@@ -9,7 +9,7 @@ from pathlib import Path
 from SpineAtlas import Atlas, ReadAtlasFile
 
 from .i18n import t
-from .utils import CREATE_NO_WINDOW, LogFunc, no_log
+from .utils import CREATE_NO_WINDOW, LogFunc, is_safe_file_name, is_safe_relative_name, no_log
 from .models import SkelConvertOptions, SkelVersionConflict
 
 
@@ -171,7 +171,6 @@ class SkelConverter:
             log(f'    > {t("log.spine.version_mismatch_converting", current=current_version, target=target_version)}')
             converted = SkelConverter._convert_bytes(
                 skel_bytes=skel_bytes,
-                resource_name=resource_name,
                 converter_path=options.converter_path,
                 target_version=target_version,
                 log=log,
@@ -186,7 +185,6 @@ class SkelConverter:
     @staticmethod
     def _convert_bytes(
         skel_bytes: bytes,
-        resource_name: str,
         converter_path: Path,
         target_version: str,
         log: LogFunc,
@@ -195,7 +193,8 @@ class SkelConverter:
         try:
             # 创建临时文件进行转换
             with tempfile.TemporaryDirectory() as temp_dir:
-                temp_input_path = Path(temp_dir) / resource_name
+                # A fixed name: the asset's own name comes from the mod
+                temp_input_path = Path(temp_dir) / "input.skel"
                 temp_input_path.write_bytes(skel_bytes)
 
                 # 调用 run() 进行转换（原地覆盖）
@@ -516,6 +515,15 @@ class SpineViewer:
             return False, msg
 
 
+def _require_safe_atlas_names(atlas: Atlas) -> None:
+    """Refuse an atlas whose page or region names would leave the output folder: both come from the mod."""
+    for page in atlas.atlas:
+        unsafe = [] if is_safe_file_name(page.png) else [page.png]
+        unsafe += [frame.name for frame in page.frames if not is_safe_relative_name(frame.name)]
+        if unsafe:
+            raise ValueError(t("log.extractor.skipping_unsafe_name", name=repr(unsafe[0])))
+
+
 def atlas_downgrade(
     atlas_path: Path,
     output_dir: Path,
@@ -535,6 +543,7 @@ def atlas_downgrade(
         log(f'    > {t("log.spine.converting_atlas", name=atlas_path.name)}')
 
         atlas: Atlas = ReadAtlasFile(str(atlas_path))
+        _require_safe_atlas_names(atlas)
         atlas.version = False
 
         atlas.ReScale()
@@ -572,6 +581,7 @@ def unpack_atlas(
         log(f'    > {t("log.spine.unpacking_atlas", name=atlas_path.name)}')
 
         atlas = ReadAtlasFile(str(atlas_path))
+        _require_safe_atlas_names(atlas)
         atlas.ReScale()
         frames_output_dir = output_dir / "images"
         frames_output_dir.mkdir(parents=True, exist_ok=True)

@@ -471,6 +471,7 @@
 			"extraction_types": "Extraction types: {types}",
 			"using_temp_dir": "Using temp directory: {path}",
 			"skipping_unnamed": "Skipping an unnamed {type} asset",
+			"skipping_unsafe_name": "Skipping an asset with an unsafe name: {name}",
 			"extraction_failed": "Error extracting asset {name}: {error}",
 			"processing_file": "Processing: {name}",
 			"stream_ref_dangling": "Skipping extraction [{name}]: serialized data references a stream data file (.resS) missing from the bundle; replacing would corrupt the asset",

@@ -471,6 +471,7 @@
 			"extraction_types": "抽出する種類：{types}",
 			"using_temp_dir": "一時フォルダーを使用：{path}",
 			"skipping_unnamed": "名前のない{type}アセットをスキップ",
+			"skipping_unsafe_name": "安全でない名前のアセットをスキップ：{name}",
 			"extraction_failed": "アセット{name}の抽出中にエラーが発生しました：{error}",
 			"processing_file": "処理中：{name}",
 			"stream_ref_dangling": "[{name}]の抽出をスキップ：シリアライズデータがBundle内にないストリームデータファイル（.resS）を参照しているため、置き換えるとアセットが破損します",
