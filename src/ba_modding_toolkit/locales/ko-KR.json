@@ -471,6 +471,7 @@
 			"extraction_types": "추출 유형: {types}",
 			"using_temp_dir": "임시 폴더 사용: {path}",
 			"skipping_unnamed": "이름 없는 {type} 에셋 건너뜀",
+			"skipping_unsafe_name": "안전하지 않은 이름의 에셋 건너뜀: {name}",
 			"extraction_failed": "에셋 {name} 추출 중 오류: {error}",
 			"processing_file": "처리 중: {name}",
 			"stream_ref_dangling": "추출 건너뜀 [{name}]: 직렬화 데이터가 번들에 없는 스트림 데이터 파일(.resS)을 참조합니다. 교체하면 에셋이 손상됩니다",

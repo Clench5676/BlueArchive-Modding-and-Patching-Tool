@@ -471,6 +471,7 @@
 			"extraction_types": "ประเภทที่แยก: {types}",
 			"using_temp_dir": "ใช้โฟลเดอร์ชั่วคราว: {path}",
 			"skipping_unnamed": "ข้ามทรัพยากร {type} ที่ไม่มีชื่อ",
+			"skipping_unsafe_name": "ข้ามทรัพยากรที่มีชื่อไม่ปลอดภัย: {name}",
 			"extraction_failed": "แยกทรัพยากร {name} ไม่สำเร็จ: {error}",
 			"processing_file": "กำลังประมวลผล: {name}",
 			"stream_ref_dangling": "ข้ามการแยก [{name}]: ข้อมูลอ้างถึงไฟล์สตรีม (.resS) ที่ไม่มีใน Bundle, การแทนที่จะทำให้ทรัพยากรเสียหาย",
