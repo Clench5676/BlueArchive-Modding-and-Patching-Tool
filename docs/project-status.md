@@ -1,13 +1,13 @@
 # Development status
 
-As of 2026-10-30. Verify the actual branch, working tree and `pyproject.toml` version before reporting progress.
+As of 2026-11-01. Verify the actual branch, working tree and `pyproject.toml` version before reporting progress.
 [Backlog](backlog.md) holds the detailed requirements and owner findings.
 
 ## Branch state
 
 | Branch | State |
 | --- | --- |
-| `main` | Local version `0.6.0`: the published 0.5.0 baseline, the upstream syncs after it, the 0.6.0-alpha.1 and alpha.2 review work, BL-020, BL-021, BL-040, BL-041, BL-043, BL-042, BL-044, BL-045, BL-046, BL-047, BL-048 the alpha.5 to alpha.8 review fixes and the prerelease-only BL-020/BL-021 previews (BL-037, BL-044, BL-047, BL-049 through BL-053), BL-055, BL-057 and BL-058. Not pushed. |
+| `main` | Local version `0.6.1-alpha`: the published 0.6.0, the upstream sync to `6c61fdc8`, the security policy and the fix that keeps files from a mod inside their output folder (`e8bee4c2`). Not pushed: held until upstream publishes its fix for the same issue. |
 
 0.6.0 is published (tag `0.6.0` at `817ebeda`, 2026-10-30): macOS build uploaded, Windows build by the release workflow.
 
@@ -54,8 +54,8 @@ from passing tests or the presence of earlier code.
 
 ## Review artifact and validation
 
-`dist/Blue-Archive-Modding-and-Patching-Tool-0.6.0-macos-arm64.dmg`, MD5 `d18e3aececa04fb9c6cdc87f576a6138`,
-built from `817ebeda` (`chore(release): 0.6.0`).
+`dist/Blue-Archive-Modding-and-Patching-Tool-0.6.1-alpha-macos-arm64.dmg`, MD5 `147b3463ef808813d63624f40c88e3c5`,
+built from `4a2e31d9` (`chore(release): 0.6.1-alpha`). Awaiting the owner's pre-review.
 
-On `main` before the build: 1,965 JavaScript tests passed; 3,595 Python tests passed, 26 skipped (with the official
-development view). Native Windows behavior is not verified on the macOS host.
+On `main` before the build: 3,633 tests passed, 26 skipped (`uv run python -m pytest`, JavaScript tests included,
+with the official development view). Native Windows behavior is not verified on the macOS host.
