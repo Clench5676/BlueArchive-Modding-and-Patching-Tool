@@ -1039,6 +1039,11 @@ Remove Imported removes `done`, `library` and `installed` rows from the current 
 Mods or change installed files; pending, conflicted and failed rows remain. The import list, selection and view
 controls remain in memory when navigation leaves and returns during the same session.
 
+A failed row in Import Results shows only localized text: the row's short reason, then ` - ` and the `error.<code>`
+string with the failure's parameters when the locale has one that says more. The code and parameters are not shown; they stay on the result and,
+for a blocked row, on its list entry, which the error report reads (`BAMTRecovery.importList`, `import_row`), and the
+backend logs each failure with them.
+
 `import.analyze {paths, recursive}` returns a library writer job ID; its result is `{entries, skipped, revision}`.
 `Entry.state` is `ready`, `convert`, `update`, `blocked`, `library`, `installed` or `done`. `done` means
 the entry imported successfully in this session; it is unchecked and cannot be selected.
@@ -1534,7 +1539,9 @@ optional, so a popup still works without them.
 - **Hosts.** The detail screen's own, `#popup` and `#picker`, inside the screen; and two on the stage, so a popup
   shows on any screen: `#prompt` (z-index 2550) for list prompts and `#dialog` (z-index 2600) for message popups, both
   over the settings (2500) and under the toast (3000). Each message popup is a layer of its own in `#dialog`, so one
-  opened from another shows over it.
+  opened from another shows over it. The display settings (`#display`, 2500) opened while `#dialog` is up (Assign
+  Character's Display Settings) get the `over` class (2700, like the scan consent's), so they draw over the dialog,
+  take its clicks and are first on the stack; the class goes when they close.
 - **The stack.** Every open popup is on one stack (`opened(host, close)`), and Escape goes to the topmost one only.
   A popup that must be answered with a button (no close button) takes Escape and does nothing with it, so nothing
   under it acts. A popup leaves the stack by itself when its host is hidden or its layer is gone. Escape is left
@@ -1550,7 +1557,10 @@ optional, so a popup still works without them.
   small button (`{text, button: {label, fn}}`, the consent popup's light blue Change button), every line is a row of
   the game's light stats box with its button at the right. An optional checkbox (the gacha list's) under the lines.
   `plain: true` uses left-aligned lines without a box or separators; line buttons stay at the right, and adding one
-  preserves the text's font size and fitting rules.
+  preserves the text's font size and fitting rules. `scroll: true` keeps the lines in a scrolling list between the
+  title and the buttons; a message whose frame would pass 1400 units (the Add result of many Mods, the dropped queue
+  list) switches to that list by itself, so its title and buttons stay on the stage (`messageLayout().scroll`), and a
+  shorter one is laid out as before.
   It resolves once it closes, however it closes, with `{button, checked}`: `button` is `ok`, `cancel`, or `null` for
   the close button, the backdrop and Escape; `checked` is the checkbox's state at that moment. `close: false` draws no
   close button, and the backdrop and Escape do nothing. The popup takes the keyboard focus while it is open (Enter
