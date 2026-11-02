@@ -162,6 +162,8 @@ input[type="text"], input[type="search"], textarea { cursor: text; }
 .consent-host[hidden] { display: none; }
 /* the scan consent opened from Settings or the switch's help: over the settings and the message popups */
 #consent.over { z-index: 2700; }
+/* the display settings opened from a dialog (#dialog, 2600): over it, so it takes the clicks */
+#display.over { z-index: 2700; }
 
 /* settings: the rows scroll inside the popup's white panel */
 .settings-host { z-index: 2500; }

@@ -220,6 +220,7 @@ function onKey(ev) {
 function finish(result) {
   const host = $("display");
   host.hidden = true;
+  host.classList.remove("over");
   closed(host);
   host.innerHTML = "";
   removeEventListener("keydown", onKey);
@@ -239,6 +240,8 @@ export async function open({ view, count: counter, onDone, sorts = SORTS, sortOn
   count = counter;
   done = onDone;
   scroll = 0;
+  // opened from a dialog (#dialog, z-index 2600): drawn over it, and over it on the popup stack (opened() below)
+  $("display").classList.toggle("over", !$("dialog")?.hidden);
   $("display").hidden = false;
   opened($("display"), () => finish(null));
   addEventListener("keydown", onKey);

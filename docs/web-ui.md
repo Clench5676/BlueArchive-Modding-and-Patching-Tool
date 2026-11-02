@@ -1515,7 +1515,9 @@ optional, so a popup still works without them.
 - **Hosts.** The detail screen's own, `#popup` and `#picker`, inside the screen; and two on the stage, so a popup
   shows on any screen: `#prompt` (z-index 2550) for list prompts and `#dialog` (z-index 2600) for message popups, both
   over the settings (2500) and under the toast (3000). Each message popup is a layer of its own in `#dialog`, so one
-  opened from another shows over it.
+  opened from another shows over it. The display settings (`#display`, 2500) opened while `#dialog` is up (Assign
+  Character's Display Settings) get the `over` class (2700, like the scan consent's), so they draw over the dialog,
+  take its clicks and are first on the stack; the class goes when they close.
 - **The stack.** Every open popup is on one stack (`opened(host, close)`), and Escape goes to the topmost one only.
   A popup that must be answered with a button (no close button) takes Escape and does nothing with it, so nothing
   under it acts. A popup leaves the stack by itself when its host is hidden or its layer is gone. Escape is left
