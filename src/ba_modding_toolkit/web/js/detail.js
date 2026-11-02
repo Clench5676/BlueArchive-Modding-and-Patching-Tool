@@ -196,7 +196,10 @@ const repairAction = (c) => repairedId(c) ? "remap.go" : "act.update";
 const baseOf = (c, kind = "spr") => (c.kind === "mod" ? spineBase("mod", c.id) : c.core ? spineBase(`official-${kind}`, c.core) : null);
 // The installed portrait comes from the current game files; with mods off, preview the configured source.
 const currentBase = () => variantBase(variant());
-const readFamily = (key) => withTimeout(rpc("family.get", { key }), HARD_CAP, "family.get");
+// no deadline: the read waits for a job that holds the library lock, as the route's does (main.js), and the screen stays as
+// it is meanwhile. A caller drops the result when the screen was read anew in the meantime (left and entered again, or
+// reloaded by another action), so that an old read never replaces a newer family.
+const readFamily = (key) => rpc("family.get", { key });
 
 // what the switch card of a kind offers (switch-sources.js), with the names and marks the cards show: the variant's
 // own portrait or lobby and its added ones, then for the portrait the other variants' ones and their added ones
@@ -795,7 +798,9 @@ async function applyCandidate(key, kind = "spr") {
       resetPreview(kind);
       if (!open) return null; // the screen was left meanwhile: the next show reads the family again
       return changeInPlace(async () => {
-        const data = await call(() => readFamily(fam.key));
+        const read = fam;
+        const data = await call(() => readFamily(read.key));
+        if (data && fam !== read) return; // the screen was read anew meanwhile
         if (data) fam = data;
         await Promise.all([renderAll(), renderLeft()]);
       });
@@ -1926,7 +1931,9 @@ async function stillAfterFullscreen() {
 }
 
 async function reload(refresh = []) {
-  const data = await call(() => readFamily(fam.key));
+  const read = fam;
+  const data = await call(() => readFamily(read.key));
+  if (data && fam !== read) return; // the screen was read anew meanwhile
   const next = data?.variants.find((v) => v.key === variantKey) || data?.variants[0];
   const changed = new Set(refresh);
   if (data) for (const kind of ["spr", "lobby", "model"]) if (previewChanged(variant(), next, kind, previewEnabled, modsOn())) changed.add(kind);
@@ -1996,9 +2003,10 @@ async function reloadChanged() {
   if (!open || busy || heldChange === undefined) return;
   const change = heldChange;
   heldChange = undefined;
-  const key = fam.key;
-  const data = await readFamily(key).catch(renderFailed);
-  if (!data || !open || fam?.key !== key || busy) return;
+  const read = fam;
+  const data = await readFamily(read.key).catch(renderFailed);
+  if (!data || !open || fam?.key !== read.key || busy) return;
+  if (fam !== read) { heldChange = mergeChange(heldChange, change); return; } // read anew meanwhile: read again after it
   // A repacked file can retain its size, date and family fields. A source event still revalidates its manifest.
   const lobbyChanged = change === null || change.cores.includes(lower(variant().lobby));
   const modelChanged = change === null || change.cores.includes(lower(variant().model));
