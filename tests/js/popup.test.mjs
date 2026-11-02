@@ -9,6 +9,7 @@ import vm from "node:vm";
 import { switchPrefabs } from "./switch_prefabs.mjs";
 import { selectionPrefab, selectionFramePixels, selectionSprite } from "./selection_prefabs.mjs";
 import { controls, insert } from "./control_prefabs.mjs";
+import { displayLayouts } from "./display_prefabs.mjs";
 
 // --- a stand-in DOM: elements in a tree, ids, clicks, the focus and the window's key listeners ---
 class El {
@@ -34,7 +35,8 @@ class El {
     }
   }
   get classList() {
-    return { replace: (a, b) => { this.classList.remove(a); this.classList.add(b); }, add: (...names) => { this.className = [...new Set([...this.className.split(" "), ...names])].join(" "); },
+    return { replace: (a, b) => { this.classList.remove(a); this.classList.add(b); },
+      toggle: (name, force) => { const on = force ?? !this.className.split(" ").includes(name); this.classList[on ? "add" : "remove"](name); return on; }, add: (...names) => { this.className = [...new Set([...this.className.split(" "), ...names])].join(" "); },
       remove: (...names) => { this.className = this.className.split(" ").filter((name) => !names.includes(name)).join(" "); } };
   }
   contains(node) { for (let n = node; n; n = n.parentNode) if (n === this) return true; return false; }
@@ -85,7 +87,7 @@ globalThis.document = {
 };
 const keyListeners = [];
 globalThis.addEventListener = (type, fn) => { if (type === "keydown") keyListeners.push(fn); };
-globalThis.removeEventListener = () => {};
+globalThis.removeEventListener = (type, fn) => { const at = keyListeners.indexOf(fn); if (type === "keydown" && at >= 0) keyListeners.splice(at, 1); };
 function press(key, extra = {}) {
   const ev = { key, defaultPrevented: false, preventDefault() { this.defaultPrevented = true; }, ...extra };
   for (const fn of keyListeners) fn(ev);
@@ -96,6 +98,8 @@ const dialog = host("dialog"), prompt = host("prompt"), consent = host("consent"
 const settings = host("settings");
 settings.className = "popup-host";
 consent.className = "consent-host";
+const display = host("display");
+display.className = "consent-host settings-host";
 const stage = host("stage");
 stage.getBoundingClientRect = () => ({ width: 1920 });
 stage.hidden = false;
@@ -135,6 +139,7 @@ OPTIONS.children[0].children[1].children.push(
   n("Game", [0, 0], [], ["Tab_On", "Tab_Off"].map((name) => n(name, [0, 0], [], [n("Label_Locale", [0, 0], [lbl()])]))),
 );
 const controlLayouts = controls();
+const filterGroup = displayLayouts(controlLayouts.filter);
 const switchLayouts = switchPrefabs();
 insert(OPTIONS, "Center/Popup/List/Sound_Setting/ETCSetting/ButtonBg", controlLayouts.option.children[0].children[0].children[0].children[0].children[0].children[0]);
 let update = null; // what app.checkUpdate answers
@@ -159,6 +164,7 @@ globalThis.fetch = async (url, opts = {}) => {
   if (url === "/asset/ui/layout/UIPopup_Sort.json") return reply(SORT);
   if (url === "/asset/ui/layout/UIPopup_Mulligan.json") return reply(selectionPrefab());
   if (url === "/asset/ui/layout/UIPopup_FilterSort.json") return reply(controlLayouts.filter);
+  if (url === "/asset/ui/layout/UIFilterObjectList.json") return reply(filterGroup);
   if (url === "/asset/ui/layout/UIPopup_Option_PC.json") return reply(OPTIONS);
   return reply(null, false); // the other prefabs are optional
 };
@@ -2560,4 +2566,75 @@ test('simulation never joins or replaces an existing real update offer', async (
   assert.equal(await Update.simulate(consent, { version: '0.6.0-alpha.9', prereleasePreviews: true }), null);
   assert.ok(action(consent, 'restart'));
   action(consent, 'later').click(); await offered;
+});
+
+// --- the display settings over a dialog (#display over #dialog) ---
+const appCss = readFileSync(new URL("../../src/ba_modding_toolkit/web/css/app.css", import.meta.url), "utf8");
+const zRule = (selector) => Number(new RegExp(`^${selector.replace(/[.#]/g, "\\$&")} \\{[^}]*?z-index: (\\d+)`, "m").exec(appCss)?.[1]);
+// a host's z-index from the stylesheet: the id's own rule, the class rule of its kind, and `.over` where it is set
+const stacking = (host) => {
+  const over = host.className.split(" ").includes("over");
+  return host.id === "display" ? zRule(over ? "#display.over" : ".settings-host") : zRule(`#${host.id}`);
+};
+
+test("the display settings open over a dialog: above it in the page and on the stack, Escape and the backdrop close them first", async (t) => {
+  const collection = n("UICharacterCollection", [0, 0], [], [n("SeletControl", [0, 0], [], [n("List", [0, 0], [], [
+    n("Scroll Bar", [0, 0], [], ["Background", "Foreground"].map((name) => n(name, [1391, 0], [{ texture: "Scroll", w_: 126, h_: 990, pivot: 4, color: "#92a6b7/1.00" }])))])])]);
+  const fetch = globalThis.fetch;
+  t.mock.method(globalThis, "fetch", async (url, options) => url === "/asset/ui/layout/UICharacterCollection.json" ? reply(collection) : fetch(url, options));
+  const Display = await import("../../src/ba_modding_toolkit/web/js/display.js");
+  const done = [];
+  const open = () => Display.open({ view: { sort: "name", order: "asc", filters: {} }, count: () => 3, onDone: (draft) => done.push(draft) });
+  const backdrop = () => walk(display).find((e) => e.dataset.path === "Center/BlackBg/BlackBgClickArea");
+
+  // the stylesheet: plainly under the dialog, over it with `.over`
+  assert.equal(stacking(display), 2500);
+  display.classList.add("over");
+  assert.ok(stacking(display) > stacking(dialog), "the display settings with .over draw above #dialog");
+  display.classList.remove("over");
+  assert.ok(stacking(display) < stacking(dialog), "without .over today's order stays");
+
+  // opened with no dialog up (the student list): today's order
+  await open();
+  assert.equal(display.hidden, false);
+  assert.ok(!display.className.split(" ").includes("over"));
+  assert.ok(stacking(display) < stacking(dialog));
+  press("Escape");
+  assert.equal(display.hidden, true);
+  assert.deepEqual(done, [null]);
+
+  // opened from a dialog (Assign Character): over it
+  const closes = [];
+  const layer = dialog.appendChild(new El());
+  dialog.hidden = false;
+  Popup.opened(dialog, (how) => { closes.push(how); layer.remove(); dialog.hidden = true; }, { el: layer });
+  await open();
+  assert.ok(display.className.split(" ").includes("over"));
+  assert.ok(stacking(display) > stacking(dialog), "the display settings draw above the dialog");
+  assert.equal(Popup.top().host, display, "and are first on the popup stack");
+  assert.ok(!dialog.contains(display) && !display.contains(dialog), "siblings: a click in one never reaches the other");
+
+  // Escape: the display settings first, then the dialog
+  assert.ok(press("Escape").defaultPrevented);
+  assert.deepEqual([display.hidden, closes], [true, []], "the dialog is still open");
+  assert.ok(!display.className.split(" ").includes("over"), "the layer class goes with the popup");
+  assert.deepEqual(done, [null, null]);
+  assert.equal(Popup.top().el, layer);
+  press("Escape");
+  assert.deepEqual(closes, ["escape"]);
+  assert.equal(Popup.top(), null);
+
+  // the backdrop of the display settings closes them alone
+  dialog.hidden = false;
+  dialog.appendChild(layer);
+  Popup.opened(dialog, (how) => { closes.push(how); layer.remove(); dialog.hidden = true; }, { el: layer });
+  await open();
+  const back = backdrop();
+  assert.ok(back, "the display settings' backdrop is drawn");
+  back.click();
+  assert.deepEqual([display.hidden, closes, done.length], [true, ["escape"], 3], "the backdrop click stays inside the display settings");
+  assert.equal(dialog.hidden, false);
+  assert.equal(Popup.top().el, layer);
+  press("Escape");
+  assert.deepEqual(closes, ["escape", "escape"]);
 });
