@@ -87,6 +87,7 @@ const deferred = () => { let resolve, reject; const promise = new Promise((ok, f
 const flush = async () => { for (let i = 0; i < 35; i++) await Promise.resolve(); };
 const options = { strategy: "cont_name_type", types: ["ALL"], skipUnchanged: true, crc: "auto", compression: "lzma",
   extraBytes: "0x08080808", backup: true, workers: 4, output: null, enableAfterImport: true };
+const filled = (text, params) => text.replace(/\{(\w+)\}/g, (_, key) => params[key] ?? "");
 const entry = (id, state = "ready", kind = "spr") => ({ id, paths: [`/fixtures/${id}.bundle`], variant: id, core: `${id}_spr`, kind,
   files: [{ path: `/fixtures/${id}.bundle`, size: 1024, target: `${id}_spr.bundle` }], size: 1024, state,
   reason: state === "blocked" ? "no_target" : null, libraryId: state === "library" ? "lib-known" : null,
@@ -1820,6 +1821,58 @@ for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) for
   }
 });
 
+// UI-3: a failed row's note is the localized text only; the code and parameters stay on the result and the list entry
+for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) test(`failed result notes show the localized text only, never a code or JSON, in ${locale}`, async () => {
+  try {
+    const strings = JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${locale}.json`, import.meta.url), "utf8"));
+    setStrings(locale, flatten(strings));
+    const h = await fixture(); await h.analyze([entry("a"), entry("b"), entry("c"), entry("d")]);
+    await h.action("start").click(); await flush();
+    const mismatch = { code: "mod_platform_mismatch", params: { file: "airi_spr.bundle", platform: "Android", expected: "Windows" } };
+    const results = [
+      // a code with an error text: that text with its parameters
+      { id: "a", outcome: "failed", reason: mismatch.code, params: mismatch.params, error: mismatch },
+      // the reason alone, without an error text: the short reason as the row shows it elsewhere
+      { id: "b", outcome: "failed", reason: "failed", error: { code: "failed", params: {} } },
+      // a code that no locale key knows: the generic failure
+      { id: "c", outcome: "failed", reason: "unheard_of_code", params: { detail: "x" }, error: { code: "unheard_of_code", params: { detail: "x" } } },
+      // the reason without an error object: its parameters are read from the row
+      { id: "d", outcome: "failed", reason: "dev_path_outside", params: { path: "/profile/input/refused.bundle" } },
+    ];
+    h.runs[0].resolve({ results });
+    await flush(); await h.page.results(); await h.page.settled();
+    const note = (id) => find(drawn(h, walk(h.dialog).find((element) => element.dataset.result === id)).tree, "Label_Locale_Limit").widgets[0].text;
+    const expected = { a: filled(strings.webui.error.mod_platform_mismatch, mismatch.params), b: strings.webui.import.reason.failed,
+      c: strings.webui.import.failed, d: filled(strings.webui.error.dev_path_outside, { path: "/profile/input/refused.bundle" }) };
+    for (const [id, text] of Object.entries(expected)) assert.equal(note(id), text, id);
+    for (const id of Object.keys(expected)) {
+      assert.ok(!/[{}"]/.test(note(id)), `${id}: no JSON`);
+      for (const code of ["mod_platform_mismatch", "unheard_of_code", "dev_path_outside"]) assert.ok(!note(id).includes(code), `${id}: no ${code}`);
+    }
+    for (const value of Object.values(mismatch.params)) assert.ok(note("a").includes(value));
+    // the result keeps the code and the parameters
+    assert.deepEqual(h.page.model.state.results, results);
+  } finally {
+    setStrings("en-US", flatten(JSON.parse(readFileSync(new URL("../../src/ba_modding_toolkit/locales/en-US.json", import.meta.url), "utf8"))));
+  }
+});
+
+test("a blocked result row keeps its code and parameters in the error report's list", async () => {
+  let snapshot;
+  globalThis.BAMTRecovery = { importList(read) { snapshot = read; } };
+  try {
+    const h = await fixture(); await h.analyze([entry("a")]);
+    await h.action("start").click(); await flush();
+    const error = { code: "mod_platform_mismatch", params: { file: "airi_spr.bundle", platform: "Android", expected: "Windows" } };
+    h.runs[0].resolve({ results: [{ id: "a", outcome: "failed", state: "blocked", reason: error.code, params: error.params, error }] });
+    await flush(); await h.page.results(); await h.page.settled();
+    const row = snapshot().rows.find((item) => item.id === "a");
+    assert.deepEqual([row.state, row.reason, row.params, row.error], ["blocked", error.code, error.params, error]);
+    const text = find(drawn(h, walk(h.dialog).find((element) => element.dataset.result === "a")).tree, "Label_Locale_Limit").widgets[0].text;
+    assert.ok(!text.includes(error.code) && !/[{}"]/.test(text), "the screen shows neither");
+  } finally { delete globalThis.BAMTRecovery; }
+});
+
 for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) test(`successful result notes count assets not transferred in ${locale}`, async () => {
   try {
     const strings = JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${locale}.json`, import.meta.url), "utf8"));
@@ -1955,7 +2008,7 @@ for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) tes
 });
 
 for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
-  test(`failure rows use distinct short labels and results retain diagnostics in ${locale}`, async () => {
+  test(`failure rows use distinct short labels and result notes show the localized error in ${locale}`, async () => {
     try {
       const strings = JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${locale}.json`, import.meta.url), "utf8"));
       setStrings(locale, flatten(strings));
@@ -1975,8 +2028,12 @@ for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
       await flush(); await h.page.results(); await h.page.settled();
       const row = walk(h.dialog).find((element) => element.dataset.result);
       const note = find(drawn(h, row).tree, "Label_Locale_Limit").widgets[0].text;
-      assert.ok(note.includes(strings.webui.import.reason.required_asset_apply_failed));
-      for (const value of [detail.code, ...Object.values(detail.params)]) assert.ok(note.includes(value));
+      // the localized error text with its parameters; the code and the parameters' raw form are not shown
+      assert.equal(note, filled(strings.webui.error.required_asset_apply_failed, detail.params));
+      for (const value of Object.values(detail.params)) assert.ok(note.includes(value));
+      assert.ok(!note.includes(detail.code) && !/[{}"]/.test(note));
+      // they stay on the result for the error report
+      assert.deepEqual(h.page.model.state.results[0].error, detail);
     } finally {
       setStrings("en-US", flatten(JSON.parse(readFileSync(new URL("../../src/ba_modding_toolkit/locales/en-US.json", import.meta.url), "utf8"))));
     }

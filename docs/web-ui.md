@@ -1020,6 +1020,11 @@ Remove Imported removes `done`, `library` and `installed` rows from the current 
 Mods or change installed files; pending, conflicted and failed rows remain. The import list, selection and view
 controls remain in memory when navigation leaves and returns during the same session.
 
+A failed row in Import Results shows only localized text: the `error.<code>` string with the failure's parameters when
+the locale has one, else the row's short reason. The code and parameters are not shown; they stay on the result and,
+for a blocked row, on its list entry, which the error report reads (`BAMTRecovery.importList`, `import_row`), and the
+backend logs each failure with them.
+
 `import.analyze {paths, recursive}` returns a library writer job ID; its result is `{entries, skipped, revision}`.
 `Entry.state` is `ready`, `convert`, `update`, `blocked`, `library`, `installed` or `done`. `done` means
 the entry imported successfully in this session; it is unchecked and cannot be selected.
