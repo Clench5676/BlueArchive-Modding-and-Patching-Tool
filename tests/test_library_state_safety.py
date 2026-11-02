@@ -1257,3 +1257,152 @@ def test_a_mod_update_is_refused_before_the_rebuild_while_a_recovery_has_failed(
     library, mods = pending(world)
     monkeypatch.setattr(core, "process_mod_update", lambda *a, **k: pytest.fail("the rebuild started"))
     expect_error("classic_open", lambda: library.update(mods[0].id))
+
+
+# --- review round: a blocked library settles nothing, a missing state reads its prev, reads never fail ---
+
+def blocked_state(world: World, how: str, monkeypatch=None):
+    """Make the world's state.json unusable one way; the bytes to put back (and the undo of a patched read)."""
+    good = state_file(world).read_bytes()
+    if how == "newer":
+        state_file(world).write_text(json.dumps({"version": 2, "mods": []}))
+    elif how == "broken":
+        state_file(world).write_bytes(b"{broken")
+        (world.root / "state.json.prev").write_bytes(b"[]")
+    else:  # io: the file cannot be opened
+        return good, NoRead(monkeypatch, "state.json", PermissionError(errno.EACCES, "locked", "state.json"))
+    return good, None
+
+
+@pytest.mark.parametrize("how", ["newer", "broken", "io"])
+def test_a_blocked_library_never_settles_the_configuration_away(world, monkeypatch, how):
+    """Every source is gone from an empty library: the scan used to drop each configured choice."""
+    world.consent = True
+    mod = world.add(world.spr)
+    world.library.apply("test", f"mod:{mod.id}")
+    profiles = (world.root / "profiles.json").read_bytes()
+    before = chosen(world)
+    assert before[(world.key(), "test_spr")]["source"] == f"mod:{mod.id}"
+    good, locked = blocked_state(world, how, monkeypatch)
+    library = world.reload()
+    assert library.mods() == [] and library.state_unreadable()
+    world.entries()
+    library.scan()
+    assert library.judge_unfinished() == 0
+    assert library.prune() == []
+    assert (world.root / "profiles.json").read_bytes() == profiles  # byte for byte
+    expect_error(("library_io_error" if how == "io" else "library_state_unreadable"),
+                 lambda: library.dismiss("untracked", [{"install": world.key(), "core": "test_spr"}]))
+    assert (world.root / "profiles.json").read_bytes() == profiles
+    if locked:
+        locked.close()
+    else:
+        state_file(world).write_bytes(good)  # fixed: the library and its choices are back
+    assert [m.id for m in library.mods()] == [mod.id] and not library.state_unreadable()
+    assert chosen(world) == before
+    assert world.entries()[(world.key(), "test_spr")].state == "ok"
+
+
+def test_a_running_instance_whose_file_turns_newer_settles_nothing_either(world):
+    world.consent = True
+    mod = world.add(world.spr)
+    world.library.apply("test", f"mod:{mod.id}")
+    profiles = (world.root / "profiles.json").read_bytes()
+    state_file(world).write_text(json.dumps({"version": 2, "mods": []}))
+    library = world.library
+    library.mods()  # the refresh notes the newer file
+    world.entries()
+    library.scan()
+    assert library.judge_unfinished() == 0 and library.prune() == []
+    expect_error("library_state_unreadable", lambda: library.dismiss("untracked", [{"install": world.key(),
+                                                                                     "core": "test_spr"}]))
+    assert (world.root / "profiles.json").read_bytes() == profiles
+
+
+def sweep(env) -> list[str]:
+    """Every read of the registry, the scan and the housekeeping the services start, in the current condition: each
+    must answer, and profiles.json must stay byte for byte what it was. Returns the names that answered."""
+    library = env.s.library
+    path = library.root / "profiles.json"
+    profiles = path.read_bytes()
+    answered = []
+    reads = (("app.info", {}), ("settings.get", {}), ("roster.list", {}), ("family.get", {"key": "test"}),
+             ("mods.state", {}), ("mods.other", {}), ("mods.entries", {}), ("mods.sizes", {"kind": "built"}),
+             ("mods.sizes", {"kind": "originals"}), ("mods.scan", {}), ("mods.scan", {"dismissed": True}))
+    for method, params in reads:
+        answer = rpc(env.app, method, **params)
+        assert "error" not in answer, (method, answer)
+        answered.append(method)
+        assert env.s.scanner.wait_idle(10.0)
+        if env.s._prune_job is not None:
+            assert env.s.jobs.wait(env.s._prune_job, 10)
+        assert path.read_bytes() == profiles, method
+    library.scan()
+    answered.append("library.scan")
+    assert library.judge_unfinished() == 0
+    answered.append("library.judge_unfinished")
+    library.prune()
+    answered.append("library.prune")
+    assert path.read_bytes() == profiles
+    return answered
+
+
+SWEPT = ["app.info", "settings.get", "roster.list", "family.get", "mods.state", "mods.other", "mods.entries",
+         "mods.sizes", "mods.sizes", "mods.scan", "mods.scan", "library.scan", "library.judge_unfinished",
+         "library.prune"]
+
+
+@pytest.mark.parametrize("how", ["newer", "broken"])
+def test_every_read_of_the_rpc_registry_answers_and_changes_nothing_while_the_library_is_blocked(rpc_env, how):
+    env = rpc_env
+    mod = env.add(env.spr)
+    env.s.library.apply("test", f"mod:{mod.id}")
+    folder = env.s.library_dir()
+    if how == "newer":
+        (folder / "state.json").write_text(json.dumps({"version": 2, "mods": []}))
+    else:
+        (folder / "state.json").write_bytes(b"{broken")
+        (folder / "state.json.prev").write_bytes(b"[]")
+    state = (folder / "state.json").read_bytes()
+    env.reload_library()
+    assert "error" not in rpc(env.app, "mods.consent", granted=True)  # the scan runs: every source looks gone
+    assert env.s.library.state_unreadable()
+    assert sweep(env) == SWEPT
+    assert (folder / "state.json").read_bytes() == state and not (folder / "state.json.bad").exists()
+    # the configuration is still there for when the file is fixed
+    config = json.loads((folder / "profiles.json").read_text())
+    assert [c["source"] for f in config["folders"].values() for c in f["configured"].values()] == [f"mod:{mod.id}"]
+
+
+def test_every_read_of_the_rpc_registry_answers_and_changes_nothing_while_a_recovery_has_failed(rpc_env):
+    env = rpc_env
+    assert "error" not in rpc(env.app, "mods.consent", granted=True)
+    first, second = crash_in_services(env)
+    env.s.library._write_check = refusing()
+    assert sweep(env) == SWEPT
+    assert env.s.library._recovery_error is not None and list(
+        (env.s.library.root / "transactions").glob("*/journal.json"))
+    config = json.loads((env.s.library.root / "profiles.json").read_text())
+    # the choice the crashed switch had configured
+    assert [c["source"] for f in config["folders"].values() for c in f["configured"].values()] == [f"mod:{second.id}"]
+
+
+def test_the_seen_baseline_is_not_taken_from_a_blocked_library(rpc_env):
+    env = rpc_env
+    mod = env.add(env.spr)
+    folder = env.s.library_dir()
+    good = (folder / "state.json").read_bytes()
+    ui = env.data / "webui.json"
+    data = json.loads(ui.read_text())
+    data.pop("seen_mods", None)  # a profile that has not taken its baseline yet
+    ui.write_text(json.dumps(data))
+    (folder / "state.json").write_bytes(b"{broken")
+    (folder / "state.json.prev").unlink(missing_ok=True)
+    env.reload_library()
+    assert env.s.library.state_unreadable()
+    assert env.s.state.seen_mods() is None  # no baseline from an empty read
+    (folder / "state.json").write_bytes(good)
+    assert not env.s.library.state_unreadable()
+    assert env.s.state.seen_mods() == {mod.id}  # the real baseline, once the library reads
+
+
