@@ -13,7 +13,7 @@ import os
 import re
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Hashable, Iterable, Sequence
 
 from ..naming import parse_filename, spine_kind
 from ..searching import SEARCH_DIR_SUFFIXES
@@ -85,6 +85,23 @@ def part_of(name: str) -> tuple[str, str | None]:
 
 def date_of(name: str) -> str:
     return parse_filename(name).date
+
+
+def mod_versions(entries: Sequence[tuple[Hashable, str]]) -> list[str]:
+    """The version of its set each bundle name belongs to, in the order given: the one rule that groups the files of
+    an import into mods, shared by the batch import and Add.
+
+    A set is what one import takes for one mod: the files of one core and kind (the batch import also separates
+    folders and variants), named by its key. Its files are the parts of one mod whatever their dates, because some
+    cores keep their parts under different dates (a Spine core's textures and text, a model's prefab and
+    dependencies). Only a set in which one part (``part_of``) occurs under more than one date holds several versions
+    of the mod: the whole set then goes by date. Returns "" for every file of a set that is one mod, else the
+    file's date."""
+    dates: dict[tuple[Hashable, tuple[str, str | None]], set[str]] = {}
+    for key, name in entries:
+        dates.setdefault((key, part_of(name)), set()).add(date_of(name))
+    versioned = {key for (key, _), found in dates.items() if len(found) > 1}
+    return [date_of(name) if key in versioned else "" for key, name in entries]
 
 
 def install_root(folder: Path) -> Path:
