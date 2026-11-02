@@ -67,6 +67,7 @@ logger = logging.getLogger(__name__)
 SPACE_MARGIN = 512 * 1024 * 1024  # left free on the library's volume by an Off and an adoption
 SAVE_EVERY = (10, 2.0)  # a toggle saves its unfinished list every 10 entries or 2 s
 BUILT_TEMP_MAX_AGE = 60 * 60  # seconds before an abandoned built copy can be cleared
+RECOVERY_RETRY = 60.0  # seconds before a read tries a recovery that failed (or waits) again, if the journals stay
 # a toggle's refusals that stop it: every later write would fail the same way
 STOPPING = ("game_running", "game_status_unavailable", "steam_busy", "folder_changed", "classic_open")
 
@@ -83,6 +84,9 @@ def _game_folder(game_file: Path) -> Path:
 
 
 def _serialized(method: Callable) -> Callable:
+    """Run a public method under the library lock, after bringing the state up to date. A pending journal is
+    recovered if it can be, and never fails the call: reads work, and a write is refused by its own gates
+    (``ModLibrary._check_recovery``) with the real failure."""
     @wraps(method)
     def call(self: ModLibrary, *args: Any, **kwargs: Any) -> Any:
         with self._lock, _errors(method.__name__):
@@ -574,6 +578,10 @@ class ModLibrary:
         self._transacting = False
         self._deferred_prunes = 0
         self._prune_pending = False
+        self._recovery_error: ServiceError | None = None  # why the last recovery attempt failed: writes refuse with it
+        self._recovery_seen: tuple[tuple[str, ...], float] | None = None  # journals at the last attempt, and when
+        self._recovery_logged: tuple | None = None  # (code, journals) of the failure already logged
+        self._waiting: set[str] = set()  # write journals waiting for their install, already logged
         self._records: dict[str, dict[str, Any]] = {}
         self._remap_previews: dict[str, dict] = {}
         self._favorites: set[str] = set()
@@ -597,6 +605,7 @@ class ModLibrary:
         self._originals_cache: tuple[Any, dict[str, int]] | None = None
         self._maps_cache: tuple[tuple, Any] | None = None
         self.profiles = Profiles(self.root)
+        self.profiles.gate = self._check_recovery  # no write of the configuration while a recovery has failed
         staging.cleanup(self.root)
         self._load()
         with self._lock:
@@ -764,14 +773,15 @@ class ModLibrary:
             return None
         return stat.st_mtime_ns, stat.st_size
 
-    def _refresh_state(self) -> None:
+    def _refresh_state(self, migrate: bool = True) -> None:
         """Take in what another instance sharing the library wrote to state.json since this one last read or wrote
         it (its size or date changed), keeping this instance's own changes not saved yet. A library that could not
-        read its state reads it again at every call that finds the file changed (and after a failed open)."""
-        self._recover_pending()
+        read its state reads it again at every call that finds the file changed (and after a failed open). The legacy
+        migration is saved when ``migrate``, and skipped (not raised) while writes are refused."""
+        self._recover_for_read()
         if not self._reread and self._state_signature() == self._seen:
-            if self._migration_pending:
-                self._save()
+            if self._migration_pending and migrate:
+                self._migrate_state()
             return
         with file_lock(self.root / "state.json.lock"):
             signature_ = self._state_signature()
@@ -788,8 +798,16 @@ class ModLibrary:
         self._state_good, self._state_error, self._reread = True, None, False
         self._version += 1
         self._migration_pending = LEGACY_REMAP not in self._migrations
-        if self._migration_pending:
+        if self._migration_pending and migrate:
+            self._migrate_state()
+
+    def _migrate_state(self) -> None:
+        """Save the state with the legacy remap migration, once writes are allowed: a pending recovery or a state that
+        cannot be written refuses (ServiceError), and a read then skips the migration for now."""
+        try:
             self._save()
+        except ServiceError as error:
+            log_failure(logger, logging.DEBUG, "Library state migration skipped", error)
 
     def _save(self) -> None:
         """Write state.json, merged with what another instance sharing the library wrote since this one last read
@@ -801,6 +819,7 @@ class ModLibrary:
         The last good file is kept as state.json.prev before the write, and an unreadable one as state.json.bad. A
         library that never read a good state (``_state_good``), a file of a newer build and a file that cannot be
         opened are not written: ServiceError ``library_state_unreadable`` or ``library_io_error``, nothing changed."""
+        self._check_recovery()
         path = self._state_path
         mine = (self._records, self._favorites, self._applied, self._migrations)
         with file_lock(self.root / "state.json.lock"):
@@ -2970,29 +2989,101 @@ class ModLibrary:
 
     @contextlib.contextmanager
     def _transaction_lock(self) -> Iterator[None]:
-        """Lock before mods, state and profiles; nested writes already hold this process lock."""
+        """Lock before mods, state and profiles; nested writes already hold this process lock. Taking the lock
+        recovers every pending journal first, every time, and raises the real failure when one cannot be rolled back
+        (a write never goes on over a journal it could not settle); the failure is remembered for the reads and for
+        the writes that do not take this lock (``_check_recovery``)."""
         if self._transacting:
             yield
             return
         with file_lock(self.root / "transactions.lock", timeout=10):
             self._transacting = True
             try:
-                self._refresh_state()
-                self._recover_transactions()
+                self._refresh_state(migrate=False)  # nothing is saved before the journals are settled
+                try:
+                    self._recover_transactions()
+                except Exception as error:
+                    self._remember_recovery(error)
+                    raise
+                self._remember_recovery(None)
                 self._check_writable()
                 yield
             finally:
                 self._transacting = False
 
+    def _journals(self) -> tuple[str, ...]:
+        """The pending journals: write, import and deletion journals under the library, as sorted paths."""
+        return tuple(sorted(str(path) for folder in ("transactions", "import-transactions", "asset-deletions")
+                            for path in (self.root / folder).glob("*/journal.json")))
+
     def _recover_pending(self) -> None:
-        """Recover before indexing game files, including one moved away just before a crash."""
-        if not self._transacting and (any((self.root / "transactions").glob("*/journal.json"))
-                                    or any((self.root / "import-transactions").glob("*/journal.json"))
-                                    or any((self.root / "asset-deletions").glob("*/journal.json"))):
+        """Recover before indexing game files, including one moved away just before a crash. Raises the failure of a
+        journal that cannot be settled (it stays pending); nothing happens without a journal."""
+        if self._transacting:
+            return
+        if self._journals():
             with self._transaction_lock():
                 pass
+        else:
+            self._recovery_error = self._recovery_seen = self._recovery_logged = None
+
+    def _recover_for_read(self) -> None:
+        """Attempt recovery before a read, never failing it: a failure is logged once, remembered (with the pending
+        journals and the time) and the read goes on. A read tries again only when the set of journals changed or
+        RECOVERY_RETRY seconds have passed; a retry that finds other journals still pending but raises nothing
+        follows the same limit. Writes recover on their own (``_transaction_lock``)."""
+        if self._transacting:
+            return
+        journals = self._journals()
+        if not journals:
+            self._recovery_error = self._recovery_seen = self._recovery_logged = None
+            return
+        seen = self._recovery_seen
+        if seen is not None and seen[0] == journals and time.monotonic() - seen[1] < RECOVERY_RETRY:
+            return
+        # the attempt is noted first: a lock another process holds (its own write) must not hold up every read
+        self._recovery_seen = (journals, time.monotonic())
+        try:
+            with self._transaction_lock():
+                pass
+        except (ServiceError, OSError):
+            pass  # remembered and logged by _remember_recovery; the read goes on
+
+    def _remember_recovery(self, error: Exception | None) -> None:
+        """Note the outcome of a recovery attempt: the failure writes refuse with (None: it succeeded), and the
+        journals still pending with the time, which limit how often a read tries again."""
+        journals = self._journals()
+        self._recovery_seen = (journals, time.monotonic()) if journals else None
+        if error is None:
+            self._recovery_error = self._recovery_logged = None
+            return
+        if isinstance(error, ServiceError):
+            failure = error
+        elif isinstance(error, OSError):
+            failure = ServiceError("library_io_error", file=error.filename)
+        else:
+            failure = ServiceError("library_operation_failed", operation="recover")
+        self._recovery_error = failure
+        if self._recovery_logged != (failure.code, journals):
+            self._recovery_logged = (failure.code, journals)
+            log_failure(logger, logging.WARNING, "Mod recovery pending, reads continue", error)
+
+    def _check_recovery(self) -> None:
+        """Refuse a change of state or configuration while a recovery has failed, with that failure. Recovery is
+        attempted again first (a closed game, a repaired file), so the refusal is the real, current one. Not during a
+        recovery itself or the writes under the transaction lock, which recovered before they started."""
+        if self._recovery_error is not None and not self._transacting:
+            self._recover_pending()
+
+    def _writes_refused(self) -> bool:
+        """Whether a recovery has failed and changes of state and configuration are refused, without trying again:
+        for the reads that settle something on the side and skip it instead."""
+        return self._recovery_error is not None and not self._transacting
 
     def _recover_transactions(self) -> None:
+        """Settle every pending journal under the transaction lock: imports, then write journals, then asset deletions.
+        A failure (ServiceError) leaves the journal and stops here; a write journal whose install is not known now waits
+        (skipped, logged once). A game file changed outside the library is left as it is (``_rollback_write``)."""
         self._recover_imports()
         for path in sorted((self.root / "transactions").glob("*/journal.json")):
             try:
@@ -3005,12 +3096,27 @@ class ModLibrary:
                     continue
                 info = data["pin"]
                 pin = self._pin(Path(info["root"]), info["server"])
-                if pin is None or pin.key != info["key"] or list(map(str, pin.dirs)) != info["dirs"]:
-                    raise ServiceError("folder_changed")
+                if pin is None or pin.key != info["key"]:
+                    # The install is not known now (its folder moved, the settings name another). The journal waits
+                    # with its files; writes to other installs go on (a rollback restores only its own keys, and
+                    # _prune refuses while a journal exists).
+                    if path.parent.name not in self._waiting:
+                        self._waiting.add(path.parent.name)
+                        logger.warning("Write journal %s waits for its install, which is not known now",
+                                       path.parent.name)
+                    continue
+                # Another resource subfolder or a moved game folder is no reason to stop, if every target still lies in
+                # a resource folder of the install; otherwise the folders changed.
+                dirs_changed = list(map(str, pin.dirs)) != info["dirs"]
                 targets = []
                 for i, item in enumerate(data["files"]):
                     target, backup = Path(item["target"]), self.root / item["rollback"]
-                    check_resource_path(target, list(pin.dirs))
+                    try:
+                        check_resource_path(target, list(pin.dirs))
+                    except ServiceError as error:
+                        if dirs_changed:
+                            raise ServiceError("folder_changed") from error
+                        raise
                     expected = self._original_path(target) if item["official"] else path.parent / f"{i}.bundle"
                     if backup != expected or not backup.resolve().is_relative_to(self.root):
                         raise ValueError("Invalid rollback path")
@@ -3018,18 +3124,34 @@ class ModLibrary:
                         raise ValueError("Invalid original path")
                     targets.append(target)
                 with self._writable(targets, pin, recovering=True):
-                    self._rollback_write(data)
-                self._release_failed([Path(item["target"]) for item in data["files"] if item["kept_now"]], pin)
-                self._drop_mods(data["kept"])
+                    left = self._rollback_write(data)
+                self._release_failed([Path(item["target"]) for item in data["files"]
+                                      if item["kept_now"] and item["target"] not in left], pin)
+                self._drop_mods(self._droppable(data["kept"], left))
                 shutil.rmtree(path.parent)
+                self._waiting.discard(path.parent.name)
                 logger.info("Recovered interrupted library write %s", path.parent.name)
             except (ValueError, TypeError, KeyError) as error:
                 raise ServiceError("library_io_error", file=path) from error
         from .asset_delete import recover
         recover(self)
 
-    def _rollback_write(self, data: dict) -> None:
-        """Return consumed originals before restoring mods. Repeating any completed step is safe."""
+    def _droppable(self, kept: list[str], left: set[str]) -> list[str]:
+        """Of the mods a rolled back write kept from game files, those to forget: not the ones kept from a file left
+        as it is (changed outside the library), whose bytes are in no game file again."""
+        if not left:
+            return list(kept)
+        names = {Path(key).name for key in left}
+        return [mod_id for mod_id in kept if not names & set((self._records.get(mod_id) or {}).get("files", ()))]
+
+    def _rollback_write(self, data: dict) -> set[str]:
+        """Return consumed originals before restoring mods. Repeating any completed step is safe.
+
+        A game file whose bytes are neither the journal's before nor its after (a Steam repair, another tool) was
+        changed outside the library: its bytes are left as they are, a warning is logged, the other files are
+        restored and the rollback finishes. Returns the targets left that way. Its record is put back as it was,
+        without a new modification time, so that the file is judged as the outside change it is."""
+        left: set[str] = set()
         for item in reversed(data["files"]):
             target = Path(item["target"])
             current = self._hashes.get(target).sha1 if target.exists() else None
@@ -3042,7 +3164,10 @@ class ModLibrary:
             if current == item["before"]:
                 continue
             if current not in (None, item["after"]):
-                raise ServiceError("entry_changed", core=core_of(target.name))
+                logger.warning("Game file %s was changed outside the library, leaving it as it is",
+                               core_of(target.name))
+                left.add(item["target"])
+                continue
             backup = self.root / item["rollback"]
             verify_file(backup, item["before"])
             if item["official"] and item["kept_now"] and not self._needed_elsewhere(
@@ -3058,11 +3183,17 @@ class ModLibrary:
             old = data["old_applied"].get(key)
             if old is None:
                 self._applied.pop(key, None)
-            else:
-                # A rollback copy has a new date, even though its bytes are unchanged.
-                self._applied[key] = {**old, "mtime": Path(key).stat().st_mtime_ns}
+                continue
+            try:
+                # A rollback copy has a new date, even though its bytes are unchanged. A file left as it is keeps the
+                # record's own date: the stat check must not read the outside bytes as the recorded ones.
+                mtime = None if key in left else Path(key).stat().st_mtime_ns
+            except OSError:
+                mtime = None
+            self._applied[key] = {**old, "mtime": mtime} if mtime is not None else dict(old)
         if self._applied != self._base[2]:
             self._save()
+        return left
 
     def _write(self, replacements: dict[Path, Path], source: str, log: LogFunc,
                progress: ProgressCallback | None, pin: Pin, build_keys: dict[Path, str] | None = None,
@@ -3112,6 +3243,7 @@ class ModLibrary:
         written: list[Path] = []
         kept_now: list[Path] = []  # originals this call kept from the game file itself
         kept: list[str] = []
+        left: set[str] = set()  # files a rollback found changed outside the library and left as they are
         restored = True
         journal: Path | None = None
         transaction: dict | None = None
@@ -3184,7 +3316,7 @@ class ModLibrary:
                 except Exception as error:
                     self._applied = old_applied
                     try:
-                        self._rollback_write(transaction)
+                        left = self._rollback_write(transaction)
                     except Exception as rollback_error:
                         restored = False
                         log_failure(logger, logging.ERROR, "Could not roll back library write", rollback_error)
@@ -3198,9 +3330,10 @@ class ModLibrary:
                 atomic_json(journal, transaction)
         except Exception:
             if restored:
-                # what they kept is in the game again; a part left half written keeps them
-                self._drop_mods(kept)
-                self._release_failed(kept_now, pin)
+                # what they kept is in the game again (not for a file left as it is); a part left half written keeps
+                # them
+                self._drop_mods(self._droppable(kept, left))
+                self._release_failed([target for target in kept_now if str(target.resolve()) not in left], pin)
                 if journal is not None:
                     shutil.rmtree(journal.parent)
             raise
@@ -4032,6 +4165,8 @@ class ModLibrary:
         """What the judgement settles in the configuration: take-overs (a newer library write than the configured
         source, or a library source with none) and sources gone from the library (dropped once listed); and the new
         dates of files the library knows by their last bytes."""
+        if self._writes_refused():
+            return  # a recovery that has failed refuses changes: the next scan settles
         restamps = {str(part.path.resolve()): part.restamp for entry in found for part in entry.parts
                     if part.restamp is not None and part.record is not None}
         if restamps:
@@ -4553,6 +4688,8 @@ class ModLibrary:
         date of a file whose bytes are the record's (its sha1 at write strength, its last bytes cheaply), and, at
         write strength, a file the cheap rule calls official whose bytes were changed outside the library (``outside``,
         its size and date; dropped by the next write there)."""
+        if self._writes_refused():
+            return  # a recovery that has failed refuses changes: a later judgement notes it
         changed = False
         for part in entry.parts:
             record = self._applied.get(str(part.path.resolve())) if part.record is not None else None
@@ -4587,6 +4724,8 @@ class ModLibrary:
         items of this data directory's known installs; nothing is dropped when the intent changed meanwhile.
         Returns the number of items dropped. Runs on the job worker."""
         with self._lock, _errors("judge_unfinished"):
+            if self._writes_refused():
+                return 0  # a recovery that has failed refuses changes of the list
             config = self.profiles.read()
             if not config or not config.get("unfinished"):
                 return 0
@@ -4861,6 +5000,8 @@ class ModLibrary:
                progress: Callable[[dict], None] | None = None, pin: Pin | None = None) -> UpdateResult:
         """Rebuild a mod against current official bundles and retain its old files. Its built copies go: they hold
         the old build."""
+        self._check_recovery()  # refused before the rebuild when a recovery has failed or the state cannot be saved
+        self._check_writable()
         pin = self._current(pin)
         record = self._record(mod_id)
         paths = self._paths(record)

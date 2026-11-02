@@ -722,6 +722,33 @@ library operations, validates journal and Mod paths, verifies a committed group'
 journal if recovery cannot complete. Metadata and directory synchronization must succeed before recovery discards
 its journal, even when a retry finds that an earlier metadata replacement already took effect.
 
+**Pending journals.** A write, an import or an asset deletion that did not finish leaves its journal (`transactions/`,
+`import-transactions/`, `asset-deletions/`), and every write recovers first. `_transaction_lock` always attempts
+the recovery and raises the real failure of a journal it cannot settle (`library_recovery_pending`,
+`original_unavailable`, `library_io_error` on an invalid journal, `game_running`, `steam_busy`, `classic_open` and the
+other refusals of a write), so a write never goes on over a journal. Reads never fail on a pending journal: a read
+attempts recovery, logs a failure once, remembers it with the pending journal paths and the time, and goes on. It
+tries again only when the set of journals changed or `RECOVERY_RETRY` (60 s) has passed, so a closed game or a
+repaired file is picked up and reads stay fast; a retry that finds other journals still pending but raises nothing
+follows the same limit. While a failure is remembered every change of `state.json` and `profiles.json` is refused with
+that failure (the central gates are `_save` and `Profiles.update`; they attempt recovery again first, so the refusal is
+the current one), which covers the favourites, aliases and configured choices that do not take the transaction lock;
+a successful recovery clears it. A read that settles something on the side (the scan's take-overs, a judgement's
+dates, the legacy migration, the unfinished list) skips it instead of failing. Recovery rules:
+
+- A game file whose bytes are neither the journal's before nor its after was changed outside the library (a Steam
+  repair, another tool), and so is one that is gone. Its bytes are left as they are, a warning is logged and the
+  other files are restored; the rollback finishes and retires the journal. Its record goes back as it was, without a
+  new modification time (a stamp from the file would let the stat check read the outside bytes as the recorded ones),
+  its kept original stays (the only official copy of a file left as it is) and so do the mods kept from it. An asset
+  deletion's rollback does the same and does not recreate a gone file.
+- A write journal whose install has the same key but other resource folders proceeds if every target still passes
+  `check_resource_path`; otherwise it stays `folder_changed`. One whose install is not known now (its folder moved, its
+  key differs) waits: it is logged, kept with its files and skipped, writes to other installs go on (a rollback
+  restores only its own keys, and the originals' prune refuses while a journal exists), and the next recovery after the
+  install is back rolls it back. An asset deletion cannot wait, since its rollback restores a snapshot of all records
+  and applied entries: it stays a remembered failure, reads work and writes refuse.
+
 This is stage-local atomicity. The existing game-write transaction separately retains and restores every replaced
 part. A complete library import is not undone merely because later optional application fails; its configured
 choice can remain pending. With the master switch off, a valid application records desired state and defers the

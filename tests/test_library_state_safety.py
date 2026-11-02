@@ -8,13 +8,12 @@ import copy
 import errno
 import json
 import logging
-import os
 from pathlib import Path
 
 import pytest
 
 import test_webui_mods
-from ba_modding_toolkit import data_paths, i18n
+from ba_modding_toolkit import core, data_paths, i18n
 from ba_modding_toolkit.bundle import Bundle
 from ba_modding_toolkit.errors import ServiceError
 from ba_modding_toolkit.library import ModLibrary, safety, service
@@ -260,6 +259,7 @@ def test_a_state_of_a_newer_version_is_blocked_without_prev_or_bad(world):
 def test_a_file_turning_newer_under_a_running_instance_is_not_overwritten(world):
     mod = world.add(world.spr)
     library = world.library
+    good = state_file(world).read_bytes()
     newer = json.dumps({"version": 3, "mods": [], "applied": {}}).encode()
     state_file(world).write_bytes(newer)
     assert [m.id for m in library.mods()] == [mod.id]  # it keeps what it holds for reading
@@ -268,6 +268,9 @@ def test_a_file_turning_newer_under_a_running_instance_is_not_overwritten(world)
     assert library.favorites() == set()
     assert state_file(world).read_bytes() == newer
     assert not (world.root / "state.json.bad").exists()
+    state_file(world).write_bytes(good)  # the newer build's file is replaced by a readable one: writes work again
+    library.set_favorite("test", True)
+    assert read_state(world)["favorites"] == ["test"]
 
 
 def test_a_file_that_cannot_be_opened_is_not_corruption_at_load(world, monkeypatch):
@@ -719,3 +722,538 @@ def test_importing_the_same_files_while_a_record_is_held_leaves_it_alone(world):
     unhide(world, mod, parked)
     library = world.reload()
     assert sorted(m.id for m in library.mods()) == sorted([mod.id, again.id])  # two mods of one content, kept
+
+
+# --- FUN-3: reads keep working while a journal is pending, writes stay protected ---
+
+class Crash(BaseException):
+    """A process exit, bypassing the ordinary exception rollback."""
+
+
+def journals_of(world: World, folder: str = "transactions") -> list[Path]:
+    return sorted((world.root / folder).glob("*/journal.json"))
+
+
+def crash_during(world: World, source: str, kind: str = "spr", core: str = "test") -> Path:
+    """Apply a source and die right after its game files were written: the write journal stays pending."""
+    def log(message):
+        if message.startswith("Installed "):
+            raise Crash()
+
+    with pytest.raises(Crash):
+        world.library.apply(core, source, log=log, kind=kind)
+    journal, = journals_of(world)
+    assert json.loads(journal.read_text())["phase"] == "writing"
+    return journal
+
+
+def two_sources(world: World):
+    """Two mods of one core, the first applied: the second one's switch is the write that dies."""
+    first = world.add(world.spr, payload=b"modded!!")
+    second = world.add(world.spr, payload=b"modded2!")
+    world.library.apply("test", f"mod:{first.id}")
+    return first, second
+
+
+def refuse_recovery(library: ModLibrary, code: str = "classic_open") -> None:
+    """Make every recovery attempt fail with a real error, as an open classic window or a running game does."""
+    def refuse(pin):
+        raise ServiceError(code)
+
+    library._write_check = refuse
+
+
+def allow_recovery(library: ModLibrary) -> None:
+    library._write_check = None
+
+
+WRITES = {
+    "favorite": lambda lib, w, mods: lib.set_favorite("test", True),
+    "alias": lambda lib, w, mods: lib.rename(mods[0].id, "alias"),
+    "seen": lambda lib, w, mods: lib.mark_seen(mods[0].id),
+    "apply": lambda lib, w, mods: lib.apply("test", f"mod:{mods[1].id}"),
+    "apply-off": lambda lib, w, mods: lib.apply("test", f"mod:{mods[1].id}"),  # mods off: configured only
+    "restore": lambda lib, w, mods: lib.restore("test"),
+    "toggle": lambda lib, w, mods: lib.toggle(False, True),
+    "add": lambda lib, w, mods: lib.add([incoming(w, "other_spr")]),
+    "remove": lambda lib, w, mods: lib.remove(mods[0].id, confirm=True),
+    "dismiss": lambda lib, w, mods: lib.dismiss("untracked", [{"install": w.key(), "core": "test_spr"}]),
+    "clear-built": lambda lib, w, mods: lib.clear_built(),
+}
+
+
+def test_the_report_reproduction_a_steam_repair_after_a_crash_no_longer_blocks_the_library(world):
+    first, second = two_sources(world)
+    crash_during(world, f"mod:{second.id}")
+    world.spr.write_bytes(OFFICIAL)  # Steam's verify: the bytes match neither the before nor the after
+    library = world.reload()
+    # reads and writes alike: nothing answers entry_changed any more
+    assert [m.id for m in library.mods()] == [first.id, second.id]
+    library.set_favorite("test", True)
+    assert world.spr.read_bytes() == OFFICIAL  # the outside change is left as it is
+    assert not journals_of(world)  # the rollback finished and retired its journal
+    assert library._recovery_error is None
+
+
+def test_a_left_file_keeps_its_old_record_without_a_new_date_so_it_reads_as_changed(world):
+    first, second = two_sources(world)
+    key = str(world.spr.resolve())
+    old = copy.deepcopy(read_state(world)["applied"][key])
+    crash_during(world, f"mod:{second.id}")
+    world.spr.write_bytes(header_bundle(b"outside!"))  # the same size as the recorded bytes, other content
+    library = world.reload()
+    record = library._applied[key]
+    assert record["mtime"] == old["mtime"] != world.spr.stat().st_mtime_ns  # no new date stamped from the file
+    assert record["sha1"] == old["sha1"] and record["source"] == f"mod:{first.id}"
+    assert library.state("test").applied != f"mod:{first.id}"  # the outside bytes are not the recorded ones
+    assert not journals_of(world)
+
+
+def test_a_file_that_is_back_to_its_before_or_after_is_restored_as_before(world):
+    first, second = two_sources(world)
+    before = world.spr.read_bytes()
+    crash_during(world, f"mod:{second.id}")
+    assert world.spr.read_bytes() != before
+    library = world.reload()
+    assert world.spr.read_bytes() == before and not journals_of(world)
+    assert library._applied[str(world.spr.resolve())]["source"] == f"mod:{first.id}"
+
+
+def forget_configuration(world: World) -> None:
+    """Nothing configured keeps the original of a name any more (the user chose again, another instance cleared it)."""
+    edit = json.loads((world.root / "profiles.json").read_text())
+    for folder in edit["folders"].values():
+        folder["configured"] = {}
+    (world.root / "profiles.json").write_text(json.dumps(edit))
+
+
+def test_a_restored_write_releases_the_original_it_kept_but_a_left_file_keeps_it(world):
+    """The trap of _release_failed: the original kept by a failed write is released once the file is back, but it is
+    the only official copy of a file left as it is."""
+    mod = world.add(world.spr, payload=b"modded!!")
+    original = world.original(world.spr)
+    crash_during(world, f"mod:{mod.id}")  # the first write over an official file kept it in originals/
+    assert original.read_bytes() == OFFICIAL and any(
+        item["kept_now"] for item in json.loads(journals_of(world)[0].read_text())["files"])
+    forget_configuration(world)
+    world.reload()  # nothing changed outside: the file is back as it was, the copy is not needed
+    assert world.spr.read_bytes() == OFFICIAL and not original.exists()
+
+
+def test_the_only_official_original_of_a_left_file_is_not_released(world):
+    mod = world.add(world.spr, payload=b"modded!!")
+    original = world.original(world.spr)
+    crash_during(world, f"mod:{mod.id}")
+    forget_configuration(world)
+    world.spr.write_bytes(header_bundle(b"outside!"))
+    world.reload()
+    assert original.read_bytes() == OFFICIAL  # the only official copy stays
+    assert world.spr.read_bytes() == header_bundle(b"outside!") and not journals_of(world)
+
+
+def test_a_failed_write_whose_file_changed_meanwhile_leaves_it_and_keeps_the_original(world, monkeypatch):
+    """The same rule on the write's own failure path (not a recovery)."""
+    mod = world.add(world.spr, payload=b"modded!!")
+    original = world.original(world.spr)
+    library = world.library
+    real, calls = library._save, []
+
+    def failing_save():
+        calls.append(1)
+        if len(calls) == 1:
+            forget_configuration(world)
+            world.spr.write_bytes(header_bundle(b"outside!"))  # an outside change while the state is saved
+            raise OSError(errno.ENOSPC, "Synthetic full disk")
+        return real()
+
+    monkeypatch.setattr(library, "_save", failing_save)
+    with pytest.raises(ServiceError, match="library_io_error"):
+        library.apply("test", f"mod:{mod.id}")
+    monkeypatch.undo()
+    assert world.spr.read_bytes() == header_bundle(b"outside!") and not journals_of(world)
+    assert original.read_bytes() == OFFICIAL
+
+
+def kept_write(world: World):
+    """A write that dies after it kept an outside mod's bytes as a library mod: (the kept mod's id, those bytes)."""
+    first = world.add(world.spr, payload=b"modded!!")
+    second = world.add(world.spr, payload=b"modded2!")
+    world.library.apply("test", f"mod:{first.id}")
+    unknown = header_bundle(b"someone's mod")
+    world.spr.write_bytes(unknown)  # an outside mod over the library's: nothing in the library holds its bytes
+    journal = crash_during(world, f"mod:{second.id}")
+    data = json.loads(journal.read_text())
+    assert len(data["kept"]) == 1  # the outside bytes were kept as a mod before the write
+    return data["kept"][0], unknown
+
+
+def test_a_mod_kept_from_a_left_file_is_not_forgotten(world):
+    kept_id, unknown = kept_write(world)
+    world.spr.write_bytes(header_bundle(b"outside!"))  # changed again behind the crash: the file is left as it is
+    library = world.reload()
+    kept = next(m for m in library.mods() if m.id == kept_id)  # its bytes are in no game file: it stays
+    assert kept.file.read_bytes() == unknown
+    assert world.spr.read_bytes() == header_bundle(b"outside!") and not journals_of(world)
+
+
+def test_a_restored_write_forgets_the_mods_it_kept(world):
+    kept_id, unknown = kept_write(world)
+    library = world.reload()  # nothing changed outside: the file is back as it was, the kept mod is not needed
+    assert world.spr.read_bytes() == unknown
+    assert kept_id not in [m.id for m in library.mods()] and not journals_of(world)
+    assert not (world.root / "mods" / kept_id).exists()
+
+
+def build(world: World, write_check=None, data_id: str = "A") -> ModLibrary:
+    """A library over the world's folders (a restart), with the caller's own write check."""
+    return ModLibrary(world.root, world.catalog, None, world.settings, scan_allowed=lambda: world.consent,
+                      data_id=data_id, write_check=write_check)
+
+
+def refusing(code: str = "classic_open"):
+    def refuse(pin):
+        raise ServiceError(code)
+
+    return refuse
+
+
+def pending(world: World, code: str = "classic_open"):
+    """A crashed switch whose recovery fails with a real error: (the library, the two mods)."""
+    first, second = two_sources(world)
+    crash_during(world, f"mod:{second.id}")
+    library = build(world, refusing(code))
+    assert library._recovery_error is not None and library._recovery_error.code == code
+    return library, [first, second]
+
+
+def snapshot_of(world: World) -> dict:
+    return {name: (world.root / name).read_bytes() for name in ("state.json", "profiles.json")
+            if (world.root / name).exists()}
+
+
+def test_reads_work_while_a_journal_cannot_roll_back(world):
+    world.consent = True
+    library, mods = pending(world)
+    journal, = journals_of(world)
+    before = snapshot_of(world)
+    assert [m.id for m in library.mods()] == [m.id for m in mods]
+    assert library.favorites() == set() and library.state("test") and library.selection("test") is not None
+    assert library.configured("test") and library.roster_snapshot(["test"])["mods"]
+    assert library.status()["current"] and library.modified() is not None and library.intent()["enabled"]
+    assert library.scan().entries is not None and library.entries() is not None
+    assert library.judge_unfinished() == 0 and library.take_pruned_cores() == set()
+    assert journal.exists() and snapshot_of(world) == before  # the reads changed nothing
+
+
+@pytest.mark.parametrize("name", sorted(WRITES))
+def test_every_write_is_refused_with_the_real_error_and_goes_through_once_recovery_works(world, name):
+    library, mods = pending(world)
+    if name == "apply-off":  # mods off: the choice is only configured, a write of the configuration alone
+        edit = json.loads((world.root / "profiles.json").read_text())
+        edit["enabled"] = False
+        (world.root / "profiles.json").write_text(json.dumps(edit))
+        library = build(world, refusing())
+    journal, = journals_of(world)
+    before = snapshot_of(world)
+    expect_error("classic_open", lambda: WRITES[name](library, world, mods))
+    assert journal.exists() and snapshot_of(world) == before  # refused before anything was written
+    assert library._recovery_error is not None
+    allow_recovery(library)
+    WRITES[name](library, world, mods)  # the closed window: the next write recovers first, then goes ahead
+    assert not journals_of(world) and library._recovery_error is None
+
+
+def test_a_successful_recovery_clears_the_remembered_failure_for_reads_too(world, monkeypatch):
+    library, mods = pending(world)
+    allow_recovery(library)
+    monkeypatch.setattr(service, "RECOVERY_RETRY", 0.0)
+    library.mods()
+    assert library._recovery_error is None and not journals_of(world)
+    library.set_favorite("test", True)
+
+
+def test_reads_try_a_failed_recovery_again_only_when_the_journals_change_or_the_limit_passes(world, monkeypatch):
+    assert service.RECOVERY_RETRY == 60.0
+    library, mods = pending(world)
+    attempts = []
+    real = library._recover_transactions
+    monkeypatch.setattr(library, "_recover_transactions", lambda: attempts.append(1) or real())
+    for _ in range(4):
+        library.mods()
+        library.state("test")
+        library.favorites()
+    assert attempts == []  # reads stay fast: no retry within the limit
+    other = world.root / "transactions" / ("e" * 32) / "journal.json"
+    other.parent.mkdir()
+    other.write_text(json.dumps({"version": 1, "phase": "committed"}))  # another journal appears
+    library.mods()
+    assert len(attempts) == 1  # the set changed: one try
+    library.mods()
+    library.mods()
+    assert len(attempts) == 1
+    monkeypatch.setattr(service, "RECOVERY_RETRY", 0.0)  # the limit has passed
+    library.mods()
+    assert len(attempts) == 2
+
+
+def test_a_failure_is_logged_once_not_at_every_attempt(world, caplog, monkeypatch):
+    library, mods = pending(world)
+    monkeypatch.setattr(service, "RECOVERY_RETRY", 0.0)
+    with caplog.at_level(logging.WARNING, logger="ba_modding_toolkit.library.service"):
+        caplog.clear()
+        for _ in range(5):
+            library.mods()
+    assert [r for r in caplog.records if "Mod recovery pending" in r.getMessage()] == []
+
+
+def test_the_migration_save_of_a_read_skips_instead_of_raising(world):
+    library, mods = pending(world)
+    library._migrations.discard(LEGACY_REMAP)  # a migration still to save, as when the file was read late
+    library._migration_pending = True
+    before = snapshot_of(world)
+    assert [m.id for m in library.mods()] == [m.id for m in mods]  # the refresh skips it instead of raising
+    assert library._migration_pending and snapshot_of(world) == before
+    allow_recovery(library)
+    library.set_favorite("test", True)
+    assert not library._migration_pending and read_state(world)["migrations"] == [LEGACY_REMAP]
+
+
+def test_a_remembered_failure_is_cleared_when_the_journals_are_gone(world, monkeypatch):
+    library, mods = pending(world)
+    for journal in journals_of(world):
+        service.shutil.rmtree(journal.parent)  # the user removes it by hand
+    library.mods()
+    assert library._recovery_error is None
+    library.set_favorite("test", True)
+
+
+# --- FUN-3: folder_changed ---
+
+def edit_journal(journal: Path, change) -> None:
+    data = json.loads(journal.read_text())
+    change(data)
+    journal.write_text(json.dumps(data))
+
+
+def test_a_new_resource_folder_alone_is_no_folder_change(world):
+    first, second = two_sources(world)
+    before = world.spr.read_bytes()
+    journal = crash_during(world, f"mod:{second.id}")
+    edit_journal(journal, lambda data: data["pin"]["dirs"].append(str(world.tmp / "a-new-resource-folder")))
+    library = world.reload()  # same install, same key, other dirs: every target is still in a resource folder
+    assert library._recovery_error is None and not journals_of(world)
+    assert world.spr.read_bytes() == before
+
+
+def test_changed_folders_stay_folder_changed_when_a_target_is_outside_the_resource_folders(world):
+    first, second = two_sources(world)
+    journal = crash_during(world, f"mod:{second.id}")
+
+    def change(data):
+        data["pin"]["dirs"].append(str(world.tmp / "a-new-resource-folder"))
+        data["files"][0]["target"] = str(world.tmp / "elsewhere" / Path(data["files"][0]["target"]).name)
+
+    edit_journal(journal, change)
+    before = snapshot_of(world)
+    library = world.reload()
+    assert library._recovery_error.code == "folder_changed"
+    assert [m.id for m in library.mods()] == [first.id, second.id]  # reads work
+    expect_error("folder_changed", lambda: library.set_favorite("test", True))  # writes refuse
+    expect_error("folder_changed", lambda: library.apply("test", f"mod:{first.id}"))
+    assert journal.exists() and snapshot_of(world) == before
+
+
+def test_a_journal_of_an_install_that_is_not_known_waits_while_other_installs_are_written(world, monkeypatch):
+    folder = japan(world)
+    other = pin_of(world, folder)
+    mod = world.add(world.spr, payload=b"modded!!")
+    world.library.apply("test", f"mod:{mod.id}", pin=other)
+    second = world.add(world.spr, payload=b"modded2!")
+    japan_file = folder / world.spr.name
+    before = japan_file.read_bytes()
+
+    def log(message):
+        if message.startswith("Installed "):
+            raise Crash()
+
+    with pytest.raises(Crash):
+        world.library.apply("test", f"mod:{second.id}", pin=other, log=log)
+    journal, = journals_of(world)
+    moved = world.tmp / "japan-moved"
+    folder.rename(moved)  # the install's folder moved away: its pin is gone
+    library = world.reload()
+    assert library._recovery_error is None  # it waits, no failure
+    assert journal.exists() and (journal.parent / "0.bundle").exists()  # with its files
+    library.set_favorite("test", True)
+    library.apply("test", f"mod:{mod.id}")  # a write to the other install goes on
+    assert world.spr.read_bytes() == mod.file.read_bytes()
+    assert journal.exists()
+    attempts = []
+    real = library._recover_transactions
+    monkeypatch.setattr(library, "_recover_transactions", lambda: attempts.append(1) or real())
+    for _ in range(3):
+        library.mods()
+    assert attempts == []  # a retry that raises nothing follows the same limit as a failed one
+    monkeypatch.setattr(service, "RECOVERY_RETRY", 0.0)
+    library.mods()
+    assert len(attempts) == 1 and journal.exists()
+    moved.rename(folder)  # the install is back: the next write rolls its journal back, restoring only its own keys
+    library.set_favorite("test", False)
+    assert not journals_of(world) and japan_file.read_bytes() == before
+    assert world.spr.read_bytes() == mod.file.read_bytes()  # the other install was not touched
+
+
+def test_a_journal_whose_install_key_differs_waits_too(world):
+    first, second = two_sources(world)
+    journal = crash_during(world, f"mod:{second.id}")
+    written = world.spr.read_bytes()
+    edit_journal(journal, lambda data: data["pin"].update(key="/not/this/install"))
+    library = world.reload()
+    assert library._recovery_error is None and journal.exists()
+    assert world.spr.read_bytes() == written  # untouched
+    assert [m.id for m in library.mods()] == [first.id, second.id]
+
+
+def japan(world: World, *cores: str) -> Path:
+    folder = world.tmp / "japan"
+    for core in cores or ("test_spr",):
+        game_bundle(folder, core)
+    world.settings.set("game_resource_dir_japan", str(folder))
+    return folder
+
+
+def pin_of(world: World, folder: Path):
+    return next(pin for pin in world.library.installs() if pin.key == world.key(folder))
+
+
+# --- FUN-3: an asset deletion's journal ---
+
+def crash_during_removal(world: World, mod, monkeypatch) -> Path:
+    """Remove an applied mod and die while undoing the removal: the deletion journal stays pending."""
+    from ba_modding_toolkit.library import asset_delete
+
+    def die(self):
+        raise Crash()
+
+    monkeypatch.setattr(asset_delete.Deletion, "rollback", die)
+
+    def reconcile():
+        raise Crash()
+
+    with pytest.raises(Crash):
+        world.library.remove(mod.id, confirm=True, reconcile=reconcile)
+    monkeypatch.undo()
+    journal, = journals_of(world, "asset-deletions")
+    assert json.loads(journal.read_text())["games"]
+    return journal
+
+
+def test_an_asset_deletion_whose_target_is_gone_rolls_back_without_recreating_it(world, monkeypatch):
+    world.consent = True
+    mod = world.add(world.spr, payload=b"modded!!")
+    world.library.apply("test", f"mod:{mod.id}")
+    crash_during_removal(world, mod, monkeypatch)
+    world.spr.unlink()  # a game update renamed the bundle: hashing the target used to raise library_io_error
+    library = world.reload()
+    assert library._recovery_error is None and not journals_of(world, "asset-deletions")
+    assert not world.spr.exists()  # not recreated
+    assert [m.id for m in library.mods()] == [mod.id]  # the records are back
+    library.set_favorite("test", True)
+
+
+def test_an_asset_deletion_target_changed_outside_is_left_and_its_record_has_no_new_date(world, monkeypatch):
+    mod = world.add(world.spr, payload=b"modded!!")
+    world.library.apply("test", f"mod:{mod.id}")
+    key = str(world.spr.resolve())
+    recorded = copy.deepcopy(read_state(world)["applied"][key])
+    crash_during_removal(world, mod, monkeypatch)
+    outside = header_bundle(b"outside!")  # the same size as the recorded bytes
+    world.spr.write_bytes(outside)
+    library = world.reload()
+    assert library._recovery_error is None and not journals_of(world, "asset-deletions")
+    assert world.spr.read_bytes() == outside
+    assert library._applied[key]["mtime"] == recorded["mtime"] != world.spr.stat().st_mtime_ns
+    assert library.state("test").applied != f"mod:{mod.id}"
+    assert [m.id for m in library.mods()] == [mod.id]
+
+
+@pytest.mark.parametrize("how", ["folder gone", "key differs"])
+def test_an_asset_deletion_of_an_unknown_install_stays_a_remembered_failure(world, monkeypatch, how):
+    mod = world.add(world.spr, payload=b"modded!!")
+    world.library.apply("test", f"mod:{mod.id}")
+    journal = crash_during_removal(world, mod, monkeypatch)
+    if how == "key differs":
+        edit_journal(journal, lambda data: data["games"][0]["pin"].update(key="/not/this/install"))
+    else:
+        edit_journal(journal, lambda data: data["games"][0]["pin"].update(root=str(world.tmp / "gone")))
+    before = snapshot_of(world)
+    library = world.reload()
+    assert library._recovery_error.code == "folder_changed"  # it cannot wait: its rollback restores a whole snapshot
+    library.mods()
+    library.favorites()  # reads work
+    expect_error("folder_changed", lambda: library.set_favorite("test", True))  # writes refuse
+    assert journal.exists() and snapshot_of(world) == before
+
+
+# --- FUN-3: through the real RPC registry ---
+
+def crash_in_services(env) -> tuple:
+    """Two mods of the test core, the first applied, a switch to the second dying after its game files: the library
+    of the services holds a pending write journal."""
+    library = env.s.library
+    first = env.add(env.spr, payload=b"modded!!")
+    second = env.add(env.spr, payload=b"modded2!")
+    library.apply("test", f"mod:{first.id}")
+
+    def log(message):
+        if message.startswith("Installed "):
+            raise Crash()
+
+    with pytest.raises(Crash):
+        library.apply("test", f"mod:{second.id}", log=log)
+    assert list((library.root / "transactions").glob("*/journal.json"))
+    return first, second
+
+
+ANSWERS = (("roster.list", {}), ("family.get", {"key": "test"}), ("mods.state", {}), ("settings.get", {}))
+
+
+def test_after_a_steam_repair_every_call_answers_through_the_rpc_registry(rpc_env):
+    env = rpc_env
+    first, second = crash_in_services(env)
+    env.spr.write_bytes(OFFICIAL)  # the bytes match neither the before nor the after
+    env.reload_library()  # a restart: the library recovers at its build
+    for method, params in ANSWERS:
+        assert "error" not in rpc(env.app, method, **params), method
+    job = env.job("mods.toggle", enabled=False, expect=True)  # this answered entry_changed
+    assert job.state == "done", job.error
+    assert env.spr.read_bytes() == OFFICIAL
+    assert not list((env.s.library.root / "transactions").glob("*/journal.json"))
+
+
+def test_reads_answer_and_writes_refuse_through_the_rpc_registry_while_a_recovery_fails(rpc_env):
+    env = rpc_env
+    first, second = crash_in_services(env)
+    library = env.s.library
+    refuse = refusing()
+    library._write_check = refuse
+    for method, params in ANSWERS:
+        assert "error" not in rpc(env.app, method, **params), method
+    family = rpc(env.app, "family.get", key="test")["result"]["variants"][0]
+    assert {mod["id"] for mod in family["modList"]} == {first.id, second.id}
+    answer = rpc(env.app, "favorites.set", variant="test", on=True)
+    assert answer["error"]["code"] == "classic_open"  # a write: the real error
+    job = env.job("mods.toggle", enabled=False, expect=True)
+    assert job.state == "failed" and job.error["code"] == "classic_open"
+    assert "error" not in rpc(env.app, "mods.state")
+    library._write_check = None
+    assert "error" not in rpc(env.app, "favorites.set", variant="test", on=True)
+    job = env.job("mods.toggle", enabled=False, expect=True)
+    assert job.state == "done", job.error
+    assert not list((library.root / "transactions").glob("*/journal.json"))
+
+
+def test_a_mod_update_is_refused_before_the_rebuild_while_a_recovery_has_failed(world, monkeypatch):
+    library, mods = pending(world)
+    monkeypatch.setattr(core, "process_mod_update", lambda *a, **k: pytest.fail("the rebuild started"))
+    expect_error("classic_open", lambda: library.update(mods[0].id))
