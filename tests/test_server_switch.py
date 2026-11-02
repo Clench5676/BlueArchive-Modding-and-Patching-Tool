@@ -15,6 +15,7 @@ from test_library import setup_library, game_bundle, make_mod
 def test_missing_japanese_folder_keeps_global_and_hall_then_recovers(app, services, tmp_path, monkeypatch):
     settings = services.settings
     global_dir = tmp_path / 'global'; global_dir.mkdir()
+    (global_dir / 'uis-atlas-test.bundle').touch()  # a game folder holds UI atlas bundles
     settings.set('file_source', 'windows_global')
     settings.set('game_resource_dir', str(global_dir))
     settings.set('game_resource_dir_japan', '')
@@ -37,6 +38,7 @@ def test_missing_japanese_folder_keeps_global_and_hall_then_recovers(app, servic
     assert rpc(app, 'hall.get')['result'] == hall
     japan = tmp_path / 'japan'; japan.mkdir()
     game_bytes = japan / 'sentinel.bundle'; game_bytes.write_bytes(b'never write game files')
+    (japan / 'uis-atlas-test.bundle').touch()
     assert 'result' in rpc(app, 'settings.set', key='gameDir.japan', value=str(japan))
     assert 'result' in rpc(app, 'settings.set', key='fileSource', value='windows_japan')
     assert settings.server_region() == 'japan'
@@ -119,6 +121,7 @@ def test_missing_global_directory_preserves_japan_and_preferences(app, services,
 def test_directory_change_cannot_retarget_an_active_writer(app, services, tmp_path, monkeypatch):
     folder = tmp_path / "new"
     folder.mkdir()
+    (folder / "uis-atlas-test.bundle").touch()  # a game folder holds UI atlas bundles
     services.settings.save()
     before = services.settings.path.read_bytes()
     monkeypatch.setattr(services.jobs, "busy", lambda *args: True)
@@ -166,7 +169,7 @@ def test_switch_rebuilds_game_library_catalog_and_cab_index(tmp_path, monkeypatc
     for region in ("global", "japan"):
         folder = tmp_path / region
         folder.mkdir()
-        paths[region] = bundle(folder, "same.bundle", "CAB-SHARED")
+        paths[region] = bundle(folder, "uis-atlas-same.bundle", "CAB-SHARED")  # a game folder holds UI atlas bundles
         settings.set("game_resource_dir" + ("_japan" if region == "japan" else ""), str(folder))
     settings.save()
     services = Services(settings, tmp_path)

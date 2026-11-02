@@ -43,6 +43,14 @@ captures. Save and App selection avoid unrelated game-writer status reads, and l
 even when no ordinary Mods exist. The roster/family payload's optional `thumbnail` field selects an App capture or an explicit verified
 default. `photography.changed {variant}` invalidates the roster without reloading an active camera.
 
+The manifest is read per entry. A photo record or a selection that cannot be used (a bad digest, an id that differs
+from its key, a selection of a photo that is gone or of another family after the catalog changed) costs that entry
+only: it is logged once, left out of every use and written back unchanged by every write, and a stale selection
+reads as the default thumbnail. A new choice for the same student replaces its kept selection. Deleting a photo a
+kept row names is refused (`photo_in_use`). A manifest that cannot be read as a whole (not JSON, another version,
+wrong top-level types, a symlink) is never rewritten, copied or replaced: the photograph RPCs answer
+`photo_library_invalid`, while `roster.list` and `family.get` log it once and use no photograph.
+
 | RPC | Parameters | Result |
 | --- | --- | --- |
 | `photography.list` | `variant` | Captures, App choice, verified default URL, game intent/availability/error |
@@ -930,7 +938,7 @@ stops the server (the page shows Closed); with `--serve` it gives `native_unavai
 
 | Method | Result |
 |---|---|
-| `app.info` | version, language, platform, game found, resource version, consent (`null`, `true`, `false`), `uiCached` (consented light assets on disk for the current resource version), paths, `debug` (started with `--debug`) |
+| `app.info` | version, language, platform, game found (the selected folder is a game install, as for `settings.set`; a folder saved earlier that holds no game starts on the no-game screen), resource version, consent (`null`, `true`, `false`), `uiCached` (consented light assets on disk for the current resource version), paths, `debug` (started with `--debug`) |
 | `app.consent {granted}` | records the choice; `false` closes the app |
 | `app.quit` | closes the window; `busy` while a writer job runs; in browser mode answers, then stops the server; `native_unavailable` with `--serve` |
 | `app.openClassic {tab}` | `{started}`: starts the classic window on a tab (`settings`: its settings) and waits for it (30 s at most), or brings the open one to the front, with the tab unless a classic task runs; a window an earlier instance left is only raised; `classic_failed {exit_code}` when the child exits or stays silent first; `busy` instead of a new window while a job writing the game folder is queued or running |
@@ -940,7 +948,7 @@ stops the server (the page shows Closed); with `--serve` it gives `native_unavai
 | `classic.clearQueue` | `{}` |
 | `i18n.strings {lang}` | `{key: text}` for `webui.*` |
 | `roster.list` | families with variants, mod counts, fresh flags, favourites, recent order, `added` (when the newest own mod was added), `aliases` per family and per variant (matched by the search, never shown), `custom` per family (the user's own aliases), `configured` manifest sources and independent `previewSources`; reads one library snapshot, without physical `selection` verification (available through `family.get`); without scan consent Replaced comes from the library's records only |
-| `settings.get` / `settings.set {key, value}` | the settings popup's values; key `roster` keeps the student list's view (merge, segment filters, sort, order, filter groups; `webui/state.py roster_view`); `lobbyZoom` is `{mode, custom}` in `settings.get`, set by keys `lobbyZoom` (`game`, `art`, `unlocked`, `custom`) and `lobbyZoomCustom` (1.0 to 4.0 game views across, kept in 0.1 steps); `lobbyPost` and `lobbyIntro` (the lobby's post-processing and its intro, on by default); the booleans `tray` (the tray or menu bar icon) and `classicPrompt` (the hand-off prompt); `settings.get` adds `traySupported` |
+| `settings.get` / `settings.set {key, value}` | the settings popup's values; key `roster` keeps the student list's view (merge, segment filters, sort, order, filter groups; `webui/state.py roster_view`); `lobbyZoom` is `{mode, custom}` in `settings.get`, set by keys `lobbyZoom` (`game`, `art`, `unlocked`, `custom`) and `lobbyZoomCustom` (1.0 to 4.0 game views across, kept in 0.1 steps); `lobbyPost` and `lobbyIntro` (the lobby's post-processing and its intro, on by default); the booleans `tray` (the tray or menu bar icon) and `classicPrompt` (the hand-off prompt); `settings.get` adds `traySupported`; the game folder keys `gameDir.global` and `gameDir.japan` are refused with `game_not_found` unless the folder is a game install (`searching.is_game_install`: one of its search directories holds a UI atlas bundle, `uis-atlas-*.bundle`, decided by file names only, so the resource folder itself stays valid), and `fileSource` with `game_directory_missing` for such a folder |
 | `family.get {key}` | a family with its variants (and `aliases` and `custom`, as in `roster.list`), mods and each variant's state, judged cheaply (`copy`, `restorable` and `official` per file; Needs Fix only from the record of the switch that wrote the file); `configured {spr, lobby}` per variant (the sources of its primary cores); `modelFiles` per variant (the 3D model's prefab bundles, newest first, `fixed` or `ok` from the header) and `version` (the game's resource version, so a switched install reloads the screen); `modList` by the variant the current catalog gives each mod's core |
 | `lobby.warm` | builds the memorial lobby prefab index in the background once per game; dependency CABs resolve on demand instead of triggering an eager full-directory index |
 | `lobby.lines {variant, talks, lang}` | `{clip: {lang: text, voice}}`: zh-CN from Kivo, ja from Kivo else the Global server, en, zh-TW, ko and th from the Global server (read only for a `lang` other than zh-CN, left out when its table is not in within 3 s); `talks` (`{animation: [clip ids]}` from the skeleton) places the Global rows on the clips; `lines_unavailable` when neither source can be read |

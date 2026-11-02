@@ -246,6 +246,7 @@ class Services:
         self._preview_cache = None
         self._injected = {k for k, v in (("game", game), ("catalog", catalog), ("library", library)) if v is not None}
         self._other_games: dict[str, Any] = {}  # other installs' GameAssets by install key, for <core>@<id> URLs
+        self._install_stamps: tuple | None = None  # game_found: the listing stamps of the folders last found to hold a game
         self._prune_job: str | None = None
         self._startup_ready = True  # start() defers maintenance until the page reports its first reveal
         self._profiles_signature: Any = None
@@ -347,9 +348,30 @@ class Services:
             return False
         try:
             self.game
-            return True
         except ServiceError:
             return False
+        # a folder that holds no game is no game: the page then starts on the no-game screen
+        return "game" in self._injected or self._holds_game()
+
+    def _holds_game(self) -> bool:
+        """Whether the selected game folder is a game install (``searching.is_game_install``). A positive verdict is
+        kept while the search directories keep their listing stamps; a folder without the game is checked again at
+        every call, so a download that adds the UI bundles is seen."""
+        from ..searching import get_search_dirs, is_game_install
+
+        base = self.settings.game_dir()
+        if base is None:
+            return False
+        try:
+            stamps = tuple((str(path), stat.st_mtime_ns, stat.st_ino)
+                           for path, stat in ((path, path.stat()) for path in get_search_dirs(base)))
+        except OSError:
+            return False
+        if self._install_stamps == stamps:
+            return True
+        found = is_game_install(base)
+        self._install_stamps = stamps if found else None
+        return found
 
     @property
     def catalog(self) -> Any:
