@@ -216,6 +216,9 @@ Imports only go one way: `webui` → `library` → `catalog` → `gameassets` �
   `%LOCALAPPDATA%\bluearchive-modding-patching-tool\cache` on Windows,
   `~/Library/Application Support/bluearchive-modding-patching-tool/cache` on macOS and
   `$XDG_CACHE_HOME/bluearchive-modding-patching-tool` (or `~/.cache/...`) elsewhere. It can be cleared from the UI.
+  It keeps the three most recently used resource-version folders (Global and Japan can both be in use; a read or write
+  marks a folder used): a new version's first successful write deletes the other version folders, only those directly
+  inside the cache root, never links or the `previews/` store. A folder that cannot be removed is logged and skipped.
   The old `BA-Modding-Toolkit` user folder is renamed automatically on first start; obsolete caches are rebuilt.
   Close older app windows first, then use the new version: an old build started afterward can recreate its old folder.
 - **Preview cache.** On by default, preserving an explicitly saved off setting and independent of the initial official
