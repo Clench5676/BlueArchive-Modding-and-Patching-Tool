@@ -15,7 +15,9 @@ The services wire it (see docs/web-ui.md, "Game watch"):
   yes; it updates the ``mods.state`` snapshot and publishes ``mods.state``;
 - ``publish(event, data)``: ``classic.closed {code: null}`` when a watched classic window ends;
 - ``request_scan()``: on the game stopping, Steam going idle and a watched classic window ending; the scanner runs
-  it only with scan consent, and coalesces requests.
+  it only with scan consent, and coalesces requests;
+- ``on_steam_idle()``: on Steam going idle, before ``request_scan()``; the services rebuild the game-backed services
+  there when a game update changed the resource version.
 """
 
 from __future__ import annotations
@@ -71,6 +73,7 @@ class GameWatch:
                  active: Callable[[], bool] = lambda: False,
                  own_classic: Callable[[], int | None] = lambda: None,
                  on_classic_closed: Callable[[], Any] | None = None,
+                 on_steam_idle: Callable[[], Any] | None = None,
                  check_game: Callable[[], None] | None = None,
                  check_steam: Callable[[Path | str], None] | None = None,
                  fast: float = FAST_SECONDS, slow: float = SLOW_SECONDS):
@@ -87,6 +90,7 @@ class GameWatch:
         self._active = active
         self._own_classic = own_classic
         self._on_classic_closed = on_classic_closed
+        self._on_steam_idle = on_steam_idle
         self._check_game = check_game
         self._check_steam = check_steam
         self._fast, self._slow = fast, slow
@@ -126,6 +130,8 @@ class GameWatch:
                     self._call(self._on_classic_closed)
             stopped = previous.game == "game_running" and state.game is None
             idle = set(previous.steam_busy) - set(state.steam_busy)
+            if idle and self._on_steam_idle is not None:
+                self._call(self._on_steam_idle)
             if stopped or idle or closed:
                 self._call(self._request_scan)
             return state

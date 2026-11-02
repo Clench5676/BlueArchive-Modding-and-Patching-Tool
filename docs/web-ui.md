@@ -903,6 +903,7 @@ watch.state  # WatchState(game, steam_busy, classic) with .reason: game_running,
 | `on_change(state)` | the services | the first poll, every change of the answer and every `profiles_seen()` yes: updates the `mods.state` snapshot and publishes `mods.state` |
 | `publish(event, data)` | the event bus | `classic.closed {code: null}` when a watched classic window ends, after `on_change`; then `on_classic_closed()` |
 | `request_scan()` | the scanner | the game stopping (from `game_running`), an install's Steam going idle, a watched classic window ending; the scanner runs it only with scan consent |
+| `on_steam_idle()` | the services | an install's Steam going idle, before `request_scan()`: when a built game's resource version changed (a game update), the game, catalog and library are rebuilt through the settings-change path (`reload_game`), at once or, while a job runs, at the next idle; an unchanged version does nothing |
 
 A failing callable is logged and never stops the thread: an unreadable process list is `game_status_unavailable`,
 a failed Steam check is idle, and a failed classic lookup keeps the last answer.

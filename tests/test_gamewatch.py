@@ -121,6 +121,23 @@ def test_one_busy_install_makes_the_switch_unavailable(world):
     assert world.take() == [("change", WatchState()), ("scan",)]
 
 
+def test_steam_going_idle_calls_its_hook_before_the_scan(world):
+    watch = world.watch(on_steam_idle=lambda: world.events.append(("steam idle",)))
+    watch.poll()
+    world.take()
+    world.busy = {"/games/japan"}
+    watch.poll()
+    assert world.take() == [("change", WatchState(steam_busy=("/games/japan",)))]
+    world.busy = set()
+    watch.poll()
+    assert world.take() == [("change", WatchState()), ("steam idle",), ("scan",)]
+    world.game = "game_running"
+    watch.poll()
+    world.game = None
+    watch.poll()
+    assert ("steam idle",) not in world.take()  # the game stopping is no Steam idle
+
+
 def test_every_known_install_is_checked_once(world):
     checked = []
     world.folders = [Path("/games/global"), Path("/games/japan"), Path("/games/global")]
