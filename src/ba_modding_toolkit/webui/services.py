@@ -38,8 +38,8 @@ PRUNE_WAIT = 120.0  # seconds the start scan waits for the library.prune job sub
 PROGRESS_PUBLISH = 0.25  # seconds between two mods.state events while a toggle reports its progress
 UPDATE_QUIT_WAIT = 3.0  # seconds for the native window to close for an update
 # the library's files and folders a library move takes along; the lock files are made again where needed
-LIBRARY_ITEMS = ("mods", "originals", "built", "transactions", "import-transactions", "photographs", "state.json", "profiles.json", "profiles.json.prev",
-                 "profiles.json.bad")
+LIBRARY_ITEMS = ("mods", "originals", "built", "transactions", "import-transactions", "photographs", "state.json",
+                 "state.json.prev", "state.json.bad", "profiles.json", "profiles.json.prev", "profiles.json.bad")
 
 
 class ModsSnapshot:
@@ -453,7 +453,7 @@ class Services:
 
     def move_library(self, target: Path) -> Path:
         """Use another folder for the mod library. The current library moves there when the target holds none: its
-        mods, kept originals, built copies, state.json and profiles.json (with its .prev and .bad)."""
+        mods, kept originals, built copies, state.json and profiles.json (each with its .prev and .bad)."""
         target = Path(target).expanduser().resolve()
         devmode.check_read(target)
         current = self.library_dir().resolve()

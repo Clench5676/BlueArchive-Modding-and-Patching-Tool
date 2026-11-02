@@ -1204,6 +1204,7 @@
 			"folder_changed": "遊戲資料夾已變更，請重試",
 			"state_changed": "已在其他地方切換，請重新確認",
 			"profiles_unreadable": "無法讀取 Mod 設定：{file}",
+			"library_state_unreadable": "無法讀取 Mod 倉庫：{file}",
 			"not_enough_space": "空間不足：需要 {need}，可用 {free}",
 			"mod_last_copy": "遊戲仍在使用的檔案的唯一副本：{file}",
 			"scan_off": "檔案檢查已關閉",

@@ -1204,6 +1204,7 @@
 			"folder_changed": "게임 폴더 변경됨, 다시 시도",
 			"state_changed": "다른 곳에서 전환됨, 다시 확인",
 			"profiles_unreadable": "모드 설정을 읽을 수 없음: {file}",
+			"library_state_unreadable": "모드 라이브러리를 읽을 수 없음: {file}",
 			"not_enough_space": "공간 부족: 필요 {need}, 여유 {free}",
 			"mod_last_copy": "게임에서 사용 중인 파일의 유일한 사본: {file}",
 			"scan_off": "파일 검사 꺼짐",

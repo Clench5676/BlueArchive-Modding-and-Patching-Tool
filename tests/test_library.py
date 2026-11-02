@@ -593,8 +593,15 @@ def test_corrupt_state_is_tolerated(setup_library, contents):
     library = reload_library(env)
     assert library.mods() == []
     assert library.favorites() == set()
-    library.set_favorite("test", True)
-    assert json.loads((env.root / "state.json").read_text())["favorites"] == ["test"]
+    if contents == '{"version":1,"mods":[{}]}':
+        # one bad record is held and written back; the file stays usable
+        library.set_favorite("test", True)
+        data = json.loads((env.root / "state.json").read_text())
+        assert data["favorites"] == ["test"] and data["mods"] == [{}]
+    else:
+        # a state that cannot be read at all is never replaced (tests/test_library_state_safety.py)
+        expect_error("library_state_unreadable", lambda: library.set_favorite("test", True))
+        assert (env.root / "state.json").read_text() == contents
 
 
 def test_state_lists_all_parts_and_uses_cached_hashes_without_loading(setup_library, monkeypatch):

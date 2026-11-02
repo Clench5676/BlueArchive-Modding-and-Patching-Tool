@@ -1204,6 +1204,7 @@
 			"folder_changed": "ゲームフォルダー変更あり、再試行",
 			"state_changed": "他の場所で切り替え済み、再確認",
 			"profiles_unreadable": "MOD設定を読み込めません：{file}",
+			"library_state_unreadable": "MODライブラリを読み込めません：{file}",
 			"not_enough_space": "空き容量不足：必要 {need}、空き {free}",
 			"mod_last_copy": "ゲームで使用中のファイルの唯一の控え：{file}",
 			"scan_off": "ファイルチェックOFF",
