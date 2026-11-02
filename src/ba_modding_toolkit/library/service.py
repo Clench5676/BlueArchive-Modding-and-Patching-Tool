@@ -934,6 +934,15 @@ class ModLibrary:
         variant = self.catalog.variant_for_core(core_of(record["files"][0]))
         return variant.key if variant is not None else record["target"]
 
+    def _repaired_id(self, record: dict[str, Any]) -> str:
+        """The repaired copy a mod links to, "" when the link points at no record: an old library that deleted the copy
+        keeps its id, which counts as none. A held record is there (its files are missing for now, not gone): its link
+        stays, and the mod stays not repairable while it is held."""
+        mod_id = record.get("repaired_id")
+        if not isinstance(mod_id, str) or not mod_id:
+            return ""
+        return mod_id if mod_id in self._records or mod_id in self._held_ids() else ""
+
     def _entry(self, record: dict[str, Any]) -> ModEntry:
         paths = self._paths(record)
         parsed = parse_filename(paths[0].name)
@@ -941,7 +950,7 @@ class ModLibrary:
         return ModEntry(record["id"], paths[0], self._label(record), self._target_of(record), record["kind"],
                         record["added"], not record["seen"], sum(p.stat().st_size for p in paths),
                         max(date_of(path.name) for path in paths), parsed.crc, core_of(paths[0].name),
-                        repaired_from=record.get("repaired_from", ""), repaired_id=record.get("repaired_id", ""),
+                        repaired_from=record.get("repaired_from", ""), repaired_id=self._repaired_id(record),
                         user_added=record.get("user_added") is True, alias=record.get("alias", ""),
                         label_base=record["label"])
 
@@ -1373,7 +1382,8 @@ class ModLibrary:
             except FileNotFoundError:
                 stamp = None
             stamps.append([str(path.resolve()), stamp])
-        identity = [pin.key if pin else None, self._target_of(record), record.get("repaired_from"), record.get("repaired_id"), stamps]
+        identity = [pin.key if pin else None, self._target_of(record), record.get("repaired_from"),
+                    self._repaired_id(record) or None, stamps]
         return hashlib.sha256(json.dumps(identity).encode()).hexdigest()
 
     @_serialized
@@ -1385,7 +1395,7 @@ class ModLibrary:
             progress({"current": 1, "total": 1, "step": "import.step.check"})
         report = self._check_group({path.name: path for path in self._paths(record)}, pin or self.current_pin(),
                                    variant_key=self._target_of(record))
-        report["repaired_from"], report["repaired_id"] = record.get("repaired_from", ""), record.get("repaired_id", "")
+        report["repaired_from"], report["repaired_id"] = record.get("repaired_from", ""), self._repaired_id(record)
         report["remappable"] = report["remappable"] and not (report["repaired_from"] or report["repaired_id"])
         return report
 
@@ -1910,6 +1920,9 @@ class ModLibrary:
                         applied.update(source='removed', removed=True)
                         applied.pop('build', None)
                 del self._records[mod_id]
+                for other in self._records.values():
+                    if other.get("repaired_id") == mod_id:
+                        del other["repaired_id"]  # the original is repairable again: one write with the copy's removal
                 self._save()
                 shutil.rmtree(directory)
                 self._delete_built_files(keys, self.profiles.read())
@@ -3719,17 +3732,22 @@ class ModLibrary:
 
     # --- built copies ---
 
+    def _build_signature(self, sources: list[Path], targets: list[Path], pin: Pin) -> str:
+        """What a build is made from: the program, the bytes of its inputs, the official bytes of its targets and the
+        options. A game file written from it records this as its ``build``."""
+        inputs = [(path.name, self._hashes.get(path).sha1) for path in sources]
+        originals = [(path.name, self._hashes.get(self._official_for(path, pin)).sha1) for path in targets]
+        options = (sorted(self.settings.asset_types()), self.settings.save_options(self.settings.crc_needed(targets[0])),
+                   self.settings.spine_options(), self.settings.anim_check_options())
+        return hashlib.sha1(repr((1, _build_version(), inputs, originals, options)).encode()).hexdigest()
+
     def _cached_build(self, sources: list[Path], targets: list[Path], pin: Pin,
                       build: Callable[[], dict[Path, Path]], build_keys: dict[Path, str]) -> dict[Path, Path]:
         """Reuse only a referenced instant-On copy with the same program, inputs, official targets and options.
         Prepared files otherwise live solely in the caller's temporary staging directory."""
         if len({path.name for path in targets}) != len(targets):
             return build()  # built keys identify parts by file name
-        inputs = [(path.name, self._hashes.get(path).sha1) for path in sources]
-        originals = [(path.name, self._hashes.get(self._official_for(path, pin)).sha1) for path in targets]
-        options = (sorted(self.settings.asset_types()), self.settings.save_options(self.settings.crc_needed(targets[0])),
-                   self.settings.spine_options(), self.settings.anim_check_options())
-        signature = hashlib.sha1(repr((1, _build_version(), inputs, originals, options)).encode()).hexdigest()
+        signature = self._build_signature(sources, targets, pin)
         build_keys.update((target, signature) for target in targets)
         for folder in ((self.profiles.read() or {}).get("folders") or {}).values():
             for core, key in (folder.get("built") or {}).items():
@@ -3798,20 +3816,55 @@ class ModLibrary:
         self._drop_built(pin, [core])
         return None
 
+    def _current_builds(self, pin: Pin, core: str, record: dict[str, Any], targets: list[Path]) -> set[str]:
+        """The builds a write of a mod over an entry's game files signs now, as apply and switch sign them
+        (``_cached_build``); those that cannot be told are left out."""
+        def sign(sources: Callable[[], list[Path]], group: Callable[[], list[Path]]) -> str | None:
+            try:
+                files = group()
+                if not files or len({path.name for path in files}) != len(files):
+                    return None  # built keys identify parts by file name: such a write signs nothing
+                return self._build_signature(sources(), files, pin)
+            except (OSError, ServiceError):
+                return None
+
+        if record["kind"] == "other":
+            # a switch signs one slot's files, an apply the files of the whole mod: either may have written a part
+            signatures = {sign(lambda: self._paths(record), lambda: targets),
+                          sign(lambda: self._paths(record), lambda: self._game_files(record["target"], "other", pin))}
+        elif core_of(record["files"][0]) == core:
+            signatures = {sign(lambda: self._paths(record), lambda: targets)}
+        else:
+            signatures = {sign(lambda: self._preview(record, pin, full=True), lambda: targets)}
+        signatures.discard(None)
+        return signatures
+
     def _make_built(self, pin: Pin, entry: _Entry) -> None:
         """Keep the exact bytes of an entry's modded parts before an Off replaces them, whole: every non-official part
         of one write of its configured source, as a file of the mod in mods/<id>/ when one holds those bytes, else a
-        copy in built/<sha1>.bundle. The key replaces any earlier one."""
+        copy in built/<sha1>.bundle. The key replaces any earlier one. Nothing is kept when a part of a mod was not
+        written from the mod's current files (the mod was updated since): a key naming only some parts would put
+        official bytes over the others, and the old build must not come back. The entry is built again by the On."""
         source = entry.configured
         parts: dict[str, dict[str, Any]] = {}
         mod_files: dict[str, str] = {}
-        if source.startswith("mod:") and source[4:] in self._records:
-            for path in self._paths(self._records[source[4:]]):
+        record = self._records.get(source[4:]) if source.startswith("mod:") else None
+        if record is not None:
+            for path in self._paths(record):
                 with contextlib.suppress(OSError):
                     mod_files[self._hashes.get(path).sha1] = path.name
-        for part in entry.parts:
-            if part.official or not part.record:
+        modded = [part for part in entry.parts if not part.official and part.record]
+        current: set[str] | None = None
+        for part in modded:
+            if record is None or part.record["sha1"] in mod_files:
                 continue
+            if current is None:
+                current = self._current_builds(pin, entry.core, record, [part.path for part in entry.parts])
+            if part.record.get("build") not in current:
+                logger.info("Not keeping the built copy of %s: %s was not written from the current %s", entry.core,
+                            part.path.name, source)
+                return
+        for part in modded:
             sha1 = part.record["sha1"]
             if sha1 in mod_files:
                 parts[part.path.name] = {"sha1": sha1, "mod_file": mod_files[sha1]}
@@ -4893,7 +4946,7 @@ class ModLibrary:
         """Prepare a review in temporary storage; only accept_remap can add it to the library."""
         pin = self._current(pin)
         record = self._record(mod_id)
-        if record.get("repaired_from") or record.get("repaired_id"):
+        if record.get("repaired_from") or self._repaired_id(record):
             raise ServiceError("entry_changed")
         self._remap_previews = {token: preview for token, preview in self._remap_previews.items()
                                 if preview["expires"] > time.monotonic() and preview["source"] != mod_id}
@@ -5013,7 +5066,7 @@ class ModLibrary:
             self._remap_previews.pop(preview, None)
             raise ServiceError("entry_changed")
         record = self._record(prepared["source"])
-        if record.get("repaired_from") or record.get("repaired_id") or prepared["identity"] != self._identity(
+        if record.get("repaired_from") or self._repaired_id(record) or prepared["identity"] != self._identity(
                 {path.name: path for path in self._paths(record)}):
             raise ServiceError("entry_changed")
         with tempfile.TemporaryDirectory(prefix=devmode.LIBRARY_STAGING_PREFIX + "accept-") as temporary:
@@ -5036,7 +5089,8 @@ class ModLibrary:
     def update(self, mod_id: str, log: LogFunc = no_log,
                progress: Callable[[dict], None] | None = None, pin: Pin | None = None) -> UpdateResult:
         """Rebuild a mod against current official bundles and retain its old files. Its built copies go: they hold
-        the old build."""
+        the old build. The entries configured with it are marked updated (a game file still holds the old build); an
+        update that changed nothing marks none."""
         self._check_recovery()  # refused before the rebuild when a recovery has failed or the state cannot be saved
         self._check_writable()
         pin = self._current(pin)
@@ -5097,10 +5151,32 @@ class ModLibrary:
             for path in paths:
                 if path.name not in record["files"]:
                     path.unlink()
-        with contextlib.suppress(ServiceError):
-            for key in ((self.profiles.read() or {}).get("folders") or {}):
-                self._drop_built(key, when=lambda built: built.get("source") == f"mod:{mod_id}")
+        self._after_update(mod_id)
         return UpdateResult(self._entry(record), self._paths(record), previous)
+
+    def _after_update(self, mod_id: str) -> None:
+        """A mod's build changed: the built copies of the old build go, and every entry configured with the mod gets the
+        updated marker, so the game files still holding the old build are offered Apply Mod Configuration. An earlier
+        Keep as Is of that prompt is forgotten: it answered the old build."""
+        source, stamp = f"mod:{mod_id}", now()
+        dropped: list[dict] = []
+
+        def change(data: dict) -> bool:
+            changed = False
+            for folder in data["folders"].values():
+                for core in [core for core, key in folder["built"].items() if key.get("source") == source]:
+                    dropped.append(folder["built"].pop(core))
+                    changed = True
+                for core, entry in folder["configured"].items():
+                    if entry.get("source") == source:
+                        folder["updated"][core] = stamp
+                        if isinstance(folder["dismissed"].get("drift"), dict):
+                            folder["dismissed"]["drift"].pop(core, None)
+                        changed = True
+            return changed
+
+        with contextlib.suppress(ServiceError):
+            self._update_profiles(change, after=lambda data: self._delete_built_files(dropped, data))
 
     @_serialized
     def extract(self, target: str, out_dir: Path, log: LogFunc = no_log, pin: Pin | None = None,
