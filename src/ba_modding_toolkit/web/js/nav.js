@@ -10,7 +10,7 @@ import * as NGUI from "./ngui.js";
 import * as Popup from "./popup.js";
 import { navigationEntry, navigationOrigin } from "./navigation-layout.js";
 import { rpc } from "./api.js";
-import { T } from "./i18n.js";
+import { T, errorText } from "./i18n.js";
 import { ITEMS, activate, handOffPrompt, view } from "./nav-items.js";
 import { $, S, clone } from "./util.js";
 
@@ -44,7 +44,7 @@ async function click(item) {
       ask, open: openClassic, savePrompt,
     });
   } catch (err) {
-    notify(T(`error.${err.code || "internal"}`, err.params || { error: String(err) }), { kind: "error", error: err });
+    notify(errorText(err), { kind: "error", error: err });
   } finally {
     opening = false;
   }
