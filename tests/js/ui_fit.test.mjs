@@ -217,3 +217,131 @@ for (const locale of LOCALES) test(`the display settings' sort keys and filter o
     });
   }
 });
+
+// --- UI-19: text that sank far under its floor ---
+import { readFileSync } from "node:fs";
+const catalog = JSON.parse(readFileSync(new URL("../../src/ba_modding_toolkit/catalog/data/catalog.json", import.meta.url), "utf8"));
+const NAME_KEY = { "en-US": "en", "zh-CN": "zh-CN", "zh-TW": "zh-TW", "ja-JP": "ja", "ko-KR": "ko", "th-TH": "th" };
+// every variant's full name in a locale's language (Thai falls back to the English names, as the app does)
+const namesOf = (locale) => Object.values(catalog.variants).map((v) => v.names?.[NAME_KEY[locale]]?.full || v.names?.en?.full).filter(Boolean);
+const separator = (locale) => (/^(zh|ja)/.test(locale) ? "、" : ", ");
+
+// the Show in Finder / Explorer button: Btn_Up's body is 200 x 180 (inclined), its caption 32 down to 26 in 140
+const { explorerLayout, BODY, ICON, CAPTION } = await import("../../src/ba_modding_toolkit/web/js/explorer-button.js");
+const { TAN10 } = await import("../../src/ba_modding_toolkit/web/js/util.js");
+for (const locale of LOCALES) test(`the Show in Finder / Explorer caption wraps onto up to three lines inside the button at 26 or more in ${locale}`, () => {
+  page.lang = locale;
+  for (const key of ["open.mac", "open.win"]) {
+    const caption = text(locale, key), r = explorerLayout(caption), where = `${locale} ${key} ${JSON.stringify(r.text)}`;
+    assert.ok(!r.overflow, `${where}: overflows`);
+    assert.ok(r.lines <= 3 && lines(r.text).length === r.lines, where);
+    assert.equal(r.text.replace(/\s/g, ""), caption.replace(/\s/g, ""), "every character kept");
+    // the prefab's own range: 32 down to the floor of 26, never under it
+    assert.ok(r.fs >= CAPTION.fsMin && r.fs <= CAPTION.fsMax, `${where}: size ${r.fs}`);
+    assert.ok(widest(r.text, r.fs) <= CAPTION.room + 1e-9, `${where}: ${widest(r.text, r.fs)} wide in ${CAPTION.room}`);
+    // the lines' box sits in the body under the folder icon, clear of both, and the icon in the body
+    const [labelX, labelY, boxH] = r.label, [folderX, folderY] = r.folder, ink = stack(r.text, r.fs);
+    assert.ok(boxH >= ink - 1e-9, `${where}: the label box (${boxH}) holds the lines (${ink})`);
+    assert.ok(labelY + ink / 2 <= folderY - ICON.h / 2 + 1e-9, `${where}: the caption's top ${labelY + ink / 2} reaches the icon's bottom ${folderY - ICON.h / 2}`);
+    assert.ok(labelY - ink / 2 >= BODY.bottom + 10 - 1e-9, `${where}: the caption's bottom ${labelY - ink / 2} is under the body's ${BODY.bottom}`);
+    assert.ok(folderY + ICON.h / 2 <= BODY.top - 4, `${where}: the icon leaves the body's top`);
+    // both follow the body's slant
+    assert.ok(Math.abs(labelX - (BODY.x + labelY * TAN10)) < 1e-9 && Math.abs(folderX - (BODY.x + folderY * TAN10)) < 1e-9, where);
+  }
+});
+
+test("the Show in Explorer caption no longer sinks under 26 where the old two-line fit did (every language)", () => {
+  let worse = 0, better = 0;
+  for (const locale of LOCALES) {
+    page.lang = locale;
+    for (const key of ["open.mac", "open.win"]) {
+      const old = NGUI.fitText(text(locale, key), 32, 26, 140), now = explorerLayout(text(locale, key));
+      if (now.fs < old.fs) worse++;
+      if (old.fs < 26 && now.fs >= 26) better++;
+    }
+  }
+  assert.equal(worse, 0, "never smaller than before");
+  assert.ok(better >= 1, "at least the Japanese Explorer caption was under its floor before");
+});
+
+test("a Japanese word wider than the button breaks between characters rather than shrinking the caption", () => {
+  page.lang = "ja-JP";
+  const r = explorerLayout(text("ja-JP", "open.win"));
+  assert.equal(r.lines, 3); assert.ok(r.fs >= 26);
+  // the kinsoku rules hold: no line starts with the prolonged sound mark or small kana
+  assert.ok(lines(r.text).every((line) => !/^[ーァィゥェォッャュョ]/.test(line)), JSON.stringify(r.text));
+  // groups under fsMin elsewhere are unaffected: a Latin caption never breaks inside a word
+  page.lang = "en-US";
+  assert.ok(lines(explorerLayout("Show in Explorer").text).every((line) => /^[A-Za-z ]+$/.test(line) && !/\s$/.test(line)));
+  assert.deepEqual(NGUI.fitGroup([], 32, 26, 140, 3), []);
+});
+
+// the prompt cards' labels (prompts.js card, popup.js listCard: 34 down to 24, two lines, 250 - 56 wide)
+const { markedLabel } = await import("../../src/ba_modding_toolkit/web/js/util.js");
+test("the prompt cards draw the pieces this test measures", () => {
+  const popup = readFileSync(new URL("../../src/ba_modding_toolkit/web/js/popup.js", import.meta.url), "utf8");
+  assert.match(popup, /markedLabel\(it\.label, \{ fs: 34, fsMin: 24, color: "#ffffff\/1\.00", maxW: w - 56 - \(it\.nameEdit \? 60 : 0\), mark: false, maxLines: 2 \}\)/);
+  assert.match(popup, /const LP = \{[\s\S]*?card: \{ w: 250, h: 226, bar: 68 \}/);
+  const prompts = readFileSync(new URL("../../src/ba_modding_toolkit/web/js/prompts.js", import.meta.url), "utf8");
+  assert.doesNotMatch(prompts.slice(prompts.indexOf("export function card(")), /kindLabel\(entry\)\}`/, "the kind is not appended to the label");
+});
+
+for (const locale of LOCALES) test(`dropping the kind from a prompt card's label never makes its text smaller, over every catalog name in ${locale}`, () => {
+  page.lang = locale;
+  const kind = text(locale, "tab.lobby"), fit = (label) => markedLabel(label, { fs: 34, fsMin: 24, color: "#fff", maxW: 250 - 56, maxLines: 2 });
+  let under = 0, wasUnder = 0, total = 0;
+  for (const name of namesOf(locale)) {
+    const now = fit(name), before = fit(`${name}${separator(locale)}${kind}`);
+    assert.ok(now.fs >= before.fs, `${name}: ${now.fs} against ${before.fs}`);
+    assert.ok(now.lines <= 2);
+    total++; if (now.fs < 24) under++; if (before.fs < 24) wasUnder++;
+  }
+  assert.ok(total > 600);
+  assert.ok(under < wasUnder, `${locale}: ${under} names under 24 now against ${wasUnder} with the kind`);
+});
+
+// the Hall's student cards (student-hall-ui.js formationCardTree: 36 down to 24, two lines, 190 wide)
+const hall = await (async () => {
+  let source = readFileSync(new URL("../../src/ba_modding_toolkit/web/js/student-hall-ui.js", import.meta.url), "utf8");
+  globalThis.hallHarness = { NGUI, Popup: {}, clone: structuredClone, Loading: {}, withTimeout: () => {}, T: (key) => key };
+  source = source.replace(/^import .*;$/gm, "");
+  source = `const { Popup, clone, NGUI, Loading, withTimeout, T } = globalThis.hallHarness; const S = 1920 / 2960;\n${source}\n//# sourceURL=hall-ui-fit.js`;
+  return import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`);
+})();
+const hallLabel = (name) => {
+  const n = (nodeName, children = [], widgets = []) => ({ name: nodeName, children, widgets, pos: [0, 0], scale: [1, 1] });
+  const normal = n("Normal", [n("Card_Char", [], [{ texture: "sample", w_: 252, h_: 204 }])]);
+  const card = n("UIPopupFormationCharSlot", [n("Bg"), n("UICharacterCard", [normal]),
+    n("Sprite", [n("Type_2 (1)", [n("Text", [], [{ text: "sample", fontSize: 36, w_: 190, h_: 77, pivot: 4 }])])]), n("Cover_Sell_Select")], [{ sprite: "x", w_: 256, h_: 347, pivot: 1 }]);
+  let formation = card;
+  for (const key of ["UIFormationCharSlotGroup", "Grid", "Scroll View", "Inbox", "RightBg", "Popup", "Center"]) formation = n(key, [formation]);
+  const tree = hall.formationCardTree(n("Root", [formation]), { key: "a", name, thumb: "portrait" }, false);
+  return find(tree, "Sprite/Type_2 (1)/Text").widgets[0];
+};
+for (const locale of LOCALES) test(`a Terror form's name wraps at its asterisk inside the Hall card at 24 or more in ${locale}`, () => {
+  page.lang = locale;
+  // the bare Terror names: character, asterisk, form, no brackets
+  const bare = namesOf(locale).filter((name) => /^[^*＊（(]+[*＊][^（(]+$/.test(name));
+  assert.ok(bare.length >= 1, "the catalog has a bare Terror name");
+  for (const name of bare) {
+    const w = hallLabel(name);
+    assert.ok(w.fontSize >= 24, `${name}: ${w.fontSize}`);
+    assert.ok(lines(w.text).length <= 2);
+    assert.equal(w.text.replace(/\s/g, ""), name.replace(/\s/g, ""));
+    assert.ok(widest(w.text, w.fontSize) <= 190 + 1e-9, `${name}: ${widest(w.text, w.fontSize)} wide in 190`);
+    // wrapped, it breaks after the asterisk, never inside the character's or the form's name
+    if (lines(w.text).length === 2) assert.match(lines(w.text)[0], /[*＊]$/, JSON.stringify(w.text));
+  }
+});
+
+test("a break may follow an asterisk, in either width, and only there", () => {
+  page.lang = "en-US";
+  const wrapped = NGUI.fitText("Shiroko*Terror", 36, 24, 190, 2);
+  assert.equal(wrapped.text, "Shiroko*\nTerror"); assert.equal(wrapped.fs, 24);
+  const full = NGUI.fitText("Shiroko＊Terror", 36, 24, 190, 2);
+  assert.equal(full.text, "Shiroko＊\nTerror");
+  // a star at the very start or end (a footnote mark) is not a break, and ordinary words keep wrapping at spaces
+  assert.equal(NGUI.fitText("*Shiroko", 36, 24, 60, 2).text.replace(/\n/g, ""), "*Shiroko");
+  assert.ok(!lines(NGUI.fitText("*Shiroko", 36, 24, 60, 2).text).includes("*"));
+  assert.equal(NGUI.fitText("Hoshino (Armed)", 36, 24, 190, 2).text, "Hoshino\n(Armed)");
+});

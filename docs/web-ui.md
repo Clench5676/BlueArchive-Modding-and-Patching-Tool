@@ -118,6 +118,13 @@ rebuild against changed batches. App-only photograph choices remain independent 
   Options side by side share one size (`ngui.fitGroup`): the option rows (`settings-rows.js` `radioRow`, each option
   measured in its own `lang`, as the Language row names every language in itself) and the Display Settings sort keys
   and filter options (`display.js` `shareSize`).
+  A break may follow an asterisk (`Shiroko*Terror`, `＊` in CJK), so a Terror form's name wraps between the character and
+  the form (the Hall's student cards). Text with no break to wrap at keeps the largest size under its floor at which it
+  fits on one line, not the lowest. `fitGroup` breaks inside a CJK word between characters (the kinsoku rules hold) only
+  when no word-level wrap keeps the size at its floor: the Japanese Show in Explorer caption. The detail screen's Show in
+  Finder / Explorer caption (`explorer-button.js`) takes up to three lines inside the 180-high body, the folder icon moving
+  up to the body's top edge for the third; the prompt cards (`prompts.js` `card`) label a variant by its name alone, the kind
+  being the details panel's first chip.
 - Fonts: the page draws with Resource Han Rounded CN (`web/fonts`, OFL, shipped). It covers every Han and kana
   character of the zh-TW and ja names and of the games' UI strings, but in Simplified Chinese glyph forms and
   punctuation positions, and it has no Hangul. So the html `lang` (set from the UI language) picks a stack in
