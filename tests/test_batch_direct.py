@@ -113,6 +113,29 @@ def test_model_direct_replacement_never_transfers_assets(batch_model_env, monkey
     assert target.read_bytes() == official
 
 
+def test_direct_replacement_stages_in_a_short_folder(batch_model_env, monkeypatch):
+    env = batch_model_env
+    restore_metadata(monkeypatch)
+    target = rename_crc(unity_bundle(env.parts[1], name='Hoshino_Body'))
+    env.parts[1] = target
+    source = unity_bundle(env.tmp / 'input' / target.name, name='Unknown_CutIn_Body', payload=b'modified model')
+    monkeypatch.setattr(Bundle, 'check_need_crc', lambda *args: True)
+    entry, = analyze(env, [source])['entries']
+    assert entry['state'] == 'ready' and len(entry['id']) == 64
+    prepare, staged = env.services.batch_import._prepare, []
+
+    def record(*args, **kwargs):
+        result = prepare(*args, **kwargs)
+        staged.extend(result[0] or [])
+        return result
+
+    monkeypatch.setattr(env.services.batch_import, '_prepare', record)
+    result, = run(env, [entry], crc='off', types=['Texture2D'], backup=True)
+    assert result['outcome'] == 'imported', result
+    assert [path.name for path in staged] == [target.name]
+    assert staged[0].parent.name == 'direct' and staged[0].parent.parent.name == entry['id'][:16]
+
+
 def test_current_name_rejects_invalid_bundle(env, monkeypatch):
     restore_metadata(monkeypatch)
     target = rename_crc(unity_bundle(env.original))
