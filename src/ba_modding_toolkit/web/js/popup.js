@@ -750,7 +750,7 @@ export async function listPopup(options) {
 }
 
 // --- the message popup ---
-const MSG = { title: 150, gap: 28, rowMin: 104, check: 150, buttons: 236, none: 70, minH: 640 };
+const MSG = { title: 150, gap: 28, rowMin: 104, check: 150, buttons: 236, none: 70, minH: 640, cap: 1400 };
 
 // message({title, lines, ok, cancel, check, host, width, close, confirmKeys, scroll}): a message on the popup frame, in host
 // (#dialog by default, over everything but the message popup). Resolves once it is closed, however it is closed, with
@@ -766,7 +766,8 @@ const MSG = { title: 150, gap: 28, rowMin: 104, check: 150, buttons: 236, none: 
 //   close: false for a popup that must be answered with a button (no close button; the backdrop and Escape do nothing)
 //   confirmKeys: keys that press OK while the popup is in front and holds the focus itself (a focused button takes its
 //                own key), as the PC client binds its popups' confirm (["Enter", " "]); none by default
-//   scroll: constrain the findings to the frame; title and action buttons stay visible
+//   scroll: constrain the findings to the frame; title and action buttons stay visible. A message whose frame would
+//           be taller than that frame (MSG.cap) scrolls by itself, so its title and buttons stay on the stage
 // The popup takes the keyboard focus while it is open (Enter presses nothing under it) and gives it back after.
 // Without the frame's prefab (no game folder) the same message is drawn plain.
 export function message(opts) {
@@ -887,17 +888,20 @@ function messageLines(lines, w, fitTogether, plain) {
 }
 
 // Shared by ordinary messages and text-only tours, including row fitting, frame padding and footer clearance.
+// `scroll` in the result tells whether the lines scroll in the frame: asked for, or forced because the frame would
+// be taller than MSG.cap; shorter messages are laid out as they always were.
 export function messageLayout({ lines = [], width = 1700, ok = null, cancel = null, buttons = null, check = null,
   fitTogether = [], scroll = false, plain = false } = {}) {
   const body = messageLines(lines, width, fitTogether, plain);
   const hasButtons = !!(ok || cancel || buttons?.length);
-  const need = MSG.title + body.height + (check ? MSG.check : 0) + MSG.gap + (hasButtons ? MSG.buttons : MSG.none);
-  const height = Math.min(scroll ? 1400 : Infinity, Math.max(MSG.minH, need));
+  const need = Math.max(MSG.minH, MSG.title + body.height + (check ? MSG.check : 0) + MSG.gap + (hasButtons ? MSG.buttons : MSG.none));
+  const scrolls = scroll || need > MSG.cap;
+  const height = scrolls ? Math.min(MSG.cap, need) : need;
   const top = FRAME_Y + height / 2 - MSG.title, bottom = FRAME_Y - height / 2 + (hasButtons ? MSG.buttons : MSG.none);
   const visible = Math.min(body.height, top - bottom - (check ? MSG.check : 0));
-  const used = (scroll ? visible : body.height) + (check ? MSG.check : 0);
+  const used = (scrolls ? visible : body.height) + (check ? MSG.check : 0);
   const y0 = top - Math.max(0, (top - bottom - used) / 2);
-  return { body, width, height, visible, y0 };
+  return { body, width, height, visible, y0, scroll: scrolls };
 }
 
 async function showMessage({ title = "", lines = [], ok = null, cancel = null, buttons = null, check = null, host: hostArg = "dialog", width, close: dismissable = true, confirmKeys = null, fitTogether = [], scroll = false, plain = false }, resolve) {
@@ -939,25 +943,25 @@ async function showMessage({ title = "", lines = [], ok = null, cancel = null, b
     return;
   }
   try {
-    const { body, width: w, height, visible, y0 } = messageLayout({ lines, width, ok, cancel, buttons, check: state, fitTogether, scroll, plain });
+    const { body, width: w, height, visible, y0, scroll: scrolls } = messageLayout({ lines, width, ok, cancel, buttons, check: state, fitTogether, scroll, plain });
     const t = popupFrame(title, w, height, { ok, cancel, buttons, close: dismissable });
     const popup = find(t, "Popup");
     // the content in the middle of the room between the title and the buttons
-    if (!scroll) {
+    if (!scrolls) {
       body.tree.pos = [0, y0];
       popup.children.push(body.tree);
     }
     if (state) {
-      const cb = checkbox("Check", 0, y0 - (scroll ? visible : body.height) - MSG.check / 2 - 10, state.label, state.checked, w - 300);
+      const cb = checkbox("Check", 0, y0 - (scrolls ? visible : body.height) - MSG.check / 2 - 10, state.label, state.checked, w - 300);
       cb.tree.pos[0] = -cb.w / 2;
       popup.children.push(cb.tree);
     }
     const next = document.createElement("div");
     const view = await NGUI.render(t, next, { scale: S, origin: [960, 540], z: 10 });
-    const bodyHost = scroll ? scrollArea(next, [960 - (w - 120) * S / 2, 540 - y0 * S,
+    const bodyHost = scrolls ? scrollArea(next, [960 - (w - 120) * S / 2, 540 - y0 * S,
       (w - 120) * S, visible * S], body.height * S) : next;
     await bodyHost.ready;
-    const bodyView = scroll ? await NGUI.render(body.tree, bodyHost,
+    const bodyView = scrolls ? await NGUI.render(body.tree, bodyHost,
       { scale: S, origin: [(w - 120) * S / 2, 0], z: 10 }) : view;
     if (ended) return;
     for (const [index, action] of (buttons || []).entries()) hit(next, view, `Center/Popup/Btn/Choice_${index}/BG (1)`, () => finish(action.value), { name: action.label, action: action.value });
@@ -965,7 +969,7 @@ async function showMessage({ title = "", lines = [], ok = null, cancel = null, b
     if (cancel) hit(next, view, "Center/Popup/Btn/Btn_Cancel/BG (1)", () => finish("cancel"), { name: cancel, action: "cancel" });
     if (dismissable) hit(next, view, "Center/Popup/Base/BG/Btn_Close", () => finish(null), { name: T("display.close"), action: "close" });
     for (const [i, b] of body.buttons) {
-      hit(bodyHost, bodyView, `${scroll ? "Lines" : "Center/Popup/Lines"}/Btn_${i}`, () => b.fn?.({ close: finish }), { name: b.label, action: `line${i}` });
+      hit(bodyHost, bodyView, `${scrolls ? "Lines" : "Center/Popup/Lines"}/Btn_${i}`, () => b.fn?.({ close: finish }), { name: b.label, action: `line${i}` });
     }
     if (state) wireCheck(next, view, "Center/Popup/Check", state);
     closable(view, host, dismissable ? () => finish(null) : null, { el: layer });

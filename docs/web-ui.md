@@ -1538,7 +1538,10 @@ optional, so a popup still works without them.
   small button (`{text, button: {label, fn}}`, the consent popup's light blue Change button), every line is a row of
   the game's light stats box with its button at the right. An optional checkbox (the gacha list's) under the lines.
   `plain: true` uses left-aligned lines without a box or separators; line buttons stay at the right, and adding one
-  preserves the text's font size and fitting rules.
+  preserves the text's font size and fitting rules. `scroll: true` keeps the lines in a scrolling list between the
+  title and the buttons; a message whose frame would pass 1400 units (the Add result of many Mods, the dropped queue
+  list) switches to that list by itself, so its title and buttons stay on the stage (`messageLayout().scroll`), and a
+  shorter one is laid out as before.
   It resolves once it closes, however it closes, with `{button, checked}`: `button` is `ok`, `cancel`, or `null` for
   the close button, the backdrop and Escape; `checked` is the checkbox's state at that moment. `close: false` draws no
   close button, and the backdrop and Escape do nothing. The popup takes the keyboard focus while it is open (Enter

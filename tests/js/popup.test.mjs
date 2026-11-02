@@ -213,7 +213,9 @@ test("fitting message lines together keeps the size floor and all text when extr
   const text = "A long explanation ".repeat(15).trim();
   const opened = Popup.message({ title: "Help", lines: ["On", text], width: 700, fitTogether: [0, 1] });
   await drawn(dialog, "close");
-  const lines = [0, 1].map((i) => walk(dialog).find((e) => e.dataset.path === `Center/Popup/Lines/Line_${i}`));
+  // this message is taller than the scroll cap (about 1800 units of lines): its lines are in the scrolling list
+  assert.ok(walk(dialog).some((e) => e.className === "popup-cards"));
+  const lines = [0, 1].map((i) => walk(dialog).find((e) => e.dataset.path === `Lines/Line_${i}`));
   const size = `${(NGUI.fontSizeFor(text, 44) * S).toFixed(2)}px`;
   assert.equal(lines[0].style.fontSize, size);
   assert.equal(lines[1].style.fontSize, size);
@@ -2637,4 +2639,107 @@ test("the display settings open over a dialog: above it in the page and on the s
   assert.equal(Popup.top().el, layer);
   press("Escape");
   assert.deepEqual(closes, ["escape", "escape"]);
+});
+
+// --- long messages scroll by themselves (the Add result, the dropped queue list) ---
+// layouts recorded from the unscrolled messageLayout before the cap applied by itself: [rows, frame height, y0]
+const UNSCROLLED = {
+  boxed: [[0,640,31],[1,640,91],[2,640,143],[3,742,195],[4,846,247],[5,950,299],[6,1054,351],[7,1158,403],[8,1262,455],[9,1366,507]],
+  plain: [[0,640,31],[1,640,68.8],[2,640,114.6],[3,672.8,160.4],[4,764.4,206.2],[5,856,252],[6,947.6,297.8],[7,1039.2,343.6],[8,1130.8,389.4],[9,1222.4,435.2],[10,1314,481]],
+  single: [[0,640,31],[1,640,68.8],[2,640,114.6],[3,672.8,160.4],[4,764.4,206.2],[5,856,252],[6,947.6,297.8],[7,1039.2,343.6],[8,1130.8,389.4],[9,1222.4,435.2],[10,1314,481]],
+  check: [[0,640,106],[1,640,143.8],[2,731.2,189.6],[3,822.8,235.4],[4,914.4,281.2],[5,1006,327],[6,1097.6,372.8],[7,1189.2,418.6],[8,1280.8,464.4],[9,1372.4,510.2]],
+  choices: [[0,640,31],[1,640,68.8],[2,640,114.6],[3,672.8,160.4],[4,764.4,206.2],[5,856,252],[6,947.6,297.8],[7,1039.2,343.6],[8,1130.8,389.4],[9,1222.4,435.2],[10,1314,481]],
+  none: [[0,640,-52],[1,640,-14.2],[2,640,31.6],[3,640,77.4],[4,640,123.2],[5,690,169],[6,781.6,214.8],[7,873.2,260.6],[8,964.8,306.4],[9,1056.4,352.2],[10,1148,398],[11,1239.6,443.8],[12,1331.2,489.6]],
+  fit: [[0,640,31],[1,640,68.8],[2,640,114.6],[3,672.8,160.4],[4,764.4,206.2],[5,856,252],[6,947.6,297.8],[7,1039.2,343.6],[8,1130.8,389.4],[9,1222.4,435.2],[10,1314,481]]
+};
+const messageShapes = {
+  boxed: (n) => ({ lines: Array.from({ length: n }, (_, i) => ({ text: `Mod ${i} belongs to a student\nApplied`, button: { label: "Go To", fn() {} } })), ok: "Go To", cancel: "Stay Here" }),
+  plain: (n) => ({ lines: Array.from({ length: n }, (_, i) => `Mod ${i} belongs to a student\nApplied`), ok: "Go To", cancel: "Stay Here" }),
+  single: (n) => ({ lines: Array.from({ length: n }, (_, i) => `Entry ${i} - not applied`), ok: "OK" }),
+  check: (n) => ({ lines: Array.from({ length: n }, (_, i) => `Line ${i}`), check: { label: "Recursive", checked: false }, ok: "OK", cancel: "Cancel" }),
+  choices: (n) => ({ lines: Array.from({ length: n }, (_, i) => `Line ${i}`), buttons: [{ label: "A", value: "a", primary: true }, { label: "B", value: "b" }, { label: "C", value: "c" }] }),
+  none: (n) => ({ lines: Array.from({ length: n }, (_, i) => `Line ${i}`) }),
+  fit: (n) => ({ lines: Array.from({ length: n }, (_, i) => `Line ${i}`), fitTogether: [0, 1], plain: true, ok: "OK" }),
+};
+
+test("a message within the scroll cap is laid out as before, a taller one scrolls by itself", async () => {
+  await Popup.ready();
+  for (const [shape, make] of Object.entries(messageShapes)) {
+    let last = -1;
+    for (let n = 0; n <= 40; n++) {
+      const layout = Popup.messageLayout(make(n)), recorded = UNSCROLLED[shape].find(([rows]) => rows === n);
+      if (recorded) {
+        // the same frame and placement as before, not scrolling
+        assert.equal(layout.scroll, false, `${shape} ${n}`);
+        assert.ok(Math.abs(layout.height - recorded[1]) < 0.001 && Math.abs(layout.y0 - recorded[2]) < 0.001, `${shape} ${n}`);
+        assert.equal(layout.visible, layout.body.height, `${shape} ${n}: nothing clipped`);
+        last = n;
+      } else {
+        // the unscrolled frame would pass 1400: the scrolling form, at the scroll cap
+        assert.ok(n > last, `${shape}: once over the cap, always over`);
+        assert.equal(layout.scroll, true, `${shape} ${n}`);
+        assert.equal(layout.height, 1400, `${shape} ${n}`);
+        assert.ok(layout.visible <= layout.body.height, `${shape} ${n}`);
+      }
+    }
+    // 40 rows do not fit: the list scrolls in the room between the title and the buttons
+    assert.ok(Popup.messageLayout(make(40)).visible < Popup.messageLayout(make(40)).body.height, `${shape}: 40 rows scroll`);
+    assert.ok(last >= 9 && last < 40, `${shape}: the cap is reached between 10 and 40 rows`);
+  }
+  // asking for it still works: the same cap, the same placement of a message that fits
+  const asked = Popup.messageLayout({ ...messageShapes.plain(2), scroll: true });
+  assert.deepEqual([asked.scroll, asked.height], [true, 640]);
+  assert.equal(Popup.messageLayout({ ...messageShapes.plain(40), scroll: true }).height, 1400);
+});
+
+const ADD_LOCALES = ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"];
+const fill = (text, params) => text.replace(/\{(\w+)\}/g, (_, key) => params[key] ?? "");
+const onStage = ([left, top, width, height]) => left >= -0.01 && top >= -0.01 && left + width <= 1920.01 && top + height <= 1080.01;
+
+for (const lang of ADD_LOCALES) test(`the Add result and the dropped list keep their frame, title and buttons on the stage for 1 to 40 rows in ${lang}`, async () => {
+  const NGUI = await import("../../src/ba_modding_toolkit/web/js/ngui.js");
+  const ui = JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${lang}.json`, import.meta.url))).webui;
+  setStrings(lang, Object.fromEntries(strings(ui)));
+  try {
+    // mod-add.js: one row per added mod (a line button when the mods go to several screens), buttons Go To / Stay Here;
+    // mod-switch.js queueDone: one "what - reason" line per dropped item, Confirm
+    const added = (n, buttons) => Array.from({ length: n }, (_, i) => {
+      const text = `${fill(ui.add.belongs, { name: `Student ${i}` })}\n${ui.status.applied}\n${ui.add.installed}`;
+      return buttons ? { text, button: { label: ui.add.go, fn() {} } } : text;
+    });
+    const dropped = (n) => Array.from({ length: n }, (_, i) => `${ui.mods.onTitle} ${i} - ${fill(ui.error.library_io_error, { file: `mod_${i}_spr.bundle` })}`);
+    const cases = [["Add", (n) => ({ title: ui.popup.add, lines: added(n, false), ok: ui.add.go, cancel: ui.add.stay })],
+      ["Add, several screens", (n) => ({ title: ui.popup.add, lines: added(n, true), ok: ui.add.go, cancel: ui.add.stay })],
+      // as called: with the error, so an Error Report button joins Confirm
+      ["Not applied", (n) => ({ title: ui.classic.notApplied, error: { code: "internal", params: {} }, lines: dropped(n), ok: ui.picker.ok })]];
+    for (const [name, make] of cases) for (let n = 1; n <= 40; n++) {
+      const options = make(n), expected = Popup.messageLayout(options);
+      const pending = Popup.message(options);
+      await drawn(dialog, "ok");
+      const path = (p) => walk(dialog).find((e) => e.dataset.path === `Center/Popup/${p}`);
+      const label = `${name}, ${n} rows`;
+      // the frame is the layout's, never taller than the cap, and so are the drawn title and buttons
+      const frame = NGUI.rect(path("Base/BG"));
+      assert.ok(Math.abs(frame[3] - expected.height * S) < 0.01 && expected.height <= 1400, label);
+      for (const part of ["Base/BG", "Base/BG/Label_Title_Locale", "Base/BG/Btn_Close", "Btn/Btn_Ok/BG (1)", ...(options.cancel || options.error ? ["Btn/Btn_Cancel/BG (1)"] : [])]) {
+        assert.ok(onStage(NGUI.rect(path(part))), `${label}: ${part} on the stage`);
+      }
+      // the buttons that answer it are on the stage too
+      for (const key of ["ok", "close", ...(options.cancel || options.error ? ["cancel"] : [])]) {
+        const button = action(dialog, key);
+        assert.ok(button, `${label}: ${key}`);
+        assert.ok(onStage(["left", "top", "width", "height"].map((k) => parseFloat(button.style[k]))), `${label}: ${key} button on the stage`);
+      }
+      // long ones scroll in the frame, short ones lay out as before
+      const area = walk(dialog).find((e) => e.className === "popup-cards");
+      assert.equal(!!area, expected.scroll, label);
+      if (area) {
+        assert.ok(parseFloat(area.style.top) + parseFloat(area.style.height) <= NGUI.rect(path("Btn/Btn_Ok/BG (1)"))[1], `${label}: the list ends above the buttons`);
+        assert.ok(parseFloat(area.style.top) >= NGUI.rect(path("Base/BG/Label_Title_Locale"))[1] + NGUI.rect(path("Base/BG/Label_Title_Locale"))[3], `${label}: and starts under the title`);
+        if (options.lines.some((line) => line.button)) assert.ok(action(dialog, `line${n - 1}`), `${label}: the last row's button is in the list`);
+      }
+      action(dialog, "ok").click();
+      assert.deepEqual(await pending, { button: "ok", checked: null });
+    }
+  } finally { setStrings("en-US", Object.fromEntries(strings(english))); }
 });
