@@ -694,7 +694,7 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
     if (!visible || !root) return;
     const state = model.state, busy = model.busy(); root.dataset.phase = state.phase; root.setAttribute("aria-busy", String(busy));
     dom.count.hidden = !state.entries.length;     // no count over an empty list
-    if (state.entries.length) textWidget(dom.count, T("import.count", { n: state.entries.length }), "count", { scale: 0.5, origin: [250, 16] });
+    if (state.entries.length) textWidget(dom.count, T(state.entries.length === 1 ? "import.countOne" : "import.count", { n: state.entries.length }), "count", { scale: 0.5, origin: [250, 16] });
     renderToolbar();
     dom.merge.input.disabled = busy; dom.merge.refresh();
     for (const key of ["files", "folder", "options", "clear", "remove", "removeImported", "all", "none", "recheck"]) dom[key].disabled = busy;

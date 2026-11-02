@@ -1495,6 +1495,7 @@
 		"import": {
 			"list": "导入清单",
 			"count": "{n} 个 Mod",
+			"countOne": "{n} 个 Mod",
 			"addFiles": "添加文件",
 			"addFolder": "添加文件夹",
 			"search": "名称、ID、文件名",
