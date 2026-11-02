@@ -7,7 +7,7 @@ import hashlib
 import io
 import tempfile
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from PIL import Image, ImageOps
 from UnityPy.helpers.ResourceReader import get_resource_data
@@ -163,24 +163,53 @@ def _referenced_sources(library: ModLibrary) -> set:
     return sources
 
 
-def usage_targets(library: ModLibrary) -> dict[str, set[str]]:
-    """Map referenced photos to their target skins, independently of the photo's originating skin."""
+def _uses(library: ModLibrary) -> list[tuple[Any, set[str]]]:
+    """Every source a configured entry or an existing applied file names, with the photo choices it resets."""
     config = library.profiles.read() or {}
     uses = [(entry.get('source'), set(entry.get('photo_defaults', [])))
             for folder in config.get('folders', {}).values() for entry in folder.get('configured', {}).values()]
     uses.extend((entry.get('source'), set()) for path, entry in library._applied.items()
                 if Path(path).exists() and not entry.get('removed'))
+    return uses
+
+
+def _record(library: ModLibrary, mod_id: str) -> dict:
+    """A recipe's record by id. A record state.json holds while its files are missing counts too: its choices still own
+    their photos and the file may return."""
+    record = library._records.get(mod_id)
+    if record is None:
+        record = next((raw for raw in library._held if isinstance(raw, dict) and raw.get('id') == mod_id), None)
+    return record or {}
+
+
+def _owned(library: ModLibrary, source: Any, defaults: set[str]) -> dict[str, dict]:
+    """The photo choices of a ``mod:`` source's recipe, by texture name, minus those reset to the default."""
+    if not isinstance(source, str) or not source.startswith('mod:'):
+        return {}
+    meta = _record(library, source[4:]).get(TAG)
+    choices = meta.get('choices') if isinstance(meta, dict) else None  # a held record is not validated
+    if not isinstance(choices, dict):
+        return {}
+    return {name: item for name, item in choices.items()
+            if name not in defaults and isinstance(item, dict) and isinstance(item.get('photo'), str)}
+
+
+def usage_targets(library: ModLibrary) -> dict[str, set[str]]:
+    """Map referenced photos to their target skins, independently of the photo's originating skin."""
     targets = {}
-    for source, defaults in uses:
-        if not isinstance(source, str) or not source.startswith('mod:'):
-            continue
-        for name, item in ((library._records.get(source[4:], {}).get(TAG) or {}).get('choices') or {}).items():
-            if name in defaults or not isinstance(item, dict) or not isinstance(item.get('photo'), str):
-                continue
+    for source, defaults in _uses(library):
+        for item in _owned(library, source, defaults).values():
             variants = targets.setdefault(item['photo'], set())
             if isinstance(item.get('variant'), str):
                 variants.add(item['variant'])
     return targets
+
+
+def _held_use(library: ModLibrary, key: str) -> bool:
+    """Whether a held record (not in the library's records) owns the photo in a configured entry or an applied file."""
+    return any(key == item['photo'] for source, defaults in _uses(library)
+               if isinstance(source, str) and source[4:] not in library._records
+               for item in _owned(library, source, defaults).values())
 
 
 def in_use(library: ModLibrary) -> set[str]:
@@ -189,6 +218,9 @@ def in_use(library: ModLibrary) -> set[str]:
 
 def remove_photo(library: ModLibrary, key: str, log) -> None:
     """Reset every affected texture, retaining other choices in each shared Collection recipe."""
+    if _held_use(library, key):
+        # a held record's recipe cannot be rebuilt while its files are missing: the photo stays until they return
+        raise ServiceError('photo_in_use')
     config = library.profiles.read() or {}
     enabled = profiles.enabled(config)
     pins = {pin.key: pin for pin in library._all_pins()}

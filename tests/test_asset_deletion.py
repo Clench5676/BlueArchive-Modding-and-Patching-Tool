@@ -325,3 +325,63 @@ def test_preview_fallback_deduplicates_hall_sources_and_leaves_unrelated_revisio
     after = state.get('student_hall')
     assert after['memorials'] == hall['memorials'][:1]
     assert after['active'] == 'official' and after['revision'] == 3
+
+
+def test_a_held_record_keeps_its_photos_in_use_until_its_file_returns(recipes, monkeypatch):
+    """BL-065: state.json keeps a record whose files are missing (an antivirus quarantine, a partial restore) as a held
+    record. Its photograph choices still own their photos: they count as used and cannot be deleted meanwhile."""
+    from test_library_state_safety import hide, unhide
+
+    world, target, keys, decode, core = recipes
+    before_uses = portrait_edit.usage_targets(world.library)
+    assert set(before_uses) == set(keys)
+    recipe, = [record for record in world.library._records.values() if record.get(portrait_edit.TAG)]
+    parked = hide(world, SimpleNamespace(id=recipe['id']))
+
+    def reopen():
+        library = world.reload()
+        library.photographs.family_of = lambda _: 'same-family'
+        monkeypatch.setattr(library, '_install_direct', lambda record, targets, *a, **k: {p: library._paths(record)[0] for p in targets})
+        return library
+
+    held = reopen()
+    assert held._held_ids() == {recipe['id']} and recipe['id'] not in held._records
+    # the file is gone, the record is held: both photos are still referenced by the configuration and the applied file
+    assert portrait_edit.usage_targets(held) == before_uses
+    assert portrait_edit.in_use(held) == set(keys)
+    assert held.photograph_removal_info('test', keys[0])['used']
+    snapshot = target.read_bytes(), deepcopy(world.profiles())
+    with pytest.raises(ServiceError, match='asset_delete_confirm'):
+        held.delete_photograph('test', keys[0])
+    with pytest.raises(ServiceError, match='photo_in_use'):
+        held.delete_photograph('test', keys[0], confirm=True)
+    with pytest.raises(ServiceError, match='photo_in_use'):
+        portrait_edit.remove_photo(held, keys[1], lambda _: None)
+    assert (target.read_bytes(), world.profiles()) == snapshot
+    assert all(held.photographs.image('test', key) for key in keys)
+    # the file returns: the record is usable again, still names its photos, and a confirmed deletion rebuilds the recipe
+    unhide(world, SimpleNamespace(id=recipe['id']), parked)
+    back = reopen()
+    assert back._held_ids() == frozenset() and recipe['id'] in back._records
+    assert portrait_edit.usage_targets(back) == before_uses
+    assert all(back.photographs.image('test', key) for key in keys)
+    with pytest.raises(ServiceError, match='asset_delete_confirm'):
+        back.delete_photograph('test', keys[0])
+    back.delete_photograph('test', keys[0], confirm=True)
+    assert keys[0] not in portrait_edit.in_use(back) and keys[1] in portrait_edit.in_use(back)
+
+
+def test_a_held_record_without_choices_or_with_broken_ones_uses_no_photo(tmp_path):
+    present = tmp_path / 'collection.bundle'
+    present.touch()
+    held = [{'id': 'a' * 32, portrait_edit.TAG: 'broken'}, {'id': 'b' * 32, portrait_edit.TAG: {'choices': ['broken']}},
+            {'id': 'c' * 32}, 'not a record', {'id': 'd' * 32, portrait_edit.TAG: {'choices': {
+                'x': {'photo': 'held-photo', 'variant': 'skin-a'}, 'y': {'photo': 5}, 'z': 'broken'}}}]
+    config = {'folders': {'install': {'configured': {core: {'source': f'mod:{n * 32}'} for core, n in
+                                                     zip('wxyz', 'abcd')}}}}
+    library = SimpleNamespace(_records={}, _held=held, profiles=SimpleNamespace(read=lambda: config),
+                              _applied={str(present): {'source': 'mod:' + 'e' * 32}})
+    assert portrait_edit.usage_targets(library) == {'held-photo': {'skin-a'}}
+    assert portrait_edit._held_use(library, 'held-photo') and not portrait_edit._held_use(library, 'other')
+    library._held = []
+    assert portrait_edit.usage_targets(library) == {}

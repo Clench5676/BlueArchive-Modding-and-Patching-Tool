@@ -802,7 +802,10 @@ deletion or a rolled back import never comes back. A held id still counts as a s
 configuration naming it is not dropped as `source_missing`, and the game files carrying it are not offered for
 adoption. The one exception is a game file about to be replaced: its bytes are kept as a mod then, since the held
 record has no file to show them. Every removal path (`remove`, `_drop_mods`, an import rollback, an asset deletion)
-saves before it deletes the folder, and an asset deletion's rollback leaves alone a record that returned during it.
+saves before it deletes the folder, and an asset deletion's rollback leaves alone a record that returned during it. A
+held photograph recipe (a record with `roster_photography` choices) still owns its photos: they count as used for
+`photography.removalInfo` and the deletion confirmation, and deleting one is refused (`photo_in_use`) until the record's
+files are back.
 
 **Per-Mod import publication.** `_store` stages and verifies the complete file group under
 `import-transactions/<uuid>/files`, journals its expected hashes, publishes the directory under `mods/<uuid>`, then
