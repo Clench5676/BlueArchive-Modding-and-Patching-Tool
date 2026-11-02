@@ -151,8 +151,8 @@ def _rewrite_paths(old: Path, new: Path) -> bool:
                 continue
             with file_lock(library / "state.json.lock", timeout=_LOCK_TIMEOUT), \
                     file_lock(library / "profiles.json.lock", timeout=_LOCK_TIMEOUT):
-                _rewrite_file(library / "state.json", old, new)
-                for name in ("profiles.json", "profiles.json.prev", "profiles.json.bad"):
+                for name in ("state.json", "state.json.prev", "state.json.bad",
+                             "profiles.json", "profiles.json.prev", "profiles.json.bad"):
                     _rewrite_file(library / name, old, new)
         except (OSError, ValueError) as error:
             complete = False

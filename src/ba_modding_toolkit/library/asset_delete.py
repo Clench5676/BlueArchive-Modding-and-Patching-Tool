@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import copy
 import json
+import logging
 import re
 import shutil
 from contextlib import contextmanager
@@ -10,7 +11,10 @@ from pathlib import Path
 from uuid import uuid4
 
 from ..errors import ServiceError
+from .judge import core_of
 from .storage import atomic_copy, atomic_json
+
+logger = logging.getLogger(__name__)
 
 
 class Deletion:
@@ -19,6 +23,7 @@ class Deletion:
         self.directory = directory or library.root / 'asset-deletions' / uuid4().hex
         self.rolling_back = False
         self.data = data or {'version': 1, 'phase': 'active', 'records': copy.deepcopy(library._records),
+                            'held': sorted(library._held_ids()),
                             'applied': copy.deepcopy(library._applied), 'profiles': copy.deepcopy(library.profiles.read()),
                             'mods': [], 'built': [], 'games': []}
 
@@ -70,6 +75,9 @@ class Deletion:
         self.publish()
 
     def rollback(self):
+        """Undo the deletion: the mods and built copies it removed, the game files it switched (a file gone or changed
+        outside the library is left as it is), then the snapshot of records, applied entries and configuration. A
+        record held at the start that came back meanwhile is not one this deletion created."""
         library, data = self.library, self.data
         self.rolling_back = True
         # Restore source bytes before publishing any references to them.
@@ -81,14 +89,23 @@ class Deletion:
             shutil.copytree(self.directory / 'mods' / key, directory, dirs_exist_ok=True, copy_function=lambda source, target: atomic_copy(Path(source), Path(target)))
         for name in data['built']:
             atomic_copy(self.directory / 'built' / name, library.root / 'built' / name)
-        # Every rollback uses the normal protected writer, with an outside-change fence.
+        # Every rollback uses the normal protected writer, with an outside-change fence. A game file that is gone, or
+        # whose bytes are neither the journal's before nor one of its after, was changed outside the library: it is
+        # left as it is (a gone file is not recreated), a warning is logged and the rollback goes on.
+        left = set()
         for entry in reversed(data['games']):
             target = Path(entry['target'])
-            current = library._hashes.get(target).sha1
+            try:
+                current = library._hashes.get(target).sha1
+            except FileNotFoundError:
+                current = None
             if current == entry['before']:
                 continue
-            if current not in entry['after']:
-                raise ServiceError('entry_changed', core=target.name)
+            if current is None or current not in entry['after']:
+                logger.warning('Game file %s was %s outside the library, leaving it as it is', core_of(target.name),
+                               'removed' if current is None else 'changed')
+                left.add(entry['target'])
+                continue
             pin = library._pin(Path(entry['pin']['root']), entry['pin']['server'])
             if pin is None or pin.key != entry['pin']['key']:
                 raise ServiceError('folder_changed')
@@ -97,13 +114,23 @@ class Deletion:
             source = (data['applied'].get(str(target)) or {}).get('source', 'official')
             library._commit({target: self.directory / entry['backup']}, source, lambda _: None,
                             pin=pin, prune=False, expected={target: current})
-        new_ids = set(library._records) - set(data['records'])
+        # A held record (its files were missing at the start) that came back meanwhile is not a record this
+        # transaction created: it keeps its folder and its place in the library.
+        held = set(data.get('held', []))
+        new_ids = set(library._records) - set(data['records']) - held
         library._refresh_state()
+        returned = {key: record for key, record in library._records.items() if key in held}
         library._records = copy.deepcopy(data['records'])
+        library._records.update(returned)
         library._applied = copy.deepcopy(data['applied'])
         for entry in data['games']:
-            if entry['target'] in library._applied:
-                library._applied[entry['target']]['mtime'] = Path(entry['target']).stat().st_mtime_ns
+            # a file left as it is keeps its record's own date: the stat check must not read the outside bytes as the
+            # recorded ones
+            if entry['target'] in library._applied and entry['target'] not in left:
+                try:
+                    library._applied[entry['target']]['mtime'] = Path(entry['target']).stat().st_mtime_ns
+                except OSError:
+                    pass
         previous = data['profiles']
         if library.profiles.read() != previous:
             def restore(current):

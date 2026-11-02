@@ -1204,6 +1204,7 @@
 			"folder_changed": "Game folders changed, try again",
 			"state_changed": "Switched elsewhere, check again",
 			"profiles_unreadable": "Unreadable mod settings: {file}",
+			"library_state_unreadable": "Unreadable mod library: {file}",
 			"not_enough_space": "Not enough space: {need} needed, {free} free",
 			"mod_last_copy": "Only copy of a file still in the game: {file}",
 			"scan_off": "File check off",

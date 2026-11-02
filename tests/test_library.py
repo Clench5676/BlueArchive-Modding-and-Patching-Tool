@@ -593,8 +593,15 @@ def test_corrupt_state_is_tolerated(setup_library, contents):
     library = reload_library(env)
     assert library.mods() == []
     assert library.favorites() == set()
-    library.set_favorite("test", True)
-    assert json.loads((env.root / "state.json").read_text())["favorites"] == ["test"]
+    if contents == '{"version":1,"mods":[{}]}':
+        # one bad record is held and written back; the file stays usable
+        library.set_favorite("test", True)
+        data = json.loads((env.root / "state.json").read_text())
+        assert data["favorites"] == ["test"] and data["mods"] == [{}]
+    else:
+        # a state that cannot be read at all is never replaced (tests/test_library_state_safety.py)
+        expect_error("library_state_unreadable", lambda: library.set_favorite("test", True))
+        assert (env.root / "state.json").read_text() == contents
 
 
 def test_state_lists_all_parts_and_uses_cached_hashes_without_loading(setup_library, monkeypatch):
@@ -2268,18 +2275,25 @@ def test_recovery_repeats_game_and_caller_checks_before_restoring_missing_file(s
     # Keep constructor recovery pending even when the running-game check is skipped.
     monkeypatch.setattr(safety, "check_steam_idle", steam)
     recovered = reload_library(env)
-    expect_error("steam_busy", lambda: recovered.state("test"))
+
+    def write():
+        # A read no longer fails on a pending journal; a write attempts the recovery again and is refused with its
+        # real failure.
+        recovered.set_favorite("test", True)
+
+    expect_error("steam_busy", write)
+    assert recovered.state("test")  # reads go on
     assert not env.original.exists()
     assert env.library._original_path(env.original).read_bytes() == official
     monkeypatch.setattr(safety, "check_steam_idle", lambda folder: None)
     if not dev_sandbox:
-        expect_error("game_running", lambda: recovered.state("test"))
+        expect_error("game_running", write)
         assert not env.original.exists()
         monkeypatch.setattr(safety, "check_game_not_running", lambda: None)
     mode = env.game_dir.stat().st_mode & 0o777
     env.game_dir.chmod(0o555)
     try:
-        expect_error("game_file_locked", lambda: recovered.state("test"))
+        expect_error("game_file_locked", write)
         assert not env.original.exists()
     finally:
         env.game_dir.chmod(mode)
@@ -2288,9 +2302,10 @@ def test_recovery_repeats_game_and_caller_checks_before_restoring_missing_file(s
         raise ServiceError("classic_open")
 
     recovered._write_check = classic
-    expect_error("classic_open", lambda: recovered.state("test"))
+    expect_error("classic_open", write)
     assert not env.original.exists()
     recovered._write_check = None
+    write()
     assert recovered.state("test").applied == "official"
     assert env.original.read_bytes() == official
 
@@ -2339,10 +2354,10 @@ def test_recovery_keeps_an_external_change_and_the_only_official_original(setup_
     external = header_bundle(b"outside change after interruption")
     env.original.write_bytes(external)
     recovered = reload_library(env)
-    expect_error("entry_changed", lambda: recovered.state("test"))
+    recovered.state("test")  # no longer a failure of the whole library: the outside change is left as it is
     assert env.original.read_bytes() == external
-    assert env.library._original_path(env.original).read_bytes() == official
-    assert len(list((env.root / "transactions").glob("*/journal.json"))) == 1
+    assert env.library._original_path(env.original).read_bytes() == official  # the only official copy stays
+    assert not list((env.root / "transactions").glob("*/journal.json"))  # the rollback finished and retired it
 
 
 def test_off_and_on_with_no_clone_rekeep_the_moved_original(setup_library, monkeypatch):

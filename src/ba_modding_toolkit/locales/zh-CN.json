@@ -1204,6 +1204,7 @@
 			"folder_changed": "游戏目录已变更，请重试",
 			"state_changed": "已在别处切换，请重新确认",
 			"profiles_unreadable": "无法读取 Mod 设置：{file}",
+			"library_state_unreadable": "无法读取 Mod 仓库：{file}",
 			"not_enough_space": "空间不足：需要 {need}，可用 {free}",
 			"mod_last_copy": "游戏仍在使用的文件的唯一副本：{file}",
 			"scan_off": "文件检查已关闭",

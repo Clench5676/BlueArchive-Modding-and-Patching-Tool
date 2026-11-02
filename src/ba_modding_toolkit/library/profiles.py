@@ -100,6 +100,8 @@ class Profiles:
         self._lock = threading.RLock()
         self._seen: tuple[tuple[int, int] | None, tuple[int, int] | None] | None = None
         self._data: dict[str, Any] | None = None
+        # called before every change: the owner may refuse it by raising (the library: a recovery that has failed)
+        self.gate: Callable[[], None] | None = None
 
     def signature(self) -> tuple[int, int] | None:
         """The file's (modification time in ns, size), None while it is missing."""
@@ -171,6 +173,8 @@ class Profiles:
         configuration to change in place, and returns False to write nothing. ``after`` gets the configuration as
         written (or as read, when nothing was written), still under the lock. Neither callback calls into Profiles
         or the library's public methods. Returns the configuration as written (or as read)."""
+        if self.gate is not None:
+            self.gate()
         with self._lock, file_lock(self.lock_path):
             current, bad = self._load()
             data = normalized(current)
