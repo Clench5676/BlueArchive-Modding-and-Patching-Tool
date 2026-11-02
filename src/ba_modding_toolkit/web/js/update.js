@@ -62,6 +62,11 @@ export function check(host, info, { onCheck, onError, beforeShow, simulation = f
   return done;
 }
 
+// the offer's three captions (Label_Locale widgets) on the slanted 496-wide bodies: a long one wraps to two lines before
+// it shrinks, in the popups' range (64 to 40), clear of the body's edges; all three share one size
+export const offerCaptions = (widgets) =>
+  NGUI.fitLabels(widgets, widgets.map((l) => l.text), 64, 40, 400, 2, { maxH: Popup.BUTTON_TEXT_H });
+
 function show(host, info, options) {
   return new Promise((resolve) => {
     draw(host, info, resolve, options).catch((err) => {
@@ -143,10 +148,8 @@ async function draw(host, info, resolve, { simulation = false } = {}) {
     const action = !installable ? "page" : phase === "ready" || phase === "installing" ? "restart" : "update";
     const okText = T(action === "update" ? "update.now" : `update.${action}`);
     find(controls, "Btn_Ok/Label_Locale").widgets[0].text = okText;
-    // one line on the slanted 496-wide bodies, shrinking long captions rather than running into the edges; all three share one size
     const names = ["Btn_Cancel", "Btn_Notes", "Btn_Ok"];
-    const captions = names.map((name) => find(controls, `${name}/Label_Locale`).widgets[0]);
-    NGUI.fitLabels(captions, captions.map((l) => l.text), 64, 34, 400, 1);
+    offerCaptions(names.map((name) => find(controls, `${name}/Label_Locale`).widgets[0]));
     for (const name of names) {
       if (locked) {
         const index = controls.children.findIndex((child) => child.name === name);

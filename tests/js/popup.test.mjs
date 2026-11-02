@@ -2031,6 +2031,63 @@ test("release-note button captions fit the unchanged UIPopup_Sort bodies in all 
   } finally { setStrings('en-US', Object.fromEntries(strings(english))); }
 });
 
+// UI-32: the offer's three captions wrap to two lines before they shrink, in the popups' 64 to 40 range, at one size
+test("the update offer's captions wrap before they shrink, share one size and fit in every locale", async () => {
+  const NGUI = await import("../../src/ba_modding_toolkit/web/js/ngui.js");
+  await Popup.ready();
+  const W = 400, H = Popup.BUTTON_TEXT_H; // the caption room on the slanted 496 x 177 bodies (UIPopup_Sort Btn_Ok)
+  const inside = (w, scale = 1) => {
+    const lines = w.text.split("\n");
+    return lines.length <= 2 && lines.every((line) => NGUI.glyphWidth(line, w.fontSize) * scale <= W * scale + 1e-9)
+      && lines.length * NGUI.fontSizeFor(w.text, w.fontSize) * NGUI.LINE_PITCH * scale <= H * scale + 1e-9;
+  };
+  try {
+    for (const lang of ['en-US', 'th-TH', 'ko-KR', 'ja-JP', 'zh-CN', 'zh-TW']) {
+      const ui = JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${lang}.json`, import.meta.url))).webui;
+      setStrings(lang, Object.fromEntries(strings(ui)));
+      for (const ok of [ui.update.now, ui.update.page, ui.update.restart]) {
+        const texts = [ui.update.later, ui.update.notes, ok], widgets = texts.map((text) => ({ text }));
+        Update.offerCaptions(widgets);
+        const fs = widgets[0].fontSize, what = `${lang} ${ok}`;
+        assert.equal(new Set(widgets.map((w) => w.fontSize)).size, 1, `${what}: one size`);
+        assert.ok(fs >= 40 && fs <= 64, `${what}: ${fs}`);
+        for (const [i, w] of widgets.entries()) {
+          assert.equal(w.text.replace(/\s/g, ""), texts[i].replace(/\s/g, ""), what);
+          for (const [width, height] of [[960, 540], [1600, 900], [2560, 1440]]) for (const density of [1, 2]) {
+            assert.ok(inside(w, Math.min(width / 1920, height / 1080) * S * density), `${what}: ${JSON.stringify(w.text)} at ${fs}`);
+          }
+        }
+        // wrapping comes first: the largest size of the range that holds all three on at most two lines, unless one line
+        // loses no more than two steps (4) to it, the shared rule of every popup's buttons (NGUI.fitGroup)
+        const holds = (size) => {
+          const at = texts.map((text) => ({ text }));
+          NGUI.fitLabels(at, texts, size, size, W, 2, { maxH: H });
+          return at.every((w) => w.fontSize === size && inside(w));
+        };
+        let best = 64;
+        while (best > 40 && !holds(best)) best -= 2;
+        if (widgets.some((w) => w.text.includes("\n"))) assert.equal(fs, best, what);
+        else assert.ok(fs >= best - 4, `${what}: one line at ${fs}, two lines at ${best}`);
+        // never smaller than the old single line
+        assert.ok(fs >= NGUI.fitGroup(texts, 64, 34, W, 1)[0].fs, what);
+      }
+    }
+    // the review's case: Open Download Page in English drew all three at 34 on one line
+    setStrings('en-US', Object.fromEntries(strings(english)));
+    const widgets = [english.update.later, english.update.notes, english.update.page].map((text) => ({ text }));
+    Update.offerCaptions(widgets);
+    assert.ok(widgets[0].fontSize > 34);
+    // the drawn offer uses the same fit
+    const offered = Update.check(consent, { ...available, installable: false });
+    await drawn(consent, 'page');
+    const labels = ['Btn_Cancel', 'Btn_Notes', 'Btn_Ok'].map((name) => walk(consent).find((el) => el.dataset.path === `Center/Popup/Btn/${name}/Label_Locale`));
+    assert.deepEqual(labels.map((el) => el.textContent), widgets.map((w) => w.text));
+    assert.equal(new Set(labels.map((el) => el.style.fontSize)).size, 1);
+    action(consent, 'later').click();
+    await offered;
+  } finally { setStrings('en-US', Object.fromEntries(strings(english))); }
+});
+
 test("empty and unavailable notes offer the exact release page in every locale", async () => {
   for (const lang of ['en-US', 'zh-CN', 'zh-TW', 'ja-JP', 'ko-KR', 'th-TH']) {
     const ui = JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${lang}.json`, import.meta.url))).webui;
