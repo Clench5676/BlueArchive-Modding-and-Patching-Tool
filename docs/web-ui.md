@@ -688,6 +688,20 @@ install from its list (Remove from List, `forget`) drops its record only when no
 otherwise it only hides the install there, and a toggle there lists that install's entries as not switched for the
 data directory that names it.
 
+**State file safety.** `state.json` is read record by record. A record that cannot be used (not an object, a key
+missing or of another type, a bad id) is skipped with a warning and held: its raw JSON is written back unchanged at
+every save, so one bad record costs that record at most and never the file. An invalid `applied` entry is dropped. The
+last good file is copied to `state.json.prev` before every write, the same way as `profiles.json`. An unreadable
+file is read from `.prev` instead (logged) and kept as `state.json.bad` at the next write; `.prev` is never replaced by
+bad bytes. A running instance that holds state from a good read keeps its own state when the file breaks under it (the
+previous copy is older), adds what `.prev` holds and replaces the file, keeping the old one as `.bad`. When neither the
+file nor `.prev` can be read, or the file is a newer build's (`version` above 1, which is never read as corrupt, never
+touches `.prev` or `.bad` and stays byte for byte), the library is blocked: reads answer an empty library, every write
+raises `library_state_unreadable` before it starts, and nothing is written until the user fixes or removes the file
+(the next call that finds the file changed reads it again). A file that cannot be opened (locked, scanned) is not
+corruption: reads answer an empty library, writes raise `library_io_error`, and the next call reads again. A library
+move and a data directory move take `state.json.prev` and `.bad` along, as they do for `profiles.json`.
+
 **Per-Mod import publication.** `_store` stages and verifies the complete file group under
 `import-transactions/<uuid>/files`, journals its expected hashes, publishes the directory under `mods/<uuid>`, then
 saves the corresponding `state.json` record. Metadata publication is the commit point. A failed operation rolls

@@ -1204,6 +1204,7 @@
 			"folder_changed": "โฟลเดอร์เกมเปลี่ยนแล้ว, ลองใหม่",
 			"state_changed": "มีการสลับที่อื่นแล้ว, ตรวจสอบอีกครั้ง",
 			"profiles_unreadable": "อ่านการตั้งค่า Mod ไม่ได้: {file}",
+			"library_state_unreadable": "อ่านคลัง Mod ไม่ได้: {file}",
 			"not_enough_space": "พื้นที่ไม่พอ: ต้องใช้ {need}, ว่าง {free}",
 			"mod_last_copy": "สำเนาเดียวของไฟล์ที่เกมยังใช้อยู่: {file}",
 			"scan_off": "ปิดการตรวจสอบไฟล์อยู่",
