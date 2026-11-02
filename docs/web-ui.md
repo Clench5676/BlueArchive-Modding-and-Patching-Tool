@@ -23,8 +23,10 @@ Game assets and development data are excluded from packages.
   installation has no corresponding original resource; application remains unavailable in that case.
 - Nav entries without a new screen yet open the classic Tk GUI on that tab (`bamt --tab <name>`).
 - `bamt` (and the compiled app) starts the web UI; `bamt --classic` starts the classic Tk GUI.
-- Released builds look for a newer GitHub release at start and can update themselves (`updater.py`). The existing
-  unset-preference default is on; an explicitly saved startup-update opt-out remains off.
+- Released builds look for a newer GitHub release at start and can update themselves (`updater.py`). The offer is
+  the newest release above the running version that has this platform's build and its checksum, so a pre-release
+  without a build here does not hide an older installable one; when none has them, it is the newest release, without
+  an install button. The existing unset-preference default is on; an explicitly saved startup-update opt-out remains off.
 - Out of scope for now: the other tool screens.
 
 ## Student photography
