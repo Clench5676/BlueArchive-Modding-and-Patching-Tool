@@ -19,6 +19,7 @@ class Deletion:
         self.directory = directory or library.root / 'asset-deletions' / uuid4().hex
         self.rolling_back = False
         self.data = data or {'version': 1, 'phase': 'active', 'records': copy.deepcopy(library._records),
+                            'held': sorted(library._held_ids()),
                             'applied': copy.deepcopy(library._applied), 'profiles': copy.deepcopy(library.profiles.read()),
                             'mods': [], 'built': [], 'games': []}
 
@@ -97,9 +98,14 @@ class Deletion:
             source = (data['applied'].get(str(target)) or {}).get('source', 'official')
             library._commit({target: self.directory / entry['backup']}, source, lambda _: None,
                             pin=pin, prune=False, expected={target: current})
-        new_ids = set(library._records) - set(data['records'])
+        # A held record (its files were missing at the start) that came back meanwhile is not a record this
+        # transaction created: it keeps its folder and its place in the library.
+        held = set(data.get('held', []))
+        new_ids = set(library._records) - set(data['records']) - held
         library._refresh_state()
+        returned = {key: record for key, record in library._records.items() if key in held}
         library._records = copy.deepcopy(data['records'])
+        library._records.update(returned)
         library._applied = copy.deepcopy(data['applied'])
         for entry in data['games']:
             if entry['target'] in library._applied:

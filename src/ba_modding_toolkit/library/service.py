@@ -582,6 +582,7 @@ class ModLibrary:
         self._migration_pending = False
         self._base: tuple[dict, set, dict, set] = ({}, set(), {}, set())  # the state as last read or written, for merges
         self._held: list[Any] = []  # state.json records this library cannot use now, written back unchanged
+        self._warned: set[tuple[str, str]] = set()  # held records already logged
         self._state_good = False  # whether this instance holds state from a good read of state.json
         self._state_error: ServiceError | None = None  # why state.json cannot be written now (library_state_unreadable)
         self._reread = False  # the last read could not open state.json: read it again at the next call
@@ -633,13 +634,17 @@ class ModLibrary:
         held: list[Any] = []
         for raw in mods:
             reason = self._unusable(raw)
+            if reason is None and not all((self.root / "mods" / raw["id"] / f).is_file() for f in raw["files"]):
+                reason = "files missing"  # a record stays until the user or a removal deletes it
             if reason is not None:
-                logger.warning("Holding a library record that cannot be used (%s): %s", reason,
-                               _held_id(raw) or "no usable id")
+                key = (reason, _held_id(raw) or json.dumps(raw, sort_keys=True, default=str))
+                if key not in self._warned:  # once per record, not at every read of the file
+                    self._warned.add(key)
+                    logger.warning("Holding a library record that cannot be used (%s): %s", reason,
+                                   _held_id(raw) or "no usable id")
                 held.append(raw)
                 continue
-            if all((self.root / "mods" / raw["id"] / f).is_file() for f in raw["files"]):
-                records[raw["id"]] = raw
+            records[raw["id"]] = raw
         favorites = {key for key in listed if isinstance(key, str)}
         applied = {
             path: record for path, record in written.items()
@@ -2417,7 +2422,8 @@ class ModLibrary:
 
     def _drop_mods(self, mod_ids: list[str]) -> None:
         """Forget mods _keep_replaced added for a replacement that was rolled back (their files are in the game
-        again). A state that cannot be saved still lists them; loading drops records without files."""
+        again). The state is saved before a folder is deleted. A state that cannot be saved still lists them, so
+        their folders stay: a record whose files are gone is held, never dropped."""
         if not mod_ids:
             return
         deletion = getattr(self, '_asset_deletion', None)
@@ -2429,12 +2435,13 @@ class ModLibrary:
             for mod_id in mod_ids:
                 shutil.rmtree(self.root / 'mods' / mod_id)
             return
-        for mod_id in mod_ids:
-            self._records.pop(mod_id, None)
+        removed = {mod_id: self._records.pop(mod_id) for mod_id in mod_ids if mod_id in self._records}
         try:
             self._save()
-        except OSError as error:
+        except (OSError, ServiceError) as error:
             log_failure(logger, logging.WARNING, "Could not save the library state after a rollback", error)
+            self._records.update(removed)  # still listed in state.json: they keep their folders
+            return
         for mod_id in mod_ids:
             shutil.rmtree(self.root / "mods" / mod_id, ignore_errors=True)
 
