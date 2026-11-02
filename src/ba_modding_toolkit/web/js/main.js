@@ -238,6 +238,18 @@ addEventListener("keydown", (ev) => {
   askQuit();
 });
 
+// The top bar's Settings button. Settings is drawn from the game's UI, which a start without a game folder lacks: the
+// click then says so in the plain notice (the frame is missing too), and a failure with a game is reported as one.
+// Either way a click never fails silently.
+async function openSettings(changed) {
+  try { await Settings.open(changed); }
+  catch (err) {
+    console.error(err);
+    if (!info?.gameFound) Popup.notice(T("app.noGame.hint"));
+    else notify(T(`error.${err?.code || "internal"}`, err?.params || { error: String(err) }), { kind: "error", error: err });
+  }
+}
+
 // without a game folder the game's UI cannot be drawn: plain buttons to find or choose one
 function noGame() {
   const region=ctx.prefs?.fileSource==='windows_japan'?'japan':'global';
@@ -245,10 +257,10 @@ function noGame() {
     try { await rpc("settings.set", { key: `gameDir.${region}`, value: path }); await refreshConfiguration(); }
     catch (err) { notify(T(`error.${err.code || "internal"}`, err.params || { error: String(err) }), { kind: "error", error: err }); }
   };
-  message(T("app.noGame.title"), T("error.game_directory_missing"), [
+  message(T("app.noGame.title"), T("app.noGame.hint"), [
     [T("settings.detect"), async () => {
       const found = await rpc("settings.detectGame", { region }).catch(() => []);
-      if (found.length) setDir(found[0]); else notify(T("error.game_directory_missing"), { kind: "error", error: { code: "game_directory_missing" } });
+      if (found.length) setDir(found[0]); else notify(T("app.noGame.hint"), { kind: "error", error: { code: "game_directory_missing" } });
     }],
     ...(info?.native ? [[T("settings.change"), async () => { const p = await rpc("settings.pickFolder", {}).catch(() => null); if (p) setDir(p); }]] : []),
   ]);
@@ -572,7 +584,7 @@ async function start() {
       notify(T(`error.${err.code || "internal"}`, err.params || { error: String(err) }), { kind: "error", error: err });
     }
   });
-  $("top-option").addEventListener("click", () => Settings.open(settingsChanged));
+  $("top-option").addEventListener("click", () => openSettings(settingsChanged));
   $("top-home").addEventListener("click", goHome);
   if (!location.hash) history.replaceState(null, "", ROOT_ROUTE);
   addEventListener("hashchange", route);
