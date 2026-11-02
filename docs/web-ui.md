@@ -2137,6 +2137,12 @@ in `pointer-textures`); without a game the system cursor stays and there is no e
     Art. The art is looked for within three game views around the game's view (14 lobbies reach that edge). The pass
     costs 10 to 30 % more with it (Kurumi 0.78 to 0.90 s, Toki 0.82 to 1.06 s).
   - *Custom*: 1.0 to 4.0 game views across (0.1 steps, a slider row under the option), around the game's view.
+    Settings' sliders (this one and the Sound tab's Voice) are a native range input laid unseen over the game's slider
+    (`settings.js` `wireSlider`, its native thumb `SLIDER_THUMB` wide so its centre travels the drawn thumb's range): the
+    pointer, the arrow keys, Home, End and Page Up / Down move it, the game's thumb and the value label follow while it
+    changes, and the value is saved when it commits (the pointer's release, each key press; the page is drawn again
+    with the focus put back on the slider). Keyboard focus shows a ring on the thumb. A drag the system cancels
+    (`pointercancel`) goes back to the saved value and saves nothing.
 
   Past the painted art (Unlocked, Custom) the lobby shows black: what the game's lobby camera clears to (level1
   `Persistent/Camera`, solid colour, black). With PP on, the grade runs over that black as over the art: the bottom

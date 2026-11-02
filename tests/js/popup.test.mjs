@@ -40,6 +40,12 @@ class El {
       remove: (...names) => { this.className = this.className.split(" ").filter((name) => !names.includes(name)).join(" "); } };
   }
   contains(node) { for (let n = node; n; n = n.parentNode) if (n === this) return true; return false; }
+  // only the attribute-presence selector the tests need: [data-some-key]
+  querySelectorAll(selector) {
+    const key = /^\[data-([\w-]+)\]$/.exec(selector)?.[1].replace(/-(\w)/g, (_, c) => c.toUpperCase());
+    if (!key) throw new Error(`stand-in querySelectorAll: ${selector}`);
+    return walk(this).filter((e) => e !== this && key in e.dataset);
+  }
   get isConnected() { return document.body.contains(this); }
   setAttribute(k, v) { this.attrs[k] = String(v); }
   getAttribute(k) { return this.attrs[k] ?? null; }
@@ -142,6 +148,13 @@ const controlLayouts = controls();
 const filterGroup = displayLayouts(controlLayouts.filter);
 const switchLayouts = switchPrefabs();
 insert(OPTIONS, "Center/Popup/List/Sound_Setting/ETCSetting/ButtonBg", controlLayouts.option.children[0].children[0].children[0].children[0].children[0].children[0]);
+// The sound row's slider (Master/Type_3): its title, the 689-unit bar with its thumb, the icons and the mute check.
+insert(OPTIONS, "Center/Popup/List/Sound_Setting/Sound_Scroll View/Grid_2/Master/Type_3", n("Type_3", [0, 0], [], [
+  n("Label_Locale_OptionTitle", [-600, 0], [{ ...lbl(), w_: 360, h_: 60, pivot: 3 }]),
+  n("SlideBg", [300, 0], [spr("Common_Bg_Raius10px", 689, 40)], [n("Thumb", [-316, 0], [spr("Common_Bg_Raius10px", 60, 60)])]),
+  n("Icon_Minimum", [-100, 0], [spr("Common_Bg_Raius10px", 40, 40)]), n("Icon_Maximum", [700, 0], [spr("Common_Bg_Raius10px", 40, 40)]),
+  n("Label_Mute", [850, 0], [{ ...lbl(), w_: 180, h_: 60 }], [n("Bg", [0, 0], [spr("Common_Bg_Raius10px", 100, 60)]), n("Icon", [0, 0], [spr("Common_Bg_Raius10px", 40, 40)])]),
+]));
 let update = null; // what app.checkUpdate answers
 const calls = [];
 const requests = [], handlers = new Map();
@@ -2792,4 +2805,117 @@ test("the asset consent names Agree and Decline with their captions in every lan
       assert.equal(consent.hidden, true);
     }
   } finally { setStrings("en-US", Object.fromEntries(strings(english))); consent.hidden = true; }
+});
+
+// --- UI-14: the Settings sliders are range inputs over the game's slider ---
+const sliderOf = (name) => walk(settings).find((e) => e.tagName === "INPUT" && e.attrs["aria-label"] === name);
+async function openSound(prefs = {}, tabName = "sound") {
+  const saved = [], state = { version: "1.0.0", language: "en-US", languages: [{ code: "en-US", name: "English" }], voiceVolume: 80, voiceMuted: false,
+    lobbyZoom: { mode: "custom", custom: 2 }, ...prefs };
+  handlers.set("settings.get", () => ({ result: state }));
+  handlers.set("mods.state", () => ({ result: {} }));
+  handlers.set("settings.set", ({ key, value }) => { saved.push([key, value]); Object.assign(state, { [key]: value }); return { result: state }; });
+  const Settings = await import("../../src/ba_modding_toolkit/web/js/settings.js");
+  await Settings.open(null, tabName);
+  return { saved, state, Settings };
+}
+
+test("the Settings sound slider is a range input over the game's slider, named by its row, with the saved value", async () => {
+  const { Settings } = await openSound();
+  try {
+    assert.equal(walk(settings).filter((e) => /slider-hit/.test(e.className)).length, 0, "no scripted pointer area is left");
+    const range = sliderOf(english.settings.voice);
+    assert.ok(range, "the Voice row's slider");
+    assert.deepEqual([range.type, range.min, range.max, range.step, range.value], ["range", "0", "100", "1", "80"]);
+    assert.match(range.className, /\bhit\b/); assert.match(range.className, /\bslider-range\b/);
+    // geometry: its native thumb's centre travels the 632 units the drawn thumb does, round the bar's centre
+    const bar = walk(settings).find((e) => e.dataset.path === "Rows/Voice/SlideBg"), [bl, bt, bw, bh] = NGUI_rect(bar);
+    const left = parseFloat(range.style.left), width = parseFloat(range.style.width);
+    slack(left + width / 2, bl + bw / 2); slack(width, 632 * S + Settings.SLIDER_THUMB);
+    slack(parseFloat(range.style.top), bt - 20); slack(parseFloat(range.style.height), bh + 40);
+    assert.ok(left <= bl + 1 && left + width >= bl + bw - 1, "and the hit area covers the whole bar");
+    const thumb = walk(settings).find((e) => e.dataset.path === "Rows/Voice/SlideBg/Thumb");
+    slack(parseFloat(thumb.style.left) + parseFloat(thumb.style.width) / 2, bl + bw / 2 + (-316 + 632 * 0.8) * S);
+  } finally { press("Escape"); handlers.clear(); }
+});
+
+const NGUI_rect = (el) => ["left", "top", "width", "height"].map((key) => parseFloat(el.style[key]));
+const slack = (a, b, eps = 0.02) => assert.ok(Math.abs(a - b) < eps, `${a} != ${b}`);
+
+test("a slider moves the game's thumb while it changes and saves when it commits, by pointer or key", async () => {
+  const { saved } = await openSound();
+  try {
+    const range = () => sliderOf(english.settings.voice), thumb = () => walk(settings).find((e) => e.dataset.path === "Rows/Voice/SlideBg/Thumb");
+    const start = parseFloat(thumb().style.left);
+    // a drag: the thumb follows, nothing is saved yet
+    range().value = "50"; fire(range(), "input");
+    slack(parseFloat(thumb().style.left), start + (632 * (0.5 - 0.8)) * S);
+    range().value = "20"; fire(range(), "input");
+    slack(parseFloat(thumb().style.left), start + (632 * (0.2 - 0.8)) * S); assert.deepEqual(saved, []);
+    // the release commits
+    fire(range(), "change"); await tick();
+    assert.deepEqual(saved, [["voiceVolume", 20]]);
+    // a key press: input and change together, one step
+    range().value = "21"; fire(range(), "input"); fire(range(), "change"); await tick();
+    assert.deepEqual(saved.at(-1), ["voiceVolume", 21]);
+    // the page is drawn again with the saved value
+    assert.equal(range().value, "21");
+  } finally { press("Escape"); handlers.clear(); }
+});
+
+test("a cancelled drag puts the thumb and the input back and saves nothing", async () => {
+  const { saved } = await openSound();
+  try {
+    const range = () => sliderOf(english.settings.voice), thumb = () => walk(settings).find((e) => e.dataset.path === "Rows/Voice/SlideBg/Thumb");
+    const start = parseFloat(thumb().style.left);
+    range().value = "5"; fire(range(), "input");
+    assert.ok(parseFloat(thumb().style.left) < start);
+    fire(range(), "pointercancel");
+    assert.equal(range().value, "80"); slack(parseFloat(thumb().style.left), start);
+    await tick(); assert.deepEqual(saved, [], "nothing was committed");
+    // after a commit the cancelled drag goes back to that value
+    range().value = "60"; fire(range(), "input"); fire(range(), "change"); await tick();
+    range().value = "10"; fire(range(), "input"); fire(range(), "pointercancel");
+    assert.equal(range().value, "60");
+  } finally { press("Escape"); handlers.clear(); }
+});
+
+test("keyboard focus shows a ring on the game's thumb, the pointer's focus does not, and the focus survives the redraw a save causes", async () => {
+  await openSound();
+  try {
+    const range = () => sliderOf(english.settings.voice), thumb = () => walk(settings).find((e) => e.dataset.path === "Rows/Voice/SlideBg/Thumb");
+    assert.ok(!thumb().className.split(" ").includes("slider-thumb-focus"));
+    range().matches = () => false; fire(range(), "focus");
+    assert.ok(!thumb().className.split(" ").includes("slider-thumb-focus"), "a pointer's focus draws no ring");
+    range().matches = (selector) => selector === ":focus-visible"; fire(range(), "focus");
+    assert.ok(thumb().className.split(" ").includes("slider-thumb-focus"), "a key's focus draws the ring on the thumb");
+    fire(range(), "blur"); assert.ok(!thumb().className.split(" ").includes("slider-thumb-focus"));
+    // a key press saves and the page is drawn again: the new input has the focus
+    range().focus(); const before = range();
+    range().value = "81"; fire(range(), "input"); fire(range(), "change"); await tick();
+    for (let i = 0; i < 20 && range() === before; i++) await tick();
+    assert.notEqual(range(), before, "the page was drawn again");
+    assert.equal(document.activeElement, range(), "and the slider kept the focus");
+    // the ring is a class of the stylesheet, in the app's focus blue
+    const css = readFileSync(new URL("../../src/ba_modding_toolkit/web/css/app.css", import.meta.url), "utf8");
+    assert.match(css, /\.slider-thumb-focus\s*\{[^}]*outline:\s*4px solid #2fa6f0/);
+    assert.match(css, /\.hit\.slider-range\s*\{[^}]*opacity:\s*0/);
+    assert.match(css, /\.slider-range::-webkit-slider-thumb\s*\{[^}]*width:\s*40px/);
+  } finally { press("Escape"); handlers.clear(); }
+});
+
+test("the custom zoom-out limit's slider is a range input with the value as its text", async () => {
+  const { saved } = await openSound({}, "l2d");
+  try {
+    const range = sliderOf(english.settings.zoomOut.limit);
+    assert.ok(range, "the limit row's slider");
+    assert.deepEqual([range.min, range.max, range.value], ["0", "30", "10"]);
+    assert.equal(range.attrs["aria-valuetext"], english.settings.zoomOut.factor.replace("{v}", "2.0"));
+    range.value = "25"; fire(range, "input");
+    assert.equal(range.attrs["aria-valuetext"], english.settings.zoomOut.factor.replace("{v}", "3.5"));
+    const label = walk(settings).find((e) => e.dataset.path === "Rows/ZoomCustom/Label_Mute");
+    assert.equal(label.textContent, english.settings.zoomOut.factor.replace("{v}", "3.5"), "the value label follows too");
+    fire(range, "change"); await tick();
+    assert.deepEqual(saved, [["lobbyZoomCustom", 3.5]]);
+  } finally { press("Escape"); handlers.clear(); }
 });
