@@ -38,6 +38,16 @@ export function T(key, vars = {}) {
   return s.replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? "");
 }
 
+// an error's text: its code's string with its params, error.internal without a code. error.internal shows what the error
+// says of itself (its params' error, else its message); with nothing to say it ends where that detail would start, so
+// no raw key (error.undefined) and no empty detail ("Something went wrong: ") is shown. t: a caller's own T (quit.js)
+export function errorText(err, t = T) {
+  const code = err?.code || "internal", params = { ...(err?.params || {}) };
+  if (code !== "internal" || params.error) return t(`error.${code}`, params);
+  const said = typeof err === "string" ? err : err?.message && err.message !== err.code ? String(err) : "";
+  return said ? t("error.internal", { ...params, error: said }) : t("error.internal", params).replace(/[\s:\uFF1A]+$/u, "");
+}
+
 // the name keys to try for a UI language: its own, then zh-CN for Simplified Chinese and en for the others
 // (Traditional Chinese included: a Simplified name in a Traditional screen reads as wrong, like the UI strings,
 // i18n.fallback_language), then whatever there is

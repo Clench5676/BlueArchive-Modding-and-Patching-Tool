@@ -761,7 +761,8 @@ test("download failures stay inside the popup, allow retry, and resolve only whe
     handlers.set("app.update", () => ({ error: code === "internal" ? {} : { code } }));
     const failed = Update.check(consent);
     (await drawn(consent, "update")).click();
-    await until(() => part("Status")?.textContent === english.error[code].replace(/\{\w+\}/g, ""));
+    // an error with nothing to say: error.internal without its empty detail (UI-37)
+    await until(() => part("Status")?.textContent === english.error[code].replace(/\{\w+\}/g, "").replace(/[\s:]+$/, ""));
     assert.equal(await state(failed), "pending");
     press("Escape");
     assert.equal(await failed, "update", "the failed-update result is deferred until the popup closes");
