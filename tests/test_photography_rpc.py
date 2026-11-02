@@ -3,6 +3,7 @@
 import base64
 import io
 import json
+import threading
 import time
 from pathlib import Path
 from dataclasses import replace
@@ -238,3 +239,136 @@ def test_restore_reuses_or_creates_one_default_and_reports_the_deletion_identity
     while services.jobs.get(failed).pending and time.monotonic() < deadline:
         time.sleep(.01)
     assert services.jobs.get(failed).error['code'] == 'asset_delete_confirm'
+
+
+# --- lock order (FUN-13): the photograph lock never waits for the services lock ---
+
+def _run(target, name, results):
+    def work():
+        try:
+            results[name] = target()
+        except BaseException as error:  # reported by the test
+            results[name] = error
+
+    thread = threading.Thread(target=work, name=name, daemon=True)
+    thread.start()
+    return thread
+
+
+def _finished(*threads, timeout=10):
+    deadline = time.monotonic() + timeout
+    for thread in threads:
+        thread.join(max(0, deadline - time.monotonic()))
+    return [thread.name for thread in threads if thread.is_alive()]
+
+
+@pytest.mark.parametrize('writer', ['save', 'select'])
+def test_a_save_or_selection_arriving_while_the_manifest_is_parsed_does_not_deadlock(
+        app, services, photography_env, monkeypatch, writer):
+    """The reader holds the photograph lock and looks families up; the writer arrives meanwhile. The writer used to
+    hold the services lock and wait for the photograph lock, the reader to wait for the services lock."""
+    from ba_modding_toolkit.library.photographs import Photographs
+
+    env = photography_env
+    key = rpc(app, 'photography.save', variant='hoshino', png=env['png'], mode='portrait')['result']['saved']
+    rpc(app, 'photography.select', variant='hoshino', id=key)
+    reading, writing, release = threading.Event(), threading.Event(), threading.Event()
+    real_chosen, real_save, real_select = Photographs._chosen, Photographs.save, Photographs.select
+
+    def chosen(self, data, variant):
+        if threading.current_thread().name == 'reader' and not reading.is_set():
+            reading.set()  # inside the photograph lock, before the family lookup
+            assert writing.wait(10) and release.wait(10)
+        return real_chosen(self, data, variant)
+
+    def entering(real):
+        def wrapper(self, *args, **kwargs):
+            if threading.current_thread().name == 'writer':
+                writing.set()
+            return real(self, *args, **kwargs)
+        return wrapper
+
+    monkeypatch.setattr(Photographs, '_chosen', chosen)
+    monkeypatch.setattr(Photographs, 'save', entering(real_save))
+    monkeypatch.setattr(Photographs, 'select', entering(real_select))
+    results = {}
+    reader = _run(lambda: services.photographs.list('hoshino'), 'reader', results)
+    assert reading.wait(10)
+    call_writer = (lambda: services.photography.save('hoshino', env['png'], 'portrait', '', '', '')) \
+        if writer == 'save' else (lambda: services.photography.select('hoshino', None))
+    thread = _run(call_writer, 'writer', results)
+    assert writing.wait(10)
+    release.set()
+    stuck = _finished(reader, thread)
+    assert stuck == [], f'deadlock: {stuck} still waiting'
+    assert not isinstance(results['reader'], BaseException) and not isinstance(results['writer'], BaseException), results
+    assert results['reader']['app'] == key
+
+
+def test_no_manifest_call_waits_for_the_services_lock(services, photography_env):
+    """Whatever the store does under its own lock, it does with the services lock held by someone else."""
+    env = photography_env
+    store = services.photographs
+    holding, release = threading.Event(), threading.Event()
+
+    def hold():
+        with services._lock:
+            holding.set()
+            release.wait(30)
+
+    holder = threading.Thread(target=hold, daemon=True)
+    holder.start()
+    assert holding.wait(10)
+    results = {}
+
+    def calls():
+        key = store.save('hoshino', env['png'], 'portrait')['saved']
+        store.select('hoshino', key)
+        assert store.list('hoshino')['app'] == key
+        assert store.app_url('hoshino').endswith(f'/{key}.png') and store.selection('hoshino') == key
+        assert store.has_selection('hoshino') and store.image('hoshino', key) == env['raw']
+        store.select('hoshino', 'official')
+        store.delete('hoshino', key)
+        return 'done'
+
+    worker = _run(calls, 'worker', results)
+    try:
+        stuck = _finished(worker)
+    finally:
+        release.set()
+        holder.join(10)
+    assert stuck == [] and results['worker'] == 'done', results
+
+
+def test_a_library_move_waits_for_a_photograph_save_and_the_photo_lands_in_the_new_folder(
+        app, services, photography_env, monkeypatch, tmp_path):
+    """The one thing the services lock around a save kept out: the move that leaves the folder the save writes to."""
+    from ba_modding_toolkit.library.photographs import Photographs
+
+    env = photography_env
+    rpc(app, 'photography.save', variant='hoshino', png=env['png'], mode='portrait')  # a library worth moving
+    old = services.library_dir()
+    saving, release = threading.Event(), threading.Event()
+    real_save = Photographs.save
+
+    def save(self, *args, **kwargs):
+        if threading.current_thread().name == 'saver':
+            saving.set()  # the store (of the old folder) is resolved, the photograph lock is about to be taken
+            assert release.wait(10)
+        return real_save(self, *args, **kwargs)
+
+    monkeypatch.setattr(Photographs, 'save', save)
+    results = {}
+    saver = _run(lambda: services.photography.save('hoshino', env['png'], 'portrait', '', '', ''), 'saver', results)
+    assert saving.wait(10)
+    target = tmp_path / 'moved-library'
+    mover = _run(lambda: services.move_library(target), 'mover', results)
+    mover.join(0.5)
+    assert mover.is_alive(), 'the move went ahead under a photograph save'
+    release.set()
+    assert _finished(saver, mover) == []
+    assert not isinstance(results['saver'], BaseException) and not isinstance(results['mover'], BaseException), results
+    key = results['saver']['saved']
+    assert (target / 'photographs' / 'images' / f'{key}.png').read_bytes() == env['raw']
+    assert not (old / 'photographs').exists(), 'the save landed in the folder the move left'
+    assert len(services.photographs.list('hoshino')['photos']) == 2

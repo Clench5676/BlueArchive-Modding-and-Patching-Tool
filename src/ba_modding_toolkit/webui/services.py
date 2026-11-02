@@ -242,6 +242,10 @@ class Services:
         self.tray_supported = False  # a tray or menu bar icon can be shown (the tray sets it)
         self.tray_shown = False  # the tray or menu bar icon is shown (the game watch then polls fast)
         self._lock = threading.RLock()
+        # Held by photograph saves and selections and by a library move, so a save never lands in the folder a move is
+        # leaving. Taken before ``_lock`` and before the photograph store's own lock, never while holding either.
+        self.photograph_writes = threading.RLock()
+        self._photographs_catalog: Any = None
         self._cache, self._game, self._catalog, self._library = cache, game, catalog, library
         self._preview_cache = None
         self._injected = {k for k, v in (("game", game), ("catalog", catalog), ("library", library)) if v is not None}
@@ -421,13 +425,20 @@ class Services:
 
     @property
     def photographs(self):
+        """The photograph store of the library folder in use. Its family lookup is bound to the catalog resolved here,
+        never reached through the services lock: the store's own lock is held while it looks families up, and no code
+        path may hold that lock while it waits for ``self._lock``. A new catalog (a new game folder) makes a new store.
+        Call it with the photograph lock free."""
         from ..library.photographs import Photographs, student_family
 
+        catalog = self.catalog
         root = self.library_dir()
-        store = getattr(self, "_photographs", None)
-        if store is None or store.root.parent != root:
-            self._photographs = store = Photographs(root, lambda key: student_family(self.catalog, key))
-        return store
+        with self._lock:
+            store = getattr(self, "_photographs", None)
+            if store is None or store.root.parent != root or self._photographs_catalog is not catalog:
+                self._photographs_catalog = catalog
+                self._photographs = store = Photographs(root, lambda key: student_family(catalog, key))
+            return store
 
     @property
     def photography(self):
@@ -495,7 +506,7 @@ class Services:
 
         self.scanner.cancel()  # a running scan reads the current library
         self.scanner.wait_idle(5.0)
-        with self._lock:
+        with self.photograph_writes, self._lock:  # a photograph save or selection waits, then uses the new folder
             if has_library(current) and not has_library(target):
                 clashes = [item for item in LIBRARY_ITEMS if (target / item).exists()]
                 if clashes:

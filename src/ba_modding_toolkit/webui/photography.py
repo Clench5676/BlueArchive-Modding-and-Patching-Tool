@@ -84,13 +84,16 @@ class Photography:
 
     def save(self, variant: str, png: str, mode: str, expression: str, action: str, source: str) -> dict:
         self._variant(variant)
-        # Persistence must not wait for an unrelated game writer's status scan.
-        with self.services._lock:
-            return self.describe(self.services.photographs.save(variant, png, mode, expression, action, source))
+        # Persistence must not wait for an unrelated game writer's status scan, nor hold the services lock: the
+        # manifest has its own lock, and the only thing to keep out is a library move (photograph_writes), which
+        # is taken first so the store is resolved after a move that is under way.
+        with self.services.photograph_writes:
+            result = self.services.photographs.save(variant, png, mode, expression, action, source)
+        return self.describe(result)
 
     def select(self, variant: str, key: str | None) -> dict:
         self._variant(variant)
-        with self.services._lock:
+        with self.services.photograph_writes:
             result = self.services.photographs.select(variant, key)
         self.services.events.publish("photography.changed", {"variant": variant})
         return self.describe(result)

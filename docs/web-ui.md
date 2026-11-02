@@ -39,8 +39,10 @@ pending work. Playback, Back and mode buttons reuse the approved native prefabs.
 `photographs/` belongs to the movable/shared Mod library, not Preview Cache. Its atomic manifest retains per-student
 captures and App choices, IDs and SHA-256 digests; image publication rolls back if metadata cannot commit. Chosen
 App photographs and configured/applied game photographs cannot be deleted. Preview-cache clearing never removes
-captures. Save and App selection avoid unrelated game-writer status reads, and library moves include photographs
-even when no ordinary Mods exist. The roster/family payload's optional `thumbnail` field selects an App capture or an explicit verified
+captures. Save and App selection avoid unrelated game-writer status reads and do not hold the services lock (the
+manifest has its own lock; only a library move is kept out, through `Services.photograph_writes`), and library moves
+include photographs even when no ordinary Mods exist. The store's family lookup is bound to the catalog it was built
+with, so no code path holds the manifest lock while it waits for the services lock. The roster/family payload's optional `thumbnail` field selects an App capture or an explicit verified
 default. `photography.changed {variant}` invalidates the roster without reloading an active camera.
 
 The manifest is read per entry. A photo record or a selection that cannot be used (a bad digest, an id that differs
