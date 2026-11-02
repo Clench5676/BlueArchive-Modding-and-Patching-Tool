@@ -170,8 +170,10 @@ Imports only go one way: `webui` → `library` → `catalog` → `gameassets` �
 - **Threads.** Services are thread-safe: HTTP handlers run on many threads at once. UnityPy work on one bundle is
   serialised with a per-bundle lock. Long operations run on the single job worker (see Jobs).
 - **No prose in results.** Services return data, not sentences. Errors are `ServiceError(code, **params)`
-  (`ba_modding_toolkit/errors.py`); the front end shows the locale string `webui.error.<code>`. Diagnostics go to
-  `logging.getLogger(__name__)`, never `print`.
+  (`ba_modding_toolkit/errors.py`); the front end shows the locale string `webui.error.<code>`. An error passes every
+  parameter its text names, above all `file`; where there is no file to name, it uses a code whose text has no
+  placeholder (`source_unsupported` beside `mod_unsupported`). `tests/test_error_params.py` scans for the omissions.
+  Diagnostics go to `logging.getLogger(__name__)`, never `print`.
 - **JSON-ready results.** Dataclasses with `to_json()` returning plain dicts; paths as absolute strings, dates as ISO
   strings.
 - **Texture decoding.** Every decode of a `Texture2D` read from a bundle goes through `texture_guard.texture_image`

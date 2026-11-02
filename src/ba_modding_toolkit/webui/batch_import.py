@@ -136,6 +136,18 @@ class ImportResult:
         return {"results": self.results}
 
 
+def source_file(candidate: Candidate) -> str:
+    """The file an error about a whole entry names: its first source, which the list shows as the entry's file."""
+    return str(min(candidate.files.values()))
+
+
+def blocked_error(candidate: Candidate) -> ServiceError:
+    """The error of a blocked candidate: its code with the details recorded when it was analyzed, and a file."""
+    params = dict(candidate.failure["params"]) if candidate.failure else {}
+    params.setdefault("file", source_file(candidate))
+    return ServiceError(candidate.error, **params)
+
+
 def blocked_reason(error: ServiceError) -> str:
     aliases = {"bundle_invalid": "unreadable", "game_file_not_found": "no_target",
                "mod_unsupported": "unsupported", "source_unsupported": "unsupported"}
@@ -350,7 +362,7 @@ class BatchImport:
             if candidate is None or candidate.entry["state"] in ("done", "library", "installed"):
                 raise ServiceError("bad_params", key="id")
             if candidate.error not in (None, "mod_target_unknown", "mod_target_ambiguous", "unsupported"):
-                raise ServiceError(candidate.error)
+                raise blocked_error(candidate)
             candidate.entry["assignment"] = selected.key
             self._assignments[id] = (candidate.identity, selected.key)
         target = candidate.entry.get("source") or candidate.entry["target"]
@@ -518,7 +530,7 @@ class BatchImport:
             variant, error, failure = None, None, None
             try:
                 if self._hashes.get(path).trailing is None:
-                    raise ServiceError("bundle_invalid")
+                    raise ServiceError("bundle_invalid", file=path)
                 if not library.supports_kind(kind):
                     error = "unsupported"
                     failure = ServiceError("mod_unsupported", file=path, kind=kind).to_json()
@@ -606,13 +618,13 @@ class BatchImport:
                 saved = next((mod for mod in library.mods() if mod.id == existing), None) if existing else None
                 if saved:
                     if entry.get("assignment") and entry["assignment"] != saved.target:
-                        raise ServiceError("mod_target_ambiguous")
+                        raise ServiceError("mod_target_ambiguous", file=source_file(candidate))
                     entry.update(state="library", reason=None, libraryId=saved.id, variant=saved.target,
                                  kind=saved.kind, core=entry["core"] or saved.core)
                     return
             if entry.get("assignment"):
                 if candidate.error not in (None, "mod_target_unknown", "mod_target_ambiguous", "unsupported"):
-                    raise ServiceError(candidate.error)
+                    raise blocked_error(candidate)
                 variant = self.services.catalog.assignment_variant(entry["assignment"])
                 kind = manual_identity.validate(candidate.files)
                 candidate.identity = frozenset((core_of(name), part_of(name), self._hashes.get(path).sha1)
@@ -685,7 +697,7 @@ class BatchImport:
                             or mod_origin.platform_of(selected) is None)
 
             if len({p.name for p in live}) != len(live):
-                raise ServiceError("game_file_conflict")
+                raise ServiceError("game_file_conflict", file=source_file(candidate))
             for file in entry["files"]:
                 name = next((name for name, path in candidate.files.items() if str(path) == file["path"]), "")
                 matches = [p for p in live if part_of(p.name) == part_of(name)]
@@ -712,7 +724,7 @@ class BatchImport:
             if not entry["target"]["platform"]:
                 raise ServiceError("target_unknown")
             if len(live) != len(originals):
-                raise ServiceError("game_file_conflict")
+                raise ServiceError("game_file_conflict", file=source_file(candidate))
             baseline = dict(zip(live, originals))
             exact = set(candidate.files) <= {p.name for p in live}
             sources = list(candidate.files.values())
@@ -799,7 +811,7 @@ class BatchImport:
             if error.params:
                 entry["params"] = error.to_json()["params"]
         except (OSError, ValueError) as error:
-            detail = ServiceError("bundle_invalid", error=str(error))
+            detail = ServiceError("bundle_invalid", file=source_file(candidate), error=str(error))
             entry.update(state="blocked", reason="unreadable",
                          error=failure_detail(detail, candidate.files.values(), log,
                                               secrets=getattr(self.services, "log_secrets", set())))
@@ -952,7 +964,7 @@ class BatchImport:
                                                  library.add_files(fresh.entry["kind"], paths, pin=pin, direct=bool(fresh.direct)))
                                     entries = [*added, *added.duplicates]
                                     if len(entries) != 1:
-                                        raise ServiceError("mod_unsupported")
+                                        raise ServiceError("mod_unsupported", file=source_file(candidate))
                                     mod = entries[0]
                                     item.update(libraryId=mod.id, outcome=("updated" if updated else "imported")
                                                 if added else "unchanged")
@@ -987,7 +999,8 @@ class BatchImport:
                             if error.params:
                                 item["params"] = error.to_json()["params"]
                         except OSError as error:
-                            detail = ServiceError("library_io_error", error=str(error))
+                            detail = ServiceError("library_io_error", file=error.filename or source_file(candidate),
+                                                  error=str(error))
                             item.update(outcome="failed", reason=detail.code, params=detail.params,
                                         error=failure_detail(detail, candidate.files.values(), log,
                                                              secrets=getattr(self.services, "log_secrets", set())))

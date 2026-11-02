@@ -183,8 +183,10 @@ def export_zip(services: Any, library: Any, pin: Any, *, scope: str, target: str
                                                    Path(staging), log, progress, kind)
                         directory = _safe_name(source)
                         names = [_member_name(path) for path in paths]
-                        if len({unicodedata.normalize("NFC", name).casefold() for name in names}) != len(names):
-                            raise ServiceError("game_file_conflict")
+                        keys = [unicodedata.normalize("NFC", name).casefold() for name in names]
+                        if len(set(keys)) != len(keys):
+                            raise ServiceError("game_file_conflict", file=next(
+                                name for name, key in zip(names, keys) if keys.count(key) > 1))
                         members = []
                         for path, name in zip(paths, names):
                             before = path.stat()
