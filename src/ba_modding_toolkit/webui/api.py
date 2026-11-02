@@ -571,18 +571,28 @@ def build_api(s: Services) -> RpcRegistry:
                    if (target := alias_target(f)) != f.key}
         return s.state.aliases(targets)
 
+    photo_failure: dict[str, str] = {}  # the error code of the last failed photograph lookup, logged once
+
     def variant_json(v: Any, mods: dict[str, list], favorites: set[str], recent: list[str], seen: set[str] | None,
                      modified: dict[str, str] | None = None, custom: dict[str, list[str]] | None = None,
                      roster_state: dict[str, Any] | None = None) -> dict[str, Any]:
         own = mods.get(v.key, [])
         photograph = None
-        photographs = getattr(s, "photographs", None)
-        if photographs is not None:
-            photograph = photographs.app_url(v.key)
-            if photograph is None and photographs.selection(v.key) == "official" and v.portrait:
-                pin = s.library.current_pin()
-                if pin is not None:
-                    photograph = s.photography.default_url(v.key, pin)
+        try:
+            photographs = getattr(s, "photographs", None)
+            if photographs is not None:
+                photograph = photographs.app_url(v.key)
+                if photograph is None and photographs.selection(v.key) == "official" and v.portrait:
+                    pin = s.library.current_pin()
+                    if pin is not None:
+                        photograph = s.photography.default_url(v.key, pin)
+            photo_failure.clear()
+        except ServiceError as error:
+            # the thumbnail choice is optional: the student keeps its default one, and the log says so once
+            photograph = None
+            if photo_failure.get("code") != error.code:
+                photo_failure["code"] = error.code
+                logger.warning("Photograph lookup failed (%s), students use their default thumbnails", error.code)
         return {
             **({"thumbnail": photograph} if photograph else {}),
             **stored_asset_fields(v, own),
