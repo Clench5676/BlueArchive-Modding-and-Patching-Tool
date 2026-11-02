@@ -66,7 +66,65 @@ export function ready() {
 // the page, so a popup closed by hiding its host leaves the stack by itself.
 const stack = [];
 const live = (e) => e.host.isConnected && !e.host.hidden && (!e.el || e.el.isConnected);
-function prune() { for (let i = stack.length - 1; i >= 0; i -= 1) if (!live(stack[i])) stack.splice(i, 1); }
+function prune() {
+  for (let i = stack.length - 1; i >= 0; i -= 1) if (!live(stack[i])) release(stack.splice(i, 1)[0]);
+}
+
+// --- keyboard focus: one trap for every popup on the stack ---
+// A popup takes the focus when it opens (the container, or what the caller focuses itself), Tab and Shift+Tab cycle
+// inside the topmost one, and once it closes the focus goes back to what had it before, unless the user moved on.
+const doc = () => globalThis.document;
+// an element Tab can stop at: enabled, drawn, not inert; a hidden or inert part is skipped whole
+function shown(el) {
+  if (typeof el.getClientRects !== "function") return true;
+  if (!el.getClientRects().length) return false;
+  return typeof getComputedStyle !== "function" || getComputedStyle(el).visibility !== "hidden";
+}
+export function tabStops(box) {
+  const out = [];
+  const visit = (parent) => {
+    for (const el of parent.children || []) {
+      if (el.hidden || el.inert || el.style?.display === "none") continue;
+      if (!el.disabled && el.tabIndex >= 0 && el.style?.visibility !== "hidden" && shown(el)) out.push(el);
+      visit(el);
+    }
+  };
+  visit(box);
+  return out;
+}
+function focusIn(box) {
+  const active = doc()?.activeElement;
+  if (!box || box.hidden || box.inert || box.isConnected === false || (active && box.contains?.(active))) return;
+  if (box.tabIndex < 0 && !box.hasAttribute?.("tabindex")) box.setAttribute?.("tabindex", "-1");
+  box.focus?.({ preventScroll: true });
+}
+// what had the focus when the popup opened, unless it is the popup itself or nothing in particular
+function opener(box) {
+  const active = doc()?.activeElement;
+  return active && active !== doc().body && !box.contains?.(active) ? active : null;
+}
+function release({ host, el, before }) {
+  if (!before || before.isConnected === false) return;
+  const box = el || host, active = doc()?.activeElement;
+  if (active && active !== doc().body && !box.contains?.(active)) return; // the user moved on
+  const above = stack.findLast(live); // another popup still open: only into it
+  if (above && !(above.el || above.host).contains?.(before)) return;
+  before.focus?.({ preventScroll: true });
+}
+// Tab inside the topmost popup: wraps at the ends, and brings the focus back in when it is outside (on the opener,
+// or lost when a redraw replaced the focused control). A control that took the key itself keeps it (defaultPrevented).
+export function trapKey(ev) {
+  if (ev.key !== "Tab" || ev.defaultPrevented || ev.isComposing || ev.keyCode === 229 || ev.altKey || ev.ctrlKey || ev.metaKey) return;
+  const t = top();
+  if (!t) return;
+  const box = t.el || t.host, stops = tabStops(box), active = doc()?.activeElement;
+  if (!stops.length) { ev.preventDefault(); focusIn(box); return; }
+  const at = stops.indexOf(active), last = stops.length - 1;
+  if (at >= 0 && (ev.shiftKey ? at > 0 : at < last)) return; // inside: the browser steps to the next control
+  ev.preventDefault();
+  (ev.shiftKey ? stops[last] : stops[0]).focus?.();
+}
+addEventListener("keydown", trapKey);
 
 // a popup opened in host (el: its own layer, when the host holds several); close(how) closes it, how being "escape",
 // "backdrop" or "close"; null for a popup that must be answered with one of its buttons. Drawing the same popup again
@@ -74,9 +132,10 @@ function prune() { for (let i = stack.length - 1; i >= 0; i -= 1) if (!live(stac
 export function opened(host, close, { el = null, loading = false } = {}) {
   if (loading && el) { el.style.visibility = "hidden"; el.inert = true; }
   prune();
-  const entry = { host, el, close };
   const at = stack.findIndex((e) => e.host === host && e.el === el);
-  if (at >= 0) stack[at] = entry; else stack.push(entry);
+  // a popup drawn again keeps its place and what to give the focus back to; a new one takes the focus in
+  const entry = { host, el, close, before: at >= 0 ? stack[at].before : opener(el || host) };
+  if (at >= 0) stack[at] = entry; else { stack.push(entry); if (!loading) focusIn(el || host); }
   return entry;
 }
 // Reveal only after the entire layer's work and decoded pictures are ready. A closed layer stays closed.
@@ -86,11 +145,12 @@ export async function reveal(layer, pending = []) {
   if (!layer.isConnected) return false;
   layer.style.visibility = "";
   layer.inert = false;
+  if (top()?.el === layer) focusIn(layer);
   return true;
 }
 export function closed(host, el = null) {
   const at = stack.findIndex((e) => e.host === host && e.el === el);
-  if (at >= 0) stack.splice(at, 1);
+  if (at >= 0) release(stack.splice(at, 1)[0]);
 }
 export function top() { prune(); return stack.at(-1) || null; }
 // any popup open: the stack, or a host of the other popups (the consent and update popups, the settings, the display

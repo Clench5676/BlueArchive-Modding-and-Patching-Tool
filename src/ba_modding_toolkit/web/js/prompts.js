@@ -260,6 +260,7 @@ function listPrompt({ title, items, buttons, hint, check, closable, which }) {
     const done = (button) => {
       host.hidden = true;
       host.innerHTML = "";
+      Popup.closed(host);
       resolve({ button, selection, checked: !!check?.checked });
     };
     const draw = (scroll = 0) => Popup.listPopup({

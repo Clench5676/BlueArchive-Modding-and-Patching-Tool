@@ -199,6 +199,8 @@ input[type="text"], input[type="search"], textarea { cursor: text; }
 #prompt { z-index: 2550; }
 #dialog { z-index: 2600; }
 .popup-layer { position: absolute; inset: 0; z-index: 0; outline: none; }
+/* the shared focus trap (popup.js) focuses a popup's host when nothing in it can take the focus: no ring round the stage */
+.popup-host, .consent-host { outline: none; }
 /* a message popup without the game's frame (no game folder): a plain box on the popup's dark backdrop */
 .plain-popup-back { position: absolute; inset: 0; background: rgba(0, 0, 0, .6); }
 .plain-popup { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 1000px; padding: 48px 60px 52px;

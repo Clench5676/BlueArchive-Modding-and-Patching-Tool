@@ -41,7 +41,7 @@ import { clearUnseen, hasUnseen as hasFresh, shownUnseen, switchUnseen } from ".
 import { customAliases as aliasesOf, modName, modOriginalName, studentName } from "./names.js";
 import { setTitle } from "./nav.js";
 import { KEYS, deltaOf, pacer, typing } from "./step-keys.js";
-import { FRAME_Y, closable, frameReady, hit as hitNode, listPopup, message, popupFrame, scrollArea } from "./popup.js";
+import { FRAME_Y, closable, closed as popupClosed, frameReady, hit as hitNode, listPopup, message, popupFrame, scrollArea } from "./popup.js";
 import { candidateStatus, detailStatus, selectionStatus, selectionError, intendedKey, isApplied, availableTab, coreOf, hasAsset, hasKind, primaryKind, appliedKey as keyOf, appliedOf, candidates as listSources, partsOf, popupMode, modelSource, previewBase, previewChanged, previewKey, sourceOf, switchKindOf } from "./switch-sources.js";
 import { $, DOT, RECRUIT, S, TAN10, advanceOf, at, clone, glyphsOf, hitButton, markedLabel, off, text, widget, wrapPath } from "./util.js";
 
@@ -1306,6 +1306,7 @@ function closePopup(apply) {
   switchPopupPage = null;
   $("popup").hidden = true;
   $("popup").innerHTML = "";
+  popupClosed($("popup"));
   const chosen = candidates(variant(), popupKind).find((c) => c.key === pending);
   // only a choice other than the start (what the game shows; while mods are off, the configured source)
   if (apply && chosen && !chosen.greyed) return saveCandidate(pending, popupKind);
@@ -1341,6 +1342,10 @@ function overwrittenMessage(v, kind = "spr") {
 
 // variant picker: every variant of the family in the same list layout
 let pickerSeg = 0;
+function closePicker() {
+  $("picker").hidden = true;
+  popupClosed($("picker"));
+}
 async function openPicker(scroll = 0) {
   pickerSel = pickerSel || variantKey;
   const items = fam.variants.filter(hasAsset).sort(byRank).map((o) => ({
@@ -1353,8 +1358,8 @@ async function openPicker(scroll = 0) {
     hostId: "picker", title: T("picker.title"), okText: T("picker.ok"), items, selected: pickerSel, keepScroll: scroll,
     tools: { segs: ["seg.all", "seg.recruit", "seg.noRecruit"], seg: pickerSeg, onSeg: (i) => { pickerSeg = i; openPicker(); }, sortKey: "sort.release" },
     onSelect: (key, s) => { pickerSel = key; openPicker(s); },
-    onOk: () => { $("picker").hidden = true; const k = pickerSel; pickerSel = null; ctx.go(fam.key, k); },
-    onClose: () => { $("picker").hidden = true; pickerSel = null; },
+    onOk: () => { closePicker(); const k = pickerSel; pickerSel = null; ctx.go(fam.key, k); },
+    onClose: () => { closePicker(); pickerSel = null; },
     details: (it) => {
       const o = it.src, kind = primaryKind(o), file = gameFile(o, kind);
       return {
@@ -1362,7 +1367,7 @@ async function openPicker(scroll = 0) {
         fields: [[T("field.file"), coreOf(o, kind)], [T("info.gameFile"), o.date || "—"], [T("info.status"), T(appliedKey(o, kind) === "self" ? "status.original" : "status.replaced")],
           [T(isSpecial(o) ? "special.background" : "tab.lobby"), T(o.lobby ? "model.has" : "model.none")]],
         actions: [[T(platform === "mac" ? "open.mac" : "open.win"), () => reveal(file)],
-          [T("btn.extract"), () => { $("picker").hidden = true; job("actions.extract", { target: `variant:${o.key}` }, { name: fullName(o), onDone: (r) => reveal(r?.folder) }); }]],
+          [T("btn.extract"), () => { closePicker(); job("actions.extract", { target: `variant:${o.key}` }, { name: fullName(o), onDone: (r) => reveal(r?.folder) }); }]],
       };
     },
   });
@@ -1403,7 +1408,7 @@ async function openAliases(draft = customAliases(), focusAt = null, key = varian
   const next = document.createElement("div");
   const view = await NGUI.render(t, next, { scale: S, origin: [960, 540], z: 10 });
   if (my !== aliasToken) return;
-  const close = () => { aliasToken += 1; host.hidden = true; host.innerHTML = ""; };
+  const close = () => { aliasToken += 1; host.hidden = true; host.innerHTML = ""; popupClosed(host); };
   // the screen was left or shows another variant meanwhile
   if (!open || variantKey !== key) { close(); return; }
   const inputs = [];
@@ -1555,7 +1560,7 @@ async function showDetails() {
   host.hidden = false;
   const next = document.createElement("div");
   const view = await NGUI.render(t, next, { scale: S, origin: [960, 540], z: 10 });
-  const done = () => { host.hidden = true; host.innerHTML = ""; };
+  const done = () => { host.hidden = true; host.innerHTML = ""; popupClosed(host); };
   const hit = (path, fn, name, action) => hitNode(next, view, path, fn, { name, action });
   hit("Center/Popup/Base/BG/Btn_Close", done, T("display.close"), "close");
   hit("Center/Popup/Btn/Btn_Ok/BG (1)", done, T("picker.ok"), "ok");

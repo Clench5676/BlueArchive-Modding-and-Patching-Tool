@@ -743,14 +743,6 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
       popups.hit(layer, view, "Center/Popup/Base/BG/Btn_Close", close, { name: T("display.close"), action: "close" });
       popups.closable(view, dialogHost, close, { el: layer });
       layer.setAttribute("role", "dialog"); layer.setAttribute("aria-modal", "true"); layer.setAttribute("aria-label", title);
-      layer.addEventListener("keydown", (event) => {
-        if (event.key !== "Tab") return;
-        const focusable = [...layer.querySelectorAll("button:not(:disabled), input:not(:disabled), select:not(:disabled), summary")];
-        const first = focusable[0], last = focusable.at(-1);
-        if (!first) return;
-        if (event.shiftKey && (document.activeElement === first || document.activeElement === layer)) { event.preventDefault(); last.focus(); }
-        else if (!event.shiftKey && (document.activeElement === last || document.activeElement === layer)) { event.preventDefault(); first.focus(); }
-      });
       await (popups.reveal ? popups.reveal(layer, [...drawings]) : Promise.all([...drawings]));
       if (!ended) layer.focus?.({ preventScroll: true });
     } catch (error) { close(); throw error; }
