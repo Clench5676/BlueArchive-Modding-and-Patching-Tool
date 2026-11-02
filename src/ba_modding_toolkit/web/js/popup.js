@@ -758,7 +758,14 @@ export async function listPopup(options) {
       const apply = () => { toolState.query = searchInput.value; redraw(); };
       searchInput.addEventListener("input", (ev) => { if (!ev.isComposing) apply(); });
       searchInput.addEventListener("compositionend", apply);
-      hit(next, sv, `${search.name}/SearchName/SearchNameArea/Btn_Close`, () => { toolState.query = ""; toolState.searching = false; redraw(); }, { name: T("display.close"), action: "search-close" });
+      const closeSearch = () => { toolState.query = ""; toolState.searching = false; redraw(); };
+      // Escape closes the search first, as the roster's does, and the popup stays; not the key that ends an input
+      // method's conversion (keyCode 229 in WebKit)
+      searchInput.addEventListener("keydown", (ev) => {
+        if (ev.key !== "Escape" || ev.isComposing || ev.keyCode === 229) return;
+        ev.preventDefault(); closeSearch();
+      });
+      hit(next, sv, `${search.name}/SearchName/SearchNameArea/Btn_Close`, closeSearch, { name: T("display.close"), action: "search-close" });
       next.appendChild(searchInput);
     }
   }

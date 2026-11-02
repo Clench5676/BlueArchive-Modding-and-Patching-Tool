@@ -150,6 +150,8 @@ input[type="text"], input[type="search"], textarea { cursor: text; }
   font-family: var(--font); font-weight: var(--w); line-height: 1.15; color: #1f3f5f; caret-color: #1f3f5f; text-align: center;
   -webkit-appearance: none; appearance: none; -webkit-user-select: text; user-select: text; }
 .roster-search::placeholder { color: #98a3ae; font-size: .92em; opacity: 1; }
+/* Hall's box is a search field: no browser clear button or decoration over the game's InputField */
+.roster-search::-webkit-search-cancel-button, .roster-search::-webkit-search-decoration { -webkit-appearance: none; appearance: none; display: none; }
 /* opened and focused before its box is drawn: it takes keystrokes unseen meanwhile */
 .roster-search.pending { opacity: 0; }
 /* keyboard focus (never shown for the pointer): a ring in the game's selection blue; a roster card's ring hugs its
