@@ -1175,6 +1175,7 @@
 			"busy": "請等候目前的任務完成",
 			"library_target_not_empty": "資料夾中已有 Mod 倉庫的檔案：{path}",
 			"library_io_error": "無法寫入 Mod 倉庫：{file}",
+			"data_dir_readonly": "無法寫入資料目錄：{path}",
 			"asset_extraction_failed": "無法從遊戲檔案讀取素材",
 			"asset_load_failed": "無法讀取遊戲檔案：{path}",
 			"bundle_invalid": "不是有效的資源包：{file}",

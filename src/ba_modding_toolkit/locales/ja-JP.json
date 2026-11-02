@@ -1175,6 +1175,7 @@
 			"busy": "現在のタスクの完了をお待ちください",
 			"library_target_not_empty": "このフォルダーにはすでにMODライブラリのファイルがあります：{path}",
 			"library_io_error": "MODライブラリに書き込めません：{file}",
+			"data_dir_readonly": "データフォルダーに書き込めません：{path}",
 			"asset_extraction_failed": "ゲームファイルから素材を読み込めません",
 			"asset_load_failed": "ゲームファイルを読み込めません：{path}",
 			"bundle_invalid": "有効なBundleではありません：{file}",

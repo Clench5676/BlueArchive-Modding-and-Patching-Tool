@@ -455,10 +455,13 @@ async function boot() {
   await timed("boot", () => Loading.scene(start, { opaque: true }));
   if (globalThis.BAMTRecovery && !globalThis.BAMTRecovery.ready()) return;
   const ready = rpc("app.ready", { timings: { ...startup, ...Loading.timings() } }).catch(console.error);
-  if (!info?.gameFound) return;
+  if (!info?.gameFound) {
+    await dataDirNotice().catch(console.error); // the no-game screen has no other start popup
+    return;
+  }
   Cursor.init();
-  // the start popups only once the first screen is revealed
-  const popups = Popup.sequence(startPopups());
+  // the start popups only once the first screen is revealed, the data folder notice first
+  const popups = Popup.sequence([...(info.dataDirWritable === false ? [["data-dir", dataDirNotice]] : []), ...startPopups()]);
   // The network check never holds the start sequence or a screen. Keep a late offer until the UI is free.
   if (ModSwitch.startDue("update", { info })) {
     Update.check($("consent"), undefined, { beforeShow: async () => {
@@ -469,6 +472,13 @@ async function boot() {
   await popups;
   Tours.start({ info, ready, blocked: () => Loading.busy() || ModSwitch.current()?.busy || Prompts.isBusy()
     || !!document.getElementById("bamt-recovery") }).catch((err) => console.warn("feature tour", err));
+}
+
+// A data folder that cannot be written: one notice at the start, the quit dialog's title and Confirm only
+function dataDirNotice() {
+  if (!info || info.dataDirWritable !== false) return Promise.resolve();
+  return Popup.message({ title: T("quit.title"), lines: [T("error.data_dir_readonly", { path: info.dataDir })],
+    ok: T("picker.ok") });
 }
 
 // The start popups, one at a time and in this order, each only when it has something to show (mod-switch.js
