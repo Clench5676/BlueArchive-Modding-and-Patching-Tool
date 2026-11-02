@@ -1365,7 +1365,10 @@ import list and its view controls, stays available within the session.
   on the icon as a brightness factor (0.4745; `data-tint="game"`; the icon at half until it is read). Without that
   prefab it takes NGUI's default disabled colour (`Color.grey`): the icon and the label at half brightness (`ngui`).
   Without a game folder the no-game screen shows the navigation too, with the icon in grey at half brightness and the
-  label in the settings' disabled grey (`#9aa3ad`, `plain`).
+  label in the settings' disabled grey (`#9aa3ad`, `plain`). Its hint is `app.noGame.hint` (Detect it, or choose the
+  game folder), with plain Detect and Choose buttons and no language or server controls. Settings is drawn from the
+  game's UI and cannot open without a game folder: the top bar's Settings button then says the same hint in the plain
+  notice, and any other failure of opening it is reported as a failure, so the click never fails silently.
 - **The hand-off prompt** (decision 6). A click, Enter or Space on a greyed entry opens the prompt on the shared
   message popup: the entry's label as its title, "Not migrated yet, opens in the classic UI" (`classic.hint`), the
   checkbox Don't Ask Again (`mods.dontAsk`, unticked), Cancel and Open. It shows on every click. Open with the box
