@@ -812,11 +812,12 @@ class ModLibrary:
             self._migrate_state()
 
     def _migrate_state(self) -> None:
-        """Save the state with the legacy remap migration, once writes are allowed: a pending recovery or a state that
-        cannot be written refuses (ServiceError), and a read then skips the migration for now."""
+        """Save the state with the legacy remap migration, once writes are allowed: a pending recovery, a state that
+        cannot be written (ServiceError) or a file that cannot be written (OSError) skips it for now, and it stays
+        pending. A read never fails on it."""
         try:
             self._save()
-        except ServiceError as error:
+        except (OSError, ServiceError) as error:
             log_failure(logger, logging.DEBUG, "Library state migration skipped", error)
 
     def _save(self) -> None:
@@ -3057,8 +3058,8 @@ class ModLibrary:
         try:
             with self._transaction_lock():
                 pass
-        except (ServiceError, OSError):
-            pass  # remembered and logged by _remember_recovery; the read goes on
+        except Exception:
+            pass  # _remember_recovery logs it and makes it a ServiceError; the read goes on
 
     def _remember_recovery(self, error: Exception | None) -> None:
         """Note the outcome of a recovery attempt: the failure writes refuse with (None: it succeeded), and the
