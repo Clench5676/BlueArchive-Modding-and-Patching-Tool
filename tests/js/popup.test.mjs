@@ -1951,6 +1951,33 @@ test("release notes are literal, scroll, retain the offer and never download or 
   await offered;
 });
 
+test("release notes use one type size on every line: short, wrapped, long and unbroken lines alike", async () => {
+  const NGUI = await import("../../src/ba_modding_toolkit/web/js/ngui.js");
+  setStrings("en-US", Object.fromEntries(strings(english)));
+  const room = 2458 - 240; // the plain message's text room at the notes popup's width
+  let over = "Fixed an issue";
+  while (NGUI.glyphWidth(over, 44) <= room) over += " with the mod";
+  const longest = "Words that wrap on and on ".repeat(320).trim();
+  const lines = ["Short", "A mid-length line about the mod library and its switches", over,
+    ...[8, 12, 14, 16, 18, 40, 80, 160].map((n) => "Words that wrap on and on ".repeat(n).trim()), longest,
+    ...[6, 14, 30, 60].map((n) => "更新说明里的一行文字，会在需要时换行。".repeat(n)),
+    ...[10, 40].map((n) => "การแก้ไขข้อผิดพลาดของมอด ".repeat(n).trim()),
+    `Full changelog: https://example.invalid/${"segment".repeat(60)}`];
+  const release = { ...available, version: "0.6.0", page: "https://example.invalid/release", notes: lines.join("\n") };
+  const offered = Update.check(consent, release);
+  (await drawn(consent, "notes")).click();
+  await drawn(dialog, "page");
+  const drawnLines = lines.map((text, i) => walk(dialog).find((e) => e.dataset.path === `Lines/Line_${i}`));
+  const sizes = drawnLines.map((e, i) => parseFloat(e.style.fontSize) / S / NGUI.fontSizeFor(lines[i] || "x", 1));
+  assert.ok(drawnLines[2].textContent.includes("\n"), "the line just over the width wraps");
+  assert.ok(drawnLines[lines.indexOf(longest)].textContent.split("\n").length > 4, "a long paragraph wraps on as many lines as it needs");
+  assert.ok(drawnLines.at(-1).textContent.split("\n").length > 1, "an unbroken line breaks between characters");
+  for (const [i, size] of sizes.entries()) assert.ok(Math.abs(size - 44) < 0.01, `line ${i} is ${size}`);
+  action(dialog, "dismiss").click();
+  action(consent, "later").click();
+  await offered;
+});
+
 test("release-note button captions fit the unchanged UIPopup_Sort bodies in all locales and window sizes", async () => {
   const NGUI = await import("../../src/ba_modding_toolkit/web/js/ngui.js");
   await Popup.ready();

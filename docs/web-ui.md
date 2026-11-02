@@ -2485,8 +2485,8 @@ updates do not reload actors or mutate saved positions, individual scales or the
 ## Release notes and feature tours
 
 `update.js` retains the detected release snapshot. Release Notes uses the same `UIPopup_Sort` notice frame as
-messages, with literal UILabel text, a scrolling body and an explicit release-page action. Missing/empty GitHub
-bodies take this fallback path. No image/HTML/Markdown interpretation or download/install action is involved.
+messages, with literal UILabel text at one fixed size (44) on every line (long lines wrap, none shrinks), a scrolling
+body and an explicit release-page action. Missing/empty GitHub bodies take this fallback path. No image/HTML/Markdown interpretation or download/install action is involved.
 The explicit validated page argument remains attached to that offer even if a later check changes backend state.
 
 `tours.js` and `webui/tours.py` implement the local presentation framework described in

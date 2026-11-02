@@ -11,14 +11,18 @@ import { S, clone } from "./util.js";
 const { node, sprite, label, find } = NGUI;
 const checks = new WeakMap();
 const RESTART_WAIT = 3000;
+const NOTES_FONT = 44;
 
 // Literal text on the same UIPopup_Sort frame used by notices. No HTML, Markdown images or update jobs.
 const dialogTitle = (key, simulation) => T(key) + (simulation ? T("update.simulation.suffix") : "");
 
 export async function releaseNotes(info, { simulation = false, onSimulatedPage } = {}) {
   const notes = typeof info.notes === "string" ? info.notes.trim() : "";
+  // one fixed type size on every line, as a changelog reads; a longer line wraps instead of shrinking
+  const lines = (notes ? notes.split(/\r?\n/) : [T("update.notesEmpty")])
+    .map((text) => ({ text, fontSize: NOTES_FONT, minFontSize: NOTES_FONT }));
   const result = await Popup.message({ title: `${dialogTitle("update.notes", simulation)} - ${info.version}`,
-    lines: notes ? notes.split(/\r?\n/) : [T("update.notesEmpty")], plain: true, scroll: true, width: 2458,
+    lines, plain: true, scroll: true, width: 2458,
     buttons: [{ label: T("update.releasePage"), value: "page" },
       { label: T("display.close"), value: "dismiss" }] });
   if (result.button === "page") {
