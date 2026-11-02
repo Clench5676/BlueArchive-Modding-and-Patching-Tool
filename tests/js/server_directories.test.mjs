@@ -31,7 +31,9 @@ function harness(locale, { native = true, sourceValue = 'windows_global', error 
   const prefs = { fileSource: sourceValue, gameDirs: { global: '/test/global/'.repeat(pathLength), japan: '/test/japan/'.repeat(pathLength) }, native, libraryDir: '/test/library', outputDir: '/test/output' };
   const requests = [], messages = [], failures = [], changed = [];
   const deps = { NGUI, T, wrapPath, S, rowBase, radioRow, Buttons, platform: 'mac',
-    notify: (...args) => failures.push(args), Popup: { message: async options => messages.push(options) },
+    notify: (...args) => failures.push(args),
+    // Popup.notice is message() with the notice caption and Confirm only (popup.js, tested in refusal_notice.test.mjs)
+    Popup: { notice: async text => messages.push({ title: T('quit.title'), lines: [text], ok: T('picker.ok') }) },
     rpc: async (method, args) => {
       requests.push([method, args]);
       if (error && method === 'settings.set') throw error;

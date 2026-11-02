@@ -81,6 +81,7 @@ async function draw(host, info, resolve, { simulation = false } = {}) {
     ended = true;
     host.hidden = true;
     host.innerHTML = "";
+    Popup.closed(host);
     resolve(how === "later" && error ? "update" : how);
     return true;
   };

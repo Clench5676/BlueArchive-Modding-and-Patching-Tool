@@ -9,11 +9,17 @@ export function assignmentChoices(data, view, query = "") {
     collator: new Intl.Collator(language(), { numeric: true, sensitivity: "base" }) });
 }
 
-export async function characterPicker({ data, selected, dialog, el, button, inputControl, checkbox, radioOptions, onSelect }) {
+// the variants a view offers: with Group Alts every variant of a family shown, else the cards' own
+export function offeredKeys(data, view, cards) {
+  return new Set(cards.flatMap((card) => view.merged
+    ? (data.families.find((item) => item.key === card.family)?.variants || []).map((variant) => variant.key) : [card.key]));
+}
+
+export async function characterPicker({ data, selected, dialog, el, button, inputControl, checkbox, radioOptions, emptyNote, onSelect }) {
   let view = normalizeView({ sort: "name", order: "asc" }), query = "", page = 0, family = null;
   let choice = selected || null;
   await dialog(T("import.assignCharacter"), { action: T("picker.ok"), cancel: T("popup.cancel"),
-    onAction: () => choice ? onSelect(choice) : false }, (area) => {
+    onAction: () => choice ? onSelect(choice) : false }, (area, controls) => {
     const search = inputControl(T("import.search"), "", { width: 1370, search: true }); area.appendChild(search.wrap);
     const tools = el("div"); Object.assign(tools.style, { display: "flex", flexWrap: "wrap", gap: "12px", margin: "14px 0" });
     const filters = button(T("display.title"), "characterDisplay", { width: 255, scale: 0.34 });
@@ -37,10 +43,16 @@ export async function characterPicker({ data, selected, dialog, el, button, inpu
           ? variants.map((variant) => [variant.key, label(variant)]) : [])];
       });
       list.replaceChildren();
-      radioOptions(list, values, choice, (value) => {
+      if (!values.length) {
+        // no match: the list says so, as the Hall's pickers do
+        const note = el("div"); Object.assign(note.style, { position: "relative", width: "1370px", height: "100px" });
+        emptyNote?.(note, T("hall.noCandidates")); list.appendChild(note);
+      } else radioOptions(list, values, choice, (value) => {
         if (value.startsWith("family:")) { family = value.slice(7); draw(); }
-        else choice = value;
+        else { choice = value; controls?.primary(true); } // a choice picked from the list is one the view offers
       }, { columns: 2 });
+      // a choice the search or filters hide cannot be confirmed
+      controls?.primary(!choice || offeredKeys(data, view, cards).has(choice));
       previous.disabled = page === 0; next.disabled = (page + 1) * 24 >= cards.length;
       previous.refresh(); next.refresh();
     };

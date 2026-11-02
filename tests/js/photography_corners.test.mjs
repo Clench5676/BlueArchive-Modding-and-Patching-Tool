@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import { bindCorner, CORNER_MARGIN } from '../../src/ba_modding_toolkit/web/js/corner-layout.js';
 import { headerGeometry } from '../../src/ba_modding_toolkit/web/js/window-layout.js';
 import { anchoredCentre } from '../../src/ba_modding_toolkit/web/js/visual-view.js';
-import { FRAME, OCCLUSION_BUTTON, TOOLBAR_CAPTION } from '../../src/ba_modding_toolkit/web/js/photography/camera.js';
+import { FRAME, OCCLUSION_BUTTON, TOOLBAR_CAPTION, otherMode, actionCaption } from '../../src/ba_modding_toolkit/web/js/photography/camera.js';
 import { visualPrefab } from './visual_prefabs.mjs';
 import { n, spr } from './control_prefabs.mjs';
 
@@ -69,7 +69,7 @@ for (const locale of ['en-US', 'zh-CN', 'zh-TW', 'ja-JP', 'ko-KR', 'th-TH']) for
         bamtWindowChrome: platform ? { active: true, platform, bounds: platform === 'darwin'
           ? { left: 12, right: 80, top: 8, bottom: 30 } : { left: width - 148, right: width, top: 8, bottom: 40 } } : null });
       const hits = new Map(), overlay = new Element(); let leftCamera = 0;
-      const env = { S, FRAME, OCCLUSION_BUTTON, TOOLBAR_CAPTION, document: doc, mode, overlay, active: true,
+      const env = { S, FRAME, OCCLUSION_BUTTON, TOOLBAR_CAPTION, otherMode, actionCaption, document: doc, mode, overlay, active: true,
         controlsRevision: 0, grid: true, occlusion: false, expanded: false, paused: false, saving: false,
         P: key => strings[key], clone: structuredClone, safe: fn => fn, alignIcon: async () => {}, bindCorner, anchoredCentre, press() {},
         buttonCenter: async el => ({ x: parseFloat(el.style.left) + parseFloat(el.style.width) / 2, y: parseFloat(el.style.top) + parseFloat(el.style.height) / 2 }),
@@ -78,7 +78,9 @@ for (const locale of ['en-US', 'zh-CN', 'zh-TW', 'ja-JP', 'ko-KR', 'th-TH']) for
         hitButton(host, box, action, label) { const hit = new Element('button'); hit.box = [...box]; hit.label = label; hit.action = action; host.append(hit);
           const dataset = {}; Object.defineProperty(hit, 'dataset', { value: new Proxy(dataset, { set(target, key, value) { target[key] = value; if (key === 'photoAction') hits.set(value, hit); return true; } }) }); return hit; },
         panSurface() {}, shutter: async () => {}, openGallery() {}, leave() { leftCamera++; }, switchMode() {},
-        bridge: { playbackTree: () => ({ tree: n('PhotoPlayback', [0, 0], [spr('Common_Bg_Raius5px_Shadow', 145, 141)]), textures: {} }) } };
+        // the student has both modes, so the mode button is drawn (the test of its omission is photography_choices.test.mjs)
+        bridge: { info: () => ({ hasPortrait: true, hasLobby: true }),
+          playbackTree: () => ({ tree: n('PhotoPlayback', [0, 0], [spr('Common_Bg_Raius5px_Shadow', 145, 141)]), textures: {} }) } };
       vm.runInNewContext(`${code}\nglobalThis.draw = drawControls; globalThis.prepare = prepare; globalThis.exitControl = exitControl; globalThis.prepareSwitch = prepareSwitch;`, env);
       await env.draw();
       const rect = name => { const hit = hits.get(name); assert.ok(hit, name);

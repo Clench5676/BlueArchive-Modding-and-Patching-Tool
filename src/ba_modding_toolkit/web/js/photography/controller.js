@@ -8,7 +8,7 @@ import {clone,S,hitButton} from '../util.js';
 import {captureScene} from './capture.js';
 import {photograph} from './shoot.js';
 import {cameraFeedback} from './feedback.js';
-import {FRAME,choiceLayout,OCCLUSION_BUTTON,TOOLBAR_CAPTION} from './camera.js';
+import {FRAME,choiceLayout,OCCLUSION_BUTTON,TOOLBAR_CAPTION,otherMode,actionCaption} from './camera.js';
 import {alignIcon,buttonCenter} from '../student-hall-icons.js';
 import {anchoredCentre} from '../visual-view.js';
 import {wheelKind,wheelStep} from '../lobby-touch.js';
@@ -119,8 +119,8 @@ async function leave(){
 }
 async function switchMode(){
   if(saving)return;
-  const next=mode==='portrait'?'lobby':'portrait',available=bridge.info();
-  if(next==='lobby'&&!available.hasLobby||next==='portrait'&&!available.hasPortrait)throw new Error(P('noAssets'));
+  const next=otherMode(mode,bridge.info());
+  if(!next)throw new Error(P('noAssets'));
   bridge.pause(false);paused=false;expanded=false;
   saving=true;
   try{await bridge.full(next);mode=next;}
@@ -166,6 +166,8 @@ async function shutter(host){
 }
 
 async function modeButton(host){
+  // a skin without the other mode has nothing to switch to: no button, rather than one that can only fail
+  if(!otherMode(mode,bridge.info()))return;
   const wrapper=document.createElement('div');host.append(wrapper);
   const layout=await NGUI.layout('UILobby'),tree=clone(NGUI.find(layout,'Front/Right/Btn_RotateSpine/ConditionRoot/Able_Count'));
   tree.name='CameraMode';tree.pos=[0,0];tree.children=tree.children.filter(child=>['Bg','Icon'].includes(child.name));
@@ -248,7 +250,7 @@ async function drawControls(){
     }else{
       const sequences=entries;
       const actionArea=UI.area(panelHost,[box.x+12,box.y+12,box.columns*196,box.rows*61],box.contentHeight,'photo-actions');
-      for(let index=0;index<sequences.length;index++)buttons.push(UI.button(actionArea,'Sequence'+index,sequences[index].anim,[6+(index%box.columns)*196,Math.floor(index/box.columns)*61,185,53],safe(async()=>{if(saving)return;paused=false;bridge.play(sequences[index].anim);await drawControls();})));
+      for(let index=0;index<sequences.length;index++)buttons.push(UI.button(actionArea,'Sequence'+index,actionCaption(sequences[index],T),[6+(index%box.columns)*196,Math.floor(index/box.columns)*61,185,53],safe(async()=>{if(saving)return;paused=false;bridge.play(sequences[index].anim);await drawControls();})));
     }
   }
   await Promise.all(buttons);

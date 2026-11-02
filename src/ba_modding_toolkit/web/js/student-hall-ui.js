@@ -53,15 +53,8 @@ export function createModal(title, onClose, { level = 0 } = {}) {
   const excluded = new Set(["prompt", "dialog", "display", "consent", "settings", "loading-boot"]);
   const held = [...stage.children].filter((el) => !excluded.has(el.id)).map((el) => [el, el.inert]);
   held.forEach(([el]) => { el.inert = true; }); stage.append(host); host.focus();
+  // Tab stays in the modal through the shared trap of the popup stack (popup.js), which Popup.opened below joins
   const controller = new AbortController(); let revision = 0, closed = false, drawing = null, visibleDrawing = null;
-  const trap = (event) => {
-    if (event.key !== "Tab" || Popup.top()?.host !== host) return;
-    const controls = [...host.querySelectorAll('button:not(:disabled),input:not(:disabled),[tabindex="0"]')].filter((el) => el.getClientRects().length);
-    if (!controls.length) { event.preventDefault(); host.focus(); return; }
-    const index = controls.indexOf(document.activeElement), next = event.shiftKey ? index - 1 : index + 1;
-    if (index < 0 || next < 0 || next >= controls.length) { event.preventDefault(); controls[(next + controls.length) % controls.length].focus(); }
-  };
-  host.addEventListener("keydown", trap);
   const api = { host, signal: controller.signal, live: () => !closed,
     close() {
       if (closed) return; closed = true; revision++; controller.abort(); drawing?.abort(); visibleDrawing?.abort(); Popup.closed(host); host.remove();
