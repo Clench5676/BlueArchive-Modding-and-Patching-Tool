@@ -812,6 +812,16 @@ library operations, validates journal and Mod paths, verifies a committed group'
 journal if recovery cannot complete. Metadata and directory synchronization must succeed before recovery discards
 its journal, even when a retry finds that an earlier metadata replacement already took effect.
 
+**Per-Mod update.** `update` rebuilds into a temporary folder, then publishes under the mod writer
+(`_publish_update`): it refuses with `entry_changed` when the mod's files changed since the rebuild read them, journals
+the old and new files with their hashes in `import-transactions/<mod id>/journal.json` (`operation` `update`), copies
+the old files to `mods/<id>/previous/<uuid>/` and verifies them, then replaces the files. The record's new file list in
+`state.json` is the commit point; the old files the rebuild does not name, older `previous/` copies (only the newest
+is kept) and the old build's built copies go after it. A failure, or an interruption found by recovery, before the
+commit leaves the old mod whole: its files come back from the previous copy (verified), new files it does not name go,
+and its file list is the old one again; its id, alias, assignment, configuration and repair links never change.
+Recovery finishes an update whose record names the new files that all hold their new bytes, and rolls back any other.
+
 **Pending journals.** A write, an import or an asset deletion that did not finish leaves its journal (`transactions/`,
 `import-transactions/`, `asset-deletions/`), and every write recovers first. `_transaction_lock` always attempts
 the recovery and raises the real failure of a journal it cannot settle (`library_recovery_pending`,

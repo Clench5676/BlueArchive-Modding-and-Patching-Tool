@@ -1742,6 +1742,9 @@ class ModLibrary:
                             or not journal.resolve().is_relative_to(root.resolve())):
                         raise ValueError("Invalid import journal path")
                     data = json.loads(journal.read_text(encoding="utf-8"))
+                    if isinstance(data, dict) and data.get("operation") == "update":
+                        self._recover_update(journal, data)
+                        continue
                     mod_id, record, hashes = data["id"], data["record"], data["hashes"]
                     if (not isinstance(mod_id, str) or re.fullmatch(r"[0-9a-f]{32}", mod_id) is None
                             or journal != root / mod_id / "journal.json" or journal.is_symlink()
@@ -5110,14 +5113,15 @@ class ModLibrary:
     @_serialized
     def update(self, mod_id: str, log: LogFunc = no_log,
                progress: Callable[[dict], None] | None = None, pin: Pin | None = None) -> UpdateResult:
-        """Rebuild a mod against current official bundles and retain its old files. Its built copies go: they hold
-        the old build. The entries configured with it are marked updated (a game file still holds the old build); an
-        update that changed nothing marks none."""
+        """Rebuild a mod against current official bundles and retain its old files (``_publish_update``, atomic per
+        mod). Its built copies go: they hold the old build. The entries configured with it are marked updated (a game
+        file still holds the old build); an update that changed nothing marks none."""
         self._check_recovery()  # refused before the rebuild when a recovery has failed or the state cannot be saved
         self._check_writable()
         pin = self._current(pin)
         record = self._record(mod_id)
         paths = self._paths(record)
+        built_from = {path.name: self._hashes.get(path).sha1 for path in paths}
         targets = self._plan_targets(self._plan(record, log, pin))
         with tempfile.TemporaryDirectory(prefix=devmode.LIBRARY_STAGING_PREFIX + "update-") as temporary:
             output = Path(temporary)
@@ -5149,32 +5153,161 @@ class ModLibrary:
                 if target.name not in names:
                     atomic_copy(self._official_for(target, pin), output / target.name)
                     generated.append(output / target.name)
-            directory = paths[0].parent
-            previous_dir = directory / "previous" / uuid.uuid4().hex
+            record, previous = self._publish_update(mod_id, built_from, generated)
+        return UpdateResult(self._entry(record), self._paths(record), previous)
+
+    @_mod_writer
+    def _publish_update(self, mod_id: str, built_from: dict[str, str],
+                        generated: list[Path]) -> tuple[dict[str, Any], list[Path]]:
+        """Replace a mod's files with its rebuild, atomically per mod. A journal (``import-transactions/<id>``,
+        ``operation`` ``update``) names the old and the new files with their hashes and the ``previous/<uuid>`` copy of
+        the old ones before any file changes; the record's new file list is the commit point. A failure or an
+        interruption before it leaves the old mod whole (``_rollback_update``, also at recovery): its files and file
+        list come back, and its id, alias, assignment and repair links never change. Only the newest previous copy is
+        kept. Refuses with ``entry_changed`` when the mod's files changed since the rebuild read them."""
+        record = self._record(mod_id)
+        paths = self._paths(record)
+        if {path.name: self._hashes.get(path).sha1 for path in paths} != built_from:
+            raise ServiceError("entry_changed", core=core_of(paths[0].name))
+        directory = self.root / "mods" / mod_id
+        transaction = self.root / "import-transactions" / mod_id
+        journal = transaction / "journal.json"
+        if transaction.parent.is_symlink() or transaction.exists() or (directory / "previous").is_symlink():
+            raise ServiceError("library_io_error", file=transaction)
+        new = {path.name: self._hashes.get(path).sha1 for path in generated}
+        data = {"version": 1, "operation": "update", "id": mod_id, "phase": "copying", "old": built_from,
+                "new": new, "previous": uuid.uuid4().hex}
+        previous_dir = directory / "previous" / data["previous"]
+        atomic_json(journal, data)
+        try:
             previous = []
             for path in paths:
                 backup = previous_dir / path.name
                 atomic_copy(path, backup)
+                verify_file(backup, built_from[path.name])
                 previous.append(backup)
-            old_record = dict(record)
+            data["phase"] = "replacing"
+            atomic_json(journal, data)
+            for path in generated:
+                atomic_copy(path, directory / path.name)
+                verify_file(directory / path.name, new[path.name])
+            record["files"] = sorted(new)
+            self._save()
+        except Exception as error:
             try:
-                for path in generated:
-                    atomic_copy(path, directory / path.name)
-                record["files"] = [path.name for path in sorted(generated)]
-                self._save()
-            except (OSError, ServiceError):
-                record.update(old_record)
-                for path in previous:
-                    atomic_copy(path, directory / path.name)
-                for path in generated:
-                    if path.name not in old_record["files"]:
-                        (directory / path.name).unlink(missing_ok=True)
-                raise
-            for path in paths:
-                if path.name not in record["files"]:
-                    path.unlink()
-        self._after_update(mod_id)
-        return UpdateResult(self._entry(record), self._paths(record), previous)
+                self._rollback_update(journal, data)
+            except Exception as recovery_error:
+                log_failure(logger, logging.ERROR, "Mod update rollback pending", recovery_error)
+                raise ServiceError("library_recovery_pending", file=journal) from error
+            raise
+        self._finish_update(journal, data)
+        return record, previous
+
+    def _finish_update(self, journal: Path, data: dict) -> None:
+        """After the commit: the old files the rebuild does not name go, older previous copies go, the built copies
+        and markers follow (``_after_update``), then the journal. Repeating it is safe."""
+        directory = self.root / "mods" / data["id"]
+        for name in data["old"]:
+            if name not in data["new"]:
+                (directory / name).unlink(missing_ok=True)
+        kept = directory / "previous"
+        if kept.is_dir() and not kept.is_symlink():
+            for folder in kept.iterdir():
+                if folder.name != data["previous"]:
+                    if folder.is_dir() and not folder.is_symlink():
+                        shutil.rmtree(folder)
+                    else:
+                        folder.unlink()
+        self._after_update(data["id"])
+        try:
+            shutil.rmtree(journal.parent)
+            sync_directory(journal.parent.parent)
+        except OSError as error:
+            log_failure(logger, logging.WARNING, "Committed update journal retained", error)
+
+    def _rollback_update(self, journal: Path, data: dict) -> None:
+        """Put the old mod back: each old file whose bytes are not the journal's comes from the previous copy (verified),
+        the new files the old mod does not name go, and the record's file list in state.json is the old one again.
+        This attempt's previous copy and the journal go last. Repeating it is safe."""
+        mod_id, old = data["id"], data["old"]
+        directory = self.root / "mods" / mod_id
+        previous_dir = directory / "previous" / data["previous"]
+        for name, digest in old.items():
+            path = directory / name
+            if path.is_file() and not path.is_symlink() and self._hashes.get(path).sha1 == digest:
+                continue
+            verify_file(previous_dir / name, digest)
+            atomic_copy(previous_dir / name, path)
+            verify_file(path, digest)
+        for name in data["new"]:
+            if name not in old:
+                (directory / name).unlink(missing_ok=True)
+        names = sorted(old)
+        record = self._records.get(mod_id)
+        if record is not None:
+            record["files"] = names
+        path = self._state_path
+        with file_lock(self.root / "state.json.lock"):
+            try:
+                state = json.loads(path.read_text(encoding="utf-8"))
+            except FileNotFoundError:
+                state = None
+            if state is not None:
+                if isinstance(state, dict) and isinstance(state.get("version"), (int, float)) \
+                        and not isinstance(state["version"], bool) and state["version"] > 1:
+                    raise ServiceError("library_state_unreadable", file=path)
+                if not isinstance(state, dict) or state.get("version") != 1 or not isinstance(state.get("mods"), list):
+                    raise ServiceError("library_io_error", file=path)
+                stored = [item for item in state["mods"] if isinstance(item, dict) and item.get("id") == mod_id
+                          and item.get("files") != names]
+                if stored:
+                    for item in stored:
+                        item["files"] = names
+                    try:
+                        atomic_copy(path, self._prev_path)
+                    except OSError as error:
+                        log_failure(logger, logging.WARNING, "Could not keep the previous library state", error)
+                    atomic_json(path, state)
+            sync_directory(self.root)
+        self._seen = None
+        self._refresh_state()
+        if previous_dir.exists():
+            shutil.rmtree(previous_dir)
+        shutil.rmtree(journal.parent)
+        sync_directory(journal.parent.parent)
+
+    def _recover_update(self, journal: Path, data: dict) -> None:
+        """Settle an interrupted update (``_publish_update``): finish it when the record names the new files and each
+        holds its new bytes, else roll it back."""
+        root = self.root / "import-transactions"
+        mod_id, old, new = data["id"], data["old"], data["new"]
+
+        def names_valid(files: Any) -> bool:
+            return isinstance(files, dict) and bool(files) and all(
+                isinstance(name, str) and Path(name).name == name and name.endswith(".bundle")
+                and isinstance(value, str) and re.fullmatch(r"[0-9a-f]{40}", value) is not None
+                for name, value in files.items())
+
+        if (not isinstance(mod_id, str) or re.fullmatch(r"[0-9a-f]{32}", mod_id) is None
+                or journal != root / mod_id / "journal.json" or data["version"] != 1
+                or data["phase"] not in ("copying", "replacing") or not names_valid(old) or not names_valid(new)
+                or not isinstance(data["previous"], str) or re.fullmatch(r"[0-9a-f]{32}", data["previous"]) is None):
+            raise ValueError("Invalid update journal")
+        directory = self.root / "mods" / mod_id
+        if (directory.parent.is_symlink() or directory.is_symlink() or (directory / "previous").is_symlink()
+                or not directory.resolve().is_relative_to(self.root)):
+            raise ValueError("Invalid update directory")
+        record = self._records.get(mod_id)
+
+        def holds(name: str, digest: str) -> bool:
+            path = directory / name
+            return path.is_file() and not path.is_symlink() and self._hashes.get(path).sha1 == digest
+
+        if (data["phase"] == "replacing" and record is not None and record.get("files") == sorted(new)
+                and all(holds(name, digest) for name, digest in new.items())):
+            self._finish_update(journal, data)
+        else:
+            self._rollback_update(journal, data)
 
     def _after_update(self, mod_id: str) -> None:
         """A mod's build changed: the built copies of the old build go, and every entry configured with the mod gets the
