@@ -44,7 +44,7 @@ test("a hit area or an unseen control never sets a system cursor of its own", ()
   assert.match(hall, /if \(!interactive\) \{[^}]*hit\.style\.cursor = "var\(--cursor\)"/);
 });
 
-test("only the root and the photography mode set the pointer variables, cursor.js once the game's pointer is read", () => {
+test("only the root sets the pointer variables, cursor.js once the game's pointer is read", () => {
   const sets = [];
   for (const file of [...files("css", ".css"), ...files("js", ".js"), "index.html"]) {
     const text = read(file);
@@ -54,9 +54,18 @@ test("only the root and the photography mode set the pointer variables, cursor.j
   assert.deepEqual(sets, [
     "css/app.css --cursor: default",
     "css/app.css --cursor-press: pointer",
-    "css/photography.css --cursor: default!important",
-    "css/photography.css --cursor-press: pointer!important",
     "js/cursor.js --cursor",
     "js/cursor.js --cursor-press",
   ]);
+});
+
+test("camera mode keeps the game's pointer: .photo-active sets no cursor and no pointer variable", () => {
+  const css = read("css/photography.css");
+  const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter(([, selector]) => /\.photo-active/.test(selector));
+  assert.ok(rules.length > 3, `${rules.length} .photo-active rules found`);
+  for (const [, selector, body] of rules) assert.doesNotMatch(body, /cursor/, `${selector.trim()} changes the pointer`);
+  // the touch effect rule next to it stays
+  assert.match(css, /\.photo-active \.touch-fx\s*\{[^}]*display:\s*none/);
+  // only the pan surface changes the pointer in camera mode (grab, the drag handle)
+  assert.match(css, /\.photo-pan\s*\{[^}]*cursor:\s*grab/);
 });

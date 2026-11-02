@@ -25,5 +25,4 @@
 .photo-shutter-curtain.top{top:0;transform:translateY(-100%)}
 .photo-shutter-curtain.bottom{bottom:0;transform:translateY(100%)}
 .photo-saved-flight{position:absolute;object-fit:contain;transform-origin:50% 50%;z-index:1;pointer-events:none;will-change:transform,opacity}
-.photo-active{--cursor:default!important;--cursor-press:pointer!important}
 .photo-active .touch-fx{display:none!important}
