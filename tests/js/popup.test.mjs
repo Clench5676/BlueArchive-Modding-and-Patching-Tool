@@ -1017,6 +1017,24 @@ test("the log popup preserves literal text, opens at the bottom and Copy leaves 
   assert.equal(dialog.hidden, true);
 });
 
+// UI-31: the log popup's fallback (no game frame) draws with the plain popup's styles, sized to the log
+test("the log popup's plain fallback uses only classes the style sheet defines", () => {
+  const source = readFileSync(new URL("../../src/ba_modding_toolkit/web/js/popup.js", import.meta.url), "utf8");
+  const viewer = source.slice(source.indexOf("export function textViewer("), source.indexOf("// --- ordinary refusals ---"));
+  const fallback = viewer.slice(viewer.indexOf("} catch (err) {"));
+  const css = readFileSync(new URL("../../src/ba_modding_toolkit/web/css/app.css", import.meta.url), "utf8");
+  const classes = [...fallback.matchAll(/className = "([^"]+)"/g)].flatMap((m) => m[1].split(" "));
+  assert.deepEqual(classes, ["plain-popup-back", "plain-popup", "log-message", "message-button"]);
+  for (const name of classes) assert.match(css, new RegExp(`\\.${name}[\\s,{.:]`), `.${name} has a rule`);
+  // the plain popup is 1000 px wide for messages; the log's 1400 px text needs the box to follow its content
+  const rule = (selector) => css.match(new RegExp(`(?:^|\\n)${selector.replace(".", "\\.")} \\{([^}]*)\\}`))?.[1] || "";
+  assert.match(rule(".plain-popup"), /width: 1000px/);
+  assert.match(rule(".log-message"), /width: auto/);
+  assert.ok(css.indexOf(".log-message {") > css.indexOf(".plain-popup {"), "the log's width comes later and wins");
+  assert.match(rule(".log-message .log-text"), /width: 1400px/);
+  assert.match(rule(".log-message"), /max-width: 1550px/, "1400 px of text and the plain popup's 2 x 60 px padding fit");
+});
+
 test("new card dots hide for in-use and selected mods independently", async () => {
   const items = [
     { key: "current", label: "In use", inUse: true, isNew: true },

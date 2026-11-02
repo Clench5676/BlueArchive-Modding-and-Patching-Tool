@@ -403,7 +403,7 @@ input[type="text"], input[type="search"], textarea { cursor: text; }
 
 .log-text { margin: 0; padding: 18px; overflow: auto; white-space: pre; background: #ecf5f9; color: #2d4664;
   font: 20px/1.45 monospace; user-select: text; -webkit-user-select: text; }
-.log-message { max-width: 1550px; }
+.log-message { width: auto; max-width: 1550px; } /* the plain popup sized to the log, not to its 1000 px message width */
 .log-message .log-text { width: 1400px; height: 580px; margin: 24px 0; }
 
 .repair-compare { color: #2d4664; line-height: 1.4; overflow-wrap: anywhere; padding: 0 8px 16px; }
