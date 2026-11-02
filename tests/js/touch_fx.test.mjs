@@ -210,9 +210,9 @@ test("near the right and bottom edges WebKit gets smaller and smaller cuts of th
   const boxes = pointerBoxes([23, 31]);
   assert.deepEqual(boxes[0], [23, 31]); // the whole pointer first: what every other engine shows
   assert.deepEqual(boxes.slice(1), [
-    [20, 31], [16, 31], [12, 31], [8, 31], [4, 31], // right edge: narrower, whole height
-    [23, 28], [23, 24], [23, 20], [23, 16], [23, 12], [23, 8], [23, 4], // bottom edge: shorter, whole width
-    [20, 20], [16, 16], [12, 12], [8, 8], [4, 4], // the corner
+    [20, 31], [16, 31], [12, 31], [8, 31], [4, 31], [3, 31], [2, 31], [1, 31], // right edge: narrower, whole height
+    [23, 28], [23, 24], [23, 20], [23, 16], [23, 12], [23, 8], [23, 4], [23, 3], [23, 2], [23, 1], // bottom edge: shorter, whole width
+    [20, 20], [16, 16], [12, 12], [8, 8], [4, 4], [3, 3], [2, 2], [1, 1], // the corner
   ]);
   // WebKit shows the first box that fits between the hotspot and the window's edges
   const shown = (right, bottom) => boxes.find(([w, h]) => w <= right && h <= bottom);
@@ -220,8 +220,24 @@ test("near the right and bottom edges WebKit gets smaller and smaller cuts of th
   assert.deepEqual(shown(22, 500), [20, 31]);
   assert.deepEqual(shown(500, 30), [23, 28]);
   assert.deepEqual(shown(18, 25), [16, 16]);
-  assert.deepEqual(shown(500, 3), undefined); // the last pixels: the system arrow
-  assert.deepEqual(pointerBoxes([4, 4]), [[4, 4]]);
+  // the last pixels: a thin cut, never the system arrow
+  assert.deepEqual(shown(3, 500), [3, 31]);
+  assert.deepEqual(shown(500, 3), [23, 3]);
+  assert.deepEqual(shown(2, 2), [2, 2]);
+  assert.deepEqual(shown(1, 1), [1, 1]);
+  assert.deepEqual(shown(0, 500), undefined); // outside the window
+  assert.deepEqual(pointerBoxes([4, 4]), [[4, 4], [3, 4], [2, 4], [1, 4], [4, 3], [4, 2], [4, 1], [3, 3], [2, 2], [1, 1]]);
+});
+
+test("every strip at the window's right and bottom edges, whatever its width, shows some cut of the pointer", () => {
+  for (const box of [[23, 31], [32, 32], [1, 2], [5, 9]]) {
+    const boxes = pointerBoxes(box);
+    for (let right = 1; right <= box[0] + 8; right++) {
+      for (let bottom = 1; bottom <= box[1] + 8; bottom++) {
+        assert.ok(boxes.find(([w, h]) => w <= right && h <= bottom), `${box} with ${right} x ${bottom} CSS px left`);
+      }
+    }
+  }
 });
 
 // a 2D context that records the global alpha of each stroke and image draw
