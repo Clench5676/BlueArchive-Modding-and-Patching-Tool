@@ -43,7 +43,7 @@ import { clearUnseen, hasUnseen as hasFresh, shownUnseen, switchUnseen } from ".
 import { customAliases as aliasesOf, modName, modOriginalName, studentName } from "./names.js";
 import { setTitle } from "./nav.js";
 import { KEYS, deltaOf, pacer, typing } from "./step-keys.js";
-import { FRAME_Y, closable, closed as popupClosed, frameReady, hit as hitNode, listPopup, message, popupFrame, scrollArea } from "./popup.js";
+import { FRAME_Y, closable, closed as popupClosed, frameReady, hit as hitNode, listPopup, message, notice, popupFrame, scrollArea } from "./popup.js";
 import { candidateStatus, detailStatus, selectionStatus, selectionError, intendedKey, isApplied, availableTab, coreOf, hasAsset, hasKind, primaryKind, appliedKey as keyOf, appliedOf, candidates as listSources, partsOf, popupMode, modelSource, previewBase, previewChanged, previewKey, sourceOf, switchKindOf } from "./switch-sources.js";
 import { $, DOT, RECRUIT, S, TAN10, advanceOf, at, clone, glyphsOf, hitButton, markedLabel, off, text, widget, wrapPath } from "./util.js";
 
@@ -665,7 +665,7 @@ async function addMods() {
 
 // a job with a sticky progress line; the family is re-read afterwards (after(ok, result) instead, when given).
 // A switch the classic UI's open window refuses opens the classic modal, which can queue it (mod-switch.js).
-// An apply while mods are off only saves the choice (deferred).
+// An apply while mods are off only saves the choice (deferred): a notice says so ("Saved, applied when mods are on").
 async function job(method, params, { onDone, after = () => reload(), name = fullName(variant()) } = {}) {
   if (busy) { notify(T("error.busy"), { kind: "error", error: { code: "busy" } }); return false; }
   busy = true;
@@ -712,7 +712,7 @@ async function job(method, params, { onDone, after = () => reload(), name = full
         await overwrittenMessage(variant(), params.kind || "spr");
       else if (QUEUEABLE.includes(method)) await refused(refusal, method, params);
       else notify(errorText(refusal), { kind: "error", error: refusal });
-    }
+    } else if (ok && result?.deferred === true) void notice(T("mods.saved"));
     resumeChanged();
   }
 }

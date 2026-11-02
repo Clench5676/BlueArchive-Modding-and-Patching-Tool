@@ -335,7 +335,8 @@ async function checkUpdate(event) {
     await render();
     const { check } = await import("./update.js");
     await check($("consent"), undefined, {
-      onCheck: (info) => { if (info) close(); },
+      // no newer release: the check's only answer (offline and failures go to onError)
+      onCheck: (info) => { if (info) close(); else void Popup.notice(T("settings.update.none")); },
       onError: (err) => notify(errorText(err), { kind: "error", error: err }),
     });
   } catch (err) {
