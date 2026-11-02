@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import re
+import shutil
 import tempfile
 from dataclasses import replace
 from pathlib import Path
@@ -21,6 +22,20 @@ from .server import AssetResponse
 
 if TYPE_CHECKING:
     from .services import Services
+
+
+def _create_copy(source: Path, target: Path) -> None:
+    """Create target exclusively and copy source into it; a partial copy is removed."""
+    with open(target, "xb") as out:
+        try:
+            with open(source, "rb") as data:
+                shutil.copyfileobj(data, out)
+            out.flush()
+            os.fsync(out.fileno())
+        except BaseException:
+            out.close()
+            target.unlink(missing_ok=True)
+            raise
 
 
 class Photography:
@@ -176,7 +191,13 @@ class Photography:
             while True:
                 target = folder / (stem + (f"-{counter}" if counter else "") + ".png")
                 try:
-                    os.link(staged, target)
+                    try:
+                        os.link(staged, target)
+                    except FileExistsError:
+                        raise
+                    except OSError:
+                        # Volumes without hard links (exFAT, FAT32, some shares) take an exclusive copy.
+                        _create_copy(staged, target)
                     break
                 except FileExistsError:
                     counter += 1

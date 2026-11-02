@@ -11,7 +11,7 @@ const flush = async () => { for (let i = 0; i < 30; i++) await Promise.resolve()
 function harness(initial = "roster") {
   const family = deferred(), preview = deferred(), rows = deferred(), rosterData = deferred();
   const screens = Object.fromEntries(["hall", "detail", "roster", "import"].map((key) => [`screen-${key}`, { hidden: key !== initial, style: {} }]));
-  const details = [], events = [];
+  const details = [], events = [], timeouts = [], calls = [];
   let covered = false, generation = 0, detailOpen = initial === "detail";
   let leave = () => true, hallHides = 0, hallSettles = 0, quitResult = "cancel";
   const env = {
@@ -21,7 +21,8 @@ function harness(initial = "roster") {
     history: { replaceState(_state, _title, hash) { env.location.hash = hash; } },
     ctx: {}, rosterData: null, stepCards: null, roster: () => rosterData.promise,
     BatchImport: { hide() {}, show: async () => { events.push("build-import"); await rows.promise; } }, renderNav() {},
-    withTimeout: (promise) => promise, rpc: async () => family.promise, visited() {}, setTitle() {}, T: (key) => key, askQuit: () => quitResult,
+    withTimeout: (promise, _ms, label) => { timeouts.push(label); return promise; },
+    rpc: async (method, params, options) => { calls.push({ method, params, options }); return family.promise; }, visited() {}, setTitle() {}, T: (key) => key, askQuit: () => quitResult,
     showScreen: (key) => { for (const [id, el] of Object.entries(screens)) el.hidden = id !== `screen-${key}`; events.push(key); },
     Loading: {
       hold: (work) => work(),
@@ -41,7 +42,7 @@ function harness(initial = "roster") {
     noGame() {}, notify() {},
   };
   const api = new Function("env", `let { ${Object.keys(env).join(", ")} } = env; ${code} return { route, goBack, goHome, navigation };`)(env);
-  return { ...api, family, preview, rows, rosterData, details, events, screens, location: env.location, covered: () => covered,
+  return { ...api, family, preview, rows, rosterData, details, events, timeouts, calls, screens, location: env.location, covered: () => covered,
     setLeave(fn) { leave = fn; }, setQuit(value) { quitResult = value; }, hallHides: () => hallHides, hallSettles: () => hallSettles };
 }
 
@@ -207,6 +208,18 @@ test("Back covers detail teardown and reveals the roster only after its rows fin
   h.rows.resolve(); await route;
   assert.equal(h.screens["screen-roster"].hidden, false);
   assert.equal(h.covered(), false);
+});
+
+test("opening a student waits for family.get without a client deadline", async () => {
+  const h = harness();
+  const student = h.route(); await flush();
+  assert.deepEqual(h.calls.map((c) => [c.method, c.params, c.options]), [["family.get", { key: "ibuki" }, undefined]]);
+  assert.deepEqual(h.timeouts, []);
+  assert.equal(h.covered(), true);
+  h.family.resolve({ key: "ibuki" }); await flush();
+  assert.equal(h.details.length, 1);
+  h.preview.resolve(); await student;
+  assert.equal(h.screens["screen-detail"].hidden, false);
 });
 
 test("Back takes over a pending student RPC without a late student reveal", async () => {

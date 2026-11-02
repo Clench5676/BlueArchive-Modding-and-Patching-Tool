@@ -156,6 +156,12 @@ class GameAssets:
                 self._indexes["version"] = resource_version(self.resource_dirs)
             return self._indexes["version"]
 
+    def resource_changed(self) -> bool:
+        """Whether the resource version on disk differs from the one this instance indexed (a game update)."""
+        with self._lock("version"):
+            known = self._indexes.get("version")
+        return known is not None and resource_version(self.resource_dirs) != known
+
     def _paths(self) -> list[Path]:
         with self._lock("paths"):
             if "paths" not in self._indexes:

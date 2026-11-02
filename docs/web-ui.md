@@ -216,6 +216,9 @@ Imports only go one way: `webui` → `library` → `catalog` → `gameassets` �
   `%LOCALAPPDATA%\bluearchive-modding-patching-tool\cache` on Windows,
   `~/Library/Application Support/bluearchive-modding-patching-tool/cache` on macOS and
   `$XDG_CACHE_HOME/bluearchive-modding-patching-tool` (or `~/.cache/...`) elsewhere. It can be cleared from the UI.
+  It keeps the three most recently used resource-version folders (Global and Japan can both be in use; a read or write
+  marks a folder used): a new version's first successful write deletes the other version folders, only those directly
+  inside the cache root, never links or the `previews/` store. A folder that cannot be removed is logged and skipped.
   The old `BA-Modding-Toolkit` user folder is renamed automatically on first start; obsolete caches are rebuilt.
   Close older app windows first, then use the new version: an old build started afterward can recreate its old folder.
 - **Preview cache.** On by default, preserving an explicitly saved off setting and independent of the initial official
@@ -622,7 +625,8 @@ What a switch replaces is always kept:
 
 - **An official file** is copied to `originals/<file name>` the first time it is replaced. The official copy is, in
   this order: the original already kept, the game file itself, its `.backup` beside it (the classic GUI's, judged by
-  its name without `.backup`; the library never writes or deletes `.backup` files), or a file of its name in another
+  its name without `.backup`; the library never writes or deletes `.backup` files, also when an import's backup
+  option is on: the original it keeps first is the baseline), or a file of its name in another
   game folder; at write time each is checked by the CRC32 of its whole content against the CRC in its name, so a
   modded file is never kept (`original_unavailable` then, and nothing is written). Restoring copies it back.
 - **A mod** stays in the library (`mods/<id>/`). While mods are on, `remove` refuses one a game folder still shows
@@ -770,7 +774,10 @@ skip it, and the kept originals are not pruned. `Services` takes no `seen_mods` 
 (`state_unreadable()`), so its empty read cannot mark every mod as new later. A file that cannot be opened (locked,
 scanned) is not corruption: reads answer an empty library, writes raise `library_io_error`, and the next call reads
 again. A library move and a data directory move take `state.json.prev` and `.bad` along, as they do for
-`profiles.json`.
+`profiles.json`. The replaces of `atomic_json`, `atomic_copy` and `atomic_clone` (`state.json`, the journals, game
+files and kept originals) use `filelock.replace`, the same short retry as `webui.json` and `profiles.json`: on Windows a
+`PermissionError` from another program's handle is tried again for up to a second, then raised unchanged; any other
+error is raised at once, and no temporary file stays behind.
 
 **Library move** (`Services.move_library`, `library/relocate.py`; `LIBRARY_ITEMS` lists what travels: the mod, original
 and built folders, the three journal folders `transactions/`, `import-transactions/` and `asset-deletions/`,
@@ -805,6 +812,16 @@ library operations, validates journal and Mod paths, verifies a committed group'
 journal if recovery cannot complete. Metadata and directory synchronization must succeed before recovery discards
 its journal, even when a retry finds that an earlier metadata replacement already took effect.
 
+**Per-Mod update.** `update` rebuilds into a temporary folder, then publishes under the mod writer
+(`_publish_update`): it refuses with `entry_changed` when the mod's files changed since the rebuild read them, journals
+the old and new files with their hashes in `import-transactions/<mod id>/journal.json` (`operation` `update`), copies
+the old files to `mods/<id>/previous/<uuid>/` and verifies them, then replaces the files. The record's new file list in
+`state.json` is the commit point; the old files the rebuild does not name, older `previous/` copies (only the newest
+is kept) and the old build's built copies go after it. A failure, or an interruption found by recovery, before the
+commit leaves the old mod whole: its files come back from the previous copy (verified), new files it does not name go,
+and its file list is the old one again; its id, alias, assignment, configuration and repair links never change.
+Recovery finishes an update whose record names the new files that all hold their new bytes, and rolls back any other.
+
 **Pending journals.** A write, an import or an asset deletion that did not finish leaves its journal (`transactions/`,
 `import-transactions/`, `asset-deletions/`), and every write recovers first. `_transaction_lock` always attempts
 the recovery and raises the real failure of a journal it cannot settle (`library_recovery_pending`,
@@ -825,6 +842,10 @@ dates, the legacy migration, the unfinished list) skips it instead of failing. R
   new modification time (a stamp from the file would let the stat check read the outside bytes as the recorded ones),
   its kept original stays (the only official copy of a file left as it is) and so do the mods kept from it. An asset
   deletion's rollback does the same and does not recreate a gone file.
+- A game file that is missing while a later-dated file of its part is in its folder (a game update renamed it, as
+  `_View.successor` judges) is not restored: that would write the old name beside the new one. The rollback skips it,
+  drops its record in `applied` (only the journal's own key) and keeps its original and the mods kept from it. A
+  missing file with no such successor is restored as before.
 - A write journal whose install has the same key but other resource folders proceeds if every target still passes
   `check_resource_path`; otherwise it stays `folder_changed`. One whose install is not known now (its folder moved, its
   key differs) waits: it is logged, kept with its files and skipped, writes to other installs go on (a rollback
@@ -893,6 +914,7 @@ watch.state  # WatchState(game, steam_busy, classic) with .reason: game_running,
 | `on_change(state)` | the services | the first poll, every change of the answer and every `profiles_seen()` yes: updates the `mods.state` snapshot and publishes `mods.state` |
 | `publish(event, data)` | the event bus | `classic.closed {code: null}` when a watched classic window ends, after `on_change`; then `on_classic_closed()` |
 | `request_scan()` | the scanner | the game stopping (from `game_running`), an install's Steam going idle, a watched classic window ending; the scanner runs it only with scan consent |
+| `on_steam_idle()` | the services | an install's Steam going idle, before `request_scan()`: when a built game's resource version changed (a game update), the game, catalog and library are rebuilt through the settings-change path (`reload_game`), at once or, while a job runs, at the next idle; an unchanged version does nothing |
 
 A failing callable is logged and never stops the thread: an unreadable process list is `game_status_unavailable`,
 a failed Steam check is idle, and a failed classic lookup keeps the last answer.
@@ -1058,7 +1080,7 @@ stops the server (the page shows Closed); with `--serve` it gives `native_unavai
 | `app.checkUpdate` | the newest release above this version, or `null`; `notes` is the literal GitHub body for this exact tag and `page` its canonical release page; `downloaded` and `file` (path or `null`) report a verified file still present for that version in this session |
 | `app.tours {launching?}` | approved local tours through this version, newest first; after normal `app.ready`, `launching: true` records the profile baseline and returns pending upgrade pages, deduplicated by feature ID |
 | `app.tourPresented {versions}` | acknowledge the covered published versions only after a first page has painted; merges under the profile lock, without changing preferences/library/preview state |
-| `app.update` / `app.installUpdate {file}` | job id (download and MD5 check, result `{file}`; reuses the verified file for the same version) / swap in the build and quit after Restart; `classic_open` while any classic window is open (never queued) |
+| `app.update` / `app.installUpdate {file}` | job id (download and MD5 check, result `{file}`; reuses the verified file for the same version) / swap in the build and quit after Restart (a macOS disk image that does not mount starts the installed app again); `classic_open` while any classic window is open (never queued) |
 
 HTTP endpoints outside `/api/rpc`, each with its own token, never the session token: `GET /api/classic/control` and
 `POST /api/classic/report` (the classic child's one-time token, see Classic window) and `POST /api/instance/raise`
@@ -1144,6 +1166,8 @@ poll response from overwriting newer SSE progress. Verified original inputs are 
 so two Mods for the same slot cannot rebuild from each other's writes. Each apply keeps its own transaction and
 rollback; library maintenance runs once at the end of the batch. Exact current-name, CRC-ready inputs skip redundant
 planning and staging, while the final resource checks, backup, content verification and rollback remain in place.
+A direct copy honours the CRC option (On, Off, or Auto from the official file) and appends the configured Extra Bytes
+before the CRC fix, as a rebuild does; a file whose CRC already matches its name is copied unchanged.
 Staging keeps the bundle file names, which carry the part, date and CRC, and names the folders around them by the first
 16 hex digits of the entry id or the original's SHA-1 (`batch_import.staging_name`), so the longest official bundle
 names still fit the Windows path limit under an ordinary library folder.
@@ -1950,6 +1974,9 @@ none creates a hover tooltip.
 - `scene(fn)` covers startup, roster/detail navigation, student steps and detail tabs: a fade to black (150 ms),
   then, while the work goes on, the indicator. It warns after 15 s and stays covered until preparation settles or
   navigation supersedes it; individual asset loaders have failure deadlines. The reveal fades out over 300 ms.
+  Opening a student waits for `family.get` without a client deadline, as the list waits for `roster.list`: a writer
+  job (an apply, an export) can hold the library lock for its whole run. A later navigation supersedes the wait, and
+  the late answer is dropped without a reveal.
   `wait(promise)` shows the indicator alone over the screen after 300 ms (at least 500 ms) for other waits; its default
   cap is 15 s. One page overlay at a time: a newer call takes over the one on screen.
   `wait(promise, {label, cap})` names the wait for assistive technology (the classic UI's start: "Opening the classic
