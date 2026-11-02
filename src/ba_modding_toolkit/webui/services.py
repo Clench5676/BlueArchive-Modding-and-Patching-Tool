@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import errno
 import hashlib
 import json
 import logging
+import os
 import shutil
+import tempfile
 import threading
 import time
 import webbrowser
@@ -21,9 +24,11 @@ from ..globallines import GlobalLines
 from ..kivo import Kivo
 from ..errors import ServiceError
 from ..i18n import i18n_manager
+from ..logging_utils import log_failure
 from ..naming import parse_filename
 from ..utils import EXE_DIR
 from .classic import QUEUE_METHODS, ClassicQueue, ClassicWindow, NativeOps, QueuedCall, native_ops, stat_files
+from ..library.relocate import relocate
 from .events import EventBus
 from .jobs import JobRunner
 from .scanner import Scanner
@@ -38,8 +43,35 @@ PRUNE_WAIT = 120.0  # seconds the start scan waits for the library.prune job sub
 PROGRESS_PUBLISH = 0.25  # seconds between two mods.state events while a toggle reports its progress
 UPDATE_QUIT_WAIT = 3.0  # seconds for the native window to close for an update
 # the library's files and folders a library move takes along; the lock files are made again where needed
-LIBRARY_ITEMS = ("mods", "originals", "built", "transactions", "import-transactions", "photographs", "state.json",
-                 "state.json.prev", "state.json.bad", "profiles.json", "profiles.json.prev", "profiles.json.bad")
+LIBRARY_ITEMS = ("mods", "originals", "built", "transactions", "import-transactions", "asset-deletions", "photographs",
+                 "state.json", "state.json.prev", "state.json.bad", "profiles.json", "profiles.json.prev",
+                 "profiles.json.bad")
+
+
+# errno values of a write refused by permissions or a read-only volume
+WRITE_DENIED = (errno.EACCES, errno.EPERM, errno.EROFS)
+
+
+def folder_writable(folder: Path) -> bool:
+    """Whether files can be created in a folder: a real temporary file is written and removed again."""
+    try:
+        Path(folder).mkdir(parents=True, exist_ok=True)
+        fd, name = tempfile.mkstemp(prefix=".write-test-", suffix=".tmp", dir=folder)
+    except OSError:
+        return False
+    try:
+        with os.fdopen(fd, "wb") as stream:
+            stream.write(b"\0")
+            stream.flush()
+            os.fsync(stream.fileno())
+        return True
+    except OSError:
+        return False
+    finally:
+        try:
+            os.unlink(name)
+        except OSError:
+            pass
 
 
 class ModsSnapshot:
@@ -211,6 +243,10 @@ class Services:
         with self.timings.measure("settings.load-detect"):
             self.settings = settings or Settings()
         self.data_dir = Path(data_dir)
+        # tested at start (a real temporary file); app.info reports it and the page shows one notice when it is False
+        self.data_dir_writable = folder_writable(self.data_dir)
+        if not self.data_dir_writable:
+            logger.error("The data folder cannot be written, state and settings cannot be saved")
         self.log_path = self.data_dir / "webui.log"
         self.log_secrets: set[str] = set()
         self.safe_mode = safe_mode
@@ -242,6 +278,10 @@ class Services:
         self.tray_supported = False  # a tray or menu bar icon can be shown (the tray sets it)
         self.tray_shown = False  # the tray or menu bar icon is shown (the game watch then polls fast)
         self._lock = threading.RLock()
+        # Held by photograph saves and selections and by a library move, so a save never lands in the folder a move is
+        # leaving. Taken before ``_lock`` and before the photograph store's own lock, never while holding either.
+        self.photograph_writes = threading.RLock()
+        self._photographs_catalog: Any = None
         self._cache, self._game, self._catalog, self._library = cache, game, catalog, library
         self._preview_cache = None
         self._injected = {k for k, v in (("game", game), ("catalog", catalog), ("library", library)) if v is not None}
@@ -261,6 +301,7 @@ class Services:
                                         "on_change": self._classic_changed, "on_closed": self._classic_closed})
         self.scanner = Scanner(self._scan, allowed=self.scan_allowed, writer_busy=self.jobs.busy,
                                on_done=self._scanned)
+        self.jobs.translate = self.translate_error
         self.jobs.listen(self._job_finished)
         self.jobs.listen(lambda job: self.reports.job_finished(job))
         self.jobs.on_exception = lambda *args: self.reports.backend_exception(*args)
@@ -269,6 +310,25 @@ class Services:
         from .batch_import import BatchImport
 
         self.batch_import = BatchImport(self)
+
+    def translate_error(self, error: BaseException) -> ServiceError | None:
+        """The ServiceError a failure stands for, None when it stands for none. A write the permissions refuse, to a file
+        in the data folder while that folder cannot be written, is ``data_dir_readonly`` rather than ``internal``. A
+        single file that is busy while the folder takes new files is not this."""
+        if not isinstance(error, OSError) or error.errno not in WRITE_DENIED:
+            return None
+        root = os.path.normcase(os.path.abspath(self.data_dir))
+        for name in (error.filename, error.filename2):
+            if isinstance(name, (str, bytes, os.PathLike)):
+                path = os.path.normcase(os.path.abspath(os.fsdecode(name)))
+                if path == root or path.startswith(root.rstrip(os.sep) + os.sep):
+                    break
+        else:
+            return None
+        if folder_writable(self.data_dir):
+            return None
+        log_failure(logger, logging.WARNING, "The data folder cannot be written", error)
+        return ServiceError("data_dir_readonly", path=str(self.data_dir))
 
     # --- lazily built services ---
 
@@ -421,13 +481,20 @@ class Services:
 
     @property
     def photographs(self):
+        """The photograph store of the library folder in use. Its family lookup is bound to the catalog resolved here,
+        never reached through the services lock: the store's own lock is held while it looks families up, and no code
+        path may hold that lock while it waits for ``self._lock``. A new catalog (a new game folder) makes a new store.
+        Call it with the photograph lock free."""
         from ..library.photographs import Photographs, student_family
 
+        catalog = self.catalog
         root = self.library_dir()
-        store = getattr(self, "_photographs", None)
-        if store is None or store.root.parent != root:
-            self._photographs = store = Photographs(root, lambda key: student_family(self.catalog, key))
-        return store
+        with self._lock:
+            store = getattr(self, "_photographs", None)
+            if store is None or store.root.parent != root or self._photographs_catalog is not catalog:
+                self._photographs_catalog = catalog
+                self._photographs = store = Photographs(root, lambda key: student_family(catalog, key))
+            return store
 
     @property
     def photography(self):
@@ -478,7 +545,12 @@ class Services:
 
     def move_library(self, target: Path) -> Path:
         """Use another folder for the mod library. The current library moves there when the target holds none: its
-        mods, kept originals, built copies, state.json and profiles.json (each with its .prev and .bad)."""
+        mods, kept originals, built copies, pending journals, photographs, state.json and profiles.json (each with its
+        .prev and .bad). The items are copied into the target and checked, published there, and only then is the
+        library switched to the target and the old folder cleared (library.relocate). A failure before the switch
+        removes the copies and leaves the library where it was, so the move can be tried again at once. A failure
+        clearing the old folder is logged and leaves the library at the target, complete, with the old folder keeping
+        the items it could not remove."""
         target = Path(target).expanduser().resolve()
         devmode.check_read(target)
         current = self.library_dir().resolve()
@@ -495,29 +567,32 @@ class Services:
 
         self.scanner.cancel()  # a running scan reads the current library
         self.scanner.wait_idle(5.0)
-        with self._lock:
+        with self.photograph_writes, self._lock:  # a photograph save or selection waits, then uses the new folder
             if has_library(current) and not has_library(target):
                 clashes = [item for item in LIBRARY_ITEMS if (target / item).exists()]
                 if clashes:
                     raise ServiceError("library_target_not_empty", path=str(target / clashes[0]))
-                target.mkdir(parents=True, exist_ok=True)
-                moved = []
                 try:
-                    for item in LIBRARY_ITEMS:
-                        if (current / item).exists():
-                            shutil.move(str(current / item), str(target / item))
-                            moved.append(item)
+                    relocation = relocate(current, target, LIBRARY_ITEMS)
                 except OSError as e:
-                    for item in reversed(moved):  # put back what already moved
-                        try:
-                            shutil.move(str(target / item), str(current / item))
-                        except OSError:
-                            logger.exception("could not move %s back to %s", item, current)
+                    log_failure(logger, logging.WARNING, "Cannot copy the mod library to the new folder", e)
                     raise ServiceError("library_io_error", file=str(target)) from e
-            self.state.set("library_dir", str(target))
+            else:
+                relocation = None
+            try:
+                self.state.set("library_dir", str(target))
+            except BaseException:
+                if relocation is not None:
+                    relocation.undo()  # still in use where it was: nothing was lost, the copies go
+                raise
             if "library" not in self._injected:
                 self._library = None
                 self._profiles_signature = None
+            if relocation is not None:
+                left = relocation.finish()
+                if left:
+                    logger.warning("the old library folder still holds %s; the library is complete in the new folder",
+                                   ", ".join(left))
         self.snapshot.clear_entries()
         self.events.publish("library.changed")
         self.refresh_status()

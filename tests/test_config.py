@@ -1,5 +1,7 @@
 """Tests for the Tk-free settings in ba_modding_toolkit.config."""
 
+import itertools
+import os
 from pathlib import Path
 
 import pytest
@@ -180,3 +182,175 @@ def test_selected_server_resolution_never_falls_back(tmp_path, source, region):
     assert settings.game_dir() is None and settings.resource_dirs() == []
     settings.set("file_source", "adb_" + region)
     assert settings.game_dir() is None
+
+
+# --- a bad config.toml (FUN-10) ---
+
+@pytest.fixture
+def detection(monkeypatch):
+    """No game is detected, so every default is the same on every machine."""
+    monkeypatch.setattr("ba_modding_toolkit.config.get_BA_path", lambda region="auto": None)
+
+
+def _write_bad(path: Path, kind: str) -> bytes:
+    content = {
+        "non-utf8": b'[AppSettings]\nlanguage = "caf\xe9"\n',
+        "syntax": b'[AppSettings\nmax_workers = 2\n',
+        "half-written": b'[Directories]\nfile_source = "windows_gl',
+    }[kind]
+    path.write_bytes(content)
+    return content
+
+
+@pytest.mark.parametrize("kind", ["non-utf8", "syntax", "half-written"])
+def test_a_file_that_cannot_be_parsed_starts_on_defaults(tmp_path, detection, kind):
+    path = tmp_path / "config.toml"
+    original = _write_bad(path, kind)
+    settings = Settings(path)
+    assert settings.get("max_workers") == 4 and settings.get("language") == ""
+    assert settings.get("file_source") == "windows_global" and settings.get("game_resource_dir") == ""
+    assert path.read_bytes() == original and not path.with_name("config.toml.bad").exists(), "loading writes nothing"
+
+
+@pytest.mark.parametrize("kind", ["non-utf8", "syntax", "half-written"])
+def test_a_save_keeps_the_unparsable_file_as_bad_first(tmp_path, detection, kind):
+    path, bad = tmp_path / "config.toml", tmp_path / "config.toml.bad"
+    original = _write_bad(path, kind)
+    settings = Settings(path)
+    settings.set("max_workers", 7)
+    settings.save()
+    assert bad.read_bytes() == original
+    assert Settings(path).get("max_workers") == 7
+    # the file parses now: later saves do not touch the copy
+    settings.set("max_workers", 8)
+    settings.save()
+    assert bad.read_bytes() == original and Settings(path).get("max_workers") == 8
+    assert not list(tmp_path.glob("*.tmp"))
+
+
+def test_an_unparsable_file_is_kept_even_when_it_was_hand_fixed_and_broken_again(tmp_path, detection):
+    path, bad = tmp_path / "config.toml", tmp_path / "config.toml.bad"
+    settings = Settings(path)
+    settings.save()
+    path.write_bytes(b"[Broken")  # broken after the load: the check is made at the save, not remembered
+    settings.save()
+    assert bad.read_bytes() == b"[Broken"
+
+
+def test_a_save_has_nothing_to_keep_of_a_missing_or_empty_file(tmp_path, detection):
+    path, bad = tmp_path / "config.toml", tmp_path / "config.toml.bad"
+    settings = Settings(path)
+    settings.save()
+    path.write_bytes(b"")
+    settings.save()
+    assert not bad.exists()
+
+
+def test_a_save_goes_ahead_when_the_bad_copy_cannot_be_made(tmp_path, detection, monkeypatch, caplog):
+    path = tmp_path / "config.toml"
+    _write_bad(path, "syntax")
+    settings = Settings(path)
+
+    def refuse(*args, **kwargs):
+        raise PermissionError("no copy")
+
+    monkeypatch.setattr("ba_modding_toolkit.config.shutil.copyfileobj", refuse)
+    settings.save()
+    assert Settings(path).get("max_workers") == 4
+    assert "Cannot keep the unreadable config.toml" in caplog.text
+    assert not list(tmp_path.glob("*.tmp"))
+
+
+@pytest.mark.parametrize("text", [
+    'Directories = 3\n[SaveOptions]\ncompression_method = "lz4"\n',
+    '[Directories]\ngame_resource_dir = 2020-01-01\ngame_resource_dir_japan = [1, 2]\n[SaveOptions]\n'
+    'compression_method = "lz4"\n',
+    'AppSettings = "x"\nTools = []\n[SaveOptions]\ncompression_method = "lz4"\n',
+])
+def test_a_group_or_value_of_the_wrong_type_reads_as_missing_and_the_rest_is_read(tmp_path, detection, text):
+    path = tmp_path / "config.toml"
+    path.write_text(text, encoding="utf-8")
+    settings = Settings(path)
+    assert settings.get("compression_method") == "lz4"
+    assert settings.get("game_resource_dir") == "" and settings.get("game_resource_dir_japan") == ""
+    assert settings.get("max_workers") == 4 and settings.get("report_format") == "list"
+    settings.save()  # does not stop either
+    assert toml.loads(path.read_text(encoding="utf-8"))["SaveOptions"]["compression_method"] == "lz4"
+    assert not path.with_name("config.toml.bad").exists(), "a file that parses is not a bad file"
+
+
+def test_a_value_of_the_wrong_type_runs_the_detection_default_like_a_missing_key(tmp_path, monkeypatch):
+    monkeypatch.setattr("ba_modding_toolkit.config.get_BA_path", lambda region="auto": "/found" if region == "global" else None)
+    path = tmp_path / "config.toml"
+    path.write_text("[Directories]\ngame_resource_dir = 2020-01-01\nfile_source = {a = 1}\n", encoding="utf-8")
+    settings = Settings(path)
+    assert settings.get("game_resource_dir") == "/found" and settings.get("file_source") == "windows_global"
+
+
+def test_the_legacy_directory_migration_ignores_a_value_that_is_not_text():
+    from ba_modding_toolkit.config import migrate_game_directories
+
+    for directories in (3, [], {"game_resource_dir": 3}, {"game_resource_dir": ["x"]}, {"game_resource_dir": "\0"}):
+        assert migrate_game_directories(directories, lambda region: "/games") == directories
+
+
+_ticks = itertools.count(1)
+
+
+def _poll_after_write(path: Path, content: bytes, settings: Settings) -> bool:
+    """Write the file, move its modification time forward (a coarse clock must not hide the change) and poll."""
+    path.write_bytes(content)
+    st = path.stat()
+    os.utime(path, ns=(st.st_atime_ns, st.st_mtime_ns + next(_ticks) * 5_000_000_000))
+    return settings.reload_if_changed()
+
+
+@pytest.mark.parametrize("content", [b"", b"  \n", b"[AppSettings\nmax_workers = 9\n", b'[AppSettings]\nlanguage = "\xff"\n',
+                                     b'[Directories]\nfile_source = "windows_jap'])
+def test_the_poll_never_applies_a_file_that_cannot_be_read_as_a_whole(tmp_path, detection, content, caplog):
+    path = tmp_path / "config.toml"
+    settings = Settings(path)
+    settings.set("max_workers", 6)
+    settings.set("game_resource_dir", "/games/ba")
+    settings.save()
+    seen = []
+    settings.on_change(lambda: seen.append(settings.as_dict()))
+    before = settings.as_dict()
+    with caplog.at_level("WARNING"):
+        assert _poll_after_write(path, content, settings) is False
+        assert settings.reload_if_changed() is False and settings.reload_if_changed() is False
+    assert settings.as_dict() == before and seen == []
+    assert caplog.text.count("Cannot read config.toml") == 1, "logged once per state of the file"
+    # the writer finishes: the complete file is applied
+    complete = toml.dumps({"AppSettings": {"max_workers": 2}}).encode()
+    assert _poll_after_write(path, complete, settings) is True
+    assert settings.get("max_workers") == 2 and len(seen) == 1
+
+
+def test_a_file_that_was_bad_at_the_start_is_applied_once_it_is_fixed(tmp_path, detection):
+    path = tmp_path / "config.toml"
+    _write_bad(path, "syntax")
+    settings = Settings(path)
+    seen = []
+    settings.on_change(lambda: seen.append(True))
+    assert settings.reload_if_changed() is False and seen == []
+    assert _poll_after_write(path, b"[AppSettings]\nmax_workers = 3\n", settings) is True
+    assert settings.get("max_workers") == 3 and seen == [True]
+
+
+def test_an_empty_file_at_the_start_is_all_defaults_but_a_missing_one_still_resets_a_reload(tmp_path, detection):
+    path = tmp_path / "config.toml"
+    path.write_bytes(b"")
+    assert Settings(path).get("max_workers") == 4
+    path.write_text("[AppSettings]\nmax_workers = 3\n", encoding="utf-8")
+    settings = Settings(path)
+    path.unlink()
+    assert settings.reload_if_changed() is True and settings.get("max_workers") == 4
+
+
+def test_the_poll_still_reloads_a_change_in_a_file_of_the_same_size(tmp_path, detection):
+    path = tmp_path / "config.toml"
+    path.write_text("[AppSettings]\nmax_workers = 2\n", encoding="utf-8")
+    settings = Settings(path)
+    assert _poll_after_write(path, b"[AppSettings]\nmax_workers = 3\n", settings) is True
+    assert settings.get("max_workers") == 3

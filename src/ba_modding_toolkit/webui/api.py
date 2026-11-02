@@ -88,7 +88,8 @@ FLAG_KEYS = {"tray": "tray", "classicPrompt": "classic_prompt",
 
 
 def build_api(s: Services) -> RpcRegistry:
-    rpc = RpcRegistry(on_exception=lambda *args: s.reports.backend_exception(*args) if hasattr(s, "reports") else None)
+    rpc = RpcRegistry(on_exception=lambda *args: s.reports.backend_exception(*args) if hasattr(s, "reports") else None,
+                      translate=getattr(s, "translate_error", None))
     from .photography import register as register_photography
     register_photography(rpc, s)
     from .tours import register as register_tours
@@ -120,6 +121,7 @@ def build_api(s: Services) -> RpcRegistry:
             "uiCached": found and s.ui_cached(version),
             "cacheDir": str(s.cache_dir()),
             "dataDir": str(s.data_dir),
+            "dataDirWritable": getattr(s, "data_dir_writable", True),
             "native": s.window is not None,
             "compiled": updater.is_compiled(),
             "mute": s.mute,

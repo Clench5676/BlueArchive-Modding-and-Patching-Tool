@@ -132,6 +132,11 @@ def _rewrite_file(path: Path, old: Path, new: Path) -> Any:
 def _rewrite_paths(old: Path, new: Path) -> bool:
     _rewrite_file(new / "config.toml", old, new)
     state = _rewrite_file(new / "webui.json", old, new)
+    # webui.json.prev is read when webui.json cannot be; webui.json.bad is what the user may want back
+    previous = _rewrite_file(new / "webui.json.prev", old, new)
+    _rewrite_file(new / "webui.json.bad", old, new)
+    if not isinstance(state, dict):
+        state = previous  # the app then reads its library folder from the previous copy
     _rewrite_file(new / "classic.json", old, new)
     # instance.json contains only pid, port and raise_token; lock files contain no paths. Logs and exports are
     # historical output, never loaded as settings. ADB manifests contain remote paths and relative local paths.

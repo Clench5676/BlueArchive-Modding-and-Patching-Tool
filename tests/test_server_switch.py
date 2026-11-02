@@ -78,13 +78,17 @@ def test_saved_model_target_uses_offline_student_metadata(tmp_path):
     assert value.spr is None and value.lobby is None
 
 
-def test_retained_photograph_store_resolves_the_selected_catalog(services):
+def test_photograph_store_follows_the_selected_catalog(services):
+    """The store's family lookup is bound to its catalog (it never waits for the services lock under its own lock),
+    so a new catalog makes a new store: a caller never gets one that resolves through a replaced catalog."""
     services._catalog = SimpleNamespace(variant=lambda key: SimpleNamespace(family="global-family"))
     photographs = services.photographs
     assert photographs.family("student") == "global-family"
-    services._catalog = SimpleNamespace(variant=lambda key: SimpleNamespace(family="japan-family"))
     assert services.photographs is photographs
-    assert photographs.family("student") == "japan-family"
+    services._catalog = SimpleNamespace(variant=lambda key: SimpleNamespace(family="japan-family"))
+    current = services.photographs
+    assert current is not photographs and current.family("student") == "japan-family"
+    assert services.photographs is current
 
 
 def test_server_switch_cannot_reuse_a_catalog_retained_by_an_active_task(app, services, tmp_path, monkeypatch):
