@@ -85,17 +85,22 @@ function opts(extra = {}) {
 // whole roster in the same order
 export function order(rosterData, { unfiltered = false } = {}) { return orderOf(rosterData, view, opts({ unfiltered })); }
 
-// dragging the list: one pair of window listeners for the module's lifetime
+// dragging the list: window listeners for the module's lifetime, in the capture phase so no control under the pointer
+// keeps the release from them; a cancelled pointer, or a move with no button held (released outside the window), ends
+// the drag, as Hall's drag does
 let drag = null;
 const stageScaleNow = () => document.getElementById("stage").getBoundingClientRect().width / 1920;
+const endDrag = () => { drag = null; setTimeout(() => { if (ctx) ctx.dragged = false; }, 0); };
 addEventListener("pointermove", (ev) => {
   if (!drag) return;
+  if (ev.buttons === 0) { endDrag(); return; }
   const dy = (ev.clientY - drag.y) / stageScaleNow();
   if (Math.abs(dy) > 6) ctx.dragged = true;
   view.scroll = drag.scroll - dy;
   applyScroll();
-});
-addEventListener("pointerup", () => { drag = null; setTimeout(() => { if (ctx) ctx.dragged = false; }, 0); });
+}, true);
+addEventListener("pointerup", endDrag, true);
+addEventListener("pointercancel", endDrag, true);
 
 // --- toolbar layout: right to left from the order button, the most generous sizes that fit after the title ---
 // --- frame + top menu: our labels instead of image fonts, two segment filters, the checkbox, the tool states ---
