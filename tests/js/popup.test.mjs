@@ -3100,6 +3100,53 @@ test("a list whose segment shows nothing says so in the paper, and its primary b
 });
 const NGUI_rect = (el) => ["left", "top", "width", "height"].map((k) => parseFloat(el.style[k]));
 
+// UI-34: Escape in a list popup's search box closes the search and the popup stays, as the roster's does
+test("Escape in a list popup's search closes the search first; the next one closes the popup", async (t) => {
+  const NGUI = await import("../../src/ba_modding_toolkit/web/js/ngui.js");
+  const collection = n("UICharacterCollection", [0, 0]);
+  const base = "Inventory_ListControl/RightCanvas/ListBG";
+  insert(collection, "SeletControl/TopMenu", structuredClone(NGUI.find(switchLayouts.inventory, `${base}/BG_Top_Widget`)));
+  insert(collection, "SeletControl/CharacterSearch", structuredClone(NGUI.find(switchLayouts.inventory, `${base}/Inbox/SearchInfo`)));
+  const fetch = globalThis.fetch;
+  t.mock.method(globalThis, "fetch", async (url, options) => url === "/asset/ui/layout/UICharacterCollection.json" ? reply(collection) : fetch(url, options));
+  const Fresh = await import("../../src/ba_modding_toolkit/web/js/popup.js?escape-search");
+  const items = Array.from({ length: 4 }, (_, i) => ({ key: String(i), label: `Owner ${i}`, full: `Owner ${i}` }));
+  const closes = [];
+  const options = { host: prompt, title: "Students", items, selected: "0", tools: {}, okText: "Apply",
+    onClose: (how) => { closes.push(how); prompt.hidden = true; Fresh.closed(prompt); } };
+  try {
+    await Fresh.listPopup(options);
+    action(prompt, "search").click();
+    await until(() => walk(prompt).some((e) => e.className === "roster-search"));
+    const input = () => walk(prompt).find((e) => e.className === "roster-search");
+    input().value = "Owner 1";
+    for (const fn of input().listeners.input || []) fn({ isComposing: false });
+    await until(() => input()?.value === "Owner 1");
+    await tick();
+    // the key that ends an input method's conversion is not Escape for the search
+    const ending = { key: "Escape", isComposing: false, keyCode: 229, defaultPrevented: false, preventDefault() { this.defaultPrevented = true; } };
+    for (const fn of input().listeners.keydown || []) fn(ending);
+    assert.equal(ending.defaultPrevented, false);
+    // the box gets the key before the window's listeners (the popup stack's Escape)
+    const ev = { key: "Escape", defaultPrevented: false, preventDefault() { this.defaultPrevented = true; } };
+    for (const fn of input().listeners.keydown || []) fn(ev);
+    for (const fn of [...keyListeners]) fn(ev);
+    assert.ok(ev.defaultPrevented);
+    assert.deepEqual(closes, [], "the popup stays");
+    await until(() => !input());
+    assert.ok(action(prompt, "search"), "the search is closed, its toolbar button is back");
+    assert.equal(prompt.hidden, false);
+    await tick();
+    press("Escape");
+    assert.deepEqual(closes, ["escape"]);
+    // opened again, the search starts empty
+    await Fresh.listPopup(options);
+    action(prompt, "search").click();
+    await until(() => !!input());
+    assert.equal(input().value, "");
+  } finally { prompt.hidden = true; Fresh.closed(prompt); }
+});
+
 test("a search that matches nothing blocks the primary button until the match is back", async (t) => {
   const NGUI = await import("../../src/ba_modding_toolkit/web/js/ngui.js");
   const collection = n("UICharacterCollection", [0, 0]);

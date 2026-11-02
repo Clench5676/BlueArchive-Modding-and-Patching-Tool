@@ -1709,7 +1709,9 @@ optional, so a popup still works without them.
   A list with no card to show (a search or segment that matches nothing) puts `hall.noCandidates` in the list paper,
   centred on the visible paper. With `tools`, while the chosen card (`selected`) is not among the cards shown, the
   primary button is the game's disabled one (`aria-disabled`, answering nothing); a prompt without `tools` is never
-  blocked.
+  blocked. Escape in the search box closes and clears the search, as the roster's does, and the popup stays; Hall's
+  pickers do the same (`student-hall-ui.js` `search(..., { onEscape })`). Hall's box is a search field without the
+  browser's own clear button (hidden in `app.css`) and without the prefab's `Btn_Close`.
 
 **Start sequence** (`main.js`, `Popup.sequence`). The whole first-run sequence (the cursor, the start popups, the
 update check and the feature tour) is one function that runs once per session, when a game folder is known: at the
