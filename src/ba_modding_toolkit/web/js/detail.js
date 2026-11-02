@@ -33,7 +33,7 @@ import { QUEUEABLE, current as modsState, entryLabel, listSep, refused } from ".
 import * as Prompts from "./prompts.js";
 import { anyOpen as popupOpen } from "./popup.js";
 import { rpc, spineBase, spinePrefix, loadSpineAssets, waitJob } from "./api.js";
-import { L, T, language, platform } from "./i18n.js";
+import { L, T, errorText, language, platform } from "./i18n.js";
 import { forget, idleAnimation, prioritise, thumbnailScope } from "./thumbs.js";
 import { modelThumbnail, modelStillVersion } from "./model-still.js";
 import { lazyThumbnail } from "./lazy-thumbnail.js";
@@ -233,7 +233,6 @@ function sourceLabel(v, kind) {
 const gameFile = (v = variant(), kind = "spr") => partsOf(v, kind)[0]?.file || null;
 const baseName = (path) => (path ? path.split(/[\\/]/).pop() : "—");
 const sizeText = (bytes) => (!bytes ? "—" : bytes < 1048576 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / 1048576).toFixed(1)} MB`);
-const errorText = (err) => T(`error.${err?.code || "internal"}`, err?.params || { error: String(err) });
 
 const svg = (body) => `data:image/svg+xml,${encodeURIComponent(body)}`;
 const TEXTURES = {

@@ -39,7 +39,7 @@ function harness(initial = "roster") {
       currentVariant: () => detailOpen ? "ibuki" : null,
     },
     Roster: { invalidate() {}, hide: () => events.push("hide-roster"), order: () => [], show: async () => { events.push("build-roster"); await rows.promise; } },
-    noGame() {}, notify() {},
+    noGame() {}, notify() {}, errorText: (err) => String(err?.code || "internal"), // i18n.js stand-in
   };
   const api = new Function("env", `let { ${Object.keys(env).join(", ")} } = env; ${code} return { route, goBack, goHome, navigation };`)(env);
   return { ...api, family, preview, rows, rosterData, details, events, timeouts, calls, screens, location: env.location, covered: () => covered,
