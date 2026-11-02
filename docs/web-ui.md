@@ -625,7 +625,8 @@ What a switch replaces is always kept:
 
 - **An official file** is copied to `originals/<file name>` the first time it is replaced. The official copy is, in
   this order: the original already kept, the game file itself, its `.backup` beside it (the classic GUI's, judged by
-  its name without `.backup`; the library never writes or deletes `.backup` files), or a file of its name in another
+  its name without `.backup`; the library never writes or deletes `.backup` files, also when an import's backup
+  option is on: the original it keeps first is the baseline), or a file of its name in another
   game folder; at write time each is checked by the CRC32 of its whole content against the CRC in its name, so a
   modded file is never kept (`original_unavailable` then, and nothing is written). Restoring copies it back.
 - **A mod** stays in the library (`mods/<id>/`). While mods are on, `remove` refuses one a game folder still shows

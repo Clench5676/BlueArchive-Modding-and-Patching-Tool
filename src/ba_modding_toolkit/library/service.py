@@ -3354,11 +3354,11 @@ class ModLibrary:
                 atomic_json(journal, transaction)
                 try:
                     for item, target in zip(items, changed):
-                        if create_backup and officials[target] == target.with_name(target.name + ".backup"):
-                            # Keep the only official baseline before the adjacent backup is replaced.
-                            self._keep_original(target, pin)
-                        mod_install.backup_file(target, create_backup, log)
+                        # The verified original kept first is the baseline, so no adjacent .backup is written then
+                        # (one already beside the game file is left alone); the classic install keeps its own.
                         self._keep_original(target, pin, moving=True)
+                        kept_original = self._original_path(target).is_file()
+                        mod_install.backup_file(target, create_backup and not kept_original, log)
                         if not item["official"]:
                             backup = self.root / item["rollback"]
                             if not atomic_clone(target, backup):

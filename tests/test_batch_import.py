@@ -694,7 +694,8 @@ def test_update_then_add_then_apply_forwards_every_classic_option_and_reports_ev
     assert calls[2][1]["backup"] is True
     assert result == {"id": entry["id"], "outcome": "updated", "reason": None,
                       "libraryId": env.library.mods()[0].id, "applied": True, "configured": True}
-    assert env.original.with_name(env.original.name + ".backup").read_bytes() == before
+    assert not env.original.with_name(env.original.name + ".backup").exists()  # the kept original is the baseline
+    assert env.library.official_bundles("test_spr")[0].read_bytes() == before
     assert env.library.settings is env.settings
     assert env.settings.get("compression_method") == "none"
     assert list((env.tmp / "exports" / "bundles" / entry["id"]).glob("*.bundle"))
@@ -1191,7 +1192,7 @@ def test_import_backup_preserves_an_official_baseline_from_a_classic_backup(env)
     result, = run(env, [entry], backup=True)
     assert result["outcome"] == "imported" and result["applied"]
     assert env.original.read_bytes() == incoming.read_bytes()
-    assert backup.read_bytes() == outside.read_bytes()
+    assert backup.read_bytes() == official  # an existing .backup is left alone, never overwritten
     assert env.library.official_bundles("test_spr")[0].read_bytes() == official
     env.library.restore("test")
     assert env.original.read_bytes() == official
