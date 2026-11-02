@@ -1963,6 +1963,9 @@ none creates a hover tooltip.
 - `scene(fn)` covers startup, roster/detail navigation, student steps and detail tabs: a fade to black (150 ms),
   then, while the work goes on, the indicator. It warns after 15 s and stays covered until preparation settles or
   navigation supersedes it; individual asset loaders have failure deadlines. The reveal fades out over 300 ms.
+  Opening a student waits for `family.get` without a client deadline, as the list waits for `roster.list`: a writer
+  job (an apply, an export) can hold the library lock for its whole run. A later navigation supersedes the wait, and
+  the late answer is dropped without a reveal.
   `wait(promise)` shows the indicator alone over the screen after 300 ms (at least 500 ms) for other waits; its default
   cap is 15 s. One page overlay at a time: a newer call takes over the one on screen.
   `wait(promise, {label, cap})` names the wait for assistive technology (the classic UI's start: "Opening the classic
