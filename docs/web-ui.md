@@ -701,8 +701,11 @@ configured with a mod whose build `update` changed, whose game files still hold 
 **The Enable Mods switch** (`toggle`). An Off adopts the mods it finds first (Add to Library: one mod per entry of its
 non-official parts, every part recorded, the entry configured with it), keeps the built copies, then switches every
 entry carrying a library source to official. An On switches every configured entry that does not carry its source
-back to it. The intent and the entries to reach are saved first, so a crash leaves them listed (the red dot and
-Retry, without a scan). Each entry is judged again when it is reached, with its configuration read again: a part the
+back to it, except an entry whose files changed outside the library: that one is skipped (`skipped`, `why` `changed`),
+leaves the unfinished list and keeps its files. Mods Not in the Library offers it, and only Apply Mod Configuration,
+given the entry as `changed`, writes over it (the outside change kept as a mod first). The intent and the entries to
+reach are saved first, so a crash leaves them listed (the red dot and Retry, without a scan). Each entry is judged
+again when it is reached, with its configuration read again: a part the
 library can show unchanged by size and date (or the last bytes of a CRC-fixed file) carries its record's source, and
 every other part is read in full there. An outside change is adopted by an Off and never overwritten by an On. What
 the full read finds is kept in the records, so the cheap judgement agrees from then on: a file whose bytes are the
@@ -1457,10 +1460,10 @@ The student list quits the app as the PC client's back key does in the lobby (`q
   in the `keymapping` bundle) binds the confirm of `UIPopup_System` and `UIPopup_Sort` (`Btn_Ok`,
   `UI_KeyMapping_Common_BtnOK01`) to Return with Space as its second key; their cancel's Escape binding is unused.
   One prompt at a time.
-- **Confirm** calls `app.quit`. While a writer job runs it is refused with `busy` (a toast), as the window's close
+- **Confirm** calls `app.quit`. While a writer job runs it is refused with `busy` (a notice), as the window's close
   button is. In the app's window the window closes. In browser mode (`--browser`) the server stops once it has
   answered, and the page shows Closed (`app.closed`) alone, without the top bar and the navigation. With `--serve`
-  it is refused with `native_unavailable` (a toast).
+  it is refused with `native_unavailable` (a notice).
 
 ### Bottom navigation
 
@@ -1500,7 +1503,7 @@ import list and its view controls, stays available within the session.
   the prompt is drawn plain (Popups).
 - **The hand-off.** `app.openClassic {tab}`, with the corner indicator labelled "Opening the classic UI" until the
   classic window is up (Loading screen); `classic_failed` and other refusals (`busy` while a job writes the game
-  folder) show as a toast. One hand-off at a time: a click while one is under way does nothing.
+  folder) show the Failed popup (`classic_failed`) or, for a refusal, a notice. One hand-off at a time: a click while one is under way does nothing.
 
 ### Student Hall
 
@@ -1667,7 +1670,7 @@ optional, so a popup still works without them.
 
 - **Hosts.** The detail screen's own, `#popup` and `#picker`, inside the screen; and two on the stage, so a popup
   shows on any screen: `#prompt` (z-index 2550) for list prompts and `#dialog` (z-index 2600) for message popups, both
-  over the settings (2500) and under the toast (3000). Each message popup is a layer of its own in `#dialog`, so one
+  over the settings (2500). Each message popup is a layer of its own in `#dialog`, so one
   opened from another shows over it. Mod Alias (`mod-alias.js`) and the repair preview (`mod-compare.js`) are layers of
   their own in `#dialog` too (`.popup-layer`, registered on the stack with `el`): a failed save's message draws above
   Mod Alias, Escape closes the visible (topmost) layer, and closing one removes only its own layer, never the others in
@@ -1760,7 +1763,8 @@ or failed check never holds startup, scan prompts or navigation. A newer release
 finish, then for any open popup (including Settings), loading work, input hold, writer progress or queued mod toggle
 to clear. Its offer can appear on any screen, including when the result arrives after startup. Manual Settings
 update checks remain available and share an in-flight automatic check and its popup; their result callbacks still
-run, so Settings closes for a newer release. `Update.check` resolves when its popup closes: `later` (Later or Escape), `page` (the download page
+run, so Settings closes for a newer release, and with none a notice says "Up to date" (`settings.update.none`; an
+offline check or a failure is its error instead). `Update.check` resolves when its popup closes: `later` (Later or Escape), `page` (the download page
 opened), `update` when a failed update is dismissed, `null` with no newer release, offline or if drawing fails.
 Download progress and errors stay in the popup; its buttons and Escape are blocked during download. A verified
 download shows Download Complete with Later / Restart. Later keeps it for this session; the next check for that
@@ -1805,12 +1809,12 @@ or the classic UI is open, no drift while mods are off, nothing dismissed (see M
   deletes stored files and references, retaining built files referenced by other keys, then restores affected game
   entries through the normal write checks. Refused restores leave the configuration changed and appear in Retry.
   The picker and file drops compare canonical destination keys with the selected variant when the add started.
-  Plain additions there show an Added toast and refresh; additions elsewhere name their destination and offer Go to.
+  Plain additions there refresh with no message unless one was installed or failed; additions elsewhere name their destination and offer Go to.
   Duplicates show Already in the Mod Library with the stored mod's name, with Go to only for another variant.
   Exact outside game content is adopted without reapplying it and shows Recognized as an installed Mod, including
   when it matches an existing library entry. A batch combines these messages in one popup, with navigation only
-  for other variants; local results alone have a confirmation button. Choosing the source already in use shows
-  Already in use without a job. Row 2's
+  for other variants; local results alone have a confirmation button. The source already in use has Apply greyed
+  and shows no message, and no job runs. Row 2's
   update and compare act on the mod the shown tab's files carry. The 3D tab's card has nothing to switch to yet
   (library): no chevron, and a click opens nothing.
 
@@ -1857,15 +1861,16 @@ detail screen, and in Settings' Mods tab.
   the red dot (`Common_Icon_Reddot2`) while entries were not switched or were left as is. It is a `button` with
   `role="switch"` and `aria-checked`; Space and Enter toggle. It always appears on the main
   screens with a current install (Settings keeps it without one).
-- **A click** (`click(from)`, the same rules from the top bar and Settings): busy, a toast (`error.busy`), or the
-  classic modal with its box ticked when writes wait for the classic window; unavailable, the reason as a toast; the
+- **A click** (`click(from)`, the same rules from the top bar and Settings): busy, a notice (`error.busy`), or the
+  classic modal with its box ticked when writes wait for the classic window; unavailable, the reason as a notice (the
+  Failed popup when it is no refusal); the
   first toggle ever, the explanation; the classic window open, the classic modal; otherwise `mods.toggle {enabled:
   !current, expect: current}` at once, with the corner indicator and "Working 12/40". The explanation (title and
   button Turn Off Mods or Turn On Mods, the help's opening text and "Not shown again", and Cancel) shows once: closing it in any way calls `mods.explained`, and only its button toggles. The end
-  is a toast ("Mods off", "Mods on"), or, when entries were added to the library first, failed, were left as is or
+  is silent (the switch shows the state), or, when entries were added to the library first, failed, were left as is or
   their adoption failed, a result popup: "Added to the library first: n", "Done: x, failed: y", "Left as is, no
   official copy: n", then each failed entry ("Airi, Portrait - ..."), the first six named and the rest counted.
-  `state_changed` (switched elsewhere first) is a toast, and the switch redraws from `mods.state`.
+  `state_changed` (switched elsewhere first) is a notice, and the switch redraws from `mods.state`.
 - **The "?" help** (message popup, title Enable Mods): two opening lines (`mods.helpOn`, `mods.helpOff`): On applies
   configured mods to all portraits and memorial lobbies; Off restores official files where available and keeps mods
   in the library; close the game before toggling. Both opening lines use the smaller of their fitted font sizes,
@@ -1929,9 +1934,9 @@ detail screen, and in Settings' Mods tab.
 - **The window back in front** after 30 s or more asks for a scan (`mods.scan`, only with scan consent), so a
   Steam check or a repair made meanwhile is found.
 - **While mods are off** an apply only saves the choice: the switch popup reads Save and starts on the configured
-  source, and the toast says "Saved, applied when mods are on".
+  source, and a notice says "Saved, applied when mods are on" (`mods.saved`, from the apply job's `deferred`).
 - **The tray's events** (see Tray): `tray.toggle` is followed like the page's own toggle, `tray.open` shows the first
-  toggle's explanation (its button submits the tray's toggle), the tray's refusal as a toast (the tray never queues
+  toggle's explanation (its button submits the tray's toggle), the tray's refusal as a notice (the tray never queues
   for the classic window) or the drift prompt. The page listens for them on the no-game screen too.
 
 ### Mods already in use
@@ -1955,7 +1960,7 @@ overwritten entry need none (the detail screen judges its files cheaply).
   two buttons (decision 16) and no way out but them (no close button; Escape and the backdrop do nothing): Apply Mod
   Configuration sends the ticked cards (`mods.restoreDrift`) and keeps the others as they are, Keep as Is keeps them
   all (`mods.dismiss drift`). Apply is greyed with the reason while the game runs or Steam is busy; while the classic
-  UI is open it opens the classic modal. Its result is a toast, or a popup naming the failed entries and those skipped
+  UI is open it opens the classic modal. Its result is silent, or a popup naming the failed entries and those skipped
   because their files changed since the scan ("Game files changed, check again").
 - **When they show.** At the start (see Popups, "Start sequence"); after a later scan (the window back in front, the
   classic window closed, a game folder change) once no other popup is open, when the scan found entries the prompt
@@ -2402,12 +2407,12 @@ it (decision 7); browser and serve mode have none.
   Off (decision 4). The window comes to the front instead on the first toggle ever (`explained` false: the
   explanation, whose button toggles), and afterwards on a refusal (`not_enough_space` included) or a result with
   failed, stuck or left entries. **Back to Official** opens the window on the drift prompt. **Quit** follows
-  `app.quit`; while a writer job runs, the window comes to the front with the busy toast (`app.busy`).
+  `app.quit`; while a writer job runs, the window comes to the front with the busy notice (`app.busy`).
 - **What the page is told:**
 
   | Event | Data | The page |
   |---|---|---|
-  | `tray.toggle` | `{job, enabled, expect}` | follows the job as its own toggle (`waitJob`): progress, end toast, result popup |
+  | `tray.toggle` | `{job, enabled, expect}` | follows the job as its own toggle (`waitJob`): progress, result popup |
   | `tray.open` | `{view: "explain", enabled, expect}` | shows the first toggle's explanation; its button submits `mods.toggle {enabled, expect}` |
   | `tray.open` | `{view: "error", code, params}` | shows the refusal as for its own toggle |
   | `tray.open` | `{view: "drift"}` | opens the drift prompt |

@@ -9,10 +9,10 @@ const jobSource = source.slice(source.indexOf("async function job("), source.ind
 const loadingSource = readFileSync(new URL("../../src/ba_modding_toolkit/web/js/loading.js", import.meta.url), "utf8");
 const progressSource = loadingSource.slice(loadingSource.indexOf("export function progressText("), loadingSource.indexOf("// A writer task"));
 function harness(overrides = {}) {
-  const messages = [], calls = [], progress = [];
+  const messages = [], notices = [], calls = [], progress = [];
   let released = false, end;
   const env = {
-    notify: (s) => messages.push(s), jobProgress, progressName, fam: {}, switchKind: () => "spr", T: (s) => s, renderScreen: async () => {},
+    notify: (s) => messages.push(s), notice: (s) => { notices.push(s); return Promise.resolve(); }, jobProgress, progressName, fam: {}, switchKind: () => "spr", T: (s) => s, renderScreen: async () => {},
     rpc: async () => { calls.push("submit"); return "j1"; }, waitJob: async () => ({}), reload: async () => {},
     errorText: String, QUEUEABLE: ["actions.apply", "actions.restore"], refused: (err) => messages.push(String(err)),
     overwrittenMessage: async () => {}, variant: () => ({}), fullName: () => "Example", resumeChanged: () => {},
@@ -23,7 +23,7 @@ function harness(overrides = {}) {
     let busy = false, open = true, pageToken = 1;
     ${jobSource}
     return { job, busy: () => busy, leave() { open = false; pageToken++; } };`)(env);
-  return { ...state, messages, calls, progress, released: () => released, end };
+  return { ...state, messages, notices, calls, progress, released: () => released, end };
 }
 
 test("submission, job, onDone and final reload errors release busy and allow the next switch", async () => {
@@ -150,4 +150,35 @@ test("detail progress identifies the target Mod's student variant and kind inste
   await h.job("actions.update", { mod: "m1" });
   assert.match(h.progress.at(-1), /Repairing Yoshimi \(Band, Memorial Lobby\) 2 \/ 2/);
   assert.doesNotMatch(h.progress.at(-1), /assets-|\.bundle|Portrait/);
+});
+
+test("an apply while mods are off says it only saved the choice; no other result adds a notice", async () => {
+  const saved = harness({ waitJob: async () => ({ deferred: true, unchanged: true, files: [] }) });
+  assert.equal(await saved.job("actions.apply", { variant: "v", source: "mod:a" }), true);
+  assert.deepEqual(saved.notices, ["mods.saved"]);
+  assert.deepEqual(saved.messages, [], "a notice, not an error");
+  for (const result of [{}, { deferred: false, files: ["a"] }, { unchanged: true }, null]) {
+    const h = harness({ waitJob: async () => result });
+    assert.equal(await h.job("actions.apply", { variant: "v", source: "mod:a" }), true);
+    assert.deepEqual(h.notices, [], JSON.stringify(result));
+  }
+});
+
+test("an apply that failed shows its error and no saved notice; a failing reload after a saved choice still reports both", async () => {
+  const failed = harness({ waitJob: async () => { throw new Error("wait"); } });
+  assert.equal(await failed.job("actions.apply", {}), false);
+  assert.deepEqual(failed.notices, []);
+  assert.ok(failed.messages.some((s) => s.includes("wait")));
+  const reload = harness({ waitJob: async () => ({ deferred: true }) });
+  assert.equal(await reload.job("actions.apply", {}, { after: async () => { throw new Error("reload"); } }), false);
+  assert.ok(reload.messages.some((s) => s.includes("reload")), "the error is reported");
+  assert.deepEqual(reload.notices, ["mods.saved"], "the choice was saved all the same");
+});
+
+test("the saved notice does not wait for the user: the job returns and releases busy first", async () => {
+  let close;
+  const h = harness({ waitJob: async () => ({ deferred: true }), notice: () => new Promise((resolve) => { close = resolve; }) });
+  assert.equal(await h.job("actions.apply", {}), true);
+  assert.equal(h.busy(), false);
+  close();
 });
