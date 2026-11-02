@@ -3149,3 +3149,177 @@ def test_cold_core_map_reuses_its_inventory_instead_of_rechecking_each_core(worl
     mapped = world.library._core_map(pin)
     assert mapped.spr["test"] == "test_spr" and mapped.spr["variant99"] == "variant99_spr"
     assert len(reads) <= 2
+
+
+# --- updating an applied mod: the new build reaches the game, the old one never comes back (FUN-7) ---
+
+def updating(monkeypatch, payload: bytes = b"new build") -> None:
+    """A rebuild of a mod that yields these bytes for its first game file."""
+    def update(sources, targets, output, *args, **kwargs):
+        result = output / targets[0].name
+        result.write_bytes(header_bundle(payload))
+        return ModUpdateResult(True, "updated", [FilePair(result, targets[0])])
+
+    monkeypatch.setattr(core, "process_mod_update", update)
+
+
+def forget_markers(world: World) -> None:
+    """A library updated by a build that set no marker."""
+    world.library.profiles.update(lambda data: [folder["updated"].clear() for folder in data["folders"].values()])
+
+
+def test_an_update_marks_every_entry_configured_with_the_mod_and_drops_only_its_built_copies(world, monkeypatch):
+    world.consent = True
+    folder = japan(world)
+    pin = pin_of(world, folder)
+    mod = world.add(world.spr)
+    other = world.add(game_bundle(world.game, "other_spr"), where="other")
+    world.library.apply("test", f"mod:{mod.id}")
+    world.library.apply("test", f"mod:{mod.id}", pin=pin)
+    world.library.apply("other", f"mod:{other.id}")
+    world.toggle(False)
+    world.toggle(True)  # every entry keeps its built key
+    folders = lambda: world.profiles()["folders"]
+    assert all("test_spr" in folders()[key]["built"] for key in (world.key(), pin.key))
+    assert "other_spr" in folders()[world.key()]["built"]
+    updating(monkeypatch)
+    assert not world.library.update(mod.id).unchanged
+    for key in (world.key(), pin.key):
+        assert list(folders()[key]["updated"]) == ["test_spr"]
+        assert "test_spr" not in folders()[key]["built"]
+    assert "other_spr" in folders()[world.key()]["built"]
+    states = world.entries()
+    assert states[(world.key(), "test_spr")].state == states[(pin.key, "test_spr")].state == "updated"
+    assert states[(world.key(), "other_spr")].state == "ok"
+    assert world.spr.read_bytes() == header_bundle(b"modded!!")  # the game still holds the old build
+
+
+def test_apply_mod_configuration_brings_the_updated_build_to_the_game(world, monkeypatch):
+    world.consent = True
+    mod = world.add(world.spr)
+    world.library.apply("test", f"mod:{mod.id}")
+    updating(monkeypatch)
+    world.library.update(mod.id)
+    item = {"install": world.key(), "core": "test_spr", "state": "updated"}
+    assert world.entries()[(world.key(), "test_spr")].state == "updated"
+    result = world.library.restore_drift([item])
+    assert [done["core"] for done in result.done] == ["test_spr"]
+    assert world.spr.read_bytes() == header_bundle(b"new build")
+    assert world.folder()["updated"] == {}
+    assert world.entries()[(world.key(), "test_spr")].state == "ok"
+
+
+def test_an_update_forgets_an_earlier_keep_as_is_of_the_drift_prompt(world, monkeypatch):
+    world.consent = True
+    other = game_bundle(world.game, "other_spr")
+    mod, kept = world.add(world.spr), world.add(other, where="other")
+    world.library.apply("test", f"mod:{mod.id}")
+    world.library.apply("other", f"mod:{kept.id}")
+    world.spr.write_bytes(OFFICIAL)
+    other.write_bytes(OFFICIAL)
+    world.library.dismiss("drift", [{"install": world.key(), "core": core} for core in ("test_spr", "other_spr")])
+    assert world.entries()[(world.key(), "test_spr")].dismissed
+    updating(monkeypatch)
+    world.library.update(mod.id)
+    states = world.entries(include_dismissed=True)
+    assert states[(world.key(), "test_spr")].state == "updated" and not states[(world.key(), "test_spr")].dismissed
+    assert world.entries()[(world.key(), "other_spr")].dismissed  # another mod's answer stands
+
+
+@pytest.mark.parametrize("same_bytes", [False, True])
+def test_an_update_that_changed_nothing_sets_no_marker_and_keeps_built_copies(world, monkeypatch, same_bytes):
+    world.consent = True
+    mod = world.add(world.spr)
+    world.library.apply("test", f"mod:{mod.id}")
+    world.toggle(False)
+    world.toggle(True)
+    before = world.profiles()
+    assert "test_spr" in before["folders"][world.key()]["built"]
+    def same(sources, targets, output, *args, **kwargs):  # the rebuild yields the very bytes the mod holds
+        (output / targets[0].name).write_bytes(mod.file.read_bytes())
+        return ModUpdateResult(True, "updated", [FilePair(output / targets[0].name, targets[0])])
+
+    monkeypatch.setattr(core, "process_mod_update", same if same_bytes else
+                        lambda *args, **kwargs: ModUpdateResult(True, "all_targets_unchanged", []))
+    assert world.library.update(mod.id).unchanged
+    assert world.profiles() == before and world.folder()["updated"] == {}
+    assert world.entries()[(world.key(), "test_spr")].state == "ok"
+
+
+@pytest.mark.parametrize("marked", [True, False])
+@pytest.mark.parametrize("rebuilt", [False, True])
+def test_off_then_on_after_an_update_writes_the_new_build_never_the_old_one(world, monkeypatch, marked, rebuilt):
+    world.consent = True
+    mod = world.add(world.spr, fixed=True)
+    if rebuilt:  # the game bytes are a build no file of the mod holds
+        rebuilding_installer(monkeypatch, payload=b"old build")
+    world.library.apply("test", f"mod:{mod.id}")
+    old = world.spr.read_bytes()
+    assert (old != mod.file.read_bytes()) is rebuilt
+    updating(monkeypatch, payload=b"new mod")
+    world.library.update(mod.id)
+    if not marked:
+        forget_markers(world)
+    assert world.entries()[(world.key(), "test_spr")].state == ("updated" if marked else "ok")
+    assert world.spr.read_bytes() == old  # the update does not reach the game by itself
+    world.toggle(False)
+    assert world.spr.read_bytes() == OFFICIAL
+    assert "test_spr" not in world.folder()["built"]
+    assert not (world.root / "built").exists() or not list((world.root / "built").glob("*.bundle"))
+    if rebuilt:
+        rebuilding_installer(monkeypatch, payload=b"new build")
+        expected = CRCUtils.apply_crc_fix(header_bundle(b"new build"), int(parse_filename(world.spr.name).crc))
+    else:
+        expected = header_bundle(b"new mod")
+    world.toggle(True)
+    assert world.spr.read_bytes() == expected != old
+    assert world.entries()[(world.key(), "test_spr")].state == "ok"
+    assert world.folder()["updated"] == {}
+
+
+def test_an_off_after_an_update_of_some_parts_keeps_no_partial_built_key(world):
+    world.consent = True
+    atlas = game_bundle(world.game, part="002", payload=b"skeleton")
+    mod, = world.library.add([make_mod(world.spr, world.tmp / "pack", b"mod texture"),
+                              make_mod(atlas, world.tmp / "pack", b"mod skeleton")])
+    world.library.apply("test", f"mod:{mod.id}")
+    assert atlas.read_bytes() == header_bundle(b"mod skeleton")
+    # an update by a build that set no marker, which changed the texture part only
+    (world.root / "mods" / mod.id / world.spr.name).write_bytes(header_bundle(b"mod texture, new build"))
+    assert world.entries()[(world.key(), "test_spr")].state == "ok"
+    world.toggle(False)
+    assert "test_spr" not in world.folder()["built"]  # a key for the skeleton alone would leave official over the texture
+    world.toggle(True)
+    assert world.spr.read_bytes() == header_bundle(b"mod texture, new build")
+    assert atlas.read_bytes() == header_bundle(b"mod skeleton")
+
+
+def test_an_adopted_mod_updated_since_is_not_kept_as_it_was_adopted(world, monkeypatch):
+    world.consent = True
+    keep_backup(world.spr)
+    outside_mod(world.spr)
+    world.toggle(False)  # adopts the outside bytes as a mod, and keeps them as the mod's own file
+    world.toggle(True)
+    mod, = world.library.mods()
+    adopted = world.spr.read_bytes()
+    assert adopted == mod.file.read_bytes()
+    updating(monkeypatch, payload=b"new mod")
+    world.library.update(mod.id)
+    forget_markers(world)  # no marker: the library was updated by a build that set none
+    world.toggle(False)
+    assert "test_spr" not in world.folder()["built"]
+    world.toggle(True)
+    assert world.spr.read_bytes() == header_bundle(b"new mod") != adopted
+
+
+def test_a_mod_not_updated_keeps_its_built_copy_for_an_instant_on(world, monkeypatch):
+    mod = world.add(world.spr, fixed=True)
+    rebuilding_installer(monkeypatch)
+    world.library.apply("test", f"mod:{mod.id}")
+    rebuilt = world.spr.read_bytes()
+    for _ in range(2):  # the second Off replaces the key made by the first
+        world.toggle(False)
+        assert world.folder()["built"]["test_spr"]["parts"][world.spr.name]["mod_file"] is None
+        no_installer(monkeypatch)
+        world.toggle(True)
+        assert world.spr.read_bytes() == rebuilt

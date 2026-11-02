@@ -628,9 +628,8 @@ def test_accept_stores_reviewed_bytes_once_and_persists_both_markers(repair_revi
         assert reloaded.status()["configured"] == 1
 
     reloaded.remove(result.mod.id, confirm=True)
-    assert reloaded.mods()[0].repaired_id == result.mod.id
-    with pytest.raises(ServiceError, match="entry_changed"):
-        reloaded.remap(entry.id)
+    assert not reloaded.mods()[0].repaired_id  # the link goes with the repaired copy
+    assert reloaded.remap(entry.id)["preview"]  # and the original can be repaired again
 
 
 
@@ -852,3 +851,118 @@ def test_remap_progress_reports_real_steps_without_bundle_names(repair_review):
     assert "import.step.save" in steps
     assert all(set(item) == {"current", "total", "step"} for item in progress)
     assert all(1 <= item["current"] <= item["total"] for item in progress)
+
+
+# --- a repaired copy and the link from its original (FUN-11) ---
+
+def _repair(env, entry):
+    return env.library.accept_remap(env.library.remap(entry.id)["preview"]).mod
+
+
+def _links(library):
+    return {mod.id: mod.repaired_id for mod in library.mods()}
+
+
+def test_deleting_the_repaired_copy_clears_the_link_in_the_same_state_write(repair_review, monkeypatch):
+    from ba_modding_toolkit.library import service
+
+    env, entry, _, _ = repair_review
+    child = _repair(env, entry)
+    assert _links(env.library) == {entry.id: child.id, child.id: ""}
+    writes, real = [], service.atomic_json
+
+    def spy(path, data, *args, **kwargs):
+        if Path(path).name == "state.json":
+            writes.append(json.loads(json.dumps(data)))
+        return real(path, data, *args, **kwargs)
+
+    monkeypatch.setattr(service, "atomic_json", spy)
+    env.library.remove(child.id, confirm=True)
+    parent = lambda data: next(record for record in data["mods"] if record["id"] == entry.id)
+    without_child = [data for data in writes if child.id not in {record["id"] for record in data["mods"]}]
+    assert without_child and all("repaired_id" not in parent(data) for data in without_child)
+    assert all(parent(data).get("repaired_id") == child.id for data in writes if data not in without_child)
+    assert _links(env.library) == _links(reload_library(env)) == {entry.id: ""}
+    assert env.library.remap(entry.id)["preview"]  # repairable again
+
+
+def test_a_failed_deletion_of_the_repaired_copy_restores_the_link(repair_review):
+    from ba_modding_toolkit.errors import ServiceError
+
+    env, entry, _, _ = repair_review
+    child = _repair(env, entry)
+
+    def reconcile():
+        raise OSError("Synthetic failure after the record was saved")
+
+    with pytest.raises(ServiceError, match="library_io_error"):
+        env.library.remove(child.id, confirm=True, reconcile=reconcile)
+    expected = {entry.id: child.id, child.id: ""}
+    assert _links(env.library) == _links(reload_library(env)) == expected
+    stored = json.loads((env.root / "state.json").read_text())["mods"]
+    assert {record["id"]: record.get("repaired_id", "") for record in stored} == expected
+    assert (child.file.parent / child.file.name).is_file()
+    with pytest.raises(ServiceError, match="entry_changed"):
+        env.library.remap(entry.id)  # still linked to a copy that exists
+
+
+def test_recovering_an_interrupted_deletion_of_the_repaired_copy_restores_the_link(repair_review):
+    import shutil
+
+    from ba_modding_toolkit.library import asset_delete
+
+    env, entry, _, _ = repair_review
+    child = _repair(env, entry)
+    deletion = asset_delete.Deletion(env.library)
+    deletion.publish()
+    deletion.remember_mods([child.id])
+    # the process died after the copy and the link were saved away and its folder deleted
+    del env.library._records[child.id]
+    env.library._records[entry.id].pop("repaired_id")
+    env.library._save()
+    shutil.rmtree(child.file.parent)
+    assert _links(reload_library(env)) == {entry.id: child.id, child.id: ""}
+
+
+def test_a_repaired_id_pointing_at_no_record_counts_as_none_without_a_migration(repair_review, monkeypatch):
+    from ba_modding_toolkit.errors import ServiceError
+
+    env, entry, _, _ = repair_review
+    env.library._records[entry.id]["repaired_id"] = "d" * 32  # an old library that deleted the copy
+    env.library._save()
+    stored = (env.root / "state.json").read_bytes()
+    library = reload_library(env)
+    mod, = library.mods()
+    assert mod.repaired_id == "" and mod.to_json()["repaired_id"] == ""
+    assert (env.root / "state.json").read_bytes() == stored  # read as none, nothing rewritten
+    monkeypatch.setattr(library, "_check_group", lambda *args, **kwargs: {"remappable": True})
+    report = library.compatibility(entry.id)
+    assert report["repaired_id"] == "" and report["remappable"] is True
+    child = library.accept_remap(library.remap(entry.id)["preview"]).mod
+    assert _links(library) == _links(reload_library(env)) == {entry.id: child.id, child.id: ""}
+    with pytest.raises(ServiceError, match="entry_changed"):
+        library.remap(entry.id)
+
+
+def test_a_repaired_id_held_by_a_missing_folder_stays_and_repair_stays_refused(repair_review, monkeypatch):
+    from ba_modding_toolkit.errors import ServiceError
+
+    env, entry, _, _ = repair_review
+    child = _repair(env, entry)
+    parked = env.tmp / "parked" / child.id
+    parked.parent.mkdir()
+    (env.root / "mods" / child.id).rename(parked)
+    library = reload_library(env)
+    assert library._held_ids() == {child.id}
+    mod, = library.mods()
+    assert (mod.id, mod.repaired_id) == (entry.id, child.id)  # held is not dead
+    monkeypatch.setattr(library, "_check_group", lambda *args, **kwargs: {"remappable": True})
+    report = library.compatibility(entry.id)
+    assert report["repaired_id"] == child.id and report["remappable"] is False
+    with pytest.raises(ServiceError, match="entry_changed"):
+        library.remap(entry.id)
+    library.set_favorite("test", True)  # a save writes the held record and the link back unchanged
+    stored = {record["id"]: record for record in json.loads((env.root / "state.json").read_text())["mods"]}
+    assert stored[entry.id]["repaired_id"] == child.id and stored[child.id]["repaired_from"] == entry.id
+    parked.rename(env.root / "mods" / child.id)
+    assert _links(reload_library(env)) == {entry.id: child.id, child.id: ""}
