@@ -1590,3 +1590,34 @@ Known limits, for the owner's decision:
 Validation: `tests/test_library_state_safety.py` covers every case, the review's reproductions through the real library
 and the RPC registry, and a sweep of the read RPCs with `profiles.json` byte for byte unchanged. Full suites on
 `deddd173`: 3,729 passed, 26 skipped; JavaScript 1,965 passed. Not run natively; Windows from code only.
+
+## BL-066: Review fixes for import grouping, game folder, photographs, popups and texture bounds
+
+- Status: Implemented for local review; owner acceptance pending.
+- Requested: 2026-11-02, from the whole-app review (FUN-4 to FUN-6, UI-2 to UI-4, SEC-1).
+
+1. FUN-4: a mod whose parts carry different dates imported as several mods, and applying the last reverted the others.
+   Now the files of one core and kind are one mod whatever their dates; only a part repeated under another date splits
+   the set by date (`library/judge.py` `mod_versions`, used by Add and Batch Import). A mod is dated by its newest part.
+   Mods already stored as halves are not merged.
+2. FUN-5: any existing folder was accepted as the game folder, and the next launch stayed on the recovery panel. A game
+   folder must now hold the UI atlas bundles (`searching.is_game_install`, by file names only); Settings refuses others
+   with `game_not_found`, and an old bad setting starts on the no-game screen. An error without a code shows the generic
+   failure text instead of `error.undefined`. Safe Mode has no folder control (owner's call).
+3. FUN-6: one stale photograph row failed the whole manifest and with it the roster and detail. A bad record or selection
+   now costs that entry only and is written back unchanged; a stale selection reads as the default thumbnail; a manifest
+   that cannot be parsed refuses photograph writes and is never touched; the roster never fails on the photograph lookup.
+4. UI-2: Display Settings opened from Assign Character now stacks over the dialog (`#display.over`).
+5. UI-3: a failed Import Results row shows its short reason, then the localized error text, never the code or JSON;
+   both stay on the result for the error report.
+6. UI-4: a message popup taller than the scroll cap (1400) scrolls by itself, so its title and buttons stay on the stage.
+7. SEC-1: every texture decode goes through `texture_guard`: sides 1 to 16384, a known format, and image data that covers
+   the declared size, checked before any native decoder. Crunched formats are refused, because the native unpack itself
+   is unsafe on bad data; no official Windows texture uses them. All 30,714 official Windows textures pass except 14
+   empty font placeholders that could not be decoded before either.
+
+Known limits, for the owner's decision: Safe Mode folder control; split mods from before FUN-4; crunched textures in
+Android or iOS files, not checked; import does not refuse an out-of-bounds texture, only its decode does.
+
+Validation: full suites on `60667b6c`: 4,063 passed, 26 skipped; JavaScript 1,982 passed. Not run natively; Windows from
+code only. Visual acceptance of the popups is the owner's.

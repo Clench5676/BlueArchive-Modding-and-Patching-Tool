@@ -7,7 +7,7 @@ As of 2026-11-02. Verify the actual branch, working tree and `pyproject.toml` ve
 
 | Branch | State |
 | --- | --- |
-| `main` | Local version `0.6.1-alpha`: the published 0.6.0, the upstream sync to `6c61fdc8`, the security policy, the fix that keeps files from a mod inside their output folder (`e8bee4c2`) and BL-065. Not pushed: held until upstream publishes its fix for the same issue. |
+| `main` | Local version `0.6.1-alpha`: the published 0.6.0, the upstream sync to `6c61fdc8`, the security policy, the fix that keeps files from a mod inside their output folder (`e8bee4c2`), BL-065 and BL-066. Not pushed: held until upstream publishes its fix for the same issue. |
 
 0.6.0 is published (tag `0.6.0` at `817ebeda`, 2026-10-30): macOS build uploaded, Windows build by the release workflow.
 
@@ -44,7 +44,7 @@ As of 2026-11-02. Verify the actual branch, working tree and `pyproject.toml` ve
 | BL-056 | Funnel: AI-assisted portrait refinement, being refined |
 | BL-059 through BL-063 | Accepted by the owner on Windows (alpha.14) |
 | BL-064 | Accepted by the owner on Windows (alpha.15) |
-| BL-065 | Implemented on `main` for local review; owner acceptance pending; not in the 0.6.1-alpha build |
+| BL-065, BL-066 | Implemented on `main` for local review; owner acceptance pending; not in the 0.6.1-alpha build |
 | BL-057, BL-058 | Accepted by the owner on macOS (alpha.12); Windows not reviewed |
 | BL-055 | Accepted by the owner on macOS (0.6.0 pre-review) |
 | BL-014 | Candidate, not scheduled |
