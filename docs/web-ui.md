@@ -770,7 +770,10 @@ skip it, and the kept originals are not pruned. `Services` takes no `seen_mods` 
 (`state_unreadable()`), so its empty read cannot mark every mod as new later. A file that cannot be opened (locked,
 scanned) is not corruption: reads answer an empty library, writes raise `library_io_error`, and the next call reads
 again. A library move and a data directory move take `state.json.prev` and `.bad` along, as they do for
-`profiles.json`.
+`profiles.json`. The replaces of `atomic_json`, `atomic_copy` and `atomic_clone` (`state.json`, the journals, game
+files and kept originals) use `filelock.replace`, the same short retry as `webui.json` and `profiles.json`: on Windows a
+`PermissionError` from another program's handle is tried again for up to a second, then raised unchanged; any other
+error is raised at once, and no temporary file stays behind.
 
 **Library move** (`Services.move_library`, `library/relocate.py`; `LIBRARY_ITEMS` lists what travels: the mod, original
 and built folders, the three journal folders `transactions/`, `import-transactions/` and `asset-deletions/`,
