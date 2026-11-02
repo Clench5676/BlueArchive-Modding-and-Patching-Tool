@@ -207,7 +207,7 @@ export async function card(host, item, { x, y, kind = "lobby", scale = .48, sele
   const width = geometry.w * scale, height = geometry.h * scale;
   const hit = hitButton(host, [x - width / 2 - 12, y - height / 2, width + 24, height], onPreview || (() => {}), item.full, 70);
   hit.dataset.action = interactive ? "hall-preview" : "hall-card"; hit.dataset.focusKey = `card:${item.key}`;
-  if (!interactive) { hit.tabIndex = -1; hit.style.cursor = "default"; }
+  if (!interactive) { hit.tabIndex = -1; hit.style.cursor = "var(--cursor)"; }
   observePicture(hit, item.thumb);
   // The name strip is inclined: its visual centre is left of the artwork centre.
   const actionWidth = barWidget.w_ * scale, actionX = x + bar.pos[0] * scale - actionWidth / 2;
