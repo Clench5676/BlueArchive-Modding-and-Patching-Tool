@@ -34,11 +34,15 @@ class Node {
   getContext() { return { font: "", measureText: () => ({ width: 0 }) }; }
 }
 const body = new Node("body");
-globalThis.document = { body, activeElement: body, createElement: (name) => new Node(name) };
+globalThis.document = { body, activeElement: body, createElement: (name) => new Node(name), querySelector: () => null };
 const windowListeners = {};
 globalThis.addEventListener = (type, fn) => (windowListeners[type] ||= new Set()).add(fn);
 globalThis.removeEventListener = (type, fn) => windowListeners[type]?.delete(fn);
-const press = (key) => { for (const fn of [...(windowListeners.keydown || [])]) fn({ key, preventDefault() {} }); };
+const press = (key) => {
+  const ev = { key, defaultPrevented: false, preventDefault() { this.defaultPrevented = true; } };
+  for (const fn of [...(windowListeners.keydown || [])]) fn(ev);
+  return ev;
+};
 let now = 0;
 Object.defineProperty(globalThis, "performance", { value: { now: () => now }, configurable: true, writable: true });
 
@@ -162,6 +166,26 @@ test("leaving fullscreen closes the visual mode even after the tab changed under
   press("Escape");
   assert.equal(backs, 1, "Escape does nothing once the visual mode is leaving");
   assert.equal(document.activeElement, s.zoom);
+  s.stage.remove();
+});
+
+test("Escape on a message over the visual mode closes the message only; the next one leaves", async () => {
+  const Popup = await import("../../src/ba_modding_toolkit/web/js/popup.js");
+  const s = screen();
+  let backs = 0;
+  Visual.uiOut(s.out);
+  await openVisual(s, () => { backs += 1; });
+  drawFrames(s);
+  const dialog = s.stage.appendChild(new Node("dialog")), closes = [];
+  Popup.opened(dialog, (how) => { closes.push(how); dialog.hidden = true; Popup.closed(dialog); });
+  press("Escape");
+  assert.deepEqual(closes, ["escape"]);
+  assert.equal(backs, 0, "the visual mode stays under the message");
+  press("Escape");
+  assert.equal(backs, 1);
+  dialog.remove();
+  Visual.uiBack(s.out);
+  drawFrames(s);
   s.stage.remove();
 });
 

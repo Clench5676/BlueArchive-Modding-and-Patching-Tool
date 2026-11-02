@@ -167,3 +167,34 @@ test("filter redraws reset the logical viewport instead of restoring a stale old
   await draw(100);assert.equal(current.inner.parentElement.scrollTop,500);positions.clear();await draw(2);
   assert.equal(current.inner.parentElement.scrollTop,0);assert.deepEqual(positions.get("filtered"),[0,0]);modal.close();
 });
+
+// UI-34: Hall's search box, a search field, shows no browser clear button and closes the search on Escape
+test("Hall's search box closes the search on Escape and shows no browser clear button", async () => {
+  const vm = await import("node:vm"), { readFileSync } = await import("node:fs");
+  const code = source.slice(source.indexOf("// onEscape: Escape in the box"), source.indexOf("export async function checkbox("));
+  const box = (onEscape) => {
+    const host = new Element();
+    const env = { document: { createElement: () => new Element() }, ready: async () => {}, assets: { collection: {} }, S: 1920 / 2960, T: (key) => key,
+      searchTree: () => ({ children: [] }), NGUI: { find: () => ({ widgets: [], children: [], pos: [0, 0] }), render: async () => {} } };
+    vm.runInNewContext(`${code.replace("export async function", "async function")}\nglobalThis.make = (opts) => search(host, "Aru", () => {}, [130, 172, 560], opts);`, Object.assign(env, { host }));
+    return { host, input: env.make(onEscape === undefined ? undefined : { onEscape }) };
+  };
+  const key = (input, extra) => { const ev = { key: "Escape", defaultPrevented: false, preventDefault() { this.defaultPrevented = true; }, ...extra };
+    for (const fn of input.listeners.keydown || []) fn(ev); return ev; };
+  let closed = 0;
+  const { input: making } = box(() => { closed++; }), input = await making;
+  assert.equal(input.type, "search");
+  assert.equal(key(input, { isComposing: true }).defaultPrevented, false, "an input method's Escape stays with it");
+  assert.equal(key(input, { keyCode: 229 }).defaultPrevented, false);
+  assert.equal(closed, 0);
+  assert.equal(key(input).defaultPrevented, true, "the popup under the box does not get the key");
+  assert.equal(closed, 1);
+  const plain = await box().input;
+  assert.equal(key(plain).defaultPrevented, false, "without onEscape the key goes on to the popup");
+  // WebKit and Chromium draw their own clear button in a search field; the game's box has none
+  const css = readFileSync(new URL("../../src/ba_modding_toolkit/web/css/app.css", import.meta.url), "utf8");
+  const rule = css.match(/\.roster-search::-webkit-search-cancel-button[^{]*\{([^}]*)\}/);
+  assert.ok(rule, "the clear button is styled");
+  assert.match(rule[1], /display: none/);
+  assert.match(rule[1], /-webkit-appearance: none/);
+});

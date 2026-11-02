@@ -9,7 +9,7 @@ import * as NGUI from "./ngui.js";
 import * as Buttons from "./game-buttons.js";
 import * as Popup from "./popup.js";
 import { rpc } from "./api.js";
-import { T } from "./i18n.js";
+import { T, errorText } from "./i18n.js";
 import { setSpineConsent } from "./spine-runtime.js";
 import { S, clone, hitButton, wrapPath } from "./util.js";
 
@@ -73,11 +73,17 @@ async function draw(host, cacheDir, native, resolve) {
   Popup.opened(host, null);
   const next = document.createElement("div");
   const view = await NGUI.render(t, next, { scale: S, origin: [960, 540], z: 2000 });
+  // one answer at a time, as the scan and Spine consents: a repeat click while the server answers sends nothing, and a
+  // failure shows its error with the popup still up to answer again
+  let choosing = false;
   for (const [name, granted] of [["Btn_Cancel", false], ["Btn_Ok", true]]) {
     const el = view.nodes.get(`Center/Popup/Btn/${name}/BG (1)`)?.els[0];
     if (!el) continue;
     hitButton(next, rect(el), async () => {
-      await rpc("app.consent", { granted });
+      if (choosing) return;
+      choosing = true;
+      try { await rpc("app.consent", { granted }); }
+      catch (err) { choosing = false; notify(errorText(err), { kind: "error", error: err }); return; }
       assetsAllowed = granted;
       host.hidden = true;
       host.innerHTML = "";
@@ -94,7 +100,7 @@ async function draw(host, cacheDir, native, resolve) {
         const prefs = await rpc("settings.set", { key: "cacheDir", value: folder });
         draw(host, prefs.cacheDir, native, resolve);
       } catch (err) {
-        notify(T(`error.${err.code || "internal"}`, err.params || {}), { kind: "error", error: err });
+        notify(errorText(err), { kind: "error", error: err });
       }
     }, T("consent.change"), 2100);
   }
@@ -120,7 +126,7 @@ async function drawSpine(host, over, resolve) {
     if (choosing) return;
     choosing = true;
     try { await rpc("app.spineConsent", { granted }); }
-    catch (err) { choosing = false; notify(T(`error.${err.code || "internal"}`, err.params || {}), { kind: "error", error: err }); return; }
+    catch (err) { choosing = false; notify(errorText(err), { kind: "error", error: err }); return; }
     setSpineConsent(granted);
     finishScan(host);
     resolve(granted);
@@ -258,7 +264,7 @@ async function drawScan(host, over, resolve) {
       try {
         await rpc("mods.consent", { granted });
       } catch (err) {
-        notify(T(`error.${err.code || "internal"}`, err.params || {}), { kind: "error", error: err });
+        notify(errorText(err), { kind: "error", error: err });
         return;
       }
       finishScan(host);

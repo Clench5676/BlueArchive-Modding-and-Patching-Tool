@@ -1677,7 +1677,9 @@ optional, so a popup still works without them.
   alone while an input method composes (`isComposing`, `keyCode` 229) or when a control took the key itself
   (`defaultPrevented`). `anyOpen()` tells whether any popup is up (the stack, or the consent, update, settings and
   display hosts), and `whenIdle(every, blocked)` resolves once none is and the optional work predicate is false.
-  The settings (`#settings`) register with `opened` as they open and leave with `closed`, and wire the backdrop with
+  The views under the popups leave Escape alone while `anyOpen()` or once a popup took it (`defaultPrevented`): the
+  detail screen's fullscreen, the portrait's visual mode and the camera (whose capture-phase handler runs first) stay
+  under a message such as a capture error until the next Escape. The settings (`#settings`) register with `opened` as they open and leave with `closed`, and wire the backdrop with
   `closable`: Escape and a click on the backdrop close them like every other popup, and a popup opened over them takes
   the key first.
 - **Focus.** One shared trap for every popup on the stack (`opened` / `closed`, `trapKey` on the window). A popup takes
@@ -1731,7 +1733,9 @@ optional, so a popup still works without them.
   A list with no card to show (a search or segment that matches nothing) puts `hall.noCandidates` in the list paper,
   centred on the visible paper. With `tools`, while the chosen card (`selected`) is not among the cards shown, the
   primary button is the game's disabled one (`aria-disabled`, answering nothing); a prompt without `tools` is never
-  blocked.
+  blocked. Escape in the search box closes and clears the search, as the roster's does, and the popup stays; Hall's
+  pickers do the same (`student-hall-ui.js` `search(..., { onEscape })`). Hall's box is a search field without the
+  browser's own clear button (hidden in `app.css`) and without the prefab's `Btn_Close`.
 
 **Start sequence** (`main.js`, `Popup.sequence`). The whole first-run sequence (the cursor, the start popups, the
 update check and the feature tour) is one function that runs once per session, when a game folder is known: at the
@@ -1877,7 +1881,9 @@ detail screen, and in Settings' Mods tab.
   device (`mods.scan.will.{label,items}`, `mods.scan.willNot.{label,items}`); the note
   that declining keeps those checks off and Settings changes it; Don't Allow and Allow (`mods.consent`). It must be
   answered (Escape and the backdrop do nothing), declining does not quit, and opened from Settings it shows over it
-  (`#consent.over`).
+  (`#consent.over`). A failed answer (`mods.consent`, and the asset consent's `app.consent`) shows its error with the
+  popup still up to answer again; the asset consent sends one answer at a time, a repeat click while the server
+  answers sends nothing.
 - **Settings' Mods tab** (second, after General; `UIPopup_Option_PC`'s tab column has five separators): Enable Mods
   (On / Off, the same switch with the same rules, its square "?" and red dot after the title; faded while busy or
   unavailable); Mod Cache (mods rebuilt for the current game version and
@@ -2512,8 +2518,8 @@ updates do not reload actors or mutate saved positions, individual scales or the
 ## Release notes and feature tours
 
 `update.js` retains the detected release snapshot. Release Notes uses the same `UIPopup_Sort` notice frame as
-messages, with literal UILabel text, a scrolling body and an explicit release-page action. Missing/empty GitHub
-bodies take this fallback path. No image/HTML/Markdown interpretation or download/install action is involved.
+messages, with literal UILabel text at one fixed size (44) on every line (long lines wrap, none shrinks), a scrolling
+body and an explicit release-page action. Missing/empty GitHub bodies take this fallback path. No image/HTML/Markdown interpretation or download/install action is involved.
 The explicit validated page argument remains attached to that offer even if a later check changes backend state.
 
 `tours.js` and `webui/tours.py` implement the local presentation framework described in

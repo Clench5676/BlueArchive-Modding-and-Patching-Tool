@@ -1495,6 +1495,7 @@
 		"import": {
 			"list": "가져오기 목록",
 			"count": "모드 {n}개",
+			"countOne": "모드 {n}개",
 			"addFiles": "파일 추가",
 			"addFolder": "폴더 추가",
 			"search": "이름, ID, 파일명",

@@ -14,6 +14,7 @@ import { jobProgress, progressName } from "./job-progress.js";
 import { isSpecial, specialFraming } from "./special-view.js";
 import * as NGUI from "./ngui.js";
 import { resizeButton } from "./button-layout.js";
+import { horizontalScroll } from "./horizontal-scroll.js";
 import { explorerLayout } from "./explorer-button.js";
 import { latestLoad, loadPlayer } from "./spine-load.js";
 import { ensureSpine, spineAllowed } from "./spine-runtime.js";
@@ -1017,7 +1018,6 @@ async function drawExpressions() {
     const body = view.nodes.get(cd.tree.name)?.els[0];
     if (!body || (cd.pile && cd.tree.name !== "Pile_0")) return;
     const strip = hitButton(track, rect(body), () => {
-      if (track.dataset.dragged) return;
       if (cd.item) { row4Pick(cd.item.key); keepScroll(); renderExpressions(); }
       if (cd.pile) { expanded = true; exprScroll = 0; renderExpressions(); }
       if (cd.fold) { expanded = false; renderExpressions(); }
@@ -1032,8 +1032,10 @@ async function drawExpressions() {
   }
   if (unfolded) {
     clip.classList.add("expanded");
-    track.style.width = `${(COLS[0] + list.length * PITCH + CARD.w / 2 + 24 - Lx) * S}px`;
-    enableDrag(clip, track);
+    const width = (Rx - Lx) * S, contentW = (COLS[0] + list.length * PITCH + CARD.w / 2 + 24 - Lx) * S;
+    track.style.width = `${contentW}px`;
+    // the wheel, a mouse drag and touch scroll the strip as the popups' card rows do (Popup.scrollArea); a drag picks nothing
+    horizontalScroll(clip, width, contentW);
   }
   commit(() => {
     if (!ok()) return;
@@ -1045,19 +1047,6 @@ async function drawExpressions() {
 // a portrait face's name, as the camera's expression list has it
 const faceName = (key) => (key === "00" ? T("photo.natural") : `${T("photo.expressions")} ${key}`);
 const keepScroll = () => { exprScroll = document.querySelector(".expr-clip")?.scrollLeft || 0; };
-function enableDrag(clip, track) {
-  let start = null;
-  clip.addEventListener("pointerdown", (e) => { start = { x: e.clientX, left: clip.scrollLeft }; delete track.dataset.dragged; });
-  clip.addEventListener("pointermove", (e) => {
-    if (!start) return;
-    const dx = (e.clientX - start.x) / (stage().getBoundingClientRect().width / 1920);
-    if (Math.abs(dx) > 4) track.dataset.dragged = "1";
-    clip.scrollLeft = start.left - dx;
-  });
-  const end = () => { start = null; setTimeout(() => delete track.dataset.dragged, 0); };
-  clip.addEventListener("pointerup", end);
-  clip.addEventListener("pointerleave", end);
-}
 
 // --- main Spine portrait ---
 // loadSpine(base) -> Promise, resolved once the portrait's first frame is drawn and the expression strip shows its
@@ -2109,8 +2098,9 @@ const keySteps = pacer(async (delta) => {
   clearTimeout(timer);
   arrivals = arrivals.filter((r) => r !== resolve);
 });
+// Escape leaves fullscreen only when no popup took it or is open over the view (Escape belongs to the top layer)
 addEventListener("keydown", (ev) => {
-  if (ev.key === "Escape" && open && fullscreen && !Visual.isOpen() && !photoSession) {
+  if (ev.key === "Escape" && !ev.defaultPrevented && !popupOpen() && open && fullscreen && !Visual.isOpen() && !photoSession) {
     ev.preventDefault();
     void setFullscreen(false);
     return;

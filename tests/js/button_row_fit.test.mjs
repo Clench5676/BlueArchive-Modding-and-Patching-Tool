@@ -129,11 +129,11 @@ for (const locale of LOCALES) test(`pairs of popup buttons share one size and fi
   assert.match(popup, /64, 40, 420, 2, \{ maxH: BUTTON_TEXT_H \}/);
   assert.match(popup, /fitGroup\(buttons\.map\(\(b\) => b\.label\), 72, 48, 360, 2, \{ maxH: BUTTON_TEXT_H \}\)/);
   assert.match(consent, /64, 40, 380, 2, \{ maxH: 140 \}/);
-  assert.match(update, /fitLabels\(captions, captions\.map\(\(l\) => l\.text\), 64, 34, 400, 1\)/);
+  assert.match(update, /fitLabels\(widgets, widgets\.map\(\(l\) => l\.text\), 64, 40, 400, 2, \{ maxH: Popup\.BUTTON_TEXT_H \}\)/);
   document.documentElement.lang = locale;
   for (const keys of PAIRS) {
     const captions = keys.map((key) => text(locale, key)), [a, b] = [keys[0], keys.slice(1).join("/")];
-    for (const [max, min, width, lines, height, where] of [[64, 40, 420, 2, 140, "popupFrame"], [72, 48, 360, 2, 140, "listFrame"], [64, 40, 380, 2, 140, "consent"], [64, 34, 400, 1, Infinity, "update"]]) {
+    for (const [max, min, width, lines, height, where] of [[64, 40, 420, 2, 140, "popupFrame"], [72, 48, 360, 2, 140, "listFrame"], [64, 40, 380, 2, 140, "consent"], [64, 40, 400, 2, 140, "update"]]) {
       const widgets = captions.map(() => ({ text: "", fontSize: 72, w_: 400 }));
       const fits = fitLabels(widgets, captions, max, min, width, lines, { maxH: height });
       assertGroup(fits, captions, captions.map(() => width), height, `${locale} ${where} ${a}/${b}`);

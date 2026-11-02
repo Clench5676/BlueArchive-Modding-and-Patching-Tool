@@ -1495,6 +1495,7 @@
 		"import": {
 			"list": "Import List",
 			"count": "{n} Mods",
+			"countOne": "{n} Mod",
 			"addFiles": "Add Files",
 			"addFolder": "Add Folder",
 			"search": "Name, ID, filename",

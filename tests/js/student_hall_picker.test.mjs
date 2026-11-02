@@ -27,3 +27,28 @@ test("adding a memorial disables its current control synchronously and the redra
   const next=cards.filter(card=>card.options.onAdd).at(-1);assert.equal(next.options.addEnabled,false);assert.equal(next.options.addLabel,"hall.added");
   await candidate.options.onAdd({currentTarget:hit});assert.equal(draft.current().memorials.length,1);assert.deepEqual(errors,[]);picker.close();
 });
+
+// UI-34: Escape in the picker's search box closes the search (as its toolbar button does) and the picker stays
+test("Escape in the picker's search closes the search and clears it; the picker stays",async()=>{
+  const fixture=globalThis.pickerFixture.UI,saved={rosterToolbar:fixture.rosterToolbar,search:fixture.search};
+  const toolbars=[],searches=[];let closed=0;
+  fixture.rosterToolbar=async(host,view,searching,actions)=>{toolbars.push({searching,actions});};
+  fixture.search=async(host,query,onChange,box,options)=>{searches.push({query,onChange,options});};
+  const close=modal.close;modal.close=()=>{closed++;};
+  try{
+    const draft=createDraft({revision:0,mode:"memorial",portraits:[],memorials:[],active:null});draft.begin("memorial");
+    const choice={variant:"hero",family:"hero",kind:"lobby",source:"official",core:"hero_home",names:{en:{full:"Hero"}}};
+    const picker=API.openPicker({kind:"lobby",choices:[choice],draft,onError:error=>errors.push(error),onCancel(){}});await settle();
+    assert.equal(toolbars.at(-1).searching,false);assert.equal(searches.length,0);
+    toolbars.at(-1).actions.search();await settle();
+    assert.equal(toolbars.at(-1).searching,true);assert.equal(searches.length,1);
+    assert.equal(typeof searches[0].options?.onEscape,"function","the box closes the search on Escape");
+    searches[0].onChange("Her");await settle(); // typing filters the list; the box keeps its own text
+    searches.at(-1).options.onEscape();await settle();
+    assert.equal(toolbars.at(-1).searching,false,"the search is closed");
+    const count=searches.length;
+    toolbars.at(-1).actions.search();await settle();
+    assert.equal(searches.length,count+1);assert.equal(searches.at(-1).query,"","opened again, it starts empty");
+    assert.equal(closed,0,"the picker stays");assert.deepEqual(errors,[]);picker.close();
+  }finally{Object.assign(fixture,saved);modal.close=close;}
+});

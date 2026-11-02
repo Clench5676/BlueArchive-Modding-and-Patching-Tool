@@ -194,6 +194,21 @@ test("empty screen has add actions and zero Mods, without AI UI or tooltips", as
   assert.ok(walk(h.host).every((element) => !element.getAttribute("title")));
 });
 
+test("the count over the list says one Mod in the singular, in every language", async () => {
+  const h = await fixture();
+  const count = () => h.host.querySelector(".import-count").caption;
+  await h.analyze([entry("a")]);
+  assert.equal(count(), "count/1 Mod");
+  await h.analyze([entry("a"), entry("b")]);
+  assert.equal(count(), "count/2 Mods");
+  for (const lang of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
+    const ui = JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${lang}.json`, import.meta.url), "utf8")).webui.import;
+    assert.match(ui.countOne, /\{n\}/, lang);
+    assert.deepEqual(ui.countOne.match(/\{\w+\}/g), ui.count.match(/\{\w+\}/g), lang);
+    if (lang !== "en-US") assert.equal(ui.countOne, ui.count, `${lang} has no plural to tell apart`);
+  }
+});
+
 test("preview and game choices lead Advanced Options as On/Off rows and save independently", async () => {
   const h = await fixture();
   assert.doesNotMatch(h.host.textContent, /Select for Preview|Apply to Game/, "not on the page itself");
@@ -1730,6 +1745,27 @@ for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) tes
       assert.equal(rows.length, merged ? 1 : 3);
       rows.forEach((row) => check(row, true));
     }
+  } finally { setStrings("en-US", flatten(JSON.parse(readFileSync(new URL("../../src/ba_modding_toolkit/locales/en-US.json", import.meta.url), "utf8")))); }
+});
+
+for (const [locale, sep] of [["en-US", ", "], ["zh-CN", "、"], ["zh-TW", "、"], ["ja-JP", "、"], ["ko-KR", ", "], ["th-TH", ", "]]) test(`a merged result row joins its outcomes with the language's list separator in ${locale}`, async () => {
+  try {
+    const strings = JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${locale}.json`, import.meta.url), "utf8"));
+    setStrings(locale, flatten(strings));
+    const h = await fixture();
+    const entries = [entry("a"), { ...entry("a-lobby", "ready", "lobby"), variant: "a" }, { ...entry("a-model", "ready", "model"), variant: "a" }];
+    await h.analyze(entries);
+    const merge = h.action("merge").querySelector("input"); merge.checked = true;
+    await merge.dispatch("change"); await h.page.settled();
+    await h.action("start").click(); await flush();
+    h.runs[0].resolve({ results: [{ id: "a", outcome: "imported", libraryId: "lib-a" }, { id: "a-lobby", outcome: "updated", libraryId: "lib-l" },
+      { id: "a-model", outcome: "failed", reason: "unreadable", libraryId: null }] });
+    await flush(); await h.page.results(); await h.page.settled();
+    const rows = walk(h.dialog).filter((el) => el.dataset.result);
+    assert.equal(rows.length, 1);
+    const meta = find(drawn(h, rows[0]).tree, "Label_Locale_Received").widgets[0].text;
+    const { imported, updated, failed } = strings.webui.import.outcome;
+    assert.equal(meta.replace(/\s+/g, ""), [imported, updated, failed].join(sep).replace(/\s+/g, ""), locale);
   } finally { setStrings("en-US", flatten(JSON.parse(readFileSync(new URL("../../src/ba_modding_toolkit/locales/en-US.json", import.meta.url), "utf8")))); }
 });
 
