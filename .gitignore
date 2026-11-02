@@ -6,6 +6,8 @@ config.toml
 /library/
 /webui.json
 /webui.json.lock
+/webui.json.prev
+/webui.json.bad
 /.webui.json.*.tmp
 /webui.log
 /input-trace.log

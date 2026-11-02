@@ -242,6 +242,30 @@ def test_persisted_paths_rewritten_in_values_and_keys(folders, tmp_path, externa
     assert (new / "classic.log").read_text() == (new / "input-trace.log").read_text() == log
 
 
+@pytest.mark.parametrize("main_readable", [True, False])
+def test_the_previous_copy_and_the_bad_file_of_webui_json_move_with_the_data_folder(folders, tmp_path, main_readable):
+    old, new = folders
+    library = tmp_path / "external-library"
+    library.mkdir()
+    profiles = {"version": 1, "folders": {str(old / "game"): {}}}
+    (library / "profiles.json").write_text(json.dumps(profiles))
+    state = {"prefs": {"library_dir": str(library), "cache_parent": str(old / "cache-parent")}}
+    (old / "webui.json.prev").write_text(json.dumps(state))
+    (old / "webui.json.bad").write_text(json.dumps({"prefs": {"cache_parent": str(old / "was-bad")}}))
+    if main_readable:
+        (old / "webui.json").write_text(json.dumps(state))
+    else:
+        (old / "webui.json").write_text("{ not json")
+    assert migrate_data_dir(old.parent) == new
+    assert not (new / data_paths._PENDING).exists()
+    assert json.loads((new / "webui.json.prev").read_text())["prefs"]["cache_parent"] == str(new / "cache-parent")
+    assert json.loads((new / "webui.json.bad").read_text())["prefs"]["cache_parent"] == str(new / "was-bad")
+    if not main_readable:
+        assert (new / "webui.json").read_text() == "{ not json"
+    # the library an unreadable webui.json named through its previous copy is migrated too
+    assert list(json.loads((library / "profiles.json").read_text())["folders"]) == [str(new / "game")]
+
+
 def test_interrupted_rewrite_never_stops_the_start_and_is_retried(folders, monkeypatch):
     old, new = folders
     (old / "config.toml").write_text(toml.dumps({"AppSettings": {"output_dir": str(old / "output")}}))
