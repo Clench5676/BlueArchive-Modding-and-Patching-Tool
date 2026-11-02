@@ -112,7 +112,8 @@ rebuild against changed batches. App-only photograph choices remain independent 
 - Text fitting (`ngui.fitText`) shrinks, then wraps at separators and between words (`Intl.Segmenter` in the text's
   language), keeping the CJK line-breaking rules: no closing bracket, comma, full stop, ellipsis, small kana or
   prolonged sound mark starts a line, no opening bracket ends one. `ngui.fitLabel` also widens the label to the
-  width it was fitted to.
+  width it was fitted to. A control's caption is never ellipsized: Batch Import's Import State caption wraps onto
+  two lines inside its button's 116-high body before it shrinks (`import-layout.js` `filterCaption`).
 - Fonts: the page draws with Resource Han Rounded CN (`web/fonts`, OFL, shipped). It covers every Han and kana
   character of the zh-TW and ja names and of the games' UI strings, but in Simplified Chinese glyph forms and
   punctuation positions, and it has no Hangul. So the html `lang` (set from the UI language) picks a stack in
