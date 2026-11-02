@@ -27,7 +27,6 @@ import { forget } from "./thumbs.js";
 import { setSpineConsent } from "./spine-runtime.js";
 import { $, fitStage } from "./util.js";
 import { studentName } from "./names.js";
-import { withTimeout } from "./async.js";
 import { previewCache } from "./preview-cache.js";
 import { ROOT_ROUTE, routeHistory } from "./route-history.js";
 import { setupWindowChrome } from "./window-chrome.js";
@@ -390,7 +389,8 @@ async function route() {
       Roster.hide();
       const inPlace = !$("screen-detail").hidden && !!Detail.currentVariant();
       await Loading.hold(() => Loading.scene(async (covered) => {
-        const fam = await withTimeout(rpc("family.get", { key: parts[1] }), 15000, "family.get");
+        // no client deadline, as roster.list: a writer job can hold the library lock for its whole run
+        const fam = await rpc("family.get", { key: parts[1] });
         await covered;
         if (!current()) return; // a later navigation took over
         visited(fam, parts[2]);
