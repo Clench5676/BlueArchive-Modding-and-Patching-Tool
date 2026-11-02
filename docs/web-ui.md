@@ -702,6 +702,18 @@ raises `library_state_unreadable` before it starts, and nothing is written until
 corruption: reads answer an empty library, writes raise `library_io_error`, and the next call reads again. A library
 move and a data directory move take `state.json.prev` and `.bad` along, as they do for `profiles.json`.
 
+**Held records.** A valid record whose files are missing (a quarantined file, a partial restore) is held the same
+way, with a warning, instead of being dropped at load: it is not among the library's records, so the engine and the
+UI do not see it, and it is written back unchanged at every save. It returns to the records at the next load, refresh
+of a changed file or save that finds its files, with its alias, assignment, import sources and configuration. At a
+save the held records are the disk copy's, less the ids among the merged records and the ids this instance removed
+since it last read the file (in its base, not in its records); a record with no usable id is always kept, so a
+deletion or a rolled back import never comes back. A held id still counts as a source the library has: the
+configuration naming it is not dropped as `source_missing`, and the game files carrying it are not offered for
+adoption. The one exception is a game file about to be replaced: its bytes are kept as a mod then, since the held
+record has no file to show them. Every removal path (`remove`, `_drop_mods`, an import rollback, an asset deletion)
+saves before it deletes the folder, and an asset deletion's rollback leaves alone a record that returned during it.
+
 **Per-Mod import publication.** `_store` stages and verifies the complete file group under
 `import-transactions/<uuid>/files`, journals its expected hashes, publishes the directory under `mods/<uuid>`, then
 saves the corresponding `state.json` record. Metadata publication is the commit point. A failed operation rolls

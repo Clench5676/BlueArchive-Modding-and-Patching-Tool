@@ -449,3 +449,273 @@ def rpc_env(tmp_path, monkeypatch, header_only_bundles):
     env = RosterEnv(tmp_path)
     yield env
     env.close()
+
+
+# --- FUN-2: a missing file never deletes a record ---
+
+def chosen(world: World) -> dict:
+    """The configured choices of every install: {(install, core): the choice}."""
+    return {(key, core): choice for key, folder in world.profiles()["folders"].items()
+            for core, choice in folder["configured"].items()}
+
+
+def mod_dir(world: World, mod) -> Path:
+    return world.root / "mods" / mod.id
+
+
+def hide(world: World, mod) -> Path:
+    """Take a mod's folder away (an antivirus quarantine, a partial restore); the path it moved to."""
+    parked = world.tmp / "parked" / mod.id
+    parked.parent.mkdir(exist_ok=True)
+    mod_dir(world, mod).rename(parked)
+    return parked
+
+
+def unhide(world: World, mod, parked: Path) -> None:
+    parked.rename(mod_dir(world, mod))
+
+
+def test_a_missing_file_holds_its_record_and_the_mod_returns_when_the_file_does(world):
+    first, second = two_mods(world)
+    raw = record_of(world, second.id)
+    parked = hide(world, second)
+    library = world.reload()
+    assert [mod.id for mod in library.mods()] == [first.id]  # the engine and the UI never see it
+    library.set_favorite("test", True)  # the save that used to delete the record
+    library.set_favorite("test", False)
+    assert record_of(world, second.id) == raw
+    unhide(world, second, parked)
+    library.set_favorite("test", True)  # the next save that finds its files returns it
+    assert sorted(mod.id for mod in library.mods()) == sorted([first.id, second.id])
+    assert record_of(world, second.id) == raw
+    assert sorted(mod.id for mod in world.reload().mods()) == sorted([first.id, second.id])
+
+
+def test_the_report_reproduction_a_file_that_comes_back_finds_its_mod(world):
+    mod = world.add(world.spr)
+    parked = hide(world, mod)
+    library = world.reload()
+    assert library.mods() == []
+    library.set_favorite("test", True)
+    unhide(world, mod, parked)
+    assert [m.id for m in world.reload().mods()] == [mod.id]  # mods() was empty after the file came back
+
+
+def test_a_file_missing_at_save_time_does_not_drop_a_loaded_record(world):
+    first, second = two_mods(world)
+    raw = record_of(world, second.id)
+    parked = hide(world, second)  # the library is running and holds both
+    world.library.set_favorite("test", True)
+    assert record_of(world, second.id) == raw
+    assert [mod.id for mod in world.library.mods()] == [first.id]
+    unhide(world, second, parked)
+    assert sorted(mod.id for mod in world.reload().mods()) == sorted([first.id, second.id])
+
+
+def test_alias_assignment_import_source_configuration_and_applied_record_survive_the_gap(world):
+    world.consent = True
+    first, second = two_mods(world)
+    world.library.rename(second.id, "My alias")
+    world.library.remember_import_source(second.id, {"kind": "test", "hash": "abc"})
+    edit_state(world, lambda data: next(r for r in data["mods"] if r["id"] == second.id).update(assignment="other"))
+    world.library.apply("other", f"mod:{second.id}")
+    world.reload()
+    chosen_before = chosen(world)
+    assert chosen_before[(world.key(), "other_spr")]["source"] == f"mod:{second.id}"
+    applied = read_state(world)["applied"]
+    raw = record_of(world, second.id)
+    parked = hide(world, second)
+    library = world.reload()
+    assert second.id not in [m.id for m in library.mods()]
+    # everything the engine does with the configuration and the game files while the mod is held
+    entries = world.entries()
+    assert all(entry.state != "source_missing" for entry in entries.values())
+    library.toggle(False, True)
+    library.toggle(True, False)
+    library.scan()
+    library.set_favorite("test", True)
+    library.prune()
+    assert chosen(world) == chosen_before  # configured choices intact (built keys may differ: an Off keeps them)
+    assert read_state(world)["applied"].keys() == applied.keys()
+    assert {path: record["source"] for path, record in read_state(world)["applied"].items()} == \
+        {path: record["source"] for path, record in applied.items()}
+    assert record_of(world, second.id) == raw
+    unhide(world, second, parked)
+    library = world.reload()
+    back = next(mod for mod in library.mods() if mod.id == second.id)
+    assert back.alias == "My alias" and "other" in library.assigned_targets()
+    assert library.find_import_source({"kind": "test", "hash": "abc"}) == second.id
+    assert chosen(world) == chosen_before
+    assert world.entries()[(world.key(), "other_spr")].state == "ok"
+
+
+def test_a_held_source_is_not_a_source_the_library_lost(world):
+    world.consent = True
+    mod = world.add(world.spr)
+    world.library.apply("test", f"mod:{mod.id}")
+    parked = hide(world, mod)
+    library = world.reload()
+    view = library._view(library.installs(), "full")
+    assert view.source_exists(f"mod:{mod.id}", world.key(), "spr")
+    assert not view.source_exists(f"mod:{mod.id}", world.key(), "spr", held=False)
+    assert not view.source_exists("mod:" + "f" * 32, world.key(), "spr")
+    entry = world.entries()[(world.key(), "test_spr")]
+    assert entry.state == "ok" and entry.configured == f"mod:{mod.id}" and entry.source == f"mod:{mod.id}"
+    unhide(world, mod, parked)
+
+
+def test_replacing_the_bytes_of_a_held_source_keeps_them_as_a_mod(world):
+    held = world.add(world.spr, payload=b"held mod bytes")
+    world.library.apply("test", f"mod:{held.id}")
+    other = world.add(world.spr, payload=b"another mod!")
+    parked = hide(world, held)
+    library = world.reload()
+    library.apply("test", f"mod:{other.id}")  # replaces the only copy of the held mod's bytes
+    kept = [m for m in library.mods() if m.id not in (held.id, other.id)]
+    assert len(kept) == 1 and kept[0].file.read_bytes() == header_bundle(b"held mod bytes")
+    unhide(world, held, parked)
+
+
+def test_removing_a_mod_saves_before_it_deletes_the_folder(world, monkeypatch):
+    mod = world.add(world.spr)
+    seen = []
+    real = service.shutil.rmtree
+
+    def rmtree(path, *args, **kwargs):
+        if Path(path) == mod_dir(world, mod):
+            seen.append(mod.id in [r["id"] for r in read_state(world)["mods"] if isinstance(r, dict)])
+        return real(path, *args, **kwargs)
+
+    monkeypatch.setattr(service.shutil, "rmtree", rmtree)
+    assert not world.library.remove(mod.id, confirm=True).failed
+    assert seen == [False]  # saved before the folder went
+    assert world.reload().mods() == [] and mod.id not in json.dumps(read_state(world))
+
+
+def test_a_removal_that_lost_its_folder_first_does_not_come_back_as_a_held_record(world):
+    first, second = two_mods(world)
+    library = world.library
+    library._records.pop(second.id)
+    import shutil
+    shutil.rmtree(mod_dir(world, second))  # the folder goes before the save: the disk copy holds the record
+    library._save()
+    assert [r["id"] for r in read_state(world)["mods"]] == [first.id]
+    assert library._held_ids() == frozenset()
+
+
+def test_the_merge_rule_for_held_records():
+    id_a, id_b, id_c = "a" * 32, "b" * 32, "c" * 32
+    held = [{"id": id_a}, {"id": id_b}, {"id": id_c}, "junk", {"no": "id"}, 5]
+    kept = service._held_after(held, {id_a: {}}, {id_b: {}, id_c: {}}, {id_c: {}})
+    # id_a is among the merged records, id_b was removed by this instance; no usable id: always kept
+    assert kept == [{"id": id_c}, "junk", {"no": "id"}, 5]
+    assert service._held_after([], {}, {}, {}) == []
+
+
+def test_a_rolled_back_import_does_not_leave_a_held_record_behind(world):
+    mod = world.add(world.spr)
+    record = record_of(world, mod.id)
+    new_id = "d" * 32
+    ghost = {**record, "id": new_id, "files": [next(iter(record["files"]))]}
+    edit_state(world, lambda data: data["mods"].append(ghost))  # committed metadata, its folder never published
+    journal = world.root / "import-transactions" / new_id / "journal.json"
+    journal.parent.mkdir(parents=True)
+    journal.write_text(json.dumps({"version": 1, "id": new_id, "phase": "publishing", "record": ghost,
+                                   "hashes": {ghost["files"][0]: "0" * 40}, "repaired_from": "",
+                                   "old_repaired_id": None}))
+    library = world.reload()
+    assert [m.id for m in library.mods()] == [mod.id]
+    assert not journal.exists()
+    assert [r["id"] for r in read_state(world)["mods"]] == [mod.id]  # not held, not resurrected
+    library.set_favorite("test", True)
+    assert [r["id"] for r in read_state(world)["mods"]] == [mod.id]
+
+
+def test_a_failed_save_after_a_rollback_keeps_the_folders_of_records_it_could_not_drop(world, monkeypatch):
+    kept = world.add(world.spr)
+    library = world.library
+
+    def fail(self):
+        raise OSError(errno.ENOSPC, "Synthetic full disk")
+
+    monkeypatch.setattr(ModLibrary, "_save", fail)
+    library._drop_mods([kept.id])
+    monkeypatch.undo()
+    assert mod_dir(world, kept).is_dir()  # still listed in state.json: no ghost record
+    assert [m.id for m in library.mods()] == [kept.id]
+    library._drop_mods([kept.id])
+    assert not mod_dir(world, kept).exists() and kept.id not in json.dumps(read_state(world))
+
+
+def test_a_held_record_that_returns_during_an_asset_deletion_is_not_rolled_back_as_new(world, monkeypatch):
+    victim = world.add(world.spr)
+    held = world.add(game_bundle(world.game, "other_spr"))
+    parked = hide(world, held)
+    library = world.reload()
+    assert library._held_ids() == {held.id}
+    real = library._update_profiles
+    calls = []
+
+    def back_first(*args, **kwargs):
+        if not calls:
+            calls.append(True)
+            unhide(world, held, parked)  # the file returns inside the transaction
+        return real(*args, **kwargs)
+
+    def reconcile():
+        raise OSError("Synthetic failure after the record was saved")
+
+    monkeypatch.setattr(library, "_update_profiles", back_first)
+    with pytest.raises(ServiceError, match="library_io_error"):
+        library.remove(victim.id, confirm=True, reconcile=reconcile)
+    assert mod_dir(world, held).is_dir() and (mod_dir(world, held) / held.file.name).is_file()
+    assert sorted(m.id for m in library.mods()) == sorted([victim.id, held.id])  # the rollback restored the victim
+    assert held.id in [r["id"] for r in read_state(world)["mods"]]
+
+
+def test_two_instances_sharing_a_library_with_a_held_record_see_it_return(world):
+    first, second = two_mods(world)
+    raw = record_of(world, second.id)
+    parked = hide(world, second)
+    one, two = world.reload(), world.build(data_id="B")
+    assert one._held_ids() == two._held_ids() == {second.id}
+    one.set_favorite("test", True)
+    two.set_favorite("other", True)
+    assert record_of(world, second.id) == raw and read_state(world)["favorites"] == ["other", "test"]
+    unhide(world, second, parked)
+    two.set_favorite("other", False)  # a save that finds the files
+    assert sorted(m.id for m in two.mods()) == sorted([first.id, second.id])
+    assert sorted(m.id for m in one.mods()) == sorted([first.id, second.id])  # the other instance reads it
+    assert record_of(world, second.id) == raw
+
+
+def test_switching_a_held_source_reports_it_and_drops_nothing(world):
+    world.consent = True
+    mod = world.add(world.spr)
+    world.library.apply("test", f"mod:{mod.id}")
+    world.toggle(False)  # keeps a built copy that names the mod's own file
+    before = {key: choice["source"] for key, choice in chosen(world).items()}
+    parked = hide(world, mod)
+    library = world.reload()
+    result = world.toggle(True)  # the mod cannot be written now: the entry fails, nothing is dropped
+    assert not result.dropped and [item["code"] for item in result.failed] == ["mod_not_found"]
+    assert {key: choice["source"] for key, choice in chosen(world).items()} == before
+    assert record_of(world, mod.id)["id"] == mod.id
+    unhide(world, mod, parked)
+    library = world.reload()
+    result = library.toggle(True, True)  # retry once the file is back
+    assert not result.failed and not result.dropped
+    assert world.spr.read_bytes() == next(m for m in library.mods() if m.id == mod.id).file.read_bytes()
+
+
+def test_importing_the_same_files_while_a_record_is_held_leaves_it_alone(world):
+    mod = world.add(world.spr)
+    raw = record_of(world, mod.id)
+    parked = hide(world, mod)
+    library = world.reload()
+    assert library._known() == {}  # the identity of a held record is not known: its files are not there
+    again, = library.add([make_mod(world.spr, world.tmp / "again")])
+    assert again.id != mod.id and record_of(world, mod.id) == raw
+    unhide(world, mod, parked)
+    library = world.reload()
+    assert sorted(m.id for m in library.mods()) == sorted([mod.id, again.id])  # two mods of one content, kept
