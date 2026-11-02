@@ -1061,17 +1061,17 @@ class BatchImport:
             if candidate.direct:
                 output = temporary / staging_name(entry["id"]) / "direct"
                 output.mkdir(parents=True)
-                paths = []
+                paths, extra = [], settings.save_options(False).extra_bytes or b""
                 for (target, source), original in zip(candidate.direct.items(), candidate.originals):
                     path = output / target.name
                     data = source.read_bytes()
                     expected = int(parse_filename(target.name).crc)
-                    fix = Bundle.check_need_crc(original) and CRCUtils.compute_crc32(data) != expected
+                    fix = settings.crc_needed(original) and CRCUtils.compute_crc32(data) != expected
                     if not fix and source.name.removesuffix(".backup") == target.name:
                         paths.append(source)
                         continue
                     if fix:
-                        data = CRCUtils.apply_crc_fix(data, expected)
+                        data = CRCUtils.apply_crc_fix(data + extra, expected)
                         if data is None:
                             raise ServiceError("crc_fix_failed", file=source.name)
                     path.write_bytes(data)
