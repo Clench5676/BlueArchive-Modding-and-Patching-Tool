@@ -1197,9 +1197,10 @@ def test_an_asset_deletion_of_an_unknown_install_stays_a_remembered_failure(worl
 
 # --- FUN-3: through the real RPC registry ---
 
-def crash_in_services(env) -> tuple:
+def crash_in_services(env, write_check=None) -> tuple:
     """Two mods of the test core, the first applied, a switch to the second dying after its game files: the library
-    of the services holds a pending write journal."""
+    of the services holds a pending write journal. ``write_check`` is installed before the crash: a scan thread may
+    recover the journal the moment the switch dies, so a check set afterwards can come too late."""
     library = env.s.library
     first = env.add(env.spr, payload=b"modded!!")
     second = env.add(env.spr, payload=b"modded2!")
@@ -1207,6 +1208,8 @@ def crash_in_services(env) -> tuple:
 
     def log(message):
         if message.startswith("Installed "):
+            if write_check is not None:
+                library._write_check = write_check
             raise Crash()
 
     with pytest.raises(Crash):
@@ -1233,10 +1236,8 @@ def test_after_a_steam_repair_every_call_answers_through_the_rpc_registry(rpc_en
 
 def test_reads_answer_and_writes_refuse_through_the_rpc_registry_while_a_recovery_fails(rpc_env):
     env = rpc_env
-    first, second = crash_in_services(env)
+    first, second = crash_in_services(env, write_check=refusing())
     library = env.s.library
-    refuse = refusing()
-    library._write_check = refuse
     for method, params in ANSWERS:
         assert "error" not in rpc(env.app, method, **params), method
     family = rpc(env.app, "family.get", key="test")["result"]["variants"][0]
@@ -1377,8 +1378,7 @@ def test_every_read_of_the_rpc_registry_answers_and_changes_nothing_while_the_li
 def test_every_read_of_the_rpc_registry_answers_and_changes_nothing_while_a_recovery_has_failed(rpc_env):
     env = rpc_env
     assert "error" not in rpc(env.app, "mods.consent", granted=True)
-    first, second = crash_in_services(env)
-    env.s.library._write_check = refusing()
+    first, second = crash_in_services(env, write_check=refusing())
     assert sweep(env) == SWEPT
     assert env.s.library._recovery_error is not None and list(
         (env.s.library.root / "transactions").glob("*/journal.json"))
