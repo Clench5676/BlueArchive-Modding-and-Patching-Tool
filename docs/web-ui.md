@@ -179,6 +179,13 @@ Imports only go one way: `webui` → `library` → `catalog` → `gameassets` �
   most 16384, its format is one UnityPy decodes (the crunched formats are not) and its image data, stream data
   included, covers the declared size. A refusal raises `ServiceError("bundle_invalid", file=...)` where the bundle file
   is known, else the `ValueError` subclass `TextureRefused`; callers treat it like any other unreadable texture.
+- **Bundle sizes.** `Bundle.load` is the only place the App hands a bundle file to UnityPy, and it first runs
+  `bundle_guard.check_bundle`. That reads the UnityFS header and block table (`unityfs.read_layout`, which decompresses
+  no data block and bounds the block table itself) and refuses a bundle whose file size, single block, total declared
+  uncompressed size or block table is above a ceiling. A refusal is `ServiceError("bundle_invalid", file=...)`, and
+  `Bundle.load` reports it as any other unreadable bundle (`None`). A file that is not UnityFS goes on as before. Each
+  ceiling is at least four times the largest value among the official game files; `tests/test_bundle_guard.py` measures
+  them on the verified development view (`BAMT_TEST_GAME_DIR`).
 - **Game assets.** Two classes:
   - *Light*: atlas sprites, atlas metadata, UI textures, prefab layouts and the bundle indexes. Kept in memory; written
     to the disk cache only after the user agreed (`consent = true`).
