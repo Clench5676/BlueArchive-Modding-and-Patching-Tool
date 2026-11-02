@@ -395,3 +395,169 @@ def test_legacy_file_check_modes_migrate_without_granting_automatic_consent(tmp_
     before = path.stat().st_mtime_ns
     assert UiState(path).scan_consent is expected
     assert path.stat().st_mtime_ns == before
+
+
+# --- a damaged webui.json (FUN-9): the profiles.json convention ---
+
+def _siblings(path: Path) -> tuple[Path, Path]:
+    return path.with_name("webui.json.prev"), path.with_name("webui.json.bad")
+
+
+def test_a_write_reaches_the_disk_before_it_replaces_the_file(tmp_path, monkeypatch):
+    path = tmp_path / "webui.json"
+    state = UiState(path)
+    state.set("voice_volume", 10)
+    events = []
+    real_fsync, real_replace = os.fsync, os.replace
+
+    def fsync(fd):
+        events.append("fsync")
+        real_fsync(fd)
+
+    def replace(src, dst):
+        events.append(Path(dst).name)
+        real_replace(src, dst)
+
+    monkeypatch.setattr(os, "fsync", fsync)
+    monkeypatch.setattr(os, "replace", replace)
+    state.set("voice_volume", 20)
+    # the new content is flushed, the previous copy is flushed and replaced, then the file itself is replaced
+    assert events == ["fsync", "fsync", "webui.json.prev", "webui.json"]
+
+
+def test_the_last_good_file_is_kept_as_prev_before_every_write(tmp_path):
+    path = tmp_path / "webui.json"
+    prev, bad = _siblings(path)
+    state = UiState(path)
+    state.set("a", 1)
+    assert not prev.exists(), "a file that did not exist has no previous copy"
+    state.set("b", 2)
+    assert json.loads(prev.read_text())["prefs"] == {"a": 1}
+    state.set("c", 3)
+    assert json.loads(prev.read_text())["prefs"] == {"a": 1, "b": 2}
+    assert json.loads(path.read_text())["prefs"] == {"a": 1, "b": 2, "c": 3}
+    assert not bad.exists() and not list(tmp_path.glob("*.tmp"))
+
+
+@pytest.mark.parametrize("damage", [b"", b"{ not json", b"\xff\xfe\x00", b"[]", b'"text"'])
+def test_an_unreadable_file_is_read_from_prev_and_kept_as_bad_at_the_next_write(tmp_path, damage, caplog):
+    path = tmp_path / "webui.json"
+    prev, bad = _siblings(path)
+    first = UiState(path)
+    first.set("library_dir", "/library/elsewhere")
+    first.set_consent(False)
+    first.set("startup_update", False)
+    good_prev = prev.read_bytes()
+    path.write_bytes(damage)
+    with caplog.at_level("WARNING"):
+        state = UiState(path)  # a new start finds the damaged file
+    # the library location and the opt-outs come from the previous copy, and nothing is written by reading
+    assert state.get("library_dir") == "/library/elsewhere" and state.consent is False
+    assert state.flag("startup_update") is True, "the copy is the state before the last write"
+    assert path.read_bytes() == damage and prev.read_bytes() == good_prev and not bad.exists()
+    assert "previous copy" in caplog.text
+    state.set("voice_volume", 30)
+    assert bad.read_bytes() == damage
+    assert prev.read_bytes() == good_prev, "the previous copy was the last good file already"
+    data = json.loads(path.read_text())
+    assert data["prefs"] == {"library_dir": "/library/elsewhere", "voice_volume": 30} and data["consent"] is False
+    # the file parses again: the next write refreshes the previous copy as usual
+    state.set("voice_volume", 40)
+    assert json.loads(prev.read_text())["prefs"] == {"library_dir": "/library/elsewhere", "voice_volume": 30}
+    assert bad.read_bytes() == damage
+
+
+def test_with_neither_readable_the_start_is_on_defaults_and_the_bad_bytes_are_kept(tmp_path, caplog):
+    path = tmp_path / "webui.json"
+    prev, bad = _siblings(path)
+    path.write_bytes(b"\x00\x01 broken")
+    prev.write_bytes(b"{ also broken")
+    with caplog.at_level("ERROR"):
+        state = UiState(path)
+    assert [r.levelname for r in caplog.records] == ["ERROR"]
+    assert state.consent is None and state.get("library_dir") is None
+    assert state.preview_cache is True and state.flag("startup_update") is True
+    assert path.read_bytes() == b"\x00\x01 broken" and not bad.exists(), "reading changes nothing"
+    state.set("voice_volume", 10)
+    assert bad.read_bytes() == b"\x00\x01 broken"
+    assert prev.read_bytes() == b"{ also broken", "an unreadable copy is not replaced by the unreadable file"
+    assert json.loads(path.read_text()) == {"prefs": {"voice_volume": 10}}
+
+
+def test_an_unreadable_file_without_a_copy_starts_on_defaults_and_is_kept(tmp_path, caplog):
+    path = tmp_path / "webui.json"
+    prev, bad = _siblings(path)
+    path.write_bytes(b"")  # the empty file a power cut leaves
+    with caplog.at_level("ERROR"):
+        state = UiState(path)
+    assert "starting from defaults" in caplog.text
+    state.set_consent(True)
+    assert bad.read_bytes() == b"" and not prev.exists()
+    assert UiState(path).consent is True
+
+
+def test_a_missing_file_with_a_copy_is_read_from_the_copy(tmp_path):
+    """A crash between moving the bad file aside and replacing it leaves only the copy."""
+    path = tmp_path / "webui.json"
+    prev, bad = _siblings(path)
+    first = UiState(path)
+    first.set("library_dir", "/library/elsewhere")
+    first.set("voice_volume", 10)
+    path.unlink()
+    state = UiState(path)
+    assert state.get("library_dir") == "/library/elsewhere" and state.get("voice_volume") is None
+    assert json.loads(prev.read_text())["prefs"] == {"library_dir": "/library/elsewhere"}
+    state.set("tray", True)
+    data = json.loads(path.read_text())["prefs"]
+    assert data == {"library_dir": "/library/elsewhere", "tray": True}
+    assert not bad.exists()
+
+
+def test_a_running_instance_keeps_what_it_knew_and_keeps_the_bad_file(tmp_path):
+    path = tmp_path / "webui.json"
+    prev, bad = _siblings(path)
+    state = UiState(path)
+    state.set("a", 1)
+    state.set("b", 2)
+    path.write_text("{ edited by hand", encoding="utf-8")
+    assert state.get("b") == 2, "the last known state, not the older copy"
+    state.set("c", 3)
+    assert bad.read_text(encoding="utf-8") == "{ edited by hand"
+    assert json.loads(path.read_text())["prefs"] == {"a": 1, "b": 2, "c": 3}
+
+
+def test_the_strict_read_of_the_seen_mods_never_uses_the_copy_or_repairs(tmp_path):
+    path = tmp_path / "webui.json"
+    prev, bad = _siblings(path)
+    state = UiState(path)
+    state.mark_mods_seen(["old"])
+    state.mark_mods_seen(["newer"])
+    path.write_bytes(b"{ not json")
+    before = prev.read_bytes()
+    unexpected = lambda: pytest.fail("Unreadable state must not be replaced by a baseline")  # noqa: E731
+    fresh = UiState(path)
+    assert fresh.seen_mods(unexpected) is None and fresh.seen_mods() is None
+    assert path.read_bytes() == b"{ not json" and prev.read_bytes() == before and not bad.exists()
+
+
+def test_an_unreadable_file_is_looked_at_once_per_change(tmp_path, caplog):
+    path = tmp_path / "webui.json"
+    state = UiState(path)
+    state.set("a", 1)
+    state.set("b", 2)
+    path.write_bytes(b"{ not json")
+    with caplog.at_level("WARNING"):
+        for _ in range(5):
+            assert state.get("a") == 1
+    assert len(caplog.records) == 1
+
+
+def test_a_copied_data_directory_is_told_from_a_moved_one_through_a_damaged_file(tmp_path):
+    first = tmp_path / "first"
+    state = UiState(first / "webui.json")
+    original = state.data_id(first)
+    state.set("a", 1)  # the id is in the previous copy now, and the file is damaged
+    (first / "webui.json").write_bytes(b"{ not json")
+    copy = tmp_path / "copy"
+    shutil.copytree(first, copy)
+    assert UiState(copy / "webui.json").data_id(copy) != original

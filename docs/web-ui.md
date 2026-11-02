@@ -214,8 +214,13 @@ Imports only go one way: `webui` → `library` → `catalog` → `gameassets` �
   applied to the file as it is at that moment, read again under a lock the instances share (`webui.json.lock`), so
   no instance erases another's keys, and reads follow the other instances' writes. Those reads take the same lock, as
   Windows cannot replace a file another process has open; a replace that meets another program's handle (a virus
-  scanner, the search indexer) is tried again for up to a second there. The user's own aliases of the
-  students are there too (`aliases`: `{family key: [alias]}`, one student's entry changed at a time), never in the
+  scanner, the search indexer) is tried again for up to a second there. The file is flushed to disk before the
+  replace, and the last good file stays as `webui.json.prev` before every write. An unreadable `webui.json` is read
+  from that copy and kept as `webui.json.bad` at the next write; with neither readable, the state starts from the
+  defaults, an error is logged and the bad bytes are kept as `webui.json.bad` before the first write. The strict
+  read behind the seen mods does not use the copy: unreadable state answers unknown, never every mod as new. The
+  copy and the bad file move with the data directory (their stored paths are rewritten like `webui.json`'s). The
+  user's own aliases of the students are there too (`aliases`: `{family key: [alias]}`, one student's entry changed at a time), never in the
   program folder or the repository.
 
 ## gameassets

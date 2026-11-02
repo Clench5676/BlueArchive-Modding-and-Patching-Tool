@@ -5,7 +5,12 @@ classic GUI rewrites with only its own keys.
 
 Several app instances may share one data folder: every change is applied to the file as it is at that moment (read
 again under a lock the instances share), so one instance never erases what another wrote, and reads pick up the
-other instances' writes, under the same lock: Windows cannot replace a file another process has open."""
+other instances' writes, under the same lock: Windows cannot replace a file another process has open.
+
+The file is written the way the library's profiles.json is: flushed to disk before the replace, and the last good file
+kept as ``webui.json.prev`` before every write. An unreadable file is read from that copy instead, and kept as
+``webui.json.bad`` at the next write. With neither readable, the state starts from the defaults (an error is logged)
+and the bad bytes are kept as ``webui.json.bad`` before the first write."""
 
 from __future__ import annotations
 
@@ -16,6 +21,7 @@ import logging
 import math
 import os
 import secrets
+import shutil
 import tempfile
 import threading
 import unicodedata
@@ -25,6 +31,7 @@ from typing import Any
 
 # the lock and the replace shared with the mod library (ba_modding_toolkit.filelock), under their old names
 from ..filelock import file_lock as _file_lock, replace as _replace
+from ..logging_utils import log_failure
 
 logger = logging.getLogger(__name__)
 
@@ -113,10 +120,14 @@ def _seen_mods_of(data: dict[str, Any]) -> set[str] | None:
 class UiState:
     def __init__(self, path: Path):
         self.path = Path(path)
+        self.prev = self.path.with_name(f"{self.path.name}.prev")
+        self.bad = self.path.with_name(f"{self.path.name}.bad")
         self._lock_path = self.path.with_name(f"{self.path.name}.lock")
         self._lock = threading.RLock()
         self._data: dict[str, Any] = {}
-        self._seen: tuple[int, int] | None = None  # the file's (mtime, size) when it was last read or written
+        self._known = False  # whether _data came from a readable file (else it is the defaults)
+        # the (file, previous copy) signatures, each (mtime, size) or None, when they were last read or written
+        self._seen: tuple[tuple[int, int] | None, tuple[int, int] | None] | None = None
         initial = self._current()
         # Startup consents are saved before tours run. Only an answer from before this launch proves prior use.
         self.had_asset_consent = isinstance(initial.get("consent"), bool)
@@ -132,68 +143,125 @@ class UiState:
 
             self._update(migrate)
 
-    def _signature(self) -> tuple[int, int] | None:
-        try:
-            st = self.path.stat()
-        except OSError:
-            return None
-        return st.st_mtime_ns, st.st_size
+    def _signature(self) -> tuple[tuple[int, int] | None, tuple[int, int] | None]:
+        def stat(path: Path) -> tuple[int, int] | None:
+            try:
+                st = path.stat()
+            except OSError:
+                return None
+            return st.st_mtime_ns, st.st_size
 
-    def _read(self, *, strict: bool = False) -> dict[str, Any] | None:
-        """The file's content now; None when missing or unreadable. Strict reads use {} for missing and raise
-        for unreadable content."""
-        try:
-            data = json.loads(self.path.read_text(encoding="utf-8"))
-        except FileNotFoundError:
-            return {} if strict else None
-        except (OSError, ValueError):
-            if strict:
-                raise
-            return None
-        if strict and not isinstance(data, dict):
+        return stat(self.path), stat(self.prev)
+
+    @staticmethod
+    def _parse(path: Path) -> dict[str, Any]:
+        """A state file's content; OSError when it cannot be read, ValueError when it is not a JSON object."""
+        data = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(data, dict):
             raise ValueError("UI state must be an object")
-        return data if isinstance(data, dict) else None
+        return data
+
+    def _read(self) -> dict[str, Any]:
+        """The file's content now, for the strict readers: {} while missing; OSError or ValueError while
+        unreadable. The previous copy is not consulted: stale state must not stand in for the file."""
+        try:
+            return self._parse(self.path)
+        except FileNotFoundError:
+            return {}
+
+    def _load(self) -> tuple[dict[str, Any] | None, str]:
+        """(the content now, the file's state) with the file lock held. The state is "ok" (webui.json parsed, and it
+        is the content), "bad" (it exists but cannot be read) or "missing"; unless "ok", the content is the previous
+        copy's (logged) or None when that cannot be read either."""
+        state = "missing"
+        try:
+            return self._parse(self.path), "ok"
+        except FileNotFoundError:
+            pass
+        except (OSError, ValueError) as error:
+            log_failure(logger, logging.WARNING, "Cannot read UI state, reading previous copy instead", error)
+            state = "bad"
+        try:
+            data = self._parse(self.prev)
+        except FileNotFoundError:
+            if state == "bad":
+                logger.error("UI state unreadable and no previous copy, starting from defaults")
+            return None, state
+        except (OSError, ValueError) as error:
+            if state == "bad":
+                log_failure(logger, logging.ERROR, "Cannot read previous UI state either, starting from defaults",
+                            error)
+            return None, state
+        if state == "missing":
+            logger.warning("UI state missing, reading previous copy")
+        return data, state
 
     def _current(self) -> dict[str, Any]:
         """The state as the file holds it now (another instance may have written it); what was last known while the
-        file is missing or unreadable. Read under the lock the instances share, so another instance's write never
-        meets this one's open file (Windows refuses to replace it)."""
+        file is missing or unreadable (else its previous copy, else the defaults). Read under the lock the instances
+        share, so another instance's write never meets this one's open file (Windows refuses to replace it)."""
         with self._lock:
-            if self._signature() in (None, self._seen):
+            if self._signature() in ((None, None), self._seen):
                 return self._data
             try:
                 with _file_lock(self._lock_path):
-                    signature, data = self._signature(), self._read()
+                    signature = self._signature()
+                    data, state = self._load()
             except OSError:  # the lock not had in time (Windows gives up after 10 s): what was last known
                 logger.warning("cannot lock %s", self._lock_path, exc_info=True)
                 return self._data
-            if signature is not None and data is not None:
-                self._data, self._seen = data, signature
+            self._seen = signature  # an unreadable file is looked at once, not at every call
+            if data is not None and (state == "ok" or not self._known):
+                self._data, self._known = data, True
             return self._data
 
     def _update(self, change: Callable[[dict[str, Any]], None]) -> None:
         """Apply one change to the file's current content, read again under the lock the instances share, and write
-        it back: keys another instance wrote meanwhile are kept."""
+        it back: keys another instance wrote meanwhile are kept. When the file cannot be read the change applies to
+        what this instance knew, else to the previous copy, else to the defaults, and the bad file is kept."""
         with self._lock, _file_lock(self._lock_path):
-            data = self._read()
-            if data is None:
+            data, state = self._load()
+            if data is None or (state != "ok" and self._known):
                 data = copy.deepcopy(self._data)
             change(data)
-            self._write(data)
+            self._write(data, bad=state == "bad")
 
-    def _write(self, data: dict[str, Any]) -> None:
-        """Replace the state atomically while both state locks are held."""
+    def _write(self, data: dict[str, Any], *, bad: bool = False) -> None:
+        """Replace the state atomically while both state locks are held. The new content reaches the disk before it
+        replaces the file; the file it replaces, when it parsed, becomes the previous copy, and when it could not be
+        read (``bad``) it is kept as webui.json.bad for the user."""
         self.path.parent.mkdir(parents=True, exist_ok=True)
         fd, name = tempfile.mkstemp(prefix=f".{self.path.name}.", suffix=".tmp", dir=self.path.parent)
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as out:
                 out.write(json.dumps(data, ensure_ascii=False, indent=1))
+                out.flush()
+                os.fsync(out.fileno())
+            if bad:
+                with contextlib.suppress(OSError):
+                    _replace(self.path, self.bad)
+            elif self.path.exists():
+                self._keep_previous()
             _replace(name, self.path)
         except BaseException:
             with contextlib.suppress(OSError):
                 os.unlink(name)
             raise
-        self._data, self._seen = data, self._signature()
+        self._data, self._known, self._seen = data, True, self._signature()
+
+    def _keep_previous(self) -> None:
+        """Copy the current file to webui.json.prev (flushed to disk, replacing the old copy in one step)."""
+        fd, name = tempfile.mkstemp(prefix=f".{self.prev.name}.", suffix=".tmp", dir=self.prev.parent)
+        try:
+            with os.fdopen(fd, "wb") as out, self.path.open("rb") as stream:
+                shutil.copyfileobj(stream, out)
+                out.flush()
+                os.fsync(out.fileno())
+            _replace(name, self.prev)
+        except BaseException:
+            with contextlib.suppress(OSError):
+                os.unlink(name)
+            raise
 
     def diagnostic_state(self) -> dict | None:
         """Read the last known diagnostic settings without a file lock or disk access."""
@@ -298,13 +366,13 @@ class UiState:
         Read strictly: stale or unreadable state must not turn every mod into a new one."""
         try:
             with self._lock, _file_lock(self._lock_path):
-                data = self._read(strict=True)
+                data = self._read()
                 if "seen_mods" in data or baseline is None:
                     return _seen_mods_of(data)
             # The library has its own lock: take its snapshot without holding either state lock.
             ids = baseline()
             with self._lock, _file_lock(self._lock_path):
-                data = self._read(strict=True)
+                data = self._read()
                 if "seen_mods" not in data:
                     data["seen_mods"] = sorted(set(ids))
                     self._write(data)
@@ -459,13 +527,16 @@ def _is_data_id(value: Any) -> bool:
 
 
 def _holds_id(folder: Path, data_id: str) -> bool:
-    """Whether a data directory still exists and its webui.json holds this id (the folder was copied, not moved)."""
-    try:
-        data = json.loads((folder / "webui.json").read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return False
-    prefs = data.get("prefs") if isinstance(data, dict) else None
-    return isinstance(prefs, dict) and prefs.get("data_id") == data_id
+    """Whether a data directory still exists and its webui.json holds this id (the folder was copied, not moved).
+    An unreadable webui.json answers from its previous copy."""
+    for name in ("webui.json", "webui.json.prev"):
+        try:
+            data = json.loads((folder / name).read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        prefs = data.get("prefs") if isinstance(data, dict) else None
+        return isinstance(prefs, dict) and prefs.get("data_id") == data_id
+    return False
 
 
 # The memorial lobby's fullscreen zoom-out limit (web/js/lobby.js zoomBounds): the game's view, the art every clip keeps
