@@ -1653,3 +1653,23 @@ labels for camera idles, Safe Mode folder control, the classic UI's truncating s
 
 Validation: full suites on `949c26eb`: 4,197 passed, 26 skipped; JavaScript 2,116 passed. Not run natively; Windows from code
 only. Visual acceptance is the owner's.
+
+## BL-068: Review fixes, Low findings
+
+- Status: Implemented for local review; owner acceptance pending.
+- Requested: 2026-11-02, from the whole-app review.
+
+Engine: FUN-18 (no restore over a game update's rename), FUN-19 (Windows replace retry), FUN-20 (a mod update is atomic and
+journaled), FUN-21 (direct import honours CRC and Extra Bytes), FUN-22 (photo export without hard links), FUN-23 (the macOS
+helper reopens the app when the image cannot mount), FUN-24 (three resource versions in the UI asset disk cache), FUN-25 (game
+services refresh after a game update), FUN-26 (navigation to a student has no client timeout), FUN-27 (the library apply writes
+no `.backup`). CI: SEC-4 (actions pinned to commits, uv 0.13.1; proven only by the next release's Windows build).
+
+Web UI: UI-26 to UI-34, UI-36, UI-37. One new string, `countOne`, in six locales.
+
+Known limits: `detail.js` `readFamily` keeps its 15 s cap; Hall has no game clear button; UI-37's other copies of the error
+expression remain. For the owner's decision: FUN-8, UI-6, UI-20, UI-21, UI-24, UI-25, UI-35, SEC-3. SEC-5 not done: reachable
+only with the session token.
+
+Validation: full suites on `248d5adc`: 4,234 passed, 26 skipped; JavaScript 2,141 passed. Not run natively; Windows from code
+only.
