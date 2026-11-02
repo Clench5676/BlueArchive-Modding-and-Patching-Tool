@@ -1111,9 +1111,9 @@ export function textViewer({ title, text, copy, close = T("display.close"), onCo
         if (ended) return;
         console.warn("text popup without the game's frame", err);
         const back = document.createElement("div"), box = document.createElement("div"), heading = document.createElement("h2");
-        back.className = "plain-modal-back";
+        back.className = "plain-popup-back";
         back.addEventListener("click", finish);
-        box.className = "plain-message log-message";
+        box.className = "plain-popup log-message";
         heading.textContent = title;
         box.appendChild(heading);
         box.appendChild(pre);
