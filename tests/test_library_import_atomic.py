@@ -174,8 +174,9 @@ def test_rollback_failure_retains_journal_and_retries_after_lock_is_released(set
             env.library.add_files("spr", paths)
         journal, = journals(env)
         assert json.loads(journal.read_text())["phase"] == "rollback"
+        env.library.mods()  # reads go on while the journal is pending (tests/test_library_state_safety.py)
         with pytest.raises(ServiceError, match="library_recovery_pending"):
-            env.library.mods()
+            env.library.set_favorite("test", True)  # a write is refused
     env.library = reload_library(env)
     assert_previous(env, old, metadata, files)
 
@@ -198,8 +199,9 @@ def test_recovery_does_not_finalize_committed_group_with_changed_bytes(setup_lib
     target = env.root / "mods" / data["id"] / paths[0].name
     target.write_bytes(b"Synthetic post-commit corruption")
     recovered = reload_library(env)
+    recovered.mods()  # reads go on while the journal is pending
     with pytest.raises(ServiceError, match="library_recovery_pending"):
-        recovered.mods()
+        recovered.set_favorite("test", True)  # a write is refused
     assert journal.exists()
     assert target.read_bytes() == b"Synthetic post-commit corruption"
 
@@ -377,8 +379,9 @@ def test_committed_recovery_retains_journal_until_metadata_sync_succeeds(setup_l
         patch.setattr(service, "sync_directory", failed_state_sync)
         patch.setattr(storage, "sync_directory", failed_state_sync)
         recovered = reload_library(env)
+        recovered.mods()  # reads go on while the journal is pending
         with pytest.raises(ServiceError, match="library_recovery_pending"):
-            recovered.mods()
+            recovered.set_favorite("test", True)  # a write is refused
         assert journal.exists()
         assert {path.name: path.read_bytes() for path in (env.root / "mods" / new_id).iterdir()} == {
             path.name: path.read_bytes() for path in paths}

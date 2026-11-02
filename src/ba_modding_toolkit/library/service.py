@@ -67,6 +67,7 @@ logger = logging.getLogger(__name__)
 SPACE_MARGIN = 512 * 1024 * 1024  # left free on the library's volume by an Off and an adoption
 SAVE_EVERY = (10, 2.0)  # a toggle saves its unfinished list every 10 entries or 2 s
 BUILT_TEMP_MAX_AGE = 60 * 60  # seconds before an abandoned built copy can be cleared
+RECOVERY_RETRY = 60.0  # seconds before a read tries a recovery that failed (or waits) again, if the journals stay
 # a toggle's refusals that stop it: every later write would fail the same way
 STOPPING = ("game_running", "game_status_unavailable", "steam_busy", "folder_changed", "classic_open")
 
@@ -83,6 +84,9 @@ def _game_folder(game_file: Path) -> Path:
 
 
 def _serialized(method: Callable) -> Callable:
+    """Run a public method under the library lock, after bringing the state up to date. A pending journal is
+    recovered if it can be, and never fails the call: reads work, and a write is refused by its own gates
+    (``ModLibrary._check_recovery``) with the real failure."""
     @wraps(method)
     def call(self: ModLibrary, *args: Any, **kwargs: Any) -> Any:
         with self._lock, _errors(method.__name__):
@@ -101,6 +105,7 @@ def _mod_writer(method: Callable) -> Callable:
             self._writing_mods = True
             try:
                 self._refresh_state()
+                self._check_writable()
                 return method(self, *args, **kwargs)
             finally:
                 self._writing_mods = False
@@ -125,6 +130,51 @@ def _errors(operation: str) -> Iterator[None]:
 
 class _Unread(Exception):
     """A file the judgement may not read: one the library did not write, without scan consent."""
+
+
+class _NewerState(Exception):
+    """A state.json of a newer build (a version above 1): never read as corrupt, never replaced."""
+
+
+# what a state.json that is not a state of this version raises while it is read
+_UNREADABLE = (ValueError, TypeError, KeyError, AttributeError, RecursionError)
+
+
+@dataclass
+class _Reading:
+    """One reading of state.json (``ModLibrary._read_state``).
+
+    ``kind``: ``ok`` (the file), ``missing`` (no file: an empty library), ``prev`` (the file is unreadable, its
+    previous copy was read instead), ``corrupt`` (neither is readable), ``newer`` (a version above 1) or ``io`` (the
+    file could not be opened: not a verdict on its contents). ``state`` is (records, favourites, applied, migrations,
+    held records); ``error`` is set for ``corrupt``, ``newer`` and ``io``."""
+
+    kind: str
+    state: tuple | None = None
+    error: ServiceError | None = None
+
+
+def _valid_id(mod_id: Any) -> bool:
+    return isinstance(mod_id, str) and len(mod_id) == 32 and all(c in "0123456789abcdef" for c in mod_id)
+
+
+def _held_id(raw: Any) -> str | None:
+    """The id of a held record, None when it has no usable one."""
+    mod_id = raw.get("id") if isinstance(raw, dict) else None
+    return mod_id if _valid_id(mod_id) else None
+
+
+def _held_after(disk_held: list, records: dict, base: dict, mine: dict) -> list:
+    """The held records to write after a merge: the disk copy's, less those whose id is among the merged ``records``
+    and those this instance removed since ``base`` (in ``base``, not in ``mine``). A record without a usable id is
+    always kept: nothing can say it was removed."""
+    removed = base.keys() - mine.keys()
+    kept = []
+    for raw in disk_held:
+        mod_id = _held_id(raw)
+        if mod_id is None or (mod_id not in records and mod_id not in removed):
+            kept.append(raw)
+    return kept
 
 
 @dataclass
@@ -187,6 +237,7 @@ class _View:
         self.library = library
         self.pins = {pin.key: pin for pin in pins}
         self.mods = set(library._records)
+        self.held = library._held_ids()  # records the library keeps but cannot use now: their sources still exist
         self.config = config
         self.enabled = profiles_mod.enabled(config)
         self.allow = allow
@@ -222,11 +273,14 @@ class _View:
             self._sizes[name] = size
         return self._sizes[name]
 
-    def source_exists(self, source: str, key: str, kind: str) -> bool:
+    def source_exists(self, source: str, key: str, kind: str, *, held: bool = True) -> bool:
+        """Whether the library has a source. A held record (kept in state.json but not usable now) counts: its
+        configuration and the game files carrying it are not those of a source the library lost. ``held=False``
+        asks only for a usable record (whether the library has the source's bytes)."""
         if source == "official":
             return True
         if source.startswith("mod:"):
-            return source[4:] in self.mods
+            return source[4:] in self.mods or (held and source[4:] in self.held)
         if source.startswith("variant:"):
             cores = self.maps.get(key)
             return bool(cores and cores.core(source[8:], kind))
@@ -508,6 +562,9 @@ class ModLibrary:
         """``write_check(pin)`` runs right before game files of an install are written, with the other checks of a
         write, and refuses by raising ServiceError (the web UI: ``classic_open`` while a classic window is open)."""
         self.root = Path(root).resolve()
+        self._state_path = self.root / "state.json"
+        self._prev_path = self.root / "state.json.prev"  # the last good state.json, kept before every write
+        self._bad_path = self.root / "state.json.bad"  # an unreadable state.json, kept at the next write
         self.catalog = catalog
         self.game = game  # unused: the library reads game files through its pins
         self.settings = settings
@@ -521,6 +578,10 @@ class ModLibrary:
         self._transacting = False
         self._deferred_prunes = 0
         self._prune_pending = False
+        self._recovery_error: ServiceError | None = None  # why the last recovery attempt failed: writes refuse with it
+        self._recovery_seen: tuple[tuple[str, ...], float] | None = None  # journals at the last attempt, and when
+        self._recovery_logged: tuple | None = None  # (code, journals) of the failure already logged
+        self._waiting: set[str] = set()  # write journals waiting for their install, already logged
         self._records: dict[str, dict[str, Any]] = {}
         self._remap_previews: dict[str, dict] = {}
         self._favorites: set[str] = set()
@@ -528,6 +589,11 @@ class ModLibrary:
         self._migrations: set[str] = set()
         self._migration_pending = False
         self._base: tuple[dict, set, dict, set] = ({}, set(), {}, set())  # the state as last read or written, for merges
+        self._held: list[Any] = []  # state.json records this library cannot use now, written back unchanged
+        self._warned: set[tuple[str, str]] = set()  # held records already logged
+        self._state_good = False  # whether this instance holds state from a good read of state.json
+        self._state_error: ServiceError | None = None  # why state.json cannot be written now (library_state_unreadable)
+        self._reread = False  # the last read could not open state.json: read it again at the next call
         self._version = 0  # bumped by every change of _applied, so a scan can tell it is stale
         self._pruned_cores: set[str] = set()
         # per install key: (folders' signature, index, its files, generation); file name -> lower-case core
@@ -539,6 +605,7 @@ class ModLibrary:
         self._originals_cache: tuple[Any, dict[str, int]] | None = None
         self._maps_cache: tuple[tuple, Any] | None = None
         self.profiles = Profiles(self.root)
+        self.profiles.gate = self._check_writes  # no change of the configuration while writes are refused
         staging.cleanup(self.root)
         self._load()
         with self._lock:
@@ -554,118 +621,255 @@ class ModLibrary:
 
     # --- state.json ---
 
-    def _parse_state(self, data: Any) -> tuple[dict, set, dict, set]:
-        if not isinstance(data, dict) or data.get("version") != 1:
+    def _parse_state(self, data: Any) -> tuple[dict, set, dict, set, list]:
+        """(records, favourites, applied, migrations, held) of a state.json's JSON. A record that cannot be used (not
+        an object, a key missing or of another type, a bad id) is skipped with a warning and its raw JSON is held, to
+        be written back unchanged: one bad record costs that record at most, never the file. An invalid ``applied``
+        entry is dropped. ValueError when the file as a whole is not a state of this version (_NewerState for a version
+        above 1)."""
+        if not isinstance(data, dict):
+            raise ValueError("not a library state")
+        version = data.get("version")
+        if isinstance(version, (int, float)) and not isinstance(version, bool) and version > 1:
+            raise _NewerState(version)
+        if version != 1:
             raise ValueError("not a version 1 library state")
-        records = {}
-        for record in data.get("mods", []):
-            mod_id = record["id"]
-            if not isinstance(mod_id, str) or len(mod_id) != 32 or any(c not in "0123456789abcdef" for c in mod_id):
+        mods, listed, written, migrated = (data.get(key, empty) for key, empty in
+                                           (("mods", []), ("favorites", []), ("applied", {}), ("migrations", [])))
+        if not (isinstance(mods, list) and isinstance(listed, list) and isinstance(written, dict)
+                and isinstance(migrated, list)):
+            raise ValueError("invalid library state")
+        records: dict[str, dict] = {}
+        held: list[Any] = []
+        for raw in mods:
+            reason = self._unusable(raw)
+            if reason is None and not all((self.root / "mods" / raw["id"] / f).is_file() for f in raw["files"]):
+                reason = "files missing"  # a record stays until the user or a removal deletes it
+            if reason is not None:
+                key = (reason, _held_id(raw) or json.dumps(raw, sort_keys=True, default=str))
+                if key not in self._warned:  # once per record, not at every read of the file
+                    self._warned.add(key)
+                    logger.warning("Holding a library record that cannot be used (%s): %s", reason,
+                                   _held_id(raw) or "no usable id")
+                held.append(raw)
                 continue
-            files = record["files"]
-            if not files or not all(isinstance(f, str) and Path(f).name == f and f.endswith(".bundle") for f in files):
-                continue
-            if not all(isinstance(record[key], str) for key in ("label", "target", "added")):
-                continue
-            if not supports_kind(record["kind"]) or not isinstance(record["seen"], bool):
-                continue
-            if "assignment" in record and (not isinstance(record["assignment"], str) or not record["assignment"]):
-                continue
-            if all((self.root / "mods" / mod_id / f).is_file() for f in files):
-                records[mod_id] = record
-        favorites = {key for key in data.get("favorites", []) if isinstance(key, str)}
+            records[raw["id"]] = raw
+        favorites = {key for key in listed if isinstance(key, str)}
         applied = {
-            path: record for path, record in data.get("applied", {}).items()
+            path: record for path, record in written.items()
             if isinstance(path, str) and isinstance(record, dict)
             and isinstance(record.get("source"), str) and isinstance(record.get("sha1"), str)
         }
-        migrations = {key for key in data.get("migrations", []) if isinstance(key, str)}
-        return records, favorites, applied, migrations
+        migrations = {key for key in migrated if isinstance(key, str)}
+        return records, favorites, applied, migrations, held
+
+    @staticmethod
+    def _unusable(record: Any) -> str | None:
+        """Why a state.json record cannot be used (a word, never a path), None when it can."""
+        if not isinstance(record, dict):
+            return "not an object"
+        try:
+            if not _valid_id(record["id"]):
+                return "bad id"
+            files = record["files"]
+            if not isinstance(files, list) or not files or not all(
+                    isinstance(f, str) and Path(f).name == f and f.endswith(".bundle") for f in files):
+                return "bad files"
+            if not all(isinstance(record[key], str) for key in ("label", "target", "added")):
+                return "bad text"
+            if not supports_kind(record["kind"]) or not isinstance(record["seen"], bool):
+                return "bad kind or flag"
+            if "assignment" in record and (not isinstance(record["assignment"], str) or not record["assignment"]):
+                return "bad assignment"
+        except (KeyError, TypeError):
+            return "key missing or of another type"
+        return None
+
+    def _parse_file(self, path: Path) -> tuple[dict, set, dict, set, list]:
+        return self._parse_state(json.loads(path.read_text(encoding="utf-8")))
+
+    def _read_state(self) -> _Reading:
+        """Read state.json, else (when it is unreadable or gone) its previous copy; never raises. With neither file the
+        library is empty. A file of a newer build (version above 1) is never read as corrupt: the previous copy is not
+        looked at. A file that cannot be opened (``OSError``: locked, scanned) is not corruption either. A missing
+        file with a previous copy (a partial restore) reads the copy, as profiles.json does: nothing here deletes
+        state.json, and its writes are atomic."""
+        path = self._state_path
+        exists = True
+        try:
+            return _Reading("ok", self._parse_file(path))
+        except FileNotFoundError:
+            exists = False
+        except _NewerState:
+            logger.warning("The library state was written by a newer version, leaving it as it is")
+            return _Reading("newer", error=ServiceError("library_state_unreadable", file=str(path)))
+        except OSError as error:
+            log_failure(logger, logging.WARNING, "Cannot read the library state", error)
+            return _Reading("io", error=ServiceError("library_io_error", file=str(path)))
+        except _UNREADABLE as error:
+            log_failure(logger, logging.WARNING, "Cannot read the library state, reading the previous copy instead",
+                        error)
+        if not exists:
+            if not self._prev_path.exists():
+                return _Reading("missing")
+            logger.warning("The library state is missing, reading the previous copy instead")
+        unreadable = ServiceError("library_state_unreadable", file=str(path if exists else self._prev_path))
+        try:
+            state = self._parse_file(self._prev_path)
+        except FileNotFoundError:
+            if not exists:
+                return _Reading("missing")
+            logger.error("The library state is unreadable and has no previous copy")
+            return _Reading("corrupt", error=unreadable)
+        except OSError as error:
+            log_failure(logger, logging.WARNING, "Cannot read the previous library state", error)
+            return _Reading("io", error=ServiceError("library_io_error", file=str(self._prev_path)))
+        except (_NewerState, *_UNREADABLE) as error:
+            log_failure(logger, logging.ERROR, "The previous library state is unreadable too", error)
+            return _Reading("corrupt", error=unreadable)
+        logger.warning("Reading the previous library state")
+        return _Reading("prev", state)
 
     def _load(self) -> None:
-        self._seen = self._state_signature()
-        try:
-            state = self._parse_state(json.loads((self.root / "state.json").read_text(encoding="utf-8")))
-        except FileNotFoundError:
+        signature_ = self._state_signature()
+        reading = self._read_state()
+        self._seen = signature_
+        if reading.error is not None:
+            self._state_unreadable(reading)
             return
-        except (OSError, ValueError, TypeError, KeyError, AttributeError) as error:
-            log_failure(logger, logging.WARNING, "Ignoring unreadable library state", error)
+        self._state_good, self._state_error, self._reread = True, None, False
+        if reading.state is None:
             return
-        self._records, self._favorites, self._applied, self._migrations = state
-        self._base = copy.deepcopy(state)
+        self._records, self._favorites, self._applied, self._migrations, self._held = reading.state
+        self._base = copy.deepcopy(reading.state[:4])
         self._migration_pending = LEGACY_REMAP not in self._migrations
         if self._migration_pending:
             try:
                 self._save()
-            except OSError as error:
+            except (OSError, ServiceError) as error:
                 log_failure(logger, logging.WARNING, "Could not migrate legacy remapped mods", error)
+
+    def _state_unreadable(self, reading: _Reading) -> None:
+        """Note a reading that found no state. A library that never read a good state stays empty and cannot be
+        saved (``_state_error``); one that holds good state keeps it, unless the file is a newer build's. An ``io``
+        failure is read again at the next call, any other verdict stands until the file changes."""
+        self._reread = reading.kind == "io"
+        if reading.kind == "newer" or not self._state_good:
+            self._state_error = reading.error
+
+    def _check_writable(self) -> None:
+        """Refuse a write before it starts changing files that state.json could not record: ServiceError
+        ``library_state_unreadable`` (a state that cannot be read, or a newer build's) or ``library_io_error`` (a state
+        that cannot be opened), as read at the last refresh."""
+        if self._state_error is not None:
+            raise ServiceError(self._state_error.code, **self._state_error.params)
+
+    def _disk_held(self, reading: _Reading) -> list:
+        """The held records of what was read. A previous copy is older than this instance's state: the records it held
+        before are kept too."""
+        held = reading.state[4] if reading.state else []
+        if reading.kind == "prev":
+            held = [*held, *(raw for raw in self._held if raw not in held)]
+        return held
+
+    def _held_ids(self) -> frozenset[str]:
+        """The ids of the records state.json holds but this library cannot use now."""
+        return frozenset(mod_id for mod_id in map(_held_id, self._held) if mod_id)
 
     def _state_signature(self) -> tuple[int, int] | None:
         try:
-            stat = (self.root / "state.json").stat()
+            stat = self._state_path.stat()
         except OSError:
             return None
         return stat.st_mtime_ns, stat.st_size
 
-    def _refresh_state(self) -> None:
+    def _refresh_state(self, migrate: bool = True) -> None:
         """Take in what another instance sharing the library wrote to state.json since this one last read or wrote
-        it (its size or date changed), keeping this instance's own changes not saved yet."""
-        self._recover_pending()
-        if self._state_signature() == self._seen:
-            if self._migration_pending:
-                self._save()
+        it (its size or date changed), keeping this instance's own changes not saved yet. A library that could not
+        read its state reads it again at every call that finds the file changed (and after a failed open). The legacy
+        migration is saved when ``migrate``, and skipped (not raised) while writes are refused."""
+        self._recover_for_read()
+        if not self._reread and self._state_signature() == self._seen:
+            if self._migration_pending and migrate:
+                self._migrate_state()
             return
         with file_lock(self.root / "state.json.lock"):
             signature_ = self._state_signature()
-            try:
-                disk = self._parse_state(json.loads((self.root / "state.json").read_text(encoding="utf-8")))
-            except FileNotFoundError:
-                disk = ({}, set(), {}, set())
-            except (OSError, ValueError, TypeError, KeyError, AttributeError):
-                self._seen = signature_
-                return
+            reading = self._read_state()
+        if reading.error is not None:
+            self._seen = signature_
+            self._state_unreadable(reading)
+            return
+        disk = reading.state or ({}, set(), {}, set(), [])
         base, mine = self._base, (self._records, self._favorites, self._applied, self._migrations)
-        self._records = _merge(base[0], mine[0], disk[0])
-        self._favorites = (set(disk[1]) | (mine[1] - base[1])) - (base[1] - mine[1])
-        self._applied = _merge(base[2], mine[2], disk[2])
-        self._migrations = mine[3] | disk[3]
-        self._base, self._seen = copy.deepcopy(disk), signature_
+        self._records, self._favorites, self._applied, self._migrations = _combine(reading.kind, base, mine, disk)
+        self._held = _held_after(self._disk_held(reading), self._records, base[0], mine[0])
+        self._base, self._seen = copy.deepcopy(disk[:4]), signature_
+        self._state_good, self._state_error, self._reread = True, None, False
         self._version += 1
         self._migration_pending = LEGACY_REMAP not in self._migrations
-        if self._migration_pending:
+        if self._migration_pending and migrate:
+            self._migrate_state()
+
+    def _migrate_state(self) -> None:
+        """Save the state with the legacy remap migration, once writes are allowed: a pending recovery, a state that
+        cannot be written (ServiceError) or a file that cannot be written (OSError) skips it for now, and it stays
+        pending. A read never fails on it."""
+        try:
             self._save()
+        except (OSError, ServiceError) as error:
+            log_failure(logger, logging.DEBUG, "Library state migration skipped", error)
 
     def _save(self) -> None:
         """Write state.json, merged with what another instance sharing the library wrote since this one last read
         it: this instance's own changes since then (records added, changed or removed by id, game file records
         written or dropped, favourites toggled) applied to the file as it is now, under a lock both share. The
-        merged state becomes this instance's only once it is written."""
-        path = self.root / "state.json"
+        merged state becomes this instance's only once it is written. Held records of the file are written back
+        unchanged, less those this instance replaced or removed.
+
+        The last good file is kept as state.json.prev before the write, and an unreadable one as state.json.bad. A
+        library that never read a good state (``_state_good``), a file of a newer build and a file that cannot be
+        opened are not written: ServiceError ``library_state_unreadable`` or ``library_io_error``, nothing changed."""
+        self._check_recovery()
+        path = self._state_path
         mine = (self._records, self._favorites, self._applied, self._migrations)
         with file_lock(self.root / "state.json.lock"):
-            try:
-                disk = self._parse_state(json.loads(path.read_text(encoding="utf-8")))
-            except FileNotFoundError:
-                disk = ({}, set(), {}, set())
-            except (OSError, ValueError, TypeError, KeyError, AttributeError):
-                disk = None
-            if disk is None:
-                merged = mine
+            reading = self._read_state()
+            if reading.error is not None and (reading.kind != "corrupt" or not self._state_good):
+                raise reading.error
+            base = self._base
+            if reading.error is not None:
+                # the file and its previous copy are unreadable, but this instance holds the state it read before:
+                # it replaces the file, which is kept as .bad
+                merged, held = mine, _held_after(self._held, mine[0], base[0], mine[0])
             else:
-                base = self._base
-                records = _merge(base[0], mine[0], disk[0])
-                applied = _merge(base[2], mine[2], disk[2])
-                favorites = (set(disk[1]) | (mine[1] - base[1])) - (base[1] - mine[1])
-                merged = (records, favorites, applied, mine[3] | disk[3])
+                disk = reading.state or ({}, set(), {}, set(), [])
+                merged = _combine(reading.kind, base, mine, disk)
+                held = _held_after(self._disk_held(reading), merged[0], base[0], mine[0])
             if LEGACY_REMAP not in merged[3]:
                 merged = (legacy_remapped(merged[0]), merged[1], merged[2], merged[3] | {LEGACY_REMAP})
-            atomic_json(path, {"version": 1, "mods": list(merged[0].values()),
-                               "favorites": sorted(merged[1]), "applied": merged[2], "migrations": sorted(merged[3])})
+            payload = {"version": 1, "mods": [*merged[0].values(), *held], "favorites": sorted(merged[1]),
+                       "applied": merged[2], "migrations": sorted(merged[3])}
+            self._keep_state_file(reading.kind)
+            atomic_json(path, payload)
             self._seen = self._state_signature()
         self._records, self._favorites, self._applied, self._migrations = merged
+        self._held = held
+        self._state_good, self._state_error, self._reread = True, None, False
         self._migration_pending = False
         self._base = copy.deepcopy(merged)
         self._version += 1
+
+    def _keep_state_file(self, kind: str) -> None:
+        """Before state.json is replaced: a file that was read becomes state.json.prev (the last good file); one that
+        could not be read is kept as state.json.bad, and the previous copy stays what it is."""
+        if kind == "ok":
+            atomic_copy(self._state_path, self._prev_path)
+        elif kind in ("prev", "corrupt") and self._state_path.exists():  # a missing file leaves nothing to keep
+            try:
+                atomic_copy(self._state_path, self._bad_path)
+            except OSError as error:
+                log_failure(logger, logging.WARNING, "Could not keep the unreadable library state", error)
 
     # --- mods ---
 
@@ -1452,25 +1656,37 @@ class ModLibrary:
                 repaired.pop("repaired_id", None)
             else:
                 repaired["repaired_id"] = data["old_repaired_id"]
-        path = self.root / "state.json"
+        path = self._state_path
         with file_lock(self.root / "state.json.lock"):
             try:
                 state = json.loads(path.read_text(encoding="utf-8"))
             except FileNotFoundError:
                 state = None
             if state is not None:
+                if isinstance(state, dict) and isinstance(state.get("version"), (int, float)) \
+                        and not isinstance(state["version"], bool) and state["version"] > 1:
+                    raise ServiceError("library_state_unreadable", file=path)
                 if not isinstance(state, dict) or state.get("version") != 1 or not isinstance(state.get("mods"), list):
                     raise ServiceError("library_io_error", file=path)
                 before = copy.deepcopy(state)
-                state["mods"] = [record for record in state["mods"] if record.get("id") != mod_id]
+                # held records are raw JSON, whatever their shape: only an object with this id goes
+                state["mods"] = [record for record in state["mods"]
+                                 if not (isinstance(record, dict) and record.get("id") == mod_id)]
                 for record in state["mods"]:
-                    if record.get("id") == data["repaired_from"] and record.get("repaired_id") == mod_id:
+                    if (isinstance(record, dict) and record.get("id") == data["repaired_from"]
+                            and record.get("repaired_id") == mod_id):
                         if data["old_repaired_id"] is None:
                             record.pop("repaired_id", None)
                         else:
                             record["repaired_id"] = data["old_repaired_id"]
                 if state != before:
+                    # the file just read is the last good one; a rollback does not wait for its copy
+                    try:
+                        atomic_copy(path, self._prev_path)
+                    except OSError as error:
+                        log_failure(logger, logging.WARNING, "Could not keep the previous library state", error)
                     atomic_json(path, state)
+                    self._held = [raw for raw in self._held if _held_id(raw) != mod_id]
             # A prior replace may have succeeded before its directory flush failed.
             # Prove the metadata removal durable even when this retry changes no JSON.
             sync_directory(self.root)
@@ -1748,7 +1964,7 @@ class ModLibrary:
             record.pop("alias", None)
         try:
             self._save()
-        except OSError:
+        except (OSError, ServiceError):
             if old is None:
                 record.pop("alias", None)
             else:
@@ -1764,7 +1980,7 @@ class ModLibrary:
         record["seen"] = True
         try:
             self._save()
-        except OSError:
+        except (OSError, ServiceError):
             record["seen"] = old
             raise
 
@@ -1784,7 +2000,7 @@ class ModLibrary:
             self._favorites.discard(variant_key)
         try:
             self._save()
-        except OSError:
+        except (OSError, ServiceError):
             self._favorites = old
             raise
 
@@ -2227,7 +2443,8 @@ class ModLibrary:
         if record and fingerprint.sha1 == record.get("sha1"):
             if record.get("removed"):
                 return False
-            if view.source_exists(record.get("source", ""), pin.key, kind_of_file(target.name) or "spr"):
+            # a held record has no bytes to show: the target's bytes are kept as a mod (held=False)
+            if view.source_exists(record.get("source", ""), pin.key, kind_of_file(target.name) or "spr", held=False):
                 return False
         elif fingerprint.trailing is None:
             return False
@@ -2235,7 +2452,8 @@ class ModLibrary:
 
     def _drop_mods(self, mod_ids: list[str]) -> None:
         """Forget mods _keep_replaced added for a replacement that was rolled back (their files are in the game
-        again). A state that cannot be saved still lists them; loading drops records without files."""
+        again). The state is saved before a folder is deleted. A state that cannot be saved still lists them, so
+        their folders stay: a record whose files are gone is held, never dropped."""
         if not mod_ids:
             return
         deletion = getattr(self, '_asset_deletion', None)
@@ -2247,12 +2465,13 @@ class ModLibrary:
             for mod_id in mod_ids:
                 shutil.rmtree(self.root / 'mods' / mod_id)
             return
-        for mod_id in mod_ids:
-            self._records.pop(mod_id, None)
+        removed = {mod_id: self._records.pop(mod_id) for mod_id in mod_ids if mod_id in self._records}
         try:
             self._save()
-        except OSError as error:
+        except (OSError, ServiceError) as error:
             log_failure(logger, logging.WARNING, "Could not save the library state after a rollback", error)
+            self._records.update(removed)  # still listed in state.json: they keep their folders
+            return
         for mod_id in mod_ids:
             shutil.rmtree(self.root / "mods" / mod_id, ignore_errors=True)
 
@@ -2328,8 +2547,9 @@ class ModLibrary:
                 logger.info("Released the original of %s kept by a failed write", target.name)
 
     def _prune(self) -> list[Path]:
-        """Serialize deletion with writes that may still need an original for rollback."""
-        if any((self.root / "transactions").glob("*/journal.json")):
+        """Serialize deletion with writes that may still need an original for rollback. Nothing is deleted while a
+        journal is pending or the state cannot be written (the start job calls this)."""
+        if self._state_error is not None or any((self.root / "transactions").glob("*/journal.json")):
             return []
         with self._transaction_lock():
             return self._prune_originals()
@@ -2415,7 +2635,7 @@ class ModLibrary:
                 self._applied.pop(name, None)
             try:
                 self._save()
-            except OSError as error:
+            except (OSError, ServiceError) as error:
                 self._applied = old_applied
                 log_failure(logger, logging.WARNING, "Could not save the library state after pruning", error)
                 markers = {}
@@ -2781,28 +3001,117 @@ class ModLibrary:
 
     @contextlib.contextmanager
     def _transaction_lock(self) -> Iterator[None]:
-        """Lock before mods, state and profiles; nested writes already hold this process lock."""
+        """Lock before mods, state and profiles; nested writes already hold this process lock. Taking the lock
+        recovers every pending journal first, every time, and raises the real failure when one cannot be rolled back
+        (a write never goes on over a journal it could not settle); the failure is remembered for the reads and for
+        the writes that do not take this lock (``_check_recovery``)."""
         if self._transacting:
             yield
             return
         with file_lock(self.root / "transactions.lock", timeout=10):
             self._transacting = True
             try:
-                self._refresh_state()
-                self._recover_transactions()
+                self._refresh_state(migrate=False)  # nothing is saved before the journals are settled
+                try:
+                    self._recover_transactions()
+                except Exception as error:
+                    self._remember_recovery(error)
+                    raise
+                self._remember_recovery(None)
+                self._check_writable()
                 yield
             finally:
                 self._transacting = False
 
+    def _journals(self) -> tuple[str, ...]:
+        """The pending journals: write, import and deletion journals under the library, as sorted paths."""
+        return tuple(sorted(str(path) for folder in ("transactions", "import-transactions", "asset-deletions")
+                            for path in (self.root / folder).glob("*/journal.json")))
+
     def _recover_pending(self) -> None:
-        """Recover before indexing game files, including one moved away just before a crash."""
-        if not self._transacting and (any((self.root / "transactions").glob("*/journal.json"))
-                                    or any((self.root / "import-transactions").glob("*/journal.json"))
-                                    or any((self.root / "asset-deletions").glob("*/journal.json"))):
+        """Recover before indexing game files, including one moved away just before a crash. Raises the failure of a
+        journal that cannot be settled (it stays pending); nothing happens without a journal."""
+        if self._transacting:
+            return
+        if self._journals():
             with self._transaction_lock():
                 pass
+        else:
+            self._recovery_error = self._recovery_seen = self._recovery_logged = None
+
+    def _recover_for_read(self) -> None:
+        """Attempt recovery before a read, never failing it: a failure is logged once, remembered (with the pending
+        journals and the time) and the read goes on. A read tries again only when the set of journals changed or
+        RECOVERY_RETRY seconds have passed; a retry that finds other journals still pending but raises nothing
+        follows the same limit. Writes recover on their own (``_transaction_lock``)."""
+        if self._transacting:
+            return
+        journals = self._journals()
+        if not journals:
+            self._recovery_error = self._recovery_seen = self._recovery_logged = None
+            return
+        seen = self._recovery_seen
+        if seen is not None and seen[0] == journals and time.monotonic() - seen[1] < RECOVERY_RETRY:
+            return
+        # the attempt is noted first: a lock another process holds (its own write) must not hold up every read
+        self._recovery_seen = (journals, time.monotonic())
+        try:
+            with self._transaction_lock():
+                pass
+        except Exception:
+            pass  # _remember_recovery logs it and makes it a ServiceError; the read goes on
+
+    def _remember_recovery(self, error: Exception | None) -> None:
+        """Note the outcome of a recovery attempt: the failure writes refuse with (None: it succeeded), and the
+        journals still pending with the time, which limit how often a read tries again."""
+        journals = self._journals()
+        self._recovery_seen = (journals, time.monotonic()) if journals else None
+        if error is None:
+            self._recovery_error = self._recovery_logged = None
+            return
+        if isinstance(error, ServiceError):
+            failure = error
+        elif isinstance(error, OSError):
+            failure = ServiceError("library_io_error", file=error.filename)
+        else:
+            failure = ServiceError("library_operation_failed", operation="recover")
+        self._recovery_error = failure
+        if self._recovery_logged != (failure.code, journals):
+            self._recovery_logged = (failure.code, journals)
+            log_failure(logger, logging.WARNING, "Mod recovery pending, reads continue", error)
+
+    def _check_recovery(self) -> None:
+        """Refuse a change of state or configuration while a recovery has failed, with that failure. Recovery is
+        attempted again first (a closed game, a repaired file), so the refusal is the real, current one. Not during a
+        recovery itself or the writes under the transaction lock, which recovered before they started."""
+        if self._recovery_error is not None and not self._transacting:
+            self._recover_pending()
+
+    def _check_writes(self) -> None:
+        """The gate of every change of the configuration (``Profiles.gate``): refused with the real error while a
+        recovery has failed (``_check_recovery``) or the state cannot be written (``_check_writable``), because a
+        library that reads an empty state would judge every source gone and settle that into profiles.json."""
+        self._check_recovery()
+        self._check_writable()
+
+    def _writes_refused(self) -> bool:
+        """Whether changes of state and configuration are refused now, without trying again: a recovery has failed or
+        the state cannot be written. For the reads that settle something on the side and skip it instead."""
+        return self._state_error is not None or (self._recovery_error is not None and not self._transacting)
+
+    def state_unreadable(self) -> bool:
+        """Whether this library holds no state from a good read of state.json: reads answer an empty library, which
+        is not the user's library (callers must not take a baseline from it). The file is read again first if it was
+        unreadable, as it may have been fixed since."""
+        with self._lock:
+            if not self._state_good:
+                self._refresh_state()
+            return not self._state_good
 
     def _recover_transactions(self) -> None:
+        """Settle every pending journal under the transaction lock: imports, then write journals, then asset deletions.
+        A failure (ServiceError) leaves the journal and stops here; a write journal whose install is not known now waits
+        (skipped, logged once). A game file changed outside the library is left as it is (``_rollback_write``)."""
         self._recover_imports()
         for path in sorted((self.root / "transactions").glob("*/journal.json")):
             try:
@@ -2815,12 +3124,27 @@ class ModLibrary:
                     continue
                 info = data["pin"]
                 pin = self._pin(Path(info["root"]), info["server"])
-                if pin is None or pin.key != info["key"] or list(map(str, pin.dirs)) != info["dirs"]:
-                    raise ServiceError("folder_changed")
+                if pin is None or pin.key != info["key"]:
+                    # The install is not known now (its folder moved, the settings name another). The journal waits
+                    # with its files; writes to other installs go on (a rollback restores only its own keys, and
+                    # _prune refuses while a journal exists).
+                    if path.parent.name not in self._waiting:
+                        self._waiting.add(path.parent.name)
+                        logger.warning("Write journal %s waits for its install, which is not known now",
+                                       path.parent.name)
+                    continue
+                # Another resource subfolder or a moved game folder is no reason to stop, if every target still lies in
+                # a resource folder of the install; otherwise the folders changed.
+                dirs_changed = list(map(str, pin.dirs)) != info["dirs"]
                 targets = []
                 for i, item in enumerate(data["files"]):
                     target, backup = Path(item["target"]), self.root / item["rollback"]
-                    check_resource_path(target, list(pin.dirs))
+                    try:
+                        check_resource_path(target, list(pin.dirs))
+                    except ServiceError as error:
+                        if dirs_changed:
+                            raise ServiceError("folder_changed") from error
+                        raise
                     expected = self._original_path(target) if item["official"] else path.parent / f"{i}.bundle"
                     if backup != expected or not backup.resolve().is_relative_to(self.root):
                         raise ValueError("Invalid rollback path")
@@ -2828,18 +3152,34 @@ class ModLibrary:
                         raise ValueError("Invalid original path")
                     targets.append(target)
                 with self._writable(targets, pin, recovering=True):
-                    self._rollback_write(data)
-                self._release_failed([Path(item["target"]) for item in data["files"] if item["kept_now"]], pin)
-                self._drop_mods(data["kept"])
+                    left = self._rollback_write(data)
+                self._release_failed([Path(item["target"]) for item in data["files"]
+                                      if item["kept_now"] and item["target"] not in left], pin)
+                self._drop_mods(self._droppable(data["kept"], left))
                 shutil.rmtree(path.parent)
+                self._waiting.discard(path.parent.name)
                 logger.info("Recovered interrupted library write %s", path.parent.name)
             except (ValueError, TypeError, KeyError) as error:
                 raise ServiceError("library_io_error", file=path) from error
         from .asset_delete import recover
         recover(self)
 
-    def _rollback_write(self, data: dict) -> None:
-        """Return consumed originals before restoring mods. Repeating any completed step is safe."""
+    def _droppable(self, kept: list[str], left: set[str]) -> list[str]:
+        """Of the mods a rolled back write kept from game files, those to forget: not the ones kept from a file left
+        as it is (changed outside the library), whose bytes are in no game file again."""
+        if not left:
+            return list(kept)
+        names = {Path(key).name for key in left}
+        return [mod_id for mod_id in kept if not names & set((self._records.get(mod_id) or {}).get("files", ()))]
+
+    def _rollback_write(self, data: dict) -> set[str]:
+        """Return consumed originals before restoring mods. Repeating any completed step is safe.
+
+        A game file whose bytes are neither the journal's before nor its after (a Steam repair, another tool) was
+        changed outside the library: its bytes are left as they are, a warning is logged, the other files are
+        restored and the rollback finishes. Returns the targets left that way. Its record is put back as it was,
+        without a new modification time, so that the file is judged as the outside change it is."""
+        left: set[str] = set()
         for item in reversed(data["files"]):
             target = Path(item["target"])
             current = self._hashes.get(target).sha1 if target.exists() else None
@@ -2852,7 +3192,10 @@ class ModLibrary:
             if current == item["before"]:
                 continue
             if current not in (None, item["after"]):
-                raise ServiceError("entry_changed", core=core_of(target.name))
+                logger.warning("Game file %s was changed outside the library, leaving it as it is",
+                               core_of(target.name))
+                left.add(item["target"])
+                continue
             backup = self.root / item["rollback"]
             verify_file(backup, item["before"])
             if item["official"] and item["kept_now"] and not self._needed_elsewhere(
@@ -2868,11 +3211,17 @@ class ModLibrary:
             old = data["old_applied"].get(key)
             if old is None:
                 self._applied.pop(key, None)
-            else:
-                # A rollback copy has a new date, even though its bytes are unchanged.
-                self._applied[key] = {**old, "mtime": Path(key).stat().st_mtime_ns}
+                continue
+            try:
+                # A rollback copy has a new date, even though its bytes are unchanged. A file left as it is keeps the
+                # record's own date: the stat check must not read the outside bytes as the recorded ones.
+                mtime = None if key in left else Path(key).stat().st_mtime_ns
+            except OSError:
+                mtime = None
+            self._applied[key] = {**old, "mtime": mtime} if mtime is not None else dict(old)
         if self._applied != self._base[2]:
             self._save()
+        return left
 
     def _write(self, replacements: dict[Path, Path], source: str, log: LogFunc,
                progress: ProgressCallback | None, pin: Pin, build_keys: dict[Path, str] | None = None,
@@ -2915,13 +3264,14 @@ class ModLibrary:
                 self._applied.update(new)
                 try:
                     self._save()
-                except OSError:
+                except (OSError, ServiceError):
                     self._applied = old_applied
                     raise
             return []
         written: list[Path] = []
         kept_now: list[Path] = []  # originals this call kept from the game file itself
         kept: list[str] = []
+        left: set[str] = set()  # files a rollback found changed outside the library and left as they are
         restored = True
         journal: Path | None = None
         transaction: dict | None = None
@@ -2994,7 +3344,7 @@ class ModLibrary:
                 except Exception as error:
                     self._applied = old_applied
                     try:
-                        self._rollback_write(transaction)
+                        left = self._rollback_write(transaction)
                     except Exception as rollback_error:
                         restored = False
                         log_failure(logger, logging.ERROR, "Could not roll back library write", rollback_error)
@@ -3008,9 +3358,10 @@ class ModLibrary:
                 atomic_json(journal, transaction)
         except Exception:
             if restored:
-                # what they kept is in the game again; a part left half written keeps them
-                self._drop_mods(kept)
-                self._release_failed(kept_now, pin)
+                # what they kept is in the game again (not for a file left as it is); a part left half written keeps
+                # them
+                self._drop_mods(self._droppable(kept, left))
+                self._release_failed([target for target in kept_now if str(target.resolve()) not in left], pin)
                 if journal is not None:
                     shutil.rmtree(journal.parent)
             raise
@@ -3842,6 +4193,8 @@ class ModLibrary:
         """What the judgement settles in the configuration: take-overs (a newer library write than the configured
         source, or a library source with none) and sources gone from the library (dropped once listed); and the new
         dates of files the library knows by their last bytes."""
+        if self._writes_refused():
+            return  # a recovery that has failed refuses changes: the next scan settles
         restamps = {str(part.path.resolve()): part.restamp for entry in found for part in entry.parts
                     if part.restamp is not None and part.record is not None}
         if restamps:
@@ -3849,7 +4202,7 @@ class ModLibrary:
                 if path in self._applied:
                     logger.info("Same bytes, new date: %s", Path(path).name)
                     self._applied[path]["mtime"] = mtime
-            with contextlib.suppress(OSError):
+            with contextlib.suppress(OSError, ServiceError):
                 self._save()
         takeovers = [entry for entry in found if entry.takeover]
         missing = [entry for entry in found if entry.state == "source_missing"]
@@ -4000,7 +4353,7 @@ class ModLibrary:
             self._update_profiles(change, after=lambda data: self._delete_built_files(replaced, data))
         except Exception:
             self._applied = old_applied
-            with contextlib.suppress(OSError):
+            with contextlib.suppress(OSError, ServiceError):
                 self._save()
             if created:
                 self._drop_mods([mod_id])
@@ -4363,6 +4716,8 @@ class ModLibrary:
         date of a file whose bytes are the record's (its sha1 at write strength, its last bytes cheaply), and, at
         write strength, a file the cheap rule calls official whose bytes were changed outside the library (``outside``,
         its size and date; dropped by the next write there)."""
+        if self._writes_refused():
+            return  # a recovery that has failed refuses changes: a later judgement notes it
         changed = False
         for part in entry.parts:
             record = self._applied.get(str(part.path.resolve())) if part.record is not None else None
@@ -4388,7 +4743,7 @@ class ModLibrary:
         if changed:
             try:
                 self._save()
-            except OSError as error:
+            except (OSError, ServiceError) as error:
                 log_failure(logger, logging.WARNING, "Could not save what a judgement found", error)
 
     def judge_unfinished(self) -> int:
@@ -4397,6 +4752,8 @@ class ModLibrary:
         items of this data directory's known installs; nothing is dropped when the intent changed meanwhile.
         Returns the number of items dropped. Runs on the job worker."""
         with self._lock, _errors("judge_unfinished"):
+            if self._writes_refused():
+                return 0  # a recovery that has failed refuses changes of the list
             config = self.profiles.read()
             if not config or not config.get("unfinished"):
                 return 0
@@ -4671,6 +5028,8 @@ class ModLibrary:
                progress: Callable[[dict], None] | None = None, pin: Pin | None = None) -> UpdateResult:
         """Rebuild a mod against current official bundles and retain its old files. Its built copies go: they hold
         the old build."""
+        self._check_recovery()  # refused before the rebuild when a recovery has failed or the state cannot be saved
+        self._check_writable()
         pin = self._current(pin)
         record = self._record(mod_id)
         paths = self._paths(record)
@@ -4718,7 +5077,7 @@ class ModLibrary:
                     atomic_copy(path, directory / path.name)
                 record["files"] = [path.name for path in sorted(generated)]
                 self._save()
-            except OSError:
+            except (OSError, ServiceError):
                 record.update(old_record)
                 for path in previous:
                     atomic_copy(path, directory / path.name)
@@ -4821,6 +5180,21 @@ def _merge(base: dict, mine: dict, disk: dict) -> dict:
         else:
             out.pop(key, None)
     return out
+
+
+def _combine(kind: str, base: tuple, mine: tuple, disk: tuple) -> tuple[dict, set, dict, set]:
+    """This instance's changes since ``base`` (``mine``) on the state read from disk: (records, favourites, applied,
+    migrations). The previous copy of an unreadable state.json (``kind`` ``prev``) is older than what this instance
+    holds, so it adds to ``mine`` and drops nothing but what this instance removed since ``base``."""
+    if kind == "prev":
+        records, applied = {**disk[0], **mine[0]}, {**disk[2], **mine[2]}
+        for key in base[0].keys() - mine[0].keys():
+            records.pop(key, None)
+        for key in base[2].keys() - mine[2].keys():
+            applied.pop(key, None)
+        return records, (set(disk[1]) | mine[1]) - (base[1] - mine[1]), applied, mine[3] | disk[3]
+    return (_merge(base[0], mine[0], disk[0]), (set(disk[1]) | (mine[1] - base[1])) - (base[1] - mine[1]),
+            _merge(base[2], mine[2], disk[2]), mine[3] | disk[3])
 
 
 def _drop_source(data: dict, source: str, keys: list[dict]) -> list[tuple[str, str]]:

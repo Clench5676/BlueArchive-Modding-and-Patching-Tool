@@ -688,6 +688,39 @@ install from its list (Remove from List, `forget`) drops its record only when no
 otherwise it only hides the install there, and a toggle there lists that install's entries as not switched for the
 data directory that names it.
 
+**State file safety.** `state.json` is read record by record. A record that cannot be used (not an object, a key
+missing or of another type, a bad id) is skipped with a warning and held: its raw JSON is written back unchanged at
+every save, so one bad record costs that record at most and never the file. An invalid `applied` entry is dropped. The
+last good file is copied to `state.json.prev` before every write, the same way as `profiles.json`. An unreadable file
+is read from `.prev` instead (logged) and kept as `state.json.bad` at the next write; `.prev` is never replaced by bad
+bytes. A missing file with a `.prev` (a partial restore; nothing in the app deletes `state.json`, and its writes are
+atomic) reads the `.prev` too, a running instance keeping its own records; with neither file the library is empty. A
+running instance that holds state from a good read keeps its own state when the file breaks under it (the previous copy
+is older), adds what `.prev` holds and replaces the file, keeping the old one as `.bad`. When neither the file nor
+`.prev` can be read, or the file is a newer build's (`version` above 1, which is never read as corrupt, never touches
+`.prev` or `.bad` and stays byte for byte), the library is blocked: reads answer an empty library, every write raises
+`library_state_unreadable` before it starts, and nothing is written until the user fixes or removes the file (the next
+call that finds the file changed reads it again). Nothing of `profiles.json` is written either: an empty library judges
+every configured source gone, so the gate of the configuration (`Profiles.gate`) refuses with the same error, the reads
+that settle something on the side (the scan's take-overs and dropped choices, a judgement's dates, the unfinished list)
+skip it, and the kept originals are not pruned. `Services` takes no `seen_mods` baseline from such a library
+(`state_unreadable()`), so its empty read cannot mark every mod as new later. A file that cannot be opened (locked,
+scanned) is not corruption: reads answer an empty library, writes raise `library_io_error`, and the next call reads
+again. A library move and a data directory move take `state.json.prev` and `.bad` along, as they do for
+`profiles.json`.
+
+**Held records.** A valid record whose files are missing (a quarantined file, a partial restore) is held the same
+way, with a warning, instead of being dropped at load: it is not among the library's records, so the engine and the
+UI do not see it, and it is written back unchanged at every save. It returns to the records at the next load, refresh
+of a changed file or save that finds its files, with its alias, assignment, import sources and configuration. At a
+save the held records are the disk copy's, less the ids among the merged records and the ids this instance removed
+since it last read the file (in its base, not in its records); a record with no usable id is always kept, so a
+deletion or a rolled back import never comes back. A held id still counts as a source the library has: the
+configuration naming it is not dropped as `source_missing`, and the game files carrying it are not offered for
+adoption. The one exception is a game file about to be replaced: its bytes are kept as a mod then, since the held
+record has no file to show them. Every removal path (`remove`, `_drop_mods`, an import rollback, an asset deletion)
+saves before it deletes the folder, and an asset deletion's rollback leaves alone a record that returned during it.
+
 **Per-Mod import publication.** `_store` stages and verifies the complete file group under
 `import-transactions/<uuid>/files`, journals its expected hashes, publishes the directory under `mods/<uuid>`, then
 saves the corresponding `state.json` record. Metadata publication is the commit point. A failed operation rolls
@@ -695,6 +728,33 @@ back its record, any repair link and its files without removing earlier independ
 library operations, validates journal and Mod paths, verifies a committed group's bytes and retains a pending
 journal if recovery cannot complete. Metadata and directory synchronization must succeed before recovery discards
 its journal, even when a retry finds that an earlier metadata replacement already took effect.
+
+**Pending journals.** A write, an import or an asset deletion that did not finish leaves its journal (`transactions/`,
+`import-transactions/`, `asset-deletions/`), and every write recovers first. `_transaction_lock` always attempts
+the recovery and raises the real failure of a journal it cannot settle (`library_recovery_pending`,
+`original_unavailable`, `library_io_error` on an invalid journal, `game_running`, `steam_busy`, `classic_open` and the
+other refusals of a write), so a write never goes on over a journal. Reads never fail on a pending journal: a read
+attempts recovery, logs a failure once, remembers it with the pending journal paths and the time, and goes on. It
+tries again only when the set of journals changed or `RECOVERY_RETRY` (60 s) has passed, so a closed game or a
+repaired file is picked up and reads stay fast; a retry that finds other journals still pending but raises nothing
+follows the same limit. While a failure is remembered every change of `state.json` and `profiles.json` is refused with
+that failure (the central gates are `_save` and `Profiles.update`; they attempt recovery again first, so the refusal is
+the current one), which covers the favourites, aliases and configured choices that do not take the transaction lock;
+a successful recovery clears it. A read that settles something on the side (the scan's take-overs, a judgement's
+dates, the legacy migration, the unfinished list) skips it instead of failing. Recovery rules:
+
+- A game file whose bytes are neither the journal's before nor its after was changed outside the library (a Steam
+  repair, another tool), and so is one that is gone. Its bytes are left as they are, a warning is logged and the
+  other files are restored; the rollback finishes and retires the journal. Its record goes back as it was, without a
+  new modification time (a stamp from the file would let the stat check read the outside bytes as the recorded ones),
+  its kept original stays (the only official copy of a file left as it is) and so do the mods kept from it. An asset
+  deletion's rollback does the same and does not recreate a gone file.
+- A write journal whose install has the same key but other resource folders proceeds if every target still passes
+  `check_resource_path`; otherwise it stays `folder_changed`. One whose install is not known now (its folder moved, its
+  key differs) waits: it is logged, kept with its files and skipped, writes to other installs go on (a rollback
+  restores only its own keys, and the originals' prune refuses while a journal exists), and the next recovery after the
+  install is back rolls it back. An asset deletion cannot wait, since its rollback restores a snapshot of all records
+  and applied entries: it stays a remembered failure, reads work and writes refuse.
 
 This is stage-local atomicity. The existing game-write transaction separately retains and restores every replaced
 part. A complete library import is not undone merely because later optional application fails; its configured
