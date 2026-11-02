@@ -24,6 +24,12 @@ export function lobbyCaptureView(view,bounds,frame=FRAME){
     y:bounded(view.y,bounds.y0-bottom*view.h,bounds.y1-top*view.h)};
 }
 
+// The mode that is not shown, when the student has it: the mode button switches to it, and a student without it gets no
+// button (bridge.info() tells hasPortrait and hasLobby).
+export const otherMode=(mode,info)=>{
+  const next=mode==='portrait'?'lobby':'portrait';
+  return (next==='lobby'?info?.hasLobby:info?.hasPortrait)?next:null;
+};
 // Keep the existing right edge and neighbouring grid/mode controls fixed.
 export const OCCLUSION_BUTTON=Object.freeze([1352,25,196,76]);
 // The toolbar's text buttons (Occlusion Guide, Grid) share one caption size: the largest up to 38 units at which every caption
