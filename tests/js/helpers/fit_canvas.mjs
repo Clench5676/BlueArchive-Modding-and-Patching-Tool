@@ -14,13 +14,13 @@ export function advance(char) {
   if (WIDE.test(char)) return 1;
   if (THAI_MARK.test(char)) return 0;
   if (THAI.test(char)) return 0.5;
-  if (char === " ") return 0.28;
-  if ("iljtfI.,:;'!|".includes(char)) return 0.3;
-  if ("()[]*-/".includes(char)) return 0.36;
-  if ("mwMW@".includes(char)) return 0.85;
-  if (/[0-9]/.test(char)) return 0.56;
-  if (/[A-Z]/.test(char)) return 0.64;
-  return 0.52;
+  if (char === " ") return 0.3;
+  if ("iljtfI.,:;'!|".includes(char)) return 0.33;
+  if ("()[]*-/".includes(char)) return 0.4;
+  if ("mwMW@".includes(char)) return 0.92;
+  if (/[0-9]/.test(char)) return 0.58;
+  if (/[A-Z]/.test(char)) return 0.68;
+  return 0.56;
 }
 
 export const context = {

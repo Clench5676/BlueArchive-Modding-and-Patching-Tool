@@ -46,7 +46,8 @@ export function makeImportLayouts() {
   Object.assign(tag.widgets[0], { fontSize: 46, w_: 106, h_: 44, pivot: 3 });
   const tagBG = find(tag, "TypeBG"); tagBG.pos = [-26, 1]; Object.assign(tagBG.widgets[0], { w_: 170, h_: 86, pivot: 3 });
   Object.assign(find(inv, `${base}/EquipPos/Texture`).widgets[0], { w_: 551, h_: 435, pivot: 4 });
-  insert(inv, `${detail}/Label_Name`, label("Label_Name", "Name", { fontSize: 104 }));
+  insert(inv, `${detail}/Label_Name`, label("Label_Name", "Name", { fontSize: 104, w_: 964, h_: 145, pivot: 3 }));
+  find(inv, `${detail}/Label_Name`).pos = [-570, 93];
   insert(inv, `${detail}/Text_Amount`, label("Text_Amount", "x999", { color: "#77deff/1.00" }));
   insert(inv, `${detail}/BG`, node("BG", [17, 98], [sprite("Common_Bg_Raius20px", 1246, 204, { color: "#1a3351/0.99" })], [node("HaveBG"), image("Texture")]));
   insert(inv, `${detail}/Label_ExpirationDateTime/TypeBG`, node("TypeBG", [0, 0], [sprite("Common_Bg_Raius10px", 438, 64, { color: "#eb5691/1.00" })]));
