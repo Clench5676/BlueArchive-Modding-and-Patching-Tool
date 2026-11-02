@@ -1653,7 +1653,9 @@ optional, so a popup still works without them.
   alone while an input method composes (`isComposing`, `keyCode` 229) or when a control took the key itself
   (`defaultPrevented`). `anyOpen()` tells whether any popup is up (the stack, or the consent, update, settings and
   display hosts), and `whenIdle(every, blocked)` resolves once none is and the optional work predicate is false.
-  The settings (`#settings`) register with `opened` as they open and leave with `closed`, and wire the backdrop with
+  The views under the popups leave Escape alone while `anyOpen()` or once a popup took it (`defaultPrevented`): the
+  detail screen's fullscreen, the portrait's visual mode and the camera (whose capture-phase handler runs first) stay
+  under a message such as a capture error until the next Escape. The settings (`#settings`) register with `opened` as they open and leave with `closed`, and wire the backdrop with
   `closable`: Escape and a click on the backdrop close them like every other popup, and a popup opened over them takes
   the key first.
 - **Focus.** One shared trap for every popup on the stack (`opened` / `closed`, `trapKey` on the window). A popup takes

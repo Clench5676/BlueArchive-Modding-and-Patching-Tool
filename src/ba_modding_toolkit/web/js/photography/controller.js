@@ -345,4 +345,5 @@ async function applyGame(){
   await Loading.task(async()=>{await waitJob(await call('apply',{id:selected,png:selected===DEFAULT?await generatedPNG():null}));if(scope!==generation)throw new DOMException('Photography ended','AbortError');await repositoryRead();});
   await galleryDraw();
 }
-globalThis.addEventListener?.('keydown',event=>{if(active&&!modal&&!Loading.covering()&&event.key==='Escape'){event.preventDefault();event.stopImmediatePropagation();safe(leave)();}},true);
+// Escape leaves the camera; a popup over it (a capture error) takes it first, and closes alone
+globalThis.addEventListener?.('keydown',event=>{if(active&&!modal&&!Loading.covering()&&event.key==='Escape'&&!event.defaultPrevented&&!Popup.anyOpen()){event.preventDefault();event.stopImmediatePropagation();safe(leave)();}},true);

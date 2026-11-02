@@ -2109,8 +2109,9 @@ const keySteps = pacer(async (delta) => {
   clearTimeout(timer);
   arrivals = arrivals.filter((r) => r !== resolve);
 });
+// Escape leaves fullscreen only when no popup took it or is open over the view (Escape belongs to the top layer)
 addEventListener("keydown", (ev) => {
-  if (ev.key === "Escape" && open && fullscreen && !Visual.isOpen() && !photoSession) {
+  if (ev.key === "Escape" && !ev.defaultPrevented && !popupOpen() && open && fullscreen && !Visual.isOpen() && !photoSession) {
     ev.preventDefault();
     void setFullscreen(false);
     return;
