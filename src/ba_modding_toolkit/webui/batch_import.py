@@ -35,6 +35,14 @@ CHOICES = {"strategy": ("path_id", "cont_name_type", "name_type"),
            "crc": ("auto", "on", "off"), "compression": ("lzma", "lz4", "original", "none")}
 BOOLS = ("skipUnchanged", "backup", "enableAfterImport", "previewAfterImport")
 IMPORTABLE = frozenset(("ready", "convert", "update"))
+# Staging folders are named by the first hex digits of an id or digest. The bundle names inside keep their full form,
+# so the folder names stay short enough for Windows paths (259 characters) with the longest official bundle names.
+STAGING_DIGITS = 16
+
+
+def staging_name(digest: str) -> str:
+    """The short, stable name of the staging folder of an entry id or an original's digest."""
+    return digest[:STAGING_DIGITS]
 
 
 def options_of(value: Any, defaults: dict) -> dict:
@@ -1021,7 +1029,7 @@ class BatchImport:
             key = (original.resolve(), revision)
             if key not in snapshots:
                 fingerprint = self._hashes.get(original)
-                copied = temporary / "originals" / fingerprint.sha1 / original.name
+                copied = temporary / "originals" / staging_name(fingerprint.sha1) / original.name
                 copied.parent.mkdir(parents=True, exist_ok=True)
                 if not atomic_clone(original, copied):
                     shutil.copy2(original, copied)
@@ -1038,7 +1046,7 @@ class BatchImport:
         self._require_importable(candidate)
         if entry["state"] == "ready":
             if candidate.direct:
-                output = temporary / entry["id"] / "direct"
+                output = temporary / staging_name(entry["id"]) / "direct"
                 output.mkdir(parents=True)
                 paths = []
                 for (target, source), original in zip(candidate.direct.items(), candidate.originals):
@@ -1059,7 +1067,7 @@ class BatchImport:
             return list(candidate.files.values()), False, candidate
         phase = "convert" if candidate.conversion else "update"
         progress(candidate, phase, "check")
-        work = temporary / entry["id"]
+        work = temporary / staging_name(entry["id"])
         output, targets_dir = work / "output", work / "targets"
         output.mkdir(parents=True)
         targets_dir.mkdir()
