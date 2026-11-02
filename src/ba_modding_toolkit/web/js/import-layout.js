@@ -101,6 +101,17 @@ export function importArtwork(ui, layouts) {
     Object.assign(w, { text: f.text, fontSize: f.fs, w_: width ?? w.w_, h_: Math.max(w.h_, f.fs * 1.3 * String(f.text).split("\n").length) });
     return n;
   };
+  // the box of lines at NGUI's pitch, as drawn (the page font draws Latin larger, see ngui.js fontSizeFor)
+  const lineBox = (text, fs) => String(text).split("\n").length * (ui.fontSizeFor?.(text, fs) ?? fs) * (ui.LINE_PITCH ?? 1.15);
+  // The Import State filter's caption (SortBtn/Btn_Normal/Type_2/Text, 336 wide, 56 down to 70 %): wrapped onto two lines
+  // inside the button's body (456 x 116) before it shrinks, never ellipsized. The lines keep clear of the body's edges
+  // round the label's own offset.
+  const filterCaption = (sort, caption) => {
+    const type = ui.find(sort, "Type_2"), text = ui.find(type, "Text"), w = text.widgets.find((x) => "text" in x);
+    const body = sort.widgets.find((x) => "sprite" in x), offset = Math.abs((type.pos?.[1] || 0) + (text.pos?.[1] || 0));
+    const [f] = ui.fitGroup([caption], w.fontSize, w.fontSize * 0.7, w.w_, 2, { maxH: body.h_ - 2 * offset });
+    Object.assign(w, { text: f.text, fontSize: f.fs, h_: Math.max(w.h_, lineBox(f.text, f.fs)) });
+  };
   const inventory = (path) => get("UINonEquipmentInventory", path);
   const mail = (path) => get("UIMailBox", path);
   const content = (path) => get("UIMailBoxContent", path);
@@ -137,7 +148,7 @@ export function importArtwork(ui, layouts) {
       const sort = ui.find(t, "SortBtn/Btn_Normal");
       for (const name of ["FilterMarker_Off", "FilterMarker_On"]) ui.find(sort, name).active = (name === "FilterMarker_On") === filtered;
       ui.find(sort, "Type_1").active = false; ui.find(sort, "Type_2").active = true;
-      label(ui.find(sort, "Type_2/Text"), caption).widgets.find((w) => "text" in w).ellipsis = true;
+      filterCaption(sort, caption);
       const order = ui.find(t, "OrderBtn/Btn_Normal");
       ui.find(order, "Icon_down").active = !ascending; ui.find(order, "Icon_Up").active = ascending;
       ui.find(t, "SearchBtn/Btn_Normal").active = !searching;

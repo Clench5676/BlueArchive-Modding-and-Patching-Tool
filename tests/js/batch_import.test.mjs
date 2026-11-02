@@ -1091,7 +1091,7 @@ test("the Items header retains its own control sizes, transforms and states with
     const filtered = h.action("filter").getAttribute("aria-label").startsWith("Cannot Import");
     assert.equal(find(tree, "SortBtn/Btn_Normal/FilterMarker_On").active, filtered);
     assert.equal(find(tree, "SortBtn/Btn_Normal/FilterMarker_Off").active, !filtered);
-    assert.equal(find(tree, "SortBtn/Btn_Normal/Type_2/Text").widgets[0].ellipsis, true);
+    assert.ok(!find(tree, "SortBtn/Btn_Normal/Type_2/Text").widgets[0].ellipsis, "the state caption wraps instead of ending in an ellipsis");
   };
   assertTools(); await h.analyze(); await h.action("order").click(); await h.page.settled(); assertTools();
   await h.action("filter").click(); await flush(); await walk(h.dialog).find((e) => e.dataset.value === "blocked").click();
@@ -1154,10 +1154,11 @@ test("empty, full, filtered and long Thai toolbars fit the header, with search a
           const [sx, sy, sw, sh] = rectOf(wrap);
           assert.ok(sx >= 0 && sx + sw <= width); assert.ok(sy > cy && sy + sh < ly);
         }
-        for (const n of [find(drawn(h, header).tree, "Label_Locale_Title"), find(drawn(h, header).tree, "SortBtn/Btn_Normal/Type_2/Text"), ...(count.hidden ? [] : [drawn(h, count).tree])]) {
+        for (const n of [find(drawn(h, header).tree, "Label_Locale_Title"), ...(count.hidden ? [] : [drawn(h, count).tree])]) {
           const label = n.widgets.find((w) => "text" in w);
           assert.equal(label.ellipsis, true); assert.ok(!label.text.includes("\n"));
         }
+        assert.ok(!find(drawn(h, header).tree, "SortBtn/Btn_Normal/Type_2/Text").widgets[0].ellipsis);
       };
       await check(); await h.action("searchToggle").click(); await check();
       await h.analyze(Array.from({ length: 150 }, (_, i) => entry(`mod-${i}`, i % 2 ? "blocked" : "ready")));
