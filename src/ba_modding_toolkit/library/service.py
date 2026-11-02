@@ -1062,7 +1062,9 @@ class ModLibrary:
                   direct: bool = False) -> AddResult:
         """Import a batch of one supported kind, optionally applying through the master switch."""
         if not supports_kind(kind):
-            raise ServiceError("mod_unsupported", kind=kind)
+            if not paths:
+                raise ServiceError("source_unsupported", kind=kind)  # no file to name
+            raise ServiceError("mod_unsupported", file=paths[0], kind=kind)
         if apply:
             return self.add_and_apply(paths, progress, pin, log, kind=kind)
         return self.add(paths, progress, pin, kind=kind, direct=direct)
@@ -1590,8 +1592,11 @@ class ModLibrary:
                metadata: dict[str, Any] | None = None) -> dict[str, Any]:
         """Publish a complete directory before its metadata, with durable recovery of either outcome."""
         names = sorted(files)
-        if not names or any(Path(name).name != name or not name.endswith(".bundle") for name in names):
-            raise ServiceError("mod_unsupported")
+        if not names:
+            raise ServiceError("source_unsupported")  # no file to name
+        refused = next((name for name in names if Path(name).name != name or not name.endswith(".bundle")), None)
+        if refused is not None:
+            raise ServiceError("mod_unsupported", file=refused)
         mod_id = uuid.uuid4().hex
         directory = self.root / "mods" / mod_id
         transaction = self.root / "import-transactions" / mod_id
@@ -5132,25 +5137,28 @@ class ModLibrary:
             bundle = Bundle.load(path)
             if bundle is None:
                 raise ServiceError("bundle_invalid", file=path)
-            for obj in bundle.env.objects:
-                if obj.type not in types:
-                    continue
-                name = obj.peek_name() or ""
-                key = (name, obj.type.name)
-                occurrence = counts.get(key, 0)
-                counts[key] = occurrence + 1
-                raw = obj.get_raw_data()
-                digest = hashlib.sha1(raw)
-                size = len(raw)
-                # Streamed textures and meshes may change without any change to
-                # their serialized object; include the referenced payload too.
-                data = obj.read()
-                stream = getattr(data, "m_StreamData", None)
-                if stream and stream.path and stream.size:
-                    payload = get_resource_data(stream.path, obj.assets_file, stream.offset, stream.size)
-                    digest.update(payload)
-                    size += len(payload)
-                assets[(*key, occurrence)] = (digest.hexdigest(), size)
+            try:
+                for obj in bundle.env.objects:
+                    if obj.type not in types:
+                        continue
+                    name = obj.peek_name() or ""
+                    key = (name, obj.type.name)
+                    occurrence = counts.get(key, 0)
+                    counts[key] = occurrence + 1
+                    raw = obj.get_raw_data()
+                    digest = hashlib.sha1(raw)
+                    size = len(raw)
+                    # Streamed textures and meshes may change without any change to
+                    # their serialized object; include the referenced payload too.
+                    data = obj.read()
+                    stream = getattr(data, "m_StreamData", None)
+                    if stream and stream.path and stream.size:
+                        payload = get_resource_data(stream.path, obj.assets_file, stream.offset, stream.size)
+                        digest.update(payload)
+                        size += len(payload)
+                    assets[(*key, occurrence)] = (digest.hexdigest(), size)
+            except (ValueError, EOFError) as error:
+                raise ServiceError("bundle_invalid", file=path) from error
         return assets
 
     @_serialized
@@ -5163,11 +5171,8 @@ class ModLibrary:
         return self._compare_paths(mod_id, self._paths(record), baseline)
 
     def _compare_paths(self, mod_id: str, paths: list[Path], baseline: list[Path]) -> CompareResult:
-        try:
-            mod = self._asset_hashes(paths)
-            official = self._asset_hashes(baseline)
-        except (ValueError, EOFError) as error:
-            raise ServiceError("bundle_invalid", id=mod_id) from error
+        mod = self._asset_hashes(paths)
+        official = self._asset_hashes(baseline)
         differences = []
         for key in sorted(mod.keys() | official.keys()):
             left, right = mod.get(key), official.get(key)
