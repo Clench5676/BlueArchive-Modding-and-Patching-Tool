@@ -55,8 +55,8 @@ from passing tests or the presence of earlier code.
 
 ## Review artifact and validation
 
-`dist/Blue-Archive-Modding-and-Patching-Tool-0.6.1-alpha.2-macos-arm64.dmg`, MD5 `c4142ef9ed6223b55e415e3d30b86be6`,
-built from `dcdab6b4` (`chore(release): 0.6.1-alpha.2`), with BL-065 through BL-067. Awaiting the owner's review.
+`dist/Blue-Archive-Modding-and-Patching-Tool-0.6.1-alpha.3-macos-arm64.dmg`, MD5 `fc12c87755897d6b586557d697394a05`,
+built from `60c09fe5` (`chore(release): 0.6.1-alpha.3`), with BL-065 through BL-068. Awaiting the owner's review.
 
-On `main` before the build (`949c26eb`): 4,197 Python tests passed, 26 skipped; 2,116 JavaScript tests passed (isolated runs
+On `main` before the build (`248d5adc`): 4,234 Python tests passed, 26 skipped; 2,141 JavaScript tests passed (isolated runs
 with the official development view). Native Windows behavior is not verified on the macOS host.
