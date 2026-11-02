@@ -104,7 +104,10 @@ export function makeImportLayouts() {
   const caption = label("Locale_Text", "unowned", { pivot: 3, color: "#484e52/1.00" }); caption.pos = [131, 2.8];
   const toggle = node("UIPopup_GachaCharList.Btn_Checkbox", [-1385, 598], [sprite("Common_Toggle_BG", 798, 110, { pivot: 3 })],
     [state("Type_OFF"), state("Type_ON"), caption]);
-  return { UINonEquipmentInventory: inv, UIMailBox: mail, UIMailBoxContent: content, UIPopup_FilterSort: fs, UINonEquipmentInventoryListItem: item,
+  const collection = node("UICharacterCollection");
+  insert(collection, "SeletControl/List/Scroll Bar", node("Scroll Bar", [0, 0], [], ["Background", "Foreground"].map((name) =>
+    node(name, [1391, 0], [{ texture: "CharacterCollection_ScrollBarBg", w_: 126, h_: 990, pivot: 4, color: "#92a6b7/1.00", prefabMarker: true }]))));
+  return { UICharacterCollection: collection, UINonEquipmentInventory: inv, UIMailBox: mail, UIMailBoxContent: content, UIPopup_FilterSort: fs, UINonEquipmentInventoryListItem: item,
     "UIPopup_GachaCharList.Btn_Checkbox": toggle };
 }
 export { find };

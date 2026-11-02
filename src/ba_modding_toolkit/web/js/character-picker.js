@@ -9,7 +9,8 @@ export function assignmentChoices(data, view, query = "") {
     collator: new Intl.Collator(language(), { numeric: true, sensitivity: "base" }) });
 }
 
-export async function characterPicker({ data, selected, dialog, el, button, inputControl, checkbox, radioOptions, onSelect }) {
+// refresh(area): the dialog's scrolling area changed height (its game scrollbar follows)
+export async function characterPicker({ data, selected, dialog, el, button, inputControl, checkbox, radioOptions, onSelect, refresh = () => {} }) {
   let view = normalizeView({ sort: "name", order: "asc" }), query = "", page = 0, family = null;
   let choice = selected || null;
   await dialog(T("import.assignCharacter"), { action: T("picker.ok"), cancel: T("popup.cancel"),
@@ -23,7 +24,8 @@ export async function characterPicker({ data, selected, dialog, el, button, inpu
     const merged = checkbox(T("roster.merge"), false, (value) => { view.merged = value; family = null; page = 0; draw(); });
     Object.assign(merged.label.style, { position: "relative", width: "460px", height: "55px" });
     tools.append(filters, direction, mods, recruit, merged.label); area.appendChild(tools);
-    const list = el("div"); Object.assign(list.style, { maxHeight: "440px", overflowY: "auto" }); area.appendChild(list);
+    // the dialog's area is the one scroller (with the game's scrollbar); a page of 24 is the list's length
+    const list = el("div"); area.appendChild(list);
     const pages = el("div"); Object.assign(pages.style, { display: "flex", justifyContent: "space-between" });
     const previous = button("‹", "characterPrevious", { width: 100, scale: 0.34 });
     const next = button("›", "characterNext", { width: 100, scale: 0.34 }); pages.append(previous, next); area.appendChild(pages);
@@ -42,14 +44,14 @@ export async function characterPicker({ data, selected, dialog, el, button, inpu
         else choice = value;
       }, { columns: 2 });
       previous.disabled = page === 0; next.disabled = (page + 1) * 24 >= cards.length;
-      previous.refresh(); next.refresh();
+      previous.refresh(); next.refresh(); refresh(area);
     };
     const searchChanged = () => { query = search.input.value; page = 0; family = null; draw(); };
     search.input.addEventListener("input", (event) => { if (!event.isComposing) searchChanged(); });
     search.input.addEventListener("compositionend", searchChanged);
     search.clear?.addEventListener("click", () => { search.input.value = ""; searchChanged(); });
-    previous.addEventListener("click", () => { page--; list.scrollTop = 0; draw(); });
-    next.addEventListener("click", () => { page++; list.scrollTop = 0; draw(); });
+    previous.addEventListener("click", () => { page--; area.scrollTop = 0; draw(); });
+    next.addEventListener("click", () => { page++; area.scrollTop = 0; draw(); });
     direction.addEventListener("click", () => {
       view.order = view.order === "asc" ? "desc" : "asc"; direction.caption = T(`roster.${view.order}`);
       direction.setAttribute("aria-label", direction.caption); direction.refresh(); page = 0; draw();
