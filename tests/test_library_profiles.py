@@ -1120,11 +1120,16 @@ def test_an_on_retries_the_set_source_after_an_unfinished_off(world, monkeypatch
     assert [item["core"] for item in result.left] == ["test_spr"]
     assert world.unfinished() == [{"install": world.key(), "core": "test_spr", "why": "left"}]
     assert world.library.intent()["unfinished"]["left"] == 1
-    result = world.toggle(True)
-    assert result.done and not result.failed
+    outside = world.spr.read_bytes()
+    result = world.toggle(True)  # an On never writes over an outside change: skipped, and it leaves the list
+    assert result.done == [] and not result.failed
+    assert [item["why"] for item in result.skipped] == ["changed"]
     assert world.unfinished() == []
-    assert world.library.selection("test")["spr"]["installed"]
-    assert world.spr.read_bytes() == mod.file.read_bytes()
+    assert world.library.intent()["unfinished"] == {"pending": 0, "left": 0, "stuck": 0}
+    assert not world.library.selection("test")["spr"]["installed"]
+    assert world.spr.read_bytes() == outside != mod.file.read_bytes()
+    world.consent = True
+    assert world.entries()[(world.key(), "test_spr")].state == "changed"  # offered by the prompt
 
 
 def test_a_stuck_item_stays_stuck_across_a_crash(world, monkeypatch):
@@ -1582,10 +1587,12 @@ def test_an_unfixed_outside_write_of_the_official_size_is_caught_when_reached(wo
     world.spr.write_bytes(header_bundle(b"outside!"))  # no CRC fix, no trailing bytes, the official size
     entry = world.entries()[(world.key(), "test_spr")]
     assert entry.state == "reset"  # judged cheaply: official, changed since written
-    result = world.library.toggle(True, True)  # a Retry of the On
-    assert result.done and not result.failed
-    assert world.spr.read_bytes() == mod.file.read_bytes()
-    assert world.library.selection("test")["spr"]["installed"]
+    result = world.library.toggle(True, True)  # a Retry of the On: the full read finds the outside change
+    assert result.done == [] and not result.failed
+    assert [item["why"] for item in result.skipped] == ["changed"]
+    assert world.spr.read_bytes() == header_bundle(b"outside!")  # never written over by an On
+    assert not world.library.selection("test")["spr"]["installed"]
+    assert len(world.library.mods()) == 1
     result = world.toggle(False)
     assert not result.failed
     assert world.spr.read_bytes() == OFFICIAL
@@ -1600,8 +1607,71 @@ def test_an_entry_changed_after_the_scan_is_judged_again_when_reached(world):
     assert world.entries()[(world.key(), "test_spr")].state == "ok"
     data = outside_mod(world.spr)  # after the last scan
     result = world.toggle(True)
-    assert result.done and world.spr.read_bytes() == mod.file.read_bytes()
+    assert result.done == [] and [item["why"] for item in result.skipped] == ["changed"]
+    assert world.spr.read_bytes() == data  # reached: changed outside, left as it is
+    assert [m.id for m in world.library.mods()] == [mod.id]
+
+
+@pytest.mark.parametrize("consent", [False, True])
+def test_an_on_and_its_retry_never_write_over_an_outside_change(world, consent):
+    mod = world.add(world.spr, fixed=True)
+    world.library.apply("test", f"mod:{mod.id}")
+    world.toggle(False)
+    data = outside_mod(world.spr)  # another tool writes the game file while mods are off
+    for retry in range(2):  # the On, then a Retry of the On: the same answer, nothing left to retry
+        result = world.library.toggle(True, retry == 1)
+        assert result.done == [] and not result.failed and result.left == [] and result.stuck == []
+        assert [(item["core"], item["why"]) for item in result.skipped] == [("test_spr", "changed")]
+        assert world.spr.read_bytes() == data
+        assert [m.id for m in world.library.mods()] == [mod.id]  # the outside bytes are not stored by an On
+        assert world.unfinished() == []
+        assert world.library.intent()["unfinished"] == {"pending": 0, "left": 0, "stuck": 0}
+        assert world.folder()["configured"]["test_spr"]["source"] == f"mod:{mod.id}"
+    if consent:  # the prompt that offers it: Mods Not in the Library lists a configured changed entry
+        world.consent = True
+        entry = world.entries()[(world.key(), "test_spr")]
+        assert entry.state == "changed" and not entry.dismissed
+    # an outside change adopted by the next Off, as before
+    result = world.toggle(False)
+    assert [item["core"] for item in result.adopted] == ["test_spr"]
+    assert world.spr.read_bytes() == OFFICIAL
     assert any(m.file.read_bytes() == data for m in world.library.mods())
+
+
+def test_apply_mod_configuration_may_still_write_over_a_listed_changed_entry_after_an_on_skipped_it(world):
+    mod = world.add(world.spr, fixed=True)
+    world.library.apply("test", f"mod:{mod.id}")
+    world.toggle(False)
+    data = outside_mod(world.spr)
+    assert [item["why"] for item in world.toggle(True).skipped] == ["changed"]
+    assert world.spr.read_bytes() == data
+    world.consent = True
+    assert world.entries()[(world.key(), "test_spr")].state == "changed"
+    result = world.library.restore_drift([{"install": world.key(), "core": "test_spr", "state": "changed"}])
+    assert [done["core"] for done in result.done] == ["test_spr"] and result.skipped == []
+    assert world.spr.read_bytes() == mod.file.read_bytes()
+    assert any(m.file.read_bytes() == data for m in world.library.mods())  # the outside change kept first
+    assert world.unfinished() == []
+
+
+def test_an_on_skipping_an_outside_change_still_brings_an_updated_build_to_the_game(world, monkeypatch):
+    mod = world.add(world.spr)
+    other = world.add(game_bundle(world.game, "other_spr"), where="other")
+    world.library.apply("test", f"mod:{mod.id}")
+    world.library.apply("other", f"mod:{other.id}")
+    updating(monkeypatch)
+    assert not world.library.update(mod.id).unchanged  # the `updated` marker of test_spr
+    assert list(world.folder()["updated"]) == ["test_spr"]
+    world.toggle(False)
+    other_file = next(world.game.glob("*other_spr*"))
+    outside = outside_mod(other_file)  # another tool changes the other entry's file while mods are off
+    result = world.toggle(True)
+    assert [item["core"] for item in result.done] == ["test_spr"]
+    assert [(item["core"], item["why"]) for item in result.skipped] == [("other_spr", "changed")]
+    assert world.spr.read_bytes() == header_bundle(b"new build")  # FUN-7: the updated build reaches the game
+    assert other_file.read_bytes() == outside
+    assert world.folder()["updated"] == {}
+    assert world.unfinished() == []
 
 
 def test_the_prune_reads_no_game_file_contents(world, monkeypatch):
