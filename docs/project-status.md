@@ -7,7 +7,7 @@ As of 2026-11-02. Verify the actual branch, working tree and `pyproject.toml` ve
 
 | Branch | State |
 | --- | --- |
-| `main` | Local version `0.6.1-alpha`: the published 0.6.0, the upstream sync to `6c61fdc8`, the security policy, the fix that keeps files from a mod inside their output folder (`e8bee4c2`), BL-065 and BL-066. Not pushed: held until upstream publishes its fix for the same issue. |
+| `main` | Local version `0.6.1-alpha.1`: the published 0.6.0, the upstream sync to `6c61fdc8`, the security policy, the fix that keeps files from a mod inside their output folder (`e8bee4c2`), BL-065 and BL-066. Not pushed: held until upstream publishes its fix for the same issue. |
 
 0.6.0 is published (tag `0.6.0` at `817ebeda`, 2026-10-30): macOS build uploaded, Windows build by the release workflow.
 
@@ -44,7 +44,7 @@ As of 2026-11-02. Verify the actual branch, working tree and `pyproject.toml` ve
 | BL-056 | Funnel: AI-assisted portrait refinement, being refined |
 | BL-059 through BL-063 | Accepted by the owner on Windows (alpha.14) |
 | BL-064 | Accepted by the owner on Windows (alpha.15) |
-| BL-065, BL-066 | Implemented on `main` for local review; owner acceptance pending; not in the 0.6.1-alpha build |
+| BL-065, BL-066 | Implemented; in the 0.6.1-alpha.1 build; owner acceptance pending |
 | BL-057, BL-058 | Accepted by the owner on macOS (alpha.12); Windows not reviewed |
 | BL-055 | Accepted by the owner on macOS (0.6.0 pre-review) |
 | BL-014 | Candidate, not scheduled |
@@ -55,10 +55,9 @@ from passing tests or the presence of earlier code.
 
 ## Review artifact and validation
 
-`dist/Blue-Archive-Modding-and-Patching-Tool-0.6.1-alpha-macos-arm64.dmg`, MD5 `147b3463ef808813d63624f40c88e3c5`,
-built from `4a2e31d9` (`chore(release): 0.6.1-alpha`). Awaiting the owner's pre-review.
+`dist/Blue-Archive-Modding-and-Patching-Tool-0.6.1-alpha.1-macos-arm64.dmg`, MD5 `3951d887778a33657b11ba66af5ef1f7`,
+built from `93c82cf9` (`chore(release): 0.6.1-alpha.1`), with BL-065 and BL-066. Awaiting the owner's review; the
+0.6.1-alpha build is superseded.
 
-On `main` before the build: 3,633 tests passed, 26 skipped (`uv run python -m pytest`, JavaScript tests included,
-with the official development view). Native Windows behavior is not verified on the macOS host.
-
-`main` has moved on since that build with BL-065: 3,729 Python tests passed, 26 skipped; 1,965 JavaScript tests passed.
+On `main` before the build (`60667b6c`): 4,063 Python tests passed, 26 skipped; 1,982 JavaScript tests passed (isolated
+runs with the official development view). Native Windows behavior is not verified on the macOS host.
