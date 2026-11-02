@@ -18,7 +18,7 @@ import * as Update from "./update.js";
 import * as Buttons from "./game-buttons.js";
 import { rowBase, radioRow } from "./settings-rows.js";
 import { on, rpc } from "./api.js";
-import { T, platform } from "./i18n.js";
+import { T, errorText, platform } from "./i18n.js";
 import { runtimeLoaded, setSpineConsent } from "./spine-runtime.js";
 import { $, DOT, S, clone, glyphsOf, hitButton, wrapPath } from "./util.js";
 
@@ -32,7 +32,6 @@ let layout = null, prefs = null, tab = "general", scroll = 0, onChange = null, t
 let checkingUpdate = false;
 let otherMods = null, otherRequest = 0;
 
-const errorText = (err) => T(`error.${err.code || "internal"}`, err.params || { error: String(err) });
 async function call(fn) {
   try { return await fn(); } catch (err) {
     if (err.code === "game_directory_missing" && ["global", "japan"].includes(err.params?.region)) {

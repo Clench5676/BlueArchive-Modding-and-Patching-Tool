@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
+import { errorText } from "../../src/ba_modding_toolkit/web/js/i18n.js";
 
 const source = readFileSync(new URL("../../src/ba_modding_toolkit/web/js/mod-add.js", import.meta.url), "utf8");
 const flat = (o, p = "", out = {}) => { for (const [k, v] of Object.entries(o)) { if (v && typeof v === "object") flat(v, `${p}${k}.`, out); else out[`${p}${k}`] = v; } return out; };
@@ -17,6 +18,7 @@ async function harness({ locale = "en-US", added = [], button = "cancel", error 
     Loading: { hold: (fn) => fn(), task: async (run, options) => { log.push(["loading", options]); try { return await run((p) => progress.push(p)); } finally { log.push(["closed"]); } } },
     Popup: { message: async (opts) => { log.push(["popup", opts]); return { button }; } },
     notify: (text) => log.push(["notify", text]),
+    errorText: (err) => errorText(err, d.T), // the shared error text (i18n.js) with this locale's strings
     Compatibility: {
       compare: (report) => ({ issues: report.issues || [] }),
       show: async (report, options) => {
@@ -29,7 +31,7 @@ async function harness({ locale = "en-US", added = [], button = "cancel", error 
     },
   };
   globalThis.modAddDeps = d;
-  const code = `const {rpc,waitJob,T,Loading,Popup,notify,Compatibility} = globalThis.modAddDeps;\n${source.replace(/^import .*;$/gm, "")}\n// ${seq++}`;
+  const code = `const {rpc,waitJob,T,errorText,Loading,Popup,notify,Compatibility} = globalThis.modAddDeps;\n${source.replace(/^import .*;$/gm, "")}\n// ${seq++}`;
   const mod = await import(`data:text/javascript;base64,${Buffer.from(code).toString("base64")}`);
   mod.init({ names: async () => name,
     changed: () => log.push(["changed"]), go: (key) => log.push(["go", key]), goOther: () => log.push(["goOther"]) });

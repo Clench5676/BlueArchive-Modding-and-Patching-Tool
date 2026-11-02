@@ -5,7 +5,7 @@ import * as Buttons from "./game-buttons.js";
 import * as NGUI from "./ngui.js";
 import * as Popup from "./popup.js";
 import { rpc, waitJob } from "./api.js";
-import { T } from "./i18n.js";
+import { T, errorText } from "./i18n.js";
 import { S, clone } from "./util.js";
 
 const { node, sprite, label, find } = NGUI;
@@ -215,7 +215,7 @@ async function draw(host, info, resolve, { simulation = false } = {}) {
       phase = "ready";
     } catch (err) {
       phase = installing ? "ready" : "offer";
-      error = T(`error.${err.code || "internal"}`, err.params || {});
+      error = errorText(err);
     }
     await render();
   }
