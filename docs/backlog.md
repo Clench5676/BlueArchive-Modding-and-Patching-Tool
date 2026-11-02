@@ -1676,7 +1676,22 @@ only.
 
 ## BL-069: macOS: the pointer sometimes flickers to the system pointer
 
-- Status: Open.
+- Status: Partly fixed for local review; the trigger is not confirmed, the owner's observation is pending.
 - Requested: 2026-11-02 (owner, 0.6.1-alpha.3).
 
 On macOS the game's pointer (`web/js/cursor.js`) occasionally flickers to the system pointer. Trigger not known yet.
+
+A code audit proved no single cause. Fixed: the last 3 CSS px at the window's right and bottom edges had no cursor cut (the
+list now goes down to 1 px); the Settings sliders showed `ew-resize`; a plain Hall card set `default`. A test now pins which
+cursor values the page may use and what writes `--cursor`.
+
+Candidates the code cannot prove, and what to watch for: the integrated title bar and the traffic lights (only when crossing the
+top strip); AppKit's resize edges (only at the window border, not in fullscreen); cursor rects reset on window events (right
+after Cmd-Tab, a resize or a fullscreen toggle); a busy web process (heavy screens, or scene changes under a still pointer).
+
+For the owner's decision: `photography.css` `.photo-active` sets the system pointer for the whole camera mode.
+
+Leftovers in the same job: UI-37's other copies use the shared `errorText`; `detail.js` `readFamily` has no 15 s cap and a stale
+read does not commit; a photo a held record uses counts as used and cannot be deleted.
+
+Validation: full suites on `f1ad2631`: 4236 passed, 26 skipped; JavaScript 2149 passed. Not run natively.
