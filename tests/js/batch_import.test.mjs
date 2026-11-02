@@ -194,6 +194,21 @@ test("empty screen has add actions and zero Mods, without AI UI or tooltips", as
   assert.ok(walk(h.host).every((element) => !element.getAttribute("title")));
 });
 
+test("the count over the list says one Mod in the singular, in every language", async () => {
+  const h = await fixture();
+  const count = () => h.host.querySelector(".import-count").caption;
+  await h.analyze([entry("a")]);
+  assert.equal(count(), "count/1 Mod");
+  await h.analyze([entry("a"), entry("b")]);
+  assert.equal(count(), "count/2 Mods");
+  for (const lang of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
+    const ui = JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${lang}.json`, import.meta.url), "utf8")).webui.import;
+    assert.match(ui.countOne, /\{n\}/, lang);
+    assert.deepEqual(ui.countOne.match(/\{\w+\}/g), ui.count.match(/\{\w+\}/g), lang);
+    if (lang !== "en-US") assert.equal(ui.countOne, ui.count, `${lang} has no plural to tell apart`);
+  }
+});
+
 test("preview and game choices lead Advanced Options as On/Off rows and save independently", async () => {
   const h = await fixture();
   assert.doesNotMatch(h.host.textContent, /Select for Preview|Apply to Game/, "not on the page itself");
