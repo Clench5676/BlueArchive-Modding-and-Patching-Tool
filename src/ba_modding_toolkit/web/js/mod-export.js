@@ -4,7 +4,7 @@ import * as Popup from "./popup.js";
 import * as Loading from "./loading.js";
 import { rowBase, radioRow } from "./settings-rows.js";
 import { rpc, waitJob } from "./api.js";
-import { T } from "./i18n.js";
+import { T, errorText } from "./i18n.js";
 import { S, hitButton, wrapPath } from "./util.js";
 
 let active = false;
@@ -108,7 +108,7 @@ export async function open(request) {
       reveal: (path) => rpc("os.reveal", { path }),
     });
   } catch (error) {
-    Popup.notify(T(`error.${error.code || "internal"}`, error.params || { error: String(error) }), { kind: "error", error });
+    Popup.notify(errorText(error), { kind: "error", error });
     return null;
   } finally { active = false; }
 }
