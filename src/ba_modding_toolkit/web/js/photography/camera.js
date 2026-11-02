@@ -30,6 +30,9 @@ export const otherMode=(mode,info)=>{
   const next=mode==='portrait'?'lobby':'portrait';
   return (next==='lobby'?info?.hasLobby:info?.hasPortrait)?next:null;
 };
+// A Dialogue / Actions caption: a dialogue (it carries its number n) is named as the detail screen names it; any other
+// clip (an idle pose) keeps its clip name until it has a label of its own.
+export const actionCaption=(entry,T)=>Number.isFinite(entry?.n)?T('lobby.dialogue',{n:entry.n}):entry?.anim;
 // Keep the existing right edge and neighbouring grid/mode controls fixed.
 export const OCCLUSION_BUTTON=Object.freeze([1352,25,196,76]);
 // The toolbar's text buttons (Occlusion Guide, Grid) share one caption size: the largest up to 38 units at which every caption

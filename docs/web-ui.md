@@ -36,7 +36,9 @@ PNG directly to the library. Expression cards reuse the detail renderer's face c
 resources, pause hidden clocks/audio and publish a complete frame in place. Route/variant changes invalidate
 pending work. Playback, Back and mode buttons reuse the approved native prefabs. The mode button is drawn only when
 the student has the other mode (`bridge.info()` tells `hasPortrait` and `hasLobby`); a skin without a memorial lobby or
-without a portrait gets none. The owner handles UAT/visual review.
+without a portrait gets none. In the memorial camera's Dialogue / Actions list a dialogue is captioned as the detail
+screen names it (`lobby.dialogue`, "Dialogue 3"), never by its Spine clip name; the idle poses in that list have no label
+of their own yet and keep their clip names. The owner handles UAT/visual review.
 
 `photographs/` belongs to the movable/shared Mod library, not Preview Cache. Its atomic manifest retains per-student
 captures and App choices, IDs and SHA-256 digests; image publication rolls back if metadata cannot commit. Chosen

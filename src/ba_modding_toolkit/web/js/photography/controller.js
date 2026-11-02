@@ -8,7 +8,7 @@ import {clone,S,hitButton} from '../util.js';
 import {captureScene} from './capture.js';
 import {photograph} from './shoot.js';
 import {cameraFeedback} from './feedback.js';
-import {FRAME,choiceLayout,OCCLUSION_BUTTON,TOOLBAR_CAPTION,otherMode} from './camera.js';
+import {FRAME,choiceLayout,OCCLUSION_BUTTON,TOOLBAR_CAPTION,otherMode,actionCaption} from './camera.js';
 import {alignIcon,buttonCenter} from '../student-hall-icons.js';
 import {anchoredCentre} from '../visual-view.js';
 import {wheelKind,wheelStep} from '../lobby-touch.js';
@@ -250,7 +250,7 @@ async function drawControls(){
     }else{
       const sequences=entries;
       const actionArea=UI.area(panelHost,[box.x+12,box.y+12,box.columns*196,box.rows*61],box.contentHeight,'photo-actions');
-      for(let index=0;index<sequences.length;index++)buttons.push(UI.button(actionArea,'Sequence'+index,sequences[index].anim,[6+(index%box.columns)*196,Math.floor(index/box.columns)*61,185,53],safe(async()=>{if(saving)return;paused=false;bridge.play(sequences[index].anim);await drawControls();})));
+      for(let index=0;index<sequences.length;index++)buttons.push(UI.button(actionArea,'Sequence'+index,actionCaption(sequences[index],T),[6+(index%box.columns)*196,Math.floor(index/box.columns)*61,185,53],safe(async()=>{if(saving)return;paused=false;bridge.play(sequences[index].anim);await drawControls();})));
     }
   }
   await Promise.all(buttons);

@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import { bindCorner, CORNER_MARGIN } from '../../src/ba_modding_toolkit/web/js/corner-layout.js';
 import { headerGeometry } from '../../src/ba_modding_toolkit/web/js/window-layout.js';
 import { anchoredCentre } from '../../src/ba_modding_toolkit/web/js/visual-view.js';
-import { FRAME, OCCLUSION_BUTTON, TOOLBAR_CAPTION, otherMode } from '../../src/ba_modding_toolkit/web/js/photography/camera.js';
+import { FRAME, OCCLUSION_BUTTON, TOOLBAR_CAPTION, otherMode, actionCaption } from '../../src/ba_modding_toolkit/web/js/photography/camera.js';
 import { visualPrefab } from './visual_prefabs.mjs';
 import { n, spr } from './control_prefabs.mjs';
 
@@ -69,7 +69,7 @@ for (const locale of ['en-US', 'zh-CN', 'zh-TW', 'ja-JP', 'ko-KR', 'th-TH']) for
         bamtWindowChrome: platform ? { active: true, platform, bounds: platform === 'darwin'
           ? { left: 12, right: 80, top: 8, bottom: 30 } : { left: width - 148, right: width, top: 8, bottom: 40 } } : null });
       const hits = new Map(), overlay = new Element(); let leftCamera = 0;
-      const env = { S, FRAME, OCCLUSION_BUTTON, TOOLBAR_CAPTION, otherMode, document: doc, mode, overlay, active: true,
+      const env = { S, FRAME, OCCLUSION_BUTTON, TOOLBAR_CAPTION, otherMode, actionCaption, document: doc, mode, overlay, active: true,
         controlsRevision: 0, grid: true, occlusion: false, expanded: false, paused: false, saving: false,
         P: key => strings[key], clone: structuredClone, safe: fn => fn, alignIcon: async () => {}, bindCorner, anchoredCentre, press() {},
         buttonCenter: async el => ({ x: parseFloat(el.style.left) + parseFloat(el.style.width) / 2, y: parseFloat(el.style.top) + parseFloat(el.style.height) / 2 }),
