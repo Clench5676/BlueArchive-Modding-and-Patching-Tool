@@ -1448,3 +1448,37 @@ def test_a_missing_state_without_a_prev_is_a_fresh_library_and_a_junk_prev_block
     assert not state_file(world).exists()
 
 
+def test_a_read_survives_any_exception_of_a_recovery(world, monkeypatch):
+    first, second = two_sources(world)
+    crash_during(world, f"mod:{second.id}")
+
+    def boom(self):
+        raise RuntimeError("Synthetic failure that is not a ServiceError")
+
+    monkeypatch.setattr(ModLibrary, "_recover_transactions", boom)
+    library = build(world)
+    monkeypatch.setattr(service, "RECOVERY_RETRY", 0.0)
+    assert [m.id for m in library.mods()] == [first.id, second.id]  # a read goes on
+    assert library._recovery_error.code == "library_operation_failed"
+    expect_error("library_operation_failed", lambda: library.set_favorite("test", True))  # a write is refused
+    monkeypatch.undo()
+    library.set_favorite("test", True)
+    assert not journals_of(world)
+
+
+def test_a_read_survives_an_oserror_of_the_migration_save(world, monkeypatch):
+    mod = world.add(world.spr)
+    library = world.library
+    library._migrations.discard(LEGACY_REMAP)
+    library._migration_pending = True
+
+    def fail(path, data):
+        raise OSError(errno.EROFS, "Synthetic read-only library")
+
+    real = service.atomic_json
+    monkeypatch.setattr(service, "atomic_json", fail)
+    assert [m.id for m in library.mods()] == [mod.id]  # no raise
+    assert library._migration_pending
+    monkeypatch.setattr(service, "atomic_json", real)
+    library.mods()
+    assert not library._migration_pending and read_state(world)["migrations"] == [LEGACY_REMAP]
