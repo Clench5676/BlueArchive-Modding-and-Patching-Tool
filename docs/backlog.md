@@ -1668,8 +1668,15 @@ no `.backup`). CI: SEC-4 (actions pinned to commits, uv 0.13.1; proven only by t
 Web UI: UI-26 to UI-34, UI-36, UI-37. One new string, `countOne`, in six locales.
 
 Known limits: `detail.js` `readFamily` keeps its 15 s cap; Hall has no game clear button; UI-37's other copies of the error
-expression remain. For the owner's decision: FUN-8, UI-6, UI-20, UI-21, UI-24, UI-25, UI-35, SEC-3. SEC-5 not done: reachable
-only with the session token.
+expression remain. For the owner's decision: FUN-8, UI-6, UI-20, UI-21, UI-24, UI-25, UI-35. SEC-3 closed: no signing (owner, 2026-11-02).
+SEC-5 not done: reachable only with the session token.
 
 Validation: full suites on `248d5adc`: 4,234 passed, 26 skipped; JavaScript 2,141 passed. Not run natively; Windows from code
 only.
+
+## BL-069: macOS: the pointer sometimes flickers to the system pointer
+
+- Status: Open.
+- Requested: 2026-11-02 (owner, 0.6.1-alpha.3).
+
+On macOS the game's pointer (`web/js/cursor.js`) occasionally flickers to the system pointer. Trigger not known yet.
