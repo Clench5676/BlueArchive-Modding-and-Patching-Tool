@@ -235,6 +235,25 @@ def get_search_dirs(base_dir: Path) -> list[Path]:
     return ret
 
 
+def is_game_install(base_dir: Path) -> bool:
+    """
+    Whether a folder is a game install: at least one of its search directories holds a UI atlas bundle, the bundles the
+    web UI draws its sprites from. Decided by file names only; no bundle is opened. The folder itself is a search
+    directory, so a resource folder qualifies as well as the install root.
+    """
+    from .gameassets.discovery import is_atlas
+
+    for directory in get_search_dirs(Path(base_dir)):
+        try:
+            with os.scandir(directory) as entries:
+                for entry in entries:
+                    if entry.name.endswith(".bundle") and is_atlas(Path(entry.name)) and entry.is_file():
+                        return True
+        except OSError:
+            continue
+    return False
+
+
 def list_bundle_files(base_dir: Path) -> list[BundleFileInfo]:
     """
     快速扫描搜索目录下的所有 bundle 文件，仅收集基础信息（路径、大小、修改时间）。

@@ -314,7 +314,9 @@ def test_web_ui_refuses_paths_outside_the_roots(dev, dev_services):
 
     api = build_api(dev_services)
     game = dev.root / "game"
-    (game / "BlueArchive_Data" / "StreamingAssets" / "PUB" / "Resource" / "GameData" / "Windows").mkdir(parents=True)
+    resource = game / "BlueArchive_Data" / "StreamingAssets" / "PUB" / "Resource" / "GameData" / "Windows"
+    resource.mkdir(parents=True)
+    (resource / "uis-atlas-test.bundle").touch()  # a game folder holds UI atlas bundles
     for key, value in (("gameDir.global", dev.outside), ("gameDir.japan", dev.outside),
                        ("outputDir", dev.outside / "output"), ("libraryDir", dev.outside / "library"),
                        ("cacheDir", dev.outside)):
