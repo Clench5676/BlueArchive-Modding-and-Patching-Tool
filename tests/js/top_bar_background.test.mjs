@@ -39,7 +39,16 @@ test('painting changes only the background; toolbar caps, shadow and layout rema
   const css=readFileSync(new URL('../../src/ba_modding_toolkit/web/css/app.css',import.meta.url),'utf8');
   const rule=css.slice(css.indexOf('.topbar {'),css.indexOf('.back {'));
   assert.doesNotMatch(rule,/border-image/);assert.match(rule,/border-width: 0 11px 0 172px/);
-  assert.match(rule,/background-origin: border-box/);assert.match(rule,/drop-shadow\(0 2px 3px rgba\(30, 60, 100, \.18\)\)/);
+  assert.match(rule,/background-origin: border-box/);
+  // the sprite's own shadow rows are the bar's shadow: no CSS filter or shadow of ours on top of it
+  assert.doesNotMatch(rule,/drop-shadow|box-shadow|filter\s*:/);
+});
+test('the top bar and the Enable Mods switch draw no shadow of their own',()=>{
+  const css=readFileSync(new URL('../../src/ba_modding_toolkit/web/css/app.css',import.meta.url),'utf8').replace(/\/\*[\s\S]*?\*\//g,'');
+  for(const selector of ['.topbar','.ms-toggle']){
+    const rule=css.match(new RegExp(`(?:^|\\n)${selector.replace('.','\\.')}\\s*\\{[^}]*\\}`));
+    assert.ok(rule,selector);assert.doesNotMatch(rule[0],/drop-shadow|box-shadow|filter\s*:/,selector);
+  }
 });
 test('remaining switch and scrollbar paint paths do not create CSS border-image slices',()=>{
   for(const name of ['mod-switch-skin.js','scrollbar.js']){
