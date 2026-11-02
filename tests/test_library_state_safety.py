@@ -1406,3 +1406,45 @@ def test_the_seen_baseline_is_not_taken_from_a_blocked_library(rpc_env):
     assert env.s.state.seen_mods() == {mod.id}  # the real baseline, once the library reads
 
 
+def test_a_missing_state_with_a_prev_reads_the_prev_on_a_fresh_load(world):
+    mod = world.add(world.spr)
+    world.library.set_favorite("test", True)
+    state_file(world).unlink()  # a partial restore
+    library = world.reload()
+    assert [m.id for m in library.mods()] == [mod.id]
+    library.set_favorite("other", True)
+    assert [r["id"] for r in read_state(world)["mods"]] == [mod.id]
+    assert not (world.root / "state.json.bad").exists()  # there was no file to keep
+    assert [m.id for m in world.reload().mods()] == [mod.id]
+
+
+def test_a_missing_state_with_a_prev_keeps_the_records_of_a_running_instance(world):
+    first, second = two_mods(world)
+    library = world.library
+    library.set_favorite("test", True)
+    state_file(world).unlink()
+    assert sorted(m.id for m in library.mods()) == sorted([first.id, second.id])
+    library.set_favorite("other", True)  # the save recreates the file from memory and the previous copy
+    data = read_state(world)
+    assert sorted(r["id"] for r in data["mods"]) == sorted([first.id, second.id])
+    assert data["favorites"] == ["other", "test"] and data["applied"]
+    assert not (world.root / "state.json.bad").exists()
+
+
+def test_a_missing_state_without_a_prev_is_a_fresh_library_and_a_junk_prev_blocks(world):
+    world.add(world.spr)
+    state_file(world).unlink()
+    (world.root / "state.json.prev").unlink(missing_ok=True)
+    assert world.reload().mods() == []
+    library = world.library
+    library.set_favorite("test", True)
+    assert read_state(world)["favorites"] == ["test"]
+    state_file(world).unlink()
+    (world.root / "state.json.prev").write_bytes(b"{broken")
+    library = world.reload()
+    assert library.mods() == []
+    error = expect_error("library_state_unreadable", lambda: library.set_favorite("test", True))
+    assert error.params["file"] == str(world.root / "state.json.prev")
+    assert not state_file(world).exists()
+
+
