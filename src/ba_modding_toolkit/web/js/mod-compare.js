@@ -9,7 +9,9 @@ import { spine as confirmLicence } from "./consent.js";
 
 const { node, label, find } = NGUI;
 
-// Compare assets on the existing popup frame, in a detail or stage-level host.
+// Compare assets on the existing popup frame, in a detail or stage-level host, as a layer of its own in that host (as
+// the message popups): a message over it draws above it, Escape closes the topmost layer, and closing it leaves any
+// other layer of the host alone.
 export async function show(result, title = T("act.compare"), hostId = "popup", review = null) {
   await ready();
   const host = $(hostId);
@@ -23,9 +25,19 @@ export async function show(result, title = T("act.compare"), hostId = "popup", r
     popup.children.push(node(`R_${i}`, [-820, y], [label(`${d.type} - ${d.name}`, 38, "#2d4664/1.00", 1300, 50, { pivot: 3, depth: 8, ellipsis: true })]),
       node(`S_${i}`, [820, y], [label(T(`compare.${d.status}`), 38, `${color[d.status] || "#2d4664"}/1.00`, 300, 50, { pivot: 5, depth: 8 })]));
   });
+  const layer = document.createElement("div");
+  layer.className = "popup-layer";
+  layer.tabIndex = -1;
+  host.appendChild(layer);
   host.hidden = false;
   const next = document.createElement("div");
-  const view = await NGUI.render(t, next, { scale: S, origin: [960, 540], z: 10 });
+  let view;
+  try { view = await NGUI.render(t, next, { scale: S, origin: [960, 540], z: 10 }); }
+  catch (err) {
+    layer.remove();
+    if (!host.children.length) host.hidden = true;
+    throw err;
+  }
   const players = [], startPlayers = [];
   if (review) {
     const inner = scrollArea(next, [960 - 850 * S, 540 - 420 * S, 1700 * S, 760 * S], 0);
@@ -88,16 +100,18 @@ export async function show(result, title = T("act.compare"), hostId = "popup", r
     if (finished) return;
     finished = true;
     for (const player of players) player.dispose();
-    popupClosed(host);
-    host.hidden = true; host.innerHTML = ""; finish(accepted === true);
+    layer.remove();
+    popupClosed(host, layer);
+    if (!host.children.length) host.hidden = true;
+    finish(accepted === true);
   };
   hitNode(next, view, "Center/Popup/Base/BG/Btn_Close", done, { name: T("display.close"), action: "close" });
   if (review) {
     hitNode(next, view, "Center/Popup/Btn/Btn_Ok/BG (1)", () => done(true), { name: review.accept, action: "ok" });
     hitNode(next, view, "Center/Popup/Btn/Btn_Cancel/BG (1)", () => done(false), { name: review.discard, action: "cancel" });
   }
-  closable(view, host, done);
-  host.replaceChildren(...next.childNodes);
+  closable(view, host, done, { el: layer });
+  layer.replaceChildren(...next.childNodes);
   for (const start of startPlayers) start();
   return closed;
 }

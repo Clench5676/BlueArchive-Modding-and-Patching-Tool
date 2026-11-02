@@ -1547,7 +1547,10 @@ optional, so a popup still works without them.
 - **Hosts.** The detail screen's own, `#popup` and `#picker`, inside the screen; and two on the stage, so a popup
   shows on any screen: `#prompt` (z-index 2550) for list prompts and `#dialog` (z-index 2600) for message popups, both
   over the settings (2500) and under the toast (3000). Each message popup is a layer of its own in `#dialog`, so one
-  opened from another shows over it. The display settings (`#display`, 2500) opened while `#dialog` is up (Assign
+  opened from another shows over it. Mod Alias (`mod-alias.js`) and the repair preview (`mod-compare.js`) are layers of
+  their own in `#dialog` too (`.popup-layer`, registered on the stack with `el`): a failed save's message draws above
+  Mod Alias, Escape closes the visible (topmost) layer, and closing one removes only its own layer, never the others in
+  the host. The display settings (`#display`, 2500) opened while `#dialog` is up (Assign
   Character's Display Settings) get the `over` class (2700, like the scan consent's), so they draw over the dialog,
   take its clicks and are first on the stack; the class goes when they close.
 - **The stack.** Every open popup is on one stack (`opened(host, close)`), and Escape goes to the topmost one only.

@@ -958,7 +958,7 @@ test("mod aliases save and clear from the current value and both switch pencils 
         await aliasKey(input, { keyCode: 229 });
         assert.equal(rpcRequests.length, start, "input method confirmation cannot save");
         await finish(t, aliasKey(input));
-        assert.equal(hosts.dialog.hidden, true);
+        assert.equal(aliasInput(), null, "the alias editor is closed"); // its own layer: other layers of the host are not its to clear
         assert.equal(currentCell().getAttribute("aria-label"), input.value);
         const original = walk(hosts.ngui).find((e) => e.dataset.path?.endsWith("Data_Widget/OriginalName"));
         assert.equal(original.getAttribute("aria-label"), core);
@@ -981,7 +981,8 @@ test("mod aliases save and clear from the current value and both switch pencils 
         assert.ok(!walk(hosts.popup).some((e) => e.dataset.path === "Details/OriginalName"));
         await walk(hosts.popup).find((e) => e.dataset.action === "alias:details").click(); await flush();
         assert.equal(aliasInput().value, "");
-        await walk(hosts.dialog).find((e) => e.dataset.action === "cancel").click();
+        await walk(aliasInput().parentNode).find((e) => e.dataset.action === "cancel").click();
+        assert.equal(aliasInput(), null, "cancel closes the alias editor");
         assert.equal(hosts.popup.hidden, false, "cancel keeps the source picker open");
         await closeSwitch();
         Detail.hide();
@@ -1087,10 +1088,12 @@ test("cancel, close, backdrop and Escape discard an alias draft without saving",
   for (const how of ["cancel", "close", "backdrop", "escape"]) {
     await ModAlias.open({ mod: { id: "test", alias: "Saved alias" }, onSaved: () => assert.fail("cancel cannot save") });
     aliasInput().value = "Draft";
+    // the editor is a layer of its own: other layers of the host (a stray message) are not the buttons under test
+    const layer = aliasInput().parentNode;
     if (how === "escape") Popup.onKey({ key: "Escape", preventDefault() {} });
-    else if (how === "backdrop") await walk(hosts.dialog).find((e) => e.dataset.path === "Center/BlackBg/BlackBgClickArea").click();
-    else await walk(hosts.dialog).find((e) => e.dataset.action === how).click();
-    assert.equal(hosts.dialog.hidden, true);
+    else if (how === "backdrop") await walk(layer).find((e) => e.dataset.path === "Center/BlackBg/BlackBgClickArea").click();
+    else await walk(layer).find((e) => e.dataset.action === how).click();
+    assert.equal(aliasInput(), null, "the alias editor is closed"); // its own layer: other layers of the host are not its to clear
   }
   assert.equal(rpcRequests.length, start);
 });
@@ -1113,7 +1116,7 @@ test("failed alias saves keep the draft, and repeated Enter submits once", async
     resolve({ result: { id: "test", alias: input.value } });
     await pending;
     assert.equal(saved.alias, "Retry alias");
-    assert.equal(hosts.dialog.hidden, true);
+    assert.equal(aliasInput(), null, "the alias editor is closed"); // its own layer: other layers of the host are not its to clear
   } finally { ModAlias.close(); renameReply = saveAlias; }
 });
 
@@ -1124,7 +1127,7 @@ test("leaving detail closes the mod alias editor", async (t) => {
     await walk(hosts.ngui).find((e) => e.dataset.part?.endsWith("/ModAliasBtn")).click();
     assert.ok(aliasInput());
     Detail.hide();
-    assert.equal(hosts.dialog.hidden, true);
+    assert.equal(aliasInput(), null, "the alias editor is closed"); // its own layer: other layers of the host are not its to clear
   } finally { Detail.hide(); await flush(); t.mock.timers.reset(); }
 });
 
