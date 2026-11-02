@@ -1549,3 +1549,44 @@ An initial test run refused to read a new, untracked scrolling source file under
 policy. The implementation now reuses the tracked `horizontal-scroll.js`; the formerly failing case and both
 full suites pass without changing the isolation policy. Git staging was refused when creating the worktree's
 index lock, so the changes remain uncommitted in this worktree.
+
+## BL-065: Mod library state and recovery safety
+
+- Status: Implemented for local review; owner acceptance pending. Not in the 0.6.1-alpha build.
+- Requested: 2026-11-02, from a whole-app functional review (FUN-1 to FUN-3).
+
+1. One bad record or an unreadable `state.json` erased the library at the next save.
+2. A mod file that was briefly missing permanently deleted its library record.
+3. A journal that could not roll back (a Steam repair after a crash, a moved game folder) blocked reads and writes for
+   good.
+
+Implementation (`library/service.py`, `library/asset_delete.py`, `library/profiles.py`):
+
+1. `state.json` is read record by record; an unusable record is held and written back unchanged. The last good file is
+   kept as `state.json.prev`, an unreadable one as `state.json.bad`, the same convention as `profiles.json`. A missing
+   file also reads `.prev`. With neither readable, or a version above 1, the library is blocked: reads answer empty,
+   every change of state or configuration is refused with `library_state_unreadable`, and side writes of reads skip. A
+   file that cannot be opened is not corruption: `library_io_error`, read again at the next call.
+2. A valid record with a missing file is held the same way and returns when its file does, with its alias, assignment,
+   configuration and applied record. A held id still counts as a source, so nothing is settled away; a removal never
+   comes back.
+3. Reads attempt recovery but never fail on it; a read retries when the journals change or after 60 s. Writes always
+   attempt recovery and refuse with the real error. A game file whose bytes match neither the journal's before nor its
+   after is an outside change: left as it is, without a new date on its record, its kept original kept, the journal
+   retired. Same install key with other resource folders proceeds if every target is still accepted. A write journal of
+   an install not known now waits with its files while other installs are written. An asset deletion cannot wait,
+   because its rollback restores a whole-library snapshot: reads work and writes refuse.
+
+Known limits, for the owner's decision:
+
+- Nothing in the UI shows a held mod or a blocked library. A held mod stays hidden until its file returns; a blocked
+  library looks empty and the error appears only when a write is refused.
+- `original_unavailable`, `library_recovery_pending` and an invalid journal still refuse writes with no way out in the
+  UI.
+- `_prune` deletes nothing while a journal waits, so an install that never returns keeps originals on disk.
+- Held photograph composite records are invisible to `usage_targets` and `remove_photo`, and the one-time legacy remap
+  does not see held originals.
+
+Validation: `tests/test_library_state_safety.py` covers every case, the review's reproductions through the real library
+and the RPC registry, and a sweep of the read RPCs with `profiles.json` byte for byte unchanged. Full suites on
+`deddd173`: 3,729 passed, 26 skipped; JavaScript 1,965 passed. Not run natively; Windows from code only.
