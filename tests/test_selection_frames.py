@@ -8,6 +8,7 @@ from ba_modding_toolkit.gameassets.selection_frames import ROOT, SLOT, export_ef
 from ba_modding_toolkit.gameassets.layouts import export_layout, subtree
 from ba_modding_toolkit.gameassets import particles
 from test_gameassets import _fake_prefab
+from texture_helpers import fake_texture
 
 
 def test_layout_attaches_frame_effect_only_to_its_own_node():
@@ -73,7 +74,7 @@ def test_frame_texture_export_rejects_ids_outside_the_prefab(tmp_path, monkeypat
     def open_bundle(path):
         reads.append(path)
         yield SimpleNamespace(objects=[SimpleNamespace(path_id=42, assets_file=SimpleNamespace(name='CAB-test'),
-            type=SimpleNamespace(name='Texture2D'), read=lambda: SimpleNamespace(image=Image.new('RGBA', (2, 2))))])
+            type=SimpleNamespace(name='Texture2D'), read=lambda: fake_texture(Image.new('RGBA', (2, 2))))])
     monkeypatch.setattr(service, 'open_bundle', open_bundle)
     with pytest.raises(AssetNotFound):
         game.selection_frame_texture('cab-unlisted_42')

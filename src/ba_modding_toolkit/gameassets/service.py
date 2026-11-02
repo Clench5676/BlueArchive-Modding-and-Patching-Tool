@@ -19,6 +19,7 @@ from PIL import Image
 from .. import devmode
 from ..errors import ServiceError
 from ..naming import parse_filename, spine_kind
+from ..texture_guard import texture_image
 from .cache import AssetCache, PreviewCache, pack_preview_files, unpack_preview_files
 from . import lobby
 from .discovery import (
@@ -349,7 +350,7 @@ class GameAssets:
             image = self.cache.get(_SCHEMA + key, version=self.cache_version, disk=False)
             if image is None:
                 with open_bundle(path) as env:
-                    image = find_object(env, record).read().image
+                    image = texture_image(find_object(env, record).read(), path.name)
                     image.load()
                 self.cache.put(_SCHEMA + key, image, version=self.cache_version, disk=False, generation=generation)
             return image
@@ -510,7 +511,7 @@ class GameAssets:
                             and obj.assets_file.name.lower() == cab and obj.type.name == "Texture2D"), None)
                 if obj is None:
                     raise AssetNotFound(("selection-frame", tex_id))
-                return png_bytes(obj.read().image)
+                return png_bytes(texture_image(obj.read(), Path(bundle).name))
         return self._cached("selection-frame/" + json.dumps([tex_id, spine_stamps([Path(bundle)])]), build, disk=False)
 
     def _collection(self) -> dict:
@@ -591,7 +592,7 @@ class GameAssets:
                 with open_bundle(path) as env:
                     for obj in env.objects:
                         if obj.type.name == "Texture2D" and obj.peek_name() == name:
-                            found.append(png_bytes(obj.read().image))
+                            found.append(png_bytes(texture_image(obj.read(), path.name)))
             if len(found) != 1 or spine_stamps(paths) != stamps:
                 raise ServiceError("photo_target_unavailable")
             return found[0]
@@ -968,7 +969,7 @@ class GameAssets:
                             and o.type.name == "Texture2D"), None)
                 if obj is None:
                     raise AssetNotFound(("lobby-fx", core, tex_id))
-                return png_bytes(obj.read().image)
+                return png_bytes(texture_image(obj.read(), Path(bundle).name))
         return self._cached("lobby-fx/" + json.dumps([tex_id, spine_stamps([Path(bundle)])]), build, disk=False)
 
 
