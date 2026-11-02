@@ -1186,6 +1186,13 @@ is added. This also normalizes undersized official destination pages, so the res
 size. Rotations, trim offsets and premultiplied alpha remain part of region placement. `mod-compatibility.js` adds
 "Textures upscaled to {w} × {h}" to the result for each distinct enlarged size (`remap.upscaled` in all five locales).
 
+A repaired copy and its original link to each other (`repaired_from`, `repaired_id`), and a linked mod is not repaired
+again (`remap` and `accept_remap` refuse it with `entry_changed`). `remove` clears the original's `repaired_id` in the
+same state write that removes the copy, and an asset deletion's rollback restores the link with the snapshot of records.
+A `repaired_id` that points at no record counts as none (`ModEntry.repaired_id`, the compatibility report and its stamp,
+the repair gate), so a library that deleted the copy before this recovers without a migration. A held record (its folder
+is missing for now) is there: its link stays and the original stays not repairable while it is held.
+
 ## Asset routes
 
 | Route | Class |

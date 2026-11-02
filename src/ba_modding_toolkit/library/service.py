@@ -934,6 +934,15 @@ class ModLibrary:
         variant = self.catalog.variant_for_core(core_of(record["files"][0]))
         return variant.key if variant is not None else record["target"]
 
+    def _repaired_id(self, record: dict[str, Any]) -> str:
+        """The repaired copy a mod links to, "" when the link points at no record: an old library that deleted the copy
+        keeps its id, which counts as none. A held record is there (its files are missing for now, not gone): its link
+        stays, and the mod stays not repairable while it is held."""
+        mod_id = record.get("repaired_id")
+        if not isinstance(mod_id, str) or not mod_id:
+            return ""
+        return mod_id if mod_id in self._records or mod_id in self._held_ids() else ""
+
     def _entry(self, record: dict[str, Any]) -> ModEntry:
         paths = self._paths(record)
         parsed = parse_filename(paths[0].name)
@@ -941,7 +950,7 @@ class ModLibrary:
         return ModEntry(record["id"], paths[0], self._label(record), self._target_of(record), record["kind"],
                         record["added"], not record["seen"], sum(p.stat().st_size for p in paths),
                         max(date_of(path.name) for path in paths), parsed.crc, core_of(paths[0].name),
-                        repaired_from=record.get("repaired_from", ""), repaired_id=record.get("repaired_id", ""),
+                        repaired_from=record.get("repaired_from", ""), repaired_id=self._repaired_id(record),
                         user_added=record.get("user_added") is True, alias=record.get("alias", ""),
                         label_base=record["label"])
 
@@ -1373,7 +1382,8 @@ class ModLibrary:
             except FileNotFoundError:
                 stamp = None
             stamps.append([str(path.resolve()), stamp])
-        identity = [pin.key if pin else None, self._target_of(record), record.get("repaired_from"), record.get("repaired_id"), stamps]
+        identity = [pin.key if pin else None, self._target_of(record), record.get("repaired_from"),
+                    self._repaired_id(record) or None, stamps]
         return hashlib.sha256(json.dumps(identity).encode()).hexdigest()
 
     @_serialized
@@ -1385,7 +1395,7 @@ class ModLibrary:
             progress({"current": 1, "total": 1, "step": "import.step.check"})
         report = self._check_group({path.name: path for path in self._paths(record)}, pin or self.current_pin(),
                                    variant_key=self._target_of(record))
-        report["repaired_from"], report["repaired_id"] = record.get("repaired_from", ""), record.get("repaired_id", "")
+        report["repaired_from"], report["repaired_id"] = record.get("repaired_from", ""), self._repaired_id(record)
         report["remappable"] = report["remappable"] and not (report["repaired_from"] or report["repaired_id"])
         return report
 
@@ -1910,6 +1920,9 @@ class ModLibrary:
                         applied.update(source='removed', removed=True)
                         applied.pop('build', None)
                 del self._records[mod_id]
+                for other in self._records.values():
+                    if other.get("repaired_id") == mod_id:
+                        del other["repaired_id"]  # the original is repairable again: one write with the copy's removal
                 self._save()
                 shutil.rmtree(directory)
                 self._delete_built_files(keys, self.profiles.read())
@@ -4933,7 +4946,7 @@ class ModLibrary:
         """Prepare a review in temporary storage; only accept_remap can add it to the library."""
         pin = self._current(pin)
         record = self._record(mod_id)
-        if record.get("repaired_from") or record.get("repaired_id"):
+        if record.get("repaired_from") or self._repaired_id(record):
             raise ServiceError("entry_changed")
         self._remap_previews = {token: preview for token, preview in self._remap_previews.items()
                                 if preview["expires"] > time.monotonic() and preview["source"] != mod_id}
@@ -5053,7 +5066,7 @@ class ModLibrary:
             self._remap_previews.pop(preview, None)
             raise ServiceError("entry_changed")
         record = self._record(prepared["source"])
-        if record.get("repaired_from") or record.get("repaired_id") or prepared["identity"] != self._identity(
+        if record.get("repaired_from") or self._repaired_id(record) or prepared["identity"] != self._identity(
                 {path.name: path for path in self._paths(record)}):
             raise ServiceError("entry_changed")
         with tempfile.TemporaryDirectory(prefix=devmode.LIBRARY_STAGING_PREFIX + "accept-") as temporary:
