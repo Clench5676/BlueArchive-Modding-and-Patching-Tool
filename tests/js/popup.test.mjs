@@ -2787,3 +2787,114 @@ test("Settings is on the popup stack: Escape and the backdrop close it, and a po
     assert.equal(Popup.top(), null);
   } finally { handlers.clear(); settings.hidden = true; settings.innerHTML = ""; }
 });
+
+// UI-15: Mod Alias and the repair preview are layers of their own in #dialog, like the message popups
+const layers = () => dialog.children.filter((el) => el.className === "popup-layer");
+test("Mod Alias is a layer of its own: a failed save's message draws above it, and Escape closes the visible layer", async () => {
+  const ModAlias = await import("../../src/ba_modding_toolkit/web/js/mod-alias.js");
+  handlers.set("mods.rename", () => ({ error: { code: "library_io_error", params: { file: "x.bundle" } } }));
+  try {
+    const saved = [];
+    const opening = ModAlias.open({ mod: { id: "m1", alias: "" }, onSaved: async (value) => saved.push(value) });
+    const ok = await drawn(dialog, "ok");
+    await opening;
+    const [alias] = layers();
+    assert.equal(layers().length, 1);
+    assert.ok(alias.contains(ok), "its buttons are in its own layer, not loose in the host");
+    assert.ok(walk(alias).some((el) => el.className.includes("mod-alias-input")));
+    assert.equal(dialog.children.every((el) => el === alias), true, "nothing else sits in the host");
+    assert.equal(Popup.top().el, alias);
+    ok.click();
+    await until(() => layers().length === 2);
+    const [, message] = layers();
+    assert.notEqual(message, alias);
+    assert.equal(dialog.children.indexOf(message) > dialog.children.indexOf(alias), true, "the failed save's message is above Mod Alias");
+    assert.equal(alias.isConnected, true, "the alias popup stays open for another try");
+    assert.equal(walk(alias).find((el) => el.className.includes("mod-alias-input")).disabled, false);
+    assert.equal(Popup.top().el, message, "Escape belongs to the message");
+    assert.ok(press("Escape").defaultPrevented);
+    await until(() => layers().length === 1);
+    assert.equal(alias.isConnected, true, "closing the message leaves Mod Alias");
+    assert.equal(dialog.hidden, false);
+    assert.equal(Popup.top().el, alias);
+    assert.ok(press("Escape").defaultPrevented);
+    assert.equal(layers().length, 0);
+    assert.equal(dialog.hidden, true);
+    assert.deepEqual(saved, []);
+  } finally { handlers.clear(); }
+});
+
+test("closing Mod Alias leaves the other layers of the host, and a saved name closes only its own layer", async () => {
+  const ModAlias = await import("../../src/ba_modding_toolkit/web/js/mod-alias.js");
+  handlers.set("mods.rename", () => ({ result: { id: "m1", label: "Name" } }));
+  try {
+    const saved = [];
+    const opening = ModAlias.open({ mod: { id: "m1", alias: "Old" }, onSaved: async (value) => saved.push(value) });
+    await drawn(dialog, "ok");
+    await opening;
+    const [alias] = layers();
+    const other = Popup.message({ title: "Other", lines: ["Line"], ok: "OK" });
+    await until(() => layers().length === 2 && action(layers()[1], "ok"));
+    const [, message] = layers();
+    action(alias, "cancel").click(); // Cancel on the layer under the message
+    assert.equal(alias.isConnected, false);
+    assert.equal(message.isConnected, true, "the other layer is not removed");
+    assert.equal(dialog.hidden, false);
+    action(message, "ok").click();
+    await other;
+    assert.equal(dialog.hidden, true);
+    // a save that works closes Mod Alias and reports the result
+    const again = ModAlias.open({ mod: { id: "m1", alias: "" }, onSaved: async (value) => saved.push(value) });
+    const ok = await drawn(dialog, "ok");
+    await again;
+    ok.click();
+    await until(() => saved.length === 1);
+    assert.deepEqual(saved, [{ id: "m1", label: "Name" }]);
+    assert.equal(layers().length, 0);
+    assert.equal(dialog.hidden, true);
+    // opening it again while one is open replaces that one only
+    const first = ModAlias.open({ mod: { id: "m1", alias: "" }, onSaved: async () => {} });
+    await drawn(dialog, "ok"); await first;
+    const second = ModAlias.open({ mod: { id: "m2", alias: "" }, onSaved: async () => {} });
+    await until(() => layers().length === 1 && action(dialog, "ok")); await second;
+    assert.equal(layers().length, 1);
+    action(dialog, "close").click();
+    assert.equal(dialog.hidden, true);
+  } finally { handlers.clear(); }
+});
+
+test("the repair preview is a layer of its own: a message over it, Escape on the visible layer, and a close that leaves the others", async () => {
+  const Compare = await import("../../src/ba_modding_toolkit/web/js/mod-compare.js");
+  const review = { lines: ["moved 1"], accept: english.remap.accept, discard: english.remap.discard };
+  const pending = Compare.show({ assets: [], pages: [], drawings: {} }, "Painted", "dialog", review);
+  await drawn(dialog, "cancel");
+  const [preview] = layers();
+  assert.equal(layers().length, 1);
+  assert.ok(preview.contains(action(dialog, "ok")), "its buttons are in its own layer");
+  assert.equal(Popup.top().el, preview);
+  const over = Popup.message({ title: "Failed", lines: ["It failed"], ok: "OK" });
+  await until(() => layers().length === 2 && action(layers()[1], "ok"));
+  const [, message] = layers();
+  assert.equal(dialog.children.indexOf(message) > dialog.children.indexOf(preview), true, "the message draws above the preview");
+  assert.equal(Popup.top().el, message);
+  assert.ok(press("Escape").defaultPrevented);
+  assert.deepEqual(await over, { button: null, checked: null });
+  assert.equal(preview.isConnected, true, "Escape closed only the message");
+  assert.equal(Popup.top().el, preview);
+  // Discard on the preview leaves a message opened over it
+  const other = Popup.message({ title: "Other", lines: ["Line"], ok: "OK" });
+  await until(() => layers().length === 2 && action(layers()[1], "ok"));
+  action(preview, "cancel").click();
+  assert.equal(await pending, false);
+  assert.equal(preview.isConnected, false);
+  assert.equal(layers().length, 1, "the other layer stays");
+  assert.equal(dialog.hidden, false);
+  action(layers()[0], "ok").click();
+  await other;
+  assert.equal(dialog.hidden, true);
+  // Accept resolves true
+  const accepted = Compare.show({ assets: [], pages: [], drawings: {} }, "Painted", "dialog", review);
+  action(await drawn(dialog, "ok").then(() => dialog), "ok").click();
+  assert.equal(await accepted, true);
+  assert.equal(dialog.hidden, true);
+});
