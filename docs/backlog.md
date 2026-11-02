@@ -1621,3 +1621,35 @@ Android or iOS files, not checked; import does not refuse an out-of-bounds textu
 
 Validation: full suites on `60667b6c`: 4,063 passed, 26 skipped; JavaScript 1,982 passed. Not run natively; Windows from
 code only. Visual acceptance of the popups is the owner's.
+
+## BL-067: Review fixes, Medium findings
+
+- Status: Implemented for local review; owner acceptance pending.
+- Requested: 2026-11-02, from the whole-app review.
+
+Library: FUN-7 (an update marks the entries configured with the mod, and Off then On never writes the old build back),
+FUN-11 (a deleted repaired copy leaves its parent repairable; a dead link counts as none).
+
+Settings files and data folder: FUN-9 (`webui.json` keeps `.prev` and `.bad`, flushed before replace), FUN-10 (a bad
+`config.toml` starts on defaults, is kept as `.bad` before a save, and a failed read is never applied), FUN-13 (no
+lock-order deadlock around the photograph store), FUN-14 (a read-only data folder gives one notice and
+`data_dir_readonly`, with a new string in six locales, the non-English wording not owner-reviewed), FUN-17 (a library move
+copies, verifies and publishes before it clears the source, and a failed move can be retried).
+
+Engine: FUN-12 (the newest release with this platform's build is offered first), FUN-16 (shorter staging folders), SEC-2
+(`bundle_guard` bounds bundle sizes before loading; all official bundles pass), UI-23 (errors name their file).
+
+Popups and first run: UI-1, UI-5 (ordinary refusals are a neutral notice, `REFUSALS` in `popup.js`), UI-7, UI-8 (one shared
+focus trap), UI-15, UI-16, UI-17 (dialogues only; idles keep clip names, no string exists), UI-22, FUN-15 (the first-run
+sequence runs once a game folder is chosen).
+
+Fit and accessibility: UI-9, UI-10, UI-11, UI-12, UI-13, UI-14, UI-18, UI-19. `ngui.js` `fitLines` and `fitGroup` changed for
+every caller: text with no break point keeps the largest one-line size, and CJK may break between characters only when no word
+wrap stays at the floor.
+
+Known limits, for the owner's decision: FUN-8 (On overwrites an outside change, against the docs), UI-6 (actions with no
+result since the toasts were removed), UI-20, UI-21, UI-24, UI-25, a third line for prompt cards (names still under 24),
+labels for camera idles, Safe Mode folder control, the classic UI's truncating save of `config.toml`.
+
+Validation: full suites on `949c26eb`: 4,197 passed, 26 skipped; JavaScript 2,116 passed. Not run natively; Windows from code
+only. Visual acceptance is the owner's.
