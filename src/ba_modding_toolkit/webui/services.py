@@ -28,6 +28,7 @@ from ..logging_utils import log_failure
 from ..naming import parse_filename
 from ..utils import EXE_DIR
 from .classic import QUEUE_METHODS, ClassicQueue, ClassicWindow, NativeOps, QueuedCall, native_ops, stat_files
+from ..library.relocate import relocate
 from .events import EventBus
 from .jobs import JobRunner
 from .scanner import Scanner
@@ -42,8 +43,9 @@ PRUNE_WAIT = 120.0  # seconds the start scan waits for the library.prune job sub
 PROGRESS_PUBLISH = 0.25  # seconds between two mods.state events while a toggle reports its progress
 UPDATE_QUIT_WAIT = 3.0  # seconds for the native window to close for an update
 # the library's files and folders a library move takes along; the lock files are made again where needed
-LIBRARY_ITEMS = ("mods", "originals", "built", "transactions", "import-transactions", "photographs", "state.json",
-                 "state.json.prev", "state.json.bad", "profiles.json", "profiles.json.prev", "profiles.json.bad")
+LIBRARY_ITEMS = ("mods", "originals", "built", "transactions", "import-transactions", "asset-deletions", "photographs",
+                 "state.json", "state.json.prev", "state.json.bad", "profiles.json", "profiles.json.prev",
+                 "profiles.json.bad")
 
 
 # errno values of a write refused by permissions or a read-only volume
@@ -543,7 +545,12 @@ class Services:
 
     def move_library(self, target: Path) -> Path:
         """Use another folder for the mod library. The current library moves there when the target holds none: its
-        mods, kept originals, built copies, state.json and profiles.json (each with its .prev and .bad)."""
+        mods, kept originals, built copies, pending journals, photographs, state.json and profiles.json (each with its
+        .prev and .bad). The items are copied into the target and checked, published there, and only then is the
+        library switched to the target and the old folder cleared (library.relocate). A failure before the switch
+        removes the copies and leaves the library where it was, so the move can be tried again at once. A failure
+        clearing the old folder is logged and leaves the library at the target, complete, with the old folder keeping
+        the items it could not remove."""
         target = Path(target).expanduser().resolve()
         devmode.check_read(target)
         current = self.library_dir().resolve()
@@ -565,24 +572,27 @@ class Services:
                 clashes = [item for item in LIBRARY_ITEMS if (target / item).exists()]
                 if clashes:
                     raise ServiceError("library_target_not_empty", path=str(target / clashes[0]))
-                target.mkdir(parents=True, exist_ok=True)
-                moved = []
                 try:
-                    for item in LIBRARY_ITEMS:
-                        if (current / item).exists():
-                            shutil.move(str(current / item), str(target / item))
-                            moved.append(item)
+                    relocation = relocate(current, target, LIBRARY_ITEMS)
                 except OSError as e:
-                    for item in reversed(moved):  # put back what already moved
-                        try:
-                            shutil.move(str(target / item), str(current / item))
-                        except OSError:
-                            logger.exception("could not move %s back to %s", item, current)
+                    log_failure(logger, logging.WARNING, "Cannot copy the mod library to the new folder", e)
                     raise ServiceError("library_io_error", file=str(target)) from e
-            self.state.set("library_dir", str(target))
+            else:
+                relocation = None
+            try:
+                self.state.set("library_dir", str(target))
+            except BaseException:
+                if relocation is not None:
+                    relocation.undo()  # still in use where it was: nothing was lost, the copies go
+                raise
             if "library" not in self._injected:
                 self._library = None
                 self._profiles_signature = None
+            if relocation is not None:
+                left = relocation.finish()
+                if left:
+                    logger.warning("the old library folder still holds %s; the library is complete in the new folder",
+                                   ", ".join(left))
         self.snapshot.clear_entries()
         self.events.publish("library.changed")
         self.refresh_status()
