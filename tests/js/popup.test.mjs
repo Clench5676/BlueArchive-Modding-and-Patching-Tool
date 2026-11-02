@@ -2898,3 +2898,103 @@ test("the repair preview is a layer of its own: a message over it, Escape on the
   assert.equal(await accepted, true);
   assert.equal(dialog.hidden, true);
 });
+
+// UI-22: a search or segment with no match says so in the list paper, and confirming a hidden choice is blocked
+const noMatch = () => walk(prompt).filter((e) => e.textContent === english.hall.noCandidates && e.dataset.path === "Empty");
+test("a list whose segment shows nothing says so in the paper, and its primary button answers nothing", async () => {
+  const everything = [{ key: "a", label: "Alpha", full: "Alpha", recruit: true }, { key: "b", label: "Beta", full: "Beta", recruit: false }];
+  const asked = [];
+  const options = (items, selected) => ({ host: prompt, title: "Sources", items, selected, tools: { segs: ["seg.all", "seg.recruit", "seg.noRecruit"], seg: 0, onSeg() {} },
+    okText: "Apply", onOk: () => asked.push("ok"), onClose: () => asked.push("close"),
+    details: (it) => ({ title: "Details", fields: [["File", it.label]], actions: [] }) });
+  try {
+    // everything shown: the primary button works
+    await Popup.listPopup(options(everything, "a"));
+    assert.equal(noMatch().length, 0);
+    const colour = (root) => walk(root).find((e) => e.dataset.path === "Center/Popup/Btn/Btn_0/Label_Locale")?.style.color;
+    const normal = colour(prompt), plainOk = action(prompt, "ok");
+    assert.equal(plainOk.disabled ?? false, false);
+    plainOk.click();
+    assert.deepEqual(asked, ["ok"]);
+    // the chosen card filtered out (the caller's segment removed it): the paper still lists the others, Apply is blocked
+    asked.length = 0;
+    await Popup.listPopup(options(everything.slice(1), "a"));
+    assert.equal(noMatch().length, 0, "other cards are shown: no empty message");
+    const blocked = action(prompt, "ok");
+    assert.equal(blocked.disabled, true);
+    assert.equal(blocked.getAttribute("aria-disabled"), "true");
+    blocked.click();
+    assert.deepEqual(asked, [], "a disabled button does not answer");
+    assert.notEqual(colour(prompt), normal, "drawn as the game's disabled button");
+    // nothing shown at all
+    await Popup.listPopup(options([], "a"));
+    const [empty] = noMatch();
+    assert.ok(empty, "hall.noCandidates is in the list paper");
+    assert.equal(action(prompt, "ok").disabled, true);
+    const paper = walk(prompt).find((e) => e.dataset.path === "Center/Popup/ListPaper");
+    assert.ok(paper, "the list paper is drawn");
+    const [pl, pt, pw, ph] = NGUI_rect(paper), [el, et, ew, eh] = NGUI_rect(empty);
+    assert.ok(el >= pl && el + ew <= pl + pw && et >= pt && et + eh <= pt + ph, "the message lies inside the paper");
+    assert.ok(Math.abs((el + ew / 2) - (pl + pw / 2)) < 1, "centred across the paper");
+    // the paper's own text is the app's string
+    assert.equal(empty.textContent, english.hall.noCandidates);
+    // the segment is cleared by the caller: the card is back and Apply works again
+    asked.length = 0;
+    await Popup.listPopup(options(everything, "a"));
+    assert.equal(noMatch().length, 0);
+    assert.equal(action(prompt, "ok").disabled ?? false, false);
+    action(prompt, "ok").click();
+    assert.deepEqual(asked, ["ok"]);
+    // a popup without tools (a prompt) is not blocked, whatever it lists
+    asked.length = 0;
+    await Popup.listPopup({ host: prompt, title: "Prompt", items: everything.slice(1), selected: "a", okText: "Apply", onOk: () => asked.push("ok") });
+    action(prompt, "ok").click();
+    assert.deepEqual(asked, ["ok"]);
+  } finally { prompt.hidden = true; Popup.closed(prompt); }
+});
+const NGUI_rect = (el) => ["left", "top", "width", "height"].map((k) => parseFloat(el.style[k]));
+
+test("a search that matches nothing blocks the primary button until the match is back", async (t) => {
+  const NGUI = await import("../../src/ba_modding_toolkit/web/js/ngui.js");
+  const collection = n("UICharacterCollection", [0, 0]);
+  const base = "Inventory_ListControl/RightCanvas/ListBG";
+  insert(collection, "SeletControl/TopMenu", structuredClone(NGUI.find(switchLayouts.inventory, `${base}/BG_Top_Widget`)));
+  insert(collection, "SeletControl/CharacterSearch", structuredClone(NGUI.find(switchLayouts.inventory, `${base}/Inbox/SearchInfo`)));
+  insert(collection, "SeletControl/List/Scroll Bar", n("Scroll Bar", [0, 0], [], ["Background", "Foreground"].map((name) =>
+    n(name, [1391, 0], [{ texture: "Scroll", w_: 126, h_: 990, pivot: 4, color: "#92a6b7/1.00" }]))));
+  const fetch = globalThis.fetch;
+  t.mock.method(globalThis, "fetch", async (url, options) => url === "/asset/ui/layout/UICharacterCollection.json" ? reply(collection) : fetch(url, options));
+  const Fresh = await import("../../src/ba_modding_toolkit/web/js/popup.js?empty-search");
+  const items = Array.from({ length: 4 }, (_, i) => ({ key: String(i), label: `Owner ${i}`, full: `Owner ${i}` }));
+  const asked = [];
+  try {
+    await Fresh.listPopup({ host: prompt, layoutKind: "spr", title: "Portraits", items, selected: "3", tools: {}, okText: "Apply", onOk: () => asked.push("ok") });
+    action(prompt, "search").click();
+    await until(() => walk(prompt).some((e) => e.className === "roster-search"));
+    const type = async (value) => {
+      const input = walk(prompt).find((e) => e.className === "roster-search");
+      input.value = value;
+      for (const fn of input.listeners.input || []) fn({ isComposing: false });
+      await until(() => walk(prompt).find((e) => e.className === "roster-search")?.value === value);
+      await tick();
+    };
+    await type("zzz");
+    await until(() => walk(prompt).some((e) => e.dataset.path === "Empty"));
+    const empty = walk(prompt).find((e) => e.dataset.path === "Empty");
+    assert.equal(empty.textContent, english.hall.noCandidates);
+    assert.equal(action(prompt, "ok").disabled, true);
+    action(prompt, "ok").click();
+    assert.deepEqual(asked, []);
+    // the paper is lowered with the search field open: the message is centred on what shows of it
+    const area = walk(prompt).find((e) => e.className === "popup-cards");
+    assert.ok(area, "the scrolling area is still drawn");
+    // a match that does not include the chosen card keeps Apply blocked; one that does frees it
+    await type("Owner 0");
+    await until(() => !walk(prompt).some((e) => e.dataset.path === "Empty"));
+    assert.equal(action(prompt, "ok").disabled, true, "card 3 is still hidden by the search");
+    await type("Owner 3");
+    await until(() => action(prompt, "ok") && !action(prompt, "ok").disabled);
+    action(prompt, "ok").click();
+    assert.deepEqual(asked, ["ok"]);
+  } finally { prompt.hidden = true; Fresh.closed(prompt); }
+});

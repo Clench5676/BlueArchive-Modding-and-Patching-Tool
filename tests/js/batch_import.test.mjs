@@ -97,7 +97,7 @@ const catalog = { families: ["a", "b", "c", "d", "e"].map((id) => ({ key: id, va
   key: id, custom: id === "a" ? ["Saved Alias"] : [], fileId: `${id}_spr`, spr: `${id}_spr`, lobby: `${id}_home`, model: `${id}_model`, portrait: `/portrait/${id}.png`, bg: `/bg/${id}.png`, names: { en: { full: `Student ${id}` }, ja: { full: `JP ${id}` } },
 }] })) };
 
-async function fixture({ licensed = false, native = true, suggest, countIcons = false } = {}) {
+async function fixture({ licensed = false, native = true, suggest, countIcons = false, blockedConfirm = false } = {}) {
   body.replaceChildren(); observers.length = 0;
   const host = body.appendChild(new El()), dialog = body.appendChild(new El()); dialog.id = "dialog"; dialog.hidden = true;
   const calls = [], analyses = [], runs = [], sources = [], messages = [], answers = [], thumbs = [], modelThumbs = [], scopes = [], popupStack = [], holds = [];
@@ -138,6 +138,7 @@ async function fixture({ licensed = false, native = true, suggest, countIcons = 
       popupStack.push({ host, close });
     },
     reveal: async (layer, work) => { await Promise.all(work); layer.style.visibility = ""; layer.inert = false; },
+    ...(blockedConfirm ? { disabledConfirm: () => node("DisabledConfirm") } : {}),
     closed: () => popupStack.pop(), closable() {},
     hit: (host, _view, _path, fn, attrs) => {
       const button = new El("button"); button.dataset.action = attrs.action; button.setAttribute("aria-label", attrs.name);
@@ -248,6 +249,38 @@ test("manual character picker searches cross-server students and confirms owners
   await confirming; await h.page.settled();
   assert.equal(h.page.model.state.entries[0].variant, "future");
   assert.equal(h.page.model.state.analysisRevision, 9);
+});
+
+test("Assign Character says so when nothing matches, and blocks Confirm while the chosen student is filtered out", async () => {
+  const h = await fixture({ blockedConfirm: true }); const unknown = { ...entry("unidentified", "blocked", "lobby"), variant: null, reason: "mod_target_unknown" };
+  await h.analyze([unknown]); await h.action("assignCharacter").click(); await flush(); await h.page.settled();
+  const ok = h.action("ok", h.dialog), search = h.dialog.querySelector("input");
+  const confirm = () => h.rendered.findLast((item) => item.tree.name === "DisabledConfirm").host;
+  const type = async (value) => { search.value = value; await search.dispatch("input"); await h.page.settled(); await flush(); };
+  const assigned = () => h.calls.filter((call) => call.method === "import.assignCharacter").length;
+  assert.equal(ok.disabled, false, "nothing chosen yet: as before");
+  assert.equal(confirm().hidden, true);
+  await type("Future");
+  await walk(h.dialog).find((element) => element.dataset.value === "future").click();
+  assert.equal(ok.disabled, false);
+  assert.doesNotMatch(h.dialog.textContent, /No matching assets/);
+  // a search that matches nothing: the message in the list, Confirm blocked and drawn as the game's disabled button
+  await type("zzz-no-such-student");
+  assert.match(h.dialog.textContent, /No matching assets/);
+  assert.equal(walk(h.dialog).filter((element) => element.dataset.value).length, 0, "no options");
+  assert.equal(ok.disabled, true); assert.equal(ok.getAttribute("aria-disabled"), "true"); assert.equal(confirm().hidden, false);
+  await h.action("ok", h.dialog).click(); await flush();
+  assert.equal(assigned(), 0, "the hidden choice is not assigned");
+  // a match that leaves the chosen student out blocks too; one that includes the student frees Confirm
+  await type("Student a");
+  assert.doesNotMatch(h.dialog.textContent, /No matching assets/);
+  assert.equal(ok.disabled, true, "Future Student is hidden by this search");
+  await type("");
+  assert.equal(ok.disabled, false); assert.equal(confirm().hidden, true); assert.equal(ok.getAttribute("aria-disabled"), "false");
+  const confirming = ok.click(); await flush();
+  assert.equal(assigned(), 1);
+  h.sources.at(-1).resolve({ ...unknown, variant: "future", assignment: "future", libraryOnly: true, state: "ready", reason: null, revision: 9 });
+  await confirming; await h.page.settled();
 });
 
 test("language changes retain import choices, search input and capture scope without another analysis", async () => {
