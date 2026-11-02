@@ -648,7 +648,8 @@ with the detail screen). Its state, first match wins: `damaged` (a header that c
 no files), `untracked` / `changed` (files the library did not write, without / with a configuration), `source_missing`
 (a configured source gone from the library: listed once, then dropped), a take-over (a newer library write than the
 configuration, written by another instance: configured with it), `updated` / `reset` (mods on, a configured entry a
-game update renamed or a Steam check or repair put back, in whole or in part), `ok`, else `pending`.
+game update renamed or a Steam check or repair put back, in whole or in part; `updated` also marks every entry
+configured with a mod whose build `update` changed, whose game files still hold the old build), `ok`, else `pending`.
 
 **The Enable Mods switch** (`toggle`). An Off adopts the mods it finds first (Add to Library: one mod per entry of its
 non-official parts, every part recorded, the entry configured with it), keeps the built copies, then switches every
@@ -673,7 +674,12 @@ install without a CRC fix), else a copy in `library/built/<sha1>.bundle`. On, Re
 them back with one copy per part (no installer, no UnityPy), byte for byte, while they fit: built for that source,
 every part's name and every file name the build read (an adapted mod's official parts, another variant's files) still
 in the install. A game update, a changed or dropped configuration, a mod's update or removal, a Forget and Mod Cache cleanup
-drop them; a built file goes once no install's key references it. Deletions, including Mod Cache cleanup,
+drop them; a built file goes once no install's key references it. An update that changed the mod's build also sets the
+`updated` marker on every entry configured with it (an earlier Keep as Is of its drift prompt is forgotten), so the drift
+prompt offers Apply Mod Configuration; one that changed nothing sets none. An Off keeps no key for an entry with a
+modded part that was not written from the mod's current files (the part's bytes are not a file of the mod and its
+`build` is not the one a write from them signs now): a key naming only some parts would put official bytes over the
+others, and the old build must not come back; the On builds the entry from the mod. Deletions, including Mod Cache cleanup,
 run under `profiles.json.lock` against the configuration just saved. Bundle copies run outside that lock: after a
 new key is saved and the lock released, any missing files are copied again from the still-modded game files. Later
 deletions respect the saved key; recovery copies are checked again under the lock and deleted if no key references
