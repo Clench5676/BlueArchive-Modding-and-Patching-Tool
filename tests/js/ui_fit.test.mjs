@@ -124,3 +124,96 @@ test("a name with no word break to wrap at is not cut off by the plate", () => {
   assert.ok(glyphWidth(name, 72.8) > 1160 * 1.4, "longer than two lines of the room at the floor");
   assert.ok(w.ellipsis === true || widest(w.text, w.fontSize) <= 1160, `${widest(w.text, w.fontSize)} wide, ellipsis ${w.ellipsis}`);
 });
+
+// --- UI-11: options side by side share one size (settings-rows.js radioRow: Language, Match Strategy, Spine ...) ---
+const { radioRow } = await import("../../src/ba_modding_toolkit/web/js/settings-rows.js");
+// the language picker's order (i18n.py UI_LANGUAGES), each option named in its own language
+const LANGUAGES = ["zh-CN", "zh-TW", "en-US", "ja-JP", "ko-KR", "th-TH"];
+// the labels a radio row draws, in order: [widget, node]
+const optionLabels = (row) => row.tree.children.filter((c) => /^Opt_\d+$/.test(c.name)).map((c) => find(c, "Label").widgets[0]);
+const noop = () => {};
+// the pitch and the room the row fits a label to (settings-rows.js)
+const roomOf = (columns) => Math.min(508, 1400 / columns) - 110;
+// a text fits at X when fitText holds it there with nothing smaller allowed, and its lines stay in the band
+const fitsAt = (value, fs, room, lang = null, band = 96) => {
+  const f = NGUI.fitText(value, fs, fs, room, 2, lang);
+  return f.fs === fs && stack(f.text, fs) <= band;
+};
+
+function assertSharedRow(row, texts, columns, where, langs = []) {
+  const labels = optionLabels(row), room = roomOf(columns), sizes = new Set(labels.map((w) => w.fontSize));
+  assert.equal(labels.length, texts.length);
+  assert.equal(sizes.size, 1, `${where}: one size, got ${[...sizes]}`);
+  labels.forEach((w, i) => {
+    assert.equal(w.lang, langs[i], `${where}: option ${i} keeps its own language`);
+    assert.equal(w.text.replace(/\s/g, ""), texts[i].replace(/\s/g, ""), "every character kept");
+    assert.ok(lines(w.text).length <= 2, `${where}: ${texts[i]} on ${lines(w.text).length} lines`);
+    assert.ok(widest(w.text, w.fontSize) <= room + 1e-9, `${where}: ${JSON.stringify(w.text)} is ${widest(w.text, w.fontSize)} wide in ${room}`);
+    // under the dotted line (109 below the row's top, 4 thick) and above the row's bottom (240) round the option's centre at
+    // 174.5, and no taller than the 100 between option lines where the options take more than one row
+    const band = texts.length > columns ? 96 : 120;
+    assert.ok(stack(w.text, w.fontSize) <= band + 1e-9, `${where}: ${JSON.stringify(w.text)} is ${stack(w.text, w.fontSize)} tall`);
+    assert.ok(174.5 - stack(w.text, w.fontSize) / 2 >= 113 && 174.5 + stack(w.text, w.fontSize) / 2 <= 240, `${where}: leaves the row`);
+  });
+  // the largest size at which every one fits, give or take the step or two that wrapping must win to be worth it (fitGroup)
+  const fs = labels[0].fontSize;
+  if (fs <= 42 && lines(labels[0].text).length === 1) assert.ok(texts.some((value, i) => !fitsAt(value, fs + 6, room, langs[i] || null, texts.length > columns ? 96 : 120)), `${where}: ${fs} could be larger`);
+}
+
+test("the Language row draws every option at one size, each measured in its own language", () => {
+  for (const locale of LOCALES) {
+    page.lang = locale;
+    const names = LANGUAGES.map((code) => text(code, "languageName"));
+    const row = radioRow("Language", 0, text(locale, "settings.language"), LANGUAGES.map((code, i) => [code, names[i], code]), "en-US", noop);
+    assertSharedRow(row, names, LANGUAGES.length, `${locale} Language`, LANGUAGES);
+  }
+});
+
+test("the language of each label decides how it is measured", () => {
+  page.lang = "en-US";
+  const wide = "Wide label of some length", short = "Short";
+  const [own, other] = NGUI.fitGroup([wide, short], 48, 34, 150, 2, { lang: ["sv", null] });
+  const alone = NGUI.fitGroup([wide], 48, 34, 150, 2, { lang: "sv" })[0], plain = NGUI.fitGroup([wide], 48, 34, 150, 2)[0];
+  assert.ok(alone.fs < plain.fs, "the wide stack measures wider, so the same text takes a smaller size");
+  assert.equal(own.fs, Math.min(alone.fs, NGUI.fitGroup([short], 48, 34, 150, 2)[0].fs), "the group's size is the wide label's");
+  assert.equal(other.fs, own.fs);
+  // the same list through fitLabels: each widget's own lang
+  const widgets = [{ lang: "sv" }, {}];
+  NGUI.fitLabels(widgets, [wide, short], 48, 34, 150);
+  assert.equal(widgets[0].fontSize, own.fs);
+  assert.equal(widgets[1].fontSize, own.fs);
+  assert.equal(page.lang, "en-US");
+});
+
+for (const locale of LOCALES) test(`Match Strategy, Spine and the other option rows draw one size in ${locale}`, () => {
+  page.lang = locale;
+  const rows = {
+    strategy: ["cont_name_type", "path_id", "name_type"].map((key) => text(locale, `import.strategy.${key}`)),
+    crc: [text(locale, "import.auto"), text(locale, "settings.post.on"), text(locale, "settings.post.off")],
+    compression: ["LZMA", "LZ4", text(locale, "import.original"), text(locale, "import.uncompressed")],
+    spine: [text(locale, "spine.license.yes"), text(locale, "spine.license.no")],
+    onOff: [text(locale, "settings.post.on"), text(locale, "settings.post.off")],
+  };
+  for (const [key, texts] of Object.entries(rows)) {
+    const columns = key === "strategy" || key === "crc" || key === "compression" ? Math.min(texts.length, 3) : texts.length;
+    const row = radioRow(`Option_${key}`, 0, "Title", texts.map((value, i) => [i, value]), 0, noop, { columns });
+    assertSharedRow(row, texts, columns, `${locale} ${key}`);
+  }
+});
+
+// the display settings: the five sort keys (UISortObjectListUnit labels, 360 wide) and the eight filter options
+// (UIFilterObjectListUnit labels, 380 wide) are each one group; display.js fits them together (shareSize)
+for (const locale of LOCALES) test(`the display settings' sort keys and filter options fit as one group each in ${locale}`, () => {
+  page.lang = locale;
+  const sorts = ["recent", "added", "name", "mods", "default"].map((key) => text(locale, `sort.${key}`));
+  const filters = [text(locale, "fav.on"), text(locale, "display.fav.off"), text(locale, "status.original"), text(locale, "status.replaced"),
+    text(locale, "model.has"), text(locale, "model.none"), text(locale, "model.has"), text(locale, "model.none")];
+  for (const [texts, fsMax, fsMin, room] of [[sorts, 48, 34, 360], [filters, 44, 32, 380]]) {
+    const fits = NGUI.fitGroup(texts, fsMax, fsMin, room);
+    assert.equal(new Set(fits.map((f) => f.fs)).size, 1, `${locale}: ${fits.map((f) => f.fs)}`);
+    fits.forEach((f, i) => {
+      assert.ok(!f.overflow && f.lines <= 2, `${locale} ${texts[i]}`);
+      assert.ok(widest(f.text, f.fs) <= room + 1e-9, `${locale} ${JSON.stringify(f.text)} is ${widest(f.text, f.fs)} wide in ${room}`);
+    });
+  }
+});

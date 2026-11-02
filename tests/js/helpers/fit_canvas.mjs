@@ -23,11 +23,14 @@ export function advance(char) {
   return 0.56;
 }
 
+// the font stack of Swedish (a language the app does not ship), drawn 60 % wider, to tell a label measured in its own
+// language from one measured in the page's
+const WIDE_STACK = "Wide Test Sans";
 export const context = {
   font: "",
   measureText(text) {
-    const px = parseFloat(/([\d.]+)px/.exec(this.font)[1]);
-    return { width: [...String(text)].reduce((sum, char) => sum + advance(char) * px, 0),
+    const px = parseFloat(/([\d.]+)px/.exec(this.font)[1]), stretch = this.font.includes(WIDE_STACK) ? 1.6 : 1;
+    return { width: [...String(text)].reduce((sum, char) => sum + advance(char) * px * stretch, 0),
       // ink above and below the baseline, and the font's box (inkShift, inkBand)
       actualBoundingBoxAscent: 0.72 * px, actualBoundingBoxDescent: /[gjpqy]/.test(text) ? 0.2 * px : 0,
       fontBoundingBoxAscent: 1.16 * px, fontBoundingBoxDescent: 0.29 * px };
@@ -38,7 +41,7 @@ export const context = {
 export function installFitPage() {
   const root = { lang: "en-US", appendChild() {} };
   globalThis.document = { createElement: () => ({ getContext: () => context, remove() {} }), documentElement: root };
-  globalThis.getComputedStyle = () => ({ getPropertyValue: () => "" });
+  globalThis.getComputedStyle = (probe) => ({ getPropertyValue: () => (probe.lang === "sv" ? `"${WIDE_STACK}", sans-serif` : "") });
   return root;
 }
 
