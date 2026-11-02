@@ -600,7 +600,7 @@ def test_system_temp_conversion_output_reproduces_the_dev_read_guard_failure(rea
 
     monkeypatch.setattr(batch_import.staging.tempfile, 'TemporaryDirectory', former_staging)
     result, = run(env, [entry], types=['TextAsset'], enableAfterImport=False)
-    refused = staged[0] / entry['id'] / 'output' / env.original.name
+    refused = staged[0] / batch_import.staging_name(entry['id']) / 'output' / env.original.name
     assert result['outcome'] == 'failed' and result['reason'] == 'dev_path_outside'
     assert result['params'] == {'path': str(refused)}
     assert not env.library.mods()

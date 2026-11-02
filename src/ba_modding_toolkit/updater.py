@@ -125,22 +125,30 @@ def _get(url: str, timeout: float) -> bytes:
 
 
 def latest(releases: list[dict], current: str, suffix: str | None) -> UpdateInfo | None:
-    """The newest release above ``current`` (drafts skipped; pre-releases included, the project is in alpha)."""
+    """The newest release above ``current`` (drafts skipped; pre-releases included, the project is in alpha).
+
+    A release with this platform's build and checksum is preferred over a newer one without them (a pre-release often
+    ships no Windows build); the newest release overall is the fallback when none has both. Never a downgrade."""
     mine = parse_version(current.removesuffix("-dev")) or parse_version("0.0.0")
     best = None
+    best_built = None
     for rel in releases:
         if rel.get("draft"):
             continue
         key = parse_version(rel.get("tag_name", ""))
         if key is None or key <= mine:
             continue
+        version = rel["tag_name"].removeprefix("v")
+        asset, checksum = pick_assets(rel.get("assets", []), suffix, version)
+        candidate = (key, rel, version, asset, checksum)
         if best is None or key > best[0]:
-            best = (key, rel)
-    if best is None:
+            best = candidate
+        if asset and checksum and (best_built is None or key > best_built[0]):
+            best_built = candidate
+    chosen = best_built or best
+    if chosen is None:
         return None
-    rel = best[1]
-    version = rel["tag_name"].removeprefix("v")
-    asset, checksum = pick_assets(rel.get("assets", []), suffix, version)
+    _, rel, version, asset, checksum = chosen
     return UpdateInfo(version=version, current=current,
                       page=f"https://github.com/{REPO}/releases/tag/{rel['tag_name']}",
                       asset=asset, checksum=checksum, prerelease=bool(rel.get("prerelease")),

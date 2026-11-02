@@ -35,6 +35,14 @@ CHOICES = {"strategy": ("path_id", "cont_name_type", "name_type"),
            "crc": ("auto", "on", "off"), "compression": ("lzma", "lz4", "original", "none")}
 BOOLS = ("skipUnchanged", "backup", "enableAfterImport", "previewAfterImport")
 IMPORTABLE = frozenset(("ready", "convert", "update"))
+# Staging folders are named by the first hex digits of an id or digest. The bundle names inside keep their full form,
+# so the folder names stay short enough for Windows paths (259 characters) with the longest official bundle names.
+STAGING_DIGITS = 16
+
+
+def staging_name(digest: str) -> str:
+    """The short, stable name of the staging folder of an entry id or an original's digest."""
+    return digest[:STAGING_DIGITS]
 
 
 def options_of(value: Any, defaults: dict) -> dict:
@@ -126,6 +134,18 @@ class ImportResult:
 
     def to_json(self) -> dict:
         return {"results": self.results}
+
+
+def source_file(candidate: Candidate) -> str:
+    """The file an error about a whole entry names: its first source, which the list shows as the entry's file."""
+    return str(min(candidate.files.values()))
+
+
+def blocked_error(candidate: Candidate) -> ServiceError:
+    """The error of a blocked candidate: its code with the details recorded when it was analyzed, and a file."""
+    params = dict(candidate.failure["params"]) if candidate.failure else {}
+    params.setdefault("file", source_file(candidate))
+    return ServiceError(candidate.error, **params)
 
 
 def blocked_reason(error: ServiceError) -> str:
@@ -342,7 +362,7 @@ class BatchImport:
             if candidate is None or candidate.entry["state"] in ("done", "library", "installed"):
                 raise ServiceError("bad_params", key="id")
             if candidate.error not in (None, "mod_target_unknown", "mod_target_ambiguous", "unsupported"):
-                raise ServiceError(candidate.error)
+                raise blocked_error(candidate)
             candidate.entry["assignment"] = selected.key
             self._assignments[id] = (candidate.identity, selected.key)
         target = candidate.entry.get("source") or candidate.entry["target"]
@@ -510,7 +530,7 @@ class BatchImport:
             variant, error, failure = None, None, None
             try:
                 if self._hashes.get(path).trailing is None:
-                    raise ServiceError("bundle_invalid")
+                    raise ServiceError("bundle_invalid", file=path)
                 if not library.supports_kind(kind):
                     error = "unsupported"
                     failure = ServiceError("mod_unsupported", file=path, kind=kind).to_json()
@@ -598,13 +618,13 @@ class BatchImport:
                 saved = next((mod for mod in library.mods() if mod.id == existing), None) if existing else None
                 if saved:
                     if entry.get("assignment") and entry["assignment"] != saved.target:
-                        raise ServiceError("mod_target_ambiguous")
+                        raise ServiceError("mod_target_ambiguous", file=source_file(candidate))
                     entry.update(state="library", reason=None, libraryId=saved.id, variant=saved.target,
                                  kind=saved.kind, core=entry["core"] or saved.core)
                     return
             if entry.get("assignment"):
                 if candidate.error not in (None, "mod_target_unknown", "mod_target_ambiguous", "unsupported"):
-                    raise ServiceError(candidate.error)
+                    raise blocked_error(candidate)
                 variant = self.services.catalog.assignment_variant(entry["assignment"])
                 kind = manual_identity.validate(candidate.files)
                 candidate.identity = frozenset((core_of(name), part_of(name), self._hashes.get(path).sha1)
@@ -677,7 +697,7 @@ class BatchImport:
                             or mod_origin.platform_of(selected) is None)
 
             if len({p.name for p in live}) != len(live):
-                raise ServiceError("game_file_conflict")
+                raise ServiceError("game_file_conflict", file=source_file(candidate))
             for file in entry["files"]:
                 name = next((name for name, path in candidate.files.items() if str(path) == file["path"]), "")
                 matches = [p for p in live if part_of(p.name) == part_of(name)]
@@ -704,7 +724,7 @@ class BatchImport:
             if not entry["target"]["platform"]:
                 raise ServiceError("target_unknown")
             if len(live) != len(originals):
-                raise ServiceError("game_file_conflict")
+                raise ServiceError("game_file_conflict", file=source_file(candidate))
             baseline = dict(zip(live, originals))
             exact = set(candidate.files) <= {p.name for p in live}
             sources = list(candidate.files.values())
@@ -791,7 +811,7 @@ class BatchImport:
             if error.params:
                 entry["params"] = error.to_json()["params"]
         except (OSError, ValueError) as error:
-            detail = ServiceError("bundle_invalid", error=str(error))
+            detail = ServiceError("bundle_invalid", file=source_file(candidate), error=str(error))
             entry.update(state="blocked", reason="unreadable",
                          error=failure_detail(detail, candidate.files.values(), log,
                                               secrets=getattr(self.services, "log_secrets", set())))
@@ -944,7 +964,7 @@ class BatchImport:
                                                  library.add_files(fresh.entry["kind"], paths, pin=pin, direct=bool(fresh.direct)))
                                     entries = [*added, *added.duplicates]
                                     if len(entries) != 1:
-                                        raise ServiceError("mod_unsupported")
+                                        raise ServiceError("mod_unsupported", file=source_file(candidate))
                                     mod = entries[0]
                                     item.update(libraryId=mod.id, outcome=("updated" if updated else "imported")
                                                 if added else "unchanged")
@@ -979,7 +999,8 @@ class BatchImport:
                             if error.params:
                                 item["params"] = error.to_json()["params"]
                         except OSError as error:
-                            detail = ServiceError("library_io_error", error=str(error))
+                            detail = ServiceError("library_io_error", file=error.filename or source_file(candidate),
+                                                  error=str(error))
                             item.update(outcome="failed", reason=detail.code, params=detail.params,
                                         error=failure_detail(detail, candidate.files.values(), log,
                                                              secrets=getattr(self.services, "log_secrets", set())))
@@ -1021,7 +1042,7 @@ class BatchImport:
             key = (original.resolve(), revision)
             if key not in snapshots:
                 fingerprint = self._hashes.get(original)
-                copied = temporary / "originals" / fingerprint.sha1 / original.name
+                copied = temporary / "originals" / staging_name(fingerprint.sha1) / original.name
                 copied.parent.mkdir(parents=True, exist_ok=True)
                 if not atomic_clone(original, copied):
                     shutil.copy2(original, copied)
@@ -1038,7 +1059,7 @@ class BatchImport:
         self._require_importable(candidate)
         if entry["state"] == "ready":
             if candidate.direct:
-                output = temporary / entry["id"] / "direct"
+                output = temporary / staging_name(entry["id"]) / "direct"
                 output.mkdir(parents=True)
                 paths = []
                 for (target, source), original in zip(candidate.direct.items(), candidate.originals):
@@ -1059,7 +1080,7 @@ class BatchImport:
             return list(candidate.files.values()), False, candidate
         phase = "convert" if candidate.conversion else "update"
         progress(candidate, phase, "check")
-        work = temporary / entry["id"]
+        work = temporary / staging_name(entry["id"])
         output, targets_dir = work / "output", work / "targets"
         output.mkdir(parents=True)
         targets_dir.mkdir()
