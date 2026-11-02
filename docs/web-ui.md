@@ -115,6 +115,9 @@ rebuild against changed batches. App-only photograph choices remain independent 
   width it was fitted to. A control's caption is never ellipsized: Batch Import's Import State caption wraps onto
   two lines inside its button's 116-high body before it shrinks (`import-layout.js` `filterCaption`), and a long name
   takes up to two lines on the Batch Import name plate, inside the plate's height round the label (`namePlate`).
+  Options side by side share one size (`ngui.fitGroup`): the option rows (`settings-rows.js` `radioRow`, each option
+  measured in its own `lang`, as the Language row names every language in itself) and the Display Settings sort keys
+  and filter options (`display.js` `shareSize`).
 - Fonts: the page draws with Resource Han Rounded CN (`web/fonts`, OFL, shipped). It covers every Han and kana
   character of the zh-TW and ja names and of the games' UI strings, but in Simplified Chinese glyph forms and
   punctuation positions, and it has no Hangul. So the html `lang` (set from the UI language) picks a stack in

@@ -635,13 +635,20 @@ const sizeFloor = (fsMin) => Math.max(8, Math.floor(fsMin * 0.4));
 // fits (the caller shortens the text or enlarges the box).
 export function fitGroup(strs, fsMax, fsMin, maxW, maxLines = 2, { lang = null, maxH = Infinity } = {}) {
   const outer = measureLang;
-  measureLang = lang || outer;
+  // lang: one language for every label, or a list with each label's own (null: the page's), as the Language row has
+  const perLabel = Array.isArray(lang);
+  measureLang = perLabel ? outer : lang || outer;
   try {
     const labels = strs.map((s) => String(s ?? "")), widths = labels.map((_, i) => (Array.isArray(maxW) ? maxW[i] : maxW));
     const floor = sizeFloor(fsMin);
+    const wrap = (i, fs, lines) => {
+      if (!perLabel) return wrapAt(labels[i], fs, widths[i], lines);
+      measureLang = lang[i] || outer;
+      try { return wrapAt(labels[i], fs, widths[i], lines); } finally { measureLang = outer; }
+    };
     const solve = (lines) => {
       for (let fs = fsMax; fs >= floor; fs -= 2) {
-        const rows = labels.map((s, i) => wrapAt(s, fs, widths[i], lines));
+        const rows = labels.map((_, i) => wrap(i, fs, lines));
         if (rows.every((r, i) => r && r.length * fontSizeFor(labels[i], fs) * LINE_PITCH <= maxH)) {
           return rows.map((r) => ({ text: r.join("\n"), fs, lines: r.length }));
         }
@@ -654,7 +661,7 @@ export function fitGroup(strs, fsMax, fsMin, maxW, maxLines = 2, { lang = null, 
       return single && single[0].fs >= wrapped[0].fs - 4 && single[0].fs >= wrapped[0].fs * 0.92 ? single : wrapped;
     }
     return labels.map((s, i) => {
-      const lines = wrapAt(s, floor, widths[i], maxLines) || [s];
+      const lines = wrap(i, floor, maxLines) || [s];
       return { text: lines.join("\n"), fs: floor, lines: lines.length, overflow: true };
     });
   } finally {
@@ -758,7 +765,8 @@ export function inkBand(str, px) {
 
 // fitGroup into the label widgets of one group: each one's text and size (the same for all), and its box at least maxW wide
 export function fitLabels(widgets, strs, fsMax, fsMin, maxW, maxLines = 2, opts = {}) {
-  const fits = fitGroup(strs, fsMax, fsMin, maxW, maxLines, { lang: widgets[0]?.lang, ...opts });
+  // each widget's own language, as the Language row's options have
+  const fits = fitGroup(strs, fsMax, fsMin, maxW, maxLines, { lang: widgets.some((w) => w.lang) ? widgets.map((w) => w.lang) : null, ...opts });
   widgets.forEach((widget, i) => Object.assign(widget, { text: fits[i].text, fontSize: fits[i].fs, w_: Math.max(widget.w_ || 0, maxW) }));
   return fits;
 }

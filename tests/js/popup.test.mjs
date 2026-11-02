@@ -2641,6 +2641,37 @@ test("the display settings open over a dialog: above it in the page and on the s
   assert.deepEqual(closes, ["escape", "escape"]);
 });
 
+// Options side by side are one kind of control: every sort key, and every filter option of every group, draws at one size
+test("the display settings' sort keys and filter options each share one font size in every language", async (t) => {
+  const collection = n("UICharacterCollection", [0, 0], [], [n("SeletControl", [0, 0], [], [n("List", [0, 0], [], [
+    n("Scroll Bar", [0, 0], [], ["Background", "Foreground"].map((name) => n(name, [1391, 0], [{ texture: "Scroll", w_: 126, h_: 990, pivot: 4, color: "#92a6b7/1.00" }])))])])]);
+  const fetch = globalThis.fetch;
+  t.mock.method(globalThis, "fetch", async (url, options) => url === "/asset/ui/layout/UICharacterCollection.json" ? reply(collection) : fetch(url, options));
+  const Display = await import("../../src/ba_modding_toolkit/web/js/display.js");
+  const label = (root, pattern) => walk(root).filter((e) => pattern.test(e.dataset.path || "") && e.textContent);
+  try {
+    // the filter tab is the module's tab until a sort-only popup switches it, so the filter passes come first
+    for (const sortOnly of [false, true]) for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
+      const ui = JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${locale}.json`, import.meta.url), "utf8")).webui;
+      setStrings(locale, Object.fromEntries(strings(ui)));
+      document.documentElement.lang = locale;
+      await Display.open({ view: { sort: "name", order: "asc", filters: {} }, count: () => 3, onDone() {}, sortOnly });
+      if (sortOnly) {
+        // the five sort keys, each with the one label that shows (dark with the button on, dimmed off)
+        const sizes = label(display, /\/Sort_\w+\/Label_Text\/(On\/)?Label_On$/).map((e) => e.style.fontSize);
+        assert.equal(sizes.length, 5, `${locale}: five sort keys`);
+        assert.equal(new Set(sizes).size, 1, `${locale}: the sort keys at ${sizes}`);
+      } else {
+        // the eight options of the four groups
+        await until(() => label(display, /Unit_\w+\/SwitchObject_Columns_4\/Label_Text$/).length === 8);
+        const sizes = label(display, /Unit_\w+\/SwitchObject_Columns_4\/Label_Text$/).map((e) => e.style.fontSize);
+        assert.equal(new Set(sizes).size, 1, `${locale}: the filter options at ${sizes}`);
+      }
+      press("Escape");
+    }
+  } finally { setStrings("en-US", Object.fromEntries(strings(english))); document.documentElement.lang = "en-US"; }
+});
+
 // --- long messages scroll by themselves (the Add result, the dropped queue list) ---
 // layouts recorded from the unscrolled messageLayout before the cap applied by itself: [rows, frame height, y0]
 const UNSCROLLED = {
