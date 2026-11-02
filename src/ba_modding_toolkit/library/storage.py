@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any
 
 from ..bundle import Bundle
+from ..filelock import replace as replace_file
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +61,7 @@ def atomic_json(path: Path, data: dict[str, Any]) -> None:
             stream.write("\n")
             stream.flush()
             os.fsync(stream.fileno())
-        os.replace(temporary, path)
+        replace_file(temporary, path)
         sync_directory(path.parent)
     finally:
         temporary.unlink(missing_ok=True)
@@ -78,7 +79,7 @@ def atomic_copy(source: Path, target: Path) -> None:
             os.fsync(output.fileno())
         if target.exists():
             temporary.chmod(target.stat().st_mode & 0o777)
-        os.replace(temporary, target)
+        replace_file(temporary, target)
         sync_directory(target.parent)
     finally:
         temporary.unlink(missing_ok=True)
@@ -160,7 +161,7 @@ def atomic_clone(source: Path, target: Path) -> bool:
             temporary.chmod(target.stat().st_mode & 0o777)
         with temporary.open("r+b" if os.name == "nt" else "rb") as stream:
             os.fsync(stream.fileno())
-        os.replace(temporary, target)
+        replace_file(temporary, target)
         sync_directory(target.parent)
         return True
     finally:

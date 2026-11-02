@@ -1198,9 +1198,27 @@ class Services:
             find_classic=self.classic.orphan, profiles_seen=self.profiles_seen,
             on_change=lambda state: self.publish_state(), publish=self.events.publish,
             request_scan=self.request_scan, active=lambda: self.events.listeners() > 0 or self.tray_shown,
-            own_classic=self._own_classic, on_classic_closed=self._orphan_closed)
+            own_classic=self._own_classic, on_classic_closed=self._orphan_closed, on_steam_idle=self._steam_idle)
         if run:
             self.watch.start()
+
+    def _steam_idle(self) -> None:
+        """Steam went idle on an install: when a game update changed a built game's resource version, rebuild the
+        game-backed services as a settings change does (once no job runs). An unchanged version does nothing."""
+        with self._lock:
+            games = [game for game in (self._game, *self._other_games.values()) if game is not None]
+        changed = False
+        for game in games:
+            check = getattr(game, "resource_changed", None)
+            try:
+                changed = bool(check and check())
+            except OSError:
+                logger.debug("cannot read the resource version after Steam went idle", exc_info=True)
+            if changed:
+                break
+        if changed:
+            logger.info("the game's resource version changed: rebuilding the game services")
+            self._on_settings_changed()
 
     def raise_window(self) -> None:
         """A second start of the program on this data directory: show and raise the window (browser mode: open the

@@ -259,7 +259,14 @@ def macos_script(dmg: Path, app: Path, pid: int) -> str:
 # waits for the app to quit, then replaces it with the one in the downloaded disk image and starts it again
 while kill -0 {pid} 2>/dev/null; do sleep 0.5; done
 MNT=$(mktemp -d)
-hdiutil attach -nobrowse -readonly -mountpoint "$MNT" {q(str(dmg))} >/dev/null || exit 1
+hdiutil attach -nobrowse -readonly -mountpoint "$MNT" {q(str(dmg))} >/dev/null
+STATUS=$?
+if [ "$STATUS" -ne 0 ]; then
+  # the disk image did not mount: start the installed app again, then report the failure
+  rmdir "$MNT"
+  open {q(str(app))}
+  exit "$STATUS"
+fi
 SRC=$(find "$MNT" -maxdepth 1 -name '*.app' | head -n 1)
 if [ -n "$SRC" ]; then
   rm -rf {q(str(staged))}

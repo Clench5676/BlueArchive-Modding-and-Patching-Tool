@@ -158,3 +158,87 @@ def test_refs_adapter_flushes_then_clones_aligned_extents_and_copies_tail(tmp_pa
     storage._refs_clone(source, target)
     assert (0, 8192) in calls
     assert target.read_bytes() == source.read_bytes() == data
+
+
+# --- replaces tried again for a moment while another program holds the file (Windows), as profiles.json does ---
+
+def _clone_by_copy(monkeypatch):
+    def clone(source, target):
+        target.write_bytes(source.read_bytes())
+        return True
+
+    monkeypatch.setattr(storage, "_clone", clone)
+
+
+def _replace_actions(tmp_path, monkeypatch):
+    from ba_modding_toolkit import filelock
+
+    source = tmp_path / "source"
+    source.write_bytes(b"new bytes")
+    monkeypatch.setattr(filelock.replace, "__defaults__", (5, 0.0))  # the Windows retry on any platform
+    _clone_by_copy(monkeypatch)
+    return {
+        "json": (lambda target: storage.atomic_json(target, {"new": True}), b'{\n  "new": true\n}\n'),
+        "copy": (lambda target: storage.atomic_copy(source, target), b"new bytes"),
+        "clone": (lambda target: storage.atomic_clone(source, target), b"new bytes"),
+    }
+
+
+@pytest.mark.parametrize("action", ["json", "copy", "clone"])
+def test_a_replace_held_for_a_moment_is_tried_again(tmp_path, monkeypatch, action):
+    run, expected = _replace_actions(tmp_path, monkeypatch)[action]
+    target = tmp_path / "state"
+    target.write_bytes(b"old bytes")
+    real, calls = os.replace, []
+
+    def replacing(source, destination):
+        calls.append(source)
+        if len(calls) < 3:
+            raise PermissionError(errno.EACCES, "Held by another program", str(destination))
+        return real(source, destination)
+
+    monkeypatch.setattr(storage.os, "replace", replacing)
+    run(target)
+    assert len(calls) == 3
+    assert target.read_bytes() == expected
+    assert sorted(path.name for path in tmp_path.iterdir()) == ["source", "state"]
+
+
+@pytest.mark.parametrize("action", ["json", "copy", "clone"])
+def test_a_replace_that_stays_held_still_fails_with_the_same_error_and_leaves_no_temporary(tmp_path, monkeypatch,
+                                                                                         action):
+    run, _expected = _replace_actions(tmp_path, monkeypatch)[action]
+    target = tmp_path / "state"
+    target.write_bytes(b"old bytes")
+    calls = []
+
+    def replacing(source, destination):
+        calls.append(source)
+        raise PermissionError(errno.EACCES, "Held by another program", str(destination))
+
+    monkeypatch.setattr(storage.os, "replace", replacing)
+    with pytest.raises(PermissionError) as caught:
+        run(target)
+    assert caught.value.errno == errno.EACCES and caught.value.filename == str(target)
+    assert len(calls) == 5  # the retry is bounded
+    assert target.read_bytes() == b"old bytes"
+    assert sorted(path.name for path in tmp_path.iterdir()) == ["source", "state"]
+
+
+@pytest.mark.parametrize("action", ["json", "copy", "clone"])
+def test_a_replace_failing_for_another_reason_is_not_tried_again(tmp_path, monkeypatch, action):
+    run, _expected = _replace_actions(tmp_path, monkeypatch)[action]
+    target = tmp_path / "state"
+    target.write_bytes(b"old bytes")
+    calls = []
+
+    def replacing(source, destination):
+        calls.append(source)
+        raise OSError(errno.ENOSPC, "No space left", str(destination))
+
+    monkeypatch.setattr(storage.os, "replace", replacing)
+    with pytest.raises(OSError) as caught:
+        run(target)
+    assert caught.value.errno == errno.ENOSPC
+    assert len(calls) == 1
+    assert target.read_bytes() == b"old bytes"

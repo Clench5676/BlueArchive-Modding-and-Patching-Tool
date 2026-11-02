@@ -101,13 +101,13 @@ def test_model_direct_replacement_never_transfers_assets(batch_model_env, monkey
     monkeypatch.setattr(Bundle, 'check_need_crc', lambda *args: True)
     entry, = analyze(env, [source])['entries']
     assert (entry['state'], entry['reason'], entry['files'][0]['target']) == ('ready', None, target.name)
-    result, = run(env, [entry], crc='off', types=['Texture2D'], backup=True)
+    result, = run(env, [entry], crc='auto', extraBytes='', types=['Texture2D'], backup=True)
     assert result['outcome'] == 'imported' and result['applied'], result
     installed = target.read_bytes()
     assert installed == original_source if fixed else installed[:-4] == original_source
     assert CRCUtils.compute_crc32(installed) == int(parse_filename(target.name).crc)
     assert source.read_bytes() == original_source
-    assert Path(str(target) + '.backup').read_bytes() == official
+    assert not Path(str(target) + '.backup').exists()
     assert all(path.read_bytes() == env.official[path] for path in (env.parts[0], env.parts[2]))
     env.library.restore('hoshino', kind='model')
     assert target.read_bytes() == official
@@ -130,10 +130,38 @@ def test_direct_replacement_stages_in_a_short_folder(batch_model_env, monkeypatc
         return result
 
     monkeypatch.setattr(env.services.batch_import, '_prepare', record)
-    result, = run(env, [entry], crc='off', types=['Texture2D'], backup=True)
+    result, = run(env, [entry], crc='auto', types=['Texture2D'], backup=True)
     assert result['outcome'] == 'imported', result
     assert [path.name for path in staged] == [target.name]
     assert staged[0].parent.name == 'direct' and staged[0].parent.parent.name == entry['id'][:16]
+
+
+@pytest.mark.parametrize('crc,official_needs,extra', [
+    ('off', True, '0x01020304'), ('auto', False, '0x01020304'), ('on', False, ''), ('on', False, '0x01020304'),
+    ('auto', True, '0x0A0B'),
+])
+def test_direct_replacement_honours_the_crc_and_extra_bytes_options(batch_model_env, monkeypatch, crc,
+                                                                     official_needs, extra):
+    env = batch_model_env
+    restore_metadata(monkeypatch)
+    target = rename_crc(unity_bundle(env.parts[1], name='Hoshino_Body'))
+    env.parts[1] = target
+    source = rename_crc(unity_bundle(env.tmp / 'input' / target.name, name='Unknown_CutIn_Body',
+                                     payload=b'modified model'))
+    original_source = source.read_bytes()
+    monkeypatch.setattr(Bundle, 'check_need_crc', lambda *args: official_needs)
+    entry, = analyze(env, [source])['entries']
+    assert entry['state'] == 'ready' and entry['files'][0]['target'] == target.name
+    result, = run(env, [entry], crc=crc, extraBytes=extra, types=['Texture2D'])
+    assert result['outcome'] == 'imported' and result['applied'], result
+    installed = target.read_bytes()
+    if crc == 'off' or (crc == 'auto' and not official_needs):
+        assert installed == original_source
+        return
+    appended = bytes.fromhex(extra[2:]) if extra else b''
+    assert installed[:len(original_source)] == original_source
+    assert installed[len(original_source):-4] == appended
+    assert CRCUtils.compute_crc32(installed) == int(parse_filename(target.name).crc)
 
 
 def test_current_name_rejects_invalid_bundle(env, monkeypatch):
@@ -290,7 +318,8 @@ def test_verified_modified_model_part_imports_whole(verified_model, monkeypatch,
     result, = run(env, [entry], types=['Texture2D'])
     assert result['outcome'] == 'imported' and result['applied'], result
     installed = env.original.read_bytes()
-    assert installed == before or installed[:-4] == before
+    assert installed == before or (installed[:len(before)] == before and
+                                   CRCUtils.compute_crc32(installed) == int(parse_filename(env.original.name).crc))
     assert source.read_bytes() == before
     assert all(path.read_bytes() == contents for path, contents in official.items() if path != env.original)
     mod, = env.library.mods()

@@ -208,3 +208,41 @@ def test_switch_rebuilds_game_library_catalog_and_cab_index(tmp_path, monkeypatc
         assert before == {key: path.read_bytes() for key, path in paths.items()}
     finally:
         services.close()
+
+
+def test_steam_going_idle_rebuilds_the_game_services_only_after_a_version_change(tmp_path, monkeypatch):
+    from ba_modding_toolkit.config import Settings
+    from ba_modding_toolkit.webui.services import Services
+    from test_cab_discovery import bundle
+
+    settings = Settings(tmp_path / "config.toml")
+    settings.set("bacii_map_path", str(tmp_path / "missing.csv"))
+    folder = tmp_path / "global"
+    folder.mkdir()
+    bundle(folder, "uis-atlas-same.bundle", "CAB-SHARED")
+    settings.set("game_resource_dir", str(folder))
+    settings.save()
+    services = Services(settings, tmp_path)
+    monkeypatch.setattr(services, "refresh_status", lambda: None)
+    monkeypatch.setattr(services, "request_scan", lambda: None)
+    try:
+        services.start_watch(run=False)
+        assert services.watch._on_steam_idle == services._steam_idle
+        old_game, old_catalog = services.game, services.catalog
+        version = old_game.resource_version
+        services._steam_idle()  # nothing changed
+        assert services.game is old_game and services.catalog is old_catalog
+        (folder / "added-by-update.bundle").write_bytes(b"new")
+        busy = [True]
+        monkeypatch.setattr(services.jobs, "busy", lambda: busy[0])
+        services._steam_idle()  # a job runs: the rebuild waits for the next idle
+        assert services.game is old_game and services.catalog is old_catalog
+        busy[0] = False
+        game = services.game
+        assert game is not old_game and services.catalog is not old_catalog
+        assert game.resource_version != version
+        (folder / "added-by-update.bundle").write_bytes(b"newer build")
+        services._steam_idle()
+        assert services.game is not game
+    finally:
+        services.close()
