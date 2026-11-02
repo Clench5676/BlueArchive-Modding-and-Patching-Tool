@@ -1695,3 +1695,17 @@ Leftovers in the same job: UI-37's other copies use the shared `errorText`; `det
 read does not commit; a photo a held record uses counts as used and cannot be deleted.
 
 Validation: full suites on `f1ad2631`: 4236 passed, 26 skipped; JavaScript 2149 passed. Not run natively.
+
+## BL-070: One design system for the web UI
+
+- Status: Audited; migration awaits the owner's decisions.
+- Requested: 2026-11-02 (owner): does the UI follow the game's design language (button sizes, spacing, fonts), and where it does not, does it have one system of its own?
+
+Audit by numbers, from the official prefabs and the code. Screens cloned from prefabs are restored: roster, detail, Display Settings, Settings (three deviations), Batch Import, navigation,
+loading, visual mode, the Hall balloon. Inconsistent: message, notice and confirm popups, tours, Mod Alias, Compare, Export, the consents, the update dialog, Hall's chrome and modals, the lobby subtitle
+and frost.
+
+Main findings: the popup footer's button centre sits 122, 148, 172 or about 81 units above the frame bottom against the prefab's 190.5, with five caption ranges and gaps of 88, 54, 31 and 24 against 88; the game's one small
+button (402 x 136, font 48) has seven body sizes in the app; about 28 CSS lines carry their own radius, blur, shadow or colour; 30 of 69 colour literals are not in the exported prefabs; four hand copies of the light stats box and two chips.
+
+Decisions from the same review: FUN-8, UI-6 and UI-20's shadows are done on `main`. UI-21 migrates when those screens are next touched, and is part of this item. UI-24 closed: no selected state, the game's lobby menu has none.
