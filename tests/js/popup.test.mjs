@@ -886,7 +886,15 @@ test("Settings disables Check for Updates while pending and uses the shared popu
   assert.equal(calls.slice(start).filter((m) => m === "app.checkUpdate").length, 1);
   answer({ result: null });
   await until(() => checkButton());
-  assert.equal(dialog.hidden, true, "no-update status stays silent");
+  // no newer release: the neutral notice says so, Settings stays open behind it
+  await drawn(dialog, "ok");
+  assert.ok(walk(dialog).some((e) => e.textContent === english.quit.title), "the notice caption");
+  assert.ok(walk(dialog).some((e) => e.textContent === english.settings.update.none));
+  assert.equal(action(dialog, "cancel"), undefined, "a notice, not a failure with an Error Report");
+  assert.equal(settings.hidden, false);
+  action(dialog, "ok").click();
+  await tick();
+  assert.equal(dialog.hidden, true);
   // A later check is allowed; its popup owns the same host and startup shares its promise.
   answer = null;
   checkButton().click();
