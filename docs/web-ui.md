@@ -691,16 +691,23 @@ data directory that names it.
 **State file safety.** `state.json` is read record by record. A record that cannot be used (not an object, a key
 missing or of another type, a bad id) is skipped with a warning and held: its raw JSON is written back unchanged at
 every save, so one bad record costs that record at most and never the file. An invalid `applied` entry is dropped. The
-last good file is copied to `state.json.prev` before every write, the same way as `profiles.json`. An unreadable
-file is read from `.prev` instead (logged) and kept as `state.json.bad` at the next write; `.prev` is never replaced by
-bad bytes. A running instance that holds state from a good read keeps its own state when the file breaks under it (the
-previous copy is older), adds what `.prev` holds and replaces the file, keeping the old one as `.bad`. When neither the
-file nor `.prev` can be read, or the file is a newer build's (`version` above 1, which is never read as corrupt, never
-touches `.prev` or `.bad` and stays byte for byte), the library is blocked: reads answer an empty library, every write
-raises `library_state_unreadable` before it starts, and nothing is written until the user fixes or removes the file
-(the next call that finds the file changed reads it again). A file that cannot be opened (locked, scanned) is not
-corruption: reads answer an empty library, writes raise `library_io_error`, and the next call reads again. A library
-move and a data directory move take `state.json.prev` and `.bad` along, as they do for `profiles.json`.
+last good file is copied to `state.json.prev` before every write, the same way as `profiles.json`. An unreadable file
+is read from `.prev` instead (logged) and kept as `state.json.bad` at the next write; `.prev` is never replaced by bad
+bytes. A missing file with a `.prev` (a partial restore; nothing in the app deletes `state.json`, and its writes are
+atomic) reads the `.prev` too, a running instance keeping its own records; with neither file the library is empty. A
+running instance that holds state from a good read keeps its own state when the file breaks under it (the previous copy
+is older), adds what `.prev` holds and replaces the file, keeping the old one as `.bad`. When neither the file nor
+`.prev` can be read, or the file is a newer build's (`version` above 1, which is never read as corrupt, never touches
+`.prev` or `.bad` and stays byte for byte), the library is blocked: reads answer an empty library, every write raises
+`library_state_unreadable` before it starts, and nothing is written until the user fixes or removes the file (the next
+call that finds the file changed reads it again). Nothing of `profiles.json` is written either: an empty library judges
+every configured source gone, so the gate of the configuration (`Profiles.gate`) refuses with the same error, the reads
+that settle something on the side (the scan's take-overs and dropped choices, a judgement's dates, the unfinished list)
+skip it, and the kept originals are not pruned. `Services` takes no `seen_mods` baseline from such a library
+(`state_unreadable()`), so its empty read cannot mark every mod as new later. A file that cannot be opened (locked,
+scanned) is not corruption: reads answer an empty library, writes raise `library_io_error`, and the next call reads
+again. A library move and a data directory move take `state.json.prev` and `.bad` along, as they do for
+`profiles.json`.
 
 **Held records.** A valid record whose files are missing (a quarantined file, a partial restore) is held the same
 way, with a warning, instead of being dropped at load: it is not among the library's records, so the engine and the
