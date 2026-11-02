@@ -1559,6 +1559,14 @@ optional, so a popup still works without them.
   The settings (`#settings`) register with `opened` as they open and leave with `closed`, and wire the backdrop with
   `closable`: Escape and a click on the backdrop close them like every other popup, and a popup opened over them takes
   the key first.
+- **Focus.** One shared trap for every popup on the stack (`opened` / `closed`, `trapKey` on the window). A popup takes
+  the keyboard focus when it opens (its layer or host; a layer hidden while it loads, `loading`, when it is revealed), Tab
+  and Shift+Tab stay inside the topmost popup and wrap at its first and last control (disabled, hidden, inert and
+  undrawn controls are skipped), the focus is pulled back in when it is outside or lost to a redraw, and it returns to
+  what had it before once the popup closes, unless the user has moved on or another popup is still open over it. A
+  popup that must be answered with a button traps just the same. A control that took the key itself (`defaultPrevented`,
+  the tour's own Tab), an input method composing and the modifier keys are left alone. The Hall modals and the import
+  dialogs use it; the tour keeps its own three-button cycle.
 - **Refusals and failures** (`notify`, `notice`; BL-045). An ordinary refusal, where the app declined an action because
   of a state or a rule and nothing broke, is the neutral notice: title Notice (`quit.title`), the line, Confirm only,
   no Failed and no Error Report. `REFUSALS` lists the codes: `busy`, `game_running`, `steam_busy`, `classic_open`,

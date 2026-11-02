@@ -69,6 +69,8 @@ async function draw(host, cacheDir, native, resolve) {
     node("Note", [0, -260], [label(T("consent.note"), 36, "#6b7d92/1.00", 1700, 50, { depth: 7 })]),
   );
   host.hidden = false;
+  // on the popup stack, to be answered with a button: Escape does nothing, and the shared focus trap holds it
+  Popup.opened(host, null);
   const next = document.createElement("div");
   const view = await NGUI.render(t, next, { scale: S, origin: [960, 540], z: 2000 });
   for (const [name, granted] of [["Btn_Cancel", false], ["Btn_Ok", true]]) {
@@ -79,6 +81,7 @@ async function draw(host, cacheDir, native, resolve) {
       assetsAllowed = granted;
       host.hidden = true;
       host.innerHTML = "";
+      Popup.closed(host);
       resolve(granted);
     }, "", 2100);
   }
