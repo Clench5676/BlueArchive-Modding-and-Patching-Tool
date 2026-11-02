@@ -27,8 +27,9 @@ export async function characterPicker({ data, selected, dialog, el, button, inpu
     // the dialog's area is the one scroller (with the game's scrollbar); a page of 24 is the list's length
     const list = el("div"); area.appendChild(list);
     const pages = el("div"); Object.assign(pages.style, { display: "flex", justifyContent: "space-between" });
-    const previous = button("‹", "characterPrevious", { width: 100, scale: 0.34 });
-    const next = button("›", "characterNext", { width: 100, scale: 0.34 }); pages.append(previous, next); area.appendChild(pages);
+    // the arrows are the painted captions; the pages they turn name them
+    const previous = button("‹", "characterPrevious", { width: 100, scale: 0.34, name: T("photo.previous") });
+    const next = button("›", "characterNext", { width: 100, scale: 0.34, name: T("photo.next") }); pages.append(previous, next); area.appendChild(pages);
     const label = (variant) => studentName(variant, L(variant.names)?.full || variant.key);
     const draw = () => {
       const cards = assignmentChoices(data, view, query);

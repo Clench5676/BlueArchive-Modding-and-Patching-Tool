@@ -2774,3 +2774,22 @@ for (const lang of ADD_LOCALES) test(`the Add result and the dropped list keep t
     }
   } finally { setStrings("en-US", Object.fromEntries(strings(english))); }
 });
+
+// --- UI-13: the asset consent's Agree and Decline are named by their captions ---
+test("the asset consent names Agree and Decline with their captions in every language", async () => {
+  const Consent = await import("../../src/ba_modding_toolkit/web/js/consent.js");
+  try {
+    for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
+      const ui = JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${locale}.json`, import.meta.url), "utf8")).webui;
+      setStrings(locale, Object.fromEntries(strings(ui)));
+      const asked = Consent.show(consent, "/cache", false);
+      await until(() => walk(consent).some((e) => e.tagName === "BUTTON"));
+      const buttons = walk(consent).filter((e) => e.tagName === "BUTTON");
+      // the popup's order: Decline (Btn_Cancel) first, then Agree
+      assert.deepEqual(buttons.map((b) => b.getAttribute("aria-label")), [ui.consent.no, ui.consent.yes], locale);
+      buttons[1].click();
+      assert.equal(await asked, true);
+      assert.equal(consent.hidden, true);
+    }
+  } finally { setStrings("en-US", Object.fromEntries(strings(english))); consent.hidden = true; }
+});

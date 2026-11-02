@@ -74,6 +74,21 @@ export function toolbarLayout(view, { title = T("roster.title"), left = -1270, r
 }
 
 
+// The toolbar's three toggles as hit areas, in SeletControl's units: the six segments of the two filters and Group Alts.
+// Each has its box [x, y, width, height] (centre), its name (the caption it draws, "All" in both filters), whether its
+// setting is on (aria-pressed) and apply(view), which sets it.
+export function toggleHits(view, lay, segY = 720 - 219 - 50.2) {
+  const segments = (key, values, labels, centre) => values.map((value, i) => ({
+    box: [centre - (2.5 - i) * lay.segW, segY, lay.segW, 104], name: T(labels[i]), pressed: view[key] === value,
+    apply: (target) => { target[key] = value; } }));
+  return [
+    ...segments("mods", ["all", "mods", "none"], ["seg.all", "seg.mods", "seg.noMods"], lay.seg1),
+    ...segments("recruit", ["all", "yes", "no"], ["seg.all", "seg.recruit", "seg.noRecruit"], lay.seg2),
+    { box: [lay.cbLeft + lay.cbW / 2, 720 - 273, lay.cbW, 110], name: T("roster.merge"), pressed: view.merged === true,
+      apply: (target) => { target.merged = !target.merged; } },
+  ];
+}
+
 // Shared complete UICharacterCollection toolbar; callers retain their own list and title.
 export function toolbarTree(collection, checkbox, view, searching, lay = toolbarLayout(view)) {
   const menu = clone(find(collection, "SeletControl/TopMenu"));
