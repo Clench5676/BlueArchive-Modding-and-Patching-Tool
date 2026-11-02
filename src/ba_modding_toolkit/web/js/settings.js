@@ -135,7 +135,7 @@ function sliderRow(name, y, title, value, muted) {
   Object.assign(mute.widgets[0], { text: T("settings.mute"), fontSize: fitText(T("settings.mute"), 50, 34, 180).fs });
   find(mute, "Icon").active = !!muted;
   return { tree: t, h: 172, hits: [{ path: `${name}/Label_Mute/Bg`, fn: () => set("voiceMuted", !muted), name: T("settings.mute") }],
-    slider: { path: `${name}/SlideBg`, value: value / 100, steps: 100, set: (f) => set("voiceVolume", Math.round(f * 100)) } };
+    slider: { path: `${name}/SlideBg`, name: title, value: value / 100, steps: 100, set: (f) => set("voiceVolume", Math.round(f * 100)) } };
 }
 
 // the custom zoom-out limit: the slider row without the sound icons, the value where the mute check is
@@ -147,7 +147,7 @@ function factorRow(name, y, title, value) {
   for (const path of ["Icon_Minimum", "Icon_Maximum", "Label_Mute/Bg", "Label_Mute/Icon"]) find(t, path).active = false;
   find(t, "SlideBg").pos[0] += 60; // into the mute icon's place: room for the title
   Object.assign(find(t, "Label_Mute").widgets[0], { text: factorText(value), fontSize: 50 });
-  const slider = { path: `${name}/SlideBg`, label: `${name}/Label_Mute`, value: f, steps: Math.round((hi - lo) * 10),
+  const slider = { path: `${name}/SlideBg`, name: title, label: `${name}/Label_Mute`, value: f, steps: Math.round((hi - lo) * 10),
     text: (x) => factorText(at(x)), set: (x) => set("lobbyZoomCustom", at(x)) };
   return { tree: t, h: 172, hits: [], slider };
 }
@@ -368,32 +368,42 @@ async function saveSetting(key, value) {
   return next;
 }
 
-// --- slider dragging: the thumb follows the pointer (and the value label, if any), the value is saved on release.
-// s: {path, value (0 to 1), steps, set(f), label?, text?(f)} ---
+// --- the sliders: a native range input over the game's slider, as the Hall's size slider has it. The pointer, the arrow keys,
+// Home, End and Page Up and Down move it, a screen reader reads it (name, value); the game's thumb follows it (and the value
+// label, if any), and the value is saved when the input commits (the pointer's release, each key press). The input is
+// unseen: its focus shows as a ring on the thumb. A drag the system cancels (pointercancel) is undone: the thumb and the
+// input go back to the saved value and nothing is saved.
+// s: {path, name, value (0 to 1), steps, set(f), label?, text?(f)} ---
+export const SLIDER_THUMB = 40; // px: the input's native thumb (app.css .slider-range), so its centre travels the drawn thumb's 632 units
 function wireSlider(host, view, s) {
   const bar = view.nodes.get(s.path)?.els[0], thumbEntry = view.nodes.get(`${s.path}/Thumb`);
   if (!bar || !thumbEntry) return;
   const thumb = thumbEntry.els[0], valueLabel = s.label ? view.nodes.get(s.label)?.els[0] : null;
-  const [l, t, w, h] = rect(bar);
-  const area = document.createElement("div");
-  area.className = "hit slider-hit";
-  Object.assign(area.style, { left: `${l - 20}px`, top: `${t - 20}px`, width: `${w + 40}px`, height: `${h + 40}px`, zIndex: 80 });
-  host.appendChild(area);
-  const stageScale = () => document.getElementById("stage").getBoundingClientRect().width / 1920;
-  const pad = (w - 632 * S) / 2; // the thumb travels 632 units inside the 689-unit bar
-  const valueAt = (clientX) => {
-    const x = (clientX - area.getBoundingClientRect().left) / stageScale() - 20 - pad;
-    return Math.round(Math.max(0, Math.min(1, x / (632 * S))) * s.steps) / s.steps;
-  };
+  const [l, t, w, h] = rect(bar), travel = 632 * S; // the thumb travels 632 units inside the 689-unit bar
+  const range = document.createElement("input");
+  range.type = "range"; range.className = "hit slider-range";
+  range.min = "0"; range.max = String(s.steps); range.step = "1";
+  range.setAttribute("aria-label", s.name);
+  range.dataset.focusKey = `slider:${s.path}`;
+  Object.assign(range.style, { left: `${l + w / 2 - travel / 2 - SLIDER_THUMB / 2}px`, top: `${t - 20}px`,
+    width: `${travel + SLIDER_THUMB}px`, height: `${h + 40}px`, zIndex: 80 });
+  const stepOf = (f) => Math.round(f * s.steps), fractionOf = () => Number(range.value) / s.steps;
   const base = parseFloat(thumb.style.left) - (-316 + 632 * s.value) * S;
+  let saved = s.value;
   const move = (f) => {
     thumb.style.left = `${base + (-316 + 632 * f) * S}px`;
-    if (valueLabel && s.text) valueLabel.textContent = s.text(f);
+    const text = s.text ? s.text(f) : null;
+    if (valueLabel && text != null) valueLabel.textContent = text;
+    if (text != null) range.setAttribute("aria-valuetext", text); else range.removeAttribute("aria-valuetext");
   };
-  let dragging = false;
-  area.addEventListener("pointerdown", (e) => { dragging = true; area.setPointerCapture(e.pointerId); move(valueAt(e.clientX)); });
-  area.addEventListener("pointermove", (e) => { if (dragging) move(valueAt(e.clientX)); });
-  area.addEventListener("pointerup", (e) => { if (!dragging) return; dragging = false; s.set(valueAt(e.clientX)); });
+  range.value = String(stepOf(s.value)); move(s.value);
+  range.addEventListener("input", () => move(fractionOf()));
+  range.addEventListener("change", () => { saved = fractionOf(); s.set(saved); });
+  range.addEventListener("pointercancel", () => { range.value = String(stepOf(saved)); move(saved); });
+  // keyboard focus only (the pointer's focus shows nothing, as everywhere in the app)
+  range.addEventListener("focus", () => { if (range.matches?.(":focus-visible") !== false) thumb.classList.add("slider-thumb-focus"); });
+  range.addEventListener("blur", () => thumb.classList.remove("slider-thumb-focus"));
+  host.appendChild(range);
 }
 
 async function readyLayout() {
@@ -450,7 +460,10 @@ async function render({ builtSize = null, sizeError = null } = {}) {
   if (my !== token || $("settings").hidden) return;
   // a click on the backdrop closes it, as Escape does (the shared stack); a redraw keeps its place on the stack
   Popup.closable(view, host, close);
+  // a slider saves on every key press and the page is drawn again: the focus goes back to the same control
+  const focused = document.activeElement?.dataset?.focusKey;
   host.replaceChildren(...next.childNodes);
+  if (focused) [...host.querySelectorAll("[data-focus-key]")].find((el) => el.dataset.focusKey === focused)?.focus();
   host.querySelector(".settings-rows").scrollTop = scroll;
   host.querySelector(".settings-rows").addEventListener("scroll", (e) => { scroll = e.target.scrollTop; });
   if (tab === "mods" && builtSize == null && !sizeError) {

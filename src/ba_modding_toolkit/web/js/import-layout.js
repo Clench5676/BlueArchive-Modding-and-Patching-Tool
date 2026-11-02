@@ -17,16 +17,8 @@ export const ROW_SELECTION = { left: 19, top: 8, width: 164, height: 160, scale:
 // Items/ListBG: its PaperBG and Inbox sit 60 units below the panel's centre, so that is the middle of the grey frame
 // (header strip and toolbar included), in panel px.
 export const PAPER_CENTRE = (S) => [636, 352 + 60 * S];
-export const EMPTY_GAP = 85;      // between the centres of Items' ListEmpty message and the drop hint under it
-
-// The box centres (px, down) of the ListEmpty message and the drop hint under it (null: none) that put the block's ink
-// centre on `centre`, as the eye takes the middle of the list. title, note: each label's ink as offsets of its top and
-// bottom from its box centre (NGUI.inkBand).
-export function emptyBlock(centre, title, note = null, gap = EMPTY_GAP) {
-  const bottom = note ? gap + note.bottom : title.bottom;
-  const first = centre - (title.top + bottom) / 2;
-  return { title: first, note: note ? first + gap : null };
-}
+export const NAME_ROOM = 1160;    // the Batch Import name plate's room for a name (units)
+export { EMPTY_GAP, emptyBlock } from "./empty-block.js";
 const rowGap = (ui, layouts) => 348 - ui.find(layouts.UIMailBoxContent, "List_01/BG").widgets.find((w) => "sprite" in w).h_;
 
 // Include child widgets, their pivots and inclined overhangs in the selection frame's drawn edge.
@@ -77,8 +69,9 @@ export function selectionWindow(tree, atlas = {}, outline, pictureOutline = null
 }
 
 export async function loadImportLayouts(ui) {
+  // UICharacterCollection holds the game list's scrollbar (SeletControl/List/Scroll Bar) that the scrolling areas draw
   const names = ["UINonEquipmentInventory", "UIMailBox", "UIMailBoxContent", "UIPopup_FilterSort", "UINonEquipmentInventoryListItem",
-    "UIPopup_GachaCharList.Btn_Checkbox"];
+    "UIPopup_GachaCharList.Btn_Checkbox", "UICharacterCollection"];
   const layouts = Object.fromEntries(await Promise.all(names.map(async (name) => [name, await ui.layout(name)])));
   const item = layouts.UINonEquipmentInventoryListItem;
   const frame = clone(ui.find(item, `${item.children[0].name}/Normal/Cover_Select`));
@@ -101,6 +94,29 @@ export function importArtwork(ui, layouts) {
     Object.assign(w, { text: f.text, fontSize: f.fs, w_: width ?? w.w_, h_: Math.max(w.h_, f.fs * 1.3 * String(f.text).split("\n").length) });
     return n;
   };
+  // the box of lines at NGUI's pitch, as drawn (the page font draws Latin larger, see ngui.js fontSizeFor)
+  const lineBox = (text, fs) => String(text).split("\n").length * (ui.fontSizeFor?.(text, fs) ?? fs) * (ui.LINE_PITCH ?? 1.15);
+  // The Import State filter's caption (SortBtn/Btn_Normal/Type_2/Text, 336 wide, 56 down to 70 %): wrapped onto two lines
+  // inside the button's body (456 x 116) before it shrinks, never ellipsized. The lines keep clear of the body's edges
+  // round the label's own offset.
+  const filterCaption = (sort, caption) => {
+    const type = ui.find(sort, "Type_2"), text = ui.find(type, "Text"), w = text.widgets.find((x) => "text" in x);
+    const body = sort.widgets.find((x) => "sprite" in x), offset = Math.abs((type.pos?.[1] || 0) + (text.pos?.[1] || 0));
+    const [f] = ui.fitGroup([caption], w.fontSize, w.fontSize * 0.7, w.w_, 2, { maxH: body.h_ - 2 * offset });
+    Object.assign(w, { text: f.text, fontSize: f.fs, h_: Math.max(w.h_, lineBox(f.text, f.fs)) });
+  };
+  // Items/Equip_Target/Label_Name (104, down to 70 %) on its dark plate (BG): the name takes up to two lines, at the largest
+  // size that keeps their box inside the plate round the label's own centre (the plate is 204 high, the label sits 5 below
+  // its middle), 1160 wide (the plate's width less the right margin the removed quantity tag left). A name no wrapping can
+  // fit (a long file name has no word breaks) stays on one line at the floor and ends in an ellipsis.
+  const namePlate = (t, name) => {
+    const plate = ui.find(t, "BG"), node = ui.find(t, "Label_Name"), w = node.widgets.find((x) => "text" in x);
+    const body = plate.widgets.find((x) => "sprite" in x), half = body.h_ * (plate.scale?.[1] ?? 1) / 2;
+    const room = 2 * Math.min(node.pos[1] - (plate.pos[1] - half), plate.pos[1] + half - node.pos[1]);
+    const [f] = ui.fitGroup([name], w.fontSize, w.fontSize * 0.7, NAME_ROOM, 2, { maxH: room });
+    if (f.overflow) { Object.assign(w, { text: String(name), fontSize: w.fontSize * 0.7, w_: NAME_ROOM, ellipsis: true }); return; }
+    Object.assign(w, { text: f.text, fontSize: f.fs, w_: NAME_ROOM, h_: Math.max(w.h_, lineBox(f.text, f.fs)) });
+  };
   const inventory = (path) => get("UINonEquipmentInventory", path);
   const mail = (path) => get("UIMailBox", path);
   const content = (path) => get("UIMailBoxContent", path);
@@ -110,6 +126,8 @@ export function importArtwork(ui, layouts) {
 
   return {
     label,
+    // the game list's prefab, for scrollbar.js
+    collection: () => layouts.UICharacterCollection,
     rowGap: () => rowGap(ui, layouts) * ROW_SCALE,
     // UINonEquipmentInventory/Inventory_ListControl/BG, including the game's two background textures.
     background: () => at(inventory(`${INVENTORY}/BG`)),
@@ -137,7 +155,7 @@ export function importArtwork(ui, layouts) {
       const sort = ui.find(t, "SortBtn/Btn_Normal");
       for (const name of ["FilterMarker_Off", "FilterMarker_On"]) ui.find(sort, name).active = (name === "FilterMarker_On") === filtered;
       ui.find(sort, "Type_1").active = false; ui.find(sort, "Type_2").active = true;
-      label(ui.find(sort, "Type_2/Text"), caption).widgets.find((w) => "text" in w).ellipsis = true;
+      filterCaption(sort, caption);
       const order = ui.find(t, "OrderBtn/Btn_Normal");
       ui.find(order, "Icon_down").active = !ascending; ui.find(order, "Icon_Up").active = ascending;
       ui.find(t, "SearchBtn/Btn_Normal").active = !searching;
@@ -254,7 +272,7 @@ export function importArtwork(ui, layouts) {
       const t = at(inventory(DETAIL));
       t.children = t.children.filter((c) => ["BG", "Label_Name", "Text_Type"].includes(c.name));
       ui.find(t, "BG").children = ui.find(t, "BG").children.filter((c) => c.name !== "HaveBG");
-      label(ui.find(t, "Label_Name"), name, 1160, 1);
+      namePlate(t, name);
       const tag = ui.find(t, "Text_Type"); label(tag, kind, 850);
       ui.find(tag, "TypeBG").widgets[0].w_ = 910;
       return t;

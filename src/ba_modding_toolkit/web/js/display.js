@@ -32,6 +32,12 @@ const groupTitle = { favorite: () => T("fav.label"), portrait: () => T("tab.port
   model: () => T("tab.model") };
 
 const setText = (n, text, fsMax, fsMin, w) => NGUI.fitLabel(n.widgets.find((x) => "text" in x), text, fsMax, fsMin, w);
+// Options side by side share one size (NGUI.fitGroup): the largest from fsMax at which every text fits w after wrapping.
+// widgets: for each text, the label widgets that show it.
+function shareSize(widgets, texts, fsMax, fsMin, w) {
+  const fits = NGUI.fitGroup(texts, fsMax, fsMin, w);
+  widgets.forEach((shown, i) => shown.forEach((x) => Object.assign(x, { text: fits[i].text, fontSize: fits[i].fs, w_: Math.max(x.w_ || 0, w) })));
+}
 
 // --- the popup frame: backdrop, title, tabs, the shown panel, the buttons ---
 function frameTree() {
@@ -69,6 +75,9 @@ function frameTree() {
   setText(find(bar, "Label_Locale_UnitList"), T("display.sortBy"), 48, 36, 1600);
   const unit = find(normal, "Option_Normal/Grid/UISortObjectListUnit");
   const options = sortKeys.map((key, i) => sortUnit(unit, key, i));
+  // the sort keys are options side by side: one size for all of them (each key's two labels, dark and dimmed, alike)
+  shareSize(options.map((u) => ["On/Label_On", "Label_On"].map((path) => find(find(u, "Label_Text"), path).widgets.find((x) => "text" in x))),
+    sortKeys.map((key) => T(`sort.${key}`)), 48, 34, 360);
   sort.children = [find(sort, "BG_List"), bar, ...options];
   find(popup, "Btn_Section/Btn_Disable").active = false;
   setText(find(popup, "Btn_Section/Btn_Ok/Label_Locale"), T("picker.ok"), 72, 48, 420);
@@ -85,14 +94,13 @@ function sortUnit(template, key, i) {
   const opt = find(u, "Label_Text");
   const on = draft.sort === key;
   find(opt, "On").active = on;
-  for (const path of ["On/Label_On", "Label_On"]) setText(find(opt, path), T(`sort.${key}`), 48, 34, 360);
   find(opt, "Label_On").active = !on; // the dimmed label under the button when off, the dark one with it when on
   return u;
 }
 
 // the filter groups: UIFilterObjectList with one check box per option (UIFilterObjectListUnit)
 function groupsTree() {
-  const out = node("Groups", [0, 0]);
+  const out = node("Groups", [0, 0]), labels = [], texts = [];
   Object.keys(FILTERS).forEach((group, gi) => {
     const g = clone(layout.group);
     g.name = `Group_${group}`;
@@ -111,11 +119,14 @@ function groupsTree() {
       find(u, "UIFilter_CheckBox/CheckBoxIcon_Disable").active = !on;
       const sw = find(u, "SwitchObject_Columns_4");
       for (const c of sw.children) c.active = c.name === "Label_Text";
-      setText(find(sw, "Label_Text"), optionLabel[group][value](), 44, 32, 380);
+      labels.push([find(sw, "Label_Text").widgets.find((x) => "text" in x)]);
+      texts.push(optionLabel[group][value]());
       return u;
     });
     out.children.push(g);
   });
+  // every option of every group is one kind of control: one size for all of them
+  shareSize(labels, texts, 44, 32, 380);
   return out;
 }
 

@@ -60,7 +60,9 @@ input[type="text"], input[type="search"], textarea { cursor: text; }
 .import-panel, .import-detail { z-index: 1; }
 .import-button, .import-option, .import-option-note, .import-option-error, .import-row, .import-result-row { position: relative; }
 .import-button, .import-row-copy, .import-check { z-index: 40; }
-.import-list { overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; }
+/* the native bars are hidden: batch-import.js draws the game list's scrollbar (UICharacterCollection) over these areas */
+.import-list { overflow-y: auto; overflow-x: hidden; scrollbar-width: none; }
+.import-list::-webkit-scrollbar, .import-dialog-content::-webkit-scrollbar { display: none; }
 .import-row { width: 1192.32px; height: 187.92px; }
 .import-result-row { width: 1400px; height: 216px; }
 .import-selection { z-index: 34; pointer-events: none; }
@@ -73,7 +75,7 @@ input[type="text"], input[type="search"], textarea { cursor: text; }
 .import-input-wrap { z-index: 1; }
 .import-input-wrap .roster-search { z-index: 30; }
 .import-search-clear { z-index: 40; }
-.import-dialog-content { position: absolute; left: 228px; top: 190px; width: 1464px; height: 640px; overflow-y: auto; overflow-x: hidden; padding: 16px; z-index: 40; }
+.import-dialog-content { position: absolute; left: 228px; top: 190px; width: 1464px; height: 640px; overflow-y: auto; overflow-x: hidden; scrollbar-width: none; padding: 16px; z-index: 40; }
 .import-resource-types { position: relative; border: 0; min-width: 0; }
 .import-option-control { position: absolute; z-index: 40; appearance: none; -webkit-appearance: none; background: transparent; border: 0; }
 .import-radio-group button { z-index: 40; }
@@ -170,7 +172,12 @@ input[type="text"], input[type="search"], textarea { cursor: text; }
 .settings-rows { position: absolute; z-index: 3005; overflow-y: auto; overflow-x: hidden; scrollbar-width: none; }
 .settings-rows::-webkit-scrollbar { display: none; }
 .settings-rows-inner { position: relative; }
-.slider-hit { cursor: ew-resize; touch-action: none; }
+/* the sliders' range inputs lie unseen over the game's slider (settings.js wireSlider): the game's thumb shows the value and,
+   on keyboard focus, a ring. The native thumb is 40 px wide (SLIDER_THUMB) so its centre travels the drawn thumb's range */
+.hit.slider-range { margin: 0; opacity: 0; cursor: ew-resize; touch-action: none; -webkit-appearance: none; appearance: none; }
+.slider-range::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 40px; height: 40px; }
+.slider-range::-moz-range-thumb { width: 40px; height: 40px; border: 0; }
+.slider-thumb-focus { outline: 4px solid #2fa6f0; outline-offset: 2px; border-radius: 10px; }
 
 /* --- detail --- */
 /* the alias editor's inputs, over the game's input rows (UIPopup_Input's text and placeholder colours) */

@@ -148,3 +148,24 @@ test("library-only roster cards use saved Mod previews without inventing local c
   }
   assert.equal(requested.length, 2);
 });
+
+test("the empty list is placed by emptyListY on the middle of the visible paper, whether or not the search box is open", () => {
+  const code = source.slice(source.indexOf("function emptyTree() {"), source.indexOf("// the empty list's picture for the current items"));
+  assert.match(code, /emptyListY\(\(listTop\(\) \+ PAPER_BOTTOM\) \/ 2, message\)/);
+  assert.doesNotMatch(code, /PAPER_TOP/, "the old shift by the search box's height is gone");
+  const root = () => ({ name: "LeftInfo_Empty", active: false, pos: [0, 53], widgets: [], children: [{ name: "Label_Locale", pos: [0, -589], widgets: [{ text: "empty", fontSize: 48, w_: 146, h_: 56 }], children: [] }] });
+  const find = (tree, path) => path.split("/").reduce((n, part) => n?.children.find((c) => c.name === part), tree);
+  const collection = { children: [{ name: "SeletControl", children: [root()] }] };
+  for (const [top, centre] of [[334.5, -190], [182, -266.25]]) {
+    const calls = [];
+    const emptyTree = new Function("env", `const { layouts, clone, find, T, listTop, PAPER_BOTTOM, emptyListY } = env;\n${code}\nreturn emptyTree;`)({
+      layouts: { collection }, clone: structuredClone, find: (tree, path) => path === "SeletControl/LeftInfo_Empty" ? collection.children[0].children[0] : find(tree, path),
+      T: (key) => `[${key}]`, listTop: () => top, PAPER_BOTTOM: -714.5, emptyListY: (...args) => { calls.push(args); return 1234; },
+    });
+    const tree = emptyTree();
+    assert.equal(tree.active, true); assert.equal(tree.pos[1], 1234);
+    assert.equal(calls.length, 1); assert.equal(calls[0][0], centre);
+    assert.deepEqual([calls[0][1].text, calls[0][1].w_], ["[roster.empty]", 1200]);
+    assert.equal(collection.children[0].children[0].pos[1], 53, "the layout is cloned, never moved");
+  }
+});

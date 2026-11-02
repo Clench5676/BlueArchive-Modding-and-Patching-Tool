@@ -120,7 +120,19 @@ rebuild against changed batches. App-only photograph choices remain independent 
 - Text fitting (`ngui.fitText`) shrinks, then wraps at separators and between words (`Intl.Segmenter` in the text's
   language), keeping the CJK line-breaking rules: no closing bracket, comma, full stop, ellipsis, small kana or
   prolonged sound mark starts a line, no opening bracket ends one. `ngui.fitLabel` also widens the label to the
-  width it was fitted to.
+  width it was fitted to. A control's caption is never ellipsized: Batch Import's Import State caption wraps onto
+  two lines inside its button's 116-high body before it shrinks (`import-layout.js` `filterCaption`), and a long name
+  takes up to two lines on the Batch Import name plate, inside the plate's height round the label (`namePlate`).
+  Options side by side share one size (`ngui.fitGroup`): the option rows (`settings-rows.js` `radioRow`, each option
+  measured in its own `lang`, as the Language row names every language in itself) and the Display Settings sort keys
+  and filter options (`display.js` `shareSize`).
+  A break may follow an asterisk (`Shiroko*Terror`, `＊` in CJK), so a Terror form's name wraps between the character and
+  the form (the Hall's student cards). Text with no break to wrap at keeps the largest size under its floor at which it
+  fits on one line, not the lowest. `fitGroup` breaks inside a CJK word between characters (the kinsoku rules hold) only
+  when no word-level wrap keeps the size at its floor: the Japanese Show in Explorer caption. The detail screen's Show in
+  Finder / Explorer caption (`explorer-button.js`) takes up to three lines inside the 180-high body, the folder icon moving
+  up to the body's top edge for the third; the prompt cards (`prompts.js` `card`) label a variant by its name alone, the kind
+  being the details panel's first chip.
 - Fonts: the page draws with Resource Han Rounded CN (`web/fonts`, OFL, shipped). It covers every Han and kana
   character of the zh-TW and ja names and of the games' UI strings, but in Simplified Chinese glyph forms and
   punctuation positions, and it has no Hangul. So the html `lang` (set from the UI language) picks a stack in
@@ -1094,6 +1106,13 @@ Remove Imported removes `done`, `library` and `installed` rows from the current 
 Mods or change installed files; pending, conflicted and failed rows remain. The import list, selection and view
 controls remain in memory when navigation leaves and returns during the same session.
 
+The scrolling areas of Batch Import hide the native bars (`app.css`) and draw the complete
+`UICharacterCollection/SeletControl/List/Scroll Bar` prefab over their right edge, as `Popup.scrollArea` does
+(`scrollbar.js`, bound by `bindBar` in `batch-import.js`): the import list, and the dialogs' area of Advanced Options,
+the Import State filter, Import Results and Assign Character. The bar follows the area's own scroll position and shows
+only while the content overflows; the list's bar is drawn again when the search box changes its length. Assign Character
+has no scroller of its own inside that area: the 24 students of a page lie in it, and paging scrolls it back to the top.
+
 A failed row in Import Results shows only localized text: the row's short reason, then ` - ` and the `error.<code>`
 string with the failure's parameters when the locale has one that says more. The code and parameters are not shown; they stay on the result and,
 for a blocked row, on its list entry, which the error report reads (`BAMTRecovery.importList`, `import_row`), and the
@@ -1326,6 +1345,14 @@ Manifest network and JSON failures retain the URL and original cause; JSON error
 
 ## Front end
 
+Invisible buttons over drawn controls carry their accessible names from the locale files, never a painted glyph: the
+detail screen's student arrows (`hall.previous`, `hall.next`), Copy with the file it copies (`window.copy`), the variant
+chips and the expression strip's cards (the chip's or card's caption; a face is `photo.natural` or `photo.expressions`
+and its number, as the camera names it; the pile is `chips.more`, Collapse `fold.label`), the roster's six segments and
+Group Alts, the asset consent's Agree and Decline, and Assign Character's page arrows (`photo.previous`, `photo.next`).
+A control that picks one of several or switches a setting carries `aria-pressed`: the shown variant's chip, the picked
+face and the segments and Group Alts that are on. The chip that opens the picker, the pile and Collapse are not toggles.
+
 A port of `prototype/main-screen-v4`: `ngui.js` (prefab renderer), the roster, the detail screen, the popups, the
 consent popup and the lobby player, as ES modules under `web/js/`, one page with a hash router (`#/roster`,
 `#/student/<family>/<variant>`). Its data comes from the RPC methods above instead of the generated `data.js`, its
@@ -1351,6 +1378,10 @@ ported.
   user's own aliases of the family (the detail screen's alias editor) and the file id, ignoring case, width, kana and
   separators (with the marks inside names, as in Shiroko*Terror); every word must match. Its input opens focused at once, before the box is drawn round it, and stays in the page across
   rebuilds, so nothing typed meanwhile is lost. The detail screen's arrows follow the same search.
+- With no match the game's empty list shows (`LeftInfo_Empty`: Arona's picture over the faint disc, the message under
+  them). `roster-widgets.js` `emptyListY` puts its ink, from the top of the picture to the bottom of the message, on the
+  middle of the paper the eye sees (`empty-block.js` `emptyBlock`, as Batch Import's empty list): the whole paper, or what
+  the open search box leaves under it.
 - Keyboard focus moves the list through its own scroll position (the clip never scrolls by itself, so the virtual
   rows and the scrollbar stay in step); the cards are in the page in the list's order, and the focused one shows a
   ring in the game's selection blue.
@@ -2219,6 +2250,12 @@ in `pointer-textures`); without a game the system cursor stays and there is no e
     Art. The art is looked for within three game views around the game's view (14 lobbies reach that edge). The pass
     costs 10 to 30 % more with it (Kurumi 0.78 to 0.90 s, Toki 0.82 to 1.06 s).
   - *Custom*: 1.0 to 4.0 game views across (0.1 steps, a slider row under the option), around the game's view.
+    Settings' sliders (this one and the Sound tab's Voice) are a native range input laid unseen over the game's slider
+    (`settings.js` `wireSlider`, its native thumb `SLIDER_THUMB` wide so its centre travels the drawn thumb's range): the
+    pointer, the arrow keys, Home, End and Page Up / Down move it, the game's thumb and the value label follow while it
+    changes, and the value is saved when it commits (the pointer's release, each key press; the page is drawn again
+    with the focus put back on the slider). Keyboard focus shows a ring on the thumb. A drag the system cancels
+    (`pointercancel`) goes back to the saved value and saves nothing.
 
   Past the painted art (Unlocked, Custom) the lobby shows black: what the game's lobby camera clears to (level1
   `Persistent/Camera`, solid colour, black). With PP on, the grade runs over that black as over the art: the bottom

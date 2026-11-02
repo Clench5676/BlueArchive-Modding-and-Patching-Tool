@@ -145,7 +145,14 @@ async function fixture({ licensed = false, native = true, suggest, countIcons = 
       button.addEventListener("click", fn); host.appendChild(button); return button;
     },
   };
-  const page = createImportPage({ host, call, ui, popups, allowed: () => licensed, suggest,
+  // the game's scrollbar (scrollbar.js) on a stand-in: where it was drawn and every sync it was given
+  const drawnBars = [];
+  const bars = async (barHost, track, options) => {
+    const bar = new El(); bar.className = `scrollbar ${options.className}`; bar.track = track; bar.options = options; bar.syncs = [];
+    bar.sync = (visible, total, offset) => { bar.syncs.push([visible, total, offset]); bar.hidden = total <= visible; };
+    barHost.appendChild(bar); drawnBars.push(bar); return bar;
+  };
+  const page = createImportPage({ host, call, ui, popups, allowed: () => licensed, suggest, bars,
     loading: { hold: (work, opts) => {
       const hold = { opts, active: true }; holds.push(hold);
       const done = Promise.resolve().then(work).finally(() => { hold.active = false; });
@@ -167,7 +174,7 @@ async function fixture({ licensed = false, native = true, suggest, countIcons = 
   const analyze = async (entries = mixed(), paths = entries.flatMap((entry) => entry.paths)) => {
     const adding = page.drop(paths); await flush(); analyses.at(-1).resolve({ entries, skipped: 0 }); await adding; await page.settled(); await flush(); return adding;
   };
-  return { page, context, destinations, host, dialog, layouts, layoutSnapshot, rendered, loaded, calls,
+  return { page, context, destinations, host, dialog, layouts, layoutSnapshot, rendered, loaded, calls, drawnBars,
     holds, holdPicker: () => { pickerHold = deferred(); return pickerHold; }, holdThumbs: () => { thumbsHold = deferred(); return thumbsHold; },
     thumbnailFor: (fn) => { thumbnailFor = fn; },
     holdDecode: (predicate) => { decodeHold = { ...deferred(), predicate }; return decodeHold; },
@@ -647,7 +654,7 @@ const treeNodes = (tree) => [tree, ...(tree.children || []).flatMap(treeNodes)];
 test("the page clones runtime Items/Mailbox widgets and has no invented empty preview or key hint", async () => {
   const h = await fixture();
   assert.deepEqual(h.loaded, ["UINonEquipmentInventory", "UIMailBox", "UIMailBoxContent", "UIPopup_FilterSort", "UINonEquipmentInventoryListItem",
-    "UIPopup_GachaCharList.Btn_Checkbox"]);
+    "UIPopup_GachaCharList.Btn_Checkbox", "UICharacterCollection"]);
   assert.equal(h.host.querySelector(".import-detail").textContent, "");
   await h.analyze(); await h.page.openOptions(); await h.page.settled();
   assert.equal(h.dialog.querySelector("select"), null, "options use the game's radio widgets");
@@ -1124,7 +1131,7 @@ test("the Items header retains its own control sizes, transforms and states with
     const filtered = h.action("filter").getAttribute("aria-label").startsWith("Cannot Import");
     assert.equal(find(tree, "SortBtn/Btn_Normal/FilterMarker_On").active, filtered);
     assert.equal(find(tree, "SortBtn/Btn_Normal/FilterMarker_Off").active, !filtered);
-    assert.equal(find(tree, "SortBtn/Btn_Normal/Type_2/Text").widgets[0].ellipsis, true);
+    assert.ok(!find(tree, "SortBtn/Btn_Normal/Type_2/Text").widgets[0].ellipsis, "the state caption wraps instead of ending in an ellipsis");
   };
   assertTools(); await h.analyze(); await h.action("order").click(); await h.page.settled(); assertTools();
   await h.action("filter").click(); await flush(); await walk(h.dialog).find((e) => e.dataset.value === "blocked").click();
@@ -1187,10 +1194,11 @@ test("empty, full, filtered and long Thai toolbars fit the header, with search a
           const [sx, sy, sw, sh] = rectOf(wrap);
           assert.ok(sx >= 0 && sx + sw <= width); assert.ok(sy > cy && sy + sh < ly);
         }
-        for (const n of [find(drawn(h, header).tree, "Label_Locale_Title"), find(drawn(h, header).tree, "SortBtn/Btn_Normal/Type_2/Text"), ...(count.hidden ? [] : [drawn(h, count).tree])]) {
+        for (const n of [find(drawn(h, header).tree, "Label_Locale_Title"), ...(count.hidden ? [] : [drawn(h, count).tree])]) {
           const label = n.widgets.find((w) => "text" in w);
           assert.equal(label.ellipsis, true); assert.ok(!label.text.includes("\n"));
         }
+        assert.ok(!find(drawn(h, header).tree, "SortBtn/Btn_Normal/Type_2/Text").widgets[0].ellipsis);
       };
       await check(); await h.action("searchToggle").click(); await check();
       await h.analyze(Array.from({ length: 150 }, (_, i) => entry(`mod-${i}`, i % 2 ? "blocked" : "ready")));
@@ -2073,3 +2081,131 @@ for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
     }
   });
 }
+
+// --- the game's scrollbar on every scrolling area (UICharacterCollection/SeletControl/List/Scroll Bar) ---
+const { scrollbarTrack } = await import("../../src/ba_modding_toolkit/web/js/scrollbar.js");
+const { DIALOG_AREA } = await import("../../src/ba_modding_toolkit/web/js/batch-import.js");
+const importCss = readFileSync(new URL("../../src/ba_modding_toolkit/web/css/app.css", import.meta.url), "utf8");
+const cssRule = (selector) => importCss.match(new RegExp(`(?:^|\\n)${selector.replace(/[.]/g, "\\.")}\\s*\\{([^}]+)\\}`))[1];
+// an area that overflows: what the browser would report
+const overflow = (area, visible, total, top = 0) => { Object.assign(area, { clientHeight: visible, scrollHeight: total, scrollTop: top }); return area; };
+
+test("the native bars are hidden on the list and the dialogs' area, and the dialog area's numbers are the stylesheet's", () => {
+  for (const selector of [".import-list", ".import-dialog-content"]) {
+    assert.match(cssRule(selector), /overflow-y:\s*auto/);
+    assert.match(cssRule(selector), /scrollbar-width:\s*none/, `${selector} hides Firefox's and WebKit's bar`);
+  }
+  assert.match(importCss, /\.import-list::-webkit-scrollbar,\s*\.import-dialog-content::-webkit-scrollbar\s*\{\s*display:\s*none/);
+  const rule = cssRule(".import-dialog-content"), px = (name) => Number(rule.match(new RegExp(`(?:^|[\\s;])${name}:\\s*(\\d+)px`))[1]);
+  assert.deepEqual([px("left"), px("top"), px("width"), px("height")], DIALOG_AREA);
+});
+
+test("the Batch Import list draws the game's scrollbar over its right edge, follows it and moves with the search box", async () => {
+  const h = await fixture(); await h.analyze();
+  const panel = h.host.querySelector(".import-panel"), list = h.host.querySelector(".import-list");
+  const bar = () => h.drawnBars.findLast((item) => item.parentNode === panel);
+  assert.ok(bar(), "bound to the list");
+  assert.deepEqual(h.layouts.UICharacterCollection, h.layoutSnapshot.UICharacterCollection, "the game's prefab is not mutated");
+  assert.deepEqual(bar().track, scrollbarTrack([26, 202, 1220, 414], S));
+  assert.equal(bar().options.collection, h.layouts.UICharacterCollection);
+  // the track's painted edge ends on the list's right edge, clear of the rows
+  closeTo(bar().track[0] + 49 * S, 26 + 1220); assert.ok(26 + ROW_WIDTH < 26 + 1220 - 20 * S);
+  // the content grows: the bar takes the area's own numbers, at its scroll position
+  overflow(list, 414, 2000, 300); await list.dispatch("scroll");
+  assert.deepEqual(bar().syncs.at(-1), [414, 2000, 300]); assert.equal(bar().hidden, false);
+  overflow(list, 414, 414, 0); await list.dispatch("scroll");
+  assert.equal(bar().hidden, true, "no bar without overflow");
+  // the search box shortens the list: a bar of the new length replaces the old one
+  const before = bar(); await h.action("searchToggle").click(); await h.page.settled();
+  assert.deepEqual(bar().track, scrollbarTrack([26, 294, 1220, 322], S)); assert.notEqual(bar(), before);
+  assert.equal(before.parentNode, null, "the old bar is gone");
+  assert.equal(panel.children.filter((item) => item.className.startsWith("scrollbar")).length, 1);
+  await h.action("searchToggle").click(); await h.page.settled();
+  assert.deepEqual(bar().track, scrollbarTrack([26, 202, 1220, 414], S));
+});
+
+test("Advanced Options, Import State, Import Results and Assign Character each draw the game's scrollbar on their area", async () => {
+  const h = await fixture(); await h.analyze();
+  const areaOf = () => h.dialog.querySelector(".import-dialog-content");
+  const barOf = () => h.drawnBars.findLast((item) => item.parentNode?.parentNode === h.dialog);
+  // Advanced Options: a narrower body, the area follows it
+  await h.page.openOptions(); await h.page.settled();
+  let area = areaOf(), bar = barOf();
+  const body = OPTION_WIDTH * S;
+  assert.ok(bar && bar.parentNode.contains(area));
+  assert.deepEqual(bar.track, scrollbarTrack([960 - body / 2 - 16, 190, body + 32, 640], S));
+  assert.equal(bar.options.className, "import-bar");
+  overflow(area, 640, 1700, 120); await area.dispatch("scroll"); assert.deepEqual(bar.syncs.at(-1), [640, 1700, 120]);
+  await h.action("close", h.dialog).click();
+  // Import State: the full area
+  await h.action("filter").click(); await flush(); await h.page.settled();
+  area = areaOf(); bar = barOf();
+  assert.deepEqual(bar.track, scrollbarTrack(DIALOG_AREA, S));
+  overflow(area, 640, 900, 0); await area.dispatch("scroll"); assert.deepEqual(bar.syncs.at(-1), [640, 900, 0]);
+  await h.action("close", h.dialog).click();
+  // Assign Character
+  const unknown = { ...entry("unidentified", "blocked", "lobby"), variant: null, reason: "mod_target_unknown" };
+  await h.analyze([unknown]); await h.action("assignCharacter").click(); await flush(); await h.page.settled();
+  area = areaOf(); bar = barOf();
+  assert.deepEqual(bar.track, scrollbarTrack(DIALOG_AREA, S));
+  await h.action("close", h.dialog).click();
+});
+
+test("Import Results draws the game's scrollbar on its area", async () => {
+  const h = await fixture(); await h.analyze([entry("a"), entry("b")]);
+  h.page.model.checkAll(true); await h.action("start").click(); await flush();
+  h.runs[0].resolve({ results: [{ id: "a", outcome: "imported", reason: null, libraryId: "lib-a", applied: false },
+    { id: "b", outcome: "imported", reason: null, libraryId: "lib-b", applied: false }] }); await flush(); await h.page.settled();
+  await h.page.results();
+  const area = h.dialog.querySelector(".import-results"), bar = h.drawnBars.findLast((item) => item.parentNode?.parentNode === h.dialog);
+  assert.ok(area && bar, "bound to the results");
+  assert.deepEqual(bar.track, scrollbarTrack(DIALOG_AREA, S));
+  overflow(area, 640, 1400, 60); await area.dispatch("scroll");
+  assert.deepEqual(bar.syncs.at(-1), [640, 1400, 60]);
+  await h.action("ok", h.dialog).click();
+});
+
+test("Assign Character scrolls in one area: no scroller inside it, paging goes back to the top, the bar follows each page", async () => {
+  const h = await fixture();
+  const unknown = { ...entry("unidentified", "blocked", "lobby"), variant: null, reason: "mod_target_unknown" };
+  await h.analyze([unknown]);
+  const original = catalog.families, many = [];
+  // 60 students: three pages of 24 at most
+  for (let i = 0; i < 60; i++) many.push({ key: `s${i}`, variants: [{ key: `s${i}`, custom: [], fileId: `s${i}_spr`, names: { en: { full: `Student ${String(i).padStart(2, "0")}` } } }] });
+  catalog.families = many;
+  try {
+    await h.action("assignCharacter").click(); await flush(); await h.page.settled();
+    const area = h.dialog.querySelector(".import-dialog-content"), bar = h.drawnBars.findLast((item) => item.parentNode?.parentNode === h.dialog);
+    for (const element of walk(area)) {
+      assert.ok(!/overflow/i.test(Object.keys(element.style).join(" ")), `no nested scroller: ${element.className || element.tagName}`);
+      assert.equal(element.style.maxHeight, undefined);
+    }
+    const syncs = bar.syncs.length;
+    overflow(area, 640, 1400, 500);
+    await h.action("characterNext", h.dialog).click(); await flush();
+    assert.equal(area.scrollTop, 0, "the next page starts at the top");
+    assert.ok(bar.syncs.length > syncs, "the bar follows the redrawn list");
+    assert.deepEqual(bar.syncs.at(-1).slice(0, 2), [640, 1400]);
+    area.scrollTop = 300; await h.action("characterPrevious", h.dialog).click(); await flush();
+    assert.equal(area.scrollTop, 0);
+    await h.action("close", h.dialog).click();
+  } finally { catalog.families = original; }
+});
+
+// --- UI-13: Assign Character's page arrows are named by the pages they turn, not by their painted glyphs ---
+test("Assign Character's previous and next page buttons are named in every language and keep their painted arrows", async () => {
+  const unknown = { ...entry("unidentified", "blocked", "lobby"), variant: null, reason: "mod_target_unknown" };
+  try {
+    for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
+      const ui = JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${locale}.json`, import.meta.url), "utf8")).webui;
+      setStrings(locale, flatten(JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${locale}.json`, import.meta.url), "utf8"))));
+      const h = await fixture(); await h.analyze([unknown]);
+      await h.action("assignCharacter").click(); await flush(); await h.page.settled();
+      const previous = h.action("characterPrevious", h.dialog), next = h.action("characterNext", h.dialog);
+      assert.equal(previous.getAttribute("aria-label"), ui.photo.previous, locale);
+      assert.equal(next.getAttribute("aria-label"), ui.photo.next, locale);
+      assert.equal(previous.caption, "‹"); assert.equal(next.caption, "›");
+      await h.action("close", h.dialog).click();
+    }
+  } finally { setStrings("en-US", flatten(JSON.parse(readFileSync(new URL("../../src/ba_modding_toolkit/locales/en-US.json", import.meta.url), "utf8")))); }
+});

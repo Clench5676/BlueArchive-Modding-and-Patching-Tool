@@ -19,6 +19,7 @@ import { loadImportLayouts, importArtwork, clipButtonPatterns, ROW_SCALE, ROW_WI
 import { suggestImports } from "./import-assistants.js";
 import { createImportState, countsOf, eligible, RESOURCE_TYPES, STATES } from "./import-state.js";
 import { characterPicker } from "./character-picker.js";
+import { scrollbar as gameScrollbar, scrollbarTrack } from "./scrollbar.js";
 
 const KIND_KEYS = { spr: "tab.portrait", lobby: "tab.lobby", model: "tab.model", other: "import.other" };
 const REASONS = new Set(["unreadable", "no_target", "conflict", "spine_version", "unsupported",
@@ -30,6 +31,8 @@ const OUTCOMES = new Set(["imported", "updated", "unchanged", "failed", "skipped
 const sizeText = (size) => size >= 1048576 ? `${(size / 1048576).toFixed(1)} MB` : `${Math.ceil((size || 0) / 1024)} KB`;
 const baseName = (path) => path?.split(/[\\/]/).pop() || "";
 const listSeparator = () => /^(zh|ja)/i.test(language()) ? "、" : ", ";
+// the dialogs' scrolling area [left, top, width, height] (px in the stage; app.css .import-dialog-content has the same numbers)
+export const DIALOG_AREA = [228, 190, 1464, 640];
 
 export function catalogEntries(data) {
   return (data?.families || []).flatMap((family) => (family.variants || []).map((variant) => ({ ...variant, family })));
@@ -45,7 +48,8 @@ export function entryIdentity(entry, catalog) {
 }
 
 export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, popups = Popup,
-  thumbnails = thumbnailScope, modelThumbnails = modelThumbnail, allowed = spineAllowed, suggest = suggestImports, loading = Loading } = {}) {
+  thumbnails = thumbnailScope, modelThumbnails = modelThumbnail, allowed = spineAllowed, suggest = suggestImports, loading = Loading,
+  bars = gameScrollbar } = {}) {
   const model = createImportState({ rpc: call, waitJob: jobs, suggest, changed: () => context?.invalidateRoster?.() });
   let context = null, catalog = [], visible = false, root = null, scope = null;
   let query = "", filter = "all", ascending = true, searchOpen = false, rowsKey = null, previewKey = null, generation = 0;
@@ -117,6 +121,23 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
     work.catch((error) => console.error("Import artwork", error)).finally(() => { drawings.delete(work); wake(); });
     return work;
   };
+  // The game list's scrollbar (UICharacterCollection/SeletControl/List/Scroll Bar) over a native scrolling area, as
+  // Popup.scrollArea draws it: the area's own bar is hidden (app.css), this one follows its scroll position and shows only
+  // while the content overflows. box: the area's [left, top, width, height] in host, the edge the painted bar ends on.
+  const scrollBars = new Map();
+  const syncBar = (area) => { scrollBars.get(area)?.bar?.sync(area.clientHeight, area.scrollHeight, area.scrollTop); };
+  function bindBar(area, barHost, box, z = 60) {
+    const key = JSON.stringify(box), mine = scrollBars.get(area);
+    if (mine?.key === key) { syncBar(area); return; }
+    mine?.bar?.remove();
+    const record = { key, bar: null };
+    scrollBars.set(area, record);
+    if (!mine) area.addEventListener("scroll", () => syncBar(area));
+    tracked(bars(barHost, scrollbarTrack(box, S), { collection: art.collection(), z, className: "import-bar" }).then((bar) => {
+      if (scrollBars.get(area) !== record) { bar.remove(); return; }
+      record.bar = bar; syncBar(area);
+    }).catch((error) => console.warn("import scrollbar unavailable", error)));
+  }
   // DOM below is geometry, scrolling and accessible hit areas only. All visible widgets come from import-layout.js.
   const place = (element, x, y, width, height) => {
     Object.assign(element.style, { position: "absolute", left: `${x}px`, top: `${y}px`, width: `${width}px`, height: `${height}px` });
@@ -140,8 +161,9 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
     if (element.caption === `${source}/${caption}`) return;
     element.caption = `${source}/${caption}`; paint(element, art[source](caption), { scale, origin });
   }
-  function button(caption, action, { width = 180, primary = false, scale = 0.4 } = {}) {
-    const b = el("button", "hit import-button"); b.type = "button"; b.dataset.action = action;
+  // name: the accessible name where the painted caption is not one (a glyph on a pager button)
+  function button(caption, action, { width = 180, primary = false, scale = 0.4, name = null } = {}) {
+    const b = el("button", "hit import-button"); b.type = "button"; b.dataset.action = action; b.accessibleName = name;
     Object.assign(b.style, { width: `${width}px`, height: `${(primary ? 166 : 162) * scale}px` });
     b.refresh = () => {
       const key = JSON.stringify([b.caption, b.disabled, b.size]); if (key === b.drawKey) return; b.drawKey = key;
@@ -151,7 +173,7 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
     setCaption(b, caption); return b;
   }
   function setCaption(b, caption) {
-    b.caption = caption; b.setAttribute("aria-label", caption); b.refresh();
+    b.caption = caption; b.setAttribute("aria-label", b.accessibleName || caption); b.refresh();
   }
   const EMPTY_BOX = [1200, 100];   // each empty-list label's box (px), its text centred in it
   // Buttons side by side share one caption size: the list's seven tools, and Advanced Options with Recheck.
@@ -249,7 +271,7 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
     paint(dom.background, art.background(), { origin: [960, 540] });
     dom.preview = place(el("div", "import-detail"), 46, 132, 524, 700); root.appendChild(dom.preview);
     // Items/ListBG: the two-column frame retains its paper/inbox insets, with a mail list in place of the item grid.
-    const panel = place(el("div", "import-panel"), 602, 132, 1272, 704);
+    const panel = place(el("div", "import-panel"), 602, 132, 1272, 704); dom.panel = panel;
     paint(panel, art.panel(1272 / S, 704 / S), { origin: [636, 352] });
     dom.header = place(el("div", "import-header"), 0, 0, 1272, 136 * S);
     dom.count = el("div", "import-count"); panel.append(dom.header, dom.count);
@@ -318,6 +340,7 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
     const stripTop = paperTop;
     place(dom.count, 26 + ROW_WIDTH - 250, (stripTop + 202) / 2 - 16, 250, 32);
     place(dom.list, 26, top, 1220, 616 - top);
+    bindBar(dom.list, dom.panel, [26, top, 1220, 616 - top]);
     listTop = top; placeEmpty();
   }
   // Items' ListEmpty message, with the drop hint under it while nothing is added: one block whose ink centre sits on the
@@ -561,7 +584,7 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
     catalog = catalogEntries(data); identities = new WeakMap();
     await characterPicker({ data, selected: entry.variant, dialog, el, button, inputControl, checkbox, radioOptions,
       emptyNote: (host, caption) => textWidget(host, caption, "empty", { scale: 0.5, origin: [685, 50] }),
-      onSelect: (variant) => model.assignCharacter(entry.id, variant) });
+      refresh: syncBar, onSelect: (variant) => model.assignCharacter(entry.id, variant) });
   }
 
   const stateText = (entry) => T(entry.libraryOnly && eligible(entry) ? "import.libraryOnly" : entry.reason === "source_unknown" ? "import.reason.source_unknown" : `import.state.${entry.state}`);
@@ -651,7 +674,7 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
           record.row = previous; record.previousRow = null; replacements.set(next, previous);
         }
         dom.list.replaceChildren(...contents.map((row) => replacements.get(row) || row));
-        dom.list.scrollTop = scrollTop;
+        dom.list.scrollTop = scrollTop; syncBar(dom.list);
       }));
     }
     for (const row of rows.values()) {
@@ -744,9 +767,10 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
         await ui.render(popups.disabledConfirm(frame), blocked, { scale: S, origin: [960, 540], z: 40 });
         if (ended) return;
       }
-      const area = el("div", "import-dialog-content");
-      if (bodyWidth) Object.assign(area.style, { left: `${960 - bodyWidth / 2 - 16}px`, width: `${bodyWidth + 32}px` });
+      const area = el("div", "import-dialog-content"), box = [...DIALOG_AREA];
+      if (bodyWidth) { box[0] = 960 - bodyWidth / 2 - 16; box[2] = bodyWidth + 32; Object.assign(area.style, { left: `${box[0]}px`, width: `${box[2]}px` }); }
       layer.appendChild(area); await content(area, { primary: (enabled) => { allowed = enabled !== false; sync(); } });
+      bindBar(area, layer, box);
       const finish = async () => {
         if (working || !allowed) return; working = true; layer.setAttribute("aria-busy", "true");
         try {

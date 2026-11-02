@@ -83,7 +83,7 @@ async function draw(host, cacheDir, native, resolve) {
       host.innerHTML = "";
       Popup.closed(host);
       resolve(granted);
-    }, "", 2100);
+    }, T(granted ? "consent.yes" : "consent.no"), 2100);
   }
   const change = view.nodes.get("Center/Popup/Cached/Change")?.els[0];
   if (change && native) {

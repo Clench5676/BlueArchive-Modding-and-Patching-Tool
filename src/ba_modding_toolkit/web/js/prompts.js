@@ -95,12 +95,12 @@ export function crcText(entry) {
 export const sizeText = (bytes) => ModSwitch.sizeText(bytes);
 
 // card(entry, {state, nameOf, kind}): one card of a prompt, for popup.js listPopup (its thumbnail is added by the page):
-//   the variant's name, the kind and install chips (the install only when more than one is known), "No Official Copy"
+//   the variant's name (the kind is a chip of the details panel, not part of the label), the kind and install chips (the install only when more than one is known), "No Official Copy"
 //   on an overwritten entry; damaged and stuck entries cannot be ticked and are drawn dim with their state
-export function card(entry, { state = null, nameOf = (e) => e?.variant || e?.core || "", which = "untracked", sep = ModSwitch.listSep() } = {}) {
+export function card(entry, { state = null, nameOf = (e) => e?.variant || e?.core || "", which = "untracked" } = {}) {
   const name = nameOf(entry) || entry?.variant || entry?.core || "";
-  // a variant's portrait and lobby are two cards: the kind follows the name
-  const label = `${name}${sep}${kindLabel(entry)}`;
+  // the card's label is the name alone, at the most room the card has; the kind is the details panel's first chip
+  const label = name;
   const installs = state?.installs || [];
   const chips = [kindLabel(entry)];
   if (installs.length > 1) chips.push(installOf(state, entry.install)?.label || entry.install);

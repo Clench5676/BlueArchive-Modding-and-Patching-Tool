@@ -15,7 +15,7 @@ import { specialFraming } from "./special-view.js";
 import * as NGUI from "./ngui.js";
 import * as Display from "./display.js";
 import * as Loading from "./loading.js";
-import { searchTree as rosterSearchTree, toolbarLayout, toolbarTree } from "./roster-widgets.js";
+import { emptyListY, searchTree as rosterSearchTree, toggleHits, toolbarLayout, toolbarTree } from "./roster-widgets.js";
 import { current as modsState } from "./mod-switch.js";
 import { countNodes, countText, iconsOf } from "./mod-counts.js";
 import { rpc, spineBase } from "./api.js";
@@ -282,8 +282,10 @@ function applyScroll() {
 function emptyTree() {
   const t = clone(find(layouts.collection, "SeletControl/LeftInfo_Empty"));
   t.active = true;
-  t.pos[1] -= PAPER_TOP - listTop();
-  Object.assign(find(t, "Label_Locale").widgets[0], { text: T("roster.empty"), w_: 1200 });
+  const message = find(t, "Label_Locale").widgets[0];
+  Object.assign(message, { text: T("roster.empty"), w_: 1200 });
+  // the picture and the message sit on the middle of the paper the eye sees: all of it, or what the open search box leaves
+  t.pos[1] = emptyListY((listTop() + PAPER_BOTTOM) / 2, message);
   return t;
 }
 // the empty list's picture for the current items, built off screen (nothing when there are items)
@@ -493,20 +495,19 @@ async function buildFrame(my) {
   });
 
   // hit areas for the header controls (TopMenu sits at y 720 in SeletControl's units)
-  const hit = ([ux, uy, w, h], fn, name) => {
+  const hit = ([ux, uy, w, h], fn, name, pressed = null) => {
     const b = document.createElement("button");
     b.className = "card-hit";
     Object.assign(b.style, { left: `${ORIGIN[0] + (ux - w / 2) * S}px`, top: `${ORIGIN[1] - (uy + h / 2) * S}px`, width: `${w * S}px`, height: `${h * S}px` });
     if (name) b.setAttribute("aria-label", name);
+    if (pressed != null) b.setAttribute("aria-pressed", String(pressed));
     b.addEventListener("click", fn);
     next.appendChild(b);
     return b;
   };
-  const segY = 720 - 219 - 50.2;
   const reset = (fn) => () => { fn(); view.scroll = 0; save(); renderAll(); };
-  ["all", "mods", "none"].forEach((k, i) => hit([lay.seg1 - (2.5 - i) * lay.segW, segY, lay.segW, 104], reset(() => { view.mods = k; })));
-  ["all", "yes", "no"].forEach((k, i) => hit([lay.seg2 - (2.5 - i) * lay.segW, segY, lay.segW, 104], reset(() => { view.recruit = k; })));
-  hit([lay.cbLeft + lay.cbW / 2, 720 - 273, lay.cbW, 110], reset(() => { view.merged = !view.merged; }));
+  // the segments and Group Alts toggle a view setting: named by their captions, pressed while that setting is on
+  for (const toggle of toggleHits(view, lay)) hit(toggle.box, reset(() => toggle.apply(view)), toggle.name, toggle.pressed);
   hit([lay.search, TOOL_Y, 150, 116], () => (searching ? closeSearch() : openSearch()), T("roster.search"));
   // the display settings' first drawing takes a while: it starts as the pointer comes to the button
   hit([lay.sort, TOOL_Y, lay.sortW, 116], openDisplay, T("display.title")).addEventListener("pointerenter", () => Display.warm());

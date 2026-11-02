@@ -14,6 +14,7 @@ import { jobProgress, progressName } from "./job-progress.js";
 import { isSpecial, specialFraming } from "./special-view.js";
 import * as NGUI from "./ngui.js";
 import { resizeButton } from "./button-layout.js";
+import { explorerLayout } from "./explorer-button.js";
 import { latestLoad, loadPlayer } from "./spine-load.js";
 import { ensureSpine, spineAllowed } from "./spine-runtime.js";
 import { decodeAll } from "./image-decode.js";
@@ -27,7 +28,7 @@ import * as Compatibility from "./mod-compatibility.js";
 import { show as showCompare } from "./mod-compare.js";
 import * as Lobby from "./lobby.js";
 import * as Visual from "./visual-mode.js";
-import { QUEUEABLE, current as modsState, entryLabel, refused } from "./mod-switch.js";
+import { QUEUEABLE, current as modsState, entryLabel, listSep, refused } from "./mod-switch.js";
 import * as Prompts from "./prompts.js";
 import { anyOpen as popupOpen } from "./popup.js";
 import { rpc, spineBase, spinePrefix, loadSpineAssets, waitJob } from "./api.js";
@@ -341,11 +342,11 @@ function screenTree() {
   widget(t, `${up}/BG (1)`).color = "#dbeef5/1.00";
   for (const k of at(t, `${up}/BG (1)`).children) k.widgets[0].sprite = "Common_Btn_Normal_B_C_Pt";
   resizeButton(at(t, `${up}/BG (1)`));
-  const openText = fitText(T(platform === "mac" ? "open.mac" : "open.win"), 32, 26, 140);
-  text(t, `${up}/Label_Locale`, openText.text, { fontSize: openText.fs, w_: 160, h_: 40 * openText.lines, color: "#2d5164/1.00" });
-  at(t, `${up}/Label_Locale`).pos = [-1.4 - (openText.lines > 1 ? 36 : 46) * TAN10, openText.lines > 1 ? -36 : -46];
-  const folderY = openText.lines > 1 ? 38 : 26;
-  at(t, up).children.push(node("Folder", [-1.4 + folderY * TAN10, folderY], [{ texture: "svg:folder", w_: 56, h_: 50, pivot: 4, depth: 12, color: "#ffffff/1.00" }]));
+  // the caption wraps onto up to three lines inside the 180-high body before it shrinks (explorer-button.js)
+  const open_ = explorerLayout(T(platform === "mac" ? "open.mac" : "open.win"));
+  text(t, `${up}/Label_Locale`, open_.text, { fontSize: open_.fs, w_: 160, h_: open_.label[2], color: "#2d5164/1.00" });
+  at(t, `${up}/Label_Locale`).pos = [open_.label[0], open_.label[1]];
+  at(t, up).children.push(node("Folder", open_.folder, [{ texture: "svg:folder", w_: 56, h_: 50, pivot: 4, depth: 12, color: "#ffffff/1.00" }]));
 
   // row 2: four actions on what the shown tab's game files carry. Title and icon centred as a group on the card's
   // slanted midline.
@@ -598,7 +599,8 @@ function hits(view, leftHost, rightHost) {
   }
   add(leftHost, "LeftInfo/CharInfo/Char_Target/Pin/Pin_On/Bg", toggleFav, T("fav.label"));
   add(leftHost, "LeftInfo/CharInfo/Char_Target/Pin/Pin_Off/Bg", toggleFav, T("fav.label"));
-  add(leftHost, "LeftInfo/CharInfo/Char_Target/Char_CVCollectionBtn", copyName, baseName(gameFile(variant(), tabKind())));
+  // Copy, then the file it copies
+  add(leftHost, "LeftInfo/CharInfo/Char_Target/Char_CVCollectionBtn", copyName, `${T("window.copy")}${listSep()}${baseName(gameFile(variant(), tabKind()))}`);
   // The pencil opens the editor beside the displayed name.
   const aliasEls = ["Char_AliasBtn"].map((n) => view.nodes.get(`Inventory_ListControl/LeftInfo/CharInfo/Char_Target/${n}`)?.els[0]).filter(Boolean);
   if (aliasEls.length) {
@@ -609,8 +611,8 @@ function hits(view, leftHost, rightHost) {
     hitButton(leftHost, [l, tp, r - l, bt - tp], () => call(() => openAliases()), list ? `${T("alias.title")} - ${list}` : T("alias.title"));
   }
   // the previous or next card of the student list, within its filters and in its order
-  add(leftHost, "Arrow_L/Left", () => ctx.step(-1, fam.key, variantKey));
-  add(rightHost, "Arrow_R/Right", () => ctx.step(1, fam.key, variantKey));
+  add(leftHost, "Arrow_L/Left", () => ctx.step(-1, fam.key, variantKey), T("hall.previous"));
+  add(rightHost, "Arrow_R/Right", () => ctx.step(1, fam.key, variantKey), T("hall.next"));
   add(leftHost, "LeftInfo/CharInfo/Char_Target/Char_ZoomBtn", () => setFullscreen(true), T("lobby.fullscreen"));
   if (tab === "lobby") add(leftHost, "LeftInfo/CharInfo/Char_Target/Char_PlayBtn", togglePlayAll, T(Lobby.playingAll() ? "lobby.stop" : "lobby.playAll"));
   const v = variant();
@@ -872,7 +874,8 @@ async function drawChips() {
   const host = $("ngui-chips");
   // Char_Target sits at (-1480, -720); BG2 (886 x 202, top-centre at 514, 234, sheared about its centre) holds the chips
   const CENTRE_Y = 234 - 101;
-  const tree = node("Chips", [-1480, -720], [], chipLayout().map(({ v, more, row, col, span }) => {
+  const chips = chipLayout();
+  const tree = node("Chips", [-1480, -720], [], chips.map(({ v, more, row, col, span }) => {
     const y = 234 - 58 - row * 84, x = 514 + (y - CENTRE_Y) * TAN10 + (col + (span - 1) / 2 - 1) * CHIP_PITCH;
     const w = CHIP_W + (span - 1) * CHIP_PITCH;
     return v
@@ -888,7 +891,12 @@ async function drawChips() {
   if (!ok()) return; // a newer render took over
   for (const [path, entry] of view.nodes) {
     const m = /\/Chip_([^/]*)$/.exec(path);
-    if (m && entry.els[0]) hitButton(next, rect(entry.els[0]), () => (m[1] === "more" ? openPicker() : ctx.go(fam.key, m[1])));
+    if (!m || !entry.els[0]) continue;
+    // the chip's caption names it; the shown variant's chip is the pressed one
+    const chip = m[1] === "more" ? chips.find((c) => !c.v) : chips.find((c) => c.v?.key === m[1]);
+    const button = hitButton(next, rect(entry.els[0]), () => (m[1] === "more" ? openPicker() : ctx.go(fam.key, m[1])),
+      chip?.v ? shortName(chip.v) : T("chips.more", { n: chip?.more ?? 0 }));
+    if (chip?.v) button.setAttribute("aria-pressed", String(chip.v.key === variantKey));
   }
   commit(() => {
     if (!ok()) return;
@@ -975,7 +983,7 @@ async function drawExpressions() {
   const cards = [];
   if (unfolded || list.length <= 4) {
     list.forEach((it, i) => cards.push({ tree: cardOf(it, COLS[0] + i * PITCH), item: it }));
-    if (unfolded) cards.push({ tree: stripCard("Fold", COLS[0] + list.length * PITCH, { caption: T("fold.label"), tone: "#eef4f8" }), fold: true });
+    if (unfolded) cards.push({ tree: stripCard("Fold", COLS[0] + list.length * PITCH, { caption: T("fold.label"), tone: "#eef4f8" }), fold: true, name: T("fold.label") });
   } else {
     // three cards; a chosen item further along takes the third card so it stays in view
     const shown = list.slice(0, 3);
@@ -987,7 +995,8 @@ async function drawExpressions() {
     const pw = 178, right = BTN_COL[1];
     cards.push({ tree: stripCard("Pile_2", right - pw / 2, { w: pw, h: CARD.h - 24, tone: "#dfe8ef" }), pile: true, z: 100 });
     cards.push({ tree: stripCard("Pile_1", right - pw / 2 - 14, { w: pw, h: CARD.h - 12, tone: "#eef4f8" }), pile: true, z: 140 });
-    cards.push({ tree: stripCard("Pile_0", right - pw / 2 - 28, { w: pw, thumb: picture(rest[0]), dim: !!rest[0].thumb, caption: `+${rest.length}`, tone: rest[0].thumb ? "#ffffff" : "#d3dee8" }), pile: true, z: 180 });
+    cards.push({ tree: stripCard("Pile_0", right - pw / 2 - 28, { w: pw, thumb: picture(rest[0]), dim: !!rest[0].thumb, caption: `+${rest.length}`, tone: rest[0].thumb ? "#ffffff" : "#d3dee8" }),
+      pile: true, name: T("chips.more", { n: rest.length }), z: 180 });
   }
   // clip: the row's height, from the box's slanted right edge to the row's inner right edge
   const Lx = 300, Rx = 1316, TOPU = -436, BOTU = -670;
@@ -1007,12 +1016,14 @@ async function drawExpressions() {
     thumbs.push(...view.thumbnails);
     const body = view.nodes.get(cd.tree.name)?.els[0];
     if (!body || (cd.pile && cd.tree.name !== "Pile_0")) return;
-    hitButton(track, rect(body), () => {
+    const strip = hitButton(track, rect(body), () => {
       if (track.dataset.dragged) return;
       if (cd.item) { row4Pick(cd.item.key); keepScroll(); renderExpressions(); }
       if (cd.pile) { expanded = true; exprScroll = 0; renderExpressions(); }
       if (cd.fold) { expanded = false; renderExpressions(); }
-    }, cd.item?.body || cd.item?.caption || "", 260);
+    }, cd.name || cd.item?.body || cd.item?.caption || (cd.item ? faceName(cd.item.key) : ""), 260);
+    // the strip's cards pick one item: the picked one is pressed
+    if (cd.item) strip.setAttribute("aria-pressed", String(cd.item.key === sel));
   }));
   if (!ok()) return; // a newer render took over (e.g. the tab changed while faces were rendering)
   if (my === exprToken) {
@@ -1031,6 +1042,8 @@ async function drawExpressions() {
     if (unfolded) clip.scrollLeft = exprScroll;
   });
 }
+// a portrait face's name, as the camera's expression list has it
+const faceName = (key) => (key === "00" ? T("photo.natural") : `${T("photo.expressions")} ${key}`);
 const keepScroll = () => { exprScroll = document.querySelector(".expr-clip")?.scrollLeft || 0; };
 function enableDrag(clip, track) {
   let start = null;
