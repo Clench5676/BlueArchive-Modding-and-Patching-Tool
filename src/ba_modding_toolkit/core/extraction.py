@@ -19,6 +19,7 @@ from ..models import (
 )
 from ..asset import find_stream_refs
 from ..bundle import Bundle
+from ..texture_guard import texture_image
 
 # 提取器支持的资源类型（公开提取接口默认全量提取）
 EXTRACTABLE_ASSET_TYPES = {"Texture2D", "TextAsset", "Mesh", "AnimationClip"}
@@ -83,7 +84,7 @@ def extract_assets_from_bundle(
                     dest_path.write_bytes(asset_bytes)
                 elif obj.type == AssetType.Texture2D:
                     dest_path = work_dir / f"{resource_name}.png"
-                    data.image.convert("RGBA").save(dest_path)
+                    texture_image(data, bundle_file.name).convert("RGBA").save(dest_path)
                 elif obj.type in (AssetType.Mesh, AssetType.AnimationClip):
                     # raw dump 导出；含流式引用（.resS）的数据脱离源 bundle 后无法重打包，跳过并告警
                     raw = obj.get_raw_data()

@@ -19,6 +19,7 @@ from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageOps
 from . import atlas_remap as remap, core, devmode
 from .bundle import Bundle
 from .models import SaveOptions
+from .texture_guard import texture_image
 
 
 @dataclass
@@ -200,7 +201,7 @@ The output directory must not already contain the target file.
         raise ValueError("Atlas and page texture must each have exactly one official owner")
     source, bundle, obj = matches[0]
     texture = obj.read()
-    official = texture.image.convert("RGBA")
+    official = texture_image(texture).convert("RGBA")
     if isinstance(generated, Path):
         devmode.check_read(generated)
         with Image.open(generated) as image:
@@ -278,7 +279,7 @@ The output directory must not already contain the target file.
             raise ValueError("Assembly changed an unrelated official object")
         result = next(item.read() for item in checked.env.objects
                       if (item.assets_file.name, item.path_id) == changed_key)
-        decoded = result.image.convert("RGBA")
+        decoded = texture_image(result).convert("RGBA")
         if decoded.size != assembly.image.size or decoded.tobytes() != assembly.image.tobytes():
             raise ValueError("Packed texture pixels differ from assembled pixels")
     except Exception:

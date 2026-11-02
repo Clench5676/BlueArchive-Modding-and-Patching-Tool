@@ -13,6 +13,7 @@ from .models import (
     FontAssetData,
 )
 from .spine import SkelConverter, check_skel_animation_diff
+from .texture_guard import texture_image
 from .utils import no_log
 
 
@@ -152,7 +153,7 @@ def extract_asset(obj, ctx: ExtractContext) -> tuple[AssetContent | None, list[S
             basename = sd.path.replace("\\", "/").rsplit("/", 1)[-1]
             if basename not in ctx.env_file.files:
                 raise ValueError(t("webui.error.required_asset_stream_missing"))
-        content: AssetContent = data.image
+        content: AssetContent = texture_image(data)
         content.load()
         return content, []
 
@@ -214,7 +215,7 @@ def apply_asset(obj, content: AssetContent, ctx: ApplyContext, *, data=None) -> 
 
     if obj.type == AssetType.Texture2D:
         new_image = content
-        current_image = data.image
+        current_image = texture_image(data)
         if (current_image.mode == new_image.mode
                 and current_image.size == new_image.size
                 and current_image.tobytes() == new_image.tobytes()):

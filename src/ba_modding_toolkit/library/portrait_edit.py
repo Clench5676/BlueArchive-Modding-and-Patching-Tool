@@ -16,6 +16,7 @@ from .. import devmode
 from ..bundle import Bundle
 from ..errors import ServiceError
 from ..models import SaveOptions
+from ..texture_guard import texture_image
 from . import profiles
 from .judge import core_of, date_of, other_target
 from .models import PhotographApplyResult
@@ -96,7 +97,7 @@ def patch_portraits(base: Path, official: Path, output: Path, edits: dict[str, b
         if (result.m_Width, result.m_Height, result.m_TextureFormat) != (width, height, texture_format):
             raise ServiceError("photo_apply_failed")
         if pixels is not None:
-            if result.image.convert("RGBA").tobytes() != pixels:
+            if texture_image(result, output.name).convert("RGBA").tobytes() != pixels:
                 raise ServiceError("photo_apply_failed")
         elif bytes(result.image_data) != encoded:
             raise ServiceError("photo_apply_failed")

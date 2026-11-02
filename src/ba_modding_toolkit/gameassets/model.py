@@ -29,6 +29,7 @@ import UnityPy.helpers.MeshHelper as MeshHelper
 from UnityPy.helpers.MeshHelper import MeshHandler
 from UnityPy.helpers.PackedBitVector import reshape, unpack_floats, unpack_ints
 
+from ..texture_guard import texture_image
 from .discovery import cab_names
 from .errors import AssetNotFound
 from .unity import open_bundle
@@ -852,7 +853,8 @@ class _Exporter:
         if key not in self.textures:
             data = obj.read()
             buffer = io.BytesIO()
-            data.image.save(buffer, format="PNG", compress_level=1)
+            owner = self.g.locations.get(obj.assets_file.name.lower())
+            texture_image(data, Path(owner).name if owner else None).save(buffer, format="PNG", compress_level=1)
             # m_ColorSpace 0: imported without sRGB (masks, the hair direction map), sampled as stored
             linear = getattr(data, "m_ColorSpace", 1) == 0
             sampler = texture_sampler(self.g.tree(obj))
