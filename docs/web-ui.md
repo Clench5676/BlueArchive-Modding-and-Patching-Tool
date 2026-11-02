@@ -43,6 +43,14 @@ captures. Save and App selection avoid unrelated game-writer status reads, and l
 even when no ordinary Mods exist. The roster/family payload's optional `thumbnail` field selects an App capture or an explicit verified
 default. `photography.changed {variant}` invalidates the roster without reloading an active camera.
 
+The manifest is read per entry. A photo record or a selection that cannot be used (a bad digest, an id that differs
+from its key, a selection of a photo that is gone or of another family after the catalog changed) costs that entry
+only: it is logged once, left out of every use and written back unchanged by every write, and a stale selection
+reads as the default thumbnail. A new choice for the same student replaces its kept selection. Deleting a photo a
+kept row names is refused (`photo_in_use`). A manifest that cannot be read as a whole (not JSON, another version,
+wrong top-level types, a symlink) is never rewritten, copied or replaced: the photograph RPCs answer
+`photo_library_invalid`, while `roster.list` and `family.get` log it once and use no photograph.
+
 | RPC | Parameters | Result |
 | --- | --- | --- |
 | `photography.list` | `variant` | Captures, App choice, verified default URL, game intent/availability/error |
