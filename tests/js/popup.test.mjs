@@ -3212,6 +3212,34 @@ test("the asset consent names Agree and Decline with their captions in every lan
   } finally { setStrings("en-US", Object.fromEntries(strings(english))); consent.hidden = true; }
 });
 
+// --- UI-36: a failed asset consent shows its error and can be answered again; a repeat click sends nothing ---
+test("a failed asset consent shows the error, keeps the popup to retry, and a repeat click sends nothing", async () => {
+  const Consent = await import("../../src/ba_modding_toolkit/web/js/consent.js");
+  setStrings("en-US", Object.fromEntries(strings(english)));
+  const sent = [];
+  let answer = null;
+  handlers.set("app.consent", (params) => { sent.push(params); return new Promise((resolve) => { answer = resolve; }); });
+  try {
+    const asked = Consent.show(consent, "/cache", false);
+    await until(() => walk(consent).some((e) => e.tagName === "BUTTON"));
+    const agree = () => walk(consent).filter((e) => e.tagName === "BUTTON")[1];
+    agree().click(); agree().click(); await tick();
+    assert.deepEqual(sent, [{ granted: true }], "one request while the first is answered");
+    answer({ error: { code: "data_dir_readonly", params: { path: "/cache" } } });
+    const shown = english.error.data_dir_readonly.replace("{path}", "/cache");
+    await until(() => walk(dialog).some((e) => e.textContent === shown));
+    assert.equal(await state(asked), "pending");
+    assert.equal(consent.hidden, false, "the consent stays up to answer again");
+    (action(dialog, "ok") || action(dialog, "cancel")).click();
+    await until(() => dialog.hidden);
+    agree().click(); await tick();
+    assert.equal(sent.length, 2, "after the failure another answer is sent");
+    answer({ result: null });
+    assert.equal(await asked, true);
+    assert.equal(consent.hidden, true);
+  } finally { handlers.delete("app.consent"); consent.hidden = true; Popup.closed(consent); }
+});
+
 // --- UI-14: the Settings sliders are range inputs over the game's slider ---
 const sliderOf = (name) => walk(settings).find((e) => e.tagName === "INPUT" && e.attrs["aria-label"] === name);
 async function openSound(prefs = {}, tabName = "sound") {

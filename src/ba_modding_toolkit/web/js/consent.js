@@ -73,11 +73,17 @@ async function draw(host, cacheDir, native, resolve) {
   Popup.opened(host, null);
   const next = document.createElement("div");
   const view = await NGUI.render(t, next, { scale: S, origin: [960, 540], z: 2000 });
+  // one answer at a time, as the scan and Spine consents: a repeat click while the server answers sends nothing, and a
+  // failure shows its error with the popup still up to answer again
+  let choosing = false;
   for (const [name, granted] of [["Btn_Cancel", false], ["Btn_Ok", true]]) {
     const el = view.nodes.get(`Center/Popup/Btn/${name}/BG (1)`)?.els[0];
     if (!el) continue;
     hitButton(next, rect(el), async () => {
-      await rpc("app.consent", { granted });
+      if (choosing) return;
+      choosing = true;
+      try { await rpc("app.consent", { granted }); }
+      catch (err) { choosing = false; notify(errorText(err), { kind: "error", error: err }); return; }
       assetsAllowed = granted;
       host.hidden = true;
       host.innerHTML = "";

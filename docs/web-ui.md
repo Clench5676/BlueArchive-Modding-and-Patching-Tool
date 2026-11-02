@@ -1857,7 +1857,9 @@ detail screen, and in Settings' Mods tab.
   device (`mods.scan.will.{label,items}`, `mods.scan.willNot.{label,items}`); the note
   that declining keeps those checks off and Settings changes it; Don't Allow and Allow (`mods.consent`). It must be
   answered (Escape and the backdrop do nothing), declining does not quit, and opened from Settings it shows over it
-  (`#consent.over`).
+  (`#consent.over`). A failed answer (`mods.consent`, and the asset consent's `app.consent`) shows its error with the
+  popup still up to answer again; the asset consent sends one answer at a time, a repeat click while the server
+  answers sends nothing.
 - **Settings' Mods tab** (second, after General; `UIPopup_Option_PC`'s tab column has five separators): Enable Mods
   (On / Off, the same switch with the same rules, its square "?" and red dot after the title; faded while busy or
   unavailable); Mod Cache (mods rebuilt for the current game version and
