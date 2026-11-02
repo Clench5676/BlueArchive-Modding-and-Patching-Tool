@@ -1151,6 +1151,8 @@ poll response from overwriting newer SSE progress. Verified original inputs are 
 so two Mods for the same slot cannot rebuild from each other's writes. Each apply keeps its own transaction and
 rollback; library maintenance runs once at the end of the batch. Exact current-name, CRC-ready inputs skip redundant
 planning and staging, while the final resource checks, backup, content verification and rollback remain in place.
+A direct copy honours the CRC option (On, Off, or Auto from the official file) and appends the configured Extra Bytes
+before the CRC fix, as a rebuild does; a file whose CRC already matches its name is copied unchanged.
 Staging keeps the bundle file names, which carry the part, date and CRC, and names the folders around them by the first
 16 hex digits of the entry id or the original's SHA-1 (`batch_import.staging_name`), so the longest official bundle
 names still fit the Windows path limit under an ordinary library folder.
