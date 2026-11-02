@@ -56,6 +56,10 @@ def test_texture_application_decodes_target_once_without_changing_pixel_comparis
 
     class Data:
         m_Name = 'page'
+        m_Width, m_Height, m_TextureFormat = 7, 9, 4
+
+        def get_image_data(self):
+            return bytes(7 * 9 * 4)
 
         @property
         def image(self):

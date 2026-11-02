@@ -280,8 +280,13 @@ def write_bundle(path, atlases, textures, skeleton=b'{"skeleton":{"spine":"4.2.3
     for name, data in texts.items():
         entries.append((49, {"m_Name": name, "m_Script": data.decode() if isinstance(data, bytes) else data}))
     for name, image in textures.items():
-        pixels, encoded_format = Texture2DConverter.image_to_texture2d(image, texture_format)
-        entries.append((28, {"m_Name": name, "m_Width": image.width, "m_Height": image.height,
+        if isinstance(image, tuple):
+            # (width, height, texture format, data): declared as given, not encoded
+            width, height, encoded_format, pixels = image
+        else:
+            pixels, encoded_format = Texture2DConverter.image_to_texture2d(image, texture_format)
+            width, height = image.width, image.height
+        entries.append((28, {"m_Name": name, "m_Width": width, "m_Height": height,
             "m_TextureFormat": int(encoded_format), "m_MipCount": 1, "m_ImageCount": 1, "m_TextureDimension": 2,
             "m_CompleteImageSize": len(pixels), "image data": pixels}))
     blobs = []

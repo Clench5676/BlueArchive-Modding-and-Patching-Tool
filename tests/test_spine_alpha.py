@@ -8,6 +8,7 @@ import pytest
 from PIL import Image
 
 from ba_modding_toolkit.gameassets.spine import extract_spine
+from texture_helpers import fake_texture
 
 
 @pytest.mark.parametrize("core", ["np0032_npc", "arona_workpage_daytime", "plana_workpage", "cafe",
@@ -31,7 +32,7 @@ def test_export_matches_020_at_transparent_edges(tmp_path, monkeypatch, core, at
         "m_TexEnvs": [["_MainTex", {"m_Texture": {"m_FileID": 0, "m_PathID": 1}}]]}}
     parts = {
         "material.bundle": [obj("Material", 2, tree=mat)],
-        "texture.bundle": [obj("Texture2D", 1, SimpleNamespace(m_Name=core, image=image))],
+        "texture.bundle": [obj("Texture2D", 1, fake_texture(image, m_Name=core))],
         "atlas.bundle": [obj("TextAsset", 3, SimpleNamespace(m_Name=f"{core}.atlas", m_Script=atlas))],
     }
 

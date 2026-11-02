@@ -9,6 +9,7 @@ from pathlib import Path
 
 from PIL import Image
 
+from ..texture_guard import texture_image
 from .errors import AssetNotFound
 from .unity import open_bundle
 
@@ -73,7 +74,7 @@ def extract_spine(bundles: list[Path]) -> dict[str, bytes]:
                     data = obj.read()
                     # served from the same machine and held in memory only: level 1 encodes a lobby's large pages
                     # several times faster than the default and the larger bytes cost nothing on loopback
-                    textures[data.m_Name] = png_bytes(data.image.convert("RGBA"), level=1)
+                    textures[data.m_Name] = png_bytes(texture_image(data, path.name).convert("RGBA"), level=1)
     for name, data in textures.items():
         result[name if name.lower().endswith(".png") else name + ".png"] = data
     # Some bundles use a different case, a .png suffix, or a directory prefix

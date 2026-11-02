@@ -12,6 +12,7 @@ from . import devmode
 from .bundle import Bundle
 from .models import ContNameTypeKey, Patch
 from .spine import get_skel_version
+from .texture_guard import texture_image
 
 
 class RemapError(ValueError):
@@ -411,7 +412,7 @@ def read_inputs(paths: list[Path]) -> Inputs:
             if obj.type.name == "Texture2D":
                 key = texture_key(name)
                 try:
-                    result.textures[key] = data.image.convert("RGBA")
+                    result.textures[key] = texture_image(data).convert("RGBA")
                 except (ValueError, EOFError, OSError) as error:
                     raise RemapError("atlas_remap_invalid", file=f"{path.name} - {name}",
                                      reason=str(error)) from error
