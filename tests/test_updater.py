@@ -52,6 +52,63 @@ def test_latest_picks_the_newest_newer_release():
     assert updater.latest(releases, "0.1.1-alpha-dev", mac) is None
 
 
+WIN = "-windows-x64.exe"
+
+
+def built(tag, suffix=WIN, checksum=True, **kwargs):
+    """A release with this platform's build, and its checksum unless ``checksum`` is false."""
+    name = f"BAMPT-{tag.removeprefix('v')}{suffix}"
+    return release(tag, name, *([name + ".md5"] if checksum else []), **kwargs)
+
+
+def test_latest_prefers_the_newest_release_with_this_platforms_build():
+    # A pre-release without a Windows build does not hide the stable release that has one.
+    releases = [built("0.6.1-alpha", "-macos-arm64.dmg"), built("0.6.0", prerelease=False)]
+    for ordered in (releases, releases[::-1]):
+        info = updater.latest(ordered, "0.5.0", WIN)
+        assert info.version == "0.6.0" and info.asset.name == f"BAMPT-0.6.0{WIN}"
+        assert info.checksum.name == info.asset.name + ".md5" and not info.prerelease
+    # The newest of several releases with a build wins
+    releases = [built("0.5.5"), built("0.6.0"), built("0.6.1-alpha", "-macos-arm64.dmg"), built("0.5.9")]
+    assert updater.latest(releases, "0.5.0", WIN).version == "0.6.0"
+    # A draft with a build is never offered
+    assert updater.latest([built("0.7.0", draft=True), built("0.6.0")], "0.5.0", WIN).version == "0.6.0"
+
+
+def test_latest_needs_the_build_and_its_checksum_to_prefer_a_release():
+    assert updater.latest([built("0.6.0"), built("0.6.1", checksum=False)], "0.5.0", WIN).version == "0.6.0"
+    assert updater.latest([built("0.6.0", checksum=False), built("0.6.1")], "0.5.0", WIN).version == "0.6.1"
+
+
+def test_latest_never_offers_a_downgrade_to_reach_a_build():
+    releases = [built("0.6.0"), built("0.6.1-alpha", "-macos-arm64.dmg")]
+    # Running 0.6.0: the only newer release has no build here, and it is still reported as before
+    info = updater.latest(releases, "0.6.0", WIN)
+    assert info.version == "0.6.1-alpha" and info.asset is None and info.checksum is None and not info.installable
+    # Running a pre-release above the one release with a build: nothing older is offered
+    info = updater.latest([*releases, built("0.6.1-alpha.2", "-macos-arm64.dmg")], "0.6.1-alpha.1", WIN)
+    assert info.version == "0.6.1-alpha.2" and info.asset is None
+    assert updater.latest(releases, "0.6.1-alpha", WIN) is None
+    assert updater.latest([built("0.6.0")], "0.6.0", WIN) is None
+
+
+def test_latest_falls_back_to_the_newest_release_when_none_has_a_build():
+    releases = [built("0.5.5", "-macos-arm64.dmg"), built("0.6.1-alpha", "-macos-arm64.dmg"), built("0.6.0", "-macos-arm64.dmg")]
+    info = updater.latest(releases, "0.5.0", WIN)
+    assert info.version == "0.6.1-alpha" and info.prerelease and info.asset is None and not info.installable
+    assert info.page.endswith("/releases/tag/0.6.1-alpha")
+    # No platform build is published at all (suffix None): the newest release, as before
+    info = updater.latest(releases, "0.5.0", None)
+    assert info.version == "0.6.1-alpha" and info.asset is None and info.checksum is None
+
+
+def test_latest_release_notes_follow_the_chosen_release():
+    chosen = {**built("0.6.0"), "body": "Stable notes"}
+    skipped = {**built("0.6.1-alpha", "-macos-arm64.dmg"), "body": "Alpha notes"}
+    info = updater.latest([skipped, chosen], "0.5.0", WIN)
+    assert info.to_json()["notes"] == "Stable notes" and info.page.endswith("/releases/tag/0.6.0")
+
+
 def test_pick_assets_skips_the_cli_build():
     win = "-windows-x64.exe"
     assets = release("0.1.0", f"BAMPT-cli-0.1.0{win}", f"BAMPT-0.1.0{win}", f"BAMPT-0.1.0{win}.md5")["assets"]

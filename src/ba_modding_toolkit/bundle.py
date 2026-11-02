@@ -11,6 +11,7 @@ from UnityPy.files import SerializedFile
 from UnityPy.environment import Environment as Env
 
 from .asset import ApplyContext, ExtractContext, apply_asset, extract_asset
+from .bundle_guard import check_bundle
 from .i18n import t
 from .errors import ServiceError
 from .utils import apply_crc_fix, compute_crc32, no_log, throttle_progress
@@ -325,6 +326,15 @@ class Bundle:
         if not bundle_path.exists():
             log(f'❌ {t("log.file.not_exist", path=bundle_path)}')
             return None
+
+        # Bound bundle sizes before loading: a refusal is an unreadable bundle, like any other.
+        try:
+            check_bundle(bundle_path)
+        except ServiceError:
+            log(f'❌ {t("log.file.load_failed", path=bundle_path)}')
+            return None
+        except OSError:
+            pass  # an unreadable file fails below as before
 
         # 快速检测尾部字节数
         trailing = cls.get_trailing_bytes(bundle_path)

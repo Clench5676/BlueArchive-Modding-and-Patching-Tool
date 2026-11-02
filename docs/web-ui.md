@@ -23,8 +23,10 @@ Game assets and development data are excluded from packages.
   installation has no corresponding original resource; application remains unavailable in that case.
 - Nav entries without a new screen yet open the classic Tk GUI on that tab (`bamt --tab <name>`).
 - `bamt` (and the compiled app) starts the web UI; `bamt --classic` starts the classic Tk GUI.
-- Released builds look for a newer GitHub release at start and can update themselves (`updater.py`). The existing
-  unset-preference default is on; an explicitly saved startup-update opt-out remains off.
+- Released builds look for a newer GitHub release at start and can update themselves (`updater.py`). The offer is
+  the newest release above the running version that has this platform's build and its checksum, so a pre-release
+  without a build here does not hide an older installable one; when none has them, it is the newest release, without
+  an install button. The existing unset-preference default is on; an explicitly saved startup-update opt-out remains off.
 - Out of scope for now: the other tool screens.
 
 ## Student photography
@@ -168,8 +170,10 @@ Imports only go one way: `webui` → `library` → `catalog` → `gameassets` �
 - **Threads.** Services are thread-safe: HTTP handlers run on many threads at once. UnityPy work on one bundle is
   serialised with a per-bundle lock. Long operations run on the single job worker (see Jobs).
 - **No prose in results.** Services return data, not sentences. Errors are `ServiceError(code, **params)`
-  (`ba_modding_toolkit/errors.py`); the front end shows the locale string `webui.error.<code>`. Diagnostics go to
-  `logging.getLogger(__name__)`, never `print`.
+  (`ba_modding_toolkit/errors.py`); the front end shows the locale string `webui.error.<code>`. An error passes every
+  parameter its text names, above all `file`; where there is no file to name, it uses a code whose text has no
+  placeholder (`source_unsupported` beside `mod_unsupported`). `tests/test_error_params.py` scans for the omissions.
+  Diagnostics go to `logging.getLogger(__name__)`, never `print`.
 - **JSON-ready results.** Dataclasses with `to_json()` returning plain dicts; paths as absolute strings, dates as ISO
   strings.
 - **Texture decoding.** Every decode of a `Texture2D` read from a bundle goes through `texture_guard.texture_image`
@@ -177,6 +181,13 @@ Imports only go one way: `webui` → `library` → `catalog` → `gameassets` �
   most 16384, its format is one UnityPy decodes (the crunched formats are not) and its image data, stream data
   included, covers the declared size. A refusal raises `ServiceError("bundle_invalid", file=...)` where the bundle file
   is known, else the `ValueError` subclass `TextureRefused`; callers treat it like any other unreadable texture.
+- **Bundle sizes.** `Bundle.load` is the only place the App hands a bundle file to UnityPy, and it first runs
+  `bundle_guard.check_bundle`. That reads the UnityFS header and block table (`unityfs.read_layout`, which decompresses
+  no data block and bounds the block table itself) and refuses a bundle whose file size, single block, total declared
+  uncompressed size or block table is above a ceiling. A refusal is `ServiceError("bundle_invalid", file=...)`, and
+  `Bundle.load` reports it as any other unreadable bundle (`None`). A file that is not UnityFS goes on as before. Each
+  ceiling is at least four times the largest value among the official game files; `tests/test_bundle_guard.py` measures
+  them on the verified development view (`BAMT_TEST_GAME_DIR`).
 - **Game assets.** Two classes:
   - *Light*: atlas sprites, atlas metadata, UI textures, prefab layouts and the bundle indexes. Kept in memory; written
     to the disk cache only after the user agreed (`consent = true`).
@@ -1081,6 +1092,9 @@ poll response from overwriting newer SSE progress. Verified original inputs are 
 so two Mods for the same slot cannot rebuild from each other's writes. Each apply keeps its own transaction and
 rollback; library maintenance runs once at the end of the batch. Exact current-name, CRC-ready inputs skip redundant
 planning and staging, while the final resource checks, backup, content verification and rollback remain in place.
+Staging keeps the bundle file names, which carry the part, date and CRC, and names the folders around them by the first
+16 hex digits of the entry id or the original's SHA-1 (`batch_import.staging_name`), so the longest official bundle
+names still fit the Windows path limit under an ordinary library folder.
 
 Job waits have no default elapsed-time deadline. Each status RPC has a 15-second limit; transient failures keep the
 original job ID and progress while the UI shows Reconnecting. Polling retries with bounded backoff. Window focus,

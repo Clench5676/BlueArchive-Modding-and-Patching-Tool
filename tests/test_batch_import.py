@@ -538,6 +538,58 @@ def updater(monkeypatch, calls, payload=b"updated mod"):
     monkeypatch.setattr(batch_import.core, "process_mod_update", update)
 
 
+# The review's example: a library folder of 73 characters and the longest official bundle names (134 characters).
+WINDOWS_LIBRARY = r"C:\Users\student\Downloads\Blue-Archive-Modding-and-Patching-Tool\library"
+LONGEST_BUNDLE_NAME = 134
+WINDOWS_PATH_LIMIT = 259  # MAX_PATH of 260 includes the terminating null
+
+
+def windows_length(path, root):
+    """The length of ``path`` if the library folder ``root`` were ``WINDOWS_LIBRARY`` and its name 134 characters."""
+    folders = path.parent.relative_to(root).parts
+    return len(WINDOWS_LIBRARY) + sum(len(part) + 1 for part in folders) + 1 + LONGEST_BUNDLE_NAME
+
+
+def test_staging_paths_fit_the_windows_limit_with_the_longest_bundle_names(env, monkeypatch):
+    assert len(WINDOWS_LIBRARY) == 73
+    source = game_bundle(env.tmp / "old", date="2025-01-01", payload=b"old mod")
+    entry, = analyze(env, [source])["entries"]
+    assert entry["state"] == "update" and len(entry["id"]) == 64
+    calls = []
+    updater(monkeypatch, calls)
+    update = batch_import.core.process_mod_update
+    staged = []
+
+    def record(**kwargs):
+        staged.extend(kwargs["target_paths"])
+        staged.extend(kwargs["output_dir"] / path.name for path in kwargs["target_paths"])
+        return update(**kwargs)
+
+    monkeypatch.setattr(batch_import.core, "process_mod_update", record)
+    snapshot = env.services.batch_import._snapshot_originals
+
+    def snapshot_and_record(candidate, temporary, snapshots):
+        snapshot(candidate, temporary, snapshots)
+        staged.extend(candidate.originals)
+
+    monkeypatch.setattr(env.services.batch_import, "_snapshot_originals", snapshot_and_record)
+    assert run(env, [entry], enableAfterImport=False)[0]["outcome"] == "updated"
+    assert len(staged) >= 3 and all(path.is_relative_to(env.library.root / "staging") for path in staged)
+    # The bundle names are unchanged, the folders around them are short
+    assert {path.name for path in staged} == {env.original.name}
+    assert max(windows_length(path, env.library.root) for path in staged) <= WINDOWS_PATH_LIMIT
+    work = {path.parent.parent.name for path in staged if path.parent.name in ("targets", "output")}
+    assert work == {entry["id"][:16]}
+    assert {path.parent.name for path in staged if path.parent.parent.name == "originals"} == {
+        env.services.batch_import._hashes.get(env.original).sha1[:16]}
+
+
+def test_staging_names_keep_the_first_sixteen_digits():
+    digest = "0123456789abcdef" * 4
+    assert batch_import.staging_name(digest) == "0123456789abcdef"
+    assert batch_import.staging_name("abc") == "abc"
+
+
 def test_omitted_assets_are_available_in_the_settings_app_log(env, monkeypatch):
     from ba_modding_toolkit.webui.session_log import RedactingFormatter
 

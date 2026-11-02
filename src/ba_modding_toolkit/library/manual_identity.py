@@ -15,8 +15,11 @@ def validate(files: dict[str, Path], kind: str | None = None) -> str:
 
     Known platform evidence must be supported and consistent. No choice made here authorizes installation.
     """
-    if not files or any(Path(name).name != name or not name.endswith(".bundle") for name in files):
-        raise ServiceError("mod_unsupported")
+    refused = next((name for name in files if Path(name).name != name or not name.endswith(".bundle")), None)
+    if not files:
+        raise ServiceError("source_unsupported")  # no file to name
+    if refused is not None:
+        raise ServiceError("mod_unsupported", file=refused)
     inspection = integrity.Inspection()
     combined = integrity.Contents()
     kinds = set()
@@ -39,7 +42,8 @@ def validate(files: dict[str, Path], kind: str | None = None) -> str:
             if detected:
                 kinds.add(detected)
     if len(kinds) != 1 or (kind is not None and kind not in kinds):
-        raise ServiceError("mod_target_ambiguous" if len(kinds) > 1 else "mod_unsupported")
+        first = next(iter(files))
+        raise ServiceError("mod_target_ambiguous" if len(kinds) > 1 else "mod_unsupported", file=first)
     inferred = next(iter(kinds))
     if inferred in ("spr", "lobby") and not combined.skeletons:
         raise ServiceError("mod_parts_missing", files="skeleton.skel")
