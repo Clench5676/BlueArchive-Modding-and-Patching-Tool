@@ -1139,7 +1139,7 @@ export function textViewer({ title, text, copy, close = T("display.close"), onCo
 // something unreadable or unknown (game_status_unavailable, profiles_unreadable) stay failures.
 export const REFUSALS = Object.freeze([
   // the machine is in a state that blocks the action
-  "busy", "game_running", "steam_busy", "classic_open", "game_not_found", "game_directory_missing",
+  "busy", "game_running", "steam_busy", "classic_open", "game_not_found", "game_directory_missing", "data_dir_readonly",
   // the view was stale: something changed since the click was offered
   "state_changed", "folder_changed", "entry_changed",
   // a rule of the app
