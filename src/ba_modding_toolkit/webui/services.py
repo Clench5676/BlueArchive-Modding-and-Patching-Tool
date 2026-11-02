@@ -382,8 +382,11 @@ class Services:
                         self.library_dir(), self.catalog, game, self.settings, scan_allowed=self.scan_allowed,
                         data_id=self.state.data_id(self.data_dir), write_check=self._write_check)
             library = self._library
-            # Establish the baseline before any caller (including an add or adoption job) gets the library.
-            self.state.seen_mods(lambda: [m.id for m in library.mods()])
+            # Establish the baseline before any caller (including an add or adoption job) gets the library. A library
+            # that could not read its state answers empty: that is no baseline (every mod would count as new later).
+            unreadable = getattr(library, "state_unreadable", None)
+            self.state.seen_mods(None if unreadable is not None and unreadable() else
+                                 lambda: [m.id for m in library.mods()])
             if built is not None:
                 # kept originals the game no longer needs (verified in the launcher, replaced by a game update) are
                 # deleted once per library, on the job worker so no apply runs meanwhile; the judging of the

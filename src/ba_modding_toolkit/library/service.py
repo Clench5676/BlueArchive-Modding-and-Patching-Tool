@@ -605,7 +605,7 @@ class ModLibrary:
         self._originals_cache: tuple[Any, dict[str, int]] | None = None
         self._maps_cache: tuple[tuple, Any] | None = None
         self.profiles = Profiles(self.root)
-        self.profiles.gate = self._check_recovery  # no write of the configuration while a recovery has failed
+        self.profiles.gate = self._check_writes  # no change of the configuration while writes are refused
         staging.cleanup(self.root)
         self._load()
         with self._lock:
@@ -2536,8 +2536,9 @@ class ModLibrary:
                 logger.info("Released the original of %s kept by a failed write", target.name)
 
     def _prune(self) -> list[Path]:
-        """Serialize deletion with writes that may still need an original for rollback."""
-        if any((self.root / "transactions").glob("*/journal.json")):
+        """Serialize deletion with writes that may still need an original for rollback. Nothing is deleted while a
+        journal is pending or the state cannot be written (the start job calls this)."""
+        if self._state_error is not None or any((self.root / "transactions").glob("*/journal.json")):
             return []
         with self._transaction_lock():
             return self._prune_originals()
@@ -3075,10 +3076,26 @@ class ModLibrary:
         if self._recovery_error is not None and not self._transacting:
             self._recover_pending()
 
+    def _check_writes(self) -> None:
+        """The gate of every change of the configuration (``Profiles.gate``): refused with the real error while a
+        recovery has failed (``_check_recovery``) or the state cannot be written (``_check_writable``), because a
+        library that reads an empty state would judge every source gone and settle that into profiles.json."""
+        self._check_recovery()
+        self._check_writable()
+
     def _writes_refused(self) -> bool:
-        """Whether a recovery has failed and changes of state and configuration are refused, without trying again:
-        for the reads that settle something on the side and skip it instead."""
-        return self._recovery_error is not None and not self._transacting
+        """Whether changes of state and configuration are refused now, without trying again: a recovery has failed or
+        the state cannot be written. For the reads that settle something on the side and skip it instead."""
+        return self._state_error is not None or (self._recovery_error is not None and not self._transacting)
+
+    def state_unreadable(self) -> bool:
+        """Whether this library holds no state from a good read of state.json: reads answer an empty library, which
+        is not the user's library (callers must not take a baseline from it). The file is read again first if it was
+        unreadable, as it may have been fixed since."""
+        with self._lock:
+            if not self._state_good:
+                self._refresh_state()
+            return not self._state_good
 
     def _recover_transactions(self) -> None:
         """Settle every pending journal under the transaction lock: imports, then write journals, then asset deletions.
