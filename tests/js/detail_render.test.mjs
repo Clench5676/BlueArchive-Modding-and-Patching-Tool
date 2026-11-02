@@ -2062,3 +2062,23 @@ test("the expression strip's cards, its pile and Collapse are named, and the pic
     Detail.hide(); portraitExpressions = ["00", "01"]; playerMode = "ready"; thumbMode = "pending"; await flush(); t.mock.timers.reset(); setStrings("en-US", localeTable("en-US"));
   }
 });
+
+// --- UI-19: the Show in Finder / Explorer button is drawn from explorer-button.js's layout, in every locale ---
+test("the Show in Finder button's caption and folder icon are placed by the explorer layout in every locale", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const { explorerLayout } = await import("../../src/ba_modding_toolkit/web/js/explorer-button.js");
+  try {
+    for (const lang of everyLocale) {
+      const table = localeTable(lang); setStrings(lang, table);
+      family = modFamily();
+      await showPortrait(t);
+      const at = (suffix) => walk(hosts.ngui).find((e) => e.dataset.path?.endsWith(suffix) && (e.textContent || e.dataset.tex));
+      const expected = explorerLayout(table["webui.open.mac"]);
+      const label = at("Status/Btn_Up_Wrapper/Btn_Up/Label_Locale"), folder = at("Status/Btn_Up_Wrapper/Btn_Up/Folder");
+      assert.equal(label.textContent, expected.text, `${lang}: the caption`);
+      assert.equal(label.style.fontSize, `${(NGUI.fontSizeFor(expected.text, expected.fs) * (1920 / 2960)).toFixed(2)}px`, `${lang}: its size`);
+      assert.equal(folder?.dataset.tex, "svg:folder", `${lang}: the folder icon`);
+      Detail.hide();
+    }
+  } finally { Detail.hide(); await flush(); t.mock.timers.reset(); setStrings("en-US", localeTable("en-US")); }
+});

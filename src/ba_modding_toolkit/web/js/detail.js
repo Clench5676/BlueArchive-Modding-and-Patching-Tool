@@ -14,6 +14,7 @@ import { jobProgress, progressName } from "./job-progress.js";
 import { isSpecial, specialFraming } from "./special-view.js";
 import * as NGUI from "./ngui.js";
 import { resizeButton } from "./button-layout.js";
+import { explorerLayout } from "./explorer-button.js";
 import { latestLoad, loadPlayer } from "./spine-load.js";
 import { ensureSpine, spineAllowed } from "./spine-runtime.js";
 import { decodeAll } from "./image-decode.js";
@@ -341,11 +342,11 @@ function screenTree() {
   widget(t, `${up}/BG (1)`).color = "#dbeef5/1.00";
   for (const k of at(t, `${up}/BG (1)`).children) k.widgets[0].sprite = "Common_Btn_Normal_B_C_Pt";
   resizeButton(at(t, `${up}/BG (1)`));
-  const openText = fitText(T(platform === "mac" ? "open.mac" : "open.win"), 32, 26, 140);
-  text(t, `${up}/Label_Locale`, openText.text, { fontSize: openText.fs, w_: 160, h_: 40 * openText.lines, color: "#2d5164/1.00" });
-  at(t, `${up}/Label_Locale`).pos = [-1.4 - (openText.lines > 1 ? 36 : 46) * TAN10, openText.lines > 1 ? -36 : -46];
-  const folderY = openText.lines > 1 ? 38 : 26;
-  at(t, up).children.push(node("Folder", [-1.4 + folderY * TAN10, folderY], [{ texture: "svg:folder", w_: 56, h_: 50, pivot: 4, depth: 12, color: "#ffffff/1.00" }]));
+  // the caption wraps onto up to three lines inside the 180-high body before it shrinks (explorer-button.js)
+  const open_ = explorerLayout(T(platform === "mac" ? "open.mac" : "open.win"));
+  text(t, `${up}/Label_Locale`, open_.text, { fontSize: open_.fs, w_: 160, h_: open_.label[2], color: "#2d5164/1.00" });
+  at(t, `${up}/Label_Locale`).pos = [open_.label[0], open_.label[1]];
+  at(t, up).children.push(node("Folder", open_.folder, [{ texture: "svg:folder", w_: 56, h_: 50, pivot: 4, depth: 12, color: "#ffffff/1.00" }]));
 
   // row 2: four actions on what the shown tab's game files carry. Title and icon centred as a group on the card's
   // slanted midline.
