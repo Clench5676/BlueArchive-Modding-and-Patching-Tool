@@ -45,8 +45,10 @@ of their own yet and keep their clip names. The owner handles UAT/visual review.
 `photographs/` belongs to the movable/shared Mod library, not Preview Cache. Its atomic manifest retains per-student
 captures and App choices, IDs and SHA-256 digests; image publication rolls back if metadata cannot commit. Chosen
 App photographs and configured/applied game photographs cannot be deleted. Preview-cache clearing never removes
-captures. Save and App selection avoid unrelated game-writer status reads, and library moves include photographs
-even when no ordinary Mods exist. The roster/family payload's optional `thumbnail` field selects an App capture or an explicit verified
+captures. Save and App selection avoid unrelated game-writer status reads and do not hold the services lock (the
+manifest has its own lock; only a library move is kept out, through `Services.photograph_writes`), and library moves
+include photographs even when no ordinary Mods exist. The store's family lookup is bound to the catalog it was built
+with, so no code path holds the manifest lock while it waits for the services lock. The roster/family payload's optional `thumbnail` field selects an App capture or an explicit verified
 default. `photography.changed {variant}` invalidates the roster without reloading an active camera.
 
 The manifest is read per entry. A photo record or a selection that cannot be used (a bad digest, an id that differs
@@ -224,14 +226,28 @@ Imports only go one way: `webui` → `library` → `catalog` → `gameassets` �
   permits the validated index and sprite PNGs in the app's disk cache.
   NGUI rejects empty or malformed atlas metadata and retries on a later render; a requested sprite missing from
   an otherwise valid index also invalidates it. Failures keep the existing placeholder geometry and log the cause.
+- **Read-only data folder.** The services test the data folder at start by writing and removing a real temporary
+  file (`folder_writable`; `app.info.dataDirWritable`). No fallback to another folder is made. A write that the
+  permissions refuse, to a file in the data folder while that folder cannot be written, answers `data_dir_readonly`
+  (RPC calls and jobs alike, through `Services.translate_error`) instead of `internal`; a single busy file in a folder
+  that takes new files stays an ordinary failure.
 - **User data.** The mod library and UI state live in `utils.EXE_DIR` (the portable data directory the app already
   uses for `config.toml` and `output/`). Several instances may share it: a change to the UI state (`webui.json`) is
   applied to the file as it is at that moment, read again under a lock the instances share (`webui.json.lock`), so
   no instance erases another's keys, and reads follow the other instances' writes. Those reads take the same lock, as
   Windows cannot replace a file another process has open; a replace that meets another program's handle (a virus
-  scanner, the search indexer) is tried again for up to a second there. The user's own aliases of the
-  students are there too (`aliases`: `{family key: [alias]}`, one student's entry changed at a time), never in the
-  program folder or the repository.
+  scanner, the search indexer) is tried again for up to a second there. The file is flushed to disk before the
+  replace, and the last good file stays as `webui.json.prev` before every write. An unreadable `webui.json` is read
+  from that copy and kept as `webui.json.bad` at the next write; with neither readable, the state starts from the
+  defaults, an error is logged and the bad bytes are kept as `webui.json.bad` before the first write. The strict
+  read behind the seen mods does not use the copy: unreadable state answers unknown, never every mod as new. The
+  copy and the bad file move with the data directory (their stored paths are rewritten like `webui.json`'s).
+  `config.toml` never stops the start: a group that is not a table or a value of another type reads as missing
+  (its default; the rest of the file is still read), and a file that cannot be parsed as a whole (non-UTF-8 bytes, a
+  syntax error) starts on defaults. Before any save replaces such a file it is copied to `config.toml.bad`, and the
+  2-second poll for the classic GUI's saves never applies a read that failed or found no content (a save in
+  progress): it reads again once the file changes. The user's own aliases of the students are there too (`aliases`:
+  `{family key: [alias]}`, one student's entry changed at a time), never in the program folder or the repository.
 
 ## gameassets
 
@@ -744,6 +760,19 @@ scanned) is not corruption: reads answer an empty library, writes raise `library
 again. A library move and a data directory move take `state.json.prev` and `.bad` along, as they do for
 `profiles.json`.
 
+**Library move** (`Services.move_library`, `library/relocate.py`; `LIBRARY_ITEMS` lists what travels: the mod, original
+and built folders, the three journal folders `transactions/`, `import-transactions/` and `asset-deletions/`,
+`photographs/`, and `state.json` and `profiles.json` with their `.prev` and `.bad`). Each item is copied into a staging
+folder inside the target (`.library-move-<token>`; files are flushed to disk, modification times kept), the copies are
+compared with the source (names, kinds, sizes, link targets, and the bytes of files up to 1 MiB), and they are then
+published under their final names. Only then is `library_dir` switched, and the source cleared item by item: each is
+renamed aside in one step and the renamed folder deleted. Up to the switch nothing of the source changes: a failure
+(`library_io_error`; a target inside an item is refused the same way) removes the copies, the staging folder and the
+folders the move made, and the same call can be made again at once; a failed switch takes the published copies back. A
+failure clearing the source never loses anything: the library is complete at the target and in use there, the old folder
+keeps whole any item it could not rename, and the failure is logged. A staging folder left by a move that was cut short
+is removed by the next move into that folder.
+
 **Held records.** A valid record whose files are missing (a quarantined file, a partial restore) is held the same
 way, with a warning, instead of being dropped at load: it is not among the library's records, so the engine and the
 UI do not see it, and it is written back unchanged at every save. It returns to the records at the next load, refresh
@@ -964,7 +993,7 @@ stops the server (the page shows Closed); with `--serve` it gives `native_unavai
 
 | Method | Result |
 |---|---|
-| `app.info` | version, language, platform, game found (the selected folder is a game install, as for `settings.set`; a folder saved earlier that holds no game starts on the no-game screen), resource version, consent (`null`, `true`, `false`), `uiCached` (consented light assets on disk for the current resource version), paths, `debug` (started with `--debug`) |
+| `app.info` | version, language, platform, game found (the selected folder is a game install, as for `settings.set`; a folder saved earlier that holds no game starts on the no-game screen), resource version, consent (`null`, `true`, `false`), `uiCached` (consented light assets on disk for the current resource version), paths, `dataDirWritable` (a real temporary file was written in the data folder and removed again at start; `false`: see Start sequence), `debug` (started with `--debug`) |
 | `app.consent {granted}` | records the choice; `false` closes the app |
 | `app.quit` | closes the window; `busy` while a writer job runs; in browser mode answers, then stops the server; `native_unavailable` with `--serve` |
 | `app.openClassic {tab}` | `{started}`: starts the classic window on a tab (`settings`: its settings) and waits for it (30 s at most), or brings the open one to the front, with the tab unless a classic task runs; a window an earlier instance left is only raised; `classic_failed {exit_code}` when the child exits or stays silent first; `busy` instead of a new window while a job writing the game folder is queued or running |
@@ -1654,7 +1683,10 @@ update check and the feature tour) is one function that runs once per session, w
 start, or, after a start without one, as soon as the folder is chosen on the no-game screen
 (`refreshConfiguration` calls it after the first screen is shown; the consent and the loading screen are then given the
 data of the game found), without a restart. A later refresh never starts it again. Once the first screen is revealed
-the start popups come one at a time, in order, each only when it has something to show (`mod-switch.js startDue`): the asset consent, the scan
+the start popups come one at a time, in order, each only when it has something to show (`mod-switch.js startDue`): first,
+when `app.info.dataDirWritable` is `false` (the data folder cannot be written), one notice with the quit dialog's title and
+Confirm only (`webui.error.data_dir_readonly`, with the folder's path; the no-game screen shows it too, once per session);
+then the asset consent, the scan
 consent (while it is unanswered and a game folder is known; see Enable Mods switch). File checks require scan
 consent: On checks at every start, Off withdraws consent and stops scans.
 The Configuration Drift Check row's Check remains available while Off too: missing consent opens the scan consent

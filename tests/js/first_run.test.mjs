@@ -119,7 +119,7 @@ test('a game found while boot() is still waiting leaves the sequence to boot(), 
 
 test('the sequence has one entry, guarded, and boot() and the refresh both go through it',()=>{
   assert.equal(source.split('Cursor.init()').length-1,1);
-  assert.equal(source.split('Popup.sequence(startPopups())').length-1,1);
+  assert.equal(source.split('...startPopups()]').length-1,1);
   assert.equal(source.split('Tours.start(').length-1,1);
   assert.match(refresh,/firstRun\(\)\.catch\(console\.error\)/);
   assert.match(source,/Loading\.init\(info\);[^\n]*\n\s*startWithGame = !!info\.gameFound;/);

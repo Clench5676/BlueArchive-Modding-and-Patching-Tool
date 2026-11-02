@@ -12,8 +12,10 @@ logger = logging.getLogger(__name__)
 
 
 class RpcRegistry:
-    def __init__(self, on_exception=None) -> None:
+    def __init__(self, on_exception=None, translate=None) -> None:
         self.on_exception = on_exception
+        # an exception -> the ServiceError it stands for (an environment fault the user can act on), or None
+        self.translate = translate
         self._methods: dict[str, Callable[..., Any]] = {}
 
     def method(self, name: str) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
@@ -44,6 +46,9 @@ class RpcRegistry:
         except ServiceError as e:
             return {"error": e.to_json()}
         except Exception as e:
+            known = self.translate(e) if self.translate else None
+            if known is not None:
+                return {"error": known.to_json()}
             logger.exception("RPC %s failed", name)
             if self.on_exception:
                 self.on_exception(type(e), e, e.__traceback__)

@@ -1175,6 +1175,7 @@
 			"busy": "Wait for the current task to finish",
 			"library_target_not_empty": "The folder already holds mod library files: {path}",
 			"library_io_error": "Could not write to the mod library: {file}",
+			"data_dir_readonly": "Data folder not writable: {path}",
 			"asset_extraction_failed": "Could not read the assets from the game files",
 			"asset_load_failed": "Could not read a game file: {path}",
 			"bundle_invalid": "Not a valid bundle: {file}",

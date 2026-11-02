@@ -468,7 +468,7 @@ async function route() {
 // up; until then boot() itself starts the sequence if a game is found. startWithGame: start() gave the consent and the
 // loading screen the data of a start with a game; without it they still hold their no-game data and are given the data
 // of the game that was found.
-let sessionReady = null, firstRunStarted = false, startWithGame = false;
+let sessionReady = null, firstRunStarted = false, startWithGame = false, dataDirNoticed = false;
 async function firstRun() {
   if (!sessionReady || firstRunStarted || !info?.gameFound) return;
   firstRunStarted = true;
@@ -479,8 +479,8 @@ async function firstRun() {
     Loading.init(info);
   }
   Cursor.init();
-  // the start popups only once the first screen is revealed
-  const popups = Popup.sequence(startPopups());
+  // the start popups only once the first screen is revealed, the data folder notice first
+  const popups = Popup.sequence([...(info.dataDirWritable === false ? [["data-dir", dataDirNotice]] : []), ...startPopups()]);
   // The network check never holds the start sequence or a screen. Keep a late offer until the UI is free.
   if (ModSwitch.startDue("update", { info })) {
     Update.check($("consent"), undefined, { beforeShow: async () => {
@@ -500,7 +500,16 @@ async function boot() {
   await timed("boot", () => Loading.scene(start, { opaque: true }));
   if (globalThis.BAMTRecovery && !globalThis.BAMTRecovery.ready()) return;
   sessionReady = rpc("app.ready", { timings: { ...startup, ...Loading.timings() } }).catch(console.error);
+  if (!info?.gameFound) await dataDirNotice().catch(console.error); // the no-game screen has no other start popup
   await firstRun();
+}
+
+// A data folder that cannot be written: one notice per session, the quit dialog's title and Confirm only
+function dataDirNotice() {
+  if (!info || info.dataDirWritable !== false || dataDirNoticed) return Promise.resolve();
+  dataDirNoticed = true;
+  return Popup.message({ title: T("quit.title"), lines: [T("error.data_dir_readonly", { path: info.dataDir })],
+    ok: T("picker.ok") });
 }
 
 // The start popups, one at a time and in this order, each only when it has something to show (mod-switch.js

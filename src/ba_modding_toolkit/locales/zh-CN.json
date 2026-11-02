@@ -1175,6 +1175,7 @@
 			"busy": "请等当前任务完成",
 			"library_target_not_empty": "目标文件夹里已有 Mod 仓库的文件：{path}",
 			"library_io_error": "无法写入 Mod 仓库：{file}",
+			"data_dir_readonly": "无法写入数据文件夹：{path}",
 			"asset_extraction_failed": "无法从游戏文件中读取素材",
 			"asset_load_failed": "无法读取游戏文件：{path}",
 			"bundle_invalid": "不是有效的资源包：{file}",

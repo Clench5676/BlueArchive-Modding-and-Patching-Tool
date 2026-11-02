@@ -1175,6 +1175,7 @@
 			"busy": "รองานปัจจุบันเสร็จก่อน",
 			"library_target_not_empty": "โฟลเดอร์มีไฟล์คลัง Mod อยู่แล้ว: {path}",
 			"library_io_error": "เขียนลงคลัง Mod ไม่ได้: {file}",
+			"data_dir_readonly": "เขียนลงโฟลเดอร์ข้อมูลไม่ได้: {path}",
 			"asset_extraction_failed": "อ่านทรัพยากรจากไฟล์เกมไม่ได้",
 			"asset_load_failed": "อ่านไฟล์เกมไม่ได้: {path}",
 			"bundle_invalid": "Bundle ไม่ถูกต้อง: {file}",
