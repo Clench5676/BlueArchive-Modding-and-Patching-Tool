@@ -42,7 +42,8 @@ from . import integrity, safety, staging
 from .identity import identify
 from .judge import (
     CRC_STATES, KINDS, LIBRARY_SOURCES, carried_of, classify, core_of, crc_state, date_of, distinguishing_folders,
-    install_key, install_root, kind_of, kind_of_file, leaves, now, other_target, part_of, says_official, seconds, supports_kind,
+    install_key, install_root, kind_of, kind_of_file, leaves, mod_versions, now, other_target, part_of, says_official,
+    seconds, supports_kind,
 )
 from .migrations import LEGACY_REMAP, legacy_remapped
 from .models import (
@@ -936,9 +937,10 @@ class ModLibrary:
     def _entry(self, record: dict[str, Any]) -> ModEntry:
         paths = self._paths(record)
         parsed = parse_filename(paths[0].name)
+        # The parts of one mod can carry different dates: the mod is dated by its newest part, not by the first one.
         return ModEntry(record["id"], paths[0], self._label(record), self._target_of(record), record["kind"],
                         record["added"], not record["seen"], sum(p.stat().st_size for p in paths),
-                        parsed.date, parsed.crc, core_of(paths[0].name),
+                        max(date_of(path.name) for path in paths), parsed.crc, core_of(paths[0].name),
                         repaired_from=record.get("repaired_from", ""), repaired_id=record.get("repaired_id", ""),
                         user_added=record.get("user_added") is True, alias=record.get("alias", ""),
                         label_base=record["label"])
@@ -1069,7 +1071,8 @@ class ModLibrary:
     @_mod_writer
     def add(self, paths: list[Path], progress: ProgressCallback | None = None, pin: Pin | None = None,
             *, kind: Kind | None = None, direct: bool = False) -> AddResult:
-        """Store one mod per core and date, deduplicating complete bundle sets. In dev mode (devmode) only files
+        """Store one mod per core and kind, whatever the dates of its parts (a part repeated under another date starts
+        a version per date, judge.mod_versions), deduplicating complete bundle sets. In dev mode (devmode) only files
         inside the dev roots are taken."""
         for path in paths:
             devmode.check_read(path)
@@ -1191,8 +1194,9 @@ class ModLibrary:
     def _add(self, paths: list[Path], progress: ProgressCallback | None = None, pin: Pin | None = None,
              expected_kind: Kind | None = None, *, direct: bool = False) -> AddResult:
         known = self._known()
-        groups: dict[tuple[str, str], dict[str, Path]] = {}
+        groups: dict[tuple[str, ...], dict[str, Path]] = {}
         targets = {}
+        taken: list[tuple[Path, str, str, str]] = []
         for i, source in enumerate(map(Path, paths)):
             if progress:
                 progress(i, len(paths), t("webui.progress.add", name=source.name))
@@ -1212,8 +1216,13 @@ class ModLibrary:
                                   identify(source, name, self.catalog))
             if expected_kind is not None and kind != expected_kind:
                 raise ServiceError("mod_unsupported", file=source)
-            parsed = parse_filename(name)
-            key = (str(source.parent), "other") if kind == "other" else (parsed.core.lower(), parsed.date)
+            taken.append((source, name, target, kind))
+        # The files of one core and kind are one mod whatever their dates, unless one part repeats under other dates.
+        versions = iter(mod_versions([((parse_filename(name).core.lower(), kind), name)
+                                      for _, name, _, kind in taken if kind != "other"]))
+        for source, name, target, kind in taken:
+            key = (str(source.parent), "other") if kind == "other" else (
+                parse_filename(name).core.lower(), kind, next(versions))
             targets[key] = (target, kind)
             group = groups.setdefault(key, {})
             if kind == "other":

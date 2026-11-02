@@ -511,9 +511,10 @@ class ModLibrary:
                  write_check: Callable[[Pin], None] | None = None): ...   # write_check: the caller's own refusal
                                                    # right before game files are written (the web UI: classic_open)
     def mods(self) -> list[ModEntry]               # id, file, label, target (variant key), kind ("spr" | "lobby"),
-                                                   # added, fresh, size, date, crc, core (lower case)
+                                                   # added, fresh, size, date (its newest part's), crc, core (lower case)
     def add(self, paths: list[Path]) -> list[ModEntry]   # copies into the library; target from the file name's core
-                                                         # (portrait "_spr", lobby "_home", "_home_gl", "_home_teen")
+                                                         # (portrait "_spr", lobby "_home", "_home_gl", "_home_teen");
+                                                         # one mod per core and kind, see "Import grouping"
     def remove(self, mod_id: str, confirm=False) -> None # refused while a game folder shows it (see below)
     def rename(self, mod_id: str, label: str) -> None
     def mark_seen(self, mod_id: str) -> None
@@ -947,7 +948,7 @@ stops the server (the page shows Closed); with `--serve` it gives `native_unavai
 | `preview.failed {url, step, error}` | bounded browser preview diagnostics in the session log, including release builds |
 | `favorites.set {variant, on}` | |
 | `aliases.set {family, aliases}` | the user's own aliases of a student as kept (`webui/state.py`: NFC, no control or format characters, whitespace runs one space, empty and repeated ones, ignoring case and width, dropped); `alias_too_long` past 24 characters, `alias_too_many` past 8, and nothing is kept then; an empty list forgets them |
-| `mods.add {paths, background = false}` / `mods.pick {background = false}` | `{added, duplicates, installed}`; with `background`, a library writer job id (`mods.pick` opens the native file dialog); identity is core plus SHA-1, independent of filenames |
+| `mods.add {paths, background = false}` / `mods.pick {background = false}` | `{added, duplicates, installed}`; with `background`, a library writer job id (`mods.pick` opens the native file dialog); identity is core plus SHA-1, independent of filenames; grouping as in "Import grouping" |
 | `mods.removalInfo {id}` | `{name, used}` for the deletion confirmation, including configured and applied entries in every install |
 | `mods.remove {id, confirm = false}` | library writer job id; result `{done, failed, dropped, cores, kinds}`; deletes the source, stored files and references, then restores game entries to Official or their saved source; refused writes keep the new configuration and an unfinished entry |
 | `mods.rename {id, label}` | |
@@ -1007,6 +1008,16 @@ across recorded installations and records those assignments, including while the
 must prepare successfully. The archive is written to a temporary file in the destination, verified for ZIP integrity
 and member hashes, flushed and atomically published. Failed preparation or publication does not leave a partial
 new ZIP. This exports user-requested files at runtime; no game assets are included in application builds.
+
+### Import grouping
+
+The batch import (`import.analyze`, one folder at a time, with kind and variant) and Add (`mods.add`, drag and drop, one
+upload) group files with one rule, `judge.mod_versions`. The files of one core and kind are one mod whatever their dates:
+some cores keep their parts under different dates (Spine textures and text, a model's prefab and dependencies), so one row
+or library Mod holds all of them and an apply writes every part. Only a set in which one part (`part_of`) occurs more than once
+under different dates holds several versions of the mod; the whole set is then grouped by date, one row or Mod per date.
+`other` bundles keep their own handling. A Mod's `date` is the newest date of its parts. Library Mods stored before this
+rule keep the split they were stored with; nothing is merged or migrated.
 
 ### Batch import origins and conversion
 

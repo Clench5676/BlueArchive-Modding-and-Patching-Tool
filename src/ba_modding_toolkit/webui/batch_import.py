@@ -20,7 +20,7 @@ from ..errors import ServiceError
 from ..gameassets.spine import spine_revision
 from ..i18n import t
 from ..library import integrity, staging, manual_identity
-from ..library.judge import core_of, kind_of, part_of
+from ..library.judge import core_of, kind_of, mod_versions, part_of
 from ..library.storage import Fingerprints, atomic_clone, verify_file
 from ..models import AssetType, SaveOptions
 from ..naming import parse_filename
@@ -502,6 +502,7 @@ class BatchImport:
             else:
                 take(path)
         groups: dict[tuple, list[tuple]] = {}
+        inspected = []
         for path in selected:
             name = path.name.removesuffix(".backup")
             parsed = parse_filename(name)
@@ -528,10 +529,14 @@ class BatchImport:
                 logger.debug("Cannot inspect uploaded bundle")
                 error = "unreadable"
                 failure = ServiceError("bundle_invalid", file=path, error=str(caught)).to_json()
-            parsed = parse_filename(name)
-            # Date separates versions; folders separate alternative mods of the same release.
+            inspected.append((path, name, kind, variant, error, failure))
+        # The files of one core and kind are one mod whatever their dates, unless one part repeats under other
+        # dates (judge.mod_versions, the rule Add uses). Folders separate alternative mods of the same release.
+        versions = iter(mod_versions([((path.parent, parse_filename(name).core.lower(), kind, variant), name)
+                                      for path, name, kind, variant, _, _ in inspected if kind != "other"]))
+        for path, name, kind, variant, error, failure in inspected:
             key = (path.parent, "", "", kind, None) if kind == "other" else (
-                path.parent, parsed.core.lower(), parsed.date, kind, variant)
+                path.parent, parse_filename(name).core.lower(), next(versions), kind, variant)
             groups.setdefault(key, []).append((path, name, error, failure))
         candidates = []
         for (_, core_name, _, kind, variant), items in groups.items():
