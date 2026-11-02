@@ -15,7 +15,7 @@ import { specialFraming } from "./special-view.js";
 import * as NGUI from "./ngui.js";
 import * as Display from "./display.js";
 import * as Loading from "./loading.js";
-import { searchTree as rosterSearchTree, toggleHits, toolbarLayout, toolbarTree } from "./roster-widgets.js";
+import { emptyListY, searchTree as rosterSearchTree, toggleHits, toolbarLayout, toolbarTree } from "./roster-widgets.js";
 import { current as modsState } from "./mod-switch.js";
 import { countNodes, countText, iconsOf } from "./mod-counts.js";
 import { rpc, spineBase } from "./api.js";
@@ -282,8 +282,10 @@ function applyScroll() {
 function emptyTree() {
   const t = clone(find(layouts.collection, "SeletControl/LeftInfo_Empty"));
   t.active = true;
-  t.pos[1] -= PAPER_TOP - listTop();
-  Object.assign(find(t, "Label_Locale").widgets[0], { text: T("roster.empty"), w_: 1200 });
+  const message = find(t, "Label_Locale").widgets[0];
+  Object.assign(message, { text: T("roster.empty"), w_: 1200 });
+  // the picture and the message sit on the middle of the paper the eye sees: all of it, or what the open search box leaves
+  t.pos[1] = emptyListY((listTop() + PAPER_BOTTOM) / 2, message);
   return t;
 }
 // the empty list's picture for the current items, built off screen (nothing when there are items)

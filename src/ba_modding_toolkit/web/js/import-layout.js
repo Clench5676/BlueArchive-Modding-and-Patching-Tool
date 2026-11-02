@@ -18,16 +18,7 @@ export const ROW_SELECTION = { left: 19, top: 8, width: 164, height: 160, scale:
 // (header strip and toolbar included), in panel px.
 export const PAPER_CENTRE = (S) => [636, 352 + 60 * S];
 export const NAME_ROOM = 1160;    // the Batch Import name plate's room for a name (units)
-export const EMPTY_GAP = 85;      // between the centres of Items' ListEmpty message and the drop hint under it
-
-// The box centres (px, down) of the ListEmpty message and the drop hint under it (null: none) that put the block's ink
-// centre on `centre`, as the eye takes the middle of the list. title, note: each label's ink as offsets of its top and
-// bottom from its box centre (NGUI.inkBand).
-export function emptyBlock(centre, title, note = null, gap = EMPTY_GAP) {
-  const bottom = note ? gap + note.bottom : title.bottom;
-  const first = centre - (title.top + bottom) / 2;
-  return { title: first, note: note ? first + gap : null };
-}
+export { EMPTY_GAP, emptyBlock } from "./empty-block.js";
 const rowGap = (ui, layouts) => 348 - ui.find(layouts.UIMailBoxContent, "List_01/BG").widgets.find((w) => "sprite" in w).h_;
 
 // Include child widgets, their pivots and inclined overhangs in the selection frame's drawn edge.
