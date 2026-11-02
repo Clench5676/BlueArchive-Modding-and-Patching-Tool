@@ -2,12 +2,20 @@
 
 Reads and writes the same ``config.toml`` as the classic GUI (``gui/configs.py``): the same groups, keys and defaults,
 so both GUIs share one file. Unknown groups and keys found in the file are kept when saving.
+
+A file that cannot be read starts the app on defaults instead of stopping it: a group that is not a table or a value of
+another type is read as missing (the rest of the file is still read), and a file that cannot be parsed as a whole
+(non-UTF-8 bytes, a syntax error) reads as all defaults, is copied to ``config.toml.bad`` before any save replaces it,
+and is never applied by ``reload_if_changed`` (a save in progress leaves a half-written file for a moment).
 """
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import os
+import shutil
+import tempfile
 import threading
 from dataclasses import dataclass
 from pathlib import Path
@@ -17,6 +25,7 @@ import toml
 
 from . import devmode, utils
 from .data_paths import APP_DIR_NAME, OLD_APP_DIR_NAME, default_cache_dir, migrate_cache_dir
+from .logging_utils import log_failure
 from .models import AnimCheckOptions, SaveOptions, SkelConvertOptions
 from .naming import CharacterInternalIDMap
 from .utils import EXE_DIR, get_BA_path, parse_hex_bytes
@@ -134,8 +143,11 @@ def migrate_game_directories(directories: dict, detect: Callable[[str], str | No
     Keep the existing Global/Japan keys so older versions can still read both folders.
     Explicit pairs and unrecognized folders retain their original assignments.
     """
+    if not isinstance(directories, dict):
+        return directories
     legacy = directories.get("game_resource_dir")
-    if not legacy or directories.get("game_resource_dir_japan") or not devmode.allows_read(legacy):
+    if not isinstance(legacy, str) or not legacy or "\0" in legacy or directories.get("game_resource_dir_japan") \
+            or not devmode.allows_read(legacy):
         return directories
     from .library.judge import install_root
 
@@ -144,7 +156,7 @@ def migrate_game_directories(directories: dict, detect: Callable[[str], str | No
         matches = {region for region in ("global", "japan")
                    if (folder := detect(region)) and devmode.allows_read(folder)
                    and install_root(Path(folder).expanduser()) == root}
-    except (OSError, RuntimeError):
+    except (OSError, RuntimeError, ValueError):
         return directories
     if matches != {"japan"}:
         return directories
@@ -160,23 +172,52 @@ class Settings:
     def __init__(self, path: Path = CONFIG_FILE):
         devmode.check_read(path)
         self.path = Path(path)
+        self.bad = self.path.with_name(f"{self.path.name}.bad")
         self._lock = threading.RLock()
         self._values: dict[str, Any] = {}
         self._extra: dict[str, dict] = {}  # groups and keys this schema does not know, kept on save
-        self._mtime: float | None = None
+        self._mtime: tuple[int, int] | None = None  # the file's (mtime, size) when it was last applied or saved
+        self._failed: tuple[int, int] | None = None  # the (mtime, size) of the file the last read of failed on
+        self._applied = False  # whether a read of the file has been applied yet (a failed one is not applied after)
         self._listeners: list[Callable[[], None]] = []
         self.load()
 
     # --- file ---
 
-    def load(self) -> None:
+    def _read_file(self, *, reload: bool) -> tuple[dict | None, Exception | None]:
+        """(the file's tables, None); ({}, None) while it is missing; (None, why) when it exists but cannot be read
+        or parsed as a whole. On a reload a file without content counts as unreadable as well: it is what a save in
+        progress leaves for a moment, and an empty file is never the app's own."""
+        try:
+            text = self.path.read_text(encoding="utf-8")
+            if reload and not text.strip():
+                raise ValueError("no content")
+            return toml.loads(text), None
+        except FileNotFoundError:
+            return {}, None
+        except Exception as error:  # OSError, bad bytes, a syntax error, and whatever the parser raises on garbage
+            return None, error
+
+    def load(self) -> bool:
+        """Read config.toml into the settings. Returns False when the file exists but cannot be read as a whole: at
+        the first read everything is then default, afterwards nothing changes (a failed read is never applied)."""
         with self._lock:
-            data: dict[str, dict] = {}
-            if self.path.exists():
-                try:
-                    data = toml.loads(self.path.read_text(encoding="utf-8"))
-                except (OSError, toml.TomlDecodeError):
-                    data = {}
+            signature = self._stat()
+            data, error = self._read_file(reload=self._applied)
+            if data is None:
+                if signature != self._failed:  # once per state of the file, not at every poll
+                    log_failure(logger, logging.WARNING, "Cannot read config.toml, keeping the settings in use"
+                                if self._applied else "Cannot read config.toml, using defaults", error)
+                self._failed = signature
+                if self._applied:
+                    return False
+                data = {}
+            else:
+                self._failed = None
+            for group, entries in list(data.items()):
+                if not isinstance(entries, dict):  # nothing to read in it: its keys read as missing
+                    logger.warning("config.toml: %s is not a table, using defaults for it", group)
+                    del data[group]
             values, known = {}, set()
             detected: dict[str, str] = {}
 
@@ -188,7 +229,7 @@ class Settings:
             data["Directories"] = migrate_game_directories(data.get("Directories", {}), detect)
             for key, f in FIELDS.items():
                 group = data.get(f.group, {})
-                if key in group:
+                if key in group and isinstance(group[key], (str, int, float, bool)):  # else (a date, a list) it reads as missing
                     values[key] = _coerce(key, group[key])
                 elif key == "file_source":
                     values[key] = "windows_global" if detect("global") else "windows_japan" if detect("japan") else "windows_global"
@@ -199,13 +240,13 @@ class Settings:
                 known.add((f.group, key))
             extra: dict[str, dict] = {}
             for group, entries in data.items():
-                if not isinstance(entries, dict):
-                    continue
                 for k, v in entries.items():
                     if (group, k) not in known:
                         extra.setdefault(group, {})[k] = v
             self._values, self._extra = values, extra
-            self._mtime = self._stat()
+            self._applied = True
+            self._mtime = signature if error is None else None
+            return error is None
 
     def save(self) -> None:
         with self._lock:
@@ -213,17 +254,39 @@ class Settings:
             for key, f in FIELDS.items():
                 data.setdefault(f.group, {})[key] = self._values[key]
             self.path.parent.mkdir(parents=True, exist_ok=True)
+            self._keep_unreadable()
             tmp = self.path.with_suffix(".toml.tmp")
             tmp.write_text(toml.dumps(data), encoding="utf-8")
             os.replace(tmp, self.path)
-            self._mtime = self._stat()
+            self._mtime, self._failed = self._stat(), None
+
+    def _keep_unreadable(self) -> None:
+        """Copy a config.toml that cannot be parsed as a whole to config.toml.bad before a save replaces it: the user
+        may want it back. A file without content, or one that cannot be copied, has nothing to keep."""
+        data, _ = self._read_file(reload=False)
+        if data is not None:
+            return
+        name = None
+        try:
+            fd, name = tempfile.mkstemp(prefix=f".{self.bad.name}.", suffix=".tmp", dir=self.bad.parent)
+            with os.fdopen(fd, "wb") as out, self.path.open("rb") as stream:
+                shutil.copyfileobj(stream, out)
+            os.replace(name, self.bad)
+        except OSError as error:
+            log_failure(logger, logging.WARNING, "Cannot keep the unreadable config.toml", error)
+            if name is not None:
+                with contextlib.suppress(OSError):
+                    os.unlink(name)
 
     def reload_if_changed(self) -> bool:
-        """Reload when the file changed on disk since the last load or save. Returns whether it reloaded."""
+        """Reload when the file changed on disk since the last load or save. Returns whether it reloaded. A file that
+        cannot be read as a whole (a save in progress) changes nothing, and is read again once it changes."""
         with self._lock:
-            if self._stat() == self._mtime:
+            current = self._stat()
+            if current == self._mtime or (current is not None and current == self._failed):
                 return False
-            self.load()
+            if not self.load():
+                return False
         for listener in list(self._listeners):
             listener()
         return True
@@ -231,11 +294,12 @@ class Settings:
     def on_change(self, listener: Callable[[], None]) -> None:
         self._listeners.append(listener)
 
-    def _stat(self) -> float | None:
+    def _stat(self) -> tuple[int, int] | None:
         try:
-            return self.path.stat().st_mtime
+            stat = self.path.stat()
         except OSError:
             return None
+        return stat.st_mtime_ns, stat.st_size
 
     # --- values ---
 

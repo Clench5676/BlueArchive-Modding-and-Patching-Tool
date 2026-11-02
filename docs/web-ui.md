@@ -219,9 +219,13 @@ Imports only go one way: `webui` → `library` → `catalog` → `gameassets` �
   from that copy and kept as `webui.json.bad` at the next write; with neither readable, the state starts from the
   defaults, an error is logged and the bad bytes are kept as `webui.json.bad` before the first write. The strict
   read behind the seen mods does not use the copy: unreadable state answers unknown, never every mod as new. The
-  copy and the bad file move with the data directory (their stored paths are rewritten like `webui.json`'s). The
-  user's own aliases of the students are there too (`aliases`: `{family key: [alias]}`, one student's entry changed at a time), never in the
-  program folder or the repository.
+  copy and the bad file move with the data directory (their stored paths are rewritten like `webui.json`'s).
+  `config.toml` never stops the start: a group that is not a table or a value of another type reads as missing
+  (its default; the rest of the file is still read), and a file that cannot be parsed as a whole (non-UTF-8 bytes, a
+  syntax error) starts on defaults. Before any save replaces such a file it is copied to `config.toml.bad`, and the
+  2-second poll for the classic GUI's saves never applies a read that failed or found no content (a save in
+  progress): it reads again once the file changes. The user's own aliases of the students are there too (`aliases`:
+  `{family key: [alias]}`, one student's entry changed at a time), never in the program folder or the repository.
 
 ## gameassets
 
