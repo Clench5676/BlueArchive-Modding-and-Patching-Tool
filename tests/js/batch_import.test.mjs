@@ -1821,7 +1821,8 @@ for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) for
   }
 });
 
-// UI-3: a failed row's note is the localized text only; the code and parameters stay on the result and the list entry
+// UI-3: a failed row's note is its short reason and the localized error text; the code and parameters stay on the result
+// and the list entry
 for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) test(`failed result notes show the localized text only, never a code or JSON, in ${locale}`, async () => {
   try {
     const strings = JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${locale}.json`, import.meta.url), "utf8"));
@@ -1842,7 +1843,7 @@ for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) tes
     h.runs[0].resolve({ results });
     await flush(); await h.page.results(); await h.page.settled();
     const note = (id) => find(drawn(h, walk(h.dialog).find((element) => element.dataset.result === id)).tree, "Label_Locale_Limit").widgets[0].text;
-    const expected = { a: filled(strings.webui.error.mod_platform_mismatch, mismatch.params), b: strings.webui.import.reason.failed,
+    const expected = { a: `${strings.webui.import.reason.mod_platform_mismatch} - ${filled(strings.webui.error.mod_platform_mismatch, mismatch.params)}`, b: strings.webui.import.reason.failed,
       c: strings.webui.import.failed, d: filled(strings.webui.error.dev_path_outside, { path: "/profile/input/refused.bundle" }) };
     for (const [id, text] of Object.entries(expected)) assert.equal(note(id), text, id);
     for (const id of Object.keys(expected)) {
@@ -2028,8 +2029,8 @@ for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
       await flush(); await h.page.results(); await h.page.settled();
       const row = walk(h.dialog).find((element) => element.dataset.result);
       const note = find(drawn(h, row).tree, "Label_Locale_Limit").widgets[0].text;
-      // the localized error text with its parameters; the code and the parameters' raw form are not shown
-      assert.equal(note, filled(strings.webui.error.required_asset_apply_failed, detail.params));
+      // the short reason, then the localized error text with its parameters; never the code or the raw parameters
+      assert.equal(note, `${strings.webui.import.reason.required_asset_apply_failed} - ${filled(strings.webui.error.required_asset_apply_failed, detail.params)}`);
       for (const value of Object.values(detail.params)) assert.ok(note.includes(value));
       assert.ok(!note.includes(detail.code) && !/[{}"]/.test(note));
       // they stay on the result for the error report

@@ -1020,8 +1020,8 @@ Remove Imported removes `done`, `library` and `installed` rows from the current 
 Mods or change installed files; pending, conflicted and failed rows remain. The import list, selection and view
 controls remain in memory when navigation leaves and returns during the same session.
 
-A failed row in Import Results shows only localized text: the `error.<code>` string with the failure's parameters when
-the locale has one, else the row's short reason. The code and parameters are not shown; they stay on the result and,
+A failed row in Import Results shows only localized text: the row's short reason, then ` - ` and the `error.<code>`
+string with the failure's parameters when the locale has one that says more. The code and parameters are not shown; they stay on the result and,
 for a blocked row, on its list entry, which the error report reads (`BAMTRecovery.importList`, `import_row`), and the
 backend logs each failure with them.
 
