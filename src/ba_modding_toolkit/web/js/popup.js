@@ -921,9 +921,11 @@ function plainMessage(layer, { title, lines, ok, cancel, buttons, state, dismiss
   layer.replaceChildren(back, box);
 }
 
+// a fixed size (max equals min) only wraps, on as many lines as it needs, and never shrinks below that size
 function messageText(text, max, min, room) {
-  const fitted = fitText(text, max, min, room, 4);
-  if (fitted.text.split("\n").every((line) => glyphsOf(line, fitted.fs) <= room)) return fitted;
+  const fixed = max === min;
+  const fitted = fitText(text, max, min, room, fixed ? Infinity : 4);
+  if ((!fixed || fitted.fs >= min) && fitted.text.split("\n").every((line) => glyphsOf(line, fitted.fs) <= room)) return fitted;
   return wrapPath(text, min, min, room, Infinity);
 }
 
