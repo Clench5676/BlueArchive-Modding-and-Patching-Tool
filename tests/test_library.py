@@ -1198,9 +1198,29 @@ def test_current_ready_parts_skip_planning_and_staging_but_restore_retained_part
     assert set(applied.files) == {env.original, second}
     assert env.original.read_bytes() == stored and second.read_bytes() == official[second]
     assert source.read_bytes() == stored and mod.file.read_bytes() == stored
-    assert all(target.with_name(target.name + '.backup').read_bytes() == before[target] for target in before)
+    # the kept originals are the baseline: the library writes no adjacent .backup
+    assert not any(target.with_name(target.name + '.backup').exists() for target in before)
     env.library.restore('test')
     assert {target: target.read_bytes() for target in official} == official
+
+
+def test_library_apply_keeps_the_original_first_and_leaves_an_existing_backup_alone(setup_library):
+    env = setup_library
+    official = env.original.read_bytes()
+    backup = env.original.with_name(env.original.name + '.backup')
+    backup.write_bytes(b'a classic backup the library never writes')
+    first, = env.library.add([make_mod(env.original, env.tmp / 'first', payload=b'first mod')])
+    env.library.apply('test', f'mod:{first.id}', create_backup=True)
+    second, = env.library.add([make_mod(env.original, env.tmp / 'second', payload=b'second mod')])
+    env.library.apply('test', f'mod:{second.id}', create_backup=True)
+    assert env.original.read_bytes() == second.file.read_bytes()
+    assert env.library.official_bundles('test_spr')[0].read_bytes() == official
+    assert backup.read_bytes() == b'a classic backup the library never writes'
+    assert not env.library.toggle(False, True).failed
+    assert env.original.read_bytes() == official
+    env.library.restore('test')
+    assert env.original.read_bytes() == official
+    assert backup.read_bytes() == b'a classic backup the library never writes'
 
 
 def test_batch_housekeeping_runs_once_on_exception_and_releases_its_scope(setup_library, monkeypatch):

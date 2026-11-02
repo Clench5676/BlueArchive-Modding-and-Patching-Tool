@@ -107,7 +107,7 @@ def test_model_direct_replacement_never_transfers_assets(batch_model_env, monkey
     assert installed == original_source if fixed else installed[:-4] == original_source
     assert CRCUtils.compute_crc32(installed) == int(parse_filename(target.name).crc)
     assert source.read_bytes() == original_source
-    assert Path(str(target) + '.backup').read_bytes() == official
+    assert not Path(str(target) + '.backup').exists()
     assert all(path.read_bytes() == env.official[path] for path in (env.parts[0], env.parts[2]))
     env.library.restore('hoshino', kind='model')
     assert target.read_bytes() == official
