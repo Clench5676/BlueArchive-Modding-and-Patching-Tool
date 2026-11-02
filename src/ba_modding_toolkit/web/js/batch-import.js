@@ -99,12 +99,14 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
     const key = `error.${code}`, text = T(key, { file: entry?.paths?.[0] || "", ...(error?.params || {}) });
     return code && code !== "internal" && text !== key ? text : T("import.failed");
   };
-  // A failed row's note: the localized error text with its parameters when the code has one, else the row's reason.
-  // The code and parameters stay on the result (and, for a blocked row, on its list entry) for the error report.
+  // A failed row's note: the row's short reason, then the localized error text with its parameters when the code has
+  // one that says more. The code and parameters stay on the result (and, for a blocked row, on its list entry) for the
+  // error report.
   const resultNote = (item, entry) => {
     const detail = item.error || { code: item.reason, params: item.params || {} };
+    const label = report(item, entry);
     const key = `error.${detail.code}`, text = detail.code ? T(key, { file: entry?.paths?.[0] || "", ...(detail.params || {}) }) : key;
-    return text !== key ? text : report(item, entry);
+    return text !== key && text !== label ? `${label} - ${text}` : label;
   };
   const el = (tag, className = "", text = "") => {
     const element = document.createElement(tag); element.className = className; element.textContent = text; return element;
