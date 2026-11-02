@@ -3,6 +3,7 @@ output/
 Addons/
 adb_cache/
 config.toml
+config.toml.bad
 /library/
 /webui.json
 /webui.json.lock
