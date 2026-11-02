@@ -125,7 +125,7 @@ test("the sites the review lists draw their error text through the shared errorT
     assert.doesNotMatch(source, /const errorText =/, `${name} has no errorText of its own`);
     assert.match(source, /errorText\(/, name);
   }
-  assert.equal(read("consent.js").match(/errorText\(err\)/g).length, 3, "the folder change, the Spine consent and the scan consent");
+  assert.equal(read("consent.js").match(/errorText\(err\)/g).length, 4, "the asset consent, the folder change, the Spine consent and the scan consent");
   const main = read("main.js");
   assert.match(main, /catch \(err\) \{ notify\(errorText\(err\), \{ kind: "error", error: err \}\); \}/, "the no-game screen's folder");
   assert.match(main, /\} catch \(err\) \{\n {6}notify\(errorText\(err\), \{ kind: "error", error: err \}\);/, "files dropped on the window");
