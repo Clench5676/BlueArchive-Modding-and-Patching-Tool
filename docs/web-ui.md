@@ -1622,8 +1622,12 @@ optional, so a popup still works without them.
   primary button is the game's disabled one (`aria-disabled`, answering nothing); a prompt without `tools` is never
   blocked.
 
-**Start sequence** (`main.js`, `Popup.sequence`). Once the first screen is revealed the start popups come one at a
-time, in order, each only when it has something to show (`mod-switch.js startDue`): the asset consent, the scan
+**Start sequence** (`main.js`, `Popup.sequence`). The whole first-run sequence (the cursor, the start popups, the
+update check and the feature tour) is one function that runs once per session, when a game folder is known: at the
+start, or, after a start without one, as soon as the folder is chosen on the no-game screen
+(`refreshConfiguration` calls it after the first screen is shown; the consent and the loading screen are then given the
+data of the game found), without a restart. A later refresh never starts it again. Once the first screen is revealed
+the start popups come one at a time, in order, each only when it has something to show (`mod-switch.js startDue`): the asset consent, the scan
 consent (while it is unanswered and a game folder is known; see Enable Mods switch). File checks require scan
 consent: On checks at every start, Off withdraws consent and stops scans.
 The Configuration Drift Check row's Check remains available while Off too: missing consent opens the scan consent

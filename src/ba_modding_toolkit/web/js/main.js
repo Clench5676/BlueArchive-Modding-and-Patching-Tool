@@ -279,6 +279,8 @@ async function refreshConfiguration(){
   if(!next.gameFound){noGame();return;}
   await NGUI.init();if(revision!==configurationRevision)return;
   await route();
+  // a game found after a start without one: the first-run sequence runs now, not at the next launch
+  if(revision===configurationRevision)firstRun().catch(console.error);
 }
 
 let routeToken = 0, routeAttempt = 0, permissionAttempt = 0, endRoute = () => {}, homeRequested = false;
@@ -460,14 +462,22 @@ async function route() {
   }
 }
 
-async function boot() {
-  fitStage();
-  addEventListener("resize", fitStage);
-  // the page starts behind the loading screen: the game's UI is read, then the first screen is built
-  await timed("boot", () => Loading.scene(start, { opaque: true }));
-  if (globalThis.BAMTRecovery && !globalThis.BAMTRecovery.ready()) return;
-  const ready = rpc("app.ready", { timings: { ...startup, ...Loading.timings() } }).catch(console.error);
-  if (!info?.gameFound) return;
+// The first-run sequence: the cursor, the start popups, the update check and the feature tour. It needs a game folder, so
+// it runs once per session: at the start, or, when the start found none, as soon as the folder is chosen on the no-game
+// screen (refreshConfiguration), without a restart. sessionReady is set by boot() once the page has told the server it is
+// up; until then boot() itself starts the sequence if a game is found. startWithGame: start() gave the consent and the
+// loading screen the data of a start with a game; without it they still hold their no-game data and are given the data
+// of the game that was found.
+let sessionReady = null, firstRunStarted = false, startWithGame = false;
+async function firstRun() {
+  if (!sessionReady || firstRunStarted || !info?.gameFound) return;
+  firstRunStarted = true;
+  if (!startWithGame) {
+    startWithGame = true;
+    Consent.init(info);
+    setSpineConsent(info.spineConsent);
+    Loading.init(info);
+  }
   Cursor.init();
   // the start popups only once the first screen is revealed
   const popups = Popup.sequence(startPopups());
@@ -479,8 +489,18 @@ async function boot() {
     } }).catch((err) => console.error("update check", err));
   }
   await popups;
-  Tours.start({ info, ready, blocked: () => Loading.busy() || ModSwitch.current()?.busy || Prompts.isBusy()
+  Tours.start({ info, ready: sessionReady, blocked: () => Loading.busy() || ModSwitch.current()?.busy || Prompts.isBusy()
     || !!document.getElementById("bamt-recovery") }).catch((err) => console.warn("feature tour", err));
+}
+
+async function boot() {
+  fitStage();
+  addEventListener("resize", fitStage);
+  // the page starts behind the loading screen: the game's UI is read, then the first screen is built
+  await timed("boot", () => Loading.scene(start, { opaque: true }));
+  if (globalThis.BAMTRecovery && !globalThis.BAMTRecovery.ready()) return;
+  sessionReady = rpc("app.ready", { timings: { ...startup, ...Loading.timings() } }).catch(console.error);
+  await firstRun();
 }
 
 // The start popups, one at a time and in this order, each only when it has something to show (mod-switch.js
@@ -517,6 +537,7 @@ async function start() {
   Consent.init(info);
   setSpineConsent(info.spineConsent);
   Loading.init(info); // the loading screen's backdrop from the game's prefab
+  startWithGame = !!info.gameFound;
   const ui = info.gameFound ? timed("ui-indexes", () => NGUI.init()) : Promise.resolve();
   ui.catch(() => {}); // observed below after the strings and fonts
   ctx.prefs = await prefs;
