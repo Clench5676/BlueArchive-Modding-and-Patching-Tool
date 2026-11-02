@@ -2360,6 +2360,94 @@ def test_recovery_keeps_an_external_change_and_the_only_official_original(setup_
     assert not list((env.root / "transactions").glob("*/journal.json"))  # the rollback finished and retired it
 
 
+def test_recovery_does_not_recreate_a_file_a_game_update_superseded(setup_library, monkeypatch):
+    from ba_modding_toolkit.library import service
+    env = setup_library
+    official = env.original.read_bytes()
+    entry, = env.library.add([make_mod(env.original, env.tmp / "input", fixed=True)])
+    monkeypatch.setattr(storage, "_clone", lambda *args: False)
+    move = service.verified_move
+    original = env.library._original_path(env.original)
+
+    def moving(source, target, sha1):
+        move(source, target, sha1)
+        if target.parent == env.root / "originals":
+            raise InterruptedWrite()
+
+    monkeypatch.setattr(service, "verified_move", moving)
+    with pytest.raises(InterruptedWrite):
+        env.library.apply("test", f"mod:{entry.id}")
+    monkeypatch.setattr(service, "verified_move", move)
+    assert not env.original.exists() and original.read_bytes() == official
+    # the game update: a later-dated file of the same part appears, the old name stays gone
+    newer = game_bundle(env.game_dir, date="2026-02-01", payload=b"updated")
+    recovered = reload_library(env)
+    assert not env.original.exists()
+    assert sorted(path.name for path in env.game_dir.glob("*.bundle")) == [newer.name]
+    assert original.read_bytes() == official  # the original stays
+    assert str(env.original.resolve()) not in recovered._applied
+    assert not list((env.root / "transactions").glob("*/journal.json"))
+    assert recovered.state("test")
+
+
+def test_recovery_of_a_superseded_file_drops_only_its_own_record(setup_library, monkeypatch):
+    from ba_modding_toolkit.library import service
+    env = setup_library
+    atlas = game_bundle(env.game_dir, part="002", payload=b"atlas")
+    mods = [make_mod(path, env.tmp / "input", fixed=True) for path in (atlas, env.original)]
+    modded_atlas = mods[0].read_bytes()
+    entry, = env.library.add(mods)
+    monkeypatch.setattr(storage, "_clone", lambda *args: False)
+    env.library.apply("test", f"mod:{entry.id}")
+    assert str(env.original.resolve()) in env.library._applied
+    original = env.library._original_path(env.original)
+    move = service.verified_move
+
+    def moving(source, target, sha1):
+        move(source, target, sha1)
+        if source == original and target == env.original:
+            raise InterruptedWrite()  # the original is back in the game folder, the restore not finished
+
+    monkeypatch.setattr(service, "verified_move", moving)
+    with pytest.raises(InterruptedWrite):
+        env.library.restore("test")
+    monkeypatch.setattr(service, "verified_move", move)
+    # Steam removes the file and adds a newer one of its part; the other part is unrelated
+    env.original.unlink()
+    newer = game_bundle(env.game_dir, date="2026-02-01", payload=b"updated")
+    recovered = reload_library(env)
+    assert not env.original.exists() and newer.exists()
+    assert str(env.original.resolve()) not in recovered._applied
+    assert recovered._applied[str(atlas.resolve())]["source"] == f"mod:{entry.id}"
+    assert atlas.read_bytes() == modded_atlas
+    assert not list((env.root / "transactions").glob("*/journal.json"))
+
+
+def test_recovery_restores_a_missing_file_that_has_no_successor(setup_library, monkeypatch):
+    from ba_modding_toolkit.library import service
+    env = setup_library
+    official = env.original.read_bytes()
+    entry, = env.library.add([make_mod(env.original, env.tmp / "input", fixed=True)])
+    monkeypatch.setattr(storage, "_clone", lambda *args: False)
+    move = service.verified_move
+
+    def moving(source, target, sha1):
+        move(source, target, sha1)
+        if target.parent == env.root / "originals":
+            raise InterruptedWrite()
+
+    monkeypatch.setattr(service, "verified_move", moving)
+    with pytest.raises(InterruptedWrite):
+        env.library.apply("test", f"mod:{entry.id}")
+    monkeypatch.setattr(service, "verified_move", move)
+    # an older-dated file of the part is no successor
+    game_bundle(env.game_dir, date="2025-12-01", payload=b"older")
+    recovered = reload_library(env)
+    assert env.original.read_bytes() == official
+    assert not list((env.root / "transactions").glob("*/journal.json"))
+    assert recovered.state("test")
+
+
 def test_off_and_on_with_no_clone_rekeep_the_moved_original(setup_library, monkeypatch):
     env = setup_library
     official = env.original.read_bytes()

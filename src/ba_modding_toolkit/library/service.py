@@ -221,6 +221,15 @@ class _Entry:
         return {"install": self.pin.key, "core": self.core, "variant": self.variant, "kind": self.kind}
 
 
+def _has_successor(index: dict[str, list[Path]], path: Path) -> bool:
+    """Whether a file of the same part, dated after ``path``, is in its folder in an install's index (a game update
+    renamed it)."""
+    part, date = part_of(path.name), date_of(path.name)
+    return bool(date) and any(
+        other.parent == path.parent and part_of(other.name) == part and date_of(other.name) > date
+        for other in index.get(core_of(path.name), []))
+
+
 class _View:
     """A consistent copy of what the judgement reads besides the game files: the library's records, its mods, the
     configuration, the indexes and the kept originals. ``allow`` says which game files it may read:
@@ -386,10 +395,7 @@ class _View:
 
     def successor(self, pin: Pin, path: Path) -> bool:
         """Whether a present file of the same part, dated after it, is in the same folder (a game update)."""
-        part, date = part_of(path.name), date_of(path.name)
-        return bool(date) and any(
-            other.parent == path.parent and part_of(other.name) == part and date_of(other.name) > date
-            for other in self.indexes[pin.key].get(core_of(path.name), []))
+        return _has_successor(self.indexes[pin.key], path)
 
     def later_record(self, path: Path) -> bool:
         """Whether the library recorded a later file of the same part in the same folder (it wrote the successor)."""
@@ -3179,7 +3185,7 @@ class ModLibrary:
                         raise ValueError("Invalid original path")
                     targets.append(target)
                 with self._writable(targets, pin, recovering=True):
-                    left = self._rollback_write(data)
+                    left = self._rollback_write(data, pin)
                 self._release_failed([Path(item["target"]) for item in data["files"]
                                       if item["kept_now"] and item["target"] not in left], pin)
                 self._drop_mods(self._droppable(data["kept"], left))
@@ -3199,16 +3205,27 @@ class ModLibrary:
         names = {Path(key).name for key in left}
         return [mod_id for mod_id in kept if not names & set((self._records.get(mod_id) or {}).get("files", ()))]
 
-    def _rollback_write(self, data: dict) -> set[str]:
+    def _rollback_write(self, data: dict, pin: Pin) -> set[str]:
         """Return consumed originals before restoring mods. Repeating any completed step is safe.
 
         A game file whose bytes are neither the journal's before nor its after (a Steam repair, another tool) was
         changed outside the library: its bytes are left as they are, a warning is logged, the other files are
         restored and the rollback finishes. Returns the targets left that way. Its record is put back as it was,
-        without a new modification time, so that the file is judged as the outside change it is."""
+        without a new modification time, so that the file is judged as the outside change it is.
+
+        A target that is missing while a later-dated file of its part is in its folder was superseded by a game
+        update: it is not restored (that would write the old name beside the new one), the journal's own record of it
+        is dropped and its original stays. It is returned with the targets left, so that nothing it kept is released."""
         left: set[str] = set()
+        superseded: set[str] = set()
         for item in reversed(data["files"]):
             target = Path(item["target"])
+            if not target.exists() and _has_successor(self._index(pin), target):
+                logger.warning("Game file %s was superseded by a game update, not restoring it",
+                               core_of(target.name))
+                left.add(item["target"])
+                superseded.add(item["target"])
+                continue
             current = self._hashes.get(target).sha1 if target.exists() else None
             original = self.root / item["restore"] if item["restore"] else None
             if original is not None and not original.exists():
@@ -3236,7 +3253,7 @@ class ModLibrary:
         for item in data["files"]:
             key = item["target"]
             old = data["old_applied"].get(key)
-            if old is None:
+            if old is None or key in superseded:
                 self._applied.pop(key, None)
                 continue
             try:
@@ -3371,7 +3388,7 @@ class ModLibrary:
                 except Exception as error:
                     self._applied = old_applied
                     try:
-                        left = self._rollback_write(transaction)
+                        left = self._rollback_write(transaction, pin)
                     except Exception as rollback_error:
                         restored = False
                         log_failure(logger, logging.ERROR, "Could not roll back library write", rollback_error)
