@@ -408,6 +408,8 @@ const tabDot = (i) => walk(hosts.ngui).find((e) => e.dataset.path?.endsWith(`Cha
 const chipDot = (key) => walk(hosts["ngui-chips"]).find((e) => e.dataset.path?.endsWith(`/Chip_${key}/Dot`));
 const tabButton = (i) => walk(hosts.ngui).find((e) => e.dataset.part?.endsWith(`Tab_${i}/Tab_Off/Label`));
 const closeSwitch = async () => { await walk(hosts.popup).find((e) => e.dataset.action === "close").click(); await flush(); };
+// a message an earlier test left open (a preview error) takes Escape before the fullscreen view under it
+const closeLeftMessages = () => { hosts.dialog.replaceChildren(); hosts.dialog.hidden = true; };
 async function showPortrait(t, key = "ibuki") {
   const showing = Detail.show(context, family, key); await flush();
   await finish(t, showing);
@@ -1752,6 +1754,7 @@ async function clickFullscreen(t, button) {
 
 for (const enabled of [true, false]) test(`fullscreen switches both ways on the selected skin with mods ${enabled ? 'on' : 'off'} and keeps preview state`, async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
+  closeLeftMessages();
   try {
     errors.length = 0; lobbyMode = 'ready'; playerMode = 'lobby-ready';
     setStrings('en-US', localeTable('en-US'));
@@ -1828,6 +1831,7 @@ test('a skin without a lobby omits the switch even when another skin has a lobby
 
 for (const viaSwitch of [true, false]) test(`Back and Escape leave the lobby fullscreen ${viaSwitch ? 'after the portrait switch' : 'from the lobby detail tab'}`, async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
+  closeLeftMessages();
   try {
     lobbyMode = 'ready'; playerMode = 'lobby-ready'; family = modFamily();
     await showPortrait(t);
@@ -1847,6 +1851,7 @@ for (const viaSwitch of [true, false]) test(`Back and Escape leave the lobby ful
 
 test('Escape while a fullscreen switch is loading cannot reopen fullscreen with stale controls', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
+  closeLeftMessages();
   try {
     family = modFamily(); lobbyMode = 'pending'; await showPortrait(t);
     await clickFullscreen(t, zoomButton());
@@ -2063,6 +2068,47 @@ test("the expression strip's cards, its pile and Collapse are named, and the pic
     }
   } finally {
     Detail.hide(); portraitExpressions = ["00", "01"]; playerMode = "ready"; thumbMode = "pending"; await flush(); t.mock.timers.reset(); setStrings("en-US", localeTable("en-US"));
+  }
+});
+
+// --- UI-33: the unfolded expression strip scrolls with the wheel through horizontalScroll, as Popup.scrollArea does ---
+test("the unfolded expression strip takes the wheel and a drag picks no face", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  try {
+    portraitExpressions = ["00", "01", "02", "03", "04", "05", "06", "07", "08"]; playerMode = thumbMode = "ready";
+    family = modFamily();
+    await showPortrait(t);
+    const clip = () => walk(hosts["ngui-expr"]).find((e) => e.classList.contains("expr-clip"));
+    const cards = () => walk(hosts["ngui-expr"]).filter((e) => e.tagName === "BUTTON");
+    assert.equal(clip().listeners.wheel, undefined, "the folded strip has nothing to scroll");
+    await cards().at(-1).click(); await flush();
+    const strip = clip(), track = strip.children[0];
+    assert.ok(strip.classList.contains("expanded"));
+    const room = parseFloat(strip.style.width), content = parseFloat(track.style.width);
+    assert.ok(content > room, "nine faces and Collapse run past the row");
+    assert.equal(strip.listeners.wheel.length, 1);
+    assert.equal(strip.style.touchAction, "pan-x", "touch scrolls the strip natively");
+    // a mouse wheel notch moves the strip sideways, stopping at either end
+    strip.scrollLeft = 0;
+    let prevented = false;
+    strip.listeners.wheel[0]({ deltaX: 0, deltaY: 100, deltaMode: 1, preventDefault() { prevented = true; } });
+    assert.equal(strip.scrollLeft, 40 * 100 > content - room ? content - room : 4000);
+    assert.ok(prevented, "the page does not scroll as well");
+    strip.listeners.wheel[0]({ deltaX: 0, deltaY: -1, deltaMode: 1, preventDefault() {} });
+    assert.equal(strip.scrollLeft, content - room - 40, "a notch is 40 px");
+    strip.listeners.wheel[0]({ deltaX: 0, deltaY: -100, deltaMode: 1, preventDefault() {} });
+    assert.equal(strip.scrollLeft, 0);
+    // a drag scrolls it and the click that ends it picks nothing
+    const pointer = (type, clientX) => strip.listeners[type].forEach((fn) => fn({ button: 0, pointerId: 1, pointerType: "mouse", clientX, preventDefault() {} }));
+    pointer("pointerdown", 500); pointer("pointermove", 400); pointer("pointerup", 400);
+    assert.ok(strip.scrollLeft > 0);
+    let stopped = false;
+    for (const fn of strip.listeners.click) fn({ detail: 1, preventDefault() {}, stopImmediatePropagation() { stopped = true; } });
+    assert.ok(stopped, "the drag's click is taken before the face under it");
+    await cards().at(-1).click(); await flush(); // folded again
+    Detail.hide();
+  } finally {
+    Detail.hide(); portraitExpressions = ["00", "01"]; playerMode = "ready"; thumbMode = "pending"; await flush(); t.mock.timers.reset();
   }
 });
 

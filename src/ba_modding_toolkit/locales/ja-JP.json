@@ -1495,6 +1495,7 @@
 		"import": {
 			"list": "インポート一覧",
 			"count": "MOD {n}件",
+			"countOne": "MOD {n}件",
 			"addFiles": "ファイルを追加",
 			"addFolder": "フォルダーを追加",
 			"search": "名前、ID、ファイル名",

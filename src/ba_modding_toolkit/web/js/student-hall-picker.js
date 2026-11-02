@@ -43,15 +43,17 @@ export function openPicker({ kind, choices, draft, onPreview, onChange, onSave, 
     const display = () => openDisplay({ view, sorts: ["recent", "name", "added", "mods", "default"],
       count: (next) => studentChoices(choices, next, query, L, language(), memorial ? "lobby" : "spr").length,
       onDone: (next) => { if (next && modal.live()) { view = normalizeView({ ...view, ...next }); positions.clear(); draw().catch(onError); } } });
+    const toggleSearch = () => {
+      searching = !searching; if (!searching) query = ""; positions.clear();
+      draw().then(() => { if (searching && modal.live()) modal.host.querySelector('[data-focus-key="hall-search"]')?.focus(); }).catch(onError);
+    };
     await UI.rosterToolbar(layer, view, searching, {
       change: (next) => { if (isSaving()) return; view = normalizeView({ ...view, ...next }); student = null; positions.clear(); draw().catch(onError); },
-      search: () => {
-        searching = !searching; if (!searching) query = ""; positions.clear();
-        draw().then(() => { if (searching && modal.live()) modal.host.querySelector('[data-focus-key="hall-search"]')?.focus(); }).catch(onError);
-      },
+      search: toggleSearch,
       display: safe(display),
     }, memorial ? {} : { x: 300, y: 250, width: 1320 });
-    if (searching) await UI.search(layer, query, (value) => { query = value; positions.clear(); changed(); }, memorial ? [130, 252, 1640] : [300, 298, 1320]);
+    if (searching) await UI.search(layer, query, (value) => { query = value; positions.clear(); changed(); }, memorial ? [130, 252, 1640] : [300, 298, 1320],
+      { onEscape: toggleSearch });
   }
   async function drawPortraits(layer, alive, signal) {
     const groups = rows();

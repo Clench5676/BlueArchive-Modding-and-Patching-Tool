@@ -22,6 +22,7 @@ const NGUI = await import(new URL('ngui.js', web));
 const { wrapPath, S } = await import(new URL('util.js', web));
 const { rowBase, radioRow } = await import(new URL('settings-rows.js', web));
 const ButtonsModule = await import(new URL('game-buttons.js', web));
+const { errorText } = await import(new URL('i18n.js', web));
 const { option, filter } = controls();
 const Buttons = { smallButton: (...args) => ButtonsModule.optionButton(option, filter, ...args) };
 
@@ -30,7 +31,7 @@ function harness(locale, { native = true, sourceValue = 'windows_global', error 
   const T = (key, values = {}) => key.split('.').reduce((v, k) => v[k], strings).replace(/\{(\w+)\}/g, (_, k) => values[k]);
   const prefs = { fileSource: sourceValue, gameDirs: { global: '/test/global/'.repeat(pathLength), japan: '/test/japan/'.repeat(pathLength) }, native, libraryDir: '/test/library', outputDir: '/test/output' };
   const requests = [], messages = [], failures = [], changed = [];
-  const deps = { NGUI, T, wrapPath, S, rowBase, radioRow, Buttons, platform: 'mac',
+  const deps = { NGUI, T, wrapPath, S, rowBase, radioRow, Buttons, platform: 'mac', errorText: err => errorText(err, T),
     notify: (...args) => failures.push(args),
     // Popup.notice is message() with the notice caption and Confirm only (popup.js, tested in refusal_notice.test.mjs)
     Popup: { notice: async text => messages.push({ title: T('quit.title'), lines: [text], ok: T('picker.ok') }) },

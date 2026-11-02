@@ -18,7 +18,7 @@ import * as Update from "./update.js";
 import * as Tours from "./tours.js";
 import * as ModAdd from "./mod-add.js";
 import { on, rpc, spinePrefix } from "./api.js";
-import { L, T, setStrings, languageRefresh } from "./i18n.js";
+import { L, T, errorText, setStrings, languageRefresh } from "./i18n.js";
 import { neighbour, visit } from "./roster-order.js";
 import { hasAsset, primaryKind } from "./switch-sources.js";
 import { renderNav, setTitle, setTopActions, reflowTopActions } from "./nav.js";
@@ -254,7 +254,7 @@ function noGame() {
   const region=ctx.prefs?.fileSource==='windows_japan'?'japan':'global';
   const setDir = async (path) => {
     try { await rpc("settings.set", { key: `gameDir.${region}`, value: path }); await refreshConfiguration(); }
-    catch (err) { notify(T(`error.${err.code || "internal"}`, err.params || { error: String(err) }), { kind: "error", error: err }); }
+    catch (err) { notify(errorText(err), { kind: "error", error: err }); }
   };
   message(T("app.noGame.title"), T("app.noGame.hint"), [
     [T("settings.detect"), async () => {
@@ -611,7 +611,7 @@ async function start() {
       ctx.invalidateRoster();
       route();
     } catch (err) {
-      notify(T(`error.${err.code || "internal"}`, err.params || { error: String(err) }), { kind: "error", error: err });
+      notify(errorText(err), { kind: "error", error: err });
     }
   });
   $("top-option").addEventListener("click", () => openSettings(settingsChanged));

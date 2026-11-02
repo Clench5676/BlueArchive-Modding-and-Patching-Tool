@@ -1,6 +1,6 @@
 // Shared by the native picker and file drops. The backend owns every target decision.
 import { rpc, waitJob } from "./api.js";
-import { T } from "./i18n.js";
+import { T, errorText } from "./i18n.js";
 
 import * as Loading from "./loading.js";
 import * as Popup from "./popup.js";
@@ -32,7 +32,7 @@ export async function add(paths = null, currentVariant = null) {
   if (!added.length && !duplicates.length) return report;
   if (added.length || installed.length) context.changed?.();
   const failures = new Map((report?.failed || []).map((failure) => [failure.id,
-    T("add.applyFailed", { reason: T(`error.${failure.code}`, failure.params) })]));
+    T("add.applyFailed", { reason: errorText(failure) })]));
   const installedIds = new Set(installed.map((m) => m.id));
   const appliedIds = new Set((report?.applied || []).map((m) => m.id));
   const configuredIds = new Set((report?.configured || []).map((m) => m.id));

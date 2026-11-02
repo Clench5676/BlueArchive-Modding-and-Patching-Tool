@@ -84,3 +84,49 @@ test("a failed locale read preserves the active table and can be retried", async
   await change("ja-JP");
   assert.equal(T("caption"), "retried");
 });
+
+// UI-37: one error text for the whole UI: never a raw key (error.undefined) or an empty detail ("Something went wrong: ")
+test("errorText gives a coded error its string and an uncoded one error.internal with a detail or none at all", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { errorText } = await import("../../src/ba_modding_toolkit/web/js/i18n.js");
+  const flat = (o, p = "webui") => Object.entries(o).flatMap(([k, v]) => typeof v === "object" ? flat(v, `${p}.${k}`) : [[`${p}.${k}`, v]]);
+  class RpcError extends Error { constructor(code, params = {}) { super(code); this.code = code; this.params = params; } } // as api.js
+  try {
+    for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
+      const ui = JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${locale}.json`, import.meta.url), "utf8")).webui;
+      setStrings(locale, Object.fromEntries(flat(ui)));
+      const internal = ui.error.internal, bare = internal.slice(0, internal.indexOf("{error}")).replace(/[\s:\uFF1A]+$/u, "");
+      assert.ok(bare && !/[:\uFF1A]\s*$/u.test(bare), locale);
+      // a coded error: its own string with its params
+      assert.equal(errorText(new RpcError("busy")), ui.error.busy, locale);
+      assert.equal(errorText({ code: "data_dir_readonly", params: { path: "/x" } }), ui.error.data_dir_readonly.replace("{path}", "/x"));
+      // error.internal with what the error says of itself
+      assert.equal(errorText(new RpcError("internal", { error: "HTTP 500" })), internal.replace("{error}", "HTTP 500"), locale);
+      assert.equal(errorText(new TypeError("x is not a function")), internal.replace("{error}", "TypeError: x is not a function"), locale);
+      assert.equal(errorText("offline"), internal.replace("{error}", "offline"));
+      // nothing to say (a job that failed without a code or params, no error at all): error.internal without its detail
+      for (const err of [new RpcError("internal", {}), new RpcError(undefined, undefined), { code: undefined }, {}, null, undefined, new Error("")]) {
+        const text = errorText(err);
+        assert.equal(text, bare, `${locale}: ${JSON.stringify(err)}`);
+        assert.ok(!text.includes("error."), `${locale}: no raw key`);
+      }
+      // a caller's own translator (quit.js passes the page's T)
+      assert.equal(errorText(new RpcError("busy"), (key) => `<${key}>`), "<error.busy>");
+    }
+  } finally { setStrings("zh-CN", {}); }
+});
+
+test("the sites the review lists draw their error text through the shared errorText", async () => {
+  const { readFileSync } = await import("node:fs");
+  const read = (name) => readFileSync(new URL(`../../src/ba_modding_toolkit/web/js/${name}`, import.meta.url), "utf8");
+  for (const name of ["consent.js", "update.js", "quit.js", "mod-add.js", "settings.js"]) {
+    const source = read(name);
+    assert.doesNotMatch(source, /`error\.\$\{/, `${name} builds no error key of its own`);
+    assert.doesNotMatch(source, /const errorText =/, `${name} has no errorText of its own`);
+    assert.match(source, /errorText\(/, name);
+  }
+  assert.equal(read("consent.js").match(/errorText\(err\)/g).length, 4, "the asset consent, the folder change, the Spine consent and the scan consent");
+  const main = read("main.js");
+  assert.match(main, /catch \(err\) \{ notify\(errorText\(err\), \{ kind: "error", error: err \}\); \}/, "the no-game screen's folder");
+  assert.match(main, /\} catch \(err\) \{\n {6}notify\(errorText\(err\), \{ kind: "error", error: err \}\);/, "files dropped on the window");
+});

@@ -761,7 +761,8 @@ test("download failures stay inside the popup, allow retry, and resolve only whe
     handlers.set("app.update", () => ({ error: code === "internal" ? {} : { code } }));
     const failed = Update.check(consent);
     (await drawn(consent, "update")).click();
-    await until(() => part("Status")?.textContent === english.error[code].replace(/\{\w+\}/g, ""));
+    // an error with nothing to say: error.internal without its empty detail (UI-37)
+    await until(() => part("Status")?.textContent === english.error[code].replace(/\{\w+\}/g, "").replace(/[\s:]+$/, ""));
     assert.equal(await state(failed), "pending");
     press("Escape");
     assert.equal(await failed, "update", "the failed-update result is deferred until the popup closes");
@@ -1015,6 +1016,24 @@ test("the log popup preserves literal text, opens at the bottom and Copy leaves 
   press("Escape");
   await done;
   assert.equal(dialog.hidden, true);
+});
+
+// UI-31: the log popup's fallback (no game frame) draws with the plain popup's styles, sized to the log
+test("the log popup's plain fallback uses only classes the style sheet defines", () => {
+  const source = readFileSync(new URL("../../src/ba_modding_toolkit/web/js/popup.js", import.meta.url), "utf8");
+  const viewer = source.slice(source.indexOf("export function textViewer("), source.indexOf("// --- ordinary refusals ---"));
+  const fallback = viewer.slice(viewer.indexOf("} catch (err) {"));
+  const css = readFileSync(new URL("../../src/ba_modding_toolkit/web/css/app.css", import.meta.url), "utf8");
+  const classes = [...fallback.matchAll(/className = "([^"]+)"/g)].flatMap((m) => m[1].split(" "));
+  assert.deepEqual(classes, ["plain-popup-back", "plain-popup", "log-message", "message-button"]);
+  for (const name of classes) assert.match(css, new RegExp(`\\.${name}[\\s,{.:]`), `.${name} has a rule`);
+  // the plain popup is 1000 px wide for messages; the log's 1400 px text needs the box to follow its content
+  const rule = (selector) => css.match(new RegExp(`(?:^|\\n)${selector.replace(".", "\\.")} \\{([^}]*)\\}`))?.[1] || "";
+  assert.match(rule(".plain-popup"), /width: 1000px/);
+  assert.match(rule(".log-message"), /width: auto/);
+  assert.ok(css.indexOf(".log-message {") > css.indexOf(".plain-popup {"), "the log's width comes later and wins");
+  assert.match(rule(".log-message .log-text"), /width: 1400px/);
+  assert.match(rule(".log-message"), /max-width: 1550px/, "1400 px of text and the plain popup's 2 x 60 px padding fit");
 });
 
 test("new card dots hide for in-use and selected mods independently", async () => {
@@ -1951,6 +1970,33 @@ test("release notes are literal, scroll, retain the offer and never download or 
   await offered;
 });
 
+test("release notes use one type size on every line: short, wrapped, long and unbroken lines alike", async () => {
+  const NGUI = await import("../../src/ba_modding_toolkit/web/js/ngui.js");
+  setStrings("en-US", Object.fromEntries(strings(english)));
+  const room = 2458 - 240; // the plain message's text room at the notes popup's width
+  let over = "Fixed an issue";
+  while (NGUI.glyphWidth(over, 44) <= room) over += " with the mod";
+  const longest = "Words that wrap on and on ".repeat(320).trim();
+  const lines = ["Short", "A mid-length line about the mod library and its switches", over,
+    ...[8, 12, 14, 16, 18, 40, 80, 160].map((n) => "Words that wrap on and on ".repeat(n).trim()), longest,
+    ...[6, 14, 30, 60].map((n) => "更新说明里的一行文字，会在需要时换行。".repeat(n)),
+    ...[10, 40].map((n) => "การแก้ไขข้อผิดพลาดของมอด ".repeat(n).trim()),
+    `Full changelog: https://example.invalid/${"segment".repeat(60)}`];
+  const release = { ...available, version: "0.6.0", page: "https://example.invalid/release", notes: lines.join("\n") };
+  const offered = Update.check(consent, release);
+  (await drawn(consent, "notes")).click();
+  await drawn(dialog, "page");
+  const drawnLines = lines.map((text, i) => walk(dialog).find((e) => e.dataset.path === `Lines/Line_${i}`));
+  const sizes = drawnLines.map((e, i) => parseFloat(e.style.fontSize) / S / NGUI.fontSizeFor(lines[i] || "x", 1));
+  assert.ok(drawnLines[2].textContent.includes("\n"), "the line just over the width wraps");
+  assert.ok(drawnLines[lines.indexOf(longest)].textContent.split("\n").length > 4, "a long paragraph wraps on as many lines as it needs");
+  assert.ok(drawnLines.at(-1).textContent.split("\n").length > 1, "an unbroken line breaks between characters");
+  for (const [i, size] of sizes.entries()) assert.ok(Math.abs(size - 44) < 0.01, `line ${i} is ${size}`);
+  action(dialog, "dismiss").click();
+  action(consent, "later").click();
+  await offered;
+});
+
 test("release-note button captions fit the unchanged UIPopup_Sort bodies in all locales and window sizes", async () => {
   const NGUI = await import("../../src/ba_modding_toolkit/web/js/ngui.js");
   await Popup.ready();
@@ -1983,6 +2029,63 @@ test("release-note button captions fit the unchanged UIPopup_Sort bodies in all 
         }
       }
     }
+  } finally { setStrings('en-US', Object.fromEntries(strings(english))); }
+});
+
+// UI-32: the offer's three captions wrap to two lines before they shrink, in the popups' 64 to 40 range, at one size
+test("the update offer's captions wrap before they shrink, share one size and fit in every locale", async () => {
+  const NGUI = await import("../../src/ba_modding_toolkit/web/js/ngui.js");
+  await Popup.ready();
+  const W = 400, H = Popup.BUTTON_TEXT_H; // the caption room on the slanted 496 x 177 bodies (UIPopup_Sort Btn_Ok)
+  const inside = (w, scale = 1) => {
+    const lines = w.text.split("\n");
+    return lines.length <= 2 && lines.every((line) => NGUI.glyphWidth(line, w.fontSize) * scale <= W * scale + 1e-9)
+      && lines.length * NGUI.fontSizeFor(w.text, w.fontSize) * NGUI.LINE_PITCH * scale <= H * scale + 1e-9;
+  };
+  try {
+    for (const lang of ['en-US', 'th-TH', 'ko-KR', 'ja-JP', 'zh-CN', 'zh-TW']) {
+      const ui = JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${lang}.json`, import.meta.url))).webui;
+      setStrings(lang, Object.fromEntries(strings(ui)));
+      for (const ok of [ui.update.now, ui.update.page, ui.update.restart]) {
+        const texts = [ui.update.later, ui.update.notes, ok], widgets = texts.map((text) => ({ text }));
+        Update.offerCaptions(widgets);
+        const fs = widgets[0].fontSize, what = `${lang} ${ok}`;
+        assert.equal(new Set(widgets.map((w) => w.fontSize)).size, 1, `${what}: one size`);
+        assert.ok(fs >= 40 && fs <= 64, `${what}: ${fs}`);
+        for (const [i, w] of widgets.entries()) {
+          assert.equal(w.text.replace(/\s/g, ""), texts[i].replace(/\s/g, ""), what);
+          for (const [width, height] of [[960, 540], [1600, 900], [2560, 1440]]) for (const density of [1, 2]) {
+            assert.ok(inside(w, Math.min(width / 1920, height / 1080) * S * density), `${what}: ${JSON.stringify(w.text)} at ${fs}`);
+          }
+        }
+        // wrapping comes first: the largest size of the range that holds all three on at most two lines, unless one line
+        // loses no more than two steps (4) to it, the shared rule of every popup's buttons (NGUI.fitGroup)
+        const holds = (size) => {
+          const at = texts.map((text) => ({ text }));
+          NGUI.fitLabels(at, texts, size, size, W, 2, { maxH: H });
+          return at.every((w) => w.fontSize === size && inside(w));
+        };
+        let best = 64;
+        while (best > 40 && !holds(best)) best -= 2;
+        if (widgets.some((w) => w.text.includes("\n"))) assert.equal(fs, best, what);
+        else assert.ok(fs >= best - 4, `${what}: one line at ${fs}, two lines at ${best}`);
+        // never smaller than the old single line
+        assert.ok(fs >= NGUI.fitGroup(texts, 64, 34, W, 1)[0].fs, what);
+      }
+    }
+    // the review's case: Open Download Page in English drew all three at 34 on one line
+    setStrings('en-US', Object.fromEntries(strings(english)));
+    const widgets = [english.update.later, english.update.notes, english.update.page].map((text) => ({ text }));
+    Update.offerCaptions(widgets);
+    assert.ok(widgets[0].fontSize > 34);
+    // the drawn offer uses the same fit
+    const offered = Update.check(consent, { ...available, installable: false });
+    await drawn(consent, 'page');
+    const labels = ['Btn_Cancel', 'Btn_Notes', 'Btn_Ok'].map((name) => walk(consent).find((el) => el.dataset.path === `Center/Popup/Btn/${name}/Label_Locale`));
+    assert.deepEqual(labels.map((el) => el.textContent), widgets.map((w) => w.text));
+    assert.equal(new Set(labels.map((el) => el.style.fontSize)).size, 1);
+    action(consent, 'later').click();
+    await offered;
   } finally { setStrings('en-US', Object.fromEntries(strings(english))); }
 });
 
@@ -2998,6 +3101,53 @@ test("a list whose segment shows nothing says so in the paper, and its primary b
 });
 const NGUI_rect = (el) => ["left", "top", "width", "height"].map((k) => parseFloat(el.style[k]));
 
+// UI-34: Escape in a list popup's search box closes the search and the popup stays, as the roster's does
+test("Escape in a list popup's search closes the search first; the next one closes the popup", async (t) => {
+  const NGUI = await import("../../src/ba_modding_toolkit/web/js/ngui.js");
+  const collection = n("UICharacterCollection", [0, 0]);
+  const base = "Inventory_ListControl/RightCanvas/ListBG";
+  insert(collection, "SeletControl/TopMenu", structuredClone(NGUI.find(switchLayouts.inventory, `${base}/BG_Top_Widget`)));
+  insert(collection, "SeletControl/CharacterSearch", structuredClone(NGUI.find(switchLayouts.inventory, `${base}/Inbox/SearchInfo`)));
+  const fetch = globalThis.fetch;
+  t.mock.method(globalThis, "fetch", async (url, options) => url === "/asset/ui/layout/UICharacterCollection.json" ? reply(collection) : fetch(url, options));
+  const Fresh = await import("../../src/ba_modding_toolkit/web/js/popup.js?escape-search");
+  const items = Array.from({ length: 4 }, (_, i) => ({ key: String(i), label: `Owner ${i}`, full: `Owner ${i}` }));
+  const closes = [];
+  const options = { host: prompt, title: "Students", items, selected: "0", tools: {}, okText: "Apply",
+    onClose: (how) => { closes.push(how); prompt.hidden = true; Fresh.closed(prompt); } };
+  try {
+    await Fresh.listPopup(options);
+    action(prompt, "search").click();
+    await until(() => walk(prompt).some((e) => e.className === "roster-search"));
+    const input = () => walk(prompt).find((e) => e.className === "roster-search");
+    input().value = "Owner 1";
+    for (const fn of input().listeners.input || []) fn({ isComposing: false });
+    await until(() => input()?.value === "Owner 1");
+    await tick();
+    // the key that ends an input method's conversion is not Escape for the search
+    const ending = { key: "Escape", isComposing: false, keyCode: 229, defaultPrevented: false, preventDefault() { this.defaultPrevented = true; } };
+    for (const fn of input().listeners.keydown || []) fn(ending);
+    assert.equal(ending.defaultPrevented, false);
+    // the box gets the key before the window's listeners (the popup stack's Escape)
+    const ev = { key: "Escape", defaultPrevented: false, preventDefault() { this.defaultPrevented = true; } };
+    for (const fn of input().listeners.keydown || []) fn(ev);
+    for (const fn of [...keyListeners]) fn(ev);
+    assert.ok(ev.defaultPrevented);
+    assert.deepEqual(closes, [], "the popup stays");
+    await until(() => !input());
+    assert.ok(action(prompt, "search"), "the search is closed, its toolbar button is back");
+    assert.equal(prompt.hidden, false);
+    await tick();
+    press("Escape");
+    assert.deepEqual(closes, ["escape"]);
+    // opened again, the search starts empty
+    await Fresh.listPopup(options);
+    action(prompt, "search").click();
+    await until(() => !!input());
+    assert.equal(input().value, "");
+  } finally { prompt.hidden = true; Fresh.closed(prompt); }
+});
+
 test("a search that matches nothing blocks the primary button until the match is back", async (t) => {
   const NGUI = await import("../../src/ba_modding_toolkit/web/js/ngui.js");
   const collection = n("UICharacterCollection", [0, 0]);
@@ -3060,6 +3210,34 @@ test("the asset consent names Agree and Decline with their captions in every lan
       assert.equal(consent.hidden, true);
     }
   } finally { setStrings("en-US", Object.fromEntries(strings(english))); consent.hidden = true; }
+});
+
+// --- UI-36: a failed asset consent shows its error and can be answered again; a repeat click sends nothing ---
+test("a failed asset consent shows the error, keeps the popup to retry, and a repeat click sends nothing", async () => {
+  const Consent = await import("../../src/ba_modding_toolkit/web/js/consent.js");
+  setStrings("en-US", Object.fromEntries(strings(english)));
+  const sent = [];
+  let answer = null;
+  handlers.set("app.consent", (params) => { sent.push(params); return new Promise((resolve) => { answer = resolve; }); });
+  try {
+    const asked = Consent.show(consent, "/cache", false);
+    await until(() => walk(consent).some((e) => e.tagName === "BUTTON"));
+    const agree = () => walk(consent).filter((e) => e.tagName === "BUTTON")[1];
+    agree().click(); agree().click(); await tick();
+    assert.deepEqual(sent, [{ granted: true }], "one request while the first is answered");
+    answer({ error: { code: "data_dir_readonly", params: { path: "/cache" } } });
+    const shown = english.error.data_dir_readonly.replace("{path}", "/cache");
+    await until(() => walk(dialog).some((e) => e.textContent === shown));
+    assert.equal(await state(asked), "pending");
+    assert.equal(consent.hidden, false, "the consent stays up to answer again");
+    (action(dialog, "ok") || action(dialog, "cancel")).click();
+    await until(() => dialog.hidden);
+    agree().click(); await tick();
+    assert.equal(sent.length, 2, "after the failure another answer is sent");
+    answer({ result: null });
+    assert.equal(await asked, true);
+    assert.equal(consent.hidden, true);
+  } finally { handlers.delete("app.consent"); consent.hidden = true; Popup.closed(consent); }
 });
 
 // --- UI-14: the Settings sliders are range inputs over the game's slider ---

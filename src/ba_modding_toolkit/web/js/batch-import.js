@@ -595,7 +595,7 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
       unidentified: entry.reason === "source_unknown", state: stateText(entry),
       counts: merged ? group.counts : null, badge: !merged && !result,
       meta: result ? [...new Set(group.entries.map((entry) => model.state.results.find((item) => item.id === entry.id))
-        .map((item) => T(`import.outcome.${OUTCOMES.has(item?.outcome) ? item.outcome : "failed"}`)))].join(", ")
+        .map((item) => T(`import.outcome.${OUTCOMES.has(item?.outcome) ? item.outcome : "failed"}`)))].join(listSeparator())
         : merged ? [...new Set(group.entries.map(stateText))].join(listSeparator())
         : T(entry.files?.length === 1 ? "import.metaOne" : "import.meta", { id: identified(entry).core, n: entry.files?.length || 0, size: sizeText(entry.size) }) };
   }
@@ -694,7 +694,7 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
     if (!visible || !root) return;
     const state = model.state, busy = model.busy(); root.dataset.phase = state.phase; root.setAttribute("aria-busy", String(busy));
     dom.count.hidden = !state.entries.length;     // no count over an empty list
-    if (state.entries.length) textWidget(dom.count, T("import.count", { n: state.entries.length }), "count", { scale: 0.5, origin: [250, 16] });
+    if (state.entries.length) textWidget(dom.count, T(state.entries.length === 1 ? "import.countOne" : "import.count", { n: state.entries.length }), "count", { scale: 0.5, origin: [250, 16] });
     renderToolbar();
     dom.merge.input.disabled = busy; dom.merge.refresh();
     for (const key of ["files", "folder", "options", "clear", "remove", "removeImported", "all", "none", "recheck"]) dom[key].disabled = busy;

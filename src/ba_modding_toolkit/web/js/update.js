@@ -5,20 +5,24 @@ import * as Buttons from "./game-buttons.js";
 import * as NGUI from "./ngui.js";
 import * as Popup from "./popup.js";
 import { rpc, waitJob } from "./api.js";
-import { T } from "./i18n.js";
+import { T, errorText } from "./i18n.js";
 import { S, clone } from "./util.js";
 
 const { node, sprite, label, find } = NGUI;
 const checks = new WeakMap();
 const RESTART_WAIT = 3000;
+const NOTES_FONT = 44;
 
 // Literal text on the same UIPopup_Sort frame used by notices. No HTML, Markdown images or update jobs.
 const dialogTitle = (key, simulation) => T(key) + (simulation ? T("update.simulation.suffix") : "");
 
 export async function releaseNotes(info, { simulation = false, onSimulatedPage } = {}) {
   const notes = typeof info.notes === "string" ? info.notes.trim() : "";
+  // one fixed type size on every line, as a changelog reads; a longer line wraps instead of shrinking
+  const lines = (notes ? notes.split(/\r?\n/) : [T("update.notesEmpty")])
+    .map((text) => ({ text, fontSize: NOTES_FONT, minFontSize: NOTES_FONT }));
   const result = await Popup.message({ title: `${dialogTitle("update.notes", simulation)} - ${info.version}`,
-    lines: notes ? notes.split(/\r?\n/) : [T("update.notesEmpty")], plain: true, scroll: true, width: 2458,
+    lines, plain: true, scroll: true, width: 2458,
     buttons: [{ label: T("update.releasePage"), value: "page" },
       { label: T("display.close"), value: "dismiss" }] });
   if (result.button === "page") {
@@ -57,6 +61,11 @@ export function check(host, info, { onCheck, onError, beforeShow, simulation = f
   checks.set(host, { checked, done });
   return done;
 }
+
+// the offer's three captions (Label_Locale widgets) on the slanted 496-wide bodies: a long one wraps to two lines before
+// it shrinks, in the popups' range (64 to 40), clear of the body's edges; all three share one size
+export const offerCaptions = (widgets) =>
+  NGUI.fitLabels(widgets, widgets.map((l) => l.text), 64, 40, 400, 2, { maxH: Popup.BUTTON_TEXT_H });
 
 function show(host, info, options) {
   return new Promise((resolve) => {
@@ -139,10 +148,8 @@ async function draw(host, info, resolve, { simulation = false } = {}) {
     const action = !installable ? "page" : phase === "ready" || phase === "installing" ? "restart" : "update";
     const okText = T(action === "update" ? "update.now" : `update.${action}`);
     find(controls, "Btn_Ok/Label_Locale").widgets[0].text = okText;
-    // one line on the slanted 496-wide bodies, shrinking long captions rather than running into the edges; all three share one size
     const names = ["Btn_Cancel", "Btn_Notes", "Btn_Ok"];
-    const captions = names.map((name) => find(controls, `${name}/Label_Locale`).widgets[0]);
-    NGUI.fitLabels(captions, captions.map((l) => l.text), 64, 34, 400, 1);
+    offerCaptions(names.map((name) => find(controls, `${name}/Label_Locale`).widgets[0]));
     for (const name of names) {
       if (locked) {
         const index = controls.children.findIndex((child) => child.name === name);
@@ -208,7 +215,7 @@ async function draw(host, info, resolve, { simulation = false } = {}) {
       phase = "ready";
     } catch (err) {
       phase = installing ? "ready" : "offer";
-      error = T(`error.${err.code || "internal"}`, err.params || {});
+      error = errorText(err);
     }
     await render();
   }

@@ -14,6 +14,7 @@ import {portraitMinimum} from './photography/camera.js';
 // Input: press and drag (any button, a finger) moves the art; the mouse wheel zooms at the pointer; a trackpad pinches
 // (ctrl + wheel in Chromium and WebView2, gesture events in WebKit) and swipes; two fingers pinch.
 import * as NGUI from "./ngui.js";
+import { anyOpen as popupOpen } from "./popup.js";
 import { bindCorner } from "./corner-layout.js";
 import { ensureSpine } from "./spine-runtime.js";
 import { wheelKind, wheelStep } from "./lobby-touch.js";
@@ -404,9 +405,9 @@ const HANDLERS = [["pointerdown", down], ["pointermove", move], ["pointerup", up
   ["wheel", wheel, { passive: false }], ["gesturestart", gestureStart], ["gesturechange", gestureChange],
   ["gestureend", gestureEnd], ["contextmenu", prevent], ["dragstart", prevent]];
 
-// Escape leaves, like the game's back key
+// Escape leaves, like the game's back key; not when a popup took it or is open over the view (the top layer has it)
 function onKey(e) {
-  if (e.key !== "Escape" || !isOpen()) return;
+  if (e.key !== "Escape" || e.defaultPrevented || popupOpen() || !isOpen()) return;
   e.preventDefault();
   st.o.onBack();
 }

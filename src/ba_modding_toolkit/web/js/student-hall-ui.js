@@ -141,7 +141,8 @@ export function area(host, box, height, key, { width = box[2], horizontal = fals
   const inner = Popup.scrollArea(host, box, height, { horizontal, contentW: width });
   inner.parentElement.dataset.scroll = key; return inner;
 }
-export async function search(host, query, onChange, [x, y, width] = [130, 172, 560]) {
+// onEscape: Escape in the box closes the search first, as the roster's does (not the key that ends a conversion)
+export async function search(host, query, onChange, [x, y, width] = [130, 172, 560], { onEscape = null } = {}) {
   await ready(); const tree = searchTree(assets.collection); tree.name = "HallSearch"; tree.pos = [0, 0];
   const name = NGUI.find(tree, "SearchName"); name.pos = [0, 0];
   const area = NGUI.find(name, "SearchNameArea"); area.pos = [0, 0];
@@ -153,6 +154,7 @@ export async function search(host, query, onChange, [x, y, width] = [130, 172, 5
   Object.assign(input.style, { left: `${x + 16}px`, top: `${y + 7}px`, width: `${width - 32}px`, height: "48px", fontSize: "26px", zIndex: "85" });
   input.value = query; input.placeholder = T("roster.searchHint"); input.setAttribute("aria-label", T("roster.searchHint")); input.dataset.focusKey = "hall-search";
   input.addEventListener("input", (e) => { if (!e.isComposing) onChange(input.value); }); input.addEventListener("compositionend", () => onChange(input.value));
+  if (onEscape) input.addEventListener("keydown", (e) => { if (e.key === "Escape" && !e.isComposing && e.keyCode !== 229) { e.preventDefault(); onEscape(); } });
   host.append(input); return input;
 }
 export async function checkbox(host, caption, checked, change, [x, y, width]) {

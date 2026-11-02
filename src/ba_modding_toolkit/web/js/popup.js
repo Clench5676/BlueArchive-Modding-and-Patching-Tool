@@ -758,7 +758,14 @@ export async function listPopup(options) {
       const apply = () => { toolState.query = searchInput.value; redraw(); };
       searchInput.addEventListener("input", (ev) => { if (!ev.isComposing) apply(); });
       searchInput.addEventListener("compositionend", apply);
-      hit(next, sv, `${search.name}/SearchName/SearchNameArea/Btn_Close`, () => { toolState.query = ""; toolState.searching = false; redraw(); }, { name: T("display.close"), action: "search-close" });
+      const closeSearch = () => { toolState.query = ""; toolState.searching = false; redraw(); };
+      // Escape closes the search first, as the roster's does, and the popup stays; not the key that ends an input
+      // method's conversion (keyCode 229 in WebKit)
+      searchInput.addEventListener("keydown", (ev) => {
+        if (ev.key !== "Escape" || ev.isComposing || ev.keyCode === 229) return;
+        ev.preventDefault(); closeSearch();
+      });
+      hit(next, sv, `${search.name}/SearchName/SearchNameArea/Btn_Close`, closeSearch, { name: T("display.close"), action: "search-close" });
       next.appendChild(searchInput);
     }
   }
@@ -921,9 +928,11 @@ function plainMessage(layer, { title, lines, ok, cancel, buttons, state, dismiss
   layer.replaceChildren(back, box);
 }
 
+// a fixed size (max equals min) only wraps, on as many lines as it needs, and never shrinks below that size
 function messageText(text, max, min, room) {
-  const fitted = fitText(text, max, min, room, 4);
-  if (fitted.text.split("\n").every((line) => glyphsOf(line, fitted.fs) <= room)) return fitted;
+  const fixed = max === min;
+  const fitted = fitText(text, max, min, room, fixed ? Infinity : 4);
+  if ((!fixed || fitted.fs >= min) && fitted.text.split("\n").every((line) => glyphsOf(line, fitted.fs) <= room)) return fitted;
   return wrapPath(text, min, min, room, Infinity);
 }
 
@@ -1109,9 +1118,9 @@ export function textViewer({ title, text, copy, close = T("display.close"), onCo
         if (ended) return;
         console.warn("text popup without the game's frame", err);
         const back = document.createElement("div"), box = document.createElement("div"), heading = document.createElement("h2");
-        back.className = "plain-modal-back";
+        back.className = "plain-popup-back";
         back.addEventListener("click", finish);
-        box.className = "plain-message log-message";
+        box.className = "plain-popup log-message";
         heading.textContent = title;
         box.appendChild(heading);
         box.appendChild(pre);
