@@ -207,6 +207,44 @@ def test_export_preserves_pixels_and_avoids_collisions(services, photography_env
     assert opened == [destination, destination]
 
 
+def test_export_copies_exclusively_where_hard_links_fail(services, photography_env, tmp_path, monkeypatch):
+    import errno
+    from ba_modding_toolkit.webui import photography
+    destination = tmp_path / 'exports'
+    services.settings.set('output_dir', str(destination))
+    monkeypatch.setattr(photography, 'reveal', lambda folder: None)
+
+    def unsupported(source, target):
+        raise PermissionError(errno.EPERM, 'Operation not permitted')
+
+    monkeypatch.setattr(photography.os, 'link', unsupported)
+    key = services.photography.save('hoshino', photography_env['png'], 'portrait', '', '', '')['saved']
+    first = services.photography.export('hoshino', key)
+    second = services.photography.export('hoshino', key)
+    assert first['path'] != second['path']
+    assert Path(first['path']).read_bytes() == Path(second['path']).read_bytes() == photography_env['raw']
+    assert sorted(path.name for path in destination.iterdir()) == sorted(
+        Path(result['path']).name for result in (first, second))
+
+
+def test_export_removes_a_partial_copy(services, photography_env, tmp_path, monkeypatch):
+    from ba_modding_toolkit.webui import photography
+    destination = tmp_path / 'exports'
+    services.settings.set('output_dir', str(destination))
+    monkeypatch.setattr(photography, 'reveal', lambda folder: None)
+    monkeypatch.setattr(photography.os, 'link', lambda source, target: (_ for _ in ()).throw(OSError('no links')))
+    key = services.photography.save('hoshino', photography_env['png'], 'portrait', '', '', '')['saved']
+
+    def partial(source, out, *args):
+        out.write(source.read(8))
+        raise OSError('device full')
+
+    monkeypatch.setattr(photography.shutil, 'copyfileobj', partial)
+    with pytest.raises(OSError, match='device full'):
+        services.photography.export('hoshino', key)
+    assert list(destination.iterdir()) == []
+
+
 @pytest.mark.parametrize('existing', [False, True])
 @pytest.mark.parametrize('deferred', [False, True])
 def test_restore_reuses_or_creates_one_default_and_reports_the_deletion_identity(
