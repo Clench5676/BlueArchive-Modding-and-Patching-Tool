@@ -1920,6 +1920,9 @@ detail screen, and in Settings' Mods tab.
   comes first, so the same change is not read twice). Without cores (the classic window closed, a job stopped
   midway, the mod list changed) the screen compares what it shows with the family read again, and the roster forgets
   the portraits whose Replaced flag changed. A job that switched nothing (a prune) changes nothing on the page.
+  The screen's own reads of `family.get` (after a switch, a reload, a change) have no client deadline either: they wait
+  for a job that holds the library lock while the screen stays as it is, and a read that finishes after the screen was
+  read anew (left and entered again, or reloaded by another action) is dropped; a change read that way is read again.
 - **The window back in front** after 30 s or more asks for a scan (`mods.scan`, only with scan consent), so a
   Steam check or a repair made meanwhile is found.
 - **While mods are off** an apply only saves the choice: the switch popup reads Save and starts on the configured
