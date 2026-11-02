@@ -1698,6 +1698,35 @@ def test_migrated_020_library_supplies_repair_labels_markers_and_counts(app, ser
                 assert mods[original["id"]]["repaired_id"] == repaired["id"]
 
 
+@pytest.mark.parametrize("copy", ["gone", "held"])
+def test_a_repaired_id_reaches_the_web_ui_only_while_its_copy_exists_or_is_held(app, services, monkeypatch, tmp_path, copy):
+    import shutil
+
+    from ba_modding_toolkit.library import ModLibrary
+    from test_legacy_remap import legacy_record, write_legacy_state
+    from test_library import FakeCatalog as LibraryCatalog, FakeVariant as LibraryVariant
+
+    root = tmp_path / "library"
+    original = legacy_record(root, 1, "hoshino_spr", core="hoshino_spr", target="hoshino")
+    original["user_added"] = True
+    records = [original]
+    if copy == "gone":
+        original["repaired_id"] = "d" * 32  # deleted by a build that kept the link
+    else:
+        fixed = legacy_record(root, 2, "hoshino_spr", core="hoshino_spr", target="hoshino", date="2026-10-01")
+        fixed["user_added"], fixed["repaired_from"], original["repaired_id"] = False, original["id"], fixed["id"]
+        shutil.rmtree(root / "mods" / fixed["id"])  # its folder is missing for now: the record is held
+        records.append(fixed)
+    write_legacy_state(root, records)
+    library = ModLibrary(root, LibraryCatalog(LibraryVariant("hoshino", "hoshino_spr")))
+    assert library._held_ids() == (frozenset() if copy == "gone" else {fixed["id"]})
+    monkeypatch.setattr(services.library, "mods", library.mods)
+    result = rpc(app, "family.get", key="hoshino")["result"]
+    mods = {mod["id"]: mod for mod in result["variants"][0]["modList"]}
+    assert list(mods) == [original["id"]]
+    assert mods[original["id"]]["repaired_id"] == ("" if copy == "gone" else fixed["id"])
+
+
 def test_release_page_snapshot_survives_another_check(app, services, update_env, monkeypatch):
     from ba_modding_toolkit import updater
     opened = []
