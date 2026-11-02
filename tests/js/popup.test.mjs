@@ -2743,3 +2743,47 @@ for (const lang of ADD_LOCALES) test(`the Add result and the dropped list keep t
     }
   } finally { setStrings("en-US", Object.fromEntries(strings(english))); }
 });
+
+test("Settings is on the popup stack: Escape and the backdrop close it, and a popup over it takes the key first", async () => {
+  const Settings = await import("../../src/ba_modding_toolkit/web/js/settings.js");
+  handlers.set("settings.get", () => ({ result: { version: "1.0.0", language: "en-US", languages: [{ code: "en-US", name: "English" }], cacheDir: "/test/cache", native: true } }));
+  handlers.set("mods.state", () => ({ result: {} }));
+  try {
+    await Settings.open();
+    assert.equal(settings.hidden, false);
+    assert.equal(Popup.top().host, settings, "registered with Popup.opened");
+    // a message over it takes Escape first; Settings stays up
+    const over = Popup.message({ title: "Over", lines: ["Line"], ok: "OK" });
+    await drawn(dialog, "ok");
+    assert.equal(Popup.top().host, dialog);
+    assert.ok(press("Escape").defaultPrevented);
+    assert.deepEqual(await over, { button: null, checked: null });
+    assert.equal(settings.hidden, false);
+    assert.equal(Popup.top().host, settings);
+    // then Escape closes Settings itself
+    assert.ok(press("Escape").defaultPrevented);
+    assert.equal(settings.hidden, true);
+    assert.equal(settings.children.length, 0);
+    assert.equal(Popup.top(), null);
+    assert.equal(press("Escape").defaultPrevented, false, "nothing open: the key is the screen's");
+    // the backdrop closes it, a click on its body that misses a control does not
+    await Settings.open();
+    walk(settings).find((el) => el.dataset.path === "Center/Popup/Base/BG").click();
+    assert.equal(settings.hidden, false);
+    walk(settings).find((el) => el.dataset.path === "Center/BlackBg/BlackBgClickArea").click();
+    assert.equal(settings.hidden, true);
+    assert.equal(Popup.top(), null);
+    // a redraw (a tab, a setting) keeps one place on the stack
+    await Settings.open();
+    const tab = walk(settings).find((el) => el.tagName === "BUTTON" && el.getAttribute("aria-label") === english.settings.tab.mods);
+    assert.ok(tab);
+    const stackBefore = Popup.top();
+    tab.click();
+    await until(() => walk(settings).some((el) => el.dataset.path?.includes("Rows/Switch")));
+    assert.equal(Popup.top().host, settings);
+    assert.ok(stackBefore.host === settings);
+    press("Escape");
+    assert.equal(settings.hidden, true);
+    assert.equal(Popup.top(), null);
+  } finally { handlers.clear(); settings.hidden = true; settings.innerHTML = ""; }
+});

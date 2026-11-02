@@ -29,7 +29,9 @@ const mod = { id: "m1", label: "UI Pack", target: "other-set:ui", files: ["ui-te
 test("opening Settings on Mods selects the tab before loading generic sources", async () => {
   const openSource = settings.slice(settings.indexOf("export async function open("), settings.indexOf("export const current"));
   const calls = [], host = { hidden: true }, prefs = { language: "en-US" };
-  const deps = { $: () => host, follow: () => {}, call: (fn) => fn(),
+  const deps = { $: () => host, follow: () => {}, call: (fn) => fn(), close() {},
+    // Settings registers with the popup stack as it opens (tested in popup.test.mjs)
+    Popup: { opened: (stacked, close) => calls.push(["opened", stacked === host, typeof close]) },
     ModSwitch: { current: () => ({}), refresh: () => assert.fail("already loaded") },
     rpc: async (method) => { calls.push(method); return method === "settings.get" ? prefs : [mod]; },
     render: async () => calls.push("render") };
@@ -40,7 +42,7 @@ test("opening Settings on Mods selects the tab before loading generic sources", 
     return { open, state: () => ({ tab, scroll, prefs, otherMods, onChange }) };`)(deps);
   const changed = () => {};
   await h.open(changed, "mods");
-  assert.deepEqual(calls, ["settings.get", "mods.other", "render"]);
+  assert.deepEqual(calls, ["settings.get", "mods.other", ["opened", true, "function"], "render"]);
   assert.deepEqual(h.state(), { tab: "mods", scroll: 0, prefs, otherMods: [mod], onChange: changed });
   assert.equal(host.hidden, false);
   calls.length = 0;
