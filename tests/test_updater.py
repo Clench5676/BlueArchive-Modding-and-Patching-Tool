@@ -166,6 +166,34 @@ def test_scripts_wait_replace_and_restart():
     win.encode("ascii")
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX shell helper")
+def test_macos_helper_restarts_the_installed_app_when_the_image_cannot_mount(tmp_path):
+    stubs, temporary = tmp_path / "bin", tmp_path / "tmp"
+    stubs.mkdir()
+    temporary.mkdir()
+    opened = tmp_path / "opened.txt"
+    (stubs / "hdiutil").write_text("#!/bin/sh\necho \"$@\" >> \"$STUB_LOG\"\nexit 3\n")
+    (stubs / "open").write_text("#!/bin/sh\nprintf '%s\\n' \"$@\" >> \"$OPENED\"\n")
+    for stub in stubs.iterdir():
+        stub.chmod(0o755)
+    app = tmp_path / "Apps" / "Tool's App.app"
+    app.mkdir(parents=True)
+    dmg = tmp_path / "new app.dmg"
+    dmg.write_bytes(b"not an image")
+    gone = subprocess.Popen([sys.executable, "-c", "pass"])
+    gone.wait()
+    script = tmp_path / "helper.sh"
+    script.write_text(updater.macos_script(dmg, app, gone.pid))
+    env = {"PATH": f"{stubs}:/usr/bin:/bin", "TMPDIR": str(temporary), "OPENED": str(opened),
+           "STUB_LOG": str(tmp_path / "hdiutil.txt")}
+    result = subprocess.run(["/bin/sh", str(script)], env=env, timeout=30)
+    assert result.returncode == 3
+    assert opened.read_text().splitlines() == [str(app)]
+    assert app.is_dir() and dmg.read_bytes() == b"not an image"
+    assert "attach" in (tmp_path / "hdiutil.txt").read_text()
+    assert list(temporary.iterdir()) == []
+
+
 def test_install_refuses_development_runs(tmp_path):
     with pytest.raises(ServiceError) as e:
         updater.install(tmp_path / "x.dmg", "0" * 32)

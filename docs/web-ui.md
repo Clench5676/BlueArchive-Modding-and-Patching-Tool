@@ -1065,7 +1065,7 @@ stops the server (the page shows Closed); with `--serve` it gives `native_unavai
 | `app.checkUpdate` | the newest release above this version, or `null`; `notes` is the literal GitHub body for this exact tag and `page` its canonical release page; `downloaded` and `file` (path or `null`) report a verified file still present for that version in this session |
 | `app.tours {launching?}` | approved local tours through this version, newest first; after normal `app.ready`, `launching: true` records the profile baseline and returns pending upgrade pages, deduplicated by feature ID |
 | `app.tourPresented {versions}` | acknowledge the covered published versions only after a first page has painted; merges under the profile lock, without changing preferences/library/preview state |
-| `app.update` / `app.installUpdate {file}` | job id (download and MD5 check, result `{file}`; reuses the verified file for the same version) / swap in the build and quit after Restart; `classic_open` while any classic window is open (never queued) |
+| `app.update` / `app.installUpdate {file}` | job id (download and MD5 check, result `{file}`; reuses the verified file for the same version) / swap in the build and quit after Restart (a macOS disk image that does not mount starts the installed app again); `classic_open` while any classic window is open (never queued) |
 
 HTTP endpoints outside `/api/rpc`, each with its own token, never the session token: `GET /api/classic/control` and
 `POST /api/classic/report` (the classic child's one-time token, see Classic window) and `POST /api/instance/raise`
