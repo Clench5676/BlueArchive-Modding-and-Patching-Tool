@@ -276,6 +276,16 @@ export function popupFrame(title, w, h, { ok = null, cancel = null, close = true
   return t;
 }
 
+// popupFrame's confirm button as the game's disabled one, alone at the frame's place: a popup that can block its confirm
+// lays this over the live one while it is blocked (the list popup draws its blocked primary button the same way)
+export function disabledConfirm(frame) {
+  const t = clone(frame), popup = find(t, "Popup"), btn = find(popup, "Btn");
+  btn.children = [Buttons.disable(find(btn, "Btn_Ok"))];
+  popup.children = [btn];
+  t.children = t.children.filter((c) => c.name === "Popup");
+  return t;
+}
+
 // a click on a popup's backdrop or Escape closes it, as the game's PopupClose does; its body takes the clicks that
 // miss its controls. close null: the popup must be answered with a button (the backdrop and Escape do nothing).
 // Puts the popup on the stack.
@@ -630,6 +640,8 @@ function detailsTree(it, title, fields, actions, portraitTexture = null, kind = 
 //   onSelect(key, scroll): a card was clicked (the caller ticks it, toggled(), or chooses it, and draws the popup again)
 //   buttons: [{label, fn, primary, greyed, action}] under the list, or okText and onOk for the one confirm button
 //   onClose(how): the close button, the backdrop and Escape; null for a popup without them (it must be answered)
+//   A list with no card to show puts hall.noCandidates in the list paper; with tools, while the chosen card (selected)
+//   is not among the cards shown, the primary button is the game's disabled one and answers nothing.
 //   tools: {segs, seg, onSeg, sortKey} for the student list's tools over the cards, or null; without them, hint
 //          (left) and footer (right) show in their place
 //   check: {label, checked, onChange} for a checkbox left of the buttons; a click flips check.checked, so the same
@@ -669,10 +681,16 @@ export async function listPopup(options) {
   const redraw = () => listPopup({ ...options, keepScroll: 0 });
   const ticked = multi ? new Set(selected || []) : null;
   const isSelected = (key) => (multi ? ticked.has(key) : key === selected);
-  const btns = buttons || [{ label: okText, fn: onOk, primary: true, semantic: options.okSemantic || "confirm", action: "ok" }];
+  // a search or segment that hides the chosen card: confirming would act on a card the user cannot see
+  const filteredOut = !!tools && !multi && selected != null && !items.some((it) => it.key === selected);
+  const btns = (buttons || [{ label: okText, fn: onOk, primary: true, semantic: options.okSemantic || "confirm", action: "ok" }])
+    .map((b) => (b.primary && filteredOut ? { ...b, greyed: true, blocked: true } : b));
   const next = document.createElement("div");
   const view = await NGUI.render(listFrame(title, btns, !!onClose), next, { scale: S, origin: [960, 540] });
-  btns.forEach((b, i) => hit(next, view, `Center/Popup/Btn/Btn_${i}/BG (1)`, b.fn, { name: b.label, action: b.action || `button${i}` }));
+  btns.forEach((b, i) => {
+    const button = hit(next, view, `Center/Popup/Btn/Btn_${i}/BG (1)`, b.blocked ? () => {} : b.fn, { name: b.label, action: b.action || `button${i}` });
+    if (button && b.blocked) { button.disabled = true; button.setAttribute("aria-disabled", "true"); }
+  });
   if (onClose) hit(next, view, "Center/Popup/Base/BG/Btn_Close", () => onClose("close"), { name: T("display.close"), action: "close" });
   closable(view, host, onClose);
   const band = [];
@@ -745,6 +763,12 @@ export async function listPopup(options) {
     }
   }
   const top = LP.list.t - 166 - (tools && toolState.searching && !horizontal ? 160 : 0), bottom = LP.list.b + 24;
+  if (!items.length) {
+    // nothing to show: the list paper says so, as the Hall's pickers do
+    const room = LP.list.r - LP.list.l - 160, f = fitText(T("hall.noCandidates"), 48, 32, room, 2);
+    await NGUI.render(node("Empty", [(LP.list.l + LP.list.r) / 2, (top + bottom) / 2],
+      [label(f.text, f.fs, "#2d4664/1.00", room, f.fs * 1.3 * f.lines + 8, { depth: 8 })]), next, { scale: S, origin: [960, 540], z: 20 });
+  }
   const [aL, aT] = [960 + (LP.list.l + 16) * S, 540 - top * S];
   // Measure the actual prefab widgets, including the name band's asymmetric incline and selection marks.
   const trees = items.map((it) => listCard(it, 0, 0, isSelected(it.key), card, options.layoutKind));

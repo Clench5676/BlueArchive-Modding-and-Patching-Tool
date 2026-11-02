@@ -1167,7 +1167,10 @@ with the same text, so both entry reasons and RPC/job failures translate consist
 `character-picker.js` uses the roster's search, filters, sorting and variant-grouping controls over the offline
 assignment catalog. That catalog combines shipped student metadata and the character map, so ownership selection
 can include a Japanese-server student whose resources are absent from the selected Global installation. Confirming
-the owner persists `assignment` with a self-contained, validated Mod; re-analysis recognizes the stored result.
+the owner persists `assignment` with a self-contained, validated Mod; re-analysis recognizes the stored result. A
+search or filter that shows no student puts `hall.noCandidates` in the list, and while the chosen student is not among
+those the view offers, Confirm is the game's disabled button and answers nothing (`dialog` of `batch-import.js`
+passes the content `primary(enabled)`; `Popup.disabledConfirm` draws the disabled button over the live one).
 
 `assigned_catalog.py` adds saved assigned students to roster/detail results without inventing resource handles.
 `storedKinds` describes kinds present in the student's library Mods, while `localKinds` and `spr`/`lobby`/`model`
@@ -1614,6 +1617,10 @@ optional, so a popup still works without them.
   not-owned cards with its picture in grey, and `badge` replaces In Use with the caller's word. Buttons right-aligned
   under the list (the main ones in OK's blue, three or more a little smaller), a checkbox at their left, and no close
   button when `onClose` is `null`. The cards' buttons are in the page in the list's order.
+  A list with no card to show (a search or segment that matches nothing) puts `hall.noCandidates` in the list paper,
+  centred on the visible paper. With `tools`, while the chosen card (`selected`) is not among the cards shown, the
+  primary button is the game's disabled one (`aria-disabled`, answering nothing); a prompt without `tools` is never
+  blocked.
 
 **Start sequence** (`main.js`, `Popup.sequence`). Once the first screen is revealed the start popups come one at a
 time, in order, each only when it has something to show (`mod-switch.js startDue`): the asset consent, the scan
