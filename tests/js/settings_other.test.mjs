@@ -13,7 +13,8 @@ function harness({ locale = "en-US", answer = "ok", used = true, error = null, r
   const calls = [], messages = [], refused = [];
   let changed = 0;
   const deps = { T, Loading: { task: (fn) => fn(() => {}) },
-    ModSwitch: { refresh: async () => {}, refused: (...args) => refused.push(args) },
+    ModSwitch: { refresh: async () => {}, refused: (...args) => refused.push(args),
+      listSep: () => (/^(zh|ja)/i.test(locale) ? "、" : ", ") }, // the rule mod-switch.js tests pin
     Popup: { message: async (opts) => { messages.push(opts); return { button: answer }; } },
     rpc: async (method, params) => {
       calls.push([method, params]);
@@ -21,10 +22,21 @@ function harness({ locale = "en-US", answer = "ok", used = true, error = null, r
       return method === "mods.removalInfo" ? { name: "UI Pack", used } : "job1";
     }, waitJob: async (id) => { assert.equal(id, "job1"); return result; }, notify: (s) => calls.push(["notify", s]),
   };
-  const api = new Function("deps", `const {${Object.keys(deps)}} = deps; ${strip(source)}; return { rows, select, remove };`)(deps);
+  const api = new Function("deps", `const {${Object.keys(deps)}} = deps; ${strip(source)}; return { rows, select, remove, valueText };`)(deps);
   return { ...api, T, calls, messages, refused, changed: () => { changed++; }, changes: () => changed };
 }
 const mod = { id: "m1", label: "UI Pack", target: "other-set:ui", files: ["ui-textures.bundle", "music-audio.bundle"], state: "official", selected: false };
+
+test("a source's file names join with the language's list separator, after the state", () => {
+  for (const [locale, sep] of [["en-US", ", "], ["zh-CN", "、"], ["zh-TW", "、"], ["ja-JP", "、"], ["ko-KR", ", "], ["th-TH", ", "]]) {
+    const h = harness({ locale });
+    const state = h.T("settings.mods.otherState.official");
+    assert.equal(h.valueText(mod), `${state} - ui-textures.bundle${sep}music-audio.bundle`, locale);
+    assert.equal(h.valueText({ ...mod, state: "active" }), `${h.T("status.applied")} - ui-textures.bundle${sep}music-audio.bundle`, locale);
+    assert.equal(h.valueText({ ...mod, files: ["one.bundle"] }), `${state} - one.bundle`, locale);
+    assert.equal(h.valueText({ ...mod, files: [] }), state, `${locale}: no files, no dangling separator`);
+  }
+});
 
 test("opening Settings on Mods selects the tab before loading generic sources", async () => {
   const openSource = settings.slice(settings.indexOf("export async function open("), settings.indexOf("export const current"));
