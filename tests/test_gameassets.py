@@ -106,6 +106,82 @@ def test_disk_cache_presence_requires_consent_and_the_current_resource_version(t
     assert not cache.has_disk_entries("current")
 
 
+def _version_folder(root, name, age, entries=1):
+    folder = root / hashlib.sha1(name.encode()).hexdigest()
+    folder.mkdir(parents=True)
+    for index in range(entries):
+        (folder / f"{index}.cache").write_bytes(b"old")
+    stamp = time.time_ns() - age * 1_000_000_000
+    os.utime(folder, ns=(stamp, stamp))
+    return folder
+
+
+def test_a_new_version_keeps_the_three_most_recently_used_disk_folders(tmp_path):
+    root = tmp_path / "cache"
+    oldest, older, recent = (_version_folder(root, name, age) for name, age in
+                             (("oldest", 300), ("older", 200), ("recent", 100)))
+    global_version = _version_folder(root, "global", 400)
+    previews = root / "previews"
+    previews.mkdir()
+    (previews / "entry.preview").write_bytes(b"preview")
+    (root / ("f" * 40 + ".txt")).write_bytes(b"not a folder")
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "keep.cache").write_bytes(b"outside")
+    link = root / ("e" * 40)
+    link.symlink_to(outside, target_is_directory=True)
+    cache = AssetCache("new", root=root, allowed=True)
+    # Global stays in use beside Japan: reading it marks its folder recent.
+    assert cache.get("0", version="global") is None
+    (global_version / (hashlib.sha256(b"light").hexdigest() + ".cache")).write_bytes(b"global ui")
+    stamp = time.time_ns() - 400 * 1_000_000_000
+    os.utime(global_version, ns=(stamp, stamp))
+    assert cache.get("light", version="global") == b"global ui"
+    cache.put("light", b"new ui")
+    new = root / hashlib.sha1(b"new").hexdigest()
+    assert (new / (hashlib.sha256(b"light").hexdigest() + ".cache")).read_bytes() == b"new ui"
+    assert sorted(path.name for path in root.iterdir()) == sorted(
+        [new.name, global_version.name, recent.name, "previews", "f" * 40 + ".txt", "e" * 40])
+    assert not oldest.exists() and not older.exists()
+    assert (previews / "entry.preview").read_bytes() == b"preview"
+    assert (outside / "keep.cache").read_bytes() == b"outside" and link.is_symlink()
+
+
+def test_only_a_new_versions_first_write_retires_folders(tmp_path):
+    root = tmp_path / "cache"
+    cache = AssetCache("current", root=root, allowed=True)
+    cache.put("a", b"a")
+    stale = [_version_folder(root, name, age) for name, age in (("one", 300), ("two", 200), ("three", 100))]
+    cache.put("b", b"b")
+    assert all(folder.is_dir() for folder in stale)
+    # A version folder that already holds entries is not new, even in a fresh instance.
+    AssetCache("current", root=root, allowed=True).put("c", b"c")
+    assert all(folder.is_dir() for folder in stale)
+    AssetCache("current", root=root, allowed=False).put("d", b"d", version="next")
+    assert all(folder.is_dir() for folder in stale)
+
+
+def test_an_old_cache_folder_that_cannot_be_removed_is_logged_and_skipped(tmp_path, monkeypatch, caplog):
+    from ba_modding_toolkit.gameassets import cache as cache_module
+    root = tmp_path / "cache"
+    held, removable = (_version_folder(root, name, age) for name, age in (("held", 500), ("removable", 400)))
+    kept = [_version_folder(root, name, age) for name, age in (("a", 200), ("b", 100))]
+    remove = cache_module.shutil.rmtree
+
+    def refuse(path, *args, **kwargs):
+        if Path(path) == held:
+            raise PermissionError("in use")
+        return remove(path, *args, **kwargs)
+
+    monkeypatch.setattr(cache_module.shutil, "rmtree", refuse)
+    cache = AssetCache("new", root=root, allowed=True)
+    with caplog.at_level(logging.WARNING, logger=cache_module.__name__):
+        cache.put("light", b"new ui")
+    assert cache.get("light") == b"new ui"
+    assert held.is_dir() and not removable.exists() and all(folder.is_dir() for folder in kept)
+    assert "Cannot remove the old asset cache folder " + held.name in caplog.text
+
+
 def test_resource_version_catalog_and_listing(tmp_path):
     resources = tmp_path / "Resource"
     dirs = [resources / "GameData/Windows", resources / "Preload/Windows"]

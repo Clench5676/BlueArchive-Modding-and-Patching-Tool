@@ -6,6 +6,7 @@ import hashlib
 import json
 import logging
 import os
+import re
 import secrets
 import shutil
 import struct
@@ -21,6 +22,8 @@ from .. import config, devmode
 
 logger = logging.getLogger(__name__)
 
+_VERSION_FOLDER = re.compile(r"[0-9a-f]{40}")
+
 
 class AssetCache:
     """Cache assets by version and key; disk entries are bytes and require consent.
@@ -29,8 +32,12 @@ class AssetCache:
     and other decoded values are memory-only. Callers must pass ``disk=False``
     for heavy assets, including their lookups. No directories are created until
     the first permitted disk write. Changing ``allowed`` is synchronous with I/O.
-    In dev mode (devmode) the root must lie inside the dev roots.
+    In dev mode (devmode) the root must lie inside the dev roots. The disk keeps
+    the ``KEEP_VERSIONS`` most recently used resource-version folders: a new
+    version's first write removes the others (Global and Japan can both be in use).
     """
+
+    KEEP_VERSIONS = 3
 
     def __init__(self, resource_version: str = "", *, allowed: bool = False,
                  max_bytes: int = 512 * 1024 * 1024, root: Path | None = None):
@@ -45,6 +52,9 @@ class AssetCache:
         self._items: OrderedDict[tuple[str, str, bool], tuple[Any, int]] = OrderedDict()
         self._bytes = 0
         self._generation = 0
+        # Version folders this instance has seen holding entries and has marked as used.
+        self._filled: set[Path] = set()
+        self._used: set[Path] = set()
 
     @property
     def generation(self) -> int:
@@ -102,9 +112,45 @@ class AssetCache:
                 except OSError:
                     logger.warning("Cannot read asset cache entry %s", key, exc_info=True)
                     return None
+                self._mark_used(self._path(version, key).parent)
                 self._remember(token, value, len(value))
                 return value
         return None
+
+    def _mark_used(self, folder: Path) -> None:
+        # The folder's modification time orders versions by use; touch it once per instance.
+        if folder in self._used:
+            return
+        self._used.add(folder)
+        try:
+            os.utime(folder, None)
+        except OSError:
+            pass
+
+    def _retire_versions(self, current: Path) -> None:
+        """Remove version folders beyond the most recently used ones, only inside the cache root."""
+        try:
+            folders = [path for path in self.root.iterdir()
+                       if path != current and _VERSION_FOLDER.fullmatch(path.name)
+                       and not path.is_symlink() and not path.is_junction() and path.is_dir()]
+        except OSError:
+            logger.warning("Cannot list the asset cache folders", exc_info=True)
+            return
+
+        def used(path: Path) -> int:
+            try:
+                return path.stat().st_mtime_ns
+            except OSError:
+                return 0
+
+        folders.sort(key=used, reverse=True)
+        for folder in folders[self.KEEP_VERSIONS - 1:]:
+            try:
+                shutil.rmtree(folder)
+            except OSError:
+                logger.warning("Cannot remove the old asset cache folder %s", folder.name, exc_info=True)
+            self._filled.discard(folder)
+            self._used.discard(folder)
 
     def _remember(self, token: tuple[str, str, bool], value: Any, size: int) -> None:
         old = self._items.pop(token, None)
@@ -140,19 +186,26 @@ class AssetCache:
                 return
             self._remember((version, key, disk), value, size)
             if disk and self._allowed and isinstance(value, bytes):
-                temporary = None
+                temporary, first = None, False
                 try:
                     path = self._path(version, key)
-                    path.parent.mkdir(parents=True, exist_ok=True)
-                    with tempfile.NamedTemporaryFile(dir=path.parent, delete=False) as stream:
+                    folder = path.parent
+                    first = folder not in self._filled and not any(folder.glob("*.cache"))
+                    folder.mkdir(parents=True, exist_ok=True)
+                    with tempfile.NamedTemporaryFile(dir=folder, delete=False) as stream:
                         temporary = Path(stream.name)
                         stream.write(value)
                     os.replace(temporary, path)
+                    self._filled.add(folder)
+                    self._mark_used(folder)
                 except OSError:
+                    first = False
                     logger.warning("Cannot write asset cache entry %s", key, exc_info=True)
                 finally:
                     if temporary is not None:
                         temporary.unlink(missing_ok=True)
+                if first:
+                    self._retire_versions(folder)
 
     def clear(self) -> None:
         """Remove all memory entries and all resource versions on disk."""
@@ -166,6 +219,8 @@ class AssetCache:
             self._generation += 1
             self._items.clear()
             self._bytes = 0
+            self._filled.clear()
+            self._used.clear()
 
 
 # Increment when an exporter changes its output or interpretation of source files.
