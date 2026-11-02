@@ -689,14 +689,17 @@ class ModLibrary:
         return self._parse_state(json.loads(path.read_text(encoding="utf-8")))
 
     def _read_state(self) -> _Reading:
-        """Read state.json, else (when it is unreadable) its previous copy; never raises. A file that does not exist is
-        an empty library. A file of a newer build (version above 1) is never read as corrupt: the previous copy is not
-        looked at. A file that cannot be opened (``OSError``: locked, scanned) is not corruption either."""
+        """Read state.json, else (when it is unreadable or gone) its previous copy; never raises. With neither file the
+        library is empty. A file of a newer build (version above 1) is never read as corrupt: the previous copy is not
+        looked at. A file that cannot be opened (``OSError``: locked, scanned) is not corruption either. A missing
+        file with a previous copy (a partial restore) reads the copy, as profiles.json does: nothing here deletes
+        state.json, and its writes are atomic."""
         path = self._state_path
+        exists = True
         try:
             return _Reading("ok", self._parse_file(path))
         except FileNotFoundError:
-            return _Reading("missing")
+            exists = False
         except _NewerState:
             logger.warning("The library state was written by a newer version, leaving it as it is")
             return _Reading("newer", error=ServiceError("library_state_unreadable", file=str(path)))
@@ -706,17 +709,24 @@ class ModLibrary:
         except _UNREADABLE as error:
             log_failure(logger, logging.WARNING, "Cannot read the library state, reading the previous copy instead",
                         error)
+        if not exists:
+            if not self._prev_path.exists():
+                return _Reading("missing")
+            logger.warning("The library state is missing, reading the previous copy instead")
+        unreadable = ServiceError("library_state_unreadable", file=str(path if exists else self._prev_path))
         try:
             state = self._parse_file(self._prev_path)
         except FileNotFoundError:
+            if not exists:
+                return _Reading("missing")
             logger.error("The library state is unreadable and has no previous copy")
-            return _Reading("corrupt", error=ServiceError("library_state_unreadable", file=str(path)))
+            return _Reading("corrupt", error=unreadable)
         except OSError as error:
             log_failure(logger, logging.WARNING, "Cannot read the previous library state", error)
             return _Reading("io", error=ServiceError("library_io_error", file=str(self._prev_path)))
         except (_NewerState, *_UNREADABLE) as error:
             log_failure(logger, logging.ERROR, "The previous library state is unreadable too", error)
-            return _Reading("corrupt", error=ServiceError("library_state_unreadable", file=str(path)))
+            return _Reading("corrupt", error=unreadable)
         logger.warning("Reading the previous library state")
         return _Reading("prev", state)
 
@@ -854,7 +864,7 @@ class ModLibrary:
         could not be read is kept as state.json.bad, and the previous copy stays what it is."""
         if kind == "ok":
             atomic_copy(self._state_path, self._prev_path)
-        elif kind in ("prev", "corrupt"):
+        elif kind in ("prev", "corrupt") and self._state_path.exists():  # a missing file leaves nothing to keep
             try:
                 atomic_copy(self._state_path, self._bad_path)
             except OSError as error:
