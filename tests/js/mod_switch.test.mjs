@@ -763,8 +763,10 @@ test("a prompt's cards: the name, the kind and install chips, No Official Copy, 
   const two = base({ installs: [install(GLOBAL, "Global"), install(JAPAN, "Japan", { id: "0123abcd4567" })] });
   const nameOf = (e) => ({ airi: "Airi", hina: "Hina" })[e.variant] || e.variant;
   const c = P.card(entry("airi_spr", "untracked"), { state: base(), nameOf });
-  assert.deepEqual([c.key, c.label, c.full, c.chips, c.disabled, c.size], [`${GLOBAL}|airi_spr`, `Airi, ${S("tab.portrait")}`, "Airi", [S("tab.portrait")], false, 100]);
-  assert.equal(P.card(entry("hina_home", "reset"), { nameOf, sep: "、" }).label, `Hina、${S("tab.lobby")}`, "a portrait and a lobby are told apart");
+  assert.deepEqual([c.key, c.label, c.full, c.chips, c.disabled, c.size], [`${GLOBAL}|airi_spr`, "Airi", "Airi", [S("tab.portrait")], false, 100]);
+  // the label is the name alone (the kind is the details panel's first chip); a portrait and a lobby are told apart there
+  assert.equal(P.card(entry("hina_home", "reset"), { nameOf }).label, "Hina");
+  assert.deepEqual(P.card(entry("hina_home", "reset"), { nameOf }).chips, [S("tab.lobby")]);
   // two installs: the install chip; an alternate lobby core: its suffix after the kind
   const j = P.card(entry("hina_home_gl", "untracked", { install: JAPAN, overwritten: true }), { state: two, nameOf });
   assert.deepEqual(j.chips, [`${S("tab.lobby")} gl`, "Japan", S("mods.copy.none")]);

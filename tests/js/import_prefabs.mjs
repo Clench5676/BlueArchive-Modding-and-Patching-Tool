@@ -46,7 +46,8 @@ export function makeImportLayouts() {
   Object.assign(tag.widgets[0], { fontSize: 46, w_: 106, h_: 44, pivot: 3 });
   const tagBG = find(tag, "TypeBG"); tagBG.pos = [-26, 1]; Object.assign(tagBG.widgets[0], { w_: 170, h_: 86, pivot: 3 });
   Object.assign(find(inv, `${base}/EquipPos/Texture`).widgets[0], { w_: 551, h_: 435, pivot: 4 });
-  insert(inv, `${detail}/Label_Name`, label("Label_Name", "Name", { fontSize: 104 }));
+  insert(inv, `${detail}/Label_Name`, label("Label_Name", "Name", { fontSize: 104, w_: 964, h_: 145, pivot: 3 }));
+  find(inv, `${detail}/Label_Name`).pos = [-570, 93];
   insert(inv, `${detail}/Text_Amount`, label("Text_Amount", "x999", { color: "#77deff/1.00" }));
   insert(inv, `${detail}/BG`, node("BG", [17, 98], [sprite("Common_Bg_Raius20px", 1246, 204, { color: "#1a3351/0.99" })], [node("HaveBG"), image("Texture")]));
   insert(inv, `${detail}/Label_ExpirationDateTime/TypeBG`, node("TypeBG", [0, 0], [sprite("Common_Bg_Raius10px", 438, 64, { color: "#eb5691/1.00" })]));
@@ -103,7 +104,10 @@ export function makeImportLayouts() {
   const caption = label("Locale_Text", "unowned", { pivot: 3, color: "#484e52/1.00" }); caption.pos = [131, 2.8];
   const toggle = node("UIPopup_GachaCharList.Btn_Checkbox", [-1385, 598], [sprite("Common_Toggle_BG", 798, 110, { pivot: 3 })],
     [state("Type_OFF"), state("Type_ON"), caption]);
-  return { UINonEquipmentInventory: inv, UIMailBox: mail, UIMailBoxContent: content, UIPopup_FilterSort: fs, UINonEquipmentInventoryListItem: item,
+  const collection = node("UICharacterCollection");
+  insert(collection, "SeletControl/List/Scroll Bar", node("Scroll Bar", [0, 0], [], ["Background", "Foreground"].map((name) =>
+    node(name, [1391, 0], [{ texture: "CharacterCollection_ScrollBarBg", w_: 126, h_: 990, pivot: 4, color: "#92a6b7/1.00", prefabMarker: true }]))));
+  return { UICharacterCollection: collection, UINonEquipmentInventory: inv, UIMailBox: mail, UIMailBoxContent: content, UIPopup_FilterSort: fs, UINonEquipmentInventoryListItem: item,
     "UIPopup_GachaCharList.Btn_Checkbox": toggle };
 }
 export { find };

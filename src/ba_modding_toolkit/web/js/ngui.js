@@ -529,7 +529,7 @@ export const label = (text, fontSize, color, w, h, opts = {}) => ({ cls: "UILabe
 export const glyphWidth = (str, fs) => Math.max(...String(str).split("\n").map((l) => textWidth(l, fs) - (/[\uff09\u300d]$/.test(l) ? fs * 0.45 : 0)));
 // fit text into maxW: shrink from fsMax to fsMin on one line; if it still does not fit, break into up to maxLines lines
 // at the smallest size that fits. Breaks go at separators (full-width comma and enumeration comma, ", ", " - ", spaces,
-// before brackets) first, then between CJK or Thai
+// after an asterisk, before brackets) first, then between CJK or Thai
 // words; the CJK line-breaking rules hold (NO_START, NO_END). Wrapped text is never larger than fsMin.
 const CJK = /[\u3040-\u30ff\u3400-\u9fff\uff00-\uffef]/;
 const THAI = /[\u0e00-\u0e7f]/;
@@ -544,12 +544,15 @@ const NO_START = new RegExp("^[" +
 // never at the end of a line (UAX #14 OP): opening brackets and quotes
 const NO_END = /[\uff08\uff3b\uff5b\uff5f\u3008\u300a\u300c\u300e\u3010\u3014\u3016\u3018\u301a\u301d\u2018\u201c([{]$/;
 function tokensOf(str, cjkBreaks) {
-  let tokens = String(str).split(/(?<=[\uff0c\u3001]|, | - |\s)|(?=[\uff08(])/).filter(Boolean);
+  // A Terror form joins the character and the form with an asterisk (Shiroko*Terror, full-width in CJK): a break may follow it.
+  let tokens = String(str).split(/(?<=[\uff0c\u3001]|, | - |\s)|(?=[\uff08(])|(?<=\S[*\uff0a])(?=\S)/).filter(Boolean);
   // CJK and Thai runs break between words (Intl.Segmenter), keeping Thai vowels and tone marks with their words.
   // Without a segmenter, Thai runs stay whole rather than splitting combining marks from their base letters.
   const seg = typeof Intl !== "undefined" && Intl.Segmenter ? new Intl.Segmenter(textLang() || "zh", { granularity: "word" }) : null;
-  if (cjkBreaks) tokens = tokens.flatMap((tok) => (!(CJK.test(tok) || THAI.test(tok)) ? [tok] : seg ? [...seg.segment(tok)].map((x) => x.segment)
-    : tok.match(/[\u3040-\u30ff\u3400-\u9fff\uff00-\uffef]|[^\u3040-\u30ff\u3400-\u9fff\uff00-\uffef]+/g)));
+  // "chars": CJK may break between any two characters (the kinsoku rules below still hold), for a word wider than its line
+  const perChar = (tok) => tok.match(/[\u3040-\u30ff\u3400-\u9fff\uff00-\uffef]|[^\u3040-\u30ff\u3400-\u9fff\uff00-\uffef]+/g);
+  if (cjkBreaks) tokens = tokens.flatMap((tok) => (!(CJK.test(tok) || THAI.test(tok)) ? [tok]
+    : cjkBreaks === "chars" && CJK.test(tok) ? perChar(tok) : seg ? [...seg.segment(tok)].map((x) => x.segment) : perChar(tok)));
   // a token that may not start a line joins the one before it, one after an opening bracket joins that bracket
   const merged = [];
   for (const tok of tokens) {
@@ -589,6 +592,15 @@ function balanced(tokens, fs, maxW, lines) {
   return breakLines(tokens, fs, hi);
 }
 function fitLines(str, fsMax, fsMin, maxW, maxLines) {
+  const fit = fitWrapped(str, fsMax, fsMin, maxW, maxLines);
+  // Text with no break to wrap at (one long word) used to jump from fsMin to fsMin - 8. It keeps the largest size under fsMin
+  // at which it fits on one line: a wrap that wins a larger size is still used.
+  if (maxLines > 1 && fit.fs < fsMin) {
+    for (let fs = fsMin - 2; fs > fit.fs && fs >= fsMin - 8; fs -= 2) if (glyphWidth(str, fs) <= maxW) return { text: str, fs, lines: 1 };
+  }
+  return fit;
+}
+function fitWrapped(str, fsMax, fsMin, maxW, maxLines) {
   for (let fs = fsMax; fs >= fsMin; fs -= 2) if (glyphWidth(str, fs) <= maxW) return { text: str, fs, lines: 1 };
   // A single-line cell keeps its size floor; the caller clips or ellipsizes any remaining overflow.
   if (maxLines === 1) return { text: str, fs: fsMin, lines: 1 };
@@ -611,10 +623,12 @@ function fitLines(str, fsMax, fsMin, maxW, maxLines) {
 }
 
 // the lines str takes at size fs within maxW (one when it fits), at most maxLines; null when it does not fit
+// charBreaks: also try breaks between any two CJK characters, after words and separators have failed (fitGroup sets it)
+let charBreaks = false;
 function wrapAt(str, fs, maxW, maxLines) {
   if (glyphWidth(str, fs) <= maxW) return [str];
   if (maxLines < 2) return null;
-  for (const cjkBreaks of [false, true]) {
+  for (const cjkBreaks of charBreaks ? [false, true, "chars"] : [false, true]) {
     const tokens = tokensOf(str, cjkBreaks);
     const lines = breakLines(tokens, fs, maxW);
     if (lines.length > 1 && lines.length <= maxLines && lines.every((l) => glyphWidth(l, fs) <= maxW)) return balanced(tokens, fs, maxW, lines);
@@ -635,26 +649,43 @@ const sizeFloor = (fsMin) => Math.max(8, Math.floor(fsMin * 0.4));
 // fits (the caller shortens the text or enlarges the box).
 export function fitGroup(strs, fsMax, fsMin, maxW, maxLines = 2, { lang = null, maxH = Infinity } = {}) {
   const outer = measureLang;
-  measureLang = lang || outer;
+  // lang: one language for every label, or a list with each label's own (null: the page's), as the Language row has
+  const perLabel = Array.isArray(lang);
+  measureLang = perLabel ? outer : lang || outer;
   try {
     const labels = strs.map((s) => String(s ?? "")), widths = labels.map((_, i) => (Array.isArray(maxW) ? maxW[i] : maxW));
     const floor = sizeFloor(fsMin);
+    const wrap = (i, fs, lines) => {
+      if (!perLabel) return wrapAt(labels[i], fs, widths[i], lines);
+      measureLang = lang[i] || outer;
+      try { return wrapAt(labels[i], fs, widths[i], lines); } finally { measureLang = outer; }
+    };
     const solve = (lines) => {
       for (let fs = fsMax; fs >= floor; fs -= 2) {
-        const rows = labels.map((s, i) => wrapAt(s, fs, widths[i], lines));
+        const rows = labels.map((_, i) => wrap(i, fs, lines));
         if (rows.every((r, i) => r && r.length * fontSizeFor(labels[i], fs) * LINE_PITCH <= maxH)) {
           return rows.map((r) => ({ text: r.join("\n"), fs, lines: r.length }));
         }
       }
       return null;
     };
-    const wrapped = solve(maxLines);
+    if (!labels.length) return [];
+    let wrapped = solve(maxLines);
+    // A CJK word wider than its line (the katakana of "Explorer") keeps the labels under fsMin: break inside it instead, as
+    // the guidelines allow for CJK, when that keeps the size within the range.
+    if (maxLines > 1 && (!wrapped || wrapped[0].fs < fsMin)) {
+      charBreaks = true;
+      try {
+        const chars = solve(maxLines);
+        if (chars && (!wrapped || chars[0].fs > wrapped[0].fs)) wrapped = chars;
+      } finally { charBreaks = false; }
+    }
     if (wrapped) {
       const single = maxLines > 1 && wrapped.some((f) => f.lines > 1) ? solve(1) : null;
       return single && single[0].fs >= wrapped[0].fs - 4 && single[0].fs >= wrapped[0].fs * 0.92 ? single : wrapped;
     }
     return labels.map((s, i) => {
-      const lines = wrapAt(s, floor, widths[i], maxLines) || [s];
+      const lines = wrap(i, floor, maxLines) || [s];
       return { text: lines.join("\n"), fs: floor, lines: lines.length, overflow: true };
     });
   } finally {
@@ -758,7 +789,8 @@ export function inkBand(str, px) {
 
 // fitGroup into the label widgets of one group: each one's text and size (the same for all), and its box at least maxW wide
 export function fitLabels(widgets, strs, fsMax, fsMin, maxW, maxLines = 2, opts = {}) {
-  const fits = fitGroup(strs, fsMax, fsMin, maxW, maxLines, { lang: widgets[0]?.lang, ...opts });
+  // each widget's own language, as the Language row's options have
+  const fits = fitGroup(strs, fsMax, fsMin, maxW, maxLines, { lang: widgets.some((w) => w.lang) ? widgets.map((w) => w.lang) : null, ...opts });
   widgets.forEach((widget, i) => Object.assign(widget, { text: fits[i].text, fontSize: fits[i].fs, w_: Math.max(widget.w_ || 0, maxW) }));
   return fits;
 }

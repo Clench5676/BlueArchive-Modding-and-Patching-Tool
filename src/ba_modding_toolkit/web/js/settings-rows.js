@@ -1,7 +1,10 @@
 // Shared UIPopup_Option_PC / UIPopup_Option_Toggle rows, used by Settings and Batch Import.
-import { node, sprite, label, fitText } from "./ngui.js";
+import { node, sprite, label, fitText, fitGroup } from "./ngui.js";
 
 export const ROW_W = 1552;
+// the lines of an option stay in the band under the row's dotted line: 123 high round the option's centre in a one-line row,
+// and where the options wrap onto more rows (100 apart) no taller than the pitch less a margin
+export const OPTION_TEXT_H = 96, OPTION_TEXT_H_ONE_ROW = 120;
 
 function titleNode(text, y = 65) {
   const f = fitText(text, 50, 40, 1400, 1);
@@ -23,9 +26,13 @@ export function rowBase(name, y, h, title) {
 export function radioRow(name, y, title, options, selected, onPick, { dim = false, description = "", columns = options.length } = {}) {
   const h = 240 + (Math.ceil(options.length / columns) - 1) * 100, row = rowBase(name, y, h, title), hits = [];
   const pitch = Math.min(508, 1400 / columns);
+  // the options are one kind of control side by side: one size for all of them (each text measured in its own language),
+  // its lines inside the band under the row's dotted line
+  const fits = fitGroup(options.map(([, text]) => text), 48, 34, pitch - 110, 2,
+    { lang: options.map(([, , lang]) => lang || null), maxH: options.length > columns ? OPTION_TEXT_H : OPTION_TEXT_H_ONE_ROW });
   options.forEach(([value, text, lang], i) => {
     const x = -689 + i % columns * pitch, on = selected instanceof Set ? selected.has(value) : value === selected;
-    const f = fitText(text, 48, 34, pitch - 110, 2, lang);
+    const f = fits[i];
     const alpha = dim ? (on ? "0.55" : "0.35") : on ? "1.00" : "0.71";
     row.children.push(node(`Opt_${i}`, [x, h / 2 - 174.5 - Math.floor(i / columns) * 100], [], [
       node("BG", [0, 0], [sprite("Common_Btn_Radio_BG", 60, 60, { type: 0, depth: 25, ...(dim ? { color: "#ffffff/0.55" } : {}) })]),

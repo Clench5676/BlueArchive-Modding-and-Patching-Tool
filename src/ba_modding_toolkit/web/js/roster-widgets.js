@@ -1,6 +1,7 @@
 // UICharacterCollection's search field and list tools, shared with Batch Import.
 import * as NGUI from "./ngui.js";
-import { clone, advanceOf, glyphsOf } from "./util.js";
+import { S, clone, advanceOf, glyphsOf } from "./util.js";
+import { emptyBlock } from "./empty-block.js";
 
 export function searchTree(collection) {
   const box = clone(find(collection, "SeletControl/CharacterSearch"));
@@ -73,6 +74,39 @@ export function toolbarLayout(view, { title = T("roster.title"), left = -1270, r
   return null;
 }
 
+
+// UICharacterCollection/SeletControl/LeftInfo_Empty, in its own units (y up) from its root: Arona's picture (Image_Inven_Empty,
+// a 943 box at y -318) over the faint disc, and the message under them (Label_Locale at y -589). Measured on the official
+// texture, 1024 square: its ink (alpha above 16) lies in rows 93 to 620.
+export const EMPTY_LIST = { label: -589, picture: { y: -318, size: 943, inkTop: 93 / 1024 } };
+
+// Where LeftInfo_Empty's root goes (units, y up) so that its ink, from the top of Arona's picture to the bottom of the message,
+// is centred on `centre` (units): the middle of the paper the eye sees (the whole of it, or what the open search box leaves).
+// label: the message's widget as drawn (its text and font size).
+export function emptyListY(centre, label) {
+  const { picture } = EMPTY_LIST;
+  const pictureTop = picture.y + picture.size / 2 - picture.inkTop * picture.size;
+  const ink = NGUI.inkBand(label.text, NGUI.fontSizeFor(label.text, label.fontSize) * S);
+  // the message's box centre (px, down) that puts the block's centre on the paper's; the picture's ink reaches up to
+  // `pictureTop`, which is (pictureTop - label) units above the message's centre
+  const at = emptyBlock(-centre * S, { top: -(pictureTop - EMPTY_LIST.label) * S, bottom: ink.bottom });
+  return -at.title / S - EMPTY_LIST.label;
+}
+
+// The toolbar's three toggles as hit areas, in SeletControl's units: the six segments of the two filters and Group Alts.
+// Each has its box [x, y, width, height] (centre), its name (the caption it draws, "All" in both filters), whether its
+// setting is on (aria-pressed) and apply(view), which sets it.
+export function toggleHits(view, lay, segY = 720 - 219 - 50.2) {
+  const segments = (key, values, labels, centre) => values.map((value, i) => ({
+    box: [centre - (2.5 - i) * lay.segW, segY, lay.segW, 104], name: T(labels[i]), pressed: view[key] === value,
+    apply: (target) => { target[key] = value; } }));
+  return [
+    ...segments("mods", ["all", "mods", "none"], ["seg.all", "seg.mods", "seg.noMods"], lay.seg1),
+    ...segments("recruit", ["all", "yes", "no"], ["seg.all", "seg.recruit", "seg.noRecruit"], lay.seg2),
+    { box: [lay.cbLeft + lay.cbW / 2, 720 - 273, lay.cbW, 110], name: T("roster.merge"), pressed: view.merged === true,
+      apply: (target) => { target.merged = !target.merged; } },
+  ];
+}
 
 // Shared complete UICharacterCollection toolbar; callers retain their own list and title.
 export function toolbarTree(collection, checkbox, view, searching, lay = toolbarLayout(view)) {
