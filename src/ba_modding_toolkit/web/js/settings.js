@@ -37,7 +37,7 @@ async function call(fn) {
   try { return await fn(); } catch (err) {
     if (err.code === "game_directory_missing" && ["global", "japan"].includes(err.params?.region)) {
       // The game's notice caption, also used by Quit; UIPopup_Sort supplies the frame and lone Confirm button.
-      await Popup.message({ title: T("quit.title"), lines: [T(`settings.gameDirMissing.${err.params.region}`)], ok: T("picker.ok") });
+      await Popup.notice(T(`settings.gameDirMissing.${err.params.region}`));
     } else notify(errorText(err), { kind: "error", error: err });
     return null;
   }

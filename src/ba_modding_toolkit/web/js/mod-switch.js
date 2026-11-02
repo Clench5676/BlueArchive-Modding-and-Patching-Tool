@@ -463,7 +463,7 @@ export function refused(err, method = null, params = null) {
 // queued, the queue is emptied) ---
 export async function classicModal({ method = null, params = null, queued = false } = {}) {
   const r = await Popup.message({
-    title: T("classic.opened"), lines: [T("error.classic_open")], error: { code: "classic_open", params: { method, params } },
+    title: T("classic.opened"), lines: [T("error.classic_open")],
     cancel: T("classic.front"), ok: T("picker.ok"),
     check: { label: T("classic.autoApply"), checked: queued },
   });

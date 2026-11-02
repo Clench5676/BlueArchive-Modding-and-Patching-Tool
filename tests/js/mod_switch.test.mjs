@@ -724,6 +724,7 @@ test("the classic modal queues the refused write only when its box is ticked, on
   MS.click("top");
   await drawn(dialog, "check");
   assert.equal(walk(dialog).some((e) => e.attrs?.["aria-label"] === S("classic.front")), true);
+  assert.deepEqual(actionsIn(dialog).map((e) => e.dataset.action).filter((name) => /^line/.test(name)), [], "the classic modal is no failure: no Error Report row");
   press("Escape");
   await until(() => dialog.hidden, "closed");
   assert.equal(queued(), 2, "unticked: nothing queued");
