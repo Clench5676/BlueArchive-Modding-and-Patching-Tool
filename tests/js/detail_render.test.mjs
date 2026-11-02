@@ -1975,3 +1975,90 @@ for (const lang of ['en-US', 'zh-CN', 'zh-TW', 'ja-JP', 'ko-KR', 'th-TH']) test(
     }
   } finally { holder.remove(); hosts.stage.getBoundingClientRect = oldRect; Object.assign(globalThis, old); }
 });
+
+// --- UI-13: accessible names and pressed states of the detail screen's controls, from the locale files ---
+const named = (host, pattern) => walk(host).filter((e) => e.tagName === "BUTTON" && pattern.test(e.dataset.part || e.getAttribute("aria-label") || ""));
+const everyLocale = ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"];
+
+test("the student arrows, the copy button and the variant chips are named, and the shown chip is pressed, in every locale", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  try {
+    for (const lang of everyLocale) {
+      const table = localeTable(lang); setStrings(lang, table);
+      family = modFamily();
+      family.variants[0].state.files[0].file = "/game/ibuki_spr.bundle";
+      family.variants.push(...["alt", "dress"].map((key, i) => ({ key, spr: `${key}_spr`, order: i + 1, recruitable: true, modList: [], names: { en: { full: key, short: `Skin ${key}` } } })));
+      await showPortrait(t);
+      const part = (suffix) => walk(body).find((e) => e.tagName === "BUTTON" && e.dataset.part?.endsWith(suffix));
+      assert.equal(part("Arrow_L/Left").getAttribute("aria-label"), table["webui.hall.previous"], `${lang}: previous student`);
+      assert.equal(part("Arrow_R/Right").getAttribute("aria-label"), table["webui.hall.next"], `${lang}: next student`);
+      const copy = part("Char_CVCollectionBtn").getAttribute("aria-label");
+      assert.ok(copy.startsWith(table["webui.window.copy"]), `${lang}: the copy button says Copy: ${copy}`);
+      assert.ok(copy.includes("ibuki_spr"), `${lang}: and the file it copies: ${copy}`);
+      // chips: the caption names each, the shown variant's is pressed, the others are not
+      const chips = walk(hosts["ngui-chips"]).filter((e) => e.tagName === "BUTTON");
+      assert.equal(chips.length, 3);
+      assert.ok(chips.every((chip) => chip.getAttribute("aria-label")), `${lang}: every chip has a name`);
+      assert.deepEqual(chips.map((chip) => chip.getAttribute("aria-pressed")), ["true", "false", "false"], `${lang}: the shown variant is pressed`);
+      assert.ok(chips[1].getAttribute("aria-label").includes("Skin alt"));
+      Detail.hide();
+    }
+  } finally { Detail.hide(); await flush(); t.mock.timers.reset(); setStrings("en-US", localeTable("en-US")); }
+});
+
+test("a variant list with more chips than fit names its More chip with the count", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  try {
+    for (const lang of everyLocale) {
+      const table = localeTable(lang); setStrings(lang, table);
+      family = modFamily();
+      family.variants.push(...Array.from({ length: 12 }, (_, i) => ({ key: `skin_${i}`, spr: `skin_${i}_spr`, order: i + 1, recruitable: true, modList: [], names: { en: { full: `Variant ${i}`, short: `Skin ${i}` } } })));
+      await showPortrait(t);
+      const chips = walk(hosts["ngui-chips"]).filter((e) => e.tagName === "BUTTON");
+      const more = chips.at(-1), count = chips.length - 1, hidden = 13 - count;
+      assert.ok(hidden > 0);
+      assert.equal(more.getAttribute("aria-label"), table["webui.chips.more"].replace("{n}", String(hidden)), `${lang}: More chip`);
+      assert.equal(more.getAttribute("aria-pressed"), null, "More opens a picker: it is not a toggle");
+      Detail.hide();
+    }
+  } finally { Detail.hide(); await flush(); t.mock.timers.reset(); setStrings("en-US", localeTable("en-US")); }
+});
+
+test("the expression strip's cards, its pile and Collapse are named, and the picked face is pressed, in every locale", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  try {
+    portraitExpressions = ["00", "01", "02", "03", "04", "05"]; playerMode = thumbMode = "ready";
+    for (const lang of everyLocale) {
+      const table = localeTable(lang); setStrings(lang, table);
+      family = modFamily();
+      await showPortrait(t);
+      const cards = () => walk(hosts["ngui-expr"]).filter((e) => e.tagName === "BUTTON");
+      // three faces and the pile
+      assert.equal(cards().length, 4, `${lang}: three faces and the pile`);
+      const [natural, second, third, pile] = cards();
+      assert.equal(natural.getAttribute("aria-label"), table["webui.photo.natural"], `${lang}: the plain face`);
+      assert.equal(second.getAttribute("aria-label"), `${table["webui.photo.expressions"]} 01`);
+      assert.equal(third.getAttribute("aria-label"), `${table["webui.photo.expressions"]} 02`);
+      assert.deepEqual([natural, second, third].map((card) => card.getAttribute("aria-pressed")), ["true", "false", "false"], `${lang}: the picked face`);
+      assert.equal(pile.getAttribute("aria-label"), table["webui.chips.more"].replace("{n}", "3"), `${lang}: the pile`);
+      assert.equal(pile.getAttribute("aria-pressed"), null);
+      // picking another face moves the pressed state
+      await second.click(); await flush();
+      assert.deepEqual(cards().slice(0, 3).map((card) => card.getAttribute("aria-pressed")), ["false", "true", "false"], `${lang}: pressed follows the pick`);
+      // the pile unfolds every face and Collapse
+      await cards().at(-1).click(); await flush();
+      const unfolded = cards();
+      assert.equal(unfolded.length, 7, `${lang}: six faces and Collapse`);
+      assert.equal(unfolded.at(-1).getAttribute("aria-label"), table["webui.fold.label"], `${lang}: Collapse`);
+      assert.equal(unfolded.at(-1).getAttribute("aria-pressed"), null);
+      assert.ok(unfolded.slice(0, 6).every((card) => card.getAttribute("aria-label")), `${lang}: every face has a name`);
+      assert.equal(new Set(unfolded.slice(0, 6).map((card) => card.getAttribute("aria-label"))).size, 6, `${lang}: no two faces share a name`);
+      await unfolded[0].click(); await flush(); // the plain face again, and folded, for the next language
+      await cards().at(-1).click(); await flush();
+      assert.equal(cards().length, 4);
+      Detail.hide();
+    }
+  } finally {
+    Detail.hide(); portraitExpressions = ["00", "01"]; playerMode = "ready"; thumbMode = "pending"; await flush(); t.mock.timers.reset(); setStrings("en-US", localeTable("en-US"));
+  }
+});

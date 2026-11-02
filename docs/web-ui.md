@@ -1275,6 +1275,14 @@ Manifest network and JSON failures retain the URL and original cause; JSON error
 
 ## Front end
 
+Invisible buttons over drawn controls carry their accessible names from the locale files, never a painted glyph: the
+detail screen's student arrows (`hall.previous`, `hall.next`), Copy with the file it copies (`window.copy`), the variant
+chips and the expression strip's cards (the chip's or card's caption; a face is `photo.natural` or `photo.expressions`
+and its number, as the camera names it; the pile is `chips.more`, Collapse `fold.label`), the roster's six segments and
+Group Alts, the asset consent's Agree and Decline, and Assign Character's page arrows (`photo.previous`, `photo.next`).
+A control that picks one of several or switches a setting carries `aria-pressed`: the shown variant's chip, the picked
+face and the segments and Group Alts that are on. The chip that opens the picker, the pile and Collapse are not toggles.
+
 A port of `prototype/main-screen-v4`: `ngui.js` (prefab renderer), the roster, the detail screen, the popups, the
 consent popup and the lobby player, as ES modules under `web/js/`, one page with a hash router (`#/roster`,
 `#/student/<family>/<variant>`). Its data comes from the RPC methods above instead of the generated `data.js`, its

@@ -2158,3 +2158,21 @@ test("Assign Character scrolls in one area: no scroller inside it, paging goes b
     await h.action("close", h.dialog).click();
   } finally { catalog.families = original; }
 });
+
+// --- UI-13: Assign Character's page arrows are named by the pages they turn, not by their painted glyphs ---
+test("Assign Character's previous and next page buttons are named in every language and keep their painted arrows", async () => {
+  const unknown = { ...entry("unidentified", "blocked", "lobby"), variant: null, reason: "mod_target_unknown" };
+  try {
+    for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
+      const ui = JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${locale}.json`, import.meta.url), "utf8")).webui;
+      setStrings(locale, flatten(JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${locale}.json`, import.meta.url), "utf8"))));
+      const h = await fixture(); await h.analyze([unknown]);
+      await h.action("assignCharacter").click(); await flush(); await h.page.settled();
+      const previous = h.action("characterPrevious", h.dialog), next = h.action("characterNext", h.dialog);
+      assert.equal(previous.getAttribute("aria-label"), ui.photo.previous, locale);
+      assert.equal(next.getAttribute("aria-label"), ui.photo.next, locale);
+      assert.equal(previous.caption, "‹"); assert.equal(next.caption, "›");
+      await h.action("close", h.dialog).click();
+    }
+  } finally { setStrings("en-US", flatten(JSON.parse(readFileSync(new URL("../../src/ba_modding_toolkit/locales/en-US.json", import.meta.url), "utf8")))); }
+});

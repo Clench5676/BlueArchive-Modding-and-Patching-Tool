@@ -161,8 +161,9 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
     if (element.caption === `${source}/${caption}`) return;
     element.caption = `${source}/${caption}`; paint(element, art[source](caption), { scale, origin });
   }
-  function button(caption, action, { width = 180, primary = false, scale = 0.4 } = {}) {
-    const b = el("button", "hit import-button"); b.type = "button"; b.dataset.action = action;
+  // name: the accessible name where the painted caption is not one (a glyph on a pager button)
+  function button(caption, action, { width = 180, primary = false, scale = 0.4, name = null } = {}) {
+    const b = el("button", "hit import-button"); b.type = "button"; b.dataset.action = action; b.accessibleName = name;
     Object.assign(b.style, { width: `${width}px`, height: `${(primary ? 166 : 162) * scale}px` });
     b.refresh = () => {
       const key = JSON.stringify([b.caption, b.disabled, b.size]); if (key === b.drawKey) return; b.drawKey = key;
@@ -172,7 +173,7 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
     setCaption(b, caption); return b;
   }
   function setCaption(b, caption) {
-    b.caption = caption; b.setAttribute("aria-label", caption); b.refresh();
+    b.caption = caption; b.setAttribute("aria-label", b.accessibleName || caption); b.refresh();
   }
   const EMPTY_BOX = [1200, 100];   // each empty-list label's box (px), its text centred in it
   // Buttons side by side share one caption size: the list's seven tools, and Advanced Options with Recheck.
