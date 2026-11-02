@@ -243,7 +243,7 @@ function noGame() {
   const region=ctx.prefs?.fileSource==='windows_japan'?'japan':'global';
   const setDir = async (path) => {
     try { await rpc("settings.set", { key: `gameDir.${region}`, value: path }); await refreshConfiguration(); }
-    catch (err) { notify(T(`error.${err.code}`, err.params), { kind: "error", error: err }); }
+    catch (err) { notify(T(`error.${err.code || "internal"}`, err.params || { error: String(err) }), { kind: "error", error: err }); }
   };
   message(T("app.noGame.title"), T("error.game_directory_missing"), [
     [T("settings.detect"), async () => {
@@ -569,7 +569,7 @@ async function start() {
       ctx.invalidateRoster();
       route();
     } catch (err) {
-      notify(T(`error.${err.code}`, err.params), { kind: "error", error: err });
+      notify(T(`error.${err.code || "internal"}`, err.params || { error: String(err) }), { kind: "error", error: err });
     }
   });
   $("top-option").addEventListener("click", () => Settings.open(settingsChanged));
