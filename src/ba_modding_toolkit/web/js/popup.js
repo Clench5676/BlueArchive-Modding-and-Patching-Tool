@@ -1048,9 +1048,33 @@ export function textViewer({ title, text, copy, close = T("display.close"), onCo
   });
 }
 
-// Only errors/refusals use a notification popup. Rich results call message() explicitly.
+// --- ordinary refusals ---
+// A refusal declines an action because of a state or a rule (a task still running, the game open, no game folder, a
+// Hall rule): nothing broke, so it reads as the game's neutral notice (title quit.title, Confirm only), without Failed
+// and without an Error Report button (BL-045). Every other code is a real failure and keeps both. Codes that report
+// something unreadable or unknown (game_status_unavailable, profiles_unreadable) stay failures.
+export const REFUSALS = Object.freeze([
+  // the machine is in a state that blocks the action
+  "busy", "game_running", "steam_busy", "classic_open", "game_not_found", "game_directory_missing",
+  // the view was stale: something changed since the click was offered
+  "state_changed", "folder_changed", "entry_changed",
+  // a rule of the app
+  "mod_in_use", "mod_in_use_elsewhere", "mod_last_copy", "asset_official", "photo_in_use", "library_target_not_empty",
+  "hall_last_portrait", "hall_last_memorial", "hall_duplicate_portrait", "hall_duplicate_memorial", "hall_conflict",
+  "alias_too_long", "alias_too_many", "export_empty", "scan_off", "native_only", "native_unavailable",
+]);
+export const isRefusal = (error) => REFUSALS.includes(error?.code);
+
+// the neutral notice: the game's caption title (as the quit prompt), one line, Confirm only; resolves when closed
+export function notice(text) {
+  return message({ title: T("quit.title"), lines: [text], ok: T("picker.ok") });
+}
+
+// Only errors/refusals use a notification popup: a refusal as a notice, anything else as Failed with the Error Report.
+// Rich results call message() explicitly.
 export function notify(text, { kind = "info", error = null } = {}) {
   if (!text || kind !== "error") return;
+  if (isRefusal(error)) { void notice(text); return; }
   void message({ title: T("job.failed"), lines: [text], ok: T("picker.ok"), error });
 }
 

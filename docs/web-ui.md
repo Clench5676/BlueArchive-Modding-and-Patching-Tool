@@ -1553,6 +1553,17 @@ optional, so a popup still works without them.
   alone while an input method composes (`isComposing`, `keyCode` 229) or when a control took the key itself
   (`defaultPrevented`). `anyOpen()` tells whether any popup is up (the stack, or the consent, update, settings and
   display hosts), and `whenIdle(every, blocked)` resolves once none is and the optional work predicate is false.
+- **Refusals and failures** (`notify`, `notice`; BL-045). An ordinary refusal, where the app declined an action because
+  of a state or a rule and nothing broke, is the neutral notice: title Notice (`quit.title`), the line, Confirm only,
+  no Failed and no Error Report. `REFUSALS` lists the codes: `busy`, `game_running`, `steam_busy`, `classic_open`,
+  `game_not_found`, `game_directory_missing`, `state_changed`, `folder_changed`, `entry_changed`, `mod_in_use`,
+  `mod_in_use_elsewhere`, `mod_last_copy`, `asset_official`, `photo_in_use`, `library_target_not_empty`,
+  `hall_last_portrait`, `hall_last_memorial`, `hall_duplicate_portrait`, `hall_duplicate_memorial`, `hall_conflict`,
+  `alias_too_long`, `alias_too_many`, `export_empty`, `scan_off`, `native_only`, `native_unavailable`. Any other code,
+  or none, is a real failure: title Failed and the Error Report button (`game_status_unavailable` and
+  `profiles_unreadable` report something unreadable, so they stay failures). A greyed switch or Apply names its reason
+  by its code, so the same rule decides. The classic modal and the Spine licence prompt are questions, not failures:
+  they pass no `error`.
 - **Buttons.** Every button of a popup is an invisible button over the drawn one, named for assistive technology by
   the caption it covers (`aria-label`) and marked with what it does (`data-action`). When a sprite is missing from
   the atlases its button is placed from the prefab node, so the popup can still be answered.
