@@ -79,3 +79,79 @@ test("a lobby source event reloads the manifest even if a repack kept every fami
   await vm.runInContext(`${functionSource("async function reloadChanged")}; reloadChanged();`, ctx);
   assert.deepEqual(calls, ["roster", "lobby", "panels", "preview"]);
 });
+
+// FUN-26 for the detail screen: a family read waits for the job that holds the library lock, and an old read never
+// replaces a newer family
+test("the family read has no deadline of its own: it waits for a job that holds the library lock", async () => {
+  const line = source.split("\n").find((l) => l.startsWith("const readFamily ="));
+  assert.ok(line, "readFamily is defined");
+  let release;
+  const ctx = {
+    rpc: (method, params) => new Promise((resolve) => { release = () => resolve({ method, key: params.key }); }),
+    // a stand-in deadline that would have fired long before the job ends
+    withTimeout: (promise, ms) => Promise.race([promise, new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), ms))]),
+    HARD_CAP: 5,
+  };
+  vm.createContext(ctx);
+  const pending = vm.runInContext(`${line}; readFamily("shun")`, ctx);
+  await new Promise((resolve) => setTimeout(resolve, 40));
+  release();
+  assert.deepEqual(await pending, { method: "family.get", key: "shun" });
+});
+
+function deferred() {
+  let resolve;
+  const promise = new Promise((r) => { resolve = r; });
+  return { promise, resolve };
+}
+
+test("a family read that finishes after the screen was read anew does not replace the newer family", async () => {
+  const calls = [], v = { key: "shun", lobby: "shun_home" };
+  const read = deferred(), newer = { key: "shun", variants: [v], newer: true };
+  const ctx = {
+    open: true, quiet: () => true, busy: false, heldChange: { cores: ["shun_home"] },
+    fam: { key: "shun", variants: [v] }, variantKey: "shun", variant: () => v,
+    readFamily: () => read.promise, renderFailed: assert.fail,
+    previewEnabled: true, modsOn: () => true, lower: (s) => String(s || "").toLowerCase(), mergeChange: () => ({ cores: ["shun_home"] }),
+    filesSig: () => "unchanged", previewChanged: () => false, tab: "lobby", tabKind: () => "lobby",
+    ctx: { invalidateRoster: () => calls.push("roster") }, resetPreview: (kind) => calls.push(kind),
+    changeInPlace: (fn) => fn(), renderAll: async () => calls.push("panels"), renderLeft: async () => calls.push("preview"),
+  };
+  vm.createContext(ctx);
+  const running = vm.runInContext(`${functionSource("async function reloadChanged")}; reloadChanged();`, ctx);
+  ctx.fam = newer; // the screen was left and entered again, or reloaded by another action, while the read waited
+  ctx.heldChange = undefined;
+  read.resolve({ key: "shun", variants: [{ ...v, old: true }] });
+  await running;
+  assert.equal(ctx.fam, newer, "the old read is dropped");
+  assert.deepEqual(calls, []);
+  assert.deepEqual(ctx.heldChange, { cores: ["shun_home"] }, "the change is read again after the newer family");
+});
+
+test("reload and a switch's reload drop a read that finishes after the screen was read anew", async () => {
+  const calls = [], v = { key: "dress", spr: "dress_spr", lobby: "dress_home", model: "dress_model", configured: {} };
+  for (const entry of ["reload()", 'applyCandidate("mod:test", "spr")']) {
+    const read = deferred(), newer = { key: "family", variants: [v], newer: true };
+    const ctx = {
+      busy: false, isApplied: () => false, switchPopupPage: null, pageToken: 1,
+      coreOf, variant: () => ctx.fam.variants[0], sourceOf: (key) => key, ctx: { invalidateRoster: () => calls.push("roster") },
+      forget() {}, spinePrefix: (kind, core) => `${kind}/${core}`,
+      call: (fn) => fn(), readFamily: () => read.promise,
+      renderAll: async () => calls.push("cards"), renderLeft: async () => calls.push("left"),
+      shownSource: () => "mod:old", selectionStatus: () => "switch.configured", appliedKey: () => "mod:old", previewChanged,
+      modsOn: () => true, previewEnabled: true, tabKind: () => "spr", previewKey: () => "k", changeInPlace: (fn) => fn(),
+      clearTimeout() {}, open: true, fam: { key: "family", variants: [v] }, variantKey: v.key, shownLeft: "spr",
+      expression: "00", blinkTimer: null, mainPlayer: {}, modelGeneration: 0, modelShot: {}, lobbyStale: false, lobbyShot: {},
+      lobbySeq: {}, lobbyAll: true, shownKey: "dress", previewEnabledNow: true,
+      job: async (_method, _params, opts) => { await opts.after(true, { files: [], unchanged: true }); },
+    };
+    vm.createContext(ctx);
+    const running = vm.runInContext(`${code}; ${entry}`, ctx);
+    ctx.fam = newer;
+    read.resolve({ key: "family", variants: [{ ...v, old: true }] });
+    await running;
+    assert.equal(ctx.fam, newer, `${entry}: the old read is dropped`);
+    assert.ok(!calls.includes("cards") && !calls.includes("left"), `${entry}: nothing is drawn from it`);
+    calls.length = 0;
+  }
+});

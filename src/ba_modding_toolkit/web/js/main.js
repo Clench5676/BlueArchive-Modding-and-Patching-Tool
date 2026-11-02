@@ -245,7 +245,7 @@ async function openSettings(changed) {
   catch (err) {
     console.error(err);
     if (!info?.gameFound) Popup.notice(T("app.noGame.hint"));
-    else notify(T(`error.${err?.code || "internal"}`, err?.params || { error: String(err) }), { kind: "error", error: err });
+    else notify(errorText(err), { kind: "error", error: err });
   }
 }
 
@@ -301,7 +301,7 @@ function withHallPermission(action) {
   return Promise.resolve(StudentHall.canLeave?.()).then((allowed) => {
     if (allowed !== false && permission === permissionAttempt) return action();
   }).catch((err) => {
-    if (permission === permissionAttempt) notify(T(`error.${err.code || "internal"}`, err.params || { error: String(err) }), { kind: "error", error: err });
+    if (permission === permissionAttempt) notify(errorText(err), { kind: "error", error: err });
   });
 }
 function goHome() {
@@ -330,7 +330,7 @@ async function route() {
       if (attempt !== routeAttempt) return;
       homeRequested = false;
       if (location.hash !== shownRoute) history.replaceState(null, "", shownRoute);
-      notify(T(`error.${err.code || "internal"}`, err.params || { error: String(err) }), { kind: "error", error: err });
+      notify(errorText(err), { kind: "error", error: err });
       return;
     }
   }
@@ -446,7 +446,7 @@ async function route() {
     if (globalThis.BAMTRecovery?.isBooting() && err.code !== "game_not_found") throw err;
     console.error(err);
     if (err.code === "game_not_found") { noGame(); return; }
-    notify(T(`error.${err.code || "internal"}`, err.params || { error: String(err) }), { kind: "error", error: err });
+    notify(errorText(err), { kind: "error", error: err });
     if (parts[0] === "student") Detail.stepFailed();
     // a student the catalog does not have (a stale or mistyped link): the screen shown before, its portrait, lobby or
     // 3D view, does not stay under that address; back to the list, under the error popup

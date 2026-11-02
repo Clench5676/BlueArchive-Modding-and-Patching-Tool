@@ -10,8 +10,8 @@
 // app.css (webui/main.py keeps it True).
 // WebKit (WKWebView) drops a cursor image whose box would cross the window's right or bottom edge and shows the system
 // arrow instead (Style::Cursor::selectImageCursor): the image is cut to the texture's opaque part, and smaller cuts of
-// it follow in the list for the last pixels at those edges (the first one that fits is shown). Other engines take the
-// first, the whole pointer.
+// it follow in the list for the last pixels at those edges, down to 1 CSS px (the first one that fits is shown). Other
+// engines take the first, the whole pointer.
 //
 // Touch effect: touch-fx.js simulates FX_Touch; this draws it on two canvases over the whole window, below the
 // pointer and above everything else, idle (hidden, no frame loop, no bitmap) while nothing animates. The light goes to
@@ -66,9 +66,14 @@ export function opaqueBox({ data, width, height }, size = SIZE) {
 }
 
 // the pointer's boxes in the order WebKit tries them: the whole pointer, then narrower ones for the right edge,
-// shorter ones for the bottom edge and smaller squares for the corner, `step` CSS px apart
+// shorter ones for the bottom edge and smaller squares for the corner, `step` CSS px apart and then 1 CSS px apart
+// below one step, so that no strip at the window's edges is left to the system arrow
 export function pointerBoxes([w, h], step = STEP) {
-  const cuts = (n) => Array.from({ length: Math.ceil(n / step) - 1 }, (_, i) => (Math.ceil(n / step) - 1 - i) * step);
+  const cuts = (n) => {
+    const coarse = Array.from({ length: Math.ceil(n / step) - 1 }, (_, i) => (Math.ceil(n / step) - 1 - i) * step);
+    const fine = Array.from({ length: Math.min(step, n) - 1 }, (_, i) => Math.min(step, n) - 1 - i);
+    return [...coarse, ...fine];
+  };
   return [[w, h], ...cuts(w).map((x) => [x, h]), ...cuts(h).map((y) => [w, y]), ...cuts(Math.min(w, h)).map((s) => [s, s])];
 }
 

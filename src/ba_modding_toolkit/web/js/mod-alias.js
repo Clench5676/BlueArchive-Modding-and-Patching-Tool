@@ -4,7 +4,7 @@
 import { notify } from "./popup.js";
 import * as NGUI from "./ngui.js";
 import { rpc } from "./api.js";
-import { T } from "./i18n.js";
+import { T, errorText } from "./i18n.js";
 import { FRAME_Y, closed, closable, frameReady, hit, popupFrame } from "./popup.js";
 import * as Loading from "./loading.js";
 import { $, S } from "./util.js";
@@ -61,7 +61,7 @@ export async function open({ mod, onSaved }) {
       if (my === token) finish();
       await onSaved(saved);
     } catch (err) {
-      notify(T(`error.${err.code || "internal"}`, err.params || { error: String(err) }), { kind: "error", error: err });
+      notify(errorText(err), { kind: "error", error: err });
     } finally { saving = false; input.disabled = false; }
   };
   input.addEventListener("keydown", (ev) => {

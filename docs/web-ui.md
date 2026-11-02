@@ -802,7 +802,10 @@ deletion or a rolled back import never comes back. A held id still counts as a s
 configuration naming it is not dropped as `source_missing`, and the game files carrying it are not offered for
 adoption. The one exception is a game file about to be replaced: its bytes are kept as a mod then, since the held
 record has no file to show them. Every removal path (`remove`, `_drop_mods`, an import rollback, an asset deletion)
-saves before it deletes the folder, and an asset deletion's rollback leaves alone a record that returned during it.
+saves before it deletes the folder, and an asset deletion's rollback leaves alone a record that returned during it. A
+held photograph recipe (a record with `roster_photography` choices) still owns its photos: they count as used for
+`photography.removalInfo` and the deletion confirmation, and deleting one is refused (`photo_in_use`) until the record's
+files are back.
 
 **Per-Mod import publication.** `_store` stages and verifies the complete file group under
 `import-transactions/<uuid>/files`, journals its expected hashes, publishes the directory under `mods/<uuid>`, then
@@ -1920,6 +1923,9 @@ detail screen, and in Settings' Mods tab.
   comes first, so the same change is not read twice). Without cores (the classic window closed, a job stopped
   midway, the mod list changed) the screen compares what it shows with the family read again, and the roster forgets
   the portraits whose Replaced flag changed. A job that switched nothing (a prune) changes nothing on the page.
+  The screen's own reads of `family.get` (after a switch, a reload, a change) have no client deadline either: they wait
+  for a job that holds the library lock while the screen stays as it is, and a read that finishes after the screen was
+  read anew (left and entered again, or reloaded by another action) is dropped; a change read that way is read again.
 - **The window back in front** after 30 s or more asks for a scan (`mods.scan`, only with scan consent), so a
   Steam check or a repair made meanwhile is found.
 - **While mods are off** an apply only saves the choice: the switch popup reads Save and starts on the configured
@@ -2016,10 +2022,10 @@ in `pointer-textures`); without a game the system cursor stays and there is no e
   turns off selection on `body` itself.
 - **Window edges.** WebKit (WKWebView) drops a cursor image whose box would cross the window's right or bottom edge
   and shows the system arrow (`Style::Cursor::selectImageCursor`); Chromium (WebView2) takes any cursor up to 32 px.
-  The image is cut to the texture's opaque part (23 x 31 CSS px), and smaller cuts follow in the list, 4 px apart:
-  narrower for the right edge, shorter for the bottom, squares for the corner. WebKit shows the first that fits, so the
-  pointer is cut at the edge, and only the last 3 px show the arrow. The images are object URLs, which keep the value
-  short (every button resolves it).
+  The image is cut to the texture's opaque part (23 x 31 CSS px), and smaller cuts follow in the list, 4 px apart and
+  then 1 px apart below 4 px: narrower for the right edge, shorter for the bottom, squares for the corner. WebKit shows
+  the first that fits, so the pointer is cut at the edge and no strip of the window is left to the arrow. The images are
+  object URLs, which keep the value short (every button resolves it).
 - **Touch effect.** `Resources/UI/FX_Touch`, spawned by TouchEffectCreater at the pointer through the UI camera
   (orthographic size 1: the stage is 2 units high), dragged while the button is held and stopped 60 frames after the
   release. Its parts and numbers come from the prefab's ParticleSystem and TrailRenderer typetrees and its materials'

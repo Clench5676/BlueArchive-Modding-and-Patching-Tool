@@ -60,7 +60,7 @@ test('the no-game screen shows the no-game hint, and a Detect that finds nothing
 const settingsButton = source.slice(source.indexOf('async function openSettings('), source.indexOf('\n// without a game folder'));
 function opener({ gameFound, failure = null } = {}) {
   const notices = [], notes = [], opened = [];
-  const env = { info: { gameFound }, T, console: { error() {} }, Popup: { notice: text => notices.push(text) },
+  const env = { info: { gameFound }, T, errorText, console: { error() {} }, Popup: { notice: text => notices.push(text) },
     notify: (text, options) => notes.push({ text, options }),
     Settings: { open: async (...args) => { opened.push(args); if (failure) throw failure; } } };
   const open = new Function('env', `const {${Object.keys(env)}}=env;${settingsButton};return openSettings;`)(env);

@@ -17,7 +17,7 @@ import { createSceneCamera, sceneRect, sceneViewport } from "./student-hall-came
 import { dialogueText } from "./dialogue-text.js";
 import { portraitRect } from "./student-hall-framing.js";
 import { rpc } from "./api.js";
-import { T, L, language } from "./i18n.js";
+import { T, L, errorText, language } from "./i18n.js";
 import { clone, S, hitButton, text } from "./util.js";
 import { lazyThumbnail } from "./lazy-thumbnail.js";
 import { thumbnailScope } from "./thumbs.js";
@@ -44,7 +44,7 @@ const editing = () => store?.kind() === "layout";
 const arranging = () => editing() && !fullscreen?.active();
 const choiceOf = (entry, kind = "spr") => options.choices.find((choice) => choice.kind === kind && sourceKey(choice) === sourceKey(entry));
 const titleOf = (choice) => choice ? [L(choice.names)?.full || choice.variant, choice.label].filter(Boolean).join(" - ") : T("hall.missing");
-const fail = (error) => { if (root && error?.name !== "AbortError") Popup.notify(T(`error.${error.code || "internal"}`, error.params || { error: String(error) }), { kind: "error", error }); };
+const fail = (error) => { if (root && error?.name !== "AbortError") Popup.notify(errorText(error), { kind: "error", error }); };
 function layer(parent, className = "layer-host", z = null) {
   const element = document.createElement("div"); element.className = className;
   Object.assign(element.style, { position: "absolute", inset: "0", ...(z === null ? {} : { zIndex: String(z) }) }); parent.append(element); return element;

@@ -130,3 +130,16 @@ test("the sites the review lists draw their error text through the shared errorT
   assert.match(main, /catch \(err\) \{ notify\(errorText\(err\), \{ kind: "error", error: err \}\); \}/, "the no-game screen's folder");
   assert.match(main, /\} catch \(err\) \{\n {6}notify\(errorText\(err\), \{ kind: "error", error: err \}\);/, "files dropped on the window");
 });
+
+test("the other copies of that expression use the shared errorText too", async () => {
+  const { readFileSync } = await import("node:fs");
+  const read = (name) => readFileSync(new URL(`../../src/ba_modding_toolkit/web/js/${name}`, import.meta.url), "utf8");
+  for (const name of ["detail.js", "nav.js", "mod-alias.js", "mod-export.js", "student-hall.js", "main.js"]) {
+    const source = read(name);
+    assert.doesNotMatch(source, /T\(`error\.\$\{\w+\??\.code \|\| "internal"\}`/, `${name} builds no error key of its own`);
+    assert.doesNotMatch(source, /String\(err(or)?\) \}\)/, `${name} builds no error detail of its own`);
+    assert.doesNotMatch(source, /const errorText =/, `${name} has no errorText of its own`);
+    assert.match(source, /import \{[^}]*\berrorText\b[^}]*\} from "\.\/i18n\.js"/, `${name} imports the shared one`);
+    assert.match(source, /\berrorText\(/, name);
+  }
+});
