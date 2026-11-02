@@ -34,7 +34,9 @@ portrait and memorial renderers; it never enlarges a thumbnail as its capture so
 matches the student roster, optional thirds stay outside output, and the shutter writes a lossless native-pixel
 PNG directly to the library. Expression cards reuse the detail renderer's face cache. Mode switches retain ready
 resources, pause hidden clocks/audio and publish a complete frame in place. Route/variant changes invalidate
-pending work. Playback, Back and mode buttons reuse the approved native prefabs. The owner handles UAT/visual review.
+pending work. Playback, Back and mode buttons reuse the approved native prefabs. The mode button is drawn only when
+the student has the other mode (`bridge.info()` tells `hasPortrait` and `hasLobby`); a skin without a memorial lobby or
+without a portrait gets none. The owner handles UAT/visual review.
 
 `photographs/` belongs to the movable/shared Mod library, not Preview Cache. Its atomic manifest retains per-student
 captures and App choices, IDs and SHA-256 digests; image publication rolls back if metadata cannot commit. Chosen
