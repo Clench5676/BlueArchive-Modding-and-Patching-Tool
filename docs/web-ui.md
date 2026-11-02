@@ -739,6 +739,19 @@ scanned) is not corruption: reads answer an empty library, writes raise `library
 again. A library move and a data directory move take `state.json.prev` and `.bad` along, as they do for
 `profiles.json`.
 
+**Library move** (`Services.move_library`, `library/relocate.py`; `LIBRARY_ITEMS` lists what travels: the mod, original
+and built folders, the three journal folders `transactions/`, `import-transactions/` and `asset-deletions/`,
+`photographs/`, and `state.json` and `profiles.json` with their `.prev` and `.bad`). Each item is copied into a staging
+folder inside the target (`.library-move-<token>`; files are flushed to disk, modification times kept), the copies are
+compared with the source (names, kinds, sizes, link targets, and the bytes of files up to 1 MiB), and they are then
+published under their final names. Only then is `library_dir` switched, and the source cleared item by item: each is
+renamed aside in one step and the renamed folder deleted. Up to the switch nothing of the source changes: a failure
+(`library_io_error`; a target inside an item is refused the same way) removes the copies, the staging folder and the
+folders the move made, and the same call can be made again at once; a failed switch takes the published copies back. A
+failure clearing the source never loses anything: the library is complete at the target and in use there, the old folder
+keeps whole any item it could not rename, and the failure is logged. A staging folder left by a move that was cut short
+is removed by the next move into that folder.
+
 **Held records.** A valid record whose files are missing (a quarantined file, a partial restore) is held the same
 way, with a warning, instead of being dropped at load: it is not among the library's records, so the engine and the
 UI do not see it, and it is written back unchanged at every save. It returns to the records at the next load, refresh
