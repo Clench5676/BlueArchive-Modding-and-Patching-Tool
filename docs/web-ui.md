@@ -825,6 +825,10 @@ dates, the legacy migration, the unfinished list) skips it instead of failing. R
   new modification time (a stamp from the file would let the stat check read the outside bytes as the recorded ones),
   its kept original stays (the only official copy of a file left as it is) and so do the mods kept from it. An asset
   deletion's rollback does the same and does not recreate a gone file.
+- A game file that is missing while a later-dated file of its part is in its folder (a game update renamed it, as
+  `_View.successor` judges) is not restored: that would write the old name beside the new one. The rollback skips it,
+  drops its record in `applied` (only the journal's own key) and keeps its original and the mods kept from it. A
+  missing file with no such successor is restored as before.
 - A write journal whose install has the same key but other resource folders proceeds if every target still passes
   `check_resource_path`; otherwise it stays `folder_changed`. One whose install is not known now (its folder moved, its
   key differs) waits: it is logged, kept with its files and skipped, writes to other installs go on (a rollback
