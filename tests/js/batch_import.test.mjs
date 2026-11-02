@@ -1748,6 +1748,27 @@ for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) tes
   } finally { setStrings("en-US", flatten(JSON.parse(readFileSync(new URL("../../src/ba_modding_toolkit/locales/en-US.json", import.meta.url), "utf8")))); }
 });
 
+for (const [locale, sep] of [["en-US", ", "], ["zh-CN", "、"], ["zh-TW", "、"], ["ja-JP", "、"], ["ko-KR", ", "], ["th-TH", ", "]]) test(`a merged result row joins its outcomes with the language's list separator in ${locale}`, async () => {
+  try {
+    const strings = JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${locale}.json`, import.meta.url), "utf8"));
+    setStrings(locale, flatten(strings));
+    const h = await fixture();
+    const entries = [entry("a"), { ...entry("a-lobby", "ready", "lobby"), variant: "a" }, { ...entry("a-model", "ready", "model"), variant: "a" }];
+    await h.analyze(entries);
+    const merge = h.action("merge").querySelector("input"); merge.checked = true;
+    await merge.dispatch("change"); await h.page.settled();
+    await h.action("start").click(); await flush();
+    h.runs[0].resolve({ results: [{ id: "a", outcome: "imported", libraryId: "lib-a" }, { id: "a-lobby", outcome: "updated", libraryId: "lib-l" },
+      { id: "a-model", outcome: "failed", reason: "unreadable", libraryId: null }] });
+    await flush(); await h.page.results(); await h.page.settled();
+    const rows = walk(h.dialog).filter((el) => el.dataset.result);
+    assert.equal(rows.length, 1);
+    const meta = find(drawn(h, rows[0]).tree, "Label_Locale_Received").widgets[0].text;
+    const { imported, updated, failed } = strings.webui.import.outcome;
+    assert.equal(meta.replace(/\s+/g, ""), [imported, updated, failed].join(sep).replace(/\s+/g, ""), locale);
+  } finally { setStrings("en-US", flatten(JSON.parse(readFileSync(new URL("../../src/ba_modding_toolkit/locales/en-US.json", import.meta.url), "utf8")))); }
+});
+
 for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) test(`owner review: source badge and result paragraphs fit in ${locale}`, async () => {
   try {
     const strings = JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${locale}.json`, import.meta.url)));

@@ -41,9 +41,12 @@ export async function remove(mod, changed) {
   } catch (err) { ModSwitch.refused(err); }
 }
 
+// the state, then the file names in the language's list separator
+export const valueText = (mod) => [T(["active", "set"].includes(mod.state) ? "status.applied" : `settings.mods.otherState.${mod.state}`),
+  mod.files.join(ModSwitch.listSep())].filter(Boolean).join(" - ");
+
 export function rows(mods, valueRow, changed) {
-  return mods.map((mod, i) => valueRow(`Other_${i}`, 0, mod.label,
-    [T(["active", "set"].includes(mod.state) ? "status.applied" : `settings.mods.otherState.${mod.state}`), ...mod.files].join(" - "), [
+  return mods.map((mod, i) => valueRow(`Other_${i}`, 0, mod.label, valueText(mod), [
       [T("settings.mods.useMod"), () => select(mod, changed, true), mod.state !== "missing" && (!mod.selected || mod.state === "changed")],
       [T("settings.mods.official"), () => select(mod, changed, false), mod.state !== "missing"],
       [T("btn.delete"), () => remove(mod, changed)],
