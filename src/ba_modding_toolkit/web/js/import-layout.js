@@ -78,8 +78,9 @@ export function selectionWindow(tree, atlas = {}, outline, pictureOutline = null
 }
 
 export async function loadImportLayouts(ui) {
+  // UICharacterCollection holds the game list's scrollbar (SeletControl/List/Scroll Bar) that the scrolling areas draw
   const names = ["UINonEquipmentInventory", "UIMailBox", "UIMailBoxContent", "UIPopup_FilterSort", "UINonEquipmentInventoryListItem",
-    "UIPopup_GachaCharList.Btn_Checkbox"];
+    "UIPopup_GachaCharList.Btn_Checkbox", "UICharacterCollection"];
   const layouts = Object.fromEntries(await Promise.all(names.map(async (name) => [name, await ui.layout(name)])));
   const item = layouts.UINonEquipmentInventoryListItem;
   const frame = clone(ui.find(item, `${item.children[0].name}/Normal/Cover_Select`));
@@ -134,6 +135,8 @@ export function importArtwork(ui, layouts) {
 
   return {
     label,
+    // the game list's prefab, for scrollbar.js
+    collection: () => layouts.UICharacterCollection,
     rowGap: () => rowGap(ui, layouts) * ROW_SCALE,
     // UINonEquipmentInventory/Inventory_ListControl/BG, including the game's two background textures.
     background: () => at(inventory(`${INVENTORY}/BG`)),

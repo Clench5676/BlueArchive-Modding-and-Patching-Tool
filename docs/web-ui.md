@@ -1049,6 +1049,13 @@ Remove Imported removes `done`, `library` and `installed` rows from the current 
 Mods or change installed files; pending, conflicted and failed rows remain. The import list, selection and view
 controls remain in memory when navigation leaves and returns during the same session.
 
+The scrolling areas of Batch Import hide the native bars (`app.css`) and draw the complete
+`UICharacterCollection/SeletControl/List/Scroll Bar` prefab over their right edge, as `Popup.scrollArea` does
+(`scrollbar.js`, bound by `bindBar` in `batch-import.js`): the import list, and the dialogs' area of Advanced Options,
+the Import State filter, Import Results and Assign Character. The bar follows the area's own scroll position and shows
+only while the content overflows; the list's bar is drawn again when the search box changes its length. Assign Character
+has no scroller of its own inside that area: the 24 students of a page lie in it, and paging scrolls it back to the top.
+
 A failed row in Import Results shows only localized text: the row's short reason, then ` - ` and the `error.<code>`
 string with the failure's parameters when the locale has one that says more. The code and parameters are not shown; they stay on the result and,
 for a blocked row, on its list entry, which the error report reads (`BAMTRecovery.importList`, `import_row`), and the
