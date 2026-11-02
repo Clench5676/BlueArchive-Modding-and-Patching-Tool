@@ -701,8 +701,11 @@ configured with a mod whose build `update` changed, whose game files still hold 
 **The Enable Mods switch** (`toggle`). An Off adopts the mods it finds first (Add to Library: one mod per entry of its
 non-official parts, every part recorded, the entry configured with it), keeps the built copies, then switches every
 entry carrying a library source to official. An On switches every configured entry that does not carry its source
-back to it. The intent and the entries to reach are saved first, so a crash leaves them listed (the red dot and
-Retry, without a scan). Each entry is judged again when it is reached, with its configuration read again: a part the
+back to it, except an entry whose files changed outside the library: that one is skipped (`skipped`, `why` `changed`),
+leaves the unfinished list and keeps its files. Mods Not in the Library offers it, and only Apply Mod Configuration,
+given the entry as `changed`, writes over it (the outside change kept as a mod first). The intent and the entries to
+reach are saved first, so a crash leaves them listed (the red dot and Retry, without a scan). Each entry is judged
+again when it is reached, with its configuration read again: a part the
 library can show unchanged by size and date (or the last bytes of a CRC-fixed file) carries its record's source, and
 every other part is read in full there. An outside change is adopted by an Off and never overwritten by an On. What
 the full read finds is kept in the records, so the cheap judgement agrees from then on: a file whose bytes are the

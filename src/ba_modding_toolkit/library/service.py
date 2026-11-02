@@ -4552,7 +4552,8 @@ class ModLibrary:
         """The Enable Mods switch over every known install (a writer job of the game folders). An Off adopts the mods
         it finds first (with scan consent its own pass finds them; without, the changed files it meets), keeps the
         built copies, then switches every entry carrying a library source to official. An On switches every
-        configured entry that does not carry its source to it, from the built copy when it still fits. The
+        configured entry that does not carry its source to it, from the built copy when it still fits; a file
+        changed outside the library is skipped (``why`` ``changed``) and left as it is. The
         configuration never changes (decision 2); the intent and the entries not switched yet are saved first.
         ``expect`` is the intent the caller saw (``state_changed`` otherwise); Retry is the same call with ``expect``
         equal to the current intent."""
@@ -4773,8 +4774,10 @@ class ModLibrary:
                 raise
             outcome["done"] = item
             return outcome, None, item
-        # mods on: an On, its Retry, or Apply Mod Configuration
-        if state in ("untracked", "changed") and not (entry.configured and not drift) and not (drift and state == "changed" and listed_state == "changed"):
+        # mods on: an On, its Retry, or Apply Mod Configuration. An outside change is never written over by an On or its
+        # Retry (it leaves the unfinished list: the "Mods Not in the Library" prompt offers it); only Apply Mod
+        # Configuration may, for an entry it was given as changed
+        if state in ("untracked", "changed") and not (drift and state == "changed" and listed_state == "changed"):
             outcome["skipped"] = {**item, "why": state}
             return outcome, (None if leaves(state, True) else "pending"), item
         if drift and state not in ("reset", "updated", "changed"):
