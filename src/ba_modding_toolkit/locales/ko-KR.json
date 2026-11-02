@@ -1175,6 +1175,7 @@
 			"busy": "진행 중인 작업이 끝날 때까지 기다려 주세요",
 			"library_target_not_empty": "폴더에 이미 모드 라이브러리 파일이 있음: {path}",
 			"library_io_error": "모드 라이브러리에 쓸 수 없음: {file}",
+			"data_dir_readonly": "데이터 폴더에 쓸 수 없음: {path}",
 			"asset_extraction_failed": "게임 파일에서 에셋을 읽을 수 없음",
 			"asset_load_failed": "게임 파일을 읽을 수 없음: {path}",
 			"bundle_invalid": "올바른 번들이 아님: {file}",

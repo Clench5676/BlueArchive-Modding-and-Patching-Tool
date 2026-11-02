@@ -211,6 +211,11 @@ Imports only go one way: `webui` → `library` → `catalog` → `gameassets` �
   permits the validated index and sprite PNGs in the app's disk cache.
   NGUI rejects empty or malformed atlas metadata and retries on a later render; a requested sprite missing from
   an otherwise valid index also invalidates it. Failures keep the existing placeholder geometry and log the cause.
+- **Read-only data folder.** The services test the data folder at start by writing and removing a real temporary
+  file (`folder_writable`; `app.info.dataDirWritable`). No fallback to another folder is made. A write that the
+  permissions refuse, to a file in the data folder while that folder cannot be written, answers `data_dir_readonly`
+  (RPC calls and jobs alike, through `Services.translate_error`) instead of `internal`; a single busy file in a folder
+  that takes new files stays an ordinary failure.
 - **User data.** The mod library and UI state live in `utils.EXE_DIR` (the portable data directory the app already
   uses for `config.toml` and `output/`). Several instances may share it: a change to the UI state (`webui.json`) is
   applied to the file as it is at that moment, read again under a lock the instances share (`webui.json.lock`), so
@@ -954,7 +959,7 @@ stops the server (the page shows Closed); with `--serve` it gives `native_unavai
 
 | Method | Result |
 |---|---|
-| `app.info` | version, language, platform, game found (the selected folder is a game install, as for `settings.set`; a folder saved earlier that holds no game starts on the no-game screen), resource version, consent (`null`, `true`, `false`), `uiCached` (consented light assets on disk for the current resource version), paths, `debug` (started with `--debug`) |
+| `app.info` | version, language, platform, game found (the selected folder is a game install, as for `settings.set`; a folder saved earlier that holds no game starts on the no-game screen), resource version, consent (`null`, `true`, `false`), `uiCached` (consented light assets on disk for the current resource version), paths, `dataDirWritable` (a real temporary file was written in the data folder and removed again at start; `false`: see Start sequence), `debug` (started with `--debug`) |
 | `app.consent {granted}` | records the choice; `false` closes the app |
 | `app.quit` | closes the window; `busy` while a writer job runs; in browser mode answers, then stops the server; `native_unavailable` with `--serve` |
 | `app.openClassic {tab}` | `{started}`: starts the classic window on a tab (`settings`: its settings) and waits for it (30 s at most), or brings the open one to the front, with the tab unless a classic task runs; a window an earlier instance left is only raised; `classic_failed {exit_code}` when the child exits or stays silent first; `busy` instead of a new window while a job writing the game folder is queued or running |
@@ -1595,7 +1600,9 @@ optional, so a popup still works without them.
   button when `onClose` is `null`. The cards' buttons are in the page in the list's order.
 
 **Start sequence** (`main.js`, `Popup.sequence`). Once the first screen is revealed the start popups come one at a
-time, in order, each only when it has something to show (`mod-switch.js startDue`): the asset consent, the scan
+time, in order, each only when it has something to show (`mod-switch.js startDue`): first, when `app.info.dataDirWritable`
+is `false` (the data folder cannot be written), one notice with the quit dialog's title and Confirm only
+(`webui.error.data_dir_readonly`, with the folder's path; the no-game screen shows it too); then the asset consent, the scan
 consent (while it is unanswered and a game folder is known; see Enable Mods switch). File checks require scan
 consent: On checks at every start, Off withdraws consent and stops scans.
 The Configuration Drift Check row's Check remains available while Off too: missing consent opens the scan consent
