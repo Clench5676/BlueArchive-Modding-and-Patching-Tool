@@ -442,5 +442,7 @@ test("generic go-to opens Settings' Mods tab with the same preference updates as
   context.go("base");
   assert.deepEqual(destinations, [["mutsuki", "base"]]);
   const button = main.slice(main.indexOf('  $("top-option").addEventListener'), main.indexOf('  addEventListener("hashchange", route);'));
-  assert.ok(button.includes("Settings.open(settingsChanged)"));
+  // the button goes through openSettings, which opens Settings with the same callback and catches a rejection
+  assert.ok(button.includes("openSettings(settingsChanged)"));
+  assert.ok(main.includes("await Settings.open(changed)"));
 });

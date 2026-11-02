@@ -289,7 +289,8 @@ function bootHarness({ compiled = true, startupUpdate = true } = {}) {
   let loading = false, promptBusy = false, recovery = null;
   const env = {
     info: { gameFound: true, compiled, startupUpdate }, startup: {}, fitStage() {}, addEventListener() {},
-    timed: (_phase, work) => work(), start: () => first.promise,
+    // start() hands the consent and the loading screen the data of a start with a game
+    timed: (_phase, work) => work(), start: () => first.promise.then(() => setStartWithGame(true)),
     rpc: async (method) => events.push(method), Cursor: { init: () => events.push("cursor") }, $: () => host,
     Loading: { scene: (work) => work(), timings: () => ({}), busy: () => loading, init() {} },
     Popup: {
@@ -306,8 +307,12 @@ function bootHarness({ compiled = true, startupUpdate = true } = {}) {
     Prompts: { start: async (name) => events.push(name), isBusy: () => promptBusy },
     Update: { check: (_host, _info, options) => { events.push("update-check"); offers.push(options); return update.promise; } },
   };
-  const bootCode = source.slice(source.indexOf("async function boot("), source.indexOf("async function start()"));
-  const boot = new Function("env", `let { ${Object.keys(env).join(", ")} } = env; ${bootCode} return boot;`)(env);
+  // the first-run sequence, boot() and the start popups
+  const bootCode = source.slice(source.indexOf("let sessionReady = null"), source.indexOf("async function start()"));
+  let setStartWithGame;
+  const boot = new Function("env", `let { ${Object.keys(env).join(", ")} } = env; ${bootCode}
+    env.setStartWithGame = (value) => { startWithGame = value; }; return boot;`)(env);
+  setStartWithGame = env.setStartWithGame;
   return { boot, first, consent, update, events, offers, blockers, tourOffers, modState, setLoading: (v) => { loading = v; },
     setPromptBusy: v => { promptBusy = v; }, setRecovery: v => { recovery = v; } };
 }

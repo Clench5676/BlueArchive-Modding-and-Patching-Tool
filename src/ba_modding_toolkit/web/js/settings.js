@@ -37,7 +37,7 @@ async function call(fn) {
   try { return await fn(); } catch (err) {
     if (err.code === "game_directory_missing" && ["global", "japan"].includes(err.params?.region)) {
       // The game's notice caption, also used by Quit; UIPopup_Sort supplies the frame and lone Confirm button.
-      await Popup.message({ title: T("quit.title"), lines: [T(`settings.gameDirMissing.${err.params.region}`)], ok: T("picker.ok") });
+      await Popup.notice(T(`settings.gameDirMissing.${err.params.region}`));
     } else notify(errorText(err), { kind: "error", error: err });
     return null;
   }
@@ -448,6 +448,8 @@ async function render({ builtSize = null, sizeError = null } = {}) {
     if (r.slider) wireSlider(inner, rv, { ...r.slider, path: `Rows/${r.slider.path}`, label: r.slider.label && `Rows/${r.slider.label}` });
   }
   if (my !== token || $("settings").hidden) return;
+  // a click on the backdrop closes it, as Escape does (the shared stack); a redraw keeps its place on the stack
+  Popup.closable(view, host, close);
   host.replaceChildren(...next.childNodes);
   host.querySelector(".settings-rows").scrollTop = scroll;
   host.querySelector(".settings-rows").addEventListener("scroll", (e) => { scroll = e.target.scrollTop; });
@@ -466,6 +468,7 @@ function close() {
   const host = $("settings");
   host.hidden = true;
   host.innerHTML = "";
+  Popup.closed(host);
 }
 
 // the Mods tab follows the switch's state (mods.state: a toggle elsewhere, the game starting, the file check)
@@ -496,6 +499,8 @@ export async function open(changed, initialTab = null) {
   otherRequest++;
   otherMods = tab === "mods" ? await call(() => rpc("mods.other")) : null;
   $("settings").hidden = false;
+  // on the popup stack from the start: Escape closes it, and a popup opened over it takes the key first
+  Popup.opened($("settings"), close);
   await render();
 }
 

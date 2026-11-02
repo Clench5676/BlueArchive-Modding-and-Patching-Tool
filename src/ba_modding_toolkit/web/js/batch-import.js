@@ -560,6 +560,7 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
     for (const family of data.families) family.variants = family.variants.map((variant) => ({ ...variant, ...current.get(variant.key) }));
     catalog = catalogEntries(data); identities = new WeakMap();
     await characterPicker({ data, selected: entry.variant, dialog, el, button, inputControl, checkbox, radioOptions,
+      emptyNote: (host, caption) => textWidget(host, caption, "empty", { scale: 0.5, origin: [685, 50] }),
       onSelect: (variant) => model.assignCharacter(entry.id, variant) });
   }
 
@@ -713,6 +714,8 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
   }
 
   // Popup.popupFrame clones UIPopup_Sort/Center: Base/BG, Btn_Close and Btn/Btn_Ok / Btn_Cancel.
+  // content(area, {primary(enabled)}): primary(false) blocks the confirm button (the game's disabled one, answering nothing)
+  // until primary(true); it may be called while the content is built.
   async function dialog(title, { action = T("display.close"), cancel = null, onAction = () => true, width = 2458, bodyWidth = null } = {}, content) {
     await popups.ready();
     if (!visible || dialogClose) return;
@@ -727,30 +730,35 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
     dialogClose = () => close(true);
     popups.opened(dialogHost, close, { el: layer, loading: true });
     try {
-      const view = await ui.render(popups.popupFrame(title, width, 1360, { ok: action, cancel }), layer, { scale: S, origin: [960, 540], z: 10 });
+      const frame = popups.popupFrame(title, width, 1360, { ok: action, cancel });
+      const view = await ui.render(frame, layer, { scale: S, origin: [960, 540], z: 10 });
       if (ended) return;
+      let allowed = true, okHit = null, blocked = null;
+      const sync = () => {
+        if (okHit) { okHit.disabled = !allowed; okHit.setAttribute("aria-disabled", String(!allowed)); }
+        if (blocked) blocked.hidden = allowed;
+      };
+      // the confirm in the game's disabled look, over the live one (above its caption), shown while blocked
+      if (popups.disabledConfirm) {
+        blocked = el("div"); blocked.hidden = true; layer.appendChild(blocked);
+        await ui.render(popups.disabledConfirm(frame), blocked, { scale: S, origin: [960, 540], z: 40 });
+        if (ended) return;
+      }
       const area = el("div", "import-dialog-content");
       if (bodyWidth) Object.assign(area.style, { left: `${960 - bodyWidth / 2 - 16}px`, width: `${bodyWidth + 32}px` });
-      layer.appendChild(area); await content(area);
+      layer.appendChild(area); await content(area, { primary: (enabled) => { allowed = enabled !== false; sync(); } });
       const finish = async () => {
-        if (working) return; working = true; layer.setAttribute("aria-busy", "true");
+        if (working || !allowed) return; working = true; layer.setAttribute("aria-busy", "true");
         try {
           if (await onAction(area)) { working = false; close(); }
         } finally { working = false; layer.setAttribute("aria-busy", "false"); }
       };
-      popups.hit(layer, view, "Center/Popup/Btn/Btn_Ok/BG (1)", finish, { name: action, action: "ok" });
+      okHit = popups.hit(layer, view, "Center/Popup/Btn/Btn_Ok/BG (1)", finish, { name: action, action: "ok" });
+      sync();
       if (cancel) popups.hit(layer, view, "Center/Popup/Btn/Btn_Cancel/BG (1)", close, { name: cancel, action: "cancel" });
       popups.hit(layer, view, "Center/Popup/Base/BG/Btn_Close", close, { name: T("display.close"), action: "close" });
       popups.closable(view, dialogHost, close, { el: layer });
       layer.setAttribute("role", "dialog"); layer.setAttribute("aria-modal", "true"); layer.setAttribute("aria-label", title);
-      layer.addEventListener("keydown", (event) => {
-        if (event.key !== "Tab") return;
-        const focusable = [...layer.querySelectorAll("button:not(:disabled), input:not(:disabled), select:not(:disabled), summary")];
-        const first = focusable[0], last = focusable.at(-1);
-        if (!first) return;
-        if (event.shiftKey && (document.activeElement === first || document.activeElement === layer)) { event.preventDefault(); last.focus(); }
-        else if (!event.shiftKey && (document.activeElement === last || document.activeElement === layer)) { event.preventDefault(); first.focus(); }
-      });
       await (popups.reveal ? popups.reveal(layer, [...drawings]) : Promise.all([...drawings]));
       if (!ended) layer.focus?.({ preventScroll: true });
     } catch (error) { close(); throw error; }

@@ -260,12 +260,13 @@ function listPrompt({ title, items, buttons, hint, check, closable, which }) {
     const done = (button) => {
       host.hidden = true;
       host.innerHTML = "";
+      Popup.closed(host);
       resolve({ button, selection, checked: !!check?.checked });
     };
     const draw = (scroll = 0) => Popup.listPopup({
       host, title, items, selected: [...selection], multi: true, focus, keepScroll: scroll, hint,
       footer: footer(items, selection, { size: which === "untracked" }), check,
-      buttons: buttons.map((b) => ({ ...b, fn: () => (b.greyed ? notify(b.why || "", { kind: "error" }) : done(b.action)) })),
+      buttons: buttons.map((b) => ({ ...b, fn: () => (b.greyed ? notify(b.why || "", { kind: "error", error: b.whyError }) : done(b.action)) })),
       onClose: closable ? () => done("later") : null,
       onSelect: (key, s) => { focus = key; selection = Popup.toggled(selection, items, key); draw(s); },
       details: (it) => {
@@ -297,7 +298,7 @@ async function driftPrompt(lists, s) {
     title: T("mods.driftTitle"), items, hint, closable: false, which: "drift",
     buttons: [
       { label: T("mods.driftKeep"), action: "keep" },
-      { label: T("mods.driftApply"), action: "apply", primary: true, greyed: !!blocked && s.reason !== "classic_open", why: blocked },
+      { label: T("mods.driftApply"), action: "apply", primary: true, greyed: !!blocked && s.reason !== "classic_open", why: blocked, whyError: { code: s.reason, params: s.reasonParams } },
     ],
   });
   if (!answer.button) return null;

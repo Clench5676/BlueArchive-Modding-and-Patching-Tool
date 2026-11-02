@@ -66,7 +66,65 @@ export function ready() {
 // the page, so a popup closed by hiding its host leaves the stack by itself.
 const stack = [];
 const live = (e) => e.host.isConnected && !e.host.hidden && (!e.el || e.el.isConnected);
-function prune() { for (let i = stack.length - 1; i >= 0; i -= 1) if (!live(stack[i])) stack.splice(i, 1); }
+function prune() {
+  for (let i = stack.length - 1; i >= 0; i -= 1) if (!live(stack[i])) release(stack.splice(i, 1)[0]);
+}
+
+// --- keyboard focus: one trap for every popup on the stack ---
+// A popup takes the focus when it opens (the container, or what the caller focuses itself), Tab and Shift+Tab cycle
+// inside the topmost one, and once it closes the focus goes back to what had it before, unless the user moved on.
+const doc = () => globalThis.document;
+// an element Tab can stop at: enabled, drawn, not inert; a hidden or inert part is skipped whole
+function shown(el) {
+  if (typeof el.getClientRects !== "function") return true;
+  if (!el.getClientRects().length) return false;
+  return typeof getComputedStyle !== "function" || getComputedStyle(el).visibility !== "hidden";
+}
+export function tabStops(box) {
+  const out = [];
+  const visit = (parent) => {
+    for (const el of parent.children || []) {
+      if (el.hidden || el.inert || el.style?.display === "none") continue;
+      if (!el.disabled && el.tabIndex >= 0 && el.style?.visibility !== "hidden" && shown(el)) out.push(el);
+      visit(el);
+    }
+  };
+  visit(box);
+  return out;
+}
+function focusIn(box) {
+  const active = doc()?.activeElement;
+  if (!box || box.hidden || box.inert || box.isConnected === false || (active && box.contains?.(active))) return;
+  if (box.tabIndex < 0 && !box.hasAttribute?.("tabindex")) box.setAttribute?.("tabindex", "-1");
+  box.focus?.({ preventScroll: true });
+}
+// what had the focus when the popup opened, unless it is the popup itself or nothing in particular
+function opener(box) {
+  const active = doc()?.activeElement;
+  return active && active !== doc().body && !box.contains?.(active) ? active : null;
+}
+function release({ host, el, before }) {
+  if (!before || before.isConnected === false) return;
+  const box = el || host, active = doc()?.activeElement;
+  if (active && active !== doc().body && !box.contains?.(active)) return; // the user moved on
+  const above = stack.findLast(live); // another popup still open: only into it
+  if (above && !(above.el || above.host).contains?.(before)) return;
+  before.focus?.({ preventScroll: true });
+}
+// Tab inside the topmost popup: wraps at the ends, and brings the focus back in when it is outside (on the opener,
+// or lost when a redraw replaced the focused control). A control that took the key itself keeps it (defaultPrevented).
+export function trapKey(ev) {
+  if (ev.key !== "Tab" || ev.defaultPrevented || ev.isComposing || ev.keyCode === 229 || ev.altKey || ev.ctrlKey || ev.metaKey) return;
+  const t = top();
+  if (!t) return;
+  const box = t.el || t.host, stops = tabStops(box), active = doc()?.activeElement;
+  if (!stops.length) { ev.preventDefault(); focusIn(box); return; }
+  const at = stops.indexOf(active), last = stops.length - 1;
+  if (at >= 0 && (ev.shiftKey ? at > 0 : at < last)) return; // inside: the browser steps to the next control
+  ev.preventDefault();
+  (ev.shiftKey ? stops[last] : stops[0]).focus?.();
+}
+addEventListener("keydown", trapKey);
 
 // a popup opened in host (el: its own layer, when the host holds several); close(how) closes it, how being "escape",
 // "backdrop" or "close"; null for a popup that must be answered with one of its buttons. Drawing the same popup again
@@ -74,9 +132,10 @@ function prune() { for (let i = stack.length - 1; i >= 0; i -= 1) if (!live(stac
 export function opened(host, close, { el = null, loading = false } = {}) {
   if (loading && el) { el.style.visibility = "hidden"; el.inert = true; }
   prune();
-  const entry = { host, el, close };
   const at = stack.findIndex((e) => e.host === host && e.el === el);
-  if (at >= 0) stack[at] = entry; else stack.push(entry);
+  // a popup drawn again keeps its place and what to give the focus back to; a new one takes the focus in
+  const entry = { host, el, close, before: at >= 0 ? stack[at].before : opener(el || host) };
+  if (at >= 0) stack[at] = entry; else { stack.push(entry); if (!loading) focusIn(el || host); }
   return entry;
 }
 // Reveal only after the entire layer's work and decoded pictures are ready. A closed layer stays closed.
@@ -86,11 +145,12 @@ export async function reveal(layer, pending = []) {
   if (!layer.isConnected) return false;
   layer.style.visibility = "";
   layer.inert = false;
+  if (top()?.el === layer) focusIn(layer);
   return true;
 }
 export function closed(host, el = null) {
   const at = stack.findIndex((e) => e.host === host && e.el === el);
-  if (at >= 0) stack.splice(at, 1);
+  if (at >= 0) release(stack.splice(at, 1)[0]);
 }
 export function top() { prune(); return stack.at(-1) || null; }
 // any popup open: the stack, or a host of the other popups (the consent and update popups, the settings, the display
@@ -213,6 +273,16 @@ export function popupFrame(title, w, h, { ok = null, cancel = null, close = true
     NGUI.fitLabels(btn.children.map((child) => find(child, "Label_Locale").widgets[0]), buttons.map((action) => action.label), 64, 40, 420, 2, { maxH: BUTTON_TEXT_H });
   }
   find(t, "BlackBg/BlackBgClickArea").widgets.find((x) => "sprite" in x).color = "#000000/0.60";
+  return t;
+}
+
+// popupFrame's confirm button as the game's disabled one, alone at the frame's place: a popup that can block its confirm
+// lays this over the live one while it is blocked (the list popup draws its blocked primary button the same way)
+export function disabledConfirm(frame) {
+  const t = clone(frame), popup = find(t, "Popup"), btn = find(popup, "Btn");
+  btn.children = [Buttons.disable(find(btn, "Btn_Ok"))];
+  popup.children = [btn];
+  t.children = t.children.filter((c) => c.name === "Popup");
   return t;
 }
 
@@ -570,6 +640,8 @@ function detailsTree(it, title, fields, actions, portraitTexture = null, kind = 
 //   onSelect(key, scroll): a card was clicked (the caller ticks it, toggled(), or chooses it, and draws the popup again)
 //   buttons: [{label, fn, primary, greyed, action}] under the list, or okText and onOk for the one confirm button
 //   onClose(how): the close button, the backdrop and Escape; null for a popup without them (it must be answered)
+//   A list with no card to show puts hall.noCandidates in the list paper; with tools, while the chosen card (selected)
+//   is not among the cards shown, the primary button is the game's disabled one and answers nothing.
 //   tools: {segs, seg, onSeg, sortKey} for the student list's tools over the cards, or null; without them, hint
 //          (left) and footer (right) show in their place
 //   check: {label, checked, onChange} for a checkbox left of the buttons; a click flips check.checked, so the same
@@ -609,10 +681,16 @@ export async function listPopup(options) {
   const redraw = () => listPopup({ ...options, keepScroll: 0 });
   const ticked = multi ? new Set(selected || []) : null;
   const isSelected = (key) => (multi ? ticked.has(key) : key === selected);
-  const btns = buttons || [{ label: okText, fn: onOk, primary: true, semantic: options.okSemantic || "confirm", action: "ok" }];
+  // a search or segment that hides the chosen card: confirming would act on a card the user cannot see
+  const filteredOut = !!tools && !multi && selected != null && !items.some((it) => it.key === selected);
+  const btns = (buttons || [{ label: okText, fn: onOk, primary: true, semantic: options.okSemantic || "confirm", action: "ok" }])
+    .map((b) => (b.primary && filteredOut ? { ...b, greyed: true, blocked: true } : b));
   const next = document.createElement("div");
   const view = await NGUI.render(listFrame(title, btns, !!onClose), next, { scale: S, origin: [960, 540] });
-  btns.forEach((b, i) => hit(next, view, `Center/Popup/Btn/Btn_${i}/BG (1)`, b.fn, { name: b.label, action: b.action || `button${i}` }));
+  btns.forEach((b, i) => {
+    const button = hit(next, view, `Center/Popup/Btn/Btn_${i}/BG (1)`, b.blocked ? () => {} : b.fn, { name: b.label, action: b.action || `button${i}` });
+    if (button && b.blocked) { button.disabled = true; button.setAttribute("aria-disabled", "true"); }
+  });
   if (onClose) hit(next, view, "Center/Popup/Base/BG/Btn_Close", () => onClose("close"), { name: T("display.close"), action: "close" });
   closable(view, host, onClose);
   const band = [];
@@ -685,6 +763,12 @@ export async function listPopup(options) {
     }
   }
   const top = LP.list.t - 166 - (tools && toolState.searching && !horizontal ? 160 : 0), bottom = LP.list.b + 24;
+  if (!items.length) {
+    // nothing to show: the list paper says so, as the Hall's pickers do
+    const room = LP.list.r - LP.list.l - 160, f = fitText(T("hall.noCandidates"), 48, 32, room, 2);
+    await NGUI.render(node("Empty", [(LP.list.l + LP.list.r) / 2, (top + bottom) / 2],
+      [label(f.text, f.fs, "#2d4664/1.00", room, f.fs * 1.3 * f.lines + 8, { depth: 8 })]), next, { scale: S, origin: [960, 540], z: 20 });
+  }
   const [aL, aT] = [960 + (LP.list.l + 16) * S, 540 - top * S];
   // Measure the actual prefab widgets, including the name band's asymmetric incline and selection marks.
   const trees = items.map((it) => listCard(it, 0, 0, isSelected(it.key), card, options.layoutKind));
@@ -1048,9 +1132,33 @@ export function textViewer({ title, text, copy, close = T("display.close"), onCo
   });
 }
 
-// Only errors/refusals use a notification popup. Rich results call message() explicitly.
+// --- ordinary refusals ---
+// A refusal declines an action because of a state or a rule (a task still running, the game open, no game folder, a
+// Hall rule): nothing broke, so it reads as the game's neutral notice (title quit.title, Confirm only), without Failed
+// and without an Error Report button (BL-045). Every other code is a real failure and keeps both. Codes that report
+// something unreadable or unknown (game_status_unavailable, profiles_unreadable) stay failures.
+export const REFUSALS = Object.freeze([
+  // the machine is in a state that blocks the action
+  "busy", "game_running", "steam_busy", "classic_open", "game_not_found", "game_directory_missing",
+  // the view was stale: something changed since the click was offered
+  "state_changed", "folder_changed", "entry_changed",
+  // a rule of the app
+  "mod_in_use", "mod_in_use_elsewhere", "mod_last_copy", "asset_official", "photo_in_use", "library_target_not_empty",
+  "hall_last_portrait", "hall_last_memorial", "hall_duplicate_portrait", "hall_duplicate_memorial", "hall_conflict",
+  "alias_too_long", "alias_too_many", "export_empty", "scan_off", "native_only", "native_unavailable",
+]);
+export const isRefusal = (error) => REFUSALS.includes(error?.code);
+
+// the neutral notice: the game's caption title (as the quit prompt), one line, Confirm only; resolves when closed
+export function notice(text) {
+  return message({ title: T("quit.title"), lines: [text], ok: T("picker.ok") });
+}
+
+// Only errors/refusals use a notification popup: a refusal as a notice, anything else as Failed with the Error Report.
+// Rich results call message() explicitly.
 export function notify(text, { kind = "info", error = null } = {}) {
   if (!text || kind !== "error") return;
+  if (isRefusal(error)) { void notice(text); return; }
   void message({ title: T("job.failed"), lines: [text], ok: T("picker.ok"), error });
 }
 

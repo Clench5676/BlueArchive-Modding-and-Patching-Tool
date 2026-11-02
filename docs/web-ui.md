@@ -36,7 +36,11 @@ portrait and memorial renderers; it never enlarges a thumbnail as its capture so
 matches the student roster, optional thirds stay outside output, and the shutter writes a lossless native-pixel
 PNG directly to the library. Expression cards reuse the detail renderer's face cache. Mode switches retain ready
 resources, pause hidden clocks/audio and publish a complete frame in place. Route/variant changes invalidate
-pending work. Playback, Back and mode buttons reuse the approved native prefabs. The owner handles UAT/visual review.
+pending work. Playback, Back and mode buttons reuse the approved native prefabs. The mode button is drawn only when
+the student has the other mode (`bridge.info()` tells `hasPortrait` and `hasLobby`); a skin without a memorial lobby or
+without a portrait gets none. In the memorial camera's Dialogue / Actions list a dialogue is captioned as the detail
+screen names it (`lobby.dialogue`, "Dialogue 3"), never by its Spine clip name; the idle poses in that list have no label
+of their own yet and keep their clip names. The owner handles UAT/visual review.
 
 `photographs/` belongs to the movable/shared Mod library, not Preview Cache. Its atomic manifest retains per-student
 captures and App choices, IDs and SHA-256 digests; image publication rolls back if metadata cannot commit. Chosen
@@ -1183,7 +1187,10 @@ with the same text, so both entry reasons and RPC/job failures translate consist
 `character-picker.js` uses the roster's search, filters, sorting and variant-grouping controls over the offline
 assignment catalog. That catalog combines shipped student metadata and the character map, so ownership selection
 can include a Japanese-server student whose resources are absent from the selected Global installation. Confirming
-the owner persists `assignment` with a self-contained, validated Mod; re-analysis recognizes the stored result.
+the owner persists `assignment` with a self-contained, validated Mod; re-analysis recognizes the stored result. A
+search or filter that shows no student puts `hall.noCandidates` in the list, and while the chosen student is not among
+those the view offers, Confirm is the game's disabled button and answers nothing (`dialog` of `batch-import.js`
+passes the content `primary(enabled)`; `Popup.disabledConfirm` draws the disabled button over the live one).
 
 `assigned_catalog.py` adds saved assigned students to roster/detail results without inventing resource handles.
 `storedKinds` describes kinds present in the student's library Mods, while `localKinds` and `spr`/`lobby`/`model`
@@ -1392,7 +1399,10 @@ import list and its view controls, stays available within the session.
   on the icon as a brightness factor (0.4745; `data-tint="game"`; the icon at half until it is read). Without that
   prefab it takes NGUI's default disabled colour (`Color.grey`): the icon and the label at half brightness (`ngui`).
   Without a game folder the no-game screen shows the navigation too, with the icon in grey at half brightness and the
-  label in the settings' disabled grey (`#9aa3ad`, `plain`).
+  label in the settings' disabled grey (`#9aa3ad`, `plain`). Its hint is `app.noGame.hint` (Detect it, or choose the
+  game folder), with plain Detect and Choose buttons and no language or server controls. Settings is drawn from the
+  game's UI and cannot open without a game folder: the top bar's Settings button then says the same hint in the plain
+  notice, and any other failure of opening it is reported as a failure, so the click never fails silently.
 - **The hand-off prompt** (decision 6). A click, Enter or Space on a greyed entry opens the prompt on the shared
   message popup: the entry's label as its title, "Not migrated yet, opens in the classic UI" (`classic.hint`), the
   checkbox Don't Ask Again (`mods.dontAsk`, unticked), Cancel and Open. It shows on every click. Open with the box
@@ -1571,7 +1581,10 @@ optional, so a popup still works without them.
 - **Hosts.** The detail screen's own, `#popup` and `#picker`, inside the screen; and two on the stage, so a popup
   shows on any screen: `#prompt` (z-index 2550) for list prompts and `#dialog` (z-index 2600) for message popups, both
   over the settings (2500) and under the toast (3000). Each message popup is a layer of its own in `#dialog`, so one
-  opened from another shows over it. The display settings (`#display`, 2500) opened while `#dialog` is up (Assign
+  opened from another shows over it. Mod Alias (`mod-alias.js`) and the repair preview (`mod-compare.js`) are layers of
+  their own in `#dialog` too (`.popup-layer`, registered on the stack with `el`): a failed save's message draws above
+  Mod Alias, Escape closes the visible (topmost) layer, and closing one removes only its own layer, never the others in
+  the host. The display settings (`#display`, 2500) opened while `#dialog` is up (Assign
   Character's Display Settings) get the `over` class (2700, like the scan consent's), so they draw over the dialog,
   take its clicks and are first on the stack; the class goes when they close.
 - **The stack.** Every open popup is on one stack (`opened(host, close)`), and Escape goes to the topmost one only.
@@ -1580,6 +1593,28 @@ optional, so a popup still works without them.
   alone while an input method composes (`isComposing`, `keyCode` 229) or when a control took the key itself
   (`defaultPrevented`). `anyOpen()` tells whether any popup is up (the stack, or the consent, update, settings and
   display hosts), and `whenIdle(every, blocked)` resolves once none is and the optional work predicate is false.
+  The settings (`#settings`) register with `opened` as they open and leave with `closed`, and wire the backdrop with
+  `closable`: Escape and a click on the backdrop close them like every other popup, and a popup opened over them takes
+  the key first.
+- **Focus.** One shared trap for every popup on the stack (`opened` / `closed`, `trapKey` on the window). A popup takes
+  the keyboard focus when it opens (its layer or host; a layer hidden while it loads, `loading`, when it is revealed), Tab
+  and Shift+Tab stay inside the topmost popup and wrap at its first and last control (disabled, hidden, inert and
+  undrawn controls are skipped), the focus is pulled back in when it is outside or lost to a redraw, and it returns to
+  what had it before once the popup closes, unless the user has moved on or another popup is still open over it. A
+  popup that must be answered with a button traps just the same. A control that took the key itself (`defaultPrevented`,
+  the tour's own Tab), an input method composing and the modifier keys are left alone. The Hall modals and the import
+  dialogs use it; the tour keeps its own three-button cycle.
+- **Refusals and failures** (`notify`, `notice`; BL-045). An ordinary refusal, where the app declined an action because
+  of a state or a rule and nothing broke, is the neutral notice: title Notice (`quit.title`), the line, Confirm only,
+  no Failed and no Error Report. `REFUSALS` lists the codes: `busy`, `game_running`, `steam_busy`, `classic_open`,
+  `game_not_found`, `game_directory_missing`, `state_changed`, `folder_changed`, `entry_changed`, `mod_in_use`,
+  `mod_in_use_elsewhere`, `mod_last_copy`, `asset_official`, `photo_in_use`, `library_target_not_empty`,
+  `hall_last_portrait`, `hall_last_memorial`, `hall_duplicate_portrait`, `hall_duplicate_memorial`, `hall_conflict`,
+  `alias_too_long`, `alias_too_many`, `export_empty`, `scan_off`, `native_only`, `native_unavailable`. Any other code,
+  or none, is a real failure: title Failed and the Error Report button (`game_status_unavailable` and
+  `profiles_unreadable` report something unreadable, so they stay failures). A greyed switch or Apply names its reason
+  by its code, so the same rule decides. The classic modal and the Spine licence prompt are questions, not failures:
+  they pass no `error`.
 - **Buttons.** Every button of a popup is an invisible button over the drawn one, named for assistive technology by
   the caption it covers (`aria-label`) and marked with what it does (`data-action`). When a sprite is missing from
   the atlases its button is placed from the prefab node, so the popup can still be answered.
@@ -1609,9 +1644,17 @@ optional, so a popup still works without them.
   not-owned cards with its picture in grey, and `badge` replaces In Use with the caller's word. Buttons right-aligned
   under the list (the main ones in OK's blue, three or more a little smaller), a checkbox at their left, and no close
   button when `onClose` is `null`. The cards' buttons are in the page in the list's order.
+  A list with no card to show (a search or segment that matches nothing) puts `hall.noCandidates` in the list paper,
+  centred on the visible paper. With `tools`, while the chosen card (`selected`) is not among the cards shown, the
+  primary button is the game's disabled one (`aria-disabled`, answering nothing); a prompt without `tools` is never
+  blocked.
 
-**Start sequence** (`main.js`, `Popup.sequence`). Once the first screen is revealed the start popups come one at a
-time, in order, each only when it has something to show (`mod-switch.js startDue`): the asset consent, the scan
+**Start sequence** (`main.js`, `Popup.sequence`). The whole first-run sequence (the cursor, the start popups, the
+update check and the feature tour) is one function that runs once per session, when a game folder is known: at the
+start, or, after a start without one, as soon as the folder is chosen on the no-game screen
+(`refreshConfiguration` calls it after the first screen is shown; the consent and the loading screen are then given the
+data of the game found), without a restart. A later refresh never starts it again. Once the first screen is revealed
+the start popups come one at a time, in order, each only when it has something to show (`mod-switch.js startDue`): the asset consent, the scan
 consent (while it is unanswered and a game folder is known; see Enable Mods switch). File checks require scan
 consent: On checks at every start, Off withdraws consent and stops scans.
 The Configuration Drift Check row's Check remains available while Off too: missing consent opens the scan consent
