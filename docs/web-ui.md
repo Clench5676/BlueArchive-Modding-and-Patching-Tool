@@ -172,6 +172,11 @@ Imports only go one way: `webui` → `library` → `catalog` → `gameassets` �
   `logging.getLogger(__name__)`, never `print`.
 - **JSON-ready results.** Dataclasses with `to_json()` returning plain dicts; paths as absolute strings, dates as ISO
   strings.
+- **Texture decoding.** Every decode of a `Texture2D` read from a bundle goes through `texture_guard.texture_image`
+  (or `check_texture` before a decode of its own). A texture is refused unless its width and height are positive and at
+  most 16384, its format is one UnityPy decodes (the crunched formats are not) and its image data, stream data
+  included, covers the declared size. A refusal raises `ServiceError("bundle_invalid", file=...)` where the bundle file
+  is known, else the `ValueError` subclass `TextureRefused`; callers treat it like any other unreadable texture.
 - **Game assets.** Two classes:
   - *Light*: atlas sprites, atlas metadata, UI textures, prefab layouts and the bundle indexes. Kept in memory; written
     to the disk cache only after the user agreed (`consent = true`).

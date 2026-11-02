@@ -12,6 +12,7 @@ from ba_modding_toolkit.core import extraction
 from ba_modding_toolkit.models import AssetType
 from ba_modding_toolkit.spine import SkelConverter, atlas_downgrade, unpack_atlas
 from ba_modding_toolkit.utils import is_safe_file_name, is_safe_relative_name, no_log
+from texture_helpers import fake_texture
 
 ESCAPES = ["../escaped", "..\\escaped", "sub/../../escaped", "/escaped", "\\escaped", "C:escaped", "C:\\escaped",
            "..", ".", "", ".. ", "./..", "a/", "name\0.txt", "file.txt:stream"]
@@ -40,7 +41,7 @@ def text_asset(name: str):
 
 
 def texture(name: str):
-    data = SimpleNamespace(m_Name=name, image=Image.new("RGBA", (1, 1)))
+    data = fake_texture(Image.new("RGBA", (1, 1)), m_Name=name)
     return SimpleNamespace(type=AssetType.Texture2D, read=lambda: data)
 
 

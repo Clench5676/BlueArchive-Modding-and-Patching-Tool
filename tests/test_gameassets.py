@@ -26,6 +26,7 @@ from ba_modding_toolkit.gameassets.discovery import (
 from ba_modding_toolkit.gameassets.layouts import export_layout, subtree
 from ba_modding_toolkit.gameassets.spine import atlas_pages, extract_spine
 from ba_modding_toolkit.searching import get_search_dirs
+from texture_helpers import fake_texture
 
 logger = logging.getLogger(__name__)
 # reference files extracted earlier, only when named (BAMT_TEST_PROTOTYPE); they may come from a modded install
@@ -388,7 +389,7 @@ def test_external_atlas_crop_orientation_and_decode_once(tmp_path, monkeypatch):
         "m_TexEnvs": [("_MainTex", {"m_Texture": {"m_FileID": 0, "m_PathID": 3}})]}})
     image = Image.new("RGBA", (2, 2), "blue")
     image.putpixel((1, 0), (255, 0, 0, 255))
-    texture = _Object("Texture2D", 3, "CAB-texture", name="Test", data=SimpleNamespace(image=image))
+    texture = _Object("Texture2D", 3, "CAB-texture", name="Test", data=fake_texture(image))
     envs = {first: SimpleNamespace(objects=[atlas]), second: SimpleNamespace(objects=[material, texture])}
     envs.update({relocated / path.name: env for path, env in list(envs.items())})
     loads = []
@@ -437,7 +438,7 @@ def atlas_source(tmp_path, monkeypatch, request):
             yield SimpleNamespace(objects=[atlas])
         else:
             image = Image.new("RGBA", (1, 1), path.read_text().strip())
-            texture = _Object("Texture2D", 3, "CAB-image", name="Common", data=SimpleNamespace(image=image))
+            texture = _Object("Texture2D", 3, "CAB-image", name="Common", data=fake_texture(image))
             yield SimpleNamespace(objects=[material, texture])
 
     monkeypatch.setattr(service, "open_bundle", open_fake)
@@ -671,11 +672,11 @@ def test_texture_route_falls_back_to_the_pointer_textures(tmp_path, monkeypatch)
     pointer = Image.new("RGBA", (4, 4), (0, 128, 255, 255))
     envs = {
         ui: SimpleNamespace(objects=[_Object("Texture2D", 1, "CAB-ui", name="UITex_BGBlueLight",
-                                             data=SimpleNamespace(image=Image.new("RGBA", (2, 2), "white")))]),
+                                             data=fake_texture(Image.new("RGBA", (2, 2), "white")))]),
         cursor: SimpleNamespace(objects=[_Object("Texture2D", 1, "CAB-cursor", name="PCIcon_MousePoint",
-                                                 data=SimpleNamespace(image=pointer))]),
+                                                 data=fake_texture(pointer))]),
         fx: SimpleNamespace(objects=[_Object("Texture2D", 7, "CAB-fx", name="FX_TEX_Trail_03",
-                                             data=SimpleNamespace(image=Image.new("RGBA", (8, 2), "red")))]),
+                                             data=fake_texture(Image.new("RGBA", (8, 2), "red")))]),
     }
 
     @contextmanager
@@ -713,7 +714,7 @@ def test_collection_backgrounds_without_the_collection_suffix(tmp_path, monkeypa
 
     def texture(pid, name, color):
         return _Object("Texture2D", pid, "CAB-collect", name=name,
-                       data=SimpleNamespace(image=Image.new("RGB", (4, 3), color)))
+                       data=fake_texture(Image.new("RGB", (4, 3), color)))
     envs = {collect: SimpleNamespace(objects=[
         texture(1, "BG_Abydos_Collection", "white"), texture(2, "BG_NewYearFestival2", "red"),
         texture(3, "Student_Portrait_CH0192_Collection", "blue"), texture(4, "NPC_Portrait_Arona_Collection", "black"),
@@ -808,8 +809,8 @@ def test_spine_atlas_pages_and_aliases(tmp_path, monkeypatch):
     objects = [
         _Object("TextAsset", 1, "CAB", data=SimpleNamespace(m_Name="hero.atlas", m_Script=atlas.decode())),
         _Object("TextAsset", 2, "CAB", data=SimpleNamespace(m_Name="hero.skel", m_Script="\udcffbinary")),
-        _Object("Texture2D", 3, "CAB", data=SimpleNamespace(m_Name="hero", image=Image.new("RGBA", (1, 1)))),
-        _Object("Texture2D", 4, "CAB", data=SimpleNamespace(m_Name="second.png", image=Image.new("RGBA", (1, 1)))),
+        _Object("Texture2D", 3, "CAB", data=fake_texture(Image.new("RGBA", (1, 1)), m_Name="hero")),
+        _Object("Texture2D", 4, "CAB", data=fake_texture(Image.new("RGBA", (1, 1)), m_Name="second.png")),
     ]
 
     @contextmanager
@@ -898,8 +899,8 @@ def test_spine_mod_overrides_win_independent_of_paths_and_cache_order(
         return [
             _Object("TextAsset", 1, "CAB", data=SimpleNamespace(m_Name="hero.skel", m_Script=skeleton)),
             _Object("TextAsset", 2, "CAB", data=SimpleNamespace(m_Name="hero.atlas", m_Script=atlas)),
-            _Object("Texture2D", 3, "CAB", data=SimpleNamespace(
-                m_Name="hero", image=Image.new("RGBA", (1, 1), color))),
+            _Object("Texture2D", 3, "CAB", data=fake_texture(
+                Image.new("RGBA", (1, 1), color), m_Name="hero")),
         ]
     official_objects = objects("blue", "official")
     official_objects.append(_Object("TextAsset", 4, "CAB", data=SimpleNamespace(
