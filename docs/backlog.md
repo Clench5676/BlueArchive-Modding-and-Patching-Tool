@@ -1871,7 +1871,7 @@ same student's other portraits not yet in the Hall, keeping position, size, mirr
 
 ## BL-077: Photography: blank space in the Expressions list pans the camera
 
-- Status: Fixed on `main`, awaiting the owner's acceptance.
+- Status: Fixed in `9bef922d` (alpha.13), awaiting the owner's acceptance.
 - Requested: 2026-11-03 (owner, 0.6.1-alpha.12, macOS): with the portrait camera's Expressions list open, the pointer over the list's
   blank space turns into the hand, and the wheel there moves the frame.
 

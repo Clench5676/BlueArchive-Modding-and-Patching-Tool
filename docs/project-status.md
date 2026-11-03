@@ -7,7 +7,7 @@ As of 2026-11-03. Verify the actual branch, working tree and `pyproject.toml` ve
 
 | Branch | State |
 | --- | --- |
-| `main` | Local version `0.6.1-alpha.12`: the published 0.6.0, the upstream sync to `6c61fdc8`, the security policy, the fix that keeps files from a mod inside their output folder (`e8bee4c2`), BL-065 through BL-069, BL-070 steps 1 and 2, BL-071, BL-072, BL-073, BL-076. Not pushed: held until upstream publishes its fix for the same issue. |
+| `main` | Local version `0.6.1-alpha.13`: the published 0.6.0, the upstream sync to `6c61fdc8`, the security policy, the fix that keeps files from a mod inside their output folder (`e8bee4c2`), BL-065 through BL-069, BL-070 steps 1 and 2, BL-071, BL-072, BL-073, BL-076, BL-077. Not pushed: held until upstream publishes its fix for the same issue. |
 
 0.6.0 is published (tag `0.6.0` at `817ebeda`, 2026-10-30): macOS build uploaded, Windows build by the release workflow.
 
@@ -51,7 +51,7 @@ As of 2026-11-03. Verify the actual branch, working tree and `pyproject.toml` ve
 | BL-074 | Closed by the owner: working as intended |
 | BL-076 | Toolbar under the feet where the head has no room, layout editing without the stall, in alpha.12; owner acceptance pending |
 | BL-075 | Open, minor |
-| BL-077 | Fixed on `main` after alpha.12; owner acceptance pending |
+| BL-077 | Fixed in alpha.13; owner acceptance pending |
 | BL-078 | Open, not reproduced |
 | BL-057, BL-058 | Accepted by the owner on macOS (alpha.12); Windows not reviewed |
 | BL-055 | Accepted by the owner on macOS (0.6.0 pre-review) |
@@ -63,9 +63,9 @@ from passing tests or the presence of earlier code.
 
 ## Review artifact and validation
 
-`dist/Blue-Archive-Modding-and-Patching-Tool-0.6.1-alpha.12-macos-arm64.dmg`, MD5 `499bb530ef1e83c41d17044b4a4fc169`,
-built from `534116a7` (`chore(release): 0.6.1-alpha.12`): alpha.11 and the BL-076 fixes (toolbar under the feet when blocked,
-background atlas alpha reads). BL-076 awaits the owner's review.
+`dist/Blue-Archive-Modding-and-Patching-Tool-0.6.1-alpha.13-macos-arm64.dmg`, MD5 `a4176a691a86f8defec90f3ff026f6f9`,
+built from `cda24269` (`chore(release): 0.6.1-alpha.13`): alpha.12 and the BL-077 fix (the photography choice list no longer
+pans the camera). BL-076 and BL-077 await the owner's review.
 
-On `main` before the build (`f2d9820d`, tested in its worktree): 4249 passed, 26 skipped (Python); 2304 JavaScript tests passed (isolated runs with the official development
+On `main` before the build (`9bef922d`): 4249 passed, 26 skipped (Python, including the photography JavaScript tests) (isolated runs with the official development
 view). Native Windows behavior is not verified on the macOS host.
