@@ -77,6 +77,37 @@ export const CHIP = Object.freeze({
   inset: 40,
 });
 
+// The light stats box, UICharacterDetail/Inventory_ListControl/RightInfo/Target/Active/1_NormalInfo/Status: Bg
+// (Common_Bg_Raius10px #ecf5f9), its Deco (Common_Line_Raius10px #c0c9d4) and Bar (Common_Line_Dot #c0c9d4, 4 high). The
+// prefab's own rows are 82 high with no padding and its captions 42; the app's rows, captions and paddings below are its own.
+export const STATS_BOX = Object.freeze({
+  fill: "#ecf5f9",
+  line: "#c0c9d4",
+  divider: "#c0c9d4",
+  // Deco is the fill's size plus 5 across and 5 down (Bg_1: 319 x 164 against 324 x 169, centred to within a unit)
+  lineOutset: 5,
+  // what a box leaves of the width of what holds it: a popup frame leaves 200 across, a panel 40
+  inset: Object.freeze({ frame: 200, panel: 40 }),
+  // caption 38; value 38 down to 26 on up to 3 lines, wrapped and never cut; a row is 64 high at least
+  caption: 38,
+  value: Object.freeze({ fs: 38, fsMin: 26, lines: 3 }),
+  rowMin: 64,
+  // a text row is its lines at 1.25 of the size and this much more, a value label 8 more than its lines
+  rowPad: 16,
+  linePitch: 1.25,
+  labelPad: 8,
+  // the box's padding above the first row and under the last, the captions' and the dividers' inset from the box's edges,
+  // the gap between the caption column and the value, the slack kept between the text and the label's right edge
+  padY: 12,
+  padX: 30,
+  dividerInset: 30,
+  captionGap: 30,
+  slack: 20,
+  // a smaller line under a value (a mod's original name): size range, label height, the room it adds to the row, how far the
+  // value rises and how far the line stands above the row's foot
+  secondary: Object.freeze({ fs: 28, fsMin: 24, h: 36, extra: 42, rise: 21, foot: 26, colour: "#2d4664/0.65" }),
+});
+
 // Colours, each from the game.
 export const COLOUR = Object.freeze({
   // UIPopup_Formation_CharEdit Tag_1_Select/Label: success text, progress fill

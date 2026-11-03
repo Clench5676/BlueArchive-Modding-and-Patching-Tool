@@ -97,6 +97,30 @@ def test_chip_is_the_detail_screens_type_chip(tokens, layouts):
     assert chip["pitch"] - chip["w"] == chip["gap"]
 
 
+def test_stats_box_is_the_detail_screens_status_box(tokens, layouts):
+    detail = layouts["UICharacterDetail"]
+    path = "Inventory_ListControl/RightInfo/Target/Active/1_NormalInfo/Status"
+    box = tokens["STATS_BOX"]
+    bg, bg_line = subtree(detail, f"{path}/Bg"), subtree(detail, f"{path}/Bg/Deco")
+    second, second_line = subtree(detail, f"{path}/Bg/Bg_1"), subtree(detail, f"{path}/Bg/Bg_1/Deco")
+    fill, line = sprite(bg, "Common_Bg_Raius10px"), sprite(bg_line, "Common_Line_Raius10px")
+    fill_1, line_1 = sprite(second, "Common_Bg_Raius10px"), sprite(second_line, "Common_Line_Raius10px")
+    divider = sprite(subtree(detail, f"{path}/Bar"), "Common_Line_Dot")
+    # the fill, the line and the divider colours
+    assert [fill["color"], fill_1["color"]] == [f"{box['fill']}/1.00"] * 2 == ["#ecf5f9/1.00"] * 2
+    assert [line["color"], line_1["color"]] == [f"{box['line']}/1.00"] * 2 == ["#c0c9d4/1.00"] * 2
+    assert divider["color"] == f"{box['divider']}/1.00" == "#c0c9d4/1.00"
+    assert divider["h_"] == 4
+    # the line is the fill plus 5 across and 5 down, centred to within a unit (Deco at -2.3, +3.0)
+    assert [line_1["w_"] - fill_1["w_"], line_1["h_"] - fill_1["h_"]] == [box["lineOutset"]] * 2 == [5, 5]
+    assert line["h_"] - fill["h_"] == box["lineOutset"]
+    assert abs(second_line["pos"][0] + box["lineOutset"] / 2) <= 0.5 and abs(second_line["pos"][1] - box["lineOutset"] / 2) <= 0.5
+    assert second_line["pos"] == bg_line["pos"]
+    # the first fill's line is 10 wider: its right 5 more lie under the second fill, which is drawn above it
+    assert line["w_"] - fill["w_"] == 2 * box["lineOutset"]
+    assert second["pos"][0] + fill_1["w_"] >= bg_line["pos"][0] + line["w_"] and fill_1["depth"] > line["depth"]
+
+
 @pytest.mark.parametrize("root", ["UIPopup_Sort", "UIPopup_Option_PC", "UIPopup_FilterSort"])
 def test_backdrop_rests_at_the_tween_alpha(tokens, root):
     # BlackBgClickArea carries a TweenAlpha from 0 to 0.80: that is where the backdrop rests, not the sprite's own 0.94
