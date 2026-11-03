@@ -1,6 +1,7 @@
 // Complete option and disabled button branches; captions and dimensions are the only substitutions.
 import * as NGUI from "./ngui.js";
 import { resizeButton } from "./button-layout.js";
+import { FOOTER, SMALL_BUTTON } from "./ui-tokens.js";
 import { clone } from "./util.js";
 
 let layouts, loading;
@@ -32,15 +33,18 @@ export function disabledButton(filter, original) {
 
 export const disable = (original) => disabledButton(layouts.filter, original);
 
-export function optionButton(option, filter, name, x, y, caption, { w = 300, h = 112, enabled = true, fs = 44, min = 30, depth = 10, semantic = "secondary" } = {}) {
+// The popups' light-blue button (ETCSetting/ButtonBg): 402 x 136, caption 48 down to 34 fitted to the width less 60, its label
+// box 30 less across and 20 less down. Callers vary the width (240 at least) and pass their own sizes where a screen has
+// its own (the Hall's boxes).
+export function optionButton(option, filter, name, x, y, caption, { w = SMALL_BUTTON.w, h = SMALL_BUTTON.h, enabled = true, fs = SMALL_BUTTON.fs, min = SMALL_BUTTON.fsMin, depth = 10, semantic = "secondary" } = {}) {
   let tree = clone(NGUI.find(option, "Center/Popup/List/Sound_Setting/ETCSetting/ButtonBg"));
   tree.name = name;
   tree.pos = [x, y];
   resizeButton(tree, w, h);
   const label = NGUI.find(tree, "Label_Locale");
-  NGUI.fitLabel(label.widgets[0], caption, fs, min, w - 60);
-  label.widgets[0].w_ = w - 30;
-  label.widgets[0].h_ = h - 20;
+  NGUI.fitLabel(label.widgets[0], caption, fs, min, w - SMALL_BUTTON.fitInset);
+  label.widgets[0].w_ = w - SMALL_BUTTON.boxInsetW;
+  label.widgets[0].h_ = h - SMALL_BUTTON.boxInsetH;
   if (!enabled) tree = disabledButton(filter, tree);
   const shift = (n, d = 0) => {
     for (const widget of n.widgets) if ("sprite" in widget || "text" in widget) widget.depth = depth + ("text" in widget ? 2 : d);
@@ -62,7 +66,7 @@ export async function skinPrimary(button, caption) {
     tree.pos = [0, 0];
     tree.active = true;
     tree.actionSemantic="confirm";
-    NGUI.fitLabel(NGUI.find(tree, "Label_Locale").widgets[0], caption, 64, 40, 420);
+    NGUI.fitLabel(NGUI.find(tree, "Label_Locale").widgets[0], caption, FOOTER.caption.fs, FOOTER.caption.fsMin, FOOTER.caption.w);
     const next = document.createElement("div"), scale = 0.4;
     await NGUI.render(tree, next, { scale, origin: [110, 42] });
     await NGUI.decoded([...(next.children || [])], Infinity);

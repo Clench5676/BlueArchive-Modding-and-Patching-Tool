@@ -2131,3 +2131,34 @@ test("the Show in Finder button's caption and folder icon are placed by the expl
     }
   } finally { Detail.hide(); await flush(); t.mock.timers.reset(); setStrings("en-US", localeTable("en-US")); }
 });
+
+// --- design tokens, item E: the nameplate's chips are the prefab chip (Char_Target/Type/MainType/BG): 272 x 72, caption 40 down to 28 ---
+test("variant chips are 272 x 72 with the caption at 40 down to 28, the second column 290 on", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const { CHIP } = await import("../../src/ba_modding_toolkit/web/js/ui-tokens.js");
+  const S = 1920 / 2960;
+  try {
+    setStrings("en-US", localeTable("en-US"));
+    family = modFamily();
+    family.variants.push(...Array.from({ length: 3 }, (_, i) => ({
+      key: `skin_${i}`, spr: `skin_${i}_spr`, order: i + 1, recruitable: true, modList: [],
+      custom: [], names: { en: { full: `Variant ${i}`, short: `Skin ${i}` } },
+    })));
+    await showPortrait(t);
+    const chips = walk(hosts["ngui-chips"]).filter((e) => /\/Chip_[^/]+$/.test(e.dataset.path || ""));
+    assert.ok(chips.length >= 3, "the chips are drawn");
+    for (const chip of chips) {
+      const [, , w, h] = NGUI.rect(chip);
+      assert.ok(Math.abs(h - CHIP.h * S) < 0.02, `${chip.dataset.path}: ${h / S} high`);
+      // one cell, or two with the pitch between (a long name takes two columns)
+      assert.ok([CHIP.w, CHIP.w + CHIP.pitch].some((width) => Math.abs(w - width * S) < 0.02), `${chip.dataset.path}: ${w / S} wide`);
+    }
+    // a short caption fits at the prefab's 40 (Latin text is drawn 1.12 larger)
+    const caption = walk(hosts["ngui-chips"]).find((e) => /\/Chip_[^/]+\/Label\/Text$/.test(e.dataset.path || "") && e.textContent);
+    assert.ok(Math.abs(parseFloat(caption.style.fontSize) - NGUI.fontSizeFor(caption.textContent, CHIP.fs) * S) < 0.02, "caption size 40");
+    const source = readFileSync(new URL("../../src/ba_modding_toolkit/web/js/detail.js", import.meta.url), "utf8");
+    assert.match(source, /const CHIP_FS = CHIP\.fs, CHIP_W = CHIP\.w, CHIP_PITCH = CHIP\.pitch;/);
+    assert.doesNotMatch(source, /CHIP_FS = 38/);
+    Detail.hide();
+  } finally { Detail.hide(); await flush(); t.mock.timers.reset(); setStrings("en-US", localeTable("en-US")); }
+});

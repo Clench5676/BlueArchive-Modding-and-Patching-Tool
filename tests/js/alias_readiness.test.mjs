@@ -8,8 +8,8 @@ const flush = async () => { for (let i = 0; i < 20; i++) await Promise.resolve()
 test("a cold student pencil waits visibly for the popup frame before using it", async () => {
   const gate = deferred(); let waiting = false, built = false;
   const text = source("detail"), code = text.slice(text.indexOf("async function openAliases("), text.indexOf("  const popup = find(t, \"Popup\");", text.indexOf("async function openAliases(")));
-  const env = { customAliases: () => [], variantKey: "student", $: () => ({}), ALIAS_MAX: 8, FRAME_Y: 0,
-    AL: { top: 10, pitch: 10, bottom: 10 }, T: String, frameReady: () => gate.promise,
+  const env = { customAliases: () => [], variantKey: "student", $: () => ({}), ALIAS_MAX: 8,
+    AL: { w: 10 }, aliasFrame: () => ({ h: 10, ys: [0] }), T: String, frameReady: () => gate.promise,
     Loading: { wait: async (p) => { waiting = true; try { return await p; } finally { waiting = false; } } },
     popupFrame: () => { built = true; return {}; } };
   const open = new Function("env", `const { ${Object.keys(env)} } = env; let aliasToken = 0, open = true; ${code}\n} return openAliases;`)(env);

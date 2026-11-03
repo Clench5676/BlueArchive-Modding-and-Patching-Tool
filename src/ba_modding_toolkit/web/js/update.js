@@ -6,6 +6,7 @@ import * as NGUI from "./ngui.js";
 import * as Popup from "./popup.js";
 import { rpc, waitJob } from "./api.js";
 import { T, errorText } from "./i18n.js";
+import { COLOUR } from "./ui-tokens.js";
 import { S, clone } from "./util.js";
 
 const { node, sprite, label, find } = NGUI;
@@ -62,10 +63,14 @@ export function check(host, info, { onCheck, onError, beforeShow, simulation = f
   return done;
 }
 
-// the offer's three captions (Label_Locale widgets) on the slanted 496-wide bodies: a long one wraps to two lines before
-// it shrinks, in the popups' range (64 to 40), clear of the body's edges; all three share one size
-export const offerCaptions = (widgets) =>
-  NGUI.fitLabels(widgets, widgets.map((l) => l.text), 64, 40, 400, 2, { maxH: Popup.BUTTON_TEXT_H });
+// the offer's three captions (Label_Locale widgets) on the slanted 496-wide bodies: the popups' footer fit (popupFrame
+// applies the same to the three choices), a long one wraps to two lines before it shrinks, clear of the body's edges; all
+// three share one size
+export const offerCaptions = (widgets) => Popup.footerLabels(widgets, widgets.map((l) => l.text));
+
+// the frame, 1700 wide; 940 high leaves the Progress bar's bottom (the lowest content) 33 above the three buttons' tops
+const PROGRESS = { y: -160, h: 20 };
+export const FRAME = { w: 1700, h: 940, contentBottom: PROGRESS.y - PROGRESS.h / 2 };
 
 function show(host, info, options) {
   return new Promise((resolve) => {
@@ -97,60 +102,39 @@ async function draw(host, info, resolve, { simulation = false } = {}) {
   // on the popup stack from the start: Escape is Later unless a job or restart is in progress
   Popup.opened(host, () => close("later"));
   await Buttons.ready();
-  const sort = await NGUI.layout("UIPopup_Sort");
+  await Popup.frameReady();
   if (ended) return;
-  const t = clone(find(sort, "Center"));
-  const popup = find(t, "Popup");
-  popup.children = popup.children.filter((c) => ["Base", "Btn"].includes(c.name));
-  const bg = find(popup, "Base/BG");
-  Object.assign(bg.widgets[0], { w_: 1700, h_: 820 });
-  find(bg, "Texture_Top").pos = [-850 + 248, 410 - 66];
-  const title = find(bg, "Label_Title_Locale");
-  const tf = NGUI.fitText(dialogTitle("update.title", simulation), 72, 52, 1100);
-  Object.assign(title.widgets[0], { text: tf.text, fontSize: tf.fs, w_: 1200 });
-  title.pos = [0, 410 - 64];
-  find(title, "Line").widgets[0].w_ = NGUI.glyphWidth(tf.text, tf.fs) + 14;
-  find(bg, "Btn_Close").active = false;
-  const btn = find(popup, "Btn");
-  btn.pos = [0, -274];
-  const notesButton = clone(find(btn, "Btn_Cancel"));
-  notesButton.name = "Btn_Notes";
-  find(notesButton, "Label_Locale").widgets[0].text = T("update.notes");
-  btn.children.push(notesButton);
-  for (const [name, x] of [["Btn_Cancel", -550], ["Btn_Notes", 0], ["Btn_Ok", 550]]) {
-    find(btn, name).pos = [x, 0];
-  }
   const installable = simulation || info.installable;
-  find(btn, "Btn_Cancel/Label_Locale").widgets[0].text = T("update.later");
-  find(t, "BlackBg/BlackBgClickArea").widgets.find((w) => "sprite" in w).color = "#000000/0.65";
   // the two versions on the game's light stats box
   const rows = [[T("update.current"), info.current.replace(/-dev$/, "")], [T("update.latest"), info.version]];
   const capW = Math.max(...rows.map(([k]) => NGUI.textWidth(k, 44))) + 60;
-  popup.children.push(node("Box", [0, 90], [sprite("Common_Bg_Raius10px", 1300, 260, { depth: 5, color: "#ecf5f9/1.00" })], [
-    node("Line", [0, 0], [sprite("Common_Line_Raius10px", 1306, 266, { depth: 4, color: "#c0c9d4/1.00" })]),
-    ...rows.flatMap(([k, v], i) => [
-      node(`K_${i}`, [-600, 62 - i * 124], [label(k, 44, "#2d4664/1.00", capW, 60, { pivot: 3, depth: 8 })]),
-      node(`V_${i}`, [-600 + capW, 62 - i * 124], [label(v, 48, i ? "#1f9a52/1.00" : "#000000/1.00", 1100 - capW, 60, { pivot: 3, depth: 8 })]),
+  const content = [
+    node("Box", [0, 90], [sprite("Common_Bg_Raius10px", 1300, 260, { depth: 5, color: "#ecf5f9/1.00" })], [
+      node("Line", [0, 0], [sprite("Common_Line_Raius10px", 1306, 266, { depth: 4, color: "#c0c9d4/1.00" })]),
+      ...rows.flatMap(([k, v], i) => [
+        node(`K_${i}`, [-600, 62 - i * 124], [label(k, 44, "#2d4664/1.00", capW, 60, { pivot: 3, depth: 8 })]),
+        node(`V_${i}`, [-600 + capW, 62 - i * 124], [label(v, 48, i ? `${COLOUR.success}/1.00` : "#000000/1.00", 1100 - capW, 60, { pivot: 3, depth: 8 })]),
+      ]),
+      node("Dots", [0, 0], [sprite("Common_Line_Dot", 1200, 4, { type: 2, depth: 7, color: "#c0c9d4/1.00" })]),
     ]),
-    node("Dots", [0, 0], [sprite("Common_Line_Dot", 1200, 4, { type: 2, depth: 7, color: "#c0c9d4/1.00" })]),
-  ]));
-  popup.children.push(
     node("Status", [0, -94], [label("", 40, "#2d4664/1.00", 1250, 96, { depth: 8 })]),
-    node("Progress", [0, -160], [sprite("Common_Bg_Raius10px", 1200, 20, { depth: 5, color: "#c0c9d4/1.00" })], [
-      node("Fill", [-600, 0], [sprite("Common_Bg_Raius10px", 1200, 20, { pivot: 3, depth: 6, color: "#1f9a52/1.00" })]),
+    node("Progress", [0, PROGRESS.y], [sprite("Common_Bg_Raius10px", 1200, PROGRESS.h, { depth: 5, color: "#c0c9d4/1.00" })], [
+      node("Fill", [-600, 0], [sprite("Common_Bg_Raius10px", 1200, PROGRESS.h, { pivot: 3, depth: 6, color: `${COLOUR.success}/1.00` })]),
     ]),
-  );
+  ];
 
   async function render() {
     const rev = ++revision, locked = blocked();
     if (locked) for (const b of buttons) b.disabled = true;
-    const tree = clone(t), body = find(tree, "Popup"), controls = find(body, "Btn");
     const action = !installable ? "page" : phase === "ready" || phase === "installing" ? "restart" : "update";
     const okText = T(action === "update" ? "update.now" : `update.${action}`);
-    find(controls, "Btn_Ok/Label_Locale").widgets[0].text = okText;
-    const names = ["Btn_Cancel", "Btn_Notes", "Btn_Ok"];
-    offerCaptions(names.map((name) => find(controls, `${name}/Label_Locale`).widgets[0]));
-    for (const name of names) {
+    // the shared popup frame, no close button; Later, Release Notes and the action are its three choices
+    const tree = Popup.popupFrame(dialogTitle("update.title", simulation), FRAME.w, FRAME.h, { close: false, buttons: [
+      { label: T("update.later"), name: "Btn_Cancel" }, { label: T("update.notes"), name: "Btn_Notes" },
+      { label: okText, name: "Btn_Ok", primary: true, semantic: "update" }] });
+    const body = find(tree, "Popup"), controls = find(body, "Btn");
+    body.children.push(...clone(content));
+    for (const name of ["Btn_Cancel", "Btn_Notes", "Btn_Ok"]) {
       if (locked) {
         const index = controls.children.findIndex((child) => child.name === name);
         controls.children[index] = Buttons.disable(controls.children[index]);
@@ -159,7 +143,7 @@ async function draw(host, info, resolve, { simulation = false } = {}) {
     const text = error || status || (phase === "downloading" ? T("update.downloading", { p: percent })
       : phase === "ready" ? T("update.complete") : phase === "installing" ? T("update.restarting") : "");
     const f = NGUI.fitText(text, 40, 30, 1250, 2);
-    Object.assign(find(body, "Status").widgets[0], { text: f.text, fontSize: f.fs, color: error ? "#c74646/1.00" : "#2d4664/1.00" });
+    Object.assign(find(body, "Status").widgets[0], { text: f.text, fontSize: f.fs, color: error ? `${COLOUR.error}/1.00` : "#2d4664/1.00" });
     const progress = find(body, "Progress");
     progress.active = phase === "downloading";
     find(progress, "Fill").active = percent > 0;
