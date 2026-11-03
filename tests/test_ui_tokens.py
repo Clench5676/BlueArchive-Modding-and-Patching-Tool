@@ -166,3 +166,12 @@ def test_status_colours_exist_in_the_games_prefabs(tokens):
             walk(export_layout(env, root, {}))
     missing = {name: value for name, value in wanted.items() if value.lower() not in found}
     assert not missing, f"not a colour of any hinted prefab: {missing}"
+
+
+def test_applied_selection_gold_is_the_mulligan_selectline_sprite(tokens):
+    with open_bundle(bundle_of("UIPopup_Mulligan")) as env:
+        tree = export_layout(env, "UIPopup_Mulligan", {})
+    line = subtree(tree, "Center/Popup/01/UIMulliganSlot/SelectLine")
+    sprites = [w for w in line["widgets"] if "sprite" in w]
+    assert len(sprites) == 1
+    assert sprites[0]["color"] == tokens["APPLIED_SELECTION_GOLD"] + "/1.00"

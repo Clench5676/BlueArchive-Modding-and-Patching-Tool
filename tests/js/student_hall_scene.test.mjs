@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { readFile } from "node:fs/promises";
-import { createDraft, sourceKey } from "../../src/ba_modding_toolkit/web/js/student-hall-model.js";
+import { createDraft, sourceKey, portraitSelection, portraitReplacements } from "../../src/ba_modding_toolkit/web/js/student-hall-model.js";
 import { createMemorialPool } from "../../src/ba_modding_toolkit/web/js/student-hall-memorial.js";
 import { dialogueText } from "../../src/ba_modding_toolkit/web/js/dialogue-text.js";
 import { sceneRect, sceneViewport } from "../../src/ba_modding_toolkit/web/js/student-hall-camera.js";
@@ -21,29 +21,29 @@ class Element {
   setPointerCapture() {}
   contains(node) { return this===node || this.children.some(child=>child.contains?.(node)); }
   closest() { return this.dataset.entry ? this : this.parentElement?.closest?.() || null; }
-  getBoundingClientRect() { return {width:1920,top:0}; }
+  getBoundingClientRect() { return {width:1920,top:0,left:0}; }
   emit(name,event={}) { for(const fn of this.listeners[name]||[]) fn(event); }
 }
 const saved=()=>({revision:0,mode:"portraits",background:"office-day",portraitScale:1,portraits:["a","b","c"].map((id)=>({id,variant:id,source:`mod:${id}`,x:700,y:1100,scale:1})),memorials:[],active:null});
 let loads=0,disposals=0,holds=0,updates=0,persisted=[],buttons=[],chromeDelay=null,testLanguage="en-US";
 const renderer={actors:new Map(),allowed:true,needsLoad:()=>false,dispose(){disposals++;},setScale(){},update(entries){updates++;const previous=new Map(this.actors);this.actors.clear();for(const entry of entries)this.actors.set(entry.id,{...previous.get(entry.id),entry});return Promise.resolve(true);}};
 globalThis.sceneHarness={
-  createDraft,createMemorialPool,sourceKey,portraitRect,sceneRect,sceneViewport,dialogueText,language:()=>testLanguage,clone:structuredClone,S:1920/2960,T:(key)=>key,L:(names)=>names?.en,
+  createDraft,createMemorialPool,sourceKey,portraitSelection,portraitReplacements,portraitRect,sceneRect,sceneViewport,dialogueText,language:()=>testLanguage,clone:structuredClone,S:1920/2960,T:(key)=>key,L:(names)=>names?.en,
   document:{createElement:()=>new Element(),activeElement:null,removeEventListener(){}},
   Backgrounds:{backgroundChoice:()=>({name:"office-day"}),render:async()=>{loads++;}},
   Loading:{hold:async(fn)=>{holds++;return fn();}},
-  Lobby:{hide(){}},Popup:{notify(){}},
+  Lobby:{hide(){}},Popup:{notify(){},anyOpen:()=>false},
   UI:{button:async()=>{},caption:async()=>{}},
   rpc:async(method,params)=>{if(method==="lobby.lines")return globalThis.sceneHarness.lineResponse(params);const {value,revision}=params;persisted.push(method);return {...structuredClone(value),revision:revision+1};},
   hitButton(parent,rect,click,label){const button=new Element();button.label=label;button.rect=rect;button.addEventListener("click",click);parent.append(button);buttons.push(button);return button;},
 };
 let source=await readFile(new URL("../../src/ba_modding_toolkit/web/js/student-hall.js",import.meta.url),"utf8");
 source=source.replace(/^import .*;$/gm,"");
-source=`const {createDraft,createMemorialPool,sourceKey,portraitRect,sceneRect,sceneViewport,dialogueText,language,clone,S,T,L,document,Backgrounds,Loading,Lobby,Popup,UI,rpc,hitButton}=globalThis.sceneHarness;\n${source}
+source=`import { bindPortraitPointer, portraitToolbarLayout } from "${new URL("../../src/ba_modding_toolkit/web/js/student-hall-framing.js",import.meta.url).href}";\nconst {createDraft,createMemorialPool,sourceKey,portraitSelection,portraitReplacements,portraitRect,sceneRect,sceneViewport,dialogueText,language,clone,S,T,L,document,Backgrounds,Loading,Lobby,Popup,UI,rpc,hitButton}=globalThis.sceneHarness;\n${source}
 const originalHits=renderHits;
 export function fixture(value,renderer,memory=null,shownMode=value.mode){
  store=createDraft(value);root=document.createElement('div');art=document.createElement('div');hits=document.createElement('div');chrome=document.createElement('div');subtitle=document.createElement('div');root.append(art,hits,chrome,subtitle);
- portraits=renderer;abort=new AbortController();sceneMode=shownMode;backgroundName='office-day';backgroundHost=document.createElement('div');portraitSceneHost=document.createElement('div');art.append(portraitSceneHost);ctx={prefs:{},info:{}};actorHover=null;sceneCover=null;fullscreen=null;sceneCamera=null;dialogue=null;
+ portraits=renderer;abort=new AbortController();sceneMode=shownMode;backgroundName='office-day';backgroundHost=document.createElement('div');portraitSceneHost=document.createElement('div');art.append(portraitSceneHost);ctx={prefs:{},info:{}};actorHover=null;selected=null;sceneCover=null;fullscreen=null;sceneCamera=null;dialogue=null;
  memorials=memory||{current:()=>null,suspend(){},cancelPending(){},dispose(){}};
  options={choices:[...value.portraits.map(e=>({...e,kind:'spr',names:{en:{full:e.id}}})),...value.memorials.map(e=>({...e,kind:'lobby',names:{en:{full:e.id}}}))],backgrounds:[]};
  renderChrome=async()=>{await globalThis.sceneHarness.chromeReady?.();return document.createElement('div');};renderHits=()=>Promise.resolve();renderPortraitActions=async()=>{};
@@ -51,6 +51,7 @@ export function fixture(value,renderer,memory=null,shownMode=value.mode){
 export function elements(){return {root,art,hits,chrome,portraitSceneHost,sceneCover,sceneMode};}
 export function immersiveFixture(active,onPlay){fullscreen={active:()=>active,dispose(){}};dialogue={play:onPlay};}
 
+export function selection(){return selected;} export {selectPortrait,onKey};
 export function draft(){return store;} export {controls,saveDraft,cancelDraft,renderScene,portraitActions,createHoverOwner,memorial,step,refreshMemorialCaptions};
 export function cameraFixture(view){sceneCamera={view:()=>view,sync(){},dispose(){}};}
 export function hitsNow(){originalHits();return hits;}`;
@@ -81,11 +82,11 @@ test("portrait hit order follows saved layer order and wheel or keys cannot muta
 test("two-or-more portrait layouts offer layer and flip actions, with boundary moves disabled",()=>{
   setup();Hall.draft().begin("layout");
   const list=Hall.draft().current().portraits;
-  assert.equal(Hall.portraitActions(list[0]).length,6);
+  assert.equal(Hall.portraitActions(list[0]).length,7);
   assert.equal(Hall.portraitActions(list[0]).find(action=>action[0]==="Backward")[3],false);
   assert.equal(Hall.portraitActions(list[2]).find(action=>action[0]==="Front")[3],false);
-  Hall.draft().remove("c");assert.equal(Hall.portraitActions(list[0]).length,6);
-  Hall.draft().remove("b");assert.deepEqual(Hall.portraitActions(list[0]),[]);assert.equal(Hall.draft().remove("a"),false);
+  Hall.draft().remove("c");assert.equal(Hall.portraitActions(list[0]).length,7);
+  Hall.draft().remove("b");assert.deepEqual(Hall.portraitActions(list[0]).map(a=>[a[0],a[3]]),[["Change",false]]);assert.equal(Hall.draft().remove("a"),false);
 });
 
 test("one hover owner keeps its palette during pointer entry, focus loss and overlapping actor entry",()=>{
@@ -113,12 +114,16 @@ test("the shared action palette stays above every hit rectangle through real foc
   palette.emit("pointerleave",{relatedTarget:buttons[1]});assert.equal(palette.dataset.actorToolbar,"b");
 });
 
-test("lost pointer capture or released buttons end dragging before any later movement",()=>{
-  setup();Hall.draft().begin("layout");Hall.hitsNow();const entry=Hall.draft().current().portraits[0],initial=entry.x,button=buttons[0];
-  button.emit("pointerdown",{clientX:100,clientY:100,pointerId:1,preventDefault(){}});
-  button.emit("lostpointercapture");button.emit("pointermove",{clientX:200,clientY:100,buttons:0});assert.equal(entry.x,initial);
-  const fresh=buttons.at(-3);fresh.emit("pointerdown",{clientX:100,clientY:100,pointerId:2,preventDefault(){}});
-  fresh.emit("pointermove",{clientX:200,clientY:100,buttons:0});assert.equal(entry.x,initial);
+test("pixel pointer surface replaces overlapping rectangle dragging while named buttons stay keyboard reachable",()=>{
+  setup();Hall.draft().begin("layout");const hits=Hall.hitsNow(),surface=hits.children.find(child=>"portraitSurface" in child.dataset);
+  assert.ok(surface);assert.ok(buttons.every(button=>button.style.pointerEvents==="none"));
+  assert.ok(buttons.every(button=>button.label && button.listeners.click && !button.listeners.pointerdown));
+});
+
+test("atlas alpha is prepared for picking only in layout editing",()=>{
+  let prepared=0;renderer.preparePick=()=>prepared++;
+  try{setup();Hall.hitsNow();assert.equal(prepared,0,"viewing never decodes atlas alpha");Hall.draft().begin("layout");Hall.hitsNow();assert.equal(prepared,1);}
+  finally{delete renderer.preparePick;}
 });
 
 const tick=()=>new Promise(setImmediate);
@@ -197,4 +202,52 @@ test("a retained memorial changes caption language without replaying and rejects
   assert.equal(published[1].text({ja:"Old foreign line"}),"");
   oldReady({voice:{ja:"Obsolete"}});await old;assert.equal(published.filter(value=>value.rows!==undefined).length,1);
   controller.abort();await Hall.refreshMemorialCaptions(player);assert.equal(requests.length,2);
+});
+
+test("selection toggles, switches, pins against hover, and survives layer/flip redraws",()=>{
+  setup();Hall.draft().begin("layout");let hits=Hall.hitsNow();
+  buttons[0].emit("click",{detail:0});assert.equal(Hall.selection(),"a");
+  const palette=hits.children.at(-1);buttons[1].emit("pointerenter");assert.equal(palette.dataset.actorToolbar,"a");
+  buttons[0].emit("click",{detail:0});assert.equal(Hall.selection(),null);
+  buttons[1].emit("click",{detail:0});assert.equal(Hall.selection(),"b");
+  buttons[2].emit("click",{detail:0});assert.equal(Hall.selection(),"c");
+  Hall.draft().layer("c","back");Hall.draft().flip("c");hits=Hall.hitsNow();
+  assert.equal(Hall.selection(),"c");assert.equal(hits.children.at(-1).dataset.actorToolbar,"c");
+  assert.equal(buttons.at(-3)["aria-pressed"],"true");
+});
+test("four-stage-pixel click tolerance, empty clicks, Escape and drag never toggle off",()=>{
+  setup();Hall.draft().begin("layout");let hits=Hall.hitsNow();renderer.pick=()=>"a";
+  const surface=()=>hits.children.find(e=>"portraitSurface" in e.dataset);
+  const press=(x,y)=>surface().emit("pointerdown",{button:0,clientX:x,clientY:y,pointerId:1,preventDefault(){}});
+  const release=(x,y)=>{surface().emit("pointerup",{clientX:x,clientY:y,pointerId:1});hits=Hall.elements().hits;};
+  const before=Hall.draft().current().portraits[0].x;
+  press(100,100);release(104,100);assert.equal(Hall.selection(),"a");assert.equal(Hall.draft().current().portraits[0].x,before);
+  press(100,100);release(105,100);assert.equal(Hall.selection(),"a");assert.equal(Hall.draft().current().portraits[0].x,before+5);
+  let prevented=false;Hall.onKey({key:"Escape",preventDefault(){prevented=true;},stopImmediatePropagation(){}});assert.ok(prevented);assert.equal(Hall.selection(),null);
+  prevented=false;Hall.onKey({key:"Escape",preventDefault(){prevented=true;}});assert.equal(prevented,false);
+  Hall.selectPortrait("click","a");renderer.pick=()=>null;press(100,100);release(100,100);assert.equal(Hall.selection(),null);delete renderer.pick;
+});
+test("Save, Cancel, removal and leaving end editor selection",async()=>{
+  setup();Hall.draft().begin("layout");Hall.selectPortrait("click","a");await Hall.saveDraft();assert.equal(Hall.selection(),null);
+  Hall.draft().begin("layout");Hall.selectPortrait("click","b");await Hall.cancelDraft();assert.equal(Hall.selection(),null);
+  Hall.draft().begin("layout");Hall.selectPortrait("click","c");Hall.draft().remove("c");Hall.hitsNow();assert.equal(Hall.selection(),null);
+  Hall.selectPortrait("click","a");Hall.selectPortrait("end");assert.equal(Hall.selection(),null);
+});
+test("selection reducer covers redraws and drag cancellation without persisting session state",()=>{
+  let selected=null;
+  const send=(type,id=null,ids=[])=>selected=portraitSelection(selected,{type,id,ids});
+  assert.equal(send("click","a"),"a");assert.equal(send("click","a"),null);assert.equal(send("click","b"),"b");
+  assert.equal(send("drag","b"),"b");assert.equal(send("drag","a"),"a");assert.equal(send("redraw",null,["a","b"]),"a");
+  assert.equal(send("remove","b"),"a");assert.equal(send("remove","a"),null);assert.equal(send("click",null),null);
+  send("click","a");assert.equal(send("escape"),null);send("click","a");assert.equal(send("end"),null);
+});
+
+test("pixel surface ends a drag on lost capture or released buttons before any later movement",()=>{
+  for(const event of ["lostpointercapture","released"]){
+    setup();Hall.draft().begin("layout");const host=Hall.hitsNow(),surface=host.children.find(e=>"portraitSurface" in e.dataset);renderer.pick=()=>"a";
+    const entry=Hall.draft().current().portraits[0],initial=entry.x;
+    surface.emit("pointerdown",{button:0,clientX:100,clientY:100,pointerId:1,preventDefault(){}});
+    if(event==="lostpointercapture")surface.emit(event,{pointerId:1});else surface.emit("pointermove",{clientX:200,clientY:100,buttons:0});
+    surface.emit("pointermove",{clientX:300,clientY:100,buttons:1});assert.equal(entry.x,initial);assert.equal(Hall.selection(),null);delete renderer.pick;
+  }
 });

@@ -1530,10 +1530,24 @@ share the detail screen's exit control. Only the exit and scene interaction rema
 and global navigation are hidden.
 
 Portrait mode uses one shared canvas/context and camera. Each instance has independent skeleton animation state,
-blink/talk tracks, position and legacy relative scale. Dragging changes position; individual wheel/gesture scaling
-is disabled. Hover controls in the editor remove an actor; with three or more actors they also change layer order
-and horizontal mirroring. There is no actor selection frame. Different portrait sources for one student may coexist;
-the same source cannot be added twice.
+blink/talk tracks, position and individual relative scale. Layout editing queries posed public Spine attachment
+vertices and UVs against cached atlas-page alpha, in reverse saved layer order. Normal-blend active slots with effective alpha at least 0.1 count; transparent areas pass through, including
+when mirrored or scaled. One pointer surface uses that query for hover, press and drag; named DOM buttons retain Tab
+and keyboard/assistive activation. Atlas alpha is decoded once per page, only in layout editing. Dragging changes position;
+individual wheel/gesture scaling is disabled. Hover controls in the editor remove an actor; with two or more actors
+they also change layer order and horizontal mirroring. Clicking within four stage pixels selects an actor, clicking
+it again clears selection, and clicking another switches it.
+Empty scene clicks and Escape clear it; a drag selects and never toggles. Keyboard/assistive button activation uses the
+same toggle. Selection pins the toolbar against hover changes, survives hit redraws, and ends on Save, Cancel, removal
+or leaving the page. With no selection the toolbar follows hover/focus. A static three-stage-pixel gold outline uses
+`UIPopup_Mulligan/Center/Popup/01/UIMulliganSlot/SelectLine` (`#ffe900`), held in `APPLIED_SELECTION_GOLD`.
+A flat alpha-threshold shader through the public Spine batcher and skeleton renderer draws sixteen radius-three
+offsets just before that actor's normal draw; non-Normal/inactive slots are excluded and front actors cover it.
+Different portrait sources for one student may coexist; the same source cannot be added twice. The Common `Campaign_Icon_ChangeUnit` toolbar action opens the Hall portrait
+picker restricted to the selected choice's family: the student's official and Mod portraits, excluding itself and
+placed sources (a Mod portrait may go back to its own variant's official art). With no eligible source it is disabled. Choosing one replaces only the draft entry's variant
+and source; UUID, position, individual size, mirror and layer index stay intact. Only the new art loads; saved source
+actors remain cached through Cancel, without restarting other actors or the background.
 Existing duplicate portrait rows are canonicalized on read without writing a migration or advancing the revision. Preview license
 opt-out remains effective. The Add Portraits modal lists student names beside independently scrolling portrait-card
 rows. Optional skin grouping, search, filters and sorting use roster semantics; only library portraits can be added.
@@ -1545,7 +1559,12 @@ The native `LobbyCommon` CharPos and SkeletonDataAsset scale define the projecti
 a compact global portrait-size slider from 25% to 150%, with 100% as the default.
 It sits below the two equal-width Save/Cancel buttons at the upper right, aligned with the entire icon group,
 in the native inclined button body. It has no visible caption, percentage field or Reset button.
-This multiplier preserves entry anchors and individual scales and leaves the background unchanged. Slider changes
+Each portrait toolbar has a second row with the same native slider for its own size (50–200%, one-percent steps)
+and a Reset button for 100%. The two rows occupy separate boxes. The toolbar sits beside the portrait, level with its
+top (above or below it only when neither side fits), clamped to the band below the top-right controls and above the
+bottom band (y 360 to 960) at portrait corners and both size limits. It moves to a new size only on release or Reset,
+never under a dragged thumb. Both size controls edit the draft; Save keeps them and Cancel restores them.
+The global multiplier preserves entry anchors and individual scales and leaves the background unchanged. Slider changes
 update the shared renderer and interaction bounds directly, including changes made while assets are still loading;
 they do not recreate a canvas, renderer or asset request. New source batches retain a lossless last-frame cover
 while shared-context guest players initialize; the complete new actor map is drawn before the cover is removed.
@@ -1580,7 +1599,7 @@ scene or steal its input ownership. Modal redraws retain their committed content
 offscreen library entries remain lazy.
 
 `student_hall.py` validates state stored under `student_hall` in UI preferences. Mode, background, portrait positions
-and legacy relative scales, boolean `mirror`, global `portraitScale`, entry order, memorial playlist and active entry persist. Missing global scale
+and individual relative scales, boolean `mirror`, global `portraitScale`, entry order, memorial playlist and active entry persist. Missing global scale
 defaults to 1; the API rejects non-finite or out-of-range values. Revision checks prevent a stale window from
 silently overwriting another window's saved arrangement. Leaving the screen disposes its players, pending loads and
 audio; returning loads the saved state. Dirty exits prompt before changing page or return history. Home resets that
@@ -1892,6 +1911,8 @@ the prefab values, from the development view). It imports no other UI module.
   (the mailbox limit label), error `#bb3421` (the skill type sprite), greyed `#828282` (Btn_Disable's label), the page's ink
   `#2c4564` (the collection's top bar title; `--navy-text` repeats it), the In Use badge `#ffb700` on `#4b2116`, a note's
   ink and the consent's "never" bar `#6a7b8f`. The style sheets repeat the CSS ones, which the token tests keep equal.
+- **Hall selection gold** (`APPLIED_SELECTION_GOLD`): `UIPopup_Mulligan/Center/Popup/01/UIMulliganSlot/SelectLine`,
+  the applied frame's single UISprite yellow, `#ffe900`.
 - **Corners, focus ring, fallback button** (style sheets): the game's ladder, Raius5px, Raius10px and Raius20px (5, 10 and
   22 units) is 3.24, 6.49 and 14.27 px at the stage's scale (`RADIUS_PX`). One focus rule in `app.css` draws the ring for
   every control, 4 px `#2fa6f0`, 2 px off, radius 6.49 px (a roster card's keeps its -3 px offset because the list clips; no

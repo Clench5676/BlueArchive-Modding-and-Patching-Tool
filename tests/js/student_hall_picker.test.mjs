@@ -10,7 +10,7 @@ globalThis.document={createElement:()=>new Element()};
 globalThis.pickerFixture={normalizeView,sourceKey,portraitRows,studentChoices,memorialChoices,
   bindReorder(){},dragFeedback:()=>({}),Display:{},Popup:{top:()=>null},T:key=>key,L:names=>names?.en,language:()=>"en",spineBase:()=>"source",
   thumbnailScope:()=>({signal,cancel(){}}),lazyThumbnail:()=>({}),
-  UI:{MEMORIAL_QUEUE_PITCH:244,createModal:()=>modal,rosterToolbar:async()=>{},caption:async()=>{},panel:async()=>{},studentCard:async()=>{},queuePanel:async()=>{},queueMarker:async()=>new Element(),button:async()=>{},
+  UI:{MEMORIAL_QUEUE_PITCH:244,createModal:()=>modal,rowPlate:async()=>{},rosterToolbar:async()=>{},caption:async()=>{},panel:async()=>{},studentCard:async()=>{},queuePanel:async()=>{},queueMarker:async()=>new Element(),button:async()=>{},
     async card(host,item,options){cards.push({item,options});return{visual:new Element(),hit:new Element(),actionBox:[0,0,180,36]};},
     virtualArea(host,box,count,pitch,render){const scroll=new Element(),inner=new Element();scroll.append(inner);host.append(scroll);const pending=[];
       for(let i=0;i<count;i++){const cell=new Element();inner.append(cell);pending.push(render(cell,i,signal));}return{inner,ready:Promise.all(pending)};}}};
@@ -51,4 +51,19 @@ test("Escape in the picker's search closes the search and clears it; the picker 
     assert.equal(searches.length,count+1);assert.equal(searches.at(-1).query,"","opened again, it starts empty");
     assert.equal(closed,0,"the picker stays");assert.deepEqual(errors,[]);picker.close();
   }finally{Object.assign(fixture,saved);modal.close=close;}
+});
+
+test("portrait replacement reuses Hall rows and explicit choice buttons without adding another entry",async()=>{
+  cards.length=0;const replaced=[],draft=createDraft({revision:0,mode:"portraits",portraits:[{id:"a",variant:"hero",source:"mod:old",x:800,y:1100,scale:1}],memorials:[],active:null});draft.begin("layout");
+  const choice={variant:"hero-alt",family:"hero",kind:"spr",source:"official",core:"hero_alt_spr",names:{en:{full:"Hero Alt"}}};
+  const picker=API.openPicker({kind:"spr",choices:[choice],draft,onError:e=>errors.push(e),onDone(){},onReplace:c=>replaced.push(c)});await settle();
+  const candidate=cards.find(c=>c.options.onAdd);assert.equal(candidate.options.addLabel,"import.select");assert.equal(candidate.options.fitAdd,true);assert.equal(candidate.options.addEnabled,true);
+  const hit={disabled:false};await candidate.options.onAdd({currentTarget:hit});assert.equal(hit.disabled,true);assert.deepEqual(replaced,[choice]);assert.equal(draft.current().portraits.length,1);picker.close();
+});
+test("Change Portrait is present beside background in all six locales, with the owner's exact en/zh wording",async()=>{
+  const words={"en-US":"Change Portrait","zh-CN":"\u66f4\u6362\u7acb\u7ed8"};
+  for(const lang of ["en-US","zh-CN","zh-TW","ja-JP","ko-KR","th-TH"]){
+    const raw=await readFile(new URL(`../../src/ba_modding_toolkit/locales/${lang}.json`,import.meta.url),"utf8"),hall=JSON.parse(raw).webui.hall;
+    assert.ok(hall.changePortrait);if(words[lang])assert.equal(hall.changePortrait,words[lang]);assert.match(raw,/"background": [^\n]+\n\s*"changePortrait":/);
+  }
 });

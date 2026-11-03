@@ -26,13 +26,13 @@ globalThis.hallControlsHarness = { S, clone: structuredClone, NGUI: { find, node
     Object.assign(entry.els[0].style,{transform:options.rotation?`rotate(${-options.rotation}deg)`:"",transformOrigin:"50% 50%"});
   },
   text(tree, path, value) { find(tree, path).widgets[0].text = value; },
-  UI: { scaleControl: async () => {} }, T: (key) => `localized:${key}`, Popup: { hit(host, view, path, fn, meta) { const b = { path, fn, dataset: {}, ...meta }; wired.push(b); return b; } },
+  UI: { button: async () => {}, scaleControl: async () => {} }, T: (key) => `localized:${key}`, Popup: { hit(host, view, path, fn, meta) { const b = { path, fn, dataset: {}, ...meta }; wired.push(b); return b; } },
   document: { createElement: () => ({ style: {}, children: [], append(child) { this.children.push(child); } }) }, lobby };
 let source = await readFile(new URL("../../src/ba_modding_toolkit/web/js/student-hall.js", import.meta.url), "utf8");
 source = source.replace(/^import .*;$/gm, "");
-source = `import { bindCorner } from "${new URL("../../src/ba_modding_toolkit/web/js/corner-layout.js", import.meta.url).href}";\n` + source;
+source = `import { portraitReplacements } from "${new URL("../../src/ba_modding_toolkit/web/js/student-hall-model.js", import.meta.url).href}";\nimport { portraitRect, portraitToolbarLayout, PORTRAIT_SIZE } from "${new URL("../../src/ba_modding_toolkit/web/js/student-hall-framing.js", import.meta.url).href}";\nimport { bindCorner } from "${new URL("../../src/ba_modding_toolkit/web/js/corner-layout.js", import.meta.url).href}";\n` + source;
 source = `const {S,clone,NGUI,alignIcon,text,T,Popup,document,UI}=globalThis.hallControlsHarness;\n${source}\nexport {lobbyControl,controls,renderChrome,renderPortraitActions};
-export function fixture(mode,kind=null,writes=0,portraits=[]){layouts={lobby:globalThis.hallControlsHarness.lobby};store={current:()=>({mode,memorials:[],portraits}),kind:()=>kind};root={};chrome={replaceChildren(){}};pendingWrites=writes;hitGeneration=0;}
+export function fixture(mode,kind=null,writes=0,portraits=[],choices=[]){options={choices};layouts={lobby:globalThis.hallControlsHarness.lobby};store={current:()=>({mode,memorials:[],portraits}),kind:()=>kind};root={};chrome={replaceChildren(){}};hits={querySelector:()=>null};pendingWrites=writes;hitGeneration=0;}
 //# sourceURL=hall-controls-fixture.js`;
 const Hall = await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`);
 
@@ -88,7 +88,7 @@ test("rendered layer arrows rotate in screen coordinates while retaining centere
     assert.deepEqual(icon.node.pos,[0,0]);assert.deepEqual(icon.node.scale,[1,1]);
     assert.ok(Math.abs(Math.max(widget.w_,widget.h_)-56)<1e-10);
   }
-  assert.equal(wired.length,6);assert.ok(wired.every(button=>!button.disabled));
+  assert.equal(wired.length,7);assert.ok(wired.filter(button=>button.action!=="hall-portrait-change").every(button=>!button.disabled));assert.equal(wired.find(button=>button.action==="hall-portrait-change").disabled,true);
 });
 
 test("top-right icons keep the75percent baseline with the photo-only8percent optical adjustment",async()=>{
@@ -122,4 +122,33 @@ test("Hall's real action row measures its top margin below the bar at minimum, d
       assert.ok(rendered.children.every(node => node.children[0].widgets[0].h_ === 104));
     }
   }
+});
+
+test("the Common ChangeUnit portrait icon keeps its77x68ratio and enables only with a replacement candidate",async()=>{
+  const entry={id:"a",variant:"hero",source:"mod:current",scale:1},choices=[{...entry,family:"hero",kind:"spr"},{variant:"alt",source:"official",family:"hero",kind:"spr"}];
+  for(const available of [[],choices]){
+    Hall.fixture("portraits","layout",0,[entry],available);wired=[];await Hall.renderPortraitActions({style:{},replaceChildren(){}},entry,{x:900,y:400,width:400,height:700},0);
+    const hit=wired.find(b=>b.action==="hall-portrait-change"),widget=drawnIcons.get("PortraitChange").node.widgets[0];
+    assert.equal(widget.atlas,"Common");assert.equal(widget.sprite,"Campaign_Icon_ChangeUnit");assert.ok(Math.abs(widget.w_/widget.h_-77/68)<1e-12);
+    assert.equal(hit.disabled,available.length===0);assert.equal(hit.name,"localized:hall.changePortrait");
+  }
+});
+
+test("the own-size slider moves the toolbar only once a size is set, never under a dragged thumb",async()=>{
+  const { portraitRect, portraitToolbarLayout } = await import("../../src/ba_modding_toolkit/web/js/student-hall-framing.js");
+  const entry={id:"a",variant:"hero",source:"mod:current",x:400,y:1100,scale:1,mirror:false},ui=globalThis.hallControlsHarness.UI,saved={...ui};
+  let change,reset,listeners={};
+  ui.scaleControl=async(host,value,fn,options)=>{assert.equal(value,1);assert.equal(options.limits.min,.5);change=fn;return {range:{addEventListener:(name,f)=>{listeners[name]=f;}},reset:()=>fn(1)};};
+  ui.button=async(host,name,caption,box,fn)=>{if(name==="HallPortraitScaleReset")reset=fn;};
+  try{
+    Hall.fixture("portraits","layout",0,[entry],[]);wired=[];
+    const host={style:{},replaceChildren(){}},rect=portraitRect(entry,null);
+    await Hall.renderPortraitActions(host,entry,rect,0);
+    const count=wired.length,start={...host.style},expected=(scale)=>portraitToolbarLayout(portraitRect({...entry,scale},null),count);
+    assert.equal(start.left,`${expected(1).x}px`);
+    change(1.8);assert.equal(entry.scale,1.8);assert.deepEqual(host.style,start,"input alone never moves the toolbar");
+    assert.notEqual(expected(1.8).x,expected(1).x,"the fixture really moves the toolbar");
+    listeners.change();assert.equal(host.style.left,`${expected(1.8).x}px`);assert.equal(host.style.top,`${expected(1.8).y}px`);
+    reset();assert.equal(entry.scale,1);assert.equal(host.style.left,`${expected(1).x}px`);
+  }finally{Object.assign(ui,saved);}
 });

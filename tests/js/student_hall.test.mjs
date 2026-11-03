@@ -6,7 +6,7 @@ import { portraitScale } from "../../src/ba_modding_toolkit/web/js/student-hall-
 const file = new URL("../../src/ba_modding_toolkit/web/js/student-hall-portraits.js", import.meta.url);
 let source = await readFile(file, "utf8");
 source = source.replace(/^import .*;$/gm, "");
-source = `const {loadSpineAssets, spineBase, loadPlayer, ensureSpine, idleAnimation, Stage, portraitScale} = globalThis.hallHarness;\n${source}`;
+source = `import { APPLIED_SELECTION_GOLD } from "${new URL("../../src/ba_modding_toolkit/web/js/ui-tokens.js", import.meta.url).href}";\nimport { pickPortrait, preparePickPages, visibleSlot, VISIBLE_ALPHA } from "${new URL("../../src/ba_modding_toolkit/web/js/student-hall-framing.js", import.meta.url).href}";\nconst {loadSpineAssets, spineBase, loadPlayer, ensureSpine, idleAnimation, Stage, portraitScale} = globalThis.hallHarness;\n${source}`;
 let calls, disposed, shared, hooks, delay, drawn, players;
 class Skeleton { constructor(data) { this.data = data; } setSkin(skin) { this.skin = skin; } setSlotsToSetupPose() { this.attachments = this.skin.attachments; } update() {} updateWorldTransform() {} }
 class AnimationState { constructor(data) { this.data = data; } setAnimation() {} setEmptyAnimation() { return {}; } apply() {} update(delta) { this.elapsed=(this.elapsed||0)+delta; } }
@@ -15,7 +15,7 @@ globalThis.spine = { Skeleton, AnimationState, AnimationStateData: class { const
   SpinePlayer: class { constructor(layer, config) {
     players.push(this);
     this.skeleton = new Skeleton(data); this.skeleton.skin = { name: "custom", attachments: ["mod-only"] }; this.animationState = new AnimationState({});
-    this.canvas = { width: 1920, height: 1080 }; this.sceneRenderer = { drawSkeleton(skeleton) { drawn.push(skeleton); } }; this.context = { gl: {} }; this.config = config;
+    this.canvas = { width: 1920, height: 1080 }; this.sceneRenderer = { drawSkeleton(skeleton) { this.primed=true; if (skeleton.drawOrder?.length !== 0) drawn.push(skeleton); } }; this.context = { gl: {} }; this.config = config;
     this.drawFrame = () => this.sceneRenderer.drawSkeleton(this.skeleton);
     this.stopRendering = () => { this.stopRequestAnimationFrame=true; }; this.startRendering = () => { this.stopRequestAnimationFrame=false; };
   } } };
@@ -154,4 +154,48 @@ test("scene zoom updates the shared projection while retaining every skeleton, a
   assert.equal(calls.length,requestCount);assert.equal(disposed.length,0);
   for(let i=0;i<actors.length;i++){assert.equal(actors[i].player,before[i].player);assert.equal(actors[i].player.skeleton.x,before[i].x);assert.equal(actors[i].player.skeleton.scaleX,before[i].scale);}
   result.setView(null);assert.equal(players[0].currentViewport.width,1920);controller.abort();
+});
+
+test("gold outline uses the public renderer mask immediately below its actor and front portraits occlude it",async()=>{
+  const host=setup(),signal=new AbortController().signal,list=entries(3);
+  const result=await Hall.createPortraits(host,list,choice,{signal}), owner=players[0],events=[];
+  const savedShader=globalThis.spine.Shader;
+  globalThis.spine.Shader=class{bind(){events.push("mask-program");}dispose(){events.push("dispose-mask");}
+    setUniform4x4f(){}setUniformi(){}setUniformf(){}
+    setUniform3f(name,...gold){assert.equal(name,"u_gold");assert.deepEqual(gold,[1,233/255,0]);}
+    setUniform2f(name,...offset){assert.equal(name,"u_offset");assert.ok(Math.abs(Math.hypot(...offset)-3)<1e-9);}};
+  const normal={data:{blendMode:0},bone:{active:true},attachment:{name:"body"},getAttachment(){return this.attachment;},setAttachment(a){this.attachment=a;}};
+  const additive={...normal,data:{blendMode:1},attachment:{name:"glow"}},inactive={...normal,bone:{active:false},attachment:{name:"inactive"}};
+  const selected=result.actors.get(list[1].id).player.skeleton;selected.drawOrder=[normal,additive,inactive];
+  const batcherShader={bind(){events.push("normal-program");}};
+  let drawing=true;
+  owner.sceneRenderer.batcher={begin(shader){assert.equal(drawing,false);drawing=true;events.push(shader===batcherShader?"begin-normal":"begin-mask");},end(){assert.equal(drawing,true);drawing=false;events.push("end");}};
+  owner.sceneRenderer.batcherShader=batcherShader;
+  owner.sceneRenderer.camera={projectionView:{values:[]}};
+  owner.sceneRenderer.skeletonRenderer={draw(batcher,skeleton,...rest){assert.deepEqual(rest,[],"the whole slot range");assert.equal(skeleton,selected);assert.equal(drawing,true);assert.equal(normal.attachment.name,"body");assert.deepEqual(skeleton.drawOrder,[normal]);assert.equal(additive.attachment.name,"glow");assert.equal(inactive.attachment.name,"inactive");assert.ok(owner.sceneRenderer.primed);drawn.push("outline");}};
+  result.setSelection(list[1].id);drawn=[];owner.drawFrame();
+  const skeletons=[...result.actors.values()].map(a=>a.player.skeleton);
+  assert.deepEqual(drawn,[skeletons[0],...Array(16).fill("outline"),skeletons[1],skeletons[2]]);
+  assert.deepEqual(selected.drawOrder,[normal,additive,inactive]);
+  assert.equal(additive.attachment.name,"glow");assert.equal(inactive.attachment.name,"inactive");
+  assert.deepEqual(events.slice(-3),["end","normal-program","begin-normal"]);assert.equal(drawing,true);
+  assert.equal(events.filter(e=>e==="begin-mask").length,16);
+  const back=skeletons[0];back.drawOrder=selected.drawOrder;
+  owner.sceneRenderer.skeletonRenderer.draw=(batcher,skeleton)=>{assert.equal(skeleton,back);assert.ok(owner.sceneRenderer.primed);drawn.push("outline");};
+  result.setSelection(list[0].id);owner.sceneRenderer.primed=false;drawn=[];owner.drawFrame();assert.deepEqual(drawn,[...Array(16).fill("outline"),...skeletons]);
+  assert.match(Hall.OUTLINE_FRAGMENT,/texture2D\(u_texture, v_uv\).a \* v_alpha < 0.1/);
+  result.setSelection(null);drawn=[];owner.drawFrame();assert.deepEqual(drawn,skeletons);result.dispose();assert.equal(events.at(-1),"dispose-mask");
+  globalThis.spine.Shader=savedShader;
+});
+
+test("swapping one portrait loads only its new art; Cancel restores its cached saved actor and every other track",async()=>{
+  const host=setup(),signal=new AbortController().signal,original=entries(3).map((e,i)=>({...e,source:`mod:source${i}`}));
+  const result=await Hall.createPortraits(host,original,e=>({source:e.source}),{signal});const before=[...result.actors.values()];
+  before.forEach((a,i)=>a.player.animationState.trackTime=80+i);
+  const next=structuredClone(original);next[1].source="mod:new";
+  const count=calls.length;await result.update(next,1,{retain:original});
+  assert.deepEqual(calls.slice(count),["mod/new"]);assert.equal(result.actors.get(original[0].id),before[0]);assert.equal(result.actors.get(original[2].id),before[2]);
+  assert.notEqual(result.actors.get(original[1].id),before[1]);assert.equal(disposed.length,0);
+  await result.update(original,1,{retain:original});assert.deepEqual([...result.actors.values()],before);assert.deepEqual(before.map(a=>a.player.animationState.trackTime),[80,81,82]);
+  assert.equal(calls.length,count+1);assert.equal(disposed.length,1);result.dispose();
 });

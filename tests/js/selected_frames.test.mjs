@@ -6,6 +6,7 @@ import { frameMesh } from '../../src/ba_modding_toolkit/web/js/ngui-frame-fx.js'
 import { frameOutline } from '../../src/ba_modding_toolkit/web/js/row-thumbnail.js';
 import { sliceAxis, slicePoint } from '../../src/ba_modding_toolkit/web/js/sprite-slices.js';
 import { selectionPrefab, selectionSprite, selectionFramePixels } from './selection_prefabs.mjs';
+import { APPLIED_SELECTION_GOLD } from "../../src/ba_modding_toolkit/web/js/ui-tokens.js";
 const at = (tree, path) => path.split('/').reduce((n, part) => n.children.find(c => c.name === part), tree);
 const slot = () => at(selectionPrefab(), SELECTION_SLOT);
 const walk = n => [n, ...(n.children || []).flatMap(walk)];
@@ -134,4 +135,10 @@ test('all six locales retain their existing Applied labels for accessibility', (
     const ui = JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${locale}.json`, import.meta.url))).webui;
     assert.ok(ui.status.applied); assert.ok(ui.photo.applied);
   }
+});
+
+test("Hall outline gold is the applied Mulligan SelectLine's single sprite yellow",()=>{
+  const line=at(selectionPrefab(),`${SELECTION_SLOT}/SelectLine`);
+  assert.equal(line.widgets.filter(w=>"sprite" in w).length,1);
+  assert.equal(sprite(line).color,`${APPLIED_SELECTION_GOLD}/1.00`);
 });

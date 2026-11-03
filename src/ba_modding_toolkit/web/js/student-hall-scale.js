@@ -1,14 +1,14 @@
 // Bind the native slider; optional percentage fields retain partial text while typing.
-import { HALL_SCALE, hallScale } from "./student-hall-framing.js";
-export function bindScale(range, number, reset, { value, change, paint = () => {}, enabled = () => true }) {
-  const lo = HALL_SCALE.min * 100, hi = HALL_SCALE.max * 100;
-  let percent = Math.round(hallScale(value) * 100);
+import { HALL_SCALE } from "./student-hall-framing.js";
+export function bindScale(range, number, reset, { value, change, paint = () => {}, enabled = () => true, limits = HALL_SCALE }) {
+  const lo = limits.min * 100, hi = limits.max * 100;
+  let appliedValue = value, percent = Math.round((Number.isFinite(value) ? Math.max(limits.min, Math.min(limits.max, value)) : limits.default) * 100);
   for (const input of [range, number].filter(Boolean)) { input.min = String(lo); input.max = String(hi); input.step = "1"; }
-  function show() { range.value = String(percent); if (number) number.value = String(percent); paint((percent - lo) / (hi - lo)); }
+  function show() { range.value = String(percent); if (number) number.value = String(percent); range.setAttribute?.("aria-valuetext", `${percent}%`); paint((percent - lo) / (hi - lo)); }
   function apply(next, sync = true) {
     if (!enabled()) { show(); return; }
     const clamped = Math.round(Math.max(lo, Math.min(hi, next)));
-    const changed = clamped !== percent; percent = clamped;
+    const changed = clamped !== percent || clamped / 100 !== appliedValue; percent = clamped; appliedValue = percent / 100;
     if (sync) show(); else { range.value = String(percent); paint((percent - lo) / (hi - lo)); }
     if (changed) change(percent / 100);
   }
@@ -24,6 +24,6 @@ export function bindScale(range, number, reset, { value, change, paint = () => {
   };
   number?.addEventListener("change", commit); number?.addEventListener("blur", commit);
   number?.addEventListener("keydown", (event) => { if (event.key === "Enter") { event.preventDefault(); commit(); } });
-  reset?.addEventListener("click", () => apply(HALL_SCALE.default * 100));
-  show(); return { value: () => percent / 100 };
+  reset?.addEventListener("click", () => apply(limits.default * 100));
+  show(); return { value: () => percent / 100, reset: () => apply(limits.default * 100) };
 }

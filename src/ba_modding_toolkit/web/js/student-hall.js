@@ -6,7 +6,7 @@ import * as Loading from "./loading.js";
 import * as Popup from "./popup.js";
 import * as UI from "./student-hall-ui.js";
 import * as Backgrounds from "./student-hall-backgrounds.js";
-import { createDraft, sourceKey, contentBounds } from "./student-hall-model.js";
+import { createDraft, sourceKey, contentBounds, portraitSelection, portraitReplacements } from "./student-hall-model.js";
 import { openPicker } from "./student-hall-picker.js";
 import { createDialogue } from "./student-hall-dialogue.js";
 import { createPortraits } from "./student-hall-portraits.js";
@@ -15,7 +15,7 @@ import { createMemorialPool } from "./student-hall-memorial.js";
 import { createFullscreen } from "./student-hall-fullscreen.js";
 import { createSceneCamera, sceneRect, sceneViewport } from "./student-hall-camera.js";
 import { dialogueText } from "./dialogue-text.js";
-import { portraitRect } from "./student-hall-framing.js";
+import { bindPortraitPointer, portraitRect, portraitToolbarLayout, PORTRAIT_SIZE } from "./student-hall-framing.js";
 import { rpc } from "./api.js";
 import { T, L, errorText, language } from "./i18n.js";
 import { clone, S, hitButton, text } from "./util.js";
@@ -197,6 +197,12 @@ function paintSceneView(view, immediate = false) {
   }
   dialogue?.reposition?.();
 }
+function selectPortrait(type, id = null) {
+  selected = portraitSelection(selected, { type, id, ids: current().portraits.map((entry) => entry.id) });
+  portraits?.setSelection?.(arranging() ? selected : null);
+  actorHover?.pin(selected);
+  for (const button of hits?.querySelectorAll?.("[data-entry]") || []) button.setAttribute("aria-pressed", String(arranging() && selected === button.dataset.entry));
+}
 function portraitActions(entry) {
   const list = current().portraits, index = list.findIndex((item) => item.id === entry.id);
   const actions = list.length > 1 ? [["Remove", "hall.remove", () => store.remove(entry.id), true]] : [];
@@ -206,11 +212,13 @@ function portraitActions(entry) {
     ["Front", "hall.layerFront", () => store.layer(entry.id, "front"), index < list.length - 1],
     ["Back", "hall.layerBack", () => store.layer(entry.id, "back"), index > 0],
     ["Flip", "hall.flipHorizontal", () => store.flip(entry.id), true]);
+  actions.push(["Change", "hall.changePortrait", () => changePortrait(entry), portraitReplacements(entry, options.choices, list).length > 0]);
   return actions;
 }
 // Kept separate from behavior so the chosen game icons can be swapped without changing editor semantics.
 const PORTRAIT_ICONS = {
   // UICardGame_MyDeck SelectDump, UIConquest MissionTab_Target, UICampaign ScenarioReplay, UIFormation PositionChange.
+  Change: { atlas: "Common", sprite: "Campaign_Icon_ChangeUnit", width: 77, height: 68 },
   Remove: { atlas: "CardGame", sprite: "CCG_Icon_Dump", width: 64, height: 64 },
   Backward: { sprite: "Common_Icon_Top", width: 44, height: 26, rotZ: 180 },
   Forward: { sprite: "Common_Icon_Top", width: 44, height: 26 },
@@ -219,9 +227,8 @@ const PORTRAIT_ICONS = {
   Flip: { sprite: "Common_Icon_Change", width: 80, height: 80 },
 };
 async function renderPortraitActions(host, entry, rect, version, alive = () => true) {
-  const actions = portraitActions(entry), width = 62, gap = 6, total = actions.length * (width + gap) - gap;
-  const x = Math.max(20, Math.min(1900 - total, rect.x + rect.width - total)), y = Math.max(360, Math.min(900, rect.y));
-  Object.assign(host.style, { left: `${x}px`, top: `${y}px`, width: `${total}px`, height: `${width}px` });
+  const actions = portraitActions(entry), box = portraitToolbarLayout(rect, actions.length), width = box.icon, gap = box.gap;
+  Object.assign(host.style, { left: `${box.x}px`, top: `${box.y}px`, width: `${box.width}px`, height: `${box.height}px` });
   const destination = document.createElement("div");
   await Promise.all(actions.map(async ([name, key, action, enabled], index) => {
     const chosen = PORTRAIT_ICONS[name];
@@ -238,20 +245,37 @@ async function renderPortraitActions(host, entry, rect, version, alive = () => t
     await alignIcon(view, `${tree.name}/Icon`, `${tree.name}/Bg`, { maxSize: 56 * S, rotation: chosen.rotZ || 0, enabled: enabled && !pendingWrites });
     const button = Popup.hit(destination, view, `${tree.name}/Bg`, () => {
       if (version !== hitGeneration || !alive() || !arranging() || pendingWrites || !enabled) return;
-      selected = name === "Remove" ? null : entry.id;
-      if (action()) renderScene().catch(fail);
+      if (name === "Remove") selectPortrait("remove", entry.id);
+      if (name === "Change") action(); else if (action()) renderScene().catch(fail);
     }, { name: T(key), action: `hall-portrait-${name.toLowerCase()}`, z: 90 });
     if (button) { button.dataset.entryAction = entry.id; button.disabled = pendingWrites > 0 || !enabled; }
   }));
+  const enabled = () => version === hitGeneration && alive() && arranging() && !pendingWrites;
+  // The toolbar moves only once a size is set: moving it under a dragged thumb would feed back into the slider.
+  const place = () => {
+    if (!enabled()) return;
+    const next = portraitToolbarLayout(rectOf(entry), portraitActions(entry).length);
+    Object.assign(host.style, { left: `${next.x}px`, top: `${next.y}px` });
+  };
+  let control;
+  await UI.button(destination, "HallPortraitScaleReset", T("hall.scaleReset"), box.reset, () => { control?.reset(); place(); }, { enabled: enabled() });
+  control = await UI.scaleControl(destination, entry.scale, (value) => {
+    if (!enabled()) return;
+    entry.scale = value; portraits?.setScale?.(current().portraitScale);
+    const rect = rectOf(entry), button = hits.querySelector(`[data-entry="${entry.id}"]`);
+    if (button) Object.assign(button.style, { left: `${rect.x}px`, top: `${rect.y}px`, width: `${rect.width}px`, height: `${rect.height}px` });
+  }, { enabled, box: box.slider, limits: PORTRAIT_SIZE, focusKey: `hall-portrait-scale:${entry.id}` });
+  control?.range?.addEventListener("change", place);
   if (version === hitGeneration && alive() && root) host.replaceChildren(destination);
 }
 function createHoverOwner(change) {
-  let owner = null, pointer = null, palette = false, focus = null;
+  let owner = null, pointer = null, palette = false, focus = null, pinned = null;
   const publish = () => {
-    const next = palette ? owner : pointer || focus;
+    const next = pinned || (palette ? owner : pointer || focus);
     if (next !== owner) { owner = next; change(owner); }
   };
   return {
+    pin(id) { pinned = id; publish(); },
     actorEnter(id) { pointer = id; publish(); },
     actorLeave(id, intoPalette = false) { if (pointer === id) pointer = null; if (intoPalette) palette = true; publish(); },
     paletteEnter() { palette = true; },
@@ -263,8 +287,11 @@ function createHoverOwner(change) {
   };
 }
 function renderHits(host = hits) {
+  if (!editing()) selected = null;
+  else selected = portraitSelection(selected, { type: "redraw", ids: current().portraits.map((entry) => entry.id) });
+  portraits?.setSelection?.(arranging() ? selected : null);
   const previousHover = actorHover?.snapshot(), focused = document.activeElement;
-  const focusedAction = focused?.dataset?.entryAction && focused.dataset.action, focusedActor = focused?.dataset?.entry;
+  const focusedKey = focused?.dataset?.focusKey, focusedAction = focused?.dataset?.entryAction && focused.dataset.action, focusedActor = focused?.dataset?.entry;
   const hitVersion = ++hitGeneration; actorHover = null; host.replaceChildren(); if (current().mode !== "portraits") return Promise.resolve();
   let ready = Promise.resolve();
   const alive = () => hitVersion === hitGeneration && !!root;
@@ -279,8 +306,8 @@ function renderHits(host = hits) {
       palette.style.visibility = entry ? "" : "hidden"; palette.dataset.actorToolbar = owner || "";
       if (!entry) return;
       renderPortraitActions(palette, entry, rectOf(entry), hitVersion, () => alive() && version === paletteVersion).then(() => {
-        if (!alive() || version !== paletteVersion || !focusedAction || previousHover?.owner !== id) return;
-        palette.querySelector(`[data-action="${focusedAction}"]`)?.focus({ preventScroll: true });
+        if (!alive() || version !== paletteVersion || (!focusedAction && !focusedKey) || previousHover?.owner !== id) return;
+        palette.querySelector(focusedKey ? `[data-focus-key="${focusedKey}"]` : `[data-action="${focusedAction}"]`)?.focus({ preventScroll: true });
       }).catch(fail);
     });
     const targetActor = (target) => target?.closest?.("[data-entry]")?.dataset.entry || null;
@@ -303,9 +330,11 @@ function renderHits(host = hits) {
   }
   for (const entry of current().portraits) {
     const rect = rectOf(entry), button = hitButton(host, [rect.x, rect.y, rect.width, rect.height], () => {
-      if (!arranging()) dialogue?.play(entry).catch(fail);
+      if (arranging()) { if (!pendingWrites) selectPortrait("click", entry.id); }
+      else dialogue?.play(entry).catch(fail);
     }, titleOf(choiceOf(entry)));
     buttons.set(entry.id, button); button.dataset.entry = entry.id; button.style.touchAction = "none";
+    if (arranging()) button.style.pointerEvents = "none";
     button.setAttribute("aria-pressed", String(arranging() && selected === entry.id));
     const hover = actorHover;
     if (hover) {
@@ -318,27 +347,41 @@ function renderHits(host = hits) {
         hover.focus(palette.contains(focused) ? owner : host.contains(focused) ? focused?.dataset?.entry || null : null);
       }));
     }
-    let drag;
-    button.addEventListener("pointerdown", (event) => {
-      if (!alive() || !arranging() || pendingWrites) return; selected = entry.id;
-      const bounds = root.getBoundingClientRect(); drag = { px: event.clientX, py: event.clientY, x: entry.x, y: entry.y, scale: 1920 / bounds.width };
-      button.setPointerCapture(event.pointerId); event.preventDefault();
+  }
+  if (arranging()) {
+    portraits?.preparePick?.();
+    const surface = document.createElement("div");
+    surface.dataset.portraitSurface = "";
+    Object.assign(surface.style, { position: "absolute", inset: "0", pointerEvents: "auto", touchAction: "none" });
+    host.append(surface);
+    bindPortraitPointer(surface, { root, pick: (x, y) => portraits?.pick?.(x, y) || null,
+      enabled: () => alive() && arranging() && !pendingWrites,
+      hover: (id, target) => { if (id) actorHover.actorEnter(id); else actorHover.actorLeave(owner, palette?.contains(target)); },
+      down: (held) => {
+        const entry = current().portraits.find((item) => item.id === held.id);
+        if (entry) { held.x = entry.x; held.y = entry.y; }
+      },
+      move: (held, point) => {
+        const entry = current().portraits.find((item) => item.id === held.id); if (!entry) return;
+        if (!held.dragged && Math.hypot(point.x - held.start.x, point.y - held.start.y) <= 4) return;
+        if (!held.dragged) { held.dragged = true; selectPortrait("drag", held.id); }
+        entry.x = Math.max(0, Math.min(1920, held.x + point.x - held.start.x));
+        entry.y = Math.max(200, Math.min(1800, held.y + point.y - held.start.y));
+        portraits?.setScale?.(current().portraitScale);
+        const rect = rectOf(entry), button = buttons.get(entry.id);
+        Object.assign(button.style, { left: `${rect.x}px`, top: `${rect.y}px` });
+        if (palette && owner === entry.id) {
+          const box = portraitToolbarLayout(rect, portraitActions(entry).length);
+          Object.assign(palette.style, { left: `${box.x}px`, top: `${box.y}px` });
+        }
+      },
+      end: (held, point) => { if (!held.dragged && point) selectPortrait("click", held.id); if (alive()) renderHits(); },
     });
-    button.addEventListener("pointermove", (event) => {
-      if (!alive()) { drag = null; return; }
-      if (drag && event.buttons === 0) { end(); return; }
-      if (!drag || pendingWrites) return;
-      entry.x = Math.max(0, Math.min(1920, drag.x + (event.clientX - drag.px) * drag.scale));
-      entry.y = Math.max(200, Math.min(1800, drag.y + (event.clientY - drag.py) * drag.scale));
-      const box = rectOf(entry); button.style.left = `${box.x}px`; button.style.top = `${box.y}px`;
-      if (palette) palette.style.visibility = "hidden";
-    });
-    const end = () => { if (drag) { drag = null; if (alive()) renderHits(); } };
-    for (const event of ["pointerup", "pointercancel", "lostpointercapture"]) button.addEventListener(event, end);
   }
   if (palette) {
     host.append(palette);
     if (previousHover?.owner && buttons.has(previousHover.owner)) actorHover.restore(previousHover);
+    actorHover.pin(selected);
     if (focusedActor && buttons.has(focusedActor)) buttons.get(focusedActor).focus({ preventScroll: true });
   }
   return ready;
@@ -496,6 +539,16 @@ export function applyPrefs(prefs) {
   if (ctx) ctx.prefs = prefs; dialogue?.preferencesChanged();
   const memory = memorials?.current(); if (memory) configureMemorial(memory.player, prefs);
 }
+function changePortrait(entry) {
+  if (!arranging() || pendingWrites) return;
+  const choices = portraitReplacements(entry, options.choices, current().portraits); if (!choices.length) return;
+  closeEditor(); const gen = page;
+  editor = openPicker({ kind: "spr", choices, draft: store, onError: fail, isSaving: () => pendingWrites > 0,
+    onDone: () => closeEditor(), onReplace: async (choice) => {
+      if (gen !== page || !arranging() || pendingWrites || !store.replacePortrait(entry.id, choice, options.choices)) return;
+      closeEditor(); await renderScene().catch(fail);
+    } });
+}
 function addPortraits() {
   if (!editing()) store.begin("layout"); closeEditor(); const gen = page;
   editor = openPicker({ kind: "spr", choices: options.choices, draft: store, onError: fail, isSaving: () => pendingWrites > 0,
@@ -554,7 +607,7 @@ export function canLeave() {
   const gen = page; fullscreen?.leave({ refocus: false }); editor?.closeNested?.();
   leavePending = (async () => {
     await saving.catch(() => {}); if (gen !== page || !root) return true;
-    if (!store.dirty()) { needsSettlement ||= store.kind() === "layout"; closeEditor(); store.cancel(); return true; }
+    if (!store.dirty()) { needsSettlement ||= store.kind() === "layout"; closeEditor(); store.cancel(); selectPortrait("end"); return true; }
     const answer = await new Promise((resolve) => {
       leaveResolve = resolve;
       const modal = UI.createModal(T("hall.unsaved"), () => { modal.close(); leavePrompt = null; leaveResolve = null; resolve("stay"); }, { level: 3 }); leavePrompt = modal;
@@ -567,7 +620,7 @@ export function canLeave() {
     if (gen !== page || !root) return true;
     needsSettlement = true;
     if (answer === "save") { try { await saveDraft({ render: false }); } catch (error) { fail(error); return false; } }
-    else store.cancel();
+    else { store.cancel(); selectPortrait("end"); }
     closeEditor(); return true;
   })().finally(() => { leavePending = null; });
   return leavePending;
@@ -584,12 +637,15 @@ export async function show(context, data = null) {
   if (gen !== page) return; store = createDraft(saved); options = available; layouts = { lobby, slot };
   fullscreen = createFullscreen({ root, stage: document.getElementById("stage"), chrome, prepareExit: fullscreenExit,
     popupOpen: () => Popup.anyOpen(), returnFocus: () => chrome?.querySelector('[data-action="hall-fullscreen"]'),
-    onChange: () => { actorHover?.clearPointer(); } });
+    onChange: () => { actorHover?.clearPointer(); renderHits(); } });
   sceneCamera = createSceneCamera({ host: root, enabled: () => !!store && current().mode === "portraits" && !editing(),
     blocked: () => !root || pendingWrites > 0 || Popup.anyOpen() || Loading.held() || Loading.covering(), onChange: paintSceneView });
   document.addEventListener("keydown", onKey); await renderScene();
 }
 function onKey(event) {
+  if (root && arranging() && selected && event.key === "Escape" && !Popup.anyOpen() && !event.defaultPrevented && !event.isComposing && event.keyCode !== 229) {
+    event.preventDefault(); event.stopImmediatePropagation(); selectPortrait("escape"); return;
+  }
   if (!root || current().mode !== "memorial" || Popup.anyOpen() || !["ArrowLeft", "ArrowRight"].includes(event.key) || event.repeat) return;
   if (/INPUT|TEXTAREA|SELECT/.test(event.target?.tagName) || event.target?.isContentEditable) return;
   event.preventDefault(); step(event.key === "ArrowLeft" ? -1 : 1).catch(fail);

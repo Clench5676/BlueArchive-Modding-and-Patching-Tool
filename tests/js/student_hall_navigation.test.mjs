@@ -21,7 +21,7 @@ globalThis.hallHarness = {
 };
 let source = await readFile(new URL("../../src/ba_modding_toolkit/web/js/student-hall.js", import.meta.url), "utf8");
 source = source.replace(/^import .*;$/gm, "");
-source = `const {createDraft,S,clone,T,rpc,Lobby,Popup,NGUI,UI}=globalThis.hallHarness;\n${source}
+source = `import { portraitSelection } from "${new URL("../../src/ba_modding_toolkit/web/js/student-hall-model.js",import.meta.url).href}";\nconst {createDraft,S,clone,T,rpc,Lobby,Popup,NGUI,UI}=globalThis.hallHarness;\n${source}
 export function fixture(value, render) { store=createDraft(value);root=art=nodeFake(); renderScene=render;renderChrome=async()=>{}; }
 function nodeFake(){return {replaceChildren(){}};}
 export function initializePending(){store=null;root=art=nodeFake();}
