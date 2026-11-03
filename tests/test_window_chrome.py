@@ -134,7 +134,7 @@ class Button:
 @pytest.mark.parametrize('flipped', [True, False])
 def test_cocoa_moves_only_y_and_leaves_fullscreen_reveal_to_appkit(flipped):
     host = CocoaHost.__new__(CocoaHost)
-    host.api = NS(NSContainsRect=lambda outer, inner: inner.origin.y >= 0 and inner.origin.y + inner.size.height <= outer.size.height,
+    host.api = NS(NSContainsRect=lambda outer, inner: outer.origin.y <= inner.origin.y and inner.origin.y + inner.size.height <= outer.origin.y + outer.size.height,
                   NSWindowStyleMaskFullScreen=1 << 14)
     state = {'fullscreen': False, 'mini': False}
     content = NS(isFlipped=lambda: flipped, bounds=lambda: rect(0, 0, 200, 200))
@@ -156,9 +156,24 @@ def test_cocoa_moves_only_y_and_leaves_fullscreen_reveal_to_appkit(flipped):
     state.update(fullscreen=False, mini=True)
     assert host.measure({'centre': 30}) is None
     state['mini'] = False
-    host.buttons[0].parent.bounds = lambda: rect(0, 0, 200, 22)
-    with pytest.raises(RuntimeError, match='clipped'):
-        host.measure({'centre': 40})
+    # a wide window: the bar's centre line is lower than a 32-high title bar container lets the buttons go. They go as low as
+    # it allows and stay inside it; the native chrome is not given up (a second display, BL-073)
+    # (the container spans the content's top 32 points; this stand-in converts frames unchanged, so an unflipped container
+    # starts 168 up)
+    base = 0 if flipped else 168
+    for button in host.buttons:
+        button.parent.bounds = lambda: rect(0, base, 200, 32)
+        button.value.origin = NS(x=button.value.origin.x, y=3 if flipped else base + 15)
+    bounds = host.measure({'centre': 40})
+    assert bounds.bottom == pytest.approx(32) and bounds.top == pytest.approx(18)
+    for button in host.buttons:
+        assert base <= button.frame().origin.y <= base + 32 - 14
+    # inside the room, the centre line is still met
+    bounds = host.measure({'centre': 20})
+    assert (bounds.top + bounds.bottom) / 2 == pytest.approx(20)
+    # upwards the same: never above the container's top
+    bounds = host.measure({'centre': 2})
+    assert bounds.top == pytest.approx(0)
 
 
 class Hook:
