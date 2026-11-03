@@ -20,21 +20,58 @@ export function portraitRect(entry, bounds = null, globalScale = HALL_SCALE.defa
 export const VISIBLE_ALPHA = .1;
 const QUAD = [0, 1, 2, 2, 3, 0];
 const pages = new WeakMap(), vertices = new WeakMap();
+// Picking needs alpha only coarsely: a page is read at most ALPHA_SIDE texels on its longer side, so a large Mod atlas
+// costs milliseconds, not seconds, and its canvas is released at once. A page that reads as wholly transparent is a
+// failed read (WebKit refuses canvases past its memory budget): it counts as opaque rather than hiding the portrait.
+export const ALPHA_SIDE = 1024;
+function alphaSize(image) {
+  const fit = Math.min(1, ALPHA_SIDE / Math.max(image.width, image.height, 1));
+  return [Math.max(1, Math.round(image.width * fit)), Math.max(1, Math.round(image.height * fit))];
+}
+function readAlpha(texture, source, width, height) {
+  const canvas = document.createElement("canvas");
+  canvas.width = width; canvas.height = height;
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  context.drawImage(source, 0, 0, width, height);
+  const rgba = context.getImageData(0, 0, width, height).data;
+  canvas.width = canvas.height = 0;
+  const alpha = new Uint8Array(width * height);
+  let any = 0;
+  for (let i = 0; i < alpha.length; i++) any |= alpha[i] = rgba[i * 4 + 3];
+  const page = any ? { width, height, alpha } : null; pages.set(texture, page); return page;
+}
 export function pageAlpha(texture) {
   if (pages.has(texture)) return pages.get(texture);
-  const image = texture.getImage(), canvas = document.createElement("canvas");
-  canvas.width = image.width; canvas.height = image.height;
-  const context = canvas.getContext("2d", { willReadFrequently: true });
-  context.drawImage(image, 0, 0);
-  const rgba = context.getImageData(0, 0, canvas.width, canvas.height).data;
-  const alpha = new Uint8Array(canvas.width * canvas.height);
-  for (let i = 0; i < alpha.length; i++) alpha[i] = rgba[i * 4 + 3];
-  const page = { width: canvas.width, height: canvas.height, alpha }; pages.set(texture, page); return page;
+  const image = texture.getImage();
+  return readAlpha(texture, image, ...alphaSize(image));
 }
-export function preparePickPages(data) {
-  for (const skin of data.skins || []) for (const { attachment } of skin.getAttachments()) {
-    if (attachment.region?.texture) pageAlpha(attachment.region.texture);
+// The browser decodes and shrinks the page off the main thread; only the small read stays on it. That holds for the
+// page's bytes: an <img> source would be decoded on the main thread again (120 ms for a 2048 page).
+async function shrunkBitmap(image, width, height, load = fetch) {
+  const options = { resizeWidth: width, resizeHeight: height, resizeQuality: "low" };
+  if (typeof image?.src === "string" && image.src) {
+    try { const response = await load(image.src); if (response.ok) return await createImageBitmap(await response.blob(), options); } catch {}
   }
+  try { return await createImageBitmap(image, options); } catch { return null; }
+}
+async function loadPageAlpha(texture, load) {
+  const image = texture.getImage(), [width, height] = alphaSize(image);
+  const bitmap = await shrunkBitmap(image, width, height, load);
+  if (pages.has(texture)) { bitmap?.close?.(); return pages.get(texture); }
+  try { return readAlpha(texture, bitmap || image, width, height); } finally { bitmap?.close?.(); }
+}
+// Pages read so far; null means not read yet or unreadable, and picking then treats the attachment as opaque.
+export const readyAlpha = (texture) => pages.get(texture) || null;
+// Read the pages of skeleton data one per task, so entering layout editing never blocks on them.
+export function preparePickPages(data, schedule = (task) => setTimeout(task), load = globalThis.fetch) {
+  const textures = new Set();
+  for (const skin of data.skins || []) for (const { attachment } of skin.getAttachments()) {
+    if (attachment.region?.texture && !pages.has(attachment.region.texture)) textures.add(attachment.region.texture);
+  }
+  return [...textures].reduce((chain, texture) => chain.then(() => new Promise((resolve) => schedule(resolve))).then(async () => {
+    try { if (!pages.has(texture)) await (typeof createImageBitmap === "function" ? loadPageAlpha(texture, load) : pageAlpha(texture)); }
+    catch (error) { pages.set(texture, null); console.warn("Hall pick alpha unavailable", error); }
+  }), Promise.resolve());
 }
 // Atlas UVs already include trim and rotation. Match the page's linear filtering and clamp at its edges.
 export function sampleAlpha(page, u, v) {
@@ -45,7 +82,7 @@ export function sampleAlpha(page, u, v) {
     + (at(ix, iy + 1) * (1 - fx) + at(ix + 1, iy + 1) * fx) * fy;
 }
 export function visibleSlot(slot) { return slot.bone.active && slot.data.blendMode === 0; }
-export function skeletonContains(skeleton, x, y, S, alphaOf = pageAlpha) {
+export function skeletonContains(skeleton, x, y, S, alphaOf = readyAlpha) {
   for (const slot of skeleton.drawOrder || []) {
     if (!visibleSlot(slot)) continue;
     const a = slot.getAttachment();
@@ -68,7 +105,7 @@ export function skeletonContains(skeleton, x, y, S, alphaOf = pageAlpha) {
 // VISIBLE_ALPHA): the topmost visible point and the horizontal centre of the visible band below it (the top tenth of
 // the visible height). Spine's bounds also count transparent and off-body parts, so they can sit to either side of
 // the character. World units, y up; null when nothing is visible.
-export function visibleHead(skeleton, S, alphaOf = pageAlpha, step = 8) {
+export function visibleHead(skeleton, S, alphaOf = readyAlpha, step = 8) {
   const parts = [];
   for (const slot of skeleton.drawOrder || []) {
     if (!visibleSlot(slot)) continue;
@@ -107,11 +144,12 @@ function trianglesAlpha(world, triangles, uv, page, opacity, x, y) {
     if (!det) continue;
     const dx = x - ax, dy = y - ay, b = (dx * cy - dy * cx) / det, c = (bx * dy - by * dx) / det, aWeight = 1 - b - c;
     if (b < 0 || c < 0 || aWeight < 0) continue;
+    if (!page) return true;
     if (opacity * sampleAlpha(page, aWeight * uv[p] + b * uv[q] + c * uv[r], aWeight * uv[p + 1] + b * uv[q + 1] + c * uv[r + 1]) >= VISIBLE_ALPHA) return true;
   }
   return false;
 }
-export function pickPortrait(actors, x, stageY, S, alphaOf = pageAlpha) {
+export function pickPortrait(actors, x, stageY, S, alphaOf = readyAlpha) {
   const ordered = [...actors.values()];
   for (let i = ordered.length - 1; i >= 0; i--) {
     if (skeletonContains(ordered[i].player.skeleton, x, 1080 - stageY, S, alphaOf)) return ordered[i].entry.id;
@@ -156,22 +194,22 @@ export function bindPortraitPointer(surface, { root, pick, hover, down, move, en
 export const PORTRAIT_SIZE = Object.freeze({ min: .5, max: 2, default: 1 });
 // App-owned packing around native 62px icon buttons and the UILobby 104-unit slider body. The two rows never overlap.
 // Centred directly above the portrait's visible head (`head`, stage units) and touching it, so the pointer can travel
-// from the portrait into the toolbar; without a head, above the portrait's box. Moved inwards only where it would not
-// fit on the stage, and down below any control it would cover (the top bar, the Hall's top-right buttons and slider).
+// from the portrait into the toolbar; without a head, above the portrait's box. Where that would leave the stage or cover
+// a control (the top bar, the Hall's top-right buttons and slider), it goes under the portrait's feet instead, or to the
+// stage's bottom when they are off-stage. Horizontally it moves inwards only at the stage's edges.
 export const PORTRAIT_TOOLBAR_MARGIN = 16;
 export function portraitToolbarLayout(rect, count, obstacles = [], head = null) {
-  const icon = 62, gap = 6, width = Math.max(420, count * (icon + gap) - gap), height = 142, edge = 20;
-  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  const icon = 62, gap = 6, width = Math.max(420, count * (icon + gap) - gap), height = 142, edge = 20, m = PORTRAIT_TOOLBAR_MARGIN;
   const centre = head ? head.x : rect.x + rect.width / 2, top = head ? head.y : rect.y;
-  const x = clamp(centre - width / 2, edge, 1920 - edge - width);
-  let y = clamp(top - height, edge, 1080 - edge - height);
-  const m = PORTRAIT_TOOLBAR_MARGIN;
-  for (let moved = true, pass = 0; moved && pass < obstacles.length + 1; pass++) {
-    moved = false;
-    for (const o of obstacles) {
-      if (x < o.x + o.width + m && x + width > o.x - m && y < o.y + o.height + m && y + height > o.y - m) { y = o.y + o.height + m; moved = true; }
-    }
+  const x = Math.max(edge, Math.min(1920 - edge - width, centre - width / 2));
+  const covered = (y) => obstacles.filter((o) => x < o.x + o.width + m && x + width > o.x - m && y < o.y + o.height + m && y + height > o.y - m);
+  let y = top - height;
+  if (y < edge || covered(y).length) {
+    y = Math.min(rect.y + rect.height, 1080 - edge - height);
+    for (let pass = 0, over = covered(y); over.length && pass <= obstacles.length; pass++, over = covered(y))
+      y = Math.min(...over.map((o) => o.y - m - height));
   }
-  return { x, y: Math.min(y, 1080 - edge - height), width, height, icon, gap,
-    slider: [0, 108, width - 168], reset: [width - 156, 74, 156, 68] };
+  // A head below the stage still keeps the toolbar on it.
+  y = Math.max(edge, Math.min(1080 - edge - height, y));
+  return { x, y, width, height, icon, gap, slider: [0, 108, width - 168], reset: [width - 156, 74, 156, 68] };
 }
