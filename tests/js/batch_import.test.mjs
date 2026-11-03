@@ -1377,7 +1377,7 @@ test("all six locales translate source routes, choices and conversion reasons", 
   } finally { setStrings("en-US", load("en-US")); }
 });
 
-test("merged rows keep variant identity, count every asset kind in place, and select only eligible Mods", async () => {
+test("merged rows keep variant identity, say every asset kind and state as an ungrouped row does, and select only eligible Mods", async () => {
   const h = await fixture({ licensed: true });
   const a = entry("a"), lobby = { ...entry("a-lobby", "update", "lobby"), variant: "a" };
   const model = { ...entry("a-model", "blocked", "model"), variant: "a" };
@@ -1398,9 +1398,11 @@ test("merged rows keep variant identity, count every asset kind in place, and se
   h.analyses.at(-1).resolve({ entries: [a, lobby, model, other, newPortrait], skipped: 0 });
   await adding; await h.page.settled();
   assert.equal(h.row("a"), row, "the student row survives adding more assets");
-  const sender = find(drawn(h, row).tree, "Label_From");
-  assert.deepEqual(sender.children.map((node) => node.name), ["spr", "lobby", "model"]);
-  assert.equal(sender.children[0].children[0].widgets[0].text.replace(/\n/g, ""), "Portrait ×2");
+  const tree = drawn(h, row).tree, text = (path) => find(tree, path).widgets.find((w) => "text" in w).text.replace(/\n/g, "");
+  assert.equal(text("Label_Locale_Received"), "Portrait ×2, Memorial Lobby ×1, 3D Model ×1");
+  assert.equal(find(tree, "Label_From").children.length, 0, "no icon counts in the list");
+  assert.notEqual(find(tree, "TimeLimit").active, false, "the states are on the status tag");
+  for (const state of [/Ready/, /Pending Update/]) assert.match(text("TimeLimit/Label_Locale_TimeLimit"), state);
   assert.ok(h.thumbs.some(([, , , , , bg]) => bg === "/bg/a.png"));
 });
 
@@ -1420,8 +1422,9 @@ test("results omit state badges, follow the merge setting and route every studen
   await h.page.results(); await h.page.settled();
   const lobbyCount = walk(h.dialog).find((element) => element.dataset.kind === "lobby");
   assert.ok(lobbyCount);
-  const row = lobbyCount.parentNode, icon = row.art.children.find((element) => element.dataset.path === "List_01/Label_From/lobby/Icon");
-  const [left, top, width, height] = rectOf(lobbyCount), [ix, iy, iw, ih] = rectOf(icon);
+  const row = lobbyCount.parentNode, word = row.art.children.find((element) => element.dataset.path === "List_01/Label_From/lobby/Count");
+  assert.equal(row.art.children.some((element) => /Label_From\/\w+\/Icon$/.test(element.dataset.path || "")), false, "words, no tiny icons");
+  const [left, top, width, height] = rectOf(lobbyCount), [ix, iy, iw, ih] = rectOf(word);
   assert.ok(left <= ix && top <= iy && left + width >= ix + iw && top + height >= iy + ih);
   await lobbyCount.click();
   assert.deepEqual(h.destinations.at(-1), ["a", "a", "lobby"]);

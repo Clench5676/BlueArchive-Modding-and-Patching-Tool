@@ -1,6 +1,6 @@
 // Batch Import's artwork is cloned from runtime game layouts. Only container dimensions and data slots adapt
 // to the approved two-column screen; sprite slicing, inclines, decoration, colours and typography stay in NGUI.
-import { countNodes, iconsOf } from "./mod-counts.js";
+import { countNodes } from "./mod-counts.js";
 import { resizeButton } from "./button-layout.js";
 import { clone } from "./util.js";
 import { frameOutline, innerFrame } from "./row-thumbnail.js";
@@ -342,7 +342,7 @@ export function importArtwork(ui, layouts) {
       if (counts) {
         const kinds = ["spr", "lobby", "model", "other"].filter((kind) => counts[kind] > 0);
         at(sender, result ? 370 : 510, ROW_TEXT_TOP); sender.widgets = [];
-        sender.children = countNodes(counts, iconsOf(ui.atlasIndex?.()), ui.translate, { kinds, width: result ? 500 : 780,
+        sender.children = countNodes(counts, {}, ui.translate, { kinds, width: result ? 500 : 780,
           color: ui.find(t, "Label_System").widgets[0].color, fontSize: textSize, top: true });
         kindLines = 1;
         for (const child of sender.children) {

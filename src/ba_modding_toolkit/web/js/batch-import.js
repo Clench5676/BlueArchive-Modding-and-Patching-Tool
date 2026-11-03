@@ -600,12 +600,17 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
 
   function rowCopy(group, result = false) {
     const entry = representative(group.entries);
-    return { result, kind: T(KIND_KEYS[entry.kind] || KIND_KEYS.other),
-      unidentified: entry.reason === "source_unknown", state: stateText(entry),
-      counts: merged ? group.counts : null, badge: !merged && !result,
+    // A grouped row in the list reads like an ungrouped one: its kinds as text on the metadata line, its states on the status tag.
+    const groupedRow = merged && !result;
+    const kindCounts = () => Object.entries(group.counts).filter(([, n]) => n)
+      .map(([kind, n]) => `${T(KIND_KEYS[kind] || KIND_KEYS.other)} ×${n}`).join(listSeparator());
+    return { result, kind: groupedRow ? "" : T(KIND_KEYS[entry.kind] || KIND_KEYS.other),
+      unidentified: entry.reason === "source_unknown",
+      state: groupedRow ? [...new Set(group.entries.map(stateText))].join(listSeparator()) : stateText(entry),
+      counts: merged && result ? group.counts : null, badge: !result,
       meta: result ? [...new Set(group.entries.map((entry) => model.state.results.find((item) => item.id === entry.id))
         .map((item) => T(`import.outcome.${OUTCOMES.has(item?.outcome) ? item.outcome : "failed"}`)))].join(listSeparator())
-        : merged ? [...new Set(group.entries.map(stateText))].join(listSeparator())
+        : groupedRow ? kindCounts()
         : T(entry.files?.length === 1 ? "import.metaOne" : "import.meta", { id: identified(entry).core, n: entry.files?.length || 0, size: sizeText(entry.size) }) };
   }
 
