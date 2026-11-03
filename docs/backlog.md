@@ -1797,6 +1797,10 @@ Lead's findings (2026-11-03):
 - Not reproducible in development: the packaged app's executable is linked against the macOS 27.2 SDK, the development Python against
   15.5, and AppKit gives them different title bar metrics. In development the title bar container is 28 high and the chrome fails at
   start on both displays ("M1 button would be clipped by its AppKit container"); in the packaged app it works on the primary display.
+- Reproduced the packaged title bar in development with a launcher linked against SDK 27.2: the chrome then works, and stays active
+  when the window is moved between the displays programmatically (whole jumps, small steps across the boundary, sizes up to
+  1900 wide on the second display). A real pointer drag could not be simulated without accessibility rights. On the second display
+  the buttons sit 0.37 pt under the title bar container's top edge, close to the "clipped" check.
 - Needed: the reason the packaged app logs (`Native window chrome inactive: ...`) after the move.
 - Direction: a failed alignment must not hide the lights or hand dragging to the JS fallback on macOS; keep native dragging whatever
   the alignment does.
