@@ -1874,6 +1874,8 @@ the prefab values, from the development view). It imports no other UI module.
   (the mailbox limit label), error `#bb3421` (the skill type sprite), greyed `#828282` (Btn_Disable's label), the page's ink
   `#2c4564` (the collection's top bar title; `--navy-text` repeats it), the In Use badge `#ffb700` on `#4b2116`, a note's
   ink and the consent's "never" bar `#6a7b8f`. The style sheets repeat the CSS ones, which the token tests keep equal.
+- **Settings rows** stand 12 units apart (`SETTINGS.rowGap`, the prefab's Game tab); the scrolling area ends at the last
+  row's foot plus that gap.
 
 ### Enable Mods switch
 
