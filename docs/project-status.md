@@ -47,7 +47,7 @@ As of 2026-11-02. Verify the actual branch, working tree and `pyproject.toml` ve
 | BL-065 through BL-069 | Implemented; owner acceptance pending (BL-069: trigger not confirmed) |
 | BL-070 | Step 1 of 4 accepted by the owner on macOS (alpha.5); Windows not reviewed; steps 2 to 4 not started |
 | BL-071 | Implemented; owner acceptance pending |
-| BL-072 | Import button and gold patterns implemented, owner acceptance pending; items 1 to 6 open |
+| BL-072 | Implemented, except item 2 left as it is by the owner; owner acceptance pending |
 | BL-057, BL-058 | Accepted by the owner on macOS (alpha.12); Windows not reviewed |
 | BL-055 | Accepted by the owner on macOS (0.6.0 pre-review) |
 | BL-014 | Candidate, not scheduled |

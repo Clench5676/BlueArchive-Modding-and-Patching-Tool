@@ -1749,7 +1749,7 @@ that is the owner's. A trackpad's own momentum after the fingers lift is the sys
 
 ## BL-072: Batch Import's design check
 
-- Status: The Import button and the gold patterns implemented, owner acceptance pending. The rest open: the owner's call.
+- Status: Implemented except item 2, which stays as it is by the owner's choice (2026-11-03); owner acceptance pending.
 - Requested: 2026-11-03 (owner): check the page by eye and in code; the bottom-right confirm button is too large.
 
 Done:
@@ -1760,13 +1760,16 @@ Done:
 - Found on the way: every gold popup button had lost its two corner patterns (BL-029 names them): the template's nodes were not
   marked active, and the mirrored one used a negative scale the renderer does not draw.
 
-Open, seen in the development build (English, Simplified Chinese, Thai):
+Seen in the development build (English, Simplified Chinese, Thai), with what the owner chose (2026-11-03):
 
-1. The list shows only about 2.2 rows: rows are 188 px high, and a 100 px strip above them holds nothing but "N Mods", which the
-   filter button's "All (N)" already says. BL-058 settled the count's hiding at zero, not this strip.
+1. The list showed about 2.2 rows: rows are 188 px high, and a 100 px strip above them held nothing but "N Mods", which the filter
+   button's "All (N)" already says. Done: the strip and the count are gone, about 2.7 rows. This replaces BL-058's hidden count.
+   Rows keep their size.
 2. The list's seven tools are 56 px high with 21 px captions, beside the 88 px row. The game's lower small buttons are 106 units
-   (69 px: `Btn_Reset`, `Btn_Shortcuts`).
-3. Grouped rows: the student icon at 20 px reads as a dark blob, and the status is plain text where ungrouped rows use a tag.
-4. The left column ends at 765 px and the list at 826 px; with no Mods the left column is blank.
-5. Two golds: Import `#ffee00` (Items `UseBtn`), popups `#f6e94b` (Mailbox `ReceiveAll`).
-6. The filter popup is 2458 units wide for one short column.
+   (69 px: `Btn_Reset`, `Btn_Shortcuts`). Left as it is: at that height the row may not fit.
+3. Grouped rows: the student icon at 20 px read as a dark blob, and the status was plain text where ungrouped rows use a tag. Done:
+   kinds as text on the metadata line, states on the tag. Grouped results name the kinds in words too.
+4. The left column ended at 765 px and the list at 826 px. Done: the name plate's foot meets the list's; the blank left column with
+   no Mods stays.
+5. Two golds: Import `#ffee00` (Items `UseBtn`), popups `#f6e94b` (Mailbox `ReceiveAll`). Done: Import uses Mailbox's button.
+6. The filter popup was 2458 units wide for one short column. Done: Advanced Options' frame.
