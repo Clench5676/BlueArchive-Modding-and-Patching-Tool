@@ -3495,11 +3495,11 @@ test("the list, consent, update and tour footers share that centre height, capti
     near2(bodies[1].cx - bodies[0].cx - 496 * 0.8, 24);
     near2(bodies[2].cx - bodies[1].cx - 496 * 0.8, 24);
     near2(frame.h, Update.FRAME.h);
-    // the versions stand on the light stats box: the frame less 200 wide, 238 under the frame's top, clear of the buttons by the
+    // the versions stand on the light stats box: the frame less 200 wide, where a message's lines start, clear of the buttons by the
     // room Status and the progress bar need (POPUP.clearance under them)
     const box = measure(consent, "Center/Popup/Box");
     near2(box.w, Update.FRAME.w - 200);
-    near2(frame.top - box.top, 238);
+    near2(frame.top - box.top, 150);
     near2(box.h, 2 * 64 + 24);
     near2(box.bottom - Update.FRAME.contentBottom, 6 + 96 + 8 + 20);
     assert.ok(Update.FRAME.contentBottom - (Popup.footerTop(Update.FRAME.h, 3)) >= POPUP.clearance - 1e-9);

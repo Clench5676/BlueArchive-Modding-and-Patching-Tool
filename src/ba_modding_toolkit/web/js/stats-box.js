@@ -22,7 +22,7 @@ const { node, sprite, label } = NGUI;
 const colourOf = (colour) => colour || "#000000/1.00";
 const lineHeight = (fitted) => fitted.lines * fitted.fs * B.linePitch;
 
-// the box's width in what holds it: "frame" is a popup frame's width, "panel" a panel's
+// the box's width in what holds it: "frame" is a popup frame's width, "panel" a panel's, "table" a table's the box stands over
 export const boxWidth = (holder, width) => width - B.inset[holder];
 
 // the width the captions take: the widest one and the gap to the values (none without captions)
@@ -40,7 +40,7 @@ function cutTo(fitted, cut) {
   return { ...fitted, text: `${fitted.text.split("\n").slice(0, cut).join("\n")}\u2026`, lines: cut };
 }
 
-// holder: "frame" or "panel", width: its width; at: the box's top centre in the caller's frame; name: the box node's name;
+// holder: "frame", "panel" or "table", width: its width; at: the box's top centre in the caller's frame; name: the box node's name;
 // names: the rows' node name prefixes ({caption: "F", value: "V", divider: "L"} by default).
 // Gives {nodes, height, width, capW, rows: [{y, h, top, bottom, text, room}]}; the nodes are the box (fill and line) first, then
 // each row's caption, value, secondary line, slot nodes and the divider under it (none under the last row).

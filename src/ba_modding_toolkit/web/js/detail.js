@@ -1510,10 +1510,10 @@ function detailsInfo() {
 // and its height
 function detailsBody({ fields, rows }) {
   const W = DT.r - DT.l, kids = [];
-  // summary: captions, then values that wrap (paths), never cut; on the game's light stats box. A mod's value leaves room at the
-  // right for its edit icon, and its original name stands under it.
+  // summary: captions, then values that wrap (paths), never cut; on the game's light stats box, as wide as the file table under
+  // it. A mod's value leaves room at the right for its edit icon, and its original name stands under it.
   const TOP = 12; // air under the scrolling area's top edge
-  const box = statsBox({ holder: "panel", width: W, at: [W / 2, -TOP], name: "Summary", rows: fields.map(([k, v, mod]) => ({
+  const box = statsBox({ holder: "table", width: W, at: [W / 2, -TOP], name: "Summary", rows: fields.map(([k, v, mod]) => ({
     caption: k, value: String(v), ariaLabel: String(v), reserve: mod ? 70 : 0, secondary: mod?.alias ? modOriginalName(mod) : "",
     slot: mod ? ({ i, x, valueY, room, text }) => [node(`Edit_${i}`, [x + Math.min(glyphsOf(text.text, text.fs), room) + 32, valueY],
       [sprite("Cafe_Icon_NameEdit", 46, 46, { type: 0, depth: 9, color: "#2d4664/1.00" })])] : undefined,
