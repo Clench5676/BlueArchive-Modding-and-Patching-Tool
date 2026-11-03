@@ -1836,9 +1836,12 @@ app, or the game updated those students, since the last good state.
 
 ## BL-076: Student Hall: select a portrait by its outline, a pinned toolbar, its own size and a skin swap
 
-- Status: Implemented in local `main` (`95959624`, 2026-11-03; Codex, reviewed and fixed by the lead); not in a build yet; awaiting
-  the owner's visual acceptance (outline width and colour, the two-row toolbar, the Change Portrait picker). Japanese, Korean and
-  Thai "Change Portrait" wording unreviewed.
+- Status: Implemented (`95959624`, Codex, reviewed and fixed by the lead). Owner on alpha.9 (2026-11-03): a click on a portrait did
+  nothing, and the toolbar beside the portrait was harder to reach than one directly above it. Cause: the macOS WKWebView can end a
+  captured press with only a click (no pointerup, no lost capture; seen in an offscreen WKWebView probe), and selection waited for the
+  release. Fixed in `2dede1ed` (alpha.10): selection on press, any release signal ends a press, toolbar centred directly above the
+  portrait and below the top bar and top-right controls, hover kept over the transparent parts of the box. Awaiting the owner's
+  acceptance on alpha.10. Japanese, Korean and Thai "Change Portrait" wording unreviewed.
 - Requested: 2026-11-03 (owner): with portraits close together, the toolbar of a placed portrait is hard to reach. Clicking a portrait
   should draw the gold "applied" outline along its real visible outline and pin its toolbar (hovering another portrait shows no
   toolbar then); clicking it again clears the selection. The toolbar should gain a size slider of its own and a button that swaps the
