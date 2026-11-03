@@ -51,6 +51,8 @@ As of 2026-11-03. Verify the actual branch, working tree and `pyproject.toml` ve
 | BL-074 | Closed by the owner: working as intended |
 | BL-076 | Toolbar under the feet where the head has no room, layout editing without the stall, in alpha.12; owner acceptance pending |
 | BL-075 | Open, minor |
+| BL-077 | Fixed on `main` after alpha.12; owner acceptance pending |
+| BL-078 | Open, not reproduced |
 | BL-057, BL-058 | Accepted by the owner on macOS (alpha.12); Windows not reviewed |
 | BL-055 | Accepted by the owner on macOS (0.6.0 pre-review) |
 | BL-014 | Candidate, not scheduled |

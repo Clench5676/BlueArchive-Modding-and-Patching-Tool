@@ -1868,3 +1868,26 @@ outline about 3 stage px wide in the applied frame's yellow, under the portrait,
 200% in a second toolbar row with a reset, the global size kept; a change-portrait button (`Campaign_Icon_ChangeUnit`) listing the
 same student's other portraits not yet in the Hall, keeping position, size, mirror and layer. Only the Spine runtime's public API.
 
+
+## BL-077: Photography: blank space in the Expressions list pans the camera
+
+- Status: Fixed on `main`, awaiting the owner's acceptance.
+- Requested: 2026-11-03 (owner, 0.6.1-alpha.12, macOS): with the portrait camera's Expressions list open, the pointer over the list's
+  blank space turns into the hand, and the wheel there moves the frame.
+
+Cause: `#photo-overlay` passes the pointer through (`pointer-events: none`) and only the `.hit` cards took it back; the list's scroll
+area (`.popup-cards`) and the panel's frame are not under a `.layer-host`, so their blank space hit the pan surface (`.photo-pan`,
+`cursor: grab`, wheel pan and zoom). The lobby camera's Actions list had the same gaps.
+
+Fix (`controller.js` `choiceShield`, `photography.css`): a transparent shield under the cards covers the panel's whole box, and the
+scroll area takes the pointer, so a wheel in the gaps scrolls the list and the game pointer stays.
+
+## BL-078: macOS: dragging the top bar sometimes does not move the window
+
+- Status: Open, not reproduced (owner, 2026-11-03).
+- Requested: 2026-11-03 (owner, 0.6.1-alpha.12, macOS): dragging the top bar did not move the window; happened once, not seen again.
+
+Candidates (lead, from the code): the native drag regions (`window-chrome.js` `dragRegions`) are published empty while a popup or
+consent host is open, a scene is immersive or the chrome is not yet valid, and again only after the next layout pass; the native
+chrome itself failing (`Native window chrome inactive: ...` in the log) leaves pywebview's JS drag. Needed when it returns: the
+screen, whether the traffic lights were shown, whether a double-click on the bar worked, and the log line if any.
