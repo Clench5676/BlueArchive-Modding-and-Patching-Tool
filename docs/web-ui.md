@@ -1563,8 +1563,11 @@ It sits below the two equal-width Save/Cancel buttons at the upper right, aligne
 in the native inclined button body. It has no visible caption, percentage field or Reset button.
 Each portrait toolbar has a second row with the same native slider for its own size (50–200%, one-percent steps)
 and a Reset button for 100%. The two rows occupy separate boxes. The toolbar is centred directly above the portrait's
-box and touches it, inside the stage, moved down below any control it would cover (the top bar, the Hall's top-right
-buttons and global size slider, measured live). It moves to a new size only on release or Reset, never under a dragged
+visible head and touches it: the topmost visible point by the picker's rule and the centre of the visible band below it
+(the top tenth of the visible height), cached per actor relative to its position and recomputed on a size or mirror
+change. Spine's bounds also count transparent and off-body parts, so they can sit to either side of the character; they
+are used only when nothing is visible. The toolbar moves inwards only where it would leave the stage, and down below
+any control it would cover (the top bar, the Hall's top-right buttons and global size slider, measured live). It moves to a new size only on release or Reset, never under a dragged
 thumb. Both size controls edit the draft; Save keeps them and Cancel restores them.
 The global multiplier preserves entry anchors and individual scales and leaves the background unchanged. Slider changes
 update the shared renderer and interaction bounds directly, including changes made while assets are still loading;

@@ -32,6 +32,7 @@ let source = await readFile(new URL("../../src/ba_modding_toolkit/web/js/student
 source = source.replace(/^import .*;$/gm, "");
 source = `import { portraitReplacements } from "${new URL("../../src/ba_modding_toolkit/web/js/student-hall-model.js", import.meta.url).href}";\nimport { portraitRect, portraitToolbarLayout, PORTRAIT_SIZE } from "${new URL("../../src/ba_modding_toolkit/web/js/student-hall-framing.js", import.meta.url).href}";\nimport { bindCorner } from "${new URL("../../src/ba_modding_toolkit/web/js/corner-layout.js", import.meta.url).href}";\n` + source;
 source = `const {S,clone,NGUI,alignIcon,text,T,Popup,document,UI}=globalThis.hallControlsHarness;\n${source}\nexport {lobbyControl,controls,renderChrome,renderPortraitActions};
+export function setPortraits(value){portraits=value;}
 export function fixture(mode,kind=null,writes=0,portraits=[],choices=[]){options={choices};layouts={lobby:globalThis.hallControlsHarness.lobby};store={current:()=>({mode,memorials:[],portraits}),kind:()=>kind};root={getBoundingClientRect:()=>({left:0,top:0,width:1920,height:1080})};chrome={replaceChildren(){},querySelectorAll:()=>[]};hits={querySelector:()=>null};pendingWrites=writes;hitGeneration=0;}
 //# sourceURL=hall-controls-fixture.js`;
 const Hall = await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`);
@@ -151,4 +152,14 @@ test("the own-size slider moves the toolbar only once a size is set, never under
     listeners.change();assert.equal(host.style.left,`${expected(1.8).x}px`);assert.equal(host.style.top,`${expected(1.8).y}px`);
     reset();assert.equal(entry.scale,1);assert.equal(host.style.left,`${expected(1).x}px`);assert.equal(host.style.top,`${expected(1).y}px`);
   }finally{Object.assign(ui,saved);}
+});
+
+test("the toolbar centres on the portrait's visible head, not its Spine bounds",async()=>{
+  const entry={id:"a",variant:"hero",source:"mod:current",x:700,y:1100,scale:1,mirror:false};
+  Hall.fixture("portraits","layout",0,[entry],[]);Hall.setPortraits({actors:new Map(),head:(id)=>id==="a"?{x:-150,y:-600}:null});
+  try{
+    const host={style:{},replaceChildren(){}};await Hall.renderPortraitActions(host,entry,{x:0,y:0,width:1900,height:1080},0);
+    const [x,y,w,h]=["left","top","width","height"].map(k=>parseFloat(host.style[k]));
+    assert.equal(x+w/2,700-150,"centred on the head, not on the wide box");assert.equal(y+h,1100-600,"touching the head");
+  }finally{Hall.setPortraits(null);}
 });

@@ -101,3 +101,10 @@ test("the toolbar is centred directly above the portrait, touching it, and clear
     for(const o of CHROME)assert.ok(!overlaps(b,o),JSON.stringify([x,y,width,o]));
   }
 });
+test("with a known head the toolbar centres on it, moving inwards only at the stage's edges",()=>{
+  const rect={x:100,y:300,width:1400,height:1500};
+  let box=portraitToolbarLayout(rect,7,CHROME,{x:1150,y:520});assert.equal(box.x+box.width/2,1150);assert.equal(box.y+box.height,520);
+  box=portraitToolbarLayout(rect,7,CHROME,{x:60,y:520});assert.equal(box.x,20,"inwards at the left edge");assert.equal(box.y+box.height,520);
+  box=portraitToolbarLayout(rect,7,CHROME,{x:1890,y:900});assert.equal(box.x+box.width,1900,"inwards at the right edge");
+  box=portraitToolbarLayout(rect,7,CHROME,{x:700,y:120});assert.equal(box.x+box.width/2,700);assert.equal(box.y,64+PORTRAIT_TOOLBAR_MARGIN,"down only when there is no room above");
+});
