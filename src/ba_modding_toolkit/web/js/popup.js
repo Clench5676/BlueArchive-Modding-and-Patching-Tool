@@ -21,7 +21,7 @@ import { frameOutline } from "./row-thumbnail.js";
 import { T } from "./i18n.js";
 import { withTimeout } from "./async.js";
 import { TEXT_VIEWER } from "./popup-frames.js";
-import { BACKDROP, FOOTER, POPUP, SMALL_BUTTON } from "./ui-tokens.js";
+import { BACKDROP, CHIP, FOOTER, POPUP, SMALL_BUTTON } from "./ui-tokens.js";
 import { DOT, RECRUIT, S, TAN10, advanceOf, clone, glyphsOf, hitButton, markedLabel, wrapPath } from "./util.js";
 
 const { node, sprite, label, find, rect } = NGUI;
@@ -565,6 +565,20 @@ export function listCard(it, x, y, selected, card = LP.card, kind = null) {
 // the details panel's action buttons: a caption keeps 14 clear of each edge of the slanted body (the slant moves the text
 // band's top and bottom lines by up to 4), and two lines of it stay inside the body's 120 height
 const ACTION_CLEAR = 28, ACTION_TEXT_H = 96;
+// the details panel's chips and fields box, y below the panel's top: the box's top edge, and the chips' first row centre,
+// which keeps POPUP.clearance between the chips' bottom and the box (the chip is 72 high)
+const DETAILS_BOX_Y = 750, DETAILS_CHIP_Y = DETAILS_BOX_Y - POPUP.clearance - CHIP.h / 2;
+// where n chips stand in a panel w wide: rows of as many as fit with their slant inside it (3 chips and the gaps between are
+// wider than the 850-unit panel), each row centred; x from the panel's centre
+export function chipPlaces(count, panelW) {
+  const fits = (n) => n * CHIP.w + (n - 1) * CHIP.gap + CHIP.h * TAN10 <= panelW;
+  let perRow = 1;
+  while (fits(perRow + 1)) perRow += 1;
+  return Array.from({ length: count }, (_, i) => {
+    const row = Math.floor(i / perRow), inRow = Math.min(perRow, count - row * perRow);
+    return { row, x: (i - row * perRow - (inRow - 1) / 2) * CHIP.pitch };
+  });
+}
 // the details panel: title bar, the picture, name, kind chips, fields, actions
 function detailsTree(it, title, fields, actions, portraitTexture = null, kind = null) {
   const b = LP.left, cx = (b.l + b.r) / 2, w = b.r - b.l;
@@ -594,11 +608,13 @@ function detailsTree(it, title, fields, actions, portraitTexture = null, kind = 
   const using = it.inUseText || (it.inUse ? T("popup.inUse") : null);
   const chips = it.chips || [it.tag?.text || (it.recruit ? T("type.recruit") : it.kind === "mod" ? T("type.added") : T("type.noRecruit")), ...(using ? [using] : [])];
   const dark = !it.chips && it.recruit; // the recruit chip: dark, with the recruit mark
+  // the chips (the prefab's, 272 x 72): in rows of as many as fit inside the panel, the first 16 above the fields box
+  const places = chipPlaces(chips.length, w), rows = Math.max(0, ...places.map((p) => p.row)) + 1;
   chips.forEach((c, i) => {
-    const cw = 250, x = cx + (i - (chips.length - 1) / 2) * (cw + 16);
-    kids.push(node(`Chip_${i}`, [x, b.t - 690], [sprite("Common_Bg_Raius10px", cw, 60, { incline: 10, depth: 6, color: i === 0 && dark ? "#2c4564/1.00" : "#ffffff/1.00" })], [
-      node("Line", [0, 0], [sprite("Common_Line_Raius10px", cw, 60, { incline: 10, depth: 7, color: "#c0c9d4/1.00" })]),
-      node("Text", [0, 0], [], markedLabel(c, { fs: 32, fsMin: 24, color: i === 0 && dark ? "#ffffff/1.00" : "#2c4564/1.00", maxW: cw - 30, mark: i === 0 && dark, depth: 8 }).nodes),
+    const cw = CHIP.w, { x: dx, row } = places[i], x = cx + dx;
+    kids.push(node(`Chip_${i}`, [x, b.t - DETAILS_CHIP_Y - row * CHIP.rowPitch], [sprite("Common_Bg_Raius10px", cw, CHIP.h, { incline: 10, depth: 6, color: i === 0 && dark ? "#2c4564/1.00" : "#ffffff/1.00" })], [
+      node("Line", [0, 0], [sprite("Common_Line_Raius10px", cw, CHIP.h, { incline: 10, depth: 7, color: "#c0c9d4/1.00" })]),
+      node("Text", [0, 0], [], markedLabel(c, { fs: CHIP.fs, fsMin: CHIP.fsMin, color: i === 0 && dark ? "#ffffff/1.00" : "#2c4564/1.00", maxW: cw - CHIP.inset, mark: i === 0 && dark, depth: 8 }).nodes),
     ]));
   });
   // fields, on the game's light stats box; long values (file names) wrap, never cut
@@ -609,7 +625,7 @@ function detailsTree(it, title, fields, actions, portraitTexture = null, kind = 
     return f;
   });
   const rowHs = values.map((f) => Math.max(64, f.lines * f.fs * 1.25 + 16));
-  const boxT = b.t - 750, boxH = rowHs.reduce((a, h) => a + h, 0) + 24;
+  const boxT = b.t - DETAILS_BOX_Y - (rows - 1) * CHIP.rowPitch, boxH = rowHs.reduce((a, h) => a + h, 0) + 24;
   kids.push(node("Fields", [cx, boxT - boxH / 2], [sprite("Common_Bg_Raius10px", w - 40, boxH, { depth: 5, color: "#ecf5f9/1.00" })], [
     node("Line", [0, 0], [sprite("Common_Line_Raius10px", w - 34, boxH + 6, { depth: 4, color: "#c0c9d4/1.00" })]),
   ]));

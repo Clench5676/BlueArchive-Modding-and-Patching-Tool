@@ -1865,6 +1865,11 @@ the prefab values, from the development view). It imports no other UI module.
   90 (240 at least) in a row at least 156 high; the asset consent's Change button the same, on a line of its own under
   the item (`consent.js` `assetLayout`). Not migrated yet: the Hall's buttons, the photography toolbar, the popup details
   actions and the detail screen's Show in Finder / Explorer button.
+- **Chip** (`CHIP`; UICharacterDetail `Char_Target/Type/MainType/BG`): 272 x 72 inclined 10 degrees, caption 40 down to 28,
+  290 apart. The nameplate's variant chips (`detail.js`) and the list popup's details panel (`popup.js`) draw it. In the
+  panel the chips stand in centred rows of as many as fit inside it (two; a third goes on a second row, 84 lower, and
+  the fields box with it: `chipPlaces`), the first row 16 above the fields box; the portrait panel keeps its one row of
+  chips sized to its half (`switch-layout.js`), 16 above its box.
 
 ### Enable Mods switch
 

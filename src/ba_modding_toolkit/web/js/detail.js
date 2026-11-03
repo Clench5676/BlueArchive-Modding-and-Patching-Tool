@@ -45,6 +45,7 @@ import { setTitle } from "./nav.js";
 import { KEYS, deltaOf, pacer, typing } from "./step-keys.js";
 import { closable, closed as popupClosed, frameReady, hit as hitNode, listPopup, message, notice, popupFrame, scrollArea } from "./popup.js";
 import { ALIAS, DETAILS, aliasFrame, detailsFrame } from "./popup-frames.js";
+import { CHIP } from "./ui-tokens.js";
 import { candidateStatus, detailStatus, selectionStatus, selectionError, intendedKey, isApplied, availableTab, coreOf, hasAsset, hasKind, primaryKind, appliedKey as keyOf, appliedOf, candidates as listSources, partsOf, popupMode, modelSource, previewBase, previewChanged, previewKey, sourceOf, switchKindOf } from "./switch-sources.js";
 import { $, DOT, RECRUIT, S, TAN10, advanceOf, at, clone, glyphsOf, hitButton, markedLabel, off, text, widget, wrapPath } from "./util.js";
 
@@ -824,10 +825,10 @@ async function saveCandidate(key, kind) {
 
 // --- variant chips in the nameplate's white panel (style of the game's type chips) ---
 // 3 columns x 2 rows; a long name takes two columns; with more variants than fit, the last cell opens the picker.
-const CHIP_FS = 38, CHIP_W = 272, CHIP_PITCH = 290;
+const CHIP_FS = CHIP.fs, CHIP_W = CHIP.w, CHIP_PITCH = CHIP.pitch; // the prefab chip (Char_Target/Type/MainType/BG): 272 x 72, 40 down to 28
 const chipSpan = (item) => {
   const need = glyphsOf(shortName(item), 32) + (item.recruitable ? 32 * 1.35 / RECRUIT.ratio + 6 : 0) + (appliedKey(item) !== "self" ? 34 : 0);
-  return need > CHIP_W - 40 ? 2 : 1;
+  return need > CHIP_W - CHIP.inset ? 2 : 1;
 };
 const byRank = (a, b) => (isFav(b) - isFav(a)) || (b.recruitable - a.recruitable) || a.order - b.order;
 function placeChips(items) {
@@ -863,11 +864,11 @@ function chipLayout() {
   return [...picked, { more: list.length - picked.length, row: 1, col: 2, span: 1 }];
 }
 function chipNode(name, pos, w, caption, active, swapped, mark, fresh = false) {
-  const body = sprite("Common_Bg_Raius10px", w, 72, { incline: 10, depth: 5, color: active ? "#2c4564/1.00" : "#ffffff/1.00" });
+  const body = sprite("Common_Bg_Raius10px", w, CHIP.h, { incline: 10, depth: 5, color: active ? "#2c4564/1.00" : "#ffffff/1.00" });
   const color = active ? "#ffffff/1.00" : "#2c4564/1.00";
-  const lbl = markedLabel(caption, { fs: CHIP_FS, fsMin: 28, color, maxW: w - 40 - (swapped ? 30 : 0), mark, depth: 8 });
+  const lbl = markedLabel(caption, { fs: CHIP_FS, fsMin: CHIP.fsMin, color, maxW: w - CHIP.inset - (swapped ? 30 : 0), mark, depth: 8 });
   const kids = [node("Label", [swapped ? -15 : 0, 0], [], lbl.nodes)];
-  if (!active) kids.push(node("Line", [0, 0], [sprite("Common_Line_Raius10px", w, 72, { incline: 10, depth: 6, color: "#c0c9d4/1.00" })]));
+  if (!active) kids.push(node("Line", [0, 0], [sprite("Common_Line_Raius10px", w, CHIP.h, { incline: 10, depth: 6, color: "#c0c9d4/1.00" })]));
   // the variant wears another portrait: the game's swap icon at the right end
   if (swapped) kids.push(node("Swapped", [w / 2 - 36, 0], [sprite("Common_Icon_Change", 32, 32, { type: 0, depth: 9, color: active ? "#e6b6ef/1.00" : "#9c44ac/1.00" })]));
   if (fresh) kids.push(DOT([w / 2 - 4 + 36 * TAN10, 34], 30));
@@ -882,7 +883,7 @@ async function drawChips() {
   const CENTRE_Y = 234 - 101;
   const chips = chipLayout();
   const tree = node("Chips", [-1480, -720], [], chips.map(({ v, more, row, col, span }) => {
-    const y = 234 - 58 - row * 84, x = 514 + (y - CENTRE_Y) * TAN10 + (col + (span - 1) / 2 - 1) * CHIP_PITCH;
+    const y = 234 - 58 - row * CHIP.rowPitch, x = 514 + (y - CENTRE_Y) * TAN10 + (col + (span - 1) / 2 - 1) * CHIP_PITCH;
     const w = CHIP_W + (span - 1) * CHIP_PITCH;
     return v
       ? chipNode(`Chip_${v.key}`, [x, y], w, shortName(v), v.key === variantKey, shownSource(v) !== "self", v.recruitable, hasFresh(v))
