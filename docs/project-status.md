@@ -7,7 +7,7 @@ As of 2026-11-02. Verify the actual branch, working tree and `pyproject.toml` ve
 
 | Branch | State |
 | --- | --- |
-| `main` | Local version `0.6.1-alpha.5`: the published 0.6.0, the upstream sync to `6c61fdc8`, the security policy, the fix that keeps files from a mod inside their output folder (`e8bee4c2`), BL-065 through BL-069, BL-070 step 1. Not pushed: held until upstream publishes its fix for the same issue. |
+| `main` | Local version `0.6.1-alpha.6`: the published 0.6.0, the upstream sync to `6c61fdc8`, the security policy, the fix that keeps files from a mod inside their output folder (`e8bee4c2`), BL-065 through BL-069, BL-070 step 1, BL-071, BL-072's Import button. Not pushed: held until upstream publishes its fix for the same issue. |
 
 0.6.0 is published (tag `0.6.0` at `817ebeda`, 2026-10-30): macOS build uploaded, Windows build by the release workflow.
 
@@ -58,8 +58,8 @@ from passing tests or the presence of earlier code.
 
 ## Review artifact and validation
 
-`dist/Blue-Archive-Modding-and-Patching-Tool-0.6.1-alpha.5-macos-arm64.dmg`, MD5 `70684690148c693d3dc1a21df1d819fa`,
-built from `1d8a5ef7` (`chore(release): 0.6.1-alpha.5`), with BL-065 through BL-069 and BL-070 step 1. Awaiting the owner's review.
+`dist/Blue-Archive-Modding-and-Patching-Tool-0.6.1-alpha.6-macos-arm64.dmg`, MD5 `64b80cd6555bf4f1dc273e2c699c2b9d`,
+built from `74f45782` (`chore(release): 0.6.1-alpha.6`), with BL-065 through BL-069, BL-070 step 1, BL-071 and BL-072's Import button. Awaiting the owner's review.
 
-On `main` before the build (`9406c427`): 4247 passed, 26 skipped (Python); 2204 JavaScript tests passed (isolated runs with the official development
+On `main` before the build (`1ebeccda`): 4247 passed, 26 skipped (Python); 2209 JavaScript tests passed (isolated runs with the official development
 view). Native Windows behavior is not verified on the macOS host.
