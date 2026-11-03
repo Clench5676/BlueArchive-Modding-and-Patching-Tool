@@ -1843,8 +1843,12 @@ app, or the game updated those students, since the last good state.
   portrait and below the top bar and top-right controls, hover kept over the transparent parts of the box. Owner on alpha.10: clicks
   work; the toolbar still sat to the left or right of every student. Cause: Spine's bounds count transparent and off-body parts, so
   their centre is 30 to 130 stage px off the character for most students (measured on official portraits in the dev view). Fixed in
-  `5b20484c` (alpha.11): the toolbar is centred on the visible head. Awaiting the owner's acceptance on alpha.11. Japanese, Korean
-  and Thai "Change Portrait" wording unreviewed.
+  `5b20484c` (alpha.11): the toolbar is centred on the visible head. Owner on alpha.11: above the head as wanted, but a portrait at
+  the top right got it on its face (pushed below the top-right controls), and entering layout editing stalled for seconds. Owner
+  decision: where the toolbar cannot go above the head, it goes under the feet. The stall was the main-thread re-decode of every
+  atlas page for pick alpha (about 120 ms per 2048 page in Chrome). Fixed in `f2d9820d` (alpha.12): feet placement, pages read in
+  the background (blob decode and shrink off the main thread, opaque until read). Awaiting the owner's acceptance on alpha.12.
+  Japanese, Korean and Thai "Change Portrait" wording unreviewed.
 - Requested: 2026-11-03 (owner): with portraits close together, the toolbar of a placed portrait is hard to reach. Clicking a portrait
   should draw the gold "applied" outline along its real visible outline and pin its toolbar (hovering another portrait shows no
   toolbar then); clicking it again clears the selection. The toolbar should gain a size slider of its own and a button that swaps the
