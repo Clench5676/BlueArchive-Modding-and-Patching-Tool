@@ -761,6 +761,8 @@ test("resized real button patterns are clipped to the inclined body at every pag
   }
 });
 
+const { SMALL_BUTTON } = await import("../../src/ba_modding_toolkit/web/js/ui-tokens.js");
+const { BUTTON_BODY_H } = await import("../../src/ba_modding_toolkit/web/js/import-layout.js");
 const drawn = (h, element) => h.rendered.findLast((item) => item.host === element.art);
 const rectOf = (element) => ["left", "top", "width", "height"].map((key) => parseFloat(element.style[key]));
 const closeTo = (actual, expected) => assert.ok(Math.abs(actual - expected) < 0.02, `${actual} != ${expected}`);
@@ -1017,7 +1019,7 @@ test("buttons side by side share one caption size: the list's tools, and Advance
   assert.ok(treeNodes(alone).flatMap((n) => n.widgets).some((w) => "text" in w && w.text === "Remove Imported"));
 });
 
-test("the page gives the list's tools one size, Advanced Options and Recheck another, and leaves Import alone", async () => {
+test("the page gives the list's tools one size and the row under the list another, Import included", async () => {
   const h = await fixture();
   await h.page.settled();
   const size = (action) => {
@@ -1027,9 +1029,32 @@ test("the page gives the list's tools one size, Advanced Options and Recheck ano
   const tools = ["files", "folder", "all", "none", "remove", "removeImported", "clear"].map(size);
   assert.equal(new Set(tools).size, 1, `the seven tools: ${tools}`);
   assert.equal(size("options"), size("recheck"));
+  assert.equal(size("start"), size("recheck"), "Import's caption is its neighbours' size, not the Items prefab's 72");
   // the shared size comes from the group fit (the stand-in takes 2 off the prefab's size), not from each caption alone
   assert.ok(tools[0] < 60 && size("options") < 60);
-  assert.equal(size("start"), 72, "the primary button keeps its own prefab size");
+});
+
+test("the row under the list is one row of the small button, right-aligned to the list's tools", async () => {
+  const h = await fixture();
+  await h.page.settled();
+  const [options, recheck, start] = ["options", "recheck", "start"].map((action) => rectOf(h.action(action)));
+  for (const rect of [options, recheck, start]) {
+    closeTo(rect[3], SMALL_BUTTON.h * S);
+    closeTo(rect[1] + rect[3] / 2, 902);
+  }
+  closeTo(start[2], SMALL_BUTTON.w * S);
+  closeTo(recheck[2], SMALL_BUTTON.w * S);
+  closeTo(start[0] - recheck[0] - recheck[2], SMALL_BUTTON.gap);
+  closeTo(recheck[0] - options[0] - options[2], SMALL_BUTTON.gap);
+  const clear = rectOf(h.action("clear")), panelLeft = 602;
+  closeTo(start[0] + start[2], panelLeft + clear[0] + clear[2]);
+  // every body is drawn at one scale and one height, gold or blue, enabled or not
+  for (const action of ["options", "recheck", "start"]) {
+    const { tree, opts } = drawn(h, h.action(action));
+    closeTo(opts.scale, SMALL_BUTTON.h * S / BUTTON_BODY_H);
+    const body = treeNodes(tree).flatMap((n) => n.widgets).find((w) => w.sprite === "Common_Btn_BG");
+    assert.equal(body.h_, BUTTON_BODY_H, action);
+  }
 });
 
 test("every page action swaps its whole disabled prefab, including both dotted patterns, through the job lifecycle", async () => {
