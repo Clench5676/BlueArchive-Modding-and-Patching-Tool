@@ -1778,3 +1778,42 @@ Seen in the development build (English, Simplified Chinese, Thai), with what the
    no Mods stays.
 5. Two golds: Import `#ffee00` (Items `UseBtn`), popups `#f6e94b` (Mailbox `ReceiveAll`). Done: Import uses Mailbox's button.
 6. The filter popup was 2458 units wide for one short column. Done: Advanced Options' frame.
+
+## BL-073: macOS: on a second display the window jumps between screens and loses its traffic lights
+
+- Status: Being diagnosed.
+- Requested: 2026-11-03 (owner, 0.6.1-alpha.7): after moving the window to the second display, dragging it there makes it jump back
+  and forth between the two displays at a high rate, and the traffic lights are gone.
+
+Owner's setup: built-in Retina display (2x, primary) and a 1920 x 1080 display at 1x.
+
+Lead's findings (2026-11-03):
+
+- The traffic lights belong to the native chrome (BL-037 M1). When `CocoaHost.measure` raises, `WindowChrome.fail` disposes it: the
+  lights are hidden again and the top bar falls back to pywebview's JS drag (`DRAG_REGION_SELECTOR`), which moves the window by
+  `screenX`/`screenY` flipped against the screen the window was created on. Across displays of different sizes and origins that
+  conversion is wrong, and each move changes the next event's coordinates: the window oscillates. Both symptoms fit "the native
+  chrome failed after the move".
+- Not reproducible in development: the packaged app's executable is linked against the macOS 27.2 SDK, the development Python against
+  15.5, and AppKit gives them different title bar metrics. In development the title bar container is 28 high and the chrome fails at
+  start on both displays ("M1 button would be clipped by its AppKit container"); in the packaged app it works on the primary display.
+- Needed: the reason the packaged app logs (`Native window chrome inactive: ...`) after the move.
+- Direction: a failed alignment must not hide the lights or hand dragging to the JS fallback on macOS; keep native dragging whatever
+  the alignment does.
+
+## BL-074: Student Hall shows the official art for two students after updating to alpha.7
+
+- Status: Being diagnosed.
+- Requested: 2026-11-03 (owner, 0.6.1-alpha.7): in the Student Hall, the portrait and the memorial lobby of Ako (Dress) and Hina
+  (Swimsuit) show the official art again; other students not checked.
+
+The Hall's "official" source has drawn the verified official files since 0.6.0, and a Hall entry whose mod is gone shows "missing", not
+the official art, so neither explains it alone. The owner's library cannot be read from here. Questions for the owner: what the Hall's
+layout editing names those two entries; whether the detail screen and the game show the mod; whether those mods were updated in the
+app, or the game updated those students, since the last good state.
+
+## BL-075: Settings: the volume sliders do not follow the arrow keys
+
+- Status: Open, minor (owner, 2026-11-03).
+- Requested: 2026-11-03 (owner, BL-067 review): the arrow keys do not change the volume. UI-14 (BL-067) meant to fix this.
+
