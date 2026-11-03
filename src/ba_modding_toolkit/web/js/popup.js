@@ -21,8 +21,9 @@ import { frameOutline } from "./row-thumbnail.js";
 import { T } from "./i18n.js";
 import { withTimeout } from "./async.js";
 import { TEXT_VIEWER } from "./popup-frames.js";
-import { BACKDROP, CHIP, COLOUR, FOOTER, POPUP, SMALL_BUTTON } from "./ui-tokens.js";
-import { DOT, RECRUIT, S, TAN10, advanceOf, clone, glyphsOf, hitButton, markedLabel, wrapPath } from "./util.js";
+import { statsBox, valueRoom } from "./stats-box.js";
+import { BACKDROP, CHIP, COLOUR, FOOTER, POPUP, SMALL_BUTTON, STATS_BOX } from "./ui-tokens.js";
+import { DOT, RECRUIT, S, TAN10, clone, glyphsOf, hitButton, markedLabel, wrapPath } from "./util.js";
 
 const { node, sprite, label, find, rect } = NGUI;
 const fitText = (...a) => NGUI.fitText(...a);
@@ -585,8 +586,8 @@ export function chipPlaces(count, panelW) {
     return { row, x: (i - row * perRow - (inRow - 1) / 2) * (CHIP.w + gap) };
   });
 }
-// the details panel: title bar, the picture, name, kind chips, fields, actions
-function detailsTree(it, title, fields, actions, portraitTexture = null, kind = null) {
+// the details panel: title bar, the picture, name, kind chips, fields, actions (exported for the tests, like chipPlaces)
+export function detailsTree(it, title, fields, actions, portraitTexture = null, kind = null) {
   const b = LP.left, cx = (b.l + b.r) / 2, w = b.r - b.l;
   const pictureW = kind === "model" ? 490 : w;
   const kids = [
@@ -624,25 +625,9 @@ function detailsTree(it, title, fields, actions, portraitTexture = null, kind = 
     ]));
   });
   // fields, on the game's light stats box; long values (file names) wrap, never cut
-  const capW = Math.max(...fields.map(([k]) => advanceOf(k, 38))) + 30, room = w - 120 - capW;
-  const values = fields.map(([, v], i) => {
-    const f = wrapPath(String(v), 38, 26, room, 3);
-    if (i === 2 && f.lines > 2) { f.text = f.text.split("\n").slice(0, 2).join("\n") + "…"; f.lines = 2; }
-    return f;
-  });
-  const rowHs = values.map((f) => Math.max(64, f.lines * f.fs * 1.25 + 16));
-  const boxT = b.t - DETAILS_BOX_Y - (rows - 1) * CHIP.rowPitch, boxH = rowHs.reduce((a, h) => a + h, 0) + 24;
-  kids.push(node("Fields", [cx, boxT - boxH / 2], [sprite("Common_Bg_Raius10px", w - 40, boxH, { depth: 5, color: "#ecf5f9/1.00" })], [
-    node("Line", [0, 0], [sprite("Common_Line_Raius10px", w - 34, boxH + 6, { depth: 4, color: "#c0c9d4/1.00" })]),
-  ]));
-  let top = boxT - 12;
-  fields.forEach(([k, v, color], i) => {
-    const rowH = rowHs[i], y = top - rowH / 2, x0 = b.l + 50, f = values[i];
-    kids.push(node(`F_${i}`, [x0, y], [label(k, 38, "#2d4664/1.00", capW, 50, { pivot: 3, depth: 8 })]));
-    kids.push(node(`V_${i}`, [x0 + capW, y], [label(f.text, f.fs, color || "#000000/1.00", room + 20, f.lines * f.fs * 1.25 + 8, { pivot: 3, depth: 8, ariaLabel: String(v) })]));
-    if (i < fields.length - 1) kids.push(node(`L_${i}`, [cx, y - rowH / 2], [sprite("Common_Line_Dot", w - 100, 4, { type: 2, depth: 7, color: "#c0c9d4/1.00" })]));
-    top -= rowH;
-  });
+  const boxT = b.t - DETAILS_BOX_Y - (rows - 1) * CHIP.rowPitch;
+  kids.push(...statsBox({ holder: "panel", width: w, at: [cx, boxT], name: "Fields", rows: fields.map(([k, v, color], i) => (
+    { caption: k, value: String(v), colour: color, ariaLabel: String(v), cut: i === 2 ? 2 : 0 })) }).nodes);
   // One size for the whole row: the largest at which every caption fits its button after wrapping onto two lines. The bodies
   // are equal slots less a gap, until one long word would cost every caption size: then it takes width from its neighbours.
   const bw = (w - 60) / actions.length, gap = 14;
@@ -899,7 +884,7 @@ export async function listPopup(options) {
 // --- the message popup ---
 // buttons: the room under the content for the footer, 304.5: the footer's top (FOOTER.centre + half a body, 279) and 25.5 of air.
 // It was 236 while the footer's centre sat 68.5 lower.
-export const MSG = { title: 150, gap: 28, rowMin: 104, rowButton: SMALL_BUTTON.h + 20, check: 150, buttons: FOOTER.centre + FOOTER.body.h / 2 + 25.5, none: 70, minH: 640, cap: 1400 };
+export const MSG = { title: 150, gap: 28, rowButton: SMALL_BUTTON.h + 20, check: 150, buttons: FOOTER.centre + FOOTER.body.h / 2 + 25.5, none: 70, minH: 640, cap: 1400 };
 
 // message({title, lines, ok, cancel, check, host, width, close, confirmKeys, scroll}): a message on the popup frame, in host
 // (#dialog by default, over everything but the message popup). Resolves once it is closed, however it is closed, with
@@ -986,58 +971,64 @@ function plainMessage(layer, { title, lines, ok, cancel, buttons, state, dismiss
   layer.replaceChildren(back, box);
 }
 
-// a fixed size (max equals min) only wraps, on as many lines as it needs, and never shrinks below that size
-function messageText(text, max, min, room) {
+// a fixed size (max equals min) only wraps, on as many lines as it needs, and never shrinks below that size. strict: no size
+// under min either way (the light box's rows): text that cannot keep it within `lines` lines breaks at separators and between
+// characters, down to min, on as many lines as it needs
+function messageText(text, max, min, room, lines = 4, strict = false) {
   const fixed = max === min;
-  const fitted = fitText(text, max, min, room, fixed ? Infinity : 4);
-  if ((!fixed || fitted.fs >= min) && fitted.text.split("\n").every((line) => glyphsOf(line, fitted.fs) <= room)) return fitted;
-  return wrapPath(text, min, min, room, Infinity);
+  const fitted = fitText(text, max, min, room, fixed ? Infinity : lines);
+  if ((!(fixed || strict) || fitted.fs >= min) && fitted.text.split("\n").every((line) => glyphsOf(line, fitted.fs) <= room)) return fitted;
+  return strict ? wrapPath(text, max, min, room, lines) : wrapPath(text, min, min, room, Infinity);
 }
+// a fitted text with its lines counted as drawn (a line break in the text itself counts)
+const counted = (fitted) => ({ ...fitted, lines: fitted.text.split("\n").length });
 
 function messageLines(lines, w, fitTogether, plain) {
   const rows = lines.map((l) => (typeof l === "string" ? { text: l } : l));
   const boxed = !plain && rows.some((r) => r.button);
-  const min = boxed ? 40 : 44, max = boxed ? 44 : 52;
+  // the rows of the light stats box take its value range (38 down to 26, three lines); lines without a box keep 52 down to 44
+  const min = boxed ? STATS_BOX.value.fsMin : 44, max = boxed ? STATS_BOX.value.fs : 52, most = boxed ? STATS_BOX.value.lines : 4;
   const fitted = rows.map((r) => {
     // a line button is the small button: 136 high, as wide as its caption needs and 90 more (240 at least), the caption 48 down to 34
     const bf = r.button ? fitText(r.button.label, SMALL_BUTTON.fs, SMALL_BUTTON.fsMin, SMALL_BUTTON.w - SMALL_BUTTON.fitInset) : null;
     const bw = bf ? Math.max(SMALL_BUTTON.minW, glyphsOf(bf.text, bf.fs) + SMALL_BUTTON.glyphPad) : 0;
-    const room = w - (boxed ? 280 : 240) - (bw ? bw + 30 : 0);
-    return { r, bf, bw, room, f: messageText(r.text, r.fontSize ?? max, r.minFontSize ?? min, room) };
+    const room = boxed ? valueRoom("frame", w, { reserve: bw ? bw + 30 : 0 }) : w - 240 - (bw ? bw + 30 : 0);
+    const f = messageText(r.text, r.fontSize ?? max, r.minFontSize ?? min, room, most, boxed);
+    return { r, bf, bw, room, f: boxed ? counted(f) : f };
   });
   const group = fitTogether.map((i) => fitted[i]).filter(Boolean);
   if (group.length) {
     const fs = Math.max(min, Math.min(...group.map(({ f }) => f.fs)));
     // Rewrap at the shared size; extra lines keep the popup's minimum instead of shrinking below it.
-    for (const s of group) s.f = wrapPath(s.r.text, fs, fs, s.room, 4);
+    for (const s of group) s.f = boxed ? counted(wrapPath(s.r.text, fs, fs, s.room, 4)) : wrapPath(s.r.text, fs, fs, s.room, 4);
+  }
+  const buttons = [];
+  if (boxed) {
+    // rows on the game's light stats box: text at the left, the line's button at the right; a row with a button holds it, in 156
+    // at least (the button and 10 above and below)
+    const box = statsBox({ holder: "frame", width: w, name: "Box", names: { value: "Row", divider: "Dot" }, rows: fitted.map(({ r, f, bf, bw }, i) => ({
+      value: f, colour: `${r.color || "#2d4664"}/1.00`, minH: bf ? MSG.rowButton : STATS_BOX.rowMin, reserve: bw ? bw + 30 : 0,
+      slot: bf ? ({ right, y }) => {
+        buttons.push([i, r.button]);
+        return [Buttons.smallButton(`Btn_${i}`, right - bw / 2, y, r.button.label, { w: bw, fs: SMALL_BUTTON.fs, min: SMALL_BUTTON.fsMin, depth: 8 })];
+      } : undefined,
+    })) });
+    return { tree: node("Lines", [0, 0], [], box.nodes), height: box.height, buttons };
   }
   const out = [];
   let y = 0;
-  // rows on the game's light stats box: text at the left, the line's button at the right
-  const boxW = w - 200, buttons = [];
-  // a row with a button holds it: in the light box 156 at least (the button and 10 above and below), rows without keep rowMin
-  const sized = fitted.map((s) => ({ ...s, h: boxed ? Math.max(s.bf ? MSG.rowButton : MSG.rowMin, s.f.lines * s.f.fs * 1.3 + 30)
-    : Math.max(s.bf ? SMALL_BUTTON.h : 0, s.f.lines * s.f.fs * 1.3 + 8) }));
-  const boxH = sized.reduce((a, s) => a + s.h, 0) + 16;
-  if (boxed) {
-    out.push(node("Box", [0, -boxH / 2], [sprite("Common_Bg_Raius10px", boxW, boxH, { depth: 5, color: "#ecf5f9/1.00" })], [
-      node("Line", [0, 0], [sprite("Common_Line_Raius10px", boxW + 6, boxH + 6, { depth: 4, color: "#c0c9d4/1.00" })]),
-    ]));
-    y = -8;
-  }
+  const sized = fitted.map((s) => ({ ...s, h: Math.max(s.bf ? SMALL_BUTTON.h : 0, s.f.lines * s.f.fs * 1.3 + 8) }));
   sized.forEach(({ r, f, bf, bw, h, room }, i) => {
     const cy = y - h / 2;
-    const left = boxed || plain;
-    out.push(node(`${boxed ? "Row" : "Line"}_${i}`, [left ? -w / 2 + (boxed ? 140 : 120) : 0, cy],
-      [label(f.text, f.fs, `${r.color || "#2d4664"}/1.00`, left ? room : w - 200, f.lines * f.fs * 1.3 + 8, { pivot: left ? 3 : 4, depth: 8 })]));
+    out.push(node(`Line_${i}`, [plain ? -w / 2 + 120 : 0, cy],
+      [label(f.text, f.fs, `${r.color || "#2d4664"}/1.00`, plain ? room : w - 200, f.lines * f.fs * 1.3 + 8, { pivot: plain ? 3 : 4, depth: 8 })]));
     if (bf) {
-      out.push(Buttons.smallButton(`Btn_${i}`, w / 2 - (boxed ? 130 : 120) - bw / 2, cy, r.button.label, { w: bw, fs: SMALL_BUTTON.fs, min: SMALL_BUTTON.fsMin, depth: 8 }));
+      out.push(Buttons.smallButton(`Btn_${i}`, w / 2 - 120 - bw / 2, cy, r.button.label, { w: bw, fs: SMALL_BUTTON.fs, min: SMALL_BUTTON.fsMin, depth: 8 }));
       buttons.push([i, r.button]);
     }
-    if (boxed && i < sized.length - 1) out.push(node(`Dot_${i}`, [0, y - h], [sprite("Common_Line_Dot", boxW - 60, 4, { type: 2, depth: 7, color: "#c0c9d4/1.00" })]));
-    y -= h + (boxed ? 0 : 16);
+    y -= h + 16;
   });
-  return { tree: node("Lines", [0, 0], [], out), height: boxed ? boxH : Math.max(0, -y - 16), buttons };
+  return { tree: node("Lines", [0, 0], [], out), height: Math.max(0, -y - 16), buttons };
 }
 
 // Shared by ordinary messages and text-only tours, including row fitting, frame padding and footer clearance.
