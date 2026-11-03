@@ -6,6 +6,7 @@ import * as NGUI from "./ngui.js";
 import * as Popup from "./popup.js";
 import { rpc, waitJob } from "./api.js";
 import { T, errorText } from "./i18n.js";
+import { COLOUR } from "./ui-tokens.js";
 import { S, clone } from "./util.js";
 
 const { node, sprite, label, find } = NGUI;
@@ -112,13 +113,13 @@ async function draw(host, info, resolve, { simulation = false } = {}) {
       node("Line", [0, 0], [sprite("Common_Line_Raius10px", 1306, 266, { depth: 4, color: "#c0c9d4/1.00" })]),
       ...rows.flatMap(([k, v], i) => [
         node(`K_${i}`, [-600, 62 - i * 124], [label(k, 44, "#2d4664/1.00", capW, 60, { pivot: 3, depth: 8 })]),
-        node(`V_${i}`, [-600 + capW, 62 - i * 124], [label(v, 48, i ? "#1f9a52/1.00" : "#000000/1.00", 1100 - capW, 60, { pivot: 3, depth: 8 })]),
+        node(`V_${i}`, [-600 + capW, 62 - i * 124], [label(v, 48, i ? `${COLOUR.success}/1.00` : "#000000/1.00", 1100 - capW, 60, { pivot: 3, depth: 8 })]),
       ]),
       node("Dots", [0, 0], [sprite("Common_Line_Dot", 1200, 4, { type: 2, depth: 7, color: "#c0c9d4/1.00" })]),
     ]),
     node("Status", [0, -94], [label("", 40, "#2d4664/1.00", 1250, 96, { depth: 8 })]),
     node("Progress", [0, PROGRESS.y], [sprite("Common_Bg_Raius10px", 1200, PROGRESS.h, { depth: 5, color: "#c0c9d4/1.00" })], [
-      node("Fill", [-600, 0], [sprite("Common_Bg_Raius10px", 1200, PROGRESS.h, { pivot: 3, depth: 6, color: "#1f9a52/1.00" })]),
+      node("Fill", [-600, 0], [sprite("Common_Bg_Raius10px", 1200, PROGRESS.h, { pivot: 3, depth: 6, color: `${COLOUR.success}/1.00` })]),
     ]),
   ];
 
@@ -142,7 +143,7 @@ async function draw(host, info, resolve, { simulation = false } = {}) {
     const text = error || status || (phase === "downloading" ? T("update.downloading", { p: percent })
       : phase === "ready" ? T("update.complete") : phase === "installing" ? T("update.restarting") : "");
     const f = NGUI.fitText(text, 40, 30, 1250, 2);
-    Object.assign(find(body, "Status").widgets[0], { text: f.text, fontSize: f.fs, color: error ? "#c74646/1.00" : "#2d4664/1.00" });
+    Object.assign(find(body, "Status").widgets[0], { text: f.text, fontSize: f.fs, color: error ? `${COLOUR.error}/1.00` : "#2d4664/1.00" });
     const progress = find(body, "Progress");
     progress.active = phase === "downloading";
     find(progress, "Fill").active = percent > 0;

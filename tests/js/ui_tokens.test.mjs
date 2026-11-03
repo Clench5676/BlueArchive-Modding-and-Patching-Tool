@@ -89,3 +89,37 @@ test("a screen with its own button boxes (the Hall's) passes every size, so the 
   assert.match(hall, /Buttons\.smallButton\(name, 0, 0, caption, \{ w: width \/ S, h: height \/ S, fs: size \?\? 40, min: size \?\? 26,/);
   assert.match(hall, /NGUI\.fitGroup\(captions, 40, 26, width \/ S - 60, 2, \{ maxH: height \/ S - 20 \}\)/);
 });
+
+// --- item F: colours from the game's own prefabs, each in one place ---
+import { readdirSync } from "node:fs";
+const sources = (dir, ext) => readdirSync(new URL(dir, WEB), { withFileTypes: true }).flatMap((entry) =>
+  entry.isDirectory() ? sources(`${dir}${entry.name}/`, ext) : entry.name.endsWith(ext) ? [`${dir}${entry.name}`] : []);
+
+test("the status colours are the game's: success, warning, error, greyed, navy, In Use and note", () => {
+  assert.deepEqual({ ...Tokens.COLOUR }, { success: "#0a6f2d", warning: "#f14f00", error: "#bb3421", greyed: "#828282", navy: "#2c4564",
+    inUse: "#ffb700", inUseInk: "#4b2116", note: "#6a7b8f", neverBar: "#6a7b8f" });
+});
+
+test("no site outside ui-tokens.js carries a retired backdrop or colour literal", () => {
+  const retired = [/#000000\/0\.60/i, /#000000\/0\.65/i, /#1f9a52/i, /#d9822b/i, /#c74646/i, /#c0392b/i, /#9aa3ad/i, /#2c445c/i, /#ffbc11/i, /#3a2a00/i,
+    /#6b7d92/i, /#545454/i];
+  const files = [...sources("js/", ".js"), ...sources("css/", ".css")].filter((file) => file !== "js/ui-tokens.js");
+  assert.ok(files.length > 100 && files.includes("js/popup.js") && files.includes("css/app.css"));
+  for (const file of files) {
+    const text = read(file);
+    for (const pattern of retired) assert.doesNotMatch(text, pattern, `${file} still holds ${pattern}`);
+  }
+});
+
+test("the call sites take the status colours from the tokens, the style sheet repeats the same values", () => {
+  const uses = { "js/update.js": ["COLOUR.success", "COLOUR.error"], "js/detail.js": ["COLOUR.success", "COLOUR.warning", "COLOUR.greyed"],
+    "js/mod-compare.js": ["COLOUR.warning", "COLOUR.success", "COLOUR.error"], "js/prompts.js": ["COLOUR.greyed"],
+    "js/popup.js": ["COLOUR.inUse", "COLOUR.inUseInk"], "js/consent.js": ["COLOUR.neverBar", "COLOUR.note"] };
+  for (const [file, names] of Object.entries(uses)) for (const name of names) assert.ok(read(file).includes(name), `${file} uses ${name}`);
+  const css = read("css/app.css");
+  assert.match(css, new RegExp(`--navy-text: ${Tokens.COLOUR.navy};`));
+  assert.match(css, new RegExp(`\\.nav-item\\.greyed \\{ color: ${Tokens.COLOUR.greyed}; \\}`));
+  // the loading fallback's text shadow and dot take the same navy
+  assert.match(css, new RegExp(`text-shadow: 0 3px 0 ${Tokens.COLOUR.navy}, 2px 0 0 ${Tokens.COLOUR.navy}, -2px 0 0 ${Tokens.COLOUR.navy};`));
+  assert.match(css, new RegExp(`box-shadow: 0 0 0 1px #fff, 0 3px 0 2px ${Tokens.COLOUR.navy};`));
+});

@@ -9,6 +9,7 @@ import { notify } from "./popup.js";
 import * as Loading from "./loading.js";
 import * as ModSwitch from "./mod-switch.js";
 import * as Popup from "./popup.js";
+import { COLOUR } from "./ui-tokens.js";
 import { on, rpc, spineBase, waitJob } from "./api.js";
 import { T } from "./i18n.js";
 import { addFirstLines, overwrittenLines } from "./repairs.js";
@@ -106,8 +107,8 @@ export function card(entry, { state = null, nameOf = (e) => e?.variant || e?.cor
   if (installs.length > 1) chips.push(installOf(state, entry.install)?.label || entry.install);
   if (entry.overwritten) chips.push(T("mods.copy.none"));
   const apart = which === "untracked" ? entry.state === "damaged" : entry.state === "pending" && entry.overwritten;
-  const badge = entry.state === "damaged" ? { text: T("mods.damaged"), color: "#9aa3ad", ink: "#ffffff" }
-    : entry.overwritten ? { text: which === "drift" ? T("mods.overwritten") : T("mods.copy.none"), color: "#9aa3ad", ink: "#ffffff" }
+  const badge = entry.state === "damaged" ? { text: T("mods.damaged"), color: COLOUR.greyed, ink: "#ffffff" }
+    : entry.overwritten ? { text: which === "drift" ? T("mods.overwritten") : T("mods.copy.none"), color: COLOUR.greyed, ink: "#ffffff" }
       : null;
   return {
     key: entryKey(entry), label, full: name, kind: entry.kind, size: apart ? 0 : entry.size || 0, chips,

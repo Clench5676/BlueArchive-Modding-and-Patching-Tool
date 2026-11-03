@@ -21,7 +21,7 @@ import { frameOutline } from "./row-thumbnail.js";
 import { T } from "./i18n.js";
 import { withTimeout } from "./async.js";
 import { TEXT_VIEWER } from "./popup-frames.js";
-import { BACKDROP, CHIP, FOOTER, POPUP, SMALL_BUTTON } from "./ui-tokens.js";
+import { BACKDROP, CHIP, COLOUR, FOOTER, POPUP, SMALL_BUTTON } from "./ui-tokens.js";
 import { DOT, RECRUIT, S, TAN10, advanceOf, clone, glyphsOf, hitButton, markedLabel, wrapPath } from "./util.js";
 
 const { node, sprite, label, find, rect } = NGUI;
@@ -526,13 +526,13 @@ export function listCard(it, x, y, selected, card = LP.card, kind = null) {
   ]));
   const corner = (dx, dy) => [dx + dy * TAN10, dy]; // a point inside the slanted card
   if (it.dim) kids.push(node("Dim", [1, 4], [sprite("Common_Bg_Raius10px", w - 12, h - 18, { incline: 10, depth: 24, color: "#000000/0.55" })]));
-  const badge = it.badge || (it.inUse ? { text: T("popup.inUse"), color: "#ffbc11", ink: "#3a2a00" } : null);
+  const badge = it.badge || (it.inUse ? { text: T("popup.inUse"), color: COLOUR.inUse, ink: COLOUR.inUseInk } : null);
   for (const [name, mark, y] of [["Using", badge, h / 2 - 30], ["Tag", it.tag, -h / 2 + 36]]) {
     if (!mark) continue;
     // as wide as its word needs, from the corner, up to most of the card
     const bf = fitText(mark.text, 26, 20, w - 70, 1), bw = Math.max(116, glyphsOf(bf.text, bf.fs) + 24);
     kids.push(node(name, corner(-w / 2 + 12 + bw / 2, y), [sprite("Common_Bg_Raius10px", bw, 42, { depth: 26, color: `${mark.color}/1.00`, incline: 10 })],
-      [node("Text", [0, 0], [label(bf.text, bf.fs, `${mark.ink || "#3a2a00"}/1.00`, bw - 4, 40, { depth: 27 })])]));
+      [node("Text", [0, 0], [label(bf.text, bf.fs, `${mark.ink || COLOUR.inUseInk}/1.00`, bw - 4, 40, { depth: 27 })])]));
   }
   if (it.fav) kids.push(node("Pin", corner(w / 2 - 38, -h / 2 + 36), [sprite("Common_Btn_Pin_01", 54, 54, { type: 0, depth: 26 })]));
   if (it.recruit) kids.push(node("Recruit", corner(-w / 2 + 34, -h / 2 + 40), [sprite(RECRUIT.sprite, 62 / RECRUIT.ratio, 62, { atlas: RECRUIT.atlas, type: 0, depth: 26 })]));

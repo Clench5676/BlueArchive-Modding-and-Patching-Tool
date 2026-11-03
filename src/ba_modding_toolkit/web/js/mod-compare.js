@@ -4,6 +4,7 @@ import { T } from "./i18n.js";
 import { $, S } from "./util.js";
 import { closed as popupClosed, closable, hit as hitNode, popupFrame, ready, scrollArea } from "./popup.js";
 import { compareFrame } from "./popup-frames.js";
+import { COLOUR } from "./ui-tokens.js";
 import { loadPlayer } from "./spine-load.js";
 import { ensureSpine } from "./spine-runtime.js";
 import { spine as confirmLicence } from "./consent.js";
@@ -20,7 +21,7 @@ export async function show(result, title = T("act.compare"), hostId = "popup", r
   const t = popupFrame(title, frame.w, frame.h, review ? { ok: review.accept, cancel: review.discard } : {});
   const popup = find(t, "Popup");
   const rows = (result.assets || []).filter((d) => d.status !== "same").slice(0, frame.rows.max);
-  const color = { changed: "#d9822b", added: "#1f9a52", removed: "#c0392b" };
+  const color = { changed: COLOUR.warning, added: COLOUR.success, removed: COLOUR.error };
   if (!review && !rows.length) popup.children.push(node("None", [0, 120], [label(T("compare.none"), 44, "#2d4664/1.00", 1600, 60, { depth: 8 })]));
   (review ? [] : rows).forEach((d, i) => {
     const y = frame.rows.y - i * frame.rows.pitch;
