@@ -3752,7 +3752,7 @@ for (const lang of LOCALE_LIST) test(`the asset consent's Change button (136 hig
 });
 
 // --- design tokens, item E: one chip (272 x 72, caption 40 down to 28, 290 apart) in the list popup's details panel ---
-test("chipPlaces stands chips in centred rows that fit inside the 850-unit panel, 290 apart", () => {
+test("chipPlaces stands chips in centred rows that fit inside the 850-unit panel, 290 apart or closer", () => {
   const { CHIP } = Tokens;
   const slant = CHIP.h * Math.tan(10 * Math.PI / 180);
   for (const panel of [850, 790]) for (let n = 1; n <= 7; n++) {
@@ -3760,7 +3760,11 @@ test("chipPlaces stands chips in centred rows that fit inside the 850-unit panel
     assert.equal(places.length, n);
     for (let row = 0; row < rows; row++) {
       const xs = places.filter((p) => p.row === row).map((p) => p.x);
-      xs.slice(1).forEach((x, i) => assert.equal(x - xs[i], CHIP.pitch));
+      xs.slice(1).forEach((x, i) => {
+        const pitch = x - xs[i];
+        assert.ok(pitch <= CHIP.pitch + 1e-9 && pitch >= CHIP.w + 8 - 1e-9, `${n} chips in ${panel}: pitch ${pitch}`);
+        assert.ok(Math.abs(pitch - (xs[1] - xs[0])) < 1e-9, "one pitch in a row");
+      });
       assert.ok(Math.abs(xs.reduce((a, b) => a + b, 0)) < 1e-9, "centred");
       const left = Math.min(...xs) - CHIP.w / 2 - slant / 2, right = Math.max(...xs) + CHIP.w / 2 + slant / 2;
       assert.ok(left >= -panel / 2 - 1e-9 && right <= panel / 2 + 1e-9, `${n} chips in ${panel}: row ${row} is ${left} to ${right}`);
@@ -3769,7 +3773,7 @@ test("chipPlaces stands chips in centred rows that fit inside the 850-unit panel
     const counts = Array.from({ length: rows }, (_, row) => places.filter((p) => p.row === row).length);
     assert.ok(counts.slice(0, -1).every((c) => c === counts[0]) && counts.at(-1) <= counts[0]);
   }
-  assert.deepEqual(Popup.chipPlaces(3, 850).map((p) => p.row), [0, 0, 1], "three chips are wider than the panel: the third goes on a second row");
+  assert.deepEqual(Popup.chipPlaces(3, 850).map((p) => p.row), [0, 0, 0], "the most a card has, three chips, stay on one row, so the fields box keeps its place");
   assert.deepEqual(Popup.chipPlaces(2, 850).map((p) => p.x), [-145, 145]);
 });
 

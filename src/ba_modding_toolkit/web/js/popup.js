@@ -571,15 +571,18 @@ const ACTION_CLEAR = 28, ACTION_TEXT_H = 96;
 // the details panel's chips and fields box, y below the panel's top: the box's top edge, and the chips' first row centre,
 // which keeps POPUP.clearance between the chips' bottom and the box (the chip is 72 high)
 const DETAILS_BOX_Y = 750, DETAILS_CHIP_Y = DETAILS_BOX_Y - POPUP.clearance - CHIP.h / 2;
-// where n chips stand in a panel w wide: rows of as many as fit with their slant inside it (3 chips and the gaps between are
-// wider than the 850-unit panel), each row centred; x from the panel's centre
+// where n chips stand in a panel w wide: 290 apart, or closer where a row's slant would leave the panel (three stand about 283
+// apart in the 850-unit panel, in one row, so the fields box keeps its place), never under 8 clear; rows of as many as fit,
+// each centred; x from the panel's centre
+const CHIP_MIN_GAP = 8;
 export function chipPlaces(count, panelW) {
-  const fits = (n) => n * CHIP.w + (n - 1) * CHIP.gap + CHIP.h * TAN10 <= panelW;
+  const slant = CHIP.h * TAN10;
   let perRow = 1;
-  while (fits(perRow + 1)) perRow += 1;
+  while ((perRow + 1) * CHIP.w + perRow * CHIP_MIN_GAP + slant <= panelW) perRow += 1;
   return Array.from({ length: count }, (_, i) => {
     const row = Math.floor(i / perRow), inRow = Math.min(perRow, count - row * perRow);
-    return { row, x: (i - row * perRow - (inRow - 1) / 2) * CHIP.pitch };
+    const gap = inRow > 1 ? Math.min(CHIP.gap, (panelW - slant - inRow * CHIP.w) / (inRow - 1)) : 0;
+    return { row, x: (i - row * perRow - (inRow - 1) / 2) * (CHIP.w + gap) };
   });
 }
 // the details panel: title bar, the picture, name, kind chips, fields, actions
