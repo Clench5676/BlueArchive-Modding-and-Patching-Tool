@@ -131,7 +131,7 @@ async function draw(host, info, resolve, { simulation = false } = {}) {
     // the shared popup frame, no close button; Later, Release Notes and the action are its three choices
     const tree = Popup.popupFrame(dialogTitle("update.title", simulation), FRAME.w, FRAME.h, { close: false, buttons: [
       { label: T("update.later"), name: "Btn_Cancel" }, { label: T("update.notes"), name: "Btn_Notes" },
-      { label: okText, name: "Btn_Ok", primary: true }] });
+      { label: okText, name: "Btn_Ok", primary: true, semantic: "update" }] });
     const body = find(tree, "Popup"), controls = find(body, "Btn");
     body.children.push(...clone(content));
     for (const name of ["Btn_Cancel", "Btn_Notes", "Btn_Ok"]) {
