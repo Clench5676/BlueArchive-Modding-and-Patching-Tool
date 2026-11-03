@@ -276,7 +276,7 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
     root = el("div", "import-page"); root.dataset.phase = model.state.phase;
     dom.background = el("div", "import-background"); root.appendChild(dom.background);
     paint(dom.background, art.background(), { origin: [960, 540] });
-    dom.preview = place(el("div", "import-detail"), 46, 132, 524, 700); root.appendChild(dom.preview);
+    dom.preview = place(el("div", "import-detail"), 46, 132, 524, 707); root.appendChild(dom.preview);
     // Items/ListBG: the two-column frame retains its paper/inbox insets, with a mail list in place of the item grid.
     const panel = place(el("div", "import-panel"), 602, 132, 1272, 704); dom.panel = panel;
     paint(panel, art.panel(1272 / S, 704 / S), { origin: [636, 352] });
@@ -523,10 +523,11 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
     if (entry) {
       const identity = identified(entry);
       const landscape = entry.kind === "lobby";
-      const width = landscape ? 400 : 254, height = landscape ? 225 : 466, headerHeight = landscape ? 30 : 44;
+      // two pictures, side by side or stacked, above the name plate, whose foot meets the list's
+      const width = landscape ? 444 : 254, height = landscape ? 250 : 466, headerHeight = landscape ? 30 : 44;
       for (const incoming of [false, true]) {
-        const box = place(el("div", `import-preview${incoming ? " incoming" : ""}`), landscape ? 62 : incoming ? 270 : 0,
-          landscape && incoming ? 271 : 0, width, headerHeight + height);
+        const box = place(el("div", `import-preview${incoming ? " incoming" : ""}`), landscape ? 40 : incoming ? 270 : 0,
+          landscape && incoming ? 296 : 0, width, headerHeight + height);
         const source = thumbnail(entry, { incoming, large: true });
         const drawing = paint(box, art.preview(T(incoming ? "import.incoming" : "import.current"), { width: width / 0.46, height: height / 0.46, headerHeight: headerHeight / 0.46 }), {
           scale: 0.46, origin: [width / 2, 0], textures: { "Texture": Promise.resolve(null) },
@@ -538,13 +539,13 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
         }
         next.appendChild(box);
       }
-      const banner = place(el("div", "import-name-banner"), 0, 526, 524, 120);
+      const banner = place(el("div", "import-name-banner"), 0, 587, 524, 120);
       paint(banner, art.banner(identity.name, T(KIND_KEYS[entry.kind] || KIND_KEYS.other)), { scale: 0.42, origin: [255, 104] });
       next.appendChild(banner);
       if (!entry.libraryOnly && entry.target && (!entry.source?.server || !entry.source?.platform || ["server", "platform"].some((key) => entry.source[key] !== entry.target[key]))) next.appendChild(sourceControl(entry));
       if (!["done", "library", "installed"].includes(entry.state) && (!entry.variant || entry.assignment || ["mod_target_unknown", "mod_target_ambiguous", "no_target"].includes(entry.reason))) {
         const assign = button(T("import.assignCharacter"), "assignCharacter", { width: 524, scale: 0.34 });
-        place(assign, 0, 704, 524, 55); assign.disabled = model.busy(); assign.refresh();
+        place(assign, 0, 765, 524, 55); assign.disabled = model.busy(); assign.refresh();
         assign.addEventListener("click", () => openCharacter(entry).catch((error) => showError(report(error), error)));
         next.appendChild(assign);
       }
@@ -564,7 +565,7 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
   function sourceControl(entry) {
     const group = el("div", "import-source");
     const choose = button(T("import.source.choose"), "source", { width: 524, scale: 0.34 });
-    place(choose, 0, 645, 524, 55); choose.disabled = model.busy() || model.state.phase === "done"; choose.refresh();
+    place(choose, 0, 706, 524, 55); choose.disabled = model.busy() || model.state.phase === "done"; choose.refresh();
     choose.addEventListener("click", () => openSource(entry).catch((error) => showError(report(error), error))); group.append(choose); return group;
   }
   async function openSource(entry) {
