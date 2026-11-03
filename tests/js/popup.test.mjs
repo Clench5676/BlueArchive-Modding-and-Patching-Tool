@@ -341,7 +341,8 @@ test('photo deletion warnings fit the UIPopup_Sort frame in all six locales', as
 
 test("shared message sizes and scrolling preserve complete paths with and without row buttons", async () => {
   const NGUI = await import("../../src/ba_modding_toolkit/web/js/ngui.js");
-  const path = "Intro_Shoulder_L/".repeat(90), name = "x".repeat(180);
+  // long enough to scroll at the light box's smaller type as well
+  const path = "Intro_Shoulder_L/".repeat(180), name = "x".repeat(360);
   for (const boxed of [false, true]) {
     const lines = ["On", path, boxed ? { text: name, button: { label: "Details" } } : name];
     const pending = Popup.message({ title: "Findings", lines, fitTogether: [0, 1], scroll: true, ok: "OK" });
@@ -349,7 +350,7 @@ test("shared message sizes and scrolling preserve complete paths with and withou
     const area = walk(dialog).find((el) => el.className === "popup-cards");
     const prefix = boxed ? "Row" : "Line";
     const rows = [0, 1, 2].map((i) => walk(area).find((el) => el.dataset.path === `Lines/${prefix}_${i}`));
-    const size = `${(NGUI.fontSizeFor(path, boxed ? 40 : 44) * S).toFixed(2)}px`;
+    const size = `${(NGUI.fontSizeFor(path, boxed ? 26 : 44) * S).toFixed(2)}px`;
     assert.equal(rows[0].style.fontSize, size);
     assert.equal(rows[1].style.fontSize, size);
     assert.equal(rows[1].textContent.replaceAll("\n", ""), path);
@@ -1331,7 +1332,7 @@ test("a long folder in the file-details summary does not resize the current valu
   for (const name of ["F_0", "F_1", "V_1"]) assert.deepEqual(widget(after, name), widget(before, name));
   assert.equal(widget(after, "V_0").ariaLabel, fields[0][1]);
   assert.equal(widget(after, "V_0").title, undefined);
-  assert.ok(widget(after, "V_0").fontSize >= 28, "a wrapped path respects its size floor");
+  assert.ok(widget(after, "V_0").fontSize >= 26, "a wrapped path respects its size floor");
   assert.ok(widget(after, "V_0").text.includes("\n"));
 });
 
@@ -2626,7 +2627,7 @@ test('Settings exposes one prerelease simulation row with both cases and stable 
           const done = button.click();
           await drawn(consent, 'update');
           assert.equal(settings.hidden, true);
-          assert.ok(part('Box/V_1'));
+          assert.ok(part('V_1'));
           (await drawn(consent, 'notes')).click();
           await drawn(dialog, 'page');
           assert.ok(walk(dialog).some((el) => el.textContent === (i ? ui.update.notesEmpty : ui.update.simulation.sample)));
@@ -2806,7 +2807,8 @@ test("the display settings' sort keys and filter options each share one font siz
 // --- long messages scroll by themselves (the Add result, the dropped queue list) ---
 // layouts recorded from the unscrolled messageLayout: [rows, frame height, y0]. UNSCROLLED_BEFORE is the record from before the
 // footer rose to 190.5 above the frame's bottom edge (MSG.buttons 236, now 304.5); UNSCROLLED is the record under the rise. The
-// boxed rows hold the 136-high small button now (156 a row, 104 before), so their record changed once more.
+// boxed rows hold the 136-high small button now (156 a row, 104 before), so their record changed once more; the light stats box's
+// padding (12 above and below, 8 before) changed it again.
 const UNSCROLLED_BEFORE = {
   boxed: [[0,640,31],[1,640,91],[2,640,143],[3,742,195],[4,846,247],[5,950,299],[6,1054,351],[7,1158,403],[8,1262,455],[9,1366,507]],
   plain: [[0,640,31],[1,640,68.8],[2,640,114.6],[3,672.8,160.4],[4,764.4,206.2],[5,856,252],[6,947.6,297.8],[7,1039.2,343.6],[8,1130.8,389.4],[9,1222.4,435.2],[10,1314,481]],
@@ -2817,7 +2819,7 @@ const UNSCROLLED_BEFORE = {
   fit: [[0,640,31],[1,640,68.8],[2,640,114.6],[3,672.8,160.4],[4,764.4,206.2],[5,856,252],[6,947.6,297.8],[7,1039.2,343.6],[8,1130.8,389.4],[9,1222.4,435.2],[10,1314,481]]
 };
 const UNSCROLLED = {
-  boxed: [[0,640,65.25],[1,654.5,151.25],[2,810.5,229.25],[3,966.5,307.25],[4,1122.5,385.25],[5,1278.5,463.25]],
+  boxed: [[0,640,65.25],[1,662.5,155.25],[2,818.5,233.25],[3,974.5,311.25],[4,1130.5,389.25],[5,1286.5,467.25]],
   plain: [[0,640,65.25],[1,640,103.05],[2,649.7,148.85],[3,741.3,194.65],[4,832.9,240.45],[5,924.5,286.25],[6,1016.1,332.05],[7,1107.7,377.85],[8,1199.3,423.65],[9,1290.9,469.45],[10,1382.5,515.25]],
   single: [[0,640,65.25],[1,640,103.05],[2,649.7,148.85],[3,741.3,194.65],[4,832.9,240.45],[5,924.5,286.25],[6,1016.1,332.05],[7,1107.7,377.85],[8,1199.3,423.65],[9,1290.9,469.45],[10,1382.5,515.25]],
   check: [[0,640,140.25],[1,708.1,178.05],[2,799.7,223.85],[3,891.3,269.65],[4,982.9,315.45],[5,1074.5,361.25],[6,1166.1,407.05],[7,1257.7,452.85],[8,1349.3,498.65]],
@@ -3493,6 +3495,16 @@ test("the list, consent, update and tour footers share that centre height, capti
     near2(bodies[1].cx - bodies[0].cx - 496 * 0.8, 24);
     near2(bodies[2].cx - bodies[1].cx - 496 * 0.8, 24);
     near2(frame.h, Update.FRAME.h);
+    // the versions stand on the light stats box: the frame less 200 wide, where a message's lines start, clear of the buttons by the
+    // room Status and the progress bar need (POPUP.clearance under them)
+    const box = measure(consent, "Center/Popup/Box");
+    near2(box.w, Update.FRAME.w - 200);
+    near2(frame.top - box.top, 150);
+    near2(box.h, 2 * 64 + 24);
+    near2(box.bottom - Update.FRAME.contentBottom, 6 + 96 + 8 + 20);
+    assert.ok(Update.FRAME.contentBottom - (Popup.footerTop(Update.FRAME.h, 3)) >= POPUP.clearance - 1e-9);
+    assert.ok(["V_0", "V_1", "F_0", "F_1", "L_0"].every((name) => walk(consent).some((e) => e.dataset.path === `Center/Popup/${name}`)));
+    assert.ok(!walk(consent).some((e) => e.dataset.path === "Center/Popup/L_1"), "no divider under the last row");
     assert.equal(oneSize(consent, ["Btn_Cancel", "Btn_Notes", "Btn_Ok"]), 1);
     assert.notEqual(walk(consent).find((e) => e.dataset.path === "Center/Popup/Btn/Btn_Ok/Label_Locale").style.color, "#4b2116", "Update is not the gold button (BL-034)");
     action(consent, "later").click();
@@ -3604,12 +3616,12 @@ for (const lang of LOCALE_LIST) test(`message line buttons are 136 high, as wide
         const t = text.widgets[0], textRight = text.pos[0] + t.w_, buttonLeft = button.pos[0] - bg.w_ / 2;
         assert.ok(textRight + 30 <= buttonLeft + 1e-9, `${lang} ${key} ${width}: text ends ${textRight}, the button starts ${buttonLeft}`);
         assert.ok(button.pos[0] + bg.w_ / 2 <= width / 2, "inside the frame");
-        // a row with a button holds it (156 in the light box); rows without keep the minimum (104)
+        // a row with a button holds it (156 in the light box); rows without keep the box's minimum (64)
         const rows = (tree) => ["Row_0", "Row_1", "Row_2"].map((name) => NGUI.find(tree, name)).filter(Boolean);
         if (!plain) {
           const [r0, r1, r2] = rows(body.tree);
-          assert.equal(r0.pos[1] - r1.pos[1], (104 + 156) / 2, `${lang}: row heights 104, 156`);
-          assert.equal(r1.pos[1] - r2.pos[1], (156 + 104) / 2);
+          assert.equal(r0.pos[1] - r1.pos[1], (64 + 156) / 2, `${lang}: row heights 64, 156`);
+          assert.equal(r1.pos[1] - r2.pos[1], (156 + 64) / 2);
         }
       }
     }

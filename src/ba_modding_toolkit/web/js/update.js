@@ -6,7 +6,8 @@ import * as NGUI from "./ngui.js";
 import * as Popup from "./popup.js";
 import { rpc, waitJob } from "./api.js";
 import { T, errorText } from "./i18n.js";
-import { COLOUR } from "./ui-tokens.js";
+import { statsBox } from "./stats-box.js";
+import { COLOUR, FOOTER, POPUP, STATS_BOX } from "./ui-tokens.js";
 import { S, clone } from "./util.js";
 
 const { node, sprite, label, find } = NGUI;
@@ -68,9 +69,27 @@ export function check(host, info, { onCheck, onError, beforeShow, simulation = f
 // three share one size
 export const offerCaptions = (widgets) => Popup.footerLabels(widgets, widgets.map((l) => l.text));
 
-// the frame, 1700 wide; 940 high leaves the Progress bar's bottom (the lowest content) 33 above the three buttons' tops
-const PROGRESS = { y: -160, h: 20 };
-export const FRAME = { w: 1700, h: 940, contentBottom: PROGRESS.y - PROGRESS.h / 2 };
+// the frame, 1700 wide, as high as its content needs: the light box where a message's lines start under the title, then Status
+// (96 high) and the Progress bar (20 high, the lowest content), and POPUP.clearance between that and the three buttons' tops
+const STATUS = { gap: 6, h: 96 };
+const PROGRESS = { gap: 8, h: 20 };
+const TOP = Popup.MSG.title;
+const FRAME_W = 1700;
+// the frame for a box boxH high: its height, the box's top and the centres of Status and Progress (popup-local y), and the
+// lowest content edge
+export function frameFor(boxH) {
+  const below = STATUS.gap + STATUS.h + PROGRESS.gap + PROGRESS.h;
+  const footer = FOOTER.centre + FOOTER.body.h * Popup.footerScale(3, FRAME_W) / 2;
+  const h = Math.ceil(TOP + boxH + below + POPUP.clearance + footer);
+  const boxTop = POPUP.frameY + h / 2 - TOP, boxBottom = boxTop - boxH;
+  const status = boxBottom - STATUS.gap - STATUS.h / 2, progress = boxBottom - STATUS.gap - STATUS.h - PROGRESS.gap - PROGRESS.h / 2;
+  return { w: FRAME_W, h, boxTop, status, progress, contentBottom: progress - PROGRESS.h / 2 };
+}
+// the rows of the box: the current version in black, the latest in the success colour
+export const versionRows = (info) => [{ caption: T("update.current"), value: info.current.replace(/-dev$/, "") },
+  { caption: T("update.latest"), value: info.version, colour: `${COLOUR.success}/1.00` }];
+// the two versions are one line each: two rows of the box's minimum
+export const FRAME = frameFor(2 * STATS_BOX.rowMin + 2 * STATS_BOX.padY);
 
 function show(host, info, options) {
   return new Promise((resolve) => {
@@ -105,20 +124,13 @@ async function draw(host, info, resolve, { simulation = false } = {}) {
   await Popup.frameReady();
   if (ended) return;
   const installable = simulation || info.installable;
-  // the two versions on the game's light stats box
-  const rows = [[T("update.current"), info.current.replace(/-dev$/, "")], [T("update.latest"), info.version]];
-  const capW = Math.max(...rows.map(([k]) => NGUI.textWidth(k, 44))) + 60;
+  // the two versions on the game's light stats box; the frame takes the height the box and the lines under it need
+  const rows = versionRows(info);
+  const frame = frameFor(statsBox({ holder: "frame", width: FRAME_W, rows }).height);
   const content = [
-    node("Box", [0, 90], [sprite("Common_Bg_Raius10px", 1300, 260, { depth: 5, color: "#ecf5f9/1.00" })], [
-      node("Line", [0, 0], [sprite("Common_Line_Raius10px", 1306, 266, { depth: 4, color: "#c0c9d4/1.00" })]),
-      ...rows.flatMap(([k, v], i) => [
-        node(`K_${i}`, [-600, 62 - i * 124], [label(k, 44, "#2d4664/1.00", capW, 60, { pivot: 3, depth: 8 })]),
-        node(`V_${i}`, [-600 + capW, 62 - i * 124], [label(v, 48, i ? `${COLOUR.success}/1.00` : "#000000/1.00", 1100 - capW, 60, { pivot: 3, depth: 8 })]),
-      ]),
-      node("Dots", [0, 0], [sprite("Common_Line_Dot", 1200, 4, { type: 2, depth: 7, color: "#c0c9d4/1.00" })]),
-    ]),
-    node("Status", [0, -94], [label("", 40, "#2d4664/1.00", 1250, 96, { depth: 8 })]),
-    node("Progress", [0, PROGRESS.y], [sprite("Common_Bg_Raius10px", 1200, PROGRESS.h, { depth: 5, color: "#c0c9d4/1.00" })], [
+    ...statsBox({ holder: "frame", width: FRAME_W, at: [0, frame.boxTop], rows }).nodes,
+    node("Status", [0, frame.status], [label("", 40, "#2d4664/1.00", 1250, STATUS.h, { depth: 8 })]),
+    node("Progress", [0, frame.progress], [sprite("Common_Bg_Raius10px", 1200, PROGRESS.h, { depth: 5, color: "#c0c9d4/1.00" })], [
       node("Fill", [-600, 0], [sprite("Common_Bg_Raius10px", 1200, PROGRESS.h, { pivot: 3, depth: 6, color: `${COLOUR.success}/1.00` })]),
     ]),
   ];
@@ -129,7 +141,7 @@ async function draw(host, info, resolve, { simulation = false } = {}) {
     const action = !installable ? "page" : phase === "ready" || phase === "installing" ? "restart" : "update";
     const okText = T(action === "update" ? "update.now" : `update.${action}`);
     // the shared popup frame, no close button; Later, Release Notes and the action are its three choices
-    const tree = Popup.popupFrame(dialogTitle("update.title", simulation), FRAME.w, FRAME.h, { close: false, buttons: [
+    const tree = Popup.popupFrame(dialogTitle("update.title", simulation), frame.w, frame.h, { close: false, buttons: [
       { label: T("update.later"), name: "Btn_Cancel" }, { label: T("update.notes"), name: "Btn_Notes" },
       { label: okText, name: "Btn_Ok", primary: true, semantic: "update" }] });
     const body = find(tree, "Popup"), controls = find(body, "Btn");

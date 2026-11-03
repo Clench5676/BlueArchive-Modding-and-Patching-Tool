@@ -1876,6 +1876,18 @@ the prefab values, from the development view). It imports no other UI module.
   panel the chips stand in one centred row (three, the most a card has, about 283 apart so they stay inside it:
   `chipPlaces`), 16 above the fields box; the portrait panel keeps its one row of
   chips sized to its half (`switch-layout.js`), 16 above its box.
+- **Light stats box** (`STATS_BOX`; UICharacterDetail `Inventory_ListControl/RightInfo/Target/Active/1_NormalInfo/Status`: `Bg`
+  `#ecf5f9`, its `Deco` line `#c0c9d4` and the `Bar` divider): drawn by `statsBox()` in `web/js/stats-box.js` (pure
+  layout: nodes and height), for the list popup's details panel, the file details, the messages with a line button and the
+  update dialog. The line is the fill plus 5 across and down (the prefab's Deco). The box is the holder's width less 200 in
+  a popup frame (messages, update), less 40 in a panel (the list popup's details) and less the line's 5 over a table (the file
+  details, so its outer edge is the table's); captions 38, values 38 down to 26 on up to three
+  lines, wrapped and never cut; a row 64 high at least, 12 of padding above and below, 30 in from each side, dotted
+  dividers between rows only. The prefab's own rows are 82 high with no padding and its captions 42, so those are the
+  app's. A message's rows take the same text range (a row with a button stays 156 high). The update dialog's box starts where a message's lines do (150 under the frame's top), and its frame is as
+  high as its box, Status and the progress bar need, `POPUP.clearance` above the buttons (`update.js` `frameFor()`,
+  `FRAME.h`). The portrait panel (`switch-layout.js` `splitPortraitPanel`) still lays out its own half-width box and takes
+  only the line's outset from the token.
 - **Colours** (`COLOUR`), each from the game: success `#0a6f2d` (the Formation popup's selected tag), warning `#f14f00`
   (the mailbox limit label), error `#bb3421` (the skill type sprite), greyed `#828282` (Btn_Disable's label), the page's ink
   `#2c4564` (the collection's top bar title; `--navy-text` repeats it), the In Use badge `#ffb700` on `#4b2116`, a note's
