@@ -41,3 +41,16 @@ test('the source picker, gallery and Settings use explicit treatment in all loca
     }
   }
 });
+
+test('the gold template\'s patterns are drawn: the renderer skips a node not marked active and a negative scale',async()=>{
+  const {goldTemplate}=await import('../../src/ba_modding_toolkit/web/js/affirmative-buttons.js');
+  const patterns=goldTemplate.children.filter(child=>child.widgets?.some(w=>/_Pt$/.test(w.sprite||'')));
+  assert.equal(patterns.length,2);
+  for(const pattern of patterns){assert.equal(pattern.active,true,pattern.name);assert.ok(pattern.scale.every(k=>k>0),'the renderer draws no negative scale');}
+  assert.deepEqual(patterns.map(pattern=>pattern.widgets[0].flip),[0,3],'the second one is the prefab\'s mirrored pattern');
+  const tree={name:'Btn_Ok',actionSemantic:'confirm',active:true,pos:[0,0],scale:[1,1],widgets:[],children:[
+    {name:'Label_Locale',active:true,pos:[0,0],scale:[1,1],widgets:[{text:'OK',color:'#2d4664/1.00'}],children:[]},
+    {name:'BG (1)',active:true,pos:[0,0],scale:[1,1],widgets:[{sprite:'Common_Btn_BG',w_:496,h_:177,color:'#77deff/1.00',pivot:4,depth:5}],children:[]}]};
+  const body=skinAffirmatives(tree,goldTemplate).children[1];
+  assert.deepEqual(body.children.map(child=>child.active),[true,true]);
+});
