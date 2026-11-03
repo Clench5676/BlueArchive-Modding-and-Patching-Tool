@@ -239,6 +239,9 @@ const PORTRAIT_ICONS = {
   Flip: { sprite: "Common_Icon_Change", width: 80, height: 80 },
 };
 async function renderPortraitActions(host, entry, rect, version, alive = () => true) {
+  // The toolbar is placed by the portrait's visible head, known once its atlas alpha is read (a few milliseconds).
+  await portraits?.pickReady?.(entry.id);
+  if (version !== hitGeneration || !alive()) return;
   const actions = portraitActions(entry), box = toolbarBox(entry, rect), width = box.icon, gap = box.gap;
   Object.assign(host.style, { left: `${box.x}px`, top: `${box.y}px`, width: `${box.width}px`, height: `${box.height}px` });
   const destination = document.createElement("div");

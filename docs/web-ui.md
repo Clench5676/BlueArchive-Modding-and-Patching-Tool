@@ -1533,7 +1533,10 @@ Portrait mode uses one shared canvas/context and camera. Each instance has indep
 blink/talk tracks, position and individual relative scale. Layout editing queries posed public Spine attachment
 vertices and UVs against cached atlas-page alpha, in reverse saved layer order. Normal-blend active slots with effective alpha at least 0.1 count; transparent areas pass through, including
 when mirrored or scaled. One pointer surface uses that query for hover, press and drag; named DOM buttons retain Tab
-and keyboard/assistive activation. Atlas alpha is decoded once per page, only in layout editing. Dragging changes position;
+and keyboard/assistive activation. Atlas alpha is read only in layout editing, in the background, one page per task: the page's bytes are decoded and
+shrunk off the main thread (at most 1024 texels on the longer side), so entering layout editing never waits on them.
+Until a page is read, and for a page that cannot be read (WebKit refuses canvases past its memory budget), picking
+treats its attachments as opaque; a portrait's toolbar waits for its pages. Dragging changes position;
 individual wheel/gesture scaling is disabled. Hover controls in the editor remove an actor; with two or more actors
 they also change layer order and horizontal mirroring. Pressing an actor selects it at once and pressing another
 switches it; pressing the selected actor again clears selection on release, unless the press moves more than four stage
@@ -1566,8 +1569,9 @@ and a Reset button for 100%. The two rows occupy separate boxes. The toolbar is 
 visible head and touches it: the topmost visible point by the picker's rule and the centre of the visible band below it
 (the top tenth of the visible height), cached per actor relative to its position and recomputed on a size or mirror
 change. Spine's bounds also count transparent and off-body parts, so they can sit to either side of the character; they
-are used only when nothing is visible. The toolbar moves inwards only where it would leave the stage, and down below
-any control it would cover (the top bar, the Hall's top-right buttons and global size slider, measured live). It moves to a new size only on release or Reset, never under a dragged
+are used only when nothing is visible. Where the toolbar would leave the stage above the head or cover a control (the
+top bar, the Hall's top-right buttons and global size slider, measured live), it goes under the portrait's feet, or to
+the stage's bottom when the feet are off-stage. Horizontally it moves inwards only at the stage's edges. It moves to a new size only on release or Reset, never under a dragged
 thumb. Both size controls edit the draft; Save keeps them and Cancel restores them.
 The global multiplier preserves entry anchors and individual scales and leaves the background unchanged. Slider changes
 update the shared renderer and interaction bounds directly, including changes made while assets are still loading;

@@ -180,12 +180,16 @@ export async function createPortraits(host, entries, choiceOf, { signal, onError
   try { await update(entries); } catch (error) { dispose(); throw error; }
   return { actors, dispose, allowed: true, needsLoad, update, pick: (x, y) => pickPortrait(actors, x, y, spine),
     // Layout editing only: viewing never picks, so it never decodes atlas alpha. Pages already decoded are skipped.
-    preparePick() { for (const { data } of sources.values()) preparePickPages(data); },
+    // Reads each source's atlas alpha in the background, one page per task; picking treats unread pages as opaque.
+    preparePick() {
+      return Promise.all([...sources.values()].map((source) => source.alpha ||= preparePickPages(source.data).then(() => { source.alphaReady = true; })));
+    },
+    pickReady(id) { const actor = actors.get(id); return (actor && sources.get(actor.base)?.alpha) || Promise.resolve(); },
     // The visible head relative to the skeleton's position, in stage units (y down): moving keeps it, a size or mirror
-    // change recomputes it.
+    // change recomputes it. Unknown until the source's alpha is read.
     head(id) {
       const actor = actors.get(id), skeleton = actor?.player.skeleton;
-      if (!skeleton) return null;
+      if (!skeleton || !sources.get(actor.base)?.alphaReady) return null;
       const key = `${skeleton.scaleX}:${skeleton.scaleY}`;
       if (actor.head?.key !== key) {
         const head = visibleHead(skeleton, spine);

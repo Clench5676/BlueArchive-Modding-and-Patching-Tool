@@ -46,7 +46,7 @@ test("horizontal flip reflects asymmetric bounds around the same anchor for hits
 // Geometry comes only from the runtime's public API, using synthetic atlas pages and skeletons.
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
-import { pickPortrait, sampleAlpha, skeletonContains, bindPortraitPointer, VISIBLE_ALPHA, pageAlpha, preparePickPages, visibleHead } from "../../src/ba_modding_toolkit/web/js/student-hall-framing.js";
+import { pickPortrait, sampleAlpha, skeletonContains, bindPortraitPointer, VISIBLE_ALPHA, pageAlpha, preparePickPages, visibleHead, readyAlpha, ALPHA_SIDE } from "../../src/ba_modding_toolkit/web/js/student-hall-framing.js";
 const runtimeContext = vm.createContext({ console, TextDecoder, TextEncoder, Float32Array, Uint8Array, Uint16Array, Int16Array, Int32Array, ArrayBuffer, DataView });
 vm.runInContext(readFileSync(new URL("../../src/ba_modding_toolkit/web/vendor/spine-player-4.2.120/spine-player.min.js", import.meta.url), "utf8"), runtimeContext);
 const Runtime = runtimeContext.spine;
@@ -124,11 +124,43 @@ test("weighted meshes use the runtime pose, and atlas rotation is already presen
     }
   }
 });
-test("page alpha is decoded once at source readiness and picking reuses its cache",()=>{
-  const previous=globalThis.document;let decodes=0,reads=0;
+test("page alpha is read once, one page per task, and picking reuses its cache",async()=>{
+  const previous=globalThis.document;let decodes=0,reads=0;const tasks=[];
   globalThis.document={createElement:()=>({getContext:()=>({drawImage(){decodes++;},getImageData:()=>({data:new Uint8Array([1,2,3,25,4,5,6,26])})})})};
-  const texture={getImage(){reads++;return{width:2,height:1};}},data={skins:[{getAttachments:()=>[{attachment:{region:{texture}}},{attachment:{region:{texture}}}]}]};
-  try{preparePickPages(data);assert.deepEqual([...pageAlpha(texture).alpha],[25,26]);assert.equal(pageAlpha(texture),pageAlpha(texture));assert.equal(decodes,1);assert.equal(reads,1);}finally{globalThis.document=previous;}
+  const texture={getImage(){reads++;return{width:2,height:1};}},other={getImage:()=>({width:2,height:1})};
+  const data={skins:[{getAttachments:()=>[{attachment:{region:{texture}}},{attachment:{region:{texture}}},{attachment:{region:{texture:other}}}]}]};
+  try{
+    const done=preparePickPages(data,(task)=>tasks.push(task));assert.equal(readyAlpha(texture),null,"nothing is read before its task");
+    await Promise.resolve();assert.equal(tasks.length,1,"one page per task");tasks.shift()();
+    await new Promise(setImmediate);assert.equal(tasks.length,1);tasks.shift()();await done;
+    assert.deepEqual([...readyAlpha(texture).alpha],[25,26]);assert.equal(pageAlpha(texture),readyAlpha(texture));assert.equal(decodes,2);assert.equal(reads,1);
+  }finally{globalThis.document=previous;}
+});
+test("with createImageBitmap the page is decoded and shrunk off the main thread before the small read",async()=>{
+  const previous={document:globalThis.document,createImageBitmap:globalThis.createImageBitmap};const calls=[],drawn=[];let closed=0;
+  globalThis.document={createElement:()=>({getContext:()=>({drawImage:(...args)=>drawn.push(args),getImageData:(x,y,w,h)=>({data:new Uint8Array(w*h*4).fill(200)})})})};
+  globalThis.createImageBitmap=async(image,options)=>{calls.push([image,options]);return {bitmap:true,close(){closed++;}};};
+  const image={width:4096,height:4096,src:"http://hall/page.png"},texture={getImage:()=>image},data={skins:[{getAttachments:()=>[{attachment:{region:{texture}}}]}]};
+  const blob={bytes:"png"},fetched=[];
+  try{
+    await preparePickPages(data,(task)=>task(),async(url)=>{fetched.push(url);return {ok:true,blob:async()=>blob};});
+    assert.deepEqual(fetched,["http://hall/page.png"],"the page's own bytes, decoded off the main thread");
+    assert.deepEqual(calls,[[blob,{resizeWidth:ALPHA_SIDE,resizeHeight:ALPHA_SIDE,resizeQuality:"low"}]]);
+    assert.equal(drawn[0][0].bitmap,true,"the decoded bitmap is what is read");assert.equal(closed,1);
+    assert.equal(readyAlpha(texture).width,ALPHA_SIDE);
+    const other={width:2048,height:1024,src:"http://hall/other.png"},second={getImage:()=>other};
+    await preparePickPages({skins:[{getAttachments:()=>[{attachment:{region:{texture:second}}}]}]},(task)=>task(),async()=>{throw new Error("offline");});
+    assert.equal(calls.at(-1)[0],other,"without the bytes, the image itself");assert.equal(readyAlpha(second).width,ALPHA_SIDE);
+  }finally{globalThis.document=previous.document;if(previous.createImageBitmap)globalThis.createImageBitmap=previous.createImageBitmap;else delete globalThis.createImageBitmap;}
+});
+test("large pages are read at most ALPHA_SIDE wide and an unreadable page counts as opaque",()=>{
+  const previous=globalThis.document;const drawn=[];let canvas;
+  globalThis.document={createElement:()=>(canvas={getContext:()=>({drawImage:(...args)=>drawn.push(args.slice(1)),getImageData:(x,y,w,h)=>({data:new Uint8Array(w*h*4)})})})};
+  try{
+    const big={getImage:()=>({width:4096,height:2048})};assert.equal(pageAlpha(big),null,"wholly transparent: a failed read");
+    assert.deepEqual(drawn[0],[0,0,ALPHA_SIDE,ALPHA_SIDE/2]);assert.equal(canvas.width,0,"the canvas is released");
+    const skeleton=pickActor("blank").player.skeleton;assert.ok(skeletonContains(skeleton,35,10,Runtime,()=>null),"no alpha: the attachment counts as opaque");assert.equal(skeletonContains(skeleton,35,30,Runtime,()=>null),false);
+  }finally{globalThis.document=previous;}
 });
 
 test("the visible head ignores Spine's bounds: transparent props, additive halos and hidden slots never move it", () => {
