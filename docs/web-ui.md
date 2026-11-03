@@ -1874,6 +1874,12 @@ the prefab values, from the development view). It imports no other UI module.
   (the mailbox limit label), error `#bb3421` (the skill type sprite), greyed `#828282` (Btn_Disable's label), the page's ink
   `#2c4564` (the collection's top bar title; `--navy-text` repeats it), the In Use badge `#ffb700` on `#4b2116`, a note's
   ink and the consent's "never" bar `#6a7b8f`. The style sheets repeat the CSS ones, which the token tests keep equal.
+- **Corners, focus ring, fallback button** (style sheets): the game's ladder, Raius5px, Raius10px and Raius20px (5, 10 and
+  22 units) is 3.24, 6.49 and 14.27 px at the stage's scale (`RADIUS_PX`). One focus rule in `app.css` draws the ring for
+  every control, 4 px `#2fa6f0`, 2 px off, radius 6.49 px (a roster card's keeps its -3 px offset because the list clips; no
+  glow). `.plain-popup` is 14.27 px, `.plain-line-button` and the plain checkbox 6.49 px. The no-game screens have one flat
+  button look, `#8de4ff` with `#314665` ink on a 6.49 px corner, no skew and no shadow (`.message-button`, the recovery
+  panel's buttons and `.plain-line-button`). The lobby subtitle and the photography sheet are unchanged.
 - **Settings rows** stand 12 units apart (`SETTINGS.rowGap`, the prefab's Game tab); the scrolling area ends at the last
   row's foot plus that gap.
 

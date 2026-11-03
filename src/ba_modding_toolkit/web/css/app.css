@@ -153,13 +153,14 @@ input[type="text"], input[type="search"], textarea { cursor: text; }
 .roster-search::-webkit-search-cancel-button, .roster-search::-webkit-search-decoration { -webkit-appearance: none; appearance: none; display: none; }
 /* opened and focused before its box is drawn: it takes keystrokes unseen meanwhile */
 .roster-search.pending { opacity: 0; }
-/* keyboard focus (never shown for the pointer): a ring in the game's selection blue; a roster card's ring hugs its
-   portrait frame, inside the list's clip */
+/* keyboard focus (never shown for the pointer): one ring everywhere, 4 px in the app's focus blue, 2 px off the control, on the
+   game's Raius10px corner (6.49 px at the stage's scale: ui-tokens.js FOCUS, which the token tests keep equal). A roster
+   card's ring sits inside its portrait frame, because the list clips. */
 .hit:focus-visible, .card-hit:focus-visible, .nav-item:focus-visible, .top-option:focus-visible, .top-home:focus-visible, .back:focus-visible,
-.ms-toggle:focus-visible, .ms-help:focus-visible {
-  outline: 4px solid #2fa6f0; outline-offset: 2px; border-radius: 10px; }
-.card-row .card-hit:focus-visible { outline: 5px solid #2fa6f0; outline-offset: -3px; border-radius: 12px;
-  box-shadow: inset 0 0 0 7px rgba(255, 255, 255, .7), 0 0 14px rgba(47, 166, 240, .55); }
+.ms-toggle:focus-visible, .ms-help:focus-visible, .slider-thumb-focus,
+.plain-popup .message-button:focus-visible, .plain-check:focus-visible, .plain-line-button:focus-visible {
+  outline: 4px solid #2fa6f0; outline-offset: 2px; border-radius: 6.49px; }
+.card-row .card-hit:focus-visible { outline-offset: -3px; }
 .roster-empty { position: absolute; inset: 0; pointer-events: none; }
 .consent-host { position: absolute; inset: 0; z-index: 2000; }
 .consent-host[hidden] { display: none; }
@@ -178,7 +179,6 @@ input[type="text"], input[type="search"], textarea { cursor: text; }
 .hit.slider-range { margin: 0; opacity: 0; touch-action: none; -webkit-appearance: none; appearance: none; }
 .slider-range::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 40px; height: 40px; }
 .slider-range::-moz-range-thumb { width: 40px; height: 40px; border: 0; }
-.slider-thumb-focus { outline: 4px solid #2fa6f0; outline-offset: 2px; border-radius: 10px; }
 
 /* --- detail --- */
 /* the alias editor's inputs, over the game's input rows (UIPopup_Input's text and placeholder colours) */
@@ -212,19 +212,20 @@ input[type="text"], input[type="search"], textarea { cursor: text; }
 /* a message popup without the game's frame (no game folder): a plain box on the popup's dark backdrop */
 .plain-popup-back { position: absolute; inset: 0; background: rgba(0, 0, 0, .6); }
 .plain-popup { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 1000px; padding: 48px 60px 52px;
-  display: flex; flex-direction: column; align-items: center; gap: 22px; border-radius: 14px; background: #f4fcfe; color: #2d4664; text-align: center; }
+  display: flex; flex-direction: column; align-items: center; gap: 22px; border-radius: 14.27px; background: #f4fcfe; color: #2d4664; text-align: center; }
 .plain-popup h2 { font: var(--w) 48px/1.2 var(--font); }
 .plain-popup p { font: var(--w) 32px/1.4 var(--font); color: #2d4664; max-width: 100%; overflow-wrap: anywhere; }
 .plain-message-lines { width: 100%; max-height: 520px; overflow-y: auto; overflow-x: hidden; }
-.plain-line-button { margin-left: 20px; padding: 8px 22px; border-radius: 8px; background: #8de4ff; color: #314665; font: var(--w) 26px/1 var(--font); }
+/* the fallback button, one look for the no-game screens (here, fallback.css's .message-button and the recovery panel's): the light-blue
+   button flat, #8de4ff with #314665 ink on the game's Raius10px corner, no skew and no shadow */
+.plain-line-button { margin-left: 20px; padding: 8px 22px; border-radius: 6.49px; background: #8de4ff; color: #314665; font: var(--w) 26px/1 var(--font); }
 .plain-check { display: flex; align-items: center; gap: 16px; font: var(--w) 30px/1 var(--font); color: #484e52; }
-.plain-check::before { content: ""; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 8px;
+.plain-check::before { content: ""; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 6.49px;
   border: 3px solid #96b6c2; background: #e4f3f8; color: #fff; font: 700 28px/1 sans-serif; }
 .plain-check[aria-checked="true"]::before { content: "\2713"; background: #2a63c5; border-color: #2a63c5; }
 .plain-popup .message-actions { margin-top: 10px; }
 .spine-license-plain h2 { font: 600 48px/1.2 system-ui, sans-serif; }
 .spine-license-plain p, .spine-license-plain .message-button { font: 400 32px/1.4 system-ui, sans-serif; }
-.plain-popup .message-button:focus-visible, .plain-check:focus-visible, .plain-line-button:focus-visible { outline: 4px solid #2fa6f0; outline-offset: 2px; }
 .hit { position: absolute; background: transparent; cursor: var(--cursor-press); }
 
 /* switch-portrait card: the game's weapon card has no text slot */

@@ -3363,7 +3363,8 @@ test("keyboard focus shows a ring on the game's thumb, the pointer's focus does 
     assert.equal(document.activeElement, range(), "and the slider kept the focus");
     // the ring is a class of the stylesheet, in the app's focus blue
     const css = readFileSync(new URL("../../src/ba_modding_toolkit/web/css/app.css", import.meta.url), "utf8");
-    assert.match(css, /\.slider-thumb-focus\s*\{[^}]*outline:\s*4px solid #2fa6f0/);
+    // one focus rule for every control (the slider's thumb among them): 4 px, 2 px off, on the Raius10px corner
+    assert.match(css, /\.slider-thumb-focus,[^{]*\{[^}]*outline:\s*4px solid #2fa6f0;\s*outline-offset:\s*2px;\s*border-radius:\s*6\.49px/);
     assert.match(css, /\.hit\.slider-range\s*\{[^}]*opacity:\s*0/);
     assert.match(css, /\.slider-range::-webkit-slider-thumb\s*\{[^}]*width:\s*40px/);
   } finally { press("Escape"); handlers.clear(); }
