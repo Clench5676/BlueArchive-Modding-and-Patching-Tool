@@ -125,7 +125,8 @@ test("generic Settings rows render names, every target file, status and actions 
     const ButtonsModule = await import(new URL("game-buttons.js", web));
     const { option, filter } = controls();
     const Buttons = { smallButton: (...args) => ButtonsModule.optionButton(option, filter, ...args) };
-    const deps = { NGUI, T: h.T, wrapPath, rowBase, radioRow, Buttons };
+    const { BACKDROP, SMALL_BUTTON } = await import(new URL("ui-tokens.js", web));
+    const deps = { NGUI, T: h.T, wrapPath, rowBase, radioRow, Buttons, BACKDROP, SMALL_BUTTON };
     const valueRow = new Function("deps", `const {${Object.keys(deps)}} = deps; ${strip(settings)}; return valueRow;`)(deps);
     const rows = h.rows([mod, { ...mod, id: "m2", label: "Missing Pack", state: "missing" }], valueRow, h.changed);
     const host = new El();

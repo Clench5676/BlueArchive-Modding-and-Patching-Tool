@@ -1849,6 +1849,23 @@ or the classic UI is open, no drift while mods are off, nothing dismissed (see M
   what they carry and, for a mod, its file and the variant it was made for; then one row per bundle with its size,
   date, CRC state and what it carries. The frame fits its content and scrolls past the stage's height.
 
+### Design tokens
+
+`web/js/ui-tokens.js` holds the numbers and colours the web UI shares, each named after the prefab node it comes from; a
+call site imports it, nothing else repeats them (`tests/js/ui_tokens.test.mjs` pins the sites, `tests/test_ui_tokens.py`
+the prefab values, from the development view). It imports no other UI module.
+
+- **Popup frame, footer, backdrop**: see Popups above (`POPUP`, `FOOTER`, `BACKDROP`).
+- **Small button** (`SMALL_BUTTON`; UIPopup_Option_PC `Center/Popup/List/Sound_Setting/ETCSetting/ButtonBg`): 402 x 136, caption
+  48 down to 34 fitted to the width less 60, its label box 30 less across and 20 less down; only the width varies, 240 at
+  least. `game-buttons.js` `optionButton` takes these as its defaults; the Hall passes its own sizes. Settings' value rows
+  put the buttons right-aligned to x 700, 422 apart, beside the value while it keeps at least 460 (two to a line) and
+  under it three to a line; the rest wrap to a second line, right-aligned like the first (`settings.js`
+  `valueRowLayout`). The Export pair is 680 x 136. A message's line button is 136 high and as wide as its caption plus
+  90 (240 at least) in a row at least 156 high; the asset consent's Change button the same, on a line of its own under
+  the item (`consent.js` `assetLayout`). Not migrated yet: the Hall's buttons, the photography toolbar, the popup details
+  actions and the detail screen's Show in Finder / Explorer button.
+
 ### Enable Mods switch
 
 One kill switch for every game folder (`mod-switch.js`; the pure parts tested in Node from `tests/test_mod_switch.py`).

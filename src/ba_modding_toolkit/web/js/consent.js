@@ -11,6 +11,7 @@ import * as Popup from "./popup.js";
 import { rpc } from "./api.js";
 import { T, errorText } from "./i18n.js";
 import { setSpineConsent } from "./spine-runtime.js";
+import { FOOTER, POPUP, SMALL_BUTTON } from "./ui-tokens.js";
 import { S, hitButton, wrapPath } from "./util.js";
 
 const { node, sprite, label, find, rect } = NGUI;
@@ -24,31 +25,52 @@ export async function show(host, cacheDir, native = false) {
   return new Promise((resolve) => draw(host, cacheDir, native, resolve));
 }
 
+// The asset consent's layout, popup-local units. Its Cached section holds the item, then a line of its own with the cache path
+// and the light-blue Change button (the small button: 136 high, as wide as its caption and 90 more, 240 at least, its right
+// edge where the old button's was); the frame is as tall as the content needs, the Note 16 above the buttons' tops.
+const ASSET = { w: 1900, minH: 1180, section: 1740, never: 300, item: { y: -150, h: 50 }, top: 148, between: 40,
+  rowGap: 16, foot: 24, noteGap: 30, noteH: 50, left: -800, right: 815, pathGap: 30 };
+export function assetLayout(cacheDir) {
+  const bf = NGUI.fitText(T("consent.change"), SMALL_BUTTON.fs, SMALL_BUTTON.fsMin, SMALL_BUTTON.w - SMALL_BUTTON.fitInset);
+  const bw = Math.max(SMALL_BUTTON.minW, NGUI.glyphWidth(bf.text, bf.fs) + SMALL_BUTTON.glyphPad);
+  const room = ASSET.right - bw - ASSET.pathGap - ASSET.left;
+  // where the cache goes, wrapped rather than cut
+  const to = wrapPath(T("cacheTo", { path: cacheDir }), 40, 30, room, 2);
+  const pathH = to.fs * 1.3 * to.lines + 8, rowH = Math.max(SMALL_BUTTON.h, pathH);
+  const rowTop = ASSET.item.y - ASSET.item.h / 2 - ASSET.rowGap, rowY = rowTop - rowH / 2;
+  const cachedH = -rowTop + rowH + ASSET.foot;
+  const content = ASSET.top + cachedH + ASSET.between + ASSET.never + ASSET.noteGap + ASSET.noteH;
+  const h = Math.max(ASSET.minH, content + POPUP.clearance + FOOTER.centre + FOOTER.body.h / 2);
+  const cachedTop = POPUP.frameY + h / 2 - ASSET.top, neverTop = cachedTop - cachedH - ASSET.between;
+  const noteBottom = neverTop - ASSET.never - ASSET.noteGap - ASSET.noteH;
+  return { w: ASSET.w, h, cachedTop, cachedH, neverTop, noteY: noteBottom + ASSET.noteH / 2, noteBottom, to, rowY, rowH, room,
+    change: { x: ASSET.right - bw / 2, w: bw, caption: bf }, itemBox: [ASSET.left, ASSET.item.y - ASSET.item.h / 2, ASSET.item.y + ASSET.item.h / 2] };
+}
+
 async function draw(host, cacheDir, native, resolve) {
   await Buttons.ready();
   await Popup.frameReady();
+  const layout = assetLayout(cacheDir);
   // the shared popup frame: no close button, to be answered with one of its two buttons
-  const { tree: t, popup } = consentFrame(T("consent.title"), 1900, 1180, [T("consent.no"), T("consent.yes")]);
+  const { tree: t, popup } = consentFrame(T("consent.title"), layout.w, layout.h, [T("consent.no"), T("consent.yes")]);
   // two rows: what is cached, what never is; each a white section with the game's title bar
-  const row = (name, y, titleText, items, tone) => node(name, [0, y], [], [
-    node("Bg", [0, 0], [sprite("Common_Nonoutline_W_Bg", 1740, 300, { pivot: 1, depth: 4 })]),
+  const row = (name, y, h, titleText, items, tone) => node(name, [0, y], [], [
+    node("Bg", [0, 0], [sprite("Common_Nonoutline_W_Bg", ASSET.section, h, { pivot: 1, depth: 4 })]),
     node("Title_Bg", [-850, -56], [sprite("Common_Bg_Raius10px", 1700, 73, { pivot: 3, depth: 5, color: `${tone}/1.00`, incline: 10 })], [
       node("Deco", [28.8, 0], [sprite("Common_BGDeco", 68, 72, { depth: 6, color: "#2a5886/1.00", type: 0 })]),
       node("Label", [40, 0], [label(titleText, 46, "#ffffff/1.00", 1500, 50, { pivot: 3, depth: 7 })]),
     ]),
     ...items.map((item, i) => node(`Item_${i}`, [-800, -150 - i * 62], [label(item, 40, "#2d4664/1.00", 1600, 50, { pivot: 3, depth: 7 })])),
   ]);
-  // where the cache goes, wrapped rather than cut, with the popup's light-blue Change button beside it
-  const to = wrapPath(T("cacheTo", { path: cacheDir }), 40, 30, 1260, 2);
-  const cached = row("Cached", 430, T("consent.cached.label"), [T("consent.cached.items")], "#2d4c72");
-  const pathY = -212 - (to.lines - 1) * to.fs * 0.65;
+  const cached = row("Cached", layout.cachedTop, layout.cachedH, T("consent.cached.label"), [T("consent.cached.items")], "#2d4c72");
+  const { to } = layout;
   cached.children.push(
-    node("Path", [-800, pathY], [label(to.text, to.fs, "#2d4664/1.00", 1290, to.fs * 1.3 * to.lines + 8, { pivot: 3, depth: 7 })]),
-    Buttons.smallButton("Change", 700, pathY, T("consent.change"), { w: 230, h: 96, enabled: native, fs: 40, min: 28, depth: 8 }));
+    node("Path", [ASSET.left, layout.rowY], [label(to.text, to.fs, "#2d4664/1.00", layout.room, to.fs * 1.3 * to.lines + 8, { pivot: 3, depth: 7 })]),
+    Buttons.smallButton("Change", layout.change.x, layout.rowY, T("consent.change"), { w: layout.change.w, enabled: native, depth: 8 }));
   popup.children.push(
     cached,
-    row("Never", 90, T("consent.never.label"), [T("consent.never.items"), T("consent.never.how")], "#545454"),
-    node("Note", [0, -260], [label(T("consent.note"), 36, "#6b7d92/1.00", 1700, 50, { depth: 7 })]),
+    row("Never", layout.neverTop, ASSET.never, T("consent.never.label"), [T("consent.never.items"), T("consent.never.how")], "#545454"),
+    node("Note", [0, layout.noteY], [label(T("consent.note"), 36, "#6b7d92/1.00", 1700, ASSET.noteH, { depth: 7 })]),
   );
   host.hidden = false;
   // on the popup stack, to be answered with a button: Escape does nothing, and the shared focus trap holds it

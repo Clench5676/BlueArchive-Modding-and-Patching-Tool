@@ -173,21 +173,24 @@ for (const locale of LOCALES) test(`the roster's six segments and the popup's th
   assertGroup(fitGroup(three, 44, 26, 230 - 30, 2, { maxH: 96 }), three, three.map(() => 200), 96, `${locale} popup`);
 });
 
-// --- Settings: tabs (300 wide), the two buttons of a value row (300 x 112), the export pair (680 x 112) ---
+// --- Settings: tabs (300 wide), the buttons of a value row (402 x 136, the prefab's small button), the export pair (680 x 136) ---
+const { SMALL_BUTTON } = await import("../../src/ba_modding_toolkit/web/js/ui-tokens.js");
 for (const locale of LOCALES) test(`Settings tabs and button pairs share one size and fit in ${locale}`, async () => {
-  const settings = await source("settings.js");
+  const settings = await source("settings.js"), buttons = await source("game-buttons.js");
   assert.match(settings, /fitGroup\(TABS\.map\(\(id\) => T\(`settings\.tab\.\$\{id\}`\)\), 56, 40, 300, 2\)/);
-  assert.match(settings, /44, 30, 300 - 60, 2, \{ maxH: 112 - 20 \}/);
-  assert.match(settings, /44, 30, 680 - 60, 2, \{ maxH: 112 - 20 \}/);
+  assert.match(settings, /SMALL_BUTTON\.fs, SMALL_BUTTON\.fsMin,\s*SMALL_BUTTON\.w - SMALL_BUTTON\.fitInset, 2, \{ maxH: SMALL_BUTTON\.h - SMALL_BUTTON\.boxInsetH \}/);
+  assert.match(settings, /SMALL_BUTTON\.fs, SMALL_BUTTON\.fsMin, SMALL_BUTTON\.wideW - SMALL_BUTTON\.fitInset, 2,\s*\{ maxH: SMALL_BUTTON\.h - SMALL_BUTTON\.boxInsetH \}/);
+  assert.match(buttons, /w = SMALL_BUTTON\.w, h = SMALL_BUTTON\.h, enabled = true, fs = SMALL_BUTTON\.fs, min = SMALL_BUTTON\.fsMin/);
   document.documentElement.lang = locale;
+  const { w, h, fs, fsMin, fitInset, boxInsetH, wideW } = SMALL_BUTTON;
   const tabs = Object.keys(web.get(locale).settings.tab).map((id) => text(locale, `settings.tab.${id}`));
   assertGroup(fitGroup(tabs, 56, 40, 300, 2), tabs, tabs.map(() => 300), Infinity, `${locale} tabs`);
   const exported = ["export.library", "export.applied"].map((key) => text(locale, key));
-  assertGroup(fitGroup(exported, 44, 30, 680 - 60, 2, { maxH: 92 }), exported, exported.map(() => 620), 92, `${locale} export`);
+  assertGroup(fitGroup(exported, fs, fsMin, wideW - fitInset, 2, { maxH: h - boxInsetH }), exported, exported.map(() => wideW - fitInset), h - boxInsetH, `${locale} export`);
   // the value rows' buttons: Open and Change / Clear cache style captions
   for (const pair of [["settings.change", "settings.detect"], ["settings.mods.clear", "open.mac"], ["open.mac", "settings.change"]]) {
     const captions = pair.map((key) => text(locale, key));
-    assertGroup(fitGroup(captions, 44, 30, 300 - 60, 2, { maxH: 92 }), captions, captions.map(() => 240), 92, `${locale} ${pair}`);
+    assertGroup(fitGroup(captions, fs, fsMin, w - fitInset, 2, { maxH: h - boxInsetH }), captions, captions.map(() => w - fitInset), h - boxInsetH, `${locale} ${pair}`);
   }
 });
 
