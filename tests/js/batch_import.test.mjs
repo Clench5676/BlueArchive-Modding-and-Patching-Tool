@@ -1032,6 +1032,12 @@ test("the page gives the list's tools one size and the row under the list anothe
   assert.equal(size("start"), size("recheck"), "Import's caption is its neighbours' size, not the Items prefab's 72");
   // the shared size comes from the group fit (the stand-in takes 2 off the prefab's size), not from each caption alone
   assert.ok(tools[0] < 60 && size("options") < 60);
+  // the left column's name plate ends where the list does (its box 587 down, the plate's foot 107 into the box)
+  await h.analyze([entry("a")]); await h.page.settled();
+  closeTo(rectOf(h.host.querySelector(".import-name-banner"))[1], 587);
+  closeTo(132 + 587 + 107, 826);
+  // Import is the popups' gold, Mailbox's ReceiveAll
+  assert.equal(treeNodes(drawn(h, h.action("start")).tree).flatMap((n) => n.widgets).find((w) => w.sprite === "Common_Btn_BG").color, "#f6e94b/1.00");
 });
 
 test("the row under the list is one row of the small button, right-aligned to the list's tools", async () => {
@@ -1068,7 +1074,7 @@ test("every page action swaps its whole disabled prefab, including both dotted p
       assert.ok(patterns.length);
       const kind = button.disabled ? "B_C" : action === "start" ? "Y_S" : "B_S";
       assert.ok(patterns.every((w) => w.sprite === `Common_Btn_Normal_${kind}_Pt`), action);
-      if (button.disabled && action !== "start") {
+      if (button.disabled) {
         assert.equal(patterns.length, 2, "the entire Mailbox disabled state is retained");
         assert.equal(patterns[1].color, "#ffffff/0.80");
         assert.equal(patterns[1].flip, 3);

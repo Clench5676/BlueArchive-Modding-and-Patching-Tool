@@ -80,6 +80,7 @@ export function makeImportLayouts() {
   insert(mail, "Bottom/ObjectsDisplayed_Unread/Label_Locale", label("Label_Locale", "note", { pivot: 3 }));
   const receive = insert(mail, "Bottom/ObjectsDisplayed_Unread/ReceiveAll/Btn", button("Btn", false));
   receive.widgets[0].color = "#f6e94b/1.00";
+  for (const child of receive.children) for (const w of child.widgets) if (/_Pt$/.test(w.sprite || "")) w.sprite = "Common_Btn_Normal_Y_S_Pt";
   const disabled = insert(mail, "Bottom/ObjectsDisplayed_Unread/ReceiveAll/Btn_Disable", button("Btn_Disable", false, true));
   disabled.children.push(node("Pt (1)", [-52, 3], [sprite("Common_Btn_Normal_B_C_Pt", 252, 140, { color: "#ffffff/0.80" })]));
   disabled.children.at(-1).scale = [-1, -1];
