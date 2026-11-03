@@ -34,3 +34,58 @@ test("the small button and the chip are the prefab nodes' sizes, their pitches f
   assert.deepEqual([CHIP.w, CHIP.h, CHIP.fs, CHIP.fsMin, CHIP.pitch], [272, 72, 40, 28, 290]);
   assert.equal(CHIP.pitch - CHIP.w, CHIP.gap);
 });
+
+// --- the measuring stand-in the fit tests share (button_row_fit.test.mjs): a CJK or Thai code point one em, anything else half ---
+const WIDE = /[⺀-鿿　-ヿ＀-￯가-힯฀-๿]/;
+const ctx = {
+  font: "",
+  measureText(s) {
+    const fs = parseFloat(/([\d.]+)px/.exec(this.font)[1]);
+    return { width: [...s].reduce((w, c) => w + (WIDE.test(c) ? fs : fs / 2), 0) };
+  },
+};
+globalThis.document = {
+  createElement: () => ({ getContext: () => ctx, remove() {} }),
+  documentElement: { lang: "en-US", appendChild() {} },
+};
+globalThis.getComputedStyle = () => ({ getPropertyValue: () => "" });
+const NGUI = await import("../../src/ba_modding_toolkit/web/js/ngui.js");
+const ButtonsModule = await import("../../src/ba_modding_toolkit/web/js/game-buttons.js");
+const { controls } = await import("./control_prefabs.mjs");
+
+const { option, filter } = controls();
+const smallButton = (...args) => ButtonsModule.optionButton(option, filter, ...args);
+const bodyOf = (tree) => tree.widgets.find((w) => w.sprite === "Common_Btn_BG");
+const labelOf = (tree) => NGUI.find(tree, "Label_Locale").widgets[0];
+
+// --- item D: one small button, the prefab's ETCSetting/ButtonBg ---
+test("the small button defaults to the prefab's 402 x 136 at 48 down to 34, its label box 30 and 20 less", () => {
+  const { SMALL_BUTTON: B } = Tokens;
+  const tree = smallButton("B", 0, 0, "OK");
+  assert.deepEqual([bodyOf(tree).w_, bodyOf(tree).h_], [402, 136]);
+  const label = labelOf(tree);
+  assert.deepEqual([label.w_, label.h_], [402 - 30, 136 - 20]);
+  assert.equal(label.fontSize, 48);
+  // a long caption wraps, then shrinks, inside the fit width (w - 60) and the box height, never under 34 while it can hold
+  const long = labelOf(smallButton("B", 0, 0, "Clear the cache of this application"));
+  const widest = Math.max(...long.text.split("\n").map((line) => NGUI.glyphWidth(line, long.fontSize)));
+  assert.ok(widest <= 402 - B.fitInset && long.fontSize <= 48);
+  // only the width varies, and the label follows it
+  for (const w of [240, 300, 402, 680]) {
+    const wide = smallButton("B", 0, 0, "Open", { w });
+    assert.deepEqual([bodyOf(wide).w_, bodyOf(wide).h_, labelOf(wide).w_, labelOf(wide).h_], [w, 136, w - 30, 116]);
+  }
+});
+
+test("a screen with its own button boxes (the Hall's) passes every size, so the new defaults do not change it", () => {
+  // the Hall's footer and first-run buttons: explicit w, h and caption range
+  for (const [w, h, fs, min] of [[431, 102, 40, 26], [1093, 166, 40, 26], [216, 98, 36, 36]]) {
+    const tree = smallButton("B", 0, 0, "Add Portraits", { w, h, fs, min });
+    assert.deepEqual([bodyOf(tree).w_, bodyOf(tree).h_], [w, h]);
+    assert.deepEqual([labelOf(tree).w_, labelOf(tree).h_], [w - 30, h - 20]);
+    assert.ok(labelOf(tree).fontSize <= fs, `${w} x ${h}`);
+  }
+  const hall = readFileSync(new URL("js/student-hall-ui.js", WEB), "utf8");
+  assert.match(hall, /Buttons\.smallButton\(name, 0, 0, caption, \{ w: width \/ S, h: height \/ S, fs: size \?\? 40, min: size \?\? 26,/);
+  assert.match(hall, /NGUI\.fitGroup\(captions, 40, 26, width \/ S - 60, 2, \{ maxH: height \/ S - 20 \}\)/);
+});

@@ -23,6 +23,7 @@ const { wrapPath, S } = await import(new URL('util.js', web));
 const { rowBase, radioRow } = await import(new URL('settings-rows.js', web));
 const ButtonsModule = await import(new URL('game-buttons.js', web));
 const { errorText } = await import(new URL('i18n.js', web));
+const { BACKDROP, SMALL_BUTTON } = await import(new URL('ui-tokens.js', web));
 const { option, filter } = controls();
 const Buttons = { smallButton: (...args) => ButtonsModule.optionButton(option, filter, ...args) };
 
@@ -31,7 +32,7 @@ function harness(locale, { native = true, sourceValue = 'windows_global', error 
   const T = (key, values = {}) => key.split('.').reduce((v, k) => v[k], strings).replace(/\{(\w+)\}/g, (_, k) => values[k]);
   const prefs = { fileSource: sourceValue, gameDirs: { global: '/test/global/'.repeat(pathLength), japan: '/test/japan/'.repeat(pathLength) }, native, libraryDir: '/test/library', outputDir: '/test/output' };
   const requests = [], messages = [], failures = [], changed = [];
-  const deps = { NGUI, T, wrapPath, S, rowBase, radioRow, Buttons, platform: 'mac', errorText: err => errorText(err, T),
+  const deps = { NGUI, T, wrapPath, S, rowBase, radioRow, Buttons, BACKDROP, SMALL_BUTTON, platform: 'mac', errorText: err => errorText(err, T),
     notify: (...args) => failures.push(args),
     // Popup.notice is message() with the notice caption and Confirm only (popup.js, tested in refusal_notice.test.mjs)
     Popup: { notice: async text => messages.push({ title: T('quit.title'), lines: [text], ok: T('picker.ok') }) },
@@ -114,9 +115,9 @@ for (const locale of locales) {
           assert.ok(x + body.w_ / 2 < 1552 / 2);
           assert.ok(y + body.h_ / 2 <= rowHeight / 2 - 109 && y - body.h_ / 2 >= -rowHeight / 2);
           assert.ok(labels[i].text.split('\n').every(line => NGUI.glyphWidth(line, labels[i].fontSize) <= labels[i].w_));
-          assert.ok(labels[i].fontSize >= 30 && labels[i].fontSize <= 44);
+          assert.ok(labels[i].fontSize >= 34 && labels[i].fontSize <= 48);
         });
-        assert.ok(buttons[0].pos[0] + 150 < buttons[1].pos[0] - 150);
+        assert.ok(buttons[0].pos[0] + 201 < buttons[1].pos[0] - 201);
         for (const [width, windowHeight] of [[640, 480], [960, 540], [1920, 1080], [2560, 1440]]) {
           const scale = Math.min(width / 1920, windowHeight / 1080);
           const panelTop = (540 - 375 * S) * scale, panelBottom = panelTop + 854 * S * scale;

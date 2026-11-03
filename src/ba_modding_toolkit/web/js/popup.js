@@ -21,7 +21,7 @@ import { frameOutline } from "./row-thumbnail.js";
 import { T } from "./i18n.js";
 import { withTimeout } from "./async.js";
 import { TEXT_VIEWER } from "./popup-frames.js";
-import { BACKDROP, FOOTER, POPUP } from "./ui-tokens.js";
+import { BACKDROP, FOOTER, POPUP, SMALL_BUTTON } from "./ui-tokens.js";
 import { DOT, RECRUIT, S, TAN10, advanceOf, clone, glyphsOf, hitButton, markedLabel, wrapPath } from "./util.js";
 
 const { node, sprite, label, find, rect } = NGUI;
@@ -877,7 +877,7 @@ export async function listPopup(options) {
 // --- the message popup ---
 // buttons: the room under the content for the footer, 304.5: the footer's top (FOOTER.centre + half a body, 279) and 25.5 of air.
 // It was 236 while the footer's centre sat 68.5 lower.
-export const MSG = { title: 150, gap: 28, rowMin: 104, check: 150, buttons: FOOTER.centre + FOOTER.body.h / 2 + 25.5, none: 70, minH: 640, cap: 1400 };
+export const MSG = { title: 150, gap: 28, rowMin: 104, rowButton: SMALL_BUTTON.h + 20, check: 150, buttons: FOOTER.centre + FOOTER.body.h / 2 + 25.5, none: 70, minH: 640, cap: 1400 };
 
 // message({title, lines, ok, cancel, check, host, width, close, confirmKeys, scroll}): a message on the popup frame, in host
 // (#dialog by default, over everything but the message popup). Resolves once it is closed, however it is closed, with
@@ -977,8 +977,9 @@ function messageLines(lines, w, fitTogether, plain) {
   const boxed = !plain && rows.some((r) => r.button);
   const min = boxed ? 40 : 44, max = boxed ? 44 : 52;
   const fitted = rows.map((r) => {
-    const bf = r.button ? fitText(r.button.label, 40, 28, 340) : null;
-    const bw = bf ? Math.max(230, glyphsOf(bf.text, bf.fs) + 90) : 0;
+    // a line button is the small button: 136 high, as wide as its caption needs and 90 more (240 at least), the caption 48 down to 34
+    const bf = r.button ? fitText(r.button.label, SMALL_BUTTON.fs, SMALL_BUTTON.fsMin, SMALL_BUTTON.w - SMALL_BUTTON.fitInset) : null;
+    const bw = bf ? Math.max(SMALL_BUTTON.minW, glyphsOf(bf.text, bf.fs) + SMALL_BUTTON.glyphPad) : 0;
     const room = w - (boxed ? 280 : 240) - (bw ? bw + 30 : 0);
     return { r, bf, bw, room, f: messageText(r.text, r.fontSize ?? max, r.minFontSize ?? min, room) };
   });
@@ -992,8 +993,9 @@ function messageLines(lines, w, fitTogether, plain) {
   let y = 0;
   // rows on the game's light stats box: text at the left, the line's button at the right
   const boxW = w - 200, buttons = [];
-  const sized = fitted.map((s) => ({ ...s, h: boxed ? Math.max(MSG.rowMin, s.f.lines * s.f.fs * 1.3 + 30)
-    : Math.max(s.bf ? 92 : 0, s.f.lines * s.f.fs * 1.3 + 8) }));
+  // a row with a button holds it: in the light box 156 at least (the button and 10 above and below), rows without keep rowMin
+  const sized = fitted.map((s) => ({ ...s, h: boxed ? Math.max(s.bf ? MSG.rowButton : MSG.rowMin, s.f.lines * s.f.fs * 1.3 + 30)
+    : Math.max(s.bf ? SMALL_BUTTON.h : 0, s.f.lines * s.f.fs * 1.3 + 8) }));
   const boxH = sized.reduce((a, s) => a + s.h, 0) + 16;
   if (boxed) {
     out.push(node("Box", [0, -boxH / 2], [sprite("Common_Bg_Raius10px", boxW, boxH, { depth: 5, color: "#ecf5f9/1.00" })], [
@@ -1007,7 +1009,7 @@ function messageLines(lines, w, fitTogether, plain) {
     out.push(node(`${boxed ? "Row" : "Line"}_${i}`, [left ? -w / 2 + (boxed ? 140 : 120) : 0, cy],
       [label(f.text, f.fs, `${r.color || "#2d4664"}/1.00`, left ? room : w - 200, f.lines * f.fs * 1.3 + 8, { pivot: left ? 3 : 4, depth: 8 })]));
     if (bf) {
-      out.push(Buttons.smallButton(`Btn_${i}`, w / 2 - (boxed ? 130 : 120) - bw / 2, cy, r.button.label, { w: bw, h: 92, fs: 40, min: 28, depth: 8 }));
+      out.push(Buttons.smallButton(`Btn_${i}`, w / 2 - (boxed ? 130 : 120) - bw / 2, cy, r.button.label, { w: bw, fs: SMALL_BUTTON.fs, min: SMALL_BUTTON.fsMin, depth: 8 }));
       buttons.push([i, r.button]);
     }
     if (boxed && i < sized.length - 1) out.push(node(`Dot_${i}`, [0, y - h], [sprite("Common_Line_Dot", boxW - 60, 4, { type: 2, depth: 7, color: "#c0c9d4/1.00" })]));
