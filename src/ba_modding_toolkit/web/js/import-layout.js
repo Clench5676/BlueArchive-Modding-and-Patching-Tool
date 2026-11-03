@@ -1,6 +1,6 @@
 // Batch Import's artwork is cloned from runtime game layouts. Only container dimensions and data slots adapt
 // to the approved two-column screen; sprite slicing, inclines, decoration, colours and typography stay in NGUI.
-import { countNodes, iconsOf } from "./mod-counts.js";
+import { countNodes } from "./mod-counts.js";
 import { resizeButton } from "./button-layout.js";
 import { clone } from "./util.js";
 import { frameOutline, innerFrame } from "./row-thumbnail.js";
@@ -17,8 +17,7 @@ export const ROW_SELECTION = { left: 19, top: 8, width: 164, height: 160, scale:
 // Items/ListBG: its PaperBG and Inbox sit 60 units below the panel's centre, so that is the middle of the grey frame
 // (header strip and toolbar included), in panel px.
 export const PAPER_CENTRE = (S) => [636, 352 + 60 * S];
-// Mailbox's Btn_Receive body, the height of every action button here: Items' UseBtn (166 in its prefab) is drawn at it too, so
-// the bodies of a row match.
+// The height of every action button here: Mailbox's Btn_Receive and ReceiveAll/Btn.
 export const BUTTON_BODY_H = 162;
 export const NAME_ROOM = 1160;    // the Batch Import name plate's room for a name (units)
 export { EMPTY_GAP, emptyBlock } from "./empty-block.js";
@@ -192,7 +191,7 @@ export function importArtwork(ui, layouts) {
       const w = ui.find(layouts.UINonEquipmentInventory, `${LIST}/Inbox/SearchInfo/SearchName/SearchNameArea/InputField/Label_Search`).widgets.find((w) => "text" in w);
       return { color: w.color.split("/")[0], caretColor: w.color.split("/")[0], fontSize: `${w.fontSize * scale}px` };
     },
-    // MailboxContent/List_01/Btn_Receive supplies every blue action; Items/Bottom/Use/UseBtn supplies Import.
+    // MailboxContent/List_01/Btn_Receive supplies every blue action; Mailbox/ReceiveAll/Btn, the popups' gold, supplies Import.
     // Clone the entire disabled state, including its dark dotted B_C patterns, not just its body/label colours.
     // The caption size buttons side by side share (secondary ones, MailboxContent/List_01/Btn_Receive): the largest from the
     // prefab's size down to 70 % of it (or the range given) at which every caption fits its button (the widths, units) after
@@ -203,21 +202,17 @@ export function importArtwork(ui, layouts) {
     },
     // size: the row's shared caption size (buttonSize)
     button(caption, width, primary = false, enabled = true, size = null) {
-      const t = primary ? inventory(`${INVENTORY}/RightCanvas/Bottom/${enabled ? "Use" : "None"}/UseBtn`)
-        : enabled ? content("List_01/Btn_Receive") : mail("Bottom/ObjectsDisplayed_Unread/ReceiveAll/Btn_Disable");
+      const t = !enabled ? mail("Bottom/ObjectsDisplayed_Unread/ReceiveAll/Btn_Disable")
+        : primary ? mail("Bottom/ObjectsDisplayed_Unread/ReceiveAll/Btn") : content("List_01/Btn_Receive");
       at(t);
-      const body = primary ? ui.find(t, "BG") : t;
-      if (primary) {
-        const [x, y] = body.pos;
-        for (const c of t.children) { c.pos[0] -= x; c.pos[1] -= y; }
-      }
+      const body = t;
       resizeButton(body, width, BUTTON_BODY_H);
       // NGUI's DOM renderer uses sprite flips for mirroring; negative prefab scales would produce negative CSS sizes.
       for (const c of body.children) for (const w of c.widgets) if (/^Common_Btn_.*_Pt$/.test(w.sprite || "")) {
         w.flip = (w.flip || 0) ^ (c.scale[0] < 0 ? 1 : 0) ^ (c.scale[1] < 0 ? 2 : 0);
         c.scale = c.scale.map(Math.abs);
       }
-      const captionNode = ui.find(t, primary ? enabled ? "Label_Locale_Use" : "Text" : "Label_Locale");
+      const captionNode = ui.find(t, "Label_Locale");
       const w = captionNode.widgets.find((w) => "text" in w), height = body.widgets.find((w) => "sprite" in w).h_ - 20;
       if (size) {
         // the row's size: wrapped within the button at that size, whatever the prefab's own size is
@@ -347,7 +342,7 @@ export function importArtwork(ui, layouts) {
       if (counts) {
         const kinds = ["spr", "lobby", "model", "other"].filter((kind) => counts[kind] > 0);
         at(sender, result ? 370 : 510, ROW_TEXT_TOP); sender.widgets = [];
-        sender.children = countNodes(counts, iconsOf(ui.atlasIndex?.()), ui.translate, { kinds, width: result ? 500 : 780,
+        sender.children = countNodes(counts, {}, ui.translate, { kinds, width: result ? 500 : 780,
           color: ui.find(t, "Label_System").widgets[0].color, fontSize: textSize, top: true });
         kindLines = 1;
         for (const child of sender.children) {

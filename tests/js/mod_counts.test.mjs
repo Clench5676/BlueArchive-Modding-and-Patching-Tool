@@ -56,7 +56,7 @@ test("both counts have full localized text and the mod chip is kind neutral in a
   }
 });
 
-test("merged import counts share the roster icons and include models and generic assets", () => {
+test("the count nodes draw the roster icons and include models and generic assets", () => {
   const kinds = ["spr", "lobby", "model", "other"];
   const index = { Common: Object.fromEntries(kinds.map((kind) => [COUNT_ICONS[kind], { width: 40, height: 40 }])) };
   const nodes = countNodes({ spr: 2, lobby: 3, model: 4, other: 5 }, iconsOf(index), null, { kinds, width: 800 });
