@@ -100,6 +100,15 @@ test("the status colours are the game's: success, warning, error, greyed, navy, 
     inUse: "#ffb700", inUseInk: "#4b2116", note: "#6a7b8f", neverBar: "#6a7b8f" });
 });
 
+test("the stats box tokens: the prefab's colours and outset, the lead's caption, value and row numbers, the app's paddings", () => {
+  const { STATS_BOX: B } = Tokens;
+  assert.deepEqual([B.fill, B.line, B.divider, B.lineOutset], ["#ecf5f9", "#c0c9d4", "#c0c9d4", 5]);
+  assert.deepEqual({ ...B.inset }, { frame: 200, panel: 40 });
+  assert.deepEqual([B.caption, B.value.fs, B.value.fsMin, B.value.lines, B.rowMin], [38, 38, 26, 3, 64]);
+  assert.deepEqual([B.padY, B.padX, B.dividerInset, B.captionGap, B.slack, B.rowPad, B.linePitch, B.labelPad], [12, 30, 30, 30, 20, 16, 1.25, 8]);
+  assert.deepEqual({ ...B.secondary }, { fs: 28, fsMin: 24, h: 36, extra: 42, rise: 21, foot: 26, colour: "#2d4664/0.65" });
+});
+
 test("no site outside ui-tokens.js carries a retired backdrop or colour literal", () => {
   const retired = [/#000000\/0\.60/i, /#000000\/0\.65/i, /#1f9a52/i, /#d9822b/i, /#c74646/i, /#c0392b/i, /#9aa3ad/i, /#2c445c/i, /#ffbc11/i, /#3a2a00/i,
     /#6b7d92/i, /#545454/i];
