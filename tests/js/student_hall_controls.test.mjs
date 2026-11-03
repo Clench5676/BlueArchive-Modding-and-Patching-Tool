@@ -27,12 +27,12 @@ globalThis.hallControlsHarness = { S, clone: structuredClone, NGUI: { find, node
   },
   text(tree, path, value) { find(tree, path).widgets[0].text = value; },
   UI: { button: async () => {}, scaleControl: async () => {} }, T: (key) => `localized:${key}`, Popup: { hit(host, view, path, fn, meta) { const b = { path, fn, dataset: {}, ...meta }; wired.push(b); return b; } },
-  document: { createElement: () => ({ style: {}, children: [], append(child) { this.children.push(child); } }) }, lobby };
+  document: { createElement: () => ({ style: {}, children: [], append(child) { this.children.push(child); } }), querySelectorAll: () => [] }, lobby };
 let source = await readFile(new URL("../../src/ba_modding_toolkit/web/js/student-hall.js", import.meta.url), "utf8");
 source = source.replace(/^import .*;$/gm, "");
 source = `import { portraitReplacements } from "${new URL("../../src/ba_modding_toolkit/web/js/student-hall-model.js", import.meta.url).href}";\nimport { portraitRect, portraitToolbarLayout, PORTRAIT_SIZE } from "${new URL("../../src/ba_modding_toolkit/web/js/student-hall-framing.js", import.meta.url).href}";\nimport { bindCorner } from "${new URL("../../src/ba_modding_toolkit/web/js/corner-layout.js", import.meta.url).href}";\n` + source;
 source = `const {S,clone,NGUI,alignIcon,text,T,Popup,document,UI}=globalThis.hallControlsHarness;\n${source}\nexport {lobbyControl,controls,renderChrome,renderPortraitActions};
-export function fixture(mode,kind=null,writes=0,portraits=[],choices=[]){options={choices};layouts={lobby:globalThis.hallControlsHarness.lobby};store={current:()=>({mode,memorials:[],portraits}),kind:()=>kind};root={};chrome={replaceChildren(){}};hits={querySelector:()=>null};pendingWrites=writes;hitGeneration=0;}
+export function fixture(mode,kind=null,writes=0,portraits=[],choices=[]){options={choices};layouts={lobby:globalThis.hallControlsHarness.lobby};store={current:()=>({mode,memorials:[],portraits}),kind:()=>kind};root={getBoundingClientRect:()=>({left:0,top:0,width:1920,height:1080})};chrome={replaceChildren(){},querySelectorAll:()=>[]};hits={querySelector:()=>null};pendingWrites=writes;hitGeneration=0;}
 //# sourceURL=hall-controls-fixture.js`;
 const Hall = await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`);
 
@@ -145,10 +145,10 @@ test("the own-size slider moves the toolbar only once a size is set, never under
     const host={style:{},replaceChildren(){}},rect=portraitRect(entry,null);
     await Hall.renderPortraitActions(host,entry,rect,0);
     const count=wired.length,start={...host.style},expected=(scale)=>portraitToolbarLayout(portraitRect({...entry,scale},null),count);
-    assert.equal(start.left,`${expected(1).x}px`);
+    assert.equal(start.left,`${expected(1).x}px`);assert.equal(start.top,`${expected(1).y}px`);
     change(1.8);assert.equal(entry.scale,1.8);assert.deepEqual(host.style,start,"input alone never moves the toolbar");
-    assert.notEqual(expected(1.8).x,expected(1).x,"the fixture really moves the toolbar");
+    assert.notEqual(expected(1.8).y,expected(1).y,"the fixture really moves the toolbar");
     listeners.change();assert.equal(host.style.left,`${expected(1.8).x}px`);assert.equal(host.style.top,`${expected(1.8).y}px`);
-    reset();assert.equal(entry.scale,1);assert.equal(host.style.left,`${expected(1).x}px`);
+    reset();assert.equal(entry.scale,1);assert.equal(host.style.left,`${expected(1).x}px`);assert.equal(host.style.top,`${expected(1).y}px`);
   }finally{Object.assign(ui,saved);}
 });

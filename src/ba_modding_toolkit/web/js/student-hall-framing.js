@@ -81,47 +81,57 @@ export function pickPortrait(actors, x, stageY, S, alphaOf = pageAlpha) {
   return null;
 }
 // One surface owns pointer input; the named DOM buttons remain focusable for keyboard/AT activation.
+// WebKit (the macOS app's WKWebView) may end a captured press with only a click, without pointerup or
+// lostpointercapture. A press therefore ends on whichever comes first: pointerup, click, lost capture or a move with no
+// button down, at the last known point. Only pointercancel ends it without a release point.
 export function bindPortraitPointer(surface, { root, pick, hover, down, move, end, enabled = () => true }) {
   let held = null;
   const point = (event) => {
     const box = root.getBoundingClientRect(), scale = 1920 / box.width;
     return { x: (event.clientX - box.left) * scale, y: (event.clientY - box.top) * scale };
   };
+  const ours = (event) => !!held && (event.pointerId === undefined || event.pointerId === held.pointerId);
   surface.addEventListener("pointermove", (event) => {
-    if (!enabled() || held && event.pointerId !== undefined && event.pointerId !== held.pointerId) return;
-    if (held !== null && event.buttons === 0) { finish(event, true); return; }
+    if (!enabled() || held && !ours(event)) return;
+    if (held !== null && event.buttons === 0) { finish(held.last); return; }
     const p = point(event);
-    if (held !== null) move(held, p); else hover(pick(p.x, p.y));
+    if (held !== null) { held.last = p; move(held, p); } else hover(pick(p.x, p.y), null, p);
   });
   surface.addEventListener("pointerdown", (event) => {
     if (!enabled() || held !== null || event.button !== 0) return;
-    const p = point(event); held = { id: pick(p.x, p.y), start: p, pointerId: event.pointerId };
-    down(held, p); surface.setPointerCapture(event.pointerId); event.preventDefault();
+    const p = point(event); held = { id: pick(p.x, p.y), start: p, last: p, pointerId: event.pointerId };
+    down(held, p); surface.setPointerCapture?.(event.pointerId); event.preventDefault();
   });
-  function finish(event, cancelled = false) {
-    if (!held || event.pointerId !== undefined && event.pointerId !== held.pointerId) return;
+  function finish(p) {
+    if (!held) return;
     const previous = held; held = null;
     if (surface.hasPointerCapture?.(previous.pointerId)) surface.releasePointerCapture(previous.pointerId);
-    if (enabled()) { const p = cancelled ? null : point(event); if (p) move(previous, p); end(previous, p); }
+    if (enabled()) { if (p) move(previous, p); end(previous, p); }
   }
-  surface.addEventListener("pointerup", (event) => finish(event));
-  for (const name of ["pointercancel", "lostpointercapture"]) surface.addEventListener(name, (event) => finish(event, true));
-  surface.addEventListener("pointerleave", (event) => { if (!held) hover(null, event.relatedTarget); });
+  surface.addEventListener("pointerup", (event) => { if (ours(event)) finish(point(event)); });
+  surface.addEventListener("click", (event) => { if (held) finish(point(event)); });
+  surface.addEventListener("lostpointercapture", (event) => { if (ours(event)) finish(held.last); });
+  surface.addEventListener("pointercancel", (event) => { if (ours(event)) finish(null); });
+  surface.addEventListener("pointerleave", (event) => { if (!held) hover(null, event.relatedTarget, null); });
 }
 
 export const PORTRAIT_SIZE = Object.freeze({ min: .5, max: 2, default: 1 });
-// The band the single-row toolbar kept: below the Hall's top-right controls (the global size slider at y 315) and
-// above the bottom band (976 - 16).
-export const PORTRAIT_TOOLBAR_BOUNDS = Object.freeze({ left: 20, top: 360, right: 1900, bottom: 960 });
 // App-owned packing around native 62px icon buttons and the UILobby 104-unit slider body. The two rows never overlap.
-// Beside the portrait, level with its top; above or below it only when neither side fits.
-export function portraitToolbarLayout(rect, count, bounds = PORTRAIT_TOOLBAR_BOUNDS) {
-  const icon = 62, gap = 6, width = Math.max(420, count * (icon + gap) - gap), height = 142;
+// Centred directly above the portrait's box and touching it, so the pointer can travel from the portrait into the
+// toolbar; moved down below any control it would cover (the top bar, the Hall's top-right buttons and size slider).
+export const PORTRAIT_TOOLBAR_MARGIN = 16;
+export function portraitToolbarLayout(rect, count, obstacles = []) {
+  const icon = 62, gap = 6, width = Math.max(420, count * (icon + gap) - gap), height = 142, edge = 20;
   const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
-  const right = rect.x + rect.width + 12, left = rect.x - width - 12, above = rect.y - height - 12, below = rect.y + rect.height + 12;
-  const beside = right + width <= bounds.right ? right : left >= bounds.left ? left : null;
-  const x = beside ?? rect.x + rect.width - width;
-  const y = beside !== null ? rect.y : above >= bounds.top ? above : below + height <= bounds.bottom ? below : rect.y;
-  return { x: clamp(x, bounds.left, bounds.right - width), y: clamp(y, bounds.top, bounds.bottom - height), width, height, icon, gap,
+  const x = clamp(rect.x + rect.width / 2 - width / 2, edge, 1920 - edge - width);
+  let y = clamp(rect.y - height, edge, 1080 - edge - height);
+  const m = PORTRAIT_TOOLBAR_MARGIN;
+  for (let moved = true, pass = 0; moved && pass < obstacles.length + 1; pass++) {
+    moved = false;
+    for (const o of obstacles) {
+      if (x < o.x + o.width + m && x + width > o.x - m && y < o.y + o.height + m && y + height > o.y - m) { y = o.y + o.height + m; moved = true; }
+    }
+  }
+  return { x, y: Math.min(y, 1080 - edge - height), width, height, icon, gap,
     slider: [0, 108, width - 168], reset: [width - 156, 74, 156, 68] };
 }
