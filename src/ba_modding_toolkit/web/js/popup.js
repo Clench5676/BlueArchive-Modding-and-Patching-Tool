@@ -292,7 +292,10 @@ export function popupFrame(title, w, h, { ok = null, cancel = null, close = true
     const { scale, xs } = footerSlots(buttons.length, w);
     btn.active = true;
     btn.children = buttons.map((action, index) => {
-      const child = clone(action.primary ? primary : secondary); child.name = action.name || `Choice_${index}`; child.active = true; child.affirmative = !!action.primary;
+      const child = clone(action.primary ? primary : secondary); child.name = action.name || `Choice_${index}`; child.active = true;
+      // a primary choice is the gold affirmative one, unless its semantic says otherwise (Update is blue: BL-034)
+      child.affirmative = !!action.primary && !action.semantic;
+      if (action.semantic) child.actionSemantic = action.semantic;
       child.scale = [scale, scale]; child.pos = [xs[index], 0];
       return child;
     });

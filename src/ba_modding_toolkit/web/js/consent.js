@@ -183,7 +183,10 @@ async function drawSpine(host, over, resolve) {
 // the shared popup frame at a size, its title and two buttons: [cancel, ok] captions; no close button
 function consentFrame(title, w, h, [no, yes]) {
   const tree = Popup.popupFrame(title, w, h, { ok: yes, cancel: no, close: false });
-  return { tree, popup: find(tree, "Popup") };
+  const popup = find(tree, "Popup");
+  // the answer to a consent stays the plain blue button, not the gold affirmative one
+  find(popup, "Btn/Btn_Ok").actionSemantic = "consent";
+  return { tree, popup };
 }
 
 // a white section with the game's title bar and its lines (each wrapped to two lines at most); returns [node, height]

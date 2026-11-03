@@ -3478,6 +3478,7 @@ test("the list, consent, update and tour footers share that centre height, capti
       near2(bodies[1].cx - bodies[0].cx - 496, 88);
       assert.equal(oneSize(consent, ["Btn_Cancel", "Btn_Ok"]), 1);
       assert.equal(walk(consent).some((e) => e.dataset.action === "close"), false, "no close button");
+      assert.notEqual(walk(consent).find((e) => e.dataset.path === "Center/Popup/Btn/Btn_Ok/Label_Locale").style.color, "#4b2116", "a consent's answer is not the gold button");
       assert.ok(frame.bottom > -STAGE_HALF && frame.top < STAGE_HALF, "on the stage");
       walk(consent).find((e) => e.tagName === "BUTTON").click(); // the first answer is Decline
       await asked;
@@ -3493,6 +3494,7 @@ test("the list, consent, update and tour footers share that centre height, capti
     near2(bodies[2].cx - bodies[1].cx - 496 * 0.8, 24);
     near2(frame.h, Update.FRAME.h);
     assert.equal(oneSize(consent, ["Btn_Cancel", "Btn_Notes", "Btn_Ok"]), 1);
+    assert.notEqual(walk(consent).find((e) => e.dataset.path === "Center/Popup/Btn/Btn_Ok/Label_Locale").style.color, "#4b2116", "Update is not the gold button (BL-034)");
     action(consent, "later").click();
     await offered;
     // a tour page, with and without its illustration
