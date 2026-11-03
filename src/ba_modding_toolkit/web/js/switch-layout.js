@@ -1,6 +1,6 @@
 // Switch geometry in NGUI units. Preserve popup.js's Common_Btn_BG body,
 // Common_Line_Raius20px frame and Common_Bg_Raius10px name band.
-import { CHIP, POPUP } from "./ui-tokens.js";
+import { CHIP, POPUP, STATS_BOX } from "./ui-tokens.js";
 const GRID_WIDTH = 1818, INSET = 40, ROW_GAP = 48;
 const lean = Math.tan(10 * Math.PI / 180);
 export function switchGrid(kind, width = GRID_WIDTH) {
@@ -113,6 +113,6 @@ export function splitPortraitPanel(tree, find, wrap) {
   const box = find(tree, "Fields");
   box.pos = [cx, (boxTop + top) / 2];
   Object.assign(box.widgets[0], { w_: width, h_: boxTop - top });
-  Object.assign(find(box, "Line").widgets[0], { w_: width + 6, h_: boxTop - top + 6 });
+  Object.assign(find(box, "Line").widgets[0], { w_: width + STATS_BOX.lineOutset, h_: boxTop - top + STATS_BOX.lineOutset });
   return tree;
 }

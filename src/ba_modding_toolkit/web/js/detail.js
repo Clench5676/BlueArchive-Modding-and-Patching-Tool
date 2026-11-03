@@ -45,6 +45,7 @@ import { setTitle } from "./nav.js";
 import { KEYS, deltaOf, pacer, typing } from "./step-keys.js";
 import { closable, closed as popupClosed, frameReady, hit as hitNode, listPopup, message, notice, popupFrame, scrollArea } from "./popup.js";
 import { ALIAS, DETAILS, aliasFrame, detailsFrame } from "./popup-frames.js";
+import { statsBox } from "./stats-box.js";
 import { CHIP, COLOUR } from "./ui-tokens.js";
 import { candidateStatus, detailStatus, selectionStatus, selectionError, intendedKey, isApplied, availableTab, coreOf, hasAsset, hasKind, primaryKind, appliedKey as keyOf, appliedOf, candidates as listSources, partsOf, popupMode, modelSource, previewBase, previewChanged, previewKey, sourceOf, switchKindOf } from "./switch-sources.js";
 import { $, DOT, RECRUIT, S, TAN10, advanceOf, at, clone, glyphsOf, hitButton, markedLabel, off, text, widget, wrapPath } from "./util.js";
@@ -1509,37 +1510,22 @@ function detailsInfo() {
 // and its height
 function detailsBody({ fields, rows }) {
   const W = DT.r - DT.l, kids = [];
-  // summary: captions, then values that wrap (paths), never cut; on the game's light stats box
-  const capW = Math.max(...fields.map(([k]) => advanceOf(k, 38))) + 40, room = W - 80 - capW;
-  const values = fields.map(([, v, mod]) => wrapPath(String(v), 38, 28, room - (mod ? 70 : 0), 3));
-  const originals = fields.map(([, , mod]) => mod?.alias ? modOriginalName(mod) : "");
-  const rowHs = values.map((f, i) => Math.max(72, f.lines * f.fs * 1.25 + 22 + (originals[i] ? 42 : 0)));
-  const boxH = rowHs.reduce((a, h) => a + h, 0) + 20;
+  // summary: captions, then values that wrap (paths), never cut; on the game's light stats box, as wide as the file table under
+  // it. A mod's value leaves room at the right for its edit icon, and its original name stands under it.
   const TOP = 12; // air under the scrolling area's top edge
-  kids.push(node("Summary", [W / 2, -TOP - boxH / 2], [sprite("Common_Bg_Raius10px", W - 6, boxH, { depth: 5, color: "#ecf5f9/1.00" })], [
-    node("Line", [0, 0], [sprite("Common_Line_Raius10px", W, boxH + 6, { depth: 4, color: "#c0c9d4/1.00" })]),
-  ]));
-  let y = -TOP - 10;
-  fields.forEach(([k, v, mod], i) => {
-    const h = rowHs[i], cy = y - h / 2, f = values[i], nameY = cy + (originals[i] ? 21 : 0);
-    kids.push(node(`F_${i}`, [40, cy], [label(k, 38, "#2d4664/1.00", capW, 50, { pivot: 3, depth: 8 })]));
-    kids.push(node(`V_${i}`, [40 + capW, nameY], [label(f.text, f.fs, "#000000/1.00", room + 20 - (mod ? 70 : 0), f.lines * f.fs * 1.25 + 8, { pivot: 3, depth: 8, ariaLabel: String(v) })]));
-    if (originals[i]) {
-      const secondary = fitText(originals[i], 28, 24, room - 70, 1);
-      kids.push(node(`Original_${i}`, [40 + capW, y - h + 26],
-        [label(secondary.text, secondary.fs, "#2d4664/0.65", room - 70, 36, { pivot: 3, depth: 8, ellipsis: true, ariaLabel: originals[i] })]));
-    }
-    if (mod) kids.push(node(`Edit_${i}`, [40 + capW + Math.min(glyphsOf(f.text, f.fs), room - 70) + 32, nameY],
-      [sprite("Cafe_Icon_NameEdit", 46, 46, { type: 0, depth: 9, color: "#2d4664/1.00" })]));
-    if (i < fields.length - 1) kids.push(node(`L_${i}`, [W / 2, y - h], [sprite("Common_Line_Dot", W - 60, 4, { type: 2, depth: 7, color: "#c0c9d4/1.00" })]));
-    y -= h;
-  });
+  const box = statsBox({ holder: "table", width: W, at: [W / 2, -TOP], name: "Summary", rows: fields.map(([k, v, mod]) => ({
+    caption: k, value: String(v), ariaLabel: String(v), reserve: mod ? 70 : 0, secondary: mod?.alias ? modOriginalName(mod) : "",
+    slot: mod ? ({ i, x, valueY, room, text }) => [node(`Edit_${i}`, [x + Math.min(glyphsOf(text.text, text.fs), room) + 32, valueY],
+      [sprite("Cafe_Icon_NameEdit", 46, 46, { type: 0, depth: 9, color: "#2d4664/1.00" })])] : undefined,
+  })) });
+  kids.push(...box.nodes);
+  const boxH = box.height;
   // the file table: the list header's light blue bar with the captions, then the bundles
   const cols = DT_COLS.filter((_, i) => i < 4 || rows.some((r) => r[4] !== null));
   const extra = DT_COLS.reduce((a, [, w]) => a + w, 0) - cols.reduce((a, [, w]) => a + w, 0);
   const widths = cols.map(([, w], i) => w + (i === 0 ? extra : 0));
   const xs = widths.map((_, i) => 30 + widths.slice(0, i).reduce((a, w) => a + w, 0));
-  y = -TOP - boxH - 36;
+  let y = -TOP - boxH - 36;
   kids.push(node("Head", [W / 2, y - 40], [sprite("Common_Bg_Raius10px", W, 80, { depth: 5, color: "#d1edff/1.00" })]));
   cols.forEach(([key], i) => kids.push(node(`H_${i}`, [xs[i], y - 40], [label(T(key), fitText(T(key), 36, 28, widths[i] - 30).fs, "#294263/1.00", widths[i] - 20, 50, { pivot: 3, depth: 8 })])));
   y -= 80;
