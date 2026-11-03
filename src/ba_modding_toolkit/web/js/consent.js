@@ -11,7 +11,7 @@ import * as Popup from "./popup.js";
 import { rpc } from "./api.js";
 import { T, errorText } from "./i18n.js";
 import { setSpineConsent } from "./spine-runtime.js";
-import { FOOTER, POPUP, SMALL_BUTTON } from "./ui-tokens.js";
+import { COLOUR, FOOTER, POPUP, SMALL_BUTTON } from "./ui-tokens.js";
 import { S, hitButton, wrapPath } from "./util.js";
 
 const { node, sprite, label, find, rect } = NGUI;
@@ -69,8 +69,8 @@ async function draw(host, cacheDir, native, resolve) {
     Buttons.smallButton("Change", layout.change.x, layout.rowY, T("consent.change"), { w: layout.change.w, enabled: native, depth: 8 }));
   popup.children.push(
     cached,
-    row("Never", layout.neverTop, ASSET.never, T("consent.never.label"), [T("consent.never.items"), T("consent.never.how")], "#545454"),
-    node("Note", [0, layout.noteY], [label(T("consent.note"), 36, "#6b7d92/1.00", 1700, ASSET.noteH, { depth: 7 })]),
+    row("Never", layout.neverTop, ASSET.never, T("consent.never.label"), [T("consent.never.items"), T("consent.never.how")], COLOUR.neverBar),
+    node("Note", [0, layout.noteY], [label(T("consent.note"), 36, `${COLOUR.note}/1.00`, 1700, ASSET.noteH, { depth: 7 })]),
   );
   host.hidden = false;
   // on the popup stack, to be answered with a button: Escape does nothing, and the shared focus trap holds it
@@ -228,7 +228,7 @@ async function drawScan(host, over, resolve) {
   await Popup.frameReady();
   const W = 1900;
   const [checked, hc] = section("Checked", 0, T("mods.scan.will.label"), [T("mods.scan.will.items")], "#2d4c72");
-  const [never, hn] = section("Never", 0, T("mods.scan.willNot.label"), [T("mods.scan.willNot.items")], "#545454");
+  const [never, hn] = section("Never", 0, T("mods.scan.willNot.label"), [T("mods.scan.willNot.items")], COLOUR.neverBar);
   const note = NGUI.fitText(T("mods.scan.note"), 36, 28, 1700, 2);
   const noteH = note.lines * note.fs * 1.3;
   // the title 170, the sections with a gap, the note, the buttons 320
@@ -239,7 +239,7 @@ async function drawScan(host, over, resolve) {
   y -= hc + 50;
   never.pos = [0, y];
   y -= hn + 40;
-  popup.children.push(checked, never, node("Note", [0, y - noteH / 2], [label(note.text, note.fs, "#6b7d92/1.00", 1700, noteH + 8, { depth: 7 })]));
+  popup.children.push(checked, never, node("Note", [0, y - noteH / 2], [label(note.text, note.fs, `${COLOUR.note}/1.00`, 1700, noteH + 8, { depth: 7 })]));
   host.classList.toggle("over", over);
   host.hidden = false;
   // on the popup stack, to be answered with a button: Escape does nothing, and nothing under it acts

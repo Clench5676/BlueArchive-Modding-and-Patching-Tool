@@ -10,7 +10,7 @@
   unicode-range: U+0000-024F, U+2070-209F, U+20A0-20CF; }
 
 :root {
-  --navy-text: #2c445c;
+  --navy-text: #2c4564;
   --w: 500;
   /* the pointer: the game's own once cursor.js has read it (the system cursor without a game); one for everything
      and one for what reacts to a press (the game shows the same pointer on both) */
@@ -132,7 +132,7 @@ input[type="text"], input[type="search"], textarea { cursor: text; }
 .nav-bar { position: absolute; inset: 0; pointer-events: none; }
 .nav-items { position: absolute; left: 50px; right: 50px; bottom: 0; height: 104px; display: flex; justify-content: space-between; }
 .nav-item { position: relative; width: 260px; height: 104px; font: var(--w) 26px/1 var(--font); white-space: nowrap; }
-.nav-item.greyed { color: #9aa3ad; }
+.nav-item.greyed { color: #828282; }
 
 /* --- roster --- */
 .ngui-host { position: absolute; inset: 0; }
@@ -368,7 +368,7 @@ input[type="text"], input[type="search"], textarea { cursor: text; }
 /* Once UI assets are ready, the corner keeps its style while a new repeater is rendered. */
 .loading-fallback { position: absolute; right: 84px; bottom: 44px; display: flex; align-items: flex-end; gap: 9px; color: #8de4ff;
   font: italic var(--w) 44px/1 "RHR", sans-serif; letter-spacing: 1px; transform: skewX(-10deg);
-  -webkit-text-stroke: 1px #fff; text-shadow: 0 3px 0 #2c445c, 2px 0 0 #2c445c, -2px 0 0 #2c445c; }
+  -webkit-text-stroke: 1px #fff; text-shadow: 0 3px 0 #2c4564, 2px 0 0 #2c4564, -2px 0 0 #2c4564; }
 .loading-fallback span { margin-right: 4px; animation: ld-text .8333s ease-in-out infinite; }
 .loading.with-progress { z-index: 1501; }
 .input-held > .loading { z-index: 4000; }
@@ -377,7 +377,7 @@ input[type="text"], input[type="search"], textarea { cursor: text; }
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; pointer-events: none; }
 .loading-progress.prefab-label { inset: 0; max-width: none; overflow: visible; background: none; }
 .loading-fallback i { width: 11px; height: 11px; margin-bottom: 5px; border-radius: 50%; background: #8de4ff;
-  box-shadow: 0 0 0 1px #fff, 0 3px 0 2px #2c445c; animation: ld-dot0 1.1667s ease-in-out infinite; }
+  box-shadow: 0 0 0 1px #fff, 0 3px 0 2px #2c4564; animation: ld-dot0 1.1667s ease-in-out infinite; }
 .loading-fallback i:nth-of-type(2) { animation-name: ld-dot1; }
 .loading-fallback i:nth-of-type(3) { animation-name: ld-dot2; }
 @media (prefers-reduced-motion: reduce) {

@@ -45,7 +45,7 @@ import { setTitle } from "./nav.js";
 import { KEYS, deltaOf, pacer, typing } from "./step-keys.js";
 import { closable, closed as popupClosed, frameReady, hit as hitNode, listPopup, message, notice, popupFrame, scrollArea } from "./popup.js";
 import { ALIAS, DETAILS, aliasFrame, detailsFrame } from "./popup-frames.js";
-import { CHIP } from "./ui-tokens.js";
+import { CHIP, COLOUR } from "./ui-tokens.js";
 import { candidateStatus, detailStatus, selectionStatus, selectionError, intendedKey, isApplied, availableTab, coreOf, hasAsset, hasKind, primaryKind, appliedKey as keyOf, appliedOf, candidates as listSources, partsOf, popupMode, modelSource, previewBase, previewChanged, previewKey, sourceOf, switchKindOf } from "./switch-sources.js";
 import { $, DOT, RECRUIT, S, TAN10, advanceOf, at, clone, glyphsOf, hitButton, markedLabel, off, text, widget, wrapPath } from "./util.js";
 
@@ -305,7 +305,7 @@ function screenTree() {
   text(t, `${INFO}/Title_Bg/Label_Locale`, T(isSpecial(v) && tab === "lobby" ? "special.background" : `info.title.${tab}`), { w_: 600 });
   text(t, `${INFO}/Detail_Btn/Label_Locale`, T("info.details"));
   const crcState = crcOf(v, kind);
-  const crc = crcState === "fixed" ? ["crc.fixed", "#1f9a52"] : crcState === "needs_fix" ? ["crc.needed", "#d9822b"] : ["crc.original", "#000000"];
+  const crc = crcState === "fixed" ? ["crc.fixed", COLOUR.success] : crcState === "needs_fix" ? ["crc.needed", COLOUR.warning] : ["crc.original", "#000000"];
   const now = tab === "portrait" ? c.label : sourceLabel(v, kind);
   const stats = [["Label_Life", "info.current", "Data_Widget/Data", now],
     ["Label_Attact", "info.status", "Data_Widget/Data", !coreOf(v, kind) ? T("import.reason.no_target") : detailStatus(v, kind) ? T(detailStatus(v, kind)) : "—"],
@@ -1203,7 +1203,7 @@ function disposePortrait() {
 let popupSeg = 0, popupKind = "spr", popupStart = null, switchPopupPage = null;
 let switchThumbnails = null;
 const modsOn = () => modsState()?.enabled !== false;
-const GREYED_BADGE = () => ({ text: T("mods.overwritten"), color: "#9aa3ad", ink: "#ffffff" });
+const GREYED_BADGE = () => ({ text: T("mods.overwritten"), color: COLOUR.greyed, ink: "#ffffff" });
 function renderPopup(scroll = 0) { return drawPopup(scroll).catch(renderFailed); }
 async function drawPopup(scroll = 0) {
   if (!switchThumbnails || switchPopupPage !== pageToken) return;
@@ -1247,10 +1247,10 @@ async function drawPopup(scroll = 0) {
       const file = c.kind === "mod" ? c.mod.file : gameFile(c.variant, kind);
       const size = c.kind === "mod" ? c.mod.size : partsOf(c.variant, kind).reduce((n, f) => n + (f.size || 0), 0);
       const status = !coreOf(v, kind) ? "import.reason.no_target" : candidateStatus(v, kind, c.key);
-      const statusColor = status && coreOf(v, kind) ? "#1f9a52/1.00" : null;
+      const statusColor = status && coreOf(v, kind) ? `${COLOUR.success}/1.00` : null;
       const error = c.key === mode.set ? selectionError(v, kind) : null;
       const crcState = c.key === appliedKey(v, kind) ? crcOf(v, kind) : null;
-      const crc = crcState === "fixed" ? ["crc.fixed", "#1f9a52"] : crcState === "needs_fix" ? ["crc.needed", "#d9822b"] : crcState === "ok" ? ["crc.original", ""] : null;
+      const crc = crcState === "fixed" ? ["crc.fixed", COLOUR.success] : crcState === "needs_fix" ? ["crc.needed", COLOUR.warning] : crcState === "ok" ? ["crc.original", ""] : null;
       return {
         title: T(isSpecial(v) ? "special.background" : kind === "spr" ? "info.title.portrait" : `info.title.${kind}`),
         fields: [[T("field.file"), baseName(file)], [T("field.size"), sizeText(size)], [T("field.status"), [status && T(status), error && T(`error.${error.code}`, error.params)].filter(Boolean).join("\n") || "—", statusColor],
@@ -1481,7 +1481,7 @@ async function openAliases(draft = customAliases(), focusAt = null, key = varian
 // size, date, CRC and what it carries ---
 const DT = DETAILS;
 const DT_COLS = [["field.file", 1040], ["field.size", 220], ["field.date", 270], ["field.crc", 290], ["field.status", 260]];
-const crcLabel = (state) => (state === "fixed" ? [T("crc.fixed"), "#1f9a52"] : state === "needs_fix" ? [T("crc.needed"), "#d9822b"] : [T("crc.original"), "#000000"]);
+const crcLabel = (state) => (state === "fixed" ? [T("crc.fixed"), COLOUR.success] : state === "needs_fix" ? [T("crc.needed"), COLOUR.warning] : [T("crc.original"), "#000000"]);
 // what a game file carries, as a label: the original, a mod's name, another variant's name, or "replaced"
 function carriedLabel(applied) {
   if (!applied || applied === "official") return T("status.original");
