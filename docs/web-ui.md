@@ -2497,6 +2497,11 @@ it (decision 7); browser and serve mode have none.
 - The front end's pure parts in Node (`tests/js/*.test.mjs`, each run from its `tests/test_*.py`), the shared popups,
   the Enable Mods switch, item 1's prompts and the tray's events on a stand-in DOM with the en-US strings
   (`mod_switch.test.mjs`, `repairs.test.mjs`, `spine_base.test.mjs` among them).
+- The design tokens: `tests/js/ui_tokens.test.mjs` (the tokens, no retired literal in any web source, the caption range of
+  every footer through every locale file, the small button, the style sheet rules) and the footer, frame-room, Settings
+  row, message line button, consent and chip tests in `popup.test.mjs`; `tests/test_ui_tokens.py` compares the tokens with
+  UIPopup_Sort, UIPopup_Option_PC, UICharacterDetail and the three BlackBgClickArea tweens from the development view
+  (numbers only; skipped without `BAMT_TEST_GAME_DIR`).
 
 ## Lobby lines
 

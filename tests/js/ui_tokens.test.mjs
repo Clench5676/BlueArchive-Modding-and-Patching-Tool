@@ -36,7 +36,7 @@ test("the small button and the chip are the prefab nodes' sizes, their pitches f
 });
 
 // --- the measuring stand-in the fit tests share (button_row_fit.test.mjs): a CJK or Thai code point one em, anything else half ---
-const WIDE = /[⺀-鿿　-ヿ＀-￯가-힯฀-๿]/;
+const WIDE = /[\u2e80-\u9fff\u3000-\u30ff\uff00-\uffef\uac00-\ud7af\u0e00-\u0e7f]/;
 const ctx = {
   font: "",
   measureText(s) {
@@ -179,4 +179,50 @@ test("the plain popup and its parts sit on the ladder, and the three fallback bu
   // left as they were: the lobby's subtitle and the photography sheet
   assert.match(ruleStarting(css, ".lobby-subtitle"), /border-radius: 10px/);
   assert.match(css, /\.loading-fallback i \{[^}]*border-radius: 50%/);
+});
+
+// --- item B/I: the footer's caption range through every locale file ---
+import { readFileSync as readSync } from "node:fs";
+const LOCALE_DIR = new URL("../../src/ba_modding_toolkit/locales/", import.meta.url);
+const locales = readdirSync(LOCALE_DIR).filter((name) => name.endsWith(".json")).map((name) => name.slice(0, -5)).sort();
+// every set of captions that stands together in one popup footer
+const FOOTERS = [["picker.ok", "popup.cancel"], ["popup.save", "popup.cancel"], ["popup.apply", "popup.cancel"], ["consent.no", "consent.yes"],
+  ["mods.scan.no", "mods.scan.yes"], ["spine.license.no", "spine.license.yes"], ["update.later", "update.notes", "update.now"],
+  ["update.later", "update.notes", "update.restart"], ["update.later", "update.notes", "update.page"], ["update.releasePage", "display.close"],
+  ["tour.previous", "tour.next"], ["tour.previous", "tour.finish"], ["export.chooseDirectory", "export.confirm"], ["export.openFolder", "popup.cancel"],
+  ["remap.discard", "remap.accept"], ["settings.log.copy", "display.close"], ["picker.ok", "open.mac"], ["picker.ok", "open.win"], ["btn.delete", "popup.cancel"],
+  ["recovery.report", "picker.ok"]];
+// Captions that do not hold the range's 48 in a 400 box on two lines in this file's stand-in canvas (a code point of Thai a full em,
+// Latin half an em): the shared fit takes the group under 48, never past the box. Named here so that they are seen, not hidden.
+const BELOW_MINIMUM = {
+  "en-US": ["spine.license.no/spine.license.yes"],
+  "th-TH": ["spine.license.no/spine.license.yes", "update.later/update.notes/update.now", "update.later/update.notes/update.restart", "update.later/update.notes/update.page",
+    "recovery.report/picker.ok"],
+};
+test("there is a locale file for each shipped language", () => {
+  assert.deepEqual(["en-US", "ja-JP", "ko-KR", "th-TH", "zh-CN", "zh-TW"].filter((l) => !locales.includes(l)), []);
+});
+for (const locale of locales) test(`every footer's captions share one size in the 72 to 48 range, inside the 400 x 140 box, in ${locale}`, () => {
+  const web = JSON.parse(readSync(new URL(`${locale}.json`, LOCALE_DIR), "utf8")).webui;
+  const text = (key) => key.split(".").reduce((o, part) => o?.[part], web);
+  document.documentElement.lang = locale;
+  const { fs: max, fsMin: min, w, lines, h } = Tokens.FOOTER.caption;
+  for (const keys of FOOTERS) {
+    const captions = keys.map(text);
+    const what = `${locale} ${keys.join("/")}`;
+    if (captions.some((c) => typeof c !== "string")) { assert.fail(`${what}: a caption is missing`); }
+    const widgets = captions.map(() => ({ text: "", fontSize: max, w_: w }));
+    const fits = NGUI.fitLabels(widgets, captions, max, min, w, lines, { maxH: h });
+    assert.equal(new Set(fits.map((f) => f.fs)).size, 1, `${what}: one size`);
+    fits.forEach((f, i) => {
+      assert.ok(!f.overflow, `${what}: ${captions[i]} overflows`);
+      assert.ok(f.lines <= lines, `${what}: ${captions[i]} on ${f.lines} lines`);
+      for (const line of f.text.split("\n")) assert.ok(NGUI.glyphWidth(line, f.fs) <= w + 1e-9, `${what}: ${JSON.stringify(line)} wider than ${w}`);
+      assert.ok(f.lines * NGUI.fontSizeFor(f.text, f.fs) * NGUI.LINE_PITCH <= h + 1e-9, `${what}: ${JSON.stringify(f.text)} taller than ${h}`);
+      assert.equal(f.text.replace(/\s/g, ""), captions[i].replace(/\s/g, ""), `${what}: every character kept`);
+    });
+    const size = fits[0].fs;
+    if (BELOW_MINIMUM[locale]?.includes(keys.join("/"))) assert.ok(size < min && size >= 36, `${what}: ${size} is under the range's ${min}, as recorded`);
+    else assert.ok(size >= min && size <= max, `${what}: ${size} is in the range`);
+  }
 });
