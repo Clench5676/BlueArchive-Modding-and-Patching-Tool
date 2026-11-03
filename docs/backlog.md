@@ -1727,7 +1727,7 @@ Switch Portrait panel still lays out its own half-width box.
 
 **Remaining, one at a time:**
 
-- Step 3: the lobby subtitle on the balloon (which box in fullscreen is the owner's call); Hall modals and buttons on the shared footer and small button.
+- Step 3: the lobby subtitle on the balloon (owner, 2026-11-03: as the lead proposed, `Talk` at the head box, `UITalk` in fullscreen); Hall modals and buttons on the shared footer and small button. Next round of work, not dispatched yet.
 - Step 4: list popup cards and details panel cloned from prefabs (UI-21), and its details actions.
 - Not scheduled, owner's eye first: the photography toolbar and colours; the lobby frost.
 
