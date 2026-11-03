@@ -24,8 +24,8 @@ export function createSceneCamera({ host, enabled = () => true, blocked = () => 
   const active = () => !disposed && enabled() && !blocked();
   const allowed = (event) => active() && !event.defaultPrevented && !event.target?.closest?.(".hall-chrome, .hall-fullscreen-exit");
   const paint = (immediate = false) => onChange({ ...view }, immediate);
-  const tick = (at) => {
-    frame = null;
+  // One step of the camera, at most once a frame: a zoom eases to its goal, and the view is painted.
+  const step = (at) => {
     if (!active()) { target = { ...view }; last = null; return; }
     const dt = last == null ? 1 / 60 : Math.min(.1, Math.max(0, (at - last) / 1000)); last = at;
     const fraction = 1 - Math.exp(-dt / .08);
@@ -35,6 +35,7 @@ export function createSceneCamera({ host, enabled = () => true, blocked = () => 
     if (view.scale !== target.scale || view.x !== target.x || view.y !== target.y) frame = request(tick);
     else last = null;
   };
+  const tick = (at) => { frame = null; step(at); };
   const change = (next) => { target = constrainScene(next); if (frame == null) frame = request(tick); };
   const point = (event) => {
     const box = host.getBoundingClientRect(), factor = box.width ? 1920 / box.width : 1;
@@ -45,7 +46,13 @@ export function createSceneCamera({ host, enabled = () => true, blocked = () => 
     const scale = clamp(target.scale * factor, 1, 3), ratio = scale / target.scale;
     change({ scale, x: x - (x - target.x) * ratio, y: y - (y - target.y) * ratio });
   };
-  const pan = (dx, dy) => change({ ...target, x: target.x + dx, y: target.y + dy });
+  // A pan has no easing: the scene stays under the pointer or the fingers. A zoom still gliding carries on from the moved view.
+  const pan = (dx, dy) => {
+    const gliding = view.scale !== target.scale || view.x !== target.x || view.y !== target.y;
+    target = constrainScene({ ...target, x: target.x + dx, y: target.y + dy });
+    view = gliding ? constrainScene({ ...view, x: view.x + dx, y: view.y + dy }) : { ...target };
+    if (frame == null) frame = request(tick);
+  };
   const wheel = (event) => {
     if (!allowed(event)) return;
     event.preventDefault();
@@ -92,6 +99,10 @@ export function createSceneCamera({ host, enabled = () => true, blocked = () => 
     ["pointerdown",down],["pointermove",move],["pointerup",up],["pointercancel",up],["lostpointercapture",up],["contextmenu",menu]];
   for (const args of listeners) host.addEventListener(...args);
   return { view: () => ({ ...view }), target: () => ({ ...target }),
+    // The portraits' renderer calls this at the top of its frame: the camera steps first, so the portraits it is about to
+    // draw, the background and the hit areas show one view. Otherwise a renderer frame that runs before the camera's own
+    // draws the previous frame's view, and the portraits trail the background while the scene moves.
+    flush() { if (disposed || frame == null) return; cancel(frame); frame = null; step(now()); },
     sync({ reset = false } = {}) {
       if (disposed) return;
       if (!enabled() || reset) {
