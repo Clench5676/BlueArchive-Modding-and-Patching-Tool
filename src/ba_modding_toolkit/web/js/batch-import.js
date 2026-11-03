@@ -384,7 +384,7 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
   };
   async function openFilter() {
     let draft = filter;
-    await dialog(T("import.filter"), { action: T("picker.ok"), cancel: T("popup.cancel"), onAction: () => {
+    await dialog(T("import.filter"), { action: T("picker.ok"), cancel: T("popup.cancel"), width: 1800, bodyWidth: OPTION_WIDTH * S, onAction: () => {
       filter = draft; countsKey = null; render(); return true;
     } }, (area) => radioOptions(area, filterOptions(), draft, (value) => { draft = value; }));
   }

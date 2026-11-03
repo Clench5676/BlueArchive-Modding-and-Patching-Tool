@@ -2205,10 +2205,10 @@ test("Advanced Options, Import State, Import Results and Assign Character each d
   assert.equal(bar.options.className, "import-bar");
   overflow(area, 640, 1700, 120); await area.dispatch("scroll"); assert.deepEqual(bar.syncs.at(-1), [640, 1700, 120]);
   await h.action("close", h.dialog).click();
-  // Import State: the full area
+  // Import State: Advanced Options' narrower body
   await h.action("filter").click(); await flush(); await h.page.settled();
   area = areaOf(); bar = barOf();
-  assert.deepEqual(bar.track, scrollbarTrack(DIALOG_AREA, S));
+  assert.deepEqual(bar.track, scrollbarTrack([960 - body / 2 - 16, DIALOG_AREA[1], body + 32, 640], S));
   overflow(area, 640, 900, 0); await area.dispatch("scroll"); assert.deepEqual(bar.syncs.at(-1), [640, 900, 0]);
   await h.action("close", h.dialog).click();
   // Assign Character
