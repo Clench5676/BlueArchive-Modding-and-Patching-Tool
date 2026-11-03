@@ -187,26 +187,11 @@ async function fixture({ licensed = false, native = true, suggest, countIcons = 
 test("empty screen has add actions and zero Mods, without AI UI or tooltips", async () => {
   const h = await fixture();
   assert.equal(h.phase(), "idle"); assert.match(h.host.textContent, /No Mods/);
-  assert.doesNotMatch(h.host.textContent, /0 Mods/); assert.equal(h.host.querySelector(".import-count").hidden, true);
+  assert.doesNotMatch(h.host.textContent, /0 Mods/);
   assert.equal(h.action("start").disabled, true);
   assert.equal(h.action("files").disabled, false); assert.equal(h.action("folder").disabled, false);
   assert.doesNotMatch(h.host.textContent, /AI|master switch|step/i);
   assert.ok(walk(h.host).every((element) => !element.getAttribute("title")));
-});
-
-test("the count over the list says one Mod in the singular, in every language", async () => {
-  const h = await fixture();
-  const count = () => h.host.querySelector(".import-count").caption;
-  await h.analyze([entry("a")]);
-  assert.equal(count(), "count/1 Mod");
-  await h.analyze([entry("a"), entry("b")]);
-  assert.equal(count(), "count/2 Mods");
-  for (const lang of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
-    const ui = JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${lang}.json`, import.meta.url), "utf8")).webui.import;
-    assert.match(ui.countOne, /\{n\}/, lang);
-    assert.deepEqual(ui.countOne.match(/\{\w+\}/g), ui.count.match(/\{\w+\}/g), lang);
-    if (lang !== "en-US") assert.equal(ui.countOne, ui.count, `${lang} has no plural to tell apart`);
-  }
 });
 
 test("preview and game choices lead Advanced Options as On/Off rows and save independently", async () => {
@@ -227,7 +212,7 @@ test("preview and game choices lead Advanced Options as On/Off rows and save ind
   assert.equal(h.page.model.state.options.enableAfterImport, false);
 });
 
-test("the empty list's message and drop hint centre on the grey frame, with or without search, and no count shows", async () => {
+test("the empty list's message and drop hint centre on the grey frame, with or without search", async () => {
   const h = await fixture();
   const [cx, cy] = PAPER_CENTRE(S);
   const centre = (element) => { const [x, y, w, hh] = rectOf(element); return [x + w / 2, y + hh / 2]; };
@@ -239,7 +224,6 @@ test("the empty list's message and drop hint centre on the grey frame, with or w
     closeTo(title[0] + 26, cx); closeTo(note[0] + 26, cx);
     closeTo(note[1] - title[1], EMPTY_GAP);
     closeTo(top + (title[1] + note[1]) / 2, cy);
-    assert.equal(h.host.querySelector(".import-count").hidden, true);
   }
 });
 
@@ -1048,6 +1032,12 @@ test("the row under the list is one row of the small button, right-aligned to th
   closeTo(recheck[0] - options[0] - options[2], SMALL_BUTTON.gap);
   const clear = rectOf(h.action("clear")), panelLeft = 602;
   closeTo(start[0] + start[2], panelLeft + clear[0] + clear[2]);
+  // the left column's name plate ends where the list does (its box 587 down, the plate's foot 107 into the box)
+  await h.analyze([entry("a")]); await h.page.settled();
+  closeTo(rectOf(h.host.querySelector(".import-name-banner"))[1], 587);
+  closeTo(132 + 587 + 107, 826);
+  // Import is the popups' gold, Mailbox's ReceiveAll
+  assert.equal(treeNodes(drawn(h, h.action("start")).tree).flatMap((n) => n.widgets).find((w) => w.sprite === "Common_Btn_BG").color, "#f6e94b/1.00");
   // every body is drawn at one scale and one height, gold or blue, enabled or not
   for (const action of ["options", "recheck", "start"]) {
     const { tree, opts } = drawn(h, h.action(action));
@@ -1068,7 +1058,7 @@ test("every page action swaps its whole disabled prefab, including both dotted p
       assert.ok(patterns.length);
       const kind = button.disabled ? "B_C" : action === "start" ? "Y_S" : "B_S";
       assert.ok(patterns.every((w) => w.sprite === `Common_Btn_Normal_${kind}_Pt`), action);
-      if (button.disabled && action !== "start") {
+      if (button.disabled) {
         assert.equal(patterns.length, 2, "the entire Mailbox disabled state is retained");
         assert.equal(patterns[1].color, "#ffffff/0.80");
         assert.equal(patterns[1].flip, 3);
@@ -1177,12 +1167,12 @@ test("the Items header retains its own control sizes, transforms and states with
   await h.action("filter").click(); await flush(); await walk(h.dialog).find((e) => e.dataset.value === "blocked").click();
   await h.action("ok", h.dialog).click(); await h.page.settled(); assertTools();
   const search = h.host.querySelector(".import-search"), wrap = h.host.querySelector(".import-input-wrap"), list = h.host.querySelector(".import-list");
-  assert.equal(wrap.hidden, true); closeTo(parseFloat(list.style.top), 202);
+  assert.equal(wrap.hidden, true); closeTo(parseFloat(list.style.top), 110);
   await h.action("searchToggle").click(); await h.page.settled(); assertTools();
-  assert.equal(wrap.hidden, false); assert.equal(document.activeElement, search); closeTo(parseFloat(list.style.top), 294);
+  assert.equal(wrap.hidden, false); assert.equal(document.activeElement, search); closeTo(parseFloat(list.style.top), 202);
   search.value = "JP e"; await search.dispatch("compositionend"); assert.ok(h.row("e"));
   await h.action("searchToggle").click(); await h.page.settled(); assertTools();
-  assert.equal(wrap.hidden, true); closeTo(parseFloat(list.style.top), 202); assert.equal(search.value, "JP e");
+  assert.equal(wrap.hidden, true); closeTo(parseFloat(list.style.top), 110); assert.equal(search.value, "JP e");
   assert.deepEqual(h.layouts, h.layoutSnapshot);
 });
 
@@ -1197,14 +1187,13 @@ function artworkBounds(h, element, predicate = () => true) {
   });
 }
 
-test("empty, full, filtered and long Thai toolbars fit the header, with search and count clear of the list", async () => {
+test("empty, full, filtered and long Thai toolbars fit the header, with search clear of the list", async () => {
   const english = flatten(JSON.parse(readFileSync(new URL("../../src/ba_modding_toolkit/locales/en-US.json", import.meta.url), "utf8")));
   const thai = flatten(JSON.parse(readFileSync(new URL("../../src/ba_modding_toolkit/locales/th-TH.json", import.meta.url), "utf8")));
   try {
     for (const strings of [english, thai, { ...thai,
       "webui.import.list": thai["webui.import.list"].repeat(12),
       "webui.import.filterCount": thai["webui.import.filterCount"].repeat(12),
-      "webui.import.count": thai["webui.import.count"].repeat(12),
     }]) {
       setStrings(strings === english ? "en-US" : "th-TH", strings);
       const h = await fixture();
@@ -1219,22 +1208,15 @@ test("empty, full, filtered and long Thai toolbars fit the header, with search a
         const title = artworkBounds(h, header, (p) => p.endsWith("Label_Locale_Title"))[0];
         const controls = artworkBounds(h, header, (p) => !p.endsWith("Label_Locale_Title"));
         assert.ok(title[2] < Math.min(...controls.map((r) => r[0])), "title stays left of the tools");
-        const list = h.host.querySelector(".import-list"), count = h.host.querySelector(".import-count");
-        const [cx, cy, cw, ch] = rectOf(count), [lx, ly, lw, lh] = rectOf(list);
-        closeTo(cx + cw, lx + 1192.32); closeTo(cy + ch / 2, (352 + 60 * S - (704 / S - 152) * S / 2 + 202) / 2); assert.ok(cy + ch < ly);
-        assert.equal(count.parentNode, panel, "count never scrolls with rows");
-        assert.ok(cy > headerBottom); assert.ok(ly + lh < parseFloat(h.action("files").style.top));
-        assert.equal(count.hidden, !h.page.model.state.entries.length, "no count over an empty list");
-        if (!count.hidden) {
-          const countBounds = artworkBounds(h, count)[0];
-          closeTo(countBounds[0], 0); closeTo(countBounds[1], 0); closeTo(countBounds[2], cw); closeTo(countBounds[3], ch);
-        }
+        const list = h.host.querySelector(".import-list");
+        const [lx, ly, lw, lh] = rectOf(list);
+        assert.ok(ly > headerBottom); assert.ok(ly + lh < parseFloat(h.action("files").style.top));
         const wrap = h.host.querySelector(".import-input-wrap");
         if (!wrap.hidden) {
           const [sx, sy, sw, sh] = rectOf(wrap);
-          assert.ok(sx >= 0 && sx + sw <= width); assert.ok(sy > cy && sy + sh < ly);
+          assert.ok(sx >= 0 && sx + sw <= width); assert.ok(sy > headerBottom && sy + sh < ly);
         }
-        for (const n of [find(drawn(h, header).tree, "Label_Locale_Title"), ...(count.hidden ? [] : [drawn(h, count).tree])]) {
+        for (const n of [find(drawn(h, header).tree, "Label_Locale_Title")]) {
           const label = n.widgets.find((w) => "text" in w);
           assert.equal(label.ellipsis, true); assert.ok(!label.text.includes("\n"));
         }
@@ -1371,7 +1353,7 @@ test("all six locales translate source routes, choices and conversion reasons", 
   } finally { setStrings("en-US", load("en-US")); }
 });
 
-test("merged rows keep variant identity, count every asset kind in place, and select only eligible Mods", async () => {
+test("merged rows keep variant identity, say every asset kind and state as an ungrouped row does, and select only eligible Mods", async () => {
   const h = await fixture({ licensed: true });
   const a = entry("a"), lobby = { ...entry("a-lobby", "update", "lobby"), variant: "a" };
   const model = { ...entry("a-model", "blocked", "model"), variant: "a" };
@@ -1392,9 +1374,11 @@ test("merged rows keep variant identity, count every asset kind in place, and se
   h.analyses.at(-1).resolve({ entries: [a, lobby, model, other, newPortrait], skipped: 0 });
   await adding; await h.page.settled();
   assert.equal(h.row("a"), row, "the student row survives adding more assets");
-  const sender = find(drawn(h, row).tree, "Label_From");
-  assert.deepEqual(sender.children.map((node) => node.name), ["spr", "lobby", "model"]);
-  assert.equal(sender.children[0].children[0].widgets[0].text.replace(/\n/g, ""), "Portrait ×2");
+  const tree = drawn(h, row).tree, text = (path) => find(tree, path).widgets.find((w) => "text" in w).text.replace(/\n/g, "");
+  assert.equal(text("Label_Locale_Received"), "Portrait ×2, Memorial Lobby ×1, 3D Model ×1");
+  assert.equal(find(tree, "Label_From").children.length, 0, "no icon counts in the list");
+  assert.notEqual(find(tree, "TimeLimit").active, false, "the states are on the status tag");
+  for (const state of [/Ready/, /Pending Update/]) assert.match(text("TimeLimit/Label_Locale_TimeLimit"), state);
   assert.ok(h.thumbs.some(([, , , , , bg]) => bg === "/bg/a.png"));
 });
 
@@ -1414,8 +1398,9 @@ test("results omit state badges, follow the merge setting and route every studen
   await h.page.results(); await h.page.settled();
   const lobbyCount = walk(h.dialog).find((element) => element.dataset.kind === "lobby");
   assert.ok(lobbyCount);
-  const row = lobbyCount.parentNode, icon = row.art.children.find((element) => element.dataset.path === "List_01/Label_From/lobby/Icon");
-  const [left, top, width, height] = rectOf(lobbyCount), [ix, iy, iw, ih] = rectOf(icon);
+  const row = lobbyCount.parentNode, word = row.art.children.find((element) => element.dataset.path === "List_01/Label_From/lobby/Count");
+  assert.equal(row.art.children.some((element) => /Label_From\/\w+\/Icon$/.test(element.dataset.path || "")), false, "words, no tiny icons");
+  const [left, top, width, height] = rectOf(lobbyCount), [ix, iy, iw, ih] = rectOf(word);
   assert.ok(left <= ix && top <= iy && left + width >= ix + iw && top + height >= iy + ih);
   await lobbyCount.click();
   assert.deepEqual(h.destinations.at(-1), ["a", "a", "lobby"]);
@@ -1683,7 +1668,7 @@ test("portrait comparisons are vertical side by side; lobbies are landscape with
     for (let i = 0; i < 2; i++) {
       const [x, y, w, hgt] = bounds[i];
       assert.ok(x >= 0 && x + w <= parseFloat(column.style.width));
-      assert.ok(y + hgt <= banner[1]);
+      assert.ok(y + hgt <= banner[1] - 10, "clear of the category tag, which stands 10 above the plate's box");
       const tag = boxes[i].art.children.find((el) => el.dataset.path === "EquipPos/Text_Type/TypeBG");
       assert.ok(rectOf(tag)[1] + rectOf(tag)[3] <= pictures[i][1] + 0.01, "caption stays with its picture");
     }
@@ -2168,7 +2153,7 @@ test("the Batch Import list draws the game's scrollbar over its right edge, foll
   const bar = () => h.drawnBars.findLast((item) => item.parentNode === panel);
   assert.ok(bar(), "bound to the list");
   assert.deepEqual(h.layouts.UICharacterCollection, h.layoutSnapshot.UICharacterCollection, "the game's prefab is not mutated");
-  assert.deepEqual(bar().track, scrollbarTrack([26, 202, 1220, 414], S));
+  assert.deepEqual(bar().track, scrollbarTrack([26, 110, 1220, 506], S));
   assert.equal(bar().options.collection, h.layouts.UICharacterCollection);
   // the track's painted edge ends on the list's right edge, clear of the rows
   closeTo(bar().track[0] + 49 * S, 26 + 1220); assert.ok(26 + ROW_WIDTH < 26 + 1220 - 20 * S);
@@ -2179,11 +2164,11 @@ test("the Batch Import list draws the game's scrollbar over its right edge, foll
   assert.equal(bar().hidden, true, "no bar without overflow");
   // the search box shortens the list: a bar of the new length replaces the old one
   const before = bar(); await h.action("searchToggle").click(); await h.page.settled();
-  assert.deepEqual(bar().track, scrollbarTrack([26, 294, 1220, 322], S)); assert.notEqual(bar(), before);
+  assert.deepEqual(bar().track, scrollbarTrack([26, 202, 1220, 414], S)); assert.notEqual(bar(), before);
   assert.equal(before.parentNode, null, "the old bar is gone");
   assert.equal(panel.children.filter((item) => item.className.startsWith("scrollbar")).length, 1);
   await h.action("searchToggle").click(); await h.page.settled();
-  assert.deepEqual(bar().track, scrollbarTrack([26, 202, 1220, 414], S));
+  assert.deepEqual(bar().track, scrollbarTrack([26, 110, 1220, 506], S));
 });
 
 test("Advanced Options, Import State, Import Results and Assign Character each draw the game's scrollbar on their area", async () => {
@@ -2199,10 +2184,10 @@ test("Advanced Options, Import State, Import Results and Assign Character each d
   assert.equal(bar.options.className, "import-bar");
   overflow(area, 640, 1700, 120); await area.dispatch("scroll"); assert.deepEqual(bar.syncs.at(-1), [640, 1700, 120]);
   await h.action("close", h.dialog).click();
-  // Import State: the full area
+  // Import State: Advanced Options' narrower body
   await h.action("filter").click(); await flush(); await h.page.settled();
   area = areaOf(); bar = barOf();
-  assert.deepEqual(bar.track, scrollbarTrack(DIALOG_AREA, S));
+  assert.deepEqual(bar.track, scrollbarTrack([960 - body / 2 - 16, DIALOG_AREA[1], body + 32, 640], S));
   overflow(area, 640, 900, 0); await area.dispatch("scroll"); assert.deepEqual(bar.syncs.at(-1), [640, 900, 0]);
   await h.action("close", h.dialog).click();
   // Assign Character

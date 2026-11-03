@@ -1494,8 +1494,6 @@
 		},
 		"import": {
 			"list": "รายการนำเข้า",
-			"count": "{n} Mod",
-			"countOne": "{n} Mod",
 			"addFiles": "เพิ่มไฟล์",
 			"addFolder": "เพิ่มโฟลเดอร์",
 			"search": "ชื่อ, ID, ชื่อไฟล์",
