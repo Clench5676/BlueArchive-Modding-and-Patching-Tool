@@ -1698,7 +1698,7 @@ Validation: full suites on `f1ad2631`: 4236 passed, 26 skipped; JavaScript 2149 
 
 ## BL-070: One design system for the web UI
 
-- Status: Step 1 of 4 accepted by the owner on macOS (alpha.5, 2026-11-03); Windows not reviewed. Step 2 implemented, owner acceptance pending. Steps 3 and 4 not started.
+- Status: Steps 1 and 2 of 4 accepted by the owner on macOS (alpha.5 and alpha.7, 2026-11-03); Windows not reviewed. Steps 3 and 4 not started.
 - Requested: 2026-11-02 (owner): does the UI follow the game's design language (button sizes, spacing, fonts), and where it does not, does it have one system of its own?
 
 Owner decisions (2026-11-03): follow the prefab's values as the one system; run the migration one step at a time; keep the top bar and the Enable Mods switch at their present size.
@@ -1742,7 +1742,7 @@ Decisions from the same review: FUN-8, UI-6 and UI-20's shadows are done on `mai
 
 ## BL-071: Student Hall: portraits not fixed to the scene while panning
 
-- Status: Implemented; owner acceptance pending.
+- Status: Accepted by the owner on macOS (alpha.7, 2026-11-03); Windows not reviewed.
 - Requested: 2026-11-03 (owner): zoomed in, a pan makes the portrait feel thrown about rather than fixed to the canvas.
 
 Two causes, measured in the development build with a read-only frame probe (a right-button drag of 720 stage px at 2.3 x):
@@ -1754,7 +1754,7 @@ that is the owner's. A trackpad's own momentum after the fingers lift is the sys
 
 ## BL-072: Batch Import's design check
 
-- Status: Implemented except item 2, which stays as it is by the owner's choice (2026-11-03); owner acceptance pending.
+- Status: Accepted by the owner on macOS (alpha.7, 2026-11-03); Windows not reviewed. Item 2 stays as it is by the owner's choice.
 - Requested: 2026-11-03 (owner): check the page by eye and in code; the bottom-right confirm button is too large.
 
 Done:
