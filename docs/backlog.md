@@ -1698,7 +1698,7 @@ Validation: full suites on `f1ad2631`: 4236 passed, 26 skipped; JavaScript 2149 
 
 ## BL-070: One design system for the web UI
 
-- Status: Step 1 of 4 implemented; owner acceptance pending. Steps 2 to 4 not started.
+- Status: Step 1 of 4 accepted by the owner on macOS (alpha.5, 2026-11-03); Windows not reviewed. Steps 2 to 4 not started.
 - Requested: 2026-11-02 (owner): does the UI follow the game's design language (button sizes, spacing, fonts), and where it does not, does it have one system of its own?
 
 Owner decisions (2026-11-03): follow the prefab's values as the one system; run the migration one step at a time; keep the top bar and the Enable Mods switch at their present size.
@@ -1734,3 +1734,39 @@ Main findings: the popup footer's button centre sits 122, 148, 172 or about 81 u
 button (402 x 136, font 48) has seven body sizes in the app; about 28 CSS lines carry their own radius, blur, shadow or colour; 30 of 69 colour literals are not in the exported prefabs; four hand copies of the light stats box and two chips.
 
 Decisions from the same review: FUN-8, UI-6 and UI-20's shadows are done on `main`. UI-21 migrates when those screens are next touched, and is part of this item. UI-24 closed: no selected state, the game's lobby menu has none.
+
+## BL-071: Student Hall: portraits not fixed to the scene while panning
+
+- Status: Implemented; owner acceptance pending.
+- Requested: 2026-11-03 (owner): zoomed in, a pan makes the portrait feel thrown about rather than fixed to the canvas.
+
+Two causes, measured in the development build with a read-only frame probe (a right-button drag of 720 stage px at 2.3 x):
+a pan eased towards its goal over 0.08 s and glided on after release, and the portraits' renderer could draw before the camera
+stepped, so the portraits trailed the background by a frame. Before: 64 of 70 frames off the background, up to 19.9 px, 713.7 of
+720 px at the last move. After: 0 of 156 frames, 720 of 720 px, no movement after release. A pan now has no easing, and the
+renderer steps the camera at the top of its frame. Zooming keeps its easing. A headless software renderer cannot judge the feel:
+that is the owner's. A trackpad's own momentum after the fingers lift is the system's and stays.
+
+## BL-072: Batch Import's design check
+
+- Status: The Import button and the gold patterns implemented, owner acceptance pending. The rest open: the owner's call.
+- Requested: 2026-11-03 (owner): check the page by eye and in code; the bottom-right confirm button is too large.
+
+Done:
+
+- Import was the Items prefab's `UseBtn` at scale 0.6 (100 px high, caption 48 px) beside 81 px buttons with 29 px captions, against the
+  rule that siblings share one size. The row is now one row of the small button (88 px, caption up to 34.9 px, 20 apart),
+  right-aligned to the list's tools. Gold marks Import.
+- Found on the way: every gold popup button had lost its two corner patterns (BL-029 names them): the template's nodes were not
+  marked active, and the mirrored one used a negative scale the renderer does not draw.
+
+Open, seen in the development build (English, Simplified Chinese, Thai):
+
+1. The list shows only about 2.2 rows: rows are 188 px high, and a 100 px strip above them holds nothing but "N Mods", which the
+   filter button's "All (N)" already says. BL-058 settled the count's hiding at zero, not this strip.
+2. The list's seven tools are 56 px high with 21 px captions, beside the 88 px row. The game's lower small buttons are 106 units
+   (69 px: `Btn_Reset`, `Btn_Shortcuts`).
+3. Grouped rows: the student icon at 20 px reads as a dark blob, and the status is plain text where ungrouped rows use a tag.
+4. The left column ends at 765 px and the list at 826 px; with no Mods the left column is blank.
+5. Two golds: Import `#ffee00` (Items `UseBtn`), popups `#f6e94b` (Mailbox `ReceiveAll`).
+6. The filter popup is 2458 units wide for one short column.
