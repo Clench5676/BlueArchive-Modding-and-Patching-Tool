@@ -53,7 +53,7 @@ test("slider-only binding supports the full25to150range without a numeric field 
   assert.deepEqual(changes,[.25,.73,1.5]);
 });
 
-import { PORTRAIT_SIZE, PORTRAIT_TOOLBAR_BOUNDS, portraitToolbarLayout } from "../../src/ba_modding_toolkit/web/js/student-hall-framing.js";
+import { PORTRAIT_SIZE, PORTRAIT_TOOLBAR_MARGIN, portraitToolbarLayout } from "../../src/ba_modding_toolkit/web/js/student-hall-framing.js";
 test("individual size uses .5–2.0, hundredth steps, reset and a cancellable/saveable draft",()=>{
   const saved={revision:0,mode:"portraits",portraitScale:.8,portraits:[{id:"a",variant:"a",source:"mod:a",x:900,y:1100,scale:.8,mirror:true}],memorials:[],active:null};
   const draft=createDraft(saved);draft.begin("layout");const range=new Input(),entry=draft.current().portraits[0];
@@ -69,8 +69,7 @@ test("toolbar fits at every corner and both size limits, all window scales/densi
     const rect=portraitRect({x,y,scale:own,mirror},{x:-200,y:0,width:900,height:1800},global),box=portraitToolbarLayout(rect,count);
     for(const windowWidth of [960,1600,2560])for(const density of [1,2,3]){
       const k=windowWidth/1920*density;
-      assert.ok(box.x>=PORTRAIT_TOOLBAR_BOUNDS.left&&box.x+box.width<=PORTRAIT_TOOLBAR_BOUNDS.right);
-      assert.ok(box.y>=PORTRAIT_TOOLBAR_BOUNDS.top&&box.y+box.height<=PORTRAIT_TOOLBAR_BOUNDS.bottom,"clear of the Hall's top-right controls");
+      assert.ok(box.x>=20&&box.x+box.width<=1900&&box.y>=20&&box.y+box.height<=1060);
       assert.ok(box.x*k>=0&&box.y*k>=0);assert.ok((box.x+box.width)*k<=1920*k);assert.ok((box.y+box.height)*k<=1080*k);
       assert.ok(box.icon<box.reset[1]);assert.ok(box.slider[1]-24>box.icon);
       assert.ok(box.slider[0]+box.slider[2]<box.reset[0]);assert.ok(box.reset[0]+box.reset[2]<=box.width);
@@ -86,11 +85,19 @@ test("legacy own sizes outside the control range change only on explicit input, 
   }
 });
 
-test("the toolbar sits beside the portrait level with its top, and above or below it only when neither side fits",()=>{
-  const b=PORTRAIT_TOOLBAR_BOUNDS;
-  let box=portraitToolbarLayout({x:400,y:420,width:500,height:600},7);assert.equal(box.x,912);assert.equal(box.y,420);
-  box=portraitToolbarLayout({x:1300,y:500,width:500,height:500},7);assert.equal(box.x+box.width,1288);assert.equal(box.y,500);
-  box=portraitToolbarLayout({x:100,y:150,width:1700,height:600},7);assert.equal(box.y,762);assert.ok(box.y+box.height<=b.bottom);
-  box=portraitToolbarLayout({x:100,y:700,width:1700,height:300},7);assert.equal(box.y,700-box.height-12);
-  box=portraitToolbarLayout({x:0,y:0,width:1920,height:1080},7);assert.equal(box.y,b.top);assert.equal(box.x+box.width,b.right);
+// The top bar and the Hall's top-right controls as the editor measures them (stage units, 0.6.1-alpha.9).
+const CHROME=[{x:-84,y:0,width:2088,height:64},{x:1495,y:108,width:465,height:67},{x:1495,y:193,width:465,height:67},{x:1517,y:283,width:423,height:48}];
+const overlaps=(a,o,m=0)=>a.x<o.x+o.width+m&&a.x+a.width>o.x-m&&a.y<o.y+o.height+m&&a.y+a.height>o.y-m;
+test("the toolbar is centred directly above the portrait, touching it, and clear of every control",()=>{
+  let box=portraitToolbarLayout({x:400,y:600,width:500,height:400},7,CHROME);
+  assert.equal(box.x+box.width/2,650);assert.equal(box.y+box.height,600,"touching the portrait's top");
+  box=portraitToolbarLayout({x:411,y:96,width:1177,height:1586},7,CHROME);
+  assert.equal(box.x+box.width/2,411+1177/2);assert.equal(box.y,64+PORTRAIT_TOOLBAR_MARGIN,"below the top bar");
+  box=portraitToolbarLayout({x:1300,y:150,width:600,height:900},7,CHROME);
+  assert.equal(box.y,331+PORTRAIT_TOOLBAR_MARGIN,"below the top-right controls");
+  for(const x of [0,700,1500,1920])for(const y of [0,200,400,900])for(const width of [200,900,1900]){
+    const b=portraitToolbarLayout({x:x-width/2,y,width,height:700},7,CHROME);
+    assert.ok(b.x>=20&&b.x+b.width<=1900&&b.y>=20&&b.y+b.height<=1060);
+    for(const o of CHROME)assert.ok(!overlaps(b,o),JSON.stringify([x,y,width,o]));
+  }
 });

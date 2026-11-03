@@ -1535,11 +1535,13 @@ vertices and UVs against cached atlas-page alpha, in reverse saved layer order. 
 when mirrored or scaled. One pointer surface uses that query for hover, press and drag; named DOM buttons retain Tab
 and keyboard/assistive activation. Atlas alpha is decoded once per page, only in layout editing. Dragging changes position;
 individual wheel/gesture scaling is disabled. Hover controls in the editor remove an actor; with two or more actors
-they also change layer order and horizontal mirroring. Clicking within four stage pixels selects an actor, clicking
-it again clears selection, and clicking another switches it.
-Empty scene clicks and Escape clear it; a drag selects and never toggles. Keyboard/assistive button activation uses the
-same toggle. Selection pins the toolbar against hover changes, survives hit redraws, and ends on Save, Cancel, removal
-or leaving the page. With no selection the toolbar follows hover/focus. A static three-stage-pixel gold outline uses
+they also change layer order and horizontal mirroring. Pressing an actor selects it at once and pressing another
+switches it; pressing the selected actor again clears selection on release, unless the press moves more than four stage
+pixels and becomes a drag. Pressing the empty scene and Escape clear it; a drag never toggles. A press ends on pointerup,
+click, lost capture or a move with no button down, whichever comes first: the macOS WKWebView may send only a click.
+Keyboard/assistive button activation uses the same toggle. Selection pins the toolbar against hover changes, survives
+hit redraws, and ends on Save, Cancel, removal or leaving the page. With no selection the toolbar follows hover/focus;
+transparent parts of the hovered actor's box keep its toolbar, so the pointer can reach it. A static three-stage-pixel gold outline uses
 `UIPopup_Mulligan/Center/Popup/01/UIMulliganSlot/SelectLine` (`#ffe900`), held in `APPLIED_SELECTION_GOLD`.
 A flat alpha-threshold shader through the public Spine batcher and skeleton renderer draws sixteen radius-three
 offsets just before that actor's normal draw; non-Normal/inactive slots are excluded and front actors cover it.
@@ -1560,10 +1562,10 @@ a compact global portrait-size slider from 25% to 150%, with 100% as the default
 It sits below the two equal-width Save/Cancel buttons at the upper right, aligned with the entire icon group,
 in the native inclined button body. It has no visible caption, percentage field or Reset button.
 Each portrait toolbar has a second row with the same native slider for its own size (50–200%, one-percent steps)
-and a Reset button for 100%. The two rows occupy separate boxes. The toolbar sits beside the portrait, level with its
-top (above or below it only when neither side fits), clamped to the band below the top-right controls and above the
-bottom band (y 360 to 960) at portrait corners and both size limits. It moves to a new size only on release or Reset,
-never under a dragged thumb. Both size controls edit the draft; Save keeps them and Cancel restores them.
+and a Reset button for 100%. The two rows occupy separate boxes. The toolbar is centred directly above the portrait's
+box and touches it, inside the stage, moved down below any control it would cover (the top bar, the Hall's top-right
+buttons and global size slider, measured live). It moves to a new size only on release or Reset, never under a dragged
+thumb. Both size controls edit the draft; Save keeps them and Cancel restores them.
 The global multiplier preserves entry anchors and individual scales and leaves the background unchanged. Slider changes
 update the shared renderer and interaction bounds directly, including changes made while assets are still loading;
 they do not recreate a canvas, renderer or asset request. New source batches retain a lossless last-frame cover

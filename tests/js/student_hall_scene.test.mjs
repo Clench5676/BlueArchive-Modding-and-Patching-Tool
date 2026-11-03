@@ -29,7 +29,7 @@ let loads=0,disposals=0,holds=0,updates=0,persisted=[],buttons=[],chromeDelay=nu
 const renderer={actors:new Map(),allowed:true,needsLoad:()=>false,dispose(){disposals++;},setScale(){},update(entries){updates++;const previous=new Map(this.actors);this.actors.clear();for(const entry of entries)this.actors.set(entry.id,{...previous.get(entry.id),entry});return Promise.resolve(true);}};
 globalThis.sceneHarness={
   createDraft,createMemorialPool,sourceKey,portraitSelection,portraitReplacements,portraitRect,sceneRect,sceneViewport,dialogueText,language:()=>testLanguage,clone:structuredClone,S:1920/2960,T:(key)=>key,L:(names)=>names?.en,
-  document:{createElement:()=>new Element(),activeElement:null,removeEventListener(){}},
+  document:{createElement:()=>new Element(),activeElement:null,removeEventListener(){},querySelectorAll:()=>[]},
   Backgrounds:{backgroundChoice:()=>({name:"office-day"}),render:async()=>{loads++;}},
   Loading:{hold:async(fn)=>{holds++;return fn();}},
   Lobby:{hide(){}},Popup:{notify(){},anyOpen:()=>false},
@@ -242,12 +242,32 @@ test("selection reducer covers redraws and drag cancellation without persisting 
   send("click","a");assert.equal(send("escape"),null);send("click","a");assert.equal(send("end"),null);
 });
 
-test("pixel surface ends a drag on lost capture or released buttons before any later movement",()=>{
+test("pixel surface ends a press on lost capture or released buttons; the press has already selected",()=>{
   for(const event of ["lostpointercapture","released"]){
     setup();Hall.draft().begin("layout");const host=Hall.hitsNow(),surface=host.children.find(e=>"portraitSurface" in e.dataset);renderer.pick=()=>"a";
     const entry=Hall.draft().current().portraits[0],initial=entry.x;
-    surface.emit("pointerdown",{button:0,clientX:100,clientY:100,pointerId:1,preventDefault(){}});
+    surface.emit("pointerdown",{button:0,clientX:100,clientY:100,pointerId:1,preventDefault(){}});assert.equal(Hall.selection(),"a");
     if(event==="lostpointercapture")surface.emit(event,{pointerId:1});else surface.emit("pointermove",{clientX:200,clientY:100,buttons:0});
-    surface.emit("pointermove",{clientX:300,clientY:100,buttons:1});assert.equal(entry.x,initial);assert.equal(Hall.selection(),null);delete renderer.pick;
+    surface.emit("pointermove",{clientX:300,clientY:100,buttons:1});assert.equal(entry.x,initial);assert.equal(Hall.selection(),"a");delete renderer.pick;
   }
+});
+test("hover keeps a portrait's toolbar over the transparent parts of its box, the way up to the toolbar",()=>{
+  setup();Hall.draft().begin("layout");const hits=Hall.hitsNow(),surface=hits.children.find(e=>"portraitSurface" in e.dataset),palette=hits.children.at(-1);
+  const [left,top,width]=hits.children.find(e=>e.dataset.entry==="a").rect;
+  renderer.pick=()=>"a";surface.emit("pointermove",{clientX:left+width/2,clientY:top+300,buttons:0});assert.equal(palette.dataset.actorToolbar,"a");
+  renderer.pick=()=>null;surface.emit("pointermove",{clientX:left+width/2,clientY:top+2,buttons:0});assert.equal(palette.dataset.actorToolbar,"a","inside the box");
+  surface.emit("pointermove",{clientX:left-40,clientY:top+300,buttons:0});assert.equal(palette.dataset.actorToolbar,"","outside the box");
+  delete renderer.pick;
+});
+test("WebKit's click-only release selects, toggles off and never drags",()=>{
+  setup();Hall.draft().begin("layout");let hits=Hall.hitsNow();renderer.pick=()=>"a";
+  const surface=()=>hits.children.find(e=>"portraitSurface" in e.dataset),entry=Hall.draft().current().portraits[0],initial=entry.x;
+  // The sequence the macOS WKWebView sends: pointerdown, a move that still reports a button, then only click.
+  const tap=()=>{surface().emit("pointerdown",{button:0,clientX:100,clientY:100,pointerId:1,preventDefault(){}});
+    surface().emit("pointermove",{clientX:100,clientY:100,buttons:4,pointerId:1});surface().emit("click",{clientX:100,clientY:100});hits=Hall.elements().hits;};
+  tap();assert.equal(Hall.selection(),"a");assert.equal(entry.x,initial);
+  assert.equal(hits.children.at(-1).dataset.actorToolbar,"a","the toolbar is pinned");
+  tap();assert.equal(Hall.selection(),null,"a second click clears it");
+  tap();assert.equal(Hall.selection(),"a");renderer.pick=()=>null;tap();assert.equal(Hall.selection(),null,"an empty click clears it");
+  delete renderer.pick;
 });

@@ -203,6 +203,15 @@ function selectPortrait(type, id = null) {
   actorHover?.pin(selected);
   for (const button of hits?.querySelectorAll?.("[data-entry]") || []) button.setAttribute("aria-pressed", String(arranging() && selected === button.dataset.entry));
 }
+// The top bar and the Hall's own controls, in stage units: the portrait toolbar never covers them.
+function toolbarObstacles() {
+  if (!root) return [];
+  const box = root.getBoundingClientRect(), scale = box.width > 0 ? 1920 / box.width : 1;
+  return [...(chrome?.querySelectorAll?.("button, input") || []), ...document.querySelectorAll("header.topbar")]
+    .map((element) => element.getBoundingClientRect()).filter((b) => b.width > 0 && b.height > 0)
+    .map((b) => ({ x: (b.left - box.left) * scale, y: (b.top - box.top) * scale, width: b.width * scale, height: b.height * scale }));
+}
+function toolbarBox(entry, rect = rectOf(entry)) { return portraitToolbarLayout(rect, portraitActions(entry).length, toolbarObstacles()); }
 function portraitActions(entry) {
   const list = current().portraits, index = list.findIndex((item) => item.id === entry.id);
   const actions = list.length > 1 ? [["Remove", "hall.remove", () => store.remove(entry.id), true]] : [];
@@ -227,7 +236,7 @@ const PORTRAIT_ICONS = {
   Flip: { sprite: "Common_Icon_Change", width: 80, height: 80 },
 };
 async function renderPortraitActions(host, entry, rect, version, alive = () => true) {
-  const actions = portraitActions(entry), box = portraitToolbarLayout(rect, actions.length), width = box.icon, gap = box.gap;
+  const actions = portraitActions(entry), box = toolbarBox(entry, rect), width = box.icon, gap = box.gap;
   Object.assign(host.style, { left: `${box.x}px`, top: `${box.y}px`, width: `${box.width}px`, height: `${box.height}px` });
   const destination = document.createElement("div");
   await Promise.all(actions.map(async ([name, key, action, enabled], index) => {
@@ -254,7 +263,7 @@ async function renderPortraitActions(host, entry, rect, version, alive = () => t
   // The toolbar moves only once a size is set: moving it under a dragged thumb would feed back into the slider.
   const place = () => {
     if (!enabled()) return;
-    const next = portraitToolbarLayout(rectOf(entry), portraitActions(entry).length);
+    const next = toolbarBox(entry);
     Object.assign(host.style, { left: `${next.x}px`, top: `${next.y}px` });
   };
   let control;
@@ -356,10 +365,19 @@ function renderHits(host = hits) {
     host.append(surface);
     bindPortraitPointer(surface, { root, pick: (x, y) => portraits?.pick?.(x, y) || null,
       enabled: () => alive() && arranging() && !pendingWrites,
-      hover: (id, target) => { if (id) actorHover.actorEnter(id); else actorHover.actorLeave(owner, palette?.contains(target)); },
+      hover: (id, target, point) => {
+        if (id) { actorHover.actorEnter(id); return; }
+        // Transparent parts of the hovered portrait's box, such as the way up to its toolbar, keep its toolbar.
+        const entry = owner && current().portraits.find((item) => item.id === owner), rect = entry && point && rectOf(entry);
+        if (rect && point.x >= rect.x && point.x <= rect.x + rect.width && point.y >= rect.y && point.y <= rect.y + rect.height) return;
+        actorHover.actorLeave(owner, palette?.contains(target));
+      },
+      // Selection happens on press: the release may arrive late or only as a click (WebKit). Pressing the selected
+      // portrait again clears it on release, unless the press becomes a drag.
       down: (held) => {
         const entry = current().portraits.find((item) => item.id === held.id);
         if (entry) { held.x = entry.x; held.y = entry.y; }
+        if (held.id && held.id === selected) held.toggle = true; else selectPortrait("click", held.id);
       },
       move: (held, point) => {
         const entry = current().portraits.find((item) => item.id === held.id); if (!entry) return;
@@ -371,11 +389,11 @@ function renderHits(host = hits) {
         const rect = rectOf(entry), button = buttons.get(entry.id);
         Object.assign(button.style, { left: `${rect.x}px`, top: `${rect.y}px` });
         if (palette && owner === entry.id) {
-          const box = portraitToolbarLayout(rect, portraitActions(entry).length);
+          const box = toolbarBox(entry, rect);
           Object.assign(palette.style, { left: `${box.x}px`, top: `${box.y}px` });
         }
       },
-      end: (held, point) => { if (!held.dragged && point) selectPortrait("click", held.id); if (alive()) renderHits(); },
+      end: (held, point) => { if (held.toggle && !held.dragged && point) selectPortrait("click", held.id); if (alive()) renderHits(); },
     });
   }
   if (palette) {
