@@ -1689,7 +1689,7 @@ test("portrait comparisons are vertical side by side; lobbies are landscape with
     for (let i = 0; i < 2; i++) {
       const [x, y, w, hgt] = bounds[i];
       assert.ok(x >= 0 && x + w <= parseFloat(column.style.width));
-      assert.ok(y + hgt <= banner[1]);
+      assert.ok(y + hgt <= banner[1] - 10, "clear of the category tag, which stands 10 above the plate's box");
       const tag = boxes[i].art.children.find((el) => el.dataset.path === "EquipPos/Text_Type/TypeBG");
       assert.ok(rectOf(tag)[1] + rectOf(tag)[3] <= pictures[i][1] + 0.01, "caption stays with its picture");
     }
