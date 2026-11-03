@@ -3550,3 +3550,23 @@ test("every popup frame keeps its lowest content 16 above the buttons' tops and 
     }
   } finally { consent.hidden = true; Popup.closed(consent); }
 });
+
+// --- design tokens, item C: one backdrop, the prefab's resting 0.80 (BlackBgClickArea's TweenAlpha runs 0 to 0.80, not the sprite's 0.94) ---
+test("every popup frame draws the one backdrop token", async () => {
+  const NGUI = await import("../../src/ba_modding_toolkit/web/js/ngui.js");
+  await Popup.ready();
+  assert.equal(Tokens.BACKDROP, "#000000/0.80");
+  const colour = (tree) => NGUI.find(tree, "BlackBg/BlackBgClickArea").widgets.find((w) => "sprite" in w).color;
+  for (const [w, h] of [[1500, 680], [1900, 1180], [2458, 1400]]) assert.equal(colour(Popup.popupFrame("T", w, h, { ok: "OK" })), Tokens.BACKDROP);
+  // the consent and update dialogs are popupFrame's now; the list popup, the display settings and Settings set the same token
+  for (const file of ["popup.js", "display.js", "settings.js"]) {
+    const source = readFileSync(new URL(`../../src/ba_modding_toolkit/web/js/${file}`, import.meta.url), "utf8");
+    const sites = source.match(/BlackBgClickArea"\)\.widgets\.find\(\(\w+\) => "sprite" in \w+\)\.color = [^;]+;/g) || [];
+    assert.ok(sites.length >= 1, file);
+    assert.ok(sites.every((site) => site.endsWith("= BACKDROP;")), `${file}: ${sites}`);
+  }
+  for (const file of ["consent.js", "update.js"]) {
+    const source = readFileSync(new URL(`../../src/ba_modding_toolkit/web/js/${file}`, import.meta.url), "utf8");
+    assert.doesNotMatch(source, /BlackBgClickArea/, `${file} draws no frame of its own`);
+  }
+});

@@ -1661,7 +1661,9 @@ does (`OnPressScreen`, `OnMoveSpine`, `PlayZoomInOut`, `co_ReturnToDefaultPositi
 The detail screen's popups (switch portrait, switch memorial lobby, the variant picker, compare, details, aliases) are
 drawn on the game's popup frame (UIPopup_Sort) and cover the whole stage with its dark backdrop, top bar and
 navigation included, like the display settings and the settings; a click on the backdrop or Escape closes them
-(PopupClose).
+(PopupClose). Every popup draws the same backdrop, `BACKDROP` in `ui-tokens.js`: black at 0.80, the value
+`BlackBgClickArea`'s TweenAlpha (0 to 0.80 in 0.2 s) rests at in UIPopup_Sort, UIPopup_Option_PC and UIPopup_FilterSort
+(the sprite's own 0.94 is not where it ends). The app shows it at once, without that fade.
 
 **The shared popup module** (`popup.js`, tested in Node from `tests/test_popup.py` on a stand-in DOM). Every screen
 draws its popups with it, and it reads its own prefabs once (`ready()`): UIPopup_Sort (required), the student list's

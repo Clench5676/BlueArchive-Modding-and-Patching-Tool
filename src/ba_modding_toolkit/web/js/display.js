@@ -7,7 +7,7 @@ import { scrollbar } from "./scrollbar.js";
 import * as NGUI from "./ngui.js";
 import { T } from "./i18n.js";
 import { FILTERS, NATURAL, SORTS } from "./roster-order.js";
-import { FOOTER } from "./ui-tokens.js";
+import { BACKDROP, FOOTER } from "./ui-tokens.js";
 import { $, S, clone, glyphsOf, hitButton } from "./util.js";
 
 const { node, find } = NGUI;
@@ -43,7 +43,7 @@ function shareSize(widgets, texts, fsMax, fsMin, w) {
 // --- the popup frame: backdrop, title, tabs, the shown panel, the buttons ---
 function frameTree() {
   const t = clone(find(layout.fs, "Center"));
-  find(t, "BlackBg/BlackBgClickArea").widgets.find((w) => "sprite" in w).color = "#000000/0.60";
+  find(t, "BlackBg/BlackBgClickArea").widgets.find((w) => "sprite" in w).color = BACKDROP;
   const popup = find(t, "Popup");
   const title = find(popup, "Base/BG/Label_Title_Locale");
   const tf = setText(title, T("display.title"), 72, 52, 1100);

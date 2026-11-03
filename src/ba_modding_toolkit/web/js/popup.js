@@ -21,7 +21,7 @@ import { frameOutline } from "./row-thumbnail.js";
 import { T } from "./i18n.js";
 import { withTimeout } from "./async.js";
 import { TEXT_VIEWER } from "./popup-frames.js";
-import { FOOTER, POPUP } from "./ui-tokens.js";
+import { BACKDROP, FOOTER, POPUP } from "./ui-tokens.js";
 import { DOT, RECRUIT, S, TAN10, advanceOf, clone, glyphsOf, hitButton, markedLabel, wrapPath } from "./util.js";
 
 const { node, sprite, label, find, rect } = NGUI;
@@ -299,7 +299,7 @@ export function popupFrame(title, w, h, { ok = null, cancel = null, close = true
     // the captions of the choices share one size
     footerLabels(btn.children.map((child) => find(child, "Label_Locale").widgets[0]), buttons.map((action) => action.label));
   }
-  find(t, "BlackBg/BlackBgClickArea").widgets.find((x) => "sprite" in x).color = "#000000/0.60";
+  find(t, "BlackBg/BlackBgClickArea").widgets.find((x) => "sprite" in x).color = BACKDROP;
   return t;
 }
 
@@ -496,7 +496,7 @@ function listFrame(title, buttons, closeButton) {
     if (b.greyed) return Buttons.disable(n);
     return n;
   });
-  find(t, "BlackBg/BlackBgClickArea").widgets.find((w) => "sprite" in w).color = "#000000/0.60";
+  find(t, "BlackBg/BlackBgClickArea").widgets.find((w) => "sprite" in w).color = BACKDROP;
   const panel = (name, b, tone) => node(name, [(b.l + b.r) / 2, (b.t + b.b) / 2], [sprite("Common_Bg_Raius10px", b.r - b.l, b.t - b.b, { depth: 3, color: tone })]);
   popup.children.push(
     panel("LeftPanel", LP.left, "#ffffff/0.00"),
