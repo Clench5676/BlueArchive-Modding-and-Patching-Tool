@@ -123,3 +123,60 @@ test("the call sites take the status colours from the tokens, the style sheet re
   assert.match(css, new RegExp(`text-shadow: 0 3px 0 ${Tokens.COLOUR.navy}, 2px 0 0 ${Tokens.COLOUR.navy}, -2px 0 0 ${Tokens.COLOUR.navy};`));
   assert.match(css, new RegExp(`box-shadow: 0 0 0 1px #fff, 0 3px 0 2px ${Tokens.COLOUR.navy};`));
 });
+
+// --- item H: the game's corner ladder, one focus ring, one fallback button ---
+const rule = (css, selector) => {
+  const i = css.indexOf(selector);
+  assert.ok(i >= 0, `${selector} in the style sheet`);
+  return css.slice(css.indexOf("{", i) + 1, css.indexOf("}", i));
+};
+// the declarations of the rule whose selector (or first selector of a list) is `selector`
+const ruleStarting = (css, selector) => {
+  const bare = css.replace(/\/\*[\s\S]*?\*\//g, "");
+  for (const [, head, body] of bare.matchAll(/([^{}]+)\{([^}]*)\}/g)) {
+    if (head.split(",")[0].trim().replace(/\s+/g, " ") === selector) return body;
+  }
+  assert.fail(`${selector} rule`);
+};
+
+test("the radii are the game's ladder (Raius5px, Raius10px and Raius20px: 5, 10 and 22 units) in px at the stage's scale", () => {
+  const S = 1920 / 2960;
+  assert.deepEqual({ ...Tokens.RADIUS_PX }, { r5: 3.24, r10: 6.49, r22: 14.27 });
+  for (const [px, units] of [[3.24, 5], [6.49, 10], [14.27, 22]]) assert.ok(Math.abs(px - units * S) < 0.005, `${units} units`);
+});
+
+test("one focus ring for every control: 4 px #2fa6f0, 2 px off, radius 6.49 px; cards keep a negative offset and drop the glow", () => {
+  const css = read("css/app.css");
+  const { FOCUS } = Tokens;
+  assert.deepEqual([FOCUS.colour, FOCUS.width, FOCUS.offset, FOCUS.radiusPx], ["#2fa6f0", 4, 2, 6.49]);
+  const outlines = css.match(/outline:[^;]*#2fa6f0[^;]*;/g);
+  assert.equal(outlines.length, 1, "one declaration of the ring in the whole style sheet");
+  const ring = ruleStarting(css, ".hit:focus-visible");
+  assert.match(ring, new RegExp(`outline: ${FOCUS.width}px solid ${FOCUS.colour}; outline-offset: ${FOCUS.offset}px; border-radius: ${FOCUS.radiusPx}px;`));
+  const selectors = css.slice(css.indexOf(".hit:focus-visible"), css.indexOf("{", css.indexOf(".hit:focus-visible")));
+  for (const name of [".card-hit:focus-visible", ".nav-item:focus-visible", ".top-option:focus-visible", ".top-home:focus-visible", ".back:focus-visible",
+    ".ms-toggle:focus-visible", ".ms-help:focus-visible", ".slider-thumb-focus", ".plain-popup .message-button:focus-visible", ".plain-check:focus-visible",
+    ".plain-line-button:focus-visible"]) assert.ok(selectors.includes(name), name);
+  const card = ruleStarting(css, ".card-row .card-hit:focus-visible");
+  assert.match(card, /outline-offset: -3px;/);
+  assert.doesNotMatch(card, /box-shadow|rgba\(47, ?166, ?240/);
+  assert.doesNotMatch(css, /rgba\(47, ?166, ?240/, "no focus glow anywhere");
+});
+
+test("the plain popup and its parts sit on the ladder, and the three fallback buttons are one flat look", () => {
+  const css = read("css/app.css"), fallback = read("css/fallback.css");
+  const { RADIUS_PX: R, FALLBACK_BUTTON: B } = Tokens;
+  assert.match(ruleStarting(css, ".plain-popup"), new RegExp(`border-radius: ${R.r22}px`));
+  assert.match(ruleStarting(css, ".plain-check::before"), new RegExp(`border-radius: ${R.r10}px`));
+  const look = [ruleStarting(css, ".plain-line-button"), rule(fallback, ".message-button, #bamt-recovery button")];
+  for (const declarations of look) {
+    assert.match(declarations, new RegExp(`border-radius: ${B.radiusPx}px`));
+    assert.match(declarations, new RegExp(`background: ${B.fill}`));
+    assert.match(declarations, new RegExp(`color: ${B.ink}`));
+    assert.doesNotMatch(declarations, /skew|transform|box-shadow|text-shadow/);
+  }
+  assert.deepEqual([B.fill, B.ink, B.radiusPx], ["#8de4ff", "#314665", 6.49]);
+  // left as they were: the lobby's subtitle and the photography sheet
+  assert.match(ruleStarting(css, ".lobby-subtitle"), /border-radius: 10px/);
+  assert.match(css, /\.loading-fallback i \{[^}]*border-radius: 50%/);
+});

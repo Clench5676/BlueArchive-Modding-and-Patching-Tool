@@ -13,8 +13,9 @@
 .screen.message h2, #bamt-recovery h1 { font: var(--w) 56px/1.2 var(--font); color: #2d4664; }
 .screen.message p, #bamt-recovery p { font: var(--w) 32px/1.4 var(--font); color: #5b6f86; }
 .message-actions { display: flex; gap: 28px; margin-top: 18px; }
-.message-button, #bamt-recovery button { min-width: 240px; padding: 22px 40px; border-radius: 10px; background: #8de4ff; color: #314665; font: var(--w) 34px/1 var(--font);
-  transform: skewX(-10deg); box-shadow: 0 4px 0 rgba(40, 80, 120, .25); }
+/* the fallback button, one look with app.css's .plain-line-button: #8de4ff with #314665 ink on the game's Raius10px corner (6.49 px at
+   the stage's scale), flat: no skew and no shadow */
+.message-button, #bamt-recovery button { min-width: 240px; padding: 22px 40px; border-radius: 6.49px; background: #8de4ff; color: #314665; font: var(--w) 34px/1 var(--font); }
 
 #bamt-recovery { --w: 500; --font: system-ui, sans-serif; position: fixed; inset: 0; z-index: 2147483647;
   background: #f4f4f4; color: #444; font: 24px/1.4 system-ui, sans-serif; overflow: auto; padding: 8vh 8vw;
