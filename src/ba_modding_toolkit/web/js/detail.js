@@ -43,7 +43,9 @@ import { clearUnseen, hasUnseen as hasFresh, shownUnseen, switchUnseen } from ".
 import { customAliases as aliasesOf, modName, modOriginalName, studentName } from "./names.js";
 import { setTitle } from "./nav.js";
 import { KEYS, deltaOf, pacer, typing } from "./step-keys.js";
-import { FRAME_Y, closable, closed as popupClosed, frameReady, hit as hitNode, listPopup, message, notice, popupFrame, scrollArea } from "./popup.js";
+import { closable, closed as popupClosed, frameReady, hit as hitNode, listPopup, message, notice, popupFrame, scrollArea } from "./popup.js";
+import { ALIAS, DETAILS, aliasFrame, detailsFrame } from "./popup-frames.js";
+import { CHIP, COLOUR } from "./ui-tokens.js";
 import { candidateStatus, detailStatus, selectionStatus, selectionError, intendedKey, isApplied, availableTab, coreOf, hasAsset, hasKind, primaryKind, appliedKey as keyOf, appliedOf, candidates as listSources, partsOf, popupMode, modelSource, previewBase, previewChanged, previewKey, sourceOf, switchKindOf } from "./switch-sources.js";
 import { $, DOT, RECRUIT, S, TAN10, advanceOf, at, clone, glyphsOf, hitButton, markedLabel, off, text, widget, wrapPath } from "./util.js";
 
@@ -181,7 +183,7 @@ const fullName = (v) => studentName(v, originalName(v));
 const shortName = (v) => studentName(v, L(v.names)?.short ?? v.key);
 // the current variant's own aliases (webui/state.py keeps the same limits): the roster search
 // finds this skin by all of them; the first one is the nameplate's main name
-const ALIAS_MAX = 8, ALIAS_LENGTH = 24;
+const ALIAS_MAX = ALIAS.max, ALIAS_LENGTH = 24;
 const customAliases = () => aliasesOf(variant());
 const aliasList = () => customAliases().join(/^(zh|ja)/.test(language()) ? "\u3001" : ", ");
 const variant = () => fam.variants.find((v) => v.key === variantKey) || fam.variants[0];
@@ -303,7 +305,7 @@ function screenTree() {
   text(t, `${INFO}/Title_Bg/Label_Locale`, T(isSpecial(v) && tab === "lobby" ? "special.background" : `info.title.${tab}`), { w_: 600 });
   text(t, `${INFO}/Detail_Btn/Label_Locale`, T("info.details"));
   const crcState = crcOf(v, kind);
-  const crc = crcState === "fixed" ? ["crc.fixed", "#1f9a52"] : crcState === "needs_fix" ? ["crc.needed", "#d9822b"] : ["crc.original", "#000000"];
+  const crc = crcState === "fixed" ? ["crc.fixed", COLOUR.success] : crcState === "needs_fix" ? ["crc.needed", COLOUR.warning] : ["crc.original", "#000000"];
   const now = tab === "portrait" ? c.label : sourceLabel(v, kind);
   const stats = [["Label_Life", "info.current", "Data_Widget/Data", now],
     ["Label_Attact", "info.status", "Data_Widget/Data", !coreOf(v, kind) ? T("import.reason.no_target") : detailStatus(v, kind) ? T(detailStatus(v, kind)) : "—"],
@@ -823,10 +825,10 @@ async function saveCandidate(key, kind) {
 
 // --- variant chips in the nameplate's white panel (style of the game's type chips) ---
 // 3 columns x 2 rows; a long name takes two columns; with more variants than fit, the last cell opens the picker.
-const CHIP_FS = 38, CHIP_W = 272, CHIP_PITCH = 290;
+const CHIP_FS = CHIP.fs, CHIP_W = CHIP.w, CHIP_PITCH = CHIP.pitch; // the prefab chip (Char_Target/Type/MainType/BG): 272 x 72, 40 down to 28
 const chipSpan = (item) => {
   const need = glyphsOf(shortName(item), 32) + (item.recruitable ? 32 * 1.35 / RECRUIT.ratio + 6 : 0) + (appliedKey(item) !== "self" ? 34 : 0);
-  return need > CHIP_W - 40 ? 2 : 1;
+  return need > CHIP_W - CHIP.inset ? 2 : 1;
 };
 const byRank = (a, b) => (isFav(b) - isFav(a)) || (b.recruitable - a.recruitable) || a.order - b.order;
 function placeChips(items) {
@@ -862,11 +864,11 @@ function chipLayout() {
   return [...picked, { more: list.length - picked.length, row: 1, col: 2, span: 1 }];
 }
 function chipNode(name, pos, w, caption, active, swapped, mark, fresh = false) {
-  const body = sprite("Common_Bg_Raius10px", w, 72, { incline: 10, depth: 5, color: active ? "#2c4564/1.00" : "#ffffff/1.00" });
+  const body = sprite("Common_Bg_Raius10px", w, CHIP.h, { incline: 10, depth: 5, color: active ? "#2c4564/1.00" : "#ffffff/1.00" });
   const color = active ? "#ffffff/1.00" : "#2c4564/1.00";
-  const lbl = markedLabel(caption, { fs: CHIP_FS, fsMin: 28, color, maxW: w - 40 - (swapped ? 30 : 0), mark, depth: 8 });
+  const lbl = markedLabel(caption, { fs: CHIP_FS, fsMin: CHIP.fsMin, color, maxW: w - CHIP.inset - (swapped ? 30 : 0), mark, depth: 8 });
   const kids = [node("Label", [swapped ? -15 : 0, 0], [], lbl.nodes)];
-  if (!active) kids.push(node("Line", [0, 0], [sprite("Common_Line_Raius10px", w, 72, { incline: 10, depth: 6, color: "#c0c9d4/1.00" })]));
+  if (!active) kids.push(node("Line", [0, 0], [sprite("Common_Line_Raius10px", w, CHIP.h, { incline: 10, depth: 6, color: "#c0c9d4/1.00" })]));
   // the variant wears another portrait: the game's swap icon at the right end
   if (swapped) kids.push(node("Swapped", [w / 2 - 36, 0], [sprite("Common_Icon_Change", 32, 32, { type: 0, depth: 9, color: active ? "#e6b6ef/1.00" : "#9c44ac/1.00" })]));
   if (fresh) kids.push(DOT([w / 2 - 4 + 36 * TAN10, 34], 30));
@@ -881,7 +883,7 @@ async function drawChips() {
   const CENTRE_Y = 234 - 101;
   const chips = chipLayout();
   const tree = node("Chips", [-1480, -720], [], chips.map(({ v, more, row, col, span }) => {
-    const y = 234 - 58 - row * 84, x = 514 + (y - CENTRE_Y) * TAN10 + (col + (span - 1) / 2 - 1) * CHIP_PITCH;
+    const y = 234 - 58 - row * CHIP.rowPitch, x = 514 + (y - CENTRE_Y) * TAN10 + (col + (span - 1) / 2 - 1) * CHIP_PITCH;
     const w = CHIP_W + (span - 1) * CHIP_PITCH;
     return v
       ? chipNode(`Chip_${v.key}`, [x, y], w, shortName(v), v.key === variantKey, shownSource(v) !== "self", v.recruitable, hasFresh(v))
@@ -1201,7 +1203,7 @@ function disposePortrait() {
 let popupSeg = 0, popupKind = "spr", popupStart = null, switchPopupPage = null;
 let switchThumbnails = null;
 const modsOn = () => modsState()?.enabled !== false;
-const GREYED_BADGE = () => ({ text: T("mods.overwritten"), color: "#9aa3ad", ink: "#ffffff" });
+const GREYED_BADGE = () => ({ text: T("mods.overwritten"), color: COLOUR.greyed, ink: "#ffffff" });
 function renderPopup(scroll = 0) { return drawPopup(scroll).catch(renderFailed); }
 async function drawPopup(scroll = 0) {
   if (!switchThumbnails || switchPopupPage !== pageToken) return;
@@ -1245,10 +1247,10 @@ async function drawPopup(scroll = 0) {
       const file = c.kind === "mod" ? c.mod.file : gameFile(c.variant, kind);
       const size = c.kind === "mod" ? c.mod.size : partsOf(c.variant, kind).reduce((n, f) => n + (f.size || 0), 0);
       const status = !coreOf(v, kind) ? "import.reason.no_target" : candidateStatus(v, kind, c.key);
-      const statusColor = status && coreOf(v, kind) ? "#1f9a52/1.00" : null;
+      const statusColor = status && coreOf(v, kind) ? `${COLOUR.success}/1.00` : null;
       const error = c.key === mode.set ? selectionError(v, kind) : null;
       const crcState = c.key === appliedKey(v, kind) ? crcOf(v, kind) : null;
-      const crc = crcState === "fixed" ? ["crc.fixed", "#1f9a52"] : crcState === "needs_fix" ? ["crc.needed", "#d9822b"] : crcState === "ok" ? ["crc.original", ""] : null;
+      const crc = crcState === "fixed" ? ["crc.fixed", COLOUR.success] : crcState === "needs_fix" ? ["crc.needed", COLOUR.warning] : crcState === "ok" ? ["crc.original", ""] : null;
       return {
         title: T(isSpecial(v) ? "special.background" : kind === "spr" ? "info.title.portrait" : `info.title.${kind}`),
         fields: [[T("field.file"), baseName(file)], [T("field.size"), sizeText(size)], [T("field.status"), [status && T(status), error && T(`error.${error.code}`, error.params)].filter(Boolean).join("\n") || "—", statusColor],
@@ -1385,7 +1387,7 @@ async function openPicker(scroll = 0) {
 // them (aliases.set); Cancel, the close button, the backdrop or Escape drop the changes. Enter in the empty row adds
 // what it holds, in another row goes to the next one, in an empty one at the end keeps them; never while an input
 // method is composing (isComposing, or keyCode 229, which WebKit sends for the key that ends a conversion). ---
-const AL = { w: 1500, rowW: 1180, rowH: 100, pitch: 124, top: 236, bottom: 334 };
+const AL = ALIAS;
 let aliasToken = 0;
 // draft: the rows; focusAt: the row to focus (the empty one when null); carry: the empty row of the editor drawn before,
 // which keeps the focus while this one is drawn: what is typed there meanwhile goes into the new empty row
@@ -1397,8 +1399,7 @@ async function openAliases(draft = customAliases(), focusAt = null, key = varian
   const names = draft.slice(0, ALIAS_MAX);
   const adding = names.length < ALIAS_MAX;
   const n = names.length + (adding ? 1 : 0);
-  const h = AL.top + (n - 1) * AL.pitch + AL.bottom;
-  const ys = Array.from({ length: n }, (_, i) => FRAME_Y + h / 2 - AL.top - i * AL.pitch);
+  const { h, ys } = aliasFrame(n);
   const t = popupFrame(T("alias.title"), AL.w, h, { ok: T("picker.ok"), cancel: T("popup.cancel") });
   const popup = find(t, "Popup");
   ys.forEach((y, i) => {
@@ -1478,9 +1479,9 @@ async function openAliases(draft = customAliases(), focusAt = null, key = varian
 // --- details (the info bar's Details button): the shown tab's game files on the popup frame. A summary (the folder,
 // what the files carry and, for a mod, its file and the variant it was made for), then one row per bundle: name,
 // size, date, CRC and what it carries ---
-const DT = { w: 2200, h: 1400, l: -1040, r: 1040 };
+const DT = DETAILS;
 const DT_COLS = [["field.file", 1040], ["field.size", 220], ["field.date", 270], ["field.crc", 290], ["field.status", 260]];
-const crcLabel = (state) => (state === "fixed" ? [T("crc.fixed"), "#1f9a52"] : state === "needs_fix" ? [T("crc.needed"), "#d9822b"] : [T("crc.original"), "#000000"]);
+const crcLabel = (state) => (state === "fixed" ? [T("crc.fixed"), COLOUR.success] : state === "needs_fix" ? [T("crc.needed"), COLOUR.warning] : [T("crc.original"), "#000000"]);
 // what a game file carries, as a label: the original, a mod's name, another variant's name, or "replaced"
 function carriedLabel(applied) {
   if (!applied || applied === "official") return T("status.original");
@@ -1560,8 +1561,8 @@ async function showDetails() {
   const info = detailsInfo();
   const body = detailsBody(info);
   // the frame fits its content, up to almost the whole stage (then the content scrolls): the title takes 140 units
-  // above the content, the buttons 228 under it
-  const h = Math.min(DT.h, Math.max(900, body.height + 140 + 228)), top = FRAME_Y + h / 2 - 140, bottom = FRAME_Y - h / 2 + 228;
+  // above the content, the buttons 296.5 under it (popup-frames.js)
+  const { h, top, bottom } = detailsFrame(body.height);
   const t = popupFrame(info.title, DT.w, h, { ok: T("picker.ok"), cancel: info.reveal ? T(platform === "mac" ? "open.mac" : "open.win") : null });
   host.hidden = false;
   const next = document.createElement("div");

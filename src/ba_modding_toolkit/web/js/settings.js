@@ -16,6 +16,7 @@ import * as ModExport from "./mod-export.js";
 import * as Tours from "./tours.js";
 import * as Update from "./update.js";
 import * as Buttons from "./game-buttons.js";
+import { BACKDROP, SETTINGS, SMALL_BUTTON } from "./ui-tokens.js";
 import { rowBase, radioRow } from "./settings-rows.js";
 import { on, rpc } from "./api.js";
 import { T, errorText, platform } from "./i18n.js";
@@ -98,21 +99,49 @@ async function checkFiles() {
   render();
 }
 
-// a value with one or two buttons on the right (folders, version, cache); long values wrap, never cut
-function valueRow(name, y, title, value, buttons, { below = false, showValue = true } = {}) {
-  const room = below ? 1440 : 1420 - buttons.length * 320;
-  const f = wrapPath(value || T("settings.notSet"), 38, 30, room, 3);
-  const lineH = f.fs * 1.3, blockH = Math.max(lineH * f.lines, 112);
-  const h = 130 + blockH + 30 + (below ? 132 : 0), row = rowBase(name, y, h, title), hits = [];
+// --- a value with buttons on the right (folders, version, cache); long values wrap, never cut ---
+// The value starts at x -718 and the light-blue buttons (402 x 136, 422 apart) stand right-aligned to x 700. Beside the
+// value they leave it 1420 less their pitches, and no fewer than the 460 the row's three buttons left it before they grew;
+// buttons that do not fit wrap to a second line, right-aligned as the first. Under the value (below) the whole line is theirs.
+const VALUE_ROOM = 1420, VALUE_ROOM_MIN = 460, BUTTONS_X = 700, BELOW_ROOM = 1440;
+const BUTTON_STEP = SMALL_BUTTON.h + SMALL_BUTTON.gap; // one line of buttons to the next
+// how many buttons each line holds: [first line, second line, ...]
+export function buttonLines(count, below = false) {
+  const perLine = below ? Math.floor((BUTTONS_X + 718 + SMALL_BUTTON.gap) / SMALL_BUTTON.pitch)
+    : Math.floor((VALUE_ROOM - VALUE_ROOM_MIN) / SMALL_BUTTON.pitch);
+  const lines = [];
+  for (let i = 0; i < count; i += perLine) lines.push(Math.min(perLine, count - i));
+  return lines;
+}
+export const valueRoom = (count, below = false) => (below ? BELOW_ROOM : VALUE_ROOM - (buttonLines(count)[0] || 0) * SMALL_BUTTON.pitch);
+// the row's height and where its buttons stand (y of each line's centres, x of each button's centre): textH is the value's
+// height. Beside the value the first line of buttons is centred on it; under it the lines stand at the row's foot.
+export function valueRowLayout(count, textH, { below = false } = {}) {
+  const lines = buttonLines(count, below), { h: bh, pitch } = SMALL_BUTTON;
+  const stack = lines.length ? lines.length * bh + (lines.length - 1) * SMALL_BUTTON.gap : 0;
+  const blockH = Math.max(textH, below || !count ? 112 : bh);
+  const h = below ? 180 + blockH + stack : 130 + blockH + 30 + Math.max(0, lines.length - 1) * BUTTON_STEP;
   const midY = h / 2 - 130 - blockH / 2;
+  const ys = lines.map((_, j) => (below ? -h / 2 + 19 + stack - bh / 2 - j * BUTTON_STEP : midY - j * BUTTON_STEP));
+  const xs = lines.flatMap((n) => Array.from({ length: n }, (_, i) => BUTTONS_X - SMALL_BUTTON.w / 2 - (n - 1 - i) * pitch));
+  return { h, blockH, midY, lines, ys, xs };
+}
+function valueRow(name, y, title, value, buttons, { below = false, showValue = true } = {}) {
+  const f = wrapPath(value || T("settings.notSet"), 38, 30, valueRoom(buttons.length, below), 3);
+  const lineH = f.fs * 1.3, layout = valueRowLayout(buttons.length, lineH * f.lines, { below });
+  const { h, midY } = layout, row = rowBase(name, y, h, title), hits = [];
   // Action-only rows keep the same spacing without a value label.
-  if (showValue) row.children.push(node("Value", [-718, midY], [label(f.text, f.fs, "#2d4664/1.00", room, lineH * f.lines + 10, { pivot: 3, depth: 8 })]));
-  // buttons side by side share one caption size (Buttons.smallButton's 300 x 112, range 44 down to 30)
-  const size = buttons.length > 1 ? NGUI.fitGroup(buttons.map(([caption]) => caption), 44, 30, 300 - 60, 2, { maxH: 112 - 20 })[0].fs : null;
-  buttons.forEach(([caption, fn, enabled = true], i) => {
-    const x = 700 - (buttons.length - 1 - i) * 320 - 150;
-    row.children.push(buttonNode(`Btn_${i}`, x, below ? -h / 2 + 75 : midY, caption, { enabled, ...(size ? { fs: size, min: size } : {}) }));
-    if (enabled) hits.push({ path: `${name}/Btn_${i}`, fn, name: caption });
+  if (showValue) row.children.push(node("Value", [-718, midY], [label(f.text, f.fs, "#2d4664/1.00", valueRoom(buttons.length, below), lineH * f.lines + 10, { pivot: 3, depth: 8 })]));
+  // buttons side by side share one caption size (the small button's range, 48 down to 34)
+  const size = buttons.length > 1 ? NGUI.fitGroup(buttons.map(([caption]) => caption), SMALL_BUTTON.fs, SMALL_BUTTON.fsMin,
+    SMALL_BUTTON.w - SMALL_BUTTON.fitInset, 2, { maxH: SMALL_BUTTON.h - SMALL_BUTTON.boxInsetH })[0].fs : null;
+  let at = 0;
+  layout.lines.forEach((count, line) => {
+    for (let i = 0; i < count; i++, at++) {
+      const [caption, fn, enabled = true] = buttons[at];
+      row.children.push(buttonNode(`Btn_${at}`, layout.xs[at], layout.ys[line], caption, { enabled, ...(size ? { fs: size, min: size } : {}) }));
+      if (enabled) hits.push({ path: `${name}/Btn_${at}`, fn, name: caption });
+    }
   });
   return { tree: row, h, hits };
 }
@@ -180,14 +209,14 @@ function frameTree() {
   // the left column keeps only as many separators as there are tabs
   const grid = find(popup, "TabBg/Grid");
   if (grid) grid.children = grid.children.slice(0, TABS.length);
-  find(t, "BlackBg/BlackBgClickArea").widgets.find((w) => "sprite" in w).color = "#000000/0.60";
+  find(t, "BlackBg/BlackBgClickArea").widgets.find((w) => "sprite" in w).color = BACKDROP;
   return t;
 }
 
 function rows({ builtSize = null, sizeError = null } = {}) {
   const p = prefs, out = [];
   let y = -20;
-  const add = (r) => { r.tree.pos[1] = y - r.h / 2 + (r.tree.pos[1] || 0); out.push(r); y -= r.h + 24; };
+  const add = (r) => { r.tree.pos[1] = y - r.h / 2 + (r.tree.pos[1] || 0); out.push(r); y -= r.h + SETTINGS.rowGap; };
   const reveal = (path) => () => call(() => rpc("os.reveal", { path }));
   const browse = (key, start) => async () => {
     const path = await call(() => rpc("settings.pickFolder", { start }));
@@ -240,14 +269,17 @@ function rows({ builtSize = null, sizeError = null } = {}) {
     const sw = radioRow("Switch", 0, T("mods.switch"), ON_OFF(), v.on, (value) => { if (value !== v.on) ModSwitch.click("settings"); },
       { dim: v.busy || v.unavailable, description: v.unavailable ? ModSwitch.reasonText(m) : "" });
     add(helpAfterTitle(sw, T("mods.switch"), v.dot));
-    const exportRow = rowBase("Export", 0, 270, T("export.title"));
+    // the pair of 680 x 136 buttons under the dotted line: 20 below it, 29 above the row's foot
+    const exportH = 109 + 20 + SMALL_BUTTON.h + 29;
+    const exportRow = rowBase("Export", 0, exportH, T("export.title"));
     const exportHits = [];
-    const exportSize = NGUI.fitGroup([T("export.library"), T("export.applied")], 44, 30, 680 - 60, 2, { maxH: 112 - 20 })[0].fs;
+    const exportSize = NGUI.fitGroup([T("export.library"), T("export.applied")], SMALL_BUTTON.fs, SMALL_BUTTON.fsMin, SMALL_BUTTON.wideW - SMALL_BUTTON.fitInset, 2,
+      { maxH: SMALL_BUTTON.h - SMALL_BUTTON.boxInsetH })[0].fs;
     [["library", "export.library"], ["applied", "export.applied"]].forEach(([scope, key], i) => {
-      exportRow.children.push(buttonNode(`Btn_${i}`, -370 + i * 740, -50, T(key), { w: 680, fs: exportSize, min: exportSize }));
+      exportRow.children.push(buttonNode(`Btn_${i}`, -370 + i * 740, exportH / 2 - 109 - 20 - SMALL_BUTTON.h / 2, T(key), { w: SMALL_BUTTON.wideW, fs: exportSize, min: exportSize }));
       exportHits.push({ path: `Export/Btn_${i}`, fn: () => ModExport.open({ scope }), name: T(key) });
     });
-    add({ tree: exportRow, h: 270, hits: exportHits });
+    add({ tree: exportRow, h: exportH, hits: exportHits });
     add(valueRow("Built", 0, T("mods.cache"), sizeError || (builtSize == null ? T("job.running") :
       ModSwitch.sizeText(builtSize)), [
       [T("settings.mods.clear"), async () => { if (await ModSwitch.clearBuilt()) render(); }, builtSize > 0]]));

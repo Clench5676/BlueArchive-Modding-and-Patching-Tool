@@ -1661,7 +1661,9 @@ does (`OnPressScreen`, `OnMoveSpine`, `PlayZoomInOut`, `co_ReturnToDefaultPositi
 The detail screen's popups (switch portrait, switch memorial lobby, the variant picker, compare, details, aliases) are
 drawn on the game's popup frame (UIPopup_Sort) and cover the whole stage with its dark backdrop, top bar and
 navigation included, like the display settings and the settings; a click on the backdrop or Escape closes them
-(PopupClose).
+(PopupClose). Every popup draws the same backdrop, `BACKDROP` in `ui-tokens.js`: black at 0.80, the value
+`BlackBgClickArea`'s TweenAlpha (0 to 0.80 in 0.2 s) rests at in UIPopup_Sort, UIPopup_Option_PC and UIPopup_FilterSort
+(the sprite's own 0.94 is not where it ends). The app shows it at once, without that fade.
 
 **The shared popup module** (`popup.js`, tested in Node from `tests/test_popup.py` on a stand-in DOM). Every screen
 draws its popups with it, and it reads its own prefabs once (`ready()`): UIPopup_Sort (required), the student list's
@@ -1710,8 +1712,17 @@ optional, so a popup still works without them.
 - **Buttons.** Every button of a popup is an invisible button over the drawn one, named for assistive technology by
   the caption it covers (`aria-label`) and marked with what it does (`data-action`). When a sprite is missing from
   the atlases its button is placed from the prefab node, so the popup can still be answered.
-- **`popupFrame(title, w, h, {ok, cancel, close})`**: the frame at a size, its title, the close button and Cancel / OK
-  (a lone button in the middle).
+- **`popupFrame(title, w, h, {ok, cancel, close, buttons})`**: the one frame builder (the consent popups and the update
+  dialog call it with `close: false`; the list popup keeps its own stretched frame and panels but takes the footer's
+  numbers from the same code). The frame at a size, its title, the close button and the footer: Cancel / OK, or named
+  `buttons` (`{label, primary, name}`). The footer's centre is 190.5 units above the frame's bottom edge in every frame
+  (UIPopup_Sort `Btn`), the bodies 496 x 177, the captions 72 down to 48 in a 400 box on up to two lines at one size. One
+  button is centred, two sit at the prefab's x -292 and +292 (88 apart), three or more at 0.8 and 24 apart (smaller in a
+  narrow frame). The list popup's footer stays right-aligned to its own right edge (`footerY`, `footerSlots`,
+  `footerScale`, `footerGap`, `footerFit`, `footerLabels` in `popup.js`). The footer sits 68.5 higher than the app's frames
+  used to keep it, so the message popup's room under its lines (`MSG.buttons`) is 304.5 and the fixed-size frames that held
+  content down to the buttons grew by that (`popup-frames.js`: alias editor, file details, Mod Alias, the repair review,
+  the import dialogs, illustrated tour pages, the update dialog).
 - **`message({title, lines, ok, cancel, check, close})`** in `#dialog`: lines of text, centred; when a line carries a
   small button (`{text, button: {label, fn}}`, the consent popup's light blue Change button), every line is a row of
   the game's light stats box with its button at the right. An optional checkbox (the gacha list's) under the lines.
@@ -1837,6 +1848,40 @@ or the classic UI is open, no drift while mods are off, nothing dismissed (see M
 - **Details** (the Portrait, Memorial Lobby and 3D Model info bars' button): the shown tab's game files. The folder,
   what they carry and, for a mod, its file and the variant it was made for; then one row per bundle with its size,
   date, CRC state and what it carries. The frame fits its content and scrolls past the stage's height.
+
+### Design tokens
+
+`web/js/ui-tokens.js` holds the numbers and colours the web UI shares, each named after the prefab node it comes from; a
+call site imports it, nothing else repeats them (`tests/js/ui_tokens.test.mjs` pins the sites, `tests/test_ui_tokens.py`
+the prefab values, from the development view). It imports no other UI module.
+
+- **Popup frame, footer, backdrop**: see Popups above (`POPUP`, `FOOTER`, `BACKDROP`).
+- **Small button** (`SMALL_BUTTON`; UIPopup_Option_PC `Center/Popup/List/Sound_Setting/ETCSetting/ButtonBg`): 402 x 136, caption
+  48 down to 34 fitted to the width less 60, its label box 30 less across and 20 less down; only the width varies, 240 at
+  least. `game-buttons.js` `optionButton` takes these as its defaults; the Hall passes its own sizes. Settings' value rows
+  put the buttons right-aligned to x 700, 422 apart, beside the value while it keeps at least 460 (two to a line) and
+  under it three to a line; the rest wrap to a second line, right-aligned like the first (`settings.js`
+  `valueRowLayout`). The Export pair is 680 x 136. A message's line button is 136 high and as wide as its caption plus
+  90 (240 at least) in a row at least 156 high; the asset consent's Change button the same, on a line of its own under
+  the item (`consent.js` `assetLayout`). Not migrated yet: the Hall's buttons, the photography toolbar, the popup details
+  actions and the detail screen's Show in Finder / Explorer button.
+- **Chip** (`CHIP`; UICharacterDetail `Char_Target/Type/MainType/BG`): 272 x 72 inclined 10 degrees, caption 40 down to 28,
+  290 apart. The nameplate's variant chips (`detail.js`) and the list popup's details panel (`popup.js`) draw it. In the
+  panel the chips stand in one centred row (three, the most a card has, about 283 apart so they stay inside it:
+  `chipPlaces`), 16 above the fields box; the portrait panel keeps its one row of
+  chips sized to its half (`switch-layout.js`), 16 above its box.
+- **Colours** (`COLOUR`), each from the game: success `#0a6f2d` (the Formation popup's selected tag), warning `#f14f00`
+  (the mailbox limit label), error `#bb3421` (the skill type sprite), greyed `#828282` (Btn_Disable's label), the page's ink
+  `#2c4564` (the collection's top bar title; `--navy-text` repeats it), the In Use badge `#ffb700` on `#4b2116`, a note's
+  ink and the consent's "never" bar `#6a7b8f`. The style sheets repeat the CSS ones, which the token tests keep equal.
+- **Corners, focus ring, fallback button** (style sheets): the game's ladder, Raius5px, Raius10px and Raius20px (5, 10 and
+  22 units) is 3.24, 6.49 and 14.27 px at the stage's scale (`RADIUS_PX`). One focus rule in `app.css` draws the ring for
+  every control, 4 px `#2fa6f0`, 2 px off, radius 6.49 px (a roster card's keeps its -3 px offset because the list clips; no
+  glow). `.plain-popup` is 14.27 px, `.plain-line-button` and the plain checkbox 6.49 px. The no-game screens have one flat
+  button look, `#8de4ff` with `#314665` ink on a 6.49 px corner, no skew and no shadow (`.message-button`, the recovery
+  panel's buttons and `.plain-line-button`). The lobby subtitle and the photography sheet are unchanged.
+- **Settings rows** stand 12 units apart (`SETTINGS.rowGap`, the prefab's Game tab); the scrolling area ends at the last
+  row's foot plus that gap.
 
 ### Enable Mods switch
 
@@ -2452,6 +2497,11 @@ it (decision 7); browser and serve mode have none.
 - The front end's pure parts in Node (`tests/js/*.test.mjs`, each run from its `tests/test_*.py`), the shared popups,
   the Enable Mods switch, item 1's prompts and the tray's events on a stand-in DOM with the en-US strings
   (`mod_switch.test.mjs`, `repairs.test.mjs`, `spine_base.test.mjs` among them).
+- The design tokens: `tests/js/ui_tokens.test.mjs` (the tokens, no retired literal in any web source, the caption range of
+  every footer through every locale file, the small button, the style sheet rules) and the footer, frame-room, Settings
+  row, message line button, consent and chip tests in `popup.test.mjs`; `tests/test_ui_tokens.py` compares the tokens with
+  UIPopup_Sort, UIPopup_Option_PC, UICharacterDetail and the three BlackBgClickArea tweens from the development view
+  (numbers only; skipped without `BAMT_TEST_GAME_DIR`).
 
 ## Lobby lines
 

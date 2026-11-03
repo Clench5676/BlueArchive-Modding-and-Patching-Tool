@@ -20,6 +20,8 @@ import { fitBadgeCaptions, selectedFrame, selectionArtWindow, SELECTION_PREFAB, 
 import { frameOutline } from "./row-thumbnail.js";
 import { T } from "./i18n.js";
 import { withTimeout } from "./async.js";
+import { TEXT_VIEWER } from "./popup-frames.js";
+import { BACKDROP, CHIP, COLOUR, FOOTER, POPUP, SMALL_BUTTON } from "./ui-tokens.js";
 import { DOT, RECRUIT, S, TAN10, advanceOf, clone, glyphsOf, hitButton, markedLabel, wrapPath } from "./util.js";
 
 const { node, sprite, label, find, rect } = NGUI;
@@ -227,11 +229,36 @@ export function hit(host, view, path, fn, { name = "", action = "", z = 80 } = {
 // --- the frame ---
 // a popup button (UIPopup_Sort Btn_Ok / Btn_Cancel, Common_Btn_BG 496 x 177): its caption, even on two lines, keeps clear of
 // the body's top and bottom edges
-export const BUTTON_TEXT_H = 140;
+export const BUTTON_TEXT_H = FOOTER.caption.h;
+// the game's popup frame is centred 12 units under the stage's centre (Base -20, BG +8)
+export const FRAME_Y = POPUP.frameY;
+
+// --- the footer: one set of numbers for every popup frame (UIPopup_Sort/Center/Popup/Btn) ---
+// the buttons' centre, popup-local y: FOOTER.centre above the bottom edge of a frame h high, whatever its height
+export const footerY = (h) => FRAME_Y - h / 2 + FOOTER.centre;
+// the top of the bodies of n buttons, popup-local y
+export const footerTop = (h, n = 1) => footerY(h) + FOOTER.body.h * footerScale(n) / 2;
+// one or two bodies at the prefab's size, 88 apart; three or more at 0.8 and 24 apart, smaller where a frame w wide is too narrow
+export function footerScale(n, w = Infinity) {
+  if (n < 3) return 1;
+  return Math.min(FOOTER.many.scale, (w - FOOTER.many.margin - FOOTER.many.gap * (n - 1)) / n / FOOTER.body.w);
+}
+export const footerGap = (n) => (n < 3 ? FOOTER.pairGap : FOOTER.many.gap);
+// the centres of n bodies in a row centred on the frame (x), and their scale
+export function footerSlots(n, w) {
+  const scale = footerScale(n, w), pitch = FOOTER.body.w * scale + footerGap(n);
+  return { scale, xs: Array.from({ length: n }, (_, i) => (i - (n - 1) / 2) * pitch) };
+}
+// the captions of one footer share one size: the prefab's 72 down to 48 in a 400 box, up to two lines, clear of the body's edges
+const CAPTION = FOOTER.caption;
+export const footerFit = (captions) => NGUI.fitGroup(captions, CAPTION.fs, CAPTION.fsMin, CAPTION.w, CAPTION.lines, { maxH: CAPTION.h });
+export const footerLabels = (widgets, captions) => NGUI.fitLabels(widgets, captions, CAPTION.fs, CAPTION.fsMin, CAPTION.w, CAPTION.lines, { maxH: CAPTION.h });
+
 // the game's popup frame at a size: backdrop, title, close button and, when given, its Cancel and OK buttons with
-// these labels near the bottom edge (a lone one in the middle). The frame's centre sits 12 units under the stage's
-// (Base -20, BG +8).
-export const FRAME_Y = -12;
+// these labels, FOOTER.centre above the bottom edge (a lone one in the middle; two at the prefab's +/-292).
+//   buttons: [{label, primary, name}] instead of ok / cancel: named choices in a row (one centred, two as OK and Cancel,
+//            three or more smaller); a node is Choice_<index> unless it names itself
+//   close: false for a popup that must be answered with a button (no close button)
 export function popupFrame(title, w, h, { ok = null, cancel = null, close = true, buttons = null } = {}) {
   const t = clone(find(layouts.sortPopup, "Center"));
   const popup = find(t, "Popup");
@@ -249,7 +276,7 @@ export function popupFrame(title, w, h, { ok = null, cancel = null, close = true
   closeBtn.active = close;
   const btn = find(popup, "Btn");
   btn.active = !!(ok || cancel);
-  btn.pos = [0, FRAME_Y - h / 2 + 122];
+  btn.pos = [0, footerY(h)];
   for (const [name, caption] of [["Btn_Ok", ok], ["Btn_Cancel", cancel]]) {
     const b = find(btn, name);
     resizeButton(find(b, "BG (1)"));
@@ -259,20 +286,23 @@ export function popupFrame(title, w, h, { ok = null, cancel = null, close = true
   }
   // the two captions share one size
   const captions = [["Btn_Ok", ok], ["Btn_Cancel", cancel]].filter(([, caption]) => caption);
-  NGUI.fitLabels(captions.map(([name]) => find(btn, `${name}/Label_Locale`).widgets[0]), captions.map(([, caption]) => caption), 64, 40, 420, 2, { maxH: BUTTON_TEXT_H });
+  footerLabels(captions.map(([name]) => find(btn, `${name}/Label_Locale`).widgets[0]), captions.map(([, caption]) => caption));
   if (buttons?.length) {
     const primary = find(btn, "Btn_Ok"), secondary = find(btn, "Btn_Cancel");
-    const gap = 24, buttonWidth = Math.min(460, (w - 140 - gap * (buttons.length - 1)) / buttons.length), scale = buttonWidth / BTN_W;
+    const { scale, xs } = footerSlots(buttons.length, w);
     btn.active = true;
     btn.children = buttons.map((action, index) => {
-      const child = clone(action.primary ? primary : secondary); child.name = `Choice_${index}`; child.active = true; child.affirmative = !!action.primary;
-      child.scale = [scale, scale]; child.pos = [(index - (buttons.length - 1) / 2) * (buttonWidth + gap), 0];
+      const child = clone(action.primary ? primary : secondary); child.name = action.name || `Choice_${index}`; child.active = true;
+      // a primary choice is the gold affirmative one, unless its semantic says otherwise (Update is blue: BL-034)
+      child.affirmative = !!action.primary && !action.semantic;
+      if (action.semantic) child.actionSemantic = action.semantic;
+      child.scale = [scale, scale]; child.pos = [xs[index], 0];
       return child;
     });
     // the captions of the choices share one size
-    NGUI.fitLabels(btn.children.map((child) => find(child, "Label_Locale").widgets[0]), buttons.map((action) => action.label), 64, 40, 420, 2, { maxH: BUTTON_TEXT_H });
+    footerLabels(btn.children.map((child) => find(child, "Label_Locale").widgets[0]), buttons.map((action) => action.label));
   }
-  find(t, "BlackBg/BlackBgClickArea").widgets.find((x) => "sprite" in x).color = "#000000/0.60";
+  find(t, "BlackBg/BlackBgClickArea").widgets.find((x) => "sprite" in x).color = BACKDROP;
   return t;
 }
 
@@ -373,11 +403,18 @@ const LP = {
   frame: { w: 2860, h: 1520 },                  // Common_Popup_Bg, stretched to almost the whole screen
   left: { l: -1370, r: -520, t: 600, b: -690 }, // details panel
   list: { l: -480, r: 1370, t: 600, b: -470 },  // list panel (light blue frame)
-  ok: { x: 1150, y: -600, w: 440, h: 160 },     // confirm
+  ok: { x: 1150 },                              // confirm: the footer's right edge is this plus half a body
   card: { w: 250, h: 226, bar: 68 },            // card body (Common_Btn_BG) and its name bar
   pitch: [284, 350],
 };
-const BTN_W = 496; // the frame's button body (Common_Btn_BG)
+const BTN_W = FOOTER.body.w; // the frame's button body (Common_Btn_BG)
+// the footer of the list popup sits under the list panel, right-aligned to its own right edge; its centre height, caption
+// range and gaps are the shared footer's (one or two bodies 88 apart, three or more at 0.8 and 24 apart)
+const listFooter = (n) => {
+  const k = footerScale(n), gap = footerGap(n), bw = BTN_W * k, right = LP.ok.x + BTN_W / 2;
+  return { k, gap, bw, right, left: right - n * bw - (n - 1) * gap, y: footerY(LP.frame.h),
+    x: (i) => right - bw / 2 - (n - 1 - i) * (bw + gap) };
+};
 
 // the student list's tools at the top right of the list: order, sort, search and, with segs, the segment filter
 function toolbar(right, y, { segs = null, sortKey = "sort.default", active = 0, ascending = true, filtered = false } = {}) {
@@ -446,23 +483,23 @@ function listFrame(title, buttons, closeButton) {
   const btn = find(popup, "Btn");
   const [ok, cancel] = [find(btn, "Btn_Ok"), find(btn, "Btn_Cancel")];
   btn.pos = [0, 0];
-  const k = buttons.length > 2 ? 0.8 : 1, bw = BTN_W * k, gap = 24, right = LP.ok.x + BTN_W / 2;
+  const foot = listFooter(buttons.length);
   // the buttons' captions share one size: the largest at which every one fits after wrapping
-  const fits = NGUI.fitGroup(buttons.map((b) => b.label), 72, 48, 360, 2, { maxH: BUTTON_TEXT_H });
+  const fits = footerFit(buttons.map((b) => b.label));
   btn.children = buttons.map((b, i) => {
     const n = clone(b.primary ? ok : cancel);
     resizeButton(find(n, "BG (1)"));
     n.name = `Btn_${i}`;
     n.actionSemantic=b.semantic||(b.primary?"confirm":"secondary");
     n.active = true;
-    n.scale = [k, k];
-    n.pos = [right - bw / 2 - (buttons.length - 1 - i) * (bw + gap), LP.ok.y];
+    n.scale = [foot.k, foot.k];
+    n.pos = [foot.x(i), foot.y];
     const f = fits[i];
     Object.assign(find(n, "Label_Locale").widgets[0], { text: f.text, fontSize: f.fs });
     if (b.greyed) return Buttons.disable(n);
     return n;
   });
-  find(t, "BlackBg/BlackBgClickArea").widgets.find((w) => "sprite" in w).color = "#000000/0.60";
+  find(t, "BlackBg/BlackBgClickArea").widgets.find((w) => "sprite" in w).color = BACKDROP;
   const panel = (name, b, tone) => node(name, [(b.l + b.r) / 2, (b.t + b.b) / 2], [sprite("Common_Bg_Raius10px", b.r - b.l, b.t - b.b, { depth: 3, color: tone })]);
   popup.children.push(
     panel("LeftPanel", LP.left, "#ffffff/0.00"),
@@ -492,13 +529,13 @@ export function listCard(it, x, y, selected, card = LP.card, kind = null) {
   ]));
   const corner = (dx, dy) => [dx + dy * TAN10, dy]; // a point inside the slanted card
   if (it.dim) kids.push(node("Dim", [1, 4], [sprite("Common_Bg_Raius10px", w - 12, h - 18, { incline: 10, depth: 24, color: "#000000/0.55" })]));
-  const badge = it.badge || (it.inUse ? { text: T("popup.inUse"), color: "#ffbc11", ink: "#3a2a00" } : null);
+  const badge = it.badge || (it.inUse ? { text: T("popup.inUse"), color: COLOUR.inUse, ink: COLOUR.inUseInk } : null);
   for (const [name, mark, y] of [["Using", badge, h / 2 - 30], ["Tag", it.tag, -h / 2 + 36]]) {
     if (!mark) continue;
     // as wide as its word needs, from the corner, up to most of the card
     const bf = fitText(mark.text, 26, 20, w - 70, 1), bw = Math.max(116, glyphsOf(bf.text, bf.fs) + 24);
     kids.push(node(name, corner(-w / 2 + 12 + bw / 2, y), [sprite("Common_Bg_Raius10px", bw, 42, { depth: 26, color: `${mark.color}/1.00`, incline: 10 })],
-      [node("Text", [0, 0], [label(bf.text, bf.fs, `${mark.ink || "#3a2a00"}/1.00`, bw - 4, 40, { depth: 27 })])]));
+      [node("Text", [0, 0], [label(bf.text, bf.fs, `${mark.ink || COLOUR.inUseInk}/1.00`, bw - 4, 40, { depth: 27 })])]));
   }
   if (it.fav) kids.push(node("Pin", corner(w / 2 - 38, -h / 2 + 36), [sprite("Common_Btn_Pin_01", 54, 54, { type: 0, depth: 26 })]));
   if (it.recruit) kids.push(node("Recruit", corner(-w / 2 + 34, -h / 2 + 40), [sprite(RECRUIT.sprite, 62 / RECRUIT.ratio, 62, { atlas: RECRUIT.atlas, type: 0, depth: 26 })]));
@@ -531,6 +568,23 @@ export function listCard(it, x, y, selected, card = LP.card, kind = null) {
 // the details panel's action buttons: a caption keeps 14 clear of each edge of the slanted body (the slant moves the text
 // band's top and bottom lines by up to 4), and two lines of it stay inside the body's 120 height
 const ACTION_CLEAR = 28, ACTION_TEXT_H = 96;
+// the details panel's chips and fields box, y below the panel's top: the box's top edge, and the chips' first row centre,
+// which keeps POPUP.clearance between the chips' bottom and the box (the chip is 72 high)
+const DETAILS_BOX_Y = 750, DETAILS_CHIP_Y = DETAILS_BOX_Y - POPUP.clearance - CHIP.h / 2;
+// where n chips stand in a panel w wide: 290 apart, or closer where a row's slant would leave the panel (three stand about 283
+// apart in the 850-unit panel, in one row, so the fields box keeps its place), never under 8 clear; rows of as many as fit,
+// each centred; x from the panel's centre
+const CHIP_MIN_GAP = 8;
+export function chipPlaces(count, panelW) {
+  const slant = CHIP.h * TAN10;
+  let perRow = 1;
+  while ((perRow + 1) * CHIP.w + perRow * CHIP_MIN_GAP + slant <= panelW) perRow += 1;
+  return Array.from({ length: count }, (_, i) => {
+    const row = Math.floor(i / perRow), inRow = Math.min(perRow, count - row * perRow);
+    const gap = inRow > 1 ? Math.min(CHIP.gap, (panelW - slant - inRow * CHIP.w) / (inRow - 1)) : 0;
+    return { row, x: (i - row * perRow - (inRow - 1) / 2) * (CHIP.w + gap) };
+  });
+}
 // the details panel: title bar, the picture, name, kind chips, fields, actions
 function detailsTree(it, title, fields, actions, portraitTexture = null, kind = null) {
   const b = LP.left, cx = (b.l + b.r) / 2, w = b.r - b.l;
@@ -560,11 +614,13 @@ function detailsTree(it, title, fields, actions, portraitTexture = null, kind = 
   const using = it.inUseText || (it.inUse ? T("popup.inUse") : null);
   const chips = it.chips || [it.tag?.text || (it.recruit ? T("type.recruit") : it.kind === "mod" ? T("type.added") : T("type.noRecruit")), ...(using ? [using] : [])];
   const dark = !it.chips && it.recruit; // the recruit chip: dark, with the recruit mark
+  // the chips (the prefab's, 272 x 72): in rows of as many as fit inside the panel, the first 16 above the fields box
+  const places = chipPlaces(chips.length, w), rows = Math.max(0, ...places.map((p) => p.row)) + 1;
   chips.forEach((c, i) => {
-    const cw = 250, x = cx + (i - (chips.length - 1) / 2) * (cw + 16);
-    kids.push(node(`Chip_${i}`, [x, b.t - 690], [sprite("Common_Bg_Raius10px", cw, 60, { incline: 10, depth: 6, color: i === 0 && dark ? "#2c4564/1.00" : "#ffffff/1.00" })], [
-      node("Line", [0, 0], [sprite("Common_Line_Raius10px", cw, 60, { incline: 10, depth: 7, color: "#c0c9d4/1.00" })]),
-      node("Text", [0, 0], [], markedLabel(c, { fs: 32, fsMin: 24, color: i === 0 && dark ? "#ffffff/1.00" : "#2c4564/1.00", maxW: cw - 30, mark: i === 0 && dark, depth: 8 }).nodes),
+    const cw = CHIP.w, { x: dx, row } = places[i], x = cx + dx;
+    kids.push(node(`Chip_${i}`, [x, b.t - DETAILS_CHIP_Y - row * CHIP.rowPitch], [sprite("Common_Bg_Raius10px", cw, CHIP.h, { incline: 10, depth: 6, color: i === 0 && dark ? "#2c4564/1.00" : "#ffffff/1.00" })], [
+      node("Line", [0, 0], [sprite("Common_Line_Raius10px", cw, CHIP.h, { incline: 10, depth: 7, color: "#c0c9d4/1.00" })]),
+      node("Text", [0, 0], [], markedLabel(c, { fs: CHIP.fs, fsMin: CHIP.fsMin, color: i === 0 && dark ? "#ffffff/1.00" : "#2c4564/1.00", maxW: cw - CHIP.inset, mark: i === 0 && dark, depth: 8 }).nodes),
     ]));
   });
   // fields, on the game's light stats box; long values (file names) wrap, never cut
@@ -575,7 +631,7 @@ function detailsTree(it, title, fields, actions, portraitTexture = null, kind = 
     return f;
   });
   const rowHs = values.map((f) => Math.max(64, f.lines * f.fs * 1.25 + 16));
-  const boxT = b.t - 750, boxH = rowHs.reduce((a, h) => a + h, 0) + 24;
+  const boxT = b.t - DETAILS_BOX_Y - (rows - 1) * CHIP.rowPitch, boxH = rowHs.reduce((a, h) => a + h, 0) + 24;
   kids.push(node("Fields", [cx, boxT - boxH / 2], [sprite("Common_Bg_Raius10px", w - 40, boxH, { depth: 5, color: "#ecf5f9/1.00" })], [
     node("Line", [0, 0], [sprite("Common_Line_Raius10px", w - 34, boxH + 6, { depth: 4, color: "#c0c9d4/1.00" })]),
   ]));
@@ -727,8 +783,8 @@ export async function listPopup(options) {
   }
   let cb = null;
   if (check) {
-    const k = btns.length > 2 ? 0.8 : 1, left = LP.ok.x + BTN_W / 2 - btns.length * (BTN_W * k + 24) + 24;
-    cb = checkbox("Check", LP.list.l, LP.ok.y, check.label, !!check.checked, left - 40 - LP.list.l);
+    const foot = listFooter(btns.length);
+    cb = checkbox("Check", LP.list.l, foot.y, check.label, !!check.checked, foot.left - 40 - LP.list.l);
     band.push(cb.tree);
   }
   if (band.length) {
@@ -841,7 +897,9 @@ export async function listPopup(options) {
 }
 
 // --- the message popup ---
-const MSG = { title: 150, gap: 28, rowMin: 104, check: 150, buttons: 236, none: 70, minH: 640, cap: 1400 };
+// buttons: the room under the content for the footer, 304.5: the footer's top (FOOTER.centre + half a body, 279) and 25.5 of air.
+// It was 236 while the footer's centre sat 68.5 lower.
+export const MSG = { title: 150, gap: 28, rowMin: 104, rowButton: SMALL_BUTTON.h + 20, check: 150, buttons: FOOTER.centre + FOOTER.body.h / 2 + 25.5, none: 70, minH: 640, cap: 1400 };
 
 // message({title, lines, ok, cancel, check, host, width, close, confirmKeys, scroll}): a message on the popup frame, in host
 // (#dialog by default, over everything but the message popup). Resolves once it is closed, however it is closed, with
@@ -941,8 +999,9 @@ function messageLines(lines, w, fitTogether, plain) {
   const boxed = !plain && rows.some((r) => r.button);
   const min = boxed ? 40 : 44, max = boxed ? 44 : 52;
   const fitted = rows.map((r) => {
-    const bf = r.button ? fitText(r.button.label, 40, 28, 340) : null;
-    const bw = bf ? Math.max(230, glyphsOf(bf.text, bf.fs) + 90) : 0;
+    // a line button is the small button: 136 high, as wide as its caption needs and 90 more (240 at least), the caption 48 down to 34
+    const bf = r.button ? fitText(r.button.label, SMALL_BUTTON.fs, SMALL_BUTTON.fsMin, SMALL_BUTTON.w - SMALL_BUTTON.fitInset) : null;
+    const bw = bf ? Math.max(SMALL_BUTTON.minW, glyphsOf(bf.text, bf.fs) + SMALL_BUTTON.glyphPad) : 0;
     const room = w - (boxed ? 280 : 240) - (bw ? bw + 30 : 0);
     return { r, bf, bw, room, f: messageText(r.text, r.fontSize ?? max, r.minFontSize ?? min, room) };
   });
@@ -956,8 +1015,9 @@ function messageLines(lines, w, fitTogether, plain) {
   let y = 0;
   // rows on the game's light stats box: text at the left, the line's button at the right
   const boxW = w - 200, buttons = [];
-  const sized = fitted.map((s) => ({ ...s, h: boxed ? Math.max(MSG.rowMin, s.f.lines * s.f.fs * 1.3 + 30)
-    : Math.max(s.bf ? 92 : 0, s.f.lines * s.f.fs * 1.3 + 8) }));
+  // a row with a button holds it: in the light box 156 at least (the button and 10 above and below), rows without keep rowMin
+  const sized = fitted.map((s) => ({ ...s, h: boxed ? Math.max(s.bf ? MSG.rowButton : MSG.rowMin, s.f.lines * s.f.fs * 1.3 + 30)
+    : Math.max(s.bf ? SMALL_BUTTON.h : 0, s.f.lines * s.f.fs * 1.3 + 8) }));
   const boxH = sized.reduce((a, s) => a + s.h, 0) + 16;
   if (boxed) {
     out.push(node("Box", [0, -boxH / 2], [sprite("Common_Bg_Raius10px", boxW, boxH, { depth: 5, color: "#ecf5f9/1.00" })], [
@@ -971,7 +1031,7 @@ function messageLines(lines, w, fitTogether, plain) {
     out.push(node(`${boxed ? "Row" : "Line"}_${i}`, [left ? -w / 2 + (boxed ? 140 : 120) : 0, cy],
       [label(f.text, f.fs, `${r.color || "#2d4664"}/1.00`, left ? room : w - 200, f.lines * f.fs * 1.3 + 8, { pivot: left ? 3 : 4, depth: 8 })]));
     if (bf) {
-      out.push(Buttons.smallButton(`Btn_${i}`, w / 2 - (boxed ? 130 : 120) - bw / 2, cy, r.button.label, { w: bw, h: 92, fs: 40, min: 28, depth: 8 }));
+      out.push(Buttons.smallButton(`Btn_${i}`, w / 2 - (boxed ? 130 : 120) - bw / 2, cy, r.button.label, { w: bw, fs: SMALL_BUTTON.fs, min: SMALL_BUTTON.fsMin, depth: 8 }));
       buttons.push([i, r.button]);
     }
     if (boxed && i < sized.length - 1) out.push(node(`Dot_${i}`, [0, y - h], [sprite("Common_Line_Dot", boxW - 60, 4, { type: 2, depth: 7, color: "#c0c9d4/1.00" })]));
@@ -1103,15 +1163,16 @@ export function textViewer({ title, text, copy, close = T("display.close"), onCo
         await ready();
         if (ended) return;
         const next = document.createElement("div");
-        const view = await NGUI.render(popupFrame(title, 2458, 1400, { ok: copy, cancel: close }), next,
+        const view = await NGUI.render(popupFrame(title, TEXT_VIEWER.w, TEXT_VIEWER.h, { ok: copy, cancel: close }), next,
           { scale: S, origin: [960, 540], z: 10 });
         if (ended) return;
         hit(next, view, "Center/Popup/Btn/Btn_Ok/BG (1)", onCopy, { name: copy, action: "copy" });
         hit(next, view, "Center/Popup/Btn/Btn_Cancel/BG (1)", finish, { name: close, action: "cancel" });
         hit(next, view, "Center/Popup/Base/BG/Btn_Close", finish, { name: close, action: "close" });
         closable(view, host, finish, { el: layer });
-        Object.assign(pre.style, { position: "absolute", left: `${960 - 1100 * S}px`, top: `${540 - (FRAME_Y + 530) * S}px`,
-          width: `${2200 * S}px`, height: `${900 * S}px`, zIndex: 40 });
+        const box = TEXT_VIEWER.box;
+        Object.assign(pre.style, { position: "absolute", left: `${960 - box.width / 2 * S}px`, top: `${540 - box.top * S}px`,
+          width: `${box.width * S}px`, height: `${box.height * S}px`, zIndex: 40 });
         next.appendChild(pre);
         layer.replaceChildren(...next.childNodes);
       } catch (err) {
