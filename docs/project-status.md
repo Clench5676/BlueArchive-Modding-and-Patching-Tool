@@ -7,7 +7,7 @@ As of 2026-11-02. Verify the actual branch, working tree and `pyproject.toml` ve
 
 | Branch | State |
 | --- | --- |
-| `main` | Local version `0.6.1-alpha.7`: the published 0.6.0, the upstream sync to `6c61fdc8`, the security policy, the fix that keeps files from a mod inside their output folder (`e8bee4c2`), BL-065 through BL-069, BL-070 steps 1 and 2, BL-071, BL-072. Not pushed: held until upstream publishes its fix for the same issue. |
+| `main` | Local version `0.6.1-alpha.8`: the published 0.6.0, the upstream sync to `6c61fdc8`, the security policy, the fix that keeps files from a mod inside their output folder (`e8bee4c2`), BL-065 through BL-069, BL-070 steps 1 and 2, BL-071, BL-072, BL-073. Not pushed: held until upstream publishes its fix for the same issue. |
 
 0.6.0 is published (tag `0.6.0` at `817ebeda`, 2026-10-30): macOS build uploaded, Windows build by the release workflow.
 
@@ -47,6 +47,9 @@ As of 2026-11-02. Verify the actual branch, working tree and `pyproject.toml` ve
 | BL-065 through BL-069 | Implemented; owner acceptance pending (BL-069: trigger not confirmed) |
 | BL-070 | Steps 1 and 2 of 4 accepted by the owner on macOS (alpha.5, alpha.7); Windows not reviewed; steps 3 and 4 not started |
 | BL-071, BL-072 | Accepted by the owner on macOS (alpha.7); Windows not reviewed |
+| BL-073 | Fixed in alpha.8; owner acceptance pending |
+| BL-074 | Being diagnosed; owner's answer pending |
+| BL-075 | Open, minor |
 | BL-057, BL-058 | Accepted by the owner on macOS (alpha.12); Windows not reviewed |
 | BL-055 | Accepted by the owner on macOS (0.6.0 pre-review) |
 | BL-014 | Candidate, not scheduled |
@@ -57,8 +60,8 @@ from passing tests or the presence of earlier code.
 
 ## Review artifact and validation
 
-`dist/Blue-Archive-Modding-and-Patching-Tool-0.6.1-alpha.7-macos-arm64.dmg`, MD5 `a55353b080f117b82a7cace718e789a0`,
-built from `999998cb` (`chore(release): 0.6.1-alpha.7`), with BL-065 through BL-069, BL-070 steps 1 and 2, BL-071 and BL-072. BL-070 steps 1 and 2, BL-071 and BL-072 accepted; BL-065 through BL-069 awaiting the owner's review.
+`dist/Blue-Archive-Modding-and-Patching-Tool-0.6.1-alpha.8-macos-arm64.dmg`, MD5 `d4d296e27546b69d0a7eb5ea629df713`,
+built from `2347e82f` (`chore(release): 0.6.1-alpha.8`): alpha.7 and the BL-073 fix. BL-065 through BL-069 and BL-073 await the owner's review.
 
-On `main` before the build (`66a7a6d3`): 4248 passed, 26 skipped (Python); 2259 JavaScript tests passed (isolated runs with the official development
+On `main` before the build (`f05f512c`): 4248 passed, 26 skipped (Python); 2259 JavaScript tests passed (isolated runs with the official development
 view). Native Windows behavior is not verified on the macOS host.
