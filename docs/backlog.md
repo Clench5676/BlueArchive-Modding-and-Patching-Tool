@@ -1698,7 +1698,7 @@ Validation: full suites on `f1ad2631`: 4236 passed, 26 skipped; JavaScript 2149 
 
 ## BL-070: One design system for the web UI
 
-- Status: Step 1 of 4 accepted by the owner on macOS (alpha.5, 2026-11-03); Windows not reviewed. Steps 2 to 4 not started.
+- Status: Step 1 of 4 accepted by the owner on macOS (alpha.5, 2026-11-03); Windows not reviewed. Step 2 implemented, owner acceptance pending. Steps 3 and 4 not started.
 - Requested: 2026-11-02 (owner): does the UI follow the game's design language (button sizes, spacing, fonts), and where it does not, does it have one system of its own?
 
 Owner decisions (2026-11-03): follow the prefab's values as the one system; run the migration one step at a time; keep the top bar and the Enable Mods switch at their present size.
@@ -1719,9 +1719,14 @@ Consent and update popups now use `popupFrame`; their OK stays blue (BL-034). Po
 
 Step 1 leaves these for later or for the owner: captions below the 48 minimum under the tests' measuring stand-in (en-US Spine licence 46; Thai Spine licence 36, update offer 40, recovery report 36), to be judged with the real font; 11 off-game colours nobody decided (stage gradient, Enable Mods OFF ink, plain popup backdrop 0.6, checked plain checkbox, lobby-unavailable text, repair preview, native-controls button, detail placeholder ink and strip card tones).
 
+**Step 2, one light stats box (`web/js/stats-box.js`, `STATS_BOX`):** the list popup's details panel, the file details, messages with a line
+button and the update dialog draw through one component. Caption 38, value 38 down to 26 on up to three lines, a row at least 64 high, the line
+the fill plus 5 (the prefab's). Width: a popup frame less 200, a panel less 40, the file details the table under it. Owner's decision (2026-11-03):
+boxed message rows take the same text range; a row with a button stays 156 high. The update dialog's frame goes from 940 to about 710 high. The
+Switch Portrait panel still lays out its own half-width box.
+
 **Remaining, one at a time:**
 
-- Step 2: one light stats box component.
 - Step 3: the lobby subtitle on the balloon (which box in fullscreen is the owner's call); Hall modals and buttons on the shared footer and small button.
 - Step 4: list popup cards and details panel cloned from prefabs (UI-21), and its details actions.
 - Not scheduled, owner's eye first: the photography toolbar and colours; the lobby frost.
