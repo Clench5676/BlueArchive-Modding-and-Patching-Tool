@@ -29,7 +29,7 @@ const named = (nodes, name) => nodes.find((n) => n.name === name);
 const widgetOf = (n) => n.widgets[0];
 
 test("the box is the holder's width less 200 in a popup frame and 40 in a panel", () => {
-  assert.deepEqual([B.inset.frame, B.inset.panel], [200, 40]);
+  assert.deepEqual([B.inset.frame, B.inset.panel, B.inset.table], [200, 40, B.lineOutset]);
   for (const width of [850, 1700, 2080, 2458]) {
     assert.equal(Box.boxWidth("frame", width), width - 200);
     assert.equal(Box.boxWidth("panel", width), width - 40);

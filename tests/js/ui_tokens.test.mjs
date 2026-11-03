@@ -103,7 +103,7 @@ test("the status colours are the game's: success, warning, error, greyed, navy, 
 test("the stats box tokens: the prefab's colours and outset, the lead's caption, value and row numbers, the app's paddings", () => {
   const { STATS_BOX: B } = Tokens;
   assert.deepEqual([B.fill, B.line, B.divider, B.lineOutset], ["#ecf5f9", "#c0c9d4", "#c0c9d4", 5]);
-  assert.deepEqual({ ...B.inset }, { frame: 200, panel: 40 });
+  assert.deepEqual({ ...B.inset }, { frame: 200, panel: 40, table: 5 });
   assert.deepEqual([B.caption, B.value.fs, B.value.fsMin, B.value.lines, B.rowMin], [38, 38, 26, 3, 64]);
   assert.deepEqual([B.padY, B.padX, B.dividerInset, B.captionGap, B.slack, B.rowPad, B.linePitch, B.labelPad], [12, 30, 30, 30, 20, 16, 1.25, 8]);
   assert.deepEqual({ ...B.secondary }, { fs: 28, fsMin: 24, h: 36, extra: 42, rise: 21, foot: 26, colour: "#2d4664/0.65" });

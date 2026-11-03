@@ -69,11 +69,11 @@ export function check(host, info, { onCheck, onError, beforeShow, simulation = f
 // three share one size
 export const offerCaptions = (widgets) => Popup.footerLabels(widgets, widgets.map((l) => l.text));
 
-// the frame, 1700 wide, as high as its content needs: the light box 238 under the frame's top, then Status (96 high) and the
-// Progress bar (20 high, the lowest content), and POPUP.clearance between that and the three buttons' tops
+// the frame, 1700 wide, as high as its content needs: the light box where a message's lines start under the title, then Status
+// (96 high) and the Progress bar (20 high, the lowest content), and POPUP.clearance between that and the three buttons' tops
 const STATUS = { gap: 6, h: 96 };
 const PROGRESS = { gap: 8, h: 20 };
-const TOP = 238;
+const TOP = Popup.MSG.title;
 const FRAME_W = 1700;
 // the frame for a box boxH high: its height, the box's top and the centres of Status and Progress (popup-local y), and the
 // lowest content edge

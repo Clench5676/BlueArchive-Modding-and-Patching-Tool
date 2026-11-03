@@ -86,8 +86,9 @@ export const STATS_BOX = Object.freeze({
   divider: "#c0c9d4",
   // Deco is the fill's size plus 5 across and 5 down (Bg_1: 319 x 164 against 324 x 169, centred to within a unit)
   lineOutset: 5,
-  // what a box leaves of the width of what holds it: a popup frame leaves 200 across, a panel 40
-  inset: Object.freeze({ frame: 200, panel: 40 }),
+  // what a box leaves of the width of what holds it: a popup frame leaves 200 across, a panel 40, and a table leaves the line's
+  // outset, so the box's outer edge is the edge of the table under it
+  inset: Object.freeze({ frame: 200, panel: 40, table: 5 }),
   // caption 38; value 38 down to 26 on up to 3 lines, wrapped and never cut; a row is 64 high at least
   caption: 38,
   value: Object.freeze({ fs: 38, fsMin: 26, lines: 3 }),

@@ -185,8 +185,9 @@ for (const locale of LOCALES) test(`the file details' light box holds its captio
       const edit = child(nodes, `Edit_${i}`);
       return edit ? rectOf(edit) : null;
     } });
-    // one width rule: the panel (2080) less 40
-    assert.equal(boxRect.right - boxRect.left, W - 40, what);
+    // as wide as the file table under it (2080): the box's line, outside the fill, ends at the table's edges
+    assert.equal(boxRect.right - boxRect.left, W - B.lineOutset, what);
+    assert.equal(child(nodes, "Summary").children[0].widgets[0].w_, W, `${what}: the line's outer edges are the table's`);
     // the edit icon follows the text, the original name sits under it (the value rises), both inside the row
     const edit = child(nodes, "Edit_1"), original = child(nodes, "Original_1"), value = child(nodes, "V_1");
     assert.ok(edit && original, `${what}: the edit icon and the original name`);
@@ -260,8 +261,8 @@ for (const locale of LOCALES) test(`the update dialog's version rows and frame h
     // the lowest content, the progress bar, stays POPUP.clearance above the three buttons' tops, and the frame is on the stage
     assert.ok(frame.contentBottom - Popup.footerTop(frame.h, 3) >= POPUP.clearance - 1e-9, `${what}: ${frame.contentBottom - Popup.footerTop(frame.h, 3)} clear of the buttons`);
     assert.ok(frame.h <= POPUP.maxH && frame.h > 0);
-    // from the top: the box 238 under the frame's top, Status under it, the progress bar under that
-    assert.equal(POPUP.frameY + frame.h / 2 - frame.boxTop, 238);
+    // from the top: the box where a message's lines start, Status under it, the progress bar under that
+    assert.equal(POPUP.frameY + frame.h / 2 - frame.boxTop, 150);
     assert.ok(frame.boxTop - box.height > frame.status + 48 && frame.status - 48 > frame.progress + 10, `${what}: the order under the box`);
   }
 });
