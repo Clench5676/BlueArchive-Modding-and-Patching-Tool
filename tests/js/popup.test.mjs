@@ -3676,7 +3676,8 @@ for (const lang of LOCALE_LIST) test(`Settings tabs keep every value row's butto
       const inner = walk(settings).find((e) => e.className === "settings-rows-inner");
       const rows = rowEls.map((el) => ({ el, name: el.dataset.path.slice(5), box: rectOf(el) })).sort((a, b) => a.box[1] - b.box[1]);
       for (const [i, row] of rows.entries()) {
-        if (i) assert.ok(row.box[1] >= rows[i - 1].box[1] + rows[i - 1].box[3] - 0.05, `${tabName} ${row.name}: rows do not overlap`);
+        // the rows stand 12 apart (the prefab's Game tab), none over another
+        if (i) near2(row.box[1] - (rows[i - 1].box[1] + rows[i - 1].box[3]), Tokens.SETTINGS.rowGap * S);
         const buttons = walk(settings).filter((e) => new RegExp(`^Rows/${row.name}/Btn_\\d+$`).test(e.dataset.path || ""));
         const value = walk(settings).find((e) => e.dataset.path === `Rows/${row.name}/Value`);
         for (const [j, button] of buttons.entries()) {

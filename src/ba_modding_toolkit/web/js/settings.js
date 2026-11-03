@@ -16,7 +16,7 @@ import * as ModExport from "./mod-export.js";
 import * as Tours from "./tours.js";
 import * as Update from "./update.js";
 import * as Buttons from "./game-buttons.js";
-import { BACKDROP, SMALL_BUTTON } from "./ui-tokens.js";
+import { BACKDROP, SETTINGS, SMALL_BUTTON } from "./ui-tokens.js";
 import { rowBase, radioRow } from "./settings-rows.js";
 import { on, rpc } from "./api.js";
 import { T, errorText, platform } from "./i18n.js";
@@ -216,7 +216,7 @@ function frameTree() {
 function rows({ builtSize = null, sizeError = null } = {}) {
   const p = prefs, out = [];
   let y = -20;
-  const add = (r) => { r.tree.pos[1] = y - r.h / 2 + (r.tree.pos[1] || 0); out.push(r); y -= r.h + 24; };
+  const add = (r) => { r.tree.pos[1] = y - r.h / 2 + (r.tree.pos[1] || 0); out.push(r); y -= r.h + SETTINGS.rowGap; };
   const reveal = (path) => () => call(() => rpc("os.reveal", { path }));
   const browse = (key, start) => async () => {
     const path = await call(() => rpc("settings.pickFolder", { start }));
