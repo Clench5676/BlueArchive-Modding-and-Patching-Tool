@@ -406,6 +406,7 @@ async function renderScene() {
         nextBackground = document.createElement("div"); Object.assign(nextBackground.style, { position: "absolute", inset: "0" });
         const backgroundReady = Backgrounds.render(background, nextBackground, { signal, choices: options.backgrounds });
         const actorReady = createPortraits(portraitHost, value.portraits, choiceOf, { signal, globalScale: value.portraitScale, onError: fail,
+          onFrame: () => sceneCamera?.flush(),
           onRecover: () => { if (!signal.aborted) { clearPortraitScene(); if (current().mode === "portraits") renderScene().catch(fail); } } });
         const [result] = await Promise.all([actorReady, backgroundReady]);
         if (!live()) { result.dispose(); return; }
