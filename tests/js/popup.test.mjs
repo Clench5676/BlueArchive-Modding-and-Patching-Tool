@@ -3746,3 +3746,87 @@ for (const lang of LOCALE_LIST) test(`the asset consent's Change button (136 hig
     await asked;
   } finally { consent.hidden = true; Popup.closed(consent); setStrings("en-US", Object.fromEntries(strings(english))); document.documentElement.lang = "en-US"; }
 });
+
+// --- design tokens, item E: one chip (272 x 72, caption 40 down to 28, 290 apart) in the list popup's details panel ---
+test("chipPlaces stands chips in centred rows that fit inside the 850-unit panel, 290 apart", () => {
+  const { CHIP } = Tokens;
+  const slant = CHIP.h * Math.tan(10 * Math.PI / 180);
+  for (const panel of [850, 790]) for (let n = 1; n <= 7; n++) {
+    const places = Popup.chipPlaces(n, panel), rows = Math.max(...places.map((p) => p.row)) + 1;
+    assert.equal(places.length, n);
+    for (let row = 0; row < rows; row++) {
+      const xs = places.filter((p) => p.row === row).map((p) => p.x);
+      xs.slice(1).forEach((x, i) => assert.equal(x - xs[i], CHIP.pitch));
+      assert.ok(Math.abs(xs.reduce((a, b) => a + b, 0)) < 1e-9, "centred");
+      const left = Math.min(...xs) - CHIP.w / 2 - slant / 2, right = Math.max(...xs) + CHIP.w / 2 + slant / 2;
+      assert.ok(left >= -panel / 2 - 1e-9 && right <= panel / 2 + 1e-9, `${n} chips in ${panel}: row ${row} is ${left} to ${right}`);
+    }
+    // rows are filled in order: no row is started before the one above is full
+    const counts = Array.from({ length: rows }, (_, row) => places.filter((p) => p.row === row).length);
+    assert.ok(counts.slice(0, -1).every((c) => c === counts[0]) && counts.at(-1) <= counts[0]);
+  }
+  assert.deepEqual(Popup.chipPlaces(3, 850).map((p) => p.row), [0, 0, 1], "three chips are wider than the panel: the third goes on a second row");
+  assert.deepEqual(Popup.chipPlaces(2, 850).map((p) => p.x), [-145, 145]);
+});
+
+for (const lang of LOCALE_LIST) test(`the details panel's chips are 272 x 72, inside the panel and clear of the fields box and the name, in ${lang}`, async () => {
+  const NGUI = await import("../../src/ba_modding_toolkit/web/js/ngui.js");
+  const { CHIP } = Tokens;
+  const ui = localeWebui(lang);
+  const lists = [[ui.type.noRecruit], [ui.type.added, ui.popup.inUse], [ui.type.recruit, ui.settings.server.global, ui.mods.copy.none],
+    [ui.type.added, ui.settings.server.japan, ui.mods.copy.none, ui.popup.inUse]];
+  const panel = [960 - 1370 * S, 960 - 520 * S], slant = CHIP.h * Math.tan(10 * Math.PI / 180) * S;
+  try {
+    setStrings(lang, Object.fromEntries(strings(ui)));
+    document.documentElement.lang = lang;
+    for (const chips of lists) for (const original of [null, "original_name_spr.bundle"]) for (const full of ["Hoshino", "Hoshino (Swimsuit, Battle Ready, Special Edition)"]) {
+      await Popup.listPopup({ host: prompt, title: ui.info.title.portrait, selected: "a",
+        items: [{ key: "a", label: full, full, original, chips, thumb: null, big: null }],
+        details: () => ({ title: ui.info.title.portrait, fields: [["File", "ibuki_dress_spr_very_long_name.bundle"], ["Size", "12 MB"], ["CRC", "Fixed"], ["Copy", "Official"]], actions: [[ui.picker.ok, () => {}]] }) });
+      const part = (name) => walk(prompt).find((el) => el.dataset.path === `Details/${name}`);
+      const fields = NGUI.rect(part("Fields")), name = NGUI.rect(part("Name"));
+      const what = `${lang} ${chips.length} chips${original ? " with an original" : ""}, ${full.length > 10 ? "long" : "short"} name`;
+      chips.forEach((_, i) => {
+        const chip = NGUI.rect(part(`Chip_${i}`));
+        assert.ok(Math.abs(chip[2] - CHIP.w * S) < 0.02 && Math.abs(chip[3] - CHIP.h * S) < 0.02, `${what}: chip ${i} is ${chip[2] / S} x ${chip[3] / S}`);
+        assert.ok(chip[0] - slant / 2 >= panel[0] - 0.02 && chip[0] + chip[2] + slant / 2 <= panel[1] + 0.02, `${what}: chip ${i} inside the panel`);
+        assert.ok(chip[1] + chip[3] + 16 * S <= fields[1] + 0.02, `${what}: chip ${i} keeps 16 above the fields box`);
+        // its caption stays in the chip
+        const text = walk(prompt).filter((el) => el.dataset.path?.startsWith(`Details/Chip_${i}/Text`) && el.textContent);
+        assert.ok(text.length, `${what}: chip ${i} has its caption`);
+        for (const el of text) {
+          const r = NGUI.rect(el), fs = parseFloat(el.style.fontSize);
+          assert.ok(r[0] >= chip[0] - 0.02 && r[0] + r[2] <= chip[0] + chip[2] + 0.02 && r[1] >= chip[1] - 0.02 && r[1] + r[3] <= chip[1] + chip[3] + 0.02, `${what}: chip ${i}'s caption inside it`);
+          assert.ok(fs <= NGUI.fontSizeFor(el.textContent, CHIP.fs) * S + 0.02, `${what}: chip ${i} at ${fs}`);
+        }
+      });
+      // the chips of one row are level and the name above does not reach into them (an original line sits between)
+      const first = NGUI.rect(part("Chip_0"));
+      if (!original && full.length < 10) assert.ok(name[1] + name[3] <= first[1] + 0.02, `${what}: the name clears the chips`);
+      prompt.hidden = true;
+    }
+  } finally { prompt.hidden = true; setStrings("en-US", Object.fromEntries(strings(english))); document.documentElement.lang = "en-US"; }
+});
+
+test("the portrait panel's chips (72 high) stay in the right half and 16 above the fields box", async () => {
+  const NGUI = await import("../../src/ba_modding_toolkit/web/js/ngui.js");
+  const { portraitPanel: b } = await import("../../src/ba_modding_toolkit/web/js/switch-layout.js");
+  const ui = localeWebui("en-US");
+  const left = 960 + ((b.left + b.right) / 2 + b.gap / 2) * S, right = 960 + b.right * S;
+  try {
+    for (const chips of [[ui.type.noRecruit], [ui.type.added, ui.popup.inUse], [ui.type.recruit, ui.settings.server.global, ui.mods.copy.none]]) {
+      await Popup.listPopup({ host: prompt, title: "Portrait", selected: "a", layoutKind: "spr",
+        items: [{ key: "a", label: "Hoshino", full: "Hoshino", chips, thumb: null, big: null }],
+        details: () => ({ title: "Portrait", fields: [["File", "ibuki_dress_spr.bundle"], ["Size", "12 MB"], ["CRC", "Fixed"], ["Copy", "Official"]], actions: [] }) });
+      const part = (name) => walk(prompt).find((el) => el.dataset.path === `Details/${name}`);
+      const fields = NGUI.rect(part("Fields"));
+      chips.forEach((_, i) => {
+        const chip = NGUI.rect(part(`Chip_${i}`));
+        assert.ok(Math.abs(chip[3] - 72 * S) < 0.02, `${chips.length} chips: chip ${i} is 72 high`);
+        assert.ok(chip[0] >= left - 0.02 && chip[0] + chip[2] <= right + 0.02, `${chips.length} chips: chip ${i} in the right half`);
+        assert.ok(chip[1] + chip[3] + 16 * S <= fields[1] + 0.02, `${chips.length} chips: chip ${i} keeps 16 above the fields box`);
+      });
+      prompt.hidden = true;
+    }
+  } finally { prompt.hidden = true; }
+});

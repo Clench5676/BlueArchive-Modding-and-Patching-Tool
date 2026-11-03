@@ -1,5 +1,6 @@
 // Switch geometry in NGUI units. Preserve popup.js's Common_Btn_BG body,
 // Common_Line_Raius20px frame and Common_Bg_Raius10px name band.
+import { CHIP, POPUP } from "./ui-tokens.js";
 const GRID_WIDTH = 1818, INSET = 40, ROW_GAP = 48;
 const lean = Math.tan(10 * Math.PI / 180);
 export function switchGrid(kind, width = GRID_WIDTH) {
@@ -80,8 +81,10 @@ export function splitPortraitPanel(tree, find, wrap) {
   if (original) { original.pos = [cx, b.top - 126]; original.widgets[0].w_ = width; }
   const chips = tree.children.filter((n) => n.name.startsWith("Chip_"));
   const chipWidth = (width - 12 * (chips.length - 1)) / Math.max(1, chips.length);
+  // the fields box starts 234 under the panel's top; the chips (72 high) stand POPUP.clearance above it
+  const boxTop = b.top - 234, chipY = boxTop + POPUP.clearance + CHIP.h / 2;
   chips.forEach((chip, i) => {
-    chip.pos = [middle + b.gap / 2 + chipWidth / 2 + i * (chipWidth + 12), b.top - 192];
+    chip.pos = [middle + b.gap / 2 + chipWidth / 2 + i * (chipWidth + 12), chipY];
     chip.widgets[0].w_ = chipWidth;
     find(chip, "Line").widgets[0].w_ = chipWidth;
     const text = find(chip, "Text");
@@ -107,7 +110,7 @@ export function splitPortraitPanel(tree, find, wrap) {
     const line = find(tree, `L_${i}`);
     if (line) { line.pos = [cx, top + 10]; line.widgets[0].w_ = width - 24; }
   });
-  const box = find(tree, "Fields"), boxTop = b.top - 234;
+  const box = find(tree, "Fields");
   box.pos = [cx, (boxTop + top) / 2];
   Object.assign(box.widgets[0], { w_: width, h_: boxTop - top });
   Object.assign(find(box, "Line").widgets[0], { w_: width + 6, h_: boxTop - top + 6 });

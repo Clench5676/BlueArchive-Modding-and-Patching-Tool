@@ -64,7 +64,7 @@ export const SMALL_BUTTON = Object.freeze({
 });
 
 // UICharacterDetail/Inventory_ListControl/LeftInfo/CharInfo/Char_Target/Type/MainType/BG: Common_Bg_Raius10px 272 x 72
-// inclined 10 degrees, Label fs 40. Chips stand 290 apart.
+// inclined 10 degrees, Label fs 40. Chips stand 290 apart, a second row 84 under the first (the nameplate's rows).
 export const CHIP = Object.freeze({
   w: 272,
   h: 72,
@@ -72,6 +72,7 @@ export const CHIP = Object.freeze({
   fsMin: 28,
   pitch: 290,
   gap: 290 - 272,
+  rowPitch: 84,
   // the caption is fitted to w - 40
   inset: 40,
 });
