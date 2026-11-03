@@ -16,6 +16,7 @@ import * as ModExport from "./mod-export.js";
 import * as Tours from "./tours.js";
 import * as Update from "./update.js";
 import * as Buttons from "./game-buttons.js";
+import { BACKDROP } from "./ui-tokens.js";
 import { rowBase, radioRow } from "./settings-rows.js";
 import { on, rpc } from "./api.js";
 import { T, errorText, platform } from "./i18n.js";
@@ -180,7 +181,7 @@ function frameTree() {
   // the left column keeps only as many separators as there are tabs
   const grid = find(popup, "TabBg/Grid");
   if (grid) grid.children = grid.children.slice(0, TABS.length);
-  find(t, "BlackBg/BlackBgClickArea").widgets.find((w) => "sprite" in w).color = "#000000/0.60";
+  find(t, "BlackBg/BlackBgClickArea").widgets.find((w) => "sprite" in w).color = BACKDROP;
   return t;
 }
 
