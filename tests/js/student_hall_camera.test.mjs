@@ -51,6 +51,34 @@ test("middle-button scene pan and source switching preserve the temporary view w
   h.enable(true);h.camera.sync();assert.deepEqual(h.painted.at(-1).view,retained);assert.equal(h.painted.at(-1).immediate,true);h.camera.dispose();
 });
 
+test("a pan has no easing: the view moves with the pointer at once and nothing moves after release",()=>{
+  const h=fixture();h.send("wheel",{ctrlKey:true,deltaY:-70});h.flush();const zoom=h.camera.view();
+  h.send("pointerdown",{button:2,pointerId:7});
+  h.send("pointermove",{pointerId:7,clientX:560,clientY:310,buttons:2});
+  assert.deepEqual(h.camera.view(),h.camera.target(),"no gap between the view and its goal");
+  close(h.camera.view().x,zoom.x-40);close(h.camera.view().y,zoom.y-20);
+  h.send("pointerup",{pointerId:7});h.flush();
+  const painted=h.painted.at(-1).view;close(painted.x,zoom.x-40);close(painted.y,zoom.y-20);
+  const count=h.painted.length;h.flush();assert.equal(h.painted.length,count,"no glide once it has been painted");
+  h.time(500);h.send("wheel",{deltaX:8,deltaY:5});assert.deepEqual(h.camera.view(),h.camera.target(),"a two-finger swipe follows the fingers too");h.camera.dispose();
+});
+test("a pan during a zoom's glide moves the glide with it and the zoom still ends where it was going",()=>{
+  const h=fixture();h.send("wheel",{ctrlKey:true,deltaY:-70});h.flush();
+  h.time(500);h.send("wheel",{ctrlKey:true,deltaY:-20,clientX:580,clientY:320});const goal=h.camera.target(),before=h.camera.view();
+  assert.notEqual(before.scale,goal.scale);
+  h.send("wheel",{deltaX:8,deltaY:0});
+  close(h.camera.view().x,before.x-16);assert.equal(h.camera.view().scale,before.scale,"the pan does not jump the zoom");
+  h.flush();close(h.camera.view().scale,goal.scale);close(h.camera.view().x,goal.x-16);h.camera.dispose();
+});
+test("flush steps the camera at the top of the renderer's frame, once, so the portraits draw this frame's view",()=>{
+  const h=fixture();h.send("wheel",{ctrlKey:true,deltaY:-70});h.flush();const count=h.painted.length;
+  h.time(500);h.send("wheel",{deltaX:8,deltaY:5});assert.equal(h.painted.length,count,"nothing painted before the frame");assert.equal(h.frames.size,1);
+  h.camera.flush();assert.equal(h.painted.length,count+1);close(h.painted.at(-1).view.x,h.camera.target().x);
+  assert.equal(h.frames.size,0,"the camera's own request retired: no second step in this frame");
+  h.camera.flush();assert.equal(h.painted.length,count+1,"nothing to do without a pending frame");
+  h.send("wheel",{ctrlKey:true,deltaY:-20});h.camera.flush();assert.equal(h.frames.size,1,"a zoom still gliding asks for the next frame");
+  h.flush();h.camera.dispose();h.camera.flush();
+});
 test("animated zoom-out never exposes an unintended edge while the scene is still magnified",()=>{
   const h=fixture();h.send("wheel",{ctrlKey:true,deltaY:-200});h.flush();h.send("wheel",{deltaY:100,deltaMode:1});h.flush();
   for(const {view} of h.painted){

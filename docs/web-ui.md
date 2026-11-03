@@ -2575,6 +2575,10 @@ shared temporary camera, from 100% (the default view) to 300%. Wheel, pinch and 
 default size; the scene can pan only within its magnified bounds. UI controls retain their normal size. Camera
 updates do not reload actors or mutate saved positions, individual scales or the layout-editing size slider.
 
+A zoom eases to its goal (0.08 s); a pan has no easing, so the scene stays under the pointer or the fingers and stops when
+they stop. The portraits' renderer steps the camera at the top of its frame (`flush`), so the portraits, the background and
+the hit areas show one view in every frame; the portraits never trail the background while the scene moves.
+
 
 ## Release notes and feature tours
 

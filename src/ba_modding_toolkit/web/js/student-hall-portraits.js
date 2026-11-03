@@ -22,7 +22,7 @@ export function pose(entry, skeleton, globalScale = 1) {
   skeleton.scaleX = skeleton.scaleY * (entry.mirror ? -1 : 1);
 }
 
-export async function createPortraits(host, entries, choiceOf, { signal, onError, onRecover, globalScale = 1 } = {}) {
+export async function createPortraits(host, entries, choiceOf, { signal, onError, onRecover, onFrame, globalScale = 1 } = {}) {
   const actors = new Map(), cachedActors = new Map(), loads = [], sources = new Map();
   let disposed = false, owner = null, revision = 0, tail = Promise.resolve(), pendingUpdates = 0, cover = null, active = true, recoveryPending = false;
   let cameraView = VIEW;
@@ -70,6 +70,7 @@ export async function createPortraits(host, entries, choiceOf, { signal, onError
         preserveDrawingBuffer: true, viewport: VIEW,
         frame: (p, delta) => {
           if (p !== owner || !active) return;
+          onFrame?.();
           p.currentViewport = cameraView; p.previousViewport = null;
           for (const { entry, player: actor } of actors.values()) {
             pose(entry, actor.skeleton, globalScale);
