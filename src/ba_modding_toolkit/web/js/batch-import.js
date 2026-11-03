@@ -13,9 +13,9 @@ import { spineAllowed } from "./spine-runtime.js";
 import { thumbnailScope, forget } from "./thumbs.js";
 import { modelThumbnail } from "./model-still.js";
 import { S } from "./util.js";
-import { FOOTER } from "./ui-tokens.js";
+import { FOOTER, SMALL_BUTTON } from "./ui-tokens.js";
 import { ROW_W as OPTION_WIDTH, rowBase, radioRow } from "./settings-rows.js";
-import { loadImportLayouts, importArtwork, clipButtonPatterns, ROW_SCALE, ROW_WIDTH, ROW_HEIGHT, ROW_SELECTION, ROW_CHECK_TOP,
+import { BUTTON_BODY_H, loadImportLayouts, importArtwork, clipButtonPatterns, ROW_SCALE, ROW_WIDTH, ROW_HEIGHT, ROW_SELECTION, ROW_CHECK_TOP,
   PAPER_CENTRE, emptyBlock } from "./import-layout.js";
 import { suggestImports } from "./import-assistants.js";
 import { createImportState, countsOf, eligible, RESOURCE_TYPES, STATES } from "./import-state.js";
@@ -167,10 +167,10 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
   // name: the accessible name where the painted caption is not one (a glyph on a pager button)
   function button(caption, action, { width = 180, primary = false, scale = 0.4, name = null } = {}) {
     const b = el("button", "hit import-button"); b.type = "button"; b.dataset.action = action; b.accessibleName = name;
-    Object.assign(b.style, { width: `${width}px`, height: `${(primary ? 166 : 162) * scale}px` });
+    Object.assign(b.style, { width: `${width}px`, height: `${BUTTON_BODY_H * scale}px` });
     b.refresh = () => {
       const key = JSON.stringify([b.caption, b.disabled, b.size]); if (key === b.drawKey) return; b.drawKey = key;
-      paint(b, art.button(b.caption, width / scale, primary, !b.disabled, b.size), { scale, origin: [width / 2, (primary ? 166 : 162) * scale / 2] });
+      paint(b, art.button(b.caption, width / scale, primary, !b.disabled, b.size), { scale, origin: [width / 2, BUTTON_BODY_H * scale / 2] });
     };
     b.buttonWidth = width / scale;
     setCaption(b, caption); return b;
@@ -179,13 +179,17 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
     b.caption = caption; b.setAttribute("aria-label", b.accessibleName || caption); b.refresh();
   }
   const EMPTY_BOX = [1200, 100];   // each empty-list label's box (px), its text centred in it
-  // Buttons side by side share one caption size: the list's seven tools, and Advanced Options with Recheck.
+  // The row under the list is one row of the small button (SMALL_BUTTON: 136 high, caption 48 down to 34, 20 apart), drawn from the
+  // prefabs' 162-high bodies. Import stands out by its gold, not by its size. Its right edge is the list tools' (Clear's).
+  const FOOTER_ROW = { scale: SMALL_BUTTON.h * S / BUTTON_BODY_H, y: 902, right: 1848, wide: 330, width: SMALL_BUTTON.w * S,
+    size: { max: SMALL_BUTTON.fs * BUTTON_BODY_H / SMALL_BUTTON.h, min: SMALL_BUTTON.fsMin * BUTTON_BODY_H / SMALL_BUTTON.h } };
+  // Buttons side by side share one caption size: the list's seven tools, and the row under the list.
   const TOOLBAR = [["files", "addFiles", 26, 174], ["folder", "addFolder", 210, 190], ["all", "all", 410, 126], ["none", "none", 546, 140],
     ["remove", "remove", 696, 150], ["removeImported", "removeImported", 856, 224], ["clear", "clear", 1090, 156]];
   function shareSizes() {
-    for (const keys of [TOOLBAR.map(([key]) => key), ["options", "recheck"]]) {
+    for (const [keys, range] of [[TOOLBAR.map(([key]) => key)], [["options", "recheck", "start"], FOOTER_ROW.size]]) {
       const buttons = keys.map((key) => dom[key]).filter(Boolean);
-      const size = buttons.length > 1 && art ? art.buttonSize(buttons.map((b) => b.caption), buttons.map((b) => b.buttonWidth)) : null;
+      const size = buttons.length > 1 && art ? art.buttonSize(buttons.map((b) => b.caption), buttons.map((b) => b.buttonWidth), range) : null;
       for (const b of buttons) { b.size = size; b.refresh(); }
     }
   }
@@ -302,14 +306,15 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
       dom[key] = button(T(`import.${caption}`), key, { width, scale: 0.34 }); place(dom[key], x, 629, width, 56); panel.appendChild(dom[key]);
     }
     root.appendChild(panel);
-    dom.options = button(T("import.options.title"), "options", { width: 290, scale: 0.5 });
-    dom.recheck = button(T("import.recheck"), "recheck", { width: 230, scale: 0.5 });
+    const { scale: rowScale, wide, width: rowWidth } = FOOTER_ROW, rowHeight = BUTTON_BODY_H * rowScale;
+    dom.options = button(T("import.options.title"), "options", { width: wide, scale: rowScale });
+    dom.recheck = button(T("import.recheck"), "recheck", { width: rowWidth, scale: rowScale });
+    dom.start = button(T("import.action", { n: 0 }), "start", { width: rowWidth, scale: rowScale, primary: true });
     shareSizes();
-    dom.start = button(T("import.action", { n: 0 }), "start", { width: 330, scale: 0.6, primary: true });
     // As on the roster/detail screens, reserve the nav's entire 104 px area, with 24 px above it.
-    const footerY = 902;
-    place(dom.options, 958, footerY - 40.5, 290, 81); place(dom.recheck, 1272, footerY - 40.5, 230, 81);
-    place(dom.start, 1528, footerY - 49.8, 330, 99.6);
+    const rowTop = FOOTER_ROW.y - rowHeight / 2, startX = FOOTER_ROW.right - rowWidth, recheckX = startX - SMALL_BUTTON.gap - rowWidth;
+    place(dom.options, recheckX - SMALL_BUTTON.gap - wide, rowTop, wide, rowHeight); place(dom.recheck, recheckX, rowTop, rowWidth, rowHeight);
+    place(dom.start, startX, rowTop, rowWidth, rowHeight);
     root.append(dom.options, dom.recheck, dom.start);
     root.addEventListener("click", (event) => {
       const target = event.target.closest?.("[data-action]");

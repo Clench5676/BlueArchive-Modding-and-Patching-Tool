@@ -27,9 +27,10 @@ export function skinAffirmatives(tree,template){
   const result=copy(tree);visit(result);return result;
 }
 // Derived widget geometry only; every sprite is still loaded from the user's own Common atlas at runtime.
+// The second pattern is the prefab's mirrored one: a sprite flip, as the renderer draws no negative scale.
 // Keeping these small values avoids loading the entire Mailbox scene for each first confirmation.
 export const goldTemplate={name:'Btn',pos:[0,0],scale:[1,1],widgets:[
  {sprite:'Common_Btn_BG',atlas:'Common',type:1,incline:10,w_:494,h_:162,pivot:4,depth:5,color:'#f6e94b/1.00'}],children:[
  {name:'Label_Locale',pos:[0,5],scale:[1,1],widgets:[{text:'',color:'#4b2116/1.00'}],children:[]},
- ...[[125.8,3.1,1,.8],[-122.6,9.3,-1,.6]].map(([x,y,scale,alpha],index)=>({name:`GoldPattern${index}`,pos:[x,y],scale:[scale,scale],widgets:[
- {sprite:'Common_Btn_Normal_Y_S_Pt',atlas:'Common',type:1,incline:0,w_:252,h_:140,pivot:4,depth:6,color:`#ffffff/${alpha}`}],children:[]}))]};
+ ...[[125.8,3.1,0,.8],[-122.6,9.3,3,.6]].map(([x,y,flip,alpha],index)=>({name:`GoldPattern${index}`,active:true,pos:[x,y],scale:[1,1],widgets:[
+ {sprite:'Common_Btn_Normal_Y_S_Pt',atlas:'Common',type:1,incline:0,flip,w_:252,h_:140,pivot:4,depth:6,color:`#ffffff/${alpha}`}],children:[]}))]};
