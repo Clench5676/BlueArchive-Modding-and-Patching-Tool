@@ -1552,7 +1552,7 @@ index lock, so the changes remain uncommitted in this worktree.
 
 ## BL-065: Mod library state and recovery safety
 
-- Status: Implemented for local review; owner acceptance pending. Not in the 0.6.1-alpha build.
+- Status: Accepted by the owner on macOS (alpha.7, 2026-11-03): the owner's checks passed; what the owner could not trigger (state damage, recovery, engine and CI fixes) on the automated tests; Windows not reviewed.
 - Requested: 2026-11-02, from a whole-app functional review (FUN-1 to FUN-3).
 
 1. One bad record or an unreadable `state.json` erased the library at the next save.
@@ -1593,7 +1593,7 @@ and the RPC registry, and a sweep of the read RPCs with `profiles.json` byte for
 
 ## BL-066: Review fixes for import grouping, game folder, photographs, popups and texture bounds
 
-- Status: Implemented for local review; owner acceptance pending.
+- Status: Accepted by the owner on macOS (alpha.7, 2026-11-03): the owner's checks passed; what the owner could not trigger (state damage, recovery, engine and CI fixes) on the automated tests; Windows not reviewed.
 - Requested: 2026-11-02, from the whole-app review (FUN-4 to FUN-6, UI-2 to UI-4, SEC-1).
 
 1. FUN-4: a mod whose parts carry different dates imported as several mods, and applying the last reverted the others.
@@ -1624,7 +1624,7 @@ code only. Visual acceptance of the popups is the owner's.
 
 ## BL-067: Review fixes, Medium findings
 
-- Status: Implemented for local review; owner acceptance pending.
+- Status: Accepted by the owner on macOS (alpha.7, 2026-11-03): the owner's checks passed; what the owner could not trigger (state damage, recovery, engine and CI fixes) on the automated tests; Windows not reviewed.
 - Requested: 2026-11-02, from the whole-app review.
 
 Library: FUN-7 (an update marks the entries configured with the mod, and Off then On never writes the old build back),
@@ -1656,7 +1656,7 @@ only. Visual acceptance is the owner's.
 
 ## BL-068: Review fixes, Low findings
 
-- Status: Implemented for local review; owner acceptance pending.
+- Status: Accepted by the owner on macOS (alpha.7, 2026-11-03): the owner's checks passed; what the owner could not trigger (state damage, recovery, engine and CI fixes) on the automated tests; Windows not reviewed.
 - Requested: 2026-11-02, from the whole-app review.
 
 Engine: FUN-18 (no restore over a game update's rename), FUN-19 (Windows replace retry), FUN-20 (a mod update is atomic and
@@ -1676,7 +1676,7 @@ only.
 
 ## BL-069: macOS: the pointer sometimes flickers to the system pointer
 
-- Status: Partly fixed for local review; the trigger is not confirmed, the owner's observation is pending.
+- Status: Accepted by the owner on macOS (alpha.7, 2026-11-03): no flicker seen in ten minutes of use; reopen if it returns.
 - Requested: 2026-11-02 (owner, 0.6.1-alpha.3).
 
 On macOS the game's pointer (`web/js/cursor.js`) occasionally flickers to the system pointer. Trigger not known yet.
@@ -1781,7 +1781,7 @@ Seen in the development build (English, Simplified Chinese, Thai), with what the
 
 ## BL-073: macOS: on a second display the window jumps between screens and loses its traffic lights
 
-- Status: Fixed for local review (alpha.8); owner acceptance pending.
+- Status: Accepted by the owner (2026-11-03) without a test: no window that wide in use; reopen if it returns.
 - Requested: 2026-11-03 (owner, 0.6.1-alpha.7): after moving the window to the second display, dragging it there makes it jump back
   and forth between the two displays at a high rate, and the traffic lights are gone.
 
@@ -1813,7 +1813,8 @@ Lead's findings (2026-11-03):
 
 ## BL-074: Student Hall shows the official art for two students after updating to alpha.7
 
-- Status: Being diagnosed.
+- Status: Closed by the owner (2026-11-03), working as intended. Cause confirmed: the owner had deleted the first of duplicate mods,
+  and a deleted mod's Hall entries go back to the official art. The owner keeps that: the user notices it more easily.
 - Requested: 2026-11-03 (owner, 0.6.1-alpha.7): in the Student Hall, the portrait and the memorial lobby of Ako (Dress) and Hina
   (Swimsuit) show the official art again; other students not checked.
 
@@ -1832,4 +1833,19 @@ app, or the game updated those students, since the last good state.
 
 - Status: Open, minor (owner, 2026-11-03).
 - Requested: 2026-11-03 (owner, BL-067 review): the arrow keys do not change the volume. UI-14 (BL-067) meant to fix this.
+
+## BL-076: Student Hall: select a portrait by its outline, a pinned toolbar, its own size and a skin swap
+
+- Status: Refining; not dispatched.
+- Requested: 2026-11-03 (owner): with portraits close together, the toolbar of a placed portrait is hard to reach. Clicking a portrait
+  should draw the gold "applied" outline along its real visible outline and pin its toolbar (hovering another portrait shows no
+  toolbar then); clicking it again clears the selection. The toolbar should gain a size slider of its own and a button that swaps the
+  portrait for another skin of the same student.
+
+Today (lead, 2026-11-03): the toolbar exists only in layout editing (`student-hall.js` `renderHits`, `createHoverOwner`); it follows the
+pointer over each portrait's bounding box (`portraitRect`), so overlapping boxes hide the portraits behind. Each Hall portrait already
+stores its own size (`entry.scale`, 0.2 to 2.5, validated in `student_hall.py`), but no control sets it: only the global size
+slider. All portraits draw into one shared Spine canvas. Icon candidates in the game's atlases: skin swap `Campaign_Icon_ChangeUnit`
+(77 x 68), `CCG_Icon_ReplaceCards`, `Common_Icon_BeforeChange`; size `Common_Icon_ZoomChar` (100 x 69). The flip button already uses
+`Common_Icon_Change`.
 

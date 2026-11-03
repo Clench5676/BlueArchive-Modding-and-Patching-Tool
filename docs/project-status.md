@@ -44,11 +44,12 @@ As of 2026-11-02. Verify the actual branch, working tree and `pyproject.toml` ve
 | BL-056 | Funnel: AI-assisted portrait refinement, being refined |
 | BL-059 through BL-063 | Accepted by the owner on Windows (alpha.14) |
 | BL-064 | Accepted by the owner on Windows (alpha.15) |
-| BL-065 through BL-069 | Implemented; owner acceptance pending (BL-069: trigger not confirmed) |
+| BL-065 through BL-069 | Accepted by the owner on macOS (alpha.7); Windows not reviewed |
 | BL-070 | Steps 1 and 2 of 4 accepted by the owner on macOS (alpha.5, alpha.7); Windows not reviewed; steps 3 and 4 not started |
 | BL-071, BL-072 | Accepted by the owner on macOS (alpha.7); Windows not reviewed |
-| BL-073 | Fixed in alpha.8; owner acceptance pending |
-| BL-074 | Being diagnosed; owner's answer pending |
+| BL-073 | Accepted by the owner (alpha.8) |
+| BL-074 | Closed by the owner: working as intended |
+| BL-076 | Refining; not dispatched |
 | BL-075 | Open, minor |
 | BL-057, BL-058 | Accepted by the owner on macOS (alpha.12); Windows not reviewed |
 | BL-055 | Accepted by the owner on macOS (0.6.0 pre-review) |
@@ -61,7 +62,7 @@ from passing tests or the presence of earlier code.
 ## Review artifact and validation
 
 `dist/Blue-Archive-Modding-and-Patching-Tool-0.6.1-alpha.8-macos-arm64.dmg`, MD5 `d4d296e27546b69d0a7eb5ea629df713`,
-built from `2347e82f` (`chore(release): 0.6.1-alpha.8`): alpha.7 and the BL-073 fix. BL-065 through BL-069 and BL-073 await the owner's review.
+built from `2347e82f` (`chore(release): 0.6.1-alpha.8`): alpha.7 and the BL-073 fix. Everything in it is accepted.
 
 On `main` before the build (`f05f512c`): 4248 passed, 26 skipped (Python); 2259 JavaScript tests passed (isolated runs with the official development
 view). Native Windows behavior is not verified on the macOS host.
