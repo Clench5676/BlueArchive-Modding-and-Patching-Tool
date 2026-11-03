@@ -211,7 +211,10 @@ function toolbarObstacles() {
     .map((element) => element.getBoundingClientRect()).filter((b) => b.width > 0 && b.height > 0)
     .map((b) => ({ x: (b.left - box.left) * scale, y: (b.top - box.top) * scale, width: b.width * scale, height: b.height * scale }));
 }
-function toolbarBox(entry, rect = rectOf(entry)) { return portraitToolbarLayout(rect, portraitActions(entry).length, toolbarObstacles()); }
+function toolbarBox(entry, rect = rectOf(entry)) {
+  const offset = portraits?.head?.(entry.id), head = offset && { x: entry.x + offset.x, y: entry.y + offset.y };
+  return portraitToolbarLayout(rect, portraitActions(entry).length, toolbarObstacles(), head);
+}
 function portraitActions(entry) {
   const list = current().portraits, index = list.findIndex((item) => item.id === entry.id);
   const actions = list.length > 1 ? [["Remove", "hall.remove", () => store.remove(entry.id), true]] : [];

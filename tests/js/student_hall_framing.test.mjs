@@ -46,7 +46,7 @@ test("horizontal flip reflects asymmetric bounds around the same anchor for hits
 // Geometry comes only from the runtime's public API, using synthetic atlas pages and skeletons.
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
-import { pickPortrait, sampleAlpha, skeletonContains, bindPortraitPointer, VISIBLE_ALPHA, pageAlpha, preparePickPages } from "../../src/ba_modding_toolkit/web/js/student-hall-framing.js";
+import { pickPortrait, sampleAlpha, skeletonContains, bindPortraitPointer, VISIBLE_ALPHA, pageAlpha, preparePickPages, visibleHead } from "../../src/ba_modding_toolkit/web/js/student-hall-framing.js";
 const runtimeContext = vm.createContext({ console, TextDecoder, TextEncoder, Float32Array, Uint8Array, Uint16Array, Int16Array, Int32Array, ArrayBuffer, DataView });
 vm.runInContext(readFileSync(new URL("../../src/ba_modding_toolkit/web/vendor/spine-player-4.2.120/spine-player.min.js", import.meta.url), "utf8"), runtimeContext);
 const Runtime = runtimeContext.spine;
@@ -129,4 +129,25 @@ test("page alpha is decoded once at source readiness and picking reuses its cach
   globalThis.document={createElement:()=>({getContext:()=>({drawImage(){decodes++;},getImageData:()=>({data:new Uint8Array([1,2,3,25,4,5,6,26])})})})};
   const texture={getImage(){reads++;return{width:2,height:1};}},data={skins:[{getAttachments:()=>[{attachment:{region:{texture}}},{attachment:{region:{texture}}}]}]};
   try{preparePickPages(data);assert.deepEqual([...pageAlpha(texture).alpha],[25,26]);assert.equal(pageAlpha(texture),pageAlpha(texture));assert.equal(decodes,1);assert.equal(reads,1);}finally{globalThis.document=previous;}
+});
+
+test("the visible head ignores Spine's bounds: transparent props, additive halos and hidden slots never move it", () => {
+  const atlas = new Runtime.TextureAtlas("page.png\nsize: 4,2\nbody\n bounds: 0,0,4,2\n\nclear.png\nsize: 4,2\nprop\n bounds: 0,0,4,2\n");
+  const textures = new Map();
+  atlas.setTextures({ get: (path) => { if (!textures.has(path)) textures.set(path, { path, getImage: () => ({ width: 4, height: 2 }), setFilters() {}, setWraps() {} }); return textures.get(path); } });
+  const region = (path, width, height, x, y) => ({ path, width, height, x, y });
+  const slots = [["body", "normal", "ffffffff"], ["head", "normal", "ffffffff"], ["halo", "additive", "ffffffff"], ["prop", "normal", "ffffffff"], ["faded", "normal", "ffffff10"]];
+  const attachments = { body: { body: region("body", 400, 600, 200, 300) }, head: { head: region("body", 100, 100, 300, 650) },
+    halo: { halo: region("body", 100, 60, 300, 780) }, prop: { prop: region("prop", 200, 900, 900, 450) }, faded: { faded: region("body", 100, 400, -300, 900) } };
+  const data = new Runtime.SkeletonJson(new Runtime.AtlasAttachmentLoader(atlas)).readSkeletonData({ skeleton: { spine: "4.2.33" }, bones: [{ name: "root" }],
+    slots: slots.map(([name, blend, color]) => ({ name, bone: "root", attachment: name, blend, color })), skins: [{ name: "default", attachments }] });
+  const skeleton = new Runtime.Skeleton(data); skeleton.updateWorldTransform(Runtime.Physics.update);
+  const pages = (texture) => texture.path === "clear.png" ? clearPage : opaquePage;
+  const offset = new Runtime.Vector2(), size = new Runtime.Vector2(); skeleton.getBounds(offset, size, []);
+  assert.ok(offset.x < -300 && offset.x + size.x > 900, "Spine's bounds also count the transparent prop and the faded slot");
+  let head = visibleHead(skeleton, Runtime, pages);
+  assert.ok(Math.abs(head.x - 300) <= 8, `centre ${head.x}`); assert.ok(head.y <= 700 && head.y > 692, `top ${head.y}`);
+  skeleton.scaleX = -1; skeleton.updateWorldTransform(Runtime.Physics.update); head = visibleHead(skeleton, Runtime, pages);
+  assert.ok(Math.abs(head.x + 300) <= 8, "mirrored"); skeleton.scaleX = 1;
+  skeleton.bones[0].active = false; assert.equal(visibleHead(skeleton, Runtime, pages), null);
 });

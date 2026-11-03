@@ -5,7 +5,7 @@ import { ensureSpine } from "./spine-runtime.js";
 import { idleAnimation } from "./thumbs.js";
 import * as Stage from "./lobby-stage.js";
 import { APPLIED_SELECTION_GOLD } from "./ui-tokens.js";
-import { pickPortrait, portraitScale, preparePickPages, visibleSlot, VISIBLE_ALPHA } from "./student-hall-framing.js";
+import { pickPortrait, portraitScale, preparePickPages, visibleHead, visibleSlot, VISIBLE_ALPHA } from "./student-hall-framing.js";
 
 const VIEW = { x: 0, y: 0, width: 1920, height: 1080, padLeft: 0, padRight: 0, padTop: 0, padBottom: 0,
   transitionTime: 0, animations: {} };
@@ -181,6 +181,18 @@ export async function createPortraits(host, entries, choiceOf, { signal, onError
   return { actors, dispose, allowed: true, needsLoad, update, pick: (x, y) => pickPortrait(actors, x, y, spine),
     // Layout editing only: viewing never picks, so it never decodes atlas alpha. Pages already decoded are skipped.
     preparePick() { for (const { data } of sources.values()) preparePickPages(data); },
+    // The visible head relative to the skeleton's position, in stage units (y down): moving keeps it, a size or mirror
+    // change recomputes it.
+    head(id) {
+      const actor = actors.get(id), skeleton = actor?.player.skeleton;
+      if (!skeleton) return null;
+      const key = `${skeleton.scaleX}:${skeleton.scaleY}`;
+      if (actor.head?.key !== key) {
+        const head = visibleHead(skeleton, spine);
+        actor.head = { key, offset: head && { x: head.x - skeleton.x, y: skeleton.y - head.y } };
+      }
+      return actor.head.offset;
+    },
     setSelection(id) { selectedId = id; }, setActive(value) {
     if (disposed || active === !!value) return;
     active = !!value;
