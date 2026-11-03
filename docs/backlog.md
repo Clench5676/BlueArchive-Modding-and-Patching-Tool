@@ -1781,7 +1781,7 @@ Seen in the development build (English, Simplified Chinese, Thai), with what the
 
 ## BL-073: macOS: on a second display the window jumps between screens and loses its traffic lights
 
-- Status: Being diagnosed.
+- Status: Fixed for local review (alpha.8); owner acceptance pending.
 - Requested: 2026-11-03 (owner, 0.6.1-alpha.7): after moving the window to the second display, dragging it there makes it jump back
   and forth between the two displays at a high rate, and the traffic lights are gone.
 
@@ -1802,8 +1802,14 @@ Lead's findings (2026-11-03):
   1900 wide on the second display). A real pointer drag could not be simulated without accessibility rights. On the second display
   the buttons sit 0.37 pt under the title bar container's top edge, close to the "clipped" check.
 - Needed: the reason the packaged app logs (`Native window chrome inactive: ...`) after the move.
-- Direction: a failed alignment must not hide the lights or hand dragging to the JS fallback on macOS; keep native dragging whatever
-  the alignment does.
+- Cause, confirmed by the owner's log ("M1 button would be clipped by its AppKit container", after maximizing on the second display)
+  and reproduced with the SDK 27.2 launcher: the lights move down to the toolbar's centre line, which grows with the window
+  (`window-layout.js` `headerGeometry`: 23.3 at 1512 wide, 28.9 at 1920 x 1055). The title bar container is 32 high, so beyond
+  about 1560 wide, on any display, the move was refused and the chrome given up for good.
+- Fix (`window_macos.py` `_within_container`): the buttons go as low as the container allows and the chrome stays. On such a window
+  the lights sit up to about 5 points above the bar's centre line (owner's eye). Verified with real AppKit through the launcher:
+  before, the chrome failed and stayed off; after, it stays on at 1920 x 1055 and back.
+- Left: pywebview's JS drag still jumps across displays, but it now runs only when the native chrome fails for another reason.
 
 ## BL-074: Student Hall shows the official art for two students after updating to alpha.7
 
@@ -1812,7 +1818,13 @@ Lead's findings (2026-11-03):
   (Swimsuit) show the official art again; other students not checked.
 
 The Hall's "official" source has drawn the verified official files since 0.6.0, and a Hall entry whose mod is gone shows "missing", not
-the official art, so neither explains it alone. The owner's library cannot be read from here. Questions for the owner: what the Hall's
+the official art, so neither explains it alone. Owner (2026-11-03): the detail screen still shows the mods (renamed by the owner);
+the game state cannot be checked; an update of those students is possible.
+
+Lead's lead candidate: deleting a mod (`mods.remove` -> `state.reconcile_deleted_source`) rewrites the Hall entries that use it to the
+official source whenever the student has one, even when another mod of the same student and kind remains (`api.py` `fallback`
+prefers `official`). Deleting old versions after importing new ones would give exactly this. The only other path since 0.6.0 is
+`webui.json` read from `.prev` (FUN-9), which would bring back an older Hall as a whole. The owner's library cannot be read from here. Questions for the owner: what the Hall's
 layout editing names those two entries; whether the detail screen and the game show the mod; whether those mods were updated in the
 app, or the game updated those students, since the last good state.
 
