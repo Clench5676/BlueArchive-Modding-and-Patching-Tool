@@ -3,6 +3,7 @@ import * as NGUI from "./ngui.js";
 import { T } from "./i18n.js";
 import { $, S } from "./util.js";
 import { closed as popupClosed, closable, hit as hitNode, popupFrame, ready, scrollArea } from "./popup.js";
+import { compareFrame } from "./popup-frames.js";
 import { loadPlayer } from "./spine-load.js";
 import { ensureSpine } from "./spine-runtime.js";
 import { spine as confirmLicence } from "./consent.js";
@@ -15,13 +16,14 @@ const { node, label, find } = NGUI;
 export async function show(result, title = T("act.compare"), hostId = "popup", review = null) {
   await ready();
   const host = $(hostId);
-  const t = popupFrame(title, 1900, 1180, review ? { ok: review.accept, cancel: review.discard } : {});
+  const frame = compareFrame(!!review);
+  const t = popupFrame(title, frame.w, frame.h, review ? { ok: review.accept, cancel: review.discard } : {});
   const popup = find(t, "Popup");
-  const rows = (result.assets || []).filter((d) => d.status !== "same").slice(0, 12);
+  const rows = (result.assets || []).filter((d) => d.status !== "same").slice(0, frame.rows.max);
   const color = { changed: "#d9822b", added: "#1f9a52", removed: "#c0392b" };
   if (!review && !rows.length) popup.children.push(node("None", [0, 120], [label(T("compare.none"), 44, "#2d4664/1.00", 1600, 60, { depth: 8 })]));
   (review ? [] : rows).forEach((d, i) => {
-    const y = 400 - i * 64;
+    const y = frame.rows.y - i * frame.rows.pitch;
     popup.children.push(node(`R_${i}`, [-820, y], [label(`${d.type} - ${d.name}`, 38, "#2d4664/1.00", 1300, 50, { pivot: 3, depth: 8, ellipsis: true })]),
       node(`S_${i}`, [820, y], [label(T(`compare.${d.status}`), 38, `${color[d.status] || "#2d4664"}/1.00`, 300, 50, { pivot: 5, depth: 8 })]));
   });
@@ -40,7 +42,7 @@ export async function show(result, title = T("act.compare"), hostId = "popup", r
   }
   const players = [], startPlayers = [];
   if (review) {
-    const inner = scrollArea(next, [960 - 850 * S, 540 - 420 * S, 1700 * S, 760 * S], 0);
+    const inner = scrollArea(next, [960 - frame.scroll.width / 2 * S, 540 - frame.scroll.top * S, frame.scroll.width * S, frame.scroll.height * S], 0);
     inner.classList.add("repair-compare");
     inner.style.fontSize = `${36 * S}px`;
     const text = (value) => {

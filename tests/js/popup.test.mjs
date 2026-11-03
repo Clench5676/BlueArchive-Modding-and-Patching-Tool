@@ -695,9 +695,9 @@ test("update progress stays in NGUI, blocks buttons and Escape, and completion w
   assert.ok(bar.top - status.bottom >= 6 * S, "the status has a gap above the bar");
   for (const name of ["Btn_Ok", "Btn_Cancel"]) {
     const button = bounds(part(`Btn/${name}/BG (1)`));
-    assert.ok(Math.abs(button.height - 177 * S) < 0.01, "check the prefab's full button background height");
+    assert.ok(Math.abs(button.height - 177 * 0.8 * S) < 0.01, "check the prefab's button background height at the three-choice scale");
     assert.ok(button.top - bar.bottom >= 12 * S, "the full button background clears the progress bar");
-    assert.ok(button.bottom < frame.bottom, "the buttons stay within the 1500x820 frame");
+    assert.ok(button.bottom < frame.bottom, "the buttons stay within the frame");
   }
   await progress(200, 100, 100);
   await progress(-10, 100, 0);
@@ -1557,7 +1557,7 @@ test("failed-job notifications offer Error Report on the game frame", async () =
     Popup.notify("Failed job", { kind: "error" });
     const layer = dialog.children.at(-1);
     const report = await drawn(layer, "cancel");
-    assert.ok(walk(layer).some((el) => el.textContent === "Error Report"));
+    assert.ok(walk(layer).some((el) => el.textContent.replace(/\s+/g, " ") === "Error Report"));
     report.click();
     assert.equal(reports, 1);
     assert.equal(dialog.hidden, true);
@@ -2020,18 +2020,18 @@ test("release-note button captions fit the unchanged UIPopup_Sort bodies in all 
       assert.equal(new Set(labels.map(w => w.fontSize)).size, 1, lang);
       for (const [i, child] of controls.entries()) {
         const w = labels[i], body = NGUI.find(child, 'BG (1)');
-        assert.deepEqual(child.pos, [(i - .5) * 484, 0]);
-        assert.deepEqual(child.scale, [460 / 496, 460 / 496]);
+        assert.deepEqual(child.pos, [(i - .5) * 584, 0]); // two bodies at the prefab's +/-292, 88 apart
+        assert.deepEqual(child.scale, [1, 1]);
         assert.deepEqual(body.pos, [0, -4]);
         assert.deepEqual([body.widgets[0].w_, body.widgets[0].h_], [496, 177]);
         assert.deepEqual(NGUI.find(child, 'Label_Locale').pos, [0, 2]);
         assert.equal(w.text.replace(/\s/g, ''), captions[i].replace(/\s/g, ''), lang);
         const lines = w.text.split('\n');
         assert.ok(lines.length <= 2, `${lang}: ${JSON.stringify(w.text)}`);
-        assert.ok(w.fontSize >= 40 && w.fontSize <= 64, lang);
+        assert.ok(w.fontSize >= 48 && w.fontSize <= 72, lang);
         for (const [width, height] of [[960, 540], [1600, 900], [2560, 1440]]) for (const density of [1, 2]) {
           const scale = Math.min(width / 1920, height / 1080) * (1920 / 2960) * child.scale[0] * density;
-          assert.ok(NGUI.glyphWidth(w.text, w.fontSize) * scale <= 420 * scale + 1e-9, `${lang}: width`);
+          assert.ok(NGUI.glyphWidth(w.text, w.fontSize) * scale <= 400 * scale + 1e-9, `${lang}: width`);
           assert.ok(lines.length * NGUI.fontSizeFor(w.text, w.fontSize) * NGUI.LINE_PITCH * scale
             <= Popup.BUTTON_TEXT_H * scale + 1e-9, `${lang}: height`);
         }
@@ -2040,7 +2040,7 @@ test("release-note button captions fit the unchanged UIPopup_Sort bodies in all 
   } finally { setStrings('en-US', Object.fromEntries(strings(english))); }
 });
 
-// UI-32: the offer's three captions wrap to two lines before they shrink, in the popups' 64 to 40 range, at one size
+// UI-32: the offer's three captions wrap to two lines before they shrink, in the popups' 72 to 48 range, at one size
 test("the update offer's captions wrap before they shrink, share one size and fit in every locale", async () => {
   const NGUI = await import("../../src/ba_modding_toolkit/web/js/ngui.js");
   await Popup.ready();
@@ -2059,7 +2059,9 @@ test("the update offer's captions wrap before they shrink, share one size and fi
         Update.offerCaptions(widgets);
         const fs = widgets[0].fontSize, what = `${lang} ${ok}`;
         assert.equal(new Set(widgets.map((w) => w.fontSize)).size, 1, `${what}: one size`);
-        assert.ok(fs >= 40 && fs <= 64, `${what}: ${fs}`);
+        // this file's stand-in canvas is 0.6 em a character, harsher than the real font: where a caption cannot hold 48 in it,
+        // the group takes the next sizes down (never under the old floor of 40); the logic is the shared fit
+        assert.ok(fs >= 40 && fs <= 72, `${what}: ${fs}`);
         for (const [i, w] of widgets.entries()) {
           assert.equal(w.text.replace(/\s/g, ""), texts[i].replace(/\s/g, ""), what);
           for (const [width, height] of [[960, 540], [1600, 900], [2560, 1440]]) for (const density of [1, 2]) {
@@ -2073,12 +2075,12 @@ test("the update offer's captions wrap before they shrink, share one size and fi
           NGUI.fitLabels(at, texts, size, size, W, 2, { maxH: H });
           return at.every((w) => w.fontSize === size && inside(w));
         };
-        let best = 64;
+        let best = 72;
         while (best > 40 && !holds(best)) best -= 2;
         if (widgets.some((w) => w.text.includes("\n"))) assert.equal(fs, best, what);
         else assert.ok(fs >= best - 4, `${what}: one line at ${fs}, two lines at ${best}`);
         // never smaller than the old single line
-        assert.ok(fs >= NGUI.fitGroup(texts, 64, 34, W, 1)[0].fs, what);
+        assert.ok(fs >= NGUI.fitGroup(texts, 72, 34, W, 1)[0].fs, what);
       }
     }
     // the review's case: Open Download Page in English drew all three at 34 on one line
@@ -2216,8 +2218,10 @@ test('tour pages and sibling controls fit all six locales inside the notice pref
         assert.ok(count.pos[1] - 35 >= heading.pos[1] + titleWidget.h_ / 2);
         assert.ok(heading.pos[1] - titleWidget.h_ / 2 > copy.pos[1] + bodyWidget.h_ / 2);
         if (image) {
-          assert.ok(copy.pos[1] - bodyWidget.h_ / 2 >= 100);
-          assert.ok(-480 > NGUI.find(popup, 'Btn').pos[1] + 177 / 2);
+          const slot = NGUI.find(popup, 'ImageSlot'), caption = NGUI.find(popup, 'Caption');
+          assert.ok(copy.pos[1] - bodyWidget.h_ / 2 >= slot.pos[1] + 250);
+          // the caption's bottom edge keeps 16 clear of the footer's tops (the footer sits 190.5 above the frame's bottom)
+          assert.ok(caption.pos[1] - 35 >= NGUI.find(popup, 'Btn').pos[1] + 177 / 2 + 16);
         }
         for (const widget of [titleWidget, bodyWidget]) for (const line of widget.text.split('\n')) {
           assert.ok(NGUI.glyphWidth(line, widget.fontSize) <= widget.w_, `${lang}: ${line}`);
@@ -2225,7 +2229,7 @@ test('tour pages and sibling controls fit all six locales inside the notice pref
         const captions = ['Btn_Cancel', 'Btn_Ok'].map((name) => NGUI.find(popup, `Btn/${name}/Label_Locale`).widgets[0]);
         assert.equal(captions[0].fontSize, captions[1].fontSize);
         for (const widget of captions) {
-          assert.ok(widget.fontSize >= 40 && widget.fontSize <= 64);
+          assert.ok(widget.fontSize >= 48 && widget.fontSize <= 72);
           assert.ok(widget.text.split('\n').length <= 2);
           for (const line of widget.text.split('\n')) assert.ok(NGUI.glyphWidth(line, widget.fontSize) <= 400);
         }
@@ -2511,20 +2515,22 @@ test('illustrated and mixed tours retain the original geometry, including a miss
   await Popup.ready();
   const pages = [tourPages[0], { ...tourPages[1], image: '/tours/missing-ui.png', caption: 'App controls' }];
   const size = Tours.pageSize(pages);
-  assert.deepEqual(size, { width: 2458, height: 1400, image: [-1000, -400, 2000, 500] });
+  // the frame is 68.5 taller for the footer's rise and its content half of that higher: the original room under the caption
+  const lift = 34.25;
+  assert.deepEqual(size, { width: 2458, height: 1468.5, image: [-1000, -400 + lift, 2000, 500], bottom: -445 + lift - 35 });
   for (const [i, page] of pages.entries()) {
     const popup = NGUI.find(Tours.pageTree(page, i, pages.length, size), 'Popup');
-    assert.deepEqual([NGUI.find(popup, 'Base/BG').widgets[0].w_, NGUI.find(popup, 'Base/BG').widgets[0].h_], [2458, 1400]);
-    assert.deepEqual(NGUI.find(popup, 'Count').pos, [0, 520]);
-    assert.deepEqual(NGUI.find(popup, 'FeatureTitle').pos, [0, page.image ? 405 : 300]);
-    assert.deepEqual(NGUI.find(popup, 'FeatureBody').pos, [0, page.image ? 220 : -40]);
+    assert.deepEqual([NGUI.find(popup, 'Base/BG').widgets[0].w_, NGUI.find(popup, 'Base/BG').widgets[0].h_], [2458, 1468.5]);
+    assert.deepEqual(NGUI.find(popup, 'Count').pos, [0, 520 + lift]);
+    assert.deepEqual(NGUI.find(popup, 'FeatureTitle').pos, [0, (page.image ? 405 : 300) + lift]);
+    assert.deepEqual(NGUI.find(popup, 'FeatureBody').pos, [0, (page.image ? 220 : -40) + lift]);
     assert.equal(NGUI.find(popup, 'FeatureTitle').widgets[0].w_, 2100);
-    assert.deepEqual(NGUI.find(popup, 'Btn').pos, [0, -590]);
+    assert.deepEqual(NGUI.find(popup, 'Btn').pos, [0, -12 - 1468.5 / 2 + 190.5]);
     if (page.image) {
       const slot = NGUI.find(popup, 'ImageSlot');
-      assert.deepEqual(slot.pos, [0, -150]);
+      assert.deepEqual(slot.pos, [0, -150 + lift]);
       assert.deepEqual([slot.widgets[0].w_, slot.widgets[0].h_], [2000, 500]);
-      assert.deepEqual(NGUI.find(popup, 'Caption').pos, [0, -445]);
+      assert.deepEqual(NGUI.find(popup, 'Caption').pos, [0, -445 + lift]);
     }
   }
   const opened = Tours.show(pages, ['0.6.0']);
@@ -2536,7 +2542,7 @@ test('illustrated and mixed tours retain the original geometry, including a miss
   assert.deepEqual(frame(), initial);
   const image = walk(dialog).find((el) => el.tagName === 'IMG');
   assert.deepEqual([image.style.left, image.style.top, image.style.width, image.style.height],
-    [`${960 - 1000 * S}px`, `${540 - 100 * S}px`, `${2000 * S}px`, `${500 * S}px`]);
+    [`${960 - 1000 * S}px`, `${540 - (100 + lift) * S}px`, `${2000 * S}px`, `${500 * S}px`]);
   image.onerror();
   assert.deepEqual(frame(), initial);
   action(dialog, 'close').click(); await opened;
@@ -2649,15 +2655,16 @@ test('simulated offers use the real prefab and notes builder, intercept every ac
         const geometry = ['Btn_Cancel', 'Btn_Notes', 'Btn_Ok'].map((name) => byPath(consent, `Center/Popup/Btn/${name}/BG (1)`));
         assert.equal(actionsIn(consent).length, 3);
         for (const el of geometry) {
-          assert.ok(Math.abs(parseFloat(el.style.width) - 496 * S) < 0.01);
-          assert.ok(Math.abs(parseFloat(el.style.height) - 177 * S) < 0.01);
+          // three choices: the footer's 0.8 scale
+          assert.ok(Math.abs(parseFloat(el.style.width) - 496 * 0.8 * S) < 0.01);
+          assert.ok(Math.abs(parseFloat(el.style.height) - 177 * 0.8 * S) < 0.01);
         }
         for (let i = 1; i < geometry.length; i++) assert.ok(parseFloat(geometry[i - 1].style.left) + parseFloat(geometry[i - 1].style.width) < parseFloat(geometry[i].style.left));
         const labels = ['Btn_Cancel', 'Btn_Notes', 'Btn_Ok'].map((name) => byPath(consent, `Center/Popup/Btn/${name}/Label_Locale`));
         assert.equal(new Set(labels.map((el) => el.style.fontSize)).size, 1);
         for (const el of [title, ...labels]) {
           const fs = parseFloat(el.style.fontSize);
-          for (const line of el.textContent.split('\n')) assert.ok(line.length * 0.6 * fs <= (el === title ? 1100 : 400) * S + 0.01, `${lang}: ${line}`);
+          for (const line of el.textContent.split('\n')) assert.ok(line.length * 0.6 * fs <= (el === title ? 1300 : 400 * 0.8) * S + 0.01, `${lang}: ${line}`);
         }
         (await drawn(consent, 'notes')).click();
         await drawn(dialog, 'page');
@@ -2797,8 +2804,9 @@ test("the display settings' sort keys and filter options each share one font siz
 });
 
 // --- long messages scroll by themselves (the Add result, the dropped queue list) ---
-// layouts recorded from the unscrolled messageLayout before the cap applied by itself: [rows, frame height, y0]
-const UNSCROLLED = {
+// layouts recorded from the unscrolled messageLayout: [rows, frame height, y0]. UNSCROLLED_BEFORE is the record from before the
+// footer rose to 190.5 above the frame's bottom edge (MSG.buttons 236, now 304.5); UNSCROLLED is the record under the rise.
+const UNSCROLLED_BEFORE = {
   boxed: [[0,640,31],[1,640,91],[2,640,143],[3,742,195],[4,846,247],[5,950,299],[6,1054,351],[7,1158,403],[8,1262,455],[9,1366,507]],
   plain: [[0,640,31],[1,640,68.8],[2,640,114.6],[3,672.8,160.4],[4,764.4,206.2],[5,856,252],[6,947.6,297.8],[7,1039.2,343.6],[8,1130.8,389.4],[9,1222.4,435.2],[10,1314,481]],
   single: [[0,640,31],[1,640,68.8],[2,640,114.6],[3,672.8,160.4],[4,764.4,206.2],[5,856,252],[6,947.6,297.8],[7,1039.2,343.6],[8,1130.8,389.4],[9,1222.4,435.2],[10,1314,481]],
@@ -2806,6 +2814,15 @@ const UNSCROLLED = {
   choices: [[0,640,31],[1,640,68.8],[2,640,114.6],[3,672.8,160.4],[4,764.4,206.2],[5,856,252],[6,947.6,297.8],[7,1039.2,343.6],[8,1130.8,389.4],[9,1222.4,435.2],[10,1314,481]],
   none: [[0,640,-52],[1,640,-14.2],[2,640,31.6],[3,640,77.4],[4,640,123.2],[5,690,169],[6,781.6,214.8],[7,873.2,260.6],[8,964.8,306.4],[9,1056.4,352.2],[10,1148,398],[11,1239.6,443.8],[12,1331.2,489.6]],
   fit: [[0,640,31],[1,640,68.8],[2,640,114.6],[3,672.8,160.4],[4,764.4,206.2],[5,856,252],[6,947.6,297.8],[7,1039.2,343.6],[8,1130.8,389.4],[9,1222.4,435.2],[10,1314,481]]
+};
+const UNSCROLLED = {
+  boxed: [[0,640,65.25],[1,640,125.25],[2,706.5,177.25],[3,810.5,229.25],[4,914.5,281.25],[5,1018.5,333.25],[6,1122.5,385.25],[7,1226.5,437.25],[8,1330.5,489.25]],
+  plain: [[0,640,65.25],[1,640,103.05],[2,649.7,148.85],[3,741.3,194.65],[4,832.9,240.45],[5,924.5,286.25],[6,1016.1,332.05],[7,1107.7,377.85],[8,1199.3,423.65],[9,1290.9,469.45],[10,1382.5,515.25]],
+  single: [[0,640,65.25],[1,640,103.05],[2,649.7,148.85],[3,741.3,194.65],[4,832.9,240.45],[5,924.5,286.25],[6,1016.1,332.05],[7,1107.7,377.85],[8,1199.3,423.65],[9,1290.9,469.45],[10,1382.5,515.25]],
+  check: [[0,640,140.25],[1,708.1,178.05],[2,799.7,223.85],[3,891.3,269.65],[4,982.9,315.45],[5,1074.5,361.25],[6,1166.1,407.05],[7,1257.7,452.85],[8,1349.3,498.65]],
+  choices: [[0,640,65.25],[1,640,103.05],[2,649.7,148.85],[3,741.3,194.65],[4,832.9,240.45],[5,924.5,286.25],[6,1016.1,332.05],[7,1107.7,377.85],[8,1199.3,423.65],[9,1290.9,469.45],[10,1382.5,515.25]],
+  none: [[0,640,-52],[1,640,-14.2],[2,640,31.6],[3,640,77.4],[4,640,123.2],[5,690,169],[6,781.6,214.8],[7,873.2,260.6],[8,964.8,306.4],[9,1056.4,352.2],[10,1148,398],[11,1239.6,443.8],[12,1331.2,489.6]],
+  fit: [[0,640,65.25],[1,640,103.05],[2,649.7,148.85],[3,741.3,194.65],[4,832.9,240.45],[5,924.5,286.25],[6,1016.1,332.05],[7,1107.7,377.85],[8,1199.3,423.65],[9,1290.9,469.45],[10,1382.5,515.25]]
 };
 const messageShapes = {
   boxed: (n) => ({ lines: Array.from({ length: n }, (_, i) => ({ text: `Mod ${i} belongs to a student\nApplied`, button: { label: "Go To", fn() {} } })), ok: "Go To", cancel: "Stay Here" }),
@@ -2837,13 +2854,20 @@ test("a message within the scroll cap is laid out as before, a taller one scroll
         assert.ok(layout.visible <= layout.body.height, `${shape} ${n}`);
       }
     }
+    // against the record from before the footer rose: a frame that held its content to the buttons is 68.5 taller with the
+    // content half of that higher, one with no buttons is as it was
+    for (const [rows, height, y0] of UNSCROLLED_BEFORE[shape]) {
+      const layout = Popup.messageLayout(make(rows)), rise = shape === "none" ? 0 : 68.5;
+      if (layout.scroll || height === 640) continue;
+      assert.ok(Math.abs(layout.height - (height + rise)) < 0.001 && Math.abs(layout.y0 - (y0 + rise / 2)) < 0.001, `${shape} ${rows} against the old record`);
+    }
     // 40 rows do not fit: the list scrolls in the room between the title and the buttons
     assert.ok(Popup.messageLayout(make(40)).visible < Popup.messageLayout(make(40)).body.height, `${shape}: 40 rows scroll`);
-    assert.ok(last >= 9 && last < 40, `${shape}: the cap is reached between 10 and 40 rows`);
+    assert.ok(last >= 8 && last < 40, `${shape}: the cap is reached between 9 and 40 rows`);
   }
   // asking for it still works: the same cap, the same placement of a message that fits
   const asked = Popup.messageLayout({ ...messageShapes.plain(2), scroll: true });
-  assert.deepEqual([asked.scroll, asked.height], [true, 640]);
+  assert.deepEqual([asked.scroll, asked.height], [true, 649.7]); // 581.2 of content, the footer 68.5 higher
   assert.equal(Popup.messageLayout({ ...messageShapes.plain(40), scroll: true }).height, 1400);
 });
 
@@ -3358,4 +3382,171 @@ test("the custom zoom-out limit's slider is a range input with the value as its 
     fire(range, "change"); await tick();
     assert.deepEqual(saved, [["lobbyZoomCustom", 3.5]]);
   } finally { press("Escape"); handlers.clear(); }
+});
+
+// --- design tokens, item B: one popup footer. Its centre is 190.5 above the frame's bottom edge in every popup frame ---
+const Tokens = await import("../../src/ba_modding_toolkit/web/js/ui-tokens.js");
+const Frames = await import("../../src/ba_modding_toolkit/web/js/popup-frames.js");
+const { FOOTER, POPUP } = Tokens;
+const STAGE_HALF = 540 / S; // the stage is 1080 px high: 832.5 units either side of its centre
+const unitsOf = (el) => {
+  const [top, height, left, width] = ["top", "height", "left", "width"].map((key) => parseFloat(el.style[key]));
+  return { cx: (left + width / 2 - 960) / S, cy: (540 - (top + height / 2)) / S, w: width / S, h: height / S, top: (540 - top) / S, bottom: (540 - top - height) / S };
+};
+const measure = (root, path) => unitsOf(walk(root).find((e) => e.dataset.path === path));
+// the footer of a drawn frame: each body's centre height above the frame's bottom edge (the body sits 4 units under its node, scaled)
+function footerOf(root, names, scale) {
+  const frame = measure(root, "Center/Popup/Base/BG");
+  return { frame, bodies: names.map((name) => {
+    const body = measure(root, `Center/Popup/Btn/${name}/BG (1)`);
+    return { ...body, above: body.cy + 4 * scale - frame.bottom, top: body.cy + 4 * scale + FOOTER.body.h * scale / 2 };
+  }) };
+}
+const near2 = (a, b, eps = 0.02) => assert.ok(Math.abs(a - b) < eps, `${a} != ${b}`);
+
+test("popupFrame puts the footer's centre 190.5 above the bottom edge at every height, width and button count", async () => {
+  const NGUI = await import("../../src/ba_modding_toolkit/web/js/ngui.js");
+  await Popup.ready();
+  for (const h of [640, 900, 1180, 1400, 1428.5, 1468.5, 1560]) for (const w of [1500, 1900, 2458]) {
+    const bottom = POPUP.frameY - h / 2;
+    for (const [ok, cancel] of [["OK", null], [null, "No"], ["OK", "No"]]) {
+      const tree = NGUI.find(Popup.popupFrame("T", w, h, { ok, cancel }), "Popup");
+      assert.equal(NGUI.find(tree, "Base/BG").widgets[0].h_, h);
+      const btn = NGUI.find(tree, "Btn");
+      assert.equal(btn.pos[1] - bottom, FOOTER.centre, `${w} x ${h}`);
+      assert.equal(btn.pos[1], Popup.footerY(h));
+      const live = ["Btn_Ok", "Btn_Cancel"].map((name) => NGUI.find(btn, name)).filter((b) => b.active);
+      // one button in the middle; two at the prefab's +/-292, the bodies 88 apart
+      if (live.length === 1) assert.equal(live[0].pos[0], 0);
+      else { assert.deepEqual(live.map((b) => b.pos[0]).sort((a, b) => a - b), [-292, 292]); assert.equal(584 - FOOTER.body.w, 88); }
+    }
+    for (let n = 1; n <= 5; n++) {
+      const actions = Array.from({ length: n }, (_, i) => ({ label: `Choice ${i}`, value: `c${i}`, primary: i === n - 1 }));
+      const btn = NGUI.find(Popup.popupFrame("T", w, h, { buttons: actions }), "Popup/Btn");
+      assert.equal(btn.pos[1] - bottom, FOOTER.centre);
+      assert.equal(btn.children.length, n);
+      const { scale, xs } = Popup.footerSlots(n, w);
+      assert.deepEqual(btn.children.map((c) => c.pos[0]), xs);
+      assert.ok(btn.children.every((c) => c.scale[0] === scale && c.scale[1] === scale && c.pos[1] === 0));
+      // one: centred; two: the prefab's x, 88 apart; three or more: 0.8 and 24 apart, smaller when the frame is too narrow
+      if (n === 1) assert.deepEqual([scale, xs], [1, [0]]);
+      if (n === 2) { assert.equal(scale, 1); assert.deepEqual(xs, [-292, 292]); }
+      if (n >= 3) {
+        assert.equal(scale, Math.min(0.8, (w - 140 - 24 * (n - 1)) / n / 496));
+        for (let i = 1; i < n; i++) near2(xs[i] - xs[i - 1] - 496 * scale, 24);
+        near2(xs.reduce((a, b) => a + b, 0), 0);
+        // the row stays inside the frame, with its 70 margin on each side
+        assert.ok(xs[n - 1] + 496 * scale / 2 <= w / 2 - 70 + 1e-9, `${n} choices in ${w}`);
+      }
+      assert.equal(Popup.footerGap(n), n < 3 ? 88 : 24);
+    }
+  }
+  // the named choices keep the names the update dialog's hit paths use
+  const named = NGUI.find(Popup.popupFrame("T", 1700, 940, { close: false, buttons: [{ label: "A", name: "Btn_Cancel" }, { label: "B", name: "Btn_Notes" }, { label: "C", name: "Btn_Ok", primary: true }] }), "Popup/Btn");
+  assert.deepEqual(named.children.map((c) => c.name), ["Btn_Cancel", "Btn_Notes", "Btn_Ok"]);
+  assert.equal(NGUI.find(Popup.popupFrame("T", 1700, 940, { close: false, ok: "OK" }), "Popup/Base/BG/Btn_Close").active, false);
+});
+
+test("the list, consent, update and tour footers share that centre height, caption range and gaps", async () => {
+  const NGUI = await import("../../src/ba_modding_toolkit/web/js/ngui.js");
+  const Consent = await import("../../src/ba_modding_toolkit/web/js/consent.js");
+  const Tours = await import("../../src/ba_modding_toolkit/web/js/tours.js");
+  const oneSize = (root, names) => new Set(names.map((name) => walk(root).find((e) => e.dataset.path === `Center/Popup/Btn/${name}/Label_Locale`).style.fontSize)).size;
+  try {
+    // the list popup: right-aligned under the list panel, 88 apart for two, 0.8 and 24 for three or more
+    for (const buttons of [1, 2, 3, 4]) {
+      const list = Array.from({ length: buttons }, (_, i) => ({ label: `Button ${i}`, fn() {}, primary: i === buttons - 1 }));
+      await Popup.listPopup({ host: prompt, title: "List", items, selected: "a", onSelect() {}, buttons: list,
+        details: () => ({ title: "Portrait", fields: [["File", "a.bundle"]], actions: [] }) });
+      const names = list.map((_, i) => `Btn_${i}`), k = buttons > 2 ? 0.8 : 1;
+      const { frame, bodies } = footerOf(prompt, names, k);
+      near2(frame.h, 1520);
+      for (const body of bodies) { near2(body.above, FOOTER.centre); near2(body.w, 496 * k); }
+      for (let i = 1; i < buttons; i++) near2(bodies[i].cx - bodies[i - 1].cx - 496 * k, buttons > 2 ? 24 : 88);
+      near2(bodies.at(-1).cx + 496 * k / 2, 1150 + 248, 0.05); // right-aligned to its own right edge
+      assert.equal(oneSize(prompt, names), 1);
+      prompt.hidden = true;
+    }
+    // the asset consent, the scan consent and the Spine licence
+    for (const open of [() => Consent.show(consent, "/cache", false), () => Consent.scan(consent)]) {
+      const asked = open();
+      await until(() => walk(consent).some((e) => e.tagName === "BUTTON"));
+      const { frame, bodies } = footerOf(consent, ["Btn_Cancel", "Btn_Ok"], 1);
+      for (const body of bodies) near2(body.above, FOOTER.centre);
+      near2(bodies[1].cx - bodies[0].cx - 496, 88);
+      assert.equal(oneSize(consent, ["Btn_Cancel", "Btn_Ok"]), 1);
+      assert.equal(walk(consent).some((e) => e.dataset.action === "close"), false, "no close button");
+      assert.ok(frame.bottom > -STAGE_HALF && frame.top < STAGE_HALF, "on the stage");
+      walk(consent).find((e) => e.tagName === "BUTTON").click(); // the first answer is Decline
+      await asked;
+      consent.hidden = true; Popup.closed(consent);
+    }
+    // the update offer: three choices
+    update = { current: "0.1.0-alpha.3", version: "0.1.0-beta", installable: true };
+    const offered = Update.check(consent);
+    await drawn(consent, "later");
+    const { frame, bodies } = footerOf(consent, ["Btn_Cancel", "Btn_Notes", "Btn_Ok"], 0.8);
+    for (const body of bodies) { near2(body.above, FOOTER.centre); near2(body.w, 496 * 0.8); }
+    near2(bodies[1].cx - bodies[0].cx - 496 * 0.8, 24);
+    near2(bodies[2].cx - bodies[1].cx - 496 * 0.8, 24);
+    near2(frame.h, Update.FRAME.h);
+    assert.equal(oneSize(consent, ["Btn_Cancel", "Btn_Notes", "Btn_Ok"]), 1);
+    action(consent, "later").click();
+    await offered;
+    // a tour page, with and without its illustration
+    for (const image of [null, "/tours/app-ui.png"]) {
+      const page = { version: "0.6.0", title: "Title", body: "Body text", image, caption: "Caption" };
+      const size = Tours.pageSize([page]);
+      const popup = NGUI.find(Tours.pageTree(page, 1, 2, size), "Popup");
+      const h = NGUI.find(popup, "Base/BG").widgets[0].h_;
+      assert.equal(NGUI.find(popup, "Btn").pos[1] - (POPUP.frameY - h / 2), FOOTER.centre);
+      assert.deepEqual(["Btn_Cancel", "Btn_Ok"].map((name) => NGUI.find(popup, `Btn/${name}`).pos[0]), [-292, 292]);
+    }
+  } finally { prompt.hidden = true; consent.hidden = true; Popup.closed(consent); Popup.closed(prompt); }
+});
+
+test("every popup frame keeps its lowest content 16 above the buttons' tops and stays on the stage", async () => {
+  const Tours = await import("../../src/ba_modding_toolkit/web/js/tours.js");
+  const Import = await import("../../src/ba_modding_toolkit/web/js/batch-import.js");
+  await Popup.ready();
+  const rooms = [];
+  const room = (name, h, bottom, buttons = 2, w = 1900) => rooms.push({ name, h, bottom, buttons, w });
+  room("text viewer", Frames.TEXT_VIEWER.h, Frames.TEXT_VIEWER.bottom);
+  for (let n = 1; n <= Frames.ALIAS.max; n++) { const f = Frames.aliasFrame(n); room(`alias editor, ${n} rows`, f.h, f.bottom); }
+  for (const body of [0, 300, 900, 1500, 3000, 20000]) { const f = Frames.detailsFrame(body); room(`details, body ${body}`, f.h, f.bottom); }
+  room("Mod Alias", Frames.MOD_ALIAS.h, Frames.MOD_ALIAS.bottom);
+  for (const review of [true, false]) { const f = Frames.compareFrame(review); room(`compare${review ? " review" : ""}`, f.h, f.bottom, review ? 2 : 0); }
+  room("export", Frames.EXPORT.h, Frames.EXPORT.bottom);
+  room("illustrated tour page", Tours.GEOMETRY.height, Tours.GEOMETRY.bottom);
+  room("update", Update.FRAME.h, Update.FRAME.contentBottom, 3);
+  // the batch import dialogs: the scrolling area [left, top, width, height] in stage px
+  const [, areaTop, , areaHeight] = Import.DIALOG_AREA;
+  room("import dialogs", Import.DIALOG_H, (540 - (areaTop + areaHeight)) / S);
+  // the message popup, in every shape and length, scrolling or not
+  for (const [shape, make] of Object.entries(messageShapes)) for (let rows = 0; rows <= 40; rows++) {
+    const layout = Popup.messageLayout(make(rows)), hasButtons = shape !== "none";
+    const used = (layout.scroll ? layout.visible : layout.body.height) + (shape === "check" ? Popup.MSG.check : 0);
+    room(`message ${shape}, ${rows} rows`, layout.height, layout.y0 - used, hasButtons ? (shape === "choices" ? 3 : 2) : 0);
+  }
+  for (const { name, h, bottom, buttons, w } of rooms) {
+    assert.ok(h <= POPUP.maxH, `${name}: ${h} is no taller than ${POPUP.maxH}`);
+    assert.ok(POPUP.frameY + h / 2 <= STAGE_HALF && POPUP.frameY - h / 2 >= -STAGE_HALF, `${name} stays on the stage`);
+    if (buttons) assert.ok(bottom >= Popup.footerTop(h, buttons) + POPUP.clearance - 1e-9, `${name}: content ends at ${bottom}, the buttons start at ${Popup.footerTop(h, buttons)}`);
+  }
+  // the list popup: its list panel's bottom edge is above the footer's tops, one to four buttons
+  for (const buttons of [1, 2, 3, 4]) assert.ok(-470 >= Popup.footerTop(1520, buttons) + POPUP.clearance, `list popup, ${buttons} buttons`);
+  // the consent popups, measured as drawn
+  const Consent = await import("../../src/ba_modding_toolkit/web/js/consent.js");
+  try {
+    for (const open of [() => Consent.show(consent, "/cache", false), () => Consent.scan(consent)]) {
+      const asked = open();
+      await until(() => walk(consent).some((e) => e.tagName === "BUTTON"));
+      const lowest = Math.min(...walk(consent).filter((e) => /^Center\/Popup\/(Cached|Never|Checked|Note)$/.test(e.dataset.path || "")).map((e) => unitsOf(e).bottom));
+      const { bodies } = footerOf(consent, ["Btn_Cancel", "Btn_Ok"], 1);
+      assert.ok(lowest >= bodies[0].top + POPUP.clearance - 0.02, `consent content ends at ${lowest}, the buttons start at ${bodies[0].top}`);
+      walk(consent).find((e) => e.tagName === "BUTTON").click(); // the first answer is Decline
+      await asked;
+      consent.hidden = true; Popup.closed(consent);
+    }
+  } finally { consent.hidden = true; Popup.closed(consent); }
 });

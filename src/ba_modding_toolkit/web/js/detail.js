@@ -43,7 +43,8 @@ import { clearUnseen, hasUnseen as hasFresh, shownUnseen, switchUnseen } from ".
 import { customAliases as aliasesOf, modName, modOriginalName, studentName } from "./names.js";
 import { setTitle } from "./nav.js";
 import { KEYS, deltaOf, pacer, typing } from "./step-keys.js";
-import { FRAME_Y, closable, closed as popupClosed, frameReady, hit as hitNode, listPopup, message, notice, popupFrame, scrollArea } from "./popup.js";
+import { closable, closed as popupClosed, frameReady, hit as hitNode, listPopup, message, notice, popupFrame, scrollArea } from "./popup.js";
+import { ALIAS, DETAILS, aliasFrame, detailsFrame } from "./popup-frames.js";
 import { candidateStatus, detailStatus, selectionStatus, selectionError, intendedKey, isApplied, availableTab, coreOf, hasAsset, hasKind, primaryKind, appliedKey as keyOf, appliedOf, candidates as listSources, partsOf, popupMode, modelSource, previewBase, previewChanged, previewKey, sourceOf, switchKindOf } from "./switch-sources.js";
 import { $, DOT, RECRUIT, S, TAN10, advanceOf, at, clone, glyphsOf, hitButton, markedLabel, off, text, widget, wrapPath } from "./util.js";
 
@@ -181,7 +182,7 @@ const fullName = (v) => studentName(v, originalName(v));
 const shortName = (v) => studentName(v, L(v.names)?.short ?? v.key);
 // the current variant's own aliases (webui/state.py keeps the same limits): the roster search
 // finds this skin by all of them; the first one is the nameplate's main name
-const ALIAS_MAX = 8, ALIAS_LENGTH = 24;
+const ALIAS_MAX = ALIAS.max, ALIAS_LENGTH = 24;
 const customAliases = () => aliasesOf(variant());
 const aliasList = () => customAliases().join(/^(zh|ja)/.test(language()) ? "\u3001" : ", ");
 const variant = () => fam.variants.find((v) => v.key === variantKey) || fam.variants[0];
@@ -1385,7 +1386,7 @@ async function openPicker(scroll = 0) {
 // them (aliases.set); Cancel, the close button, the backdrop or Escape drop the changes. Enter in the empty row adds
 // what it holds, in another row goes to the next one, in an empty one at the end keeps them; never while an input
 // method is composing (isComposing, or keyCode 229, which WebKit sends for the key that ends a conversion). ---
-const AL = { w: 1500, rowW: 1180, rowH: 100, pitch: 124, top: 236, bottom: 334 };
+const AL = ALIAS;
 let aliasToken = 0;
 // draft: the rows; focusAt: the row to focus (the empty one when null); carry: the empty row of the editor drawn before,
 // which keeps the focus while this one is drawn: what is typed there meanwhile goes into the new empty row
@@ -1397,8 +1398,7 @@ async function openAliases(draft = customAliases(), focusAt = null, key = varian
   const names = draft.slice(0, ALIAS_MAX);
   const adding = names.length < ALIAS_MAX;
   const n = names.length + (adding ? 1 : 0);
-  const h = AL.top + (n - 1) * AL.pitch + AL.bottom;
-  const ys = Array.from({ length: n }, (_, i) => FRAME_Y + h / 2 - AL.top - i * AL.pitch);
+  const { h, ys } = aliasFrame(n);
   const t = popupFrame(T("alias.title"), AL.w, h, { ok: T("picker.ok"), cancel: T("popup.cancel") });
   const popup = find(t, "Popup");
   ys.forEach((y, i) => {
@@ -1478,7 +1478,7 @@ async function openAliases(draft = customAliases(), focusAt = null, key = varian
 // --- details (the info bar's Details button): the shown tab's game files on the popup frame. A summary (the folder,
 // what the files carry and, for a mod, its file and the variant it was made for), then one row per bundle: name,
 // size, date, CRC and what it carries ---
-const DT = { w: 2200, h: 1400, l: -1040, r: 1040 };
+const DT = DETAILS;
 const DT_COLS = [["field.file", 1040], ["field.size", 220], ["field.date", 270], ["field.crc", 290], ["field.status", 260]];
 const crcLabel = (state) => (state === "fixed" ? [T("crc.fixed"), "#1f9a52"] : state === "needs_fix" ? [T("crc.needed"), "#d9822b"] : [T("crc.original"), "#000000"]);
 // what a game file carries, as a label: the original, a mod's name, another variant's name, or "replaced"
@@ -1560,8 +1560,8 @@ async function showDetails() {
   const info = detailsInfo();
   const body = detailsBody(info);
   // the frame fits its content, up to almost the whole stage (then the content scrolls): the title takes 140 units
-  // above the content, the buttons 228 under it
-  const h = Math.min(DT.h, Math.max(900, body.height + 140 + 228)), top = FRAME_Y + h / 2 - 140, bottom = FRAME_Y - h / 2 + 228;
+  // above the content, the buttons 296.5 under it (popup-frames.js)
+  const { h, top, bottom } = detailsFrame(body.height);
   const t = popupFrame(info.title, DT.w, h, { ok: T("picker.ok"), cancel: info.reveal ? T(platform === "mac" ? "open.mac" : "open.win") : null });
   host.hidden = false;
   const next = document.createElement("div");

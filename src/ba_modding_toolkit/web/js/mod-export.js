@@ -2,6 +2,7 @@
 import * as NGUI from "./ngui.js";
 import * as Popup from "./popup.js";
 import * as Loading from "./loading.js";
+import { EXPORT } from "./popup-frames.js";
 import { rowBase, radioRow } from "./settings-rows.js";
 import { rpc, waitJob } from "./api.js";
 import { T, errorText } from "./i18n.js";
@@ -52,23 +53,23 @@ function confirmation(initial) {
     const render = async () => {
       const mine = ++generation;
       await Popup.frameReady();
-      const tree = Popup.popupFrame(T("export.title"), 1800, 1400,
+      const tree = Popup.popupFrame(T("export.title"), EXPORT.w, EXPORT.h,
         { ok: T("export.confirm"), cancel: T("export.chooseDirectory") });
       const popup = NGUI.find(tree, "Popup");
-      const path = rowBase("Destination", 385, 260, T(draft.folder === draft.defaultFolder ? "export.defaultDestination" : "export.destination"));
+      const path = rowBase("Destination", EXPORT.rows.Destination.y, EXPORT.rows.Destination.h, T(draft.folder === draft.defaultFolder ? "export.defaultDestination" : "export.destination"));
       const fit = wrapPath(draft.folder, 44, 30, 1400, 3);
       path.children.push(NGUI.node("Path", [-718, -45], [NGUI.label(fit.text, fit.fs, "#2d4664/1.00", 1440,
         fit.fs * fit.lines * 1.3 + 10, { pivot: 3, depth: 8 })]));
       const targets = draft.targets?.length ? draft.targets : [{ server: draft.server, platform: draft.platform }];
       const servers = [...new Set(targets.map((target) => target.server))];
       const platforms = [...new Set(targets.filter((target) => target.server === draft.server).map((target) => target.platform))];
-      const rows = [radioRow("Server", 85, T("export.server"), servers.map((value) => [value, T(`settings.server.${value}`)]),
+      const rows = [radioRow("Server", EXPORT.rows.Server.y, T("export.server"), servers.map((value) => [value, T(`settings.server.${value}`)]),
         draft.server, (value) => {
           draft.server = value;
           if (!targets.some((target) => target.server === value && target.platform === draft.platform))
             draft.platform = targets.find((target) => target.server === value).platform;
           redraw();
-        }), radioRow("Platform", -175, T("export.platform"), platforms.map((value) => [value, T(`import.source.${value}`)]),
+        }), radioRow("Platform", EXPORT.rows.Platform.y, T("export.platform"), platforms.map((value) => [value, T(`import.source.${value}`)]),
         draft.platform, (value) => { draft.platform = value; redraw(); })];
       popup.children.push(path, ...rows.map((row) => row.tree));
       const next = document.createElement("div");

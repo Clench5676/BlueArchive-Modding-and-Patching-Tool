@@ -20,6 +20,8 @@ import { fitBadgeCaptions, selectedFrame, selectionArtWindow, SELECTION_PREFAB, 
 import { frameOutline } from "./row-thumbnail.js";
 import { T } from "./i18n.js";
 import { withTimeout } from "./async.js";
+import { TEXT_VIEWER } from "./popup-frames.js";
+import { FOOTER, POPUP } from "./ui-tokens.js";
 import { DOT, RECRUIT, S, TAN10, advanceOf, clone, glyphsOf, hitButton, markedLabel, wrapPath } from "./util.js";
 
 const { node, sprite, label, find, rect } = NGUI;
@@ -227,11 +229,36 @@ export function hit(host, view, path, fn, { name = "", action = "", z = 80 } = {
 // --- the frame ---
 // a popup button (UIPopup_Sort Btn_Ok / Btn_Cancel, Common_Btn_BG 496 x 177): its caption, even on two lines, keeps clear of
 // the body's top and bottom edges
-export const BUTTON_TEXT_H = 140;
+export const BUTTON_TEXT_H = FOOTER.caption.h;
+// the game's popup frame is centred 12 units under the stage's centre (Base -20, BG +8)
+export const FRAME_Y = POPUP.frameY;
+
+// --- the footer: one set of numbers for every popup frame (UIPopup_Sort/Center/Popup/Btn) ---
+// the buttons' centre, popup-local y: FOOTER.centre above the bottom edge of a frame h high, whatever its height
+export const footerY = (h) => FRAME_Y - h / 2 + FOOTER.centre;
+// the top of the bodies of n buttons, popup-local y
+export const footerTop = (h, n = 1) => footerY(h) + FOOTER.body.h * footerScale(n) / 2;
+// one or two bodies at the prefab's size, 88 apart; three or more at 0.8 and 24 apart, smaller where a frame w wide is too narrow
+export function footerScale(n, w = Infinity) {
+  if (n < 3) return 1;
+  return Math.min(FOOTER.many.scale, (w - FOOTER.many.margin - FOOTER.many.gap * (n - 1)) / n / FOOTER.body.w);
+}
+export const footerGap = (n) => (n < 3 ? FOOTER.pairGap : FOOTER.many.gap);
+// the centres of n bodies in a row centred on the frame (x), and their scale
+export function footerSlots(n, w) {
+  const scale = footerScale(n, w), pitch = FOOTER.body.w * scale + footerGap(n);
+  return { scale, xs: Array.from({ length: n }, (_, i) => (i - (n - 1) / 2) * pitch) };
+}
+// the captions of one footer share one size: the prefab's 72 down to 48 in a 400 box, up to two lines, clear of the body's edges
+const CAPTION = FOOTER.caption;
+export const footerFit = (captions) => NGUI.fitGroup(captions, CAPTION.fs, CAPTION.fsMin, CAPTION.w, CAPTION.lines, { maxH: CAPTION.h });
+export const footerLabels = (widgets, captions) => NGUI.fitLabels(widgets, captions, CAPTION.fs, CAPTION.fsMin, CAPTION.w, CAPTION.lines, { maxH: CAPTION.h });
+
 // the game's popup frame at a size: backdrop, title, close button and, when given, its Cancel and OK buttons with
-// these labels near the bottom edge (a lone one in the middle). The frame's centre sits 12 units under the stage's
-// (Base -20, BG +8).
-export const FRAME_Y = -12;
+// these labels, FOOTER.centre above the bottom edge (a lone one in the middle; two at the prefab's +/-292).
+//   buttons: [{label, primary, name}] instead of ok / cancel: named choices in a row (one centred, two as OK and Cancel,
+//            three or more smaller); a node is Choice_<index> unless it names itself
+//   close: false for a popup that must be answered with a button (no close button)
 export function popupFrame(title, w, h, { ok = null, cancel = null, close = true, buttons = null } = {}) {
   const t = clone(find(layouts.sortPopup, "Center"));
   const popup = find(t, "Popup");
@@ -249,7 +276,7 @@ export function popupFrame(title, w, h, { ok = null, cancel = null, close = true
   closeBtn.active = close;
   const btn = find(popup, "Btn");
   btn.active = !!(ok || cancel);
-  btn.pos = [0, FRAME_Y - h / 2 + 122];
+  btn.pos = [0, footerY(h)];
   for (const [name, caption] of [["Btn_Ok", ok], ["Btn_Cancel", cancel]]) {
     const b = find(btn, name);
     resizeButton(find(b, "BG (1)"));
@@ -259,18 +286,18 @@ export function popupFrame(title, w, h, { ok = null, cancel = null, close = true
   }
   // the two captions share one size
   const captions = [["Btn_Ok", ok], ["Btn_Cancel", cancel]].filter(([, caption]) => caption);
-  NGUI.fitLabels(captions.map(([name]) => find(btn, `${name}/Label_Locale`).widgets[0]), captions.map(([, caption]) => caption), 64, 40, 420, 2, { maxH: BUTTON_TEXT_H });
+  footerLabels(captions.map(([name]) => find(btn, `${name}/Label_Locale`).widgets[0]), captions.map(([, caption]) => caption));
   if (buttons?.length) {
     const primary = find(btn, "Btn_Ok"), secondary = find(btn, "Btn_Cancel");
-    const gap = 24, buttonWidth = Math.min(460, (w - 140 - gap * (buttons.length - 1)) / buttons.length), scale = buttonWidth / BTN_W;
+    const { scale, xs } = footerSlots(buttons.length, w);
     btn.active = true;
     btn.children = buttons.map((action, index) => {
-      const child = clone(action.primary ? primary : secondary); child.name = `Choice_${index}`; child.active = true; child.affirmative = !!action.primary;
-      child.scale = [scale, scale]; child.pos = [(index - (buttons.length - 1) / 2) * (buttonWidth + gap), 0];
+      const child = clone(action.primary ? primary : secondary); child.name = action.name || `Choice_${index}`; child.active = true; child.affirmative = !!action.primary;
+      child.scale = [scale, scale]; child.pos = [xs[index], 0];
       return child;
     });
     // the captions of the choices share one size
-    NGUI.fitLabels(btn.children.map((child) => find(child, "Label_Locale").widgets[0]), buttons.map((action) => action.label), 64, 40, 420, 2, { maxH: BUTTON_TEXT_H });
+    footerLabels(btn.children.map((child) => find(child, "Label_Locale").widgets[0]), buttons.map((action) => action.label));
   }
   find(t, "BlackBg/BlackBgClickArea").widgets.find((x) => "sprite" in x).color = "#000000/0.60";
   return t;
@@ -373,11 +400,18 @@ const LP = {
   frame: { w: 2860, h: 1520 },                  // Common_Popup_Bg, stretched to almost the whole screen
   left: { l: -1370, r: -520, t: 600, b: -690 }, // details panel
   list: { l: -480, r: 1370, t: 600, b: -470 },  // list panel (light blue frame)
-  ok: { x: 1150, y: -600, w: 440, h: 160 },     // confirm
+  ok: { x: 1150 },                              // confirm: the footer's right edge is this plus half a body
   card: { w: 250, h: 226, bar: 68 },            // card body (Common_Btn_BG) and its name bar
   pitch: [284, 350],
 };
-const BTN_W = 496; // the frame's button body (Common_Btn_BG)
+const BTN_W = FOOTER.body.w; // the frame's button body (Common_Btn_BG)
+// the footer of the list popup sits under the list panel, right-aligned to its own right edge; its centre height, caption
+// range and gaps are the shared footer's (one or two bodies 88 apart, three or more at 0.8 and 24 apart)
+const listFooter = (n) => {
+  const k = footerScale(n), gap = footerGap(n), bw = BTN_W * k, right = LP.ok.x + BTN_W / 2;
+  return { k, gap, bw, right, left: right - n * bw - (n - 1) * gap, y: footerY(LP.frame.h),
+    x: (i) => right - bw / 2 - (n - 1 - i) * (bw + gap) };
+};
 
 // the student list's tools at the top right of the list: order, sort, search and, with segs, the segment filter
 function toolbar(right, y, { segs = null, sortKey = "sort.default", active = 0, ascending = true, filtered = false } = {}) {
@@ -446,17 +480,17 @@ function listFrame(title, buttons, closeButton) {
   const btn = find(popup, "Btn");
   const [ok, cancel] = [find(btn, "Btn_Ok"), find(btn, "Btn_Cancel")];
   btn.pos = [0, 0];
-  const k = buttons.length > 2 ? 0.8 : 1, bw = BTN_W * k, gap = 24, right = LP.ok.x + BTN_W / 2;
+  const foot = listFooter(buttons.length);
   // the buttons' captions share one size: the largest at which every one fits after wrapping
-  const fits = NGUI.fitGroup(buttons.map((b) => b.label), 72, 48, 360, 2, { maxH: BUTTON_TEXT_H });
+  const fits = footerFit(buttons.map((b) => b.label));
   btn.children = buttons.map((b, i) => {
     const n = clone(b.primary ? ok : cancel);
     resizeButton(find(n, "BG (1)"));
     n.name = `Btn_${i}`;
     n.actionSemantic=b.semantic||(b.primary?"confirm":"secondary");
     n.active = true;
-    n.scale = [k, k];
-    n.pos = [right - bw / 2 - (buttons.length - 1 - i) * (bw + gap), LP.ok.y];
+    n.scale = [foot.k, foot.k];
+    n.pos = [foot.x(i), foot.y];
     const f = fits[i];
     Object.assign(find(n, "Label_Locale").widgets[0], { text: f.text, fontSize: f.fs });
     if (b.greyed) return Buttons.disable(n);
@@ -727,8 +761,8 @@ export async function listPopup(options) {
   }
   let cb = null;
   if (check) {
-    const k = btns.length > 2 ? 0.8 : 1, left = LP.ok.x + BTN_W / 2 - btns.length * (BTN_W * k + 24) + 24;
-    cb = checkbox("Check", LP.list.l, LP.ok.y, check.label, !!check.checked, left - 40 - LP.list.l);
+    const foot = listFooter(btns.length);
+    cb = checkbox("Check", LP.list.l, foot.y, check.label, !!check.checked, foot.left - 40 - LP.list.l);
     band.push(cb.tree);
   }
   if (band.length) {
@@ -841,7 +875,9 @@ export async function listPopup(options) {
 }
 
 // --- the message popup ---
-const MSG = { title: 150, gap: 28, rowMin: 104, check: 150, buttons: 236, none: 70, minH: 640, cap: 1400 };
+// buttons: the room under the content for the footer, 304.5: the footer's top (FOOTER.centre + half a body, 279) and 25.5 of air.
+// It was 236 while the footer's centre sat 68.5 lower.
+export const MSG = { title: 150, gap: 28, rowMin: 104, check: 150, buttons: FOOTER.centre + FOOTER.body.h / 2 + 25.5, none: 70, minH: 640, cap: 1400 };
 
 // message({title, lines, ok, cancel, check, host, width, close, confirmKeys, scroll}): a message on the popup frame, in host
 // (#dialog by default, over everything but the message popup). Resolves once it is closed, however it is closed, with
@@ -1103,15 +1139,16 @@ export function textViewer({ title, text, copy, close = T("display.close"), onCo
         await ready();
         if (ended) return;
         const next = document.createElement("div");
-        const view = await NGUI.render(popupFrame(title, 2458, 1400, { ok: copy, cancel: close }), next,
+        const view = await NGUI.render(popupFrame(title, TEXT_VIEWER.w, TEXT_VIEWER.h, { ok: copy, cancel: close }), next,
           { scale: S, origin: [960, 540], z: 10 });
         if (ended) return;
         hit(next, view, "Center/Popup/Btn/Btn_Ok/BG (1)", onCopy, { name: copy, action: "copy" });
         hit(next, view, "Center/Popup/Btn/Btn_Cancel/BG (1)", finish, { name: close, action: "cancel" });
         hit(next, view, "Center/Popup/Base/BG/Btn_Close", finish, { name: close, action: "close" });
         closable(view, host, finish, { el: layer });
-        Object.assign(pre.style, { position: "absolute", left: `${960 - 1100 * S}px`, top: `${540 - (FRAME_Y + 530) * S}px`,
-          width: `${2200 * S}px`, height: `${900 * S}px`, zIndex: 40 });
+        const box = TEXT_VIEWER.box;
+        Object.assign(pre.style, { position: "absolute", left: `${960 - box.width / 2 * S}px`, top: `${540 - box.top * S}px`,
+          width: `${box.width * S}px`, height: `${box.height * S}px`, zIndex: 40 });
         next.appendChild(pre);
         layer.replaceChildren(...next.childNodes);
       } catch (err) {

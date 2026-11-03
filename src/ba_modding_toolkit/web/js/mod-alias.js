@@ -5,7 +5,8 @@ import { notify } from "./popup.js";
 import * as NGUI from "./ngui.js";
 import { rpc } from "./api.js";
 import { T, errorText } from "./i18n.js";
-import { FRAME_Y, closed, closable, frameReady, hit, popupFrame } from "./popup.js";
+import { closed, closable, frameReady, hit, popupFrame } from "./popup.js";
+import { MOD_ALIAS } from "./popup-frames.js";
 import * as Loading from "./loading.js";
 import { $, S } from "./util.js";
 
@@ -17,13 +18,13 @@ export async function open({ mod, onSaved }) {
   await Loading.wait(frameReady(), { immediate: true, cap: null });
   if (my !== token) return;
   const host = $("dialog"), next = document.createElement("div");
-  const tree = popupFrame(T("modAlias.title"), 1500, 680, { ok: T("popup.save"), cancel: T("popup.cancel") });
-  const y = FRAME_Y + 50, w = 1180, h = 100;
+  const tree = popupFrame(T("modAlias.title"), MOD_ALIAS.w, MOD_ALIAS.h, { ok: T("popup.save"), cancel: T("popup.cancel") });
+  const { y, w, h } = MOD_ALIAS.input;
   NGUI.find(tree, "Popup").children.push(
     NGUI.node("Input", [0, y], [NGUI.sprite("Common_Bg_Raius10px", w, h, { depth: 6, color: "#e6eaec/1.00" })], [
       NGUI.node("Line", [0, 0], [NGUI.sprite("Common_line_10px", w + 2, h, { depth: 7, color: "#cfd4da/1.00" })]),
     ]),
-    NGUI.node("Hint", [0, y - 110], [NGUI.label(T("modAlias.hint"), 36, "#2d4664/1.00", w, 90, { depth: 8 })]),
+    NGUI.node("Hint", [0, y + MOD_ALIAS.hint.dy], [NGUI.label(T("modAlias.hint"), 36, "#2d4664/1.00", w, MOD_ALIAS.hint.h, { depth: 8 })]),
   );
   const layer = document.createElement("div");
   layer.className = "popup-layer";
