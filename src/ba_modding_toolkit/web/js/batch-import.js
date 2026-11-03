@@ -22,6 +22,9 @@ import { createImportState, countsOf, eligible, RESOURCE_TYPES, STATES } from ".
 import { characterPicker } from "./character-picker.js";
 import { scrollbar as gameScrollbar, scrollbarTrack } from "./scrollbar.js";
 
+// The list's top in the panel: 12 under Items' grey Inbox (its top edge is at 98). The search field, open, takes its place and
+// pushes the rows down by SEARCH_ROOM.
+const LIST_TOP = 110, SEARCH_ROOM = 92;
 const KIND_KEYS = { spr: "tab.portrait", lobby: "tab.lobby", model: "tab.model", other: "import.other" };
 const REASONS = new Set(["unreadable", "no_target", "conflict", "spine_version", "unsupported",
   "source_unknown", "source_conflict", "platform_unsupported", "target_unknown", "conversion_names", "no_matching_assets", "conversion_failed",
@@ -57,7 +60,7 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
   let context = null, catalog = [], visible = false, root = null, scope = null;
   let query = "", filter = "all", ascending = true, searchOpen = false, rowsKey = null, previewKey = null, generation = 0;
   let rows = new Map(), identities = new WeakMap(), dom = {}, dialogClose = null, countsKey = null;
-  let art = null, merged = false, shownError = null, listTop = 202;
+  let art = null, merged = false, shownError = null, listTop = LIST_TOP;
   const thumbnailJobs = new Map();
   const liveVersions = new Map(), refreshedResults = new WeakSet();
   let listGeneration = 0, liveRefreshPending = false;
@@ -281,10 +284,10 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
     const panel = place(el("div", "import-panel"), 602, 132, 1272, 704); dom.panel = panel;
     paint(panel, art.panel(1272 / S, 704 / S), { origin: [636, 352] });
     dom.header = place(el("div", "import-header"), 0, 0, 1272, 136 * S);
-    dom.count = el("div", "import-count"); panel.append(dom.header, dom.count);
+    panel.append(dom.header);
     const search = inputControl(T("import.search"), query, { width: 1220, search: true });
     dom.search = search.input; dom.search.placeholder = T("import.search"); dom.search.enterKeyHint = "search";
-    dom.searchWrap = place(search.wrap, 26, 202, 1220, 112 * S);
+    dom.searchWrap = place(search.wrap, 26, LIST_TOP, 1220, 112 * S);
     const runSearch = () => { query = dom.search.value.toLocaleLowerCase(); renderRows(); };
     dom.search.addEventListener("input", (event) => { if (!event.isComposing) runSearch(); }); dom.search.addEventListener("compositionend", runSearch);
     search.clear.addEventListener("click", () => { dom.search.value = ""; runSearch(); dom.search.focus(); });
@@ -341,12 +344,9 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
   }
 
   function layoutList() {
-    const top = searchOpen ? 294 : 202;
+    const top = searchOpen ? LIST_TOP + SEARCH_ROOM : LIST_TOP;
     dom.searchWrap.hidden = !searchOpen;
     dom.searchToggle.setAttribute("aria-expanded", String(searchOpen));
-    const paperTop = 352 + 60 * S - (704 / S - 152) * S / 2;
-    const stripTop = paperTop;
-    place(dom.count, 26 + ROW_WIDTH - 250, (stripTop + 202) / 2 - 16, 250, 32);
     place(dom.list, 26, top, 1220, 616 - top);
     bindBar(dom.list, dom.panel, [26, top, 1220, 616 - top]);
     listTop = top; placeEmpty();
@@ -386,7 +386,7 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
     let draft = filter;
     await dialog(T("import.filter"), { action: T("picker.ok"), cancel: T("popup.cancel"), width: 1800, bodyWidth: OPTION_WIDTH * S, onAction: () => {
       filter = draft; countsKey = null; render(); return true;
-    } }, (area) => radioOptions(area, filterOptions(), draft, (value) => { draft = value; }));
+    } }, (area) => radioOptions(area, filterOptions(), draft, (value) => { draft = value; }, { width: OPTION_WIDTH * S }));
   }
 
   // Pictures stay in the actual prefab UITexture widgets; no separate DOM picture/frame is assembled.
@@ -707,8 +707,6 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
   function render() {
     if (!visible || !root) return;
     const state = model.state, busy = model.busy(); root.dataset.phase = state.phase; root.setAttribute("aria-busy", String(busy));
-    dom.count.hidden = !state.entries.length;     // no count over an empty list
-    if (state.entries.length) textWidget(dom.count, T(state.entries.length === 1 ? "import.countOne" : "import.count", { n: state.entries.length }), "count", { scale: 0.5, origin: [250, 16] });
     renderToolbar();
     dom.merge.input.disabled = busy; dom.merge.refresh();
     for (const key of ["files", "folder", "options", "clear", "remove", "removeImported", "all", "none", "recheck"]) dom[key].disabled = busy;
