@@ -1698,8 +1698,33 @@ Validation: full suites on `f1ad2631`: 4236 passed, 26 skipped; JavaScript 2149 
 
 ## BL-070: One design system for the web UI
 
-- Status: Audited; migration awaits the owner's decisions.
+- Status: Step 1 of 4 implemented; owner acceptance pending. Steps 2 to 4 not started.
 - Requested: 2026-11-02 (owner): does the UI follow the game's design language (button sizes, spacing, fonts), and where it does not, does it have one system of its own?
+
+Owner decisions (2026-11-03): follow the prefab's values as the one system; run the migration one step at a time; keep the top bar and the Enable Mods switch at their present size.
+
+**Step 1, shared tokens (`web/js/ui-tokens.js`), pinned against the prefabs by `tests/test_ui_tokens.py`:**
+
+| Role | Value | Prefab |
+| --- | --- | --- |
+| Popup footer | centre 190.5 above the frame's bottom, bodies 496 x 177, two 88 apart, three or more at 0.8 and 24 apart, caption 72 down to 48 in a 400 box | `UIPopup_Sort/Center/Popup/Btn` |
+| Backdrop | `#000000/0.80`: the sprite says 0.94, but its `TweenAlpha` rests at 0.80 (read from the data, not seen in the game) | `BlackBg/BlackBgClickArea` |
+| Small button | 402 x 136, caption 48 down to 34, only the width varies (240 at least) | `ETCSetting/ButtonBg` |
+| Chip | 272 x 72, caption 40 down to 28, 290 apart; three in the list popup's panel about 283 apart | `Char_Target/Type/MainType/BG` |
+| Status colours | success `#0a6f2d`, warning `#f14f00`, error `#bb3421`, greyed `#828282` | prefab labels and sprites |
+| Settings row gap | 12 | `UIPopup_Option_PC`, Game tab |
+| CSS radii | 3.24, 6.49, 14.27 px (5, 10, 22 units); one fallback button, no skew or shadow | `Common_Bg_Raius*` |
+
+Consent and update popups now use `popupFrame`; their OK stays blue (BL-034). Popups have no fade.
+
+Step 1 leaves these for later or for the owner: captions below the 48 minimum under the tests' measuring stand-in (en-US Spine licence 46; Thai Spine licence 36, update offer 40, recovery report 36), to be judged with the real font; 11 off-game colours nobody decided (stage gradient, Enable Mods OFF ink, plain popup backdrop 0.6, checked plain checkbox, lobby-unavailable text, repair preview, native-controls button, detail placeholder ink and strip card tones).
+
+**Remaining, one at a time:**
+
+- Step 2: one light stats box component.
+- Step 3: the lobby subtitle on the balloon (which box in fullscreen is the owner's call); Hall modals and buttons on the shared footer and small button.
+- Step 4: list popup cards and details panel cloned from prefabs (UI-21), and its details actions.
+- Not scheduled, owner's eye first: the photography toolbar and colours; the lobby frost.
 
 Audit by numbers, from the official prefabs and the code. Screens cloned from prefabs are restored: roster, detail, Display Settings, Settings (three deviations), Batch Import, navigation,
 loading, visual mode, the Hall balloon. Inconsistent: message, notice and confirm popups, tours, Mod Alias, Compare, Export, the consents, the update dialog, Hall's chrome and modals, the lobby subtitle
