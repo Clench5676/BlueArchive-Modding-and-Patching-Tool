@@ -86,6 +86,26 @@ test('the Dialogue / Actions list captions its buttons through actionCaption in 
   assert.equal(choiceLayout('lobby',5).columns,3,'unchanged: the list keeps its geometry');
 });
 
+// Blank space in the Expressions / Actions list is the list's, not the pan surface's: no grab cursor, no pan or zoom there.
+const css=readFileSync(new URL('../../src/ba_modding_toolkit/web/css/photography.css',import.meta.url),'utf8');
+const rule=selector=>[...css.matchAll(/([^{}]+)\{([^}]*)\}/g)].filter(([,sel])=>sel.split(',').map(x=>x.trim()).includes(selector)).map(([,,body])=>body).join(';');
+test('the choice list covers its whole box and its scroll area takes the pointer',()=>{
+  const code=controller.slice(controller.indexOf('function choiceShield('),controller.indexOf('async function choicePanel('));
+  const made=[],host={prepend(child){made.push(child);}};
+  const document={createElement:()=>({style:{}})};
+  const choiceShield=new Function('document',`${code};return choiceShield;`)(document);
+  for(const [kind,count] of [['portrait',1],['portrait',7],['portrait',30],['lobby',2],['lobby',14]]){
+    const box=choiceLayout(kind,count),shield=choiceShield(host,box);
+    assert.equal(made.at(-1),shield,'first in the panel, under the cards');
+    assert.deepEqual(shield.style,{left:`${box.x}px`,top:`${box.y}px`,width:`${box.width}px`,height:`${box.height}px`},`${kind} ${count}`);
+    assert.equal(shield.className,'photo-choice-shield');
+  }
+  assert.match(controller,/choiceShield\(panelHost,box\);await choicePanel\(panelHost,box\);/,'drawn with every expanded list');
+  assert.match(rule('.photo-choice-shield'),/pointer-events:auto/);
+  assert.match(rule('#photo-overlay .popup-cards'),/pointer-events:auto/,'the gaps between cards scroll the list');
+  assert.doesNotMatch(rule('.photo-choice-shield'),/cursor/,'the game pointer, not the pan surface\'s grab');
+});
+
 // the caption fits its 185 x 53 button as the other captions of the row do (UI.button: 40 down to 26, up to two lines)
 const WIDE=/[⺀-鿿　-ヿ＀-￯가-힯฀-๿]/;
 const ctx={font:'',measureText(s){const fs=parseFloat(/([\d.]+)px/.exec(this.font)[1]);

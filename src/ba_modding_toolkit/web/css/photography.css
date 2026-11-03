@@ -1,6 +1,7 @@
 .photo-active #visual-ui .visual-btn,.photo-active #fs-exit,.photo-active .lobby-text,.photo-active .lobby-subtitle,.photo-active .lobby-caption,.photo-active .lobby-balloon{display:none!important}
 #photo-overlay{position:absolute;inset:0;z-index:500;pointer-events:none}
-#photo-overlay .hit{pointer-events:auto}
+#photo-overlay .hit,#photo-overlay .popup-cards,.photo-choice-shield{pointer-events:auto}
+.photo-choice-shield{position:absolute}
 #photo-launcher{position:absolute;inset:0;z-index:500;pointer-events:none}
 #photo-launcher .hit{pointer-events:auto}
 .photo-active #photo-launcher{display:none}

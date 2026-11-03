@@ -196,6 +196,13 @@ async function playbackButton(host){
   hit.dataset.photoAction='Playback';hit.setAttribute('aria-pressed',String(paused));
 }
 
+// The list's whole box takes the pointer, blank space and frame included: the pan surface below never sees a press, a wheel
+// or its grab cursor there, and a wheel over the cards' gaps scrolls the list.
+function choiceShield(host,box){
+  const shield=document.createElement('div');shield.className='photo-choice-shield';
+  Object.assign(shield.style,{left:`${box.x}px`,top:`${box.y}px`,width:`${box.width}px`,height:`${box.height}px`});
+  host.prepend(shield);return shield;
+}
 async function choicePanel(host,box){
   const {formation}=await UI.ready(),tree=clone(NGUI.find(formation,'Center/Popup/RightBg'));
   tree.name='PhotoChoices';tree.pos=[0,0];tree.children=tree.children.filter(child=>child.name==='Bg_W');
@@ -237,7 +244,7 @@ async function drawControls(){
     const panelHost=document.createElement('div');layer.append(panelHost);
     bindCorner(panelHost,[1788,950,102,82],{corner:'bottom-right'});
     const entries=mode==='portrait'?bridge.expressions():bridge.actions(),box=choiceLayout(mode,entries.length);
-    await choicePanel(panelHost,box);
+    choiceShield(panelHost,box);await choicePanel(panelHost,box);
     if(mode==='portrait'){
       const items=entries,area=UI.area(panelHost,[box.x+12,box.y+12,box.width-24,box.rows*box.rowHeight],box.contentHeight,'photo-expressions');
       for(let index=0;index<items.length;index++)buttons.push((async()=>{
