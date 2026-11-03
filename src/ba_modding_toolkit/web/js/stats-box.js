@@ -64,7 +64,7 @@ export function statsBox({ holder, width, at = [0, 0], rows, name = "Box", names
   let top = at[1] - B.padY;
   placed.forEach(({ row, room, fitted, h }, i) => {
     const y = top - h / 2, x = left + B.padX + capW, valueY = y + (row.secondary ? B.secondary.rise : 0);
-    if (row.caption) nodes.push(node(`${prefix.caption}_${i}`, [left + B.padX, y], [label(row.caption, B.caption, "#2d4664/1.00", capW, 50, { pivot: 3, depth: 8 })]));
+    if (row.caption != null) nodes.push(node(`${prefix.caption}_${i}`, [left + B.padX, y], [label(row.caption, B.caption, "#2d4664/1.00", capW, 50, { pivot: 3, depth: 8 })]));
     nodes.push(node(`${prefix.value}_${i}`, [x, valueY], [label(fitted.text, fitted.fs, colourOf(row.colour), room + B.slack,
       fitted.lines * fitted.fs * B.linePitch + B.labelPad, { pivot: 3, depth: 8, ...(row.ariaLabel != null ? { ariaLabel: row.ariaLabel } : {}) })]));
     if (row.secondary) {
