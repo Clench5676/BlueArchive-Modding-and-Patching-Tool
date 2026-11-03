@@ -13,6 +13,7 @@ import { spineAllowed } from "./spine-runtime.js";
 import { thumbnailScope, forget } from "./thumbs.js";
 import { modelThumbnail } from "./model-still.js";
 import { S } from "./util.js";
+import { FOOTER } from "./ui-tokens.js";
 import { ROW_W as OPTION_WIDTH, rowBase, radioRow } from "./settings-rows.js";
 import { loadImportLayouts, importArtwork, clipButtonPatterns, ROW_SCALE, ROW_WIDTH, ROW_HEIGHT, ROW_SELECTION, ROW_CHECK_TOP,
   PAPER_CENTRE, emptyBlock } from "./import-layout.js";
@@ -32,7 +33,9 @@ const sizeText = (size) => size >= 1048576 ? `${(size / 1048576).toFixed(1)} MB`
 const baseName = (path) => path?.split(/[\\/]/).pop() || "";
 const listSeparator = () => /^(zh|ja)/i.test(language()) ? "、" : ", ";
 // the dialogs' scrolling area [left, top, width, height] (px in the stage; app.css .import-dialog-content has the same numbers)
-export const DIALOG_AREA = [228, 190, 1464, 640];
+// and their frame's height: 1360 plus the footer's rise (68.5), the area 22 px (half of it in px) higher
+export const DIALOG_H = 1360 + FOOTER.rise;
+export const DIALOG_AREA = [228, 168, 1464, 640];
 
 export function catalogEntries(data) {
   return (data?.families || []).flatMap((family) => (family.variants || []).map((variant) => ({ ...variant, family })));
@@ -753,7 +756,7 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
     dialogClose = () => close(true);
     popups.opened(dialogHost, close, { el: layer, loading: true });
     try {
-      const frame = popups.popupFrame(title, width, 1360, { ok: action, cancel });
+      const frame = popups.popupFrame(title, width, DIALOG_H, { ok: action, cancel });
       const view = await ui.render(frame, layer, { scale: S, origin: [960, 540], z: 10 });
       if (ended) return;
       let allowed = true, okHit = null, blocked = null;

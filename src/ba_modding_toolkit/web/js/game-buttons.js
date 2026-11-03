@@ -1,6 +1,7 @@
 // Complete option and disabled button branches; captions and dimensions are the only substitutions.
 import * as NGUI from "./ngui.js";
 import { resizeButton } from "./button-layout.js";
+import { FOOTER } from "./ui-tokens.js";
 import { clone } from "./util.js";
 
 let layouts, loading;
@@ -62,7 +63,7 @@ export async function skinPrimary(button, caption) {
     tree.pos = [0, 0];
     tree.active = true;
     tree.actionSemantic="confirm";
-    NGUI.fitLabel(NGUI.find(tree, "Label_Locale").widgets[0], caption, 64, 40, 420);
+    NGUI.fitLabel(NGUI.find(tree, "Label_Locale").widgets[0], caption, FOOTER.caption.fs, FOOTER.caption.fsMin, FOOTER.caption.w);
     const next = document.createElement("div"), scale = 0.4;
     await NGUI.render(tree, next, { scale, origin: [110, 42] });
     await NGUI.decoded([...(next.children || [])], Infinity);

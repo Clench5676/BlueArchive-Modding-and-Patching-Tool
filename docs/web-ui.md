@@ -1710,8 +1710,17 @@ optional, so a popup still works without them.
 - **Buttons.** Every button of a popup is an invisible button over the drawn one, named for assistive technology by
   the caption it covers (`aria-label`) and marked with what it does (`data-action`). When a sprite is missing from
   the atlases its button is placed from the prefab node, so the popup can still be answered.
-- **`popupFrame(title, w, h, {ok, cancel, close})`**: the frame at a size, its title, the close button and Cancel / OK
-  (a lone button in the middle).
+- **`popupFrame(title, w, h, {ok, cancel, close, buttons})`**: the one frame builder (the consent popups and the update
+  dialog call it with `close: false`; the list popup keeps its own stretched frame and panels but takes the footer's
+  numbers from the same code). The frame at a size, its title, the close button and the footer: Cancel / OK, or named
+  `buttons` (`{label, primary, name}`). The footer's centre is 190.5 units above the frame's bottom edge in every frame
+  (UIPopup_Sort `Btn`), the bodies 496 x 177, the captions 72 down to 48 in a 400 box on up to two lines at one size. One
+  button is centred, two sit at the prefab's x -292 and +292 (88 apart), three or more at 0.8 and 24 apart (smaller in a
+  narrow frame). The list popup's footer stays right-aligned to its own right edge (`footerY`, `footerSlots`,
+  `footerScale`, `footerGap`, `footerFit`, `footerLabels` in `popup.js`). The footer sits 68.5 higher than the app's frames
+  used to keep it, so the message popup's room under its lines (`MSG.buttons`) is 304.5 and the fixed-size frames that held
+  content down to the buttons grew by that (`popup-frames.js`: alias editor, file details, Mod Alias, the repair review,
+  the import dialogs, illustrated tour pages, the update dialog).
 - **`message({title, lines, ok, cancel, check, close})`** in `#dialog`: lines of text, centred; when a line carries a
   small button (`{text, button: {label, fn}}`, the consent popup's light blue Change button), every line is a row of
   the game's light stats box with its button at the right. An optional checkbox (the gacha list's) under the lines.

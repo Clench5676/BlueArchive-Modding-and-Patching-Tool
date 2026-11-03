@@ -1246,7 +1246,8 @@ test("footer artwork clears the whole bottom nav and the list and dialog content
   assert.match(css, /\.import-search-clear\s*\{\s*z-index:\s*40/);
   const rule = css.match(/\.import-dialog-content\s*\{([^}]+)\}/)[1];
   const top = Number(rule.match(/top:\s*(\d+)px/)[1]), height = Number(rule.match(/height:\s*(\d+)px/)[1]);
-  const popupButtonTop = 540 - (-12 - 1360 / 2 + 122 - 4) * S - 177 * S / 2;
+  // the dialog frame is 68.5 taller than it was; its footer's centre sits 190.5 above the bottom edge, the body 4 below that
+  const popupButtonTop = 540 - (-12 - (1360 + 68.5) / 2 + 190.5 - 4) * S - 177 * S / 2;
   assert.ok(top + height < popupButtonTop - 16);
 });
 
@@ -2169,7 +2170,7 @@ test("Advanced Options, Import State, Import Results and Assign Character each d
   let area = areaOf(), bar = barOf();
   const body = OPTION_WIDTH * S;
   assert.ok(bar && bar.parentNode.contains(area));
-  assert.deepEqual(bar.track, scrollbarTrack([960 - body / 2 - 16, 190, body + 32, 640], S));
+  assert.deepEqual(bar.track, scrollbarTrack([960 - body / 2 - 16, DIALOG_AREA[1], body + 32, 640], S));
   assert.equal(bar.options.className, "import-bar");
   overflow(area, 640, 1700, 120); await area.dispatch("scroll"); assert.deepEqual(bar.syncs.at(-1), [640, 1700, 120]);
   await h.action("close", h.dialog).click();

@@ -37,6 +37,9 @@ export const FOOTER = Object.freeze({
   caption: Object.freeze({ fs: 72, fsMin: 48, w: 400, lines: 2, h: 140 }),
   // three or more choices: 0.8 of the bodies, 24 apart, and the frame keeps 140 across for its margins
   many: Object.freeze({ scale: 0.8, gap: 24, margin: 140 }),
+  // how far the footer rose against the 122 the app's own popup frame kept before the footer followed the prefab: frames
+  // that held content down to the buttons grow by this
+  rise: 190.5 - 122,
 });
 
 // UIPopup_Option_PC/Center/Popup/List/Sound_Setting/ETCSetting/ButtonBg: Common_Btn_BG 402 x 136, Label_Locale fs 48. Only

@@ -11,7 +11,7 @@ import * as Popup from "./popup.js";
 import { rpc } from "./api.js";
 import { T, errorText } from "./i18n.js";
 import { setSpineConsent } from "./spine-runtime.js";
-import { S, clone, hitButton, wrapPath } from "./util.js";
+import { S, hitButton, wrapPath } from "./util.js";
 
 const { node, sprite, label, find, rect } = NGUI;
 let assetsAllowed = false, spinePrompt = null;
@@ -26,27 +26,9 @@ export async function show(host, cacheDir, native = false) {
 
 async function draw(host, cacheDir, native, resolve) {
   await Buttons.ready();
-  const sort = await NGUI.layout("UIPopup_Sort");
-  const t = clone(find(sort, "Center"));
-  const popup = find(t, "Popup");
-  popup.children = popup.children.filter((c) => ["Base", "Btn"].includes(c.name));
-  const bg = find(popup, "Base/BG");
-  Object.assign(bg.widgets[0], { w_: 1900, h_: 1180 });
-  find(bg, "Texture_Top").pos = [-950 + 248, 590 - 66];
-  const title = find(bg, "Label_Title_Locale");
-  const tf = NGUI.fitText(T("consent.title"), 72, 52, 1300);
-  Object.assign(title.widgets[0], { text: tf.text, fontSize: tf.fs, w_: 1400 });
-  title.pos = [0, 590 - 64];
-  find(title, "Line").widgets[0].w_ = NGUI.glyphWidth(tf.text, tf.fs) + 14;
-  find(bg, "Btn_Close").active = false;
-  const btn = find(popup, "Btn");
-  btn.pos = [0, -430];
-  find(btn, "Btn_Cancel/Label_Locale").widgets[0].text = T("consent.no");
-  find(btn, "Btn_Ok/Label_Locale").widgets[0].text = T("consent.yes");
-  // the two captions share one size
-  const labels = ["Btn_Cancel", "Btn_Ok"].map((name) => find(btn, `${name}/Label_Locale`).widgets[0]);
-  NGUI.fitLabels(labels, labels.map((l) => l.text), 64, 40, 380, 2, { maxH: 140 });
-  find(t, "BlackBg/BlackBgClickArea").widgets.find((w) => "sprite" in w).color = "#000000/0.65";
+  await Popup.frameReady();
+  // the shared popup frame: no close button, to be answered with one of its two buttons
+  const { tree: t, popup } = consentFrame(T("consent.title"), 1900, 1180, [T("consent.no"), T("consent.yes")]);
   // two rows: what is cached, what never is; each a white section with the game's title bar
   const row = (name, y, titleText, items, tone) => node(name, [0, y], [], [
     node("Bg", [0, 0], [sprite("Common_Nonoutline_W_Bg", 1740, 300, { pivot: 1, depth: 4 })]),
@@ -160,8 +142,8 @@ async function drawSpine(host, over, resolve) {
     next.appendChild(back);
     next.appendChild(box);
   } else {
-    const sort = await NGUI.layout("UIPopup_Sort");
-    const { tree, popup } = consentFrame(sort, T("spine.license.title"), 1900, 860, [T("spine.license.no"), T("spine.license.yes")]);
+    await Popup.frameReady();
+    const { tree, popup } = consentFrame(T("spine.license.title"), 1900, 860, [T("spine.license.no"), T("spine.license.yes")]);
     const body = NGUI.fitText(T("spine.license.body"), 48, 40, 1660, 3);
     popup.children.push(node("Licence", [0, 30], [label(body.text, body.fs, "#2d4664/1.00", 1680, body.lines * body.fs * 1.3 + 8, { depth: 7 })]));
     const view = await NGUI.render(tree, next, { scale: S, origin: [960, 540], z: 2000 });
@@ -176,26 +158,10 @@ async function drawSpine(host, over, resolve) {
 
 // --- the scan consent (decision 10) ---
 
-// the popup frame of the asset consent at a size, its title and two buttons: [cancel, ok] captions
-function consentFrame(sort, title, w, h, [no, yes]) {
-  const t = clone(find(sort, "Center"));
-  const popup = find(t, "Popup");
-  popup.children = popup.children.filter((c) => ["Base", "Btn"].includes(c.name));
-  const bg = find(popup, "Base/BG");
-  Object.assign(bg.widgets[0], { w_: w, h_: h });
-  find(bg, "Texture_Top").pos = [-w / 2 + 248, h / 2 - 66];
-  const titleNode = find(bg, "Label_Title_Locale");
-  const tf = NGUI.fitText(title, 72, 52, w - 600);
-  Object.assign(titleNode.widgets[0], { text: tf.text, fontSize: tf.fs, w_: w - 500 });
-  titleNode.pos = [0, h / 2 - 64];
-  find(titleNode, "Line").widgets[0].w_ = NGUI.glyphWidth(tf.text, tf.fs) + 14;
-  find(bg, "Btn_Close").active = false;
-  const btn = find(popup, "Btn");
-  btn.pos = [0, -h / 2 + 160];
-  // the two captions share one size
-  NGUI.fitLabels(["Btn_Cancel", "Btn_Ok"].map((name) => find(btn, `${name}/Label_Locale`).widgets[0]), [no, yes], 64, 40, 380, 2, { maxH: 140 });
-  find(t, "BlackBg/BlackBgClickArea").widgets.find((x) => "sprite" in x).color = "#000000/0.65";
-  return { tree: t, popup };
+// the shared popup frame at a size, its title and two buttons: [cancel, ok] captions; no close button
+function consentFrame(title, w, h, [no, yes]) {
+  const tree = Popup.popupFrame(title, w, h, { ok: yes, cancel: no, close: false });
+  return { tree, popup: find(tree, "Popup") };
 }
 
 // a white section with the game's title bar and its lines (each wrapped to two lines at most); returns [node, height]
@@ -237,7 +203,7 @@ function finishScan(host) {
 }
 
 async function drawScan(host, over, resolve) {
-  const sort = await NGUI.layout("UIPopup_Sort");
+  await Popup.frameReady();
   const W = 1900;
   const [checked, hc] = section("Checked", 0, T("mods.scan.will.label"), [T("mods.scan.will.items")], "#2d4c72");
   const [never, hn] = section("Never", 0, T("mods.scan.willNot.label"), [T("mods.scan.willNot.items")], "#545454");
@@ -245,7 +211,7 @@ async function drawScan(host, over, resolve) {
   const noteH = note.lines * note.fs * 1.3;
   // the title 170, the sections with a gap, the note, the buttons 320
   const H = Math.max(1000, 170 + hc + 50 + hn + 40 + noteH + 320);
-  const { tree, popup } = consentFrame(sort, T("mods.scan.title"), W, H, [T("mods.scan.no"), T("mods.scan.yes")]);
+  const { tree, popup } = consentFrame(T("mods.scan.title"), W, H, [T("mods.scan.no"), T("mods.scan.yes")]);
   let y = H / 2 - 170;
   checked.pos = [0, y];
   y -= hc + 50;
