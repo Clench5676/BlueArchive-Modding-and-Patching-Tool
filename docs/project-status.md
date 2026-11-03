@@ -7,7 +7,7 @@ As of 2026-11-03. Verify the actual branch, working tree and `pyproject.toml` ve
 
 | Branch | State |
 | --- | --- |
-| `main` | Local version `0.6.1-alpha.8`: the published 0.6.0, the upstream sync to `6c61fdc8`, the security policy, the fix that keeps files from a mod inside their output folder (`e8bee4c2`), BL-065 through BL-069, BL-070 steps 1 and 2, BL-071, BL-072, BL-073, and BL-076 after alpha.8 (not in a build yet). Not pushed: held until upstream publishes its fix for the same issue. |
+| `main` | Local version `0.6.1-alpha.9`: the published 0.6.0, the upstream sync to `6c61fdc8`, the security policy, the fix that keeps files from a mod inside their output folder (`e8bee4c2`), BL-065 through BL-069, BL-070 steps 1 and 2, BL-071, BL-072, BL-073, BL-076. Not pushed: held until upstream publishes its fix for the same issue. |
 
 0.6.0 is published (tag `0.6.0` at `817ebeda`, 2026-10-30): macOS build uploaded, Windows build by the release workflow.
 
@@ -49,7 +49,7 @@ As of 2026-11-03. Verify the actual branch, working tree and `pyproject.toml` ve
 | BL-071, BL-072 | Accepted by the owner on macOS (alpha.7); Windows not reviewed |
 | BL-073 | Accepted by the owner (alpha.8) |
 | BL-074 | Closed by the owner: working as intended |
-| BL-076 | Implemented in local `main` (`95959624`); not in a build yet; awaiting owner acceptance |
+| BL-076 | In alpha.9; owner acceptance pending |
 | BL-075 | Open, minor |
 | BL-057, BL-058 | Accepted by the owner on macOS (alpha.12); Windows not reviewed |
 | BL-055 | Accepted by the owner on macOS (0.6.0 pre-review) |
@@ -61,8 +61,8 @@ from passing tests or the presence of earlier code.
 
 ## Review artifact and validation
 
-`dist/Blue-Archive-Modding-and-Patching-Tool-0.6.1-alpha.8-macos-arm64.dmg`, MD5 `d4d296e27546b69d0a7eb5ea629df713`,
-built from `2347e82f` (`chore(release): 0.6.1-alpha.8`): alpha.7 and the BL-073 fix. Everything in it is accepted.
+`dist/Blue-Archive-Modding-and-Patching-Tool-0.6.1-alpha.9-macos-arm64.dmg`, MD5 `6ee145277ca44be9ac4a6d900a380185`,
+built from `5a656cac` (`chore(release): 0.6.1-alpha.9`): alpha.8 (all accepted) and BL-076, which awaits the owner's review.
 
-On `main` before the build (`f05f512c`): 4248 passed, 26 skipped (Python); 2259 JavaScript tests passed (isolated runs with the official development
+On `main` before the build (`95959624`, tested in its worktree): 4249 passed, 26 skipped (Python); 2297 JavaScript tests passed (isolated runs with the official development
 view). Native Windows behavior is not verified on the macOS host.
