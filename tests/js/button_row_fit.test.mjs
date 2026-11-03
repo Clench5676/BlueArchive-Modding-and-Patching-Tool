@@ -246,3 +246,16 @@ for (const locale of LOCALES) test(`the Show in Finder / Explorer button's capti
     keepsEverything(f, text(locale, key));
   }
 });
+
+for (const locale of LOCALES) test(`Hall portrait Reset fits its native button in ${locale}`, () => {
+  document.documentElement.lang=locale;
+  const S=1920/2960, caption=text(locale,"hall.scaleReset"), room=156/S-60, height=68/S-20;
+  assertGroup(fitGroup([caption],40,26,room,2,{maxH:height}),[caption],[room],height,`${locale} portrait reset`);
+});
+
+for (const locale of LOCALES) test(`Hall portrait swap choice fits its existing card button in ${locale}`, () => {
+  document.documentElement.lang=locale;
+  const S=1920/2960, caption=text(locale,"import.select"), room=(320-22)*.46/S-60, height=40/S-20;
+  const fit=fitGroup([caption],40,26,room,2,{maxH:height})[0];
+  assertGroup([fit],[caption],[room],height,`${locale} portrait choice`);
+});

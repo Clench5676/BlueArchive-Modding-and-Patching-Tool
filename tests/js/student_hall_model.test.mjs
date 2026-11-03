@@ -132,3 +132,33 @@ test("merged picker families aggregate only the current resource kind",()=>{
   for(const kind of ["spr","lobby"]){const [family]=studentChoices(choices,normalizeView({merged:true,mods:"mods"}),"",label,"en",kind);assert.equal(family.mods,1);}
   assert.equal(studentChoices(choices.filter(choice=>choice.kind!=="lobby"||choice.source==="official"),normalizeView({merged:true,mods:"mods"}),"",label,"en","lobby").length,0);
 });
+
+import { portraitReplacements } from "../../src/ba_modding_toolkit/web/js/student-hall-model.js";
+const swapChoices=[
+  {variant:"base",family:"hero",kind:"spr",source:"mod:current"},
+  {variant:"base",family:"hero",kind:"spr",source:"official"},
+  {variant:"other",family:"hero",kind:"spr",source:"official"},
+  {variant:"base",family:"hero",kind:"spr",source:"mod:another"},
+  {variant:"other",family:"hero",kind:"spr",source:"mod:placed"},
+  {variant:"other",family:"hero",kind:"lobby",source:"mod:lobby"},
+  {variant:"other",family:"stranger",kind:"spr",source:"mod:wrong-family"},
+];
+test("portrait replacements include the student's official art and same-family mods, excluding self, placed and lobby art",()=>{
+  const entry={id:"a",variant:"base",source:"mod:current"},placed=[entry,{variant:"other",source:"mod:placed"}];
+  assert.deepEqual(portraitReplacements(entry,swapChoices,placed).map(c=>`${c.variant}:${c.source}`),["base:official","other:official","base:mod:another"]);
+  // An official portrait never lists itself, only the student's other portraits.
+  assert.deepEqual(portraitReplacements({id:"b",variant:"base",source:"official"},swapChoices,[]).map(c=>`${c.variant}:${c.source}`),
+    ["base:mod:current","other:official","base:mod:another","other:mod:placed"]);
+  assert.deepEqual(portraitReplacements({...entry,source:"mod:missing"},swapChoices,placed),[]);
+  assert.deepEqual(portraitReplacements(entry,swapChoices,[...placed,...swapChoices]),[]);
+});
+test("replacing a portrait keeps its identity, position, mirror, size and layer; Cancel restores its source",()=>{
+  const entry={id:"a",variant:"base",source:"mod:current",x:812,y:1240,scale:1.73,mirror:true};
+  const state={revision:0,mode:"portraits",portraits:[{id:"below",variant:"below",source:"official",x:0,y:1100,scale:1},entry,{id:"above",variant:"above",source:"official",x:100,y:1100,scale:1}],memorials:[],active:null};
+  const draft=createDraft(state);assert.equal(draft.replacePortrait("a",swapChoices[2],swapChoices),false);draft.begin("layout");
+  assert.equal(draft.replacePortrait("a",swapChoices[5],swapChoices),false);
+  assert.ok(draft.replacePortrait("a",swapChoices[2],swapChoices));
+  assert.deepEqual(draft.current().portraits[1],{...entry,variant:"other",source:"official"});assert.deepEqual(draft.current().portraits.map(e=>e.id),["below","a","above"]);
+  assert.ok(draft.dirty());draft.cancel();assert.deepEqual(draft.current().portraits[1],entry);
+  draft.begin("layout");draft.replacePortrait("a",swapChoices[3],swapChoices);draft.accept({...draft.current(),revision:1});assert.equal(draft.saved().portraits[1].source,"mod:another");
+});

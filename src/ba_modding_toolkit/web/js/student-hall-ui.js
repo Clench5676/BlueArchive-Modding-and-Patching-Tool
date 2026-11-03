@@ -163,7 +163,7 @@ export async function checkbox(host, caption, checked, change, [x, y, width]) {
   Popup.wireCheck(host, view, "Merged", { checked, label: caption }, change);
 }
 // UILobby's inclined rounded button contains UIPopup_Option_PC's native sound slider.
-export async function scaleControl(host, value, change, { enabled = () => true, box = [1875 - (3 * 156 * S + 40), 315, 3 * 156 * S + 40] } = {}) {
+export async function scaleControl(host, value, change, { enabled = () => true, box = [1875 - (3 * 156 * S + 40), 315, 3 * 156 * S + 40], limits, focusKey = "hall-scale-range" } = {}) {
   const [popup, lobby, { buttonCenter }] = await Promise.all([NGUI.layout("UIPopup_Option_PC"), NGUI.layout("UILobby"), import("./student-hall-icons.js")]);
   const [x, y, width] = box, middle = x + width / 2, scale = (width - 44) / (689 * S);
   const tree = clone(NGUI.find(lobby, "Front/Right/Btn_RotateSpine/ConditionRoot/Able_Count"));
@@ -180,11 +180,11 @@ export async function scaleControl(host, value, change, { enabled = () => true, 
   }
   const thumb = view.nodes.get("HallScale/SlideBg/Thumb").els[0], start = parseFloat(thumb.style.left);
   const range = document.createElement("input"); range.type = "range"; range.className = "hit";
-  range.setAttribute("aria-label", T("hall.portraitScale")); range.dataset.focusKey = "hall-scale-range";
+  range.setAttribute("aria-label", T(limits ? "hall.portraitScalePercent" : "hall.portraitScale")); range.dataset.focusKey = focusKey;
   Object.assign(range.style, { position: "absolute", left: `${center.x - 346 * S * scale}px`, top: `${center.y - 24}px`,
     width: `${692 * S * scale}px`, height: "48px", opacity: "0", margin: "0", zIndex: "90" });
   host.append(range); range.disabled = !enabled();
-  return bindScale(range, null, null, { value, change, enabled, paint: (fraction) => { thumb.style.left = `${start + 632 * S * scale * fraction}px`; } });
+  return { range, ...bindScale(range, null, null, { value, change, enabled, limits, paint: (fraction) => { thumb.style.left = `${start + 632 * S * scale * fraction}px`; } }) };
 }
 
 function observePicture(element, picture) {
@@ -195,7 +195,7 @@ function observePicture(element, picture) {
   }, { rootMargin: "80px" });
   observer.observe(element); picture.signal?.addEventListener("abort", () => observer.disconnect(), { once: true });
 }
-export async function card(host, item, { x, y, kind = "lobby", scale = .48, selected = false, onPreview, onAdd, addLabel = T("hall.add"), addEnabled = true, label = true, interactive = !!onPreview }) {
+export async function card(host, item, { x, y, kind = "lobby", scale = .48, selected = false, onPreview, onAdd, addLabel = T("hall.add"), addEnabled = true, fitAdd = false, label = true, interactive = !!onPreview }) {
   const geometry = kind === "spr" ? { w: 320, h: 600, bar: 88 } : { w: 720, h: 405, bar: 88 };
   const tree = Popup.listCard(item, 0, 0, selected, geometry, kind);
   NGUI.find(tree, "Thumb").widgets.find((widget) => "clipImage" in widget).placeholderOnFailure = true;
@@ -212,7 +212,7 @@ export async function card(host, item, { x, y, kind = "lobby", scale = .48, sele
   // The name strip is inclined: its visual centre is left of the artwork centre.
   const actionWidth = barWidget.w_ * scale, actionX = x + bar.pos[0] * scale - actionWidth / 2;
   if (onAdd) await button(host, `Add${item.key}`, addLabel,
-    [actionX, y - bar.pos[1] * scale + barWidget.h_ * scale / 2 + 8, actionWidth, 40], onAdd, { enabled: addEnabled });
+    [actionX, y - bar.pos[1] * scale + barWidget.h_ * scale / 2 + 8, actionWidth, 40], onAdd, { enabled: addEnabled, ...(fitAdd ? { size: buttonSize([addLabel], actionWidth, 40) } : {}) });
   return { view, visual, hit, width, height, actionBox: [actionX, y + height / 2 + 8, actionWidth, 36] };
 }
 export const MEMORIAL_QUEUE_PITCH = (290 + (720 + 405 * Math.tan(Math.PI / 18)) * .25) / 2;

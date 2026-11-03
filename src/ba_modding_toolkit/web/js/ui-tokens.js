@@ -142,3 +142,6 @@ export const FOCUS = Object.freeze({ colour: "#2fa6f0", width: 4, offset: 2, rad
 // The plain fallback button of the no-game screens (the light-blue button, Common_Btn_BG #8de4ff, Label #314665), flat:
 // no skew and no shadow
 export const FALLBACK_BUTTON = Object.freeze({ fill: "#8de4ff", ink: "#314665", radiusPx: RADIUS_PX.r10 });
+
+// UIPopup_Mulligan/Center/Popup/01/UIMulliganSlot/SelectLine, the applied selection UISprite.
+export const APPLIED_SELECTION_GOLD = "#ffe900";

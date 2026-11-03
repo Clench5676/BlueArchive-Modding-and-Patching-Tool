@@ -11,12 +11,12 @@ import { spineBase } from "./api.js";
 import { L, T, language } from "./i18n.js";
 
 const titleOf = (choice) => [L(choice.names)?.full || choice.variant, choice.label].filter(Boolean).join(" - ");
-export function openPicker({ kind, choices, draft, onPreview, onChange, onSave, onCancel, onDone, onError, onViewed, isSaving = () => false }) {
+export function openPicker({ kind, choices, draft, onPreview, onChange, onSave, onCancel, onDone, onError, onViewed, onReplace, isSaving = () => false }) {
   const memorial = kind === "lobby", work = thumbnailScope({ priority: "popup" }), pictures = new Map(), headsPictures = new Map(), viewed = {}, positions = new Map();
   let view = normalizeView({ sort: memorial ? "recent" : "name", order: memorial ? "desc" : "asc" }), query = "", searching = false, student = null;
   let debounce, displayOwned = false;
   const close = () => memorial ? onCancel() : onDone();
-  const modal = UI.createModal(T(memorial ? "hall.adjust" : "hall.addPortraits"), close);
+  const modal = UI.createModal(T(onReplace ? "hall.changePortrait" : memorial ? "hall.adjust" : "hall.addPortraits"), close);
   const safe = (action) => (...args) => isSaving() ? null : Promise.resolve(action(...args)).catch((error) => { if (modal.live()) onError(error); });
   const picture = (choice) => {
     const key = sourceKey(choice);
@@ -28,8 +28,18 @@ export function openPicker({ kind, choices, draft, onPreview, onChange, onSave, 
   };
   const item = (choice, key = sourceKey(choice)) => ({ key, full: titleOf(choice), label: choice.label || L(choice.names)?.full || choice.variant, thumb: picture(choice) });
   const canAdd = (choice) => !(choice.kind === "spr" ? draft.current().portraits : draft.current().memorials).some((entry) => sourceKey(entry) === sourceKey(choice));
-  const addLabel = (choice) => T(canAdd(choice) ? "hall.add" : "hall.added");
-  const add = async (choice, hit) => { if (isSaving()) return false; const entry = draft.add(choice); if (!entry) return false; if (hit) hit.disabled = true; onChange?.(); if (modal.live()) await draw(); return true; };
+  const addLabel = (choice) => T(onReplace ? "import.select" : canAdd(choice) ? "hall.add" : "hall.added");
+  const add = async (choice, hit) => {
+    if (isSaving()) return false;
+    if (onReplace) {
+      if (!canAdd(choice)) return false;
+      if (hit) hit.disabled = true;
+      await onReplace(choice); return true;
+    }
+    const entry = draft.add(choice); if (!entry) return false;
+    if (hit) hit.disabled = true;
+    onChange?.(); if (modal.live()) await draw(); return true;
+  };
   const rows = () => portraitRows(choices, view, query, L, language());
   const students = () => studentChoices(choices, view, query, L, language(), "lobby").filter((s) => s.lobby);
   const changed = () => { clearTimeout(debounce); debounce = setTimeout(() => { if (modal.live()) draw().catch(onError); }, 100); };
@@ -64,7 +74,7 @@ export function openPicker({ kind, choices, draft, onPreview, onChange, onSave, 
       await UI.caption(rowHost, row.student.name, [90, 170, 150], { size: 44 });
       if (rowSignal.aborted) return;
       const strip = UI.virtualArea(rowHost, [240, 0, 960, 402], row.choices.length, 220, (cell, i) => UI.card(cell, item(row.choices[i]), {
-        x: 105, y: 154, kind: "spr", scale: .46, onAdd: safe((event) => add(row.choices[i], event?.currentTarget)), addLabel: addLabel(row.choices[i]), addEnabled: canAdd(row.choices[i]) }),
+        x: 105, y: 154, kind: "spr", scale: .46, onAdd: safe((event) => add(row.choices[i], event?.currentTarget)), addLabel: addLabel(row.choices[i]), addEnabled: canAdd(row.choices[i]), fitAdd: !!onReplace }),
         { key: `portrait-${row.key}`, horizontal: true, signal: rowSignal, positions, onError });
       await strip.ready;
     }, { key: "portrait-rows", signal, positions, onError });
@@ -117,7 +127,7 @@ export function openPicker({ kind, choices, draft, onPreview, onChange, onSave, 
   async function draw() {
     await modal.draw(async (layer, alive, signal) => { await toolbar(layer); if (!alive()) return; await (memorial ? drawMemorials(layer, alive, signal) : drawPortraits(layer, alive, signal)); },
       memorial ? [{ label: T("popup.cancel"), fn: safe(onCancel) }, { label: T("hall.savePlaylist"), fn: safe(onSave), enabled: draft.current().memorials.length > 0 }]
-        : [{ label: T("hall.doneAdding"), fn: safe(onDone) }], memorial ? {} : { width: 2150, height: 1300 });
+        : [{ label: T(onReplace ? "popup.cancel" : "hall.doneAdding"), fn: safe(onDone) }], memorial ? {} : { width: 2150, height: 1300 });
   }
   draw().catch(onError);
   const closeNested = () => { if (displayOwned && Popup.top()?.host?.id === "display") Popup.top().close?.("navigation"); displayOwned = false; };

@@ -4,7 +4,8 @@ import { loadPlayer } from "./spine-load.js";
 import { ensureSpine } from "./spine-runtime.js";
 import { idleAnimation } from "./thumbs.js";
 import * as Stage from "./lobby-stage.js";
-import { portraitScale } from "./student-hall-framing.js";
+import { APPLIED_SELECTION_GOLD } from "./ui-tokens.js";
+import { pickPortrait, portraitScale, preparePickPages, visibleSlot, VISIBLE_ALPHA } from "./student-hall-framing.js";
 
 const VIEW = { x: 0, y: 0, width: 1920, height: 1080, padLeft: 0, padRight: 0, padTop: 0, padBottom: 0,
   transitionTime: 0, animations: {} };
@@ -25,7 +26,7 @@ export function pose(entry, skeleton, globalScale = 1) {
 export async function createPortraits(host, entries, choiceOf, { signal, onError, onRecover, onFrame, globalScale = 1 } = {}) {
   const actors = new Map(), cachedActors = new Map(), loads = [], sources = new Map();
   let disposed = false, owner = null, revision = 0, tail = Promise.resolve(), pendingUpdates = 0, cover = null, active = true, recoveryPending = false;
-  let cameraView = VIEW;
+  let cameraView = VIEW, selectedId = null, outline = null;
   const baseOf = (entry) => {
     const choice = choiceOf(entry);
     return choice && spineBase(choice.source.startsWith("mod:") ? "mod" : "official-spr", choice.source.startsWith("mod:") ? choice.source.slice(4) : choice.core);
@@ -34,7 +35,8 @@ export async function createPortraits(host, entries, choiceOf, { signal, onError
     if (disposed) return;
     disposed = true; revision++;
     signal?.removeEventListener("abort", dispose);
-    // Guests release their GPU objects before their shared-context owner.
+    // Guests and the mask shader release their GPU objects before their shared-context owner.
+    outline?.dispose(); outline = null;
     for (const load of [...loads].reverse()) load.dispose();
     actors.clear(); cachedActors.clear(); sources.clear(); cover?.remove?.(); cover = null; host.replaceChildren();
   };
@@ -89,7 +91,16 @@ export async function createPortraits(host, entries, choiceOf, { signal, onError
             owner = p; owner.hallLayer = layer;
             const draw = p.sceneRenderer.drawSkeleton.bind(p.sceneRenderer);
             p.sceneRenderer.drawSkeleton = (_skeleton, ...args) => {
-              for (const { player: actor } of actors.values()) draw(actor.skeleton, ...args);
+              for (const [id, { player: actor }] of actors) {
+                if (id === selectedId) {
+                  // An empty public draw starts SceneRenderer's polygon pass even when this is the back-most actor.
+                  const order = actor.skeleton.drawOrder;
+                  try { actor.skeleton.drawOrder = []; draw(actor.skeleton, ...args); }
+                  finally { actor.skeleton.drawOrder = order; }
+                  outline ||= createPortraitOutline(p); outline.draw(actor.skeleton);
+                }
+                draw(actor.skeleton, ...args);
+              }
             };
           } else Stage.ready(p);
         },
@@ -105,7 +116,7 @@ export async function createPortraits(host, entries, choiceOf, { signal, onError
     return sources.get(base);
   }
   function actorFor(entry, base) {
-    const old = cachedActors.get(entry.id);
+    const key = `${entry.id}:${base}`, old = cachedActors.get(key);
     if (old?.base === base) return old;
     const source = sources.get(base);
     if (!source) return null;
@@ -121,7 +132,7 @@ export async function createPortraits(host, entries, choiceOf, { signal, onError
       if ([offset.x, offset.y, size.x, size.y].every(Number.isFinite) && size.x > 0 && size.y > 0)
         bounds = { x: (offset.x - entry.x) / scale, y: (offset.y - (1080 - entry.y)) / scale, width: size.x / scale, height: size.y / scale };
     }
-    const actor = { entry, player, bounds, base }; cachedActors.set(entry.id, actor); return actor;
+    const actor = { entry, player, bounds, base }; cachedActors.set(key, actor); return actor;
   }
   function commit(next, value, retain = []) {
     globalScale = value;
@@ -134,8 +145,8 @@ export async function createPortraits(host, entries, choiceOf, { signal, onError
     }
     // The visible map changes once, only after every requested source is ready.
     actors.clear(); for (const [id, actor] of ordered) actors.set(id, actor);
-    const keptIds = new Set([...next, ...retain].map((entry) => entry.id));
-    for (const id of cachedActors.keys()) if (!keptIds.has(id)) cachedActors.delete(id);
+    const keptActors = new Set([...next, ...retain].map((entry) => `${entry.id}:${baseOf(entry)}`));
+    for (const key of cachedActors.keys()) if (!keptActors.has(key)) cachedActors.delete(key);
     const keptSources = new Set([...cachedActors.values()].map((actor) => actor.base));
     for (const [base, source] of sources) if (source.player !== owner && !keptSources.has(base)) {
       source.load.dispose(); source.layer.remove?.(); sources.delete(base);
@@ -167,7 +178,10 @@ export async function createPortraits(host, entries, choiceOf, { signal, onError
   }
 
   try { await update(entries); } catch (error) { dispose(); throw error; }
-  return { actors, dispose, allowed: true, needsLoad, update, setActive(value) {
+  return { actors, dispose, allowed: true, needsLoad, update, pick: (x, y) => pickPortrait(actors, x, y, spine),
+    // Layout editing only: viewing never picks, so it never decodes atlas alpha. Pages already decoded are skipped.
+    preparePick() { for (const { data } of sources.values()) preparePickPages(data); },
+    setSelection(id) { selectedId = id; }, setActive(value) {
     if (disposed || active === !!value) return;
     active = !!value;
     if (!active) { for (const load of loads) load.player?.stopRendering?.(); return; }
@@ -232,4 +246,63 @@ export function talkExpression(actor, talking, expression = null) {
       const next = state.setAnimation(clip.track, clip.animation, !!clip.loop); next.mixDuration = clip.mix || 0;
     }
   }
+}
+
+// An app-owned flat mask shader, drawn by Spine's public SkeletonRenderer/PolygonBatcher. The runtime owns all
+// attachment tessellation and clipping. Only Normal active slots and the picker's effective-alpha threshold count.
+const OUTLINE_VERTEX = `
+attribute vec4 a_position;
+attribute vec4 a_color;
+attribute vec2 a_texCoords;
+attribute vec4 a_color2;
+uniform mat4 u_projTrans;
+uniform vec2 u_offset;
+varying vec2 v_uv;
+varying float v_alpha;
+varying float v_dark;
+void main() {
+  v_uv = a_texCoords; v_alpha = a_color.a; v_dark = a_color2.a;
+  gl_Position = u_projTrans * (a_position + vec4(u_offset, 0.0, 0.0));
+}`;
+export const OUTLINE_FRAGMENT = `
+precision mediump float;
+uniform sampler2D u_texture;
+uniform vec3 u_gold;
+uniform float u_unused;
+varying vec2 v_uv;
+varying float v_alpha;
+varying float v_dark;
+void main() {
+  if (texture2D(u_texture, v_uv).a * v_alpha < ${VISIBLE_ALPHA}) discard;
+  gl_FragColor = vec4(u_gold, 1.0) + v_dark * u_unused;
+}`;
+export const OUTLINE_OFFSETS = Object.freeze(Array.from({ length: 16 }, (_, i) => Object.freeze([3 * Math.cos(i * Math.PI / 8), 3 * Math.sin(i * Math.PI / 8)])));
+export function createPortraitOutline(player) {
+  const renderer = player.sceneRenderer;
+  const shader = new spine.Shader(player.context, OUTLINE_VERTEX, OUTLINE_FRAGMENT);
+  const gold = [1, 3, 5].map((i) => parseInt(APPLIED_SELECTION_GOLD.slice(i, i + 2), 16) / 255);
+  return { dispose: () => shader.dispose(), draw(skeleton) {
+    const batcher = renderer.batcher, order = skeleton.drawOrder;
+    // Only public batcher calls: end() flushes the portraits behind, each offset is its own begin(mask)/end() pass,
+    // and the normal pass resumes with SceneRenderer's own shader.
+    batcher.end();
+    let open = false;
+    try {
+      skeleton.drawOrder = order.filter(visibleSlot);
+      shader.bind();
+      shader.setUniform4x4f("u_projTrans", renderer.camera.projectionView.values);
+      shader.setUniformi("u_texture", 0); shader.setUniform3f("u_gold", ...gold); shader.setUniformf("u_unused", 0);
+      for (const [dx, dy] of OUTLINE_OFFSETS) {
+        shader.setUniform2f("u_offset", dx, dy);
+        batcher.begin(shader); open = true;
+        // The whole slot range; drawSkeleton has already set premultipliedAlpha for this frame.
+        renderer.skeletonRenderer.draw(batcher, skeleton);
+        batcher.end(); open = false;
+      }
+    } finally {
+      if (open) batcher.end();
+      skeleton.drawOrder = order;
+      renderer.batcherShader.bind(); batcher.begin(renderer.batcherShader);
+    }
+  } };
 }

@@ -64,6 +64,12 @@ export function createDraft(saved) {
       if (from === to) return false;
       const [entry] = list.splice(from, 1); list.splice(to, 0, entry); return true;
     },
+    replacePortrait(id, choice, choices) {
+      if (!draft || kind !== "layout") return false;
+      const entry = draft.portraits.find((item) => item.id === id);
+      if (!entry || !portraitReplacements(entry, choices, draft.portraits).some((candidate) => sourceKey(candidate) === sourceKey(choice))) return false;
+      entry.variant = choice.variant; entry.source = choice.source; return true;
+    },
     flip(id) {
       if (!draft || kind !== "layout") return false;
       const entry = draft.portraits.find((item) => item.id === id);
@@ -148,4 +154,22 @@ export function contentBounds(rootBox, toolbarBoxes = [], navBox = null) {
   const toolbarBottom = Math.max(180, ...toolbarBoxes.filter((box) => box.height > 0).map((box) => (box.bottom - top) * scale));
   const navTop = navBox?.height > 0 ? (navBox.top - top) * scale : 976;
   return { left: 24, top: toolbarBottom + 16, right: 1896, bottom: Math.min(1044, navTop - 16) };
+}
+
+// Selection belongs to the editor session, never the persisted Hall draft.
+export function portraitSelection(selected, { type, id = null, ids = [] }) {
+  if (["end", "escape"].includes(type)) return null;
+  if (type === "click") return selected === id ? null : id;
+  if (type === "drag") return id || selected;
+  if (type === "remove") return selected === id ? null : selected;
+  if (type === "redraw") return ids.includes(selected) ? selected : null;
+  return selected;
+}
+
+export function portraitReplacements(entry, choices, placed) {
+  const current = choices.find((choice) => choice.kind === "spr" && sourceKey(choice) === sourceKey(entry));
+  if (!current?.family) return [];
+  const used = new Set(placed.map(sourceKey)); used.add(sourceKey(entry));
+  // Every other portrait of the student: a Mod portrait may also go back to its own variant's official art.
+  return choices.filter((choice) => choice.kind === "spr" && choice.family === current.family && !used.has(sourceKey(choice)));
 }
