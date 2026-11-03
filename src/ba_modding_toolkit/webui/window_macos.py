@@ -72,6 +72,23 @@ class CocoaHost:
                 self.owner.refresh()
             self.observers.append(centre.addObserverForName_object_queue_usingBlock_(getattr(api, name), window, None, changed))
 
+    def _within_container(self, dy):
+        """The downward move (content points) closest to ``dy`` that keeps every button inside its container; 0 when none
+        does."""
+        low, high = -float("inf"), float("inf")
+        for button in self.buttons:
+            frame, parent = button.frame(), button.superview()
+            bounds = parent.bounds()
+            # the move allowed in the container's own coordinates, then turned into a downward move
+            first = bounds.origin.y - frame.origin.y
+            last = bounds.origin.y + bounds.size.height - (frame.origin.y + frame.size.height)
+            if not parent.isFlipped():
+                first, last = -last, -first
+            low, high = max(low, first), min(high, last)
+        if low > high:
+            return 0
+        return min(max(dy, low), high)
+
     def state(self):
         return {"maximized": bool(self.window.isZoomed()), "minimized": bool(self.window.isMiniaturized()),
                 "fullscreen": bool(self.window.styleMask() & self.api.NSWindowStyleMaskFullScreen)}
@@ -82,10 +99,13 @@ class CocoaHost:
             return None
         if not self.state()["fullscreen"]:
             before = [self._rect(button) for button in self.buttons]
-            targets = vertical_offsets(before, layout["centre"])
-            for button, source, target in zip(self.buttons, before, targets):
+            wanted = vertical_offsets(before, layout["centre"])
+            # The title bar container is only so high (32 pt with the current SDK). On a wide window the toolbar's centre line
+            # sits lower than the buttons can go inside it: they go as low as it allows rather than giving the controls up.
+            dy = self._within_container(wanted[0].top - before[0].top)
+            targets = [Rect(r.left, r.top + dy, r.right, r.bottom + dy) for r in before]
+            for button in self.buttons:
                 frame, parent = button.frame(), button.superview()
-                dy = target.top - source.top
                 button.setFrameOrigin_((frame.origin.x, frame.origin.y + (dy if parent.isFlipped() else -dy)))
                 frame, bounds = button.frame(), parent.bounds()
                 if not self.api.NSContainsRect(bounds, frame):
