@@ -1836,7 +1836,7 @@ app, or the game updated those students, since the last good state.
 
 ## BL-076: Student Hall: select a portrait by its outline, a pinned toolbar, its own size and a skin swap
 
-- Status: Refining; not dispatched.
+- Status: Specified, owner-approved (2026-11-03); not dispatched (owner: write the brief first).
 - Requested: 2026-11-03 (owner): with portraits close together, the toolbar of a placed portrait is hard to reach. Clicking a portrait
   should draw the gold "applied" outline along its real visible outline and pin its toolbar (hovering another portrait shows no
   toolbar then); clicking it again clears the selection. The toolbar should gain a size slider of its own and a button that swaps the
@@ -1848,4 +1848,11 @@ stores its own size (`entry.scale`, 0.2 to 2.5, validated in `student_hall.py`),
 slider. All portraits draw into one shared Spine canvas. Icon candidates in the game's atlases: skin swap `Campaign_Icon_ChangeUnit`
 (77 x 68), `CCG_Icon_ReplaceCards`, `Common_Icon_BeforeChange`; size `Common_Icon_ZoomChar` (100 x 69). The flip button already uses
 `Common_Icon_Change`.
+
+Owner's decisions (2026-11-03), as the lead proposed: layout editing only; a click selects, a click on the selected portrait clears,
+another portrait switches, the empty scene or Escape clears, a drag selects and never clears; the portrait under the pointer is the
+front-most one with visible pixels there (Normal-blend slots; halos and glows ignored), for hover, click and drag; a static gold
+outline about 3 stage px wide in the applied frame's yellow, under the portrait, no animation; the portrait's own size from 50% to
+200% in a second toolbar row with a reset, the global size kept; a change-portrait button (`Campaign_Icon_ChangeUnit`) listing the
+same student's other portraits not yet in the Hall, keeping position, size, mirror and layer. Only the Spine runtime's public API.
 

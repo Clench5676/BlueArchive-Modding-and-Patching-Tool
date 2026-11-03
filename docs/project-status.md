@@ -49,7 +49,7 @@ As of 2026-11-02. Verify the actual branch, working tree and `pyproject.toml` ve
 | BL-071, BL-072 | Accepted by the owner on macOS (alpha.7); Windows not reviewed |
 | BL-073 | Accepted by the owner (alpha.8) |
 | BL-074 | Closed by the owner: working as intended |
-| BL-076 | Refining; not dispatched |
+| BL-076 | Specified and approved; not dispatched |
 | BL-075 | Open, minor |
 | BL-057, BL-058 | Accepted by the owner on macOS (alpha.12); Windows not reviewed |
 | BL-055 | Accepted by the owner on macOS (0.6.0 pre-review) |
