@@ -1840,8 +1840,11 @@ app, or the game updated those students, since the last good state.
   nothing, and the toolbar beside the portrait was harder to reach than one directly above it. Cause: the macOS WKWebView can end a
   captured press with only a click (no pointerup, no lost capture; seen in an offscreen WKWebView probe), and selection waited for the
   release. Fixed in `2dede1ed` (alpha.10): selection on press, any release signal ends a press, toolbar centred directly above the
-  portrait and below the top bar and top-right controls, hover kept over the transparent parts of the box. Awaiting the owner's
-  acceptance on alpha.10. Japanese, Korean and Thai "Change Portrait" wording unreviewed.
+  portrait and below the top bar and top-right controls, hover kept over the transparent parts of the box. Owner on alpha.10: clicks
+  work; the toolbar still sat to the left or right of every student. Cause: Spine's bounds count transparent and off-body parts, so
+  their centre is 30 to 130 stage px off the character for most students (measured on official portraits in the dev view). Fixed in
+  `5b20484c` (alpha.11): the toolbar is centred on the visible head. Awaiting the owner's acceptance on alpha.11. Japanese, Korean
+  and Thai "Change Portrait" wording unreviewed.
 - Requested: 2026-11-03 (owner): with portraits close together, the toolbar of a placed portrait is hard to reach. Clicking a portrait
   should draw the gold "applied" outline along its real visible outline and pin its toolbar (hovering another portrait shows no
   toolbar then); clicking it again clears the selection. The toolbar should gain a size slider of its own and a button that swaps the
