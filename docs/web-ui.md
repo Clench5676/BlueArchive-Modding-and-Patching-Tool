@@ -1865,6 +1865,9 @@ the prefab values, from the development view). It imports no other UI module.
   90 (240 at least) in a row at least 156 high; the asset consent's Change button the same, on a line of its own under
   the item (`consent.js` `assetLayout`). Not migrated yet: the Hall's buttons, the photography toolbar, the popup details
   actions and the detail screen's Show in Finder / Explorer button.
+- **Batch Import's row under the list** is one row of the small button's size (136 high, caption 48 down to 34, 20 apart): Advanced
+  Options, Recheck and Import share one body height and one caption size, on the prefabs' own bodies (Mailbox `Btn_Receive`, Items
+  `UseBtn` drawn at 162 instead of its 166). Import stands out by its gold, not by its size. The row's right edge is the list tools'.
 - **Chip** (`CHIP`; UICharacterDetail `Char_Target/Type/MainType/BG`): 272 x 72 inclined 10 degrees, caption 40 down to 28,
   290 apart. The nameplate's variant chips (`detail.js`) and the list popup's details panel (`popup.js`) draw it. In the
   panel the chips stand in one centred row (three, the most a card has, about 283 apart so they stay inside it:

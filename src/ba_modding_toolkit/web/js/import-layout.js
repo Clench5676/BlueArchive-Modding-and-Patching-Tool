@@ -17,6 +17,9 @@ export const ROW_SELECTION = { left: 19, top: 8, width: 164, height: 160, scale:
 // Items/ListBG: its PaperBG and Inbox sit 60 units below the panel's centre, so that is the middle of the grey frame
 // (header strip and toolbar included), in panel px.
 export const PAPER_CENTRE = (S) => [636, 352 + 60 * S];
+// Mailbox's Btn_Receive body, the height of every action button here: Items' UseBtn (166 in its prefab) is drawn at it too, so
+// the bodies of a row match.
+export const BUTTON_BODY_H = 162;
 export const NAME_ROOM = 1160;    // the Batch Import name plate's room for a name (units)
 export { EMPTY_GAP, emptyBlock } from "./empty-block.js";
 const rowGap = (ui, layouts) => 348 - ui.find(layouts.UIMailBoxContent, "List_01/BG").widgets.find((w) => "sprite" in w).h_;
@@ -192,10 +195,11 @@ export function importArtwork(ui, layouts) {
     // MailboxContent/List_01/Btn_Receive supplies every blue action; Items/Bottom/Use/UseBtn supplies Import.
     // Clone the entire disabled state, including its dark dotted B_C patterns, not just its body/label colours.
     // The caption size buttons side by side share (secondary ones, MailboxContent/List_01/Btn_Receive): the largest from the
-    // prefab's size down to 70 % of it at which every caption fits its button (the widths, units) after wrapping.
-    buttonSize(captions, widths) {
+    // prefab's size down to 70 % of it (or the range given) at which every caption fits its button (the widths, units) after
+    // wrapping.
+    buttonSize(captions, widths, { max = null, min = null } = {}) {
       const t = content("List_01/Btn_Receive"), w = ui.find(t, "Label_Locale").widgets.find((w) => "text" in w);
-      return ui.fitGroup(captions, w.fontSize, w.fontSize * 0.7, widths.map((width) => width - 60), 2, { maxH: t.widgets.find((x) => "sprite" in x).h_ - 20 })[0]?.fs;
+      return ui.fitGroup(captions, max ?? w.fontSize, min ?? w.fontSize * 0.7, widths.map((width) => width - 60), 2, { maxH: t.widgets.find((x) => "sprite" in x).h_ - 20 })[0]?.fs;
     },
     // size: the row's shared caption size (buttonSize)
     button(caption, width, primary = false, enabled = true, size = null) {
@@ -207,7 +211,7 @@ export function importArtwork(ui, layouts) {
         const [x, y] = body.pos;
         for (const c of t.children) { c.pos[0] -= x; c.pos[1] -= y; }
       }
-      resizeButton(body, width);
+      resizeButton(body, width, BUTTON_BODY_H);
       // NGUI's DOM renderer uses sprite flips for mirroring; negative prefab scales would produce negative CSS sizes.
       for (const c of body.children) for (const w of c.widgets) if (/^Common_Btn_.*_Pt$/.test(w.sprite || "")) {
         w.flip = (w.flip || 0) ^ (c.scale[0] < 0 ? 1 : 0) ^ (c.scale[1] < 0 ? 2 : 0);
