@@ -7,7 +7,7 @@ As of 2026-11-03. Verify the actual branch, working tree and `pyproject.toml` ve
 
 | Branch | State |
 | --- | --- |
-| `main` | Local version `0.6.1-alpha.11`: the published 0.6.0, the upstream sync to `6c61fdc8`, the security policy, the fix that keeps files from a mod inside their output folder (`e8bee4c2`), BL-065 through BL-069, BL-070 steps 1 and 2, BL-071, BL-072, BL-073, BL-076. Not pushed: held until upstream publishes its fix for the same issue. |
+| `main` | Local version `0.6.1-alpha.12`: the published 0.6.0, the upstream sync to `6c61fdc8`, the security policy, the fix that keeps files from a mod inside their output folder (`e8bee4c2`), BL-065 through BL-069, BL-070 steps 1 and 2, BL-071, BL-072, BL-073, BL-076. Not pushed: held until upstream publishes its fix for the same issue. |
 
 0.6.0 is published (tag `0.6.0` at `817ebeda`, 2026-10-30): macOS build uploaded, Windows build by the release workflow.
 
@@ -49,7 +49,7 @@ As of 2026-11-03. Verify the actual branch, working tree and `pyproject.toml` ve
 | BL-071, BL-072 | Accepted by the owner on macOS (alpha.7); Windows not reviewed |
 | BL-073 | Accepted by the owner (alpha.8) |
 | BL-074 | Closed by the owner: working as intended |
-| BL-076 | Clicks fixed in alpha.10; toolbar centred on the visible head in alpha.11; owner acceptance pending |
+| BL-076 | Toolbar under the feet where the head has no room, layout editing without the stall, in alpha.12; owner acceptance pending |
 | BL-075 | Open, minor |
 | BL-057, BL-058 | Accepted by the owner on macOS (alpha.12); Windows not reviewed |
 | BL-055 | Accepted by the owner on macOS (0.6.0 pre-review) |
@@ -61,9 +61,9 @@ from passing tests or the presence of earlier code.
 
 ## Review artifact and validation
 
-`dist/Blue-Archive-Modding-and-Patching-Tool-0.6.1-alpha.11-macos-arm64.dmg`, MD5 `911d1098b54485f423b7a790fa283fdc`,
-built from `17a9f19a` (`chore(release): 0.6.1-alpha.11`): alpha.10 and the BL-076 toolbar fix (centred on the visible head).
-BL-076 awaits the owner's review.
+`dist/Blue-Archive-Modding-and-Patching-Tool-0.6.1-alpha.12-macos-arm64.dmg`, MD5 `499bb530ef1e83c41d17044b4a4fc169`,
+built from `534116a7` (`chore(release): 0.6.1-alpha.12`): alpha.11 and the BL-076 fixes (toolbar under the feet when blocked,
+background atlas alpha reads). BL-076 awaits the owner's review.
 
-On `main` before the build (`5b20484c`, tested in its worktree): 4249 passed, 26 skipped (Python); 2302 JavaScript tests passed (isolated runs with the official development
+On `main` before the build (`f2d9820d`, tested in its worktree): 4249 passed, 26 skipped (Python); 2304 JavaScript tests passed (isolated runs with the official development
 view). Native Windows behavior is not verified on the macOS host.
