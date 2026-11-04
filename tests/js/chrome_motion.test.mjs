@@ -8,7 +8,9 @@ import { LOBBY_ENTRY } from "../../src/ba_modding_toolkit/web/js/ui-tokens.js";
 
 const source = readFileSync(new URL("../../src/ba_modding_toolkit/web/js/chrome-motion.js", import.meta.url), "utf8")
   .replace('import { reflowCorners } from "./corner-layout.js";', "const reflowCorners = () => {};")
+  .replace('import { rpc } from "./api.js";', "const rpc = (...call) => { globalThis.motionRpc.push(call); return Promise.resolve(); };")
   .replace('import { LOBBY_ENTRY } from "./ui-tokens.js";', `import { LOBBY_ENTRY } from "${new URL("../../src/ba_modding_toolkit/web/js/ui-tokens.js", import.meta.url).href}";`);
+globalThis.motionRpc = [];
 const M = await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`);
 const S = 1920 / 2960, near = (a, b, e = 1e-6) => assert.ok(Math.abs(a - b) <= e, `${a} vs ${b}`);
 
@@ -193,4 +195,19 @@ test("boot() lets the bars in after the first screen, and after a failed one too
     await boot().catch(() => {});
     assert.equal(entered.length, 1, fail ? "a recovery page needs the window buttons" : "after the first screen");
   }
+});
+
+test("without a stand-in the motion goes to the App's own RPC, so the native window buttons get it", () => {
+  globalThis.motionRpc.length = 0;
+  const box = (b) => ({ getBoundingClientRect: () => ({ left: b[0], top: b[1], width: b[2], height: b[3], right: b[0] + b[2], bottom: b[1] + b[3] }),
+    querySelectorAll: () => [], style: {} });
+  const header = box([0, 0, 960, 32]), stage = box([0, 0, 960, 540]);
+  const doc = { documentElement: { classList: { toggle() {} } }, getElementById: () => stage,
+    querySelector: (sel) => (sel === ".topbar" ? header : null), addEventListener() {} };
+  const motion = M.createChromeMotion({ document: doc, window: { innerWidth: 960, innerHeight: 540, addEventListener() {} },
+    raf() {}, now: () => 0, setTimeout: () => 0, clearTimeout() {} });
+  motion.setup({ lights: () => true });
+  motion.syncLights();
+  assert.equal(globalThis.motionRpc.at(-1)[0], "window.motion");
+  assert.ok(globalThis.motionRpc.at(-1)[1].frames[0] > 0, "the buttons wait away with the bar before the first screen");
 });
