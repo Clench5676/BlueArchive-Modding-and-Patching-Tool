@@ -235,3 +235,52 @@ for (const locale of locales) test(`every footer's captions share one size in th
     else assert.ok(size >= min && size <= max, `${what}: ${size} is in the range`);
   }
 });
+
+// Hall modal candidates are measured without moving their content. Every current draw caller hits the stop rule.
+const popupSource = read("js/popup.js");
+const footerHelpers = new Function("FOOTER", "FRAME_Y", "NGUI", `${popupSource.slice(popupSource.indexOf("export const footerY"), popupSource.indexOf("// the game's popup frame at a size"))
+  .replaceAll("export ", "")}; return {footerY, footerTop, footerSlots, footerFit};`)(Tokens.FOOTER, Tokens.POPUP.frameY, NGUI);
+test("Hall modal footer candidates use FOOTER for one, two and three actions", () => {
+  for (const n of [1, 2, 3]) {
+    const { scale, xs } = footerHelpers.footerSlots(n, 2800);
+    assert.equal(scale, n < 3 ? 1 : Tokens.FOOTER.many.scale);
+    assert.equal(xs.reduce((sum, x) => sum + x, 0), 0);
+    for (let i = 1; i < n; i++) assert.ok(Math.abs(xs[i] - xs[i-1] - Tokens.FOOTER.body.w * scale
+      - (n < 3 ? Tokens.FOOTER.pairGap : Tokens.FOOTER.many.gap)) < 1e-9);
+    assert.equal(footerHelpers.footerY(1450) - (Tokens.POPUP.frameY - 1450 / 2), Tokens.FOOTER.centre);
+  }
+});
+test("all current Hall modal contents cross the shared footer's required clearance", () => {
+  const S = 1920 / 2960, picker = read("js/student-hall-picker.js"), hall = read("js/student-hall.js");
+  // Pin the actual call sites, including both search states, so these failures cannot silently become stale.
+  assert.match(picker, /searching \? 370 : 300, 1320, searching \? 485 : 555/);
+  assert.match(picker, /queuePanel\(layer, \[115, 720, 1685, 195\]/);
+  assert.match(hall, /\[130, 190, 760, 650\]/);
+  for (const [name, height, n, bottom, excess] of [["portraits", 1300, 1, 855, 76.945945945946],
+    ["memorials", 1450, 2, 915, 88.297297297297], ["backgrounds", 1450, 2, 840, 13.297297297297]]) {
+    const limit = 540 - (footerHelpers.footerTop(height, n) + Tokens.POPUP.clearance) * S;
+    assert.ok(Math.abs(bottom - limit - excess) < 1e-9, name);
+    assert.ok(bottom > limit, `${name} must remain stopped`);
+  }
+});
+const HALL_FOOTERS = [["popup.cancel", "hall.savePlaylist"], ["hall.doneAdding"], ["popup.cancel"],
+  ["popup.cancel", "hall.useBackground"], ["hall.keepEditing", "hall.discard", "hall.saveLeave"]];
+for (const locale of ["en-US", "th-TH", "zh-CN", "zh-TW", "ja-JP", "ko-KR"]) test(`Hall footer caption candidates preserve every character in ${locale}`, () => {
+  const web = JSON.parse(readSync(new URL(`${locale}.json`, LOCALE_DIR), "utf8")).webui;
+  document.documentElement.lang = locale;
+  for (const keys of HALL_FOOTERS) {
+    const captions = keys.map((key) => key.split(".").reduce((value, part) => value[part], web));
+    const fits = footerHelpers.footerFit(captions);
+    assert.equal(new Set(fits.map((f) => f.fs)).size, 1);
+    for (const [i, fit] of fits.entries()) {
+      const stopped = locale === "th-TH" ? { "hall.doneAdding": 44, "hall.keepEditing/hall.discard/hall.saveLeave": 36 } : {};
+      if (stopped[keys.join("/")]) assert.equal(fit.fs, stopped[keys.join("/")], "Stopped candidate; no migration below minimum");
+      else assert.ok(fit.fs >= Tokens.FOOTER.caption.fsMin, `${locale} ${keys.join("/")} needs ${fit.fs}`);
+      assert.ok(fit.fs <= Tokens.FOOTER.caption.fs && !fit.overflow);
+      assert.ok(fit.lines * NGUI.fontSizeFor(fit.text, fit.fs) * NGUI.LINE_PITCH <= Tokens.FOOTER.caption.h);
+      assert.equal(fit.text.replace(/\s/g, ""), captions[i].replace(/\s/g, ""));
+      for (const line of fit.text.split("\n")) assert.ok(NGUI.glyphWidth(line, fit.fs) <= Tokens.FOOTER.caption.w);
+    }
+  }
+});
+
