@@ -5,6 +5,8 @@ from __future__ import annotations
 import logging
 import math
 import sys
+import time
+from collections import deque
 from dataclasses import asdict, dataclass
 
 logger = logging.getLogger(__name__)
@@ -55,6 +57,7 @@ class WindowChrome:
         self.sequence = 0
         self.rejected = ""
         self.empty = ""
+        self.updates, self.busy_at = deque(), -math.inf
 
     def install(self):
         try:
@@ -132,6 +135,14 @@ class WindowChrome:
                                len(drag) if isinstance(drag, list) else "no")
             raise
         self.rejected = ""
+        # A page laying the toolbar out again and again makes the native side measure again and again: say so (BL-080).
+        now = time.monotonic()
+        self.updates.append(now)
+        while now - self.updates[0] > 10:
+            self.updates.popleft()
+        if len(self.updates) >= 30 and now - self.busy_at >= 60:
+            self.busy_at = now
+            logger.info("Native window chrome: %d toolbar layouts in 10 s", len(self.updates))
         empty = "" if regions else state or "covered"
         if bool(regions) != bool(self.layout["drag"]) or (not regions and empty != self.empty):
             logger.info("Native window chrome drag regions: %d%s", len(regions), f" ({empty})" if empty else "")

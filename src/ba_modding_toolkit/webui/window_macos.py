@@ -3,10 +3,53 @@
 from __future__ import annotations
 
 import logging
+import math
+import time
+from collections import deque
 
 from .window_chrome import Rect, union, vertical_offsets
 
 logger = logging.getLogger(__name__)
+
+
+class PointerProbe:
+    """What AppKit shows as the pointer while it moves over the window, for the session log (BL-080): the system arrow,
+    a hand, the text beam, or an image (the page's game pointer). Logs a burst of changes (the two flickering) and a system
+    pointer that stays over the page; quiet otherwise."""
+    WINDOW, BURST, STUCK, QUIET = 10.0, 8, 5.0, 60.0
+    PAGE = ("image", "I-beam")
+
+    def __init__(self, api, clock=time.monotonic):
+        self.api, self.clock = api, clock
+        self.kind, self.since, self.changes = None, 0.0, deque()
+        self.burst_at = self.stuck_at = -math.inf
+        self.stuck_logged = False
+
+    def kind_of(self, cursor):
+        if cursor is None:
+            return "none"
+        known = self.api.NSCursor
+        for name, factory in (("arrow", "arrowCursor"), ("open hand", "openHandCursor"), ("closed hand", "closedHandCursor"),
+                              ("I-beam", "IBeamCursor"), ("pointing hand", "pointingHandCursor")):
+            if cursor == getattr(known, factory)():
+                return name
+        return "image"
+
+    def moved(self, y, over_page):
+        now, kind = self.clock(), self.kind_of(self.api.NSCursor.currentCursor())
+        if kind != self.kind:
+            if self.kind is not None:
+                self.changes.append(now)
+            self.kind, self.since, self.stuck_logged = kind, now, False
+        while self.changes and now - self.changes[0] > self.WINDOW:
+            self.changes.popleft()
+        if len(self.changes) >= self.BURST and now - self.burst_at >= self.WINDOW:
+            self.burst_at = now
+            logger.info("Native pointer changed %d times in %.0f s, now %s", len(self.changes), self.WINDOW, kind)
+        if (over_page and kind not in self.PAGE and not self.stuck_logged and now - self.since >= self.STUCK
+                and now - self.stuck_at >= self.QUIET):
+            self.stuck_logged, self.stuck_at = True, now
+            logger.info("Native pointer: %s for %.0f s over the page (y %.0f)", kind, now - self.since, y)
 
 
 class CocoaHost:
@@ -15,6 +58,8 @@ class CocoaHost:
     # The top bar's offset the buttons share (points up, chrome-motion.js), the motion playing it, where they were
     # aligned (origins) and rest (content rect), and what of the offset and hiding is on them now.
     offset, motion, base, resting, applied, hid = 0.0, 0, (), None, 0.0, False
+    # the toolbar centre line the buttons were last aligned to; the pointer's log
+    centre, probe, pointer_monitor = None, None, None
 
     def __init__(self, window, owner, *, api=None, dispatch=None, later=None):
         if api is None:
@@ -82,6 +127,9 @@ class CocoaHost:
             self.original.append((button.frame().origin, button.isHidden()))
             button.setHidden_(False)
         self.monitor = api.NSEvent.addLocalMonitorForEventsMatchingMask_handler_(api.NSEventMaskLeftMouseDown, self.mouse_down)
+        self.probe = PointerProbe(api)
+        self.pointer_monitor = api.NSEvent.addLocalMonitorForEventsMatchingMask_handler_(api.NSEventMaskMouseMoved,
+                                                                                         self.pointer_moved)
         centre = api.NSNotificationCenter.defaultCenter()
         for name in ("NSWindowDidResizeNotification", "NSWindowDidMoveNotification", "NSWindowDidBecomeKeyNotification",
                      "NSWindowDidResignKeyNotification", "NSWindowDidMiniaturizeNotification", "NSWindowDidDeminiaturizeNotification",
@@ -94,6 +142,30 @@ class CocoaHost:
                     self.transition = False
                 self.owner.refresh()
             self.observers.append(centre.addObserverForName_object_queue_usingBlock_(getattr(api, name), window, None, changed))
+
+    def pointer_moved(self, event):
+        # Only reads AppKit's pointer for the log; the event goes on unchanged whatever happens here.
+        try:
+            content = self.window.contentView()
+            if event.window() == self.window and content is not None and self.probe is not None:
+                point = content.convertPoint_fromView_(event.locationInWindow(), None)
+                bounds = content.bounds()
+                y = point.y - bounds.origin.y if content.isFlipped() else bounds.origin.y + bounds.size.height - point.y
+                self.probe.moved(y, y >= self.owner.layout["height"])
+        except Exception:  # never let the log stand in the way of a move
+            pass
+        return event
+
+    def _placed(self, centre):
+        """The buttons still where the last alignment and the offset put them, for the same centre line."""
+        if not self.base or self.resting is None or centre != self.centre:
+            return False
+        for button, (x, y) in zip(self.buttons, self.base):
+            up = -1 if button.superview().isFlipped() else 1
+            origin = button.frame().origin
+            if abs(origin.x - x) > .01 or abs(origin.y - (y + up * self.applied)) > .01:
+                return False
+        return True
 
     def slide(self, frames, period):
         """Play the page's top bar offsets on the buttons, one per period; a newer motion replaces this one."""
@@ -119,10 +191,13 @@ class CocoaHost:
         hide = bool(offset and self.resting is not None and offset >= self.resting.bottom)
         for button, (x, y) in zip(self.buttons, self.base):
             up = -1 if button.superview().isFlipped() else 1
-            # in fullscreen AppKit may have laid the buttons out again: move only those still where this put them
-            if not fullscreen or abs(button.frame().origin.y - (y + up * self.applied)) < .5:
+            origin = button.frame().origin
+            # in fullscreen AppKit may have laid the buttons out again: move only those still where this put them. A move
+            # to where a button already is would still make AppKit reset the pointer: skip it.
+            if ((not fullscreen or abs(origin.y - (y + up * self.applied)) < .5)
+                    and (abs(origin.x - x) > .01 or abs(origin.y - (y + up * offset)) > .01)):
                 button.setFrameOrigin_((x, y + up * offset))
-            if hide or self.hid:
+            if (hide or self.hid) and button.isHidden() != hide:
                 button.setHidden_(hide)
         self.applied, self.hid = offset, hide
 
@@ -160,7 +235,14 @@ class CocoaHost:
         self.retries = 0
         if self.window.isMiniaturized() or self.transition:
             return None
-        if not self.state()["fullscreen"]:
+        fullscreen = self.state()["fullscreen"]
+        if not fullscreen:
+            # Every page layout measures again. Buttons already aligned (and moved by the top bar's offset) stay put: each
+            # real move makes AppKit reset the pointer, which flickered against the page's game pointer.
+            if self._placed(layout["centre"]):
+                if self.offset != self.applied:
+                    self._place()
+                return self.resting
             before = [self._rect(button, content) for button in self.buttons]
             wanted = vertical_offsets(before, layout["centre"])
             # The title bar container is only so high (32 pt with the current SDK). On a wide window the toolbar's centre line
@@ -178,14 +260,22 @@ class CocoaHost:
                 if abs(source.left - actual.left) > .5 or abs(target.top - actual.top) > .5:
                     raise RuntimeError("M1 AppKit relayout rejected vertical button alignment")
             self.base = [(button.frame().origin.x, button.frame().origin.y) for button in self.buttons]
-            self.applied = 0.0
+            self.applied, self.centre = 0.0, layout["centre"]
+        else:
+            # AppKit lays them out in fullscreen: they get back what the offset changed, and are aligned again on the way out
+            self.centre = None
+            if self.applied or self.hid:
+                self._place()
         # Fullscreen visibility/reveal belongs to AppKit; never force buttons visible there.
         visible = [self._rect(button, content) for button in self.buttons]
         if not visible:
             return None
-        self.resting = union(visible)
+        bounds = union(visible)
+        if fullscreen:
+            return bounds
         # where the buttons rest, though the top bar's motion may have them elsewhere now
-        if self.offset or self.applied or self.hid:
+        self.resting = bounds
+        if self.offset or self.hid:
             self._place()
         return self.resting
 
@@ -203,6 +293,9 @@ class CocoaHost:
         if self.monitor is not None:
             self.api.NSEvent.removeMonitor_(self.monitor)
             self.monitor = None
+        if self.pointer_monitor is not None:
+            self.api.NSEvent.removeMonitor_(self.pointer_monitor)
+            self.pointer_monitor = None
         for button, (origin, hidden) in zip(self.buttons, self.original):
             button.setFrameOrigin_(origin)
             button.setHidden_(hidden)

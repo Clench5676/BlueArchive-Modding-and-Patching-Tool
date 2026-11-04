@@ -633,7 +633,7 @@ def test_cocoa_installs_and_removes_a_window_scoped_mouse_monitor(cocoa_drag):
                 removeObserver_=removed.append)
     api = NS(NSWindowCloseButton=0, NSWindowMiniaturizeButton=1, NSWindowZoomButton=2,
              NSUserDefaults=f.host.api.NSUserDefaults,
-             NSEventMaskLeftMouseDown=2,
+             NSEventMaskLeftMouseDown=2, NSEventMaskMouseMoved=32,
              NSEvent=NS(addLocalMonitorForEventsMatchingMask_handler_=lambda mask, fn: monitors.append((mask, fn)) or fn,
                         removeMonitor_=removed.append), NSNotificationCenter=NS(defaultCenter=lambda: centre))
     names = ('DidResize', 'DidMove', 'DidBecomeKey', 'DidResignKey', 'DidMiniaturize', 'DidDeminiaturize',
@@ -648,7 +648,8 @@ def test_cocoa_installs_and_removes_a_window_scoped_mouse_monitor(cocoa_drag):
     assert f.calls == ['drag'] and not any(button.hidden for button in buttons)
     host.dispose()
     assert all(button.hidden for button in buttons)
-    assert removed == observers + [monitors[0][1]]
+    assert monitors[1][0] == api.NSEventMaskMouseMoved, "the pointer's log watches moves"
+    assert removed == observers + [monitors[0][1], monitors[1][1]]
     assert host.monitor is None and not hasattr(host, 'overlay')
 
 
@@ -933,3 +934,73 @@ def test_cocoa_dispose_stops_a_playing_motion():
     host.dispose()
     pending.pop(0)[1]()
     assert host.offset == 30.0, "the next step never runs"
+
+
+@pytest.mark.parametrize('flipped', [True, False])
+def test_cocoa_measures_without_moving_buttons_already_in_place(flipped):
+    # every page layout measures again; a move to where a button already is makes AppKit reset the pointer, which
+    # flickered against the page's game pointer (alpha.19)
+    host, pending, _ = cocoa_motion(flipped)
+    host.measure({'centre': 22})
+    host.slide([40.0], 1 / 60)
+    moves, hides = [], []
+    for button in host.buttons:
+        original_move, original_hide = button.setFrameOrigin_, button.setHidden_
+        button.setFrameOrigin_ = lambda point, f=original_move: (moves.append(point), f(point))
+        button.setHidden_ = lambda value, f=original_hide: (hides.append(value), f(value))
+    for _ in range(5):
+        assert host.measure({'centre': 22}) is not None
+    assert moves == [] and hides == []
+    host.slide([40.0], 1 / 60)
+    assert moves == [] and hides == [], "the same offset again moves nothing"
+    host.measure({'centre': 25})
+    assert len(moves) == 6 and tops(host) == pytest.approx([-22] * 3), "a new centre line aligns them, the offset stays"
+
+
+def test_pointer_probe_logs_a_flicker_and_a_system_pointer_that_stays(caplog):
+    from ba_modding_toolkit.webui.window_macos import PointerProbe
+    arrow, hand, image = object(), object(), object()
+    current, clock = [image], [0.0]
+    api = NS(NSCursor=NS(currentCursor=lambda: current[0], arrowCursor=lambda: arrow, openHandCursor=lambda: hand,
+                         closedHandCursor=lambda: object(), IBeamCursor=lambda: object(), pointingHandCursor=lambda: object()))
+    probe = PointerProbe(api, clock=lambda: clock[0])
+    with caplog.at_level("INFO", logger="ba_modding_toolkit.webui.window_macos"):
+        probe.moved(300, True)
+        for step in range(9):  # the two pointers taking turns
+            clock[0] += .2
+            current[0] = arrow if step % 2 == 0 else image
+            probe.moved(300, True)
+        current[0] = hand
+        for _ in range(30):  # the open hand stays over the page
+            clock[0] += .25
+            probe.moved(400, True)
+        current[0] = image
+        for _ in range(30):  # the game pointer stays: nothing to say
+            clock[0] += .25
+            probe.moved(400, True)
+    lines = [r.getMessage() for r in caplog.records]
+    assert lines[0] == "Native pointer changed 8 times in 10 s, now image"
+    assert lines[1] == "Native pointer: open hand for 5 s over the page (y 400)"
+    assert len(lines) == 2
+    assert probe.kind_of(None) == "none" and probe.kind_of(image) == "image"
+
+
+def test_cocoa_pointer_log_never_stands_in_the_way_of_a_move(cocoa_drag):
+    host = cocoa_drag.host
+    host.probe = NS(moved=lambda y, over: (_ for _ in ()).throw(RuntimeError("probe")))
+    event = cocoa_drag.event()
+    assert host.pointer_moved(event) is event
+
+
+def test_toolbar_layouts_in_a_burst_are_logged(caplog, monkeypatch):
+    import ba_modding_toolkit.webui.window_chrome as module
+    clock = [100.0]
+    monkeypatch.setattr(module.time, "monotonic", lambda: clock[0])
+    chrome = WindowChrome(NS(), EventBus(), platform='darwin', host=Host())
+    regions = [[{"left": 90, "top": 0, "right": 150 + i % 2, "bottom": 44}] for i in range(40)]
+    with caplog.at_level("INFO", logger="ba_modding_toolkit.webui.window_chrome"):
+        for drag in regions:
+            clock[0] += .1
+            chrome.update(22, 44, drag)
+    lines = [r.getMessage() for r in caplog.records if "toolbar layouts" in r.getMessage()]
+    assert lines == ["Native window chrome: 30 toolbar layouts in 10 s"]
