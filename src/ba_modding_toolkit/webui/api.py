@@ -37,6 +37,18 @@ from .session_log import tail
 from .state import ALIAS_LENGTH, ALIAS_MAX, LOBBY_ZOOM_MODES, alias_key, alias_text, is_number, lobby_zoom, roster_view
 from .system import can_restart_safe, reveal
 
+# a build's own release notes, one Markdown file per version (shipped with the package's assets)
+RELEASE_NOTES_DIR = Path(__file__).resolve().parent.parent / "assets" / "release-notes"
+
+
+def release_notes(version: str, folder: Path = RELEASE_NOTES_DIR) -> dict[str, str]:
+    """A build's own release notes (<X.Y.Z>.md, the text its GitHub release carries; a pre-release reads its version's),
+    for Settings' update preview. Empty notes when the build ships none."""
+    found = re.match(r"\d+\.\d+\.\d+", version)
+    path = folder / f"{found.group(0)}.md" if found else None
+    notes = path.read_text(encoding="utf-8") if path is not None and path.is_file() else ""
+    return {"version": found.group(0) if found else version, "notes": notes}
+
 logger = logging.getLogger(__name__)
 trace_logger = logging.getLogger("ba_modding_toolkit.webui.trace")
 TRACE_BATCH, TRACE_LINE = 100, 600  # events per debug.trace call, characters per logged event
@@ -297,6 +309,10 @@ def build_api(s: Services) -> RpcRegistry:
             return {"file": str(path)}
 
         return s.jobs.submit("update.download", download)
+
+    @rpc.method("app.releaseNotes")
+    def app_release_notes() -> dict[str, str]:
+        return release_notes(str(get_version_info().get("version") or ""))
 
     @rpc.method("app.openReleasePage")
     def app_open_release_page(page: str | None = None) -> None:

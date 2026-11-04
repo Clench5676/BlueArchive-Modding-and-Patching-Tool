@@ -1956,7 +1956,7 @@ test("Hall's opt-in failure caption stays hidden until a lazy still actually fai
   }
 });
 
-test("release notes are literal, scroll, retain the offer and never download or install", async () => {
+test("release notes never run HTML or load images, scroll, retain the offer and never download or install", async () => {
   setStrings("en-US", Object.fromEntries(strings(english)));
   const start = calls.length;
   const notes = '<script>literal</script> ![remote](https://example.invalid/image)\n' + 'More changes\n'.repeat(100);
@@ -1967,9 +1967,9 @@ test("release notes are literal, scroll, retain the offer and never download or 
   const area = walk(dialog).find((el) => el.className === "popup-cards");
   assert.ok(area);
   assert.ok(parseFloat(area.children[0].style.height) > parseFloat(area.style.height));
+  // Markdown is drawn as text: tags and image marks go, their text stays, nothing becomes an element
   const text = walk(dialog).find((el) => el.dataset.path === "Lines/Line_0");
-  assert.ok(text.textContent.includes('<script>literal</script>'));
-  assert.ok(text.textContent.includes('![remote]'));
+  assert.equal(text.textContent, "literal remote");
   assert.equal(text.children.length, 0);
   action(dialog, "dismiss").click();
   assert.equal(consent.hidden, false);
@@ -1977,6 +1977,36 @@ test("release notes are literal, scroll, retain the offer and never download or 
   assert.equal(calls.slice(start).some((m) => ['app.update', 'app.installUpdate'].includes(m)), false);
   action(consent, "later").click();
   await offered;
+});
+
+test("release notes draw their Markdown in the UI language: headings larger, items with a hanging bullet", async () => {
+  const NGUI = await import("../../src/ba_modding_toolkit/web/js/ngui.js");
+  const { scriptOf } = await import("../../src/ba_modding_toolkit/web/js/release-notes.js");
+  const shipped = readFileSync(new URL("../../src/ba_modding_toolkit/assets/release-notes/0.7.0.md", import.meta.url), "utf8");
+  const chineseUi = JSON.parse(readFileSync(new URL("../../src/ba_modding_toolkit/locales/zh-CN.json", import.meta.url))).webui;
+  try {
+    for (const [lang, table, script] of [["en-US", english, "en"], ["zh-CN", chineseUi, "zh-CN"]]) {
+      setStrings(lang, Object.fromEntries(strings(table)));
+      const offered = Update.check(consent, { ...available, version: "0.7.0", page: "https://example.invalid/release", notes: shipped });
+      (await drawn(consent, "notes")).click();
+      await drawn(dialog, "page");
+      const lines = walk(dialog).filter((e) => /^Lines\/Line_\d+$/.test(e.dataset.path || ""));
+      const marks = walk(dialog).filter((e) => /^Lines\/Mark_\d+$/.test(e.dataset.path || ""));
+      const size = (e) => parseFloat(e.style.fontSize) / S / NGUI.fontSizeFor(e.textContent || "x", 1);
+      assert.ok(lines.length > 10 && marks.length >= 8, `${lang}: lines and bullets drawn`);
+      assert.equal(scriptOf(lines.map((e) => e.textContent).join("")), script, `${lang}: one language only`);
+      for (const e of lines) assert.doesNotMatch(e.textContent, /^#|\*\*|<!--|^---/, `${lang}: no Markdown marks`);
+      assert.ok(Math.abs(size(lines[0]) - 52) < .01, `${lang}: a section heading is larger`);
+      assert.ok(lines.filter((e) => Math.abs(size(e) - 44) < .01).length >= 8, `${lang}: items at the notes' size`);
+      for (const mark of marks) {
+        const text = lines.find((e) => e.dataset.path === mark.dataset.path.replace("Mark_", "Line_"));
+        assert.ok(parseFloat(mark.style.left) < parseFloat(text.style.left), `${lang}: the bullet hangs left of its text`);
+      }
+      action(dialog, "dismiss").click();
+      action(consent, "later").click();
+      await offered;
+    }
+  } finally { setStrings("en-US", Object.fromEntries(strings(english))); }
 });
 
 test("release notes use one type size on every line: short, wrapped, long and unbroken lines alike", async () => {
@@ -2634,7 +2664,8 @@ test('Settings exposes one prerelease simulation row with both cases and stable 
           action(dialog, 'dismiss').click();
           action(consent, 'later').click();
           await done;
-          assert.equal(calls.length, start, 'simulation makes no RPC, including check, download, install or browser open');
+          // only the build's own notes are read (a local file): no check, download, install or browser open
+          assert.deepEqual(calls.slice(start).filter((m) => m !== 'app.releaseNotes'), [], 'simulation makes no other RPC');
         }
       }
     }
@@ -2688,7 +2719,8 @@ test('simulated offers use the real prefab and notes builder, intercept every ac
           assert.ok(status.textContent.split('\n').length * fs * 1.15 <= 96 * S + 0.01);
         }
         action(consent, 'later').click(); await offered;
-        assert.equal(calls.length, start, 'no network RPC, updater job, staging, installation or external browser');
+        assert.deepEqual(calls.slice(start).filter((m) => m !== 'app.releaseNotes'), [],
+          'no network RPC, updater job, staging, installation or external browser');
       }
     }
   } finally { action(consent, 'later')?.click(); setStrings('en-US', Object.fromEntries(strings(english))); }
