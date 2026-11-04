@@ -14,6 +14,11 @@ logger = logging.getLogger(__name__)
 
 CREATE_NO_WINDOW = 0x08000000 if sys.platform == "win32" else 0
 
+# Folders that macOS opens by running or installing them; `open` on one starts it, so these are only ever selected
+PACKAGE_SUFFIXES = frozenset({".app", ".appex", ".bundle", ".framework", ".kext", ".mpkg", ".pkg", ".plugin",
+                              ".prefpane", ".qlgenerator", ".saver", ".service", ".systemextension", ".wdgt",
+                              ".workflow", ".xpc"})
+
 
 def _is_wsl() -> bool:
     try:
@@ -33,7 +38,8 @@ def reveal(path: str | Path) -> None:
             subprocess.Popen(f'explorer /select,"{p}"' if p.is_file() else f'explorer "{p}"',
                              creationflags=CREATE_NO_WINDOW)
         elif sys.platform == "darwin":
-            subprocess.run(["open", "-R", str(p)] if p.is_file() else ["open", str(p)], check=True)
+            select = p.is_file() or p.suffix.lower() in PACKAGE_SUFFIXES
+            subprocess.run(["open", "-R", str(p)] if select else ["open", str(p)], check=True)
         elif _is_wsl():
             win = subprocess.run(["wslpath", "-w", str(p)], capture_output=True, text=True, check=True).stdout.strip()
             subprocess.Popen(["explorer.exe", f"/select,{win}"] if p.is_file() else ["explorer.exe", win])
