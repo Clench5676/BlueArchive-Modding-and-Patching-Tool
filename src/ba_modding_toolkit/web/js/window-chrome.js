@@ -132,18 +132,26 @@ async function layout() {
     if (state) await publishLayout(g, [], state);
     if (revision !== layoutRevision || !nativeChrome() || !wrapper || !snapshot.valid) return;
   }
-  await alignTopBar();
-  if (revision !== layoutRevision || !nativeChrome() || !wrapper) return;
   // The bar draws above every popup, so it keeps moving the window while one is open (BL-078); only its controls
   // wait for the popup. Native regions never cover hanging Back art. Immersive scenes keep only the real window
   // controls, with no toolbar or drag regions.
-  header.inert = !snapshot.valid || topHidden || blocked;
-  const drag = dragRegions({ width: innerWidth, height: g.rowHeight, bounds: snapshot.bounds,
-    platform: snapshot.platform, immersive: scene, blocked: !snapshot.valid,
-    exclusions: topHidden ? [] : visibleHits(header) });
-  wrapper.querySelectorAll('.window-drag-region').forEach((el) => el.remove());
+  const publish = () => {
+    header.inert = !snapshot.valid || topHidden || blocked;
+    const drag = dragRegions({ width: innerWidth, height: g.rowHeight, bounds: snapshot.bounds,
+      platform: snapshot.platform, immersive: scene, blocked: !snapshot.valid,
+      exclusions: topHidden ? [] : visibleHits(header) });
+    wrapper.querySelectorAll('.window-drag-region').forEach((el) => el.remove());
+    return publishLayout(g, drag, state);
+  };
+  // The regions follow the page at once; the ink alignment then moves the bar's pictures by a pixel or two and the
+  // regions follow again. Waiting for the alignment first left the bar without regions whenever a pass did not finish
+  // it (BL-078: after a popup or an immersive scene the bar stayed undraggable).
+  await publish();
   if (revision !== layoutRevision || !nativeChrome() || !wrapper) return;
-  await publishLayout(g, drag, state);
+  const slow = setTimeout(() => layoutFailed(new Error('Top bar alignment still pending after 2 s')), 2000);
+  try { await alignTopBar(); } finally { clearTimeout(slow); }
+  if (revision !== layoutRevision || !nativeChrome() || !wrapper) return;
+  await publish();
 }
 
 async function publishLayout(g, drag, state = '') {

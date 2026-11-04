@@ -166,3 +166,17 @@ test('a bar the pointer brought back in an immersive scene drags and clicks; it 
   assert.equal(motion.opts.lights(),false,'macOS fullscreen shows and hides the window buttons itself');
   stage.classList.clear();await change();
 });
+
+test('an unfinished ink alignment no longer keeps the bar undraggable after an immersive scene (BL-078)',async()=>{
+  snapshot={active:true,valid:true,platform:'darwin',sequence:snapshot.sequence+1,bounds:{left:12,top:8,right:80,bottom:30},state:{fullscreen:false}};
+  handlers['window.chrome'](snapshot);stage.classList.clear();root.classList.clear();popup.hidden=true;motion.revealed=false;await change();
+  let release;alignmentGate=new Promise(resolve=>release=resolve);
+  stage.classList.add('hall-fullscreen');await change();assert.deepEqual(payload().drag,[]);
+  stage.classList.clear();await change();
+  assert.ok(payload().drag.some(rect=>rect.bottom>12),'published before the alignment finished');
+  assert.equal(payload().state,'');assert.equal(header.inert,false);
+  // the bar the pointer brings back in a scene drags at once as well
+  stage.classList.add('fullscreen');await change();motion.revealed=true;await change();
+  assert.ok(payload().drag.length>0);
+  motion.revealed=false;stage.classList.clear();alignmentGate=null;release();await settle();await change();
+});
