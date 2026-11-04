@@ -273,7 +273,7 @@ async function renderPortraitActions(host, entry, rect, version, alive = () => t
     Object.assign(host.style, { left: `${next.x}px`, top: `${next.y}px` });
   };
   let control;
-  await UI.button(destination, "HallPortraitScaleReset", T("hall.scaleReset"), box.reset, () => { control?.reset(); place(); }, { enabled: enabled() });
+  await UI.button(destination, "HallPortraitScaleReset", T("hall.scaleReset"), box.reset, () => { control?.reset(); place(); }, { enabled: enabled(), captionSite: "hall.scaleReset" });
   control = await UI.scaleControl(destination, entry.scale, (value) => {
     if (!enabled()) return;
     entry.scale = value; portraits?.setScale?.(current().portraitScale);
@@ -637,7 +637,7 @@ export function canLeave() {
     const answer = await new Promise((resolve) => {
       leaveResolve = resolve;
       const modal = UI.createModal(T("hall.unsaved"), () => { modal.close(); leavePrompt = null; leaveResolve = null; resolve("stay"); }, { level: 3 }); leavePrompt = modal;
-      Popup.message({ host: modal.host, title: T("hall.unsaved"), width: 1450, lines: [T("hall.unsavedText")],
+      Popup.message({ host: modal.host, title: T("hall.unsaved"), width: 1450, lines: [T("hall.unsavedText")], captionSite: "hall.unsavedChanges",
         buttons: [{ label: T("hall.keepEditing"), value: "stay" }, { label: T("hall.discard"), value: "discard" }, { label: T("hall.saveLeave"), value: "save", primary: true }],
       }).then(({ button }) => { modal.close(); leavePrompt = null; leaveResolve = null; resolve(button || "stay"); })
         .catch((error) => { fail(error); modal.close(); leavePrompt = null; leaveResolve = null; resolve("stay"); });

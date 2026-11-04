@@ -8,7 +8,7 @@ import { searchTree, orderBody, toolbarLayout, toolbarTree } from "./roster-widg
 import { clone, S, hitButton } from "./util.js";
 import { T } from "./i18n.js";
 import { bindScale } from "./student-hall-scale.js";
-import { POPUP, SMALL_BUTTON } from "./ui-tokens.js";
+import { POPUP, SMALL_BUTTON, captionMinimum } from "./ui-tokens.js";
 let assets;
 const visibleReadiness = new WeakMap(), virtualControls = new WeakMap();
 function pictureReadiness(host, picture, view) {
@@ -62,7 +62,7 @@ export function createModal(title, onClose, { level = 0 } = {}) {
       held.forEach(([el, inert]) => { if (el.isConnected) el.inert = inert; });
       if (previous?.isConnected && !previous.inert) previous.focus?.();
     },
-    async draw(build, actions = [], { width = 2800, height = 1450, retainedFooter = false } = {}) {
+    async draw(build, actions = [], { width = 2800, height = 1450, retainedFooter = false, captionSite = "hall.modal" } = {}) {
       drawing?.abort(); const nextDrawing = new AbortController(); drawing = nextDrawing;
       const drawSignal = nextDrawing.signal, token = ++revision;
       const cancelled = new Promise((resolve) => drawSignal.addEventListener("abort", resolve, { once: true }));
@@ -70,7 +70,7 @@ export function createModal(title, onClose, { level = 0 } = {}) {
       try { await Loading.hold(async () => {
         await ready(); if (!live()) return;
         const layer = document.createElement("div"); layer.className = "popup-layer";
-        const tree = modalFrame(title, width, height, retainedFooter ? [] : actions);
+        const tree = modalFrame(title, width, height, retainedFooter ? [] : actions, captionSite);
         const frame = await NGUI.render(tree, layer, { scale: S, origin: [960, 540], signal: drawSignal });
         if (!live()) return;
         Popup.closable(frame, host, onClose);
@@ -123,9 +123,9 @@ export function createModal(title, onClose, { level = 0 } = {}) {
   };
   Popup.opened(host, onClose); return api;
 }
-export function modalFrame(title, width, height, actions) {
+export function modalFrame(title, width, height, actions, captionSite = "hall.modal") {
   const tree = Popup.popupFrame(title, width, height, { buttons: actions.map((action, index) => ({ ...action,
-    name: `Footer${index}`, semantic: action.semantic || (action.primary ? "confirm" : "secondary") })) });
+    name: `Footer${index}`, semantic: action.semantic || (action.primary ? "confirm" : "secondary") })), captionSite });
   if (actions.length) {
     const row = NGUI.find(tree, "Popup/Btn");
     row.children = row.children.map((child, index) => actions[index].enabled === false ? Buttons.disable(child) : child);
@@ -172,7 +172,7 @@ export async function button(host, name, caption, box, action, opts = {}) {
   await ready();
   const placed = buttonBox(box), fit = NGUI.fitGroup([caption], opts.size ?? SMALL_BUTTON.fs, opts.size ?? SMALL_BUTTON.fsMin,
     placed[2] / S - SMALL_BUTTON.fitInset, 2, { maxH: SMALL_BUTTON.h - SMALL_BUTTON.boxInsetH })[0];
-  if (fit.overflow || fit.fs < SMALL_BUTTON.fsMin) throw new RangeError(`Hall small button cannot fit: ${name}`);
+  if (fit.overflow || fit.fs < captionMinimum(opts.captionSite, document.documentElement.lang, SMALL_BUTTON.fsMin)) throw new RangeError(`Hall small button cannot fit: ${name}`);
   return drawButton(host, name, caption, placed, action, { ...opts, fs: fit.fs, min: fit.fs, fit });
 }
 async function drawButton(host, name, caption, [x, y, width, height], action,

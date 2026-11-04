@@ -242,8 +242,8 @@ for (const locale of locales) test(`every footer's captions share one size in th
 
 // Hall modals use the shared footer; the memorial editor still hits its full-row stop rule.
 const popupSource = read("js/popup.js");
-const footerHelpers = new Function("FOOTER", "FRAME_Y", "NGUI", `${popupSource.slice(popupSource.indexOf("export const footerY"), popupSource.indexOf("// the game's popup frame at a size"))
-  .replaceAll("export ", "")}; return {footerY, footerTop, footerSlots, footerFit};`)(Tokens.FOOTER, Tokens.POPUP.frameY, NGUI);
+const footerHelpers = new Function("FOOTER", "FRAME_Y", "NGUI", "captionMinimum", `${popupSource.slice(popupSource.indexOf("export const footerY"), popupSource.indexOf("// the game's popup frame at a size"))
+  .replaceAll("export ", "")}; return {footerY, footerTop, footerSlots, footerFit, footerLabels};`)(Tokens.FOOTER, Tokens.POPUP.frameY, NGUI, Tokens.captionMinimum);
 test("Hall modal footers use FOOTER for one, two and three actions", () => {
   for (const n of [1, 2, 3]) {
     const { scale, xs } = footerHelpers.footerSlots(n, 2800);
@@ -305,16 +305,19 @@ test("the memorial modal remains stopped: even tightly stacked full rows cannot 
 });
 const HALL_FOOTERS = [["popup.cancel", "hall.savePlaylist"], ["hall.doneAdding"], ["popup.cancel"],
   ["popup.cancel", "hall.useBackground"], ["hall.keepEditing", "hall.discard", "hall.saveLeave"]];
-for (const locale of ["en-US", "th-TH", "zh-CN", "zh-TW", "ja-JP", "ko-KR"]) test(`Hall footer caption candidates preserve every character in ${locale}`, () => {
+for (const locale of ["en-US", "th-TH", "zh-CN", "zh-TW", "ja-JP", "ko-KR"]) test(`Hall footer captions use only named Thai exceptions and preserve every character in ${locale}`, () => {
   const web = JSON.parse(readSync(new URL(`${locale}.json`, LOCALE_DIR), "utf8")).webui;
   document.documentElement.lang = locale;
-  for (const keys of HALL_FOOTERS) {
+  for (const keys of [...HALL_FOOTERS].sort((a, b) => Math.max(...b.map((key) => key.split(".").reduce((v, k) => v[k], web).length)) - Math.max(...a.map((key) => key.split(".").reduce((v, k) => v[k], web).length)))) {
     const captions = keys.map((key) => key.split(".").reduce((value, part) => value[part], web));
-    const fits = footerHelpers.footerFit(captions);
+    const site = keys[0] === "hall.doneAdding" ? "hall.doneAdding" : keys[0] === "hall.keepEditing" ? "hall.unsavedChanges" : "hall.modal";
+    const widgets = captions.map(() => ({}));
+    const fits = footerHelpers.footerLabels(widgets, captions, { site });
+    assert.deepEqual(fits.map(f=>f.fs), footerHelpers.footerFit(captions, { site }).map(f=>f.fs));
     assert.equal(new Set(fits.map((f) => f.fs)).size, 1);
     for (const [i, fit] of fits.entries()) {
-      const stopped = locale === "th-TH" ? { "hall.doneAdding": 44, "hall.keepEditing/hall.discard/hall.saveLeave": 36 } : {};
-      if (stopped[keys.join("/")]) assert.equal(fit.fs, stopped[keys.join("/")], "Stopped candidate; no migration below minimum");
+      const exceptions = locale === "th-TH" ? { "hall.doneAdding": 44, "hall.keepEditing/hall.discard/hall.saveLeave": 36 } : {};
+      if (exceptions[keys.join("/")]) assert.equal(fit.fs, exceptions[keys.join("/")], "Named site and Thai only");
       else assert.ok(fit.fs >= Tokens.FOOTER.caption.fsMin, `${locale} ${keys.join("/")} needs ${fit.fs}`);
       assert.ok(fit.fs <= Tokens.FOOTER.caption.fs && !fit.overflow);
       assert.ok(fit.lines * NGUI.fontSizeFor(fit.text, fit.fs) * NGUI.LINE_PITCH <= Tokens.FOOTER.caption.h);
@@ -325,11 +328,11 @@ for (const locale of ["en-US", "th-TH", "zh-CN", "zh-TW", "ja-JP", "ko-KR"]) tes
 });
 
 const hallUiSource = read("js/student-hall-ui.js");
-const hallControls = new Function("NGUI", "Buttons", "Popup", "ready", "S", "SMALL_BUTTON", `${hallUiSource.slice(
+const hallControls = new Function("NGUI", "Buttons", "Popup", "ready", "S", "SMALL_BUTTON", "captionMinimum", `${hallUiSource.slice(
   hallUiSource.indexOf("export function buttonBox"), hallUiSource.indexOf("export async function caption"))
   .replaceAll("export ", "")}; return {buttonBox, buttonSize, button};`)(
     { ...NGUI, render: async (tree, host, options) => { host.tree = tree; host.origin = options.origin; return {}; } },
-    { smallButton }, { hit: () => ({ dataset: {} }) }, async () => {}, 1920 / 2960, Tokens.SMALL_BUTTON);
+    { smallButton }, { hit: () => ({ dataset: {} }) }, async () => {}, 1920 / 2960, Tokens.SMALL_BUTTON, Tokens.captionMinimum);
 test("Hall small buttons retain centres and widths, use the minimum width and token height", async () => {
   const S = 1920 / 2960, B = Tokens.SMALL_BUTTON;
   for (const box of [[730, 560, 460, 70], [0, 0, 100, 66], [100, 200, 300, 68]]) {
@@ -393,7 +396,7 @@ for (const locale of ["en-US", "th-TH", "zh-CN", "zh-TW", "ja-JP", "ko-KR"]) tes
     const fits = NGUI.fitGroup(captions, B.fs, B.fsMin, Math.max(B.minW, width / S) - B.fitInset, 2, { maxH: B.h - B.boxInsetH });
     assert.equal(new Set(fits.map((f) => f.fs)).size, 1);
     for (const [i, f] of fits.entries()) {
-      assert.equal(f.fs, size); if (locale === "th-TH" && keys[0] === "hall.scaleReset") assert.equal(f.fs, 30, "Stopped Reset candidate; below 34");
+      assert.equal(f.fs, size); if (locale === "th-TH" && keys[0] === "hall.scaleReset") assert.equal(f.fs, 30, "Named Thai Reset exception");
       else assert.ok(f.fs >= B.fsMin && f.fs <= B.fs, `${locale} ${keys.join("/")} needs ${f.fs}`);
       assert.ok(!f.overflow); assert.ok(f.lines * NGUI.fontSizeFor(f.text, f.fs) * NGUI.LINE_PITCH <= B.h - B.boxInsetH);
       for (const line of f.text.split("\n")) assert.ok(NGUI.glyphWidth(line, f.fs) <= Math.max(B.minW, width / S) - B.fitInset);
@@ -417,4 +420,41 @@ test("Hall first-run body and caption bounds scale together at supported window 
     assert.ok((B.h - B.boxInsetH) * S * scale < box[3] * scale);
     assert.ok((box[2] / S - B.boxInsetW) * S * scale < box[2] * scale);
   }
+});
+
+
+test("caption exceptions are exactly the three approved sites and apply only in Thai", () => {
+  assert.deepEqual({...Tokens.CAPTION_EXCEPTIONS}, {
+    "hall.doneAdding": {"th-TH":44}, "hall.unsavedChanges": {"th-TH":36}, "hall.scaleReset": {"th-TH":30},
+  });
+  for (const locale of ["en-US","th-TH","zh-CN","zh-TW","ja-JP","ko-KR"]) {
+    assert.equal(Tokens.captionMinimum("hall.other",locale,48),48);
+    for (const [site, minimum] of [["hall.doneAdding",48],["hall.unsavedChanges",48],["hall.scaleReset",34]])
+      if(locale!=="th-TH") assert.equal(Tokens.captionMinimum(site,locale,minimum),minimum);
+  }
+});
+test("Thai footer exceptions cannot authorize another footer or another locale", () => {
+  document.documentElement.lang="th-TH";
+  const web=JSON.parse(readSync(new URL("th-TH.json",LOCALE_DIR),"utf8")).webui;
+  for(const [site,captions] of [["hall.doneAdding",[web.hall.doneAdding]],["hall.unsavedChanges",[web.hall.keepEditing,web.hall.discard,web.hall.saveLeave]]]) {
+    assert.throws(()=>footerHelpers.footerFit(captions,{site:"hall.other"}),RangeError);
+    assert.throws(()=>footerHelpers.footerFit(captions,{site,locale:"en-US"}),RangeError);
+    assert.doesNotThrow(()=>footerHelpers.footerFit(captions,{site}));
+  }
+  assert.match(read("js/student-hall-picker.js"), /captionSite: onReplace \? "hall.portraitReplacement" : "hall.doneAdding"/);
+  assert.match(read("js/student-hall.js"), /captionSite: "hall.unsavedChanges"/);
+  assert.match(popupSource,/popupFrame\(title, w, height, \{ ok, cancel, buttons, close: dismissable, captionSite \}\)/);
+});
+for (const locale of ["en-US","th-TH","zh-CN","zh-TW","ja-JP","ko-KR"]) test(`Reset renders with its named caption allowance in ${locale}`, async () => {
+  document.documentElement.lang=locale;
+  const web=JSON.parse(readSync(new URL(`${locale}.json`,LOCALE_DIR),"utf8")).webui,host={};
+  await hallControls.button(host,"HallPortraitScaleReset",web.hall.scaleReset,[264,74,156,Tokens.SMALL_BUTTON.h*1920/2960],()=>{}, {captionSite:"hall.scaleReset"});
+  const label=labelOf(host.tree);
+  assert.ok(label.fontSize >= (locale==="th-TH"?30:34));
+  if(locale==="th-TH") {
+    assert.equal(label.fontSize,30);
+    await assert.rejects(hallControls.button({},"Other",web.hall.scaleReset,[264,74,156,88.216],()=>{}),RangeError);
+  }
+  assert.equal(label.text.replace(/\s/g,""),web.hall.scaleReset.replace(/\s/g,""));
+  assert.match(read("js/student-hall.js"),/captionSite: "hall.scaleReset"/);
 });
