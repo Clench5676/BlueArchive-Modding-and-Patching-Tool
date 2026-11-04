@@ -190,6 +190,14 @@ def build_api(s: Services) -> RpcRegistry:
             except (ValueError, TypeError, KeyError):
                 raise ServiceError("bad_params", key="geometry") from None
 
+    @rpc.method("window.motion")
+    def window_motion(frames: list, period: float = 1 / 60) -> None:
+        if s.chrome is not None:
+            try:
+                s.chrome.motion(frames, period)
+            except (ValueError, TypeError):
+                raise ServiceError("bad_params", key="motion") from None
+
     @rpc.method("window.control")
     def window_control(action: str) -> None:
         if action not in ("minimize", "maximize", "close", "fullscreen"):
