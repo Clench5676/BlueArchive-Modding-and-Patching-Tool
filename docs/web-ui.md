@@ -150,9 +150,18 @@ rebuild against changed batches. App-only photograph choices remain independent 
 
 ## Process layout
 
+The App lives in `src/bmpt/`; the upstream engine and classic GUI/CLI remain in `src/ba_modding_toolkit/`.
+The App imports the engine explicitly. `bmpt/__init__.py` is empty so the engine's fork-added hooks can import
+small App modules without initializing the web UI. The launcher (`bmpt.launcher`), `python -m bmpt` and
+`python -m bmpt.webui` register `bmpt/locales` with the engine before dispatch. The page reads those App strings
+directly; the engine merges registered locale dictionaries with its own values taking precedence. Classic strings
+remain in `ba_modding_toolkit/locales`. The legacy `python -m ba_modding_toolkit` command still dispatches the App.
+A standalone `python -m ba_modding_toolkit.cli` run does not register App strings and may show the few App-only
+error keys raw. Data/settings folders, update assets and user-facing strings are unchanged by the package split.
+
 ```
 pywebview window (main thread) ── HTTP ──> WebServer (threaded WSGI, 127.0.0.1, random port)
-                                              /              static front end (ba_modding_toolkit/web)
+                                              /              static front end (bmpt/web)
                                               /api/rpc       calls, JSON in and out
                                               /api/events    Server-Sent Events
                                               /asset/...     game assets read from the install
@@ -170,8 +179,8 @@ header `X-BAMT-Token`), and the `Host` header must be `127.0.0.1:<port>` or `loc
 ## Packages
 
 ```
-src/ba_modding_toolkit/
-  config.py      Tk-free settings: same config.toml groups and keys as gui/configs.py
+src/bmpt/
+  config.py      Tk-free settings: same config.toml groups and keys as ba_modding_toolkit/gui/configs.py
   gameassets/    UI atlases, UI textures, prefab layouts, collection art and Spine skeletons from the install
   catalog/       students (families) and their variants, names in zh-CN, zh-TW, en, ja and ko
   library/       portrait, lobby, model and other mods: add, remove, apply, restore, update, extract, compare
@@ -179,7 +188,7 @@ src/ba_modding_toolkit/
   web/           static front end, no build step, plain ES modules
 ```
 
-Imports only go one way: `webui` → `library` → `catalog` → `gameassets` → the existing core modules (`bundle`,
+App module dependencies follow `webui` → `library` → `catalog` → `gameassets` → the existing core modules (`bundle`,
 `searching`, `naming`, `utils`, `core`, `mod_install`). `gameassets`, `catalog` and `library` never import `webui`,
 `gui`, `tkinter` or `webview`.
 
@@ -188,7 +197,7 @@ Imports only go one way: `webui` → `library` → `catalog` → `gameassets` �
 - **Threads.** Services are thread-safe: HTTP handlers run on many threads at once. UnityPy work on one bundle is
   serialised with a per-bundle lock. Long operations run on the single job worker (see Jobs).
 - **No prose in results.** Services return data, not sentences. Errors are `ServiceError(code, **params)`
-  (`ba_modding_toolkit/errors.py`); the front end shows the locale string `webui.error.<code>`. An error passes every
+  (`bmpt/errors.py`); the front end shows the locale string `webui.error.<code>`. An error passes every
   parameter its text names, above all `file`; where there is no file to name, it uses a code whose text has no
   placeholder (`source_unsupported` beside `mod_unsupported`). `tests/test_error_params.py` scans for the omissions.
   Diagnostics go to `logging.getLogger(__name__)`, never `print`.
@@ -1047,7 +1056,7 @@ stops the server (the page shows Closed); with `--serve` it gives `native_unavai
 | `family.get {key}` | a family with its variants (and `aliases` and `custom`, as in `roster.list`), mods and each variant's state, judged cheaply (`copy`, `restorable` and `official` per file; Needs Fix only from the record of the switch that wrote the file); `configured {spr, lobby}` per variant (the sources of its primary cores); `modelFiles` per variant (the 3D model's prefab bundles, newest first, `fixed` or `ok` from the header) and `version` (the game's resource version, so a switched install reloads the screen); `modList` by the variant the current catalog gives each mod's core |
 | `lobby.warm` | builds the memorial lobby prefab index in the background once per game; dependency CABs resolve on demand instead of triggering an eager full-directory index |
 | `lobby.lines {variant, talks, lang}` | `{clip: {lang: text, voice}}`: zh-CN from Kivo, ja from Kivo else the Global server, en, zh-TW, ko and th from the Global server (read only for a `lang` other than zh-CN, left out when its table is not in within 3 s); `talks` (`{animation: [clip ids]}` from the skeleton) places the Global rows on the clips; `lines_unavailable` when neither source can be read |
-| `debug.trace {events}` | the fullscreen lobby's input events, logged (logger `ba_modding_toolkit.webui.trace`, and `input-trace.log` in the data directory) only when the app was started with `--debug`; ignored otherwise |
+| `debug.trace {events}` | the fullscreen lobby's input events, logged (logger `bmpt.webui.trace`, and `input-trace.log` in the data directory) only when the app was started with `--debug`; ignored otherwise |
 | `preview.failed {url, step, error}` | bounded browser preview diagnostics in the session log, including release builds |
 | `favorites.set {variant, on}` | |
 | `aliases.set {family, aliases}` | the user's own aliases of a student as kept (`webui/state.py`: NFC, no control or format characters, whitespace runs one space, empty and repeated ones, ignoring case and width, dropped); `alias_too_long` past 24 characters, `alias_too_many` past 8, and nothing is kept then; an empty list forgets them |
