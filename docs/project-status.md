@@ -7,7 +7,7 @@ As of 2026-11-04. Verify the actual branch, working tree and `pyproject.toml` ve
 
 | Branch | State |
 | --- | --- |
-| `main` | Local version `0.6.1-alpha.16`: the published 0.6.0, the upstream syncs to `6c61fdc8` and to v2.12.0 (`62ec9471`), the security policy, the fix that keeps files from a mod inside their output folder (`e8bee4c2`) and its own message for refused atlases (`ca44e051`), BL-065 through BL-069, BL-070 steps 1 to 3, BL-071, BL-072, BL-073, BL-076, BL-077, the BL-078 close-time chrome fix (`1a2afd84`). Not pushed. Upstream published its fix for the same issue in v2.12.0 (2026-11-04), so 0.6.1 is no longer held back. |
+| `main` | Local version `0.6.1-alpha.17`: the published 0.6.0, the upstream syncs to `6c61fdc8` and to v2.12.0 (`62ec9471`), the security policy, the fix that keeps files from a mod inside their output folder (`e8bee4c2`) and its own message for refused atlases (`ca44e051`), BL-065 through BL-069, BL-070 steps 1 to 3, BL-071, BL-072, BL-073, BL-076, BL-077, the BL-078 close-time chrome fix (`1a2afd84`). Not pushed. Upstream published its fix for the same issue in v2.12.0 (2026-11-04), so 0.6.1 is no longer held back. |
 
 0.6.0 is published (tag `0.6.0` at `817ebeda`, 2026-10-30): macOS build uploaded, Windows build by the release workflow.
 
@@ -62,11 +62,10 @@ from passing tests or the presence of earlier code.
 
 ## Review artifact and validation
 
-`dist/Blue-Archive-Modding-and-Patching-Tool-0.6.1-alpha.16-macos-arm64.dmg`, MD5 `1cc1067379aee2c3ab176ecda87ca237`,
-built from `f1d9b85d` (`chore(release): 0.6.1-alpha.16`): alpha.15, the upstream sync to v2.12.0 (`fee277eb`) with its
-fork adaptations (`15c9dc42`, `bae2533f`) and the macOS reveal hardening (`62723651`). BL-078 awaits the owner's
-confirmation.
+`dist/Blue-Archive-Modding-and-Patching-Tool-0.6.1-alpha.17-macos-arm64.dmg`, MD5 `2157a0aeef516d3cae69088be5b36fe0`,
+built from `76c62c4c` (`chore(release): 0.6.1-alpha.17`): alpha.16, the BL-078 top bar drag hardening and logging
+(`b186e93b`) and BL-070 step 3's second pass (`abf289e6`, `b9b7ad4e`, `7f245853`). BL-070 step 3 and BL-078 await the
+owner's review.
 
-On `main` before the build: 4273 passed, 33 skipped (`uv run python -m pytest`, JavaScript tests included, isolated
-runs with the official development view; the seven new spine2dump tests skip without the tool), then the reveal
-tests and the web UI suites (363 passed) after the reveal change. Native Windows behavior is not verified on the macOS host.
+On `main` before the build (`7f245853`): 4281 passed, 33 skipped (Python), 2348 JavaScript tests passed (isolated runs
+with the official development view). Native Windows behavior is not verified on the macOS host.
