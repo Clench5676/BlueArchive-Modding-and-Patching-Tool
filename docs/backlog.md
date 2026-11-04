@@ -2009,3 +2009,15 @@ and the offset put them are not moved, and a move or hiding that changes nothing
 pointer changes 8 times within 10 s, when a system pointer stays 5 s over the page (both from AppKit's current cursor
 while the mouse moves), and when the page lays the toolbar out 30 times within 10 s.
 
+## BL-081: Release notes in the App: Markdown drawn, one language
+
+- Status: Implemented by the lead; owner review pending (0.7.0-alpha.1, macOS).
+- Requested: 2026-11-04 (owner): the App's release notes showed the Markdown marks (`##`) and English and Chinese one after
+  the other; they should be rendered and separated by language. The 0.7.0 notes and changelog to be drafted and, ideally,
+  built in.
+
+Implemented (`release-notes.js`, `update.js` `notesLines`, plain message rows' `marker` / `indent` / `gap`, `app.releaseNotes`):
+see `docs/web-ui.md` "Release notes and feature tours". The 0.7.0 notes ship as `assets/release-notes/0.7.0.md` (English
+and Simplified Chinese, marked sections) and show in Settings' prerelease update preview; the same file becomes the GitHub
+release's text once the owner approves it. `CHANGELOG.MD` carries the 0.7.0 entry, dated for publication.
+
