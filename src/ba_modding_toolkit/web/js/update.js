@@ -103,6 +103,14 @@ export function frameFor(boxH) {
   const status = boxBottom - STATUS.gap - STATUS.h / 2, progress = boxBottom - STATUS.gap - STATUS.h - PROGRESS.gap - PROGRESS.h / 2;
   return { w: FRAME_W, h, boxTop, status, progress, contentBottom: progress - PROGRESS.h / 2 };
 }
+// The content shown is centred in the room the frame keeps under the title: the version box alone while the offer waits,
+// with Status once there is a line, with the Progress bar too while downloading (owner, 2026-11-04: no empty band under
+// the box). The shift moves the whole group down from its top place.
+export function contentShift({ status = false, progress = false } = {}) {
+  const full = STATUS.gap + STATUS.h + PROGRESS.gap + PROGRESS.h;
+  const shown = status || progress ? STATUS.gap + STATUS.h + (progress ? PROGRESS.gap + PROGRESS.h : 0) : 0;
+  return (full - shown) / 2;
+}
 // the rows of the box: the current version in black, the latest in the success colour
 export const versionRows = (info) => [{ caption: T("update.current"), value: info.current.replace(/-dev$/, "") },
   { caption: T("update.latest"), value: info.version, colour: `${COLOUR.success}/1.00` }];
@@ -163,18 +171,19 @@ async function draw(host, info, resolve, { simulation = false } = {}) {
       { label: T("update.later"), name: "Btn_Cancel" }, { label: T("update.notes"), name: "Btn_Notes" },
       { label: okText, name: "Btn_Ok", primary: true, semantic: "update" }] });
     const body = find(tree, "Popup"), controls = find(body, "Btn");
-    body.children.push(...clone(content));
+    const text = error || status || (phase === "downloading" ? T("update.downloading", { p: percent })
+      : phase === "ready" ? T("update.complete") : phase === "installing" ? T("update.restarting") : "");
+    const shift = contentShift({ status: !!text, progress: phase === "downloading" });
+    body.children.push(node("Content", [0, -shift], [], clone(content)));
     for (const name of ["Btn_Cancel", "Btn_Notes", "Btn_Ok"]) {
       if (locked) {
         const index = controls.children.findIndex((child) => child.name === name);
         controls.children[index] = Buttons.disable(controls.children[index]);
       }
     }
-    const text = error || status || (phase === "downloading" ? T("update.downloading", { p: percent })
-      : phase === "ready" ? T("update.complete") : phase === "installing" ? T("update.restarting") : "");
     const f = NGUI.fitText(text, 40, 30, 1250, 2);
-    Object.assign(find(body, "Status").widgets[0], { text: f.text, fontSize: f.fs, color: error ? `${COLOUR.error}/1.00` : "#2d4664/1.00" });
-    const progress = find(body, "Progress");
+    Object.assign(find(body, "Content/Status").widgets[0], { text: f.text, fontSize: f.fs, color: error ? `${COLOUR.error}/1.00` : "#2d4664/1.00" });
+    const progress = find(body, "Content/Progress");
     progress.active = phase === "downloading";
     find(progress, "Fill").active = percent > 0;
     find(progress, "Fill").widgets[0].w_ = 1200 * percent / 100;

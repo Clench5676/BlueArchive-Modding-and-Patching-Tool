@@ -214,7 +214,8 @@ async function until(fn) {
   for (let i = 0; i < 1000; i++) { if (fn()) return; await tick(); }
   assert.fail("popup did not reach the expected state");
 }
-const part = (name) => walk(consent).find((e) => e.dataset.path === `Center/Popup/${name}`);
+// the update offer's content (versions, Status, Progress) sits in its centred Content group
+const part = (name) => walk(consent).find((e) => [`Center/Popup/${name}`, `Center/Popup/Content/${name}`].includes(e.dataset.path));
 
 afterEach(async () => {
   await new Promise((resolve) => setImmediate(resolve));
@@ -3527,16 +3528,18 @@ test("the list, consent, update and tour footers share that centre height, capti
     near2(bodies[1].cx - bodies[0].cx - 496 * 0.8, 24);
     near2(bodies[2].cx - bodies[1].cx - 496 * 0.8, 24);
     near2(frame.h, Update.FRAME.h);
-    // the versions stand on the light stats box: the frame less 200 wide, where a message's lines start, clear of the buttons by the
-    // room Status and the progress bar need (POPUP.clearance under them)
-    const box = measure(consent, "Center/Popup/Box");
+    // the versions stand on the light stats box, the frame less 200 wide. The frame keeps the room Status and the progress bar
+    // need (POPUP.clearance under them); while the offer waits the box alone is centred in it (no empty band under it)
+    const box = measure(consent, "Center/Popup/Content/Box"), below = 6 + 96 + 8 + 20;
     near2(box.w, Update.FRAME.w - 200);
-    near2(frame.top - box.top, 150);
+    near2(frame.top - box.top, 150 + below / 2);
     near2(box.h, 2 * 64 + 24);
-    near2(box.bottom - Update.FRAME.contentBottom, 6 + 96 + 8 + 20);
+    near2(box.bottom - Update.FRAME.contentBottom, below / 2);
+    near2(Update.contentShift(), below / 2); near2(Update.contentShift({ status: true }), (below - 102) / 2);
+    near2(Update.contentShift({ status: true, progress: true }), 0);
     assert.ok(Update.FRAME.contentBottom - (Popup.footerTop(Update.FRAME.h, 3)) >= POPUP.clearance - 1e-9);
-    assert.ok(["V_0", "V_1", "F_0", "F_1", "L_0"].every((name) => walk(consent).some((e) => e.dataset.path === `Center/Popup/${name}`)));
-    assert.ok(!walk(consent).some((e) => e.dataset.path === "Center/Popup/L_1"), "no divider under the last row");
+    assert.ok(["V_0", "V_1", "F_0", "F_1", "L_0"].every((name) => walk(consent).some((e) => e.dataset.path === `Center/Popup/Content/${name}`)));
+    assert.ok(!walk(consent).some((e) => e.dataset.path === "Center/Popup/Content/L_1"), "no divider under the last row");
     assert.equal(oneSize(consent, ["Btn_Cancel", "Btn_Notes", "Btn_Ok"]), 1);
     assert.notEqual(walk(consent).find((e) => e.dataset.path === "Center/Popup/Btn/Btn_Ok/Label_Locale").style.color, "#4b2116", "Update is not the gold button (BL-034)");
     action(consent, "later").click();
