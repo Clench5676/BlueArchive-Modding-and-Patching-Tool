@@ -273,7 +273,7 @@ async function renderPortraitActions(host, entry, rect, version, alive = () => t
     Object.assign(host.style, { left: `${next.x}px`, top: `${next.y}px` });
   };
   let control;
-  await UI.button(destination, "HallPortraitScaleReset", T("hall.scaleReset"), box.reset, () => { control?.reset(); place(); }, { enabled: enabled(), captionSite: "hall.scaleReset" });
+  await UI.button(destination, "HallPortraitScaleReset", T("hall.scaleReset"), box.reset, () => { control?.reset(); place(); }, { enabled: enabled(), captionSite: "hall.scaleReset", height: box.reset[3] });
   control = await UI.scaleControl(destination, entry.scale, (value) => {
     if (!enabled()) return;
     entry.scale = value; portraits?.setScale?.(current().portraitScale);

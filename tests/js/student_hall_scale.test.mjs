@@ -74,7 +74,7 @@ test("toolbar fits at every corner and both size limits, all window scales/densi
       assert.ok(box.icon<box.reset[1]);assert.ok(box.slider[1]-24>box.icon);
       assert.ok(box.slider[0]+box.slider[2]<box.reset[0]);assert.ok(box.reset[0]+box.reset[2]<=box.width);
       assert.ok(box.reset[1]+box.reset[3]<=box.height);
-      assert.equal(box.reset[3],136*1920/2960);assert.equal(box.height,PORTRAIT_TOOLBAR_HEIGHT);
+      assert.equal(box.reset[3],104*1920/2960,"Reset is as tall as the slider body beside it");assert.equal(box.height,PORTRAIT_TOOLBAR_HEIGHT);
       assert.equal(box.slider[1],box.reset[1]+box.reset[3]/2);
     }
   }

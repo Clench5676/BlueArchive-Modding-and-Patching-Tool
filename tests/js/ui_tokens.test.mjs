@@ -388,17 +388,17 @@ for (const locale of ["en-US", "th-TH", "zh-CN", "zh-TW", "ja-JP", "ko-KR"]) tes
   const web = JSON.parse(readSync(new URL(`${locale}.json`, LOCALE_DIR), "utf8")).webui;
   document.documentElement.lang = locale;
   const B = Tokens.SMALL_BUTTON, S = 1920 / 2960;
-  for (const [keys, width] of [[["hall.addPortraits", "hall.adjust"], 460], [["hall.scaleReset"], 156],
+  for (const [keys, width, bodyH = B.h] of [[["hall.addPortraits", "hall.adjust"], 460], [["hall.scaleReset"], 156, 104],
     [["hall.remove"], 190], [["hall.add", "hall.added", "import.select"], (320-22)*.46],
     [["hall.add", "hall.added"], (720-22)*.39]]) {
     const captions = keys.map((key) => key.split(".").reduce((value, part) => value[part], web));
-    const size = hallControls.buttonSize(captions, width);
-    const fits = NGUI.fitGroup(captions, B.fs, B.fsMin, Math.max(B.minW, width / S) - B.fitInset, 2, { maxH: B.h - B.boxInsetH });
+    const fits = NGUI.fitGroup(captions, B.fs, B.fsMin, Math.max(B.minW, width / S) - B.fitInset, 2, { maxH: bodyH - B.boxInsetH });
+    const size = bodyH === B.h ? hallControls.buttonSize(captions, width) : fits[0].fs;
     assert.equal(new Set(fits.map((f) => f.fs)).size, 1);
     for (const [i, f] of fits.entries()) {
       assert.equal(f.fs, size); if (locale === "th-TH" && keys[0] === "hall.scaleReset") assert.equal(f.fs, 30, "Named Thai Reset exception");
       else assert.ok(f.fs >= B.fsMin && f.fs <= B.fs, `${locale} ${keys.join("/")} needs ${f.fs}`);
-      assert.ok(!f.overflow); assert.ok(f.lines * NGUI.fontSizeFor(f.text, f.fs) * NGUI.LINE_PITCH <= B.h - B.boxInsetH);
+      assert.ok(!f.overflow); assert.ok(f.lines * NGUI.fontSizeFor(f.text, f.fs) * NGUI.LINE_PITCH <= bodyH - B.boxInsetH);
       for (const line of f.text.split("\n")) assert.ok(NGUI.glyphWidth(line, f.fs) <= Math.max(B.minW, width / S) - B.fitInset);
       assert.equal(f.text.replace(/\s/g, ""), captions[i].replace(/\s/g, ""));
     }
@@ -448,8 +448,11 @@ test("Thai footer exceptions cannot authorize another footer or another locale",
 for (const locale of ["en-US","th-TH","zh-CN","zh-TW","ja-JP","ko-KR"]) test(`Reset renders with its named caption allowance in ${locale}`, async () => {
   document.documentElement.lang=locale;
   const web=JSON.parse(readSync(new URL(`${locale}.json`,LOCALE_DIR),"utf8")).webui,host={};
-  await hallControls.button(host,"HallPortraitScaleReset",web.hall.scaleReset,[264,74,156,Tokens.SMALL_BUTTON.h*1920/2960],()=>{}, {captionSite:"hall.scaleReset"});
+  const row=104*1920/2960;
+  await hallControls.button(host,"HallPortraitScaleReset",web.hall.scaleReset,[264,74,156,row],()=>{}, {captionSite:"hall.scaleReset",height:row});
   const label=labelOf(host.tree);
+  assert.ok(Math.abs((bodyOf(host.tree)?.h_ || NGUI.find(host.tree, "BG (1)").widgets[0].h_) - 104) < 1e-9, "the body is the slider body's height");
+  assert.equal(host.origin[1], 74 + row / 2, "centred on the slider's row");
   assert.ok(label.fontSize >= (locale==="th-TH"?30:34));
   if(locale==="th-TH") {
     assert.equal(label.fontSize,30);
