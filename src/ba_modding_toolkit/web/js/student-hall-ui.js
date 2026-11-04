@@ -153,8 +153,9 @@ export function portraitRowLayout() {
   return { height, pitch: height + 4, cardX: 105 + 12, cardY, stripX: 240 - 12, stripW: 960 + 12 };
 }
 // Keep a caller's centre and width; only the minimum width and the shared small-button height constrain its body.
-export function buttonBox([x, y, width, height]) {
-  const w = Math.max(SMALL_BUTTON.minW * S, width), h = SMALL_BUTTON.h * S;
+// bodyHeight: a site whose neighbour sets the height (the portrait toolbar's Reset beside its slider).
+export function buttonBox([x, y, width, height], bodyHeight = SMALL_BUTTON.h * S) {
+  const w = Math.max(SMALL_BUTTON.minW * S, width), h = bodyHeight;
   return [x + (width - w) / 2, y + (height - h) / 2, w, h];
 }
 export const buttonSize = (captions, width) => NGUI.fitGroup(captions, SMALL_BUTTON.fs, SMALL_BUTTON.fsMin,
@@ -167,11 +168,12 @@ export const retainedButtonSize = (captions, width, height) => NGUI.fitGroup(cap
 export const retainedButton = (host, name, caption, box, action, opts = {}) => drawButton(host, name, caption, box, action,
   { ...opts, fs: opts.size ?? 40, min: opts.size ?? 26, retained: true });
 
-// size: a row's shared caption size (buttonSize). Fit first with the token's height as well as its width.
+// size: a row's shared caption size (buttonSize). Fit first with the body's height as well as its width.
+// height: the body height in stage pixels where the site sets it (buttonBox); the token's otherwise.
 export async function button(host, name, caption, box, action, opts = {}) {
   await ready();
-  const placed = buttonBox(box), fit = NGUI.fitGroup([caption], opts.size ?? SMALL_BUTTON.fs, opts.size ?? SMALL_BUTTON.fsMin,
-    placed[2] / S - SMALL_BUTTON.fitInset, 2, { maxH: SMALL_BUTTON.h - SMALL_BUTTON.boxInsetH })[0];
+  const placed = buttonBox(box, opts.height), fit = NGUI.fitGroup([caption], opts.size ?? SMALL_BUTTON.fs, opts.size ?? SMALL_BUTTON.fsMin,
+    placed[2] / S - SMALL_BUTTON.fitInset, 2, { maxH: placed[3] / S - SMALL_BUTTON.boxInsetH })[0];
   if (fit.overflow || fit.fs < captionMinimum(opts.captionSite, document.documentElement.lang, SMALL_BUTTON.fsMin)) throw new RangeError(`Hall small button cannot fit: ${name}`);
   return drawButton(host, name, caption, placed, action, { ...opts, fs: fit.fs, min: fit.fs, fit });
 }

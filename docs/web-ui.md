@@ -1631,9 +1631,12 @@ up by the row's 16 px of free top space; its size and the name captions stay unc
 by its existing hit outset (x 240 to 228, width 960 to 972), while card/action stage horizontal centres stay unchanged.
 Even the tightest searched viewport (Japanese toolbar) holds a full row. Horizontal card pitch stays 220 px.
 
-The portrait toolbar grows from 142 to 162.216 CSS px: its second row is 88.216 high from y 74, with Reset at the
-existing horizontal centre and width (156 px). Its slider follows the row's centre. Placement above the visible head,
-below the feet when blocked, inside the stage and clear of the top bar and right controls uses the new total height.
+The portrait toolbar's second row is the slider body's height (`UILobby` `Btn_RotateSpine/ConditionRoot/Able_Count/Bg`,
+104 u, 67.459 CSS px) from y 74, total 141.459 px (`PORTRAIT_TOOLBAR_ROW`, `PORTRAIT_TOOLBAR_HEIGHT`). Reset draws through
+`button()` with that body height (`height` option) at its horizontal centre and width (156 px), so it is exactly as tall
+as the slider beside it (owner, 2026-11-04); its caption keeps the 48 to 34 range, its label box 84 u high, and every
+locale's caption is one line. Placement above the visible head, below the feet when blocked, inside the stage and clear
+of the top bar and right controls uses this total height.
 The memorial candidate Add and queue Remove still use `retainedButton` because their combined containing layout hits
 the full-row stop above; their row/card/panel sizes, drag pitch, marker and hit boxes remain unchanged.
 
