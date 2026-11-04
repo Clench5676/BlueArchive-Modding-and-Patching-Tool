@@ -130,6 +130,9 @@ class Button:
     def isHidden(self):
         return self.hidden
 
+    def setHidden_(self, value):
+        self.hidden = value
+
 
 @pytest.mark.parametrize('flipped', [True, False])
 def test_cocoa_moves_only_y_and_leaves_fullscreen_reveal_to_appkit(flipped):
@@ -831,3 +834,102 @@ def test_windows_installs_aspect_policy_before_show_without_waiting_for_webview(
     services = NS(window=None, data_dir=tmp_path, timings=Timings(), events=EventBus())
     main._run_window(services, NS(url='http://127.0.0.1:1/'), False)
     assert calls == ['before-show', 'install', 'shown', 'dispose']
+
+
+def test_window_button_motion_is_checked_and_goes_to_hosts_that_play_it():
+    # chrome-motion.js sends the top bar's offsets; the macOS buttons follow them, other hosts have none in the toolbar
+    host = Host()
+    played = []
+    host.slide = lambda frames, period: played.append((frames, period))
+    chrome = WindowChrome(NS(), EventBus(), platform='darwin', host=host)
+    chrome.motion([1, 2], 1 / 60)
+    assert played == [], "nothing before the chrome is active"
+    chrome.install()
+    chrome.motion([108.2, 50, 0], 1 / 60)
+    assert played == [([108.2, 50.0, 0.0], 1 / 60)]
+    for frames, period in [([], 1 / 60), ([1] * 121, 1 / 60), ([-1], 1 / 60), ([float('nan')], 1 / 60), ([True], 1 / 60),
+                           ([4097], 1 / 60), ("12", 1 / 60), ([1], 0), ([1], 0.5), ([1], None)]:
+        with pytest.raises(ValueError):
+            chrome.motion(frames, period)
+    assert len(played) == 1
+    plain = WindowChrome(NS(), EventBus(), platform='win32', host=Host())
+    plain.install()
+    plain.motion([10], 1 / 60)
+
+
+def cocoa_motion(flipped, fullscreen=None):
+    host = CocoaHost.__new__(CocoaHost)
+    host.api = NS(NSContainsRect=lambda outer, inner: outer.origin.y <= inner.origin.y and inner.origin.y + inner.size.height <= outer.origin.y + outer.size.height,
+                  NSWindowStyleMaskFullScreen=1 << 14)
+    fullscreen = fullscreen if fullscreen is not None else {'on': False}
+    content = NS(isFlipped=lambda: flipped, bounds=lambda: rect(0, 0, 200, 200))
+    host.window = NS(contentView=lambda: content, isMiniaturized=lambda: False, isZoomed=lambda: False,
+                     styleMask=lambda: 1 << 14 if fullscreen['on'] else 0)
+    host.transition, host.retries = False, 0
+    host.buttons = [Button(x, 8 if flipped else 178, flipped) for x in [12, 32, 52]]
+    pending = []
+    host.later = lambda delay, fn: pending.append((delay, fn))
+    return host, pending, fullscreen
+
+
+def tops(host):
+    # top edge in content points from the window's top, as the page measures
+    flipped = host.buttons[0].parent.isFlipped()
+    return [b.frame().origin.y if flipped else 200 - b.frame().origin.y - 14 for b in host.buttons]
+
+
+@pytest.mark.parametrize('flipped', [True, False])
+def test_cocoa_buttons_play_the_top_bar_motion_and_hide_once_above_the_window(flipped):
+    host, pending, _ = cocoa_motion(flipped)
+    resting = host.measure({'centre': 22})
+    assert tops(host) == pytest.approx([15] * 3)
+    host.slide([30.0, 10.0, 0.0], 1 / 60)
+    assert tops(host) == pytest.approx([-15] * 3) and all(b.hidden for b in host.buttons), "wholly above the window"
+    delay, step = pending.pop(0)
+    assert delay == 1 / 60
+    step()
+    assert tops(host) == pytest.approx([5] * 3) and not any(b.hidden for b in host.buttons)
+    # a newer motion replaces the one still playing
+    host.slide([20.0], 1 / 60)
+    pending.pop(0)[1]()
+    assert tops(host) == pytest.approx([-5] * 3) and host.offset == 20
+    # a layout pass aligns them again and keeps the offset
+    bounds = host.measure({'centre': 25})
+    assert bounds.top == pytest.approx(resting.top + 3) and tops(host) == pytest.approx([-2] * 3)
+    assert [b.frame().origin.x for b in host.buttons] == [12, 32, 52]
+    host.slide([0.0], 1 / 60)
+    assert tops(host) == pytest.approx([18] * 3)
+
+
+@pytest.mark.parametrize('flipped', [True, False])
+def test_cocoa_fullscreen_gets_back_only_what_the_motion_changed(flipped):
+    host, pending, fullscreen = cocoa_motion(flipped)
+    host.measure({'centre': 22})
+    host.slide([40.0], 1 / 60)
+    assert all(b.hidden for b in host.buttons)
+    # macOS fullscreen: AppKit laid the first button out itself; the others are still where the motion put them
+    fullscreen['on'] = True
+    appkit = NS(x=12, y=4 if flipped else 182)
+    host.buttons[0].value.origin = appkit
+    host.measure({'centre': 22})
+    assert host.buttons[0].frame().origin is appkit, "AppKit's own layout stays"
+    assert tops(host)[1:] == pytest.approx([15, 15]) and not any(b.hidden for b in host.buttons)
+    host.slide([40.0], 1 / 60)
+    assert tops(host)[1:] == pytest.approx([15, 15]) and not any(b.hidden for b in host.buttons), "nothing moves there"
+    # leaving fullscreen AppKit lays the row out as one again; alignment and the offset return
+    host.buttons[0].value.origin = NS(x=12, y=host.buttons[1].frame().origin.y)
+    fullscreen['on'] = False
+    host.measure({'centre': 22})
+    assert tops(host) == pytest.approx([-25] * 3) and all(b.hidden for b in host.buttons)
+
+
+def test_cocoa_dispose_stops_a_playing_motion():
+    host, pending, _ = cocoa_motion(True)
+    host.api.NSNotificationCenter = NS(defaultCenter=lambda: NS(removeObserver_=lambda observer: None))
+    host.observers, host.monitor = [], None
+    host.measure({'centre': 22})
+    host.original = [(b.frame().origin, False) for b in host.buttons]
+    host.slide([30.0, 0.0], 1 / 60)
+    host.dispose()
+    pending.pop(0)[1]()
+    assert host.offset == 30.0, "the next step never runs"

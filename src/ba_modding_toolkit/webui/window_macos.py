@@ -12,6 +12,9 @@ logger = logging.getLogger(__name__)
 class CocoaHost:
     # A missing content view is measured again this often, this many times (pywebview swaps it while it loads).
     RETRY_DELAY, RETRY_LIMIT = 0.25, 8
+    # The top bar's offset the buttons share (points up, chrome-motion.js), the motion playing it, where they were
+    # aligned (origins) and rest (content rect), and what of the offset and hiding is on them now.
+    offset, motion, base, resting, applied, hid = 0.0, 0, (), None, 0.0, False
 
     def __init__(self, window, owner, *, api=None, dispatch=None, later=None):
         if api is None:
@@ -92,6 +95,37 @@ class CocoaHost:
                 self.owner.refresh()
             self.observers.append(centre.addObserverForName_object_queue_usingBlock_(getattr(api, name), window, None, changed))
 
+    def slide(self, frames, period):
+        """Play the page's top bar offsets on the buttons, one per period; a newer motion replaces this one."""
+        self.motion += 1
+        token = self.motion
+
+        def step(index):
+            if token != self.motion:
+                return
+            self.offset = frames[index]
+            self._place()
+            if index + 1 < len(frames):
+                self.later(period, lambda: step(index + 1))
+        step(0)
+
+    def _place(self):
+        """The buttons at their aligned place moved up by the offset, hidden once wholly above the window. macOS
+        fullscreen shows and hides them itself: there they only get back what this changed."""
+        if not self.base or self.transition or self.window.contentView() is None:
+            return
+        fullscreen = self.state()["fullscreen"]
+        offset = 0.0 if fullscreen else self.offset
+        hide = bool(offset and self.resting is not None and offset >= self.resting.bottom)
+        for button, (x, y) in zip(self.buttons, self.base):
+            up = -1 if button.superview().isFlipped() else 1
+            # in fullscreen AppKit may have laid the buttons out again: move only those still where this put them
+            if not fullscreen or abs(button.frame().origin.y - (y + up * self.applied)) < .5:
+                button.setFrameOrigin_((x, y + up * offset))
+            if hide or self.hid:
+                button.setHidden_(hide)
+        self.applied, self.hid = offset, hide
+
     def _within_container(self, dy):
         """The downward move (content points) closest to ``dy`` that keeps every button inside its container; 0 when none
         does."""
@@ -143,9 +177,17 @@ class CocoaHost:
             for source, target, actual in zip(before, targets, after):
                 if abs(source.left - actual.left) > .5 or abs(target.top - actual.top) > .5:
                     raise RuntimeError("M1 AppKit relayout rejected vertical button alignment")
+            self.base = [(button.frame().origin.x, button.frame().origin.y) for button in self.buttons]
+            self.applied = 0.0
         # Fullscreen visibility/reveal belongs to AppKit; never force buttons visible there.
         visible = [self._rect(button, content) for button in self.buttons]
-        return union(visible) if visible else None
+        if not visible:
+            return None
+        self.resting = union(visible)
+        # where the buttons rest, though the top bar's motion may have them elsewhere now
+        if self.offset or self.applied or self.hid:
+            self._place()
+        return self.resting
 
     def command(self, action):
         selectors = {"minimize": self.window.performMiniaturize_, "maximize": self.window.performZoom_,
@@ -153,6 +195,7 @@ class CocoaHost:
         selectors[action](None)
 
     def dispose(self):
+        self.motion += 1
         centre = self.api.NSNotificationCenter.defaultCenter()
         for observer in self.observers:
             centre.removeObserver_(observer)

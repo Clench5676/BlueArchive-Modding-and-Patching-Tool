@@ -10,6 +10,8 @@ from dataclasses import asdict, dataclass
 logger = logging.getLogger(__name__)
 # Why the page sent no drag regions, for the log: an immersive scene, or chrome the page does not take as valid yet.
 LAYOUT_STATES = ("", "immersive", "waiting")
+# The top bar's motion the window buttons play (chrome-motion.js): at most this many offsets, each at most this far.
+MOTION_FRAMES, MOTION_REACH = 120, 4096
 
 
 @dataclass(frozen=True)
@@ -137,6 +139,19 @@ class WindowChrome:
         self.layout = {"centre": centre, "height": height, "drag": regions}
         if self.active:
             self.host.dispatch(self.refresh)
+
+    def motion(self, frames, period):
+        """The top bar's offsets (points up from where the buttons rest), one per period: the window buttons follow it.
+        Only hosts whose buttons sit in the page's toolbar play it."""
+        number = lambda v: isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
+        if (not isinstance(frames, list) or not 1 <= len(frames) <= MOTION_FRAMES
+                or not all(number(v) and 0 <= v <= MOTION_REACH for v in frames)):
+            raise ValueError("Invalid window button motion")
+        if not number(period) or not 0 < period <= 0.1:
+            raise ValueError("Invalid window button motion period")
+        if self.active and hasattr(self.host, "slide"):
+            frames = [float(v) for v in frames]
+            self.host.dispatch(lambda: self.host.slide(frames, float(period)))
 
     def command(self, action):
         if self.active:
