@@ -24,6 +24,9 @@ where = ["src"]
 # only the app package goes into wheels, whatever else lies under src/
 include = ["ba_modding_toolkit*"]
 
+[tool.setuptools.package-data]
+ba_modding_toolkit = ["locales/*.json", "py.typed"]
+
 [tool.uv.sources]
 spineatlas = { git = "https://github.com/Agent-0808/SpineAtlas.git", rev = "fix/bounds-not-first" }
 
