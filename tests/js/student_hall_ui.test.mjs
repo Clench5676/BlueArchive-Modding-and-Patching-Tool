@@ -21,7 +21,7 @@ globalThis.document={createElement:()=>new Element(),getElementById:()=>stage,ac
 const find=(tree,path)=>path.split("/").reduce((node,key)=>node.children.find((child)=>child.name===key),tree);
 globalThis.uiHarness={withTimeout,Loading:{hold:async(work)=>work()},T:key=>key,clone:structuredClone,NGUI:{find,fitLabel(widget,text){widget.text=text;},fitGroup:(captions)=>captions.map(()=>({fs:40}))},Popup:{opened(host,close){top={host,close};},closed(){top=null;},top:()=>top}};
 let source=await readFile(new URL("../../src/ba_modding_toolkit/web/js/student-hall-ui.js",import.meta.url),"utf8");
-source=source.replace(/^import .*;$/gm,"");source=`const {Popup,clone,NGUI,Loading,withTimeout,T}=globalThis.uiHarness; const S=1920/2960;\n${source}\nexport function areaFixture(fn){area=fn;} export function assetsFixture(value){assets=value;} export function readinessFixture(host,fn){visibleReadiness.set(host,fn);} export {pictureReadiness};\n//# sourceURL=hall-ui-fixture.js`;
+source=source.replace(/^import .*;$/gm,"");source=`const {Popup,clone,NGUI,Loading,withTimeout,T}=globalThis.uiHarness; const Buttons={disable:(...args)=>globalThis.uiHarness.Buttons.disable(...args)}; const S=1920/2960;\n${source}\nexport function areaFixture(fn){area=fn;} export function assetsFixture(value){assets=value;} export function readinessFixture(host,fn){visibleReadiness.set(host,fn);} export {pictureReadiness};\n//# sourceURL=hall-ui-fixture.js`;
 const UI=await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`);
 UI.areaFixture((host,box,height,key)=>{const scroll=new Element();scroll.dataset.scroll=key;scroll.isConnected=host.isConnected;const inner=new Element();scroll.append(inner);host.append(scroll);return inner;});
 const settle=()=>new Promise((resolve)=>setTimeout(resolve,40));
@@ -197,4 +197,19 @@ test("Hall's search box closes the search on Escape and shows no browser clear b
   assert.ok(rule, "the clear button is styled");
   assert.match(rule[1], /display: none/);
   assert.match(rule[1], /-webkit-appearance: none/);
+});
+
+
+test("Hall modalFrame delegates one, two and three actions to popupFrame, preserving semantics and disabled state",()=>{
+  let options;
+  const saved={...globalThis.uiHarness.Popup};
+  globalThis.uiHarness.Buttons={disable:child=>({...child,disabled:true})};
+  globalThis.uiHarness.Popup.popupFrame=(title,w,h,opts)=>{options=opts;return {name:"Center",children:[{name:"Popup",children:[{name:"Btn",children:opts.buttons.map(b=>({name:b.name,semantic:b.semantic}))}]}]};};
+  for(const count of [1,2,3]){
+    const actions=Array.from({length:count},(_,i)=>({label:`Action ${i}`,semantic:["confirm","blue","secondary"][i],enabled:i!==0}));
+    const tree=UI.modalFrame("Hall",2800,1450,actions),row=find(tree,"Popup/Btn");
+    assert.equal(options.buttons.length,count);assert.deepEqual(options.buttons.map(b=>b.semantic),actions.map(a=>a.semantic));
+    assert.equal(row.children[0].disabled,true);assert.equal(row.children[0].name,"Footer0");
+  }
+  Object.assign(globalThis.uiHarness.Popup,saved);
 });

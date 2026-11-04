@@ -238,11 +238,11 @@ for (const locale of locales) test(`every footer's captions share one size in th
   }
 });
 
-// Hall modal candidates are measured without moving their content. Every current draw caller hits the stop rule.
+// Hall modals use the shared footer; the memorial editor still hits its full-row stop rule.
 const popupSource = read("js/popup.js");
 const footerHelpers = new Function("FOOTER", "FRAME_Y", "NGUI", `${popupSource.slice(popupSource.indexOf("export const footerY"), popupSource.indexOf("// the game's popup frame at a size"))
   .replaceAll("export ", "")}; return {footerY, footerTop, footerSlots, footerFit};`)(Tokens.FOOTER, Tokens.POPUP.frameY, NGUI);
-test("Hall modal footer candidates use FOOTER for one, two and three actions", () => {
+test("Hall modal footers use FOOTER for one, two and three actions", () => {
   for (const n of [1, 2, 3]) {
     const { scale, xs } = footerHelpers.footerSlots(n, 2800);
     assert.equal(scale, n < 3 ? 1 : Tokens.FOOTER.many.scale);
@@ -252,18 +252,54 @@ test("Hall modal footer candidates use FOOTER for one, two and three actions", (
     assert.equal(footerHelpers.footerY(1450) - (Tokens.POPUP.frameY - 1450 / 2), Tokens.FOOTER.centre);
   }
 });
-test("all current Hall modal contents cross the shared footer's required clearance", () => {
-  const S = 1920 / 2960, picker = read("js/student-hall-picker.js"), hall = read("js/student-hall.js");
-  // Pin the actual call sites, including both search states, so these failures cannot silently become stale.
-  assert.match(picker, /searching \? 370 : 300, 1320, searching \? 485 : 555/);
-  assert.match(picker, /queuePanel\(layer, \[115, 720, 1685, 195\]/);
-  assert.match(hall, /\[130, 190, 760, 650\]/);
-  for (const [name, height, n, bottom, excess] of [["portraits", 1300, 1, 855, 76.945945945946],
-    ["memorials", 1450, 2, 915, 88.297297297297], ["backgrounds", 1450, 2, 840, 13.297297297297]]) {
-    const limit = 540 - (footerHelpers.footerTop(height, n) + Tokens.POPUP.clearance) * S;
-    assert.ok(Math.abs(bottom - limit - excess) < 1e-9, name);
-    assert.ok(bottom > limit, `${name} must remain stopped`);
+const { SORTS } = await import("../../src/ba_modding_toolkit/web/js/roster-order.js");
+const toolbarSource = read("js/roster-widgets.js");
+const toolbarFor = (web) => new Function("NGUI", "T", "advanceOf", "glyphsOf", "fitText", "SORTS",
+  `${toolbarSource.slice(toolbarSource.indexOf("export function toolbarLayout"), toolbarSource.indexOf("// UICharacterCollection/SeletControl/LeftInfo_Empty"))
+    .replaceAll("export ", "")}; return toolbarLayout;`)(NGUI, (key) => key.split(".").reduce((v, k) => v[k], web), NGUI.glyphWidth, NGUI.glyphWidth, NGUI.fitText, SORTS);
+const modalLayoutFor = (web) => {
+  const source = read("js/student-hall-ui.js");
+  return new Function("Popup", "POPUP", "S", "toolbarLayout", `${source.slice(source.indexOf("export const modalContentBottom"), source.indexOf("// Keep a caller's centre"))
+    .replaceAll("export ", "")}; return {modalContentBottom, portraitPickerLayout, backgroundPickerBox};`)(footerHelpers, Tokens.POPUP, 1920 / 2960, toolbarFor(web));
+};
+for (const locale of ["en-US", "th-TH", "zh-CN", "zh-TW", "ja-JP", "ko-KR"]) test(`Hall modal content clears the shared footer, keeping full rows in both search states in ${locale}`, () => {
+  document.documentElement.lang = locale;
+  const web = JSON.parse(readSync(new URL(`${locale}.json`, LOCALE_DIR), "utf8")).webui;
+  const layout = modalLayoutFor(web), S = 1920 / 2960;
+  for (const searching of [false, true]) {
+    const box = layout.portraitPickerLayout({ sort: "name" }, searching);
+    const [x, y, w, h] = box.list;
+    assert.ok(h >= 402, "one full portrait row");
+    assert.ok(box.toolbar.y - 70 * box.scale >= box.titleBottom - 1e-9);
+    assert.ok(y >= box.toolbar.y + 70 * box.scale);
+    if (searching) assert.ok(y >= box.search[1] + 30 + 45 * S);
+    assert.ok(y + h + Tokens.POPUP.clearance * S <= 540 - footerHelpers.footerTop(1300) * S + 1e-9);
+    assert.deepEqual([x, w], [300, 1320]);
+    for (const [width, height] of [[960, 540], [1600, 900], [2560, 1440]]) for (const dpr of [1, 2, 3]) {
+      const k = Math.min(width / 1920, height / 1080) * dpr;
+      assert.ok((y + h) * k <= height * dpr);
+    }
   }
+  const bg = layout.backgroundPickerBox();
+  assert.deepEqual([bg[0], bg[2], bg[3]], [130, 760, 650]);
+  assert.ok(bg[1] >= 540 - (Tokens.POPUP.frameY + 1450 / 2 - 132) * S);
+  assert.ok(bg[3] >= 280);
+  assert.ok(bg[1] + bg[3] + Tokens.POPUP.clearance * S <= 540 - footerHelpers.footerTop(1450, 2) * S + 1e-9);
+  assert.match(read("js/student-hall-picker.js"), /UI\.portraitPickerLayout\(view, searching\)\.list/);
+  assert.match(read("js/student-hall.js"), /UI\.backgroundPickerBox\(\)/);
+});
+test("the memorial modal remains stopped: even tightly stacked full rows cannot clear the shared footer", () => {
+  const S = 1920 / 2960, limit = 540 - (footerHelpers.footerTop(1450, 2) + Tokens.POPUP.clearance) * S;
+  const titleBottom = 540 - (Tokens.POPUP.frameY + 1450 / 2 - (64 + 52 + 6)) * S;
+  const candidate = 93 + (202.5 + 10 + 88) * .39 + 8 + Tokens.SMALL_BUTTON.h * S;
+  const queue = 119 + Tokens.SMALL_BUTTON.h * S;
+  // A generous lower bound: no inter-panel gaps, shortest name strip, search only its native body's height.
+  for (const searching of [false, true]) {
+    const bottom = titleBottom + 140 * (1660 / 2840) + (searching ? 90 * S : 0) + 58 + candidate + 15 + 15 + queue + 5;
+    assert.ok(bottom > limit, `${searching}: ${bottom} exceeds ${limit}`);
+  }
+  assert.match(read("js/student-hall-picker.js"), /memorial \? \{ retainedFooter: true \}/);
+  assert.match(read("js/student-hall-picker.js"), /queuePanel\(layer, \[115, 720, 1685, 195\]/);
 });
 const HALL_FOOTERS = [["popup.cancel", "hall.savePlaylist"], ["hall.doneAdding"], ["popup.cancel"],
   ["popup.cancel", "hall.useBackground"], ["hall.keepEditing", "hall.discard", "hall.saveLeave"]];
