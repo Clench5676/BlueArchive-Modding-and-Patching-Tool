@@ -2719,8 +2719,17 @@ the hit areas show one view in every frame; the portraits never trail the backgr
 ## Release notes and feature tours
 
 `update.js` retains the detected release snapshot. Release Notes uses the same `UIPopup_Sort` notice frame as
-messages, with literal UILabel text at one fixed size (44) on every line (long lines wrap, none shrinks), a scrolling
-body and an explicit release-page action. Missing/empty GitHub bodies take this fallback path. No image/HTML/Markdown interpretation or download/install action is involved.
+messages, with UILabel text, a scrolling body and an explicit release-page action. `release-notes.js` reads the body's
+Markdown in the UI language: language sections are separated by a rule (`---`) and marked `<!-- lang: en -->`,
+`<!-- lang: zh-CN -->` (GitHub hides the marks); an unmarked section is told by its script (0.6.0's body: English, a
+rule, Chinese). The UI language's section shows, else its other variant (zh-TW reads zh-CN), else English, else the
+first. Headings draw at 56 / 52 / 48, list items at 44 with a hanging bullet (plain message rows' `marker`, `indent`,
+`gap`), other lines at 44; every line of the body stays its own line, as GitHub shows it, and a long one wraps rather than
+shrinks. Emphasis, code, link and image marks go and their text stays; HTML is dropped, never interpreted, and nothing is
+downloaded or installed. Missing or empty bodies show the empty-notes line.
+A build ships its own notes as `assets/release-notes/<X.Y.Z>.md`, the text its GitHub release carries; `app.releaseNotes`
+reads the running version's file, and Settings' prerelease update preview ("Release Notes" case) shows it in place of the
+sample, so the notes can be read in the App before publishing.
 The explicit validated page argument remains attached to that offer even if a later check changes backend state.
 
 `tours.js` and `webui/tours.py` implement the local presentation framework described in

@@ -899,6 +899,8 @@ export const MSG = { title: 150, gap: 28, rowButton: SMALL_BUTTON.h + 20, check:
 //   lines: text, or {text, button: {label, fn}} for a line with a small button at its end (fn({close}), where
 //          close(button) closes the popup); with such a line every line shows as a row of the game's light box
 //          fontSize/minFontSize optionally keep a row's existing type size (the tour counter and body).
+//          With plain: indent (units) moves a line right, marker hangs a bullet left of its first line (markerGap wide,
+//          its font size by default), gap adds space above it (release notes' lists and sections).
 //   fitTogether: line indices fitted at one shared size, using the smallest fit within the popup's size floor
 //   plain: left-aligned lines without a box or separators, including lines with a button at the right
 //   ok, cancel: the buttons' labels (either may be left out); check: {label, checked}
@@ -952,8 +954,9 @@ function plainMessage(layer, { title, lines, ok, cancel, buttons, state, dismiss
   box.appendChild(el("h2", "", title));
   const content = scroll ? box.appendChild(el("div", "plain-message-lines")) : box;
   lines.map((l) => (typeof l === "string" ? { text: l } : l)).forEach((r, i) => {
-    const p = el("p", "", r.text);
-    if (plain) Object.assign(p.style, { textAlign: "left", display: "flex", alignItems: "center", gap: "20px" });
+    const p = el("p", "", r.marker ? `${r.marker} ${r.text}` : r.text);
+    if (plain) Object.assign(p.style, { textAlign: "left", display: "flex", alignItems: "center", gap: "20px",
+      paddingLeft: r.indent ? `${r.indent * S}px` : "", marginTop: r.gap ? `${r.gap * S}px` : "" });
     if (r.button) {
       const b = button(r.button.label, () => r.button.fn?.({ close: finish }), `line${i}`, "plain-line-button");
       if (plain) Object.assign(b.style, { marginLeft: "auto", flexShrink: "0" });
@@ -998,7 +1001,7 @@ function messageLines(lines, w, fitTogether, plain) {
     // a line button is the small button: 136 high, as wide as its caption needs and 90 more (240 at least), the caption 48 down to 34
     const bf = r.button ? fitText(r.button.label, SMALL_BUTTON.fs, SMALL_BUTTON.fsMin, SMALL_BUTTON.w - SMALL_BUTTON.fitInset) : null;
     const bw = bf ? Math.max(SMALL_BUTTON.minW, glyphsOf(bf.text, bf.fs) + SMALL_BUTTON.glyphPad) : 0;
-    const room = boxed ? valueRoom("frame", w, { reserve: bw ? bw + 30 : 0 }) : w - 240 - (bw ? bw + 30 : 0);
+    const room = boxed ? valueRoom("frame", w, { reserve: bw ? bw + 30 : 0 }) : w - 240 - (bw ? bw + 30 : 0) - (plain ? r.indent || 0 : 0);
     const f = messageText(r.text, r.fontSize ?? max, r.minFontSize ?? min, room, most, boxed);
     return { r, bf, bw, room, f: boxed ? counted(f) : f };
   });
@@ -1025,9 +1028,13 @@ function messageLines(lines, w, fitTogether, plain) {
   let y = 0;
   const sized = fitted.map((s) => ({ ...s, h: Math.max(s.bf ? SMALL_BUTTON.h : 0, s.f.lines * s.f.fs * 1.3 + 8) }));
   sized.forEach(({ r, f, bf, bw, h, room }, i) => {
-    const cy = y - h / 2;
-    out.push(node(`Line_${i}`, [plain ? -w / 2 + 120 : 0, cy],
-      [label(f.text, f.fs, `${r.color || "#2d4664"}/1.00`, plain ? room : w - 200, f.lines * f.fs * 1.3 + 8, { pivot: plain ? 3 : 4, depth: 8 })]));
+    if (plain && r.gap) y -= r.gap;
+    const cy = y - h / 2, x = plain ? -w / 2 + 120 + (r.indent || 0) : 0, colour = `${r.color || "#2d4664"}/1.00`;
+    out.push(node(`Line_${i}`, [x, cy],
+      [label(f.text, f.fs, colour, plain ? room : w - 200, f.lines * f.fs * 1.3 + 8, { pivot: plain ? 3 : 4, depth: 8 })]));
+    // a list item's bullet hangs left of its text, on the first line's centre (labels draw lines 1.15 apart)
+    if (plain && r.marker) out.push(node(`Mark_${i}`, [x - (r.markerGap ?? f.fs), cy + (f.lines - 1) * f.fs * 1.15 / 2],
+      [label(r.marker, f.fs, colour, r.markerGap ?? f.fs, f.fs * 1.3, { pivot: 3, depth: 8 })]));
     if (bf) {
       out.push(Buttons.smallButton(`Btn_${i}`, w / 2 - 120 - bw / 2, cy, r.button.label, { w: bw, fs: SMALL_BUTTON.fs, min: SMALL_BUTTON.fsMin, depth: 8 }));
       buttons.push([i, r.button]);

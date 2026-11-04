@@ -5,7 +5,8 @@ import * as Buttons from "./game-buttons.js";
 import * as NGUI from "./ngui.js";
 import * as Popup from "./popup.js";
 import { rpc, waitJob } from "./api.js";
-import { T, errorText } from "./i18n.js";
+import { T, errorText, language } from "./i18n.js";
+import { notesFor } from "./release-notes.js";
 import { statsBox } from "./stats-box.js";
 import { COLOUR, FOOTER, POPUP, STATS_BOX } from "./ui-tokens.js";
 import { S, clone } from "./util.js";
@@ -15,14 +16,29 @@ const checks = new WeakMap();
 const RESTART_WAIT = 3000;
 const NOTES_FONT = 44;
 
-// Literal text on the same UIPopup_Sort frame used by notices. No HTML, Markdown images or update jobs.
+// The release's Markdown on the same UIPopup_Sort frame used by notices, in the UI language (release-notes.js): headings
+// larger, list items with a hanging bullet. No HTML, images or update jobs.
 const dialogTitle = (key, simulation) => T(key) + (simulation ? T("update.simulation.suffix") : "");
+const HEADING_FONT = [56, 52, 48];
+
+// the popup's lines for the notes: one fixed type size per kind, as a changelog reads; a longer line wraps instead of
+// shrinking
+export function notesLines(markdown, lang = language()) {
+  const blocks = notesFor(typeof markdown === "string" ? markdown : "", lang);
+  if (!blocks.length) return [{ text: T("update.notesEmpty"), fontSize: NOTES_FONT, minFontSize: NOTES_FONT }];
+  return blocks.map((b) => {
+    if (b.kind === "heading") {
+      const fontSize = HEADING_FONT[Math.min(b.level, 3) - 1];
+      return { text: b.text, fontSize, minFontSize: fontSize, gap: b.gap ? 32 : 0 };
+    }
+    const line = { text: b.text, fontSize: NOTES_FONT, minFontSize: NOTES_FONT, gap: b.gap ? 12 : 0 };
+    if (b.kind === "item") return { ...line, marker: b.marker, markerGap: 44, indent: 52 + b.depth * 52 };
+    return b.under != null ? { ...line, indent: 52 + b.under * 52 } : line;
+  });
+}
 
 export async function releaseNotes(info, { simulation = false, onSimulatedPage } = {}) {
-  const notes = typeof info.notes === "string" ? info.notes.trim() : "";
-  // one fixed type size on every line, as a changelog reads; a longer line wraps instead of shrinking
-  const lines = (notes ? notes.split(/\r?\n/) : [T("update.notesEmpty")])
-    .map((text) => ({ text, fontSize: NOTES_FONT, minFontSize: NOTES_FONT }));
+  const lines = notesLines(info.notes);
   const result = await Popup.message({ title: `${dialogTitle("update.notes", simulation)} - ${info.version}`,
     lines, plain: true, scroll: true, width: 2458,
     buttons: [{ label: T("update.releasePage"), value: "page" },
@@ -33,11 +49,13 @@ export async function releaseNotes(info, { simulation = false, onSimulatedPage }
   }
 }
 
-// Settings supplies the server's shared prerelease gate. Synthetic data never enters the updater service.
-export function simulate(host, prefs, notes = true) {
-  if (prefs?.prereleasePreviews !== true || checks.has(host)) return Promise.resolve(null);
-  return check(host, { current: prefs.version, version: "0.6.0", installable: true,
-    notes: notes ? T("update.simulation.sample") : "" }, { simulation: true });
+// Settings supplies the server's shared prerelease gate. Synthetic data never enters the updater service. With notes,
+// the build's own release notes (app.releaseNotes) stand in for a newer release's, so they can be read before publishing.
+export async function simulate(host, prefs, notes = true) {
+  if (prefs?.prereleasePreviews !== true || checks.has(host)) return null;
+  const own = notes ? await rpc("app.releaseNotes").catch(() => null) : null;
+  return check(host, { current: prefs.version, version: own?.notes ? own.version : "0.6.0", installable: true,
+    notes: notes ? own?.notes || T("update.simulation.sample") : "" }, { simulation: true });
 }
 
 // resolves with what closed the popup: "later" (Later or Escape), "page" (the download page opened) or "update" (a
