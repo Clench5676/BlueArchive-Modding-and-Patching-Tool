@@ -17,6 +17,21 @@ TRANSLATIONS = sorted(p.stem for p in LOCALES.glob("*.json") if p.stem != REFERE
 # {path}, which the caller passes (extra arguments are ignored), and asks for {count}, which the caller passes too.
 KNOWN_PLACEHOLDER_DIFFERENCES: set[tuple[str, str]] = set()
 
+# Classic UI strings upstream ships in en-US and zh-CN only (the render backend settings of v2.12.0). The classic UI is
+# kept as upstream has it, so the other languages fall back to English for these keys.
+CLASSIC_ONLY_KEYS = {
+    "file_type.spine2dump",
+    "log.spine.spine2dump_set",
+    "message.3rd_party.spine2dump_required",
+    "option.render_backend",
+    "option.render_backend_info",
+    "option.render_backend_spine2dump",
+    "option.render_backend_spine_viewer",
+    "option.spine2dump_path",
+    "option.spine2dump_path_info",
+    "ui.settings.group_render_backend",
+}
+
 
 def load(code: str) -> dict:
     return json.loads((LOCALES / f"{code}.json").read_text(encoding="utf-8"))
@@ -47,8 +62,18 @@ def test_every_ui_language_ships():
 @pytest.mark.parametrize("code", TRANSLATIONS)
 def test_same_keys_as_en_us(code):
     reference, translation = flatten(load(REFERENCE)), flatten(load(code))
-    assert sorted(set(reference) - set(translation)) == [], "missing"
+    optional = set() if code == "zh-CN" else CLASSIC_ONLY_KEYS
+    assert sorted(set(reference) - set(translation) - optional) == [], "missing"
     assert sorted(set(translation) - set(reference)) == [], "not in en-US"
+
+
+def test_classic_only_keys_are_classic_strings():
+    """The exception list names en-US keys only, none of them with a translation that would make it stale."""
+    reference = flatten(load(REFERENCE))
+    assert CLASSIC_ONLY_KEYS <= set(reference)
+    for code in TRANSLATIONS:
+        if code != "zh-CN":
+            assert not CLASSIC_ONLY_KEYS & set(flatten(load(code))), code
 
 
 @pytest.mark.parametrize("code", TRANSLATIONS)
