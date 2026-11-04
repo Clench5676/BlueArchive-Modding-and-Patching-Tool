@@ -77,17 +77,19 @@ test("the small button defaults to the prefab's 402 x 136 at 48 down to 34, its 
   }
 });
 
-test("a screen with its own button boxes (the Hall's) passes every size, so the new defaults do not change it", () => {
-  // the Hall's footer and first-run buttons: explicit w, h and caption range
+test("stopped Hall sites explicitly retain their existing button boxes and caption range", () => {
   for (const [w, h, fs, min] of [[431, 102, 40, 26], [1093, 166, 40, 26], [216, 98, 36, 36]]) {
     const tree = smallButton("B", 0, 0, "Add Portraits", { w, h, fs, min });
     assert.deepEqual([bodyOf(tree).w_, bodyOf(tree).h_], [w, h]);
     assert.deepEqual([labelOf(tree).w_, labelOf(tree).h_], [w - 30, h - 20]);
     assert.ok(labelOf(tree).fontSize <= fs, `${w} x ${h}`);
   }
-  const hall = readFileSync(new URL("js/student-hall-ui.js", WEB), "utf8");
-  assert.match(hall, /Buttons\.smallButton\(name, 0, 0, caption, \{ w: width \/ S, h: height \/ S, fs: size \?\? 40, min: size \?\? 26,/);
-  assert.match(hall, /NGUI\.fitGroup\(captions, 40, 26, width \/ S - 60, 2, \{ maxH: height \/ S - 20 \}\)/);
+  const hall = read("js/student-hall-ui.js");
+  assert.match(hall, /retainedButtonSize = .*NGUI\.fitGroup\(captions, 40, 26, width \/ S - 60, 2, \{ maxH: height \/ S - 20 \}\)/);
+  assert.match(hall, /actions.map\(\(action, index\) => retainedButton/);
+  assert.match(hall, /if \(onAdd\) await retainedButton/);
+  assert.match(read("js/student-hall-picker.js"), /UI\.retainedButton\(box, `Remove/);
+  assert.match(read("js/student-hall.js"), /UI\.retainedButton\(destination, "HallPortraitScaleReset"/);
 });
 
 // --- item F: colours from the game's own prefabs, each in one place ---
@@ -284,3 +286,79 @@ for (const locale of ["en-US", "th-TH", "zh-CN", "zh-TW", "ja-JP", "ko-KR"]) tes
   }
 });
 
+const hallUiSource = read("js/student-hall-ui.js");
+const hallControls = new Function("NGUI", "Buttons", "Popup", "ready", "S", "SMALL_BUTTON", `${hallUiSource.slice(
+  hallUiSource.indexOf("export function buttonBox"), hallUiSource.indexOf("export async function caption"))
+  .replaceAll("export ", "")}; return {buttonBox, buttonSize, button};`)(
+    { ...NGUI, render: async (tree, host, options) => { host.tree = tree; host.origin = options.origin; return {}; } },
+    { smallButton }, { hit: () => ({ dataset: {} }) }, async () => {}, 1920 / 2960, Tokens.SMALL_BUTTON);
+test("Hall small buttons retain centres and widths, use the minimum width and token height", async () => {
+  const S = 1920 / 2960, B = Tokens.SMALL_BUTTON;
+  for (const box of [[730, 560, 460, 70], [0, 0, 100, 66], [100, 200, 300, 68]]) {
+    const placed = hallControls.buttonBox(box);
+    assert.equal(placed[0] + placed[2] / 2, box[0] + box[2] / 2);
+    assert.equal(placed[1] + placed[3] / 2, box[1] + box[3] / 2);
+    assert.equal(placed[2], Math.max(box[2], B.minW * S)); assert.equal(placed[3], B.h * S);
+    const host = {}, hit = await hallControls.button(host, "FirstRun", "Add Portraits", box, () => {}, { enabled: false });
+    assert.equal(hit.disabled, true);
+    assert.equal(bodyOf(host.tree)?.h_ || NGUI.find(host.tree, "BG (1)").widgets[0].h_, B.h);
+    assert.deepEqual([labelOf(host.tree).w_, labelOf(host.tree).h_], [placed[2] / S - B.boxInsetW, B.h - B.boxInsetH]);
+    assert.deepEqual(host.origin, [box[0] + box[2] / 2, box[1] + box[3] / 2]);
+    assert.ok(labelOf(host.tree).fontSize >= B.fsMin && labelOf(host.tree).fontSize <= B.fs);
+  }
+});
+test("taller Hall card controls cross their neighbours or containing rows, so those sites stay stopped", () => {
+  const S = 1920 / 2960, B = Tokens.SMALL_BUTTON;
+  assert.match(popupSource, /sprite\("Common_Bg_Raius10px", w - 22, barH/);
+  const sites = [
+    // name, old box, row bottom, prior neighbour bottom, new bottom outside the row
+    ["portrait Add/Select", [0, 154 + (300 + 10 + 88)*.46 + 8, (320-22)*.46, 40], 402, 154 + (300 + 10 + 88)*.46, 7.1881081081081],
+    ["memorial Add", [0, 93 + (202.5 + 10 + 88)*.39 + 8, (720-22)*.39, 40], 275, 93 + (202.5 + 10 + 88)*.39, 7.3031081081081],
+    ["queue Remove", [0, 60 + 405*.25/2 + 8, (720-22)*.25, 36], 175, 60 + 405*.25/2, 5.7331081081081],
+    ["unavailable queue Remove", [45, 119, 190, 36], 175, 0, 6.1081081081081],
+    ["portrait Reset", [264, 74, 156, 68], 142, 62, 10.1081081081081],
+  ];
+  for (const [name, box, bottom, neighbour, over] of sites) {
+    const placed = hallControls.buttonBox(box);
+    assert.equal(placed[3], B.h * S);
+    assert.ok(Math.abs(placed[1] + placed[3] - bottom - over) < 1e-8, name);
+    if (name.includes("Add") || name === "queue Remove") assert.ok(placed[1] < neighbour, `${name} overlaps neighbour`);
+  }
+});
+for (const locale of ["en-US", "th-TH", "zh-CN", "zh-TW", "ja-JP", "ko-KR"]) test(`Hall button captions fit SMALL_BUTTON without cutting in ${locale}`, () => {
+  const web = JSON.parse(readSync(new URL(`${locale}.json`, LOCALE_DIR), "utf8")).webui;
+  document.documentElement.lang = locale;
+  const B = Tokens.SMALL_BUTTON, S = 1920 / 2960;
+  for (const [keys, width] of [[["hall.addPortraits", "hall.adjust"], 460], [["hall.scaleReset"], 156],
+    [["hall.remove"], 190], [["hall.add", "hall.added", "import.select"], (320-22)*.46],
+    [["hall.add", "hall.added"], (720-22)*.39]]) {
+    const captions = keys.map((key) => key.split(".").reduce((value, part) => value[part], web));
+    const size = hallControls.buttonSize(captions, width);
+    const fits = NGUI.fitGroup(captions, B.fs, B.fsMin, Math.max(B.minW, width / S) - B.fitInset, 2, { maxH: B.h - B.boxInsetH });
+    assert.equal(new Set(fits.map((f) => f.fs)).size, 1);
+    for (const [i, f] of fits.entries()) {
+      assert.equal(f.fs, size); if (locale === "th-TH" && keys[0] === "hall.scaleReset") assert.equal(f.fs, 30, "Stopped Reset candidate; below 34");
+      else assert.ok(f.fs >= B.fsMin && f.fs <= B.fs, `${locale} ${keys.join("/")} needs ${f.fs}`);
+      assert.ok(!f.overflow); assert.ok(f.lines * NGUI.fontSizeFor(f.text, f.fs) * NGUI.LINE_PITCH <= B.h - B.boxInsetH);
+      for (const line of f.text.split("\n")) assert.ok(NGUI.glyphWidth(line, f.fs) <= Math.max(B.minW, width / S) - B.fitInset);
+      assert.equal(f.text.replace(/\s/g, ""), captions[i].replace(/\s/g, ""));
+    }
+  }
+  // The first-run memorial button clears its existing empty/missing caption at the same centre.
+  for (const key of ["empty", "missing"]) {
+    const fit = NGUI.fitText(web.hall[key], 40, 26, 900 / S, 3);
+    const captionBottom = 500 + fit.fs * 1.25 * fit.lines * S / 2;
+    assert.ok(captionBottom <= hallControls.buttonBox([730, 560, 460, 70])[1]);
+  }
+});
+
+test("Hall first-run body and caption bounds scale together at supported window sizes and densities", () => {
+  const box = hallControls.buttonBox([730, 560, 460, 70]), S = 1920 / 2960, B = Tokens.SMALL_BUTTON;
+  for (const [w, h] of [[960, 540], [1600, 900], [2560, 1440]]) for (const dpr of [1, 2, 3]) {
+    const scale = Math.min(w / 1920, h / 1080) * dpr;
+    assert.ok(box[0] * scale >= 0 && (box[0] + box[2]) * scale <= w * dpr);
+    assert.ok(box[1] * scale >= 0 && (box[1] + box[3]) * scale <= h * dpr);
+    assert.ok((B.h - B.boxInsetH) * S * scale < box[3] * scale);
+    assert.ok((box[2] / S - B.boxInsetW) * S * scale < box[2] * scale);
+  }
+});

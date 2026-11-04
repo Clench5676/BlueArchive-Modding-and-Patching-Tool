@@ -1608,6 +1608,17 @@ In the deterministic locale fit tests, Thai `hall.doneAdding` needs 44 rather th
 existing shared unsaved-changes popup also needs 36 for its sibling captions. Those caption candidates remain stopped,
 with the existing strings unchanged. The other Hall footer captions fit the shared range in all six locales.
 
+Hall `student-hall-ui.js` `button()` uses `SMALL_BUTTON`: height 136 u, caption 48 down to 34, fit width w-60,
+label box w-30 by 116. `buttonBox` preserves each caller's centre and width, raising only widths below 240 u;
+`buttonSize` gives sibling groups one size. The two 460 x 70 CSS px first-run buttons now draw 460 x 88.216 at
+centre (960, 595). `updateAction` preserves the original control's migrated/retained role when refreshing it.
+
+The picker Add/Select controls, queue Remove controls and portrait Reset retain their prior drawing through
+`retainedButton`: the 136 u candidate overlaps the portrait/memorial name strips and queue artwork, and leaves
+those rows by 7.188 / 7.303 / 5.733 CSS px respectively (6.108 for an unavailable queue entry). Reset would leave its
+142 px toolbar by 10.108 px, and its Thai caption needs 30 u at the existing width rather than the minimum 34.
+No neighbouring widgets move. The existing modal footer also stays on its retained control as described above.
+
 Hall mode changes retain the previous complete frame until the target background, actors, material/FX textures and
 first composite frame are ready. Portrait and current memorial sessions are retained separately; inactive sessions
 pause animation, intro clocks, timers and audio. Returning resumes those sessions without restarting the intro.
@@ -1895,12 +1906,15 @@ the prefab values, from the development view). It imports no other UI module.
 - **Popup frame, footer, backdrop**: see Popups above (`POPUP`, `FOOTER`, `BACKDROP`).
 - **Small button** (`SMALL_BUTTON`; UIPopup_Option_PC `Center/Popup/List/Sound_Setting/ETCSetting/ButtonBg`): 402 x 136, caption
   48 down to 34 fitted to the width less 60, its label box 30 less across and 20 less down; only the width varies, 240 at
-  least. `game-buttons.js` `optionButton` takes these as its defaults; the Hall passes its own sizes. Settings' value rows
+  least. `game-buttons.js` `optionButton` takes these as its defaults; Hall `button()` also uses them, retaining each
+  caller's centre and width (raised to 240 u if necessary). Explicitly stopped Hall sites use `retainedButton`. Settings'
+  value rows
   put the buttons right-aligned to x 700, 422 apart, beside the value while it keeps at least 460 (two to a line) and
   under it three to a line; the rest wrap to a second line, right-aligned like the first (`settings.js`
   `valueRowLayout`). The Export pair is 680 x 136. A message's line button is 136 high and as wide as its caption plus
   90 (240 at least) in a row at least 156 high; the asset consent's Change button the same, on a line of its own under
-  the item (`consent.js` `assetLayout`). Not migrated yet: the Hall's buttons, the photography toolbar, the popup details
+  the item (`consent.js` `assetLayout`). Not migrated yet: the stopped Hall card, Reset and footer buttons,
+  the photography toolbar, the popup details
   actions and the detail screen's Show in Finder / Explorer button.
 - **Batch Import's row under the list** is one row of the small button's size (136 high, caption 48 down to 34, 20 apart): Advanced
   Options, Recheck and Import share one body height and one caption size, on the prefabs' own bodies (Mailbox `Btn_Receive` and

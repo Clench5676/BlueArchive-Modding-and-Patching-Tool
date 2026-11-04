@@ -8,6 +8,7 @@ import { searchTree, orderBody, toolbarLayout, toolbarTree } from "./roster-widg
 import { clone, S, hitButton } from "./util.js";
 import { T } from "./i18n.js";
 import { bindScale } from "./student-hall-scale.js";
+import { SMALL_BUTTON } from "./ui-tokens.js";
 let assets;
 const visibleReadiness = new WeakMap(), virtualControls = new WeakMap();
 function pictureReadiness(host, picture, view) {
@@ -76,8 +77,8 @@ export function createModal(title, onClose, { level = 0 } = {}) {
         await build(layer, live, drawSignal);
         const actionWidth = Math.min(280, (width * S - 180) / Math.max(1, actions.length) - 20);
         const right = 960 + width * S / 2 - 70, bottom = 540 + (height / 2 - 120) * S;
-        const footerSize = buttonSize(actions.map((action) => action.label), actionWidth, 66);
-        await Promise.all(actions.map((action, index) => button(layer, `Footer${index}`, action.label,
+        const footerSize = retainedButtonSize(actions.map((action) => action.label), actionWidth, 66);
+        await Promise.all(actions.map((action, index) => retainedButton(layer, `Footer${index}`, action.label,
           [right - (actions.length - index) * (actionWidth + 20), bottom, actionWidth, 66], action.fn, { enabled: action.enabled !== false, size: footerSize })));
         await document.fonts?.ready;
         const scrollSnapshot = () => new Map([...host.querySelectorAll('[data-scroll]')].map((el) => [el.dataset.scroll, [el.scrollLeft, el.scrollTop]]));
@@ -115,17 +116,38 @@ export function createModal(title, onClose, { level = 0 } = {}) {
   };
   Popup.opened(host, onClose); return api;
 }
-// The caption size buttons side by side share: the largest of Buttons.smallButton's range (40 down to 26) at which every
-// caption fits its button (label box: 60 less across, 20 less down) after wrapping, for buttons of one size.
-export const buttonSize = (captions, width, height) => NGUI.fitGroup(captions, 40, 26, width / S - 60, 2, { maxH: height / S - 20 })[0]?.fs;
-// size: the shared caption size of the row this button is in (buttonSize)
-export async function button(host, name, caption, [x, y, width, height], action, { enabled = true, semantic = "secondary", size = null } = {}) {
+// Keep a caller's centre and width; only the minimum width and the shared small-button height constrain its body.
+export function buttonBox([x, y, width, height]) {
+  const w = Math.max(SMALL_BUTTON.minW * S, width), h = SMALL_BUTTON.h * S;
+  return [x + (width - w) / 2, y + (height - h) / 2, w, h];
+}
+export const buttonSize = (captions, width) => NGUI.fitGroup(captions, SMALL_BUTTON.fs, SMALL_BUTTON.fsMin,
+  Math.max(SMALL_BUTTON.minW, width / S) - SMALL_BUTTON.fitInset, 2,
+  { maxH: SMALL_BUTTON.h - SMALL_BUTTON.boxInsetH })[0]?.fs;
+
+// Explicitly retained sites hit the design-step3 stop rules: modal content, card Add/Remove and portrait Reset.
+// Their existing bodies/captions stay until their containing layout can change.
+export const retainedButtonSize = (captions, width, height) => NGUI.fitGroup(captions, 40, 26, width / S - 60, 2, { maxH: height / S - 20 })[0]?.fs;
+export const retainedButton = (host, name, caption, box, action, opts = {}) => drawButton(host, name, caption, box, action,
+  { ...opts, fs: opts.size ?? 40, min: opts.size ?? 26, retained: true });
+
+// size: a row's shared caption size (buttonSize). Fit first with the token's height as well as its width.
+export async function button(host, name, caption, box, action, opts = {}) {
   await ready();
-  const tree = Buttons.smallButton(name, 0, 0, caption, { w: width / S, h: height / S, fs: size ?? 40, min: size ?? 26, enabled, semantic, depth: 65 });
+  const placed = buttonBox(box), fit = NGUI.fitGroup([caption], opts.size ?? SMALL_BUTTON.fs, opts.size ?? SMALL_BUTTON.fsMin,
+    placed[2] / S - SMALL_BUTTON.fitInset, 2, { maxH: SMALL_BUTTON.h - SMALL_BUTTON.boxInsetH })[0];
+  if (fit.overflow || fit.fs < SMALL_BUTTON.fsMin) throw new RangeError(`Hall small button cannot fit: ${name}`);
+  return drawButton(host, name, caption, placed, action, { ...opts, fs: fit.fs, min: fit.fs, fit });
+}
+async function drawButton(host, name, caption, [x, y, width, height], action,
+  { enabled = true, semantic = "secondary", fs, min, fit = null, retained = false } = {}) {
+  await ready();
+  const tree = Buttons.smallButton(name, 0, 0, caption, { w: width / S, h: height / S, fs, min, enabled, semantic, depth: 65 });
+  if (fit) Object.assign(NGUI.find(tree, "Label_Locale").widgets[0], { text: fit.text, fontSize: fit.fs });
   const view = await NGUI.render(tree, host, { scale: S, origin: [x + width / 2, y + height / 2] });
   const path = NGUI.find(tree, "BG (1)") ? `${name}/BG (1)` : name;
   const hit = Popup.hit(host, view, path, action, { name: caption, action: name, z: 90 });
-  if (hit) { hit.disabled = !enabled; hit.dataset.focusKey = name; }
+  if (hit) { hit.disabled = !enabled; hit.dataset.focusKey = name; hit.dataset.retainedButton = String(retained); }
   return hit;
 }
 export async function caption(host, value, [x, y, width], { size = 40, align = 1 } = {}) {
@@ -211,8 +233,8 @@ export async function card(host, item, { x, y, kind = "lobby", scale = .48, sele
   observePicture(hit, item.thumb);
   // The name strip is inclined: its visual centre is left of the artwork centre.
   const actionWidth = barWidget.w_ * scale, actionX = x + bar.pos[0] * scale - actionWidth / 2;
-  if (onAdd) await button(host, `Add${item.key}`, addLabel,
-    [actionX, y - bar.pos[1] * scale + barWidget.h_ * scale / 2 + 8, actionWidth, 40], onAdd, { enabled: addEnabled, ...(fitAdd ? { size: buttonSize([addLabel], actionWidth, 40) } : {}) });
+  if (onAdd) await retainedButton(host, `Add${item.key}`, addLabel,
+    [actionX, y - bar.pos[1] * scale + barWidget.h_ * scale / 2 + 8, actionWidth, 40], onAdd, { enabled: addEnabled, ...(fitAdd ? { size: retainedButtonSize([addLabel], actionWidth, 40) } : {}) });
   return { view, visual, hit, width, height, actionBox: [actionX, y + height / 2 + 8, actionWidth, 36] };
 }
 export const MEMORIAL_QUEUE_PITCH = (290 + (720 + 405 * Math.tan(Math.PI / 18)) * .25) / 2;
@@ -370,7 +392,9 @@ export async function updateAction(host, name, label, action, enabled) {
   const hit = [...host.querySelectorAll("button[data-action]")].find((button) => button.dataset.action === name);
   if (!hit) return;
   const box = [hit.style.left, hit.style.top, hit.style.width, hit.style.height].map(parseFloat), owner = hit.parentElement;
-  const next = document.createElement("div"); await button(next, name, label, box, action, { enabled });
+  const next = document.createElement("div");
+  const draw = hit.dataset.retainedButton === "true" ? retainedButton : button;
+  await draw(next, name, label, box, action, { enabled });
   if (!hit.isConnected) return;
   for (const element of owner.querySelectorAll("[data-path]")) if (element.dataset.path === name || element.dataset.path.startsWith(name + "/")) element.remove();
   hit.remove(); owner.append(...next.childNodes);
