@@ -1698,7 +1698,7 @@ Validation: full suites on `f1ad2631`: 4236 passed, 26 skipped; JavaScript 2149 
 
 ## BL-070: One design system for the web UI
 
-- Status: Steps 1 and 2 of 4 accepted by the owner on macOS (alpha.5 and alpha.7, 2026-11-03); Windows not reviewed. Step 3 implemented on `main` (`4dea1366`..`7f245853`), the memorial editor kept as it is by the owner's decision; owner review pending. Step 4 not started.
+- Status: Steps 1 and 2 of 4 accepted by the owner on macOS (alpha.5 and alpha.7, 2026-11-03); Windows not reviewed. Step 3 implemented on `main` (`4dea1366`..`7f245853`), the memorial editor kept as it is by the owner's decision; the owner's alpha.17 findings (Reset height, fullscreen balloon) fixed by the lead, owner review pending. Step 4 not started.
 - Requested: 2026-11-02 (owner): does the UI follow the game's design language (button sizes, spacing, fonts), and where it does not, does it have one system of its own?
 
 Owner decisions (2026-11-03): follow the prefab's values as the one system; run the migration one step at a time; keep the top bar and the Enable Mods switch at their present size.
@@ -1752,6 +1752,13 @@ Switch Portrait panel still lays out its own half-width box.
   162 px) grow (`b9b7ad4e`); the three Thai exceptions are named per site and locale (`7f245853`). The memorial editor
   cannot fit the footer and a full row (18 px short, 77 px with search open): owner's decision (2026-11-04), it keeps its own
   66 px action row and its Add and Remove buttons as they are.
+  Owner's review of alpha.17 (2026-11-04): the portrait size Reset must be as tall as the slider beside it, not taller;
+  fullscreen must keep the `Talk` balloon (switching to `UITalk` broke the continuity). Lead's fix: the toolbar's second
+  row and Reset take the slider body's 104 u (67.5 px; toolbar 141.5 px), the caption range unchanged; fullscreen draws
+  the same Talk balloon by the head, bounded by the whole stage and following the art, and the UITalk path
+  (`hall.dialogueLayout`'s `box`, `NGUI.shrinkContent`) is removed. The two buttons the lead had called "first-run" are
+  the Hall's empty states (all portraits removed; no or an unavailable memorial): the first visit gets Shiroko's portrait
+  and memorial, so they do not show then.
 - Step 4: list popup cards and details panel cloned from prefabs (UI-21), and its details actions.
 - Not scheduled, owner's eye first: the photography toolbar and colours; the lobby frost.
 
@@ -1908,8 +1915,9 @@ scroll area takes the pointer, so a wheel in the gaps scrolls the list and the g
 
 ## BL-078: macOS: dragging the top bar sometimes does not move the window
 
-- Status: Seen again on alpha.15 (owner, 2026-11-04). Close-time chrome failure fixed in `1a2afd84`; silent startup paths
-  hardened and logged in `b186e93b`; root cause not confirmed, awaiting the next test build.
+- Status: Seen again on alpha.15 and alpha.17 (owner, 2026-11-04). Close-time chrome failure fixed in `1a2afd84`; silent
+  startup paths hardened and logged in `b186e93b`; alpha.17's log points at the open-popup rule, fixed by the lead; owner
+  review pending (a press in an immersive scene does not drag, by BL-037's design).
 - Requested: 2026-11-03 (owner, 0.6.1-alpha.12, macOS): dragging the top bar did not move the window; happened once, not seen again.
 
 Candidates (lead, from the code): the native drag regions (`window-chrome.js` `dragRegions`) are published empty while a popup or
@@ -1936,3 +1944,13 @@ resized, with no notification to measure again. Fixed in `b186e93b` (lead): a la
 failed layout pass goes to the diagnostic report, a missing content view is measured again (8 x 0.25 s), and the log now
 says when the chrome becomes active and valid, when its drag regions appear or go, when it refuses a layout, and why a
 press on the top bar did not drag. If it happens again, those lines show which path it was.
+
+Owner, 2026-11-04 (0.6.1-alpha.17, macOS): the top bar did not move the window again. The log: chrome active and valid,
+12 drag regions at start; 31 s later `drag regions: 0`, and 3 s after that a press on the top bar was ignored for
+`no drag regions`. The page clears the regions only for an immersive scene (detail or Hall fullscreen, photography),
+chrome that is not valid (logged as `waiting`, absent here), or any open popup, consent, settings or Hall modal. So the
+press came while one of those was open. The popup rule was stricter than the design (`docs/design/window-controls.md`:
+popups remove only the regions they cover): the stage's popups draw below the native bar (`.window-header`, z 1000, over
+the transformed stage), so they cover none of it, yet the bar looked live and did not drag. Fixed by the lead: the bar
+keeps its drag regions while a popup is open, its controls still wait for the popup; immersive scenes keep no drag
+regions as BL-037 accepted. The log now names why the regions are empty (`immersive`, `waiting`, `covered`).
