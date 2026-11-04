@@ -10,7 +10,7 @@ import shutil
 from typing import Callable, TYPE_CHECKING
 import ttkbootstrap as tb
 
-from .. import devmode
+from bmpt import devmode
 from ..utils import CREATE_NO_WINDOW, no_log
 from ..i18n import t
 from ..models import FilePair, FileType, AnimDiffMap, LogFunc

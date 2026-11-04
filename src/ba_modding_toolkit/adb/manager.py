@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
-from .. import devmode
+from bmpt import devmode
 from ..i18n import t
 from ..utils import CREATE_NO_WINDOW, no_log
 

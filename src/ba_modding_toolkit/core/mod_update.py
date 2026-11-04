@@ -5,7 +5,7 @@ import threading
 import traceback
 from pathlib import Path
 from typing import Callable
-from ..errors import ServiceError
+from bmpt.errors import ServiceError
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from ..i18n import t

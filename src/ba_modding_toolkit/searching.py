@@ -12,7 +12,7 @@ from .models import LogFunc, AssetKey, AssetType
 
 if TYPE_CHECKING:
     from .adb.file_source import ADBFileSource
-    from .gameassets.cabs import CabIndex
+    from bmpt.gameassets.cabs import CabIndex
 
 
 def search_prefix(
@@ -241,7 +241,7 @@ def is_game_install(base_dir: Path) -> bool:
     web UI draws its sprites from. Decided by file names only; no bundle is opened. The folder itself is a search
     directory, so a resource folder qualifies as well as the install root.
     """
-    from .gameassets.discovery import is_atlas
+    from bmpt.gameassets.discovery import is_atlas
 
     for directory in get_search_dirs(Path(base_dir)):
         try:
@@ -299,12 +299,12 @@ def managed_cab_index(search_dirs: list[Path], cache_path: Path | None = None, *
     """
     import json
 
-    from . import config, devmode
-    from .gameassets.cache import PreviewCache
-    from .gameassets.cabs import CabIndex
-    from .gameassets.discovery import resource_version
+    from bmpt import config, devmode
+    from bmpt.gameassets.cache import PreviewCache
+    from bmpt.gameassets.cabs import CabIndex
+    from bmpt.gameassets.discovery import resource_version
     from .utils import EXE_DIR
-    from .webui.state import UiState
+    from bmpt.webui.state import UiState
 
     directories = list(dict.fromkeys(Path(path).resolve() for path in search_dirs if Path(path).is_dir()))
     cache = None

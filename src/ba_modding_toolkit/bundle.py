@@ -11,9 +11,9 @@ from UnityPy.files import SerializedFile
 from UnityPy.environment import Environment as Env
 
 from .asset import ApplyContext, ExtractContext, apply_asset, extract_asset
-from .bundle_guard import check_bundle
+from bmpt.bundle_guard import check_bundle
 from .i18n import t
-from .errors import ServiceError
+from bmpt.errors import ServiceError
 from .utils import apply_crc_fix, compute_crc32, no_log, throttle_progress
 from .spine import SkelConverter, check_skel_animation_diff
 from .naming import RESOURCE_TYPES_NUM, parse_filename, ParsedFilename
@@ -113,7 +113,7 @@ class UpdateScope:
 
 def get_cab_names(bundle_path: Path) -> set[str] | None:
     """Read internal names cheaply; preserve the CLI fallback contract."""
-    from .unityfs import read_cab_names
+    from bmpt.unityfs import read_cab_names
 
     try:
         names = read_cab_names(bundle_path)

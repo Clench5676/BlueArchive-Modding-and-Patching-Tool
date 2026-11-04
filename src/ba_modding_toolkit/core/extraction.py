@@ -19,7 +19,7 @@ from ..models import (
 )
 from ..asset import find_stream_refs
 from ..bundle import Bundle
-from ..texture_guard import texture_image
+from bmpt.texture_guard import texture_image
 
 # 提取器支持的资源类型（公开提取接口默认全量提取）
 EXTRACTABLE_ASSET_TYPES = {"Texture2D", "TextAsset", "Mesh", "AnimationClip"}
