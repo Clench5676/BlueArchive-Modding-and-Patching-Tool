@@ -30,6 +30,9 @@ human-reviewed presentation materials.
   footer; Hall buttons take the game's small button.
 - Batch Import's list, grouped rows, name plates, filter popup and gold Import button follow the game's popups.
 - Upstream BA Modding Toolkit synchronized to v2.12.0, with the Spine2Dump rendering backend for the classic UI and CLI.
+- The App's code and data moved into its own package, `bmpt`; upstream's package `ba_modding_toolkit` holds the engine,
+  with the fork's changes limited to the imports of its own modules and a hook through which the App registers its strings.
+- The update offer centres its version box while no download is shown.
 
 ### Fixed
 

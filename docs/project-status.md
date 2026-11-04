@@ -55,6 +55,7 @@ As of 2026-11-04. Verify the actual branch, working tree and `pyproject.toml` ve
 | BL-079 | Accepted by the owner on macOS (alpha.19); Windows not reviewed |
 | BL-080 | Closed by the owner (2026-11-04): flicker fixed (`5e6b3d56`); stuck pointer not seen again, cause not identified, logging kept |
 | BL-081 | In-app release notes draw Markdown in the UI language; the 0.7.0 notes built in; owner review pending |
+| BL-082 | The App in its own package `bmpt`, upstream's package as the engine; owner review pending |
 | BL-057, BL-058 | Accepted by the owner on macOS (alpha.12); Windows not reviewed |
 | BL-055 | Accepted by the owner on macOS (0.6.0 pre-review) |
 | BL-014 | Candidate, not scheduled |

@@ -2021,3 +2021,16 @@ see `docs/web-ui.md` "Release notes and feature tours". The 0.7.0 notes ship as 
 and Simplified Chinese, marked sections) and show in Settings' prerelease update preview; the same file becomes the GitHub
 release's text once the owner approves it. `CHANGELOG.MD` carries the 0.7.0 entry, dated for publication.
 
+## BL-082: The App in its own package, upstream's package as the engine
+
+- Status: Implemented (Codex, reviewed and merged by the lead, `8465e1ee`..`013a536b`); owner review pending (0.7.0-alpha.2).
+- Requested: 2026-11-04 (owner): the 0.7.0 release notes sat under upstream's package; upstream is an engine the App
+  uses, not the main body. Split before releasing 0.7.0; the App's package is `bmpt`.
+
+Inventory (Codex, against upstream v2.12.0 `62ec9471`, the last merged upstream commit; `upstream/main` is the same): of 324
+tracked files in `src/ba_modding_toolkit/`, 33 were upstream unchanged, 35 upstream modified by the fork, 256 fork-only, none
+renamed or deleted. Upstream's own code imports nothing of the fork's; the fork had added 30 imports of its own modules to 18
+upstream files. The fork-only files moved to `src/bmpt/`; those 30 lines now import `bmpt`; each locale's `webui` strings moved
+to `src/bmpt/locales/`, and the engine's i18n gained `register_locale_dir`, which the App calls at start, so messages the
+fork raises in engine code read as before. Packaging and both builds take `bmpt`; nothing changes for users.
+
