@@ -452,6 +452,25 @@ def test_macos_keyboard_and_edit_menu_restore_after_rebuild_without_timer(monkey
     assert quit_item.selector == 'terminate:', 'queued callbacks become inert after disposal'
 
 
+def test_cocoa_window_closing_without_content_view_keeps_the_native_chrome():
+    # pywebview's windowWillClose removes the web view, the window's content view, before AppKit posts the window's
+    # last notifications (resign key). The refresh they trigger measured a None view and gave the chrome up (BL-078).
+    host = CocoaHost.__new__(CocoaHost)
+    host.api = NS(NSWindowStyleMaskFullScreen=1 << 14)
+    host.window = NS(contentView=lambda: None, isMiniaturized=lambda: False, isZoomed=lambda: False, styleMask=lambda: 0)
+    host.transition = False
+    host.buttons = [Button(x, 8, True) for x in [12, 32, 52]]
+    host.dispatch = lambda fn: fn()
+    host.dispose = lambda: pytest.fail("the native chrome was given up")
+    before = [b.frame().origin.y for b in host.buttons]
+    assert host.measure({'centre': 30}) is None
+    assert [b.frame().origin.y for b in host.buttons] == before
+    chrome = WindowChrome(NS(), EventBus(), platform='darwin', host=host)
+    chrome.active, chrome.valid = True, True
+    chrome.refresh()
+    assert chrome.active and not chrome.valid and chrome.reason == "not-installed"
+
+
 @pytest.fixture
 def cocoa_drag():
     calls, keys = [], []
@@ -497,9 +516,10 @@ def test_cocoa_double_click_respects_system_title_bar_action(cocoa_drag, action,
     assert f.keys == ["AppleActionOnDoubleClick"]
 
 
-@pytest.mark.parametrize("blocked", ["popup", "invalid", "inactive", "transition", "other-window"])
+@pytest.mark.parametrize("blocked", ["popup", "invalid", "inactive", "transition", "other-window", "no-content"])
 def test_cocoa_drag_passes_unhandled_events_through(cocoa_drag, blocked):
     f = cocoa_drag
+    if blocked == "no-content": f.host.window.contentView = lambda: None
     if blocked == "popup": f.host.owner.layout["drag"] = []
     if blocked == "invalid": f.host.owner.valid = False
     if blocked == "inactive": f.host.owner.active = False
