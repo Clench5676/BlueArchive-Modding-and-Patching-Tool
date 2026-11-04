@@ -1599,6 +1599,15 @@ official or Mod source runs through the existing lobby renderer, including its s
 dialogue. Missing sources remain distinguishable from an empty playlist. A library-only Mod can render without a
 local scene-layout resource, using the renderer's existing layout fallback.
 
+Hall `createModal().draw` still retains its original 66 px, right-aligned action row and frame sizes. Migrating the
+current sites to `FOOTER` is stopped by content clearance: the memorial queue ends at 915 CSS px and the background
+list at 840, while the 1450 u frame permits 826.70; the portrait/replacement list ends at 855 while its 1300 u frame
+permits 778.05. These limits include `POPUP.clearance` (16 u) above the shared footer top. Content is not moved or
+shrunk. Tests pin the one/two/three-action footer candidates to the shared helper and measure these conflicts.
+In the deterministic locale fit tests, Thai `hall.doneAdding` needs 44 rather than the footer minimum 48; the Hall's
+existing shared unsaved-changes popup also needs 36 for its sibling captions. Those caption candidates remain stopped,
+with the existing strings unchanged. The other Hall footer captions fit the shared range in all six locales.
+
 Hall mode changes retain the previous complete frame until the target background, actors, material/FX textures and
 first composite frame are ready. Portrait and current memorial sessions are retained separately; inactive sessions
 pause animation, intro clocks, timers and audio. Returning resumes those sessions without restarting the intro.
