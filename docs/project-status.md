@@ -7,7 +7,7 @@ As of 2026-11-04. Verify the actual branch, working tree and `pyproject.toml` ve
 
 | Branch | State |
 | --- | --- |
-| `main` | Local version `0.6.1-alpha.14`: the published 0.6.0, the upstream sync to `6c61fdc8`, the security policy, the fix that keeps files from a mod inside their output folder (`e8bee4c2`), BL-065 through BL-069, BL-070 steps 1 and 2 and part of step 3, BL-071, BL-072, BL-073, BL-076, BL-077, the BL-078 close-time chrome fix (`1a2afd84`). Not pushed: held until upstream publishes its fix for the same issue. |
+| `main` | Local version `0.6.1-alpha.15`: the published 0.6.0, the upstream sync to `6c61fdc8`, the security policy, the fix that keeps files from a mod inside their output folder (`e8bee4c2`) and its own message for refused atlases (`ca44e051`), BL-065 through BL-069, BL-070 steps 1 and 2 and part of step 3, BL-071, BL-072, BL-073, BL-076, BL-077, the BL-078 close-time chrome fix (`1a2afd84`). Not pushed. Upstream published its fix for the same issue in v2.12.0 (2026-11-04), so 0.6.1 is no longer held back. |
 
 0.6.0 is published (tag `0.6.0` at `817ebeda`, 2026-10-30): macOS build uploaded, Windows build by the release workflow.
 
@@ -62,10 +62,9 @@ from passing tests or the presence of earlier code.
 
 ## Review artifact and validation
 
-`dist/Blue-Archive-Modding-and-Patching-Tool-0.6.1-alpha.14-macos-arm64.dmg`, MD5 `9c4fbc4feffcce1005c22c1757d1df2a`,
-built from `155f56c7` (`chore(release): 0.6.1-alpha.14`): alpha.13 and the BL-078 close-time chrome fix (the native window
-controls and drag are no longer given up when the window closes). BL-078 awaits the owner's confirmation.
+`dist/Blue-Archive-Modding-and-Patching-Tool-0.6.1-alpha.15-macos-arm64.dmg`, MD5 `ebd2dfb0ff1930ec9c0776078ef394a9`,
+built from `8e910533` (`chore(release): 0.6.1-alpha.15`): alpha.14 and the dedicated message for refused atlases
+(`ca44e051`, upstream's `log.spine.unsafe_atlas_name`). BL-078 awaits the owner's confirmation.
 
-On `main` before the build (`91f0f9bb`): 4251 passed, 26 skipped (Python; `tests/test_mod_origin.py` rerun with
-`python -m pytest`, which puts the repository on the import path), 2305 JavaScript tests passed (isolated runs with the
-official development view). Native Windows behavior is not verified on the macOS host.
+On `main` before the build (`ca44e051`): 4254 passed, 26 skipped (`uv run python -m pytest`, JavaScript tests included,
+isolated runs with the official development view). Native Windows behavior is not verified on the macOS host.
