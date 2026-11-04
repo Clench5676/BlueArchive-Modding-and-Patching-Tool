@@ -2,16 +2,16 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { test } from 'node:test';
-import { bindCorner, CORNER_MARGIN } from '../../src/ba_modding_toolkit/web/js/corner-layout.js';
-import { headerGeometry } from '../../src/ba_modding_toolkit/web/js/window-layout.js';
-import { anchoredCentre } from '../../src/ba_modding_toolkit/web/js/visual-view.js';
-import { FRAME, OCCLUSION_BUTTON, TOOLBAR_CAPTION, otherMode, actionCaption } from '../../src/ba_modding_toolkit/web/js/photography/camera.js';
+import { bindCorner, CORNER_MARGIN } from '../../src/bmpt/web/js/corner-layout.js';
+import { headerGeometry } from '../../src/bmpt/web/js/window-layout.js';
+import { anchoredCentre } from '../../src/bmpt/web/js/visual-view.js';
+import { FRAME, OCCLUSION_BUTTON, TOOLBAR_CAPTION, otherMode, actionCaption } from '../../src/bmpt/web/js/photography/camera.js';
 import { visualPrefab } from './visual_prefabs.mjs';
 import { n, spr } from './control_prefabs.mjs';
 
 const S = 1920 / 2960, near = (a, b) => assert.ok(Math.abs(a - b) < 1e-7, `${a} != ${b}`);
-const source = readFileSync(new URL('../../src/ba_modding_toolkit/web/js/photography/controller.js', import.meta.url), 'utf8');
-const visualSource = readFileSync(new URL('../../src/ba_modding_toolkit/web/js/visual-mode.js', import.meta.url), 'utf8');
+const source = readFileSync(new URL('../../src/bmpt/web/js/photography/controller.js', import.meta.url), 'utf8');
+const visualSource = readFileSync(new URL('../../src/bmpt/web/js/visual-mode.js', import.meta.url), 'utf8');
 // Run the shared fullscreen renderer too; only asset loading and the DOM are stand-ins.
 const backCode = visualSource.match(/^const CENTRE = .*$/m)[0] + '\n' + visualSource.match(/^const HIT = .*$/m)[0]
   + '\n' + visualSource.match(/^const CORNERS = .*$/m)[0] + '\n'
@@ -55,11 +55,11 @@ const layouts = { UICharacterVisualMode: visualPrefab(),
   UILobby: n('UILobby', [0, 0], [], [n('Front', [0, 0], [], [n('Right', [0, 0], [], [n('Btn_RotateSpine', [0, 0], [], [n('ConditionRoot', [0, 0], [], [loop])])])])]) };
 globalThis.document = { createElement: () => new Element(), documentElement: { lang: 'en-US' } };
 globalThis.getComputedStyle = () => ({ getPropertyValue: () => '' });
-const NGUI = await import('../../src/ba_modding_toolkit/web/js/ngui.js');
+const NGUI = await import('../../src/bmpt/web/js/ngui.js');
 
 for (const locale of ['en-US', 'zh-CN', 'zh-TW', 'ja-JP', 'ko-KR', 'th-TH']) for (const mode of ['portrait', 'lobby']) {
   test(`real ${mode} camera controls retain prefab dimensions and fit at all corner margins in ${locale}`, async () => {
-    const webui = JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${locale}.json`, import.meta.url))).webui;
+    const webui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url))).webui;
     const strings = webui.photo;
     for (const platform of [null, 'darwin', 'win32']) for (const [width, height] of [[960, 540], [1600, 900], [2560, 1440], [2560, 1080], [960, 1200]]) {
       const scale = Math.min(width / 1920, height / 1080), stageLeft = (width - 1920 * scale) / 2, stageTop = (height - 1080 * scale) / 2, header = headerGeometry(width, height, platform === 'win32' ? 40 : 0, true);

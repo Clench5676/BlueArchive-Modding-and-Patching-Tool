@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { latestLoad, loadPlayer } from "../../src/ba_modding_toolkit/web/js/spine-load.js";
+import { latestLoad, loadPlayer } from "../../src/bmpt/web/js/spine-load.js";
 
 const tick = () => new Promise(setImmediate);
 function runtime() {

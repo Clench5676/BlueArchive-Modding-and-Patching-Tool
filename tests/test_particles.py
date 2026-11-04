@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import math
 
-from ba_modding_toolkit.gameassets import particles
+from bmpt.gameassets import particles
 
 
 def key(time: float, value: float, slope: float = 0.0) -> dict:

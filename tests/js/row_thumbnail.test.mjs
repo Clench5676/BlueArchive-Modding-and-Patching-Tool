@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { frameOutline, innerFrame } from "../../src/ba_modding_toolkit/web/js/row-thumbnail.js";
-import { sliceAxis, spriteBorders } from "../../src/ba_modding_toolkit/web/js/sprite-slices.js";
+import { frameOutline, innerFrame } from "../../src/bmpt/web/js/row-thumbnail.js";
+import { sliceAxis, spriteBorders } from "../../src/bmpt/web/js/sprite-slices.js";
 
 const near = (a, b) => assert.ok(Math.abs(a - b) < 1e-7, `${a} != ${b}`);
 function fixture({ insets = [7, 9, 10, 6], seam = false, radius = 14 } = {}) {

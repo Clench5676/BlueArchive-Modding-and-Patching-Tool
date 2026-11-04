@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { FACE_W, NOT_FACE, faceOf, isFacePart, thumbFrame } from "../../src/ba_modding_toolkit/web/js/thumbs.js";
+import { FACE_W, NOT_FACE, faceOf, isFacePart, thumbFrame } from "../../src/bmpt/web/js/thumbs.js";
 
 const near = (a, b, eps = 1e-6) => assert.ok(Math.abs(a - b) < eps, `${a} != ${b}`);
 const box = (x0, x1, y0, y1) => ({ x0, x1, y0, y1 });

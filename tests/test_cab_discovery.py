@@ -12,10 +12,10 @@ import pytest
 from UnityPy.helpers.CompressionHelper import compress_lz4
 
 from ba_modding_toolkit.bundle import get_cab_names
-from ba_modding_toolkit.gameassets.cache import PreviewCache
-from ba_modding_toolkit.gameassets.cabs import CabIndex
-from ba_modding_toolkit.gameassets.discovery import cab_names
-from ba_modding_toolkit.gameassets.model import BundleGraph
+from bmpt.gameassets.cache import PreviewCache
+from bmpt.gameassets.cabs import CabIndex
+from bmpt.gameassets.discovery import cab_names
+from bmpt.gameassets.model import BundleGraph
 
 
 def bundle(root, name, cab, *, at_end=False, padding=4, engine="2022.3.55f1", flags=2):
@@ -248,7 +248,7 @@ def test_mapping_hits_revalidate_in_place_changes_inside_one_graph_batch(tmp_pat
 
 
 def test_eviction_bounds_metadata_and_scan_orders_without_losing_resolution(tmp_path, monkeypatch):
-    from ba_modding_toolkit.gameassets import cabs
+    from bmpt.gameassets import cabs
     monkeypatch.setattr(cabs, "_MAX_ENTRIES", 2)
     monkeypatch.setattr(cabs, "_MAX_ORDERS", 2)
     monkeypatch.setattr(cabs, "_MAX_METADATA_BYTES", 4096)

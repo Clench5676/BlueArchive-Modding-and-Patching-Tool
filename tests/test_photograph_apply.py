@@ -11,13 +11,13 @@ from types import SimpleNamespace
 import pytest
 from PIL import Image
 
-from ba_modding_toolkit.config import Settings
-from ba_modding_toolkit.errors import ServiceError
-from ba_modding_toolkit.gameassets import AssetCache, GameAssets
-from ba_modding_toolkit.gameassets.unity import open_bundle, find_object
-from ba_modding_toolkit.library import ModLibrary, safety, storage
-from ba_modding_toolkit.library import portrait_edit
-from ba_modding_toolkit.library.judge import core_of
+from bmpt.config import Settings
+from bmpt.errors import ServiceError
+from bmpt.gameassets import AssetCache, GameAssets
+from bmpt.gameassets.unity import open_bundle, find_object
+from bmpt.library import ModLibrary, safety, storage
+from bmpt.library import portrait_edit
+from bmpt.library.judge import core_of
 from ba_modding_toolkit.searching import get_search_dirs
 from test_library import FakeCatalog, FakeVariant
 

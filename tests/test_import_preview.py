@@ -5,9 +5,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from ba_modding_toolkit.errors import ServiceError
-from ba_modding_toolkit.gameassets import AssetCache, GameAssets
-from ba_modding_toolkit.webui.server import WebApp
+from bmpt.errors import ServiceError
+from bmpt.gameassets import AssetCache, GameAssets
+from bmpt.webui.server import WebApp
 
 from test_batch_import import analyze, env, batch_model_env
 from test_library import game_bundle, make_mod, setup_library
@@ -35,7 +35,7 @@ def test_source_preview_composes_missing_official_parts_and_never_writes_art_to_
 
     cache = AssetCache(allowed=True, root=env.tmp / "art-cache")
     env.services._game = GameAssets([env.game_dir], cache)
-    monkeypatch.setattr("ba_modding_toolkit.gameassets.service.extract_spine", extract)
+    monkeypatch.setattr("bmpt.gameassets.service.extract_spine", extract)
     before = {path: path.read_bytes() for path in [env.original, text, source]}
     entry, = analyze(env, [source])["entries"]
     app, prefix = preview_route(env, entry)
@@ -56,7 +56,7 @@ def test_source_preview_composes_missing_official_parts_and_never_writes_art_to_
 def test_source_preview_uses_the_identified_core_for_renamed_uploads(env, monkeypatch):
     target = game_bundle(env.game_dir, "test_home_gl")
     source = game_bundle(env.tmp / "renamed", date="2025-01-01", payload=b"renamed lobby")
-    monkeypatch.setattr("ba_modding_toolkit.library.identity.content_cores", lambda path: {"test_home_gl"})
+    monkeypatch.setattr("bmpt.library.identity.content_cores", lambda path: {"test_home_gl"})
     env.services._game = SimpleNamespace(spine_files_from=lambda paths: {
         "background.skel": b"background", "test_home_gl.skel": b"incoming lobby"})
     entry, = analyze(env, [source])["entries"]
@@ -121,14 +121,14 @@ def test_source_preview_tokens_never_resolve_arbitrary_paths(env):
 
 @pytest.mark.parametrize('problem', ['platform', 'source', 'conflict'])
 def test_blocked_sources_still_serve_renderable_preview_assets(env, monkeypatch, problem):
-    from ba_modding_toolkit.library import integrity
+    from bmpt.library import integrity
     if problem == "source":
-        monkeypatch.setattr("ba_modding_toolkit.webui.batch_import._asset_match", lambda *args, **kwargs: ([], ""))
+        monkeypatch.setattr("bmpt.webui.batch_import._asset_match", lambda *args, **kwargs: ([], ""))
 
     source = game_bundle(env.tmp / 'input', date="2025-01-01", payload=b"old mod")
     inspect = integrity.inspect
     if problem == 'conflict':
-        monkeypatch.setattr('ba_modding_toolkit.library.identity.content_cores',
+        monkeypatch.setattr('bmpt.library.identity.content_cores',
                             lambda path: {'test_spr', 'other_spr'})
     else:
         monkeypatch.setattr(integrity, 'inspect', lambda path, **kwargs:

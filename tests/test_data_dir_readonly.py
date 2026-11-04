@@ -9,8 +9,8 @@ from pathlib import Path
 
 import pytest
 
-from ba_modding_toolkit.webui import services as services_module
-from ba_modding_toolkit.webui.services import WRITE_DENIED, folder_writable
+from bmpt.webui import services as services_module
+from bmpt.webui.services import WRITE_DENIED, folder_writable
 from test_webui import app, call, rpc, services  # noqa: F401 - fixtures
 
 LOCALES = Path(services_module.__file__).resolve().parents[1] / "locales"
@@ -77,9 +77,9 @@ def test_app_info_reports_the_result(app, services):
 
 @posix_permissions
 def test_the_services_test_the_folder_at_start(tmp_path):
-    from ba_modding_toolkit.config import Settings
-    from ba_modding_toolkit.webui.services import Services
-    from ba_modding_toolkit.webui.state import UiState
+    from bmpt.config import Settings
+    from bmpt.webui.services import Services
+    from bmpt.webui.state import UiState
 
     data = tmp_path / "data"
     data.mkdir()

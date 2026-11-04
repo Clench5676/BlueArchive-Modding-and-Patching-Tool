@@ -11,11 +11,11 @@ from types import SimpleNamespace
 import pytest
 from PIL import Image
 
-from ba_modding_toolkit.errors import ServiceError
-from ba_modding_toolkit.gameassets import AssetCache, AssetNotFound, GameAssets
-from ba_modding_toolkit.gameassets.cache import PreviewCache
-from ba_modding_toolkit.gameassets import office
-from ba_modding_toolkit.webui.student_hall import empty_hall, validate_hall
+from bmpt.errors import ServiceError
+from bmpt.gameassets import AssetCache, AssetNotFound, GameAssets
+from bmpt.gameassets.cache import PreviewCache
+from bmpt.gameassets import office
+from bmpt.webui.student_hall import empty_hall, validate_hall
 
 from test_webui import app, services, call, rpc
 
@@ -241,7 +241,7 @@ def test_material_dependencies_invalidate_geometry_without_scanning_shader_as_te
 
 
 def test_ui_texture_uses_material_shader_override_instead_of_default_shader(installed, monkeypatch):
-    from ba_modding_toolkit.gameassets import model
+    from bmpt.gameassets import model
     def obj(pid, kind, data):
         return SimpleNamespace(path_id=pid, type=SimpleNamespace(name=kind), data=data)
     root = obj(1, "GameObject", {"m_Name": "Root"})

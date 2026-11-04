@@ -6,12 +6,12 @@ import { test } from "node:test";
 
 globalThis.document = { documentElement: { lang: "en-US" } };
 const flat = (o, p = "", out = {}) => { for (const [k, v] of Object.entries(o)) { if (v && typeof v === "object") flat(v, `${p}${k}.`, out); else out[`${p}${k}`] = v; } return out; };
-const strings = flat(JSON.parse(readFileSync(new URL("../../src/ba_modding_toolkit/locales/en-US.json", import.meta.url), "utf8")));
-const I18n = await import("../../src/ba_modding_toolkit/web/js/i18n.js");
+const strings = flat(JSON.parse(readFileSync(new URL("../../src/bmpt/locales/en-US.json", import.meta.url), "utf8")));
+const I18n = await import("../../src/bmpt/web/js/i18n.js");
 I18n.setStrings("en-US", strings);
 const T = I18n.T;
 const S = (key) => strings[`webui.${key}`];
-const Repairs = await import("../../src/ba_modding_toolkit/web/js/repairs.js");
+const Repairs = await import("../../src/bmpt/web/js/repairs.js");
 
 const STEAM = "C:\\Program Files (x86)\\Steam\\steamapps\\common\\BlueArchive";
 

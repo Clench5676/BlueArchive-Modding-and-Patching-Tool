@@ -57,7 +57,7 @@ dialog.hidden = true;
 globalThis.fetch = async () => ({ ok: false, status: 404, json: async () => null });
 const warn = console.warn;
 console.warn = (...args) => { if (!/popup layout|message popup without/.test(String(args[0]))) warn(...args); };
-const Popup = await import("../../src/ba_modding_toolkit/web/js/popup.js");
+const Popup = await import("../../src/bmpt/web/js/popup.js");
 
 const mount = (tag = "div") => body.appendChild(new El(tag));
 const buttons = (host, n) => Array.from({ length: n }, () => host.appendChild(new El("button")));
@@ -324,7 +324,7 @@ test("an asset-consent style popup that must be answered is trapped too, and Esc
 
 test("popup.js keeps one trap: the Hall modal and the import dialogs no longer carry their own", async () => {
   const { readFileSync } = await import("node:fs");
-  const web = (file) => readFileSync(new URL(`../../src/ba_modding_toolkit/web/js/${file}`, import.meta.url), "utf8");
+  const web = (file) => readFileSync(new URL(`../../src/bmpt/web/js/${file}`, import.meta.url), "utf8");
   assert.doesNotMatch(web("student-hall-ui.js"), /event\.key !== "Tab"/);
   assert.doesNotMatch(web("batch-import.js"), /event\.key !== "Tab"/);
   assert.match(web("popup.js"), /addEventListener\("keydown", trapKey\)/);

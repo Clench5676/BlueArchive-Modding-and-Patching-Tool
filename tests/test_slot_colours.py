@@ -15,7 +15,7 @@ import pytest
 
 NODE = shutil.which("node")
 ROOT = Path(__file__).parent
-MODULE = ROOT.parent / "src" / "ba_modding_toolkit" / "web" / "js" / "slot-colours.js"
+MODULE = ROOT.parent / "src" / "bmpt" / "web" / "js" / "slot-colours.js"
 GAME_DIR = Path(os.environ.get("BAMT_TEST_GAME_DIR") or "/nonexistent/bamt-real-game")
 # the constants of the two gamma-to-linear conversions as float32 immediates in a D3D11 program: UnityCG's
 # GammaToLinearSpace (a cubic, spine-unity's PMAGammaToTargetSpace) and the exact sRGB curve's linear part (1 / 12.92)
@@ -120,7 +120,7 @@ def test_real_vertex_programs_match_the_curves(lobby_shaders):
 
 @pytest.mark.skipif(not GAME_DIR.is_dir(), reason="No local game install")
 def test_real_lobby_page_shaders(tmp_path):
-    from ba_modding_toolkit.gameassets import AssetCache, GameAssets
+    from bmpt.gameassets import AssetCache, GameAssets
     from ba_modding_toolkit.searching import get_search_dirs
 
     game = GameAssets(get_search_dirs(GAME_DIR), AssetCache(root=tmp_path / "cache", allowed=False))

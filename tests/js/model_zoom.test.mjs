@@ -6,14 +6,14 @@ import assert from "node:assert/strict";
 import { register } from "node:module";
 import { test } from "node:test";
 
-const VENDOR = new URL("../../src/ba_modding_toolkit/web/vendor/three-0.160.0/", import.meta.url).href;
+const VENDOR = new URL("../../src/bmpt/web/vendor/three-0.160.0/", import.meta.url).href;
 register(`data:text/javascript,${encodeURIComponent(`export async function resolve(spec, ctx, next) {
   if (spec === "three") return { url: ${JSON.stringify(VENDOR + "build/three.module.min.js")}, shortCircuit: true };
   if (spec.startsWith("three/addons/")) return { url: ${JSON.stringify(VENDOR + "examples/jsm/")} + spec.slice(13), shortCircuit: true };
   return next(spec, ctx); }`)}`);
 const { attachInput, bustDistance, clampPan, frameDistance, liftShare, pinchZoom, restoreZoom, saveZoom, wheelZoom,
   zoomShare } =
-  await import("../../src/ba_modding_toolkit/web/js/model.js");
+  await import("../../src/bmpt/web/js/model.js");
 
 const near = (a, b, eps = 1e-6) => assert.ok(Math.abs(a - b) <= eps, `${a} != ${b}`);
 const TAN5 = Math.tan((5 * Math.PI) / 180);

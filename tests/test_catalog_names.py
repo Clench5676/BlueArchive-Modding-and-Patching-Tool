@@ -11,8 +11,8 @@ import shlex
 
 import pytest
 
-from ba_modding_toolkit.catalog import DEFAULT_DATA
-from ba_modding_toolkit.catalog._names import (
+from bmpt.catalog import DEFAULT_DATA
+from bmpt.catalog._names import (
     BASE_SHORT, FILE_ID, LANGUAGES, NAMES, NAMING, PART_SEPARATORS, SEPARATORS, TWINS, apply_thai_names,
     bracketed, csv_bases, remark, thai_fallback, usable,
 )
@@ -254,7 +254,7 @@ def test_shipped_aliases_are_sorted_and_never_the_shown_name(shipped: dict):
 
 
 def test_cn_words_pair_kivos_words_with_the_servers():
-    from ba_modding_toolkit.catalog._names import cn_words
+    from bmpt.catalog._names import cn_words
 
     armed, battle, bunny, bunny_cn = "\u4e34\u6218", "\u6b66\u88c5", "\u5154\u5973\u90ce", "\u90a6\u59ae"
     rows = [{"skin_kivo": armed, "skin_cn": battle}, {"skin_kivo": f"{bunny},{armed}", "skin_cn": f"{bunny_cn},{battle}"},
@@ -267,7 +267,7 @@ def test_cn_words_pair_kivos_words_with_the_servers():
 
 
 def test_cn_aliases_put_the_servers_names_in_place():
-    from ba_modding_toolkit.catalog._names import cn_aliases, cn_base, cn_name
+    from bmpt.catalog._names import cn_aliases, cn_base, cn_name
 
     momoi, peach = "\u6843\u4e95", "\u6843"
     armed, battle, damaged = "\u4e34\u6218", "\u6b66\u88c5", "\u6218\u635f"

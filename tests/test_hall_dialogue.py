@@ -10,10 +10,10 @@ from types import SimpleNamespace
 
 import pytest
 
-from ba_modding_toolkit import globallines
-from ba_modding_toolkit.errors import ServiceError
-from ba_modding_toolkit.webui import student_hall
-from ba_modding_toolkit.webui.student_hall import MemoryMemo, PortraitVoices, LocalPortraitVoices
+from bmpt import globallines
+from bmpt.errors import ServiceError
+from bmpt.webui import student_hall
+from bmpt.webui.student_hall import MemoryMemo, PortraitVoices, LocalPortraitVoices
 
 from test_webui import app, services, rpc
 from test_globallines import row
@@ -147,7 +147,7 @@ def test_warm_line_metadata_uses_published_caches_without_false_pending_jobs(app
     rpc(app, "hall.voice", variant="hoshino", clip="hoshino_lobby_1")
     def forbidden(*args, **kwargs):
         pytest.fail("Published line metadata should not schedule another background job")
-    monkeypatch.setattr("ba_modding_toolkit.webui.api._background", forbidden)
+    monkeypatch.setattr("bmpt.webui.api._background", forbidden)
     result = rpc(app, "hall.lines", variant="hoshino", lang="en")["result"]
     assert result["pending"] is False and result["lines"]["hoshino_lobby_1"]["voice"]
 
@@ -186,8 +186,8 @@ def test_viewed_order_is_per_source_and_does_not_mutate_hall_or_game(app, servic
 
 def test_last_memorial_cannot_be_removed_after_first_saved_entry(tmp_path):
     from uuid import uuid4
-    from ba_modding_toolkit.webui.state import UiState
-    from ba_modding_toolkit.webui.student_hall import empty_hall, save_hall
+    from bmpt.webui.state import UiState
+    from bmpt.webui.student_hall import empty_hall, save_hall
     state = UiState(tmp_path / "ui.json")
     initial = save_hall(state, empty_hall(), 0)
     initial["memorials"] = [{"id": str(uuid4()), "variant": "hoshino", "source": "official"}]
@@ -202,7 +202,7 @@ def test_last_memorial_cannot_be_removed_after_first_saved_entry(tmp_path):
 
 def test_exact_portrait_source_duplicates_are_rejected_but_other_resources_and_memorials_remain_valid(tmp_path):
     from uuid import uuid4
-    from ba_modding_toolkit.webui.student_hall import empty_hall, validate_hall
+    from bmpt.webui.student_hall import empty_hall, validate_hall
     first = {"id": str(uuid4()), "variant": "hoshino", "source": "mod:one"}
     second = {**first, "id": str(uuid4())}
     value = {**empty_hall(), "portraits": [first, second]}
@@ -219,7 +219,7 @@ def test_exact_portrait_source_duplicates_are_rejected_but_other_resources_and_m
 
 def test_native_portrait_anchor_only_fills_missing_coordinates():
     from uuid import uuid4
-    from ba_modding_toolkit.webui.student_hall import empty_hall, validate_hall, PORTRAIT_ORIGIN
+    from bmpt.webui.student_hall import empty_hall, validate_hall, PORTRAIT_ORIGIN
     fresh = {"id": str(uuid4()), "variant": "hoshino", "source": "mod:one"}
     placed = {"id": str(uuid4()), "variant": "hoshino", "source": "mod:two", "x": 960, "y": 1120, "scale": 1.7}
     result = validate_hall({**empty_hall(), "portraits": [fresh, placed]})["portraits"]
@@ -229,7 +229,7 @@ def test_native_portrait_anchor_only_fills_missing_coordinates():
 
 def test_legacy_duplicate_read_keeps_first_uuid_and_cas_revision_without_disk_migration(app, services):
     from uuid import uuid4
-    from ba_modding_toolkit.webui.student_hall import empty_hall
+    from bmpt.webui.student_hall import empty_hall
     first = {"id": str(uuid4()), "variant": "hoshino", "source": "mod:one", "x": 400, "y": 1120, "scale": 1}
     duplicate = {**first, "id": str(uuid4()), "x": 1200}
     other = {**first, "id": str(uuid4()), "source": "mod:two", "x": 800}
@@ -350,7 +350,7 @@ def test_native_expression_motion_retains_authored_tracks_and_omits_random_idle_
 
 def test_verified_portrait_clips_supply_real_expression_tracks(tmp_path):
     import os
-    from ba_modding_toolkit.gameassets import AssetCache, GameAssets
+    from bmpt.gameassets import AssetCache, GameAssets
     from ba_modding_toolkit.searching import get_search_dirs
     game_dir = Path(os.environ.get("BAMT_TEST_GAME_DIR") or "/nonexistent/bamt-real-game")
     if not game_dir.is_dir():

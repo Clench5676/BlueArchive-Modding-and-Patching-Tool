@@ -8,13 +8,13 @@ from pathlib import Path
 
 import pytest
 
-from ba_modding_toolkit import globallines
-from ba_modding_toolkit.config import Settings
-from ba_modding_toolkit.errors import ServiceError
-from ba_modding_toolkit.webui import api as webui_api
-from ba_modding_toolkit.webui.api import build_api
-from ba_modding_toolkit.webui.services import Services
-from ba_modding_toolkit.webui.state import UiState
+from bmpt import globallines
+from bmpt.config import Settings
+from bmpt.errors import ServiceError
+from bmpt.webui import api as webui_api
+from bmpt.webui.api import build_api
+from bmpt.webui.services import Services
+from bmpt.webui.state import UiState
 
 
 def row(cid, group, order, en, tw="", anim="", category="UILobbySpecial", teen=False, jp="", kr="", th=""):

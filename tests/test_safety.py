@@ -9,9 +9,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from ba_modding_toolkit import game_paths
-from ba_modding_toolkit.errors import ServiceError
-from ba_modding_toolkit.library import safety
+from bmpt import game_paths
+from bmpt.errors import ServiceError
+from bmpt.library import safety
 
 WINE_LINE = r"C:\Program Files (x86)\Steam\steamapps\common\BlueArchive\BlueArchive.exe"
 NATIVE_COMM = "/Applications/Blue Archive.app/Contents/MacOS/Blue Archive"
@@ -81,7 +81,7 @@ def test_wine_command_lines(line):
     r"C:\Games\BlueArchive.exe.bak",
     r"C:\Program Files (x86)\Steam\steam.exe -silent",
     OWN_COMM + " --classic --tab update",
-    "/usr/bin/python3 -m ba_modding_toolkit.webui --serve --port 8790",
+    "/usr/bin/python3 -m bmpt.webui --serve --port 8790",
     "Blue-Archive-Modding-and-Patching-Tool-0.1.0-alpha.4-windows-x64.exe --classic",
 ])
 def test_command_lines_that_are_not_the_game(line):

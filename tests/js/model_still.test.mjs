@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { holdPopupCaptures } from "../../src/ba_modding_toolkit/web/js/capture-priority.js";
-import { createModelStills, modelStillKey, modelStillVersion } from "../../src/ba_modding_toolkit/web/js/model-still.js";
+import { holdPopupCaptures } from "../../src/bmpt/web/js/capture-priority.js";
+import { createModelStills, modelStillKey, modelStillVersion } from "../../src/bmpt/web/js/model-still.js";
 const turn = () => new Promise(setImmediate);
 const fixture = (capture = async (url) => `blob:${url}`) => {
   const loads = [], disposed = [], reports = [];

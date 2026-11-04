@@ -2,8 +2,8 @@
 
 import pytest
 
-from ba_modding_toolkit import kivo
-from ba_modding_toolkit.errors import ServiceError
+from bmpt import kivo
+from bmpt.errors import ServiceError
 
 PAGE = {
     "voice": [

@@ -6,7 +6,7 @@ import { test } from "node:test";
 
 import {
   modelSource, modelUrl, appliedKey, appliedOf, availableTab, candidates, configuredKey, coreOf, hasAsset, overwrittenOf, partsOf, popupMode, primaryKind, previewBase, previewChanged, previewKey, sourceOf, switchKindOf,
-} from "../../src/ba_modding_toolkit/web/js/switch-sources.js";
+} from "../../src/bmpt/web/js/switch-sources.js";
 
 const part = (kind, applied, extra = {}) => ({ file: `/game/${kind}-${applied}.bundle`, kind, applied, crc: "ok", ...extra });
 const mod = (id, target, kind) => ({ id, target, kind, label: id, file: `/library/mods/${id}/${id}.bundle`, fresh: false });
@@ -322,7 +322,7 @@ test("model sources stay within the variant and use the shared configured/applie
 });
 
 test("Applied follows game intent independently of physical writes and preview selection", async () => {
-  const { selectionStatus, candidateStatus, detailStatus, selectionError, importStatus } = await import("../../src/ba_modding_toolkit/web/js/switch-sources.js");
+  const { selectionStatus, candidateStatus, detailStatus, selectionError, importStatus } = await import("../../src/bmpt/web/js/switch-sources.js");
   for (const kind of ["spr", "lobby", "model"]) {
     const v = { key: "a", spr: "a_spr", lobby: "a_home", model: "a", configured: { [kind]: "mod:chosen" },
       state: { files: [part(kind, "mod:old")] }, selection: {} };
@@ -345,7 +345,7 @@ test("Applied follows game intent independently of physical writes and preview s
 });
 
 test("saved previews and game intent remain independent for every asset kind", async () => {
-  const { intendedKey, isApplied, selectionStatus } = await import("../../src/ba_modding_toolkit/web/js/switch-sources.js");
+  const { intendedKey, isApplied, selectionStatus } = await import("../../src/bmpt/web/js/switch-sources.js");
   for (const kind of ["spr", "lobby", "model"]) {
     const v = { key: "a", configured: { [kind]: "mod:game" }, previewSources: { [kind]: "mod:preview" } };
     for (const enabled of [false, true]) {

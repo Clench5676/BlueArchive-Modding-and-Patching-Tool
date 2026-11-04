@@ -12,9 +12,10 @@ import pytest
 import toml
 
 from ba_modding_toolkit.utils import paths as utils_paths
-from ba_modding_toolkit import config, data_paths, devmode, filelock, utils
-from ba_modding_toolkit.data_paths import APP_DIR_NAME, OLD_APP_DIR_NAME, migrate_data_dir
-from ba_modding_toolkit.webui.instance import InstanceLock
+from bmpt import config, data_paths, devmode, filelock
+from ba_modding_toolkit import utils
+from bmpt.data_paths import APP_DIR_NAME, OLD_APP_DIR_NAME, migrate_data_dir
+from bmpt.webui.instance import InstanceLock
 
 
 @pytest.fixture
@@ -112,7 +113,7 @@ def test_legacy_lock_is_held_during_process_checks_and_rename(folders, monkeypat
 @pytest.mark.skipif(os.name == "nt", reason="Uses POSIX locks to exercise the Windows API branches")
 def test_windows_rename_failure_releases_probe_for_normal_instance_lock(folders, monkeypatch):
     import fcntl
-    from ba_modding_toolkit.webui import instance as instance_module
+    from bmpt.webui import instance as instance_module
 
     old, new = folders
     (old / "instance.lock").touch()
@@ -420,7 +421,7 @@ def test_live_older_instance_keeps_its_folder_for_this_run(folders, both):
 
 
 def test_live_classic_child_prevents_migration(folders):
-    from ba_modding_toolkit.webui.classic import SYSTEM_PROCESSES
+    from bmpt.webui.classic import SYSTEM_PROCESSES
 
     old, new = folders
     (old / "classic.json").write_text(json.dumps({"pid": os.getpid(), "exe": sys.executable, "hwnd": 0,
@@ -510,9 +511,9 @@ def test_cache_cleanup_failure_keeps_old_cache_and_warns(tmp_path, monkeypatch, 
 
 @pytest.mark.parametrize("both", [False, True])
 def test_custom_cache_and_override(tmp_path, monkeypatch, both):
-    from ba_modding_toolkit.errors import ServiceError
-    from ba_modding_toolkit.webui.services import Services
-    from ba_modding_toolkit.webui.state import UiState
+    from bmpt.errors import ServiceError
+    from bmpt.webui.services import Services
+    from bmpt.webui.state import UiState
 
     monkeypatch.setattr(utils, "DATA_DIR_OVERRIDE", None)
     data = tmp_path / "data"
@@ -546,9 +547,9 @@ def test_custom_cache_and_override(tmp_path, monkeypatch, both):
 
 
 def test_changing_cache_parent_recognizes_legacy_name(tmp_path, monkeypatch):
-    from ba_modding_toolkit.errors import ServiceError
-    from ba_modding_toolkit.webui.services import Services
-    from ba_modding_toolkit.webui.state import UiState
+    from bmpt.errors import ServiceError
+    from bmpt.webui.services import Services
+    from bmpt.webui.state import UiState
 
     monkeypatch.setattr(utils, "DATA_DIR_OVERRIDE", None)
     state = UiState(tmp_path / "data/webui.json")
@@ -568,7 +569,7 @@ def test_changing_cache_parent_recognizes_legacy_name(tmp_path, monkeypatch):
 
 
 def test_migrations_refuse_paths_outside_isolated_roots(folders, tmp_path, monkeypatch):
-    from ba_modding_toolkit.errors import ServiceError
+    from bmpt.errors import ServiceError
 
     old, new = folders
     # both lists, so a session that already runs isolated (writable roots set) gives the same answer

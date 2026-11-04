@@ -11,11 +11,11 @@ from pathlib import Path
 
 import pytest
 
-from ba_modding_toolkit.webui import diagnostics, main, native
-from ba_modding_toolkit.webui.api import build_api
-from ba_modding_toolkit.webui.diagnostics import Reports
-from ba_modding_toolkit.webui.session_log import open_run_log
-from ba_modding_toolkit.webui.timing import Timings
+from bmpt.webui import diagnostics, main, native
+from bmpt.webui.api import build_api
+from bmpt.webui.diagnostics import Reports
+from bmpt.webui.session_log import open_run_log
+from bmpt.webui.timing import Timings
 
 
 @pytest.fixture
@@ -309,13 +309,13 @@ def test_pywebview_failure_is_caught_by_startup_wrapper(reports, monkeypatch):
 
 
 def test_safe_mode_disables_assets_and_maintenance_without_changing_consent(tmp_path, monkeypatch):
-    from ba_modding_toolkit.config import Settings
-    from ba_modding_toolkit.webui.services import Services
-    from ba_modding_toolkit.webui.state import UiState
-    from ba_modding_toolkit.errors import ServiceError
-    from ba_modding_toolkit.webui.server import WebApp
-    from ba_modding_toolkit.webui.events import EventBus
-    from ba_modding_toolkit.webui.rpc import RpcRegistry
+    from bmpt.config import Settings
+    from bmpt.webui.services import Services
+    from bmpt.webui.state import UiState
+    from bmpt.errors import ServiceError
+    from bmpt.webui.server import WebApp
+    from bmpt.webui.events import EventBus
+    from bmpt.webui.rpc import RpcRegistry
 
     state = UiState(tmp_path / "webui.json")
     state.set_consent(True)
@@ -360,7 +360,7 @@ def test_restart_safe_refuses_writers_and_restarts_only_after_lock_release(monke
     monkeypatch.setattr(main, "InstanceLock", lambda _: SimpleNamespace(acquire=lambda: True,
                                                                        release=lambda: order.append("released")))
     monkeypatch.setattr(main, "_run", lambda args, instance: args.safe_mode)
-    from ba_modding_toolkit.webui import system
+    from bmpt.webui import system
     monkeypatch.setattr(system, "program_command", lambda: ["test-app"])
     import subprocess
     monkeypatch.setattr(subprocess, "Popen", lambda command: order.append(command))
@@ -369,9 +369,9 @@ def test_restart_safe_refuses_writers_and_restarts_only_after_lock_release(monke
 
 
 def test_unexpected_rpc_and_job_exceptions_create_reports(reports):
-    from ba_modding_toolkit.webui.events import EventBus
-    from ba_modding_toolkit.webui.jobs import JobRunner
-    from ba_modding_toolkit.webui.rpc import RpcRegistry
+    from bmpt.webui.events import EventBus
+    from bmpt.webui.jobs import JobRunner
+    from bmpt.webui.rpc import RpcRegistry
     rpc = RpcRegistry(on_exception=reports.backend_exception)
 
     def fail(**kwargs):
@@ -417,9 +417,9 @@ def test_large_report_fields_and_log_bytes_are_bounded(reports):
 
 
 def test_failed_wsgi_request_writes_automatic_report(reports):
-    from ba_modding_toolkit.webui.server import WebApp
-    from ba_modding_toolkit.webui.events import EventBus
-    from ba_modding_toolkit.webui.rpc import RpcRegistry
+    from bmpt.webui.server import WebApp
+    from bmpt.webui.events import EventBus
+    from bmpt.webui.rpc import RpcRegistry
 
     def fail(*args):
         raise RuntimeError("asset reader failed")
@@ -441,8 +441,8 @@ def test_log_header_redacts_home(reports):
 
 
 def test_build_propagates_safe_mode_and_html_does_not_wait_for_game_cache(tmp_path, monkeypatch):
-    from ba_modding_toolkit.config import Settings
-    from ba_modding_toolkit.webui.services import Services
+    from bmpt.config import Settings
+    from bmpt.webui.services import Services
     s = Services(Settings(tmp_path / "config.toml"), tmp_path, safe_mode=True)
     monkeypatch.setattr(main, "Services", lambda **kwargs: s if kwargs["safe_mode"] else pytest.fail("normal mode"))
     monkeypatch.setattr(main, "Server", lambda app, port: SimpleNamespace(app=app, port=12345))
@@ -599,7 +599,7 @@ def test_review_optional_failures_and_blocking_reads_yield_report(reports, monke
 
 
 def test_review_consent_uses_cache_without_file_lock(reports, monkeypatch):
-    from ba_modding_toolkit.webui.state import UiState
+    from bmpt.webui.state import UiState
     state = UiState(reports.data_dir / "webui.json")
     state.set_consent(True)
     state.set("spine_consent", False)
@@ -625,9 +625,9 @@ def test_review_popup_report_records_error_code_and_private_parameters(reports):
 
 
 def test_review_recovery_embeds_shared_plain_style(reports):
-    from ba_modding_toolkit.webui.server import WebApp, WEB_DIR
-    from ba_modding_toolkit.webui.events import EventBus
-    from ba_modding_toolkit.webui.rpc import RpcRegistry
+    from bmpt.webui.server import WebApp, WEB_DIR
+    from bmpt.webui.events import EventBus
+    from bmpt.webui.rpc import RpcRegistry
     body = b"".join(WebApp(RpcRegistry(), EventBus())._static("/", lambda *args: None)).decode()
     style = (WEB_DIR / "css" / "fallback.css").read_text()
     assert style in body
@@ -713,11 +713,11 @@ def test_review_structured_filenames_keep_only_extensions():
 
 
 def test_batch_failure_is_redacted_in_session_log_before_report(reports):
-    from ba_modding_toolkit.errors import ServiceError
-    from ba_modding_toolkit.webui.batch_import import failure_detail
+    from bmpt.errors import ServiceError
+    from bmpt.webui.batch_import import failure_detail
     path = reports.data_dir / 'webui.log'
     handler = logging.FileHandler(path)
-    logger = logging.getLogger('ba_modding_toolkit.webui.batch_import')
+    logger = logging.getLogger('bmpt.webui.batch_import')
     logger.addHandler(handler)
     events = []
     error = ServiceError('required_asset_extract_failed', file='/Users/PrivateUser/Mods/Private Model.bundle',

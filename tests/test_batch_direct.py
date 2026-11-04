@@ -8,14 +8,14 @@ from types import SimpleNamespace
 import pytest
 
 from ba_modding_toolkit.bundle import Bundle
-from ba_modding_toolkit.errors import ServiceError
-from ba_modding_toolkit.library import integrity
-from ba_modding_toolkit.library.identity import content_cores
-from ba_modding_toolkit.library.integrity import metadata as bundle_metadata, inspect as inspect_bundle
+from bmpt.errors import ServiceError
+from bmpt.library import integrity
+from bmpt.library.identity import content_cores
+from bmpt.library.integrity import metadata as bundle_metadata, inspect as inspect_bundle
 from ba_modding_toolkit.models import AssetType, SaveOptions
 from ba_modding_toolkit.naming import parse_filename
 from ba_modding_toolkit.utils import CRCUtils
-from ba_modding_toolkit.webui import batch_import
+from bmpt.webui import batch_import
 from test_batch_import import analyze, batch_model_env, env, run
 from test_library import game_bundle, make_mod, setup_library
 from test_library_model import model_bundle, model_env
@@ -65,7 +65,7 @@ def test_failure_details_reach_results_and_logs(env, monkeypatch, caplog, phase,
 
 def restore_metadata(monkeypatch):
     monkeypatch.setattr(integrity, 'metadata', bundle_metadata)
-    monkeypatch.setattr('ba_modding_toolkit.library.identity.content_cores', content_cores)
+    monkeypatch.setattr('bmpt.library.identity.content_cores', content_cores)
 
 
 def rename_crc(path):
@@ -88,7 +88,7 @@ def test_model_direct_replacement_never_transfers_assets(batch_model_env, monkey
         source.write_bytes(CRCUtils.apply_crc_fix(source.read_bytes(), int(parse_filename(target.name).crc)))
     original_source = source.read_bytes()
     # This is the content identity failure masked as no_target before current names took precedence.
-    from ba_modding_toolkit.library.identity import identify
+    from bmpt.library.identity import identify
     with pytest.raises(ServiceError, match='mod_target_unknown'):
         identify(source, source.name, env.catalog)
 
@@ -210,7 +210,7 @@ def test_crc_only_names_copy_all_kinds_without_asset_matching(env, monkeypatch, 
 
 @pytest.mark.parametrize('crc_name', [False, True])
 def test_current_npc_without_roster_entry_imports_applies_and_restores(env, monkeypatch, crc_name):
-    from ba_modding_toolkit.catalog import Catalog
+    from bmpt.catalog import Catalog
 
     restore_metadata(monkeypatch)
     env.library.catalog = Catalog(SimpleNamespace(spine_cores=lambda kind: {}, collection_names=lambda: {},
@@ -240,12 +240,12 @@ def verified_model(tmp_path, monkeypatch):
     value = os.environ.get('BAMT_TEST_GAME_DIR')
     if not value:
         pytest.skip('Set BAMT_TEST_GAME_DIR to an isolated verified official view')
-    from ba_modding_toolkit.catalog import Catalog
-    from ba_modding_toolkit.config import Settings
-    from ba_modding_toolkit.library import ModLibrary, safety
+    from bmpt.catalog import Catalog
+    from bmpt.config import Settings
+    from bmpt.library import ModLibrary, safety
     from ba_modding_toolkit.searching import get_search_dirs
-    from ba_modding_toolkit.webui.api import build_api
-    from ba_modding_toolkit.webui.services import Services
+    from bmpt.webui.api import build_api
+    from bmpt.webui.services import Services
 
     resources = get_search_dirs(Path(value))
     portraits = {parse_filename(path.name).core: [] for folder in resources
@@ -304,7 +304,7 @@ def test_verified_modified_model_part_imports_whole(verified_model, monkeypatch,
     before = source.read_bytes()
     official = {path: path.read_bytes() for path in env.original.parent.glob('*.bundle')}
     # The former content-first path rejects the changed model name before copying this part.
-    from ba_modding_toolkit.library.identity import identify
+    from bmpt.library.identity import identify
     with pytest.raises(ServiceError, match='mod_target_unknown'):
         identify(source, source.name, env.library.catalog)
 
@@ -495,7 +495,7 @@ def test_library_inspection_failure_logs_only_sanitized_error(env, monkeypatch, 
     assert entry['state'] == 'blocked'
     assert entry['error']['code'] == ('library_io_error' if error_type is FileNotFoundError
                                       else 'library_operation_failed')
-    records = [record for record in caplog.records if record.name == 'ba_modding_toolkit.library.service']
+    records = [record for record in caplog.records if record.name == 'bmpt.library.service']
     assert len(records) == 1
     assert records[0].exc_info is None
     assert error_type.__name__ in records[0].getMessage()

@@ -20,10 +20,10 @@ from urllib.parse import urlparse
 
 import pytest
 
-from ba_modding_toolkit.errors import ServiceError
-from ba_modding_toolkit.gui import control as ctl
-from ba_modding_toolkit.webui import classic as cl
-from ba_modding_toolkit.webui import system
+from bmpt.errors import ServiceError
+from bmpt.gui import control as ctl
+from bmpt.webui import classic as cl
+from bmpt.webui import system
 
 # --- helpers ---
 
@@ -852,7 +852,7 @@ def test_a_real_child_that_prints_during_import_keeps_the_channel(tmp_path, monk
         "import os, sys, time",
         "print('noise ' * 5000)",
         "print('\\u5df2\\u542f\\u52a8', flush=True)",
-        "from ba_modding_toolkit.gui.control import ControlClient, take_channel",
+        "from bmpt.gui.control import ControlClient, take_channel",
         "url, token = take_channel()",
         "assert 'BAMT_CLASSIC_TOKEN' not in os.environ",
         "c = ControlClient(url, token).start()",

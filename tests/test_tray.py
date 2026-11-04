@@ -10,13 +10,13 @@ from pathlib import Path
 
 import pytest
 
-from ba_modding_toolkit.errors import ServiceError
+from bmpt.errors import ServiceError
 from ba_modding_toolkit.i18n import i18n_manager
-from ba_modding_toolkit.webui import tray as tray_module
-from ba_modding_toolkit.webui.events import EventBus
-from ba_modding_toolkit.webui.jobs import JobRunner
-from ba_modding_toolkit.webui.strings import ui_strings
-from ba_modding_toolkit.webui.tray import MenuItem, Tray, needs_window, toggle_action, tray_menu, tray_tooltip
+from bmpt.webui import tray as tray_module
+from bmpt.webui.events import EventBus
+from bmpt.webui.jobs import JobRunner
+from bmpt.webui.strings import ui_strings
+from bmpt.webui.tray import MenuItem, Tray, needs_window, toggle_action, tray_menu, tray_tooltip
 
 ROOT = Path(__file__).resolve().parent.parent
 EN = ui_strings("en-US")
@@ -333,7 +333,7 @@ def test_a_click_runs_off_the_ui_thread(made):
 # --- the backends ---
 
 def test_the_tray_module_makes_no_backend_on_import():
-    code = ("import sys, ba_modding_toolkit.webui.tray as t; "
+    code = ("import sys, bmpt.webui.tray as t; "
             "print(sorted(m for m in ('AppKit', 'Foundation', 'clr', 'PyObjCTools') if m in sys.modules))")
     out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True,
                          env={**os.environ, "PYTHONPATH": str(ROOT / "src")})
@@ -363,8 +363,8 @@ class Hook:
 def run_window(monkeypatch, tmp_path, supported):
     from types import SimpleNamespace
 
-    from ba_modding_toolkit.webui import main
-    from ba_modding_toolkit.webui.timing import Timings
+    from bmpt.webui import main
+    from bmpt.webui.timing import Timings
 
     window = SimpleNamespace(events=SimpleNamespace(**{name: Hook() for name in ("initialized", "loaded", "closing", "closed", "before_show", "shown", "maximized", "minimized", "restored")}))
     started, closed = {}, []

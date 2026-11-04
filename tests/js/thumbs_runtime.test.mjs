@@ -4,8 +4,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
 import { afterEach, test } from "node:test";
-import { thumb, thumbnailScope, THUMB_LOAD_TIMEOUT } from "../../src/ba_modding_toolkit/web/js/thumbs.js";
-import { setSpineConsent } from "../../src/ba_modding_toolkit/web/js/spine-runtime.js";
+import { thumb, thumbnailScope, THUMB_LOAD_TIMEOUT } from "../../src/bmpt/web/js/thumbs.js";
+import { setSpineConsent } from "../../src/bmpt/web/js/spine-runtime.js";
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const events = [], players = [], images = [], encoded = [];
@@ -53,7 +53,7 @@ globalThis.Image = class {
   removeAttribute() {}
 };
 const runtime = vm.createContext({ console, document, performance, requestAnimationFrame });
-vm.runInContext(readFileSync(new URL("../../src/ba_modding_toolkit/web/vendor/spine-player-4.2.120/spine-player.min.js", import.meta.url), "utf8"), runtime);
+vm.runInContext(readFileSync(new URL("../../src/bmpt/web/vendor/spine-player-4.2.120/spine-player.min.js", import.meta.url), "utf8"), runtime);
 const S = runtime.spine;
 class Player {
   constructor(el, config) {

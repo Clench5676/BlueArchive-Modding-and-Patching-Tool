@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {test} from 'node:test';
-const source=readFileSync(new URL('../../src/ba_modding_toolkit/web/js/main.js',import.meta.url),'utf8');
+const source=readFileSync(new URL('../../src/bmpt/web/js/main.js',import.meta.url),'utf8');
 const refresh=source.slice(source.indexOf('async function refreshConfiguration()'),source.indexOf('\nlet routeToken'));
 const sequence=source.slice(source.indexOf('let sessionReady = null'),source.indexOf('// The start popups, one at a time'));
 const flush=async()=>{for(let i=0;i<40;i++)await Promise.resolve();};

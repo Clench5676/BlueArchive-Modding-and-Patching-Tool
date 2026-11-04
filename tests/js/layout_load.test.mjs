@@ -3,7 +3,7 @@ import { test } from "node:test";
 
 globalThis.document = { createElement: () => ({ getContext: () => ({}) }) };
 globalThis.addEventListener = () => {};
-const { init, layout } = await import("../../src/ba_modding_toolkit/web/js/ngui.js");
+const { init, layout } = await import("../../src/bmpt/web/js/ngui.js");
 const deferred = () => { let resolve; const promise = new Promise((r) => { resolve = r; }); return { promise, resolve }; };
 const flush = async () => { for (let i = 0; i < 20; i++) await Promise.resolve(); };
 

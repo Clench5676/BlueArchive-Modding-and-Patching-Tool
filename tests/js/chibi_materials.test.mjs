@@ -4,12 +4,12 @@ import assert from "node:assert/strict";
 import { register } from "node:module";
 import { test } from "node:test";
 
-const THREE_URL = new URL("../../src/ba_modding_toolkit/web/vendor/three-0.160.0/build/three.module.min.js", import.meta.url).href;
+const THREE_URL = new URL("../../src/bmpt/web/vendor/three-0.160.0/build/three.module.min.js", import.meta.url).href;
 register(`data:text/javascript,${encodeURIComponent(`export async function resolve(spec, ctx, next) {
   return spec === "three" ? { url: ${JSON.stringify(THREE_URL)}, shortCircuit: true } : next(spec, ctx); }`)}`);
 const THREE = await import("three");
 const { AMBIENT, CHARACTER_LIGHT_DIR, EMPTY_SCENE_AMBIENT, LIGHT, ambientAt, characterLight, chibiMaterial, outlineMaterial,
-  slotSpace, trilightProbe } = await import("../../src/ba_modding_toolkit/web/js/chibi-materials.js");
+  slotSpace, trilightProbe } = await import("../../src/bmpt/web/js/chibi-materials.js");
 
 const near = (a, b, eps = 1e-4) => assert.ok(Math.abs(a - b) <= eps, `${a} != ${b}`);
 const linear = (c) => (c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));

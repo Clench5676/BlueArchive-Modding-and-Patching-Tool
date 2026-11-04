@@ -5,7 +5,7 @@ import { test } from "node:test";
 
 import {
   DEFAULT_VIEW, FILTERS, NATURAL, RECENT_MAX, SORTS, arrange, filtering, fold, neighbour, normalizeView, order, visit,
-} from "../../src/ba_modding_toolkit/web/js/roster-order.js";
+} from "../../src/bmpt/web/js/roster-order.js";
 
 const v = (key, extra = {}) => ({
   key, fileId: key.toUpperCase(), names: { "zh-CN": { full: key }, en: { full: key } }, spr: `${key}_spr`,

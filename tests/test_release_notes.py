@@ -2,7 +2,7 @@
 same text is the GitHub release's. The page's Markdown reader is tested in tests/js/release_notes.test.mjs."""
 import re
 
-from ba_modding_toolkit.webui.api import RELEASE_NOTES_DIR, release_notes
+from bmpt.webui.api import RELEASE_NOTES_DIR, release_notes
 
 MARK = re.compile(r"^<!--\s*lang:\s*([A-Za-z-]+)\s*-->$")
 

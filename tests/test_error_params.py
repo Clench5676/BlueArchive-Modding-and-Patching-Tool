@@ -9,14 +9,15 @@ from types import SimpleNamespace
 import pytest
 
 from ba_modding_toolkit.bundle import Bundle
-from ba_modding_toolkit.errors import ServiceError
-from ba_modding_toolkit.library import integrity, manual_identity
-from ba_modding_toolkit.webui import batch_import, export_service
+from bmpt.errors import ServiceError
+from bmpt.library import integrity, manual_identity
+from bmpt.webui import batch_import, export_service
 
 from test_batch_import import analyze, env, finish, rpc, run
 from test_library import game_bundle, make_mod, setup_library
 
-PACKAGE = Path(__file__).parents[1] / "src" / "ba_modding_toolkit"
+PACKAGE = Path(__file__).parents[1] / "src" / "bmpt"
+ENGINE_PACKAGE = PACKAGE.with_name("ba_modding_toolkit")
 LOCALES = sorted((PACKAGE / "locales").glob("*.json"))
 
 
@@ -34,8 +35,8 @@ def test_every_error_raised_with_a_constant_code_passes_the_parameters_of_its_te
     needed = {code: names for code, names in placeholders().items() if names}
     assert {"file", "name", "error"} <= set().union(*needed.values())
     missing = []
-    for path in sorted(PACKAGE.rglob("*.py")):
-        relative = path.relative_to(PACKAGE).as_posix()
+    for path in sorted([*PACKAGE.rglob("*.py"), *ENGINE_PACKAGE.rglob("*.py")]):
+        relative = path.relative_to(PACKAGE if path.is_relative_to(PACKAGE) else ENGINE_PACKAGE).as_posix()
         if relative.startswith(("gui/", "cli/")):
             continue
         for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
@@ -118,7 +119,7 @@ def test_compare_names_the_bundle_it_cannot_read(setup_library, monkeypatch, fai
         return SimpleNamespace(env=SimpleNamespace(objects=objects if broken else []))
 
     monkeypatch.setattr(Bundle, "load", load)
-    monkeypatch.setattr("ba_modding_toolkit.library.service.AssetType", SimpleNamespace(
+    monkeypatch.setattr("bmpt.library.service.AssetType", SimpleNamespace(
         Texture2D=kind, TextAsset=kind, Mesh=kind, AnimationClip=kind))
     error = raised(lambda: env.library._compare_paths("id", [mod], [official]))
     assert (error.code, error.params) == ("bundle_invalid", {"file": mod if failing == "mod" else official})

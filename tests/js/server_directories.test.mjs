@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { controls } from './control_prefabs.mjs';
 
-const web = new URL('../../src/ba_modding_toolkit/web/js/', import.meta.url);
+const web = new URL('../../src/bmpt/web/js/', import.meta.url);
 const source = readFileSync(new URL('settings.js', web), 'utf8');
 const locales = ['en-US', 'zh-CN', 'zh-TW', 'ja-JP', 'ko-KR', 'th-TH'];
 const strip = s => s.replace(/^import .*;\n/gm, '').replace(/^export /gm, '');
@@ -28,7 +28,7 @@ const { option, filter } = controls();
 const Buttons = { smallButton: (...args) => ButtonsModule.optionButton(option, filter, ...args) };
 
 function harness(locale, { native = true, sourceValue = 'windows_global', error = null, pathLength = 1 } = {}) {
-  const strings = JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${locale}.json`, import.meta.url), 'utf8')).webui;
+  const strings = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), 'utf8')).webui;
   const T = (key, values = {}) => key.split('.').reduce((v, k) => v[k], strings).replace(/\{(\w+)\}/g, (_, k) => values[k]);
   const prefs = { fileSource: sourceValue, gameDirs: { global: '/test/global/'.repeat(pathLength), japan: '/test/japan/'.repeat(pathLength) }, native, libraryDir: '/test/library', outputDir: '/test/output' };
   const requests = [], messages = [], failures = [], changed = [];

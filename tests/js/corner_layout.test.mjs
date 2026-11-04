@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { readFileSync } from 'node:fs';
-import { CORNER_MARGIN, CORNER_UNITS, cornerBox, bindCorner, bindEdge, reflowCorners } from '../../src/ba_modding_toolkit/web/js/corner-layout.js';
-import { headerGeometry } from '../../src/ba_modding_toolkit/web/js/window-layout.js';
-import { topActionLayout, nativeRightClearance } from '../../src/ba_modding_toolkit/web/js/top-action-layout.js';
+import { CORNER_MARGIN, CORNER_UNITS, cornerBox, bindCorner, bindEdge, reflowCorners } from '../../src/bmpt/web/js/corner-layout.js';
+import { headerGeometry } from '../../src/bmpt/web/js/window-layout.js';
+import { topActionLayout, nativeRightClearance } from '../../src/bmpt/web/js/top-action-layout.js';
 import { cornerPrefabs } from './corner_prefabs.mjs';
 
 const S = 1920 / 2960, locales = ['en-US', 'zh-CN', 'zh-TW', 'ja-JP', 'ko-KR', 'th-TH'];
@@ -61,7 +61,7 @@ const scenes = [
   ]]),
 ];
 for (const locale of locales) for (const platform of [null, 'darwin', 'win32']) {
-  const strings = JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${locale}.json`, import.meta.url))).webui;
+  const strings = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url))).webui;
   for (const [scene, immersive, groups] of scenes) test(`${scene}, ${locale}, ${platform || 'no native chrome'}: shared edge margin`, () => {
     assert.ok(strings.lobby.exit && strings.row.switch.portrait && strings.row.switch.lobby && strings.photo.occlusion && strings.photo.gridOn);
     for (const [width, height] of [[960, 540], [1600, 900], [2560, 1440], [2560, 1080], [960, 1200]]) for (const density of [1, 2, 3]) {
@@ -126,7 +126,7 @@ test('registered controls recalculate after stage fitting and native bounds chan
 test('the real stage fitter spans the window with the non-native toolbar and clears those offsets on native hosts', async () => {
   const old = Object.fromEntries(['document', 'innerWidth', 'innerHeight', 'bamtWindowChrome', 'bamtHeaderGeometry'].map(k => [k, globalThis[k]]));
   globalThis.document = { createElement: () => ({ getContext: () => ({}) }) };
-  const { fitStage } = await import('../../src/ba_modding_toolkit/web/js/util.js');
+  const { fitStage } = await import('../../src/bmpt/web/js/util.js');
   const style = () => ({ setProperty(key, value) { this[key] = value; }, removeProperty(key) { delete this[key]; } });
   const bar = { style: style() };
   try {
@@ -147,8 +147,8 @@ test('the real stage fitter spans the window with the non-native toolbar and cle
 });
 
 test('the viewport clips the window while the scene artwork and sliding navigation retain their fitted clip', () => {
-  const css = readFileSync(new URL('../../src/ba_modding_toolkit/web/css/app.css', import.meta.url), 'utf8');
-  const html = readFileSync(new URL('../../src/ba_modding_toolkit/web/index.html', import.meta.url), 'utf8');
+  const css = readFileSync(new URL('../../src/bmpt/web/css/app.css', import.meta.url), 'utf8');
+  const html = readFileSync(new URL('../../src/bmpt/web/index.html', import.meta.url), 'utf8');
   assert.match(css, /\.viewport \{[^}]*position: fixed;[^}]*inset: 0;[^}]*overflow: clip;/);
   assert.doesNotMatch(/^\.stage \{([\s\S]*?)^\}/m.exec(css)[1], /overflow:/);
   assert.match(css, /\.scene-clip \{[^}]*position: absolute;[^}]*inset: 0;[^}]*overflow: clip;[^}]*pointer-events: none;/);

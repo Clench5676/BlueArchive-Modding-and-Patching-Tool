@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { cardColours, colourSwitchCard, edgeColours } from "../../src/ba_modding_toolkit/web/js/switch-card.js";
+import { cardColours, colourSwitchCard, edgeColours } from "../../src/bmpt/web/js/switch-card.js";
 
 const imageData = (pixels) => ({ width: pixels[0].length, height: pixels.length, data: new Uint8ClampedArray(pixels.flat(2)) });
 const blend = (a, b, t) => a.map((v, c) => v * (1 - t) + b[c] * t);

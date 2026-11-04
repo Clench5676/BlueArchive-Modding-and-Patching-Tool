@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { jobProgress, progressName } from "../../src/ba_modding_toolkit/web/js/job-progress.js";
-import { NAME_LANG, setStrings, T } from "../../src/ba_modding_toolkit/web/js/i18n.js";
+import { jobProgress, progressName } from "../../src/bmpt/web/js/job-progress.js";
+import { NAME_LANG, setStrings, T } from "../../src/bmpt/web/js/i18n.js";
 
 globalThis.document = { documentElement: {} };
 const locales = ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"];
-const catalog = JSON.parse(readFileSync(new URL("../../src/ba_modding_toolkit/catalog/data/catalog.json", import.meta.url)));
+const catalog = JSON.parse(readFileSync(new URL("../../src/bmpt/catalog/data/catalog.json", import.meta.url)));
 function catalogVariant(key) {
   const entry = catalog.variants[key], student = catalog.students[entry.student_id];
   return { key, names: entry.names, family: { key: student.base, base: student.names } };
@@ -17,7 +17,7 @@ const flat = (data, prefix = "", out = {}) => {
   } return out;
 };
 for (const locale of locales) test(`student job identities use one bracket and omit repeated steps in ${locale}`, () => {
-  setStrings(locale, flat(JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${locale}.json`, import.meta.url)))));
+  setStrings(locale, flat(JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url)))));
   const names = { full: "Yoshimi (Band)", short: "Band" }, variant = { key: "ch0220", names: { en: names }, family: { key: "yoshimi", base: { en: "Yoshimi" } } }, kind = T("tab.lobby");
   const name = progressName(variant, kind);
   assert.equal(name, T("progress.subject", { name: "Yoshimi", parts: ["Band", kind].join(T("progress.comma")) }));
@@ -41,7 +41,7 @@ for (const locale of locales) test(`student job identities use one bracket and o
 
 for (const locale of locales) {
   for (const key of ["ch9996", "ch9997", "ch9998", "ch9999"]) test(`catalog base ${key} omits Original in ${locale}`, () => {
-    setStrings(locale, flat(JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${locale}.json`, import.meta.url)))));
+    setStrings(locale, flat(JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url)))));
     const variant = catalogVariant(key), family = variant.family, base = family.base[NAME_LANG[locale]];
     assert.equal(variant.key, family.key);
     for (const kind of [T("tab.portrait"), T("tab.lobby"), T("tab.model")]) {
@@ -56,7 +56,7 @@ for (const locale of locales) {
     }
   });
   test(`catalog variants retain their labels in ${locale}`, () => {
-    setStrings(locale, flat(JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${locale}.json`, import.meta.url)))));
+    setStrings(locale, flat(JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url)))));
     for (const key of ["ch0220", "ch0263", "np0168", "np0169", "np0170"]) {
       const variant = catalogVariant(key), lang = NAME_LANG[locale], kind = T("tab.lobby");
       assert.notEqual(variant.key, variant.family.key);

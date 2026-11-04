@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { readFile } from "node:fs/promises";
-import { portraitScale } from "../../src/ba_modding_toolkit/web/js/student-hall-framing.js";
+import { portraitScale } from "../../src/bmpt/web/js/student-hall-framing.js";
 
-const file = new URL("../../src/ba_modding_toolkit/web/js/student-hall-portraits.js", import.meta.url);
+const file = new URL("../../src/bmpt/web/js/student-hall-portraits.js", import.meta.url);
 let source = await readFile(file, "utf8");
 source = source.replace(/^import .*;$/gm, "");
-source = `import { APPLIED_SELECTION_GOLD } from "${new URL("../../src/ba_modding_toolkit/web/js/ui-tokens.js", import.meta.url).href}";\nimport { pickPortrait, preparePickPages, visibleSlot, VISIBLE_ALPHA } from "${new URL("../../src/ba_modding_toolkit/web/js/student-hall-framing.js", import.meta.url).href}";\nconst {loadSpineAssets, spineBase, loadPlayer, ensureSpine, idleAnimation, Stage, portraitScale} = globalThis.hallHarness;\n${source}`;
+source = `import { APPLIED_SELECTION_GOLD } from "${new URL("../../src/bmpt/web/js/ui-tokens.js", import.meta.url).href}";\nimport { pickPortrait, preparePickPages, visibleSlot, VISIBLE_ALPHA } from "${new URL("../../src/bmpt/web/js/student-hall-framing.js", import.meta.url).href}";\nconst {loadSpineAssets, spineBase, loadPlayer, ensureSpine, idleAnimation, Stage, portraitScale} = globalThis.hallHarness;\n${source}`;
 let calls, disposed, shared, hooks, delay, drawn, players;
 class Skeleton { constructor(data) { this.data = data; } setSkin(skin) { this.skin = skin; } setSlotsToSetupPose() { this.attachments = this.skin.attachments; } update() {} updateWorldTransform() {} }
 class AnimationState { constructor(data) { this.data = data; } setAnimation() {} setEmptyAnimation() { return {}; } apply() {} update(delta) { this.elapsed=(this.elapsed||0)+delta; } }

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { ROOT_ROUTE, routeHistory } from "../../src/ba_modding_toolkit/web/js/route-history.js";
+import { ROOT_ROUTE, routeHistory } from "../../src/bmpt/web/js/route-history.js";
 
 test("menu entry points preserve a return stack rooted at Student Hall", () => {
   const h = routeHistory();

@@ -6,10 +6,10 @@ from urllib.parse import quote
 
 import pytest
 
-from ba_modding_toolkit.errors import ServiceError
-from ba_modding_toolkit.webui.api import build_api
-from ba_modding_toolkit.webui.session_log import LOG_BYTES, RedactingFormatter, redact, tail
-from ba_modding_toolkit.webui.timing import Timings
+from bmpt.errors import ServiceError
+from bmpt.webui.api import build_api
+from bmpt.webui.session_log import LOG_BYTES, RedactingFormatter, redact, tail
+from bmpt.webui.timing import Timings
 
 
 def test_log_rpc_returns_the_last_500_lines_in_order_and_redacts_secrets(tmp_path):

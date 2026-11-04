@@ -5,12 +5,12 @@ from __future__ import annotations
 import io
 from types import SimpleNamespace
 
-from ba_modding_toolkit.config import Settings
-from ba_modding_toolkit.errors import ServiceError
-from ba_modding_toolkit.webui.api import build_api
-from ba_modding_toolkit.webui.server import WebApp
-from ba_modding_toolkit.webui.services import Services
-from ba_modding_toolkit.webui.state import UiState
+from bmpt.config import Settings
+from bmpt.errors import ServiceError
+from bmpt.webui.api import build_api
+from bmpt.webui.server import WebApp
+from bmpt.webui.services import Services
+from bmpt.webui.state import UiState
 
 
 class RouteCatalog:

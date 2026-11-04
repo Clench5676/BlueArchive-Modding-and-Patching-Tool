@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { lobbyStillViewport } from "../../src/ba_modding_toolkit/web/js/lobby-still.js";
+import { lobbyStillViewport } from "../../src/bmpt/web/js/lobby-still.js";
 // Coordinates derived from Ui's UILobbyElement / CH0169_home, with no game assets.
 const ui = { view: { x: -1480, y: -832.5, w: 2960, h: 1665 }, layer: { x: 0, y: -962, scale: 1 } };
 for (const aspect of [16 / 9, 384 / 352, 1, 480 / 880]) test(`Ui's ${aspect} still contains only the game camera`, () => {

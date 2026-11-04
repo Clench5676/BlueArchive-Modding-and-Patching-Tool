@@ -9,7 +9,7 @@ from pathlib import Path
 from PIL import Image
 
 ROOT = Path(__file__).resolve().parent.parent
-ICON_DIR = ROOT / "src" / "ba_modding_toolkit" / "assets" / "tray"
+ICON_DIR = ROOT / "src" / "bmpt" / "assets" / "tray"
 
 
 def test_the_icon_files_are_there():

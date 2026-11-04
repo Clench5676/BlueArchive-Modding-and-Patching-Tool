@@ -6,10 +6,10 @@ from pathlib import Path
 
 import pytest
 
-from ba_modding_toolkit.gameassets import AssetCache, GameAssets
-from ba_modding_toolkit.gameassets.layouts import export_layout, subtree
-from ba_modding_toolkit.gameassets.office import BACKGROUNDS
-from ba_modding_toolkit.gameassets.unity import open_bundle
+from bmpt.gameassets import AssetCache, GameAssets
+from bmpt.gameassets.layouts import export_layout, subtree
+from bmpt.gameassets.office import BACKGROUNDS
+from bmpt.gameassets.unity import open_bundle
 from ba_modding_toolkit.searching import get_search_dirs
 
 GAME_DIR = Path(os.environ.get("BAMT_TEST_GAME_DIR") or "/nonexistent/bamt-real-game")

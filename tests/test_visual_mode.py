@@ -9,11 +9,11 @@ from pathlib import Path
 
 import pytest
 
-from ba_modding_toolkit.gameassets import AssetCache, GameAssets
-from ba_modding_toolkit.gameassets import service
-from ba_modding_toolkit.gameassets.discovery import is_prefab
-from ba_modding_toolkit.gameassets.layouts import export_layout, subtree
-from ba_modding_toolkit.gameassets.unity import open_bundle
+from bmpt.gameassets import AssetCache, GameAssets
+from bmpt.gameassets import service
+from bmpt.gameassets.discovery import is_prefab
+from bmpt.gameassets.layouts import export_layout, subtree
+from bmpt.gameassets.unity import open_bundle
 from ba_modding_toolkit.searching import get_search_dirs
 
 NODE = shutil.which("node")

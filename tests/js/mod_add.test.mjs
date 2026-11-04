@@ -1,15 +1,15 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { errorText } from "../../src/ba_modding_toolkit/web/js/i18n.js";
+import { errorText } from "../../src/bmpt/web/js/i18n.js";
 
-const source = readFileSync(new URL("../../src/ba_modding_toolkit/web/js/mod-add.js", import.meta.url), "utf8");
+const source = readFileSync(new URL("../../src/bmpt/web/js/mod-add.js", import.meta.url), "utf8");
 const flat = (o, p = "", out = {}) => { for (const [k, v] of Object.entries(o)) { if (v && typeof v === "object") flat(v, `${p}${k}.`, out); else out[`${p}${k}`] = v; } return out; };
 let seq = 0;
 async function harness({ locale = "en-US", added = [], button = "cancel", error = null, cancelled = false,
   compatibilityUpdate = false, compatibilityRemap = false,
   name = ({ variant }) => ({ base: "Mutsuki", dress: "Mutsuki (Dress)" })[variant] || variant } = {}) {
-  const strings = flat(JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${locale}.json`, import.meta.url), "utf8")));
+  const strings = flat(JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8")));
   const log = [], progress = [];
   const d = {
     T: (key, vars = {}) => (strings[`webui.${key}`] || key).replace(/\{(\w+)\}/g, (_, k) => vars[k] || ""),
@@ -57,7 +57,7 @@ test("a failed automatic switch remains visible on the current variant in all si
     const h = await harness({ locale, added: report });
     await h.mod.add(null, "base");
     const popup = h.log.find(([k]) => k === "popup")[1];
-    const strings = JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${locale}.json`, import.meta.url), "utf8")).webui;
+    const strings = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8")).webui;
     assert.deepEqual(popup.lines, [strings.add.applyFailed.replace("{reason}", strings.error.game_running)]);
     assert.ok(!h.log.some(([k]) => k === "notify"));
   }
@@ -69,7 +69,7 @@ test("adding keeps its initial action label without starting a repair in all loc
     const added = { added: [mod], compatibility: { m1: { issues: ["outdated"] } } };
     const h = await harness({ locale, added, compatibilityUpdate: true });
     await h.mod.add(["mod.bundle"], "base");
-    const strings = JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${locale}.json`, import.meta.url), "utf8")).webui.progress;
+    const strings = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8")).webui.progress;
     assert.deepEqual(h.log.filter(([k]) => k === "loading").map(([, options]) => options.label), [
       strings.add.replace("{name}", strings.mods)]);
     assert.ok(!h.log.some(([key]) => ["compatibility", "checked", "remap"].includes(key)));
@@ -153,7 +153,7 @@ test("inserted names are trimmed without spaces around full-width commas", async
 });
 
 test("file drops use the student actually shown and refresh after either confirmation", async () => {
-  const main = readFileSync(new URL("../../src/ba_modding_toolkit/web/js/main.js", import.meta.url), "utf8");
+  const main = readFileSync(new URL("../../src/bmpt/web/js/main.js", import.meta.url), "utf8");
   const drop = main.slice(main.indexOf('  on("drop",'), main.indexOf('  $("top-option").addEventListener'));
   for (const shown of ["ch0200", "aris", null]) {
     const h = await harness({ added: [{ target: "ch0200", core: "aris_maid_spr", kind: "spr" }] });
@@ -175,7 +175,7 @@ test("file drops use the student actually shown and refresh after either confirm
 });
 
 test("detail exposes the selected variant rather than its family or the route's requested variant", () => {
-  const detail = readFileSync(new URL("../../src/ba_modding_toolkit/web/js/detail.js", import.meta.url), "utf8");
+  const detail = readFileSync(new URL("../../src/bmpt/web/js/detail.js", import.meta.url), "utf8");
   const variant = detail.match(/^const variant = .*$/m)[0];
   const current = detail.match(/^export const currentVariant = .*$/m)[0].replace("export ", "");
   for (const selected of ["ch0200", "aris"]) {
@@ -248,7 +248,7 @@ test("duplicate popup names the stored mod and offers Go to or OK in every local
     assert.ok(!/[{}]/.test(opts.lines[0]));
     assert.ok(!h.log.some(([k]) => k === "changed"));
     assert.deepEqual(h.log.at(-1), ["go", "base"]);
-    const strings = JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${locale}.json`, import.meta.url), "utf8")).webui;
+    const strings = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8")).webui;
     assert.equal(opts.lines[0], strings.add.duplicate.replace("{name}", duplicate.label));
     assert.equal(opts.cancel, strings.picker.ok);
   }
@@ -272,7 +272,7 @@ test("duplicates on the current canonical variant show OK without navigation in 
     const h = await harness({ locale, added: { added: [], duplicates: [duplicate], installed: [] }, button: "ok" });
     await h.mod.add(null, "base");
     const opts = h.log.find(([k]) => k === "popup")[1];
-    const strings = JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${locale}.json`, import.meta.url), "utf8")).webui;
+    const strings = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8")).webui;
     assert.deepEqual(opts.lines, [strings.add.duplicate.replace("{name}", "My portrait")]);
     assert.equal(opts.ok, strings.picker.ok);
     assert.equal(opts.cancel, null);
@@ -304,7 +304,7 @@ test("one report combines special results, toasts plain local adds and navigates
   for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
     const h = await harness({ locale, added: report, button: "ok" });
     await h.mod.add(["mods.bundle"], " base ");
-    const strings = JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${locale}.json`, import.meta.url), "utf8")).webui;
+    const strings = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8")).webui;
     const popups = h.log.filter(([k]) => k === "popup");
     assert.equal(popups.length, 1);
     const opts = popups[0][1];
@@ -339,7 +339,7 @@ test("the footer skips a duplicate on the current variant when another result ca
 });
 
 test("picker callers pass the selected variant and refresh new entries or adoption without revisiting a departed page", async () => {
-  const detail = readFileSync(new URL("../../src/ba_modding_toolkit/web/js/detail.js", import.meta.url), "utf8");
+  const detail = readFileSync(new URL("../../src/bmpt/web/js/detail.js", import.meta.url), "utf8");
   const add = detail.slice(detail.indexOf("async function addMods("), detail.indexOf("// a job with a sticky"));
   const entry = { ...portrait, id: "m1" };
   for (const [report, changed] of [[[], false], [null, false], [[entry], true],
@@ -364,7 +364,7 @@ test("picker callers pass the selected variant and refresh new entries or adopti
 });
 
 test("drop callers accept report objects for new mods, duplicates and adoption without an empty-drop hint", async () => {
-  const main = readFileSync(new URL("../../src/ba_modding_toolkit/web/js/main.js", import.meta.url), "utf8");
+  const main = readFileSync(new URL("../../src/bmpt/web/js/main.js", import.meta.url), "utf8");
   const drop = main.slice(main.indexOf('  on("drop",'), main.indexOf('  $("top-option").addEventListener'));
   for (const report of [{ added: [portrait] }, { duplicates: [portrait] }, { installed: [portrait] }]) {
     let handler, refreshes = 0, invalidations = 0;
@@ -388,7 +388,7 @@ test("mixed generic and character additions show labels and localized kinds in a
       return "Mutsuki";
     } });
     await h.mod.add(["ui.bundle", "portrait.bundle"]);
-    const strings = JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${locale}.json`, import.meta.url), "utf8")).webui;
+    const strings = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8")).webui;
     const opts = h.log.find(([k]) => k === "popup")[1];
     assert.deepEqual(opts.lines.map((row) => row.text), [
       strings.add.part.replace("{name}", "UI Pack").replace("{kind}", strings.import.other),
@@ -420,7 +420,7 @@ test("generic additions and duplicates share Settings as their destination", asy
 });
 
 test("generic go-to opens Settings' Mods tab with the same preference updates as the settings button", async () => {
-  const main = readFileSync(new URL("../../src/ba_modding_toolkit/web/js/main.js", import.meta.url), "utf8");
+  const main = readFileSync(new URL("../../src/bmpt/web/js/main.js", import.meta.url), "utf8");
   const setup = main.slice(main.indexOf("  const settingsChanged ="), main.indexOf('  on("library.changed", libraryChanged);'));
   const changes = [], opened = [], destinations = [];
   let context;

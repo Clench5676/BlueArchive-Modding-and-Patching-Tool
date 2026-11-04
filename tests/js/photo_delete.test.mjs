@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {test} from 'node:test';
-const source=readFileSync(new URL('../../src/ba_modding_toolkit/web/js/photography/controller.js',import.meta.url),'utf8');
+const source=readFileSync(new URL('../../src/bmpt/web/js/photography/controller.js',import.meta.url),'utf8');
 const code=source.slice(source.indexOf('async function deletePhoto()'),source.indexOf('async function applyGame()'));
 test('gallery cards and their accessible Applied label consume only the target-scoped flag', async () => {
   const drawCode=source.slice(source.indexOf('async function galleryDraw()'),source.indexOf('async function deletePhoto()'));
@@ -17,7 +17,7 @@ test('gallery cards and their accessible Applied label consume only the target-s
 });
 function setup({used=false,used_here=used,used_elsewhere=false,official=false,answer='ok',fail=false,locale='en-US'}={}){
   const requests=[],prompts=[];let changed=0;
-  const strings=JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${locale}.json`,import.meta.url),'utf8')).webui;
+  const strings=JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`,import.meta.url),'utf8')).webui;
   const T=key=>key.split('.').reduce((v,key)=>v[key],strings),P=key=>T('photo.'+key);
   const env={T,P,call:async(method,params)=>{requests.push([method,params]);return method==='removalInfo'?{used,used_here,used_elsewhere,official}:{photos:[]};},
     Popup:{message:async options=>{prompts.push(options);return {button:answer};}},
@@ -34,7 +34,7 @@ for(const [locale,otherWarning] of Object.entries(otherVariantWarnings)){
   for(const [state,used_here,used_elsewhere] of [['shown skin',true,false],['other skin',false,true],['both skins',true,true]]){
     test(`${state} photo confirmation uses the approved localized wording in ${locale}`,async()=>{
       const h=setup({used:true,used_here,used_elsewhere,locale});await h.deletePhoto();
-      const ui=JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${locale}.json`,import.meta.url),'utf8')).webui;
+      const ui=JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`,import.meta.url),'utf8')).webui;
       assert.equal(h.prompts.length,1);
       assert.deepEqual(h.prompts[0].lines,[used_here?ui.error.asset_delete_confirm:otherWarning]);
       assert.equal(h.prompts[0].ok,ui.photo.delete);assert.equal(h.prompts[0].cancel,ui.popup.cancel);

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 
-const source = readFileSync(new URL('../../src/ba_modding_toolkit/web/js/prompts.js', import.meta.url), 'utf8');
+const source = readFileSync(new URL('../../src/bmpt/web/js/prompts.js', import.meta.url), 'utf8');
 const lifecycle = source.slice(source.indexOf('const shown = { drift:'), source.indexOf('async function cardsOf(')).replace(/^export /gm, '');
 const flush = async () => { for (let i = 0; i < 40; i++) await Promise.resolve(); };
 const deferred = () => { let resolve; return { promise: new Promise(r => { resolve = r; }), resolve }; };

@@ -10,11 +10,11 @@ from pathlib import Path
 
 import pytest
 
-from ba_modding_toolkit.config import Settings
-from ba_modding_toolkit.errors import ServiceError
-from ba_modding_toolkit.gameassets import lobby
-from ba_modding_toolkit.webui.services import Services
-from ba_modding_toolkit.webui.state import UiState
+from bmpt.config import Settings
+from bmpt.errors import ServiceError
+from bmpt.gameassets import lobby
+from bmpt.webui.services import Services
+from bmpt.webui.state import UiState
 
 # the real-install tests run only on an official game folder named by BAMT_TEST_GAME_DIR
 GAME_DIR = Path(os.environ.get("BAMT_TEST_GAME_DIR") or "/nonexistent/bamt-real-game")
@@ -536,7 +536,7 @@ def test_lobby_json_route_is_memory_only(tmp_path):
 
 class _FxGame(_Game):
     def lobby_fx_texture(self, core, tex_id):
-        from ba_modding_toolkit.gameassets import AssetNotFound
+        from bmpt.gameassets import AssetNotFound
         self.calls.append((core, tex_id))
         if tex_id != "cab-ab_-12":
             raise AssetNotFound(tex_id)
@@ -570,7 +570,7 @@ def test_lobby_fx_texture_route(tmp_path):
 
 class _SoundGame(_Game):
     def lobby_sound(self, core, clip_id):
-        from ba_modding_toolkit.gameassets import AssetNotFound
+        from bmpt.gameassets import AssetNotFound
         self.calls.append((core, clip_id))
         if clip_id != "cab-sfx_655":
             raise AssetNotFound(clip_id)
@@ -598,7 +598,7 @@ def test_lobby_sound_route(tmp_path):
 def real_game(tmp_path_factory):
     if not GAME_DIR.is_dir():
         pytest.skip("No local game install")
-    from ba_modding_toolkit.gameassets import AssetCache, GameAssets
+    from bmpt.gameassets import AssetCache, GameAssets
     from ba_modding_toolkit.searching import get_search_dirs
     root = tmp_path_factory.mktemp("lobby") / "cache"
     return GameAssets(get_search_dirs(GAME_DIR), AssetCache(root=root, allowed=True))
@@ -606,7 +606,7 @@ def real_game(tmp_path_factory):
 
 @pytest.mark.skipif(not GAME_DIR.is_dir(), reason="No local game install")
 def test_real_lobbies(real_game, monkeypatch):
-    from ba_modding_toolkit.gameassets.service import _SCHEMA
+    from bmpt.gameassets.service import _SCHEMA
     cache, puts = real_game.cache, []
     put = cache.put
 
@@ -640,7 +640,7 @@ def test_real_lobbies(real_game, monkeypatch):
 
 @pytest.mark.skipif(not GAME_DIR.is_dir(), reason="No local game install")
 def test_real_lobby_particles(real_game, monkeypatch):
-    from ba_modding_toolkit.gameassets import AssetNotFound
+    from bmpt.gameassets import AssetNotFound
     puts, put = [], real_game.cache.put
 
     def record(key, value, **kwargs):
@@ -726,7 +726,7 @@ def test_real_lobby_page_queues(real_game):
 
 @pytest.mark.skipif(not GAME_DIR.is_dir(), reason="No local game install")
 def test_real_lobby_idle_clips_and_sounds(real_game, monkeypatch):
-    from ba_modding_toolkit.gameassets import AssetNotFound
+    from bmpt.gameassets import AssetNotFound
     puts, put = [], real_game.cache.put
 
     def record(key, value, **kwargs):

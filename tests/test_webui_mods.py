@@ -14,23 +14,23 @@ from types import SimpleNamespace
 import pytest
 
 from ba_modding_toolkit.bundle import Bundle
-from ba_modding_toolkit.config import Settings
-from ba_modding_toolkit.data_paths import APP_DIR_NAME, OLD_APP_DIR_NAME, migrate_data_dir
-from ba_modding_toolkit.errors import ServiceError
+from bmpt.config import Settings
+from bmpt.data_paths import APP_DIR_NAME, OLD_APP_DIR_NAME, migrate_data_dir
+from bmpt.errors import ServiceError
 from ba_modding_toolkit.i18n import t
-from ba_modding_toolkit.gui import control as ctl
-from ba_modding_toolkit.library import safety
-from ba_modding_toolkit.library.judge import install_key, install_root
-from ba_modding_toolkit.library.profiles import Profiles
+from bmpt.gui import control as ctl
+from bmpt.library import safety
+from bmpt.library.judge import install_key, install_root
+from bmpt.library.profiles import Profiles
 from ba_modding_toolkit.naming import parse_filename
 from ba_modding_toolkit.utils import CRCUtils
-from ba_modding_toolkit.webui import classic as cl
-from ba_modding_toolkit.webui import main as webui_main
-from ba_modding_toolkit.webui.api import build_api
-from ba_modding_toolkit.webui.instance import InstanceLock, raise_running, read_info
-from ba_modding_toolkit.webui.server import WebApp
-from ba_modding_toolkit.webui.services import Services
-from ba_modding_toolkit.webui.state import UiState, data_path
+from bmpt.webui import classic as cl
+from bmpt.webui import main as webui_main
+from bmpt.webui.api import build_api
+from bmpt.webui.instance import InstanceLock, raise_running, read_info
+from bmpt.webui.server import WebApp
+from bmpt.webui.services import Services
+from bmpt.webui.state import UiState, data_path
 
 from test_classic_handoff import FakePopen, FakeProcesses, WsgiOpener, wait_for
 from test_library import FakeCatalog, FakeVariant, game_bundle, header_bundle, make_mod
@@ -220,7 +220,7 @@ def test_mods_state_and_status_refresh_never_compute_sizes(env, monkeypatch):
     def no_sizes(directory):
         pytest.fail(f"State refresh measured storage: {directory}")
 
-    monkeypatch.setattr("ba_modding_toolkit.library.service._folder_size", no_sizes)
+    monkeypatch.setattr("bmpt.library.service._folder_size", no_sizes)
     status = env.s.refresh_status()
     assert status is not None
     assert "builtSize" not in status and "originalsSize" not in status
@@ -232,7 +232,7 @@ def test_mods_state_and_status_refresh_never_compute_sizes(env, monkeypatch):
 
 @pytest.mark.parametrize("kind", ["built", "originals"])
 def test_mods_sizes_counts_only_the_requested_folder_on_demand(env, monkeypatch, kind):
-    from ba_modding_toolkit.library import service
+    from bmpt.library import service
 
     root = env.s.library.root
     for folder, payload in (("built", b"generated"), ("originals", b"official")):
@@ -1093,7 +1093,7 @@ def test_background_add_switches_and_rescans_with_durable_file_progress(env, mon
 
 @pytest.mark.parametrize('scan_finishes_first', [True, False])
 def test_background_add_replaces_a_scan_it_invalidates(env, monkeypatch, scan_finishes_first):
-    from ba_modding_toolkit.library.service import _View
+    from bmpt.library.service import _View
 
     env.s.set_scan_consent(True)
     assert env.s.scanner.wait_idle(5)
@@ -1265,14 +1265,14 @@ def test_first_add_baselines_existing_mods_before_storing_new_ones(env, monkeypa
             job = env.job("mods.toggle", enabled=False, expect=True)
         assert job.state == "done", job.error
     else:
-        from ba_modding_toolkit.library.models import CompareResult, RemapResult
+        from bmpt.library.models import CompareResult, RemapResult
 
         def accept_remap(library, preview):
             # Use synthetic output instead of rebuilding Unity assets; retain the real library write.
             rebuilt = library._entry(library._store({source.name: source}, "Repacked", "test", "spr"))
             return RemapResult(rebuilt, {}, CompareResult(rebuilt.id, []))
 
-        monkeypatch.setattr("ba_modding_toolkit.library.ModLibrary.accept_remap", accept_remap)
+        monkeypatch.setattr("bmpt.library.ModLibrary.accept_remap", accept_remap)
         job = env.job("actions.acceptRemap", preview="review")
         assert job.state == "done", job.error
     mods = env.s.library.mods()
@@ -1409,7 +1409,7 @@ def test_mod_alias_rpc_returns_the_saved_name_and_publishes_metadata_change(env)
 
 def test_remap_rpc_is_read_only_and_accept_publishes_a_new_library_mod(env, monkeypatch):
     from dataclasses import replace
-    from ba_modding_toolkit.library.models import CompareResult, RemapResult
+    from bmpt.library.models import CompareResult, RemapResult
 
     entry = env.add(env.spr)
     rebuilt = replace(entry, id="repacked", label="Repacked")
@@ -1429,7 +1429,7 @@ def test_remap_rpc_is_read_only_and_accept_publishes_a_new_library_mod(env, monk
     job = env.job("actions.acceptRemap", preview="review")
     assert job.state == "done" and job.writes == "library"
     assert job.result == result.to_json()
-    from ba_modding_toolkit.webui.services import _changed_of
+    from bmpt.webui.services import _changed_of
     assert _changed_of(result) == {"cores": [entry.core], "kinds": [entry.kind], "mods": True}
 
 

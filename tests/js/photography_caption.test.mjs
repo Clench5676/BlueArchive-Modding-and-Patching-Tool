@@ -19,13 +19,13 @@ globalThis.document = {
   documentElement: { lang: "en-US", appendChild() {} },
 };
 globalThis.getComputedStyle = () => ({ getPropertyValue: () => "" });
-const NGUI = await import("../../src/ba_modding_toolkit/web/js/ngui.js");
-const { TOOLBAR_CAPTION, OCCLUSION_BUTTON } = await import("../../src/ba_modding_toolkit/web/js/photography/camera.js");
+const NGUI = await import("../../src/bmpt/web/js/ngui.js");
+const { TOOLBAR_CAPTION, OCCLUSION_BUTTON } = await import("../../src/bmpt/web/js/photography/camera.js");
 const S = 1920 / 2960;
 const LOCALES = ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"];
 
 for (const locale of LOCALES) test(`the toolbar captions share one size and fit the 196 x 76 bodies in ${locale}`, async () => {
-  const ui = JSON.parse(await readFile(new URL(`../../src/ba_modding_toolkit/locales/${locale}.json`, import.meta.url), "utf8")).webui.photo;
+  const ui = JSON.parse(await readFile(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8")).webui.photo;
   document.documentElement.lang = locale;
   const captions = [ui.occlusion, ui.gridOn, ui.gridOff];
   assert.ok(captions.every(Boolean));
@@ -57,7 +57,7 @@ test("the button keeps its compact box while its caption wraps", () => {
 });
 
 test("the toolbar button code no longer depends on computed style", async () => {
-  const source = await readFile(new URL("../../src/ba_modding_toolkit/web/js/photography/controller.js", import.meta.url), "utf8");
+  const source = await readFile(new URL("../../src/bmpt/web/js/photography/controller.js", import.meta.url), "utf8");
   assert.doesNotMatch(source, /getComputedStyle/);
   assert.match(source, /inkShift/);
   assert.match(source, /fitGroup/);

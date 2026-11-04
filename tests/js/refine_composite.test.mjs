@@ -2,9 +2,9 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 import {test} from 'node:test';
-import {poseSetup} from '../../src/ba_modding_toolkit/web/js/refine-composite.js';
+import {poseSetup} from '../../src/bmpt/web/js/refine-composite.js';
 const c=vm.createContext({console,TextDecoder,TextEncoder,Float32Array,Uint8Array,Uint16Array,Int16Array,Int32Array,ArrayBuffer,DataView});
-vm.runInContext(readFileSync(new URL('../../src/ba_modding_toolkit/web/vendor/spine-player-4.2.120/spine-player.min.js',import.meta.url),'utf8'),c);
+vm.runInContext(readFileSync(new URL('../../src/bmpt/web/vendor/spine-player-4.2.120/spine-player.min.js',import.meta.url),'utf8'),c);
 const S=c.spine;
 const atlas=rotation=>`page.png\nsize: 32,32\npma: true\nbody\n bounds: 10,10,6,4\n rotate: ${rotation}\n offsets: 1,2,9,12\n index: 2\n`;
 function fixture(type='region') {
@@ -39,7 +39,7 @@ test('runtime clipping, hidden slots and explicit null replacement',()=>{
  assert.deepEqual(poseSetup(S,atlas(0),fixture(),{back:null}).attachments.map(a=>a.slot),['front']);
 });
 
-import {poseTracks, listPoses} from '../../src/ba_modding_toolkit/web/js/refine-composite.js';
+import {poseTracks, listPoses} from '../../src/bmpt/web/js/refine-composite.js';
 function animated() {
  const f=fixture('mesh');
  f.animations={Idle_01:{bones:{root:{translate:[{x:0,y:0},{time:2,x:8,y:4}]}}},

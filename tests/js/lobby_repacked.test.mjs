@@ -3,13 +3,13 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import vm from "node:vm";
-import { artBounds, containingView, overlaps, resumeRest, settle, validRect, worldBounds } from "../../src/ba_modding_toolkit/web/js/lobby-health.js";
-import { lobbyIdle } from "../../src/ba_modding_toolkit/web/js/rest-pose.js";
-import * as Lobby from "../../src/ba_modding_toolkit/web/js/lobby.js";
-import * as Pins from "../../src/ba_modding_toolkit/web/js/skeleton-pins.js";
+import { artBounds, containingView, overlaps, resumeRest, settle, validRect, worldBounds } from "../../src/bmpt/web/js/lobby-health.js";
+import { lobbyIdle } from "../../src/bmpt/web/js/rest-pose.js";
+import * as Lobby from "../../src/bmpt/web/js/lobby.js";
+import * as Pins from "../../src/bmpt/web/js/skeleton-pins.js";
 
 const context = vm.createContext({ console, TextDecoder, TextEncoder, Float32Array, Uint8Array, Uint16Array, Int16Array, Int32Array, ArrayBuffer, DataView });
-vm.runInContext(readFileSync(new URL("../../src/ba_modding_toolkit/web/vendor/spine-player-4.2.120/spine-player.min.js", import.meta.url), "utf8"), context);
+vm.runInContext(readFileSync(new URL("../../src/bmpt/web/vendor/spine-player-4.2.120/spine-player.min.js", import.meta.url), "utf8"), context);
 globalThis.spine = context.spine;
 const fixture = (name, extension) => readFileSync(new URL(`../fixtures/lobby/${name}.${extension}`, import.meta.url), "utf8");
 function player(name, change = () => {}) {
@@ -80,7 +80,7 @@ test("repacked bounds and prefab scale frame posed vertices, independent of the 
 });
 
 test("the full lobby measurement frames renamed idle art beyond the official camera and clamps a stale touch bone", () => {
-  const source = readFileSync(new URL("../../src/ba_modding_toolkit/web/js/lobby.js", import.meta.url), "utf8");
+  const source = readFileSync(new URL("../../src/bmpt/web/js/lobby.js", import.meta.url), "utf8");
   const code = source.slice(source.indexOf("const CELL ="), source.indexOf("// switch between the left view"))
     .replaceAll("export function", "function").replaceAll("export const", "const");
   const G = { x: -1480, y: -832.5, w: 2960, h: 1665 };
@@ -104,7 +104,7 @@ test("the full lobby measurement frames renamed idle art beyond the official cam
 });
 
 test("revisited revision geometry matches cold painting exactly and cannot be mutated by callers", () => {
-  const source = readFileSync(new URL("../../src/ba_modding_toolkit/web/js/lobby.js", import.meta.url), "utf8");
+  const source = readFileSync(new URL("../../src/bmpt/web/js/lobby.js", import.meta.url), "utf8");
   const code = source.slice(source.indexOf("const CELL ="), source.indexOf("// --- the zoom-out limit"))
     .replaceAll("export function", "function");
   const G = { x: -1480, y: -832.5, w: 2960, h: 1665 }, revision = "a".repeat(64);
@@ -125,7 +125,7 @@ test("revisited revision geometry matches cold painting exactly and cannot be mu
 });
 
 test("geometry identity covers revisions, transforms, skins, rest poses, pins, framing and camera", () => {
-  const source = readFileSync(new URL("../../src/ba_modding_toolkit/web/js/lobby.js", import.meta.url), "utf8");
+  const source = readFileSync(new URL("../../src/bmpt/web/js/lobby.js", import.meta.url), "utf8");
   const helpers = source.slice(source.indexOf("function rectCache("), source.indexOf("// the grid: three game views"));
   const h = new Function(`let current;
     ${helpers}
@@ -152,7 +152,7 @@ test("geometry identity covers revisions, transforms, skins, rest poses, pins, f
 });
 
 test("geometry caches bound memory, evict least recently used entries and clone typed masks", () => {
-  const source = readFileSync(new URL("../../src/ba_modding_toolkit/web/js/lobby.js", import.meta.url), "utf8");
+  const source = readFileSync(new URL("../../src/bmpt/web/js/lobby.js", import.meta.url), "utf8");
   const rectCache = new Function(`${source.slice(source.indexOf("function rectCache("), source.indexOf("const paintedRects ="))}
     return rectCache;`)();
   const value = { any: new Uint8Array(16).fill(1), cells: { i0: 1 }, whole: { cells: { i0: 2 } } };

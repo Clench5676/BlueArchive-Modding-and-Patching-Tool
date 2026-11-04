@@ -24,7 +24,7 @@ globalThis.document = { createElement: () => new El(), documentElement: { lang: 
 globalThis.addEventListener = () => {};
 const blobs = new Map();
 URL.createObjectURL = (blob) => { const url = `blob:${blobs.size}`; blobs.set(url, blob); return url; };
-const { ITEMS } = await import("../../src/ba_modding_toolkit/web/js/nav-items.js");
+const { ITEMS } = await import("../../src/bmpt/web/js/nav-items.js");
 const meta = Object.fromEntries(ITEMS.map((item, i) => [item.icon, { width: 1100 + i * 130, height: 1400 - i * 120 }]));
 Object.assign(meta, { Common_Top_Home_Btn: { width: 62, height: 59 }, Common_Top_Option_Btn: { width: 60, height: 62 },
   Common_Square_Bg: { width: 4, height: 49 } });
@@ -57,9 +57,9 @@ globalThis.fetch = async (url) => ({ ok: true, json: async () => {
   if (url.endsWith("UICharacterCollection.json")) return collection;
   assert.fail(url);
 } });
-const { renderNav } = await import("../../src/ba_modding_toolkit/web/js/nav.js");
-const { setStrings } = await import("../../src/ba_modding_toolkit/web/js/i18n.js");
-const { S } = await import("../../src/ba_modding_toolkit/web/js/util.js");
+const { renderNav } = await import("../../src/bmpt/web/js/nav.js");
+const { setStrings } = await import("../../src/bmpt/web/js/i18n.js");
+const { S } = await import("../../src/bmpt/web/js/util.js");
 const flat = (value, prefix = "", out = {}) => {
   for (const [key, item] of Object.entries(value)) {
     if (typeof item === "object") flat(item, `${prefix}${key}.`, out); else out[prefix + key] = item;
@@ -69,7 +69,7 @@ const flat = (value, prefix = "", out = {}) => {
 
 for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) test(`all seven nav entries fit their buttons with a shared icon box and label baseline in ${locale}`, async () => {
   document.documentElement.lang = locale;
-  setStrings(locale, flat(JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${locale}.json`, import.meta.url), "utf8"))));
+  setStrings(locale, flat(JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8"))));
   await renderNav(1, { game: true });
   assert.equal(host.children.length, 7);
   const labelTops = [], iconTops = [];
@@ -114,7 +114,7 @@ test("Home, settings and divider retain the game's native sibling spacing", asyn
 });
 
 test('Hall reflows Settings into Home and restores sibling geometry across repeated transitions',async()=>{
-  const {setTopActions}=await import('../../src/ba_modding_toolkit/web/js/nav.js');
+  const {setTopActions}=await import('../../src/bmpt/web/js/nav.js');
   await renderNav(-1,{game:true});
   const original=structuredClone(Object.fromEntries(Object.entries(top).map(([key,node])=>[key,node.style])));
   const centre=style=>[parseFloat(style.right)+parseFloat(style.width)/2,parseFloat(style.top)+parseFloat(style.height)/2];
@@ -130,7 +130,7 @@ test('Hall reflows Settings into Home and restores sibling geometry across repea
   }
 });
 test('native-control clearance is preserved at fractional window scales',async()=>{
-  const {topActionLayout,nativeRightClearance}=await import('../../src/ba_modding_toolkit/web/js/top-action-layout.js');
+  const {topActionLayout,nativeRightClearance}=await import('../../src/bmpt/web/js/top-action-layout.js');
   const boxes={home:[44,7,62*S,59*S],option:[158,7,60*S,62*S],line:[120,12,4*S,49*S]};
   for(const scale of [.5,.75,1,1.25,1.5,2]){
     const stage={left:0,top:0,right:1920*scale,width:1920*scale},controls={left:stage.right-108,top:0,bottom:24,width:108};
@@ -143,7 +143,7 @@ test('native-control clearance is preserved at fractional window scales',async()
 });
 
 test('page names remain accessible while Hall removes Back and leaving restores the current route',async()=>{
-  const {setTitle,setTopActions}=await import('../../src/ba_modding_toolkit/web/js/nav.js');
+  const {setTitle,setTopActions}=await import('../../src/bmpt/web/js/nav.js');
   const classes=new Set();
   top['.topbar']=Object.assign(new El(),{classList:{toggle(name,on){on?classes.add(name):classes.delete(name);}}});
   const back=top['.topbar .back'],action=()=>{};
@@ -162,13 +162,13 @@ test('page names remain accessible while Hall removes Back and leaving restores 
 });
 
 for(const locale of ['en-US','zh-CN','zh-TW','ja-JP','ko-KR','th-TH'])test(`every page retains its accessible name without a visible title in ${locale}`,async()=>{
-  const {setTitle,setTopActions}=await import('../../src/ba_modding_toolkit/web/js/nav.js');
-  const ui=JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${locale}.json`,import.meta.url))).webui;
+  const {setTitle,setTopActions}=await import('../../src/bmpt/web/js/nav.js');
+  const ui=JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`,import.meta.url))).webui;
   for(const [name,hall] of [[ui.top.students,false],[ui.hall.title,true],[ui.nav.import,false]]){
     setTopActions(hall);setTitle(name,()=>{});
     assert.equal(top['.topbar'].attrs['aria-label'],name);
     assert.equal(top['.topbar .back'].hidden,hall);
   }
-  const html=readFileSync(new URL('../../src/ba_modding_toolkit/web/index.html',import.meta.url),'utf8');
+  const html=readFileSync(new URL('../../src/bmpt/web/index.html',import.meta.url),'utf8');
   assert.doesNotMatch(html,/class="title"/);
 });

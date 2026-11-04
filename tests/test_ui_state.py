@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 
 import ba_modding_toolkit
-from ba_modding_toolkit.webui.state import ALIAS_LENGTH, ALIAS_MAX, FLAGS, UiState, _replace, data_path
+from bmpt.webui.state import ALIAS_LENGTH, ALIAS_MAX, FLAGS, UiState, _replace, data_path
 
 
 def test_instances_keep_each_others_keys(tmp_path):
@@ -136,7 +136,7 @@ def test_seen_mods_unreadable_state_suppresses_marks_without_repair(tmp_path, mo
             def locked(*args):
                 raise OSError("State cannot be locked")
 
-            monkeypatch.setattr("ba_modding_toolkit.webui.state._file_lock", locked)
+            monkeypatch.setattr("bmpt.webui.state._file_lock", locked)
     before = path.read_bytes()
 
     def unexpected_baseline():
@@ -155,7 +155,7 @@ def test_seen_mods_failed_baseline_write_is_unknown_and_can_be_retried(tmp_path,
         raise PermissionError("State cannot be replaced")
 
     with monkeypatch.context() as patch:
-        patch.setattr("ba_modding_toolkit.webui.state._replace", unwritable)
+        patch.setattr("bmpt.webui.state._replace", unwritable)
         assert state.seen_mods(lambda: ["old"]) is None
     assert not path.exists() and not list(tmp_path.glob("*.tmp"))
     assert state.seen_mods(lambda: ["old"]) == {"old"}
@@ -295,7 +295,7 @@ def test_own_aliases_are_cleaned(tmp_path):
 
 WRITER = """
 import sys
-from ba_modding_toolkit.webui.state import UiState
+from bmpt.webui.state import UiState
 path, prefix, count = sys.argv[1], sys.argv[2], int(sys.argv[3])
 state = UiState(path)
 for i in range(count):

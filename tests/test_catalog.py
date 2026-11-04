@@ -11,9 +11,9 @@ import time
 
 import pytest
 
-from ba_modding_toolkit.catalog import Catalog, DEFAULT_DATA
-from ba_modding_toolkit.catalog._names import BASE_SHORT, LANGUAGES
-from ba_modding_toolkit.errors import ServiceError
+from bmpt.catalog import Catalog, DEFAULT_DATA
+from bmpt.catalog._names import BASE_SHORT, LANGUAGES
+from bmpt.errors import ServiceError
 from ba_modding_toolkit.naming import parse_filename
 
 FIXTURES = Path(__file__).parent / "fixtures" / "catalog"
@@ -519,7 +519,7 @@ def test_installed_collection_validation_reports_absent_textures(generator, ship
 
 @pytest.mark.skipif(not GAME_DIR.is_dir(), reason="No local game install for integration")
 def test_installed_recruitable_follows_portraits_then_flags(shipped: dict, installed_game_dir: Path, tmp_path: Path):
-    from ba_modding_toolkit.gameassets import AssetCache, GameAssets
+    from bmpt.gameassets import AssetCache, GameAssets
     from ba_modding_toolkit.searching import get_search_dirs
 
     # allowed=False: the collection index stays in memory, nothing is written

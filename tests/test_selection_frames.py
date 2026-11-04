@@ -4,9 +4,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from ba_modding_toolkit.gameassets.selection_frames import ROOT, SLOT, export_effects
-from ba_modding_toolkit.gameassets.layouts import export_layout, subtree
-from ba_modding_toolkit.gameassets import particles
+from bmpt.gameassets.selection_frames import ROOT, SLOT, export_effects
+from bmpt.gameassets.layouts import export_layout, subtree
+from bmpt.gameassets import particles
 from test_gameassets import _fake_prefab
 from texture_helpers import fake_texture
 
@@ -60,14 +60,14 @@ def test_frame_export_resolves_the_authored_particle_and_material_timing(blue):
 
 
 def test_frame_texture_export_rejects_ids_outside_the_prefab(tmp_path, monkeypatch):
-    from ba_modding_toolkit.gameassets import AssetCache, AssetNotFound, GameAssets
+    from bmpt.gameassets import AssetCache, AssetNotFound, GameAssets
     from PIL import Image
     game = GameAssets([tmp_path], AssetCache(root=tmp_path / 'cache'))
     slot = {'frameEffect': {'material': {'tex': {'_Tex_Main': {'id': 'cab-test_42'}}}}}
     monkeypatch.setattr(game, 'layout', lambda root, path: slot)
     monkeypatch.setattr(game, '_resolve_cabs', lambda wanted: {'cab-test': str(tmp_path / 'fake.bundle')})
     from contextlib import contextmanager
-    from ba_modding_toolkit.gameassets import service
+    from bmpt.gameassets import service
     (tmp_path / 'fake.bundle').write_bytes(b'fake')
     reads = []
     @contextmanager

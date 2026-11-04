@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { KEYS, deltaOf, pacer, typing } from "../../src/ba_modding_toolkit/web/js/step-keys.js";
+import { KEYS, deltaOf, pacer, typing } from "../../src/bmpt/web/js/step-keys.js";
 
 const key = (k, extra = {}) => ({ key: k, keyCode: 0, repeat: false, isComposing: false, defaultPrevented: false,
   altKey: false, ctrlKey: false, metaKey: false, shiftKey: false, ...extra });

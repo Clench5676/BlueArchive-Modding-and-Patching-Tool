@@ -11,9 +11,9 @@ import numpy as np
 from PIL import Image, ImageDraw
 import pytest
 
-from ba_modding_toolkit.refine_composite import compose
-from ba_modding_toolkit.refine_cut import Pose
-from ba_modding_toolkit.refine_inputs import (InputParameters, InputGateError, choose_key,
+from bmpt.refine_composite import compose
+from bmpt.refine_cut import Pose
+from bmpt.refine_inputs import (InputParameters, InputGateError, choose_key,
     flatten, key_image, templates, prompt, plan_inputs, load_plan, merge_inputs, finish, main, expression_inputs)
 
 
@@ -214,7 +214,7 @@ def test_key_quality_gate_rejects_destructive_alpha_snapping(tmp_path):
 
 def test_real_synthetic_bundle_chain_packs_every_page_and_preserves_metadata(tmp_path):
     from test_atlas_remap import atlas_text, write_bundle
-    from ba_modding_toolkit.atlas_remap import read_inputs
+    from bmpt.atlas_remap import read_inputs
     plan,folder,_,pages = make_plan(tmp_path)
     text = atlas_text([(n,im.size,[(Path(n).stem,-1,(0,0),im.size,im.size,(0,0),0)]) for n,im in pages.items()])
     filename = 'assets-_mx-spinecharacters-test_spr-_mxdependency-2026-01-01_003_assets_all_123456.bundle'
@@ -273,7 +273,7 @@ def test_manifest_plan_and_finish_commands(tmp_path, capsys):
 def test_official_cycling_input_identity(tmp_path):
     if not os.environ.get('BAMT_TEST_GAME_DIR'):
         pytest.skip('Set BAMT_TEST_GAME_DIR to a verified official development view')
-    from ba_modding_toolkit.atlas_remap import read_inputs, texture_key
+    from bmpt.atlas_remap import read_inputs, texture_key
     from ba_modding_toolkit.searching import get_search_dirs
     name = 'shiroko_ridingsuit_spr'
     paths = sorted(p for d in get_search_dirs(Path(os.environ['BAMT_TEST_GAME_DIR'])) for p in d.glob(f'assets-_mx-spinecharacters-{name}-*.bundle'))

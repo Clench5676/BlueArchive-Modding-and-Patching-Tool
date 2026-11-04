@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-THUMBS = Path(__file__).resolve().parents[1] / "src" / "ba_modding_toolkit" / "web" / "js" / "thumbs.js"
+THUMBS = Path(__file__).resolve().parents[1] / "src" / "bmpt" / "web" / "js" / "thumbs.js"
 NODE = shutil.which("node")
 
 

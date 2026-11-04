@@ -8,8 +8,8 @@ from pathlib import Path
 
 import pytest
 
-from ba_modding_toolkit.errors import ServiceError
-from ba_modding_toolkit.library import service, storage
+from bmpt.errors import ServiceError
+from bmpt.library import service, storage
 
 from test_library import game_bundle, make_mod, reload_library, setup_library
 

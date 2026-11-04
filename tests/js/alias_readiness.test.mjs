@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-const source = (name) => readFileSync(new URL(`../../src/ba_modding_toolkit/web/js/${name}.js`, import.meta.url), "utf8");
+const source = (name) => readFileSync(new URL(`../../src/bmpt/web/js/${name}.js`, import.meta.url), "utf8");
 const deferred = () => { let resolve; const promise = new Promise((r) => { resolve = r; }); return { promise, resolve }; };
 const flush = async () => { for (let i = 0; i < 20; i++) await Promise.resolve(); };
 

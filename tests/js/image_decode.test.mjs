@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { cssUrls, decodeAll, imageUrls, imageDecoder } from "../../src/ba_modding_toolkit/web/js/image-decode.js";
+import { cssUrls, decodeAll, imageUrls, imageDecoder } from "../../src/bmpt/web/js/image-decode.js";
 
 // an element as the page has it: only its inline style matters
 const el = (backgroundImage) => ({ style: { backgroundImage } });

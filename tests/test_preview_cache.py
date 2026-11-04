@@ -17,14 +17,14 @@ from types import SimpleNamespace
 import pytest
 from PIL import Image
 
-from ba_modding_toolkit.config import Settings
-from ba_modding_toolkit.gameassets import AssetCache, AssetNotFound, GameAssets
-from ba_modding_toolkit.gameassets import model, service
-from ba_modding_toolkit.gameassets.cache import PreviewCache, pack_preview_files, unpack_preview_files
-from ba_modding_toolkit.webui.api import build_api
-from ba_modding_toolkit.webui.server import AssetResponse, WebApp
-from ba_modding_toolkit.webui.services import Services
-from ba_modding_toolkit.webui.state import UiState
+from bmpt.config import Settings
+from bmpt.gameassets import AssetCache, AssetNotFound, GameAssets
+from bmpt.gameassets import model, service
+from bmpt.gameassets.cache import PreviewCache, pack_preview_files, unpack_preview_files
+from bmpt.webui.api import build_api
+from bmpt.webui.server import AssetResponse, WebApp
+from bmpt.webui.services import Services
+from bmpt.webui.state import UiState
 from ba_modding_toolkit.searching import get_search_dirs
 from test_webui import FakeCatalog, FakeGame, FakeLibrary, call, rpc
 

@@ -13,12 +13,13 @@ from pathlib import Path
 import pytest
 
 import test_webui_mods
-from ba_modding_toolkit import core, data_paths, i18n
+from ba_modding_toolkit import core, i18n
+from bmpt import data_paths
 from ba_modding_toolkit.bundle import Bundle
-from ba_modding_toolkit.errors import ServiceError
-from ba_modding_toolkit.library import ModLibrary, safety, service
-from ba_modding_toolkit.library.service import LEGACY_REMAP
-from ba_modding_toolkit.webui.services import LIBRARY_ITEMS
+from bmpt.errors import ServiceError
+from bmpt.library import ModLibrary, safety, service
+from bmpt.library.service import LEGACY_REMAP
+from bmpt.webui.services import LIBRARY_ITEMS
 
 from test_library import FakeCatalog as LibraryCatalog
 from test_library import game_bundle, header_bundle, make_mod
@@ -26,7 +27,7 @@ from test_library_profiles import OFFICIAL, World, expect_error, world  # noqa: 
 from test_webui import FakeFamily, FakeGame, FakeVariant
 from test_webui_mods import Env, rpc
 
-LOCALES = Path(__file__).resolve().parents[1] / "src" / "ba_modding_toolkit" / "locales"
+LOCALES = Path(__file__).resolve().parents[1] / "src" / "bmpt" / "locales"
 
 
 # --- helpers ---
@@ -128,7 +129,7 @@ BAD_RECORDS = [
 def test_every_kind_of_bad_record_is_held_and_written_back_unchanged(world, bad, caplog):
     mod = world.add(world.spr)
     edit_state(world, lambda data: data["mods"].insert(0, copy.deepcopy(bad)))
-    with caplog.at_level(logging.WARNING, logger="ba_modding_toolkit.library.service"):
+    with caplog.at_level(logging.WARNING, logger="bmpt.library.service"):
         library = world.reload()
     assert any("Holding a library record" in record.getMessage() for record in caplog.records)
     assert [m.id for m in library.mods()] == [mod.id]
@@ -182,7 +183,7 @@ def test_an_unreadable_file_reads_its_prev_and_is_kept_as_bad_at_the_next_write(
     prev = (world.root / "state.json.prev").read_bytes()
     garbage = b'{"version": 1, "mods": [tru'
     state_file(world).write_bytes(garbage)
-    with caplog.at_level(logging.WARNING, logger="ba_modding_toolkit.library.service"):
+    with caplog.at_level(logging.WARNING, logger="bmpt.library.service"):
         library = world.reload()
     assert any("previous" in record.getMessage() for record in caplog.records)
     assert [m.id for m in library.mods()] == [mod.id] and library.favorites() == {"test"}  # what prev held
@@ -999,7 +1000,7 @@ def test_reads_try_a_failed_recovery_again_only_when_the_journals_change_or_the_
 def test_a_failure_is_logged_once_not_at_every_attempt(world, caplog, monkeypatch):
     library, mods = pending(world)
     monkeypatch.setattr(service, "RECOVERY_RETRY", 0.0)
-    with caplog.at_level(logging.WARNING, logger="ba_modding_toolkit.library.service"):
+    with caplog.at_level(logging.WARNING, logger="bmpt.library.service"):
         caplog.clear()
         for _ in range(5):
             library.mods()
@@ -1130,7 +1131,7 @@ def pin_of(world: World, folder: Path):
 
 def crash_during_removal(world: World, mod, monkeypatch) -> Path:
     """Remove an applied mod and die while undoing the removal: the deletion journal stays pending."""
-    from ba_modding_toolkit.library import asset_delete
+    from bmpt.library import asset_delete
 
     def die(self):
         raise Crash()

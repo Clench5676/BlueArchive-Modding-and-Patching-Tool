@@ -7,7 +7,7 @@ globalThis.document={createElement:()=>({getContext(){return this.context ||= {d
 URL.createObjectURL=canvas=>{const url=`blob:${blobs.size}`;blobs.set(url,canvas);return url;};
 globalThis.Image=class {set src(url){this.naturalWidth=343;this.naturalHeight=105;queueMicrotask(()=>this.onload?.());}decode(){return Promise.resolve();}};
 globalThis.requestAnimationFrame=fn=>queueMicrotask(fn);
-const {barImage,barDensity,BAR_CUTS,BAR_BORDER_SCALES,paintTopBar,createTopBarPainter}=await import('../../src/ba_modding_toolkit/web/js/top-bar-background.js');
+const {barImage,barDensity,BAR_CUTS,BAR_BORDER_SCALES,paintTopBar,createTopBarPainter}=await import('../../src/bmpt/web/js/top-bar-background.js');
 for(const scale of [.5,.625,.75,5/6,1,1.25,1.5,1.75,2])for(const dpi of [1,1.25,1.5,2,3])test(`top bar is one contiguous raster at scale ${scale}, DPI ${dpi}`,async()=>{
   // Verified development view: UICharacterCollection/BG_W/Bg is 2996 x 166;
   // its Common_Top_Menu_Bg atlas crop is 343 x 105, cuts 310 left / 20 right.
@@ -36,7 +36,7 @@ test('painting changes only the background; toolbar caps, shadow and layout rema
   await paintTopBar(bar,.5);
   assert.match(bar.style.backgroundImage,/^url\("blob:/);
   assert.deepEqual(Object.keys(bar.style),['backgroundImage']);
-  const css=readFileSync(new URL('../../src/ba_modding_toolkit/web/css/app.css',import.meta.url),'utf8');
+  const css=readFileSync(new URL('../../src/bmpt/web/css/app.css',import.meta.url),'utf8');
   const rule=css.slice(css.indexOf('.topbar {'),css.indexOf('.back {'));
   assert.doesNotMatch(rule,/border-image/);assert.match(rule,/border-width: 0 11px 0 172px/);
   assert.match(rule,/background-origin: border-box/);
@@ -44,7 +44,7 @@ test('painting changes only the background; toolbar caps, shadow and layout rema
   assert.doesNotMatch(rule,/drop-shadow|box-shadow|filter\s*:/);
 });
 test('the top bar and the Enable Mods switch draw no shadow of their own',()=>{
-  const css=readFileSync(new URL('../../src/ba_modding_toolkit/web/css/app.css',import.meta.url),'utf8').replace(/\/\*[\s\S]*?\*\//g,'');
+  const css=readFileSync(new URL('../../src/bmpt/web/css/app.css',import.meta.url),'utf8').replace(/\/\*[\s\S]*?\*\//g,'');
   for(const selector of ['.topbar','.ms-toggle']){
     const rule=css.match(new RegExp(`(?:^|\\n)${selector.replace('.','\\.')}\\s*\\{[^}]*\\}`));
     assert.ok(rule,selector);assert.doesNotMatch(rule[0],/drop-shadow|box-shadow|filter\s*:/,selector);
@@ -52,7 +52,7 @@ test('the top bar and the Enable Mods switch draw no shadow of their own',()=>{
 });
 test('remaining switch and scrollbar paint paths do not create CSS border-image slices',()=>{
   for(const name of ['mod-switch-skin.js','scrollbar.js']){
-    const js=readFileSync(new URL(`../../src/ba_modding_toolkit/web/js/${name}`,import.meta.url),'utf8').replace(/^\s*\/\/.*$/gm,'');
+    const js=readFileSync(new URL(`../../src/bmpt/web/js/${name}`,import.meta.url),'utf8').replace(/^\s*\/\/.*$/gm,'');
     assert.doesNotMatch(js,/borderImage|border-image/);
   }
 });

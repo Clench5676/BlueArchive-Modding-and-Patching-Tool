@@ -8,8 +8,8 @@ import json
 import pytest
 
 from ba_modding_toolkit import core
-from ba_modding_toolkit.errors import ServiceError
-from ba_modding_toolkit.library import service
+from bmpt.errors import ServiceError
+from bmpt.library import service
 from ba_modding_toolkit.models import FilePair, ModUpdateResult
 
 from test_library import game_bundle, header_bundle, make_mod, reload_library, setup_library

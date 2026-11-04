@@ -34,7 +34,7 @@ globalThis.fetch = async (url) => {
   return { ok: !!body, status: body ? 200 : 404, json: async () => body };
 };
 // detail.js keeps detailsBody private: this loader hook exposes it to this test only
-const DETAIL = new URL("../../src/ba_modding_toolkit/web/js/detail.js", import.meta.url).href;
+const DETAIL = new URL("../../src/bmpt/web/js/detail.js", import.meta.url).href;
 register(`data:text/javascript,${encodeURIComponent(`
 export async function load(url, ctx, next) {
   const result = await next(url, ctx);
@@ -44,7 +44,7 @@ export async function load(url, ctx, next) {
   }
   return result;
 }`)}`);
-const JS = "../../src/ba_modding_toolkit/web/js/";
+const JS = "../../src/bmpt/web/js/";
 const NGUI = await import(`${JS}ngui.js`);
 const Tokens = await import(`${JS}ui-tokens.js`);
 const Popup = await import(`${JS}popup.js`);
@@ -60,7 +60,7 @@ const { STATS_BOX: B, POPUP } = Tokens;
 
 // longest first
 const LOCALES = ["en-US", "th-TH", "ja-JP", "ko-KR", "zh-TW", "zh-CN"];
-const webui = (locale) => JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${locale}.json`, import.meta.url), "utf8")).webui;
+const webui = (locale) => JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8")).webui;
 const flat = (value, prefix = "webui") => Object.entries(value).flatMap(([key, text]) => typeof text === "object" ? flat(text, `${prefix}.${key}`) : [[`${prefix}.${key}`, text]]);
 const fill = (text, params) => text.replace(/\{(\w+)\}/g, (_, key) => params[key] ?? "");
 const leaves = (value) => typeof value === "string" ? [value] : Object.values(value).flatMap(leaves);

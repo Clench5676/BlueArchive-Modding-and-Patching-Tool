@@ -3,9 +3,9 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import * as Tokens from "../../src/ba_modding_toolkit/web/js/ui-tokens.js";
+import * as Tokens from "../../src/bmpt/web/js/ui-tokens.js";
 
-const WEB = new URL("../../src/ba_modding_toolkit/web/", import.meta.url);
+const WEB = new URL("../../src/bmpt/web/", import.meta.url);
 const read = (path) => readFileSync(new URL(path, WEB), "utf8");
 
 const frozenDeep = (value) => !value || typeof value !== "object" || (Object.isFrozen(value) && Object.values(value).every(frozenDeep));
@@ -49,8 +49,8 @@ globalThis.document = {
   documentElement: { lang: "en-US", appendChild() {} },
 };
 globalThis.getComputedStyle = () => ({ getPropertyValue: () => "" });
-const NGUI = await import("../../src/ba_modding_toolkit/web/js/ngui.js");
-const ButtonsModule = await import("../../src/ba_modding_toolkit/web/js/game-buttons.js");
+const NGUI = await import("../../src/bmpt/web/js/ngui.js");
+const ButtonsModule = await import("../../src/bmpt/web/js/game-buttons.js");
 const { controls } = await import("./control_prefabs.mjs");
 
 const { option, filter } = controls();
@@ -196,7 +196,7 @@ test("the plain popup and its parts sit on the ladder, and the three fallback bu
 
 // --- item B/I: the footer's caption range through every locale file ---
 import { readFileSync as readSync } from "node:fs";
-const LOCALE_DIR = new URL("../../src/ba_modding_toolkit/locales/", import.meta.url);
+const LOCALE_DIR = new URL("../../src/bmpt/locales/", import.meta.url);
 const locales = readdirSync(LOCALE_DIR).filter((name) => name.endsWith(".json")).map((name) => name.slice(0, -5)).sort();
 // every set of captions that stands together in one popup footer
 const FOOTERS = [["picker.ok", "popup.cancel"], ["popup.save", "popup.cancel"], ["popup.apply", "popup.cancel"], ["consent.no", "consent.yes"],
@@ -254,7 +254,7 @@ test("Hall modal footers use FOOTER for one, two and three actions", () => {
     assert.equal(footerHelpers.footerY(1450) - (Tokens.POPUP.frameY - 1450 / 2), Tokens.FOOTER.centre);
   }
 });
-const { SORTS } = await import("../../src/ba_modding_toolkit/web/js/roster-order.js");
+const { SORTS } = await import("../../src/bmpt/web/js/roster-order.js");
 const toolbarSource = read("js/roster-widgets.js");
 const toolbarFor = (web) => new Function("NGUI", "T", "advanceOf", "glyphsOf", "fitText", "SORTS",
   `${toolbarSource.slice(toolbarSource.indexOf("export function toolbarLayout"), toolbarSource.indexOf("// UICharacterCollection/SeletControl/LeftInfo_Empty"))

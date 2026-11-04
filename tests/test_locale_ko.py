@@ -6,8 +6,9 @@ import re
 from pathlib import Path
 
 from ba_modding_toolkit import i18n
+from bmpt.localization import LOCALES
 
-LOCALES = Path(i18n.__file__).parent / "locales"
+CLASSIC_LOCALES = Path(i18n.__file__).parent / "locales"
 
 
 def strings() -> dict[str, str]:
@@ -17,7 +18,8 @@ def strings() -> dict[str, str]:
             path = f"{prefix}.{key}" if prefix else key
             flat.update(flatten(value, path) if isinstance(value, dict) else {path: value})
         return flat
-    return flatten(json.loads((LOCALES / "ko-KR.json").read_text(encoding="utf-8")))
+    return flatten({**json.loads((CLASSIC_LOCALES / "ko-KR.json").read_text(encoding="utf-8")),
+             **json.loads((LOCALES / "ko-KR.json").read_text(encoding="utf-8"))})
 
 
 def test_korean_is_offered():

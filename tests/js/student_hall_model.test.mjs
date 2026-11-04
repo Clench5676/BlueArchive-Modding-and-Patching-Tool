@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { createDraft, sourceKey, portraitRows, studentChoices, memorialChoices, contentBounds } from "../../src/ba_modding_toolkit/web/js/student-hall-model.js";
-import { normalizeView } from "../../src/ba_modding_toolkit/web/js/roster-order.js";
+import { createDraft, sourceKey, portraitRows, studentChoices, memorialChoices, contentBounds } from "../../src/bmpt/web/js/student-hall-model.js";
+import { normalizeView } from "../../src/bmpt/web/js/roster-order.js";
 const saved = () => ({ revision: 0, mode: "portraits", background: "office-day", portraits: [], memorials: [{ id: "a", variant: "hero", source: "official" }, { id: "b", variant: "hero", source: "mod:alternate" }], active: "b" });
 const source = (variant, kind = "spr", extra = {}) => ({ variant, family: "hero", familyNames: { en: "Hero" }, names: { en: { full: variant } },
   source: "mod:" + variant, kind, favorite: false, recruitable: true, ...extra });
@@ -133,7 +133,7 @@ test("merged picker families aggregate only the current resource kind",()=>{
   assert.equal(studentChoices(choices.filter(choice=>choice.kind!=="lobby"||choice.source==="official"),normalizeView({merged:true,mods:"mods"}),"",label,"en","lobby").length,0);
 });
 
-import { portraitReplacements } from "../../src/ba_modding_toolkit/web/js/student-hall-model.js";
+import { portraitReplacements } from "../../src/bmpt/web/js/student-hall-model.js";
 const swapChoices=[
   {variant:"base",family:"hero",kind:"spr",source:"mod:current"},
   {variant:"base",family:"hero",kind:"spr",source:"official"},

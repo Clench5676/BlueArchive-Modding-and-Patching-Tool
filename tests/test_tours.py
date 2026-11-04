@@ -5,9 +5,9 @@ import shutil
 
 import pytest
 
-from ba_modding_toolkit.errors import ServiceError
-from ba_modding_toolkit.webui import strings, tours
-from ba_modding_toolkit.webui.state import UiState
+from bmpt.errors import ServiceError
+from bmpt.webui import strings, tours
+from bmpt.webui.state import UiState
 
 
 def release(version, *features):

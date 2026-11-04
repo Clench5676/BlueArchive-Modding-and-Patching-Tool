@@ -4,9 +4,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from ba_modding_toolkit.catalog import Catalog
-from ba_modding_toolkit.errors import ServiceError
-from ba_modding_toolkit.library import integrity, manual_identity
+from bmpt.catalog import Catalog
+from bmpt.errors import ServiceError
+from bmpt.library import integrity, manual_identity
 
 from test_batch_import import env, analyze, finish, rpc, run
 from test_library import game_bundle, make_mod, setup_library, reload_library
@@ -89,7 +89,7 @@ def test_unreleased_assignment_stores_self_contained_mod_and_never_applies(env, 
     assert env.library.preview_bundles(mod.id) == [env.root / "mods" / mod.id / source.name]
     env.services._game = SimpleNamespace(spine_files_from=lambda paths: {"future_home.skel": b"skeleton"})
     assert env.services._spine_file("mod", mod.id, "skeleton.skel").body == b"skeleton"
-    from ba_modding_toolkit.webui.batch_import import BatchImport
+    from bmpt.webui.batch_import import BatchImport
     restarted = BatchImport(env.services)
     entry, = finish(env, restarted.analyze([str(source)]))["entries"]
     assert entry["state"] == "library" and entry["variant"] == chosen.key
@@ -115,7 +115,7 @@ def test_unknown_platform_can_be_stored_without_claiming_compatibility(tmp_path,
 
 
 def test_saved_assignments_add_only_their_students_without_inventing_game_handles():
-    from ba_modding_toolkit.webui.assigned_catalog import families_with_assignments, stored_asset_fields
+    from bmpt.webui.assigned_catalog import families_with_assignments, stored_asset_fields
     catalog = Catalog(None, None)
     chosen = catalog.assignment_families()[0].variants[0]
     families = families_with_assignments(catalog, [chosen.key])

@@ -11,13 +11,13 @@ from pathlib import Path
 
 import pytest
 
-from ba_modding_toolkit.gameassets.layouts import export_layout, subtree
-from ba_modding_toolkit.gameassets.service import PREFAB_HINTS
-from ba_modding_toolkit.gameassets.unity import open_bundle
+from bmpt.gameassets.layouts import export_layout, subtree
+from bmpt.gameassets.service import PREFAB_HINTS
+from bmpt.gameassets.unity import open_bundle
 
 NODE = shutil.which("node")
 GAME_DIR = Path(os.environ.get("BAMT_TEST_GAME_DIR") or "/nonexistent/bamt-real-game")
-TOKENS = Path(__file__).resolve().parents[1] / "src/ba_modding_toolkit/web/js/ui-tokens.js"
+TOKENS = Path(__file__).resolve().parents[1] / "src/bmpt/web/js/ui-tokens.js"
 
 pytestmark = pytest.mark.skipif(NODE is None or not GAME_DIR.is_dir(), reason="Node.js and an official development view are required")
 
@@ -180,8 +180,8 @@ def test_applied_selection_gold_is_the_mulligan_selectline_sprite(tokens):
 def test_lobby_entry_is_uiani_lobby(tokens, tmp_path_factory):
     # UILobby's root plays its legacy Animation clip as the lobby opens: the top bar and bottom menu keys, as offsets
     # from where the prefab puts the nodes (chrome-motion.js plays them on the App's bars).
-    from ba_modding_toolkit.gameassets import AssetCache, GameAssets
-    from ba_modding_toolkit.gameassets.model import BundleGraph
+    from bmpt.gameassets import AssetCache, GameAssets
+    from bmpt.gameassets.model import BundleGraph
     from ba_modding_toolkit.searching import get_search_dirs
     game = GameAssets(get_search_dirs(GAME_DIR), AssetCache(root=tmp_path_factory.mktemp("lobby-entry"), allowed=False))
     with game._cab_discovery().batch(), BundleGraph({}, resolver=game._resolve_cabs) as graph:

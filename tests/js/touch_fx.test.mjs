@@ -6,8 +6,8 @@ import { test } from "node:test";
 import {
   FX, arcState, curve, drag, flashState, gradient, overBlend, press, release, sparkState, step, toLinear, toSrgb,
   trailState,
-} from "../../src/ba_modding_toolkit/web/js/touch-fx.js";
-import { cursorValue, opaqueBox, paint, pointerBoxes, withRetries } from "../../src/ba_modding_toolkit/web/js/cursor.js";
+} from "../../src/bmpt/web/js/touch-fx.js";
+import { cursorValue, opaqueBox, paint, pointerBoxes, withRetries } from "../../src/bmpt/web/js/cursor.js";
 
 const near = (a, b, eps = 1e-6) => assert.ok(Math.abs(a - b) <= eps, `${a} != ${b}`);
 // a fixed sequence instead of Math.random

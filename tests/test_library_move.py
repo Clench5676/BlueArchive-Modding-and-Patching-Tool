@@ -9,9 +9,9 @@ from pathlib import Path
 
 import pytest
 
-from ba_modding_toolkit.errors import ServiceError
-from ba_modding_toolkit.library import relocate as relocate_module
-from ba_modding_toolkit.webui.services import LIBRARY_ITEMS
+from bmpt.errors import ServiceError
+from bmpt.library import relocate as relocate_module
+from bmpt.webui.services import LIBRARY_ITEMS
 from test_webui import services  # noqa: F401 - fixture
 
 DIRECTORIES = ("mods", "originals", "built", "transactions", "import-transactions", "asset-deletions", "photographs")

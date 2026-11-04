@@ -9,7 +9,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from ba_modding_toolkit.library import storage
+from bmpt.library import storage
 
 
 def digest(data):
@@ -171,7 +171,7 @@ def _clone_by_copy(monkeypatch):
 
 
 def _replace_actions(tmp_path, monkeypatch):
-    from ba_modding_toolkit import filelock
+    from bmpt import filelock
 
     source = tmp_path / "source"
     source.write_bytes(b"new bytes")

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import * as Lobby from "../../src/ba_modding_toolkit/web/js/lobby.js";
+import * as Lobby from "../../src/bmpt/web/js/lobby.js";
 
 test("official Hall memorial uses original art with full game metadata", async () => {
   const before = globalThis.fetch, requests = [], revision = "c".repeat(64);

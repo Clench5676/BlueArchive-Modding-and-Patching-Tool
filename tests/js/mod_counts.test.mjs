@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
 globalThis.document = { documentElement: { lang: "en" }, createElement: () => ({ getContext: () => ({ measureText: (t) => ({ width: String(t).length * 20 }) }) }) };
-const { COUNT_ICONS, countNodes, countText, iconsOf } = await import("../../src/ba_modding_toolkit/web/js/mod-counts.js");
+const { COUNT_ICONS, countNodes, countText, iconsOf } = await import("../../src/bmpt/web/js/mod-counts.js");
 
 test("count icons are the two named game sprites, found in the loaded atlases only", () => {
   const index = {
@@ -40,7 +40,7 @@ test("a count whose sprite is missing degrades to a word and the number", () => 
 test("both counts have full localized text and the mod chip is kind neutral in all five locales", () => {
   const labels = { "zh-CN": "Mod", "zh-TW": "Mod", "en-US": "Mod", "ja-JP": "MOD", "ko-KR": "\ubaa8\ub4dc" };
   for (const [lang, mod] of Object.entries(labels)) {
-    const ui = JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${lang}.json`, import.meta.url))).webui;
+    const ui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url))).webui;
     assert.equal(ui.type.added, mod, lang);
     const T = (key, params) => {
       assert.equal(key, "band.modCounts");

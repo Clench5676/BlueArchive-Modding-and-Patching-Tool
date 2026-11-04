@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { clipRosterBand } from "../../src/ba_modding_toolkit/web/js/roster-card.js";
-import { collectionStill } from "../../src/ba_modding_toolkit/web/js/thumbs.js";
+import { clipRosterBand } from "../../src/bmpt/web/js/roster-card.js";
+import { collectionStill } from "../../src/bmpt/web/js/thumbs.js";
 import { maskCanvas } from "./sprite_mask_fixture.mjs";
 
-const source = (file) => readFileSync(new URL(`../../src/ba_modding_toolkit/web/js/${file}.js`, import.meta.url), "utf8");
+const source = (file) => readFileSync(new URL(`../../src/bmpt/web/js/${file}.js`, import.meta.url), "utf8");
 
 test("the native tag and portrait share the card's painted surface after deferred frame completion", async () => {
   assert.doesNotMatch(source("roster"), /w_ = 406/);
@@ -72,7 +72,7 @@ test("an expression cancels blinking immediately, stale blinks cannot replace it
 });
 
 test("merging uses variants rather than families and leaves unidentified and generic Mods separate", async () => {
-  const { importGroups } = await import("../../src/ba_modding_toolkit/web/js/import-groups.js");
+  const { importGroups } = await import("../../src/bmpt/web/js/import-groups.js");
   const entries = [
     { id: "p1", kind: "spr", variant: "base" }, { id: "l1", kind: "lobby", variant: "base" },
     { id: "p2", kind: "spr", variant: "dress" }, { id: "m1", kind: "model", variant: "dress" },

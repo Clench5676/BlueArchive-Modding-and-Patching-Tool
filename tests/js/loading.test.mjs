@@ -1,10 +1,10 @@
-import { alignBaseline, publishAligned } from "../../src/ba_modding_toolkit/web/js/loading-baseline.js";
-import { loadingLabel, loadingLetterSprites, loadingInkLine, alphaBounds } from "../../src/ba_modding_toolkit/web/js/ngui-label.js";
+import { alignBaseline, publishAligned } from "../../src/bmpt/web/js/loading-baseline.js";
+import { loadingLabel, loadingLetterSprites, loadingInkLine, alphaBounds } from "../../src/bmpt/web/js/ngui-label.js";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
-const source = readFileSync(new URL("../../src/ba_modding_toolkit/web/js/loading.js", import.meta.url), "utf8");
+const source = readFileSync(new URL("../../src/bmpt/web/js/loading.js", import.meta.url), "utf8");
 const deferred = () => { let resolve, reject; const promise = new Promise((ok, fail) => { resolve = ok; reject = fail; }); return { promise, resolve, reject }; };
 const flush = async () => { for (let i = 0; i < 20; i++) await Promise.resolve(); };
 let seq = 0;
@@ -60,7 +60,7 @@ async function harness({ labelFailure = null, labelGate = null, locale = "en-US"
   stage.getBoundingClientRect = () => ({ top: 0, width: 1920 });
   let now = 0, timerId = 0;
   let localized = translated;
-  const strings = JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${locale}.json`, import.meta.url), "utf8")).webui;
+  const strings = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8")).webui;
   const T = (key, vars = {}) => localized ? (key.split(".").reduce((o, k) => o?.[k], strings) || key)
     .replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? "") : key;
   const initial = boot ? stage.appendChild(new El()) : null;
@@ -214,7 +214,7 @@ test("a cancelled scene hands its cover to the newer navigation", async () => {
 });
 
 test("writer progress keeps Loading in the right corner", () => {
-  const css = readFileSync(new URL("../../src/ba_modding_toolkit/web/css/app.css", import.meta.url), "utf8");
+  const css = readFileSync(new URL("../../src/bmpt/web/css/app.css", import.meta.url), "utf8");
   assert.match(css, /\.loading-fallback \{[^}]*right: 84px/);
   assert.doesNotMatch(css, /with-progress \.loading-(?:fallback|ind)\s*\{/);
   assert.match(css, /\.loading-progress \{[^}]*left: 84px/);
@@ -314,11 +314,11 @@ test("boot adopts the neutral indicator and relabels it when locale strings arri
 });
 
 test("the initial document uses a neutral system style before modules and locale strings arrive", () => {
-  const html = readFileSync(new URL("../../src/ba_modding_toolkit/web/index.html", import.meta.url), "utf8");
-  const css = readFileSync(new URL("../../src/ba_modding_toolkit/web/css/app.css", import.meta.url), "utf8");
+  const html = readFileSync(new URL("../../src/bmpt/web/index.html", import.meta.url), "utf8");
+  const css = readFileSync(new URL("../../src/bmpt/web/css/app.css", import.meta.url), "utf8");
   assert.match(html, /class="loading full on neutral" id="loading-boot"/);
   assert.match(html, /id="loading-boot"[\s\S]*?class="loading-plain"><span><\/span>/);
-  const fallback = readFileSync(new URL("../../src/ba_modding_toolkit/web/css/fallback.css", import.meta.url), "utf8");
+  const fallback = readFileSync(new URL("../../src/bmpt/web/css/fallback.css", import.meta.url), "utf8");
   assert.match(fallback, /\.loading-plain \{[^}]*system-ui, sans-serif/);
   assert.match(fallback, /\.loading\.neutral \.loading-back \{[^}]*#f4f4f4/);
   assert.match(css, /\.loading-fallback \{[^}]*bottom: 44px[^}]*color: #8de4ff[^}]*"RHR"[^}]*text-stroke: 1px #fff/);

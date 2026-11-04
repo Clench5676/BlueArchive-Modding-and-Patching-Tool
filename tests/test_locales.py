@@ -8,8 +8,9 @@ from pathlib import Path
 import pytest
 
 from ba_modding_toolkit import i18n
+from bmpt.localization import LOCALES
 
-LOCALES = Path(i18n.__file__).parent / "locales"
+CLASSIC_LOCALES = Path(i18n.__file__).parent / "locales"
 REFERENCE = "en-US"
 TRANSLATIONS = sorted(p.stem for p in LOCALES.glob("*.json") if p.stem != REFERENCE)
 
@@ -34,7 +35,10 @@ CLASSIC_ONLY_KEYS = {
 
 
 def load(code: str) -> dict:
-    return json.loads((LOCALES / f"{code}.json").read_text(encoding="utf-8"))
+    classic = json.loads((CLASSIC_LOCALES / f"{code}.json").read_text(encoding="utf-8"))
+    app = json.loads((LOCALES / f"{code}.json").read_text(encoding="utf-8"))
+    assert "webui" not in classic and set(app) == {"webui"}
+    return {**classic, **app}
 
 
 def flatten(tree: dict, prefix: str = "") -> dict[str, object]:
@@ -71,6 +75,7 @@ def test_classic_only_keys_are_classic_strings():
     """The exception list names en-US keys only, none of them with a translation that would make it stale."""
     reference = flatten(load(REFERENCE))
     assert CLASSIC_ONLY_KEYS <= set(reference)
+    assert all(not key.startswith("webui.") for key in CLASSIC_ONLY_KEYS)
     for code in TRANSLATIONS:
         if code != "zh-CN":
             assert not CLASSIC_ONLY_KEYS & set(flatten(load(code))), code

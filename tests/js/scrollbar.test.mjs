@@ -1,14 +1,14 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { readFile } from "node:fs/promises";
-import { sliceAxis } from '../../src/ba_modding_toolkit/web/js/sprite-slices.js';
+import { sliceAxis } from '../../src/bmpt/web/js/sprite-slices.js';
 let rendered, nodes, slices=[];
 const tree = {name:"Scroll Bar",children:["Background","Foreground"].map((name)=>({name,pos:[1391,0],widgets:[{texture:"CharacterCollection_ScrollBarBg",w_:126,h_:990,color:name==='Background'?'#ccd7df/1.00':'#92a6b7/1.00'}]}))};
 globalThis.scrollFixture = {clone:structuredClone,NGUI:{find:()=>tree,textureIndex:()=>({CharacterCollection_ScrollBarBg:'native-texture'}),
   tinted:async(url,color)=>`${url}:${color}`,slicedImage:async(...args)=>{slices.push(args);return `baked:${args[3]}`;},
   render:async(t)=>{rendered=t;return{nodes:nodes=new Map(t.children.map((c)=>[`${t.name}/${c.name}`,{els:[{style:{backgroundImage:'url("native-texture")'}}]}]))};}}};
 globalThis.document={createElement:()=>({style:{}}),getElementById:()=>null};
-let source=await readFile(new URL("../../src/ba_modding_toolkit/web/js/scrollbar.js",import.meta.url),"utf8");source=source.replace(/^import .*;$/gm,"");
+let source=await readFile(new URL("../../src/bmpt/web/js/scrollbar.js",import.meta.url),"utf8");source=source.replace(/^import .*;$/gm,"");
 const {scrollbar,scrollbarTrack}=await import(`data:text/javascript;base64,${Buffer.from('const {clone,NGUI}=globalThis.scrollFixture;\n'+source).toString('base64')}`);
 test("native scrollbar end caps retain their aspect on both axes and very long lists",async()=>{
   for(const horizontal of [false,true]){

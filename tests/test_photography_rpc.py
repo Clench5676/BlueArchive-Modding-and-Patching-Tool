@@ -11,9 +11,9 @@ from dataclasses import replace
 import pytest
 from PIL import Image
 
-from ba_modding_toolkit.errors import ServiceError
-from ba_modding_toolkit.library.models import Pin, PhotographApplyResult
-from ba_modding_toolkit.webui.server import MAX_BODY
+from bmpt.errors import ServiceError
+from bmpt.library.models import Pin, PhotographApplyResult
+from bmpt.webui.server import MAX_BODY
 from test_webui import app, call, rpc, services
 
 
@@ -194,7 +194,7 @@ def test_preview_cache_clear_does_not_remove_photographs(app, services, photogra
 
 
 def test_export_preserves_pixels_and_avoids_collisions(services, photography_env, tmp_path, monkeypatch):
-    from ba_modding_toolkit.webui import photography
+    from bmpt.webui import photography
     destination = tmp_path / 'exports'
     services.settings.set('output_dir', str(destination))
     opened = []
@@ -209,7 +209,7 @@ def test_export_preserves_pixels_and_avoids_collisions(services, photography_env
 
 def test_export_copies_exclusively_where_hard_links_fail(services, photography_env, tmp_path, monkeypatch):
     import errno
-    from ba_modding_toolkit.webui import photography
+    from bmpt.webui import photography
     destination = tmp_path / 'exports'
     services.settings.set('output_dir', str(destination))
     monkeypatch.setattr(photography, 'reveal', lambda folder: None)
@@ -228,7 +228,7 @@ def test_export_copies_exclusively_where_hard_links_fail(services, photography_e
 
 
 def test_export_removes_a_partial_copy(services, photography_env, tmp_path, monkeypatch):
-    from ba_modding_toolkit.webui import photography
+    from bmpt.webui import photography
     destination = tmp_path / 'exports'
     services.settings.set('output_dir', str(destination))
     monkeypatch.setattr(photography, 'reveal', lambda folder: None)
@@ -305,7 +305,7 @@ def test_a_save_or_selection_arriving_while_the_manifest_is_parsed_does_not_dead
         app, services, photography_env, monkeypatch, writer):
     """The reader holds the photograph lock and looks families up; the writer arrives meanwhile. The writer used to
     hold the services lock and wait for the photograph lock, the reader to wait for the services lock."""
-    from ba_modding_toolkit.library.photographs import Photographs
+    from bmpt.library.photographs import Photographs
 
     env = photography_env
     key = rpc(app, 'photography.save', variant='hoshino', png=env['png'], mode='portrait')['result']['saved']
@@ -381,7 +381,7 @@ def test_no_manifest_call_waits_for_the_services_lock(services, photography_env)
 def test_a_library_move_waits_for_a_photograph_save_and_the_photo_lands_in_the_new_folder(
         app, services, photography_env, monkeypatch, tmp_path):
     """The one thing the services lock around a save kept out: the move that leaves the folder the save writes to."""
-    from ba_modding_toolkit.library.photographs import Photographs
+    from bmpt.library.photographs import Photographs
 
     env = photography_env
     rpc(app, 'photography.save', variant='hoshino', png=env['png'], mode='portrait')  # a library worth moving

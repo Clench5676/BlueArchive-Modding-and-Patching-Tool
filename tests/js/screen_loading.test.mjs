@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { ROOT_ROUTE, routeHistory } from "../../src/ba_modding_toolkit/web/js/route-history.js";
+import { ROOT_ROUTE, routeHistory } from "../../src/bmpt/web/js/route-history.js";
 
-const source = readFileSync(new URL("../../src/ba_modding_toolkit/web/js/main.js", import.meta.url), "utf8");
+const source = readFileSync(new URL("../../src/bmpt/web/js/main.js", import.meta.url), "utf8");
 const code = source.slice(source.indexOf("let routeToken ="), source.indexOf("async function boot("));
 const deferred = () => { let resolve, reject; const promise = new Promise((r, fail) => { resolve = r; reject = fail; }); return { promise, resolve, reject }; };
 const flush = async () => { for (let i = 0; i < 30; i++) await Promise.resolve(); };
@@ -279,7 +279,7 @@ test("a late import failure cannot redirect a newer student navigation", async (
 });
 
 test("startup scan prompts follow current consent without a separate startup mode", async () => {
-  const prompts = readFileSync(new URL("../../src/ba_modding_toolkit/web/js/prompts.js", import.meta.url), "utf8");
+  const prompts = readFileSync(new URL("../../src/bmpt/web/js/prompts.js", import.meta.url), "utf8");
   const start = prompts.slice(prompts.indexOf("export async function start("), prompts.indexOf("async function later("))
     .replace("export async function", "async function");
   const calls = [];

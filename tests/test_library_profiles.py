@@ -16,13 +16,13 @@ import pytest
 
 from ba_modding_toolkit import core, mod_install
 from ba_modding_toolkit.bundle import Bundle
-from ba_modding_toolkit.config import Settings
-from ba_modding_toolkit.errors import ServiceError
+from bmpt.config import Settings
+from bmpt.errors import ServiceError
 from ba_modding_toolkit.i18n import I18n
-from ba_modding_toolkit.library import ModLibrary, safety, service, storage
-from ba_modding_toolkit.library import profiles as profiles_module
-from ba_modding_toolkit.library.judge import carried_of, classify, install_key, install_root, leaves
-from ba_modding_toolkit.library.profiles import Profiles
+from bmpt.library import ModLibrary, safety, service, storage
+from bmpt.library import profiles as profiles_module
+from bmpt.library.judge import carried_of, classify, install_key, install_root, leaves
+from bmpt.library.profiles import Profiles
 from ba_modding_toolkit.models import FilePair, ModUpdateResult
 from ba_modding_toolkit.naming import parse_filename
 from ba_modding_toolkit.utils import CRCUtils
@@ -74,7 +74,7 @@ def test_two_profiles_on_one_file_keep_both_changes(tmp_path):
 
 
 def test_a_missing_switch_means_on(tmp_path):
-    from ba_modding_toolkit.library.profiles import enabled
+    from bmpt.library.profiles import enabled
     assert enabled(None) and enabled({"version": 1, "folders": {}})
     (tmp_path / "profiles.json").write_text('{"version": 1, "folders": {}}')
     assert enabled(Profiles(tmp_path).read())
@@ -115,7 +115,7 @@ def test_a_failed_write_keeps_the_file_as_it_was(tmp_path, monkeypatch):
     profiles = Profiles(tmp_path)
     profiles.update(lambda data: data.update(enabled=False))
     before = (tmp_path / "profiles.json").read_bytes()
-    from ba_modding_toolkit import filelock
+    from bmpt import filelock
     real = filelock.os.replace
 
     def fail(source, target):
@@ -1010,7 +1010,7 @@ def test_another_installs_variant_source_stays_configured_and_is_applied_from_th
         result.write_bytes(CRCUtils.apply_crc_fix(header_bundle(b"adapted!"), int(parse_filename(targets[0].name).crc)))
         return ModUpdateResult(True, "updated", [FilePair(result, targets[0])])
 
-    monkeypatch.setattr("ba_modding_toolkit.library.service.adapt_variant_sources", lambda sources, *args: sources)
+    monkeypatch.setattr("bmpt.library.service.adapt_variant_sources", lambda sources, *args: sources)
     monkeypatch.setattr(core, "process_mod_update", update)
     # configured there by an earlier build, with a variant the current catalog lacks
     world.library.profiles.update(lambda data: data["folders"].setdefault(pin.key, {"server": "japan"}).update(
@@ -1298,7 +1298,7 @@ def test_a_library_source_without_configuration_is_taken_over_once(world):
 
 
 def test_a_record_without_a_write_time_uses_its_date(world):
-    from ba_modding_toolkit.library.judge import seconds
+    from bmpt.library.judge import seconds
     assert seconds(1_700_000_000_000_000_000) == 1_700_000_000.0
     assert seconds("2026-01-01T00:00:00+00:00") == 1767225600.0 and seconds(None) is None
 
@@ -1396,7 +1396,7 @@ def test_a_variant_record_without_its_core_there_is_unknown_and_adopted(world, m
         result.write_bytes(swap)
         return ModUpdateResult(True, "updated", [FilePair(result, targets[0])])
 
-    monkeypatch.setattr("ba_modding_toolkit.library.service.adapt_variant_sources", lambda sources, *args: sources)
+    monkeypatch.setattr("bmpt.library.service.adapt_variant_sources", lambda sources, *args: sources)
     monkeypatch.setattr(core, "process_mod_update", update)
     world.library.apply("test", "variant:other")
     other.unlink()  # that variant's portrait is gone from this install
@@ -2435,7 +2435,7 @@ def test_a_variant_entry_whose_source_files_changed_is_rebuilt(world, monkeypatc
         result.write_bytes(CRCUtils.apply_crc_fix(header_bundle(b"adapted!"), int(parse_filename(targets[0].name).crc)))
         return ModUpdateResult(True, "updated", [FilePair(result, targets[0])])
 
-    monkeypatch.setattr("ba_modding_toolkit.library.service.adapt_variant_sources", lambda sources, *args: sources)
+    monkeypatch.setattr("bmpt.library.service.adapt_variant_sources", lambda sources, *args: sources)
     monkeypatch.setattr(core, "process_mod_update", update)
     world.library.apply("test", "variant:other")
     world.toggle(False)
@@ -2609,8 +2609,8 @@ def test_entries_of_cores_the_current_catalog_does_not_map_carry_shipped_names(w
 def test_the_lock_order_is_kept_across_threads(world, monkeypatch):
     """The library lock, transactions.lock, mods.lock, state.json.lock and profiles.json.lock stay in order;
     no thread holds profiles.json.lock while it asks the scan consent."""
-    from ba_modding_toolkit import filelock
-    from ba_modding_toolkit.library import profiles as profiles_module
+    from bmpt import filelock
+    from bmpt.library import profiles as profiles_module
     order = {"transactions.lock": 1.25, "mods.lock": 1.5, "state.json.lock": 2, "profiles.json.lock": 3}
     held = threading.local()
     violations: list[str] = []
@@ -2696,7 +2696,7 @@ def test_the_lock_order_is_kept_across_threads(world, monkeypatch):
 # --- what the switch's snapshot reads ---
 
 def test_the_status_lists_installs_with_ids_and_distinct_folder_names(world):
-    from ba_modding_toolkit.library.judge import distinguishing_folders
+    from bmpt.library.judge import distinguishing_folders
     assert distinguishing_folders({"a": Path("/x/Steam/BlueArchive"), "b": Path("/y/Other/BlueArchive")}) == {
         "a": "Steam/BlueArchive", "b": "Other/BlueArchive"}
     assert distinguishing_folders({"a": Path("/x/BlueArchive"), "b": Path("/y/Steam")}) == {

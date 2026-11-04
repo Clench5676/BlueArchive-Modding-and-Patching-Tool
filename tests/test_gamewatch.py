@@ -10,10 +10,10 @@ from types import SimpleNamespace
 
 import pytest
 
-from ba_modding_toolkit import game_paths
-from ba_modding_toolkit.errors import ServiceError
-from ba_modding_toolkit.library import safety
-from ba_modding_toolkit.webui.gamewatch import FAST_SECONDS, SLOW_SECONDS, GameWatch, WatchState
+from bmpt import game_paths
+from bmpt.errors import ServiceError
+from bmpt.library import safety
+from bmpt.webui.gamewatch import FAST_SECONDS, SLOW_SECONDS, GameWatch, WatchState
 
 
 class World:

@@ -7,9 +7,9 @@ import subprocess
 
 import pytest
 
-from ba_modding_toolkit.gameassets.layouts import export_layout, subtree
-from ba_modding_toolkit.gameassets.service import PREFAB_HINTS
-from ba_modding_toolkit.gameassets.unity import open_bundle
+from bmpt.gameassets.layouts import export_layout, subtree
+from bmpt.gameassets.service import PREFAB_HINTS
+from bmpt.gameassets.unity import open_bundle
 
 NODE = shutil.which("node")
 GAME_DIR = Path(os.environ.get("BAMT_TEST_GAME_DIR") or "/nonexistent/bamt-real-game")

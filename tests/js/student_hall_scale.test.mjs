@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { bindScale } from "../../src/ba_modding_toolkit/web/js/student-hall-scale.js";
-import { createDraft } from "../../src/ba_modding_toolkit/web/js/student-hall-model.js";
-import { PORTRAIT_TOOLBAR_HEIGHT, portraitScale, portraitRect } from "../../src/ba_modding_toolkit/web/js/student-hall-framing.js";
+import { bindScale } from "../../src/bmpt/web/js/student-hall-scale.js";
+import { createDraft } from "../../src/bmpt/web/js/student-hall-model.js";
+import { PORTRAIT_TOOLBAR_HEIGHT, portraitScale, portraitRect } from "../../src/bmpt/web/js/student-hall-framing.js";
 class Input {
   value=""; listeners={};
   addEventListener(name,fn){(this.listeners[name] ||= []).push(fn);}
@@ -53,7 +53,7 @@ test("slider-only binding supports the full25to150range without a numeric field 
   assert.deepEqual(changes,[.25,.73,1.5]);
 });
 
-import { PORTRAIT_SIZE, PORTRAIT_TOOLBAR_MARGIN, portraitToolbarLayout } from "../../src/ba_modding_toolkit/web/js/student-hall-framing.js";
+import { PORTRAIT_SIZE, PORTRAIT_TOOLBAR_MARGIN, portraitToolbarLayout } from "../../src/bmpt/web/js/student-hall-framing.js";
 test("individual size uses .5–2.0, hundredth steps, reset and a cancellable/saveable draft",()=>{
   const saved={revision:0,mode:"portraits",portraitScale:.8,portraits:[{id:"a",variant:"a",source:"mod:a",x:900,y:1100,scale:.8,mirror:true}],memorials:[],active:null};
   const draft=createDraft(saved);draft.begin("layout");const range=new Input(),entry=draft.current().portraits[0];

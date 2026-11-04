@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-const code = readFileSync(new URL("../../src/ba_modding_toolkit/web/js/detail.js", import.meta.url), "utf8");
+const code = readFileSync(new URL("../../src/bmpt/web/js/detail.js", import.meta.url), "utf8");
 const n = (name, widgets = [], children = [], pos = [0, 0]) => ({ name, widgets, children, pos, active: true });
 const find = (tree, path) => path.split("/").filter(Boolean).reduce((n, part) => n?.children.find((c) => c.name === part), tree);
 

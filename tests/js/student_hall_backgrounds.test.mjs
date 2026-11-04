@@ -25,7 +25,7 @@ globalThis.hallBackgroundHarness = {
   },
   withTimeout: (promise) => promise,
 };
-let source = await readFile(new URL("../../src/ba_modding_toolkit/web/js/student-hall-backgrounds.js", import.meta.url), "utf8");
+let source = await readFile(new URL("../../src/bmpt/web/js/student-hall-backgrounds.js", import.meta.url), "utf8");
 source = source.replace(/^import .*;$/gm, "");
 source = `const {NGUI, withTimeout} = globalThis.hallBackgroundHarness; const S = 1920 / 2960; const T = (key) => key;\n${source}`;
 const Hall = await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`);

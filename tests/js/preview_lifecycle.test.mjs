@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { previewLifecycle, previewTimer } from "../../src/ba_modding_toolkit/web/js/preview-lifecycle.js";
-import { latestLoad, loadPlayer } from "../../src/ba_modding_toolkit/web/js/spine-load.js";
-import { nextFrame } from "../../src/ba_modding_toolkit/web/js/async.js";
+import { previewLifecycle, previewTimer } from "../../src/bmpt/web/js/preview-lifecycle.js";
+import { latestLoad, loadPlayer } from "../../src/bmpt/web/js/spine-load.js";
+import { nextFrame } from "../../src/bmpt/web/js/async.js";
 
 const tick = () => new Promise(setImmediate);
 function globals(t, env) {

@@ -3,11 +3,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { SKELETON_SCALE, stagePoint } from "../../src/ba_modding_toolkit/web/js/portrait-view.js";
+import { SKELETON_SCALE, stagePoint } from "../../src/bmpt/web/js/portrait-view.js";
 import {
   FULL_SCALE, SCREEN, SLIDE, SLIDE_S, STAGE, ZOOM_MAX, anchoredCentre, artBox, atHome, clampView, hermite, homeView, limits,
   mix, panBy, slideFrames, viewOf, viewport, zoomAt,
-} from "../../src/ba_modding_toolkit/web/js/visual-view.js";
+} from "../../src/bmpt/web/js/visual-view.js";
 
 const S = 1920 / 2960; // stage px per prefab unit (util.js)
 const BOX = { left: 0, top: 0, width: STAGE.width, height: STAGE.height };

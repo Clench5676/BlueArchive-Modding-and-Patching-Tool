@@ -17,14 +17,14 @@ from types import SimpleNamespace
 import pytest
 from PIL import Image
 
-from ba_modding_toolkit.errors import ServiceError
-from ba_modding_toolkit.gameassets import AssetCache, AssetNotFound, GameAssets
-from ba_modding_toolkit.gameassets import service, unity
-from ba_modding_toolkit.gameassets.discovery import (
+from bmpt.errors import ServiceError
+from bmpt.gameassets import AssetCache, AssetNotFound, GameAssets
+from bmpt.gameassets import service, unity
+from bmpt.gameassets.discovery import (
     bundle_paths, group_bundles, is_pointer_texture, is_prefab, is_texture, resource_version,
 )
-from ba_modding_toolkit.gameassets.layouts import export_layout, subtree
-from ba_modding_toolkit.gameassets.spine import atlas_pages, extract_spine
+from bmpt.gameassets.layouts import export_layout, subtree
+from bmpt.gameassets.spine import atlas_pages, extract_spine
 from ba_modding_toolkit.searching import get_search_dirs
 from texture_helpers import fake_texture
 
@@ -162,7 +162,7 @@ def test_only_a_new_versions_first_write_retires_folders(tmp_path):
 
 
 def test_an_old_cache_folder_that_cannot_be_removed_is_logged_and_skipped(tmp_path, monkeypatch, caplog):
-    from ba_modding_toolkit.gameassets import cache as cache_module
+    from bmpt.gameassets import cache as cache_module
     root = tmp_path / "cache"
     held, removable = (_version_folder(root, name, age) for name, age in (("held", 500), ("removable", 400)))
     kept = [_version_folder(root, name, age) for name, age in (("a", 200), ("b", 100))]
@@ -893,7 +893,7 @@ def test_spine_atlas_pages_and_aliases(tmp_path, monkeypatch):
     def open_fake(path):
         yield SimpleNamespace(objects=objects)
 
-    monkeypatch.setattr("ba_modding_toolkit.gameassets.spine.open_bundle", open_fake)
+    monkeypatch.setattr("bmpt.gameassets.spine.open_bundle", open_fake)
     files = extract_spine([tmp_path / "fake.bundle"])
     assert files["hero.skel"] == b"\xffbinary"
     assert files["Pages/Hero.PNG"] == files["hero.png"]
@@ -927,7 +927,7 @@ def test_mod_spine_cache_invalidates_without_disk_writes(tmp_path, monkeypatch):
 
 
 def test_spine_cache_tracks_same_size_replacements_with_preserved_mtime(tmp_path, monkeypatch):
-    from ba_modding_toolkit.gameassets.spine import spine_revision
+    from bmpt.gameassets.spine import spine_revision
 
     path = tmp_path / "mod.bundle"
     path.write_bytes(b"before")
@@ -989,7 +989,7 @@ def test_spine_mod_overrides_win_independent_of_paths_and_cache_order(
     def open_fake(path):
         loads.append(path)
         yield SimpleNamespace(objects=mod_objects if path == mod else official_objects)
-    monkeypatch.setattr("ba_modding_toolkit.gameassets.spine.open_bundle", open_fake)
+    monkeypatch.setattr("bmpt.gameassets.spine.open_bundle", open_fake)
     cache = AssetCache(root=tmp_path / "cache", allowed=True)
     game = GameAssets([official.parent], cache)
     files = game.spine_files_from([official, mod])
@@ -1118,7 +1118,7 @@ def test_real_collection_art_stays_in_memory(real_game):
 def test_real_catalog_backgrounds_resolve(real_game):
     """Every shipped background of a variant whose collection portrait is installed (so released on this server) is
     in the collection index, including the ones not named *_Collection (Junko (New Year): BG_NewYearFestival2)."""
-    from ba_modding_toolkit.catalog import DEFAULT_DATA
+    from bmpt.catalog import DEFAULT_DATA
 
     names = real_game.collection_names()
     portraits, backgrounds = set(names["portrait"]), set(names["bg"])
@@ -1192,7 +1192,7 @@ def test_layout_exports_loading_label_effect_colour_and_distance():
 
 
 def test_prefab_pin_gradient_is_exported_without_changing_its_white_tint():
-    from ba_modding_toolkit.gameassets.layouts import _widget
+    from bmpt.gameassets.layouts import _widget
 
     obj = SimpleNamespace(assets_file=SimpleNamespace(name="fixture", externals=[]))
     tree = {"m_Script": {}, "mAtlas": {}, "mSpriteName": "Common_Icon_Pin_Detail", "mType": 1,

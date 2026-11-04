@@ -2,13 +2,13 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import vm from "node:vm";
-import { isSpecial, specialFraming, specialView } from "../../src/ba_modding_toolkit/web/js/special-view.js";
-import { artBounds, settle, validRect, worldBounds } from "../../src/ba_modding_toolkit/web/js/lobby-health.js";
-import { layersOf } from "../../src/ba_modding_toolkit/web/js/lobby.js";
+import { isSpecial, specialFraming, specialView } from "../../src/bmpt/web/js/special-view.js";
+import { artBounds, settle, validRect, worldBounds } from "../../src/bmpt/web/js/lobby-health.js";
+import { layersOf } from "../../src/bmpt/web/js/lobby.js";
 
 const read = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
 const context = vm.createContext({ console, TextDecoder, TextEncoder, Float32Array, Uint8Array, Uint16Array, Int16Array, Int32Array, ArrayBuffer, DataView });
-vm.runInContext(read("../../src/ba_modding_toolkit/web/vendor/spine-player-4.2.120/spine-player.min.js"), context);
+vm.runInContext(read("../../src/bmpt/web/vendor/spine-player-4.2.120/spine-player.min.js"), context);
 globalThis.spine = context.spine;
 const union = (a, b) => ({ x0: Math.min(a.x0, b.x0), y0: Math.min(a.y0, b.y0), x1: Math.max(a.x1, b.x1), y1: Math.max(a.y1, b.y1) });
 function player() {
@@ -60,9 +60,9 @@ test("scene framing fills every supported view aspect from its own bounds", () =
 });
 
 test("detail and thumbnails frame real posed vertices, ignoring stale export bounds", () => {
-  const lobby = read("../../src/ba_modding_toolkit/web/js/lobby.js");
+  const lobby = read("../../src/bmpt/web/js/lobby.js");
   const code = lobby.slice(lobby.indexOf("function measureSpecial("), lobby.indexOf("// switch between the left view"));
-  const thumbs = read("../../src/ba_modding_toolkit/web/js/thumbs.js");
+  const thumbs = read("../../src/bmpt/web/js/thumbs.js");
   const thumbnail = new Function("spine", "specialView", "artBounds", `${thumbs.slice(thumbs.indexOf("function viewFor("), thumbs.indexOf("function loadPlayer("))}; return viewFor;`)(spine, specialView, artBounds);
   const p = player(), layer = { name: "np0032_npc", x: 40000, y: -30000, scale: 0.01, player: p };
   const edge = worldBounds(artBounds(p.skeleton), layer);

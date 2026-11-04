@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { hasAsset } from "../../src/ba_modding_toolkit/web/js/switch-sources.js";
-import { visit } from "../../src/ba_modding_toolkit/web/js/roster-order.js";
+import { hasAsset } from "../../src/bmpt/web/js/switch-sources.js";
+import { visit } from "../../src/bmpt/web/js/roster-order.js";
 
 // Run the event coalescing and refresh with a detail page already on screen.
-const source = readFileSync(new URL("../../src/ba_modding_toolkit/web/js/main.js", import.meta.url), "utf8");
+const source = readFileSync(new URL("../../src/bmpt/web/js/main.js", import.meta.url), "utf8");
 const code = source.slice(source.indexOf("let heldChange,"), source.indexOf("// A completed toggle"));
 function harness() {
   const refreshed = [], forgotten = [], timers = [];

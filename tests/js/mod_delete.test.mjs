@@ -2,10 +2,10 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
-const source = readFileSync(new URL("../../src/ba_modding_toolkit/web/js/detail.js", import.meta.url), "utf8");
+const source = readFileSync(new URL("../../src/bmpt/web/js/detail.js", import.meta.url), "utf8");
 const removeSource = source.slice(source.indexOf("async function removeMod("), source.indexOf("// the Add First"));
 function harness({ locale = "en-US", used = true, button = "ok", error = null } = {}) {
-  const strings = JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${locale}.json`, import.meta.url), "utf8")).webui;
+  const strings = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8")).webui;
   const calls = [], messages = [];
   const T = (key, values = {}) => key.split(".").reduce((v, part) => v[part], strings).replace(/\{(\w+)\}/g, (_, k) => values[k]);
   const deps = {

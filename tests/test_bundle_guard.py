@@ -7,10 +7,11 @@ from pathlib import Path
 import pytest
 from UnityPy.helpers.CompressionHelper import compress_lz4
 
-from ba_modding_toolkit import bundle as bundle_module, bundle_guard, unityfs
+from ba_modding_toolkit import bundle as bundle_module
+from bmpt import bundle_guard, unityfs
 from ba_modding_toolkit.bundle import Bundle
-from ba_modding_toolkit.bundle_guard import check_bundle
-from ba_modding_toolkit.errors import ServiceError
+from bmpt.bundle_guard import check_bundle
+from bmpt.errors import ServiceError
 
 from test_atlas_remap import write_bundle
 

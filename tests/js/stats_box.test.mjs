@@ -4,7 +4,7 @@
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import { test } from "node:test";
-import { STATS_BOX as B } from "../../src/ba_modding_toolkit/web/js/ui-tokens.js";
+import { STATS_BOX as B } from "../../src/bmpt/web/js/ui-tokens.js";
 
 // the measuring stand-in shared with the other fit tests: a CJK or Thai code point one em, anything else half
 const WIDE = /[\u2e80-\u9fff\u3000-\u30ff\uff00-\uffef\uac00-\ud7af\u0e00-\u0e7f]/;
@@ -20,10 +20,10 @@ globalThis.document = {
   documentElement: { lang: "en-US", appendChild() {} },
 };
 globalThis.getComputedStyle = () => ({ getPropertyValue: () => "" });
-const NGUI = await import("../../src/ba_modding_toolkit/web/js/ngui.js");
-const Box = await import("../../src/ba_modding_toolkit/web/js/stats-box.js");
+const NGUI = await import("../../src/bmpt/web/js/ngui.js");
+const Box = await import("../../src/bmpt/web/js/stats-box.js");
 
-const WEB = new URL("../../src/ba_modding_toolkit/web/", import.meta.url);
+const WEB = new URL("../../src/bmpt/web/", import.meta.url);
 const read = (path) => readFileSync(new URL(path, WEB), "utf8");
 const named = (nodes, name) => nodes.find((n) => n.name === name);
 const widgetOf = (n) => n.widgets[0];

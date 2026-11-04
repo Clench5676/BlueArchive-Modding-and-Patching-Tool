@@ -2,12 +2,12 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { latestLoad, loadPlayer } from "../../src/ba_modding_toolkit/web/js/spine-load.js";
-import { withTimeout } from "../../src/ba_modding_toolkit/web/js/async.js";
-import { atStep } from "../../src/ba_modding_toolkit/web/js/preview-error.js";
-import { validRect } from "../../src/ba_modding_toolkit/web/js/lobby-health.js";
+import { latestLoad, loadPlayer } from "../../src/bmpt/web/js/spine-load.js";
+import { withTimeout } from "../../src/bmpt/web/js/async.js";
+import { atStep } from "../../src/bmpt/web/js/preview-error.js";
+import { validRect } from "../../src/bmpt/web/js/lobby-health.js";
 
-const source = readFileSync(new URL("../../src/ba_modding_toolkit/web/js/lobby.js", import.meta.url), "utf8");
+const source = readFileSync(new URL("../../src/bmpt/web/js/lobby.js", import.meta.url), "utf8");
 const loading = source.slice(source.indexOf("const lobbyLoads ="), source.indexOf("// the input trace"))
   .replaceAll("export function", "function").replaceAll("export async function", "async function");
 const tick = () => new Promise(setImmediate);

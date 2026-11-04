@@ -5,10 +5,10 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFilter
 import pytest
 
-from ba_modding_toolkit.refine_stitch import (minimum_seam, seam_mask, stitch,
+from bmpt.refine_stitch import (minimum_seam, seam_mask, stitch,
     double_edge_count, native_movement, gross_disagreement, fringe_gate, nearest_inside)
-from ba_modding_toolkit.refine_inputs import InputParameters, key_image, flatten, crop_boxes, prompt
-from ba_modding_toolkit.refine_cut import join_band_gate
+from bmpt.refine_inputs import InputParameters, key_image, flatten, crop_boxes, prompt
+from bmpt.refine_cut import join_band_gate
 
 
 def drawing():
@@ -144,7 +144,7 @@ def test_prompt_v2_keeps_v1_and_forbids_wording_at_fill_time():
 
 
 def test_outline_matte_preserves_neutral_interior_and_softens_only_outer_band():
-    from ba_modding_toolkit.refine_stitch import frame_background
+    from bmpt.refine_stitch import frame_background
     official=Image.new('RGBA',(128,128))
     ImageDraw.Draw(official).rectangle((16,16,111,111),fill=(180,180,180,255))
     c=np.asarray(flatten(official,(255,0,255))).copy()
@@ -169,7 +169,7 @@ def test_outline_matte_preserves_neutral_interior_and_softens_only_outer_band():
 
 
 def test_frame_background_uses_connectivity_not_neutral_colour():
-    from ba_modding_toolkit.refine_stitch import frame_background
+    from bmpt.refine_stitch import frame_background
     mask=np.ones((20,20),bool);mask[3:17,3:17]=False;mask[8:12,8:12]=True
     connected=frame_background(mask)
     assert connected[0,0] and not connected[9,9]
@@ -178,7 +178,7 @@ def test_frame_background_uses_connectivity_not_neutral_colour():
 
 
 def test_rigid_subpixel_estimator_corrects_shift_and_retains_identity():
-    from ba_modding_toolkit.refine_stitch import estimate_translation,translate_rgb
+    from bmpt.refine_stitch import estimate_translation,translate_rgb
     a=np.asarray(drawing())[...,:3].astype(np.float32)
     assert np.array_equal(translate_rgb(a,(0,0)),a)
     b=translate_rgb(a,(.75,-.5),fill=(130,150,170))
@@ -190,7 +190,7 @@ def test_rigid_subpixel_estimator_corrects_shift_and_retains_identity():
 
 
 def test_nearest_colour_accepts_existing_dark_ink_rejects_green_outlier():
-    from ba_modding_toolkit.refine_stitch import nearest_colour
+    from bmpt.refine_stitch import nearest_colour
     rgb=np.full((24,24,3),220,np.float32);rgb[10,10]=(30,30,30);rgb[10,14]=(30,30,30)
     seeds=np.zeros((24,24),bool);seeds[10,11]=True;seeds[10,14]=True
     query=np.zeros((24,24),bool);query[10,10]=True
@@ -231,7 +231,7 @@ def test_complement_gate_accepts_palette_interpolation_rejects_new_green():
 
 @pytest.mark.parametrize('coverage',[1.,.75])
 def test_key_chroma_despill_includes_opaque_edges_without_changing_interior(coverage):
-    from ba_modding_toolkit.refine_stitch import despill_key_band
+    from bmpt.refine_stitch import despill_key_band
     rgb=np.zeros((96,96,3),np.float32);rgb[16:80,16:80]=(.25,.25,.4)
     alpha=np.zeros((96,96),np.float32);alpha[16:80,16:80]=1
     band=np.zeros((96,96),bool);band[16:19,16:80]=True
@@ -248,7 +248,7 @@ def test_key_chroma_despill_includes_opaque_edges_without_changing_interior(cove
 
 
 def test_key_chroma_despill_uses_the_crop_own_interior_palette():
-    from ba_modding_toolkit.refine_stitch import despill_key_band
+    from bmpt.refine_stitch import despill_key_band
     results=[]
     for paint in ((.2,.2,.35),(.4,.2,.45)):
         rgb=np.zeros((80,80,3),np.float32);rgb[12:68,12:68]=paint
@@ -261,7 +261,7 @@ def test_key_chroma_despill_uses_the_crop_own_interior_palette():
 
 
 def test_key_direction_gate_rejects_opaque_magenta_rim_accepts_interior_paint():
-    from ba_modding_toolkit.refine_stitch import key_fringe_gate
+    from bmpt.refine_stitch import key_fringe_gate
     a=np.zeros((128,128,4),np.uint8);a[...,:3]=(100,100,130);a[16:112,16:112,3]=255
     a[50:60,50:60,:3]=(220,80,220)
     good=Image.fromarray(a.copy())

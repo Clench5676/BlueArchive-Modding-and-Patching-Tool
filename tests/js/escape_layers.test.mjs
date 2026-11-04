@@ -37,7 +37,7 @@ function press(key) {
   return ev;
 }
 globalThis.fetch = async () => ({ ok: false, status: 404, json: async () => null });
-const Popup = await import("../../src/ba_modding_toolkit/web/js/popup.js");
+const Popup = await import("../../src/bmpt/web/js/popup.js");
 
 // a message on the popup stack (the #dialog host); Escape closes it through the stack
 function message() {
@@ -47,7 +47,7 @@ function message() {
   return { host, closes };
 }
 
-const detail = readFileSync(new URL("../../src/ba_modding_toolkit/web/js/detail.js", import.meta.url), "utf8");
+const detail = readFileSync(new URL("../../src/bmpt/web/js/detail.js", import.meta.url), "utf8");
 const detailKeys = detail.slice(detail.indexOf("// Escape leaves fullscreen only when"), detail.indexOf('addEventListener("keyup"'));
 function detailFullscreen() {
   const calls = [];
@@ -88,7 +88,7 @@ test("with a popup open the fullscreen handler does nothing, whatever order the 
   } finally { view.dispose(); }
 });
 
-const controller = readFileSync(new URL("../../src/ba_modding_toolkit/web/js/photography/controller.js", import.meta.url), "utf8");
+const controller = readFileSync(new URL("../../src/bmpt/web/js/photography/controller.js", import.meta.url), "utf8");
 const cameraKeys = controller.slice(controller.indexOf("// Escape leaves the camera"));
 
 test("Escape on a capture error over the camera closes the error only; the next one leaves the camera", () => {

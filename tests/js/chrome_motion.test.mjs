@@ -4,12 +4,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { readFileSync } from "node:fs";
-import { LOBBY_ENTRY } from "../../src/ba_modding_toolkit/web/js/ui-tokens.js";
+import { LOBBY_ENTRY } from "../../src/bmpt/web/js/ui-tokens.js";
 
-const source = readFileSync(new URL("../../src/ba_modding_toolkit/web/js/chrome-motion.js", import.meta.url), "utf8")
+const source = readFileSync(new URL("../../src/bmpt/web/js/chrome-motion.js", import.meta.url), "utf8")
   .replace('import { reflowCorners } from "./corner-layout.js";', "const reflowCorners = () => {};")
   .replace('import { rpc } from "./api.js";', "const rpc = (...call) => { globalThis.motionRpc.push(call); return Promise.resolve(); };")
-  .replace('import { LOBBY_ENTRY } from "./ui-tokens.js";', `import { LOBBY_ENTRY } from "${new URL("../../src/ba_modding_toolkit/web/js/ui-tokens.js", import.meta.url).href}";`);
+  .replace('import { LOBBY_ENTRY } from "./ui-tokens.js";', `import { LOBBY_ENTRY } from "${new URL("../../src/bmpt/web/js/ui-tokens.js", import.meta.url).href}";`);
 globalThis.motionRpc = [];
 const M = await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`);
 const S = 1920 / 2960, near = (a, b, e = 1e-6) => assert.ok(Math.abs(a - b) <= e, `${a} vs ${b}`);
@@ -184,7 +184,7 @@ test("no native window buttons, no motion for them", () => {
 });
 
 test("boot() lets the bars in after the first screen, and after a failed one too", async () => {
-  const main = readFileSync(new URL("../../src/ba_modding_toolkit/web/js/main.js", import.meta.url), "utf8");
+  const main = readFileSync(new URL("../../src/bmpt/web/js/main.js", import.meta.url), "utf8");
   const code = main.slice(main.indexOf("async function boot()"), main.indexOf("async function start()"));
   for (const fail of [false, true]) {
     const entered = [];

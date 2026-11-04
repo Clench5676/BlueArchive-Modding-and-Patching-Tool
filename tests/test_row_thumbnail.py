@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
-from ba_modding_toolkit.gameassets import AssetCache, GameAssets
+from bmpt.gameassets import AssetCache, GameAssets
 from ba_modding_toolkit.searching import get_search_dirs
 
 
@@ -31,7 +31,7 @@ def verified_frame(tmp_path_factory):
 @pytest.mark.parametrize("scale", [.34, .54, .68, .873, 1.25, 2, 4])
 def test_verified_item_frame_contour_matches_rounded_thumbnail_within_one_pixel(verified_frame, scale):
     widget, meta, image = verified_frame
-    module = Path(__file__).resolve().parents[1] / "src/ba_modding_toolkit/web/js/row-thumbnail.js"
+    module = Path(__file__).resolve().parents[1] / "src/bmpt/web/js/row-thumbnail.js"
     script = '''import {frameOutline, innerFrame} from MODULE;
 let s=""; for await (const part of process.stdin) s += part;
 const {pixels,widget,meta,scale}=JSON.parse(s), outline=frameOutline(pixels);

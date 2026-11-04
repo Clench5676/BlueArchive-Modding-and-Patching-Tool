@@ -1,4 +1,4 @@
-"""Tests for the Tk-free settings in ba_modding_toolkit.config."""
+"""Tests for the Tk-free settings in bmpt.config."""
 
 import itertools
 import os
@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 import toml
 
-from ba_modding_toolkit.config import FIELDS, Field, Settings
+from bmpt.config import FIELDS, Field, Settings
 from ba_modding_toolkit.spine import SpineViewer
 
 
@@ -108,7 +108,7 @@ def test_anim_check_key_is_stable_and_follows_the_settings(tmp_path):
 
 def test_explicit_directory_pair_never_runs_game_detection(tmp_path: Path, monkeypatch):
     """A value read from the file is coerced by the field's type: the detection default runs only for a missing key."""
-    from ba_modding_toolkit import config
+    from bmpt import config
 
     def detect(region="auto"):
         raise AssertionError("game detection ran")
@@ -127,7 +127,7 @@ def test_explicit_directory_pair_never_runs_game_detection(tmp_path: Path, monke
 
 
 def test_a_missing_key_still_runs_its_default(tmp_path: Path, monkeypatch):
-    from ba_modding_toolkit import config
+    from bmpt import config
 
     monkeypatch.setattr(config, "get_BA_path", lambda region="auto": "/found" if region == "global" else None)
     s = Settings(tmp_path / "config.toml")
@@ -144,7 +144,7 @@ def test_each_install_is_detected_at_most_once_per_settings_load(tmp_path, monke
         calls.append(region)
         return f"/games/{region}" if region == found else None
 
-    monkeypatch.setattr("ba_modding_toolkit.config.get_BA_path", detect)
+    monkeypatch.setattr("bmpt.config.get_BA_path", detect)
     settings = Settings(tmp_path / "config.toml")
     assert calls == ["global", "japan"]
     assert settings.get("file_source") == ("windows_japan" if found == "japan" else "windows_global")
@@ -169,7 +169,7 @@ def test_legacy_directory_migration_is_lossless_and_idempotent(tmp_path, monkeyp
     install = tmp_path / "install"
     resources = install / "GameData" / "Windows"
     resources.mkdir(parents=True)
-    monkeypatch.setattr("ba_modding_toolkit.config.get_BA_path", lambda region:
+    monkeypatch.setattr("bmpt.config.get_BA_path", lambda region:
                         str(install) if identified in (region, "ambiguous") else None)
     path = tmp_path / "config.toml"
     dirs = {"game_resource_dir": str(resources), "file_source": "windows_global", "future": "kept"}
@@ -233,7 +233,7 @@ def test_selected_server_resolution_never_falls_back(tmp_path, source, region):
 @pytest.fixture
 def detection(monkeypatch):
     """No game is detected, so every default is the same on every machine."""
-    monkeypatch.setattr("ba_modding_toolkit.config.get_BA_path", lambda region="auto": None)
+    monkeypatch.setattr("bmpt.config.get_BA_path", lambda region="auto": None)
 
 
 def _write_bad(path: Path, kind: str) -> bytes:
@@ -298,7 +298,7 @@ def test_a_save_goes_ahead_when_the_bad_copy_cannot_be_made(tmp_path, detection,
     def refuse(*args, **kwargs):
         raise PermissionError("no copy")
 
-    monkeypatch.setattr("ba_modding_toolkit.config.shutil.copyfileobj", refuse)
+    monkeypatch.setattr("bmpt.config.shutil.copyfileobj", refuse)
     settings.save()
     assert Settings(path).get("max_workers") == 4
     assert "Cannot keep the unreadable config.toml" in caplog.text
@@ -324,7 +324,7 @@ def test_a_group_or_value_of_the_wrong_type_reads_as_missing_and_the_rest_is_rea
 
 
 def test_a_value_of_the_wrong_type_runs_the_detection_default_like_a_missing_key(tmp_path, monkeypatch):
-    monkeypatch.setattr("ba_modding_toolkit.config.get_BA_path", lambda region="auto": "/found" if region == "global" else None)
+    monkeypatch.setattr("bmpt.config.get_BA_path", lambda region="auto": "/found" if region == "global" else None)
     path = tmp_path / "config.toml"
     path.write_text("[Directories]\ngame_resource_dir = 2020-01-01\nfile_source = {a = 1}\n", encoding="utf-8")
     settings = Settings(path)
@@ -332,7 +332,7 @@ def test_a_value_of_the_wrong_type_runs_the_detection_default_like_a_missing_key
 
 
 def test_the_legacy_directory_migration_ignores_a_value_that_is_not_text():
-    from ba_modding_toolkit.config import migrate_game_directories
+    from bmpt.config import migrate_game_directories
 
     for directories in (3, [], {"game_resource_dir": 3}, {"game_resource_dir": ["x"]}, {"game_resource_dir": "\0"}):
         assert migrate_game_directories(directories, lambda region: "/games") == directories

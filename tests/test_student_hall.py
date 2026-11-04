@@ -4,9 +4,9 @@ from uuid import uuid4
 
 import pytest
 
-from ba_modding_toolkit.errors import ServiceError
-from ba_modding_toolkit.webui.state import UiState
-from ba_modding_toolkit.webui.student_hall import empty_hall, normalize_hall, portrait_lines, save_hall, validate_hall
+from bmpt.errors import ServiceError
+from bmpt.webui.state import UiState
+from bmpt.webui.student_hall import empty_hall, normalize_hall, portrait_lines, save_hall, validate_hall
 
 
 def entry(**extra):
@@ -78,7 +78,7 @@ def test_failed_publication_preserves_complete_previous_snapshot(tmp_path, monke
     value["portraits"] = [entry()]
     def fail(*args):
         raise OSError("disk full")
-    monkeypatch.setattr("ba_modding_toolkit.webui.state._replace", fail)
+    monkeypatch.setattr("bmpt.webui.state._replace", fail)
     with pytest.raises(OSError):
         save_hall(state, value, 1)
     assert UiState(state.path).get("student_hall") == previous
@@ -118,8 +118,8 @@ def test_portrait_composition_and_cancellation_in_node():
 
 def test_library_only_cross_server_entries_are_available_without_local_core(tmp_path):
     from types import SimpleNamespace
-    from ba_modding_toolkit.webui.rpc import RpcRegistry
-    from ba_modding_toolkit.webui.student_hall import register_api
+    from bmpt.webui.rpc import RpcRegistry
+    from bmpt.webui.student_hall import register_api
     variant = SimpleNamespace(key="unreleased", names={"en": {"full": "Unreleased"}}, spr=None, lobby=None, portrait=None)
     mod = SimpleNamespace(id="future-mod", target="unreleased", kind="lobby", alias="", label="Future lobby")
     service = SimpleNamespace(game_found=lambda: True, state=UiState(tmp_path / "ui.json"),
@@ -138,7 +138,7 @@ def test_library_only_cross_server_entries_are_available_without_local_core(tmp_
 
 
 def test_global_portrait_scale_defaults_read_and_persistence_leave_entries_unchanged(tmp_path):
-    from ba_modding_toolkit.webui.student_hall import normalize_hall
+    from bmpt.webui.student_hall import normalize_hall
     state = UiState(tmp_path / "ui.json")
     legacy = empty_hall()
     legacy.pop("portraitScale")

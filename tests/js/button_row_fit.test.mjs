@@ -20,18 +20,18 @@ globalThis.document = {
   documentElement: { lang: "en-US", appendChild() {} },
 };
 globalThis.getComputedStyle = () => ({ getPropertyValue: () => "" });
-const NGUI = await import("../../src/ba_modding_toolkit/web/js/ngui.js");
+const NGUI = await import("../../src/bmpt/web/js/ngui.js");
 const { LINE_PITCH, fitGroup, fitLabels, fitRow, fitText, fontSizeFor, glyphWidth } = NGUI;
 
 const LOCALES = ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"];
 const web = new Map();
-for (const locale of LOCALES) web.set(locale, JSON.parse(await readFile(new URL(`../../src/ba_modding_toolkit/locales/${locale}.json`, import.meta.url), "utf8")).webui);
+for (const locale of LOCALES) web.set(locale, JSON.parse(await readFile(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8")).webui);
 const text = (locale, key) => {
   const value = key.split(".").reduce((o, part) => o?.[part], web.get(locale));
   assert.equal(typeof value, "string", `${locale}: ${key}`);
   return value;
 };
-const source = async (file) => readFile(new URL(`../../src/ba_modding_toolkit/web/js/${file}`, import.meta.url), "utf8");
+const source = async (file) => readFile(new URL(`../../src/bmpt/web/js/${file}`, import.meta.url), "utf8");
 
 const widest = (f) => Math.max(...f.text.split("\n").map((l) => glyphWidth(l, f.fs)));
 const tall = (f) => f.lines * fontSizeFor(f.text, f.fs) * LINE_PITCH;
@@ -121,7 +121,7 @@ for (const locale of LOCALES) test(`the four action cards and the three tabs sha
 
 // --- popup buttons: Ok / Cancel pairs (popupFrame, listFrame, consent) and the update popup's three, Common_Btn_BG 496 x 177 ---
 // One caption range for every footer (ui-tokens.js FOOTER.caption): 72 down to 48, a 400 box, two lines, 140 high
-const { FOOTER } = await import("../../src/ba_modding_toolkit/web/js/ui-tokens.js");
+const { FOOTER } = await import("../../src/bmpt/web/js/ui-tokens.js");
 const PAIRS = [["picker.ok", "popup.cancel"], ["popup.save", "popup.cancel"], ["consent.no", "consent.yes"], ["mods.scan.no", "mods.scan.yes"],
   ["spine.license.no", "spine.license.yes"], ["update.later", "update.notes", "update.now"], ["update.later", "update.notes", "update.restart"],
   ["update.later", "update.notes", "update.page"]];
@@ -174,7 +174,7 @@ for (const locale of LOCALES) test(`the roster's six segments and the popup's th
 });
 
 // --- Settings: tabs (300 wide), the buttons of a value row (402 x 136, the prefab's small button), the export pair (680 x 136) ---
-const { SMALL_BUTTON } = await import("../../src/ba_modding_toolkit/web/js/ui-tokens.js");
+const { SMALL_BUTTON } = await import("../../src/bmpt/web/js/ui-tokens.js");
 const S = 1920 / 2960;
 for (const locale of LOCALES) test(`Settings tabs and button pairs share one size and fit in ${locale}`, async () => {
   const settings = await source("settings.js"), buttons = await source("game-buttons.js");

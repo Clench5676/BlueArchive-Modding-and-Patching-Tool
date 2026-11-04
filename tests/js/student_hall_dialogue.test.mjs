@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { readFile } from "node:fs/promises";
-import { dialogueText } from "../../src/ba_modding_toolkit/web/js/dialogue-text.js";
-import { spriteBorders, sliceAxis, slicePoint } from "../../src/ba_modding_toolkit/web/js/sprite-slices.js";
+import { dialogueText } from "../../src/bmpt/web/js/dialogue-text.js";
+import { spriteBorders, sliceAxis, slicePoint } from "../../src/bmpt/web/js/sprite-slices.js";
 
 class Element {
   constructor() { this.style = {}; this.children = []; this.attrs = {}; }
@@ -24,7 +24,7 @@ globalThis.hallDialogueHarness = {
   clearTimeout: (id) => { timers.delete(id); timerDelays.delete(id); },
   URL: { createObjectURL: () => `blob:voice-${nextTimer}`, revokeObjectURL: (url) => revoked.push(url) },
 };
-let source = await readFile(new URL("../../src/ba_modding_toolkit/web/js/student-hall-dialogue.js", import.meta.url), "utf8");
+let source = await readFile(new URL("../../src/bmpt/web/js/student-hall-dialogue.js", import.meta.url), "utf8");
 source = source.replace(/^import .*;$/gm, "");
 source = `const {NGUI, defaultRpc, language, S, talkExpression, setTimeout, clearTimeout, URL, spriteBorders, sliceAxis, slicePoint, dialogueText} = globalThis.hallDialogueHarness;\n${source}`;
 const { createDialogue, memoryMemo, prepareBalloon, balloonPosition, balloonBody, wrapDialogue, lobbyPoint, lobbyBalloon, clampBalloon, createLobbyDialogue } = await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`);
@@ -508,8 +508,8 @@ test("balloon subtitle transitions preserve the 260 ms sequence and immediate la
   h.show("", true); assert.equal(host.hidden, true); h.dispose();
 });
 test("the Hall and memorial lobby use one prepareBalloon and CSS contributes no subtitle look", async () => {
-  const lobby = await readFile(new URL("../../src/ba_modding_toolkit/web/js/lobby.js", import.meta.url), "utf8");
-  const css = await readFile(new URL("../../src/ba_modding_toolkit/web/css/app.css", import.meta.url), "utf8");
+  const lobby = await readFile(new URL("../../src/bmpt/web/js/lobby.js", import.meta.url), "utf8");
+  const css = await readFile(new URL("../../src/bmpt/web/css/app.css", import.meta.url), "utf8");
   assert.match(lobby, /import\("\.\/student-hall-dialogue.js"\)/);
   assert.equal((source.match(/function prepareBalloon\(/g) || []).length, 1);
   assert.equal((source.match(/prepareBalloon\(template|prepareBalloon\(saved/g) || []).length, 3);

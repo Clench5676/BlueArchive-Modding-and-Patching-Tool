@@ -8,14 +8,14 @@ from types import SimpleNamespace
 
 import pytest
 
-from ba_modding_toolkit.errors import ServiceError
-from ba_modding_toolkit.library.photographs import Photographs
+from bmpt.errors import ServiceError
+from bmpt.library.photographs import Photographs
 from test_photographs import capture
 from test_webui import app, rpc, services  # noqa: F401  (fixtures)
 
 BAD = "b" * 32
 DIGEST = "d" * 64
-LOG = "ba_modding_toolkit.library.photographs"
+LOG = "bmpt.library.photographs"
 
 
 def family_of(key):

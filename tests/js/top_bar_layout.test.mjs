@@ -18,8 +18,8 @@ globalThis.document = {
   documentElement: { lang: "en-US", appendChild() {} },
 };
 globalThis.getComputedStyle = () => ({ getPropertyValue: () => "" });
-const NGUI = await import("../../src/ba_modding_toolkit/web/js/ngui.js");
-const Layout = await import("../../src/ba_modding_toolkit/web/js/top-bar-layout.js");
+const NGUI = await import("../../src/bmpt/web/js/ngui.js");
+const Layout = await import("../../src/bmpt/web/js/top-bar-layout.js");
 const S = 1920 / 2960;
 const LOCALES = ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"];
 const near = (a, b, eps = 1e-6) => assert.ok(Math.abs(a - b) < eps, `${a} != ${b}`);
@@ -94,7 +94,7 @@ test("every element's ink lands on the bar's centre, from the prefab's geometry 
 });
 
 for (const locale of LOCALES) test(`the caption keeps its script reference baseline in ${locale}`, async () => {
-  const ui=JSON.parse(await readFile(new URL(`../../src/ba_modding_toolkit/locales/${locale}.json`,import.meta.url),'utf8')).webui;
+  const ui=JSON.parse(await readFile(new URL(`../../src/bmpt/locales/${locale}.json`,import.meta.url),'utf8')).webui;
   document.documentElement.lang=locale;
   for(const fs of [20,23,26]){
     const shift=NGUI.inkShift(ui.mods.switch,fs,{reference:true});
@@ -108,12 +108,12 @@ for (const locale of LOCALES) test(`the caption keeps its script reference basel
 });
 
 test("the bar still measures its fill and aligns the remaining caption by script reference ink", async () => {
-  const css = await readFile(new URL("../../src/ba_modding_toolkit/web/css/app.css", import.meta.url), "utf8");
+  const css = await readFile(new URL("../../src/bmpt/web/css/app.css", import.meta.url), "utf8");
   assert.match(css, /padding-bottom: var\(--bar-padding, 4\.88px\)/);
   near(Layout.barPadding(Layout.barCentre()), 4.88, 0.01);
-  const nav = await readFile(new URL("../../src/ba_modding_toolkit/web/js/nav.js", import.meta.url), "utf8");
+  const nav = await readFile(new URL("../../src/bmpt/web/js/nav.js", import.meta.url), "utf8");
   assert.match(nav, /watchTopBar\(\)/);
-  const bar=await readFile(new URL('../../src/ba_modding_toolkit/web/js/top-bar.js',import.meta.url),'utf8');
+  const bar=await readFile(new URL('../../src/bmpt/web/js/top-bar.js',import.meta.url),'utf8');
   assert.match(bar,/querySelectorAll\("\.ms-label"\)/);
   assert.match(bar,/inkShift\(el\.textContent, parseFloat\(getComputedStyle\(el\)\.fontSize\), \{ reference: true \}\)/);
 });

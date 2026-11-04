@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { captureRetries } from "../../src/ba_modding_toolkit/web/js/capture-retries.js";
+import { captureRetries } from "../../src/bmpt/web/js/capture-retries.js";
 
 test("a busy queue cannot spend retry backoff or attempts, including work arriving during backoff", (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
