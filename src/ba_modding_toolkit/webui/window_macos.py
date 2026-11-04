@@ -24,6 +24,8 @@ class CocoaHost:
         if event.window() != self.window or not self.owner.active or not self.owner.valid or self.transition:
             return event
         content = self.window.contentView()
+        if content is None:
+            return event
         point = content.convertPoint_fromView_(event.locationInWindow(), None)
         bounds = content.bounds()
         x = point.x - bounds.origin.x
@@ -40,8 +42,7 @@ class CocoaHost:
             self.window.performWindowDragWithEvent_(event)
         return None
 
-    def _rect(self, button):
-        view = self.window.contentView()
+    def _rect(self, button, view):
         frame = button.convertRect_toView_(button.bounds(), view)
         top = frame.origin.y if view.isFlipped() else view.bounds().size.height - frame.origin.y - frame.size.height
         return Rect(frame.origin.x, top, frame.origin.x + frame.size.width, top + frame.size.height)
@@ -95,10 +96,12 @@ class CocoaHost:
 
     def measure(self, layout):
         content = self.window.contentView()
-        if self.window.isMiniaturized() or self.transition:
+        # pywebview's close handler removes the web view, which is the content view, before AppKit posts the window's
+        # last notifications: nothing to measure then, and no reason to give the native chrome up.
+        if content is None or self.window.isMiniaturized() or self.transition:
             return None
         if not self.state()["fullscreen"]:
-            before = [self._rect(button) for button in self.buttons]
+            before = [self._rect(button, content) for button in self.buttons]
             wanted = vertical_offsets(before, layout["centre"])
             # The title bar container is only so high (32 pt with the current SDK). On a wide window the toolbar's centre line
             # sits lower than the buttons can go inside it: they go as low as it allows rather than giving the controls up.
@@ -110,12 +113,12 @@ class CocoaHost:
                 frame, bounds = button.frame(), parent.bounds()
                 if not self.api.NSContainsRect(bounds, frame):
                     raise RuntimeError("M1 button would be clipped by its AppKit container")
-            after = [self._rect(button) for button in self.buttons]
+            after = [self._rect(button, content) for button in self.buttons]
             for source, target, actual in zip(before, targets, after):
                 if abs(source.left - actual.left) > .5 or abs(target.top - actual.top) > .5:
                     raise RuntimeError("M1 AppKit relayout rejected vertical button alignment")
         # Fullscreen visibility/reveal belongs to AppKit; never force buttons visible there.
-        visible = [self._rect(button) for button in self.buttons]
+        visible = [self._rect(button, content) for button in self.buttons]
         return union(visible) if visible else None
 
     def command(self, action):
