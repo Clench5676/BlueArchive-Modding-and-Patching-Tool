@@ -1698,7 +1698,7 @@ Validation: full suites on `f1ad2631`: 4236 passed, 26 skipped; JavaScript 2149 
 
 ## BL-070: One design system for the web UI
 
-- Status: Steps 1 and 2 of 4 accepted by the owner on macOS (alpha.5 and alpha.7, 2026-11-03); Windows not reviewed. Steps 3 and 4 not started.
+- Status: Steps 1 and 2 of 4 accepted by the owner on macOS (alpha.5 and alpha.7, 2026-11-03); Windows not reviewed. Step 3 cleared to continue by the owner (2026-11-04), dispatch to be proposed; step 4 not started.
 - Requested: 2026-11-02 (owner): does the UI follow the game's design language (button sizes, spacing, fonts), and where it does not, does it have one system of its own?
 
 Owner decisions (2026-11-03): follow the prefab's values as the one system; run the migration one step at a time; keep the top bar and the Enable Mods switch at their present size.
@@ -1831,7 +1831,7 @@ app, or the game updated those students, since the last good state.
 
 ## BL-075: Settings: the volume sliders do not follow the arrow keys
 
-- Status: Open, minor (owner, 2026-11-03).
+- Status: Closed by the owner (2026-11-04).
 - Requested: 2026-11-03 (owner, BL-067 review): the arrow keys do not change the volume. UI-14 (BL-067) meant to fix this.
 
 ## BL-076: Student Hall: select a portrait by its outline, a pinned toolbar, its own size and a skin swap
@@ -1847,8 +1847,8 @@ app, or the game updated those students, since the last good state.
   the top right got it on its face (pushed below the top-right controls), and entering layout editing stalled for seconds. Owner
   decision: where the toolbar cannot go above the head, it goes under the feet. The stall was the main-thread re-decode of every
   atlas page for pick alpha (about 120 ms per 2048 page in Chrome). Fixed in `f2d9820d` (alpha.12): feet placement, pages read in
-  the background (blob decode and shrink off the main thread, opaque until read). Awaiting the owner's acceptance on alpha.12.
-  Japanese, Korean and Thai "Change Portrait" wording unreviewed.
+  the background (blob decode and shrink off the main thread, opaque until read). Accepted by the owner on macOS (alpha.13,
+  2026-11-04); Windows not reviewed. Japanese, Korean and Thai "Change Portrait" wording unreviewed.
 - Requested: 2026-11-03 (owner): with portraits close together, the toolbar of a placed portrait is hard to reach. Clicking a portrait
   should draw the gold "applied" outline along its real visible outline and pin its toolbar (hovering another portrait shows no
   toolbar then); clicking it again clears the selection. The toolbar should gain a size slider of its own and a button that swaps the
@@ -1871,7 +1871,7 @@ same student's other portraits not yet in the Hall, keeping position, size, mirr
 
 ## BL-077: Photography: blank space in the Expressions list pans the camera
 
-- Status: Fixed in `9bef922d` (alpha.13), awaiting the owner's acceptance.
+- Status: Fixed in `9bef922d` (alpha.13); accepted by the owner on macOS (2026-11-04); Windows not reviewed.
 - Requested: 2026-11-03 (owner, 0.6.1-alpha.12, macOS): with the portrait camera's Expressions list open, the pointer over the list's
   blank space turns into the hand, and the wheel there moves the frame.
 
@@ -1884,10 +1884,20 @@ scroll area takes the pointer, so a wheel in the gaps scrolls the list and the g
 
 ## BL-078: macOS: dragging the top bar sometimes does not move the window
 
-- Status: Open, not reproduced (owner, 2026-11-03).
+- Status: Open, not reproduced (owner, 2026-11-03). Close-time chrome failure from the owner's alpha.13 log fixed in `1a2afd84`;
+  whether it explains the failed drag is not confirmed.
 - Requested: 2026-11-03 (owner, 0.6.1-alpha.12, macOS): dragging the top bar did not move the window; happened once, not seen again.
 
 Candidates (lead, from the code): the native drag regions (`window-chrome.js` `dragRegions`) are published empty while a popup or
 consent host is open, a scene is immersive or the chrome is not yet valid, and again only after the next layout pass; the native
 chrome itself failing (`Native window chrome inactive: ...` in the log) leaves pywebview's JS drag. Needed when it returns: the
 screen, whether the traffic lights were shown, whether a double-click on the bar worked, and the log line if any.
+
+Owner's alpha.13 log (2026-11-04, macOS, three times: 00:32, 08:28, 08:30): `Native window chrome inactive: 'NoneType' object
+has no attribute 'isFlipped'` from `CocoaHost.measure` → `_rect`. Cause: pywebview's `windowWillClose_` removes the web view,
+which is the window's content view, before AppKit posts the window's last notifications; the resign-key refresh measured the
+buttons against a None view, and `WindowChrome.fail` gave the native chrome up (buttons restored, drag monitor removed). Fixed in
+`1a2afd84`: `measure` returns nothing and `mouse_down` passes the event through while there is no content view; the chrome
+stays active. Reproduced in `tests/test_window_chrome.py` (the old code raises at the same line). Only the close path is known
+to clear the content view, so these entries are most likely close-time noise; a failure mid-session would also have replaced
+the traffic lights with the fallback buttons. Still needed if the drag fails again: the log lines just before the failure.

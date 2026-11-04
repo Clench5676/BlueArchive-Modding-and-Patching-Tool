@@ -1,13 +1,13 @@
 # Development status
 
-As of 2026-11-03. Verify the actual branch, working tree and `pyproject.toml` version before reporting progress.
+As of 2026-11-04. Verify the actual branch, working tree and `pyproject.toml` version before reporting progress.
 [Backlog](backlog.md) holds the detailed requirements and owner findings.
 
 ## Branch state
 
 | Branch | State |
 | --- | --- |
-| `main` | Local version `0.6.1-alpha.13`: the published 0.6.0, the upstream sync to `6c61fdc8`, the security policy, the fix that keeps files from a mod inside their output folder (`e8bee4c2`), BL-065 through BL-069, BL-070 steps 1 and 2, BL-071, BL-072, BL-073, BL-076, BL-077. Not pushed: held until upstream publishes its fix for the same issue. |
+| `main` | Local version `0.6.1-alpha.13`: the published 0.6.0, the upstream sync to `6c61fdc8`, the security policy, the fix that keeps files from a mod inside their output folder (`e8bee4c2`), BL-065 through BL-069, BL-070 steps 1 and 2, BL-071, BL-072, BL-073, BL-076, BL-077, the BL-078 close-time chrome fix (`1a2afd84`). Not pushed: held until upstream publishes its fix for the same issue. |
 
 0.6.0 is published (tag `0.6.0` at `817ebeda`, 2026-10-30): macOS build uploaded, Windows build by the release workflow.
 
@@ -45,14 +45,13 @@ As of 2026-11-03. Verify the actual branch, working tree and `pyproject.toml` ve
 | BL-059 through BL-063 | Accepted by the owner on Windows (alpha.14) |
 | BL-064 | Accepted by the owner on Windows (alpha.15) |
 | BL-065 through BL-069 | Accepted by the owner on macOS (alpha.7); Windows not reviewed |
-| BL-070 | Steps 1 and 2 of 4 accepted by the owner on macOS (alpha.5, alpha.7); Windows not reviewed; steps 3 and 4 not started |
+| BL-070 | Steps 1 and 2 of 4 accepted by the owner on macOS (alpha.5, alpha.7); Windows not reviewed; step 3 cleared to continue (2026-11-04), not dispatched; step 4 not started |
 | BL-071, BL-072 | Accepted by the owner on macOS (alpha.7); Windows not reviewed |
 | BL-073 | Accepted by the owner (alpha.8) |
 | BL-074 | Closed by the owner: working as intended |
-| BL-076 | Toolbar under the feet where the head has no room, layout editing without the stall, in alpha.12; owner acceptance pending |
-| BL-075 | Open, minor |
-| BL-077 | Fixed in alpha.13; owner acceptance pending |
-| BL-078 | Open, not reproduced |
+| BL-076, BL-077 | Accepted by the owner on macOS (alpha.13, 2026-11-04); Windows not reviewed |
+| BL-075 | Closed by the owner (2026-11-04) |
+| BL-078 | Open, not reproduced; the close-time chrome failure in the owner's alpha.13 log fixed on `main` (`1a2afd84`) |
 | BL-057, BL-058 | Accepted by the owner on macOS (alpha.12); Windows not reviewed |
 | BL-055 | Accepted by the owner on macOS (0.6.0 pre-review) |
 | BL-014 | Candidate, not scheduled |
@@ -65,7 +64,7 @@ from passing tests or the presence of earlier code.
 
 `dist/Blue-Archive-Modding-and-Patching-Tool-0.6.1-alpha.13-macos-arm64.dmg`, MD5 `a4176a691a86f8defec90f3ff026f6f9`,
 built from `cda24269` (`chore(release): 0.6.1-alpha.13`): alpha.12 and the BL-077 fix (the photography choice list no longer
-pans the camera). BL-076 and BL-077 await the owner's review.
+pans the camera). BL-076 and BL-077 accepted by the owner on macOS (2026-11-04).
 
 On `main` before the build (`9bef922d`): 4249 passed, 26 skipped (Python, including the photography JavaScript tests) (isolated runs with the official development
 view). Native Windows behavior is not verified on the macOS host.
