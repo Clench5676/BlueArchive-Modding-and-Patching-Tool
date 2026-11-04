@@ -1927,7 +1927,7 @@ the prefab values, from the development view). It imports no other UI module.
   every control, 4 px `#2fa6f0`, 2 px off, radius 6.49 px (a roster card's keeps its -3 px offset because the list clips; no
   glow). `.plain-popup` is 14.27 px, `.plain-line-button` and the plain checkbox 6.49 px. The no-game screens have one flat
   button look, `#8de4ff` with `#314665` ink on a 6.49 px corner, no skew and no shadow (`.message-button`, the recovery
-  panel's buttons and `.plain-line-button`). The lobby subtitle and the photography sheet are unchanged.
+  panel's buttons and `.plain-line-button`). The photography sheet is unchanged; the lobby dialogue uses ChatDialog balloons.
 - **Settings rows** stand 12 units apart (`SETTINGS.rowGap`, the prefab's Game tab); the scrolling area ends at the last
   row's foot plus that gap.
 
@@ -2567,6 +2567,23 @@ Online data, fetched on demand and kept in memory only (never written to disk):
 
 The page shows only the UI language's lines: a dialogue card without one shows a grey, slanted "Dialogue N", and the
 subtitle shows nothing for it.
+
+The memorial lobby dialogue host (`.lobby-subtitle`) draws game widgets rather than a CSS text box. In the detail
+screen's left view it uses the Hall's `student-hall-dialogue.js` `prepareBalloon`, `balloonPosition` and `wrapDialogue`:
+`LobbyCommon/DialogPanel/ChatDialog/Talk`, `Lobby_balloon`, native fs52 and #3e444a. The lobby parser's `dialog.Talk`
+is in the same prefab-root coordinate space as the pat and drag rectangles (both include ancestor transforms).
+The top-left pivot maps through the current lobby view, then clamps to the visible area before the detail panel's
+rendered background. Missing/nonfinite Talk positions, special framing and sparse art use `touch` as a zero-size
+anchor; `balloonPosition` puts it to the right or flips it left. Camera/frame changes recompute placement.
+
+Fullscreen uses `LobbyCommon`'s `UITalk` at its screen anchor in the detail screen and immersive Hall. The Hall's
+ordinary memorial view uses Talk even though its camera calls `frame("full")`: `setDialogueFullscreen` separates
+immersive UI state from camera framing. `hall.dialogueLayout` accepts Talk or UITalk; the backend reads
+all geometry and styling from the prefab. UITalk retains its 813 x 298 bottom-pivot sliced sprite, 680 x 220 centred
+label, fs62, offsets and (-678, -613) box position. `NGUI.shrinkContent` implements its overflow mode (0), wrapping
+in the selected line's language and reducing whole font sizes until the complete text fits, without a design minimum.
+The existing 0.26 s upward leave/rising entry sequence and textless-cue retention remain. The pointer-transparent
+host exposes the current text through `role="status"` and `aria-label`; the Hall portrait dialogue stays unchanged.
 
 ### Local error reports and startup recovery
 

@@ -52,7 +52,7 @@ export function elements(){return {root,art,hits,chrome,portraitSceneHost,sceneC
 export function immersiveFixture(active,onPlay){fullscreen={active:()=>active,dispose(){}};dialogue={play:onPlay};}
 
 export function selection(){return selected;} export {selectPortrait,onKey};
-export function draft(){return store;} export {controls,saveDraft,cancelDraft,renderScene,portraitActions,createHoverOwner,memorial,step,refreshMemorialCaptions};
+export function draft(){return store;} export {controls,saveDraft,cancelDraft,renderScene,portraitActions,createHoverOwner,memorial,step,refreshMemorialCaptions,configureMemorial};
 export function cameraFixture(view){sceneCamera={view:()=>view,sync(){},dispose(){}};}
 export function hitsNow(){originalHits();return hits;}`;
 // The fixture is intentionally DOM-only; actual Spine identities and GPU resource reuse are covered by student_hall.test.
@@ -128,7 +128,7 @@ test("atlas alpha is prepared for picking only in layout editing",()=>{
 
 const tick=()=>new Promise(setImmediate);
 function memoryFixture(){
-  const events=[],players=[0,1].map(index=>({index,suspended:true,suspend(){if(!this.suspended)events.push(["suspend",index]);this.suspended=true;},resume(){if(this.suspended)events.push(["resume",index]);this.suspended=false;},async prepareFrame(){events.push(["frame",index]);return true;},hide(){events.push(["hide",index]);},setVolume(){},setZoomLimit(){},setPostProcessing(){},setIntro(){}}));
+  const events=[],players=[0,1].map(index=>({index,suspended:true,suspend(){if(!this.suspended)events.push(["suspend",index]);this.suspended=true;},resume(){if(this.suspended)events.push(["resume",index]);this.suspended=false;},async prepareFrame(){events.push(["frame",index]);return true;},hide(){events.push(["hide",index]);},setVolume(){},setZoomLimit(){},setPostProcessing(){},setIntro(){},setDialogueFullscreen(on){this.dialogueFullscreen=on;}}));
   let loadDelay=null;
   const pool=createMemorialPool({moduleFor:async index=>players[index],load:async(choice,host,signal,player)=>{events.push(["load",player.index,choice.source]);await loadDelay;return true;}});
   return {pool,players,events,delay(value){loadDelay=value;}};
@@ -162,7 +162,7 @@ test("portraits and the last memorial survive round trips with one memory load a
 
 test("the real memorial wrapper rejects null metadata or a false frame result before its ready contract",async()=>{
   setup();const host=new Element(),signal=new AbortController().signal,choice={variant:"m",core:"m",source:"official"};
-  const player={setVolume(){},setZoomLimit(){},setPostProcessing(){},setIntro(){},frame(){},interactive(){},show:async()=>null,prepareFrame:async()=>false};
+  const player={setVolume(){},setZoomLimit(){},setPostProcessing(){},setIntro(){},setDialogueFullscreen(on){this.dialogueFullscreen=on;},frame(){},interactive(){},show:async()=>null,prepareFrame:async()=>false};
   await assert.rejects(Hall.memorial(choice,host,signal,player),/source is unavailable/);
   player.show=async()=>({sequences:[]});await assert.rejects(Hall.memorial(choice,host,signal,player),/frame is unavailable/);
 });
@@ -270,4 +270,12 @@ test("WebKit's click-only release selects, toggles off and never drags",()=>{
   tap();assert.equal(Hall.selection(),null,"a second click clears it");
   tap();assert.equal(Hall.selection(),"a");renderer.pick=()=>null;tap();assert.equal(Hall.selection(),null,"an empty click clears it");
   delete renderer.pick;
+});
+
+test("ordinary Hall memorials use Talk even with the full camera; immersion alone selects UITalk", () => {
+  setup(); const changes = [], player = { setDialogueFullscreen: (on) => changes.push(on), setVolume() {}, setZoomLimit() {}, setPostProcessing() {}, setIntro() {} };
+  Hall.configureMemorial(player); Hall.immersiveFixture(true); Hall.configureMemorial(player);
+  Hall.immersiveFixture(false); Hall.configureMemorial(player);
+  assert.deepEqual(changes, [false, true, false]);
+  assert.match(source, /onChange: \(active\) => \{ memorials\?\.current\(\)\?\.player.setDialogueFullscreen\(active\)/);
 });

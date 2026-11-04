@@ -185,8 +185,8 @@ test("the plain popup and its parts sit on the ladder, and the three fallback bu
     assert.doesNotMatch(declarations, /skew|transform|box-shadow|text-shadow/);
   }
   assert.deepEqual([B.fill, B.ink, B.radiusPx], ["#8de4ff", "#314665", 6.49]);
-  // left as they were: the lobby's subtitle and the photography sheet
-  assert.match(ruleStarting(css, ".lobby-subtitle"), /border-radius: 10px/);
+  // The lobby now draws the prefab balloon; its CSS host has only geometry and motion.
+  assert.doesNotMatch(ruleStarting(css, ".lobby-subtitle"), /border-radius|background|color|font|padding/);
   assert.match(css, /\.loading-fallback i \{[^}]*border-radius: 50%/);
 });
 

@@ -419,6 +419,7 @@ function viewed(choice) {
   }).catch((error) => console.warn("Hall view history unavailable", error));
 }
 function configureMemorial(player, prefs = ctx?.prefs) {
+  player.setDialogueFullscreen(!!fullscreen?.active());
   player.setVolume((prefs?.voiceVolume ?? 80) / 100, ctx?.info?.mute || prefs?.voiceMuted);
   player.setZoomLimit(prefs?.lobbyZoom); player.setPostProcessing(prefs?.lobbyPost !== false); player.setIntro(prefs?.lobbyIntro !== false);
 }
@@ -531,6 +532,7 @@ async function renderScene() {
         const changed = memorials.current() !== nextMemory;
         memorials.commit(nextMemory); nextMemory.host.style.visibility = "";
         if (resourcesChanged) configureMemorial(nextMemory.player);
+        nextMemory.player.setDialogueFullscreen(!!fullscreen?.active());
         nextMemory.player.resume();
         if (changed) viewed(choice);
       } else if (temporaryHost) {
@@ -661,7 +663,7 @@ export async function show(context, data = null) {
   if (gen !== page) return; store = createDraft(saved); options = available; layouts = { lobby, slot };
   fullscreen = createFullscreen({ root, stage: document.getElementById("stage"), chrome, prepareExit: fullscreenExit,
     popupOpen: () => Popup.anyOpen(), returnFocus: () => chrome?.querySelector('[data-action="hall-fullscreen"]'),
-    onChange: () => { actorHover?.clearPointer(); renderHits(); } });
+    onChange: (active) => { memorials?.current()?.player.setDialogueFullscreen(active); actorHover?.clearPointer(); renderHits(); } });
   sceneCamera = createSceneCamera({ host: root, enabled: () => !!store && current().mode === "portraits" && !editing(),
     blocked: () => !root || pendingWrites > 0 || Popup.anyOpen() || Loading.held() || Loading.covering(), onChange: paintSceneView });
   document.addEventListener("keydown", onKey); await renderScene();

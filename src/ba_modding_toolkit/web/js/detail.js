@@ -525,6 +525,12 @@ async function drawScreen() {
   const bg = await NGUI.render(bgNode, frag, { scale: S, origin: ORIGIN, rootPath: "Inventory_ListControl", textures: { BG: v.bg || undefined }, deferImages: true });
   if (!ok()) return;
   const view = { nodes: new Map([...lv.nodes, ...rv.nodes]) };
+  const panel = rv.nodes.get("Inventory_ListControl/RightInfo/Target/Active/Bg")?.els[0];
+  if (panel) {
+    const [left, , , height] = NGUI.rect(panel);
+    const incline = rv.nodes.get("Inventory_ListControl/RightInfo/Target/Active/Bg").node.widgets.find((w) => "sprite" in w)?.incline || 0;
+    Lobby.setDialogueBounds({ left: 0, top: 0, right: left - Math.abs(Math.tan(incline * Math.PI / 180)) * height / 2, bottom: 1080 });
+  }
   const cardReady = addSwitchText(rightHost, view);
   if (my === renderToken) {
     screenPics = [picturesReady([...lv.images, ...rv.images, ...bg.images], leftHost, rightHost, frag)];

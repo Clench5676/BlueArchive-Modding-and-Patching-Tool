@@ -196,3 +196,96 @@ def test_lobby_strings_in_both_languages():
         for key in ("tab.l2d", "zoomOut.label", "zoomOut.game", "zoomOut.art", "zoomOut.unlocked", "zoomOut.custom",
                     "zoomOut.limit", "zoomOut.factor", "post.label", "post.on", "post.off"):
             assert strings.get(f"webui.settings.{key}"), (lang, key)
+
+
+# Dialogue geometry from the verified development view; no images or source text are retained.
+import os
+
+from ba_modding_toolkit.gameassets import AssetCache, GameAssets
+from ba_modding_toolkit.gameassets.unity import open_bundle
+from ba_modding_toolkit.searching import get_search_dirs
+from ba_modding_toolkit.webui.student_hall import dialogue_layout
+
+GAME_DIR = Path(os.environ.get("BAMT_TEST_GAME_DIR") or "/nonexistent/bamt-real-game")
+
+
+
+@pytest.fixture(scope="module")
+def game(tmp_path_factory):
+    return GameAssets(get_search_dirs(GAME_DIR), AssetCache(root=tmp_path_factory.mktemp("dialogue-cache"), allowed=False))
+
+
+@pytest.mark.skipif(not GAME_DIR.is_dir(), reason="Official development view required")
+def test_uitalk_template_numbers(game):
+    from ba_modding_toolkit.gameassets.layouts import export_layout, subtree
+    path = game._bundle_path(game._lobby_prefabs()["lobbycommon"])
+    with open_bundle(path) as env:
+        original = subtree(export_layout(env, "LobbyCommon", {}), "DialogPanel/ChatDialog/UITalk")
+    saved = dialogue_layout(game, "UITalk")
+    def widget(tree, key):
+        return next(w for w in tree["widgets"] if key in w)
+    assert saved["pos"] == original["pos"] == [-678, -613]
+    sprite, label = subtree(saved, "Sprite"), subtree(saved, "Label")
+    assert sprite["pos"] == [0, -29] and label["pos"] == [7, 87]
+    body, text = widget(sprite, "sprite"), widget(label, "text")
+    assert [body[k] for k in ("w_", "h_", "pivot", "type")] == [813, 298, 7, 1]
+    assert [text[k] for k in ("w_", "h_", "fontSize", "pivot", "overflow")] == [680, 220, 62, 4, 0]
+    assert body["sprite"] == widget(subtree(original, "Sprite"), "sprite")["sprite"]
+    assert text["color"] == widget(subtree(original, "Label"), "text")["color"] == "#29415a/1.00"
+    assert dialogue_layout(game)["pos"] == [0, 0]
+
+
+@pytest.mark.skipif(not GAME_DIR.is_dir(), reason="Official development view required")
+def test_dialogue_and_pat_boxes_share_prefab_root_coordinates(game):
+    # Independently accumulate the official transforms from the root. Unlike local positions, both exported values
+    # must include every ancestor's translation, rotation and scale. The collider rect is unrotated about its centre.
+    info = game.lobby_info("ch0100_home")
+    path = game._bundle_path(game._lobby_prefabs()["lobbych0100"])
+    with open_bundle(path) as env:
+        objects = {o.path_id: o.read_typetree() for o in env.objects if o.type.name in
+                   ("GameObject", "Transform", "RectTransform", "BoxCollider", "MonoBehaviour")}
+        kinds = {o.path_id: o.type.name for o in env.objects}
+        scripts = {o.path_id: o.read().m_ClassName for o in env.objects if o.type.name == "MonoScript"}
+    transforms = {t["m_GameObject"]["m_PathID"]: t for pid, t in objects.items()
+                  if kinds[pid] in ("Transform", "RectTransform")}
+    root = next(t for t in transforms.values() if not t["m_Father"]["m_PathID"]
+                and objects[t["m_GameObject"]["m_PathID"]]["m_Name"].lower() == "lobbych0100")
+    descendants = []
+    import math
+    def walk(t, parent=(1, 0, 0, 1, 0, 0)):
+        q, scale, pos = t["m_LocalRotation"], t["m_LocalScale"], t["m_LocalPosition"]
+        assert [q["x"], q["y"]] == [0, 0]
+        angle = 2 * math.atan2(q["z"], q["w"])
+        c, s = math.cos(angle), math.sin(angle)
+        a, b, d, e, x, y = parent
+        matrix = (a*c*scale["x"] + d*s*scale["x"], b*c*scale["x"] + e*s*scale["x"],
+                  -a*s*scale["y"] + d*c*scale["y"], -b*s*scale["y"] + e*c*scale["y"],
+                  a*pos["x"] + d*pos["y"] + x, b*pos["x"] + e*pos["y"] + y)
+        descendants.append((t["m_GameObject"]["m_PathID"], matrix))
+        for child in t.get("m_Children", []):
+            branch = objects[child["m_PathID"]]
+            if contains_target(branch):
+                walk(branch, matrix)
+    chat = next(t for pid, t in objects.items() if kinds[pid] == "MonoBehaviour"
+                and scripts.get(t.get("m_Script", {}).get("m_PathID")) == "ChatDialog"
+                and t.get("DialogBoxes"))
+    talk_go = chat["DialogBoxes"][0]["GameObject"]["m_PathID"]
+    pat = next(t for pid, t in objects.items() if kinds[pid] == "MonoBehaviour"
+               and scripts.get(t.get("m_Script", {}).get("m_PathID")) == "SpineDragIK"
+               and objects[t["m_GameObject"]["m_PathID"]]["m_Name"] == info["drags"][0]["name"])
+    pat_go = pat["m_GameObject"]["m_PathID"]
+    def contains_target(t):
+        return t["m_GameObject"]["m_PathID"] in (talk_go, pat_go) or any(
+            contains_target(objects[c["m_PathID"]]) for c in t.get("m_Children", []))
+    walk(root)
+    positions = dict(descendants)
+    assert list(positions[talk_go][4:]) == info["dialog"]["Talk"] == [-320, 503]
+    a, b, c, d, x, y = positions[pat_go]
+    collider = next(t for pid, t in objects.items() if kinds[pid] == "BoxCollider"
+                    and t["m_GameObject"]["m_PathID"] == pat_go)
+    centre, size = collider["m_Center"], collider["m_Size"]
+    x, y = x + a*centre["x"] + c*centre["y"], y + b*centre["x"] + d*centre["y"]
+    hw, hh = size["x"]*math.hypot(a, b)/2, size["y"]*math.hypot(c, d)/2
+    corners = [round(x-hw, 1), round(y-hh, 1), round(x+hw, 1), round(y+hh, 1)]
+    assert corners == info["drags"][0]["rect"] == [-1019, 186, -519, 536]
+    assert info["drags"][0]["rot"] == round(math.degrees(math.atan2(b, a)), 2)

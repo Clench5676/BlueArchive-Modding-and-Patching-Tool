@@ -27,7 +27,7 @@ globalThis.hallDialogueHarness = {
 let source = await readFile(new URL("../../src/ba_modding_toolkit/web/js/student-hall-dialogue.js", import.meta.url), "utf8");
 source = source.replace(/^import .*;$/gm, "");
 source = `const {NGUI, defaultRpc, language, S, talkExpression, setTimeout, clearTimeout, URL, spriteBorders, sliceAxis, slicePoint, dialogueText} = globalThis.hallDialogueHarness;\n${source}`;
-const { createDialogue, memoryMemo, prepareBalloon, balloonPosition, balloonBody, wrapDialogue } = await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`);
+const { createDialogue, memoryMemo, prepareBalloon, balloonPosition, balloonBody, wrapDialogue, lobbyPoint, lobbyBalloon, createLobbyDialogue } = await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`);
 const deferred = () => { let resolve, reject; const promise = new Promise((yes, no) => { resolve = yes; reject = no; }); return { promise, resolve, reject }; };
 const flush = async () => { for (let i = 0; i < 20; i++) await Promise.resolve(); };
 const template = () => ({ name: "Talk", pos: [0, 0], scale: [1, 1], widgets: [], children: [
@@ -453,4 +453,100 @@ test("scene zoom moves an existing balloon with its actor without rerendering or
   const before=parseFloat(h.host.children[0].style.left);value.x+=100;h.controller.reposition();
   assert.ok(parseFloat(h.host.children[0].style.left)>before);assert.equal(h.rendered.length,1);
   assert.equal(h.players[0].played,1);assert.equal(h.players[0].paused,0);h.controller.dispose();assert.equal(timers.size,0);
+});
+
+const lobbyGeometry = (extra = {}) => ({ info: { dialog: { Talk: [-320, 503] } },
+  meta: { touch: { x: -769, y: 361 }, sparse: false }, view: { x: -1480, y: -832.5, w: 2960, h: 1665 },
+  bounds: { left: 0, top: 0, right: 1000, bottom: 1080 }, ...extra });
+const balloonUi = { find, glyphWidth: (text, size) => [...text].length * size / 2 };
+test("memorial Talk maps its top-left prefab point through the same view as the pat point", () => {
+  const g = lobbyGeometry(), at = lobbyPoint({ x: -320, y: 503 }, g.view);
+  const placed = lobbyBalloon(template(), "Hello", g, { ui: balloonUi });
+  assert.equal(placed.x, (1160 / 2960) * 1920); assert.ok(Math.abs(placed.y - (329.5 / 1665) * 1080) < 1e-9);
+  assert.equal(placed.x, at.x); assert.equal(placed.y, at.y); assert.equal(placed.flip, false);
+  const zoom = { x: -1100, y: -300, w: 1400, h: 787.5 };
+  const moved = lobbyBalloon(template(), "Hello", lobbyGeometry({ view: zoom }), { ui: balloonUi });
+  const point = lobbyPoint({ x: -320, y: 503 }, zoom);
+  assert.equal(moved.x, Math.min(point.x, 1000 - moved.width)); assert.equal(moved.y, 0);
+});
+test("missing or nonfinite Talk, special framing and sparse art all use the pat point and flip inside the visible view", () => {
+  for (const extra of [{ info: {} }, { info: { dialog: { Talk: [NaN, 503] } } }, { framing: "character" },
+    { meta: { touch: { x: -769, y: 361 }, sparse: true } }]) {
+    const g = lobbyGeometry(extra), placed = lobbyBalloon(template(), "Hello", g, { ui: balloonUi });
+    const point = lobbyPoint(g.meta.touch, g.view);
+    assert.deepEqual({ x: placed.x, y: placed.y, flip: placed.flip },
+      balloonPosition({ ...point, width: 0, height: 0 }, placed, g.bounds));
+  }
+  const g = lobbyGeometry({ info: {}, meta: { touch: { x: 0, y: -700 } } });
+  const result = lobbyBalloon(template(), "Hello", g, { ui: balloonUi });
+  assert.equal(result.flip, true); assert.ok(result.x + result.width <= g.bounds.right);
+  assert.ok(result.y + result.height <= g.bounds.bottom);
+});
+test("UITalk retains the prefab's stage position and native geometry independently of lobby zoom", () => {
+  const uiTalk = { name: "UITalk", pos: [-678, -613], children: [
+    { name: "Sprite", pos: [0, -29], widgets: [{ sprite: "Common_Balloon_Type2", w_: 813, h_: 298, pivot: 7 }] },
+    { name: "Label", pos: [7, 87], widgets: [{ text: "", w_: 680, h_: 220, fontSize: 62, pivot: 4, overflow: 0 }] }] };
+  const ui = { ...balloonUi, shrinkContent: () => ({ text: "Wrapped", fs: 31 }) };
+  const g = lobbyGeometry({ full: true }), a = lobbyBalloon(uiTalk, "Long line", g, { ui });
+  const b = lobbyBalloon(uiTalk, "Long line", { ...g, view: { x: 4, y: 6, w: 8, h: 4.5 } }, { ui });
+  assert.deepEqual(a, b); assert.deepEqual(a.tree.pos, [-678, -613]);
+  assert.equal(a.x + a.tree.pos[0] * (1920 / 2960), 520.2162162162163);
+  assert.equal(a.y - a.tree.pos[1] * (1920 / 2960), 937.6216216216217);
+  assert.deepEqual(find(a.tree, "Sprite").pos, [0, -29]);
+  assert.equal(find(a.tree, "Label").widgets[0].fontSize, 31);
+});
+test("balloon subtitle transitions preserve the 260 ms sequence and immediate language replacement cancels it", async () => {
+  timers = new Map(); timerDelays = new Map();
+  const host = new Element(), classes = new Set(); host.hidden = true;
+  host.classList = { add: (...keys) => keys.forEach((key) => classes.add(key)), remove: (...keys) => keys.forEach((key) => classes.delete(key)) };
+  const h = createLobbyDialogue({ host, geometry: () => lobbyGeometry(), ui: { ...balloonUi, render: async () => {} },
+    call: async () => template(), raf: (fn) => fn(), later: hallDialogueHarness.setTimeout, cancel: hallDialogueHarness.clearTimeout });
+  h.show("First"); await flush(); assert.equal(host.attrs["aria-label"], "First");
+  assert.equal(host.attrs.role, "status"); assert.equal(host.style.pointerEvents, "none");
+  h.show("Next"); assert.equal(classes.has("out"), true); assert.equal(host.attrs["aria-label"], "First");
+  fireTimer(260); await flush(); assert.equal(host.attrs["aria-label"], "Next");
+  h.show("Stale"); h.show("Translation", true, "th"); await flush();
+  assert.equal(host.attrs["aria-label"], "Translation"); assert.equal(classes.size, 0); assert.equal(timers.size, 0);
+  h.show("", true); assert.equal(host.hidden, true); h.dispose();
+});
+test("the Hall and memorial lobby use one prepareBalloon and CSS contributes no subtitle look", async () => {
+  const lobby = await readFile(new URL("../../src/ba_modding_toolkit/web/js/lobby.js", import.meta.url), "utf8");
+  const css = await readFile(new URL("../../src/ba_modding_toolkit/web/css/app.css", import.meta.url), "utf8");
+  assert.match(lobby, /import\("\.\/student-hall-dialogue.js"\)/);
+  assert.equal((source.match(/function prepareBalloon\(/g) || []).length, 1);
+  assert.equal((source.match(/prepareBalloon\(template|prepareBalloon\(saved/g) || []).length, 3);
+  for (const rule of css.matchAll(/[^{}]*\.lobby-subtitle[^{}]*\{([^}]*)\}/g))
+    assert.doesNotMatch(rule[1], /background|border-radius|color|font|padding|bottom:|left:/);
+});
+
+test("camera motion repositions an existing Talk drawing, flips when needed and frame changes load UITalk", async () => {
+  const host = new Element(), classes = new Set(), frames = [], draws = [], reads = [];
+  host.hidden = true; host.classList = { add: (...keys) => keys.forEach((key) => classes.add(key)), remove: (...keys) => keys.forEach((key) => classes.delete(key)) };
+  let g = lobbyGeometry({ info: {} });
+  const h = createLobbyDialogue({ host, geometry: () => g,
+    ui: { ...balloonUi, render: async (tree) => draws.push(tree), shrinkContent: (text) => ({ text, fs: 62 }) },
+    call: async (_, { box }) => { reads.push(box); const tree = template(); if (box === "UITalk") tree.pos = [-678, -613]; return tree; },
+    raf: (fn) => frames.push(fn), later: hallDialogueHarness.setTimeout, cancel: hallDialogueHarness.clearTimeout });
+  h.show("Hello"); await flush(); assert.equal(draws.length, 1); assert.equal(classes.has("in"), true);
+  const first = host.children[0], x = parseFloat(first.style.left);
+  g = { ...g, view: { ...g.view, x: g.view.x - 100 } }; h.reposition(); await flush();
+  assert.equal(host.children[0], first); assert.notEqual(parseFloat(first.style.left), x); assert.equal(draws.length, 1);
+  g = { ...g, meta: { touch: { x: -10, y: 361 } } }; h.reposition(); await flush();
+  assert.equal(draws.length, 2); assert.equal(find(draws.at(-1), "Sprite").widgets[0].flip, 1);
+  while (frames.length) frames.shift()(); assert.equal(classes.has("in"), false, "a camera redraw must not strand the entry in opacity zero");
+  g = { ...g, full: true }; h.reposition(); await flush();
+  assert.deepEqual(reads, ["Talk", "UITalk"]); assert.deepEqual(draws.at(-1).pos, [-678, -613]);
+  const total = draws.length; g = { ...g, view: { ...g.view, x: 123 } }; h.reposition(); await flush();
+  assert.equal(draws.length, total, "fullscreen UI stays put while the art pans"); h.dispose();
+});
+test("Talk remains inside the visible left area at minimum/default/large windows and 1x/2x/3x densities", () => {
+  const g = lobbyGeometry({ info: {}, meta: { touch: { x: -10, y: -700 } } });
+  const p = lobbyBalloon(template(), "Hello", g, { ui: balloonUi });
+  for (const [w, h] of [[960, 540], [1600, 900], [2560, 1440]]) for (const dpr of [1, 2, 3]) {
+    const factor = Math.min(w / 1920, h / 1080) * dpr;
+    assert.ok(p.x * factor >= g.bounds.left * factor);
+    assert.ok((p.x + p.width) * factor <= g.bounds.right * factor);
+    assert.ok(p.y * factor >= g.bounds.top * factor);
+    assert.ok((p.y + p.height) * factor <= g.bounds.bottom * factor);
+  }
 });

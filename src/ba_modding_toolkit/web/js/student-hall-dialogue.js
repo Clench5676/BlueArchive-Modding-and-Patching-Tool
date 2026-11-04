@@ -92,7 +92,7 @@ export function balloonBody(sprite, meta = BALLOON_BODY) {
   return box;
 }
 
-export function prepareBalloon(template, text, rect, { ui = NGUI, lang = "en", bounds } = {}) {
+export function prepareBalloon(template, text, rect, { ui = NGUI, lang = "en", bounds, at } = {}) {
   const tree = structuredClone(template), spriteNode = ui.find(tree, "Sprite"), labelNode = ui.find(tree, "Label");
   const sprite = spriteNode.widgets.find((widget) => "sprite" in widget), label = labelNode.widgets.find((widget) => "text" in widget);
   const left = labelNode.pos[0] - spriteNode.pos[0], top = spriteNode.pos[1] - labelNode.pos[1];
@@ -112,7 +112,7 @@ export function prepareBalloon(template, text, rect, { ui = NGUI, lang = "en", b
   label.text = lines.join("\n"); label.w_ = contentWidth; label.h_ = contentHeight; label.lang = lang;
   sprite.w_ = left + contentWidth + right; sprite.h_ = top + contentHeight + bottom;
   const size = { width: sprite.w_ * S, height: sprite.h_ * S };
-  const position = balloonPosition(rect, size, bounds);
+  const position = at ? clampBalloon(at, size, bounds) : balloonPosition(rect, size, bounds);
   sprite.flip = position.flip ? (sprite.flip || 0) ^ 1 : sprite.flip || 0;
   const body = balloonBody(sprite, ui.atlasIndex?.()?.[sprite.atlas]?.[sprite.sprite]);
   // A centred UILabel invokes NGUI's existing font-baseline correction. The original top-left pivot cannot
@@ -345,4 +345,84 @@ export function createDialogue({ host, actorOf, choiceOf = () => null, info = ()
       if (busy && muted()) { if (current) finishText(); else stop(); }
       else if (audio) audio.volume = clamp((settings?.voiceVolume ?? 80) / 100, 0, 1);
     } };
+}
+
+// Lobby points and the pat rectangles are prefab-root coordinates (gameassets/lobby.py's single transform walk).
+export const lobbyPoint = (point, view) => ({ x: (point.x - view.x) * 1920 / view.w,
+  y: (view.y + view.h - point.y) * 1080 / view.h });
+export function clampBalloon(at, size, bounds) {
+  return { x: clamp(at.x, bounds.left, bounds.right - size.width),
+    y: clamp(at.y, bounds.top, bounds.bottom - size.height), flip: false };
+}
+export function lobbyBalloon(template, text, { info, meta, view, framing, full, bounds }, { ui = NGUI, lang = "en" } = {}) {
+  if (full) {
+    const tree = structuredClone(template), label = ui.find(tree, "Label").widgets.find((w) => "text" in w);
+    const fitted = ui.shrinkContent(text, label, lang);
+    Object.assign(label, { text: fitted.text, fontSize: fitted.fs, lang });
+    // UITalk is screen anchored: zooming/panning the memorial never moves this UI box.
+    return { tree, x: 960, y: 540, scale: S, fs: fitted.fs };
+  }
+  const point = info?.dialog?.Talk;
+  const at = !framing && !meta.sparse && point?.length === 2
+    ? lobbyPoint({ x: point[0], y: point[1] }, view) : null;
+  const touch = lobbyPoint(meta.touch, view);
+  return { ...prepareBalloon(template, text, { ...touch, width: 0, height: 0 },
+    { ui, lang, bounds, at: at && Number.isFinite(at.x) && Number.isFinite(at.y) ? at : null }), scale: S };
+}
+
+// The memorial's existing leave/enter sequence, now rendering the same Talk helper as the Hall, or prefab UITalk.
+export function createLobbyDialogue({ host, geometry, call = defaultRpc, ui = NGUI,
+  later = setTimeout, cancel = clearTimeout, raf = requestAnimationFrame } = {}) {
+  const templates = new Map();
+  let text = "", lang = "en", timer = null, version = 0, disposed = false, rendered = null, key = "", geometryKey = "", entering = false, motion = 0;
+  host.setAttribute("role", "status"); host.style.pointerEvents = "none";
+  async function draw() {
+    const g = geometry(); if (!text || !g?.meta || !g.view || disposed) return;
+    const box = g.full ? "UITalk" : "Talk", value = text, language = lang, turn = version;
+    if (!templates.has(box)) templates.set(box, Promise.resolve(call("hall.dialogueLayout", { box })).catch((error) => {
+      templates.delete(box); throw error;
+    }));
+    const template = await templates.get(box); await ui.init?.();
+    if (disposed || turn !== version || value !== text || language !== lang) return;
+    const placement = lobbyBalloon(template, text, g, { ui, lang });
+    const nextKey = JSON.stringify([text, lang, box, placement.flip, placement.width, placement.height]);
+    const position = { left: `${placement.x}px`, top: `${placement.y}px` };
+    if (key === nextKey) { if (rendered) Object.assign(rendered.style, position); return; }
+    key = nextKey; const my = ++version;
+    const scratch = document.createElement("div");
+    Object.assign(scratch.style, { position: "absolute", ...position, pointerEvents: "none" });
+    await ui.render(placement.tree, scratch, { scale: placement.scale, origin: [0, 0] });
+    if (disposed || my !== version) return;
+    rendered = scratch; host.replaceChildren(scratch);
+    if (entering) {
+      entering = false; const transition = motion;
+      raf(() => raf(() => { if (!disposed && transition === motion) host.classList.remove("in"); }));
+    }
+  }
+  const redraw = () => { void draw().catch((error) => { key = ""; console.warn("Lobby dialogue unavailable", error); }); };
+  function content(value, language, animate = false) {
+    entering = !!value && animate; motion++;
+    version++; text = value; lang = language; key = ""; rendered = null;
+    host.replaceChildren(); host.setAttribute("aria-label", text); host.hidden = !text;
+    if (text) redraw();
+  }
+  return {
+    show(value, immediate = false, language = "en") {
+      cancel(timer); timer = null;
+      if (immediate) { content(value, language); host.classList.remove("in", "out"); return; }
+      const enter = () => {
+        content(value, language, true); host.classList.remove("out"); host.classList.add("in");
+      };
+      if (!host.hidden && text) {
+        host.classList.add("out");
+        timer = later(() => { content("", language); if (value) enter(); }, 260);
+      } else if (value) enter();
+      else content("", language);
+    },
+    reposition() {
+      const g = geometry(), next = JSON.stringify(g?.full ? ["full"] : [g?.view, g?.bounds, g?.meta?.touch, g?.info?.dialog?.Talk, g?.framing, g?.meta?.sparse]);
+      if (next !== geometryKey) { geometryKey = next; redraw(); }
+    },
+    dispose() { disposed = true; version++; cancel(timer); host.replaceChildren(); },
+  };
 }
