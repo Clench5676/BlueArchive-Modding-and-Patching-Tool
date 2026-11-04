@@ -253,13 +253,8 @@ input[type="text"], input[type="search"], textarea { cursor: text; }
 #ngui-chips, #ngui-expr, .topbar, .nav { transition: transform .45s ease, opacity .45s ease; }
 .stage.fullscreen #ngui .side.left, .stage.fullscreen #ngui-chips { transform: translateX(-70%); opacity: 0; }
 .stage.fullscreen #ngui .side.right, .stage.fullscreen #ngui-expr { transform: translateX(70%); opacity: 0; }
-/* the round back button hangs below the bar, so the bar moves out by more than its own height */
-.stage.fullscreen .topbar { transform: translateY(-200%); pointer-events: none; }
-.stage.fullscreen .nav { transform: translateY(140%); }
 .stage.fullscreen .lobby-frost { opacity: 0; }
 /* Hall hides its chrome independently while retaining its portrait and memorial players. */
-.stage.hall-fullscreen .topbar { transform: translateY(-200%); pointer-events: none; }
-.stage.hall-fullscreen .nav { transform: translateY(140%); pointer-events: none; }
 #student-hall.hall-immersive > .hall-chrome, #student-hall.hall-immersive [data-actor-toolbar] { visibility: hidden; pointer-events: none; }
 .hall-fullscreen-exit { z-index: 6; }
 
@@ -427,8 +422,10 @@ input[type="text"], input[type="search"], textarea { cursor: text; }
 .topbar .mod-switch { flex: none; }
 .topbar.mods-compact .ms-label { display: none; }
 .native-chrome .topbar.chrome-waiting > * { visibility: hidden; }
-.window-immersive .topbar { opacity: 0; visibility: hidden; pointer-events: none; filter: none; transition: none; }
-.window-immersive .window-header { pointer-events: none; }
+/* chrome-motion.js moves the top bar and the bottom menu (translate); one that has left (an immersive scene's, or one
+   waiting for its entry) is out of reach as well as out of view */
+.chrome-hide-top .topbar, .chrome-hide-bottom .nav { visibility: hidden; pointer-events: none; }
+.chrome-hide-top .window-header { pointer-events: none; }
 /* The optional WebView2 API routes these measured blank rectangles to native caption gestures. */
 .window-drag-region { position: absolute; app-region: drag; -webkit-app-region: drag; }
 .native-chrome button, .native-chrome [role="switch"], .native-chrome .mod-switch { app-region: no-drag; -webkit-app-region: no-drag; }

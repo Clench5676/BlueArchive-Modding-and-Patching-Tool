@@ -153,3 +153,11 @@ export const FALLBACK_BUTTON = Object.freeze({ fill: "#8de4ff", ink: "#314665", 
 
 // UIPopup_Mulligan/Center/Popup/01/UIMulliganSlot/SelectLine, the applied selection UISprite.
 export const APPLIED_SELECTION_GOLD = "#ffe900";
+
+// UILobby's legacy Animation clip UIAni_Lobby (on the prefab's root), played as the lobby opens: the top bar
+// (Front/NUITop/Top/Right, at rest y 702) drops from 333.7 units above and the bottom menu (Front/Bottom/Menu, at rest
+// y -680) rises from 1043 below. Unweighted Hermite keys, [time s, y offset from the rest position, slope].
+export const LOBBY_ENTRY = Object.freeze({
+  top: Object.freeze([Object.freeze([0, 333.7, 0]), Object.freeze([0.2, 28.55, -271.9047]), Object.freeze([0.42, 0, 0])]),
+  bottom: Object.freeze([Object.freeze([0, -1043, 0]), Object.freeze([0.2, -29.52, 281.1431]), Object.freeze([0.42, 0, 0])]),
+});

@@ -435,7 +435,10 @@ through a transition. The game row can remain until the user enters page immersi
 fullscreen entry, hide the caption through the host's fullscreen policy and restore exact styles/bounds on exit;
 do not treat a maximized window as fullscreen.
 
-For existing Hall/detail page immersion in an ordinary window, hide/inert the App action rows while retaining
+Superseded by the owner (2026-11-04, BL-079): page immersion sends the top bar, the bottom menu and the macOS window
+buttons away; a pointer at the window's top or bottom edge brings that edge's bar back, usable, the buttons travelling with
+the top bar (`chrome-motion.js`, `CocoaHost.slide`; macOS fullscreen keeps AppKit's own reveal). Before that decision:
+for existing Hall/detail page immersion in an ordinary window, hide/inert the App action rows while retaining
 native window controls and a minimal native drag background. The window-owned header background remains; page
 immersion is not a request to hide the OS controls. Keep Hall's existing exit button, popup precedence and focus
 restoration, updating its selectors after moving the header. In simultaneous OS fullscreen + page immersion,

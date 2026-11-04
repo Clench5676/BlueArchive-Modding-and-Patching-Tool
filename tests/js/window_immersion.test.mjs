@@ -22,7 +22,9 @@ test('camera preparation is immersive even before the shared detail fullscreen f
   assert.match(source('web/js/student-hall-fullscreen.js'),/stage\.classList\.add\("hall-fullscreen"\)/);
   assert.match(source('web/js/window-chrome.js'),/observe\(document\.documentElement, \{ attributes: true, attributeFilter: \['class'\]/);
   const css=source('web/css/app.css');
-  assert.match(css,/\.window-immersive \.topbar \{[^}]*opacity: 0;[^}]*visibility: hidden;[^}]*pointer-events: none;[^}]*filter: none/);
+  // chrome-motion.js moves the bars away; once away they are out of reach too, and no style sheet rule moves them
+  assert.match(css,/\.chrome-hide-top \.topbar, \.chrome-hide-bottom \.nav \{[^}]*visibility: hidden;[^}]*pointer-events: none/);
+  assert.doesNotMatch(css,/\.stage\.(hall-)?fullscreen \.(topbar|nav) \{|\.window-immersive \.topbar/);
   assert.doesNotMatch(source('web/js/nav.js'),/back\.style\.visibility/);
 });
 for(const platform of ['darwin','win32','fallback'])test(`immersion reports no drag rectangles for ${platform}`,()=>{

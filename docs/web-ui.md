@@ -1918,6 +1918,30 @@ or the classic UI is open, no drift while mods are off, nothing dismissed (see M
   what they carry and, for a mod, its file and the variant it was made for; then one row per bundle with its size,
   date, CRC state and what it carries. The frame fits its content and scrolls past the stage's height.
 
+### Bar motion
+
+`chrome-motion.js` moves the top bar and the bottom menu as the game's lobby moves them: UILobby's legacy Animation clip
+`UIAni_Lobby` on the prefab's root, `Front/NUITop/Top/Right` and `Front/Bottom/Menu` (`LOBBY_ENTRY` below). Offsets are
+viewport pixels away from the screen, set as the CSS `translate` property (it composes with the native toolbar's `scale`
+transform and the corner controls' own `translate`): on `.window-header` with the native toolbar, else on `.topbar` and
+`.nav` in stage pixels. A bar that has left gets `chrome-hide-top` / `chrome-hide-bottom` on the root (hidden, no pointer).
+
+- **Entry.** Both bars wait where the clip starts (333.7 and 1043 units away) until `main.js` `boot()` has shown the first
+  screen, a recovery page included, then come in on the clip's Hermite curves (0.42 s). A first screen that never reports
+  lets them in after 30 s.
+- **Immersive scenes** (`window-layout.js` `isImmersive`: detail and Hall fullscreen, photography) send both bars away, as
+  far as their painted edges (the hanging Back art included) plus 8 px. A pointer within 16 px of the window's top or bottom
+  edge brings that edge's bar back on the same curve, usable (Hall and detail fullscreen hold the bars `inert`; a revealed
+  bar is not, a leaving one gets their state back). It leaves 500 ms after the pointer was last off it; leaving the window
+  over a bar keeps it. The scenes' own controls make room: `corner-layout.js` places top corners under the revealed bar and
+  bottom corners above the revealed menu (`bamtChromeInsets`), and `bindEdge` moves a centred edge control (the
+  photography shutter) as far.
+- **macOS window buttons.** With the native toolbar outside macOS fullscreen, each top bar motion goes to `window.motion` as
+  offsets at 60 Hz; `CocoaHost.slide` plays them on the buttons and hides them once wholly above the window. A layout pass
+  aligns them again and keeps the offset; in macOS fullscreen AppKit owns them, and they get back only what the motion
+  changed. While the top bar is away for its entry the whole row drags the window; an immersive scene's away bar has no
+  drag regions, a revealed one drags and clicks as anywhere else.
+
 ### Design tokens
 
 `web/js/ui-tokens.js` holds the numbers and colours the web UI shares, each named after the prefab node it comes from; a
@@ -1925,6 +1949,8 @@ call site imports it, nothing else repeats them (`tests/js/ui_tokens.test.mjs` p
 the prefab values, from the development view). It imports no other UI module.
 
 - **Popup frame, footer, backdrop**: see Popups above (`POPUP`, `FOOTER`, `BACKDROP`).
+- **Lobby entry** (`LOBBY_ENTRY`; UILobby's `UIAni_Lobby`): the top bar's and the bottom menu's unweighted Hermite keys,
+  `[time, offset from rest, slope]`: 333.7 / 28.55 / 0 and -1043 / -29.52 / 0 units at 0, 0.2 and 0.42 s. See Bar motion.
 - **Small button** (`SMALL_BUTTON`; UIPopup_Option_PC `Center/Popup/List/Sound_Setting/ETCSetting/ButtonBg`): 402 x 136, caption
   48 down to 34 fitted to the width less 60, its label box 30 less across and 20 less down; only the width varies, 240 at
   least. `game-buttons.js` `optionButton` takes these as its defaults; Hall `button()` also uses them, retaining each

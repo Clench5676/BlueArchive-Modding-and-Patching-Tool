@@ -53,14 +53,17 @@ globalThis.requestAnimationFrame=fn=>frames.push(fn);globalThis.addEventListener
 globalThis.getComputedStyle=el=>({visibility:el===back&&back.hidden?'hidden':'visible'});
 globalThis.MutationObserver=class {constructor(fn){this.fn=fn;}observe(target,opts){observed.push({target,opts,fn:this.fn});}};
 let alignmentGate=null,layoutFailure=null;
+// chrome-motion.js has its own tests: here an immersive scene's bar is away unless a test brings it back
+const motion={immersive:false,revealed:false,synced:0,setup(opts){this.opts=opts;},setImmersive(on){this.immersive=on;},
+  hidden(){return this.immersive&&!this.revealed;},apply(){},syncLights(){this.synced++;}};
 let snapshot={active:true,valid:true,platform:'darwin',sequence:1,bounds:{left:12,top:8,right:80,bottom:30}};
-globalThis.chromeFixture={...geometry,on:(name,fn)=>handlers[name]=fn,rpc:async(name,value)=>{
+globalThis.chromeFixture={...geometry,chromeMotion:()=>motion,on:(name,fn)=>handlers[name]=fn,rpc:async(name,value)=>{
   if(name==='window.chrome')return snapshot;calls.push({name,value});
   if(name==='window.layout'&&layoutFailure){const error=layoutFailure;layoutFailure=null;throw error;}},T:key=>key,
   reflowTopActions(){},alignTopBar:async()=>{if(alignmentGate)await alignmentGate;},fitStage(){},
   naturalTextWidth:(el,scale)=>Math.ceil(el.textContent.length*13*scale),paintTopBar:async()=>{}};
 let source=readFileSync(new URL('../../src/ba_modding_toolkit/web/js/window-chrome.js',import.meta.url),'utf8').replace(/^import .*;$/gm,'');
-source=`const {on,rpc,T,reflowTopActions,alignTopBar,fitStage,naturalTextWidth,paintTopBar,headerGeometry,rowLayout,isImmersive,dragRegions,expandRect}=globalThis.chromeFixture;\n${source}`;
+source=`const {on,rpc,T,reflowTopActions,alignTopBar,fitStage,naturalTextWidth,paintTopBar,headerGeometry,rowLayout,isImmersive,dragRegions,expandRect,chromeMotion}=globalThis.chromeFixture;\n${source}`;
 const {setupWindowChrome}=await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
 async function settle(){for(let i=0;i<8;i++){frames.splice(0).forEach(fn=>fn());await new Promise(resolve=>setImmediate(resolve));}}
 const payload=()=>calls.filter(c=>c.name==='window.layout').at(-1).value;
@@ -144,4 +147,22 @@ test('a refused layout goes to the report and is sent again on the next layout p
   await change();
   assert.equal(sent(),before+1,'an accepted layout is not sent again');
   back.hidden=false;await change();
+});
+
+test('a bar the pointer brought back in an immersive scene drags and clicks; it leaves with no drag regions again',async()=>{
+  snapshot={active:true,valid:true,platform:'darwin',sequence:snapshot.sequence+1,bounds:{left:12,top:8,right:80,bottom:30},state:{fullscreen:false}};
+  const synced=motion.synced;handlers['window.chrome'](snapshot);await settle();
+  assert.equal(motion.synced,synced+1,'new native chrome takes the top bar offset');
+  assert.equal(motion.opts.lights(),true);
+  stage.classList=new Classes(['fullscreen']);root.classList.clear();popup.hidden=true;await change();
+  assert.deepEqual(payload().drag,[]);assert.equal(payload().state,'immersive');assert.equal(header.inert,true);
+  motion.revealed=true;await change();
+  assert.equal(header.inert,false);assert.equal(payload().state,'');
+  assert.ok(payload().drag.some(rect=>rect.bottom>12),'the revealed bar moves the window');
+  assert.ok(payload().drag.every(rect=>rect.right<=88||rect.left>=142||rect.top>=60),'its Back still takes its own clicks');
+  motion.revealed=false;await change();
+  assert.deepEqual(payload().drag,[]);assert.equal(header.inert,true);
+  snapshot={...snapshot,sequence:snapshot.sequence+1,state:{fullscreen:true}};handlers['window.chrome'](snapshot);await settle();
+  assert.equal(motion.opts.lights(),false,'macOS fullscreen shows and hides the window buttons itself');
+  stage.classList.clear();await change();
 });

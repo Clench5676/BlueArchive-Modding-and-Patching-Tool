@@ -28,7 +28,7 @@ function harness({first=NO_GAME}={}){
     Prompts:{isBusy:()=>false},
     startPopups:()=>[['consent',async()=>{}],['spine',async()=>{}]],
     $:()=>({}),document:{getElementById:()=>null},fitStage(){},addEventListener(){},
-    timed:async(_phase,work)=>work(),startup:{},
+    timed:async(_phase,work)=>work(),startup:{},chromeMotion:()=>({enter(){}}),
     start:async()=>{api.setInfo(first);api.setStartWithGame(first.gameFound);},
     rpc:async method=>{
       if(method==='app.ready'){log.push(['app.ready']);return null;}

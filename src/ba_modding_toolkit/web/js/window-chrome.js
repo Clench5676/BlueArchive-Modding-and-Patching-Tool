@@ -6,11 +6,16 @@ import { fitStage } from "./util.js";
 import { paintTopBar } from "./top-bar-background.js";
 import { naturalTextWidth } from "./top-bar-measure.js";
 import { headerGeometry, rowLayout, isImmersive, dragRegions, expandRect } from "./window-layout.js";
+import { chromeMotion } from "./chrome-motion.js";
 
 let snapshot = null, wrapper = null, placeholder = null, compact = false, scheduled = false, lastLayout = "";
-let layoutRevision = 0, lastImmersive = null;
+let layoutRevision = 0, lastScene = null;
 const bar = () => document.querySelector('.topbar');
+// The top bar's entry, its absence in immersive scenes and its return at the window's edge (chrome-motion.js).
+const motion = chromeMotion();
 export const nativeChrome = () => snapshot?.active && snapshot.mode !== 'standard' ? snapshot : null;
+// The macOS window buttons travel with the top bar, except in macOS fullscreen, where AppKit shows and hides them.
+const nativeLights = () => !!nativeChrome() && snapshot.platform === 'darwin' && !snapshot.state?.fullscreen;
 
 function fallbackControls() {
   const existing = document.getElementById('native-controls');
@@ -32,6 +37,7 @@ function accept(next) {
   if (snapshot && (next.sequence || 0) < (snapshot.sequence || 0)) return;
   snapshot = next;
   globalThis.bamtWindowChrome = nativeChrome();
+  motion.syncLights();
   fallbackControls(); schedule();
 }
 
@@ -72,12 +78,16 @@ async function layout() {
   if (!header || !stage) return;
   const immersive = isImmersive(stage.classList, document.documentElement.classList);
   document.body.classList.toggle('window-immersive', immersive);
+  motion.setImmersive(immersive);
+  // An immersive scene whose bar is away has no toolbar and no drag regions (BL-037); a bar the pointer brought back
+  // drags and clicks as anywhere else. A bar still waiting for its entry leaves the whole row to dragging.
+  const topHidden = motion.hidden('top'), scene = immersive && topHidden;
   const blocked = [...document.querySelectorAll('.consent-host, .popup-host')].some((el) => !el.hidden && el.getClientRects().length);
   const visibleHits = (root) => [...root.querySelectorAll('button, [role="switch"], .mod-switch')]
     .filter((el) => !el.hidden && getComputedStyle(el).visibility !== 'hidden' && el.getClientRects().length)
     .map((el) => expandRect(el.getBoundingClientRect()));
   if (!nativeChrome()) {
-    lastImmersive = null;
+    lastScene = null;
     if (wrapper) {
       placeholder.replaceWith(header); wrapper.remove(); wrapper = placeholder = null;
       header.style.removeProperty('width'); header.style.removeProperty('height'); header.style.removeProperty('transform');
@@ -89,6 +99,7 @@ async function layout() {
     const scale = stage.getBoundingClientRect().width / 1920;
     fitRow(header, scale);
     paintTopBar(header, scale).catch((error) => console.warn("top bar background", error));
+    motion.apply();
     await alignTopBar();
     if (revision !== layoutRevision || nativeChrome()) return;
     return;
@@ -104,18 +115,19 @@ async function layout() {
   Object.assign(header.style, { width: `${innerWidth / g.scale}px`, height: `${g.rowHeight / g.scale}px`, transform: `scale(${g.scale})` });
   header.classList.toggle('chrome-waiting', !snapshot.valid);
   // Hall/detail hold their own inert/focus state. Only add a temporary measurement guard.
-  if (!immersive) header.inert = !snapshot.valid;
+  if (!topHidden) header.inert = !snapshot.valid;
   fitStage(); reflowTopActions();
   fitRow(header, g.scale, snapshot.platform === 'darwin' ? snapshot.bounds?.right || 0 : 0);
   paintTopBar(header, g.scale).catch((error) => console.warn("top bar background", error));
+  motion.apply();
   // Why the native side has no drag regions, for its log: an immersive scene or chrome that is not valid yet.
-  const state = immersive ? 'immersive' : snapshot.valid ? '' : 'waiting';
+  const state = scene ? 'immersive' : snapshot.valid ? '' : 'waiting';
   // Clear old page hit regions before any asynchronous art/ink measurement.
   // A slow asset must not leave a fullscreen scene under a broad drag row.
-  if (lastImmersive !== immersive || !snapshot.valid) {
-    lastImmersive = immersive;
+  if (lastScene !== scene || !snapshot.valid) {
+    lastScene = scene;
     wrapper.querySelectorAll('.window-drag-region').forEach((el) => el.remove());
-    header.inert = immersive || blocked || !snapshot.valid;
+    header.inert = topHidden || blocked || !snapshot.valid;
     // Entering a scene or losing validity clears the regions at once; the first pass and leaving a scene measure below.
     if (state) await publishLayout(g, [], state);
     if (revision !== layoutRevision || !nativeChrome() || !wrapper || !snapshot.valid) return;
@@ -125,10 +137,10 @@ async function layout() {
   // The bar draws above every popup, so it keeps moving the window while one is open (BL-078); only its controls
   // wait for the popup. Native regions never cover hanging Back art. Immersive scenes keep only the real window
   // controls, with no toolbar or drag regions.
-  header.inert = !snapshot.valid || immersive || blocked;
+  header.inert = !snapshot.valid || topHidden || blocked;
   const drag = dragRegions({ width: innerWidth, height: g.rowHeight, bounds: snapshot.bounds,
-    platform: snapshot.platform, immersive, blocked: !snapshot.valid,
-    exclusions: visibleHits(immersive ? stage : header) });
+    platform: snapshot.platform, immersive: scene, blocked: !snapshot.valid,
+    exclusions: topHidden ? [] : visibleHits(header) });
   wrapper.querySelectorAll('.window-drag-region').forEach((el) => el.remove());
   if (revision !== layoutRevision || !nativeChrome() || !wrapper) return;
   await publishLayout(g, drag, state);
@@ -143,6 +155,7 @@ async function publishLayout(g, drag, state = '') {
 }
 
 export function setupWindowChrome() {
+  motion.setup({ onChange: schedule, lights: nativeLights });
   on('window.chrome', accept);
   rpc('window.chrome').then(accept).catch(console.error);
   fallbackControls();

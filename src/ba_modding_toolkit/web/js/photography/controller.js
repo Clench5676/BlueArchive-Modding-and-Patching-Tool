@@ -12,7 +12,7 @@ import {FRAME,choiceLayout,OCCLUSION_BUTTON,TOOLBAR_CAPTION,otherMode,actionCapt
 import {alignIcon,buttonCenter} from '../student-hall-icons.js';
 import {anchoredCentre} from '../visual-view.js';
 import {wheelKind,wheelStep} from '../lobby-touch.js';
-import {bindCorner} from '../corner-layout.js';
+import {bindCorner,bindEdge} from '../corner-layout.js';
 import {prepareBack} from '../visual-mode.js';
 export {FRAME};
 let sessionVariant=null,generation=0,repository,bridge,overlay,active=false,mode='portrait',grid=true,expanded=false,paused=false,selected=null,page=0,modal=null;
@@ -156,7 +156,9 @@ function panSurface(host){
   surface.addEventListener('contextmenu',event=>event.preventDefault());
 }
 
-async function shutter(host){
+async function shutter(layer){
+  // it rises with the bottom menu the pointer brings back, as the corner controls do (corner-layout.js bindEdge)
+  const host=document.createElement('div');layer.append(host);bindEdge(host,'bottom');
   const tree=node('Shutter',[{sprite:'Common_Btn_Circle_W',atlas:'Common',type:0,w_:146/S,h_:146/S,pivot:4,depth:60,color:'#ffffff/1.00'}]);
   const view=await NGUI.render(tree,host,{scale:S,origin:[960,980]});
   const center=await buttonCenter(view.nodes.get('Shutter').els[0]);
