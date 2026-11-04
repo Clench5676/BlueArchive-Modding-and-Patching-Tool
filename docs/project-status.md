@@ -51,7 +51,7 @@ As of 2026-11-04. Verify the actual branch, working tree and `pyproject.toml` ve
 | BL-074 | Closed by the owner: working as intended |
 | BL-076, BL-077 | Accepted by the owner on macOS (alpha.13, 2026-11-04); Windows not reviewed |
 | BL-075 | Closed by the owner (2026-11-04) |
-| BL-078 | Open, not reproduced; the close-time chrome failure in the owner's alpha.13 log fixed on `main` (`1a2afd84`) |
+| BL-078 | Seen again on alpha.15; close-time failure fixed (`1a2afd84`), silent startup paths hardened and logged (`b186e93b`); root cause not confirmed |
 | BL-057, BL-058 | Accepted by the owner on macOS (alpha.12); Windows not reviewed |
 | BL-055 | Accepted by the owner on macOS (0.6.0 pre-review) |
 | BL-014 | Candidate, not scheduled |

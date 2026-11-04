@@ -1902,8 +1902,8 @@ scroll area takes the pointer, so a wheel in the gaps scrolls the list and the g
 
 ## BL-078: macOS: dragging the top bar sometimes does not move the window
 
-- Status: Open, not reproduced (owner, 2026-11-03). Close-time chrome failure from the owner's alpha.13 log fixed in `1a2afd84`;
-  whether it explains the failed drag is not confirmed.
+- Status: Seen again on alpha.15 (owner, 2026-11-04). Close-time chrome failure fixed in `1a2afd84`; silent startup paths
+  hardened and logged in `b186e93b`; root cause not confirmed, awaiting the next test build.
 - Requested: 2026-11-03 (owner, 0.6.1-alpha.12, macOS): dragging the top bar did not move the window; happened once, not seen again.
 
 Candidates (lead, from the code): the native drag regions (`window-chrome.js` `dragRegions`) are published empty while a popup or
@@ -1919,3 +1919,14 @@ buttons against a None view, and `WindowChrome.fail` gave the native chrome up (
 stays active. Reproduced in `tests/test_window_chrome.py` (the old code raises at the same line). Only the close path is known
 to clear the content view, so these entries are most likely close-time noise; a failure mid-session would also have replaced
 the traffic lights with the fallback buttons. Still needed if the drag fails again: the log lines just before the failure.
+
+Owner, 2026-11-04 (0.6.1-alpha.15, macOS): right after the newly installed build opened (Student Hall), the top bar did not
+move the window. The report's logs (alpha.13 sessions and this one): the alpha.13 `isFlipped` warnings each follow
+`Native lifecycle: closed complete`, so they were close-time noise, fixed by `1a2afd84`; the alpha.15 session has no window
+chrome line at all, so the cause is not in the log. Three silent paths in the code could leave the top bar without drag
+regions: the page remembered a toolbar layout before the native side took it, so a refused layout was never sent again; the
+native side refused a layout without a log line; a missing content view left the chrome waiting until the window moved or
+resized, with no notification to measure again. Fixed in `b186e93b` (lead): a layout is sent again until it is taken, a
+failed layout pass goes to the diagnostic report, a missing content view is measured again (8 x 0.25 s), and the log now
+says when the chrome becomes active and valid, when its drag regions appear or go, when it refuses a layout, and why a
+press on the top bar did not drag. If it happens again, those lines show which path it was.
