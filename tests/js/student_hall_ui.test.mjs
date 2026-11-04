@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { readFile } from "node:fs/promises";
+import { SMALL_BUTTON } from "../../src/ba_modding_toolkit/web/js/ui-tokens.js";
 import { withTimeout } from "../../src/ba_modding_toolkit/web/js/async.js";
 class Element {
   constructor(id = "") { this.id=id;this.style={};this.dataset={};this.children=[];this.listeners={};this.inert=false;this.isConnected=true;this.scrollTop=0;this.scrollLeft=0; }
@@ -19,9 +20,9 @@ class Element {
 let stage=new Element("stage"),top;
 globalThis.document={createElement:()=>new Element(),getElementById:()=>stage,activeElement:null};
 const find=(tree,path)=>path.split("/").reduce((node,key)=>node.children.find((child)=>child.name===key),tree);
-globalThis.uiHarness={withTimeout,Loading:{hold:async(work)=>work()},T:key=>key,clone:structuredClone,NGUI:{find,fitLabel(widget,text){widget.text=text;},fitGroup:(captions)=>captions.map(()=>({fs:40}))},Popup:{opened(host,close){top={host,close};},closed(){top=null;},top:()=>top}};
+globalThis.uiHarness={SMALL_BUTTON,withTimeout,Loading:{hold:async(work)=>work()},T:key=>key,clone:structuredClone,NGUI:{find,fitLabel(widget,text){widget.text=text;},fitGroup:(captions)=>captions.map(()=>({fs:40}))},Popup:{opened(host,close){top={host,close};},closed(){top=null;},top:()=>top}};
 let source=await readFile(new URL("../../src/ba_modding_toolkit/web/js/student-hall-ui.js",import.meta.url),"utf8");
-source=source.replace(/^import .*;$/gm,"");source=`const {Popup,clone,NGUI,Loading,withTimeout,T}=globalThis.uiHarness; const Buttons={disable:(...args)=>globalThis.uiHarness.Buttons.disable(...args)}; const S=1920/2960;\n${source}\nexport function areaFixture(fn){area=fn;} export function assetsFixture(value){assets=value;} export function readinessFixture(host,fn){visibleReadiness.set(host,fn);} export {pictureReadiness};\n//# sourceURL=hall-ui-fixture.js`;
+source=source.replace(/^import .*;$/gm,"");source=`const {Popup,clone,NGUI,Loading,withTimeout,T,SMALL_BUTTON}=globalThis.uiHarness; const Buttons={disable:(...args)=>globalThis.uiHarness.Buttons.disable(...args)}; const S=1920/2960;\n${source}\nexport function areaFixture(fn){area=fn;} export function assetsFixture(value){assets=value;} export function readinessFixture(host,fn){visibleReadiness.set(host,fn);} export {pictureReadiness};\n//# sourceURL=hall-ui-fixture.js`;
 const UI=await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`);
 UI.areaFixture((host,box,height,key)=>{const scroll=new Element();scroll.dataset.scroll=key;scroll.isConnected=host.isConnected;const inner=new Element();scroll.append(inner);host.append(scroll);return inner;});
 const settle=()=>new Promise((resolve)=>setTimeout(resolve,40));
@@ -69,12 +70,14 @@ test("white native row plates reserve equal margins beyond their outer inclined 
   const body={sprite:"Common_Bg_Raius5px_Shadow",type:1,incline:10,w_:622,h_:116,color:"#ffffff/1.00"};
   const n=(name,children=[],widgets=[])=>({name,children,widgets,pos:[0,0]});
   const tree=n("Root",[n("SeletControl",[n("TopMenu",[n("SortBtn",[n("Btn_Normal",[n("Icon")],[body])])])])]);
-  const plate=UI.rowPlateTree(tree,[1320,402]),widget=plate.widgets[0],scale=1920/2960;
+  globalThis.uiHarness.Popup.LIST_CARD_NAME={fs:34,lines:2,padY:22,pitch:1.2};
+  const row=UI.portraitRowLayout();
+  const plate=UI.rowPlateTree(tree,[1320,row.height]),widget=plate.widgets[0],scale=1920/2960;
   assert.equal(widget.sprite,body.sprite);assert.equal(widget.color,body.color);assert.equal(widget.type,1);assert.deepEqual(plate.children,[]);
   const outer=widget.w_*scale+widget.h_*scale*Math.tan(Math.PI/18);
   assert.ok(Math.abs((1320-outer)/2-32)<.001);
-  assert.ok(154-600*.46/2>=16);
-  assert.ok(154+(600/2+10+88)*.46+8+40<=402-16);
+  assert.equal(row.cardY-600*.46/2,0);
+  assert.ok(row.cardY+(600/2+10+103.6)*.46+8+SMALL_BUTTON.h*scale<=row.height-20*scale+1e-9);
 });
 
 

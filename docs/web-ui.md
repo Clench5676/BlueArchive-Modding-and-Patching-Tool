@@ -1601,7 +1601,7 @@ local scene-layout resource, using the renderer's existing layout fallback.
 
 Hall `createModal().draw` sends its actions through `popupFrame` and its shared `FOOTER` layout, preserving each
 semantic and enabled state. Frame sizes stay unchanged. The 2150 x 1300 u portrait/replacement picker packs its toolbar
-below the native title decoration, then its optional search box and list, using the free header space before reducing
+below the native title underline, then its optional search box and list, using the free header space before reducing
 the viewport. Both search states end at 778.05 CSS px; the footer centre is 845.84 px (formerly 916.78). The background
 picker moves its [130, 190, 760, 650] list up to y 176.70, retaining its viewport height and full rows; it ends at 826.70,
 with footer centre 894.49 px (formerly 965.43). These content limits include `POPUP.clearance` (16 u).
@@ -1620,11 +1620,19 @@ label box w-30 by 116. `buttonBox` preserves each caller's centre and width, rai
 `buttonSize` gives sibling groups one size. The two 460 x 70 CSS px first-run buttons now draw 460 x 88.216 at
 centre (960, 595). `updateAction` preserves the original control's migrated/retained role when refreshing it.
 
-The picker Add/Select controls, queue Remove controls and portrait Reset retain their prior drawing through
-`retainedButton`: the 136 u candidate overlaps the portrait/memorial name strips and queue artwork, and leaves
-those rows by 7.188 / 7.303 / 5.733 CSS px respectively (6.108 for an unavailable queue entry). Reset would leave its
-142 px toolbar by 10.108 px, and its Thai caption needs 30 u at the existing width rather than the minimum 34.
-No neighbouring widgets move. The existing modal footer also stays on its retained control as described above.
+The portrait picker Add/Select bodies now sit 8 CSS px below the unchanged name strip and draw through `button()`.
+Their minimum width is 155.676 px (240 u), keeping the former horizontal centre. Portrait row plates and nested strips
+grow from 402 to 437.445 px, with vertical pitch 406 to 441.445: this reserves the existing name strip's largest
+103.6 u two-line case, the 88.216 px button and the horizontal scrollbar's 12.973 px painted band. The artwork moves
+up by the row's 16 px of free top space; its size and the name captions stay unchanged. The strip extends 12 px left
+by its existing hit outset (x 240 to 228, width 960 to 972), while card/action stage horizontal centres stay unchanged.
+Even the tightest searched viewport (Japanese toolbar) holds a full row. Horizontal card pitch stays 220 px.
+
+The portrait toolbar grows from 142 to 162.216 CSS px: its second row is 88.216 high from y 74, with Reset at the
+existing horizontal centre and width (156 px). Its slider follows the row's centre. Placement above the visible head,
+below the feet when blocked, inside the stage and clear of the top bar and right controls uses the new total height.
+The memorial candidate Add and queue Remove still use `retainedButton` because their combined containing layout hits
+the full-row stop above; their row/card/panel sizes, drag pitch, marker and hit boxes remain unchanged.
 
 Hall mode changes retain the previous complete frame until the target background, actors, material/FX textures and
 first composite frame are ready. Portrait and current memorial sessions are retained separately; inactive sessions
@@ -1914,13 +1922,13 @@ the prefab values, from the development view). It imports no other UI module.
 - **Small button** (`SMALL_BUTTON`; UIPopup_Option_PC `Center/Popup/List/Sound_Setting/ETCSetting/ButtonBg`): 402 x 136, caption
   48 down to 34 fitted to the width less 60, its label box 30 less across and 20 less down; only the width varies, 240 at
   least. `game-buttons.js` `optionButton` takes these as its defaults; Hall `button()` also uses them, retaining each
-  caller's centre and width (raised to 240 u if necessary). Explicitly stopped Hall sites use `retainedButton`. Settings'
+  caller's centre and width (raised to 240 u if necessary). The stopped memorial sites use `retainedButton`. Settings'
   value rows
   put the buttons right-aligned to x 700, 422 apart, beside the value while it keeps at least 460 (two to a line) and
   under it three to a line; the rest wrap to a second line, right-aligned like the first (`settings.js`
   `valueRowLayout`). The Export pair is 680 x 136. A message's line button is 136 high and as wide as its caption plus
   90 (240 at least) in a row at least 156 high; the asset consent's Change button the same, on a line of its own under
-  the item (`consent.js` `assetLayout`). Not migrated yet: the stopped Hall card, Reset and footer buttons,
+  the item (`consent.js` `assetLayout`). Not migrated yet: the stopped memorial candidate, queue and footer buttons,
   the photography toolbar, the popup details
   actions and the detail screen's Show in Finder / Explorer button.
 - **Batch Import's row under the list** is one row of the small button's size (136 high, caption 48 down to 34, 20 apart): Advanced

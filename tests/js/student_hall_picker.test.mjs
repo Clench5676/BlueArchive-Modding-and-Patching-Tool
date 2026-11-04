@@ -10,7 +10,7 @@ globalThis.document={createElement:()=>new Element()};
 globalThis.pickerFixture={normalizeView,sourceKey,portraitRows,studentChoices,memorialChoices,
   bindReorder(){},dragFeedback:()=>({}),Display:{},Popup:{top:()=>null},T:key=>key,L:names=>names?.en,language:()=>"en",spineBase:()=>"source",
   thumbnailScope:()=>({signal,cancel(){}}),lazyThumbnail:()=>({}),
-  UI:{portraitPickerLayout:()=>({toolbar:{x:300,y:247,width:1320},search:[300,283,1320],list:[300,343,1320,435]}),MEMORIAL_QUEUE_PITCH:244,createModal:()=>modal,rowPlate:async()=>{},rosterToolbar:async()=>{},caption:async()=>{},panel:async()=>{},studentCard:async()=>{},queuePanel:async()=>{},queueMarker:async()=>new Element(),retainedButton:async()=>{},button:async()=>{},
+  UI:{buttonSize:()=>48,portraitRowLayout:()=>({height:437.4451891891892,pitch:441.4451891891892,cardX:117,cardY:138,stripX:228,stripW:972}),portraitPickerLayout:()=>({toolbar:{x:300,y:247,width:1320},search:[300,283,1320],list:[300,343,1320,435]}),MEMORIAL_QUEUE_PITCH:244,createModal:()=>modal,rowPlate:async()=>{},rosterToolbar:async()=>{},caption:async()=>{},panel:async()=>{},studentCard:async()=>{},queuePanel:async()=>{},queueMarker:async()=>new Element(),retainedButton:async()=>{},button:async()=>{},
     async card(host,item,options){cards.push({item,options});return{visual:new Element(),hit:new Element(),actionBox:[0,0,180,36]};},
     virtualArea(host,box,count,pitch,render){const scroll=new Element(),inner=new Element();scroll.append(inner);host.append(scroll);const pending=[];
       for(let i=0;i<count;i++){const cell=new Element();inner.append(cell);pending.push(render(cell,i,signal));}return{inner,ready:Promise.all(pending)};}}};

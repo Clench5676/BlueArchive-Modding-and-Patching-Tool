@@ -1,3 +1,5 @@
+import { SMALL_BUTTON } from "./ui-tokens.js";
+
 // Verified LobbyCommon and LobbyCommonNight: identity ancestors, TweenController/CharPos at (-112, -886),
 // scale 111. Ordinary portrait SkeletonDataAssets use .01. The game's 16:9 UI camera spans 2960 x 1665 units.
 // These are a projection baseline, not a claim about every runtime camera/character composition.
@@ -198,8 +200,9 @@ export const PORTRAIT_SIZE = Object.freeze({ min: .5, max: 2, default: 1 });
 // a control (the top bar, the Hall's top-right buttons and slider), it goes under the portrait's feet instead, or to the
 // stage's bottom when they are off-stage. Horizontally it moves inwards only at the stage's edges.
 export const PORTRAIT_TOOLBAR_MARGIN = 16;
+export const PORTRAIT_TOOLBAR_HEIGHT = 74 + SMALL_BUTTON.h * 1920 / LOBBY_UI_WIDTH;
 export function portraitToolbarLayout(rect, count, obstacles = [], head = null) {
-  const icon = 62, gap = 6, width = Math.max(420, count * (icon + gap) - gap), height = 142, edge = 20, m = PORTRAIT_TOOLBAR_MARGIN;
+  const icon = 62, gap = 6, width = Math.max(420, count * (icon + gap) - gap), height = PORTRAIT_TOOLBAR_HEIGHT, edge = 20, m = PORTRAIT_TOOLBAR_MARGIN;
   const centre = head ? head.x : rect.x + rect.width / 2, top = head ? head.y : rect.y;
   const x = Math.max(edge, Math.min(1920 - edge - width, centre - width / 2));
   const covered = (y) => obstacles.filter((o) => x < o.x + o.width + m && x + width > o.x - m && y < o.y + o.height + m && y + height > o.y - m);
@@ -211,5 +214,6 @@ export function portraitToolbarLayout(rect, count, obstacles = [], head = null) 
   }
   // A head below the stage still keeps the toolbar on it.
   y = Math.max(edge, Math.min(1080 - edge - height, y));
-  return { x, y, width, height, icon, gap, slider: [0, 108, width - 168], reset: [width - 156, 74, 156, 68] };
+  const rowHeight = SMALL_BUTTON.h * 1920 / LOBBY_UI_WIDTH;
+  return { x, y, width, height, icon, gap, slider: [0, 74 + rowHeight / 2, width - 168], reset: [width - 156, 74, 156, rowHeight] };
 }

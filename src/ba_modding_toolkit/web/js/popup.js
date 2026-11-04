@@ -513,6 +513,7 @@ function listFrame(title, buttons, closeButton) {
 // one card of the list: the game's card body, the picture clipped to its window, a name bar under it. A card that
 // cannot be chosen (dim) is darkened like the roster's not-owned cards, its picture without colour; its badge (In Use,
 // or the caller's) stays bright.
+export const LIST_CARD_NAME = Object.freeze({ fs: 34, fsMin: 24, lines: 2, padY: 22, pitch: 1.2 });
 export function listCard(it, x, y, selected, card = LP.card, kind = null) {
   const { w, h, bar } = card;
   // The same upright image must reach both inclined edges even in a tall portrait window.
@@ -522,8 +523,8 @@ export function listCard(it, x, y, selected, card = LP.card, kind = null) {
       imgLeft: `${-overscan * 100}%`, imgWidth: `${(1 + 2 * overscan) * 100}%` }]),
     node("Line", [1, 4], [sprite("Common_Line_Raius20px", w - 12, h - 18, { incline: 10, depth: 9, color: "#ffffff/1.00" })]),
   ];
-  const lbl = markedLabel(it.label, { fs: 34, fsMin: 24, color: "#ffffff/1.00", maxW: w - 56 - (it.nameEdit ? 60 : 0), mark: false, maxLines: 2 });
-  const barH = Math.max(bar, 22 + lbl.lines * lbl.fs * 1.2), barY = -h / 2 - 10 - barH / 2;
+  const lbl = markedLabel(it.label, { fs: LIST_CARD_NAME.fs, fsMin: LIST_CARD_NAME.fsMin, color: "#ffffff/1.00", maxW: w - 56 - (it.nameEdit ? 60 : 0), mark: false, maxLines: LIST_CARD_NAME.lines });
+  const barH = Math.max(bar, LIST_CARD_NAME.padY + lbl.lines * lbl.fs * LIST_CARD_NAME.pitch), barY = -h / 2 - 10 - barH / 2;
   kids.push(node("Bar", [barY * TAN10 + 4, barY], [sprite("Common_Bg_Raius10px", w - 22, barH, { incline: 10, depth: 8, color: "#2c4564/1.00" })], [
     node("Name", [it.nameEdit ? -30 : 0, 0], [], lbl.nodes),
     ...(it.nameEdit ? [node("EditName", [w / 2 - 50, 0], [sprite("Cafe_Icon_NameEdit", 42, 42, { type: 0, depth: 12 })])] : []),
