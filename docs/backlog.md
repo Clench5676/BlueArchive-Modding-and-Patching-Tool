@@ -1915,9 +1915,9 @@ scroll area takes the pointer, so a wheel in the gaps scrolls the list and the g
 
 ## BL-078: macOS: dragging the top bar sometimes does not move the window
 
-- Status: Seen again on alpha.15 and alpha.17 (owner, 2026-11-04). Close-time chrome failure fixed in `1a2afd84`; silent
-  startup paths hardened and logged in `b186e93b`; alpha.17's log points at the open-popup rule, fixed by the lead; owner
-  review pending (a press in an immersive scene does not drag, by BL-037's design).
+- Status: Seen again on alpha.15, alpha.17 and alpha.18 (owner, 2026-11-04). Close-time chrome failure fixed in `1a2afd84`;
+  silent startup paths hardened and logged in `b186e93b`; the open-popup rule relaxed in `4841e30e`; alpha.18's log points
+  at the common cause, fixed by the lead; owner review pending.
 - Requested: 2026-11-03 (owner, 0.6.1-alpha.12, macOS): dragging the top bar did not move the window; happened once, not seen again.
 
 Candidates (lead, from the code): the native drag regions (`window-chrome.js` `dragRegions`) are published empty while a popup or
@@ -1955,9 +1955,18 @@ the transformed stage), so they cover none of it, yet the bar looked live and di
 keeps its drag regions while a popup is open, its controls still wait for the popup; immersive scenes keep no drag
 regions as BL-037 accepted. The log now names why the regions are empty (`immersive`, `waiting`, `covered`).
 
+Owner, 2026-11-04 (0.6.1-alpha.18, macOS): after fullscreen the top bar no longer moved the window. The log: `drag regions:
+0 (immersive)` on entering, then nothing until a press was ignored for `no drag regions`; no frontend error. The page
+cleared the regions at once when a scene (or, before `4841e30e`, a popup) began, but published the new regions only after
+`alignTopBar()` had finished within the same layout pass: an alignment still decoding, or any change under the stage
+during it, ended the pass, and the bar kept the empty regions. The alpha.17 report fits the same pattern. Fixed by the
+lead: each pass publishes the regions at once and again after the alignment; an alignment still pending after 2 s goes
+to the report. Reproduced in `tests/js/window_chrome.test.mjs` (the old code fails it).
+
 ## BL-079: The bars enter as the game's lobby does; immersive scenes keep them away until the pointer comes
 
-- Status: Implemented by the lead on `main`; owner review pending (macOS). Windows not reviewed.
+- Status: Implemented by the lead on `main`; the bars accepted by the owner on alpha.18 (macOS); the window buttons fixed
+  after alpha.18, owner review pending. Windows not reviewed.
 - Requested: 2026-11-04 (owner): find the game's animation of the top and bottom bars sliding in when the game starts;
   play it when the App first loads; in fullscreen hide both bars and the window buttons, and slide them out when the
   pointer comes near.
@@ -1975,4 +1984,21 @@ Implementation (`chrome-motion.js`, tokens `LOBBY_ENTRY`, `corner-layout.js` ins
 `CocoaHost.slide`): see `docs/web-ui.md` "Bar motion". The reveal and its leaving reuse the clip's curve over the bar's own
 painted extent (the game has no such motion); the 16 px edge band and the 500 ms delay are the App's. Photography's bottom
 controls rise with the menu as its top controls go down with the bar.
+
+Owner's review of alpha.18 (2026-11-04): the bars are right; the window buttons stayed visible throughout, loading and
+fullscreen included. Cause: the motion module's default sender was a stand-in, so `window.motion` never left the page;
+its tests passed their own sender. Fixed by the lead: it sends through the App's RPC, with a test of the default.
+
+## BL-080: Student Hall: the system pointer replaces the game pointer for good
+
+- Status: Open; cause not identified.
+- Requested: 2026-11-04 (owner, 0.6.1-alpha.18, macOS): in the Student Hall, switched to the L2D memorial and in
+  fullscreen, the pointer turns into the system pointer, mostly the open hand (sometimes the arrow), as if the Hall's
+  "drag the scene" took it over; only a restart brings the game pointer back. Not known whether earlier builds did it.
+
+Lead's notes: the game pointer is a CSS `cursor` on `body` and buttons (`cursor.js`, `--cursor`), which nothing else writes.
+The open hand is CSS `grab`: `lobby-touch.js` gives the memorial's host `grab`/`grabbing` over its drag boxes, and the
+photography, model and visual-mode surfaces have it too; the Hall camera's pan (middle or right button, pointer capture)
+sets no cursor. A pointer that stays wrong everywhere until a restart points at WebKit's native cursor state rather than
+the page's styles. Next: find a sequence that reproduces it.
 
