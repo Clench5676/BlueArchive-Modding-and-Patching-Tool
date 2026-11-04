@@ -118,7 +118,7 @@ export function openPicker({ kind, choices, draft, onPreview, onChange, onSave, 
         bindReorder(drawn.hit, { id: entry.id, index, count: list.length, scroll: cell.parentElement.parentElement, pitch,
           move: reorder, enabled: () => !isSaving(), signal: rowSignal, feedback: dragFeedback(drawn.visual, () => marker, pitch, list.length) });
       } else await UI.caption(box, T("hall.missing"), [5, 60, 240], { size: 28 });
-      await UI.button(box, `Remove${entry.id}`, T("hall.remove"), actionBox, () => { if (!isSaving() && draft.remove(entry.id)) { onChange?.(); draw().catch(onError); } }, { enabled: list.length > 1 });
+      await UI.retainedButton(box, `Remove${entry.id}`, T("hall.remove"), actionBox, () => { if (!isSaving() && draft.remove(entry.id)) { onChange?.(); draw().catch(onError); } }, { enabled: list.length > 1 });
     }, { key: "memorial-playlist", horizontal: true, signal, positions, onError });
     marker = await UI.queueMarker(queue.inner, pitch);
     await queue.ready;

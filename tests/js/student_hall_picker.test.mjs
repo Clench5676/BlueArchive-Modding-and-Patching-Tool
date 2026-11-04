@@ -10,7 +10,7 @@ globalThis.document={createElement:()=>new Element()};
 globalThis.pickerFixture={normalizeView,sourceKey,portraitRows,studentChoices,memorialChoices,
   bindReorder(){},dragFeedback:()=>({}),Display:{},Popup:{top:()=>null},T:key=>key,L:names=>names?.en,language:()=>"en",spineBase:()=>"source",
   thumbnailScope:()=>({signal,cancel(){}}),lazyThumbnail:()=>({}),
-  UI:{MEMORIAL_QUEUE_PITCH:244,createModal:()=>modal,rowPlate:async()=>{},rosterToolbar:async()=>{},caption:async()=>{},panel:async()=>{},studentCard:async()=>{},queuePanel:async()=>{},queueMarker:async()=>new Element(),button:async()=>{},
+  UI:{MEMORIAL_QUEUE_PITCH:244,createModal:()=>modal,rowPlate:async()=>{},rosterToolbar:async()=>{},caption:async()=>{},panel:async()=>{},studentCard:async()=>{},queuePanel:async()=>{},queueMarker:async()=>new Element(),retainedButton:async()=>{},button:async()=>{},
     async card(host,item,options){cards.push({item,options});return{visual:new Element(),hit:new Element(),actionBox:[0,0,180,36]};},
     virtualArea(host,box,count,pitch,render){const scroll=new Element(),inner=new Element();scroll.append(inner);host.append(scroll);const pending=[];
       for(let i=0;i<count;i++){const cell=new Element();inner.append(cell);pending.push(render(cell,i,signal));}return{inner,ready:Promise.all(pending)};}}};

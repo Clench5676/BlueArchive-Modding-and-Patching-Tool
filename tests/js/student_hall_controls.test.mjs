@@ -26,7 +26,7 @@ globalThis.hallControlsHarness = { S, clone: structuredClone, NGUI: { find, node
     Object.assign(entry.els[0].style,{transform:options.rotation?`rotate(${-options.rotation}deg)`:"",transformOrigin:"50% 50%"});
   },
   text(tree, path, value) { find(tree, path).widgets[0].text = value; },
-  UI: { button: async () => {}, scaleControl: async () => {} }, T: (key) => `localized:${key}`, Popup: { hit(host, view, path, fn, meta) { const b = { path, fn, dataset: {}, ...meta }; wired.push(b); return b; } },
+  UI: { retainedButton: async () => {}, button: async () => {}, scaleControl: async () => {} }, T: (key) => `localized:${key}`, Popup: { hit(host, view, path, fn, meta) { const b = { path, fn, dataset: {}, ...meta }; wired.push(b); return b; } },
   document: { createElement: () => ({ style: {}, children: [], append(child) { this.children.push(child); } }), querySelectorAll: () => [] }, lobby };
 let source = await readFile(new URL("../../src/ba_modding_toolkit/web/js/student-hall.js", import.meta.url), "utf8");
 source = source.replace(/^import .*;$/gm, "");
@@ -140,7 +140,7 @@ test("the own-size slider moves the toolbar only once a size is set, never under
   const entry={id:"a",variant:"hero",source:"mod:current",x:400,y:1100,scale:1,mirror:false},ui=globalThis.hallControlsHarness.UI,saved={...ui};
   let change,reset,listeners={};
   ui.scaleControl=async(host,value,fn,options)=>{assert.equal(value,1);assert.equal(options.limits.min,.5);change=fn;return {range:{addEventListener:(name,f)=>{listeners[name]=f;}},reset:()=>fn(1)};};
-  ui.button=async(host,name,caption,box,fn)=>{if(name==="HallPortraitScaleReset")reset=fn;};
+  ui.retainedButton=async(host,name,caption,box,fn)=>{if(name==="HallPortraitScaleReset")reset=fn;};
   try{
     Hall.fixture("portraits","layout",0,[entry],[]);wired=[];
     const host={style:{},replaceChildren(){}},rect=portraitRect(entry,null);
