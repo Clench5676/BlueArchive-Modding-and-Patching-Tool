@@ -7,7 +7,7 @@ As of 2026-11-04. Verify the actual branch, working tree and `pyproject.toml` ve
 
 | Branch | State |
 | --- | --- |
-| `main` | Local version `0.6.1-alpha.20`: the published 0.6.0, the upstream syncs to `6c61fdc8` and to v2.12.0 (`62ec9471`), the security policy, the fix that keeps files from a mod inside their output folder (`e8bee4c2`) and its own message for refused atlases (`ca44e051`), BL-065 through BL-069, BL-070 steps 1 to 3, BL-071, BL-072, BL-073, BL-076, BL-077, the BL-078 fixes (`1a2afd84`, `b186e93b`, `4841e30e`), BL-079. Not pushed. Upstream published its fix for the same issue in v2.12.0 (2026-11-04), so 0.6.1 is no longer held back. |
+| `main` | Local version `0.7.0-alpha.1`: the published 0.6.0, the upstream syncs to `6c61fdc8` and to v2.12.0 (`62ec9471`), the security policy, the fix that keeps files from a mod inside their output folder (`e8bee4c2`) and its own message for refused atlases (`ca44e051`), BL-065 through BL-069, BL-070 steps 1 to 3, BL-071, BL-072, BL-073, BL-076, BL-077, the BL-078 fixes (`1a2afd84`, `b186e93b`, `4841e30e`), BL-079. Not pushed. Upstream published its fix for the same issue in v2.12.0 (2026-11-04), so 0.6.1 is no longer held back. |
 
 0.6.0 is published (tag `0.6.0` at `817ebeda`, 2026-10-30): macOS build uploaded, Windows build by the release workflow.
 
@@ -65,9 +65,10 @@ from passing tests or the presence of earlier code.
 
 ## Review artifact and validation
 
-`dist/Blue-Archive-Modding-and-Patching-Tool-0.6.1-alpha.20-macos-arm64.dmg`, MD5 `6211af862fc2d003ad394ce387b41d80`,
-built from `e3573f91` (`chore(release): 0.6.1-alpha.20`): alpha.19 and the fix for the pointer flicker as the window
-buttons realigned, with the pointer logging (`5e6b3d56`). BL-070 and BL-080 closed by the owner.
+`dist/Blue-Archive-Modding-and-Patching-Tool-0.7.0-alpha.1-macos-arm64.dmg`, MD5 `5049f210dca5761fbc0d75da9dcad34a`,
+built from `b2c0ac8b` (`chore(release): 0.7.0-alpha.1`): the 0.7.0 pre-review build, with BL-081 (release notes drawn
+as Markdown in the UI language, the 0.7.0 notes built in) and the drafted 0.7.0 release notes and changelog. BL-081 and
+the release notes' wording await the owner's review.
 
-On `main` before the build (`669cad8e`): 4294 passed, 33 skipped (Python), 2364 JavaScript tests passed (isolated runs
+On `main` before the build (`dd6f32af`): 4296 passed, 33 skipped (Python), 2370 JavaScript tests passed (isolated runs
 with the official development view). Native Windows behavior is not verified on the macOS host.
