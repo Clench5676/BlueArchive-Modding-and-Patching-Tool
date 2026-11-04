@@ -7,7 +7,7 @@ As of 2026-11-04. Verify the actual branch, working tree and `pyproject.toml` ve
 
 | Branch | State |
 | --- | --- |
-| `main` | Local version `0.6.1-alpha.17`: the published 0.6.0, the upstream syncs to `6c61fdc8` and to v2.12.0 (`62ec9471`), the security policy, the fix that keeps files from a mod inside their output folder (`e8bee4c2`) and its own message for refused atlases (`ca44e051`), BL-065 through BL-069, BL-070 steps 1 to 3, BL-071, BL-072, BL-073, BL-076, BL-077, the BL-078 fixes (`1a2afd84`, `b186e93b`, `4841e30e`), BL-079. Not pushed. Upstream published its fix for the same issue in v2.12.0 (2026-11-04), so 0.6.1 is no longer held back. |
+| `main` | Local version `0.6.1-alpha.18`: the published 0.6.0, the upstream syncs to `6c61fdc8` and to v2.12.0 (`62ec9471`), the security policy, the fix that keeps files from a mod inside their output folder (`e8bee4c2`) and its own message for refused atlases (`ca44e051`), BL-065 through BL-069, BL-070 steps 1 to 3, BL-071, BL-072, BL-073, BL-076, BL-077, the BL-078 fixes (`1a2afd84`, `b186e93b`, `4841e30e`), BL-079. Not pushed. Upstream published its fix for the same issue in v2.12.0 (2026-11-04), so 0.6.1 is no longer held back. |
 
 0.6.0 is published (tag `0.6.0` at `817ebeda`, 2026-10-30): macOS build uploaded, Windows build by the release workflow.
 
@@ -63,10 +63,11 @@ from passing tests or the presence of earlier code.
 
 ## Review artifact and validation
 
-`dist/Blue-Archive-Modding-and-Patching-Tool-0.6.1-alpha.17-macos-arm64.dmg`, MD5 `2157a0aeef516d3cae69088be5b36fe0`,
-built from `76c62c4c` (`chore(release): 0.6.1-alpha.17`): alpha.16, the BL-078 top bar drag hardening and logging
-(`b186e93b`) and BL-070 step 3's second pass (`abf289e6`, `b9b7ad4e`, `7f245853`). BL-070 step 3 and BL-078 await the
-owner's review.
+`dist/Blue-Archive-Modding-and-Patching-Tool-0.6.1-alpha.18-macos-arm64.dmg`, MD5 `7812b389a06162a77788b33c47922aef`,
+built from `0e234fcb` (`chore(release): 0.6.1-alpha.18`): alpha.17, the BL-078 fix for open popups (`4841e30e`), the
+owner's alpha.17 BL-070 findings (`68b0ebdc`, `7160604d`) and BL-079 (`62e09fa3`, `bc93efcd`). BL-070 step 3, BL-078 and
+BL-079 await the owner's review.
 
-On `main` before the build (`7f245853`): 4281 passed, 33 skipped (Python), 2348 JavaScript tests passed (isolated runs
-with the official development view). Native Windows behavior is not verified on the macOS host.
+On `main` before the build (`a23254b3`): 4288 passed, 33 skipped (Python; the dev tripwire's one refusal of the then
+untracked new module passed once it was committed), 2362 JavaScript tests passed (isolated runs with the official
+development view). Native Windows behavior is not verified on the macOS host.
