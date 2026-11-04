@@ -152,7 +152,7 @@ skips** in this isolated worktree (no test game view configured). Focused covera
 Python tests, 11 immersion/controller tests, 38 shared title/row/navigation tests and 89 bar/switch/scrollbar raster
 tests. The full JavaScript run initially exposed incomplete stage-geometry fakes in popup/fidelity tests; those
 fixtures now supply the DOM measurement contract and both full suites pass. `git diff main --
-src/ba_modding_toolkit/locales` is empty. The native event monitor, preference values and menu timer are verified
+src/bmpt/locales` is empty. The native event monitor, preference values and menu timer are verified
 with fakes; no real native event routing, preference UI mapping, menu replacement or WebKit painting is claimed.
 
 No real platform feasibility pass or failure is established by those tests. On a failing packaged host, the exact
@@ -214,16 +214,16 @@ The present authorization advances BL-037 to a proposed design; it does not auth
 
 | Area | Current behaviour and evidence |
 | --- | --- |
-| Host creation (R) | [`webui/main.py::_run_window`](../../src/ba_modding_toolkit/webui/main.py) creates a 1600 × 900 window, minimum 960 × 540, with `frameless=True`, `easy_drag=False`, `text_select=True`, black background and default resizability. It sets `SHOW_DEFAULT_MENUS=False`, `DRAG_REGION_SELECTOR=".topbar"`, `DRAG_REGION_DIRECT_TARGET_ONLY=True`. Windows explicitly selects `gui="edgechromium"`; macOS leaves GUI selection to pywebview. `confirm_close` is not enabled. |
+| Host creation (R) | [`webui/main.py::_run_window`](../../src/bmpt/webui/main.py) creates a 1600 × 900 window, minimum 960 × 540, with `frameless=True`, `easy_drag=False`, `text_select=True`, black background and default resizability. It sets `SHOW_DEFAULT_MENUS=False`, `DRAG_REGION_SELECTOR=".topbar"`, `DRAG_REGION_DIRECT_TARGET_ONLY=True`. Windows explicitly selects `gui="edgechromium"`; macOS leaves GUI selection to pywebview. `confirm_close` is not enabled. |
 | macOS host (U) | Cocoa 6.2.1 retains titled/closable/miniaturizable/resizable window styles, adds full-size content for frameless mode, makes the title bar transparent, hides its title and hides all three standard buttons. Thus native buttons exist but are hidden; the App has no code restoring them. See [`cocoa.py`, constructor](https://github.com/r0x0r/pywebview/blob/6.2.1/webview/platforms/cocoa.py#L516-L644). |
 | Windows host (U) | WinForms 6.2.1 uses `FormBorderStyle.None` for frameless windows. WebView2 is a child control docked to fill the form. The current integration does not preserve a system caption-button area. See [`winforms.py`](https://github.com/r0x0r/pywebview/blob/6.2.1/webview/platforms/winforms.py#L246-L257) and [`edgechromium.py`](https://github.com/r0x0r/pywebview/blob/6.2.1/webview/platforms/edgechromium.py#L83-L95). |
-| Visible control group (R) | [`web/js/main.js::setupWindowControls`](../../src/ba_modding_toolkit/web/js/main.js) appends `#native-controls` to `document.body` when `pywebview` exists. It creates HTML buttons `−`, `□`, `×`, with localized accessible names. Despite its ID, this is a custom web group on **both** platforms, ordered minimize/maximize/close at the **top right**. |
-| Control styling (R) | [`web/css/app.css`](../../src/ba_modding_toolkit/web/css/app.css) fixes that group to viewport `(right:0, top:0)`, above the UI at z-index 10000; each button is 36 × 24 CSS pixels. The 108 × 24 group is invisible until hover or focus. It is outside the scaled stage and remains when the stage toolbar slides away. |
-| Commands (R) | [`webui/api.py::window_control`](../../src/ba_modding_toolkit/webui/api.py) calls `minimize()`, `destroy()` or `maximize()/restore()`. The maximize toggle writes a Python `window.maximized` flag; the App does not synchronize that flag with native maximize, snap or restore events. This is not a reliable native-state model. |
+| Visible control group (R) | [`web/js/main.js::setupWindowControls`](../../src/bmpt/web/js/main.js) appends `#native-controls` to `document.body` when `pywebview` exists. It creates HTML buttons `−`, `□`, `×`, with localized accessible names. Despite its ID, this is a custom web group on **both** platforms, ordered minimize/maximize/close at the **top right**. |
+| Control styling (R) | [`web/css/app.css`](../../src/bmpt/web/css/app.css) fixes that group to viewport `(right:0, top:0)`, above the UI at z-index 10000; each button is 36 × 24 CSS pixels. The 108 × 24 group is invisible until hover or focus. It is outside the scaled stage and remains when the stage toolbar slides away. |
+| Commands (R) | [`webui/api.py::window_control`](../../src/bmpt/webui/api.py) calls `minimize()`, `destroy()` or `maximize()/restore()`. The maximize toggle writes a Python `window.maximized` flag; the App does not synchronize that flag with native maximize, snap or restore events. This is not a reliable native-state model. |
 | Dragging (R/U) | Only a direct `.topbar` target starts pywebview's selector drag. Descendants, including the title, do not qualify; blank bar areas do. The 6.2.1 injected script tracks mouse movement and requests window movement, rather than declaring an OS caption hit area. It supplies no title-bar double-click handler. See [`customize.js`](https://github.com/r0x0r/pywebview/blob/6.2.1/webview/js/customize.js#L36-L86). |
-| Menus (R) | [`webui/native.py::install_edit_menu`](../../src/ba_modding_toolkit/webui/native.py) adds Cut/Copy/Paste/Select All on macOS after page load. The App does not add a Window menu or explicit minimize/zoom/fullscreen shortcuts. The exact packaged menu and responder behaviour has not been accepted for this design. |
-| Toolbar (R) | [`web/index.html`](../../src/ba_modding_toolkit/web/index.html) places Back, page title, Enable Mods, divider, Settings and Home in `.topbar` inside the 1920 × 1080 stage. [`nav.js`](../../src/ba_modding_toolkit/web/js/nav.js) skins Back and the right actions from `UICharacterCollection`; [`top-bar.js`](../../src/ba_modding_toolkit/web/js/top-bar.js) aligns text/sprite ink to the background fill. |
-| Clearance and Hall (R) | [`top-action-layout.js`](../../src/ba_modding_toolkit/web/js/top-action-layout.js) measures overlap with the custom group and adds an 8 CSS-pixel right gap. It shifts the right actions only. In Hall it centres Settings in Home's former box and hides Home and the divider; leaving restores the original sibling boxes (BL-038). |
+| Menus (R) | [`webui/native.py::install_edit_menu`](../../src/bmpt/webui/native.py) adds Cut/Copy/Paste/Select All on macOS after page load. The App does not add a Window menu or explicit minimize/zoom/fullscreen shortcuts. The exact packaged menu and responder behaviour has not been accepted for this design. |
+| Toolbar (R) | [`web/index.html`](../../src/bmpt/web/index.html) places Back, page title, Enable Mods, divider, Settings and Home in `.topbar` inside the 1920 × 1080 stage. [`nav.js`](../../src/bmpt/web/js/nav.js) skins Back and the right actions from `UICharacterCollection`; [`top-bar.js`](../../src/bmpt/web/js/top-bar.js) aligns text/sprite ink to the background fill. |
+| Clearance and Hall (R) | [`top-action-layout.js`](../../src/bmpt/web/js/top-action-layout.js) measures overlap with the custom group and adds an 8 CSS-pixel right gap. It shifts the right actions only. In Hall it centres Settings in Home's former box and hides Home and the divider; leaving restores the original sibling boxes (BL-038). |
 
 The web group has the wrong side and presentation for macOS, lacks native traffic-light behaviour, and is hard to
 discover while invisible. On Windows, a web maximize click is not evidence of Snap Layouts support. The small web
@@ -231,23 +231,23 @@ buttons do not supply native caption hit testing, resize borders or system-menu 
 native resize and drag-to-restore behaviour remain unverified. Right-side clearance solves a local collision; it
 does not budget Back/title/Mods against controls or reserve a macOS left area.
 
-There is also a coordinate mismatch: [`util.js::fitStage`](../../src/ba_modding_toolkit/web/js/util.js) scales and
+There is also a coordinate mismatch: [`util.js::fitStage`](../../src/bmpt/web/js/util.js) scales and
 centres a 16:9 stage inside the viewport. At other aspect ratios, its toolbar can be below or inset from the native
 window corner while the custom controls stay at the corner. Keeping the toolbar solely stage-anchored cannot
 guarantee a shared native-control row.
 
 ### Existing close and fullscreen paths
 
-**R:** [`main.py`](../../src/ba_modding_toolkit/webui/main.py) connects pywebview `closing` to
-[`Services.on_closing`](../../src/ba_modding_toolkit/webui/services.py). That method refuses queued/running writers,
+**R:** [`main.py`](../../src/bmpt/webui/main.py) connects pywebview `closing` to
+[`Services.on_closing`](../../src/bmpt/webui/services.py). That method refuses queued/running writers,
 publishes `app.busy`, and handles update-related classic-window refusal. `Services.quit` also checks writers.
-[`jobs.py`](../../src/ba_modding_toolkit/webui/jobs.py) provides atomic `reserve_quit`/`cancel_quit`, currently used for
+[`jobs.py`](../../src/bmpt/webui/jobs.py) provides atomic `reserve_quit`/`cancel_quit`, currently used for
 update/restart coordination. `on_closed` launches an already prepared update helper only after the window closes.
 
-**R:** [`StudentHall.canLeave`](../../src/ba_modding_toolkit/web/js/student-hall.js) waits for saving and offers Keep
+**R:** [`StudentHall.canLeave`](../../src/bmpt/web/js/student-hall.js) waits for saving and offers Keep
 Editing / Discard / Save and Leave for a dirty Hall draft. Navigation, Back/Home and classic handoff use this
 permission path. The native closing callback and `window.control:close` do **not** consult it. The roster's
-[`quit.js`](../../src/ba_modding_toolkit/web/js/quit.js) adds a separate Quit? confirmation for Back/Escape; it is not
+[`quit.js`](../../src/bmpt/web/js/quit.js) adds a separate Quit? confirmation for Back/Escape; it is not
 a general native-close interception layer. No general `beforeunload` close guard was found in the main wiring.
 
 **U/D:** Cocoa 6.2.1's `destroy()` schedules `NSWindow.close`, while user close uses its delegate. Apple documents
@@ -261,7 +261,7 @@ The design must preserve the intended guards and close these gaps, rather than a
 loop. Whether the App's menu consumes the shortcut first in each responder context is unverified; audit both.
 See [`cocoa.py` keyboard handling](https://github.com/r0x0r/pywebview/blob/6.2.1/webview/platforms/cocoa.py#L460-L490).
 
-**R:** Hall's [`student-hall-fullscreen.js`](../../src/ba_modding_toolkit/web/js/student-hall-fullscreen.js) implements
+**R:** Hall's [`student-hall-fullscreen.js`](../../src/bmpt/web/js/student-hall-fullscreen.js) implements
 an immersive **page mode**: it hides/inerts the stage toolbar and navigation, focuses an exit button and restores
 focus on leaving. Detail uses the stage's separate `.fullscreen` styling. These modes do not themselves request
 native OS fullscreen. Neither is a substitute for the macOS green button or a Windows host fullscreen command.
@@ -290,9 +290,9 @@ examples are not drop-in pywebview/WinForms APIs; adopting another window framew
 
 **R:** the donor is `UICharacterCollection/SeletControl/Top/BG_W/Bg`, with `Common_Top_Menu_Bg` and `Label_Title`;
 the right group is `UICharacterCollection/NUITop_Scenes/Top/Right`. The `SeletControl` spelling is intentional.
-The renderer exports widget sizes/positions through [`gameassets/layouts.py`](../../src/ba_modding_toolkit/gameassets/layouts.py).
-The following values are recorded in [`top-bar-layout.js`](../../src/ba_modding_toolkit/web/js/top-bar-layout.js),
-[`nav.js`](../../src/ba_modding_toolkit/web/js/nav.js), [`top_bar_layout.test.mjs`](../../tests/js/top_bar_layout.test.mjs)
+The renderer exports widget sizes/positions through [`gameassets/layouts.py`](../../src/bmpt/gameassets/layouts.py).
+The following values are recorded in [`top-bar-layout.js`](../../src/bmpt/web/js/top-bar-layout.js),
+[`nav.js`](../../src/bmpt/web/js/nav.js), [`top_bar_layout.test.mjs`](../../tests/js/top_bar_layout.test.mjs)
 and [`nav_geometry.test.mjs`](../../tests/js/nav_geometry.test.mjs). Fixture assertions describe the checked-in
 contract, not independently verified current game assets.
 

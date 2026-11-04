@@ -107,7 +107,7 @@ counts as presentation and avoids a second automatic popup later in that launch.
 
 ## Release preparation
 
-Runtime tour text belongs in all six `src/ba_modding_toolkit/locales/*.json` files. For 0.6.0, the keys are
+Runtime tour text belongs in all six `src/bmpt/locales/*.json` files. For 0.6.0, the keys are
 `webui.tours.v0_6_0.<page-id>.title` and `.body` (with an optional `.caption`). `PUBLISHED_TOURS` in
 `webui/tours.py` stores metadata and each page's `copy` locale key prefix. The existing web UI i18n loader resolves
 the selected language at runtime, without fallback: a missing, blank, non-string or oversized title/body in any

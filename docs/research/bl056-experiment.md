@@ -492,7 +492,7 @@ No original/generated image bytes or atlas/skeleton payloads are included in Git
 
 - No product tests were added for this report-only change. Full suites were run once at the end of the image
   experiment; temporary scripts validate the experiment rather than changing shipped behavior.
-- Locale diff: `git diff main -- src/ba_modding_toolkit/locales` is empty; all six locales are unchanged.
+- Locale diff: `git diff main -- src/bmpt/locales` is empty; all six locales are unchanged.
 - Files changed: `docs/research/bl056-experiment.md` (this same report) and the existing single BL-056 status line
   in `docs/backlog.md` (link wording updated to the completed report/image inventory).
 - Commit list: prior `8df3ee87` — `docs: record BL-056 portrait experiment evidence and blockers`; this continuation
@@ -527,7 +527,7 @@ approve a production integration or a game-ready portrait.
 
 ## 8. K4: engine assembly and local owner test mods
 
-`src/ba_modding_toolkit/refine_assembly.py` now provides `assemble_page` and `assemble_mod`, without UI,
+`src/bmpt/refine_assembly.py` now provides `assemble_page` and `assemble_mod`, without UI,
 generation or locale changes. Inputs are the official portrait parts and an arbitrary-size generated page,
 unrotated trimmed region crop (name/index), or box crop in atlas coordinates (left, top, right, bottom).
 The engine reuses `atlas_remap` parsing, region/page types, bounds, rotation, alpha conversion and aspect
@@ -781,7 +781,7 @@ There are no committed skeletons, atlases or images from the game.
   binary helper `js/helpers/refine-pose.mjs`. Documentation: this section and one BL-056 status line.
 - No UI/prefab or locale changes. The existing portrait framing node remains
   `UICharacterDetail/Inventory_ListControl/CharacterPos`; no new prefab/widget was constructed.
-  `git diff main -- src/ba_modding_toolkit/locales` is empty for all six locales.
+  `git diff main -- src/bmpt/locales` is empty for all six locales.
 - The worktree's index is blocked. Authorized temporary Git metadata under `k5/git` delivers separate
   `feat(core): ...`, `test: ...` and `docs: ...` commits in `/tmp/portrait-composite.bundle`, branch
   `codex/portrait-composite`. The normal index/refs, primary checkout and `main` remain untouched; the bundle
@@ -845,7 +845,7 @@ were inspected or reproduced; Python production code never launches Node. The te
 `refine_cut.py` accepts explicit `Pose` geometries, full-frame or boxed targets, untargeted animation poses,
 official pages, density and frame. It returns pages, edited-mesh and allowed-change masks, and a serializable
 per-slot/per-pose report. `CutParameters` names the fixed thresholds and radii. A manifest can be run with
-`python -m ba_modding_toolkit.refine_cut manifest.json --output <absolute-external-folder>`; its geometry,
+`python -m bmpt.refine_cut manifest.json --output <absolute-external-folder>`; its geometry,
 targets and masks are data, so another portrait requires no source changes. Output and PNG review sheets
 must be outside the source tree. Generation is separate and was never invoked for K6.
 
@@ -1092,8 +1092,8 @@ Returned images are named by crop id, for example `crop-0-0.png`.
 With caller-owned absolute paths in the variables, the same command handles both sides of generation:
 
 ```sh
-python -m ba_modding_toolkit.refine_inputs plan "$MANIFEST" --output "$INPUTS"
-python -m ba_modding_toolkit.refine_inputs finish "$INPUTS/plan.json" --returns "$RETURNS" --output "$RESULT"
+python -m bmpt.refine_inputs plan "$MANIFEST" --output "$INPUTS"
+python -m bmpt.refine_inputs finish "$INPUTS/plan.json" --returns "$RETURNS" --output "$RESULT"
 ```
 
 `finish` validates hashes, merges, keys, cuts, gates and optionally packs. Packing reuses K6's edited
@@ -1136,7 +1136,7 @@ tracked. No GUI, browser, screenshot, audio, image generation, package build, pu
 
 ### Validation, delivery and limits
 
-Engine/data files: `src/ba_modding_toolkit/refine_inputs.py` and `refine_prompts.json` (parts 1-4).
+Engine/data files: `src/bmpt/refine_inputs.py` and `refine_prompts.json` (parts 1-4).
 Tests: `tests/test_refine_inputs.py`, **20 cases**, covering synthetic planning, masks, hash tampering,
 soft alpha and unmixed colour, identity, changed return sizes, surviving real edits, colour offsets,
 drift rejection, diagnostic gates, context preparation, prompt wording, commands and multi-page packing.
