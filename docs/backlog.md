@@ -1698,7 +1698,7 @@ Validation: full suites on `f1ad2631`: 4236 passed, 26 skipped; JavaScript 2149 
 
 ## BL-070: One design system for the web UI
 
-- Status: Steps 1 and 2 of 4 accepted by the owner on macOS (alpha.5 and alpha.7, 2026-11-03); Windows not reviewed. Step 3 partly implemented on `main` (`4dea1366`..`4fb031c3`), owner review pending; its stopped sites decided by the owner (2026-11-04), not yet implemented. Step 4 not started.
+- Status: Steps 1 and 2 of 4 accepted by the owner on macOS (alpha.5 and alpha.7, 2026-11-03); Windows not reviewed. Step 3 implemented on `main` (`4dea1366`..`7f245853`), the memorial editor kept as it is by the owner's decision; owner review pending. Step 4 not started.
 - Requested: 2026-11-02 (owner): does the UI follow the game's design language (button sizes, spacing, fonts), and where it does not, does it have one system of its own?
 
 Owner decisions (2026-11-03): follow the prefab's values as the one system; run the migration one step at a time; keep the top bar and the Enable Mods switch at their present size.
@@ -1746,6 +1746,12 @@ Switch Portrait panel still lays out its own half-width box.
   Owner's decisions (2026-11-04), as the lead recommended: the Hall modals move up or shorten their content to make room for
   the shared footer; rows and cards grow so their buttons can take the small button's size; Thai may go below the minimum
   caption size at those three sites, wording unchanged.
+  Second pass (Codex, reviewed by the lead, 2026-11-04): the Add/Change Portrait and background modals draw the shared footer
+  (`abf289e6`; the portrait toolbar and search box rise to the title underline, the background list uses the gap above it);
+  portrait Add/Select and the portrait size Reset take the small button, their rows (402 to 437 px) and the toolbar (142 to
+  162 px) grow (`b9b7ad4e`); the three Thai exceptions are named per site and locale (`7f245853`). The memorial editor
+  cannot fit the footer and a full row (18 px short, 77 px with search open): owner's decision (2026-11-04), it keeps its own
+  66 px action row and its Add and Remove buttons as they are.
 - Step 4: list popup cards and details panel cloned from prefabs (UI-21), and its details actions.
 - Not scheduled, owner's eye first: the photography toolbar and colours; the lobby frost.
 
