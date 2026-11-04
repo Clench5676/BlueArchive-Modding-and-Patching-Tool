@@ -112,15 +112,19 @@ rm -rf "$BUILD_DIR"/*.app
         --mode=app \
         --python-flag=-m \
         --enable-plugins=tk-inter \
+        --include-package=bmpt \
         --include-package=ba_modding_toolkit \
         --include-package=UnityPy.resources \
+        --include-package-data=bmpt \
         --include-package-data=ba_modding_toolkit \
         --include-package-data=UnityPy \
         --include-package-data=archspec \
         --include-data-dir=ba_modding_toolkit/assets=ba_modding_toolkit/assets \
         --include-data-dir=ba_modding_toolkit/locales=ba_modding_toolkit/locales \
-        --include-data-dir=ba_modding_toolkit/web=ba_modding_toolkit/web \
-        --include-data-dir=ba_modding_toolkit/catalog/data=ba_modding_toolkit/catalog/data \
+        --include-data-dir=bmpt/assets=bmpt/assets \
+        --include-data-dir=bmpt/locales=bmpt/locales \
+        --include-data-dir=bmpt/web=bmpt/web \
+        --include-data-dir=bmpt/catalog/data=bmpt/catalog/data \
         ${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"} \
         --macos-app-name="$APP_NAME" \
         --macos-signed-app-name="$BUNDLE_ID" \
@@ -135,7 +139,7 @@ rm -rf "$BUILD_DIR"/*.app
         --output-filename=Blue-Archive-Modding-and-Patching-Tool \
         --report="$BUILD_DIR/compilation-report.xml" \
         --assume-yes-for-downloads \
-        ba_modding_toolkit
+        bmpt
 )
 
 BUILT_APPS=("$BUILD_DIR"/*.app)

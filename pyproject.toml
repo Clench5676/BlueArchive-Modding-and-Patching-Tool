@@ -21,17 +21,25 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["src"]
-# only the app package goes into wheels, whatever else lies under src/
-include = ["ba_modding_toolkit*"]
+# Only the App and its engine go into wheels, whatever else lies under src/.
+include = ["bmpt*", "ba_modding_toolkit*"]
 
 [tool.setuptools.package-data]
-ba_modding_toolkit = ["locales/*.json", "py.typed"]
+ba_modding_toolkit = ["locales/*.json", "assets/*.ico", "assets/*.png", "py.typed"]
+bmpt = [
+    "locales/*.json", "catalog/data/*.json", "refine_prompts.json",
+    "assets/dev-hooks.json", "assets/release-notes/*.md", "assets/tray/*",
+    "web/*", "web/css/*", "web/js/*.js", "web/js/photography/*.js", "web/fonts/*",
+    "web/vendor/*/*", "web/vendor/*/build/*",
+    "web/vendor/*/examples/jsm/controls/*", "web/vendor/*/examples/jsm/loaders/*",
+    "web/vendor/*/examples/jsm/utils/*",
+]
 
 [tool.uv.sources]
 spineatlas = { git = "https://github.com/Agent-0808/SpineAtlas.git", rev = "fix/bounds-not-first" }
 
 [project.scripts]
-bamt = "ba_modding_toolkit.launcher:main"
+bamt = "bmpt.launcher:main"
 
 [dependency-groups]
 dev = [

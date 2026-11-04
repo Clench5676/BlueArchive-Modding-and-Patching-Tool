@@ -68,8 +68,10 @@ $Copyright = "Copyright $([char]0xA9)2025-2026 Agent-0808. Licensed under GPLv3.
 $Trademarks = "Blue Archive $([char]0xA9)NEXON Games Co., Ltd. & Yostar, Inc. This tool is unofficial and not endorsed by them."
 $Common = @(
     "--mode=onefile",
+    "--include-package=bmpt",
     "--include-package=ba_modding_toolkit",
     "--include-package=UnityPy.resources",
+    "--include-package-data=bmpt",
     "--include-package-data=ba_modding_toolkit",
     "--include-package-data=UnityPy",
     "--include-package-data=archspec",
@@ -96,14 +98,16 @@ try {
             --enable-plugins=tk-inter `
             --include-data-dir=ba_modding_toolkit/assets=ba_modding_toolkit/assets `
             --include-data-dir=ba_modding_toolkit/locales=ba_modding_toolkit/locales `
-            --include-data-dir=ba_modding_toolkit/web=ba_modding_toolkit/web `
-            --include-data-dir=ba_modding_toolkit/catalog/data=ba_modding_toolkit/catalog/data `
+            --include-data-dir=bmpt/assets=bmpt/assets `
+            --include-data-dir=bmpt/locales=bmpt/locales `
+            --include-data-dir=bmpt/web=bmpt/web `
+            --include-data-dir=bmpt/catalog/data=bmpt/catalog/data `
             --windows-icon-from-ico=ba_modding_toolkit/assets/eligma.ico `
             --windows-console-mode=disable `
             --product-name="Blue Archive Modding and Patching Tool" `
             --file-description="Blue Archive Modding and Patching Tool" `
             --output-filename=$Gui `
-            ba_modding_toolkit
+            bmpt
         if ($LASTEXITCODE -ne 0) { throw "the GUI build failed" }
         Pop-Location
         $Files += $Gui

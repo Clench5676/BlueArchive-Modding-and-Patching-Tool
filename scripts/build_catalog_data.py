@@ -33,8 +33,8 @@ import sys
 # Support direct invocation from a source checkout without installing the script.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from ba_modding_toolkit.catalog._data import base_rank, csv_entry, read_character_map
-from ba_modding_toolkit.catalog._names import (
+from bmpt.catalog._data import base_rank, csv_entry, read_character_map
+from bmpt.catalog._names import (
     LANGUAGES, SOURCE_LANGUAGES, NAMES, NAMING, apply_thai_names, clean, cn_aliases, cn_base, cn_words, compose,
     csv_bases, csv_names, csv_sources, given_name, name_head, short_name, usable,
 )

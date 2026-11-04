@@ -1,4 +1,4 @@
-"""Build the tray and menu bar icons from their SVG sources in src/ba_modding_toolkit/assets/tray.
+"""Build the tray and menu bar icons from their SVG sources in src/bmpt/assets/tray.
 
     python scripts/tray_icons.py                     # menubar.pdf, menubar@2x.png and tray.ico from the SVGs
     python scripts/tray_icons.py --check             # exit 1 when the built files no longer match the SVGs
@@ -31,7 +31,7 @@ from pathlib import Path
 
 from PIL import Image, ImageChops, ImageDraw
 
-ICON_DIR = Path(__file__).resolve().parent.parent / "src" / "ba_modding_toolkit" / "assets" / "tray"
+ICON_DIR = Path(__file__).resolve().parent.parent / "src" / "bmpt" / "assets" / "tray"
 MENUBAR_PT = 18  # the menu bar icon's size in points
 TRAY_SIZES = (16, 20, 24, 32)  # Windows picks the frame of the small icon size: 100 %, 125 %, 150 % and 200 %
 SUPERSAMPLE = 16  # samples per pixel along each axis when rendering
