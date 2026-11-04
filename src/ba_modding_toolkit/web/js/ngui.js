@@ -787,23 +787,6 @@ export function inkBand(str, px) {
   return { top: centre - half, bottom: centre + half };
 }
 
-// NGUI UILabel Overflow.ShrinkContent (0): keep the authored box and reduce whole font sizes until all text fits.
-// There is no design minimum for this overflow mode. Explicit paragraphs and language-aware word/CJK breaks survive.
-export function shrinkContent(str, widget, lang = null) {
-  const outer = measureLang, breaks = charBreaks;
-  measureLang = lang || outer; charBreaks = true;
-  try {
-    for (let fs = widget.fontSize; fs > 0; fs--) {
-      const paragraphs = String(str).split(/\r?\n/).map((part) => wrapAt(part, fs, widget.w_, Infinity));
-      if (paragraphs.some((lines) => !lines)) continue;
-      const lines = paragraphs.flat();
-      if (lines.length * fontSizeFor(str, fs) * LINE_PITCH <= widget.h_)
-        return { text: lines.join("\n"), fs, lines: lines.length };
-    }
-    throw new RangeError("ShrinkContent cannot fit at a positive whole font size");
-  } finally { measureLang = outer; charBreaks = breaks; }
-}
-
 // fitGroup into the label widgets of one group: each one's text and size (the same for all), and its box at least maxW wide
 export function fitLabels(widgets, strs, fsMax, fsMin, maxW, maxLines = 2, opts = {}) {
   // each widget's own language, as the Language row's options have

@@ -216,23 +216,14 @@ def game(tmp_path_factory):
 
 
 @pytest.mark.skipif(not GAME_DIR.is_dir(), reason="Official development view required")
-def test_uitalk_template_numbers(game):
+def test_talk_template_is_the_prefab_box_at_the_origin(game):
     from ba_modding_toolkit.gameassets.layouts import export_layout, subtree
     path = game._bundle_path(game._lobby_prefabs()["lobbycommon"])
     with open_bundle(path) as env:
-        original = subtree(export_layout(env, "LobbyCommon", {}), "DialogPanel/ChatDialog/UITalk")
-    saved = dialogue_layout(game, "UITalk")
-    def widget(tree, key):
-        return next(w for w in tree["widgets"] if key in w)
-    assert saved["pos"] == original["pos"] == [-678, -613]
-    sprite, label = subtree(saved, "Sprite"), subtree(saved, "Label")
-    assert sprite["pos"] == [0, -29] and label["pos"] == [7, 87]
-    body, text = widget(sprite, "sprite"), widget(label, "text")
-    assert [body[k] for k in ("w_", "h_", "pivot", "type")] == [813, 298, 7, 1]
-    assert [text[k] for k in ("w_", "h_", "fontSize", "pivot", "overflow")] == [680, 220, 62, 4, 0]
-    assert body["sprite"] == widget(subtree(original, "Sprite"), "sprite")["sprite"]
-    assert text["color"] == widget(subtree(original, "Label"), "text")["color"] == "#29415a/1.00"
-    assert dialogue_layout(game)["pos"] == [0, 0]
+        original = subtree(export_layout(env, "LobbyCommon", {}), "DialogPanel/ChatDialog/Talk")
+    saved = dialogue_layout(game)
+    assert saved["pos"] == [0, 0]
+    assert [child["name"] for child in saved["children"]] == [child["name"] for child in original["children"]]
 
 
 @pytest.mark.skipif(not GAME_DIR.is_dir(), reason="Official development view required")

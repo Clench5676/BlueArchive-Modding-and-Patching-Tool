@@ -305,10 +305,8 @@ class LocalPortraitVoices:
         return self.memo.get(("audio", clip, tuple(spine_stamps([path]))), read)
 
 
-def dialogue_layout(game: Any, box: str = "Talk") -> dict:
-    """A LobbyCommon ChatDialog box, retaining its prefab geometry, sliced sprite and label."""
-    if box not in ("Talk", "UITalk"):
-        raise ServiceError("bad_params", key="box")
+def dialogue_layout(game: Any) -> dict:
+    """The ordinary LobbyCommon ChatDialog balloon, retaining its native sliced sprite and text styling."""
     hint = "ui-uilobbyelement-_mxload-prefabs-2025-07-02_assets_all_1158600183.bundle"
     path = next((path for path in game._paths() if path.name == hint), None)
     if path is None:
@@ -319,11 +317,10 @@ def dialogue_layout(game: Any, box: str = "Talk") -> dict:
     def read() -> bytes:
         with open_bundle(path) as env:
             tree = export_layout(env, "LobbyCommon", game._atlas_index()["names"])
-        balloon = subtree(tree, "DialogPanel/ChatDialog/" + box)
-        if box == "Talk":
-            balloon["pos"] = [0, 0]
-        return json.dumps(balloon).encode()
-    return json.loads(game._cached("hall/dialogue-v2/" + box + json.dumps(spine_stamps([path])), read))
+        talk = subtree(tree, "DialogPanel/ChatDialog/Talk")
+        talk["pos"] = [0, 0]
+        return json.dumps(talk).encode()
+    return json.loads(game._cached("hall/dialogue-v1/" + json.dumps(spine_stamps([path])), read))
 
 
 def portrait_motion_layout(game: Any, core: str | None) -> dict:
@@ -525,8 +522,8 @@ def register_api(rpc: Any, s: Any) -> None:
         return s.state.get("hall_viewed", [])
 
     @rpc.method("hall.dialogueLayout")
-    def balloon(box: str = "Talk") -> dict:
-        return dialogue_layout(s.game, box)
+    def balloon() -> dict:
+        return dialogue_layout(s.game)
 
     @rpc.method("hall.lines")
     def lines(variant: str, lang: str = "ja") -> dict:
