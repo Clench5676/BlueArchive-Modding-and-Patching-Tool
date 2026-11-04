@@ -29,7 +29,8 @@ import { forgetSpineAssets, spineBase, spineAssetBase } from "./api.js";
 import { lobbyIdle } from "./rest-pose.js";
 import { withTimeout } from "./async.js";
 import { atStep, previewError } from "./preview-error.js";
-import { T } from "./i18n.js";
+import { T, language } from "./i18n.js";
+const dialogueModule = () => import("./student-hall-dialogue.js");
 import { artBounds, containingView, overlaps, resumeRest, settle, validRect, worldBounds } from "./lobby-health.js";
 import * as Linear from "./linear.js";
 import * as Materials from "./skeleton-materials.js";
@@ -62,6 +63,10 @@ let lines = {}, muted = false, volume = 0.8, lineOf = (l) => l?.["zh-CN"] || "";
 let introOn = true; // the intro setting (setIntro): off shows the lobby as its intro leaves it
 const listeners = new Set();
 let ownsTouch = false;
+let dialogueFullscreen = null;
+export function setDialogueFullscreen(on) { dialogueFullscreen = on; current?.caption?.reposition(); }
+let dialogueViewBounds = { left: 0, top: 0, right: STAGE.w, bottom: STAGE.h };
+export function setDialogueBounds(bounds) { dialogueViewBounds = bounds; current?.caption?.reposition(); }
 // Query-keyed Lobby modules share lobby-touch.js. The shared token also protects against late disposal when a
 // caller claims another instance before releasing this one (including the canonical detail-screen instance).
 const touchOwners = globalThis[Symbol.for("bamt.lobby.touch-owners")] ||= new WeakMap(), touchToken = {};
@@ -570,11 +575,12 @@ function viewNow() {
       }
     }
   }
+  c.caption?.reposition();
   return c.view;
 }
 function setView(view, immediate) {
   current.target = view;
-  if (immediate) current.view = view;
+  if (immediate) { current.view = view; current.caption?.reposition(); }
 }
 
 // the lobby's frame, head-pat point and talk sequences
@@ -1023,6 +1029,14 @@ async function showNow(core, host, variant, mod, sources, signal, framing, defer
   signal.addEventListener("abort", current.cancel, { once: true });
   talkIndex = -1;
   current.ready = (async () => {
+    const owner = current;
+    void dialogueModule().then(({ createLobbyDialogue }) => {
+      if (signal.aborted || my !== token) return;
+      owner.caption = createLobbyDialogue({ host: host.querySelector(".lobby-subtitle"), later: setTimeout, cancel: clearTimeout,
+        geometry: () => ({ info: owner.info, meta: owner.meta, view: owner.view, framing: owner.framing,
+          full: dialogueFullscreen ?? mode === "full", bounds: dialogueViewBounds }) });
+      if (owner.captionLine) owner.caption.show(...owner.captionLine);
+    }).catch((error) => { if (!signal.aborted && my === token) console.warn("Lobby dialogue unavailable", error); });
     const { info, layers } = await layersOf(core, mod, sources, framing, { signal });
     if (signal.aborted || my !== token) return null;
     if (!layers.length) throw new Error("No lobby skeletons found");
@@ -1167,6 +1181,7 @@ function clearView(host) {
   current?.intro?.dispose(); // its sounds, its depth of field's targets
   dropPlayers();
   current?.fx?.dispose();
+  current?.caption?.dispose();
   current = null;
   clearInterval(extendTimer);
   chain = null;
@@ -1659,27 +1674,15 @@ export const textOf = (seq) => seq.cues.map((c) => lineOf(lines[c.clip])).filter
 
 // one subtitle line at a time: the old one leaves upwards and the next rises in from below
 function subtitle(text, immediate = false) {
-  const box = current?.host?.querySelector(".lobby-subtitle");
-  if (!box) return;
-  clearTimeout(subtitleTimer);
-  if (immediate) {
-    box.textContent = text;
-    box.hidden = !text;
-    box.classList.remove("in", "out");
-    return;
-  }
-  const showNew = () => {
-    box.textContent = text;
-    box.hidden = !text;
-    box.classList.remove("out");
-    box.classList.add("in");
-    requestAnimationFrame(() => requestAnimationFrame(() => box.classList.remove("in")));
-  };
-  if (!box.hidden && box.textContent) {
-    box.classList.add("out");
-    subtitleTimer = setTimeout(() => { box.hidden = true; box.textContent = ""; if (text) showNew(); }, 260);
-  } else if (text) showNew();
-  else box.hidden = true;
+  if (!current) return;
+  if (!text) { current.captionLine = ["", immediate]; current.caption?.show(...current.captionLine); return; }
+  // A Hall fallback may use another language than the page. Preserve the selected row's actual language.
+  const preferred = { "en-US": "en", "ja-JP": "ja", "ko-KR": "ko", "th-TH": "th" }[language()] || language();
+  const rows = (talk?.cues || []).map((clip) => lines[clip]).reverse();
+  const row = rows.find((value) => value && Object.values(value).includes(text));
+  const lang = row?.[preferred] === text ? preferred : Object.keys(row || {}).find((key) => row[key] === text) || preferred;
+  current.captionLine = [text, immediate, lang];
+  current.caption?.show(...current.captionLine);
 }
 
 // A camera may show beyond the art, but never synthesize stretched/blurred border pixels.

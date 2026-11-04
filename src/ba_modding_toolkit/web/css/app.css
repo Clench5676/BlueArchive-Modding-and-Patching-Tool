@@ -299,14 +299,12 @@ input[type="text"], input[type="search"], textarea { cursor: text; }
 .model-view:active { cursor: grabbing; }
 .model-view.ready { opacity: 1; }
 
-/* subtitle: above the favourite badge and the nameplate, grows upwards; leaves upwards, arrives from below */
-.lobby-subtitle { position: absolute; left: 150px; bottom: 400px; max-width: 760px; z-index: 6; padding: 18px 30px; border-radius: 10px;
-  background: rgba(16, 34, 56, .72); color: #fff; font: var(--w) 30px/1.45 var(--font); white-space: pre-line;
+/* Game dialogue balloons; only their host's entry/exit motion belongs to CSS. Geometry comes from the prefab. */
+.lobby-subtitle { position: absolute; inset: 0; z-index: 6; pointer-events: none;
   transition: opacity .26s ease, translate .26s ease; }
 .lobby-subtitle[hidden] { display: none; }
 .lobby-subtitle.out { opacity: 0; translate: 0 -24px; }
 .lobby-subtitle.in { opacity: 0; translate: 0 24px; transition: none; }
-.stage.fullscreen .lobby-subtitle { left: 50%; transform: translateX(-50%); bottom: 70px; }
 
 /* Fullscreen exit uses UICharacterVisualMode/LeftTop/Btn_Back. */
 .fs-exit { position: absolute; z-index: 30; transition: opacity .6s ease; }

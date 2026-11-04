@@ -23,7 +23,7 @@ globalThis.document = {
 };
 globalThis.getComputedStyle = (el) => ({ getPropertyValue: () => /^th(?:-|$)/.test(el.lang)
   ? /:lang\(th\)\s*\{\s*--font:\s*([^;]+);/.exec(css)?.[1] || "" : "" });
-const { LINE_PITCH, fitGroup, fitLabel, fitLabels, fitRow, fitText, fontSizeFor, glyphWidth, inkBand, inkReference, inkShift, textWidth } = await import("../../src/ba_modding_toolkit/web/js/ngui.js");
+const { LINE_PITCH, shrinkContent, fitGroup, fitLabel, fitLabels, fitRow, fitText, fontSizeFor, glyphWidth, inkBand, inkReference, inkShift, textWidth } = await import("../../src/ba_modding_toolkit/web/js/ngui.js");
 
 const BAD_START = /^[、。，．：；！？）」』】〉》…‥ーぁぃぅぇぉっゃゅょゎァィゥェォッャュョヮヵヶ〜～,.!?)]/;
 const BAD_END = /[（「『【〈《(]$/;
@@ -299,4 +299,22 @@ test("inkBand gives the ink's top and bottom around the box centre, lines at the
   near(band.top, -shift - (0.72 + 0.2) * px / 2); near(band.bottom, -shift + (0.72 + 0.2) * px / 2);
   const two = inkBand("H\ng", px);
   near(two.bottom - two.top, (0.72 + 0.2 + 1.15) * px); near((two.top + two.bottom) / 2, -inkShift("H\ng", px));
+});
+
+test("UITalk ShrinkContent preserves long lines inside the authored 680 by 220 box without a design floor", () => {
+  const samples = [
+    ["en-US", "The memorial lobby keeps every word of this deliberately long dialogue, including its final sentence. ".repeat(5)],
+    ["th-TH", "\u0e04\u0e38\u0e13\u0e04\u0e23\u0e39\u0e04\u0e30\u0e27\u0e31\u0e19\u0e19\u0e35\u0e49\u0e1e\u0e27\u0e01\u0e40\u0e23\u0e32\u0e08\u0e30\u0e44\u0e1b\u0e14\u0e49\u0e27\u0e22\u0e01\u0e31\u0e19\u0e44\u0e2b\u0e21\u0e04\u0e30".repeat(12)],
+    ["ja-JP", "\u5148\u751f\u3001\u300c\u3042\u308a\u304c\u3068\u3046\u300d\u3063\u3066\u8a00\u3063\u3066\u304f\u308c\u308b\uff1f".repeat(18)],
+  ];
+  const sizes = [];
+  for (const [lang, text] of samples) {
+    document.documentElement.lang = lang;
+    const fit = shrinkContent(text, { fontSize: 62, w_: 680, h_: 220 }, lang);
+    sizes.push(fit.fs); assert.ok(fit.fs <= 62 && fit.fs > 0);
+    assert.ok(fit.lines * fontSizeFor(text, fit.fs) * LINE_PITCH <= 220);
+    for (const line of fit.text.split("\n")) assert.ok(glyphWidth(line, fit.fs) <= 680);
+    assert.equal(fit.text.replace(/\s/g, ""), text.replace(/\s/g, ""));
+  }
+  assert.deepEqual(sizes, [18, 23, 17]);
 });

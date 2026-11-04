@@ -111,21 +111,11 @@ test("pending translations retain voice metadata for cues reached during the lan
   } finally { h.controls.stop(); t.mock.timers.reset(); }
 });
 
-test("immediate subtitle translation cancels an outgoing old-language transition", (t) => {
-  t.mock.timers.enable({ apis: ["setTimeout"] });
-  const classes = new Set(), box = { hidden: false, textContent: "Old language",
-    classList: { add: (...names) => names.forEach((name) => classes.add(name)),
-      remove: (...names) => names.forEach((name) => classes.delete(name)) } };
-  const subtitle = new Function("current", "requestAnimationFrame", `let subtitleTimer;
-    ${source.slice(source.indexOf("function subtitle("))}
-    return subtitle;`)({ host: { querySelector: () => box } }, (fn) => fn());
-  try {
-    subtitle("Pending old-language cue"); assert.equal(classes.has("out"), true);
-    subtitle("Current translation", true);
-    assert.equal(box.textContent, "Current translation"); assert.equal(box.hidden, false);
-    assert.equal(classes.size, 0);
-    t.mock.timers.tick(300);
-    assert.equal(box.textContent, "Current translation", "the superseded transition cannot restore old text");
-    subtitle("", true); assert.equal(box.textContent, ""); assert.equal(box.hidden, true);
-  } finally { t.mock.timers.reset(); }
+test("subtitle forwards the actual selected fallback language to the shared balloon controller", () => {
+  const shown = [], current = { caption: { show: (...args) => shown.push(args) } };
+  const start = source.indexOf("function subtitle("), end = source.indexOf("// A camera", start);
+  const subtitle = new Function("current", "language", "talk", "lines", `${source.slice(start, end)}; return subtitle;`)(
+    current, () => "th-TH", { cues: ["one"] }, { one: { ja: "Fallback", th: "Translation" } });
+  subtitle("Fallback"); subtitle("Translation", true);
+  assert.deepEqual(shown, [["Fallback", false, "ja"], ["Translation", true, "th"]]);
 });
