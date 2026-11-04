@@ -354,38 +354,31 @@ export function clampBalloon(at, size, bounds) {
   return { x: clamp(at.x, bounds.left, bounds.right - size.width),
     y: clamp(at.y, bounds.top, bounds.bottom - size.height), flip: false };
 }
+const FULL_STAGE = Object.freeze({ left: 0, top: 0, right: 1920, bottom: 1080 });
+// Fullscreen keeps the Talk balloon by the head (owner, 2026-11-04): the detail panel has gone, so the whole stage bounds it.
 export function lobbyBalloon(template, text, { info, meta, view, framing, full, bounds }, { ui = NGUI, lang = "en" } = {}) {
-  if (full) {
-    const tree = structuredClone(template), label = ui.find(tree, "Label").widgets.find((w) => "text" in w);
-    const fitted = ui.shrinkContent(text, label, lang);
-    Object.assign(label, { text: fitted.text, fontSize: fitted.fs, lang });
-    // UITalk is screen anchored: zooming/panning the memorial never moves this UI box.
-    return { tree, x: 960, y: 540, scale: S, fs: fitted.fs };
-  }
   const point = info?.dialog?.Talk;
   const at = !framing && !meta.sparse && point?.length === 2
     ? lobbyPoint({ x: point[0], y: point[1] }, view) : null;
   const touch = lobbyPoint(meta.touch, view);
   return { ...prepareBalloon(template, text, { ...touch, width: 0, height: 0 },
-    { ui, lang, bounds, at: at && Number.isFinite(at.x) && Number.isFinite(at.y) ? at : null }), scale: S };
+    { ui, lang, bounds: full ? FULL_STAGE : bounds, at: at && Number.isFinite(at.x) && Number.isFinite(at.y) ? at : null }), scale: S };
 }
 
-// The memorial's existing leave/enter sequence, now rendering the same Talk helper as the Hall, or prefab UITalk.
+// The memorial's existing leave/enter sequence, rendering the same Talk helper as the Hall in every view.
 export function createLobbyDialogue({ host, geometry, call = defaultRpc, ui = NGUI,
   later = setTimeout, cancel = clearTimeout, raf = requestAnimationFrame } = {}) {
-  const templates = new Map();
+  let template = null;
   let text = "", lang = "en", timer = null, version = 0, disposed = false, rendered = null, key = "", geometryKey = "", entering = false, motion = 0;
   host.setAttribute("role", "status"); host.style.pointerEvents = "none";
   async function draw() {
     const g = geometry(); if (!text || !g?.meta || !g.view || disposed) return;
-    const box = g.full ? "UITalk" : "Talk", value = text, language = lang, turn = version;
-    if (!templates.has(box)) templates.set(box, Promise.resolve(call("hall.dialogueLayout", { box })).catch((error) => {
-      templates.delete(box); throw error;
-    }));
-    const template = await templates.get(box); await ui.init?.();
+    const value = text, language = lang, turn = version;
+    template ||= Promise.resolve(call("hall.dialogueLayout", {})).catch((error) => { template = null; throw error; });
+    const talk = await template; await ui.init?.();
     if (disposed || turn !== version || value !== text || language !== lang) return;
-    const placement = lobbyBalloon(template, text, g, { ui, lang });
-    const nextKey = JSON.stringify([text, lang, box, placement.flip, placement.width, placement.height]);
+    const placement = lobbyBalloon(talk, text, g, { ui, lang });
+    const nextKey = JSON.stringify([text, lang, placement.flip, placement.width, placement.height]);
     const position = { left: `${placement.x}px`, top: `${placement.y}px` };
     if (key === nextKey) { if (rendered) Object.assign(rendered.style, position); return; }
     key = nextKey; const my = ++version;
@@ -420,7 +413,7 @@ export function createLobbyDialogue({ host, geometry, call = defaultRpc, ui = NG
       else content("", language);
     },
     reposition() {
-      const g = geometry(), next = JSON.stringify(g?.full ? ["full"] : [g?.view, g?.bounds, g?.meta?.touch, g?.info?.dialog?.Talk, g?.framing, g?.meta?.sparse]);
+      const g = geometry(), next = JSON.stringify([!!g?.full, g?.view, g?.bounds, g?.meta?.touch, g?.info?.dialog?.Talk, g?.framing, g?.meta?.sparse]);
       if (next !== geometryKey) { geometryKey = next; redraw(); }
     },
     dispose() { disposed = true; version++; cancel(timer); host.replaceChildren(); },

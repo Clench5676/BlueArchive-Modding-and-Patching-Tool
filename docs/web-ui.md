@@ -2622,12 +2622,11 @@ The top-left pivot maps through the current lobby view, then clamps to the visib
 rendered background. Missing/nonfinite Talk positions, special framing and sparse art use `touch` as a zero-size
 anchor; `balloonPosition` puts it to the right or flips it left. Camera/frame changes recompute placement.
 
-Fullscreen uses `LobbyCommon`'s `UITalk` at its screen anchor in the detail screen and immersive Hall. The Hall's
-ordinary memorial view uses Talk even though its camera calls `frame("full")`: `setDialogueFullscreen` separates
-immersive UI state from camera framing. `hall.dialogueLayout` accepts Talk or UITalk; the backend reads
-all geometry and styling from the prefab. UITalk retains its 813 x 298 bottom-pivot sliced sprite, 680 x 220 centred
-label, fs62, offsets and (-678, -613) box position. `NGUI.shrinkContent` implements its overflow mode (0), wrapping
-in the selected line's language and reducing whole font sizes until the complete text fits, without a design minimum.
+Fullscreen keeps the same Talk balloon by the head (owner, 2026-11-04: switching to `UITalk` broke the continuity), in
+the detail screen and the immersive Hall; only its bounds widen to the whole stage, as the detail panel has gone. It
+follows the art while the fullscreen view zooms or pans. The Hall's ordinary memorial view keeps its view bounds even
+though its camera calls `frame("full")`: `setDialogueFullscreen` separates immersive UI state from camera framing.
+`hall.dialogueLayout` returns the Talk box; the backend reads its geometry and styling from the prefab.
 The existing 0.26 s upward leave/rising entry sequence and textless-cue retention remain. The pointer-transparent
 host exposes the current text through `role="status"` and `aria-label`; the Hall portrait dialogue stays unchanged.
 

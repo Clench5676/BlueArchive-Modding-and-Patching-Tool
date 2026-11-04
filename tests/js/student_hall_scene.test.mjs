@@ -272,7 +272,7 @@ test("WebKit's click-only release selects, toggles off and never drags",()=>{
   delete renderer.pick;
 });
 
-test("ordinary Hall memorials use Talk even with the full camera; immersion alone selects UITalk", () => {
+test("ordinary Hall memorials keep their view bounds with the full camera; immersion alone frees the whole stage", () => {
   setup(); const changes = [], player = { setDialogueFullscreen: (on) => changes.push(on), setVolume() {}, setZoomLimit() {}, setPostProcessing() {}, setIntro() {} };
   Hall.configureMemorial(player); Hall.immersiveFixture(true); Hall.configureMemorial(player);
   Hall.immersiveFixture(false); Hall.configureMemorial(player);
