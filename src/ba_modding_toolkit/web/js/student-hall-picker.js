@@ -129,7 +129,7 @@ export function openPicker({ kind, choices, draft, onPreview, onChange, onSave, 
   async function draw() {
     await modal.draw(async (layer, alive, signal) => { await toolbar(layer); if (!alive()) return; await (memorial ? drawMemorials(layer, alive, signal) : drawPortraits(layer, alive, signal)); },
       memorial ? [{ label: T("popup.cancel"), fn: safe(onCancel) }, { label: T("hall.savePlaylist"), fn: safe(onSave), enabled: draft.current().memorials.length > 0 }]
-        : [{ label: T(onReplace ? "popup.cancel" : "hall.doneAdding"), fn: safe(onDone) }], memorial ? { retainedFooter: true } : { width: 2150, height: 1300 });
+        : [{ label: T(onReplace ? "popup.cancel" : "hall.doneAdding"), fn: safe(onDone) }], memorial ? { retainedFooter: true } : { width: 2150, height: 1300, captionSite: onReplace ? "hall.portraitReplacement" : "hall.doneAdding" });
   }
   draw().catch(onError);
   const closeNested = () => { if (displayOwned && Popup.top()?.host?.id === "display") Popup.top().close?.("navigation"); displayOwned = false; };

@@ -63,6 +63,14 @@ export const SMALL_BUTTON = Object.freeze({
   wideW: 680,
 });
 
+// Owner-approved wording exceptions, scoped to a single Hall site and locale. The prefab minima above stay unchanged.
+export const CAPTION_EXCEPTIONS = Object.freeze({
+  "hall.doneAdding": Object.freeze({ "th-TH": 44 }),
+  "hall.unsavedChanges": Object.freeze({ "th-TH": 36 }),
+  "hall.scaleReset": Object.freeze({ "th-TH": 30 }),
+});
+export const captionMinimum = (site, locale, minimum) => CAPTION_EXCEPTIONS[site]?.[locale] ?? minimum;
+
 // UICharacterDetail/Inventory_ListControl/LeftInfo/CharInfo/Char_Target/Type/MainType/BG: Common_Bg_Raius10px 272 x 72
 // inclined 10 degrees, Label fs 40. Chips stand 290 apart, a second row 84 under the first (the nameplate's rows).
 export const CHIP = Object.freeze({

@@ -22,7 +22,7 @@ import { T } from "./i18n.js";
 import { withTimeout } from "./async.js";
 import { TEXT_VIEWER } from "./popup-frames.js";
 import { statsBox, valueRoom } from "./stats-box.js";
-import { BACKDROP, CHIP, COLOUR, FOOTER, POPUP, SMALL_BUTTON, STATS_BOX } from "./ui-tokens.js";
+import { BACKDROP, CHIP, COLOUR, FOOTER, POPUP, SMALL_BUTTON, STATS_BOX, captionMinimum } from "./ui-tokens.js";
 import { DOT, RECRUIT, S, TAN10, clone, glyphsOf, hitButton, markedLabel, wrapPath } from "./util.js";
 
 const { node, sprite, label, find, rect } = NGUI;
@@ -252,15 +252,20 @@ export function footerSlots(n, w) {
 }
 // the captions of one footer share one size: the prefab's 72 down to 48 in a 400 box, up to two lines, clear of the body's edges
 const CAPTION = FOOTER.caption;
-export const footerFit = (captions) => NGUI.fitGroup(captions, CAPTION.fs, CAPTION.fsMin, CAPTION.w, CAPTION.lines, { maxH: CAPTION.h });
-export const footerLabels = (widgets, captions) => NGUI.fitLabels(widgets, captions, CAPTION.fs, CAPTION.fsMin, CAPTION.w, CAPTION.lines, { maxH: CAPTION.h });
+function checkFooterFits(fits, { site = null, locale = document.documentElement.lang } = {}) {
+  if (site && fits.some((fit) => fit.overflow || fit.fs < captionMinimum(site, locale, CAPTION.fsMin)))
+    throw new RangeError(`Popup footer cannot fit: ${site} (${locale})`);
+  return fits;
+}
+export const footerFit = (captions, options) => checkFooterFits(NGUI.fitGroup(captions, CAPTION.fs, CAPTION.fsMin, CAPTION.w, CAPTION.lines, { maxH: CAPTION.h }), options);
+export const footerLabels = (widgets, captions, options) => checkFooterFits(NGUI.fitLabels(widgets, captions, CAPTION.fs, CAPTION.fsMin, CAPTION.w, CAPTION.lines, { maxH: CAPTION.h }), options);
 
 // the game's popup frame at a size: backdrop, title, close button and, when given, its Cancel and OK buttons with
 // these labels, FOOTER.centre above the bottom edge (a lone one in the middle; two at the prefab's +/-292).
 //   buttons: [{label, primary, name}] instead of ok / cancel: named choices in a row (one centred, two as OK and Cancel,
 //            three or more smaller); a node is Choice_<index> unless it names itself
 //   close: false for a popup that must be answered with a button (no close button)
-export function popupFrame(title, w, h, { ok = null, cancel = null, close = true, buttons = null } = {}) {
+export function popupFrame(title, w, h, { ok = null, cancel = null, close = true, buttons = null, captionSite = null } = {}) {
   const t = clone(find(layouts.sortPopup, "Center"));
   const popup = find(t, "Popup");
   popup.children = popup.children.filter((c) => ["Base", "Btn"].includes(c.name));
@@ -287,7 +292,7 @@ export function popupFrame(title, w, h, { ok = null, cancel = null, close = true
   }
   // the two captions share one size
   const captions = [["Btn_Ok", ok], ["Btn_Cancel", cancel]].filter(([, caption]) => caption);
-  footerLabels(captions.map(([name]) => find(btn, `${name}/Label_Locale`).widgets[0]), captions.map(([, caption]) => caption));
+  footerLabels(captions.map(([name]) => find(btn, `${name}/Label_Locale`).widgets[0]), captions.map(([, caption]) => caption), { site: captionSite });
   if (buttons?.length) {
     const primary = find(btn, "Btn_Ok"), secondary = find(btn, "Btn_Cancel");
     const { scale, xs } = footerSlots(buttons.length, w);
@@ -301,7 +306,7 @@ export function popupFrame(title, w, h, { ok = null, cancel = null, close = true
       return child;
     });
     // the captions of the choices share one size
-    footerLabels(btn.children.map((child) => find(child, "Label_Locale").widgets[0]), buttons.map((action) => action.label));
+    footerLabels(btn.children.map((child) => find(child, "Label_Locale").widgets[0]), buttons.map((action) => action.label), { site: captionSite });
   }
   find(t, "BlackBg/BlackBgClickArea").widgets.find((x) => "sprite" in x).color = BACKDROP;
   return t;
@@ -1049,7 +1054,7 @@ export function messageLayout({ lines = [], width = 1700, ok = null, cancel = nu
   return { body, width, height, visible, y0, scroll: scrolls };
 }
 
-async function showMessage({ title = "", lines = [], ok = null, cancel = null, buttons = null, check = null, host: hostArg = "dialog", width, close: dismissable = true, confirmKeys = null, fitTogether = [], scroll = false, plain = false }, resolve) {
+async function showMessage({ title = "", lines = [], ok = null, cancel = null, buttons = null, check = null, host: hostArg = "dialog", width, close: dismissable = true, confirmKeys = null, fitTogether = [], scroll = false, plain = false, captionSite = null }, resolve) {
   const host = hostOf(hostArg);
   const layer = document.createElement("div");
   layer.className = "popup-layer";
@@ -1089,7 +1094,7 @@ async function showMessage({ title = "", lines = [], ok = null, cancel = null, b
   }
   try {
     const { body, width: w, height, visible, y0, scroll: scrolls } = messageLayout({ lines, width, ok, cancel, buttons, check: state, fitTogether, scroll, plain });
-    const t = popupFrame(title, w, height, { ok, cancel, buttons, close: dismissable });
+    const t = popupFrame(title, w, height, { ok, cancel, buttons, close: dismissable, captionSite });
     const popup = find(t, "Popup");
     // the content in the middle of the room between the title and the buttons
     if (!scrolls) {

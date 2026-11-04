@@ -1611,9 +1611,12 @@ candidate Add and queue Remove bodies while retaining a full row cannot fit abov
 lower bound with no inter-panel gaps ends at 845.11 px without search, or 903.49 with search, beyond
 the 826.70 limit. Its current queue panel stays [115, 720, 1685, 195], ending at 915; footer centre stays 965.43 px.
 Tests cover the migrated layouts in all six locales and both search states, and pin this remaining stop numerically.
-In the deterministic locale fit tests, Thai `hall.doneAdding` needs 44 rather than the footer minimum 48; the Hall's
-existing shared unsaved-changes popup also needs 36 for its sibling captions. Those caption candidates remain stopped,
-with the existing strings unchanged. The other Hall footer captions fit the shared range in all six locales.
+
+`CAPTION_EXCEPTIONS` names exactly three Thai-only allowances: `hall.doneAdding` (44 u in its shared footer),
+`hall.unsavedChanges` (36 u shared by Keep Editing / Discard / Save and Leave), and `hall.scaleReset` (30 u).
+Call sites explicitly pass `captionSite`; the popup and small-button renderers validate the resulting size against that
+site and the page locale. The token minima remain 48 and 34. Other Hall sites and all other locales retain those minima;
+wording stays unchanged and every caption retains every character.
 
 Hall `student-hall-ui.js` `button()` uses `SMALL_BUTTON`: height 136 u, caption 48 down to 34, fit width w-60,
 label box w-30 by 116. `buttonBox` preserves each caller's centre and width, raising only widths below 240 u;
@@ -1931,6 +1934,8 @@ the prefab values, from the development view). It imports no other UI module.
   the item (`consent.js` `assetLayout`). Not migrated yet: the stopped memorial candidate, queue and footer buttons,
   the photography toolbar, the popup details
   actions and the detail screen's Show in Finder / Explorer button.
+- **Caption exceptions** (`CAPTION_EXCEPTIONS`, checked by `captionMinimum`): only Thai at Hall's Done Adding (44),
+  unsaved-changes footer group (36) and portrait Reset (30). The footer/small-button token minima stay 48/34.
 - **Batch Import's row under the list** is one row of the small button's size (136 high, caption 48 down to 34, 20 apart): Advanced
   Options, Recheck and Import share one body height and one caption size, on the prefabs' own bodies (Mailbox `Btn_Receive` and
   `ReceiveAll/Btn`, the popups' gold). Import stands out by its gold, not by its size. The row's right edge is the list tools'.
