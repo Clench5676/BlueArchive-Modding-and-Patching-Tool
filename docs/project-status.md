@@ -51,9 +51,9 @@ As of 2026-11-04. Verify the actual branch, working tree and `pyproject.toml` ve
 | BL-074 | Closed by the owner: working as intended |
 | BL-076, BL-077 | Accepted by the owner on macOS (alpha.13, 2026-11-04); Windows not reviewed |
 | BL-075 | Closed by the owner (2026-11-04) |
-| BL-078 | Seen again on alpha.15, .17 and .18; fixes `1a2afd84`, `b186e93b`, `4841e30e`; alpha.18's log showed the common cause (the regions came back only after the top bar's ink alignment finished), fixed after alpha.18; owner review pending |
-| BL-079 | The bars enter on UILobby's `UIAni_Lobby`; immersive scenes keep them away until the pointer comes to the edge; the bars accepted on alpha.18 (macOS), the window buttons fixed after it, owner review pending; Windows not reviewed |
-| BL-080 | Student Hall L2D fullscreen: the system pointer replaces the game pointer until a restart; open, cause not identified |
+| BL-078 | Accepted by the owner on macOS (alpha.19); Windows not reviewed |
+| BL-079 | Accepted by the owner on macOS (alpha.19); Windows not reviewed |
+| BL-080 | Student Hall L2D fullscreen: the system pointer replaces the game pointer until a restart; cause not identified. The alpha.19 pointer flicker (window buttons moved on every layout) fixed and pointer logging added after alpha.19, owner review pending |
 | BL-057, BL-058 | Accepted by the owner on macOS (alpha.12); Windows not reviewed |
 | BL-055 | Accepted by the owner on macOS (0.6.0 pre-review) |
 | BL-014 | Candidate, not scheduled |

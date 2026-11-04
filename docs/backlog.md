@@ -1915,9 +1915,8 @@ scroll area takes the pointer, so a wheel in the gaps scrolls the list and the g
 
 ## BL-078: macOS: dragging the top bar sometimes does not move the window
 
-- Status: Seen again on alpha.15, alpha.17 and alpha.18 (owner, 2026-11-04). Close-time chrome failure fixed in `1a2afd84`;
-  silent startup paths hardened and logged in `b186e93b`; the open-popup rule relaxed in `4841e30e`; alpha.18's log points
-  at the common cause, fixed by the lead; owner review pending.
+- Status: Accepted by the owner on macOS (alpha.19, 2026-11-04); Windows not reviewed. Fixes `1a2afd84`, `b186e93b`,
+  `4841e30e`, `bb034e39`.
 - Requested: 2026-11-03 (owner, 0.6.1-alpha.12, macOS): dragging the top bar did not move the window; happened once, not seen again.
 
 Candidates (lead, from the code): the native drag regions (`window-chrome.js` `dragRegions`) are published empty while a popup or
@@ -1965,8 +1964,7 @@ to the report. Reproduced in `tests/js/window_chrome.test.mjs` (the old code fai
 
 ## BL-079: The bars enter as the game's lobby does; immersive scenes keep them away until the pointer comes
 
-- Status: Implemented by the lead on `main`; the bars accepted by the owner on alpha.18 (macOS); the window buttons fixed
-  after alpha.18, owner review pending. Windows not reviewed.
+- Status: Accepted by the owner on macOS (alpha.19, 2026-11-04); Windows not reviewed.
 - Requested: 2026-11-04 (owner): find the game's animation of the top and bottom bars sliding in when the game starts;
   play it when the App first loads; in fullscreen hide both bars and the window buttons, and slide them out when the
   pointer comes near.
@@ -1991,7 +1989,7 @@ its tests passed their own sender. Fixed by the lead: it sends through the App's
 
 ## BL-080: Student Hall: the system pointer replaces the game pointer for good
 
-- Status: Open; cause not identified.
+- Status: Open; cause not identified. The alpha.19 flicker fixed by the lead; pointer logging added; owner review pending.
 - Requested: 2026-11-04 (owner, 0.6.1-alpha.18, macOS): in the Student Hall, switched to the L2D memorial and in
   fullscreen, the pointer turns into the system pointer, mostly the open hand (sometimes the arrow), as if the Hall's
   "drag the scene" took it over; only a restart brings the game pointer back. Not known whether earlier builds did it.
@@ -2001,4 +1999,12 @@ The open hand is CSS `grab`: `lobby-touch.js` gives the memorial's host `grab`/`
 photography, model and visual-mode surfaces have it too; the Hall camera's pan (middle or right button, pointer capture)
 sets no cursor. A pointer that stays wrong everywhere until a restart points at WebKit's native cursor state rather than
 the page's styles. Next: find a sequence that reproduces it.
+
+Owner, 2026-11-04 (0.6.1-alpha.19, macOS): the system pointer and the game pointer now flicker in turns; the log had
+nothing on pointers. Lead's finding: alpha.19 moves the window buttons with the top bar (BL-079), and every page layout
+made the native side align them again, moving them from the offset to their place and back. Each real move of a window
+button makes AppKit reset the pointer, which WebKit then set back. Fixed by the lead: buttons already where the alignment
+and the offset put them are not moved, and a move or hiding that changes nothing is skipped. The log now says when the
+pointer changes 8 times within 10 s, when a system pointer stays 5 s over the page (both from AppKit's current cursor
+while the mouse moves), and when the page lays the toolbar out 30 times within 10 s.
 
