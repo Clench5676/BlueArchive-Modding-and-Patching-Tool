@@ -8,6 +8,46 @@ When publishing a stable release, add its final changes with the actual version/
 release/compare links, and retain compatibility or migration notes. Release notes and feature tours are separate,
 human-reviewed presentation materials.
 
+## [0.7.0] - 2026-11-04
+
+### Added
+
+- Student Hall portraits are selected by their visible outline; each portrait has its own toolbar (above the head, under
+  the feet where the head has no room), its own size and a skin swap.
+- The top bar and the bottom menu come in on UILobby's own `UIAni_Lobby` curves once the first screen shows. Immersive
+  scenes (detail and Hall fullscreen, the camera) keep them away until the pointer reaches the window's top or bottom
+  edge; the macOS window buttons travel with the top bar.
+- Memorial lobby dialogue on the game's `ChatDialog` Talk balloon, in the normal view and in fullscreen.
+- Design tokens taken from the game's prefabs (`ui-tokens.js`): the popup footer and backdrop, the small button, chips,
+  the light stats box and the status colours, used across popups, Settings, Batch Import and the Student Hall.
+- Release notes in update detection draw their Markdown and show the section in the UI language. A build ships its own
+  notes (`assets/release-notes/<version>.md`), which Settings' prerelease update preview shows.
+- Session-log lines for the macOS pointer and for bursts of toolbar layouts.
+
+### Changed
+
+- Student Hall portraits stay fixed to the scene while panning; the portrait and background pickers draw the shared popup
+  footer; Hall buttons take the game's small button.
+- Batch Import's list, grouped rows, name plates, filter popup and gold Import button follow the game's popups.
+- Upstream BA Modding Toolkit synchronized to v2.12.0, with the Spine2Dump rendering backend for the classic UI and CLI.
+
+### Fixed
+
+- Files from a mod always stay inside their output folder.
+- Mod library state and recovery: reads survive a damaged or missing state file and a pending journal, configuration
+  changes are refused while the state is blocked, a failed library move can be retried, a mod updates as a whole, an
+  updated mod is offered to the game without its old build written back, and no `.backup` is written beside game files.
+- Bundle and texture sizes are bounded before loading; the UI asset disk cache keeps three resource versions.
+- macOS: the top bar keeps moving the window after popups, fullscreen and missed layouts; the window controls stay on
+  wide windows and second displays; the game pointer no longer flickers to the system pointer.
+- Photography: blank space in the Expressions list no longer pans the camera.
+- Error texts, keyboard focus kept inside popups, accessible names, and text fit across the App.
+
+### Compatibility
+
+- No data migration. Earlier releases' notes still show: an unmarked bilingual body is split at its rule and read by
+  script.
+
 ## [0.6.0] - 2026-10-30
 
 ### Added
@@ -203,6 +243,7 @@ for the classic toolkit's earlier v2 releases.
 | 0.1.0-alpha.2 | [alpha.1...alpha.2](https://github.com/Clench5676/BlueArchive-Modding-and-Patching-Tool/compare/0.1.0-alpha.1...0.1.0-alpha.2) |
 | 0.1.0-alpha.1 | [alpha...alpha.1](https://github.com/Clench5676/BlueArchive-Modding-and-Patching-Tool/compare/0.1.0-alpha...0.1.0-alpha.1) |
 
+[0.7.0]: https://github.com/Clench5676/BlueArchive-Modding-and-Patching-Tool/releases/tag/0.7.0
 [0.6.0]: https://github.com/Clench5676/BlueArchive-Modding-and-Patching-Tool/releases/tag/0.6.0
 [0.5.0]: https://github.com/Clench5676/BlueArchive-Modding-and-Patching-Tool/releases/tag/0.5.0
 [0.4.1]: https://github.com/Clench5676/BlueArchive-Modding-and-Patching-Tool/releases/tag/0.4.1
