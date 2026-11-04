@@ -1954,3 +1954,25 @@ popups remove only the regions they cover): the stage's popups draw below the na
 the transformed stage), so they cover none of it, yet the bar looked live and did not drag. Fixed by the lead: the bar
 keeps its drag regions while a popup is open, its controls still wait for the popup; immersive scenes keep no drag
 regions as BL-037 accepted. The log now names why the regions are empty (`immersive`, `waiting`, `covered`).
+
+## BL-079: The bars enter as the game's lobby does; immersive scenes keep them away until the pointer comes
+
+- Status: Implemented by the lead on `main`; owner review pending (macOS). Windows not reviewed.
+- Requested: 2026-11-04 (owner): find the game's animation of the top and bottom bars sliding in when the game starts;
+  play it when the App first loads; in fullscreen hide both bars and the window buttons, and slide them out when the
+  pointer comes near.
+
+Found: UILobby's root carries a legacy `Animation` with the clip `UIAni_Lobby` (in a dependency bundle), played as the
+lobby opens. `Front/NUITop/Top/Right` drops from 333.7 units above its rest, `Front/Bottom/Menu` (the App's bottom menu)
+rises from 1043 below; unweighted Hermite keys at 0, 0.2 and 0.42 s cover about 96 % of the way in the first 0.2 s. The
+same clip slides the lobby's side buttons in, which the App does not have.
+
+Owner's decisions (2026-11-04): the hiding covers detail and Hall fullscreen and photography, whose own top controls move
+down with the bar; a revealed bar is usable (Back leaves the page as usual) and the window drags from it; the top and bottom
+edges reveal their own bar; the window buttons wait hidden during loading and come in with the top bar.
+
+Implementation (`chrome-motion.js`, tokens `LOBBY_ENTRY`, `corner-layout.js` insets and `bindEdge`, `window.motion` and
+`CocoaHost.slide`): see `docs/web-ui.md` "Bar motion". The reveal and its leaving reuse the clip's curve over the bar's own
+painted extent (the game has no such motion); the 16 px edge band and the 500 ms delay are the App's. Photography's bottom
+controls rise with the menu as its top controls go down with the bar.
+

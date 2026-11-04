@@ -7,7 +7,7 @@ As of 2026-11-04. Verify the actual branch, working tree and `pyproject.toml` ve
 
 | Branch | State |
 | --- | --- |
-| `main` | Local version `0.6.1-alpha.17`: the published 0.6.0, the upstream syncs to `6c61fdc8` and to v2.12.0 (`62ec9471`), the security policy, the fix that keeps files from a mod inside their output folder (`e8bee4c2`) and its own message for refused atlases (`ca44e051`), BL-065 through BL-069, BL-070 steps 1 to 3, BL-071, BL-072, BL-073, BL-076, BL-077, the BL-078 close-time chrome fix (`1a2afd84`). Not pushed. Upstream published its fix for the same issue in v2.12.0 (2026-11-04), so 0.6.1 is no longer held back. |
+| `main` | Local version `0.6.1-alpha.17`: the published 0.6.0, the upstream syncs to `6c61fdc8` and to v2.12.0 (`62ec9471`), the security policy, the fix that keeps files from a mod inside their output folder (`e8bee4c2`) and its own message for refused atlases (`ca44e051`), BL-065 through BL-069, BL-070 steps 1 to 3, BL-071, BL-072, BL-073, BL-076, BL-077, the BL-078 fixes (`1a2afd84`, `b186e93b`, `4841e30e`), BL-079. Not pushed. Upstream published its fix for the same issue in v2.12.0 (2026-11-04), so 0.6.1 is no longer held back. |
 
 0.6.0 is published (tag `0.6.0` at `817ebeda`, 2026-10-30): macOS build uploaded, Windows build by the release workflow.
 
@@ -45,13 +45,14 @@ As of 2026-11-04. Verify the actual branch, working tree and `pyproject.toml` ve
 | BL-059 through BL-063 | Accepted by the owner on Windows (alpha.14) |
 | BL-064 | Accepted by the owner on Windows (alpha.15) |
 | BL-065 through BL-069 | Accepted by the owner on macOS (alpha.7); Windows not reviewed |
-| BL-070 | Steps 1 and 2 of 4 accepted by the owner on macOS (alpha.5, alpha.7); Windows not reviewed; step 3 on `main` (lobby dialogue balloons, Hall modals on the shared footer, Hall small buttons, three Thai exceptions; the memorial editor kept by the owner's decision), owner review pending; step 4 not started |
+| BL-070 | Steps 1 and 2 of 4 accepted by the owner on macOS (alpha.5, alpha.7); Windows not reviewed; step 3 on `main` (lobby dialogue balloons, Hall modals on the shared footer, Hall small buttons, three Thai exceptions; the memorial editor kept by the owner's decision; the owner's alpha.17 findings fixed: Reset as tall as its slider, the Talk balloon in fullscreen), owner review pending; step 4 not started |
 | BL-071, BL-072 | Accepted by the owner on macOS (alpha.7); Windows not reviewed |
 | BL-073 | Accepted by the owner (alpha.8) |
 | BL-074 | Closed by the owner: working as intended |
 | BL-076, BL-077 | Accepted by the owner on macOS (alpha.13, 2026-11-04); Windows not reviewed |
 | BL-075 | Closed by the owner (2026-11-04) |
-| BL-078 | Seen again on alpha.15; close-time failure fixed (`1a2afd84`), silent startup paths hardened and logged (`b186e93b`); root cause not confirmed |
+| BL-078 | Seen again on alpha.15 and alpha.17; close-time failure fixed (`1a2afd84`), silent startup paths hardened and logged (`b186e93b`); alpha.17's log pointed at open popups clearing the bar's drag regions, fixed (`4841e30e`); owner review pending |
+| BL-079 | The bars enter on UILobby's `UIAni_Lobby`; immersive scenes keep them and the macOS window buttons away until the pointer comes to the edge; implemented by the lead, owner review pending (macOS); Windows not reviewed |
 | BL-057, BL-058 | Accepted by the owner on macOS (alpha.12); Windows not reviewed |
 | BL-055 | Accepted by the owner on macOS (0.6.0 pre-review) |
 | BL-014 | Candidate, not scheduled |
