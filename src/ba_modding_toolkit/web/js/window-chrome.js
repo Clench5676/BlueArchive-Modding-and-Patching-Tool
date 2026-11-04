@@ -39,7 +39,15 @@ function schedule() {
   ++layoutRevision;
   if (scheduled) return;
   scheduled = true;
-  requestAnimationFrame(() => { scheduled = false; layout().catch(console.error); });
+  requestAnimationFrame(() => { scheduled = false; layout().catch(layoutFailed); });
+}
+
+// A failed layout leaves the native drag regions as they were: put it in the diagnostic report, not only the console.
+function layoutFailed(error) {
+  console.error(error);
+  const event = { kind: 'window-chrome', message: String(error?.message || error).slice(0, 2000),
+    stack: String(error?.stack || '').slice(0, 4000), page: globalThis.location?.hash || '' };
+  rpc('app.frontendError', { event }).catch(() => {});
 }
 
 function fitRow(header, scale, nativeLeft = 0) {
@@ -124,7 +132,10 @@ async function layout() {
 
 async function publishLayout(g, drag) {
   const payload = JSON.stringify({ centre: g.centre, height: g.rowHeight, drag });
-  if (payload !== lastLayout) { lastLayout = payload; await rpc('window.layout', JSON.parse(payload)); }
+  if (payload === lastLayout) return;
+  // Remember a layout only once the native side took it: a refused one is sent again on the next layout pass.
+  await rpc('window.layout', JSON.parse(payload));
+  lastLayout = payload;
 }
 
 export function setupWindowChrome() {
