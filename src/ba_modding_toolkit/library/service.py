@@ -3763,7 +3763,7 @@ class ModLibrary:
         inputs = [(path.name, self._hashes.get(path).sha1) for path in sources]
         originals = [(path.name, self._hashes.get(self._official_for(path, pin)).sha1) for path in targets]
         options = (sorted(self.settings.asset_types()), self.settings.save_options(self.settings.crc_needed(targets[0])),
-                   self.settings.spine_options(), self.settings.anim_check_options())
+                   self.settings.spine_options(), self.settings.anim_check_key())
         return hashlib.sha1(repr((1, _build_version(), inputs, originals, options)).encode()).hexdigest()
 
     def _cached_build(self, sources: list[Path], targets: list[Path], pin: Pin,

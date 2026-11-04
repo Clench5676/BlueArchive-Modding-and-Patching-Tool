@@ -11,6 +11,7 @@ from ba_modding_toolkit.gui.windows import mod_install_dialog as preview
 from ba_modding_toolkit.models import AnimCheckOptions
 from ba_modding_toolkit.mod_install import InstallAction, ModFilePlan, ModGroup
 from ba_modding_toolkit.naming import parse_filename
+from ba_modding_toolkit.spine import SpineViewer
 
 
 class CanvasHarness:
@@ -128,7 +129,7 @@ def test_preview_pairs_match_names_and_survive_extraction_cleanup(tmp_path, monk
 
     rendered = []
 
-    def render(bundles, directory, viewer, **kwargs):
+    def render(bundles, directory, backend, **kwargs):
         rendered.append(bundles)
         if render_state == "failed":
             return False, "synthetic render failure", []
@@ -145,7 +146,7 @@ def test_preview_pairs_match_names_and_survive_extraction_cleanup(tmp_path, monk
     monkeypatch.setattr(preview, "render_spine_preview_from_bundle", render)
     viewer = tmp_path / "synthetic-viewer"
     viewer.touch()
-    result = preview._process_group(group, viewer if render_state != "absent" else None,
+    result = preview._process_group(group, SpineViewer(viewer) if render_state != "absent" else None,
                                      AnimCheckOptions(), lambda message: None)
 
     assert result.error is None
@@ -223,7 +224,7 @@ def test_parallel_preview_pipeline_finishes_classic_busy_tracking(tmp_path, monk
         after=lambda delay, callback, *args: callback(*args),
         _apply_result=lambda index, result: results.append((index, result)),
         set_task_running=running.append,
-        app=SimpleNamespace(spine_viewer_path_var=Variable(""), max_workers_var=Variable(2),
+        app=SimpleNamespace(get_render_backend=lambda: None, max_workers_var=Variable(2),
                             build_anim_check_options=AnimCheckOptions,
                             logger=SimpleNamespace(log=lambda message: None)))
     preview.ModInstallDialog._pipeline_worker(dialog)

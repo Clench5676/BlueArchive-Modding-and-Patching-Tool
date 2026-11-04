@@ -8,6 +8,7 @@ import pytest
 import toml
 
 from ba_modding_toolkit.config import FIELDS, Field, Settings
+from ba_modding_toolkit.spine import SpineViewer
 
 
 def test_defaults_when_file_missing(tmp_path: Path):
@@ -60,6 +61,49 @@ def test_asset_types(tmp_path: Path):
     assert s.asset_types() == {"Texture2D", "TextAsset", "Mesh", "AnimationClip"}
     s.set("replace_all", True)
     assert s.asset_types() == {"ALL"}
+
+
+@pytest.mark.parametrize("enabled", [False, True])
+@pytest.mark.parametrize("path", ["", " \t ", "missing/SpineViewerCLI.exe"])
+def test_anim_check_options_without_a_tool_has_no_backend(tmp_path, enabled, path):
+    settings = Settings(tmp_path / "config.toml")
+    settings.set("check_animations", enabled)
+    settings.set("spine_viewer_path", path)
+
+    options = settings.anim_check_options()
+
+    assert options.enabled is enabled
+    assert options.backend is None
+    assert options.is_valid() is False
+
+
+@pytest.mark.parametrize("enabled", [False, True])
+def test_anim_check_options_uses_the_configured_viewer(tmp_path, enabled):
+    settings = Settings(tmp_path / "config.toml")
+    path = tmp_path / "SpineViewerCLI.exe"
+    path.touch()
+    settings.set("check_animations", enabled)
+    settings.set("spine_viewer_path", f"  {path}  ")
+
+    options = settings.anim_check_options()
+
+    assert options.enabled is enabled
+    assert isinstance(options.backend, SpineViewer) and options.backend.tool_path == path
+    assert options.is_valid() is enabled
+
+
+def test_anim_check_key_is_stable_and_follows_the_settings(tmp_path):
+    """Build signatures take this key: it must not change between calls, only with the settings."""
+    settings = Settings(tmp_path / "config.toml")
+    path = tmp_path / "SpineViewerCLI.exe"
+    path.touch()
+    settings.set("spine_viewer_path", str(path))
+
+    assert settings.anim_check_key() == settings.anim_check_key() == (False, str(path))
+    settings.set("check_animations", True)
+    assert settings.anim_check_key() == (True, str(path))
+    settings.set("spine_viewer_path", "")
+    assert settings.anim_check_key() == (True, "")
 
 
 def test_explicit_directory_pair_never_runs_game_detection(tmp_path: Path, monkeypatch):

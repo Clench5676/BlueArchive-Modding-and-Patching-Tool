@@ -28,6 +28,7 @@ from .data_paths import APP_DIR_NAME, OLD_APP_DIR_NAME, default_cache_dir, migra
 from .logging_utils import log_failure
 from .models import AnimCheckOptions, SaveOptions, SkelConvertOptions
 from .naming import CharacterInternalIDMap
+from .spine import get_spine_backend
 from .utils import EXE_DIR, get_BA_path, parse_hex_bytes
 
 CONFIG_FILE = EXE_DIR / "config.toml"
@@ -377,7 +378,18 @@ class Settings:
                                   target_version=str(self.get("spine_downgrade_version")).strip())
 
     def anim_check_options(self) -> AnimCheckOptions:
-        return AnimCheckOptions(enabled=self.get("check_animations"), viewer_path=Path(self.get("spine_viewer_path")))
+        path = self._viewer_path()
+        backend = get_spine_backend("spine_viewer", path) if path is not None and path.is_file() else None
+        return AnimCheckOptions(enabled=self.get("check_animations"), backend=backend)
+
+    def anim_check_key(self) -> tuple[bool, str]:
+        """The animation check settings as plain values, for keys that must stay equal between calls."""
+        path = self._viewer_path()
+        return bool(self.get("check_animations")), str(path) if path is not None else ""
+
+    def _viewer_path(self) -> Path | None:
+        path = str(self.get("spine_viewer_path")).strip()
+        return Path(path) if path else None
 
     def output_subdir(self, name: str) -> Path:
         path = Path(self.get("output_dir")) / name

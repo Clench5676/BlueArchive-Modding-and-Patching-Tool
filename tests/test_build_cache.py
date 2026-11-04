@@ -25,8 +25,14 @@ def builder(env, monkeypatch):
     return calls
 
 
-def test_reapply_reuses_only_a_referenced_build_after_restart(setup_library, monkeypatch):
+@pytest.mark.parametrize('configured_viewer', [False, True])
+def test_reapply_reuses_only_a_referenced_build_after_restart(setup_library, monkeypatch, configured_viewer):
     env = setup_library
+    if configured_viewer:
+        viewer = env.tmp / 'SpineViewerCLI.exe'
+        viewer.touch()
+        env.settings.set('spine_viewer_path', str(viewer))
+        env.settings.set('check_animations', True)
     mod, = env.library.add([make_mod(env.original, env.tmp / 'upload')])
     calls = builder(env, monkeypatch)
     env.library.apply('test', f'mod:{mod.id}')
@@ -92,7 +98,7 @@ def test_refused_apply_leaves_no_persistent_build(setup_library, monkeypatch, ki
     assert env.library.sizes('built')['builtSize'] == 0
 
 
-@pytest.mark.parametrize('change', ['source', 'options', 'copy', 'version', 'target'])
+@pytest.mark.parametrize('change', ['source', 'options', 'copy', 'version', 'target', 'animation_check', 'viewer_path'])
 def test_changed_inputs_options_program_targets_and_corrupt_copy_force_rebuild(setup_library, monkeypatch, change):
     env = setup_library
     mod, = env.library.add([make_mod(env.original, env.tmp / 'upload')])
@@ -109,6 +115,10 @@ def test_changed_inputs_options_program_targets_and_corrupt_copy_force_rebuild(s
         cached.write_bytes(header_bundle(b'changed copy'))
     elif change == 'version':
         monkeypatch.setattr('ba_modding_toolkit.library.service._build_version', lambda: 'another version')
+    elif change == 'animation_check':
+        env.settings.set('check_animations', True)
+    elif change == 'viewer_path':
+        env.settings.set('spine_viewer_path', str(env.tmp / 'SpineViewerCLI.exe'))
     else:
         env.original.unlink()
         env.original = game_bundle(env.game_dir, date='2026-02-01', payload=b'new official target')
