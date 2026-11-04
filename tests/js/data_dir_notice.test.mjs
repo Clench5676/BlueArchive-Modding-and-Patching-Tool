@@ -41,6 +41,7 @@ function bootHarness(info) {
   const messages = [], sequences = [];
   const env = {
     info, startup: {}, fitStage() {}, addEventListener() {}, timed: (_phase, work) => work(), start: async () => {},
+    chromeMotion: () => ({ enter() {} }),
     rpc: async () => {}, Cursor: { init() {} }, $: () => ({}), console, setSpineConsent() {},
     T: (key, params) => `${key}${params ? JSON.stringify(params) : ''}`,
     Loading: { scene: (work) => work(), timings: () => ({}), busy: () => false, init() {} },

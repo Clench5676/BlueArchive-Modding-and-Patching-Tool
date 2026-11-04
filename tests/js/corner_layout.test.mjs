@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { readFileSync } from 'node:fs';
-import { CORNER_MARGIN, CORNER_UNITS, cornerBox, bindCorner, reflowCorners } from '../../src/ba_modding_toolkit/web/js/corner-layout.js';
+import { CORNER_MARGIN, CORNER_UNITS, cornerBox, bindCorner, bindEdge, reflowCorners } from '../../src/ba_modding_toolkit/web/js/corner-layout.js';
 import { headerGeometry } from '../../src/ba_modding_toolkit/web/js/window-layout.js';
 import { topActionLayout, nativeRightClearance } from '../../src/ba_modding_toolkit/web/js/top-action-layout.js';
 import { cornerPrefabs } from './corner_prefabs.mjs';
@@ -165,4 +165,39 @@ test('the viewport clips the window while the scene artwork and sliding navigati
   }
   for (const id of ['ngui-bg', 'visual-bg', 'portrait', 'model', 'lobby', 'ngui', 'ngui-chips', 'ngui-expr']) assert.ok(ancestry.get(id).includes('scene-clip'), id);
   for (const id of ['visual-ui', 'fs-exit', 'popup', 'picker']) assert.ok(!ancestry.get(id).includes('scene-clip'), id);
+});
+
+test('immersive scene controls make room for a bar the pointer brought back (chrome-motion.js insets)', () => {
+  const box = [0, 0, 110, 75], stage = { left: 0, top: 0, width: 960 }, margin = CORNER_MARGIN / 2;
+  const at = (corner, insets, native = null) => cornerBox(box, { corner, width: 960, height: 540, stage, insets, native });
+  for (const corner of ['top-left', 'top-right']) {
+    near(at(corner, null)[1], margin * 2);
+    near(at(corner, { top: 55, bottom: 60, offset: 0 })[1], (55 + margin) * 2, 'below the revealed bar, Back included');
+    near(at(corner, { top: 20, bottom: 0, offset: 35 })[1], (20 + margin) * 2, 'part way, with the bar');
+    near(cornerBox(box, { corner, immersive: false, width: 960, height: 540, stage, barBottom: 32,
+      insets: { top: 55, bottom: 60, offset: 0 } })[1], (32 + margin) * 2, 'outside a scene the bar itself decides');
+  }
+  for (const corner of ['bottom-left', 'bottom-right'])
+    near(at(corner, { top: 55, bottom: 60, offset: 0 })[1], (540 - margin - 37.5 - 60) * 2);
+  // the macOS window buttons travel with the top bar: away with it, they no longer push the top-left control aside
+  const native = { active: true, bounds: { left: 12, top: 8, right: 80, bottom: 30 } };
+  assert.ok(at('top-left', { top: 0, bottom: 0, offset: 0 }, native)[0] > margin * 2, 'buttons at rest push it right');
+  near(at('top-left', { top: 0, bottom: 0, offset: 55 }, native)[0], margin * 2);
+});
+
+test('a centred edge control (the photography shutter) moves as far as the bar reaches in', () => {
+  const stageEl = { getBoundingClientRect: () => ({ left: 0, top: 0, width: 960, height: 540 }) };
+  const saved = [globalThis.document, globalThis.innerWidth, globalThis.innerHeight, globalThis.bamtChromeInsets];
+  globalThis.document = { getElementById: () => stageEl, querySelector: () => null };
+  globalThis.innerWidth = 960; globalThis.innerHeight = 540;
+  try {
+    const shutter = { style: {}, isConnected: true }, top = { style: {}, isConnected: true };
+    globalThis.bamtChromeInsets = { top: 0, bottom: 0, offset: 55 };
+    bindEdge(shutter, 'bottom'); bindEdge(top, 'top');
+    assert.equal(shutter.style.translate, '');
+    globalThis.bamtChromeInsets = { top: 30, bottom: 60, offset: 25 }; reflowCorners();
+    assert.equal(shutter.style.translate, '0px -120px'); assert.equal(top.style.translate, '0px 60px');
+  } finally {
+    [globalThis.document, globalThis.innerWidth, globalThis.innerHeight, globalThis.bamtChromeInsets] = saved;
+  }
 });

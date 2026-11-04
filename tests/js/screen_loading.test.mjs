@@ -303,7 +303,7 @@ function bootHarness({ compiled = true, startupUpdate = true } = {}) {
   const env = {
     info: { gameFound: true, compiled, startupUpdate }, startup: {}, fitStage() {}, addEventListener() {},
     // start() hands the consent and the loading screen the data of a start with a game
-    timed: (_phase, work) => work(), start: () => first.promise.then(() => setStartWithGame(true)),
+    timed: (_phase, work) => work(), start: () => first.promise.then(() => setStartWithGame(true)), chromeMotion: () => ({ enter() {} }),
     rpc: async (method) => events.push(method), Cursor: { init: () => events.push("cursor") }, $: () => host,
     Loading: { scene: (work) => work(), timings: () => ({}), busy: () => loading, init() {} },
     Popup: {

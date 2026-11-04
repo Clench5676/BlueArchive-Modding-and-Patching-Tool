@@ -97,7 +97,10 @@ export function setTopActions(hall,available=true){
 }
 export function reflowTopActions(){
   document.querySelector('.topbar')?.style.setProperty('--corner-margin', `${CORNER_MARGIN}px`);
-  const stage=document.querySelector('.topbar')?.getBoundingClientRect?.() || document.getElementById('stage')?.getBoundingClientRect?.();
+  const bar=document.querySelector('.topbar')?.getBoundingClientRect?.(),lift=globalThis.bamtChromeInsets?.offset||0;
+  // the bar where it rests, though chrome-motion.js may have it on its way in or away
+  const stage=bar?{left:bar.left,right:bar.right,width:bar.width,height:bar.height,top:bar.top+lift,bottom:bar.bottom+lift}
+    :document.getElementById('stage')?.getBoundingClientRect?.();
   const native=globalThis.bamtWindowChrome;
   const controls=native?.platform==='win32' ? native.bounds : document.getElementById('native-controls')?.getBoundingClientRect?.();
   const preliminary=topActionLayout(topBoxes,topHall);

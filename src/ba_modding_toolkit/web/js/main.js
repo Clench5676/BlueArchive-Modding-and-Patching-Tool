@@ -30,6 +30,7 @@ import { studentName } from "./names.js";
 import { previewCache } from "./preview-cache.js";
 import { ROOT_ROUTE, routeHistory } from "./route-history.js";
 import { setupWindowChrome } from "./window-chrome.js";
+import { chromeMotion } from "./chrome-motion.js";
 import { installCloseGuard } from "./window-close.js";
 import { installVerticalWheel } from "./horizontal-scroll.js";
 
@@ -496,8 +497,10 @@ async function firstRun() {
 async function boot() {
   fitStage();
   addEventListener("resize", fitStage);
-  // the page starts behind the loading screen: the game's UI is read, then the first screen is built
-  await timed("boot", () => Loading.scene(start, { opaque: true }));
+  // the page starts behind the loading screen: the game's UI is read, then the first screen is built; the bars come in
+  // as the game's lobby brings them (chrome-motion.js), also over a recovery page, with the window buttons
+  try { await timed("boot", () => Loading.scene(start, { opaque: true })); }
+  finally { chromeMotion().enter(); }
   if (globalThis.BAMTRecovery && !globalThis.BAMTRecovery.ready()) return;
   sessionReady = rpc("app.ready", { timings: { ...startup, ...Loading.timings() } }).catch(console.error);
   if (!info?.gameFound) await dataDirNotice().catch(console.error); // the no-game screen has no other start popup

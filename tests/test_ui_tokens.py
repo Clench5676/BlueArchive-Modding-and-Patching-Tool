@@ -175,3 +175,28 @@ def test_applied_selection_gold_is_the_mulligan_selectline_sprite(tokens):
     sprites = [w for w in line["widgets"] if "sprite" in w]
     assert len(sprites) == 1
     assert sprites[0]["color"] == tokens["APPLIED_SELECTION_GOLD"] + "/1.00"
+
+
+def test_lobby_entry_is_uiani_lobby(tokens, tmp_path_factory):
+    # UILobby's root plays its legacy Animation clip as the lobby opens: the top bar and bottom menu keys, as offsets
+    # from where the prefab puts the nodes (chrome-motion.js plays them on the App's bars).
+    from ba_modding_toolkit.gameassets import AssetCache, GameAssets
+    from ba_modding_toolkit.gameassets.model import BundleGraph
+    from ba_modding_toolkit.searching import get_search_dirs
+    game = GameAssets(get_search_dirs(GAME_DIR), AssetCache(root=tmp_path_factory.mktemp("lobby-entry"), allowed=False))
+    with game._cab_discovery().batch(), BundleGraph({}, resolver=game._resolve_cabs) as graph:
+        env = graph.add(game._prefab_bundle("UILobby"))
+        root = next(o for o in env.objects if o.type.name == "GameObject" and graph.tree(o)["m_Name"] == "UILobby")
+        animation = graph.component(root, "Animation")
+        clip = graph.tree(graph.deref(animation, graph.tree(animation)["m_Animation"]))
+        layout = export_layout(env, "UILobby", {})
+    assert clip["m_Name"] == "UIAni_Lobby" and clip["m_Legacy"]
+    curves = {c["path"]: c["curve"]["m_Curve"] for c in clip["m_PositionCurves"]}
+    for edge, path in (("top", "Front/NUITop/Top/Right"), ("bottom", "Front/Bottom/Menu")):
+        keys, rest = curves[path], subtree(layout, path)["pos"][1]
+        assert keys[-1]["value"]["y"] == rest
+        assert all(k["weightedMode"] == 0 for k in keys)
+        got = [[k["time"], k["value"]["y"] - rest, k["outSlope"]["y"]] for k in keys]
+        assert all(k["inSlope"]["y"] == k["outSlope"]["y"] for k in keys)
+        flat = lambda rows: [v for row in rows for v in row]
+        assert flat(got) == pytest.approx(flat(tokens["LOBBY_ENTRY"][edge]), abs=1e-3)
