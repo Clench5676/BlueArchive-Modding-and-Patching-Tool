@@ -49,6 +49,7 @@ class WindowChrome:
         self.state = {"maximized": False, "fullscreen": False, "minimized": False}
         self.layout = {"centre": 22, "height": 48, "drag": []}
         self.sequence = 0
+        self.rejected = ""
 
     def install(self):
         try:
@@ -65,6 +66,7 @@ class WindowChrome:
             self.host.install()
             self.active = True
             self.reason = ""
+            logger.info("Native window chrome active: %s", self.platform)
             self.refresh()
         except Exception as error:
             self.fail(error)
@@ -94,7 +96,11 @@ class WindowChrome:
         try:
             self.state = self.host.state()
             bounds = self.host.measure(self.layout)
-            self.valid = self.platform == "win32" or (bounds is not None and bounds.valid)
+            valid = self.platform == "win32" or (bounds is not None and bounds.valid)
+            if valid != self.valid:
+                # A report must show whether the chrome ever became usable (BL-078).
+                logger.info("Native window chrome %s", "valid" if valid else "waiting")
+            self.valid = valid
             if self.valid:
                 self.bounds = bounds
             self.publish()
@@ -102,14 +108,25 @@ class WindowChrome:
             self.fail(error)
 
     def update(self, centre, height, drag):
-        if not all(isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
-                   for v in (centre, height)) or not 0 < centre < height <= 512:
-            raise ValueError("Invalid toolbar geometry")
-        if not isinstance(drag, list) or len(drag) > 64:
-            raise ValueError("Invalid toolbar drag regions")
-        regions = [Rect(**rect) for rect in drag]
-        if any(not rect.valid or rect.top < 0 or rect.bottom > height or rect.left < 0 for rect in regions):
-            raise ValueError("Invalid toolbar drag region")
+        try:
+            if not all(isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
+                       for v in (centre, height)) or not 0 < centre < height <= 512:
+                raise ValueError("Invalid toolbar geometry")
+            if not isinstance(drag, list) or len(drag) > 64:
+                raise ValueError("Invalid toolbar drag regions")
+            regions = [Rect(**rect) for rect in drag]
+            if any(not rect.valid or rect.top < 0 or rect.bottom > height or rect.left < 0 for rect in regions):
+                raise ValueError("Invalid toolbar drag region")
+        except (ValueError, TypeError) as error:
+            # A rejected layout leaves the previous drag regions in place: say so once per distinct reason.
+            if str(error) != self.rejected:
+                self.rejected = str(error)
+                logger.warning("Native window chrome rejected the toolbar layout: %s (%s drag regions)", error,
+                               len(drag) if isinstance(drag, list) else "no")
+            raise
+        self.rejected = ""
+        if bool(regions) != bool(self.layout["drag"]):
+            logger.info("Native window chrome drag regions: %d", len(regions))
         self.layout = {"centre": centre, "height": height, "drag": regions}
         if self.active:
             self.host.dispatch(self.refresh)

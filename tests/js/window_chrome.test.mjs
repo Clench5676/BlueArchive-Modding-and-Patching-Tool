@@ -52,10 +52,11 @@ globalThis.document=doc;globalThis.innerWidth=960;globalThis.innerHeight=540;glo
 globalThis.requestAnimationFrame=fn=>frames.push(fn);globalThis.addEventListener=(name,fn)=>listeners[name]=fn;
 globalThis.getComputedStyle=el=>({visibility:el===back&&back.hidden?'hidden':'visible'});
 globalThis.MutationObserver=class {constructor(fn){this.fn=fn;}observe(target,opts){observed.push({target,opts,fn:this.fn});}};
-let alignmentGate=null;
+let alignmentGate=null,layoutFailure=null;
 let snapshot={active:true,valid:true,platform:'darwin',sequence:1,bounds:{left:12,top:8,right:80,bottom:30}};
 globalThis.chromeFixture={...geometry,on:(name,fn)=>handlers[name]=fn,rpc:async(name,value)=>{
-  if(name==='window.chrome')return snapshot;calls.push({name,value});},T:key=>key,
+  if(name==='window.chrome')return snapshot;calls.push({name,value});
+  if(name==='window.layout'&&layoutFailure){const error=layoutFailure;layoutFailure=null;throw error;}},T:key=>key,
   reflowTopActions(){},alignTopBar:async()=>{if(alignmentGate)await alignmentGate;},fitStage(){},
   naturalTextWidth:(el,scale)=>Math.ceil(el.textContent.length*13*scale),paintTopBar:async()=>{}};
 let source=readFileSync(new URL('../../src/ba_modding_toolkit/web/js/window-chrome.js',import.meta.url),'utf8').replace(/^import .*;$/gm,'');
@@ -118,4 +119,22 @@ test('standard Windows title bar leaves the prefab in the stage without native c
       assert.equal(body.querySelectorAll('.window-drag-region').length,0);
     }
   }
+});
+
+test('a refused layout goes to the report and is sent again on the next layout pass',async()=>{
+  // BL-078: the layout used to be remembered before the native side took it, so a refused one was never sent again
+  // and the top bar kept the old (often empty) drag regions.
+  snapshot={active:true,valid:true,platform:'darwin',sequence:snapshot.sequence+1,bounds:{left:12,top:8,right:80,bottom:30}};
+  handlers['window.chrome'](snapshot);await settle();
+  stage.classList.clear();root.classList.clear();popup.hidden=true;await change();await change();
+  const sent=()=>calls.filter(c=>c.name==='window.layout').length;
+  back.hidden=true;layoutFailure=new Error('bad_params');await change();
+  const refused=payload(),before=sent();
+  const report=calls.find(c=>c.name==='app.frontendError');
+  assert.equal(report.value.event.kind,'window-chrome');assert.equal(report.value.event.message,'bad_params');
+  await change();
+  assert.equal(sent(),before+1);assert.deepEqual(payload(),refused);
+  await change();
+  assert.equal(sent(),before+1,'an accepted layout is not sent again');
+  back.hidden=false;await change();
 });

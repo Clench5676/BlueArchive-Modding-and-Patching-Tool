@@ -2,26 +2,36 @@
 
 from __future__ import annotations
 
+import logging
+
 from .window_chrome import Rect, union, vertical_offsets
+
+logger = logging.getLogger(__name__)
 
 
 class CocoaHost:
-    def __init__(self, window, owner, *, api=None, dispatch=None):
+    # A missing content view is measured again this often, this many times (pywebview swaps it while it loads).
+    RETRY_DELAY, RETRY_LIMIT = 0.25, 8
+
+    def __init__(self, window, owner, *, api=None, dispatch=None, later=None):
         if api is None:
             import AppKit as api
-        if dispatch is None:
+        if dispatch is None or later is None:
             from PyObjCTools import AppHelper
-            dispatch = AppHelper.callAfter
-        self.api, self.dispatch = api, dispatch
+            dispatch = dispatch or AppHelper.callAfter
+            later = later or AppHelper.callLater
+        self.api, self.dispatch, self.later = api, dispatch, later
         self.window, self.owner = window.native, owner
         self.buttons, self.original, self.observers = [], [], []
         self.monitor = None
         self.transition = False
+        self.retries = 0
+        self.ignored = ""
 
     def mouse_down(self, event):
         # A local monitor runs before WKWebView hit testing, including after Cocoa
         # replaces contentView. Rectangles arrive in viewport CSS pixels (AppKit points).
-        if event.window() != self.window or not self.owner.active or not self.owner.valid or self.transition:
+        if event.window() != self.window or not self.owner.active:
             return event
         content = self.window.contentView()
         if content is None:
@@ -30,8 +40,17 @@ class CocoaHost:
         bounds = content.bounds()
         x = point.x - bounds.origin.x
         y = point.y - bounds.origin.y if content.isFlipped() else bounds.origin.y + bounds.size.height - point.y
-        if not any(r.contains(x, y) for r in self.owner.layout["drag"]):
+        regions = self.owner.layout["drag"]
+        reason = ("invalid" if not self.owner.valid else "transition" if self.transition else
+                  "no drag regions" if not regions else "")
+        if reason and 0 <= y < self.owner.layout["height"]:
+            # A press on the top bar that cannot drag: logged once per reason, so a report shows why (BL-078).
+            if reason != self.ignored:
+                self.ignored = reason
+                logger.info("Native window chrome ignored a top bar press: %s", reason)
+        if reason or not any(r.contains(x, y) for r in regions):
             return event
+        self.ignored = ""
         if event.clickCount() == 2:
             action = self.api.NSUserDefaults.standardUserDefaults().stringForKey_("AppleActionOnDoubleClick")
             if action == "Minimize":
@@ -97,8 +116,15 @@ class CocoaHost:
     def measure(self, layout):
         content = self.window.contentView()
         # pywebview's close handler removes the web view, which is the content view, before AppKit posts the window's
-        # last notifications: nothing to measure then, and no reason to give the native chrome up.
-        if content is None or self.window.isMiniaturized() or self.transition:
+        # last notifications: nothing to measure then, and no reason to give the native chrome up. No notification
+        # follows when a content view arrives, so measure again a few times rather than wait for a resize or a move.
+        if content is None:
+            if self.retries < self.RETRY_LIMIT:
+                self.retries += 1
+                self.later(self.RETRY_DELAY, self.owner.refresh)
+            return None
+        self.retries = 0
+        if self.window.isMiniaturized() or self.transition:
             return None
         if not self.state()["fullscreen"]:
             before = [self._rect(button, content) for button in self.buttons]

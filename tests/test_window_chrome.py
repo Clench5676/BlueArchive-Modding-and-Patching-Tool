@@ -140,7 +140,7 @@ def test_cocoa_moves_only_y_and_leaves_fullscreen_reveal_to_appkit(flipped):
     content = NS(isFlipped=lambda: flipped, bounds=lambda: rect(0, 0, 200, 200))
     host.window = NS(contentView=lambda: content, isMiniaturized=lambda: state['mini'], isZoomed=lambda: False,
                      styleMask=lambda: 1 << 14 if state['fullscreen'] else 0)
-    host.transition = False
+    host.transition, host.retries = False, 0
     host.buttons = [Button(x, 8 if flipped else 178, flipped) for x in [12, 32, 52]]
     bounds = host.measure({'centre': 29.5619})
     assert (bounds.top + bounds.bottom) / 2 == pytest.approx(29.5619)
@@ -458,7 +458,9 @@ def test_cocoa_window_closing_without_content_view_keeps_the_native_chrome():
     host = CocoaHost.__new__(CocoaHost)
     host.api = NS(NSWindowStyleMaskFullScreen=1 << 14)
     host.window = NS(contentView=lambda: None, isMiniaturized=lambda: False, isZoomed=lambda: False, styleMask=lambda: 0)
-    host.transition = False
+    host.transition, host.retries, retries = False, 0, []
+    host.later = lambda delay, fn: retries.append((delay, fn))
+    host.owner = NS(refresh=lambda: None)
     host.buttons = [Button(x, 8, True) for x in [12, 32, 52]]
     host.dispatch = lambda fn: fn()
     host.dispose = lambda: pytest.fail("the native chrome was given up")
@@ -471,12 +473,42 @@ def test_cocoa_window_closing_without_content_view_keeps_the_native_chrome():
     assert chrome.active and not chrome.valid and chrome.reason == "not-installed"
 
 
+def test_cocoa_measures_again_until_a_content_view_arrives(caplog):
+    # No AppKit notification follows when pywebview puts its web view in place: without another measurement the
+    # chrome stayed waiting, with no drag regions, until the window was moved or resized (BL-078).
+    host = CocoaHost.__new__(CocoaHost)
+    host.api = NS(NSContainsRect=lambda outer, inner: True, NSWindowStyleMaskFullScreen=1 << 14)
+    content, scheduled = {'view': None}, []
+    host.window = NS(contentView=lambda: content['view'], isMiniaturized=lambda: False, isZoomed=lambda: False,
+                     styleMask=lambda: 0)
+    host.transition, host.retries = False, 0
+    host.buttons = [Button(x, 8, True) for x in [12, 32, 52]]
+    host.later = lambda delay, fn: scheduled.append((delay, fn))
+    host.install = lambda: None
+    host.dispose = lambda: pytest.fail("the native chrome was given up")
+    chrome = WindowChrome(NS(), EventBus(), platform='darwin', host=host)
+    host.owner = chrome
+    with caplog.at_level("INFO", logger="ba_modding_toolkit.webui.window_chrome"):
+        chrome.install()
+        assert chrome.active and not chrome.valid
+        assert [delay for delay, _ in scheduled] == [CocoaHost.RETRY_DELAY]
+        content['view'] = NS(isFlipped=lambda: True, bounds=lambda: rect(0, 0, 200, 200))
+        scheduled.pop()[1]()
+    assert chrome.valid and host.retries == 0 and not scheduled
+    assert "Native window chrome active: darwin" in caplog.text and "Native window chrome valid" in caplog.text
+    # a content view that never comes back (the window closed) is not measured forever
+    content['view'] = None
+    for _ in range(CocoaHost.RETRY_LIMIT + 3):
+        chrome.refresh()
+    assert len(scheduled) == CocoaHost.RETRY_LIMIT
+
+
 @pytest.fixture
 def cocoa_drag():
     calls, keys = [], []
     host = CocoaHost.__new__(CocoaHost)
-    host.owner = NS(active=True, valid=True, layout={"drag": [Rect(90, 0, 150, 44)]})
-    host.transition = False
+    host.owner = NS(active=True, valid=True, layout={"height": 44, "drag": [Rect(90, 0, 150, 44)]})
+    host.transition, host.ignored = False, ""
     state = {"flipped": False, "action": None}
     # A nonzero bounds origin and a changed content view exercise the conversion,
     # rather than assuming locationInWindow already uses web coordinates.
@@ -529,6 +561,38 @@ def test_cocoa_drag_passes_unhandled_events_through(cocoa_drag, blocked):
     assert not f.calls and not f.keys
 
 
+def test_cocoa_logs_why_a_top_bar_press_cannot_drag_once_per_reason(cocoa_drag, caplog):
+    f = cocoa_drag
+    with caplog.at_level("INFO", logger="ba_modding_toolkit.webui.window_macos"):
+        f.host.owner.valid = False
+        for _ in range(3):
+            f.host.mouse_down(f.event())
+        f.host.owner.valid = True
+        f.host.owner.layout["drag"] = []
+        f.host.mouse_down(f.event())
+        f.host.mouse_down(f.event(y=300))  # below the bar: not a top bar press
+    lines = [r.getMessage() for r in caplog.records]
+    assert lines == ["Native window chrome ignored a top bar press: invalid",
+                     "Native window chrome ignored a top bar press: no drag regions"]
+    assert not f.calls
+
+
+def test_rejected_toolbar_layout_is_logged_once_and_keeps_the_previous_regions(caplog):
+    chrome = WindowChrome(NS(), EventBus(), platform='darwin', host=Host())
+    good = [{"left": 90, "top": 0, "right": 150, "bottom": 44}]
+    with caplog.at_level("INFO", logger="ba_modding_toolkit.webui.window_chrome"):
+        chrome.update(22, 44, good)
+        for _ in range(2):
+            with pytest.raises(ValueError):
+                chrome.update(22, 44, good * 65)
+        chrome.update(22, 44, [])
+    assert chrome.layout["drag"] == []
+    lines = [r.getMessage() for r in caplog.records]
+    assert lines == ["Native window chrome drag regions: 1",
+                     "Native window chrome rejected the toolbar layout: Invalid toolbar drag regions (65 drag regions)",
+                     "Native window chrome drag regions: 0"]
+
+
 def test_cocoa_installs_and_removes_a_window_scoped_mouse_monitor(cocoa_drag):
     f = cocoa_drag
     buttons = [Button(x, 8, True) for x in (12, 32, 52)]
@@ -550,7 +614,7 @@ def test_cocoa_installs_and_removes_a_window_scoped_mouse_monitor(cocoa_drag):
              'WillEnterFullScreen', 'WillExitFullScreen', 'DidEnterFullScreen', 'DidExitFullScreen')
     for name in names:
         setattr(api, 'NSWindow' + name + 'Notification', name)
-    host = CocoaHost(NS(native=f.host.window), f.host.owner, api=api, dispatch=lambda fn: fn())
+    host = CocoaHost(NS(native=f.host.window), f.host.owner, api=api, dispatch=lambda fn: fn(), later=lambda delay, fn: None)
     host.install()
     assert aspect == [(16, 9)]
     assert monitors[0][0] == api.NSEventMaskLeftMouseDown
@@ -690,7 +754,7 @@ def test_cocoa_content_aspect_policy_survives_m1_alignment_failure():
     calls = []
     window = NS(setContentAspectRatio_=calls.append, standardWindowButton_=lambda kind: None)
     api = NS(NSWindowCloseButton=0, NSWindowMiniaturizeButton=1, NSWindowZoomButton=2)
-    host = CocoaHost(NS(native=window), NS(), api=api, dispatch=lambda fn: fn())
+    host = CocoaHost(NS(native=window), NS(), api=api, dispatch=lambda fn: fn(), later=lambda delay, fn: None)
     with pytest.raises(RuntimeError, match='button missing'):
         host.install()
     assert calls == [(16, 9)]
