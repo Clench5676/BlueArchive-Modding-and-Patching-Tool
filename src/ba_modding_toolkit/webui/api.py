@@ -183,10 +183,10 @@ def build_api(s: Services) -> RpcRegistry:
         return s.chrome.snapshot() if s.chrome is not None else {"active": False, "platform": "browser", "sequence": 0}
 
     @rpc.method("window.layout")
-    def window_layout(centre: float, height: float, drag: list) -> None:
+    def window_layout(centre: float, height: float, drag: list, state: str = "") -> None:
         if s.chrome is not None:
             try:
-                s.chrome.update(centre, height, drag)
+                s.chrome.update(centre, height, drag, state)
             except (ValueError, TypeError, KeyError):
                 raise ServiceError("bad_params", key="geometry") from None
 

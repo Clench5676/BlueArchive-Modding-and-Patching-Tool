@@ -8,6 +8,8 @@ import sys
 from dataclasses import asdict, dataclass
 
 logger = logging.getLogger(__name__)
+# Why the page sent no drag regions, for the log: an immersive scene, or chrome the page does not take as valid yet.
+LAYOUT_STATES = ("", "immersive", "waiting")
 
 
 @dataclass(frozen=True)
@@ -50,6 +52,7 @@ class WindowChrome:
         self.layout = {"centre": 22, "height": 48, "drag": []}
         self.sequence = 0
         self.rejected = ""
+        self.empty = ""
 
     def install(self):
         try:
@@ -107,8 +110,10 @@ class WindowChrome:
         except Exception as error:
             self.fail(error)
 
-    def update(self, centre, height, drag):
+    def update(self, centre, height, drag, state=""):
         try:
+            if state not in LAYOUT_STATES:
+                raise ValueError("Invalid toolbar state")
             if not all(isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
                        for v in (centre, height)) or not 0 < centre < height <= 512:
                 raise ValueError("Invalid toolbar geometry")
@@ -125,8 +130,10 @@ class WindowChrome:
                                len(drag) if isinstance(drag, list) else "no")
             raise
         self.rejected = ""
-        if bool(regions) != bool(self.layout["drag"]):
-            logger.info("Native window chrome drag regions: %d", len(regions))
+        empty = "" if regions else state or "covered"
+        if bool(regions) != bool(self.layout["drag"]) or (not regions and empty != self.empty):
+            logger.info("Native window chrome drag regions: %d%s", len(regions), f" ({empty})" if empty else "")
+        self.empty = empty
         self.layout = {"centre": centre, "height": height, "drag": regions}
         if self.active:
             self.host.dispatch(self.refresh)

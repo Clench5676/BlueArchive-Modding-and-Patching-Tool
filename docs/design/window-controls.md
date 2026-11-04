@@ -395,7 +395,9 @@ Home follow their existing availability rules. Native chrome and safe spacing mu
 for focus rings. The page title and decorative background may drag and accept title-bar double-click; the title
 is not an action. Back, Settings, Home, every Mods segment/label/help target, popups, inputs and the hanging Back
 box stay clickable. Dragging a Hall scene or camera must never move the window. Popup coverage temporarily removes
-covered drag regions. Decorative DOM wrappers must not turn new parts of an action into drag targets.
+covered drag regions; the stage's popups draw below the native bar and cover none of it, so the bar keeps moving the
+window while one is open and only its controls wait (BL-078). Decorative DOM wrappers must not turn new parts of an
+action into drag targets.
 
 M1/M2 should use native event handling/transparent native hit views only over known blank/title rectangles, passing
 the original NSEvent to AppKit dragging. Double-click must follow the supported OS's title-bar preference; its

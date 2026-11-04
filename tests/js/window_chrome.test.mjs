@@ -65,7 +65,7 @@ const {setupWindowChrome}=await import(`data:text/javascript;base64,${Buffer.fro
 async function settle(){for(let i=0;i<8;i++){frames.splice(0).forEach(fn=>fn());await new Promise(resolve=>setImmediate(resolve));}}
 const payload=()=>calls.filter(c=>c.name==='window.layout').at(-1).value;
 const change=async()=>{listeners.resize();await settle();};
-test('native and fallback controllers hide and restore every immersive scene and block popup dragging',async()=>{
+test('native and fallback controllers hide and restore every immersive scene; the bar still drags under a popup',async()=>{
   setupWindowChrome();assert.equal(doc.getElementById('native-controls'),undefined);await settle();
   assert.ok(observed.some(({target,opts})=>target===root&&opts.attributeFilter.includes('class')));
   for(const platform of ['darwin']){
@@ -76,14 +76,19 @@ test('native and fallback controllers hide and restore every immersive scene and
       stage.classList=new Classes(stageFlags);root.classList=new Classes(rootFlags);await change();
       assert.ok(body.classList.has('window-immersive'));assert.equal(header.inert,true);
       assert.equal(globalThis.bamtHeaderGeometry.extra,0);assert.equal(sceneBack.inert,false);
-      assert.deepEqual(payload().drag,[]);
+      assert.deepEqual(payload().drag,[]);assert.equal(payload().state,'immersive');
       assert.equal(body.querySelectorAll('.window-drag-region').length,0);
       popup.hidden=false;await change();assert.deepEqual(payload().drag,[]);
       assert.equal(body.querySelectorAll('.window-drag-region').length,0);
       popup.hidden=true;stage.classList.clear();root.classList.clear();await change();
       assert.equal(body.classList.has('window-immersive'),false);assert.equal(header.inert,false);
-      assert.ok(payload().drag.some(rect=>rect.bottom>12));
+      assert.ok(payload().drag.some(rect=>rect.bottom>12));assert.equal(payload().state,'');
     }
+    // BL-078: the bar draws above every popup, so it keeps moving the window; only its controls wait.
+    const free=payload().drag;
+    popup.hidden=false;await change();
+    assert.equal(header.inert,true);assert.deepEqual(payload().drag,free);assert.equal(payload().state,'');
+    popup.hidden=true;await change();assert.equal(header.inert,false);assert.deepEqual(payload().drag,free);
   }
   // A slow decoded sprite cannot leave the previous full drag row over the
   // scene, and a late alignment completion cannot re-enable it under a popup.
@@ -101,6 +106,8 @@ test('native and fallback controllers hide and restore every immersive scene and
   popup.hidden=false;await change();assert.equal(body.querySelectorAll('.window-drag-region').length,0);
   popup.hidden=true;root.classList.clear();await change();
   assert.equal(body.classList.has('window-immersive'),false);assert.equal(body.querySelectorAll('.window-drag-region').length,0);
+  // An empty layout always says why, so the native log never reports an unexplained empty bar at startup.
+  assert.ok(calls.filter(c=>c.name==='window.layout').every(c=>c.value.drag.length||c.value.state));
 });
 
 test('standard Windows title bar leaves the prefab in the stage without native clearance or HTML buttons',async()=>{

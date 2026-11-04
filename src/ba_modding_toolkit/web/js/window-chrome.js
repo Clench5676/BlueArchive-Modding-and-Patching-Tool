@@ -108,30 +108,34 @@ async function layout() {
   fitStage(); reflowTopActions();
   fitRow(header, g.scale, snapshot.platform === 'darwin' ? snapshot.bounds?.right || 0 : 0);
   paintTopBar(header, g.scale).catch((error) => console.warn("top bar background", error));
+  // Why the native side has no drag regions, for its log: an immersive scene or chrome that is not valid yet.
+  const state = immersive ? 'immersive' : snapshot.valid ? '' : 'waiting';
   // Clear old page hit regions before any asynchronous art/ink measurement.
-  // A slow asset must not leave a fullscreen scene or popup under a broad drag row.
-  if (lastImmersive !== immersive || blocked || !snapshot.valid) {
+  // A slow asset must not leave a fullscreen scene under a broad drag row.
+  if (lastImmersive !== immersive || !snapshot.valid) {
     lastImmersive = immersive;
     wrapper.querySelectorAll('.window-drag-region').forEach((el) => el.remove());
     header.inert = immersive || blocked || !snapshot.valid;
-    await publishLayout(g, []);
-    if (revision !== layoutRevision || !nativeChrome() || !wrapper || blocked || !snapshot.valid) return;
+    // Entering a scene or losing validity clears the regions at once; the first pass and leaving a scene measure below.
+    if (state) await publishLayout(g, [], state);
+    if (revision !== layoutRevision || !nativeChrome() || !wrapper || !snapshot.valid) return;
   }
   await alignTopBar();
   if (revision !== layoutRevision || !nativeChrome() || !wrapper) return;
-  // Native regions never cover popups or hanging Back art. Immersive scenes
-  // keep only the real window controls, with no toolbar or drag regions.
+  // The bar draws above every popup, so it keeps moving the window while one is open (BL-078); only its controls
+  // wait for the popup. Native regions never cover hanging Back art. Immersive scenes keep only the real window
+  // controls, with no toolbar or drag regions.
   header.inert = !snapshot.valid || immersive || blocked;
   const drag = dragRegions({ width: innerWidth, height: g.rowHeight, bounds: snapshot.bounds,
-    platform: snapshot.platform, immersive, blocked: blocked || !snapshot.valid,
+    platform: snapshot.platform, immersive, blocked: !snapshot.valid,
     exclusions: visibleHits(immersive ? stage : header) });
   wrapper.querySelectorAll('.window-drag-region').forEach((el) => el.remove());
   if (revision !== layoutRevision || !nativeChrome() || !wrapper) return;
-  await publishLayout(g, drag);
+  await publishLayout(g, drag, state);
 }
 
-async function publishLayout(g, drag) {
-  const payload = JSON.stringify({ centre: g.centre, height: g.rowHeight, drag });
+async function publishLayout(g, drag, state = '') {
+  const payload = JSON.stringify({ centre: g.centre, height: g.rowHeight, drag, state });
   if (payload === lastLayout) return;
   // Remember a layout only once the native side took it: a refused one is sent again on the next layout pass.
   await rpc('window.layout', JSON.parse(payload));

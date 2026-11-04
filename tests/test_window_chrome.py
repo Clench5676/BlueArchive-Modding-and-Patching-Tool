@@ -590,7 +590,30 @@ def test_rejected_toolbar_layout_is_logged_once_and_keeps_the_previous_regions(c
     lines = [r.getMessage() for r in caplog.records]
     assert lines == ["Native window chrome drag regions: 1",
                      "Native window chrome rejected the toolbar layout: Invalid toolbar drag regions (65 drag regions)",
-                     "Native window chrome drag regions: 0"]
+                     "Native window chrome drag regions: 0 (covered)"]
+
+
+def test_empty_drag_regions_are_logged_with_the_page_state(caplog):
+    # BL-078: the log names why the top bar has no drag regions, so a report shows the screen's state.
+    chrome = WindowChrome(NS(), EventBus(), platform='darwin', host=Host())
+    good = [{"left": 90, "top": 0, "right": 150, "bottom": 44}]
+    with caplog.at_level("INFO", logger="ba_modding_toolkit.webui.window_chrome"):
+        chrome.update(22, 44, [], "waiting")
+        chrome.update(22, 44, good)
+        chrome.update(22, 44, [], "immersive")
+        chrome.update(22, 44, [], "immersive")
+        chrome.update(22, 44, [], "waiting")
+        chrome.update(22, 44, good, "")
+        with pytest.raises(ValueError):
+            chrome.update(22, 44, [], "popup")
+    assert chrome.layout["drag"] == [Rect(**good[0])]
+    assert [r.getMessage() for r in caplog.records] == [
+        "Native window chrome drag regions: 0 (waiting)",
+        "Native window chrome drag regions: 1",
+        "Native window chrome drag regions: 0 (immersive)",
+        "Native window chrome drag regions: 0 (waiting)",
+        "Native window chrome drag regions: 1",
+        "Native window chrome rejected the toolbar layout: Invalid toolbar state (0 drag regions)"]
 
 
 def test_cocoa_installs_and_removes_a_window_scoped_mouse_monitor(cocoa_drag):
