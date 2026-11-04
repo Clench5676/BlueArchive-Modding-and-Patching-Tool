@@ -13,7 +13,7 @@ import shutil
 import tempfile
 import threading
 
-from .. import devmode
+from bmpt import devmode
 from ..i18n import t
 from ..utils import no_log
 from ..models import (

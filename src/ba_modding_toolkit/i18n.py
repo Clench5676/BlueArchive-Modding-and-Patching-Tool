@@ -7,6 +7,18 @@ from functools import reduce, lru_cache
 from pathlib import Path
 from typing import Any
 
+# Apps register their strings without coupling the engine to their packages.
+_locale_dirs: list[Path] = []
+
+
+def _merge_translations(primary: dict, extra: dict) -> dict:
+    merged = dict(extra)
+    for key, value in primary.items():
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            value = _merge_translations(value, merged[key])
+        merged[key] = value
+    return merged
+
 def get_locale_dir() -> Path:
     """
     获取 locales 目录路径
@@ -163,13 +175,19 @@ class I18n:
         else:
             print(f"I18n Warning: Language '{self.lang}' not found, fallback '{fallback_code}' not found either.")
 
-        self.translations = self._load_translation_file(main_path)
-        self.fallback_translations = self._load_translation_file(fallback_path)
+        self.translations = self._load_language(self.lang)
+        self.fallback_translations = self._load_language(fallback_code)
 
         if not self.translations and not self.fallback_translations:
             print(f"Warning: No translation files found for '{self.lang}' or '{fallback_code}'.")
 
         self._get_template.cache_clear()
+
+    def _load_language(self, lang: str) -> dict[str, Any]:
+        data = self._load_translation_file(self.locales_dir / f"{lang}.json")
+        for folder in _locale_dirs:
+            data = _merge_translations(data, self._load_translation_file(folder / f"{lang}.json"))
+        return data
 
     def _load_translation_file(self, path: Path) -> dict[str, Any]:
         """加载单个翻译文件"""
@@ -260,3 +278,10 @@ class I18n:
 # 创建全局 i18n 实例
 i18n_manager = I18n()
 t = i18n_manager.t
+
+
+def register_locale_dir(folder: str | Path) -> None:
+    folder = Path(folder).resolve()
+    if folder not in _locale_dirs:
+        _locale_dirs.append(folder)
+        i18n_manager.load_translations()

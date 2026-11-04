@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 from ...i18n import t
 from ...models import FileType
 from ...utils import get_environment_info
-from ...game_paths import GameRegion, find_game_dirs
+from bmpt.game_paths import GameRegion, find_game_dirs
 from ...naming import CharacterInternalIDMap
 from ..components import Theme, UIComponents, SettingRow, VerticalScrolledFrame
 from ..utils import select_file, open_directory

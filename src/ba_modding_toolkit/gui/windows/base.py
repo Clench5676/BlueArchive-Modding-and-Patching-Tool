@@ -4,7 +4,7 @@ import ttkbootstrap as tb
 from tkinter import messagebox
 from threading import Event
 from ...i18n import t
-from ..control import busy
+from bmpt.gui.control import busy
 
 
 class StoppableDialog(tb.Toplevel):

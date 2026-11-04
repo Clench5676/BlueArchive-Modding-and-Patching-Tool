@@ -2,7 +2,7 @@
 
 import ttkbootstrap as tb
 from typing import Callable, TYPE_CHECKING
-from ..control import busy
+from bmpt.gui.control import busy
 if TYPE_CHECKING:
     from ..app import App
 

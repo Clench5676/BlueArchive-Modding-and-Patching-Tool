@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Callable, Literal, NamedTuple
 from enum import StrEnum
 from PIL import Image
 
-from .errors import ServiceError
+from bmpt.errors import ServiceError
 
 
 from UnityPy.enums import ClassIDType as AssetType

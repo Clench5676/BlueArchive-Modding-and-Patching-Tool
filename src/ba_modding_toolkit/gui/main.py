@@ -6,8 +6,8 @@ import os
 import sys
 
 from ..utils import EXE_DIR
-from ..webui.classic import remove_classic_json
-from .control import ControlBridge, ControlClient, take_channel
+from bmpt.webui.classic import remove_classic_json
+from bmpt.gui.control import ControlBridge, ControlClient, take_channel
 from .utils import tbDnDWindow
 from .app import App
 

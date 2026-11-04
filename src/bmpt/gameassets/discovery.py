@@ -1,0 +1,108 @@
+"""Cheap bundle discovery and resource version calculation."""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import os
+from pathlib import Path
+
+from ba_modding_toolkit.naming import parse_filename
+
+
+def bundle_paths(resource_dirs: list[Path]) -> list[Path]:
+    """List bundle files once, preserving resource directory precedence."""
+    found: dict[str, Path] = {}
+    for directory in resource_dirs:
+        with os.scandir(directory) as entries:
+            for entry in entries:
+                if entry.name.endswith(".bundle") and entry.is_file():
+                    found.setdefault(entry.name, Path(entry.path))
+    return [found[name] for name in sorted(found)]
+
+
+def resource_version(resource_dirs: list[Path]) -> str:
+    """Hash the Windows catalog, falling back to sorted file names and sizes."""
+    checked: set[Path] = set()
+    for directory in resource_dirs:
+        for parent in (directory, *directory.parents):
+            catalog = parent / "Catalog" / "Windows" / "catalog_Windows.hash"
+            if catalog in checked:
+                continue
+            checked.add(catalog)
+            if catalog.is_file():
+                return hashlib.sha1(catalog.read_bytes()).hexdigest()
+    listing = []
+    for directory in resource_dirs:
+        with os.scandir(directory) as entries:
+            listing.extend((entry.name, entry.stat().st_size) for entry in entries if entry.is_file())
+    return hashlib.sha1(json.dumps(sorted(listing), separators=(",", ":")).encode()).hexdigest()
+
+
+def group_bundles(paths: list[Path], category: str) -> dict[str, list[Path]]:
+    """Group all dated bundle parts by parsed category and lower-case core."""
+    groups: dict[str, list[Path]] = {}
+    for path in sorted(paths):
+        parsed = parse_filename(path.name)
+        if parsed.category == category:
+            groups.setdefault(parsed.core.lower(), []).append(path)
+    return groups
+
+
+def is_atlas(path: Path) -> bool:
+    """Whether a bundle belongs to the UI atlas family."""
+    return "uis-atlas-" in path.name
+
+
+def is_texture(path: Path) -> bool:
+    """Whether a bundle belongs to the shared UI texture families."""
+    name = path.name
+    return ("addressableasset-uis-_mxprolog-" in name
+            or "uis-00_images-_mxload-" in name
+            or "uis-00_images-formation-" in name
+            or "uis-00_images-imagefont-" in name
+            or name.startswith(("uis-01_common-09_popupimage-", "uis-01_common-13_campaignimage-")))
+
+
+def is_pointer_texture(path: Path) -> bool:
+    """Whether a bundle can hold the PC client's mouse cursor (UIs/GLPC_Cursor, also in the shared UI textures) or
+    the textures of the touch effect (Resources/UI/FX_Touch: the EffectsFreezed texture families)."""
+    name = path.name
+    return ("-uis-glpc_cursor-" in name or "-uis-_mxcommon-_mxdependency-textures-" in name
+            or "-effectsfreezed-texture-" in name)
+
+
+def is_prefab(path: Path) -> bool:
+    """Whether a bundle can contain a UI prefab root (Resources/UI holds the loading screen, UILoading)."""
+    return (path.name.startswith(("ui-_mxload-prefabs-", "ui-uiassetobject-"))
+            or (path.name.startswith("prologdepengroup-") and "-addressableasset-ui-" in path.name)
+            or (path.name.startswith("prologgroup-") and "-resources-ui-" in path.name))
+
+
+def cab_names(path: Path) -> list[str]:
+    """Read lower-case internal names, preserving corrupt-directory errors."""
+    from ..unityfs import read_cab_names
+
+    return [name.lower() for name in read_cab_names(path) or ()]
+
+
+def is_model_dependency(path: Path) -> bool:
+    """Families that hold 3D chibi prefabs, meshes, materials, textures, shaders and shared animators."""
+    name = path.name
+    return ("characters" in name or "-_mx-npcs-" in name or name.startswith("character-")
+            or "-_mx-shaders-" in name or "-_mx-program-animators-" in name)
+
+
+def is_lobby_prefab(path: Path) -> bool:
+    """Whether a bundle holds memorial lobby prefabs (UILobbyElement/Lobby<Name>.prefab)."""
+    return path.name.startswith("ui-uilobbyelement-")
+
+
+def is_layout_texture(path: Path) -> bool:
+    """Texture-only families additionally referenced by the detail prefab.
+
+    These supply names for embedded campaign widgets and UI effects, rather
+    than expanding the shared UITexture index to character or gameplay art.
+    """
+    return (path.name.startswith(("uis-01_common-25_campaign-", "uis-02_tactics-02_skillicon-"))
+            or "-effectsfreezed-texture-" in path.name)

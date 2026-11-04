@@ -13,7 +13,7 @@ from .models import (
     FontAssetData,
 )
 from .spine import SkelConverter, check_skel_animation_diff
-from .texture_guard import texture_image
+from bmpt.texture_guard import texture_image
 from .utils import no_log
 
 

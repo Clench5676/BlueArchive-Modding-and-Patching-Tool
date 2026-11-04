@@ -5,8 +5,8 @@ import sys
 from functools import wraps
 from pathlib import Path
 
-from .. import devmode
-from ..errors import ServiceError
+from bmpt import devmode
+from bmpt.errors import ServiceError
 from .taps import UpdateTap, PackTap, CrcTap, ParseTap, EnvTap, ExtractTap, BatchUpdateTap, InstallTap, ReportTap, BatchPreviewTap, BackupTap, InspectTap, TraceTap
 from ..searching import find_target_bundles, search_prefix, list_bundle_files, get_search_dirs
 from ..core import (
