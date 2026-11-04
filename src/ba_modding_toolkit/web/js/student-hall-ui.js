@@ -8,7 +8,7 @@ import { searchTree, orderBody, toolbarLayout, toolbarTree } from "./roster-widg
 import { clone, S, hitButton } from "./util.js";
 import { T } from "./i18n.js";
 import { bindScale } from "./student-hall-scale.js";
-import { SMALL_BUTTON } from "./ui-tokens.js";
+import { POPUP, SMALL_BUTTON } from "./ui-tokens.js";
 let assets;
 const visibleReadiness = new WeakMap(), virtualControls = new WeakMap();
 function pictureReadiness(host, picture, view) {
@@ -62,7 +62,7 @@ export function createModal(title, onClose, { level = 0 } = {}) {
       held.forEach(([el, inert]) => { if (el.isConnected) el.inert = inert; });
       if (previous?.isConnected && !previous.inert) previous.focus?.();
     },
-    async draw(build, actions = [], { width = 2800, height = 1450 } = {}) {
+    async draw(build, actions = [], { width = 2800, height = 1450, retainedFooter = false } = {}) {
       drawing?.abort(); const nextDrawing = new AbortController(); drawing = nextDrawing;
       const drawSignal = nextDrawing.signal, token = ++revision;
       const cancelled = new Promise((resolve) => drawSignal.addEventListener("abort", resolve, { once: true }));
@@ -70,16 +70,23 @@ export function createModal(title, onClose, { level = 0 } = {}) {
       try { await Loading.hold(async () => {
         await ready(); if (!live()) return;
         const layer = document.createElement("div"); layer.className = "popup-layer";
-        const frame = await NGUI.render(Popup.popupFrame(title, width, height), layer, { scale: S, origin: [960, 540], signal: drawSignal });
+        const tree = modalFrame(title, width, height, retainedFooter ? [] : actions);
+        const frame = await NGUI.render(tree, layer, { scale: S, origin: [960, 540], signal: drawSignal });
         if (!live()) return;
         Popup.closable(frame, host, onClose);
         Popup.hit(layer, frame, "Center/Popup/Base/BG/Btn_Close", onClose, { name: T("display.close") });
         await build(layer, live, drawSignal);
-        const actionWidth = Math.min(280, (width * S - 180) / Math.max(1, actions.length) - 20);
-        const right = 960 + width * S / 2 - 70, bottom = 540 + (height / 2 - 120) * S;
-        const footerSize = retainedButtonSize(actions.map((action) => action.label), actionWidth, 66);
-        await Promise.all(actions.map((action, index) => retainedButton(layer, `Footer${index}`, action.label,
-          [right - (actions.length - index) * (actionWidth + 20), bottom, actionWidth, 66], action.fn, { enabled: action.enabled !== false, size: footerSize })));
+        if (retainedFooter) {
+          // The memorial editor cannot retain a full candidate row above the taller queue and shared footer.
+          const actionWidth = Math.min(280, (width * S - 180) / Math.max(1, actions.length) - 20);
+          const right = 960 + width * S / 2 - 70, bottom = 540 + (height / 2 - 120) * S;
+          const footerSize = retainedButtonSize(actions.map((action) => action.label), actionWidth, 66);
+          await Promise.all(actions.map((action, index) => retainedButton(layer, `Footer${index}`, action.label,
+            [right - (actions.length - index) * (actionWidth + 20), bottom, actionWidth, 66], action.fn, { enabled: action.enabled !== false, semantic: action.semantic, size: footerSize })));
+        } else actions.forEach((action, index) => {
+          const hit = Popup.hit(layer, frame, `Center/Popup/Btn/Footer${index}/BG (1)`, action.fn, { name: action.label, action: `Footer${index}` });
+          if (hit) { hit.disabled = action.enabled === false; hit.dataset.focusKey = `Footer${index}`; }
+        });
         await document.fonts?.ready;
         const scrollSnapshot = () => new Map([...host.querySelectorAll('[data-scroll]')].map((el) => [el.dataset.scroll, [el.scrollLeft, el.scrollTop]]));
         let oldScroll;
@@ -116,6 +123,26 @@ export function createModal(title, onClose, { level = 0 } = {}) {
   };
   Popup.opened(host, onClose); return api;
 }
+export function modalFrame(title, width, height, actions) {
+  const tree = Popup.popupFrame(title, width, height, { buttons: actions.map((action, index) => ({ ...action,
+    name: `Footer${index}`, semantic: action.semantic || (action.primary ? "confirm" : "secondary") })) });
+  if (actions.length) {
+    const row = NGUI.find(tree, "Popup/Btn");
+    row.children = row.children.map((child, index) => actions[index].enabled === false ? Buttons.disable(child) : child);
+  }
+  return tree;
+}
+export const modalContentBottom = (height, actions = 1) => 540 - (Popup.footerTop(height, actions) + POPUP.clearance) * S;
+// UIPopup_Sort's title decoration occupies the first 132 units below the frame's top; keep the toolbar below it.
+export function portraitPickerLayout(view, searching) {
+  const width = 1320, lay = toolbarLayout(view, { title: "" });
+  const scale = Math.min(1660 / 2840, width / (1412 - lay.cbLeft + 28));
+  const titleBottom = 540 - (POPUP.frameY + 1300 / 2 - 132) * S;
+  const y = titleBottom + 70 * scale, top = y + 70 * scale + (searching ? 60 : 0);
+  return { titleBottom, scale, toolbar: { x: 300, y, width }, search: [300, y + 70 * scale, width],
+    list: [300, top, width, modalContentBottom(1300) - top] };
+}
+export const backgroundPickerBox = () => [130, modalContentBottom(1450, 2) - 650, 760, 650];
 // Keep a caller's centre and width; only the minimum width and the shared small-button height constrain its body.
 export function buttonBox([x, y, width, height]) {
   const w = Math.max(SMALL_BUTTON.minW * S, width), h = SMALL_BUTTON.h * S;

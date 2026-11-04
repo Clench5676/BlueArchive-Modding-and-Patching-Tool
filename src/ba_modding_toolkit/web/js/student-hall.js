@@ -595,7 +595,7 @@ function chooseBackground() {
   const items = options.backgrounds.map((background) => ({ key: background.name, label: Backgrounds.label(background), full: Backgrounds.label(background),
     thumb: lazyThumbnail(() => Backgrounds.preview(background, { signal: work.signal }), work.signal) }));
   const draw = () => modal.draw(async (target, alive, signal) => {
-    const list = UI.virtualArea(target, [130, 190, 760, 650], Math.ceil(items.length / 2), 280,
+    const list = UI.virtualArea(target, UI.backgroundPickerBox(), Math.ceil(items.length / 2), 280,
       (cell, row) => Promise.all(items.slice(row * 2, row * 2 + 2).map((item, index) => UI.card(cell, item, {
         x: 190 + index * 370, y: 110, scale: .4, selected: item.key === selectedBackground,
         onPreview: () => { selectedBackground = item.key; draw().catch(fail); } }))),

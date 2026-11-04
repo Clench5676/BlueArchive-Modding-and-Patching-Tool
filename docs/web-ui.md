@@ -1599,11 +1599,18 @@ official or Mod source runs through the existing lobby renderer, including its s
 dialogue. Missing sources remain distinguishable from an empty playlist. A library-only Mod can render without a
 local scene-layout resource, using the renderer's existing layout fallback.
 
-Hall `createModal().draw` still retains its original 66 px, right-aligned action row and frame sizes. Migrating the
-current sites to `FOOTER` is stopped by content clearance: the memorial queue ends at 915 CSS px and the background
-list at 840, while the 1450 u frame permits 826.70; the portrait/replacement list ends at 855 while its 1300 u frame
-permits 778.05. These limits include `POPUP.clearance` (16 u) above the shared footer top. Content is not moved or
-shrunk. Tests pin the one/two/three-action footer candidates to the shared helper and measure these conflicts.
+Hall `createModal().draw` sends its actions through `popupFrame` and its shared `FOOTER` layout, preserving each
+semantic and enabled state. Frame sizes stay unchanged. The 2150 x 1300 u portrait/replacement picker packs its toolbar
+below the native title decoration, then its optional search box and list, using the free header space before reducing
+the viewport. Both search states end at 778.05 CSS px; the footer centre is 845.84 px (formerly 916.78). The background
+picker moves its [130, 190, 760, 650] list up to y 176.70, retaining its viewport height and full rows; it ends at 826.70,
+with footer centre 894.49 px (formerly 965.43). These content limits include `POPUP.clearance` (16 u).
+
+The memorial editor remains stopped, with its original panels, candidate/queue controls and 66 px footer. Growing the
+candidate Add and queue Remove bodies while retaining a full row cannot fit above the shared footer. Even a generous
+lower bound with no inter-panel gaps ends at 845.11 px without search, or 903.49 with search, beyond
+the 826.70 limit. Its current queue panel stays [115, 720, 1685, 195], ending at 915; footer centre stays 965.43 px.
+Tests cover the migrated layouts in all six locales and both search states, and pin this remaining stop numerically.
 In the deterministic locale fit tests, Thai `hall.doneAdding` needs 44 rather than the footer minimum 48; the Hall's
 existing shared unsaved-changes popup also needs 36 for its sibling captions. Those caption candidates remain stopped,
 with the existing strings unchanged. The other Hall footer captions fit the shared range in all six locales.

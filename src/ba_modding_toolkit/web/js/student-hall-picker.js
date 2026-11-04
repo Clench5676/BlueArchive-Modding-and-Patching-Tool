@@ -61,14 +61,14 @@ export function openPicker({ kind, choices, draft, onPreview, onChange, onSave, 
       change: (next) => { if (isSaving()) return; view = normalizeView({ ...view, ...next }); student = null; positions.clear(); draw().catch(onError); },
       search: toggleSearch,
       display: safe(display),
-    }, memorial ? {} : { x: 300, y: 250, width: 1320 });
-    if (searching) await UI.search(layer, query, (value) => { query = value; positions.clear(); changed(); }, memorial ? [130, 252, 1640] : [300, 298, 1320],
+    }, memorial ? {} : UI.portraitPickerLayout(view, searching).toolbar);
+    if (searching) await UI.search(layer, query, (value) => { query = value; positions.clear(); changed(); }, memorial ? [130, 252, 1640] : UI.portraitPickerLayout(view, searching).search,
       { onEscape: toggleSearch });
   }
   async function drawPortraits(layer, alive, signal) {
     const groups = rows();
     if (!groups.length) return UI.caption(layer, T("hall.noCandidates"), [320, 390, 1200]);
-    const list = UI.virtualArea(layer, [300, searching ? 370 : 300, 1320, searching ? 485 : 555], groups.length, 406, async (rowHost, rowIndex, rowSignal) => {
+    const list = UI.virtualArea(layer, UI.portraitPickerLayout(view, searching).list, groups.length, 406, async (rowHost, rowIndex, rowSignal) => {
       const row = groups[rowIndex];
       await UI.rowPlate(rowHost, [1320, 402]);
       await UI.caption(rowHost, row.student.name, [90, 170, 150], { size: 44 });
@@ -127,7 +127,7 @@ export function openPicker({ kind, choices, draft, onPreview, onChange, onSave, 
   async function draw() {
     await modal.draw(async (layer, alive, signal) => { await toolbar(layer); if (!alive()) return; await (memorial ? drawMemorials(layer, alive, signal) : drawPortraits(layer, alive, signal)); },
       memorial ? [{ label: T("popup.cancel"), fn: safe(onCancel) }, { label: T("hall.savePlaylist"), fn: safe(onSave), enabled: draft.current().memorials.length > 0 }]
-        : [{ label: T(onReplace ? "popup.cancel" : "hall.doneAdding"), fn: safe(onDone) }], memorial ? {} : { width: 2150, height: 1300 });
+        : [{ label: T(onReplace ? "popup.cancel" : "hall.doneAdding"), fn: safe(onDone) }], memorial ? { retainedFooter: true } : { width: 2150, height: 1300 });
   }
   draw().catch(onError);
   const closeNested = () => { if (displayOwned && Popup.top()?.host?.id === "display") Popup.top().close?.("navigation"); displayOwned = false; };
