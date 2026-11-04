@@ -1698,7 +1698,7 @@ Validation: full suites on `f1ad2631`: 4236 passed, 26 skipped; JavaScript 2149 
 
 ## BL-070: One design system for the web UI
 
-- Status: Steps 1 and 2 of 4 accepted by the owner on macOS (alpha.5 and alpha.7, 2026-11-03); Windows not reviewed. Step 3 partly implemented on `main` (`4dea1366`..`4fb031c3`), owner review pending; its stopped sites await the owner's decision. Step 4 not started.
+- Status: Steps 1 and 2 of 4 accepted by the owner on macOS (alpha.5 and alpha.7, 2026-11-03); Windows not reviewed. Step 3 partly implemented on `main` (`4dea1366`..`4fb031c3`), owner review pending; its stopped sites decided by the owner (2026-11-04), not yet implemented. Step 4 not started.
 - Requested: 2026-11-02 (owner): does the UI follow the game's design language (button sizes, spacing, fonts), and where it does not, does it have one system of its own?
 
 Owner decisions (2026-11-03): follow the prefab's values as the one system; run the migration one step at a time; keep the top bar and the Enable Mods switch at their present size.
@@ -1743,6 +1743,9 @@ Switch Portrait panel still lays out its own half-width box.
     16 to 18 px and leave their rows by 5 to 10 px. They keep their present size.
   - Thai captions under the minimum: `hall.doneAdding` 44 in the footer (48), the unsaved-changes popup's three buttons 36
     (48, already in use today), the portrait size reset 30 (34).
+  Owner's decisions (2026-11-04), as the lead recommended: the Hall modals move up or shorten their content to make room for
+  the shared footer; rows and cards grow so their buttons can take the small button's size; Thai may go below the minimum
+  caption size at those three sites, wording unchanged.
 - Step 4: list popup cards and details panel cloned from prefabs (UI-21), and its details actions.
 - Not scheduled, owner's eye first: the photography toolbar and colours; the lobby frost.
 
