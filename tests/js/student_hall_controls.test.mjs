@@ -140,7 +140,7 @@ test("the own-size slider moves the toolbar only once a size is set, never under
   const entry={id:"a",variant:"hero",source:"mod:current",x:400,y:1100,scale:1,mirror:false},ui=globalThis.hallControlsHarness.UI,saved={...ui};
   let change,reset,listeners={};
   ui.scaleControl=async(host,value,fn,options)=>{assert.equal(value,1);assert.equal(options.limits.min,.5);change=fn;return {range:{addEventListener:(name,f)=>{listeners[name]=f;}},reset:()=>fn(1)};};
-  ui.retainedButton=async(host,name,caption,box,fn)=>{if(name==="HallPortraitScaleReset")reset=fn;};
+  ui.button=async(host,name,caption,box,fn)=>{if(name==="HallPortraitScaleReset")reset=fn;};
   try{
     Hall.fixture("portraits","layout",0,[entry],[]);wired=[];
     const host={style:{},replaceChildren(){}},rect=portraitRect(entry,null);

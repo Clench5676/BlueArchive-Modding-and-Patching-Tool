@@ -280,7 +280,8 @@ test("a Japanese word wider than the button breaks between characters rather tha
 const { markedLabel } = await import("../../src/ba_modding_toolkit/web/js/util.js");
 test("the prompt cards draw the pieces this test measures", () => {
   const popup = readFileSync(new URL("../../src/ba_modding_toolkit/web/js/popup.js", import.meta.url), "utf8");
-  assert.match(popup, /markedLabel\(it\.label, \{ fs: 34, fsMin: 24, color: "#ffffff\/1\.00", maxW: w - 56 - \(it\.nameEdit \? 60 : 0\), mark: false, maxLines: 2 \}\)/);
+  assert.match(popup, /LIST_CARD_NAME = Object\.freeze\(\{ fs: 34, fsMin: 24, lines: 2, padY: 22, pitch: 1\.2 \}\)/);
+  assert.match(popup, /markedLabel\(it\.label, \{ fs: LIST_CARD_NAME.fs, fsMin: LIST_CARD_NAME.fsMin, color: "#ffffff\/1\.00", maxW: w - 56 - \(it\.nameEdit \? 60 : 0\), mark: false, maxLines: LIST_CARD_NAME.lines \}\)/);
   assert.match(popup, /const LP = \{[\s\S]*?card: \{ w: 250, h: 226, bar: 68 \}/);
   const prompts = readFileSync(new URL("../../src/ba_modding_toolkit/web/js/prompts.js", import.meta.url), "utf8");
   assert.doesNotMatch(prompts.slice(prompts.indexOf("export function card(")), /kindLabel\(entry\)\}`/, "the kind is not appended to the label");

@@ -133,16 +133,25 @@ export function modalFrame(title, width, height, actions) {
   return tree;
 }
 export const modalContentBottom = (height, actions = 1) => 540 - (Popup.footerTop(height, actions) + POPUP.clearance) * S;
-// UIPopup_Sort's title decoration occupies the first 132 units below the frame's top; keep the toolbar below it.
+// UIPopup_Sort's title is 64 below the top, its underline another 52 down, with half its 12-unit height below that.
 export function portraitPickerLayout(view, searching) {
   const width = 1320, lay = toolbarLayout(view, { title: "" });
   const scale = Math.min(1660 / 2840, width / (1412 - lay.cbLeft + 28));
-  const titleBottom = 540 - (POPUP.frameY + 1300 / 2 - 132) * S;
+  const titleBottom = 540 - (POPUP.frameY + 1300 / 2 - (64 + 52 + 6)) * S;
   const y = titleBottom + 70 * scale, top = y + 70 * scale + (searching ? 60 : 0);
   return { titleBottom, scale, toolbar: { x: 300, y, width }, search: [300, y + 70 * scale, width],
     list: [300, top, width, modalContentBottom(1300) - top] };
 }
 export const backgroundPickerBox = () => [130, modalContentBottom(1450, 2) - 650, 760, 650];
+export function portraitRowLayout() {
+  const name = Popup.LIST_CARD_NAME, bar = Math.max(88, name.padY + name.lines * name.fs * name.pitch);
+  // Use the row's 16 free pixels above the artwork before growing it; reserve the native horizontal scrollbar's
+  // painted 20-unit band below the button (scrollbarTrack). Its viewport gains the card's existing 12px hit outset
+  // on the left, keeping the artwork and action's stage x unchanged while admitting the wider body.
+  const cardY = 600 * .46 / 2;
+  const height = cardY + (600 / 2 + 10 + bar) * .46 + 8 + SMALL_BUTTON.h * S + 20 * S;
+  return { height, pitch: height + 4, cardX: 105 + 12, cardY, stripX: 240 - 12, stripW: 960 + 12 };
+}
 // Keep a caller's centre and width; only the minimum width and the shared small-button height constrain its body.
 export function buttonBox([x, y, width, height]) {
   const w = Math.max(SMALL_BUTTON.minW * S, width), h = SMALL_BUTTON.h * S;
@@ -152,7 +161,7 @@ export const buttonSize = (captions, width) => NGUI.fitGroup(captions, SMALL_BUT
   Math.max(SMALL_BUTTON.minW, width / S) - SMALL_BUTTON.fitInset, 2,
   { maxH: SMALL_BUTTON.h - SMALL_BUTTON.boxInsetH })[0]?.fs;
 
-// Explicitly retained sites hit the design-step3 stop rules: modal content, card Add/Remove and portrait Reset.
+// The memorial editor's footer, candidate Add and queue Remove still hit the full-row stop rule.
 // Their existing bodies/captions stay until their containing layout can change.
 export const retainedButtonSize = (captions, width, height) => NGUI.fitGroup(captions, 40, 26, width / S - 60, 2, { maxH: height / S - 20 })[0]?.fs;
 export const retainedButton = (host, name, caption, box, action, opts = {}) => drawButton(host, name, caption, box, action,
@@ -244,7 +253,7 @@ function observePicture(element, picture) {
   }, { rootMargin: "80px" });
   observer.observe(element); picture.signal?.addEventListener("abort", () => observer.disconnect(), { once: true });
 }
-export async function card(host, item, { x, y, kind = "lobby", scale = .48, selected = false, onPreview, onAdd, addLabel = T("hall.add"), addEnabled = true, fitAdd = false, label = true, interactive = !!onPreview }) {
+export async function card(host, item, { x, y, kind = "lobby", scale = .48, selected = false, onPreview, onAdd, addLabel = T("hall.add"), addEnabled = true, addSize, fitAdd = false, label = true, interactive = !!onPreview }) {
   const geometry = kind === "spr" ? { w: 320, h: 600, bar: 88 } : { w: 720, h: 405, bar: 88 };
   const tree = Popup.listCard(item, 0, 0, selected, geometry, kind);
   NGUI.find(tree, "Thumb").widgets.find((widget) => "clipImage" in widget).placeholderOnFailure = true;
@@ -260,8 +269,13 @@ export async function card(host, item, { x, y, kind = "lobby", scale = .48, sele
   observePicture(hit, item.thumb);
   // The name strip is inclined: its visual centre is left of the artwork centre.
   const actionWidth = barWidget.w_ * scale, actionX = x + bar.pos[0] * scale - actionWidth / 2;
-  if (onAdd) await retainedButton(host, `Add${item.key}`, addLabel,
-    [actionX, y - bar.pos[1] * scale + barWidget.h_ * scale / 2 + 8, actionWidth, 40], onAdd, { enabled: addEnabled, ...(fitAdd ? { size: retainedButtonSize([addLabel], actionWidth, 40) } : {}) });
+  if (onAdd) {
+    const draw = kind === "spr" ? button : retainedButton, height = kind === "spr" ? SMALL_BUTTON.h * S : 40;
+    const size = kind === "spr" ? buttonSize : (captions, width) => retainedButtonSize(captions, width, height);
+    await draw(host, `Add${item.key}`, addLabel,
+      [actionX, y - bar.pos[1] * scale + barWidget.h_ * scale / 2 + 8, actionWidth, height], onAdd,
+      { enabled: addEnabled, ...(addSize != null ? { size: addSize } : fitAdd ? { size: size([addLabel], actionWidth) } : {}) });
+  }
   return { view, visual, hit, width, height, actionBox: [actionX, y + height / 2 + 8, actionWidth, 36] };
 }
 export const MEMORIAL_QUEUE_PITCH = (290 + (720 + 405 * Math.tan(Math.PI / 18)) * .25) / 2;

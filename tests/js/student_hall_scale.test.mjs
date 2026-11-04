@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { bindScale } from "../../src/ba_modding_toolkit/web/js/student-hall-scale.js";
 import { createDraft } from "../../src/ba_modding_toolkit/web/js/student-hall-model.js";
-import { portraitScale, portraitRect } from "../../src/ba_modding_toolkit/web/js/student-hall-framing.js";
+import { PORTRAIT_TOOLBAR_HEIGHT, portraitScale, portraitRect } from "../../src/ba_modding_toolkit/web/js/student-hall-framing.js";
 class Input {
   value=""; listeners={};
   addEventListener(name,fn){(this.listeners[name] ||= []).push(fn);}
@@ -74,6 +74,8 @@ test("toolbar fits at every corner and both size limits, all window scales/densi
       assert.ok(box.icon<box.reset[1]);assert.ok(box.slider[1]-24>box.icon);
       assert.ok(box.slider[0]+box.slider[2]<box.reset[0]);assert.ok(box.reset[0]+box.reset[2]<=box.width);
       assert.ok(box.reset[1]+box.reset[3]<=box.height);
+      assert.equal(box.reset[3],136*1920/2960);assert.equal(box.height,PORTRAIT_TOOLBAR_HEIGHT);
+      assert.equal(box.slider[1],box.reset[1]+box.reset[3]/2);
     }
   }
 });
@@ -92,13 +94,13 @@ test("the toolbar is centred directly above the portrait, touching it, or under 
   let box=portraitToolbarLayout({x:400,y:600,width:500,height:400},7,CHROME);
   assert.equal(box.x+box.width/2,650);assert.equal(box.y+box.height,600,"touching the portrait's top");
   box=portraitToolbarLayout({x:411,y:96,width:1177,height:1586},7,CHROME);
-  assert.equal(box.x+box.width/2,411+1177/2);assert.equal(box.y,1080-20-142,"the top bar is in the way: the stage's bottom, the feet being off-stage");
+  assert.equal(box.x+box.width/2,411+1177/2);assert.equal(box.y,1080-20-PORTRAIT_TOOLBAR_HEIGHT,"the top bar is in the way: the stage's bottom, the feet being off-stage");
   box=portraitToolbarLayout({x:1300,y:300,width:600,height:500},7,CHROME);
   assert.equal(box.y,800,"the top-right controls are in the way: right under the feet");
   box=portraitToolbarLayout({x:400,y:300,width:500,height:500},7,CHROME);
   assert.equal(box.y+box.height,300,"the same height on the left has room above");
   box=portraitToolbarLayout({x:1300,y:300,width:600,height:500},7,[...CHROME,{x:1200,y:900,width:700,height:100}]);
-  assert.equal(box.y,900-PORTRAIT_TOOLBAR_MARGIN-142,"a control under the feet lifts it above that control");
+  assert.equal(box.y,900-PORTRAIT_TOOLBAR_MARGIN-PORTRAIT_TOOLBAR_HEIGHT,"a control under the feet lifts it above that control");
   for(const x of [0,700,1500,1920])for(const y of [0,200,400,900])for(const width of [200,900,1900]){
     const b=portraitToolbarLayout({x:x-width/2,y,width,height:700},7,CHROME);
     assert.ok(b.x>=20&&b.x+b.width<=1900&&b.y>=20&&b.y+b.height<=1060);
@@ -110,6 +112,6 @@ test("with a known head the toolbar centres on it, moving inwards only at the st
   let box=portraitToolbarLayout(rect,7,CHROME,{x:1150,y:520});assert.equal(box.x+box.width/2,1150);assert.equal(box.y+box.height,520);
   box=portraitToolbarLayout(rect,7,CHROME,{x:60,y:520});assert.equal(box.x,20,"inwards at the left edge");assert.equal(box.y+box.height,520);
   box=portraitToolbarLayout(rect,7,CHROME,{x:1890,y:900});assert.equal(box.x+box.width,1900,"inwards at the right edge");
-  box=portraitToolbarLayout(rect,7,CHROME,{x:700,y:120});assert.equal(box.x+box.width/2,700);assert.equal(box.y,1080-20-142,"under the feet only when there is no room above");
+  box=portraitToolbarLayout(rect,7,CHROME,{x:700,y:120});assert.equal(box.x+box.width/2,700);assert.equal(box.y,1080-20-PORTRAIT_TOOLBAR_HEIGHT,"under the feet only when there is no room above");
   box=portraitToolbarLayout({x:1350,y:200,width:500,height:600},7,CHROME,{x:1600,y:260});assert.equal(box.x+box.width/2,1600);assert.equal(box.y,800,"top-right portrait: under its feet, never on its face");
 });

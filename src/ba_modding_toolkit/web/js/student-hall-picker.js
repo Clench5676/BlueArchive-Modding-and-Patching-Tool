@@ -68,13 +68,15 @@ export function openPicker({ kind, choices, draft, onPreview, onChange, onSave, 
   async function drawPortraits(layer, alive, signal) {
     const groups = rows();
     if (!groups.length) return UI.caption(layer, T("hall.noCandidates"), [320, 390, 1200]);
-    const list = UI.virtualArea(layer, UI.portraitPickerLayout(view, searching).list, groups.length, 406, async (rowHost, rowIndex, rowSignal) => {
+    const rowLayout = UI.portraitRowLayout();
+    const addSize = UI.buttonSize((onReplace ? ["import.select"] : ["hall.add", "hall.added"]).map((key) => T(key)), (320 - 22) * .46);
+    const list = UI.virtualArea(layer, UI.portraitPickerLayout(view, searching).list, groups.length, rowLayout.pitch, async (rowHost, rowIndex, rowSignal) => {
       const row = groups[rowIndex];
-      await UI.rowPlate(rowHost, [1320, 402]);
+      await UI.rowPlate(rowHost, [1320, rowLayout.height]);
       await UI.caption(rowHost, row.student.name, [90, 170, 150], { size: 44 });
       if (rowSignal.aborted) return;
-      const strip = UI.virtualArea(rowHost, [240, 0, 960, 402], row.choices.length, 220, (cell, i) => UI.card(cell, item(row.choices[i]), {
-        x: 105, y: 154, kind: "spr", scale: .46, onAdd: safe((event) => add(row.choices[i], event?.currentTarget)), addLabel: addLabel(row.choices[i]), addEnabled: canAdd(row.choices[i]), fitAdd: !!onReplace }),
+      const strip = UI.virtualArea(rowHost, [rowLayout.stripX, 0, rowLayout.stripW, rowLayout.height], row.choices.length, 220, (cell, i) => UI.card(cell, item(row.choices[i]), {
+        x: rowLayout.cardX, y: rowLayout.cardY, kind: "spr", scale: .46, onAdd: safe((event) => add(row.choices[i], event?.currentTarget)), addLabel: addLabel(row.choices[i]), addEnabled: canAdd(row.choices[i]), addSize, fitAdd: !!onReplace }),
         { key: `portrait-${row.key}`, horizontal: true, signal: rowSignal, positions, onError });
       await strip.ready;
     }, { key: "portrait-rows", signal, positions, onError });
