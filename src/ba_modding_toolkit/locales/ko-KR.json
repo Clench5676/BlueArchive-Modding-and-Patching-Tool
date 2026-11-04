@@ -376,6 +376,7 @@
 			"unpacking_atlas": "Atlas 언패킹 중: {name}",
 			"atlas_unpack_success": "Atlas 언패킹 성공, 프레임 저장 위치: {path}",
 			"atlas_unpack_failed": "Atlas 언패킹 실패",
+			"unsafe_atlas_name": "안전하지 않은 이름이 포함된 Atlas 거부: {name}",
 			"querying_info": "애니메이션 정보 조회 중: {name}",
 			"query_success": "애니메이션 {anim_count}개, 스킨 {skin_count}개",
 			"query_failed": "조회 실패.",

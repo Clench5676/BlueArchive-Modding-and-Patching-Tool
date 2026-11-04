@@ -376,6 +376,7 @@
 			"unpacking_atlas": "正在解包 Atlas: {name}",
 			"atlas_unpack_success": "Atlas 解包成功，帧已保存至: {path}",
 			"atlas_unpack_failed": "Atlas 解包失败",
+			"unsafe_atlas_name": "atlas 包含不安全的名称：{name}，已拒绝处理",
 			"querying_info": "正在查询动画信息: {name}",
 			"query_success": "查询成功，找到 {anim_count} 个动画，{skin_count} 个皮肤",
 			"query_failed": "查询动画信息失败",

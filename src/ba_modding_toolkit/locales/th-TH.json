@@ -376,6 +376,7 @@
 			"unpacking_atlas": "กำลังแยก Atlas: {name}",
 			"atlas_unpack_success": "แยก Atlas สำเร็จ, บันทึกเฟรมที่: {path}",
 			"atlas_unpack_failed": "แยก Atlas ไม่สำเร็จ",
+			"unsafe_atlas_name": "ปฏิเสธ Atlas ที่มีชื่อไม่ปลอดภัย: {name}",
 			"querying_info": "กำลังค้นข้อมูลแอนิเมชัน: {name}",
 			"query_success": "พบ {anim_count} แอนิเมชัน, {skin_count} สกิน",
 			"query_failed": "ค้นข้อมูลแอนิเมชันไม่สำเร็จ",
