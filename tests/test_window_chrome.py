@@ -8,13 +8,13 @@ from types import SimpleNamespace as NS
 
 import pytest
 
-from ba_modding_toolkit.errors import ServiceError
-from ba_modding_toolkit.webui.events import EventBus
-from ba_modding_toolkit.webui.jobs import JobRunner
-from ba_modding_toolkit.webui.window_chrome import Rect, WindowChrome, union, vertical_offsets
-from ba_modding_toolkit.webui.window_close import CloseCoordinator
-from ba_modding_toolkit.webui.window_macos import CocoaHost
-from ba_modding_toolkit.webui.window_windows import WindowsHost, aspect_rect, WM_SIZING, WM_DPICHANGED
+from bmpt.errors import ServiceError
+from bmpt.webui.events import EventBus
+from bmpt.webui.jobs import JobRunner
+from bmpt.webui.window_chrome import Rect, WindowChrome, union, vertical_offsets
+from bmpt.webui.window_close import CloseCoordinator
+from bmpt.webui.window_macos import CocoaHost
+from bmpt.webui.window_windows import WindowsHost, aspect_rect, WM_SIZING, WM_DPICHANGED
 
 
 class Host:
@@ -334,7 +334,7 @@ def test_new_draft_revision_invalidates_permission_and_releases_reservation(clos
 
 
 def test_windows_subclass_retains_callback_forwards_and_cleans_up():
-    from ba_modding_toolkit.webui.window_windows import WindowSubclass
+    from bmpt.webui.window_windows import WindowSubclass
     class Function:
         def __init__(self, fn): self.fn = fn
         def __call__(self, *args): return self.fn(*args)
@@ -360,7 +360,7 @@ def test_windows_subclass_retains_callback_forwards_and_cleans_up():
 
 
 def test_macos_keyboard_and_edit_menu_restore_after_rebuild_without_timer(monkeypatch):
-    from ba_modding_toolkit.webui.native import install_window_commands
+    from bmpt.webui.native import install_window_commands
     class Object:
         @classmethod
         def alloc(cls): return cls()
@@ -491,7 +491,7 @@ def test_cocoa_measures_again_until_a_content_view_arrives(caplog):
     host.dispose = lambda: pytest.fail("the native chrome was given up")
     chrome = WindowChrome(NS(), EventBus(), platform='darwin', host=host)
     host.owner = chrome
-    with caplog.at_level("INFO", logger="ba_modding_toolkit.webui.window_chrome"):
+    with caplog.at_level("INFO", logger="bmpt.webui.window_chrome"):
         chrome.install()
         assert chrome.active and not chrome.valid
         assert [delay for delay, _ in scheduled] == [CocoaHost.RETRY_DELAY]
@@ -566,7 +566,7 @@ def test_cocoa_drag_passes_unhandled_events_through(cocoa_drag, blocked):
 
 def test_cocoa_logs_why_a_top_bar_press_cannot_drag_once_per_reason(cocoa_drag, caplog):
     f = cocoa_drag
-    with caplog.at_level("INFO", logger="ba_modding_toolkit.webui.window_macos"):
+    with caplog.at_level("INFO", logger="bmpt.webui.window_macos"):
         f.host.owner.valid = False
         for _ in range(3):
             f.host.mouse_down(f.event())
@@ -583,7 +583,7 @@ def test_cocoa_logs_why_a_top_bar_press_cannot_drag_once_per_reason(cocoa_drag, 
 def test_rejected_toolbar_layout_is_logged_once_and_keeps_the_previous_regions(caplog):
     chrome = WindowChrome(NS(), EventBus(), platform='darwin', host=Host())
     good = [{"left": 90, "top": 0, "right": 150, "bottom": 44}]
-    with caplog.at_level("INFO", logger="ba_modding_toolkit.webui.window_chrome"):
+    with caplog.at_level("INFO", logger="bmpt.webui.window_chrome"):
         chrome.update(22, 44, good)
         for _ in range(2):
             with pytest.raises(ValueError):
@@ -600,7 +600,7 @@ def test_empty_drag_regions_are_logged_with_the_page_state(caplog):
     # BL-078: the log names why the top bar has no drag regions, so a report shows the screen's state.
     chrome = WindowChrome(NS(), EventBus(), platform='darwin', host=Host())
     good = [{"left": 90, "top": 0, "right": 150, "bottom": 44}]
-    with caplog.at_level("INFO", logger="ba_modding_toolkit.webui.window_chrome"):
+    with caplog.at_level("INFO", logger="bmpt.webui.window_chrome"):
         chrome.update(22, 44, [], "waiting")
         chrome.update(22, 44, good)
         chrome.update(22, 44, [], "immersive")
@@ -801,9 +801,9 @@ def test_windows_failed_aspect_install_keeps_standard_caption_and_cleans_subclas
 
 
 def test_windows_installs_aspect_policy_before_show_without_waiting_for_webview(monkeypatch, tmp_path):
-    from ba_modding_toolkit.webui import main, native, window_chrome
-    from ba_modding_toolkit.webui.timing import Timings
-    from ba_modding_toolkit.webui.tray import Tray
+    from bmpt.webui import main, native, window_chrome
+    from bmpt.webui.timing import Timings
+    from bmpt.webui.tray import Tray
     calls = []
     handlers = {}
     class Event(Hook):
@@ -958,13 +958,13 @@ def test_cocoa_measures_without_moving_buttons_already_in_place(flipped):
 
 
 def test_pointer_probe_logs_a_flicker_and_a_system_pointer_that_stays(caplog):
-    from ba_modding_toolkit.webui.window_macos import PointerProbe
+    from bmpt.webui.window_macos import PointerProbe
     arrow, hand, image = object(), object(), object()
     current, clock = [image], [0.0]
     api = NS(NSCursor=NS(currentCursor=lambda: current[0], arrowCursor=lambda: arrow, openHandCursor=lambda: hand,
                          closedHandCursor=lambda: object(), IBeamCursor=lambda: object(), pointingHandCursor=lambda: object()))
     probe = PointerProbe(api, clock=lambda: clock[0])
-    with caplog.at_level("INFO", logger="ba_modding_toolkit.webui.window_macos"):
+    with caplog.at_level("INFO", logger="bmpt.webui.window_macos"):
         probe.moved(300, True)
         for step in range(9):  # the two pointers taking turns
             clock[0] += .2
@@ -993,12 +993,12 @@ def test_cocoa_pointer_log_never_stands_in_the_way_of_a_move(cocoa_drag):
 
 
 def test_toolbar_layouts_in_a_burst_are_logged(caplog, monkeypatch):
-    import ba_modding_toolkit.webui.window_chrome as module
+    import bmpt.webui.window_chrome as module
     clock = [100.0]
     monkeypatch.setattr(module.time, "monotonic", lambda: clock[0])
     chrome = WindowChrome(NS(), EventBus(), platform='darwin', host=Host())
     regions = [[{"left": 90, "top": 0, "right": 150 + i % 2, "bottom": 44}] for i in range(40)]
-    with caplog.at_level("INFO", logger="ba_modding_toolkit.webui.window_chrome"):
+    with caplog.at_level("INFO", logger="bmpt.webui.window_chrome"):
         for drag in regions:
             clock[0] += .1
             chrome.update(22, 44, drag)

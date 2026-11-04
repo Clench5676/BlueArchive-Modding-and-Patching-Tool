@@ -11,11 +11,12 @@ from UnityPy.helpers import TypeTreeHelper
 from UnityPy.helpers.Tpk import get_typetree_node
 from UnityPy.streams import EndianBinaryWriter
 
-from ba_modding_toolkit import atlas_remap as remap, core
+from bmpt import atlas_remap as remap
+from ba_modding_toolkit import core
 from ba_modding_toolkit.bundle import Bundle
 from ba_modding_toolkit.core import mod_update
 from ba_modding_toolkit.i18n import I18n, t
-from ba_modding_toolkit.library.integrity import inspect as inspect_bundle
+from bmpt.library.integrity import inspect as inspect_bundle
 from ba_modding_toolkit.models import ContNameTypeKey, SaveOptions
 from ba_modding_toolkit.utils import CRCUtils
 
@@ -407,7 +408,7 @@ def test_library_remap_refuses_missing_dated_atlas_without_storing(setup_library
     source = write_bundle(env.tmp / "upload" / current.name.replace("2026-01-01", "2025-01-01"), {},
                           {"page": Image.new("RGBA", (8, 4), "red")})
     entry, = env.library.add([source])
-    from ba_modding_toolkit.errors import ServiceError
+    from bmpt.errors import ServiceError
     with pytest.raises(ServiceError, match="atlas_remap_source_missing") as caught:
         env.library.remap(entry.id)
     assert caught.value.params == {"file": "test.atlas", "date": "2025-01-01"}
@@ -416,7 +417,7 @@ def test_library_remap_refuses_missing_dated_atlas_without_storing(setup_library
 
 
 def test_library_remap_missing_atlas_can_use_verified_current_copy_of_same_date(setup_library, monkeypatch):
-    from ba_modding_toolkit.library import integrity
+    from bmpt.library import integrity
 
     env = setup_library
     env.original.unlink()
@@ -435,7 +436,7 @@ def test_library_remap_missing_atlas_can_use_verified_current_copy_of_same_date(
 
 @pytest.mark.parametrize("date", ["2025-01-01", "2026-01-01"])
 def test_library_remap_uses_only_kept_atlas_of_mod_date(setup_library, monkeypatch, date):
-    from ba_modding_toolkit.library import integrity
+    from bmpt.library import integrity
 
     env = setup_library
     env.original.unlink()
@@ -456,7 +457,7 @@ def test_library_remap_uses_only_kept_atlas_of_mod_date(setup_library, monkeypat
     monkeypatch.setattr(integrity, "inspect", lambda path: integrity.Contents(atlases=remap.read_inputs([path]).atlases))
     before = current.read_bytes(), entry.file.read_bytes()
     if date != "2025-01-01":
-        from ba_modding_toolkit.errors import ServiceError
+        from bmpt.errors import ServiceError
         with pytest.raises(ServiceError, match="atlas_remap_source_missing"):
             env.library.remap(entry.id)
         assert len(env.library.mods()) == 1
@@ -543,7 +544,7 @@ def test_unscaled_trim_crop_preserves_hidden_colour_channels():
 
 @pytest.fixture
 def repair_review(setup_library, monkeypatch):
-    monkeypatch.setattr("ba_modding_toolkit.library.integrity.inspect", inspect_bundle)
+    monkeypatch.setattr("bmpt.library.integrity.inspect", inspect_bundle)
     env = setup_library
     env.original.unlink()
     old = [("page.png", (16, 16), [("part", -1, (1, 1), (4, 4), (4, 4), (0, 0), 0)])]
@@ -581,15 +582,15 @@ def test_remap_review_and_discard_leave_no_mod_files_or_metadata(repair_review):
     assert not env.library._remap_previews
     assert all(path.read_bytes() == data for path, data in before.items())
     assert [path.name for path in (env.library.root / "mods").iterdir()] == [entry.id]
-    from ba_modding_toolkit.errors import ServiceError
+    from bmpt.errors import ServiceError
     with pytest.raises(ServiceError, match="entry_changed"):
         env.library.accept_remap(preview["preview"])
 
 
 @pytest.mark.parametrize("legacy", [False, True])
 def test_accept_stores_reviewed_bytes_once_and_persists_both_markers(repair_review, legacy):
-    from ba_modding_toolkit.errors import ServiceError
-    from ba_modding_toolkit.library import ModLibrary
+    from bmpt.errors import ServiceError
+    from bmpt.library import ModLibrary
 
     env, entry, current, source = repair_review
     if legacy:
@@ -635,11 +636,11 @@ def test_accept_stores_reviewed_bytes_once_and_persists_both_markers(repair_revi
 
 @pytest.mark.parametrize("language", ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR"])
 def test_accept_keeps_alias_names_and_repair_metadata_together(repair_review, monkeypatch, language):
-    from ba_modding_toolkit.errors import ServiceError
+    from bmpt.errors import ServiceError
 
     env, entry, current, source = repair_review
     translate = I18n(language).t
-    monkeypatch.setattr("ba_modding_toolkit.library.service.t", translate)
+    monkeypatch.setattr("bmpt.library.service.t", translate)
     before = {path: (path.read_bytes(), path.stat().st_mtime_ns) for path in (entry.file, current, source)}
     env.library.rename(entry.id, "Before review")
     preview = env.library.remap(entry.id)
@@ -669,7 +670,7 @@ def test_accept_keeps_alias_names_and_repair_metadata_together(repair_review, mo
 
 
 def test_accept_refuses_changed_or_removed_original_and_expired_preview(repair_review):
-    from ba_modding_toolkit.errors import ServiceError
+    from bmpt.errors import ServiceError
 
     env, entry, _, _ = repair_review
     preview = env.library.remap(entry.id)["preview"]
@@ -731,7 +732,7 @@ def test_accept_failure_rolls_back_both_markers_and_the_new_directory(repair_rev
     def fail():
         raise OSError("write refused")
     monkeypatch.setattr(env.library, "_save", fail)
-    from ba_modding_toolkit.errors import ServiceError
+    from bmpt.errors import ServiceError
     with pytest.raises(ServiceError, match="library_io_error"):
         env.library.accept_remap(preview)
     assert not env.library.mods()[0].repaired_id
@@ -743,7 +744,7 @@ def test_accept_failure_rolls_back_both_markers_and_the_new_directory(repair_rev
 
 
 def test_source_changed_during_remapping_never_becomes_an_acceptable_preview(repair_review, monkeypatch):
-    from ba_modding_toolkit.errors import ServiceError
+    from bmpt.errors import ServiceError
 
     env, entry, _, _ = repair_review
     process = core.process_mod_update
@@ -760,7 +761,7 @@ def test_source_changed_during_remapping_never_becomes_an_acceptable_preview(rep
 
 @pytest.mark.parametrize("missing", ["source_region", "source_page", "target_region"])
 def test_required_regions_refuse_before_building_or_creating_anything(repair_review, monkeypatch, missing):
-    from ba_modding_toolkit.errors import ServiceError
+    from bmpt.errors import ServiceError
 
     env, entry, current, _ = repair_review
     kept = next(path for path in (env.library.root / "originals").glob("*.bundle") if "2025-01-01" in path.name)
@@ -864,7 +865,7 @@ def _links(library):
 
 
 def test_deleting_the_repaired_copy_clears_the_link_in_the_same_state_write(repair_review, monkeypatch):
-    from ba_modding_toolkit.library import service
+    from bmpt.library import service
 
     env, entry, _, _ = repair_review
     child = _repair(env, entry)
@@ -887,7 +888,7 @@ def test_deleting_the_repaired_copy_clears_the_link_in_the_same_state_write(repa
 
 
 def test_a_failed_deletion_of_the_repaired_copy_restores_the_link(repair_review):
-    from ba_modding_toolkit.errors import ServiceError
+    from bmpt.errors import ServiceError
 
     env, entry, _, _ = repair_review
     child = _repair(env, entry)
@@ -909,7 +910,7 @@ def test_a_failed_deletion_of_the_repaired_copy_restores_the_link(repair_review)
 def test_recovering_an_interrupted_deletion_of_the_repaired_copy_restores_the_link(repair_review):
     import shutil
 
-    from ba_modding_toolkit.library import asset_delete
+    from bmpt.library import asset_delete
 
     env, entry, _, _ = repair_review
     child = _repair(env, entry)
@@ -925,7 +926,7 @@ def test_recovering_an_interrupted_deletion_of_the_repaired_copy_restores_the_li
 
 
 def test_a_repaired_id_pointing_at_no_record_counts_as_none_without_a_migration(repair_review, monkeypatch):
-    from ba_modding_toolkit.errors import ServiceError
+    from bmpt.errors import ServiceError
 
     env, entry, _, _ = repair_review
     env.library._records[entry.id]["repaired_id"] = "d" * 32  # an old library that deleted the copy
@@ -945,7 +946,7 @@ def test_a_repaired_id_pointing_at_no_record_counts_as_none_without_a_migration(
 
 
 def test_a_repaired_id_held_by_a_missing_folder_stays_and_repair_stays_refused(repair_review, monkeypatch):
-    from ba_modding_toolkit.errors import ServiceError
+    from bmpt.errors import ServiceError
 
     env, entry, _, _ = repair_review
     child = _repair(env, entry)

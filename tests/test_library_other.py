@@ -7,11 +7,11 @@ from types import SimpleNamespace
 import pytest
 
 from ba_modding_toolkit.bundle import Bundle
-from ba_modding_toolkit.errors import ServiceError
-from ba_modding_toolkit.library import ModLibrary, supports_kind
-from ba_modding_toolkit.library.identity import identify
-from ba_modding_toolkit.library.integrity import Contents, inspect as inspect_bundle
-from ba_modding_toolkit.library.judge import core_of, other_target
+from bmpt.errors import ServiceError
+from bmpt.library import ModLibrary, supports_kind
+from bmpt.library.identity import identify
+from bmpt.library.integrity import Contents, inspect as inspect_bundle
+from bmpt.library.judge import core_of, other_target
 from ba_modding_toolkit.models import AssetType, PatchResult
 from ba_modding_toolkit.naming import parse_filename
 from ba_modding_toolkit.utils import CRCUtils
@@ -124,7 +124,7 @@ def test_generic_missing_dependencies_and_platform_are_checked_before_storage(ot
     upload = make_mod(env.parts[0], env.tmp / 'upload')
     for contents, code in [(Contents(platforms={'Android'}), 'mod_platform_mismatch'),
                            (Contents(platforms={'StandaloneWindows64'}, streams={'missing.ress'}), 'mod_parts_missing')]:
-        monkeypatch.setattr('ba_modding_toolkit.library.integrity.inspect',
+        monkeypatch.setattr('bmpt.library.integrity.inspect',
                             lambda path: contents if path == upload else Contents(platforms={'StandaloneWindows64'}))
         with pytest.raises(ServiceError, match=code):
             env.library.add_files('other', [upload])
@@ -228,7 +228,7 @@ def test_generic_exact_name_crc_save_preserves_whole_bundle_outside_update_types
 
 
 def test_generic_audio_integrity_tracks_its_stream_companion(other_env, monkeypatch):
-    from ba_modding_toolkit.library.integrity import missing_parts
+    from bmpt.library.integrity import missing_parts
 
     stream = SimpleNamespace(m_Source='archive:/CAB/music.resS', m_Size=32)
     obj = SimpleNamespace(type=SimpleNamespace(name='AudioClip'), read=lambda: SimpleNamespace(m_Resource=stream))
@@ -236,7 +236,7 @@ def test_generic_audio_integrity_tracks_its_stream_companion(other_env, monkeypa
     files = {'CAB': serialized}
     bundle = SimpleNamespace(env=SimpleNamespace(files=files, objects=[obj]))
     monkeypatch.setattr(Bundle, 'load', lambda *args: bundle)
-    monkeypatch.setattr('ba_modding_toolkit.library.integrity.inspect', inspect_bundle)
+    monkeypatch.setattr('bmpt.library.integrity.inspect', inspect_bundle)
     contents = inspect_bundle(other_env.parts[-1])
     assert contents.streams == {'music.ress'}
     assert missing_parts(contents, Contents()) == {'music.ress'}

@@ -2,9 +2,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { readFileSync } from "node:fs";
-import { sections, pick, scriptOf, inline, blocks, notesFor } from "../../src/ba_modding_toolkit/web/js/release-notes.js";
+import { sections, pick, scriptOf, inline, blocks, notesFor } from "../../src/bmpt/web/js/release-notes.js";
 
-const shipped = readFileSync(new URL("../../src/ba_modding_toolkit/assets/release-notes/0.7.0.md", import.meta.url), "utf8");
+const shipped = readFileSync(new URL("../../src/bmpt/assets/release-notes/0.7.0.md", import.meta.url), "utf8");
 const HAN = "新功能与修复"; // a short Chinese heading
 const KANA = "あたらしい", HANGUL = "새로운 기능", THAI = "คุณสมบัติ";
 

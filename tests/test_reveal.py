@@ -4,7 +4,7 @@ import subprocess
 
 import pytest
 
-from ba_modding_toolkit.webui import system
+from bmpt.webui import system
 
 
 @pytest.fixture

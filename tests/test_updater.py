@@ -12,8 +12,9 @@ from types import SimpleNamespace
 import pytest
 
 from ba_modding_toolkit.utils import paths as utils_paths
-from ba_modding_toolkit import updater, utils
-from ba_modding_toolkit.errors import ServiceError
+from bmpt import updater
+from ba_modding_toolkit import utils
+from bmpt.errors import ServiceError
 
 
 @pytest.fixture(autouse=True)

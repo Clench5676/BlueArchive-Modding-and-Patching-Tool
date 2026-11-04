@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
-import { loadPlayer } from "../../src/ba_modding_toolkit/web/js/spine-load.js";
+import { loadPlayer } from "../../src/bmpt/web/js/spine-load.js";
 
 const read = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
 const near = (values, expected) => values.forEach((v, i) => assert.ok(Math.abs(v - expected[i]) < 1e-6));
@@ -33,7 +33,7 @@ test("portrait and lobby loads retain 0.2.0 straight blending even when atlas pa
 });
 
 test("the memorial lobby caller selects the 0.2.0 PMA flag", () => {
-  const source = read("../../src/ba_modding_toolkit/web/js/lobby.js");
+  const source = read("../../src/bmpt/web/js/lobby.js");
   const code = source.slice(source.indexOf("function makePlayer("), source.indexOf("// A loaded player in linear light"));
   const env = { document: { createElement: () => ({}) }, Stage: { make: (_share, make) => make() },
     spine: { SpinePlayer: class { constructor(_div, config) { this.config = config; } } },
@@ -47,7 +47,7 @@ test("the memorial lobby caller selects the 0.2.0 PMA flag", () => {
 test("the bundled renderer keeps 0.2.0 edge colours and declared slot blends across atlas PMA flags", () => {
   const context = vm.createContext({ console, TextDecoder, TextEncoder, Float32Array, Uint8Array, Uint16Array,
     Int16Array, Int32Array, ArrayBuffer, DataView });
-  vm.runInContext(read("../../src/ba_modding_toolkit/web/vendor/spine-player-4.2.120/spine-player.min.js"), context);
+  vm.runInContext(read("../../src/bmpt/web/vendor/spine-player-4.2.120/spine-player.min.js"), context);
   const S = context.spine;
   for (const flag of ["", "pma: true\n", "pma: false\n"]) {
     const atlas = new S.TextureAtlas(`edge.png\nsize: 2,1\n${flag}edge\n  bounds: 0,0,2,1\n`);

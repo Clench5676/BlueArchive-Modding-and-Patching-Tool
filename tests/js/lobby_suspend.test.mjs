@@ -1,17 +1,17 @@
 import assert from "node:assert/strict";
 import vm from "node:vm";
-import * as Sync from "../../src/ba_modding_toolkit/web/js/lobby-sync.js";
+import * as Sync from "../../src/bmpt/web/js/lobby-sync.js";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
-import { latestLoad } from "../../src/ba_modding_toolkit/web/js/spine-load.js";
-import * as Intro from "../../src/ba_modding_toolkit/web/js/lobby-intro.js";
-import { withTimeout } from "../../src/ba_modding_toolkit/web/js/async.js";
+import { latestLoad } from "../../src/bmpt/web/js/spine-load.js";
+import * as Intro from "../../src/bmpt/web/js/lobby-intro.js";
+import { withTimeout } from "../../src/bmpt/web/js/async.js";
 
-const source = (await readFile(new URL("../../src/ba_modding_toolkit/web/js/lobby.js", import.meta.url), "utf8"))
+const source = (await readFile(new URL("../../src/bmpt/web/js/lobby.js", import.meta.url), "utf8"))
   .replace(/^import .*;$/gm, "").replace(/^export /gm, "");
 const deferred = () => { let resolve, reject; const promise = new Promise((yes, no) => { resolve = yes; reject = no; }); return { promise, resolve, reject }; };
 const runtime = vm.createContext({ console, document: {}, performance });
-vm.runInContext(await readFile(new URL("../../src/ba_modding_toolkit/web/vendor/spine-player-4.2.120/spine-player.min.js", import.meta.url), "utf8"), runtime);
+vm.runInContext(await readFile(new URL("../../src/bmpt/web/vendor/spine-player-4.2.120/spine-player.min.js", import.meta.url), "utf8"), runtime);
 const NativeSpine = runtime.spine;
 const flush = async () => { for (let i = 0; i < 15; i++) await Promise.resolve(); };
 function environment() {

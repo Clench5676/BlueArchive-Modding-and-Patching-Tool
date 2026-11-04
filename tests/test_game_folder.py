@@ -6,12 +6,12 @@ from pathlib import Path
 
 import pytest
 
-from ba_modding_toolkit.config import Settings
+from bmpt.config import Settings
 from ba_modding_toolkit.searching import is_game_install
-from ba_modding_toolkit.webui.api import build_api
-from ba_modding_toolkit.webui.server import WebApp
-from ba_modding_toolkit.webui.services import Services
-from ba_modding_toolkit.webui.state import UiState
+from bmpt.webui.api import build_api
+from bmpt.webui.server import WebApp
+from bmpt.webui.services import Services
+from bmpt.webui.state import UiState
 from test_webui import FakeCatalog, FakeLibrary, rpc
 
 RESOURCE = Path("BlueArchive_Data/StreamingAssets/PUB/Resource/GameData/Windows")
@@ -92,7 +92,7 @@ def test_only_atlas_bundle_files_count(env):
 
 def test_the_predicate_reads_names_only(tmp_path, monkeypatch):
     install(tmp_path)
-    from ba_modding_toolkit.gameassets import discovery  # imported before files are forbidden
+    from bmpt.gameassets import discovery  # imported before files are forbidden
     assert discovery.is_atlas
     for name in ("open", "read_bytes", "read_text"):
         monkeypatch.setattr(Path, name, lambda *a, **k: pytest.fail("read a file"), raising=False)

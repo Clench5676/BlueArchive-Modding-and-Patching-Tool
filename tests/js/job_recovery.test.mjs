@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { waitJob } from "../../src/ba_modding_toolkit/web/js/api.js";
+import { waitJob } from "../../src/bmpt/web/js/api.js";
 
 class Events {
   listeners = new Map();

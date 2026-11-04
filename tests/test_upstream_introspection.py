@@ -66,7 +66,8 @@ def test_introspection_reads_official_samples_without_writing(sample_case):
 def test_cab_scan_caches_and_invalidates_changed_bundle(tmp_path, monkeypatch):
     bundle = tmp_path / "sample.bundle"
     names = unityfs(bundle)
-    from ba_modding_toolkit import config, utils
+    from bmpt import config
+    from ba_modding_toolkit import utils
     monkeypatch.setattr(utils, "EXE_DIR", tmp_path / "data")
     monkeypatch.setattr(config, "user_cache_dir", lambda: tmp_path / "cache")
     assert find_cab_bundles(names, [tmp_path]) == dict.fromkeys(names, bundle)

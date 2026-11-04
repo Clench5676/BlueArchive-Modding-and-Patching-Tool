@@ -6,9 +6,9 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
-from ba_modding_toolkit import atlas_remap as remap
+from bmpt import atlas_remap as remap
 from ba_modding_toolkit.bundle import Bundle
-from ba_modding_toolkit.refine_assembly import assemble_mod, assemble_page, misalignment
+from bmpt.refine_assembly import assemble_mod, assemble_page, misalignment
 
 from test_atlas_remap import atlas_text, pattern, write_bundle
 
@@ -215,10 +215,10 @@ def test_official_cycling_identity_roundtrip(cycling_official, tmp_path):
 
 @pytest.mark.parametrize("scale", [1, 2])
 def test_official_cycling_mod_is_accepted_and_identified_by_app_import(cycling_official, tmp_path, scale):
-    from ba_modding_toolkit.catalog import Catalog
-    from ba_modding_toolkit.config import Settings
-    from ba_modding_toolkit.gameassets import AssetCache, GameAssets
-    from ba_modding_toolkit.library import ModLibrary
+    from bmpt.catalog import Catalog
+    from bmpt.config import Settings
+    from bmpt.gameassets import AssetCache, GameAssets
+    from bmpt.library import ModLibrary
 
     paths, inputs = cycling_official
     # Settings and library writes are isolated; official parts are only read.
@@ -246,7 +246,7 @@ def test_official_cycling_mod_is_accepted_and_identified_by_app_import(cycling_o
     assert actual.tobytes() == expected.image.tobytes()
     # The same extractor used by the App serves an intact atlas/skeleton with the new page.
     from io import BytesIO
-    from ba_modding_toolkit.gameassets.spine import extract_spine
+    from bmpt.gameassets.spine import extract_spine
 
     files = extract_spine([built if path.name == built.name else path for path in paths])
     assert files["shiroko_ridingsuit_spr.atlas"] == inputs.atlases["shiroko_ridingsuit_spr.atlas"]
@@ -256,7 +256,7 @@ def test_official_cycling_mod_is_accepted_and_identified_by_app_import(cycling_o
 
 
 def test_projected_page_uses_k4_packer_and_rejects_alpha_or_outside_changes(tmp_path):
-    from ba_modding_toolkit.refine_assembly import Assembly
+    from bmpt.refine_assembly import Assembly
     text=atlas_text([('page.png',(20,18),[('body',-1,(4,3),(6,4),(6,4),(0,0),0)])])
     source=write_bundle(tmp_path/'official'/NAME,{'hero.atlas':text},{'page':page()})
     original=remap.read_inputs([source]).textures['page']
@@ -271,7 +271,7 @@ def test_projected_page_uses_k4_packer_and_rejects_alpha_or_outside_changes(tmp_
 
 
 def test_generated_alpha_requires_mesh_mask_and_roundtrips(tmp_path):
-    from ba_modding_toolkit.refine_assembly import Assembly
+    from bmpt.refine_assembly import Assembly
     text = atlas_text([('page.png', (20, 18), [('body', -1, (4, 3), (6, 4), (6, 4), (0, 0), 0)])])
     source = write_bundle(tmp_path / 'official' / NAME, {'hero.atlas': text}, {'page': page(), 'other': pattern((8, 8), 31)}, texture_format=25)
     before = source.read_bytes()
@@ -301,7 +301,7 @@ def test_generated_alpha_requires_mesh_mask_and_roundtrips(tmp_path):
 
 
 def test_generated_alpha_mask_does_not_bypass_official_region_check(tmp_path):
-    from ba_modding_toolkit.refine_assembly import Assembly
+    from bmpt.refine_assembly import Assembly
     text = atlas_text([('page.png', (20, 18), [('body', -1, (4, 3), (6, 4), (6, 4), (0, 0), 0)])])
     source = write_bundle(tmp_path / 'official' / NAME, {'hero.atlas': text}, {'page': page()})
     candidate = remap.read_inputs([source]).textures['page'].copy()

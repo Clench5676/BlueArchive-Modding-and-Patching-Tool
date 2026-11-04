@@ -132,7 +132,7 @@ def test_every_required_key_must_be_applied_across_targets(tmp_path, monkeypatch
 
 
 def test_extraction_rejects_a_truncated_mesh_stream(tmp_path):
-    from ba_modding_toolkit.errors import ServiceError
+    from bmpt.errors import ServiceError
     obj = asset("required_mesh", AssetType.Mesh)
     obj.read = lambda: SimpleNamespace(m_Name="required_mesh", m_StreamData=SimpleNamespace(
         path="archive:/CAB-stream/CAB-stream.resS", offset=2, size=8))

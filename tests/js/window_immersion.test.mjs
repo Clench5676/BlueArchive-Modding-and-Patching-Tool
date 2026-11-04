@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { readFileSync } from 'node:fs';
-import { isImmersive, dragRegions, headerGeometry } from '../../src/ba_modding_toolkit/web/js/window-layout.js';
-const source=(file)=>readFileSync(new URL(`../../src/ba_modding_toolkit/${file}`,import.meta.url),'utf8');
+import { isImmersive, dragRegions, headerGeometry } from '../../src/bmpt/web/js/window-layout.js';
+const source=(file)=>readFileSync(new URL(`../../src/bmpt/${file}`,import.meta.url),'utf8');
 const scenes=[
   ['portrait fullscreen',['fullscreen'],[]],
   ['memorial lobby fullscreen',['fullscreen'],[]],

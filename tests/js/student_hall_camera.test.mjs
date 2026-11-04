@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { constrainScene, sceneRect, sceneViewport, createSceneCamera } from "../../src/ba_modding_toolkit/web/js/student-hall-camera.js";
+import { constrainScene, sceneRect, sceneViewport, createSceneCamera } from "../../src/bmpt/web/js/student-hall-camera.js";
 const close = (a,b) => assert.ok(Math.abs(a-b)<.03,`${a} != ${b}`);
 function fixture(){
   const listeners=new Map(),frames=new Map(),painted=[],released=[];let sequence=0,now=0,enabled=true,blocked=false;

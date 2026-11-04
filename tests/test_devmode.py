@@ -1,4 +1,4 @@
-"""The environment hooks for isolated development runs (ba_modding_toolkit.devmode): inert without their variables,
+"""The environment hooks for isolated development runs (bmpt.devmode): inert without their variables,
 and what each does when set."""
 
 import fnmatch
@@ -14,7 +14,8 @@ import pytest
 
 import ba_modding_toolkit
 from ba_modding_toolkit.utils import paths as utils_paths
-from ba_modding_toolkit import config, devmode, utils
+from bmpt import config, devmode
+from ba_modding_toolkit import utils
 
 DEV_VARIABLES = ("BAMT_DATA_DIR", "BAMT_GAME_DIRS_GLOBAL", "BAMT_GAME_DIRS_JAPAN", "BAMT_DEV_ROOTS",
                  "BAMT_DEV_WRITABLE")
@@ -96,7 +97,7 @@ def _python(code: str, **env: str) -> str:
 
 
 def test_data_dir_is_read_on_import(tmp_path):
-    out = _python("from ba_modding_toolkit import config, utils\n"
+    out = _python("from bmpt import config\nfrom ba_modding_toolkit import utils\n"
                   "print(utils.EXE_DIR); print(config.CONFIG_FILE); print(config.user_cache_dir())",
                   BAMT_DATA_DIR=str(tmp_path / "profile"))
     profile = (tmp_path / "profile").resolve()
@@ -109,7 +110,7 @@ def test_data_dir_is_read_on_import(tmp_path):
 @pytest.fixture
 def no_search(monkeypatch):
     """Fail the test if the game is searched for: the user's prefixes, Steam libraries or registry."""
-    from ba_modding_toolkit import game_paths
+    from bmpt import game_paths
 
     def searched(*args, **kwargs):
         raise AssertionError("searched for the game")
@@ -124,7 +125,7 @@ def test_game_dirs_unset_is_none():
 
 
 def test_named_game_dirs_replace_the_search(tmp_path, monkeypatch, no_search):
-    from ba_modding_toolkit.game_paths import find_game_dirs
+    from bmpt.game_paths import find_game_dirs
 
     first, second = tmp_path / "first", tmp_path / "second"
     first.mkdir()
@@ -163,7 +164,7 @@ def dev(tmp_path, monkeypatch):
 
 
 def expect_outside(action, path=None):
-    from ba_modding_toolkit.errors import ServiceError
+    from bmpt.errors import ServiceError
 
     with pytest.raises(ServiceError) as caught:
         action()
@@ -205,14 +206,14 @@ def test_dev_roots_set_to_nothing_allow_nothing(tmp_path, monkeypatch):
 
 
 def test_dev_mode_never_searches_for_the_game(dev, no_search):
-    from ba_modding_toolkit.game_paths import find_game_dirs
+    from bmpt.game_paths import find_game_dirs
 
     assert find_game_dirs("global") == [] and find_game_dirs("japan") == []
     assert utils.get_BA_path("auto") is None
 
 
 def test_named_game_dirs_outside_the_roots_are_dropped(dev, monkeypatch, no_search):
-    from ba_modding_toolkit.game_paths import find_game_dirs
+    from bmpt.game_paths import find_game_dirs
 
     view = dev.root / "view"
     view.mkdir()
@@ -246,8 +247,8 @@ def test_output_folder_outside_the_roots_is_refused(dev):
 
 
 def test_library_takes_mods_from_inside_the_roots_only(dev):
-    from ba_modding_toolkit.errors import ServiceError
-    from ba_modding_toolkit.library import ModLibrary
+    from bmpt.errors import ServiceError
+    from bmpt.library import ModLibrary
 
     library = ModLibrary(dev.root / "library", SimpleNamespace(), object(), config.Settings(dev.root / "config.toml"))
     outside = dev.outside / "mod.bundle"
@@ -281,7 +282,7 @@ class _Library:
         return []
 
     def add_and_apply(self, paths):
-        from ba_modding_toolkit.library.models import AddResult
+        from bmpt.library.models import AddResult
 
         self.added.append(paths)
         return AddResult()
@@ -289,8 +290,8 @@ class _Library:
 
 @pytest.fixture
 def dev_services(dev):
-    from ba_modding_toolkit.webui.services import Services
-    from ba_modding_toolkit.webui.state import UiState
+    from bmpt.webui.services import Services
+    from bmpt.webui.state import UiState
 
     state = UiState(dev.root / "webui.json")
     # This fixture narrows the session roots; its lazily constructed preview
@@ -303,14 +304,14 @@ def dev_services(dev):
 
 
 def test_web_ui_data_directory_must_lie_inside_the_roots(dev):
-    from ba_modding_toolkit.webui.services import Services
+    from bmpt.webui.services import Services
 
     expect_outside(lambda: Services(config.Settings(dev.root / "config.toml"), dev.outside))
     assert list(dev.outside.iterdir()) == []
 
 
 def test_web_ui_refuses_paths_outside_the_roots(dev, dev_services):
-    from ba_modding_toolkit.webui.api import build_api
+    from bmpt.webui.api import build_api
 
     api = build_api(dev_services)
     game = dev.root / "game"
@@ -334,8 +335,8 @@ def test_web_ui_refuses_paths_outside_the_roots(dev, dev_services):
 
 
 def test_web_ui_library_and_cache_outside_the_roots_are_refused(dev):
-    from ba_modding_toolkit.webui.services import Services
-    from ba_modding_toolkit.webui.state import UiState
+    from bmpt.webui.services import Services
+    from bmpt.webui.state import UiState
 
     state = UiState(dev.root / "webui.json")
     state.set("library_dir", str(dev.outside / "library"))
@@ -350,7 +351,7 @@ def test_web_ui_library_and_cache_outside_the_roots_are_refused(dev):
 
 
 def test_game_assets_read_and_cache_inside_the_roots_only(dev):
-    from ba_modding_toolkit.gameassets import AssetCache, GameAssets
+    from bmpt.gameassets import AssetCache, GameAssets
 
     expect_outside(lambda: AssetCache(root=dev.outside / "cache", allowed=True))
     cache = AssetCache(root=dev.root / "cache", allowed=True)
@@ -444,7 +445,7 @@ def test_library_staging_folders_take_writes(sandboxed, tmp_path, monkeypatch):
 
 
 def test_game_files_are_written_in_writable_folders_only(sandboxed, monkeypatch):
-    from ba_modding_toolkit.library import safety
+    from bmpt.library import safety
 
     def game_check():
         raise AssertionError("the game check ran")
@@ -466,7 +467,7 @@ def test_game_files_are_written_in_writable_folders_only(sandboxed, monkeypatch)
 
 
 def test_game_check_runs_without_dev_mode(tmp_path, monkeypatch):
-    from ba_modding_toolkit.library import safety
+    from bmpt.library import safety
 
     checks = []
     monkeypatch.setattr(safety, "check_game_not_running", lambda: checks.append(True))
@@ -485,9 +486,9 @@ def _header_bundle(payload: bytes) -> bytes:
 def _switch_env(game_dir: Path, data: Path, monkeypatch):
     """A library whose game folder holds one official portrait bundle, and a mod for it ready to import."""
     from ba_modding_toolkit.bundle import Bundle
-    from ba_modding_toolkit.library import ModLibrary, safety
+    from bmpt.library import ModLibrary, safety
 
-    monkeypatch.setattr("ba_modding_toolkit.library.identity.content_cores", lambda path: set())
+    monkeypatch.setattr("bmpt.library.identity.content_cores", lambda path: set())
     official = _header_bundle(b"official")
     name = ("assets-_mx-spinecharacters-test_spr-_mxdependency-2026-01-01_003_assets_all_"
             f"{utils.CRCUtils.compute_crc32(official)}.bundle")
@@ -625,7 +626,7 @@ def test_adb_runs_without_dev_mode(monkeypatch):
 @pytest.fixture
 def installable_build(tmp_path, monkeypatch):
     """A writable macOS app bundle the updater could replace."""
-    from ba_modding_toolkit import updater
+    from bmpt import updater
 
     target = tmp_path / "Tool.app"
     executable = target / "Contents" / "MacOS" / "Tool"
@@ -638,8 +639,8 @@ def installable_build(tmp_path, monkeypatch):
 
 
 def test_a_build_never_replaces_itself_in_dev_mode(installable_build, monkeypatch, tmp_path):
-    from ba_modding_toolkit import updater
-    from ba_modding_toolkit.errors import ServiceError
+    from bmpt import updater
+    from bmpt.errors import ServiceError
 
     assert updater.install_target() == installable_build
     monkeypatch.setenv("BAMT_DEV_ROOTS", str(tmp_path))
@@ -654,14 +655,14 @@ def test_a_build_never_replaces_itself_in_dev_mode(installable_build, monkeypatc
 # --- builds ---
 
 def test_builds_carry_the_hooks_version():
-    marker = Path(ba_modding_toolkit.__file__).parent / "assets" / "dev-hooks.json"
+    marker = Path(devmode.__file__).parent / "assets" / "dev-hooks.json"
     assert json.loads(marker.read_text(encoding="utf-8")) == {"hooks": devmode.HOOKS}
 
 
 def test_wheels_hold_the_app_only():
     data = tomllib.loads((SRC.parent / "pyproject.toml").read_text(encoding="utf-8"))
     include = data["tool"]["setuptools"]["packages"]["find"]["include"]
-    for name in ("ba_modding_toolkit", "ba_modding_toolkit.webui", "ba_modding_toolkit.library"):
+    for name in ("ba_modding_toolkit", "bmpt", "bmpt.webui", "bmpt.library"):
         assert any(fnmatch.fnmatchcase(name, pattern) for pattern in include), name
-    for name in ("tests", "scripts", "tools", "tools.store"):
+    for name in ("bamt_dev", "tests", "scripts", "tools", "tools.store"):
         assert not any(fnmatch.fnmatchcase(name, pattern) for pattern in include), name

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
-const root = new URL("../../src/ba_modding_toolkit/web/", import.meta.url);
+const root = new URL("../../src/bmpt/web/", import.meta.url);
 const source = readFileSync(new URL("js/spine-runtime.js", root), "utf8");
 let sequence = 0;
 async function harness(choice = null) {
@@ -98,8 +98,8 @@ test("a script without the runtime namespace cleans up before retry", async () =
 });
 
 test("thumbnails declined before loading use their callers' static images without requests or players", async () => {
-  const { setSpineConsent } = await import("../../src/ba_modding_toolkit/web/js/spine-runtime.js");
-  const { thumb, thumbnailScope } = await import("../../src/ba_modding_toolkit/web/js/thumbs.js");
+  const { setSpineConsent } = await import("../../src/bmpt/web/js/spine-runtime.js");
+  const { thumb, thumbnailScope } = await import("../../src/bmpt/web/js/thumbs.js");
   setSpineConsent(false);
   globalThis.fetch = () => assert.fail("declined thumbnails need no manifest");
   globalThis.document.createElement = () => assert.fail("declined thumbnails need no player host");

@@ -2,13 +2,13 @@
 import assert from "node:assert/strict";
 import { register } from "node:module";
 import { test } from "node:test";
-const VENDOR = new URL("../../src/ba_modding_toolkit/web/vendor/three-0.160.0/", import.meta.url).href;
+const VENDOR = new URL("../../src/bmpt/web/vendor/three-0.160.0/", import.meta.url).href;
 register(`data:text/javascript,${encodeURIComponent(`export async function resolve(spec, ctx, next) {
   if (spec === "three") return { url: ${JSON.stringify(VENDOR + "build/three.module.min.js")}, shortCircuit: true };
   if (spec.startsWith("three/addons/")) return { url: ${JSON.stringify(VENDOR + "examples/jsm/")} + spec.slice(13), shortCircuit: true };
   return next(spec, ctx); }`)}`);
-const { createStillView, FORMATION_VIEW, visibleStillFrame } = await import("../../src/ba_modding_toolkit/web/js/model.js");
-const { OUTLINE } = await import("../../src/ba_modding_toolkit/web/js/chibi-materials.js");
+const { createStillView, FORMATION_VIEW, visibleStillFrame } = await import("../../src/bmpt/web/js/model.js");
+const { OUTLINE } = await import("../../src/bmpt/web/js/chibi-materials.js");
 const vertices = new Float32Array([-.3, 0, 0, .3, 0, 0, 0, 1.1, 0]);
 const fixture = new TextEncoder().encode(JSON.stringify({
   asset: { version: "2.0" }, scene: 0, scenes: [{ nodes: [0] }], nodes: [{ mesh: 0 }],

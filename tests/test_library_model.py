@@ -6,12 +6,12 @@ from types import SimpleNamespace
 
 import pytest
 
-from ba_modding_toolkit.catalog import Catalog
-from ba_modding_toolkit.errors import ServiceError
-from ba_modding_toolkit.library import ModLibrary, supports_kind
-from ba_modding_toolkit.library.identity import content_cores, identify
-from ba_modding_toolkit.library.integrity import Contents
-from ba_modding_toolkit.library.judge import kind_of_file
+from bmpt.catalog import Catalog
+from bmpt.errors import ServiceError
+from bmpt.library import ModLibrary, supports_kind
+from bmpt.library.identity import content_cores, identify
+from bmpt.library.integrity import Contents
+from bmpt.library.judge import kind_of_file
 from ba_modding_toolkit.naming import parse_filename
 
 from test_library import game_bundle, header_bundle, make_mod, setup_library
@@ -56,7 +56,7 @@ def test_model_content_identity_overrules_renamed_file(model_env, monkeypatch, n
     source = model_bundle(env.tmp / 'upload', core='ch0246')
     with monkeypatch.context() as patch:
         objects(patch, [name], [name] if '/' in name else [])
-        patch.setattr('ba_modding_toolkit.library.identity.content_cores', content_cores)
+        patch.setattr('bmpt.library.identity.content_cores', content_cores)
         filename, key, kind = identify(source, source.name, env.catalog)
     assert (parse_filename(filename).core, key, kind) == ('hoshino_original', 'hoshino', 'model')
 
@@ -68,7 +68,7 @@ def test_model_content_conflict_and_unknown_are_refused(model_env, monkeypatch):
                         (['Echelon_Hoshino_Original', 'hoshino_spr.skel'], 'mod_target_ambiguous')]:
         with monkeypatch.context() as patch:
             objects(patch, names)
-            patch.setattr('ba_modding_toolkit.library.identity.content_cores', content_cores)
+            patch.setattr('bmpt.library.identity.content_cores', content_cores)
             with pytest.raises(ServiceError, match=code):
                 identify(source, source.name, env.catalog)
 
@@ -87,7 +87,7 @@ def test_model_roles_resolve_against_the_owning_core(model_env, monkeypatch, anc
     if anchor == 'prefab':
         names.append('Echelon_CH0123')
     objects(monkeypatch, names, containers)
-    monkeypatch.setattr('ba_modding_toolkit.library.identity.content_cores', content_cores)
+    monkeypatch.setattr('bmpt.library.identity.content_cores', content_cores)
     assert content_cores(source) == {'model:ch0123'}
     filename, key, kind = identify(source, source.name, catalog)
     assert (parse_filename(filename).core, key, kind) == ('ch0123', 'shigure', 'model')
@@ -112,7 +112,7 @@ def test_model_role_resolution_preserves_unknown_and_conflicting_targets(model_e
     catalog = SimpleNamespace(variant_for_core=lambda core: None,
                               variant_for_model_core=variants.get)
     objects(monkeypatch, names)
-    monkeypatch.setattr('ba_modding_toolkit.library.identity.content_cores', content_cores)
+    monkeypatch.setattr('bmpt.library.identity.content_cores', content_cores)
     with pytest.raises(ServiceError) as caught:
         identify(source, source.name, catalog)
     assert caught.value.code == code
@@ -193,13 +193,13 @@ def test_model_library_relocation_keeps_restore_and_remove(model_env):
 def test_model_missing_mesh_stream_and_platform_refuse_the_whole_upload(model_env, monkeypatch):
     env = model_env
     upload = make_mod(env.parts[1], env.tmp / 'upload')
-    monkeypatch.setattr('ba_modding_toolkit.library.integrity.inspect',
+    monkeypatch.setattr('bmpt.library.integrity.inspect',
                         lambda path: Contents(platforms={'StandaloneWindows64'}, streams={'missing.ress'})
                         if path == upload else Contents(platforms={'StandaloneWindows64'}))
     with pytest.raises(ServiceError, match='mod_parts_missing'):
         env.library.add([upload])
     assert env.library.mods() == []
-    monkeypatch.setattr('ba_modding_toolkit.library.integrity.inspect',
+    monkeypatch.setattr('bmpt.library.integrity.inspect',
                         lambda path: Contents(platforms={'Android' if path == upload else 'StandaloneWindows64'}))
     with pytest.raises(ServiceError, match='mod_platform_mismatch'):
         env.library.add([upload])
@@ -213,7 +213,7 @@ def test_model_variant_transplant_is_refused(model_env):
 
 
 def test_model_jobs_publish_the_model_kind(model_env):
-    from ba_modding_toolkit.webui.services import _changed_of
+    from bmpt.webui.services import _changed_of
     env = model_env
     entry, = env.library.add([make_mod(env.parts[1], env.tmp / 'upload')])
     result = env.library.apply('hoshino', f'mod:{entry.id}', kind='model')
@@ -223,7 +223,7 @@ def test_model_jobs_publish_the_model_kind(model_env):
 def test_add_files_checks_the_content_kind_before_storing_anything(model_env, monkeypatch):
     env = model_env
     upload = make_mod(env.parts[1], env.tmp / 'upload')
-    monkeypatch.setattr('ba_modding_toolkit.library.identity.content_cores', lambda path: {'hoshino_spr'})
+    monkeypatch.setattr('bmpt.library.identity.content_cores', lambda path: {'hoshino_spr'})
     with pytest.raises(ServiceError, match='mod_unsupported'):
         env.library.add_files('model', [upload])
     assert env.library.mods() == []

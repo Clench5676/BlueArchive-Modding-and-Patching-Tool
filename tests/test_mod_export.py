@@ -8,13 +8,13 @@ from dataclasses import replace
 
 import pytest
 
-from ba_modding_toolkit.errors import ServiceError
+from bmpt.errors import ServiceError
 from ba_modding_toolkit.bundle import Bundle
-from ba_modding_toolkit.library import integrity
+from bmpt.library import integrity
 from ba_modding_toolkit.searching import _asset_match
-from ba_modding_toolkit.webui import batch_import
-from ba_modding_toolkit.webui import export_service
-from ba_modding_toolkit.webui.rpc import RpcRegistry
+from bmpt.webui import batch_import
+from bmpt.webui import export_service
+from bmpt.webui.rpc import RpcRegistry
 
 from test_library import game_bundle, make_mod, setup_library
 from test_mod_origin import inspect_bundle, bundle_metadata, official_bundle, old_bundle

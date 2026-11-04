@@ -8,7 +8,7 @@ import pytest
                     reason="Optional verified-asset check: set BAMT_TEST_GAME_DIR to an isolated verified copy")
 def test_verified_ui_lobby_camera_matches_still_coordinates(tmp_path):
     from pathlib import Path
-    from ba_modding_toolkit.gameassets import AssetCache, GameAssets
+    from bmpt.gameassets import AssetCache, GameAssets
     from ba_modding_toolkit.searching import get_search_dirs
 
     root = Path(os.environ.get("BAMT_TEST_GAME_DIR", "/nonexistent/verified-view"))

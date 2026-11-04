@@ -46,8 +46,8 @@ const press = (key) => {
 let now = 0;
 Object.defineProperty(globalThis, "performance", { value: { now: () => now }, configurable: true, writable: true });
 
-const Visual = await import("../../src/ba_modding_toolkit/web/js/visual-mode.js");
-const { setSpineConsent } = await import("../../src/ba_modding_toolkit/web/js/spine-runtime.js");
+const Visual = await import("../../src/bmpt/web/js/visual-mode.js");
+const { setSpineConsent } = await import("../../src/bmpt/web/js/spine-runtime.js");
 setSpineConsent(true);
 globalThis.spine = {};
 
@@ -170,7 +170,7 @@ test("leaving fullscreen closes the visual mode even after the tab changed under
 });
 
 test("Escape on a message over the visual mode closes the message only; the next one leaves", async () => {
-  const Popup = await import("../../src/ba_modding_toolkit/web/js/popup.js");
+  const Popup = await import("../../src/bmpt/web/js/popup.js");
   const s = screen();
   let backs = 0;
   Visual.uiOut(s.out);

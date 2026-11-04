@@ -6,9 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from ba_modding_toolkit import filelock
-from ba_modding_toolkit.errors import ServiceError
-from ba_modding_toolkit.library import ModLibrary, profiles, service, staging
+from bmpt import filelock
+from bmpt.errors import ServiceError
+from bmpt.library import ModLibrary, profiles, service, staging
 
 from test_library import setup_library
 

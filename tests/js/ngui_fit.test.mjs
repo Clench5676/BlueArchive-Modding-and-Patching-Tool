@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { readFile } from "node:fs/promises";
 
-const css = await readFile(new URL("../../src/ba_modding_toolkit/web/css/app.css", import.meta.url), "utf8");
+const css = await readFile(new URL("../../src/bmpt/web/css/app.css", import.meta.url), "utf8");
 
 // a canvas that measures a CJK character (Han, kana, Hangul, full-width forms) 1 em wide and anything else half an em
 const WIDE = /[⺀-鿿　-ヿ＀-￯가-힯]/;
@@ -23,7 +23,7 @@ globalThis.document = {
 };
 globalThis.getComputedStyle = (el) => ({ getPropertyValue: () => /^th(?:-|$)/.test(el.lang)
   ? /:lang\(th\)\s*\{\s*--font:\s*([^;]+);/.exec(css)?.[1] || "" : "" });
-const { LINE_PITCH, fitGroup, fitLabel, fitLabels, fitRow, fitText, fontSizeFor, glyphWidth, inkBand, inkReference, inkShift, textWidth } = await import("../../src/ba_modding_toolkit/web/js/ngui.js");
+const { LINE_PITCH, fitGroup, fitLabel, fitLabels, fitRow, fitText, fontSizeFor, glyphWidth, inkBand, inkReference, inkShift, textWidth } = await import("../../src/bmpt/web/js/ngui.js");
 
 const BAD_START = /^[、。，．：；！？）」』】〉》…‥ーぁぃぅぇぉっゃゅょゎァィゥェォッャュョヮヵヶ〜～,.!?)]/;
 const BAD_END = /[（「『【〈《(]$/;
@@ -207,7 +207,7 @@ test("wrapping that wins only a step of size is not used", () => {
 
 test("a group of CJK and Thai labels wraps by words and shares a size", async () => {
   for (const locale of ["th-TH", "zh-CN", "ko-KR", "ja-JP"]) {
-    const ui = JSON.parse(await readFile(new URL(`../../src/ba_modding_toolkit/locales/${locale}.json`, import.meta.url), "utf8")).webui;
+    const ui = JSON.parse(await readFile(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8")).webui;
     const labels = [ui.popup.apply, ui.compatibility.check, ui.btn.delete];
     document.documentElement.lang = locale;
     const group = fitGroup(labels, 40, 26, 170, 2);

@@ -4,10 +4,10 @@ from types import SimpleNamespace
 
 import pytest
 
-from ba_modding_toolkit.catalog import Catalog, Variant
-from ba_modding_toolkit.library import ModLibrary
-from ba_modding_toolkit.webui.photography import Photography
-from ba_modding_toolkit.webui.student_hall import empty_hall
+from bmpt.catalog import Catalog, Variant
+from bmpt.library import ModLibrary
+from bmpt.webui.photography import Photography
+from bmpt.webui.student_hall import empty_hall
 from test_webui import app, services, rpc
 from test_library import setup_library, game_bundle, make_mod
 
@@ -161,10 +161,10 @@ def test_apply_and_restore_use_selected_install_and_preserve_other_choices(setup
 
 
 def test_switch_rebuilds_game_library_catalog_and_cab_index(tmp_path, monkeypatch):
-    from ba_modding_toolkit.config import Settings
-    from ba_modding_toolkit.webui.services import Services
-    from ba_modding_toolkit.webui.api import build_api
-    from ba_modding_toolkit.webui.server import WebApp
+    from bmpt.config import Settings
+    from bmpt.webui.services import Services
+    from bmpt.webui.api import build_api
+    from bmpt.webui.server import WebApp
     from test_cab_discovery import bundle
 
     settings = Settings(tmp_path / "config.toml")
@@ -211,8 +211,8 @@ def test_switch_rebuilds_game_library_catalog_and_cab_index(tmp_path, monkeypatc
 
 
 def test_steam_going_idle_rebuilds_the_game_services_only_after_a_version_change(tmp_path, monkeypatch):
-    from ba_modding_toolkit.config import Settings
-    from ba_modding_toolkit.webui.services import Services
+    from bmpt.config import Settings
+    from bmpt.webui.services import Services
     from test_cab_discovery import bundle
 
     settings = Settings(tmp_path / "config.toml")

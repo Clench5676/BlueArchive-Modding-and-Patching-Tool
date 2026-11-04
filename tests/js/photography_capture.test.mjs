@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {test} from 'node:test';
-import {FRAME} from '../../src/ba_modding_toolkit/web/js/photography/camera.js';
-const source=(await readFile(new URL('../../src/ba_modding_toolkit/web/js/photography/capture.js',import.meta.url),'utf8')).replace("import * as NGUI from '../ngui.js';","const NGUI={load:async()=>{throw new Error('Unexpected fallback')}};");
+import {FRAME} from '../../src/bmpt/web/js/photography/camera.js';
+const source=(await readFile(new URL('../../src/bmpt/web/js/photography/capture.js',import.meta.url),'utf8')).replace("import * as NGUI from '../ngui.js';","const NGUI={load:async()=>{throw new Error('Unexpected fallback')}};");
 const adjusted=source.replace("import {FRAME} from './camera.js';",`const FRAME=${JSON.stringify(FRAME)};`);
 const {projectedCrop,captureScene}=await import('data:text/javascript;base64,'+Buffer.from(adjusted).toString('base64'));
 test('the crop is exactly centered in the student-detail stage at either display scale',()=>{

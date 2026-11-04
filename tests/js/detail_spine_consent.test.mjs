@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { decodeAll } from "../../src/ba_modding_toolkit/web/js/image-decode.js";
+import { decodeAll } from "../../src/bmpt/web/js/image-decode.js";
 
-const source = readFileSync(new URL("../../src/ba_modding_toolkit/web/js/detail.js", import.meta.url), "utf8");
+const source = readFileSync(new URL("../../src/bmpt/web/js/detail.js", import.meta.url), "utf8");
 const portraitCode = source.slice(source.indexOf("async function showSpine("), source.indexOf("// the detail screen's portrait framing"));
 const noop = () => {};
 

@@ -16,12 +16,12 @@ from PIL import Image, ImageChops, ImageStat
 
 from ba_modding_toolkit import core, mod_install
 from ba_modding_toolkit.bundle import Bundle
-from ba_modding_toolkit.catalog.models import CoreMap
-from ba_modding_toolkit.config import Settings
-from ba_modding_toolkit.errors import ServiceError
+from bmpt.catalog.models import CoreMap
+from bmpt.config import Settings
+from bmpt.errors import ServiceError
 from ba_modding_toolkit.i18n import I18n
-from ba_modding_toolkit.library import ModLibrary
-from ba_modding_toolkit.library import safety, service, storage
+from bmpt.library import ModLibrary
+from bmpt.library import safety, service, storage
 from ba_modding_toolkit.models import AssetType, FilePair, ModUpdateResult
 from ba_modding_toolkit.naming import parse_filename
 from ba_modding_toolkit.searching import get_search_dirs
@@ -247,7 +247,7 @@ def test_add_separates_cores_dates_and_kinds(setup_library):
 def test_add_rolls_back_incomplete_pack(setup_library, monkeypatch):
     env = setup_library
     sources = [game_bundle(env.tmp / "input", part=part) for part in ("002", "003")]
-    from ba_modding_toolkit.library import service
+    from bmpt.library import service
     original_copy = service.atomic_copy
     def copy(source, target):
         if source == sources[1]:
@@ -336,8 +336,8 @@ def test_preview_keeps_preload_parts_before_mod_overrides(setup_library):
 
 @pytest.mark.parametrize("core,kind", [("test_spr", "spr"), ("test_home_gl", "lobby"), ("other_spr", "spr")])
 def test_official_preview_uses_kept_parts_and_is_unavailable_without_them(setup_library, monkeypatch, core, kind):
-    from ba_modding_toolkit.gameassets import AssetCache, GameAssets
-    from ba_modding_toolkit.webui.services import Services
+    from bmpt.gameassets import AssetCache, GameAssets
+    from bmpt.webui.services import Services
 
     env = setup_library
     env.original.unlink()
@@ -357,7 +357,7 @@ def test_official_preview_uses_kept_parts_and_is_unavailable_without_them(setup_
                 files["Pages/portrait.png"] = path.read_bytes()
         return files
 
-    monkeypatch.setattr("ba_modding_toolkit.gameassets.service.extract_spine", extract)
+    monkeypatch.setattr("bmpt.gameassets.service.extract_spine", extract)
     services = Services(env.settings, env.tmp / "ui", game=game, catalog=env.catalog, library=env.library)
     prefix = f"spine/official-{kind}/{core}"
     try:
@@ -408,9 +408,9 @@ def test_live_bundles_put_the_parts_that_carry_a_mod_last(setup_library):
 
 @pytest.mark.parametrize("kind,core_name", [("spr", "test_spr"), ("lobby", "test_home_gl")])
 def test_live_spine_files_merge_in_the_previews_order(setup_library, monkeypatch, kind, core_name):
-    from ba_modding_toolkit.gameassets import AssetCache, GameAssets
-    from ba_modding_toolkit.webui.api import build_api
-    from ba_modding_toolkit.webui.services import Services
+    from bmpt.gameassets import AssetCache, GameAssets
+    from bmpt.webui.api import build_api
+    from bmpt.webui.services import Services
 
     env = setup_library
     first = env.original if kind == "spr" else game_bundle(env.game_dir, core_name, part="textassets")
@@ -424,7 +424,7 @@ def test_live_spine_files_merge_in_the_previews_order(setup_library, monkeypatch
         return {f"{core_name}.skel": b"skeleton", f"{core_name}.atlas": b"atlas",
                 "page.png": paths[-1].read_bytes()}
 
-    monkeypatch.setattr("ba_modding_toolkit.gameassets.service.extract_spine", extract)
+    monkeypatch.setattr("bmpt.gameassets.service.extract_spine", extract)
     services = Services(env.settings, env.tmp / "ui", cache=cache, game=game, catalog=env.catalog, library=env.library)
     prefix = f"spine/{kind}/{core_name}"
     try:
@@ -560,7 +560,7 @@ def test_repaired_default_name_tracks_original_alias_and_has_its_own_override(se
 
     env = setup_library
     translate = I18n(language).t
-    monkeypatch.setattr("ba_modding_toolkit.library.service.t", translate)
+    monkeypatch.setattr("bmpt.library.service.t", translate)
     entry, = env.library.add([make_mod(env.original, env.tmp / "input")])
     env.library.rename(entry.id, "Original alias")
     source = make_mod(env.original, env.tmp / "repaired", payload=b"repaired")
@@ -744,7 +744,7 @@ def test_multi_part_install_rolls_back_every_part_on_write_failure(setup_library
     before = {path: path.read_bytes() for path in targets}
     entry, = env.library.add([make_mod(path, env.tmp / "input", payload=b"mod " + path.name.encode())
                               for path in targets])
-    from ba_modding_toolkit.library import service
+    from bmpt.library import service
     monkeypatch.setattr(storage, "_clone", lambda source, target: bool(shutil.copyfile(source, target)) if cloning else False)
     original_copy = service.atomic_copy
     original_clone, original_move = service.atomic_clone, service.verified_move
@@ -925,7 +925,7 @@ def test_variant_apply_and_restore_select_kinds(setup_library, monkeypatch, kind
         entry, = env.library.add([make_mod(path, env.tmp / "input", payload=current.encode())])
         env.library.apply("test", f"mod:{entry.id}", kind=current)
     before = {path: path.read_bytes() for path in originals}
-    monkeypatch.setattr("ba_modding_toolkit.library.service.adapt_variant_sources",
+    monkeypatch.setattr("bmpt.library.service.adapt_variant_sources",
                         lambda sources, *args: sources)
     calls = []
     def update(sources, targets, output, *args, **kwargs):
@@ -967,7 +967,7 @@ def test_default_portrait_choices_ignore_unavailable_lobby_originals(setup_libra
     env.library.apply("test", f"mod:{entry.id}")
     env.library.apply("test", "official")
     assert env.original.read_bytes() == original
-    monkeypatch.setattr("ba_modding_toolkit.library.service.adapt_variant_sources",
+    monkeypatch.setattr("bmpt.library.service.adapt_variant_sources",
                         lambda sources, *args: sources)
     def update(sources, targets, output, *args, **kwargs):
         result = output / targets[0].name
@@ -1006,7 +1006,7 @@ def test_cross_variant_mod_uses_mod_parts_official_baselines_and_tracks_source(s
         result = output / target.name
         result.write_bytes(header_bundle(b"adapted selected mod"))
         return ModUpdateResult(True, "updated", [FilePair(result, target)])
-    monkeypatch.setattr("ba_modding_toolkit.library.service.adapt_variant_sources", adapt)
+    monkeypatch.setattr("bmpt.library.service.adapt_variant_sources", adapt)
     monkeypatch.setattr(core, "process_mod_update", update)
     result = env.library.apply("test", f"mod:{source_mod.id}")
     assert set(result.files) == {target_atlas, env.original}
@@ -1034,7 +1034,7 @@ def test_variant_swap_uses_official_source_and_keeps_target_original(setup_libra
     entry = env.library.add([make_mod(other, env.tmp / "input")])[0]
     env.library.apply("other", f"mod:{entry.id}")
     calls = []
-    monkeypatch.setattr("ba_modding_toolkit.library.service.adapt_variant_sources",
+    monkeypatch.setattr("bmpt.library.service.adapt_variant_sources",
                         lambda sources, *args: sources)
     def update(sources, targets, output, *args, **kwargs):
         calls.append((sources, targets, kwargs))
@@ -1295,7 +1295,7 @@ def test_compare_detects_changes_in_streamed_payloads(setup_library, monkeypatch
         obj.read = lambda: SimpleNamespace(m_StreamData=SimpleNamespace(path="image.resS", offset=0, size=3))
         return SimpleNamespace(env=SimpleNamespace(objects=[obj]))
     monkeypatch.setattr(Bundle, "load", load)
-    monkeypatch.setattr("ba_modding_toolkit.library.service.get_resource_data",
+    monkeypatch.setattr("bmpt.library.service.get_resource_data",
                         lambda _, path, *args: b"new" if path == entry.file else b"old")
     result = env.library.compare(entry.id)
     assert len(result.assets) == 1 and result.assets[0].status == "changed"
@@ -1319,7 +1319,7 @@ def kept_copy(env, path):
 
 def swap_by_copying(monkeypatch, payload=b"adapted"):
     """Variant swaps and cross-variant mods without UnityPy: the adapted result is a fixed payload."""
-    monkeypatch.setattr("ba_modding_toolkit.library.service.adapt_variant_sources", lambda sources, *args: sources)
+    monkeypatch.setattr("bmpt.library.service.adapt_variant_sources", lambda sources, *args: sources)
     def update(sources, targets, output, *args, **kwargs):
         result = output / targets[0].name
         result.write_bytes(header_bundle(payload))
@@ -1668,8 +1668,9 @@ def test_a_mod_whose_changed_part_is_official_again_can_be_removed(setup_library
 
 @pytest.mark.parametrize("language", ["en-US", "zh-CN"])
 def test_the_in_use_refusals_have_their_messages(language):
-    locales = Path(core.__file__).parent.parent / "locales"
-    errors = json.loads((locales / f"{language}.json").read_text(encoding="utf-8"))["webui"]["error"]
+    from bmpt.localization import LOCALES
+
+    errors = json.loads((LOCALES / f"{language}.json").read_text(encoding="utf-8"))["webui"]["error"]
     assert errors["mod_in_use"] and "{folder}" in errors["mod_in_use_elsewhere"]
 
 
@@ -1744,7 +1745,7 @@ def test_kept_mods_are_dropped_when_the_switch_is_rolled_back(setup_library, mon
     env.library.apply("test", f"mod:{first.id}")
     external = header_bundle(b"from another tool")
     env.original.write_bytes(external)
-    from ba_modding_toolkit.library import service
+    from bmpt.library import service
     original_copy = service.atomic_copy
     def copy(source, target):
         if target == env.original:
@@ -2039,7 +2040,7 @@ class InterruptedWrite(BaseException):
 
 @pytest.mark.parametrize("cloning", [False, True])
 def test_original_moves_or_clones_and_restores_without_a_byte_copy(setup_library, monkeypatch, cloning):
-    from ba_modding_toolkit.library import service
+    from bmpt.library import service
     env = setup_library
     official = env.original.read_bytes()
     inode = env.original.stat().st_ino
@@ -2080,7 +2081,7 @@ def test_original_moves_or_clones_and_restores_without_a_byte_copy(setup_library
 
 @pytest.mark.parametrize("point", ["journal", "copied", "kept", "prepared", "first_part", "saved"])
 def test_crash_recovers_every_part_and_the_previous_records(setup_library, monkeypatch, point):
-    from ba_modding_toolkit.library import service
+    from bmpt.library import service
     env = setup_library
     atlas = game_bundle(env.game_dir, part="002", payload=b"atlas")
     before = {path: path.read_bytes() for path in (atlas, env.original)}
@@ -2147,7 +2148,7 @@ def test_crash_recovers_every_part_and_the_previous_records(setup_library, monke
 
 @pytest.mark.parametrize("published", [False, True])
 def test_commit_marker_failure_keeps_recoverable_files_and_state(setup_library, monkeypatch, published):
-    from ba_modding_toolkit.library import service
+    from bmpt.library import service
     env = setup_library
     official = env.original.read_bytes()
     entry, = env.library.add([make_mod(env.original, env.tmp / "input", fixed=True)])
@@ -2173,7 +2174,7 @@ def test_commit_marker_failure_keeps_recoverable_files_and_state(setup_library, 
 
 
 def test_a_state_flush_failure_after_publication_rolls_back_its_records(setup_library, monkeypatch):
-    from ba_modding_toolkit.library import service
+    from bmpt.library import service
     env = setup_library
     official = env.original.read_bytes()
     entry, = env.library.add([make_mod(env.original, env.tmp / "input", fixed=True)])
@@ -2195,7 +2196,7 @@ def test_a_state_flush_failure_after_publication_rolls_back_its_records(setup_li
 
 
 def test_recovery_follows_a_relocated_library(setup_library, monkeypatch):
-    from ba_modding_toolkit.library import service
+    from bmpt.library import service
     env = setup_library
     official = env.original.read_bytes()
     entry, = env.library.add([make_mod(env.original, env.tmp / "input", fixed=True)])
@@ -2221,7 +2222,7 @@ def test_recovery_follows_a_relocated_library(setup_library, monkeypatch):
 @pytest.mark.parametrize("crash_again", [False, True])
 def test_crash_during_restore_returns_original_to_library_before_rolling_back_mod(setup_library, monkeypatch,
                                                                                 crash_again):
-    from ba_modding_toolkit.library import service
+    from bmpt.library import service
     env = setup_library
     official = env.original.read_bytes()
     entry, = env.library.add([make_mod(env.original, env.tmp / "input", fixed=True)])
@@ -2261,7 +2262,7 @@ def test_crash_during_restore_returns_original_to_library_before_rolling_back_mo
 @pytest.mark.parametrize("dev_sandbox", [False, True], ids=["normal", "dev-sandbox"])
 def test_recovery_repeats_game_and_caller_checks_before_restoring_missing_file(setup_library, monkeypatch,
                                                                             dev_sandbox):
-    from ba_modding_toolkit.library import service
+    from bmpt.library import service
     env = setup_library
     # Writable dev sandboxes deliberately skip the running-game check.
     if dev_sandbox:
@@ -2332,7 +2333,7 @@ def test_recovery_repeats_game_and_caller_checks_before_restoring_missing_file(s
 
 def test_prune_waits_for_the_shared_transaction_lock(setup_library, monkeypatch):
     from contextlib import contextmanager
-    from ba_modding_toolkit.library import service
+    from bmpt.library import service
     env = setup_library
     entry, = env.library.add([make_mod(env.original, env.tmp / "input", fixed=True)])
     env.library.apply("test", f"mod:{entry.id}")
@@ -2381,7 +2382,7 @@ def test_recovery_keeps_an_external_change_and_the_only_official_original(setup_
 
 
 def test_recovery_does_not_recreate_a_file_a_game_update_superseded(setup_library, monkeypatch):
-    from ba_modding_toolkit.library import service
+    from bmpt.library import service
     env = setup_library
     official = env.original.read_bytes()
     entry, = env.library.add([make_mod(env.original, env.tmp / "input", fixed=True)])
@@ -2411,7 +2412,7 @@ def test_recovery_does_not_recreate_a_file_a_game_update_superseded(setup_librar
 
 
 def test_recovery_of_a_superseded_file_drops_only_its_own_record(setup_library, monkeypatch):
-    from ba_modding_toolkit.library import service
+    from bmpt.library import service
     env = setup_library
     atlas = game_bundle(env.game_dir, part="002", payload=b"atlas")
     mods = [make_mod(path, env.tmp / "input", fixed=True) for path in (atlas, env.original)]
@@ -2444,7 +2445,7 @@ def test_recovery_of_a_superseded_file_drops_only_its_own_record(setup_library, 
 
 
 def test_recovery_restores_a_missing_file_that_has_no_successor(setup_library, monkeypatch):
-    from ba_modding_toolkit.library import service
+    from bmpt.library import service
     env = setup_library
     official = env.original.read_bytes()
     entry, = env.library.add([make_mod(env.original, env.tmp / "input", fixed=True)])

@@ -1,7 +1,7 @@
 // Exercise the shared NGUI raster path with synthetic images only; record draw geometry, never game pixels.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { selectedFrame, SELECTION_SLOT } from '../../src/ba_modding_toolkit/web/js/selected-frames.js';
+import { selectedFrame, SELECTION_SLOT } from '../../src/bmpt/web/js/selected-frames.js';
 import { selectionPrefab } from './selection_prefabs.mjs';
 
 const encoded = [];
@@ -24,7 +24,7 @@ const meta = { width: 64, height: 69, borderLeft: 0, borderRight: 0, borderTop: 
 globalThis.fetch = async url => ({ ok: true, json: async () => url.includes('atlases') ? { Common: {
   Common_Icon_Mulligan_1: { ...meta }, Common_Icon_Mulligan_2: { ...meta },
 } } : {} });
-const NGUI = await import('../../src/ba_modding_toolkit/web/js/ngui.js');
+const NGUI = await import('../../src/bmpt/web/js/ngui.js');
 const slot = () => NGUI.find(selectionPrefab(), SELECTION_SLOT);
 const near = (a, b, tolerance = 1e-8) => assert.ok(Math.abs(a - b) <= tolerance, `${a} != ${b}`);
 

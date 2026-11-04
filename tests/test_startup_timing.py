@@ -5,13 +5,13 @@ from types import SimpleNamespace
 
 import pytest
 
-from ba_modding_toolkit.webui.timing import Timings
-from ba_modding_toolkit.webui.services import Services
+from bmpt.webui.timing import Timings
+from bmpt.webui.services import Services
 
 
 def test_failed_work_is_timed_and_snapshots_are_detached(monkeypatch):
     ticks = iter([10, 10.25])
-    monkeypatch.setattr("ba_modding_toolkit.webui.timing.time.perf_counter", lambda: next(ticks))
+    monkeypatch.setattr("bmpt.webui.timing.time.perf_counter", lambda: next(ticks))
     timings = Timings()
     with pytest.raises(ValueError), timings.measure("ui.atlases"):
         raise ValueError("unreadable fixture")
@@ -39,7 +39,7 @@ def test_layout_route_names_the_root_in_timings_even_on_failure(caplog, fails):
         return {'name': root}
 
     host = SimpleNamespace(game=SimpleNamespace(layout=layout), timings=Timings())
-    with caplog.at_level('INFO', logger='ba_modding_toolkit.webui.timing'):
+    with caplog.at_level('INFO', logger='bmpt.webui.timing'):
         if fails:
             with pytest.raises(ValueError):
                 Services._ui_asset(host, ['layout', 'UILobbyCharacterSelectPopup_Slot.json'], {'path': 'Child'})

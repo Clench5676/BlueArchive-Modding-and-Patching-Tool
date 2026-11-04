@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { hasAsset, primaryKind, configuredKey, previewBase } from "../../src/ba_modding_toolkit/web/js/switch-sources.js";
+import { hasAsset, primaryKind, configuredKey, previewBase } from "../../src/bmpt/web/js/switch-sources.js";
 
-const source = readFileSync(new URL("../../src/ba_modding_toolkit/web/js/roster.js", import.meta.url), "utf8");
+const source = readFileSync(new URL("../../src/bmpt/web/js/roster.js", import.meta.url), "utf8");
 const rowsCode = source.slice(source.indexOf("async function renderRow("), source.indexOf("function maxScroll("));
 const deferred = () => { let resolve; const promise = new Promise((r) => { resolve = r; }); return { promise, resolve }; };
 const flush = async () => { for (let i = 0; i < 20; i++) await Promise.resolve(); };

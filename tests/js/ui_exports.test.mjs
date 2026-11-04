@@ -11,8 +11,8 @@ globalThis.fetch = async (url, options) => {
     ? { effect: 3, effectColor: "#ffffff/1", effectDistance: [3, 3], gradient: ["#fa8c21", "#e6780e"] }
     : { effect: 3 } };
 };
-const { uiExportUrl } = await import("../../src/ba_modding_toolkit/web/js/api.js");
-const NGUI = await import("../../src/ba_modding_toolkit/web/js/ngui.js");
+const { uiExportUrl } = await import("../../src/bmpt/web/js/api.js");
+const NGUI = await import("../../src/bmpt/web/js/ngui.js");
 test("the bootstrap export epoch bypasses old fresh cache entries and is idempotent", () => {
   const first = uiExportUrl("/asset/ui/layout/Root.json?path=child");
   assert.equal(uiExportUrl(first), first); assert.match(first, /path=child.*export=http-exports-v1/);

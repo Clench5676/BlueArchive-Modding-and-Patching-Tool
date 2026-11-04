@@ -4,7 +4,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import * as Touch from "../../src/ba_modding_toolkit/web/js/lobby-touch.js";
+import * as Touch from "../../src/bmpt/web/js/lobby-touch.js";
 
 globalThis.document ??= { addEventListener() {}, removeEventListener() {} };
 

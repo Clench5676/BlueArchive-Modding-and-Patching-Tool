@@ -4,8 +4,8 @@ import hashlib
 
 import pytest
 
-from ba_modding_toolkit.errors import ServiceError
-from ba_modding_toolkit.library.storage import Fingerprints
+from bmpt.errors import ServiceError
+from bmpt.library.storage import Fingerprints
 from ba_modding_toolkit.utils import CRCUtils
 
 from test_library import game_bundle, header_bundle, make_mod, reload_library, setup_library
@@ -114,7 +114,7 @@ def test_changed_inputs_options_program_targets_and_corrupt_copy_force_rebuild(s
         cached, = (env.root / 'built').glob('*.bundle')
         cached.write_bytes(header_bundle(b'changed copy'))
     elif change == 'version':
-        monkeypatch.setattr('ba_modding_toolkit.library.service._build_version', lambda: 'another version')
+        monkeypatch.setattr('bmpt.library.service._build_version', lambda: 'another version')
     elif change == 'animation_check':
         env.settings.set('check_animations', True)
     elif change == 'viewer_path':

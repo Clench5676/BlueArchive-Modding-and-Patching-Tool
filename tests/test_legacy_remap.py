@@ -6,8 +6,8 @@ import json
 import pytest
 
 from ba_modding_toolkit.i18n import I18n
-from ba_modding_toolkit.library import service
-from ba_modding_toolkit.library.migrations import LEGACY_REMAP
+from bmpt.library import service
+from bmpt.library.migrations import LEGACY_REMAP
 
 from test_library import game_bundle, reload_library, setup_library
 

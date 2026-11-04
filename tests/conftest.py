@@ -6,6 +6,10 @@ from pathlib import Path
 from typing import NamedTuple
 from PIL import Image
 
+from bmpt.localization import register_locales
+
+register_locales()
+
 from ba_modding_toolkit.spine import SkelConverter, atlas_downgrade, get_skel_version
 from ba_modding_toolkit.utils import LogFunc, no_log
 
@@ -263,11 +267,11 @@ RENDER_SKIP_ENV = "SKIP_SPINE_RENDER"
 def header_only_bundles(monkeypatch):
     """Synthetic library fixtures have headers and payload bytes, without Unity objects.
     Content inspection is covered separately with object and container name fixtures."""
-    monkeypatch.setattr("ba_modding_toolkit.library.identity.content_cores", lambda path: set())
-    from ba_modding_toolkit.library.integrity import Contents
-    monkeypatch.setattr("ba_modding_toolkit.library.integrity.inspect",
+    monkeypatch.setattr("bmpt.library.identity.content_cores", lambda path: set())
+    from bmpt.library.integrity import Contents
+    monkeypatch.setattr("bmpt.library.integrity.inspect",
                         lambda path, **kwargs: Contents(platforms={"StandaloneWindows64"}, files={"cab-test"}))
-    monkeypatch.setattr("ba_modding_toolkit.library.integrity.metadata",
+    monkeypatch.setattr("bmpt.library.integrity.metadata",
                         lambda path, **kwargs: Contents(platforms={"StandaloneWindows64"}, versions={"2021.3"}, files={"cab-test"}))
 
 

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {test} from 'node:test';
-const code=await readFile(new URL('../../src/ba_modding_toolkit/web/js/photography/shoot.js',import.meta.url),'utf8');
+const code=await readFile(new URL('../../src/bmpt/web/js/photography/shoot.js',import.meta.url),'utf8');
 const {photograph}=await import('data:text/javascript;base64,'+Buffer.from(code).toString('base64'));
 function setup({paused=false,failCapture=false,failSave=false}={}){
   const calls=[];

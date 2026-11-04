@@ -2,11 +2,11 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { readFile } from "node:fs/promises";
 import { readFileSync } from "node:fs";
-import { emptyBlock } from "../../src/ba_modding_toolkit/web/js/empty-block.js";
+import { emptyBlock } from "../../src/bmpt/web/js/empty-block.js";
 const text={"roster.title":"Student List","roster.merge":"Group Alts","seg.all":"All","seg.mods":"Modded","seg.noMods":"No Mod","seg.recruit":"Playable","seg.noRecruit":"NPC","sort.recent":"Recently Viewed","sort.added":"Recently Added","sort.name":"Name","sort.mods":"Mod Count","sort.default":"Default"};
 const measure=(value,size)=>value.length*size*.45;
 const fit=(value,size,min,width)=>({text:value,fs:Math.max(min,Math.min(size,width/(value.length*.45))),lines:1});
-let source=await readFile(new URL("../../src/ba_modding_toolkit/web/js/roster-widgets.js",import.meta.url),"utf8");source=source.replace(/^import .*;$/gm,"");
+let source=await readFile(new URL("../../src/bmpt/web/js/roster-widgets.js",import.meta.url),"utf8");source=source.replace(/^import .*;$/gm,"");
 // ink as the page font draws it: 0.72 em above the baseline, 0.2 below for a letter with a descender, in a box 1.15 em a line
 const ink=(str,px)=>{const lines=String(str).split("\n"),span=(lines.length-1)*px*1.15,ascent=.72*px,descent=/[gjpqy]/.test(lines.at(-1))?.2*px:0;
   const shift=(ascent-descent-1.16*px+.29*px)/2,half=(ascent+descent+span)/2;return{top:-shift-half,bottom:-shift+half};};
@@ -49,7 +49,7 @@ test("every shipped language names the segments and Group Alts with its own capt
   const lay=toolbarLayout({sort:"name"});
   try{
     for(const lang of["en-US","zh-CN","zh-TW","ja-JP","ko-KR","th-TH"]){
-      const ui=JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${lang}.json`,import.meta.url),"utf8")).webui;
+      const ui=JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`,import.meta.url),"utf8")).webui;
       globalThis.toolbarFixture.table=Object.fromEntries([...Object.entries(ui.seg).map(([k,v])=>[`seg.${k}`,v]),["roster.merge",ui.roster.merge]]);
       const names=toggleHits({mods:"all",recruit:"all",merged:false},lay).map(h=>h.name);
       assert.deepEqual(names,[ui.seg.all,ui.seg.mods,ui.seg.noMods,ui.seg.all,ui.seg.recruit,ui.seg.noRecruit,ui.roster.merge],lang);

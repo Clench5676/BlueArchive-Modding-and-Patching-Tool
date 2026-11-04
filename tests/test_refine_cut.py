@@ -10,8 +10,8 @@ import numpy as np
 from PIL import Image, ImageDraw
 import pytest
 
-from ba_modding_toolkit.refine_composite import compose
-from ba_modding_toolkit.refine_cut import (cut, Pose, CutParameters, GateError, join_band_gate,
+from bmpt.refine_composite import compose
+from bmpt.refine_cut import (cut, Pose, CutParameters, GateError, join_band_gate,
                                            check_invariants, pushpull)
 
 
@@ -218,14 +218,15 @@ def test_push_pull_upsampling_is_bilinear():
 
 
 def test_shipped_paths_do_not_import_optional_refine_modules():
-    root = Path(__file__).resolve().parents[1] / 'src' / 'ba_modding_toolkit'
-    for path in root.rglob('*.py'):
-        if path.stem.startswith('refine_'): continue
-        for node in ast.walk(ast.parse(path.read_text())):
-            if isinstance(node, ast.Import): names = [a.name for a in node.names]
-            elif isinstance(node, ast.ImportFrom): names = [node.module or '', *[a.name for a in node.names]]
-            else: continue
-            assert not any('refine_' in name for name in names), path
+    root = Path(__file__).resolve().parents[1] / 'src' / 'bmpt'
+    for package in (root, root.with_name('ba_modding_toolkit')):
+        for path in package.rglob('*.py'):
+            if path.stem.startswith('refine_'): continue
+            for node in ast.walk(ast.parse(path.read_text())):
+                if isinstance(node, ast.Import): names = [a.name for a in node.names]
+                elif isinstance(node, ast.ImportFrom): names = [node.module or '', *[a.name for a in node.names]]
+                else: continue
+                assert not any('refine_' in name for name in names), path
     for path in (root / 'web' / 'js').glob('*.js'):
         if path.name == 'refine-composite.js': continue
         assert 'refine-composite' not in path.read_text(), path
@@ -234,7 +235,7 @@ def test_shipped_paths_do_not_import_optional_refine_modules():
 def test_official_animation_state_every_listed_pose(tmp_path):
     if not os.environ.get('BAMT_TEST_GAME_DIR'):
         pytest.skip('Set BAMT_TEST_GAME_DIR to a verified official development view')
-    from ba_modding_toolkit.atlas_remap import read_inputs
+    from bmpt.atlas_remap import read_inputs
     from ba_modding_toolkit.searching import get_search_dirs
     name = 'shiroko_ridingsuit_spr'
     paths = sorted(p for folder in get_search_dirs(Path(os.environ['BAMT_TEST_GAME_DIR']))
@@ -254,7 +255,7 @@ def test_official_animation_state_every_listed_pose(tmp_path):
 
 
 def test_common_root_translation_reveals_no_texels_and_identity_is_exact():
-    from ba_modding_toolkit.refine_cut import revealed_texels
+    from bmpt.refine_cut import revealed_texels
     g = geometry(attachment('back'), attachment('front', box=(24, 0, 64, 64)))
     shifted = deepcopy(g)
     for a in shifted['attachments']:
@@ -272,7 +273,7 @@ def test_common_root_translation_reveals_no_texels_and_identity_is_exact():
 
 
 def test_manifest_command_writes_only_to_external_folder(tmp_path, capsys):
-    from ba_modding_toolkit.refine_cut import main
+    from bmpt.refine_cut import main
     g = geometry(attachment('body'))
     (tmp_path / 'g.json').write_text(json.dumps(g))
     image().save(tmp_path / 'official.png'); image((100, 120, 140, 255)).save(tmp_path / 'target.png')

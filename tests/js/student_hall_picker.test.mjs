@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { readFile } from "node:fs/promises";
-import { createDraft, sourceKey, portraitRows, studentChoices, memorialChoices } from "../../src/ba_modding_toolkit/web/js/student-hall-model.js";
-import { normalizeView } from "../../src/ba_modding_toolkit/web/js/roster-order.js";
+import { createDraft, sourceKey, portraitRows, studentChoices, memorialChoices } from "../../src/bmpt/web/js/student-hall-model.js";
+import { normalizeView } from "../../src/bmpt/web/js/roster-order.js";
 class Element {style={};dataset={};children=[];append(child){child.parentElement=this;this.children.push(child);}setAttribute(){}querySelector(){return null;}}
 const drawn=[],cards=[],errors=[];
 const signal=new AbortController().signal,layer=new Element(),modal={host:new Element(),live:()=>true,close(){},async draw(build){const promise=build(layer,()=>true,signal);drawn.push(promise);await promise;}};
@@ -14,7 +14,7 @@ globalThis.pickerFixture={normalizeView,sourceKey,portraitRows,studentChoices,me
     async card(host,item,options){cards.push({item,options});return{visual:new Element(),hit:new Element(),actionBox:[0,0,180,36]};},
     virtualArea(host,box,count,pitch,render){const scroll=new Element(),inner=new Element();scroll.append(inner);host.append(scroll);const pending=[];
       for(let i=0;i<count;i++){const cell=new Element();inner.append(cell);pending.push(render(cell,i,signal));}return{inner,ready:Promise.all(pending)};}}};
-let source=await readFile(new URL("../../src/ba_modding_toolkit/web/js/student-hall-picker.js",import.meta.url),"utf8");source=source.replace(/^import .*;$/gm,"");
+let source=await readFile(new URL("../../src/bmpt/web/js/student-hall-picker.js",import.meta.url),"utf8");source=source.replace(/^import .*;$/gm,"");
 const API=await import(`data:text/javascript;base64,${Buffer.from('const {UI,Display,Popup,bindReorder,dragFeedback,normalizeView,sourceKey,portraitRows,studentChoices,memorialChoices,thumbnailScope,lazyThumbnail,spineBase,L,T,language}=globalThis.pickerFixture;\n'+source+'\n//# sourceURL=hall-picker-fixture.js').toString('base64')}`);
 const settle=async()=>{await new Promise(setImmediate);await drawn.at(-1);};
 test("adding a memorial disables its current control synchronously and the redraw reports Added",async()=>{
@@ -63,7 +63,7 @@ test("portrait replacement reuses Hall rows and explicit choice buttons without 
 test("Change Portrait is present beside background in all six locales, with the owner's exact en/zh wording",async()=>{
   const words={"en-US":"Change Portrait","zh-CN":"\u66f4\u6362\u7acb\u7ed8"};
   for(const lang of ["en-US","zh-CN","zh-TW","ja-JP","ko-KR","th-TH"]){
-    const raw=await readFile(new URL(`../../src/ba_modding_toolkit/locales/${lang}.json`,import.meta.url),"utf8"),hall=JSON.parse(raw).webui.hall;
+    const raw=await readFile(new URL(`../../src/bmpt/locales/${lang}.json`,import.meta.url),"utf8"),hall=JSON.parse(raw).webui.hall;
     assert.ok(hall.changePortrait);if(words[lang])assert.equal(hall.changePortrait,words[lang]);assert.match(raw,/"background": [^\n]+\n\s*"changePortrait":/);
   }
 });

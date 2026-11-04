@@ -39,8 +39,8 @@ globalThis.document = { createElement: () => new El(), getElementById: (id) => i
 globalThis.addEventListener = () => {};
 globalThis.requestAnimationFrame = (fn) => setTimeout(fn, 0);
 globalThis.fetch = async () => { throw new Error("no game assets in this test"); };
-const Loading = await import("../../src/ba_modding_toolkit/web/js/loading.js");
-const Popup = await import("../../src/ba_modding_toolkit/web/js/popup.js");
+const Loading = await import("../../src/bmpt/web/js/loading.js");
+const Popup = await import("../../src/bmpt/web/js/popup.js");
 const event = (target = new El(), key) => ({ target, key, prevented: false, stopped: false,
   preventDefault() { this.prevented = true; }, stopImmediatePropagation() { this.stopped = true; } });
 
@@ -162,7 +162,7 @@ test("a repair cover blocks Back, popup clicks and Escape until success or failu
 });
 
 
-const detailSource = readFileSync(new URL("../../src/ba_modding_toolkit/web/js/detail.js", import.meta.url), "utf8");
+const detailSource = readFileSync(new URL("../../src/bmpt/web/js/detail.js", import.meta.url), "utf8");
 const detailJob = detailSource.slice(detailSource.indexOf("async function job("), detailSource.indexOf("function shownMod()"));
 function detailHarness(overrides = {}) {
   const env = { Loading, notify() {}, T: (key) => key, variant: () => ({}), fullName: () => "Student", fam: {},
@@ -223,14 +223,14 @@ for (const entry of ["Add Mod picker", "Add Mod files", "Enable Mods"]) test(`${
   };
   let start;
   if (entry.startsWith("Add Mod")) {
-    const source = readFileSync(new URL("../../src/ba_modding_toolkit/web/js/mod-add.js", import.meta.url), "utf8");
+    const source = readFileSync(new URL("../../src/bmpt/web/js/mod-add.js", import.meta.url), "utf8");
     const env = { Loading, T: (key) => key, rpc: () => submitted.promise,
       waitJob: async () => { await work.promise; return []; }, Popup: {} };
     const add = new Function("env", `const { ${Object.keys(env).join(", ")} } = env;
       ${source.replace(/^import .*;$/gm, "").replaceAll("export ", "")}; return add;`)(env);
     start = () => add(entry.endsWith("files") ? ["mod.bundle"] : null, "base");
   } else {
-    const source = readFileSync(new URL("../../src/ba_modding_toolkit/web/js/mod-switch.js", import.meta.url), "utf8");
+    const source = readFileSync(new URL("../../src/bmpt/web/js/mod-switch.js", import.meta.url), "utf8");
     const run = source.slice(source.indexOf("async function run(params)"), source.indexOf("// a toggle job followed"));
     const env = { Loading, T: (key) => key, notify: assert.fail, rpc: () => submitted.promise,
       toggleJob: () => work.promise, refreshPage: () => redraw.promise, REFRESH_CAP: 1000,

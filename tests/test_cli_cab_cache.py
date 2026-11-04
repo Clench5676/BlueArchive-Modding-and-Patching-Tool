@@ -9,13 +9,14 @@ from types import SimpleNamespace
 
 import pytest
 
-from ba_modding_toolkit import config, utils
-from ba_modding_toolkit.gameassets.cache import AssetCache, PreviewCache
-from ba_modding_toolkit.gameassets.service import GameAssets
+from bmpt import config
+from ba_modding_toolkit import utils
+from bmpt.gameassets.cache import AssetCache, PreviewCache
+from bmpt.gameassets.service import GameAssets
 from ba_modding_toolkit.searching import find_cab_bundles, managed_cab_index
-from ba_modding_toolkit.webui.api import build_api
-from ba_modding_toolkit.webui.services import Services
-from ba_modding_toolkit.webui.state import UiState
+from bmpt.webui.api import build_api
+from bmpt.webui.services import Services
+from bmpt.webui.state import UiState
 from test_cab_discovery import bundle
 from test_webui import FakeCatalog, FakeGame, FakeLibrary
 
@@ -73,7 +74,7 @@ def test_resource_versions_are_isolated_even_with_unchanged_bundles(managed, tmp
     new = managed_cab_index([game])
     assert new.key != old.key
     calls = []
-    from ba_modding_toolkit.gameassets.discovery import cab_names
+    from bmpt.gameassets.discovery import cab_names
     new.reader = lambda path: calls.append(path) or cab_names(path)
     assert new.resolve({"cab-target"}) == {"cab-target": str(target)}
     assert calls == [target]
@@ -144,7 +145,7 @@ def test_settings_clear_removes_cli_cache_and_invalidates_a_running_index(manage
         assert cli.cache.generation != generation
         assert not cli.cache.put(cli.key, b"stale", generation=generation)
         calls = []
-        from ba_modding_toolkit.gameassets.discovery import cab_names
+        from bmpt.gameassets.discovery import cab_names
         cli.reader = lambda path: calls.append(path) or cab_names(path)
         assert cli.resolve({"cab-target"}) == {"cab-target": str(target)}
         assert calls == [target]

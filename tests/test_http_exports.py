@@ -1,8 +1,8 @@
 """Export cache validators apply to every light asset and survive schema changes."""
-from ba_modding_toolkit.webui import server
-from ba_modding_toolkit.webui.events import EventBus
-from ba_modding_toolkit.webui.rpc import RpcRegistry
-from ba_modding_toolkit.webui.server import AssetResponse, WebApp
+from bmpt.webui import server
+from bmpt.webui.events import EventBus
+from bmpt.webui.rpc import RpcRegistry
+from bmpt.webui.server import AssetResponse, WebApp
 import pytest
 
 

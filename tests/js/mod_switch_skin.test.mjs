@@ -1,8 +1,8 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
-import {segmentTree,segmentOrigin,segmentDensity,SEGMENT_SCALE} from '../../src/ba_modding_toolkit/web/js/mod-switch-skin.js';
-import {sliceAxis} from '../../src/ba_modding_toolkit/web/js/sprite-slices.js';
+import {segmentTree,segmentOrigin,segmentDensity,SEGMENT_SCALE} from '../../src/bmpt/web/js/mod-switch-skin.js';
+import {sliceAxis} from '../../src/bmpt/web/js/sprite-slices.js';
 for(const dpi of [1,1.25,1.5,1.75,2,3])for(const scale of [.5,.75,1,1.25,1.5,2])test(`switch tiles share exact raster edges at DPI ${dpi}, scale ${scale}`,()=>{
   for(const pressed of [false,true])for(const flip of [false,true]){
     const widget=segmentTree(110,pressed,flip).widgets[0];
@@ -20,15 +20,15 @@ for(const dpi of [1,1.25,1.5,1.75,2,3])for(const scale of [.5,.75,1,1.25,1.5,2])
   }
 });
 test('both states use NGUI single-image paint, with no separately composited CSS mask patches',async()=>{
-  const css=await readFile(new URL('../../src/ba_modding_toolkit/web/css/app.css',import.meta.url),'utf8');
+  const css=await readFile(new URL('../../src/bmpt/web/css/app.css',import.meta.url),'utf8');
   const segment=css.slice(css.indexOf('.ms-seg {'),css.indexOf('/* busy:'));
   assert.ok(!segment.includes('mask-box-image'));assert.ok(!segment.includes('border-image'));assert.ok(!segment.includes('::before'));
-  const source=await readFile(new URL('../../src/ba_modding_toolkit/web/js/mod-switch.js',import.meta.url),'utf8');
+  const source=await readFile(new URL('../../src/bmpt/web/js/mod-switch.js',import.meta.url),'utf8');
   assert.match(source,/NGUI.render\(segmentTree/);assert.match(source,/revision!==skinRevision/);
 });
 
 test('the shared raster accepts effective DPI without reducing smoothing or logical geometry',async()=>{
-  const renderer=await readFile(new URL('../../src/ba_modding_toolkit/web/js/ngui.js',import.meta.url),'utf8');
+  const renderer=await readFile(new URL('../../src/bmpt/web/js/ngui.js',import.meta.url),'utf8');
   assert.match(renderer,/sliceAxis\(sw, l, r, wpx, \[scales\[3\], scales\[1\]\], density\)/);
   assert.match(renderer,/sliceAxis\(sh, t, bo, hpx, \[scales\[0\], scales\[2\]\], density\)/);
   assert.match(renderer,/Number\(opts.rasterDensity\)/);
@@ -36,7 +36,7 @@ test('the shared raster accepts effective DPI without reducing smoothing or logi
 });
 
 test('the real sliced-image raster keeps exact tile boundaries and display-density resolution',async()=>{
-  const source=await readFile(new URL('../../src/ba_modding_toolkit/web/js/ngui.js',import.meta.url),'utf8');
+  const source=await readFile(new URL('../../src/bmpt/web/js/ngui.js',import.meta.url),'utf8');
   const code=source.slice(source.indexOf('const baked = new Map();'),source.indexOf('// halve repeatedly')).replace('export function slicedImage', 'function slicedImage');
   const canvases=[];
   const document={createElement(){

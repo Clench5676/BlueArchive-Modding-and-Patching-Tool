@@ -8,13 +8,13 @@ from types import SimpleNamespace
 
 import pytest
 
-from ba_modding_toolkit import mod_origin
+from bmpt import mod_origin
 from ba_modding_toolkit.bundle import Bundle
-from ba_modding_toolkit.library import integrity
-from ba_modding_toolkit.library import ModLibrary
-from ba_modding_toolkit.library.identity import content_cores
-from ba_modding_toolkit.library.integrity import inspect as inspect_bundle, metadata as bundle_metadata
-from ba_modding_toolkit.webui import batch_import
+from bmpt.library import integrity
+from bmpt.library import ModLibrary
+from bmpt.library.identity import content_cores
+from bmpt.library.integrity import inspect as inspect_bundle, metadata as bundle_metadata
+from bmpt.webui import batch_import
 from ba_modding_toolkit.searching import _asset_match
 from ba_modding_toolkit.utils import CRCUtils
 
@@ -149,7 +149,7 @@ def test_conversion_update_add_apply_uses_real_classic_core(real_metadata, platf
 @pytest.mark.parametrize('platform,source_platform', [(13, 'android'), (9, 'ios')])
 def test_current_release_spine_rebuilds_foreign_platform_instead_of_copying(
         real_metadata, kind, crc_name, manual, platform, source_platform):
-    from ba_modding_toolkit.errors import ServiceError
+    from bmpt.errors import ServiceError
 
     env = real_metadata
     if kind == 'lobby':
@@ -224,7 +224,7 @@ def test_current_release_cross_platform_rebuild_rejects_invalid_output(real_meta
 @pytest.mark.parametrize('kind', ['spr', 'lobby'])
 @pytest.mark.parametrize('manual', [False, True])
 def test_current_release_spine_upgrades_serialized_version_using_target_format(real_metadata, kind, manual):
-    from ba_modding_toolkit.errors import ServiceError
+    from bmpt.errors import ServiceError
 
     env = real_metadata
     if kind == 'lobby':
@@ -524,7 +524,7 @@ def test_official_metadata_detection_on_copies_only(tmp_path):
 
 
 def test_ios_target_folder_is_found_by_settings_resource_search(tmp_path):
-    from ba_modding_toolkit.config import Settings
+    from bmpt.config import Settings
     from ba_modding_toolkit.searching import get_search_dirs
 
     folder = tmp_path / 'Resource'
@@ -554,7 +554,7 @@ def test_conversion_failure_cannot_store_or_apply_mobile_bytes(real_metadata, mo
 
 @pytest.mark.parametrize('output', [False, True])
 def test_conversion_stages_only_inside_the_pinned_library_with_dev_guards(real_metadata, monkeypatch, output):
-    from ba_modding_toolkit import devmode
+    from bmpt import devmode
 
     env = real_metadata
     monkeypatch.setenv(devmode.ROOTS, str(env.tmp))
@@ -581,7 +581,7 @@ def test_conversion_stages_only_inside_the_pinned_library_with_dev_guards(real_m
 
 
 def test_system_temp_conversion_output_reproduces_the_dev_read_guard_failure(real_metadata, monkeypatch):
-    from ba_modding_toolkit import devmode
+    from bmpt import devmode
 
     env = real_metadata
     monkeypatch.setenv(devmode.ROOTS, str(env.tmp))
@@ -658,7 +658,7 @@ def test_markerless_lobby_fallback_validates_compressed_renamed_bundles(real_met
     env.original.unlink()
     env.original = game_bundle(env.game_dir, "ch0156_home")
     env.catalog.variants["test"].lobby = "ch0156_home"
-    monkeypatch.setattr("ba_modding_toolkit.library.identity.content_cores", content_cores)
+    monkeypatch.setattr("bmpt.library.identity.content_cores", content_cores)
     official_bundle(env, name="ch0156_home_note")
     source = unity_bundle(env.tmp / "input" / "renamed.bundle", platform, cab="CAB-repacked", payload=b"mobile mod", name="ch0156_home_note")
     bundle = Bundle.load(source)
@@ -829,7 +829,7 @@ def test_import_uses_current_counterparts_and_reports_omissions(real_metadata, m
 @pytest.mark.parametrize("method", ["bundle", "inspect", "keys", "readable_keys"])
 @pytest.mark.parametrize("replacement", [False, True])
 def test_inspection_rejects_changed_file_revision(tmp_path, method, replacement):
-    from ba_modding_toolkit.errors import ServiceError
+    from bmpt.errors import ServiceError
     source = unity_bundle(tmp_path / "source.bundle")
     inspection = integrity.Inspection()
     getattr(inspection, method)(source)
@@ -877,7 +877,7 @@ def test_judge_rejects_input_changed_during_library_identity(real_metadata, monk
 
 
 def test_inspection_rejects_a_file_changed_during_load(tmp_path, monkeypatch):
-    from ba_modding_toolkit.errors import ServiceError
+    from bmpt.errors import ServiceError
     source = unity_bundle(tmp_path / "source.bundle")
     load = Bundle.load
 
@@ -1057,7 +1057,7 @@ def test_reimport_rebuild_does_not_rebind_provenance_to_swapped_parts(real_metad
 
 
 def test_optional_stored_source_lookup_failure_does_not_block(real_metadata, monkeypatch):
-    from ba_modding_toolkit.errors import ServiceError
+    from bmpt.errors import ServiceError
     env = real_metadata
     source = old_bundle(env.tmp / 'input' / env.original.name, 13, cab='CAB-source', payload=b'mod',
                         references=['com.nexon.bluearchive'])

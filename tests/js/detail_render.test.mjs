@@ -233,7 +233,7 @@ for (const path of ["BG/Deco", "Label_Name", "Char_CVCollectionBtn/Sprite", "Cha
   "Pin/Pin_On/Bg/Icon/Label_Locale", "Pin/Pin_Off/Bg/Icon/Label_Locale"]) add(`${PLATE}/${path}`);
 
 const atlas = { Common: Object.fromEntries([...new Set([
-  ...[...readFileSync(new URL("../../src/ba_modding_toolkit/web/js/detail.js", import.meta.url), "utf8").matchAll(/"(Common_[A-Za-z0-9_]+)"/g)].map((m) => m[1]),
+  ...[...readFileSync(new URL("../../src/bmpt/web/js/detail.js", import.meta.url), "utf8").matchAll(/"(Common_[A-Za-z0-9_]+)"/g)].map((m) => m[1]),
   "Common_Bg_Raius10px_Select", "Common_Icon_Check_Y_Off", "Common_Icon_Mulligan_1", "Common_Icon_Mulligan_2", "Card_Select_Line_Blue", "Cafe_Icon_NameEdit", "Common_Icon_Reddot2", "School_Icon_Schedule",
   "Common_UIHide_Icon", "Common_Icon_Change", "Common_Icon_Back", "Common_Empty", "Cafe_Icon_Rotate",
 ])].map((name) => [name, name === 'Common_Bg_Raius10px_Select' ? selectionSprite : { width: 8, height: 8 }])), Event: { Event_Icon_ClueSearch_857: { width: 8, height: 8 } } };
@@ -326,10 +326,10 @@ const flat = (obj, prefix = "", out = {}) => {
   }
   return out;
 };
-const { setStrings } = await import("../../src/ba_modding_toolkit/web/js/i18n.js");
-const { setSpineConsent } = await import("../../src/ba_modding_toolkit/web/js/spine-runtime.js");
+const { setStrings } = await import("../../src/bmpt/web/js/i18n.js");
+const { setSpineConsent } = await import("../../src/bmpt/web/js/spine-runtime.js");
 setSpineConsent(true);
-setStrings("en-US", flat(JSON.parse(readFileSync(new URL("../../src/ba_modding_toolkit/locales/en-US.json", import.meta.url), "utf8"))));
+setStrings("en-US", flat(JSON.parse(readFileSync(new URL("../../src/bmpt/locales/en-US.json", import.meta.url), "utf8"))));
 const modelRequests = [], modelStillRequests = [];
 let modelPreview = null;
 globalThis.__detailModel = {
@@ -355,8 +355,8 @@ register(`data:text/javascript,${encodeURIComponent(`export async function resol
   return next(spec, ctx);
 }`)}`);
 await import(modelStub);
-const Detail = await import("../../src/ba_modding_toolkit/web/js/detail.js");
-const localeTable = (lang) => flat(JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${lang}.json`, import.meta.url), "utf8")));
+const Detail = await import("../../src/bmpt/web/js/detail.js");
+const localeTable = (lang) => flat(JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url), "utf8")));
 
 test("disabled action cards never enable the dark lock cover", () => {
   const card = node("SkillData_EX"), normal = node("Normal"), cover = node("Lock_Cover"), empty = node("Empty");
@@ -383,11 +383,11 @@ test("disabled actions use the game's grey button body without changing its dono
   assert.equal(bg.widgets[0].color, template.children.find((node) => node.name === "BG (1)").widgets[0].color);
   assert.deepEqual(template, before);
 });
-const NGUI = await import("../../src/ba_modding_toolkit/web/js/ngui.js");
-const Loading = await import("../../src/ba_modding_toolkit/web/js/loading.js");
-const ModSwitch = await import("../../src/ba_modding_toolkit/web/js/mod-switch.js");
-const ModAlias = await import("../../src/ba_modding_toolkit/web/js/mod-alias.js");
-const Popup = await import("../../src/ba_modding_toolkit/web/js/popup.js");
+const NGUI = await import("../../src/bmpt/web/js/ngui.js");
+const Loading = await import("../../src/bmpt/web/js/loading.js");
+const ModSwitch = await import("../../src/bmpt/web/js/mod-switch.js");
+const ModAlias = await import("../../src/bmpt/web/js/mod-alias.js");
+const Popup = await import("../../src/bmpt/web/js/popup.js");
 let invalidations = 0;
 const context = { prefs: { voiceMuted: true, voiceVolume: 0 }, info: {}, invalidateRoster() { invalidations++; }, step() {}, go() {} };
 function modFamily(kind = "spr", id = "test") {
@@ -735,7 +735,7 @@ test("NGUI logs missing atlas metadata and keeps placeholder geometry for contro
 });
 
 test("a lobby player setup exception settles its layer instead of hanging Lobby.show", async () => {
-  const Lobby = await import("../../src/ba_modding_toolkit/web/js/lobby.js");
+  const Lobby = await import("../../src/bmpt/web/js/lobby.js");
   try {
     errors.length = 0; lobbyMode = "ready"; playerMode = "broken";
     await assert.rejects(Lobby.show("ibuki_home", hosts.lobby, "ibuki"), /Mod skeleton setup failed/);
@@ -747,7 +747,7 @@ for (const mode of ["pending", "error", "empty", "partial", "invalid"]) test(`pa
   t.mock.timers.enable({ apis: ["setTimeout"] });
   try {
     errors.length = 0; indexMode = mode;
-    const Renderer = await import(`../../src/ba_modding_toolkit/web/js/ngui.js?index=${mode}`);
+    const Renderer = await import(`../../src/bmpt/web/js/ngui.js?index=${mode}`);
     const host = new El();
     const view = await Renderer.render(node("Panel"), host, { deferImages: true });
     assert.equal(view.nodes.get("Panel").els[0].style.backgroundColor, "#ffffff");
@@ -803,7 +803,7 @@ test("long portrait and lobby names only resize their own info cell in every loc
   const size = (str, fs) => `${(NGUI.fontSizeFor(str, fs) * 1920 / 2960).toFixed(2)}px`;
   try {
     for (const lang of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
-      setStrings(lang, flat(JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${lang}.json`, import.meta.url), "utf8"))));
+      setStrings(lang, flat(JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url), "utf8"))));
       for (const kind of ["spr", "lobby"]) {
         const snapshots = [];
         for (const name of ["ibuki_spr", "azusa_swimsuit_spr", "azusa_swimsuit_spr".repeat(20), "ibuki_spr"]) {
@@ -841,7 +841,7 @@ test("long portrait and lobby names only resize their own info cell in every loc
     }
   } finally {
     Detail.hide(); await flush(); t.mock.timers.reset();
-    setStrings("en-US", flat(JSON.parse(readFileSync(new URL("../../src/ba_modding_toolkit/locales/en-US.json", import.meta.url), "utf8"))));
+    setStrings("en-US", flat(JSON.parse(readFileSync(new URL("../../src/bmpt/locales/en-US.json", import.meta.url), "utf8"))));
   }
 });
 
@@ -856,7 +856,7 @@ test("student aliases lead the existing name band, keep the variant's original, 
   t.mock.timers.enable({ apis: ["setTimeout"] });
   try {
     for (const lang of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
-      const ui = JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${lang}.json`, import.meta.url), "utf8"));
+      const ui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url), "utf8"));
       setStrings(lang, flat(ui));
       family = modFamily(); family.variants[0].custom = ["My <Ibuki> & friend", "Search nickname"];
       const base = structuredClone(family.variants[0]);
@@ -895,7 +895,7 @@ test("student aliases lead the existing name band, keep the variant's original, 
     }
   } finally {
     Detail.hide(); await flush(); t.mock.timers.reset();
-    setStrings("en-US", flat(JSON.parse(readFileSync(new URL("../../src/ba_modding_toolkit/locales/en-US.json", import.meta.url), "utf8"))));
+    setStrings("en-US", flat(JSON.parse(readFileSync(new URL("../../src/bmpt/locales/en-US.json", import.meta.url), "utf8"))));
   }
 });
 
@@ -905,7 +905,7 @@ test("variant aliases name detail chips, switch cards and variant picker cards i
     (el.textContent === caption || el.getAttribute("aria-label") === caption));
   try {
     for (const lang of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
-      setStrings(lang, flat(JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${lang}.json`, import.meta.url), "utf8"))));
+      setStrings(lang, flat(JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url), "utf8"))));
       family = modFamily();
       family.variants[0].custom = ["Base Ink"];
       family.variants.push(...Array.from({ length: 8 }, (_, i) => ({
@@ -934,7 +934,7 @@ test("variant aliases name detail chips, switch cards and variant picker cards i
     }
   } finally {
     Detail.hide(); await flush(); t.mock.timers.reset();
-    setStrings("en-US", flat(JSON.parse(readFileSync(new URL("../../src/ba_modding_toolkit/locales/en-US.json", import.meta.url), "utf8"))));
+    setStrings("en-US", flat(JSON.parse(readFileSync(new URL("../../src/bmpt/locales/en-US.json", import.meta.url), "utf8"))));
   }
 });
 
@@ -942,7 +942,7 @@ test("mod aliases save and clear from the current value and both switch pencils 
   t.mock.timers.enable({ apis: ["setTimeout"] });
   try {
     for (const lang of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
-      const ui = JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${lang}.json`, import.meta.url), "utf8"));
+      const ui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url), "utf8"));
       setStrings(lang, flat(ui));
       for (const kind of ["spr", "lobby"]) {
         family = modFamily(kind);
@@ -992,7 +992,7 @@ test("mod aliases save and clear from the current value and both switch pencils 
     }
   } finally {
     Detail.hide(); await flush(); t.mock.timers.reset();
-    setStrings("en-US", flat(JSON.parse(readFileSync(new URL("../../src/ba_modding_toolkit/locales/en-US.json", import.meta.url), "utf8"))));
+    setStrings("en-US", flat(JSON.parse(readFileSync(new URL("../../src/bmpt/locales/en-US.json", import.meta.url), "utf8"))));
   }
 });
 
@@ -1018,7 +1018,7 @@ test("repaired names and own aliases keep a separate repair tag in every locale"
   t.mock.timers.enable({ apis: ["setTimeout"] });
   try {
     for (const lang of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
-      const ui = JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${lang}.json`, import.meta.url), "utf8"));
+      const ui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url), "utf8"));
       setStrings(lang, flat(ui));
       for (const enabled of [true, false]) for (const alias of ["", "Own alias"]) {
         modsEnabled = enabled;
@@ -1051,7 +1051,7 @@ test("repaired names and own aliases keep a separate repair tag in every locale"
     modsEnabled = true;
     await ModSwitch.refresh();
     Detail.hide(); await flush(); t.mock.timers.reset();
-    setStrings("en-US", flat(JSON.parse(readFileSync(new URL("../../src/ba_modding_toolkit/locales/en-US.json", import.meta.url), "utf8"))));
+    setStrings("en-US", flat(JSON.parse(readFileSync(new URL("../../src/bmpt/locales/en-US.json", import.meta.url), "utf8"))));
   }
 });
 
@@ -1515,7 +1515,7 @@ test("switch subtitles retain the selected name and use a plain separator in all
   t.mock.timers.enable({ apis: ["setTimeout"] });
   try {
     for (const lang of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
-      const ui = JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${lang}.json`, import.meta.url), "utf8"));
+      const ui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url), "utf8"));
       setStrings(lang, flat(ui));
       for (const installed of [false, true]) {
         family = modFamily("spr", "hina_spr");
@@ -1532,7 +1532,7 @@ test("switch subtitles retain the selected name and use a plain separator in all
     }
   } finally {
     Detail.hide(); await flush(); t.mock.timers.reset();
-    setStrings("en-US", flat(JSON.parse(readFileSync(new URL("../../src/ba_modding_toolkit/locales/en-US.json", import.meta.url), "utf8"))));
+    setStrings("en-US", flat(JSON.parse(readFileSync(new URL("../../src/bmpt/locales/en-US.json", import.meta.url), "utf8"))));
   }
 });
 
@@ -1866,7 +1866,7 @@ test('Escape while a fullscreen switch is loading cannot reopen fullscreen with 
 });
 
 for (const lang of ['en-US', 'zh-CN', 'zh-TW', 'ja-JP', 'ko-KR', 'th-TH']) test(`fullscreen prefab corners and native switch buttons preserve geometry in ${lang}`, async () => {
-  const Visual = await import('../../src/ba_modding_toolkit/web/js/visual-mode.js');
+  const Visual = await import('../../src/bmpt/web/js/visual-mode.js');
   const strings = localeTable(lang), scale = 1920 / 2960, layout = visualPrefab();
   const labels = { back: strings['webui.lobby.exit'], reset: strings['webui.visual.reset'], switch: strings['webui.row.switch.lobby'] };
   const before = structuredClone(layout);
@@ -1918,8 +1918,8 @@ for (const lang of ['en-US', 'zh-CN', 'zh-TW', 'ja-JP', 'ko-KR', 'th-TH']) test(
     assert.ok(imageRequests.some((url) => url.includes('/Common_Icon_Change.png')), 'The Student Hall Flip sprite is rendered');
   }
   assert.deepEqual(layout, before, 'The source prefab is unchanged');
-  const { CORNER_MARGIN, reflowCorners } = await import('../../src/ba_modding_toolkit/web/js/corner-layout.js');
-  const { headerGeometry } = await import('../../src/ba_modding_toolkit/web/js/window-layout.js');
+  const { CORNER_MARGIN, reflowCorners } = await import('../../src/bmpt/web/js/corner-layout.js');
+  const { headerGeometry } = await import('../../src/bmpt/web/js/window-layout.js');
   const oldRect = hosts.stage.getBoundingClientRect;
   const old = Object.fromEntries(['innerWidth', 'innerHeight', 'bamtWindowChrome', 'bamtHeaderGeometry'].map(k => [k, globalThis[k]]));
   const holder = body.appendChild(new El());
@@ -2115,7 +2115,7 @@ test("the unfolded expression strip takes the wheel and a drag picks no face", a
 // --- UI-19: the Show in Finder / Explorer button is drawn from explorer-button.js's layout, in every locale ---
 test("the Show in Finder button's caption and folder icon are placed by the explorer layout in every locale", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
-  const { explorerLayout } = await import("../../src/ba_modding_toolkit/web/js/explorer-button.js");
+  const { explorerLayout } = await import("../../src/bmpt/web/js/explorer-button.js");
   try {
     for (const lang of everyLocale) {
       const table = localeTable(lang); setStrings(lang, table);
@@ -2135,7 +2135,7 @@ test("the Show in Finder button's caption and folder icon are placed by the expl
 // --- design tokens, item E: the nameplate's chips are the prefab chip (Char_Target/Type/MainType/BG): 272 x 72, caption 40 down to 28 ---
 test("variant chips are 272 x 72 with the caption at 40 down to 28, the second column 290 on", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
-  const { CHIP } = await import("../../src/ba_modding_toolkit/web/js/ui-tokens.js");
+  const { CHIP } = await import("../../src/bmpt/web/js/ui-tokens.js");
   const S = 1920 / 2960;
   try {
     setStrings("en-US", localeTable("en-US"));
@@ -2156,7 +2156,7 @@ test("variant chips are 272 x 72 with the caption at 40 down to 28, the second c
     // a short caption fits at the prefab's 40 (Latin text is drawn 1.12 larger)
     const caption = walk(hosts["ngui-chips"]).find((e) => /\/Chip_[^/]+\/Label\/Text$/.test(e.dataset.path || "") && e.textContent);
     assert.ok(Math.abs(parseFloat(caption.style.fontSize) - NGUI.fontSizeFor(caption.textContent, CHIP.fs) * S) < 0.02, "caption size 40");
-    const source = readFileSync(new URL("../../src/ba_modding_toolkit/web/js/detail.js", import.meta.url), "utf8");
+    const source = readFileSync(new URL("../../src/bmpt/web/js/detail.js", import.meta.url), "utf8");
     assert.match(source, /const CHIP_FS = CHIP\.fs, CHIP_W = CHIP\.w, CHIP_PITCH = CHIP\.pitch;/);
     assert.doesNotMatch(source, /CHIP_FS = 38/);
     Detail.hide();

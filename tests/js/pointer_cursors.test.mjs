@@ -6,7 +6,7 @@ import { test } from "node:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
-const WEB = new URL("../../src/ba_modding_toolkit/web/", import.meta.url).pathname;
+const WEB = new URL("../../src/bmpt/web/", import.meta.url).pathname;
 const files = (dir, ext) => readdirSync(join(WEB, dir), { recursive: true }).filter((f) => f.endsWith(ext)).map((f) => join(dir, f)).sort();
 const read = (file) => readFileSync(join(WEB, file), "utf8").replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, ""); // without comments
 const ALLOWED = new Set(["grab", "grabbing", "text", "var(--cursor)", "var(--cursor-press)"]);

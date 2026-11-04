@@ -12,16 +12,16 @@ from types import SimpleNamespace
 
 import pytest
 
-from ba_modding_toolkit.config import Settings
-from ba_modding_toolkit.errors import ServiceError
+from bmpt.config import Settings
+from bmpt.errors import ServiceError
 from ba_modding_toolkit.i18n import I18n, offered_languages
-from ba_modding_toolkit.webui.api import build_api, ui_strings
-from ba_modding_toolkit.webui.events import EventBus
-from ba_modding_toolkit.webui.jobs import JobRunner
-from ba_modding_toolkit.webui.server import WebApp
-from ba_modding_toolkit.webui.services import Services
-from ba_modding_toolkit.webui.state import ALIAS_LENGTH, ALIAS_MAX, UiState, roster_view
-from ba_modding_toolkit.webui.timing import Timings
+from bmpt.webui.api import build_api, ui_strings
+from bmpt.webui.events import EventBus
+from bmpt.webui.jobs import JobRunner
+from bmpt.webui.server import WebApp
+from bmpt.webui.services import Services
+from bmpt.webui.state import ALIAS_LENGTH, ALIAS_MAX, UiState, roster_view
+from bmpt.webui.timing import Timings
 
 
 @dataclass
@@ -719,7 +719,7 @@ def test_preview_failures_are_logged_in_release_sessions(app, services, caplog):
 
 
 def test_another_installs_skeleton_is_read_from_its_own_files(app, services, monkeypatch, tmp_path):
-    from ba_modding_toolkit.library.models import Pin
+    from bmpt.library.models import Pin
 
     current = Pin("/games/global", tmp_path / "global", (tmp_path / "global",), "global")
     other = Pin("/games/japan", tmp_path / "japan", (tmp_path / "japan",), "japan")
@@ -836,7 +836,7 @@ def test_live_spine_files_are_read_in_the_librarys_order(app, services, monkeypa
 
 
 def test_live_portrait_survives_cache_clear(app, services, monkeypatch, tmp_path):
-    from ba_modding_toolkit.gameassets import AssetCache, GameAssets
+    from bmpt.gameassets import AssetCache, GameAssets
 
     game_dir = tmp_path / "game"
     game_dir.mkdir()
@@ -851,7 +851,7 @@ def test_live_portrait_survives_cache_clear(app, services, monkeypatch, tmp_path
         reads.append(list(paths))
         return {"Ibuki_spr.skel": b"skeleton", "Ibuki_spr.atlas": b"page.png\nsize: 1,1\n",
                 "page.png": paths[-1].read_bytes()}
-    monkeypatch.setattr("ba_modding_toolkit.gameassets.service.extract_spine", extract)
+    monkeypatch.setattr("bmpt.gameassets.service.extract_spine", extract)
     def no_preview(*args, **kwargs):
         pytest.fail("A current portrait must not need a mod preview or kept originals")
     monkeypatch.setattr(services.library, "preview_bundles", no_preview, raising=False)
@@ -886,7 +886,7 @@ def test_asset_failures_log_the_request_and_cause(app, services, monkeypatch, ca
 
 
 def test_atlas_route_revalidates_and_reports_failure(app, services, monkeypatch, tmp_path, caplog):
-    from ba_modding_toolkit.gameassets import AssetCache, GameAssets
+    from bmpt.gameassets import AssetCache, GameAssets
 
     services.state.set_consent(True)
     assert call(app, "/asset/ui/atlases.json")[1]["Cache-Control"] == "no-store"
@@ -948,7 +948,7 @@ def test_a_new_library_prunes_its_kept_originals_once(tmp_path, monkeypatch):
         def judge_unfinished(self):
             return 0
 
-    monkeypatch.setattr("ba_modding_toolkit.library.ModLibrary", Library)
+    monkeypatch.setattr("bmpt.library.ModLibrary", Library)
     s = Services(Settings(tmp_path / "config.toml"), tmp_path, state=UiState(tmp_path / "webui.json"),
                  cache=object(), game=FakeGame(), catalog=FakeCatalog())
     s.state.set("scan_consent", True)
@@ -1008,7 +1008,7 @@ def test_startup_preferences_round_trip_and_update_info(app, services):
 
 
 def test_app_info_reports_only_consented_current_ui_cache(app, services, tmp_path):
-    from ba_modding_toolkit.gameassets import AssetCache
+    from bmpt.gameassets import AssetCache
 
     cache = services._cache = AssetCache(root=tmp_path / "cache", allowed=True)
     cache.put("ui", b"cached", version="old")
@@ -1021,7 +1021,7 @@ def test_app_info_reports_only_consented_current_ui_cache(app, services, tmp_pat
 
 
 def test_initial_html_selects_the_cached_loading_style_before_any_rpc(app, services, tmp_path):
-    from ba_modding_toolkit.gameassets import AssetCache
+    from bmpt.gameassets import AssetCache
 
     app.ui_cached = services.ui_cached
     services._cache = cache = AssetCache(root=tmp_path / "cache", allowed=True)
@@ -1208,7 +1208,7 @@ def test_saved_roster_type_filter_is_dropped_on_load_and_save(app, services, tmp
 
 def test_settings_offer_the_languages_with_a_locale_file(app, services, tmp_path, monkeypatch):
     from ba_modding_toolkit.i18n import i18n_manager
-    from ba_modding_toolkit.webui import api as webui_api
+    from bmpt.webui import api as webui_api
 
     locales = tmp_path / "locales"
     locales.mkdir()
@@ -1235,7 +1235,7 @@ def test_install_update_needs_the_window_and_the_verified_download(app, services
 
 @pytest.fixture
 def update_env(services, tmp_path, monkeypatch):
-    from ba_modding_toolkit import updater
+    from bmpt import updater
 
     info = updater.UpdateInfo("1.1.0", "1.0.0", "", updater.Asset("app.dmg", "https://example.invalid/app.dmg", 8),
                               updater.Asset("app.dmg.md5", "https://example.invalid/app.dmg.md5", 32), installable=True)
@@ -1243,7 +1243,7 @@ def update_env(services, tmp_path, monkeypatch):
     monkeypatch.setattr(updater, "check", lambda: env.info)
     monkeypatch.setattr(updater.urllib.request, "urlopen", lambda *a, **kw: pytest.fail("network access"))
     monkeypatch.setattr(updater, "_get", lambda *a, **kw: pytest.fail("network access"))
-    monkeypatch.setattr("ba_modding_toolkit.webui.api.tempfile.mkdtemp", lambda **kw: str(tmp_path / "downloads"))
+    monkeypatch.setattr("bmpt.webui.api.tempfile.mkdtemp", lambda **kw: str(tmp_path / "downloads"))
 
     def download(info, dest, progress):
         env.downloads.append(info.version)
@@ -1276,7 +1276,7 @@ def download_update(app, services):
 @pytest.mark.parametrize("language", ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"])
 def test_update_download_progress_names_the_action_and_asset(app, services, update_env, monkeypatch, language):
     translate = I18n(language).t
-    monkeypatch.setattr("ba_modding_toolkit.webui.api.t", translate)
+    monkeypatch.setattr("bmpt.webui.api.t", translate)
     rpc(app, "app.checkUpdate")
     job = rpc(app, "app.update")["result"]
     assert services.jobs.wait(job, 5)
@@ -1354,7 +1354,7 @@ def test_update_rpc_rechecks_the_cache_when_queued_downloads_run(app, services, 
 
 
 def test_update_rpc_does_not_cache_a_failed_download_and_can_retry(app, services, update_env, monkeypatch):
-    from ba_modding_toolkit import updater
+    from bmpt import updater
 
     rpc(app, "app.checkUpdate")
     download = updater.download
@@ -1376,7 +1376,7 @@ def test_update_rpc_does_not_cache_a_failed_download_and_can_retry(app, services
 
 @pytest.mark.parametrize("code", ["classic_open", "busy", "update_unavailable", "update_unsupported"])
 def test_install_update_refusals_keep_the_download_for_retry(app, services, update_env, monkeypatch, code):
-    from ba_modding_toolkit import updater
+    from bmpt import updater
 
     rpc(app, "app.checkUpdate")
     file = download_update(app, services)
@@ -1413,7 +1413,7 @@ def test_install_update_refusals_keep_the_download_for_retry(app, services, upda
 @pytest.mark.parametrize("closing_event", [True, False])
 def test_install_update_reserves_admission_until_native_closed_and_starts_only_one_helper(
         app, services, update_env, monkeypatch, closing_event):
-    from ba_modding_toolkit import updater
+    from bmpt import updater
 
     rpc(app, "app.checkUpdate")
     file = download_update(app, services)
@@ -1476,7 +1476,7 @@ def test_install_update_reserves_admission_until_native_closed_and_starts_only_o
 @pytest.mark.parametrize("refusal", ["silent", "accepted", "exception", "classic_open"])
 def test_install_update_never_launches_a_helper_for_a_refused_native_close_and_releases_admission(
         app, services, update_env, monkeypatch, refusal):
-    from ba_modding_toolkit.webui import services as services_module
+    from bmpt.webui import services as services_module
 
     monkeypatch.setattr(services_module, "UPDATE_QUIT_WAIT", 0.01)
     rpc(app, "app.checkUpdate")
@@ -1531,13 +1531,14 @@ def test_settings_change_waits_for_the_running_job(services):
 def test_every_service_error_has_a_string():
     import os
     import re
-    root = Path(__file__).resolve().parents[1] / "src" / "ba_modding_toolkit"
+    src = Path(__file__).resolve().parents[1] / "src"
     codes = set()
-    for folder, directories, names in os.walk(root):
-        directories[:] = [name for name in directories if not name.startswith(".")]
-        for name in names:
-            if name.endswith(".py"):
-                codes |= set(re.findall(r'ServiceError\("([a-z_]+)"', (Path(folder) / name).read_text(encoding="utf-8")))
+    for root in (src / "ba_modding_toolkit", src / "bmpt"):
+        for folder, directories, names in os.walk(root):
+            directories[:] = [name for name in directories if not name.startswith(".")]
+            for name in names:
+                if name.endswith(".py"):
+                    codes |= set(re.findall(r'ServiceError\("([a-z_]+)"', (Path(folder) / name).read_text(encoding="utf-8")))
     for lang in offered_languages():
         strings = ui_strings(lang)
         assert not [c for c in sorted(codes) if f"webui.error.{c}" not in strings], lang
@@ -1558,7 +1559,7 @@ def test_static_files_behind_symlinks_are_served(app, tmp_path):
 
 
 def test_program_command_in_a_compiled_build(monkeypatch, tmp_path):
-    from ba_modding_toolkit.webui import system
+    from bmpt.webui import system
     exe = tmp_path / "Tool"
     exe.write_text("")
     monkeypatch.setitem(system.__dict__, "__compiled__", True)
@@ -1576,14 +1577,14 @@ def test_the_window_leaves_the_pointer_and_text_selection_to_the_page(monkeypatc
     import sys
     from types import SimpleNamespace
 
-    from ba_modding_toolkit.webui import main
+    from bmpt.webui import main
 
     class Hook:
         def __iadd__(self, handler):
             return self
 
     monkeypatch.setattr(main.sys, "platform", platform)
-    from ba_modding_toolkit.webui import native
+    from bmpt.webui import native
     monkeypatch.setattr(native, "webview2_version", lambda: "120.0.0.0")
     created, started = {}, {}
 
@@ -1593,7 +1594,7 @@ def test_the_window_leaves_the_pointer_and_text_selection_to_the_page(monkeypatc
 
     monkeypatch.setitem(sys.modules, "webview", SimpleNamespace(settings={}, create_window=create_window,
                                                                 start=lambda **options: started.update(options)))
-    from ba_modding_toolkit.webui.tray import Tray
+    from bmpt.webui.tray import Tray
 
     monkeypatch.setattr(Tray, "supported", staticmethod(lambda platform=sys.platform: False))  # tests/test_tray.py
     main._run_window(SimpleNamespace(window=None, data_dir=tmp_path, timings=Timings(), events=EventBus()), SimpleNamespace(url="http://127.0.0.1:1/"), False)
@@ -1611,7 +1612,7 @@ def test_the_close_button_preflights_readers_and_refuses_writers(services, monke
     import sys
     from types import SimpleNamespace
 
-    from ba_modding_toolkit.webui import main
+    from bmpt.webui import main
 
     handlers = {}
 
@@ -1671,7 +1672,7 @@ def test_original_and_repaired_versions_share_roster_and_band_counts(app, servic
 
 @pytest.mark.parametrize("orphan", [False, True])
 def test_migrated_020_library_supplies_repair_labels_markers_and_counts(app, services, monkeypatch, tmp_path, orphan):
-    from ba_modding_toolkit.library import ModLibrary
+    from bmpt.library import ModLibrary
     from test_legacy_remap import legacy_record, write_legacy_state
     from test_library import FakeCatalog as LibraryCatalog, FakeVariant as LibraryVariant
 
@@ -1702,7 +1703,7 @@ def test_migrated_020_library_supplies_repair_labels_markers_and_counts(app, ser
 def test_a_repaired_id_reaches_the_web_ui_only_while_its_copy_exists_or_is_held(app, services, monkeypatch, tmp_path, copy):
     import shutil
 
-    from ba_modding_toolkit.library import ModLibrary
+    from bmpt.library import ModLibrary
     from test_legacy_remap import legacy_record, write_legacy_state
     from test_library import FakeCatalog as LibraryCatalog, FakeVariant as LibraryVariant
 
@@ -1728,9 +1729,9 @@ def test_a_repaired_id_reaches_the_web_ui_only_while_its_copy_exists_or_is_held(
 
 
 def test_release_page_snapshot_survives_another_check(app, services, update_env, monkeypatch):
-    from ba_modding_toolkit import updater
+    from bmpt import updater
     opened = []
-    monkeypatch.setattr('ba_modding_toolkit.webui.api.webbrowser.open', opened.append)
+    monkeypatch.setattr('bmpt.webui.api.webbrowser.open', opened.append)
     page = f'https://github.com/{updater.REPO}/releases/tag/v1.1.0'
     update_env.info.page, update_env.info.notes = page, 'Exact release notes'
     assert rpc(app, 'app.checkUpdate')['result']['notes'] == 'Exact release notes'
@@ -1745,12 +1746,12 @@ def test_release_page_snapshot_survives_another_check(app, services, update_env,
 
 def test_tours_rpc_requires_normal_ready_and_keeps_replay_local(app, services, monkeypatch, tmp_path):
     from ba_modding_toolkit.i18n import i18n_manager
-    from ba_modding_toolkit.webui import tours
+    from bmpt.webui import tours
     from test_tours import release, write_locales
 
     manifest = (release('0.2.0', 'photos'),)
     write_locales(tmp_path, manifest)
-    monkeypatch.setattr('ba_modding_toolkit.webui.strings.get_locale_dir', lambda: tmp_path)
+    monkeypatch.setattr('bmpt.webui.strings.get_locale_dir', lambda: tmp_path)
     monkeypatch.setattr(tours, 'PUBLISHED_TOURS', manifest)
     monkeypatch.setattr(services, 'game_found', lambda: pytest.fail('tour must not inspect the game'))
     monkeypatch.setattr(services, 'ready', lambda: None)
@@ -1778,7 +1779,7 @@ def test_tours_rpc_requires_normal_ready_and_keeps_replay_local(app, services, m
 @pytest.mark.parametrize('consent', [True, False])
 def test_historyless_profile_tour_rpc_distinguishes_upgrade_from_first_install(
         app, services, monkeypatch, tmp_path, legacy, consent):
-    from ba_modding_toolkit.webui.state import UiState
+    from bmpt.webui.state import UiState
 
     path = tmp_path / 'tour-profile.json'
     if legacy:
@@ -1810,7 +1811,7 @@ def test_historyless_profile_tour_rpc_distinguishes_upgrade_from_first_install(
 
 @pytest.fixture
 def native_exit(services):
-    from ba_modding_toolkit.webui.window_close import CloseCoordinator
+    from bmpt.webui.window_close import CloseCoordinator
     waiting, destroyed = threading.Event(), threading.Event()
     callbacks = []
     def evaluate(script, callback=None):
@@ -1831,8 +1832,8 @@ def native_exit(services):
 
 @pytest.mark.parametrize('origin', ['app', 'fallback', 'native', 'tray', 'safe-restart', 'consent'])
 def test_exit_routes_share_hall_preflight_and_writer_admission(app, services, native_exit, monkeypatch, origin):
-    from ba_modding_toolkit.webui.tray import Tray
-    monkeypatch.setattr('ba_modding_toolkit.webui.api.can_restart_safe', lambda: True)
+    from bmpt.webui.tray import Tray
+    monkeypatch.setattr('bmpt.webui.api.can_restart_safe', lambda: True)
     monkeypatch.setattr(services, 'set_consent', lambda granted: None)
     if origin == 'native':
         assert services.on_closing() is False
@@ -1855,7 +1856,7 @@ def test_exit_routes_share_hall_preflight_and_writer_admission(app, services, na
 
 
 def test_update_draft_preflight_precedes_native_timeout_and_reservation(app, services, update_env, monkeypatch):
-    from ba_modding_toolkit.webui.window_close import CloseCoordinator
+    from bmpt.webui.window_close import CloseCoordinator
     rpc(app, 'app.checkUpdate')
     file = download_update(app, services)
     waiting, release = threading.Event(), threading.Event()
@@ -1886,11 +1887,11 @@ def test_update_draft_preflight_precedes_native_timeout_and_reservation(app, ser
 @pytest.mark.parametrize('lang', ['en-US', 'zh-CN', 'zh-TW', 'ja-JP', 'ko-KR', 'th-TH'])
 def test_both_review_features_share_the_running_version_gate(app, services, monkeypatch, version, enabled, lang):
     from ba_modding_toolkit.i18n import i18n_manager
-    from ba_modding_toolkit.webui import tours
+    from bmpt.webui import tours
     # the gate itself, on a tour still under review
     monkeypatch.setattr(tours, 'PUBLISHED_TOURS', tuple({**tour, 'approved': 'prerelease'} for tour in tours.PUBLISHED_TOURS))
     monkeypatch.setattr(i18n_manager, 'lang', lang)
-    monkeypatch.setattr('ba_modding_toolkit.webui.api.get_version_info', lambda: {'version': version})
+    monkeypatch.setattr('bmpt.webui.api.get_version_info', lambda: {'version': version})
     monkeypatch.setattr('ba_modding_toolkit.utils.get_version_info', lambda: {'version': version})
     app.rpc = build_api(services)
     tours.launch(services.state, '0.6.0-alpha.8', [])

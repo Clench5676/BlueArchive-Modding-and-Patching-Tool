@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { readFileSync } from 'node:fs';
-import * as geometry from '../../src/ba_modding_toolkit/web/js/window-layout.js';
+import * as geometry from '../../src/bmpt/web/js/window-layout.js';
 class Classes extends Set {
   contains(name){return this.has(name);}
   toggle(name,on=!this.has(name)){on?this.add(name):this.delete(name);return on;}
@@ -62,7 +62,7 @@ globalThis.chromeFixture={...geometry,chromeMotion:()=>motion,on:(name,fn)=>hand
   if(name==='window.layout'&&layoutFailure){const error=layoutFailure;layoutFailure=null;throw error;}},T:key=>key,
   reflowTopActions(){},alignTopBar:async()=>{if(alignmentGate)await alignmentGate;},fitStage(){},
   naturalTextWidth:(el,scale)=>Math.ceil(el.textContent.length*13*scale),paintTopBar:async()=>{}};
-let source=readFileSync(new URL('../../src/ba_modding_toolkit/web/js/window-chrome.js',import.meta.url),'utf8').replace(/^import .*;$/gm,'');
+let source=readFileSync(new URL('../../src/bmpt/web/js/window-chrome.js',import.meta.url),'utf8').replace(/^import .*;$/gm,'');
 source=`const {on,rpc,T,reflowTopActions,alignTopBar,fitStage,naturalTextWidth,paintTopBar,headerGeometry,rowLayout,isImmersive,dragRegions,expandRect,chromeMotion}=globalThis.chromeFixture;\n${source}`;
 const {setupWindowChrome}=await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
 async function settle(){for(let i=0;i<8;i++){frames.splice(0).forEach(fn=>fn());await new Promise(resolve=>setImmediate(resolve));}}

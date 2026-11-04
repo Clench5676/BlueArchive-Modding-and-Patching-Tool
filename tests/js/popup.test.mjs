@@ -186,16 +186,16 @@ globalThis.fetch = async (url, opts = {}) => {
 const warn = console.warn;
 console.warn = (...args) => { if (!String(args[0]).startsWith("popup layout")) warn(...args); };
 
-const Popup = await import("../../src/ba_modding_toolkit/web/js/popup.js");
-const Update = await import("../../src/ba_modding_toolkit/web/js/update.js");
-const { S } = await import("../../src/ba_modding_toolkit/web/js/util.js");
-const { setStrings } = await import("../../src/ba_modding_toolkit/web/js/i18n.js");
-const { setSpineConsent } = await import("../../src/ba_modding_toolkit/web/js/spine-runtime.js");
+const Popup = await import("../../src/bmpt/web/js/popup.js");
+const Update = await import("../../src/bmpt/web/js/update.js");
+const { S } = await import("../../src/bmpt/web/js/util.js");
+const { setStrings } = await import("../../src/bmpt/web/js/i18n.js");
+const { setSpineConsent } = await import("../../src/bmpt/web/js/spine-runtime.js");
 setSpineConsent(true);
 const runtime = vm.createContext({ console, TextDecoder, TextEncoder, Float32Array, Uint8Array, Uint16Array, Int16Array, Int32Array, ArrayBuffer, DataView });
-vm.runInContext(readFileSync(new URL("../../src/ba_modding_toolkit/web/vendor/spine-player-4.2.120/spine-player.min.js", import.meta.url), "utf8"), runtime);
+vm.runInContext(readFileSync(new URL("../../src/bmpt/web/vendor/spine-player-4.2.120/spine-player.min.js", import.meta.url), "utf8"), runtime);
 globalThis.spine = runtime.spine;
-const english = JSON.parse(readFileSync(new URL("../../src/ba_modding_toolkit/locales/en-US.json", import.meta.url))).webui;
+const english = JSON.parse(readFileSync(new URL("../../src/bmpt/locales/en-US.json", import.meta.url))).webui;
 function strings(value, prefix = "webui") {
   return Object.entries(value).flatMap(([key, text]) => typeof text === "object" ? strings(text, `${prefix}.${key}`) : [[`${prefix}.${key}`, text]]);
 }
@@ -223,7 +223,7 @@ afterEach(async () => {
 });
 
 test("fitting message lines together keeps the size floor and all text when extra wrapping is needed", async () => {
-  const NGUI = await import("../../src/ba_modding_toolkit/web/js/ngui.js");
+  const NGUI = await import("../../src/bmpt/web/js/ngui.js");
   const text = "A long explanation ".repeat(15).trim();
   const opened = Popup.message({ title: "Help", lines: ["On", text], width: 700, fitTogether: [0, 1] });
   await drawn(dialog, "close");
@@ -315,11 +315,11 @@ test("scrollable findings wrap long paths and unbroken names inside the frame, k
 });
 
 test('photo deletion warnings fit the UIPopup_Sort frame in all six locales', async () => {
-  const NGUI = await import('../../src/ba_modding_toolkit/web/js/ngui.js');
+  const NGUI = await import('../../src/bmpt/web/js/ngui.js');
   const bounds = el => { const [left, top, width, height] = NGUI.rect(el); return {left, top, right:left+width, bottom:top+height}; };
   try {
     for(const locale of ['en-US','zh-CN','zh-TW','ja-JP','ko-KR','th-TH']){
-      const ui=JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${locale}.json`,import.meta.url),'utf8')).webui;
+      const ui=JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`,import.meta.url),'utf8')).webui;
       setStrings(locale,Object.fromEntries(strings(ui)));
       for(const warning of [ui.error.asset_delete_confirm,ui.error.photo_delete_other_variant]){
         const pending=Popup.message({title:ui.photo.delete,lines:[warning],ok:ui.photo.delete,cancel:ui.popup.cancel});
@@ -341,7 +341,7 @@ test('photo deletion warnings fit the UIPopup_Sort frame in all six locales', as
 });
 
 test("shared message sizes and scrolling preserve complete paths with and without row buttons", async () => {
-  const NGUI = await import("../../src/ba_modding_toolkit/web/js/ngui.js");
+  const NGUI = await import("../../src/bmpt/web/js/ngui.js");
   // long enough to scroll at the light box's smaller type as well
   const path = "Intro_Shoulder_L/".repeat(180), name = "x".repeat(360);
   for (const boxed of [false, true]) {
@@ -368,7 +368,7 @@ test("shared message sizes and scrolling preserve complete paths with and withou
 });
 
 test("compatibility details scroll the complete list and return to the same Remap and Cancel actions", async () => {
-  const Compatibility = await import("../../src/ba_modding_toolkit/web/js/mod-compatibility.js");
+  const Compatibility = await import("../../src/bmpt/web/js/mod-compatibility.js");
   const names = Array.from({ length: 80 }, (_, i) => `Intro_Shoulder_L/Intro_Shoulder_L_${i}`);
   const input = (paths) => ({ atlases: {}, textures: {}, skeletons: { "CH0261_home.skel": {
     version: "4.2.33", data: Buffer.from(JSON.stringify({ bones: [{ name: "root" }], slots: [{ name: "face", bone: "root" }],
@@ -482,7 +482,7 @@ test("confirm keys press OK while the popup is in front and holds the focus; non
 });
 
 test("the hand-off prompt saves Don't Ask Again only with Open (decision 6)", async () => {
-  const { ITEMS, activate, handOffPrompt } = await import("../../src/ba_modding_toolkit/web/js/nav-items.js");
+  const { ITEMS, activate, handOffPrompt } = await import("../../src/bmpt/web/js/nav-items.js");
   const T = (key) => key;
   const ask = (item) => Popup.message(handOffPrompt(item, T));
   const run = () => {
@@ -868,7 +868,7 @@ test("concurrent checks share one request and popup through download and dismiss
 });
 
 test("Settings disables Check for Updates while pending and uses the shared popup check", async () => {
-  const Settings = await import("../../src/ba_modding_toolkit/web/js/settings.js");
+  const Settings = await import("../../src/bmpt/web/js/settings.js");
   handlers.set("settings.get", () => ({ result: {
     version: "1.0.0", language: "en-US", languages: [["en-US", "English"]].map(([code, name]) => ({ code, name })),
     cacheDir: "/test/cache", native: true,
@@ -913,9 +913,9 @@ test("Settings disables Check for Updates while pending and uses the shared popu
 });
 
 test("Settings includes Thai as a sixth language with its native label and language tag", async () => {
-  const Settings = await import("../../src/ba_modding_toolkit/web/js/settings.js");
+  const Settings = await import("../../src/bmpt/web/js/settings.js");
   const languages = ["zh-CN", "zh-TW", "en-US", "ja-JP", "ko-KR", "th-TH"].map((code) => ({
-    code, name: JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${code}.json`, import.meta.url))).webui.languageName,
+    code, name: JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${code}.json`, import.meta.url))).webui.languageName,
   }));
   handlers.set("settings.get", () => ({ result: { version: "1.0.0", language: "en-US", languages } }));
   handlers.set("mods.state", () => ({ result: {} }));
@@ -933,7 +933,7 @@ test("Settings includes Thai as a sixth language with its native label and langu
 });
 
 test("a manual Settings check joins an automatic offer already queued behind Settings", async () => {
-  const Settings = await import("../../src/ba_modding_toolkit/web/js/settings.js");
+  const Settings = await import("../../src/bmpt/web/js/settings.js");
   handlers.set("settings.get", () => ({ result: {
     version: "1.0.0", language: "en-US", languages: [{ code: "en-US", name: "English" }],
     cacheDir: "/test/cache", native: true,
@@ -960,7 +960,7 @@ test("a manual Settings check joins an automatic offer already queued behind Set
 
 test("every update locale has short completion and restart labels", () => {
   for (const language of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
-    const locale = JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${language}.json`, import.meta.url))).webui.update;
+    const locale = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${language}.json`, import.meta.url))).webui.update;
     assert.deepEqual(Object.keys(locale).sort(), Object.keys(english.update).sort());
     for (const key of ["complete", "restart"]) assert.ok(locale[key] && !/[.。!！·・]/u.test(locale[key]));
   }
@@ -1030,10 +1030,10 @@ test("the log popup preserves literal text, opens at the bottom and Copy leaves 
 
 // UI-31: the log popup's fallback (no game frame) draws with the plain popup's styles, sized to the log
 test("the log popup's plain fallback uses only classes the style sheet defines", () => {
-  const source = readFileSync(new URL("../../src/ba_modding_toolkit/web/js/popup.js", import.meta.url), "utf8");
+  const source = readFileSync(new URL("../../src/bmpt/web/js/popup.js", import.meta.url), "utf8");
   const viewer = source.slice(source.indexOf("export function textViewer("), source.indexOf("// --- ordinary refusals ---"));
   const fallback = viewer.slice(viewer.indexOf("} catch (err) {"));
-  const css = readFileSync(new URL("../../src/ba_modding_toolkit/web/css/app.css", import.meta.url), "utf8");
+  const css = readFileSync(new URL("../../src/bmpt/web/css/app.css", import.meta.url), "utf8");
   const classes = [...fallback.matchAll(/className = "([^"]+)"/g)].flatMap((m) => m[1].split(" "));
   assert.deepEqual(classes, ["plain-popup-back", "plain-popup", "log-message", "message-button"]);
   for (const name of classes) assert.match(css, new RegExp(`\\.${name}[\\s,{.:]`), `.${name} has a rule`);
@@ -1067,7 +1067,7 @@ test("new card dots hide for in-use and selected mods independently", async () =
 
 test("portrait and memorial lobby mods share the localized Mod chip under the name", async () => {
   for (const lang of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
-    const ui = JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${lang}.json`, import.meta.url))).webui;
+    const ui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url))).webui;
     setStrings(lang, { "webui.type.added": ui.type.added, "webui.popup.inUse": ui.popup.inUse });
     for (const kind of ["spr", "lobby"]) {
       await Popup.listPopup({ host: prompt, title: kind, items: [{ key: "m", kind: "mod", label: "Library mod", full: "Library mod", inUse: true }],
@@ -1082,8 +1082,8 @@ test("portrait and memorial lobby mods share the localized Mod chip under the na
 
 // Exercise the detail actions with the real RPC/job and popup code. The loader exposes its private actions only
 // to this test and replaces thumbnail rendering; panel/player drawing is observed through the setup callback.
-const DETAIL = new URL("../../src/ba_modding_toolkit/web/js/detail.js", import.meta.url).href;
-const THUMBS = new URL("../../src/ba_modding_toolkit/web/js/thumbs.js", import.meta.url).href;
+const DETAIL = new URL("../../src/bmpt/web/js/detail.js", import.meta.url).href;
+const THUMBS = new URL("../../src/bmpt/web/js/thumbs.js", import.meta.url).href;
 const detailTest = `
 export { baseOf, detailsBody, renderPopup, runUpdate, runCompatibility, copyName };
 export function setupPreviewTest(data, kind, onLeft = async () => {}) {
@@ -1122,7 +1122,7 @@ export async function load(url, ctx, next) {
   return result;
 }`)}`);
 const Detail = await import(DETAIL);
-const Mods = await import("../../src/ba_modding_toolkit/web/js/mod-switch.js");
+const Mods = await import("../../src/bmpt/web/js/mod-switch.js");
 const Thumbs = await import(THUMBS);
 const switchHost = host("popup");
 const previewFamily = () => ({ key: "a", version: "rv1", variants: [
@@ -1225,7 +1225,7 @@ test("each mod card exposes a read-only compatibility check for its own mod", as
 
 test("switch cards and details label manifest choices Applied with either switch state", async () => {
   for (const lang of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
-    const ui = JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${lang}.json`, import.meta.url))).webui;
+    const ui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url))).webui;
     setStrings(lang, Object.fromEntries(["type", "popup", "switch", "status"].flatMap((group) =>
       Object.entries(ui[group]).map(([key, value]) => [`webui.${group}.${key}`, value]))));
     for (const [kind, source] of [["spr", "mod:p"], ["lobby", "mod:l"], ["spr", "variant:b"]]) {
@@ -1255,7 +1255,7 @@ test("switch cards and details label manifest choices Applied with either switch
 });
 
 test("a saved source's detail chip keeps its caption independently of In Use", async () => {
-  const ui = JSON.parse(readFileSync(new URL("../../src/ba_modding_toolkit/locales/en-US.json", import.meta.url))).webui;
+  const ui = JSON.parse(readFileSync(new URL("../../src/bmpt/locales/en-US.json", import.meta.url))).webui;
   await Popup.listPopup({ host: prompt, title: "Portrait", items: [{ key: "m", kind: "mod", label: "Saved mod", full: "Saved mod",
     inUse: false, inUseText: ui.switch.configured, badge: { text: ui.switch.configured, color: "#8de4ff" } }],
     selected: "m", details: () => ({ title: "Portrait", fields: [], actions: [] }) });
@@ -1267,7 +1267,7 @@ test("switch popup fields fit a long file independently in portrait and lobby de
   const field = (prefix, i) => walk(prompt).find((el) => el.dataset.path === `Details/${prefix}_${i}`);
   try {
     for (const lang of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
-      const ui = JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${lang}.json`, import.meta.url))).webui;
+      const ui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url))).webui;
       setStrings(lang, Object.fromEntries(strings(ui)));
       for (const kind of ["portrait", "lobby"]) {
         const snapshots = [];
@@ -1290,10 +1290,10 @@ test("switch popup fields fit a long file independently in portrait and lobby de
 });
 
 test("long mod aliases and original file names share the switch detail name band in every locale", async () => {
-  const NGUI = await import("../../src/ba_modding_toolkit/web/js/ngui.js");
+  const NGUI = await import("../../src/bmpt/web/js/ngui.js");
   try {
     for (const lang of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
-      const ui = JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${lang}.json`, import.meta.url))).webui;
+      const ui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url))).webui;
       setStrings(lang, Object.fromEntries(strings(ui)));
       const alias = "Painted <summer> & colors ".repeat(8), original = "ibuki_dress_spr".repeat(16) + ".bundle";
       await Popup.listPopup({ host: prompt, title: ui.info.title.portrait,
@@ -1339,7 +1339,7 @@ test("a long folder in the file-details summary does not resize the current valu
 
 test("repair review displays both pages and warnings; Accept alone stores the repaired mod", async () => {
   setStrings("en-US", Object.fromEntries(strings(english)));
-  const Compatibility = await import("../../src/ba_modding_toolkit/web/js/mod-compatibility.js");
+  const Compatibility = await import("../../src/bmpt/web/js/mod-compatibility.js");
   globalThis.getComputedStyle = () => ({ opacity: "1" });
   globalThis.requestAnimationFrame = (fn) => setTimeout(fn, 0);
   const built = { preview: "review", pages: [{ name: "page", original: "data:image/png;base64,YQ==", repaired: "data:image/png;base64,Yg==" }],
@@ -1387,7 +1387,7 @@ test("repaired names carry their localized tag and originals jump to their repai
 });
 
 test("repair comparison uses separate in-memory players and disposes both on close", async () => {
-  const Compare = await import("../../src/ba_modding_toolkit/web/js/mod-compare.js");
+  const Compare = await import("../../src/bmpt/web/js/mod-compare.js");
   const previous = globalThis.spine, created = [];
   globalThis.spine = {
     Downloader: class { rawDataUris = {}; },
@@ -1471,7 +1471,7 @@ test("errors use an answerable game popup, plain notices stay silent and the toa
     assert.ok(walk(layer).some((el) => el.dataset.path === "Center/Popup/Base/BG"), "uses the existing game popup frame");
     ok.click(); assert.equal(dialog.hidden, true);
   }
-  const root = new URL("../../src/ba_modding_toolkit/web/", import.meta.url);
+  const root = new URL("../../src/bmpt/web/", import.meta.url);
   assert.doesNotMatch(readFileSync(new URL("index.html", root), "utf8"), /id="toast"|class="toast"/);
   assert.doesNotMatch(readFileSync(new URL("css/app.css", root), "utf8"), /\.toast\b/);
   assert.doesNotMatch(readFileSync(new URL("js/util.js", root), "utf8"), /export function toast\b/);
@@ -1502,12 +1502,12 @@ test("clean Update asks Cancel / Update and reuses the checked report; problems 
   work = Detail.runUpdate(); assert.equal(await work, true);
   assert.equal(checks, 2); assert.equal(updates, 2);
   assert.ok(!walk(dialog).some((el) => el.textContent.replaceAll("\n", " ") === english.compatibility.forceUpdate));
-  const exact = JSON.parse(readFileSync(new URL("../../src/ba_modding_toolkit/locales/zh-CN.json", import.meta.url))).webui.compatibility.forceUpdate;
+  const exact = JSON.parse(readFileSync(new URL("../../src/bmpt/locales/zh-CN.json", import.meta.url))).webui.compatibility.forceUpdate;
   assert.equal(exact, "\u76ee\u524d\u5b8c\u6574\u6027\u65e0\u95ee\u9898\uff0c\u662f\u5426\u786e\u5b9a\u4ecd\u8981\u5f3a\u5236\u66f4\u65b0\uff1f");
 });
 
 for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) test(`unavailable compatibility asks before updating in ${locale}`, async () => {
-  const ui = JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${locale}.json`, import.meta.url))).webui;
+  const ui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url))).webui;
   setStrings(locale, Object.fromEntries(strings(ui))); await modsEnabled(false);
   const inputs = { skeletons: {}, atlases: {}, textures: {} }, fam = previewFamily();
   let updates = 0;
@@ -1531,7 +1531,7 @@ for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) tes
 });
 
 for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) test(`copy-name failures use an error popup while success stays silent in ${locale}`, async () => {
-  const ui = JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${locale}.json`, import.meta.url))).webui;
+  const ui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url))).webui;
   const previous = navigator.clipboard, copied = [];
   setStrings(locale, Object.fromEntries(strings(ui)));
   Detail.setupPreviewTest(previewFamily(), "spr");
@@ -1595,14 +1595,14 @@ test("error popup report actions retain the triggering code and parameters", asy
 
 // Exercise the actual rendered popup at all supported text lengths and kinds, without localhost.
 test("switch geometry: per-kind columns, aspects, card bounds, labels and portrait split", async () => {
-  const NGUI = await import("../../src/ba_modding_toolkit/web/js/ngui.js");
+  const NGUI = await import("../../src/bmpt/web/js/ngui.js");
   const box = (path) => NGUI.rect(walk(prompt).find((el) => el.dataset.path === path));
   const inside = (a, b, message) => {
     assert.ok(a[0] >= b[0] - 1 && a[1] >= b[1] - 1 && a[0] + a[2] <= b[0] + b[2] + 1 && a[1] + a[3] <= b[1] + b[3] + 1, message);
   };
   try {
     for (const lang of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
-      const ui = JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${lang}.json`, import.meta.url))).webui;
+      const ui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url))).webui;
       setStrings(lang, Object.fromEntries(strings(ui)));
       for (const [kind, columns] of [["spr", 4], ["lobby", 2], ["model", 4]]) {
         const items = Array.from({ length: 9 }, (_, i) => ({ key: String(i), kind: "mod", full: "ch0200_spr", label: "ch0200_spr",
@@ -1672,7 +1672,7 @@ test("switch geometry: per-kind columns, aspects, card bounds, labels and portra
 
 
 test("portrait spacing fits four tall cards at the standard width and selects horizontal scrolling", async () => {
-  const { switchGrid } = await import("../../src/ba_modding_toolkit/web/js/switch-layout.js");
+  const { switchGrid } = await import("../../src/bmpt/web/js/switch-layout.js");
   for (const width of [1300, 1818, 2200]) {
     const { card, columns, pitch, overhang } = switchGrid("spr", width);
     assert.equal(card.h / card.w, 2.2);
@@ -1691,8 +1691,8 @@ test("portrait spacing fits four tall cards at the standard width and selects ho
 
 // Measure rendered CSS rectangles independently of switch-layout's calculations. Include each widget's shear.
 test("every kind left-aligns outer corners, with compact portrait gaps and balanced vertical grids", async () => {
-  const { rect } = await import("../../src/ba_modding_toolkit/web/js/ngui.js");
-  const { switchGrid } = await import("../../src/ba_modding_toolkit/web/js/switch-layout.js");
+  const { rect } = await import("../../src/bmpt/web/js/ngui.js");
+  const { switchGrid } = await import("../../src/bmpt/web/js/switch-layout.js");
   const outer = (el) => {
     const [x, y, w, h] = rect(el), angle = Number(/skewX\(([-\d.]+)deg\)/.exec(el.style.transform)?.[1] || 0);
     const overhang = Math.abs(Math.tan(angle * Math.PI / 180) * h / 2);
@@ -1746,7 +1746,7 @@ const fire = (el, type, extra = {}) => {
 };
 
 test("portrait horizontal input handles wheel units, scaled drags, touch and keyboard clicks", async () => {
-  const { horizontalScroll } = await import("../../src/ba_modding_toolkit/web/js/horizontal-scroll.js");
+  const { horizontalScroll } = await import("../../src/bmpt/web/js/horizontal-scroll.js");
   const area = new El(); area.scrollLeft = 0; area.scrollTop = 0;
   area.getBoundingClientRect = () => ({ width: 200 }); // stage at half scale
   let captured = null; area.setPointerCapture = (id) => { captured = id; };
@@ -1785,8 +1785,8 @@ test("portrait horizontal input handles wheel units, scaled drags, touch and key
 });
 
 test("switch captures begin on visibility and retain selection and rename offsets on either axis", async () => {
-  const { lazyThumbnail } = await import("../../src/ba_modding_toolkit/web/js/lazy-thumbnail.js");
-  const { rect } = await import("../../src/ba_modding_toolkit/web/js/ngui.js");
+  const { lazyThumbnail } = await import("../../src/bmpt/web/js/lazy-thumbnail.js");
+  const { rect } = await import("../../src/bmpt/web/js/ngui.js");
   for (const kind of ["spr", "lobby", "model"]) {
     const captured = [], selections = [], aliases = [];
     const items = Array.from({ length: 19 }, (_, i) => {
@@ -1838,7 +1838,7 @@ test("switch captures begin on visibility and retain selection and rename offset
 });
 
 test("deferred switch thumbnails cancel without starting off-screen work or publishing late results", async () => {
-  const { lazyThumbnail } = await import("../../src/ba_modding_toolkit/web/js/lazy-thumbnail.js");
+  const { lazyThumbnail } = await import("../../src/bmpt/web/js/lazy-thumbnail.js");
   const cancelled = new AbortController(); let starts = 0;
   const pending = lazyThumbnail(() => { starts++; return "blob:unexpected"; }, cancelled.signal);
   cancelled.abort(); pending.bump();
@@ -1851,7 +1851,7 @@ test("deferred switch thumbnails cancel without starting off-screen work or publ
 });
 
 test("NGUI preview placeholders remain for pending, missing, rejected and undecodable stills", async () => {
-  const NGUI = await import("../../src/ba_modding_toolkit/web/js/ngui.js");
+  const NGUI = await import("../../src/bmpt/web/js/ngui.js");
   let finish;
   const pending = Object.assign(new Promise((resolve) => { finish = resolve; }), { thumbnail: true });
   const target = new El();
@@ -1897,7 +1897,7 @@ for (const kind of ["spr", "model"]) test(`${kind} card and info panel remove pl
 });
 
 test("portrait search uses the prefab header without reducing the row height or hiding the scrollbar", async (t) => {
-  const NGUI = await import("../../src/ba_modding_toolkit/web/js/ngui.js");
+  const NGUI = await import("../../src/bmpt/web/js/ngui.js");
   const collection = n("UICharacterCollection", [0, 0]);
   const base = "Inventory_ListControl/RightCanvas/ListBG";
   insert(collection, "SeletControl/TopMenu", structuredClone(NGUI.find(switchLayouts.inventory, `${base}/BG_Top_Widget`)));
@@ -1906,7 +1906,7 @@ test("portrait search uses the prefab header without reducing the row height or 
     n(name, [1391, 0], [{ texture: "Scroll", w_: 126, h_: 990, pivot: 4, color: "#92a6b7/1.00" }]))));
   const fetch = globalThis.fetch;
   t.mock.method(globalThis, "fetch", async (url, options) => url === "/asset/ui/layout/UICharacterCollection.json" ? reply(collection) : fetch(url, options));
-  const Fresh = await import("../../src/ba_modding_toolkit/web/js/popup.js?portrait-search");
+  const Fresh = await import("../../src/bmpt/web/js/popup.js?portrait-search");
   const items = Array.from({ length: 8 }, (_, i) => ({ key: String(i), label: `Owner ${i}`, full: `Owner ${i}` }));
   try {
     await Fresh.listPopup({ host: prompt, layoutKind: "spr", title: "Portraits", items, selected: "7", tools: {}, okText: "Apply" });
@@ -1943,7 +1943,7 @@ test("standard message choices expose all three actions within one native footer
 });
 
 test("Hall's opt-in failure caption stays hidden until a lazy still actually fails", async () => {
-  const NGUI = await import("../../src/ba_modding_toolkit/web/js/ngui.js");
+  const NGUI = await import("../../src/bmpt/web/js/ngui.js");
   for (const outcome of ["null", "reject", "success"]) {
     let resolve, reject;
     const pending = Object.assign(new Promise((yes, no) => { resolve=yes; reject=no; }), { thumbnail:true });
@@ -1981,10 +1981,10 @@ test("release notes never run HTML or load images, scroll, retain the offer and 
 });
 
 test("release notes draw their Markdown in the UI language: headings larger, items with a hanging bullet", async () => {
-  const NGUI = await import("../../src/ba_modding_toolkit/web/js/ngui.js");
-  const { scriptOf } = await import("../../src/ba_modding_toolkit/web/js/release-notes.js");
-  const shipped = readFileSync(new URL("../../src/ba_modding_toolkit/assets/release-notes/0.7.0.md", import.meta.url), "utf8");
-  const chineseUi = JSON.parse(readFileSync(new URL("../../src/ba_modding_toolkit/locales/zh-CN.json", import.meta.url))).webui;
+  const NGUI = await import("../../src/bmpt/web/js/ngui.js");
+  const { scriptOf } = await import("../../src/bmpt/web/js/release-notes.js");
+  const shipped = readFileSync(new URL("../../src/bmpt/assets/release-notes/0.7.0.md", import.meta.url), "utf8");
+  const chineseUi = JSON.parse(readFileSync(new URL("../../src/bmpt/locales/zh-CN.json", import.meta.url))).webui;
   try {
     for (const [lang, table, script] of [["en-US", english, "en"], ["zh-CN", chineseUi, "zh-CN"]]) {
       setStrings(lang, Object.fromEntries(strings(table)));
@@ -2011,7 +2011,7 @@ test("release notes draw their Markdown in the UI language: headings larger, ite
 });
 
 test("release notes use one type size on every line: short, wrapped, long and unbroken lines alike", async () => {
-  const NGUI = await import("../../src/ba_modding_toolkit/web/js/ngui.js");
+  const NGUI = await import("../../src/bmpt/web/js/ngui.js");
   setStrings("en-US", Object.fromEntries(strings(english)));
   const room = 2458 - 240; // the plain message's text room at the notes popup's width
   let over = "Fixed an issue";
@@ -2038,11 +2038,11 @@ test("release notes use one type size on every line: short, wrapped, long and un
 });
 
 test("release-note button captions fit the unchanged UIPopup_Sort bodies in all locales and window sizes", async () => {
-  const NGUI = await import("../../src/ba_modding_toolkit/web/js/ngui.js");
+  const NGUI = await import("../../src/bmpt/web/js/ngui.js");
   await Popup.ready();
   try {
     for (const lang of ['en-US', 'th-TH', 'ko-KR', 'ja-JP', 'zh-CN', 'zh-TW']) {
-      const ui = JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${lang}.json`, import.meta.url))).webui;
+      const ui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url))).webui;
       setStrings(lang, Object.fromEntries(strings(ui)));
       const captions = [ui.update.releasePage, ui.display.close];
       const tree = Popup.popupFrame(ui.update.notes, 2458, 1355, {
@@ -2074,7 +2074,7 @@ test("release-note button captions fit the unchanged UIPopup_Sort bodies in all 
 
 // UI-32: the offer's three captions wrap to two lines before they shrink, in the popups' 72 to 48 range, at one size
 test("the update offer's captions wrap before they shrink, share one size and fit in every locale", async () => {
-  const NGUI = await import("../../src/ba_modding_toolkit/web/js/ngui.js");
+  const NGUI = await import("../../src/bmpt/web/js/ngui.js");
   await Popup.ready();
   const W = 400, H = Popup.BUTTON_TEXT_H; // the caption room on the slanted 496 x 177 bodies (UIPopup_Sort Btn_Ok)
   const inside = (w, scale = 1) => {
@@ -2084,7 +2084,7 @@ test("the update offer's captions wrap before they shrink, share one size and fi
   };
   try {
     for (const lang of ['en-US', 'th-TH', 'ko-KR', 'ja-JP', 'zh-CN', 'zh-TW']) {
-      const ui = JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${lang}.json`, import.meta.url))).webui;
+      const ui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url))).webui;
       setStrings(lang, Object.fromEntries(strings(ui)));
       for (const ok of [ui.update.now, ui.update.page, ui.update.restart]) {
         const texts = [ui.update.later, ui.update.notes, ok], widgets = texts.map((text) => ({ text }));
@@ -2133,7 +2133,7 @@ test("the update offer's captions wrap before they shrink, share one size and fi
 
 test("empty and unavailable notes offer the exact release page in every locale", async () => {
   for (const lang of ['en-US', 'zh-CN', 'zh-TW', 'ja-JP', 'ko-KR', 'th-TH']) {
-    const ui = JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${lang}.json`, import.meta.url))).webui;
+    const ui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url))).webui;
     setStrings(lang, Object.fromEntries(strings(ui)));
     const release = { ...available, version: '0.6.0', page: 'https://github.com/example/releases/tag/v0.6.0' };
     const offered = Update.check(consent, release);
@@ -2155,7 +2155,7 @@ test("empty and unavailable notes offer the exact release page in every locale",
   setStrings('en-US', Object.fromEntries(strings(english)));
 });
 
-const Tours = await import('../../src/ba_modding_toolkit/web/js/tours.js');
+const Tours = await import('../../src/bmpt/web/js/tours.js');
 const tourPages = [
   { id: 'photos', version: '0.6.0', title: 'Your Student Photos', body: 'Frame a portrait, save a photo, make it yours.' },
   { id: 'hall', version: '0.6.0', title: 'Your Student Hall', body: 'Keep your favorite students close.' },
@@ -2225,7 +2225,7 @@ test('empty content and closing a pre-render consume no presentation; missing im
 });
 
 test('tour pages and sibling controls fit all six locales inside the notice prefab', async () => {
-  const NGUI = await import('../../src/ba_modding_toolkit/web/js/ngui.js');
+  const NGUI = await import('../../src/bmpt/web/js/ngui.js');
   await Popup.ready();
   const examples = {
     'en-US': ['Your Student Photos', 'Frame a portrait, save a photo, make it yours.'],
@@ -2237,7 +2237,7 @@ test('tour pages and sibling controls fit all six locales inside the notice pref
   };
   try {
     for (const [lang, [title, text]] of Object.entries(examples)) {
-      const ui = JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${lang}.json`, import.meta.url))).webui;
+      const ui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url))).webui;
       setStrings(lang, Object.fromEntries(strings(ui)));
       for (const image of [null, '/tours/app-ui.png']) for (const index of [0, 1]) {
         const tree = Tours.pageTree({ version: '0.6.0', title, body: text, image, caption: title }, index, 2);
@@ -2272,9 +2272,9 @@ test('tour pages and sibling controls fit all six locales inside the notice pref
 
 for (const lang of ['en-US', 'zh-CN', 'zh-TW', 'ja-JP', 'ko-KR', 'th-TH']) {
   test(`Settings New Features has no value and empty paths retain Not set in ${lang}`, async () => {
-    const Settings = await import('../../src/ba_modding_toolkit/web/js/settings.js');
-    const NGUI = await import('../../src/ba_modding_toolkit/web/js/ngui.js');
-    const ui = JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${lang}.json`, import.meta.url))).webui;
+    const Settings = await import('../../src/bmpt/web/js/settings.js');
+    const NGUI = await import('../../src/bmpt/web/js/ngui.js');
+    const ui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url))).webui;
     const byPath = (path) => walk(settings).find((el) => el.dataset.path === `Rows/${path}`);
     const near = (actual, expected) => assert.ok(Math.abs(actual - expected) < 0.02, `${actual} != ${expected}`);
     handlers.set('settings.get', () => ({ result: { version: '0.6.0-alpha.10', language: lang,
@@ -2352,7 +2352,7 @@ test('Settings replay keeps the version list underneath and earlier tours remain
 test('the tour list joins titles with each shipped language\'s comma', async () => {
   try {
     for (const lang of ['en-US', 'ko-KR', 'th-TH', 'ja-JP', 'zh-CN', 'zh-TW']) {
-      const ui = JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${lang}.json`, import.meta.url))).webui;
+      const ui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url))).webui;
       const separator = ['en-US', 'ko-KR', 'th-TH'].includes(lang) ? ', ' : '、';
       assert.equal(ui.tour.separator, separator);
       setStrings(lang, Object.fromEntries(strings(ui)));
@@ -2389,7 +2389,7 @@ test('automatic tours wait for consents, update dialogs and jobs without checkin
 });
 
 test('source frame replacement preserves card envelopes, list placement and hit targets', async () => {
-  const { cardInkBounds, switchGrid, placeSwitchCards } = await import('../../src/ba_modding_toolkit/web/js/switch-layout.js');
+  const { cardInkBounds, switchGrid, placeSwitchCards } = await import('../../src/bmpt/web/js/switch-layout.js');
   await Popup.selectionReady();
   for (const kind of ['spr', 'lobby', 'model', null]) {
     const grid = switchGrid(kind), base = { key: 'choice', label: 'Source', full: 'Source' };
@@ -2422,13 +2422,13 @@ test('source frame replacement preserves card envelopes, list placement and hit 
 });
 
 test('source cards use the state badge and fitted locale caption in every picker', async () => {
-  const NGUI = await import('../../src/ba_modding_toolkit/web/js/ngui.js');
-  const { switchGrid } = await import('../../src/ba_modding_toolkit/web/js/switch-layout.js');
+  const NGUI = await import('../../src/bmpt/web/js/ngui.js');
+  const { switchGrid } = await import('../../src/bmpt/web/js/switch-layout.js');
   await Popup.selectionReady();
   const treeWalk = n => [n, ...(n.children || []).flatMap(treeWalk)];
   try {
     for (const lang of ['en-US', 'zh-CN', 'zh-TW', 'ja-JP', 'ko-KR', 'th-TH']) {
-      const ui = JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${lang}.json`, import.meta.url))).webui;
+      const ui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url))).webui;
       setStrings(lang, Object.fromEntries(strings(ui)));
       const captions = Popup.selectionCaptions();
       assert.equal(captions.applied.text, ui.status.applied);
@@ -2469,11 +2469,11 @@ test('source cards use the state badge and fitted locale caption in every picker
 
 
 test('shipped text-only tours use one fitted message frame in every locale, window and density', async () => {
-  const NGUI = await import('../../src/ba_modding_toolkit/web/js/ngui.js');
+  const NGUI = await import('../../src/bmpt/web/js/ngui.js');
   await Popup.ready();
   try {
     for (const lang of ['en-US', 'zh-CN', 'zh-TW', 'ja-JP', 'ko-KR', 'th-TH']) {
-      const ui = JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${lang}.json`, import.meta.url))).webui;
+      const ui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url))).webui;
       setStrings(lang, Object.fromEntries(strings(ui)));
       const pages = Object.entries(ui.tours.v0_6_0).map(([id, copy]) => ({ id, version: '0.6.0', ...copy }));
       assert.deepEqual(pages.map(({ id }) => id), ['student-thumbnails', 'hall-viewing-zoom']);
@@ -2543,7 +2543,7 @@ test('shipped text-only tours use one fitted message frame in every locale, wind
 });
 
 test('illustrated and mixed tours retain the original geometry, including a missing image', async () => {
-  const NGUI = await import('../../src/ba_modding_toolkit/web/js/ngui.js');
+  const NGUI = await import('../../src/bmpt/web/js/ngui.js');
   await Popup.ready();
   const pages = [tourPages[0], { ...tourPages[1], image: '/tours/missing-ui.png', caption: 'App controls' }];
   const size = Tours.pageSize(pages);
@@ -2581,7 +2581,7 @@ test('illustrated and mixed tours retain the original geometry, including a miss
 });
 
 test('tour frame height grows for longer copy and is scoped to its version', async () => {
-  const NGUI = await import('../../src/ba_modding_toolkit/web/js/ngui.js');
+  const NGUI = await import('../../src/bmpt/web/js/ngui.js');
   await Popup.ready();
   const pages = [tourPages[0], { ...tourPages[1], body: 'A longer explanation of the feature. '.repeat(12).trim() }];
   const size = Tours.pageSize(pages);
@@ -2604,10 +2604,10 @@ test('tour frame height grows for longer copy and is scoped to its version', asy
 
 
 test('Settings exposes one prerelease simulation row with both cases and stable exposes none', async () => {
-  const Settings = await import('../../src/ba_modding_toolkit/web/js/settings.js');
+  const Settings = await import('../../src/bmpt/web/js/settings.js');
   try {
     for (const lang of ['en-US', 'zh-CN', 'zh-TW', 'ja-JP', 'ko-KR', 'th-TH']) {
-      const ui = JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${lang}.json`, import.meta.url))).webui;
+      const ui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url))).webui;
       setStrings(lang, Object.fromEntries(strings(ui)));
       for (const enabled of [false, true]) {
         const prefs = { version: enabled ? '0.6.0-alpha.9' : '0.6.0', prereleasePreviews: enabled,
@@ -2677,7 +2677,7 @@ test('simulated offers use the real prefab and notes builder, intercept every ac
   const byPath = (root, path) => walk(root).find((el) => el.dataset.path === path);
   try {
     for (const lang of ['en-US', 'zh-CN', 'zh-TW', 'ja-JP', 'ko-KR', 'th-TH']) {
-      const ui = JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${lang}.json`, import.meta.url))).webui;
+      const ui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url))).webui;
       setStrings(lang, Object.fromEntries(strings(ui)));
       for (const notes of [true, false]) {
         const start = calls.length;
@@ -2736,7 +2736,7 @@ test('simulation never joins or replaces an existing real update offer', async (
 });
 
 // --- the display settings over a dialog (#display over #dialog) ---
-const appCss = readFileSync(new URL("../../src/ba_modding_toolkit/web/css/app.css", import.meta.url), "utf8");
+const appCss = readFileSync(new URL("../../src/bmpt/web/css/app.css", import.meta.url), "utf8");
 const zRule = (selector) => Number(new RegExp(`^${selector.replace(/[.#]/g, "\\$&")} \\{[^}]*?z-index: (\\d+)`, "m").exec(appCss)?.[1]);
 // a host's z-index from the stylesheet: the id's own rule, the class rule of its kind, and `.over` where it is set
 const stacking = (host) => {
@@ -2749,7 +2749,7 @@ test("the display settings open over a dialog: above it in the page and on the s
     n("Scroll Bar", [0, 0], [], ["Background", "Foreground"].map((name) => n(name, [1391, 0], [{ texture: "Scroll", w_: 126, h_: 990, pivot: 4, color: "#92a6b7/1.00" }])))])])]);
   const fetch = globalThis.fetch;
   t.mock.method(globalThis, "fetch", async (url, options) => url === "/asset/ui/layout/UICharacterCollection.json" ? reply(collection) : fetch(url, options));
-  const Display = await import("../../src/ba_modding_toolkit/web/js/display.js");
+  const Display = await import("../../src/bmpt/web/js/display.js");
   const done = [];
   const open = () => Display.open({ view: { sort: "name", order: "asc", filters: {} }, count: () => 3, onDone: (draft) => done.push(draft) });
   const backdrop = () => walk(display).find((e) => e.dataset.path === "Center/BlackBg/BlackBgClickArea");
@@ -2812,12 +2812,12 @@ test("the display settings' sort keys and filter options each share one font siz
     n("Scroll Bar", [0, 0], [], ["Background", "Foreground"].map((name) => n(name, [1391, 0], [{ texture: "Scroll", w_: 126, h_: 990, pivot: 4, color: "#92a6b7/1.00" }])))])])]);
   const fetch = globalThis.fetch;
   t.mock.method(globalThis, "fetch", async (url, options) => url === "/asset/ui/layout/UICharacterCollection.json" ? reply(collection) : fetch(url, options));
-  const Display = await import("../../src/ba_modding_toolkit/web/js/display.js");
+  const Display = await import("../../src/bmpt/web/js/display.js");
   const label = (root, pattern) => walk(root).filter((e) => pattern.test(e.dataset.path || "") && e.textContent);
   try {
     // the filter tab is the module's tab until a sort-only popup switches it, so the filter passes come first
     for (const sortOnly of [false, true]) for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
-      const ui = JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${locale}.json`, import.meta.url), "utf8")).webui;
+      const ui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8")).webui;
       setStrings(locale, Object.fromEntries(strings(ui)));
       document.documentElement.lang = locale;
       await Display.open({ view: { sort: "name", order: "asc", filters: {} }, count: () => 3, onDone() {}, sortOnly });
@@ -2912,8 +2912,8 @@ const fill = (text, params) => text.replace(/\{(\w+)\}/g, (_, key) => params[key
 const onStage = ([left, top, width, height]) => left >= -0.01 && top >= -0.01 && left + width <= 1920.01 && top + height <= 1080.01;
 
 for (const lang of ADD_LOCALES) test(`the Add result and the dropped list keep their frame, title and buttons on the stage for 1 to 40 rows in ${lang}`, async () => {
-  const NGUI = await import("../../src/ba_modding_toolkit/web/js/ngui.js");
-  const ui = JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${lang}.json`, import.meta.url))).webui;
+  const NGUI = await import("../../src/bmpt/web/js/ngui.js");
+  const ui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url))).webui;
   setStrings(lang, Object.fromEntries(strings(ui)));
   try {
     // mod-add.js: one row per added mod (a line button when the mods go to several screens), buttons Go To / Stay Here;
@@ -2960,7 +2960,7 @@ for (const lang of ADD_LOCALES) test(`the Add result and the dropped list keep t
 });
 
 test("Settings is on the popup stack: Escape and the backdrop close it, and a popup over it takes the key first", async () => {
-  const Settings = await import("../../src/ba_modding_toolkit/web/js/settings.js");
+  const Settings = await import("../../src/bmpt/web/js/settings.js");
   handlers.set("settings.get", () => ({ result: { version: "1.0.0", language: "en-US", languages: [{ code: "en-US", name: "English" }], cacheDir: "/test/cache", native: true } }));
   handlers.set("mods.state", () => ({ result: {} }));
   try {
@@ -3006,7 +3006,7 @@ test("Settings is on the popup stack: Escape and the backdrop close it, and a po
 // UI-15: Mod Alias and the repair preview are layers of their own in #dialog, like the message popups
 const layers = () => dialog.children.filter((el) => el.className === "popup-layer");
 test("Mod Alias is a layer of its own: a failed save's message draws above it, and Escape closes the visible layer", async () => {
-  const ModAlias = await import("../../src/ba_modding_toolkit/web/js/mod-alias.js");
+  const ModAlias = await import("../../src/bmpt/web/js/mod-alias.js");
   handlers.set("mods.rename", () => ({ error: { code: "library_io_error", params: { file: "x.bundle" } } }));
   try {
     const saved = [];
@@ -3040,7 +3040,7 @@ test("Mod Alias is a layer of its own: a failed save's message draws above it, a
 });
 
 test("closing Mod Alias leaves the other layers of the host, and a saved name closes only its own layer", async () => {
-  const ModAlias = await import("../../src/ba_modding_toolkit/web/js/mod-alias.js");
+  const ModAlias = await import("../../src/bmpt/web/js/mod-alias.js");
   handlers.set("mods.rename", () => ({ result: { id: "m1", label: "Name" } }));
   try {
     const saved = [];
@@ -3079,7 +3079,7 @@ test("closing Mod Alias leaves the other layers of the host, and a saved name cl
 });
 
 test("the repair preview is a layer of its own: a message over it, Escape on the visible layer, and a close that leaves the others", async () => {
-  const Compare = await import("../../src/ba_modding_toolkit/web/js/mod-compare.js");
+  const Compare = await import("../../src/bmpt/web/js/mod-compare.js");
   const review = { lines: ["moved 1"], accept: english.remap.accept, discard: english.remap.discard };
   const pending = Compare.show({ assets: [], pages: [], drawings: {} }, "Painted", "dialog", review);
   await drawn(dialog, "cancel");
@@ -3171,14 +3171,14 @@ const NGUI_rect = (el) => ["left", "top", "width", "height"].map((k) => parseFlo
 
 // UI-34: Escape in a list popup's search box closes the search and the popup stays, as the roster's does
 test("Escape in a list popup's search closes the search first; the next one closes the popup", async (t) => {
-  const NGUI = await import("../../src/ba_modding_toolkit/web/js/ngui.js");
+  const NGUI = await import("../../src/bmpt/web/js/ngui.js");
   const collection = n("UICharacterCollection", [0, 0]);
   const base = "Inventory_ListControl/RightCanvas/ListBG";
   insert(collection, "SeletControl/TopMenu", structuredClone(NGUI.find(switchLayouts.inventory, `${base}/BG_Top_Widget`)));
   insert(collection, "SeletControl/CharacterSearch", structuredClone(NGUI.find(switchLayouts.inventory, `${base}/Inbox/SearchInfo`)));
   const fetch = globalThis.fetch;
   t.mock.method(globalThis, "fetch", async (url, options) => url === "/asset/ui/layout/UICharacterCollection.json" ? reply(collection) : fetch(url, options));
-  const Fresh = await import("../../src/ba_modding_toolkit/web/js/popup.js?escape-search");
+  const Fresh = await import("../../src/bmpt/web/js/popup.js?escape-search");
   const items = Array.from({ length: 4 }, (_, i) => ({ key: String(i), label: `Owner ${i}`, full: `Owner ${i}` }));
   const closes = [];
   const options = { host: prompt, title: "Students", items, selected: "0", tools: {}, okText: "Apply",
@@ -3217,7 +3217,7 @@ test("Escape in a list popup's search closes the search first; the next one clos
 });
 
 test("a search that matches nothing blocks the primary button until the match is back", async (t) => {
-  const NGUI = await import("../../src/ba_modding_toolkit/web/js/ngui.js");
+  const NGUI = await import("../../src/bmpt/web/js/ngui.js");
   const collection = n("UICharacterCollection", [0, 0]);
   const base = "Inventory_ListControl/RightCanvas/ListBG";
   insert(collection, "SeletControl/TopMenu", structuredClone(NGUI.find(switchLayouts.inventory, `${base}/BG_Top_Widget`)));
@@ -3226,7 +3226,7 @@ test("a search that matches nothing blocks the primary button until the match is
     n(name, [1391, 0], [{ texture: "Scroll", w_: 126, h_: 990, pivot: 4, color: "#92a6b7/1.00" }]))));
   const fetch = globalThis.fetch;
   t.mock.method(globalThis, "fetch", async (url, options) => url === "/asset/ui/layout/UICharacterCollection.json" ? reply(collection) : fetch(url, options));
-  const Fresh = await import("../../src/ba_modding_toolkit/web/js/popup.js?empty-search");
+  const Fresh = await import("../../src/bmpt/web/js/popup.js?empty-search");
   const items = Array.from({ length: 4 }, (_, i) => ({ key: String(i), label: `Owner ${i}`, full: `Owner ${i}` }));
   const asked = [];
   try {
@@ -3263,10 +3263,10 @@ test("a search that matches nothing blocks the primary button until the match is
 
 // --- UI-13: the asset consent's Agree and Decline are named by their captions ---
 test("the asset consent names Agree and Decline with their captions in every language", async () => {
-  const Consent = await import("../../src/ba_modding_toolkit/web/js/consent.js");
+  const Consent = await import("../../src/bmpt/web/js/consent.js");
   try {
     for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
-      const ui = JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${locale}.json`, import.meta.url), "utf8")).webui;
+      const ui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8")).webui;
       setStrings(locale, Object.fromEntries(strings(ui)));
       const asked = Consent.show(consent, "/cache", false);
       await until(() => walk(consent).some((e) => e.tagName === "BUTTON"));
@@ -3282,7 +3282,7 @@ test("the asset consent names Agree and Decline with their captions in every lan
 
 // --- UI-36: a failed asset consent shows its error and can be answered again; a repeat click sends nothing ---
 test("a failed asset consent shows the error, keeps the popup to retry, and a repeat click sends nothing", async () => {
-  const Consent = await import("../../src/ba_modding_toolkit/web/js/consent.js");
+  const Consent = await import("../../src/bmpt/web/js/consent.js");
   setStrings("en-US", Object.fromEntries(strings(english)));
   const sent = [];
   let answer = null;
@@ -3316,7 +3316,7 @@ async function openSound(prefs = {}, tabName = "sound") {
   handlers.set("settings.get", () => ({ result: state }));
   handlers.set("mods.state", () => ({ result: {} }));
   handlers.set("settings.set", ({ key, value }) => { saved.push([key, value]); Object.assign(state, { [key]: value }); return { result: state }; });
-  const Settings = await import("../../src/ba_modding_toolkit/web/js/settings.js");
+  const Settings = await import("../../src/bmpt/web/js/settings.js");
   await Settings.open(null, tabName);
   return { saved, state, Settings };
 }
@@ -3397,7 +3397,7 @@ test("keyboard focus shows a ring on the game's thumb, the pointer's focus does 
     assert.notEqual(range(), before, "the page was drawn again");
     assert.equal(document.activeElement, range(), "and the slider kept the focus");
     // the ring is a class of the stylesheet, in the app's focus blue
-    const css = readFileSync(new URL("../../src/ba_modding_toolkit/web/css/app.css", import.meta.url), "utf8");
+    const css = readFileSync(new URL("../../src/bmpt/web/css/app.css", import.meta.url), "utf8");
     // one focus rule for every control (the slider's thumb among them): 4 px, 2 px off, on the Raius10px corner
     assert.match(css, /\.slider-thumb-focus,[^{]*\{[^}]*outline:\s*4px solid #2fa6f0;\s*outline-offset:\s*2px;\s*border-radius:\s*6\.49px/);
     assert.match(css, /\.hit\.slider-range\s*\{[^}]*opacity:\s*0/);
@@ -3422,8 +3422,8 @@ test("the custom zoom-out limit's slider is a range input with the value as its 
 });
 
 // --- design tokens, item B: one popup footer. Its centre is 190.5 above the frame's bottom edge in every popup frame ---
-const Tokens = await import("../../src/ba_modding_toolkit/web/js/ui-tokens.js");
-const Frames = await import("../../src/ba_modding_toolkit/web/js/popup-frames.js");
+const Tokens = await import("../../src/bmpt/web/js/ui-tokens.js");
+const Frames = await import("../../src/bmpt/web/js/popup-frames.js");
 const { FOOTER, POPUP } = Tokens;
 const STAGE_HALF = 540 / S; // the stage is 1080 px high: 832.5 units either side of its centre
 const unitsOf = (el) => {
@@ -3442,7 +3442,7 @@ function footerOf(root, names, scale) {
 const near2 = (a, b, eps = 0.02) => assert.ok(Math.abs(a - b) < eps, `${a} != ${b}`);
 
 test("popupFrame puts the footer's centre 190.5 above the bottom edge at every height, width and button count", async () => {
-  const NGUI = await import("../../src/ba_modding_toolkit/web/js/ngui.js");
+  const NGUI = await import("../../src/bmpt/web/js/ngui.js");
   await Popup.ready();
   for (const h of [640, 900, 1180, 1400, 1428.5, 1468.5, 1560]) for (const w of [1500, 1900, 2458]) {
     const bottom = POPUP.frameY - h / 2;
@@ -3485,9 +3485,9 @@ test("popupFrame puts the footer's centre 190.5 above the bottom edge at every h
 });
 
 test("the list, consent, update and tour footers share that centre height, caption range and gaps", async () => {
-  const NGUI = await import("../../src/ba_modding_toolkit/web/js/ngui.js");
-  const Consent = await import("../../src/ba_modding_toolkit/web/js/consent.js");
-  const Tours = await import("../../src/ba_modding_toolkit/web/js/tours.js");
+  const NGUI = await import("../../src/bmpt/web/js/ngui.js");
+  const Consent = await import("../../src/bmpt/web/js/consent.js");
+  const Tours = await import("../../src/bmpt/web/js/tours.js");
   const oneSize = (root, names) => new Set(names.map((name) => walk(root).find((e) => e.dataset.path === `Center/Popup/Btn/${name}/Label_Locale`).style.fontSize)).size;
   try {
     // the list popup: right-aligned under the list panel, 88 apart for two, 0.8 and 24 for three or more
@@ -3557,8 +3557,8 @@ test("the list, consent, update and tour footers share that centre height, capti
 });
 
 test("every popup frame keeps its lowest content 16 above the buttons' tops and stays on the stage", async () => {
-  const Tours = await import("../../src/ba_modding_toolkit/web/js/tours.js");
-  const Import = await import("../../src/ba_modding_toolkit/web/js/batch-import.js");
+  const Tours = await import("../../src/bmpt/web/js/tours.js");
+  const Import = await import("../../src/bmpt/web/js/batch-import.js");
   await Popup.ready();
   const rooms = [];
   const room = (name, h, bottom, buttons = 2, w = 1900) => rooms.push({ name, h, bottom, buttons, w });
@@ -3587,7 +3587,7 @@ test("every popup frame keeps its lowest content 16 above the buttons' tops and 
   // the list popup: its list panel's bottom edge is above the footer's tops, one to four buttons
   for (const buttons of [1, 2, 3, 4]) assert.ok(-470 >= Popup.footerTop(1520, buttons) + POPUP.clearance, `list popup, ${buttons} buttons`);
   // the consent popups, measured as drawn
-  const Consent = await import("../../src/ba_modding_toolkit/web/js/consent.js");
+  const Consent = await import("../../src/bmpt/web/js/consent.js");
   try {
     for (const open of [() => Consent.show(consent, "/cache", false), () => Consent.scan(consent)]) {
       const asked = open();
@@ -3604,31 +3604,31 @@ test("every popup frame keeps its lowest content 16 above the buttons' tops and 
 
 // --- design tokens, item C: one backdrop, the prefab's resting 0.80 (BlackBgClickArea's TweenAlpha runs 0 to 0.80, not the sprite's 0.94) ---
 test("every popup frame draws the one backdrop token", async () => {
-  const NGUI = await import("../../src/ba_modding_toolkit/web/js/ngui.js");
+  const NGUI = await import("../../src/bmpt/web/js/ngui.js");
   await Popup.ready();
   assert.equal(Tokens.BACKDROP, "#000000/0.80");
   const colour = (tree) => NGUI.find(tree, "BlackBg/BlackBgClickArea").widgets.find((w) => "sprite" in w).color;
   for (const [w, h] of [[1500, 680], [1900, 1180], [2458, 1400]]) assert.equal(colour(Popup.popupFrame("T", w, h, { ok: "OK" })), Tokens.BACKDROP);
   // the consent and update dialogs are popupFrame's now; the list popup, the display settings and Settings set the same token
   for (const file of ["popup.js", "display.js", "settings.js"]) {
-    const source = readFileSync(new URL(`../../src/ba_modding_toolkit/web/js/${file}`, import.meta.url), "utf8");
+    const source = readFileSync(new URL(`../../src/bmpt/web/js/${file}`, import.meta.url), "utf8");
     const sites = source.match(/BlackBgClickArea"\)\.widgets\.find\(\(\w+\) => "sprite" in \w+\)\.color = [^;]+;/g) || [];
     assert.ok(sites.length >= 1, file);
     assert.ok(sites.every((site) => site.endsWith("= BACKDROP;")), `${file}: ${sites}`);
   }
   for (const file of ["consent.js", "update.js"]) {
-    const source = readFileSync(new URL(`../../src/ba_modding_toolkit/web/js/${file}`, import.meta.url), "utf8");
+    const source = readFileSync(new URL(`../../src/bmpt/web/js/${file}`, import.meta.url), "utf8");
     assert.doesNotMatch(source, /BlackBgClickArea/, `${file} draws no frame of its own`);
   }
 });
 
 // --- design tokens, item D: one small button (402 x 136, caption 48 down to 34) ---
 const LOCALE_LIST = ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"];
-const localeWebui = (lang) => JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${lang}.json`, import.meta.url))).webui;
+const localeWebui = (lang) => JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url))).webui;
 const byDots = (ui, key) => key.split(".").reduce((o, part) => o[part], ui);
 
 for (const lang of LOCALE_LIST) test(`message line buttons are 136 high, as wide as their caption and 90 (240 at least), and their rows hold them in ${lang}`, async () => {
-  const NGUI = await import("../../src/ba_modding_toolkit/web/js/ngui.js");
+  const NGUI = await import("../../src/bmpt/web/js/ngui.js");
   await Popup.ready();
   const ui = localeWebui(lang);
   try {
@@ -3664,7 +3664,7 @@ for (const lang of LOCALE_LIST) test(`message line buttons are 136 high, as wide
 });
 
 test("value rows lay their 402 x 136 buttons right-aligned 422 apart and wrap to a second line, never shrinking one", async () => {
-  const Settings = await import("../../src/ba_modding_toolkit/web/js/settings.js");
+  const Settings = await import("../../src/bmpt/web/js/settings.js");
   const { SMALL_BUTTON: B } = Tokens;
   // beside the value: two buttons to a line (the value keeps its 460); under it: three (the line is 1418 wide)
   assert.deepEqual([0, 1, 2, 3, 4, 5, 6, 7].map((n) => Settings.buttonLines(n)), [[], [1], [2], [2, 1], [2, 2], [2, 2, 1], [2, 2, 2], [2, 2, 2, 1]]);
@@ -3699,7 +3699,7 @@ test("value rows lay their 402 x 136 buttons right-aligned 422 apart and wrap to
 });
 
 for (const lang of LOCALE_LIST) test(`Settings tabs keep every value row's buttons inside the row and clear of the value, and every row reachable in ${lang}`, async () => {
-  const NGUI = await import("../../src/ba_modding_toolkit/web/js/ngui.js");
+  const NGUI = await import("../../src/bmpt/web/js/ngui.js");
   const ui = localeWebui(lang);
   const prefs = (extra = {}) => ({ version: "0.6.0-alpha.10", language: lang, languages: [{ code: lang, name: ui.languageName }], native: true, traySupported: true,
     logPath: "/Users/someone/Library/Application Support/bluearchive-modding-patching-tool/logs/session.log",
@@ -3713,7 +3713,7 @@ for (const lang of LOCALE_LIST) test(`Settings tabs keep every value row's butto
   handlers.set("app.tours", () => ({ result: { tours: [] } }));
   setStrings(lang, Object.fromEntries(strings(ui)));
   document.documentElement.lang = lang;
-  const Settings = await import("../../src/ba_modding_toolkit/web/js/settings.js");
+  const Settings = await import("../../src/bmpt/web/js/settings.js");
   const rectOf = (el) => NGUI.rect(el);
   const inside = (a, b, eps = 0.05) => a[0] >= b[0] - eps && a[1] >= b[1] - eps && a[0] + a[2] <= b[0] + b[2] + eps && a[1] + a[3] <= b[1] + b[3] + eps;
   const apart = (a, b) => a[0] + a[2] <= b[0] + 0.05 || b[0] + b[2] <= a[0] + 0.05 || a[1] + a[3] <= b[1] + 0.05 || b[1] + b[3] <= a[1] + 0.05;
@@ -3759,8 +3759,8 @@ for (const lang of LOCALE_LIST) test(`Settings tabs keep every value row's butto
 });
 
 for (const lang of LOCALE_LIST) test(`the asset consent's Change button (136 high) clears the item and path text and the buttons below, in ${lang}`, async () => {
-  const NGUI = await import("../../src/ba_modding_toolkit/web/js/ngui.js");
-  const Consent = await import("../../src/ba_modding_toolkit/web/js/consent.js");
+  const NGUI = await import("../../src/bmpt/web/js/ngui.js");
+  const Consent = await import("../../src/bmpt/web/js/consent.js");
   const ui = localeWebui(lang);
   await Popup.ready();
   const apartBoxes = (a, b) => a[2] <= b[0] + 1e-9 || b[2] <= a[0] + 1e-9 || a[3] <= b[1] + 1e-9 || b[3] <= a[1] + 1e-9; // [x0, y0, x1, y1]
@@ -3825,7 +3825,7 @@ test("chipPlaces stands chips in centred rows that fit inside the 850-unit panel
 });
 
 for (const lang of LOCALE_LIST) test(`the details panel's chips are 272 x 72, inside the panel and clear of the fields box and the name, in ${lang}`, async () => {
-  const NGUI = await import("../../src/ba_modding_toolkit/web/js/ngui.js");
+  const NGUI = await import("../../src/bmpt/web/js/ngui.js");
   const { CHIP } = Tokens;
   const ui = localeWebui(lang);
   const lists = [[ui.type.noRecruit], [ui.type.added, ui.popup.inUse], [ui.type.recruit, ui.settings.server.global, ui.mods.copy.none],
@@ -3864,8 +3864,8 @@ for (const lang of LOCALE_LIST) test(`the details panel's chips are 272 x 72, in
 });
 
 test("the portrait panel's chips (72 high) stay in the right half and 16 above the fields box", async () => {
-  const NGUI = await import("../../src/ba_modding_toolkit/web/js/ngui.js");
-  const { portraitPanel: b } = await import("../../src/ba_modding_toolkit/web/js/switch-layout.js");
+  const NGUI = await import("../../src/bmpt/web/js/ngui.js");
+  const { portraitPanel: b } = await import("../../src/bmpt/web/js/switch-layout.js");
   const ui = localeWebui("en-US");
   const left = 960 + ((b.left + b.right) / 2 + b.gap / 2) * S, right = 960 + b.right * S;
   try {

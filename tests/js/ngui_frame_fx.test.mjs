@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { selectedFrame, SELECTION_SLOT } from '../../src/ba_modding_toolkit/web/js/selected-frames.js';
+import { selectedFrame, SELECTION_SLOT } from '../../src/bmpt/web/js/selected-frames.js';
 import { selectionPrefab } from './selection_prefabs.mjs';
 const media = { matches: false, addEventListener(_type, fn) { this.change = fn; } };
 globalThis.matchMedia = () => media;
@@ -9,8 +9,8 @@ const frames = new Map();
 globalThis.requestAnimationFrame = fn => { const id = ++serial; frames.set(id, fn); return id; };
 globalThis.cancelAnimationFrame = id => frames.delete(id);
 globalThis.MutationObserver = class { constructor(fn) { observe = fn; } observe() {} };
-const { FRAME_OUTPUT, frameBlend, frameMesh, frameOver, renderFrameEffect } = await import('../../src/ba_modding_toolkit/web/js/ngui-frame-fx.js');
-const { toLinear, toSrgb } = await import('../../src/ba_modding_toolkit/web/js/touch-fx.js');
+const { FRAME_OUTPUT, frameBlend, frameMesh, frameOver, renderFrameEffect } = await import('../../src/bmpt/web/js/ngui-frame-fx.js');
+const { toLinear, toSrgb } = await import('../../src/bmpt/web/js/touch-fx.js');
 const slot = SELECTION_SLOT.split('/').reduce((n, part) => n.children.find(c => c.name === part), selectionPrefab());
 const effect = selectedFrame(slot, { w: 312, h: 480 }, true, true).children.find(n => n.frameEffect).frameEffect;
 function setup({ connected = true, glAvailable = true } = {}) {

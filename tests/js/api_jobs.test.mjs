@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { rpc, waitJob } from "../../src/ba_modding_toolkit/web/js/api.js";
+import { rpc, waitJob } from "../../src/bmpt/web/js/api.js";
 
 let stream;
 globalThis.EventSource = class {

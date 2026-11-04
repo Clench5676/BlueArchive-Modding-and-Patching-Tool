@@ -5,12 +5,14 @@ import re
 from pathlib import Path
 
 from ba_modding_toolkit import i18n
+from bmpt.localization import LOCALES
 
-LOCALES = Path(i18n.__file__).parent / "locales"
+CLASSIC_LOCALES = Path(i18n.__file__).parent / "locales"
 
 
 def strings():
-    return json.loads((LOCALES / "th-TH.json").read_text(encoding="utf-8"))
+    return {**json.loads((CLASSIC_LOCALES / "th-TH.json").read_text(encoding="utf-8")),
+             **json.loads((LOCALES / "th-TH.json").read_text(encoding="utf-8"))}
 
 
 def test_thai_is_offered_with_its_native_name():

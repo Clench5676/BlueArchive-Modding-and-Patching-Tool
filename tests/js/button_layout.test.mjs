@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { resizeButton } from "../../src/ba_modding_toolkit/web/js/button-layout.js";
+import { resizeButton } from "../../src/bmpt/web/js/button-layout.js";
 
 const px = [0, 0.5, 1, 0, 0.5, 1, 0, 0.5, 1], py = [1, 1, 1, 0.5, 0.5, 0.5, 0, 0, 0];
 const near = (a, b) => assert.ok(Math.abs(a - b) < 1e-8, `${a} != ${b}`);

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {test} from 'node:test';
-const source=await readFile(new URL('../../src/ba_modding_toolkit/web/js/photography/feedback.js',import.meta.url),'utf8');
+const source=await readFile(new URL('../../src/bmpt/web/js/photography/feedback.js',import.meta.url),'utf8');
 const {stageRect,flightTransform}=await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
 test('album flight uses logical stage coordinates at any window scale',()=>{
   for(const scale of [.5,1,1.5]){

@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from ba_modding_toolkit.library.judge import mod_versions
+from bmpt.library.judge import mod_versions
 from ba_modding_toolkit.naming import parse_filename
 
 from test_batch_import import analyze, batch_model_env, env, rpc, run

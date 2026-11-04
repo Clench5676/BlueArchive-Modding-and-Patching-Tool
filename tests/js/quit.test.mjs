@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { CONFIRM_KEYS, HOSTS, confirmQuit, quitKey } from "../../src/ba_modding_toolkit/web/js/quit.js";
+import { CONFIRM_KEYS, HOSTS, confirmQuit, quitKey } from "../../src/bmpt/web/js/quit.js";
 
 // the page: the student list shown, every popup host hidden, unless said otherwise
 function page({ roster = true, open = [] } = {}) {

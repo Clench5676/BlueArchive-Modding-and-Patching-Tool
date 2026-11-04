@@ -6,7 +6,7 @@ import vm from "node:vm";
 
 const context = vm.createContext({ console, TextDecoder, TextEncoder, Float32Array, Uint8Array,
   Uint16Array, Int16Array, Int32Array, ArrayBuffer, DataView });
-vm.runInContext(readFileSync(new URL("../../src/ba_modding_toolkit/web/vendor/spine-player-4.2.120/spine-player.min.js", import.meta.url), "utf8"), context);
+vm.runInContext(readFileSync(new URL("../../src/bmpt/web/vendor/spine-player-4.2.120/spine-player.min.js", import.meta.url), "utf8"), context);
 const S = context.spine;
 
 for (const degrees of [0, 90, 180, 270]) {

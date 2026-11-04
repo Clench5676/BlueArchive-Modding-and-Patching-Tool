@@ -4,7 +4,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { ITEMS, NGUI_GREY, activate, greyed, handOffPrompt, tintOf, view } from "../../src/ba_modding_toolkit/web/js/nav-items.js";
+import { ITEMS, NGUI_GREY, activate, greyed, handOffPrompt, tintOf, view } from "../../src/bmpt/web/js/nav-items.js";
 
 const T = (key, vars = {}) => (key === "nav.classic" ? `${vars.label} - Classic UI` : `<${key}>`);
 const CLASSIC = ["crc_tool", "asset_packer", "asset_extractor", "adb_push", "tools"];
@@ -153,7 +153,7 @@ dialog.hidden = true;
 globalThis.fetch = async () => ({ ok: false, status: 404, json: async () => null });
 const warn = console.warn;
 console.warn = (...args) => { if (!/popup layout|message popup without/.test(String(args[0]))) warn(...args); };
-const Popup = await import("../../src/ba_modding_toolkit/web/js/popup.js");
+const Popup = await import("../../src/bmpt/web/js/popup.js");
 
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
 const action = (name) => walk(dialog).find((e) => e.dataset?.action === name);

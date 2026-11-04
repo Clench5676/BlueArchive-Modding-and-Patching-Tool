@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { createFullscreen } from "../../src/ba_modding_toolkit/web/js/student-hall-fullscreen.js";
+import { createFullscreen } from "../../src/bmpt/web/js/student-hall-fullscreen.js";
 class Element {
   constructor(doc){this.doc=doc;this.children=[];this.inert=false;this.isConnected=true;this.classes=new Set();this.classList={add:name=>this.classes.add(name),remove:name=>this.classes.delete(name)};this.attrs={};}
   append(element){element.parent=this;this.children.push(element);}

@@ -41,10 +41,10 @@ globalThis.spine = { BlendMode: { Normal: 0, Additive: 1 },
   PolygonBatcher: { blendModesGL: [{ srcRgb: 1, srcRgbPma: 1, dstRgb: 2, srcAlpha: 1 }, { srcRgb: 1, srcRgbPma: 1, dstRgb: 1, srcAlpha: 1 }] } };
 globalThis.performance ??= { now: () => Date.now() };
 
-const Stage = await import("../../src/ba_modding_toolkit/web/js/lobby-stage.js");
-const GL = await import("../../src/ba_modding_toolkit/web/js/particles-gl.js");
-const Linear = await import("../../src/ba_modding_toolkit/web/js/linear.js");
-const P = await import("../../src/ba_modding_toolkit/web/js/particles.js");
+const Stage = await import("../../src/bmpt/web/js/lobby-stage.js");
+const GL = await import("../../src/bmpt/web/js/particles-gl.js");
+const Linear = await import("../../src/bmpt/web/js/linear.js");
+const P = await import("../../src/bmpt/web/js/particles.js");
 
 // The layers and effects of three lobbies as lobby.json gives them (the queues of their atlas pages and of their
 // effects' materials, the effects' sorting fudge and depth): two skeletons each, the second the intro's scene parked

@@ -45,7 +45,7 @@ export function installFitPage() {
   return root;
 }
 
-const read = (locale) => JSON.parse(readFileSync(new URL(`../../../src/ba_modding_toolkit/locales/${locale}.json`, import.meta.url), "utf8")).webui;
+const read = (locale) => JSON.parse(readFileSync(new URL(`../../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8")).webui;
 const cache = new Map();
 // the locale's web UI strings, flat ("import.filterCount") or nested
 export function webui(locale) {

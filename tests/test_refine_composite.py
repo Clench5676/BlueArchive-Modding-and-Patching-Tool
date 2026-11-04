@@ -8,7 +8,7 @@ import numpy as np
 from PIL import Image, ImageDraw
 import pytest
 
-from ba_modding_toolkit.refine_composite import compose, project, movement_check
+from bmpt.refine_composite import compose, project, movement_check
 
 
 def geometry(overlap=False, blend=0, tint=None):
@@ -128,7 +128,7 @@ def test_invalid_geometry_or_density_is_refused():
 def test_official_binary_composite_identity_and_every_expression(tmp_path):
     if not os.environ.get('BAMT_TEST_GAME_DIR'):
         pytest.skip('Set BAMT_TEST_GAME_DIR to a verified official development view')
-    from ba_modding_toolkit.atlas_remap import read_inputs
+    from bmpt.atlas_remap import read_inputs
     from ba_modding_toolkit.searching import get_search_dirs
     paths = sorted(p for d in get_search_dirs(Path(os.environ['BAMT_TEST_GAME_DIR'])) for p in d.glob('assets-_mx-spinecharacters-shiroko_ridingsuit_spr-*.bundle'))
     if not paths: pytest.skip('Official view has no Shiroko (Cycling)')

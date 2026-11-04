@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 
-const main = readFileSync(new URL('../../src/ba_modding_toolkit/web/js/main.js', import.meta.url), 'utf8');
+const main = readFileSync(new URL('../../src/bmpt/web/js/main.js', import.meta.url), 'utf8');
 const notice = main.slice(main.indexOf('function dataDirNotice()'), main.indexOf('// The start popups, one at a time'));
 
 function harness(info) {

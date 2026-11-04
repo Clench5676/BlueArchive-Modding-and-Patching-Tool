@@ -3,12 +3,12 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { controls } from "./control_prefabs.mjs";
 
-const web = new URL("../../src/ba_modding_toolkit/web/js/", import.meta.url);
+const web = new URL("../../src/bmpt/web/js/", import.meta.url);
 const source = readFileSync(new URL("settings-other.js", web), "utf8");
 const settings = readFileSync(new URL("settings.js", web), "utf8");
 const strip = (s) => s.replace(/^import .*;\n/gm, "").replace(/^export /gm, "");
 function harness({ locale = "en-US", answer = "ok", used = true, error = null, result = {} } = {}) {
-  const strings = JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${locale}.json`, import.meta.url), "utf8")).webui;
+  const strings = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8")).webui;
   const T = (key, values = {}) => key.split(".").reduce((v, k) => v[k], strings).replace(/\{(\w+)\}/g, (_, k) => values[k]);
   const calls = [], messages = [], refused = [];
   let changed = 0;

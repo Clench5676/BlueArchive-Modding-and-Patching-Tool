@@ -3,13 +3,13 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import vm from "node:vm";
-import { jobProgress } from "../../src/ba_modding_toolkit/web/js/job-progress.js";
-import { setStrings } from "../../src/ba_modding_toolkit/web/js/i18n.js";
+import { jobProgress } from "../../src/bmpt/web/js/job-progress.js";
+import { setStrings } from "../../src/bmpt/web/js/i18n.js";
 
 const context = vm.createContext({ console, TextDecoder, TextEncoder, Float32Array, Uint8Array, Uint16Array, Int16Array, Int32Array, ArrayBuffer, DataView });
-vm.runInContext(readFileSync(new URL("../../src/ba_modding_toolkit/web/vendor/spine-player-4.2.120/spine-player.min.js", import.meta.url), "utf8"), context);
+vm.runInContext(readFileSync(new URL("../../src/bmpt/web/vendor/spine-player-4.2.120/spine-player.min.js", import.meta.url), "utf8"), context);
 globalThis.spine = context.spine;
-const source = readFileSync(new URL("../../src/ba_modding_toolkit/web/js/mod-compatibility.js", import.meta.url), "utf8");
+const source = readFileSync(new URL("../../src/bmpt/web/js/mod-compatibility.js", import.meta.url), "utf8");
 const fixture = JSON.parse(readFileSync(new URL("../assets/integrity/mismatched_skeleton.json", import.meta.url), "utf8"));
 const encoded = (data) => ({ version: data.skeleton.spine, data: Buffer.from(JSON.stringify(data)).toString("base64") });
 const atlas = (x = 1, name = "smile", size = 64) => `page.png\nsize: ${size},${size}\n${name}\n bounds: ${x},1,8,8\n`;
@@ -18,7 +18,7 @@ const report = () => ({ official: inputs(), mod: inputs(), remappable: true });
 const mixedReport = () => { const r = report(); r.mod.textures.page = [64, 32]; return r; };
 let sequence = 0;
 async function harness(locale = "en-US", button = "cancel", accept = false) {
-  const strings = JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${locale}.json`, import.meta.url), "utf8")).webui;
+  const strings = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8")).webui;
   globalThis.document ||= { documentElement: {}, getElementById: () => null };
   const flat = (o, prefix = "webui.", out = {}) => {
     for (const [key, value] of Object.entries(o)) {

@@ -9,9 +9,9 @@ from concurrent.futures import ThreadPoolExecutor
 import pytest
 from PIL import Image
 
-from ba_modding_toolkit.errors import ServiceError
-from ba_modding_toolkit.library import photographs
-from ba_modding_toolkit.library.photographs import Photographs
+from bmpt.errors import ServiceError
+from bmpt.library import photographs
+from bmpt.library.photographs import Photographs
 
 
 def capture(size=(202, 228), color=(13, 85, 170, 180)):
@@ -143,7 +143,7 @@ def test_failed_selection_publish_retains_previous_selection(tmp_path, monkeypat
 
 
 def test_family_gallery_has_independent_variant_counters_and_selections(tmp_path):
-    from ba_modding_toolkit.library.photographs import Photographs
+    from bmpt.library.photographs import Photographs
     import base64
     import io
     from PIL import Image

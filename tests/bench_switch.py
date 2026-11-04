@@ -24,7 +24,7 @@ from ba_modding_toolkit.utils import CRCUtils
 
 def run_trial():
     with tempfile.TemporaryDirectory() as temporary, MonkeyPatch.context() as patch:
-        patch.setattr('ba_modding_toolkit.library.identity.content_cores', lambda path: set())
+        patch.setattr('bmpt.library.identity.content_cores', lambda path: set())
         env = test_library.setup_library.__wrapped__(Path(temporary), patch, None)
         env.original.unlink()
         env.original = test_library.game_bundle(env.game_dir, payload=b'A' * (8 * 1024 * 1024))
@@ -50,7 +50,7 @@ def run_trial():
 
         patch.setattr(library, '_install_direct', measured('build_crc', build))
         patch.setattr(library._hashes, 'get', measured('fingerprints', library._hashes.get))
-        module = importlib.import_module('ba_modding_toolkit.library.service')
+        module = importlib.import_module('bmpt.library.service')
         patch.setattr(module, 'atomic_copy', measured('copy', module.atomic_copy))
         for name in ('_commit', '_stage_official', '_prune_quietly', '_official_for'):
             patch.setattr(library, name, measured(name, getattr(library, name)))
@@ -87,11 +87,11 @@ def main():
     args = parser.parse_args()
     if args.baseline:
         for suffix in ('storage', 'service'):
-            module = importlib.import_module(f'ba_modding_toolkit.library.{suffix}')
-            path = f'src/ba_modding_toolkit/library/{suffix}.py'
+            module = importlib.import_module(f'bmpt.library.{suffix}')
+            path = f'src/bmpt/library/{suffix}.py'
             source = subprocess.run(['git', 'show', f'HEAD:{path}'], check=True, capture_output=True, text=True).stdout
             exec(compile(source, f'<baseline {path}>', 'exec'), vars(module))
-        test_library.ModLibrary = importlib.import_module('ba_modding_toolkit.library.service').ModLibrary
+        test_library.ModLibrary = importlib.import_module('bmpt.library.service').ModLibrary
     trials = [run_trial() for _ in range(args.trials)]
     median = {name: {phase: round(statistics.median(trial[name].get(phase, 0) for trial in trials), 3)
                      for phase in sorted({p for trial in trials for p in trial[name]})}

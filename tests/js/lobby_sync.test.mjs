@@ -4,8 +4,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-const Sync = await import("../../src/ba_modding_toolkit/web/js/lobby-sync.js");
-const Lobby = await import("../../src/ba_modding_toolkit/web/js/lobby.js");
+const Sync = await import("../../src/bmpt/web/js/lobby-sync.js");
+const Lobby = await import("../../src/bmpt/web/js/lobby.js");
 
 // an AnimationState that records what is set and queued; entries carry a listener like spine-ts's
 class State {

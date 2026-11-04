@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { labelEffect, labelBaselineInset, loadingLabel } from "../../src/ba_modding_toolkit/web/js/ngui-label.js";
+import { labelEffect, labelBaselineInset, loadingLabel } from "../../src/bmpt/web/js/ngui-label.js";
 const n = (name, pos, widgets = [], children = []) => ({ name, pos, widgets, children, scale: [1, 1], active: true });
 const letter = { text: "Now Loading", fontSize: 46, w_: 300, h_: 70, pivot: 4, color: "#ffffff/1.00",
   effect: 2, effectColor: "#123456/0.90", effectDistance: [2, -3] };
@@ -10,9 +10,9 @@ test("loading progress clones the prefab label effect and NGUI renders its exact
   const tree = loadingLabel(repeater, null, "Applying Mods", 1920 / 2960), w = tree.widgets[0];
   for (const key of ["effect", "effectColor", "effectDistance", "color", "fontSize"]) assert.deepEqual(w[key], letter[key]);
   assert.equal(labelEffect(w, 0.5), "1px -1.5px 0 rgba(18, 52, 86, 0.9), -1px 1.5px 0 rgba(18, 52, 86, 0.9), 1px 1.5px 0 rgba(18, 52, 86, 0.9), -1px -1.5px 0 rgba(18, 52, 86, 0.9)");
-  const renderer = readFileSync(new URL("../../src/ba_modding_toolkit/web/js/ngui.js", import.meta.url), "utf8");
+  const renderer = readFileSync(new URL("../../src/bmpt/web/js/ngui.js", import.meta.url), "utf8");
   assert.match(renderer, /textShadow: labelEffect\(w, sy \* S\)/);
-  const css = readFileSync(new URL("../../src/ba_modding_toolkit/web/css/app.css", import.meta.url), "utf8");
+  const css = readFileSync(new URL("../../src/bmpt/web/css/app.css", import.meta.url), "utf8");
   assert.match(css, /\.loading-progress\.prefab-label \{ inset: 0/);
   assert.match(css, /\.loading-edge \{[^}]*z-index: 0/);
 });
@@ -49,7 +49,7 @@ test("sprite letter ink, excluding g and Arona, defines the progress baseline", 
 });
 
 test("ellipsis glyph canvas includes font descent and outline on every side", async () => {
-  const { labelClipPadding } = await import("../../src/ba_modding_toolkit/web/js/ngui-label.js");
+  const { labelClipPadding } = await import("../../src/bmpt/web/js/ngui-label.js");
   for (const text of ["Import List", "gjpy", "\u6e05\u55ae", "\u4e00\u89a7", "\ubaa9\ub85d", "\u0e19\u0e33\u0e40\u0e02\u0e49\u0e32"]) {
     const fs = 62, metrics = { actualBoundingBoxAscent: 72, actualBoundingBoxDescent: 18, fontBoundingBoxAscent: 72, fontBoundingBoxDescent: 18 };
     const padding = labelClipPadding({ ...letter, text }, fs, metrics);
@@ -62,7 +62,7 @@ test("ellipsis glyph canvas includes font descent and outline on every side", as
 
 
 test("Thai combining marks use the font baseline rather than moving it to the ink center", async () => {
-  const { labelClipPadding } = await import("../../src/ba_modding_toolkit/web/js/ngui-label.js");
+  const { labelClipPadding } = await import("../../src/bmpt/web/js/ngui-label.js");
   const fs = 62, baseline = (fs * 1.15 + 72 - 18) / 2;
   const pad = labelClipPadding(letter, fs, { actualBoundingBoxAscent: 90, actualBoundingBoxDescent: 25,
     fontBoundingBoxAscent: 72, fontBoundingBoxDescent: 18 });

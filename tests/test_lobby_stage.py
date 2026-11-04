@@ -28,7 +28,7 @@ def test_lobby_stage_in_node():
 def real_game(tmp_path_factory):
     if not GAME_DIR.is_dir():
         pytest.skip("No local game install")
-    from ba_modding_toolkit.gameassets import AssetCache, GameAssets
+    from bmpt.gameassets import AssetCache, GameAssets
     from ba_modding_toolkit.searching import get_search_dirs
     root = tmp_path_factory.mktemp("stage") / "cache"
     return GameAssets(get_search_dirs(GAME_DIR), AssetCache(root=root, allowed=True))

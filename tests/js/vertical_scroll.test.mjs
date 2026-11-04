@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
-import { easeScroll, installVerticalWheel, wheelScroller, windowsWheel } from '../../src/ba_modding_toolkit/web/js/horizontal-scroll.js';
+import { easeScroll, installVerticalWheel, wheelScroller, windowsWheel } from '../../src/bmpt/web/js/horizontal-scroll.js';
 
 const near = (actual, expected) => assert.ok(Math.abs(actual - expected) < 1e-8, `${actual} != ${expected}`);
 const notch = (extra = {}) => ({ deltaY: 100, deltaX: 0, deltaMode: 0, wheelDeltaY: -120,
@@ -172,12 +172,12 @@ test('pointer, keyboard, blur, visibility and motion preference changes cancel n
 });
 
 test('the roster uses the shared controller for its virtual position and cancels it on hide or rebuild', () => {
-  const source = readFileSync(new URL('../../src/ba_modding_toolkit/web/js/roster.js', import.meta.url), 'utf8');
+  const source = readFileSync(new URL('../../src/bmpt/web/js/roster.js', import.meta.url), 'utf8');
   assert.match(source, /wheelScroller\(\{ read: \(\) => view.scroll/);
   assert.match(source, /view.scroll = top; applyScroll\(\)/);
   assert.match(source, /if \(motion.wheel\(ev\)\) return;/);
   for (const name of ['relist', 'buildFrame', 'hide']) assert.match(source,
     new RegExp(`(?:async )?function ${name}\\([^)]*\\) \\{\\s*wheelMotion\\?\\.stop\\(\\);`));
-  const main = readFileSync(new URL('../../src/ba_modding_toolkit/web/js/main.js', import.meta.url), 'utf8');
+  const main = readFileSync(new URL('../../src/bmpt/web/js/main.js', import.meta.url), 'utf8');
   assert.match(main, /installVerticalWheel\(\);/);
 });

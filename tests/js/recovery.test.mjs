@@ -2,9 +2,9 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import vm from "node:vm";
-import { rpc } from "../../src/ba_modding_toolkit/web/js/api.js";
+import { rpc } from "../../src/bmpt/web/js/api.js";
 
-const source = readFileSync(new URL("../../src/ba_modding_toolkit/web/js/recovery.js", import.meta.url), "utf8");
+const source = readFileSync(new URL("../../src/bmpt/web/js/recovery.js", import.meta.url), "utf8");
 class El {
   children = []; style = {}; textContent = "";
   constructor(tag) { this.tag = tag; }
@@ -18,7 +18,7 @@ class El {
 function harness({ safeMode = false, canRestartSafe = true } = {}) {
   let now = 0, timerId = 0;
   const timers = new Map(), listeners = {}, calls = [], body = new El("body");
-  const strings = JSON.parse(readFileSync(new URL("../../src/ba_modding_toolkit/locales/en-US.json", import.meta.url))).webui;
+  const strings = JSON.parse(readFileSync(new URL("../../src/bmpt/locales/en-US.json", import.meta.url))).webui;
   const flat = {};
   const flatten = (data, prefix = "") => { for (const [k, value] of Object.entries(data)) {
     const key = prefix ? `${prefix}.${k}` : k;

@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { readFileSync } from 'node:fs';
-import { headerGeometry, rowLayout, subtractRegions, expandRect, stageCoverBleed } from '../../src/ba_modding_toolkit/web/js/window-layout.js';
-import { topActionLayout, nativeRightClearance } from '../../src/ba_modding_toolkit/web/js/top-action-layout.js';
-import { barCentre } from '../../src/ba_modding_toolkit/web/js/top-bar-layout.js';
+import { headerGeometry, rowLayout, subtractRegions, expandRect, stageCoverBleed } from '../../src/bmpt/web/js/window-layout.js';
+import { topActionLayout, nativeRightClearance } from '../../src/bmpt/web/js/top-action-layout.js';
+import { barCentre } from '../../src/bmpt/web/js/top-bar-layout.js';
 import { cornerPrefabs } from './corner_prefabs.mjs';
-import { CORNER_MARGIN } from '../../src/ba_modding_toolkit/web/js/corner-layout.js';
-import { installCloseGuard } from '../../src/ba_modding_toolkit/web/js/window-close.js';
+import { CORNER_MARGIN } from '../../src/bmpt/web/js/corner-layout.js';
+import { installCloseGuard } from '../../src/bmpt/web/js/window-close.js';
 
 const S = 24 / 37;
 const sizes = [[960,540], [1600,900], [2560,1080], [960,1200]];
@@ -15,7 +15,7 @@ const near = (a,b) => assert.ok(Math.abs(a-b)<1e-7, `${a} != ${b}`);
 // contract as the DOM canvas. Native font rendering remains owner acceptance.
 const textWidth = (text, font) => [...text].reduce((w,c) => w + font * (/[^\x00-\x7f]/.test(c) ? 1 : .65), 0);
 const prefabs=cornerPrefabs.UICharacterCollection,right='NUITop_Scenes/Top/Right/';
-const cssSource=readFileSync(new URL('../../src/ba_modding_toolkit/web/css/app.css',import.meta.url),'utf8');
+const cssSource=readFileSync(new URL('../../src/bmpt/web/css/app.css',import.meta.url),'utf8');
 const borderLeft=Number(/border-width: 0 11px 0 (\d+)px/.exec(cssSource)[1]);
 const marginLeft=Number(/\.mod-switch \{[^}]*margin-left: (-?[\d.]+)px/.exec(cssSource)[1]);
 const hallMargin=Number(/\.topbar\.hall-home \.mod-switch \{ margin-left: (-?[\d.]+)px/.exec(cssSource)[1]);
@@ -28,7 +28,7 @@ const boxes=Object.fromEntries([['home','Lobby'],['option','Option'],['line','Li
 const pages=[{name:'Hall',hall:true,modsVisible:true},{name:'roster',hall:false,modsVisible:true},
   {name:'detail',hall:false,modsVisible:true},{name:'import',hall:false,modsVisible:true},{name:'message',hall:false,modsVisible:false}];
 for (const locale of ['en-US','zh-CN','zh-TW','ja-JP','ko-KR','th-TH']) test(`title-free rows for every page and native bounds in ${locale}`, () => {
-  const strings = JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${locale}.json`,import.meta.url))).webui;
+  const strings = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`,import.meta.url))).webui;
   // Preserve the real ON/OFF labels, prefab switch/help widgets and CSS gaps.
   const toggleWidth=[strings.settings.post.on,strings.settings.post.off].reduce((w,label)=>w+Math.max(82,textWidth(label,24)+28),0);
   const fixedMods=toggleWidth+40+12;

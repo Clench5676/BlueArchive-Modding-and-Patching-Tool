@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { rangeBaseline, alignBaseline, publishAligned } from "../../src/ba_modding_toolkit/web/js/loading-baseline.js";
+import { rangeBaseline, alignBaseline, publishAligned } from "../../src/bmpt/web/js/loading-baseline.js";
 
 test("the owner's DOM metrics require an upward 15.3-stage-unit correction", () => {
   const measured = rangeBaseline({ top: 998.5, height: 37.5 }, { fontBoundingBoxAscent: 30, fontBoundingBoxDescent: 7 });

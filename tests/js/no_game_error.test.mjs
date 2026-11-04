@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {test} from 'node:test';
-import {errorText as sharedErrorText} from '../../src/ba_modding_toolkit/web/js/i18n.js';
-const source=readFileSync(new URL('../../src/ba_modding_toolkit/web/js/main.js',import.meta.url),'utf8');
+import {errorText as sharedErrorText} from '../../src/bmpt/web/js/i18n.js';
+const source=readFileSync(new URL('../../src/bmpt/web/js/main.js',import.meta.url),'utf8');
 const noGame=source.slice(source.indexOf('function noGame()'),source.indexOf('\nasync function refreshConfiguration()'));
 const T=(key,params)=>`${key}${params?JSON.stringify(params):''}`;
 const errorText=(err)=>sharedErrorText(err,T); // the shared error text (i18n.js) with this stand-in T

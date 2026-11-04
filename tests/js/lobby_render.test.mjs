@@ -119,7 +119,7 @@ function player(gl, slots, layer) {
   return p;
 }
 
-const Linear = await import("../../src/ba_modding_toolkit/web/js/linear.js");
+const Linear = await import("../../src/bmpt/web/js/linear.js");
 
 test("empty ungraded targets are detected even when the final pass adds an opaque clear colour", () => {
   const gl = fakeGL(), p = player(gl, [], {});
@@ -140,9 +140,9 @@ test("empty ungraded targets are detected even when the final pass adds an opaqu
     assert.equal(Linear.hasPixels(p), true, "opaque black art is still drawable art");
   } finally { Linear.detach(p); }
 });
-const Mesh = await import("../../src/ba_modding_toolkit/web/js/mesh-fx.js");
-const GL = await import("../../src/ba_modding_toolkit/web/js/particles-gl.js");
-const { STRIDE, IDENTITY } = await import("../../src/ba_modding_toolkit/web/js/particles.js");
+const Mesh = await import("../../src/bmpt/web/js/mesh-fx.js");
+const GL = await import("../../src/bmpt/web/js/particles-gl.js");
+const { STRIDE, IDENTITY } = await import("../../src/bmpt/web/js/particles.js");
 
 // --- mesh-fx.js -----------------------------------------------------------------------------------------------------
 
@@ -277,7 +277,7 @@ test("mesh renderers draw with the effects, sorted with them, with their animate
 
 // --- skeleton-materials.js ------------------------------------------------------------------------------------------
 
-const M = await import("../../src/ba_modding_toolkit/web/js/skeleton-materials.js");
+const M = await import("../../src/bmpt/web/js/skeleton-materials.js");
 // linear.js attached, with the blend modes the batch is set to in the player's log
 function attachLinear(p) {
   const ok = Linear.attach(p), batcher = p.sceneRenderer.batcher, set = batcher.setBlendMode;
@@ -335,7 +335,7 @@ test("Multiply and Screen slots without replacement materials draw as Normal", (
 });
 
 test("only Aoi's NPC keeps its declared glow blends through the real lobby material setup", () => {
-  const source = readFileSync(new URL("../../src/ba_modding_toolkit/web/js/lobby.js", import.meta.url), "utf8");
+  const source = readFileSync(new URL("../../src/bmpt/web/js/lobby.js", import.meta.url), "utf8");
   const code = source.slice(source.indexOf("function lightUp("), source.indexOf("// --- fallback only"));
   for (const core of ["np0032_npc", "NP0032_NPC", "hero_home", "hero_spr", "np0032_spr", "np0035_npc", "arona_workpage_daytime", "plana_workpage", "cafe"]) {
     const native = core.toLowerCase() === "np0032_npc", gl = fakeGL();
@@ -359,7 +359,7 @@ test("only Aoi's NPC keeps its declared glow blends through the real lobby mater
 });
 
 test("a library-only Mod without an official core still attaches and renders its lobby materials", () => {
-  const source = readFileSync(new URL("../../src/ba_modding_toolkit/web/js/lobby.js", import.meta.url), "utf8");
+  const source = readFileSync(new URL("../../src/bmpt/web/js/lobby.js", import.meta.url), "utf8");
   const code = source.slice(source.indexOf("function lightUp("), source.indexOf("// --- fallback only"));
   const gl = fakeGL(), layer = { name: "custom_home", materials: { pages: {}, blend: {}, tintBlack: false } };
   const p = player(gl, [["body", 0, "Page"], ["glow", 3, "Page"]], layer);
@@ -471,7 +471,7 @@ test("a skeleton without prefab data keeps spine-player's drawing", () => {
 
 // --- skeleton-pins.js -----------------------------------------------------------------------------------------------
 
-const Pins = await import("../../src/ba_modding_toolkit/web/js/skeleton-pins.js");
+const Pins = await import("../../src/bmpt/web/js/skeleton-pins.js");
 
 test("pinned bones keep their prefab place after the animation", () => {
   const bones = { Hip: { x: 221.7, y: 663.6, rotation: 10, scaleX: 1, scaleY: 1 }, cheek: { x: 0, y: 0, rotation: 350, scaleX: 2, scaleY: 2 } };

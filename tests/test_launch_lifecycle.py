@@ -9,13 +9,13 @@ from types import SimpleNamespace
 
 import pytest
 
-from ba_modding_toolkit.webui import main, native
-from ba_modding_toolkit.webui.events import EventBus
-from ba_modding_toolkit.webui.instance import InstanceLock, read_info
-from ba_modding_toolkit.webui.jobs import JobRunner
-from ba_modding_toolkit.webui.services import Services
-from ba_modding_toolkit.webui.timing import Timings
-from ba_modding_toolkit.webui.tray import Tray
+from bmpt.webui import main, native
+from bmpt.webui.events import EventBus
+from bmpt.webui.instance import InstanceLock, read_info
+from bmpt.webui.jobs import JobRunner
+from bmpt.webui.services import Services
+from bmpt.webui.timing import Timings
+from bmpt.webui.tray import Tray
 
 
 DROP_EVENTS = ("dragenter", "dragstart", "dragover", "drop")
@@ -89,7 +89,7 @@ def make_desktop(monkeypatch, tmp_path, platform):
 
     # Lifecycle tests fake the native adapter as well as pywebview; no AppKit/.NET
     # API is loaded. Windows installs before show, macOS after document attachment.
-    from ba_modding_toolkit.webui import window_macos, window_windows
+    from bmpt.webui import window_macos, window_windows
     class Host:
         def __init__(self, window, owner): pass
         def install(self): state.chrome_installed.append(threading.current_thread())

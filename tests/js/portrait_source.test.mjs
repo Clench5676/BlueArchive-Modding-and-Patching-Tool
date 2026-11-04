@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { forgetSpineAssets, loadSpineAssets, spineBase } from "../../src/ba_modding_toolkit/web/js/api.js";
+import { forgetSpineAssets, loadSpineAssets, spineBase } from "../../src/bmpt/web/js/api.js";
 
 test("cancelling a view aborts its manifest request before constructing a player", async (t) => {
   const controller = new AbortController();

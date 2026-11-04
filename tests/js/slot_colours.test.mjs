@@ -18,8 +18,8 @@ class Batcher { setBlendMode() {} }
 globalThis.spine = { BlendMode: { Normal: 0, Additive: 1 },
   PolygonBatcher: { blendModesGL: [{ srcRgb: 1, srcRgbPma: 1, dstRgb: 2, srcAlpha: 1 }, { srcRgb: 1, srcRgbPma: 1, dstRgb: 1, srcAlpha: 1 }] } };
 
-const Linear = await import("../../src/ba_modding_toolkit/web/js/linear.js");
-const SlotColours = await import("../../src/ba_modding_toolkit/web/js/slot-colours.js");
+const Linear = await import("../../src/bmpt/web/js/linear.js");
+const SlotColours = await import("../../src/bmpt/web/js/slot-colours.js");
 
 const dec = (c) => (c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
 const close = (got, want, msg) => got.forEach((v, i) => assert.ok(Math.abs(v - want[i]) < 1e-9, `${msg}: ${got} != ${want}`));

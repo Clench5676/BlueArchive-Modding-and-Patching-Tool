@@ -20,8 +20,8 @@ def test_popup_in_node():
 def test_photo_delete_confirmation_uses_official_popup_geometry(request, tmp_path):
     if not request.config.pluginmanager.hasplugin("bamt_dev.testing"):
         pytest.skip("Requires the official development view (-p bamt_dev.testing)")
-    from ba_modding_toolkit.gameassets import AssetCache, GameAssets
-    from ba_modding_toolkit.gameassets.layouts import subtree
+    from bmpt.gameassets import AssetCache, GameAssets
+    from bmpt.gameassets.layouts import subtree
 
     official = request.getfixturevalue("official_game")
     official.require_layout("UIPopup_Sort")
@@ -43,8 +43,8 @@ def test_photo_delete_confirmation_uses_official_popup_geometry(request, tmp_pat
 def test_review_controls_use_official_popup_and_settings_nodes(request, tmp_path):
     if not request.config.pluginmanager.hasplugin("bamt_dev.testing"):
         pytest.skip("Requires the official development view (-p bamt_dev.testing)")
-    from ba_modding_toolkit.gameassets import AssetCache, GameAssets
-    from ba_modding_toolkit.gameassets.layouts import subtree
+    from bmpt.gameassets import AssetCache, GameAssets
+    from bmpt.gameassets.layouts import subtree
 
     official = request.getfixturevalue("official_game")
     cache = AssetCache(root=tmp_path / 'memory-only', allowed=False)

@@ -9,9 +9,9 @@ from types import SimpleNamespace
 import pytest
 
 from ba_modding_toolkit.bundle import Bundle
-from ba_modding_toolkit.errors import ServiceError
-from ba_modding_toolkit.library import integrity
-from ba_modding_toolkit.library.integrity import inspect as inspect_bundle
+from bmpt.errors import ServiceError
+from bmpt.library import integrity
+from bmpt.library.integrity import inspect as inspect_bundle
 
 from test_library import game_bundle, make_mod, setup_library
 
@@ -428,13 +428,13 @@ def test_self_contained_atlas_positions_rotations_and_trims_are_not_official_dri
     assert not report["remappable"]
     register(source, {"atlases": {"test.atlas": new}, "textures": {"page": [64, 64]}})
     # Inspecting an equal atlas is insensitive to line indentation and syntax spelling.
-    from ba_modding_toolkit.atlas_remap import layout_changes
+    from bmpt.atlas_remap import layout_changes
     equivalent = old.replace("rotate: false", "rotate: 0")
     assert layout_changes({"test.atlas": old.encode()}, {"test.atlas": equivalent.encode()}) == []
 
 
 def test_import_validates_parts_without_running_compatibility(serialized, monkeypatch):
-    from ba_modding_toolkit import atlas_remap
+    from bmpt import atlas_remap
 
     env, register = serialized
     source = register(make_mod(env.original, env.tmp / "input"))

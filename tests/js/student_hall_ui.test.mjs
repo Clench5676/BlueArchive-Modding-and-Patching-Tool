@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { readFile } from "node:fs/promises";
-import { SMALL_BUTTON, captionMinimum } from "../../src/ba_modding_toolkit/web/js/ui-tokens.js";
-import { withTimeout } from "../../src/ba_modding_toolkit/web/js/async.js";
+import { SMALL_BUTTON, captionMinimum } from "../../src/bmpt/web/js/ui-tokens.js";
+import { withTimeout } from "../../src/bmpt/web/js/async.js";
 class Element {
   constructor(id = "") { this.id=id;this.style={};this.dataset={};this.children=[];this.listeners={};this.inert=false;this.isConnected=true;this.scrollTop=0;this.scrollLeft=0; }
   append(el) { el.parentElement=this;this.children.push(el); }
@@ -21,7 +21,7 @@ let stage=new Element("stage"),top;
 globalThis.document={createElement:()=>new Element(),getElementById:()=>stage,activeElement:null};
 const find=(tree,path)=>path.split("/").reduce((node,key)=>node.children.find((child)=>child.name===key),tree);
 globalThis.uiHarness={captionMinimum,SMALL_BUTTON,withTimeout,Loading:{hold:async(work)=>work()},T:key=>key,clone:structuredClone,NGUI:{find,fitLabel(widget,text){widget.text=text;},fitGroup:(captions)=>captions.map(()=>({fs:40}))},Popup:{opened(host,close){top={host,close};},closed(){top=null;},top:()=>top}};
-let source=await readFile(new URL("../../src/ba_modding_toolkit/web/js/student-hall-ui.js",import.meta.url),"utf8");
+let source=await readFile(new URL("../../src/bmpt/web/js/student-hall-ui.js",import.meta.url),"utf8");
 source=source.replace(/^import .*;$/gm,"");source=`const {Popup,clone,NGUI,Loading,withTimeout,T,SMALL_BUTTON,captionMinimum}=globalThis.uiHarness; const Buttons={disable:(...args)=>globalThis.uiHarness.Buttons.disable(...args)}; const S=1920/2960;\n${source}\nexport function areaFixture(fn){area=fn;} export function assetsFixture(value){assets=value;} export function readinessFixture(host,fn){visibleReadiness.set(host,fn);} export {pictureReadiness};\n//# sourceURL=hall-ui-fixture.js`;
 const UI=await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`);
 UI.areaFixture((host,box,height,key)=>{const scroll=new Element();scroll.dataset.scroll=key;scroll.isConnected=host.isConnected;const inner=new Element();scroll.append(inner);host.append(scroll);return inner;});
@@ -195,7 +195,7 @@ test("Hall's search box closes the search on Escape and shows no browser clear b
   const plain = await box().input;
   assert.equal(key(plain).defaultPrevented, false, "without onEscape the key goes on to the popup");
   // WebKit and Chromium draw their own clear button in a search field; the game's box has none
-  const css = readFileSync(new URL("../../src/ba_modding_toolkit/web/css/app.css", import.meta.url), "utf8");
+  const css = readFileSync(new URL("../../src/bmpt/web/css/app.css", import.meta.url), "utf8");
   const rule = css.match(/\.roster-search::-webkit-search-cancel-button[^{]*\{([^}]*)\}/);
   assert.ok(rule, "the clear button is styled");
   assert.match(rule[1], /display: none/);

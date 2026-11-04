@@ -68,21 +68,21 @@ globalThis.IntersectionObserver = class {
   disconnect() { this.items.clear(); }
   reveal() { this.callback([...this.items].filter((item) => item.isConnected).map((target) => ({ target, isIntersecting: true }))); }
 };
-const { createImportPage, entryIdentity, catalogEntries } = await import("../../src/ba_modding_toolkit/web/js/batch-import.js");
-const { importAssistants, suggestImports } = await import("../../src/ba_modding_toolkit/web/js/import-assistants.js");
-const { importArtwork, clipButtonPatterns, selectionWindow, ROW_SELECTION, ROW_SCALE, ROW_WIDTH, ROW_HEIGHT, PAPER_CENTRE, EMPTY_GAP, emptyBlock } = await import("../../src/ba_modding_toolkit/web/js/import-layout.js");
-const { frameOutline } = await import("../../src/ba_modding_toolkit/web/js/row-thumbnail.js");
-const { ROW_W: OPTION_WIDTH, rowBase, radioRow } = await import("../../src/ba_modding_toolkit/web/js/settings-rows.js");
-const { S } = await import("../../src/ba_modding_toolkit/web/js/util.js");
-const { createImportState } = await import("../../src/ba_modding_toolkit/web/js/import-state.js");
-const { setStrings } = await import("../../src/ba_modding_toolkit/web/js/i18n.js");
+const { createImportPage, entryIdentity, catalogEntries } = await import("../../src/bmpt/web/js/batch-import.js");
+const { importAssistants, suggestImports } = await import("../../src/bmpt/web/js/import-assistants.js");
+const { importArtwork, clipButtonPatterns, selectionWindow, ROW_SELECTION, ROW_SCALE, ROW_WIDTH, ROW_HEIGHT, PAPER_CENTRE, EMPTY_GAP, emptyBlock } = await import("../../src/bmpt/web/js/import-layout.js");
+const { frameOutline } = await import("../../src/bmpt/web/js/row-thumbnail.js");
+const { ROW_W: OPTION_WIDTH, rowBase, radioRow } = await import("../../src/bmpt/web/js/settings-rows.js");
+const { S } = await import("../../src/bmpt/web/js/util.js");
+const { createImportState } = await import("../../src/bmpt/web/js/import-state.js");
+const { setStrings } = await import("../../src/bmpt/web/js/i18n.js");
 const flatten = (data, prefix = "", result = {}) => {
   for (const [key, value] of Object.entries(data)) {
     if (typeof value === "object") flatten(value, `${prefix}${key}.`, result); else result[prefix + key] = value;
   }
   return result;
 };
-setStrings("en-US", flatten(JSON.parse(readFileSync(new URL("../../src/ba_modding_toolkit/locales/en-US.json", import.meta.url), "utf8"))));
+setStrings("en-US", flatten(JSON.parse(readFileSync(new URL("../../src/bmpt/locales/en-US.json", import.meta.url), "utf8"))));
 const deferred = () => { let resolve, reject; const promise = new Promise((ok, fail) => { resolve = ok; reject = fail; }); return { promise, resolve, reject }; };
 const flush = async () => { for (let i = 0; i < 35; i++) await Promise.resolve(); };
 const options = { strategy: "cont_name_type", types: ["ALL"], skipUnchanged: true, crc: "auto", compression: "lzma",
@@ -298,7 +298,7 @@ test("language changes retain import choices, search input and capture scope wit
     const input = h.host.querySelector("input.roster-search") || h.host.querySelectorAll("input").find((el) => el.classList.contains("roster-search"));
     const calls = h.calls.length, scope = h.scopes[0];
     for (const lang of ["ja-JP", "en-US", "ja-JP"]) {
-      const strings = flatten(JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${lang}.json`, import.meta.url), "utf8")));
+      const strings = flatten(JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url), "utf8")));
       setStrings(lang, strings);
       h.page.relabel(); await h.page.settled();
       assert.equal(h.action("files").getAttribute("aria-label"), strings["webui.import.addFiles"]);
@@ -311,7 +311,7 @@ test("language changes retain import choices, search input and capture scope wit
     }
   } finally {
     h.page.hide();
-    setStrings("en-US", flatten(JSON.parse(readFileSync(new URL("../../src/ba_modding_toolkit/locales/en-US.json", import.meta.url), "utf8"))));
+    setStrings("en-US", flatten(JSON.parse(readFileSync(new URL("../../src/bmpt/locales/en-US.json", import.meta.url), "utf8"))));
   }
 });
 
@@ -638,7 +638,7 @@ test("failed option reads cannot release an in-flight analysis lock", async () =
 });
 
 test("the window's native drop event goes directly to Batch Import on its route", async () => {
-  const source = readFileSync(new URL("../../src/ba_modding_toolkit/web/js/main.js", import.meta.url), "utf8");
+  const source = readFileSync(new URL("../../src/bmpt/web/js/main.js", import.meta.url), "utf8");
   const drop = source.slice(source.indexOf('  on("drop",'), source.indexOf('  $("top-option").addEventListener'));
   const calls = []; let handler;
   const env = { on: (_event, fn) => { handler = fn; }, location: { hash: "#/import" },
@@ -664,9 +664,9 @@ test("the page clones runtime Items/Mailbox widgets and has no invented empty pr
   assert.equal(h.host.querySelector("img"), null, "pictures bind to prefab UITexture widgets");
   assert.equal(h.host.querySelector(".import-preview-image").dataset.path, "EquipPos/Texture");
   assert.equal(h.row("a").querySelector(".import-thumb").dataset.path, "List_01/BG_Icon/Icon_Arona");
-  const source = readFileSync(new URL("../../src/ba_modding_toolkit/web/js/batch-import.js", import.meta.url), "utf8");
+  const source = readFileSync(new URL("../../src/bmpt/web/js/batch-import.js", import.meta.url), "utf8");
   assert.doesNotMatch(source, /ui\.(sprite|node)\(|import\.choose|\b[Kk]ey[Hh]int/);
-  const css = readFileSync(new URL("../../src/ba_modding_toolkit/web/css/app.css", import.meta.url), "utf8");
+  const css = readFileSync(new URL("../../src/bmpt/web/css/app.css", import.meta.url), "utf8");
   const rules = css.slice(css.indexOf("/* Batch Import:"), css.indexOf("/* Batch Import:") + css.slice(css.indexOf("/* Batch Import:")).indexOf("\n/*", 3));
   assert.doesNotMatch(rules, /border-radius|box-shadow|#[0-9a-f]{3,8}|linear-gradient|drop-shadow/i);
 });
@@ -745,8 +745,8 @@ test("resized real button patterns are clipped to the inclined body at every pag
   }
 });
 
-const { SMALL_BUTTON } = await import("../../src/ba_modding_toolkit/web/js/ui-tokens.js");
-const { BUTTON_BODY_H } = await import("../../src/ba_modding_toolkit/web/js/import-layout.js");
+const { SMALL_BUTTON } = await import("../../src/bmpt/web/js/ui-tokens.js");
+const { BUTTON_BODY_H } = await import("../../src/bmpt/web/js/import-layout.js");
 const drawn = (h, element) => h.rendered.findLast((item) => item.host === element.art);
 const rectOf = (element) => ["left", "top", "width", "height"].map((key) => parseFloat(element.style[key]));
 const closeTo = (actual, expected) => assert.ok(Math.abs(actual - expected) < 0.02, `${actual} != ${expected}`);
@@ -1188,8 +1188,8 @@ function artworkBounds(h, element, predicate = () => true) {
 }
 
 test("empty, full, filtered and long Thai toolbars fit the header, with search clear of the list", async () => {
-  const english = flatten(JSON.parse(readFileSync(new URL("../../src/ba_modding_toolkit/locales/en-US.json", import.meta.url), "utf8")));
-  const thai = flatten(JSON.parse(readFileSync(new URL("../../src/ba_modding_toolkit/locales/th-TH.json", import.meta.url), "utf8")));
+  const english = flatten(JSON.parse(readFileSync(new URL("../../src/bmpt/locales/en-US.json", import.meta.url), "utf8")));
+  const thai = flatten(JSON.parse(readFileSync(new URL("../../src/bmpt/locales/th-TH.json", import.meta.url), "utf8")));
   try {
     for (const strings of [english, thai, { ...thai,
       "webui.import.list": thai["webui.import.list"].repeat(12),
@@ -1249,7 +1249,7 @@ test("footer artwork clears the whole bottom nav and the list and dialog content
   const panel = h.host.querySelector(".import-panel"), list = h.host.querySelector(".import-list");
   assert.ok(parseFloat(panel.style.top) + parseFloat(panel.style.height) < parseFloat(h.action("start").style.top));
   assert.ok(parseFloat(list.style.top) + parseFloat(list.style.height) < parseFloat(h.action("all").style.top));
-  const css = readFileSync(new URL("../../src/ba_modding_toolkit/web/css/app.css", import.meta.url), "utf8");
+  const css = readFileSync(new URL("../../src/bmpt/web/css/app.css", import.meta.url), "utf8");
   assert.match(css, /\.import-search-clear\s*\{\s*z-index:\s*40/);
   const rule = css.match(/\.import-dialog-content\s*\{([^}]+)\}/)[1];
   const top = Number(rule.match(/top:\s*(\d+)px/)[1]), height = Number(rule.match(/height:\s*(\d+)px/)[1]);
@@ -1259,7 +1259,7 @@ test("footer artwork clears the whole bottom nav and the list and dialog content
 });
 
 test("all six locales retain option labels, On/Off choices and the same saved values", async () => {
-  const load = (locale) => flatten(JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${locale}.json`, import.meta.url), "utf8")));
+  const load = (locale) => flatten(JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8")));
   try {
     for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
       const strings = load(locale); setStrings(locale, strings);
@@ -1335,7 +1335,7 @@ test("source selection cancellation leaves the entry untouched", async () => {
 });
 
 test("all six locales translate source routes, choices and conversion reasons", async () => {
-  const load = (locale) => flatten(JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${locale}.json`, import.meta.url), "utf8")));
+  const load = (locale) => flatten(JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8")));
   try {
     for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
       const strings = load(locale); setStrings(locale, strings);
@@ -1453,7 +1453,7 @@ test("the shared page hold reports both analysis and import progress through art
 
 test("all six locales use short completion, merge and applied labels", () => {
   for (const lang of ["zh-CN", "zh-TW", "en-US", "ja-JP", "ko-KR", "th-TH"]) {
-    const data = JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${lang}.json`, import.meta.url))).webui.import;
+    const data = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url))).webui.import;
     for (const text of [data.state.done, data.merge, data.applied, data.notApplied]) assert.ok(text && !/[{}]/.test(text));
     assert.deepEqual([...data.waitProgress.matchAll(/\{(\w+)\}/g)].map((m) => m[1]), ["label", "done", "total"]);
     if (lang === "zh-CN") { assert.equal(data.state.done, "\u5df2\u5b8c\u6210"); assert.equal(data.applied, "\u5df2\u5b89\u88c5"); }
@@ -1546,7 +1546,7 @@ test("the page has no status widget during analysis, completion or picker failur
 test("row metadata, kind, badge text and checkbox share a top edge and fixed font in all six locales", async () => {
   try {
     for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
-      setStrings(locale, flatten(JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${locale}.json`, import.meta.url), "utf8"))));
+      setStrings(locale, flatten(JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8"))));
       const h = await fixture(); await h.analyze();
       for (const id of ["a", "b", "c", "d", "e"]) {
         const row = h.row(id), { tree } = drawn(h, row), prefix = tree.name;
@@ -1564,7 +1564,7 @@ test("row metadata, kind, badge text and checkbox share a top edge and fixed fon
         closeTo(divider.pos[0] + divider.widgets[0].w_, 926);
       }
     }
-  } finally { setStrings("en-US", flatten(JSON.parse(readFileSync(new URL("../../src/ba_modding_toolkit/locales/en-US.json", import.meta.url), "utf8")))); }
+  } finally { setStrings("en-US", flatten(JSON.parse(readFileSync(new URL("../../src/bmpt/locales/en-US.json", import.meta.url), "utf8")))); }
 });
 
 test("the entire white mail gradient stretches to the card edge without clipping off its fade", async () => {
@@ -1591,7 +1591,7 @@ test("manual source selection is limited to unknown sources and conversion route
 
 for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) test(`long metadata and kinds wrap at the beta font size in list and result rows in ${locale}`, async () => {
   try {
-    const strings = JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${locale}.json`, import.meta.url), "utf8"));
+    const strings = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8"));
     setStrings(locale, flatten(strings));
     for (const merged of [false, true]) for (const countIcons of [false, true]) {
       const h = await fixture({ countIcons });
@@ -1635,7 +1635,7 @@ for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) tes
       await flush(); await h.page.results(); await h.page.settled();
       check(walk(h.dialog).filter((el) => el.dataset.result), true);
     }
-  } finally { setStrings("en-US", flatten(JSON.parse(readFileSync(new URL("../../src/ba_modding_toolkit/locales/en-US.json", import.meta.url))))); }
+  } finally { setStrings("en-US", flatten(JSON.parse(readFileSync(new URL("../../src/bmpt/locales/en-US.json", import.meta.url))))); }
 });
 
 test("import identities and search keep aliases on the selected skin", () => {
@@ -1728,7 +1728,7 @@ test("atlas slice cuts never become the thumbnail corner radius", () => {
 
 for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) test(`merged and result row kinds share the metadata font and top line in ${locale}`, async () => {
   try {
-    setStrings(locale, flatten(JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${locale}.json`, import.meta.url), "utf8"))));
+    setStrings(locale, flatten(JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8"))));
     for (const merged of [false, true]) for (const countIcons of [false, true]) {
       const h = await fixture({ countIcons });
       const entries = [entry("a"), { ...entry("a-lobby", "ready", "lobby"), variant: "a" },
@@ -1756,12 +1756,12 @@ for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) tes
       assert.equal(rows.length, merged ? 1 : 3);
       rows.forEach((row) => check(row, true));
     }
-  } finally { setStrings("en-US", flatten(JSON.parse(readFileSync(new URL("../../src/ba_modding_toolkit/locales/en-US.json", import.meta.url), "utf8")))); }
+  } finally { setStrings("en-US", flatten(JSON.parse(readFileSync(new URL("../../src/bmpt/locales/en-US.json", import.meta.url), "utf8")))); }
 });
 
 for (const [locale, sep] of [["en-US", ", "], ["zh-CN", "、"], ["zh-TW", "、"], ["ja-JP", "、"], ["ko-KR", ", "], ["th-TH", ", "]]) test(`a merged result row joins its outcomes with the language's list separator in ${locale}`, async () => {
   try {
-    const strings = JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${locale}.json`, import.meta.url), "utf8"));
+    const strings = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8"));
     setStrings(locale, flatten(strings));
     const h = await fixture();
     const entries = [entry("a"), { ...entry("a-lobby", "ready", "lobby"), variant: "a" }, { ...entry("a-model", "ready", "model"), variant: "a" }];
@@ -1777,12 +1777,12 @@ for (const [locale, sep] of [["en-US", ", "], ["zh-CN", "、"], ["zh-TW", "、"]
     const meta = find(drawn(h, rows[0]).tree, "Label_Locale_Received").widgets[0].text;
     const { imported, updated, failed } = strings.webui.import.outcome;
     assert.equal(meta.replace(/\s+/g, ""), [imported, updated, failed].join(sep).replace(/\s+/g, ""), locale);
-  } finally { setStrings("en-US", flatten(JSON.parse(readFileSync(new URL("../../src/ba_modding_toolkit/locales/en-US.json", import.meta.url), "utf8")))); }
+  } finally { setStrings("en-US", flatten(JSON.parse(readFileSync(new URL("../../src/bmpt/locales/en-US.json", import.meta.url), "utf8")))); }
 });
 
 for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) test(`owner review: source badge and result paragraphs fit in ${locale}`, async () => {
   try {
-    const strings = JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${locale}.json`, import.meta.url)));
+    const strings = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url)));
     setStrings(locale, flatten(strings));
     const h = await fixture();
     await h.analyze([{ ...entry("a", "blocked"), source: null, target: { server: "global", platform: "windows" }, reason: "source_unknown" }]);
@@ -1814,7 +1814,7 @@ for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) tes
         if (i) assert.ok(labels[i - 1].pos[1] - n.pos[1] >= 56 && (labels[i - 1].pos[1] - n.pos[1]) % 56 === 0);
       }
     }
-  } finally { setStrings("en-US", flatten(JSON.parse(readFileSync(new URL("../../src/ba_modding_toolkit/locales/en-US.json", import.meta.url))))); }
+  } finally { setStrings("en-US", flatten(JSON.parse(readFileSync(new URL("../../src/bmpt/locales/en-US.json", import.meta.url))))); }
 });
 
 test("source popup title labels occupy distinct prefab rows", async () => {
@@ -1835,7 +1835,7 @@ test("source popup title labels occupy distinct prefab rows", async () => {
 
 for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) test(`result paragraphs use even spacing and clear the footer in ${locale}`, async () => {
   try {
-    setStrings(locale, flatten(JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${locale}.json`, import.meta.url)))));
+    setStrings(locale, flatten(JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url)))));
     const h = await fixture();
     await h.analyze([{ ...entry("a", "convert", "lobby"), source: { server: "global", platform: "android" }, target: { server: "global", platform: "windows" } }, entry("b")]);
     await h.action("start").click(); await flush();
@@ -1850,7 +1850,7 @@ for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) tes
         if (i) assert.ok(paragraphs[i - 1].pos[1] - n.pos[1] >= 56 && (paragraphs[i - 1].pos[1] - n.pos[1]) % 56 === 0);
       }
     }
-  } finally { setStrings("en-US", flatten(JSON.parse(readFileSync(new URL("../../src/ba_modding_toolkit/locales/en-US.json", import.meta.url))))); }
+  } finally { setStrings("en-US", flatten(JSON.parse(readFileSync(new URL("../../src/bmpt/locales/en-US.json", import.meta.url))))); }
 });
 
 
@@ -1867,7 +1867,7 @@ test("nested selection widgets retain their derived picture position and draw ab
     closeTo(x + width / 2, opts.origin[0] + expected.x * opts.scale);
     closeTo(y + height / 2, opts.origin[1] - expected.y * opts.scale);
   }
-  const css = readFileSync(new URL("../../src/ba_modding_toolkit/web/css/app.css", import.meta.url), "utf8");
+  const css = readFileSync(new URL("../../src/bmpt/web/css/app.css", import.meta.url), "utf8");
   const z = (name) => Number(new RegExp(`\\.${name} \\{[^}]*z-index: ([0-9]+)`).exec(css)?.[1]);
   assert.ok(z("import-selection") > z("import-art"), "the game frame covers the picture's border");
 });
@@ -1894,7 +1894,7 @@ for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) for
   ["mod_parts_missing", { files: "first.bundle, second.bundle" }, "first.bundle, second.bundle"],
 ]) test(`result notes preserve all parameters for ${reason} in ${locale}`, async () => {
   try {
-    setStrings(locale, flatten(JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${locale}.json`, import.meta.url), "utf8"))));
+    setStrings(locale, flatten(JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8"))));
     const h = await fixture(); await h.analyze([entry("a")]);
     await h.action("start").click(); await flush();
     h.runs[0].resolve({ results: [{ id: "a", outcome: "failed", configured: true, reason, params }] });
@@ -1905,7 +1905,7 @@ for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) for
     assert.ok(note.includes(" - "), "saved status and error use the plain separator");
     assert.ok(!/[·•・]/u.test(note));
   } finally {
-    setStrings("en-US", flatten(JSON.parse(readFileSync(new URL("../../src/ba_modding_toolkit/locales/en-US.json", import.meta.url), "utf8"))));
+    setStrings("en-US", flatten(JSON.parse(readFileSync(new URL("../../src/bmpt/locales/en-US.json", import.meta.url), "utf8"))));
   }
 });
 
@@ -1913,7 +1913,7 @@ for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) for
 // and the list entry
 for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) test(`failed result notes show the localized text only, never a code or JSON, in ${locale}`, async () => {
   try {
-    const strings = JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${locale}.json`, import.meta.url), "utf8"));
+    const strings = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8"));
     setStrings(locale, flatten(strings));
     const h = await fixture(); await h.analyze([entry("a"), entry("b"), entry("c"), entry("d")]);
     await h.action("start").click(); await flush();
@@ -1942,7 +1942,7 @@ for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) tes
     // the result keeps the code and the parameters
     assert.deepEqual(h.page.model.state.results, results);
   } finally {
-    setStrings("en-US", flatten(JSON.parse(readFileSync(new URL("../../src/ba_modding_toolkit/locales/en-US.json", import.meta.url), "utf8"))));
+    setStrings("en-US", flatten(JSON.parse(readFileSync(new URL("../../src/bmpt/locales/en-US.json", import.meta.url), "utf8"))));
   }
 });
 
@@ -1964,7 +1964,7 @@ test("a blocked result row keeps its code and parameters in the error report's l
 
 for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) test(`successful result notes count assets not transferred in ${locale}`, async () => {
   try {
-    const strings = JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${locale}.json`, import.meta.url), "utf8"));
+    const strings = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8"));
     setStrings(locale, flatten(strings));
     const h = await fixture(); await h.analyze([entry("a")]);
     await h.action("start").click(); await flush();
@@ -1980,7 +1980,7 @@ for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) tes
     assert.ok(!walk(row).some((el) => el.title));
     assert.ok(compact(row.textContent).includes(compact(strings.webui.import.outcome.updated)));
   } finally {
-    setStrings("en-US", flatten(JSON.parse(readFileSync(new URL("../../src/ba_modding_toolkit/locales/en-US.json", import.meta.url), "utf8"))));
+    setStrings("en-US", flatten(JSON.parse(readFileSync(new URL("../../src/bmpt/locales/en-US.json", import.meta.url), "utf8"))));
   }
 });
 
@@ -2029,7 +2029,7 @@ test("the import request carries the analysis revision after recheck", async () 
 for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
   test(`converted duplicates show the library label and disable Import in ${locale}`, async () => {
     try {
-      const strings = JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${locale}.json`, import.meta.url)));
+      const strings = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url)));
       setStrings(locale, flatten(strings));
       const h = await fixture();
       await h.analyze([{ ...entry("a", "library"), source: { server: "global", platform: "android" },
@@ -2040,7 +2040,7 @@ for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
       assert.equal(await h.page.model.start(), false);
       assert.equal(h.runs.length, 0);
     } finally {
-      setStrings("en-US", flatten(JSON.parse(readFileSync(new URL("../../src/ba_modding_toolkit/locales/en-US.json", import.meta.url)))));
+      setStrings("en-US", flatten(JSON.parse(readFileSync(new URL("../../src/bmpt/locales/en-US.json", import.meta.url)))));
     }
   });
 }
@@ -2084,7 +2084,7 @@ test("merged result rows total the omitted asset counts", async () => {
 
 for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) test(`merged unknown-source states keep the manual-identification wording in ${locale}`, async () => {
   try {
-    const strings = JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${locale}.json`, import.meta.url)));
+    const strings = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url)));
     setStrings(locale, flatten(strings));
     const h = await fixture();
     await h.analyze([entry("a"), { ...entry("a-lobby", "blocked", "lobby"), variant: "a", source: null, reason: "source_unknown" }]);
@@ -2093,13 +2093,13 @@ for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) tes
     const row = h.row("a");
     assert.ok(row.textContent.replace(/\s/g, "").includes(strings.webui.import.reason.source_unknown.replace(/\s/g, "")));
     assert.ok(!row.textContent.includes(strings.webui.import.state.blocked));
-  } finally { setStrings("en-US", flatten(JSON.parse(readFileSync(new URL("../../src/ba_modding_toolkit/locales/en-US.json", import.meta.url))))); }
+  } finally { setStrings("en-US", flatten(JSON.parse(readFileSync(new URL("../../src/bmpt/locales/en-US.json", import.meta.url))))); }
 });
 
 for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
   test(`failure rows use distinct short labels and result notes show the localized error in ${locale}`, async () => {
     try {
-      const strings = JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${locale}.json`, import.meta.url), "utf8"));
+      const strings = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8"));
       setStrings(locale, flatten(strings));
       const reasons = ["required_asset_extract_failed", "required_asset_apply_failed", "required_assets_unmatched",
         "mod_target_unknown", "mod_parts_missing", "mod_platform_mismatch", "mod_unity_version_mismatch", "mod_release_mismatch", "failed"];
@@ -2124,15 +2124,15 @@ for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
       // they stay on the result for the error report
       assert.deepEqual(h.page.model.state.results[0].error, detail);
     } finally {
-      setStrings("en-US", flatten(JSON.parse(readFileSync(new URL("../../src/ba_modding_toolkit/locales/en-US.json", import.meta.url), "utf8"))));
+      setStrings("en-US", flatten(JSON.parse(readFileSync(new URL("../../src/bmpt/locales/en-US.json", import.meta.url), "utf8"))));
     }
   });
 }
 
 // --- the game's scrollbar on every scrolling area (UICharacterCollection/SeletControl/List/Scroll Bar) ---
-const { scrollbarTrack } = await import("../../src/ba_modding_toolkit/web/js/scrollbar.js");
-const { DIALOG_AREA } = await import("../../src/ba_modding_toolkit/web/js/batch-import.js");
-const importCss = readFileSync(new URL("../../src/ba_modding_toolkit/web/css/app.css", import.meta.url), "utf8");
+const { scrollbarTrack } = await import("../../src/bmpt/web/js/scrollbar.js");
+const { DIALOG_AREA } = await import("../../src/bmpt/web/js/batch-import.js");
+const importCss = readFileSync(new URL("../../src/bmpt/web/css/app.css", import.meta.url), "utf8");
 const cssRule = (selector) => importCss.match(new RegExp(`(?:^|\\n)${selector.replace(/[.]/g, "\\.")}\\s*\\{([^}]+)\\}`))[1];
 // an area that overflows: what the browser would report
 const overflow = (area, visible, total, top = 0) => { Object.assign(area, { clientHeight: visible, scrollHeight: total, scrollTop: top }); return area; };
@@ -2244,8 +2244,8 @@ test("Assign Character's previous and next page buttons are named in every langu
   const unknown = { ...entry("unidentified", "blocked", "lobby"), variant: null, reason: "mod_target_unknown" };
   try {
     for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
-      const ui = JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${locale}.json`, import.meta.url), "utf8")).webui;
-      setStrings(locale, flatten(JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${locale}.json`, import.meta.url), "utf8"))));
+      const ui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8")).webui;
+      setStrings(locale, flatten(JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8"))));
       const h = await fixture(); await h.analyze([unknown]);
       await h.action("assignCharacter").click(); await flush(); await h.page.settled();
       const previous = h.action("characterPrevious", h.dialog), next = h.action("characterNext", h.dialog);
@@ -2254,5 +2254,5 @@ test("Assign Character's previous and next page buttons are named in every langu
       assert.equal(previous.caption, "‹"); assert.equal(next.caption, "›");
       await h.action("close", h.dialog).click();
     }
-  } finally { setStrings("en-US", flatten(JSON.parse(readFileSync(new URL("../../src/ba_modding_toolkit/locales/en-US.json", import.meta.url), "utf8")))); }
+  } finally { setStrings("en-US", flatten(JSON.parse(readFileSync(new URL("../../src/bmpt/locales/en-US.json", import.meta.url), "utf8")))); }
 });

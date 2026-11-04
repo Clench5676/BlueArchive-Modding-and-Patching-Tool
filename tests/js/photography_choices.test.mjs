@@ -3,12 +3,12 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {test} from 'node:test';
-import {otherMode,actionCaption,choiceLayout} from '../../src/ba_modding_toolkit/web/js/photography/camera.js';
+import {otherMode,actionCaption,choiceLayout} from '../../src/bmpt/web/js/photography/camera.js';
 
-const web=new URL('../../src/ba_modding_toolkit/web/js/',import.meta.url);
+const web=new URL('../../src/bmpt/web/js/',import.meta.url);
 const controller=readFileSync(new URL('photography/controller.js',web),'utf8');
 const LOCALES=['en-US','zh-CN','zh-TW','ja-JP','ko-KR','th-TH'];
-const ui=locale=>JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${locale}.json`,import.meta.url),'utf8')).webui;
+const ui=locale=>JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`,import.meta.url),'utf8')).webui;
 const fill=(text,params={})=>text.replace(/\{(\w+)\}/g,(_,key)=>params[key]);
 
 test('the other mode is offered only when the student has it',()=>{
@@ -87,7 +87,7 @@ test('the Dialogue / Actions list captions its buttons through actionCaption in 
 });
 
 // Blank space in the Expressions / Actions list is the list's, not the pan surface's: no grab cursor, no pan or zoom there.
-const css=readFileSync(new URL('../../src/ba_modding_toolkit/web/css/photography.css',import.meta.url),'utf8');
+const css=readFileSync(new URL('../../src/bmpt/web/css/photography.css',import.meta.url),'utf8');
 const rule=selector=>[...css.matchAll(/([^{}]+)\{([^}]*)\}/g)].filter(([,sel])=>sel.split(',').map(x=>x.trim()).includes(selector)).map(([,,body])=>body).join(';');
 test('the choice list covers its whole box and its scroll area takes the pointer',()=>{
   const code=controller.slice(controller.indexOf('function choiceShield('),controller.indexOf('async function choicePanel('));
@@ -112,7 +112,7 @@ const ctx={font:'',measureText(s){const fs=parseFloat(/([\d.]+)px/.exec(this.fon
   return {width:[...s].reduce((w,c)=>w+(WIDE.test(c)?1:.58)*fs,0),actualBoundingBoxAscent:.75*fs,actualBoundingBoxDescent:.2*fs,fontBoundingBoxAscent:1.16*fs,fontBoundingBoxDescent:.29*fs};}};
 globalThis.document={createElement:()=>({getContext:()=>ctx,remove(){}}),documentElement:{lang:'en-US',appendChild(){}}};
 globalThis.getComputedStyle=()=>({getPropertyValue:()=>''});
-const NGUI=await import('../../src/ba_modding_toolkit/web/js/ngui.js');
+const NGUI=await import('../../src/bmpt/web/js/ngui.js');
 const S=1920/2960;
 for(const locale of LOCALES)test(`every dialogue caption fits the action button in ${locale}`,()=>{
   document.documentElement.lang=locale;

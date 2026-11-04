@@ -1,17 +1,17 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { L, T, setStrings } from "../../src/ba_modding_toolkit/web/js/i18n.js";
-import { modName, studentName } from "../../src/ba_modding_toolkit/web/js/names.js";
+import { L, T, setStrings } from "../../src/bmpt/web/js/i18n.js";
+import { modName, studentName } from "../../src/bmpt/web/js/names.js";
 
 globalThis.document = { documentElement: {}, createElement: () => ({ getContext: () => ({ measureText: () => ({ width: 0 }) }) }),
   getElementById: () => null, querySelector: () => null, addEventListener() {} };
 globalThis.window = new EventTarget();
 globalThis.addEventListener = () => {};
-const Prompts = await import("../../src/ba_modding_toolkit/web/js/prompts.js");
-const ModAdd = await import("../../src/ba_modding_toolkit/web/js/mod-add.js");
-const ModSwitch = await import("../../src/ba_modding_toolkit/web/js/mod-switch.js");
-const main = readFileSync(new URL("../../src/ba_modding_toolkit/web/js/main.js", import.meta.url), "utf8");
+const Prompts = await import("../../src/bmpt/web/js/prompts.js");
+const ModAdd = await import("../../src/bmpt/web/js/mod-add.js");
+const ModSwitch = await import("../../src/bmpt/web/js/mod-switch.js");
+const main = readFileSync(new URL("../../src/bmpt/web/js/main.js", import.meta.url), "utf8");
 const code = main.slice(main.indexOf("async function variantNames()"), main.indexOf("// --- library.changed"));
 const flatten = (obj, prefix = "", out = {}) => {
   for (const [key, value] of Object.entries(obj)) {
@@ -27,7 +27,7 @@ test("main's shared resolver supplies variant aliases to global prompts, Mod Add
     { key: "plain", custom: [], names }];
   const data = { families: [{ variants }] };
   for (const lang of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
-    setStrings(lang, flatten(JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${lang}.json`, import.meta.url), "utf8"))));
+    setStrings(lang, flatten(JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url), "utf8"))));
     for (const cached of [false, true]) {
       const resolver = new Function("roster", "rosterData", "L", "studentName", `${code}; return variantNames;`)(
         cached ? async () => { throw new Error("offline"); } : async () => data, data, L, studentName);
@@ -49,7 +49,7 @@ test("cached repaired Mod names relocalize from stable source labels without cha
   const source = { id: "source", label: "Initial", label_base: "Initial", alias: "Source alias" };
   const repaired = { id: "fixed", repaired_from: "source", label: "Cached repair suffix", label_base: "Initial" };
   for (const lang of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH", "en-US"]) {
-    const table = flatten(JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${lang}.json`, import.meta.url), "utf8")));
+    const table = flatten(JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url), "utf8")));
     setStrings(lang, table);
     const expected = (name) => table["webui.remap.name"].replace("{name}", name);
     assert.equal(modName(repaired, [source, repaired], T), expected("Source alias"));

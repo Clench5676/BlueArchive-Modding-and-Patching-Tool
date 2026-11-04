@@ -12,7 +12,7 @@ from ba_modding_toolkit import i18n
 from ba_modding_toolkit.i18n import (
     UI_LANGUAGES, I18n, fallback_language, is_traditional_chinese, match_language, offered_languages,
 )
-from ba_modding_toolkit.webui import api as webui_api
+from bmpt.webui import api as webui_api
 
 NODE = shutil.which("node")
 JS_TESTS = Path(__file__).parent / "js" / "i18n.test.mjs"
@@ -107,7 +107,7 @@ def test_web_ui_strings_of_a_new_language(monkeypatch, tmp_path):
 
 
 def test_web_ui_strings_can_check_a_locale_without_fallback(tmp_path):
-    from ba_modding_toolkit.webui.strings import ui_strings
+    from bmpt.webui.strings import ui_strings
 
     write_locale(tmp_path, "en-US", {"webui": {"shared": "English fallback"}})
     write_locale(tmp_path, "ko-KR", {"webui": {"own": "Locale value", "invalid": 42}})

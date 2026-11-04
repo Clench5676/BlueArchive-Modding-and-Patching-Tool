@@ -1,12 +1,12 @@
 // Exercise the detail job's orchestration with stand-ins for the rendered screen and RPC transport.
-import { jobProgress, progressName } from "../../src/ba_modding_toolkit/web/js/job-progress.js";
-import { setStrings, T as translate } from "../../src/ba_modding_toolkit/web/js/i18n.js";
+import { jobProgress, progressName } from "../../src/bmpt/web/js/job-progress.js";
+import { setStrings, T as translate } from "../../src/bmpt/web/js/i18n.js";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-const source = readFileSync(new URL("../../src/ba_modding_toolkit/web/js/detail.js", import.meta.url), "utf8");
+const source = readFileSync(new URL("../../src/bmpt/web/js/detail.js", import.meta.url), "utf8");
 const jobSource = source.slice(source.indexOf("async function job("), source.indexOf("function shownMod()"));
-const loadingSource = readFileSync(new URL("../../src/ba_modding_toolkit/web/js/loading.js", import.meta.url), "utf8");
+const loadingSource = readFileSync(new URL("../../src/bmpt/web/js/loading.js", import.meta.url), "utf8");
 const progressSource = loadingSource.slice(loadingSource.indexOf("export function progressText("), loadingSource.indexOf("// A writer task"));
 function harness(overrides = {}) {
   const messages = [], notices = [], calls = [], progress = [];
@@ -82,7 +82,7 @@ test("the apply result reaches the refresh while input is still held", async () 
 
 test("detail actions keep the verb, target and count from progress in all locales", async () => {
   for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
-    const strings = JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${locale}.json`, import.meta.url), "utf8")).webui;
+    const strings = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8")).webui;
     const T = (key, vars = {}) => key.split(".").reduce((o, k) => o[k], strings).replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? "");
     const flat = (o, prefix = "", result = {}) => { for (const [key, value] of Object.entries(o)) {
       if (value && typeof value === "object") flat(value, prefix + key + ".", result); else result["webui." + prefix + key] = value;
@@ -137,7 +137,7 @@ test("a completed add reloads only the page that opened its picker", async () =>
 });
 
 test("detail progress identifies the target Mod's student variant and kind instead of the active tab or bundle", async () => {
-  const strings = JSON.parse(readFileSync(new URL("../../src/ba_modding_toolkit/locales/en-US.json", import.meta.url), "utf8"));
+  const strings = JSON.parse(readFileSync(new URL("../../src/bmpt/locales/en-US.json", import.meta.url), "utf8"));
   const flat = (o, prefix = "", out = {}) => { for (const [key, value] of Object.entries(o)) {
     if (value && typeof value === "object") flat(value, `${prefix}${key}.`, out); else out[prefix + key] = value;
   } return out; };

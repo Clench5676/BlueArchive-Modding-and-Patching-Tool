@@ -46,10 +46,10 @@ globalThis.fetch = async () => ({ ok: false, status: 404, json: async () => null
 const warn = console.warn;
 console.warn = (...args) => { if (!/popup layout|message popup without/.test(String(args[0]))) warn(...args); };
 
-const Popup = await import("../../src/ba_modding_toolkit/web/js/popup.js");
-const { setStrings } = await import("../../src/ba_modding_toolkit/web/js/i18n.js");
+const Popup = await import("../../src/bmpt/web/js/popup.js");
+const { setStrings } = await import("../../src/bmpt/web/js/i18n.js");
 const locales = ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"];
-const webui = (locale) => JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${locale}.json`, import.meta.url), "utf8")).webui;
+const webui = (locale) => JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8")).webui;
 const strings = (value, prefix = "webui") => Object.entries(value).flatMap(([key, text]) => typeof text === "object"
   ? strings(text, `${prefix}.${key}`) : [[`${prefix}.${key}`, text]]);
 const english = webui("en-US");
@@ -140,7 +140,7 @@ test("information is still silent, and an empty text shows nothing", async () =>
 });
 
 test("the classic modal and the licence prompt are not failures: neither passes an error", () => {
-  const web = (file) => readFileSync(new URL(`../../src/ba_modding_toolkit/web/js/${file}`, import.meta.url), "utf8");
+  const web = (file) => readFileSync(new URL(`../../src/bmpt/web/js/${file}`, import.meta.url), "utf8");
   const modal = web("mod-switch.js"), start = modal.indexOf("export async function classicModal(");
   const classic = modal.slice(start, modal.indexOf("\n}\n", start));
   assert.match(classic, /title: T\("classic\.opened"\)/);
@@ -152,7 +152,7 @@ test("the classic modal and the licence prompt are not failures: neither passes 
 });
 
 test("a greyed Apply names its reason as the same refusal as the greyed switch", () => {
-  const prompts = readFileSync(new URL("../../src/ba_modding_toolkit/web/js/prompts.js", import.meta.url), "utf8");
+  const prompts = readFileSync(new URL("../../src/bmpt/web/js/prompts.js", import.meta.url), "utf8");
   assert.match(prompts, /notify\(b\.why \|\| "", \{ kind: "error", error: b\.whyError \}\)/);
   assert.match(prompts, /why: blocked, whyError: \{ code: s\.reason, params: s\.reasonParams \}/);
 });

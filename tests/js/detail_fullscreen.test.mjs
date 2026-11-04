@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { test } from 'node:test';
 
-const source = readFileSync(new URL('../../src/ba_modding_toolkit/web/js/detail.js', import.meta.url), 'utf8');
+const source = readFileSync(new URL('../../src/bmpt/web/js/detail.js', import.meta.url), 'utf8');
 const code = source.slice(source.indexOf('// fullscreen memorial lobby:'), source.indexOf('// the switch card\'s still'));
 function harness(start, hasLobby = true) {
   const calls = [], nodes = new Map();

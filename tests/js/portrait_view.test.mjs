@@ -5,7 +5,7 @@ import { test } from "node:test";
 
 import {
   CHARACTER_POS, SKELETON_SCALE, portraitViewport, stagePoint,
-} from "../../src/ba_modding_toolkit/web/js/portrait-view.js";
+} from "../../src/bmpt/web/js/portrait-view.js";
 
 const S = 1920 / 2960;          // stage px per prefab unit (util.js)
 const ORIGIN = [960, 515];      // the detail screen's prefab centre on the stage (detail.js)

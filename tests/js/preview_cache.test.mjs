@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { createPreviewCache } from "../../src/ba_modding_toolkit/web/js/preview-cache.js";
-import { createModelStills } from "../../src/ba_modding_toolkit/web/js/model-still.js";
+import { createPreviewCache } from "../../src/bmpt/web/js/preview-cache.js";
+import { createModelStills } from "../../src/bmpt/web/js/model-still.js";
 
 const png = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
 const configured = (store, generation = "one", enabled = true) => store.configure({ previewCache: enabled, previewCacheGeneration: generation });

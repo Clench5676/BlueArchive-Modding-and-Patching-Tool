@@ -4,7 +4,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-const P = await import("../../src/ba_modding_toolkit/web/js/particles.js");
+const P = await import("../../src/bmpt/web/js/particles.js");
 const { Effects, value, colorAt, shapePoint, geometry, vertexColor, drawOrder, STRIDE, WORLD, IDENTITY } = P;
 // where a system draws among stacked skeletons, each drawing its own parts (particles-gl.js layers by default): after
 // the last part of any layer that sorts before it ({layer, part}), else before the first layer's first (part -1)
@@ -678,8 +678,8 @@ class Batcher { setBlendMode() {} }
 globalThis.spine = { BlendMode: { Normal: 0, Additive: 1 },
   PolygonBatcher: { blendModesGL: [{ srcRgb: 1, srcRgbPma: 1, dstRgb: 2, srcAlpha: 1 }, { srcRgb: 1, srcRgbPma: 1, dstRgb: 1, srcAlpha: 1 }] } };
 globalThis.performance ??= { now: () => Date.now() };
-const Linear = await import("../../src/ba_modding_toolkit/web/js/linear.js");
-const GL = await import("../../src/ba_modding_toolkit/web/js/particles-gl.js");
+const Linear = await import("../../src/bmpt/web/js/linear.js");
+const GL = await import("../../src/bmpt/web/js/particles-gl.js");
 
 function player(gl, layer) {
   const page = Object.assign(new Texture(), { texture: {}, useMipMaps: false });
@@ -920,7 +920,7 @@ test("a system's trails draw with their own material where its queue sorts them"
 
 // --- skeleton-parts.js: a skeleton drawn one render queue at a time ---------------------------------------------------
 
-const Parts = await import("../../src/ba_modding_toolkit/web/js/skeleton-parts.js");
+const Parts = await import("../../src/bmpt/web/js/skeleton-parts.js");
 
 test("a skeleton draws one part per queue of its pages, each with its own slots, the effects in between", () => {
   const layer = { order: 0, queue: 2900, pages: { Kisaki: 3100, Kisaki_2: 3200, Kisaki_3: 2900, Kisaki_4: 2900 }, z: 0 };

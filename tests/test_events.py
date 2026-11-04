@@ -1,6 +1,6 @@
 """The event bus's observers on the Python side."""
 
-from ba_modding_toolkit.webui.events import EventBus
+from bmpt.webui.events import EventBus
 
 
 def test_the_event_bus_observer_is_called_and_can_stop():

@@ -10,14 +10,14 @@ from pathlib import Path
 
 import pytest
 
-from ba_modding_toolkit.config import Settings
-from ba_modding_toolkit.webui.api import TRACE_BATCH, TRACE_LINE, build_api, ui_strings
-from ba_modding_toolkit.webui.main import _trace_to_file
-from ba_modding_toolkit.webui.server import WebApp
-from ba_modding_toolkit.webui.services import Services
-from ba_modding_toolkit.webui.state import UiState
+from bmpt.config import Settings
+from bmpt.webui.api import TRACE_BATCH, TRACE_LINE, build_api, ui_strings
+from bmpt.webui.main import _trace_to_file
+from bmpt.webui.server import WebApp
+from bmpt.webui.services import Services
+from bmpt.webui.state import UiState
 
-WEB = Path(__file__).resolve().parents[1] / "src" / "ba_modding_toolkit" / "web"
+WEB = Path(__file__).resolve().parents[1] / "src" / "bmpt" / "web"
 
 
 class FakeGame:
@@ -102,16 +102,16 @@ def test_intro_setting_is_on_by_default_and_persists(app, tmp_path):
 
 
 def test_input_trace_is_logged_only_when_started_with_debug(app, services, caplog):
-    caplog.set_level(logging.INFO, logger="ba_modding_toolkit.webui.trace")
+    caplog.set_level(logging.INFO, logger="bmpt.webui.trace")
     events = [{"k": "down", "pt": "mouse", "b": 0, "bs": 1}, {"k": "wheel", "dy": 4.5, "act": "pan"}]
     assert rpc(app, "app.info")["result"]["debug"] is False
     rpc(app, "debug.trace", events=events)
-    assert not [r for r in caplog.records if r.name == "ba_modding_toolkit.webui.trace"]
+    assert not [r for r in caplog.records if r.name == "bmpt.webui.trace"]
 
     services.debug = True
     assert rpc(app, "app.info")["result"]["debug"] is True
     rpc(app, "debug.trace", events=events + [{"k": "move", "note": "x" * 5000}] + [{"k": "move"}] * (TRACE_BATCH + 10))
-    lines = [r.getMessage() for r in caplog.records if r.name == "ba_modding_toolkit.webui.trace"]
+    lines = [r.getMessage() for r in caplog.records if r.name == "bmpt.webui.trace"]
     assert len(lines) == TRACE_BATCH  # one call logs a bounded batch
     assert json.loads(lines[0]) == events[0] and json.loads(lines[1]) == events[1]
     assert len(lines[2]) == TRACE_LINE  # and bounded lines
@@ -119,7 +119,7 @@ def test_input_trace_is_logged_only_when_started_with_debug(app, services, caplo
 
 
 def test_input_trace_also_goes_to_a_file(tmp_path):
-    trace = logging.getLogger("ba_modding_toolkit.webui.trace")
+    trace = logging.getLogger("bmpt.webui.trace")
     before = list(trace.handlers)
     try:
         _trace_to_file(tmp_path / "input-trace.log")
@@ -201,10 +201,10 @@ def test_lobby_strings_in_both_languages():
 # Dialogue geometry from the verified development view; no images or source text are retained.
 import os
 
-from ba_modding_toolkit.gameassets import AssetCache, GameAssets
-from ba_modding_toolkit.gameassets.unity import open_bundle
+from bmpt.gameassets import AssetCache, GameAssets
+from bmpt.gameassets.unity import open_bundle
 from ba_modding_toolkit.searching import get_search_dirs
-from ba_modding_toolkit.webui.student_hall import dialogue_layout
+from bmpt.webui.student_hall import dialogue_layout
 
 GAME_DIR = Path(os.environ.get("BAMT_TEST_GAME_DIR") or "/nonexistent/bamt-real-game")
 
@@ -217,7 +217,7 @@ def game(tmp_path_factory):
 
 @pytest.mark.skipif(not GAME_DIR.is_dir(), reason="Official development view required")
 def test_talk_template_is_the_prefab_box_at_the_origin(game):
-    from ba_modding_toolkit.gameassets.layouts import export_layout, subtree
+    from bmpt.gameassets.layouts import export_layout, subtree
     path = game._bundle_path(game._lobby_prefabs()["lobbycommon"])
     with open_bundle(path) as env:
         original = subtree(export_layout(env, "LobbyCommon", {}), "DialogPanel/ChatDialog/Talk")

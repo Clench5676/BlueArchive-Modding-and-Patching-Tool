@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { bindReorder, dragFeedback, TOUCH_REORDER_HOLD } from "../../src/ba_modding_toolkit/web/js/student-hall-reorder.js";
-import { horizontalScroll } from "../../src/ba_modding_toolkit/web/js/horizontal-scroll.js";
+import { bindReorder, dragFeedback, TOUCH_REORDER_HOLD } from "../../src/bmpt/web/js/student-hall-reorder.js";
+import { horizontalScroll } from "../../src/bmpt/web/js/horizontal-scroll.js";
 class Target {
   style={};dataset={};events=new Map();
   addEventListener(key,fn){if(!this.events.has(key))this.events.set(key,new Set());this.events.get(key).add(fn);}

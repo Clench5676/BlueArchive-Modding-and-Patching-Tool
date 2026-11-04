@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import pytest
 from PIL import Image
 
-from ba_modding_toolkit.gameassets.spine import extract_spine
+from bmpt.gameassets.spine import extract_spine
 from texture_helpers import fake_texture
 
 
@@ -40,7 +40,7 @@ def test_export_matches_020_at_transparent_edges(tmp_path, monkeypatch, core, at
     def open_fake(path):
         yield SimpleNamespace(objects=parts[path.name])
 
-    monkeypatch.setattr("ba_modding_toolkit.gameassets.spine.open_bundle", open_fake)
+    monkeypatch.setattr("bmpt.gameassets.spine.open_bundle", open_fake)
     files = extract_spine([tmp_path / name for name in parts])
     assert files[f"{core}.atlas"] == atlas.encode()
     assert files[f"Pages/{core}.PNG"] == files[f"{core}.png"]

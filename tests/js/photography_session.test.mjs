@@ -3,7 +3,7 @@ import {readFile} from 'node:fs/promises';
 import vm from 'node:vm';
 import {test} from 'node:test';
 import {n,spr,insert} from './control_prefabs.mjs';
-const detail=await readFile(new URL('../../src/ba_modding_toolkit/web/js/detail.js',import.meta.url),'utf8');
+const detail=await readFile(new URL('../../src/bmpt/web/js/detail.js',import.meta.url),'utf8');
 const code=detail.slice(detail.indexOf('// Student photography retains'));
 const playbackFixture=n('Inventory_ListControl');
 insert(playbackFixture,'LeftInfo/CharInfo/Char_Target/Char_ZoomBtn',n('Char_ZoomBtn',[0,0],[spr('Common_Bg_Raius5px_Shadow',145,141)],[n('Sprite',[3.6,9.8],[spr('Common_Icon_ZoomChar',100,70)])]));

@@ -28,9 +28,9 @@ globalThis.hallControlsHarness = { S, clone: structuredClone, NGUI: { find, node
   text(tree, path, value) { find(tree, path).widgets[0].text = value; },
   UI: { retainedButton: async () => {}, button: async () => {}, scaleControl: async () => {} }, T: (key) => `localized:${key}`, Popup: { hit(host, view, path, fn, meta) { const b = { path, fn, dataset: {}, ...meta }; wired.push(b); return b; } },
   document: { createElement: () => ({ style: {}, children: [], append(child) { this.children.push(child); } }), querySelectorAll: () => [] }, lobby };
-let source = await readFile(new URL("../../src/ba_modding_toolkit/web/js/student-hall.js", import.meta.url), "utf8");
+let source = await readFile(new URL("../../src/bmpt/web/js/student-hall.js", import.meta.url), "utf8");
 source = source.replace(/^import .*;$/gm, "");
-source = `import { portraitReplacements } from "${new URL("../../src/ba_modding_toolkit/web/js/student-hall-model.js", import.meta.url).href}";\nimport { portraitRect, portraitToolbarLayout, PORTRAIT_SIZE } from "${new URL("../../src/ba_modding_toolkit/web/js/student-hall-framing.js", import.meta.url).href}";\nimport { bindCorner } from "${new URL("../../src/ba_modding_toolkit/web/js/corner-layout.js", import.meta.url).href}";\n` + source;
+source = `import { portraitReplacements } from "${new URL("../../src/bmpt/web/js/student-hall-model.js", import.meta.url).href}";\nimport { portraitRect, portraitToolbarLayout, PORTRAIT_SIZE } from "${new URL("../../src/bmpt/web/js/student-hall-framing.js", import.meta.url).href}";\nimport { bindCorner } from "${new URL("../../src/bmpt/web/js/corner-layout.js", import.meta.url).href}";\n` + source;
 source = `const {S,clone,NGUI,alignIcon,text,T,Popup,document,UI}=globalThis.hallControlsHarness;\n${source}\nexport {lobbyControl,controls,renderChrome,renderPortraitActions};
 export function setPortraits(value){portraits=value;}
 export function fixture(mode,kind=null,writes=0,portraits=[],choices=[]){options={choices};layouts={lobby:globalThis.hallControlsHarness.lobby};store={current:()=>({mode,memorials:[],portraits}),kind:()=>kind};root={getBoundingClientRect:()=>({left:0,top:0,width:1920,height:1080})};chrome={replaceChildren(){},querySelectorAll:()=>[]};hits={querySelector:()=>null};pendingWrites=writes;hitGeneration=0;}
@@ -103,8 +103,8 @@ test("top-right icons keep the75percent baseline with the photo-only8percent opt
 });
 
 test("Hall's real action row measures its top margin below the bar at minimum, default and large sizes", async () => {
-  const { CORNER_MARGIN } = await import('../../src/ba_modding_toolkit/web/js/corner-layout.js');
-  const { headerGeometry } = await import('../../src/ba_modding_toolkit/web/js/window-layout.js');
+  const { CORNER_MARGIN } = await import('../../src/bmpt/web/js/corner-layout.js');
+  const { headerGeometry } = await import('../../src/bmpt/web/js/window-layout.js');
   for (const mode of ['portraits', 'memorial']) for (const platform of [null, 'darwin', 'win32']) {
     for (const [width, height] of [[960, 540], [1600, 900], [2560, 1440], [2560, 1080], [960, 1200]]) {
       const header = platform ? headerGeometry(width, height, platform === 'win32' ? 40 : 0) : null;
@@ -136,7 +136,7 @@ test("the Common ChangeUnit portrait icon keeps its77x68ratio and enables only w
 });
 
 test("the own-size slider moves the toolbar only once a size is set, never under a dragged thumb",async()=>{
-  const { portraitRect, portraitToolbarLayout } = await import("../../src/ba_modding_toolkit/web/js/student-hall-framing.js");
+  const { portraitRect, portraitToolbarLayout } = await import("../../src/bmpt/web/js/student-hall-framing.js");
   const entry={id:"a",variant:"hero",source:"mod:current",x:400,y:1100,scale:1,mirror:false},ui=globalThis.hallControlsHarness.UI,saved={...ui};
   let change,reset,listeners={};
   ui.scaleControl=async(host,value,fn,options)=>{assert.equal(value,1);assert.equal(options.limits.min,.5);change=fn;return {range:{addEventListener:(name,f)=>{listeners[name]=f;}},reset:()=>fn(1)};};

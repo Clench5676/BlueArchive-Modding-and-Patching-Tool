@@ -5,14 +5,14 @@ from types import SimpleNamespace
 
 import pytest
 
-from ba_modding_toolkit.catalog import Catalog
-from ba_modding_toolkit.errors import ServiceError
-from ba_modding_toolkit.gameassets import AssetCache, GameAssets
-from ba_modding_toolkit.library import ModLibrary
-from ba_modding_toolkit.library.identity import content_cores, identify
+from bmpt.catalog import Catalog
+from bmpt.errors import ServiceError
+from bmpt.gameassets import AssetCache, GameAssets
+from bmpt.library import ModLibrary
+from bmpt.library.identity import content_cores, identify
 from ba_modding_toolkit.naming import parse_filename, spine_kind
-from ba_modding_toolkit.webui.api import build_api
-from ba_modding_toolkit.webui.services import Services
+from bmpt.webui.api import build_api
+from bmpt.webui.services import Services
 
 from test_library import game_bundle, make_mod, setup_library
 from test_mod_identity import objects
@@ -190,7 +190,7 @@ def test_special_rpc_and_preview_use_existing_lobby_routes(setup_library, monkey
     game = GameAssets([env.game_dir], AssetCache(root=env.tmp / "cache"))
     catalog = Catalog(game, None)
     env.library.catalog = catalog
-    monkeypatch.setattr("ba_modding_toolkit.gameassets.service.extract_spine", lambda paths: {
+    monkeypatch.setattr("bmpt.gameassets.service.extract_spine", lambda paths: {
         "arona_workpage_daytime.skel": paths[-1].read_bytes(), "arona_workpage_daytime.atlas": b"atlas"})
     services = Services(env.settings, env.tmp / "ui", game=game, catalog=catalog, library=env.library)
     try:

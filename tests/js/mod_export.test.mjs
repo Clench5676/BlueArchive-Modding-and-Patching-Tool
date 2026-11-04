@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
-const source = readFileSync(new URL("../../src/ba_modding_toolkit/web/js/mod-export.js", import.meta.url), "utf8");
+const source = readFileSync(new URL("../../src/bmpt/web/js/mod-export.js", import.meta.url), "utf8");
 const body = source.slice(source.indexOf("export async function journey"), source.indexOf("function confirmation"))
   .replace("export async", "async");
 const journey = new Function(`${body}; return journey;`)();

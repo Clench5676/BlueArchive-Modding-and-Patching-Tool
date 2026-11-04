@@ -6,10 +6,10 @@ from types import SimpleNamespace
 import pytest
 
 from ba_modding_toolkit.bundle import Bundle
-from ba_modding_toolkit.catalog import Catalog
-from ba_modding_toolkit.errors import ServiceError
+from bmpt.catalog import Catalog
+from bmpt.errors import ServiceError
 from ba_modding_toolkit.i18n import t
-from ba_modding_toolkit.library.identity import content_cores, identify
+from bmpt.library.identity import content_cores, identify
 from ba_modding_toolkit.naming import parse_filename
 
 from test_library import FakeVariant, game_bundle, make_mod, setup_library
@@ -80,7 +80,7 @@ def test_matching_variant_alias_is_canonicalized_and_can_be_applied(setup_librar
     source.write_bytes(original.read_bytes() + b'lobby mod')
     with monkeypatch.context() as patch:
         objects(patch, names)
-        patch.setattr('ba_modding_toolkit.library.identity.content_cores', content_cores)
+        patch.setattr('bmpt.library.identity.content_cores', content_cores)
         entry, = env.library.add([source])
     assert (entry.core, entry.target, entry.kind) == ('mutsuki_dress_home', 'ch0246', 'lobby')
     env.library.apply('ch0246', f'mod:{entry.id}', kind='lobby')
@@ -127,7 +127,7 @@ def test_upload_splits_kinds_and_variants_and_reports_files(setup_library, monke
     env.catalog.variants['dress'] = FakeVariant('dress', 'dress_spr', 'dress_home')
     portrait = game_bundle(env.tmp / 'upload', 'test_spr')
     lobby = game_bundle(env.tmp / 'upload', 'dress_home')
-    monkeypatch.setattr('ba_modding_toolkit.library.identity.content_cores',
+    monkeypatch.setattr('bmpt.library.identity.content_cores',
                         lambda path: {parse_filename(path.name).core})
     progress = []
     entries = env.library.add([portrait, lobby], lambda *p: progress.append(p))
@@ -140,7 +140,7 @@ def test_unknown_part_adds_nothing_from_the_entire_upload(setup_library, monkeyp
     env = setup_library
     valid = game_bundle(env.tmp / 'upload', 'test_spr')
     unknown = game_bundle(env.tmp / 'upload', 'unknown_home')
-    monkeypatch.setattr('ba_modding_toolkit.library.identity.content_cores', lambda path: set())
+    monkeypatch.setattr('bmpt.library.identity.content_cores', lambda path: set())
     with pytest.raises(ServiceError) as caught:
         env.library.add([valid, unknown])
     assert caught.value.code == 'mod_target_unknown'
@@ -152,7 +152,7 @@ def test_renamed_upload_is_stored_under_its_content_target(setup_library, monkey
     env = setup_library
     env.catalog.variants['dress'] = FakeVariant('dress', 'dress_spr', 'dress_home')
     source = game_bundle(env.tmp / 'upload', 'test_home_gl')
-    monkeypatch.setattr('ba_modding_toolkit.library.identity.content_cores', lambda path: {'dress_home'})
+    monkeypatch.setattr('bmpt.library.identity.content_cores', lambda path: {'dress_home'})
     entry, = env.library.add([source])
     assert (entry.target, entry.kind, entry.core) == ('dress', 'lobby', 'dress_home')
     assert entry.file.read_bytes() == source.read_bytes()
@@ -169,7 +169,7 @@ def test_add_files_accepts_the_identified_kind_of_a_renamed_upload(
     source = make_mod(targets[filename_kind], env.tmp / 'upload')
     target = targets[content_kind]
     core = parse_filename(target.name).core
-    monkeypatch.setattr('ba_modding_toolkit.library.identity.content_cores', lambda path: {core})
+    monkeypatch.setattr('bmpt.library.identity.content_cores', lambda path: {core})
 
     added = env.library.add_files(content_kind, [source], apply=apply)
 

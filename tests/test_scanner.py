@@ -6,8 +6,8 @@ import threading
 import time
 from types import SimpleNamespace
 
-from ba_modding_toolkit.errors import ServiceError
-from ba_modding_toolkit.webui.scanner import Scanner
+from bmpt.errors import ServiceError
+from bmpt.webui.scanner import Scanner
 
 
 def wait_for(cond, timeout=5.0):

@@ -16,11 +16,11 @@ from types import SimpleNamespace
 import pytest
 from UnityPy.helpers.CompressionHelper import compress_lz4
 
-from ba_modding_toolkit.catalog import Catalog, model_core
-from ba_modding_toolkit.gameassets import AssetCache, AssetNotFound, GameAssets
-from ba_modding_toolkit.gameassets import model
-from ba_modding_toolkit.gameassets import service
-from ba_modding_toolkit.gameassets.discovery import cab_names, is_model_dependency
+from bmpt.catalog import Catalog, model_core
+from bmpt.gameassets import AssetCache, AssetNotFound, GameAssets
+from bmpt.gameassets import model
+from bmpt.gameassets import service
+from bmpt.gameassets.discovery import cab_names, is_model_dependency
 from ba_modding_toolkit.searching import get_search_dirs
 
 FIXTURES = Path(__file__).parent / "fixtures" / "catalog"

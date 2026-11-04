@@ -6,12 +6,12 @@ import json
 
 import pytest
 
-from ba_modding_toolkit.errors import ServiceError
-from ba_modding_toolkit.library import service, portrait_edit, asset_delete
-from ba_modding_toolkit.library.photographs import Photographs
-from ba_modding_toolkit.library.judge import core_of
-from ba_modding_toolkit.webui.state import UiState
-from ba_modding_toolkit.webui.photography import Photography
+from bmpt.errors import ServiceError
+from bmpt.library import service, portrait_edit, asset_delete
+from bmpt.library.photographs import Photographs
+from bmpt.library.judge import core_of
+from bmpt.webui.state import UiState
+from bmpt.webui.photography import Photography
 from test_library_profiles import world, japan, pin_of, OFFICIAL
 from test_library import header_bundle
 from ba_modding_toolkit.utils import CRCUtils
@@ -253,7 +253,7 @@ def test_photo_cleanup_failure_restores_shared_recipes_and_preview_choices(recip
     if failure == 'unlink':
         monkeypatch.setattr(Path, 'unlink', fail)
     else:
-        from ba_modding_toolkit.library import photographs
+        from bmpt.library import photographs
         write = photographs.atomic_json
         def publish(path, data):
             write(path, data)
@@ -305,7 +305,7 @@ def test_outer_recovery_restores_a_deleted_source_and_profiles(world):
     world.library.profiles.update(lambda data: data['folders'][world.key()]['configured'].clear())
     service.shutil.rmtree(mod.file.parent)
     # A new instance recovers under transactions.lock before accepting another operation.
-    from ba_modding_toolkit.library import ModLibrary
+    from bmpt.library import ModLibrary
     restored = ModLibrary(world.root, world.library.catalog, object(), world.settings)
     assert mod.file.exists() and restored.mods() == [mod]
     assert restored.profiles.read()['enabled'] == config['enabled']

@@ -14,13 +14,13 @@ from UnityPy.enums import BuildTarget, TextureFormat as TF
 from UnityPy.export import Texture2DConverter
 from UnityPy.helpers import ResourceReader, TextureSwizzler
 
-from ba_modding_toolkit import atlas_remap as remap, refine_assembly, texture_guard as guard
+from bmpt import atlas_remap as remap, refine_assembly, texture_guard as guard
 from ba_modding_toolkit.bundle import Bundle
 from ba_modding_toolkit.core import extraction
-from ba_modding_toolkit.errors import ServiceError
-from ba_modding_toolkit.gameassets import AssetCache, GameAssets, model, service
-from ba_modding_toolkit.gameassets.spine import extract_spine
-from ba_modding_toolkit.library import portrait_edit
+from bmpt.errors import ServiceError
+from bmpt.gameassets import AssetCache, GameAssets, model, service
+from bmpt.gameassets.spine import extract_spine
+from bmpt.library import portrait_edit
 from ba_modding_toolkit.models import AssetType
 from ba_modding_toolkit.searching import get_search_dirs
 from ba_modding_toolkit.utils import no_log
@@ -417,8 +417,8 @@ def spaced(items, count):
 
 @real_install
 def test_official_spine_cores_and_ui_bundles_pass_the_check(tmp_path):
-    from ba_modding_toolkit.gameassets.discovery import group_bundles, is_atlas, is_texture
-    from ba_modding_toolkit.gameassets.unity import open_bundle
+    from bmpt.gameassets.discovery import group_bundles, is_atlas, is_texture
+    from bmpt.gameassets.unity import open_bundle
 
     game = GameAssets(get_search_dirs(GAME_DIR), AssetCache(root=tmp_path / "cache"))
     portraits, lobbies = game.spine_cores("spr"), game.spine_cores("lobby")

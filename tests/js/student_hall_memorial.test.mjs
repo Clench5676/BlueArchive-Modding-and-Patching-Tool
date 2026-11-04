@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { createMemorialPool } from "../../src/ba_modding_toolkit/web/js/student-hall-memorial.js";
+import { createMemorialPool } from "../../src/bmpt/web/js/student-hall-memorial.js";
 const choice=(name,id=name)=>({id,variant:name,source:`mod:${name}`});
 function fixture(){
   const events=[],hosts=[],players=[0,1].map(index=>({index,hide(){events.push(["hide",index]);},suspend(){events.push(["pause",index]);},resume(){events.push(["resume",index]);}}));

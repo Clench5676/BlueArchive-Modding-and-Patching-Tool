@@ -8,9 +8,9 @@ import time
 import pytest
 
 from ba_modding_toolkit.i18n import I18n
-from ba_modding_toolkit.webui import jobs as jobs_module
-from ba_modding_toolkit.webui.events import EventBus
-from ba_modding_toolkit.webui.jobs import JobRunner
+from bmpt.webui import jobs as jobs_module
+from bmpt.webui.events import EventBus
+from bmpt.webui.jobs import JobRunner
 
 
 @pytest.mark.parametrize("language", ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR"])
@@ -101,7 +101,7 @@ def test_a_pending_job_is_never_forgotten():
 
 
 def test_failures_in_run_result_or_listeners_always_finish_and_release_the_worker():
-    from ba_modding_toolkit.errors import ServiceError
+    from bmpt.errors import ServiceError
 
     events = EventBus()
     seen = events.subscribe()

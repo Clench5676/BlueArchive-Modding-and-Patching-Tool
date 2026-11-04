@@ -4,9 +4,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-const I = await import("../../src/ba_modding_toolkit/web/js/lobby-intro.js");
-const P = await import("../../src/ba_modding_toolkit/web/js/particles.js");
-const Dof = await import("../../src/ba_modding_toolkit/web/js/lobby-dof.js");
+const I = await import("../../src/bmpt/web/js/lobby-intro.js");
+const P = await import("../../src/bmpt/web/js/particles.js");
+const Dof = await import("../../src/bmpt/web/js/lobby-dof.js");
 
 const near = (a, b, eps = 1e-6, what = "") => assert.ok(Math.abs(a - b) <= eps, `${what} ${a} != ${b}`);
 

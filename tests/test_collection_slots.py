@@ -3,8 +3,8 @@
 import hashlib
 from pathlib import Path
 
-from ba_modding_toolkit.library import ModLibrary
-from ba_modding_toolkit.library.judge import core_of
+from bmpt.library import ModLibrary
+from bmpt.library.judge import core_of
 from ba_modding_toolkit.naming import parse_filename
 from ba_modding_toolkit.utils import CRCUtils
 from test_library import header_bundle, make_mod, setup_library

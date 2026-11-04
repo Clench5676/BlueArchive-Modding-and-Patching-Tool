@@ -7,9 +7,9 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
-from ba_modding_toolkit.gameassets import AssetCache, GameAssets
+from bmpt.gameassets import AssetCache, GameAssets
 
-SOURCE = Path(__file__).parents[1] / "src/ba_modding_toolkit/web/js/selected-frames.js"
+SOURCE = Path(__file__).parents[1] / "src/bmpt/web/js/selected-frames.js"
 
 
 @pytest.fixture

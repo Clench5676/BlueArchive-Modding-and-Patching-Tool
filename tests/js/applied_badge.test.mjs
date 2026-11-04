@@ -21,9 +21,9 @@ globalThis.document = {
   documentElement: { lang: "en-US", appendChild() {} },
 };
 globalThis.getComputedStyle = () => ({ getPropertyValue: () => "" });
-const { LINE_PITCH, fitGroup, fontSizeFor, glyphWidth } = await import("../../src/ba_modding_toolkit/web/js/ngui.js");
+const { LINE_PITCH, fitGroup, fontSizeFor, glyphWidth } = await import("../../src/bmpt/web/js/ngui.js");
 const { BADGE_FONT_MIN, badgeCaptionBox, fitBadgeCaptions, selectedFrame, SELECTION_BADGE_SLICES, SELECTION_SLOT } =
-  await import("../../src/ba_modding_toolkit/web/js/selected-frames.js");
+  await import("../../src/bmpt/web/js/selected-frames.js");
 
 const LOCALES = ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"];
 // The game's own word for "Selected": the Global client's text for it in English, Traditional Chinese, Japanese, Korean and
@@ -31,7 +31,7 @@ const LOCALES = ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"];
 const WORDS = { "en-US": "Selected", "zh-CN": "已选择", "zh-TW": "選擇中", "ja-JP": "選択中",
   "ko-KR": "선택 중", "th-TH": "เลือกอยู่" };
 const strings = new Map();
-for (const locale of LOCALES) strings.set(locale, JSON.parse(await readFile(new URL(`../../src/ba_modding_toolkit/locales/${locale}.json`, import.meta.url), "utf8")));
+for (const locale of LOCALES) strings.set(locale, JSON.parse(await readFile(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8")));
 const at = (tree, path) => path.split("/").reduce((n, part) => n.children.find((c) => c.name === part), tree);
 const slot = () => at(selectionPrefab(), SELECTION_SLOT);
 const walk = (n) => [n, ...(n.children || []).flatMap(walk)];

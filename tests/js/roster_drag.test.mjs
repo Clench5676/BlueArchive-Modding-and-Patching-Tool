@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 import vm from "node:vm";
 import { test } from "node:test";
 
-const source = readFileSync(new URL("../../src/ba_modding_toolkit/web/js/roster.js", import.meta.url), "utf8");
+const source = readFileSync(new URL("../../src/bmpt/web/js/roster.js", import.meta.url), "utf8");
 const code = source.slice(source.indexOf("// dragging the list:"), source.indexOf("// --- toolbar layout"));
 
 function harness() {

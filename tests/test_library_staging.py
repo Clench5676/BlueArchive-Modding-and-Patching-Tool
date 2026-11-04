@@ -8,9 +8,9 @@ import time
 
 import pytest
 
-from ba_modding_toolkit.filelock import file_lock
-from ba_modding_toolkit.library.service import ModLibrary
-from ba_modding_toolkit.library.staging import import_directory
+from bmpt.filelock import file_lock
+from bmpt.library.service import ModLibrary
+from bmpt.library.staging import import_directory
 
 from test_library import setup_library
 
@@ -89,7 +89,7 @@ def test_startup_preserves_another_process_then_cleans_after_forced_quit(setup_l
     script = """
 from pathlib import Path
 import sys
-from ba_modding_toolkit.library.staging import import_directory
+from bmpt.library.staging import import_directory
 with import_directory(Path(sys.argv[1])) as path:
     (path / 'output.bundle').write_bytes(b'building')
     print(path, flush=True)

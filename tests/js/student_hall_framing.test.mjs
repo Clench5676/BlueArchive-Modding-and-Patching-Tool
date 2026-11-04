@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { LOBBY_CHARACTER_POS, PORTRAIT_ANCHOR, PORTRAIT_BASE_SCALE, portraitScale, portraitRect } from "../../src/ba_modding_toolkit/web/js/student-hall-framing.js";
-import { portraitViewport, stagePoint } from "../../src/ba_modding_toolkit/web/js/portrait-view.js";
-import { createDraft } from "../../src/ba_modding_toolkit/web/js/student-hall-model.js";
+import { LOBBY_CHARACTER_POS, PORTRAIT_ANCHOR, PORTRAIT_BASE_SCALE, portraitScale, portraitRect } from "../../src/bmpt/web/js/student-hall-framing.js";
+import { portraitViewport, stagePoint } from "../../src/bmpt/web/js/portrait-view.js";
+import { createDraft } from "../../src/bmpt/web/js/student-hall-model.js";
 const close = (actual, expected) => assert.ok(Math.abs(actual - expected) < 1e-7, `${actual} != ${expected}`);
 const box = { left: 0, top: 0, width: 1920, height: 1080 };
 
@@ -46,9 +46,9 @@ test("horizontal flip reflects asymmetric bounds around the same anchor for hits
 // Geometry comes only from the runtime's public API, using synthetic atlas pages and skeletons.
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
-import { pickPortrait, sampleAlpha, skeletonContains, bindPortraitPointer, VISIBLE_ALPHA, pageAlpha, preparePickPages, visibleHead, readyAlpha, ALPHA_SIDE } from "../../src/ba_modding_toolkit/web/js/student-hall-framing.js";
+import { pickPortrait, sampleAlpha, skeletonContains, bindPortraitPointer, VISIBLE_ALPHA, pageAlpha, preparePickPages, visibleHead, readyAlpha, ALPHA_SIDE } from "../../src/bmpt/web/js/student-hall-framing.js";
 const runtimeContext = vm.createContext({ console, TextDecoder, TextEncoder, Float32Array, Uint8Array, Uint16Array, Int16Array, Int32Array, ArrayBuffer, DataView });
-vm.runInContext(readFileSync(new URL("../../src/ba_modding_toolkit/web/vendor/spine-player-4.2.120/spine-player.min.js", import.meta.url), "utf8"), runtimeContext);
+vm.runInContext(readFileSync(new URL("../../src/bmpt/web/vendor/spine-player-4.2.120/spine-player.min.js", import.meta.url), "utf8"), runtimeContext);
 const Runtime = runtimeContext.spine;
 function pickActor(id, { blend = "normal", mesh = false, alpha = "ffffffff", slots = 1, weighted = false, rotate = 0 } = {}) {
   const atlas = new Runtime.TextureAtlas("page.png\nsize: 4,2\nbody\n bounds: 0,0,4,2\n rotate: " + rotate + "\n");

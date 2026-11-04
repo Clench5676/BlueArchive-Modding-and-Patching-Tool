@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
-import { selectedFrame, selectionArtWindow, sourceCardState, SELECTION_SLOT } from '../../src/ba_modding_toolkit/web/js/selected-frames.js';
-import { frameMesh } from '../../src/ba_modding_toolkit/web/js/ngui-frame-fx.js';
-import { frameOutline } from '../../src/ba_modding_toolkit/web/js/row-thumbnail.js';
-import { sliceAxis, slicePoint } from '../../src/ba_modding_toolkit/web/js/sprite-slices.js';
+import { selectedFrame, selectionArtWindow, sourceCardState, SELECTION_SLOT } from '../../src/bmpt/web/js/selected-frames.js';
+import { frameMesh } from '../../src/bmpt/web/js/ngui-frame-fx.js';
+import { frameOutline } from '../../src/bmpt/web/js/row-thumbnail.js';
+import { sliceAxis, slicePoint } from '../../src/bmpt/web/js/sprite-slices.js';
 import { selectionPrefab, selectionSprite, selectionFramePixels } from './selection_prefabs.mjs';
-import { APPLIED_SELECTION_GOLD } from "../../src/ba_modding_toolkit/web/js/ui-tokens.js";
+import { APPLIED_SELECTION_GOLD } from "../../src/bmpt/web/js/ui-tokens.js";
 const at = (tree, path) => path.split('/').reduce((n, part) => n.children.find(c => c.name === part), tree);
 const slot = () => at(selectionPrefab(), SELECTION_SLOT);
 const walk = n => [n, ...(n.children || []).flatMap(walk)];
@@ -132,7 +132,7 @@ test('frame animation uses the prefab particle timing and scrolling material, wi
 
 test('all six locales retain their existing Applied labels for accessibility', () => {
   for (const locale of ['en-US', 'zh-CN', 'zh-TW', 'ja-JP', 'ko-KR', 'th-TH']) {
-    const ui = JSON.parse(readFileSync(new URL(`../../src/ba_modding_toolkit/locales/${locale}.json`, import.meta.url))).webui;
+    const ui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url))).webui;
     assert.ok(ui.status.applied); assert.ok(ui.photo.applied);
   }
 });

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {test} from 'node:test';
-const source=readFileSync(new URL('../../src/ba_modding_toolkit/web/js/main.js',import.meta.url),'utf8');
+const source=readFileSync(new URL('../../src/bmpt/web/js/main.js',import.meta.url),'utf8');
 const refresh=source.slice(source.indexOf('async function refreshConfiguration()'),source.indexOf('\nlet routeToken'));
 test('old cross-server refreshes cannot commit after a newer refresh and recovery needs no restart',async()=>{
   const pending=[],routes=[],nav=[],started=[];

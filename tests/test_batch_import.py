@@ -13,13 +13,13 @@ from types import SimpleNamespace
 import pytest
 
 from ba_modding_toolkit.bundle import Bundle
-from ba_modding_toolkit.errors import ServiceError
-from ba_modding_toolkit.library import integrity
+from bmpt.errors import ServiceError
+from bmpt.library import integrity
 from ba_modding_toolkit.models import AssetType, FilePair, ModUpdateResult, PatchResult
-from ba_modding_toolkit.webui import batch_import, native
-from ba_modding_toolkit.webui.api import build_api
-from ba_modding_toolkit.webui.services import Services
-from ba_modding_toolkit.webui.state import UiState
+from bmpt.webui import batch_import, native
+from bmpt.webui.api import build_api
+from bmpt.webui.services import Services
+from bmpt.webui.state import UiState
 
 from test_library import FakeVariant, game_bundle, make_mod, setup_library
 from test_library_model import model_bundle, model_env
@@ -182,7 +182,7 @@ def test_backup_upload_and_content_alias_use_library_normalization(env, monkeypa
     assert run(env, [entry], enableAfterImport=False)[0]["outcome"] == "imported"
     target = game_bundle(env.game_dir, "test_home_gl")
     renamed = game_bundle(env.tmp / "wrong-name", date="2025-01-01", payload=b"lobby data")
-    monkeypatch.setattr("ba_modding_toolkit.library.identity.content_cores", lambda path: {"test_home_gl"})
+    monkeypatch.setattr("bmpt.library.identity.content_cores", lambda path: {"test_home_gl"})
     entry, = analyze(env, [renamed])["entries"]
     assert (entry["kind"], entry["core"], entry["files"][0]["target"]) == ("lobby", "test_home_gl", target.name)
     assert entry["state"] == "update"
@@ -200,7 +200,7 @@ def test_blocked_reasons_are_codes_and_failures_do_not_hide_other_entries(env, m
         source = game_bundle(env.tmp / "bad", "other_spr")
     elif problem == "ambiguous":
         source = game_bundle(env.tmp / "bad", date="2025-01-01", payload=b"ambiguous")
-        monkeypatch.setattr("ba_modding_toolkit.library.identity.content_cores",
+        monkeypatch.setattr("bmpt.library.identity.content_cores",
                             lambda path: {"test_spr", "other_spr"} if path == source else set())
     elif problem == "other":
         source = game_bundle(env.tmp / "bad", "shared", category="shaders")
@@ -591,7 +591,7 @@ def test_staging_names_keep_the_first_sixteen_digits():
 
 
 def test_omitted_assets_are_available_in_the_settings_app_log(env, monkeypatch):
-    from ba_modding_toolkit.webui.session_log import RedactingFormatter
+    from bmpt.webui.session_log import RedactingFormatter
 
     source = game_bundle(env.tmp / "old", date="2025-01-01", payload=b"old mod")
     entry, = analyze(env, [source])["entries"]
@@ -839,7 +839,7 @@ def test_completed_rows_are_scoped_to_unchanged_inputs_and_the_library_install(e
     elif change == "remove":
         assert not env.library.remove(result["libraryId"]).failed
     elif change == "library":
-        from ba_modding_toolkit.library import ModLibrary
+        from bmpt.library import ModLibrary
         env.services._library = ModLibrary(env.tmp / "another-library", env.catalog, object(), env.settings)
     else:
         game_bundle(env.tmp / "another-game")
@@ -942,7 +942,7 @@ def test_new_analysis_invalidates_previous_ids_at_submission(env):
 
 
 def test_a_replaced_library_invalidates_analyzed_sources(env):
-    from ba_modding_toolkit.library import ModLibrary
+    from bmpt.library import ModLibrary
 
     source = make_mod(env.original, env.tmp / "input")
     entry, = analyze(env, [source])["entries"]
@@ -1252,8 +1252,8 @@ GAME_DIR = Path(os.environ.get("BAMT_TEST_GAME_DIR") or "/nonexistent/bamt-real-
 
 @pytest.mark.skipif(not GAME_DIR.is_dir(), reason="Blue Archive install unavailable")
 def test_integration_official_bundle_preflight_uses_only_copies(tmp_path, monkeypatch):
-    from ba_modding_toolkit.config import Settings
-    from ba_modding_toolkit.library import ModLibrary
+    from bmpt.config import Settings
+    from bmpt.library import ModLibrary
     from ba_modding_toolkit.naming import parse_filename
     from ba_modding_toolkit.searching import get_search_dirs
     from test_library import FakeCatalog
@@ -1401,7 +1401,7 @@ def test_generic_old_bundle_can_split_into_multiple_current_official_files(batch
 
 
 def test_generic_classic_queue_pins_every_target_slot(batch_other_env):
-    from ba_modding_toolkit.library.judge import core_of
+    from bmpt.library.judge import core_of
 
     env = batch_other_env
     mod, = env.library.add_files('other', [make_mod(p, env.tmp / 'incoming') for p in env.parts])
@@ -1623,7 +1623,7 @@ def test_every_analysis_logs_a_redacted_verdict_at_info(env, monkeypatch, caplog
         return inspect(files, *args, **kwargs)
 
     monkeypatch.setattr(env.library, "inspect_import", refuse)
-    with caplog.at_level(logging.INFO, logger="ba_modding_toolkit.webui.batch_import"):
+    with caplog.at_level(logging.INFO, logger="bmpt.webui.batch_import"):
         entries = analyze(env, [good, bad])["entries"]
     logs = [record.message for record in caplog.records if "Batch import analysis (analyze):" in record.message]
     assert len(logs) == 2

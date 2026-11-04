@@ -4,8 +4,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-const Lobby = await import("../../src/ba_modding_toolkit/web/js/lobby.js");
-const Linear = await import("../../src/ba_modding_toolkit/web/js/linear.js");
+const Lobby = await import("../../src/bmpt/web/js/lobby.js");
+const Linear = await import("../../src/bmpt/web/js/linear.js");
 
 test("a configured lobby reads every art layer from the library preview and keeps the game's layout", async () => {
   const before = globalThis.fetch, requests = [];

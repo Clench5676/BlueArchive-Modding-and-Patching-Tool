@@ -34,7 +34,7 @@ class Batcher { setBlendMode() { return "spine"; } }
 globalThis.spine = { BlendMode: { Normal: 0, Additive: 1 },
   PolygonBatcher: { blendModesGL: [{ srcRgb: 1, srcRgbPma: 1, dstRgb: 2, srcAlpha: 1 }, { srcRgb: 1, srcRgbPma: 1, dstRgb: 1, srcAlpha: 1 }] } };
 
-const Linear = await import("../../src/ba_modding_toolkit/web/js/linear.js");
+const Linear = await import("../../src/bmpt/web/js/linear.js");
 
 function player(gl) {
   const page = Object.assign(new Texture(), { texture: {}, useMipMaps: false });
