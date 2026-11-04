@@ -376,6 +376,7 @@
 			"unpacking_atlas": "Unpacking Atlas: {name}",
 			"atlas_unpack_success": "Atlas unpack successful, frames saved to: {path}",
 			"atlas_unpack_failed": "Atlas unpack failed",
+			"unsafe_atlas_name": "Atlas contains an unsafe name: {name}, refusing to process it",
 			"querying_info": "Querying animation information: {name}",
 			"query_success": "Found {anim_count} animations, {skin_count} skins",
 			"query_failed": "Query failed.",

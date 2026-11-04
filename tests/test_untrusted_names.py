@@ -9,6 +9,7 @@ import pytest
 from PIL import Image
 
 from ba_modding_toolkit.core import extraction
+from ba_modding_toolkit.i18n import t
 from ba_modding_toolkit.models import AssetType
 from ba_modding_toolkit.spine import SkelConverter, atlas_downgrade, unpack_atlas
 from ba_modding_toolkit.utils import is_safe_file_name, is_safe_relative_name, no_log
@@ -96,6 +97,13 @@ def test_unpack_refuses_a_region_leaving_the_output_folder(tmp_path):
     atlas = write_atlas(tmp_path / "deep" / "atlas", region="../../../escaped")
     assert unpack_atlas(atlas, tmp_path / "deep" / "out", no_log) is False
     assert not list(tmp_path.rglob("escaped*"))
+
+
+def test_unpack_reports_the_refused_atlas_name(tmp_path):
+    atlas = write_atlas(tmp_path / "atlas", region="../escaped")
+    lines: list[str] = []
+    assert unpack_atlas(atlas, tmp_path / "out", lines.append) is False
+    assert any(t("log.spine.unsafe_atlas_name", name=repr("../escaped")) in line for line in lines)
 
 
 def test_unpack_keeps_regions_in_folders(tmp_path):

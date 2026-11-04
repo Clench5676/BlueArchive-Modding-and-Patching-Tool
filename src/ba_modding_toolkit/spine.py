@@ -521,7 +521,7 @@ def _require_safe_atlas_names(atlas: Atlas) -> None:
         unsafe = [] if is_safe_file_name(page.png) else [page.png]
         unsafe += [frame.name for frame in page.frames if not is_safe_relative_name(frame.name)]
         if unsafe:
-            raise ValueError(t("log.extractor.skipping_unsafe_name", name=repr(unsafe[0])))
+            raise ValueError(t("log.spine.unsafe_atlas_name", name=repr(unsafe[0])))
 
 
 def atlas_downgrade(

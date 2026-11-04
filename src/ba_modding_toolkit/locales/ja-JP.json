@@ -376,6 +376,7 @@
 			"unpacking_atlas": "Atlasをアンパック中：{name}",
 			"atlas_unpack_success": "Atlasのアンパックに成功しました。フレームの保存先：{path}",
 			"atlas_unpack_failed": "Atlasのアンパックに失敗しました",
+			"unsafe_atlas_name": "安全でない名前を含むAtlasを拒否：{name}",
 			"querying_info": "アニメーション情報を取得中：{name}",
 			"query_success": "アニメーション{anim_count}個、スキン{skin_count}個が見つかりました",
 			"query_failed": "取得に失敗しました。",
