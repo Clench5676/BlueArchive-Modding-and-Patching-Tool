@@ -7,6 +7,7 @@
 // Offsets are viewport CSS pixels away from the screen: up for the top bar, down for the bottom menu.
 import { LOBBY_ENTRY } from "./ui-tokens.js";
 import { reflowCorners } from "./corner-layout.js";
+import { rpc } from "./api.js";
 
 const UNIT = 1920 / 2960;
 export const FRAME = 1 / 60;
@@ -45,7 +46,7 @@ export function createChromeMotion(env = {}) {
   const now = env.now ?? (() => view.performance.now());
   const later = env.setTimeout ?? ((fn, ms) => view.setTimeout(fn, ms));
   const cancel = env.clearTimeout ?? ((id) => view.clearTimeout(id));
-  const send = env.rpc ?? (() => Promise.resolve());
+  const send = env.rpc ?? rpc;
   const reflow = env.reflow ?? reflowCorners;
   let onChange = () => {}, lights = () => false;
   const edge = (name, keys) => ({ name, keys, offset: 0, from: 0, to: 0, start: 0, moving: false, away: true,
