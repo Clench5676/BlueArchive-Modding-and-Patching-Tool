@@ -45,7 +45,7 @@ As of 2026-11-04. Verify the actual branch, working tree and `pyproject.toml` ve
 | BL-059 through BL-063 | Accepted by the owner on Windows (alpha.14) |
 | BL-064 | Accepted by the owner on Windows (alpha.15) |
 | BL-065 through BL-069 | Accepted by the owner on macOS (alpha.7); Windows not reviewed |
-| BL-070 | Steps 1 and 2 of 4 accepted by the owner on macOS (alpha.5, alpha.7); Windows not reviewed; step 3 on `main` (lobby dialogue balloons, Hall modals on the shared footer, Hall small buttons, three Thai exceptions; the memorial editor kept by the owner's decision; the owner's alpha.17 findings fixed: Reset as tall as its slider, the Talk balloon in fullscreen), owner review pending; step 4 not started |
+| BL-070 | Closed by the owner (2026-11-04): steps 1 to 3 accepted on macOS (alpha.5, alpha.7, alpha.20); step 4 not started; Windows not reviewed |
 | BL-071, BL-072 | Accepted by the owner on macOS (alpha.7); Windows not reviewed |
 | BL-073 | Accepted by the owner (alpha.8) |
 | BL-074 | Closed by the owner: working as intended |
@@ -53,7 +53,7 @@ As of 2026-11-04. Verify the actual branch, working tree and `pyproject.toml` ve
 | BL-075 | Closed by the owner (2026-11-04) |
 | BL-078 | Accepted by the owner on macOS (alpha.19); Windows not reviewed |
 | BL-079 | Accepted by the owner on macOS (alpha.19); Windows not reviewed |
-| BL-080 | Student Hall L2D fullscreen: the system pointer replaces the game pointer until a restart; cause not identified. The alpha.19 pointer flicker (window buttons moved on every layout) fixed and pointer logging added after alpha.19, owner review pending |
+| BL-080 | Closed by the owner (2026-11-04): flicker fixed (`5e6b3d56`); stuck pointer not seen again, cause not identified, logging kept |
 | BL-057, BL-058 | Accepted by the owner on macOS (alpha.12); Windows not reviewed |
 | BL-055 | Accepted by the owner on macOS (0.6.0 pre-review) |
 | BL-014 | Candidate, not scheduled |
@@ -66,7 +66,7 @@ from passing tests or the presence of earlier code.
 
 `dist/Blue-Archive-Modding-and-Patching-Tool-0.6.1-alpha.20-macos-arm64.dmg`, MD5 `6211af862fc2d003ad394ce387b41d80`,
 built from `e3573f91` (`chore(release): 0.6.1-alpha.20`): alpha.19 and the fix for the pointer flicker as the window
-buttons realigned, with the pointer logging (`5e6b3d56`). BL-070 step 3 and BL-080 await the owner's review.
+buttons realigned, with the pointer logging (`5e6b3d56`). BL-070 and BL-080 closed by the owner.
 
 On `main` before the build (`669cad8e`): 4294 passed, 33 skipped (Python), 2364 JavaScript tests passed (isolated runs
 with the official development view). Native Windows behavior is not verified on the macOS host.

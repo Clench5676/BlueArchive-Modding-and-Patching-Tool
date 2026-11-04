@@ -1698,7 +1698,7 @@ Validation: full suites on `f1ad2631`: 4236 passed, 26 skipped; JavaScript 2149 
 
 ## BL-070: One design system for the web UI
 
-- Status: Steps 1 and 2 of 4 accepted by the owner on macOS (alpha.5 and alpha.7, 2026-11-03); Windows not reviewed. Step 3 implemented on `main` (`4dea1366`..`7f245853`), the memorial editor kept as it is by the owner's decision; the owner's alpha.17 findings (Reset height, fullscreen balloon) fixed by the lead, owner review pending. Step 4 not started.
+- Status: Closed by the owner (2026-11-04). Steps 1 to 3 accepted on macOS (alpha.5, alpha.7, alpha.20); step 4 not started; Windows not reviewed.
 - Requested: 2026-11-02 (owner): does the UI follow the game's design language (button sizes, spacing, fonts), and where it does not, does it have one system of its own?
 
 Owner decisions (2026-11-03): follow the prefab's values as the one system; run the migration one step at a time; keep the top bar and the Enable Mods switch at their present size.
@@ -1989,7 +1989,8 @@ its tests passed their own sender. Fixed by the lead: it sends through the App's
 
 ## BL-080: Student Hall: the system pointer replaces the game pointer for good
 
-- Status: Open; cause not identified. The alpha.19 flicker fixed by the lead; pointer logging added; owner review pending.
+- Status: Closed by the owner (2026-11-04): not seen on alpha.20. The alpha.19 flicker fixed (`5e6b3d56`); the stuck pointer's
+  cause not identified, the pointer logging (`5e6b3d56`) stays for a report if it returns.
 - Requested: 2026-11-04 (owner, 0.6.1-alpha.18, macOS): in the Student Hall, switched to the L2D memorial and in
   fullscreen, the pointer turns into the system pointer, mostly the open hand (sometimes the arrow), as if the Hall's
   "drag the scene" took it over; only a restart brings the game pointer back. Not known whether earlier builds did it.
