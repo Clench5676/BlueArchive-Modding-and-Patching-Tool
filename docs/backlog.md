@@ -1698,7 +1698,7 @@ Validation: full suites on `f1ad2631`: 4236 passed, 26 skipped; JavaScript 2149 
 
 ## BL-070: One design system for the web UI
 
-- Status: Steps 1 and 2 of 4 accepted by the owner on macOS (alpha.5 and alpha.7, 2026-11-03); Windows not reviewed. Step 3 cleared to continue by the owner (2026-11-04), dispatch to be proposed; step 4 not started.
+- Status: Steps 1 and 2 of 4 accepted by the owner on macOS (alpha.5 and alpha.7, 2026-11-03); Windows not reviewed. Step 3 partly implemented on `main` (`4dea1366`..`4fb031c3`), owner review pending; its stopped sites await the owner's decision. Step 4 not started.
 - Requested: 2026-11-02 (owner): does the UI follow the game's design language (button sizes, spacing, fonts), and where it does not, does it have one system of its own?
 
 Owner decisions (2026-11-03): follow the prefab's values as the one system; run the migration one step at a time; keep the top bar and the Enable Mods switch at their present size.
@@ -1727,7 +1727,22 @@ Switch Portrait panel still lays out its own half-width box.
 
 **Remaining, one at a time:**
 
-- Step 3: the lobby subtitle on the balloon (owner, 2026-11-03: as the lead proposed, `Talk` at the head box, `UITalk` in fullscreen); Hall modals and buttons on the shared footer and small button. Next round of work, not dispatched yet.
+- Step 3: the lobby subtitle on the balloon (owner, 2026-11-03: as the lead proposed, `Talk` at the head box, `UITalk` in fullscreen); Hall modals and buttons on the shared footer and small button.
+  Implemented (Codex, reviewed by the lead, 2026-11-04):
+  - Memorial lobby dialogue (`4dea1366`): the self-made `.lobby-subtitle` box is gone. Normal views (detail screen, Hall
+    memorial) draw LobbyCommon's `Talk` balloon through the Hall's balloon code, at the lobby prefab's own `ChatDialog` Talk
+    position under the lobby camera (`ch0100_home`: (-320, 503); the same prefab-root space as the pat box, proven on the
+    official view), clamped to the visible view (left of the detail panel); lobbies without one use the head-pat point.
+    Fullscreen (detail fullscreen, Hall immersive) draws the screen-anchored `UITalk` (813 x 298, label 680 x 220, fs62
+    `#29415a`) with NGUI ShrinkContent, no minimum size. Leave and enter motion kept.
+  - Hall first-run buttons on the small button (`4fb031c3`): 460 px wide, 136 u high, captions 48 down to 34, same centre.
+  Stopped, waiting for the owner (numbers in `f719f3f5` and `docs/web-ui.md`):
+  - Hall modals on the shared footer: the content of all three modals would cross the footer's clearance (Add/Change
+    Portrait short by 77 px, memorial editor 88 px, background chooser 13 px). Their own 66 px action row stays.
+  - Hall small buttons in rows: card Add/Select, queue Remove and the portrait size reset would overlap their neighbours by
+    16 to 18 px and leave their rows by 5 to 10 px. They keep their present size.
+  - Thai captions under the minimum: `hall.doneAdding` 44 in the footer (48), the unsaved-changes popup's three buttons 36
+    (48, already in use today), the portrait size reset 30 (34).
 - Step 4: list popup cards and details panel cloned from prefabs (UI-21), and its details actions.
 - Not scheduled, owner's eye first: the photography toolbar and colours; the lobby frost.
 
