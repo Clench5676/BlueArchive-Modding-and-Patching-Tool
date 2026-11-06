@@ -1665,10 +1665,11 @@ def test_every_analysis_logs_a_redacted_verdict_at_info(env, monkeypatch, caplog
     assert {row["state"] for row in rows} == {"ready", "blocked"}
     blocked = next(row for row in rows if row["state"] == "blocked")
     assert blocked["code"] == "required_assets_unmatched" and blocked["params"]["name"] == "Body"
-    assert blocked["params"]["file"] == "[asset].bundle"
-    assert all(row["files"][0]["filename"] == "[asset].bundle" for row in rows)
+    # The game's own file names stay (BL-094); the folders they came from never do.
+    assert blocked["params"]["file"] == bad.name
+    assert all(row["files"][0]["filename"] == good.name for row in rows)
     assert all("part" in row["files"][0] and "conversionRoute" in row and "target" in row for row in rows)
-    assert good.name not in "\n".join(logs) and str(env.tmp) not in "\n".join(logs)
+    assert str(env.tmp) not in "\n".join(logs)
     assert {row["id"] for row in rows} == {entry["id"] for entry in entries}
 
 

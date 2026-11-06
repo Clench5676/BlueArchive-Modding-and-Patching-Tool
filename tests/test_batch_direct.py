@@ -60,7 +60,8 @@ def test_failure_details_reach_results_and_logs(env, monkeypatch, caplog, phase,
         assert entry['reason'] == batch_import.blocked_reason(ServiceError(code))
         assert entry['error'] == expected
     assert code in caplog.text and 'Modified_Body' in caplog.text
-    assert str(source) not in caplog.text and source.name not in caplog.text
+    # The game's own file name stays in the log (BL-094); the folder it came from never does.
+    assert str(source) not in caplog.text and str(source.parent) not in caplog.text and source.name in caplog.text
 
 
 def restore_metadata(monkeypatch):
@@ -500,4 +501,4 @@ def test_library_inspection_failure_logs_only_sanitized_error(env, monkeypatch, 
     assert records[0].exc_info is None
     assert error_type.__name__ in records[0].getMessage()
     assert '[path]' in records[0].getMessage()
-    assert all(value not in caplog.text for value in (str(source), source.name, 'PrivateUser', 'Private Assets'))
+    assert all(value not in caplog.text for value in (str(source), str(source.parent), 'PrivateUser', 'Private Assets'))

@@ -732,3 +732,17 @@ def test_batch_failure_is_redacted_in_session_log_before_report(reports):
         assert 'PrivateUser' not in text and '/Users/' not in text
         assert 'Private Model' not in text and 'Private Image' not in text
         assert '[asset].bundle' in text and 'required_asset_extract_failed' in text
+
+
+def test_game_names_stay_and_log_heads_survive_asset_redaction():
+    # BL-094: CAB ids and official bundle names name game data; a log record's head is never an asset name.
+    cabs = "CAB-7df6619cc2190abf44ffa1f85955af6d, CAB-97c2225a5b38bc8e9de5114c79536679"
+    official = "assets-_mx-characters-ch0258-_mxdependency-2024-11-18_004_assets_all_3218880749.bundle"
+    assert diagnostics.clean({"files": cabs}, set()) == {"files": cabs}
+    assert diagnostics.clean({"file": f"D:/Private Folder/{official}"}, set()) == {"file": official}
+    assert diagnostics.clean({"files": f"{official}, Private Mod.bundle"}, set()) == {"files": "[asset].bundle"}
+    line = "2026-11-06 19:20:13,123 WARNING bmpt.gameassets.service: Private Voice.wav not found"
+    assert diagnostics.private_text(line, set()) == (
+        "2026-11-06 19:20:13,123 WARNING bmpt.gameassets.service: [asset].wav not found")
+    text = diagnostics.private_text(f'Preview failed: {{"url": "/asset/model/ch0258.glb", "file": "{official}"}}', set())
+    assert "/asset/model/ch0258.glb" in text and official in text
