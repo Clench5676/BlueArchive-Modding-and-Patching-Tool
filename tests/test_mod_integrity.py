@@ -684,8 +684,9 @@ def test_model_content_keeps_its_dependency_core_even_when_variant_model_differs
     assert e.library.identify_import(source, source.name) == (source.name, 'ch0258', 'model')
     mod, = e.library.add([source])
     assert (mod.core, mod.target, mod.kind) == ('ch0258', 'ch0258', 'model')
-    with pytest.raises(ServiceError, match='mod_target_mismatch'):
-        e.library.apply('ch0258', f'mod:{mod.id}', kind='model')
+    assert e.library.model_cores('ch0258') == ['ch0258_02', 'ch0258']
+    result = e.library.apply('ch0258', f'mod:{mod.id}', kind='model')
+    assert result.files == [dependency]
 
 
 @pytest.mark.parametrize('kind,core,category', [

@@ -59,6 +59,19 @@ class CoreMap:
     names: dict[str, dict[str, dict[str, str]]]  # variant key -> the shipped names, for the keys the data has
 
     model: dict[str, str] = field(default_factory=dict)  # variant key -> installed 3D model core
+    model_cores: dict[str, tuple[str, ...]] = field(default_factory=dict)  # variant key -> prefab first, own dependencies
+
+    def slot(self, core: str) -> str:
+        """The choice key of a physical core; a model's dependencies share its prefab's choice."""
+        core = core.lower()
+        key = self.key(core)
+        return self.model[key] if core in self.model_cores.get(key, ()) else core
+
+    def slot_cores(self, core: str) -> tuple[str, ...]:
+        """Physical cores of one choice, with the model prefab first."""
+        core = core.lower()
+        key = self.key(core)
+        return self.model_cores[key] if core in self.model_cores.get(key, ()) else (core,)
 
     def key(self, core: str) -> str | None:
         """The variant key of a portrait or lobby core, ignoring letter case; None for a core of neither kind."""
