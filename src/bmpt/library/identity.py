@@ -14,7 +14,8 @@ from .judge import MODEL_CATEGORIES, kind_of, kind_of_file, other_target
 CORE = re.compile(r"(?<![a-z0-9_])([a-z][a-z0-9_]*?_(?:spr|home(?:_gl|_teen)?))(?=$|[^a-z0-9])", re.I)
 CONTAINER = re.compile(r"(?:^|/)(spinebackground|spinelobbies|spinecharacters)/([a-z0-9_]+)(?:/|\.)", re.I)
 
-MODEL_CONTAINER = re.compile(r"(?:^|/)(?:characters|npcs)/([a-z0-9_]+)(?:/|\.)", re.I)
+# Meshes, textures and clips live under characters/ or npcs/, prefabs and controllers under addressableasset/character/.
+MODEL_CONTAINER = re.compile(r"(?:^|/)(?:characters|npcs|addressableasset/character)/([a-z0-9_]+)(?:/|\.)", re.I)
 MODEL_ROLE = (
     r"(?:(?:cut_?in)_)?(?:body|face|hair|head|eyemouth|eyesmouth|eyebrow|halo|weapon|"
     r"formation|cafe|victory|normal|stand|idle)(?:_[a-z0-9_]+)?(?:\.[a-z0-9]+)?")
@@ -46,10 +47,11 @@ def content_cores(path: Path) -> set[str]:
                 and (match[1] != "spinelobbies" or kind_of(parsed.core) != "lobby"))):
             special[name] = match[2]
     container_kinds: dict[str, set[str]] = {}
-    model_names = {}
+    model_names = {name: model[1].lower() for name in names if (model := MODEL_CONTAINER.search(name))}
+    # Asset paths name the model a bundle replaces; only without them do prefab and object names identify it.
+    contained = bool(model_names)
     for name in names:
-        model = MODEL_CONTAINER.search(name) or MODEL_PREFAB.fullmatch(Path(name).name)
-        if model:
+        if not contained and (model := MODEL_PREFAB.fullmatch(Path(name).name)):
             model_names[name] = model[1].lower()
         kind = "home" if "spinelobbies/" in name else "spr" if "spinecharacters/" in name else None
         if kind and name.endswith((".skel", ".atlas")):
@@ -68,6 +70,10 @@ def content_cores(path: Path) -> set[str]:
             matches = {core for core in model_cores
                        if re.fullmatch(re.escape(core) + "_" + MODEL_ROLE, bare, re.I)}
             if not matches and (model := MODEL_ASSET.fullmatch(bare)):
+                if contained:
+                    # Object names beside asset paths are free-form in the game's own files (bones, clips, props,
+                    # misspelt meshes) and claim no other model.
+                    continue
                 matches.add(model[1].lower())
             if matches:
                 cores.update("model:" + core for core in matches)
@@ -82,6 +88,9 @@ def content_cores(path: Path) -> set[str]:
         cores.update(match.lower() for match in found)
         if not found and normalized.lower().endswith((".skel", ".atlas")):
             stem = Path(normalized).stem.lower()
+            if contained:
+                # A model's own Spine effects (Kotama's skill bear, emoji) sit under its asset paths, not a portrait's.
+                continue
             if special:
                 # Special scenes often use several unrelated skeleton names. Their containers own those layers.
                 continue
