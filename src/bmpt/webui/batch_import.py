@@ -729,6 +729,8 @@ class BatchImport:
             return
         selected = set(candidate.files.values())
         folders = {path.parent for path in selected}
+        # Another release or a backup of a selected part is an alternative to it, not a missing file.
+        parts = {integrity.replacement_key(path.name) for path in selected}
         found = []
         for path, held in sorted(headers.items(), key=lambda item: (item[0].name, str(item[0]))):
             if path in selected:
@@ -740,7 +742,8 @@ class BatchImport:
             slot_matches = (library.import_core(parsed.core, kind, self._pin) == entry["core"] or
                             variant is not None and variant.key == entry["variant"])
             same_slot = (path.parent in folders and kind != "other" and kind == entry["kind"] and
-                         slot_matches and path not in (selected_paths or selected))
+                         slot_matches and path not in (selected_paths or selected) and
+                         integrity.replacement_key(path.name) not in parts)
             if same_slot or held & candidate.missing_cabs:
                 found.append({"path": str(path), "name": path.name, "size": path.stat().st_size})
         if found or candidate.missing_cabs:

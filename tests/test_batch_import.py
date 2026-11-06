@@ -1946,3 +1946,11 @@ def test_fill_all_keeps_two_incomplete_alternatives_of_one_slot_separate(env, mo
     assert sorted(row["paths"] for row in completed) == sorted([
         sorted(map(str, [first, first_missing])), sorted(map(str, [second, second_missing]))])
 
+
+def test_a_backup_or_another_release_of_a_selected_part_is_not_a_missing_file(env, monkeypatch):
+    create, _, _ = missing_bundles(env, monkeypatch)
+    folder = env.tmp / "with-backup"
+    selected = create(env.original, folder, "cab-test")
+    create(Path(env.original.name + ".backup"), folder, "cab-backup")
+    entry, = analyze(env, [selected])["entries"]
+    assert entry["state"] == "ready" and "missing" not in entry
