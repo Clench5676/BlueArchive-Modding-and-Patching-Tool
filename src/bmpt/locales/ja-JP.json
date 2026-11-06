@@ -262,7 +262,7 @@
 			},
 			"overwritten": "上書き済み",
 			"damaged": "破損",
-			"overwrittenTitle": "オリジナルファイル上書き済み",
+			"overwrittenTitle": "公式オリジナルファイルなし",
 			"overwrittenNone": "オリジナルの控えなし",
 			"incomplete": "MODが不完全",
 			"keptCurrent": "現在のゲームファイルをMODライブラリに追加済み",

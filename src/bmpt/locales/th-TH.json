@@ -262,7 +262,7 @@
 			},
 			"overwritten": "ถูกเขียนทับ",
 			"damaged": "เสียหาย",
-			"overwrittenTitle": "ไฟล์ต้นฉบับถูกเขียนทับ",
+			"overwrittenTitle": "ไม่มีไฟล์ต้นฉบับทางการ",
 			"overwrittenNone": "ไม่เหลือสำเนาต้นฉบับ",
 			"incomplete": "Mod ไม่ครบ",
 			"keptCurrent": "เพิ่มไฟล์เกมปัจจุบันเข้าคลังแล้ว",
