@@ -16,6 +16,7 @@ from typing import Any
 
 from .. import devmode, mod_origin
 from ..errors import ServiceError
+from ..openfiles import temporary_directory
 from ..library import integrity
 from ..library.judge import core_of
 from ..library.storage import sync_directory
@@ -175,7 +176,7 @@ def export_zip(services: Any, library: Any, pin: Any, *, scope: str, target: str
         try:
             with tempfile.NamedTemporaryFile(prefix=".mod-export-", suffix=".tmp", dir=folder, delete=False) as stream:
                 temporary_zip = Path(stream.name)
-            with tempfile.TemporaryDirectory(prefix=devmode.LIBRARY_STAGING_PREFIX + "export-") as staging:
+            with temporary_directory(prefix=devmode.LIBRARY_STAGING_PREFIX + "export-") as staging:
                 with zipfile.ZipFile(temporary_zip, "w", compression=zipfile.ZIP_DEFLATED, allowZip64=True) as archive:
                     for i, source in enumerate(sources, 1):
                         progress({"current": i, "total": len(sources), "step": "import.step.export"})

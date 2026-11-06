@@ -5,12 +5,12 @@ import logging
 import os
 from pathlib import Path
 import shutil
-import tempfile
 import time
 
 from .. import devmode
 from ..filelock import file_lock
 from ..logging_utils import log_failure
+from ..openfiles import temporary_directory
 
 logger = logging.getLogger(__name__)
 MIN_IMPORT_AGE = 24 * 60 * 60
@@ -37,7 +37,7 @@ def import_directory(root: Path):
     with ExitStack() as resources:
         # Creation and lease acquisition are atomic with respect to startup cleanup.
         with file_lock(staging / ".lock", timeout=5):
-            temporary = resources.enter_context(tempfile.TemporaryDirectory(prefix="import-", dir=staging))
+            temporary = resources.enter_context(temporary_directory(prefix="import-", dir=staging))
             path = Path(temporary)
             lease = staging / (path.name + ".lock")
             resources.enter_context(file_lock(lease, timeout=0))

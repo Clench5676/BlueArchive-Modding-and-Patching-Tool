@@ -11,6 +11,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from ..errors import ServiceError
+from ..openfiles import remove_tree
 from .judge import core_of
 from .storage import atomic_copy, atomic_json
 
@@ -211,7 +212,7 @@ def transaction(library):
     except BaseException:
         # Keep the journal and its verified bytes if protected rollback cannot finish.
         deletion.rollback()
-        shutil.rmtree(deletion.directory)
+        remove_tree(deletion.directory)
         raise
     else:
         shutil.rmtree(deletion.directory, ignore_errors=True)

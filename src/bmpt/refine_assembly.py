@@ -10,7 +10,6 @@ as in atlas_remap; callers with independent page metadata can override it explic
 from __future__ import annotations
 
 import math
-import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -20,6 +19,7 @@ from bmpt import atlas_remap as remap, devmode
 from ba_modding_toolkit import core
 from ba_modding_toolkit.bundle import Bundle
 from ba_modding_toolkit.models import SaveOptions
+from bmpt.openfiles import temporary_directory
 from .texture_guard import texture_image
 
 
@@ -251,7 +251,7 @@ The output directory must not already contain the target file.
     before = _object_bytes(bundle)
     edited = assembly.image.size != official.size or assembly.image.tobytes() != official.tobytes()
     options = SaveOptions(perform_crc=True, extra_bytes=b"\x08\x08\x08\x08", compression="lz4")
-    with tempfile.TemporaryDirectory(prefix="bamt-refine-") as temporary:
+    with temporary_directory(prefix="bamt-refine-") as temporary:
         scratch = Path(temporary)
         base = source
         if edited:

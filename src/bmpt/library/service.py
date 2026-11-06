@@ -13,7 +13,6 @@ import logging
 import os
 import re
 import shutil
-import tempfile
 import threading
 import time
 import unicodedata
@@ -34,6 +33,7 @@ from ..errors import ServiceError
 from ..filelock import file_lock
 from ba_modding_toolkit.i18n import t
 from ..logging_utils import log_failure
+from ..openfiles import remove_tree, temporary_directory
 from ba_modding_toolkit.models import AssetType, LogFunc, ProgressCallback
 from ba_modding_toolkit.naming import parse_filename
 from ba_modding_toolkit.searching import SEARCH_DIR_SUFFIXES, get_search_dirs
@@ -1959,7 +1959,7 @@ class ModLibrary:
                     if other.get("repaired_id") == mod_id:
                         del other["repaired_id"]  # the original is repairable again: one write with the copy's removal
                 self._save()
-                shutil.rmtree(directory)
+                remove_tree(directory)
                 self._delete_built_files(keys, self.profiles.read())
                 if reconcile:
                     reconcile()
@@ -2532,7 +2532,7 @@ class ModLibrary:
                 self._records.pop(mod_id, None)
             self._save()
             for mod_id in mod_ids:
-                shutil.rmtree(self.root / 'mods' / mod_id)
+                remove_tree(self.root / 'mods' / mod_id)
             return
         removed = {mod_id: self._records.pop(mod_id) for mod_id in mod_ids if mod_id in self._records}
         try:
@@ -3645,7 +3645,7 @@ class ModLibrary:
         kept_current: list[str] = []
         incomplete = False
         try:
-            with tempfile.TemporaryDirectory(prefix=devmode.LIBRARY_STAGING_PREFIX) as temporary:
+            with temporary_directory(prefix=devmode.LIBRARY_STAGING_PREFIX) as temporary:
                 work = Path(temporary)
                 build_keys: dict[Path, str] = {}
                 if source.startswith("mod:"):
@@ -3756,7 +3756,7 @@ class ModLibrary:
         self._configure(pin, target, kinds, source)
         kept_current: list[str] = []
         try:
-            with tempfile.TemporaryDirectory(prefix=devmode.LIBRARY_STAGING_PREFIX) as temporary:
+            with temporary_directory(prefix=devmode.LIBRARY_STAGING_PREFIX) as temporary:
                 build_keys = {}
                 replacements = self._cached_build(self._paths(record), targets, pin,
                     lambda: self._install_direct(record, targets, Path(temporary), log, progress, pin), build_keys)
@@ -3823,7 +3823,7 @@ class ModLibrary:
         if not targets:
             raise ServiceError("game_file_not_found", variant=core)
         kind = self._kind(core, pin) or "spr"
-        with tempfile.TemporaryDirectory(prefix=devmode.LIBRARY_STAGING_PREFIX) as temporary:
+        with temporary_directory(prefix=devmode.LIBRARY_STAGING_PREFIX) as temporary:
             work = Path(temporary)
             build_keys: dict[Path, str] = {}
             replacements = None
@@ -5097,7 +5097,7 @@ class ModLibrary:
             if progress:
                 progress({"current": current, "total": len(targets), "step": f"import.step.{key}"})
 
-        with tempfile.TemporaryDirectory(prefix=devmode.LIBRARY_STAGING_PREFIX + "remap-") as temporary:
+        with temporary_directory(prefix=devmode.LIBRARY_STAGING_PREFIX + "remap-") as temporary:
             output = Path(temporary)
             step("check")
             originals = self._stage_official(targets, output / "official", pin)
@@ -5207,7 +5207,7 @@ class ModLibrary:
         if record.get("repaired_from") or self._repaired_id(record) or prepared["identity"] != self._identity(
                 {path.name: path for path in self._paths(record)}):
             raise ServiceError("entry_changed")
-        with tempfile.TemporaryDirectory(prefix=devmode.LIBRARY_STAGING_PREFIX + "accept-") as temporary:
+        with temporary_directory(prefix=devmode.LIBRARY_STAGING_PREFIX + "accept-") as temporary:
             files = {}
             for name, data in prepared["files"].items():
                 path = Path(temporary) / name
@@ -5236,7 +5236,7 @@ class ModLibrary:
         paths = self._paths(record)
         built_from = {path.name: self._hashes.get(path).sha1 for path in paths}
         targets = self._plan_targets(self._plan(record, log, pin))
-        with tempfile.TemporaryDirectory(prefix=devmode.LIBRARY_STAGING_PREFIX + "update-") as temporary:
+        with temporary_directory(prefix=devmode.LIBRARY_STAGING_PREFIX + "update-") as temporary:
             output = Path(temporary)
             generated = []
             all_unchanged = True

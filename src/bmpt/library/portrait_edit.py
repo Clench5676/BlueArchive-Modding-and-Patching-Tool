@@ -5,7 +5,6 @@ from __future__ import annotations
 import copy
 import hashlib
 import io
-import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -15,6 +14,7 @@ from UnityPy.helpers.ResourceReader import get_resource_data
 from .. import devmode
 from ba_modding_toolkit.bundle import Bundle
 from ..errors import ServiceError
+from ..openfiles import temporary_directory
 from ba_modding_toolkit.models import SaveOptions
 from ..texture_guard import texture_image
 from . import profiles
@@ -338,7 +338,7 @@ def apply(library: ModLibrary, variant: str, photo: str | None, png: bytes | Non
     if photo is None and configured_source == "official" and (
             library._hashes.get(target).sha1 == library._hashes.get(official).sha1):
         return _result(library.apply(core, "official", kind="other", pin=pin, log=log, progress=progress), variant, core)
-    with tempfile.TemporaryDirectory(prefix=devmode.LIBRARY_STAGING_PREFIX) as temporary:
+    with temporary_directory(prefix=devmode.LIBRARY_STAGING_PREFIX) as temporary:
         work = Path(temporary)
         edits = {descriptor["name"]: png}
         if record is not None and slot != core:

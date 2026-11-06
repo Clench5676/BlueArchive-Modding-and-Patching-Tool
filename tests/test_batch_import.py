@@ -1717,3 +1717,34 @@ def test_direct_auto_crc_uses_verified_snapshot_when_an_official_copy_exists(env
     monkeypatch.setattr(Bundle, 'check_need_crc', detect)
     result, = run(env, [entry], crc='auto', enableAfterImport=False)
     assert result['outcome'] == 'imported' and calls
+
+
+def test_a_stored_mod_whose_install_fails_stays_in_the_library_row(env, monkeypatch):
+    # BL-091: the row must say the mod is in the library, with its id, when only the install after the import failed.
+    source = make_mod(env.original, env.tmp / "input")
+    entry, = analyze(env, [source])["entries"]
+
+    def refuse(*args, **kwargs):
+        raise ServiceError("mod_target_mismatch", id="x", variant="test")
+
+    monkeypatch.setattr(env.library, "apply_import", refuse)
+    result, = run(env, [entry])
+    mod, = env.library.mods()
+    assert result["outcome"] == "failed" and result["reason"] == "mod_target_mismatch"
+    assert result["libraryId"] == mod.id
+    row, = env.services.batch_import.diagnostic_snapshot()["rows"]
+    assert row["state"] == "library" and row["libraryId"] == mod.id
+
+
+def test_an_import_whose_workspace_cannot_be_removed_still_reports_its_rows(env, monkeypatch):
+    # BL-091: on Windows a bundle read during the import can keep the workspace from being removed.
+    from bmpt import openfiles
+
+    def refuse(path, **kwargs):
+        raise PermissionError(32, "The process cannot access the file because it is being used by another process")
+
+    source = make_mod(env.original, env.tmp / "input")
+    entry, = analyze(env, [source])["entries"]
+    monkeypatch.setattr(openfiles, "remove_tree", refuse)
+    result, = run(env, [entry], enableAfterImport=False)
+    assert result["outcome"] == "imported" and result["libraryId"] == env.library.mods()[0].id
