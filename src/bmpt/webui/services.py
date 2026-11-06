@@ -187,7 +187,8 @@ def _changed_of(result: Any) -> dict[str, list[str]]:
     cores, kinds = getattr(result, "cores", None), getattr(result, "kinds", None)
     if cores is not None and kinds is not None:
         return {"cores": sorted(cores), "kinds": sorted(kinds),
-                **({"mods": True} if getattr(result, "mods_changed", False) else {})}
+                **({"mods": True} if getattr(result, "mods_changed", False)
+                   or any(item.get("kept_current") for item in getattr(result, "done", [])) else {})}
     files = getattr(result, "files", None)
     if isinstance(files, list):
         from ..library.judge import core_of
@@ -196,7 +197,7 @@ def _changed_of(result: Any) -> dict[str, list[str]]:
         from ..library.judge import kind_of_file
         kinds = sorted({kind_of_file(Path(f).name) or ("spr" if parse_filename(Path(f).name).core.endswith("_spr")
                                                      else "lobby") for f in files if isinstance(f, (str, Path))})
-        return {"cores": cores, "kinds": kinds}
+        return {"cores": cores, "kinds": kinds, **({"mods": True} if getattr(result, "kept_current", False) else {})}
     mod = getattr(result, "mod", None)
     if mod is not None and getattr(mod, "core", None):
         return {"cores": [mod.core], "kinds": [mod.kind], **({"mods": True} if hasattr(result, "report") else {})}

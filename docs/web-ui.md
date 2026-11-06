@@ -596,6 +596,8 @@ class ModLibrary:
     def restore(self, variant_key, log, kind="spr", pin=None) -> ApplyResult
     def would_write(self, variant_key, source, kind="spr", pin=None) -> bool   # for the classic window's rule
     def preview_bundles(self, mod_id: str, pin=None) -> list[Path]
+    def preview_complements(self, core: str, names: list[str], pin=None) -> list[Path]
+    def preview_incomplete(self, mod_id: str, pin=None) -> bool
     def official_bundles(self, core: str, pin=None) -> list[Path]  # verified originals, whole core or unavailable
     def prune(self) -> list[Path]                        # kept originals deleted (see below)
     def update(self, mod_id: str, log, progress) -> UpdateResult   # rebuild against the current game file
@@ -637,7 +639,8 @@ What a switch replaces is always kept:
   its name without `.backup`; the library never writes or deletes `.backup` files, also when an import's backup
   option is on: the original it keeps first is the baseline), or a file of its name in another
   game folder; at write time each is checked by the CRC32 of its whole content against the CRC in its name, so a
-  modded file is never kept (`original_unavailable` then, and nothing is written). Restoring copies it back.
+  modded file is never kept as official. Missing official copies do not prevent a direct Mod import or apply.
+  Restoring requires a verified official copy; without one it leaves the Mod in place (`original_unavailable`).
 - **A mod** stays in the library (`mods/<id>/`). While mods are on, `remove` refuses one a game folder still shows
   (unchanged since the library put it there): `mod_in_use` in the current game folder, else `mod_in_use_elsewhere`
   with that folder; in a folder the switch does not cover, in any state. While mods are off removing is allowed: every
@@ -650,6 +653,15 @@ What a switch replaces is always kept:
   already in the library is not stored twice. Each file a write reaches is judged in full here (its SHA-1 against the
   library's record, never its size and date, then its CRC32; the write hashes every target anyway, so this reads
   nothing more), so a mod another tool installed without the CRC fix, or with the file's date put back, is kept too.
+  This also works when no official copy remains: all unkept non-official parts of the core and kind are stored
+  before the first game write. A successful apply reports `kept_current`, shown once as Current game files added
+  to the library. A failed write rolls back to the outside bytes from its journal, without calling them official.
+
+A partial Mod takes omitted parts from verified official copies when available, otherwise from the current game
+files. Preview and apply use the same order. Such a fallback reports `incomplete` and shows Mod incomplete in the
+existing switch status and apply result; ordinary partial Mods with official omitted parts have no such status.
+Official previews and restore never use that fallback. Repairing the game files clears the missing-copy state
+automatically, and the next apply keeps those verified files as originals.
 
 Every write goes through `_commit`: resource path checks, the game not running and Steam not updating or verifying
 the install, the files lockable, atomic replacement, and a rollback of every written part when one fails (the mods it
@@ -724,8 +736,8 @@ by its size and date (`outside`, dropped by the next write there). Without that,
 in the untracked prompt again, and the second in the drift prompt at every start for Apply Mod Configuration to skip.
 Refusals before anything is written: `folder_changed`, `state_changed` (another place switched first), the game
 running, Steam busy, and `not_enough_space` (what an Off copies, with 512 MiB to spare); a running game, Steam busy or
-changed folders stop a job midway, the rest stays listed. Overwritten entries (no official copy anywhere) are left as
-they are (`stuck`); the app never repairs game files, it names the repair to run.
+changed folders stop a job midway, the rest stays listed. An Off leaves overwritten entries (no official copy
+anywhere) as they are (`stuck`); the app names the existing Steam verify and Restore Resources repair instructions.
 
 **Built copies.** Before an Off reverts an entry that carries its configured source, the library keeps the exact
 bytes it wrote there, whole: a file of the mod in `mods/<id>/` when one holds them (every adopted part, every direct
@@ -1154,6 +1166,12 @@ A failed row in Import Results shows only localized text: the row's short reason
 string with the failure's parameters when the locale has one that says more. The code and parameters are not shown; they stay on the result and,
 for a blocked row, on its list entry, which the error report reads (`BAMTRecovery.importList`, `import_row`), and the
 backend logs each failure with them.
+
+Direct replacements in current slots import even if the install has no official copy. Asset transfers still need
+verified official baselines: outdated updates, cross-platform or cross-server conversions, format/release rebuilds
+and Spine-version updates can become `blocked` with `original_unavailable` during analysis or Recheck. If a baseline
+disappears before preparation, the execution result can be `failed` with the same reason. Both use Official File
+Overwritten, No official copy left and the existing repair lines. No live Mod is used as an official conversion base.
 
 `import.analyze {paths, recursive}` returns a library writer job ID; its result is `{entries, skipped, revision}`.
 `Entry.state` is `ready`, `convert`, `update`, `blocked`, `library`, `installed` or `done`. `done` means
@@ -1889,16 +1907,19 @@ or the classic UI is open, no drift while mods are off, nothing dismissed (see M
   card sprites and `UINonEquipmentInventory/Inventory_ListControl/EquipPos/Texture` detail image stay intact.
   Selection and rename redraws retain the active axis offset. Captures start when a card enters the viewport or
   its details are shown, and both share one still; closing the popup cancels deferred work.
-  On an overwritten kind (a file that is not official with no official copy anywhere, `restorable` false) every card
-  but the one in use is greyed (the roster's not-owned dim, its picture in grey, "Overwritten" where In Use goes), and
-  so is another variant's card whose files of that kind are overwritten. These cards can still be selected for
-  preview; Apply is disabled. `original_unavailable` opens the Add First or Overwritten message
+  On an overwritten kind (a file that is not official with no official copy anywhere, `restorable` false), Original
+  is greyed with the existing Overwritten treatment. Library Mods remain selectable and applicable; another
+  variant's official card is greyed when that source has no official copy. The greyed cards can still be selected
+  for preview; Apply is disabled. `original_unavailable` opens the Add First or Overwritten message
   from an apply or a restore. Delete, in a mod's details, always confirms with the mod's name. If configured or
   applied anywhere, it explains that those entries return to Official or their saved source. The library writer
   deletes stored files and references, retaining built files referenced by other keys, then restores affected game
   entries through the normal write checks. Refused restores leave the configuration changed and appear in Retry.
   The picker and file drops compare canonical destination keys with the selected variant when the add started.
-  Plain additions there refresh with no message unless one was installed or failed; additions elsewhere name their destination and offer Go to.
+  Plain additions there refresh with no message unless one was installed, failed, kept outside files or is
+  incomplete; additions elsewhere name their destination and offer Go to.
+  Settings' Other Mods uses the same preservation notice; its Official action is disabled while the slot shows
+  No official copy left. A refused restore there uses the existing overwritten message and repair lines.
   Duplicates show Already in the Mod Library with the stored mod's name, with Go to only for another variant.
   Exact outside game content is adopted without reapplying it and shows Recognized as an installed Mod, including
   when it matches an existing library entry. A batch combines these messages in one popup, with navigation only

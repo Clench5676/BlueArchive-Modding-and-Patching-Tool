@@ -1,4 +1,6 @@
 import { importStatus } from "./switch-sources.js";
+import { current as modsState } from "./mod-switch.js";
+import { overwrittenLines } from "./repairs.js";
 // Unified import behaviour over runtime Items, Mailbox and FilterSort prefab widgets (import-layout.js).
 import { progressName } from "./job-progress.js";
 import { importGroups } from "./import-groups.js";
@@ -30,7 +32,7 @@ const REASONS = new Set(["unreadable", "no_target", "conflict", "spine_version",
   "source_unknown", "source_conflict", "platform_unsupported", "target_unknown", "conversion_names", "no_matching_assets", "conversion_failed",
   "mod_platform_unknown", "library_io_error", "mod_target_ambiguous", "mod_target_unknown", "mod_parts_missing",
   "game_file_conflict", "mod_platform_mismatch", "mod_unity_version_mismatch", "mod_release_mismatch", "required_asset_extract_failed",
-  "required_asset_apply_failed", "required_assets_unmatched", "entry_changed", "original_unavailable", "original_invalid", "failed"]);
+  "required_asset_apply_failed", "required_assets_unmatched", "entry_changed", "original_invalid", "failed"]);
 const OUTCOMES = new Set(["imported", "updated", "unchanged", "failed", "skipped"]);
 const sizeText = (size) => size >= 1048576 ? `${(size / 1048576).toFixed(1)} MB` : `${Math.ceil((size || 0) / 1024)} KB`;
 const baseName = (path) => path?.split(/[\\/]/).pop() || "";
@@ -105,6 +107,12 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
   }
   const report = (error, entry = null) => {
     const code = typeof error === "string" ? error : error?.code || error?.reason;
+    if (code === "original_unavailable") {
+      const state = modsState() || {};
+      return [T("mods.overwrittenTitle"), ...overwrittenLines({
+        installs: (state.installs || []).filter((i) => i.key === state.current),
+      }, T)].join("\n");
+    }
     if (entry && REASONS.has(code)) return T(`import.reason.${code}`, error?.params || {});
     const key = `error.${code}`, text = T(key, { file: entry?.paths?.[0] || "", ...(error?.params || {}) });
     return code && code !== "internal" && text !== key ? text : T("import.failed");
@@ -115,6 +123,7 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
   const resultNote = (item, entry) => {
     const detail = item.error || { code: item.reason, params: item.params || {} };
     const label = report(item, entry);
+    if (item.reason === "original_unavailable") return label;
     const key = `error.${detail.code}`, text = detail.code ? T(key, { file: entry?.paths?.[0] || "", ...(detail.params || {}) }) : key;
     return text !== key && text !== label ? `${label} - ${text}` : label;
   };
@@ -619,7 +628,7 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
       const item = model.state.results.find((item) => item.id === entry.id);
       if (item?.applyUnavailable) return T("import.libraryOnly");
       return item?.reason ? [item.configured && T(importStatus(item)), resultNote(item, entry)].filter(Boolean).join(" - ") : ["imported", "updated", "unchanged"].includes(item?.outcome)
-        ? T(importStatus(item)) : "";
+        ? [T(importStatus(item)), item.kept_current && T("mods.keptCurrent")].filter(Boolean).join(" - ") : "";
     }) : group.entries.map(rowNote);
     const omitted = result ? group.entries.reduce((count, entry) => count
       + (model.state.results.find((item) => item.id === entry.id)?.notTransferred?.length || 0), 0) : 0;

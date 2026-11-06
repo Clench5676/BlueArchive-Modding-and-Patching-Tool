@@ -264,6 +264,8 @@
 			"damaged": "已損壞",
 			"overwrittenTitle": "原版檔案已被覆蓋",
 			"overwrittenNone": "已無原版備份",
+			"incomplete": "Mod 不完整",
+			"keptCurrent": "目前遊戲檔案已加入 Mod 倉庫",
 			"addFirst": "修復前先加入 Mod 倉庫",
 			"lastCopy": "遊戲仍在使用的檔案的唯一副本",
 			"mayNotStart": "遊戲可能無法啟動",
@@ -787,7 +789,6 @@
 				"required_asset_apply_failed": "資源套用失敗",
 				"required_assets_unmatched": "必要資源未匹配",
 				"entry_changed": "檔案已變更",
-				"original_unavailable": "原版檔案無法使用",
 				"original_invalid": "原版檔案無效",
 				"failed": "匯入檢查失敗"
 			},

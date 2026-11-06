@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { controls } from "./control_prefabs.mjs";
+import { overwrittenLines } from "../../src/bmpt/web/js/repairs.js";
 
 const web = new URL("../../src/bmpt/web/js/", import.meta.url);
 const source = readFileSync(new URL("settings-other.js", web), "utf8");
@@ -12,7 +13,7 @@ function harness({ locale = "en-US", answer = "ok", used = true, error = null, r
   const T = (key, values = {}) => key.split(".").reduce((v, k) => v[k], strings).replace(/\{(\w+)\}/g, (_, k) => values[k]);
   const calls = [], messages = [], refused = [];
   let changed = 0;
-  const deps = { T, Loading: { task: (fn) => fn(() => {}) },
+  const deps = { T, overwrittenLines, Loading: { task: (fn) => fn(() => {}) },
     ModSwitch: { refresh: async () => {}, refused: (...args) => refused.push(args),
       listSep: () => (/^(zh|ja)/i.test(locale) ? "、" : ", ") }, // the rule mod-switch.js tests pin
     Popup: { message: async (opts) => { messages.push(opts); return { button: answer }; } },
@@ -143,4 +144,21 @@ test("generic Settings rows render names, every target file, status and actions 
     assert.equal(h.calls[0][0], "actions.apply");
     assert.doesNotMatch(source, /tooltip|setAttribute\(["']title/);
   } finally { globalThis.document = original; }
+});
+
+test("generic applies report kept files and disable Original without an official copy", async () => {
+  for (const locale of ["en-US", "th-TH", "zh-CN", "zh-TW", "ja-JP", "ko-KR"]) {
+    const h = harness({ locale, result: { kept_current: true } });
+    await h.select(mod, h.changed, true);
+    assert.deepEqual(h.messages[0].lines, [h.T("mods.keptCurrent")]);
+    const overwritten = { ...mod, state: "active", selected: true, overwritten: true };
+    assert.ok(h.valueText(overwritten).includes(h.T("mods.overwrittenNone")));
+    let actions;
+    h.rows([overwritten], (...args) => { actions = args[4]; }, h.changed);
+    assert.equal(actions.find(([caption]) => caption === h.T("settings.mods.official"))[2], false);
+    const failed = harness({ locale, error: { code: "original_unavailable" } });
+    await failed.select(mod, failed.changed, false);
+    assert.equal(failed.messages[0].title, failed.T("mods.overwrittenTitle"));
+    for (const key of ["overwrittenNone", "repairGame", "repairThen"]) assert.ok(failed.messages[0].lines.includes(failed.T(`mods.${key}`)));
+  }
 });

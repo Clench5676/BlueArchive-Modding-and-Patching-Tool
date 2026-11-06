@@ -276,3 +276,20 @@ def test_generic_current_alternative_does_not_resolve_through_an_older_mods_asse
     assert rows[current.id]['selected']
     env.library.restore(current.target, kind='other')
     assert newer.read_bytes() == header_bundle(b'new official')
+
+
+def test_generic_missing_official_import_and_apply_keep_the_outside_slot(other_env):
+    env = other_env
+    target = env.parts[0]
+    target.write_bytes(header_bundle(b'outside generic mod'))
+    before = target.read_bytes()
+    mod, = env.library.add_files('other', [make_mod(target, env.tmp / 'incoming')])
+    result = env.library.apply(mod.target, f'mod:{mod.id}', kind='other')
+    assert result.kept_current and not result.incomplete
+    kept, = [entry for entry in env.library.mods() if entry.id != mod.id]
+    assert kept.kind == 'other' and kept.file.read_bytes() == before
+    assert target.read_bytes() == mod.file.read_bytes()
+    assert next(row for row in env.library.other_mods() if row['id'] == mod.id)['overwritten']
+    assert not (env.root / 'originals' / target.name).exists()
+    with pytest.raises(ServiceError, match='original_unavailable'):
+        env.library.restore(mod.target, kind='other')
