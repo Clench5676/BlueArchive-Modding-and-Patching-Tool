@@ -119,7 +119,7 @@ test("errorText gives a coded error its string and an uncoded one error.internal
 test("the sites the review lists draw their error text through the shared errorText", async () => {
   const { readFileSync } = await import("node:fs");
   const read = (name) => readFileSync(new URL(`../../src/bmpt/web/js/${name}`, import.meta.url), "utf8");
-  for (const name of ["consent.js", "update.js", "quit.js", "mod-add.js", "settings.js"]) {
+  for (const name of ["consent.js", "update.js", "quit.js", "settings.js"]) {
     const source = read(name);
     assert.doesNotMatch(source, /`error\.\$\{/, `${name} builds no error key of its own`);
     assert.doesNotMatch(source, /const errorText =/, `${name} has no errorText of its own`);

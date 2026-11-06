@@ -208,7 +208,7 @@ test("a detail write refusal opens its answerable popup only after releasing the
   assert.equal(shown, 1); assert.equal(Loading.held(), false);
 });
 
-for (const entry of ["Add Mod picker", "Add Mod files", "Enable Mods"]) test(`${entry} blocks all detail input through submission and job completion`, async () => {
+for (const entry of ["Enable Mods"]) test(`${entry} blocks all detail input through submission and job completion`, async () => {
   const submitted = deferred(), work = deferred(), redraw = deferred();
   const targets = ["back", "nav", "student", "variant", "tab", "mods switch", "action", "popup"].map((name) => {
     const target = new El(); target.back = name === "back";
@@ -222,21 +222,12 @@ for (const entry of ["Add Mod picker", "Add Mod files", "Enable Mods"]) test(`${
     }
   };
   let start;
-  if (entry.startsWith("Add Mod")) {
-    const source = readFileSync(new URL("../../src/bmpt/web/js/mod-add.js", import.meta.url), "utf8");
-    const env = { Loading, T: (key) => key, rpc: () => submitted.promise,
-      waitJob: async () => { await work.promise; return []; }, Popup: {} };
-    const add = new Function("env", `const { ${Object.keys(env).join(", ")} } = env;
-      ${source.replace(/^import .*;$/gm, "").replaceAll("export ", "")}; return add;`)(env);
-    start = () => add(entry.endsWith("files") ? ["mod.bundle"] : null, "base");
-  } else {
-    const source = readFileSync(new URL("../../src/bmpt/web/js/mod-switch.js", import.meta.url), "utf8");
-    const run = source.slice(source.indexOf("async function run(params)"), source.indexOf("// a toggle job followed"));
-    const env = { Loading, T: (key) => key, notify: assert.fail, rpc: () => submitted.promise,
-      toggleJob: () => work.promise, refreshPage: () => redraw.promise, REFRESH_CAP: 1000,
-      finished: () => assertInput(false), refused: assert.fail };
-    start = new Function("env", `const { ${Object.keys(env).join(", ")} } = env; let inFlight = false; ${run}; return run;`)(env);
-  }
+  const source = readFileSync(new URL("../../src/bmpt/web/js/mod-switch.js", import.meta.url), "utf8");
+  const run = source.slice(source.indexOf("async function run(params)"), source.indexOf("// a toggle job followed"));
+  const env = { Loading, T: (key) => key, notify: assert.fail, rpc: () => submitted.promise,
+    toggleJob: () => work.promise, refreshPage: () => redraw.promise, REFRESH_CAP: 1000,
+    finished: () => assertInput(false), refused: assert.fail };
+  start = new Function("env", `const { ${Object.keys(env).join(", ")} } = env; let inFlight = false; ${run}; return run;`)(env);
   const done = start();
   assertInput(true);
   submitted.resolve("job"); await new Promise(setImmediate); assertInput(true);

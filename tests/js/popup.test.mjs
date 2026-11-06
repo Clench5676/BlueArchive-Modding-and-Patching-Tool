@@ -2916,15 +2916,9 @@ for (const lang of ADD_LOCALES) test(`the Add result and the dropped list keep t
   const ui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url))).webui;
   setStrings(lang, Object.fromEntries(strings(ui)));
   try {
-    // mod-add.js: one row per added mod (a line button when the mods go to several screens), buttons Go To / Stay Here;
     // mod-switch.js queueDone: one "what - reason" line per dropped item, Confirm
-    const added = (n, buttons) => Array.from({ length: n }, (_, i) => {
-      const text = `${fill(ui.add.belongs, { name: `Student ${i}` })}\n${ui.status.applied}\n${ui.add.installed}`;
-      return buttons ? { text, button: { label: ui.add.go, fn() {} } } : text;
-    });
     const dropped = (n) => Array.from({ length: n }, (_, i) => `${ui.mods.onTitle} ${i} - ${fill(ui.error.library_io_error, { file: `mod_${i}_spr.bundle` })}`);
-    const cases = [["Add", (n) => ({ title: ui.popup.add, lines: added(n, false), ok: ui.add.go, cancel: ui.add.stay })],
-      ["Add, several screens", (n) => ({ title: ui.popup.add, lines: added(n, true), ok: ui.add.go, cancel: ui.add.stay })],
+    const cases = [
       // as called: with the error, so an Error Report button joins Confirm
       ["Not applied", (n) => ({ title: ui.classic.notApplied, error: { code: "internal", params: {} }, lines: dropped(n), ok: ui.picker.ok })]];
     for (const [name, make] of cases) for (let n = 1; n <= 40; n++) {

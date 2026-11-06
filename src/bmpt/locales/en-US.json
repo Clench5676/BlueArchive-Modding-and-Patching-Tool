@@ -210,8 +210,7 @@
 			"apply": "Apply",
 			"save": "Save",
 			"cancel": "Cancel",
-			"inUse": "In Use",
-			"add": "Add Portrait"
+			"inUse": "In Use"
 		},
 		"mods": {
 			"switch": "Enable Mods",
@@ -638,14 +637,7 @@
 			"none": "Same as the game file"
 		},
 		"add": {
-			"done": "Added",
-			"belongs": "Mod for {name} added",
-			"part": "{name}, {kind}, added",
-			"go": "Go to",
-			"stay": "Stay here",
-			"duplicate": "Already in the Mod Library: {name}",
-			"installed": "Recognized as an installed Mod",
-			"applyFailed": "Added, switch failed: {reason}"
+			"go": "Go to"
 		},
 		"compatibility": {
 			"more": "{names}, +{n}",
