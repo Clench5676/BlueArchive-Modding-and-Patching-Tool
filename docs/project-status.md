@@ -1,13 +1,13 @@
 # Development status
 
-As of 2026-11-04. Verify the actual branch, working tree and `pyproject.toml` version before reporting progress.
+As of 2026-11-06. Verify the actual branch, working tree and `pyproject.toml` version before reporting progress.
 [Backlog](backlog.md) holds the detailed requirements and owner findings.
 
 ## Branch state
 
 | Branch | State |
 | --- | --- |
-| `main` | Local version `0.7.0-alpha.2`: the published 0.6.0, the upstream syncs to `6c61fdc8` and to v2.12.0 (`62ec9471`), the security policy, the fix that keeps files from a mod inside their output folder (`e8bee4c2`) and its own message for refused atlases (`ca44e051`), BL-065 through BL-069, BL-070 steps 1 to 3, BL-071, BL-072, BL-073, BL-076, BL-077, the BL-078 fixes (`1a2afd84`, `b186e93b`, `4841e30e`), BL-079. Not pushed. Upstream published its fix for the same issue in v2.12.0 (2026-11-04), so 0.6.1 is no longer held back. |
+| `main` | Local version `0.7.0-alpha.3`: the published 0.6.0, the upstream syncs to `6c61fdc8` and to v2.12.0 (`62ec9471`), the security policy, the fix that keeps files from a mod inside their output folder (`e8bee4c2`) and its own message for refused atlases (`ca44e051`), BL-065 through BL-069, BL-070 steps 1 to 3, BL-071, BL-072, BL-073, BL-076, BL-077, the BL-078 fixes (`1a2afd84`, `b186e93b`, `4841e30e`), BL-079, BL-081 through BL-085. Not pushed. Upstream published its fix for the same issue in v2.12.0 (2026-11-04), so 0.6.1 is no longer held back. |
 
 0.6.0 is published (tag `0.6.0` at `817ebeda`, 2026-10-30): macOS build uploaded, Windows build by the release workflow.
 
@@ -68,11 +68,12 @@ from passing tests or the presence of earlier code.
 
 ## Review artifact and validation
 
-`dist/Blue-Archive-Modding-and-Patching-Tool-0.7.0-alpha.2-macos-arm64.dmg`, MD5 `ec923fd8f15e96ad62d4af26a4953ccc`,
-built from `3639a953` (`chore(release): 0.7.0-alpha.2`): alpha.1, the update offer's centred version box (`65e901da`) and
-BL-082, the App in its own package `bmpt` (`8465e1ee`..`013a536b`); the bundle carries `bmpt`'s front end, strings, assets
-(the 0.7.0 notes) and catalog data and the engine's strings. BL-081, BL-082 and the release notes' wording await the
-owner's review.
+`dist/Blue-Archive-Modding-and-Patching-Tool-0.7.0-alpha.3-macos-arm64.dmg`, MD5 `9b7be6a12a500bd3793ac41d97611d78`,
+built from `cd9cd7cf` (`chore(release): 0.7.0-alpha.3`): alpha.2 and BL-083 to BL-085 (`3ec7302d`..`0e3eb3f9`), from a
+Windows user's 0.6.0 report: 3D model mods identified by their asset paths, the Official File Overwritten message for a
+3D model with no official copy, the Spine licence notice on the message frame. BL-081, BL-082, BL-083 to BL-085 and the
+release notes' wording await the owner's review; BL-086 awaits the owner's decision.
 
-On the split (`013a536b`, same tree as `main` before the docs and the bump): 4327 passed, 33 skipped (Python), 2370
-JavaScript tests passed (isolated runs with the official development view). Native Windows behavior is not verified on the macOS host.
+On `0e3eb3f9` (same tree as the build): 4333 passed, 33 skipped (Python, `python -m pytest`, which puts the checkout on
+the import path that `test_mod_origin.py` needs), 2373 JavaScript tests passed (isolated runs with the official
+development view). The new notice's look is for the owner's eye. Native Windows behavior is not verified on the macOS host.
