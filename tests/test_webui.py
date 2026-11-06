@@ -902,7 +902,12 @@ def test_missing_official_spine_returns_404(app, services, monkeypatch):
 
     monkeypatch.setattr(services.library, "official_bundles", missing, raising=False)
     for name in ("manifest.json", "skeleton.skel", "skeleton.atlas", "portrait.png"):
-        assert call(app, f"/asset/spine/official-spr/hoshino_spr/{name}")[0] == "404 Not Found"
+        status, headers, _ = call(app, f"/asset/spine/official-spr/hoshino_spr/{name}")
+        # the page learns the refusal's code, never its parameters
+        assert status == "404 Not Found" and headers["X-BAMT-Error"] == "original_unavailable"
+        assert "hoshino_spr" not in json.dumps(headers)
+    status, headers, _ = call(app, "/asset/model/hoshino.png")  # no such route: no refusal to explain
+    assert status == "404 Not Found" and "X-BAMT-Error" not in headers
 
 
 @pytest.mark.parametrize("kind,core", [("spr", "hoshino_spr"), ("lobby", "hoshino_home")])

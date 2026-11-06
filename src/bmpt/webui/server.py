@@ -188,7 +188,9 @@ class WebApp:
             res = self.assets(path[len("/asset/"):], query)
         except (KeyError, FileNotFoundError, ServiceError) as e:
             logger.warning("asset %s not found: %r", path, e, exc_info=isinstance(e, OSError))
-            return self._text(start_response, "404 Not Found", "not found")
+            # The refusal's code (never its parameters, which can hold paths) lets the page explain it.
+            code = [("X-BAMT-Error", e.code)] if isinstance(e, ServiceError) and re.fullmatch(r"[a-z_]+", e.code) else []
+            return self._respond(start_response, "404 Not Found", b"not found", "text/plain; charset=utf-8", code)
         headers = [("Cache-Control", "no-store")]
         if res.light and self.consent():
             digest = hashlib.sha256(HTTP_EXPORT_SCHEMA.encode() + b"\0" + res.body).hexdigest()
