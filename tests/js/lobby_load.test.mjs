@@ -24,6 +24,8 @@ function harness(layersOf = layers, resolveSources = null, { allowed = true, con
   const env = {
     dialogueModule: async () => ({ createLobbyDialogue: () => ({ show: noop, reposition: noop, dispose: noop }) }),
     skinPrimary: (button, caption) => { button.textContent = caption; },
+    // no game folder here: the notice falls back to its plain line and button
+    framedNotice: async () => { throw new Error("no frame"); },
     latestLoad, layersOf, withTimeout, atStep, validRect, ensureSpine: async () => allowed,
     consent: async () => ({ async spine(host, opts) { prompts.push({ host, opts }); allowed = confirm; return confirm; } }),
     rectOf: (v) => ({ x0: v.x, y0: v.y, x1: v.x + v.w, y1: v.y + v.h }),
@@ -76,6 +78,7 @@ test("a lobby without confirmation fetches no source and offers confirmation bef
   const h = harness(layers, async () => { sources++; return { artBase: "art/", base: "layout/" }; }, { allowed: false });
   try {
     assert.equal(await h.show("hero_home", h.host, "hero"), null);
+    await tick();
     assert.equal(sources, 0);
     assert.equal(h.created.length, 0);
     assert.equal(h.host.message.className, "lobby-unavailable");
@@ -93,6 +96,7 @@ test("a lobby without confirmation fetches no source and offers confirmation bef
 test("declining the lobby confirmation keeps the status and never creates a player", async () => {
   const h = harness(layers, null, { allowed: false, confirm: false });
   await h.show("np0032_npc", h.host, "special:np0032_npc", { framing: "character" });
+  await tick();
   await h.host.message.children[0].click();
   assert.equal(h.created.length, 0);
   assert.equal(h.prompts.length, 1);
