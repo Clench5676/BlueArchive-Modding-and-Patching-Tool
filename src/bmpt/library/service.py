@@ -303,7 +303,7 @@ class _View:
         out = []
         for folder in pin.dirs:
             for path, record in self.by_folder.get(folder, []):
-                if core_of(path.name) == core:
+                if self.maps[pin.key].slot(core_of(path.name)) == core:
                     out.append((path, record))
         return out
 
@@ -450,8 +450,10 @@ class _View:
     # --- one entry ---
 
     def entry(self, pin: Pin, core: str) -> _Entry:
+        core = self.maps[pin.key].slot(core)
         kind = self.library._kind(core, pin) or "spr"
-        files = self.indexes[pin.key].get(core, [])
+        files = [path for value in self.maps[pin.key].slot_cores(core)
+                 for path in self.indexes[pin.key].get(value, [])]
         parts = [self.part(path, pin, kind) for path in files]
         folder = self.folder(pin.key)
         config = self.configured(pin.key, core)
@@ -513,14 +515,17 @@ class _View:
         for folder in pin.dirs:
             cores.update(core_of(path.name) for path, _record in self.by_folder.get(folder, [])
                          if kind_of_file(path.name))
-        return cores
+        return {self.maps[pin.key].slot(core) for core in cores}
 
     def entries(self, pins: list[Pin], cancel: Callable[[], bool] | None = None,
                 cores: set[str] | None = None) -> list[_Entry]:
         """Every entry that is configured, not in its intended state, or overwritten."""
         out = []
         for pin in pins:
-            for core in sorted(self.cores(pin) if cores is None else self.cores(pin) & cores):
+            wanted = self.cores(pin)
+            if cores is not None:
+                wanted &= {self.maps[pin.key].slot(core) for core in cores}
+            for core in sorted(wanted):
                 if cancel and cancel():
                     return out
                 try:
@@ -1091,7 +1096,7 @@ class ModLibrary:
     @_mod_writer
     def add(self, paths: list[Path], progress: ProgressCallback | None = None, pin: Pin | None = None,
             *, kind: Kind | None = None, direct: bool = False) -> AddResult:
-        """Store one mod per core and kind, whatever the dates of its parts (a part repeated under another date starts
+        """Store one mod per slot and kind, whatever the dates of its parts (a part repeated under another date starts
         a version per date, judge.mod_versions), deduplicating complete bundle sets. In dev mode (devmode) only files
         inside the dev roots are taken."""
         for path in paths:
@@ -1213,10 +1218,11 @@ class ModLibrary:
 
     def _add(self, paths: list[Path], progress: ProgressCallback | None = None, pin: Pin | None = None,
              expected_kind: Kind | None = None, *, direct: bool = False) -> AddResult:
+        pin = pin or self.current_pin()
         known = self._known()
         groups: dict[tuple[str, ...], dict[str, Path]] = {}
         targets = {}
-        taken: list[tuple[Path, str, str, str]] = []
+        taken: list[tuple[Path, str, str, str, str]] = []
         for i, source in enumerate(map(Path, paths)):
             if progress:
                 progress(i, len(paths), t("webui.progress.add", name=source.name))
@@ -1235,13 +1241,14 @@ class ModLibrary:
             name, target, kind = self._identify_import(source, name, pin)
             if expected_kind is not None and kind != expected_kind:
                 raise ServiceError("mod_unsupported", file=source)
-            taken.append((source, name, target, kind))
-        # The files of one core and kind are one mod whatever their dates, unless one part repeats under other dates.
-        versions = iter(self.import_versions([((parse_filename(name).core.lower(), kind), name)
-                                              for _, name, _, kind in taken if kind != "other"], pin))
-        for source, name, target, kind in taken:
+            core = self.import_core(parse_filename(name).core, kind, pin)
+            taken.append((source, name, target, kind, core))
+        # Model sets share their prefab slot key; other character kinds keep their physical core.
+        versions = iter(self.import_versions([((core, kind), name)
+                                              for _, name, _, kind, core in taken if kind != "other"], pin))
+        for source, name, target, kind, core in taken:
             key = (str(source.parent), "other") if kind == "other" else (
-                parse_filename(name).core.lower(), kind, next(versions))
+                core, kind, next(versions))
             targets[key] = (target, kind)
             group = groups.setdefault(key, {})
             if kind == "other":
@@ -1257,7 +1264,6 @@ class ModLibrary:
             group[name] = source
 
         # Validate every group before storing any part of this upload.
-        pin = pin or self.current_pin()
         for group in groups.values():
             if not direct or not self.direct_import(group, pin):
                 self._check_group(group, pin, compatibility=False)
@@ -1303,7 +1309,7 @@ class ModLibrary:
         if pin and not targets and variant_key and kind != "other":
             target_core = self._core_map(pin).core(variant_key, kind) or core
             targets = self._spine_parts(target_core, pin)
-        if targets and kind != "other":
+        if targets and kind not in ("other", "model"):
             target_core = parse_filename(targets[0].name).core
         originals, original_paths, current_parts = {}, [], {}
         unavailable = not targets
@@ -1452,8 +1458,16 @@ class ModLibrary:
                         and self._is_official_as(self.root / "originals" / kept, kept) for kept in self._originals())
         return identify(path, name, self.catalog, filename_only=named)
 
+    def import_core(self, core: str, kind: str, pin: Pin | None = None) -> str:
+        """The import set's core key: a model's prefab slot, otherwise its unchanged physical core."""
+        core = core.lower()
+        if kind != "model":
+            return core
+        pin = pin or self.current_pin()
+        return self._core_map(pin).slot(core) if pin else core
+
     def import_versions(self, entries: Sequence[tuple[Hashable, str]], pin: Pin | None = None) -> list[str]:
-        """The common Add/batch grouping rule, including releases the selected install keeps together."""
+        """The common Add/batch version rule. Callers key model sets by import_core, across all physical cores."""
         pin = pin or self.current_pin()
         installed = (path.name for paths in self._index(pin).values() for path in paths) if pin else ()
         return mod_versions(entries, installed)
@@ -1878,16 +1892,17 @@ class ModLibrary:
     def _recognize_installed(self, mod_id: str, identity: frozenset) -> bool:
         """Adopt exact outside content without writing any game files."""
         record = self._records[mod_id]
-        cores = {core_of(name) for name in record["files"]}
         matched = False
         for pin in self.installs():
             view = self._view(self._view_pins(pin), "full")
+            cores = {view.maps[pin.key].slot(core_of(name)) for name in record["files"]}
             entries = [view.entry(pin, core) for core in cores]
             parts = [part for entry in entries for part in entry.parts]
             if not parts or not self._identity({p.path.name: p.path for p in parts if not p.official}) <= identity:
                 continue
             for entry in entries:
-                local = frozenset(item for item in identity if item[0] == entry.core)
+                local = frozenset(item for item in identity
+                                  if item[0] in view.maps[pin.key].slot_cores(entry.core))
                 if entry.state not in ("untracked", "changed") or not self._matches_installed(local, entry):
                     continue
                 try:
@@ -1975,7 +1990,8 @@ class ModLibrary:
         for name, applied in self._applied.items():
             if applied.get("source") == source:
                 path = Path(name)
-                affected.update((pin.key, core_of(path.name)) for pin in pins if path.parent in pin.dirs)
+                affected.update((pin.key, self._core_map(pin).slot(core_of(path.name)))
+                                for pin in pins if path.parent in pin.dirs)
         keys: list[dict] = []
 
         def change(data: dict) -> None:
@@ -2282,6 +2298,9 @@ class ModLibrary:
         for record in self._records.values():
             if core_of(record["files"][0]) == core.lower():
                 return record["kind"]
+        mapped = self._maps.get(pin.key)
+        if mapped and core.lower() in mapped[1].model.values():
+            return "model"
         return kind_of(core)
 
     def _built_for(self, pin: Pin) -> int:
@@ -2314,17 +2333,33 @@ class ModLibrary:
                     target = spr_of if core.lower().endswith("_spr") else lobby_of
                     target.setdefault(variant.key, core)
             mapped = CoreMap(keys, spr_of, lobby_of, {})
-        models = [slot.core for slot in slots if kind_of(slot.core, slot.category) == "model"]
+        models = [slot.core.lower() for slot in slots if kind_of(slot.core, slot.category) == "model"]
         model_map = getattr(self.catalog, "model_map", None)
+        model_variant = getattr(self.catalog, "variant_for_model_core", self.catalog.variant_for_core)
         keys = model_map(models) if model_map else {
             core.lower(): variant.key for core in models
-            if (variant := self.catalog.variant_for_core(core.lower())) is not None}
+            if (variant := model_variant(core.lower())) is not None}
         model_of = {}
+        preferred = {v.key: v.model.lower() for family in getattr(self.catalog, "families", lambda: [])()
+                     for v in family.variants
+                     if getattr(v, "model", None)}
+        # Prefer this install's prefab over its dependency cores, even when a dependency sorts first.
+        prefabs = {core for core in models if any(parse_filename(path.name).category == "character"
+                                                  for path in index[core.lower()])}
         for core in sorted(models):
             key = keys.get(core.lower(), core.lower())
             mapped.keys.setdefault(core.lower(), key)
             model_of.setdefault(key, core)
-        mapped = replace(mapped, model=model_of)
+            if core in prefabs and model_of[key] not in prefabs:
+                model_of[key] = core
+        for key, core in preferred.items():
+            if key in model_of:
+                model_of[key] = core
+                mapped.keys.setdefault(core, key)
+        model_cores = {key: (core, *sorted(value for value in models
+                                          if value != core and keys.get(value.lower()) == key))
+                       for key, core in model_of.items()}
+        mapped = replace(mapped, model=model_of, model_cores=model_cores)
         self._maps[pin.key] = (built_for, mapped)
         return mapped
 
@@ -2385,9 +2420,22 @@ class ModLibrary:
                 return sorted(targets)
             return self._other_targets({path.name: path for path in self._paths(record)}, pin)
         variant = self._variant(key)
-        index = self._index(self._current(pin))
+        pin = self._current(pin)
+        index = self._index(pin)
         return [path for current, value in (("spr", variant.spr), ("lobby", variant.lobby), ("model", getattr(variant, "model", None)))
-                if value and (kind is None or current == kind) for path in index.get(value.lower(), [])]
+                if value and (kind is None or current == kind)
+                for core in (self._core_map(pin).slot_cores(value) if current == "model" else (value.lower(),))
+                for path in index.get(core, [])]
+
+    @_serialized
+    def model_cores(self, variant_key: str, pin: Pin | None = None) -> list[str]:
+        """A variant's model slot: its prefab core, followed by its own installed dependency cores."""
+        variant = self._variant(variant_key)
+        core = getattr(variant, "model", None)
+        if not core:
+            return []
+        pin = pin or self.current_pin()
+        return list(self._core_map(pin).slot_cores(core)) if pin else [core.lower()]
 
     def _other_targets(self, files: dict[str, Path], pin: Pin) -> list[Path]:
         """Resolve official file slots by prefix, then container/name/type for older or repacked bundles."""
@@ -2645,7 +2693,8 @@ class ModLibrary:
         source leaving that part official). When unsure, the original stays."""
         core = core_of(name)
         for pin in pins:
-            entry = ((((config or {}).get("folders") or {}).get(pin.key) or {}).get("configured") or {}).get(core)
+            slot = self._core_map(pin).slot(core)
+            entry = ((((config or {}).get("folders") or {}).get(pin.key) or {}).get("configured") or {}).get(slot)
             if not entry:
                 continue
             path = next((path for path in self._index(pin).get(core, []) if path.name == name), None)
@@ -2749,7 +2798,7 @@ class ModLibrary:
                     if path.exists() or not view.successor(pin, path) or path.name in kept:
                         continue
                     stale.append(str(path))
-                    core = core_of(path.name)
+                    core = view.maps[pin.key].slot(core_of(path.name))
                     if (view.says_nonofficial(path, record, present=False) and view.configured(pin.key, core)
                             and not view.later_record(path)):
                         markers.setdefault(pin.key, set()).add(core)
@@ -2870,9 +2919,7 @@ class ModLibrary:
         for value in values:
             if not value:
                 continue
-            core = value.lower()
-            if not view.indexes[pin.key].get(core):
-                continue
+            core = view.maps[pin.key].slot(value)
             entry = view.entry(pin, core)
             files.extend(self._file_state(view, entry, part) for part in entry.parts)
         sources = {file.applied for file in files}
@@ -2944,7 +2991,7 @@ class ModLibrary:
             choice = folder.get(core.lower()) if core else None
             if not choice:
                 continue
-            paths = self._index(pin).get(core.lower(), [])
+            paths = self._spine_parts(core, pin)
             installed = bool(paths) and profiles_mod.enabled(config) and not choice.get("error")
             try:
                 for path in paths:
@@ -2954,7 +3001,8 @@ class ModLibrary:
                         installed = False
                         break
                 recorded = {Path(name) for name, record in self._applied.items()
-                            if Path(name).parent in pin.dirs and core_of(Path(name).name) == core.lower()
+                            if Path(name).parent in pin.dirs
+                            and self._core_map(pin).slot(core_of(Path(name).name)) == core.lower()
                             and record.get("source") == choice["source"] and not record.get("removed")}
                 installed = installed and recorded == set(paths)
             except (OSError, ServiceError):
@@ -3014,16 +3062,18 @@ class ModLibrary:
         return out
 
     @_serialized
-    def official_bundles(self, core: str, pin: Pin | None = None) -> list[Path]:
+    def official_bundles(self, core: str, pin: Pin | None = None, *, current_fallback: bool = False) -> list[Path]:
         """Verified official parts of a core, including kept originals of overwritten game files.
 
-        Resolve the whole set or fail: a live mod part must never fill a missing official part.
+        Resolve the whole set or fail. Model previews can explicitly request current files where
+        no official copy remains; callers rebuilding mods always require verified official bytes.
         """
         pin = self._current(pin)
         paths = self._spine_parts(core, pin)
         if not paths:
             raise ServiceError("game_file_not_found", variant=core)
-        return [self._official_for(path, pin) for path in paths]
+        resolve = self._official_or_current if current_fallback else self._official_for
+        return [resolve(path, pin) for path in paths]
 
     def _spine_parts(self, core: str, pin: Pin) -> list[Path]:
         """The supported character bundle parts of a core, in game folder order.
@@ -3032,7 +3082,8 @@ class ModLibrary:
         remain supplied by the install's CAB graph.
         """
         core = core.lower()
-        paths = self._index(pin).get(core, [])
+        index = self._index(pin)
+        paths = [path for value in self._core_map(pin).slot_cores(core) for path in index.get(value, [])]
         return [path for path in paths if kind_of_file(path.name)]
 
     @_serialized
@@ -3739,15 +3790,19 @@ class ModLibrary:
                     targets = self._game_files(variant_key, record["kind"], pin)
                     if not targets:
                         raise ServiceError("game_file_not_found", variant=variant_key)
-                    cores = [core_of(targets[0].name)]
-                    if record["kind"] in ("lobby", "model") and core_of(record["files"][0]) != cores[0]:
+                    cores = [getattr(variant, "model").lower() if record["kind"] == "model"
+                             else core_of(targets[0].name)]
+                    own_model = record["kind"] == "model" and all(
+                        core_of(name) in self._core_map(pin).slot_cores(cores[0]) for name in record["files"])
+                    if (record["kind"] == "model" and not own_model) or (
+                            record["kind"] == "lobby" and core_of(record["files"][0]) != cores[0]):
                         raise ServiceError("mod_target_mismatch", id=record["id"], variant=variant_key)
                     if not on:
                         return self._defer(pin, variant_key, {record["kind"]: cores[0]}, source)
                     kinds = {record["kind"]: cores[0]}
                     incomplete = self._incomplete(record, pin)
                     self._configure(pin, variant_key, kinds, source)
-                    if core_of(record["files"][0]) == cores[0]:
+                    if own_model or core_of(record["files"][0]) == cores[0]:
                         view = self._view([pin], "full")
                         entry = view.entry(pin, cores[0])
                         identity = self._identity({path.name: path for path in self._paths(record)})
@@ -3901,7 +3956,8 @@ class ModLibrary:
         """The internal write of an entry: its core's parts in its own install switched to a source, and nothing
         else (the configuration stays). From a built copy when one still fits; a mod made for the core is installed
         directly, another variant's mod adapted, another variant's files (in that same install) adapted."""
-        targets = self._index(pin).get(core, [])
+        core = self._core_map(pin).slot(core)
+        targets = self._spine_parts(core, pin)
         if not targets:
             raise ServiceError("game_file_not_found", variant=core)
         kind = self._kind(core, pin) or "spr"
@@ -3916,7 +3972,10 @@ class ModLibrary:
             if replacements is None:
                 if source.startswith("mod:"):
                     record = self._record(source[4:])
-                    if record["kind"] == "other" or core_of(record["files"][0]) == core:
+                    if record["kind"] == "model" and any(
+                            core_of(name) not in self._core_map(pin).slot_cores(core) for name in record["files"]):
+                        raise ServiceError("mod_target_mismatch", id=record["id"], variant=core)
+                    if record["kind"] in ("other", "model") or core_of(record["files"][0]) == core:
                         replacements = self._cached_build(self._paths(record), targets, pin,
                             lambda: self._install_direct(record, targets, work, log, progress, pin), build_keys)
                     else:
@@ -4044,7 +4103,7 @@ class ModLibrary:
             # a switch signs one slot's files, an apply the files of the whole mod: either may have written a part
             signatures = {sign(lambda: self._paths(record), lambda: targets),
                           sign(lambda: self._paths(record), lambda: self._game_files(record["target"], "other", pin))}
-        elif core_of(record["files"][0]) == core:
+        elif record["kind"] == "model" or core_of(record["files"][0]) == core:
             signatures = {sign(lambda: self._paths(record), lambda: targets)}
         else:
             signatures = {sign(lambda: self._preview(record, pin), lambda: targets)}
@@ -4120,7 +4179,7 @@ class ModLibrary:
         if source.startswith("mod:") and source[4:] in self._records:
             record = self._records[source[4:]]
             own = core_of(record["files"][0])
-            if own == core:
+            if record["kind"] == "model" or own == core:
                 return []
             targets = index.get(own, [])
             replaced = self._replaced_parts({path.name: path for path in self._paths(record)}, targets, pin)
@@ -4237,6 +4296,7 @@ class ModLibrary:
     def _configure(self, pin: Pin, variant_key: str, kinds: dict[str, str], source: str | None) -> None:
         """Set (or, with None, drop) the configured source of an entry's cores. A changed or dropped configuration
         drops the entry's built copy and its updated marker."""
+        kinds = {kind: self._core_map(pin).slot(core) if kind == "model" else core for kind, core in kinds.items()}
         stamp = now()
         dropped_keys: list[dict] = []
         named = any(other.key == pin.key for other in self._named_pins())
@@ -4375,13 +4435,13 @@ class ModLibrary:
         by_core: dict[str, list[tuple[Path, dict]]] = {}
         for folder in pin.dirs:
             for path, record in view.by_folder.get(folder, []):
-                core = core_of(path.name)
+                core = view.maps[pin.key].slot(core_of(path.name))
                 if kind_of_file(path.name):
                     by_core.setdefault(core, []).append((path, record))
         for core, records in sorted(by_core.items()):
             kind = self._kind(core, pin)
             parts = []
-            for path in view.indexes[pin.key].get(core, []):
+            for path in self._spine_parts(core, pin):
                 if str(path.resolve()) in view.applied:
                     with contextlib.suppress(OSError, _Unread):
                         parts.append(view.part(path, pin, kind))
@@ -4575,6 +4635,7 @@ class ModLibrary:
         whole on failure; a mod already in the library stays as it was."""
         view = self._view([pin, *[p for p in self.installs() if p.key != pin.key]], "full")
         entry = view.entry(pin, core)
+        core = entry.core
         if entry.state not in ("untracked", "changed"):
             raise ServiceError("entry_changed", core=core)
         nonofficial = [part for part in entry.parts if not part.official]
@@ -4699,6 +4760,7 @@ class ModLibrary:
         seen: set[tuple[str, str]] = set()
 
         def add(pin: Pin, core: str) -> None:
+            core = self._core_map(pin).slot(core)
             if (pin.key, core) not in seen and self._kind(core, pin):
                 seen.add((pin.key, core))
                 plan.append((pin, core))
@@ -4732,6 +4794,10 @@ class ModLibrary:
             root = Path(key)
             cores.update(core_of(Path(path).name) for path in self._applied
                          if Path(path).is_relative_to(root) and kind_of_file(Path(path).name))
+            pin = self._recorded_pin(key, folder)
+            if pin is not None:
+                mapped = self._core_map(pin)
+                cores = {mapped.slot(core) for core in cores}
             items.extend({"install": key, "core": core, "why": "pending"} for core in sorted(cores))
         return items
 
@@ -4895,7 +4961,7 @@ class ModLibrary:
             if source.startswith("mod:") and source[4:] in self._records:
                 with contextlib.suppress(OSError):
                     mod_sha1s = {self._hashes.get(path).sha1 for path in self._paths(self._records[source[4:]])}
-            for path in self._index(pin).get(core, []):
+            for path in self._spine_parts(core, pin):
                 record = self._applied.get(str(path.resolve()))
                 if not record or record.get("source") != source or record.get("official") is True:
                     continue
@@ -5089,9 +5155,9 @@ class ModLibrary:
             pin = pins.get(item.get("install")) if isinstance(item, dict) else None
             if pin is None or not isinstance(item.get("core"), str):
                 continue
-            core = item["core"].lower()
+            core = self._core_map(pin).slot(item["core"])
             files = []
-            for path in self._index(pin).get(core, []):
+            for path in self._spine_parts(core, pin):
                 with contextlib.suppress(OSError):
                     stat = path.stat()
                     files.append([path.name, stat.st_size, stat.st_mtime_ns])

@@ -321,6 +321,27 @@ test("model sources stay within the variant and use the shared configured/applie
   assert.equal(modelSource(v, false), "official");
 });
 
+test("split model slots offer dependency mods and judge every slot part", async () => {
+  const { selectionStatus, candidateStatus } = await import("../../src/bmpt/web/js/switch-sources.js");
+  const dependency = { id: "dependency", kind: "model", core: "ch0258", target: "ch0258" };
+  const v = { key: "ch0258", model: "ch0258_02", modelCores: ["ch0258_02", "ch0258"],
+    configured: { model: "mod:dependency" },
+    state: { files: [part("model", "official", { core: "ch0258_02" }),
+      part("model", "mod:dependency", { core: "ch0258", official: false, restorable: false })] },
+    modList: [dependency, { ...dependency, id: "enemy", core: "ch0258_01_enemy" },
+      { ...dependency, id: "shared", core: "droid_kaiserpmc_shield" },
+      { ...dependency, id: "foreign", core: "hoshino_original" }] };
+  const fam = { variants: [v, { key: "hoshino", model: "hoshino_original", modList: [
+    { ...dependency, id: "other", core: "hoshino_original", target: "hoshino" }] }] };
+  assert.deepEqual(candidates(fam, v, "model").map((c) => c.key), ["self", "m:dependency"]);
+  assert.equal(candidates(fam, v, "model")[0].greyed, true);
+  assert.equal(appliedKey(v, "model"), "m:dependency");
+  assert.equal(selectionStatus(v, "model"), "status.applied");
+  dependency.incomplete = true;
+  assert.equal(selectionStatus(v, "model"), "mods.incomplete");
+  assert.equal(candidateStatus(v, "model", "m:dependency"), "mods.incomplete");
+});
+
 test("Applied follows game intent independently of physical writes and preview selection", async () => {
   const { selectionStatus, candidateStatus, detailStatus, selectionError, importStatus } = await import("../../src/bmpt/web/js/switch-sources.js");
   for (const kind of ["spr", "lobby", "model"]) {

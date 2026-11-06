@@ -58,12 +58,12 @@ def test_model_route_is_never_cacheable(tmp_path):
 
 def test_model_route_uses_verified_official_or_own_mod_sources(tmp_path):
     official = [tmp_path / 'official.bundle']
-    mod_parts = [tmp_path / 'mod.bundle']
+    mod_parts = [tmp_path / 'assets-_mx-characters-ch0242-_mxdependency-2026-01-01_004_assets_all_1.bundle']
     calls = []
     game = RouteGame()
     game.model_glb = lambda core, overrides=(): calls.append((core, list(overrides))) or b'glTF'
     library = SimpleNamespace(
-        official_bundles=lambda core: official,
+        official_bundles=lambda core, **kwargs: official,
         preview_bundles=lambda mod_id: mod_parts,
         mods=lambda: [SimpleNamespace(id='own', kind='model', target='ch0242'),
                       SimpleNamespace(id='foreign', kind='model', target='ch0252'),
@@ -90,9 +90,9 @@ def test_indexed_npc_model_can_preview_without_a_student_entry(tmp_path):
     game.model_cores = lambda: {"en0002"}
     calls = []
     game.model_glb = lambda core, overrides=(): calls.append((core, list(overrides))) or b"glTF npc"
-    sources = [tmp_path / "npc.bundle"]
+    sources = [tmp_path / 'assets-_mx-npcs-en0002-_mxdependency-2026-01-01_004_assets_all_1.bundle']
     s = Services(Settings(tmp_path / "config.toml"), tmp_path, state=UiState(tmp_path / "webui.json"),
-                 cache=object(), game=game, catalog=RouteCatalog(), library=object())
+                 cache=object(), game=game, catalog=RouteCatalog(), library=SimpleNamespace(mods=lambda: []))
     s.batch_import = SimpleNamespace(preview=lambda key: ("en0002", sources))
     try:
         assert s.asset("model/en0002.glb", {}).body == b"glTF npc"

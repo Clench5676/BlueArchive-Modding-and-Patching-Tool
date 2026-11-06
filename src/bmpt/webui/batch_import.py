@@ -555,14 +555,15 @@ class BatchImport:
                 logger.debug("Cannot inspect uploaded bundle")
                 error = "unreadable"
                 failure = ServiceError("bundle_invalid", file=path, error=str(caught)).to_json()
-            inspected.append((path, name, kind, variant, error, failure))
-        # The files of one core and kind are one mod whatever their dates, unless one part repeats under other
-        # dates (judge.mod_versions, the rule Add uses). Folders separate alternative mods of the same release.
-        versions = iter(library.import_versions([((path.parent, parse_filename(name).core.lower(), kind, variant), name)
-                                      for path, name, kind, variant, _, _ in inspected if kind != "other"]))
-        for path, name, kind, variant, error, failure in inspected:
+            core = library.import_core(parse_filename(name).core, kind, self._pin)
+            inspected.append((path, name, kind, variant, core, error, failure))
+        # Model sets share the prefab slot key, including version splits across their physical cores.
+        # Folders still separate alternative mods of the same release.
+        versions = iter(library.import_versions([((path.parent, core, kind, variant), name)
+                                      for path, name, kind, variant, core, _, _ in inspected if kind != "other"], self._pin))
+        for path, name, kind, variant, core, error, failure in inspected:
             key = (path.parent, "", "", kind, None) if kind == "other" else (
-                path.parent, parse_filename(name).core.lower(), next(versions), kind, variant)
+                path.parent, core, next(versions), kind, variant)
             groups.setdefault(key, []).append((path, name, error, failure))
         candidates = []
         for (_, core_name, _, kind, variant), items in groups.items():

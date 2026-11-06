@@ -1974,7 +1974,8 @@ export function filesChanged(change = null) {
   if (!open || !fam) return;
   if (change) {
     const cores = new Set(change.cores.map(lower));
-    if (!fam.variants.some((v) => cores.has(lower(v.spr)) || cores.has(lower(v.lobby)))) return;
+    if (!fam.variants.some((v) => [v.spr, v.lobby, v.model, ...(v.modelCores || [])]
+      .some((core) => cores.has(lower(core))))) return;
   }
   heldChange = mergeChange(heldChange, change && { cores: change.cores.map(lower) });
   return resumeChanged();
@@ -2005,7 +2006,8 @@ async function reloadChanged() {
   if (fam !== read) { heldChange = mergeChange(heldChange, change); return; } // read anew meanwhile: read again after it
   // A repacked file can retain its size, date and family fields. A source event still revalidates its manifest.
   const lobbyChanged = change === null || change.cores.includes(lower(variant().lobby));
-  const modelChanged = change === null || change.cores.includes(lower(variant().model));
+  const modelChanged = change === null || [variant().model, ...(variant().modelCores || [])]
+    .some((core) => change.cores.includes(lower(core)));
   if (JSON.stringify(data) === JSON.stringify(fam) && previewEnabled === modsOn() && !lobbyChanged && !modelChanged) return;
   // the thumbnails of every core of the family whose files or configured preview changed
   const changed = { spr: false, lobby: lobbyChanged, model: modelChanged };

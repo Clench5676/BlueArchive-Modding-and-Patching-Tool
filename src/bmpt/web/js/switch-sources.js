@@ -17,7 +17,7 @@ export function availableTab(v, tab) {
   return hasKind(v, "spr") ? "portrait" : hasKind(v, "lobby") ? "lobby" : hasKind(v, "model") ? "model" : "lobby";
 }
 
-// the game file parts of one kind ("spr" portrait, "lobby" memorial lobby, "model" the 3D chibi's prefab bundles,
+// the game file parts of one kind ("spr" portrait, "lobby" memorial lobby, "model" the 3D chibi's whole slot,
 // newest first)
 export const partsOf = (v, kind = "spr") => {
   const parts = (v?.state?.files || []).filter((f) => f.kind === kind);
@@ -65,8 +65,9 @@ export const overwrittenOf = (v, kind = "spr") => partsOf(v, kind).some((f) => !
 // overwritten) }.
 export function candidates(fam, v, kind = "spr") {
   const own = coreOf(v, kind);
+  const cores = (kind === "model" && v.modelCores?.length ? v.modelCores : [own]).map((core) => String(core).toLowerCase());
   const mods = fam.variants.flatMap((o) => o.modList || []).filter((m) => m.kind === kind)
-    .filter((m) => kind === "spr" || !m.core || !own || m.core === String(own).toLowerCase());
+    .filter((m) => kind === "spr" || !m.core || !own || cores.includes(m.core));
   const across = kind === "spr" && !!own; // Cross-variant adaptation requires an actual local target.
   const others = across ? fam.variants.filter((o) => o.key !== v.key && coreOf(o, kind) && coreOf(o, kind) !== own) : [];
   const mod = (m) => ({ key: `m:${m.id}`, kind: "mod", id: m.id, mod: m, core: null, origin: fam.variants.find((o) => o.key === m.target) || null });

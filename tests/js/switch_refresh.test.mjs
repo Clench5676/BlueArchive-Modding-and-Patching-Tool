@@ -80,6 +80,27 @@ test("a lobby source event reloads the manifest even if a repack kept every fami
   assert.deepEqual(calls, ["roster", "lobby", "panels", "preview"]);
 });
 
+test("prefab and dependency source events refresh the model while foreign cores stay outside the family", async () => {
+  for (const core of ["ch0258_02", "ch0258", "ch0258_01_enemy"]) {
+    const calls = [], v = { key: "ch0258", model: "ch0258_02", modelCores: ["ch0258_02", "ch0258"] };
+    const ctx = {
+      open: true, quiet: () => true, busy: false, heldChange: undefined,
+      fam: { key: "hoshino", variants: [v] }, variantKey: v.key, variant: () => v,
+      readFamily: async () => ({ key: "hoshino", variants: [v] }), renderFailed: assert.fail,
+      previewEnabled: true, modsOn: () => true, lower: (s) => String(s || "").toLowerCase(),
+      filesSig: () => "unchanged", previewChanged: () => false, tabKind: () => "model",
+      ctx: { invalidateRoster: () => calls.push("roster") }, resetPreview: (kind) => calls.push(kind),
+      changeInPlace: (fn) => fn(), renderAll: async () => calls.push("panels"), renderLeft: async () => calls.push("preview"),
+      mergeChange: (_a, b) => b, resumeChanged: () => calls.push("queued"),
+    };
+    vm.createContext(ctx);
+    const gate = functionSource("export function filesChanged").replace("export ", "");
+    await vm.runInContext(`${gate}; ${functionSource("async function reloadChanged")};
+      filesChanged({cores: [${JSON.stringify(core)}]}); reloadChanged();`, ctx);
+    assert.deepEqual(calls, core === "ch0258_01_enemy" ? [] : ["queued", "roster", "model", "panels", "preview"]);
+  }
+});
+
 // FUN-26 for the detail screen: a family read waits for the job that holds the library lock, and an old read never
 // replaces a newer family
 test("the family read has no deadline of its own: it waits for a job that holds the library lock", async () => {
