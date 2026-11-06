@@ -82,7 +82,10 @@ REPLACE_TRIES, REPLACE_WAIT = (20, 0.05) if os.name == "nt" else (1, 0.0)
 
 
 def replace(src: str | Path, dst: Path, tries: int = REPLACE_TRIES, wait: float = REPLACE_WAIT) -> None:
-    """os.replace, tried again for a moment while another program holds the file (PermissionError)."""
+    """os.replace, tried again for a moment while another program holds the file (PermissionError). The first retry
+    also closes the files of this process's unreferenced bundle readers (openfiles.release)."""
+    from .openfiles import release
+
     for attempt in range(1, tries + 1):
         try:
             os.replace(src, dst)
@@ -90,4 +93,6 @@ def replace(src: str | Path, dst: Path, tries: int = REPLACE_TRIES, wait: float 
         except PermissionError:
             if attempt >= tries:
                 raise
+            if attempt == 1:
+                release()
             time.sleep(wait)

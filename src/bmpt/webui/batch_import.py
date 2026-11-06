@@ -460,6 +460,11 @@ class BatchImport:
         if mod_id and any(mod.id == mod_id for mod in library.mods()):
             candidate.entry.update(state="done", reason=None, libraryId=mod_id)
 
+    def _stored(self, candidate: Candidate, mod_id: str) -> None:
+        """A row whose mod was stored although a later step (its install) failed: in the library, not done."""
+        with self._lock:
+            candidate.entry.update(state="library", reason=None, libraryId=mod_id)
+
     def _complete(self, candidate: Candidate, library: Any, pin: Any, mod_id: str) -> None:
         with self._lock:
             self._completed[self._completion_key(candidate, library, pin)] = mod_id
@@ -1020,6 +1025,8 @@ class BatchImport:
                                                              secrets=getattr(self.services, "log_secrets", set())))
                         finally:
                             if phase == "apply" and item.get("libraryId") and item.get("reason"):
+                                # The mod reached the library before its install failed: the row says so.
+                                self._stored(candidate, item["libraryId"])
                                 # A failed install can still have saved the choice. Report both facts.
                                 try:
                                     if mod.kind == "other":

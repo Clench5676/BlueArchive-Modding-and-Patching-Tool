@@ -589,16 +589,19 @@ def test_system_temp_conversion_output_reproduces_the_dev_read_guard_failure(rea
     source = old_bundle(env.tmp / 'mods' / 'ui_android' / env.original.name, 13,
                           cab='CAB-mobile', payload=b'mobile mod', references=['com.nexon.bluearchive'])
     entry, = analyze(env, [source])['entries']
-    temporary_directory = batch_import.staging.tempfile.TemporaryDirectory
+    from contextlib import contextmanager
+
+    temporary_directory = batch_import.staging.temporary_directory
     staged = []
 
+    @contextmanager
     def former_staging(**kwargs):
         # Reproduce the old location without changing or broadening any guard.
-        directory = temporary_directory(prefix=devmode.LIBRARY_STAGING_PREFIX + 'import-')
-        staged.append(Path(directory.name))
-        return directory
+        with temporary_directory(prefix=devmode.LIBRARY_STAGING_PREFIX + 'import-') as directory:
+            staged.append(Path(directory))
+            yield directory
 
-    monkeypatch.setattr(batch_import.staging.tempfile, 'TemporaryDirectory', former_staging)
+    monkeypatch.setattr(batch_import.staging, 'temporary_directory', former_staging)
     result, = run(env, [entry], types=['TextAsset'], enableAfterImport=False)
     refused = staged[0] / batch_import.staging_name(entry['id']) / 'output' / env.original.name
     assert result['outcome'] == 'failed' and result['reason'] == 'dev_path_outside'
