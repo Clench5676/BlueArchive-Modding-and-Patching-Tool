@@ -163,21 +163,21 @@ test("a part's official verdict wins over its applied source; without one, its a
 // a part of another tool's mod with no official copy anywhere (family.get: restorable false)
 const overwrittenPart = (kind) => part(kind, "unknown", { official: false, copy: null, restorable: false });
 
-test("candidates carry restorable; on an overwritten kind every card but the one in use is greyed", () => {
+test("candidates keep Original unavailable while mods can replace an overwritten kind", () => {
   const fam = family();
   for (const c of candidates(fam, fam.variants[0], "spr")) {
     assert.equal(c.restorable, true, c.key);
     assert.equal(c.greyed, false, c.key);
   }
-  // hoshino's portrait overwritten by a mod outside the library: nothing in use among the cards, all greyed
+  // An outside overwrite disables Original while library mods remain selectable.
   fam.variants[0].state.files = [overwrittenPart("spr")];
   assert.equal(overwrittenOf(fam.variants[0], "spr"), true);
-  assert.ok(candidates(fam, fam.variants[0], "spr").every((c) => c.greyed));
+  assert.deepEqual(candidates(fam, fam.variants[0], "spr").filter((c) => c.greyed).map((c) => c.key), ["self"]);
   assert.equal(candidates(fam, fam.variants[0], "spr")[0].restorable, false);
-  // adopted: the library's mod is in use; it stays, the others are greyed
+  // Adoption does not change the availability of other library mods.
   fam.variants[0].state.files = [part("spr", "mod:p1", { official: false, copy: null, restorable: false })];
   const list = candidates(fam, fam.variants[0], "spr");
-  assert.deepEqual(list.filter((c) => !c.greyed).map((c) => c.key), ["m:p1"]);
+  assert.deepEqual(list.filter((c) => c.greyed).map((c) => c.key), ["self"]);
   // Preview selection is independent of whether the asset can currently be applied.
   assert.equal(popupMode(fam, fam.variants[0], "spr", true).start, "m:p1");
   assert.equal(popupMode(fam, fam.variants[0], "spr", false).start, "self");

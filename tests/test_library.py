@@ -446,13 +446,19 @@ def test_live_spine_files_merge_in_the_previews_order(setup_library, monkeypatch
         services.close()
 
 
-def test_partial_mod_preview_rejects_same_size_live_mod_as_official_fallback(setup_library):
+def test_partial_mod_preview_uses_same_size_live_mod_without_claiming_it_official(setup_library):
     env = setup_library
     texture = game_bundle(env.game_dir, part="textures")
     entry, = env.library.add([make_mod(texture, env.tmp / "input")])
     # An external overwrite has a valid header and official size, but no original exists.
     env.original.write_bytes(header_bundle(b"modified"))
-    expect_error("original_unavailable", lambda: env.library.preview_bundles(entry.id))
+    assert env.library.preview_bundles(entry.id) == [env.original, entry.file]
+    assert env.library.preview_incomplete(entry.id)
+    result = env.library.apply("test", f"mod:{entry.id}")
+    assert result.incomplete and result.kept_current
+    assert env.original.read_bytes() == header_bundle(b"modified")
+    assert env.library.selection("test")["spr"]["incomplete"]
+    expect_error("original_unavailable", lambda: env.library.official_bundles("test_spr"))
 
 
 def test_legacy_single_file_record_can_apply_and_reset_other_parts(setup_library):
@@ -793,8 +799,12 @@ def test_never_keeps_a_modded_game_file_as_original(setup_library, fixed):
     foreign = make_mod(env.original, env.tmp / "foreign", b"foreign!", fixed=fixed)
     shutil.copyfile(foreign, env.original)
     before = env.original.read_bytes()
-    expect_error("original_unavailable", lambda: env.library.apply("test", f"mod:{entry.id}"))
-    assert env.original.read_bytes() == before
+    result = env.library.apply("test", f"mod:{entry.id}")
+    assert result.kept_current and not result.incomplete
+    assert env.original.read_bytes() == entry.file.read_bytes()
+    kept, = [mod for mod in env.library.mods() if mod.id != entry.id]
+    assert kept.file.read_bytes() == before
+    assert not env.library.apply("test", f"mod:{entry.id}").kept_current
     assert not (env.root / "originals" / env.original.name).exists()
 
 
@@ -806,6 +816,95 @@ def test_invalid_kept_original_is_never_overwritten(setup_library):
     backup.write_bytes(b"invalid")
     expect_error("original_invalid", lambda: env.library.apply("test", f"mod:{entry.id}"))
     assert backup.read_bytes() == b"invalid"
+
+
+@pytest.mark.parametrize("kind", ["spr", "lobby"])
+@pytest.mark.parametrize("correct_crc", [False, True])
+def test_missing_official_apply_keeps_all_outside_parts_and_repair_clears_state(setup_library, monkeypatch, kind, correct_crc):
+    env = setup_library
+    core_name = "test_spr" if kind == "spr" else "test_home_gl"
+    first = env.original if kind == "spr" else game_bundle(env.game_dir, core_name)
+    second = game_bundle(env.game_dir, core_name, part="textures")
+    official = {path: path.read_bytes() for path in (first, second)}
+    for path in official:
+        path.write_bytes(header_bundle(b"outside " + path.name[-20:].encode()))
+    outside = {path: path.read_bytes() for path in official}
+    mod, = env.library.add([make_mod(first, env.tmp / "input", fixed=correct_crc)])
+    monkeypatch.setattr(env.settings, "crc_needed", lambda path: correct_crc)
+    result = env.library.apply("test", f"mod:{mod.id}", kind=kind)
+    assert result.kept_current and result.incomplete
+    kept, = [entry for entry in env.library.mods() if entry.id != mod.id]
+    kept_files = {path.name: path.read_bytes() for path in kept.file.parent.glob("*.bundle")}
+    assert kept_files == {path.name: data for path, data in outside.items()}
+    assert first.read_bytes() == mod.file.read_bytes() and second.read_bytes() == outside[second]
+    expect_error("original_unavailable", lambda: env.library.restore("test", kind=kind))
+    off = env.library.toggle(False, True)
+    assert any(item["core"] == core_name for item in off.stuck)
+    assert first.read_bytes() == mod.file.read_bytes() and second.read_bytes() == outside[second]
+    assert all(not (env.root / "originals" / path.name).exists() for path in official)
+    # A repair returns genuine official bytes; the existing state and switch heal without a reset.
+    for path, data in official.items():
+        path.write_bytes(data)
+    assert all(part.restorable and part.official for part in env.library.state("test").files if part.kind == kind)
+    assert not env.library.preview_incomplete(mod.id)
+    assert not env.library.toggle(True, False).failed
+    assert first.read_bytes() == mod.file.read_bytes() and second.read_bytes() == official[second]
+    assert (env.root / "originals" / first.name).read_bytes() == official[first]
+    assert not env.library.apply("test", f"mod:{mod.id}", kind=kind).incomplete
+
+
+def test_failed_apply_without_official_rolls_back_the_outside_bytes(setup_library, monkeypatch):
+    env = setup_library
+    targets = [game_bundle(env.game_dir, part="002"), env.original]
+    for path in targets:
+        path.write_bytes(header_bundle(b"outside " + path.name[-20:].encode()))
+    before = {path: path.read_bytes() for path in targets}
+    mod, = env.library.add([make_mod(path, env.tmp / "input") for path in targets])
+    copy = service.atomic_copy
+    failed = False
+
+    def fail_second(source, target):
+        nonlocal failed
+        if target in targets and source.parent == mod.file.parent:
+            # The whole outside core is durable before the first game write.
+            kept, = [entry for entry in env.library.mods() if entry.id != mod.id]
+            assert {p.name: p.read_bytes() for p in kept.file.parent.glob("*.bundle")} == {
+                p.name: data for p, data in before.items()}
+            journal, = (env.root / "transactions").glob("*/journal.json")
+            data = json.loads(journal.read_text())
+            assert data["phase"] == "writing" and all(not item["official"] for item in data["files"])
+            if target == env.original and not failed:
+                failed = True
+                raise PermissionError("synthetic failed write")
+        return copy(source, target)
+
+    monkeypatch.setattr(service, "atomic_copy", fail_second)
+    expect_error("game_file_locked", lambda: env.library.apply("test", f"mod:{mod.id}"))
+    assert failed and {path: path.read_bytes() for path in targets} == before
+    assert [entry.id for entry in env.library.mods()] == [mod.id]
+    assert not list((env.root / "transactions").glob("*/journal.json"))
+    assert not list((env.root / "originals").glob("*.bundle"))
+
+
+def test_partial_mod_with_official_omitted_parts_is_complete(setup_library):
+    env = setup_library
+    texture = game_bundle(env.game_dir, part="textures")
+    mod, = env.library.add([make_mod(texture, env.tmp / "input")])
+    assert env.library.preview_bundles(mod.id) == [env.original, mod.file]
+    assert not env.library.preview_incomplete(mod.id)
+    result = env.library.apply("test", f"mod:{mod.id}")
+    assert not result.incomplete and not result.kept_current
+
+
+def test_switch_between_library_mods_without_official_does_not_adopt_again(setup_library):
+    env = setup_library
+    env.original.write_bytes(header_bundle(b"outside"))
+    first, = env.library.add([make_mod(env.original, env.tmp / "first", b"first")])
+    second, = env.library.add([make_mod(env.original, env.tmp / "second", b"second")])
+    assert env.library.apply("test", f"mod:{first.id}").kept_current
+    assert not env.library.apply("test", f"mod:{second.id}").kept_current
+    assert env.original.read_bytes() == second.file.read_bytes()
+    assert len(env.library.mods()) == 3
 
 
 def test_refuses_install_plan_outside_resource_dirs(setup_library, monkeypatch):
@@ -2483,3 +2582,53 @@ def test_off_and_on_with_no_clone_rekeep_the_moved_original(setup_library, monke
         assert not env.library.toggle(True, expect=False).failed
         assert original.read_bytes() == official
         assert env.library.state("test").applied == source
+
+
+def test_missing_official_journal_recovers_outside_bytes_after_interrupted_rollback(setup_library, monkeypatch):
+    env = setup_library
+    targets = [game_bundle(env.game_dir, part="002"), env.original]
+    for path in targets:
+        path.write_bytes(header_bundle(b"outside " + path.name[-20:].encode()))
+    before = {path: path.read_bytes() for path in targets}
+    mod, = env.library.add([make_mod(path, env.tmp / "incoming") for path in targets])
+    copy = service.atomic_copy
+
+    def fail_second(source, target):
+        if target == env.original and source.parent == mod.file.parent:
+            raise PermissionError("synthetic interrupted write")
+        return copy(source, target)
+
+    def interrupted(*args):
+        raise OSError("synthetic interrupted rollback")
+
+    monkeypatch.setattr(service, "atomic_copy", fail_second)
+    monkeypatch.setattr(env.library, "_rollback_write", interrupted)
+    expect_error("game_file_locked", lambda: env.library.apply("test", f"mod:{mod.id}"))
+    assert list((env.root / "transactions").glob("*/journal.json"))
+    assert len(env.library.mods()) == 2
+    monkeypatch.setattr(service, "atomic_copy", copy)
+    recovered = reload_library(env)
+    assert {path: path.read_bytes() for path in targets} == before
+    assert [entry.id for entry in recovered.mods()] == [mod.id]
+    assert not list((env.root / "transactions").glob("*/journal.json"))
+    assert not list((env.root / "originals").glob("*.bundle"))
+
+
+@pytest.mark.parametrize("source_type", ["mod", "variant"])
+def test_adapted_apply_without_official_target_keeps_the_outside_mod(setup_library, monkeypatch, source_type):
+    env = setup_library
+    env.catalog.variants["other"].family = "test"
+    other = game_bundle(env.game_dir, "other_spr")
+    env.original.write_bytes(header_bundle(b"outside target"))
+    outside = env.original.read_bytes()
+    source = "variant:other"
+    if source_type == "mod":
+        mod, = env.library.add([make_mod(other, env.tmp / "incoming")])
+        source = f"mod:{mod.id}"
+    swap_by_copying(monkeypatch)
+    result = env.library.apply("test", source)
+    assert result.kept_current
+    assert env.original.read_bytes() == header_bundle(b"adapted")
+    assert any(entry.file.read_bytes() == outside for entry in env.library.mods())
+    assert not (env.root / "originals" / env.original.name).exists()
+    expect_error("original_unavailable", lambda: env.library.restore("test"))

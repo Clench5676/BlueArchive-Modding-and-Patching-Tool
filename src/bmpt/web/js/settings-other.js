@@ -5,6 +5,7 @@ import * as ModSwitch from "./mod-switch.js";
 import * as Popup from "./popup.js";
 import { rpc, waitJob } from "./api.js";
 import { T } from "./i18n.js";
+import { overwrittenLines } from "./repairs.js";
 
 
 let busy = false;
@@ -15,12 +16,18 @@ async function write(method, params, name, changed) {
   try {
     await Loading.task(async (update) => waitJob(await rpc(method, params), update), {
       label: T(method === "mods.remove" ? "progress.delete" : method === "actions.restore" ? "progress.restore" : "progress.apply", { name }),
-    }).then((result) => {
+    }).then(async (result) => {
       if (result?.failed?.length) notify(T("mods.deletePending"), { kind: "error", error: { code: result.failed[0]?.code || "internal", params: { failed: result.failed } } });
+      if (result?.kept_current) await Popup.message({ title: T("popup.apply"), lines: [T("mods.keptCurrent")], ok: T("picker.ok") });
     });
     await ModSwitch.refresh();
   } catch (err) {
-    ModSwitch.refused(err, method, params);
+    if (err.code === "original_unavailable") {
+      const state = ModSwitch.current?.() || {};
+      await Popup.message({ title: T("mods.overwrittenTitle"), lines: overwrittenLines({
+        installs: (state.installs || []).filter((item) => item.key === state.current),
+      }, T), ok: T("picker.ok") });
+    } else ModSwitch.refused(err, method, params);
   } finally { busy = false; await changed(); }
 }
 
@@ -43,12 +50,12 @@ export async function remove(mod, changed) {
 
 // the state, then the file names in the language's list separator
 export const valueText = (mod) => [T(["active", "set"].includes(mod.state) ? "status.applied" : `settings.mods.otherState.${mod.state}`),
-  mod.files.join(ModSwitch.listSep())].filter(Boolean).join(" - ");
+  mod.overwritten && T("mods.overwrittenNone"), mod.files.join(ModSwitch.listSep())].filter(Boolean).join(" - ");
 
 export function rows(mods, valueRow, changed) {
   return mods.map((mod, i) => valueRow(`Other_${i}`, 0, mod.label, valueText(mod), [
       [T("settings.mods.useMod"), () => select(mod, changed, true), mod.state !== "missing" && (!mod.selected || mod.state === "changed")],
-      [T("settings.mods.official"), () => select(mod, changed, false), mod.state !== "missing"],
+      [T("settings.mods.official"), () => select(mod, changed, false), mod.state !== "missing" && !mod.overwritten],
       [T("btn.delete"), () => remove(mod, changed)],
     ], { below: true }));
 }

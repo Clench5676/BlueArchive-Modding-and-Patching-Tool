@@ -124,8 +124,11 @@ const MAX_LISTED = 6; // failed entries a result names; the rest are counted
 export function resultSummary(result, nameOf) {
   const list = (k) => result?.[k] || [];
   const title = T(result?.enabled === false ? "mods.offState" : "mods.onState");
-  if (!list("adopted").length && !list("failed").length && !list("stuck").length && !list("left").length) return null;
+  const kept = list("done").some((item) => item.kept_current), incomplete = list("done").some((item) => item.incomplete);
+  if (!list("adopted").length && !list("failed").length && !list("stuck").length && !list("left").length && !kept && !incomplete) return null;
   const lines = [];
+  if (kept) lines.push(T("mods.keptCurrent"));
+  if (incomplete) lines.push(T("mods.incomplete"));
   if (list("adopted").length) lines.push(T("mods.toAdd", { n: list("adopted").length }));
   lines.push(T("mods.result", { done: list("done").length, failed: list("failed").length + list("left").length }));
   if (list("stuck").length) lines.push(T("mods.stuck", { n: list("stuck").length }));

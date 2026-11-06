@@ -721,7 +721,11 @@ async function job(method, params, { onDone, after = () => reload(), name = full
         await overwrittenMessage(variant(), params.kind || "spr");
       else if (QUEUEABLE.includes(method)) await refused(refusal, method, params);
       else notify(errorText(refusal), { kind: "error", error: refusal });
-    } else if (ok && result?.deferred === true) void notice(T("mods.saved"));
+    } else if (ok) {
+      const lines = [result?.deferred && T("mods.saved"), result?.kept_current && T("mods.keptCurrent"),
+        result?.incomplete && T("mods.incomplete")].filter(Boolean);
+      if (lines.length) void notice(lines.join("\n"));
+    }
     resumeChanged();
   }
 }
@@ -1230,10 +1234,10 @@ async function drawPopup(scroll = 0) {
       // The card and info panel consume one still, including its fallback, so they cannot disagree after a retry.
       thumb: picture, big: () => picture.start(),
       inUse: false, applied: !!coreOf(v, kind) && c.key === applied, fav: c.fav, isNew: c.kind === "mod" && c.mod.fresh && c.key !== applied, src: c,
-      inUseText: coreOf(v, kind) && c.key === applied ? T("status.applied") : null,
+      inUseText: c.mod?.incomplete ? T("mods.incomplete") : coreOf(v, kind) && c.key === applied ? T("status.applied") : null,
       dim: c.greyed,
       badge: c.greyed ? { ...GREYED_BADGE(), ...(!coreOf(v, kind) && c.kind === "self" ? { text: T("import.reason.no_target") } : {}) }
-        : null,
+        : c.mod?.incomplete ? { text: T("mods.incomplete"), color: COLOUR.warning, ink: "#ffffff" } : null,
       tag: c.mod?.repaired_from ? { text: T("remap.repaired"), color: "#d7eaf4", ink: "#2d4664" } : null,
     };
   })
@@ -1253,7 +1257,7 @@ async function drawPopup(scroll = 0) {
       const c = it.src;
       const file = c.kind === "mod" ? c.mod.file : gameFile(c.variant, kind);
       const size = c.kind === "mod" ? c.mod.size : partsOf(c.variant, kind).reduce((n, f) => n + (f.size || 0), 0);
-      const status = !coreOf(v, kind) ? "import.reason.no_target" : candidateStatus(v, kind, c.key);
+      const status = !coreOf(v, kind) ? "import.reason.no_target" : candidateStatus(v, kind, c.key, c.mod);
       const statusColor = status && coreOf(v, kind) ? `${COLOUR.success}/1.00` : null;
       const error = c.key === mode.set ? selectionError(v, kind) : null;
       const crcState = c.key === appliedKey(v, kind) ? crcOf(v, kind) : null;
@@ -1350,9 +1354,12 @@ async function removeMod(id) {
 
 // the Add First or Overwritten message of a variant's files of a kind (prompts.js); resolves with true once its mod
 // was added to the library
-function overwrittenMessage(v, kind = "spr") {
+async function overwrittenMessage(v, kind = "spr") {
+  const page = pageToken;
   const core = coreOf(v, kind);
-  return Prompts.overwritten({ name: entryLabel({ core, kind }, () => fullName(v)), core, files: partsOf(v, kind) });
+  const added = await Prompts.overwritten({ name: entryLabel({ core, kind }, () => fullName(v)), core, files: partsOf(v, kind) });
+  if (added && open && page === pageToken) { ctx.invalidateRoster(); await reload(); }
+  return added;
 }
 
 // variant picker: every variant of the family in the same list layout

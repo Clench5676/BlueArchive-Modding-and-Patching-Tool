@@ -264,6 +264,8 @@
 			"damaged": "已损坏",
 			"overwrittenTitle": "原版文件已被覆盖",
 			"overwrittenNone": "已无原版备份",
+			"incomplete": "Mod 不完整",
+			"keptCurrent": "当前游戏文件已加入 Mod 仓库",
 			"addFirst": "修复前先加入 Mod 仓库",
 			"lastCopy": "游戏仍在使用的文件的唯一副本",
 			"mayNotStart": "游戏可能无法启动",
@@ -787,7 +789,6 @@
 				"required_asset_apply_failed": "资源应用失败",
 				"required_assets_unmatched": "必要资源未匹配",
 				"entry_changed": "文件已变更",
-				"original_unavailable": "原版文件不可用",
 				"original_invalid": "原版文件无效",
 				"failed": "导入检查失败"
 			},

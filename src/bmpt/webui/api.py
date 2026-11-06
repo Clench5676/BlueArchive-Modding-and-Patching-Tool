@@ -769,6 +769,12 @@ def build_api(s: Services) -> RpcRegistry:
             item["state"] = to_json(s.library.state(v.key))
             item["modList"] = [{**to_json(m), "fresh": seen is not None and m.user_added and m.id not in seen}
                                for m in mods.get(v.key, [])]
+            for mod in item["modList"]:
+                try:
+                    if getattr(s.library, "preview_incomplete", lambda _: False)(mod["id"]):
+                        mod["incomplete"] = True
+                except ServiceError:
+                    pass
             item["modelFiles"] = model_files(v.model)
             variants.append(item)
         # Include the installation: two servers can have the same resource hash.

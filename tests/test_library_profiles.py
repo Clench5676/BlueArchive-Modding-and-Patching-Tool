@@ -1701,7 +1701,13 @@ def test_a_modded_backup_is_never_an_official_copy(world):
     keep_backup(world.spr, header_bundle(b"modded backup"))
     outside_mod(world.spr)
     mod = world.add(world.spr, payload=b"libmod!!", fixed=True, where="lib")
-    expect_error("original_unavailable", lambda: world.library.apply("test", f"mod:{mod.id}"))
+    outside = world.spr.read_bytes()
+    result = world.library.apply("test", f"mod:{mod.id}")
+    assert result.kept_current
+    assert world.spr.read_bytes() == mod.file.read_bytes()
+    assert any(entry.file.read_bytes() == outside for entry in world.library.mods())
+    assert not world.original(world.spr).exists()
+    expect_error("original_unavailable", lambda: world.library.restore("test"))
 
 
 def test_an_official_copy_from_another_folder(world):
@@ -3393,3 +3399,23 @@ def test_a_mod_not_updated_keeps_its_built_copy_for_an_instant_on(world, monkeyp
         no_installer(monkeypatch)
         world.toggle(True)
         assert world.spr.read_bytes() == rebuilt
+
+
+def test_apply_configuration_without_official_keeps_outside_and_reports_incomplete(world):
+    texture = game_bundle(world.game, part="textures")
+    mod = world.add(texture)
+    world.library.apply("test", f"mod:{mod.id}")
+    # Lose the retained official copy and change both parts outside the library.
+    world.original(texture).unlink()
+    for path in (world.spr, texture):
+        outside_mod(path)
+    before = {path.name: path.read_bytes() for path in (world.spr, texture)}
+    result = world.library.restore_drift([{"install": world.key(), "core": "test_spr", "state": "changed"}])
+    assert not result.failed and len(result.done) == 1
+    assert result.done[0]["kept_current"] and result.done[0]["incomplete"]
+    kept, = [entry for entry in world.library.mods() if entry.id != mod.id]
+    assert {path.name: path.read_bytes() for path in kept.file.parent.glob("*.bundle")} == before
+    assert texture.read_bytes() == mod.file.read_bytes()
+    assert world.spr.read_bytes() == before[world.spr.name]
+    from bmpt.webui.services import _changed_of
+    assert _changed_of(result)["mods"]

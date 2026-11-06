@@ -36,14 +36,16 @@ export async function add(paths = null, currentVariant = null) {
   const installedIds = new Set(installed.map((m) => m.id));
   const appliedIds = new Set((report?.applied || []).map((m) => m.id));
   const configuredIds = new Set((report?.configured || []).map((m) => m.id));
-  const visibleAdded = added.filter((mod) => !from || destination(mod) !== from || installedIds.has(mod.id) || failures.has(mod.id));
+  const incompleteIds = new Set(report?.incomplete || []);
+  const visibleAdded = added.filter((mod) => !from || destination(mod) !== from || installedIds.has(mod.id) || failures.has(mod.id)
+    || report?.kept_current || incompleteIds.has(mod.id));
   if (!visibleAdded.length && !duplicates.length) return report;
   const name = await context.names();
   const go = (mod) => mod.kind === "other" ? context.goOther() : context.go(destination(mod));
   const elsewhere = added.filter((mod) => !from || destination(mod) !== from);
   const addedLines = new Map(resultLines(elsewhere, name).map(({ mod, text }) => [mod, text]));
   const rows = [
-    ...visibleAdded.map((mod) => ({ mod, text: [addedLines.get(mod), appliedIds.has(mod.id) || configuredIds.has(mod.id) ? T("status.applied") : installedIds.has(mod.id) ? T("add.installed") : null, failures.get(mod.id)]
+    ...visibleAdded.map((mod) => ({ mod, text: [addedLines.get(mod), incompleteIds.has(mod.id) ? T("mods.incomplete") : appliedIds.has(mod.id) || configuredIds.has(mod.id) ? T("status.applied") : installedIds.has(mod.id) ? T("add.installed") : null, failures.get(mod.id)]
       .filter(Boolean).join("\n") })),
     ...duplicates.map((mod) => ({ mod, text: T("add.duplicate", { name: mod.label.trim() })
       + (installedIds.has(mod.id) ? `\n${T("add.installed")}` : "") })),
@@ -51,9 +53,9 @@ export async function add(paths = null, currentVariant = null) {
   const destinations = rows.filter(({ mod }) => !from || destination(mod) !== from);
   const multiple = new Set(rows.map(({ mod }) => destination(mod))).size > 1;
   const result = await Popup.message({ title: T("popup.add"),
-    lines: rows.map(({ mod, text }) => multiple && (!from || destination(mod) !== from) ? { text, button: {
+    lines: [...(report?.kept_current ? [T("mods.keptCurrent")] : []), ...rows.map(({ mod, text }) => multiple && (!from || destination(mod) !== from) ? { text, button: {
       label: T("add.go"), fn: ({ close }) => { close("cancel"); go(mod); },
-    } } : text),
+    } } : text)],
     ok: T(destinations.length ? "add.go" : "picker.ok"),
     cancel: destinations.length ? T(duplicates.length && !added.length ? "picker.ok" : "add.stay") : null,
   });
