@@ -1131,20 +1131,45 @@ export function unavailable(err, host, url, step = "detail") {
   failView(err, host, url, step);
 }
 
+// the Spine licence notice over a preview: the message frame (UIPopup_Sort, Popup.noticeFrame) in place, its title, the
+// line and Confirm License; without the frame (no game folder) the line and the button alone
 export function licenseRequired(host, retry) {
-  const message = document.createElement("div");
-  message.className = "lobby-unavailable";
-  message.setAttribute("role", "status");
-  message.textContent = T("spine.license.required");
-  const confirm = document.createElement("button");
-  confirm.type = "button";
-  skinPrimary(confirm, T("spine.license.confirm"));
-  confirm.addEventListener("click", async () => {
+  const notice = document.createElement("div");
+  notice.className = "lobby-unavailable lobby-notice";
+  notice.setAttribute("role", "status");
+  host.appendChild(notice);
+  const confirm = async () => {
     const Consent = await consent();
     if (await Consent.spine(document.getElementById("consent"), { over: true })) await retry?.();
+  };
+  return framedNotice(notice, confirm).catch((err) => {
+    console.warn("Spine licence notice without the game's frame", err);
+    if (!notice.isConnected) return;
+    notice.classList.remove("lobby-notice");
+    notice.removeAttribute("style");
+    notice.textContent = T("spine.license.required");
+    const button = document.createElement("button");
+    button.type = "button";
+    skinPrimary(button, T("spine.license.confirm"));
+    button.addEventListener("click", confirm);
+    notice.appendChild(button);
   });
-  message.appendChild(confirm);
-  host.appendChild(message);
+}
+
+async function framedNotice(notice, confirm) {
+  const [Popup, NGUI, { S }] = await Promise.all([import("./popup.js"), import("./ngui.js"), import("./util.js")]);
+  await Popup.ready();
+  if (!notice.isConnected) return;
+  const caption = T("spine.license.confirm");
+  const { tree, width, height } = Popup.noticeFrame({ title: T("spine.license.title"), lines: [T("spine.license.required")], ok: caption });
+  const w = width * S, h = height * S, next = document.createElement("div");
+  const view = await NGUI.render(tree, next, { scale: S, origin: [w / 2, h / 2 + Popup.FRAME_Y * S] });
+  if (!notice.isConnected) return;
+  if (!Popup.hit(next, view, "Center/Popup/Btn/Btn_Ok/BG (1)", confirm, { name: caption, action: "ok" })) {
+    throw new Error("Spine licence notice: no button");
+  }
+  Object.assign(notice.style, { width: `${w}px`, height: `${h}px` });
+  notice.replaceChildren(...next.childNodes);
 }
 
 // the lobby's players and what each holds on the GPU, gone
