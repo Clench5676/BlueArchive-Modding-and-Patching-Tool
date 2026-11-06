@@ -1777,7 +1777,11 @@ async function showModel(v, my, alive = () => true) {
   } catch (err) {
     // a model that cannot be read (a broken or unreadable GLB): the tab stays, empty, and the rest of the screen works
     console.error(err);
-    if (still()) notify(T("model.failed"), { kind: "error", error: err });
+    if (!still()) return;
+    // the official model asked for has a part with no official copy left: the install's own repair message, not
+    // awaited (the left side's load has a time limit)
+    if (err?.code === "original_unavailable") void overwrittenMessage(v, "model");
+    else notify(T("model.failed"), { kind: "error", error: err });
   }
 }
 function hideModel() {

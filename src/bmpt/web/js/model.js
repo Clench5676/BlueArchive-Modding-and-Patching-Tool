@@ -327,13 +327,17 @@ class ChibiView {
 
   async load(url, { signal } = {}) {
     const loader = new GLTFLoader();
-    const gltf = signal ? await (async () => {
-      const response = await fetch(url, { signal, cache: "no-store" });
-      if (!response.ok) throw new Error(`${url}: HTTP ${response.status}`);
-      const bytes = await response.arrayBuffer();
-      signal.throwIfAborted();
-      return loader.parseAsync(bytes, "");
-    })() : await loader.loadAsync(url);
+    const response = await fetch(url, { signal, cache: "no-store" });
+    if (!response.ok) {
+      const error = new Error(`${url}: HTTP ${response.status}`);
+      // the server's refusal code, e.g. original_unavailable: no official copy of a part is left
+      const code = response.headers.get("X-BAMT-Error");
+      if (code) error.code = code;
+      throw error;
+    }
+    const bytes = await response.arrayBuffer();
+    signal?.throwIfAborted();
+    const gltf = await loader.parseAsync(bytes, "");
     const discard = () => gltf.scene.traverse((o) => {
       o.geometry?.dispose();
       for (const m of [].concat(o.material || [])) {
