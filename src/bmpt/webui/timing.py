@@ -25,9 +25,11 @@ class Timings:
 
     def record(self, phase: str, seconds: float) -> None:
         with self._lock:
-            value = self._values.setdefault(phase, {"count": 0, "seconds": 0.0})
+            value = self._values.setdefault(phase, {"count": 0, "seconds": 0.0, "max": 0.0})
             value["count"] += 1
             value["seconds"] += seconds
+            # The longest single value: one long wait reads differently from many short ones.
+            value["max"] = max(value["max"], seconds)
         logger.info("Timing %s: %.3f s", phase, seconds)
 
     def snapshot(self) -> dict:

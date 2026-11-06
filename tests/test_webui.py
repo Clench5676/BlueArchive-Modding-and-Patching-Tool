@@ -1074,7 +1074,7 @@ def test_startup_timings_are_bounded_named_and_recorded_in_seconds(app, services
     assert ready == [True]
     assert rpc(app, "app.timings")["result"] == services.timings.snapshot()
     measured = {key: value for key, value in services.timings.snapshot().items() if key.startswith("page.")}
-    assert measured == {"page." + key: {"seconds": seconds, "count": 1} for key, seconds in
+    assert measured == {"page." + key: {"seconds": seconds, "count": 1, "max": seconds} for key, seconds in
                         {"boot": 1.25, "fonts": .02, "fallback-loading": .05, "sprite-loading": 1.2}.items()}
     assert rpc(app, "app.ready", timings=[])["error"]["code"] == "bad_params"
 

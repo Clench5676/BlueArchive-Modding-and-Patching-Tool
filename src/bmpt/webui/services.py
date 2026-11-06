@@ -17,7 +17,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
-from .. import devmode, updater
+from .. import devmode, spans, updater
 from ..config import APP_DIR_NAME, Settings, managed_cache_dir
 from ..data_paths import OLD_APP_DIR_NAME
 from ..globallines import GlobalLines
@@ -241,6 +241,7 @@ class Services:
                  classic_options: dict[str, Any] | None = None, safe_mode: bool = False):
         devmode.check_read(data_dir)
         self.timings = Timings()
+        spans.install(self.timings)  # game assets and the library record their waits here
         with self.timings.measure("settings.load-detect"):
             self.settings = settings or Settings()
         self.data_dir = Path(data_dir)
@@ -1379,28 +1380,35 @@ class Services:
             if not core:
                 raise KeyError(path)
             source = query.get("source", "live")
-            if source == "live":
-                data = self.game.model_glb(core)
-            elif source == "official":
-                data = self.game.model_glb(core, overrides=self.library.official_bundles(core))
-            elif source.startswith("mod:"):
-                mod_id = source[4:]
-                entry = next((mod for mod in self.library.mods() if mod.id == mod_id), None)
-                if entry is None or entry.kind != "model" or entry.target != target:
-                    raise KeyError(path)
-                data = self.game.model_glb(core, overrides=self.library.preview_bundles(mod_id))
-            elif source.startswith("import:"):
-                preview_core, bundles = self.batch_import.preview(source[7:])
-                if preview_core != core:
-                    raise KeyError(path)
-                data = self.game.model_glb(core, overrides=bundles)
-            else:
-                raise KeyError(path)
+            kind = source.split(":", 1)[0]
+            # How long each preview source takes end to end: lock waits, CRC checks and the export (BL-092).
+            with spans.span("asset.model." + (kind if kind in ("live", "official", "mod", "import") else "other")):
+                data = self._model_asset(core, target, source, path)
             return AssetResponse(data, MIME[".glb"], light=False)
         if kind == "voice" and len(parts) == 3:
             # a memorial lobby voice clip from Kivo, relayed so it is never cached
             variant = self.catalog.variant(parts[1])
             return AssetResponse(self.kivo.audio(variant.page_id or "", _stem(parts[2])), "audio/ogg", light=False)
+        raise KeyError(path)
+
+    def _model_asset(self, core: str, target: str, source: str, path: str) -> bytes:
+        """A variant's 3D chibi as GLB from one source: live game files, official copies, a library mod or an
+        import candidate (KeyError, a 404, for anything else)."""
+        if source == "live":
+            return self.game.model_glb(core)
+        if source == "official":
+            return self.game.model_glb(core, overrides=self.library.official_bundles(core))
+        if source.startswith("mod:"):
+            mod_id = source[4:]
+            entry = next((mod for mod in self.library.mods() if mod.id == mod_id), None)
+            if entry is None or entry.kind != "model" or entry.target != target:
+                raise KeyError(path)
+            return self.game.model_glb(core, overrides=self.library.preview_bundles(mod_id))
+        if source.startswith("import:"):
+            preview_core, bundles = self.batch_import.preview(source[7:])
+            if preview_core != core:
+                raise KeyError(path)
+            return self.game.model_glb(core, overrides=bundles)
         raise KeyError(path)
 
     def _ui_asset(self, parts: list[str], query: dict[str, str]) -> AssetResponse:
@@ -1465,6 +1473,13 @@ class Services:
         raise KeyError(kind)
 
     def _spine_asset(self, kind: str, key: str, name: str, revision: str | None = None) -> AssetResponse:
+        # How long each Spine request takes, by source and file kind (BL-092); names never reach the timings.
+        what = name if name in ("skeleton", "manifest.json", "framing.json", "lobby.json") else "file"
+        source = kind if kind in ("spr", "lobby", "official-spr", "official-lobby", "mod", "import") else "other"
+        with spans.span(f"asset.spine.{source}.{what}"):
+            return self._spine_response(kind, key, name, revision)
+
+    def _spine_response(self, kind: str, key: str, name: str, revision: str | None = None) -> AssetResponse:
         from ..gameassets.spine import spine_revision
 
         bundles = None
