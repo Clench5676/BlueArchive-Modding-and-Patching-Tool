@@ -1749,3 +1749,200 @@ def test_an_import_whose_workspace_cannot_be_removed_still_reports_its_rows(env,
     monkeypatch.setattr(openfiles, "remove_tree", refuse)
     result, = run(env, [entry], enableAfterImport=False)
     assert result["outcome"] == "imported" and result["libraryId"] == env.library.mods()[0].id
+
+
+def missing_bundles(env, monkeypatch):
+    """Real UnityFS directories with synthetic serialized-file metadata, without asset objects."""
+    from test_cab_discovery import bundle as cab_bundle
+    from bmpt.gameassets.discovery import cab_names
+
+    contents, reads = {}, []
+
+    def create(target, folder, cab, refs=()):
+        folder.mkdir(parents=True, exist_ok=True)
+        path = cab_bundle(folder, target.name, cab)
+        contents[path] = integrity.Contents(platforms={"StandaloneWindows64"}, versions={"2021.3"},
+                                           files={cab.lower()}, references=set(refs), names={"com.nexon.bluearchive"})
+        return path
+
+    original_inspect = integrity.inspect
+
+    def inspect(path, **kwargs):
+        reads.append(path)
+        return contents[path] if path in contents else original_inspect(path, **kwargs)
+
+    monkeypatch.setattr(integrity, "inspect", inspect)
+    monkeypatch.setattr(integrity, "cab_names", cab_names)
+    return create, reads, contents
+
+
+@pytest.mark.parametrize("referenced,sibling", [(True, False), (False, True), (True, True)])
+def test_missing_files_references_and_unselected_slot_files(env, monkeypatch, referenced, sibling):
+    create, reads, contents = missing_bundles(env, monkeypatch)
+    other = game_bundle(env.game_dir, part="004")
+    selected = create(env.original, env.tmp / "incoming", "cab-test", ["cab-omitted"] if referenced else [])
+    omitted = create(other, selected.parent, "cab-omitted") if sibling else None
+    entry, = analyze(env, [selected])["entries"]
+    assert entry["state"] == "incomplete" and entry["reason"] is None
+    assert entry["missing"]["unresolved"] == int(referenced)
+    assert entry["missing"]["found"] == ([{"path": str(omitted), "name": omitted.name, "size": omitted.stat().st_size}]
+                                           if sibling else [])
+    assert omitted not in reads, "Discovery reads the unselected file's directory, never its assets"
+    assert run(env, [entry])[0]["outcome"] == "skipped"
+    assert not env.library.mods()
+    again, = analyze(env, [selected])["entries"]
+    assert again["missing"] == entry["missing"]
+    if sibling:
+        complete, = analyze(env, [selected, omitted])["entries"]
+        assert complete["state"] == "ready" and "missing" not in complete
+        assert set(complete["paths"]) == {str(selected), str(omitted)}
+
+
+def test_mixed_folder_only_reports_unselected_files_of_touched_incomplete_slots(env, monkeypatch):
+    create, reads, _ = missing_bundles(env, monkeypatch)
+    folder = env.tmp / "mixed"
+    portrait = create(env.original, folder, "cab-test")
+    lobby_targets = [game_bundle(env.game_dir, "test_home_gl", part=f"{i:03}") for i in range(5)]
+    lobby = [create(target, folder, f"cab-lobby-{i}") for i, target in enumerate(lobby_targets)]
+    unrelated = create(model_bundle(env.game_dir, "other_original"), folder, "cab-unrelated")
+    rows = analyze(env, [portrait, *lobby[:2]])["entries"]
+    portrait_row = next(row for row in rows if row["kind"] == "spr")
+    lobby_row = next(row for row in rows if row["kind"] == "lobby")
+    assert portrait_row["state"] == "ready" and "missing" not in portrait_row
+    assert lobby_row["state"] == "incomplete" and lobby_row["missing"]["unresolved"] == 0
+    assert [f["path"] for f in lobby_row["missing"]["found"]] == sorted(map(str, lobby[2:]))
+    assert unrelated not in reads and all(path not in reads for path in lobby[2:])
+    assert len(rows) == 2
+
+
+@pytest.mark.parametrize("together", [False, True])
+def test_missing_cab_in_another_dropped_folder_joins_its_dependent_row(env, monkeypatch, together):
+    create, _, _ = missing_bundles(env, monkeypatch)
+    target = game_bundle(env.game_dir, part="004")
+    first = create(env.original, env.tmp / "first", "cab-test", ["cab-new"])
+    supplier = create(target, env.tmp / "second", "cab-new")
+    if not together:
+        row, = analyze(env, [first])["entries"]
+        assert row["state"] == "incomplete" and row["missing"] == {"unresolved": 1, "found": []}
+        # The other folder joins the session, even if only another slot in it was picked.
+        unrelated_target = game_bundle(env.game_dir, "other_spr")
+        unrelated = create(unrelated_target, supplier.parent, "cab-unrelated")
+        rows = analyze(env, [first, unrelated])["entries"]
+        missing = next(row for row in rows if row["core"] == "test_spr")
+        assert [f["path"] for f in missing["missing"]["found"]] == [str(supplier)]
+        paths = [first, unrelated, supplier]
+    else:
+        paths = [first.parent, supplier.parent]
+    rows = analyze(env, paths)["entries"]
+    row = next(row for row in rows if row["core"] == "test_spr")
+    assert row["state"] == "ready" and set(row["paths"]) == {str(first), str(supplier)}
+    again = analyze(env, [Path(path) for row in rows for path in row["paths"]])["entries"]
+    assert sorted(row["paths"] for row in again) == sorted(row["paths"] for row in rows)
+
+
+def test_supplying_a_slot_from_another_folder_never_merges_alternative_mods(env, monkeypatch):
+    create, _, _ = missing_bundles(env, monkeypatch)
+    target = game_bundle(env.game_dir, part="004")
+    first = create(env.original, env.tmp / "first", "cab-test")
+    omitted = create(target, first.parent, "cab-second")
+    analyze(env, [first])
+    alternative = create(env.original, env.tmp / "alternative", "cab-alternative")
+    rows = analyze(env, [first, alternative])["entries"]
+    assert len(rows) == 2
+    refused = next(row for row in rows if row["paths"] == [str(alternative)])
+    assert refused["state"] == "blocked" and refused["reason"] == "mod_target_ambiguous"
+    assert refused["params"]["candidates"] == [str(first)]
+    assert str(omitted) not in refused["paths"]
+
+
+def test_row_file_picker_passes_initial_directory_and_validates_it(env, monkeypatch):
+    calls = []
+    env.services.window = object()
+    monkeypatch.setattr(native, "pick_files", lambda window, types, **kwargs: calls.append(kwargs) or [])
+    assert rpc(env, "import.pick", directory=str(env.tmp)) == {"paths": []}
+    assert calls == [{"directory": str(env.tmp)}]
+    answer = env.rpc.call("import.pick", {"directory": 42})
+    assert answer["error"]["code"] == "bad_params"
+
+
+def test_official_3d_slot_with_one_file_omitted_then_completed_on_clones(tmp_path, monkeypatch):
+    from bmpt.catalog import Catalog
+    from bmpt.config import Settings
+    from bmpt.gameassets import AssetCache, GameAssets
+    from bmpt.gameassets.cabs import CabIndex
+    from bmpt.library import ModLibrary
+    from bmpt.library.judge import core_of, kind_of_file
+    from bmpt.library.storage import atomic_clone
+    from ba_modding_toolkit.searching import get_search_dirs
+
+    root = os.environ.get("BAMT_TEST_GAME_DIR")
+    if not root:
+        pytest.skip("Set BAMT_TEST_GAME_DIR to a verified official development view")
+    directories = get_search_dirs(Path(root))
+    official = sorted(path for directory in directories for path in directory.glob("*.bundle")
+                      if kind_of_file(path.name) == "model" and core_of(path.name) in {"ch0258_02", "ch0258"})
+    assert len(official) >= 12
+    inspection = integrity.Inspection()
+    references = set().union(*(inspection.inspect(path).references for path in official))
+    suppliers = CabIndex(directories).resolve(references, official[0])
+    portraits = {path for directory in directories for path in directory.glob("*.bundle")
+                 if core_of(path.name) == "ch0258_spr"}
+    clones = tmp_path / "game"
+    clones.mkdir()
+    for path in set(official) | portraits | {Path(path) for path in suppliers.values()}:
+        assert atomic_clone(path, clones / path.name)
+        (clones / path.name).chmod(0o644)
+    settings = Settings(tmp_path / "config.toml")
+    settings.set("game_resource_dir", str(clones))
+    settings.set("enable_crc_correction", "false")
+    settings.set("compression_method", "none")
+    game = GameAssets([clones], AssetCache(allowed=False, root=tmp_path / "cache"))
+    catalog = Catalog(game, None, server="global")
+    library = ModLibrary(tmp_path / "library", catalog, game, settings)
+    incoming = tmp_path / "incoming"
+    incoming.mkdir()
+    uploads = []
+    for path in official:
+        upload = incoming / path.name
+        assert atomic_clone(path, upload)
+        upload.chmod(0o644)
+        with upload.open("ab") as stream:
+            stream.write(b"BL-096 changed bytes")
+        uploads.append(upload)
+    omitted = uploads[-1]
+    services = Services(settings, tmp_path / "app", cache=object(), game=game, catalog=catalog, library=library)
+    services.game_found = lambda: False
+    environment = SimpleNamespace(services=services, rpc=build_api(services))
+    try:
+        original_inspect = integrity.Inspection.inspect
+        def selected_only(self, path, **kwargs):
+            assert path != omitted, "Sibling discovery must never inspect omitted assets"
+            return original_inspect(self, path, **kwargs)
+        with monkeypatch.context() as patch:
+            patch.setattr(integrity.Inspection, "inspect", selected_only)
+            row, = analyze(environment, uploads[:-1])["entries"]
+        assert (row["state"], row["kind"], row["variant"]) == ("incomplete", "model", "ch0258")
+        assert row["missing"]["found"] == [{"path": str(omitted), "name": omitted.name, "size": omitted.stat().st_size}]
+        completed, = analyze(environment, uploads)["entries"]
+        assert completed["state"] == "ready" and "missing" not in completed
+        assert len(completed["paths"]) == len(official)
+        assert not library.mods()
+    finally:
+        services.close()
+
+
+@pytest.mark.parametrize("shared_selected", [False, True])
+def test_fill_all_keeps_two_incomplete_alternatives_of_one_slot_separate(env, monkeypatch, shared_selected):
+    create, _, _ = missing_bundles(env, monkeypatch)
+    second_target = game_bundle(env.game_dir, part="004")
+    first = create(env.original, env.tmp / "first", "cab-first")
+    second = create(env.original, env.tmp / "second", "cab-first" if shared_selected else "cab-second")
+    first_missing = create(second_target, first.parent, "cab-first-extra")
+    second_missing = create(second_target, second.parent, "cab-second-extra")
+    partial = analyze(env, [first, second])["entries"]
+    assert len(partial) == 2 and {row["state"] for row in partial} == {"incomplete"}
+    completed = analyze(env, [first, second, first_missing, second_missing])["entries"]
+    assert len(completed) == 2 and {row["state"] for row in completed} == {"ready"}
+    assert sorted(row["paths"] for row in completed) == sorted([
+        sorted(map(str, [first, first_missing])), sorted(map(str, [second, second_missing]))])
+

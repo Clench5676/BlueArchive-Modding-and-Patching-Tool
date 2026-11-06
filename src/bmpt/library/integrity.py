@@ -58,7 +58,9 @@ class Contents:
 class Inspection:
     """A single analysis snapshot; never reused for execution or after input changes."""
 
-    def __init__(self, asset_types: set[str] | None = None):
+    def __init__(self, asset_types: set[str] | None = None, *, header_only_missing: bool = False):
+        self.header_only_missing = header_only_missing
+        self.missing_cabs: set[str] = set()
         self.asset_types = frozenset(asset_types if asset_types is not None else
                                     {"Texture2D", "TextAsset", "Mesh", "AnimationClip"})
         self._revisions: dict[Path, tuple[int, ...]] = {}

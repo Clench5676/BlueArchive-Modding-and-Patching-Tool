@@ -638,6 +638,16 @@ function wrapAt(str, fs, maxW, maxLines) {
 
 // NGUI's line pitch (render() lineHeight 1.15) of text drawn at fs
 export const LINE_PITCH = 1.15;
+// Draw a caption at the size already chosen for its sibling group. Try every permitted word/CJK break at that size;
+// fitText can otherwise choose a smaller size before trying Thai word breaks, undoing the group's shared size.
+export function wrapText(str, fs, maxW, maxLines = 2, lang = null) {
+  const outer = measureLang, previous = charBreaks;
+  measureLang = lang || outer; charBreaks = true;
+  try {
+    const rows = wrapAt(String(str), fs, maxW, maxLines);
+    return { text: rows ? rows.join("\n") : String(str), fs, lines: rows?.length || 1, overflow: !rows };
+  } finally { measureLang = outer; charBreaks = previous; }
+}
 // the smallest size text is shrunk to so that it stays in its box, 40 % of the size range's floor
 const sizeFloor = (fsMin) => Math.max(8, Math.floor(fsMin * 0.4));
 // Labels of widgets of one kind side by side (an action row, tabs, segments, the buttons of a popup) share one size: the

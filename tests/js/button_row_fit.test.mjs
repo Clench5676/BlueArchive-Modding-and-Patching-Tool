@@ -199,7 +199,7 @@ for (const locale of LOCALES) test(`the import list's tools and the row under th
   const page = await source("batch-import.js"), layout = await source("import-layout.js");
   assert.match(page, /\["files", "addFiles", 26, 174\], \["folder", "addFolder", 210, 190\], \["all", "all", 410, 126\], \["none", "none", 546, 140\]/);
   assert.match(page, /\["remove", "remove", 696, 150\], \["removeImported", "removeImported", 856, 224\], \["clear", "clear", 1090, 156\]/);
-  assert.match(page, /\[\["options", "recheck", "start"\], FOOTER_ROW\.size\]/);
+  assert.match(page, /\[\["fillAll", "options", "recheck", "start"\], FOOTER_ROW\.size\]/);
   assert.match(page, /wide: 330, width: SMALL_BUTTON\.w \* S/);
   assert.match(layout, /ui\.fitGroup\(captions, max \?\? w\.fontSize, min \?\? w\.fontSize \* 0\.7, widths\.map\(\(width\) => width - 60\), 2, \{ maxH: t\.widgets\.find\(\(x\) => "sprite" in x\)\.h_ - 20 \}\)/);
   document.documentElement.lang = locale;
