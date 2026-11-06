@@ -2034,3 +2034,84 @@ upstream files. The fork-only files moved to `src/bmpt/`; those 30 lines now imp
 to `src/bmpt/locales/`, and the engine's i18n gained `register_locale_dir`, which the App calls at start, so messages the
 fork raises in engine code read as before. Packaging and both builds take `bmpt`; nothing changes for users.
 
+## BL-083: The Spine licence notice over a preview has no plate
+
+- Status: Implemented by the lead; owner review pending (visual, macOS and Windows).
+- Requested: 2026-11-06 (owner, from a Windows user's 0.6.0 report): over the memorial lobby (fullscreen shown), the line
+  "Spine license confirmation required" sits straight on the scene and cannot be read.
+
+Lead's notes: `Lobby.licenseRequired` (`lobby.js`) puts the line and the Confirm License button in `.lobby-unavailable`
+(`app.css`): plain `#607689` text with no plate, over whatever the stage shows; the Spine comparison preview
+(`mod-compare.js` `previewPlayer`) does the same. The message frame of the App's popups comes from `UIPopup_Sort`
+(`popup.js` `frameReady`); the notice should sit on a game prefab plate, not on self-made CSS. The same user asked whether
+Spine must be bought to use the App: the 3D Model tab needs no Spine licence (`detail.js` `showModel` never asks), only
+the Spine previews (portrait, memorial lobby, comparisons) do; a declined licence shows the static portrait, the memorial
+lobby shows this notice.
+
+Implemented: `Popup.noticeFrame` draws the message frame (`UIPopup_Sort`) without its backdrop and close button, 1300 wide
+(843 stage px), with the title (Spine License), the line and Confirm License; `Lobby.licenseRequired` renders it in place,
+centred in the left view (the stage's left 960 px) or the stage in fullscreen, and falls back to the plain line and button
+without the frame (no game folder). Tests: every UI language's title, line and caption fit their widgets, the frame fits
+the left view, and the rendered notice carries the button. Left as it was: the comparison preview's own notice and the
+"Preview unavailable" line (`failView`), the same plain text; to be judged by eye whether they need the frame too.
+
+## BL-084: 3D model mods refused as "No known student or alt found"
+
+- Status: Implemented by the lead; owner review pending.
+- Requested: 2026-11-06 (owner, from a Windows user's 0.6.0 report): adding Hoshino's 3D model part
+  `assets-_mx-characters-hoshino_original-_mxdependency-2024-11-18_004_assets_all_672125267.bundle` fails with
+  `mod_target_unknown`.
+
+Lead's notes: the official file of that name (same CRC) is refused too. `identity.content_cores` takes every asset name
+shaped `<name>_<role>` as a model core: bones (`Bip001_*`, `Bone_*`), outline meshes (`OL_*`), the official misspellings
+(`Hosino_Origninal_*`, `Hoshino_Origina_*`), the shield prop and motion clips (`hoshino_original_move_end`,
+`hoshino_motion`); `identify` refuses the file when any core does not resolve to a variant. Of Hoshino's seven official
+`characters` parts, `_000`, `_001`, `_004` and `_005` are refused, `_002`, `_003`, `_006` pass. The fix: a model file's target
+comes from its containers, prefabs and the filename's declared core; asset names that resolve to no variant do not refuse
+it; two resolved variants stay ambiguous. A real-install test over every official model part guards it.
+
+Owner, 2026-11-06: the same file imports on the owner's macOS build. Lead's finding: when the game folder holds a part of
+the same name (CRC aside), `identify_import` identifies by the filename and never reads the content (as in 0.6.0); the
+user's import took the content path, so the App found no Hoshino part of that name in the user's game folder, which
+fits BL-085's finding that the user's Hoshino files differ from Steam's.
+
+Implemented: model asset paths (`characters/<model>/`, `npcs/<model>/`, and `addressableasset/character/<model>/` for
+prefabs and controllers) identify a model bundle; with them present, object names (bones, clips, props, the game's own
+misspellings, a controller named like a prefab, a model's own Spine effects) claim nothing. Without asset paths the old
+rules stand (prefab names, role names, unknown names refused). On the official view, of 6023 official model bundles, the
+3062 whose filename names a catalog variant all identify by content (Hoshino's: 4 of 7 refused before); the other 2961
+are enemies and NPCs outside the student catalog, refused by content as before.
+
+## BL-085: "3D model unavailable" with mods off when the install's model is not official
+
+- Status: Implemented by the lead (the message); owner review pending. The wider question is BL-086.
+- Requested: 2026-11-06 (owner, from the same report): with Enable Mods off, Hoshino's 3D Model tab shows the popup
+  "Failed: 3D model unavailable" with Error Report; the 3D thumbnails of Hoshino and Hoshino (Swimsuit) fail as well.
+
+Lead's notes: with the master switch off, `modelSource` asks for `source=official`; `official_bundles` needs every part of
+the core to pass the whole-content CRC check (or a kept original, a `.backup`, another install's copy). The log has
+`original_unavailable` for both variants and the library is empty, so at least one part of each in the user's install is
+not official; the report's redaction hides which. On the official view both resolve (10 of 10 parts each). The user's mod
+folder holds Hoshino model files under official names from their own mod manager, so a modified install is the likely
+cause; not confirmed. Proposed: a specific message for a missing original (verify the game files) instead of the generic
+failure with Error Report. Also seen in the logs: the report's `[asset]` redaction swallows the time's milliseconds, the
+level and the logger name of the "asset not found" lines; pywebview's `window.move` on Windows raises
+`ctypes.ArgumentError` (a `None` coordinate) during window drags, effect unknown.
+
+Implemented: an asset the server refuses with a `ServiceError` answers 404 with the code alone in `X-BAMT-Error` (never
+its parameters); the 3D view reads it and, for `original_unavailable`, opens the install's own Official File Overwritten
+message (Add to Library for an outside mod, else the repair lines) instead of "3D model unavailable" with Error Report.
+
+## BL-086: A missing official copy must not keep a mod from being imported
+
+- Status: Open; the owner's decision on the behaviour pending.
+- Requested: 2026-11-06 (owner, on BL-085): a missing original is common, since many users overwrote game files before
+  they managed mods with the App; that must not forbid importing.
+
+Lead's notes: adding a mod to the library already works without an official copy (`check_group` notes it as
+unavailable). Three places refuse: applying a mod over a game file that is not official when no official copy is kept
+(`_keep_original` through `_official_for`; `test_never_keeps_a_modded_game_file_as_original`), the batch import, which
+blocks such an entry (`test_unavailable_official_baseline_is_blocked_even_with_live_targets`), and previews of partial
+mods, which need official parts for what the mod leaves out. The refusals keep "back to the official version" possible
+at all times; allowing them means an entry without an official copy until the game files are repaired.
+

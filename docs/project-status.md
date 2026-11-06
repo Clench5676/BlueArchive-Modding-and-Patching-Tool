@@ -56,6 +56,8 @@ As of 2026-11-04. Verify the actual branch, working tree and `pyproject.toml` ve
 | BL-080 | Closed by the owner (2026-11-04): flicker fixed (`5e6b3d56`); stuck pointer not seen again, cause not identified, logging kept |
 | BL-081 | In-app release notes draw Markdown in the UI language; the 0.7.0 notes built in; owner review pending |
 | BL-082 | The App in its own package `bmpt`, upstream's package as the engine; owner review pending |
+| BL-083 through BL-085 | Implemented by the lead (2026-11-06, a Windows user's 0.6.0 report): the Spine licence notice on the message frame, 3D model mods identified by their asset paths, the Official File Overwritten message instead of "3D model unavailable"; owner review pending |
+| BL-086 | Open: a missing official copy must not keep a mod from being imported; the owner's decision on the behaviour pending |
 | BL-057, BL-058 | Accepted by the owner on macOS (alpha.12); Windows not reviewed |
 | BL-055 | Accepted by the owner on macOS (0.6.0 pre-review) |
 | BL-014 | Candidate, not scheduled |
