@@ -3945,18 +3945,19 @@ test("preview, comparison and compatibility modules contain no licence notice or
   assert.doesNotMatch(readFileSync(new URL("../../src/bmpt/web/css/app.css", import.meta.url), "utf8"), /\.lobby-notice/);
 });
 
-test("missing-original apply results fit the existing notice frame in every locale", async () => {
+test("missing-original apply results fit the message frame in every locale", async () => {
   const NGUI = await import("../../src/bmpt/web/js/ngui.js");
   await Popup.ready();
   for (const lang of ["en-US", "th-TH", "zh-CN", "zh-TW", "ja-JP", "ko-KR"]) {
     const ui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url))).webui;
     setStrings(lang, Object.fromEntries(strings(ui)));
     const lines = [ui.mods.keptCurrent, ui.mods.incomplete];
-    const { tree, width, height } = Popup.noticeFrame({ title: ui.popup.apply, lines, ok: ui.picker.ok });
-    assert.equal(width, Popup.NOTICE_W);
+    // the results show as an ordinary message (Popup.message), at its default width
+    const { body, width, height } = Popup.messageLayout({ lines, ok: ui.picker.ok });
+    assert.equal(width, 1700);
     assert.ok(height * S <= 1080, lang);
     for (const [index, text] of lines.entries()) {
-      const widget = NGUI.find(tree, `Popup/Lines/Line_${index}`).widgets[0];
+      const widget = NGUI.find(body.tree, `Line_${index}`).widgets[0];
       assert.equal(widget.text.replace(/\s/g, ""), text.replace(/\s/g, ""));
       assert.ok(widget.fontSize >= 44 && widget.fontSize <= 52, lang);
       assert.ok(NGUI.glyphWidth(widget.text, widget.fontSize) <= widget.w_, lang);
