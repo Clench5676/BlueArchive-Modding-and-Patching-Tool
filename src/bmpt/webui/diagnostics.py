@@ -39,6 +39,12 @@ _ASSET_FIELD = re.compile(r"[^\r\n\"'=,;<>]+")
 _ASSET_EXTENSION = re.compile(r"(?i)\.(" + _EXTENSIONS + r")(?![\w.])")
 _ASSET_VALUE = re.compile(r"(?is)^.+?\.(" + _EXTENSIONS + r")$")
 _HOME = re.compile(r"(?i)(?:[A-Z]:[/\\](?:Users|Documents and Settings)[/\\]|/(?:Users|home)/)[^/\\\r\n\"']+")
+# The game's own names stay: official bundle file names, CAB ids and the App's model URLs (a variant key). They name
+# game data, never the user, and a report without them cannot tell which game file a check refused.
+_GAME_NAME = re.compile(r"(?i)(?<![\w.\-])(?:[a-z0-9_.\-]+_assets_all_\d+\.bundle(?:\.backup)?|cab-[0-9a-f]{32}(?:\.[a-z]+)?"
+                        r"|[a-z0-9_]+\.glb)(?![\w.\-])")
+# A log record's own head (milliseconds, level, logger) is never part of an asset name.
+_LOG_HEAD = re.compile(r"^\d{3} (?:DEBUG|INFO|WARNING|ERROR|CRITICAL) [\w.]+: ")
 READ_TIMEOUT = 0.1
 COLLECTION_TIMEOUT = 1.0
 
@@ -62,14 +68,26 @@ def private_text(text: str, secrets: set[str]) -> str:
             text = re.sub(r"(?<![\w])" + re.escape(value) + r"(?![\w])", "[user]", text, flags=re.I)
     for name in {socket.gethostname(), platform.node(), os.environ.get("COMPUTERNAME", "")} - {""}:
         text = re.sub(re.escape(name), "[host]", text, flags=re.I)
+    kept: list[str] = []
+
+    def keep(match):
+        kept.append(match[0])
+        return f"\0{len(kept) - 1}\0"
+
+    text = _GAME_NAME.sub(keep, text)
+
     def asset_field(match):
         field = match[0]
-        matches = list(_ASSET_EXTENSION.finditer(field))
+        head = _LOG_HEAD.match(field)
+        head = head[0] if head else ""
+        rest = field[len(head):]
+        matches = list(_ASSET_EXTENSION.finditer(rest))
         if not matches:
             return field
-        return " ".join("[asset]." + m[1] for m in matches) + field[matches[-1].end():]
+        return head + " ".join("[asset]." + m[1] for m in matches) + rest[matches[-1].end():]
     text = _ASSET_FIELD.sub(asset_field, text)
-    return redact(text, secrets)
+    text = redact(text, secrets)
+    return re.sub("\0(\\d+)\0", lambda m: kept[int(m[1])], text)
 
 
 def clean(value: Any, secrets: set[str], depth: int = 0, *, filename: bool = False) -> Any:
@@ -84,6 +102,9 @@ def clean(value: Any, secrets: set[str], depth: int = 0, *, filename: bool = Fal
         return [clean(v, secrets, depth + 1, filename=filename) for v in list(value)[-40:]]
     if isinstance(value, str):
         # Redact before truncation so a clipped credential cannot survive.
+        names = [part.strip() for part in value.split(",")]
+        if names and all(_GAME_NAME.fullmatch(re.split(r"[/\\]", name)[-1]) for name in names):
+            return ", ".join(re.split(r"[/\\]", name)[-1] for name in names)
         asset = _ASSET_VALUE.fullmatch(value.strip())
         if filename or (asset and "\n" not in value):
             extension = re.search(r"\.[a-zA-Z0-9]{1,16}$", value.strip())
@@ -314,7 +335,7 @@ class Reports:
         app = {"version": read("version", updater.current_version) or "unknown",
                "build": "compiled" if updater.is_compiled() else "source"}
         data = {"created": datetime.now().astimezone().isoformat(timespec="seconds"),
-                "privacy": "Redacted: home paths, user names, hostnames, credentials and asset filenames. Local only; no upload.",
+                "privacy": "Redacted: home paths, user names, hostnames, credentials and file names other than the game's own. Local only; no upload.",
                 "safeMode": self.safe_mode,
                 "os": read("os", lambda: {"name": platform.system(), "version": platform.version(), "arch": platform.machine()}),
                 "locale": read("locale", lambda: locale.getlocale()[0]), "language": read("language", self.language),
