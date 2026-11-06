@@ -2159,7 +2159,7 @@ keys: `spine.license.body`, `yes`, `no`, `required`, `confirm`, `settings.spine.
 
 ## BL-088: Hoshino (Armed)'s 3D mod refused as incomplete; Batch Import stores it but cannot apply or list it
 
-- Status: Diagnosed by the lead (2026-11-06); not implemented.
+- Status: Implemented (Codex, reviewed and merged by the lead, merge `452858d4`); owner review pending.
 - Requested: 2026-11-06 (owner, a Windows tester's 0.7.0-alpha.4 reports `BAMT-report-0.7.0-alpha.4-20261106-1915` and
   `-1928`): adding the two modded parts `_004` and `_006` of Hoshino (Armed)'s 3D model says "Incomplete Mod, missing
   files: CAB-7df6…, CAB-97c2…, CAB-cd07…, CAB-eb55…"; Batch Import then fails with `PermissionError [WinError 32]`, and
@@ -2372,3 +2372,11 @@ Proposed flow (lead):
    picked file that completes another row goes there.
 5. Importing takes the complete rows; incomplete rows stay in the list, with their state, for later in the session.
 
+Lead's review of BL-088 (2026-11-06): a 3D slot is the prefab core plus every model core the catalog maps to the same
+student. On the official view only two slots grow: Hoshino (Armed), `ch0258_02` with `ch0258` (13 files, her prolog
+file included), and Wakamo (Swimsuit), `ch0175` with `wakamo_swimsuit_original`; no slot takes a shared NPC or enemy
+core. The first round still grouped model files by physical core, so a complete mod of a split slot became two library
+mods of which the slot's one choice could apply only one; a correction round groups model files by slot (one mod, one
+row, one choice). Real-install tests on cloned official files: the tester's `_004`/`_006` mod and a complete 13-file mod
+of Hoshino (Armed), through Add and Batch Import, apply, the switch candidates and restore. Full suite on the merge: 4411
+passed, 33 skipped; JavaScript 2357 passed.

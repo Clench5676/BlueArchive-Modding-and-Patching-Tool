@@ -61,7 +61,7 @@ As of 2026-11-06. Verify the actual branch, working tree and `pyproject.toml` ve
 | BL-086 | Implemented (Codex, merged): mods import and apply where no official copy is left, outside files kept first, "Mod incomplete"; owner review pending |
 | BL-087 | Implemented (Codex, merged): the Spine licence as a one-time notice for users who never answered; owner review pending, wording in five languages included |
 | BL-089, BL-090, BL-093 | Implemented (Codex, reviewed and merged, `e3e47b63`): mod files map to the game files they replace, dependencies resolve through the install's CAB index, one identification for Add and the batch import; owner review pending |
-| BL-088 | Found by the lead (2026-11-06): Hoshino (Armed)'s 3D slot misses her own meshes and textures; dispatched to Codex |
+| BL-088 | Implemented (Codex, reviewed and merged, `452858d4`): a 3D slot spans the prefab and the student's own model cores (Hoshino (Armed), Wakamo (Swimsuit)); owner review pending |
 | BL-091, BL-094 | Implemented by the lead (2026-11-06); owner review pending; native Windows not verified on the macOS host |
 | BL-092 | Step 1 implemented by the lead (2026-11-06): lock waits and preview times in the error report; Windows measurement and fix open |
 | BL-095 | Implemented by the lead (2026-11-06): a student's add buttons open Import Mod (Batch Import renamed); owner review pending |
