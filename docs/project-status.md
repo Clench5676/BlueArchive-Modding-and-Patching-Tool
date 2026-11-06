@@ -7,7 +7,7 @@ As of 2026-11-06. Verify the actual branch, working tree and `pyproject.toml` ve
 
 | Branch | State |
 | --- | --- |
-| `main` | Local version `0.7.0-alpha.4`: the published 0.6.0, the upstream syncs to `6c61fdc8` and to v2.12.0 (`62ec9471`), the security policy, the fix that keeps files from a mod inside their output folder (`e8bee4c2`) and its own message for refused atlases (`ca44e051`), BL-065 through BL-069, BL-070 steps 1 to 3, BL-071, BL-072, BL-073, BL-076, BL-077, the BL-078 fixes (`1a2afd84`, `b186e93b`, `4841e30e`), BL-079, BL-081 through BL-087. Not pushed. Upstream published its fix for the same issue in v2.12.0 (2026-11-04), so 0.6.1 is no longer held back. |
+| `main` | Local version `0.7.0-alpha.5`: the published 0.6.0, the upstream syncs to `6c61fdc8` and to v2.12.0 (`62ec9471`), the security policy, the fix that keeps files from a mod inside their output folder (`e8bee4c2`) and its own message for refused atlases (`ca44e051`), BL-065 through BL-069, BL-070 steps 1 to 3, BL-071, BL-072, BL-073, BL-076, BL-077, the BL-078 fixes (`1a2afd84`, `b186e93b`, `4841e30e`), BL-079, BL-081 through BL-095 (BL-092 step 1). Not pushed. Upstream published its fix for the same issue in v2.12.0 (2026-11-04), so 0.6.1 is no longer held back. |
 
 0.6.0 is published (tag `0.6.0` at `817ebeda`, 2026-10-30): macOS build uploaded, Windows build by the release workflow.
 
@@ -76,12 +76,17 @@ from passing tests or the presence of earlier code.
 
 ## Review artifact and validation
 
-`dist/Blue-Archive-Modding-and-Patching-Tool-0.7.0-alpha.4-macos-arm64.dmg`, MD5 `c7c17e4168263650771427eecce3703a`,
-built from `4cf02350` (`chore(release): 0.7.0-alpha.4`): alpha.3, BL-087 (`9bec8dc8`, merge `da204ee8`), BL-086
-(`a4ecd147`, merge `88c2408f`), the Official File Missing title (`5d9653ad`) and the merge's test fix (`bf5bd60f`).
-BL-081, BL-082, BL-084 to BL-087 and the release notes' wording await the owner's review.
+`dist/Blue-Archive-Modding-and-Patching-Tool-0.7.0-alpha.5-macos-arm64.dmg`, MD5 `2bd77c22020b1abc6b05b7eb575a855b`,
+built from `904a6220` (`chore(release): 0.7.0-alpha.5`): alpha.4 and, from a Windows tester's alpha.4 reports and the
+roster check, BL-088 (a 3D slot spans the prefab and the student's own cores, merge `452858d4`), BL-089, BL-090 and
+BL-093 (mod files map to the game files they replace, dependencies through the install's CAB index, one identification,
+merge `e3e47b63`), BL-091 (finished imports survive files still open on Windows), BL-092 step 1 (lock and preview
+timings in the error report), BL-094 (the game's own names in reports, pywebview's window moves on Windows), BL-095
+(a student's add buttons open Import Mod, renamed 导入Mod; only Import Mod takes dropped files). The Windows bundle of
+`main` is `Blue-Archive-Modding-and-Patching-Tool-0.7.0-alpha.5-main.bundle`.
 
-On `a98278af` (same tree as the build but the version): 4356 passed, 33 skipped (Python, `python -m pytest`), 2383
-JavaScript tests passed (isolated runs with the official development view). The start notice's look, the "Mod
-incomplete" and "Current game files added to the library" results and an install without official copies are for the
-owner's review. Native Windows behavior is not verified on the macOS host.
+On `452858d4` (same code as the build but the version and docs): 4411 passed, 33 skipped (`python -m pytest`), 2357
+JavaScript tests passed (isolated runs with the official development view). The roster test checks every playable
+student's portrait, lobby and 3D parts as one-part mods and complete slots on the official files. The tester's
+Hoshino (Armed) mod, Import Mod's new entry and drop rule, and native Windows behaviour (file locks, window moves) are
+for the owner's review; native Windows is not verified on the macOS host.
