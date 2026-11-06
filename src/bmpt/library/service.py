@@ -1365,6 +1365,8 @@ class ModLibrary:
                 missing.difference_update(self._cab_index(pin).resolve(references, targets[0] if targets else None,
                                                                      exclude=replaced))
         if missing:
+            if inspection is not None:
+                inspection.missing_cabs.update(missing & effective.references)
             # Name omitted files from the selected folders, without importing them.
             names = dict(effective.reference_names)
             for target in replaced:
@@ -1374,6 +1376,8 @@ class ModLibrary:
                 if target in baseline_parts:
                     names.update({name: target.name for name in baseline_parts[target].files})
             for folder in {path.parent for path in files.values()}:
+                if cab_inspection.header_only_missing:
+                    continue
                 for path in sorted([*folder.glob("*.bundle"), *folder.glob("*.bundle.backup")]):
                     if path not in files.values() and core_of(path.name) == core:
                         try:

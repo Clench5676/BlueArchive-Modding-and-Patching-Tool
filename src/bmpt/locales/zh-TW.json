@@ -839,7 +839,21 @@
 			"applyGame": "套用至遊戲",
 			"removeImported": "移除已匯入",
 			"assignCharacter": "選擇角色",
-			"libraryOnly": "僅入庫 - 沒有相容的遊戲目標"
+			"libraryOnly": "僅入庫 - 沒有相容的遊戲目標",
+			"missing": {
+				"state": "缺少檔案",
+				"count": "缺少檔案（{n}）",
+				"notFound": "缺少檔案（{n}），所選資料夾中未找到",
+				"groups": "{n} 組缺少檔案",
+				"groupsOne": "{n} 組缺少檔案",
+				"fillAll": "全部補齊（{n} 組）",
+				"choose": "選擇檔案…",
+				"promptHead": "此資料夾還有檔案：",
+				"promptFile": "- {name}",
+				"promptTail": "有可能同屬{student}的{kind}Mod，是否一併加入匯入檔案清單？",
+				"addTogether": "一併加入",
+				"fillLine": "- {student}的{kind}（{n}）"
+			}
 		},
 		"recovery": {
 			"report": "產生錯誤報告",

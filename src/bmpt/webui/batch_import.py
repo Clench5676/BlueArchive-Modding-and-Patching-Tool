@@ -19,6 +19,7 @@ from ba_modding_toolkit import core
 from ba_modding_toolkit.bundle import Bundle, UpdateScope
 from ..errors import ServiceError
 from ..gameassets.spine import spine_revision
+from ..gameassets.discovery import cab_names
 from ba_modding_toolkit.i18n import t
 from ..library import integrity, staging, manual_identity
 from ..library.judge import core_of, kind_of, part_of
@@ -123,6 +124,7 @@ class Candidate:
     failure: dict | None = None
     direct: dict[Path, Path] = field(default_factory=dict)
     provenance: dict | None = None
+    missing_cabs: set[str] = field(default_factory=set)
 
 
 @dataclass
@@ -241,6 +243,7 @@ class BatchImport:
         self._assignments: dict[str, tuple[frozenset, str]] = {}
         self._completed: dict[tuple, str] = {}
         self._legacy_checks: dict[str, str | None] = {}
+        self._session_folders: set[Path] = set()
 
     def defaults(self) -> dict:
         settings = self.services.settings
@@ -264,15 +267,19 @@ class BatchImport:
         self.services.state.set(PREF, options)
         return options
 
-    def pick(self, folder: bool = False, recursive: bool = False) -> dict:
+    def pick(self, folder: bool = False, recursive: bool = False, directory: str | None = None) -> dict:
         if not isinstance(folder, bool) or not isinstance(recursive, bool):
             raise ServiceError("bad_params", key="folder")
         if self.services.window is None:
             raise ServiceError("native_unavailable")
+        if directory is not None:
+            if not isinstance(directory, str) or not directory:
+                raise ServiceError("bad_params", key="directory")
+            devmode.check_read(Path(directory))
         from .native import pick_files, pick_folder
 
         paths = pick_folder(self.services.window) if folder else pick_files(
-            self.services.window, ("Bundle (*.bundle;*.bundle.backup)",))
+            self.services.window, ("Bundle (*.bundle;*.bundle.backup)",), **({"directory": directory} if directory else {}))
         return {"paths": [str(path) for path in paths]}
 
     def analyze(self, paths: list[str], recursive: bool = False) -> str:
@@ -285,6 +292,7 @@ class BatchImport:
         library = self.services.library
         pin = library.current_pin()
         with self._lock:
+            previous = list(self._latest.values()) if self._library is library and self._pin == pin else []
             self._revision += 1
             revision = self._revision
             self._latest = {}
@@ -292,8 +300,13 @@ class BatchImport:
             self._library, self._pin = library, pin
 
         def analyze(log: Any, progress: Any) -> dict:
-            candidates, skipped = self._collect(paths, recursive, library)
-            entries, known, previews = [], set(), {}
+            progress(0, 1, "")
+            candidates, skipped = self._collect(paths, recursive, library, previous=previous)
+            folders = {Path(path).expanduser().resolve() for path in paths if Path(path).is_dir()}
+            folders.update(path.parent for candidate in candidates for path in candidate.files.values())
+            self._session_folders.update(folders)
+            headers = self._folder_headers(self._session_folders, progress)
+            entries, previews = [], {}
             for i, candidate in enumerate(candidates):
                 with self._lock:
                     override = self._sources.get(candidate.entry["id"])
@@ -305,15 +318,23 @@ class BatchImport:
                 self._judge(candidate, library, pin, log)
                 self._recognize_legacy(candidate, library)
                 self._restore_completed(candidate, library, pin)
-                self._log_analysis(candidate, "analyze")
-                if candidate.identity and candidate.identity in known:
-                    skipped += len(candidate.entry["paths"])
-                    continue
-                if candidate.identity:
-                    known.add(candidate.identity)
-                self._register_preview(candidate, revision, previews)
                 entries.append(candidate)
                 progress(i + 1, len(candidates), candidate.entry["core"] or "")
+            entries = self._join_referenced(entries, headers, library, pin, log)
+            selected_paths = {path for candidate in entries for path in candidate.files.values()}
+            unique, known = [], set()
+            for candidate in entries:
+                self._missing(candidate, library, headers, selected_paths)
+                # Identical selected subsets can still belong to different incomplete Mods in two folders.
+                if candidate.entry["state"] != "incomplete" and candidate.identity:
+                    if candidate.identity in known:
+                        skipped += len(candidate.entry["paths"])
+                        continue
+                    known.add(candidate.identity)
+                unique.append(candidate)
+                self._log_analysis(candidate, "analyze")
+                self._register_preview(candidate, revision, previews)
+            entries = unique
             with self._lock:
                 if revision == self._revision:
                     self._latest = {c.entry["id"]: c for c in entries}
@@ -396,6 +417,8 @@ class BatchImport:
             self._judge(fresh, library, pin, log)
             self._recognize_legacy(fresh, library)
             self._restore_completed(fresh, library, pin)
+            selected_paths = {path for c in self._latest.values() for path in c.files.values()}
+            self._missing(fresh, library, self._folder_headers(self._session_folders, progress), selected_paths)
             self._log_analysis(fresh, "source")
             previews = {}
             self._register_preview(fresh, revision, previews)
@@ -453,7 +476,7 @@ class BatchImport:
             logger.info("Batch import: optional source recognition unavailable")
 
     def _restore_completed(self, candidate: Candidate, library: Any, pin: Any) -> None:
-        if candidate.entry["state"] == "blocked" or candidate.provenance:
+        if candidate.entry["state"] in ("blocked", "incomplete") or candidate.provenance:
             return
         with self._lock:
             mod_id = self._completed.get(self._completion_key(candidate, library, pin))
@@ -496,7 +519,8 @@ class BatchImport:
                 raise KeyError(key)
         return core_name, bundles
 
-    def _collect(self, paths: list[str], recursive: bool, library: Any) -> tuple[list[Candidate], int]:
+    def _collect(self, paths: list[str], recursive: bool, library: Any, *,
+                 previous: list[Candidate] = ()) -> tuple[list[Candidate], int]:
         selected, seen, skipped = [], set(), 0
 
         def take(path: Path) -> None:
@@ -559,11 +583,43 @@ class BatchImport:
             inspected.append((path, name, kind, variant, core, error, failure))
         # Model sets share the prefab slot key, including version splits across their physical cores.
         # Folders still separate alternative mods of the same release.
-        versions = iter(library.import_versions([((path.parent, core, kind, variant), name)
-                                      for path, name, kind, variant, core, _, _ in inspected if kind != "other"], self._pin))
+        versioned = [item for item in inspected if item[2] != "other"]
+        versions = library.import_versions([((path.parent, core, kind, variant), name)
+                                      for path, name, kind, variant, core, _, _ in versioned], self._pin)
+        version_by_path = {item[0]: version for item, version in zip(versioned, versions)}
+        active = [c for c in previous if set(c.files.values()) <= seen]
+        owners = {path: c for c in active for path in c.files.values()}
         for path, name, kind, variant, core, error, failure in inspected:
-            key = (path.parent, "", "", kind, None) if kind == "other" else (
-                path.parent, core, next(versions), kind, variant)
+            version = version_by_path.get(path, "")
+            owner = owners.get(path)
+            if owner is None and not error:
+                try:
+                    held = set(cab_names(path))
+                except (OSError, ValueError):
+                    held = set()
+                matches = [c for c in active if held & c.missing_cabs or (
+                    (core, kind, variant) == (c.entry["core"], c.entry["kind"], c.entry["variant"]) and (
+                        all(version_by_path.get(p, "") == version for p in c.files.values())
+                        if path.parent in {p.parent for p in c.files.values()} else c.entry["state"] == "incomplete"))]
+                local = [c for c in matches if path.parent in {p.parent for p in c.files.values()}]
+                if local:
+                    matches = local
+                # A repeated part or several possible owners is an alternative Mod, never a guessed merge.
+                collisions = [c for c in matches if path.parent not in {p.parent for p in c.files.values()} and
+                              any(integrity.replacement_key(name) == integrity.replacement_key(n)
+                                  for n in c.files)]
+                if len(matches) > 1 or collisions:
+                    error = "mod_target_ambiguous"
+                    failure = ServiceError(error, file=path,
+                        candidates=sorted(str(p) for c in matches for p in c.files.values())).to_json()
+                elif matches:
+                    owner = matches[0]
+            if owner is not None:
+                core, kind, variant = owner.entry["core"], owner.entry["kind"], owner.entry["variant"]
+                key = (owner.entry["id"], core, "", kind, variant)
+            else:
+                key = (path.parent, "", "", kind, None) if kind == "other" else (
+                    path.parent, core, version, kind, variant)
             groups.setdefault(key, []).append((path, name, error, failure))
         candidates = []
         for (_, core_name, _, kind, variant), items in groups.items():
@@ -607,18 +663,107 @@ class BatchImport:
             candidates.append(candidate)
         return candidates, skipped
 
+    @staticmethod
+    def _folder_headers(folders: set[Path], progress: Any = None) -> dict[Path, set[str]]:
+        """Discover suppliers from actual directory entries, never from a bundle's embedded names."""
+        headers = {}
+        for index, folder in enumerate(sorted(folders)):
+            if progress:
+                progress(index, len(folders), "")
+            devmode.check_read(folder)
+            try:
+                paths = sorted(folder.iterdir())
+            except OSError:
+                continue
+            for path in paths:
+                if not path.name.endswith((".bundle", ".bundle.backup")) or not path.is_file():
+                    continue
+                devmode.check_read(path)
+                try:
+                    headers[path.resolve()] = set(cab_names(path))
+                except (OSError, ValueError):
+                    continue
+        return headers
+
+    def _join_referenced(self, candidates: list[Candidate], headers: dict[Path, set[str]],
+                         library: Any, pin: Any, log: Any) -> list[Candidate]:
+        """A selected supplier of a new CAB belongs to its dependent upload, regardless of its folder."""
+        while True:
+            links = {id(c): [other for other in candidates if other is not c and
+                            any(headers.get(path, set()) & c.missing_cabs for path in other.files.values())]
+                     for c in candidates if c.missing_cabs}
+            changed = False
+            for candidate in candidates:
+                providers = links.get(id(candidate), [])
+                if not providers:
+                    continue
+                group = [candidate, *providers]
+                parts = [integrity.replacement_key(name) for c in group for name in c.files]
+                shared = any(other is not candidate and any(provider in links.get(id(other), [])
+                             for provider in providers) for other in candidates)
+                if shared or len(parts) != len(set(parts)):
+                    candidate.entry.update(state="blocked", reason="mod_target_ambiguous",
+                        params={"candidates": sorted(str(p) for c in group for p in c.files.values())})
+                    candidate.missing_cabs.clear()
+                    continue
+                files = {name: path for c in group for name, path in c.files.items()}
+                paths = sorted(files.values())
+                entry = {**candidate.entry, "id": hashlib.sha256("\0".join(map(str, paths)).encode()).hexdigest(),
+                         "paths": list(map(str, paths)), "files": [
+                             {"path": str(p), "size": p.stat().st_size, "target": None} for p in paths],
+                         "size": sum(p.stat().st_size for p in paths), "preview": None}
+                merged = Candidate(files, entry, source_override=candidate.source_override)
+                self._judge(merged, library, pin, log)
+                self._recognize_legacy(merged, library)
+                self._restore_completed(merged, library, pin)
+                candidates = [merged if c is candidate else c for c in candidates if c not in providers]
+                changed = True
+                break
+            if not changed:
+                return candidates
+
+    def _missing(self, candidate: Candidate, library: Any, headers: dict[Path, set[str]],
+                 selected_paths: set[Path] | None = None) -> None:
+        entry = candidate.entry
+        if candidate.error or entry.get("reason") in {"conflict", "mod_target_ambiguous", "unreadable"}:
+            return
+        selected = set(candidate.files.values())
+        folders = {path.parent for path in selected}
+        found = []
+        for path, held in sorted(headers.items(), key=lambda item: (item[0].name, str(item[0]))):
+            if path in selected:
+                continue
+            parsed = parse_filename(path.name.removesuffix(".backup"))
+            kind = kind_of(parsed.core, parsed.category) or "other"
+            resolve = getattr(library.catalog, "variant_for_asset_core", library.catalog.variant_for_core)
+            variant = resolve(parsed.core.lower()) if kind in ("spr", "lobby") else None
+            slot_matches = (library.import_core(parsed.core, kind, self._pin) == entry["core"] or
+                            variant is not None and variant.key == entry["variant"])
+            same_slot = (path.parent in folders and kind != "other" and kind == entry["kind"] and
+                         slot_matches and path not in (selected_paths or selected))
+            if same_slot or held & candidate.missing_cabs:
+                found.append({"path": str(path), "name": path.name, "size": path.stat().st_size})
+        if found or candidate.missing_cabs:
+            entry.update(state="incomplete", reason=None,
+                         missing={"unresolved": len(candidate.missing_cabs), "found": found})
+            entry.pop("error", None)
+            entry.pop("params", None)
+
     def _judge(self, candidate: Candidate, library: Any, pin: Any, log: Any = no_log,
                *, asset_types: set[str] | None = None, strategy: str | None = None) -> None:
         entry = candidate.entry
         entry.pop("params", None)
         entry.pop("error", None)
+        entry.pop("missing", None)
+        candidate.missing_cabs = set()
         entry.update(state="blocked", reason=candidate.error, libraryId=None, source=None,
                      target=mod_origin.target_of(self.services.settings, pin))
         candidate.targets, candidate.originals, candidate.spine_version, candidate.conversion = [], [], None, False
         candidate.rebuild = False
         candidate.direct = {}
         candidate.provenance = None
-        inspection = integrity.Inspection(asset_types if asset_types is not None else set(self.options()["types"]))
+        inspection = integrity.Inspection(asset_types if asset_types is not None else set(self.options()["types"]),
+                                          header_only_missing=True)
         try:
             if candidate.error in ("mod_target_unknown", "mod_target_ambiguous") or entry.get("assignment"):
                 existing = library.find_import_output(list(candidate.files.values()))
@@ -820,6 +965,11 @@ class BatchImport:
                 return
             raise ServiceError(last_failure or "source_unknown")
         except ServiceError as error:
+            candidate.missing_cabs = set(inspection.missing_cabs)
+            if error.code == "mod_parts_missing" and candidate.missing_cabs:
+                entry.update(state="incomplete", reason=None,
+                             missing={"unresolved": len(candidate.missing_cabs), "found": []})
+                return
             entry.update(state="blocked", reason=blocked_reason(error),
                          error=failure_detail(error, candidate.files.values(), log,
                                               secrets=getattr(self.services, "log_secrets", set())))

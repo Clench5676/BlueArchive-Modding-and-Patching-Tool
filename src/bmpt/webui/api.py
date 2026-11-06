@@ -878,8 +878,8 @@ def build_api(s: Services) -> RpcRegistry:
     # --- batch import ---
 
     @rpc.method("import.pick")
-    def import_pick(folder: bool = False, recursive: bool = False) -> dict[str, Any]:
-        return s.batch_import.pick(folder, recursive)
+    def import_pick(folder: bool = False, recursive: bool = False, directory: str | None = None) -> dict[str, Any]:
+        return s.batch_import.pick(folder, recursive, directory)
 
     @rpc.method("import.analyze")
     def import_analyze(paths: list[str], recursive: bool = False) -> str:

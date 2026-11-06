@@ -171,3 +171,86 @@ def test_import_lobby_still_route_supplies_the_identified_game_camera(env):
     assert status == "200 OK"
     assert json.loads(body) == {"view": info["view"], "layer": info["layers"][0]}
     assert requested == ["test_home_gl"]
+
+
+import shutil
+import subprocess
+from pathlib import Path
+
+NODE = shutil.which("node")
+TESTS = Path(__file__).parent / "js"
+
+@pytest.mark.skipif(NODE is None, reason="Node.js is not installed")
+def test_missing_files_with_verified_prefabs_and_shipped_font(tmp_path):
+    """Control assertions on official geometry and shipped WOFF2 metrics, in all six languages, without a browser."""
+    import json
+    import os
+
+    from PIL import ImageFont
+
+    from ba_modding_toolkit.searching import get_search_dirs
+    from bmpt.gameassets import AssetCache, GameAssets
+
+    root = os.environ.get("BAMT_TEST_GAME_DIR")
+    if not root:
+        pytest.skip("Set BAMT_TEST_GAME_DIR to a verified official development view")
+    game = GameAssets(get_search_dirs(Path(root)), AssetCache(root=tmp_path / "cache", allowed=False))
+    names = ["UINonEquipmentInventory", "UIMailBox", "UIMailBoxContent", "UIPopup_FilterSort",
+             "UINonEquipmentInventoryListItem", "UIPopup_GachaCharList.Btn_Checkbox", "UICharacterCollection"]
+
+    def walk(node):
+        yield node
+        for child in node.get("children", []):
+            yield from walk(child)
+
+    prefabs = {}
+    for name in names:
+        root_name, _, part = name.partition(".")
+        tree = game.layout(root_name)
+        prefabs[name] = next(node for node in walk(tree) if node["name"] == part) if part else tree
+
+    def numeric_geometry(node):
+        for widget in node.get("widgets", []):
+            if "text" in widget:
+                widget["text"] = ""
+        for child in node.get("children", []):
+            numeric_geometry(child)
+
+    for prefab in prefabs.values():
+        numeric_geometry(prefab)
+    project = TESTS.parent.parent
+    font = ImageFont.truetype(str(project / "src/bmpt/web/fonts/ResourceHanRoundedCN-Medium.woff2"), 1000)
+    # app.css explicitly uses system Thai and Korean fonts: RHR has no glyphs for either script.
+    # Measure the configured macOS faces rather than their .notdef boxes in the shipped font.
+    fallback_fonts = {}
+    for key, path in [("thai", "/System/Library/Fonts/Supplemental/Thonburi.ttc"),
+                      ("hangul", "/System/Library/Fonts/AppleSDGothicNeo.ttc")]:
+        if Path(path).is_file():
+            fallback_fonts[key] = ImageFont.truetype(path, 1000)
+    chars = set(chr(i) for i in range(32, 127))
+    for file in [project / "src/bmpt/locales" / f"{locale}.json" for locale in ("en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH")]:
+        chars.update(file.read_text(encoding="utf-8"))
+    chars.update((project / "tests/js/import_badge_ink.test.mjs").read_text(encoding="utf-8"))
+    chars.difference_update("\n\r\t")
+    glyphs = {}
+    for char in chars:
+        face = fallback_fonts.get("thai", font) if "\u0e00" <= char <= "\u0e7f" else (
+            fallback_fonts.get("hangul", font) if "\uac00" <= char <= "\ud7af" else font)
+        _, top, _, bottom = face.getbbox(char, anchor="ls")
+        glyphs[char] = [face.getlength(char), -top, bottom]
+    # Preserve real pair kerning in Latin text. CJK advances do not kern in this font.
+    kern = {}
+    for left in map(chr, range(32, 127)):
+        for right in map(chr, range(32, 127)):
+            delta = font.getlength(left + right) - glyphs[left][0] - glyphs[right][0]
+            if delta:
+                kern[left + right] = delta
+    ascent, descent = font.getmetrics()
+    proof = tmp_path / "choose-fit.json"
+    proof.write_text(json.dumps({"prefabs": prefabs, "atlases": game.atlases(),
+                                 "font": {"glyphs": glyphs, "kern": kern, "ascent": ascent, "descent": descent}}), encoding="utf-8")
+    environment = dict(os.environ, BAMT_IMPORT_FIT_PROOF=str(proof))
+    result = subprocess.run([NODE, "--test", "--test-name-pattern=badge-line:|fallback:|clipping:|footer|filter|prompt|confirmation",
+                             str(TESTS / "import_badge_ink.test.mjs")], env=environment,
+                            capture_output=True, text=True, timeout=120)
+    assert result.returncode == 0, result.stdout + result.stderr
