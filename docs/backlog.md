@@ -2238,7 +2238,7 @@ message names the missing files (from the mod's folder, else the install's CAB i
 
 ## BL-091: Windows: a finished import fails because bundles it read are still open
 
-- Status: Diagnosed by the lead (2026-11-06); not implemented.
+- Status: Implemented by the lead (`2ffbd828`); owner review pending. Native Windows not verified on the macOS host.
 
 Lead's notes: UnityPy keeps a bundle's file open while its objects live; they form cycles, so the file closes only at the
 next garbage collection. Verified: after `Inspection().inspect()` or `Bundle.load()` and dropping the result, the file
@@ -2256,7 +2256,8 @@ file system fake that refuses to delete or replace open files.
 
 ## BL-092: Lobby and 3D previews time out, and the UI stalls, on slow PCs
 
-- Status: Diagnosed by the lead from the alpha.4 logs (2026-11-06); not reproduced; not implemented.
+- Status: Step 1 implemented by the lead (`0451c763`): the timings below reach the error report; the measurement on
+  Windows and the fix are open.
 
 Lead's notes: Intel HD 530, the game on another drive. The detail's lobby and 3D model and the 3D thumbnails time out for
 minutes, then load. A preview waits 15 s at most (`lobby.js`, `model-still.js`, `thumbs.js`); model exports are serialized
@@ -2264,7 +2265,8 @@ by one `_MODEL_LOCK` and run on when the page gives up, so each retry queues beh
 also discovers its CABs on disk. While Batch Import analyzed one model, its popup's layouts took 66 s
 (`UINonEquipmentInventory` 66.4 s, normally milliseconds). The preview cache holds one lock through reads, checksums,
 writes and pruning (`gameassets/cache.py`), and `_check_model_references` may load every bundle of the install when a mod
-changes objects (`direct_import`).
+changes objects (`direct_import`). The same `_MODEL_LOCK` is also held by lobby particle exports and a selection-frame
+layout, so lobby previews queue behind 3D exports.
 
 Proposed: first, timing spans for lock waits and export phases in the error report, and a measurement on the owner's
 Windows machine; then one export per key in flight with progress the page can wait on, waits that extend while the
@@ -2285,7 +2287,7 @@ renamed files, and never a name the game does not have; the roster check guards 
 
 ## BL-094: Error reports and logs for mod failures
 
-- Status: Found by the lead (2026-11-06); not implemented.
+- Status: Implemented by the lead (`3d154235`, `1f95a317`); owner review pending.
 
 Lead's notes: the report redacts the refused files to `[asset]`, so the four CABs of BL-088 were only in the tester's
 screenshot; official file names and CAB ids are game data. The log redaction still swallows the time's milliseconds,
@@ -2294,3 +2296,36 @@ one session on Windows (a `None` coordinate while dragging the window; BL-085).
 
 Proposed: keep official names and CAB ids, redacting only user paths and names; redact only the asset in a log line;
 guard or fix the move call.
+
+Lead's finding (implementing): the move errors come from this App, which set prototypes on the shared
+`ctypes.windll.user32` (`window_windows.py`); pywebview's `move` calls the same SetWindowPos with `None` sizes. Private
+`WinDLL` instances now carry the App's prototypes.
+
+## BL-095: Adding from a student's page opens Import Mod; Batch Import becomes Import Mod
+
+- Status: Implemented by the lead (`dae4cdf5`); owner review pending.
+- Requested: 2026-11-06 (owner): on a student's page, Add Portrait, Add Memorial Lobby (Add L2D) and Add 3D Model open
+  the batch import directly; the batch import is renamed 导入Mod (Import Mod).
+
+Lead's notes: the student page's add button (`detail.js` `addMods`) opens the native picker and adds through `mods.add`
+(Add), a second import path beside the batch import (BL-093). The batch import's name is `webui.nav.import`, used by the
+bottom navigation and the screen's title. Files dropped on a student's page still go through Add; the owner did not ask
+to change that.
+
+## BL-096: Tell the user which files of a mod are missing when only some were imported
+
+- Status: Asked by the owner (2026-11-06); proposal, not scheduled.
+- Requested: 2026-11-06 (owner): when a mod has several files and only some are imported, the user should be told what
+  is still missing; can that be done, and accurately?
+
+Lead's notes: today a mod file whose CAB references are held neither by the files imported with it nor by the install
+is refused as incomplete (`mod_parts_missing`), naming the file when another bundle of the same core in the selected
+folder holds the CAB, else the CAB id; this check gives false refusals until BL-089 and BL-090 are fixed. A missing file
+that only replaces content the install also has (same CABs) is not detectable: the import succeeds and the game shows the
+mod's parts with the official rest, which no check can tell from a mod that changes only those parts. Facts the App can
+state exactly: references held nowhere (after BL-089 and BL-090), and other files of the same core and kind in the folder
+the files came from that were not selected. Whether such a file is needed cannot be known.
+
+Proposed: in Import Mod, a row with references held nowhere says which files are missing (file names when the folder
+has them); a row whose folder holds other files of its core and kind that were not selected offers them ("also in this
+folder") with one action to add them, worded as a suggestion, not as missing files.

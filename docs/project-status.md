@@ -60,7 +60,11 @@ As of 2026-11-06. Verify the actual branch, working tree and `pyproject.toml` ve
 | BL-084, BL-085 | Implemented by the lead (2026-11-06, a Windows user's 0.6.0 report): 3D model mods identified by their asset paths, the missing-official message instead of "3D model unavailable"; owner review pending |
 | BL-086 | Implemented (Codex, merged): mods import and apply where no official copy is left, outside files kept first, "Mod incomplete"; owner review pending |
 | BL-087 | Implemented (Codex, merged): the Spine licence as a one-time notice for users who never answered; owner review pending, wording in five languages included |
-| BL-088 through BL-094 | Found by the lead (2026-11-06, a Windows tester's alpha.4 reports and a roster check of every playable variant's portrait, lobby and 3D parts on the official view); not implemented. BL-088 to BL-091 make mod imports fail or be refused, 3D most |
+| BL-088 through BL-090, BL-093 | Found by the lead (2026-11-06, a Windows tester's alpha.4 reports and a roster check of every playable variant's portrait, lobby and 3D parts on the official view); BL-089, BL-090 and BL-093 dispatched to Codex, BL-088 next |
+| BL-091, BL-094 | Implemented by the lead (2026-11-06); owner review pending; native Windows not verified on the macOS host |
+| BL-092 | Step 1 implemented by the lead (2026-11-06): lock waits and preview times in the error report; Windows measurement and fix open |
+| BL-095 | Implemented by the lead (2026-11-06): a student's add buttons open Import Mod (Batch Import renamed); owner review pending |
+| BL-096 | Asked by the owner (2026-11-06): telling which files of a mod are missing; proposal, not scheduled |
 | BL-057, BL-058 | Accepted by the owner on macOS (alpha.12); Windows not reviewed |
 | BL-055 | Accepted by the owner on macOS (0.6.0 pre-review) |
 | BL-014 | Candidate, not scheduled |
