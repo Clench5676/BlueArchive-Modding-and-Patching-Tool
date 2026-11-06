@@ -1172,12 +1172,17 @@ def test_changing_original_during_snapshot_never_reaches_preparation(env, monkey
     assert not env.library.mods()
 
 
-def test_unavailable_official_baseline_is_blocked_even_with_live_targets(env):
+def test_unavailable_official_baseline_allows_direct_import_with_live_targets(env):
     outside_mod = make_mod(env.original, env.tmp / "outside", payload=b"outside mod")
     env.original.write_bytes(outside_mod.read_bytes())
     incoming = make_mod(env.original, env.tmp / "incoming", payload=b"incoming mod")
     entry, = analyze(env, [incoming])["entries"]
-    assert (entry["state"], entry["reason"]) == ("blocked", "original_unavailable")
+    assert (entry["state"], entry["reason"]) == ("ready", None)
+    result, = run(env, [entry])
+    assert result["outcome"] == "imported" and result["applied"] and result["kept_current"]
+    assert env.original.read_bytes() == incoming.read_bytes()
+    assert any(mod.file.read_bytes() == outside_mod.read_bytes() for mod in env.library.mods())
+    assert not (env.root / "originals" / env.original.name).exists()
 
 
 def test_import_backup_preserves_an_official_baseline_from_a_classic_backup(env):
@@ -1196,6 +1201,35 @@ def test_import_backup_preserves_an_official_baseline_from_a_classic_backup(env)
     assert env.library.official_bundles("test_spr")[0].read_bytes() == official
     env.library.restore("test")
     assert env.original.read_bytes() == official
+
+
+@pytest.mark.parametrize("rebuild", [False, True])
+def test_missing_official_still_blocks_asset_transfer_with_the_specific_reason(env, monkeypatch, rebuild):
+    env.original.write_bytes(make_mod(env.original, env.tmp / "outside").read_bytes())
+    source = (make_mod(env.original, env.tmp / "input", payload=b"incoming rebuild") if rebuild else
+              game_bundle(env.tmp / "old", date="2025-01-01", payload=b"old mod"))
+    if rebuild:
+        def incompatible(*args, **kwargs):
+            raise ServiceError("mod_release_mismatch")
+
+        monkeypatch.setattr(env.library, "direct_import", incompatible)
+    entry, = analyze(env, [source])["entries"]
+    assert (entry["state"], entry["reason"]) == ("blocked", "original_unavailable")
+    assert entry["error"]["code"] == "original_unavailable"
+    assert not env.library.mods()
+
+
+def test_partial_batch_without_official_imports_and_reports_incomplete(env):
+    env.original.write_bytes(make_mod(env.original, env.tmp / "outside").read_bytes())
+    texture = game_bundle(env.game_dir, part="textures")
+    incoming = make_mod(texture, env.tmp / "incoming")
+    entry, = analyze(env, [incoming])["entries"]
+    assert entry["state"] == "ready"
+    core, bundles = env.services.batch_import.preview(entry["preview"]["key"])
+    assert core == "test_spr" and bundles == [env.original, incoming]
+    result, = run(env, [entry])
+    assert result["applied"] and result["incomplete"] and result["kept_current"]
+    assert env.library.preview_incomplete(result["libraryId"])
 
 
 def test_options_persist_in_app_prefs_and_default_to_classic_settings(env):
@@ -1665,3 +1699,21 @@ def test_analysis_writers_hold_move_and_quit_guards(env, monkeypatch, method):
     finally:
         release.set()
         finish(env, jid)
+
+
+def test_direct_auto_crc_uses_verified_snapshot_when_an_official_copy_exists(env, monkeypatch):
+    incoming = make_mod(env.original, env.tmp / 'incoming')
+    entry, = analyze(env, [incoming])['entries']
+    assert entry['state'] == 'ready'
+    calls = []
+
+    def detect(path):
+        calls.append(path)
+        # A direct preparation must use the frozen official copy, not a target another row may replace.
+        assert path != env.original
+        assert 'originals' in path.parts
+        return False
+
+    monkeypatch.setattr(Bundle, 'check_need_crc', detect)
+    result, = run(env, [entry], crc='auto', enableAfterImport=False)
+    assert result['outcome'] == 'imported' and calls

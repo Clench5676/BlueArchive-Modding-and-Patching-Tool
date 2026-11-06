@@ -2256,3 +2256,22 @@ test("Assign Character's previous and next page buttons are named in every langu
     }
   } finally { setStrings("en-US", flatten(JSON.parse(readFileSync(new URL("../../src/bmpt/locales/en-US.json", import.meta.url), "utf8")))); }
 });
+
+for (const locale of ["en-US", "th-TH", "zh-CN", "zh-TW", "ja-JP", "ko-KR"]) test(`missing official bases use repair wording and partial results show their status in ${locale}`, async () => {
+  const strings = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8"));
+  try {
+    setStrings(locale, flatten(strings));
+    const h = await fixture();
+    await h.analyze([{ ...entry("blocked", "blocked"), reason: "original_unavailable" }]);
+    const note = find(drawn(h, h.row("blocked")).tree, "Label_Locale_Limit").widgets[0].text;
+    for (const key of ["overwrittenTitle", "overwrittenNone", "repairGame", "repairThen"]) assert.ok(note.includes(strings.webui.mods[key]), key);
+    await h.analyze([entry("ready")]);
+    await h.action("start").click(); await flush();
+    h.runs[0].resolve({ results: [{ id: "ready", outcome: "imported", applied: true, incomplete: true, kept_current: true }] });
+    await flush(); await h.page.results(); await h.page.settled();
+    const row = walk(h.dialog).find((element) => element.dataset.result);
+    const result = find(drawn(h, row).tree, "Label_Locale_Limit").widgets[0].text;
+    assert.equal(result, `${strings.webui.mods.incomplete} - ${strings.webui.mods.keptCurrent}`);
+    h.page.hide();
+  } finally { setStrings("en-US", flatten(JSON.parse(readFileSync(new URL("../../src/bmpt/locales/en-US.json", import.meta.url), "utf8")))); }
+});

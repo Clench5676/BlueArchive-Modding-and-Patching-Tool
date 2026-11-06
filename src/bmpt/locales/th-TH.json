@@ -264,6 +264,8 @@
 			"damaged": "เสียหาย",
 			"overwrittenTitle": "ไฟล์ต้นฉบับถูกเขียนทับ",
 			"overwrittenNone": "ไม่เหลือสำเนาต้นฉบับ",
+			"incomplete": "Mod ไม่ครบ",
+			"keptCurrent": "เพิ่มไฟล์เกมปัจจุบันเข้าคลังแล้ว",
 			"addFirst": "เพิ่มเข้าคลัง Mod ก่อนซ่อมแซม",
 			"lastCopy": "สำเนาเดียวของไฟล์ที่เกมยังใช้อยู่",
 			"mayNotStart": "เกมอาจเปิดไม่ได้",
@@ -783,7 +785,6 @@
 				"required_asset_apply_failed": "ใช้แอสเซ็ตไม่สำเร็จ",
 				"required_assets_unmatched": "แอสเซ็ตที่จำเป็นไม่ตรงกัน",
 				"entry_changed": "ไฟล์เปลี่ยนแปลงแล้ว",
-				"original_unavailable": "ไฟล์ต้นฉบับไม่พร้อมใช้",
 				"original_invalid": "ไฟล์ต้นฉบับไม่ถูกต้อง",
 				"failed": "ตรวจสอบการนำเข้าไม่สำเร็จ"
 			},

@@ -287,3 +287,68 @@ def test_add_files_checks_the_content_kind_before_storing_anything(model_env, mo
     with pytest.raises(ServiceError, match='mod_unsupported'):
         env.library.add_files('model', [upload])
     assert env.library.mods() == []
+
+
+@pytest.mark.parametrize('partial', [False, True])
+def test_model_missing_official_preserves_outside_parts_and_marks_only_partial(model_env, partial):
+    from bmpt.webui.api import build_api
+    from bmpt.webui.services import Services
+
+    env = model_env
+    for path in env.parts:
+        path.write_bytes(header_bundle(b'outside ' + path.name[-20:].encode()))
+    outside = {path: path.read_bytes() for path in env.parts}
+    uploads = [make_mod(path, env.tmp / 'incoming', payload=b'incoming ' + str(i).encode())
+               for i, path in enumerate(env.parts[:1] if partial else env.parts)]
+    result = env.library.add_and_apply(uploads)
+    mod, = result
+    assert result.applied == [mod] and not result.failed and result.kept_current
+    assert bool(result.incomplete) is partial
+    assert env.library.preview_incomplete(mod.id) is partial
+    kept, = [entry for entry in env.library.mods() if entry.id != mod.id]
+    assert {path.name: path.read_bytes() for path in kept.file.parent.glob('*.bundle')} == {
+        path.name: data for path, data in outside.items()}
+    assert not list((env.root / 'originals').glob('*.bundle'))
+    with pytest.raises(ServiceError, match='original_unavailable'):
+        env.library.restore('hoshino', kind='model')
+    services = Services(env.settings, env.tmp / 'app', cache=object(), game=object(),
+                        catalog=env.catalog, library=env.library)
+    services.game_found = lambda: False
+    try:
+        family = build_api(services).call('family.get', {'key': 'hoshino'})
+        assert 'error' not in family, family
+        shown = next(m for v in family['result']['variants'] for m in v['modList'] if m['id'] == mod.id)
+        assert shown.get('incomplete', False) is partial
+    finally:
+        services.close()
+
+
+def test_model_overwritten_add_button_rpc_works_with_mods_off_without_scan(model_env):
+    from bmpt.webui.api import build_api
+    from bmpt.webui.services import Services
+
+    env = model_env
+    env.library._scan_allowed_input = lambda: False
+    env.library.toggle(False, True)
+    for path in env.parts:
+        path.write_bytes(header_bundle(b'outside ' + path.name[-20:].encode()))
+    outside = {path: path.read_bytes() for path in env.parts}
+    game = SimpleNamespace(model_glb=lambda *args, **kwargs: pytest.fail('No official preview is available'))
+    services = Services(env.settings, env.tmp / 'app', cache=object(), game=game,
+                        catalog=env.catalog, library=env.library)
+    try:
+        with pytest.raises(ServiceError, match='original_unavailable'):
+            services.asset('model/hoshino.glb', {'source': 'official'})
+        api = build_api(services)
+        pin = env.library.current_pin()
+        response = api.call('mods.adopt', {'entries': [{'install': pin.key, 'core': 'hoshino_original'}]})
+        assert 'error' not in response
+        assert services.jobs.wait(response['result'], 10)
+        job = services.jobs.get(response['result'])
+        assert job.state == 'done' and not job.result['failed'] and not job.result['skipped']
+        mod, = env.library.mods()
+        assert mod.kind == 'model' and mod.target == 'hoshino'
+        assert {path: path.read_bytes() for path in env.parts} == outside
+        assert not list((env.root / 'originals').glob('*.bundle'))
+    finally:
+        services.close()
