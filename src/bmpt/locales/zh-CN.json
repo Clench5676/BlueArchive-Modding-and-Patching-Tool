@@ -839,7 +839,21 @@
 			"applyGame": "应用到游戏",
 			"removeImported": "移除已导入",
 			"assignCharacter": "选择角色",
-			"libraryOnly": "仅入库 - 没有兼容的游戏目标"
+			"libraryOnly": "仅入库 - 没有兼容的游戏目标",
+			"missing": {
+				"state": "缺少文件",
+				"count": "缺少文件（{n}）",
+				"notFound": "缺少文件（{n}），所选文件夹中未找到",
+				"groups": "{n} 组缺少文件",
+				"groupsOne": "{n} 组缺少文件",
+				"fillAll": "全部补齐（{n} 组）",
+				"choose": "选择文件…",
+				"promptHead": "此文件夹还有文件：",
+				"promptFile": "- {name}",
+				"promptTail": "有可能同属{student}的{kind}Mod，是否一并添加到导入文件清单？",
+				"addTogether": "一并添加",
+				"fillLine": "- {student}的{kind}（{n}）"
+			}
 		},
 		"recovery": {
 			"report": "生成错误报告",

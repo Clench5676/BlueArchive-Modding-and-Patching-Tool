@@ -11,11 +11,13 @@ logger = logging.getLogger(__name__)
 WEBVIEW2_URL = "https://developer.microsoft.com/microsoft-edge/webview2/"
 
 
-def pick_files(window: Any, file_types: Iterable[str] = (), multiple: bool = True) -> list[Path]:
+def pick_files(window: Any, file_types: Iterable[str] = (), multiple: bool = True, *,
+               directory: str | None = None) -> list[Path]:
     """The native open-file dialog. ``file_types`` entries look like ``"Bundle (*.bundle;*.backup)"``."""
     import webview
 
-    result = window.create_file_dialog(webview.FileDialog.OPEN, allow_multiple=multiple, file_types=tuple(file_types))
+    result = window.create_file_dialog(webview.FileDialog.OPEN, allow_multiple=multiple, file_types=tuple(file_types),
+                                       **({"directory": directory} if directory else {}))
     return [Path(p) for p in result or ()]
 
 

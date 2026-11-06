@@ -839,7 +839,21 @@
 			"applyGame": "게임에 적용",
 			"removeImported": "가져온 항목 제거",
 			"assignCharacter": "캐릭터 선택",
-			"libraryOnly": "라이브러리 전용 - 호환 대상 없음"
+			"libraryOnly": "라이브러리 전용 - 호환 대상 없음",
+			"missing": {
+				"state": "파일 누락",
+				"count": "파일 누락 ({n})",
+				"notFound": "파일 누락 ({n}), 선택한 폴더에 없음",
+				"groups": "파일 누락 그룹 {n}개",
+				"groupsOne": "파일 누락 그룹 {n}개",
+				"fillAll": "모두 보완 ({n}개 그룹)",
+				"choose": "파일 선택…",
+				"promptHead": "이 폴더의 다른 파일:",
+				"promptFile": "- {name}",
+				"promptTail": "{student} {kind} 모드의 일부일 수 있음. 가져오기 목록에 추가할까요?",
+				"addTogether": "추가",
+				"fillLine": "- {student}, {kind} ({n})"
+			}
 		},
 		"recovery": {
 			"report": "오류 보고서 생성",

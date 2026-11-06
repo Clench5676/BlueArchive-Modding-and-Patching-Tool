@@ -1152,7 +1152,7 @@ new ZIP. This exports user-requested files at runtime; no game assets are includ
 
 ### Import grouping
 
-The batch import (`import.analyze`, one folder at a time, with kind and variant; shown as Import Mod, and opened by a
+The batch import (`import.analyze`, with kind and variant; shown as Import Mod, and opened by a
 student page's Add Portrait, Add Memorial Lobby and Add 3D Model) and Add (`mods.add`, drag and drop, one
 upload) group files with one rule, `judge.mod_versions`. Portrait and lobby files use their physical core and kind as
 the set key. Model files use their variant's prefab slot key across every physical core in that slot: a complete set
@@ -1163,6 +1163,37 @@ part side by side, those files also stay in one Mod. Only a repeated part whose 
 splits the whole set by date, one row or Mod per date. Collection batches keep their separate dated slots.
 `other` bundles keep their own handling. A Mod's `date` is the newest date of its parts. Library Mods stored before this
 rule keep the split they were stored with; nothing is merged or migrated. Batch folders still separate alternatives.
+
+Import Mod keeps incomplete rows in the session. A row is `incomplete` when its CAB dependencies cannot resolve through
+its selected files and unreplaced install files, or its source folders contain unselected files of the same student
+variant and kind (including every physical core of a 3D slot). Other slots in a mixed folder are silent. The analysis
+job searches source folders and folders added during the session using UnityFS directories only, without loading the
+unselected bundles' assets. It reuses the existing dependency inspection's unresolved references; UnityFS directories
+themselves contain the supplied CAB names, not serialized-file external references. Directory entries supply paths;
+embedded Mod names never supply a path. Each row's `missing` contains `unresolved` and ordered, deduplicated `found`
+files (`path`, `name`, `size`). Missing rows are unticked and `import.run` skips them as non-importable.
+
+The status shows the number of found files, or the unresolved count and the folder note when none were found. The
+Import State filter includes Missing Files before Imported; the footer counts incomplete groups. When exactly one
+row has found files after analysis, its confirmation opens automatically with the filenames, roster variant name and
+tab name. Several such rows use Complete All and one confirmation listing the groups. Complete All is available with
+one or more fillable rows. Declining suppresses the same prompt until Recheck. Confirming adds the found paths and
+analyses again. Files supplied later through Add Files, Add Folder or drop join the incomplete row by slot or missing
+CAB; an ambiguous owner or a conflicting part from another folder is refused with the candidate paths recorded in
+the row's error parameters. Initial selections from separate folders can join when a unique CAB dependency proves
+their relationship. Folder separation otherwise keeps alternative Mods apart.
+
+A row with nothing found offers Choose Files, opening the native file picker in its source folder (`import.pick`
+accepts `directory`; pywebview supports it on macOS and Windows). An analysis that completes a row selects it and
+scrolls it into view, clearing a filter that would hide it. Import runs only the ticked complete rows; missing rows
+retain their state and can receive files later in the session.
+
+The row's standalone badge keeps the divider-to-meta ink gap below the metadata (`import-layout.js`). Choose Files
+shares the badge background's top and bottom and ends at column 910, with at least 28 row units between them;
+when it cannot fit, it sits below the badge. Its caption matches the badge's screen size. Each side's caption padding
+is the body's atlas slice border plus 16 units at the button's scale; reference-glyph ink is centred on the face
+between the top and bottom slice borders. Native button decoration still uses `clipButtonPatterns`. Footer buttons
+wrap at their group's shared size (`NGUI.wrapText`), preserving Thai word breaks instead of independently shrinking.
 
 Add and Import Mod both use `ModLibrary.identify_import`: an installed name (CRC aside), or a verified kept
 original of that name, owns the target and kind. Other filenames use content identification. Portrait and lobby aliases

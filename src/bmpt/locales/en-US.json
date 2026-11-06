@@ -839,7 +839,21 @@
 			"applyGame": "Apply to Game",
 			"removeImported": "Remove Imported",
 			"assignCharacter": "Assign Character",
-			"libraryOnly": "Library only - no compatible game target"
+			"libraryOnly": "Library only - no compatible game target",
+			"missing": {
+				"state": "Missing Files",
+				"count": "Missing Files ({n})",
+				"notFound": "Missing Files ({n}), Not Found in Selected Folders",
+				"groups": "{n} Groups Missing Files",
+				"groupsOne": "{n} Group Missing Files",
+				"fillAll": "Complete All ({n} Groups)",
+				"choose": "Choose Files…",
+				"promptHead": "Other files in this folder:",
+				"promptFile": "- {name}",
+				"promptTail": "Possibly part of {student}, {kind}. Add to the import list?",
+				"addTogether": "Add",
+				"fillLine": "- {student}, {kind} ({n})"
+			}
 		},
 		"recovery": {
 			"report": "Error Report",

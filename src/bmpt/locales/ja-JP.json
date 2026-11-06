@@ -839,7 +839,21 @@
 			"applyGame": "ゲームに適用",
 			"removeImported": "取込済みを除外",
 			"assignCharacter": "キャラクターを選択",
-			"libraryOnly": "ライブラリのみ - 対応する適用先なし"
+			"libraryOnly": "ライブラリのみ - 対応する適用先なし",
+			"missing": {
+				"state": "ファイル不足",
+				"count": "ファイル不足（{n}）",
+				"notFound": "ファイル不足（{n}）、選択したフォルダーになし",
+				"groups": "ファイル不足：{n} グループ",
+				"groupsOne": "ファイル不足：{n} グループ",
+				"fillAll": "すべて補完（{n} グループ）",
+				"choose": "ファイルを選択…",
+				"promptHead": "このフォルダー内の他のファイル：",
+				"promptFile": "- {name}",
+				"promptTail": "{student}の{kind}MODの一部の可能性。インポートリストに追加しますか？",
+				"addTogether": "追加",
+				"fillLine": "- {student}、{kind}（{n}）"
+			}
 		},
 		"recovery": {
 			"report": "エラーレポート作成",

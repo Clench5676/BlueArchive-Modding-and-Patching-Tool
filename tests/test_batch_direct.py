@@ -396,10 +396,11 @@ def test_partial_model_replacement_validates_effective_dependencies(batch_model_
                          cab='CAB-changed' if change == 'body_cab' else 'CAB-prefab',
                          references=[] if change == 'body_cab' else ['CAB-missing-material'])
     entry, = analyze(env, [source])['entries']
-    assert (entry['state'], entry['reason']) == ('blocked', 'mod_parts_missing')
-    assert (target.name if change == 'body_cab' else 'CAB-missing-material') in entry['params']['files']
-    with pytest.raises(ServiceError, match='mod_parts_missing'):
+    assert (entry['state'], entry['reason']) == ('incomplete', None)
+    assert entry['missing'] == {'unresolved': 1, 'found': []}
+    with pytest.raises(ServiceError, match='mod_parts_missing') as refused:
         env.library.add_files('model', [source], direct=True)
+    assert (target.name if change == 'body_cab' else 'CAB-missing-material') in refused.value.params['files']
     assert not env.library.mods()
 
 
@@ -452,7 +453,11 @@ def test_model_replacement_preserves_referenced_objects(batch_model_env, monkeyp
     entry, = analyze(env, [source])['entries']
     if change in ('removed_reference', 'changed_type', 'changed_cab'):
         code = 'mod_parts_missing' if change == 'changed_cab' and consumer != 'other_bundle' else 'mod_release_mismatch'
-        assert (entry['state'], entry['reason']) == ('blocked', code), entry
+        if code == 'mod_parts_missing':
+            assert (entry['state'], entry['reason']) == ('incomplete', None), entry
+            assert entry['missing'] == {'unresolved': 1, 'found': []}
+        else:
+            assert (entry['state'], entry['reason']) == ('blocked', code), entry
         with pytest.raises(ServiceError, match=code):
             env.library.add_files('model', [source], direct=True)
         assert not env.library.mods()
