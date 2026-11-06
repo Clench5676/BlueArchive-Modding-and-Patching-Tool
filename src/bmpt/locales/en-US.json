@@ -264,6 +264,8 @@
 			"damaged": "Damaged",
 			"overwrittenTitle": "Official File Overwritten",
 			"overwrittenNone": "No official copy left",
+			"incomplete": "Mod incomplete",
+			"keptCurrent": "Current game files added to the library",
 			"addFirst": "Add before any repair",
 			"lastCopy": "Only copy of a file still in the game",
 			"mayNotStart": "The game may not start",
@@ -783,7 +785,6 @@
 				"required_asset_apply_failed": "Asset Apply Failed",
 				"required_assets_unmatched": "Unmatched Required Assets",
 				"entry_changed": "Files Changed",
-				"original_unavailable": "Official File Unavailable",
 				"original_invalid": "Invalid Official File",
 				"failed": "Import Check Failed"
 			},

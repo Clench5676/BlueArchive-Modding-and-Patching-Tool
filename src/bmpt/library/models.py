@@ -60,6 +60,8 @@ class AddResult(list[ModEntry]):
         self.configured: list[ModEntry] = []
         self.failed: list[dict] = []
         self.compatibility: dict[str, dict] = {}
+        self.kept_current = False
+        self.incomplete: list[str] = []
 
     @property
     def added(self) -> list[ModEntry]:
@@ -71,7 +73,8 @@ class AddResult(list[ModEntry]):
                 "installed": [entry.to_json() for entry in self.installed],
                 "applied": [entry.to_json() for entry in self.applied],
                 "configured": [entry.to_json() for entry in self.configured],
-                "failed": self.failed, "compatibility": self.compatibility}
+                "failed": self.failed, "compatibility": self.compatibility,
+                "kept_current": self.kept_current, "incomplete": self.incomplete}
 
 
 @dataclass(frozen=True)
@@ -132,6 +135,8 @@ class ApplyResult(JsonResult):
     files: list[Path]
     unchanged: bool = False
     deferred: bool = False  # mods are off: the source is configured and applied when mods are on
+    kept_current: bool = False
+    incomplete: bool = False
 
 
 @dataclass(frozen=True)

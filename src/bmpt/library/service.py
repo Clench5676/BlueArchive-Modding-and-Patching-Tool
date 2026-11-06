@@ -1302,7 +1302,7 @@ class ModLibrary:
             targets = self._spine_parts(target_core, pin)
         if targets and kind != "other":
             target_core = parse_filename(targets[0].name).core
-        originals, original_paths = {}, []
+        originals, original_paths, current_parts = {}, [], {}
         unavailable = not targets
         for target in targets:
             try:
@@ -1313,6 +1313,8 @@ class ModLibrary:
                 if error.code not in ("original_unavailable", "original_invalid"):
                     raise
                 unavailable = True
+                if error.code == "original_unavailable":
+                    current_parts[target] = inspect(target)
         for contents in originals.values():
             official.merge(contents)
         expected = official.platforms or {"StandaloneWindows64"}
@@ -1326,7 +1328,7 @@ class ModLibrary:
             if kind != "other":
                 prefix = prefix.replace(f"-{parse_filename(name).core}-", f"-{target_core}-", 1)
             parts.add((prefix, res_type))
-        for target, contents in originals.items():
+        for target, contents in {**current_parts, **originals}.items():
             if part_of(target.name) not in parts:
                 effective.merge(contents)
         if not compatibility:
@@ -1433,7 +1435,17 @@ class ModLibrary:
         selected, official, originals = integrity.Contents(), integrity.Contents(), []
         identities = []
         for target, source in replacements.items():
-            original = self._official_for(target, pin, game_first=True)
+            try:
+                original = self._official_for(target, pin, game_first=True)
+            except ServiceError as error:
+                if error.code != "original_unavailable":
+                    raise
+                # Current slots can accept whole files without an official baseline. The live file is
+                # format evidence only; it must never enter originals or a conversion's baselines.
+                inspection.check(source)
+                selected.merge(inspection.inspect(source))
+                integrity.check_format(inspection.metadata(source), source, inspection.metadata(target))
+                continue
             incoming, baseline = inspection.metadata(source), inspection.metadata(original)
             integrity.check_format(incoming, source, baseline)
             identities.append((source, incoming, baseline))
@@ -1447,8 +1459,6 @@ class ModLibrary:
         # Retained official prefabs must still resolve into the replacement CABs.
         compatibility = self._check_group(files, pin, conversion=True, inspection=inspection)
         self._check_group(files, pin, compatibility=False, inspection=inspection)
-        if compatibility["unavailable"]:
-            raise ServiceError("original_unavailable")
         for source, incoming, baseline in identities:
             if not incoming.files:
                 raise ServiceError("mod_release_mismatch", file=source.name)
@@ -1458,6 +1468,12 @@ class ModLibrary:
                 raise ServiceError("mod_release_mismatch", file=source.name)
         inspection.validate()
         source_origin, error = mod_origin.source_of(set(files), selected, official, target_origin)
+        if error == "source_unknown" and compatibility["unavailable"]:
+            # The current slot already identifies a direct replacement; absent official CAB evidence
+            # must not turn the missing baseline into an import refusal.
+            evidence, error = mod_origin.constraints(set(files), selected, official, target_origin)
+            source_origin = {**target_origin, **{key: value for key, value in evidence.items() if value},
+                             "detected": False}
         if error:
             raise ServiceError(error)
         return {"direct": replacements, "targets": list(replacements), "originals": originals,
@@ -1480,7 +1496,7 @@ class ModLibrary:
         consumers = {path: path for paths in self._index(pin).values() for path in paths}
         for target in targets:
             consumers[target] = (replacements[target] if target in replacements else
-                                 self._official_for(target, pin, game_first=True))
+                                 self._official_or_current(target, pin))
         for path in consumers.values():
             if path != source and integrity.references_changed_objects(path, changed, removed_cabs, inspection):
                 raise ServiceError("mod_release_mismatch", file=source.name)
@@ -1580,6 +1596,9 @@ class ModLibrary:
                     added.configured.append(entry)
             else:
                 (added.configured if result.deferred else added.applied).append(entry)
+                added.kept_current |= result.kept_current
+                if result.incomplete:
+                    added.incomplete.append(entry.id)
         return added
 
     @_serialized
@@ -1854,7 +1873,8 @@ class ModLibrary:
                 state = "mixed"
             rows.append({"id": record["id"], "label": self._label(record), "target": record["target"],
                          "files": [path.name for path in targets] or list(record["files"]),
-                         "selected": bool(entries) and selected == len(entries), "state": state})
+                         "selected": bool(entries) and selected == len(entries), "state": state,
+                         **({"overwritten": True} if any(entry.overwritten for entry in entries) else {})})
         return rows
 
     @_serialized
@@ -2444,6 +2464,18 @@ class ModLibrary:
                 raise ServiceError("original_invalid", file=game_file)
         return official
 
+    def _official_or_current(self, game_file: Path, pin: Pin) -> Path:
+        """An omitted mod part uses official bytes when available, otherwise the current game bytes.
+
+        This fallback is never an official baseline for rebuilding, keeping originals or restoring.
+        """
+        try:
+            return self._official_for(game_file, pin)
+        except ServiceError as error:
+            if error.code != "original_unavailable":
+                raise
+            return game_file
+
     def _official_sha1(self, target: Path, pin: Pin) -> str | None:
         try:
             return self._hashes.get(self._official_for(target, pin)).sha1
@@ -2867,6 +2899,9 @@ class ModLibrary:
                 installed = False
             result[kind] = {"source": choice["source"], "installed": installed,
                             "error": None if installed else choice.get("error")}
+            source = choice["source"]
+            if source.startswith("mod:") and source[4:] in self._records and self._incomplete(self._records[source[4:]], pin):
+                result[kind]["incomplete"] = True
         return result
 
     def _selection_error(self, pin: Pin, cores, error: dict | None) -> None:
@@ -2959,20 +2994,40 @@ class ModLibrary:
 
     @_serialized
     def preview_bundles(self, mod_id: str, pin: Pin | None = None) -> list[Path]:
-        """Return missing official parts followed by the mod's overriding parts.
+        """Return omitted parts followed by the mod's overriding parts.
 
-        Parts match by prefix and resource type, independent of date and CRC. The official parts come from the mod's
-        own core in the given install (the current one), verified by content. Pass this order to
+        Parts match by prefix and resource type, independent of date and CRC. Omitted parts prefer verified official
+        copies of the mod's own core in this install, falling back to its current files. Pass this order to
         ``GameAssets.spine_files_from`` so mod assets win.
         """
-        return self._preview(self._record(mod_id), self._current(pin), full=True)
+        return self._preview(self._record(mod_id), self._current(pin))
 
-    def _preview(self, record: dict[str, Any], pin: Pin, full: bool) -> list[Path]:
+    def _preview(self, record: dict[str, Any], pin: Pin) -> list[Path]:
         paths = self._paths(record)
         replaced = {part_of(path.name) for path in paths}
-        others = [self._official_for(path, pin, full) for path in self._spine_parts(core_of(paths[0].name), pin)
+        others = [self._official_or_current(path, pin) for path in self._spine_parts(core_of(paths[0].name), pin)
                   if part_of(path.name) not in replaced]
         return others + paths
+
+    @_serialized
+    def preview_complements(self, core: str, names: list[str], pin: Pin | None = None) -> list[Path]:
+        """Parts omitted by an incoming preview, resolved with the same rule as a library mod."""
+        pin = self._current(pin)
+        replaced = {part_of(name) for name in names}
+        return [self._official_or_current(path, pin) for path in self._spine_parts(core, pin)
+                if part_of(path.name) not in replaced]
+
+    def _incomplete(self, record: dict[str, Any], pin: Pin) -> bool:
+        replaced = {part_of(name) for name in record["files"]}
+        return any(self._official_or_current(path, pin) == path and not self._is_official(path)
+                   for path in self._spine_parts(core_of(record["files"][0]), pin)
+                   if part_of(path.name) not in replaced)
+
+    @_serialized
+    def preview_incomplete(self, mod_id: str, pin: Pin | None = None) -> bool:
+        """Whether previewing this partial mod needs non-official live parts in this install."""
+        pin = pin or self.current_pin()
+        return bool(pin and self._incomplete(self._record(mod_id), pin))
 
     # --- switching ---
 
@@ -2995,21 +3050,45 @@ class ModLibrary:
         return sorted({path for group in groups for path in (
             group.target_paths + [file.existing_path for file in group.files if file.existing_path is not None])})
 
-    def _stage_official(self, paths: list[Path], directory: Path, pin: Pin) -> dict[Path, Path]:
+    def _stage_official(self, paths: list[Path], directory: Path, pin: Pin,
+                        *, current_fallback: bool = False) -> dict[Path, Path]:
         staged = {}
         directory.mkdir(parents=True, exist_ok=True)
         for path in paths:
             target = directory / path.name
             if target in staged.values():
                 raise ServiceError("game_file_conflict", file=path)
-            atomic_copy(self._official_for(path, pin), target)
+            source = self._official_or_current(path, pin) if current_fallback else self._official_for(path, pin)
+            atomic_copy(source, target)
             staged[path] = target
+        return staged
+
+    def _stage_direct(self, targets: list[Path], sources: dict[str, Path], directory: Path, pin: Pin,
+                      updating: set[Path]) -> dict[Path, Path]:
+        """Stage whole-file replacements and omitted parts without requiring an official base.
+
+        Asset transfers still require verified official targets, including generic updates.
+        """
+        directory.mkdir(parents=True, exist_ok=True)
+        staged = {}
+        for path in targets:
+            prepared = directory / path.name
+            if prepared in staged.values():
+                raise ServiceError("game_file_conflict", file=path)
+            try:
+                source = self._official_for(path, pin)
+            except ServiceError as error:
+                if error.code != "original_unavailable" or path in updating:
+                    raise
+                source = sources.get(path.name) or path
+            atomic_copy(source, prepared)
+            staged[path] = prepared
         return staged
 
     def _commit(self, replacements: dict[Path, Path], source: str, log: LogFunc,
                 progress: ProgressCallback | None = None, pin: Pin | None = None, prune: bool = True,
                 build_keys: dict[Path, str] | None = None, create_backup: bool = False,
-                expected: dict[Path, str] | None = None) -> list[Path]:
+                expected: dict[Path, str] | None = None, kept_current: list[str] | None = None) -> list[Path]:
         """Write prepared files over game files as one unit, keeping what they replace: the official file in
         originals/ (once), a file kept nowhere else as a library mod (_keep_replaced). Every written part is rolled
         back on failure. With ``prune``, kept originals no longer needed are deleted afterwards, whatever the
@@ -3021,7 +3100,8 @@ class ModLibrary:
         try:
             with self._transaction_lock():
                 return self._write(replacements, source, log, progress, pin, build_keys,
-                                   create_backup=create_backup, **({"expected": expected} if expected else {}))
+                                   create_backup=create_backup, **({"expected": expected} if expected else {}),
+                                   **({"kept_current": kept_current} if kept_current is not None else {}))
         finally:
             if prune:
                 self._prune_quietly()
@@ -3273,7 +3353,8 @@ class ModLibrary:
 
     def _write(self, replacements: dict[Path, Path], source: str, log: LogFunc,
                progress: ProgressCallback | None, pin: Pin, build_keys: dict[Path, str] | None = None,
-               *, create_backup: bool = False, expected: dict[Path, str] | None = None) -> list[Path]:
+               *, create_backup: bool = False, expected: dict[Path, str] | None = None,
+               kept_current: list[str] | None = None) -> list[Path]:
         dirs = list(pin.dirs)
         for target, prepared in replacements.items():
             check_resource_path(target, dirs)
@@ -3328,8 +3409,15 @@ class ModLibrary:
             with self._writable(list(changed), pin):
                 if expected and any(self._hashes.get(path).sha1 != digest for path, digest in expected.items()):
                     raise ServiceError("entry_changed", core=core_of(next(iter(changed)).name))
-                officials = {target: self._official_for(target, pin) for target in changed}
-                kept = self._keep_replaced(list(changed), pin)
+                officials = {}
+                for target in changed:
+                    try:
+                        officials[target] = self._official_for(target, pin)
+                    except ServiceError as error:
+                        if error.code != "original_unavailable":
+                            raise
+                # Include omitted parts of the core: the outside mod must survive as a whole.
+                kept = self._keep_replaced(list(replacements), pin)
                 directory = self.root / "transactions" / uuid.uuid4().hex
                 directory.mkdir(parents=True)
                 sync_directory(self.root)
@@ -3339,8 +3427,8 @@ class ModLibrary:
                 pins = self._all_pins()
                 for i, target in enumerate(changed):
                     original = self._original_path(target)
-                    official = self._hashes.get(officials[target]).sha1 == self._hashes.get(target).sha1
-                    new_original = officials[target] == target and not original.exists()
+                    official = target in officials and self._hashes.get(officials[target]).sha1 == self._hashes.get(target).sha1
+                    new_original = officials.get(target) == target and not original.exists()
                     if new_original:
                         kept_now.append(target)
                     restore = source == "official" and changed[target] == original and not self._needed_elsewhere(
@@ -3360,7 +3448,8 @@ class ModLibrary:
                     for item, target in zip(items, changed):
                         # The verified original kept first is the baseline, so no adjacent .backup is written then
                         # (one already beside the game file is left alone); the classic install keeps its own.
-                        self._keep_original(target, pin, moving=True)
+                        if target in officials:
+                            self._keep_original(target, pin, moving=True)
                         kept_original = self._original_path(target).is_file()
                         mod_install.backup_file(target, create_backup and not kept_original, log)
                         if not item["official"]:
@@ -3415,11 +3504,13 @@ class ModLibrary:
             raise
         if journal is not None:
             shutil.rmtree(journal.parent)
+        if kept_current is not None:
+            kept_current.extend(kept)
         return written
 
     def _stage_adapted(self, sources: list[Path], targets: list[Path], directory: Path,
                        log: LogFunc, pin: Pin) -> dict[Path, Path]:
-        staged = self._stage_official(targets, directory / "targets", pin)
+        staged = self._stage_official(targets, directory / "targets", pin, current_fallback=True)
         output = directory / "output"
         output.mkdir(parents=True)
         adapted = adapt_variant_sources(
@@ -3449,10 +3540,11 @@ class ModLibrary:
             # official copy and replacing it with the same Mod adds no protection.
             if progress:
                 progress(0, 1, t("webui.progress.process", name=core_of(record["files"][0])))
-            return {target: sources[target.name] if target.name in sources else self._official_for(target, pin)
+            return {target: sources[target.name] if target.name in sources else self._official_or_current(target, pin)
                     for target in targets}
         if record["kind"] == "other":
-            staged = self._stage_official(targets, work / "targets", pin)
+            staged = self._stage_direct(targets, sources, work / "targets", pin,
+                                        {path for path in targets if path.name not in sources})
             output = work / "output"
             output.mkdir(parents=True, exist_ok=True)
             sources = self._paths(record)
@@ -3492,7 +3584,9 @@ class ModLibrary:
         planned = self._plan_targets(groups)
         if any(path not in allowed for path in planned):
             raise ServiceError("game_file_outside_resources", file=next(p for p in planned if p not in allowed))
-        staged = self._stage_official(targets, work / "targets", pin)
+        updating = {path for group in groups for path in group.target_paths
+                    if any(file.action == mod_install.InstallAction.UPDATE for file in group.files)}
+        staged = self._stage_direct(targets, sources, work / "targets", pin, updating)
         logger.info("Mod apply plan and stage: %.3f s", time.perf_counter() - started)
         started = time.perf_counter()
         # Execute only against temporary copies. The classic installer may
@@ -3548,6 +3642,8 @@ class ModLibrary:
         on = profiles_mod.enabled(self.profiles.read())
         started = time.perf_counter()
         kinds = {}
+        kept_current: list[str] = []
+        incomplete = False
         try:
             with tempfile.TemporaryDirectory(prefix=devmode.LIBRARY_STAGING_PREFIX) as temporary:
                 work = Path(temporary)
@@ -3567,6 +3663,7 @@ class ModLibrary:
                     if not on:
                         return self._defer(pin, variant_key, {record["kind"]: cores[0]}, source)
                     kinds = {record["kind"]: cores[0]}
+                    incomplete = self._incomplete(record, pin)
                     self._configure(pin, variant_key, kinds, source)
                     if core_of(record["files"][0]) == cores[0]:
                         view = self._view([pin], "full")
@@ -3576,11 +3673,11 @@ class ModLibrary:
                             self._note_judged(view, entry)
                             self._configure(pin, variant_key, {record["kind"]: cores[0]}, source)
                             self._selection_error(pin, kinds.values(), None)
-                            return ApplyResult(variant_key, source, [], unchanged=True)
+                            return ApplyResult(variant_key, source, [], unchanged=True, incomplete=incomplete)
                         replacements = self._cached_build(self._paths(record), targets, pin,
                             lambda: self._install_direct(record, targets, work, log, progress, pin), build_keys)
                     elif target_variant != variant_key:
-                        sources = self._preview(record, pin, full=True)
+                        sources = self._preview(record, pin)
                         replacements = self._cached_build(sources, targets, pin,
                             lambda: self._stage_adapted(sources, targets, work / record["kind"], log, pin), build_keys)
                     else:  # a lobby mod of another core of this variant: not offered, never written there
@@ -3618,13 +3715,14 @@ class ModLibrary:
                     raise ServiceError("source_unsupported", source=source)
                 prepared = time.perf_counter()
                 files = self._commit(replacements, source, log, progress, pin, prune=False, build_keys=build_keys,
-                                     create_backup=create_backup)
+                                     create_backup=create_backup, kept_current=kept_current)
                 self._configure(pin, variant_key, kinds, source)
                 self._selection_error(pin, kinds.values(), None)
                 for core in kinds.values():
                     self._clear_marker(pin, core)
                 logger.info("Mod apply copy and record: %.3f s", time.perf_counter() - prepared)
-                return ApplyResult(variant_key, source, files, unchanged=not files)
+                return ApplyResult(variant_key, source, files, unchanged=not files,
+                                   kept_current=bool(kept_current), incomplete=incomplete)
         except Exception as error:
             if kinds:
                 self._selection_error(pin, kinds.values(), error.to_json() if isinstance(error, ServiceError)
@@ -3656,18 +3754,19 @@ class ModLibrary:
         if not profiles_mod.enabled(self.profiles.read()):
             return self._defer(pin, target, kinds, source)
         self._configure(pin, target, kinds, source)
+        kept_current: list[str] = []
         try:
             with tempfile.TemporaryDirectory(prefix=devmode.LIBRARY_STAGING_PREFIX) as temporary:
                 build_keys = {}
                 replacements = self._cached_build(self._paths(record), targets, pin,
                     lambda: self._install_direct(record, targets, Path(temporary), log, progress, pin), build_keys)
                 files = self._commit(replacements, source, log, progress, pin, prune=False,
-                                     build_keys=build_keys, create_backup=create_backup)
+                                     build_keys=build_keys, create_backup=create_backup, kept_current=kept_current)
             self._configure(pin, target, kinds, source)
             self._selection_error(pin, kinds, None)
             for slot in kinds:
                 self._clear_marker(pin, slot)
-            return ApplyResult(target, source, files, unchanged=not files)
+            return ApplyResult(target, source, files, unchanged=not files, kept_current=bool(kept_current))
         except Exception as error:
             self._selection_error(pin, kinds, error.to_json() if isinstance(error, ServiceError)
                                   else {"code": "library_io_error" if isinstance(error, OSError) else "library_operation_failed",
@@ -3739,7 +3838,7 @@ class ModLibrary:
                         replacements = self._cached_build(self._paths(record), targets, pin,
                             lambda: self._install_direct(record, targets, work, log, progress, pin), build_keys)
                     else:
-                        sources = self._preview(record, pin, full=True)
+                        sources = self._preview(record, pin)
                         replacements = self._cached_build(sources, targets, pin,
                             lambda: self._stage_adapted(sources, targets, work / kind, log, pin), build_keys)
                 elif source.startswith("variant:"):
@@ -3773,7 +3872,12 @@ class ModLibrary:
         Prepared files otherwise live solely in the caller's temporary staging directory."""
         if len({path.name for path in targets}) != len(targets):
             return build()  # built keys identify parts by file name
-        signature = self._build_signature(sources, targets, pin)
+        try:
+            signature = self._build_signature(sources, targets, pin)
+        except ServiceError as error:
+            if error.code != "original_unavailable":
+                raise
+            return build()  # No official baseline to sign; never cache a live fallback as official.
         build_keys.update((target, signature) for target in targets)
         for folder in ((self.profiles.read() or {}).get("folders") or {}).values():
             for core, key in (folder.get("built") or {}).items():
@@ -3788,7 +3892,7 @@ class ModLibrary:
                     for target in targets:
                         part = parts.get(target.name)
                         if part is None:
-                            replacements[target] = self._official_for(target, pin)
+                            replacements[target] = self._official_or_current(target, pin)
                             continue
                         kept = self.root / "built" / f"{part['sha1']}.bundle"
                         if part.get("mod_file") and key["source"].startswith("mod:"):
@@ -3823,7 +3927,7 @@ class ModLibrary:
             for target in targets:
                 part = parts.get(target.name)
                 if part is None:
-                    replacements[target] = self._official_for(target, pin)
+                    replacements[target] = self._official_or_current(target, pin)
                     continue
                 kept = (self.root / "mods" / source[4:] / part["mod_file"]) if part.get("mod_file") and \
                     source.startswith("mod:") else self.root / "built" / f"{part.get('sha1')}.bundle"
@@ -3861,7 +3965,7 @@ class ModLibrary:
         elif core_of(record["files"][0]) == core:
             signatures = {sign(lambda: self._paths(record), lambda: targets)}
         else:
-            signatures = {sign(lambda: self._preview(record, pin, full=True), lambda: targets)}
+            signatures = {sign(lambda: self._preview(record, pin), lambda: targets)}
         signatures.discard(None)
         return signatures
 
@@ -4792,6 +4896,7 @@ class ModLibrary:
         if entry.overwritten and not entry.configured:
             outcome["stuck"] = item
             return outcome, "stuck", item
+        mod_count = len(self._records)
         try:
             self._switch(pin, core, target, log)
         except ServiceError as error:
@@ -4800,6 +4905,10 @@ class ModLibrary:
                 return outcome, "stuck", item
             raise
         outcome["done"] = item
+        if len(self._records) > mod_count:
+            outcome["done"] = {**outcome["done"], "kept_current": True}
+        if target.startswith("mod:") and target[4:] in self._records and self._incomplete(self._records[target[4:]], pin):
+            outcome["done"] = {**outcome["done"], "incomplete": True}
         return outcome, None, item
 
     def _note_judged(self, view: _View, entry: _Entry) -> None:

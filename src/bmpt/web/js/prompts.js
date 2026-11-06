@@ -156,9 +156,12 @@ export function untrackedOutcome(button, items, selection, dontAsk = false) {
 export function driftSummary(result, nameOf) {
   const list = (k) => result?.[k] || [];
   const skipped = list("skipped").filter((s) => ["changed", "untracked", "entry_changed"].includes(s.why));
-  if (!list("failed").length && !skipped.length && !list("stuck").length) return null;
+  const kept = list("done").some((item) => item.kept_current), incomplete = list("done").some((item) => item.incomplete);
+  if (!list("failed").length && !skipped.length && !list("stuck").length && !kept && !incomplete) return null;
   const label = (e) => ModSwitch.entryLabel(e, nameOf);
   const lines = [T("mods.result", { done: list("done").length, failed: list("failed").length + skipped.length })];
+  if (kept) lines.push(T("mods.keptCurrent"));
+  if (incomplete) lines.push(T("mods.incomplete"));
   if (list("stuck").length) lines.push(T("mods.stuck", { n: list("stuck").length }));
   const failures = [
     ...list("failed").map((f) => `${label(f.entry)} - ${ModSwitch.errorText(f.code, f.params)}`),

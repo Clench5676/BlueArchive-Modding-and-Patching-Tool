@@ -240,6 +240,7 @@ const atlas = { Common: Object.fromEntries([...new Set([
 atlas.Common.Common_Icon_Change = { width: 80, height: 80 };
 const reply = (data, status = 200) => ({ ok: status === 200, status, json: async () => data });
 let family, indexMode = "ready", layoutMode = "ready", lobbyMode = "pending", optionalPending = false, modsEnabled = true;
+let modsInstall = null, modelAdoption = null;
 let seenReply = async () => ({ result: null });
 const saveAlias = async ({ id, label }) => {
   const mod = family.variants.flatMap((v) => v.modList || []).find((m) => m.id === id);
@@ -272,7 +273,10 @@ globalThis.fetch = async (url, opts = {}) => {
     }
     if (method === "jobs.get" && request.params.id === "apply-test")
       return reply({ result: { state: "done", result: { deferred: !modsEnabled, files: [] } } });
-    return reply({ result: method === "family.get" ? family : method === "mods.state" ? { enabled: modsEnabled } : null });
+    if (method === "mods.adopt" && modelAdoption) return reply({ result: "model-adoption" });
+    if (method === "jobs.get" && request.params.id === "model-adoption")
+      return reply({ result: { state: "done", result: modelAdoption() } });
+    return reply({ result: method === "family.get" ? family : method === "mods.state" ? { enabled: modsEnabled, ...modsInstall } : null });
   }
   assetRequests.push(url);
   if (url === "/asset/ui/atlases.json") {
@@ -2190,4 +2194,67 @@ test("variant chips are 272 x 72 with the caption at 40 down to 28, the second c
     assert.doesNotMatch(source, /CHIP_FS = 38/);
     Detail.hide();
   } finally { Detail.hide(); await flush(); t.mock.timers.reset(); setStrings("en-US", localeTable("en-US")); }
+});
+
+test("incomplete mods use the existing card and popup status widgets in all locales", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  try {
+    for (const lang of ["en-US", "th-TH", "zh-CN", "zh-TW", "ja-JP", "ko-KR"]) {
+      const ui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url), "utf8"));
+      setStrings(lang, flat(ui));
+      family = modFamily();
+      family.variants[0].modList[0].incomplete = true;
+      family.variants[0].configured = { spr: "mod:test" };
+      await showPortrait(t);
+      await switchButton().click(); await flush();
+      const texts = walk(hosts.popup).filter((e) => e.style.fontSize).map((e) => e.textContent || e.children[0]?.textContent);
+      assert.ok(texts.includes(ui.webui.mods.incomplete), lang);
+      const badge = walk(hosts.popup).find((e) => e.dataset.path === "Card_m:test/Using/Text");
+      assert.ok(badge, lang);
+      const text = badge.textContent || badge.children[0]?.textContent;
+      assert.equal(text.replace(/\s/g, ""), ui.webui.mods.incomplete.replace(/\s/g, ""));
+      const fitted = NGUI.fitText(ui.webui.mods.incomplete, 26, 20, 320 - 70, 1);
+      assert.ok(NGUI.glyphWidth(fitted.text, fitted.fs) <= 320 - 70, lang);
+      await closeSwitch(); Detail.hide();
+    }
+  } finally {
+    Detail.hide(); await flush(); t.mock.timers.reset();
+    setStrings("en-US", flat(JSON.parse(readFileSync(new URL("../../src/bmpt/locales/en-US.json", import.meta.url), "utf8"))));
+  }
+});
+
+test("the overwritten model message adds the model core with Mods off and refreshes detail", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const show = globalThis.__detailModel.show;
+  const eventSource = globalThis.EventSource;
+  globalThis.EventSource = class extends EventTarget { close() {} };
+  try {
+    closeLeftMessages(); family = modFamily("model");
+    const v = family.variants[0]; v.model = "ibuki_model";
+    v.state.files = [{ kind: "model", applied: "unknown", official: false, restorable: false, crc: "fixed" }];
+    modsEnabled = false;
+    modsInstall = { current: "install", installs: [{ key: "install", folder: "/synthetic/game" }] };
+    await ModSwitch.refresh();
+    modelAdoption = () => {
+      v.state.files[0].applied = "mod:kept";
+      return { added: [{ id: "kept", kind: "model", target: v.key }], failed: [], skipped: [] };
+    };
+    globalThis.__detailModel.show = async () => { throw Object.assign(new Error("No official model"), { code: "original_unavailable" }); };
+    await showPortrait(t);
+    await finish(t, tabButton(3).click());
+    for (let i = 0; i < 10; i++) { await new Promise(setImmediate); await flush(); }
+    const button = walk(hosts.dialog).find((e) => e.getAttribute("aria-label") === "Add to Library");
+    assert.ok(button);
+    const before = invalidations;
+    await button.click();
+    for (let i = 0; i < 20; i++) { t.mock.timers.tick(1000); await new Promise(setImmediate); await flush(); }
+    const request = rpcRequests.findLast((r) => r.method === "mods.adopt");
+    assert.deepEqual(request.params.entries, [{ install: "install", core: "ibuki_model" }]);
+    assert.ok(invalidations > before);
+  } finally {
+    modelAdoption = modsInstall = null; globalThis.__detailModel.show = show;
+    globalThis.EventSource = eventSource;
+    closeLeftMessages(); Detail.hide(); modsEnabled = true;
+    await ModSwitch.refresh(); await flush(); t.mock.timers.reset();
+  }
 });

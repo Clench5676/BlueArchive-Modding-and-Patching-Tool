@@ -264,6 +264,8 @@
 			"damaged": "破損",
 			"overwrittenTitle": "オリジナルファイル上書き済み",
 			"overwrittenNone": "オリジナルの控えなし",
+			"incomplete": "MODが不完全",
+			"keptCurrent": "現在のゲームファイルをMODライブラリに追加済み",
 			"addFirst": "修復前にMODライブラリへ追加",
 			"lastCopy": "ゲームで使用中のファイルの唯一の控え",
 			"mayNotStart": "ゲームが起動しない場合あり",
@@ -783,7 +785,6 @@
 				"required_asset_apply_failed": "アセット適用失敗",
 				"required_assets_unmatched": "必須アセットの一致なし",
 				"entry_changed": "ファイル変更済み",
-				"original_unavailable": "公式ファイル利用不可",
 				"original_invalid": "公式ファイルが無効",
 				"failed": "インポート確認失敗"
 			},

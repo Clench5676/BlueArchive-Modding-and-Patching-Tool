@@ -51,8 +51,7 @@ export function appliedKey(v, kind = "spr") {
 export const sourceOf = (key) => (key === "self" ? "official" : key.startsWith("m:") ? `mod:${key.slice(2)}` : `variant:${key.slice(2)}`);
 
 // whether a variant's files of a kind are overwritten: a part that is not official has no official copy anywhere
-// (family.get's restorable false), so it can be switched neither back to official nor to another source, and its
-// official files cannot serve another variant either
+// (family.get's restorable false). Its official choice is unavailable; library mods can still replace it.
 export const overwrittenOf = (v, kind = "spr") => partsOf(v, kind).some((f) => !isOfficial(f) && f.restorable === false);
 
 // the sources a variant's portrait or lobby can be switched to, in the switch popup's order: its own official files,
@@ -77,10 +76,10 @@ export function candidates(fam, v, kind = "spr") {
     ...others.map((o) => ({ key: `v:${o.key}`, kind: "variant", core: coreOf(o, kind), variant: o })),
     ...(across ? mods.filter((m) => m.target !== v.key).map(mod) : []),
   ];
-  const stuck = overwrittenOf(v, kind), inUse = appliedKey(v, kind);
+  const stuck = overwrittenOf(v, kind);
   return list.map((c) => {
     const restorable = c.kind === "mod" ? true : !overwrittenOf(c.variant, kind);
-    const greyed = (c.kind === "self" && !own) || (stuck && c.key !== inUse) || (c.kind === "variant" && !restorable);
+    const greyed = (c.kind === "self" && (!own || stuck)) || (c.kind === "variant" && !restorable);
     return { ...c, restorable, greyed };
   });
 }
@@ -110,14 +109,18 @@ export const isApplied = (v, kind, key = previewKey(v, kind)) => key === intende
 
 // A switch being On is intent, never evidence that the chosen source reached the game.
 export function selectionStatus(v, kind = "spr") {
+  if ((previewKey(v, kind) === intendedKey(v, kind) && v?.selection?.[kind]?.incomplete)
+    || (v?.modList || []).some((m) => m.incomplete && `m:${m.id}` === previewKey(v, kind)))
+    return "mods.incomplete";
   return isApplied(v, kind) ? "status.applied" : null;
 }
-export function candidateStatus(v, kind, key) {
+export function candidateStatus(v, kind, key, mod = (v?.modList || []).find((m) => `m:${m.id}` === key)) {
+  if (mod?.incomplete) return "mods.incomplete";
   return isApplied(v, kind, key) ? "status.applied" : null;
 }
 export const detailStatus = selectionStatus;
 export const selectionError = (v, kind) => v?.selection?.[kind]?.error || null;
-export const importStatus = (item) => item?.applied || item?.configured ? "status.applied" : "import.notApplied";
+export const importStatus = (item) => item?.incomplete ? "mods.incomplete" : item?.applied || item?.configured ? "status.applied" : "import.notApplied";
 export const previewChanged = (before, after, kind, beforeEnabled, enabled) => !before || !after || beforeEnabled !== enabled
   || previewKey(before, kind, beforeEnabled) !== previewKey(after, kind, enabled);
 export function modelSource(v, enabled = true) {

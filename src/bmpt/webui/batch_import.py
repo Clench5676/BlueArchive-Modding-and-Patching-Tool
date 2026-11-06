@@ -466,7 +466,7 @@ class BatchImport:
             candidate.entry.update(state="done", reason=None, libraryId=mod_id)
 
     def preview(self, key: str) -> tuple[str, list[Path]]:
-        """Compose an analyzed source in memory, with missing parts from the pinned official files."""
+        """Compose a source with official omitted parts, or current parts when no official copy remains."""
         with self._lock:
             candidate, stamp = self._previews[key]
             library, pin = self._library, self._pin
@@ -479,13 +479,12 @@ class BatchImport:
             raise KeyError(key)
         core_name = candidate.entry["core"]
         try:
-            originals = library.official_bundles(core_name, pin=pin) if pin else []
+            originals = library.preview_complements(core_name, list(candidate.files), pin=pin) if pin else []
         except ServiceError as error:
             if error.code not in ("game_file_not_found", "original_unavailable", "original_invalid"):
                 raise
             originals = []  # A self-contained upload can preview without recoverable official parts.
-        replaced = {part_of(name) for name in candidate.files}
-        bundles = [path for path in originals if part_of(path.name) not in replaced] + paths
+        bundles = originals + paths
         with self._lock:
             if key not in self._previews:
                 raise KeyError(key)
@@ -655,11 +654,16 @@ class BatchImport:
                     raise ServiceError("source_conflict")
                 entry["source"] = candidate.source_override or source
                 official, incoming, remappable = copy_compatibility(report["compatibility"], report["sourceContents"])
+                if report["compatibility"]["unavailable"]:
+                    official = {key: values if values != {None} else {incoming[key]}
+                                for key, values in official.items()}
                 mismatch = self._check_spine(candidate, official, incoming, remappable)
                 for file in entry["files"]:
                     file["target"] = next(target.name for target, source in candidate.direct.items()
                                           if str(source) == file["path"])
                 if mismatch:
+                    if report["compatibility"]["unavailable"]:
+                        library.official_bundles(entry["core"], pin=pin)
                     candidate.direct = {}
                 entry.update(state="library" if report["libraryId"] else "installed" if report["installed"] else
                              "update" if mismatch else "ready", reason=None, libraryId=report["libraryId"])
@@ -992,6 +996,10 @@ class BatchImport:
                                         # A successful apply configures the source, including deferred applies.
                                         item["configured"] = True
                                         item["applied"] = not applied.deferred
+                                        if applied.kept_current:
+                                            item["kept_current"] = True
+                                        if applied.incomplete:
+                                            item["incomplete"] = True
                                     self._complete(candidate, library, pin, mod.id)
                         except ServiceError as error:
                             item.update(outcome="failed", reason=error.code,
@@ -1063,11 +1071,12 @@ class BatchImport:
                 output = temporary / staging_name(entry["id"]) / "direct"
                 output.mkdir(parents=True)
                 paths, extra = [], settings.save_options(False).extra_bytes or b""
-                for (target, source), original in zip(candidate.direct.items(), candidate.originals):
+                baselines = {path.name.removesuffix(".backup"): path for path in candidate.originals}
+                for target, source in candidate.direct.items():
                     path = output / target.name
                     data = source.read_bytes()
                     expected = int(parse_filename(target.name).crc)
-                    fix = settings.crc_needed(original) and CRCUtils.compute_crc32(data) != expected
+                    fix = settings.crc_needed(baselines.get(target.name, target)) and CRCUtils.compute_crc32(data) != expected
                     if not fix and source.name.removesuffix(".backup") == target.name:
                         paths.append(source)
                         continue
