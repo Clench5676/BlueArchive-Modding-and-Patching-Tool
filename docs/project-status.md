@@ -65,7 +65,7 @@ As of 2026-11-06. Verify the actual branch, working tree and `pyproject.toml` ve
 | BL-091, BL-094 | Implemented by the lead (2026-11-06); owner review pending; native Windows not verified on the macOS host |
 | BL-092 | Step 1 implemented by the lead (2026-11-06): lock waits and preview times in the error report; Windows measurement and fix open |
 | BL-095 | Implemented by the lead (2026-11-06): a student's add buttons open Import Mod (Batch Import renamed); owner review pending |
-| BL-096 | Asked by the owner (2026-11-06): telling which files of a mod are missing; proposal, not scheduled |
+| BL-096 | Implemented (Codex, reviewed and merged, `2218bdcc`, prototype accepted by the owner): Import Mod tells which files of a mod are missing and adds them; owner review pending |
 | BL-057, BL-058 | Accepted by the owner on macOS (alpha.12); Windows not reviewed |
 | BL-055 | Accepted by the owner on macOS (0.6.0 pre-review) |
 | BL-014 | Candidate, not scheduled |

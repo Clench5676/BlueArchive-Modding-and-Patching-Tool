@@ -2318,8 +2318,7 @@ result popup (`mod-add.js`) had no caller left and is removed with its strings (
 
 ## BL-096: Tell the user which files of a mod are missing when only some were imported
 
-- Status: Asked by the owner (2026-11-06); prompt rule and wording decided by the owner, the lead's flow proposed; not
-  scheduled.
+- Status: Implemented (2026-11-06, merge `2218bdcc`); owner review pending.
 - Requested: 2026-11-06 (owner): when a mod has several files and only some are imported, the user should be told what
   is still missing; can that be done, and accurately?
 
@@ -2388,4 +2387,19 @@ the import list?", the button "Add" and confirmation lines "- <student>, <kind> 
 The status badge under the meta line sat too close, Choose Files… too close to the row's bottom, and badge text was not
 centred vertically (the shipped badges too); being fixed on the prototype branch, the badge centring as its own commit
 for main.
+
+Owner, 2026-11-06, second and third prototype reviews: Choose Files… goes on the badge's line at the row's right column,
+exactly as tall as the badge (done: the button keeps its corner slices, its native pattern clipped to the body); then the
+button looked cramped at the badge's caption size: the caption keeps that size, each side gets the button's side slice
+border plus the badge's own side padding, and the caption's ink is centred on the body's face. The zh-CN prompt tail
+becomes "有可能同属<student>的<kind>Mod，是否一并添加到导入文件清单？" (the owner typed MOD; the App writes Mod). No further
+prototype: implement and build.
+
+Implemented (Codex, reviewed and merged, `2218bdcc`; the badge centring `f9eb9c52`): a row whose files reference CABs held
+nowhere, or whose folder holds unselected files of its slot, is "Missing Files" (`incomplete`), not ticked and not
+imported, with the files found for it from bundle headers of the session's folders; one such row prompts by itself,
+several get "Complete All"; added files join the incomplete row whose CABs they hold or whose slot it is (alternatives of
+one slot are refused, never merged); Choose Files… opens the native dialog in the row's folder; strings in six languages.
+The lead's review fix (`b5625039`): a backup or another release of a selected part is an alternative, not a missing file.
+Every analysis reads the bundle headers of all folders of the session; a large folder on a hard disk can slow it.
 
