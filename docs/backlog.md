@@ -2309,12 +2309,17 @@ Lead's finding (implementing): the move errors come from this App, which set pro
 
 Lead's notes: the student page's add button (`detail.js` `addMods`) opens the native picker and adds through `mods.add`
 (Add), a second import path beside the batch import (BL-093). The batch import's name is `webui.nav.import`, used by the
-bottom navigation and the screen's title. Files dropped on a student's page still go through Add; the owner did not ask
-to change that.
+bottom navigation and the screen's title.
+
+Owner, 2026-11-06: no space in Chinese (导入Mod, 匯入Mod); only Import Mod accepts files dropped on the window, every
+other page refuses them. Lead: the window shows the no-drop pointer outside Import Mod and ignores such drops; Add's own
+result popup (`mod-add.js`) had no caller left and is removed with its strings (`add.done`, `add.part`, `add.belongs`,
+`add.stay`, `add.duplicate`, `add.installed`, `add.applyFailed`, `popup.add`); `mods.add` stays in the backend.
 
 ## BL-096: Tell the user which files of a mod are missing when only some were imported
 
-- Status: Asked by the owner (2026-11-06); proposal, not scheduled.
+- Status: Asked by the owner (2026-11-06); prompt rule and wording decided by the owner, the lead's flow proposed; not
+  scheduled.
 - Requested: 2026-11-06 (owner): when a mod has several files and only some are imported, the user should be told what
   is still missing; can that be done, and accurately?
 
@@ -2337,3 +2342,33 @@ generic bundles, and the canonical slot core for alias-named portrait and lobby 
 a pre-split update test. Roster test: every playable student's portrait, lobby and 3D parts as one-part mods and complete
 slots, zero refusals in the official state and both states without official copies (full mode 640 s; the default mode
 samples 34 students for the latter two). Full suite on the merge: 4389 passed, 33 skipped; JavaScript 2382 passed.
+
+Owner, 2026-11-06: prompt only for a group the selected files leave incomplete. A folder can mix portraits, lobbies and 3D
+models and the user may want only some of them; when the selected files are enough for every group they touch, say
+nothing about the rest of the folder. The prompt reads (zh-CN, the owner's wording; the other languages follow):
+"此文件夹还有文件：" then one line per file ("- <file name>"), then "有可能和<student variant>的<kind>有关，是否一并添加到导入
+文件清单？" (the variant as the roster names it, e.g. 星野（武装）, the kind 立绘, 记忆大厅 or 3D模型). The owner also asked how
+missing files are found and whether finding a file by its CAB takes long, and for a pleasant flow for supplying the missing
+files of several groups at once.
+
+Lead's answer: a bundle's header lists its own CABs and the CABs it references (no asset is decompressed). A group is
+incomplete when a referenced CAB is held neither by its files nor by an install bundle it does not replace (BL-089, BL-090).
+Finding which file holds a CAB reads only bundle headers: on the official view (26302 files, SSD, warm file cache) a present
+CAB took 1.2 s with a cold index, an absent one 2.2 s for the first full pass and 0.3 s once the index was complete. On a hard
+disk the first full pass can take minutes. The library's CAB index (BL-090) lives in memory only and is rebuilt every
+session; it should reuse the previews' persistent index (`gameassets/cabs.py` with the preview cache), revalidated by file
+stamps, and be built in the background after startup. Files in the user's folders are few and read in well under a second.
+A CAB is a unique name, so a file that holds a missing CAB is certainly the missing file, not a guess.
+
+Proposed flow (lead):
+1. Analysis marks each incomplete row "缺少文件（N）"; it is not selected and cannot be imported as is. The list's filter
+   gains "缺少文件" so a long list shows only those rows, with their count in the header.
+2. For every incomplete row the App looks in the folders the files came from (and the dropped folders) for files that hold
+   its missing CABs. A row with such files shows the owner's prompt; a list-wide action fills every such row at once after
+   one confirmation that lists the rows, so ten incomplete groups need one click, not ten dialogs.
+3. Files dropped on Import Mod at any time go to the incomplete row whose missing CABs they hold; other files become rows of
+   their own. Supplying missing files is dropping them, wherever they are, without choosing the row.
+4. A row whose missing files were found nowhere says how many are missing and offers a file picker opened in its folder; a
+   picked file that completes another row goes there.
+5. Importing takes the complete rows; incomplete rows stay in the list, with their state, for later in the session.
+
