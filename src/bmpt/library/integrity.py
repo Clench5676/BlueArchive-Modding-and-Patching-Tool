@@ -6,11 +6,14 @@ import base64
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Callable, Iterable
 
 from .. import devmode
 from ba_modding_toolkit.bundle import Bundle, UpdateScope
 from ..errors import ServiceError
 from ..gameassets.spine import atlas_pages
+from ..gameassets.discovery import cab_names
+from .judge import part_of
 from ba_modding_toolkit.models import AssetKey, AssetType, REPLACEABLE_ASSET_TYPES
 from ba_modding_toolkit.spine import get_skel_version
 
@@ -64,6 +67,14 @@ class Inspection:
         self._metadata: dict[Path, Contents] = {}
         self._keys: dict[Path, set[AssetKey]] = {}
         self._readable: dict[tuple[Path, tuple[Path, ...]], set[AssetKey]] = {}
+        self._cabs: dict[Path, set[str]] = {}
+
+    def cabs(self, path: Path) -> set[str]:
+        self.check(path)
+        if path not in self._cabs:
+            self._cabs[path] = set(cab_names(path))
+        self.check(path)
+        return self._cabs[path]
 
     def check(self, path: Path) -> None:
         devmode.check_read(path)
@@ -135,14 +146,29 @@ def replacement_key(name: str) -> str:
     return re.sub(r"_[0-9]+\.bundle$", ".bundle", name.removesuffix(".backup"))
 
 
-def replacements(files: dict[str, Path], targets: list[Path]) -> dict[Path, Path]:
+def replacements(files: dict[str, Path], targets: list[Path], *,
+                 read_cabs: Callable[[Path], Iterable[str]] = cab_names) -> dict[Path, Path]:
+    """Resolve current releases, preserving coexisting dates of a part.
+
+    A name or CAB match proves the release current. Older releases have no direct
+    replacement here: their existing update planner may target several files.
+    """
     result = {}
     for name, source in files.items():
-        matches = [path for path in targets if replacement_key(path.name) == replacement_key(name)]
-        if not matches:
-            return {}
+        matches = [path for path in targets if path.name == name]
+        if len(matches) != 1:
+            matches = [path for path in targets if replacement_key(path.name) == replacement_key(name)]
+        ambiguous = len(matches) > 1
+        if len(matches) != 1:
+            cabs = set(read_cabs(source)) if targets else set()
+            matches = [path for path in targets if cabs and set(read_cabs(path)) == cabs]
+            ambiguous |= len(matches) > 1
+        if not matches and not ambiguous:
+            continue
+        if len(matches) != 1:
+            matches = [path for path in targets if part_of(path.name) == part_of(name)]
         if len(matches) != 1 or matches[0] in result:
-            raise ServiceError("game_file_conflict", file=name)
+            raise ServiceError("mod_target_ambiguous", file=name)
         result[matches[0]] = source
     return result
 
@@ -289,11 +315,9 @@ def references_changed_objects(path: Path, changed: dict[str, set[int]], removed
     return walk(inspection.bundle(path, cache=False).env)
 
 
-def missing_parts(effective: Contents, official: Contents) -> set[str]:
-    # Current shared references (shaders, materials) remain supplied by the install.
-    # A reference to an omitted part of this core must resolve in the effective set.
-    shared = official.references - official.files
-    missing = effective.references - effective.files - shared
+def missing_parts(effective: Contents) -> set[str]:
+    """Unresolved references and Spine pairs, before install lookup and baseline comparison."""
+    missing = effective.references - effective.files
     missing.update(effective.streams - effective.files)
     for data in effective.atlases.values():
         try:

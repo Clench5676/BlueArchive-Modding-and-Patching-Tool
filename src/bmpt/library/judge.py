@@ -87,7 +87,7 @@ def date_of(name: str) -> str:
     return parse_filename(name).date
 
 
-def mod_versions(entries: Sequence[tuple[Hashable, str]]) -> list[str]:
+def mod_versions(entries: Sequence[tuple[Hashable, str]], installed: Iterable[str] = ()) -> list[str]:
     """The version of its set each bundle name belongs to, in the order given: the one rule that groups the files of
     an import into mods, shared by the batch import and Add.
 
@@ -96,11 +96,14 @@ def mod_versions(entries: Sequence[tuple[Hashable, str]]) -> list[str]:
     cores keep their parts under different dates (a Spine core's textures and text, a model's prefab and
     dependencies). Only a set in which one part (``part_of``) occurs under more than one date holds several versions
     of the mod: the whole set then goes by date. Returns "" for every file of a set that is one mod, else the
-    file's date."""
+    file's date. Dates kept side by side for that part in the install are one version."""
+    live: dict[tuple[str, str | None], set[str]] = {}
+    for name in installed:
+        live.setdefault(part_of(name), set()).add(date_of(name))
     dates: dict[tuple[Hashable, tuple[str, str | None]], set[str]] = {}
     for key, name in entries:
         dates.setdefault((key, part_of(name)), set()).add(date_of(name))
-    versioned = {key for (key, _), found in dates.items() if len(found) > 1}
+    versioned = {key for (key, part), found in dates.items() if len(found) > 1 and not found <= live.get(part, set())}
     return [date_of(name) if key in versioned else "" for key, name in entries]
 
 

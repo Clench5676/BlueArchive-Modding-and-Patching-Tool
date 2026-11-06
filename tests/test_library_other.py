@@ -239,9 +239,9 @@ def test_generic_audio_integrity_tracks_its_stream_companion(other_env, monkeypa
     monkeypatch.setattr('bmpt.library.integrity.inspect', inspect_bundle)
     contents = inspect_bundle(other_env.parts[-1])
     assert contents.streams == {'music.ress'}
-    assert missing_parts(contents, Contents()) == {'music.ress'}
+    assert missing_parts(contents) == {'music.ress'}
     files['music.resS'] = SimpleNamespace()
-    assert not missing_parts(inspect_bundle(other_env.parts[-1]), Contents())
+    assert not missing_parts(inspect_bundle(other_env.parts[-1]))
 
 
 def test_generic_library_duplicate_is_recognized_even_when_its_game_files_are_missing(other_env):
