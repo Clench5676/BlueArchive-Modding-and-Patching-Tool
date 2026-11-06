@@ -639,11 +639,10 @@ test("failed option reads cannot release an in-flight analysis lock", async () =
 
 test("the window's native drop event goes directly to Batch Import on its route", async () => {
   const source = readFileSync(new URL("../../src/bmpt/web/js/main.js", import.meta.url), "utf8");
-  const drop = source.slice(source.indexOf('  on("drop",'), source.indexOf('  $("top-option").addEventListener'));
+  const drop = source.slice(source.indexOf("  // Only Import Mod takes files dropped"), source.indexOf('  $("top-option").addEventListener'));
   const calls = []; let handler;
-  const env = { on: (_event, fn) => { handler = fn; }, location: { hash: "#/import" },
-    BatchImport: { drop: async (paths) => calls.push(paths) }, ModAdd: { add: () => assert.fail("use the import analyzer") },
-    notify: () => assert.fail("no drop error"), T: (key) => key };
+  const env = { on: (_event, fn) => { handler = fn; }, location: { hash: "#/import" }, addEventListener: () => {},
+    BatchImport: { drop: async (paths) => calls.push(paths) }, notify: () => assert.fail("no drop error"), errorText: String };
   new Function("env", `const { ${Object.keys(env).join(", ")} } = env; ${drop}`)(env);
   await handler({ paths: ["/fixtures/a.bundle"] }); assert.deepEqual(calls, [["/fixtures/a.bundle"]]);
 });

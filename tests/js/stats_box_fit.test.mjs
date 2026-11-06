@@ -204,17 +204,14 @@ for (const locale of LOCALES) test(`the file details' light box holds its captio
   }
 });
 
-// the boxed messages: the compatibility findings and the Add results, with their buttons
+// the boxed messages: the compatibility findings, with their buttons
 const PARAMS = { name: "CH0261_home.skel", mod: "4.2.33", official: "4.2.40", missing: "idle, walk, run", added: "dance, wave", names: "Intro_Shoulder_L, Intro_Shoulder_R, Face_Eye_L",
   atlas: "2048 x 2048", texture: "1024 x 1024", version: "4.2.33", runtime: "4.2.120", n: "3", reason: "The target file is in use by another program", kind: "Portrait" };
 for (const locale of LOCALES) for (const width of [1700, 2100, 2458]) test(`boxed message rows hold their text and button in ${locale}, ${width} wide`, () => {
   const { web, text } = use(locale);
   const compat = leaves(web.compatibility).map((s) => fill(s, PARAMS));
-  const added = [`${fill(text("add.duplicate"), { name: "A fairly long name of a mod in the library for a student" })}\n${text("add.installed")}`,
-    fill(text("add.belongs"), { name: "Hoshino (Swimsuit)" }), fill(text("add.part"), { name: "Hoshino (Swimsuit)", kind: PARAMS.kind }),
-    fill(text("add.applyFailed"), { reason: PARAMS.reason }), [text("status.applied"), text("add.installed")].join("\n")];
   const buttons = [text("info.details"), text("add.go"), text("tour.open"), text("recovery.report")];
-  for (const [n, texts] of [[0, compat], [1, added]]) {
+  for (const [n, texts] of [[0, compat]]) {
     const lines = texts.map((line, i) => (i % 2 === 0 ? { text: line, button: { label: buttons[(i / 2) % buttons.length], fn() {} } } : line));
     const what = `${locale} ${width} ${n ? "Add result" : "findings"}`;
     const layout = Popup.messageLayout({ lines, width, ok: "OK", cancel: "Cancel", scroll: true });

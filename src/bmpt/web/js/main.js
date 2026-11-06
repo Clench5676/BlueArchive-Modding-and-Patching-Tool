@@ -16,7 +16,6 @@ import * as StudentHall from "./student-hall.js";
 import * as Settings from "./settings.js";
 import * as Update from "./update.js";
 import * as Tours from "./tours.js";
-import * as ModAdd from "./mod-add.js";
 import { on, rpc, spinePrefix } from "./api.js";
 import { L, T, errorText, setStrings, languageRefresh } from "./i18n.js";
 import { neighbour, visit } from "./roster-order.js";
@@ -593,10 +592,6 @@ async function start() {
     if (key === "fileSource" || key.startsWith("gameDir") || key === "libraryDir") { await refreshConfiguration(); }
   };
   ctx.goOther = () => Settings.open(settingsChanged, "mods");
-  ModAdd.init({ names: variantNames, changed: ctx.invalidateRoster, go: (key) => {
-    const family = rosterData?.families.find((f) => f.variants.some((v) => v.key === key));
-    if (family) ctx.go(family.key, key);
-  }, goOther: () => Settings.open(settingsChanged, "mods") });
   on("library.changed", libraryChanged);
   on("photography.changed", () => {
     ctx.invalidateRoster();
@@ -605,13 +600,17 @@ async function start() {
     Popup.whenIdle().then(() => { if(token===routeToken&&!$("screen-roster").hidden)return route(); }).catch(console.error);
   });
   watchFront();
-  // files dropped on the window are added to the library
+  // Only Import Mod takes files dropped on the window (BL-095); every other page refuses them.
+  const importing = () => location.hash.replace(/\/$/, "") === "#/import";
+  addEventListener("dragover", (event) => {
+    if (importing() || !event.dataTransfer) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "none";
+  });
   on("drop", async ({ paths }) => {
+    if (!importing()) return;
     try {
-      if (location.hash.replace(/\/$/, "") === "#/import") { await BatchImport.drop(paths); return; }
-      await ModAdd.add(paths, Detail.currentVariant());
-      ctx.invalidateRoster();
-      route();
+      await BatchImport.drop(paths);
     } catch (err) {
       notify(errorText(err), { kind: "error", error: err });
     }

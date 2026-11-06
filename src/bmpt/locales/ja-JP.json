@@ -210,8 +210,7 @@
 			"apply": "適用",
 			"save": "保存",
 			"cancel": "キャンセル",
-			"inUse": "使用中",
-			"add": "立ち絵追加"
+			"inUse": "使用中"
 		},
 		"mods": {
 			"switch": "MODを有効化",
@@ -638,14 +637,7 @@
 			"none": "ゲームファイルと同じ"
 		},
 		"add": {
-			"done": "追加済み",
-			"belongs": "{name}のModを追加しました",
-			"part": "{name}、{kind}、追加済み",
-			"go": "移動",
-			"stay": "ここに留まる",
-			"duplicate": "MODライブラリに追加済み：{name}",
-			"installed": "導入済みのMODとして認識",
-			"applyFailed": "追加済み、切り替え失敗：{reason}"
+			"go": "移動"
 		},
 		"compatibility": {
 			"more": "{names}、+{n}",

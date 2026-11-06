@@ -210,8 +210,7 @@
 			"apply": "적용",
 			"save": "저장",
 			"cancel": "취소",
-			"inUse": "사용 중",
-			"add": "일러스트 추가"
+			"inUse": "사용 중"
 		},
 		"mods": {
 			"switch": "모드 사용",
@@ -638,14 +637,7 @@
 			"none": "게임 파일과 같음"
 		},
 		"add": {
-			"done": "추가 완료",
-			"belongs": "{name}의 Mod 추가 완료",
-			"part": "{name}, {kind}, 추가 완료",
-			"go": "이동",
-			"stay": "현재 화면 유지",
-			"duplicate": "모드 라이브러리에 이미 있음: {name}",
-			"installed": "설치된 모드로 인식됨",
-			"applyFailed": "추가됨, 전환 실패: {reason}"
+			"go": "이동"
 		},
 		"compatibility": {
 			"more": "{names}, +{n}",

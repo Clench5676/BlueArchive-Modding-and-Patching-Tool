@@ -210,8 +210,7 @@
 			"apply": "套用",
 			"save": "儲存",
 			"cancel": "取消",
-			"inUse": "使用中",
-			"add": "新增立繪"
+			"inUse": "使用中"
 		},
 		"mods": {
 			"switch": "啟用 Mod",
@@ -638,14 +637,7 @@
 			"none": "與遊戲檔案相同"
 		},
 		"add": {
-			"done": "已新增",
-			"belongs": "此 Mod 屬於 {name}，已新增",
-			"part": "{name}，{kind}，已新增",
-			"go": "前往",
-			"stay": "留在此處",
-			"duplicate": "已在 Mod 倉庫中：{name}",
-			"installed": "已識別為已安裝的 Mod",
-			"applyFailed": "已新增，切換失敗：{reason}"
+			"go": "前往"
 		},
 		"compatibility": {
 			"more": "{names}、+{n}",
