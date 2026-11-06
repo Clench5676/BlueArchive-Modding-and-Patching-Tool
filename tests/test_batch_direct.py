@@ -185,7 +185,9 @@ def test_current_name_rejects_invalid_bundle(env, monkeypatch):
 def test_crc_matching_does_not_hide_a_release_or_part_change(field, tmp_path):
     name = 'assets-_mx-characters-ch0188-_mxdependency-2024-11-18_004_assets_all_1.bundle'
     changed = name.replace('2024-11-18', '2025-07-25') if field == 'date' else name.replace('_004_', '_006_')
-    assert integrity.replacements({changed: tmp_path / changed}, [tmp_path / name]) == {}
+    target, source = tmp_path / name, tmp_path / changed
+    expected = {}
+    assert integrity.replacements({changed: source}, [target], read_cabs=lambda path: ()) == expected
 
 
 @pytest.mark.parametrize('category,core', [('spinecharacters', 'test_spr'), ('spinelobbies', 'test_home_gl'),
@@ -395,7 +397,7 @@ def test_partial_model_replacement_validates_effective_dependencies(batch_model_
                          references=[] if change == 'body_cab' else ['CAB-missing-material'])
     entry, = analyze(env, [source])['entries']
     assert (entry['state'], entry['reason']) == ('blocked', 'mod_parts_missing')
-    assert ('CAB-body' if change == 'body_cab' else 'CAB-missing-material') in entry['params']['files']
+    assert (target.name if change == 'body_cab' else 'CAB-missing-material') in entry['params']['files']
     with pytest.raises(ServiceError, match='mod_parts_missing'):
         env.library.add_files('model', [source], direct=True)
     assert not env.library.mods()

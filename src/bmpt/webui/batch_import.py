@@ -21,7 +21,7 @@ from ..errors import ServiceError
 from ..gameassets.spine import spine_revision
 from ba_modding_toolkit.i18n import t
 from ..library import integrity, staging, manual_identity
-from ..library.judge import core_of, kind_of, mod_versions, part_of
+from ..library.judge import core_of, kind_of, part_of
 from ..library.storage import Fingerprints, atomic_clone, verify_file
 from ba_modding_toolkit.models import AssetType, SaveOptions
 from ba_modding_toolkit.naming import parse_filename
@@ -484,7 +484,8 @@ class BatchImport:
             raise KeyError(key)
         core_name = candidate.entry["core"]
         try:
-            originals = library.preview_complements(core_name, list(candidate.files), pin=pin) if pin else []
+            originals = library.preview_complements(core_name, list(candidate.files), pin=pin,
+                                                   files=candidate.files) if pin else []
         except ServiceError as error:
             if error.code not in ("game_file_not_found", "original_unavailable", "original_invalid"):
                 raise
@@ -557,7 +558,7 @@ class BatchImport:
             inspected.append((path, name, kind, variant, error, failure))
         # The files of one core and kind are one mod whatever their dates, unless one part repeats under other
         # dates (judge.mod_versions, the rule Add uses). Folders separate alternative mods of the same release.
-        versions = iter(mod_versions([((path.parent, parse_filename(name).core.lower(), kind, variant), name)
+        versions = iter(library.import_versions([((path.parent, parse_filename(name).core.lower(), kind, variant), name)
                                       for path, name, kind, variant, _, _ in inspected if kind != "other"]))
         for path, name, kind, variant, error, failure in inspected:
             key = (path.parent, "", "", kind, None) if kind == "other" else (
@@ -575,7 +576,7 @@ class BatchImport:
                             skipped += 1
                             continue
                         error = "conflict"
-                    part = part_of(name)
+                    part = integrity.replacement_key(name)
                     if part in parts and self._hashes.get(parts[part]).sha1 != self._hashes.get(path).sha1:
                         error = "conflict"
                     parts[part] = path
@@ -708,9 +709,9 @@ class BatchImport:
 
             if len({p.name for p in live}) != len(live):
                 raise ServiceError("game_file_conflict", file=source_file(candidate))
+            replacements = library._replacements(candidate.files, live, pin, inspection)
             for file in entry["files"]:
-                name = next((name for name, path in candidate.files.items() if str(path) == file["path"]), "")
-                matches = [p for p in live if part_of(p.name) == part_of(name)]
+                matches = [target for target, source in replacements.items() if str(source) == file["path"]]
                 file["target"] = matches[0].name if len(matches) == 1 else None
             if entry["source"] is None or not conversion(entry["source"]):
                 if report["libraryId"]:
@@ -738,19 +739,22 @@ class BatchImport:
             baseline = dict(zip(live, originals))
             exact = set(candidate.files) <= {p.name for p in live}
             sources = list(candidate.files.values())
-            if exact:
-                targets = [p for p in live if p.name in candidate.files]
-            elif entry["kind"] == "other":
-                targets = live
-            else:
-                # A model's prefab and dependencies can have different release dates.
-                latest = {}
-                for path in live:
-                    parsed = parse_filename(path.name)
-                    latest[parsed.prefix] = max(latest.get(parsed.prefix, ""), parsed.date)
-                matched, _ = _asset_match(sources, [baseline[p] for p in live if parse_filename(p.name).date ==
-                                          latest[parse_filename(p.name).prefix]], log, keys=inspection.keys)
-                targets = [p for p in live if baseline[p] in matched]
+            targets = set(replacements)
+            older = {name: path for name, path in candidate.files.items() if path not in replacements.values()}
+            if older:
+                if entry["kind"] == "other":
+                    targets.update(library._other_targets(older, pin))
+                else:
+                    # Preserve the update path for pre-split bundles and older releases.
+                    latest = {}
+                    for path in live:
+                        parsed = parse_filename(path.name)
+                        latest[parsed.prefix] = max(latest.get(parsed.prefix, ""), parsed.date)
+                    matched, _ = _asset_match(list(older.values()), [baseline[p] for p in live
+                        if parse_filename(p.name).date == latest[parse_filename(p.name).prefix]],
+                        log, keys=inspection.keys)
+                    targets.update(p for p in live if baseline[p] in matched)
+            targets = [path for path in live if path in targets]
             inferred = entry["source"] is None
             choices = (mod_origin.candidates(names, selected, official_contents, entry["target"]) if inferred
                        else [entry["source"]])

@@ -62,7 +62,8 @@ def test_model_content_identity_overrules_renamed_file(model_env, monkeypatch, n
         objects(patch, [name], [name] if '/' in name else [])
         patch.setattr('bmpt.library.identity.content_cores', content_cores)
         filename, key, kind = identify(source, source.name, env.catalog)
-    assert (parse_filename(filename).core, key, kind) == ('hoshino_original', 'hoshino', 'model')
+    expected_core = 'hoshino' if name == 'Hoshino_Body' else 'hoshino_original'
+    assert (parse_filename(filename).core, key, kind) == (expected_core, 'hoshino', 'model')
 
 
 def test_model_content_conflict_and_unknown_are_refused(model_env, monkeypatch):
@@ -283,6 +284,7 @@ def test_model_jobs_publish_the_model_kind(model_env):
 def test_add_files_checks_the_content_kind_before_storing_anything(model_env, monkeypatch):
     env = model_env
     upload = make_mod(env.parts[1], env.tmp / 'upload')
+    upload = upload.rename(upload.with_name(upload.name.replace('hoshino_original', 'renamed')))
     monkeypatch.setattr('bmpt.library.identity.content_cores', lambda path: {'hoshino_spr'})
     with pytest.raises(ServiceError, match='mod_unsupported'):
         env.library.add_files('model', [upload])
@@ -352,3 +354,125 @@ def test_model_overwritten_add_button_rpc_works_with_mods_off_without_scan(model
         assert not list((env.root / 'originals').glob('*.bundle'))
     finally:
         services.close()
+
+
+@pytest.mark.skipif(not GAME_DIR.is_dir(), reason='Set BAMT_TEST_GAME_DIR to a verified official view')
+def test_official_roster_partial_and_complete_mod_preflight(tmp_path, monkeypatch, record_property):
+    """Every official part is a valid partial Mod, with or without recoverable originals.
+
+    One inspection per core is shared by all parts, states and checks. Clones live only
+    for that core; the read-only development view is never linked or modified.
+    BAMT_ROSTER_FULL=1 extends both missing-original states to the entire roster.
+    """
+    import time
+    from functools import cache
+    from bmpt.config import Settings
+    from bmpt.gameassets import AssetCache, GameAssets
+    from bmpt.library import integrity
+    from bmpt.library.storage import atomic_clone
+    from bmpt.openfiles import temporary_directory
+    from ba_modding_toolkit.searching import get_search_dirs
+
+    started = time.perf_counter()
+    directories = get_search_dirs(GAME_DIR)
+    game = GameAssets(directories, AssetCache(allowed=False, root=tmp_path / 'cache'))
+    catalog = Catalog(game, None, server='global')
+    # This roster and read-only install stay fixed throughout the sweep. Resolve each
+    # core once instead of repeatedly copying all catalog metadata for every part.
+    for method in ('variant_for_model_core', 'variant_for_asset_core', 'variant_for_core'):
+        monkeypatch.setattr(catalog, method, cache(getattr(catalog, method)))
+    settings = Settings(tmp_path / 'config.toml')
+    settings.set('game_resource_dir', str(GAME_DIR))
+    library = ModLibrary(tmp_path / 'library', catalog, game, settings)
+    pin = library.current_pin()
+    variants = [catalog.variant(variant.key) for family in catalog.families() for variant in family.variants
+                if variant.playable]
+    required = {'ch0258', 'airi', 'cherino', 'hoshino', 'ch0156', 'hare', 'chinatsu', 'akari', 'aru', 'ch0164', 'hihumi'}
+    fixed = required | {'shiroko', 'serika', 'ayane', 'iori', 'hina', 'ako', 'yuuka', 'noa', 'asuna', 'karin',
+                        'neru', 'natsu', 'koharu', 'hanako', 'azusa', 'mika', 'nagisa', 'shun', 'haruna',
+                        'mutsuki', 'saya', 'tsubaki', 'tsurugi', 'izumi', 'fuuka', 'juri'}
+    sample = {variant.key for variant in variants if variant.key in fixed}
+    assert required <= sample and len(sample) >= 30
+    sample_cores = {getattr(variant, kind) for variant in variants if variant.key in sample
+                    for kind in ('spr', 'lobby', 'model')}
+    full = os.environ.get('BAMT_ROSTER_FULL') == '1'
+    official_for = library._official_for
+    counters = {'official': 0, 'replaced': 0, 'all': 0, 'complete': 0, 'identified': 0}
+    failures, seen = [], set()
+
+    def check(label, action):
+        try:
+            action()
+        except ServiceError as error:
+            failures.append((label, error.code, error.params))
+
+    for variant in variants:
+        for kind in ('spr', 'lobby', 'model'):
+            core = getattr(variant, kind)
+            if not core or core in seen:
+                continue
+            seen.add(core)
+            if len(seen) % 100 == 0:
+                print(f'Roster progress: cores={len(seen)}; parts={counters}; seconds={time.perf_counter() - started:.3f}', flush=True)
+            targets = library._spine_parts(core, pin)
+            assert targets, (variant.key, kind, core)
+            with temporary_directory(prefix='roster-mod-', dir=tmp_path) as temporary:
+                folder = Path(temporary)
+                for target in targets:
+                    assert atomic_clone(target, folder / target.name), 'The roster check requires native file clones'
+                files = {target.name: folder / target.name for target in targets}
+                inspection = integrity.Inspection()
+                # Inputs are fixed clones of a read-only view. Cache the derived snapshot
+                # per path; validate all revisions after the core, and during direct import.
+                inspection.inspect = cache(inspection.inspect)
+                inspection.metadata = cache(inspection.metadata)
+                states = ('official', 'replaced', 'all') if full or core in sample_cores else ('official',)
+                for state in states:
+                    replaced = set()
+
+                    def baseline(path, *args, **kwargs):
+                        if state == 'all' or state == 'replaced' and path in replaced:
+                            raise ServiceError('original_unavailable', file=path.name)
+                        return official_for(path, *args, **kwargs)
+
+                    monkeypatch.setattr(library, '_official_for', baseline)
+                    for target in targets:
+                        source = files[target.name]
+                        replaced = {target}
+                        label = f'{variant.key}/{kind}/{state}/{target.name}'
+                        check(label + '/Add', lambda: library._check_group(
+                            {target.name: source}, pin, compatibility=False, inspection=inspection))
+                        check(label + '/Import', lambda: library.inspect_import(
+                            {target.name: source}, pin, conversion=True, inspection=inspection))
+                        counters[state] += 1
+                        if state == 'official':
+                            identity = library.identify_import(source, source.name, pin)
+                            assert identity[0] == source.name and identity[2] == kind
+                            counters['identified'] += 1
+                    if full or core in sample_cores:
+                        replaced = set(targets)
+                        check(f'{variant.key}/{kind}/{state}/complete', lambda: library._check_group(
+                            files, pin, compatibility=False, inspection=inspection))
+                        # Exercise Add's identification, grouping and storage as well as its check.
+                        # Reuse the per-core snapshot, and remove the stored clone before the next slot.
+                        original_check = library._check_group
+                        with monkeypatch.context() as patch:
+                            patch.setattr(library, '_check_group', lambda *args, **kwargs: original_check(
+                                *args, **{**kwargs, 'inspection': inspection}))
+                            try:
+                                added = library.add(list(files.values()), pin=pin)
+                                assert len(added) + len(added.duplicates) == 1, (variant.key, kind, state)
+                                for mod in [*added, *added.duplicates]:
+                                    library.remove(mod.id)
+                            except ServiceError as error:
+                                failures.append((f'{variant.key}/{kind}/{state}/Add-complete', error.code, error.params))
+                        counters['complete'] += 1
+                monkeypatch.setattr(library, '_official_for', official_for)
+                inspection.validate()
+                # Release environments before Windows removes the core's temporary clones.
+                del inspection
+    elapsed = time.perf_counter() - started
+    record_property('roster_counts', str(counters))
+    record_property('roster_seconds', round(elapsed, 3))
+    print(f'Roster preflight: {counters}; variants={len(variants)}; sample={len(sample)}; seconds={elapsed:.3f}; full={full}')
+    assert not failures, failures[:30]

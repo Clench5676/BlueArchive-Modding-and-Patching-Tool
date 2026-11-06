@@ -47,7 +47,7 @@ def validate(files: dict[str, Path], kind: str | None = None) -> str:
     inferred = next(iter(kinds))
     if inferred in ("spr", "lobby") and not combined.skeletons:
         raise ServiceError("mod_parts_missing", files="skeleton.skel")
-    missing = integrity.missing_parts(combined, integrity.Contents())
+    missing = integrity.missing_parts(combined)
     if missing:
         raise ServiceError("mod_parts_missing", files=", ".join(sorted(missing)))
     inspection.validate()

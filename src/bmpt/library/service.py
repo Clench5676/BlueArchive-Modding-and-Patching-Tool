@@ -21,7 +21,7 @@ from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from functools import wraps
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Iterator
+from typing import TYPE_CHECKING, Any, Callable, Hashable, Iterator, Sequence
 
 from UnityPy.helpers.ResourceReader import get_resource_data
 
@@ -31,6 +31,7 @@ from ba_modding_toolkit.bundle import Bundle
 from ..catalog.models import CoreMap
 from ..errors import ServiceError
 from ..filelock import file_lock
+from ..gameassets.cabs import CabIndex
 from ba_modding_toolkit.i18n import t
 from ..logging_utils import log_failure
 from ..openfiles import remove_tree, temporary_directory
@@ -606,6 +607,7 @@ class ModLibrary:
         self._pruned_cores: set[str] = set()
         # per install key: (folders' signature, index, its files, generation); file name -> lower-case core
         self._indexes: dict[str, tuple[tuple, dict[str, list[Path]], frozenset, int]] = {}
+        self._cab_indexes: dict[tuple[str, tuple[Path, ...]], CabIndex] = {}
         self._cores: dict[str, str] = {}
         self._generation = 0
         self._maps: dict[str, tuple[int, CoreMap]] = {}
@@ -1230,14 +1232,13 @@ class ModLibrary:
                 if len({core_of(name) for name in matches}) != 1:
                     raise ServiceError("mod_unsupported", file=source)
                 name = matches[0]
-            name, target, kind = (self.identify_import(source, name, pin) if direct else
-                                  identify(source, name, self.catalog))
+            name, target, kind = self._identify_import(source, name, pin)
             if expected_kind is not None and kind != expected_kind:
                 raise ServiceError("mod_unsupported", file=source)
             taken.append((source, name, target, kind))
         # The files of one core and kind are one mod whatever their dates, unless one part repeats under other dates.
-        versions = iter(mod_versions([((parse_filename(name).core.lower(), kind), name)
-                                      for _, name, _, kind in taken if kind != "other"]))
+        versions = iter(self.import_versions([((parse_filename(name).core.lower(), kind), name)
+                                              for _, name, _, kind in taken if kind != "other"], pin))
         for source, name, target, kind in taken:
             key = (str(source.parent), "other") if kind == "other" else (
                 parse_filename(name).core.lower(), kind, next(versions))
@@ -1290,7 +1291,9 @@ class ModLibrary:
                      dependencies: bool = True, conversion: bool = False, variant_key: str | None = None,
                      inspection: integrity.Inspection | None = None) -> dict:
         inspect = inspection.inspect if inspection else integrity.inspect
+        cab_inspection = inspection or integrity.Inspection()
         selected, official, effective = integrity.Contents(), integrity.Contents(), integrity.Contents()
+        baseline = integrity.Contents()
         sources = {name: inspect(path, allow_unknown=True) if conversion else inspect(path)
                    for name, path in files.items()}
         core = core_of(next(iter(files)))
@@ -1313,35 +1316,57 @@ class ModLibrary:
                 if error.code not in ("original_unavailable", "original_invalid"):
                     raise
                 unavailable = True
-                if error.code == "original_unavailable":
-                    current_parts[target] = inspect(target)
+                current_parts[target] = inspect(target)
         for contents in originals.values():
             official.merge(contents)
+        baseline_parts = {**current_parts, **originals}
+        for contents in baseline_parts.values():
+            baseline.merge(contents)
         expected = official.platforms or {"StandaloneWindows64"}
         for name, contents in sources.items():
             if not conversion:
                 integrity.check_platform(contents, files[name], expected)
             selected.merge(contents)
-        parts = set()
-        for name in files:
-            prefix, res_type = part_of(name)
-            if kind != "other":
-                prefix = prefix.replace(f"-{parse_filename(name).core}-", f"-{target_core}-", 1)
-            parts.add((prefix, res_type))
-        for target, contents in {**current_parts, **originals}.items():
-            if part_of(target.name) not in parts:
+        # Compatibility may address a variant whose installed core changed after this Mod was stored.
+        target_names = {name.replace(f"-{parse_filename(name).core}-", f"-{target_core}-", 1): path
+                        for name, path in files.items()} if target_core != core and kind != "other" else files
+        replacements = self._replacements(target_names, targets, pin, cab_inspection)
+        replaced = set(replacements)
+        older = {name: path for name, path in target_names.items() if path not in replacements.values()}
+        check_dependencies = dependencies and (not compatibility or kind in ("model", "other"))
+        if older and pin and check_dependencies:
+            if kind == "other":
+                replaced.update(self._other_targets(older, pin))
+            else:
+                replaced.update(self._plan_targets(mod_install.plan_mod_install(list(older.values()), list(pin.dirs))))
+        elif older:
+            parts = {part_of(name) for name in older}
+            replaced.update(target for target in targets if part_of(target.name) in parts)
+        for target, contents in baseline_parts.items():
+            if target not in replaced:
                 effective.merge(contents)
         if not compatibility:
             # Import validates dependencies only; absent text parts use the current official assets.
-            paired = atlas_remap.pair_atlases(selected.atlases, official.atlases)
-            selected.atlases = {**{name: data for name, data in official.atlases.items() if name not in paired},
+            paired = atlas_remap.pair_atlases(selected.atlases, baseline.atlases)
+            selected.atlases = {**{name: data for name, data in baseline.atlases.items() if name not in paired},
                                **selected.atlases}
         effective.merge(selected)
-        missing = (integrity.missing_parts(effective, official)
-                   if dependencies and (not compatibility or kind in ("model", "other")) else set())
+        missing = (integrity.missing_parts(effective) - integrity.missing_parts(baseline)
+                   if check_dependencies else set())
+        if missing and pin:
+            references = missing & effective.references
+            if references:
+                missing.difference_update(self._cab_index(pin).resolve(references, targets[0] if targets else None,
+                                                                     exclude=replaced))
         if missing:
             # Name omitted files from the selected folders, without importing them.
             names = dict(effective.reference_names)
+            for target in replaced:
+                # CABs removed by this upload identify the omitted replacement file, even without an original.
+                with contextlib.suppress(ValueError):
+                    names.update({name: target.name for name in cab_inspection.cabs(target)})
+                if target in baseline_parts:
+                    names.update({name: target.name for name in baseline_parts[target].files})
             for folder in {path.parent for path in files.values()}:
                 for path in sorted([*folder.glob("*.bundle"), *folder.glob("*.bundle.backup")]):
                     if path not in files.values() and core_of(path.name) == core:
@@ -1354,9 +1379,10 @@ class ModLibrary:
             raise ServiceError("mod_parts_missing", files=", ".join(sorted({names.get(name, name) for name in missing})))
         if not compatibility:
             return {}
+        current = (self._replacements(files, targets, pin, cab_inspection)
+                   if target_names is not files else replacements)
         report = {"kind": kind, "official": official.spine(), "mod": effective.spine(), "unavailable": unavailable,
-                "outdated": bool(targets) and set(files) != {path.name for path in targets
-                    if part_of(path.name) in parts}}
+                "outdated": bool(targets) and len(current) != len(files)}
         if conversion:
             # Internal preflight metadata; ordinary compatibility RPCs remain JSON-only.
             report["sourceContents"], report["officialContents"] = selected, official
@@ -1413,10 +1439,46 @@ class ModLibrary:
     @_serialized
     def identify_import(self, path: Path, name: str, pin: Pin | None = None) -> tuple[str, str, str]:
         """Current official slots own their identity even when a Mod renames its assets."""
+        return self._identify_import(path, name, pin)
+
+    def _identify_import(self, path: Path, name: str, pin: Pin | None = None) -> tuple[str, str, str]:
+        if kind_of_file(name) == "other":
+            return identify(path, name, self.catalog, filename_only=True)
         pin = pin or self.current_pin()
-        targets = (self._other_targets({name: path}, pin) if kind_of_file(name) == "other"
-                   else self._spine_parts(core_of(name), pin)) if pin else []
-        return identify(path, name, self.catalog, filename_only=bool(integrity.replacements({name: path}, targets)))
+        targets = self._spine_parts(core_of(name), pin) if pin else []
+        named = any(integrity.replacement_key(target.name) == integrity.replacement_key(name) for target in targets)
+        if not named:
+            named = any(integrity.replacement_key(kept) == integrity.replacement_key(name)
+                        and self._is_official_as(self.root / "originals" / kept, kept) for kept in self._originals())
+        return identify(path, name, self.catalog, filename_only=named)
+
+    def import_versions(self, entries: Sequence[tuple[Hashable, str]], pin: Pin | None = None) -> list[str]:
+        """The common Add/batch grouping rule, including releases the selected install keeps together."""
+        pin = pin or self.current_pin()
+        installed = (path.name for paths in self._index(pin).values() for path in paths) if pin else ()
+        return mod_versions(entries, installed)
+
+    def _cab_index(self, pin: Pin) -> CabIndex:
+        key = (pin.key, tuple(pin.dirs))
+        if key not in self._cab_indexes:
+            self._cab_indexes[key] = CabIndex(pin.dirs)
+        return self._cab_indexes[key]
+
+    def _replacements(self, files: dict[str, Path], targets: list[Path], pin: Pin | None,
+                      inspection: integrity.Inspection | None = None) -> dict[Path, Path]:
+        inspection = inspection or integrity.Inspection()
+
+        def read_cabs(path: Path):
+            baseline = self._official_or_current(path, pin) if pin and path in targets else path
+            return inspection.cabs(baseline)
+
+        return integrity.replacements(files, targets, read_cabs=read_cabs)
+
+    def _replaced_parts(self, files: dict[str, Path], targets: list[Path], pin: Pin | None) -> set[Path]:
+        """Precise current complements, with the existing part-based preview for older releases."""
+        current = self._replacements(files, targets, pin)
+        older = {part_of(name) for name, path in files.items() if path not in current.values()}
+        return set(current) | {target for target in targets if part_of(target.name) in older}
 
     @_serialized
     def direct_import(self, files: dict[str, Path], pin: Pin | None = None, *,
@@ -1428,10 +1490,10 @@ class ModLibrary:
         name = next(iter(files))
         targets = (self._other_targets(files, pin) if kind_of_file(name) == "other"
                    else self._spine_parts(core_of(name), pin))
-        replacements = integrity.replacements(files, targets)
-        if not replacements:
-            return None
         inspection = inspection or integrity.Inspection()
+        replacements = self._replacements(files, targets, pin, inspection)
+        if len(replacements) != len(files):
+            return None
         selected, official, originals = integrity.Contents(), integrity.Contents(), []
         identities = []
         for target, source in replacements.items():
@@ -2338,7 +2400,7 @@ class ModLibrary:
                 if exact:
                     targets.update(exact)
                     continue
-            current = None if collection else integrity.replacements({name: source}, available)
+            current = self._replacements({name: source}, available, pin)
             if current:
                 targets.update(current)
                 continue
@@ -2996,7 +3058,7 @@ class ModLibrary:
     def preview_bundles(self, mod_id: str, pin: Pin | None = None) -> list[Path]:
         """Return omitted parts followed by the mod's overriding parts.
 
-        Parts match by prefix and resource type, independent of date and CRC. Omitted parts prefer verified official
+        Parts use the import/apply replacement mapping. Omitted parts prefer verified official
         copies of the mod's own core in this install, falling back to its current files. Pass this order to
         ``GameAssets.spine_files_from`` so mod assets win.
         """
@@ -3004,24 +3066,31 @@ class ModLibrary:
 
     def _preview(self, record: dict[str, Any], pin: Pin) -> list[Path]:
         paths = self._paths(record)
-        replaced = {part_of(path.name) for path in paths}
-        others = [self._official_or_current(path, pin) for path in self._spine_parts(core_of(paths[0].name), pin)
-                  if part_of(path.name) not in replaced]
+        targets = self._spine_parts(core_of(paths[0].name), pin)
+        replaced = self._replaced_parts({path.name: path for path in paths}, targets, pin)
+        others = [self._official_or_current(path, pin) for path in targets if path not in replaced]
         return others + paths
 
     @_serialized
-    def preview_complements(self, core: str, names: list[str], pin: Pin | None = None) -> list[Path]:
+    def preview_complements(self, core: str, names: list[str], pin: Pin | None = None, *,
+                            files: dict[str, Path] | None = None) -> list[Path]:
         """Parts omitted by an incoming preview, resolved with the same rule as a library mod."""
         pin = self._current(pin)
-        replaced = {part_of(name) for name in names}
-        return [self._official_or_current(path, pin) for path in self._spine_parts(core, pin)
-                if part_of(path.name) not in replaced]
+        targets = self._spine_parts(core, pin)
+        if files is not None:
+            replaced = self._replaced_parts(files, targets, pin)
+        else:
+            replaced = set()
+            for name in names:
+                current = integrity.replacements({name: Path()}, targets, read_cabs=lambda path: ())
+                replaced.update(current or [path for path in targets if part_of(path.name) == part_of(name)])
+        return [self._official_or_current(path, pin) for path in targets if path not in replaced]
 
     def _incomplete(self, record: dict[str, Any], pin: Pin) -> bool:
-        replaced = {part_of(name) for name in record["files"]}
+        targets = self._spine_parts(core_of(record["files"][0]), pin)
+        replaced = self._replaced_parts({path.name: path for path in self._paths(record)}, targets, pin)
         return any(self._official_or_current(path, pin) == path and not self._is_official(path)
-                   for path in self._spine_parts(core_of(record["files"][0]), pin)
-                   if part_of(path.name) not in replaced)
+                   for path in targets if path not in replaced)
 
     @_serialized
     def preview_incomplete(self, mod_id: str, pin: Pin | None = None) -> bool:
@@ -3032,18 +3101,30 @@ class ModLibrary:
     # --- switching ---
 
     def _plan(self, record: dict[str, Any], log: LogFunc, pin: Pin) -> list[mod_install.ModGroup]:
-        if record["kind"] == "other":
-            paths = self._paths(record)
-            targets = self._other_targets({path.name: path for path in paths}, pin)
-            return [mod_install.ModGroup(prefix="", category=None, core=record["target"], files=[
-                mod_install.ModFilePlan(mod_path=path, parsed=parse_filename(path.name),
-                                       action=mod_install.InstallAction.UPDATE) for path in paths], target_paths=targets)]
-        groups = mod_install.plan_mod_install(self._paths(record), list(pin.dirs), log)
-        if not groups or any(file.action not in (mod_install.InstallAction.DIRECT_REPLACE,
-                                                 mod_install.InstallAction.UPDATE)
-                             for group in groups for file in group.files):
+        paths = self._paths(record)
+        files = {path.name: path for path in paths}
+        targets = (self._other_targets(files, pin) if record["kind"] == "other" else
+                   self._spine_parts(core_of(paths[0].name), pin))
+        current = self._replacements(files, targets, pin)
+        groups = {}
+        for target, path in current.items():
+            parsed = parse_filename(path.name)
+            group = groups.setdefault(parsed.prefix, mod_install.ModGroup(parsed.prefix, parsed.category, parsed.core, []))
+            group.files.append(mod_install.ModFilePlan(path, parsed, mod_install.InstallAction.DIRECT_REPLACE,
+                                                       existing_path=target))
+        planned = list(groups.values())
+        older = {name: path for name, path in files.items() if path not in current.values()}
+        if older:
+            if record["kind"] == "other":
+                planned.append(mod_install.ModGroup(prefix="", category=None, core=record["target"], files=[
+                    mod_install.ModFilePlan(path, parse_filename(name), mod_install.InstallAction.UPDATE)
+                    for name, path in older.items()], target_paths=self._other_targets(older, pin)))
+            else:
+                planned.extend(mod_install.plan_mod_install(list(older.values()), list(pin.dirs), log))
+        if not planned or any(file.action not in (mod_install.InstallAction.DIRECT_REPLACE, mod_install.InstallAction.UPDATE)
+                              for group in planned for file in group.files):
             raise ServiceError("game_file_not_found", variant=record["target"])
-        return groups
+        return planned
 
     @staticmethod
     def _plan_targets(groups: list[mod_install.ModGroup]) -> list[Path]:
@@ -3543,13 +3624,14 @@ class ModLibrary:
             return {target: sources[target.name] if target.name in sources else self._official_or_current(target, pin)
                     for target in targets}
         if record["kind"] == "other":
+            current = self._replacements(sources, targets, pin)
             staged = self._stage_direct(targets, sources, work / "targets", pin,
-                                        {path for path in targets if path.name not in sources})
+                                        set(targets) - current.keys())
             output = work / "output"
             output.mkdir(parents=True, exist_ok=True)
             sources = self._paths(record)
             for target, original in staged.items():
-                exact = next((path for path in sources if path.name == target.name), None)
+                exact = current.get(target)
                 if exact:
                     if not self._needs_crc_fix(exact, target):
                         atomic_copy(exact, original)
@@ -4040,8 +4122,9 @@ class ModLibrary:
             own = core_of(record["files"][0])
             if own == core:
                 return []
-            replaced = {part_of(name) for name in record["files"]}
-            return sorted(path.name for path in index.get(own, []) if part_of(path.name) not in replaced)
+            targets = index.get(own, [])
+            replaced = self._replaced_parts({path.name: path for path in self._paths(record)}, targets, pin)
+            return sorted(path.name for path in targets if path not in replaced)
         if source.startswith("variant:"):
             other = self._core_map(pin).core(source[8:], self._kind(core, pin) or "spr")
             return sorted(path.name for path in index.get(other.lower(), [])) if other else []
@@ -5106,8 +5189,8 @@ class ModLibrary:
                 mod = atlas_remap.read_inputs(paths)
                 official = atlas_remap.read_inputs(list(originals.values()))
 
-                replaced = {part_of(path.name) for path in paths}
-                others = [original for target, original in originals.items() if part_of(target.name) not in replaced]
+                replaced = self._replaced_parts({path.name: path for path in paths}, targets, pin)
+                others = [original for target, original in originals.items() if target not in replaced]
                 original_view = atlas_remap.read_inputs(others + paths)
                 mixed = {name: data for name, data in original_view.atlases.items() if name not in mod.atlases
                          and any(atlas_remap.texture_key(page) in mod.textures
