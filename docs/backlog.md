@@ -2192,7 +2192,7 @@ and import previews use the slot's files.
 
 ## BL-089: Parts kept under several dates: complete and partial mods refused
 
-- Status: Found by the lead (2026-11-06, roster check on the official view); not implemented.
+- Status: Implemented (Codex, reviewed and merged by the lead, `3f2d3521`, merge `e3e47b63`); owner review pending.
 
 Lead's notes: a part is `part_of`, its prefix and resource type, without the date. The official install keeps several
 dated files with the same part number side by side in 295 model cores (439 parts) and 4 lobby cores (ch0164_home,
@@ -2217,7 +2217,7 @@ without `BAMT_TEST_GAME_DIR`).
 
 ## BL-090: The missing-part check needs official copies, and refuses official data's own quirks
 
-- Status: Found by the lead (2026-11-06, roster check on the official view); not implemented.
+- Status: Implemented (Codex, reviewed and merged by the lead, `3f2d3521`, merge `e3e47b63`); owner review pending.
 
 Lead's notes: `missing_parts` lets a reference outside the effective files pass only when an official copy references it
 too (`shared = official.references - official.files`). Without official copies, BL-086's common case, the references of
@@ -2275,7 +2275,7 @@ preview cache, and the CAB index's reverse lookup for model references.
 
 ## BL-093: Add and Batch Import identify the same files differently
 
-- Status: Found by the lead (2026-11-06); not implemented.
+- Status: Implemented (Codex, reviewed and merged by the lead, `3f2d3521`, merge `e3e47b63`); owner review pending.
 
 Lead's notes: Batch Import identifies by filename when the install has the name (`identify_import`); Add reads content
 and renames (`identify`). The same files can become different library entries (BL-088), and official files are refused by
@@ -2329,3 +2329,11 @@ the files came from that were not selected. Whether such a file is needed cannot
 Proposed: in Import Mod, a row with references held nowhere says which files are missing (file names when the folder
 has them); a row whose folder holds other files of its core and kind that were not selected offers them ("also in this
 folder") with one action to add them, worded as a suggestion, not as missing files.
+
+Lead's review of BL-089, BL-090 and BL-093 (2026-11-06): the first round followed the brief's decisions 1 and 7 too
+literally and removed three features: an older release updating several current files (a pre-split bundle), the same for
+generic bundles, and the canonical slot core for alias-named portrait and lobby mods. A correction round restored them
+(older releases keep their update targets; only 3D files are never renamed) with the four tests that pin them, and added
+a pre-split update test. Roster test: every playable student's portrait, lobby and 3D parts as one-part mods and complete
+slots, zero refusals in the official state and both states without official copies (full mode 640 s; the default mode
+samples 34 students for the latter two). Full suite on the merge: 4389 passed, 33 skipped; JavaScript 2382 passed.
