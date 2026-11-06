@@ -1,6 +1,7 @@
 """Preflight over synthetic serialized-file metadata, never game assets or external tools."""
 
 import base64
+from copy import deepcopy
 import json
 import struct
 from pathlib import Path
@@ -10,7 +11,12 @@ import pytest
 
 from ba_modding_toolkit.bundle import Bundle
 from bmpt.errors import ServiceError
-from bmpt.library import integrity
+from bmpt.library import integrity, service
+from bmpt.gameassets.cabs import CabIndex
+from bmpt.library.identity import identify
+from bmpt.library.judge import mod_versions
+from ba_modding_toolkit.naming import parse_filename
+from test_batch_import import analyze, env
 from bmpt.library.integrity import inspect as inspect_bundle
 
 from test_library import game_bundle, make_mod, setup_library
@@ -44,8 +50,10 @@ def serialized(setup_library, monkeypatch):
                     files={42: SimpleNamespace()})
                  for i, platform in enumerate(spec.get("platforms", ["StandaloneWindows64"]))}
         files.update({name: SimpleNamespace() for name in spec.get("resources", [])})
+        keys = set(spec.get("skeletons", {})) | set(spec.get("atlases", {})) | set(spec.get("textures", {}))
         contents[path.read_bytes()] = SimpleNamespace(env=SimpleNamespace(
-            files={"bundle": SimpleNamespace(files=files)}, objects=objects))
+            files={"bundle": SimpleNamespace(files=files)}, objects=objects),
+            get_asset_keys=lambda *args, **kwargs: keys)
         return path
 
     monkeypatch.setattr(integrity, "inspect", inspect_bundle)
@@ -461,3 +469,272 @@ def test_compatibility_stamp_tracks_current_game_and_mod_bytes_without_writing(s
     entry.file.touch()
     assert env.library.compatibility_stamp(entry.id) != changed_game
     assert (entry.file.read_bytes(), env.original.read_bytes()) == before
+
+
+# Replacement selection, dependency baselines and common Add/import identity.
+
+@pytest.fixture
+def checks(env, monkeypatch):
+    specs, reads, indexes = {}, [], []
+
+    def register(path, *, cab='cab-a', references=(), **kwargs):
+        specs[path.read_bytes()] = integrity.Contents(
+            platforms={'StandaloneWindows64'}, versions={'2021.3'}, files={cab},
+            references=set(references), **kwargs)
+        return path
+
+    def read(path, **kwargs):
+        return deepcopy(specs[path.read_bytes()])
+
+    def cabs(path):
+        reads.append(path)
+        return read(path).files
+
+    def index(dirs):
+        value = CabIndex(dirs, reader=cabs)
+        indexes.append(value)
+        return value
+
+    monkeypatch.setattr(integrity, 'inspect', read)
+    monkeypatch.setattr(integrity, 'metadata', read)
+    monkeypatch.setattr(integrity, 'cab_names', cabs)
+    monkeypatch.setattr(service, 'CabIndex', index)
+    register(env.original)
+    env.register, env.reads, env.indexes = register, reads, indexes
+    return env
+
+
+@pytest.mark.parametrize('kind,core,category', [
+    ('spr', 'test_spr', 'spinecharacters'), ('lobby', 'test_home_gl', 'spinelobbies'),
+    ('model', 'test_model', 'characters')])
+def test_coexisting_dates_pass_each_part_and_complete_set_in_add_and_batch(checks, kind, core, category):
+    e = checks
+    if kind == 'model':
+        e.catalog.variants['test'].model = core
+        e.catalog.variant_for_model_core = lambda name: e.catalog.variants['test'] if name == core else None
+    first = e.original if kind == 'spr' else game_bundle(e.game_dir, core, category=category, payload=b'first')
+    second = game_bundle(e.game_dir, core, category=category, date='2026-02-01', payload=b'second')
+    e.register(first, cab='cab-a', references={'cab-b'})
+    e.register(second, cab='cab-b', references={'cab-a'})
+    sources = [e.register(make_mod(path, e.tmp / 'upload', payload=f'mod {i}'.encode()),
+                          cab=cab, references={other})
+               for i, (path, cab, other) in enumerate([(first, 'cab-a', 'cab-b'), (second, 'cab-b', 'cab-a')])]
+    pin = e.library.current_pin()
+    assert mod_versions([('one', p.name) for p in sources], [p.name for p in (first, second)]) == ['', '']
+    for source, target in zip(sources, (first, second)):
+        files = {source.name: source}
+        assert e.library._replacements(files, [first, second], pin) == {target: source}
+        e.library._check_group(files, pin, compatibility=False)
+        report = e.library.inspect_import(files, pin, conversion=True)
+        assert not report['compatibility']['outdated']
+        assert report['direct'] == {target: source}
+        mod, = e.library.add([source])
+        assert not e.library.compatibility(mod.id)['outdated']
+    complete, = e.library.add(sources)
+    assert len(e.library._paths(e.library._record(complete.id))) == 2
+    row, = analyze(e, [sources[0].parent])['entries']
+    assert row['reason'] is None and len(row['paths']) == 2
+    assert len(e.library.add_files(kind, sources, direct=True).duplicates) == 1
+    # Apply with a different CRC still addresses only the selected dated slot.
+    alternate = e.register(make_mod(first, e.tmp / 'alternate', payload=b'CRC changed mod'), cab='cab-a', references={'cab-b'})
+    alternate = alternate.rename(alternate.with_name(alternate.name.rsplit('_', 1)[0] + '_1.bundle'))
+    mod, = e.library.add([alternate])
+    group, = e.library._plan(e.library._record(mod.id), lambda text: None, pin)
+    assert group.files[0].existing_path == first and not group.target_paths
+    before = second.read_bytes()
+    e.library.apply('test', f'mod:{mod.id}', kind=kind)
+    assert first.read_bytes() == alternate.read_bytes() and second.read_bytes() == before
+
+
+def test_replacement_precedence_cab_match_old_release_and_ambiguity(checks, monkeypatch):
+    e = checks
+    first = e.original
+    second = e.register(game_bundle(e.game_dir, date='2026-02-01', payload=b'second'), cab='cab-b')
+    source = e.register(make_mod(first, e.tmp / 'upload'), cab='cab-b')
+    pin = e.library.current_pin()
+    targets = [first, second]
+    assert e.library._replacements({source.name: source}, targets, pin) == {first: source}
+    different_crc = source.name.rsplit('_', 1)[0] + '_1.bundle'
+    assert e.library._replacements({different_crc: source}, targets, pin) == {first: source}
+    renamed = different_crc.replace('2026-01-01', '2025-01-01')
+    assert e.library._replacements({renamed: source}, targets, pin) == {second: source}
+    assert not e.library._check_group({renamed: source}, pin)['outdated']
+    assert e.library.direct_import({renamed: source}, pin)['direct'] == {second: source}
+    # Several CAB candidates prove a current release but cannot decide its target.
+    third = e.register(game_bundle(e.game_dir, part='002', payload=b'duplicate CAB'), cab='cab-b')
+    undecidable = renamed.replace('_003_', '_004_')
+    with pytest.raises(ServiceError, match='mod_target_ambiguous') as caught:
+        e.library._check_group({undecidable: source}, pin, compatibility=False)
+    assert caught.value.params == {'file': undecidable}
+    # A unique part can decide a current release despite duplicate CAB evidence.
+    assert e.library._replacements({renamed: source}, [second, third], pin) == {second: source}
+    # With neither matching name nor CAB, it is older, however many parts are live.
+    e.register(source, cab='cab-new')
+    assert e.library._replacements({renamed: source}, targets, pin) == {}
+    monkeypatch.setattr(service.mod_install, 'asset_match', lambda sources, candidates, log: (candidates, ''))
+    e.library._check_group({renamed: source}, pin, compatibility=False)
+    assert e.library.direct_import({renamed: source}, pin) is None
+    assert e.library._check_group({renamed: source}, pin)['outdated']
+    assert not e.library.mods()
+    second.unlink()
+    third.unlink()
+    mod, = e.library.add([source.rename(source.with_name(renamed))])
+    group, = e.library._plan(e.library._record(mod.id), lambda text: None, pin)
+    assert group.target_paths == [first]
+
+
+@pytest.mark.parametrize('missing_official', ['none', 'replaced', 'all'])
+def test_unreplaced_install_bundle_supplies_new_reference_without_official_copies(checks, monkeypatch, missing_official):
+    e = checks
+    shared = e.register(game_bundle(e.game_dir, 'other_spr', payload=b'shared'), cab='cab-shared')
+    source = e.register(make_mod(e.original, e.tmp / 'upload'), references={'cab-shared'})
+    official_for = e.library._official_for
+
+    def official(path, *args, **kwargs):
+        if missing_official == 'all' or missing_official == 'replaced' and path == e.original:
+            raise ServiceError('original_unavailable', file=path.name)
+        return official_for(path, *args, **kwargs)
+
+    monkeypatch.setattr(e.library, '_official_for', official)
+    files, pin = {source.name: source}, e.library.current_pin()
+    e.library._check_group(files, pin, compatibility=False)
+    assert e.library.inspect_import(files, pin, conversion=True)['direct'] == {e.original: source}
+    e.library.add([source])
+    assert len(e.indexes) == 1
+    first_reads = len(e.reads)
+    e.library._check_group(files, pin, compatibility=False)
+    assert len(e.reads) == first_reads, 'CAB metadata is reused for an unchanged install'
+    shared.write_bytes(game_bundle(e.tmp / 'changed', 'other_spr', payload=b'changed shared').read_bytes())
+    e.register(shared, cab='cab-no-longer-shared')
+    with pytest.raises(ServiceError, match='mod_parts_missing'):
+        e.library._check_group(files, pin, compatibility=False)
+
+
+def test_new_missing_references_name_replaced_files_then_folder_files_else_cab(checks):
+    e = checks
+    sibling = e.register(game_bundle(e.game_dir, part='002', payload=b'sibling'), cab='cab-b', references={'cab-a'})
+    source = e.register(make_mod(e.original, e.tmp / 'upload'), cab='cab-new', references={'CAB-nowhere'})
+    with pytest.raises(ServiceError, match='mod_parts_missing') as caught:
+        e.library._check_group({source.name: source}, e.library.current_pin(), compatibility=False)
+    assert caught.value.params['files'] == ', '.join(sorted(['CAB-nowhere', e.original.name]))
+    folder_copy = e.register(make_mod(e.original, e.tmp / 'companion', payload=b'folder companion'), cab='cab-a')
+    folder_copy = folder_copy.rename(source.parent / folder_copy.name.replace('_003_', '_004_'))
+    source = e.register(source, cab='cab-new')
+    with pytest.raises(ServiceError, match='mod_parts_missing') as caught:
+        e.library._check_group({source.name: source}, e.library.current_pin(), compatibility=False)
+    assert caught.value.params['files'] == folder_copy.name
+    assert sibling.exists() and not e.library.mods()
+
+
+@pytest.mark.parametrize('unavailable', [False, True])
+def test_baseline_quirks_pass_but_new_missing_atlas_does_not(checks, monkeypatch, unavailable):
+    e = checks
+    e.register(e.original, skeletons={'already_missing.skel': b'4.2'}, references={'cab-official-quirk'})
+    if unavailable:
+        def absent(*args, **kwargs):
+            raise ServiceError('original_unavailable')
+        monkeypatch.setattr(e.library, '_official_for', absent)
+    source = e.register(make_mod(e.original, e.tmp / 'upload'), skeletons={'already_missing.skel': b'4.2'},
+                        references={'cab-official-quirk'})
+    e.library._check_group({source.name: source}, e.library.current_pin(), compatibility=False)
+    assert e.library.inspect_import({source.name: source}, conversion=True)['direct']
+    e.register(source, skeletons={'already_missing.skel': b'4.2', 'new_missing.skel': b'4.2'})
+    with pytest.raises(ServiceError, match='mod_parts_missing') as caught:
+        e.library.add([source])
+    assert caught.value.params['files'] == 'new_missing.atlas'
+
+
+def test_cab_index_can_resolve_an_unreplaced_duplicate(checks):
+    e = checks
+    other = e.register(game_bundle(e.game_dir, 'other_spr', payload=b'duplicate cab'), cab='cab-a')
+    index = e.library._cab_index(e.library.current_pin())
+    assert index.resolve({'cab-a'}, e.original) == {'cab-a': str(e.original)}
+    assert index.resolve({'cab-a'}, e.original, exclude={e.original}) == {'cab-a': str(other)}
+
+
+@pytest.mark.parametrize('evidence', ['install', 'kept'])
+def test_add_and_batch_keep_known_names_despite_conflicting_content(checks, monkeypatch, evidence):
+    e = checks
+    source = e.register(make_mod(e.original, e.tmp / 'upload'))
+    if evidence == 'kept':
+        kept = e.root / 'originals' / e.original.name
+        kept.parent.mkdir(parents=True)
+        kept.write_bytes(e.original.read_bytes())
+        e.original.unlink()
+    monkeypatch.setattr('bmpt.library.identity.content_cores',
+                        lambda path: pytest.fail('known filenames identify without content'))
+    expected = (source.name, 'test', 'spr')
+    assert e.library.identify_import(source, source.name) == expected
+    row, = analyze(e, [source])['entries']
+    mod, = e.library.add([source])
+    assert (mod.file.name, mod.target, mod.kind) == expected
+    assert (Path(row['files'][0]['path']).name, row['variant'], row['kind']) == expected
+
+
+def test_model_content_keeps_its_dependency_core_even_when_variant_model_differs(checks, monkeypatch):
+    e = checks
+    dependency = e.register(game_bundle(e.game_dir, 'ch0258', category='characters', payload=b'dependency'))
+    source = e.register(make_mod(dependency, e.tmp / 'upload'))
+    variant = SimpleNamespace(key='ch0258', model='ch0258_02', spr=None, lobby=None, family='test')
+    e.catalog.variants['ch0258'] = variant
+    e.register(game_bundle(e.game_dir, 'ch0258_02', category='character', payload=b'prefab'), cab='cab-prefab')
+    e.catalog.variant_for_model_core = lambda core: variant if core in {'ch0258', 'ch0258_02'} else None
+    monkeypatch.setattr('bmpt.library.identity.content_cores', lambda path: {'model:ch0258'})
+    assert identify(source, source.name, e.catalog) == (source.name, 'ch0258', 'model')
+    assert e.library.identify_import(source, source.name) == (source.name, 'ch0258', 'model')
+    mod, = e.library.add([source])
+    assert (mod.core, mod.target, mod.kind) == ('ch0258', 'ch0258', 'model')
+    with pytest.raises(ServiceError, match='mod_target_mismatch'):
+        e.library.apply('ch0258', f'mod:{mod.id}', kind='model')
+
+
+@pytest.mark.parametrize('kind,core,category', [
+    ('spr', 'test_spr', 'spinecharacters'), ('lobby', 'test_home_gl', 'spinelobbies'),
+    ('model', 'test_model', 'characters')])
+def test_pre_split_older_bundle_keeps_all_update_targets_in_add_and_batch(checks, monkeypatch, kind, core, category):
+    from bmpt.webui import batch_import
+
+    e = checks
+    if kind == 'model':
+        e.catalog.variants['test'].model = core
+        e.catalog.variant_for_model_core = lambda name: e.catalog.variants['test'] if name == core else None
+    if kind != 'spr':
+        e.original = game_bundle(e.game_dir, core, category=category, payload=b'part 003')
+    targets = [e.register(e.original, cab='cab-003')]
+    targets += [e.register(game_bundle(e.game_dir, core, category=category, part=f'{part:03}',
+                                       payload=f'part {part}'.encode()), cab=f'cab-{part:03}') for part in range(3)]
+    old = game_bundle(e.tmp / 'input', core, category=category, part='000', date='2025-01-01', payload=b'pre-split')
+    old = old.rename(old.with_name(old.name.replace('2025-01-01_000', '2025-01-01')))
+    assert parse_filename(old.name).res_type is None
+    e.register(old, cab='cab-old', names={'com.nexon.bluearchive'})
+    upstream_matches, batch_matches = [], []
+
+    def match(sources, candidates, log, **kwargs):
+        upstream_matches.append((list(sources), list(candidates)))
+        return candidates, ''
+
+    def batch_match(sources, candidates, log, **kwargs):
+        batch_matches.append((list(sources), list(candidates)))
+        return candidates, ''
+
+    monkeypatch.setattr(service.mod_install, 'asset_match', match)
+    monkeypatch.setattr(batch_import, '_asset_match', batch_match)
+    pin = e.library.current_pin()
+    assert not e.library._replacements({old.name: old}, targets, pin)
+    assert e.library.direct_import({old.name: old}, pin) is None
+    # Dependencies must exclude all update targets, even though the old file has no part number.
+    e.register(old, cab='cab-old', references={'cab-001'}, names={'com.nexon.bluearchive'})
+    with pytest.raises(ServiceError, match='mod_parts_missing') as caught:
+        e.library._check_group({old.name: old}, pin, compatibility=False)
+    assert next(path.name for path in targets if '_001_' in path.name) == caught.value.params['files']
+    e.register(old, cab='cab-old', names={'com.nexon.bluearchive'})
+    row, = analyze(e, [old])['entries']
+    assert (row['kind'], row['state'], row['reason']) == (kind, 'update', None)
+    assert any(sources == [old] and set(candidates) == set(targets) for sources, candidates in batch_matches)
+    assert set(e.services.batch_import._latest[row['id']].targets) == set(targets)
+    mod, = e.library.add_files(kind, [old])
+    assert e.library.compatibility(mod.id, pin)['outdated']
+    group, = e.library._plan(e.library._record(mod.id), lambda text: None, pin)
+    assert all(file.action == service.mod_install.InstallAction.UPDATE for file in group.files)
+    assert set(group.target_paths) == set(targets)
+    assert any(set(candidates) == set(targets) for _, candidates in upstream_matches)

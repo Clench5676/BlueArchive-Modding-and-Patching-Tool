@@ -269,6 +269,7 @@ def header_only_bundles(monkeypatch):
     Content inspection is covered separately with object and container name fixtures."""
     monkeypatch.setattr("bmpt.library.identity.content_cores", lambda path: set())
     from bmpt.library.integrity import Contents
+    monkeypatch.setattr("bmpt.library.integrity.cab_names", lambda path: [])
     monkeypatch.setattr("bmpt.library.integrity.inspect",
                         lambda path, **kwargs: Contents(platforms={"StandaloneWindows64"}, files={"cab-test"}))
     monkeypatch.setattr("bmpt.library.integrity.metadata",

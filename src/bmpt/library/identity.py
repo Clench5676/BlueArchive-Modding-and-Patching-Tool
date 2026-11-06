@@ -145,7 +145,10 @@ def identify(path: Path, name: str, catalog, *, filename_only: bool = False) -> 
         variant = resolved[0][1]
     if kind == "model":
         # Keep prefab/dependency categories: their separate slots share the same model dev name.
-        core = getattr(variant, "model", None) or (resolved[0][0][6:] if resolved else parsed.core)
+        model_cores = {core[6:] for core, _ in resolved if core.startswith("model:")}
+        if len(model_cores) > 1:
+            raise ServiceError("mod_target_ambiguous", file=path)
+        core = next(iter(model_cores)) if model_cores else parsed.core
         category = parsed.category if parsed.category in MODEL_CATEGORIES else "characters"
     else:
         core = (variant.spr if kind == "spr" else variant.lobby) or (resolved[0][0] if resolved else parsed.core)

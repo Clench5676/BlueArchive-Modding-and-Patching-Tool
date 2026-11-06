@@ -907,12 +907,20 @@ def test_switch_between_library_mods_without_official_does_not_adopt_again(setup
     assert len(env.library.mods()) == 3
 
 
-def test_refuses_install_plan_outside_resource_dirs(setup_library, monkeypatch):
+@pytest.mark.parametrize("release", ["older", "current"])
+def test_refuses_install_plan_outside_resource_dirs(setup_library, monkeypatch, release):
     env = setup_library
     outside = game_bundle(env.tmp / "outside")
-    entry = env.library.add([make_mod(env.original, env.tmp / "input")])[0]
+    source = make_mod(env.original, env.tmp / "input")
+    if release == "older":
+        source = source.rename(source.with_name(source.name.replace("2026-01-01", "2025-01-01")))
+        monkeypatch.setattr(mod_install, "asset_match", lambda sources, candidates, log: (candidates, ""))
+    entry = env.library.add([source])[0]
     groups = mod_install.plan_mod_install([entry.file], [outside.parent])
-    monkeypatch.setattr(mod_install, "plan_mod_install", lambda *args: groups)
+    if release == "older":
+        monkeypatch.setattr(mod_install, "plan_mod_install", lambda *args: groups)
+    else:
+        monkeypatch.setattr(env.library, "_plan", lambda *args: groups)
     monkeypatch.setattr(env.library, '_needs_crc_fix', lambda *args: True)
     before = outside.read_bytes()
     expect_error("game_file_outside_resources", lambda: env.library.apply("test", f"mod:{entry.id}"))
@@ -920,14 +928,22 @@ def test_refuses_install_plan_outside_resource_dirs(setup_library, monkeypatch):
     assert not (env.root / "originals").exists()
 
 
-def test_symlink_destination_cannot_escape_resources(setup_library, monkeypatch):
+@pytest.mark.parametrize("release", ["older", "current"])
+def test_symlink_destination_cannot_escape_resources(setup_library, monkeypatch, release):
     env = setup_library
     outside = game_bundle(env.tmp / "outside")
-    entry = env.library.add([make_mod(env.original, env.tmp / "input")])[0]
+    source = make_mod(env.original, env.tmp / "input")
+    if release == "older":
+        source = source.rename(source.with_name(source.name.replace("2026-01-01", "2025-01-01")))
+        monkeypatch.setattr(mod_install, "asset_match", lambda sources, candidates, log: (candidates, ""))
+    entry = env.library.add([source])[0]
     groups = mod_install.plan_mod_install([entry.file], [env.game_dir])
     env.original.unlink()
     env.original.symlink_to(outside)
-    monkeypatch.setattr(mod_install, "plan_mod_install", lambda *args: groups)
+    if release == "older":
+        monkeypatch.setattr(mod_install, "plan_mod_install", lambda *args: groups)
+    else:
+        monkeypatch.setattr(env.library, "_plan", lambda *args: groups)
     monkeypatch.setattr(env.library, "_game_files", lambda *args: [env.original])
     expect_error("game_file_outside_resources", lambda: env.library.apply("test", f"mod:{entry.id}"))
     assert env.original.is_symlink()

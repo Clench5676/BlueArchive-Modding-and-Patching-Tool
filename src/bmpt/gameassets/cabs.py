@@ -214,10 +214,12 @@ class CabIndex:
             self._validated.add(path)
         return names
 
-    def resolve(self, wanted: set[str], hint_path: Path | None = None) -> dict[str, str]:
+    def resolve(self, wanted: set[str], hint_path: Path | None = None, *,
+                exclude: Iterable[Path] = ()) -> dict[str, str]:
         with self._lock, self.batch():
             self._sync()
             remaining = {name.lower() for name in wanted}
+            excluded = set(exclude)
             found = {}
             hint = parse_filename(hint_path.name) if hint_path else None
             prefix, core = (hint.prefix, hint.core.lower()) if hint else ("", "")
@@ -232,6 +234,8 @@ class CabIndex:
 
             for name in list(remaining):
                 for path in sorted(self._reverse.get(name, ()), key=rank):
+                    if path in excluded:
+                        continue
                     if name in self._read(path):
                         found[name] = str(path)
                         remaining.remove(name)
@@ -247,13 +251,15 @@ class CabIndex:
                 visited = 0
                 for path in self._orders[order]:
                     visited += 1
+                    if path in excluded:
+                        continue
                     names = self._read(path, revalidate=False)
                     for name in remaining.intersection(names):
                         found[name] = str(path)
                         remaining.remove(name)
                     if not remaining:
                         break
-                if self._depth and visited == len(paths):
+                if self._depth and not excluded and visited == len(paths):
                     self._complete = True
             # Recheck just the returned files; repeated scan prefixes can reuse batch metadata.
             found = {name: path for name, path in found.items() if name in self._read(Path(path))}
