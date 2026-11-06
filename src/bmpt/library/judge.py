@@ -91,8 +91,9 @@ def mod_versions(entries: Sequence[tuple[Hashable, str]], installed: Iterable[st
     """The version of its set each bundle name belongs to, in the order given: the one rule that groups the files of
     an import into mods, shared by the batch import and Add.
 
-    A set is what one import takes for one mod: the files of one core and kind (the batch import also separates
-    folders and variants), named by its key. Its files are the parts of one mod whatever their dates, because some
+    A set is what one import takes for one mod: the files of one core and kind, or of one model slot across its cores
+    (the batch import also separates folders and variants), named by its key. Its files are the parts of one mod
+    whatever their dates, because some
     cores keep their parts under different dates (a Spine core's textures and text, a model's prefab and
     dependencies). Only a set in which one part (``part_of``) occurs under more than one date holds several versions
     of the mod: the whole set then goes by date. Returns "" for every file of a set that is one mod, else the
