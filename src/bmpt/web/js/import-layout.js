@@ -98,6 +98,14 @@ export function importArtwork(ui, layouts) {
   };
   // the box of lines at NGUI's pitch, as drawn (the page font draws Latin larger, see ngui.js fontSizeFor)
   const lineBox = (text, fs) => String(text).split("\n").length * (ui.fontSizeFor?.(text, fs) ?? fs) * (ui.LINE_PITCH ?? 1.15);
+  // How far (units, down) a label whose lines sit at the top of its box (pivot 1) has to move for the centre of its ink to be the
+  // centre of the box. The lines fill the top of the box at NGUI's pitch; the ink of the script's reference glyph lies
+  // NGUI.inkShift off the centre of those lines (one baseline for all text of a language). 0 without NGUI's metrics.
+  const inkDrop = (w) => {
+    if (typeof ui.inkShift !== "function") return 0;
+    const px = ui.fontSizeFor?.(w.text, w.fontSize) ?? w.fontSize, lines = String(w.text).split("\n").length;
+    return w.h_ / 2 - lines * px * (ui.LINE_PITCH ?? 1.15) / 2 + ui.inkShift(w.text, px, { reference: true });
+  };
   // The Import State filter's caption (SortBtn/Btn_Normal/Type_2/Text, 336 wide, 56 down to 70 %): wrapped onto two lines
   // inside the button's body (456 x 116) before it shrinks, never ellipsized. The lines keep clear of the body's edges
   // round the label's own offset.
@@ -200,13 +208,24 @@ export function importArtwork(ui, layouts) {
       const t = content("List_01/Btn_Receive"), w = ui.find(t, "Label_Locale").widgets.find((w) => "text" in w);
       return ui.fitGroup(captions, max ?? w.fontSize, min ?? w.fontSize * 0.7, widths.map((width) => width - 60), 2, { maxH: t.widgets.find((x) => "sprite" in x).h_ - 20 })[0]?.fs;
     },
+    // A row control's caption matches the badge's screen size. Preserve the prefab's transforms and caption padding.
+    controlSize(caption, scale) {
+      const t = content("List_01/Btn_Receive"), node = ui.find(t, "Label_Locale"), body = t.widgets.find((w) => "sprite" in w);
+      const sx = t.scale?.[0] ?? 1, sy = t.scale?.[1] ?? 1, lx = node.scale?.[0] ?? 1, ly = node.scale?.[1] ?? 1;
+      const size = ROW_TEXT_SIZE * ROW_SCALE / (scale * sy * ly);
+      const meta = ui.atlasIndex?.()[body.atlas || "Common"]?.[body.sprite];
+      return { width: (ui.glyphWidth(caption, size) * lx + (meta?.borderLeft || 0) + (meta?.borderRight || 0) + 32) * sx * scale,
+        height: BUTTON_BODY_H * scale, size, minHeight: ((meta?.borderTop || 0) + (meta?.borderBottom || 0)) * sy * scale };
+    },
     // size: the row's shared caption size (buttonSize)
-    button(caption, width, primary = false, enabled = true, size = null) {
+    // bodyHeight: optional rendered height in units at the caller's scale; only row controls use it.
+    button(caption, width, primary = false, enabled = true, size = null, bodyHeight = null) {
       const t = !enabled ? mail("Bottom/ObjectsDisplayed_Unread/ReceiveAll/Btn_Disable")
         : primary ? mail("Bottom/ObjectsDisplayed_Unread/ReceiveAll/Btn") : content("List_01/Btn_Receive");
       at(t);
       const body = t;
-      resizeButton(body, width, BUTTON_BODY_H);
+      resizeButton(body, bodyHeight == null ? width : width / (t.scale?.[0] ?? 1),
+        bodyHeight == null ? BUTTON_BODY_H : bodyHeight / (t.scale?.[1] ?? 1));
       // NGUI's DOM renderer uses sprite flips for mirroring; negative prefab scales would produce negative CSS sizes.
       for (const c of body.children) for (const w of c.widgets) if (/^Common_Btn_.*_Pt$/.test(w.sprite || "")) {
         w.flip = (w.flip || 0) ^ (c.scale[0] < 0 ? 1 : 0) ^ (c.scale[1] < 0 ? 2 : 0);
@@ -214,9 +233,18 @@ export function importArtwork(ui, layouts) {
       }
       const captionNode = ui.find(t, "Label_Locale");
       const w = captionNode.widgets.find((w) => "text" in w), height = body.widgets.find((w) => "sprite" in w).h_ - 20;
+      if (bodyHeight != null) {
+        const lx = captionNode.scale?.[0] ?? 1, ly = captionNode.scale?.[1] ?? 1, bg = body.widgets.find((w) => "sprite" in w);
+        const meta = ui.atlasIndex?.()[bg.atlas || "Common"]?.[bg.sprite];
+        const left = (meta?.borderLeft || 0) + 16, right = (meta?.borderRight || 0) + 16;
+        const f = ui.fitText(caption, size ?? w.fontSize, size ?? w.fontSize, (bg.w_ - left - right) / lx, 1);
+        Object.assign(w, { text: f.text, fontSize: f.fs, w_: (bg.w_ - left - right) / lx, h_: bg.h_ / ly, pivot: 1 });
+        captionNode.pos = [(left - right) / 2, bg.h_ / 2 - inkDrop(w) * ly + ((meta?.borderBottom || 0) - (meta?.borderTop || 0)) / 2];
+        return t;
+      }
       if (size) {
         // the row's size: wrapped within the button at that size, whatever the prefab's own size is
-        const f = ui.fitText(caption, size, size, width - 60, 2);
+        const f = ui.wrapText?.(caption, size, width - 60, 2) ?? ui.fitText(caption, size, size, width - 60, 2);
         Object.assign(w, { text: f.text, fontSize: f.fs, w_: Math.max(w.w_ || 0, width - 60), h_: height });
         return t;
       }
@@ -281,7 +309,8 @@ export function importArtwork(ui, layouts) {
     // The beta type scale is a floor. Content changes geometry, never the
     // type size of other fields or rows (including hidden result states).
     rowTextSize() { return ROW_TEXT_SIZE; },
-    row({ name, kind, state, stateKey = "ready", meta, route = "", note = "", muted = false, counts = null, badge = true, result = false, unidentified = false, textSize = ROW_TEXT_SIZE }) {
+    // control: {width, height, minHeight?} in px. Share the badge line when it fits; otherwise reserve room under it.
+    row({ name, kind, state, stateKey = "ready", meta, route = "", note = "", muted = false, counts = null, badge = true, result = false, unidentified = false, textSize = ROW_TEXT_SIZE, control = null }) {
       const t = at(content(muted ? "List_02" : "List_01"));
       t.children = t.children.filter((c) => ["BG", "Deco", "Deco (1)", "Sprite", "Line", "BG_Icon", "Label_System", "Label_From",
         "Label_Locale_Received", "Label_Locale_Limit", "TimeLimit"].includes(c.name));
@@ -312,7 +341,19 @@ export function importArtwork(ui, layouts) {
       const divider = ui.find(t, "Line");
       divider.pos[0] = textLeft;
       Object.assign(divider.widgets[0], { pivot: 3, w_: 926 - textLeft });
+      // The ink of a label whose lines fill the top of its box (pivots 0 to 2): its top and bottom as y (units, up). null without
+      // NGUI's metrics or text.
+      const ink = (node) => {
+        const w = node.widgets.find((x) => "text" in x);
+        if (!w?.text || typeof ui.inkBand !== "function") return null;
+        const px = ui.fontSizeFor?.(w.text, w.fontSize) ?? w.fontSize, half = String(w.text).split("\n").length * px * (ui.LINE_PITCH ?? 1.15) / 2;
+        const band = ui.inkBand(w.text, px);
+        return { top: node.pos[1] - (half + band.top), bottom: node.pos[1] - (half + band.bottom) };
+      };
       const wrap = (value, width) => {
+        const fit = ui.wrapText?.(String(value ?? ""), textSize, width, Infinity)
+          ?? ui.fitGroup?.([String(value ?? "")], textSize, textSize, width, Infinity)?.[0];
+        if (fit?.fs === textSize && !fit.overflow) return fit.text;
         const rows = []; let line = "";
         for (const ch of String(value ?? "")) {
           if (line && ui.glyphWidth(line + ch, textSize) > width) {
@@ -332,9 +373,14 @@ export function importArtwork(ui, layouts) {
       };
       const title = ui.find(t, "Label_System"); title.pos[0] = textLeft;
       label(title, name, 926 - textLeft, 1);
-      const badgeWidth = Math.max(330, Math.min(926 - textLeft, ui.glyphWidth(state, textSize) + 32));
+      const fullBadgeWidth = Math.max(330, Math.min(926 - textLeft, ui.glyphWidth(state, textSize) + 32));
+      const controlRoom = control ? 910 - textLeft - control.width / ROW_SCALE - 28 : 0;
+      const besideWidth = Math.max(330, Math.min(fullBadgeWidth, controlRoom));
+      const beside = Boolean(control && badge && controlRoom >= 330 && wrap(state, besideWidth - 30).split("\n").length === 1
+        && (control.minHeight || 0) <= (textSize * 1.3 + 8) * ROW_SCALE);
+      const badgeWidth = beside ? besideWidth : fullBadgeWidth;
       const kindWidth = Math.max(200, Math.min(400, ui.glyphWidth(kind, textSize) + 16));
-      const secondBadge = unidentified || badge && badgeWidth + kindWidth + 56 > (926 - textLeft) * .72;
+      const secondBadge = Boolean(control) || unidentified || badge && badgeWidth + kindWidth + 56 > (926 - textLeft) * .72;
       const kindRight = badge && !secondBadge ? Math.min(550, 910 - badgeWidth - 28) : 550;
       const metaRight = kindRight - kindWidth - 30;
       const sender = ui.find(t, "Label_From"); at(sender, kindRight - kindWidth / 2, ROW_TEXT_TOP);
@@ -353,10 +399,15 @@ export function importArtwork(ui, layouts) {
       const received = ui.find(t, "Label_Locale_Received"); received.children = [];
       const metaLines = rowLabel(received, meta, counts ? 120 - textLeft : metaRight - textLeft);
       at(received, textLeft, ROW_TEXT_TOP);
+      // The prefab's vertical rhythm: the gap from the divider (Line) to the ink of the meta line. What hangs under the meta line
+      // (a badge on its own line, then a control) keeps that gap from the ink or background above it.
+      const metaInk = ink(received), dividerBottom = divider.pos[1] - divider.widgets[0].h_ / 2;
+      const gap = metaInk ? dividerBottom - metaInk.top : 16;
       let nextLine = Math.max(metaLines, kindLines);
       const badgeLine = secondBadge && badge ? nextLine++ : 0;
+      let platform = null;
       if (route) {
-        const platform = clone(received); platform.name = "Platform"; at(platform, textLeft, ROW_TEXT_TOP - nextLine * 56);
+        platform = clone(received); platform.name = "Platform"; at(platform, textLeft, ROW_TEXT_TOP - nextLine * 56);
         nextLine += rowLabel(platform, route, 926 - textLeft); t.children.push(platform);
       }
       let limit = ui.find(t, "Label_Locale_Limit");
@@ -386,6 +437,21 @@ export function importArtwork(ui, layouts) {
       rowLabel(statusLabel, state, badgeWidth - 30, 1);
       const statusBG = ui.find(status, "Bg"); at(statusBG, 0, 4);
       Object.assign(statusBG.widgets[0], { pivot: 1, h_: statusLabel.widgets[0].h_ + 8 });
+      // the ink of the badge's text, not its line box, is centred on the badge (every state, one baseline per language)
+      statusLabel.pos[1] -= inkDrop(statusLabel.widgets[0]);
+      // A badge on its own line hangs one gap under the ink of the meta (and kind) lines, not one line pitch under their boxes; the
+      // lines after it move with it.
+      if (secondBadge && badge && metaInk) {
+        const above = Math.min(...[metaInk, counts ? null : ink(sender)].filter(Boolean).map((box) => box.bottom));
+        const y = above - gap - 4, drop = status.pos[1] - y;
+        status.pos[1] = y;
+        for (const node of [platform, limit]) if (node) node.pos[1] -= drop;
+      }
+      // The control shares the badge background's vertical box and ends at the right column. A wrapped badge or a control
+      // that cannot fit keeps the old layout: one gap below the badge, with a gap under the control inside the grown card.
+      const reserved = control && badge ? { right: beside ? 910 : status.pos[0] + badgeWidth / 2, width: control.width / ROW_SCALE,
+        height: beside ? statusBG.widgets[0].h_ : control.height / ROW_SCALE,
+        top: status.pos[1] + 4 - (beside ? 0 : statusBG.widgets[0].h_ + gap), beside } : null;
       // Longer metadata wraps in full. Grow the prefab body downwards rather
       // than clipping a route or shrinking the whole list. Notes remain one line.
       let bottom = 329 / 2;
@@ -398,6 +464,7 @@ export function importArtwork(ui, layouts) {
       for (const path of ["Label_Locale_Received", "Label_From", "Platform", "Label_Locale_Limit", "TimeLimit"]) {
         const n = ui.find(t, path); if (n) include(n);
       }
+      if (reserved && !beside) bottom = Math.max(bottom, gap - (reserved.top - reserved.height));
       const extra = bottom - 329 / 2;
       if (extra > 0) for (const name of ["BG", "Sprite"]) {
         const n = ui.find(t, name); if (!n) continue;
@@ -405,6 +472,7 @@ export function importArtwork(ui, layouts) {
         for (const w of n.widgets) if (w.h_) w.h_ += extra;
       }
       t.rowHeight = 348 + extra;
+      t.control = reserved;
       return t;
     },
     // Items list card's Cover_Select provides the selected preview marker, independently of import selection.
@@ -419,6 +487,12 @@ export function importArtwork(ui, layouts) {
       return t;
     },
   };
+}
+
+// The box [x, y, width, height] (px, from the row's top left) of the control a row reserved room for (row({ control })), or null.
+export function controlRect(tree) {
+  const c = tree?.control;
+  return c ? [ROW_WIDTH / 2 + (c.right - c.width) * ROW_SCALE, 329 * ROW_SCALE / 2 - c.top * ROW_SCALE, c.width * ROW_SCALE, c.height * ROW_SCALE] : null;
 }
 
 export { clipButtonPatterns } from "./button-layout.js";

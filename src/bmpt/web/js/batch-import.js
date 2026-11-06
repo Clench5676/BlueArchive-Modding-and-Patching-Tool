@@ -18,9 +18,10 @@ import { S } from "./util.js";
 import { FOOTER, SMALL_BUTTON } from "./ui-tokens.js";
 import { ROW_W as OPTION_WIDTH, rowBase, radioRow } from "./settings-rows.js";
 import { BUTTON_BODY_H, loadImportLayouts, importArtwork, clipButtonPatterns, ROW_SCALE, ROW_WIDTH, ROW_HEIGHT, ROW_SELECTION, ROW_CHECK_TOP,
-  PAPER_CENTRE, emptyBlock } from "./import-layout.js";
+  PAPER_CENTRE, emptyBlock, controlRect } from "./import-layout.js";
 import { suggestImports } from "./import-assistants.js";
-import { createImportState, countsOf, eligible, RESOURCE_TYPES, STATES } from "./import-state.js";
+import { createImportState, countsOf, eligible, RESOURCE_TYPES, STATES, createMissingFlow, missingText, statusText, groupsText,
+  needsChoose, chooseSize, CHOOSE, NOTE_LEFT, noteRoom, sourceFolder } from "./import-state.js";
 import { characterPicker } from "./character-picker.js";
 import { scrollbar as gameScrollbar, scrollbarTrack } from "./scrollbar.js";
 
@@ -177,12 +178,13 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
     element.caption = `${source}/${caption}`; paint(element, art[source](caption), { scale, origin });
   }
   // name: the accessible name where the painted caption is not one (a glyph on a pager button)
-  function button(caption, action, { width = 180, primary = false, scale = 0.4, name = null } = {}) {
+  function button(caption, action, { width = 180, primary = false, scale = 0.4, name = null, bodyHeight = null } = {}) {
     const b = el("button", "hit import-button"); b.type = "button"; b.dataset.action = action; b.accessibleName = name;
-    Object.assign(b.style, { width: `${width}px`, height: `${BUTTON_BODY_H * scale}px` });
+    const height = (bodyHeight ?? BUTTON_BODY_H) * scale;
+    Object.assign(b.style, { width: `${width}px`, height: `${height}px` });
     b.refresh = () => {
       const key = JSON.stringify([b.caption, b.disabled, b.size]); if (key === b.drawKey) return; b.drawKey = key;
-      paint(b, art.button(b.caption, width / scale, primary, !b.disabled, b.size), { scale, origin: [width / 2, BUTTON_BODY_H * scale / 2] });
+      paint(b, art.button(b.caption, width / scale, primary, !b.disabled, b.size, bodyHeight), { scale, origin: [width / 2, height / 2] });
     };
     b.buttonWidth = width / scale;
     setCaption(b, caption); return b;
@@ -199,8 +201,8 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
   const TOOLBAR = [["files", "addFiles", 26, 174], ["folder", "addFolder", 210, 190], ["all", "all", 410, 126], ["none", "none", 546, 140],
     ["remove", "remove", 696, 150], ["removeImported", "removeImported", 856, 224], ["clear", "clear", 1090, 156]];
   function shareSizes() {
-    for (const [keys, range] of [[TOOLBAR.map(([key]) => key)], [["options", "recheck", "start"], FOOTER_ROW.size]]) {
-      const buttons = keys.map((key) => dom[key]).filter(Boolean);
+    for (const [keys, range] of [[TOOLBAR.map(([key]) => key)], [["fillAll", "options", "recheck", "start"], FOOTER_ROW.size]]) {
+      const buttons = keys.map((key) => dom[key]).filter((b) => b && !b.hidden);
       const size = buttons.length > 1 && art ? art.buttonSize(buttons.map((b) => b.caption), buttons.map((b) => b.buttonWidth), range) : null;
       for (const b of buttons) { b.size = size; b.refresh(); }
     }
@@ -328,6 +330,12 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
     place(dom.options, recheckX - SMALL_BUTTON.gap - wide, rowTop, wide, rowHeight); place(dom.recheck, recheckX, rowTop, rowWidth, rowHeight);
     place(dom.start, startX, rowTop, rowWidth, rowHeight);
     root.append(dom.options, dom.recheck, dom.start);
+    const footer = { left: recheckX - SMALL_BUTTON.gap - wide, gap: SMALL_BUTTON.gap, wide };
+    dom.fillAll = button(missingText("fillAll", { n: 1 }), "fillAll", { width: wide, scale: rowScale });
+    place(dom.fillAll, footer.left - footer.gap - wide, rowTop, wide, rowHeight); dom.fillAll.hidden = true;
+    dom.missingNote = place(el("div"), NOTE_LEFT, rowTop, noteRoom(footer), rowHeight);
+    dom.missingNoteRoom = noteRoom(footer); dom.missingNoteHeight = rowHeight;
+    root.append(dom.fillAll, dom.missingNote);
     root.addEventListener("click", (event) => {
       const target = event.target.closest?.("[data-action]");
       if (!target || target.disabled) return;
@@ -338,7 +346,7 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
         ascending = !ascending; renderToolbar(); renderRows();
       }, all: () => model.checkAll(true), none: () => model.checkAll(false), remove: () => model.remove(),
       removeImported: () => model.removeImported(), clear: () => model.clear(),
-      options: openOptions, recheck: () => model.recheck(), start: () => model.state.phase === "done" ? results() : start() };
+      options: openOptions, fillAll: () => missingFlow.fillAll(), recheck: () => model.recheck(), start: () => model.state.phase === "done" ? results() : start() };
       Promise.resolve(actions[target.dataset.action]?.()).catch((error) => { showError(report(error), error); });
     });
     root.addEventListener("dragover", (event) => { event.preventDefault(); if (event.dataTransfer) event.dataTransfer.dropEffect = model.busy() ? "none" : "copy"; });
@@ -389,7 +397,7 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
   const filterOptions = () => {
     const counts = countsOf(model.state.entries);
     return [["all", T("import.filterCount", { state: T("seg.all"), n: model.state.entries.length })],
-      ...STATES.map((state) => [state, T("import.filterCount", { state: T(`import.state.${state}`), n: counts[state] })])];
+      ...STATES.map((state) => [state, T("import.filterCount", { state: state === "incomplete" ? missingText("state") : T(`import.state.${state}`), n: counts[state] })])];
   };
   async function openFilter() {
     let draft = filter;
@@ -605,7 +613,8 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
       refresh: syncBar, onSelect: (variant) => model.assignCharacter(entry.id, variant) });
   }
 
-  const stateText = (entry) => T(entry.libraryOnly && eligible(entry) ? "import.libraryOnly" : entry.reason === "source_unknown" ? "import.reason.source_unknown" : `import.state.${entry.state}`);
+  const stateText = (entry) => entry.state === "incomplete" ? statusText(entry.missing)
+    : T(entry.libraryOnly && eligible(entry) ? "import.libraryOnly" : entry.reason === "source_unknown" ? "import.reason.source_unknown" : `import.state.${entry.state}`);
 
   function rowCopy(group, result = false) {
     const entry = representative(group.entries);
@@ -668,10 +677,12 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
         if (existing?.signature === signature) { rows.set(group.key, existing); contents.push(existing.row); continue; }
         const row = el("div", "import-row"); row.dataset.entry = entry.id;
         const name = identified(entry).name;
-        const drawing = paint(row, art.row({ name, ...rowCopy(group), textSize, stateKey: entry.state,
+        const chooseEntry = group.entries.find(needsChoose), control = chooseEntry ? chooseSize(art) : null;
+        const tree = art.row({ name, ...rowCopy(group), textSize, stateKey: entry.state,
           route: conversionRoutes(group.entries),
-          note: [...new Set(group.entries.map(rowNote).filter(Boolean))].join(listSeparator()), muted: !eligible(entry) }),
-        { scale: ROW_SCALE, origin: [ROW_WIDTH / 2, 329 * ROW_SCALE / 2], textures: { "Icon_Arona": Promise.resolve(null) } });
+          note: [...new Set(group.entries.map(rowNote).filter(Boolean))].join(listSeparator()), muted: !eligible(entry), control });
+        const drawing = paint(row, tree,
+          { scale: ROW_SCALE, origin: [ROW_WIDTH / 2, 329 * ROW_SCALE / 2], textures: { "Icon_Arona": Promise.resolve(null) } });
         // MailboxContent/List_01 or List_02/BG_Icon/Icon_Arona is the incoming Mod's real texture slot.
         const texturePath = `${eligible(entry) ? "List_01" : "List_02"}/BG_Icon/Icon_Arona`;
         let picture;
@@ -682,7 +693,17 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
         check.input.setAttribute("aria-label", T("import.selectNamed", { name })); place(check.label, ROW_WIDTH - 66, ROW_CHECK_TOP, 50, 50);
         const selection = place(el("div", "import-selection"), ROW_SELECTION.left, ROW_SELECTION.top, ROW_SELECTION.width, ROW_SELECTION.height);
         paint(selection, art.selection(), { scale: ROW_SELECTION.scale, origin: ROW_SELECTION.origin });
-        row.append(selection, copy, check.label); contents.push(row); rows.set(group.key, { row, copy, selection, input: check.input,
+        row.append(selection, copy, check.label);
+        if (chooseEntry) {
+          const [x, y, width, height] = controlRect(tree);
+          const choose = button(missingText("choose"), "chooseFiles", { width, scale: CHOOSE.scale, bodyHeight: height / CHOOSE.scale });
+          choose.size = control.size; choose.refresh(); place(choose, x, y, width, height);
+          choose.addEventListener("click", () => {
+            model.pick(false, false, sourceFolder(chooseEntry.paths[0]));
+          });
+          row.appendChild(choose);
+        }
+        contents.push(row); rows.set(group.key, { row, copy, selection, input: check.input,
           refresh: check.refresh, group, signature, prepare, drawing, previousRow: existing?.row });
       }
       const staged = [...rows.values()];
@@ -710,6 +731,8 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
       row.input.indeterminate = !row.input.checked && selectable.some((entry) => model.state.checked.has(entry.id));
       row.input.disabled = model.busy() || !model.state.valid || model.state.phase === "done" || !selectable.length;
       row.refresh();
+      const choose = [...row.row.querySelectorAll("button")].find((b) => b.dataset.action === "chooseFiles");
+      if (choose) { choose.disabled = model.busy(); choose.refresh(); }
     }
   }
 
@@ -730,6 +753,21 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
     if (state.error && state.error !== shownError) showError(report(state.error), state.error);
     shownError = state.error;
     renderRows(); renderPreview();
+    const fillable = missingFlow.fillable().length, incomplete = state.entries.filter((entry) => entry.state === "incomplete").length;
+    dom.fillAll.hidden = !fillable; dom.fillAll.disabled = busy;
+    setCaption(dom.fillAll, missingText("fillAll", { n: fillable })); shareSizes();
+    const note = incomplete ? groupsText(incomplete) : "";
+    if (dom.missingNote.caption !== note) {
+      dom.missingNote.caption = note;
+      if (!note) dom.missingNote.replaceChildren();
+      else {
+        const tree = art.note(note), label = tree.widgets.find((w) => "text" in w), room = dom.missingNoteRoom / S;
+        const fit = ui.fitText(note, label.fontSize, label.fontSize * .7, room, 2);
+        Object.assign(label, { text: fit.text, fontSize: fit.fs, w_: room,
+          h_: Math.max(label.h_, fit.fs * 1.3 * String(fit.text).split("\n").length), pivot: 3 });
+        paint(dom.missingNote, tree, { scale: S, origin: [0, dom.missingNoteHeight / 2] });
+      }
+    }
   }
 
   function relabel() {
@@ -932,9 +970,24 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
     });
   }
 
+  async function reveal(id) {
+    const entry = model.state.entries.find((entry) => entry.id === id);
+    if (entry && (filter !== "all" && entry.state !== filter || !identified(entry).search.includes(query))) {
+      filter = "all"; query = ""; dom.search.value = ""; countsKey = null; renderToolbar(); renderRows();
+    }
+    // Row replacement itself is tracked; wait for it as well as the individual artwork jobs.
+    while (drawings.size) await Promise.all([...drawings]);
+    [...rows.values()].find((record) => record.group.entries.some((entry) => entry.id === id))?.row.scrollIntoView?.({ block: "nearest" });
+  }
+  const missingFlow = createMissingFlow({ model, identify: (entry) => identified(entry).name,
+    kindName: (kind) => T(KIND_KEYS[kind]), title: () => T("nav.import"), reveal, active: () => visible,
+    failed: (error) => showError(report(error), error),
+    ask: async ({ title, lines, ok }) => (await popups.message({ title, lines, plain: true,
+      fitTogether: lines.map((_, i) => i), ok, cancel: T("popup.cancel") })).button === "ok" });
   model.subscribe(() => {
     if (liveRefreshPending && !model.busy()) { liveRefreshPending = false; refreshCurrentPreviews(); }
     refreshAppliedPreviews(); render(); wake(); holdArtwork(); loading.refresh?.();
+    missingFlow.onChange(model.state);
   });
   return {
     model,

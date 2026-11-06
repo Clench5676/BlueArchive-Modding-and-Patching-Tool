@@ -1,8 +1,13 @@
+import { T } from "./i18n.js";
 // Batch import's RPC contract and session state, independent of the screen and its artwork.
-export const STATES = Object.freeze(["ready", "convert", "update", "library", "installed", "blocked", "done"]);
+export const STATES = Object.freeze(["ready", "convert", "update", "library", "installed", "blocked", "incomplete", "done"]);
 export const RESOURCE_TYPES = Object.freeze(["ALL", "Texture2D", "TextAsset", "Mesh", "AnimationClip"]);
 export const eligible = (entry) => ["ready", "convert", "update"].includes(entry?.state);
 export const pathsOf = (entries) => [...new Set(entries.flatMap((entry) => entry.paths || []))];
+export function sourceFolder(path) {
+  const end = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
+  return end < 0 ? "" : path.slice(0, end + (end === 0 || end === 2 && path[1] === ":" ? 1 : 0));
+}
 const snapshot = (options) => ({ ...options, types: [...options.types] });
 
 export function countsOf(entries) {
@@ -14,7 +19,7 @@ export function countsOf(entries) {
 export function createImportState({ rpc, waitJob, changed = () => {}, suggest = async () => [] }) {
   const state = { entries: [], checked: new Set(), selected: null, phase: "idle", progress: null, error: null,
     options: null, results: [], taskEntries: [], taskOptions: null, suggestions: [], valid: false, analysisRevision: null,
-    jobId: null, reconnecting: false };
+    jobId: null, reconnecting: false, analysisCause: null };
   const listeners = new Set();
   const pendingAnalyses = new Set();
   let revision = 0, contextRevision = 0, retryPaths = [], retryRecursive = false, starting = false, optionsRead = null, waitGeneration = 0;
@@ -49,7 +54,7 @@ export function createImportState({ rpc, waitJob, changed = () => {}, suggest = 
     return optionsRead;
   }
 
-  async function analyze(paths, recursive = false) {
+  async function analyze(paths, recursive = false, cause = "add") {
     if (busy() || !paths.length) return false;
     retryPaths = [...new Set(paths)]; retryRecursive = recursive;
     const before = new Map(state.entries.map((entry) => [entry.id, entry]));
@@ -57,7 +62,7 @@ export function createImportState({ rpc, waitJob, changed = () => {}, suggest = 
     const contextAtStart = contextRevision;
     const removed = new Set();
     pendingAnalyses.add(removed);
-    state.phase = "analyzing"; state.error = null; state.valid = false;
+    state.phase = "analyzing"; state.error = null; state.valid = false; state.analysisCause = cause;
     resetResults(); revision++; emit();
     try {
       const id = await rpc("import.analyze", { paths: retryPaths, recursive });
@@ -96,21 +101,21 @@ export function createImportState({ rpc, waitJob, changed = () => {}, suggest = 
     },
     subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); },
     add,
-    async pick(folder, recursive = false) {
+    async pick(folder, recursive = false, directory = null) {
       if (busy()) return false;
       const previous = state.phase;
       state.phase = "picking"; state.error = null; emit();
       try {
-        const { paths } = await rpc("import.pick", { folder, recursive: folder && recursive });
+        const { paths } = await rpc("import.pick", { folder, recursive: folder && recursive, ...(directory ? { directory } : {}) });
         state.phase = previous; emit();
         return paths.length ? add(paths, folder && recursive) : false;
       } catch (error) { fail(error); return false; }
     },
-    recheck() { return analyze(retryPaths.length ? retryPaths : pathsOf(state.entries), retryRecursive); },
+    recheck() { return analyze(retryPaths.length ? retryPaths : pathsOf(state.entries), retryRecursive, "recheck"); },
     async assignCharacter(id, variant) {
       if (busy() || !state.entries.some((entry) => entry.id === id)) return false;
       const contextAtStart = contextRevision;
-      state.phase = "analyzing"; state.error = null; resetResults(); revision++; emit();
+      state.phase = "analyzing"; state.error = null; state.analysisCause = "assignment"; resetResults(); revision++; emit();
       try {
         const job = await rpc("import.assignCharacter", { id, variant });
         const entry = await waitForJob(job);
@@ -125,7 +130,7 @@ export function createImportState({ rpc, waitJob, changed = () => {}, suggest = 
     async setSource(id, server, platform) {
       if (busy() || !state.entries.some((entry) => entry.id === id)) return false;
       const contextAtStart = contextRevision;
-      state.phase = "analyzing"; state.error = null; resetResults(); revision++; emit();
+      state.phase = "analyzing"; state.error = null; state.analysisCause = "source"; resetResults(); revision++; emit();
       try {
         const job = await rpc("import.setSource", { id, server, platform });
         const entry = await waitForJob(job);
@@ -226,4 +231,61 @@ export function createImportState({ rpc, waitJob, changed = () => {}, suggest = 
       } catch (error) { state.valid = false; changed(); fail(error); return false; }
     },
   };
+}
+
+// Import Mod's missing-file prompts and feedback, over the real import session model.
+
+export const missingText = (key, params = {}) => T(`import.missing.${key}`, params);
+export const isIncomplete = (entry) => entry?.state === "incomplete";
+export const hasFound = (entry) => isIncomplete(entry) && !!entry.missing?.found.length;
+export const needsChoose = (entry) => isIncomplete(entry) && !entry.missing?.found.length;
+export const statusText = (missing, text = missingText) => missing.found.length
+  ? text("count", { n: missing.found.length }) : text("notFound", { n: missing.unresolved });
+export const groupsText = (n, text = missingText) => text(n === 1 ? "groupsOne" : "groups", { n });
+export const CHOOSE = Object.freeze({ scale: 0.34 });
+export const chooseSize = (art) => art.controlSize(missingText("choose"), CHOOSE.scale);
+export const NOTE_LEFT = 46, NOTE_GAP = 24;
+export const noteRoom = (footer) => footer.left - footer.gap - footer.wide - NOTE_GAP - NOTE_LEFT;
+export const promptLines = (entry, { student, kind, text = missingText }) => [text("promptHead"),
+  ...entry.missing.found.map((file) => text("promptFile", { name: file.name })), text("promptTail", { student, kind })];
+
+export function createMissingFlow({ model, identify, kindName, ask, title = "", reveal = () => {}, text = missingText,
+  active = () => true, failed = () => {}, defer = queueMicrotask }) {
+  let seen = null, incomplete = [], shown = new Set();
+  const key = (entry) => JSON.stringify([entry.paths.slice().sort(), entry.missing.found.map((file) => file.path).sort()]);
+  const fillable = () => model.state.entries.filter(hasFound);
+  async function promptRow(entry) {
+    shown.add(key(entry));
+    const revision = model.state.analysisRevision;
+    if (!await ask({ title: typeof title === "function" ? title() : title,
+      lines: promptLines(entry, { student: identify(entry), kind: kindName(entry.kind), text }), ok: text("addTogether") })) return false;
+    if (model.state.analysisRevision !== revision || !model.state.entries.includes(entry)) return false;
+    return model.add(entry.missing.found.map((file) => file.path));
+  }
+  async function fillAll() {
+    const rows = fillable();
+    const revision = model.state.analysisRevision;
+    if (!rows.length || model.busy()) return false;
+    rows.forEach((entry) => shown.add(key(entry)));
+    const lines = rows.map((entry) => text("fillLine", { student: identify(entry), kind: kindName(entry.kind), n: entry.missing.found.length }));
+    if (!await ask({ title: text("fillAll", { n: rows.length }), lines, ok: text("addTogether") })) return false;
+    if (model.state.analysisRevision !== revision || !rows.every((row) => model.state.entries.includes(row))) return false;
+    return model.add(rows.flatMap((entry) => entry.missing.found.map((file) => file.path)));
+  }
+  function onChange(state) {
+    if (!state.entries.length && !model.busy()) { seen = null; incomplete = []; shown.clear(); return; }
+    if (state.phase !== "idle" || !state.valid || state.analysisRevision == null || state.analysisRevision === seen) return;
+    seen = state.analysisRevision;
+    if (state.analysisCause === "recheck") shown.clear();
+    const completed = state.entries.find((entry) => !["incomplete", "blocked"].includes(entry.state) && incomplete.some((old) =>
+      old.paths.some((path) => entry.paths.includes(path))));
+    incomplete = state.entries.filter(isIncomplete);
+    if (completed) { model.select(completed.id); reveal(completed.id); }
+    const rows = fillable(), revision = seen;
+    if (rows.length === 1 && !shown.has(key(rows[0]))) defer(() => {
+      if (active() && !model.busy() && model.state.analysisRevision === revision && model.state.entries.includes(rows[0]))
+        promptRow(rows[0]).catch(failed);
+    });
+  }
+  return { onChange, fillable, promptRow, fillAll };
 }

@@ -74,7 +74,7 @@ const { importArtwork, clipButtonPatterns, selectionWindow, ROW_SELECTION, ROW_S
 const { frameOutline } = await import("../../src/bmpt/web/js/row-thumbnail.js");
 const { ROW_W: OPTION_WIDTH, rowBase, radioRow } = await import("../../src/bmpt/web/js/settings-rows.js");
 const { S } = await import("../../src/bmpt/web/js/util.js");
-const { createImportState } = await import("../../src/bmpt/web/js/import-state.js");
+const { createImportState, sourceFolder } = await import("../../src/bmpt/web/js/import-state.js");
 const { setStrings } = await import("../../src/bmpt/web/js/i18n.js");
 const flatten = (data, prefix = "", result = {}) => {
   for (const [key, value] of Object.entries(data)) {
@@ -2273,4 +2273,164 @@ for (const locale of ["en-US", "th-TH", "zh-CN", "zh-TW", "ja-JP", "ko-KR"]) tes
     assert.equal(result, `${strings.webui.mods.incomplete} - ${strings.webui.mods.keptCurrent}`);
     h.page.hide();
   } finally { setStrings("en-US", flatten(JSON.parse(readFileSync(new URL("../../src/bmpt/locales/en-US.json", import.meta.url), "utf8")))); }
+});
+
+// Missing files use the shipped page and real session model; only its RPC boundary is replaced.
+const missingEntry = (id, count = 1) => ({ ...entry(id, "incomplete"), reason: null,
+  missing: { unresolved: count ? 0 : 2, found: Array.from({ length: count }, (_, i) => ({
+    path: `/fixtures/${id}-extra-${i}.bundle`, name: `${id}-extra-${i}.bundle`, size: 128 })) } });
+const resolveAnalysis = async (h, entries, revision) => {
+  await flush(); h.analyses.at(-1).resolve({ entries, revision, skipped: 0 }); await flush(); await h.page.settled(); await flush();
+};
+const beginAnalysis = async (h, entries, revision = 1) => {
+  const work = h.page.drop(entries.flatMap((entry) => entry.paths)); await resolveAnalysis(h, entries, revision); await work;
+};
+
+test("one incomplete row prompts once; unrelated additions keep the decline; Recheck asks again", async () => {
+  const h = await fixture(), a = missingEntry("a", 3);
+  await beginAnalysis(h, [a]);
+  assert.equal(h.messages.length, 1);
+  assert.deepEqual(h.messages[0].lines, ["Other files in this folder:", ...a.missing.found.map((f) => `- ${f.name}`),
+    "Possibly part of Saved Alias, Portrait. Add to the import list?"]);
+  assert.equal(h.messages[0].ok, "Add"); assert.equal(h.messages[0].cancel, "Cancel");
+  assert.equal(h.action("start").disabled, true); assert.equal(h.action("fillAll").hidden, false);
+  assert.equal(h.row("a").querySelector("input").checked, false);
+  assert.match(h.host.textContent, /Missing Files \(3\)/); assert.match(h.host.textContent, /1 Group Missing Files/);
+  const add = h.page.drop(entry("b").paths); await resolveAnalysis(h, [a, entry("b")], 2); await add;
+  assert.equal(h.messages.length, 1);
+  await h.action("recheck").click(); await resolveAnalysis(h, [a, entry("b")], 3);
+  assert.equal(h.messages.length, 2);
+  await h.action("filter").click(); await h.page.settled();
+  const incomplete = walk(h.dialog).find((el) => el.dataset.value === "incomplete");
+  assert.ok(incomplete); await incomplete.click(); await h.action("ok", h.dialog).click(); await h.page.settled();
+  assert.ok(h.row("a")); assert.equal(h.row("b"), undefined);
+});
+
+test("several incomplete rows use one list confirmation and select and reveal the completed row", async () => {
+  const h = await fixture(), a = missingEntry("a", 2), b = { ...missingEntry("b", 3), kind: "lobby" };
+  const revealed = []; El.prototype.scrollIntoView = function () { revealed.push(this.dataset.entry); };
+  await beginAnalysis(h, [a, b]);
+  assert.equal(h.messages.length, 0); assert.equal(h.action("fillAll").hidden, false);
+  assert.match(h.host.textContent, /2 Groups Missing Files/);
+  h.answers.push({ button: "ok" }); await h.action("fillAll").click(); await flush();
+  assert.equal(h.messages.length, 1);
+  assert.deepEqual(h.messages[0].lines, ["- Saved Alias, Portrait (2)", "- Student b, Memorial Lobby (3)"]);
+  const requested = h.analyses.at(-1).params.paths;
+  assert.deepEqual(new Set(requested), new Set([...a.paths, ...b.paths, ...a.missing.found.map((f) => f.path), ...b.missing.found.map((f) => f.path)]));
+  const completed = { ...entry("a-complete"), variant: "a", paths: [...a.paths, ...a.missing.found.map((f) => f.path)] };
+  await resolveAnalysis(h, [completed, { ...b, state: "ready", paths: [...b.paths, ...b.missing.found.map((f) => f.path)] }], 2);
+  assert.equal(h.page.model.state.selected, completed.id); assert.deepEqual(revealed, [completed.id]);
+  assert.equal(h.page.model.state.checked.has(completed.id), true); assert.equal(h.action("fillAll").hidden, true);
+  delete El.prototype.scrollIntoView;
+});
+
+test("a row with nothing found opens the native picker in its own folder and adds the paths", async () => {
+  const h = await fixture(), a = missingEntry("a", 0);
+  await beginAnalysis(h, [a]);
+  assert.equal(h.messages.length, 0); assert.equal(h.action("fillAll").hidden, true);
+  assert.match(h.host.textContent.replace(/\s+/g, " "), /Missing Files \(2\), Not Found in Selected Folders/);
+  h.picker(["/elsewhere/part.bundle"]); await h.action("chooseFiles").click(); await flush();
+  assert.deepEqual(h.calls.findLast((call) => call.method === "import.pick").params,
+    { folder: false, recursive: false, directory: "/fixtures" });
+  assert.deepEqual(h.analyses.at(-1).params.paths, [...a.paths, "/elsewhere/part.bundle"]);
+  await resolveAnalysis(h, [{ ...a, state: "ready", paths: [...a.paths, "/elsewhere/part.bundle"] }], 2);
+  assert.equal(h.page.model.selected().length, 1);
+});
+
+test("Import takes the ticked complete rows and leaves missing rows available later in the session", async () => {
+  const h = await fixture(), a = missingEntry("a", 0), b = entry("b");
+  await beginAnalysis(h, [a, b]);
+  const work = h.page.model.start(); await flush();
+  assert.deepEqual(h.runs.at(-1).params.ids, ["b"]);
+  h.runs.at(-1).resolve({ results: [{ id: "b", outcome: "imported", libraryId: "lib-b" }] }); await work; await h.page.settled();
+  assert.equal(h.page.model.state.entries.find((e) => e.id === "a").state, "incomplete");
+  assert.equal(h.page.model.state.entries.find((e) => e.id === "b").state, "done");
+  const add = h.page.drop(["/elsewhere/missing.bundle"]);
+  await resolveAnalysis(h, [{ ...a, state: "ready", paths: [...a.paths, "/elsewhere/missing.bundle"] }, { ...b, state: "done" }], 2); await add;
+  assert.equal(h.page.model.state.selected, "a"); assert.equal(h.page.model.state.checked.has("a"), true);
+});
+
+const selectedParts = (row, count) => {
+  const paths = Array.from({ length: count }, (_, i) => `/fixtures/${row.id}-part-${i}.bundle`);
+  return { ...row, paths, files: paths.map((path) => ({ path, size: 1024, target: path.split("/").at(-1) })), size: count * 1024 };
+};
+const completedEntry = (row, added, id = row.id) => {
+  const paths = [...row.paths, ...added], result = { ...row, id, state: "ready", paths,
+    files: paths.map((path) => ({ path, size: 1024, target: path.split("/").at(-1) })), size: paths.length * 1024 };
+  delete result.missing; return result;
+};
+
+test("scenario 1: a complete portrait stays silent beside a lobby with three files found", async () => {
+  const h = await fixture(), lobby = selectedParts({ ...missingEntry("b", 3), kind: "lobby" }, 2);
+  await beginAnalysis(h, [selectedParts(entry("a"), 4), lobby]);
+  assert.equal(h.messages.length, 1); assert.equal(h.messages[0].lines.length, 5);
+  assert.match(h.messages[0].lines.at(-1), /Student b, Memorial Lobby/);
+  assert.deepEqual(h.page.model.selected().map((entry) => entry.id), ["a"]);
+});
+
+test("scenario 2: adding the one omitted 3D part completes and reveals the model", async () => {
+  const h = await fixture(), partial = selectedParts({ ...missingEntry("b", 1), kind: "model" }, 3);
+  h.answers.push({ button: "ok" });
+  await beginAnalysis(h, [partial]);
+  assert.equal(h.messages.length, 1); assert.match(h.messages[0].lines.at(-1), /3D Model/);
+  assert.ok(h.analyses.at(-1).params.paths.includes(partial.missing.found[0].path));
+  await resolveAnalysis(h, [completedEntry(partial, [partial.missing.found[0].path], "complete")], 2);
+  assert.equal(h.page.model.state.entries[0].files.length, 4);
+  assert.equal(h.page.model.state.selected, "complete"); assert.equal(h.page.model.selected().length, 1);
+});
+
+test("scenario 3: a 25-row pack fills three rows, later supplies one, imports 24 and retains one", async () => {
+  const h = await fixture();
+  let rows = Array.from({ length: 25 }, (_, i) => i < 3 ? missingEntry(`pack-${i}`, i === 2 ? 2 : 1)
+    : i < 5 ? missingEntry(`pack-${i}`, 0) : entry(`pack-${i}`));
+  rows = rows.map((row) => ({ ...row, paths: Array.from({ length: 5 }, (_, i) => `/pack/${row.id}-${i}.bundle`),
+    files: Array.from({ length: 5 }, (_, i) => ({ path: `/pack/${row.id}-${i}.bundle`, size: 128, target: null })) }));
+  await beginAnalysis(h, rows);
+  assert.equal(h.page.model.state.entries.length, 25); assert.equal(h.page.model.selected().length, 20);
+  assert.equal(h.messages.length, 0); assert.equal(h.action("fillAll").caption, "Complete All (3 Groups)");
+  h.answers.push({ button: "ok" }); await h.action("fillAll").click(); await flush();
+  assert.equal(h.messages[0].lines.length, 3);
+  rows = rows.map((row, i) => i < 3 ? { ...row, state: "ready", paths: [...row.paths, ...row.missing.found.map((f) => f.path)] } : row);
+  await resolveAnalysis(h, rows, 2);
+  assert.equal(h.page.model.selected().length, 23); assert.equal(h.action("fillAll").hidden, true);
+  const add = h.page.drop(["/elsewhere/missing.bundle"]);
+  rows[3] = { ...rows[3], state: "ready", paths: [...rows[3].paths, "/elsewhere/missing.bundle"] };
+  await resolveAnalysis(h, rows, 3); await add;
+  assert.equal(h.page.model.state.selected, rows[3].id);
+  const importing = h.page.model.start(); await flush();
+  assert.equal(h.runs.at(-1).params.ids.length, 24);
+  h.runs.at(-1).resolve({ results: h.runs.at(-1).params.ids.map((id) => ({ id, outcome: "imported" })) });
+  await importing; await h.page.settled();
+  assert.deepEqual(h.page.model.state.entries.filter((entry) => entry.state === "incomplete").map((entry) => entry.id), ["pack-4"]);
+  assert.equal(h.page.model.state.entries.filter((entry) => entry.state === "done").length, 24);
+});
+
+test("scenario 4: a later folder supplies the model and adds another student's portrait", async () => {
+  const h = await fixture(), partial = selectedParts({ ...missingEntry("b", 0), kind: "model" }, 3);
+  await beginAnalysis(h, [partial]); assert.equal(h.messages.length, 0);
+  const add = h.page.drop(["/download-b"]);
+  await resolveAnalysis(h, [completedEntry(partial, ["/download-b/model.bundle"]), selectedParts(entry("a"), 4)], 2); await add;
+  assert.ok(h.page.model.state.entries.every((entry) => entry.files.length === 4));
+  assert.equal(h.page.model.state.entries.length, 2); assert.equal(h.page.model.selected().length, 2);
+  assert.equal(h.page.model.state.selected, "b"); assert.equal(h.messages.length, 0);
+});
+
+
+test("row picker folders preserve POSIX and Windows drive roots", () => {
+  assert.equal(sourceFolder("/part.bundle"), "/");
+  assert.equal(sourceFolder("/incoming/part.bundle"), "/incoming");
+  assert.equal(sourceFolder(String.raw`C:\part.bundle`), "C:\\");
+  assert.equal(sourceFolder(String.raw`C:\incoming\part.bundle`), String.raw`C:\incoming`);
+});
+
+test("completing a row already present in the library still selects and reveals it", async () => {
+  const h = await fixture(), partial = missingEntry("b", 0), revealed = [];
+  El.prototype.scrollIntoView = function () { revealed.push(this.dataset.entry); };
+  try {
+    await beginAnalysis(h, [partial]);
+    const add = h.page.drop(["/elsewhere/known.bundle"]);
+    await resolveAnalysis(h, [{ ...completedEntry(partial, ["/elsewhere/known.bundle"], "known"), state: "library" }], 2); await add;
+    assert.equal(h.page.model.state.selected, "known"); assert.deepEqual(revealed, ["known"]);
+    assert.equal(h.page.model.state.checked.size, 0);
+  } finally { delete El.prototype.scrollIntoView; }
 });
