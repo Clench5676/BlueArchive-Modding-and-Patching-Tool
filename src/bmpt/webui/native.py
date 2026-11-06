@@ -136,7 +136,8 @@ def copy_text(text: str) -> None:
     elif sys.platform == "win32":
         import ctypes
         from ctypes import wintypes
-        user, kernel = ctypes.windll.user32, ctypes.windll.kernel32
+        # Private libraries: prototypes set on ctypes.windll would change pywebview's calls as well.
+        user, kernel = ctypes.WinDLL("user32", use_last_error=True), ctypes.WinDLL("kernel32", use_last_error=True)
         kernel.GlobalAlloc.restype = wintypes.HGLOBAL
         kernel.GlobalLock.argtypes = [wintypes.HGLOBAL]
         kernel.GlobalLock.restype = ctypes.c_void_p

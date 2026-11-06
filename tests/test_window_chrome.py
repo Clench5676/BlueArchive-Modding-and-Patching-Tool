@@ -1004,3 +1004,17 @@ def test_toolbar_layouts_in_a_burst_are_logged(caplog, monkeypatch):
             chrome.update(22, 44, drag)
     lines = [r.getMessage() for r in caplog.records if "toolbar layouts" in r.getMessage()]
     assert lines == ["Native window chrome: 30 toolbar layouts in 10 s"]
+
+
+def test_windows_host_prototypes_a_user32_of_its_own(monkeypatch):
+    # BL-094: prototypes set on ctypes.windll.user32 broke pywebview's window.move (None sizes) on Windows.
+    import ctypes
+
+    from bmpt.webui import window_windows
+
+    calls = []
+    monkeypatch.setattr(ctypes, "WinDLL", lambda *args, **kwargs: calls.append((args, kwargs)) or object(),
+                        raising=False)
+    library = window_windows.private_user32()
+    assert calls == [(("user32",), {"use_last_error": True})]
+    assert library is not getattr(getattr(ctypes, "windll", None), "user32", None)
