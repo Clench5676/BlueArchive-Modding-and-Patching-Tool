@@ -2380,3 +2380,12 @@ mods of which the slot's one choice could apply only one; a correction round gro
 row, one choice). Real-install tests on cloned official files: the tester's `_004`/`_006` mod and a complete 13-file mod
 of Hoshino (Armed), through Add and Batch Import, apply, the switch candidates and restore. Full suite on the merge: 4411
 passed, 33 skipped; JavaScript 2357 passed.
+
+Owner, 2026-11-06, on the prototype (`proto/bl096`, a Sonnet subagent's build on the real Import Mod page with mocked
+data, served by the development web UI): the flow is accepted ("everything else looks fine"). Corrections: the English
+prompt was too colloquial; the owner approved "Other files in this folder:", "Possibly part of <student>, <kind>. Add to
+the import list?", the button "Add" and confirmation lines "- <student>, <kind> (<n>)"; zh-CN keeps the owner's wording.
+The status badge under the meta line sat too close, Choose Files… too close to the row's bottom, and badge text was not
+centred vertically (the shipped badges too); being fixed on the prototype branch, the badge centring as its own commit
+for main.
+
