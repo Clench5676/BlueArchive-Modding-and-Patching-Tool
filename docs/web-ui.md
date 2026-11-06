@@ -14,7 +14,7 @@ saved layering/mirroring, exclusive dialogue, and pointer-driven playlist reorde
 gesture checks cover touch holds, swipe-to-scroll, cancellation, viewport scaling and stationary-edge scrolling.
 Game assets and development data are excluded from packages.
 
-- Screens: consent popup, Student Hall, student roster, Batch Import, student detail (Portrait, Memorial Lobby and 3D tabs), the
+- Screens: consent popup, Student Hall, student roster, Import Mod (Batch Import), student detail (Portrait, Memorial Lobby and 3D tabs), the
   switch popups (portrait, memorial lobby) and the variant picker. The lobby is framed and touched like the game (its prefab data,
   `lobby.json`), plays its intro timeline when it is entered (a tap skips it; the settings' L2D tab turns it off) and
   plays its dialogue with Kivo's voices and the lines in the UI language (Kivo's Chinese and
@@ -1136,7 +1136,8 @@ new ZIP. This exports user-requested files at runtime; no game assets are includ
 
 ### Import grouping
 
-The batch import (`import.analyze`, one folder at a time, with kind and variant) and Add (`mods.add`, drag and drop, one
+The batch import (`import.analyze`, one folder at a time, with kind and variant; shown as Import Mod, and opened by a
+student page's Add Portrait, Add Memorial Lobby and Add 3D Model) and Add (`mods.add`, drag and drop, one
 upload) group files with one rule, `judge.mod_versions`. The files of one core and kind are one mod whatever their dates:
 some cores keep their parts under different dates (Spine textures and text, a model's prefab and dependencies), so one row
 or library Mod holds all of them and an apply writes every part. Only a set in which one part (`part_of`) occurs more than once

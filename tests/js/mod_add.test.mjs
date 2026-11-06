@@ -338,31 +338,6 @@ test("the footer skips a duplicate on the current variant when another result ca
   assert.deepEqual(h.log.at(-1), ["go", "dress"]);
 });
 
-test("picker callers pass the selected variant and refresh new entries or adoption without revisiting a departed page", async () => {
-  const detail = readFileSync(new URL("../../src/bmpt/web/js/detail.js", import.meta.url), "utf8");
-  const add = detail.slice(detail.indexOf("async function addMods("), detail.indexOf("// a job with a sticky"));
-  const entry = { ...portrait, id: "m1" };
-  for (const [report, changed] of [[[], false], [null, false], [[entry], true],
-    [{ added: [entry], duplicates: [], installed: [] }, true],
-    [{ added: [], duplicates: [entry], installed: [] }, false],
-    [{ added: [], duplicates: [entry], installed: [entry] }, true]]) {
-    for (const navigate of [false, true]) {
-      let refreshes = 0, invalidations = 0;
-      const env = { pageToken: 1, open: true, location: { hash: "#current" }, variant: () => ({ key: "ch0200" }),
-        call: (fn) => fn(), ctx: { invalidateRoster: () => { invalidations++; } }, reload: async () => { refreshes++; },
-        ModAdd: { add: async (...args) => {
-          assert.deepEqual(args, [null, "ch0200"]);
-          if (navigate) env.location.hash = "#other";
-          return report;
-        } },
-      };
-      await new Function("env", `const { ${Object.keys(env).join(", ")} } = env; ${add}; return addMods();`)(env);
-      assert.equal(invalidations, Number(changed));
-      assert.equal(refreshes, Number(changed && !navigate));
-    }
-  }
-});
-
 test("drop callers accept report objects for new mods, duplicates and adoption without an empty-drop hint", async () => {
   const main = readFileSync(new URL("../../src/bmpt/web/js/main.js", import.meta.url), "utf8");
   const drop = main.slice(main.indexOf('  on("drop",'), main.indexOf('  $("top-option").addEventListener'));

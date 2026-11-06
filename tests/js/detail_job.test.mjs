@@ -108,32 +108,14 @@ test("detail actions keep the verb, target and count from progress in all locale
   }
 });
 
-test("a completed add reloads only the page that opened its picker", async () => {
-  const start = source.indexOf("async function addMods(");
+test("adding from a student's page opens Import Mod instead of a picker of its own", () => {
+  const start = source.indexOf("function addMods(");
   const addSource = source.slice(start, source.indexOf("\n}\n", start) + 2);
-  for (const move of ["stay", "go", "left", "newPage"]) {
-    const calls = [];
-    const env = {
-      ctx: { invalidateRoster: () => calls.push("roster") }, reload: async () => calls.push("reload"),
-      call: (fn) => fn(), location: { hash: "#/student/base/base" }, variant: () => ({ key: "base" }),
-    };
-    const h = new Function("env", `const { ctx, reload, call, location, variant } = env;
-      let pageToken = 1, open = true;
-      const ModAdd = { add: async (paths, key) => {
-        env.check(paths, key);
-        if ("${move}" === "go") location.hash = "#/student/base/dress";
-        if ("${move}" === "left") open = false;
-        if ("${move}" === "newPage") pageToken++;
-        return [{ target: "dress" }];
-      } };
-      ${addSource}
-      return { addMods };`)({ ...env, check: (paths, key) => {
-        assert.equal(paths, null);
-        assert.equal(key, "base", "the selected variant is captured before the picker or job runs");
-      } });
-    await h.addMods();
-    assert.deepEqual(calls, move === "stay" ? ["roster", "reload"] : ["roster"]);
-  }
+  const location = { hash: "#/student/base/base" };
+  const h = new Function("env", `const { location } = env; ${addSource}; return { addMods };`)({ location });
+  h.addMods();
+  assert.equal(location.hash, "#/import");
+  assert.ok(!source.includes("ModAdd"), "the student page no longer adds through mods.add");
 });
 
 test("detail progress identifies the target Mod's student variant and kind instead of the active tab or bundle", async () => {

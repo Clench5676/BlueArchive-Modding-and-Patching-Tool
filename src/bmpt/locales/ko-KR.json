@@ -108,7 +108,7 @@
 			"adb": "ADB 푸시",
 			"tools": "도구",
 			"classic": "{label} - 클래식 화면",
-			"import": "일괄 가져오기"
+			"import": "모드 가져오기"
 		},
 		"roster": {
 			"title": "학생 리스트",
