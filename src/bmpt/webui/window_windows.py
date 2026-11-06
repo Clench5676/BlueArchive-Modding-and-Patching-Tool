@@ -38,6 +38,13 @@ def aspect_rect(rect, edge, frame, minimum=(960, 540), dpi=96):
     return Rect(left, top, left + width, top + height)
 
 
+
+def private_user32():
+    """user32 with prototypes of its own. ``ctypes.windll.user32`` is shared with pywebview, whose ``move`` passes
+    ``None`` sizes to an unprototyped SetWindowPos; prototypes set there turn every one of those calls into
+    ``ctypes.ArgumentError``."""
+    return ctypes.WinDLL("user32", use_last_error=True)
+
 class WindowsHost:
     def __init__(self, window, owner, *, api=None, subclass_factory=None):
         self.window, self.owner, self.form = window, owner, window.native
@@ -55,7 +62,7 @@ class WindowsHost:
     def install(self):
         # pywebview creates the normal resizable frame. Its caption, hit testing,
         # resize borders and WebView client bounds remain owned by WinForms/Windows.
-        self.user = self.user or ctypes.windll.user32
+        self.user = self.user or private_user32()
         for name, arguments, result in (
             ("GetWindowLongPtrW" if hasattr(self.user, "GetWindowLongPtrW") else "GetWindowLongW",
              [wintypes.HWND, ctypes.c_int], ctypes.c_ssize_t),
