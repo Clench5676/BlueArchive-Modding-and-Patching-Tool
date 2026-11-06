@@ -5,7 +5,6 @@ import * as Loading from "./loading.js";
 import * as Popup from "./popup.js";
 import * as Compare from "./mod-compare.js";
 import { ensureSpine } from "./spine-runtime.js";
-import { spine as confirmLicence } from "./consent.js";
 import { jobProgress } from "./job-progress.js";
 
 const key = (name) => name.replaceAll("\\", "/").split("/").at(-1).toLowerCase().replace(/\.png$/i, "");
@@ -124,7 +123,7 @@ async function assess(report) {
 }
 
 export async function show(report, { onRemap } = {}) {
-  if (report.kind !== "model" && !await requireRuntime()) return;
+  if (report.kind !== "model" && !await ensureSpine()) return;
   const result = compare(report, globalThis.spine, true);
   const lines = result.issues.map(({ key, params, detail }) => {
     const text = T(`compatibility.${key}`, params), full = detail ? T(`compatibility.${key}`, detail) : text;
@@ -202,15 +201,7 @@ export async function forUpdate(id, label = "", subject = label) {
 }
 
 export async function check(id, label = "", onRemapped = () => {}, mod = null, subject = label) {
-  if (mod?.kind !== "model" && !await requireRuntime()) return;
+  if (mod?.kind !== "model" && !await ensureSpine()) return;
   const report = await Loading.hold(() => inspect(id, label, null, subject), { all: true });
   return show(report, { onRemap: () => remap(id, onRemapped, label, subject) });
-}
-
-async function requireRuntime() {
-  if (await ensureSpine()) return true;
-  const response = await Popup.message({ title: T("spine.license.title"), lines: [T("spine.license.required")],
-    ok: T("spine.license.confirm"), cancel: T("popup.cancel") });
-  if (response.button !== "ok") return false;
-  return await confirmLicence(document.getElementById("consent"), { over: true }) === true && await ensureSpine();
 }

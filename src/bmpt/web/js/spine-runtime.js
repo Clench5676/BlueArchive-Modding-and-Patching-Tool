@@ -3,7 +3,7 @@ import { rpc } from "./api.js";
 const ROOT = "vendor/spine-player-4.2.120/";
 let choice, reading = null, loading = null, started = false;
 
-// A loaded script cannot be unloaded safely while players are alive. Withdrawal applies at the next start.
+// Saved answers are acknowledged at startup; an unanswered notice cannot enable the runtime.
 export function setSpineConsent(value) {
   choice = typeof value === "boolean" ? value : null;
 }

@@ -73,12 +73,12 @@ test("cancelling a pending static decode removes its layer and settles readiness
   assert.equal(h.host.children.length, 0);
 });
 
-test("a missing collection portrait offers confirmation and retries the live detail view", async () => {
+test("a missing collection portrait leaves an empty preview without a licence action", async () => {
   const h = portraitHarness(null);
   await h.show();
-  assert.equal(h.status.length, 1);
-  await h.status[0].retry();
-  assert.equal(h.retries(), 1);
+  assert.equal(h.host.children[0].children.length, 0);
+  assert.equal(h.status.length, 0);
+  assert.equal(h.retries(), 0);
   assert.deepEqual(h.unexpected, []);
 });
 
