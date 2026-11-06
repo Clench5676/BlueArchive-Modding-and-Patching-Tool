@@ -98,6 +98,14 @@ export function importArtwork(ui, layouts) {
   };
   // the box of lines at NGUI's pitch, as drawn (the page font draws Latin larger, see ngui.js fontSizeFor)
   const lineBox = (text, fs) => String(text).split("\n").length * (ui.fontSizeFor?.(text, fs) ?? fs) * (ui.LINE_PITCH ?? 1.15);
+  // How far (units, down) a label whose lines sit at the top of its box (pivot 1) has to move for the centre of its ink to be the
+  // centre of the box. The lines fill the top of the box at NGUI's pitch; the ink of the script's reference glyph lies
+  // NGUI.inkShift off the centre of those lines (one baseline for all text of a language). 0 without NGUI's metrics.
+  const inkDrop = (w) => {
+    if (typeof ui.inkShift !== "function") return 0;
+    const px = ui.fontSizeFor?.(w.text, w.fontSize) ?? w.fontSize, lines = String(w.text).split("\n").length;
+    return w.h_ / 2 - lines * px * (ui.LINE_PITCH ?? 1.15) / 2 + ui.inkShift(w.text, px, { reference: true });
+  };
   // The Import State filter's caption (SortBtn/Btn_Normal/Type_2/Text, 336 wide, 56 down to 70 %): wrapped onto two lines
   // inside the button's body (456 x 116) before it shrinks, never ellipsized. The lines keep clear of the body's edges
   // round the label's own offset.
@@ -386,6 +394,8 @@ export function importArtwork(ui, layouts) {
       rowLabel(statusLabel, state, badgeWidth - 30, 1);
       const statusBG = ui.find(status, "Bg"); at(statusBG, 0, 4);
       Object.assign(statusBG.widgets[0], { pivot: 1, h_: statusLabel.widgets[0].h_ + 8 });
+      // the ink of the badge's text, not its line box, is centred on the badge (every state, one baseline per language)
+      statusLabel.pos[1] -= inkDrop(statusLabel.widgets[0]);
       // Longer metadata wraps in full. Grow the prefab body downwards rather
       // than clipping a route or shrinking the whole list. Notes remain one line.
       let bottom = 329 / 2;
