@@ -1061,6 +1061,20 @@ export function messageLayout({ lines = [], width = 1700, ok = null, cancel = nu
   return { body, width, height, visible, y0, scroll: scrolls };
 }
 
+// a notice drawn in place over a preview on the message frame (UIPopup_Sort): its title, its lines and one button, no
+// backdrop and no close button, and not on the popup stack. 1300 wide (843 stage px), to sit inside the detail screen's
+// left view, the stage's left 960 px, with room on both sides; the caller renders the tree with the frame's centre
+// FRAME_Y under its origin.
+export const NOTICE_W = 1300;
+export function noticeFrame({ title, lines = [], ok, width = NOTICE_W }) {
+  const { body, height, y0 } = messageLayout({ lines, width, ok });
+  const tree = popupFrame(title, width, height, { ok, close: false });
+  find(tree, "BlackBg").active = false;
+  body.tree.pos = [0, y0];
+  find(tree, "Popup").children.push(body.tree);
+  return { tree, width, height };
+}
+
 async function showMessage({ title = "", lines = [], ok = null, cancel = null, buttons = null, check = null, host: hostArg = "dialog", width, close: dismissable = true, confirmKeys = null, fitTogether = [], scroll = false, plain = false, captionSite = null }, resolve) {
   const host = hostOf(hostArg);
   const layer = document.createElement("div");

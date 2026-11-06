@@ -3885,3 +3885,61 @@ test("the portrait panel's chips (72 high) stay in the right half and 16 above t
     }
   } finally { prompt.hidden = true; }
 });
+
+test("the Spine licence notice sits on the message frame inside the detail's left view in every locale", async () => {
+  const NGUI = await import("../../src/bmpt/web/js/ngui.js");
+  await Popup.ready();
+  try {
+    for (const lang of ["en-US", "th-TH", "zh-CN", "zh-TW", "ja-JP", "ko-KR"]) {
+      const ui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url))).webui;
+      setStrings(lang, Object.fromEntries(strings(ui)));
+      const { title, required, confirm } = ui.spine.license;
+      const { tree, width, height } = Popup.noticeFrame({ title, lines: [required], ok: confirm });
+      // drawn in place over the preview: no backdrop, no close button, the one button in the middle
+      assert.equal(NGUI.find(tree, "BlackBg").active, false);
+      const popup = NGUI.find(tree, "Popup");
+      assert.equal(NGUI.find(popup, "Base/BG/Btn_Close").active, false);
+      assert.equal(NGUI.find(popup, "Btn/Btn_Cancel").active, false);
+      const ok = NGUI.find(popup, "Btn/Btn_Ok");
+      assert.deepEqual([ok.active, ok.pos[0]], [true, 0]);
+      const frame = NGUI.find(popup, "Base/BG").widgets[0];
+      assert.deepEqual([frame.w_, frame.h_], [width, height]);
+      assert.equal(width, Popup.NOTICE_W);
+      // inside the left view (the stage's left 960 px, centred at 480) with 40 px on each side, and inside the stage
+      assert.ok(width * S <= 960 - 2 * 40, `${lang}: ${width * S}`);
+      assert.ok(height * S <= 1080, `${lang}: ${height * S}`);
+      // the title, the line and the caption fit their widgets at the message sizes
+      const heading = NGUI.find(popup, "Base/BG/Label_Title_Locale").widgets[0];
+      assert.ok(NGUI.glyphWidth(heading.text, heading.fontSize) <= heading.w_, `${lang} title`);
+      const line = NGUI.find(popup, "Lines/Line_0").widgets[0];
+      assert.equal(line.text.replace(/\n/g, lang.startsWith("en") || lang === "th-TH" ? " " : ""), required);
+      assert.ok(line.fontSize >= 44, `${lang} line size ${line.fontSize}`);
+      assert.ok(NGUI.glyphWidth(line.text, line.fontSize) <= line.w_, `${lang} line`);
+      const caption = NGUI.find(ok, "Label_Locale").widgets[0];
+      assert.ok(NGUI.glyphWidth(caption.text, caption.fontSize) <= caption.w_, `${lang} caption`);
+      // the line between the title's band and the button's top
+      const lineTop = NGUI.find(popup, "Lines").pos[1] + NGUI.find(popup, "Lines/Line_0").pos[1] + line.h_ / 2;
+      const lineBottom = lineTop - line.h_;
+      assert.ok(lineTop <= POPUP.frameY + height / 2 - Popup.MSG.title + 1, `${lang} under the title`);
+      assert.ok(lineBottom >= Popup.footerTop(height), `${lang} over the button`);
+    }
+  } finally { setStrings("en-US", Object.fromEntries(strings(english))); }
+});
+
+test("a preview's Spine licence notice renders the notice frame in place with its Confirm License button", async () => {
+  const Lobby = await import("../../src/bmpt/web/js/lobby.js");
+  const host = body.appendChild(document.createElement("div"));
+  try {
+    await Lobby.licenseRequired(host, () => {});
+    const notice = host.children[0];
+    assert.equal(notice.className, "lobby-unavailable lobby-notice");
+    assert.equal(notice.getAttribute("role"), "status");
+    assert.deepEqual([notice.style.width, notice.style.height].map(parseFloat).map((v) => Math.round(v)),
+      [Math.round(Popup.NOTICE_W * S), Math.round(Popup.noticeFrame({ title: english.spine.license.title,
+        lines: [english.spine.license.required], ok: english.spine.license.confirm }).height * S)]);
+    const button = action(notice, "ok");
+    assert.equal(button.getAttribute("aria-label"), english.spine.license.confirm);
+    // the frame's own title, not the plain fallback's line and button
+    assert.ok(walk(notice).some((e) => e.textContent === english.spine.license.title));
+  } finally { host.remove(); }
+});
