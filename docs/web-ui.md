@@ -1042,8 +1042,9 @@ stops the server (the page shows Closed); with `--serve` it gives `native_unavai
 
 | Method | Result |
 |---|---|
-| `app.info` | version, language, platform, game found (the selected folder is a game install, as for `settings.set`; a folder saved earlier that holds no game starts on the no-game screen), resource version, consent (`null`, `true`, `false`), `uiCached` (consented light assets on disk for the current resource version), paths, `dataDirWritable` (a real temporary file was written in the data folder and removed again at start; `false`: see Start sequence), `debug` (started with `--debug`) |
+| `app.info` | version, language, platform, game found (the selected folder is a game install, as for `settings.set`; a folder saved earlier that holds no game starts on the no-game screen), resource version, consent (`null`, `true`, `false`), `spineConsent` (`null` until acknowledged; earlier Yes or No answers are true at startup), `uiCached` (consented light assets on disk for the current resource version), paths, `dataDirWritable` (a real temporary file was written in the data folder and removed again at start; `false`: see Start sequence), `debug` (started with `--debug`) |
 | `app.consent {granted}` | records the choice; `false` closes the app |
+| `app.spineConsent {granted?}` | reads the saved answer; `{granted: true}` records the notice acknowledgement and returns true, without a notice version |
 | `app.quit` | closes the window; `busy` while a writer job runs; in browser mode answers, then stops the server; `native_unavailable` with `--serve` |
 | `app.openClassic {tab}` | `{started}`: starts the classic window on a tab (`settings`: its settings) and waits for it (30 s at most), or brings the open one to the front, with the tab unless a classic task runs; a window an earlier instance left is only raised; `classic_failed {exit_code}` when the child exits or stays silent first; `busy` instead of a new window while a job writing the game folder is queued or running |
 | `app.classic` | `{open, ready, busy, pid, orphan, queued}` (`orphan`: found through `classic.json`) |
@@ -1562,8 +1563,8 @@ picker restricted to the selected choice's family: the student's official and Mo
 placed sources (a Mod portrait may go back to its own variant's official art). With no eligible source it is disabled. Choosing one replaces only the draft entry's variant
 and source; UUID, position, individual size, mirror and layer index stay intact. Only the new art loads; saved source
 actors remain cached through Cancel, without restarting other actors or the background.
-Existing duplicate portrait rows are canonicalized on read without writing a migration or advancing the revision. Preview license
-opt-out remains effective. The Add Portraits modal lists student names beside independently scrolling portrait-card
+Existing duplicate portrait rows are canonicalized on read without writing a migration or advancing the revision. Spine previews
+wait for licence notice acknowledgement (see Spine licence); earlier Yes and No answers already count as acknowledged. The Add Portraits modal lists student names beside independently scrolling portrait-card
 rows. Optional skin grouping, search, filters and sorting use roster semantics; only library portraits can be added.
 Cards are still previews with explicit Add buttons; clicking them neither opens another preview window nor plays
 in the background. The compact modal uses inclined native white row plates, equal outer-edge margins and a
@@ -1785,8 +1786,7 @@ optional, so a popup still works without them.
   `alias_too_long`, `alias_too_many`, `export_empty`, `scan_off`, `native_only`, `native_unavailable`. Any other code,
   or none, is a real failure: title Failed and the Error Report button (`game_status_unavailable` and
   `profiles_unreadable` report something unreadable, so they stay failures). A greyed switch or Apply names its reason
-  by its code, so the same rule decides. The classic modal and the Spine licence prompt are questions, not failures:
-  they pass no `error`.
+  by its code, so the same rule decides. The classic modal and the Spine licence notice pass no `error`.
 - **Buttons.** Every button of a popup is an invisible button over the drawn one, named for assistive technology by
   the caption it covers (`aria-label`) and marked with what it does (`data-action`). When a sprite is missing from
   the atlases its button is placed from the prefab node, so the popup can still be answered.
@@ -1840,8 +1840,8 @@ data of the game found), without a restart. A later refresh never starts it agai
 the start popups come one at a time, in order, each only when it has something to show (`mod-switch.js startDue`): first,
 when `app.info.dataDirWritable` is `false` (the data folder cannot be written), one notice with the quit dialog's title and
 Confirm only (`webui.error.data_dir_readonly`, with the folder's path; the no-game screen shows it too, once per session);
-then the asset consent, the scan
-consent (while it is unanswered and a game folder is known; see Enable Mods switch). File checks require scan
+then the asset consent, the Spine licence notice (only while no answer was ever stored; see Spine licence),
+then the scan consent (while it is unanswered and a game folder is known; see Enable Mods switch). File checks require scan
 consent: On checks at every start, Off withdraws consent and stops scans.
 The Configuration Drift Check row's Check remains available while Off too: missing consent opens the scan consent
 popup first, then Allow continues the manual check; declining cancels it. Check for Updates at Startup already
@@ -1864,6 +1864,29 @@ the library come last if the start scan is already in. An unfinished scan stays 
 show once no other popup is open, including a tour. Each prompt appears when `startDue` says it is due:
 only with the scan consent, never while the game runs, Steam is busy
 or the classic UI is open, no drift while mods are off, nothing dismissed (see Mods already in use).
+
+**Spine licence**
+
+The start sequence's `spine` step follows asset consent. It shows `spine.license.title`, the legal wording in
+`spine.license.notice`, and one centred Confirm (`picker.ok`) on `UIPopup_Sort`, built through `popup.js` by
+`consent.js spineFrame`. The body wraps at the message font size (52 units); the frame grows to hold it above the
+button. There is no close button; Escape and the backdrop do nothing. Closing the app window keeps its existing
+quit behaviour. Without asset consent the plain popup uses exactly the same title, body and Confirm.
+
+The notice says that continuing to use the software confirms that the user holds a Spine Editor licence.
+Confirm sends one `app.spineConsent {granted: true}` RPC, saving `prefs.spine_consent = true` in `webui.json`.
+Repeated clicks while saving send nothing; a failed save leaves the notice open to retry. No notice version is
+stored or returned. `mod-switch.js startDue` requires this step only while `app.info.spineConsent` is null.
+Earlier Yes and No answers never show the notice. On the first start, `UiState` migrates a stored No to true under
+the shared state lock before `app.info` or the first screen reads it; an earlier Yes remains true. Unanswered
+state stays null. Confirm updates `info.spineConsent` and calls `route()` to render the current screen again.
+
+`spine-runtime.js ensureSpine` loads the runtime only after acknowledgement, including an earlier answer.
+The first screen, built before the start popups, uses a static portrait where one exists, otherwise an empty preview. Detail, Hall,
+comparison and compatibility paths show no licence notice or Confirm License action. Settings' General tab keeps
+Spine License (`settings.spine.label`) as a value row with one View (`settings.spine.view`) button. View opens the
+same notice with one Confirm and changes no state, including when its acknowledgement is still pending. There is
+no withdrawal control.
 
 - **Switch Portrait, Switch Memorial Lobby** (the switch card of the Portrait and Memorial Lobby tabs; the add button
   beside it adds mods of either kind): what the game can show for that kind (`switch-sources.js`, tested in Node):

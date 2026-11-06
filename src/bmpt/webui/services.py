@@ -635,7 +635,7 @@ class Services:
             self._cache.allowed = granted
 
     def set_spine_consent(self, granted: bool) -> None:
-        """Save the user's confirmation that they hold their own Spine licence."""
+        """Save the acknowledgement through the existing Spine consent RPC."""
         self.state.set("spine_consent", granted)
 
     def ui_cached(self, version: str | None = None) -> bool:

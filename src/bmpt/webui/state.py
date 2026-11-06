@@ -132,10 +132,14 @@ class UiState:
         # Startup consents are saved before tours run. Only an answer from before this launch proves prior use.
         self.had_asset_consent = isinstance(initial.get("consent"), bool)
         prefs = initial.get("prefs")
-        # Manual consent did not authorize automatic checks. Migrate it to Off without opting the user in.
-        if isinstance(prefs, dict) and any(key in prefs for key in ("startup_checks", "mod_switch_shown")):
+        # Earlier Spine answers acknowledge the notice; previews are enabled for either answer at startup.
+        # Manual scan consent did not authorize automatic checks. Migrate it to Off without opting the user in.
+        if isinstance(prefs, dict) and (prefs.get("spine_consent") is False
+                                       or any(key in prefs for key in ("startup_checks", "mod_switch_shown"))):
             def migrate(data: dict[str, Any]) -> None:
                 prefs = data.get("prefs", {})
+                if prefs.get("spine_consent") is False:
+                    prefs["spine_consent"] = True
                 if prefs.pop("startup_checks", None) is False and prefs.get("scan_consent") is True:
                     prefs["scan_consent"] = False
                 # The main screens always keep the switch.
@@ -472,7 +476,7 @@ class UiState:
 
     @property
     def spine_consent(self) -> bool | None:
-        """None until the user confirms whether they hold their own Spine licence; only True grants use."""
+        """None until the notice is acknowledged; earlier Yes and No answers become True at startup."""
         value = self.get("spine_consent")
         return value if isinstance(value, bool) else None
 

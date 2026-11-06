@@ -621,7 +621,7 @@
 			"change": "更改",
 			"spine": {
 				"label": "Spine 授权",
-				"restart": "Spine 授权 - 撤回后下次启动生效"
+				"view": "查看"
 			}
 		},
 		"cacheTo": "缓存到 {path}",
@@ -699,11 +699,7 @@
 		"spine": {
 			"license": {
 				"title": "Spine 授权",
-				"body": "预览使用 Esoteric Software 的 Spine Runtimes，需要自有 Spine 授权",
-				"yes": "持有 Spine 授权",
-				"no": "没有 Spine 授权",
-				"required": "Spine 授权未确认",
-				"confirm": "确认授权"
+				"notice": "继续使用本软件，即表示您确认持有 Spine Editor 授权。"
 			}
 		},
 		"import": {

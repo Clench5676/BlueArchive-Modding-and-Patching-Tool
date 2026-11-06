@@ -1101,7 +1101,7 @@ async function showSpine(base, my, signal) {
       image.src = portrait;
       layer.appendChild(image);
       await decodeAll([portrait], () => image.decode?.(), HARD_CAP, { signal });
-    } else Lobby.licenseRequired(layer, () => open && my === spineToken ? renderLeft() : null);
+    }
     if (signal.aborted || my !== spineToken) { layer.remove(); return; }
     commit(() => {
       if (signal.aborted || my !== spineToken) return;
@@ -1707,10 +1707,7 @@ const LINE_LANG = { "zh-CN": "zh-CN", "zh-TW": "zh-TW", "en-US": "en", "ja-JP": 
 async function showLobby(v, my, alive = () => true) {
   const still = () => alive() && open && my === leftToken && tab === "lobby" && variantKey === v.key;
   if (!(await ensureSpine())) {
-    if (still()) {
-      Lobby.hide($("lobby"));
-      Lobby.licenseRequired($("lobby"), () => still() ? renderLeft() : null);
-    }
+    if (still()) Lobby.hide($("lobby"));
     return;
   }
   if (!still()) return;

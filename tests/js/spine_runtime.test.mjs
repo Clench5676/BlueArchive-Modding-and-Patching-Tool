@@ -50,28 +50,28 @@ test("confirmation loads one script and stylesheet for concurrent and repeated p
   assert.equal(h.nodes.length, 2);
 });
 
-test("granting after refusal starts loading; withdrawal before loading prevents it", async () => {
-  const h = await harness(false);
-  assert.equal(await h.mod.ensureSpine(), false);
+test("a saved acknowledgement enables the runtime directly without a notice version", async () => {
+  const h = await harness();
   h.mod.setSpineConsent(true);
-  h.mod.setSpineConsent(false);
+  const ready = h.mod.ensureSpine();
+  h.complete();
+  assert.equal(await ready, true);
+  assert.deepEqual(h.calls, []);
+  assert.equal(h.nodes.length, 2);
+});
+
+test("Confirm enables an unanswered runtime only after acknowledgement", async () => {
+  const h = await harness();
+  h.mod.setSpineConsent(null);
   assert.equal(await h.mod.ensureSpine(), false);
   assert.equal(h.nodes.length, 0);
   h.mod.setSpineConsent(true);
   const ready = h.mod.ensureSpine();
   h.complete();
   assert.equal(await ready, true);
-});
-
-test("withdrawal keeps the loaded session usable and a fresh start requires confirmation again", async () => {
-  const h = await harness(true), ready = h.mod.ensureSpine();
-  await new Promise(setImmediate); h.complete(); await ready;
-  h.mod.setSpineConsent(false);
   assert.equal(h.mod.spineAllowed(), true);
   assert.equal(await h.mod.ensureSpine(), true);
-  const next = await harness(false);
-  assert.equal(await next.mod.ensureSpine(), false);
-  assert.equal(next.nodes.length, 0);
+  assert.equal(h.nodes.length, 2);
 });
 
 test("a failed script can be retried without leaving duplicate assets", async () => {

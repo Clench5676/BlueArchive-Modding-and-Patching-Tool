@@ -15,7 +15,7 @@ const noop = () => {};
 const meta = { main: "main", sparse: false, left: { x: 0, y: 0, w: 1920, h: 1080 }, full: { x: 0, y: 0, w: 1920, h: 1080 } };
 const layers = async (core, mod) => ({ info: null, layers: [{ name: "main", spine: `${core}:${mod || "live"}` }] });
 
-function harness(layersOf = layers, resolveSources = null, { allowed = true, confirm = true } = {}) {
+function harness(layersOf = layers, resolveSources = null, { allowed = true } = {}) {
   const created = [], calls = [], touchSetups = [];
   const revisions = new Map();
   const failures = [];
@@ -23,11 +23,7 @@ function harness(layersOf = layers, resolveSources = null, { allowed = true, con
   const prompts = [];
   const env = {
     dialogueModule: async () => ({ createLobbyDialogue: () => ({ show: noop, reposition: noop, dispose: noop }) }),
-    skinPrimary: (button, caption) => { button.textContent = caption; },
-    // no game folder here: the notice falls back to its plain line and button
-    framedNotice: async () => { throw new Error("no frame"); },
     latestLoad, layersOf, withTimeout, atStep, validRect, ensureSpine: async () => allowed,
-    consent: async () => ({ async spine(host, opts) { prompts.push({ host, opts }); allowed = confirm; return confirm; } }),
     rectOf: (v) => ({ x0: v.x, y0: v.y, x1: v.x + v.w, y1: v.y + v.h }),
     spineBase: (kind, core) => `/asset/spine/${kind}/${core}/skeleton`,
     previewError: (...args) => failures.push(args), T: () => "Preview unavailable",
@@ -73,34 +69,16 @@ test("deferred Hall loads retain input suspension and do not claim the shared To
   h.hide(h.host); assert.equal(h.host.inert, false);
 });
 
-test("a lobby without confirmation fetches no source and offers confirmation before retrying", async () => {
+test("a lobby before acknowledgement fetches no source and leaves no notice or button", async () => {
   let sources = 0;
   const h = harness(layers, async () => { sources++; return { artBase: "art/", base: "layout/" }; }, { allowed: false });
   try {
     assert.equal(await h.show("hero_home", h.host, "hero"), null);
-    await tick();
     assert.equal(sources, 0);
     assert.equal(h.created.length, 0);
-    assert.equal(h.host.message.className, "lobby-unavailable");
-    assert.equal(h.host.message.children[0].type, "button");
-    const retry = h.host.message.children[0].click();
-    await tick();
-    assert.equal(sources, 1);
-    assert.equal(h.created.length, 1);
-    assert.deepEqual(h.prompts, [{ host: "consent", opts: { over: true } }]);
-    h.created[0].config.success(h.created[0]);
-    await retry;
+    assert.equal(h.host.message, undefined);
+    assert.deepEqual(h.prompts, []);
   } finally { h.hide(h.host); }
-});
-
-test("declining the lobby confirmation keeps the status and never creates a player", async () => {
-  const h = harness(layers, null, { allowed: false, confirm: false });
-  await h.show("np0032_npc", h.host, "special:np0032_npc", { framing: "character" });
-  await tick();
-  await h.host.message.children[0].click();
-  assert.equal(h.created.length, 0);
-  assert.equal(h.prompts.length, 1);
-  h.hide(h.host);
 });
 
 test("configured lobby source changes cancel old players, including a switch back before the next load starts", async () => {
