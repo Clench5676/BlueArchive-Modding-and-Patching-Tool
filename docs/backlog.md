@@ -2036,7 +2036,7 @@ fork raises in engine code read as before. Packaging and both builds take `bmpt`
 
 ## BL-083: The Spine licence notice over a preview has no plate
 
-- Status: Implemented by the lead; owner review pending (visual, macOS and Windows).
+- Status: Superseded by BL-087 (the in-place notice is gone).
 - Requested: 2026-11-06 (owner, from a Windows user's 0.6.0 report): over the memorial lobby (fullscreen shown), the line
   "Spine license confirmation required" sits straight on the scene and cannot be read.
 
@@ -2104,7 +2104,7 @@ message (Add to Library for an outside mod, else the repair lines) instead of "3
 
 ## BL-086: A missing official copy must not keep a mod from being imported
 
-- Status: Dispatched to Codex (`gpt-6.1-sol`, xhigh, branch `codex/bl086-missing-original`), 2026-11-06.
+- Status: Implemented (Codex, reviewed and merged by the lead, `a4ecd147`, merge `88c2408f`); owner review pending.
 - Requested: 2026-11-06 (owner, on BL-085): a missing original is common, since many users overwrote game files before
   they managed mods with the App; that must not forbid importing.
 
@@ -2124,10 +2124,20 @@ mod takes the parts it leaves out from the game files as they are, and is then m
 Owner, 2026-11-06: the message title 原版文件已被覆盖 (Official File Overwritten) becomes 缺少官方原版文件; every language
 follows (en-US "Official File Missing"). The lead changes `mods.overwrittenTitle` after merging BL-086 and BL-087.
 
+Implemented (Codex): adding and the batch import take direct replacements without an official copy (the live file is
+format evidence only); applying keeps the current game files as a library mod first (`_keep_replaced` now gets the whole
+core, the journal marks outside bytes as non-official and rollback restores them), then writes, and says "Current game
+files added to the library"; Original stays disabled and restore and Mods Off stay stuck with the repair lines until
+the game files are official again; omitted parts of a partial mod come from official copies, else the current files,
+and such a mod shows "Mod incomplete" (card, status line, results); entries that need an official base for a conversion
+still stop, now with the missing-official message and its repair lines (`import.reason.original_unavailable` removed);
+the 3D view's Add to Library adopts the model core. Only verified official bytes ever become originals. The title rename
+is `fix(i18n): title the missing-original message Official File Missing`.
+
 ## BL-087: The Spine licence as a one-time notice at the first start
 
-- Status: Dispatched to Codex (`gpt-6.1-sol`, xhigh, branch `codex/bl087-spine-notice`), 2026-11-06. The notice's wording
-  in every language awaits the owner's review.
+- Status: Implemented (Codex, reviewed and merged by the lead, `9bec8dc8`, merge `da204ee8`); owner review pending,
+  including the notice's wording in the five other languages.
 - Requested: 2026-11-06 (owner): no explicit licence question and no "confirmation required" notices over previews; at the
   first start, a notice in legal wording that continuing to use the software confirms a Spine licence, and Confirm.
 
@@ -2139,4 +2149,11 @@ lift the licence requirement of the Spine Runtimes License; the owner decided.
 Owner, 2026-11-06, on the dispatch: users who answered before (Yes or No) never see the notice and get the Spine previews
 directly (a stored No becomes the acknowledgement); the notice says only "By continuing to use this software, you confirm
 that you hold a Spine Editor license." (the five other languages follow). Sent to the running Codex job as an amendment.
+
+Implemented (Codex): the start step is due only while no answer was ever stored; a stored No becomes `true` once at
+startup (`UiState`); Confirm uses the existing `app.spineConsent` RPC. The notice is `consent.js` `spineFrame` on
+`UIPopup_Sort` (1900 wide, the body at 52 wrapping, one Confirm, no close, Escape and backdrop inert) or the plain popup
+without the asset consent. The previews', comparison's and compatibility check's licence notices, BL-083's frame
+(`Popup.noticeFrame`, `.lobby-notice`) and Settings' withdrawal are gone; Settings' row has View (read only). Removed
+keys: `spine.license.body`, `yes`, `no`, `required`, `confirm`, `settings.spine.restart`.
 
