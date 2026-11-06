@@ -2157,3 +2157,140 @@ without the asset consent. The previews', comparison's and compatibility check's
 (`Popup.noticeFrame`, `.lobby-notice`) and Settings' withdrawal are gone; Settings' row has View (read only). Removed
 keys: `spine.license.body`, `yes`, `no`, `required`, `confirm`, `settings.spine.restart`.
 
+## BL-088: Hoshino (Armed)'s 3D mod refused as incomplete; Batch Import stores it but cannot apply or list it
+
+- Status: Diagnosed by the lead (2026-11-06); not implemented.
+- Requested: 2026-11-06 (owner, a Windows tester's 0.7.0-alpha.4 reports `BAMT-report-0.7.0-alpha.4-20261106-1915` and
+  `-1928`): adding the two modded parts `_004` and `_006` of Hoshino (Armed)'s 3D model says "Incomplete Mod, missing
+  files: CAB-7df6…, CAB-97c2…, CAB-cd07…, CAB-eb55…"; Batch Import then fails with `PermissionError [WinError 32]`, and
+  after Recheck the row says Already in Library while Switch 3D Model lists only Armed; the game keeps the official model.
+
+Lead's notes: reproduced on the official view: adding the official `assets-_mx-characters-ch0258-_mxdependency-
+2024-11-18_004` and `_006` gives the same four CABs, with or without official copies, so the user's install is not the
+cause. The four are official shared bundles: the shader prolog, URP's runtime materials, and the Kaiser PMC shield and
+AR NPC bundles. Hoshino (Armed)'s 3D slot is her prefab core `ch0258_02` (5 `character-ch0258_02-_mxload-*` files,
+118 KB); her meshes and textures, the parts mods change, sit in `assets-_mx-characters-ch0258-_mxdependency-*`
+(7 files, 17.8 MB, core `ch0258`), which belong to no slot. Of the 266 playable variants with a 3D model, only ch0258
+is split this way today.
+1. Add: `identify` (`identity.py`) renames a model file to the variant's model core, `…-ch0258-…` to `…-ch0258_02-…`, a
+   name the game does not have; `_check_group` then checks the mod against the 5 prefab files, whose references do not
+   include the shared CABs: a false `mod_parts_missing`.
+2. Batch Import identifies by filename (the install has the name) and stores the mod under core `ch0258`, target
+   `ch0258`; Enable after import applies it, and `apply` refuses a mod whose core is not the slot's: `mod_target_mismatch`
+   (reproduced on the official view with the tester's parameters).
+3. Cleaning the import's staging folder then raises WinError 32 (BL-091): the job fails as `internal`, its row results are
+   dropped, and the row says failed while the library holds the mod.
+4. Switch 3D Model offers only mods whose core is the variant's model core (`switch-sources.js` `candidates`): the stored
+   mod is filtered out. Recheck finds its identity in the library: Already in Library.
+5. The Incoming Mod preview is a 404: an `import:` model source must have the variant's model core (`services.py`, the
+   `model` asset).
+
+Proposed: a 3D slot is the variant's prefab core with the dependency cores of its own model (bundles under
+`characters/<model>/` that its prefabs reference and no other variant owns), switched as one unit; model files keep their
+names; Add and Batch Import identify alike (BL-093); apply, the switch candidates, "Mod incomplete" and the official, mod
+and import previews use the slot's files.
+
+## BL-089: Parts kept under several dates: complete and partial mods refused
+
+- Status: Found by the lead (2026-11-06, roster check on the official view); not implemented.
+
+Lead's notes: a part is `part_of`, its prefix and resource type, without the date. The official install keeps several
+dated files with the same part number side by side in 295 model cores (439 parts) and 4 lobby cores (ch0164_home,
+cherino_home, hihumi_home, spinebg); no portrait core. They are separate live bundles, each with its own CAB, both
+referenced: e.g. Airi's `assets-_mx-characters-airi_original-_mxdependency-2024-11-18_000` and `…-2025-11-07_000`,
+`character-airi_original-_mxload-2024-11-18_000` and `…-2025-07-25_000`, Chinatsu's three `prologdepengroup` files.
+- A one-part mod excludes every dated file of its part number: in the roster check (every part of every playable
+  variant's slots offered as a one-part mod, identical to the official file, on an official install), Add and Batch
+  Import refuse 291 of 2948 3D parts in 93 of 266 variants and 13 of 1364 lobby parts in 3 variants, each "missing" the
+  other dated file.
+- A complete set is refused too: `mod_versions` takes the two dates for two versions of the mod and splits the set, each
+  half missing the other. Verified with Airi's 13 official 3D files and Cherino's 7 official lobby files (Add and Batch
+  Import); Hoshino's sets, without dated siblings, pass.
+- A mod of a current file is judged made for an older release: the compatibility report gives `outdated` for the
+  official `…-airi_original-_mxdependency-2025-11-07_000`.
+
+Proposed: a mod file replaces the install file of its exact name, else of its name less the CRC, else of its prefix and
+resource type when the install has one such file; the dependency check removes only the files the mod replaces;
+`mod_versions` splits a set only when its dated files are not kept side by side in the install (the collection rule for
+`uis-01_common-14_charactercollect-` becomes a case of this); a tracked real-install test runs the roster check (skips
+without `BAMT_TEST_GAME_DIR`).
+
+## BL-090: The missing-part check needs official copies, and refuses official data's own quirks
+
+- Status: Found by the lead (2026-11-06, roster check on the official view); not implemented.
+
+Lead's notes: `missing_parts` lets a reference outside the effective files pass only when an official copy references it
+too (`shared = official.references - official.files`). Without official copies, BL-086's common case, the references of
+the current parts count as missing. Roster check, one-part mods identical to the official files:
+- no official copy only for the replaced part (an outside mod installed before, BL-086's case): of the first 124
+  variants checked, Add and Batch Import refuse portrait parts of all 124 (127 parts), lobby parts of 122 (262) and 3D
+  parts of 122 (638);
+- no official copy for any part: of the first 127 variants, portrait parts of all 127 (511 parts), lobby parts of 125
+  (642) and 3D parts of 125 (1404), e.g. portrait parts "missing" the shader prolog `CAB-97c2…`;
+- with every official copy: the official sets' own quirks are refused: ch0156's portrait parts "missing"
+  `ch0156_home.atlas`, Hare's lobby parts "missing" `hanako_home.atlas` (the atlas-pairing rule).
+BL-086's "adding never refuses a mod for a missing official copy" holds only where no shared reference is involved.
+The message names CAB ids the user cannot act on.
+
+Proposed: a reference passes when the install supplies its CAB (the CAB index, `gameassets/cabs.py`, which previews
+already use) outside the files the mod replaces; a mod is never refused for what the official set itself lacks; the
+message names the missing files (from the mod's folder, else the install's CAB index).
+
+## BL-091: Windows: a finished import fails because bundles it read are still open
+
+- Status: Diagnosed by the lead (2026-11-06); not implemented.
+
+Lead's notes: UnityPy keeps a bundle's file open while its objects live; they form cycles, so the file closes only at the
+next garbage collection. Verified: after `Inspection().inspect()` or `Bundle.load()` and dropping the result, the file
+stays open until `gc.collect()`. Windows cannot delete or replace an open file. In the tester's import, the staging
+cleanup (`staging.import_directory`) raised WinError 32 after the mod was stored and its apply had failed; the job runner
+(`jobs.py`) then reports `internal` and drops every row's result. The same risk applies wherever bundles are read in a
+temporary folder before it is deleted (18 `TemporaryDirectory` uses: apply, remap, update, accept, export, portrait edit,
+refine), and to a game file a preview has read when an apply replaces it: `filelock.replace` retries for 1 s, which
+frees no handle of this process. Not verified on Windows beyond the tester's import.
+
+Proposed: release bundle environments deterministically (read temporary and staged bundles from memory, or close their
+streams) and collect before deleting or replacing; cleanup errors log a warning and leave the folder to the startup
+cleanup; a job that fails after rows finished still returns them, and the batch row keeps its library id; a test with a
+file system fake that refuses to delete or replace open files.
+
+## BL-092: Lobby and 3D previews time out, and the UI stalls, on slow PCs
+
+- Status: Diagnosed by the lead from the alpha.4 logs (2026-11-06); not reproduced; not implemented.
+
+Lead's notes: Intel HD 530, the game on another drive. The detail's lobby and 3D model and the 3D thumbnails time out for
+minutes, then load. A preview waits 15 s at most (`lobby.js`, `model-still.js`, `thumbs.js`); model exports are serialized
+by one `_MODEL_LOCK` and run on when the page gives up, so each retry queues behind the abandoned export; a first export
+also discovers its CABs on disk. While Batch Import analyzed one model, its popup's layouts took 66 s
+(`UINonEquipmentInventory` 66.4 s, normally milliseconds). The preview cache holds one lock through reads, checksums,
+writes and pruning (`gameassets/cache.py`), and `_check_model_references` may load every bundle of the install when a mod
+changes objects (`direct_import`).
+
+Proposed: first, timing spans for lock waits and export phases in the error report, and a measurement on the owner's
+Windows machine; then one export per key in flight with progress the page can wait on, waits that extend while the
+server works, exports dropped when nobody waits, the visible detail ahead of thumbnails, short critical sections in the
+preview cache, and the CAB index's reverse lookup for model references.
+
+## BL-093: Add and Batch Import identify the same files differently
+
+- Status: Found by the lead (2026-11-06); not implemented.
+
+Lead's notes: Batch Import identifies by filename when the install has the name (`identify_import`); Add reads content
+and renames (`identify`). The same files can become different library entries (BL-088), and official files are refused by
+content in Add only: in the roster check, 18 lobby parts of 11 variants (e.g. akari_home and aru_home `_002`,
+ch9996_home) are `mod_target_unknown`, and two parts each of ch0156's portrait and Hare's lobby `mod_target_ambiguous`.
+
+Proposed: one identification for both: the install's names and the kept originals decide the slot; content only for
+renamed files, and never a name the game does not have; the roster check guards it.
+
+## BL-094: Error reports and logs for mod failures
+
+- Status: Found by the lead (2026-11-06); not implemented.
+
+Lead's notes: the report redacts the refused files to `[asset]`, so the four CABs of BL-088 were only in the tester's
+screenshot; official file names and CAB ids are game data. The log redaction still swallows the time's milliseconds,
+level and logger name of "not found" lines (BL-085). pywebview's `window.move` raised `ctypes.ArgumentError` 53 times in
+one session on Windows (a `None` coordinate while dragging the window; BL-085).
+
+Proposed: keep official names and CAB ids, redacting only user paths and names; redact only the asset in a log line;
+guard or fix the move call.
