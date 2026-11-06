@@ -1397,16 +1397,31 @@ class Services:
         if source == "live":
             return self.game.model_glb(core)
         if source == "official":
-            return self.game.model_glb(core, overrides=self.library.official_bundles(core))
+            return self.game.model_glb(core, overrides=self.library.official_bundles(core, current_fallback=True))
+        from ..library.judge import core_of, kind_of_file
+        try:
+            cores = set(getattr(self.library, "model_cores", lambda key: [core])(target))
+        except ServiceError as error:
+            if error.code != "catalog_variant_not_found" or target != core:
+                raise
+            cores = {core}  # An indexed NPC prefab can have no catalog variant.
+
+        def fits(bundles: list[Path]) -> bool:
+            return bool(bundles) and all(kind_of_file(bundle.name) == "model" and core_of(bundle.name) in cores
+                                         for bundle in bundles)
+
         if source.startswith("mod:"):
             mod_id = source[4:]
             entry = next((mod for mod in self.library.mods() if mod.id == mod_id), None)
             if entry is None or entry.kind != "model" or entry.target != target:
                 raise KeyError(path)
-            return self.game.model_glb(core, overrides=self.library.preview_bundles(mod_id))
+            bundles = self.library.preview_bundles(mod_id)
+            if not fits(bundles):
+                raise KeyError(path)
+            return self.game.model_glb(core, overrides=bundles)
         if source.startswith("import:"):
             preview_core, bundles = self.batch_import.preview(source[7:])
-            if preview_core != core:
+            if preview_core not in cores or not fits(bundles):
                 raise KeyError(path)
             return self.game.model_glb(core, overrides=bundles)
         raise KeyError(path)

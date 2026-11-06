@@ -582,7 +582,8 @@ class ModLibrary:
                                                    # added, fresh, size, date (its newest part's), crc, core (lower case)
     def add(self, paths: list[Path]) -> list[ModEntry]   # copies into the library; target from the file name's core
                                                          # (portrait "_spr", lobby "_home", "_home_gl", "_home_teen");
-                                                         # one mod per core and kind, see "Import grouping"
+                                                         # one mod per core and kind, or per model slot;
+                                                         # see "Import grouping"
     def remove(self, mod_id: str, confirm=False) -> None # refused while a game folder shows it (see below)
     def rename(self, mod_id: str, label: str) -> None
     def mark_seen(self, mod_id: str) -> None
@@ -598,7 +599,9 @@ class ModLibrary:
     def preview_bundles(self, mod_id: str, pin=None) -> list[Path]
     def preview_complements(self, core: str, names: list[str], pin=None) -> list[Path]
     def preview_incomplete(self, mod_id: str, pin=None) -> bool
-    def official_bundles(self, core: str, pin=None) -> list[Path]  # verified originals, whole core or unavailable
+    def model_cores(self, variant_key: str, pin=None) -> list[str]  # prefab first, own installed dependency cores
+    def official_bundles(self, core: str, pin=None, *, current_fallback=False) -> list[Path]  # whole slot;
+                                                        # verified originals; model previews may allow current files
     def prune(self) -> list[Path]                        # kept originals deleted (see below)
     def update(self, mod_id: str, log, progress) -> UpdateResult   # rebuild against the current game file
     def extract(self, target: str, out_dir: Path, log) -> Path     # target "variant:<key>" or "mod:<id>"
@@ -890,6 +893,19 @@ The library also supports `model` Mods and the detail page's model source select
 animation dependencies are validated together. Model preview uses the chosen source independently of game
 application; a library-only assigned model exposes its tab without claiming a local installation target.
 
+A model slot contains `variant.model` (its prefab core, first) and every other installed model-kind core that
+`Catalog.model_map` maps to that same variant. Unmapped shared NPC/enemy cores and other variants' cores stay separate.
+`ModLibrary._core_map` keeps the choice keyed by the prefab core; dependency cores do not get independent configuration
+or state entries. The slot's files, file table, Needs Fix, restore availability, selection verification and incomplete
+judgement cover all its cores. Hoshino (Armed)'s slot is `ch0258_02` plus `ch0258`.
+
+A model Mod fits when every file's core belongs to the slot. Apply uses the existing replacement mapping across all
+slot files, keeps originals, and journals the whole transaction. Omitted parts prefer official copies, then current
+files when no official copy remains; switching choices returns the previous choice's omitted parts to their official
+copies where available. Enable Mods, drift repair, adoption, removal and restore operate on the same single choice.
+Switch 3D Model offers Mods from any of the slot's cores. Filenames and the library identity retain the physical core.
+A source-change event for any slot core refreshes the detail page and its model preview.
+
 ## Game watch
 
 ### Checks before a write
@@ -1066,7 +1082,7 @@ stops the server (the page shows Closed); with `--serve` it gives `native_unavai
 | `i18n.strings {lang}` | `{key: text}` for `webui.*` |
 | `roster.list` | families with variants, mod counts, fresh flags, favourites, recent order, `added` (when the newest own mod was added), `aliases` per family and per variant (matched by the search, never shown), `custom` per family (the user's own aliases), `configured` manifest sources and independent `previewSources`; reads one library snapshot, without physical `selection` verification (available through `family.get`); without scan consent Replaced comes from the library's records only |
 | `settings.get` / `settings.set {key, value}` | the settings popup's values; key `roster` keeps the student list's view (merge, segment filters, sort, order, filter groups; `webui/state.py roster_view`); `lobbyZoom` is `{mode, custom}` in `settings.get`, set by keys `lobbyZoom` (`game`, `art`, `unlocked`, `custom`) and `lobbyZoomCustom` (1.0 to 4.0 game views across, kept in 0.1 steps); `lobbyPost` and `lobbyIntro` (the lobby's post-processing and its intro, on by default); the booleans `tray` (the tray or menu bar icon) and `classicPrompt` (the hand-off prompt); `settings.get` adds `traySupported`; the game folder keys `gameDir.global` and `gameDir.japan` are refused with `game_not_found` unless the folder is a game install (`searching.is_game_install`: one of its search directories holds a UI atlas bundle, `uis-atlas-*.bundle`, decided by file names only, so the resource folder itself stays valid), and `fileSource` with `game_directory_missing` for such a folder |
-| `family.get {key}` | a family with its variants (and `aliases` and `custom`, as in `roster.list`), mods and each variant's state, judged cheaply (`copy`, `restorable` and `official` per file; Needs Fix only from the record of the switch that wrote the file); `configured {spr, lobby}` per variant (the sources of its primary cores); `modelFiles` per variant (the 3D model's prefab bundles, newest first, `fixed` or `ok` from the header) and `version` (the game's resource version, so a switched install reloads the screen); `modList` by the variant the current catalog gives each mod's core |
+| `family.get {key}` | a family with its variants (and `aliases` and `custom`, as in `roster.list`), mods and each variant's state, judged cheaply (`copy`, `restorable` and `official` per file; Needs Fix only from the record of the switch that wrote the file); `configured {spr, lobby, model}` per variant (one source per slot); `modelCores` (prefab core first, then its own dependency cores), `modelFiles` (every model slot file, newest first, with the state's CRC and restore judgements) and `version` (the game's resource version, so a switched install reloads the screen); `modList` by the variant the current catalog gives each mod's core |
 | `lobby.warm` | builds the memorial lobby prefab index in the background once per game; dependency CABs resolve on demand instead of triggering an eager full-directory index |
 | `lobby.lines {variant, talks, lang}` | `{clip: {lang: text, voice}}`: zh-CN from Kivo, ja from Kivo else the Global server, en, zh-TW, ko and th from the Global server (read only for a `lang` other than zh-CN, left out when its table is not in within 3 s); `talks` (`{animation: [clip ids]}` from the skeleton) places the Global rows on the clips; `lines_unavailable` when neither source can be read |
 | `debug.trace {events}` | the fullscreen lobby's input events, logged (logger `bmpt.webui.trace`, and `input-trace.log` in the data directory) only when the app was started with `--debug`; ignored otherwise |
@@ -1138,18 +1154,22 @@ new ZIP. This exports user-requested files at runtime; no game assets are includ
 
 The batch import (`import.analyze`, one folder at a time, with kind and variant; shown as Import Mod, and opened by a
 student page's Add Portrait, Add Memorial Lobby and Add 3D Model) and Add (`mods.add`, drag and drop, one
-upload) group files with one rule, `judge.mod_versions`. The files of one core and kind are one mod whatever their dates:
-some cores keep their parts under different dates (Spine textures and text, a model's prefab and dependencies), so one row
-or library Mod holds all of them and an apply writes every selected part. When the install keeps multiple dates of one
+upload) group files with one rule, `judge.mod_versions`. Portrait and lobby files use their physical core and kind as
+the set key. Model files use their variant's prefab slot key across every physical core in that slot: a complete set
+of prefab and dependency files becomes one row, one library Mod and one selected source. The filenames keep their
+physical cores. The set stays together whatever its parts' dates (Spine textures and text, a model's prefab and
+dependencies), and an apply writes every selected part. When the install keeps multiple dates of one
 part side by side, those files also stay in one Mod. Only a repeated part whose dates the install does not keep together
 splits the whole set by date, one row or Mod per date. Collection batches keep their separate dated slots.
 `other` bundles keep their own handling. A Mod's `date` is the newest date of its parts. Library Mods stored before this
-rule keep the split they were stored with; nothing is merged or migrated.
+rule keep the split they were stored with; nothing is merged or migrated. Batch folders still separate alternatives.
 
 Add and Import Mod both use `ModLibrary.identify_import`: an installed name (CRC aside), or a verified kept
 original of that name, owns the target and kind. Other filenames use content identification. Portrait and lobby aliases
-canonicalize to the install's slot core (`variant.spr` / `variant.lobby`). A model keeps the core its assets name; a dependency under `characters/<model>/` never becomes the variant's prefab core. A separate
-model dependency core can be stored, while applying it still requires the slot's core.
+canonicalize to the install's slot core (`variant.spr` / `variant.lobby`). A model keeps the core its assets name; a
+dependency under `characters/<model>/` never becomes the variant's prefab core. A separate model dependency core can
+be stored and applied to the variant's slot when it is one of that slot's cores. Add and Import Mod keep the same
+filenames, target and library identity.
 
 A current-release Mod file is proved by an installed name without its CRC or by matching internal CAB names.
 It replaces the exact installed name, else the name without the CRC, else the unique CAB match, with a unique part
@@ -1292,6 +1312,10 @@ never used to store or apply a source directly.
 existing memory-only routes. Models also expose the import preview bundle set through
 `/asset/model/<variant>.glb?source=import:<key>`. Missing official parts do not prevent a
 self-contained source preview. Changed bytes, a new analysis or a changed folder expire handles.
+Model `mod:` and `import:` sources must contain only model files of the variant's slot cores; the exporter always
+uses that variant's prefab. The `official` model preview overrides every slot file with its verified official copy,
+using the current file only when no official copy remains. This preview fallback does not supply an official baseline
+for rebuilding a Mod or make a file restorable. The default `official_bundles` call still requires verified originals.
 
 New locale keys are present in all six locales. The reason keys also exist under `webui.error`
 with the same text, so both entry reasons and RPC/job failures translate consistently:
@@ -1975,8 +1999,8 @@ no withdrawal control.
   when it matches an existing library entry. A batch combines these messages in one popup, with navigation only
   for other variants; local results alone have a confirmation button. The source already in use has Apply greyed
   and shows no message, and no job runs. Row 2's
-  update and compare act on the mod the shown tab's files carry. The 3D tab's card has nothing to switch to yet
-  (library): no chevron, and a click opens nothing.
+  update and compare act on the mod the shown tab's files carry. The 3D tab's switch lists Mods from all of its own
+  model slot cores, with one saved choice for the complete slot.
 
 - **New mod marks**: unseen mods mark their own variant chip, their kind's detail tab and the roster card (any
   variant when merged). A visit or a tab change keeps the marks. Opening a switch popup marks all mods it offers

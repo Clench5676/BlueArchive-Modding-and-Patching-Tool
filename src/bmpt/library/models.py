@@ -213,8 +213,8 @@ EntryStateName = Literal["damaged", "missing", "untracked", "changed", "source_m
 
 @dataclass(frozen=True)
 class EntryState(JsonResult):
-    """One game core of a variant in one install (a portrait or one memorial lobby core): what its files carry, what
-    is configured for it, and what the switch would do with it."""
+    """One asset slot of a variant in one install: what its files carry, what is configured for it, and what the
+    switch would do with it. A model slot combines its prefab and its own dependency cores."""
 
     install: str  # the install key
     core: str  # lower-case core

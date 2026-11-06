@@ -677,10 +677,11 @@ def build_api(s: Services) -> RpcRegistry:
                                           for v in f.variants]})
         return {"families": families}
 
-    def model_files(core: str | None) -> list[dict[str, Any]]:
-        """A 3D chibi's prefab bundles (character-<dev>-_mxload-*), newest first, in the shape of the variant state's
-        file parts, judged cheaply from the header (decision 27): fixed with trailing bytes, else ok. No switch writes
-        model bundles, so none shows Needs Fix; a bundle whose header cannot be read is left out."""
+    def model_files(core: str | None, state: dict) -> list[dict[str, Any]]:
+        """All model slot parts, with the same Needs Fix and restore judgements as the file table."""
+        parts = [part for part in state.get("files", []) if part["kind"] == "model"]
+        if parts:
+            return sorted(parts, key=lambda part: (part["date"] or "", part["file"]), reverse=True)
         try:
             index = getattr(s.game, "_model_index", None) if core else None
             names = index().get(core.lower(), []) if index else []
@@ -775,7 +776,8 @@ def build_api(s: Services) -> RpcRegistry:
                         mod["incomplete"] = True
                 except ServiceError:
                     pass
-            item["modelFiles"] = model_files(v.model)
+            item["modelCores"] = getattr(s.library, "model_cores", lambda key: [v.model] if v.model else [])(v.key)
+            item["modelFiles"] = model_files(v.model, item["state"])
             variants.append(item)
         # Include the installation: two servers can have the same resource hash.
         return {"key": f.key, "base": f.names, "aliases": f.aliases,

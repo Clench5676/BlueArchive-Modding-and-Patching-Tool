@@ -31,6 +31,151 @@ def model_bundle(folder, core='hoshino_original', *, prefab=False, **kwargs):
     return path
 
 
+@pytest.mark.skipif(not GAME_DIR.is_dir(), reason='Set BAMT_TEST_GAME_DIR to a verified official view')
+def test_official_model_slot_ownership(tmp_path, record_property):
+    from bmpt.config import Settings
+    from bmpt.gameassets import AssetCache, GameAssets
+    from bmpt.library.judge import core_of
+    from ba_modding_toolkit.searching import get_search_dirs
+
+    directories = get_search_dirs(GAME_DIR)
+    game = GameAssets(directories, AssetCache(allowed=False, root=tmp_path / 'cache'))
+    catalog = Catalog(game, None, server='global')
+    settings = Settings(tmp_path / 'config.toml')
+    settings.set('game_resource_dir', str(GAME_DIR))
+    library = ModLibrary(tmp_path / 'library', catalog, game, settings)
+    cores = {core_of(path.name) for directory in directories for path in directory.glob('*.bundle')
+             if kind_of_file(path.name) == 'model'}
+    mapped = catalog.model_map(cores)
+    all_variants = [v for f in catalog.families() for v in f.variants if v.model]
+    variants = [v for v in all_variants if v.playable]
+    expanded = {}
+    for variant in variants:
+        slot = [variant.model, *sorted(core for core in cores
+                                      if core != variant.model and mapped.get(core) == variant.key)]
+        assert all(mapped.get(core) == variant.key for core in slot), (variant.key, slot)
+        assert not [(other.key, other.model) for other in all_variants
+                    if other.key != variant.key and other.model in slot], (variant.key, slot)
+        assert library.model_cores(variant.key) == slot
+        assert {core_of(path.name) for path in library._game_files(variant.key, 'model')} == set(slot)
+        if len(slot) > 1:
+            expanded[variant.key] = slot
+    assert expanded['ch0258'][:2] == ['ch0258_02', 'ch0258']
+    record_property('expanded_model_slots', str(expanded))
+    print(f'Model ownership: variants={len(variants)}; expanded={expanded}')
+
+
+@pytest.mark.skipif(not GAME_DIR.is_dir(), reason='Set BAMT_TEST_GAME_DIR to a verified official view')
+@pytest.mark.parametrize('batch', [False, True], ids=['Add', 'Batch'])
+@pytest.mark.parametrize('complete', [False, True], ids=['dependency-parts', 'complete-slot'])
+def test_official_split_model_dependency_mod_on_clones(tmp_path, batch, complete, record_property):
+    import hashlib
+    import json
+    import subprocess
+    from bmpt.config import Settings
+    from bmpt.gameassets import AssetCache, GameAssets
+    from bmpt.gameassets.cabs import CabIndex
+    from bmpt.library.integrity import Inspection
+    from bmpt.library.judge import core_of
+    from bmpt.library.storage import atomic_clone
+    from bmpt.webui.api import build_api
+    from bmpt.webui.services import Services
+    from ba_modding_toolkit.searching import get_search_dirs
+    from test_batch_import import analyze, run
+
+    directories = get_search_dirs(GAME_DIR)
+    cores = {'ch0258_02', 'ch0258'}
+    official = [path for directory in directories for path in directory.glob('*.bundle')
+                if kind_of_file(path.name) == 'model' and core_of(path.name) in cores]
+    assert len(official) >= 12
+    inspection = Inspection()
+    references = set().union(*(inspection.inspect(path).references for path in official))
+    supplied = CabIndex(directories).resolve(references, official[0])
+    portraits = {path for directory in directories for path in directory.glob('*.bundle')
+                 if core_of(path.name) == 'ch0258_spr'}
+    assert portraits
+    sources = set(official) | portraits | {Path(path) for path in supplied.values()}
+    clone_dir = tmp_path / 'game'
+    clone_dir.mkdir()
+    before = {path: hashlib.sha256(path.read_bytes()).hexdigest() for path in sources}
+    for path in sources:
+        assert atomic_clone(path, clone_dir / path.name), 'The real-install write check requires native clones'
+        (clone_dir / path.name).chmod(0o644)
+    settings = Settings(tmp_path / 'config.toml')
+    settings.set('game_resource_dir', str(clone_dir))
+    settings.set('enable_crc_correction', 'false')
+    settings.set('compression_method', 'none')
+    game = GameAssets([clone_dir], AssetCache(allowed=False, root=tmp_path / 'cache'))
+    catalog = Catalog(game, None, server='global')
+    library = ModLibrary(tmp_path / 'library', catalog, game, settings)
+    assert library.model_cores('ch0258') == ['ch0258_02', 'ch0258']
+    official_bytes = {path: path.read_bytes() for path in clone_dir.glob('*.bundle')}
+    slot_files = library._game_files('ch0258', 'model')
+    targets = sorted(slot_files if complete else (
+        path for path in slot_files if core_of(path.name) == 'ch0258' and '_mxdependency-' in path.name
+        and any('_' + part + '_' in path.name for part in ('004', '006'))))
+    assert len(targets) == (len(official) if complete else 2)
+    incoming = tmp_path / 'incoming'
+    incoming.mkdir()
+    uploads = []
+    for path in targets:
+        source = incoming / path.name
+        assert atomic_clone(path, source)
+        with source.open('ab') as stream:
+            stream.write(b'BL-088 changed bytes')
+        uploads.append(source)
+    inspection.validate()
+    del inspection
+    services = Services(settings, tmp_path / 'app', cache=object(), game=game, catalog=catalog, library=library)
+    services.game_found = lambda: False
+    env = SimpleNamespace(services=services, rpc=build_api(services))
+    try:
+        row, = analyze(env, uploads)['entries']
+        assert (row['kind'], row['core'], row['variant'], row['state']) == ('model', 'ch0258_02', 'ch0258', 'ready')
+        assert row['paths'] == sorted(map(str, uploads))
+        assert {file['target'] for file in row['files']} == {path.name for path in targets}
+        if batch:
+            result, = run(env, [row], enableAfterImport=complete, backup=False)
+            assert result['outcome'] == 'imported'
+            assert result['applied'] is complete
+            mod, = library.mods()
+        else:
+            mod, = library.add_files('model', uploads)
+        assert [entry.id for entry in library.mods()] == [mod.id]
+        assert {path.name for path in library._paths(library._record(mod.id))} == {p.name for p in uploads}
+        result = library.apply('ch0258', f'mod:{mod.id}', kind='model')
+        assert not result.incomplete
+        if batch and complete:
+            assert result.unchanged
+        else:
+            assert set(result.files) == set(targets)
+        assert {path for path, data in official_bytes.items() if path.read_bytes() != data} == set(targets)
+        assert all(target.read_bytes() == upload.read_bytes() for target, upload in zip(targets, uploads))
+        assert all((library.root / 'originals' / target.name).read_bytes() == official_bytes[target] for target in targets)
+        family = env.rpc.call('family.get', {'key': 'hoshino'})['result']
+        variant = next(v for v in family['variants'] if v['key'] == 'ch0258')
+        assert variant['selection']['model']['installed']
+        if shutil.which('node'):
+            script = ('import {readFileSync} from "node:fs"; '
+                      'import {candidates} from "./src/bmpt/web/js/switch-sources.js"; '
+                      'const f=JSON.parse(readFileSync(0,"utf8")); const v=f.variants.find(v=>v.key==="ch0258"); '
+                      'if(!candidates(f,v,"model").some(c=>c.id===' + json.dumps(mod.id) + ')) process.exit(1);')
+            check = subprocess.run(['node', '--input-type=module', '-e', script], input=json.dumps(family),
+                                   cwd=Path(__file__).resolve().parents[1], text=True, capture_output=True, timeout=30)
+            assert check.returncode == 0, check.stderr
+        row, = analyze(env, uploads)['entries']
+        assert row['state'] == ('done' if batch else 'library') and row['libraryId'] == mod.id
+        library.restore('ch0258', kind='model')
+        assert all(path.read_bytes() == data for path, data in official_bytes.items())
+        assert all(hashlib.sha256(path.read_bytes()).hexdigest() == digest for path, digest in before.items())
+        record_property('cloned_model_files', len(official))
+        record_property('cloned_shared_files', len(sources - set(official) - portraits))
+        print(f'Hoshino clone workflow: slot_files={len(official)}; shared_files={len(sources - set(official) - portraits)}; changed={len(targets)}')
+        print('Hoshino slot files: ' + ', '.join(sorted(path.name for path in official)))
+    finally:
+        services.close()
+
+
 @pytest.fixture
 def model_env(setup_library):
     env = setup_library
@@ -44,6 +189,351 @@ def model_env(setup_library):
     env.parts = [prefab, mesh, texture]
     env.official = {p: p.read_bytes() for p in env.parts}
     return env
+
+
+@pytest.fixture
+def split_model_env(setup_library, request):
+    env = setup_library
+    env.variant_key, env.prefab_core, env.dependency_core, env.family_key = getattr(
+        request, 'param', ('ch0258', 'ch0258_02', 'ch0258', 'hoshino'))
+    game_bundle(env.game_dir, env.variant_key + '_spr')
+    env.parts = [model_bundle(env.game_dir, env.prefab_core, prefab=True, part='000', payload=b'prefab'),
+                 *[model_bundle(env.game_dir, env.dependency_core, part=part, payload=b'official ' + part.encode())
+                   for part in ('004', '006', '007')]]
+    env.excluded = [model_bundle(env.game_dir, 'droid_kaiserpmc_shield', part='000'),
+                    model_bundle(env.game_dir, 'ch0258_01_enemy', part='000'),
+                    model_bundle(env.game_dir, 'hoshino_original', prefab=True, part='000')]
+    env.official = {path: path.read_bytes() for path in [*env.parts, *env.excluded]}
+    game = SimpleNamespace(spine_cores=lambda kind: {'hoshino_spr': [], env.variant_key + '_spr': []} if kind == 'spr' else {},
+                           collection_names=lambda: {}, model_cores=lambda: {env.prefab_core, 'hoshino_original'})
+    env.catalog = Catalog(game, None)
+    env.library = ModLibrary(env.root, env.catalog, object(), env.settings, scan_allowed=lambda: True)
+    return env
+
+
+@pytest.fixture
+def split_model_app(split_model_env):
+    from bmpt.webui.api import build_api
+    from bmpt.webui.services import Services
+
+    env = split_model_env
+    env.previews = []
+    game = SimpleNamespace(model_glb=lambda core, overrides=(): env.previews.append((core, list(overrides))) or b'glTF')
+    env.services = Services(env.settings, env.tmp / 'app', cache=object(), game=game,
+                            catalog=env.catalog, library=env.library)
+    env.services.game_found = lambda: False
+    env.rpc = build_api(env.services)
+    yield env
+    env.services.close()
+
+
+def test_split_model_slot_uses_only_its_own_install_cores(split_model_env):
+    env = split_model_env
+    library = env.library
+    pin = library.current_pin()
+    assert library.model_cores('ch0258') == ['ch0258_02', 'ch0258']
+    assert library._core_map(pin).core('ch0258', 'model') == 'ch0258_02'
+    assert library._game_files('ch0258', 'model') == env.parts
+    assert {file.file for file in library.state('ch0258').files if file.kind == 'model'} == set(env.parts)
+    assert set(library.official_bundles('ch0258')) == set(env.parts)
+    assert set(library.official_bundles('ch0258_02')) == set(env.parts)
+    assert library.model_cores('hoshino') == ['hoshino_original']
+    # A second install never borrows dependencies present only in the current one.
+    other = env.tmp / 'second-game'
+    model_bundle(other, 'ch0258_02', prefab=True, part='000')
+    other_pin = library._pin(other, 'global')
+    assert library.model_cores('ch0258', other_pin) == ['ch0258_02']
+    assert len(library._game_files('ch0258', 'model', other_pin)) == 1
+    # Even if that install loses its prefab file, the remaining dependencies keep the prefab choice key.
+    for path in other.glob('*.bundle'):
+        path.unlink()
+    dependency = model_bundle(other, 'ch0258', part='004')
+    assert library.model_cores('ch0258', other_pin) == ['ch0258_02', 'ch0258']
+    assert library._game_files('ch0258', 'model', other_pin) == [dependency]
+    assert library._core_map(other_pin).slot('ch0258') == 'ch0258_02'
+
+
+@pytest.mark.parametrize('batch', [False, True], ids=['Add', 'Batch'])
+def test_split_model_dependency_add_apply_switch_and_restore(split_model_app, batch):
+    from test_batch_import import analyze, run
+
+    env = split_model_app
+    library = env.library
+    uploads = [make_mod(path, env.tmp / 'incoming', payload=b'mod ' + str(i).encode())
+               for i, path in enumerate(env.parts[1:3])]
+    assert all(library.identify_import(path, path.name) == (path.name, 'ch0258', 'model') for path in uploads)
+    if batch:
+        row, = analyze(env, uploads)['entries']
+        assert (row['core'], row['variant'], row['state']) == ('ch0258_02', 'ch0258', 'ready')
+        result, = run(env, [row], enableAfterImport=False)
+        assert result['outcome'] == 'imported'
+        mod, = library.mods()
+    else:
+        mod, = library.add_files('model', uploads)
+    assert mod.core == 'ch0258' and mod.target == 'ch0258'
+    assert {path.name for path in library.preview_bundles(mod.id)} == {path.name for path in env.parts}
+    result = library.apply('ch0258', f'mod:{mod.id}', kind='model')
+    assert set(result.files) == set(env.parts[1:3]) and not result.incomplete
+    assert library.apply('ch0258', f'mod:{mod.id}', kind='model').unchanged
+    assert all(path.read_bytes() == upload.read_bytes() for path, upload in zip(env.parts[1:3], uploads))
+    assert all(path.read_bytes() == data for path, data in env.official.items() if path not in env.parts[1:3])
+    assert library.configured('ch0258')['model'] == f'mod:{mod.id}'
+    assert library.selection('ch0258')['model']['installed']
+    choices = library.profiles.read()['folders'][library.current_pin().key]['configured']
+    assert set(choices) == {'ch0258_02'}
+    hidden = library.profiles.read()
+    pin = library.current_pin()
+    hidden['folders'][pin.key]['hidden'] = [library.data_id]
+    assert library._hidden_items(hidden) == [{'install': pin.key, 'core': 'ch0258_02', 'why': 'pending'}]
+    entries = [entry for entry in library.entries() if entry.kind == 'model']
+    entry, = entries
+    assert entry.core == 'ch0258_02' and len(entry.files) == len(env.parts)
+    filtered, = library.scan(cores={'ch0258'}).entries
+    assert filtered.core == 'ch0258_02' and len(filtered.files) == len(env.parts)
+    state = [part for part in library.state('ch0258').files if part.kind == 'model']
+    assert {part.applied for part in state} == {f'mod:{mod.id}'} and all(part.restorable for part in state)
+    family = env.rpc.call('family.get', {'key': 'hoshino'})['result']
+    shown = next(v for v in family['variants'] if v['key'] == 'ch0258')
+    assert shown['modelCores'] == ['ch0258_02', 'ch0258']
+    assert {part['file'] for part in shown['modelFiles']} == set(map(str, env.parts))
+    assert shown['selection']['model']['installed']
+    row, = analyze(env, uploads)['entries']
+    assert row['libraryId'] == mod.id and row['state'] == ('done' if batch else 'library')
+    # Another choice replaces its own part and returns the previous choice's parts to official.
+    second, = library.add([make_mod(env.parts[0], env.tmp / 'second', payload=b'other prefab')])
+    library.apply('ch0258', f'mod:{second.id}', kind='model')
+    assert all(path.read_bytes() == env.official[path] for path in env.parts[1:])
+    library.apply('ch0258', f'mod:{mod.id}', kind='model')
+    assert not library.toggle(False, True).failed
+    assert all(path.read_bytes() == data for path, data in env.official.items())
+    assert all((env.root / 'originals' / path.name).read_bytes() == env.official[path] for path in env.parts[1:3])
+    assert not library.toggle(True, False).failed
+    assert library.selection('ch0258')['model']['installed']
+    library.restore('ch0258', kind='model')
+    assert library.configured('ch0258')['model'] is None
+    assert all(path.read_bytes() == data for path, data in env.official.items())
+
+
+@pytest.mark.parametrize('split_model_env', [
+    ('ch0258', 'ch0258_02', 'ch0258', 'hoshino'),
+    ('ch0175', 'ch0175', 'wakamo_swimsuit_original', 'wakamo'),
+], indirect=True, ids=['Hoshino-Armed', 'Wakamo-Swimsuit'])
+@pytest.mark.parametrize('batch', [False, True], ids=['Add', 'Batch'])
+def test_complete_split_model_is_one_row_one_mod_and_one_choice(split_model_app, batch):
+    from test_batch_import import analyze, run
+
+    env = split_model_app
+    library = env.library
+    uploads = [make_mod(path, env.tmp / 'incoming', payload=b'complete mod ' + str(i).encode())
+               for i, path in enumerate(env.parts)]
+    row, = analyze(env, uploads)['entries']
+    assert (row['core'], row['variant'], row['state']) == (env.prefab_core, env.variant_key, 'ready')
+    assert row['paths'] == sorted(map(str, uploads))
+    assert {file['target'] for file in row['files']} == {path.name for path in env.parts}
+    if batch:
+        result, = run(env, [row], enableAfterImport=True, backup=False)
+        assert result['outcome'] == 'imported' and result['applied'] and result['configured']
+        mod, = library.mods()
+    else:
+        mod, = library.add_files('model', uploads)
+        applied = library.apply(env.variant_key, f'mod:{mod.id}', kind='model')
+        assert set(applied.files) == set(env.parts)
+    assert [entry.id for entry in library.mods()] == [mod.id]
+    assert {path.name for path in library._paths(library._record(mod.id))} == {path.name for path in uploads}
+    assert all(target.read_bytes() == source.read_bytes() for target, source in zip(env.parts, uploads))
+    assert all(path.read_bytes() == env.official[path] for path in env.excluded)
+    assert all((env.root / 'originals' / path.name).read_bytes() == env.official[path] for path in env.parts)
+    choices = library.profiles.read()['folders'][library.current_pin().key]['configured']
+    assert set(choices) == {env.prefab_core} and choices[env.prefab_core]['source'] == f'mod:{mod.id}'
+    assert library.selection(env.variant_key)['model']['installed']
+    assert library.add(list(reversed(uploads))).duplicates == [mod]
+    row, = analyze(env, uploads)['entries']
+    assert row['libraryId'] == mod.id and row['core'] == env.prefab_core
+    restored = library.restore(env.variant_key, kind='model')
+    assert set(restored.files) == set(env.parts)
+    assert all(path.read_bytes() == data for path, data in env.official.items())
+    assert library.configured(env.variant_key)['model'] is None
+
+
+def test_complete_split_model_keeps_existing_partial_mods_separate(split_model_app):
+    from test_batch_import import analyze
+
+    env = split_model_app
+    uploads = [make_mod(path, env.tmp / 'incoming', payload=b'complete mod ' + str(i).encode())
+               for i, path in enumerate(env.parts)]
+    prefab, = env.library.add(uploads[:1])
+    dependency, = env.library.add(uploads[1:])
+    existing = {mod.id: env.library._output_identity(env.library._paths(env.library._record(mod.id)))
+                for mod in (prefab, dependency)}
+    complete, = env.library.add(uploads)
+    assert len(env.library.mods()) == 3 and complete.id not in existing
+    assert all(env.library._output_identity(env.library._paths(env.library._record(mod_id))) == files
+               for mod_id, files in existing.items())
+    row, = analyze(env, uploads)['entries']
+    assert row['libraryId'] == complete.id
+
+
+def test_split_model_release_split_groups_dependencies_with_their_prefab_version(split_model_app):
+    from test_batch_import import analyze
+
+    env = split_model_app
+    current = [make_mod(path, env.tmp / 'incoming', payload=b'current ' + str(i).encode())
+               for i, path in enumerate(env.parts)]
+    older = model_bundle(current[0].parent, env.prefab_core, prefab=True, part='000',
+                         date='2025-01-01', payload=b'older prefab')
+    expected = sorted([sorted(path.name for path in current), [older.name]])
+    rows = analyze(env, [*current, older])['entries']
+    assert sorted(sorted(Path(path).name for path in row['paths']) for row in rows) == expected
+    assert {row['core'] for row in rows} == {env.prefab_core}
+    mods = env.library.add([*current, older])
+    assert sorted(sorted(path.name for path in env.library._paths(env.library._record(mod.id)))
+                  for mod in mods) == expected
+
+
+def test_split_model_rejects_foreign_and_mixed_core_mods(split_model_env):
+    env = split_model_env
+    foreign, = env.library.add([make_mod(env.excluded[-1], env.tmp / 'foreign')])
+    with pytest.raises(ServiceError, match='mod_target_mismatch'):
+        env.library.apply('ch0258', f'mod:{foreign.id}', kind='model')
+    # Even a record targeted at the correct variant cannot smuggle a foreign core alongside its own.
+    own = make_mod(env.parts[1], env.tmp / 'mixed')
+    other = make_mod(env.excluded[-1], own.parent)
+    record = env.library._store({own.name: own, other.name: other}, 'mixed', 'ch0258', 'model')
+    with pytest.raises(ServiceError, match='mod_target_mismatch'):
+        env.library.apply('ch0258', f'mod:{record["id"]}', kind='model')
+    assert all(path.read_bytes() == data for path, data in env.official.items())
+
+
+def test_split_model_existing_dependency_mod_is_adopted_under_one_choice(split_model_env):
+    env = split_model_env
+    target = env.parts[1]
+    upload = make_mod(target, env.tmp / 'incoming')
+    target.with_name(target.name + '.backup').write_bytes(env.official[target])
+    target.write_bytes(upload.read_bytes())
+    result = env.library.add([upload])
+    mod, = result
+    assert result.installed == [mod]
+    assert env.library.configured('ch0258')['model'] == f'mod:{mod.id}'
+    choice, = env.library.entries()
+    assert choice.core == 'ch0258_02' and {file.file for file in choice.files} == set(env.parts)
+    env.library.restore('ch0258', kind='model')
+    assert all(path.read_bytes() == data for path, data in env.official.items())
+
+
+@pytest.mark.parametrize('outside', ['prefab', 'dependency'])
+def test_split_model_incomplete_and_unrestorable_cover_the_whole_slot(split_model_app, outside):
+    env = split_model_app
+    path = env.parts[0 if outside == 'prefab' else 3]
+    path.write_bytes(header_bundle(b'outside bytes'))
+    mod, = env.library.add([make_mod(env.parts[1], env.tmp / 'incoming')])
+    assert env.library.preview_incomplete(mod.id)
+    result = env.library.apply('ch0258', f'mod:{mod.id}', kind='model')
+    assert result.incomplete and result.kept_current
+    assert env.library.selection('ch0258')['model']['incomplete']
+    family = env.rpc.call('family.get', {'key': 'hoshino'})['result']
+    variant = next(v for v in family['variants'] if v['key'] == 'ch0258')
+    assert next(m for m in variant['modList'] if m['id'] == mod.id)['incomplete']
+    assert next(p for p in variant['modelFiles'] if p['file'] == str(path))['restorable'] is False
+    with pytest.raises(ServiceError, match='original_unavailable'):
+        env.library.restore('ch0258', kind='model')
+    assert not (env.root / 'originals' / path.name).exists()
+
+
+def test_split_model_drift_and_needs_fix_belong_to_prefab_entry(split_model_app):
+    env = split_model_app
+    target = env.parts[1]
+    mod, = env.library.add_and_apply([make_mod(target, env.tmp / 'incoming', fixed=True)])
+    # A record of a write can carry Needs Fix on any dependency, including the file table's copy.
+    env.library._applied[str(target.resolve())]['crc'] = 'needs_fix'
+    env.library._save()
+    family = env.rpc.call('family.get', {'key': 'hoshino'})['result']
+    variant = next(v for v in family['variants'] if v['key'] == 'ch0258')
+    assert next(p for p in variant['modelFiles'] if p['file'] == str(target))['crc'] == 'needs_fix'
+    target.write_bytes(env.official[target])
+    entry, = [e for e in env.library.scan().entries if e.kind == 'model']
+    assert entry.core == 'ch0258_02' and entry.state == 'reset'
+    assert not env.library.selection('ch0258')['model']['installed']
+    assert not env.library.restore_drift([{'install': entry.install, 'core': entry.core}]).failed
+    assert target.read_bytes() == mod.file.read_bytes()
+
+
+def test_split_model_batch_enable_after_import_and_deferred_choice(split_model_app):
+    from test_batch_import import analyze, run
+
+    env = split_model_app
+    assert not env.library.toggle(False, True).failed
+    upload = make_mod(env.parts[1], env.tmp / 'incoming')
+    row, = analyze(env, [upload])['entries']
+    result, = run(env, [row], enableAfterImport=True)
+    assert result['configured'] and not result['applied']
+    assert env.library.configured('ch0258')['model'] == 'mod:' + result['libraryId']
+    assert all(path.read_bytes() == data for path, data in env.official.items())
+    assert not env.library.toggle(True, False).failed
+    assert env.parts[1].read_bytes() == upload.read_bytes()
+    assert env.library.selection('ch0258')['model']['installed']
+    assert not env.library.remove(result['libraryId'], confirm=True).failed
+    assert all(path.read_bytes() == data for path, data in env.official.items())
+
+
+def test_split_model_journal_rolls_back_prefab_and_dependency_together(split_model_env, monkeypatch):
+    import json
+    from bmpt.library import service
+
+    env = split_model_env
+    targets = env.parts[:2]
+    uploads = [make_mod(path, env.tmp / 'incoming') for path in targets]
+    mod, = env.library.add(uploads)
+    copy = service.atomic_copy
+    written = []
+
+    def fail_second(source, target):
+        if target in targets and source.parent == mod.file.parent:
+            journal, = (env.root / 'transactions').glob('*/journal.json')
+            data = json.loads(journal.read_text())
+            assert data['phase'] == 'writing'
+            assert {Path(item['target']) for item in data['files']} >= set(targets)
+            written.append(target)
+            if len(written) == 2:
+                raise PermissionError('synthetic failed second slot part')
+        return copy(source, target)
+
+    monkeypatch.setattr(service, 'atomic_copy', fail_second)
+    with pytest.raises(ServiceError, match='game_file_locked'):
+        env.library.apply('ch0258', f'mod:{mod.id}', kind='model')
+    assert len(written) == 2
+    assert all(path.read_bytes() == data for path, data in env.official.items())
+    assert not list((env.root / 'transactions').glob('*/journal.json'))
+    assert env.library.configured('ch0258')['model'] == f'mod:{mod.id}'
+    assert env.library.selection('ch0258')['model']['error']['code'] == 'game_file_locked'
+
+
+def test_split_model_preview_sources_use_prefab_and_every_own_core(split_model_app):
+    from test_batch_import import analyze
+
+    env = split_model_app
+    upload = make_mod(env.parts[1], env.tmp / 'incoming')
+    row, = analyze(env, [upload])['entries']
+    assert env.services.asset('model/ch0258.glb', {'source': 'import:' + row['preview']['key']}).body == b'glTF'
+    assert env.previews[-1][0] == 'ch0258_02'
+    assert set(env.previews[-1][1]) == {upload, env.parts[0], *env.parts[2:]}
+    mod, = env.library.add_and_apply([upload])
+    assert env.services.asset('model/ch0258.glb', {'source': f'mod:{mod.id}'}).body == b'glTF'
+    assert env.previews[-1][0] == 'ch0258_02' and mod.file in env.previews[-1][1]
+    env.services.asset('model/ch0258.glb', {'source': 'official'})
+    assert {p.name: p.read_bytes() for p in env.previews[-1][1]} == {p.name: env.official[p] for p in env.parts}
+    # No official bytes remain for this omitted part: only the preview may use its current bytes.
+    env.parts[3].write_bytes(header_bundle(b'outside dependency'))
+    env.services.asset('model/ch0258.glb', {'source': 'official'})
+    assert env.parts[3] in env.previews[-1][1]
+    with pytest.raises(ServiceError, match='original_unavailable'):
+        env.library.official_bundles('ch0258_02')
+    for bundles in ([env.excluded[0]], [upload, env.excluded[-1]]):
+        env.services.batch_import = SimpleNamespace(preview=lambda key: ('ch0258', bundles))
+        with pytest.raises(KeyError):
+            env.services.asset('model/ch0258.glb', {'source': 'import:wrong'})
+    foreign, = env.library.add([make_mod(env.excluded[-1], env.tmp / 'foreign')])
+    with pytest.raises(KeyError):
+        env.services.asset('model/ch0258.glb', {'source': f'mod:{foreign.id}'})
 
 
 @pytest.mark.parametrize('category', ['character', 'characters', 'npcs'])
@@ -335,12 +825,15 @@ def test_model_overwritten_add_button_rpc_works_with_mods_off_without_scan(model
     for path in env.parts:
         path.write_bytes(header_bundle(b'outside ' + path.name[-20:].encode()))
     outside = {path: path.read_bytes() for path in env.parts}
-    game = SimpleNamespace(model_glb=lambda *args, **kwargs: pytest.fail('No official preview is available'))
+    previews = []
+    game = SimpleNamespace(model_glb=lambda core, **kwargs: previews.append(kwargs['overrides']) or b'preview')
     services = Services(env.settings, env.tmp / 'app', cache=object(), game=game,
                         catalog=env.catalog, library=env.library)
     try:
+        assert services.asset('model/hoshino.glb', {'source': 'official'}).body == b'preview'
+        assert set(previews[-1]) == set(env.parts)
         with pytest.raises(ServiceError, match='original_unavailable'):
-            services.asset('model/hoshino.glb', {'source': 'official'})
+            env.library.official_bundles('hoshino_original')
         api = build_api(services)
         pin = env.library.current_pin()
         response = api.call('mods.adopt', {'entries': [{'install': pin.key, 'core': 'hoshino_original'}]})
