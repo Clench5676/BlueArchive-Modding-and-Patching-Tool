@@ -621,7 +621,7 @@
 			"change": "Change",
 			"spine": {
 				"label": "Spine License",
-				"restart": "Spine License - Withdrawal Applies After Restart"
+				"view": "View"
 			}
 		},
 		"cacheTo": "Cached in {path}",
@@ -699,11 +699,7 @@
 		"spine": {
 			"license": {
 				"title": "Spine License",
-				"body": "Previews use the Spine Runtimes by Esoteric Software and require your own Spine license.",
-				"yes": "I Have a Spine License",
-				"no": "I Do Not Have a Spine License",
-				"required": "Spine license confirmation required",
-				"confirm": "Confirm License"
+				"notice": "By continuing to use this software, you confirm that you hold a Spine Editor license."
 			}
 		},
 		"import": {

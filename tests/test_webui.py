@@ -245,19 +245,41 @@ def rpc(app, method, **params):
     return json.loads(body)
 
 
-def test_spine_consent_rpc_reads_and_persists_the_choice(app, services):
+def test_spine_notice_confirm_uses_the_existing_consent_rpc_without_a_version(app, services, monkeypatch):
     assert rpc(app, "app.spineConsent")["result"] is None
     assert rpc(app, "app.info")["result"]["spineConsent"] is None
-    assert rpc(app, "settings.get")["result"]["spineConsent"] is None
-    for granted in (True, False):
-        assert rpc(app, "app.spineConsent", granted=granted)["result"] is granted
-        assert rpc(app, "app.spineConsent")["result"] is granted
-        assert rpc(app, "app.info")["result"]["spineConsent"] is granted
-        assert rpc(app, "settings.get")["result"]["spineConsent"] is granted
-        assert UiState(services.state.path).spine_consent is granted
+    writes = []
+    write = services.state._write
+
+    def record(data, **kwargs):
+        writes.append(json.loads(json.dumps(data)))
+        return write(data, **kwargs)
+
+    monkeypatch.setattr(services.state, "_write", record)
+    assert rpc(app, "app.spineConsent", granted=True)["result"] is True
+    assert len(writes) == 1
+    assert writes[0]["prefs"]["spine_consent"] is True
+    assert "spine_notice" not in writes[0]["prefs"]
+    assert rpc(app, "app.spineConsent")["result"] is True
+    for method in ("app.info", "settings.get"):
+        result = rpc(app, method)["result"]
+        assert result["spineConsent"] is True
+        assert "spineNotice" not in result
+    assert UiState(services.state.path).spine_consent is True
+    assert "error" in rpc(app, "app.spineNotice"), "there is no versioned notice API"
     assert services.state.consent is None
     assert services.state.scan_consent is None
     assert services.library.applied == []
+
+
+@pytest.mark.parametrize("previous", [True, False])
+def test_previous_spine_answers_are_true_before_the_first_screen(app, services, previous):
+    services.state.set("spine_consent", previous)
+    services.state = UiState(services.state.path)
+    assert rpc(app, "app.info")["result"]["spineConsent"] is True
+    assert rpc(app, "app.spineConsent")["result"] is True
+    assert rpc(app, "settings.get")["result"]["spineConsent"] is True
+    assert services.state.get("spine_notice") is None
 
 
 @pytest.mark.parametrize("granted", [None, 0, 1, "yes", [], {}])

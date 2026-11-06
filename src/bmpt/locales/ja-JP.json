@@ -621,7 +621,7 @@
 			"change": "変更",
 			"spine": {
 				"label": "Spine ライセンス",
-				"restart": "Spine ライセンス - 撤回は次回起動時に反映"
+				"view": "表示"
 			}
 		},
 		"cacheTo": "キャッシュ先：{path}",
@@ -699,11 +699,7 @@
 		"spine": {
 			"license": {
 				"title": "Spine ライセンス",
-				"body": "プレビューは Esoteric Software の Spine Runtimes を使用、利用者自身の Spine ライセンスが必要",
-				"yes": "Spine ライセンスあり",
-				"no": "Spine ライセンスなし",
-				"required": "Spine ライセンスの確認が必要",
-				"confirm": "ライセンスを確認"
+				"notice": "本ソフトウェアの使用を継続することで、Spine Editor ライセンスを保有していることを確認したものとみなされます。"
 			}
 		},
 		"import": {

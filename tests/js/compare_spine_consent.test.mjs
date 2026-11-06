@@ -32,21 +32,13 @@ function harness(allowed = false) {
     start: () => previewPlayer(host, { skeleton: "AA==", atlas: "", json: false }, "original", []) };
 }
 
-test("compare previews show a licence action without constructing readers or players", async () => {
+test("compare previews stay empty without constructing readers, players or licence actions", async () => {
   const h = harness(), handle = h.start(); await flush();
-  assert.equal(h.host.textContent, "spine.license.required");
-  assert.equal(h.host.children[0].textContent, "spine.license.confirm");
+  assert.equal(h.host.children.length, 0);
+  assert.ok(!h.host.textContent);
   assert.deepEqual(h.players, []);
-  await Promise.all([h.host.children[0].listeners.click(), h.host.children[0].listeners.click()]); await flush();
-  assert.equal(h.prompts.length, 1, "repeated clicks share one confirmation attempt");
-  assert.equal(h.prompts[0][0], h.consentHost);
-  assert.deepEqual(h.prompts[0][1], { over: true });
-  assert.deepEqual(h.players, []);
-  h.confirm(true);
-  await h.host.children[0].listeners.click(); await flush();
-  assert.equal(h.players.length, 1);
+  assert.deepEqual(h.prompts, []);
   handle.dispose();
-  assert.equal(h.players[0].disposed, true);
 });
 
 test("closing compare before its licence gate settles prevents late players", async () => {

@@ -139,16 +139,13 @@ test("information is still silent, and an empty text shows nothing", async () =>
   assert.equal(dialog.hidden, true);
 });
 
-test("the classic modal and the licence prompt are not failures: neither passes an error", () => {
+test("the classic modal is not a failure and passes no error", () => {
   const web = (file) => readFileSync(new URL(`../../src/bmpt/web/js/${file}`, import.meta.url), "utf8");
   const modal = web("mod-switch.js"), start = modal.indexOf("export async function classicModal(");
   const classic = modal.slice(start, modal.indexOf("\n}\n", start));
   assert.match(classic, /title: T\("classic\.opened"\)/);
   assert.doesNotMatch(classic.slice(0, classic.indexOf("});")), /error:/);
-  const compat = web("mod-compatibility.js"), need = compat.indexOf("async function requireRuntime()");
-  const licence = compat.slice(need, compat.indexOf("\n}\n", need));
-  assert.match(licence, /spine\.license\.title/);
-  assert.doesNotMatch(licence, /error:/);
+
 });
 
 test("a greyed Apply names its reason as the same refusal as the greyed switch", () => {

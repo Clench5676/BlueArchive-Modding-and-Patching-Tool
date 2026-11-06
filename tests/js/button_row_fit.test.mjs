@@ -123,11 +123,10 @@ for (const locale of LOCALES) test(`the four action cards and the three tabs sha
 // One caption range for every footer (ui-tokens.js FOOTER.caption): 72 down to 48, a 400 box, two lines, 140 high
 const { FOOTER } = await import("../../src/bmpt/web/js/ui-tokens.js");
 const PAIRS = [["picker.ok", "popup.cancel"], ["popup.save", "popup.cancel"], ["consent.no", "consent.yes"], ["mods.scan.no", "mods.scan.yes"],
-  ["spine.license.no", "spine.license.yes"], ["update.later", "update.notes", "update.now"], ["update.later", "update.notes", "update.restart"],
+  ["update.later", "update.notes", "update.now"], ["update.later", "update.notes", "update.restart"],
   ["update.later", "update.notes", "update.page"]];
 const BELOW_MINIMUM = {
-  "en-US": ["spine.license.no/spine.license.yes"],
-  "th-TH": ["spine.license.no/spine.license.yes", "update.later/update.notes/update.now", "update.later/update.notes/update.restart",
+  "th-TH": ["update.later/update.notes/update.now", "update.later/update.notes/update.restart",
     "update.later/update.notes/update.page"],
 };
 for (const locale of LOCALES) test(`pairs of popup buttons share one size and fit the 496 x 177 body in ${locale}`, async () => {

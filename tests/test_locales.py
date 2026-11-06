@@ -166,10 +166,9 @@ def test_update_and_remap_use_one_localized_action(code):
 
 
 @pytest.mark.parametrize("code", [REFERENCE, *TRANSLATIONS])
-def test_spine_licence_confirmation_keys(code):
+def test_spine_licence_notice_keys(code):
     ui = load(code)["webui"]
-    assert set(ui["spine"]["license"]) == {"title", "body", "yes", "no", "required", "confirm"}
-    assert set(ui["settings"]["spine"]) == {"label", "restart"}
-    assert "Esoteric Software" in ui["spine"]["license"]["body"]
-    assert "Spine Runtimes" in ui["spine"]["license"]["body"]
+    assert set(ui["spine"]["license"]) == {"title", "notice"}
+    assert set(ui["settings"]["spine"]) == {"label", "view"}
+    assert "Spine Editor" in ui["spine"]["license"]["notice"]
     assert all("\n" not in text for text in ui["spine"]["license"].values())

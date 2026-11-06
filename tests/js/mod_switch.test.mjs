@@ -338,7 +338,11 @@ test("the start prompts: their order, the scan consent, and no prompt from the s
   assert.deepEqual(MS.START, ["consent", "spine", "scan", "update", "drift", "untracked"]);
   const due = (state, entries = [], info = { consent: true, spineConsent: true, compiled: false }) => MS.START.filter((name) => MS.startDue(name, { info, state, entries }));
   assert.deepEqual(due(base({ scan: null }), [], { consent: null, spineConsent: null, compiled: true }), ["consent", "spine", "scan", "update"]);
-  assert.deepEqual(due(base({ scan: false }), [], { consent: true, spineConsent: false }), [], "a Spine refusal is remembered");
+  assert.equal(MS.startDue("spine", { info: {} }), true);
+  assert.equal(MS.startDue("spine", { info: { spineConsent: null } }), true);
+  for (const spineConsent of [true, false]) {
+    assert.deepEqual(due(base({ scan: false }), [], { consent: true, spineConsent }), [], "either stored answer skips the notice");
+  }
   assert.deepEqual(due(base({ scan: null, installs: [] })), [], "no game folder known: no scan consent");
   assert.deepEqual(due(base({ scan: false })), [], "answered: not asked again");
   const reset = { install: "/g", core: "airi_spr", state: "reset" }, untracked = { install: "/g", core: "ch0251_spr", state: "untracked" };
@@ -1161,23 +1165,23 @@ test("detail refresh callers await changes queued while an earlier refresh is dr
   assert.equal(settled, true);
 });
 
-test("Spine confirmation is plain before asset consent and grants nothing until its answer is saved", async () => {
+test("Spine notice is plain before asset consent and enables nothing until its acknowledgement is saved", async () => {
   const Consent = await import("../../src/bmpt/web/js/consent.js");
   const Runtime = await import("../../src/bmpt/web/js/spine-runtime.js");
-  const saved = answers["app.spineConsent"];
-  const save = deferred();
+  const saved = answers["app.spineConsent"], save = deferred();
   Runtime.setSpineConsent(null);
   Consent.init({ consent: false });
   answers["app.spineConsent"] = () => save.promise;
   try {
     const pending = Consent.spine(consent, { over: true });
-    assert.equal(Consent.spine(consent), pending, "concurrent requests share the prompt");
+    assert.equal(Consent.spine(consent), pending, "concurrent requests share the notice");
     await drawn(consent, "ok");
     assert.ok(walk(consent).some((e) => e.classList.contains("spine-license-plain")));
-    assert.ok(!walk(consent).some((e) => e.dataset.path), "no game layout in the plain prompt");
+    assert.ok(!walk(consent).some((e) => e.dataset.path), "no game layout in the plain notice");
     assert.ok(press("Escape").defaultPrevented);
-    assert.equal(consent.hidden, false, "Escape cannot grant or refuse");
-    assert.equal(Runtime.spineAllowed(), false);
+    walk(consent).find((e) => e.className === "plain-popup-back").click();
+    assert.equal(consent.hidden, false, "Escape and backdrop cannot dismiss the notice");
+    assert.equal(await Runtime.ensureSpine(), false);
     const before = called("app.spineConsent").length;
     action(consent, "ok").click();
     action(consent, "ok").click();
@@ -1188,54 +1192,59 @@ test("Spine confirmation is plain before asset consent and grants nothing until 
     save.resolve(true);
     assert.equal(await pending, true);
     assert.equal(Runtime.spineAllowed(), true);
-    assert.equal(Runtime.runtimeLoaded(), false, "the confirmation itself never loads Spine");
+    assert.equal(Runtime.runtimeLoaded(), false, "the notice itself never loads Spine");
     assert.equal(consent.hidden, true);
     assert.equal(consent.classList.contains("over"), false);
   } finally { answers["app.spineConsent"] = saved; Runtime.setSpineConsent(null); }
 });
 
-test("Spine confirmation uses the game frame after asset consent and every locale has both answers", async () => {
+test("Spine notice has the same title, legal body and lone Confirm in both paths in every locale", async () => {
   const Consent = await import("../../src/bmpt/web/js/consent.js");
   const Runtime = await import("../../src/bmpt/web/js/spine-runtime.js");
   const saved = answers["app.spineConsent"];
   answers["app.spineConsent"] = ({ granted }) => granted;
-  Consent.init({ consent: true });
   try {
-    for (const [index, locale] of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"].entries()) {
+    for (const locale of ["en-US", "th-TH", "zh-CN", "zh-TW", "ja-JP", "ko-KR"]) {
       const table = flat(JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8")));
       I18n.setStrings(locale, table);
-      const text = (key) => table[`webui.spine.license.${key}`];
-      const before = called("app.spineConsent").length;
-      const pending = Consent.spine(consent);
-      await drawn(consent, "ok");
-      assert.equal(called("app.spineConsent").length, before);
-      const title = walk(consent).find((e) => e.dataset.path === "Center/Popup/Base/BG/Label_Title_Locale");
-      assert.equal(title.textContent, text("title"), locale);
-      assert.equal(action(consent, "ok").getAttribute("aria-label"), text("yes"));
-      assert.equal(action(consent, "cancel").getAttribute("aria-label"), text("no"));
-      const body = walk(consent).find((e) => e.dataset.path === "Center/Popup/Licence");
-      assert.equal(body.textContent.replaceAll("\n", " ").replaceAll(" ", ""), text("body").replaceAll(" ", ""));
-      assert.ok(walk(consent).every((e) => !e.title && !e.getAttribute("title")));
-      const granted = index % 2 === 0;
-      action(consent, granted ? "ok" : "cancel").click();
-      assert.equal(await pending, granted);
-      assert.deepEqual(called("app.spineConsent").at(-1), { granted });
-      assert.equal(Runtime.spineAllowed(), granted);
+      const text = (key) => table[`webui.${key}`];
+      for (const assets of [false, true]) {
+        Consent.init({ consent: assets });
+        const before = called("app.spineConsent").length;
+        const pending = Consent.spine(consent);
+        await drawn(consent, "ok");
+        assert.equal(called("app.spineConsent").length, before);
+        const title = walk(consent).find((e) => assets ? e.dataset.path === "Center/Popup/Base/BG/Label_Title_Locale" : e.tagName === "H2");
+        assert.equal(title.textContent, text("spine.license.title"), locale);
+        const buttons = walk(consent).filter((e) => e.tagName === "BUTTON");
+        assert.equal(buttons.length, 1);
+        assert.equal(buttons[0].getAttribute("aria-label"), text("picker.ok"));
+        const body = walk(consent).find((e) => assets ? e.dataset.path === "Center/Popup/Lines/Line_0" : e.tagName === "P");
+        assert.equal(body.textContent.replace(/\s/g, ""), text("spine.license.notice").replace(/\s/g, ""));
+        assert.ok(walk(consent).every((e) => !e.title && !e.getAttribute("title")));
+        assert.ok(press("Escape").defaultPrevented);
+        consent.click();
+        assert.equal(consent.hidden, false);
+        buttons[0].click();
+        assert.equal(await pending, true);
+        assert.deepEqual(called("app.spineConsent").at(-1), { granted: true });
+        assert.equal(Runtime.spineAllowed(), true);
+      }
     }
   } finally { I18n.setStrings("en-US", strings); answers["app.spineConsent"] = saved; Runtime.setSpineConsent(null); }
 });
 
-test("startup asks for Spine after asset consent, before scan, and skips a saved refusal", async () => {
+test("startup acknowledges only an unanswered Spine notice after assets, re-renders, and skips either old answer", async () => {
   const main = readFileSync(new URL("../../src/bmpt/web/js/main.js", import.meta.url), "utf8");
   const source = main.slice(main.indexOf("function startPopups()"), main.indexOf("async function start()"));
-  for (const choice of [null, false, true]) {
+  for (const choice of [undefined, null, false, true]) {
     const info = { consent: null, spineConsent: choice }, order = [];
     const env = {
       info, $: () => consent,
       ModSwitch: { startDue: MS.startDue, current: () => base({ scan: null }) },
       Consent: {
         show: async () => { order.push("assets"); return true; },
-        spine: async () => { assert.equal(info.consent, true); order.push("spine"); return false; },
+        spine: async () => { assert.equal(info.consent, true); order.push("spine"); return true; },
         scan: async () => { order.push("scan"); return false; },
       },
       Prompts: { start: async (name) => { order.push(name); } },
@@ -1243,61 +1252,57 @@ test("startup asks for Spine after asset consent, before scan, and skips a saved
     };
     const steps = new Function("env", `const { ${Object.keys(env).join(", ")} } = env; ${source}; return startPopups();`)(env);
     await (await import("../../src/bmpt/web/js/popup.js")).sequence(steps);
-    assert.deepEqual(order, ["assets", ...(choice == null ? ["spine"] : []), "scan", "drift", "untracked"]);
-    assert.equal(info.spineConsent, choice == null ? false : choice);
+    assert.deepEqual(order, ["assets", ...(choice == null ? ["spine", "route"] : []), "scan", "drift", "untracked"]);
+    assert.equal(info.spineConsent, choice == null ? true : choice);
+    assert.equal(MS.startDue("spine", { info }), false);
   }
 });
 
-test("Settings confirms Spine beside the asset consent and withdrawal names its restart effect after loading", async () => {
+test("Settings Spine value row opens the same read-only notice in every locale without changing state", async () => {
   const Consent = await import("../../src/bmpt/web/js/consent.js");
   const Settings = await import("../../src/bmpt/web/js/settings.js");
-  const NGUI = await import("../../src/bmpt/web/js/ngui.js");
   const Runtime = await import("../../src/bmpt/web/js/spine-runtime.js");
-  const saved = { ...answers }, previousSpine = globalThis.spine;
-  let prefs = { languages: [{ code: "en-US", name: "English" }], language: "en-US", cacheDir: "/cache",
+  const saved = { ...answers }, S = I18n.T;
+  const prefs = { languages: [{ code: "en-US", name: "English" }], language: "en-US", cacheDir: "/cache",
     gameDirs: { global: "/game" }, fileSource: "windows_global", ...saved["settings.get"], spineConsent: false };
   const changes = [];
   answers["settings.get"] = () => prefs;
-  answers["app.spineConsent"] = ({ granted }) => { prefs = { ...prefs, spineConsent: granted }; return granted; };
+  answers["app.spineConsent"] = () => assert.fail("View never changes the acknowledgement");
   Consent.init({ consent: true });
   Runtime.setSpineConsent(false);
   const button = (name) => walk(settingsHost).find((e) => e.tagName === "BUTTON" && e.getAttribute("aria-label") === name);
-  const hasPath = (path) => walk(settingsHost).some((e) => e.dataset.path === path);
-  const selected = (i) => hasPath(`Rows/Spine/Opt_${i}/On`);
-  const spineButton = (i) => {
-    const bg = walk(settingsHost).find((e) => e.dataset.path === `Rows/Spine/Opt_${i}/BG`);
-    const [l, t] = NGUI.rect(bg);
-    return walk(settingsHost).find((e) => e.tagName === "BUTTON" && e.style.left === `${l}px` && e.style.top === `${t}px`);
-  };
   try {
-    await Settings.open((key, next) => changes.push([key, next.spineConsent]));
-    button(S("settings.tab.general"))?.click();
-    await until(() => selected(1), "Spine refusal selected");
-    const rows = walk(settingsHost).map((e) => e.dataset.path).filter((p) => /^Rows\/[^/]+$/.test(p));
-    assert.equal(rows[rows.indexOf("Rows/Cache") + 1], "Rows/PreviewCache");
-    assert.equal(rows[rows.indexOf("Rows/PreviewCache") + 1], "Rows/Spine");
-    const before = called("app.spineConsent").length;
-    spineButton(0).click();
-    await drawn(consent, "ok");
-    assert.equal(called("app.spineConsent").length, before, "the settings radio opens the confirmation");
-    action(consent, "cancel").click();
-    await until(() => consent.hidden && selected(1), "Spine still refused");
-    spineButton(0).click();
-    (await drawn(consent, "ok")).click();
-    await until(() => selected(0), "Spine confirmed");
-    globalThis.spine = {};
-    assert.equal(await Runtime.ensureSpine(), true);
-    spineButton(1).click();
-    await until(() => selected(1), "Spine withdrawn");
-    assert.equal(prefs.spineConsent, false);
-    assert.equal(Runtime.spineAllowed(), true, "an already loaded runtime remains usable this session");
-    const title = walk(settingsHost).find((e) => e.dataset.path === "Rows/Spine/Title");
-    assert.equal(title.textContent.replaceAll("\n", " "), S("settings.spine.restart"));
-    assert.deepEqual(changes, [["spineConsent", false], ["spineConsent", true], ["spineConsent", false]]);
-    assert.ok(walk(settingsHost).every((e) => !e.title && !e.getAttribute("title")));
+    for (const [index, locale] of ["en-US", "th-TH", "zh-CN", "zh-TW", "ja-JP", "ko-KR"].entries()) {
+      const table = flat(JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8")));
+      I18n.setStrings(locale, table);
+      prefs.spineConsent = [null, false, true][index % 3];
+      Runtime.setSpineConsent(prefs.spineConsent);
+      const previous = JSON.stringify(prefs), allowed = Runtime.spineAllowed();
+      await Settings.open((key) => changes.push(key));
+      button(S("settings.tab.general"))?.click();
+      await until(() => button(S("settings.spine.view")), "Spine View");
+      const paths = walk(settingsHost).map((e) => e.dataset.path).filter(Boolean);
+      const rows = paths.filter((p) => /^Rows\/[^/]+$/.test(p));
+      assert.equal(rows[rows.indexOf("Rows/Cache") + 1], "Rows/PreviewCache");
+      assert.equal(rows[rows.indexOf("Rows/PreviewCache") + 1], "Rows/Spine");
+      assert.ok(!paths.some((p) => p.startsWith("Rows/Spine/Opt_") || p === "Rows/Spine/Value"));
+      const title = walk(settingsHost).find((e) => e.dataset.path === "Rows/Spine/Title");
+      assert.equal(title.textContent.replace(/\s/g, ""), S("settings.spine.label").replace(/\s/g, ""));
+      button(S("settings.spine.view")).click();
+      await drawn(consent, "ok");
+      assert.equal(walk(consent).filter((e) => e.tagName === "BUTTON").length, 1);
+      assert.equal(action(consent, "ok").getAttribute("aria-label"), S("picker.ok"));
+      action(consent, "ok").click();
+      await until(() => consent.hidden, "View closed");
+      assert.equal(Runtime.spineAllowed(), allowed);
+      assert.equal(Runtime.runtimeLoaded(), false);
+      assert.equal(JSON.stringify(prefs), previous);
+      assert.deepEqual(changes, []);
+      button(S("display.close"))?.click();
+    }
   } finally {
     button(S("display.close"))?.click();
-    globalThis.spine = previousSpine;
+    I18n.setStrings("en-US", strings);
     for (const key of Object.keys(answers)) delete answers[key];
     Object.assign(answers, saved);
   }

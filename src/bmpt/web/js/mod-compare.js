@@ -1,4 +1,3 @@
-import { skinPrimary } from "./game-buttons.js";
 import * as NGUI from "./ngui.js";
 import { T } from "./i18n.js";
 import { $, S } from "./util.js";
@@ -7,7 +6,6 @@ import { compareFrame } from "./popup-frames.js";
 import { COLOUR } from "./ui-tokens.js";
 import { loadPlayer } from "./spine-load.js";
 import { ensureSpine } from "./spine-runtime.js";
-import { spine as confirmLicence } from "./consent.js";
 
 const { node, label, find } = NGUI;
 
@@ -120,25 +118,13 @@ export async function show(result, title = T("act.compare"), hostId = "popup", r
 }
 
 function previewPlayer(host, scene, side, pages) {
-  let disposed = false, confirming = false, load = null;
+  let disposed = false, load = null;
   const unavailable = () => { if (!disposed) host.textContent = T("remap.previewUnavailable"); };
   const start = async () => {
     try {
       const allowed = await ensureSpine();
       if (disposed) return;
-      if (!allowed) {
-        host.textContent = T("spine.license.required");
-        const button = document.createElement("button");
-        skinPrimary(button, T("spine.license.confirm"));
-        button.addEventListener("click", async () => {
-          if (confirming || disposed) return;
-          confirming = true;
-          try { if (await confirmLicence($("consent"), { over: true }) === true && !disposed) await start(); }
-          finally { confirming = false; }
-        });
-        host.appendChild(button);
-        return;
-      }
+      if (!allowed) return;
       host.replaceChildren();
       const skeleton = scene.json ? "skeleton.json" : "skeleton.skel";
       const bytes = Uint8Array.from(atob(scene.skeleton), (c) => c.charCodeAt(0));

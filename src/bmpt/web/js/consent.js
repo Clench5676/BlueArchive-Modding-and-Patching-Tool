@@ -17,7 +17,7 @@ import { S, hitButton, wrapPath } from "./util.js";
 const { node, sprite, label, find, rect } = NGUI;
 let assetsAllowed = false, spinePrompt = null;
 
-// The licence prompt uses game assets only after the asset consent.
+// The licence notice uses game assets only after the asset consent.
 export function init(info) { assetsAllowed = info?.consent === true; }
 
 // resolves with the choice (true / false) once a button is pressed; native: the folder picker is available
@@ -111,12 +111,12 @@ async function draw(host, cacheDir, native, resolve) {
   host.replaceChildren(...next.childNodes);
 }
 
-// Separate from the asset and file-scan consents: no Spine code is loaded by this prompt.
-export function spine(host, { over = false } = {}) {
+// The same notice at startup and from Settings. Reading it in Settings never changes state or loads Spine.
+export function spine(host, { over = false, readOnly = false } = {}) {
   if (spinePrompt) return spinePrompt;
   spinePrompt = new Promise((resolve) => {
-    drawSpine(host, over, resolve).catch((err) => {
-      console.error("Spine consent", err);
+    drawSpine(host, over, readOnly, resolve).catch((err) => {
+      console.error("Spine notice", err);
       finishScan(host);
       resolve(null);
     });
@@ -124,16 +124,32 @@ export function spine(host, { over = false } = {}) {
   return spinePrompt;
 }
 
-async function drawSpine(host, over, resolve) {
+// UIPopup_Sort with the ordinary message layout. A fixed message size wraps onto as many lines as needed,
+// growing the frame above one centred button rather than shrinking the legal notice below the message minimum.
+export function spineFrame() {
+  const ok = T("picker.ok");
+  const { body, width, height, y0 } = Popup.messageLayout({
+    lines: [{ text: T("spine.license.notice"), fontSize: 52, minFontSize: 52 }], width: 1900, ok,
+  });
+  const tree = Popup.popupFrame(T("spine.license.title"), width, height, { ok, close: false });
+  body.tree.pos = [0, y0];
+  find(tree, "Popup").children.push(body.tree);
+  return { tree, width, height };
+}
+
+async function drawSpine(host, over, readOnly, resolve) {
   let choosing = false;
-  const choose = async (granted) => {
+  const choose = async () => {
     if (choosing) return;
     choosing = true;
-    try { await rpc("app.spineConsent", { granted }); }
-    catch (err) { choosing = false; notify(errorText(err), { kind: "error", error: err }); return; }
-    setSpineConsent(granted);
+    let acknowledged = null;
+    if (!readOnly) {
+      try { acknowledged = await rpc("app.spineConsent", { granted: true }); }
+      catch (err) { choosing = false; notify(errorText(err), { kind: "error", error: err }); return; }
+      setSpineConsent(acknowledged);
+    }
     finishScan(host);
-    resolve(granted);
+    resolve(acknowledged);
   };
   host.classList.toggle("over", over);
   host.hidden = false;
@@ -144,36 +160,28 @@ async function drawSpine(host, over, resolve) {
     back.className = "plain-popup-back";
     const box = document.createElement("div");
     box.className = "plain-popup spine-license-plain";
-    for (const [tag, key] of [["h2", "title"], ["p", "body"]]) {
+    for (const [tag, key] of [["h2", "title"], ["p", "notice"]]) {
       const el = document.createElement(tag);
       el.textContent = T(`spine.license.${key}`);
       box.appendChild(el);
     }
     const row = document.createElement("div");
     row.className = "message-actions";
-    for (const [granted, key, action] of [[false, "no", "cancel"], [true, "yes", "ok"]]) {
-      const button = document.createElement("button");
-      button.className = "message-button";
-      button.textContent = T(`spine.license.${key}`);
-      button.setAttribute("aria-label", button.textContent);
-      button.dataset.action = action;
-      button.addEventListener("click", () => choose(granted));
-      row.appendChild(button);
-    }
+    const button = document.createElement("button");
+    button.className = "message-button";
+    button.textContent = T("picker.ok");
+    button.setAttribute("aria-label", button.textContent);
+    button.dataset.action = "ok";
+    button.addEventListener("click", choose);
+    row.appendChild(button);
     box.appendChild(row);
     next.appendChild(back);
     next.appendChild(box);
   } else {
     await Popup.frameReady();
-    const { tree, popup } = consentFrame(T("spine.license.title"), 1900, 860, [T("spine.license.no"), T("spine.license.yes")]);
-    const body = NGUI.fitText(T("spine.license.body"), 48, 40, 1660, 3);
-    popup.children.push(node("Licence", [0, 30], [label(body.text, body.fs, "#2d4664/1.00", 1680, body.lines * body.fs * 1.3 + 8, { depth: 7 })]));
+    const { tree } = spineFrame();
     const view = await NGUI.render(tree, next, { scale: S, origin: [960, 540], z: 2000 });
-    for (const [name, granted, key] of [["Btn_Cancel", false, "no"], ["Btn_Ok", true, "yes"]]) {
-      Popup.hit(next, view, `Center/Popup/Btn/${name}/BG (1)`, () => choose(granted), {
-        name: T(`spine.license.${key}`), action: granted ? "ok" : "cancel", z: 2100,
-      });
-    }
+    Popup.hit(next, view, "Center/Popup/Btn/Btn_Ok/BG (1)", choose, { name: T("picker.ok"), action: "ok", z: 2100 });
   }
   host.replaceChildren(...next.childNodes);
 }

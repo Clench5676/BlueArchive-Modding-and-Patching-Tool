@@ -479,7 +479,6 @@ async function renderScene() {
         const [result] = await Promise.all([actorReady, backgroundReady]);
         if (!live()) { result.dispose(); return; }
         portraits = result; portraits.setActive?.(false); backgroundCache.set(name, nextBackground);
-        if (!result.allowed && value.portraits.length) Lobby.licenseRequired(portraitHost, () => { clearPortraitScene(); return renderScene(); });
         dialogue = createDialogue({ host: subtitle, actorOf: (item) => ({ actor: portraits?.actors.get(item.id), rect: rectOf(item) }), choiceOf,
           info: () => ctx.info, prefs: () => ctx.prefs, onError: fail, signal,
           bounds: contentBounds(root.getBoundingClientRect(), [...chrome.querySelectorAll("button")].map((button) => button.getBoundingClientRect()), document.querySelector(".nav")?.getBoundingClientRect()) });
