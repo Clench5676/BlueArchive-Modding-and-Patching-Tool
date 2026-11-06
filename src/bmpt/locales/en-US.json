@@ -108,7 +108,7 @@
 			"adb": "ADB Push",
 			"tools": "Tools",
 			"classic": "{label} - Classic UI",
-			"import": "Batch Import"
+			"import": "Import Mods"
 		},
 		"roster": {
 			"title": "Student List",

@@ -22,7 +22,6 @@ import { decodeAll } from "./image-decode.js";
 import { withTimeout, nextFrame } from "./async.js";
 import { previewError } from "./preview-error.js";
 import * as Loading from "./loading.js";
-import * as ModAdd from "./mod-add.js";
 import * as ModAlias from "./mod-alias.js";
 import * as ModExport from "./mod-export.js";
 import * as Compatibility from "./mod-compatibility.js";
@@ -663,13 +662,9 @@ async function toggleFav() {
   ctx.invalidateRoster();
   renderAll();
 }
-async function addMods() {
-  const page = pageToken, address = location.hash;
-  const added = await call(() => ModAdd.add(null, variant().key));
-  if (added?.length || added?.added?.length || added?.installed?.length) {
-    ctx.invalidateRoster();
-    if (page === pageToken && open && location.hash === address) await reload();
-  }
+// Add Portrait, Add Memorial Lobby and Add 3D Model open Import Mod: every mod comes in through one import (BL-095).
+function addMods() {
+  location.hash = "#/import";
 }
 
 // a job with a sticky progress line; the family is re-read afterwards (after(ok, result) instead, when given).
