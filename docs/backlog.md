@@ -2121,6 +2121,9 @@ files in the library as a mod of their own, then applies; (3) the student's Orig
 be chosen until the game files are repaired, after which the next apply keeps the official files as usual; (4) a partial
 mod takes the parts it leaves out from the game files as they are, and is then marked "Mod incomplete" (owner, same day).
 
+Owner, 2026-11-06: the message title 原版文件已被覆盖 (Official File Overwritten) becomes 缺少官方原版文件; every language
+follows (en-US "Official File Missing"). The lead changes `mods.overwrittenTitle` after merging BL-086 and BL-087.
+
 ## BL-087: The Spine licence as a one-time notice at the first start
 
 - Status: Dispatched to Codex (`gpt-6.1-sol`, xhigh, branch `codex/bl087-spine-notice`), 2026-11-06. The notice's wording
@@ -2129,8 +2132,11 @@ mod takes the parts it leaves out from the game files as they are, and is then m
   first start, a notice in legal wording that continuing to use the software confirms a Spine licence, and Confirm.
 
 Lead's notes: replaces the Yes/No licence prompt of the start sequence, the in-place notices (BL-083's frame included),
-the comparison preview's and the compatibility check's licence questions and Settings' two-choice row. The acknowledgement
-is stored with the notice's version, so earlier answers (yes or no) see the new notice once. The legal risk was stated
+the comparison preview's and the compatibility check's licence questions and Settings' two-choice row. The legal risk was stated
 to the owner once: a notice with Confirm only gives users without a licence no honest way on but quitting, and does not
 lift the licence requirement of the Spine Runtimes License; the owner decided.
+
+Owner, 2026-11-06, on the dispatch: users who answered before (Yes or No) never see the notice and get the Spine previews
+directly (a stored No becomes the acknowledgement); the notice says only "By continuing to use this software, you confirm
+that you hold a Spine Editor license." (the five other languages follow). Sent to the running Codex job as an amendment.
 
