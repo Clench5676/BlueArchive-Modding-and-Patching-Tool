@@ -7,7 +7,7 @@ As of 2026-11-06. Verify the actual branch, working tree and `pyproject.toml` ve
 
 | Branch | State |
 | --- | --- |
-| `main` | Local version `0.7.0-alpha.3`: the published 0.6.0, the upstream syncs to `6c61fdc8` and to v2.12.0 (`62ec9471`), the security policy, the fix that keeps files from a mod inside their output folder (`e8bee4c2`) and its own message for refused atlases (`ca44e051`), BL-065 through BL-069, BL-070 steps 1 to 3, BL-071, BL-072, BL-073, BL-076, BL-077, the BL-078 fixes (`1a2afd84`, `b186e93b`, `4841e30e`), BL-079, BL-081 through BL-085. Not pushed. Upstream published its fix for the same issue in v2.12.0 (2026-11-04), so 0.6.1 is no longer held back. |
+| `main` | Local version `0.7.0-alpha.4`: the published 0.6.0, the upstream syncs to `6c61fdc8` and to v2.12.0 (`62ec9471`), the security policy, the fix that keeps files from a mod inside their output folder (`e8bee4c2`) and its own message for refused atlases (`ca44e051`), BL-065 through BL-069, BL-070 steps 1 to 3, BL-071, BL-072, BL-073, BL-076, BL-077, the BL-078 fixes (`1a2afd84`, `b186e93b`, `4841e30e`), BL-079, BL-081 through BL-087. Not pushed. Upstream published its fix for the same issue in v2.12.0 (2026-11-04), so 0.6.1 is no longer held back. |
 
 0.6.0 is published (tag `0.6.0` at `817ebeda`, 2026-10-30): macOS build uploaded, Windows build by the release workflow.
 
@@ -56,9 +56,10 @@ As of 2026-11-06. Verify the actual branch, working tree and `pyproject.toml` ve
 | BL-080 | Closed by the owner (2026-11-04): flicker fixed (`5e6b3d56`); stuck pointer not seen again, cause not identified, logging kept |
 | BL-081 | In-app release notes draw Markdown in the UI language; the 0.7.0 notes built in; owner review pending |
 | BL-082 | The App in its own package `bmpt`, upstream's package as the engine; owner review pending |
-| BL-083 through BL-085 | Implemented by the lead (2026-11-06, a Windows user's 0.6.0 report): the Spine licence notice on the message frame, 3D model mods identified by their asset paths, the Official File Overwritten message instead of "3D model unavailable"; owner review pending |
-| BL-086 | Dispatched to Codex (2026-11-06): a missing official copy must not keep a mod from being imported or applied |
-| BL-087 | Dispatched to Codex (2026-11-06): the Spine licence as a one-time notice at the first start; wording awaits the owner |
+| BL-083 | Superseded by BL-087 |
+| BL-084, BL-085 | Implemented by the lead (2026-11-06, a Windows user's 0.6.0 report): 3D model mods identified by their asset paths, the missing-official message instead of "3D model unavailable"; owner review pending |
+| BL-086 | Implemented (Codex, merged): mods import and apply where no official copy is left, outside files kept first, "Mod incomplete"; owner review pending |
+| BL-087 | Implemented (Codex, merged): the Spine licence as a one-time notice for users who never answered; owner review pending, wording in five languages included |
 | BL-057, BL-058 | Accepted by the owner on macOS (alpha.12); Windows not reviewed |
 | BL-055 | Accepted by the owner on macOS (0.6.0 pre-review) |
 | BL-014 | Candidate, not scheduled |
@@ -69,12 +70,12 @@ from passing tests or the presence of earlier code.
 
 ## Review artifact and validation
 
-`dist/Blue-Archive-Modding-and-Patching-Tool-0.7.0-alpha.3-macos-arm64.dmg`, MD5 `9b7be6a12a500bd3793ac41d97611d78`,
-built from `cd9cd7cf` (`chore(release): 0.7.0-alpha.3`): alpha.2 and BL-083 to BL-085 (`3ec7302d`..`0e3eb3f9`), from a
-Windows user's 0.6.0 report: 3D model mods identified by their asset paths, the Official File Overwritten message for a
-3D model with no official copy, the Spine licence notice on the message frame. BL-081, BL-082, BL-083 to BL-085 and the
-release notes' wording await the owner's review; BL-086 and BL-087 are with Codex.
+`dist/Blue-Archive-Modding-and-Patching-Tool-0.7.0-alpha.4-macos-arm64.dmg`, MD5 `c7c17e4168263650771427eecce3703a`,
+built from `4cf02350` (`chore(release): 0.7.0-alpha.4`): alpha.3, BL-087 (`9bec8dc8`, merge `da204ee8`), BL-086
+(`a4ecd147`, merge `88c2408f`), the Official File Missing title (`5d9653ad`) and the merge's test fix (`bf5bd60f`).
+BL-081, BL-082, BL-084 to BL-087 and the release notes' wording await the owner's review.
 
-On `0e3eb3f9` (same tree as the build): 4333 passed, 33 skipped (Python, `python -m pytest`, which puts the checkout on
-the import path that `test_mod_origin.py` needs), 2373 JavaScript tests passed (isolated runs with the official
-development view). The new notice's look is for the owner's eye. Native Windows behavior is not verified on the macOS host.
+On `a98278af` (same tree as the build but the version): 4356 passed, 33 skipped (Python, `python -m pytest`), 2383
+JavaScript tests passed (isolated runs with the official development view). The start notice's look, the "Mod
+incomplete" and "Current game files added to the library" results and an install without official copies are for the
+owner's review. Native Windows behavior is not verified on the macOS host.
