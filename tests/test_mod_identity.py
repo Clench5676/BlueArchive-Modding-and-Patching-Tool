@@ -167,6 +167,8 @@ def test_add_files_accepts_the_identified_kind_of_a_renamed_upload(
     targets = {'spr': env.original, 'lobby': game_bundle(env.game_dir, 'test_home_gl')}
     before = {kind: path.read_bytes() for kind, path in targets.items()}
     source = make_mod(targets[filename_kind], env.tmp / 'upload')
+    source = source.rename(source.with_name(source.name.replace(
+        parse_filename(source.name).core, 'renamed_spr' if filename_kind == 'spr' else 'renamed_home')))
     target = targets[content_kind]
     core = parse_filename(target.name).core
     monkeypatch.setattr('bmpt.library.identity.content_cores', lambda path: {core})

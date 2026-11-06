@@ -1140,10 +1140,35 @@ The batch import (`import.analyze`, one folder at a time, with kind and variant;
 student page's Add Portrait, Add Memorial Lobby and Add 3D Model) and Add (`mods.add`, drag and drop, one
 upload) group files with one rule, `judge.mod_versions`. The files of one core and kind are one mod whatever their dates:
 some cores keep their parts under different dates (Spine textures and text, a model's prefab and dependencies), so one row
-or library Mod holds all of them and an apply writes every part. Only a set in which one part (`part_of`) occurs more than once
-under different dates holds several versions of the mod; the whole set is then grouped by date, one row or Mod per date.
+or library Mod holds all of them and an apply writes every selected part. When the install keeps multiple dates of one
+part side by side, those files also stay in one Mod. Only a repeated part whose dates the install does not keep together
+splits the whole set by date, one row or Mod per date. Collection batches keep their separate dated slots.
 `other` bundles keep their own handling. A Mod's `date` is the newest date of its parts. Library Mods stored before this
 rule keep the split they were stored with; nothing is merged or migrated.
+
+Add and Import Mod both use `ModLibrary.identify_import`: an installed name (CRC aside), or a verified kept
+original of that name, owns the target and kind. Other filenames use content identification. Portrait and lobby aliases
+canonicalize to the install's slot core (`variant.spr` / `variant.lobby`). A model keeps the core its assets name; a dependency under `characters/<model>/` never becomes the variant's prefab core. A separate
+model dependency core can be stored, while applying it still requires the slot's core.
+
+A current-release Mod file is proved by an installed name without its CRC or by matching internal CAB names.
+It replaces the exact installed name, else the name without the CRC, else the unique CAB match, with a unique part
+(prefix and resource type) breaking an otherwise undecidable current-release match. Remaining ambiguous current
+matches give `mod_target_ambiguous`. This mapping drives direct import and apply, dependency exclusions, compatibility
+and preview complements. A current name without its CRC or a unique CAB match is never outdated.
+
+Older releases use the existing update route, including pre-split bundles that update several current files. Character
+slots use the installer's UPDATE groups; batch rebuilding matches assets against the latest live files per prefix.
+Generic slots retain prefix matching, the latest file per slot and container/name/type overlap, including the collection
+rule. Older releases are not refused as ambiguous replacement targets. When their dependency check runs, it excludes
+the files their update targets. Older preview complements retain the existing part-based rule.
+
+Dependency checks retain every install file the Mod does not replace, including dated siblings. External CAB references
+resolve through one revision-checked `CabIndex` per install and resource folders, excluding replaced files. Missing
+originals do not remove those dependencies. The check refuses only missing references or Spine pairs added relative to
+the official set, using current parts as the comparison baseline when originals are unavailable. That fallback never
+becomes an official rebuild or restore source. `mod_parts_missing` names a supplying file in the upload's folder when
+available, else the replaced install file that held the missing CAB; references held nowhere retain their CAB IDs.
 
 ### Batch import origins and conversion
 
@@ -1350,7 +1375,8 @@ candidate's core; `mod:<id>` uses `mod` and the mod's own core. `popup.js` recei
 no file selection. `ModLibrary.official_bundles` resolves every part through `_official_for`: verified kept original,
 verified game file, verified `.backup`, or a verified copy elsewhere. Missing official data fails the whole preview
 with 404 and `thumbs.js` returns null, leaving the existing plain card. Mod previews overlay the mod's parts on
-verified missing official parts, matching parts by prefix and resource type; they never fall back to live mod data.
+omitted parts selected by the same replacement mapping as import and apply. Omitted parts prefer verified originals,
+falling back to current files when no official copy remains; `preview_incomplete` marks that fallback.
 
 `spineAssetBase` resolves the manifest for every load, before the thumbnail cache lookup. The revision includes the
 ordered resolved paths, sizes, nanosecond modification and change times, covering an atomic replacement that
