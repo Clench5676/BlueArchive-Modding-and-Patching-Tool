@@ -1,5 +1,6 @@
 """Character model mods use the same library transactions and intent as Spine mods."""
 
+import os
 import shutil
 from pathlib import Path
 from types import SimpleNamespace
@@ -16,6 +17,9 @@ from ba_modding_toolkit.naming import parse_filename
 
 from test_library import game_bundle, header_bundle, make_mod, setup_library
 from test_mod_identity import objects
+
+# the real-install tests run only on an official game folder named by BAMT_TEST_GAME_DIR
+GAME_DIR = Path(os.environ.get("BAMT_TEST_GAME_DIR") or "/nonexistent/bamt-real-game")
 
 
 def model_bundle(folder, core='hoshino_original', *, prefab=False, **kwargs):
@@ -116,6 +120,62 @@ def test_model_role_resolution_preserves_unknown_and_conflicting_targets(model_e
     with pytest.raises(ServiceError) as caught:
         identify(source, source.name, catalog)
     assert caught.value.code == code
+
+
+# Object names from official model parts: bones, an outline mesh, the game's own misspellings, the shield prop,
+# animation clips, a controller, a model's own Spine effects (Kotama's skill bear, CH0333's emoji), and a role name of
+# another student.
+STRAY_OBJECT_NAMES = ['Bip001_Weapon', 'Bone_Hair_F_L_00', 'OL_Hoshino_Original_Body', 'Hosino_Origninal_Weapon',
+                      'Hoshino_Origina_Halo', 'Hoshino_Original_Shield_Weapon', 'Hoshino_Original_Move_End_Normal',
+                      'Hoshino_Original_Rearrange_Idle', 'Hoshino_Motion_Victory_Voc',
+                      'Echelon_Hoshino_Original_Controller', 'Kotama_skill_bear.skel', 'CH0333_Emoji.atlas',
+                      'Shigure_Body']
+
+
+@pytest.mark.parametrize('container, prefab', [
+    ('Assets/_MX/Characters/Hoshino_Original/Mesh/Body.asset', False),
+    ('Assets/_MX/AddressableAsset/Character/Hoshino_Original/Echelon/Echelon_Hoshino_Original.prefab', True),
+    ('Assets/_MX/AddressableAsset/Character/Hoshino_Original/Hoshino_Original_Controller.overrideController', True),
+])
+def test_model_asset_paths_identify_the_model_whatever_the_object_names(model_env, monkeypatch, container, prefab):
+    source = model_bundle(model_env.tmp / 'upload', core='renamed', prefab=prefab)
+    hoshino = SimpleNamespace(key='hoshino', model='hoshino_original')
+    shigure = SimpleNamespace(key='shigure', model='shigure')
+    catalog = SimpleNamespace(variant_for_core=lambda core: None,
+                              variant_for_model_core={'hoshino_original': hoshino, 'shigure': shigure}.get)
+    objects(monkeypatch, STRAY_OBJECT_NAMES, [container])
+    monkeypatch.setattr('bmpt.library.identity.content_cores', content_cores)
+    assert content_cores(source) == {'model:hoshino_original'}
+    filename, key, kind = identify(source, source.name, catalog)
+    assert (parse_filename(filename).core, key, kind) == ('hoshino_original', 'hoshino', 'model')
+
+
+def test_model_asset_paths_of_two_models_stay_ambiguous(model_env, monkeypatch):
+    source = model_bundle(model_env.tmp / 'upload')
+    variants = {'hoshino_original': SimpleNamespace(key='hoshino', model='hoshino_original'),
+                'shigure': SimpleNamespace(key='shigure', model='shigure')}
+    catalog = SimpleNamespace(variant_for_core=lambda core: None, variant_for_model_core=variants.get)
+    objects(monkeypatch, [], ['Assets/_MX/Characters/Hoshino_Original/Mesh/Body.asset',
+                              'Assets/_MX/Characters/Shigure/Mesh/Body.asset'])
+    monkeypatch.setattr('bmpt.library.identity.content_cores', content_cores)
+    with pytest.raises(ServiceError, match='mod_target_ambiguous'):
+        identify(source, source.name, catalog)
+
+
+@pytest.mark.skipif(not GAME_DIR.is_dir(), reason="Blue Archive install unavailable")
+@pytest.mark.parametrize('core, key', [('hoshino_original', 'hoshino'), ('hoshino_swimsuit', 'hoshino_swimsuit')])
+def test_installed_model_parts_identify_by_their_content(tmp_path, core, key):
+    # Every official part of a model, read by content as for a file with no installed namesake.
+    from bmpt.gameassets import AssetCache, GameAssets
+    from ba_modding_toolkit.searching import get_search_dirs
+
+    dirs = get_search_dirs(GAME_DIR)
+    catalog = Catalog(GameAssets(dirs, AssetCache(allowed=False, root=tmp_path)), None, server='global')
+    parts = [path for directory in dirs for path in directory.glob('*.bundle')
+             if kind_of_file(path.name) == 'model' and parse_filename(path.name).core.lower() == core]
+    assert len(parts) >= 3
+    for path in parts:
+        assert identify(path, path.name, catalog)[1:] == (key, 'model'), path.name
 
 
 def test_model_add_apply_restore_keeps_every_slot_and_official_backup(model_env):

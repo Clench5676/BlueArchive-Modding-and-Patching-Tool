@@ -303,10 +303,10 @@ def test_verified_modified_model_part_imports_whole(verified_model, monkeypatch,
     assert ('Unknown_CutIn_Body', obj.type.name) not in Bundle.load(env.original).get_asset_keys('name_type')
     before = source.read_bytes()
     official = {path: path.read_bytes() for path in env.original.parent.glob('*.bundle')}
-    # The former content-first path rejects the changed model name before copying this part.
+    # Content identification follows the part's asset paths, not the renamed object.
     from bmpt.library.identity import identify
-    with pytest.raises(ServiceError, match='mod_target_unknown'):
-        identify(source, source.name, env.library.catalog)
+    assert identify(source, source.name, env.library.catalog)[1:] == \
+        identify(env.original, env.original.name, env.library.catalog)[1:]
 
     def forbidden(*args, **kwargs):
         pytest.fail('Direct replacements must bypass asset transfer')
