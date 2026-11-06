@@ -20,7 +20,6 @@ import { BACKDROP, SETTINGS, SMALL_BUTTON } from "./ui-tokens.js";
 import { rowBase, radioRow } from "./settings-rows.js";
 import { on, rpc } from "./api.js";
 import { T, errorText, platform } from "./i18n.js";
-import { runtimeLoaded, setSpineConsent } from "./spine-runtime.js";
 import { $, DOT, S, clone, glyphsOf, hitButton, wrapPath } from "./util.js";
 
 const { node, sprite, label, find, rect } = NGUI;
@@ -233,22 +232,9 @@ function rows({ builtSize = null, sizeError = null } = {}) {
         if (next) { prefs = next; await onChange?.("cacheCleared", next); await render(); }
       }, true]]));
     add(radioRow("PreviewCache", 0, T("settings.previewCache"), ON_OFF(), p.previewCache === true, (value) => set("previewCache", value)));
-    add(radioRow("Spine", 0, T(runtimeLoaded() && p.spineConsent !== true ? "settings.spine.restart" : "settings.spine.label"),
-      [[true, T("spine.license.yes")], [false, T("spine.license.no")]], p.spineConsent === true, async (granted) => {
-        if (granted === (prefs.spineConsent === true)) return;
-        if (granted) {
-          const choice = await Consent.spine($("consent"), { over: true });
-          if (choice == null) return;
-          prefs = { ...prefs, spineConsent: choice };
-        } else {
-          const choice = await call(() => rpc("app.spineConsent", { granted: false }));
-          if (choice == null) return;
-          prefs = { ...prefs, spineConsent: false };
-          setSpineConsent(false);
-        }
-        onChange?.("spineConsent", prefs);
-        render();
-      }));
+    add(valueRow("Spine", 0, T("settings.spine.label"), "", [
+      [T("settings.spine.view"), () => call(() => Consent.spine($("consent"), { over: true, readOnly: true }))],
+    ], { showValue: false }));
     add(valueRow("Version", 0, T("settings.version"), (p.version || "").replace(/-dev$/, ""), [[T("settings.update.check"), checkUpdate, !checkingUpdate]]));
     add(valueRow("Tours", 0, T("tour.title"), "", [[T("tour.open"), () => call(Tours.browse)]], { showValue: false }));
     if (p.prereleasePreviews === true) add(valueRow("UpdateSimulation", 0, T("update.simulation.entry"), T("update.simulation.choose"),

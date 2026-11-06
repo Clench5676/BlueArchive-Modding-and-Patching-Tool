@@ -185,13 +185,12 @@ test("the language of each label decides how it is measured", () => {
   assert.equal(page.lang, "en-US");
 });
 
-for (const locale of LOCALES) test(`Match Strategy, Spine and the other option rows draw one size in ${locale}`, () => {
+for (const locale of LOCALES) test(`Match Strategy and the other option rows draw one size in ${locale}`, () => {
   page.lang = locale;
   const rows = {
     strategy: ["cont_name_type", "path_id", "name_type"].map((key) => text(locale, `import.strategy.${key}`)),
     crc: [text(locale, "import.auto"), text(locale, "settings.post.on"), text(locale, "settings.post.off")],
     compression: ["LZMA", "LZ4", text(locale, "import.original"), text(locale, "import.uncompressed")],
-    spine: [text(locale, "spine.license.yes"), text(locale, "spine.license.no")],
     onOff: [text(locale, "settings.post.on"), text(locale, "settings.post.off")],
   };
   for (const [key, texts] of Object.entries(rows)) {

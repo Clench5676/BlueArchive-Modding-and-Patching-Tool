@@ -343,18 +343,41 @@ def test_the_switch_flags_and_the_scan_consent_have_their_defaults(tmp_path):
     assert json.loads((tmp_path / "webui.json").read_text())["prefs"] == {"scan_consent": False, "tray": "yes"}
 
 
-def test_spine_consent_is_unanswered_by_default_and_persists_between_instances(tmp_path):
+def test_spine_notice_is_unanswered_by_default_and_acknowledgement_persists(tmp_path):
     path = tmp_path / "webui.json"
     state = UiState(path)
     assert state.spine_consent is None
     assert not path.exists()
     other = UiState(path)
+    other.set("voice_volume", 35)
     state.set("spine_consent", True)
     assert other.spine_consent is True
-    other.set("spine_consent", False)
-    assert state.spine_consent is False
-    assert UiState(path).spine_consent is False
-    assert json.loads(path.read_text())["prefs"] == {"spine_consent": False}
+    assert UiState(path).spine_consent is True
+    assert json.loads(path.read_text())["prefs"] == {"voice_volume": 35, "spine_consent": True}
+
+
+@pytest.mark.parametrize("previous", [True, False])
+def test_old_spine_answers_are_acknowledged_at_startup_without_a_version(tmp_path, previous, monkeypatch):
+    path = tmp_path / "webui.json"
+    original = {"consent": False, "recent": ["student"],
+                "prefs": {"spine_consent": previous, "voice_volume": 35, "scan_consent": False}}
+    path.write_text(json.dumps(original))
+    writes = []
+    write = UiState._write
+
+    def record(self, data, **kwargs):
+        writes.append(json.loads(json.dumps(data)))
+        return write(self, data, **kwargs)
+
+    monkeypatch.setattr(UiState, "_write", record)
+    state = UiState(path)
+    assert state.spine_consent is True
+    assert state.consent is False and state.scan_consent is False
+    expected = {**original, "prefs": {**original["prefs"], "spine_consent": True}}
+    assert json.loads(path.read_text()) == expected
+    assert len(writes) == (1 if previous is False else 0)
+    assert UiState(path).spine_consent is True
+    assert len(writes) == (1 if previous is False else 0), "the next start writes no migration"
 
 
 @pytest.mark.parametrize("value", [None, 0, 1, "yes", [], {}])

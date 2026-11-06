@@ -200,7 +200,7 @@ const LOCALE_DIR = new URL("../../src/bmpt/locales/", import.meta.url);
 const locales = readdirSync(LOCALE_DIR).filter((name) => name.endsWith(".json")).map((name) => name.slice(0, -5)).sort();
 // every set of captions that stands together in one popup footer
 const FOOTERS = [["picker.ok", "popup.cancel"], ["popup.save", "popup.cancel"], ["popup.apply", "popup.cancel"], ["consent.no", "consent.yes"],
-  ["mods.scan.no", "mods.scan.yes"], ["spine.license.no", "spine.license.yes"], ["update.later", "update.notes", "update.now"],
+  ["mods.scan.no", "mods.scan.yes"], ["update.later", "update.notes", "update.now"],
   ["update.later", "update.notes", "update.restart"], ["update.later", "update.notes", "update.page"], ["update.releasePage", "display.close"],
   ["tour.previous", "tour.next"], ["tour.previous", "tour.finish"], ["export.chooseDirectory", "export.confirm"], ["export.openFolder", "popup.cancel"],
   ["remap.discard", "remap.accept"], ["settings.log.copy", "display.close"], ["picker.ok", "open.mac"], ["picker.ok", "open.win"], ["btn.delete", "popup.cancel"],
@@ -208,8 +208,7 @@ const FOOTERS = [["picker.ok", "popup.cancel"], ["popup.save", "popup.cancel"], 
 // Captions that do not hold the range's 48 in a 400 box on two lines in this file's stand-in canvas (a code point of Thai a full em,
 // Latin half an em): the shared fit takes the group under 48, never past the box. Named here so that they are seen, not hidden.
 const BELOW_MINIMUM = {
-  "en-US": ["spine.license.no/spine.license.yes"],
-  "th-TH": ["spine.license.no/spine.license.yes", "update.later/update.notes/update.now", "update.later/update.notes/update.restart", "update.later/update.notes/update.page",
+  "th-TH": ["update.later/update.notes/update.now", "update.later/update.notes/update.restart", "update.later/update.notes/update.page",
     "recovery.report/picker.ok"],
 };
 test("there is a locale file for each shipped language", () => {

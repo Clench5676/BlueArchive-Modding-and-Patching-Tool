@@ -33,7 +33,6 @@ async function harness(locale = "en-US", button = "cancel", accept = false) {
   globalThis.compatibilityDeps = {
     jobProgress,
     ensureSpine: async () => { if (licensed === "error") throw new Error("Runtime failed to load"); return licensed; },
-    confirmLicence: async () => { confirms++; return licensed; },
     language: () => locale,
     T: (key, vars = {}) => key.split(".").reduce((o, k) => o?.[k], strings)?.replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? "") || key,
     rpc: async (method, params) => {
@@ -58,7 +57,7 @@ async function harness(locale = "en-US", button = "cancel", accept = false) {
     Popup: { message: async (options) => { assert.ok(!held && !covered && !taskActive); popups.push(options); return { button }; } },
     Compare: { show: async (...args) => { assert.ok(!held && !covered && !taskActive); comparisons.push(args); return accept; } },
   };
-  const code = `const { T, language, rpc, waitJob, Loading, Popup, Compare, ensureSpine, confirmLicence, jobProgress } = globalThis.compatibilityDeps;\n${source.replace(/^import .*;$/gm, "")}\n// ${sequence++}`;
+  const code = `const { T, language, rpc, waitJob, Loading, Popup, Compare, ensureSpine, jobProgress } = globalThis.compatibilityDeps;\n${source.replace(/^import .*;$/gm, "")}\n// ${sequence++}`;
   const mod = await import(`data:text/javascript;base64,${Buffer.from(code).toString("base64")}`);
   return { mod, calls, popups, comparisons, covers, labels, progress, strings, saved,
     use: (value) => { nextReport = value; }, build: (value) => { rebuilt = value; },
@@ -66,12 +65,11 @@ async function harness(locale = "en-US", button = "cancel", accept = false) {
     license: (value) => { licensed = value; }, confirms: () => confirms };
 }
 
-test("declined licence skips the runtime check and offers confirmation without blocking update inputs", async () => {
+test("pending acknowledgement skips the runtime check without a licence popup or blocking update inputs", async () => {
   const h = await harness(); h.license(false);
   await h.mod.check("old-mod");
   assert.deepEqual(h.calls, []);
-  assert.equal(h.popups[0].lines[0], h.strings.spine.license.required);
-  assert.equal(h.popups[0].ok, h.strings.spine.license.confirm);
+  assert.deepEqual(h.popups, []);
   assert.equal(h.confirms(), 0);
   h.use(mixedReport());
   assert.ok(await h.mod.inspect("old-mod"));

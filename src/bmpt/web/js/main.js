@@ -518,7 +518,7 @@ function dataDirNotice() {
 // The start popups, one at a time and in this order, each only when it has something to show (mod-switch.js
 // startDue); each step resolves once its popup has closed (docs/web-ui.md, "Start sequence"):
 //   - the asset consent;
-//   - the Spine licence confirmation, while unanswered;
+//   - the Spine licence notice, only while no answer was ever stored;
 //   - the scan consent, while it is unanswered and a game folder is known;
 //   - the prompts of mods back to official and of mods outside the library, if the start scan is already in;
 //     a later scan shows them once no other popup is open, only with the scan consent
@@ -591,7 +591,6 @@ async function start() {
     Detail.applyPrefs(prefs);
     StudentHall.applyPrefs?.(prefs);
     if (key === "fileSource" || key.startsWith("gameDir") || key === "libraryDir") { await refreshConfiguration(); }
-    else if(key === "spineConsent"){stepCards=null;ctx.invalidateRoster();await route();}
   };
   ctx.goOther = () => Settings.open(settingsChanged, "mods");
   ModAdd.init({ names: variantNames, changed: ctx.invalidateRoster, go: (key) => {
