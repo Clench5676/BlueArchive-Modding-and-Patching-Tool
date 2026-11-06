@@ -16,7 +16,7 @@ from typing import Any, Callable
 
 from PIL import Image
 
-from .. import devmode
+from .. import devmode, spans
 from ..errors import ServiceError
 from ba_modding_toolkit.naming import parse_filename, spine_kind
 from ..texture_guard import texture_image
@@ -471,7 +471,8 @@ class GameAssets:
             from . import selection_frames
             if root == selection_frames.ROOT:
                 from .model import BundleGraph
-                with _MODEL_LOCK, self._cab_discovery().batch(), BundleGraph({}, resolver=self._resolve_cabs) as graph:
+                with spans.held("model-lock.layout", _MODEL_LOCK, hold=True), self._cab_discovery().batch(), \
+                        BundleGraph({}, resolver=self._resolve_cabs) as graph:
                     env = graph.add(path)
                     resolver = _FxResolver(graph, {obj.path_id: obj for obj in env.objects}, self._shader_forms)
                     effects = selection_frames.export_effects(env, resolver.resolve)
@@ -747,7 +748,7 @@ class GameAssets:
         cached = valid_cached()
         if cached is not None:
             return cached
-        with _MODEL_LOCK:
+        with spans.held("model-lock.model", _MODEL_LOCK, hold=True):
             cached = valid_cached()
             if cached is not None:
                 return cached
@@ -856,7 +857,8 @@ class GameAssets:
         # the particle renderers' materials, textures and meshes sit in other bundles (the lobbies' shared effect
         # bundles, the shader bundles, a character's own): one graph holds them open, so it runs alone like a model
         # export (see BundleGraph)
-        with _MODEL_LOCK, self._cab_discovery().batch(), BundleGraph({}, resolver=self._resolve_cabs) as graph:
+        with spans.held("model-lock.particles", _MODEL_LOCK, hold=True), self._cab_discovery().batch(), \
+                BundleGraph({}, resolver=self._resolve_cabs) as graph:
             env = graph.add(path)
             objects = {obj.path_id: obj for obj in env.objects}
             kinds = {pid: obj.type.name for pid, obj in objects.items()}

@@ -18,7 +18,7 @@ from typing import Any
 
 from PIL import Image
 
-from .. import config, devmode
+from .. import config, devmode, spans
 
 logger = logging.getLogger(__name__)
 
@@ -295,7 +295,7 @@ class PreviewCache:
         return self.root / (digest + ".preview")
 
     def get(self, key: str) -> bytes | None:
-        with self._lock:
+        with spans.held("preview-cache-lock", self._lock):
             if not self._allowed:
                 return None
             path = self._path(key)
@@ -332,7 +332,7 @@ class PreviewCache:
     def put(self, key: str, value: bytes, *, generation: str) -> bool:
         if not isinstance(value, bytes) or len(value) > min(self.max_bytes, PREVIEW_ENTRY_LIMIT):
             return False
-        with self._lock:
+        with spans.held("preview-cache-lock", self._lock):
             self._sync_generation()
             if not self._allowed or generation != self._generation:
                 return False

@@ -16,7 +16,7 @@ def test_failed_work_is_timed_and_snapshots_are_detached(monkeypatch):
     with pytest.raises(ValueError), timings.measure("ui.atlases"):
         raise ValueError("unreadable fixture")
     snapshot = timings.snapshot()
-    assert snapshot == {"ui.atlases": {"count": 1, "seconds": .25}}
+    assert snapshot == {"ui.atlases": {"count": 1, "seconds": .25, "max": .25}}
     snapshot["ui.atlases"]["count"] = 99
     assert timings.snapshot()["ui.atlases"]["count"] == 1
 
@@ -25,7 +25,7 @@ def test_concurrent_asset_timings_accumulate():
     timings = Timings()
     with ThreadPoolExecutor(max_workers=4) as workers:
         list(workers.map(lambda _: timings.record("ui.layouts", .125), range(100)))
-    assert timings.snapshot() == {"ui.layouts": {"count": 100, "seconds": 12.5}}
+    assert timings.snapshot() == {"ui.layouts": {"count": 100, "seconds": 12.5, "max": .125}}
 
 
 @pytest.mark.parametrize('fails', [False, True])

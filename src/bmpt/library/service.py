@@ -25,7 +25,7 @@ from typing import TYPE_CHECKING, Any, Callable, Iterator
 
 from UnityPy.helpers.ResourceReader import get_resource_data
 
-from bmpt import atlas_remap, devmode, mod_origin
+from bmpt import atlas_remap, devmode, mod_origin, spans
 from ba_modding_toolkit import core, mod_install
 from ba_modding_toolkit.bundle import Bundle
 from ..catalog.models import CoreMap
@@ -91,7 +91,7 @@ def _serialized(method: Callable) -> Callable:
     (``ModLibrary._check_recovery``) with the real failure."""
     @wraps(method)
     def call(self: ModLibrary, *args: Any, **kwargs: Any) -> Any:
-        with self._lock, _errors(method.__name__):
+        with spans.held("library-lock", self._lock, floor=0.05), _errors(method.__name__):
             self._refresh_state()
             return method(self, *args, **kwargs)
     return call
