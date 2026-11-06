@@ -262,7 +262,7 @@
 			},
 			"overwritten": "Overwritten",
 			"damaged": "Damaged",
-			"overwrittenTitle": "Official File Overwritten",
+			"overwrittenTitle": "Official File Missing",
 			"overwrittenNone": "No official copy left",
 			"incomplete": "Mod incomplete",
 			"keptCurrent": "Current game files added to the library",

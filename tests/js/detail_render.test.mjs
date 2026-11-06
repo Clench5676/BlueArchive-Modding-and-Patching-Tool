@@ -1318,7 +1318,7 @@ test("an official 3D model with no official copy left opens the overwritten mess
     await finish(t, switching);
     assert.equal(modelRequests.at(-1).source, "official");
     const texts = walk(hosts.dialog).map((el) => el.textContent);
-    assert.ok(texts.includes("Official File Overwritten"), texts.join(" | "));
+    assert.ok(texts.includes("Official File Missing"), texts.join(" | "));
     assert.ok(texts.includes("No official copy left"), texts.join(" | "));
     assert.ok(!texts.includes("3D model unavailable"), texts.join(" | "));
   } finally {

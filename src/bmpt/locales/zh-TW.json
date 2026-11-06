@@ -262,7 +262,7 @@
 			},
 			"overwritten": "已被覆蓋",
 			"damaged": "已損壞",
-			"overwrittenTitle": "原版檔案已被覆蓋",
+			"overwrittenTitle": "缺少官方原版檔案",
 			"overwrittenNone": "已無原版備份",
 			"incomplete": "Mod 不完整",
 			"keptCurrent": "目前遊戲檔案已加入 Mod 倉庫",
