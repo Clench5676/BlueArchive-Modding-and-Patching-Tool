@@ -2104,7 +2104,7 @@ message (Add to Library for an outside mod, else the repair lines) instead of "3
 
 ## BL-086: A missing official copy must not keep a mod from being imported
 
-- Status: Open; the owner's decision on the behaviour pending.
+- Status: Dispatched to Codex (`gpt-6.1-sol`, xhigh, branch `codex/bl086-missing-original`), 2026-11-06.
 - Requested: 2026-11-06 (owner, on BL-085): a missing original is common, since many users overwrote game files before
   they managed mods with the App; that must not forbid importing.
 
@@ -2114,4 +2114,23 @@ unavailable). Three places refuse: applying a mod over a game file that is not o
 blocks such an entry (`test_unavailable_official_baseline_is_blocked_even_with_live_targets`), and previews of partial
 mods, which need official parts for what the mod leaves out. The refusals keep "back to the official version" possible
 at all times; allowing them means an entry without an official copy until the game files are repaired.
+
+Owner's decision, 2026-11-06 (the lead's proposal, sent to Codex as is): (1) adding and the batch import never refuse a
+mod for a missing official copy; (2) applying over an outside change with no official copy first keeps the current game
+files in the library as a mod of their own, then applies; (3) the student's Original shows "no official copy" and cannot
+be chosen until the game files are repaired, after which the next apply keeps the official files as usual; (4) a partial
+mod takes the parts it leaves out from the game files as they are, and is then marked "Mod incomplete" (owner, same day).
+
+## BL-087: The Spine licence as a one-time notice at the first start
+
+- Status: Dispatched to Codex (`gpt-6.1-sol`, xhigh, branch `codex/bl087-spine-notice`), 2026-11-06. The notice's wording
+  in every language awaits the owner's review.
+- Requested: 2026-11-06 (owner): no explicit licence question and no "confirmation required" notices over previews; at the
+  first start, a notice in legal wording that continuing to use the software confirms a Spine licence, and Confirm.
+
+Lead's notes: replaces the Yes/No licence prompt of the start sequence, the in-place notices (BL-083's frame included),
+the comparison preview's and the compatibility check's licence questions and Settings' two-choice row. The acknowledgement
+is stored with the notice's version, so earlier answers (yes or no) see the new notice once. The legal risk was stated
+to the owner once: a notice with Confirm only gives users without a licence no honest way on but quitting, and does not
+lift the licence requirement of the Spine Runtimes License; the owner decided.
 

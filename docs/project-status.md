@@ -57,7 +57,8 @@ As of 2026-11-06. Verify the actual branch, working tree and `pyproject.toml` ve
 | BL-081 | In-app release notes draw Markdown in the UI language; the 0.7.0 notes built in; owner review pending |
 | BL-082 | The App in its own package `bmpt`, upstream's package as the engine; owner review pending |
 | BL-083 through BL-085 | Implemented by the lead (2026-11-06, a Windows user's 0.6.0 report): the Spine licence notice on the message frame, 3D model mods identified by their asset paths, the Official File Overwritten message instead of "3D model unavailable"; owner review pending |
-| BL-086 | Open: a missing official copy must not keep a mod from being imported; the owner's decision on the behaviour pending |
+| BL-086 | Dispatched to Codex (2026-11-06): a missing official copy must not keep a mod from being imported or applied |
+| BL-087 | Dispatched to Codex (2026-11-06): the Spine licence as a one-time notice at the first start; wording awaits the owner |
 | BL-057, BL-058 | Accepted by the owner on macOS (alpha.12); Windows not reviewed |
 | BL-055 | Accepted by the owner on macOS (0.6.0 pre-review) |
 | BL-014 | Candidate, not scheduled |
@@ -72,7 +73,7 @@ from passing tests or the presence of earlier code.
 built from `cd9cd7cf` (`chore(release): 0.7.0-alpha.3`): alpha.2 and BL-083 to BL-085 (`3ec7302d`..`0e3eb3f9`), from a
 Windows user's 0.6.0 report: 3D model mods identified by their asset paths, the Official File Overwritten message for a
 3D model with no official copy, the Spine licence notice on the message frame. BL-081, BL-082, BL-083 to BL-085 and the
-release notes' wording await the owner's review; BL-086 awaits the owner's decision.
+release notes' wording await the owner's review; BL-086 and BL-087 are with Codex.
 
 On `0e3eb3f9` (same tree as the build): 4333 passed, 33 skipped (Python, `python -m pytest`, which puts the checkout on
 the import path that `test_mod_origin.py` needs), 2373 JavaScript tests passed (isolated runs with the official
