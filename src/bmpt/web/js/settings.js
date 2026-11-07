@@ -17,7 +17,7 @@ import * as Tours from "./tours.js";
 import * as Update from "./update.js";
 import * as Buttons from "./game-buttons.js";
 import { BACKDROP, SMALL_BUTTON, TYPE } from "./ui-tokens.js";
-import { rowBase, radioRow, valueGeometry, valueRoom, afterTitle, buttonRowGeometry, stackCards } from "./settings-rows.js";
+import { rowBase, radioRow, valueGeometry, valueRoom, afterTitle, buttonRowGeometry, stackCards, noteFit, noteNode } from "./settings-rows.js";
 import { on, rpc } from "./api.js";
 import { T, errorText, platform } from "./i18n.js";
 import { $, DOT, S, clone, glyphsOf, hitButton, wrapPath } from "./util.js";
@@ -101,11 +101,14 @@ async function checkFiles() {
 // --- a value with buttons on the right (folders, version, cache); long values wrap, never cut ---
 // The geometry (the content box, the buttons right-aligned SPACE.m apart, the value's room, the wrapping of a second line of
 // buttons) is settings-rows.js valueGeometry. The value is a description: TYPE.caption, in the label box NGUI gives a line.
+// note: a line under the dotted line, above the value and the buttons (settings-rows.js NOTE, the option's red note).
 const LABEL_BOX = 1.3;
-function valueRow(name, y, title, value, buttons, { below = false, showValue = true } = {}) {
+function valueRow(name, y, title, value, buttons, { below = false, showValue = true, note = "" } = {}) {
   const f = wrapPath(value || T("settings.notSet"), TYPE.caption.fs, TYPE.caption.min, valueRoom(buttons.length, below), 3);
-  const lineH = f.fs * LABEL_BOX, layout = valueGeometry(buttons.length, lineH * f.lines, { below });
+  const n = note ? noteFit(note) : null, noteH = n ? n.fs * LABEL_BOX * n.lines : 0;
+  const lineH = f.fs * LABEL_BOX, layout = valueGeometry(buttons.length, lineH * f.lines, { below, noteH });
   const { h } = layout, row = rowBase(name, y, h, title), hits = [];
+  if (n) row.children.push(noteNode(n, layout.note, layout.noteBox.w, noteH));
   // Action-only rows keep the same spacing without a value label.
   if (showValue) row.children.push(node("Value", layout.value, [label(f.text, f.fs, "#2d4664/1.00", layout.room, lineH * f.lines + 10, { pivot: 3, depth: 8 })]));
   // buttons side by side share one caption size (the small button's range, 48 down to 34)
@@ -218,7 +221,7 @@ function rows({ builtSize = null, sizeError = null } = {}) {
     add(radioRow("StartupUpdate", 0, T("settings.update.startup"), ON_OFF(), p.startupUpdate !== false, (v) => set("startupUpdate", v)));
     add(valueRow("Log", 0, T("settings.log.label"), p.logPath, [
       [T("settings.log.open"), openLog], [open, reveal(p.logPath)],
-      [T("recovery.report"), () => globalThis.BAMTRecovery?.report()]]));
+      [T("recovery.report"), () => globalThis.BAMTRecovery?.report()]], { note: T("settings.log.reportNote") }));
     add(valueRow("Classic", 0, T("settings.classic.label"), T("settings.classic.hint"), [[T("settings.classic.open"), () => call(() => rpc("app.openClassic", { tab: "settings" }))]]));
     // the bottom bar's hand-off prompt (decision 6): Don't Ask Again turns it off, this turns it back on
     add(radioRow("ClassicAsk", 0, T("settings.classic.ask"), [[true, T("settings.post.on")], [false, T("settings.post.off")]],

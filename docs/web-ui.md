@@ -2900,6 +2900,9 @@ host exposes the current text through `role="status"` and `aria-label`; the Hall
 
 **Error Report** in Settings' log row and error/refusal popups creates one local
 `BAMT-report-<version>-<YYYYMMDD-HHMM>.zip`. The same action is available on the built-in startup failure page.
+The log row's card states that reports are anonymized (`settings.log.reportNote`), as `UIPopup_Option_PC`'s option note
+`Label_Locale_Info`: the caption role, pivot top left, SPACE.l under the dotted line, in SkillCutIn's red (`COLOUR.noteAlert`,
+`#e06f6f`); the path and buttons follow it SPACE.m below (`settings-rows.js` `NOTE`, `valueGeometry`'s `noteH`).
 The destination order is Desktop, Downloads, the app data directory, then the system temporary directory; Windows uses redirected shell folders.
 Repeated reports in one minute receive a numeric suffix. Finder/Explorer selects the archive and the clipboard
 receives its short summary. No upload is performed. A failed clipboard/reveal action does not discard the report.
