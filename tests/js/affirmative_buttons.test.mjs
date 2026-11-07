@@ -28,7 +28,8 @@ test('names and translated captions cannot imply an affirmative action',()=>{
 test('the source picker, gallery and Settings use explicit treatment in all locales',async()=>{
   const {readFile}=await import('node:fs/promises');
   const popup=await readFile(new URL('../../src/bmpt/web/js/popup.js',import.meta.url),'utf8');
-  assert.match(popup,/actionSemantic=b.semantic\|\|\(b.primary\?"confirm":"secondary"\)/);
+  assert.match(popup,/child.actionSemantic = action.semantic \|\| \(action.primary \? "confirm" : "secondary"\)/);
+  assert.match(popup,/buttons: buttons.map/);
   assert.ok(!popup.includes('[T("popup.apply"),T("act.update")'));
   const controller=await readFile(new URL('../../src/bmpt/web/js/photography/controller.js',import.meta.url),'utf8');
   assert.match(controller,/'Export',P\('export'\).*enabled:!!selectedPhoto/s);

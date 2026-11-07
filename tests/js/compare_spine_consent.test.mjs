@@ -47,3 +47,19 @@ test("closing compare before its licence gate settles prevents late players", as
   assert.deepEqual(h.players, []);
   assert.equal(h.host.children.length, 0);
 });
+
+// The compare callers retain their public frame fields while the shared geometry rounds their old width up to L.
+import { compareFrame } from "../../src/bmpt/web/js/popup-frames.js";
+import { CONTROL, POPUP_FRAME, SPACE } from "../../src/bmpt/web/js/ui-tokens.js";
+test("compare and repair frames use L and keep their scrolling findings inside the content box", () => {
+  for (const review of [false, true]) {
+    const f = compareFrame(review);
+    assert.equal(f.w, POPUP_FRAME.L.w);
+    assert.ok(f.h >= POPUP_FRAME.L.h && f.h <= POPUP_FRAME.maxH);
+    assert.equal(f.scroll.width, f.w - 2 * SPACE.xxxl);
+    assert.equal(f.scroll.top, f.cy + f.h / 2 - POPUP_FRAME.contentTop);
+    assert.equal(f.bottom, f.scroll.top - f.scroll.height);
+    if (review) assert.equal(f.bottom - (f.cy - f.h / 2 + POPUP_FRAME.footer.bottom + CONTROL.buttonL.h), SPACE.m);
+    assert.ok(f.rows.max * f.rows.pitch <= f.scroll.height);
+  }
+});

@@ -3,6 +3,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
+import { row, toNode } from "../../src/bmpt/web/js/ui-grid.js";
 import * as Tokens from "../../src/bmpt/web/js/ui-tokens.js";
 
 const WEB = new URL("../../src/bmpt/web/", import.meta.url);
@@ -214,11 +215,11 @@ const BELOW_MINIMUM = {
 test("there is a locale file for each shipped language", () => {
   assert.deepEqual(["en-US", "ja-JP", "ko-KR", "th-TH", "zh-CN", "zh-TW"].filter((l) => !locales.includes(l)), []);
 });
-for (const locale of locales) test(`every footer's captions share one size in the 72 to 48 range, inside the 400 x 140 box, in ${locale}`, () => {
+for (const locale of locales) test(`every footer's captions share one size in the 72 to 48 range, inside the 472 x 156 box, in ${locale}`, () => {
   const web = JSON.parse(readSync(new URL(`${locale}.json`, LOCALE_DIR), "utf8")).webui;
   const text = (key) => key.split(".").reduce((o, part) => o?.[part], web);
   document.documentElement.lang = locale;
-  const { fs: max, fsMin: min, w, lines, h } = Tokens.FOOTER.caption;
+  const max = Tokens.TYPE.display.fs, min = Tokens.TYPE.display.min, w = 472, lines = 2, h = 156;
   for (const keys of FOOTERS) {
     const captions = keys.map(text);
     const what = `${locale} ${keys.join("/")}`;
@@ -234,23 +235,26 @@ for (const locale of locales) test(`every footer's captions share one size in th
       assert.equal(f.text.replace(/\s/g, ""), captions[i].replace(/\s/g, ""), `${what}: every character kept`);
     });
     const size = fits[0].fs;
-    if (BELOW_MINIMUM[locale]?.includes(keys.join("/"))) assert.ok(size < min && size >= 36, `${what}: ${size} is under the range's ${min}, as recorded`);
+    if (BELOW_MINIMUM[locale]?.includes(keys.join("/"))) {
+      const before = NGUI.fitGroup(captions, max, min, 400, 2, { maxH: 140 })[0].fs;
+      assert.ok(size >= 36 && size >= before, `${what}: no smaller than the recorded fit ${before}`);
+    }
     else assert.ok(size >= min && size <= max, `${what}: ${size} is in the range`);
   }
 });
 
 // Hall modals use the shared footer; the memorial editor still hits its full-row stop rule.
 const popupSource = read("js/popup.js");
-const footerHelpers = new Function("FOOTER", "FRAME_Y", "NGUI", "captionMinimum", `${popupSource.slice(popupSource.indexOf("export const footerY"), popupSource.indexOf("// the game's popup frame at a size"))
-  .replaceAll("export ", "")}; return {footerY, footerTop, footerSlots, footerFit, footerLabels};`)(Tokens.FOOTER, Tokens.POPUP.frameY, NGUI, Tokens.captionMinimum);
-test("Hall modal footers use FOOTER for one, two and three actions", () => {
+const footerHelpers = new Function("CONTROL", "POPUP_FRAME", "SPACE", "TYPE", "BUTTON_TEXT_H", "row", "toNode", "FRAME_Y", "NGUI", "captionMinimum", `${popupSource.slice(popupSource.indexOf("export const footerY"), popupSource.indexOf("// the game's popup frame at a size"))
+  .replaceAll("export ", "")}; return {footerY, footerTop, footerSlots, footerFit, footerLabels};`)(Tokens.CONTROL, Tokens.POPUP_FRAME, Tokens.SPACE, Tokens.TYPE, 156, row, toNode, Tokens.POPUP_FRAME.frameY, NGUI, Tokens.captionMinimum);
+test("Hall modal footers use buttonL for one, two and three actions", () => {
   for (const n of [1, 2, 3]) {
     const { scale, xs } = footerHelpers.footerSlots(n, 2800);
-    assert.equal(scale, n < 3 ? 1 : Tokens.FOOTER.many.scale);
+    assert.equal(scale, 1);
     assert.equal(xs.reduce((sum, x) => sum + x, 0), 0);
-    for (let i = 1; i < n; i++) assert.ok(Math.abs(xs[i] - xs[i-1] - Tokens.FOOTER.body.w * scale
-      - (n < 3 ? Tokens.FOOTER.pairGap : Tokens.FOOTER.many.gap)) < 1e-9);
-    assert.equal(footerHelpers.footerY(1450) - (Tokens.POPUP.frameY - 1450 / 2), Tokens.FOOTER.centre);
+    for (let i = 1; i < n; i++) assert.ok(Math.abs(xs[i] - xs[i-1] - Tokens.CONTROL.buttonL.minW * scale
+      - Tokens.POPUP_FRAME.footer.gap) < 1e-9);
+    assert.equal(footerHelpers.footerY(1450) - (Tokens.POPUP.frameY - 1450 / 2), Tokens.POPUP_FRAME.footer.bottom + Tokens.CONTROL.buttonL.h / 2);
   }
 });
 const { SORTS } = await import("../../src/bmpt/web/js/roster-order.js");
@@ -316,12 +320,15 @@ for (const locale of ["en-US", "th-TH", "zh-CN", "zh-TW", "ja-JP", "ko-KR"]) tes
     assert.equal(new Set(fits.map((f) => f.fs)).size, 1);
     for (const [i, fit] of fits.entries()) {
       const exceptions = locale === "th-TH" ? { "hall.doneAdding": 44, "hall.keepEditing/hall.discard/hall.saveLeave": 36 } : {};
-      if (exceptions[keys.join("/")]) assert.equal(fit.fs, exceptions[keys.join("/")], "Named site and Thai only");
+      if (exceptions[keys.join("/")]) {
+        const before = NGUI.fitGroup(captions, 72, 48, 400, 2, { maxH: 140 })[0].fs;
+        assert.ok(fit.fs >= exceptions[keys.join("/")] && fit.fs >= before, "Named site and Thai floor; never smaller than before");
+      }
       else assert.ok(fit.fs >= Tokens.FOOTER.caption.fsMin, `${locale} ${keys.join("/")} needs ${fit.fs}`);
       assert.ok(fit.fs <= Tokens.FOOTER.caption.fs && !fit.overflow);
-      assert.ok(fit.lines * NGUI.fontSizeFor(fit.text, fit.fs) * NGUI.LINE_PITCH <= Tokens.FOOTER.caption.h);
+      assert.ok(fit.lines * NGUI.fontSizeFor(fit.text, fit.fs) * NGUI.LINE_PITCH <= 156);
       assert.equal(fit.text.replace(/\s/g, ""), captions[i].replace(/\s/g, ""));
-      for (const line of fit.text.split("\n")) assert.ok(NGUI.glyphWidth(line, fit.fs) <= Tokens.FOOTER.caption.w);
+      for (const line of fit.text.split("\n")) assert.ok(NGUI.glyphWidth(line, fit.fs) <= 472);
     }
   }
 });
@@ -436,9 +443,9 @@ test("Thai footer exceptions cannot authorize another footer or another locale",
   document.documentElement.lang="th-TH";
   const web=JSON.parse(readSync(new URL("th-TH.json",LOCALE_DIR),"utf8")).webui;
   for(const [site,captions] of [["hall.doneAdding",[web.hall.doneAdding]],["hall.unsavedChanges",[web.hall.keepEditing,web.hall.discard,web.hall.saveLeave]]]) {
-    assert.throws(()=>footerHelpers.footerFit(captions,{site:"hall.other"}),RangeError);
-    assert.throws(()=>footerHelpers.footerFit(captions,{site,locale:"en-US"}),RangeError);
-    assert.doesNotThrow(()=>footerHelpers.footerFit(captions,{site}));
+    assert.throws(()=>footerHelpers.footerFit(captions,{site:"hall.other",width:400}),RangeError);
+    assert.throws(()=>footerHelpers.footerFit(captions,{site,locale:"en-US",width:400}),RangeError);
+    assert.doesNotThrow(()=>footerHelpers.footerFit(captions,{site,width:400}));
   }
   assert.match(read("js/student-hall-picker.js"), /captionSite: onReplace \? "hall.portraitReplacement" : "hall.doneAdding"/);
   assert.match(read("js/student-hall.js"), /captionSite: "hall.unsavedChanges"/);

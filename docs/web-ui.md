@@ -1900,41 +1900,52 @@ optional, so a popup still works without them.
 - **Buttons.** Every button of a popup is an invisible button over the drawn one, named for assistive technology by
   the caption it covers (`aria-label`) and marked with what it does (`data-action`). When a sprite is missing from
   the atlases its button is placed from the prefab node, so the popup can still be answered.
-- **`popupFrame(title, w, h, {ok, cancel, close, buttons})`**: the one frame builder (the consent popups and the update
-  dialog call it with `close: false`; the list popup keeps its own stretched frame and panels but takes the footer's
-  numbers from the same code). The frame at a size, its title, the close button and the footer: Cancel / OK, or named
-  `buttons` (`{label, primary, name}`). The footer's centre is 190.5 units above the frame's bottom edge in every frame
-  (UIPopup_Sort `Btn`), the bodies 496 x 177, the captions 72 down to 48 in a 400 box on up to two lines at one size. One
-  button is centred, two sit at the prefab's x -292 and +292 (88 apart), three or more at 0.8 and 24 apart (smaller in a
-  narrow frame). The list popup's footer stays right-aligned to its own right edge (`footerY`, `footerSlots`,
-  `footerScale`, `footerGap`, `footerFit`, `footerLabels` in `popup.js`). The footer sits 68.5 higher than the app's frames
-  used to keep it, so the message popup's room under its lines (`MSG.buttons`) is 304.5 and the fixed-size frames that held
-  content down to the buttons grew by that (`popup-frames.js`: alias editor, file details, Mod Alias, the repair review,
-  the import dialogs, illustrated tour pages, the update dialog).
+- **`popupFrame(title, w, h, {ok, cancel, close, buttons})`**: the shared frame builder, including lists and
+  consents. It keeps `UIPopup_Sort`'s `Common_Popup_Bg`, title, close and footer branches, resizing and positioning them
+  with `POPUP_FRAME`, `CONTROL.buttonL`, `TYPE` and `SPACE`. Width classes are S 1300 x 1050, M 1540 x 1073,
+  L 2098 x 1110 and XL 2841 x 1353. A numeric width rounds up to the smallest class that holds it. Height starts at
+  the class minimum and grows with content, capped at 1560; the frame remains centred 12 units below the stage centre.
+  The title is one display line, 72 down to 48, with its top 36 below the frame top. The 60-unit close icon keeps
+  48 from the right and 39 from the top. Content starts 170 below the top, with 40-unit panel/list side padding or
+  100-unit text side padding. Footer bodies are 551 x 176, 33 apart, 102 above the bottom, centred as one group;
+  three or more share a reduced width when necessary to keep at least 82.5 at either side. Captions share one size,
+  72 down to 48, up to two lines in the body's width less 2 x 39.5. The recorded Thai footer exceptions retain their
+  existing floors (36 for the recorded footer groups; named Hall allowances 44 and 36), never fitting smaller than
+  their former 400-unit-box result. No other group gets an exception. The lowest content stays 20 above the footer.
+  `footerY`, `footerTop`, `footerSlots`, `footerScale`, `footerGap`, `footerFit` and `footerLabels` expose the same
+  geometry to callers; `footerScale` describes the equal width reduction while the bodies keep their control height.
+  `popup-frames.js` holds the fixed content boxes: text viewer XL, aliases and Mod Alias M, file details and Export L,
+  and comparison/repair L. `POPUP` and `FOOTER` remain pinned to the old Sort anatomy for callers awaiting migration.
 - **`message({title, lines, ok, cancel, check, close})`** in `#dialog`: lines of text, centred; when a line carries a
   small button (`{text, button: {label, fn}}`, the consent popup's light blue Change button), every line is a row of
   the game's light stats box with its button at the right. An optional checkbox (the gacha list's) under the lines.
   `plain: true` uses left-aligned lines without a box or separators; line buttons stay at the right, and adding one
   preserves the text's font size and fitting rules. `scroll: true` keeps the lines in a scrolling list between the
-  title and the buttons; a message whose frame would pass 1400 units (the Add result of many Mods, the dropped queue
-  list) switches to that list by itself, so its title and buttons stay on the stage (`messageLayout().scroll`), and a
-  shorter one is laid out as before.
+  title and the buttons; a message whose frame would pass 1560 units (the Add result of many Mods, the dropped queue
+  list) scrolls automatically so its title, checkbox and buttons stay on the stage (`messageLayout().scroll`).
+  Its default is S, or the smallest of S/M/L that fits each paragraph on at most six lines; longer copy uses L and
+  scrolls as needed. Explicit message width 2100 selects L. `textItem` and `stack` measure and place paragraphs with
+  a 28-unit gap; line buttons and the checkbox use centred rows with a 20-unit gap. Stats-box rows retain their own
+  internal padding and row metrics.
   It resolves once it closes, however it closes, with `{button, checked}`: `button` is `ok`, `cancel`, or `null` for
   the close button, the backdrop and Escape; `checked` is the checkbox's state at that moment. `close: false` draws no
   close button, and the backdrop and Escape do nothing. The popup takes the keyboard focus while it is open (Enter
   presses nothing under it) and gives it back. `confirmKeys` (none by default; the quit prompt's Enter and Space)
   press OK while the popup is in front and holds the focus itself; a focused button takes its own key, and a held
   key's repeat, a modifier or an input method composing press nothing. Without the frame's prefab (no game folder)
-  the same message is drawn plain: a light box on the dark backdrop with the title, the lines, the checkbox and the
-  buttons, marked and answered the same way.
+  the same message is drawn plain: a light box on the dark backdrop with the same class, title, close, content,
+  checkbox and footer boxes, marked and answered the same way. The log viewer and Spine consent reuse this fallback.
 - **`listPopup({...})`**: the frame laid out like the game's quick formation edit, the selection's details on the
   left, the cards in a framed list on the right, the buttons under it. The student list's tools over the cards are
   optional (`tools`); without them a hint and a footer show in their place. One card chosen (`selected`), or several
   ticked (`multi`, with `selectable(items)` ticking all that can be, `toggled()` and `sizeOf()` for the ticked cards'
   total size). A card that cannot be ticked (`disabled`) can still be clicked; `dim` darkens it like the roster's
-  not-owned cards with its picture in grey, and `badge` replaces In Use with the caller's word. Buttons right-aligned
-  under the list (the main ones in OK's blue, three or more a little smaller), a checkbox at their left, and no close
-  button when `onClose` is `null`. The cards' buttons are in the page in the list's order.
+  not-owned cards with its picture in grey, and `badge` replaces In Use with the caller's word. Its XL content box
+  uses a 4/8-column details/list grid and a centred shared footer. An optional checkbox occupies its own row below the details column,
+  above the footer. Native card envelopes, aspects and scroll pitch are retained inside the card grid's viewport;
+  chips and stats-box rows retain their prefab internals. Details use one measured stack, or a portrait/info row
+  with stacked fields; content taller than its panel scrolls independently so the final field and actions remain
+  reachable. There is no close button when `onClose` is `null`. Card buttons follow the list order in the tab sequence.
   A list with no card to show (a search or segment that matches nothing) puts `hall.noCandidates` in the list paper,
   centred on the visible paper. With `tools`, while the chosen card (`selected`) is not among the cards shown, the
   primary button is the game's disabled one (`aria-disabled`, answering nothing); a prompt without `tools` is never
@@ -1979,8 +1990,8 @@ or the classic UI is open, no drift while mods are off, nothing dismissed (see M
 
 The start sequence's `spine` step follows asset consent. It shows `spine.license.title`, the legal wording in
 `spine.license.notice`, and one centred Confirm (`picker.ok`) on `UIPopup_Sort`, built through `popup.js` by
-`consent.js spineFrame`. The body wraps at the message font size (52 units); the frame grows to hold it above the
-button. There is no close button; Escape and the backdrop do nothing. Closing the app window keeps its existing
+`consent.js spineFrame`. It uses class L; the body wraps at the message font size (52 units), and the frame grows
+or scrolls to keep the complete notice clear of the button. There is no close button; Escape and the backdrop do nothing. Closing the app window keeps its existing
 quit behaviour. Without asset consent the plain popup uses exactly the same title, body and Confirm.
 
 The notice says that continuing to use the software confirms that the user holds a Spine Editor licence.
@@ -2093,7 +2104,8 @@ transform and the corner controls' own `translate`): on `.window-header` with th
 call site imports it, nothing else repeats them (`tests/js/ui_tokens.test.mjs` pins the sites, `tests/test_ui_tokens.py`
 the prefab values, from the development view). It imports no other UI module.
 
-- **Popup frame, footer, backdrop**: see Popups above (`POPUP`, `FOOTER`, `BACKDROP`).
+- **Popup frame, footer, backdrop**: see Popups above (`POPUP_FRAME`, `CONTROL.buttonL`, `TYPE`, `SPACE`, `BACKDROP`);
+  `POPUP` and `FOOTER` retain the old anatomy for unmigrated callers.
 - **Lobby entry** (`LOBBY_ENTRY`; UILobby's `UIAni_Lobby`): the top bar's and the bottom menu's unweighted Hermite keys,
   `[time, offset from rest, slope]`: 333.7 / 28.55 / 0 and -1043 / -29.52 / 0 units at 0, 0.2 and 0.42 s. See Bar motion.
 - **Small button** (`SMALL_BUTTON`; UIPopup_Option_PC `Center/Popup/List/Sound_Setting/ETCSetting/ButtonBg`): 402 x 136, caption
@@ -2106,8 +2118,8 @@ the prefab values, from the development view). It imports no other UI module.
   `valueRowLayout`). The Export pair is 680 x 136. A message's line button is 136 high and as wide as its caption plus
   90 (240 at least) in a row at least 156 high; the asset consent's Change button the same, on a line of its own under
   the item (`consent.js` `assetLayout`). Not migrated yet: the stopped memorial candidate, queue and footer buttons,
-  the photography toolbar, the popup details
-  actions and the detail screen's Show in Finder / Explorer button.
+  the photography toolbar and the detail screen's Show in Finder / Explorer button. Popup detail actions use the
+  136-unit control height and retain their existing 40–26 caption range for the narrow shared action row.
 - **Caption exceptions** (`CAPTION_EXCEPTIONS`, checked by `captionMinimum`): only Thai at Hall's Done Adding (44),
   unsaved-changes footer group (36) and portrait Reset (30). The footer/small-button token minima stay 48/34.
 - **Batch Import's row under the list** is one row of `buttonS` controls (136 high, caption 48 down to 34, `SPACE.m` apart, laid

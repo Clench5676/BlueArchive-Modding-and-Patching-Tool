@@ -92,7 +92,7 @@ test("a refusal is the neutral notice: the notice caption, its line and Confirm 
   const ok = await drawn("ok");
   assert.equal(title(), english.quit.title);
   assert.notEqual(title(), english.job.failed);
-  assert.deepEqual(actions(), ["ok"], "Confirm is the only button");
+  assert.deepEqual(actions(), ["close", "ok"], "the shared close icon and Confirm; no other footer choice");
   assert.equal(action("cancel"), undefined, "no Error Report");
   assert.equal(action("line0"), undefined, "no Error Report row either");
   assert.ok(walk(dialog).some((e) => e.textContent === "Wait for the current task to finish"));

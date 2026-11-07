@@ -393,6 +393,7 @@ test("the top bar's switch follows mods.state, and the first toggle explains onc
   await drawn(dialog, "cancel");
   const explanation = walk(dialog).filter((e) => /^Center\/Popup\/Lines\/Line_\d+$/.test(e.dataset.path));
   assert.equal(explanation.length, 3);
+  assert.ok(Math.abs(parseFloat(walk(dialog).find(e => e.dataset.path === "Center/Popup/Base/BG").style.width) / (1920 / 2960) - 2098) < 0.02, "the explanation takes class L");
   assert.ok(explanation.every((e) => e.style.textAlign === "left"));
   assert.ok(!walk(dialog).some((e) => /Lines\/(Box|Dot_)/.test(e.dataset.path)));
   action(dialog, "cancel").click();
@@ -506,7 +507,9 @@ test("the help fits its opening lines together in every locale, with and without
         const opened = MS.openHelp();
         await drawn(dialog, "close");
         const texts = [ui.mods.helpOn, ui.mods.helpOff];
-        const fs = Math.max(44, Math.min(...texts.map((text) => NGUI.fitText(text, 52, 44, 1860, 4).fs)));
+        const frame = walk(dialog).find(e => e.dataset.path === "Center/Popup/Base/BG");
+        assert.ok(Math.abs(parseFloat(frame.style.width) / scale - 2098) < 0.02, "help takes class L");
+        const fs = Math.max(44, Math.min(...texts.map((text) => NGUI.fitText(text, 52, 44, 2098 - 200, 6).fs)));
         const lines = texts.map((_, i) => walk(dialog).find((e) => e.dataset.path === `Center/Popup/Lines/Line_${i}`));
         assert.equal(lines[0].style.fontSize, lines[1].style.fontSize, `${lang}, scan=${scan}`);
         assert.ok(!walk(dialog).some((e) => /Lines\/(Box|Row_|Dot_)/.test(e.dataset.path)));

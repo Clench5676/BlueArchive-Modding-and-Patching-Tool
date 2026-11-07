@@ -268,12 +268,12 @@ test("a message popup takes the focus, traps Tab between its buttons and returns
   for (let i = 0; i < 200 && !walk(dialog).some((e) => e.dataset?.action === "ok"); i++) await tick();
   const layer = dialog.children.at(-1);
   assert.equal(document.activeElement, layer, "the popup holds the focus");
-  const cancel = walk(layer).find((e) => e.dataset?.action === "cancel"), ok = walk(layer).find((e) => e.dataset?.action === "ok");
+  const close = walk(layer).find((e) => e.dataset?.action === "close"), ok = walk(layer).find((e) => e.dataset?.action === "ok");
   assert.ok(press("Tab").defaultPrevented);
-  assert.equal(document.activeElement, cancel, "the first control");
+  assert.equal(document.activeElement, close, "the close icon is the first control");
   ok.focus();
   assert.ok(press("Tab").defaultPrevented);
-  assert.equal(document.activeElement, cancel, "past the last control: the first");
+  assert.equal(document.activeElement, close, "past the last control: the close icon");
   opener.focus();
   press("Tab", { shiftKey: true });
   assert.equal(document.activeElement, ok, "from the page below: pulled back in");
@@ -328,4 +328,45 @@ test("popup.js keeps one trap: the Hall modal and the import dialogs no longer c
   assert.doesNotMatch(web("student-hall-ui.js"), /event\.key !== "Tab"/);
   assert.doesNotMatch(web("batch-import.js"), /event\.key !== "Tab"/);
   assert.match(web("popup.js"), /addEventListener\("keydown", trapKey\)/);
+});
+
+test("asset-free messages use the same class, title, close, check and footer boxes", async () => {
+  const { POPUP_FRAME: P, CONTROL: C } = await import("../../src/bmpt/web/js/ui-tokens.js");
+  const scale = 1920 / 2960;
+  const shown = Popup.message({ title: "Title", lines: ["Line"], width: 1301, ok: "OK", cancel: "Cancel", check: { label: "Check", checked: false } });
+  for (let i = 0; i < 200 && !walk(dialog).some(e => e.dataset?.action === "ok"); i++) await tick();
+  const box = walk(dialog).find(e => e.className === "plain-popup"), heading = box.children.find(e => e.tagName === "H2");
+  const action = name => walk(box).find(e => e.dataset?.action === name);
+  const near = (a, b) => assert.ok(Math.abs(a - b) < 1e-9, `${a} != ${b}`);
+  near(parseFloat(box.style.width), P.M.w * scale);
+  near(parseFloat(box.style.height), P.M.h * scale);
+  near(parseFloat(heading.style.top), P.titleTop * scale);
+  near(parseFloat(action("close").style.left), (P.M.w - P.close.right - C.icon.h) * scale);
+  near(parseFloat(action("close").style.top), P.close.top * scale);
+  const footer = walk(box).find(e => e.className === "message-actions");
+  near(parseFloat(footer.style.top), (P.M.h - P.footer.bottom - C.buttonL.h) * scale);
+  near(parseFloat(action("ok").style.width), C.buttonL.minW * scale);
+  near(parseFloat(action("ok").style.left) - parseFloat(action("cancel").style.left), (C.buttonL.minW + P.footer.gap) * scale);
+  action("check").click();
+  assert.equal(action("check").getAttribute("aria-checked"), "true");
+  action("close").click();
+  assert.deepEqual(await shown, { button: null, checked: true });
+});
+
+test("the asset-free text viewer uses the XL content box and keeps Copy and Close usable", async () => {
+  const { TEXT_VIEWER } = await import("../../src/bmpt/web/js/popup-frames.js");
+  let copies = 0;
+  const shown = Popup.textViewer({ title: "Log", text: "One\nTwo", copy: "Copy", close: "Close", onCopy: () => copies++ });
+  for (let i = 0; i < 200 && !walk(dialog).some(e => e.dataset?.action === "copy"); i++) await tick();
+  const scale = 1920 / 2960, box = walk(dialog).find(e => e.className === "plain-popup");
+  const pre = walk(box).find(e => e.className === "log-text");
+  assert.equal(pre.textContent, "One\nTwo");
+  assert.equal(parseFloat(box.style.width), TEXT_VIEWER.w * scale);
+  assert.equal(parseFloat(pre.style.width), TEXT_VIEWER.box.width * scale);
+  assert.equal(parseFloat(pre.style.height), TEXT_VIEWER.box.height * scale);
+  walk(box).find(e => e.dataset?.action === "copy").click();
+  assert.equal(copies, 1);
+  walk(box).find(e => e.dataset?.action === "close").click();
+  await shown;
+  assert.equal(dialog.hidden, true);
 });

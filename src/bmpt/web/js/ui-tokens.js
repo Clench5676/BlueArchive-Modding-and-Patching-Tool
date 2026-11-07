@@ -7,7 +7,7 @@
 // node carries a TweenAlpha from 0 to 0.80 over 0.2 s, and 0.80 is where it rests.
 export const BACKDROP = "#000000/0.80";
 
-// The popup frame, UIPopup_Sort/Center/Popup.
+// Old anatomy, retained and pinned for callers awaiting migration: UIPopup_Sort/Center/Popup.
 export const POPUP = Object.freeze({
   // Base (y -20) and Base/BG (y +8, Common_Popup_Bg): the frame is centred 12 units under the stage's centre
   baseY: -20,
@@ -22,7 +22,7 @@ export const POPUP = Object.freeze({
   clearance: 16,
 });
 
-// The footer, UIPopup_Sort/Center/Popup/Btn (y -499) with Btn_Ok (x +292) and Btn_Cancel (x -292).
+// Old anatomy, retained and pinned for callers awaiting migration: UIPopup_Sort/Center/Popup/Btn (y -499) with Btn_Ok (x +292) and Btn_Cancel (x -292).
 export const FOOTER = Object.freeze({
   btnY: -499,
   // Btn's centre above the BG's bottom edge: -499 - (-12 - 1355 / 2), in every popup frame whatever its height
@@ -215,6 +215,8 @@ export const GRID = Object.freeze({ columns: 12, gutter: 40, pageMargin: 60, sta
 // 39 from the top, content from 170 down, SPACE.xl (panels) or SPACE.xxxl (text) from the sides, the footer's buttonL bodies
 // 33 apart and 102 above the frame's bottom, the pair centred (82.5 from each side; the exemplar's are 84 and 81).
 export const POPUP_FRAME = Object.freeze({
+  frameY: -12, // UIPopup_Sort Base -20 + BG 8
+  maxH: 1560,
   S: Object.freeze({ w: 1300, h: 1050 }),
   M: Object.freeze({ w: 1540, h: 1073 }),
   L: Object.freeze({ w: 2098, h: 1110 }),

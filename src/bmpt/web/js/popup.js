@@ -3,14 +3,14 @@
 //   - the list popup, laid out like the game's quick formation edit: a card's details on the left, a framed list with
 //     the student list's tools on the right (optional), the buttons under it; one card chosen, or several ticked;
 //   - the message popup: a title, lines (a line may carry a small button), an optional checkbox (the gacha list's
-//     Btn_Checkbox) and up to two buttons; it resolves when it closes, however it closes.
+//     Btn_Checkbox) and a footer group; it resolves when it closes, however it closes.
 // Popups draw into a host: the detail screen's own (#popup, #picker) or the stage-level ones (#prompt for lists,
 // #dialog for messages, both over the settings), so they show on any screen. Every open popup is on one stack:
 // Escape goes to the topmost one only, as the game's PopupClose closes the popup in front. A popup that must be
 // answered with a button takes Escape and does nothing with it, so nothing under it acts either.
 // The pure parts (the stack, the selection, the start sequence) are tested in Node (tests/js/popup.test.mjs).
 import * as NGUI from "./ngui.js";
-import { switchGrid, placeSwitchCards, splitPortraitPanel } from "./switch-layout.js";
+import { switchGrid, placeSwitchCards } from "./switch-layout.js";
 import { scrollbar, scrollbarTrack } from "./scrollbar.js";
 import { horizontalScroll } from "./horizontal-scroll.js";
 import * as Buttons from "./game-buttons.js";
@@ -20,10 +20,12 @@ import { fitBadgeCaptions, selectedFrame, selectionArtWindow, SELECTION_PREFAB, 
 import { frameOutline } from "./row-thumbnail.js";
 import { T } from "./i18n.js";
 import { withTimeout } from "./async.js";
-import { TEXT_VIEWER } from "./popup-frames.js";
+import { TEXT_VIEWER, frameClass, frameGeometry, popupContent } from "./popup-frames.js";
 import { statsBox, valueRoom } from "./stats-box.js";
-import { BACKDROP, CHIP, COLOUR, FOOTER, POPUP, SMALL_BUTTON, STATS_BOX, captionMinimum } from "./ui-tokens.js";
+import { BACKDROP, CHIP, COLOUR, CONTROL, POPUP_FRAME, SPACE, TYPE, SMALL_BUTTON, STATS_BOX, captionMinimum } from "./ui-tokens.js";
 import { DOT, RECRUIT, S, TAN10, clone, glyphsOf, hitButton, markedLabel, wrapPath } from "./util.js";
+
+import { container, grid, row, stack as layoutStack, textItem, toNode } from "./ui-grid.js";
 
 const { node, sprite, label, find, rect } = NGUI;
 const fitText = (...a) => NGUI.fitText(...a);
@@ -228,85 +230,91 @@ export function hit(host, view, path, fn, { name = "", action = "", z = 80 } = {
 }
 
 // --- the frame ---
-// a popup button (UIPopup_Sort Btn_Ok / Btn_Cancel, Common_Btn_BG 496 x 177): its caption, even on two lines, keeps clear of
-// the body's top and bottom edges
-export const BUTTON_TEXT_H = FOOTER.caption.h;
-// the game's popup frame is centred 12 units under the stage's centre (Base -20, BG +8)
-export const FRAME_Y = POPUP.frameY;
+// The Sort branches are resized to the shared buttonL control. Captions keep two display lines inside its padding.
+export const BUTTON_TEXT_H = CONTROL.buttonL.h - SPACE.m;
+export const FRAME_Y = POPUP_FRAME.frameY;
 
 // --- the footer: one set of numbers for every popup frame (UIPopup_Sort/Center/Popup/Btn) ---
-// the buttons' centre, popup-local y: FOOTER.centre above the bottom edge of a frame h high, whatever its height
-export const footerY = (h) => FRAME_Y - h / 2 + FOOTER.centre;
-// the top of the bodies of n buttons, popup-local y
-export const footerTop = (h, n = 1) => footerY(h) + FOOTER.body.h * footerScale(n) / 2;
-// one or two bodies at the prefab's size, 88 apart; three or more at 0.8 and 24 apart, smaller where a frame w wide is too narrow
+export const footerY = (h) => FRAME_Y - h / 2 + POPUP_FRAME.footer.bottom + CONTROL.buttonL.h / 2;
+export const footerTop = (h, n = 1) => footerY(h) + CONTROL.buttonL.h / 2;
 export function footerScale(n, w = Infinity) {
-  if (n < 3) return 1;
-  return Math.min(FOOTER.many.scale, (w - FOOTER.many.margin - FOOTER.many.gap * (n - 1)) / n / FOOTER.body.w);
+  return n < 3 ? 1 : Math.min(1, (w - 2 * POPUP_FRAME.footer.side - POPUP_FRAME.footer.gap * (n - 1)) / n / CONTROL.buttonL.minW);
 }
-export const footerGap = (n) => (n < 3 ? FOOTER.pairGap : FOOTER.many.gap);
-// the centres of n bodies in a row centred on the frame (x), and their scale
+export const footerGap = (n) => POPUP_FRAME.footer.gap;
 export function footerSlots(n, w) {
-  const scale = footerScale(n, w), pitch = FOOTER.body.w * scale + footerGap(n);
-  return { scale, xs: Array.from({ length: n }, (_, i) => (i - (n - 1) / 2) * pitch) };
+  if (!n) return { scale: 1, xs: [] };
+  const scale = footerScale(n, w);
+  w = Number.isFinite(w) ? w : n * CONTROL.buttonL.minW * scale + (n - 1) * footerGap(n);
+  const boxes = row(Array.from({ length: n }, () => ({ w: CONTROL.buttonL.minW * scale, h: CONTROL.buttonL.h })),
+    { w, gap: footerGap(n), justify: "center" }).boxes;
+  return { scale, xs: boxes.map(b => toNode(b, 4, { w, h: CONTROL.buttonL.h, cx: 0, cy: 0 })[0]) };
 }
-// the captions of one footer share one size: the prefab's 72 down to 48 in a 400 box, up to two lines, clear of the body's edges
-const CAPTION = FOOTER.caption;
-function checkFooterFits(fits, { site = null, locale = document.documentElement.lang } = {}) {
+const CAPTION = { fs: TYPE.display.fs, fsMin: TYPE.display.min, w: CONTROL.buttonL.minW - 2 * CONTROL.buttonL.pad,
+  lines: 2, h: BUTTON_TEXT_H };
+function checkFooterFits(fits, { site = null, locale = globalThis.document?.documentElement?.lang } = {}) {
   if (site && fits.some((fit) => fit.overflow || fit.fs < captionMinimum(site, locale, CAPTION.fsMin)))
     throw new RangeError(`Popup footer cannot fit: ${site} (${locale})`);
   return fits;
 }
-export const footerFit = (captions, options) => checkFooterFits(NGUI.fitGroup(captions, CAPTION.fs, CAPTION.fsMin, CAPTION.w, CAPTION.lines, { maxH: CAPTION.h }), options);
-export const footerLabels = (widgets, captions, options) => checkFooterFits(NGUI.fitLabels(widgets, captions, CAPTION.fs, CAPTION.fsMin, CAPTION.w, CAPTION.lines, { maxH: CAPTION.h }), options);
+export const footerFit = (captions, options = {}) => checkFooterFits(NGUI.fitGroup(captions, CAPTION.fs, CAPTION.fsMin,
+  options.width ?? CAPTION.w, CAPTION.lines, { maxH: CAPTION.h }), options);
+export function footerLabels(widgets, captions, options = {}) {
+  const width = options.width ?? CAPTION.w;
+  widgets.forEach((widget, i) => Object.assign(widget, { w_: Array.isArray(width) ? width[i] : width, h_: CAPTION.h }));
+  return checkFooterFits(NGUI.fitLabels(widgets, captions, CAPTION.fs, CAPTION.fsMin,
+    options.width ?? CAPTION.w, CAPTION.lines, { maxH: CAPTION.h }), options);
+}
 
 // the game's popup frame at a size: backdrop, title, close button and, when given, its Cancel and OK buttons with
-// these labels, FOOTER.centre above the bottom edge (a lone one in the middle; two at the prefab's +/-292).
+// these labels on centred buttonL bodies, with the shared gap and bottom inset.
 //   buttons: [{label, primary, name}] instead of ok / cancel: named choices in a row (one centred, two as OK and Cancel,
-//            three or more smaller); a node is Choice_<index> unless it names itself
+//            three or more share the available width); a node is Choice_<index> unless it names itself
 //   close: false for a popup that must be answered with a button (no close button)
 export function popupFrame(title, w, h, { ok = null, cancel = null, close = true, buttons = null, captionSite = null } = {}) {
+  ({ w, h } = frameGeometry(w, h));
   const t = clone(find(layouts.sortPopup, "Center"));
   const popup = find(t, "Popup");
   popup.children = popup.children.filter((c) => ["Base", "Btn"].includes(c.name));
-  const bg = find(popup, "Base/BG");
+  const bg = find(popup, "Base/BG"), local = { w, h, cx: 0, cy: 0 };
   Object.assign(bg.widgets[0], { w_: w, h_: h });
+  // The corner texture keeps its own prefab inset and dimensions.
   find(bg, "Texture_Top").pos = [-w / 2 + 248, h / 2 - 66];
   const titleNode = find(bg, "Label_Title_Locale");
-  const tf = fitText(title, 72, 52, Math.min(1300, w - 400));
-  Object.assign(titleNode.widgets[0], { text: tf.text, fontSize: tf.fs, w_: Math.min(1400, w - 300) });
-  titleNode.pos = [0, h / 2 - 64];
-  find(titleNode, "Line").widgets[0].w_ = glyphsOf(tf.text, tf.fs) + 14;
-  const closeBtn = find(bg, "Btn_Close");
-  closeBtn.pos = [w / 2 - 90, h / 2 - 60];
+  const titleBox = container({ w, h, padding: [POPUP_FRAME.titleTop, SPACE.xxxl, 0, SPACE.xxxl] }).inner;
+  const tf = textItem(NGUI, title, TYPE.display, { maxW: titleBox.w, lines: 1 });
+  titleNode.pos = toNode({ ...titleBox, h: tf.h }, 4, local);
+  Object.assign(titleNode.widgets[0], { text: tf.text, fontSize: tf.fs, w_: titleBox.w, h_: tf.h, pivot: 4 });
+  find(titleNode, "Line").widgets[0].w_ = glyphsOf(tf.text, tf.fs) + SPACE.s;
+  const closeBtn = find(bg, "Btn_Close"), size = POPUP_FRAME.close.size;
+  closeBtn.pos = toNode({ x: w - POPUP_FRAME.close.right - size, y: POPUP_FRAME.close.top, w: size, h: size }, 4, local);
+  Object.assign(closeBtn.widgets[0], { w_: size, h_: size, pivot: 4 });
   closeBtn.active = close;
-  const btn = find(popup, "Btn");
-  btn.active = !!(ok || cancel);
+  const btn = find(popup, "Btn"), primary = clone(find(btn, "Btn_Ok")), secondary = clone(find(btn, "Btn_Cancel"));
+  const actions = buttons?.length ? buttons : [
+    ...(cancel ? [{ label: cancel, name: "Btn_Cancel" }] : []), ...(ok ? [{ label: ok, name: "Btn_Ok", primary: true }] : []),
+  ];
+  const { scale, xs } = footerSlots(actions.length, w), bodyW = CONTROL.buttonL.minW * scale;
+  btn.active = !!actions.length;
   btn.pos = [0, footerY(h)];
-  for (const [name, caption] of [["Btn_Ok", ok], ["Btn_Cancel", cancel]]) {
-    const b = find(btn, name);
-    resizeButton(find(b, "BG (1)"));
-    b.active = !!caption;
-    b.actionSemantic=name==="Btn_Ok"?"confirm":"secondary";
-    if (!(ok && cancel)) b.pos = [0, b.pos[1]];
-  }
-  // the two captions share one size
-  const captions = [["Btn_Ok", ok], ["Btn_Cancel", cancel]].filter(([, caption]) => caption);
-  footerLabels(captions.map(([name]) => find(btn, `${name}/Label_Locale`).widgets[0]), captions.map(([, caption]) => caption), { site: captionSite });
-  if (buttons?.length) {
-    const primary = find(btn, "Btn_Ok"), secondary = find(btn, "Btn_Cancel");
-    const { scale, xs } = footerSlots(buttons.length, w);
-    btn.active = true;
-    btn.children = buttons.map((action, index) => {
-      const child = clone(action.primary ? primary : secondary); child.name = action.name || `Choice_${index}`; child.active = true;
-      // a primary choice is the gold affirmative one, unless its semantic says otherwise (Update is blue: BL-034)
-      child.affirmative = !!action.primary && !action.semantic;
-      if (action.semantic) child.actionSemantic = action.semantic;
-      child.scale = [scale, scale]; child.pos = [xs[index], 0];
-      return child;
-    });
-    // the captions of the choices share one size
-    footerLabels(btn.children.map((child) => find(child, "Label_Locale").widgets[0]), buttons.map((action) => action.label), { site: captionSite });
+  // Keep both named branches for callers that overlay a disabled confirm button.
+  btn.children = actions.length ? actions.map((action, index) => {
+    const child = clone(action.primary ? primary : secondary);
+    child.name = action.name || `Choice_${index}`;
+    child.active = true;
+    child.pos = [xs[index], 0];
+    child.scale = [1, 1];
+    child.affirmative = !!action.primary && !action.semantic;
+    child.actionSemantic = action.semantic || (action.primary ? "confirm" : "secondary");
+    const body = find(child, "BG (1)");
+    body.pos = [0, 0];
+    resizeButton(body, bodyW, CONTROL.buttonL.h);
+    find(child, "Label_Locale").pos = [0, 0];
+    return child;
+  }) : [];
+  footerLabels(btn.children.map(child => find(child, "Label_Locale").widgets[0]), actions.map(action => action.label),
+    { site: captionSite, width: bodyW - 2 * CONTROL.buttonL.pad });
+  if (!buttons?.length) for (const [name, source] of [["Btn_Ok", primary], ["Btn_Cancel", secondary]]) {
+    if (!find(btn, name)) { source.active = false; btn.children.push(source); }
   }
   find(t, "BlackBg/BlackBgClickArea").widgets.find((x) => "sprite" in x).color = BACKDROP;
   return t;
@@ -340,7 +348,8 @@ export function closable(view, host, close, { el = null } = {}) {
 export function scrollArea(host, [l, t, w, h], contentH, { horizontal = false, contentW = w } = {}) {
   const area = document.createElement("div");
   area.className = "popup-cards";
-  Object.assign(area.style, { left: `${l}px`, top: `${t}px`, width: `${w}px`, height: `${h}px` });
+  const viewport = container({ x: l, y: t, w, h }).inner;
+  Object.assign(area.style, { left: `${viewport.x}px`, top: `${viewport.y}px`, width: `${viewport.w}px`, height: `${viewport.h}px` });
   const inner = document.createElement("div");
   inner.className = "popup-cards-inner";
   inner.style.height = `${contentH}px`;
@@ -367,13 +376,15 @@ export function scrollArea(host, [l, t, w, h], contentH, { horizontal = false, c
 // edge), y; the tick shows when on. Without the prefab, the same pieces drawn from its numbers.
 const CHECK_H = 104;
 export function checkbox(name, x, y, caption, on, maxW) {
-  const f = fitText(caption, 46, 30, maxW - 131 - 46);
-  const w = 131 + glyphsOf(f.text, f.fs) + 46;
+  const fit = NGUI.fitText(caption, TYPE.body.fs, TYPE.body.min, maxW - 131 - SPACE.xl, 2, { maxH: CHECK_H });
+  const f = textItem(NGUI, fit.text, { fs: fit.fs, min: fit.fs }, { maxW: maxW - 131 - SPACE.xl, lines: 2 });
+  const parts = row([{ w: 131, h: CHECK_H }, { w: f.w + SPACE.m, h: f.h }], { gap: SPACE.m });
+  const w = parts.w; // The checkbox branch keeps its prefab check plate and its 131-unit label origin.
   const box = () => node("Check", [-120, 8], [sprite("Common_Bg_Raius10px", 74, 72, { incline: 10, depth: 25, color: "#e4f3f8/1.00" })], [
     node("Line", [0, 0], [sprite("Common_Line_Raius10px", 74, 72, { incline: 10, depth: 30, color: "#96b6c2/1.00" })]),
     node("Icon", [0.4, -1.8], [sprite("Common_Icon_Check_B", 59, 58, { depth: 35 })]),
   ]);
-  const cb = layouts.checkbox ? clone(layouts.checkbox)
+  const cb = layouts?.checkbox ? clone(layouts.checkbox)
     : node("Btn_Checkbox", [0, 0], [sprite("Resource_Bg_Radius10px", 798, 110, { incline: 10, pivot: 3, depth: 20 })], [node("Type_ON", [178, -3.2], [], [box()])]);
   cb.name = name;
   cb.pos = [x, y];
@@ -386,8 +397,8 @@ export function checkbox(name, x, y, caption, on, maxW) {
     const icon = find(c, "Check/Icon");
     if (icon) icon.active = true;
   }
-  cb.children.push(node("Label", [131, 0], [label(f.text, f.fs, "#484e52/1.00", w - 131, 50 * f.lines, { pivot: 3, depth: 31 })]));
-  return { tree: cb, w, on };
+  cb.children.push(node("Label", [131, 0], [label(f.text, f.fs, "#484e52/1.00", w - 131, f.h, { pivot: 3, depth: 31 })]));
+  return { tree: cb, w, on, caption: f };
 }
 // wires a drawn checkbox: a click flips it (state.checked) and shows or hides the tick
 export function wireCheck(host, view, path, state, onChange) {
@@ -405,41 +416,54 @@ export function wireCheck(host, view, path, state, onChange) {
 }
 
 // --- the list popup ---
-const LP = {
-  frame: { w: 2860, h: 1520 },                  // Common_Popup_Bg, stretched to almost the whole screen
-  left: { l: -1370, r: -520, t: 600, b: -690 }, // details panel
-  list: { l: -480, r: 1370, t: 600, b: -470 },  // list panel (light blue frame)
-  ok: { x: 1150 },                              // confirm: the footer's right edge is this plus half a body
-  card: { w: 250, h: 226, bar: 68 },            // card body (Common_Btn_BG) and its name bar
-  pitch: [284, 350],
-};
-const BTN_W = FOOTER.body.w; // the frame's button body (Common_Btn_BG)
-// the footer of the list popup sits under the list panel, right-aligned to its own right edge; its centre height, caption
-// range and gaps are the shared footer's (one or two bodies 88 apart, three or more at 0.8 and 24 apart)
-const listFooter = (n) => {
-  const k = footerScale(n), gap = footerGap(n), bw = BTN_W * k, right = LP.ok.x + BTN_W / 2;
-  return { k, gap, bw, right, left: right - n * bw - (n - 1) * gap, y: footerY(LP.frame.h),
-    x: (i) => right - bw / 2 - (n - 1 - i) * (bw + gap) };
-};
-
+export const LIST_CARD_NAME = Object.freeze({ fs: 34, fsMin: 24, lines: 2, padY: 22, pitch: 1.2 });
+export function listLayout(check = false, kind = null) {
+  const native = switchGrid(kind).card;
+  // One complete native card, its name band and the toolbar determine the minimum useful viewport. Additional cards scroll.
+  const cardHeight = native.h + Math.max(native.bar, LIST_CARD_NAME.padY + LIST_CARD_NAME.lines * LIST_CARD_NAME.fs * LIST_CARD_NAME.pitch);
+  const need = POPUP_FRAME.contentTop + CONTROL.buttonS.h + 5 * SPACE.m + cardHeight
+    + POPUP_FRAME.footer.bottom + CONTROL.buttonL.h + SPACE.m;
+  const frame = frameGeometry("XL", need), content = popupContent(frame.w, frame.h);
+  const panels = grid(content);
+  const detailBox = { ...panels.span(4), h: content.h - (check ? CHECK_H + SPACE.m : 0) };
+  const bounds = box => {
+    const [l, t] = toNode(box, 0, frame);
+    return { l, r: l + box.w, t, b: t - box.h };
+  };
+  return { frame, content, left: bounds(detailBox), list: bounds(panels.span(8, 4)),
+    // Card artwork and the native card-placement helper retain their prefab envelope and scroll pitch.
+    card: { w: 250, h: 226, bar: 68 }, pitch: [284, 350] };
+}
+export function listCardBox(layout, { searching = false, horizontal = false } = {}) {
+  const b = layout.list, f = layout.frame;
+  const panel = { x: b.l + f.w / 2, y: f.cy + f.h / 2 - b.t, w: b.r - b.l, h: b.t - b.b };
+  const paper = container({ ...panel, padding: [CONTROL.buttonS.h + 2 * SPACE.m
+    + (searching && !horizontal ? CONTROL.buttonS.h + SPACE.m : 0), SPACE.m, SPACE.m, SPACE.m] }).inner;
+  // The grid owns the card viewport; native card envelopes and their un-stretched pitch are placed inside it.
+  return grid(paper).span(12);
+}
+const LP = listLayout();
 // the student list's tools at the top right of the list: order, sort, search and, with segs, the segment filter
 function toolbar(right, y, { segs = null, sortKey = "sort.default", active = 0, ascending = true, filtered = false } = {}) {
   const menu = find(layouts.collection, "SeletControl/TopMenu");
   const kids = [];
-  let x = right;
+  const toolRow = row([{ w: 150, h: CONTROL.buttonS.h }, { w: 420, h: CONTROL.buttonS.h }, { w: 243, h: CONTROL.buttonS.h }],
+    { x: LP.list.l + SPACE.m, y: -y - CONTROL.buttonS.h / 2, w: right - LP.list.l - SPACE.m,
+      gap: SPACE.m, justify: "end" });
+  const local = { w: 0, h: 0, cx: 0, cy: 0 };
+  const centers = toolRow.boxes.map(box => toNode(box, 4, local));
+  // Corrections from each complete collection tool's origin to its visual body centre are prefab-owned.
+  const x = toolRow.boxes[0].x - SPACE.m;
   const order = clone(find(menu, "OrderBtn"));
-  order.pos = [x - 243 / 2 + 45.1, y];
-  x -= 243 + 16;
+  order.pos = [centers[2][0] + 45.1, centers[2][1]];
   const sort = clone(find(menu, "SortBtn"));
   const sortW = 420;
   order.children = order.children.map((child) => child.name === "Btn_Normal" ? orderBody(layouts.collection, ascending) : child);
   const st = fitText(T(sortKey), 56, 36, sortW - 150);
   sort.children = sort.children.map((child) => child.name === "Btn_Normal" ? sortBody(layouts.collection, st, sortW, filtered) : child);
-  sort.pos = [x - sortW / 2 + 83, y];
-  x -= sortW + 16;
+  sort.pos = [centers[1][0] + 83, centers[1][1]];
   const search = clone(find(menu, "SearchBtn"));
-  search.pos = [x - 150 / 2 - 89, y];
-  x -= 150 + 16;
+  search.pos = [centers[0][0] - 89, centers[0][1]];
   kids.push(order, sort, search);
   let segBox = null;
   if (segs) {
@@ -468,57 +492,27 @@ function toolbar(right, y, { segs = null, sortKey = "sort.default", active = 0, 
   return { tree: node("Toolbar", [0, 0], [], kids), segBox };
 }
 
-// the frame of a list popup: the details panel, the list panel and, under it, the buttons right-aligned to the
-// confirm's place (main ones in OK's blue, the others in Cancel's; three or more a little smaller)
-function listFrame(title, buttons, closeButton) {
-  const t = clone(find(layouts.sortPopup, "Center"));
-  const popup = find(t, "Popup");
-  popup.children = popup.children.filter((c) => ["Base", "Btn"].includes(c.name));
-  const bg = find(popup, "Base/BG");
-  Object.assign(bg.widgets[0], { w_: LP.frame.w, h_: LP.frame.h });
-  const top = LP.frame.h / 2;
-  find(bg, "Texture_Top").pos = [-LP.frame.w / 2 + 248, top - 66];
-  const titleNode = find(bg, "Label_Title_Locale");
-  const titleFit = fitText(title, 72, 52, 1300);
-  Object.assign(titleNode.widgets[0], { text: titleFit.text, fontSize: titleFit.fs, w_: 1400 });
-  titleNode.pos = [0, top - 64];
-  find(titleNode, "Line").widgets[0].w_ = glyphsOf(titleFit.text, titleFit.fs) + 14;
-  const closeBtn = find(bg, "Btn_Close");
-  closeBtn.pos = [LP.frame.w / 2 - 90, top - 60];
-  closeBtn.active = closeButton;
-  const btn = find(popup, "Btn");
-  const [ok, cancel] = [find(btn, "Btn_Ok"), find(btn, "Btn_Cancel")];
-  btn.pos = [0, 0];
-  const foot = listFooter(buttons.length);
-  // the buttons' captions share one size: the largest at which every one fits after wrapping
-  const fits = footerFit(buttons.map((b) => b.label));
-  btn.children = buttons.map((b, i) => {
-    const n = clone(b.primary ? ok : cancel);
-    resizeButton(find(n, "BG (1)"));
-    n.name = `Btn_${i}`;
-    n.actionSemantic=b.semantic||(b.primary?"confirm":"secondary");
-    n.active = true;
-    n.scale = [foot.k, foot.k];
-    n.pos = [foot.x(i), foot.y];
-    const f = fits[i];
-    Object.assign(find(n, "Label_Locale").widgets[0], { text: f.text, fontSize: f.fs });
-    if (b.greyed) return Buttons.disable(n);
-    return n;
-  });
-  find(t, "BlackBg/BlackBgClickArea").widgets.find((w) => "sprite" in w).color = BACKDROP;
-  const panel = (name, b, tone) => node(name, [(b.l + b.r) / 2, (b.t + b.b) / 2], [sprite("Common_Bg_Raius10px", b.r - b.l, b.t - b.b, { depth: 3, color: tone })]);
-  popup.children.push(
-    panel("LeftPanel", LP.left, "#ffffff/0.00"),
-    panel("ListPanel", LP.list, "#d7eaf4/1.00"),
-    node("ListPaper", [(LP.list.l + LP.list.r) / 2, (LP.list.t - 150 + LP.list.b + 16) / 2],
-      [sprite("Common_Bg_Raius10px", LP.list.r - LP.list.l - 32, LP.list.t - 150 - LP.list.b - 16, { depth: 4, color: "#f4fcfe/1.00" })]));
+// The list and details panels occupy the XL content grid; its footer uses the shared centred group.
+export function listFrame(title, buttons, closeButton, check = false, kind = null) {
+  const layout = listLayout(check, kind);
+  const t = popupFrame(title, layout.frame.w, layout.frame.h, { close: closeButton,
+    buttons: buttons.map((b, i) => ({ ...b, name: `Btn_${i}` })) });
+  const popup = find(t, "Popup"), btn = find(popup, "Btn");
+  btn.children = btn.children.map((child, i) => buttons[i].greyed ? Buttons.disable(child) : child);
+  const panel = (name, b, tone) => node(name, [(b.l + b.r) / 2, (b.t + b.b) / 2],
+    [sprite("Common_Bg_Raius10px", b.r - b.l, b.t - b.b, { depth: 3, color: tone })]);
+  const b = layout.list;
+  const paper = container({ x: b.l, y: -b.t, w: b.r - b.l, h: b.t - b.b,
+    padding: [CONTROL.buttonS.h + SPACE.m, SPACE.m, SPACE.m, SPACE.m] }).inner;
+  popup.children.push(panel("LeftPanel", layout.left, "#ffffff/0.00"), panel("ListPanel", b, "#d7eaf4/1.00"),
+    node("ListPaper", [paper.x + paper.w / 2, -paper.y - paper.h / 2],
+      [sprite("Common_Bg_Raius10px", paper.w, paper.h, { depth: 4, color: "#f4fcfe/1.00" })]));
   return t;
 }
 
 // one card of the list: the game's card body, the picture clipped to its window, a name bar under it. A card that
 // cannot be chosen (dim) is darkened like the roster's not-owned cards, its picture without colour; its badge (In Use,
 // or the caller's) stays bright.
-export const LIST_CARD_NAME = Object.freeze({ fs: 34, fsMin: 24, lines: 2, padY: 22, pitch: 1.2 });
 export function listCard(it, x, y, selected, card = LP.card, kind = null) {
   const { w, h, bar } = card;
   // The same upright image must reach both inclined edges even in a tall portrait window.
@@ -572,108 +566,147 @@ export function listCard(it, x, y, selected, card = LP.card, kind = null) {
   return tree;
 }
 
-// the details panel's action buttons: a caption keeps 14 clear of each edge of the slanted body (the slant moves the text
-// band's top and bottom lines by up to 4), and two lines of it stay inside the body's 120 height
+// The detail actions retain their existing 40–26 caption range and slanted-body inset. Their shared body height is buttonS.
 const ACTION_CLEAR = 28, ACTION_TEXT_H = 96;
-// the details panel's chips and fields box, y below the panel's top: the box's top edge, and the chips' first row centre,
-// which keeps POPUP.clearance between the chips' bottom and the box (the chip is 72 high)
-const DETAILS_BOX_Y = 750, DETAILS_CHIP_Y = DETAILS_BOX_Y - POPUP.clearance - CHIP.h / 2;
-// where n chips stand in a panel w wide: 290 apart, or closer where a row's slant would leave the panel (three stand about 283
-// apart in the 850-unit panel, in one row, so the fields box keeps its place), never under 8 clear; rows of as many as fit,
-// each centred; x from the panel's centre
-const CHIP_MIN_GAP = 8;
+// Chip art and pitch remain UICharacterDetail's own; row/stack place complete chips inside the content column.
+const CHIP_MIN_GAP = SPACE.xs;
 export function chipPlaces(count, panelW) {
   const slant = CHIP.h * TAN10;
   let perRow = 1;
   while ((perRow + 1) * CHIP.w + perRow * CHIP_MIN_GAP + slant <= panelW) perRow += 1;
-  return Array.from({ length: count }, (_, i) => {
-    const row = Math.floor(i / perRow), inRow = Math.min(perRow, count - row * perRow);
+  const boxes = [];
+  for (let first = 0; first < count; first += perRow) {
+    const inRow = Math.min(perRow, count - first);
     const gap = inRow > 1 ? Math.min(CHIP.gap, (panelW - slant - inRow * CHIP.w) / (inRow - 1)) : 0;
-    return { row, x: (i - row * perRow - (inRow - 1) / 2) * (CHIP.w + gap) };
-  });
+    const chips = row(Array.from({ length: inRow }, () => ({ w: CHIP.w, h: CHIP.h })), { w: panelW, gap, justify: "center" });
+    boxes.push(...chips.boxes.map(b => ({ row: first / perRow, x: b.x + b.w / 2 - panelW / 2 })));
+  }
+  return boxes;
 }
 // the details panel: title bar, the picture, name, kind chips, fields, actions (exported for the tests, like chipPlaces)
-export function detailsTree(it, title, fields, actions, portraitTexture = null, kind = null) {
-  const b = LP.left, cx = (b.l + b.r) / 2, w = b.r - b.l;
-  const pictureW = kind === "model" ? 490 : w;
-  const kids = [
-    node("Title_Bg", [cx, b.t - 40], [sprite("Common_Bg_Raius10px", w - 20, 73, { depth: 5, color: "#2d4c72/1.00", incline: 10 })], [
-      node("Deco", [-(w - 20) / 2 + 30, 0], [sprite("Common_BGDeco", 68, 72, { depth: 6, color: "#2a5886/1.00", type: 0 })]),
-      node("Deco (1)", [(w - 20) / 2 - 30, 0], [sprite("Common_BGDeco", 68, 72, { depth: 6, color: "#2a5886/1.00", flip: 3, type: 0 })]),
-      node("Label", [0, 0], [label(title, fitText(title, 46, 32, w - 140).fs, "#ffffff/1.00", w - 140, 50, { depth: 7 })]),
-    ]),
-    node("Picture", [cx, b.t - 330], [sprite("Common_Btn_BG", pictureW - 40, 460, { incline: 10, depth: 6, color: "#ffffff/1.00" })], [
-      node("Thumb", [1, 4], [{ clipImage: typeof it.big === "function" ? it.big() : it.big, placeholder: T("import.previewUnavailable"), w_: pictureW - 60, h_: 430, pivot: 4, depth: 7, incline: 10, radius: 22, color: "#ffffff/1.00", imgSize: kind === "model" ? "contain" : "cover", imgPosition: "center 18%" }]),
-      node("Line", [1, 4], [sprite("Common_Line_Raius20px", pictureW - 54, 438, { incline: 10, depth: 8, color: "#ffffff/1.00" })]),
-    ]),
-  ];
-  const nameRoom = w - 60 - (it.nameEdit ? 70 : 0), nameX = cx - (it.nameEdit ? 35 : 0), nameY = b.t - (it.original ? 590 : 610);
-  const nameFit = fitText(it.full, it.original ? 46 : 52, 36, nameRoom, it.original ? 1 : 2);
-  kids.push(node("Name", [nameX, nameY], [label(nameFit.text, nameFit.fs, "#2d4664/1.00", nameRoom, it.original ? 58 : 60 * nameFit.lines,
-    { depth: 8, ellipsis: !!it.original, ariaLabel: it.full })]));
+export function detailsTree(it, title, fields, actions, portraitTexture = null, kind = null, panel = LP.left) {
+  const w = panel.r - panel.l, cx = (panel.l + panel.r) / 2;
+  const frame = { w, h: 0, cx, cy: panel.t }, content = container({ w, h: panel.t - panel.b }).inner;
+  const kids = [], bands = [];
+  const titleText = textItem(NGUI, title, TYPE.heading, { maxW: w - 2 * SPACE.xxl, lines: 1 });
+  const titleH = Math.max(73, titleText.h); // The section bar and its decoration keep their prefab heights.
+  const titleNode = node("Title_Bg", [cx, 0], [sprite("Common_Bg_Raius10px", w - SPACE.m, titleH,
+    { depth: 5, color: "#2d4c72/1.00", incline: 10 })], [
+    node("Deco", [-(w - SPACE.m) / 2 + SPACE.l, 0], [sprite("Common_BGDeco", 68, 72, { depth: 6, color: "#2a5886/1.00", type: 0 })]),
+    node("Deco (1)", [(w - SPACE.m) / 2 - SPACE.l, 0], [sprite("Common_BGDeco", 68, 72, { depth: 6, color: "#2a5886/1.00", flip: 3, type: 0 })]),
+    node("Label", [0, 0], [label(titleText.text, titleText.fs, "#ffffff/1.00", w - 2 * SPACE.xxl, titleText.h, { depth: 7 })]),
+  ]);
+  kids.push(titleNode); bands.push({ name: "Title_Bg", w, h: titleH });
+  const columns = grid(content), pictureColumn = portraitTexture ? columns.span(5) : content;
+  const infoColumn = portraitTexture ? columns.span(7, 5) : content;
+  const infoW = infoColumn.w, nameRoom = infoW - 2 * SPACE.m - (it.nameEdit ? CONTROL.icon.h + SPACE.m : 0);
+  const nameFit = messageText(it.full, TYPE.heading.fs, TYPE.heading.min, nameRoom, 2, true);
+  const name = textItem(NGUI, nameFit.text, { fs: nameFit.fs, min: nameFit.fs }, { maxW: nameRoom, lines: Infinity });
+  const info = [{ name: "Name", w: infoW, h: name.h }];
+  kids.push(node("Name", [0, 0], [label(name.text, name.fs, "#2d4664/1.00", nameRoom, name.h, { depth: 8, ellipsis: !!it.original, ariaLabel: it.full })]));
+  if (it.nameEdit) kids.push(node("EditName", [0, 0], [sprite("Cafe_Icon_NameEdit", CONTROL.icon.h, CONTROL.icon.h, { type: 0, depth: 9, color: "#2d4664/1.00" })]));
   if (it.original) {
-    const secondary = fitText(it.original, 28, 24, w - 60, 1);
-    kids.push(node("OriginalName", [cx, b.t - 638], [label(secondary.text, secondary.fs, "#2d4664/0.65", w - 60, 34,
-      { depth: 8, ellipsis: true, ariaLabel: it.original })]));
+    const original = textItem(NGUI, it.original, TYPE.micro, { maxW: infoW - 2 * SPACE.m, lines: 2 });
+    kids.push(node("OriginalName", [0, 0], [label(original.text, original.fs, "#2d4664/0.65", infoW - 2 * SPACE.m, original.h, { depth: 8, ellipsis: true, ariaLabel: it.original })]));
+    info.push({ name: "OriginalName", w: infoW, h: original.h });
   }
-  if (it.nameEdit) kids.push(node("EditName", [Math.min(nameX + Math.min(glyphsOf(nameFit.text, nameFit.fs), nameRoom) / 2 + 32, b.r - 42), nameY],
-    [sprite("Cafe_Icon_NameEdit", 46, 46, { type: 0, depth: 9, color: "#2d4664/1.00" })]));
   const using = it.inUseText || (it.inUse ? T("popup.inUse") : null);
   const chips = it.chips || [it.tag?.text || (it.recruit ? T("type.recruit") : it.kind === "mod" ? T("type.added") : T("type.noRecruit")), ...(using ? [using] : [])];
-  const dark = !it.chips && it.recruit; // the recruit chip: dark, with the recruit mark
-  // the chips (the prefab's, 272 x 72): in rows of as many as fit inside the panel, the first 16 above the fields box
-  const places = chipPlaces(chips.length, w), rows = Math.max(0, ...places.map((p) => p.row)) + 1;
-  chips.forEach((c, i) => {
-    const cw = CHIP.w, { x: dx, row } = places[i], x = cx + dx;
-    kids.push(node(`Chip_${i}`, [x, b.t - DETAILS_CHIP_Y - row * CHIP.rowPitch], [sprite("Common_Bg_Raius10px", cw, CHIP.h, { incline: 10, depth: 6, color: i === 0 && dark ? "#2c4564/1.00" : "#ffffff/1.00" })], [
-      node("Line", [0, 0], [sprite("Common_Line_Raius10px", cw, CHIP.h, { incline: 10, depth: 7, color: "#c0c9d4/1.00" })]),
-      node("Text", [0, 0], [], markedLabel(c, { fs: CHIP.fs, fsMin: CHIP.fsMin, color: i === 0 && dark ? "#ffffff/1.00" : "#2c4564/1.00", maxW: cw - CHIP.inset, mark: i === 0 && dark, depth: 8 }).nodes),
-    ]));
-  });
-  // fields, on the game's light stats box; long values (file names) wrap, never cut
-  const boxT = b.t - DETAILS_BOX_Y - (rows - 1) * CHIP.rowPitch;
-  kids.push(...statsBox({ holder: "panel", width: w, at: [cx, boxT], name: "Fields", rows: fields.map(([k, v, color], i) => (
-    { caption: k, value: String(v), colour: color, ariaLabel: String(v), cut: i === 2 ? 2 : 0 })) }).nodes);
-  // One size for the whole row: the largest at which every caption fits its button after wrapping onto two lines. The bodies
-  // are equal slots less a gap, until one long word would cost every caption size: then it takes width from its neighbours.
-  const bw = (w - 60) / actions.length, gap = 14;
+  const places = chipPlaces(chips.length, infoW), rows = chips.length ? Math.max(...places.map(p => p.row)) + 1 : 0;
+  const dark = !it.chips && it.recruit;
+  chips.forEach((caption, i) => kids.push(node(`Chip_${i}`, [0, 0],
+    [sprite("Common_Bg_Raius10px", CHIP.w, CHIP.h, { incline: 10, depth: 6, color: i === 0 && dark ? "#2c4564/1.00" : "#ffffff/1.00" })], [
+      node("Line", [0, 0], [sprite("Common_Line_Raius10px", CHIP.w, CHIP.h, { incline: 10, depth: 7, color: "#c0c9d4/1.00" })]),
+      node("Text", [0, 0], [], markedLabel(caption, { fs: CHIP.fs, fsMin: CHIP.fsMin,
+        color: i === 0 && dark ? "#ffffff/1.00" : "#2c4564/1.00", maxW: CHIP.w - CHIP.inset, mark: i === 0 && dark, depth: 8 }).nodes),
+    ])));
+  if (rows) info.push({ name: "Chips", w: infoW, h: rows * CHIP.h + (rows - 1) * SPACE.s });
+  // The light stats box keeps its own padding, row sizes, caption/value types and decoration. A portrait's narrow column
+  // stacks each caption and value as successive full-width rows; other sources retain the paired columns.
+  const fieldRows = portraitTexture ? fields.flatMap(([caption, value, colour]) => [{ value: caption }, { value: String(value), colour }])
+    : fields.map(([caption, value, colour], i) => ({ caption, value: String(value), colour, ariaLabel: String(value), cut: i === 2 ? 2 : 0 }));
+  const fieldBox = fields.length ? statsBox({ holder: "panel", width: infoW, at: [0, 0], name: "Fields", rows: fieldRows }) : { nodes: [], height: 0 };
+  if (portraitTexture) for (const part of fieldBox.nodes) {
+    const match = /^V_(\d+)$/.exec(part.name);
+    if (match) { const i = Number(match[1]); part.name = `${i % 2 ? "V" : "F"}_${Math.floor(i / 2)}`; }
+  }
+  kids.push(...fieldBox.nodes);
+  if (fields.length) info.push({ name: "Fields", w: infoW, h: fieldBox.height });
+  const infoStack = layoutStack(info, { w: infoW, gap: SPACE.m });
+
+  const pictureW = portraitTexture ? pictureColumn.w : kind === "model" ? columns.span(7).w : w - 2 * SPACE.m;
+  const texture = portraitTexture && clone(portraitTexture), native = texture?.widgets.find(widget => "texture" in widget);
+  const portraitCard = texture && switchGrid("spr").card; // Keep the portrait card's native aspect in its preview column.
+  const aspect = portraitCard ? portraitCard.w / portraitCard.h : kind === "model" ? 1 : 16 / 9, pictureH = pictureW / aspect;
+  const source = typeof it.big === "function" ? it.big() : it.big;
+  const picture = node("Picture", [0, 0], [], []);
+  if (texture) {
+    texture.scale = [1, 1];
+    Object.assign(native, { clipImage: source, placeholder: T("import.previewUnavailable"), w_: pictureW, h_: pictureH,
+      imgSize: "cover", imgPosition: "center", imgLeft: "0", imgWidth: "100%", incline: 0, radius: 0 });
+    texture.pos = toNode({ x: 0, y: 0, w: pictureW, h: pictureH }, native.pivot, { w: pictureW, h: pictureH, cx: 0, cy: 0 });
+    picture.children = [texture];
+  } else {
+    picture.widgets = [sprite("Common_Btn_BG", pictureW, pictureH, { incline: 10, depth: 6, color: "#ffffff/1.00" })];
+    picture.children = [node("Thumb", [0, 0], [{ clipImage: source, placeholder: T("import.previewUnavailable"),
+      w_: pictureW - SPACE.m, h_: pictureH - SPACE.m, pivot: 4, depth: 7, incline: 10, radius: 22,
+      color: "#ffffff/1.00", imgSize: kind === "model" ? "contain" : "cover", imgPosition: "center 18%" }]),
+      node("Line", [0, 0], [sprite("Common_Line_Raius20px", pictureW - SPACE.s, pictureH - SPACE.s,
+        { incline: 10, depth: 8, color: "#ffffff/1.00" })])];
+  }
+  kids.push(picture);
+  if (portraitTexture) bands.push({ name: "Portrait", w, h: Math.max(pictureH, infoStack.h) });
+  else bands.push({ name: "Picture", w, h: pictureH }, ...infoStack.boxes);
+
+  const gap = SPACE.m, bw = (w - 2 * SPACE.m + gap) / Math.max(1, actions.length);
   const fits = NGUI.fitRow(actions.map(([caption]) => caption), 40, 26, actions.length * (bw - gap), ACTION_CLEAR, 2, { maxH: ACTION_TEXT_H });
-  let edge = b.l + 30 + gap / 2;
+  const actionRow = row(fits.map(f => ({ w: f.width, h: CONTROL.buttonS.h })), { x: SPACE.m, w: w - 2 * SPACE.m, gap, justify: "center" });
   actions.forEach(([caption, , disabled, semantic = "secondary"], i) => {
-    const f = fits[i], bodyW = f.width, x = edge + bodyW / 2;
-    edge += bodyW + gap;
-    let body = clone(find(layouts.sortPopup, "Center/Popup/Btn/Btn_Cancel/BG (1)"));
-    let ink = "#2d5164/1.00";
+    let body = clone(find(layouts.sortPopup, "Center/Popup/Btn/Btn_Cancel/BG (1)")), ink = "#2d5164/1.00";
     if (disabled) {
       const grey = Buttons.disable(node("Action", [0, 0], [], [body]));
-      body = clone(find(grey, "BG (1)"));
-      ink = find(grey, "Label_Locale").widgets[0].color;
+      body = clone(find(grey, "BG (1)")); ink = find(grey, "Label_Locale").widgets[0].color;
     }
-    const bg = body.widgets.find((w) => "sprite" in w), k = 120 / bg.h_;
-    body.name = "Body";
-    body.pos = [0, 0];
-    body.scale = [k, k];
-    resizeButton(body, bodyW / k);
+    const bg = body.widgets.find(widget => "sprite" in widget), k = CONTROL.buttonS.h / bg.h_;
+    body.name = "Body"; body.pos = [0, 0]; body.scale = [k, k]; resizeButton(body, fits[i].width / k);
     Object.assign(bg, { depth: 6, ...(!disabled ? { color: "#dbeef5/1.00" } : {}) });
-    for (const child of body.children || []) for (const w of child.widgets) if ("w_" in w) w.depth = 7;
-    const actionNode=node(`Act_${i}`, [x, b.b + 70], [], [
-      body,
-      node("Label", [0, 6], [label(f.text, f.fs, ink, bodyW - ACTION_CLEAR + 4, Math.min(110, Math.max(60, f.fs * f.lines * 1.25)), { depth: 8 })]),
-    ]);
-    actionNode.actionSemantic=disabled?"secondary":semantic;
-    kids.push(actionNode);
+    for (const child of body.children || []) for (const widget of child.widgets) if ("w_" in widget) widget.depth = 7;
+    const action = node(`Act_${i}`, [0, 0], [], [body, node("Label", [0, 0],
+      [label(fits[i].text, fits[i].fs, ink, fits[i].width - ACTION_CLEAR, ACTION_TEXT_H, { depth: 8 })])]);
+    action.actionSemantic = disabled ? "secondary" : semantic; kids.push(action);
   });
+  if (actions.length) bands.push({ name: "Actions", w, h: CONTROL.buttonS.h });
+  const placed = layoutStack(bands, { ...content, gap: SPACE.m });
   const tree = node("Details", [0, 0], [], kids);
-  if (portraitTexture) {
-    const picture = find(tree, "Picture");
-    picture.widgets = [];
-    const texture = clone(portraitTexture);
-    const w = texture.widgets.find((w) => "texture" in w);
-    Object.assign(w, { clipImage: typeof it.big === "function" ? it.big() : it.big, placeholder: T("import.previewUnavailable"),
-      imgSize: "cover", imgPosition: "center", imgLeft: "0", imgWidth: "100%", incline: 0, radius: 0 });
-    picture.children = [texture];
-    splitPortraitPanel(tree, find, wrapPath);
+  const placeInfo = (box, x = 0) => {
+    const target = { ...box, x: x + box.x };
+    if (box.name === "Fields") {
+      const [px, py] = toNode(target, 1, frame);
+      for (const part of fieldBox.nodes) { part.pos[0] += px; part.pos[1] += py; }
+    } else if (box.name === "Chips") chips.forEach((_, i) => {
+      find(tree, `Chip_${i}`).pos = toNode({ x: target.x + infoW / 2 + places[i].x - CHIP.w / 2,
+        y: target.y + places[i].row * (CHIP.h + SPACE.s), w: CHIP.w, h: CHIP.h }, 4, frame);
+    });
+    else {
+      find(tree, box.name).pos = toNode(target, 4, frame);
+      if (box.name === "Name" && it.nameEdit) find(tree, "EditName").pos = toNode({ x: target.x + infoW - SPACE.m - CONTROL.icon.h,
+        y: target.y + (target.h - CONTROL.icon.h) / 2, w: CONTROL.icon.h, h: CONTROL.icon.h }, 4, frame);
+    }
+  };
+  for (const box of placed.boxes) {
+    if (box.name === "Portrait") {
+      const portraitRow = row([{ w: pictureColumn.w, h: pictureH }, { w: infoW, h: infoStack.h }],
+        { x: 0, y: box.y, w, gap: SPACE.xl, align: "start" }).boxes;
+      picture.pos = toNode(portraitRow[0], 4, frame);
+      for (const part of infoStack.boxes) placeInfo({ ...part, y: part.y + box.y }, infoColumn.x);
+    } else if (box.name === "Actions") actionRow.boxes.forEach((action, i) => {
+      find(tree, `Act_${i}`).pos = toNode({ ...action, y: box.y }, 4, frame);
+    });
+    else if (["Title_Bg", "Picture"].includes(box.name)) find(tree, box.name).pos = toNode(box, 4, frame);
+    else placeInfo(box);
   }
+  tree.contentHeight = placed.h;
+  tree.contentLayout = placed;
   return tree;
 }
 
@@ -691,7 +724,7 @@ export function detailsTree(it, title, fields, actions, portraitTexture = null, 
 //   is not among the cards shown, the primary button is the game's disabled one and answers nothing.
 //   tools: {segs, seg, onSeg, sortKey} for the student list's tools over the cards, or null; without them, hint
 //          (left) and footer (right) show in their place
-//   check: {label, checked, onChange} for a checkbox left of the buttons; a click flips check.checked, so the same
+//   check: {label, checked, onChange} for a checkbox below the details; a click flips check.checked, so the same
 //          object is passed to every drawing
 //   details(it): {title, fields: [[caption, value, colour]], actions: [[caption, fn]]} for the panel on the left
 //   keepScroll: the list's offset on its scrolling axis (horizontal for portraits)
@@ -714,7 +747,8 @@ export async function listPopup(options) {
     const inventory = await NGUI.layout("UINonEquipmentInventory");
     portraitTexture = find(inventory, "Inventory_ListControl/EquipPos/Texture");
   }
-  const grid = switchGrid(options.layoutKind), { card, columns, pitch, horizontal } = grid;
+  const LP = listLayout(!!check, options.layoutKind);
+  const cardGrid = switchGrid(options.layoutKind), { card, columns, pitch, horizontal } = cardGrid;
   const scrollKey = horizontal ? "scrollLeft" : "scrollTop";
   let toolState = toolStates.get(host);
   if (tools) {
@@ -733,7 +767,7 @@ export async function listPopup(options) {
   const btns = (buttons || [{ label: okText, fn: onOk, primary: true, semantic: options.okSemantic || "confirm", action: "ok" }])
     .map((b) => (b.primary && filteredOut ? { ...b, greyed: true, blocked: true } : b));
   const next = document.createElement("div");
-  const view = await NGUI.render(listFrame(title, btns, !!onClose), next, { scale: S, origin: [960, 540] });
+  const view = await NGUI.render(listFrame(title, btns, !!onClose, !!check, options.layoutKind), next, { scale: S, origin: [960, 540] });
   btns.forEach((b, i) => {
     const button = hit(next, view, `Center/Popup/Btn/Btn_${i}/BG (1)`, b.blocked ? () => {} : b.fn, { name: b.label, action: b.action || `button${i}` });
     if (button && b.blocked) { button.disabled = true; button.setAttribute("aria-disabled", "true"); }
@@ -742,7 +776,7 @@ export async function listPopup(options) {
   closable(view, host, onClose);
   const band = [];
   if (tools && layouts.collection && !(horizontal && toolState.searching)) {
-    const tb = toolbar(LP.list.r - 24, LP.list.t - 76, { segs: tools.segs, sortKey: toolState.sort === "name" ? "sort.name" : tools.sortKey, active: tools.seg ?? 0, ascending: toolState.ascending, filtered: !!toolState.query });
+    const tb = toolbar(LP.list.r - SPACE.m, LP.list.t - SPACE.m - CONTROL.buttonS.h / 2, { segs: tools.segs, sortKey: toolState.sort === "name" ? "sort.name" : tools.sortKey, active: tools.seg ?? 0, ascending: toolState.ascending, filtered: !!toolState.query });
     const tv = await NGUI.render(tb.tree, next, { scale: S, origin: [960, 540], z: 20 });
     hit(next, tv, "Toolbar/OrderBtn/Btn_Normal", () => { toolState.ascending = !toolState.ascending; redraw(); },
       { name: T(toolState.ascending ? "roster.asc" : "roster.desc"), action: "order" });
@@ -769,13 +803,16 @@ export async function listPopup(options) {
     const room = LP.list.r - LP.list.l - 80;
     const ft = footer ? fitText(footer, 40, 28, room / 2, 1) : null;
     const ht = hint ? fitText(hint, 40, 28, room - (ft ? glyphsOf(ft.text, ft.fs) + 40 : 0), 2) : null;
-    if (ht) band.push(node("Hint", [LP.list.l + 40, LP.list.t - 76], [label(ht.text, ht.fs, "#2d4664/1.00", room, 50 * ht.lines, { pivot: 3, depth: 8 })]));
-    if (ft) band.push(node("Footer", [LP.list.r - 40, LP.list.t - 76], [label(ft.text, ft.fs, "#2d4664/1.00", room / 2, 50, { pivot: 5, depth: 8 })]));
+    if (ht) band.push(node("Hint", [LP.list.l + 40, LP.list.t - SPACE.m - CONTROL.buttonS.h / 2], [label(ht.text, ht.fs, "#2d4664/1.00", room, 50 * ht.lines, { pivot: 3, depth: 8 })]));
+    if (ft) band.push(node("Footer", [LP.list.r - 40, LP.list.t - SPACE.m - CONTROL.buttonS.h / 2], [label(ft.text, ft.fs, "#2d4664/1.00", room / 2, 50, { pivot: 5, depth: 8 })]));
   }
   let cb = null;
   if (check) {
-    const foot = listFooter(btns.length);
-    cb = checkbox("Check", LP.list.l, foot.y, check.label, !!check.checked, foot.left - 40 - LP.list.l);
+    const checkW = LP.left.r - LP.left.l;
+    cb = checkbox("Check", 0, 0, check.label, !!check.checked, checkW);
+    const checkRow = row([{ w: cb.w, h: CHECK_H }], { x: LP.content.x, y: LP.content.y + LP.content.h - CHECK_H,
+      w: checkW, gap: SPACE.m, justify: "center" });
+    cb.tree.pos = toNode(checkRow.boxes[0], 3, LP.frame);
     band.push(cb.tree);
   }
   if (band.length) {
@@ -786,11 +823,11 @@ export async function listPopup(options) {
   if (tools && toolState.searching && layouts.collection) {
     const search = searchTree(layouts.collection);
     // Portraits need the paper's full height: search replaces their toolbar in the header.
-    search.pos = [(LP.list.l + LP.list.r) / 2, LP.list.t - 166];
+    search.pos = [(LP.list.l + LP.list.r) / 2, LP.list.t - CONTROL.buttonS.h - SPACE.m - SPACE.xs];
     find(search, "SearchName").pos = [0, 0];
     if (horizontal) {
       const area = find(search, "SearchName/SearchNameArea"), w = area.widgets.find((w) => "sprite" in w);
-      search.pos[1] = LP.list.t - 76 - area.pos[1] - (Math.floor((w.pivot ?? 4) / 3) / 2 - .5) * w.h_;
+      search.pos[1] = LP.list.t - SPACE.m - CONTROL.buttonS.h / 2 - area.pos[1] - (Math.floor((w.pivot ?? 4) / 3) / 2 - .5) * w.h_;
     }
     const sv = await NGUI.render(search, next, { scale: S, origin: [960, 540], z: 25 });
     const r = nodeRect(sv, `${search.name}/SearchName/SearchNameArea/InputField/Label_Search`);
@@ -816,18 +853,19 @@ export async function listPopup(options) {
       next.appendChild(searchInput);
     }
   }
-  const top = LP.list.t - 166 - (tools && toolState.searching && !horizontal ? 160 : 0), bottom = LP.list.b + 24;
+  const cardBox = listCardBox(LP, { searching: tools && toolState.searching, horizontal });
+  const [cardLeft, top] = toNode(cardBox, 0, LP.frame), bottom = top - cardBox.h;
   if (!items.length) {
     // nothing to show: the list paper says so, as the Hall's pickers do
     const room = LP.list.r - LP.list.l - 160, f = fitText(T("hall.noCandidates"), 48, 32, room, 2);
     await NGUI.render(node("Empty", [(LP.list.l + LP.list.r) / 2, (top + bottom) / 2],
       [label(f.text, f.fs, "#2d4664/1.00", room, f.fs * 1.3 * f.lines + 8, { depth: 8 })]), next, { scale: S, origin: [960, 540], z: 20 });
   }
-  const [aL, aT] = [960 + (LP.list.l + 16) * S, 540 - top * S];
+  const [aL, aT] = [960 + cardLeft * S, 540 - top * S];
   // Measure the actual prefab widgets, including the name band's asymmetric incline and selection marks.
   const trees = items.map((it) => listCard(it, 0, 0, isSelected(it.key), card, options.layoutKind));
-  const paper = { left: LP.list.l + 16, right: LP.list.r - 16, top: top + 16 };
-  const bounds = placeSwitchCards(trees, grid, paper);
+  const paper = { left: cardLeft, right: cardLeft + cardBox.w, top: top + SPACE.m };
+  const bounds = placeSwitchCards(trees, cardGrid, paper);
   const rows = Math.ceil(items.length / columns), visH = (top - bottom) * S, visW = (paper.right - paper.left) * S;
   const contentH = horizontal ? visH : (rows * pitch[1] + 20) * S;
   const contentW = horizontal ? Math.max(visW, ...bounds.map((b) => (b.right - paper.left + 40) * S)) : visW;
@@ -854,11 +892,17 @@ export async function listPopup(options) {
   const sel = items.find((it) => it.key === shown) || items[0];
   if (sel && details) {
     const d = details(sel);
-    const dv = await NGUI.render(detailsTree(sel, d.title, d.fields, d.actions, portraitTexture, options.layoutKind), next, { scale: S, origin: [960, 540], z: 20 });
-    if (sel.nameEdit) hit(next, dv, "Details/EditName", () => sel.nameEdit.fn(scroll()), { name: sel.nameEdit.label, action: "alias:details" });
+    const tree = detailsTree(sel, d.title, d.fields, d.actions, portraitTexture, options.layoutKind, LP.left);
+    const panel = LP.left, panelH = panel.t - panel.b;
+    const detailsHost = tree.contentHeight > panelH ? scrollArea(next,
+      [960 + panel.l * S, 540 - panel.t * S, (panel.r - panel.l) * S, panelH * S], tree.contentHeight * S) : next;
+    await detailsHost.ready;
+    const origin = detailsHost === next ? [960, 540] : [-panel.l * S, panel.t * S];
+    const dv = await NGUI.render(tree, detailsHost, { scale: S, origin, z: 20 });
+    if (sel.nameEdit) hit(detailsHost, dv, "Details/EditName", () => sel.nameEdit.fn(scroll()), { name: sel.nameEdit.label, action: "alias:details" });
     d.actions.forEach(([caption, fn, disabled], i) => {
       if (!fn) return;
-      const button = hit(next, dv, `Details/Act_${i}/Body`, disabled ? () => {} : fn, { name: caption });
+      const button = hit(detailsHost, dv, `Details/Act_${i}/Body`, disabled ? () => {} : fn, { name: caption });
       if (button) button.disabled = !!disabled;
     });
   }
@@ -888,9 +932,9 @@ export async function listPopup(options) {
 }
 
 // --- the message popup ---
-// buttons: the room under the content for the footer, 304.5: the footer's top (FOOTER.centre + half a body, 279) and 25.5 of air.
-// It was 236 while the footer's centre sat 68.5 lower.
-export const MSG = { title: 150, gap: 28, rowButton: SMALL_BUTTON.h + 20, check: 150, buttons: FOOTER.centre + FOOTER.body.h / 2 + 25.5, none: 70, minH: 640, cap: 1400 };
+export const MSG = { title: POPUP_FRAME.contentTop, gap: SPACE.l, rowButton: SMALL_BUTTON.h + SPACE.m,
+  check: CHECK_H + SPACE.m, buttons: POPUP_FRAME.footer.bottom + CONTROL.buttonL.h + SPACE.m,
+  none: SPACE.xl, minH: POPUP_FRAME.S.h, cap: POPUP_FRAME.maxH };
 
 // message({title, lines, ok, cancel, check, host, width, close, confirmKeys, scroll}): a message on the popup frame, in host
 // (#dialog by default, over everything but the message popup). Resolves once it is closed, however it is closed, with
@@ -939,45 +983,78 @@ export function confirmKey(ev, keys) {
 }
 
 // the message without the game's prefab: a plain box on a dark backdrop, the same buttons, marked the same way
-function plainMessage(layer, { title, lines, ok, cancel, buttons, state, dismissable, scroll, plain }, finish) {
+export function plainMessage(layer, { title, lines = [], ok, cancel, buttons, state = null, dismissable = true,
+  scroll = false, plain = false, width, height, fitTogether = [], captionSite = null }, finish) {
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
   const button = (caption, fn, action, cls = "message-button") => {
-    const b = el("button", cls, caption);
-    b.dataset.action = action;
-    b.setAttribute("aria-label", caption);
-    b.addEventListener("click", fn);
-    return b;
+    const b = el("button", cls, caption); b.dataset.action = action; b.setAttribute("aria-label", caption);
+    b.addEventListener("click", fn); return b;
+  };
+  const layout = messageLayout({ lines, ok, cancel, buttons, check: state, scroll, plain, width, height, fitTogether, assets: false });
+  const frame = { w: layout.width, h: layout.height, cx: 0, cy: FRAME_Y };
+  const styleBox = (element, box, fs) => {
+    Object.assign(element.style, { position: "absolute", boxSizing: "border-box", margin: "0", padding: "0",
+      left: `${box.x * S}px`, top: `${box.y * S}px`, width: `${box.w * S}px`, height: `${box.h * S}px`,
+      ...(fs != null ? { fontSize: `${fs * S}px`, lineHeight: String(NGUI.LINE_PITCH), whiteSpace: "pre-wrap" } : {}) });
+    return element;
   };
   const back = el("div", "plain-popup-back");
   if (dismissable) back.addEventListener("click", () => finish(null));
   const box = el("div", "plain-popup");
-  box.appendChild(el("h2", "", title));
-  const content = scroll ? box.appendChild(el("div", "plain-message-lines")) : box;
-  lines.map((l) => (typeof l === "string" ? { text: l } : l)).forEach((r, i) => {
-    const p = el("p", "", r.marker ? `${r.marker} ${r.text}` : r.text);
-    if (plain) Object.assign(p.style, { textAlign: "left", display: "flex", alignItems: "center", gap: "20px",
-      paddingLeft: r.indent ? `${r.indent * S}px` : "", marginTop: r.gap ? `${r.gap * S}px` : "" });
-    if (r.button) {
-      const b = button(r.button.label, () => r.button.fn?.({ close: finish }), `line${i}`, "plain-line-button");
-      if (plain) Object.assign(b.style, { marginLeft: "auto", flexShrink: "0" });
-      p.appendChild(b);
-    }
-    content.appendChild(p);
+  Object.assign(box.style, { position: "absolute", boxSizing: "border-box", transform: "none", margin: "0", padding: "0",
+    left: `${960 - frame.w * S / 2}px`, top: `${540 - (FRAME_Y + frame.h / 2) * S}px`,
+    width: `${frame.w * S}px`, height: `${frame.h * S}px`, maxWidth: "none", maxHeight: "none" });
+  const heading = textItem(NGUI, title, TYPE.display, { maxW: frame.w - 2 * SPACE.xxxl, lines: 1 });
+  box.appendChild(styleBox(el("h2", "", heading.text), { x: SPACE.xxxl, y: POPUP_FRAME.titleTop,
+    w: frame.w - 2 * SPACE.xxxl, h: heading.h }, NGUI.fontSizeFor(heading.text, heading.fs)));
+  if (dismissable) box.appendChild(styleBox(button("×", () => finish(null), "close"),
+    { x: frame.w - POPUP_FRAME.close.right - CONTROL.icon.h, y: POPUP_FRAME.close.top, w: CONTROL.icon.h, h: CONTROL.icon.h }, CONTROL.icon.h));
+  if (dismissable) box.children.at(-1).setAttribute("aria-label", T("display.close"));
+  const content = styleBox(el("div", "plain-message-lines"), { x: layout.content.x, y: layout.content.y,
+    w: layout.content.w, h: layout.visible });
+  Object.assign(content.style, { overflow: "auto", textAlign: plain ? "left" : "center" });
+  const paragraphItems = layout.body.fitted.map(({ r, f, bf, bw, item: text }) => {
+    return { r, f, bf, bw, text, w: layout.content.w,
+      h: Math.max(r.button ? SMALL_BUTTON.h : 0, text.h) + (plain ? r.gap || 0 : 0) };
   });
+  const paragraphs = layoutStack(paragraphItems, { w: layout.content.w, gap: SPACE.l });
+  paragraphs.boxes.forEach(({ r, f, bf, bw, text, x, y, w }, i) => {
+    const indent = plain ? r.indent || 0 : 0;
+    const parts = row([{ ...text, w: w - indent - (r.button ? bw + SPACE.m : 0) }, ...(r.button ? [{ w: bw, h: SMALL_BUTTON.h }] : [])],
+      { x: x + indent, y: y + (plain ? r.gap || 0 : 0), w: w - indent, gap: SPACE.m, justify: "center" }).boxes;
+    const p = styleBox(el("p", "", f.text), parts[0], NGUI.fontSizeFor(f.text, f.fs));
+    content.appendChild(p);
+    if (plain && r.marker) content.appendChild(styleBox(el("span", "", r.marker),
+      { x: parts[0].x - (r.markerGap ?? f.fs), y: parts[0].y, w: r.markerGap ?? f.fs, h: NGUI.fontSizeFor(f.text, f.fs) * NGUI.LINE_PITCH }, NGUI.fontSizeFor(f.text, f.fs)));
+    if (r.button) {
+      const b = styleBox(button(bf.text, () => r.button.fn?.({ close: finish }), `line${i}`, "plain-line-button"), parts[1], NGUI.fontSizeFor(bf.text, bf.fs));
+      b.setAttribute("aria-label", r.button.label); content.appendChild(b);
+    }
+  });
+  // Use the measured body height for the scroll viewport, including the native stats-box row envelope.
+  if (paragraphs.h > layout.visible) content.style.overflowY = "auto";
+  box.appendChild(content);
   if (state) {
-    const b = button(state.label, () => { state.checked = !state.checked; b.setAttribute("aria-checked", String(state.checked)); }, "check", "plain-check");
-    b.setAttribute("role", "checkbox");
-    b.setAttribute("aria-checked", String(state.checked));
-    box.appendChild(b);
+    const check = button(layout.checkCaption.text, () => { state.checked = !state.checked; check.setAttribute("aria-checked", String(state.checked)); }, "check", "plain-check");
+    check.setAttribute("role", "checkbox"); check.setAttribute("aria-checked", String(state.checked));
+    check.setAttribute("aria-label", state.label);
+    box.appendChild(styleBox(check, layout.checkBox, NGUI.fontSizeFor(layout.checkCaption.text, layout.checkCaption.fs)));
   }
-  if (ok || cancel || buttons?.length) {
-    const row = el("div", "message-actions");
-    if (buttons) for (const action of buttons) row.appendChild(button(action.label, () => finish(action.value), action.value));
-    if (cancel) row.appendChild(button(cancel, () => finish("cancel"), "cancel"));
-    if (ok) row.appendChild(button(ok, () => finish("ok"), "ok"));
-    box.appendChild(row);
+  const actions = buttons?.length ? buttons : [...(cancel ? [{ label: cancel, value: "cancel" }] : []), ...(ok ? [{ label: ok, value: "ok" }] : [])];
+  if (actions.length) {
+    const slots = footerSlots(actions.length, frame.w), bodyW = CONTROL.buttonL.minW * slots.scale;
+    const fits = footerFit(actions.map(action => action.label), { site: captionSite, width: bodyW - 2 * CONTROL.buttonL.pad });
+    const actionRow = el("div", "message-actions");
+    styleBox(actionRow, { x: 0, y: frame.h - POPUP_FRAME.footer.bottom - CONTROL.buttonL.h, w: frame.w, h: CONTROL.buttonL.h });
+    const boxes = row(actions.map(() => ({ w: bodyW, h: CONTROL.buttonL.h })), { w: frame.w, gap: POPUP_FRAME.footer.gap, justify: "center" }).boxes;
+    actions.forEach((action, i) => {
+      const b = styleBox(button(fits[i].text, () => finish(action.value), action.value), boxes[i], NGUI.fontSizeFor(fits[i].text, fits[i].fs));
+      b.style.padding = `0 ${CONTROL.buttonL.pad * S}px`; b.setAttribute("aria-label", action.label); actionRow.appendChild(b);
+    });
+    box.appendChild(actionRow);
   }
   layer.replaceChildren(back, box);
+  return { box, content, layout };
 }
 
 // a fixed size (max equals min) only wraps, on as many lines as it needs, and never shrinks below that size. strict: no size
@@ -986,79 +1063,99 @@ function plainMessage(layer, { title, lines, ok, cancel, buttons, state, dismiss
 function messageText(text, max, min, room, lines = 4, strict = false) {
   const fixed = max === min;
   const fitted = fitText(text, max, min, room, fixed ? Infinity : lines);
-  if ((!(fixed || strict) || fitted.fs >= min) && fitted.text.split("\n").every((line) => glyphsOf(line, fitted.fs) <= room)) return fitted;
+  if (fitted.fs >= min && fitted.text.split("\n").every((line) => glyphsOf(line, fitted.fs) <= room)) return fitted;
   return strict ? wrapPath(text, max, min, room, lines) : wrapPath(text, min, min, room, Infinity);
 }
 // a fitted text with its lines counted as drawn (a line break in the text itself counts)
 const counted = (fitted) => ({ ...fitted, lines: fitted.text.split("\n").length });
 
-function messageLines(lines, w, fitTogether, plain) {
+const placeholderButton = (name, x, y, caption, { w }) => node(name, [x, y], [sprite("Common_Btn_BG", w, SMALL_BUTTON.h)]);
+
+function messageLines(lines, w, fitTogether, plain, assets = true) {
   const rows = lines.map((l) => (typeof l === "string" ? { text: l } : l));
   const boxed = !plain && rows.some((r) => r.button);
-  // the rows of the light stats box take its value range (38 down to 26, three lines); lines without a box keep 52 down to 44
-  const min = boxed ? STATS_BOX.value.fsMin : 44, max = boxed ? STATS_BOX.value.fs : 52, most = boxed ? STATS_BOX.value.lines : 4;
+  // Light stats rows retain their value range (38–26); unboxed paragraphs retain 52–44. Width selection allows six lines.
+  const min = boxed ? STATS_BOX.value.fsMin : 44, max = boxed ? STATS_BOX.value.fs : TYPE.heading.fs, most = 6; // Existing message floor and stats-box type range.
   const fitted = rows.map((r) => {
     // a line button is the small button: 136 high, as wide as its caption needs and 90 more (240 at least), the caption 48 down to 34
     const bf = r.button ? fitText(r.button.label, SMALL_BUTTON.fs, SMALL_BUTTON.fsMin, SMALL_BUTTON.w - SMALL_BUTTON.fitInset) : null;
     const bw = bf ? Math.max(SMALL_BUTTON.minW, glyphsOf(bf.text, bf.fs) + SMALL_BUTTON.glyphPad) : 0;
-    const room = boxed ? valueRoom("frame", w, { reserve: bw ? bw + 30 : 0 }) : w - 240 - (bw ? bw + 30 : 0) - (plain ? r.indent || 0 : 0);
+    const room = boxed ? valueRoom("frame", w, { reserve: bw ? bw + SPACE.m : 0 }) : w - 2 * SPACE.xxxl - (bw ? bw + SPACE.m : 0) - (plain ? r.indent || 0 : 0);
     const f = messageText(r.text, r.fontSize ?? max, r.minFontSize ?? min, room, most, boxed);
-    return { r, bf, bw, room, f: boxed ? counted(f) : f };
+    return { r, bf, bw, room, f: counted(f) };
   });
   const group = fitTogether.map((i) => fitted[i]).filter(Boolean);
   if (group.length) {
     const fs = Math.max(min, Math.min(...group.map(({ f }) => f.fs)));
     // Rewrap at the shared size; extra lines keep the popup's minimum instead of shrinking below it.
-    for (const s of group) s.f = boxed ? counted(wrapPath(s.r.text, fs, fs, s.room, 4)) : wrapPath(s.r.text, fs, fs, s.room, 4);
+    for (const s of group) s.f = boxed ? counted(wrapPath(s.r.text, fs, fs, s.room, Infinity)) : wrapPath(s.r.text, fs, fs, s.room, Infinity);
   }
+  // Text is already wrapped and fitted. textItem measures that fit without repeating the line-break search.
+  for (const s of fitted) s.item = textItem({ ...NGUI, fitText: () => s.f }, s.f.text,
+    { fs: s.f.fs, min: s.f.fs }, { maxW: s.room, lines: Infinity });
   const buttons = [];
   if (boxed) {
     // rows on the game's light stats box: text at the left, the line's button at the right; a row with a button holds it, in 156
     // at least (the button and 10 above and below)
     const box = statsBox({ holder: "frame", width: w, name: "Box", names: { value: "Row", divider: "Dot" }, rows: fitted.map(({ r, f, bf, bw }, i) => ({
-      value: f, colour: `${r.color || "#2d4664"}/1.00`, minH: bf ? MSG.rowButton : STATS_BOX.rowMin, reserve: bw ? bw + 30 : 0,
+      value: f, colour: `${r.color || "#2d4664"}/1.00`, minH: bf ? MSG.rowButton : STATS_BOX.rowMin, reserve: bw ? bw + SPACE.m : 0,
       slot: bf ? ({ right, y }) => {
         buttons.push([i, r.button]);
-        return [Buttons.smallButton(`Btn_${i}`, right - bw / 2, y, r.button.label, { w: bw, fs: SMALL_BUTTON.fs, min: SMALL_BUTTON.fsMin, depth: 8 })];
+        const buttonRow = row([{ w: bw, h: SMALL_BUTTON.h }], { x: right - bw, w: bw, gap: SPACE.m, justify: "center" });
+        return [(assets ? Buttons.smallButton : placeholderButton)(`Btn_${i}`, buttonRow.boxes[0].x + bw / 2, y, r.button.label, { w: bw, fs: SMALL_BUTTON.fs, min: SMALL_BUTTON.fsMin, depth: 8 })];
       } : undefined,
     })) });
-    return { tree: node("Lines", [0, 0], [], box.nodes), height: box.height, buttons };
+    return { tree: node("Lines", [0, 0], [], box.nodes), height: box.height, buttons, fitted };
   }
-  const out = [];
-  let y = 0;
-  const sized = fitted.map((s) => ({ ...s, h: Math.max(s.bf ? SMALL_BUTTON.h : 0, s.f.lines * s.f.fs * 1.3 + 8) }));
-  sized.forEach(({ r, f, bf, bw, h, room }, i) => {
-    if (plain && r.gap) y -= r.gap;
-    const cy = y - h / 2, x = plain ? -w / 2 + 120 + (r.indent || 0) : 0, colour = `${r.color || "#2d4664"}/1.00`;
-    out.push(node(`Line_${i}`, [x, cy],
-      [label(f.text, f.fs, colour, plain ? room : w - 200, f.lines * f.fs * 1.3 + 8, { pivot: plain ? 3 : 4, depth: 8 })]));
-    // a list item's bullet hangs left of its text, on the first line's centre (labels draw lines 1.15 apart)
-    if (plain && r.marker) out.push(node(`Mark_${i}`, [x - (r.markerGap ?? f.fs), cy + (f.lines - 1) * f.fs * 1.15 / 2],
-      [label(r.marker, f.fs, colour, r.markerGap ?? f.fs, f.fs * 1.3, { pivot: 3, depth: 8 })]));
+  const out = [], textBox = container({ w, h: 0, padding: [0, SPACE.xxxl] }).inner;
+  const sized = fitted.map(s => {
+    const indent = plain ? s.r.indent || 0 : 0;
+    const lineRow = row([{ ...s.item, w: s.room }, ...(s.bf ? [{ w: s.bw, h: SMALL_BUTTON.h }] : [])],
+      { x: textBox.x + indent, w: textBox.w - indent, gap: SPACE.m, justify: "center" });
+    return { ...s, lineRow, w: textBox.w, h: lineRow.h + (plain ? s.r.gap || 0 : 0) };
+  });
+  const paragraphs = layoutStack(sized, { x: textBox.x, w: textBox.w, gap: SPACE.l });
+  paragraphs.boxes.forEach(({ r, f, bf, bw, room, y, lineRow: measured }, i) => {
+    const lineRow = { ...measured, boxes: measured.boxes.map(b => ({ ...b, y: b.y + y + (plain ? r.gap || 0 : 0) })) };
+    const local = { w, h: 0, cx: 0, cy: 0 }, colour = `${r.color || "#2d4664"}/1.00`, box = lineRow.boxes[0];
+    out.push(node(`Line_${i}`, toNode(box, plain ? 3 : 4, local),
+      [label(f.text, f.fs, colour, room, box.h, { pivot: plain ? 3 : 4, depth: 8 })]));
+    if (plain && r.marker) {
+      const marker = { x: box.x - (r.markerGap ?? f.fs), y: box.y, w: r.markerGap ?? f.fs, h: f.fs * NGUI.LINE_PITCH };
+      out.push(node(`Mark_${i}`, toNode(marker, 3, local), [label(r.marker, f.fs, colour, marker.w, marker.h, { pivot: 3, depth: 8 })]));
+    }
     if (bf) {
-      out.push(Buttons.smallButton(`Btn_${i}`, w / 2 - 120 - bw / 2, cy, r.button.label, { w: bw, fs: SMALL_BUTTON.fs, min: SMALL_BUTTON.fsMin, depth: 8 }));
+      const [bx, by] = toNode(lineRow.boxes[1], 4, local);
+      out.push((assets ? Buttons.smallButton : placeholderButton)(`Btn_${i}`, bx, by, r.button.label, { w: bw, fs: SMALL_BUTTON.fs, min: SMALL_BUTTON.fsMin, depth: 8 }));
       buttons.push([i, r.button]);
     }
-    y -= h + 16;
   });
-  return { tree: node("Lines", [0, 0], [], out), height: Math.max(0, -y - 16), buttons };
+  return { tree: node("Lines", [0, 0], [], out), height: paragraphs.h, buttons, fitted, boxes: paragraphs.boxes };
 }
 
 // Shared by ordinary messages and text-only tours, including row fitting, frame padding and footer clearance.
 // `scroll` in the result tells whether the lines scroll in the frame: asked for, or forced because the frame would
-// be taller than MSG.cap; shorter messages are laid out as they always were.
-export function messageLayout({ lines = [], width = 1700, ok = null, cancel = null, buttons = null, check = null,
-  fitTogether = [], scroll = false, plain = false } = {}) {
-  const body = messageLines(lines, width, fitTogether, plain);
-  const hasButtons = !!(ok || cancel || buttons?.length);
-  const need = Math.max(MSG.minH, MSG.title + body.height + (check ? MSG.check : 0) + MSG.gap + (hasButtons ? MSG.buttons : MSG.none));
-  const scrolls = scroll || need > MSG.cap;
-  const height = scrolls ? Math.min(MSG.cap, need) : need;
-  const top = FRAME_Y + height / 2 - MSG.title, bottom = FRAME_Y - height / 2 + (hasButtons ? MSG.buttons : MSG.none);
-  const visible = Math.min(body.height, top - bottom - (check ? MSG.check : 0));
-  const used = (scrolls ? visible : body.height) + (check ? MSG.check : 0);
-  const y0 = top - Math.max(0, (top - bottom - used) / 2);
-  return { body, width, height, visible, y0, scroll: scrolls };
+// be taller than MSG.cap; each frame keeps its class minimum.
+export function messageLayout({ lines = [], width, ok = null, cancel = null, buttons = null, check = null,
+  fitTogether = [], scroll = false, plain = false, assets = true, height: minimumHeight = 0 } = {}) {
+  let size;
+  if (width != null) size = frameClass(width === 2100 ? "L" : width);
+  else size = ["S", "M", "L"].map(key => frameClass(key)).find(candidate =>
+    messageLines(lines, candidate.w, fitTogether, plain, false).fitted.every(({ f }) => f.lines <= 6)) || POPUP_FRAME.L;
+  const body = messageLines(lines, size.w, fitTogether, plain, assets), hasButtons = !!(ok || cancel || buttons?.length);
+  const need = MSG.title + body.height + (check ? MSG.check : 0) + (hasButtons ? MSG.buttons : MSG.none);
+  const { w, h: height } = frameGeometry(size.w, Math.max(need, minimumHeight)), content = popupContent(w, height, { text: true, footer: hasButtons });
+  const visible = Math.max(0, Math.min(body.height, content.h - (check ? MSG.check : 0)));
+  const scrolls = scroll || body.height > visible;
+  const y0 = toNode(content, 1, { w, h: height, cx: 0, cy: FRAME_Y })[1];
+  let checkBox = null, checkCaption = null;
+  if (check) {
+    const cb = checkbox("Check", 0, 0, check.label, !!check.checked, content.w);
+    checkCaption = cb.caption;
+    checkBox = row([{ w: cb.w, h: CHECK_H }], { x: content.x, y: content.y + visible + SPACE.m,
+      w: content.w, gap: SPACE.m, justify: "center" }).boxes[0];
+  }
+  return { body, width: w, height, visible, y0, content, checkBox, checkCaption, scroll: scrolls };
 }
 
 async function showMessage({ title = "", lines = [], ok = null, cancel = null, buttons = null, check = null, host: hostArg = "dialog", width, close: dismissable = true, confirmKeys = null, fitTogether = [], scroll = false, plain = false, captionSite = null }, resolve) {
@@ -1095,31 +1192,31 @@ async function showMessage({ title = "", lines = [], ok = null, cancel = null, b
   } catch (err) {
     console.warn("message popup without the game's frame", err);
     if (ended) return;
-    plainMessage(layer, { title, lines, ok, cancel, buttons, state, dismissable, scroll, plain }, finish);
+    plainMessage(layer, { title, lines, ok, cancel, buttons, state, dismissable, scroll, plain, width, fitTogether, captionSite }, finish);
     layer.focus?.({ preventScroll: true });
     return;
   }
   try {
-    const { body, width: w, height, visible, y0, scroll: scrolls } = messageLayout({ lines, width, ok, cancel, buttons, check: state, fitTogether, scroll, plain });
+    const { body, width: w, height, visible, y0, content, checkBox, scroll: scrolls } = messageLayout({ lines, width, ok, cancel, buttons, check: state, fitTogether, scroll, plain });
     const t = popupFrame(title, w, height, { ok, cancel, buttons, close: dismissable, captionSite });
     const popup = find(t, "Popup");
-    // the content in the middle of the room between the title and the buttons
+    // The content starts at contentTop; the check row and footer remain outside a scrolling body.
     if (!scrolls) {
       body.tree.pos = [0, y0];
       popup.children.push(body.tree);
     }
     if (state) {
-      const cb = checkbox("Check", 0, y0 - (scrolls ? visible : body.height) - MSG.check / 2 - 10, state.label, state.checked, w - 300);
-      cb.tree.pos[0] = -cb.w / 2;
+      const cb = checkbox("Check", 0, 0, state.label, state.checked, content.w);
+      cb.tree.pos = toNode(checkBox, 3, { w, h: height, cx: 0, cy: FRAME_Y });
       popup.children.push(cb.tree);
     }
     const next = document.createElement("div");
     const view = await NGUI.render(t, next, { scale: S, origin: [960, 540], z: 10 });
-    const bodyHost = scrolls ? scrollArea(next, [960 - (w - 120) * S / 2, 540 - y0 * S,
-      (w - 120) * S, visible * S], body.height * S) : next;
+    const bodyHost = scrolls ? scrollArea(next, [960 - w * S / 2, 540 - y0 * S,
+      w * S, visible * S], body.height * S) : next;
     await bodyHost.ready;
     const bodyView = scrolls ? await NGUI.render(body.tree, bodyHost,
-      { scale: S, origin: [(w - 120) * S / 2, 0], z: 10 }) : view;
+      { scale: S, origin: [w * S / 2, 0], z: 10 }) : view;
     if (ended) return;
     for (const [index, action] of (buttons || []).entries()) hit(next, view, `Center/Popup/Btn/Choice_${index}/BG (1)`, () => finish(action.value), { name: action.label, action: action.value });
     if (ok) hit(next, view, "Center/Popup/Btn/Btn_Ok/BG (1)", () => finish("ok"), { name: ok, action: "ok" });
@@ -1175,29 +1272,19 @@ export function textViewer({ title, text, copy, close = T("display.close"), onCo
         hit(next, view, "Center/Popup/Base/BG/Btn_Close", finish, { name: close, action: "close" });
         closable(view, host, finish, { el: layer });
         const box = TEXT_VIEWER.box;
-        Object.assign(pre.style, { position: "absolute", left: `${960 - box.width / 2 * S}px`, top: `${540 - box.top * S}px`,
+        Object.assign(pre.style, { position: "absolute", boxSizing: "border-box", margin: "0", left: `${960 - box.width / 2 * S}px`, top: `${540 - box.top * S}px`,
           width: `${box.width * S}px`, height: `${box.height * S}px`, zIndex: 40 });
         next.appendChild(pre);
         layer.replaceChildren(...next.childNodes);
       } catch (err) {
         if (ended) return;
         console.warn("text popup without the game's frame", err);
-        const back = document.createElement("div"), box = document.createElement("div"), heading = document.createElement("h2");
-        back.className = "plain-popup-back";
-        back.addEventListener("click", finish);
-        box.className = "plain-popup log-message";
-        heading.textContent = title;
-        box.appendChild(heading);
-        box.appendChild(pre);
-        for (const [caption, fn, action] of [[copy, onCopy, "copy"], [close, finish, "close"]]) {
-          const button = document.createElement("button");
-          button.className = "message-button";
-          button.textContent = caption;
-          button.dataset.action = action;
-          button.addEventListener("click", fn);
-          box.appendChild(button);
-        }
-        layer.replaceChildren(back, box);
+        const fallback = plainMessage(layer, { title, width: TEXT_VIEWER.w, height: TEXT_VIEWER.h,
+          buttons: [{ label: copy, value: "copy" }, { label: close, value: "close" }] }, action => action === "copy" ? onCopy() : finish());
+        fallback.content.style.height = `${TEXT_VIEWER.box.height * S}px`;
+        Object.assign(pre.style, { position: "absolute", boxSizing: "border-box", margin: "0", left: "0px", top: "0px",
+          width: `${TEXT_VIEWER.box.width * S}px`, height: `${TEXT_VIEWER.box.height * S}px` });
+        fallback.content.replaceChildren(pre);
       }
       pre.scrollTop = pre.scrollHeight;
       layer.focus?.({ preventScroll: true });
