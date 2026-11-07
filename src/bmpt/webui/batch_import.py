@@ -164,6 +164,28 @@ def blocked_reason(error: ServiceError) -> str:
     return aliases.get(error.code, error.code if error.code in reasons else "failed")
 
 
+#: The unresolved CABs an incomplete entry names, and the bundles whose summary a refused entry carries
+EVIDENCE_CABS = 40
+EVIDENCE_BUNDLES = 20
+
+
+def missing_detail(cabs: set[str], found: list[dict]) -> dict:
+    """An incomplete entry's ``missing``: how many CABs it references that neither its files, the install nor the
+    other dropped files hold, the first EVIDENCE_CABS of them, and the unselected files that complete it."""
+    return {"unresolved": len(cabs), "cabs": sorted(cabs)[:EVIDENCE_CABS], "found": found}
+
+
+def bundle_evidence(candidate: Candidate, inspection: integrity.Inspection) -> list[dict]:
+    """What the check read of each of an entry's files (``Inspection.summary``), for the error report and the log: a
+    refusal from the files' format can be told from one guessed from their names or targets."""
+    rows = []
+    for path in sorted(candidate.files.values())[:EVIDENCE_BUNDLES]:
+        summary = inspection.summary(path)
+        if summary is not None:
+            rows.append({"file": path.name, **summary})
+    return rows
+
+
 def failure_detail(error: ServiceError, paths: Any, log: Any = no_log, *, secrets: set[str] | None = None) -> dict:
     from .diagnostics import clean
 
@@ -751,8 +773,7 @@ class BatchImport:
             if same_slot or held & candidate.missing_cabs:
                 found.append({"path": str(path), "name": path.name, "size": path.stat().st_size})
         if found or candidate.missing_cabs:
-            entry.update(state="incomplete", reason=None,
-                         missing={"unresolved": len(candidate.missing_cabs), "found": found})
+            entry.update(state="incomplete", reason=None, missing=missing_detail(candidate.missing_cabs, found))
             entry.pop("error", None)
             entry.pop("params", None)
 
@@ -762,6 +783,7 @@ class BatchImport:
         entry.pop("params", None)
         entry.pop("error", None)
         entry.pop("missing", None)
+        entry.pop("bundles", None)
         candidate.missing_cabs = set()
         entry.update(state="blocked", reason=candidate.error, libraryId=None, source=None,
                      target=mod_origin.target_of(self.services.settings, pin))
@@ -973,9 +995,10 @@ class BatchImport:
             raise ServiceError(last_failure or "source_unknown")
         except ServiceError as error:
             candidate.missing_cabs = set(inspection.missing_cabs)
+            if evidence := bundle_evidence(candidate, inspection):
+                entry["bundles"] = evidence
             if error.code == "mod_parts_missing" and candidate.missing_cabs:
-                entry.update(state="incomplete", reason=None,
-                             missing={"unresolved": len(candidate.missing_cabs), "found": []})
+                entry.update(state="incomplete", reason=None, missing=missing_detail(candidate.missing_cabs, []))
                 return
             entry.update(state="blocked", reason=blocked_reason(error),
                          error=failure_detail(error, candidate.files.values(), log,
@@ -983,6 +1006,8 @@ class BatchImport:
             if error.params:
                 entry["params"] = error.to_json()["params"]
         except (OSError, ValueError) as error:
+            if evidence := bundle_evidence(candidate, inspection):
+                entry["bundles"] = evidence
             detail = ServiceError("bundle_invalid", file=source_file(candidate), error=str(error))
             entry.update(state="blocked", reason="unreadable",
                          error=failure_detail(detail, candidate.files.values(), log,

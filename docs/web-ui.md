@@ -1191,8 +1191,17 @@ variant and kind (including every physical core of a 3D slot). Other slots in a 
 job searches source folders and folders added during the session using UnityFS directories only, without loading the
 unselected bundles' assets. It reuses the existing dependency inspection's unresolved references; UnityFS directories
 themselves contain the supplied CAB names, not serialized-file external references. Directory entries supply paths;
-embedded Mod names never supply a path. Each row's `missing` contains `unresolved` and ordered, deduplicated `found`
-files (`path`, `name`, `size`). Missing rows are unticked and `import.run` skips them as non-importable.
+embedded Mod names never supply a path. Each row's `missing` contains `unresolved`, the first 40 unresolved CAB ids
+(`cabs`, sorted) and ordered, deduplicated `found` files (`path`, `name`, `size`). Missing rows are unticked and
+`import.run` skips them as non-importable.
+
+A blocked or incomplete row also carries `bundles`: for each of its files (at most 20) what the check read, from
+`Inspection.summary` (the analysis's own cache; only the serialized-file headers of a bundle it already loaded are read
+again): `file`, the build targets (`platforms`), the Unity versions (`unity`, major.minor), its own CABs and stream files
+(`cabs`, at most 10) and how many other CABs or stream files it references (`references`, `null` when only headers were
+read). A refusal from the files' format can so be told from one guessed from their names or targets. The error report's
+import rows and the analysis log carry `bundles` and `missing`; CAB ids and the game's own file names stay, other file
+names are redacted.
 
 The status shows the number of found files, or the unresolved count and the folder note when none were found. The
 Import State filter includes Missing Files before Imported; the footer counts incomplete groups. When exactly one
