@@ -20,10 +20,10 @@ const original = globalThis.document;
 globalThis.document = { documentElement: new El(), createElement: () => new El() };
 const NGUI = await import(new URL('ngui.js', web));
 const { wrapPath, S } = await import(new URL('util.js', web));
-const { rowBase, radioRow } = await import(new URL('settings-rows.js', web));
+const Rows = await import(new URL('settings-rows.js', web));
 const ButtonsModule = await import(new URL('game-buttons.js', web));
 const { errorText } = await import(new URL('i18n.js', web));
-const { BACKDROP, SETTINGS, SMALL_BUTTON } = await import(new URL('ui-tokens.js', web));
+const { BACKDROP, SMALL_BUTTON, TYPE } = await import(new URL('ui-tokens.js', web));
 const { option, filter } = controls();
 const Buttons = { smallButton: (...args) => ButtonsModule.optionButton(option, filter, ...args) };
 
@@ -32,7 +32,7 @@ function harness(locale, { native = true, sourceValue = 'windows_global', error 
   const T = (key, values = {}) => key.split('.').reduce((v, k) => v[k], strings).replace(/\{(\w+)\}/g, (_, k) => values[k]);
   const prefs = { fileSource: sourceValue, gameDirs: { global: '/test/global/'.repeat(pathLength), japan: '/test/japan/'.repeat(pathLength) }, native, libraryDir: '/test/library', outputDir: '/test/output' };
   const requests = [], messages = [], failures = [], changed = [];
-  const deps = { NGUI, T, wrapPath, S, rowBase, radioRow, Buttons, BACKDROP, SETTINGS, SMALL_BUTTON, platform: 'mac', errorText: err => errorText(err, T),
+  const deps = { NGUI, T, wrapPath, S, ...Rows, Buttons, BACKDROP, SMALL_BUTTON, TYPE, platform: 'mac', errorText: err => errorText(err, T),
     notify: (...args) => failures.push(args),
     // Popup.notice is message() with the notice caption and Confirm only (popup.js, tested in refusal_notice.test.mjs)
     Popup: { notice: async text => messages.push({ title: T('quit.title'), lines: [text], ok: T('picker.ok') }) },
@@ -100,7 +100,7 @@ for (const locale of locales) {
         const title = NGUI.find(tree, 'Title').widgets[0];
         assert.ok(NGUI.glyphWidth(title.text, title.fontSize) <= title.w_);
         assert.ok(title.fontSize >= 40 && title.fontSize <= 50);
-        assert.ok(widget.fontSize >= 30 && widget.fontSize <= 38);
+        assert.ok(widget.fontSize >= TYPE.caption.min && widget.fontSize <= TYPE.caption.fs, 'the value is a caption');
         assert.ok(widget.text.split('\n').every(line => NGUI.glyphWidth(line, widget.fontSize) <= widget.w_));
         const valueTop = value.pos[1] + widget.h_ / 2, valueBottom = value.pos[1] - widget.h_ / 2;
         assert.ok(valueTop <= rowHeight / 2 - 109 && valueBottom > -rowHeight / 2);

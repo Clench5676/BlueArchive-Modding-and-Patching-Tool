@@ -2101,9 +2101,10 @@ the prefab values, from the development view). It imports no other UI module.
   least. `game-buttons.js` `optionButton` takes these as its defaults; Hall `button()` also uses them, retaining each
   caller's centre and width (raised to 240 u if necessary). The stopped memorial sites use `retainedButton`. Settings'
   value rows
-  put the buttons right-aligned to x 700, 422 apart, beside the value while it keeps at least 460 (two to a line) and
-  under it three to a line; the rest wrap to a second line, right-aligned like the first (`settings.js`
-  `valueRowLayout`). The Export pair is 680 x 136. A message's line button is 136 high and as wide as its caption plus
+  put the buttons right-aligned to the card's content box (the 1552-wide card less its 58 padding, so to x 718), 422 apart,
+  beside the value while it keeps at least four grid columns (452; two buttons to a line) and under it three to a line; the
+  rest wrap to a second line, right-aligned like the first (`settings-rows.js` `valueGeometry`, laid out with the design
+  system's `container`, `row` and `stack`). The Export pair is 680 x 136, 60 apart and centred. A message's line button is 136 high and as wide as its caption plus
   90 (240 at least) in a row at least 156 high; the asset consent's Change button the same, on a line of its own under
   the item (`consent.js` `assetLayout`). Not migrated yet: the stopped memorial candidate, queue and footer buttons,
   the photography toolbar, the popup details
@@ -2148,8 +2149,11 @@ the prefab values, from the development view). It imports no other UI module.
   glow). `.plain-popup` is 14.27 px, `.plain-line-button` and the plain checkbox 6.49 px. The no-game screens have one flat
   button look, `#8de4ff` with `#314665` ink on a 6.49 px corner, no skew and no shadow (`.message-button`, the recovery
   panel's buttons and `.plain-line-button`). The photography sheet is unchanged; the lobby dialogue uses ChatDialog balloons.
-- **Settings rows** stand 12 units apart (`SETTINGS.rowGap`, the prefab's Game tab); the scrolling area ends at the last
-  row's foot plus that gap.
+- **Settings rows** (`UIPopup_Option_PC` cards) are laid out in the card's container (`settings-rows.js` `cardContent`): 1552
+  wide, padding 58 at the sides, the title 17 under the top, the dotted line 109 down, the content from 20 under the line to 28
+  above the foot. Radio groups keep the prefab's 508 pitch and share the content box when longer. The cards stand 12 units apart
+  (`PANEL.stackGap`, the prefab's Game tab) in the panel's list area padded by 20 (`stackCards`); the scrolling area ends at
+  the last card's foot plus that padding. A value is a caption (`TYPE.caption`).
 
 ### Enable Mods switch
 

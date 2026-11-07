@@ -16,8 +16,8 @@ import * as ModExport from "./mod-export.js";
 import * as Tours from "./tours.js";
 import * as Update from "./update.js";
 import * as Buttons from "./game-buttons.js";
-import { BACKDROP, SETTINGS, SMALL_BUTTON } from "./ui-tokens.js";
-import { rowBase, radioRow } from "./settings-rows.js";
+import { BACKDROP, SMALL_BUTTON, TYPE } from "./ui-tokens.js";
+import { rowBase, radioRow, valueGeometry, valueRoom, afterTitle, buttonRowGeometry, stackCards } from "./settings-rows.js";
 import { on, rpc } from "./api.js";
 import { T, errorText, platform } from "./i18n.js";
 import { $, DOT, S, clone, glyphsOf, hitButton, wrapPath } from "./util.js";
@@ -55,8 +55,8 @@ const ON_OFF = () => [[true, T("settings.post.on")], [false, T("settings.post.of
 // help unless ``open`` names another
 function helpAfterTitle(row, title, dot, open = () => ModSwitch.openHelp()) {
   const t = fitText(title, 50, 40, 900);
-  const x = -718.5 + glyphsOf(t.text, t.fs) + 70, y = row.h / 2 - 55;
-  row.tree.children.push(node("Help", [x, y], [sprite("Common_Square_Bg", 50, 50, { depth: 22, color: "#ffffff/1.00" })], [
+  const { pos } = afterTitle(row.h, glyphsOf(t.text, t.fs), { width: 50, height: 50 });
+  row.tree.children.push(node("Help", pos, [sprite("Common_Square_Bg", 50, 50, { depth: 22, color: "#ffffff/1.00" })], [
     node("Sprite", [2, -7], [sprite("Common_Btn_Information", 70, 72, { type: 0, depth: 23, color: "#2c4564/1.00" })]),
     ...(dot ? [DOT([40, 30], 30)] : []),
   ]));
@@ -99,38 +99,15 @@ async function checkFiles() {
 }
 
 // --- a value with buttons on the right (folders, version, cache); long values wrap, never cut ---
-// The value starts at x -718 and the light-blue buttons (402 x 136, 422 apart) stand right-aligned to x 700. Beside the
-// value they leave it 1420 less their pitches, and no fewer than the 460 the row's three buttons left it before they grew;
-// buttons that do not fit wrap to a second line, right-aligned as the first. Under the value (below) the whole line is theirs.
-const VALUE_ROOM = 1420, VALUE_ROOM_MIN = 460, BUTTONS_X = 700, BELOW_ROOM = 1440;
-const BUTTON_STEP = SMALL_BUTTON.h + SMALL_BUTTON.gap; // one line of buttons to the next
-// how many buttons each line holds: [first line, second line, ...]
-export function buttonLines(count, below = false) {
-  const perLine = below ? Math.floor((BUTTONS_X + 718 + SMALL_BUTTON.gap) / SMALL_BUTTON.pitch)
-    : Math.floor((VALUE_ROOM - VALUE_ROOM_MIN) / SMALL_BUTTON.pitch);
-  const lines = [];
-  for (let i = 0; i < count; i += perLine) lines.push(Math.min(perLine, count - i));
-  return lines;
-}
-export const valueRoom = (count, below = false) => (below ? BELOW_ROOM : VALUE_ROOM - (buttonLines(count)[0] || 0) * SMALL_BUTTON.pitch);
-// the row's height and where its buttons stand (y of each line's centres, x of each button's centre): textH is the value's
-// height. Beside the value the first line of buttons is centred on it; under it the lines stand at the row's foot.
-export function valueRowLayout(count, textH, { below = false } = {}) {
-  const lines = buttonLines(count, below), { h: bh, pitch } = SMALL_BUTTON;
-  const stack = lines.length ? lines.length * bh + (lines.length - 1) * SMALL_BUTTON.gap : 0;
-  const blockH = Math.max(textH, below || !count ? 112 : bh);
-  const h = below ? 180 + blockH + stack : 130 + blockH + 30 + Math.max(0, lines.length - 1) * BUTTON_STEP;
-  const midY = h / 2 - 130 - blockH / 2;
-  const ys = lines.map((_, j) => (below ? -h / 2 + 19 + stack - bh / 2 - j * BUTTON_STEP : midY - j * BUTTON_STEP));
-  const xs = lines.flatMap((n) => Array.from({ length: n }, (_, i) => BUTTONS_X - SMALL_BUTTON.w / 2 - (n - 1 - i) * pitch));
-  return { h, blockH, midY, lines, ys, xs };
-}
+// The geometry (the content box, the buttons right-aligned SPACE.m apart, the value's room, the wrapping of a second line of
+// buttons) is settings-rows.js valueGeometry. The value is a description: TYPE.caption, in the label box NGUI gives a line.
+const LABEL_BOX = 1.3;
 function valueRow(name, y, title, value, buttons, { below = false, showValue = true } = {}) {
-  const f = wrapPath(value || T("settings.notSet"), 38, 30, valueRoom(buttons.length, below), 3);
-  const lineH = f.fs * 1.3, layout = valueRowLayout(buttons.length, lineH * f.lines, { below });
-  const { h, midY } = layout, row = rowBase(name, y, h, title), hits = [];
+  const f = wrapPath(value || T("settings.notSet"), TYPE.caption.fs, TYPE.caption.min, valueRoom(buttons.length, below), 3);
+  const lineH = f.fs * LABEL_BOX, layout = valueGeometry(buttons.length, lineH * f.lines, { below });
+  const { h } = layout, row = rowBase(name, y, h, title), hits = [];
   // Action-only rows keep the same spacing without a value label.
-  if (showValue) row.children.push(node("Value", [-718, midY], [label(f.text, f.fs, "#2d4664/1.00", valueRoom(buttons.length, below), lineH * f.lines + 10, { pivot: 3, depth: 8 })]));
+  if (showValue) row.children.push(node("Value", layout.value, [label(f.text, f.fs, "#2d4664/1.00", layout.room, lineH * f.lines + 10, { pivot: 3, depth: 8 })]));
   // buttons side by side share one caption size (the small button's range, 48 down to 34)
   const size = buttons.length > 1 ? NGUI.fitGroup(buttons.map(([caption]) => caption), SMALL_BUTTON.fs, SMALL_BUTTON.fsMin,
     SMALL_BUTTON.w - SMALL_BUTTON.fitInset, 2, { maxH: SMALL_BUTTON.h - SMALL_BUTTON.boxInsetH })[0].fs : null;
@@ -214,8 +191,7 @@ function frameTree() {
 
 function rows({ builtSize = null, sizeError = null } = {}) {
   const p = prefs, out = [];
-  let y = -20;
-  const add = (r) => { r.tree.pos[1] = y - r.h / 2 + (r.tree.pos[1] || 0); out.push(r); y -= r.h + SETTINGS.rowGap; };
+  const add = (r) => { out.push(r); };
   const reveal = (path) => () => call(() => rpc("os.reveal", { path }));
   const browse = (key, start) => async () => {
     const path = await call(() => rpc("settings.pickFolder", { start }));
@@ -255,14 +231,14 @@ function rows({ builtSize = null, sizeError = null } = {}) {
     const sw = radioRow("Switch", 0, T("mods.switch"), ON_OFF(), v.on, (value) => { if (value !== v.on) ModSwitch.click("settings"); },
       { dim: v.busy || v.unavailable, description: v.unavailable ? ModSwitch.reasonText(m) : "" });
     add(helpAfterTitle(sw, T("mods.switch"), v.dot));
-    // the pair of 680 x 136 buttons under the dotted line: 20 below it, 29 above the row's foot
-    const exportH = 109 + 20 + SMALL_BUTTON.h + 29;
+    // the pair of 680 x 136 buttons under the dotted line
+    const pair = buttonRowGeometry(2, SMALL_BUTTON.wideW), exportH = pair.h;
     const exportRow = rowBase("Export", 0, exportH, T("export.title"));
     const exportHits = [];
     const exportSize = NGUI.fitGroup([T("export.library"), T("export.applied")], SMALL_BUTTON.fs, SMALL_BUTTON.fsMin, SMALL_BUTTON.wideW - SMALL_BUTTON.fitInset, 2,
       { maxH: SMALL_BUTTON.h - SMALL_BUTTON.boxInsetH })[0].fs;
     [["library", "export.library"], ["applied", "export.applied"]].forEach(([scope, key], i) => {
-      exportRow.children.push(buttonNode(`Btn_${i}`, -370 + i * 740, exportH / 2 - 109 - 20 - SMALL_BUTTON.h / 2, T(key), { w: SMALL_BUTTON.wideW, fs: exportSize, min: exportSize }));
+      exportRow.children.push(buttonNode(`Btn_${i}`, pair.xs[i], pair.y, T(key), { w: SMALL_BUTTON.wideW, fs: exportSize, min: exportSize }));
       exportHits.push({ path: `Export/Btn_${i}`, fn: () => ModExport.open({ scope }), name: T(key) });
     });
     add({ tree: exportRow, h: exportH, hits: exportHits });
@@ -320,7 +296,10 @@ function rows({ builtSize = null, sizeError = null } = {}) {
     add(valueRow("Library", 0, T("settings.library"), p.libraryDir, [[open, reveal(p.libraryDir)], [T("settings.change"), browse("libraryDir", p.libraryDir), p.native]]));
     add(valueRow("Output", 0, T("settings.output"), p.outputDir, [[open, reveal(p.outputDir)], [T("settings.change"), browse("outputDir", p.outputDir), p.native]]));
   }
-  return { rows: out, height: -y };
+  // the cards stack down the panel's list area (the area less PANEL.padList, the cards PANEL.stackGap apart)
+  const placed = stackCards(out.map((r) => r.h), { w: CONTENT.w, h: CONTENT.h });
+  out.forEach((r, i) => { r.tree.pos[1] = placed.centres[i] + (r.tree.pos[1] || 0); });
+  return { rows: out, height: placed.height };
 }
 
 async function openLog() {

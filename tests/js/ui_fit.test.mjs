@@ -132,8 +132,10 @@ const LANGUAGES = ["zh-CN", "zh-TW", "en-US", "ja-JP", "ko-KR", "th-TH"];
 // the labels a radio row draws, in order: [widget, node]
 const optionLabels = (row) => row.tree.children.filter((c) => /^Opt_\d+$/.test(c.name)).map((c) => find(c, "Label").widgets[0]);
 const noop = () => {};
-// the pitch and the room the row fits a label to (settings-rows.js)
-const roomOf = (columns) => Math.min(508, 1400 / columns) - 110;
+// the pitch and the room the row fits a label to (settings-rows.js): the option's pitch (508, or the content box's 1552 less
+// 2 x 58 shared by the columns) less the radio (60), its gap to the label (19), the clear of the next option (12) and the
+// fit's slack (20)
+const roomOf = (columns) => Math.min(508, (1552 - 2 * 58) / columns) - (60 + 19 + 12 + 20);
 // a text fits at X when fitText holds it there with nothing smaller allowed, and its lines stay in the band
 const fitsAt = (value, fs, room, lang = null, band = 96) => {
   const f = NGUI.fitText(value, fs, fs, room, 2, lang);
