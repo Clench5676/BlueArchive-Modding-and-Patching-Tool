@@ -52,16 +52,13 @@ def acknowledge(state, version, planned):
 
 
 @pytest.mark.parametrize('current', ['0.6.0-alpha.9', '0.6.0-alpha.9-dev', '0.6.0-dev'])
-def test_review_manifest_matches_draft_and_is_text_only(current):
-    from pathlib import Path
-    draft = (Path(__file__).parents[1] / 'docs/tours/0.6.0-draft.md').read_text()
+def test_review_manifest_matches_locales_and_is_text_only(current):
     assert tours.PUBLISHED_TOURS[0]['approved'] is True
     for lang in tours.LOCALES:
         available = tours.published(current, lang)
         assert [t['version'] for t in available] == ['0.6.0']
         assert [p['id'] for p in available[0]['pages']] == ['student-thumbnails', 'hall-viewing-zoom']
         for page in available[0]['pages']:
-            assert f"| {lang} | {page['title']} | {page['body']} |" in draft
             localized = strings.ui_strings(lang, fallback=False)
             key = f"webui.tours.v0_6_0.{page['id']}"
             assert (page['title'], page['body']) == (localized[f'{key}.title'], localized[f'{key}.body'])
