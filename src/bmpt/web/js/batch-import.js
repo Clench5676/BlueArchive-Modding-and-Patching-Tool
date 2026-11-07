@@ -15,7 +15,8 @@ import { spineAllowed } from "./spine-runtime.js";
 import { thumbnailScope, forget } from "./thumbs.js";
 import { modelThumbnail } from "./model-still.js";
 import { S } from "./util.js";
-import { FOOTER, SMALL_BUTTON } from "./ui-tokens.js";
+import { FOOTER, SMALL_BUTTON, SPACE, TYPE, CONTROL, POPUP_FRAME } from "./ui-tokens.js";
+import { row as layoutRow, stack as layoutStack, container } from "./ui-grid.js";
 import { ROW_W as OPTION_WIDTH, rowBase, radioRow } from "./settings-rows.js";
 import { BUTTON_BODY_H, loadImportLayouts, importArtwork, clipButtonPatterns, ROW_SCALE, ROW_WIDTH, ROW_HEIGHT, ROW_SELECTION, ROW_CHECK_TOP,
   PAPER_CENTRE, emptyBlock, controlRect } from "./import-layout.js";
@@ -28,6 +29,8 @@ import { scrollbar as gameScrollbar, scrollbarTrack } from "./scrollbar.js";
 // The list's top in the panel: 12 under Items' grey Inbox (its top edge is at 98). The search field, open, takes its place and
 // pushes the rows down by SEARCH_ROOM.
 const LIST_TOP = 110, SEARCH_ROOM = 92;
+// The list's box in the panel (px): where it starts, how wide it is and where it ends; the search field and the tools under it share its width.
+const LIST_X = 26, LIST_W = 1220, LIST_BOTTOM = 616;
 const KIND_KEYS = { spr: "tab.portrait", lobby: "tab.lobby", model: "tab.model", other: "import.other" };
 const REASONS = new Set(["unreadable", "no_target", "conflict", "spine_version", "unsupported",
   "source_unknown", "source_conflict", "platform_unsupported", "target_unknown", "conversion_names", "no_matching_assets", "conversion_failed",
@@ -193,13 +196,20 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
     b.caption = caption; b.setAttribute("aria-label", b.accessibleName || caption); b.refresh();
   }
   const EMPTY_BOX = [1200, 100];   // each empty-list label's box (px), its text centred in it
-  // The row under the list is one row of the small button (SMALL_BUTTON: 136 high, caption 48 down to 34, 20 apart), drawn from the
-  // prefabs' 162-high bodies. Import stands out by its gold, not by its size. Its right edge is the list tools' (Clear's).
-  const FOOTER_ROW = { scale: SMALL_BUTTON.h * S / BUTTON_BODY_H, y: 902, right: 1848, wide: 330, width: SMALL_BUTTON.w * S,
-    size: { max: SMALL_BUTTON.fs * BUTTON_BODY_H / SMALL_BUTTON.h, min: SMALL_BUTTON.fsMin * BUTTON_BODY_H / SMALL_BUTTON.h } };
+  // The row under the list is one row of buttonS controls (CONTROL.buttonS: 136 high, caption 48 down to TYPE.body.min), SPACE.m
+  // apart, drawn from the prefabs' 162-high bodies. Import stands out by its gold, not by its size. Its right edge is the list
+  // tools'. The 902 is the row's centre line in the stage (px; the App's own: the row clears the bottom nav's 104 px area).
+  const FOOTER_ROW = { scale: CONTROL.buttonS.h * S / BUTTON_BODY_H, y: 902, right: 1848, wide: 330, width: SMALL_BUTTON.w * S,
+    gap: SPACE.m * S, size: { max: CONTROL.buttonS.fs * BUTTON_BODY_H / CONTROL.buttonS.h, min: TYPE.body.min * BUTTON_BODY_H / CONTROL.buttonS.h } };
+  // The list's tools (the Items prefab's Btn_Receive bodies at TOOL_SCALE) fill the list's width, SPACE.m apart, each in the share of
+  // it its caption needs in the longest language: [key, caption key, share].
+  const TOOL_SCALE = 0.34;
+  const TOOLBAR = [["files", "addFiles", 174], ["folder", "addFolder", 190], ["all", "all", 126], ["none", "none", 140],
+    ["remove", "remove", 150], ["removeImported", "removeImported", 224], ["clear", "clear", 156]];
+  // the tools, in px of the panel: a row under the list, level with it, as high as the body
+  const toolRow = () => layoutRow(TOOLBAR.map(([, , share]) => ({ grow: share, h: BUTTON_BODY_H * TOOL_SCALE })),
+    { x: LIST_X, y: LIST_BOTTOM + SPACE.m * S, w: LIST_W, gap: SPACE.m * S });
   // Buttons side by side share one caption size: the list's seven tools, and the row under the list.
-  const TOOLBAR = [["files", "addFiles", 26, 174], ["folder", "addFolder", 210, 190], ["all", "all", 410, 126], ["none", "none", 546, 140],
-    ["remove", "remove", 696, 150], ["removeImported", "removeImported", 856, 224], ["clear", "clear", 1090, 156]];
   function shareSizes() {
     for (const [keys, range] of [[TOOLBAR.map(([key]) => key)], [["fillAll", "options", "recheck", "start"], FOOTER_ROW.size]]) {
       const buttons = keys.map((key) => dom[key]).filter((b) => b && !b.hidden);
@@ -296,9 +306,9 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
     paint(panel, art.panel(1272 / S, 704 / S), { origin: [636, 352] });
     dom.header = place(el("div", "import-header"), 0, 0, 1272, 136 * S);
     panel.append(dom.header);
-    const search = inputControl(T("import.search"), query, { width: 1220, search: true });
+    const search = inputControl(T("import.search"), query, { width: LIST_W, search: true });
     dom.search = search.input; dom.search.placeholder = T("import.search"); dom.search.enterKeyHint = "search";
-    dom.searchWrap = place(search.wrap, 26, LIST_TOP, 1220, 112 * S);
+    dom.searchWrap = place(search.wrap, LIST_X, LIST_TOP, LIST_W, 112 * S);
     const runSearch = () => { query = dom.search.value.toLocaleLowerCase(); renderRows(); };
     dom.search.addEventListener("input", (event) => { if (!event.isComposing) runSearch(); }); dom.search.addEventListener("compositionend", runSearch);
     search.clear.addEventListener("click", () => { dom.search.value = ""; runSearch(); dom.search.focus(); });
@@ -316,24 +326,28 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
     dom.list = el("div", "import-list"); dom.list.setAttribute("aria-label", T("import.list")); panel.appendChild(dom.list);
     dom.list.addEventListener("scroll", () => prepareVisibleRows(dom.list, rows.values()));
     layoutList();
-    for (const [key, caption, x, width] of TOOLBAR) {
-      dom[key] = button(T(`import.${caption}`), key, { width, scale: 0.34 }); place(dom[key], x, 629, width, 56); panel.appendChild(dom[key]);
-    }
+    toolRow().boxes.forEach((box, i) => {
+      const [key, caption] = TOOLBAR[i];
+      dom[key] = button(T(`import.${caption}`), key, { width: box.w, scale: TOOL_SCALE }); place(dom[key], box.x, box.y, box.w, box.h); panel.appendChild(dom[key]);
+    });
     root.appendChild(panel);
-    const { scale: rowScale, wide, width: rowWidth } = FOOTER_ROW, rowHeight = BUTTON_BODY_H * rowScale;
+    const { scale: rowScale, wide, width: rowWidth, gap: rowGap } = FOOTER_ROW, rowHeight = BUTTON_BODY_H * rowScale;
     dom.options = button(T("import.options.title"), "options", { width: wide, scale: rowScale });
     dom.recheck = button(T("import.recheck"), "recheck", { width: rowWidth, scale: rowScale });
     dom.start = button(T("import.action", { n: 0 }), "start", { width: rowWidth, scale: rowScale, primary: true });
     shareSizes();
-    // As on the roster/detail screens, reserve the nav's entire 104 px area, with 24 px above it.
-    const rowTop = FOOTER_ROW.y - rowHeight / 2, startX = FOOTER_ROW.right - rowWidth, recheckX = startX - SMALL_BUTTON.gap - rowWidth;
-    place(dom.options, recheckX - SMALL_BUTTON.gap - wide, rowTop, wide, rowHeight); place(dom.recheck, recheckX, rowTop, rowWidth, rowHeight);
-    place(dom.start, startX, rowTop, rowWidth, rowHeight);
-    root.append(dom.options, dom.recheck, dom.start);
-    const footer = { left: recheckX - SMALL_BUTTON.gap - wide, gap: SMALL_BUTTON.gap, wide };
     dom.fillAll = button(missingText("fillAll", { n: 1 }), "fillAll", { width: wide, scale: rowScale });
-    place(dom.fillAll, footer.left - footer.gap - wide, rowTop, wide, rowHeight); dom.fillAll.hidden = true;
-    dom.missingNote = place(el("div"), NOTE_LEFT, rowTop, noteRoom(footer), rowHeight);
+    // As on the roster/detail screens, reserve the nav's entire 104 px area, with 24 px above it. One row, right-aligned: the
+    // count's room ends before Fill All (hidden until a row can be filled), which stands left of Advanced Options.
+    const bar = layoutRow([wide, wide, rowWidth, rowWidth].map((w) => ({ w, h: rowHeight })),
+      { x: 0, y: FOOTER_ROW.y - rowHeight / 2, w: FOOTER_ROW.right, gap: rowGap, justify: "end" });
+    for (const [part, box] of [[dom.fillAll, bar.boxes[0]], [dom.options, bar.boxes[1]], [dom.recheck, bar.boxes[2]], [dom.start, bar.boxes[3]]]) {
+      place(part, box.x, box.y, box.w, box.h);
+    }
+    dom.fillAll.hidden = true;
+    root.append(dom.options, dom.recheck, dom.start);
+    const footer = { left: bar.boxes[1].x, gap: rowGap, wide };
+    dom.missingNote = place(el("div"), NOTE_LEFT, bar.boxes[0].y, noteRoom(footer), rowHeight);
     dom.missingNoteRoom = noteRoom(footer); dom.missingNoteHeight = rowHeight;
     root.append(dom.fillAll, dom.missingNote);
     root.addEventListener("click", (event) => {
@@ -364,8 +378,8 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
     const top = searchOpen ? LIST_TOP + SEARCH_ROOM : LIST_TOP;
     dom.searchWrap.hidden = !searchOpen;
     dom.searchToggle.setAttribute("aria-expanded", String(searchOpen));
-    place(dom.list, 26, top, 1220, 616 - top);
-    bindBar(dom.list, dom.panel, [26, top, 1220, 616 - top]);
+    place(dom.list, LIST_X, top, LIST_W, LIST_BOTTOM - top);
+    bindBar(dom.list, dom.panel, [LIST_X, top, LIST_W, LIST_BOTTOM - top]);
     listTop = top; placeEmpty();
   }
   // Items' ListEmpty message, with the drop hint under it while nothing is added: one block whose ink centre sits on the
@@ -376,7 +390,7 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
     const ink = (part) => part && NGUI.inkBand(part.text, part.px);
     const at = emptyBlock(y - listTop, ink(title), ink(note));
     for (const [part, centre] of [[title, at.title], [note, at.note]]) {
-      if (part) place(part.element, x - 26 - EMPTY_BOX[0] / 2, centre - EMPTY_BOX[1] / 2, ...EMPTY_BOX);
+      if (part) place(part.element, x - LIST_X - EMPTY_BOX[0] / 2, centre - EMPTY_BOX[1] / 2, ...EMPTY_BOX);
     }
   }
   function renderToolbar() {
@@ -391,7 +405,7 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
       }
       // as on the roster's top menu: the toggle follows the title, ending a gap before the first tool
       const [x, y, , h] = Popup.nodeRect(view, `BG_Top_Widget/SearchBtn/${searchOpen ? "Btn_Pressed" : "Btn_Normal"}`), style = dom.merge.label.style;
-      Object.assign(style, { left: `${x - 16 - parseFloat(style.width)}px`, top: `${y + (h - parseFloat(style.height)) / 2}px` });
+      Object.assign(style, { left: `${x - SPACE.l * S - parseFloat(style.width)}px`, top: `${y + (h - parseFloat(style.height)) / 2}px` });
     } });
   }
   const filterOptions = () => {
@@ -798,7 +812,9 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
   // Popup.popupFrame clones UIPopup_Sort/Center: Base/BG, Btn_Close and Btn/Btn_Ok / Btn_Cancel.
   // content(area, {primary(enabled)}): primary(false) blocks the confirm button (the game's disabled one, answering nothing)
   // until primary(true); it may be called while the content is built.
-  async function dialog(title, { action = T("display.close"), cancel = null, onAction = () => true, width = 2458, bodyWidth = null } = {}, content) {
+  // width: the frame's (units); bodyWidth: the content's, centred (px). padding instead: the content fills the frame's container
+  // (container: the frame less padding units on each side), and content gets its width in px.
+  async function dialog(title, { action = T("display.close"), cancel = null, onAction = () => true, width = 2458, bodyWidth = null, padding = null } = {}, content) {
     await popups.ready();
     if (!visible || dialogClose) return;
     const dialogHost = document.getElementById("dialog"), layer = el("div", "popup-layer import-dialog-layer"), before = document.activeElement;
@@ -827,8 +843,14 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
         if (ended) return;
       }
       const area = el("div", "import-dialog-content"), box = [...DIALOG_AREA];
-      if (bodyWidth) { box[0] = 960 - bodyWidth / 2 - 16; box[2] = bodyWidth + 32; Object.assign(area.style, { left: `${box[0]}px`, width: `${box[2]}px` }); }
-      layer.appendChild(area); await content(area, { primary: (enabled) => { allowed = enabled !== false; sync(); } });
+      if (padding != null) {
+        const inner = container({ w: width, h: DIALOG_H, padding: [0, padding] }).inner;
+        box[0] = 960 + (inner.x - width / 2) * S; box[2] = inner.w * S;
+        Object.assign(area.style, { left: `${box[0]}px`, width: `${box[2]}px` });
+      } else if (bodyWidth) { box[0] = 960 - bodyWidth / 2 - 16; box[2] = bodyWidth + 32; Object.assign(area.style, { left: `${box[0]}px`, width: `${box[2]}px` }); }
+      layer.appendChild(area);
+      // the area keeps 16 px each side for the game's scrollbar
+      await content(area, { width: box[2] - 32, primary: (enabled) => { allowed = enabled !== false; sync(); } });
       bindBar(area, layer, box);
       const finish = async () => {
         if (working || !allowed) return; working = true; layer.setAttribute("aria-busy", "true");
@@ -851,21 +873,26 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
     if (model.busy() || !await model.loadOptions()) return;
     const draft = { ...model.state.options, types: [...model.state.options.types] };
     let error;
-    await dialog(T("import.options.title"), { action: T("picker.ok"), cancel: T("popup.cancel"), width: 1800, bodyWidth: OPTION_WIDTH * S, onAction: async () => {
+    // The L frame (POPUP_FRAME.L: UIPopup_Option_PC's) with its content in a container padded SPACE.xl on each side (panels in a popup).
+    await dialog(T("import.options.title"), { action: T("picker.ok"), cancel: T("popup.cancel"), width: POPUP_FRAME.L.w, padding: SPACE.xl, onAction: async () => {
       if (!draft.types.length || !Number.isSafeInteger(draft.workers) || draft.workers < 1) {
         textWidget(error, T(!draft.types.length ? "import.options.typesRequired" : "import.options.workersInvalid"), "error", { origin: [OPTION_WIDTH * S / 2, 35] }); return false;
       }
       const saved = await model.saveOptions(draft); if (!saved) textWidget(error, report(model.state.error), "error", { origin: [OPTION_WIDTH * S / 2, 35] }); return saved;
-    } }, (area) => {
-      const add = (key, height) => {
+    } }, (area, { width: contentWidth }) => {
+      // The option groups (Settings' rows, OPTION_WIDTH wide) stack SPACE.l apart, centred in the content; the hint and the error
+      // line stack with them. parts: { element, w, h } in px, in order; holder: the element that stands in the stack for a group.
+      const parts = [];
+      const add = (key, height, holder = null) => {
         const group = el("div", "import-option"); group.dataset.option = key;
-        Object.assign(group.style, { width: `${OPTION_WIDTH * S}px`, height: `${height * S}px`, marginBottom: `${24 * S}px` });
-        area.appendChild(group); return group;
+        Object.assign(group.style, { width: `${OPTION_WIDTH * S}px`, height: `${height * S}px` });
+        parts.push({ element: holder || group, w: OPTION_WIDTH * S, h: height * S });
+        if (holder) holder.appendChild(group);
+        return group;
       };
-      const choice = (key, title, values, getValue, onPick, { multiple = false, parent = area } = {}) => {
+      const choice = (key, title, values, getValue, onPick, { multiple = false, parent = null } = {}) => {
         const makeRow = () => radioRow(`Option_${key}`, 0, title, values, getValue(), onPick, { columns: Math.min(values.length, 3) });
-        const group = add(key, makeRow().h), controls = [];
-        if (parent !== area) parent.appendChild(group);
+        const group = add(key, makeRow().h, parent), controls = [];
         group.setAttribute("role", multiple ? "group" : "radiogroup"); group.setAttribute("aria-label", title);
         const refresh = () => {
           const row = makeRow();
@@ -903,7 +930,7 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
       radio("strategy", ["cont_name_type", "path_id", "name_type"].map((key) => [key, T(`import.strategy.${key}`)]));
       radio("crc", [["auto", T("import.auto")], ["on", T("settings.post.on")], ["off", T("settings.post.off")]]);
       radio("compression", [["lzma", "LZMA"], ["lz4", "LZ4"], ["original", T("import.original")], ["none", T("import.uncompressed")]]);
-      const types = el("fieldset", "import-resource-types"); types.setAttribute("aria-label", T("import.options.types")); area.appendChild(types);
+      const types = el("fieldset", "import-resource-types"); types.setAttribute("aria-label", T("import.options.types"));
       choice("types", T("import.options.types"), RESOURCE_TYPES.map((type) => [type, type === "ALL" ? T("import.options.allTypes") : type]),
         () => new Set(draft.types), (type, checked) => {
           const values = new Set(draft.types); if (checked) values.add(type); else values.delete(type);
@@ -919,9 +946,15 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
         if (key === "workers") { input.min = "1"; input.step = "1"; }
         input.addEventListener("input", () => { draft[key] = key === "workers" ? Number(input.value) : key === "output" ? input.value.trim() || null : input.value; });
       }
-      const note = el("div", "import-option-note"); note.style.height = "70px"; area.appendChild(note);
+      const note = el("div", "import-option-note"); note.style.height = "70px";
+      parts.push({ element: note, w: OPTION_WIDTH * S, h: 70 });
       textWidget(note, T("import.options.bytesHint"), "empty", { origin: [OPTION_WIDTH * S / 2, 35] });
-      error = el("div", "import-option-error"); error.style.height = "80px"; error.setAttribute("role", "alert"); area.appendChild(error);
+      error = el("div", "import-option-error"); error.style.height = "80px"; error.setAttribute("role", "alert");
+      parts.push({ element: error, w: OPTION_WIDTH * S, h: 80 });
+      const pile = layoutStack(parts.map(({ w, h }) => ({ w, h })), { w: contentWidth, gap: SPACE.l * S, align: "center" });
+      const body = el("div", "import-options"); Object.assign(body.style, { position: "relative", width: `${contentWidth}px`, height: `${pile.h}px` });
+      parts.forEach(({ element }, i) => { place(element, pile.boxes[i].x, pile.boxes[i].y, pile.boxes[i].w, pile.boxes[i].h); body.appendChild(element); });
+      area.appendChild(body);
     });
   }
 
