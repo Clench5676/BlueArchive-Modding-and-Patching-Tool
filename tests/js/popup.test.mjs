@@ -3889,3 +3889,17 @@ test("portrait and ordinary detail scroll areas keep the complete last field and
     }
   } finally { prompt.hidden = true; Popup.closed(prompt); }
 });
+
+test("finding the game asks the Check Game Files consent first and searches only after an Allow", async () => {
+  const Consent = await import("../../src/bmpt/web/js/consent.js");
+  let allowed = false, searched = 0, asked = 0;
+  handlers.set("settings.detectGame", () => { searched++; return allowed ? { result: ["/games/BlueArchive"] } : { error: { code: "scan_off" } }; });
+  try {
+    assert.equal(await Consent.detectGame("global", async () => { asked++; return false; }), null, "declined: nothing is searched");
+    assert.equal(searched, 1);
+    assert.deepEqual(await Consent.detectGame("global", async () => { asked++; allowed = true; return true; }), ["/games/BlueArchive"]);
+    assert.equal(searched, 3);
+    assert.deepEqual(await Consent.detectGame("global", async () => { asked++; return true; }), ["/games/BlueArchive"]);
+    assert.equal(asked, 2, "an existing consent asks nothing");
+  } finally { handlers.delete("settings.detectGame"); }
+});
