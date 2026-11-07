@@ -120,7 +120,7 @@ for (const locale of LOCALES) test(`the four action cards and the three tabs sha
 });
 
 // --- popup buttons: buttonL bodies, 551 x 176, display captions in a 472 x 156 box ---
-const { CONTROL, TYPE } = await import("../../src/bmpt/web/js/ui-tokens.js");
+const { CONTROL, SPACE, TYPE } = await import("../../src/bmpt/web/js/ui-tokens.js");
 const PAIRS = [["picker.ok", "popup.cancel"], ["popup.save", "popup.cancel"], ["consent.no", "consent.yes"], ["mods.scan.no", "mods.scan.yes"],
   ["update.later", "update.notes", "update.now"], ["update.later", "update.notes", "update.restart"],
   ["update.later", "update.notes", "update.page"]];
@@ -198,7 +198,6 @@ for (const locale of LOCALES) test(`Settings tabs and button pairs share one siz
 
 // --- Batch Import: the list's seven tools (their shares 174 190 126 140 150 224 156 of the list's 1220, SPACE.m apart, at scale 0.34)
 // and the row under the list ---
-const { CONTROL, SPACE, TYPE } = await import("../../src/bmpt/web/js/ui-tokens.js");
 for (const locale of LOCALES) test(`the import list's tools and the row under the list share one size and fit their bodies in ${locale}`, async () => {
   const page = await source("batch-import.js"), layout = await source("import-layout.js");
   assert.match(page, /\["files", "addFiles", 174\], \["folder", "addFolder", 190\], \["all", "all", 126\], \["none", "none", 140\]/);
