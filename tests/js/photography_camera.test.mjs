@@ -55,19 +55,19 @@ test('memorial framing stays painted at every zoom and both pan extremes',()=>{
   }
 });
 
-test('compact occlusion control retains the right edge, centering, hit target and neighbours',async()=>{
-  const {OCCLUSION_BUTTON:box,TOOLBAR_CAPTION:caption}=await import('../../src/bmpt/web/js/photography/camera.js');
-  assert.deepEqual(box,[1352,25,196,76]);
-  assert.equal(box[0]+box[2],1548);assert.equal(1570-box[0]-box[2],22);
-  for(const scale of [.75,1,1.25,1.5,2]){
-    assert.ok(box[2]*scale>=44);assert.ok(box[3]*scale>=44);
-    assert.equal((box[1]+box[3]/2)*scale,63*scale);
-  }
-  // captions keep clear of the 196 x 76 body: 18 beside, 8 above and below
-  assert.deepEqual([caption.width,caption.height],[box[2]-36,box[3]-16]);
+test('composed occlusion control keeps the right edge, centred neighbours and scaled gaps',async()=>{
   const controller=await readFile(new URL('../../src/bmpt/web/js/photography/controller.js',import.meta.url),'utf8');
-  assert.match(controller,/P\('occlusion'\),OCCLUSION_BUTTON/);
-  assert.match(controller,/\[1570,25,196,76\]/);
-  // the fit never reads computed style of a layer that is not in the document yet (empty there, so nothing was ever fitted)
+  const {CONTROL,SMALL_BUTTON,SPACE}=await import('../../src/bmpt/web/js/ui-tokens.js');
+  const {row}=await import('../../src/bmpt/web/js/ui-grid.js');
+  const S=1920/2960,code=controller.slice(controller.indexOf('function photographyToolbarLayout('),controller.indexOf('function galleryPair('));
+  const boxes=new Function('CONTROL','SMALL_BUTTON','SPACE','row','S',`${code};return photographyToolbarLayout();`)(CONTROL,SMALL_BUTTON,SPACE,row,S);
+  const near=(a,b)=>assert.ok(Math.abs(a-b)<1e-9,`${a} != ${b}`);
+  near(boxes.top[0]+boxes.top[2],1890);near(boxes.grid[0]-boxes.occlusion[0]-boxes.occlusion[2],SPACE.m*S);
+  near(boxes.mode[0]-boxes.grid[0]-boxes.grid[2],SPACE.l*S);
+  for(const scale of [.75,1,1.25,1.5,2])for(const box of [boxes.occlusion,boxes.grid,boxes.mode]){
+    assert.ok(box[2]*scale>=44);assert.ok(box[3]*scale>=44);
+    near((box[1]+box[3]/2)*scale,(25+CONTROL.buttonS.h*S/2)*scale);
+  }
+  assert.match(controller,/P\('occlusion'\),boxes\.occlusion/);
   assert.doesNotMatch(controller,/getComputedStyle/);
 });

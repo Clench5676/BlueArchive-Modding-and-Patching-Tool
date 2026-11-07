@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { readFile } from "node:fs/promises";
 
+import { CONTROL, SMALL_BUTTON, SPACE } from "../../src/bmpt/web/js/ui-tokens.js";
 const S = 1920 / 2960;
+const near = (a,b) => assert.ok(Math.abs(a-b)<1e-9, `${a} != ${b}`);
 const node = (name, children = [], widgets = [], more = {}) => ({ name, children, widgets, pos: [0, 0], scale: [1, 1], active: true, ...more });
 const sprite = (name, w, h, color, depth = 3) => ({ cls: "UISprite", atlas: "Common", sprite: name, w_: w, h_: h, color, depth, type: 1 });
 // Derived metadata from UILobby's authored enabled loop and duty-selector controls.
@@ -12,7 +14,7 @@ const duty = (name, tint) => node(name, [node("Icon", [], [sprite("Common_Icon_S
 const lobby = node("UILobby", [node("Front", [node("Right", [node("Btn_RotateSpine", [node("ConditionRoot", [loop])]), node("Btn_Screen_On", [structuredClone(bg),node("Icon",[],[sprite("Common_UIHide_Icon",75,63,"#466399/1.00")],{pos:[3,8],scale:[.85,.85]})])]), node("NUITop", [node("Top", [node("Right", [node("Btn_LobbyCharacter", [duty("Able", "#466399/1.00"), duty("Disable", "#2f3c52/1.00")])])])])])]);
 function find(tree, path) { return path.split("/").reduce((n, name) => n.children.find((c) => c.name === name), tree); }
 let rendered, wired = [], drawnIcons = new Map(), alignedIcons = new Map();
-globalThis.hallControlsHarness = { S, clone: structuredClone, NGUI: { find, node: (name,pos,widgets,children) => node(name,children,widgets,{pos}), async render(tree) {
+globalThis.hallControlsHarness = { S, clone: structuredClone, NGUI: { find, fitGroup: captions => captions.map(text => ({text, fs:48})), node: (name,pos,widgets,children) => node(name,children,widgets,{pos}), async render(tree) {
     rendered = tree;
     const nodes = new Map();
     if (tree.name.startsWith("Portrait")) {
@@ -25,11 +27,12 @@ globalThis.hallControlsHarness = { S, clone: structuredClone, NGUI: { find, node
     alignedIcons.set(path,options);const entry=view.nodes.get(path); if(!entry)return;
     Object.assign(entry.els[0].style,{transform:options.rotation?`rotate(${-options.rotation}deg)`:"",transformOrigin:"50% 50%"});
   },
-  text(tree, path, value) { find(tree, path).widgets[0].text = value; },
-  UI: { retainedButton: async () => {}, button: async () => {}, scaleControl: async () => {} }, T: (key) => `localized:${key}`, Popup: { hit(host, view, path, fn, meta) { const b = { path, fn, dataset: {}, ...meta }; wired.push(b); return b; } },
+  text(tree, path, value, options) { Object.assign(find(tree, path).widgets[0], options, {text:value}); },
+  UI: { retainedButton: async () => {}, button: async () => {}, scaleControl: async () => {} }, T: (key) => globalThis.hallControlsHarness.strings ? key.split(".").reduce((v,k)=>v[k],globalThis.hallControlsHarness.strings) : `localized:${key}`, Popup: { hit(host, view, path, fn, meta) { const b = { path, fn, dataset: {}, ...meta }; wired.push(b); return b; } },
   document: { createElement: () => ({ style: {}, children: [], append(child) { this.children.push(child); } }), querySelectorAll: () => [] }, lobby };
 let source = await readFile(new URL("../../src/bmpt/web/js/student-hall.js", import.meta.url), "utf8");
 source = source.replace(/^import .*;$/gm, "");
+source = `import { CONTROL, SMALL_BUTTON, SPACE } from "${new URL("../../src/bmpt/web/js/ui-tokens.js", import.meta.url).href}";\nimport { row } from "${new URL("../../src/bmpt/web/js/ui-grid.js", import.meta.url).href}";\n` + source;
 source = `import { portraitReplacements } from "${new URL("../../src/bmpt/web/js/student-hall-model.js", import.meta.url).href}";\nimport { portraitRect, portraitToolbarLayout, PORTRAIT_SIZE } from "${new URL("../../src/bmpt/web/js/student-hall-framing.js", import.meta.url).href}";\nimport { bindCorner } from "${new URL("../../src/bmpt/web/js/corner-layout.js", import.meta.url).href}";\n` + source;
 source = `const {S,clone,NGUI,alignIcon,text,T,Popup,document,UI}=globalThis.hallControlsHarness;\n${source}\nexport {lobbyControl,controls,renderChrome,renderPortraitActions};
 export function setPortraits(value){portraits=value;}
@@ -60,9 +63,9 @@ test("normal and edit actions pack immediately left of the right-aligned numberl
     const text=all.filter((action)=>action[6]);
     assert.deepEqual(text.map((action)=>action[0]),kind==="layout"?["Cancel","Save"]:[]);
     assert.ok(text.every((action)=>action[6]===230));
-    if(text.length){assert.equal(text[0][3],text[1][3]);assert.equal(text[0][2],actions[0][2]);assert.equal(text[1][2]+text[1][3],1875);}
-    assert.equal(actions.at(-1)[0], "Fullscreen"); assert.equal(actions.at(-1)[2]+actions.at(-1)[3], 1875);
-    for (let i=0; i<actions.length-1; i++) assert.equal(actions[i+1][2]-(actions[i][2]+actions[i][3]),20);
+    if(text.length){assert.equal(text[0][3],text[1][3]);near(text[0][2],actions[0][2]);near(text[1][2]+text[1][3],1875);near(text[1][2]-text[0][2]-text[0][3],SPACE.m*S);}
+    assert.equal(actions.at(-1)[0], "Fullscreen"); near(actions.at(-1)[2]+actions.at(-1)[3], 1875);
+    for (let i=0; i<actions.length-1; i++) near(actions[i+1][2]-(actions[i][2]+actions[i][3]),(actions[i+1][0]==="Mode"?SPACE.l:SPACE.m)*S);
     for (const [name,,x,width] of actions) if (["Layout","Background","Adjust","Add","Mode","Fullscreen"].includes(name)) assert.equal(width,156*S);
   }
 });
@@ -162,4 +165,34 @@ test("the toolbar centres on the portrait's visible head, not its Spine bounds",
     const [x,y,w,h]=["left","top","width","height"].map(k=>parseFloat(host.style[k]));
     assert.equal(x+w/2,700-150,"centred on the head, not on the wide box");assert.equal(y+h,1100-600,"touching the head");
   }finally{Hall.setPortraits(null);}
+});
+
+for(const locale of ["en-US","zh-CN","zh-TW","ja-JP","ko-KR","th-TH"]) test(`Hall toolbar bodies, scaled gaps and Cancel/Save fitting in ${locale}`,async()=>{
+  const ctx={font:"",measureText(value){const fs=parseFloat(/([\d.]+)px/.exec(this.font)?.[1]||16);return {width:[...value].reduce((w,c)=>w+fs*(/[\u2e80-\u9fff\u3000-\u30ff\uff00-\uffef\uac00-\ud7af\u0e00-\u0e7f]/.test(c)?1:.55),0),actualBoundingBoxAscent:.75*fs,actualBoundingBoxDescent:.2*fs,fontBoundingBoxAscent:1.16*fs,fontBoundingBoxDescent:.29*fs};}};
+  globalThis.document={documentElement:{lang:locale,appendChild(){}},createElement:()=>({getContext:()=>ctx,remove(){}})};
+  globalThis.getComputedStyle=()=>({getPropertyValue:()=>""});
+  const real=await import("../../src/bmpt/web/js/ngui.js"),fixture=globalThis.hallControlsHarness,previous=fixture.NGUI.fitGroup;
+  fixture.NGUI.fitGroup=real.fitGroup;fixture.strings=JSON.parse(await readFile(new URL(`../../src/bmpt/locales/${locale}.json`,import.meta.url),"utf8")).webui;
+  try{
+    Hall.fixture("portraits","layout");await Hall.renderChrome();
+    const actions=Hall.controls(),icons=actions.filter(a=>!a[6]),pair=actions.filter(a=>a[6]);
+    assert.equal(CONTROL.toolbar.h,104);
+    for(const action of icons){const tree=find(rendered,action[0]),body=find(tree,"Bg").widgets[0];assert.deepEqual([body.w_,body.h_],[156,CONTROL.toolbar.h]);}
+    icons.slice(1).forEach((a,i)=>near(a[2]-icons[i][2]-icons[i][3],(a[0]==="Mode"?SPACE.l:SPACE.m)*S));
+    near(pair[1][2]-pair[0][2]-pair[0][3],SPACE.m*S);
+    for(const viewport of [960,1600,2560])for(const density of [1,2]){
+      const k=viewport/1920*density;
+      for(const action of actions){const body=find(rendered,`${action[0]}/Bg`).widgets[0];assert.ok(action[2]*k>=0&&(action[2]+action[3])*k<=viewport*density);near(body.h_*S*k,(action[6]?CONTROL.buttonS.h:CONTROL.toolbar.h)*S*k);}
+      near((pair[1][2]-pair[0][2]-pair[0][3])*k,SPACE.m*S*k);
+    }
+    const labels=pair.map(([name])=>find(rendered,`${name}/Label_SpineCount`).widgets[0]);
+    assert.equal(new Set(labels.map(w=>w.fontSize)).size,1);
+    for(let i=0;i<pair.length;i++){
+      const [name,key,,width]=pair[i],body=find(rendered,`${name}/Bg`).widgets[0],label=labels[i];
+      assert.equal(body.h_,CONTROL.buttonS.h);assert.ok(label.fontSize>=SMALL_BUTTON.fsMin&&label.fontSize<=CONTROL.buttonS.fs);
+      assert.equal(label.text.replace(/\s/g,""),fixture.T(key).replace(/\s/g,""));
+      for(const line of label.text.split("\n"))assert.ok(real.glyphWidth(line,label.fontSize)<=width/S-2*CONTROL.buttonS.pad+1e-9);
+      assert.ok(label.text.split("\n").length*real.fontSizeFor(label.text,label.fontSize)*real.LINE_PITCH<=label.h_+1e-9);
+    }
+  }finally{fixture.NGUI.fitGroup=previous;delete fixture.strings;}
 });

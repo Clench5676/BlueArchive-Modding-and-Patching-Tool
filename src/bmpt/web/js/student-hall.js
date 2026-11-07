@@ -21,6 +21,8 @@ import { T, L, errorText, language } from "./i18n.js";
 import { clone, S, hitButton, text } from "./util.js";
 import { lazyThumbnail } from "./lazy-thumbnail.js";
 import { thumbnailScope } from "./thumbs.js";
+import { CONTROL, SMALL_BUTTON, SPACE } from "./ui-tokens.js";
+import { row } from "./ui-grid.js";
 
 let ctx, store, options, root, art, chrome, hits, subtitle, layouts, dialogue, fullscreen, sceneCamera;
 let page = 0, scene = 0, toolbar = 0, hitGeneration = 0, abort, portraits, selected = null, editor = null, leavePrompt = null;
@@ -38,7 +40,8 @@ const ACTION_OPTICS = {
   Add: { center: "bounds", alphaCutoff: 32 }, Adjust: { center: "bounds", alphaCutoff: 32 },
   Fullscreen: { center: "bounds", alphaCutoff: 32 },
 };
-const TOOLBAR = Object.freeze({ right: 1875, gap: 20, iconWidth: 156 * S, width: 4 * 156 * S + 60 });
+// UILobby Able_Count/Bg keeps its own 156 x 104-unit body; ACTION_ICONS keeps the authored sprite sizes above.
+const TOOLBAR = Object.freeze({ right: 1875, gap: SPACE.m * S, iconWidth: 156 * S, width: (4 * 156 + 2 * SPACE.m + SPACE.l) * S });
 const current = () => store.current();
 const editing = () => store?.kind() === "layout";
 const arranging = () => editing() && !fullscreen?.active();
@@ -101,27 +104,29 @@ function controls() {
   else if (portraitMode) actions.push(["Layout", "hall.changeLayout", 0, 0, async () => { store.begin("layout"); await renderScene(); }],
     ["Background", "hall.background", 0, 0, () => chooseBackground()]);
   else actions.push(["Adjust", "hall.adjust", 0, 0, () => adjustMemorials()]);
-  const width = TOOLBAR.iconWidth, fullX = TOOLBAR.right - width, modeX = fullX - TOOLBAR.gap - width;
-  let right = modeX - 20;
-  for (let i = actions.length - 1; i >= 0; i--) {
-    actions[i][3] = width; actions[i][2] = right - width; right = actions[i][2] - 20;
-  }
-  actions.push(["Mode", portraitMode ? "hall.memorial" : "hall.portraits", modeX, width, () => setMode(portraitMode ? "memorial" : "portraits")]);
-  actions.push(["Fullscreen", "lobby.fullscreen", fullX, width, () => fullscreen?.enter()]);
+  const width = TOOLBAR.iconWidth, h = CONTROL.toolbar.h * S;
+  const local = row(actions.map(() => ({ w: width, h })), { gap: TOOLBAR.gap });
+  const navigation = row([{ w: width, h }, { w: width, h }], { gap: TOOLBAR.gap });
+  const groups = row([local, navigation], { x: TOOLBAR.right - TOOLBAR.width, w: TOOLBAR.width, gap: SPACE.l * S, justify: "end" });
+  local.boxes.forEach((box, i) => { actions[i][2] = groups.boxes[0].x + box.x; actions[i][3] = box.w; });
+  const [modeBox, fullBox] = navigation.boxes.map((box) => ({ ...box, x: groups.boxes[1].x + box.x }));
+  actions.push(["Mode", portraitMode ? "hall.memorial" : "hall.portraits", modeBox.x, width, () => setMode(portraitMode ? "memorial" : "portraits")]);
+  actions.push(["Fullscreen", "lobby.fullscreen", fullBox.x, width, () => fullscreen?.enter()]);
   if (editing()) {
     const width = (TOOLBAR.width - TOOLBAR.gap) / 2, left = TOOLBAR.right - TOOLBAR.width;
-    actions.push(["Cancel", "popup.cancel", left, width, () => cancelDraft(), true, 230],
-      ["Save", "popup.save", left + width + TOOLBAR.gap, width, () => saveDraft(), true, 230]);
+    const pair = row([{ w: width, h: CONTROL.buttonS.h * S }, { w: width, h: CONTROL.buttonS.h * S }], { x: left, gap: TOOLBAR.gap });
+    actions.push(["Cancel", "popup.cancel", pair.boxes[0].x, width, () => cancelDraft(), true, 230],
+      ["Save", "popup.save", pair.boxes[1].x, width, () => saveDraft(), true, 230]);
   }
   return actions;
 }
 
-function lobbyControl(name, caption, x, width, enabled = true, y = 145) {
+function lobbyControl(name, caption, x, width, enabled = true, y = 145, fit = null) {
   const tree = clone(NGUI.find(layouts.lobby, name === "Fullscreen" ? "Front/Right/Btn_Screen_On" : "Front/Right/Btn_RotateSpine/ConditionRoot/Able_Count"));
   const iconAction = Object.hasOwn(ACTION_ICONS, name), iconOnly = name === "Mode" || name === "Fullscreen" || iconAction;
   tree.name = name; tree.pos = [(x + width / 2 - 960) / S, (540 - y) / S];
   tree.children = tree.children.filter((node) => (iconOnly ? ["Bg", "Icon"] : ["Bg", "Label_SpineCount"]).includes(node.name));
-  NGUI.find(tree, "Bg").widgets.find((w) => "sprite" in w).w_ = width / S;
+  Object.assign(NGUI.find(tree, "Bg").widgets.find((w) => "sprite" in w), { w_: width / S, h_: iconOnly ? CONTROL.toolbar.h : CONTROL.buttonS.h });
   const dutyIcon = NGUI.find(layouts.lobby, `Front/NUITop/Top/Right/Btn_LobbyCharacter/${enabled ? "Able" : "Disable"}/Icon`);
   const tint = dutyIcon.widgets.find((widget) => "sprite" in widget).color;
   if (iconAction) {
@@ -136,7 +141,11 @@ function lobbyControl(name, caption, x, width, enabled = true, y = 145) {
     const size = 76 / Math.max(widget.w_, widget.h_);
     widget.w_ *= size; widget.h_ *= size; widget.color = tint;
     node.pos = [0, 0]; node.scale = [1, 1];
-  } else text(tree, "Label_SpineCount", caption, { w_: (width - 24) / S, fontSize: 34 });
+  } else {
+    const fitted = fit || NGUI.fitGroup([caption], CONTROL.buttonS.fs, SMALL_BUTTON.fsMin, width / S - 2 * CONTROL.buttonS.pad, 2, { maxH: CONTROL.buttonS.h - SMALL_BUTTON.boxInsetH })[0];
+    const label = NGUI.find(tree, "Label_SpineCount"); label.pos = [0, 0]; label.scale = [1, 1];
+    text(tree, "Label_SpineCount", fitted.text, { w_: width / S - SMALL_BUTTON.boxInsetW, h_: CONTROL.buttonS.h - SMALL_BUTTON.boxInsetH, fontSize: fitted.fs, pivot: 4, align: 2 });
+  }
   if (!enabled) for (const node of tree.children) if (node.name !== "Bg") for (const widget of node.widgets) if (widget.color) widget.color = tint;
   return tree;
 }
@@ -145,9 +154,13 @@ async function renderChrome({ publish = true } = {}) {
   const gen = page, version = ++toolbar, mode = current().mode, destination = document.createElement("div");
   Object.assign(destination.style, { position: "absolute", inset: "0" });
   const actionHost = document.createElement("div"); Object.assign(actionHost.style, { position: "absolute", inset: "0" }); destination.append(actionHost);
-  const actions = controls(), nodes = actions.map(([name, key, x, width, , enabled, y]) => lobbyControl(name, T(key), x, width, enabled !== false && pendingWrites === 0, y));
+  const actions = controls(), textActions = actions.filter((action) => action[6]);
+  const fits = textActions.length ? NGUI.fitGroup(textActions.map(([, key]) => T(key)), CONTROL.buttonS.fs, SMALL_BUTTON.fsMin,
+    textActions[0][3] / S - 2 * CONTROL.buttonS.pad, 2, { maxH: CONTROL.buttonS.h - SMALL_BUTTON.boxInsetH }) : [];
+  const nodes = actions.map(([name, key, x, width, , enabled, y]) => lobbyControl(name, T(key), x, width, enabled !== false && pendingWrites === 0, y,
+    fits[textActions.findIndex((action) => action[0] === name)]));
   const view = await NGUI.render(NGUI.node("Hall", [0, 0], [], nodes), actionHost, { scale: S, origin: [960, 540] });
-  bindCorner(actionHost, [TOOLBAR.right - TOOLBAR.width, 145 - 104 * S / 2, TOOLBAR.width, 104 * S], { corner: "top-right", immersive: false });
+  bindCorner(actionHost, [TOOLBAR.right - TOOLBAR.width, 145 - CONTROL.toolbar.h * S / 2, TOOLBAR.width, CONTROL.toolbar.h * S], { corner: "top-right", immersive: false });
   await Promise.all(actions.filter(([name]) => name === "Mode" || name === "Fullscreen" || Object.hasOwn(ACTION_ICONS, name)).map(([name, , , , , enabled]) =>
     alignIcon(view, `Hall/${name}/Icon`, `Hall/${name}/Bg`, { height: 48 * S,
       maxWidth: 104 * S, enabled: enabled !== false && !pendingWrites, ...ACTION_OPTICS[name] })));
@@ -242,7 +255,7 @@ async function renderPortraitActions(host, entry, rect, version, alive = () => t
   // The toolbar is placed by the portrait's visible head, known once its atlas alpha is read (a few milliseconds).
   await portraits?.pickReady?.(entry.id);
   if (version !== hitGeneration || !alive()) return;
-  const actions = portraitActions(entry), box = toolbarBox(entry, rect), width = box.icon, gap = box.gap;
+  const actions = portraitActions(entry), box = toolbarBox(entry, rect), width = box.icon;
   Object.assign(host.style, { left: `${box.x}px`, top: `${box.y}px`, width: `${box.width}px`, height: `${box.height}px` });
   const destination = document.createElement("div");
   await Promise.all(actions.map(async ([name, key, action, enabled], index) => {
@@ -256,7 +269,8 @@ async function renderPortraitActions(host, entry, rect, version, alive = () => t
     widget.color = NGUI.find(layouts.lobby, "Front/NUITop/Top/Right/Btn_LobbyCharacter/Able/Icon").widgets.find((item) => "sprite" in item).color;
     Object.assign(widget, { type: chosen.type ?? 1, atlas: chosen.atlas || "Common", sprite: chosen.sprite, w_: chosen.width, h_: chosen.height, flip: chosen.flip || 0 });
     const size = 56 / Math.max(widget.w_, widget.h_); widget.w_ *= size; widget.h_ *= size;
-    const view = await NGUI.render(tree, destination, { scale: S, origin: [index * (width + gap) + width / 2, width / 2] });
+    const at = box.icons[index];
+    const view = await NGUI.render(tree, destination, { scale: S, origin: [at.x + at.w / 2, at.y + at.h / 2] });
     await alignIcon(view, `${tree.name}/Icon`, `${tree.name}/Bg`, { maxSize: 56 * S, rotation: chosen.rotZ || 0, enabled: enabled && !pendingWrites });
     const button = Popup.hit(destination, view, `${tree.name}/Bg`, () => {
       if (version !== hitGeneration || !alive() || !arranging() || pendingWrites || !enabled) return;

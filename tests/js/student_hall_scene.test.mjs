@@ -39,6 +39,7 @@ globalThis.sceneHarness={
 };
 let source=await readFile(new URL("../../src/bmpt/web/js/student-hall.js",import.meta.url),"utf8");
 source=source.replace(/^import .*;$/gm,"");
+source = `import { CONTROL, SMALL_BUTTON, SPACE } from "${new URL("../../src/bmpt/web/js/ui-tokens.js", import.meta.url).href}";\nimport { row } from "${new URL("../../src/bmpt/web/js/ui-grid.js", import.meta.url).href}";\n` + source;
 source=`import { bindPortraitPointer, portraitToolbarLayout } from "${new URL("../../src/bmpt/web/js/student-hall-framing.js",import.meta.url).href}";\nconst {createDraft,createMemorialPool,sourceKey,portraitSelection,portraitReplacements,portraitRect,sceneRect,sceneViewport,dialogueText,language,clone,S,T,L,document,Backgrounds,Loading,Lobby,Popup,UI,rpc,hitButton}=globalThis.sceneHarness;\n${source}
 const originalHits=renderHits;
 export function fixture(value,renderer,memory=null,shownMode=value.mode){
