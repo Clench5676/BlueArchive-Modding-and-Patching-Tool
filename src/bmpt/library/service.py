@@ -223,9 +223,24 @@ class _Entry:
         return {"install": self.pin.key, "core": self.core, "variant": self.variant, "kind": self.kind}
 
 
+def _rebuilt(index: dict[str, list[Path]], path: Path) -> Path | None:
+    """The file that a game update rebuilt ``path`` as: the one other file of its group (its name less the CRC) in its
+    folder. An update rebuilds a changed group in place, keeping its name and date and changing only the CRC. None
+    when no other file or several have that name (groups packed one asset per bundle share it)."""
+    if not parse_filename(path.name).crc:
+        return None
+    key = integrity.replacement_key(path.name)
+    rebuilt = [other for other in index.get(core_of(path.name), [])
+               if other.parent == path.parent and other.name != path.name
+               and integrity.replacement_key(other.name) == key]
+    return rebuilt[0] if len(rebuilt) == 1 else None
+
+
 def _has_successor(index: dict[str, list[Path]], path: Path) -> bool:
-    """Whether a file of the same part, dated after ``path``, is in its folder in an install's index (a game update
-    renamed it)."""
+    """Whether the file that replaced ``path`` in a game update is in its folder in an install's index: the group
+    rebuilt under a new CRC (``_rebuilt``), or a file of the same part dated after it (an update that renamed it)."""
+    if _rebuilt(index, path) is not None:
+        return True
     part, date = part_of(path.name), date_of(path.name)
     return bool(date) and any(
         other.parent == path.parent and part_of(other.name) == part and date_of(other.name) > date
@@ -399,11 +414,15 @@ class _View:
         """Whether a present file of the same part, dated after it, is in the same folder (a game update)."""
         return _has_successor(self.indexes[pin.key], path)
 
-    def later_record(self, path: Path) -> bool:
-        """Whether the library recorded a later file of the same part in the same folder (it wrote the successor)."""
+    def later_record(self, path: Path, pin: Pin | None = None) -> bool:
+        """Whether the library recorded the file that replaced ``path`` in its folder (it wrote the successor): with
+        ``pin``, the group rebuilt under a new CRC (``_rebuilt``); a later file of the same part."""
+        records = self.by_folder.get(path.parent, [])
+        rebuilt = _rebuilt(self.indexes[pin.key], path) if pin is not None else None
+        if rebuilt is not None and any(other == rebuilt for other, _record in records):
+            return True
         part, date = part_of(path.name), date_of(path.name)
-        return any(part_of(other.name) == part and date_of(other.name) > date
-                   for other, _record in self.by_folder.get(path.parent, []))
+        return any(part_of(other.name) == part and date_of(other.name) > date for other, _record in records)
 
     def copy_of(self, part: _Part, pin: Pin) -> str | None:
         """Where an official copy of a game file is, judged cheaply: the library's kept original, the file itself,
@@ -471,7 +490,7 @@ class _View:
                     part = present[str(path)]
                     if not part.matched and part.official:
                         drifted_present = True
-                elif path.parent.is_dir() and self.successor(pin, path) and not self.later_record(path):
+                elif path.parent.is_dir() and self.successor(pin, path) and not self.later_record(path, pin):
                     drifted_gone = True
         written = max((seconds(part.record.get("at")) or seconds(part.record.get("mtime")) or 0.0
                        for part in parts if part.carried == carried and part.record), default=None)
@@ -2804,7 +2823,7 @@ class ModLibrary:
                     stale.append(str(path))
                     core = view.maps[pin.key].slot(core_of(path.name))
                     if (view.says_nonofficial(path, record, present=False) and view.configured(pin.key, core)
-                            and not view.later_record(path)):
+                            and not view.later_record(path, pin)):
                         markers.setdefault(pin.key, set()).add(core)
         built_drops: dict[str, set[str]] = {}
         for pin in pins:
