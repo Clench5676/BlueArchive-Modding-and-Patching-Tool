@@ -2421,5 +2421,6 @@ list panels about 40 inside the screen with 20 of padding, cards 12 apart. `docs
 Recalibration (agents under the new tests-by-tier and lean-brief rules): popups (Codex), Import Mod (Sonnet), Settings
 and the switch cards (Sonnet), the toolbars (Codex). Visible changes the owner should review: popup widths by class and
 the new footer, Settings' value text 38 to 36 and row heights a few units shorter, switch cards 8 units tighter, footer
-and toolbar gaps in units (20 x S instead of 20 px), the Hall's Cancel/Save as small buttons. Not yet done: the detail
-page's composed parts. The tool pages are upstream's classic windows, outside the web UI.
+and toolbar gaps in units (20 x S instead of 20 px), the Hall's Cancel/Save as small buttons. The detail page's composed parts followed (`730a52fd`: the
+nameplate's pencil 46 to 60 and 8 from the name, the switch text 48/36, the details table's cells 34 to 36 with rows
+12 apart). The tool pages are upstream's classic windows, outside the web UI.
