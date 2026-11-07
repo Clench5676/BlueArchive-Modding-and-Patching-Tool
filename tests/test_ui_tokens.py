@@ -50,7 +50,7 @@ def label(node):
     return next(w for w in node["widgets"] if "text" in w)
 
 
-def test_popup_frame_and_footer_geometry(tokens, layouts):
+def test_legacy_popup_frame_and_footer_geometry_remain_pinned(tokens, layouts):
     sort = layouts["UIPopup_Sort"]
     base, bg = subtree(sort, "Center/Popup/Base"), subtree(sort, "Center/Popup/Base/BG")
     popup, footer = tokens["POPUP"], tokens["FOOTER"]
@@ -267,6 +267,9 @@ def test_list_row_anatomy_is_the_mailbox_row(tokens, exemplars):
 
 def test_popup_frames_and_the_small_frames_anatomy(tokens, layouts, exemplars):
     P, C = tokens["POPUP_FRAME"], tokens["CONTROL"]
+    assert P["frameY"] == tokens["POPUP"]["frameY"] == -12
+    assert P["maxH"] == tokens["POPUP"]["maxH"] == 1560
+    assert P["footer"]["bottom"] + C["buttonL"]["h"] / 2 == 190
     frame = lambda tree, path: sprite(subtree(tree, path), "Common_Popup_Bg")
     assert [frame(layouts["UIPopup_Option_PC"], "Center/Popup/Base/BG")[k] for k in ("w_", "h_")] == [P["L"]["w"], P["L"]["h"]]
     gacha = exemplars["UIPopup_GachaCharList"]
