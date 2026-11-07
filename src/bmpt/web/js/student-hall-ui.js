@@ -8,7 +8,11 @@ import { searchTree, orderBody, toolbarLayout, toolbarTree } from "./roster-widg
 import { clone, S, hitButton } from "./util.js";
 import { T } from "./i18n.js";
 import { bindScale } from "./student-hall-scale.js";
-import { POPUP, SMALL_BUTTON, captionMinimum } from "./ui-tokens.js";
+import { POPUP, SMALL_BUTTON, CONTROL, TYPE, SPACE, captionMinimum } from "./ui-tokens.js";
+import { stack as layoutStack } from "./ui-grid.js";
+// A Hall small button is a buttonS control (docs/design-system.md): its height, minimum width and caption size are the system's, the
+// caption's floor the body role's. Its fit insets are the Common_Btn_BG body's (SMALL_BUTTON), not a scale value.
+const BUTTON = CONTROL.buttonS, BUTTON_FLOOR = TYPE.body.min;
 let assets;
 const visibleReadiness = new WeakMap(), virtualControls = new WeakMap();
 function pictureReadiness(host, picture, view) {
@@ -134,33 +138,39 @@ export function modalFrame(title, width, height, actions, captionSite = "hall.mo
 }
 export const modalContentBottom = (height, actions = 1) => 540 - (Popup.footerTop(height, actions) + POPUP.clearance) * S;
 // UIPopup_Sort's title is 64 below the top, its underline another 52 down, with half its 12-unit height below that.
+// Under the title the picker is a stack: the toolbar's bar (140 units at the toolbar's scale), the search field when it is open (60)
+// and the list, flush against one another (the bar and the field are one panel with the list, no gap between).
 export function portraitPickerLayout(view, searching) {
   const width = 1320, lay = toolbarLayout(view, { title: "" });
-  const scale = Math.min(1660 / 2840, width / (1412 - lay.cbLeft + 28));
+  const scale = Math.min(1660 / 2840, width / (1412 - lay.cbLeft + SPACE.l));
   const titleBottom = 540 - (POPUP.frameY + 1300 / 2 - (64 + 52 + 6)) * S;
-  const y = titleBottom + 70 * scale, top = y + 70 * scale + (searching ? 60 : 0);
-  return { titleBottom, scale, toolbar: { x: 300, y, width }, search: [300, y + 70 * scale, width],
+  const head = layoutStack([{ w: width, h: 140 * scale }, ...searching ? [{ w: width, h: 60 }] : []], { x: 300, y: titleBottom, w: width });
+  const [bar, field] = head.boxes, top = titleBottom + head.h;
+  return { titleBottom, scale, toolbar: { x: 300, y: bar.y + bar.h / 2, width }, search: field ? [field.x, field.y, field.w] : [300, top, width],
     list: [300, top, width, modalContentBottom(1300) - top] };
 }
 export const backgroundPickerBox = () => [130, modalContentBottom(1450, 2) - 650, 760, 650];
 export function portraitRowLayout() {
   const name = Popup.LIST_CARD_NAME, bar = Math.max(88, name.padY + name.lines * name.fs * name.pitch);
   // Use the row's 16 free pixels above the artwork before growing it; reserve the native horizontal scrollbar's
-  // painted 20-unit band below the button (scrollbarTrack). Its viewport gains the card's existing 12px hit outset
+  // painted 20-unit band (SPACE.m, scrollbarTrack) below the button. Its viewport gains the card's existing 12px hit outset
   // on the left, keeping the artwork and action's stage x unchanged while admitting the wider body.
+  // The row is a stack: the artwork down to the foot of its name strip, 8 px (the card's gap) and the action's body (a buttonS
+  // control), then the scrollbar's band.
   const cardY = 600 * .46 / 2;
-  const height = cardY + (600 / 2 + 10 + bar) * .46 + 8 + SMALL_BUTTON.h * S + 20 * S;
+  const column = layoutStack([{ w: 0, h: cardY + (600 / 2 + 10 + bar) * .46 }, { w: 0, h: BUTTON.h * S }], { gap: 8 });
+  const height = column.h + SPACE.m * S;
   return { height, pitch: height + 4, cardX: 105 + 12, cardY, stripX: 240 - 12, stripW: 960 + 12 };
 }
 // Keep a caller's centre and width; only the minimum width and the shared small-button height constrain its body.
 // bodyHeight: a site whose neighbour sets the height (the portrait toolbar's Reset beside its slider).
-export function buttonBox([x, y, width, height], bodyHeight = SMALL_BUTTON.h * S) {
-  const w = Math.max(SMALL_BUTTON.minW * S, width), h = bodyHeight;
+export function buttonBox([x, y, width, height], bodyHeight = BUTTON.h * S) {
+  const w = Math.max(BUTTON.minW * S, width), h = bodyHeight;
   return [x + (width - w) / 2, y + (height - h) / 2, w, h];
 }
-export const buttonSize = (captions, width) => NGUI.fitGroup(captions, SMALL_BUTTON.fs, SMALL_BUTTON.fsMin,
-  Math.max(SMALL_BUTTON.minW, width / S) - SMALL_BUTTON.fitInset, 2,
-  { maxH: SMALL_BUTTON.h - SMALL_BUTTON.boxInsetH })[0]?.fs;
+export const buttonSize = (captions, width) => NGUI.fitGroup(captions, BUTTON.fs, BUTTON_FLOOR,
+  Math.max(BUTTON.minW, width / S) - SMALL_BUTTON.fitInset, 2,
+  { maxH: BUTTON.h - SMALL_BUTTON.boxInsetH })[0]?.fs;
 
 // The memorial editor's footer, candidate Add and queue Remove still hit the full-row stop rule.
 // Their existing bodies/captions stay until their containing layout can change.
@@ -172,9 +182,9 @@ export const retainedButton = (host, name, caption, box, action, opts = {}) => d
 // height: the body height in stage pixels where the site sets it (buttonBox); the token's otherwise.
 export async function button(host, name, caption, box, action, opts = {}) {
   await ready();
-  const placed = buttonBox(box, opts.height), fit = NGUI.fitGroup([caption], opts.size ?? SMALL_BUTTON.fs, opts.size ?? SMALL_BUTTON.fsMin,
+  const placed = buttonBox(box, opts.height), fit = NGUI.fitGroup([caption], opts.size ?? BUTTON.fs, opts.size ?? BUTTON_FLOOR,
     placed[2] / S - SMALL_BUTTON.fitInset, 2, { maxH: placed[3] / S - SMALL_BUTTON.boxInsetH })[0];
-  if (fit.overflow || fit.fs < captionMinimum(opts.captionSite, document.documentElement.lang, SMALL_BUTTON.fsMin)) throw new RangeError(`Hall small button cannot fit: ${name}`);
+  if (fit.overflow || fit.fs < captionMinimum(opts.captionSite, document.documentElement.lang, BUTTON_FLOOR)) throw new RangeError(`Hall small button cannot fit: ${name}`);
   return drawButton(host, name, caption, placed, action, { ...opts, fs: fit.fs, min: fit.fs, fit });
 }
 async function drawButton(host, name, caption, [x, y, width, height], action,
@@ -272,7 +282,7 @@ export async function card(host, item, { x, y, kind = "lobby", scale = .48, sele
   // The name strip is inclined: its visual centre is left of the artwork centre.
   const actionWidth = barWidget.w_ * scale, actionX = x + bar.pos[0] * scale - actionWidth / 2;
   if (onAdd) {
-    const draw = kind === "spr" ? button : retainedButton, height = kind === "spr" ? SMALL_BUTTON.h * S : 40;
+    const draw = kind === "spr" ? button : retainedButton, height = kind === "spr" ? BUTTON.h * S : 40;
     const size = kind === "spr" ? buttonSize : (captions, width) => retainedButtonSize(captions, width, height);
     await draw(host, `Add${item.key}`, addLabel,
       [actionX, y - bar.pos[1] * scale + barWidget.h_ * scale / 2 + 8, actionWidth, height], onAdd,
