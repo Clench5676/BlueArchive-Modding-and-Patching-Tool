@@ -334,7 +334,7 @@
       "file": "src/ba_modding_toolkit/asset.py",
       "line": 16,
       "original": "from .texture_guard import texture_image",
-      "import": "from bmpt.texture_guard import texture_image"
+      "import": "from bmpt.texture_guard import encodable_image, texture_image"
     },
     {
       "file": "src/ba_modding_toolkit/bundle.py",
