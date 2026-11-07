@@ -469,10 +469,23 @@ class UiState:
 
     @property
     def scan_consent(self) -> bool | None:
-        """None until the user answered the scan consent popup; then True (the game folders may be checked) or
-        False."""
+        """None until the user answered the scan consent popup; then True (the game folders may be checked and Steam's
+        records read) or False. An Allow given before the popup covered Steam's records is asked again."""
         value = self.get("scan_consent")
+        if value is True and self.get("scan_consent_scope") != SCAN_CONSENT_SCOPE:
+            return None
         return value if isinstance(value, bool) else None
+
+    def set_scan_consent(self, granted: bool) -> None:
+        """Save an answer to the scan consent popup, for what the popup covers now."""
+        def change(data: dict[str, Any]) -> None:
+            prefs = data.get("prefs")
+            if not isinstance(prefs, dict):
+                prefs = data["prefs"] = {}
+            prefs["scan_consent"] = bool(granted)
+            prefs["scan_consent_scope"] = SCAN_CONSENT_SCOPE
+
+        self._update(change)
 
     @property
     def spine_consent(self) -> bool | None:
@@ -516,6 +529,10 @@ class UiState:
 
 # Boolean preferences and their defaults: the tray or menu bar icon,
 # the hand-off prompt before the classic UI opens, and whether the first toggle's explanation was shown
+# What the scan consent covers: 1 the game file checks; 2 also Steam's records (install location, update status, file
+# lists), for finding the game folder, the Steam watch and the official files
+SCAN_CONSENT_SCOPE = 2
+
 FLAGS = {"tray": False, "classic_prompt": True, "mods_explained": False,
          "startup_update": True}
 DATA_ID_LENGTH = 12  # hex digits

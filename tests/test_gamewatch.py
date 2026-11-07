@@ -310,3 +310,12 @@ def test_the_defaults_are_the_write_time_checks_and_read_no_game_file(world, tmp
     assert set(opened) == {f"appmanifest_{game_paths.STEAM_APP_ID}.acf"}  # never a game file
     monkeypatch.setattr(safety, "game_processes", lambda: ["/Applications/Blue Archive.app/Contents/MacOS/Blue Archive"])
     assert watch.poll().reason == "game_running"
+
+
+def test_without_the_consent_the_poll_leaves_steam_alone(world):
+    calls = []
+    watch = world.watch(check_steam=lambda folder: calls.append(folder), steam_allowed=lambda: False)
+    world.busy = {"/games/global"}
+    assert watch.poll().steam_busy == () and calls == []
+    allowed = world.watch(steam_allowed=lambda: True)
+    assert allowed.poll().steam_busy == ("/games/global",)

@@ -258,11 +258,28 @@ function noGame() {
   };
   message(T("app.noGame.title"), T("app.noGame.hint"), [
     [T("settings.detect"), async () => {
-      const found = await rpc("settings.detectGame", { region }).catch(() => []);
+      const found = await Consent.detectGame(region, plainScanConsent).catch(() => []);
+      if (found === null) return; // declined: the folder is chosen by hand
       if (found.length) setDir(found[0]); else notify(T("app.noGame.hint"), { kind: "error", error: { code: "game_directory_missing" } });
     }],
     ...(info?.native ? [[T("settings.change"), async () => { const p = await rpc("settings.pickFolder", {}).catch(() => null); if (p) setDir(p); }]] : []),
   ]);
+}
+
+// the Check Game Files consent where the game's UI cannot be drawn (no game folder yet): the same text in the plain
+// built-in style, answered with its two buttons; the no-game screen comes back after the answer
+function plainScanConsent() {
+  return new Promise((resolve) => {
+    const lines = [T("mods.scan.will.label"), T("mods.scan.will.steam"), T("mods.scan.will.items"),
+      T("mods.scan.willNot.label"), T("mods.scan.willNot.items"), T("mods.scan.note")];
+    const answer = (granted) => async () => {
+      try { await rpc("mods.consent", { granted }); }
+      catch (err) { notify(errorText(err), { kind: "error", error: err }); return; }
+      noGame();
+      resolve(granted);
+    };
+    message(T("mods.scan.title"), lines.join("\n"), [[T("mods.scan.no"), answer(false)], [T("mods.scan.yes"), answer(true)]]);
+  });
 }
 
 async function refreshConfiguration(){

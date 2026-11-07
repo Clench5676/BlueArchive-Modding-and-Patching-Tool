@@ -76,12 +76,16 @@ class GameWatch:
                  on_steam_idle: Callable[[], Any] | None = None,
                  check_game: Callable[[], None] | None = None,
                  check_steam: Callable[[Path | str], None] | None = None,
+                 steam_allowed: Callable[[], bool] = lambda: True,
                  fast: float = FAST_SECONDS, slow: float = SLOW_SECONDS):
         """``active()`` says whether to poll fast (a page connected, the tray icon shown); ``own_classic()`` gives the
         pid of the classic window this instance started, which its own watcher thread reports, so it is never
         watched here; ``on_classic_closed()`` runs after ``classic.closed`` is published, as for that thread's
-        exit. ``check_game`` and ``check_steam`` default to the write-time checks of ``library.safety``."""
+        exit. ``check_game`` and ``check_steam`` default to the write-time checks of ``library.safety``;
+        ``steam_allowed()`` says whether Steam's records may be read (the Check Game Files consent): without it the
+        poll leaves Steam alone, and the write-time check alone refuses writes while Steam changes an install."""
         self._installs = installs
+        self._steam_allowed = steam_allowed
         self._find_classic = find_classic
         self._profiles_seen = profiles_seen
         self._on_change = on_change
@@ -148,6 +152,12 @@ class GameWatch:
         return None
 
     def _steam(self) -> tuple[str, ...]:
+        try:
+            if not self._steam_allowed():
+                return ()
+        except Exception:
+            logger.exception("Steam consent unavailable")
+            return ()
         try:
             folders = [str(folder) for folder in self._installs()]
         except Exception:

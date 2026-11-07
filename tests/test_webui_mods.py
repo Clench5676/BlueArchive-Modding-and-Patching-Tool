@@ -281,6 +281,10 @@ def test_the_reasons_of_an_unavailable_switch(env, monkeypatch):
 
     monkeypatch.setattr(safety, "check_steam_idle", busy)
     s.watch.poll()
+    # Steam's records are read only with the Check Game Files consent (the write-time check refuses regardless)
+    assert rpc(env.app, "mods.state")["result"]["reason"] is None
+    s.state.set_scan_consent(True)
+    s.watch.poll()
     assert rpc(env.app, "mods.state")["result"]["reason"] == "steam_busy"
     monkeypatch.setattr(safety, "check_steam_idle", lambda folder: None)
     s.watch.poll()
@@ -339,7 +343,7 @@ def test_the_scan_consent_and_the_preferences(env):
 
 
 def test_the_start_scan_lists_a_mod_outside_the_library(env):
-    env.s.state.set("scan_consent", True)
+    env.s.state.set_scan_consent(True)
     env.spr.write_bytes(CRCUtils.apply_crc_fix(header_bundle(b"modded!!"), int(parse_filename(env.spr.name).crc)))
     assert env.s.library is not None  # built: its prune job, then the start scan
     assert wait_for(lambda: events_named(env.drain(), "library.scanned"))
@@ -391,7 +395,7 @@ def test_off_suppresses_every_scan_trigger_and_survives_restart(env, monkeypatch
 def test_switching_off_cancels_pending_scans_and_releases_the_classic_queue(env, monkeypatch):
     s = env.s
     assert s.library is not None
-    s.state.set("scan_consent", True)
+    s.state.set_scan_consent(True)
     started, release = threading.Event(), threading.Event()
 
     def scan(cancel, dismissed):
@@ -476,7 +480,7 @@ def test_the_data_directory_id_and_a_shared_library(env):
 
 def test_another_data_directorys_toggle_shows_within_one_poll(env, monkeypatch):
     s = env.s
-    s.state.set("scan_consent", True)
+    s.state.set_scan_consent(True)
     rpc(env.app, "mods.state")
     assert s.jobs.wait(s._prune_job, 10)
     s.start_watch(run=False)
@@ -536,7 +540,7 @@ def test_a_second_toggle_while_one_is_queued_is_busy(env):
 
 
 def test_adding_mods_already_in_use_runs_while_the_game_runs(env, monkeypatch):
-    env.s.state.set("scan_consent", True)
+    env.s.state.set_scan_consent(True)
     env.spr.write_bytes(CRCUtils.apply_crc_fix(header_bundle(b"modded!!"), int(parse_filename(env.spr.name).crc)))
     env.s.library
     assert wait_for(lambda: events_named(env.drain(), "library.scanned"))
@@ -1067,7 +1071,7 @@ def test_failed_build_finishes_the_apply_and_releases_its_locks(env, monkeypatch
 
 
 def test_background_add_switches_and_rescans_with_durable_file_progress(env, monkeypatch):
-    env.s.state.set("scan_consent", True)
+    env.s.state.set_scan_consent(True)
     path = make_mod(env.spr, env.tmp / 'picker')
     env.s.library
     assert env.s.jobs.wait(env.s._prune_job, 5)
@@ -1261,7 +1265,7 @@ def test_first_add_baselines_existing_mods_before_storing_new_ones(env, monkeypa
         if method == "adopt":
             job = env.job("mods.adopt", entries=[{"install": env.key(), "core": "test_spr"}])
         else:
-            env.s.state.set("scan_consent", True)
+            env.s.state.set_scan_consent(True)
             job = env.job("mods.toggle", enabled=False, expect=True)
         assert job.state == "done", job.error
     else:
