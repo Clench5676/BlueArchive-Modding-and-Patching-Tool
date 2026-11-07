@@ -759,7 +759,9 @@ def test_a_refused_row_reports_how_its_files_matched_and_every_guess(real_metada
                                  for platform in mod_origin.PLATFORMS]
     batch = env.services.batch_import
     row, = import_snapshot(batch.diagnostic_snapshot(), set())["rows"]
-    assert (row["resolution"], row["attempts"], row["previewed"]) == (entry["resolution"], entry["attempts"], False)
+    # the report adds each attempt's display code (BL-110)
+    attempts = [{**attempt, "ref": "E3004"} for attempt in entry["attempts"]]
+    assert (row["resolution"], row["attempts"], row["previewed"]) == (entry["resolution"], attempts, False)
     batch.preview(entry["preview"]["key"])
     row, = import_snapshot(batch.diagnostic_snapshot(), set())["rows"]
     assert row["previewed"] is True
