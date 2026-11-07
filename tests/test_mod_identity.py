@@ -43,14 +43,30 @@ def test_content_names_and_container_paths(monkeypatch, name, core):
     assert content_cores(Path('upload.bundle')) == {core}
 
 
-def test_a_scene_layer_in_a_cores_spine_folder_belongs_to_that_core(monkeypatch):
+@pytest.mark.parametrize('folder, names, contained', [
     # Aru's lobby keeps a second skeleton, Aru_scene, in its own folder
-    folder = 'Assets/_MX/SpineLobbies/Aru_home'
-    objects(monkeypatch, ['Aru_home.skel', 'Aru_home.atlas', 'Aru_scene.skel', 'Aru_scene.atlas'],
-            [f'{folder}/Aru_home/Aru_home.skel.bytes', f'{folder}/Aru_home/Aru_home.atlas.txt',
-             f'{folder}/Aru_Scene/Aru_scene.skel.bytes', f'{folder}/Aru_Scene/Aru_scene.atlas.txt'])
-    path = Path('assets-_mx-spinelobbies-aru_home-_mxdependency-textassets-2023-11-18_assets_all_1.bundle')
-    assert content_cores(path) == {'aru_home'}
+    ('Aru_home', ['Aru_home.skel', 'Aru_scene.skel'], ['Aru_home/Aru_home.skel.bytes', 'Aru_Scene/Aru_scene.skel.bytes']),
+    # a background layer, an official misspelling, an effect prefab and a post-processing volume named like cores
+    ('CH0060_home', ['CH0060BG_home.skel'], ['CH0060BG_home/CH0060BG_home.skel.bytes', 'CH0060_home/CH0060_home.png']),
+    ('CH9996_home', ['CH0996_home.atlas', 'CH9996_home.skel'], ['CH0996_home.atlas.txt', 'CH9996_home.skel.bytes']),
+    ('Wakamo_home', ['FX_Wakamo_home'], ['Effects/Prefab/FX_Wakamo_home.prefab']),
+    ('Hiyori_home', ['pppv_lobby_hiyori_home', 'Hiyori_home-Idle_01'], ['Hiyori_home-Idle_01.asset']),
+    # the game's own Hare lobby holds a skeleton named Hanako_home
+    ('Hare_home', ['Hanako_home.skel', 'Hare_home.skel'], ['Hanako_home.skel.bytes', 'Hare_home.skel.bytes']),
+])
+def test_assets_in_a_cores_spine_folder_belong_to_that_core(monkeypatch, folder, names, contained):
+    objects(monkeypatch, names, [f'Assets/_MX/SpineLobbies/{folder}/{name}' for name in contained])
+    core = folder.lower()
+    path = Path(f'assets-_mx-spinelobbies-{core}-_mxdependency-textassets-2023-11-18_assets_all_1.bundle')
+    assert content_cores(path) == {core}
+
+
+def test_a_portrait_folder_owns_a_lobby_named_skeleton_it_holds(monkeypatch):
+    folder = 'Assets/_MX/SpineCharacters/CH0156_spr'
+    objects(monkeypatch, ['CH0156_home.skel', 'CH0156_spr.skel'],
+            [f'{folder}/CH0156_home.skel.bytes', f'{folder}/CH0156_spr.skel.bytes'])
+    path = Path('assets-_mx-spinecharacters-ch0156_spr-_mxdependency-textassets-2023-11-18_assets_all_1.bundle')
+    assert content_cores(path) == {'ch0156_spr'}
 
 
 def test_unreadable_bundle_is_refused(monkeypatch):
