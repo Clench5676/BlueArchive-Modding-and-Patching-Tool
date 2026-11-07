@@ -608,6 +608,7 @@ class ModLibrary:
         self._lock = threading.RLock()
         self._hashes = Fingerprints()
         self._steam_files = steam_records.OfficialFiles()
+        self._steam_roots_cache: tuple[float, list[Path]] | None = None
         self._legacy_import_matches: dict[str, str | None] = {}
         self._writing_mods = False
         self._transacting = False
@@ -2622,7 +2623,7 @@ class ModLibrary:
         elif roots is not None:
             folders = list(roots)
         else:
-            folders = [pin.root for pin in self.installs()]
+            folders = self._steam_roots()
         found = set()
         for folder in folders:
             try:
@@ -2632,6 +2633,15 @@ class ModLibrary:
             if entry is not None:
                 found.add(entry)
         return next(iter(found)) if len(found) == 1 else None
+
+    def _steam_roots(self) -> list[Path]:
+        """The known installs' roots for Steam's file lists, listed again after a few seconds (a judgement asks once
+        per file)."""
+        now = time.monotonic()
+        cached = self._steam_roots_cache
+        if cached is None or now - cached[0] > 5:
+            cached = self._steam_roots_cache = (now, [pin.root for pin in self.installs()])
+        return cached[1]
 
     def _is_official_as(self, path: Path, name: str) -> bool:
         """Official: the size and SHA-1 that Steam's file list gives ``name`` (``_steam_official``), else the CRC32 of

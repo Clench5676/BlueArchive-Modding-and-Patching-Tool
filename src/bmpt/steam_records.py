@@ -254,13 +254,26 @@ class OfficialFiles:
     def __init__(self) -> None:
         self._lock = threading.Lock()
         self._cache: dict[Path, tuple[tuple, dict[str, OfficialFile]]] = {}
+        self._apps: dict[Path, tuple[tuple, Path]] = {}  # app manifest -> (its stat, the depot manifest it named)
 
     def bundles(self, game_folder: Path) -> dict[str, OfficialFile]:
         """{bundle file name: official size and SHA-1} for the install at ``game_folder``; empty when Steam keeps no
         readable file list of it."""
-        manifest = depot_manifest_path(Path(game_folder))
+        app = game_paths.steam_app_manifest(Path(game_folder))
+        if app is None or not devmode.allows_read(app):
+            return {}
+        try:
+            app_stat = app.stat()
+        except OSError:
+            return {}
+        app_signature = (app_stat.st_size, app_stat.st_mtime_ns)
+        with self._lock:
+            known = self._apps.get(app)
+        manifest = known[1] if known and known[0] == app_signature else depot_manifest_path(Path(game_folder))
         if manifest is None:
             return {}
+        with self._lock:
+            self._apps[app] = (app_signature, manifest)
         try:
             stat = manifest.stat()
         except OSError:
