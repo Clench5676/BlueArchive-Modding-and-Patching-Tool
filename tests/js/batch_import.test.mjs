@@ -60,6 +60,11 @@ globalThis.document = { body, activeElement: body, documentElement: new El("html
 };
 Object.defineProperty(globalThis, "navigator", { value: { platform: "Mac" }, configurable: true });
 globalThis.addEventListener = () => {};
+const errorRegistry = JSON.parse(readFileSync(new URL("../../src/bmpt/web/error-codes.json", import.meta.url), "utf8"));
+globalThis.fetch = async (url) => {
+  assert.equal(url, "/error-codes.json");
+  return { ok: true, json: async () => errorRegistry };
+};
 const observers = [];
 globalThis.IntersectionObserver = class {
   constructor(callback) { this.callback = callback; this.items = new Set(); observers.push(this); }
@@ -365,7 +370,7 @@ test("a refused row's badge opens its reason and what the check read of its file
   h.row("e").querySelector(".import-row-badge").click(); await flush();
   const shown = h.messages.at(-1);
   assert.equal(h.messages.length, before + 1); assert.equal(shown.title, "Details");
-  assert.equal(shown.lines[0], "Incompatible Platform - build target Android, required StandaloneWindows64", "no file name in the reason");
+  assert.equal(shown.lines[0], "Incompatible Platform - build target Android, required StandaloneWindows64 (E3007)", "the reason carries the reference and no file name");
   assert.deepEqual(shown.lines.slice(1), ["e.bundle\nBuild Target: Android\nUnity Version: 2021.3"]);
   assert.equal(shown.compact, true);
   assert.equal(h.page.model.state.selected, "a", "opening the details does not select the row");
@@ -537,12 +542,25 @@ test("analysis and run errors remain visible and prevent stale execution until r
   const h = await fixture(); const adding = h.page.drop(["/fixtures/new.bundle"]); await flush();
   h.analyses[0].reject({ code: "game_running" }); await adding; await h.page.settled();
   assert.equal(h.phase(), "error"); assert.match(h.messages.at(-1).lines.join(" "), /Close the game first/); assert.equal(h.action("start").disabled, true);
+  assert.equal(h.messages.at(-1).title, "Notice");
+  assert.equal(h.messages.at(-1).error, undefined, "a refusal has no Error Report action");
+  assert.ok(!h.messages.at(-1).lines.join(" ").includes("E2009"));
   const retry = h.page.model.recheck(); await flush(); assert.deepEqual(h.analyses[1].params.paths, ["/fixtures/new.bundle"]);
   h.analyses[1].resolve({ entries: [entry("a")], skipped: 0 }); await retry;
   h.answers.push({ button: "ok" }); await h.action("start").click(); await flush();
   h.runs[0].reject({ code: "future_error" }); await flush();
   assert.equal(h.phase(), "error"); assert.match(h.messages.at(-1).lines.join(" "), /Import Failed/); assert.doesNotMatch(h.host.textContent, /future_error/);
   assert.equal(h.action("start").disabled, true); assert.equal(h.action("recheck").disabled, false);
+});
+
+test("the import page's Failed popup retains a supplied backend reference", async () => {
+  const h = await fixture(), adding = h.page.drop(["/fixtures/new.bundle"]);
+  await flush();
+  const error = { code: "mod_parts_missing", ref: "E3999", params: { file: "new.bundle" } };
+  h.analyses[0].reject(error); await adding; await h.page.settled();
+  assert.equal(h.messages.at(-1).title, "Failed");
+  assert.ok(h.messages.at(-1).lines.at(-1).endsWith(" (E3999)"));
+  assert.equal(h.messages.at(-1).error, error);
 });
 
 test("advanced options save the exact Options contract and isolate ALL from individual types", async () => {
@@ -2220,6 +2238,9 @@ for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
         assert.equal(badge, `${strings.webui.import.state.blocked} - ${strings.webui.import.reason[reason]}`);
         assert.notEqual(badge, `${strings.webui.import.state.blocked} - ${strings.webui.import.reason.no_target}`);
         assert.equal(find(tree, "Label_Locale_Limit").widgets[0].text, "", "the reason is on the badge only");
+        h.row(`blocked-${index}`).querySelector(".import-row-badge").click(); await flush();
+        const suffix = strings.webui.popup.withCode.replace("{message}", "").replace("{code}", errorRegistry[reason].code);
+        assert.ok(h.messages.at(-1).lines[0].endsWith(suffix), `${locale}: ${reason} Details reference`);
       }
       await h.analyze([entry("ready")]);
       await h.action("start").click(); await flush();

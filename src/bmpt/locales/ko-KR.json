@@ -207,6 +207,7 @@
 			"label": "접기"
 		},
 		"popup": {
+			"withCode": "{message} ({code})",
 			"switch": "일러스트 변경",
 			"apply": "적용",
 			"save": "저장",

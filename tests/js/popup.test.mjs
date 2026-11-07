@@ -160,6 +160,7 @@ const calls = [];
 const requests = [], handlers = new Map();
 const reply = (body, ok = true) => ({ ok, status: ok ? 200 : 404, json: async () => body });
 globalThis.fetch = async (url, opts = {}) => {
+  if (url === "/error-codes.json") return reply(JSON.parse(readFileSync(new URL("../../src/bmpt/web/error-codes.json", import.meta.url), "utf8")));
   if (url === "/api/rpc") {
     const { method, params } = JSON.parse(opts.body);
     calls.push(method);
@@ -1590,11 +1591,13 @@ test("error popup report actions retain the triggering code and parameters", asy
     const layer = dialog.children.at(-1);
     (await drawn(layer, "cancel")).click();
     assert.equal(events[0].code, error.code);
+    assert.equal(events[0].ref, "E4007");
     assert.deepEqual(events[0].params, error.params);
     const pending = Popup.message({ title: "Failed", error, ok: "OK", cancel: "Retry" });
     const next = dialog.children.at(-1);
     (await drawn(next, "line0")).click();
     assert.equal(events[1].code, error.code);
+    assert.equal(events[1].ref, "E4007");
     action(next, "ok").click();
     await pending;
   } finally { delete globalThis.BAMTRecovery; }

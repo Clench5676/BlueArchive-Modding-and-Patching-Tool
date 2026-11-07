@@ -2,10 +2,11 @@
 import { withPreviewTimeout as withTimeout } from "./async.js";
 
 export class RpcError extends Error {
-  constructor(code, params = {}) {
+  constructor(code, params = {}, ref = null) {
     super(code);
     this.code = code;
     this.params = params;
+    if (ref) this.ref = ref;
   }
 }
 
@@ -26,7 +27,7 @@ export async function rpc(method, params = {}, { timeout = 0, signal } = {}) {
     });
     if (!res.ok) throw new RpcError("internal", { error: `HTTP ${res.status}` });
     const body = await res.json();
-    if (body.error) throw new RpcError(body.error.code, body.error.params || {});
+    if (body.error) throw new RpcError(body.error.code, body.error.params || {}, body.error.ref);
     return body.result;
   } catch (err) {
     if (err instanceof RpcError) throw err;
@@ -118,7 +119,7 @@ export function waitJob(id, onProgress, { pollEvery = 1500, maxErrors = Infinity
         errors = 0; connection(true);
         if (job.progress) progress(job.progress);
         if (job.state === "done") return finish(resolve, job.result);
-        if (job.state === "failed") return failed(new RpcError(job.error?.code || "internal", job.error?.params || {}));
+        if (job.state === "failed") return failed(new RpcError(job.error?.code || "internal", job.error?.params || {}, job.error?.ref));
         if (job.state !== "queued" && job.state !== "running") return failed(new RpcError("internal", { error: `Job ${job.state}` }));
       } catch (err) {
         if (settled || current !== generation) return;
@@ -144,7 +145,7 @@ export function waitJob(id, onProgress, { pollEvery = 1500, maxErrors = Infinity
       offs.push(
         on("job.progress", (d) => { if (d.id === id) { errors = 0; connection(true); progress(d); } }),
         on("job.done", (d) => { if (d.id === id) finish(resolve, d.result); }),
-        on("job.failed", (d) => { if (d.id === id) failed(new RpcError(d.code, d.params)); }),
+        on("job.failed", (d) => { if (d.id === id) failed(new RpcError(d.code, d.params, d.ref)); }),
         on("server.closing", () => failed(new RpcError("internal", { error: "Server closed" }))),
         on("open", wake),
       );
