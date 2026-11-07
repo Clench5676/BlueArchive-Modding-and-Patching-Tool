@@ -596,3 +596,14 @@ def test_an_allow_given_before_the_consent_covered_steams_records_is_asked_again
     assert state.scan_consent is False  # a refusal stands
     state.set_scan_consent(True)
     assert state.scan_consent is True and state.get("scan_consent_scope") == SCAN_CONSENT_SCOPE
+
+
+def test_the_diagnostic_state_gives_the_scan_consent_as_scan_consent_does(tmp_path):
+    state = UiState(tmp_path / "webui.json")
+    assert state.diagnostic_state()["consent"]["scan"] is None
+    state.set("scan_consent", True)  # an earlier build's answer
+    assert state.diagnostic_state()["consent"]["scan"] is None
+    state.set("scan_consent", False)
+    assert state.diagnostic_state()["consent"]["scan"] is False
+    state.set_scan_consent(True)
+    assert state.diagnostic_state()["consent"]["scan"] is True

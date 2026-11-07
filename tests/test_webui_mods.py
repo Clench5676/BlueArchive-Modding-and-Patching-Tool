@@ -1454,3 +1454,7 @@ def test_extract_rpc_forwards_step_progress(env, monkeypatch):
     job = env.job("actions.extract", target="variant:test")
     assert job.state == "done"
     assert job.progress == {"id": job.id, "current": 2, "total": 3, "step": "import.step.extract", "sequence": 1}
+
+
+def test_the_library_and_the_error_report_share_steams_file_list(env):
+    assert env.s.library._steam_files is env.s.steam_files

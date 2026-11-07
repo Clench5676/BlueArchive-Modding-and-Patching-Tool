@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import unquote
 
-from .. import devmode, updater
+from .. import devmode, steam_records, updater
 from ba_modding_toolkit.i18n import UI_LANGUAGES, i18n_manager
 from . import native, system
 from .session_log import redact
@@ -47,6 +47,10 @@ _GAME_NAME = re.compile(r"(?i)(?<![\w.\-])(?:[a-z0-9_.\-]+_assets_all_\d+\.bundl
 _LOG_HEAD = re.compile(r"^\d{3} (?:DEBUG|INFO|WARNING|ERROR|CRITICAL) [\w.]+: ")
 READ_TIMEOUT = 0.1
 COLLECTION_TIMEOUT = 1.0
+# The game file comparison starts first and gets longer than one read: a first Steam file list parse and the stats
+# take about 0.2 s for the Global build's 26,000 bundles on a fast Mac.
+GAME_FILES_TIMEOUT = 0.4
+GAME_FILE_NAMES = 100
 
 
 def private_text(text: str, secrets: set[str]) -> str:
@@ -113,6 +117,38 @@ def clean(value: Any, secrets: set[str], depth: int = 0, *, filename: bool = Fal
     if value is None or isinstance(value, (bool, int, float)):
         return value
     return clean(str(value), secrets, depth + 1, filename=filename)
+
+
+def differing_game_files(folder: Path, official: dict[str, steam_records.OfficialFile]) -> dict:
+    """The bundles of an install's resource folders that differ from Steam's file list by name or size, by stat
+    alone (no hashing): counts, and at most GAME_FILE_NAMES names each. The names from Steam's list are the game's
+    own; of the bundles it does not list, only names in the game's own form are given."""
+    present: dict[str, int] = {}
+    for prefix in steam_records.BUNDLE_FOLDERS:
+        resource = Path(folder) / prefix
+        devmode.check_read(resource)
+        try:
+            with os.scandir(resource) as entries:
+                for entry in entries:
+                    if not entry.name.lower().endswith(".bundle"):
+                        continue
+                    try:
+                        if entry.is_file():
+                            present[entry.name] = entry.stat().st_size
+                    except OSError:
+                        continue
+        except FileNotFoundError:
+            continue
+
+    def group(names: list[str]) -> dict:
+        return {"count": len(names), "names": sorted(names)[:GAME_FILE_NAMES]}
+
+    unlisted = [name for name in present if name not in official]
+    return {"listed": len(official), "present": len(present),
+            "sizeChanged": group([name for name, entry in official.items()
+                                  if name in present and present[name] != entry.size]),
+            "missing": group([name for name in official if name not in present]),
+            "notListed": {**group([name for name in unlisted if _GAME_NAME.fullmatch(name)]), "count": len(unlisted)}}
 
 
 def configured_language(data_dir: Path) -> str:
@@ -207,6 +243,7 @@ class Reports:
         self._backend_error = None
         self._reads: dict = {}
         self._reads_lock = threading.Lock()
+        self._steam_files = steam_records.OfficialFiles()  # without the services' shared one
 
     def frontend_event(self, event: dict | None = None, context: dict | None = None) -> bool:
         now = time.monotonic()
@@ -267,10 +304,9 @@ class Reports:
         except (OSError, ValueError, TypeError, AttributeError):
             return None
 
-    def optional(self, key: str, read, deadline: float):
-        """Bound optional reads, including OS calls. At most one daemon per field can remain stuck."""
-        remaining = min(READ_TIMEOUT, deadline - time.monotonic())
-        if remaining <= 0 or not self._reads_lock.acquire(blocking=False):
+    def _start(self, key: str, read) -> dict | None:
+        """The running read of a field, started when none is; None while another thread holds the read table."""
+        if not self._reads_lock.acquire(blocking=False):
             return None
         try:
             task = self._reads.get(key)
@@ -287,11 +323,46 @@ class Reports:
                 threading.Thread(target=run, name="bamt-report-" + key, daemon=True).start()
         finally:
             self._reads_lock.release()
-        if not task["done"].wait(remaining):
+        return task
+
+    def optional(self, key: str, read, deadline: float, timeout: float = READ_TIMEOUT):
+        """Bound optional reads, including OS calls. At most one daemon per field can remain stuck."""
+        remaining = min(timeout, deadline - time.monotonic())
+        if remaining <= 0:
+            return None
+        task = self._start(key, read)
+        if task is None or not task["done"].wait(remaining):
             return None
         with self._reads_lock:
             self._reads.pop(key, None)
         return task["value"]
+
+    def scan_consent(self) -> bool:
+        """The Check Game Files consent, from the in-memory cache (never the state file's lock)."""
+        s = self.services
+        if hasattr(s.state, "diagnostic_state"):
+            return ((s.state.diagnostic_state() or {}).get("consent") or {}).get("scan") is True
+        return s.scan_allowed() is True
+
+    def game_files(self) -> list | None:
+        """For each known install with Steam's file list, its bundles that differ from that list
+        (``differing_game_files``); only with the Check Game Files consent. Never the library lock: the installs come
+        from the switch's snapshot, Steam's list from the cache the library shares."""
+        s = self.services
+        if s is None or not self.scan_consent():
+            return None
+        status = s.snapshot.status()
+        if status is None:
+            return None
+        files = getattr(s, "steam_files", None) or self._steam_files
+        out = []
+        for item in status.get("installs") or []:
+            folder = Path(item["folder"])
+            official = files.bundles(folder)
+            if official:
+                out.append({"install": item.get("id"), "server": item.get("server"),
+                            **differing_game_files(folder, official)})
+        return out
 
     def _local_snapshot(self) -> dict:
         if not self._lock.acquire(timeout=READ_TIMEOUT):
@@ -331,6 +402,7 @@ class Reports:
         deadline = deadline if deadline is not None else time.monotonic() + COLLECTION_TIMEOUT
         read = lambda key, fn: self.optional(key, fn, deadline)
         s = self.services
+        self._start("gameFiles", self.game_files)  # Steam's file list and the stats run while the rest is read
         # Build identity is trusted metadata, separate from payload redaction and filenames.
         app = {"version": read("version", updater.current_version) or "unknown",
                "build": "compiled" if updater.is_compiled() else "source"}
@@ -349,7 +421,9 @@ class Reports:
                 "previousBackendError": read("previous", self._previous_error)}
         sanitized = read("redaction", lambda: clean(data, self.secrets))
         return {**(sanitized if sanitized is not None else dict.fromkeys(data)), "app": app,
-                "batchImport": read("batchImport", self.import_list)}
+                "batchImport": read("batchImport", self.import_list),
+                # Names are the game's own or left out (differing_game_files); no paths, so no redaction pass.
+                "gameFiles": self.optional("gameFiles", self.game_files, deadline, GAME_FILES_TIMEOUT)}
 
     def generate(self, *, automatic: bool = False, trigger: dict | None = None) -> dict:
         if not self._writing.acquire(timeout=COLLECTION_TIMEOUT):
@@ -374,7 +448,8 @@ class Reports:
             data = {"summary": summary, **data}
             encoded = json.dumps(data, ensure_ascii=False, indent=2)
             # A malicious error payload must not inflate the archive. Keep the latest bounded fields.
-            for field in ("previousBackendError", "frontendErrors", "lastFailedJob", "frontend", "timings", "triggeringError", "batchImport"):
+            for field in ("previousBackendError", "frontendErrors", "lastFailedJob", "frontend", "timings", "triggeringError", "batchImport",
+                          "gameFiles"):
                 if len(encoded.encode("utf-8")) <= DATA_CAP:
                     break
                 data[field] = "[Truncated]"
@@ -446,7 +521,7 @@ class Reports:
             data.pop("previousBackendError", None)
             data["error"] = private_text("".join(traceback.format_exception(exc_type, exc, tb)), self.secrets)[-32000:]
             encoded = json.dumps(data, ensure_ascii=False)
-            for field in ("frontendErrors", "frontend", "lastFailedJob", "timings", "batchImport"):
+            for field in ("frontendErrors", "frontend", "lastFailedJob", "timings", "batchImport", "gameFiles"):
                 if len(encoded.encode("utf-8")) <= DATA_CAP:
                     break
                 data[field] = "[Truncated]"
