@@ -773,6 +773,15 @@ Built copies and kept originals hold game portraits and lobbies inside the libra
 own switch wrote, never read to draw the UI, and their disk use can grow large. Settings shows the Mod Cache size
 and can clear it; kept originals remain available for Off. Sizes are measured on demand.
 
+**What reads Steam's records.** The same consent covers Steam's records on this device: Detect (`settings.detectGame`,
+`scan_off` without it; the page asks the consent first, in the plain style on the no-game screen), the game watch's
+Steam poll, and Steam's file list of the installed build (`steam_records.py`: the app manifest's `InstalledDepots`
+names the depot manifest kept in `depotcache`; its size and SHA-1 per file). With it, a bundle that list names is
+official by its size and SHA-1 (`ModLibrary._steam_official`, `_is_official_as`) and the cheap rule takes its size from
+there; without it, or for names the list lacks, the CRC rule stays. The write-time Steam check below needs no consent.
+An Allow saved before the consent covered Steam's records (`scan_consent_scope` below 2) counts as unanswered and is
+asked again; a refusal stands.
+
 **What reads game files.** The scan consent (`scan_allowed`, asked at each use) covers every read the app makes on
 its own of files the library did not write: the scan (the start and the end of each portrait and memorial lobby file;
 headers and the last bytes of recorded files, never a whole file), an Off's own pass, the roster's Replaced mark for
@@ -921,7 +930,9 @@ A source-change event for any slot core refreshes the detail page and its model 
 ### Checks before a write
 
 `library/safety.py` holds the checks every game file write makes first (`writable_game_files`). None of them reads a
-game file: the process list and Steam's manifests are not game files, so none needs the scan consent.
+game file: the process list and Steam's app manifest are not game files, so none needs the scan consent (owner,
+2026-11-07: the write-time Steam check stays outside it; reading one state value per write costs about 12 µs). The
+watch's own Steam poll runs only with the consent (`steam_allowed`).
 
 - **Game running.** `check_game_not_running()` refuses with `game_running`, or `game_status_unavailable` when the
   process list cannot be read. `game_processes()` lists the game's processes, never this process or its parent:
@@ -2232,10 +2243,11 @@ detail screen, and in Settings' Mods tab.
   services': the last scan's with the scan consent, the unfinished list's by why without it. Retry and Details stay
   at their line's right end. There is no scan-off row or Allow Check button; file-check consent stays in Settings.
 - **The scan consent popup** (`consent.js scan`, built like the asset consent): Check Game Files; This app will:
-  check whether each file applied in the game matches the configuration, find mods outside the mod library and
-  files with no official backup; This app will not: read whole files or file contents, or send anything off this
-  device (`mods.scan.will.{label,items}`, `mods.scan.willNot.{label,items}`); the note
-  that declining keeps those checks off and Settings changes it; Don't Allow and Allow (`mods.consent`). It must be
+  read Steam's install records, update status and file lists on this device, to find the game folder and identify
+  changed game files; check whether each file applied in the game matches the configuration, find mods outside the
+  mod library and files with no official backup; This app will not: read whole game files, change Steam's files, or
+  send anything off this device (`mods.scan.will.{label,steam,items}`, `mods.scan.willNot.{label,items}`); the note
+  that declining keeps these off, the game folder is chosen by hand and Settings changes it; Don't Allow and Allow (`mods.consent`). It must be
   answered (Escape and the backdrop do nothing), declining does not quit, and opened from Settings it shows over it
   (`#consent.over`). A failed answer (`mods.consent`, and the asset consent's `app.consent`) shows its error with the
   popup still up to answer again; the asset consent sends one answer at a time, a repeat click while the server

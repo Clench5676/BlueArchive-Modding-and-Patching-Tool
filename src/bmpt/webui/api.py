@@ -454,6 +454,8 @@ def build_api(s: Services) -> RpcRegistry:
     def settings_detect_game(region: str) -> list[str]:
         if region not in ("global", "japan"):
             raise ServiceError("bad_params", region=region)
+        if not s.scan_allowed():
+            raise ServiceError("scan_off")  # finding the game reads Steam's records: the Check Game Files consent
         from ..game_paths import find_game_dirs
 
         return [str(p) for p in find_game_dirs(region)]

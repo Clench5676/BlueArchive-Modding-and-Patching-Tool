@@ -25,7 +25,7 @@ from typing import TYPE_CHECKING, Any, Callable, Hashable, Iterator, Sequence
 
 from UnityPy.helpers.ResourceReader import get_resource_data
 
-from bmpt import atlas_remap, devmode, mod_origin, spans
+from bmpt import atlas_remap, devmode, game_paths, mod_origin, spans, steam_records
 from ba_modding_toolkit import core, mod_install
 from ba_modding_toolkit.bundle import Bundle
 from ..catalog.models import CoreMap
@@ -293,7 +293,8 @@ class _View:
         that name, else a record of that name, in any folder, that says official bytes. The CRC is in the name, so
         every official file of that name has those bytes."""
         if name not in self._sizes:
-            size = self.originals.get(name)
+            steam = self.library._steam_official(name, roots=[pin.root for pin in self.pins.values()])
+            size = steam.size if steam is not None else self.originals.get(name)
             if size is None:
                 size = next((record.get("size") for _path, record in self.by_name.get(name, [])
                              if says_official(record) and isinstance(record.get("size"), int)), None)
@@ -606,6 +607,8 @@ class ModLibrary:
         self._write_check = write_check
         self._lock = threading.RLock()
         self._hashes = Fingerprints()
+        self._steam_files = steam_records.OfficialFiles()
+        self._steam_roots_cache: tuple[float, list[Path]] | None = None
         self._legacy_import_matches: dict[str, str | None] = {}
         self._writing_mods = False
         self._transacting = False
@@ -2177,6 +2180,9 @@ class ModLibrary:
         return paths
 
     def _official_size(self, name: str) -> int | None:
+        steam = self._steam_official(name)
+        if steam is not None:
+            return steam.size
         original = self._original_path(Path(name))
         with contextlib.suppress(OSError):
             return original.stat().st_size
@@ -2603,10 +2609,48 @@ class ModLibrary:
     def _is_official(self, path: Path) -> bool:
         return self._is_official_as(path, path.name)
 
+    def _steam_official(self, name: str, path: Path | None = None,
+                        roots: Sequence[Path] | None = None) -> steam_records.OfficialFile | None:
+        """What Steam's file list says the official file of a bundle name is (its size and SHA-1), only with the
+        consent to read Steam's records: the list of the Steam install holding ``path``, else of ``roots``, else of
+        every known install. None when no list names it, or two lists disagree."""
+        if not self._scan_allowed():
+            return None
+        name = name.removesuffix(".backup")
+        folders: list[Path] = []
+        if path is not None and game_paths.steam_app_manifest(path.parent) is not None:
+            folders = [path.parent]
+        elif roots is not None:
+            folders = list(roots)
+        else:
+            folders = self._steam_roots()
+        found = set()
+        for folder in folders:
+            try:
+                entry = self._steam_files.bundles(folder).get(name)
+            except OSError:
+                entry = None
+            if entry is not None:
+                found.add(entry)
+        return next(iter(found)) if len(found) == 1 else None
+
+    def _steam_roots(self) -> list[Path]:
+        """The known installs' roots for Steam's file lists, listed again after a few seconds (a judgement asks once
+        per file)."""
+        now = time.monotonic()
+        cached = self._steam_roots_cache
+        if cached is None or now - cached[0] > 5:
+            cached = self._steam_roots_cache = (now, [pin.root for pin in self.installs()])
+        return cached[1]
+
     def _is_official_as(self, path: Path, name: str) -> bool:
-        """Official by the CRC32 of the whole content against the CRC in ``name``, with no trailing bytes."""
-        parsed = parse_filename(name)
+        """Official: the size and SHA-1 that Steam's file list gives ``name`` (``_steam_official``), else the CRC32 of
+        the whole content against the CRC in ``name``, with no trailing bytes. A mod can match a CRC, not a SHA-1."""
         fingerprint = self._hashes.get(path)
+        steam = self._steam_official(name, path)
+        if steam is not None:
+            return fingerprint.size == steam.size and fingerprint.sha1 == steam.sha1
+        parsed = parse_filename(name)
         return fingerprint.trailing == 0 and bool(parsed.crc) and fingerprint.crc == int(parsed.crc)
 
     def _original_path(self, game_file: Path) -> Path:

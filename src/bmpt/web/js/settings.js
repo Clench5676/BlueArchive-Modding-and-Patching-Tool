@@ -287,7 +287,7 @@ function rows({ builtSize = null, sizeError = null } = {}) {
       const dir = p.gameDirs[region];
       add(valueRow(`Game_${region}`, 0, T(`settings.gameDirLabel.${region}`), dir, [
         [T("settings.detect"), async () => {
-          const found = await call(() => rpc("settings.detectGame", { region }));
+          const found = await call(() => Consent.detectGame(region, () => ModSwitch.askScan()));
           if (found?.length) return set(`gameDir.${region}`, found[0]);
           if (found) notify(T("app.noGame.title"), { kind: "error", error: { code: "game_not_found" } });
         }],

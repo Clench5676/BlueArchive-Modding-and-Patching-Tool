@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 
 import ba_modding_toolkit
-from bmpt.webui.state import ALIAS_LENGTH, ALIAS_MAX, FLAGS, UiState, _replace, data_path
+from bmpt.webui.state import ALIAS_LENGTH, ALIAS_MAX, FLAGS, SCAN_CONSENT_SCOPE, UiState, _replace, data_path
 
 
 def test_instances_keep_each_others_keys(tmp_path):
@@ -411,12 +411,14 @@ def test_legacy_file_check_modes_migrate_without_granting_automatic_consent(tmp_
                                           "mod_switch_shown": False, "tray": True}}))
     state = UiState(path)
     expected = False if consent is True and not startup else consent
-    assert state.scan_consent is expected
+    # an Allow from before the consent covered Steam's records is asked again; the file keeps the answer
+    shown = None if expected is True else expected
+    assert state.scan_consent is shown
     assert state.get("startup_checks") is None
     assert json.loads(path.read_text())["prefs"] == {"scan_consent": expected, "tray": True}
     # Reopening does not rewrite the migrated state.
     before = path.stat().st_mtime_ns
-    assert UiState(path).scan_consent is expected
+    assert UiState(path).scan_consent is shown
     assert path.stat().st_mtime_ns == before
 
 
@@ -584,3 +586,13 @@ def test_a_copied_data_directory_is_told_from_a_moved_one_through_a_damaged_file
     copy = tmp_path / "copy"
     shutil.copytree(first, copy)
     assert UiState(copy / "webui.json").data_id(copy) != original
+
+
+def test_an_allow_given_before_the_consent_covered_steams_records_is_asked_again(tmp_path):
+    state = UiState(tmp_path / "webui.json")
+    state.set("scan_consent", True)  # an earlier build's answer
+    assert state.scan_consent is None
+    state.set("scan_consent", False)
+    assert state.scan_consent is False  # a refusal stands
+    state.set_scan_consent(True)
+    assert state.scan_consent is True and state.get("scan_consent_scope") == SCAN_CONSENT_SCOPE

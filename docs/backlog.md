@@ -2487,7 +2487,14 @@ stored records valid. Test: two official lobby prefab bundles added as two one-f
 
 ## BL-102: Official by Steam's depot manifest on Steam installs
 
-- Status: Candidate. Needs the owner's decision: whether the App may read Steam's depot cache.
+- Status: Implemented by the lead; owner review pending.
+- Owner, 2026-11-07: the App may read Steam's local depot manifest, only with the user's explicit consent: the Check
+  Game Files consent, which also covers reading the app manifests (the Steam watch) and finding the game in Steam's
+  libraries (Detect). The write-time Steam check stays outside the consent. The consent is asked before Detect searches.
+  The owner approved the popups' wording (zh-CN, en-US; the en-US "identified changed game file" written as "identify
+  changed game files"), the other four languages are drafts. The asset consent's "Never Cached" list named portraits,
+  memorial lobbies, 3D models and backgrounds, which Preview Cache (on by default) stores as previews and exports: it
+  now lists them under Cached on This Device and leaves Voices under Never Cached.
 
 The library judges a file official when the CRC32 of its whole content equals the CRC in its name with nothing trailing;
 BL-019 already notes that a matching CRC proves no origin. Steam's depot manifest of the installed build lists the size
@@ -2495,6 +2502,16 @@ and SHA-1 of every file (34,308 for the current Global build), and the library a
 (`storage.Fingerprints`) and reads Steam's app manifests (game watch). Proposed: on Steam installs, official means
 SHA-1 equality with the manifest; other installs keep the CRC rule. Check Game Files (BL-019) can then name every
 modified file, and two manifests give the exact list of files a game update changed.
+
+Implemented: `steam_records.py` reads the app manifest's installed manifest id of depot 3557621 and that depot
+manifest from `depotcache` (the library's Steam folder, the Windows client in the same Wine prefix, the registered
+client, the native client), checks its payload checksum and maps the bundle names of GameData and Preload to size and
+SHA-1 (the official build's 34,308 files agree with the development check's index; 0.1 s). With the consent the library
+judges a listed bundle official by its size and SHA-1, and its cheap rule takes the size from the list; unlisted names
+and installs without a list keep the CRC rule. Detect asks the consent first (the game's popup, or its text in the plain
+style on the no-game screen), the game watch polls Steam only with it, and an Allow given before the popup covered
+Steam's records is asked again once. Tests: `tests/test_steam_records.py`, `tests/test_ui_state.py`,
+`tests/test_gamewatch.py`, `tests/js/popup.test.mjs`, `tests/js/mod_switch.test.mjs`.
 
 ## BL-103: Dependency closures cached for previews and exports
 

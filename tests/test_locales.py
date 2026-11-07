@@ -125,7 +125,7 @@ def test_simplified_chinese_drift_spelling():
 def test_settings_uses_configuration_drift():
     mods = load(REFERENCE)["webui"]["settings"]["mods"]
     assert mods["files"] == "Configuration Drift Check"
-    assert mods["scan"] == "Check for Configuration Drift and Untracked Mods at Start"
+    assert mods["scan"] == "Read Steam Records and Check Game Files at Start"
 
 
 @pytest.mark.parametrize("code", [REFERENCE, *TRANSLATIONS])
@@ -154,8 +154,9 @@ def test_scan_consent_replacement_keys(code):
     assert "scanOff" not in mods
     assert "allowCheck" not in mods
     assert set(mods["scan"]) == {"title", "will", "willNot", "note", "no", "yes"}
-    for section in ("will", "willNot"):
-        assert set(mods["scan"][section]) == {"label", "items"}
+    # Check Game Files also reads Steam's records (owner, 2026-11-07): a second item in its "will" section
+    assert set(mods["scan"]["will"]) == {"label", "steam", "items"}
+    assert set(mods["scan"]["willNot"]) == {"label", "items"}
 
 
 @pytest.mark.parametrize("code", [REFERENCE, *TRANSLATIONS])
