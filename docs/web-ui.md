@@ -6,6 +6,9 @@ at runtime and never shipped with the program.
 
 ## Screens
 
+Composed screens take their sizes, gaps and alignment from the design system ([`design-system.md`](design-system.md):
+the scales in `ui-tokens.js`, the layout primitives in `ui-grid.js`).
+
 The Student Hall, import/assignment, ZIP export and navigation changes tracked in
 [`backlog.md`](backlog.md) are included in 0.5.0, along with office backgrounds, global portrait scaling,
 immersive Hall view and touch-friendly queue reordering. Local alpha review builds preceded the owner's stable
