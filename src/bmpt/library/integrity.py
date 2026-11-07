@@ -32,6 +32,8 @@ class Contents:
     versions: set[str] = field(default_factory=set)
     layout: dict[str, tuple[tuple[int, int], ...]] = field(default_factory=dict)
     names: set[str] = field(default_factory=set)
+    # the bundle's asset paths (its AssetBundle container keys), lower case: each is held by one bundle of a build
+    paths: set[str] = field(default_factory=set)
     files: set[str] = field(default_factory=set)
     references: set[str] = field(default_factory=set)
     reference_paths: set[str] = field(default_factory=set)
@@ -42,7 +44,7 @@ class Contents:
     textures: dict[str, tuple[int, int]] = field(default_factory=dict)
 
     def merge(self, other: Contents) -> None:
-        for key in ("platforms", "versions", "names", "files", "references", "reference_paths", "streams"):
+        for key in ("platforms", "versions", "names", "paths", "files", "references", "reference_paths", "streams"):
             getattr(self, key).update(getattr(other, key))
         for key in ("skeletons", "atlases", "textures", "reference_names", "layout"):
             getattr(self, key).update(getattr(other, key))
@@ -175,6 +177,27 @@ def replacements(files: dict[str, Path], targets: list[Path], *,
     return result
 
 
+def update_targets(sources: Iterable[Path], targets: Iterable[Path], *, paths: Callable[[Path], set[str]],
+                   keys: Callable[[Path], set[AssetKey]]) -> list[Path] | None:
+    """The current files an older release's files update, among ``targets`` (every part of the core, whatever its
+    date): the files holding any of their asset paths, else the files sharing an asset name and type; None when the
+    sources show neither (nothing to judge by).
+
+    A build keeps each asset path in exactly one bundle, while a core's parts sit under several dates and a part
+    number only counts the asset types of its own dated group; so neither the newest date nor the part number
+    identifies the file an asset lives in now."""
+    sources, targets = list(sources), list(targets)
+    wanted = set().union(*(paths(source) for source in sources))
+    if wanted:
+        found = [target for target in targets if wanted & paths(target)]
+        if found:
+            return found
+    wanted_keys = set().union(*(keys(source) for source in sources))
+    if not wanted and not wanted_keys:
+        return None
+    return [target for target in targets if wanted_keys & keys(target)] if wanted_keys else []
+
+
 def metadata(path: Path, *, inspection: Inspection) -> Contents:
     """Validate UnityFS and serialized-file headers without reading individual assets."""
     bundle = inspection.bundle(path)
@@ -235,7 +258,9 @@ def inspect(path: Path, *, allow_unknown: bool = False, inspection: Inspection |
     walk(bundle.env)
     if not allow_unknown and (not result.platforms or "UnknownPlatform" in result.platforms):
         raise ServiceError("mod_platform_unknown", file=path.name)
-    result.names.update(getattr(bundle.env, "container", {}))
+    container = getattr(bundle.env, "container", {})
+    result.names.update(container)
+    result.paths.update(path.lower() for path in container)
     for obj in bundle.env.objects:
         if obj.type.name == "AssetBundle":
             data = obj.read()
