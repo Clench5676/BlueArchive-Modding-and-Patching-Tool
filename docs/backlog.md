@@ -2403,3 +2403,23 @@ one slot are refused, never merged); Choose Files… opens the native dialog in 
 The lead's review fix (`b5625039`): a backup or another release of a selected part is an alternative, not a missing file.
 Every analysis reads the bundle headers of all folders of the session; a large folder on a hard disk can slow it.
 
+
+## BL-097: A design system for the App's composed screens
+
+- Status: Implemented (2026-11-07; merges `7906547a`, `67ab41ef`, `c7716d20`, `101eb3ba`); owner review pending.
+- Requested: 2026-11-07 (owner): tuning button positions, alignment and margins took too long; research the game's main
+  pages and popups and build a faithful, consistent UI framework (container, row and column grid design) that sets the
+  sizes, padding and alignment of buttons, windows, popups and text; then recalibrate the App's UI on it.
+
+Lead's research: 288 prefabs (41 pages, all 247 popups) read with the App's own layout reader. The game has no strict grid,
+but each role has one dominant value, traced to an exemplar node: popup titles 72 (135 of 158), the small popup frame
+1300 x 1050 shared by 19 popups (title 36 down, close 48/39, footer 551 x 176 bodies 33 apart, 102 above the bottom),
+list panels about 40 inside the screen with 20 of padding, cards 12 apart. `docs/design-system.md` describes the scales
+(`SPACE`, `TYPE`, `CONTROL`, `GRID`, `POPUP_FRAME`, `PANEL`, `LIST_ROW` in `ui-tokens.js`, pinned to the prefabs by
+`tests/test_ui_tokens.py`) and the layout primitives (`ui-grid.js`: container, 12-column grid, row, stack, text items).
+
+Recalibration (agents under the new tests-by-tier and lean-brief rules): popups (Codex), Import Mod (Sonnet), Settings
+and the switch cards (Sonnet), the toolbars (Codex). Visible changes the owner should review: popup widths by class and
+the new footer, Settings' value text 38 to 36 and row heights a few units shorter, switch cards 8 units tighter, footer
+and toolbar gaps in units (20 x S instead of 20 px), the Hall's Cancel/Save as small buttons. Not yet done: the detail
+page's composed panels and the tool pages.

@@ -143,10 +143,10 @@ boxes instead of pixel offsets.
 
 ## Adoption
 
-The scales and primitives are in place; no screen uses them yet. The screens move one at a time, each with its geometry
-tests and the owner's visual review, starting where hand placement cost the most:
+On the system (2026-11-07): every popup (`popup.js`, `popup-frames.js`: the S to XL frames and their anatomy), Import Mod
+(`import-layout.js`, `batch-import.js`), Settings (`settings-rows.js`), the switch cards (`switch-layout.js`) and the
+toolbars of the Student Hall, its framing, the roster and photography. Values that are a prefab's own stay and say so in
+the code (the Hall's 104-unit icon row, `CONTROL.toolbar`; the roster tools' 116; Settings' cards). The old `POPUP` /
+`FOOTER` tokens remain only where a screen still reads them.
 
-1. Import Mod's rows and footer (`import-layout.js`).
-2. Popups (`popup.js`): the S to XL frames and their anatomy instead of the one `UIPopup_Sort` frame (2458 x 1355, its
-   footer 496 x 177 with 88 between the buttons) every popup uses today.
-3. Settings, the Student Hall's controls and the tool pages.
+Not yet on the system: the detail page's composed panels and the tool pages.
