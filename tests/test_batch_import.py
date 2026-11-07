@@ -1798,46 +1798,47 @@ def test_missing_files_references_and_unselected_slot_files(env, monkeypatch, re
         assert set(complete["paths"]) == {str(selected), str(omitted)}
 
 
-def test_mixed_folder_only_reports_unselected_files_of_touched_incomplete_slots(env, monkeypatch):
-    create, reads, _ = missing_bundles(env, monkeypatch)
-    folder = env.tmp / "mixed"
-    portrait = create(env.original, folder, "cab-test")
-    lobby_targets = [game_bundle(env.game_dir, "test_home_gl", part=f"{i:03}") for i in range(5)]
-    lobby = [create(target, folder, f"cab-lobby-{i}") for i, target in enumerate(lobby_targets)]
-    unrelated = create(model_bundle(env.game_dir, "other_original"), folder, "cab-unrelated")
-    rows = analyze(env, [portrait, *lobby[:2]])["entries"]
-    portrait_row = next(row for row in rows if row["kind"] == "spr")
-    lobby_row = next(row for row in rows if row["kind"] == "lobby")
-    assert portrait_row["state"] == "ready" and "missing" not in portrait_row
-    assert lobby_row["state"] == "incomplete" and lobby_row["missing"]["unresolved"] == 0
-    assert [f["path"] for f in lobby_row["missing"]["found"]] == sorted(map(str, lobby[2:]))
-    assert unrelated not in reads and all(path not in reads for path in lobby[2:])
-    assert len(rows) == 2
+OWN_CAB, OMITTED_CAB = "cab-" + "1" * 32, "cab-" + "2" * 32
 
 
-@pytest.mark.parametrize("together", [False, True])
-def test_missing_cab_in_another_dropped_folder_joins_its_dependent_row(env, monkeypatch, together):
+def test_an_incomplete_entry_names_its_unresolved_cabs_and_what_was_read_of_its_files(env, monkeypatch):
+    from bmpt.webui.diagnostics import import_row
+
     create, _, _ = missing_bundles(env, monkeypatch)
-    target = game_bundle(env.game_dir, part="004")
-    first = create(env.original, env.tmp / "first", "cab-test", ["cab-new"])
-    supplier = create(target, env.tmp / "second", "cab-new")
-    if not together:
-        row, = analyze(env, [first])["entries"]
-        assert row["state"] == "incomplete" and row["missing"] == {"unresolved": 1, "found": []}
-        # The other folder joins the session, even if only another slot in it was picked.
-        unrelated_target = game_bundle(env.game_dir, "other_spr")
-        unrelated = create(unrelated_target, supplier.parent, "cab-unrelated")
-        rows = analyze(env, [first, unrelated])["entries"]
-        missing = next(row for row in rows if row["core"] == "test_spr")
-        assert [f["path"] for f in missing["missing"]["found"]] == [str(supplier)]
-        paths = [first, unrelated, supplier]
-    else:
-        paths = [first.parent, supplier.parent]
-    rows = analyze(env, paths)["entries"]
-    row = next(row for row in rows if row["core"] == "test_spr")
-    assert row["state"] == "ready" and set(row["paths"]) == {str(first), str(supplier)}
-    again = analyze(env, [Path(path) for row in rows for path in row["paths"]])["entries"]
-    assert sorted(row["paths"] for row in again) == sorted(row["paths"] for row in rows)
+    selected = create(env.original, env.tmp / "incoming", OWN_CAB, [OMITTED_CAB])
+    entry, = analyze(env, [selected])["entries"]
+    assert entry["state"] == "incomplete"
+    assert entry["missing"] == {"unresolved": 1, "cabs": [OMITTED_CAB], "found": []}
+    assert entry["bundles"] == [{"file": selected.name, "platforms": ["StandaloneWindows64"], "unity": ["2021.3"],
+                                 "cabs": [OWN_CAB], "references": 1}]
+    # the error report and the log keep CAB ids and the game's own file names
+    row = import_row(entry, set())
+    assert row["missing"]["cabs"] == [OMITTED_CAB] and row["bundles"] == entry["bundles"]
+
+
+def test_a_refused_entry_carries_the_build_target_its_files_were_read_with(env, monkeypatch):
+    from bmpt.webui.diagnostics import import_row
+
+    source = make_mod(env.original, env.tmp / "input")
+    inspect_import = env.library.inspect_import
+
+    def refuse(files, *, inspection=None, **kwargs):
+        inspection.inspect(next(iter(files.values())))  # what a check reads before it refuses
+        raise ServiceError("mod_platform_mismatch", file=source.name, platform="Android", expected="StandaloneWindows64")
+
+    monkeypatch.setattr(env.library, "inspect_import", refuse)
+    entry, = analyze(env, [source])["entries"]
+    assert (entry["state"], entry["reason"]) == ("blocked", "mod_platform_mismatch")
+    (bundle,) = entry["bundles"]
+    assert bundle["file"] == source.name and bundle["platforms"] == ["StandaloneWindows64"]
+    assert isinstance(bundle["unity"], list) and bundle["cabs"] and all(cab.startswith("cab-") for cab in bundle["cabs"])
+    assert isinstance(bundle["references"], int)
+    # a file name not in the game's own form is redacted; what was read stays
+    (row,) = import_row({**entry, "bundles": [{**bundle, "file": "My Private Mod.bundle"}]}, set())["bundles"]
+    assert row == {**bundle, "file": "[asset].bundle"}
+    monkeypatch.setattr(env.library, "inspect_import", inspect_import)
+    again, = analyze(env, [source])["entries"]  # a new check starts from what it reads again
+    assert again["state"] != "blocked" and "bundles" not in again
 
 
 def test_supplying_a_slot_from_another_folder_never_merges_alternative_mods(env, monkeypatch):
