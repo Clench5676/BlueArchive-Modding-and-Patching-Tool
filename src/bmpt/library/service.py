@@ -593,9 +593,11 @@ class ModLibrary:
 
     def __init__(self, root: Path, catalog: Catalog, game: GameAssets | None = None, settings: Settings | None = None,
                  *, scan_allowed: Callable[[], bool] = lambda: False, data_id: str = "local",
-                 write_check: Callable[[Pin], None] | None = None) -> None:
+                 write_check: Callable[[Pin], None] | None = None,
+                 steam_files: steam_records.OfficialFiles | None = None) -> None:
         """``write_check(pin)`` runs right before game files of an install are written, with the other checks of a
-        write, and refuses by raising ServiceError (the web UI: ``classic_open`` while a classic window is open)."""
+        write, and refuses by raising ServiceError (the web UI: ``classic_open`` while a classic window is open).
+        ``steam_files`` is Steam's file list cache to share (the web UI's error report reads the same one)."""
         self.root = Path(root).resolve()
         self._state_path = self.root / "state.json"
         self._prev_path = self.root / "state.json.prev"  # the last good state.json, kept before every write
@@ -608,7 +610,7 @@ class ModLibrary:
         self._write_check = write_check
         self._lock = threading.RLock()
         self._hashes = Fingerprints()
-        self._steam_files = steam_records.OfficialFiles()
+        self._steam_files = steam_files if steam_files is not None else steam_records.OfficialFiles()
         self._steam_roots_cache: tuple[float, list[Path]] | None = None
         self._legacy_import_matches: dict[str, str | None] = {}
         self._writing_mods = False

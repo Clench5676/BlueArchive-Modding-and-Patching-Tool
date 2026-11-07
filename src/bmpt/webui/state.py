@@ -273,7 +273,11 @@ class UiState:
             return None
         try:
             prefs = self._data.get("prefs", {})
-            return {"consent": {"uiAssets": self._data.get("consent"), "spine": prefs.get("spine_consent")},
+            scan = prefs.get("scan_consent")
+            if scan is True and prefs.get("scan_consent_scope") != SCAN_CONSENT_SCOPE:
+                scan = None  # as scan_consent: an Allow from before the popup covered Steam's records is asked again
+            return {"consent": {"uiAssets": self._data.get("consent"), "spine": prefs.get("spine_consent"),
+                                "scan": scan if isinstance(scan, bool) else None},
                     "libraryDir": prefs.get("library_dir")}
         finally:
             self._lock.release()
