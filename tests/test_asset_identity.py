@@ -11,7 +11,8 @@ import pytest
 
 from ba_modding_toolkit.core.mod_install import _search_latest_targets
 from bmpt.library import service as service_module
-from bmpt.library.integrity import BUILTIN_RESOURCES, Contents, missing_parts, update_targets
+from bmpt.library.integrity import BUILTIN_RESOURCES, Contents, missing_parts
+from bmpt.library.targets import Readers, by_assets
 from bmpt.library.judge import core_of
 
 # the real-install tests run only on an official game folder named by BAMT_TEST_GAME_DIR
@@ -24,6 +25,12 @@ def dependency(core: str, date: str, part: str, crc: int = 1) -> Path:
 
 def no_keys(path: Path) -> set:
     return set()
+
+
+def update_targets(sources, targets, *, paths, keys):
+    """The parts the resolver's asset stage finds, or None when the sources show nothing to judge by."""
+    found = by_assets(sources, targets, Readers(paths=paths, keys=keys))
+    return None if found is None else found[1]
 
 
 # The asset path decides, whatever the dates and part numbers

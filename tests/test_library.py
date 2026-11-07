@@ -917,10 +917,7 @@ def test_refuses_install_plan_outside_resource_dirs(setup_library, monkeypatch, 
         monkeypatch.setattr(mod_install, "asset_match", lambda sources, candidates, log: (candidates, ""))
     entry = env.library.add([source])[0]
     groups = mod_install.plan_mod_install([entry.file], [outside.parent])
-    if release == "older":
-        monkeypatch.setattr(mod_install, "plan_mod_install", lambda *args: groups)
-    else:
-        monkeypatch.setattr(env.library, "_plan", lambda *args: groups)
+    monkeypatch.setattr(env.library, "_plan", lambda *args: groups)
     monkeypatch.setattr(env.library, '_needs_crc_fix', lambda *args: True)
     before = outside.read_bytes()
     expect_error("game_file_outside_resources", lambda: env.library.apply("test", f"mod:{entry.id}"))
@@ -1250,7 +1247,8 @@ def test_update_can_split_an_old_mod_into_current_bundle_parts(setup_library, mo
     targets = [game_bundle(env.game_dir, part=part, date="2026-10-01", payload=part.encode())
                for part in ("002", "003")]
     original_bytes = {target: target.read_bytes() for target in targets}
-    monkeypatch.setattr(mod_install, "asset_match", lambda sources, candidates, log: (candidates, ""))
+    # the old bundle's assets are held by both current parts
+    monkeypatch.setattr("bmpt.library.targets.by_assets", lambda sources, targets, readers: ("asset_key", list(targets)))
     def update(sources, current, output, *args, **kwargs):
         result = output / current[0].name
         result.write_bytes(header_bundle(b"split mod " + parse_filename(current[0].name).res_type.encode()))
