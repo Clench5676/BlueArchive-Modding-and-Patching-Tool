@@ -74,6 +74,9 @@ const { importArtwork, clipButtonPatterns, selectionWindow, ROW_SELECTION, ROW_S
 const { frameOutline } = await import("../../src/bmpt/web/js/row-thumbnail.js");
 const { ROW_W: OPTION_WIDTH, rowBase, radioRow } = await import("../../src/bmpt/web/js/settings-rows.js");
 const { S } = await import("../../src/bmpt/web/js/util.js");
+const { TYPE, LINE } = await import("../../src/bmpt/web/js/ui-tokens.js");
+// separate lines of a row stack LINE.stack of the row's one size apart (List_01's meta lines)
+const PITCH = LINE.stack * TYPE.dense.fs;
 const { createImportState, sourceFolder } = await import("../../src/bmpt/web/js/import-state.js");
 const { setStrings } = await import("../../src/bmpt/web/js/i18n.js");
 const flatten = (data, prefix = "", result = {}) => {
@@ -1515,7 +1518,7 @@ for (const merged of [false, true]) test(`only conversions reserve a platform li
       assert.ok(row.art.children.every((element) => !element.dataset.path.endsWith("/Platform")));
       assert.equal(note.pos[0] + note.widgets[0].w_, 926, "the note can use the row text band");
     }
-    assert.ok(note.pos[1] <= -36 && (20 - note.pos[1]) % 56 === 0, "notes follow the wrapped metadata and route");
+    assert.ok(note.pos[1] <= 20 - PITCH && (20 - note.pos[1]) % PITCH === 0, "notes follow the wrapped metadata and route, a LINE.stack pitch a line");
     const graphic = row.art.children.find((element) => element.dataset.path.endsWith("/Label_Locale_Limit"));
     closeTo(rectOf(graphic)[1], opts.origin[1] - note.pos[1] * opts.scale);
   };
@@ -1810,7 +1813,7 @@ for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) tes
       for (const [i, n] of labels.entries()) {
         const w = n.widgets[0]; assert.equal(w.fontSize, fs); assert.equal(w.pivot, 0);
         assert.ok(n.pos[1] - w.h_ >= -329 / 2 - (tree.rowHeight - 348) + 12, "text and descenders clear the card bottom");
-        if (i) assert.ok(labels[i - 1].pos[1] - n.pos[1] >= 56 && (labels[i - 1].pos[1] - n.pos[1]) % 56 === 0);
+        if (i) assert.ok(labels[i - 1].pos[1] - n.pos[1] >= PITCH && (labels[i - 1].pos[1] - n.pos[1]) % PITCH === 0);
       }
     }
   } finally { setStrings("en-US", flatten(JSON.parse(readFileSync(new URL("../../src/bmpt/locales/en-US.json", import.meta.url))))); }
@@ -1846,7 +1849,7 @@ for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) tes
       for (const [i, n] of paragraphs.entries()) {
         const w = n.widgets[0]; assert.equal(w.fontSize, paragraphs[0].widgets[0].fontSize);
         assert.equal(w.pivot, 0); assert.ok(n.pos[1] - w.h_ >= -329 / 2 - (tree.rowHeight - 348) + 12);
-        if (i) assert.ok(paragraphs[i - 1].pos[1] - n.pos[1] >= 56 && (paragraphs[i - 1].pos[1] - n.pos[1]) % 56 === 0);
+        if (i) assert.ok(paragraphs[i - 1].pos[1] - n.pos[1] >= PITCH && (paragraphs[i - 1].pos[1] - n.pos[1]) % PITCH === 0);
       }
     }
   } finally { setStrings("en-US", flatten(JSON.parse(readFileSync(new URL("../../src/bmpt/locales/en-US.json", import.meta.url))))); }
