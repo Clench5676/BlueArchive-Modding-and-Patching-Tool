@@ -132,8 +132,10 @@ const LANGUAGES = ["zh-CN", "zh-TW", "en-US", "ja-JP", "ko-KR", "th-TH"];
 // the labels a radio row draws, in order: [widget, node]
 const optionLabels = (row) => row.tree.children.filter((c) => /^Opt_\d+$/.test(c.name)).map((c) => find(c, "Label").widgets[0]);
 const noop = () => {};
-// the pitch and the room the row fits a label to (settings-rows.js)
-const roomOf = (columns) => Math.min(508, 1400 / columns) - 110;
+// the pitch and the room the row fits a label to (settings-rows.js): the option's pitch (508, or the content box's 1552 less
+// 2 x 58 shared by the columns) less the radio (60), its gap to the label (19), the clear of the next option (12) and the
+// fit's slack (20)
+const roomOf = (columns) => Math.min(508, (1552 - 2 * 58) / columns) - (60 + 19 + 12 + 20);
 // a text fits at X when fitText holds it there with nothing smaller allowed, and its lines stay in the band
 const fitsAt = (value, fs, room, lang = null, band = 96) => {
   const f = NGUI.fitText(value, fs, fs, room, 2, lang);
@@ -303,9 +305,11 @@ for (const locale of LOCALES) test(`dropping the kind from a prompt card's label
 // the Hall's student cards (student-hall-ui.js formationCardTree: 36 down to 24, two lines, 190 wide)
 const hall = await (async () => {
   let source = readFileSync(new URL("../../src/bmpt/web/js/student-hall-ui.js", import.meta.url), "utf8");
-  globalThis.hallHarness = { NGUI, Popup: {}, clone: structuredClone, Loading: {}, withTimeout: () => {}, T: (key) => key };
+  const { CONTROL, TYPE, SPACE, SMALL_BUTTON } = await import("../../src/bmpt/web/js/ui-tokens.js");
+  const { stack: layoutStack } = await import("../../src/bmpt/web/js/ui-grid.js");
+  globalThis.hallHarness = { NGUI, Popup: {}, clone: structuredClone, Loading: {}, withTimeout: () => {}, T: (key) => key, CONTROL, TYPE, SPACE, SMALL_BUTTON, layoutStack };
   source = source.replace(/^import .*;$/gm, "");
-  source = `const { Popup, clone, NGUI, Loading, withTimeout, T } = globalThis.hallHarness; const S = 1920 / 2960;\n${source}\n//# sourceURL=hall-ui-fit.js`;
+  source = `const { Popup, clone, NGUI, Loading, withTimeout, T, CONTROL, TYPE, SPACE, SMALL_BUTTON, layoutStack } = globalThis.hallHarness; const S = 1920 / 2960;\n${source}\n//# sourceURL=hall-ui-fit.js`;
   return import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`);
 })();
 const hallLabel = (name) => {
