@@ -2110,12 +2110,15 @@ the prefab values, from the development view). It imports no other UI module.
   actions and the detail screen's Show in Finder / Explorer button.
 - **Caption exceptions** (`CAPTION_EXCEPTIONS`, checked by `captionMinimum`): only Thai at Hall's Done Adding (44),
   unsaved-changes footer group (36) and portrait Reset (30). The footer/small-button token minima stay 48/34.
-- **Batch Import's row under the list** is one row of the small button's size (136 high, caption 48 down to 34, 20 apart): Advanced
-  Options, Recheck and Import share one body height and one caption size, on the prefabs' own bodies (Mailbox `Btn_Receive` and
-  `ReceiveAll/Btn`, the popups' gold). Import stands out by its gold, not by its size. The row's right edge is the list tools'.
+- **Batch Import's row under the list** is one row of `buttonS` controls (136 high, caption 48 down to 34, `SPACE.m` apart, laid
+  out with `row`): Advanced Options, Recheck and Import share one body height and one caption size, on the prefabs' own bodies
+  (Mailbox `Btn_Receive` and `ReceiveAll/Btn`, the popups' gold). Import stands out by its gold, not by its size. The row's right
+  edge is the list tools'. The tools over it fill the list's width in one row `SPACE.m` apart, each in the share of it its caption
+  needs, `SPACE.m` under the list. Advanced Options is the L popup frame (`POPUP_FRAME.L`, 2098 wide) with its option groups in
+  a container padded `SPACE.xl`, `SPACE.l` apart (`stack`); the gaps are prefab units drawn at the stage scale, as the buttons.
 - **Batch Import's list** starts 12 under the grey paper's top edge, about 2.7 rows at a time. The count once above it is gone: the
   filter button says it. A grouped row reads like an ungrouped one: its kinds as text on the metadata line, its states on the
-  status tag. The left column's name plate ends where the list does; the filter popup has Advanced Options' frame.
+  status tag. The left column's name plate ends where the list does; the filter popup keeps the frame it had.
 - **Chip** (`CHIP`; UICharacterDetail `Char_Target/Type/MainType/BG`): 272 x 72 inclined 10 degrees, caption 40 down to 28,
   290 apart. The nameplate's variant chips (`detail.js`) and the list popup's details panel (`popup.js`) draw it. In the
   panel the chips stand in one centred row (three, the most a card has, about 283 apart so they stay inside it:
