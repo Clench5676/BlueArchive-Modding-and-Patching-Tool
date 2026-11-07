@@ -1,13 +1,13 @@
 # Development status
 
-As of 2026-11-06. Verify the actual branch, working tree and `pyproject.toml` version before reporting progress.
+As of 2026-11-07. Verify the actual branch, working tree and `pyproject.toml` version before reporting progress.
 [Backlog](backlog.md) holds the detailed requirements and owner findings.
 
 ## Branch state
 
 | Branch | State |
 | --- | --- |
-| `main` | Local version `0.7.0-alpha.8`: the published 0.6.0, the upstream syncs to `6c61fdc8` and to v2.12.0 (`62ec9471`), the security policy, the fix that keeps files from a mod inside their output folder (`e8bee4c2`) and its own message for refused atlases (`ca44e051`), BL-065 through BL-069, BL-070 steps 1 to 3, BL-071, BL-072, BL-073, BL-076, BL-077, the BL-078 fixes (`1a2afd84`, `b186e93b`, `4841e30e`), BL-079, BL-081 through BL-097 (BL-092 step 1). Not pushed. Upstream published its fix for the same issue in v2.12.0 (2026-11-04), so 0.6.1 is no longer held back. |
+| `main` | Local version `0.7.0-alpha.9`: the published 0.6.0, the upstream syncs to `6c61fdc8` and to v2.12.0 (`62ec9471`), the security policy, the fix that keeps files from a mod inside their output folder (`e8bee4c2`) and its own message for refused atlases (`ca44e051`), BL-065 through BL-069, BL-070 steps 1 to 3, BL-071, BL-072, BL-073, BL-076, BL-077, the BL-078 fixes (`1a2afd84`, `b186e93b`, `4841e30e`), BL-079, BL-081 through BL-100 (BL-092 step 1). Not pushed. Upstream published its fix for the same issue in v2.12.0 (2026-11-04), so 0.6.1 is no longer held back. |
 
 0.6.0 is published (tag `0.6.0` at `817ebeda`, 2026-10-30): macOS build uploaded, Windows build by the release workflow.
 
@@ -67,6 +67,8 @@ As of 2026-11-06. Verify the actual branch, working tree and `pyproject.toml` ve
 | BL-095 | Implemented by the lead (2026-11-06): a student's add buttons open Import Mod (Batch Import renamed); owner review pending |
 | BL-096 | Implemented (Codex, reviewed and merged, `2218bdcc`, prototype accepted by the owner): Import Mod tells which files of a mod are missing and adds them; owner review pending |
 | BL-097 | Implemented (2026-11-07): the design system (`docs/design-system.md`) and the popups, Import Mod, Settings, switch cards, toolbars and the detail page's composed parts on it; owner review pending |
+| BL-098 through BL-100 | Implemented by the lead (2026-11-07, research `docs/asset-ecosystem.md`): older releases' parts found by asset path over every date of the core, a group rebuilt in place under a new CRC taken for its part's successor, Unity's built-in resources never missing; owner review pending |
+| BL-101 through BL-105 | Candidates from the asset research, not scheduled; BL-102 needs the owner's decision |
 | BL-057, BL-058 | Accepted by the owner on macOS (alpha.12); Windows not reviewed |
 | BL-055 | Accepted by the owner on macOS (0.6.0 pre-review) |
 | BL-014 | Candidate, not scheduled |
@@ -77,11 +79,11 @@ from passing tests or the presence of earlier code.
 
 ## Review artifact and validation
 
-`dist/Blue-Archive-Modding-and-Patching-Tool-0.7.0-alpha.8-macos-arm64.dmg`, MD5 `b1d1adfb9983bd556c4bb9fa07ce68a2`,
-built from `16b0bae3` (`chore(release): 0.7.0-alpha.8`): alpha.7 and the student detail page's composed parts on the
-design system (BL-097, merge `730a52fd`). The Windows bundle of `main` is
-`Blue-Archive-Modding-and-Patching-Tool-0.7.0-alpha.8-main.bundle`.
+`dist/Blue-Archive-Modding-and-Patching-Tool-0.7.0-alpha.9-macos-arm64.dmg`, MD5 `c3b5316500403010e9e209430d14db6e`,
+built from `80d8cf53` (`chore(release): 0.7.0-alpha.9`): alpha.8 and BL-098 to BL-100 (merge `bada2a43`). The Windows
+bundle of `main` is `Blue-Archive-Modding-and-Patching-Tool-0.7.0-alpha.9-main.bundle`.
 
-On `0d6d69fe` (same code as the build but the version): 4429 passed, 34 skipped (`python -m pytest`; the roster preflight
-skipped as unchanged by the development gates), 2569 JavaScript tests passed. The visible changes listed in BL-097 are for
-the owner's review; native Windows is not verified on the macOS host.
+On `bada2a43` (same code as the build but the version): 4444 passed, 34 skipped (`python -m pytest`), the roster
+preflight run on its own as well (`tests/test_library_model.py`, 81 passed), 2569 JavaScript tests passed. BL-098 to
+BL-100 change no screen; they show in what Enable, Apply, previews and the entry states do with mods of older releases
+and after game updates. Native Windows is not verified on the macOS host.
