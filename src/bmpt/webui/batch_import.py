@@ -551,6 +551,10 @@ class BatchImport:
                             take(child)
             else:
                 take(path)
+        # a bundle of a group packed one asset per bundle gets its own slot (its CAB) before anything is identified
+        note = getattr(library, "note_packed", None)
+        if note is not None:
+            note(selected, self._pin)
         groups: dict[tuple, list[tuple]] = {}
         inspected = []
         for path in selected:

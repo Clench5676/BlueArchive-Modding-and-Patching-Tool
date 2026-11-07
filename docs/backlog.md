@@ -2476,7 +2476,8 @@ check leaves Unity's built-in resource files out (`integrity.BUILTIN_RESOURCES`)
 
 ## BL-101: Slots for groups packed one asset per bundle
 
-- Status: Candidate. Not scheduled.
+- Status: Implemented by the lead; owner review pending.
+- Owner, 2026-11-07: approved, the migration of stored configurations included.
 
 74 official groups emit one bundle per asset, and their bundles' names differ only in the CRC: 6,476 files, among them
 all 289 memorial lobby prefabs (`ui-uilobbyelement-_mxload-prefabs-…`), 681 scenario character prefabs and 1,864 effect
@@ -2484,6 +2485,16 @@ prefabs. `judge.core_of` keys a generic file's slot by its prefix and part numbe
 code, mods of two different lobby prefabs get one slot and one target and exclude each other (not exercised). Proposed:
 key those slots by the bundle's CAB (stable per entry, in the CAB index) or its single asset path; a migration keeps
 stored records valid. Test: two official lobby prefab bundles added as two one-file mods give two slots.
+
+Implemented: a name cannot tell these bundles apart over game updates (only the CRC differs, and a rebuild changes it),
+so the library learns each one's CAB from its header (stable while the asset stays in its group) and `judge.core_of`
+keys its slot by prefix, part number and CAB. It applies to every generic part that several files of one folder share,
+which also gives each dated file of such a part its own slot. The install's files of the parts its generic mods and the
+files being imported use are learned (a group's headers only, when needed); a mod file takes the slot of the install
+file with its CAB, else of the one install file it updates. At the start, the configurations, markers and records of the
+slot an earlier build shared move to the files' own slots; no game file is written. Before, two mods of two lobby
+prefabs got one target (`other-set:3e04ec36…` in the test) and excluded each other. Tests: `tests/test_packed_slots.py`
+(two mods side by side, the migration, all 289 official lobby prefabs as 289 slots).
 
 ## BL-102: Official by Steam's depot manifest on Steam installs
 

@@ -21,7 +21,7 @@ from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from functools import wraps
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Hashable, Iterator, Sequence
+from typing import TYPE_CHECKING, Any, Callable, Hashable, Iterable, Iterator, Sequence
 
 from UnityPy.helpers.ResourceReader import get_resource_data
 
@@ -32,6 +32,7 @@ from ..catalog.models import CoreMap
 from ..errors import ServiceError
 from ..filelock import file_lock
 from ..gameassets.cabs import CabIndex
+from ..gameassets.discovery import cab_names
 from ba_modding_toolkit.i18n import t
 from ..logging_utils import log_failure
 from ..openfiles import remove_tree, temporary_directory
@@ -44,8 +45,8 @@ from . import integrity, safety, staging
 from .identity import identify
 from .judge import (
     CRC_STATES, KINDS, LIBRARY_SOURCES, carried_of, classify, core_of, crc_state, date_of, distinguishing_folders,
-    install_key, install_root, kind_of, kind_of_file, leaves, mod_versions, now, other_target, part_of, says_official,
-    seconds, supports_kind,
+    install_key, install_root, kind_of, kind_of_file, learn_packed, leaves, mod_versions, now, other_target, packed_cab,
+    part_of, says_official, seconds, supports_kind,
 )
 from .migrations import LEGACY_REMAP, legacy_remapped
 from .models import (
@@ -636,6 +637,7 @@ class ModLibrary:
         self._indexes: dict[str, tuple[tuple, dict[str, list[Path]], frozenset, int]] = {}
         self._cab_indexes: dict[tuple[str, tuple[Path, ...]], CabIndex] = {}
         self._cores: dict[str, str] = {}
+        self._packed_wanted: set[str] = set()  # packed groups of files being imported (BL-101)
         self._generation = 0
         self._maps: dict[str, tuple[int, CoreMap]] = {}
         self._names_cache: dict[str, tuple[int, dict[str, Path]]] = {}
@@ -650,6 +652,7 @@ class ModLibrary:
                 self._recover_pending()
                 self._lookup_records()
                 self._migrate_collection_slots()
+                self._migrate_packed_slots()
                 self._known()
             except ServiceError as error:
                 log_failure(logger, logging.WARNING, "Mod configuration not looked up", error)
@@ -1123,6 +1126,7 @@ class ModLibrary:
         inside the dev roots are taken."""
         for path in paths:
             devmode.check_read(path)
+        self._note_packed(paths, pin)  # under the locks add holds: no library lock after its file locks
         return self._add(paths, progress, pin, kind, direct=direct)
 
     def _identity(self, files: dict[str, Path]) -> frozenset:
@@ -2359,6 +2363,173 @@ class ModLibrary:
             for pin in pins:
                 idle(pin.root)
 
+    # --- groups packed one asset per bundle (BL-101) ---
+
+    @staticmethod
+    def _packed_groups(listing: Iterable[tuple[str, str]]) -> dict[tuple, list[Path]]:
+        """The generic bundles whose part (``part_of``: prefix and part number, no date or CRC) several files of one
+        folder share, by part: groups packed one asset per bundle, and a part kept under several dates. Their names
+        cannot tell them apart over game updates, so each gets a slot keyed by its CAB."""
+        groups: dict[tuple, list[Path]] = {}
+        for name, path in listing:
+            if kind_of_file(name) == "other":
+                groups.setdefault((str(Path(path).parent), part_of(name)), []).append(Path(path))
+        packed: dict[tuple, list[Path]] = {}
+        for (_folder, part), paths in groups.items():
+            if len(paths) > 1:
+                packed.setdefault(part, []).extend(paths)
+        return packed
+
+    def _wanted_packed(self) -> set[tuple]:
+        """The parts of the generic mods' files and of files being imported: only bundles of those parts need their CAB
+        learned."""
+        return {part_of(name) for record in self._records.values() if record.get("kind") == "other"
+                for name in record["files"]} | self._packed_wanted
+
+    def _learn_packed(self, paths: Iterable[Path]) -> bool:
+        """Learn each bundle's CAB from its header for ``judge.core_of``; True when a slot key changed."""
+        changed = False
+        for path in paths:
+            if packed_cab(path.name) is not None:
+                continue
+            cab = self._first_cab(path)
+            if cab and learn_packed(path.name, cab):
+                self._cores.pop(path.name, None)
+                changed = True
+        return changed
+
+    @staticmethod
+    def _first_cab(path: Path) -> str | None:
+        try:
+            cabs = [name for name in cab_names(path) if not name.endswith((".ress", ".resource"))]
+        except (OSError, ValueError):
+            return None
+        return min(cabs) if cabs else None
+
+    def _learn_packed_sources(self, files: dict[str, Path], packed: dict[tuple, list[Path]], pin: Pin) -> bool:
+        """Learn the slot of each mod file of a packed part: the CAB it shares with a bundle of that part in the
+        install, else (an older release) the CAB of the one install file it updates, found by its assets."""
+        changed = False
+        for name, path in files.items():
+            name = name.removesuffix(".backup")
+            members = packed.get(part_of(name))
+            if not members or packed_cab(name) is not None:
+                continue
+            cab = self._first_cab(path)
+            held = {packed_cab(member.name) for member in members}
+            if cab is None or cab not in held:
+                try:
+                    targets = self._other_targets({name: path}, pin)
+                except ServiceError:
+                    targets = []
+                cab = packed_cab(targets[0].name) or self._first_cab(targets[0]) if len(targets) == 1 else None
+            if cab and learn_packed(name, cab):
+                self._cores.pop(name, None)
+                changed = True
+        return changed
+
+    def _listing(self, pin: Pin) -> list[tuple[str, str]]:
+        listing: list[tuple[str, str]] = []
+        for directory in pin.dirs:
+            try:
+                with os.scandir(directory) as entries:
+                    listing.extend((entry.name, entry.path) for entry in entries
+                                   if entry.name.endswith(".bundle") and entry.is_file(follow_symlinks=False))
+            except OSError:
+                continue
+        return listing
+
+    @_serialized
+    def note_packed(self, paths: Iterable[Path], pin: Pin | None = None) -> None:
+        """Before files are identified: a generic file of a packed part (``_packed_groups``) gets the slot of the install
+        file it replaces, and every install bundle of that part a slot of its own, each keyed by its CAB."""
+        self._note_packed(paths, pin)
+
+    def _note_packed(self, paths: Iterable[Path], pin: Pin | None = None) -> None:
+        pin = pin or self.current_pin()
+        files = {Path(path).name.removesuffix(".backup"): Path(path) for path in paths}
+        parts = {part_of(name) for name in files if kind_of_file(name) == "other"}
+        if pin is None or not parts:
+            return
+        packed = self._packed_groups(self._listing(pin))
+        hit = parts & packed.keys()
+        if not hit:
+            return
+        self._packed_wanted |= hit
+        changed = self._learn_packed([path for part in hit for path in packed[part]])
+        changed |= self._learn_packed_sources(files, packed, pin)
+        if changed:
+            self._indexes.pop(pin.key, None)
+
+    def _migrate_packed_slots(self) -> None:
+        """Give each bundle of a group packed one asset per bundle its own slot, in the generic mods' records and the
+        configuration: before BL-101 a whole group was one slot. No game bytes change."""
+        records = [record for record in self._records.values() if record.get("kind") == "other"]
+        if not records:
+            return
+        pins = self.installs()
+        groups = {pin.key: self._packed_groups(self._listing(pin)) for pin in pins}
+        for pin in pins:
+            self._indexes.pop(pin.key, None)
+            self._index(pin)  # learns the install's bundles of the parts the records use
+        moved: dict[str, dict[str, set[str]]] = {}  # mod id -> old shared slot -> its files' own slots
+        changed = False
+        for record in records:
+            names = [name for name in record["files"] if any(part_of(name) in packed for packed in groups.values())]
+            if not names:
+                continue
+            try:
+                paths = {path.name: path for path in self._paths(record)}
+            except ServiceError:
+                continue
+            for pin in pins:
+                self._learn_packed_sources({name: paths[name] for name in names if name in paths}, groups[pin.key], pin)
+            for name in names:
+                if packed_cab(name) is None:
+                    continue
+                shared = "other:" + hashlib.sha256(repr(part_of(name)).encode()).hexdigest()
+                moved.setdefault(record["id"], {}).setdefault(shared, set()).add(core_of(name))
+            target = other_target(record["files"])
+            if target != record["target"]:
+                record["target"] = target
+                changed = True
+        if changed:
+            self._save()
+        if not moved:
+            return
+        self._indexes.clear()
+
+        def update(data: dict) -> bool:
+            done = False
+            for install, folder in data.get("folders", {}).items():
+                configured = folder.get("configured", {})
+                for old, entry in list(configured.items()):
+                    source = entry.get("source", "")
+                    new = moved.get(source[4:], {}).get(old) if source.startswith("mod:") else None
+                    if not new:
+                        continue
+                    entry = configured.pop(old)
+                    for key in sorted(new):
+                        configured.setdefault(key, copy.deepcopy(entry))
+                    for field in ("built", "updated"):
+                        if old in folder.get(field, {}):
+                            value = folder[field].pop(old)
+                            for key in sorted(new):
+                                folder[field].setdefault(key, copy.deepcopy(value))
+                    for marker in folder.get("dismissed", {}).values():
+                        if isinstance(marker, dict) and old in marker:
+                            value = marker.pop(old)
+                            for key in sorted(new):
+                                marker.setdefault(key, copy.deepcopy(value))
+                    items = [item for item in data.get("unfinished", [])
+                             if item.get("install") == install and item.get("core") == old]
+                    for item in items:
+                        data["unfinished"].remove(item)
+                        data["unfinished"].extend({**item, "core": key} for key in sorted(new))
+                    done = True
+            return done
+        self.profiles.update(update)
+
     def _index(self, pin: Pin) -> dict[str, list[Path]]:
         """The install's bundle files by lower-case core (names only). Listed again when a folder changes, and
         rebuilt only when the files there are not the same ones (a write replacing a file keeps the index)."""
@@ -2369,18 +2540,14 @@ class ModLibrary:
         cached = self._indexes.get(pin.key)
         if cached and cached[0] == signature_ and signature_:
             return cached[1]
-        listing: list[tuple[str, str]] = []
-        for directory in pin.dirs:
-            try:
-                with os.scandir(directory) as entries:
-                    listing.extend((entry.name, entry.path) for entry in entries
-                                   if entry.name.endswith(".bundle") and entry.is_file(follow_symlinks=False))
-            except OSError:
-                continue
+        listing = self._listing(pin)
         files = frozenset(path for _name, path in listing)
         if cached and cached[2] == files:
             self._indexes[pin.key] = (signature_, cached[1], files, cached[3])
             return cached[1]
+        packed = self._packed_groups(listing)
+        wanted = self._wanted_packed()
+        self._learn_packed([path for key, paths in packed.items() if key in wanted for path in paths])
         index: dict[str, list[Path]] = {}
         for name, path in listing:
             core = self._cores.get(name)
