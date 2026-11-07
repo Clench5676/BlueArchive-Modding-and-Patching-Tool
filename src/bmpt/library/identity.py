@@ -47,7 +47,11 @@ def content_cores(path: Path) -> set[str]:
                 and (match[1] != "spinelobbies" or kind_of(parsed.core) != "lobby"))):
             special[name] = match[2]
     container_kinds: dict[str, set[str]] = {}
-    owned: set[str] = set()
+    # Asset paths in a Spine folder named by a core (spinelobbies/aru_home/...) belong to that core, whatever the names
+    # inside it: the game's own files keep layers, effects and misspellings there that look like other cores (Aru's
+    # Aru_scene, CH0060's CH0060BG_home, CH9996's CH0996_home, FX_Wakamo_home, a Hanako_home skeleton in Hare's lobby).
+    owners = {name: folder[2] for name in names if name not in special and (folder := CONTAINER.search(name))
+              and folder[1] != "spinebackground" and CORE.fullmatch(folder[2])}
     model_names = {name: model[1].lower() for name in names if (model := MODEL_CONTAINER.search(name))}
     # Asset paths name the model a bundle replaces; only without them do prefab and object names identify it.
     contained = bool(model_names)
@@ -57,12 +61,6 @@ def content_cores(path: Path) -> set[str]:
         kind = "home" if "spinelobbies/" in name else "spr" if "spinecharacters/" in name else None
         if kind and name.endswith((".skel", ".atlas")):
             container_kinds.setdefault(Path(name).stem, set()).add(kind)
-        # A skeleton or atlas in a Spine folder named by a core (spinelobbies/aru_home/) belongs to that core, whatever
-        # its own name (Aru's lobby keeps a scene layer, Aru_scene, beside Aru_home): its bare name names no other core.
-        if (folder := CONTAINER.search(name)) and folder[1] != "spinebackground" and CORE.fullmatch(folder[2]):
-            stem = re.sub(r"\.(?:bytes|txt)$", "", Path(name).name)
-            if stem.endswith((".skel", ".atlas")):
-                owned.add(Path(stem).stem)
     cores = set(special.values())
     model_cores = set(model_names.values())
     if not model_cores and kind_of(parsed.core, parsed.category) == "model":
@@ -87,6 +85,12 @@ def content_cores(path: Path) -> set[str]:
                 continue
         if normalized in special or (special and "/" not in normalized):
             continue
+        if normalized in owners:
+            cores.add(owners[normalized])
+            continue
+        if owners and "/" not in normalized:
+            # The asset paths own the bundle's names (object names of the assets the folders hold).
+            continue
         if special_file and "/" not in normalized:
             if Path(normalized).stem == parsed.core.lower() and normalized.endswith((".skel", ".atlas")):
                 cores.add(parsed.core.lower())
@@ -105,8 +109,6 @@ def content_cores(path: Path) -> set[str]:
                 # Bare layer names do not identify a scene. The filename still owns texture-only parts too.
                 if stem == parsed.core.lower():
                     cores.add(stem)
-                continue
-            if stem in owned:
                 continue
             if re.fullmatch(r"[a-z][a-z0-9_]*", stem):
                 if stem == parsed.core.lower() and kind_of(parsed.core, parsed.category) == "lobby":
