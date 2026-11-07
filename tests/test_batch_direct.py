@@ -10,6 +10,7 @@ import pytest
 from ba_modding_toolkit.bundle import Bundle
 from bmpt.errors import ServiceError
 from bmpt.library import integrity
+from bmpt.library import targets as resolver
 from bmpt.library.identity import content_cores
 from bmpt.library.integrity import metadata as bundle_metadata, inspect as inspect_bundle
 from ba_modding_toolkit.models import AssetType, SaveOptions
@@ -97,7 +98,7 @@ def test_model_direct_replacement_never_transfers_assets(batch_model_env, monkey
         pytest.fail('Current official parts must not match or transfer assets')
 
     monkeypatch.setattr(Bundle, 'extract_patch', forbidden)
-    monkeypatch.setattr(batch_import, '_asset_match', forbidden)
+    monkeypatch.setattr(resolver, 'sharing_keys', forbidden)
     monkeypatch.setattr(batch_import.core, 'process_mod_update', forbidden)
     monkeypatch.setattr(Bundle, 'check_need_crc', lambda *args: True)
     entry, = analyze(env, [source])['entries']
@@ -187,7 +188,7 @@ def test_crc_matching_does_not_hide_a_release_or_part_change(field, tmp_path):
     changed = name.replace('2024-11-18', '2025-07-25') if field == 'date' else name.replace('_004_', '_006_')
     target, source = tmp_path / name, tmp_path / changed
     expected = {}
-    assert integrity.replacements({changed: source}, [target], read_cabs=lambda path: ()) == expected
+    assert resolver.current({changed: source}, [target])[0] == expected
 
 
 @pytest.mark.parametrize('category,core', [('spinecharacters', 'test_spr'), ('spinelobbies', 'test_home_gl'),
@@ -315,7 +316,7 @@ def test_verified_modified_model_part_imports_whole(verified_model, monkeypatch,
         pytest.fail('Direct replacements must bypass asset transfer')
 
     monkeypatch.setattr(Bundle, 'extract_patch', forbidden)
-    monkeypatch.setattr(batch_import, '_asset_match', forbidden)
+    monkeypatch.setattr(resolver, 'sharing_keys', forbidden)
     entry, = analyze(env, [source])['entries']
     assert (entry['state'], entry['reason']) == ('ready', None), entry
     result, = run(env, [entry], types=['Texture2D'])

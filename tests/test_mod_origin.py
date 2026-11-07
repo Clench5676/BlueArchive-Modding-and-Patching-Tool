@@ -15,10 +15,10 @@ from bmpt.library import ModLibrary
 from bmpt.library.identity import content_cores
 from bmpt.library.integrity import inspect as inspect_bundle, metadata as bundle_metadata
 from bmpt.webui import batch_import
-from ba_modding_toolkit.searching import _asset_match
+from bmpt.library import targets as resolver
 from ba_modding_toolkit.utils import CRCUtils
 
-from test_batch_import import analyze, env, finish, rpc, run
+from test_batch_import import REAL_SHARING_KEYS, analyze, env, finish, rpc, run
 from test_library import game_bundle, make_mod, setup_library
 
 
@@ -103,7 +103,7 @@ def official_bundle(env, platform=19, **kwargs):
 def real_metadata(env, monkeypatch):
     monkeypatch.setattr(integrity, 'inspect', inspect_bundle)
     monkeypatch.setattr(integrity, 'metadata', bundle_metadata)
-    monkeypatch.setattr(batch_import, '_asset_match', _asset_match)
+    monkeypatch.setattr(resolver, 'sharing_keys', REAL_SHARING_KEYS)
     official_bundle(env)
     return env
 

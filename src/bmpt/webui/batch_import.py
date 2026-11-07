@@ -26,7 +26,6 @@ from ..library.judge import core_of, kind_of, part_of
 from ..library.storage import Fingerprints, atomic_clone, verify_file
 from ba_modding_toolkit.models import AssetType, SaveOptions
 from ba_modding_toolkit.naming import parse_filename
-from ba_modding_toolkit.searching import _asset_match
 from ba_modding_toolkit.spine import get_skel_version
 from ba_modding_toolkit.utils import CRCUtils, no_log, parse_hex_bytes
 
@@ -432,8 +431,7 @@ class BatchImport:
                 raise ServiceError("folder_changed")
             if pin:
                 self.services._check_pin(library, pin)
-            identity = frozenset((core_of(name), part_of(name), self._hashes.get(path).sha1)
-                                 for name, path in fresh.files.items())
+            identity = self._identity_of(fresh.files)
             if identity != fresh.identity:
                 raise ServiceError("entry_changed")
             self._judge(fresh, library, pin, log)
@@ -682,8 +680,7 @@ class BatchImport:
                      "source": None, "target": mod_origin.target_of(self.services.settings, library.current_pin())}
             candidate = Candidate(files, entry, error, failure=failure)
             try:
-                candidate.identity = frozenset((core_of(name), part_of(name), self._hashes.get(path).sha1)
-                                               for name, path in files.items())
+                candidate.identity = self._identity_of(files)
             except OSError:
                 pass  # The unreadable row above still reports all of its source paths.
             candidates.append(candidate)
@@ -777,6 +774,10 @@ class BatchImport:
             entry.pop("error", None)
             entry.pop("params", None)
 
+    def _identity_of(self, files: dict[str, Path]) -> frozenset:
+        """What an import row's files are: per file its core, part and content."""
+        return frozenset((core_of(name), part_of(name), self._hashes.get(path).sha1) for name, path in files.items())
+
     def _judge(self, candidate: Candidate, library: Any, pin: Any, log: Any = no_log,
                *, asset_types: set[str] | None = None, strategy: str | None = None) -> None:
         entry = candidate.entry
@@ -808,8 +809,7 @@ class BatchImport:
                     raise blocked_error(candidate)
                 variant = self.services.catalog.assignment_variant(entry["assignment"])
                 kind = manual_identity.validate(candidate.files)
-                candidate.identity = frozenset((core_of(name), part_of(name), self._hashes.get(path).sha1)
-                                               for name, path in candidate.files.items())
+                candidate.identity = self._identity_of(candidate.files)
                 entry.update(variant=variant.key, kind=kind, state="ready", reason=None, libraryOnly=True,
                              core=entry["core"] or variant.file_id)
                 return
@@ -884,7 +884,8 @@ class BatchImport:
 
             if len({p.name for p in live}) != len(live):
                 raise ServiceError("game_file_conflict", file=source_file(candidate))
-            replacements = library._replacements(candidate.files, live, pin, inspection)
+            resolution = library._resolve(candidate.files, live, pin, inspection)
+            replacements = resolution.current
             for file in entry["files"]:
                 matches = [target for target, source in replacements.items() if str(source) == file["path"]]
                 file["target"] = matches[0].name if len(matches) == 1 else None
@@ -914,31 +915,11 @@ class BatchImport:
             baseline = dict(zip(live, originals))
             exact = set(candidate.files) <= {p.name for p in live}
             sources = list(candidate.files.values())
+            generic = entry["kind"] == "other"
+            # The parts the files write, by the one rule Enable, Apply and the preview use (``targets.resolve``).
             targets = set(replacements)
-            older = {name: path for name, path in candidate.files.items() if path not in replacements.values()}
-            if older:
-                if entry["kind"] == "other":
-                    targets.update(library._other_targets(older, pin))
-                else:
-                    # A core keeps its parts under several dates, so the parts holding the files' assets are looked
-                    # up over every date first, as Enable and Apply do (ModLibrary._update_groups); the newest date
-                    # of a prefix stays the rule for files whose assets no part holds (pre-split bundles).
-                    grouped: dict[str, list[Path]] = {}
-                    for path in older.values():
-                        grouped.setdefault(parse_filename(path.name).prefix, []).append(path)
-                    latest = {}
-                    for path in live:
-                        parsed = parse_filename(path.name)
-                        latest[parsed.prefix] = max(latest.get(parsed.prefix, ""), parsed.date)
-                    for prefix, paths in grouped.items():
-                        found = library._update_targets(paths, live, pin, inspection)
-                        if found:
-                            targets.update(found)
-                            continue
-                        matched, _ = _asset_match(paths, [baseline[p] for p in live
-                            if parse_filename(p.name).date == latest[parse_filename(p.name).prefix]],
-                            log, keys=inspection.keys)
-                        targets.update(p for p in live if baseline[p] in matched)
+            if resolution.older:
+                targets.update(library._other_targets(resolution.older, pin) if generic else resolution.updated)
             targets = [path for path in live if path in targets]
             inferred = entry["source"] is None
             choices = (mod_origin.candidates(names, selected, official_contents, entry["target"]) if inferred
@@ -948,13 +929,13 @@ class BatchImport:
                 converting = conversion(choice)
                 failure = None
                 chosen = targets
-                if choice["server"] != entry["target"]["server"] and not all(
-                        any(part_of(name) == part_of(path.name) for path in live) for name in names):
+                # Another server's files are accepted where the resolver places them by name, CAB or asset path;
+                # the file names decide only for the others.
+                if choice["server"] != entry["target"]["server"] and not generic and resolution.unplaced:
                     failure = "conversion_names"
                 if not failure and (converting or inferred or rebuild):
                     if matched_targets is None:
-                        matches, _ = _asset_match(sources, [baseline[p] for p in targets], log, keys=inspection.keys)
-                        matched_targets = [p for p in targets if baseline[p] in matches]
+                        matched_targets = resolution.sharing_keys(targets)
                     chosen = matched_targets
                 if not chosen:
                     failure = failure or ("no_matching_assets" if converting or inferred or rebuild else "game_file_not_found")
@@ -1105,8 +1086,7 @@ class BatchImport:
                             with self._lock:
                                 check_current()
                                 self._require_importable(candidate)
-                            current = frozenset((core_of(name), part_of(name), self._hashes.get(path).sha1)
-                                                for name, path in candidate.files.items())
+                            current = self._identity_of(candidate.files)
                             if current != candidate.identity:
                                 raise ServiceError("entry_changed")
                             fresh = Candidate(dict(candidate.files), deepcopy(candidate.entry), candidate.error,
@@ -1154,8 +1134,7 @@ class BatchImport:
                                     check_current()
                                     self._require_importable(candidate)
                                     self._require_importable(fresh)
-                                    current = frozenset((core_of(name), part_of(name), self._hashes.get(path).sha1)
-                                                        for name, path in fresh.files.items())
+                                    current = self._identity_of(fresh.files)
                                     if current != fresh.identity:
                                         raise ServiceError("entry_changed")
                                 if fresh.not_transferred:

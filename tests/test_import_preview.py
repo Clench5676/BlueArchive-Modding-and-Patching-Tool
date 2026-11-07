@@ -123,7 +123,8 @@ def test_source_preview_tokens_never_resolve_arbitrary_paths(env):
 def test_blocked_sources_still_serve_renderable_preview_assets(env, monkeypatch, problem):
     from bmpt.library import integrity
     if problem == "source":
-        monkeypatch.setattr("bmpt.webui.batch_import._asset_match", lambda *args, **kwargs: ([], ""))
+        monkeypatch.setattr("bmpt.library.targets.by_assets", lambda *args, **kwargs: ("asset_path", []))
+        monkeypatch.setattr("bmpt.library.targets.sharing_keys", lambda *args, **kwargs: [])
 
     source = game_bundle(env.tmp / 'input', date="2025-01-01", payload=b"old mod")
     inspect = integrity.inspect

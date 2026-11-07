@@ -27,8 +27,10 @@ additional read. Texture decoding and mesh stream validation add necessary work,
 per input, regardless of the number of candidates. The snapshot is released after the
 row is judged and execution uses a fresh inspection.
 
-An inferred source must satisfy the target and cross-region slot rules, Spine version
-checks and asset matching. Even an exact filename must have comparable assets. The
+Another region's files are accepted where the target resolver (`library/targets.py`)
+places them by name, CAB or asset path; only files it places otherwise must name a part
+the install has (`conversion_names`). An inferred source must satisfy the target and
+cross-region slot rules, Spine version checks and asset matching. Even an exact filename must have comparable assets. The
 execution reader must be able to extract every comparable Mod asset present: textures,
 text assets (including atlas and skeleton), meshes and animation clips. Every extracted
 key must have a matching target across the selected official bundles. A readable
