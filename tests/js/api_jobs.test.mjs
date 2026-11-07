@@ -12,6 +12,19 @@ globalThis.EventSource = class {
 const answer = (body) => ({ ok: true, json: async () => body });
 const options = { pollEvery: 1, maxErrors: 3, timeout: 200 };
 
+test("RPC, polled jobs and job failure events preserve backend display references and job ids", async () => {
+  const error = { code: "mod_parts_missing", ref: "E3006", params: { count: 2 } };
+  const check = (err) => err.code === error.code && err.ref === error.ref && err.params.count === 2;
+  globalThis.fetch = async () => answer({ error });
+  await assert.rejects(rpc("fail"), check);
+  globalThis.fetch = async () => answer({ result: { id: "j-ref", state: "failed", error } });
+  await assert.rejects(waitJob("j-ref", null, options), check);
+  globalThis.fetch = async () => answer({ result: { state: "running" } });
+  const pending = waitJob("j-event", null, options);
+  stream.emit("job.failed", { id: "j-event", kind: "import", ...error });
+  await assert.rejects(pending, check);
+});
+
 test("polling observes a failed apply even when its event was lost, and done needs no event", async () => {
   globalThis.fetch = async () => answer({ result: { state: "failed", error: { code: "mod_target_mismatch", params: { variant: "test" } } } });
   await assert.rejects(waitJob("j1", null, options), (e) => e.code === "mod_target_mismatch");

@@ -19,6 +19,7 @@ import { resizeButton } from "./button-layout.js";
 import { fitBadgeCaptions, selectedFrame, selectionArtWindow, SELECTION_PREFAB, SELECTION_SLOT } from "./selected-frames.js";
 import { frameOutline } from "./row-thumbnail.js";
 import { T } from "./i18n.js";
+import { codeOf, noticeNames, withCode } from "./error-codes.js";
 import { withTimeout } from "./async.js";
 import { TEXT_VIEWER, frameClass, frameGeometry, popupContent } from "./popup-frames.js";
 import { statsBox, valueRoom } from "./stats-box.js";
@@ -961,6 +962,8 @@ export function message(opts) {
     const error = typeof opts.error === "object" && opts.error ? opts.error : {};
     const event = { kind: "popup", code: error.code || "internal", params: error.params || {},
       message: error.message || (opts.lines || []).filter((line) => typeof line === "string").join("\n") };
+    const ref = error.ref || codeOf(event.code);
+    if (ref) event.ref = ref;
     const report = () => globalThis.BAMTRecovery?.report(event);
     if (!opts.cancel) {
       opts = { ...opts, cancel: T("recovery.report") };
@@ -1299,16 +1302,7 @@ export function textViewer({ title, text, copy, close = T("display.close"), onCo
 // Hall rule): nothing broke, so it reads as the game's neutral notice (title quit.title, Confirm only), without Failed
 // and without an Error Report button (BL-045). Every other code is a real failure and keeps both. Codes that report
 // something unreadable or unknown (game_status_unavailable, profiles_unreadable) stay failures.
-export const REFUSALS = Object.freeze([
-  // the machine is in a state that blocks the action
-  "busy", "game_running", "steam_busy", "classic_open", "game_not_found", "game_directory_missing", "data_dir_readonly",
-  // the view was stale: something changed since the click was offered
-  "state_changed", "folder_changed", "entry_changed",
-  // a rule of the app
-  "mod_in_use", "mod_in_use_elsewhere", "mod_last_copy", "asset_official", "photo_in_use", "library_target_not_empty",
-  "hall_last_portrait", "hall_last_memorial", "hall_duplicate_portrait", "hall_duplicate_memorial", "hall_conflict",
-  "alias_too_long", "alias_too_many", "export_empty", "scan_off", "native_only", "native_unavailable",
-]);
+export const REFUSALS = Object.freeze(noticeNames());
 export const isRefusal = (error) => REFUSALS.includes(error?.code);
 
 // the neutral notice: the game's caption title (as the quit prompt), one line, Confirm only; resolves when closed
@@ -1321,7 +1315,7 @@ export function notice(text) {
 export function notify(text, { kind = "info", error = null } = {}) {
   if (!text || kind !== "error") return;
   if (isRefusal(error)) { void notice(text); return; }
-  void message({ title: T("job.failed"), lines: [text], ok: T("picker.ok"), error });
+  void message({ title: T("job.failed"), lines: [withCode(text, error, T)], ok: T("picker.ok"), error });
 }
 
 // Prefabs and derived UI values belong to the selected installation.

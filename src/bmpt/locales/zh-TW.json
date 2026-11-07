@@ -207,6 +207,7 @@
 			"label": "收合"
 		},
 		"popup": {
+			"withCode": "{message}（{code}）",
 			"switch": "切換立繪",
 			"apply": "套用",
 			"save": "儲存",

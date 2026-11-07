@@ -9,6 +9,7 @@ import * as Popup from "./popup.js";
 import * as Loading from "./loading.js";
 import { rpc, spineBase, spinePrefix, waitJob } from "./api.js";
 import { L, T, language } from "./i18n.js";
+import { withCode } from "./error-codes.js";
 import { customAliases, studentName } from "./names.js";
 import { specialFraming } from "./special-view.js";
 import { spineAllowed } from "./spine-runtime.js";
@@ -71,7 +72,9 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
   const thumbnailJobs = new Map();
   const liveVersions = new Map(), refreshedResults = new WeakSet();
   let listGeneration = 0, liveRefreshPending = false;
-  const showError = (message, error) => popups.message({ title: T("job.failed"), lines: [message], ok: T("picker.ok"), error });
+  const showError = (message, error) => Popup.isRefusal(error)
+    ? popups.message({ title: T("quit.title"), lines: [message], ok: T("picker.ok") })
+    : popups.message({ title: T("job.failed"), lines: [withCode(message, error, T)], ok: T("picker.ok"), error });
   const drawings = new Set();
   let loadingHold = null, left = Promise.resolve(), leave = () => {};
   const waiters = new Set();
