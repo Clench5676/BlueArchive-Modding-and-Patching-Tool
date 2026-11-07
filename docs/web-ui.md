@@ -2871,7 +2871,9 @@ receives its short summary. No upload is performed. A failed clipboard/reveal ac
 The archive contains `report.txt`, `report.json`, and `webui.log`, `webui.1.log`, `webui.2.log`. Each log keeps at
 most its last 512 KiB, dropping a partial first line. Structured data is limited to 256 KiB. Home paths (including JSON and URL encodings), user names, hostnames,
 credentials (including the existing session-secret registry), and asset filenames are redacted; extensions and
-counts remain. Game/library summaries contain no entry names or install paths. Unavailable observations are `null`.
+counts remain. An apostrophe inside a word is part of a name, so a whole name is redacted. The game's own names stay:
+official bundle names (`*_assets_all_<n>.bundle`, `*_scenes_all_<n>.bundle`, Unity's built-in shaders
+`<32 hex>_unitybuiltinshaders_<n>.bundle`, an apostrophe allowed inside), CAB ids and the App's model URLs. Game/library summaries contain no entry names or install paths. Unavailable observations are `null`.
 Game metadata is captured during initialization and `app.info`; report generation never initializes game assets
 or acquires the library lock. Persisted library metadata supplies counts only. Consent uses the in-memory cache.
 Optional reads have a 100 ms limit and share a one-second collection deadline; unavailable fields are `null`.

@@ -33,15 +33,20 @@ LOG_CAP = 512 * 1024
 DATA_CAP = 256 * 1024
 LOG_NAMES = ("webui.log", "webui.1.log", "webui.2.log")
 CRASH_NAME = "last-backend-error.json"
-# Log fields may contain unquoted names with spaces. Discard the full field through the extension.
+# Log fields may contain unquoted names with spaces. Discard the full field through the extension. An apostrophe
+# inside a word belongs to the name ("Sensei's mod.bundle"); one next to a non-word character is a quote.
 _EXTENSIONS = r"bundle(?:\.backup)?|backup|skel|atlas|png|jpg|jpeg|webp|zip|glb|fbx|wav|ogg|mp3"
-_ASSET_FIELD = re.compile(r"[^\r\n\"'=,;<>]+")
+_ASSET_FIELD = re.compile(r"(?:[^\r\n\"'=,;<>]|(?<=\w)'(?=\w))+")
 _ASSET_EXTENSION = re.compile(r"(?i)\.(" + _EXTENSIONS + r")(?![\w.])")
 _ASSET_VALUE = re.compile(r"(?is)^.+?\.(" + _EXTENSIONS + r")$")
 _HOME = re.compile(r"(?i)(?:[A-Z]:[/\\](?:Users|Documents and Settings)[/\\]|/(?:Users|home)/)[^/\\\r\n\"']+")
 # The game's own names stay: official bundle file names, CAB ids and the App's model URLs (a variant key). They name
-# game data, never the user, and a report without them cannot tell which game file a check refused.
-_GAME_NAME = re.compile(r"(?i)(?<![\w.\-])(?:[a-z0-9_.\-]+_assets_all_\d+\.bundle(?:\.backup)?|cab-[0-9a-f]{32}(?:\.[a-z]+)?"
+# game data, never the user, and a report without them cannot tell which game file a check refused. Official bundles
+# end in _assets_all_<n> or _scenes_all_<n>, or are Unity's built-in shaders (<32 hex>_unitybuiltinshaders_<n>); an
+# apostrophe occurs only inside a name (a raid scene, "netzach's"), so quotes around a name stay outside it. A match
+# never starts right after an apostrophe inside a word: that keeps the search linear on long untrusted names.
+_GAME_NAME = re.compile(r"(?i)(?<![\w.\-])(?<![\w.\-]')(?:(?:[a-z0-9_.\-]+(?:'[a-z0-9_.\-]+)*_(?:assets|scenes)_all_\d+"
+                        r"|[0-9a-f]{32}_unitybuiltinshaders_\d+)\.bundle(?:\.backup)?|cab-[0-9a-f]{32}(?:\.[a-z]+)?"
                         r"|[a-z0-9_]+\.glb)(?![\w.\-])")
 # A log record's own head (milliseconds, level, logger) is never part of an asset name.
 _LOG_HEAD = re.compile(r"^\d{3} (?:DEBUG|INFO|WARNING|ERROR|CRITICAL) [\w.]+: ")
