@@ -12,7 +12,8 @@ When direct detection is incomplete, preflight tries only the unknown dimensions
 A reliable platform or region is a constraint, including a region established by a
 shared official CAB. Conflicting markers and unsupported build targets remain errors.
 The remaining choices use Global before Japan and Android before iOS before PC. The
-first valid choice wins. These choices describe compatible conversion inputs;
+first valid choice wins. When none is valid, the row reports the first failure other
+than a cross-region file-name mismatch, which every wrong region guess produces. These choices describe compatible conversion inputs;
 indistinguishable bundles cannot prove their historical origin. Manual selections
 also cannot contradict reliable evidence.
 

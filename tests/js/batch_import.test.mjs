@@ -2421,14 +2421,12 @@ test("one incomplete row prompts once; unrelated additions keep the decline; Rec
   assert.ok(h.row("a")); assert.equal(h.row("b"), undefined);
 });
 
-test("several incomplete rows use one list confirmation and select and reveal the completed row", async () => {
+test("several incomplete rows prompt by themselves with one list confirmation and select and reveal the completed row", async () => {
   const h = await fixture(), a = missingEntry("a", 2), b = { ...missingEntry("b", 3), kind: "lobby" };
   const revealed = []; El.prototype.scrollIntoView = function () { revealed.push(this.dataset.entry); };
+  h.answers.push({ button: "ok" });
   await beginAnalysis(h, [a, b]);
-  assert.equal(h.messages.length, 0); assert.equal(h.action("fillAll").hidden, false);
-  assert.match(h.host.textContent, /2 Groups Missing Files/);
-  h.answers.push({ button: "ok" }); await h.action("fillAll").click(); await flush();
-  assert.equal(h.messages.length, 1);
+  assert.equal(h.messages.length, 1); assert.equal(h.messages[0].title, "Complete All (2 Groups)");
   assert.deepEqual(h.messages[0].lines, ["- Saved Alias, Portrait (2)", "- Student b, Memorial Lobby (3)"]);
   const requested = h.analyses.at(-1).params.paths;
   assert.deepEqual(new Set(requested), new Set([...a.paths, ...b.paths, ...a.missing.found.map((f) => f.path), ...b.missing.found.map((f) => f.path)]));
@@ -2437,6 +2435,21 @@ test("several incomplete rows use one list confirmation and select and reveal th
   assert.equal(h.page.model.state.selected, completed.id); assert.deepEqual(revealed, [completed.id]);
   assert.equal(h.page.model.state.checked.has(completed.id), true); assert.equal(h.action("fillAll").hidden, true);
   delete El.prototype.scrollIntoView;
+});
+
+test("a declined list confirmation stays on Complete All; only rows not asked about yet prompt again", async () => {
+  const h = await fixture(), a = missingEntry("a", 2), b = { ...missingEntry("b", 3), kind: "lobby" };
+  await beginAnalysis(h, [a, b]);
+  assert.equal(h.messages.length, 1); assert.equal(h.analyses.length, 1);
+  assert.equal(h.action("fillAll").hidden, false); assert.match(h.host.textContent, /2 Groups Missing Files/);
+  const add = h.page.drop(entry("c").paths); await resolveAnalysis(h, [a, b, entry("c")], 2); await add;
+  assert.equal(h.messages.length, 1);
+  h.answers.push({ button: "ok" }); await h.action("fillAll").click(); await flush();
+  assert.equal(h.messages.length, 2); assert.equal(h.messages[1].lines.length, 2);
+  const requested = h.analyses.at(-1).params.paths;
+  assert.ok([...a.missing.found, ...b.missing.found].every((file) => requested.includes(file.path)));
+  await resolveAnalysis(h, [a, b, entry("c"), { ...missingEntry("d", 1), kind: "lobby" }], 3);
+  assert.equal(h.messages.length, 3); assert.match(h.messages[2].lines.at(-1), /Student d, Memorial Lobby/);
 });
 
 test("a row with nothing found opens the native picker in its own folder and adds the paths", async () => {
@@ -2502,9 +2515,10 @@ test("scenario 3: a 25-row pack fills three rows, later supplies one, imports 24
     files: Array.from({ length: 5 }, (_, i) => ({ path: `/pack/${row.id}-${i}.bundle`, size: 128, target: null })) }));
   await beginAnalysis(h, rows);
   assert.equal(h.page.model.state.entries.length, 25); assert.equal(h.page.model.selected().length, 20);
-  assert.equal(h.messages.length, 0); assert.equal(h.action("fillAll").caption, "Complete All (3 Groups)");
+  assert.equal(h.messages.length, 1); assert.equal(h.messages[0].lines.length, 3);
+  assert.equal(h.action("fillAll").caption, "Complete All (3 Groups)");
   h.answers.push({ button: "ok" }); await h.action("fillAll").click(); await flush();
-  assert.equal(h.messages[0].lines.length, 3);
+  assert.equal(h.messages[1].lines.length, 3);
   rows = rows.map((row, i) => i < 3 ? { ...row, state: "ready", paths: [...row.paths, ...row.missing.found.map((f) => f.path)] } : row);
   await resolveAnalysis(h, rows, 2);
   assert.equal(h.page.model.selected().length, 23); assert.equal(h.action("fillAll").hidden, true);
