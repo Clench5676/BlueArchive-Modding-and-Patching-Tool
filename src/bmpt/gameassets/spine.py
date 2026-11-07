@@ -7,6 +7,8 @@ import json
 from io import BytesIO
 from pathlib import Path
 
+from typing import Iterable, Mapping
+
 from PIL import Image
 
 from ..texture_guard import texture_image
@@ -28,9 +30,29 @@ def spine_stamps(bundles: list[Path]) -> list[tuple[str, int, int, int]]:
     return stamps
 
 
+#: the asset types a Spine preview reads of its bundles
+PREVIEW_TYPES = frozenset({"TextAsset", "Texture2D"})
+
+
+class Composition(list):
+    """Bundles in merge order, and the asset types a preview leaves out of some of them (``skip``): an import that
+    transfers assets leaves the types its options do not name official, so its preview does too."""
+
+    def __init__(self, bundles: Iterable[Path] = (), skip: Mapping[Path, Iterable[str]] | None = None):
+        super().__init__(bundles)
+        self.skip = {Path(path).resolve(): frozenset(types) for path, types in (skip or {}).items() if types}
+
+
+def skipped(bundles: list[Path]) -> dict[Path, frozenset[str]]:
+    """The asset types a composition's preview leaves out, per bundle (none for a plain list)."""
+    return dict(getattr(bundles, "skip", None) or {})
+
+
 def spine_revision(bundles: list[Path]) -> str:
-    """A URL segment identifying one ordered composition of bundle versions."""
-    return hashlib.sha256(json.dumps(spine_stamps(bundles)).encode()).hexdigest()
+    """A URL segment identifying one ordered composition of bundle versions (and the types it leaves out)."""
+    skip = sorted([str(path), sorted(types)] for path, types in skipped(bundles).items())
+    return hashlib.sha256(json.dumps([spine_stamps(bundles), skip] if skip else spine_stamps(bundles))
+                          .encode()).hexdigest()
 
 
 def png_bytes(image: Image.Image, level: int | None = None) -> bytes:
@@ -60,12 +82,16 @@ def atlas_pages(data: bytes) -> list[str]:
     return pages
 
 
-def extract_spine(bundles: list[Path]) -> dict[str, bytes]:
-    """Extract every skeleton, atlas and texture, retaining atlas page filenames."""
+def extract_spine(bundles: list[Path], skip: Mapping[Path, frozenset[str]] | None = None) -> dict[str, bytes]:
+    """Extract every skeleton, atlas and texture, retaining atlas page filenames; ``skip`` leaves the given asset types
+    of some bundles out."""
     result, textures = {}, {}
     for path in bundles:
+        left = (skip or {}).get(Path(path).resolve(), frozenset())
         with open_bundle(path) as env:
             for obj in env.objects:
+                if obj.type.name in left:
+                    continue
                 if obj.type.name == "TextAsset":
                     data = obj.read()
                     if data.m_Name.endswith((".skel", ".atlas")):

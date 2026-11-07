@@ -43,6 +43,16 @@ def test_content_names_and_container_paths(monkeypatch, name, core):
     assert content_cores(Path('upload.bundle')) == {core}
 
 
+def test_a_scene_layer_in_a_cores_spine_folder_belongs_to_that_core(monkeypatch):
+    # Aru's lobby keeps a second skeleton, Aru_scene, in its own folder
+    folder = 'Assets/_MX/SpineLobbies/Aru_home'
+    objects(monkeypatch, ['Aru_home.skel', 'Aru_home.atlas', 'Aru_scene.skel', 'Aru_scene.atlas'],
+            [f'{folder}/Aru_home/Aru_home.skel.bytes', f'{folder}/Aru_home/Aru_home.atlas.txt',
+             f'{folder}/Aru_Scene/Aru_scene.skel.bytes', f'{folder}/Aru_Scene/Aru_scene.atlas.txt'])
+    path = Path('assets-_mx-spinelobbies-aru_home-_mxdependency-textassets-2023-11-18_assets_all_1.bundle')
+    assert content_cores(path) == {'aru_home'}
+
+
 def test_unreadable_bundle_is_refused(monkeypatch):
     monkeypatch.setattr(Bundle, 'load', lambda *args: None)
     with pytest.raises(ServiceError, match='bundle_invalid'):

@@ -13,7 +13,8 @@ A reliable platform or region is a constraint, including a region established by
 shared official CAB. Conflicting markers and unsupported build targets remain errors.
 The remaining choices use Global before Japan and Android before iOS before PC. The
 first valid choice wins. When none is valid, the row reports the first failure other
-than a cross-region file-name mismatch, which every wrong region guess produces. These choices describe compatible conversion inputs;
+than a cross-region file-name mismatch, which every wrong region guess produces, and
+the error report lists every choice tried with its failure. These choices describe compatible conversion inputs;
 indistinguishable bundles cannot prove their historical origin. Manual selections
 also cannot contradict reliable evidence.
 
@@ -27,8 +28,10 @@ additional read. Texture decoding and mesh stream validation add necessary work,
 per input, regardless of the number of candidates. The snapshot is released after the
 row is judged and execution uses a fresh inspection.
 
-An inferred source must satisfy the target and cross-region slot rules, Spine version
-checks and asset matching. Even an exact filename must have comparable assets. The
+Another region's files are accepted where the target resolver (`library/targets.py`)
+places them by name, CAB or asset path; only files it places otherwise must name a part
+the install has (`conversion_names`). An inferred source must satisfy the target and
+cross-region slot rules, Spine version checks and asset matching. Even an exact filename must have comparable assets. The
 execution reader must be able to extract every comparable Mod asset present: textures,
 text assets (including atlas and skeleton), meshes and animation clips. Every extracted
 key must have a matching target across the selected official bundles. A readable

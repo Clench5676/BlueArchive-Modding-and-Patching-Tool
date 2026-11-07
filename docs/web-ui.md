@@ -1199,9 +1199,14 @@ A blocked or incomplete row also carries `bundles`: for each of its files (at mo
 `Inspection.summary` (the analysis's own cache; only the serialized-file headers of a bundle it already loaded are read
 again): `file`, the build targets (`platforms`), the Unity versions (`unity`, major.minor), its own CABs and stream files
 (`cabs`, at most 10) and how many other CABs or stream files it references (`references`, `null` when only headers were
-read). A refusal from the files' format can so be told from one guessed from their names or targets. The error report's
-import rows and the analysis log carry `bundles` and `missing`; CAB ids and the game's own file names stay, other file
-names are redacted.
+read). A refusal from the files' format can so be told from one guessed from their names or targets. A blocked row
+carries the resolver's evidence as well, `resolution`: per file (at most 20) its `method` (`name`, `name_without_crc`,
+`cab`, `asset_path`, `asset_key`, `part`, `none`, or `null` when the analysis stopped before the asset stage) and the
+official parts (`targets`) and their `dates` it found; and, for a guessed source, `attempts`: every server and platform
+tried with its failure `code`. The error report's import rows and the analysis log carry `bundles`, `missing`,
+`resolution` and `attempts`, and the report's rows `previewed`: whether the import preview composed the row (a refused
+row that previewed shows the preview and the analysis disagreeing). CAB ids and the game's own file names stay, other
+file names are redacted.
 
 A blocked or incomplete row's status badge opens Details (`import-details.js`, the game's message popup with a compact frame: `Popup.message({ compact })` sizes the frame to its content, below the frame class's own height): the row's reason (its short label with the error text, a file name that opens or ends the text left out, or the missing-file status), then a paragraph a file (its name, `import.detail.platform`, `import.detail.unity`), the unresolved dependencies (`import.detail.unresolved`, then one CAB id a line, from `missing.cabs`) and the files of the same slot found in its folders (`missing.found`). Its hit area is the badge background's box (`badgeRect`), above the row's own; opening it does not select the row.
 
@@ -1246,20 +1251,29 @@ dependency under `characters/<model>/` never becomes the variant's prefab core. 
 be stored and applied to the variant's slot when it is one of that slot's cores. Add and Import Mod keep the same
 filenames, target and library identity.
 
-A current-release Mod file is proved by an installed name without its CRC or by matching internal CAB names.
-It replaces the exact installed name, else the name without the CRC, else the unique CAB match, with a unique part
-(prefix and resource type) breaking an otherwise undecidable current-release match. Remaining ambiguous current
-matches give `mod_target_ambiguous`. This mapping drives direct import and apply, dependency exclusions, compatibility
-and preview complements. A current name without its CRC or a unique CAB match is never outdated.
+One resolver decides which official parts a set of Mod files replaces or updates (`bmpt/library/targets.py`,
+`ModLibrary._resolve`, BL-113): Import Mod's analysis, the import preview's complements, Add's dependency check, the
+compatibility check, Enable and Apply (`_plan`), library previews, adapted builds' inputs and generic slots all ask it,
+and a test checks that these call sites decide nothing themselves. Per file:
 
-Older releases use the existing update route, including pre-split bundles that update several current files. Character
-slots update the core's parts that hold the older files' asset paths, else their asset names and types, over every date
-of the core (BL-098; the installer's UPDATE groups only for files whose assets no part holds). Batch Import's analysis
-finds the targets of older or differently named files (another build's resource-type names) the same way, per prefix,
-and matches assets against the latest live files of a prefix only when no part holds them. Generic slots match by asset path over every date of the prefix, then
-retain prefix matching, the latest file per slot and container/name/type overlap, including the collection rule. Older
-releases are not refused as ambiguous replacement targets. When their dependency check runs, it excludes the files their
-update targets. Older preview complements drop only the official parts whose every asset path the older files carry.
+1. a current release: the exact installed name, else the name without the CRC, else the unique CAB match, with a
+   unique part (prefix and resource type) breaking an otherwise undecidable match; remaining ambiguous current matches
+   give `mod_target_ambiguous`. Such a file replaces its part whole and is never outdated;
+2. the other files (older releases, pre-split bundles, another build's names such as Global mobile's resource-type
+   parts), per name prefix and core: the parts holding their asset paths over every date of the core (a build keeps an
+   asset path in exactly one bundle; a core keeps parts under several dates), else the parts sharing an asset name and
+   type; only for files whose assets cannot be read, their part (prefix and resource type or number) at its newest
+   date. A file whose readable assets no part holds finds nothing.
+
+The resolution gives the parts the files write (`updated`: the targets of the analysis, the dependency check's
+exclusions, the install groups of Enable and Apply) and the parts they stand in for (`replaced`: those replaced whole,
+those whose every asset path they carry, and, for unreadable files, their parts), which the preview and the
+compatibility check drop; a part updated in part keeps its other assets under the Mod's files. `replaced` is always
+within `updated`. A conversion or rebuild writes the parts of `updated` sharing an asset name and type of the import's
+asset types with the files. Generic slots go through `targets.generic`: a collection batch's exact name, a current
+release, the bundles of the prefix holding the file's asset paths over every date, else the newest file of each slot of
+the prefix with its exact name or sharing a container, name and type; a generic record's slots hold their newest file
+(`targets.slot_files`). Older releases are not refused as ambiguous replacement targets.
 
 A generic part (prefix and part number) that several files of one folder share (a group packed one asset per bundle,
 whose names differ only in the CRC, or a part kept under several dates) gives each of its files its own slot, keyed by
@@ -1388,13 +1402,18 @@ Platform/server differences produce `update`, including identical filenames. The
 `core.process_mod_update` extracts assets, decodes/re-encodes textures and injects into official
 bundles, preserving target Unity metadata, CABs and dependencies. Conversion uses `name_type`
 matching because platform path IDs and containers need not agree. Android and iOS are accepted
-as mobile sources/targets. Across servers, the source's original filename slots (prefix and
-resource type, ignoring release date/CRC) must match destination slots. Output passes the normal
+as mobile sources/targets. Across servers, files the target resolver places by name, CAB or asset
+path are accepted; the others' filename slots (prefix and resource type, ignoring release date/CRC)
+must match destination slots (`conversion_names`). Output passes the normal
 library platform/dependency checks before add/apply; the permissive conversion preflight is
 never used to store or apply a source directly.
 
 `Entry.preview` is registered independently of eligibility. Spine import URLs still use the
-existing memory-only routes. Models also expose the import preview bundle set through
+existing memory-only routes. A portrait or lobby row that transfers assets (`update`, `convert`)
+previews what its import writes: when the import's asset types leave out `TextAsset` or `Texture2D`
+(the types a Spine preview reads), the composition keeps every official part and leaves those types
+of the source files out (`gameassets.spine.Composition`, part of the preview's revision); whole-file
+rows (`ready`) and models compose as before. Models also expose the import preview bundle set through
 `/asset/model/<variant>.glb?source=import:<key>`. Missing official parts do not prevent a
 self-contained source preview. Changed bytes, a new analysis or a changed folder expire handles.
 Model `mod:` and `import:` sources must contain only model files of the variant's slot cores; the exporter always

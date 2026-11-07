@@ -18,7 +18,7 @@ from bmpt import atlas_remap, devmode, mod_origin
 from ba_modding_toolkit import core
 from ba_modding_toolkit.bundle import Bundle, UpdateScope
 from ..errors import ServiceError
-from ..gameassets.spine import spine_revision
+from ..gameassets.spine import PREVIEW_TYPES, Composition, spine_revision
 from ..gameassets.discovery import cab_names
 from ba_modding_toolkit.i18n import t
 from ..library import integrity, staging, manual_identity
@@ -26,7 +26,6 @@ from ..library.judge import core_of, kind_of, part_of
 from ..library.storage import Fingerprints, atomic_clone, verify_file
 from ba_modding_toolkit.models import AssetType, SaveOptions
 from ba_modding_toolkit.naming import parse_filename
-from ba_modding_toolkit.searching import _asset_match
 from ba_modding_toolkit.spine import get_skel_version
 from ba_modding_toolkit.utils import CRCUtils, no_log, parse_hex_bytes
 
@@ -125,6 +124,8 @@ class Candidate:
     direct: dict[Path, Path] = field(default_factory=dict)
     provenance: dict | None = None
     missing_cabs: set[str] = field(default_factory=set)
+    # the import preview composed this row (``BatchImport.preview``): a refusal of such a row is marked in reports
+    previewed: bool = False
 
 
 @dataclass
@@ -184,6 +185,19 @@ def bundle_evidence(candidate: Candidate, inspection: integrity.Inspection) -> l
         if summary is not None:
             rows.append({"file": path.name, **summary})
     return rows
+
+
+def target_evidence(entry: dict, resolution: Any, attempts: list[dict]) -> None:
+    """What a refused entry's check found of its targets, for the error report and the log: per file how the resolver
+    matched it and the official parts and dates it found (``Resolution.evidence``), and, for a guessed source, every
+    server and platform tried with its failure."""
+    if resolution is not None:
+        try:
+            entry["resolution"] = resolution.evidence()[:EVIDENCE_BUNDLES]
+        except (ServiceError, OSError, ValueError):
+            logger.debug("Batch import: no target evidence", exc_info=True)
+    if attempts:
+        entry["attempts"] = attempts
 
 
 def failure_detail(error: ServiceError, paths: Any, log: Any = no_log, *, secrets: set[str] | None = None) -> dict:
@@ -377,7 +391,8 @@ class BatchImport:
 
     def diagnostic_snapshot(self) -> dict:
         with self._lock:
-            return {"revision": self._revision, "rows": [deepcopy(c.entry) for c in self._latest.values()]}
+            return {"revision": self._revision,
+                    "rows": [{**deepcopy(c.entry), "previewed": c.previewed} for c in self._latest.values()]}
 
     def _log_analysis(self, candidate: Candidate, phase: str) -> None:
         from .diagnostics import import_row
@@ -432,8 +447,7 @@ class BatchImport:
                 raise ServiceError("folder_changed")
             if pin:
                 self.services._check_pin(library, pin)
-            identity = frozenset((core_of(name), part_of(name), self._hashes.get(path).sha1)
-                                 for name, path in fresh.files.items())
+            identity = self._identity_of(fresh.files)
             if identity != fresh.identity:
                 raise ServiceError("entry_changed")
             self._judge(fresh, library, pin, log)
@@ -528,17 +542,24 @@ class BatchImport:
         if spine_revision(paths) != stamp:
             raise KeyError(key)
         core_name = candidate.entry["core"]
+        # A Spine import that transfers assets (update, convert) writes only the asset types its options name: the
+        # preview keeps every official part and leaves the other types of the source files out, so it shows what the
+        # game will. Whole-file imports (ready) and 3D previews compose as before.
+        types = set(self.options()["types"])
+        transfers = candidate.entry["state"] in ("update", "convert") and candidate.entry["kind"] in ("spr", "lobby")
+        left = set() if "ALL" in types or not transfers else set(PREVIEW_TYPES) - types
         try:
             originals = library.preview_complements(core_name, list(candidate.files), pin=pin,
-                                                   files=candidate.files) if pin else []
+                                                   files={} if left else candidate.files) if pin else []
         except ServiceError as error:
             if error.code not in ("game_file_not_found", "original_unavailable", "original_invalid"):
                 raise
             originals = []  # A self-contained upload can preview without recoverable official parts.
-        bundles = originals + paths
+        bundles = Composition(originals + paths, {path: left for path in paths})
         with self._lock:
             if key not in self._previews:
                 raise KeyError(key)
+            candidate.previewed = True
         return core_name, bundles
 
     def _collect(self, paths: list[str], recursive: bool, library: Any, *,
@@ -682,8 +703,7 @@ class BatchImport:
                      "source": None, "target": mod_origin.target_of(self.services.settings, library.current_pin())}
             candidate = Candidate(files, entry, error, failure=failure)
             try:
-                candidate.identity = frozenset((core_of(name), part_of(name), self._hashes.get(path).sha1)
-                                               for name, path in files.items())
+                candidate.identity = self._identity_of(files)
             except OSError:
                 pass  # The unreadable row above still reports all of its source paths.
             candidates.append(candidate)
@@ -777,6 +797,10 @@ class BatchImport:
             entry.pop("error", None)
             entry.pop("params", None)
 
+    def _identity_of(self, files: dict[str, Path]) -> frozenset:
+        """What an import row's files are: per file its core, part and content."""
+        return frozenset((core_of(name), part_of(name), self._hashes.get(path).sha1) for name, path in files.items())
+
     def _judge(self, candidate: Candidate, library: Any, pin: Any, log: Any = no_log,
                *, asset_types: set[str] | None = None, strategy: str | None = None) -> None:
         entry = candidate.entry
@@ -793,6 +817,9 @@ class BatchImport:
         candidate.provenance = None
         inspection = integrity.Inspection(asset_types if asset_types is not None else set(self.options()["types"]),
                                           header_only_missing=True)
+        entry.pop("resolution", None)
+        entry.pop("attempts", None)
+        resolution, attempts = None, []
         try:
             if candidate.error in ("mod_target_unknown", "mod_target_ambiguous") or entry.get("assignment"):
                 existing = library.find_import_output(list(candidate.files.values()))
@@ -808,8 +835,7 @@ class BatchImport:
                     raise blocked_error(candidate)
                 variant = self.services.catalog.assignment_variant(entry["assignment"])
                 kind = manual_identity.validate(candidate.files)
-                candidate.identity = frozenset((core_of(name), part_of(name), self._hashes.get(path).sha1)
-                                               for name, path in candidate.files.items())
+                candidate.identity = self._identity_of(candidate.files)
                 entry.update(variant=variant.key, kind=kind, state="ready", reason=None, libraryOnly=True,
                              core=entry["core"] or variant.file_id)
                 return
@@ -884,7 +910,8 @@ class BatchImport:
 
             if len({p.name for p in live}) != len(live):
                 raise ServiceError("game_file_conflict", file=source_file(candidate))
-            replacements = library._replacements(candidate.files, live, pin, inspection)
+            resolution = library._resolve(candidate.files, live, pin, inspection)
+            replacements = resolution.current
             for file in entry["files"]:
                 matches = [target for target, source in replacements.items() if str(source) == file["path"]]
                 file["target"] = matches[0].name if len(matches) == 1 else None
@@ -914,31 +941,11 @@ class BatchImport:
             baseline = dict(zip(live, originals))
             exact = set(candidate.files) <= {p.name for p in live}
             sources = list(candidate.files.values())
+            generic = entry["kind"] == "other"
+            # The parts the files write, by the one rule Enable, Apply and the preview use (``targets.resolve``).
             targets = set(replacements)
-            older = {name: path for name, path in candidate.files.items() if path not in replacements.values()}
-            if older:
-                if entry["kind"] == "other":
-                    targets.update(library._other_targets(older, pin))
-                else:
-                    # A core keeps its parts under several dates, so the parts holding the files' assets are looked
-                    # up over every date first, as Enable and Apply do (ModLibrary._update_groups); the newest date
-                    # of a prefix stays the rule for files whose assets no part holds (pre-split bundles).
-                    grouped: dict[str, list[Path]] = {}
-                    for path in older.values():
-                        grouped.setdefault(parse_filename(path.name).prefix, []).append(path)
-                    latest = {}
-                    for path in live:
-                        parsed = parse_filename(path.name)
-                        latest[parsed.prefix] = max(latest.get(parsed.prefix, ""), parsed.date)
-                    for prefix, paths in grouped.items():
-                        found = library._update_targets(paths, live, pin, inspection)
-                        if found:
-                            targets.update(found)
-                            continue
-                        matched, _ = _asset_match(paths, [baseline[p] for p in live
-                            if parse_filename(p.name).date == latest[parse_filename(p.name).prefix]],
-                            log, keys=inspection.keys)
-                        targets.update(p for p in live if baseline[p] in matched)
+            if resolution.older:
+                targets.update(library._other_targets(resolution.older, pin) if generic else resolution.updated)
             targets = [path for path in live if path in targets]
             inferred = entry["source"] is None
             choices = (mod_origin.candidates(names, selected, official_contents, entry["target"]) if inferred
@@ -948,13 +955,13 @@ class BatchImport:
                 converting = conversion(choice)
                 failure = None
                 chosen = targets
-                if choice["server"] != entry["target"]["server"] and not all(
-                        any(part_of(name) == part_of(path.name) for path in live) for name in names):
+                # Another server's files are accepted where the resolver places them by name, CAB or asset path;
+                # the file names decide only for the others.
+                if choice["server"] != entry["target"]["server"] and not generic and resolution.unplaced:
                     failure = "conversion_names"
                 if not failure and (converting or inferred or rebuild):
                     if matched_targets is None:
-                        matches, _ = _asset_match(sources, [baseline[p] for p in targets], log, keys=inspection.keys)
-                        matched_targets = [p for p in targets if baseline[p] in matches]
+                        matched_targets = resolution.sharing_keys(targets)
                     chosen = matched_targets
                 if not chosen:
                     failure = failure or ("no_matching_assets" if converting or inferred or rebuild else "game_file_not_found")
@@ -973,6 +980,7 @@ class BatchImport:
                         failure = error.code
                 if failure:
                     if inferred:
+                        attempts.append({"server": choice["server"], "platform": choice["platform"], "code": failure})
                         # A guessed server whose file names the install lacks says less than why a guess with
                         # matching names failed, so that reason is kept.
                         if last_failure in (None, "conversion_names"):
@@ -987,7 +995,10 @@ class BatchImport:
                         available = set().union(*(inspection.keys(baseline[path]) for path in chosen))
                         if not required or not required <= available:
                             raise ServiceError("no_matching_assets")
-                    except (ServiceError, OSError, ValueError):
+                    except (ServiceError, OSError, ValueError) as error:
+                        if inferred:
+                            attempts.append({"server": choice["server"], "platform": choice["platform"],
+                                             "code": getattr(error, "code", "unreadable")})
                         inspection.validate()
                         raise
                 if not converting and not rebuild:
@@ -1010,6 +1021,7 @@ class BatchImport:
             candidate.missing_cabs = set(inspection.missing_cabs)
             if evidence := bundle_evidence(candidate, inspection):
                 entry["bundles"] = evidence
+            target_evidence(entry, resolution, attempts)
             if error.code == "mod_parts_missing" and candidate.missing_cabs:
                 entry.update(state="incomplete", reason=None, missing=missing_detail(candidate.missing_cabs, []))
                 return
@@ -1021,6 +1033,7 @@ class BatchImport:
         except (OSError, ValueError) as error:
             if evidence := bundle_evidence(candidate, inspection):
                 entry["bundles"] = evidence
+            target_evidence(entry, resolution, attempts)
             detail = ServiceError("bundle_invalid", file=source_file(candidate), error=str(error))
             entry.update(state="blocked", reason="unreadable",
                          error=failure_detail(detail, candidate.files.values(), log,
@@ -1105,8 +1118,7 @@ class BatchImport:
                             with self._lock:
                                 check_current()
                                 self._require_importable(candidate)
-                            current = frozenset((core_of(name), part_of(name), self._hashes.get(path).sha1)
-                                                for name, path in candidate.files.items())
+                            current = self._identity_of(candidate.files)
                             if current != candidate.identity:
                                 raise ServiceError("entry_changed")
                             fresh = Candidate(dict(candidate.files), deepcopy(candidate.entry), candidate.error,
@@ -1154,8 +1166,7 @@ class BatchImport:
                                     check_current()
                                     self._require_importable(candidate)
                                     self._require_importable(fresh)
-                                    current = frozenset((core_of(name), part_of(name), self._hashes.get(path).sha1)
-                                                        for name, path in fresh.files.items())
+                                    current = self._identity_of(fresh.files)
                                     if current != fresh.identity:
                                         raise ServiceError("entry_changed")
                                 if fresh.not_transferred:

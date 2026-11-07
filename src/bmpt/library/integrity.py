@@ -6,14 +6,12 @@ import base64
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, Iterable
 
 from .. import devmode
 from ba_modding_toolkit.bundle import Bundle, UpdateScope
 from ..errors import ServiceError
 from ..gameassets.spine import atlas_pages
 from ..gameassets.discovery import cab_names
-from .judge import part_of
 from ba_modding_toolkit.models import AssetKey, AssetType, REPLACEABLE_ASSET_TYPES
 from ba_modding_toolkit.spine import get_skel_version
 
@@ -173,54 +171,6 @@ class Inspection:
 def replacement_key(name: str) -> str:
     """Keep the complete release and part identity, ignoring only the final numeric CRC."""
     return re.sub(r"_[0-9]+\.bundle$", ".bundle", name.removesuffix(".backup"))
-
-
-def replacements(files: dict[str, Path], targets: list[Path], *,
-                 read_cabs: Callable[[Path], Iterable[str]] = cab_names) -> dict[Path, Path]:
-    """Resolve current releases, preserving coexisting dates of a part.
-
-    A name or CAB match proves the release current. Older releases have no direct
-    replacement here: their existing update planner may target several files.
-    """
-    result = {}
-    for name, source in files.items():
-        matches = [path for path in targets if path.name == name]
-        if len(matches) != 1:
-            matches = [path for path in targets if replacement_key(path.name) == replacement_key(name)]
-        ambiguous = len(matches) > 1
-        if len(matches) != 1:
-            cabs = set(read_cabs(source)) if targets else set()
-            matches = [path for path in targets if cabs and set(read_cabs(path)) == cabs]
-            ambiguous |= len(matches) > 1
-        if not matches and not ambiguous:
-            continue
-        if len(matches) != 1:
-            matches = [path for path in targets if part_of(path.name) == part_of(name)]
-        if len(matches) != 1 or matches[0] in result:
-            raise ServiceError("mod_target_ambiguous", file=name)
-        result[matches[0]] = source
-    return result
-
-
-def update_targets(sources: Iterable[Path], targets: Iterable[Path], *, paths: Callable[[Path], set[str]],
-                   keys: Callable[[Path], set[AssetKey]]) -> list[Path] | None:
-    """The current files an older release's files update, among ``targets`` (every part of the core, whatever its
-    date): the files holding any of their asset paths, else the files sharing an asset name and type; None when the
-    sources show neither (nothing to judge by).
-
-    A build keeps each asset path in exactly one bundle, while a core's parts sit under several dates and a part
-    number only counts the asset types of its own dated group; so neither the newest date nor the part number
-    identifies the file an asset lives in now."""
-    sources, targets = list(sources), list(targets)
-    wanted = set().union(*(paths(source) for source in sources))
-    if wanted:
-        found = [target for target in targets if wanted & paths(target)]
-        if found:
-            return found
-    wanted_keys = set().union(*(keys(source) for source in sources))
-    if not wanted and not wanted_keys:
-        return None
-    return [target for target in targets if wanted_keys & keys(target)] if wanted_keys else []
 
 
 def metadata(path: Path, *, inspection: Inspection) -> Contents:

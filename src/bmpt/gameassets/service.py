@@ -28,7 +28,7 @@ from .discovery import (
 )
 from .errors import AssetNotFound
 from .layouts import export_layout, subtree
-from .spine import extract_spine, png_bytes, spine_stamps
+from .spine import extract_spine, png_bytes, skipped, spine_stamps
 from .unity import find_object, object_record, open_bundle, reference, ref_key
 
 logger = logging.getLogger(__name__)
@@ -635,9 +635,11 @@ class GameAssets:
         """
         if not bundles:
             raise AssetNotFound("spine")
+        skip = skipped(bundles)
         paths = list(dict.fromkeys(Path(path).resolve() for path in bundles))
         stamps = spine_stamps(paths)
-        key = "spine/" + json.dumps(stamps)
+        left = sorted([str(path), sorted(types)] for path, types in skip.items())
+        key = "spine/" + json.dumps([stamps, left] if left else stamps)
         with self._lock(key):
             generation, disk_generation = self.cache.generation, self._preview_generation()
             value = self.cache.get(_SCHEMA + key, version=self.cache_version, disk=False)
@@ -649,7 +651,7 @@ class GameAssets:
                     except (ValueError, UnicodeError, TypeError):
                         self.preview_cache.discard(self._preview_key(key))
                 if value is None:
-                    value = extract_spine(paths)
+                    value = extract_spine(paths, skip) if skip else extract_spine(paths)
                     if spine_stamps(paths) != stamps:
                         raise AssetNotFound("spine changed during extraction")
                     if self.preview_cache is not None and self.preview_cache.allowed:

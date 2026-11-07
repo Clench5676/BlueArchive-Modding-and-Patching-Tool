@@ -42,6 +42,7 @@ from ba_modding_toolkit.searching import SEARCH_DIR_SUFFIXES, get_search_dirs
 from ba_modding_toolkit.utils import no_log
 from . import profiles as profiles_mod
 from . import integrity, safety, staging
+from . import targets as resolver
 from .identity import identify
 from .judge import (
     CRC_STATES, KINDS, LIBRARY_SOURCES, carried_of, classify, core_of, crc_state, date_of, distinguishing_folders,
@@ -1364,18 +1365,17 @@ class ModLibrary:
         # Compatibility may address a variant whose installed core changed after this Mod was stored.
         target_names = {name.replace(f"-{parse_filename(name).core}-", f"-{target_core}-", 1): path
                         for name, path in files.items()} if target_core != core and kind != "other" else files
-        replacements = self._replacements(target_names, targets, pin, cab_inspection)
+        resolution = self._resolve(target_names, targets, pin, cab_inspection)
+        replacements = resolution.current
         replaced = set(replacements)
-        older = {name: path for name, path in target_names.items() if path not in replacements.values()}
+        older = resolution.older
         check_dependencies = dependencies and (not compatibility or kind in ("model", "other"))
-        if older and pin and check_dependencies:
-            if kind == "other":
-                replaced.update(self._other_targets(older, pin))
-            else:
-                replaced.update(self._plan_targets(mod_install.plan_mod_install(list(older.values()), list(pin.dirs))))
+        if older and kind == "other":
+            replaced.update(self._other_targets(older, pin) if pin else [])
         elif older:
-            parts = {part_of(name) for name in older}
-            replaced.update(target for target in targets if part_of(target.name) in parts)
+            # The dependency check leaves out every part the files write; the Spine comparison, as the preview, only
+            # the parts they stand in for.
+            replaced.update(resolution.updated if check_dependencies else resolution.replaced)
         for target, contents in baseline_parts.items():
             if target not in replaced:
                 effective.merge(contents)
@@ -1510,26 +1510,16 @@ class ModLibrary:
             self._cab_indexes[key] = CabIndex(pin.dirs)
         return self._cab_indexes[key]
 
-    def _replacements(self, files: dict[str, Path], targets: list[Path], pin: Pin | None,
-                      inspection: integrity.Inspection | None = None) -> dict[Path, Path]:
-        inspection = inspection or integrity.Inspection()
-
-        def read_cabs(path: Path):
-            baseline = self._official_or_current(path, pin) if pin and path in targets else path
-            return inspection.cabs(baseline)
-
-        return integrity.replacements(files, targets, read_cabs=read_cabs)
-
-    def _asset_readers(self, targets: Sequence[Path], pin: Pin, inspection: integrity.Inspection | None = None,
-                       *, keys: bool = True) -> tuple[Callable[[Path], set[str]], Callable[[Path], set]]:
-        """Readers of a file's asset paths and (with ``keys``) asset names and types; a file of ``targets`` is read
-        from its official copy where there is one, else as it is. Identification by asset is evidence on top of the
-        name rules: a file they cannot read gives none, and the callers fall back to those rules."""
+    def _readers(self, targets: Sequence[Path], pin: Pin | None, inspection: integrity.Inspection | None = None,
+                 *, keys: bool = True) -> resolver.Readers:
+        """What the resolver reads of a file: its CABs, asset paths and (with ``keys``) asset names and types; a file
+        of ``targets`` is read from its official copy where there is one, else as it is. Asset evidence is on top of
+        the name rules: a file the readers cannot read gives none."""
         inspection = inspection or integrity.Inspection()
         members, baselines = set(targets), {}
 
         def baseline(path: Path) -> Path:
-            if path not in members:
+            if pin is None or path not in members:
                 return path
             if path not in baselines:
                 try:
@@ -1537,6 +1527,9 @@ class ModLibrary:
                 except ServiceError:
                     baselines[path] = path
             return baselines[path]
+
+        def cabs(path: Path):
+            return inspection.cabs(self._official_or_current(path, pin) if pin and path in members else path)
 
         def paths(path: Path) -> set[str]:
             try:
@@ -1554,57 +1547,50 @@ class ModLibrary:
                 logger.debug("No asset keys read from %s", path.name, exc_info=True)
                 return set()
 
-        return paths, asset_keys
+        return resolver.Readers(cabs, paths, asset_keys)
 
-    def _update_targets(self, sources: Sequence[Path], targets: Sequence[Path], pin: Pin,
-                        inspection: integrity.Inspection | None = None, *, keys: bool = True) -> list[Path] | None:
-        """The parts among ``targets`` that files of an older release update (``integrity.update_targets``: by asset
-        path, then, with ``keys``, by asset name and type); None when the sources show nothing to judge by."""
-        paths, asset_keys = self._asset_readers(targets, pin, inspection, keys=keys)
-        return integrity.update_targets(sources, targets, paths=paths, keys=asset_keys)
+    def _resolve(self, files: dict[str, Path], targets: Sequence[Path], pin: Pin | None,
+                 inspection: integrity.Inspection | None = None, *, whole: bool = True,
+                 keys: bool = True) -> resolver.Resolution:
+        """The one rule for the official parts these files replace or update (``targets.resolve``)."""
+        return resolver.resolve(files, targets, self._readers(targets, pin, inspection, keys=keys), whole=whole)
 
-    def _update_groups(self, older: dict[str, Path], targets: Sequence[Path], pin: Pin, log: LogFunc = no_log,
+    def _replacements(self, files: dict[str, Path], targets: list[Path], pin: Pin | None,
+                      inspection: integrity.Inspection | None = None) -> dict[Path, Path]:
+        """The files that are a part's current release: {target: source}."""
+        return self._resolve(files, targets, pin, inspection).current
+
+    def _update_groups(self, older: dict[str, Path], targets: Sequence[Path], pin: Pin,
                        inspection: integrity.Inspection | None = None) -> list[mod_install.ModGroup]:
-        """Install groups for files of older releases: per name prefix, the parts of the core that hold their assets,
-        whatever their dates (groups reaching a common part update it together); upstream's planner (same prefix,
-        newest date only) for the files whose assets no part of the core holds."""
-        grouped: dict[tuple[str, str], list[Path]] = {}
-        for path in older.values():
-            parsed = parse_filename(path.name)
-            grouped.setdefault((parsed.prefix, parsed.core), []).append(path)
+        """Install groups for files of older releases or other builds (every file treated as one)."""
+        return self._groups_of(self._resolve(older, targets, pin, inspection, whole=False))
+
+    @staticmethod
+    def _groups_of(resolution: resolver.Resolution) -> list[mod_install.ModGroup]:
+        """Upstream's install groups for the files the resolution does not replace whole: per name prefix and core,
+        the parts they update (groups reaching a common part update it together); files that found no part keep
+        upstream's NOT_FOUND."""
         planned: list[mod_install.ModGroup] = []
-        rest: list[Path] = []
-        for (prefix, core_name), paths in grouped.items():
-            found = self._update_targets(paths, targets, pin, inspection) if targets else None
-            if not found:
-                rest.extend(paths)
+        for group in resolution.groups:
+            parsed = parse_filename(group.names[0])
+            if not group.targets:
+                planned.append(mod_install.ModGroup(parsed.prefix, parsed.category, parsed.core, [
+                    mod_install.ModFilePlan(path, parse_filename(path.name), mod_install.InstallAction.NOT_FOUND)
+                    for path in group.sources]))
                 continue
-            group = mod_install.ModGroup(prefix, parse_filename(paths[0].name).category, core_name, [
+            merged = mod_install.ModGroup(parsed.prefix, parsed.category, parsed.core, [
                 mod_install.ModFilePlan(path, parse_filename(path.name), mod_install.InstallAction.UPDATE)
-                for path in paths], target_paths=sorted(found))
-            for other in [other for other in planned if set(other.target_paths) & set(group.target_paths)]:
+                for path in group.sources], target_paths=sorted(group.targets))
+            for other in [other for other in planned if set(other.target_paths) & set(merged.target_paths)]:
                 planned.remove(other)
-                group.files[:0] = other.files
-                group.target_paths = sorted(set(other.target_paths) | set(group.target_paths))
-            planned.append(group)
-        if rest:
-            planned.extend(mod_install.plan_mod_install(rest, list(pin.dirs), log))
+                merged.files[:0] = other.files
+                merged.target_paths = sorted(set(other.target_paths) | set(merged.target_paths))
+            planned.append(merged)
         return planned
 
     def _replaced_parts(self, files: dict[str, Path], targets: list[Path], pin: Pin | None) -> set[Path]:
-        """Precise current complements. Files of older releases are installed by updating the parts that hold their
-        assets, so they replace only the parts whose every asset path they carry (a part they update in part keeps its
-        other assets); without asset paths to judge by, the parts of the same prefix and part number."""
-        current = self._replacements(files, targets, pin)
-        older = [path for path in files.values() if path not in current.values()]
-        if older and pin:
-            rest = [target for target in targets if target not in current]
-            paths, _keys = self._asset_readers(rest, pin, keys=False)
-            carried = set().union(*(paths(path) for path in older))
-            if carried:
-                return set(current) | {target for target in rest if (held := paths(target)) and held <= carried}
-        parts = {part_of(name) for name, path in files.items() if path not in current.values()}
-        return set(current) | {target for target in targets if part_of(target.name) in parts}
+        """The parts a preview drops for these files (``Resolution.replaced``)."""
+        return self._resolve(files, targets, pin).replaced
 
     def direct_import(self, files: dict[str, Path], pin: Pin | None = None, *,
                       inspection: integrity.Inspection | None = None) -> dict | None:
@@ -2687,14 +2673,7 @@ class ModLibrary:
             index = self._index(pin)
             slots = {core_of(name) for name in record["files"]}
             if all(slot in index for slot in slots):
-                targets = []
-                for slot in sorted(slots):
-                    date = max(date_of(path.name) for path in index[slot])
-                    latest = [path for path in index[slot] if date_of(path.name) == date]
-                    if len(latest) != 1:
-                        raise ServiceError("game_file_conflict", file=latest[0])
-                    targets.extend(latest)
-                return sorted(targets)
+                return resolver.slot_files(index, slots)
             return self._other_targets({path.name: path for path in self._paths(record)}, pin)
         variant = self._variant(key)
         pin = self._current(pin)
@@ -2715,56 +2694,23 @@ class ModLibrary:
         return list(self._core_map(pin).slot_cores(core)) if pin else [core.lower()]
 
     def _other_targets(self, files: dict[str, Path], pin: Pin) -> list[Path]:
-        """Resolve official file slots by prefix, then container/name/type for older or repacked bundles."""
+        """The official files generic mod files replace or update (``targets.generic``)."""
+        return sorted({target for match in self._other_matches(files, pin).values() for target in match.targets})
+
+    def _other_matches(self, files: dict[str, Path], pin: Pin) -> dict[str, resolver.Match]:
         available = [path for slot, paths in self._index(pin).items() if slot.startswith("other:") for path in paths]
-        targets = set()
-        for name, source in files.items():
-            collection = name.lower().startswith("uis-01_common-14_charactercollect-")
-            if collection:
-                exact = [path for path in available if path.name == name]
-                if exact:
-                    targets.update(exact)
-                    continue
-            current = self._replacements({name: source}, available, pin)
-            if current:
-                targets.update(current)
-                continue
-            prefix = parse_filename(name).prefix
-            candidates = [path for path in available if parse_filename(path.name).prefix == prefix]
-            # An asset path lives in one bundle of a build: it names the target among every date of the prefix and
-            # among the bundles of a group packed one asset per bundle (their names differ only in the CRC).
-            found = self._update_targets([source], candidates, pin, keys=False) if candidates else None
-            if found:
-                targets.update(found)
-                continue
-            latest = {}
-            for path in candidates:
-                slot = core_of(path.name)
-                if slot not in latest or date_of(path.name) > date_of(latest[slot].name):
-                    latest[slot] = path
-                elif date_of(path.name) == date_of(latest[slot].name) and path != latest[slot]:
-                    raise ServiceError("game_file_conflict", file=name)
-            candidates = list(latest.values())
-            if not candidates:
-                raise ServiceError("game_file_not_found", file=name)
-            exact = [path for path in candidates if path.name == name]
-            if exact:
-                targets.update(exact)
-                continue
-            bundle = Bundle.load(source)
-            if bundle is None:
-                raise ServiceError("bundle_invalid", file=source)
-            keys = bundle.get_asset_keys("cont_name_type")
-            matched = []
-            for path in candidates:
-                baseline = self._official_for(path, pin)
-                bundle = Bundle.load(baseline)
-                if bundle and keys & bundle.get_asset_keys("cont_name_type"):
-                    matched.append(path)
-            if not matched:
-                raise ServiceError("game_file_not_found", file=name)
-            targets.update(matched)
-        return sorted(targets)
+
+        def container_keys(path: Path, source: bool) -> set:
+            if source:
+                bundle = Bundle.load(path)
+                if bundle is None:
+                    raise ServiceError("bundle_invalid", file=path)
+            else:
+                bundle = Bundle.load(self._official_for(path, pin))
+            return bundle.get_asset_keys("cont_name_type") if bundle else set()
+
+        return resolver.generic(files, available, self._readers(available, pin, keys=False),
+                                container_keys=container_keys)
 
     def _view(self, pins: list[Pin], allow: str, config: dict | None | type(...) = ...,
               snapshot: bool = False) -> _View:
@@ -3452,10 +3398,7 @@ class ModLibrary:
         if files is not None:
             replaced = self._replaced_parts(files, targets, pin)
         else:
-            replaced = set()
-            for name in names:
-                current = integrity.replacements({name: Path()}, targets, read_cabs=lambda path: ())
-                replaced.update(current or [path for path in targets if part_of(path.name) == part_of(name)])
+            replaced = resolver.resolve({name: Path(name) for name in names}, targets).replaced
         return [self._official_or_current(path, pin) for path in targets if path not in replaced]
 
     def _incomplete(self, record: dict[str, Any], pin: Pin) -> bool:
@@ -3477,7 +3420,8 @@ class ModLibrary:
         files = {path.name: path for path in paths}
         targets = (self._other_targets(files, pin) if record["kind"] == "other" else
                    self._spine_parts(core_of(paths[0].name), pin))
-        current = self._replacements(files, targets, pin)
+        resolution = self._resolve(files, targets, pin)
+        current = resolution.current
         groups = {}
         for target, path in current.items():
             parsed = parse_filename(path.name)
@@ -3492,8 +3436,7 @@ class ModLibrary:
                     mod_install.ModFilePlan(path, parse_filename(name), mod_install.InstallAction.UPDATE)
                     for name, path in older.items()], target_paths=self._other_targets(older, pin)))
             else:
-                planned.extend(self._update_groups(older, [target for target in targets if target not in current],
-                                                   pin, log))
+                planned.extend(self._groups_of(resolution))
         if not planned or any(file.action not in (mod_install.InstallAction.DIRECT_REPLACE, mod_install.InstallAction.UPDATE)
                               for group in planned for file in group.files):
             raise ServiceError("game_file_not_found", variant=record["target"])
@@ -4021,7 +3964,7 @@ class ModLibrary:
                     if result.failed_groups:
                         raise ServiceError("mod_apply_failed", id=record["id"])
                     continue
-                matching = [path for path in sources if parse_filename(path.name).prefix == parse_filename(target.name).prefix]
+                matching = resolver.same_prefix(sources, target)
                 if not matching:
                     raise ServiceError("mod_target_mismatch", id=record["id"], variant=core_of(target.name))
                 result = core.process_mod_update(matching, [original], output, self.settings.asset_types(),

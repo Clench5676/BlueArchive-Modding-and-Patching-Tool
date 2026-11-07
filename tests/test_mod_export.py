@@ -11,13 +11,13 @@ import pytest
 from bmpt.errors import ServiceError
 from ba_modding_toolkit.bundle import Bundle
 from bmpt.library import integrity
-from ba_modding_toolkit.searching import _asset_match
+from bmpt.library import targets as resolver
 from bmpt.webui import batch_import
 from bmpt.webui import export_service
 from bmpt.webui.rpc import RpcRegistry
 
 from test_library import game_bundle, make_mod, setup_library
-from test_mod_origin import inspect_bundle, bundle_metadata, official_bundle, old_bundle
+from test_mod_origin import REAL_SHARING_KEYS, inspect_bundle, bundle_metadata, official_bundle, old_bundle
 
 
 def services(env):
@@ -144,7 +144,7 @@ def test_foreign_platform_mod_is_rebuilt_with_real_unity_payload(setup_library, 
     env = setup_library
     monkeypatch.setattr(integrity, "inspect", inspect_bundle)
     monkeypatch.setattr(integrity, "metadata", bundle_metadata)
-    monkeypatch.setattr(batch_import, "_asset_match", _asset_match)
+    monkeypatch.setattr(resolver, "sharing_keys", REAL_SHARING_KEYS)
     official_bundle(env)
     source = old_bundle(env.tmp / "input" / env.original.name, source_platform, cab="CAB-source",
                         payload=b"modded", references=["com.nexon.bluearchive"])
@@ -167,7 +167,7 @@ def test_cross_server_mod_is_prepared_against_selected_target(setup_library, mon
     env = setup_library
     monkeypatch.setattr(integrity, "inspect", inspect_bundle)
     monkeypatch.setattr(integrity, "metadata", bundle_metadata)
-    monkeypatch.setattr(batch_import, "_asset_match", _asset_match)
+    monkeypatch.setattr(resolver, "sharing_keys", REAL_SHARING_KEYS)
     official_bundle(env)
     source = old_bundle(env.tmp / "input" / env.original.name, 19, cab="CAB-global",
                         payload=b"global mod", references=["com.nexon.bluearchive"])
