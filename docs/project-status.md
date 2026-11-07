@@ -7,7 +7,7 @@ As of 2026-11-06. Verify the actual branch, working tree and `pyproject.toml` ve
 
 | Branch | State |
 | --- | --- |
-| `main` | Local version `0.7.0-alpha.6`: the published 0.6.0, the upstream syncs to `6c61fdc8` and to v2.12.0 (`62ec9471`), the security policy, the fix that keeps files from a mod inside their output folder (`e8bee4c2`) and its own message for refused atlases (`ca44e051`), BL-065 through BL-069, BL-070 steps 1 to 3, BL-071, BL-072, BL-073, BL-076, BL-077, the BL-078 fixes (`1a2afd84`, `b186e93b`, `4841e30e`), BL-079, BL-081 through BL-096 (BL-092 step 1). Not pushed. Upstream published its fix for the same issue in v2.12.0 (2026-11-04), so 0.6.1 is no longer held back. |
+| `main` | Local version `0.7.0-alpha.7`: the published 0.6.0, the upstream syncs to `6c61fdc8` and to v2.12.0 (`62ec9471`), the security policy, the fix that keeps files from a mod inside their output folder (`e8bee4c2`) and its own message for refused atlases (`ca44e051`), BL-065 through BL-069, BL-070 steps 1 to 3, BL-071, BL-072, BL-073, BL-076, BL-077, the BL-078 fixes (`1a2afd84`, `b186e93b`, `4841e30e`), BL-079, BL-081 through BL-097 (BL-092 step 1). Not pushed. Upstream published its fix for the same issue in v2.12.0 (2026-11-04), so 0.6.1 is no longer held back. |
 
 0.6.0 is published (tag `0.6.0` at `817ebeda`, 2026-10-30): macOS build uploaded, Windows build by the release workflow.
 
@@ -77,11 +77,11 @@ from passing tests or the presence of earlier code.
 
 ## Review artifact and validation
 
-`dist/Blue-Archive-Modding-and-Patching-Tool-0.7.0-alpha.6-macos-arm64.dmg`, MD5 `333ab6cf1610f904aaaeb434130de3fa`,
-built from `348361bc` (`chore(release): 0.7.0-alpha.6`): alpha.5 and BL-096 (Import Mod tells which files of a mod are
-missing and adds them, merge `2218bdcc`, with the status badges' text centred, `f9eb9c52`). The Windows bundle of `main`
-is `Blue-Archive-Modding-and-Patching-Tool-0.7.0-alpha.6-main.bundle`.
+`dist/Blue-Archive-Modding-and-Patching-Tool-0.7.0-alpha.7-macos-arm64.dmg`, MD5 `26b19b788ce154d2ab4068ff5791ace6`,
+built from `809a2f99` (`chore(release): 0.7.0-alpha.7`): alpha.6 and BL-097 (the design system, `docs/design-system.md`;
+the popups, Import Mod, Settings, the switch cards and the toolbars laid out on it). The Windows bundle of `main` is
+`Blue-Archive-Modding-and-Patching-Tool-0.7.0-alpha.7-main.bundle`.
 
-On `2218bdcc` (same code as the build but the version and docs): 4424 passed, 33 skipped (`python -m pytest`), 2460
-JavaScript tests passed (isolated runs with the official development view). BL-096's flow, the Choose Files dialog and
-the button's look are for the owner's review; native Windows is not verified on the macOS host.
+On `a80a44d9` (same code as the build but the version): 4294 passed, 169 skipped (`python -m pytest`; the roster
+preflight and the refinement tests skipped as unchanged by the development gates), 2555 JavaScript tests passed. The
+visible changes listed in BL-097 are for the owner's review; native Windows is not verified on the macOS host.
