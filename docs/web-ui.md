@@ -1237,10 +1237,19 @@ matches give `mod_target_ambiguous`. This mapping drives direct import and apply
 and preview complements. A current name without its CRC or a unique CAB match is never outdated.
 
 Older releases use the existing update route, including pre-split bundles that update several current files. Character
-slots use the installer's UPDATE groups; batch rebuilding matches assets against the latest live files per prefix.
-Generic slots retain prefix matching, the latest file per slot and container/name/type overlap, including the collection
-rule. Older releases are not refused as ambiguous replacement targets. When their dependency check runs, it excludes
-the files their update targets. Older preview complements retain the existing part-based rule.
+slots update the core's parts that hold the older files' asset paths, else their asset names and types, over every date
+of the core (BL-098; the installer's UPDATE groups only for files whose assets no part holds); batch rebuilding matches
+assets against the latest live files per prefix. Generic slots match by asset path over every date of the prefix, then
+retain prefix matching, the latest file per slot and container/name/type overlap, including the collection rule. Older
+releases are not refused as ambiguous replacement targets. When their dependency check runs, it excludes the files their
+update targets. Older preview complements drop only the official parts whose every asset path the older files carry.
+
+A generic part (prefix and part number) that several files of one folder share (a group packed one asset per bundle,
+whose names differ only in the CRC, or a part kept under several dates) gives each of its files its own slot, keyed by
+the file's CAB as well (BL-101; `judge.learn_packed`, learned from the headers of the install's files of the parts the
+library's generic mods and the files being imported use). A mod file takes the slot of the install file with its CAB,
+else of the one install file it updates. Configurations and records of the shared slot an earlier build used move to
+the files' own slots at the library's start.
 
 Dependency checks retain every install file the Mod does not replace, including dated siblings. External CAB references
 resolve through one revision-checked `CabIndex` per install and resource folders, excluding replaced files. Missing
