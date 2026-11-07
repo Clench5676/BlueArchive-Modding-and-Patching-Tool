@@ -43,9 +43,9 @@
       "masked_import_lines_sha256": "8eb8ba6d47bb69e1f07cac2ab667981c26304644c6a997af68a2b629b934304c"
     },
     "src/ba_modding_toolkit/asset.py": {
-      "blob": "a50fcebe464ad053eb3ad2c48405fa834ab7500a",
-      "non_import_ast_sha256": "4db303453eda0b7b3e3a63817716cf9db383dfcb2482b68ecd84ee429371d895",
-      "masked_import_lines_sha256": "76045f58c81c4639f3eee0370964183775755c9c2affcf6918868f120c117b4d"
+      "blob": "ac58889664ca559dbc62c8c139648a2082d9c70c",
+      "non_import_ast_sha256": "4f897639e8b3752a390913876ff4045b430f5d7017337b10d548b7c1c47dbc2d",
+      "masked_import_lines_sha256": "41084e4975b85c6369f95f155c43f73ef40367f07d4eef36267a3432c1dd4d8a"
     },
     "src/ba_modding_toolkit/bundle.py": {
       "blob": "1d30d0721fe52385f7d2504c37d072ff7d973a1f",
