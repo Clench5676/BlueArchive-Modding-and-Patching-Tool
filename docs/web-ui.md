@@ -1254,8 +1254,9 @@ and preview complements. A current name without its CRC or a unique CAB match is
 
 Older releases use the existing update route, including pre-split bundles that update several current files. Character
 slots update the core's parts that hold the older files' asset paths, else their asset names and types, over every date
-of the core (BL-098; the installer's UPDATE groups only for files whose assets no part holds); batch rebuilding matches
-assets against the latest live files per prefix. Generic slots match by asset path over every date of the prefix, then
+of the core (BL-098; the installer's UPDATE groups only for files whose assets no part holds). Batch Import's analysis
+finds the targets of older or differently named files (another build's resource-type names) the same way, per prefix,
+and matches assets against the latest live files of a prefix only when no part holds them. Generic slots match by asset path over every date of the prefix, then
 retain prefix matching, the latest file per slot and container/name/type overlap, including the collection rule. Older
 releases are not refused as ambiguous replacement targets. When their dependency check runs, it excludes the files their
 update targets. Older preview complements drop only the official parts whose every asset path the older files carry.

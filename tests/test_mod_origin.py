@@ -314,6 +314,40 @@ def test_cross_server_old_filename_converts_instead_of_copying(real_metadata):
     assert inspect_bundle(env.original).platforms == {'StandaloneWindows64'}
 
 
+
+MOBILE_TEXT = 'assets-_mx-spinecharacters-test_spr-_mxdependency-textassets-2025-07-02_assets_all_1.bundle'
+
+
+def newer_part(env, name='test_spr_clip'):
+    """A newer release that adds an asset of its own, as a game update adds a clip, leaving the core's other parts
+    under their older date."""
+    path = env.game_dir / 'assets-_mx-spinecharacters-test_spr-_mxdependency-2026-02-01_assets_all_0.bundle'
+    unity_bundle(path, 19, cab='CAB-clip', payload=b'clip', name=name)
+    return path.rename(path.with_name(path.name.replace('_0.bundle', f'_{CRCUtils.compute_crc32(path.read_bytes())}.bundle')))
+
+
+def test_mobile_names_convert_into_a_part_kept_under_an_older_date(real_metadata):
+    env = real_metadata
+    newer_part(env)
+    source = unity_bundle(env.tmp / 'input' / MOBILE_TEXT, 13, cab='CAB-mobile', payload=b'mobile mod')
+    entry, = analyze(env, [source])['entries']
+    assert (entry['state'], entry['reason']) == ('convert', None)
+    assert entry['source'] == {'server': 'global', 'platform': 'android', 'detected': True}
+    assert [file['target'] for file in entry['files']] == [env.original.name]
+    result, = run(env, [entry], types=['TextAsset'])
+    assert result['outcome'] == 'updated' and result['applied']
+    assert Bundle.load(env.original).env.objects[0].read().m_Script == 'mobile mod'
+    assert inspect_bundle(env.original).platforms == {'StandaloneWindows64'}
+
+
+def test_an_inferred_source_reports_why_the_guess_with_matching_names_failed(real_metadata):
+    env = real_metadata
+    newer_part(env)
+    source = unity_bundle(env.tmp / 'input' / MOBILE_TEXT, 13, cab='CAB-mobile', payload=b'mod', name='unrelated')
+    entry, = analyze(env, [source])['entries']
+    assert (entry['state'], entry['reason'], entry['source']) == ('blocked', 'no_matching_assets', None)
+    assert entry['preview']
+
 @pytest.mark.parametrize('restart', [False, True])
 @pytest.mark.parametrize('enabled', [False, True])
 def test_converted_source_is_already_in_library_after_move_and_restart(real_metadata, monkeypatch, restart, enabled):
