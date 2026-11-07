@@ -18,7 +18,7 @@ from bmpt import atlas_remap, devmode, mod_origin
 from ba_modding_toolkit import core
 from ba_modding_toolkit.bundle import Bundle, UpdateScope
 from ..errors import ServiceError
-from ..gameassets.spine import spine_revision
+from ..gameassets.spine import PREVIEW_TYPES, Composition, spine_revision
 from ..gameassets.discovery import cab_names
 from ba_modding_toolkit.i18n import t
 from ..library import integrity, staging, manual_identity
@@ -542,14 +542,20 @@ class BatchImport:
         if spine_revision(paths) != stamp:
             raise KeyError(key)
         core_name = candidate.entry["core"]
+        # A Spine import that transfers assets (update, convert) writes only the asset types its options name: the
+        # preview keeps every official part and leaves the other types of the source files out, so it shows what the
+        # game will. Whole-file imports (ready) and 3D previews compose as before.
+        types = set(self.options()["types"])
+        transfers = candidate.entry["state"] in ("update", "convert") and candidate.entry["kind"] in ("spr", "lobby")
+        left = set() if "ALL" in types or not transfers else set(PREVIEW_TYPES) - types
         try:
             originals = library.preview_complements(core_name, list(candidate.files), pin=pin,
-                                                   files=candidate.files) if pin else []
+                                                   files={} if left else candidate.files) if pin else []
         except ServiceError as error:
             if error.code not in ("game_file_not_found", "original_unavailable", "original_invalid"):
                 raise
             originals = []  # A self-contained upload can preview without recoverable official parts.
-        bundles = originals + paths
+        bundles = Composition(originals + paths, {path: left for path in paths})
         with self._lock:
             if key not in self._previews:
                 raise KeyError(key)

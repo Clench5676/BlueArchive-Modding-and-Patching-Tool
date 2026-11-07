@@ -1402,13 +1402,18 @@ Platform/server differences produce `update`, including identical filenames. The
 `core.process_mod_update` extracts assets, decodes/re-encodes textures and injects into official
 bundles, preserving target Unity metadata, CABs and dependencies. Conversion uses `name_type`
 matching because platform path IDs and containers need not agree. Android and iOS are accepted
-as mobile sources/targets. Across servers, the source's original filename slots (prefix and
-resource type, ignoring release date/CRC) must match destination slots. Output passes the normal
+as mobile sources/targets. Across servers, files the target resolver places by name, CAB or asset
+path are accepted; the others' filename slots (prefix and resource type, ignoring release date/CRC)
+must match destination slots (`conversion_names`). Output passes the normal
 library platform/dependency checks before add/apply; the permissive conversion preflight is
 never used to store or apply a source directly.
 
 `Entry.preview` is registered independently of eligibility. Spine import URLs still use the
-existing memory-only routes. Models also expose the import preview bundle set through
+existing memory-only routes. A portrait or lobby row that transfers assets (`update`, `convert`)
+previews what its import writes: when the import's asset types leave out `TextAsset` or `Texture2D`
+(the types a Spine preview reads), the composition keeps every official part and leaves those types
+of the source files out (`gameassets.spine.Composition`, part of the preview's revision); whole-file
+rows (`ready`) and models compose as before. Models also expose the import preview bundle set through
 `/asset/model/<variant>.glb?source=import:<key>`. Missing official parts do not prevent a
 self-contained source preview. Changed bytes, a new analysis or a changed folder expire handles.
 Model `mod:` and `import:` sources must contain only model files of the variant's slot cores; the exporter always
