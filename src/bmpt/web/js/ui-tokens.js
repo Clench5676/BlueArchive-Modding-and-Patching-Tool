@@ -135,6 +135,8 @@ export const COLOUR = Object.freeze({
   // prefab labels: a note's ink, and the consent popup's "never" section bar
   note: "#6a7b8f",
   neverBar: "#6a7b8f",
+  // UIPopup_Option_PC SkillCutIn/Type_1/Label_Locale_Info: the red part of an option's note
+  noteAlert: "#e06f6f",
 });
 
 // Settings rows (UIPopup_Option_PC, Game tab): 12 apart

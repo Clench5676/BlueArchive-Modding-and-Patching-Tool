@@ -102,9 +102,9 @@ import { readdirSync } from "node:fs";
 const sources = (dir, ext) => readdirSync(new URL(dir, WEB), { withFileTypes: true }).flatMap((entry) =>
   entry.isDirectory() ? sources(`${dir}${entry.name}/`, ext) : entry.name.endsWith(ext) ? [`${dir}${entry.name}`] : []);
 
-test("the status colours are the game's: success, warning, error, greyed, navy, In Use and note", () => {
+test("the status colours are the game's: success, warning, error, greyed, navy, In Use, note and the note's alert", () => {
   assert.deepEqual({ ...Tokens.COLOUR }, { success: "#0a6f2d", warning: "#f14f00", error: "#bb3421", greyed: "#828282", navy: "#2c4564",
-    inUse: "#ffb700", inUseInk: "#4b2116", note: "#6a7b8f", neverBar: "#6a7b8f" });
+    inUse: "#ffb700", inUseInk: "#4b2116", note: "#6a7b8f", neverBar: "#6a7b8f", noteAlert: "#e06f6f" });
 });
 
 test("the stats box tokens: the prefab's colours and outset, the lead's caption, value and row numbers, the app's paddings", () => {

@@ -169,3 +169,39 @@ test("Settings keeps no hand-placed value geometry of its own", () => {
   const rowsSource = readFileSync(new URL("settings-rows.js", web), "utf8");
   assert.doesNotMatch(rowsSource, /\b1400\b|\b1440\b|-718|-689|\b700\b/);
 });
+
+// BL-111: the Log card's note that error reports are anonymized, as UIPopup_Option_PC's Label_Locale_Info (SkillCutIn,
+// CVLabel): the caption role, pivot top left, its top SPACE.l under the dotted line from the content box's left, in the red
+// of SkillCutIn's note; the path and the buttons follow it SPACE.m below and the card grows by what it adds. Every language.
+const { COLOUR } = await import(new URL("ui-tokens.js", web));
+for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) test(`${locale} general: the Log card's anonymized note stands under the dotted line, above its path and buttons`, () => {
+  const { rows, T } = harness(locale, "general");
+  const log = rows.rows.find((r) => r.tree.name === "Log"), note = NGUI.find(log.tree, "Note"), widget = note.widgets[0];
+  assert.equal(COLOUR.noteAlert, "#e06f6f");
+  assert.equal(widget.color, "#e06f6f/1.00");
+  assert.equal(widget.pivot, 0);
+  assert.ok(widget.fontSize <= TYPE.caption.fs && widget.fontSize >= TYPE.caption.min, `${widget.fontSize} is a caption`);
+  // the owner's words, wrapped at most onto two lines, each inside the content box
+  assert.equal(widget.text.replace(/\n/g, locale.startsWith("en") || locale === "th-TH" || locale === "ko-KR" ? " " : ""), T("settings.log.reportNote"));
+  const lines = widget.text.split("\n");
+  assert.ok(lines.length <= Rows.NOTE.lines);
+  for (const text of lines) assert.ok(NGUI.glyphWidth(text, widget.fontSize) <= RIGHT - LEFT + 1e-9, `${locale}: the note fits the content box`);
+  // placed like the prefab's note: the content box's left, SPACE.l under the dotted line
+  near(note.pos[0], LEFT, "the note's left");
+  near(log.h / 2 - note.pos[1], 109 + Rows.NOTE.top, "the note's top");
+  const noteBottom = note.pos[1] - (widget.h_ - 10);
+  // the path and every button stand SPACE.m or more under it, inside the card
+  const value = NGUI.find(log.tree, "Value"), vw = value.widgets[0];
+  assert.ok(value.pos[1] + (vw.h_ - 10) / 2 <= noteBottom - Rows.NOTE.gap + 1e-9, `${locale}: the path under the note`);
+  for (const button of buttonsOf(log.tree)) {
+    const body = bodyOf(button);
+    assert.ok(button.pos[1] + body.h_ / 2 <= noteBottom - Rows.NOTE.gap + 1e-9, `${locale}: ${button.name} under the note`);
+    assert.ok(button.pos[1] - body.h_ / 2 >= -log.h / 2 + SPACE.l - 1e-9, `${locale}: ${button.name} above the foot`);
+  }
+  // the card grows by exactly what the note adds; no other card carries a note
+  const plain = Rows.valueGeometry(3, (vw.h_ - 10));
+  near(log.h - plain.h, (widget.h_ - 10) + Rows.NOTE.top + Rows.NOTE.gap - SPACE.m, "the card grows by the note");
+  for (const tab of ["general", "mods", "folders"]) for (const row of harness(locale, tab).rows.rows) {
+    if (row !== log && row.tree.name !== "Log") assert.equal(NGUI.find(row.tree, "Note"), null, `${row.tree.name} has no note`);
+  }
+});

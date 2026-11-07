@@ -546,7 +546,8 @@
 				"label": "日志",
 				"open": "打开",
 				"copy": "复制",
-				"copied": "已复制"
+				"copied": "已复制",
+				"reportNote": "错误报告已匿名，已移除个人信息"
 			},
 			"update": {
 				"startup": "启动时检查更新",
