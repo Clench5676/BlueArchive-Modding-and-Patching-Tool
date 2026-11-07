@@ -1246,20 +1246,29 @@ dependency under `characters/<model>/` never becomes the variant's prefab core. 
 be stored and applied to the variant's slot when it is one of that slot's cores. Add and Import Mod keep the same
 filenames, target and library identity.
 
-A current-release Mod file is proved by an installed name without its CRC or by matching internal CAB names.
-It replaces the exact installed name, else the name without the CRC, else the unique CAB match, with a unique part
-(prefix and resource type) breaking an otherwise undecidable current-release match. Remaining ambiguous current
-matches give `mod_target_ambiguous`. This mapping drives direct import and apply, dependency exclusions, compatibility
-and preview complements. A current name without its CRC or a unique CAB match is never outdated.
+One resolver decides which official parts a set of Mod files replaces or updates (`bmpt/library/targets.py`,
+`ModLibrary._resolve`, BL-113): Import Mod's analysis, the import preview's complements, Add's dependency check, the
+compatibility check, Enable and Apply (`_plan`), library previews, adapted builds' inputs and generic slots all ask it,
+and a test checks that these call sites decide nothing themselves. Per file:
 
-Older releases use the existing update route, including pre-split bundles that update several current files. Character
-slots update the core's parts that hold the older files' asset paths, else their asset names and types, over every date
-of the core (BL-098; the installer's UPDATE groups only for files whose assets no part holds). Batch Import's analysis
-finds the targets of older or differently named files (another build's resource-type names) the same way, per prefix,
-and matches assets against the latest live files of a prefix only when no part holds them. Generic slots match by asset path over every date of the prefix, then
-retain prefix matching, the latest file per slot and container/name/type overlap, including the collection rule. Older
-releases are not refused as ambiguous replacement targets. When their dependency check runs, it excludes the files their
-update targets. Older preview complements drop only the official parts whose every asset path the older files carry.
+1. a current release: the exact installed name, else the name without the CRC, else the unique CAB match, with a
+   unique part (prefix and resource type) breaking an otherwise undecidable match; remaining ambiguous current matches
+   give `mod_target_ambiguous`. Such a file replaces its part whole and is never outdated;
+2. the other files (older releases, pre-split bundles, another build's names such as Global mobile's resource-type
+   parts), per name prefix and core: the parts holding their asset paths over every date of the core (a build keeps an
+   asset path in exactly one bundle; a core keeps parts under several dates), else the parts sharing an asset name and
+   type; only for files whose assets cannot be read, their part (prefix and resource type or number) at its newest
+   date. A file whose readable assets no part holds finds nothing.
+
+The resolution gives the parts the files write (`updated`: the targets of the analysis, the dependency check's
+exclusions, the install groups of Enable and Apply) and the parts they stand in for (`replaced`: those replaced whole,
+those whose every asset path they carry, and, for unreadable files, their parts), which the preview and the
+compatibility check drop; a part updated in part keeps its other assets under the Mod's files. `replaced` is always
+within `updated`. A conversion or rebuild writes the parts of `updated` sharing an asset name and type of the import's
+asset types with the files. Generic slots go through `targets.generic`: a collection batch's exact name, a current
+release, the bundles of the prefix holding the file's asset paths over every date, else the newest file of each slot of
+the prefix with its exact name or sharing a container, name and type; a generic record's slots hold their newest file
+(`targets.slot_files`). Older releases are not refused as ambiguous replacement targets.
 
 A generic part (prefix and part number) that several files of one folder share (a group packed one asset per bundle,
 whose names differ only in the CRC, or a part kept under several dates) gives each of its files its own slot, keyed by

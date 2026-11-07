@@ -15,6 +15,7 @@ import pytest
 from ba_modding_toolkit.bundle import Bundle
 from bmpt.errors import ServiceError
 from bmpt.library import integrity
+from bmpt.library import targets as resolver
 from ba_modding_toolkit.models import AssetType, FilePair, ModUpdateResult, PatchResult
 from bmpt.webui import batch_import, native
 from bmpt.webui.api import build_api
@@ -26,6 +27,9 @@ from test_library_model import model_bundle, model_env
 from test_library_other import other_env
 
 
+REAL_SHARING_KEYS = resolver.sharing_keys
+
+
 @pytest.fixture
 def env(setup_library, monkeypatch):
     env = setup_library
@@ -33,7 +37,7 @@ def env(setup_library, monkeypatch):
     env.services = Services(env.settings, env.tmp / "app", cache=object(), game=object(),
                             catalog=env.catalog, library=env.library)
     env.rpc = build_api(env.services)
-    monkeypatch.setattr(batch_import, "_asset_match", lambda sources, targets, log, **kwargs: (targets, ""))
+    monkeypatch.setattr(resolver, "sharing_keys", lambda sources, candidates, keys: list(candidates))
     yield env
     env.services.close()
 
@@ -45,7 +49,7 @@ def batch_model_env(model_env, monkeypatch):
     env.services = Services(env.settings, env.tmp / "app", cache=object(), game=object(),
                             catalog=env.catalog, library=env.library)
     env.rpc = build_api(env.services)
-    monkeypatch.setattr(batch_import, "_asset_match", lambda sources, targets, log, **kwargs: (targets, ""))
+    monkeypatch.setattr(resolver, "sharing_keys", lambda sources, candidates, keys: list(candidates))
     yield env
     env.services.close()
 
@@ -261,8 +265,7 @@ def test_old_model_mesh_updates_when_prefab_has_a_newer_release(batch_model_env,
     prefab.rename(newer_prefab)
     mesh, texture = env.parts[1:]
     source = model_bundle(env.tmp / "input", part="meshes", date="2025-01-01", payload=b"old mod mesh")
-    monkeypatch.setattr(batch_import, "_asset_match", __import__(
-        "ba_modding_toolkit.searching", fromlist=["_asset_match"])._asset_match)
+    monkeypatch.setattr(resolver, "sharing_keys", REAL_SHARING_KEYS)
     monkeypatch.setattr(Bundle, "load", lambda path, *args: SimpleNamespace(
         get_asset_keys=lambda *args: {"body-mesh"} if path in (source, mesh) else set()))
     entry, = analyze(env, [source])["entries"]
@@ -382,7 +385,8 @@ def test_texture_import_checks_retained_official_atlas(env, monkeypatch, outdate
 
     mock_spine_contents(monkeypatch, inspect)
     # The updater selects only the texture bundle; the text bundle stays official.
-    monkeypatch.setattr(batch_import, "_asset_match", lambda *args, **kwargs: ([env.original], ""))
+    monkeypatch.setattr(resolver, "sharing_keys", lambda sources, candidates, keys: [
+        path for path in candidates if path.name == env.original.name])
     rpc(env, "import.setOptions", **{**rpc(env, "import.options"), "types": ["Texture2D"]})
     before = {path: path.read_bytes() for path in (env.original, text)}
     entry, = analyze(env, [source])["entries"]
@@ -515,8 +519,7 @@ def test_incompatible_mixed_official_spine_series_do_not_convert_to_a_default_ve
 
 def test_classic_asset_matching_finds_repacked_targets(env, monkeypatch):
     source = game_bundle(env.tmp / "old", date="2025-01-01", payload=b"old mod")
-    monkeypatch.setattr(batch_import, "_asset_match", __import__(
-        "ba_modding_toolkit.searching", fromlist=["_asset_match"])._asset_match)
+    monkeypatch.setattr(resolver, "sharing_keys", REAL_SHARING_KEYS)
     monkeypatch.setattr(Bundle, "load", lambda path, *args: SimpleNamespace(
         get_asset_keys=lambda *args: {"page"} if path in (source, env.original) else set()))
     entry, = analyze(env, [source])["entries"]
