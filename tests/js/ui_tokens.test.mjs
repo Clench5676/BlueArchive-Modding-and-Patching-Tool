@@ -261,9 +261,9 @@ test("Hall modal footers use buttonL for one, two and three actions", () => {
 });
 const { SORTS } = await import("../../src/bmpt/web/js/roster-order.js");
 const toolbarSource = read("js/roster-widgets.js");
-const toolbarFor = (web) => new Function("NGUI", "T", "advanceOf", "glyphsOf", "fitText", "SORTS",
+const toolbarFor = (web) => new Function("NGUI", "T", "advanceOf", "glyphsOf", "fitText", "SORTS", "CONTROL", "SPACE", "row",
   `${toolbarSource.slice(toolbarSource.indexOf("export function toolbarLayout"), toolbarSource.indexOf("// UICharacterCollection/SeletControl/LeftInfo_Empty"))
-    .replaceAll("export ", "")}; return toolbarLayout;`)(NGUI, (key) => key.split(".").reduce((v, k) => v[k], web), NGUI.glyphWidth, NGUI.glyphWidth, NGUI.fitText, SORTS);
+    .replaceAll("export ", "")}; return toolbarLayout;`)(NGUI, (key) => key.split(".").reduce((v, k) => v[k], web), NGUI.glyphWidth, NGUI.glyphWidth, NGUI.fitText, SORTS, Tokens.CONTROL, Tokens.SPACE, row);
 const modalLayoutFor = (web) => {
   const source = read("js/student-hall-ui.js");
   return new Function("Popup", "POPUP", "S", "toolbarLayout", "SPACE", "BUTTON", "layoutStack", `${source.slice(source.indexOf("export const modalContentBottom"), source.indexOf("// Keep a caller's centre"))

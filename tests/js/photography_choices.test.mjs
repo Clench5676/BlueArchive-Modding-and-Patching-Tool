@@ -5,6 +5,8 @@ import {readFileSync} from 'node:fs';
 import {test} from 'node:test';
 import {otherMode,actionCaption,choiceLayout} from '../../src/bmpt/web/js/photography/camera.js';
 
+import { CONTROL, SMALL_BUTTON, SPACE } from "../../src/bmpt/web/js/ui-tokens.js";
+import { row } from "../../src/bmpt/web/js/ui-grid.js";
 const web=new URL('../../src/bmpt/web/js/',import.meta.url);
 const controller=readFileSync(new URL('photography/controller.js',web),'utf8');
 const LOCALES=['en-US','zh-CN','zh-TW','ja-JP','ko-KR','th-TH'];
@@ -21,12 +23,12 @@ test('the other mode is offered only when the student has it',()=>{
 });
 
 function harness({mode='portrait',info}={}){
-  const code=controller.slice(controller.indexOf('async function modeButton('),controller.indexOf('async function backButton('));
+  const code=controller.slice(controller.indexOf('function photographyToolbarLayout('),controller.indexOf('// The captions of the two text buttons'))+controller.slice(controller.indexOf('async function modeButton('),controller.indexOf('async function backButton('));
   const drawn=[],hits=[],corners=[],host={children:[],append(child){this.children.push(child);}};
   const node=name=>({name,pos:[0,0],scale:[1,1],widgets:[{sprite:name,w_:1,h_:1}],children:[]});
   const tree={name:'Able_Count',children:[{...node('Bg'),widgets:[{sprite:'Bg',w_:156,h_:104,depth:1}]},{...node('Icon'),widgets:[{sprite:'Icon',w_:116,h_:84,depth:1}]}],widgets:[]};
   const find=(root,path)=>path.split('/').reduce((n,key)=>n.children.find(child=>child.name===key),root);
-  const env={mode,otherMode,bridge:{info:()=>info},S:1920/2960,P:key=>key,safe:fn=>fn,switchMode(){},
+  const env={CONTROL,SMALL_BUTTON,SPACE,row,mode,otherMode,bridge:{info:()=>info},S:1920/2960,P:key=>key,safe:fn=>fn,switchMode(){},
     clone:structuredClone,bindCorner:(...args)=>corners.push(args),alignIcon:async()=>{},
     document:{createElement:()=>({append(child){this.child=child;},dataset:{}})},
     NGUI:{layout:async()=>({}),find:(root,path)=>path==='Front/Right/Btn_RotateSpine/ConditionRoot/Able_Count'?tree:find(root,path),render:async(t)=>{drawn.push(t.name);return {};}},
@@ -44,15 +46,16 @@ test('a skin without a portrait gets no mode button in the memorial camera',asyn
   await h.run(h.host);
   assert.deepEqual([h.host.children.length,h.drawn.length,h.hits.length],[0,0,0]);
 });
-test('a skin with both modes keeps the button where it was, named for the mode it switches to',async()=>{
+test('a skin with both modes keeps the right edge and names the mode it switches to',async()=>{
   for(const [mode,name] of [['portrait','lobby'],['lobby','portrait']]){
     const h=harness({mode,info:{hasPortrait:true,hasLobby:true}});
     await h.run(h.host);
     assert.equal(h.hits.length,1);
-    assert.deepEqual(h.hits[0].box,[1788,25,102,76]);
+    const box=h.hits[0].box;assert.equal(box[0]+box[2],1890);assert.equal(box[2],102);assert.equal(box[3],82);
+    assert.ok(Math.abs(box[1]+box[3]/2-(25+CONTROL.buttonS.h*(1920/2960)/2))<1e-9);
     assert.equal(h.hits[0].label,name);
     assert.equal(h.hits[0].dataset.photoAction,'Mode');
-    assert.deepEqual(h.corners[0].slice(1),[[1352,25,538,76],{corner:'top-right'}]);
+    const [anchor,options]=h.corners[0].slice(1);assert.equal(anchor[0]+anchor[2],1890);assert.equal(anchor[1],25);assert.equal(anchor[3],CONTROL.buttonS.h*(1920/2960));assert.deepEqual(options,{corner:'top-right'});
   }
 });
 test('the camera draws the mode button through that check, and switching still refuses without the mode',()=>{

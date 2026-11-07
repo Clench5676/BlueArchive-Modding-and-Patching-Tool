@@ -1,13 +1,15 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {test} from 'node:test';
+import { CONTROL, SPACE } from "../../src/bmpt/web/js/ui-tokens.js";
+import { row } from "../../src/bmpt/web/js/ui-grid.js";
 const source=readFileSync(new URL('../../src/bmpt/web/js/photography/controller.js',import.meta.url),'utf8');
 const code=source.slice(source.indexOf('async function deletePhoto()'),source.indexOf('async function applyGame()'));
 test('gallery cards and their accessible Applied label consume only the target-scoped flag', async () => {
-  const drawCode=source.slice(source.indexOf('async function galleryDraw()'),source.indexOf('async function deletePhoto()'));
+  const drawCode=source.slice(source.indexOf('function galleryPair('),source.indexOf('// The captions of the two text buttons'))+source.slice(source.indexOf('async function galleryDraw()'),source.indexOf('async function deletePhoto()'));
   const photos=[{id:'own',name:'Own skin',url:'own.png',applied:true},{id:'other',name:'Other skin',url:'other.png',applied:false}];
   const cards=[],hits=[];
-  const env={Popup:{selectionReady:async()=>{},listCard:(item,x,y,selected)=>{cards.push({...item,selected});return item;}},
+  const env={CONTROL,SPACE,row,S:1920/2960,Popup:{selectionReady:async()=>{},listCard:(item,x,y,selected)=>{cards.push({...item,selected});return item;}},
     galleryPhotos:()=>photos,photo:()=>null,modal:{draw:fn=>fn({})},NGUI:{render:async()=>{}},
     UI:{buttonSize:()=>({}),button:async()=>{}},
     hitButton:(_layer,_box,_fn,label)=>hits.push(label),safe:fn=>fn,P:key=>key};
