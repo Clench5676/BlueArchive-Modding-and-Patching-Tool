@@ -231,6 +231,10 @@ add(`${INFO}/Weapon/Equip_1/UIEquipmentCard/Dot`).widgets = [
 ];
 for (const path of ["BG/Deco", "Label_Name", "Char_CVCollectionBtn/Sprite", "Char_ZoomBtn/Sprite",
   "Pin/Pin_On/Bg/Icon/Label_Locale", "Pin/Pin_Off/Bg/Icon/Label_Locale"]) add(`${PLATE}/${path}`);
+// These synthetic holders now supply the dimensions the composed layouts measure from their prefab widgets.
+Object.assign(add(`${PLATE}/BG`).widgets[0], { w_: 1000, h_: 120, pivot: 6, incline: 10 });
+add(`${PLATE}/BG`).pos = [0, 234];
+Object.assign(add(`${INFO}/Weapon/Equip_1/UIEquipmentCard/Btn_Target/Normal/Card_Bg`).widgets[0], { w_: 778, h_: 209 });
 
 const atlas = { Common: Object.fromEntries([...new Set([
   ...[...readFileSync(new URL("../../src/bmpt/web/js/detail.js", import.meta.url), "utf8").matchAll(/"(Common_[A-Za-z0-9_]+)"/g)].map((m) => m[1]),
@@ -354,7 +358,15 @@ globalThis.__detailModel = {
 };
 const modelStub = `data:text/javascript,${encodeURIComponent(Object.keys(globalThis.__detailModel)
   .map((name) => `export const ${name} = (...args) => globalThis.__detailModel.${name}(...args);`).join("\n"))}`;
-register(`data:text/javascript,${encodeURIComponent(`export async function resolve(spec, ctx, next) {
+register(`data:text/javascript,${encodeURIComponent(`export async function load(url, ctx, next) {
+  const result = await next(url, ctx);
+  if (url.endsWith("/web/js/detail.js")) {
+    const source = typeof result.source === "string" ? result.source : new TextDecoder().decode(result.source);
+    return { ...result, source: source + "\\nexport { screenTree, nameplateRow, chipBoxes, expressionBoxes, pileBoxes, switchTextLayout, detailsBody };" };
+  }
+  return result;
+}
+export async function resolve(spec, ctx, next) {
   if (spec === "./model.js" && (ctx.parentURL?.endsWith("/detail.js") || ctx.parentURL?.endsWith("/model-still.js"))) return { url: ${JSON.stringify(modelStub)}, shortCircuit: true };
   return next(spec, ctx);
 }`)}`);
@@ -1557,7 +1569,7 @@ test("switch subtitles retain the selected name and use a plain separator in all
         v.selection = { spr: { source: "mod:hina_spr", installed } };
         await showPortrait(t);
         const text = walk(hosts.ngui).find((e) => e.className === "switch-text");
-        const subtitle = text.children.find((e) => e.tagName === "SPAN").innerText.replace(/\n/g, "");
+        const subtitle = text.children.find((e) => e.tagName === "SPAN").innerText.replace(/\n/g, "").replace(/\s*-\s*/g, " - ");
         assert.equal(subtitle, `hina_spr - ${ui.webui.status.applied}`);
         assert.ok(!/[·•・]/u.test(subtitle));
         Detail.hide();
@@ -2163,6 +2175,79 @@ test("the Show in Finder button's caption and folder icon are placed by the expl
       Detail.hide();
     }
   } finally { Detail.hide(); await flush(); t.mock.timers.reset(); setStrings("en-US", localeTable("en-US")); }
+});
+
+// --- Job E: composed detail parts at the default 1920 x 1080 viewport ---
+for (const lang of ["en-US", "zh-CN"]) test(`detail keeps its prefab cards and composes the edit row, chips and expression pile in ${lang}`, async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const { SPACE, CONTROL, CHIP } = await import("../../src/bmpt/web/js/ui-tokens.js");
+  const { centreOf, toNode } = await import("../../src/bmpt/web/js/ui-grid.js");
+  const S = 1920 / 2960, near = (a, b, eps = 0.025) => assert.ok(Math.abs(a - b) < eps, `${a} != ${b}`);
+  try {
+    setStrings(lang, localeTable(lang));
+    portraitExpressions = ["00", "01", "02", "03", "04", "05"]; playerMode = thumbMode = "ready";
+    family = modFamily("spr", `detail-layout-${lang}`);
+    const localizedName = localeTable(lang)["webui.field.folder"];
+    family.variants[0].names = { en: { full: localizedName, short: localizedName } };
+    await showPortrait(t);
+    const tree = Detail.screenTree();
+    for (const [i, card] of ["SkillData_EX", "SkillData_EX (1)", "SkillData_EX (2)", "SkillData_EX (3)"].entries()) {
+      const base = NGUI.find(tree, `${INFO}/Skill/${card}`);
+      near(base.pos[0], [39.25, 337.75, 636.25, 934.75][i]);
+      assert.equal(NGUI.find(base, "Bg").widgets[0].w_, 292.5, "the existing action bodies keep their width");
+    }
+    const addPath = `${INFO}/Weapon/Btn_Up_Wrapper/Btn_Up/BG (1)`;
+    assert.deepEqual(NGUI.find(tree, addPath).pos, NGUI.find(list, addPath).pos);
+    assert.equal(NGUI.find(tree, addPath).widgets[0].w_, NGUI.find(list, addPath).widgets[0].w_);
+    const name = walk(hosts.ngui).find(e => e.dataset.path?.endsWith(`${PLATE}/Label_Name`) && e.style.fontSize);
+    const pencil = walk(hosts.ngui).find(e => e.dataset.path?.endsWith(`${PLATE}/Char_AliasBtn`));
+    const [nx, ny, nw, nh] = NGUI.rect(name), [px, py, pw, ph] = NGUI.rect(pencil);
+    near(px - nx - nw, SPACE.xs * S);
+    near(py + ph / 2, ny + nh / 2);
+    near(pw, CONTROL.icon.h * S); near(ph, CONTROL.icon.h * S);
+    const edit = Detail.nameplateRow(NGUI.find(tree, PLATE), "Name with descenders", false, { ...NGUI, inkShift: () => 5 });
+    near(edit.boxes[0].y + centreOf(edit.boxes[0]), edit.boxes[1].y + edit.boxes[1].h / 2);
+    const boxes = Detail.chipBoxes([
+      { row: 0, col: 0, span: 1 }, { row: 0, col: 1, span: 2 }, { row: 1, col: 0, span: 1 },
+    ]).map(c => c.box);
+    near(boxes[1].x - boxes[0].x, CHIP.pitch);
+    near(boxes[2].y - boxes[0].y, CHIP.rowPitch);
+    near(boxes[2].x - boxes[0].x, -CHIP.rowPitch * Math.tan(Math.PI / 18));
+    assert.deepEqual(boxes.map(b => [b.w, b.h]), [[272, 72], [562, 72], [272, 72]]);
+    const native = Detail.expressionBoxes(3, true), unfolded = Detail.expressionBoxes(7);
+    const frame = { cx: 0, cy: 0, w: 0, h: 0 };
+    assert.deepEqual(native.map(b => toNode(b, 4, frame)[0]), [461.9, 707.5, 953.2]);
+    for (let i = 1; i < unfolded.length; i++) near(unfolded[i].x - unfolded[i - 1].x - 242, 245.7 - 242);
+    assert.ok([...native, ...unfolded].every(b => b.w === 242 && b.h === 209));
+    const pile = Detail.pileBoxes();
+    assert.deepEqual(pile.map(b => b.h), [209, 197, 185]);
+    for (const box of pile) {
+      assert.ok(box.x >= 1079.8 && box.x + box.w <= 1284.8 + 1e-9, "the pile stays in its retained column");
+      assert.equal(box.w, 205 - SPACE.l);
+      near(box.y + box.h / 2, pile[0].y + pile[0].h / 2);
+    }
+    near(pile[1].x - pile[0].x, SPACE.s); near(pile[2].x - pile[1].x, SPACE.s);
+    const cards = walk(hosts["ngui-expr"]).filter(e => e.tagName === "BUTTON");
+    assert.equal(cards.length, 4);
+    await cards.at(-1).click(); await flush();
+    const rendered = walk(hosts["ngui-expr"]).filter(e => /^Item_\d+$/.test(e.dataset.path || ""));
+    for (let i = 1; i < rendered.length; i++) near(NGUI.rect(rendered[i])[0] - NGUI.rect(rendered[i - 1])[0], 245.7 * S);
+    family.variants[0].state.files[0].file = "C:/synthetic/ibuki_spr.bundle";
+    const detailsButton = walk(hosts.ngui).find(e => e.dataset.part === `${INFO}/Detail_Btn`);
+    await detailsButton.click(); await flush();
+    const frameEl = walk(hosts.popup).find(e => e.dataset.path === "Center/Popup/Base/BG");
+    const area = walk(hosts.popup).find(e => e.classList.contains("popup-cards"));
+    const [fx, , fw] = NGUI.rect(frameEl);
+    near(parseFloat(area.style.left) - fx, SPACE.xl * S);
+    near(fx + fw - parseFloat(area.style.left) - parseFloat(area.style.width), SPACE.xl * S);
+    for (const cell of walk(area).filter(e => /^Details\/(H_\d+|R_\d+_\d+)$/.test(e.dataset.path || ""))) {
+      const [x, , w] = NGUI.rect(cell);
+      assert.ok(x >= 0 && x + w <= parseFloat(area.style.width) + 0.025, "table columns stay inside the popup content box");
+    }
+  } finally {
+    Detail.hide(); portraitExpressions = ["00", "01"]; playerMode = "ready"; thumbMode = "pending";
+    await flush(); t.mock.timers.reset(); setStrings("en-US", localeTable("en-US"));
+  }
 });
 
 // --- design tokens, item E: the nameplate's chips are the prefab chip (Char_Target/Type/MainType/BG): 272 x 72, caption 40 down to 28 ---
