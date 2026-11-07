@@ -5,6 +5,7 @@ nodes are read: no image data. The call sites are pinned against the tokens by t
 """
 import json
 import os
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -182,6 +183,9 @@ def test_status_colours_exist_in_the_games_prefabs(tokens):
             for key in ("color", "effectColor"):
                 if isinstance(widget.get(key), str) and widget[key].startswith("#"):
                     found.add(widget[key][:7].lower())
+            # NGUI colour markup inside a label's text (SkillCutIn's note: "[6A7E95]...[-][e06f6f]...")
+            if isinstance(widget.get("text"), str):
+                found.update("#" + c.lower() for c in re.findall(r"\[([0-9a-fA-F]{6})\]", widget["text"]))
         for child in node.get("children", []):
             walk(child)
 

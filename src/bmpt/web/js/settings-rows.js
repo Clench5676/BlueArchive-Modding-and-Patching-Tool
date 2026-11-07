@@ -5,7 +5,7 @@
 // 20 apart); the other numbers of the card's anatomy (240, 109, the dotted line's size and place, 100, 19, 5) are kept as the rows
 // had them, and everything the App adds comes from the scales (ui-tokens.js).
 import { node, sprite, label, fitText, fitGroup } from "./ngui.js";
-import { PANEL, SPACE, CONTROL, SMALL_BUTTON } from "./ui-tokens.js";
+import { PANEL, SPACE, CONTROL, SMALL_BUTTON, TYPE, COLOUR } from "./ui-tokens.js";
 import { container, grid, row as layoutRow, stack as layoutStack, toNode } from "./ui-grid.js";
 
 // UIPopup_Option_PC's card: 1552 wide (PANEL.padCard 58 each side), 240 high with one line of options, its dotted line (Common_Dotline,
@@ -26,6 +26,15 @@ export const OPTION_TEXT_H = 96, OPTION_TEXT_H_ONE_ROW = 120;
 // the foot (the value rows' gaps, see valueGeometry).
 const frameOf = (h) => ({ cx: 0, cy: 0, w: ROW_W, h });
 export const cardContent = (h) => container({ w: ROW_W, h, padding: [CARD.line + SPACE.m, PANEL.padCard, SPACE.l, PANEL.padCard] });
+// UIPopup_Option_PC's Label_Locale_Info: an option's note under the dotted line (SkillCutIn, CVLabel), in the caption role
+// (TYPE.caption, the prefab's 36), pivot top left, its top SPACE.l under the line (the prefab's 27.9), across the content box,
+// up to two lines; what the card holds follows it SPACE.m below. An alert note takes the red part of SkillCutIn's note.
+export const NOTE = Object.freeze({ top: SPACE.l, gap: SPACE.m, lines: 2 });
+export const noteFit = (text) => fitText(text, TYPE.caption.fs, TYPE.caption.min, cardContent(0).inner.w, NOTE.lines);
+// the note's label at `pos` (valueGeometry's note), `h` its lines' height
+export function noteNode(fit, pos, w, h, { colour = COLOUR.noteAlert } = {}) {
+  return node("Note", pos, [label(fit.text, fit.fs, `${colour}/1.00`, w, h + 10, { pivot: 0, depth: 8 })]);
+}
 // the title: the content box's width, from the card's top PANEL.cardTitleTop, left aligned
 const titleBox = () => ({ x: PANEL.padCard, y: PANEL.cardTitleTop, w: ROW_W - 2 * PANEL.padCard, h: CARD.titleH });
 // the card's title room: the box less a SPACE.xl slack at its right
@@ -111,9 +120,12 @@ export function buttonLines(count, below = false) {
 export const valueRoom = (count, below = false) => below ? cardContent(0).inner.w : cardContent(0).inner.w - (buttonLines(count)[0] || 0) * buttonPitch;
 
 // the row's height and where its parts stand (NGUI space, y up from the card's centre): textH is the value's height. Beside the
-// value the first line of buttons is centred on it; under it the lines of buttons follow the value, SPACE.l below.
-export function valueGeometry(count, textH, { below = false } = {}) {
+// value the first line of buttons is centred on it; under it the lines of buttons follow the value, SPACE.l below. noteH: a note
+// (NOTE) of that height under the dotted line, the value and the buttons NOTE.gap under it.
+export function valueGeometry(count, textH, { below = false, noteH = 0 } = {}) {
   const inner = cardContent(0).inner, lines = buttonLines(count, below), { w: bw } = SMALL_BUTTON, bh = CONTROL.buttonS.h;
+  const noteBox = noteH ? { x: inner.x, y: CARD.line + NOTE.top, w: inner.w, h: noteH } : null;
+  const start = noteBox ? noteBox.y + noteBox.h + NOTE.gap : inner.y;
   const blockH = Math.max(textH, below || !count ? TEXT_MIN : bh);
   const lineBoxes = (n, box) => layoutRow(Array.from({ length: n }, () => ({ w: bw, h: bh })), { x: box.x, y: box.y, w: box.w, h: box.h, gap: SPACE.m, justify: "end" }).boxes;
   const outer = inner.x, wide = inner.w;
@@ -121,27 +133,27 @@ export function valueGeometry(count, textH, { below = false } = {}) {
   const buttons = [];
   if (below) {
     const group = layoutStack(lines.map(() => ({ w: wide, h: bh })), { x: outer, w: wide, gap: SPACE.m });
-    const whole = layoutStack([{ w: wide, h: blockH }, ...lines.length ? [{ w: wide, h: group.h }] : []], { x: outer, y: inner.y, w: wide, gap: SPACE.l });
+    const whole = layoutStack([{ w: wide, h: blockH }, ...lines.length ? [{ w: wide, h: group.h }] : []], { x: outer, y: start, w: wide, gap: SPACE.l });
     const [block, under] = whole.boxes;
     valueBox = layoutRow([{ grow: 1, h: textH }], { x: block.x, y: block.y, w: block.w, h: block.h }).boxes[0];
     if (under) layoutStack(lines.map(() => ({ w: wide, h: bh })), { x: outer, y: under.y, w: wide, gap: SPACE.m })
       .boxes.forEach((line, j) => buttons.push(...lineBoxes(lines[j], line)));
-    height = inner.y + whole.h + SPACE.l;
+    height = start + whole.h + SPACE.l;
   } else {
     const first = lines[0] || 0, groupW = first ? first * bw + (first - 1) * SPACE.m : 0;
-    const whole = layoutStack([{ w: wide, h: blockH }, ...lines.slice(1).map(() => ({ w: wide, h: bh }))], { x: outer, y: inner.y, w: wide, gap: SPACE.m });
+    const whole = layoutStack([{ w: wide, h: blockH }, ...lines.slice(1).map(() => ({ w: wide, h: bh }))], { x: outer, y: start, w: wide, gap: SPACE.m });
     const [block, ...more] = whole.boxes;
     const top = layoutRow([{ grow: 1, h: textH }, ...first ? [{ w: groupW, h: bh }] : []], { x: block.x, y: block.y, w: block.w, h: block.h, gap: first ? SPACE.m : 0 });
     valueBox = top.boxes[0];
     if (first) buttons.push(...lineBoxes(first, top.boxes[1]));
     more.forEach((line, j) => buttons.push(...lineBoxes(lines[j + 1], line)));
-    height = inner.y + whole.h + SPACE.l;
+    height = start + whole.h + SPACE.l;
   }
   const frame = frameOf(height), up = (box) => toNode(box, 4, frame)[1], centreX = (box) => box.x + box.w / 2 - ROW_W / 2;
   let at = 0;
   const ys = lines.map((n) => { const y = up(buttons[at]); at += n; return y; });
   return { h: height, blockH, midY: up(valueBox), value: toNode(valueBox, 3, frame), room: valueBox.w, lines, ys, xs: buttons.map(centreX),
-    boxes: buttons, valueBox };
+    boxes: buttons, valueBox, noteBox, note: noteBox && toNode(noteBox, 0, frame) };
 }
 
 // A row of `count` buttons `width` wide under the dotted line (the Export pair), SPACE.xxl apart and centred in the content box:

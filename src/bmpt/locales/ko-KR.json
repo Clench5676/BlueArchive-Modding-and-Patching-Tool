@@ -545,7 +545,8 @@
 				"label": "로그",
 				"open": "열기",
 				"copy": "복사",
-				"copied": "복사됨"
+				"copied": "복사됨",
+				"reportNote": "오류 보고서 익명 처리됨, 개인 정보 삭제됨"
 			},
 			"update": {
 				"startup": "시작 시 업데이트 확인",

@@ -545,7 +545,8 @@
 				"label": "日誌",
 				"open": "開啟",
 				"copy": "複製",
-				"copied": "已複製"
+				"copied": "已複製",
+				"reportNote": "錯誤報告已匿名，已移除個人資訊"
 			},
 			"update": {
 				"startup": "啟動時檢查更新",

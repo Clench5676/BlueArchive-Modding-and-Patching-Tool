@@ -545,7 +545,8 @@
 				"label": "Log",
 				"open": "Open",
 				"copy": "Copy",
-				"copied": "Copied"
+				"copied": "Copied",
+				"reportNote": "Error reports anonymized, personal information removed"
 			},
 			"update": {
 				"startup": "Check for Updates at Startup",
