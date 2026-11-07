@@ -3,6 +3,8 @@
 A Texture2D declares its own width, height and format, and the decoders trust them. Every decode of a texture read
 from a bundle goes through ``texture_image`` (or ``check_texture`` before a decode of its own), which refuses sizes
 outside a sane range and image data shorter than the declared size needs, before any decoder runs.
+
+``encodable_image`` readies a decoded image for UnityPy's encoder, which cannot pack every mode its decoders give.
 """
 
 from __future__ import annotations
@@ -150,3 +152,19 @@ def _check(texture: Any) -> None:
         (width, height), texture_format = switch
     if len(data) < required_size(width, height, texture_format):
         raise _refuse("image data")
+
+
+def encodable_image(image: Image.Image, texture_format: int) -> Image.Image:
+    """``image`` in a mode UnityPy's encoder packs into ``texture_format``.
+
+    UnityPy decodes BC4 to a single-channel L image but packs every format from RGBA, RGB, A or R, none of which an
+    L image converts to on its own. The channel goes where the target keeps it: the alpha of Alpha8 (decoded as
+    black with that alpha), else red, green and blue of an opaque image (the red one-channel formats read).
+    Images in any other mode are returned as they are.
+    """
+    if image.mode != "L":
+        return image
+    if texture_format == TF.Alpha8:
+        black = Image.new("L", image.size)
+        return Image.merge("RGBA", (black, black, black, image))
+    return image.convert("RGBA")
