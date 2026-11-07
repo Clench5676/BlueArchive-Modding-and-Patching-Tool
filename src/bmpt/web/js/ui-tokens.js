@@ -161,3 +161,76 @@ export const LOBBY_ENTRY = Object.freeze({
   top: Object.freeze([Object.freeze([0, 333.7, 0]), Object.freeze([0.2, 28.55, -271.9047]), Object.freeze([0.42, 0, 0])]),
   bottom: Object.freeze([Object.freeze([0, -1043, 0]), Object.freeze([0.2, -29.52, 281.1431]), Object.freeze([0.42, 0, 0])]),
 });
+
+// --- The design system (docs/design-system.md): the scales every composed screen takes its sizes from. Values are the game's,
+// from a survey of 41 page prefabs and all 247 popups (the most common value of each role) and named exemplar nodes; the
+// layout primitives that use them are ui-grid.js. ---
+
+// Spacing, in units. Where a prefab gives a composition its own spacing, that wins; these are for what the App composes.
+export const SPACE = Object.freeze({
+  hair: 4,    // an outline's outset, an ink nudge
+  xs: 8,      // a label to its own decoration
+  s: 12,      // stacked cards (UIPopup_Option_PC rows), a pair of small buttons in a card
+  m: 20,      // a list panel's padding (UINonEquipmentInventory Inbox in PaperBG), buttons side by side (SMALL_BUTTON.gap)
+  l: 28,      // a control to its label (UIPopup_Sort radio to label, 26), a column of a row to the next
+  xl: 40,     // the grid's gutter; a popup's side padding around panels (survey median 41 to 43)
+  xxl: 60,    // a card's padding (UIPopup_Option_PC card to its title, 58); the page margin (UICharacterCollection, 66)
+  xxxl: 100,  // a popup's side padding around text (UIPopup_Sort 101, UIPopup_TicketUse 102)
+});
+
+// Type roles: the size (fs) and the floor a fit may shrink to (min), NGUI font sizes in units.
+export const TYPE = Object.freeze({
+  display: Object.freeze({ fs: 72, min: 48 }),  // popup titles (135 of 158 titled popups), footer captions
+  title: Object.freeze({ fs: 62, min: 48 }),    // a list row's title (UIMailBoxContent/List_01/Label_System)
+  heading: Object.freeze({ fs: 52, min: 40 }),  // option labels (UIPopup_Sort radio labels), card titles (50)
+  body: Object.freeze({ fs: 48, min: 34 }),     // meta lines (List_01/Label_Locale_Received), small-button captions
+  dense: Object.freeze({ fs: 42, min: 42 }),    // the App's dense list rows (import-layout.js ROW_TEXT_SIZE)
+  chip: Object.freeze({ fs: 40, min: 28 }),     // chips (CHIP)
+  caption: Object.freeze({ fs: 36, min: 28 }),  // descriptions (UIPopup_Option_PC Label_Option_Description)
+  badge: Object.freeze({ fs: 34, min: 28 }),    // status badges (List_01/TimeLimit/Label_Locale_TimeLimit)
+  micro: Object.freeze({ fs: 28, min: 24 }),    // a secondary line (STATS_BOX.secondary)
+});
+// Line pitch as a share of the size: NGUI's own (a label's lines) and a stack of separate lines (List_01's meta lines, 66
+// apart at 48)
+export const LINE = Object.freeze({ label: 1.15, stack: 1.375 });
+
+// Control heights: everything in one row shares one of these, and a control's caption has its size. pad: the clear space a
+// caption-sized control keeps on each side of its caption (a button's includes its 30-unit slice border).
+export const CONTROL = Object.freeze({
+  badge: Object.freeze({ h: 54, fs: 34, pad: 16, minW: 220 }),             // List_01/TimeLimit/Bg 220 x 54
+  chip: Object.freeze({ h: 72, fs: 40, pad: 20, minW: 272 }),              // CHIP
+  buttonS: Object.freeze({ h: 136, fs: 48, pad: 45, minW: 240 }),          // SMALL_BUTTON (glyphPad 90)
+  buttonM: Object.freeze({ h: 162, fs: 60, pad: 45, minW: 348 }),          // List_01/Btn_Receive 348 x 162
+  buttonL: Object.freeze({ h: 176, fs: 72, pad: 39.5, minW: 551 }),        // UIPopup_RaidEnterCheck footer, 551 x 176
+  icon: Object.freeze({ h: 60 }),                                          // Common_Icon_Close, Common_Btn_Radio_BG
+});
+
+// The grid inside any container: 12 columns, a gutter of SPACE.xl. A page's container keeps SPACE.xxl from the stage's
+// edges: 2840 across, so a column is 200 and its pitch 240.
+export const GRID = Object.freeze({ columns: 12, gutter: 40, pageMargin: 60, stageW: 2960, stageH: 1665 });
+
+// Popup frames (Common_Popup_Bg), by width class: S 1300 x 1050 (19 popups; UIPopup_RaidEnterCheck), M 1540 (UIPopup_
+// ConquestBattleEnter_Sub), L 2098 x 1110 (UIPopup_Option_PC), XL 2841 x 1353 (UIPopup_GachaCharList). Their anatomy is
+// the S class's, the survey's most common: the title's top 36 under the frame's (fs 72), the close icon 48 from the right and
+// 39 from the top, content from 170 down, SPACE.xl (panels) or SPACE.xxxl (text) from the sides, the footer's buttonL bodies
+// 33 apart and 102 above the frame's bottom, the pair centred (82.5 from each side; the exemplar's are 84 and 81).
+export const POPUP_FRAME = Object.freeze({
+  S: Object.freeze({ w: 1300, h: 1050 }),
+  M: Object.freeze({ w: 1540, h: 1073 }),
+  L: Object.freeze({ w: 2098, h: 1110 }),
+  XL: Object.freeze({ w: 2841, h: 1353 }),
+  titleTop: 36,
+  close: Object.freeze({ right: 48, top: 39, size: 60 }),
+  contentTop: 170,
+  footer: Object.freeze({ gap: 33, bottom: 102, side: 82.5 }),
+});
+
+// Panels and cards: a list panel's padding (SPACE.m), a card's (UIPopup_Option_PC: the card's title 58 in, from the card's
+// left and 17 from its top), cards stacked SPACE.s apart.
+export const PANEL = Object.freeze({ padList: 20, padCard: 58, cardTitleTop: 17, stackGap: 12 });
+
+// A list row (UIMailBoxContent/List_01, 2208 x 329): the icon's circle 304 from 36 in, the text column from 342, the title's
+// top 19 down, meta lines 66 apart from 163, the action (buttonM) 31 from the right and 26 from the bottom; a badge sits on
+// the centre of the line it qualifies.
+export const LIST_ROW = Object.freeze({ w: 2208, h: 329, iconX: 36, icon: 304, textX: 342, titleTop: 19, metaTop: 163,
+  metaPitch: 66, actionRight: 31, actionBottom: 26 });

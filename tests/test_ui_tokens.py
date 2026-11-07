@@ -200,3 +200,129 @@ def test_lobby_entry_is_uiani_lobby(tokens, tmp_path_factory):
         assert all(k["inSlope"]["y"] == k["outSlope"]["y"] for k in keys)
         flat = lambda rows: [v for row in rows for v in row]
         assert flat(got) == pytest.approx(flat(tokens["LOBBY_ENTRY"][edge]), abs=1e-3)
+
+
+# --- the design system's scales (ui-tokens.js SPACE, TYPE, CONTROL, POPUP_FRAME, PANEL, LIST_ROW; docs/design-system.md) ---
+
+# exemplars the App does not load at run time (so not in PREFAB_HINTS): their bundles in the development view
+EXEMPLAR_BUNDLES = {"UIPopup_RaidEnterCheck": "ui-_mxload-prefabs-2025-07-02_assets_all_3668241127.bundle"}
+ROW = "Center/ScrollView/ScrollViewController/Grid/UIMailBoxContent/List_01"
+PX = [0, 0.5, 1]
+
+
+@pytest.fixture(scope="module")
+def exemplars():
+    out = {}
+    for root in ("UIMailBox", "UIPopup_GachaCharList", "UIPopup_RaidEnterCheck"):
+        name = PREFAB_HINTS.get(root) or EXEMPLAR_BUNDLES[root]
+        with open_bundle(next(GAME_DIR.rglob(name))) as env:
+            out[root] = export_layout(env, root, {})
+    return out
+
+
+def edges(node, widget, origin=(0, 0)):
+    """left, top, right, bottom of a widget at its node's position (plus origin), y up"""
+    w, h, pivot = widget["w_"] * node["scale"][0], widget["h_"] * node["scale"][1], widget.get("pivot", 4)
+    left = origin[0] + node["pos"][0] - w * PX[pivot % 3]
+    top = origin[1] + node["pos"][1] + h * PX[pivot // 3]
+    return left, top, left + w, top - h
+
+
+def test_type_ramp_and_controls_are_the_exemplar_nodes(tokens, layouts, exemplars):
+    mail, sort, option = exemplars["UIMailBox"], layouts["UIPopup_Sort"], layouts["UIPopup_Option_PC"]
+    T, C = tokens["TYPE"], tokens["CONTROL"]
+    assert label(subtree(sort, "Center/Popup/Base/BG/Label_Title_Locale"))["fontSize"] == T["display"]["fs"] == 72
+    assert label(subtree(mail, f"{ROW}/Label_System"))["fontSize"] == T["title"]["fs"] == 62
+    assert label(subtree(mail, f"{ROW}/Label_Locale_Received"))["fontSize"] == T["body"]["fs"] == 48
+    assert label(subtree(mail, f"{ROW}/TimeLimit/Label_Locale_TimeLimit"))["fontSize"] == T["badge"]["fs"] == 34
+    info = "Center/Popup/List/Control/Table_1/ShortcutKeyGuide/Type_1/Label_Locale_Info"
+    assert label(subtree(option, info))["fontSize"] == T["caption"]["fs"] == 36
+    # the badge and the row's action
+    badge = sprite(subtree(mail, f"{ROW}/TimeLimit/Bg"), "Common_Bg_Raius10px")
+    assert [badge["w_"], badge["h_"]] == [C["badge"]["minW"], C["badge"]["h"]] == [220, 54]
+    receive = sprite(subtree(mail, f"{ROW}/Btn_Receive"), "Common_Btn_BG")
+    assert [receive["w_"], receive["h_"]] == [C["buttonM"]["minW"], C["buttonM"]["h"]] == [348, 162]
+    assert label(subtree(mail, f"{ROW}/Btn_Receive/Label_Locale"))["fontSize"] == C["buttonM"]["fs"] == 60
+
+
+def test_list_row_anatomy_is_the_mailbox_row(tokens, exemplars):
+    mail, R, C = exemplars["UIMailBox"], tokens["LIST_ROW"], tokens["CONTROL"]
+    row = subtree(mail, ROW)
+    frame = next(w for w in row["widgets"] if w.get("w_") == R["w"])
+    assert [frame["w_"], frame["h_"]] == [R["w"], R["h"]] == [2208, 329]
+    left, top = -R["w"] / 2, R["h"] / 2
+    title = subtree(mail, f"{ROW}/Label_System")
+    t = edges(title, label(title))
+    assert round(t[0] - left) == R["textX"] and round(top - t[1]) == R["titleTop"]
+    meta = subtree(mail, f"{ROW}/Label_Locale_Received")
+    m = edges(meta, label(meta))
+    assert round(top - m[1]) == R["metaTop"]
+    limit = subtree(mail, f"{ROW}/Label_Locale_Limit")
+    assert round(limit["pos"][1] - meta["pos"][1]) == -R["metaPitch"]
+    button = subtree(mail, f"{ROW}/Btn_Receive")
+    b = edges(button, sprite(button, "Common_Btn_BG"))
+    assert round(-left - b[2]) == R["actionRight"] and round(b[3] + top) == R["actionBottom"]
+    assert round(b[1] - b[3]) == C["buttonM"]["h"]
+
+
+def test_popup_frames_and_the_small_frames_anatomy(tokens, layouts, exemplars):
+    P, C = tokens["POPUP_FRAME"], tokens["CONTROL"]
+    frame = lambda tree, path: sprite(subtree(tree, path), "Common_Popup_Bg")
+    assert [frame(layouts["UIPopup_Option_PC"], "Center/Popup/Base/BG")[k] for k in ("w_", "h_")] == [P["L"]["w"], P["L"]["h"]]
+    gacha = exemplars["UIPopup_GachaCharList"]
+    xl = next(w for w in [frame_w for frame_w in _all_sprites(gacha) if frame_w["sprite"] == "Common_Popup_Bg"])
+    assert [xl["w_"], xl["h_"]] == [P["XL"]["w"], P["XL"]["h"]] == [2841, 1353]
+    check = exemplars["UIPopup_RaidEnterCheck"]
+    base = subtree(check, "Center/Popup/Base")
+    bg_node = subtree(check, "Center/Popup/Base/BG")
+    s = sprite(bg_node, "Common_Popup_Bg")
+    assert [s["w_"], s["h_"]] == [P["S"]["w"], P["S"]["h"]] == [1300, 1050]
+    origin = (base["pos"][0], base["pos"][1])
+    f = edges(bg_node, s, origin)
+    title_node = subtree(check, "Center/Popup/Base/Label_Title_Locale")
+    title = edges(title_node, label(title_node), origin)
+    assert round(f[1] - title[1]) == P["titleTop"] and label(title_node)["fontSize"] == 72
+    close_node = subtree(check, "Center/Popup/Base/Btn_Close")
+    close = edges(close_node, sprite(close_node, "Common_Icon_Close"), origin)
+    assert [round(f[2] - close[2]), round(f[1] - close[1]), round(close[2] - close[0])] == [P["close"]["right"], P["close"]["top"], 60]
+    # the footer: two bodies (550 at a 1.001 scale: 551 across) 33 apart, 102 above the frame's bottom, the pair centred
+    bodies = []
+    for name in ("Btn_Ok", "Btn_Cancel"):
+        button = subtree(check, f"Center/Popup/Btn_2/{name}")
+        body = subtree(check, f"Center/Popup/Btn_2/{name}/BG (1)")
+        offset = _origin(check, f"Center/Popup/Btn_2/{name}")
+        bodies.append(edges(body, sprite(body, "Common_Btn_BG"), offset))
+    bodies.sort()
+    assert [round(bodies[0][2] - bodies[0][0]), round(bodies[0][1] - bodies[0][3])] == [C["buttonL"]["minW"], C["buttonL"]["h"]]
+    assert round(bodies[1][0] - bodies[0][2]) == P["footer"]["gap"]
+    assert round(bodies[0][3] - f[3]) == P["footer"]["bottom"]
+    # the exemplar's pair stands 2 units right of the centre (84.7 and 80.7 from the sides)
+    assert abs((bodies[0][0] - f[0]) - (f[2] - bodies[1][2])) <= 4 and abs((bodies[0][0] - f[0] + f[2] - bodies[1][2]) / 2 - P["footer"]["side"]) <= 0.5
+
+
+def test_a_settings_card_pads_its_title(tokens, layouts):
+    option, P = layouts["UIPopup_Option_PC"], tokens["PANEL"]
+    path = "Center/Popup/List/Control/Table_1/ShortcutKeyIcon/Type_1"
+    card_node, title_node = subtree(option, f"{path}/BG"), subtree(option, f"{path}/Label_Locale_OptionTitle")
+    card, title = edges(card_node, sprite(card_node, "Common_Bg_Raius5px")), edges(title_node, label(title_node))
+    assert round(title[0] - card[0]) == P["padCard"] and round(card[1] - title[1]) == P["cardTitleTop"]
+    assert P["stackGap"] == tokens["SETTINGS"]["rowGap"] == tokens["SPACE"]["s"]
+
+
+def _all_sprites(tree):
+    for w in tree.get("widgets", []):
+        if "sprite" in w:
+            yield w
+    for child in tree.get("children", []):
+        yield from _all_sprites(child)
+
+
+def _origin(tree, path):
+    """the summed position of the nodes above path's node (its parent's origin), scales of 1 assumed above it"""
+    x = y = 0.0
+    node = tree
+    for part in path.split("/")[:-1]:
+        node = next(c for c in node["children"] if c["name"] == part)
+        x += node["pos"][0]; y += node["pos"][1]
+    leaf = next(c for c in node["children"] if c["name"] == path.split("/")[-1])
+    return x + leaf["pos"][0], y + leaf["pos"][1]
