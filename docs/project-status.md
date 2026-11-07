@@ -7,7 +7,7 @@ As of 2026-11-06. Verify the actual branch, working tree and `pyproject.toml` ve
 
 | Branch | State |
 | --- | --- |
-| `main` | Local version `0.7.0-alpha.7`: the published 0.6.0, the upstream syncs to `6c61fdc8` and to v2.12.0 (`62ec9471`), the security policy, the fix that keeps files from a mod inside their output folder (`e8bee4c2`) and its own message for refused atlases (`ca44e051`), BL-065 through BL-069, BL-070 steps 1 to 3, BL-071, BL-072, BL-073, BL-076, BL-077, the BL-078 fixes (`1a2afd84`, `b186e93b`, `4841e30e`), BL-079, BL-081 through BL-097 (BL-092 step 1). Not pushed. Upstream published its fix for the same issue in v2.12.0 (2026-11-04), so 0.6.1 is no longer held back. |
+| `main` | Local version `0.7.0-alpha.8`: the published 0.6.0, the upstream syncs to `6c61fdc8` and to v2.12.0 (`62ec9471`), the security policy, the fix that keeps files from a mod inside their output folder (`e8bee4c2`) and its own message for refused atlases (`ca44e051`), BL-065 through BL-069, BL-070 steps 1 to 3, BL-071, BL-072, BL-073, BL-076, BL-077, the BL-078 fixes (`1a2afd84`, `b186e93b`, `4841e30e`), BL-079, BL-081 through BL-097 (BL-092 step 1). Not pushed. Upstream published its fix for the same issue in v2.12.0 (2026-11-04), so 0.6.1 is no longer held back. |
 
 0.6.0 is published (tag `0.6.0` at `817ebeda`, 2026-10-30): macOS build uploaded, Windows build by the release workflow.
 
@@ -66,7 +66,7 @@ As of 2026-11-06. Verify the actual branch, working tree and `pyproject.toml` ve
 | BL-092 | Step 1 implemented by the lead (2026-11-06): lock waits and preview times in the error report; Windows measurement and fix open |
 | BL-095 | Implemented by the lead (2026-11-06): a student's add buttons open Import Mod (Batch Import renamed); owner review pending |
 | BL-096 | Implemented (Codex, reviewed and merged, `2218bdcc`, prototype accepted by the owner): Import Mod tells which files of a mod are missing and adds them; owner review pending |
-| BL-097 | Implemented (2026-11-07): the design system (`docs/design-system.md`) and the popups, Import Mod, Settings, switch cards and toolbars on it; owner review pending |
+| BL-097 | Implemented (2026-11-07): the design system (`docs/design-system.md`) and the popups, Import Mod, Settings, switch cards, toolbars and the detail page's composed parts on it; owner review pending |
 | BL-057, BL-058 | Accepted by the owner on macOS (alpha.12); Windows not reviewed |
 | BL-055 | Accepted by the owner on macOS (0.6.0 pre-review) |
 | BL-014 | Candidate, not scheduled |
@@ -77,11 +77,11 @@ from passing tests or the presence of earlier code.
 
 ## Review artifact and validation
 
-`dist/Blue-Archive-Modding-and-Patching-Tool-0.7.0-alpha.7-macos-arm64.dmg`, MD5 `26b19b788ce154d2ab4068ff5791ace6`,
-built from `809a2f99` (`chore(release): 0.7.0-alpha.7`): alpha.6 and BL-097 (the design system, `docs/design-system.md`;
-the popups, Import Mod, Settings, the switch cards and the toolbars laid out on it). The Windows bundle of `main` is
-`Blue-Archive-Modding-and-Patching-Tool-0.7.0-alpha.7-main.bundle`.
+`dist/Blue-Archive-Modding-and-Patching-Tool-0.7.0-alpha.8-macos-arm64.dmg`, MD5 `b1d1adfb9983bd556c4bb9fa07ce68a2`,
+built from `16b0bae3` (`chore(release): 0.7.0-alpha.8`): alpha.7 and the student detail page's composed parts on the
+design system (BL-097, merge `730a52fd`). The Windows bundle of `main` is
+`Blue-Archive-Modding-and-Patching-Tool-0.7.0-alpha.8-main.bundle`.
 
-On `a80a44d9` (same code as the build but the version): 4294 passed, 169 skipped (`python -m pytest`; the roster
-preflight and the refinement tests skipped as unchanged by the development gates), 2555 JavaScript tests passed. The
-visible changes listed in BL-097 are for the owner's review; native Windows is not verified on the macOS host.
+On `0d6d69fe` (same code as the build but the version): 4429 passed, 34 skipped (`python -m pytest`; the roster preflight
+skipped as unchanged by the development gates), 2569 JavaScript tests passed. The visible changes listed in BL-097 are for
+the owner's review; native Windows is not verified on the macOS host.
