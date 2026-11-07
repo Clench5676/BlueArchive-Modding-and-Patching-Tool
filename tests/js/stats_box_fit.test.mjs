@@ -54,8 +54,7 @@ await Buttons.ready();
 const Update = await import(`${JS}update.js`);
 const Box = await import(`${JS}stats-box.js`);
 const { setStrings } = await import(`${JS}i18n.js`);
-const { portraitPanel } = await import(`${JS}switch-layout.js`);
-const { DETAILS } = await import(`${JS}popup-frames.js`);
+const { DETAILS, frameGeometry } = await import(`${JS}popup-frames.js`);
 const { STATS_BOX: B, POPUP } = Tokens;
 
 // longest first
@@ -157,9 +156,8 @@ for (const locale of LOCALES) test(`the details panel's light box holds its capt
     const nodes = tree.children.filter((c) => c.name === "Fields" || /^(F|V|L)_\d+$/.test(c.name));
     assert.equal(nodes[0].name, "Fields");
     const { fill, boxRect } = assertRows({ nodes, what, count: fields.length });
-    // one width rule: the panel (850, popup.js's LP.left) less 40
-    assert.match(readFileSync(new URL(`${JS}popup.js`, import.meta.url), "utf8"), /left: \{ l: -1370, r: -520, t: 600, b: -690 \}/);
-    const panel = 850;
+    // The stats box keeps its own inset inside the new four-column details panel.
+    const bounds = Popup.listLayout().left, panel = bounds.r - bounds.l;
     assert.equal(fill.w_, panel - 40, what);
     assert.equal(rectOf(nodes[0]).right - rectOf(nodes[0]).left, panel - 40);
     // the third value keeps two lines and an ellipsis at most, its whole text as the accessible label
@@ -224,12 +222,12 @@ for (const locale of LOCALES) for (const width of [1700, 2100, 2458]) test(`boxe
       return { left: button.pos[0] - bg.w_ / 2, right: button.pos[0] + bg.w_ / 2, top: button.pos[1] + bg.h_ / 2, bottom: button.pos[1] - bg.h_ / 2 };
     };
     const { fill: shape, boxRect } = assertRows({ nodes, what, value: "Row", divider: "Dot", count: lines.length, lines: Infinity, slot });
-    assert.equal(shape.w_, width - 200, `${what}: the frame less 200`);
-    assert.equal(boxRect.right - boxRect.left, width - 200);
-    // rows with a button are 156 high at least and keep 30 between text and button; rows without are 64 at least
+    assert.equal(shape.w_, layout.width - 200, `${what}: the frame less 200`);
+    assert.equal(boxRect.right - boxRect.left, layout.width - 200);
+    // rows with a button are 156 high at least and keep SPACE.m between text and button; rows without are 64 at least
     lines.forEach((line, i) => {
       const row = child(nodes, `Row_${i}`).widgets[0], button = slot(i), r = rectOf(child(nodes, `Row_${i}`));
-      if (typeof line !== "string") assert.ok(button && r.right + 30 <= button.left + 1e-9, `${what} row ${i}: 30 between text and button`);
+      if (typeof line !== "string") assert.ok(button && r.right + Tokens.SPACE.m <= button.left + 1e-9, `${what} row ${i}: 20 between text and button`);
       else assert.equal(button, null);
       assert.ok(row.fontSize >= B.value.fsMin && row.fontSize <= B.value.fs, `${what} row ${i}: ${row.fontSize}`);
     });
@@ -255,11 +253,13 @@ for (const locale of LOCALES) test(`the update dialog's version rows and frame h
     assert.equal(fill.w_, 1500, `${what}: the frame (1700) less 200`);
     const frame = Update.frameFor(box.height);
     assert.equal(frame.h, Update.FRAME.h, `${what}: the frame is the same height`);
-    // the lowest content, the progress bar, stays POPUP.clearance above the three buttons' tops, and the frame is on the stage
-    assert.ok(frame.contentBottom - Popup.footerTop(frame.h, 3) >= POPUP.clearance - 1e-9, `${what}: ${frame.contentBottom - Popup.footerTop(frame.h, 3)} clear of the buttons`);
+    // The progress bar keeps SPACE.m above the three button bodies in the classified frame.
+    const drawn = frameGeometry(frame.w, frame.h);
+    assert.ok(frame.contentBottom - Popup.footerTop(drawn.h, 3) >= Tokens.SPACE.m - 1e-9,
+      `${what}: ${frame.contentBottom - Popup.footerTop(drawn.h, 3)} clear of the buttons after width/height classification`);
     assert.ok(frame.h <= POPUP.maxH && frame.h > 0);
     // from the top: the box where a message's lines start, Status under it, the progress bar under that
-    assert.equal(POPUP.frameY + frame.h / 2 - frame.boxTop, 150);
+    assert.equal(POPUP.frameY + frame.h / 2 - frame.boxTop, Tokens.POPUP_FRAME.contentTop);
     assert.ok(frame.boxTop - box.height > frame.status + 48 && frame.status - 48 > frame.progress + 10, `${what}: the order under the box`);
   }
 });
@@ -272,7 +272,9 @@ test("the Switch Portrait panel keeps the line 5 larger than its box", () => {
   const tree = Popup.detailsTree({ key: "a", full: "Hoshino", big: null, chips: ["Added"] }, "Title", fields, [], texture, "spr");
   const box = child(tree.children, "Fields"), fill = box.widgets[0], line = child(box.children, "Line").widgets[0];
   assert.deepEqual([line.w_ - fill.w_, line.h_ - fill.h_], [B.lineOutset, B.lineOutset]);
-  assert.equal(fill.w_, (portraitPanel.right - portraitPanel.left - portraitPanel.gap) / 2, "its own width, not part of this change");
+  const bounds = Popup.listLayout().left, panel = bounds.r - bounds.l;
+  const infoColumn = (panel + Tokens.SPACE.xl) / 12 * 7 - Tokens.SPACE.xl;
+  assert.equal(fill.w_, infoColumn - B.inset.panel, "the seven-column portrait info box keeps its native padding");
 });
 
 // the boxed message rows take the box's value range; a message without a box keeps its own

@@ -54,12 +54,12 @@ function assertGroup(fits, captions, widths, maxH, label) {
 test("the picker's constants are the ones asserted here", async () => {
   const popup = await source("popup.js");
   assert.match(popup, /const ACTION_CLEAR = 28, ACTION_TEXT_H = 96;/);
-  assert.match(popup, /left: \{ l: -1370, r: -520, t: 600, b: -690 \}/);
-  assert.match(popup, /const bw = \(w - 60\) \/ actions\.length, gap = 14;/);
+  assert.match(popup, /left: bounds\(detailBox\)/);
+  assert.match(popup, /const gap = SPACE.m, bw =/);
   assert.match(popup, /fitRow\(actions\.map\(\(\[caption\]\) => caption\), 40, 26, actions\.length \* \(bw - gap\), ACTION_CLEAR, 2, \{ maxH: ACTION_TEXT_H \}\)/);
 });
 
-const PANEL = 1370 - 520, GAP = 14, CLEAR = 28, ACTION_H = 96;
+const PANEL = (2841 - 80 + 40) / 12 * 4 - 40, GAP = 20, CLEAR = 28, ACTION_H = 96;
 const actionSets = (locale) => {
   const t = (key) => text(locale, key), open = t("open.mac"), openWindows = t("open.win");
   return {
@@ -74,7 +74,7 @@ const actionSets = (locale) => {
 for (const locale of LOCALES) test(`every source picker's action row shares one size and fits its buttons in ${locale}`, () => {
   document.documentElement.lang = locale;
   for (const [name, captions] of Object.entries(actionSets(locale))) {
-    const n = captions.length, slot = (PANEL - 60) / n, total = n * (slot - GAP);
+    const n = captions.length, slot = (PANEL - 40 + GAP) / n, total = n * (slot - GAP);
     const row = fitRow(captions, 40, 26, total, CLEAR, 2, { maxH: ACTION_H });
     assertGroup(row, captions, row.map((f) => f.width - CLEAR), ACTION_H, `${locale} ${name}`);
     near(row.reduce((sum, f) => sum + f.width, 0), total);
@@ -88,7 +88,7 @@ for (const locale of LOCALES) test(`every source picker's action row shares one 
     }
     // the row sits in the panel: from the first body's left edge to the last one's right edge
     const span = row.reduce((sum, f) => sum + f.width + GAP, -GAP);
-    assert.ok(span <= PANEL - 60 + 1e-9);
+    assert.ok(span <= PANEL - 40 + 1e-9);
   }
 });
 const near = (a, b, eps = 1e-6) => assert.ok(Math.abs(a - b) < eps, `${a} != ${b}`);
@@ -96,7 +96,7 @@ const near = (a, b, eps = 1e-6) => assert.ok(Math.abs(a - b) < eps, `${a} != ${b
 test("with the Chinese wording the five-button row keeps equal bodies at a full size", () => {
   document.documentElement.lang = "zh-CN";
   const captions = actionSets("zh-CN")["mod (five)"];
-  const row = fitRow(captions, 40, 26, 5 * ((PANEL - 60) / 5 - GAP), CLEAR, 2, { maxH: ACTION_H });
+  const row = fitRow(captions, 40, 26, 5 * ((PANEL - 40 + GAP) / 5 - GAP), CLEAR, 2, { maxH: ACTION_H });
   assert.ok(row[0].fs >= 36, `${row[0].fs}`);
   assert.ok(row.every((f) => f.width === row[0].width));
 });
@@ -119,9 +119,8 @@ for (const locale of LOCALES) test(`the four action cards and the three tabs sha
   }
 });
 
-// --- popup buttons: Ok / Cancel pairs (popupFrame, listFrame, consent) and the update popup's three, Common_Btn_BG 496 x 177 ---
-// One caption range for every footer (ui-tokens.js FOOTER.caption): 72 down to 48, a 400 box, two lines, 140 high
-const { FOOTER } = await import("../../src/bmpt/web/js/ui-tokens.js");
+// --- popup buttons: buttonL bodies, 551 x 176, display captions in a 472 x 156 box ---
+const { CONTROL, TYPE } = await import("../../src/bmpt/web/js/ui-tokens.js");
 const PAIRS = [["picker.ok", "popup.cancel"], ["popup.save", "popup.cancel"], ["consent.no", "consent.yes"], ["mods.scan.no", "mods.scan.yes"],
   ["update.later", "update.notes", "update.now"], ["update.later", "update.notes", "update.restart"],
   ["update.later", "update.notes", "update.page"]];
@@ -129,29 +128,32 @@ const BELOW_MINIMUM = {
   "th-TH": ["update.later/update.notes/update.now", "update.later/update.notes/update.restart",
     "update.later/update.notes/update.page"],
 };
-for (const locale of LOCALES) test(`pairs of popup buttons share one size and fit the 496 x 177 body in ${locale}`, async () => {
+for (const locale of LOCALES) test(`popup footer captions share one size and fit the buttonL body in ${locale}`, async () => {
   const popup = await source("popup.js"), consent = await source("consent.js"), update = await source("update.js");
-  assert.match(popup, /export const BUTTON_TEXT_H = FOOTER\.caption\.h;/);
-  assert.match(popup, /fitLabels\(widgets, captions, CAPTION\.fs, CAPTION\.fsMin, CAPTION\.w, CAPTION\.lines, \{ maxH: CAPTION\.h \}\)/);
-  assert.match(popup, /fitGroup\(captions, CAPTION\.fs, CAPTION\.fsMin, CAPTION\.w, CAPTION\.lines, \{ maxH: CAPTION\.h \}\)/);
+  assert.match(popup, /export const BUTTON_TEXT_H = CONTROL.buttonL.h - SPACE.m;/);
+  assert.match(popup, /NGUI.fitLabels\(widgets, captions, CAPTION.fs, CAPTION.fsMin/);
+  assert.match(popup, /NGUI.fitGroup\(captions, CAPTION.fs, CAPTION.fsMin/);
   // the other footers take that fit: popupFrame, listFrame and the update offer call it, consent calls popupFrame
-  assert.match(popup, /footerFit\(buttons\.map\(\(b\) => b\.label\)\)/);
+  assert.match(popup, /buttons: buttons.map/);
   assert.match(consent, /Popup\.popupFrame\(title, w, h, \{ ok: yes, cancel: no, close: false \}\)/);
   assert.match(update, /Popup\.footerLabels\(widgets, widgets\.map\(\(l\) => l\.text\)\)/);
   for (const [name, text] of [["popup", popup], ["consent", consent], ["update", update]]) assert.doesNotMatch(text, /\b64, 40\b/, `${name} has no private caption range`);
-  assert.deepEqual(FOOTER.caption, { fs: 72, fsMin: 48, w: 400, lines: 2, h: 140 });
+  assert.deepEqual([CONTROL.buttonL.minW, CONTROL.buttonL.h, CONTROL.buttonL.pad], [551, 176, 39.5]);
   document.documentElement.lang = locale;
-  const { fs: max, fsMin: min, w: width, lines, h: height } = FOOTER.caption;
+  const max = TYPE.display.fs, min = TYPE.display.min, width = CONTROL.buttonL.minW - 2 * CONTROL.buttonL.pad, lines = 2, height = CONTROL.buttonL.h - 20;
   for (const keys of PAIRS) {
     const captions = keys.map((key) => text(locale, key)), [a, b] = [keys[0], keys.slice(1).join("/")];
-    const widgets = captions.map(() => ({ text: "", fontSize: 72, w_: 400 }));
+    const widgets = captions.map(() => ({ text: "", fontSize: max, w_: width }));
     const fits = fitLabels(widgets, captions, max, min, width, lines, { maxH: height });
     assertGroup(fits, captions, captions.map(() => width), height, `${locale} footer ${a}/${b}`);
     // In this file's stand-in canvas (Thai counted a full em a code point, Latin half an em) a few captions do not hold the
     // range's 48 in the 400 box on two lines; the shared fit then takes the group below it, never past the box (asserted above).
     // They are named here and reported, not hidden: the wording is the owner's.
     const known = BELOW_MINIMUM[locale]?.includes(`${a}/${b}`);
-    if (known) assert.ok(fits[0].fs < min && fits[0].fs >= 36, `${locale} ${a}/${b}: ${fits[0].fs} is below the range's minimum, as recorded`);
+    if (known) {
+      const before = fitGroup(captions, max, min, 400, 2, { maxH: 140 })[0].fs;
+      assert.ok(fits[0].fs >= 36 && fits[0].fs >= before, `${locale} ${a}/${b}: no smaller than the recorded fit ${before}`);
+    }
     else assert.ok(fits[0].fs >= min && fits[0].fs <= max, `${locale} ${a}/${b}: ${fits[0].fs} is in the range`);
     assert.deepEqual(widgets.map((w) => w.fontSize), fits.map((f) => f.fs));
     assert.ok(widgets.every((w) => w.w_ >= width), "the label box is as wide as the room the caption was fitted to");

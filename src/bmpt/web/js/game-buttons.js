@@ -1,7 +1,7 @@
 // Complete option and disabled button branches; captions and dimensions are the only substitutions.
 import * as NGUI from "./ngui.js";
 import { resizeButton } from "./button-layout.js";
-import { FOOTER, SMALL_BUTTON } from "./ui-tokens.js";
+import { CONTROL, SPACE, TYPE, SMALL_BUTTON } from "./ui-tokens.js";
 import { clone } from "./util.js";
 
 let layouts, loading;
@@ -66,11 +66,16 @@ export async function skinPrimary(button, caption) {
     tree.pos = [0, 0];
     tree.active = true;
     tree.actionSemantic="confirm";
-    NGUI.fitLabel(NGUI.find(tree, "Label_Locale").widgets[0], caption, FOOTER.caption.fs, FOOTER.caption.fsMin, FOOTER.caption.w);
+    resizeButton(NGUI.find(tree, "BG (1)"), CONTROL.buttonL.minW, CONTROL.buttonL.h);
+    NGUI.find(tree, "BG (1)").pos = [0, 0];
+    NGUI.find(tree, "Label_Locale").pos = [0, 0];
+    NGUI.find(tree, "Label_Locale").widgets[0].h_ = CONTROL.buttonL.h - SPACE.m;
+    NGUI.fitLabel(NGUI.find(tree, "Label_Locale").widgets[0], caption, TYPE.display.fs, TYPE.display.min,
+      CONTROL.buttonL.minW - 2 * CONTROL.buttonL.pad, 2, { maxH: CONTROL.buttonL.h - SPACE.m });
     const next = document.createElement("div"), scale = 0.4;
-    await NGUI.render(tree, next, { scale, origin: [110, 42] });
+    await NGUI.render(tree, next, { scale, origin: [CONTROL.buttonL.minW * scale / 2, CONTROL.buttonL.h * scale / 2] });
     await NGUI.decoded([...(next.children || [])], Infinity);
-    Object.assign(button.style, { position: "relative", display: "block", margin: "18px auto 0", width: "220px", height: "84px" });
+    Object.assign(button.style, { position: "relative", display: "block", margin: `${SPACE.xl * scale}px auto 0`, width: `${CONTROL.buttonL.minW * scale}px`, height: `${CONTROL.buttonL.h * scale}px` });
     button.setAttribute("aria-label", caption);
     button.replaceChildren(...next.childNodes);
   } catch (err) { console.warn("preview button without game assets", err); }

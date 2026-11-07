@@ -358,7 +358,7 @@ export async function click(from = "top") {
 // the first toggle: the explanation once (decision 3); closing it in any way counts as shown, only its button toggles
 async function explain(s) {
   const e = explanation(s);
-  const r = await Popup.message({ title: e.title, lines: e.lines, ok: e.ok, cancel: T("popup.cancel"), width: 2100, fitTogether: [0, 1], plain: true });
+  const r = await Popup.message({ title: e.title, lines: e.lines, ok: e.ok, cancel: T("popup.cancel"), width: 2098, fitTogether: [0, 1], plain: true });
   explainedHere = true;
   rpc("mods.explained").catch(() => {});
   return r.button === "ok";
@@ -516,7 +516,7 @@ export async function openHelp() {
     details: () => overwritten(),
   };
   const lines = helpLines(state || s).map((l) => (l.button ? { text: l.text, button: { label: l.button.label, fn: act[l.button.id] } } : l.text));
-  await Popup.message({ title: T("mods.switch"), lines, width: 2100, fitTogether: [0, 1], plain: true });
+  await Popup.message({ title: T("mods.switch"), lines, width: 2098, fitTogether: [0, 1], plain: true });
 }
 
 // Settings' mod cache cleanup (decision 11): a library job; kept originals stay, Off needs them

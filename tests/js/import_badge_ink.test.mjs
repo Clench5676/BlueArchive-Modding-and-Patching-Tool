@@ -380,7 +380,7 @@ for (const locale of LOCALES) test(`the prompt fits the popup frame in ${locale}
       missingLabel("promptTail", { student: LONG_NAME, kind }, locale)];
     const layout = Popup.messageLayout({ lines: promptLines, plain: true, fitTogether: promptLines.map((_, i) => i), ok: missingLabel("addTogether", {}, locale),
       cancel: text(locale, "popup.cancel") });
-    const room = layout.width - 240;
+    const room = layout.content.w;
     const labels = labelsOf(layout);
     assert.equal(labels.length, promptLines.length);
     labels.forEach((label, i) => {
@@ -399,11 +399,11 @@ for (const locale of LOCALES) test(`the list action's confirmation lists 25 rows
   const layout = Popup.messageLayout({ lines: rows, plain: true, fitTogether: rows.map((_, i) => i), ok: missingLabel("addTogether", {}, locale),
     cancel: text(locale, "popup.cancel") });
   assert.equal(layout.scroll, true); assert.ok(layout.height <= Popup.MSG.cap + 1e-9);
-  const room = layout.width - 240;
+  const room = layout.content.w;
   for (const label of labelsOf(layout)) assert.ok(widest(label.text, label.fontSize) <= room + 1e-9);
   // the footer's pair: Cancel and the owner's Add label at one size within the prefab's 72 down to 48
   const caption = FOOTER.caption, pair = [text(locale, "popup.cancel"), missingLabel("addTogether", {}, locale)];
-  const fits = NGUI.fitGroup(pair, caption.fs, caption.fsMin, caption.w, caption.lines, { maxH: caption.h });
+  const fits = Popup.footerFit(pair);
   assert.equal(new Set(fits.map((f) => f.fs)).size, 1);
   fits.forEach((f, i) => {
     assert.ok(!f.overflow && f.fs >= caption.fsMin, `${pair[i]} at ${f.fs}`);
