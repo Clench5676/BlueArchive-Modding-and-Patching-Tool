@@ -11,6 +11,7 @@ from __future__ import annotations
 import hashlib
 import os
 import re
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Hashable, Iterable, Sequence
@@ -61,10 +62,36 @@ def kind_of_file(name: str) -> str | None:
         "other" if name.endswith(".bundle") and parsed.prefix and parsed.crc else None)
 
 
+# Groups packed one asset per bundle: their bundles' names differ only in the CRC, which a game update changes, so a
+# name cannot tell them apart. The library learns each such bundle's CAB from its header (stable while the asset stays
+# in its group) and its generic slot is keyed by it. A name with its CRC names one content, so what is learned holds.
+_packed_lock = threading.Lock()
+_packed: dict[str, str] = {}
+
+
+def learn_packed(name: str, cab: str) -> bool:
+    """Remember the CAB of a bundle of a group packed one asset per bundle; True when it was not known."""
+    key, cab = name.removesuffix(".backup").lower(), cab.lower()
+    with _packed_lock:
+        if _packed.get(key) == cab:
+            return False
+        _packed[key] = cab
+        return True
+
+
+def packed_cab(name: str) -> str | None:
+    """The learned CAB of a bundle of a group packed one asset per bundle, else None."""
+    with _packed_lock:
+        return _packed.get(name.removesuffix(".backup").lower())
+
+
 def core_of(name: str) -> str:
-    """The character core, or a generic file slot keyed by prefix and resource type, without date or CRC."""
+    """The character core, or a generic file slot keyed by prefix and resource type, without date or CRC; for a bundle
+    of a group packed one asset per bundle whose CAB is learned (``learn_packed``), by that CAB as well."""
     if kind_of_file(name) == "other":
-        return "other:" + hashlib.sha256(repr(part_of(name)).encode()).hexdigest()
+        cab = packed_cab(name)
+        part = part_of(name) if cab is None else (*part_of(name), cab)
+        return "other:" + hashlib.sha256(repr(part).encode()).hexdigest()
     return parse_filename(name).core.lower()
 
 
