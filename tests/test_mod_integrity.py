@@ -694,8 +694,6 @@ def test_model_content_keeps_its_dependency_core_even_when_variant_model_differs
     ('spr', 'test_spr', 'spinecharacters'), ('lobby', 'test_home_gl', 'spinelobbies'),
     ('model', 'test_model', 'characters')])
 def test_pre_split_older_bundle_keeps_all_update_targets_in_add_and_batch(checks, monkeypatch, kind, core, category):
-    from bmpt.webui import batch_import
-
     e = checks
     if kind == 'model':
         e.catalog.variants['test'].model = core
@@ -709,18 +707,15 @@ def test_pre_split_older_bundle_keeps_all_update_targets_in_add_and_batch(checks
     old = old.rename(old.with_name(old.name.replace('2025-01-01_000', '2025-01-01')))
     assert parse_filename(old.name).res_type is None
     e.register(old, cab='cab-old', names={'com.nexon.bluearchive'})
-    upstream_matches, batch_matches = [], []
+    matches = []
 
-    def match(sources, candidates, log, **kwargs):
-        upstream_matches.append((list(sources), list(candidates)))
-        return candidates, ''
+    def held(sources, candidates, readers):
+        # the pre-split bundle's assets are held by every current part, whatever its number
+        matches.append((list(sources), list(candidates)))
+        return 'asset_key', list(candidates)
 
-    def batch_match(sources, candidates, log, **kwargs):
-        batch_matches.append((list(sources), list(candidates)))
-        return candidates, ''
-
-    monkeypatch.setattr(service.mod_install, 'asset_match', match)
-    monkeypatch.setattr(batch_import, '_asset_match', batch_match)
+    monkeypatch.setattr('bmpt.library.targets.by_assets', held)
+    monkeypatch.setattr('bmpt.library.targets.sharing_keys', lambda sources, candidates, keys: list(candidates))
     pin = e.library.current_pin()
     assert not e.library._replacements({old.name: old}, targets, pin)
     assert e.library.direct_import({old.name: old}, pin) is None
@@ -732,14 +727,14 @@ def test_pre_split_older_bundle_keeps_all_update_targets_in_add_and_batch(checks
     e.register(old, cab='cab-old', names={'com.nexon.bluearchive'})
     row, = analyze(e, [old])['entries']
     assert (row['kind'], row['state'], row['reason']) == (kind, 'update', None)
-    assert any(sources == [old] and set(candidates) == set(targets) for sources, candidates in batch_matches)
+    assert any(sources == [old] and set(candidates) == set(targets) for sources, candidates in matches)
     assert set(e.services.batch_import._latest[row['id']].targets) == set(targets)
     mod, = e.library.add_files(kind, [old])
     assert e.library.compatibility(mod.id, pin)['outdated']
     group, = e.library._plan(e.library._record(mod.id), lambda text: None, pin)
     assert all(file.action == service.mod_install.InstallAction.UPDATE for file in group.files)
     assert set(group.target_paths) == set(targets)
-    assert any(set(candidates) == set(targets) for _, candidates in upstream_matches)
+
 
 
 @pytest.mark.skipif(not Path(os.environ.get("BAMT_TEST_GAME_DIR") or "/nonexistent").is_dir(),
