@@ -17,7 +17,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
-from .. import devmode, spans, updater
+from .. import devmode, spans, steam_records, updater
 from ..config import APP_DIR_NAME, Settings, managed_cache_dir
 from ..data_paths import OLD_APP_DIR_NAME
 from ..globallines import GlobalLines
@@ -253,6 +253,8 @@ class Services:
         self.log_secrets: set[str] = set()
         self.safe_mode = safe_mode
         self.restart_requested = False
+        # Steam's file list of each install, parsed once for the library's judgements and the error report
+        self.steam_files = steam_records.OfficialFiles()
         from .diagnostics import Reports
         self.reports = Reports(self.data_dir, services=self, safe_mode=safe_mode)
         self.reports.secrets = self.log_secrets
@@ -464,7 +466,8 @@ class Services:
                 with self.timings.measure("library.open"):
                     built = self._library = ModLibrary(
                         self.library_dir(), self.catalog, game, self.settings, scan_allowed=self.scan_allowed,
-                        data_id=self.state.data_id(self.data_dir), write_check=self._write_check)
+                        data_id=self.state.data_id(self.data_dir), write_check=self._write_check,
+                        steam_files=self.steam_files)
             library = self._library
             # Establish the baseline before any caller (including an add or adoption job) gets the library. A library
             # that could not read its state answers empty: that is no baseline (every mod would count as new later).
