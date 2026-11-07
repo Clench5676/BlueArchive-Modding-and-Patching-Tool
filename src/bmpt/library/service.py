@@ -1511,13 +1511,92 @@ class ModLibrary:
 
         return integrity.replacements(files, targets, read_cabs=read_cabs)
 
-    def _replaced_parts(self, files: dict[str, Path], targets: list[Path], pin: Pin | None) -> set[Path]:
-        """Precise current complements, with the existing part-based preview for older releases."""
-        current = self._replacements(files, targets, pin)
-        older = {part_of(name) for name, path in files.items() if path not in current.values()}
-        return set(current) | {target for target in targets if part_of(target.name) in older}
+    def _asset_readers(self, targets: Sequence[Path], pin: Pin, inspection: integrity.Inspection | None = None,
+                       *, keys: bool = True) -> tuple[Callable[[Path], set[str]], Callable[[Path], set]]:
+        """Readers of a file's asset paths and (with ``keys``) asset names and types; a file of ``targets`` is read
+        from its official copy where there is one, else as it is. Identification by asset is evidence on top of the
+        name rules: a file they cannot read gives none, and the callers fall back to those rules."""
+        inspection = inspection or integrity.Inspection()
+        members, baselines = set(targets), {}
 
-    @_serialized
+        def baseline(path: Path) -> Path:
+            if path not in members:
+                return path
+            if path not in baselines:
+                try:
+                    baselines[path] = self._official_or_current(path, pin)
+                except ServiceError:
+                    baselines[path] = path
+            return baselines[path]
+
+        def paths(path: Path) -> set[str]:
+            try:
+                return set(inspection.inspect(baseline(path), allow_unknown=True).paths)
+            except Exception:  # noqa: BLE001 - any reader failure means no evidence
+                logger.debug("No asset paths read from %s", path.name, exc_info=True)
+                return set()
+
+        def asset_keys(path: Path) -> set:
+            if not keys:
+                return set()
+            try:
+                return set(inspection.keys(baseline(path)))
+            except Exception:  # noqa: BLE001 - any reader failure means no evidence
+                logger.debug("No asset keys read from %s", path.name, exc_info=True)
+                return set()
+
+        return paths, asset_keys
+
+    def _update_targets(self, sources: Sequence[Path], targets: Sequence[Path], pin: Pin,
+                        inspection: integrity.Inspection | None = None, *, keys: bool = True) -> list[Path] | None:
+        """The parts among ``targets`` that files of an older release update (``integrity.update_targets``: by asset
+        path, then, with ``keys``, by asset name and type); None when the sources show nothing to judge by."""
+        paths, asset_keys = self._asset_readers(targets, pin, inspection, keys=keys)
+        return integrity.update_targets(sources, targets, paths=paths, keys=asset_keys)
+
+    def _update_groups(self, older: dict[str, Path], targets: Sequence[Path], pin: Pin, log: LogFunc = no_log,
+                       inspection: integrity.Inspection | None = None) -> list[mod_install.ModGroup]:
+        """Install groups for files of older releases: per name prefix, the parts of the core that hold their assets,
+        whatever their dates (groups reaching a common part update it together); upstream's planner (same prefix,
+        newest date only) for the files whose assets no part of the core holds."""
+        grouped: dict[tuple[str, str], list[Path]] = {}
+        for path in older.values():
+            parsed = parse_filename(path.name)
+            grouped.setdefault((parsed.prefix, parsed.core), []).append(path)
+        planned: list[mod_install.ModGroup] = []
+        rest: list[Path] = []
+        for (prefix, core_name), paths in grouped.items():
+            found = self._update_targets(paths, targets, pin, inspection) if targets else None
+            if not found:
+                rest.extend(paths)
+                continue
+            group = mod_install.ModGroup(prefix, parse_filename(paths[0].name).category, core_name, [
+                mod_install.ModFilePlan(path, parse_filename(path.name), mod_install.InstallAction.UPDATE)
+                for path in paths], target_paths=sorted(found))
+            for other in [other for other in planned if set(other.target_paths) & set(group.target_paths)]:
+                planned.remove(other)
+                group.files[:0] = other.files
+                group.target_paths = sorted(set(other.target_paths) | set(group.target_paths))
+            planned.append(group)
+        if rest:
+            planned.extend(mod_install.plan_mod_install(rest, list(pin.dirs), log))
+        return planned
+
+    def _replaced_parts(self, files: dict[str, Path], targets: list[Path], pin: Pin | None) -> set[Path]:
+        """Precise current complements. Files of older releases are installed by updating the parts that hold their
+        assets, so they replace only the parts whose every asset path they carry (a part they update in part keeps its
+        other assets); without asset paths to judge by, the parts of the same prefix and part number."""
+        current = self._replacements(files, targets, pin)
+        older = [path for path in files.values() if path not in current.values()]
+        if older and pin:
+            rest = [target for target in targets if target not in current]
+            paths, _keys = self._asset_readers(rest, pin, keys=False)
+            carried = set().union(*(paths(path) for path in older))
+            if carried:
+                return set(current) | {target for target in rest if (held := paths(target)) and held <= carried}
+        parts = {part_of(name) for name, path in files.items() if path not in current.values()}
+        return set(current) | {target for target in targets if part_of(target.name) in parts}
+
     def direct_import(self, files: dict[str, Path], pin: Pin | None = None, *,
                       inspection: integrity.Inspection | None = None) -> dict | None:
         """Validate current parts and the resulting set before admitting a whole-file copy."""
@@ -2477,6 +2556,12 @@ class ModLibrary:
                 continue
             prefix = parse_filename(name).prefix
             candidates = [path for path in available if parse_filename(path.name).prefix == prefix]
+            # An asset path lives in one bundle of a build: it names the target among every date of the prefix and
+            # among the bundles of a group packed one asset per bundle (their names differ only in the CRC).
+            found = self._update_targets([source], candidates, pin, keys=False) if candidates else None
+            if found:
+                targets.update(found)
+                continue
             latest = {}
             for path in candidates:
                 slot = core_of(path.name)
@@ -3194,7 +3279,8 @@ class ModLibrary:
                     mod_install.ModFilePlan(path, parse_filename(name), mod_install.InstallAction.UPDATE)
                     for name, path in older.items()], target_paths=self._other_targets(older, pin)))
             else:
-                planned.extend(mod_install.plan_mod_install(list(older.values()), list(pin.dirs), log))
+                planned.extend(self._update_groups(older, [target for target in targets if target not in current],
+                                                   pin, log))
         if not planned or any(file.action not in (mod_install.InstallAction.DIRECT_REPLACE, mod_install.InstallAction.UPDATE)
                               for group in planned for file in group.files):
             raise ServiceError("game_file_not_found", variant=record["target"])
