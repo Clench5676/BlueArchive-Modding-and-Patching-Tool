@@ -452,7 +452,7 @@
 			"conversion_failed": "转换失败",
 			"conflict": "目标冲突",
 			"spine_version": "Spine 版本不兼容",
-			"mod_unity_version_mismatch": "Unity 版本不兼容",
+			"mod_unity_version_mismatch": "Unity 版本 {version}，需要 {expected}",
 			"mod_release_mismatch": "游戏版本不兼容",
 			"crc_fix_failed": "CRC 修复失败",
 			"export_empty": "没有可导出的 Mod",
@@ -855,6 +855,11 @@
 				"promptTail": "有可能同属{student}的{kind}Mod，是否一并添加到导入文件清单？",
 				"addTogether": "一并添加",
 				"fillLine": "- {student}的{kind}（{n}）"
+			},
+			"detail": {
+				"platform": "构建平台：{platforms}",
+				"unity": "Unity 版本：{versions}",
+				"unresolved": "未找到的依赖（{n}）："
 			}
 		},
 		"recovery": {

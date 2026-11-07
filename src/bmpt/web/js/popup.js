@@ -270,8 +270,8 @@ export function footerLabels(widgets, captions, options = {}) {
 //   buttons: [{label, primary, name}] instead of ok / cancel: named choices in a row (one centred, two as OK and Cancel,
 //            three or more share the available width); a node is Choice_<index> unless it names itself
 //   close: false for a popup that must be answered with a button (no close button)
-export function popupFrame(title, w, h, { ok = null, cancel = null, close = true, buttons = null, captionSite = null } = {}) {
-  ({ w, h } = frameGeometry(w, h));
+export function popupFrame(title, w, h, { ok = null, cancel = null, close = true, buttons = null, captionSite = null, compact = false } = {}) {
+  ({ w, h } = frameGeometry(w, h, { compact }));
   const t = clone(find(layouts.sortPopup, "Center"));
   const popup = find(t, "Popup");
   popup.children = popup.children.filter((c) => ["Base", "Btn"].includes(c.name));
@@ -1137,14 +1137,15 @@ function messageLines(lines, w, fitTogether, plain, assets = true) {
 // `scroll` in the result tells whether the lines scroll in the frame: asked for, or forced because the frame would
 // be taller than MSG.cap; each frame keeps its class minimum.
 export function messageLayout({ lines = [], width, ok = null, cancel = null, buttons = null, check = null,
-  fitTogether = [], scroll = false, plain = false, assets = true, height: minimumHeight = 0 } = {}) {
+  fitTogether = [], scroll = false, plain = false, assets = true, height: minimumHeight = 0, compact = false } = {}) {
   let size;
   if (width != null) size = frameClass(width === 2100 ? "L" : width);
   else size = ["S", "M", "L"].map(key => frameClass(key)).find(candidate =>
     messageLines(lines, candidate.w, fitTogether, plain, false).fitted.every(({ f }) => f.lines <= 6)) || POPUP_FRAME.L;
   const body = messageLines(lines, size.w, fitTogether, plain, assets), hasButtons = !!(ok || cancel || buttons?.length);
   const need = MSG.title + body.height + (check ? MSG.check : 0) + (hasButtons ? MSG.buttons : MSG.none);
-  const { w, h: height } = frameGeometry(size.w, Math.max(need, minimumHeight)), content = popupContent(w, height, { text: true, footer: hasButtons });
+  const { w, h: height } = frameGeometry(size.w, Math.max(need, minimumHeight), { compact }),
+    content = popupContent(w, height, { text: true, footer: hasButtons, compact });
   const visible = Math.max(0, Math.min(body.height, content.h - (check ? MSG.check : 0)));
   const scrolls = scroll || body.height > visible;
   const y0 = toNode(content, 1, { w, h: height, cx: 0, cy: FRAME_Y })[1];
@@ -1158,7 +1159,7 @@ export function messageLayout({ lines = [], width, ok = null, cancel = null, but
   return { body, width: w, height, visible, y0, content, checkBox, checkCaption, scroll: scrolls };
 }
 
-async function showMessage({ title = "", lines = [], ok = null, cancel = null, buttons = null, check = null, host: hostArg = "dialog", width, close: dismissable = true, confirmKeys = null, fitTogether = [], scroll = false, plain = false, captionSite = null }, resolve) {
+async function showMessage({ title = "", lines = [], ok = null, cancel = null, buttons = null, check = null, host: hostArg = "dialog", width, close: dismissable = true, confirmKeys = null, fitTogether = [], scroll = false, plain = false, captionSite = null, compact = false }, resolve) {
   const host = hostOf(hostArg);
   const layer = document.createElement("div");
   layer.className = "popup-layer";
@@ -1197,8 +1198,8 @@ async function showMessage({ title = "", lines = [], ok = null, cancel = null, b
     return;
   }
   try {
-    const { body, width: w, height, visible, y0, content, checkBox, scroll: scrolls } = messageLayout({ lines, width, ok, cancel, buttons, check: state, fitTogether, scroll, plain });
-    const t = popupFrame(title, w, height, { ok, cancel, buttons, close: dismissable, captionSite });
+    const { body, width: w, height, visible, y0, content, checkBox, scroll: scrolls } = messageLayout({ lines, width, ok, cancel, buttons, check: state, fitTogether, scroll, plain, compact });
+    const t = popupFrame(title, w, height, { ok, cancel, buttons, close: dismissable, captionSite, compact });
     const popup = find(t, "Popup");
     // The content starts at contentTop; the check row and footer remain outside a scrolling body.
     if (!scrolls) {
