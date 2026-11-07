@@ -317,9 +317,13 @@ def references_changed_objects(path: Path, changed: dict[str, set[int]], removed
     return walk(inspection.bundle(path, cache=False).env)
 
 
+#: Unity's built-in resource files: externals of many official bundles, shipped with the player, never in a bundle
+BUILTIN_RESOURCES = frozenset({"unity default resources", "unity_builtin_extra"})
+
+
 def missing_parts(effective: Contents) -> set[str]:
     """Unresolved references and Spine pairs, before install lookup and baseline comparison."""
-    missing = effective.references - effective.files
+    missing = effective.references - effective.files - BUILTIN_RESOURCES
     missing.update(effective.streams - effective.files)
     for data in effective.atlases.values():
         try:
