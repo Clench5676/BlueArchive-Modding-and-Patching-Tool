@@ -63,7 +63,7 @@ TARGET_CODES = {"no_matching_assets", "conversion_names", "no_target", "game_fil
 IMPORTABLE = {"convert", "update", "ready"}
 IMPORTED = {"imported", "updated"}
 #: cores whose imports fail for a known reason outside the target rule, with its backlog key
-KNOWN = {"ch0326_home": "BL-114: a single-channel FX texture cannot be encoded for the target"}
+KNOWN: dict[str, str] = {}
 
 
 @pytest.fixture(scope="module", autouse=True)
