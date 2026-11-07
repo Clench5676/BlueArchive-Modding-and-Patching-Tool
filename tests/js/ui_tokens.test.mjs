@@ -5,6 +5,8 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { row, toNode } from "../../src/bmpt/web/js/ui-grid.js";
 import * as Tokens from "../../src/bmpt/web/js/ui-tokens.js";
+import { stack as layoutStack } from "../../src/bmpt/web/js/ui-grid.js";
+const near = (a, b, eps = 1e-9) => assert.ok(Math.abs(a - b) < eps, `${a} != ${b}`);
 
 const WEB = new URL("../../src/bmpt/web/", import.meta.url);
 const read = (path) => readFileSync(new URL(path, WEB), "utf8");
@@ -264,8 +266,8 @@ const toolbarFor = (web) => new Function("NGUI", "T", "advanceOf", "glyphsOf", "
     .replaceAll("export ", "")}; return toolbarLayout;`)(NGUI, (key) => key.split(".").reduce((v, k) => v[k], web), NGUI.glyphWidth, NGUI.glyphWidth, NGUI.fitText, SORTS);
 const modalLayoutFor = (web) => {
   const source = read("js/student-hall-ui.js");
-  return new Function("Popup", "POPUP", "S", "toolbarLayout", "SMALL_BUTTON", `${source.slice(source.indexOf("export const modalContentBottom"), source.indexOf("// Keep a caller's centre"))
-    .replaceAll("export ", "")}; return {modalContentBottom, portraitPickerLayout, backgroundPickerBox, portraitRowLayout};`)({ ...footerHelpers, LIST_CARD_NAME: { fs: 34, lines: 2, padY: 22, pitch: 1.2 } }, Tokens.POPUP, 1920 / 2960, toolbarFor(web), Tokens.SMALL_BUTTON);
+  return new Function("Popup", "POPUP", "S", "toolbarLayout", "SPACE", "BUTTON", "layoutStack", `${source.slice(source.indexOf("export const modalContentBottom"), source.indexOf("// Keep a caller's centre"))
+    .replaceAll("export ", "")}; return {modalContentBottom, portraitPickerLayout, backgroundPickerBox, portraitRowLayout};`)({ ...footerHelpers, LIST_CARD_NAME: { fs: 34, lines: 2, padY: 22, pitch: 1.2 } }, Tokens.POPUP, 1920 / 2960, toolbarFor(web), Tokens.SPACE, Tokens.CONTROL.buttonS, layoutStack);
 };
 for (const locale of ["en-US", "th-TH", "zh-CN", "zh-TW", "ja-JP", "ko-KR"]) test(`Hall modal content clears the shared footer, keeping full rows in both search states in ${locale}`, () => {
   document.documentElement.lang = locale;
@@ -276,7 +278,7 @@ for (const locale of ["en-US", "th-TH", "zh-CN", "zh-TW", "ja-JP", "ko-KR"]) tes
     const [x, y, w, h] = box.list;
     assert.ok(h >= layout.portraitRowLayout().height, "one full grown portrait row, including the tallest name strip");
     assert.ok(box.toolbar.y - 70 * box.scale >= box.titleBottom - 1e-9);
-    assert.ok(y >= box.toolbar.y + 70 * box.scale);
+    assert.ok(y >= box.toolbar.y + 70 * box.scale - 1e-9);
     if (searching) assert.ok(y >= box.search[1] + 30 + 45 * S);
     assert.ok(y + h + Tokens.POPUP.clearance * S <= 540 - footerHelpers.footerTop(1300) * S + 1e-9);
     assert.deepEqual([x, w], [300, 1320]);
@@ -334,11 +336,11 @@ for (const locale of ["en-US", "th-TH", "zh-CN", "zh-TW", "ja-JP", "ko-KR"]) tes
 });
 
 const hallUiSource = read("js/student-hall-ui.js");
-const hallControls = new Function("NGUI", "Buttons", "Popup", "ready", "S", "SMALL_BUTTON", "captionMinimum", `${hallUiSource.slice(
+const hallControls = new Function("NGUI", "Buttons", "Popup", "ready", "S", "SMALL_BUTTON", "BUTTON", "BUTTON_FLOOR", "captionMinimum", `${hallUiSource.slice(
   hallUiSource.indexOf("export function buttonBox"), hallUiSource.indexOf("export async function caption"))
   .replaceAll("export ", "")}; return {buttonBox, buttonSize, button};`)(
     { ...NGUI, render: async (tree, host, options) => { host.tree = tree; host.origin = options.origin; return {}; } },
-    { smallButton }, { hit: () => ({ dataset: {} }) }, async () => {}, 1920 / 2960, Tokens.SMALL_BUTTON, Tokens.captionMinimum);
+    { smallButton }, { hit: () => ({ dataset: {} }) }, async () => {}, 1920 / 2960, Tokens.SMALL_BUTTON, Tokens.CONTROL.buttonS, Tokens.TYPE.body.min, Tokens.captionMinimum);
 test("Hall small buttons retain centres and widths, use the minimum width and token height", async () => {
   const S = 1920 / 2960, B = Tokens.SMALL_BUTTON;
   for (const box of [[730, 560, 460, 70], [0, 0, 100, 66], [100, 200, 300, 68]]) {
@@ -358,7 +360,7 @@ test("portrait rows and their virtual strips grow together for SMALL_BUTTON, kee
   const layout = modalLayoutFor(JSON.parse(readSync(new URL("en-US.json", LOCALE_DIR), "utf8")).webui);
   const row = layout.portraitRowLayout(), S = 1920 / 2960;
   const maxBar = 22 + 2 * 34 * 1.2;
-  assert.equal(row.height, 138 + (300 + 10 + maxBar) * .46 + 8 + Tokens.SMALL_BUTTON.h * S + 20 * S);
+  near(row.height, 138 + (300 + 10 + maxBar) * .46 + 8 + Tokens.CONTROL.buttonS.h * S + Tokens.SPACE.m * S);
   assert.equal(row.pitch, row.height + 4);
   assert.match(read("js/student-hall-picker.js"), /groups.length, rowLayout.pitch/);
   assert.match(read("js/student-hall-picker.js"), /rowPlate\(rowHost, \[1320, rowLayout.height\]/);
@@ -371,11 +373,11 @@ test("portrait Add and Select keep horizontal centres and widths below both one-
   for (const barH of [88, 22 + 2 * 34 * 1.2]) for (const fitAdd of [false, true]) {
     const y = -(300 + 10 + barH / 2), x = y * Math.tan(Math.PI / 18) + 4;
     const bar = { pos: [x, y], widgets: [{ sprite: "Common_Bg_Raius10px", w_: 298, h_: barH }] }, thumb = { widgets: [{ clipImage: "image" }] };
-    const card = new Function("Popup", "NGUI", "document", "pictureReadiness", "hitButton", "observePicture", "button", "retainedButton", "buttonSize", "retainedButtonSize", "SMALL_BUTTON", "S", "T",
+    const card = new Function("Popup", "NGUI", "document", "pictureReadiness", "hitButton", "observePicture", "button", "retainedButton", "buttonSize", "retainedButtonSize", "BUTTON", "S", "T",
       `${source.slice(source.indexOf("export async function card("), source.indexOf("export const MEMORIAL_QUEUE_PITCH")).replaceAll("export ", "")}; return card;`)(
       { listCard: () => ({ children: [bar] }) }, { find: (_, name) => name === "Bar" ? bar : thumb, render: async () => ({}) },
       { createElement: () => ({ style: {} }) }, () => {}, () => ({ dataset: {}, style: {} }), () => {}, draw,
-      () => assert.fail("portrait still retained"), hallControls.buttonSize, () => {}, Tokens.SMALL_BUTTON, S, (key) => key);
+      () => assert.fail("portrait still retained"), hallControls.buttonSize, () => {}, Tokens.CONTROL.buttonS, S, (key) => key);
     const row = modalLayoutFor({}).portraitRowLayout();
     await card({ append() {} }, { key: "x", full: "Name" }, { x: row.cardX, y: row.cardY, kind: "spr", scale: .46, onAdd() {}, fitAdd, addEnabled: false });
     const [left, top, w, h] = drawn.box;
@@ -383,7 +385,7 @@ test("portrait Add and Select keep horizontal centres and widths below both one-
     assert.ok(Math.abs(left + w / 2 - (row.cardX + x * .46)) < 1e-9);
     assert.equal(w, Tokens.SMALL_BUTTON.minW * S);
     assert.ok(Math.abs(top - (row.cardY + (300 + 10 + barH) * .46 + 8)) < 1e-9);
-    assert.ok(top + h <= row.height - 20 * S + 1e-9, "button clears the painted scrollbar band");
+    assert.ok(top + h <= row.height - Tokens.SPACE.m * S + 1e-9, "button clears the painted scrollbar band");
     assert.ok(left >= 0 && left + w <= 220, "hit box stays in its virtual cell");
     assert.equal(row.cardX + row.stripX, 105 + 240, "stage horizontal centre unchanged");
     assert.equal(row.cardY - 600 * .46 / 2, 0, "artwork stays in the row");
@@ -428,6 +430,39 @@ test("Hall first-run body and caption bounds scale together at supported window 
   }
 });
 
+
+// Design system, the Hall's toolbars and selectors (student-hall-ui.js): a Hall button is a buttonS control, buttons of one row share
+// one height and one caption size, and the portrait picker and its rows are stacks laid out flush.
+for (const locale of ["en-US", "zh-CN"]) test(`Hall buttons are buttonS controls with one caption size per row, and the picker and its rows are stacks in ${locale}`, () => {
+  const web = JSON.parse(readSync(new URL(`${locale}.json`, LOCALE_DIR), "utf8")).webui, S = 1920 / 2960, C = Tokens.CONTROL.buttonS;
+  document.documentElement.lang = locale;
+  for (const box of [[730, 560, 460, 70], [0, 0, 100, 66], [264, 74, 300, 100]]) {
+    const placed = hallControls.buttonBox(box);
+    assert.equal(placed[3], C.h * S, "a buttonS control's height");
+    assert.ok(placed[2] >= C.minW * S, "its least width");
+  }
+  assert.equal(hallControls.buttonBox([0, 0, 300, 100], 104 * S)[3], 104 * S, "a site whose neighbour sets the height keeps it");
+  // the buttons of one row share one size, within the body role's range
+  for (const [keys, width] of [[["hall.addPortraits", "hall.adjust"], 460], [["hall.add", "hall.added", "import.select"], (320 - 22) * .46], [["hall.remove"], 190]]) {
+    const captions = keys.map((key) => key.split(".").reduce((value, part) => value[part], web));
+    const size = hallControls.buttonSize(captions, width), fits = NGUI.fitGroup(captions, C.fs, Tokens.TYPE.body.min, Math.max(C.minW, width / S) - Tokens.SMALL_BUTTON.fitInset, 2, { maxH: C.h - Tokens.SMALL_BUTTON.boxInsetH });
+    assert.equal(new Set(fits.map((f) => f.fs)).size, 1, `${locale} ${keys}: one size`);
+    assert.equal(size, fits[0].fs);
+    assert.ok(size >= Tokens.TYPE.body.min && size <= C.fs);
+  }
+  // the picker: toolbar bar, search field (when open) and list are one stack, flush, from the title's foot
+  const layout = modalLayoutFor(web);
+  for (const searching of [false, true]) {
+    const box = layout.portraitPickerLayout({ sort: "name" }, searching), barTop = box.toolbar.y - 70 * box.scale, barBottom = box.toolbar.y + 70 * box.scale;
+    near(barTop, box.titleBottom);
+    if (searching) { near(box.search[1], barBottom); near(box.list[1], box.search[1] + 60); } else near(box.list[1], barBottom);
+    assert.deepEqual([box.toolbar.x, box.toolbar.width, box.search[0], box.search[2], box.list[0], box.list[2]], [300, 1320, 300, 1320, 300, 1320]);
+  }
+  // the portrait row: the artwork down to its name strip, 8 px, a buttonS body, then the scrollbar's 20-unit band (SPACE.m)
+  const row = layout.portraitRowLayout(), strip = 22 + 2 * 34 * 1.2;
+  near(row.height, row.cardY + (300 + 10 + strip) * .46 + 8 + C.h * S + Tokens.SPACE.m * S);
+  assert.equal(row.pitch, row.height + 4);
+});
 
 test("caption exceptions are exactly the three approved sites and apply only in Thai", () => {
   assert.deepEqual({...Tokens.CAPTION_EXCEPTIONS}, {

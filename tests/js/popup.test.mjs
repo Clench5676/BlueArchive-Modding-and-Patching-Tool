@@ -1683,8 +1683,8 @@ test("portrait spacing fits four tall cards at the standard width and selects ho
   for (const width of [1300, 1818, 2200]) {
     const { card, columns, pitch, overhang } = switchGrid("spr", width);
     assert.equal(card.h / card.w, 2.2);
-    assert.equal(pitch[0] - card.w, 48, "portrait gaps do not stretch to fill the viewport");
-    assert.equal(pitch[1] - card.h - card.bar, 48);
+    assert.equal(pitch[0] - card.w, 40, "portrait gaps do not stretch to fill the viewport (SPACE.xl: no prefab gives the cards a gap)");
+    assert.equal(pitch[1] - card.h - card.bar, 40);
     assert.ok(columns <= 4);
     assert.ok((columns - 1) * pitch[0] + card.w + overhang <= width - 80 + .001);
   }
@@ -2298,14 +2298,16 @@ for (const lang of ['en-US', 'zh-CN', 'zh-TW', 'ja-JP', 'ko-KR', 'th-TH']) {
         .map((el) => el.textContent.replace(/\n/g, '')), [ui.tour.title, ui.tour.open]);
       assert.equal(byPath('Log/Value').textContent, ui.settings.notSet);
       const row = NGUI.rect(byPath('Tours')), button = NGUI.rect(byPath('Tours/Btn_0'));
-      // UIPopup_Option_PC: existing row width/title/tag and ETCSetting/ButtonBg (402 x 136, right edge at x 700).
-      near(row[2], 1552 * S); near(row[3], 296 * S);
+      // UIPopup_Option_PC: the card (1552 wide, padding 58, title 17 from its top, dotted line 109 down) and ETCSetting/ButtonBg
+      // (402 x 136): the content box starts SPACE.m (20) under the dotted line, ends SPACE.l (28) above the foot and holds the
+      // button against its right edge, 58 in from the card's.
+      near(row[2], 1552 * S); near(row[3], (109 + 20 + 136 + 28) * S);
       const titleRect = NGUI.rect(title);
-      near(titleRect[0] - row[0], (1552 / 2 - 718.5) * S);
-      near(titleRect[1] - row[1], (55 - 76 / 2) * S);
-      near(titleRect[2], 1440 * S); near(titleRect[3], 76 * S);
-      near(button[0] - row[0], (1552 / 2 + 700 - 402) * S);
-      near(button[1] - row[1], 130 * S);
+      near(titleRect[0] - row[0], 58 * S);
+      near(titleRect[1] - row[1], 17 * S);
+      near(titleRect[2], (1552 - 2 * 58) * S); near(titleRect[3], 76 * S);
+      near(button[0] - row[0], (1552 - 58 - 402) * S);
+      near(button[1] - row[1], (109 + 20) * S);
       near(button[2], 402 * S); near(button[3], 136 * S);
       const tag = NGUI.rect(byPath('Tours/Title/TagDeco'));
       near(tag[2], 6 * S); near(tag[3], 45 * S);
@@ -3523,38 +3525,47 @@ for (const lang of LOCALE_LIST) test(`message line buttons are 136 high, as wide
   } finally { setStrings("en-US", Object.fromEntries(strings(english))); document.documentElement.lang = "en-US"; }
 });
 
-test("value rows lay their 402 x 136 buttons right-aligned 422 apart and wrap to a second line, never shrinking one", async () => {
-  const Settings = await import("../../src/bmpt/web/js/settings.js");
-  const { SMALL_BUTTON: B } = Tokens;
-  // beside the value: two buttons to a line (the value keeps its 460); under it: three (the line is 1418 wide)
-  assert.deepEqual([0, 1, 2, 3, 4, 5, 6, 7].map((n) => Settings.buttonLines(n)), [[], [1], [2], [2, 1], [2, 2], [2, 2, 1], [2, 2, 2], [2, 2, 2, 1]]);
-  assert.deepEqual([0, 1, 2, 3, 4, 5, 6, 7].map((n) => Settings.buttonLines(n, true)), [[], [1], [2], [3], [3, 1], [3, 2], [3, 3], [3, 3, 1]]);
+test("value rows lay their 402 x 136 buttons right-aligned 422 apart in the card's content box and wrap to a second line, never shrinking one", async () => {
+  const Rows = await import("../../src/bmpt/web/js/settings-rows.js");
+  const { SMALL_BUTTON: B, SPACE, PANEL } = Tokens;
+  // the content box: the 1552-wide card less its padding (58 each side), SPACE.m under the dotted line (109 down), SPACE.l above the foot
+  const left = -1552 / 2 + PANEL.padCard, right = 1552 / 2 - PANEL.padCard, top = 109 + SPACE.m;
+  // beside the value: two buttons to a line (the value keeps its four grid columns, 452); under it: three (the line is 1436 wide)
+  assert.deepEqual([0, 1, 2, 3, 4, 5, 6, 7].map((n) => Rows.buttonLines(n)), [[], [1], [2], [2, 1], [2, 2], [2, 2, 1], [2, 2, 2], [2, 2, 2, 1]]);
+  assert.deepEqual([0, 1, 2, 3, 4, 5, 6, 7].map((n) => Rows.buttonLines(n, true)), [[], [1], [2], [3], [3, 1], [3, 2], [3, 3], [3, 3, 1]]);
+  assert.equal(Rows.valueRoom(0), right - left, "a value alone takes the content box");
   for (const below of [false, true]) for (let n = 0; n <= 7; n++) for (const textH of [0, 49.4, 98.8, 148.2, 300]) {
-    const layout = Settings.valueRowLayout(n, textH, { below }), room = Settings.valueRoom(n, below);
+    const layout = Rows.valueGeometry(n, textH, { below }), room = Rows.valueRoom(n, below);
     assert.equal(layout.xs.length, n);
-    // right-aligned to x 700, 422 apart on each line
+    assert.equal(layout.room, room, "the value's room is what valueRoom says");
+    // right-aligned to the content box's right edge, 422 apart on each line
     let at = 0;
     layout.lines.forEach((count, line) => {
-      assert.equal(layout.xs[at + count - 1], 700 - 201, `${n} buttons, line ${line} ends at the right edge`);
-      for (let i = 1; i < count; i++) assert.equal(layout.xs[at + i] - layout.xs[at + i - 1], B.pitch);
+      near2(layout.xs[at + count - 1] + B.w / 2, right);
+      for (let i = 1; i < count; i++) near2(layout.xs[at + i] - layout.xs[at + i - 1], B.pitch);
       at += count;
-      // a line sits beside the value only when the value keeps its room
-      if (!below && line === 0) assert.ok(room >= 460 && -718 + room + 18 <= layout.xs[0] - 201 + 1e-9, `${n}: the value keeps ${room}`);
-      if (!below) assert.ok(layout.xs[at - count] - 201 >= layout.xs[0] - 201 - 1e-9, "a later line starts no further left than the first");
+      // a line sits beside the value only when the value keeps its four columns, SPACE.m clear of the buttons
+      if (!below && line === 0) assert.ok(room >= 452 && left + room + SPACE.m <= layout.xs[0] - B.w / 2 + 1e-9, `${n}: the value keeps ${room}`);
+      if (!below) assert.ok(layout.xs[at - count] - B.w / 2 >= layout.xs[0] - B.w / 2 - 1e-9, "a later line starts no further left than the first");
     });
-    // every button inside the row, 136 high, under its dotted line (h/2 - 109) and above the row's foot
+    // every button inside the row, 136 high, in the content box: under its top and above the row's foot
     for (let line = 0; line < layout.lines.length; line++) {
-      assert.ok(layout.ys[line] + B.h / 2 <= layout.h / 2 - 109 + 1e-9, `${n} buttons, below ${below}: under the dotted line`);
-      assert.ok(layout.ys[line] - B.h / 2 >= -layout.h / 2 + 19 - 1e-9, `${n} buttons, below ${below}: above the row's foot`);
-      if (line) near2(layout.ys[line - 1] - layout.ys[line], B.h + B.gap);
+      assert.ok(layout.ys[line] + B.h / 2 <= layout.h / 2 - top + 1e-9, `${n} buttons, below ${below}: under the dotted line`);
+      assert.ok(layout.ys[line] - B.h / 2 >= -layout.h / 2 + SPACE.l - 1e-9, `${n} buttons, below ${below}: above the row's foot`);
+      if (line) assert.ok(layout.ys[line - 1] - layout.ys[line] >= B.h + B.gap - 1e-9, "lines of buttons are SPACE.m apart at least");
     }
+    // the value starts on the content box's left edge, its centre on the block's
+    near2(layout.value[0], left); near2(layout.value[1], layout.midY);
+    assert.ok(layout.midY + layout.blockH / 2 <= layout.h / 2 - top + 1e-9);
     if (!below && n) {
       // the first line is centred on the value, which sits under the dotted line
-      assert.ok(layout.midY + layout.blockH / 2 <= layout.h / 2 - 130 + 1e-9);
-      assert.equal(layout.ys[0], layout.midY);
+      near2(layout.ys[0], layout.midY);
       assert.ok(layout.blockH >= B.h);
     }
-    if (below && n) assert.ok(layout.midY - layout.blockH / 2 >= layout.ys[0] + B.h / 2 + 31 - 1e-9, "the value clears the buttons by 31");
+    if (below && n) near2(layout.midY - layout.blockH / 2 - (layout.ys[0] + B.h / 2), SPACE.l);
+    // the card is exactly its content: SPACE.l under the last line
+    const lowest = Math.min(layout.midY - layout.blockH / 2, ...layout.ys.slice(below ? 0 : 1).map((y) => y - B.h / 2));
+    near2(lowest + layout.h / 2, SPACE.l);
   }
 });
 
