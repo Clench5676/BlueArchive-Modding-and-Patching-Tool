@@ -5,6 +5,7 @@ import logging
 import re
 import sys
 import threading
+import time
 import zipfile
 from types import SimpleNamespace
 from pathlib import Path
@@ -611,7 +612,7 @@ def test_review_consent_uses_cache_without_file_lock(reports, monkeypatch):
     state.set("library_dir", str(library))
     reports.services.library_dir = lambda: Path(state.get("library_dir"))
     data = reports.snapshot()
-    assert data["consent"] == {"uiAssets": True, "spine": False}
+    assert data["consent"] == {"uiAssets": True, "spine": False, "scan": None}
     assert data["libraryCounts"] == {"spr": 1, "lobby": 0, "model": 0, "other": 0}
 
 
@@ -746,3 +747,98 @@ def test_game_names_stay_and_log_heads_survive_asset_redaction():
         "2026-11-06 19:20:13,123 WARNING bmpt.gameassets.service: [asset].wav not found")
     text = diagnostics.private_text(f'Preview failed: {{"url": "/asset/model/ch0258.glb", "file": "{official}"}}', set())
     assert "/asset/model/ch0258.glb" in text and official in text
+
+
+# --- game files that differ from Steam's list (BL-019) ---
+
+def steam_install(tmp_path: Path, listed: dict[str, bytes], present: dict[str, bytes], name: str = "Steam") -> Path:
+    """A synthetic Steam library holding the game: Steam's app manifest and depot manifest list ``listed`` (GameData
+    names, or Preload ones given as ``Preload/<name>``), the resource folders hold ``present``."""
+    from test_steam_records import RESOURCE, app_manifest, depot_manifest
+
+    library = tmp_path / name
+    install = library / "steamapps" / "common" / "BlueArchive"
+    for folder in ("GameData", "Preload"):
+        (install / RESOURCE / folder / "Windows").mkdir(parents=True)
+    path = lambda n: install / RESOURCE / (f"Preload/Windows/{n[8:]}" if n.startswith("Preload/") else f"GameData/Windows/{n}")
+    for n, data in present.items():
+        path(n).write_bytes(data)
+    (library / "steamapps" / "appmanifest_3557620.acf").write_text(app_manifest())
+    (library / "depotcache").mkdir()
+    (library / "depotcache" / "3557621_7791673520712697115.manifest").write_bytes(depot_manifest(
+        {path(n).relative_to(install).as_posix(): data for n, data in listed.items()}))
+    return install
+
+
+@pytest.fixture
+def steam_reports(reports):
+    """The reports of services with the Check Game Files consent and the installs the switch knows."""
+    s = reports.services
+    s.state.diagnostic_state = lambda: {"consent": {"uiAssets": True, "spine": False, "scan": True}, "libraryDir": None}
+    s.installs = []
+    s.snapshot = SimpleNamespace(status=lambda: {"installs": s.installs})
+    from bmpt import steam_records
+    s.steam_files = steam_records.OfficialFiles()
+    return reports
+
+
+def test_report_lists_the_game_files_that_differ_from_steams_list(steam_reports, tmp_path):
+    same, changed, missing = "one_assets_all_1.bundle", "two_assets_all_2.bundle", "three_mxload-2024_scenes_all_3.bundle"
+    install = steam_install(tmp_path, {same: b"same", changed: b"orig", missing: b"gone",
+                                       "Preload/pre_assets_all_4.bundle": b"pre"},
+                            {same: b"same", changed: b"modded", "Preload/pre_assets_all_4.bundle": b"pre",
+                             "old-2023_assets_all_9.bundle": b"old", "My Private Mod.bundle": b"mod",
+                             "notes.txt": b"x", f"{same}.backup": b"x"})
+    other = tmp_path / "Other" / "BlueArchive"  # an install without Steam's list is left out
+    other.mkdir(parents=True)
+    steam_reports.services.installs = [{"id": "a1b2c3d4e5f6", "server": "global", "folder": str(install)},
+                                       {"id": "0123456789ab", "server": "global", "folder": str(other)}]
+    result = steam_reports.generate()
+    data = json.loads(contents(result)["report.json"])
+    assert data["consent"]["scan"] is True
+    assert data["gameFiles"] == [{
+        "install": "a1b2c3d4e5f6", "server": "global", "listed": 4, "present": 5,
+        "sizeChanged": {"count": 1, "names": [changed]},
+        "missing": {"count": 1, "names": [missing]},  # Steam's names stay, whatever their form
+        "notListed": {"count": 2, "names": ["old-2023_assets_all_9.bundle"]}}]  # other names are left out
+    text = "\n".join(contents(result).values())
+    assert "Private" not in text and str(tmp_path) not in text and "BlueArchive" not in text
+
+
+def test_report_bounds_the_names_of_each_group_but_counts_them_all(steam_reports, tmp_path):
+    listed = {f"m{i:03}_assets_all_{i}.bundle": b"x" for i in range(105)}
+    install = steam_install(tmp_path, listed, {})
+    steam_reports.services.installs = [{"id": "a1b2c3d4e5f6", "server": "global", "folder": str(install)}]
+    (game,) = steam_reports.snapshot()["gameFiles"]
+    assert game["missing"]["count"] == 105 and game["present"] == 0
+    assert game["missing"]["names"] == sorted(listed)[:diagnostics.GAME_FILE_NAMES]
+
+
+def test_report_reads_no_game_files_without_the_check_game_files_consent(steam_reports, tmp_path, monkeypatch):
+    install = steam_install(tmp_path, {"a_assets_all_1.bundle": b"a"}, {})
+    s = steam_reports.services
+    s.installs = [{"id": "a1b2c3d4e5f6", "server": "global", "folder": str(install)}]
+    s.state.diagnostic_state = lambda: {"consent": {"uiAssets": True, "spine": False, "scan": None}, "libraryDir": None}
+    monkeypatch.setattr(s.steam_files, "bundles", lambda folder: pytest.fail("Steam's list read"))
+    monkeypatch.setattr(diagnostics, "differing_game_files", lambda *args: pytest.fail("game folder read"))
+    data = steam_reports.snapshot()
+    assert data["gameFiles"] is None and data["consent"]["scan"] is None
+
+
+def test_report_game_files_use_the_shared_steam_list_and_stay_within_their_bound(steam_reports, tmp_path, monkeypatch):
+    install = steam_install(tmp_path, {"a_assets_all_1.bundle": b"a"}, {"a_assets_all_1.bundle": b"a"})
+    s = steam_reports.services
+    s.installs = [{"id": "a1b2c3d4e5f6", "server": "global", "folder": str(install)}]
+    read = []
+    original = s.steam_files.bundles
+    monkeypatch.setattr(s.steam_files, "bundles", lambda folder: read.append(folder) or original(folder))
+    assert steam_reports.snapshot()["gameFiles"][0]["sizeChanged"] == {"count": 0, "names": []}
+    assert read == [install]
+    # a read that does not finish leaves the field empty after its bound, and the report is made
+    release = threading.Event()
+    monkeypatch.setattr(diagnostics, "differing_game_files", lambda *args: release.wait(5) and {})
+    monkeypatch.setattr(diagnostics, "GAME_FILES_TIMEOUT", 0.05)
+    started = time.monotonic()
+    assert steam_reports.snapshot()["gameFiles"] is None
+    assert time.monotonic() - started < 0.5
+    release.set()

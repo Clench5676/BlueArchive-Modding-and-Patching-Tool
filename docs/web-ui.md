@@ -2884,6 +2884,17 @@ library counts, boot timings, and the last failed job's error code/parameters. B
 in the data directory, with the same destination fallback chain on failure, at most once per minute, retaining three automatic archives with an `-auto` suffix. User-created reports are retained. A bounded redacted snapshot of
 the latest exception and its environment is embedded in later reports; archives are never nested.
 
+With the Check Game Files consent (read from the in-memory state, like the other consents, and reported as
+`consent.scan`), `gameFiles` lists each known install that has Steam's file list (`steam_records.OfficialFiles`,
+the cache the library's judgements share): the install's `id` and `server`, the bundle counts `listed` (Steam's list)
+and `present`, and three groups compared by name and size against Steam's list over `GameData/Windows` and
+`Preload/Windows`: `sizeChanged`, `missing` (listed but not there) and `notListed`. Each group has its full `count` and
+at most 100 sorted `names`; Steam's names are the game's own, and of the bundles Steam does not list only names in the
+game's own form appear. No paths, no hashing (stat only), never the library lock: the installs come from the switch's
+snapshot. The read starts first and is bounded at 0.4 s within the collection deadline; without the consent, before
+the installs are known or when the read runs out of time, `gameFiles` is `null`, and an install without Steam's list is
+left out.
+
 Recovery code, its six-locale strings and the shared built-in fallback stylesheet are embedded before external CSS and the module graph. HTML delivery does not
 wait for game UI cache detection; the normal loading code adopts cached/game styling after `app.info`. During boot,
 uncaught errors, rejected promises and failed scripts/styles show a built-in recovery page immediately. Media
