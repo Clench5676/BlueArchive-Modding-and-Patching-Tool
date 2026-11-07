@@ -149,4 +149,6 @@ toolbars of the Student Hall, its framing, the roster and photography. Values th
 the code (the Hall's 104-unit icon row, `CONTROL.toolbar`; the roster tools' 116; Settings' cards). The old `POPUP` /
 `FOOTER` tokens remain only where a screen still reads them.
 
-Not yet on the system: the detail page's composed panels and the tool pages.
+Not yet on the system: the detail page's composed parts (in progress). The tool pages (CRC Tool, Asset Packer, Asset
+Extractor, ADB Push, Tools) are upstream's classic windows, not web screens: they join the system when they move into
+the web UI.
