@@ -21,7 +21,7 @@ from bmpt.errors import ServiceError
 from bmpt.gameassets import AssetCache, GameAssets, model, service
 from bmpt.gameassets.spine import extract_spine
 from bmpt.library import portrait_edit
-from ba_modding_toolkit.models import AssetType
+from ba_modding_toolkit.models import AssetType, SaveOptions
 from ba_modding_toolkit.searching import get_search_dirs
 from ba_modding_toolkit.utils import no_log
 
@@ -146,6 +146,65 @@ def test_a_texture_still_decodes_to_the_same_pixels(tmp_path):
 def test_required_size_matches_what_unitypy_encodes(texture_format, size):
     data, encoded = Texture2DConverter.image_to_texture2d(Image.new("RGBA", size), texture_format)
     assert guard.required_size(*size, encoded) == len(data)
+
+
+# --- encoding single-channel images (BL-114) -----------------------------------------------------------------------
+
+def bc4_image(width=12, height=9, seed=7):
+    """An L image as UnityPy decodes a BC4 texture (the format of the game's single-channel FX textures)."""
+    rgba = Image.new("RGBA", (width, height))
+    rgba.putdata([((x * 31 + y * 17 + seed) % 256,) * 3 + (255,) for y in range(height) for x in range(width)])
+    data, encoded = Texture2DConverter.image_to_texture2d(rgba, TF.BC4)
+    image = guard.texture_image(texture(width, height, encoded, data))
+    assert image.mode == "L"
+    return image
+
+
+def test_unitypy_still_cannot_pack_an_l_image():
+    # the reason encodable_image exists: drop it once UnityPy packs the L images it decodes
+    with pytest.raises(ValueError, match="No packer found from L"):
+        Texture2DConverter.image_to_texture2d(bc4_image(), TF.BC4)
+
+
+@pytest.mark.parametrize("texture_format", [TF.BC4, TF.Alpha8, TF.R8, TF.EAC_R, TF.RGBA32, TF.RGB24, TF.DXT1,
+                                            TF.DXT5, TF.BC7, TF.ETC2_RGBA8, TF.ASTC_RGBA_6x6], ids=lambda f: f.name)
+def test_a_single_channel_image_encodes_into_every_target_format(texture_format):
+    source = bc4_image()
+    data, encoded = Texture2DConverter.image_to_texture2d(guard.encodable_image(source, texture_format), texture_format)
+    decoded = guard.texture_image(texture(*source.size, encoded, data))
+    assert decoded.size == source.size
+    channel = {TF.BC4: "L", TF.Alpha8: "A", TF.R8: "R", TF.RGBA32: "R", TF.RGB24: "R"}.get(texture_format)
+    if channel is not None:
+        # lossless targets keep the channel exactly, BC4 included (a decoded BC4 block encodes back to itself)
+        assert decoded.getchannel(channel).tobytes() == source.tobytes()
+
+
+def test_only_l_images_are_changed():
+    for mode in ("RGBA", "RGB"):
+        image = Image.new(mode, (4, 4))
+        assert guard.encodable_image(image, TF.BC4) is image
+    single = Image.new("L", (4, 4), 9)
+    assert guard.encodable_image(single, TF.RGBA32).getpixel((0, 0)) == (9, 9, 9, 255)
+    assert guard.encodable_image(single, TF.Alpha8).getpixel((0, 0)) == (0, 0, 0, 9)
+
+
+def test_a_bc4_texture_from_a_mod_applies_to_a_bc4_texture(tmp_path):
+    source, target = bc4_image(seed=7), bc4_image(seed=90)
+    write_bundle(tmp_path / "mod.bundle", {}, {"noise": source.convert("RGBA")}, skeleton=None,
+                 texture_format=TF.BC4)
+    write_bundle(tmp_path / "game.bundle", {}, {"noise": target.convert("RGBA")}, skeleton=None,
+                 texture_format=TF.BC4)
+    patch, _ = Bundle.load(tmp_path / "mod.bundle").extract_patch({"Texture2D"}, "name_type")
+    assert patch[("noise", "Texture2D")].mode == "L"
+    game = Bundle.load(tmp_path / "game.bundle")
+    result = game.apply_patch(patch, "name_type")
+    assert result.applied_count == 1
+    assert game.save(tmp_path / "out.bundle", SaveOptions(perform_crc=False, compression="none"))[0]
+    written = Bundle.load(tmp_path / "out.bundle")
+    (obj,) = [obj for obj in written.env.objects if obj.type == AssetType.Texture2D]
+    data = obj.read()
+    assert TF(data.m_TextureFormat) == TF.BC4
+    assert guard.texture_image(data).tobytes() == source.tobytes()
 
 
 @pytest.mark.parametrize("size", [(0, 4), (4, 0), (0, 0), (-4, 4), (4, -1), (16385, 1), (1, 16385), (None, 4),
