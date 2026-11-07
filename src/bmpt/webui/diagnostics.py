@@ -185,7 +185,9 @@ def import_row(entry: dict, secrets: set[str]) -> dict:
                              "part": parse_filename(str(file.get("path", "")).replace("\\", "/").rsplit("/", 1)[-1]).res_type}
                             for file in files if isinstance(file, dict)],
                   "source": source, "target": target, "conversionRoute": route,
-                  "selected": entry.get("selected"), "libraryId": entry.get("libraryId")}, secrets)
+                  "selected": entry.get("selected"), "libraryId": entry.get("libraryId"),
+                  # what the check read of the files (build target, Unity, own CABs) and the CABs nothing held
+                  "bundles": entry.get("bundles"), "missing": entry.get("missing")}, secrets)
 
 
 def import_snapshot(value: Any, secrets: set[str]) -> dict | None:
