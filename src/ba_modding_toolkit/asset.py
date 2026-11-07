@@ -13,7 +13,7 @@ from .models import (
     FontAssetData,
 )
 from .spine import SkelConverter, check_skel_animation_diff
-from bmpt.texture_guard import texture_image
+from bmpt.texture_guard import encodable_image, texture_image
 from .utils import no_log
 
 
@@ -237,7 +237,7 @@ def apply_asset(obj, content: AssetContent, ctx: ApplyContext, *, data=None) -> 
                 and current_image.size == new_image.size
                 and current_image.tobytes() == new_image.tobytes()):
             return ApplyOutcome(applied=False)
-        data.image = new_image
+        data.image = encodable_image(new_image, data.m_TextureFormat)
         data.save()
         return ApplyOutcome(applied=True)
 
