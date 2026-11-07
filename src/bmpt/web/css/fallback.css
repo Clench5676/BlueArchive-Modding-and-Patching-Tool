@@ -12,6 +12,8 @@
 .screen.message[hidden] { display: none; }
 .screen.message h2, #bamt-recovery h1 { font: var(--w) 56px/1.2 var(--font); color: #2d4664; }
 .screen.message p, #bamt-recovery p { font: var(--w) 32px/1.4 var(--font); color: #5b6f86; }
+/* a hint of several lines (the plain Check Game Files consent): its own lines, centred, inside the stage */
+.screen.message p { max-width: 1500px; white-space: pre-line; text-align: center; }
 .message-actions { display: flex; gap: 28px; margin-top: 18px; }
 /* the fallback button, one look with app.css's .plain-line-button: #8de4ff with #314665 ink on the game's Raius10px corner (6.49 px at
    the stage's scale), flat: no skew and no shadow */

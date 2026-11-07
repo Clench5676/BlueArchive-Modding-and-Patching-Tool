@@ -659,7 +659,7 @@ class Services:
 
     def set_scan_consent(self, granted: bool) -> None:
         """Save consent; granted, request a scan; withdrawn, scans stop and the entries empty."""
-        self.state.set("scan_consent", bool(granted))
+        self.state.set_scan_consent(bool(granted))
         if granted:
             self.request_scan()
         else:
@@ -1200,7 +1200,8 @@ class Services:
             find_classic=self.classic.orphan, profiles_seen=self.profiles_seen,
             on_change=lambda state: self.publish_state(), publish=self.events.publish,
             request_scan=self.request_scan, active=lambda: self.events.listeners() > 0 or self.tray_shown,
-            own_classic=self._own_classic, on_classic_closed=self._orphan_closed, on_steam_idle=self._steam_idle)
+            own_classic=self._own_classic, on_classic_closed=self._orphan_closed, on_steam_idle=self._steam_idle,
+            steam_allowed=self.scan_allowed)
         if run:
             self.watch.start()
 

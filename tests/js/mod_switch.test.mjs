@@ -674,11 +674,13 @@ test("the scan consent renders the two replacement sections in every locale and 
       await drawn(consent, "ok");
       assert.ok(consent.classList.contains("over"), "over Settings");
       assert.equal(called("mods.consent").length, before + index, "nothing granted yet");
-      for (const [name, section] of [["Checked", ui.mods.scan.will], ["Never", ui.mods.scan.willNot]]) {
+      // Checked: Steam's records first, then the file checks; Never: one item
+      for (const [name, section, items] of [["Checked", ui.mods.scan.will, [ui.mods.scan.will.steam, ui.mods.scan.will.items]],
+        ["Never", ui.mods.scan.willNot, [ui.mods.scan.willNot.items]]]) {
         const part = (path) => walk(consent).find((e) => e.dataset.path === `Center/Popup/${name}/${path}`);
         assert.equal(part("Title_Bg/Label").textContent, section.label, lang);
-        assert.equal(part("Item_0").textContent.replaceAll("\n", " ").replaceAll(" ", ""), section.items.replaceAll(" ", ""), lang);
-        assert.equal(part("Item_1"), undefined, "one item per section");
+        items.forEach((text, i) => assert.equal(part(`Item_${i}`).textContent.replaceAll("\n", " ").replaceAll(" ", ""), text.replaceAll(" ", ""), lang));
+        assert.equal(part(`Item_${items.length}`), undefined, `${items.length} items in ${name}`);
       }
       assert.ok(press("Escape").defaultPrevented, "it must be answered");
       assert.equal(consent.hidden, false);

@@ -978,7 +978,7 @@ def test_a_new_library_prunes_its_kept_originals_once(tmp_path, monkeypatch):
     monkeypatch.setattr("bmpt.library.ModLibrary", Library)
     s = Services(Settings(tmp_path / "config.toml"), tmp_path, state=UiState(tmp_path / "webui.json"),
                  cache=object(), game=FakeGame(), catalog=FakeCatalog())
-    s.state.set("scan_consent", True)
+    s.state.set_scan_consent(True)
     try:
         library = s.library
         assert s.library is library
@@ -993,7 +993,7 @@ def test_a_new_library_prunes_its_kept_originals_once(tmp_path, monkeypatch):
 @pytest.mark.parametrize("enabled", [True, False])
 def test_startup_maintenance_waits_for_reveal_and_respects_the_preference(services, monkeypatch, enabled):
     calls, finished = [], threading.Event()
-    services.state.set("scan_consent", enabled)
+    services.state.set_scan_consent(enabled)
     monkeypatch.setattr(services, "start_watch", lambda: None)
     monkeypatch.setattr(services.scanner, "request", lambda *args: calls.append("scan"))
     monkeypatch.setattr(services.library, "prune", lambda: calls.append("prune") or [])

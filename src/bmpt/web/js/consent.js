@@ -1,9 +1,11 @@
 // First-launch consent for caching light game assets. Before consent the UI reads every game asset straight from the
-// install (in memory). After consent only light UI assets (atlas sprites, UI textures, prefab layouts) are cached in
-// the user data directory; portraits, memorial lobbies, models, voices and backgrounds are always read from the game
-// files and never copied.
+// install (in memory). After consent light UI assets (atlas sprites, UI textures, prefab layouts) are cached in the user
+// data directory; previews and exports of portraits, memorial lobbies, backgrounds and 3D models follow the Preview
+// Cache setting (on by default, bounded); voices are always read from the game files.
 // Also the scan consent (scan()): whether the app may check the game files on its own (the start and the end of each
-// portrait and memorial lobby file), asked once like the asset consent; Settings' Mods tab asks again or withdraws it.
+// portrait and memorial lobby file) and read Steam's records on this device (the install location to find the game,
+// the update status, the file lists that tell official files); asked once like the asset consent, again when it came to
+// cover more; Settings' Mods tab asks again or withdraws it.
 import { notify } from "./popup.js";
 import * as NGUI from "./ngui.js";
 import * as Buttons from "./game-buttons.js";
@@ -38,7 +40,7 @@ export function assetLayout(cacheDir) {
   const pathH = pathItem.h;
   const pathRow = row([{ ...pathItem, w: room }, { w: bw, h: SMALL_BUTTON.h }],
     { x: SPACE.m, w: sectionW - 2 * SPACE.m, gap: SPACE.m, justify: "center" });
-  const [, cachedBodyH] = section("Cached", 0, T("consent.cached.label"), [T("consent.cached.items")], "#2d4c72", sectionW);
+  const [, cachedBodyH] = section("Cached", 0, T("consent.cached.label"), [T("consent.cached.items"), T("consent.cached.previews")], "#2d4c72", sectionW);
   const [, neverH] = section("Never", 0, T("consent.never.label"), [T("consent.never.items"), T("consent.never.how")], COLOUR.neverBar, sectionW);
   const cachedH = cachedBodyH + SPACE.m + pathRow.h;
   const note = textItem(NGUI, T("consent.note"), TYPE.caption, { maxW: w - 2 * SPACE.xxxl, lines: 3 });
@@ -61,7 +63,7 @@ async function draw(host, cacheDir, native, resolve) {
   const layout = assetLayout(cacheDir);
   // the shared popup frame: no close button, to be answered with one of its two buttons
   const { tree: t, popup } = consentFrame(T("consent.title"), layout.w, layout.h, [T("consent.no"), T("consent.yes")]);
-  const [cached] = section("Cached", layout.cachedTop, T("consent.cached.label"), [T("consent.cached.items")], "#2d4c72", layout.sectionW);
+  const [cached] = section("Cached", layout.cachedTop, T("consent.cached.label"), [T("consent.cached.items"), T("consent.cached.previews")], "#2d4c72", layout.sectionW);
   cached.children[0].widgets[0].h_ = layout.cachedH;
   const { to } = layout;
   cached.children.push(
@@ -224,7 +226,7 @@ function finishScan(host) {
 async function drawScan(host, over, resolve) {
   await Popup.frameReady();
   const W = POPUP_FRAME.L.w, panelW = W - 2 * SPACE.xl;
-  const [checked, hc] = section("Checked", 0, T("mods.scan.will.label"), [T("mods.scan.will.items")], "#2d4c72", panelW);
+  const [checked, hc] = section("Checked", 0, T("mods.scan.will.label"), [T("mods.scan.will.steam"), T("mods.scan.will.items")], "#2d4c72", panelW);
   const [never, hn] = section("Never", 0, T("mods.scan.willNot.label"), [T("mods.scan.willNot.items")], COLOUR.neverBar, panelW);
   const note = textItem(NGUI, T("mods.scan.note"), TYPE.caption, { maxW: W - 2 * SPACE.xxxl, lines: 3 });
   const parts = [{ w: panelW, h: hc }, { w: panelW, h: hn }, { w: note.w, h: note.h }];
@@ -256,4 +258,17 @@ async function drawScan(host, over, resolve) {
     }, { name: caption, action: granted ? "ok" : "cancel", z: 2100 });
   }
   host.replaceChildren(...next.childNodes);
+}
+
+// detectGame(region, ask): the game folders Steam's records name for a region. Finding them reads those records, so
+// without the Check Game Files consent the server refuses (scan_off): ask() shows the consent popup, and only an Allow
+// searches; declined, nothing is searched (null).
+export async function detectGame(region, ask) {
+  try {
+    return await rpc("settings.detectGame", { region });
+  } catch (err) {
+    if (err?.code !== "scan_off") throw err;
+    if (!(await ask())) return null;
+    return rpc("settings.detectGame", { region });
+  }
 }
