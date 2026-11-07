@@ -920,15 +920,25 @@ class BatchImport:
                 if entry["kind"] == "other":
                     targets.update(library._other_targets(older, pin))
                 else:
-                    # Preserve the update path for pre-split bundles and older releases.
+                    # A core keeps its parts under several dates, so the parts holding the files' assets are looked
+                    # up over every date first, as Enable and Apply do (ModLibrary._update_groups); the newest date
+                    # of a prefix stays the rule for files whose assets no part holds (pre-split bundles).
+                    grouped: dict[str, list[Path]] = {}
+                    for path in older.values():
+                        grouped.setdefault(parse_filename(path.name).prefix, []).append(path)
                     latest = {}
                     for path in live:
                         parsed = parse_filename(path.name)
                         latest[parsed.prefix] = max(latest.get(parsed.prefix, ""), parsed.date)
-                    matched, _ = _asset_match(list(older.values()), [baseline[p] for p in live
-                        if parse_filename(p.name).date == latest[parse_filename(p.name).prefix]],
-                        log, keys=inspection.keys)
-                    targets.update(p for p in live if baseline[p] in matched)
+                    for prefix, paths in grouped.items():
+                        found = library._update_targets(paths, live, pin, inspection)
+                        if found:
+                            targets.update(found)
+                            continue
+                        matched, _ = _asset_match(paths, [baseline[p] for p in live
+                            if parse_filename(p.name).date == latest[parse_filename(p.name).prefix]],
+                            log, keys=inspection.keys)
+                        targets.update(p for p in live if baseline[p] in matched)
             targets = [path for path in live if path in targets]
             inferred = entry["source"] is None
             choices = (mod_origin.candidates(names, selected, official_contents, entry["target"]) if inferred
@@ -963,7 +973,10 @@ class BatchImport:
                         failure = error.code
                 if failure:
                     if inferred:
-                        last_failure = failure
+                        # A guessed server whose file names the install lacks says less than why a guess with
+                        # matching names failed, so that reason is kept.
+                        if last_failure in (None, "conversion_names"):
+                            last_failure = failure
                         continue
                     raise ServiceError(failure)
                 if rebuild or inferred or (candidate.source_override or {}).get("detected"):
