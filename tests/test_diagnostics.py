@@ -749,6 +749,35 @@ def test_game_names_stay_and_log_heads_survive_asset_redaction():
     assert "/asset/model/ch0258.glb" in text and official in text
 
 
+
+@pytest.mark.parametrize("official", [
+    "assets-_mx-characters-ch0258-_mxdependency-2024-11-18_004_assets_all_3218880749.bundle",
+    "db_02_beachstage_01_mxload-2024-11-18_scenes_all_2025532204.bundle",
+    "assets-_mx-scenes-raid-netzach's-_mxdependency-meshes-2026-04-06_assets_all_2240899571.bundle",
+    "6befbbb5c811cb1575f22145d4f0a954_unitybuiltinshaders_3925052273.bundle",
+    "db_02_beachstage_01_mxload-2024-11-18_scenes_all_2025532204.bundle.backup"])
+def test_every_form_of_official_bundle_name_stays(official):
+    # BL-109: scene bundles, names with an apostrophe and Unity's built-in shaders are the game's own names too
+    assert diagnostics.private_text(f"Refused {official} in D:/Games", set()) == f"Refused {official} in D:/Games"
+    assert diagnostics.private_text(f"file='{official}'", set()) == f"file='{official}'"  # the quotes stay outside
+    assert diagnostics.clean({"file": f"D:/Private Folder/{official}"}, set()) == {"file": official}
+    assert diagnostics.clean({"files": f"{official}, {official}"}, set()) == {"files": f"{official}, {official}"}
+
+
+@pytest.mark.parametrize("private", ["Private Mod_scenes_all.bundle", "Private_Mod's_scenes_all_x.bundle",
+                                     "Private_unitybuiltinshaders_1.bundle", "'Private Mod.bundle'"])
+def test_names_outside_the_games_forms_stay_redacted(private):
+    assert "Private" not in diagnostics.private_text(f"Refused {private}", set())
+    assert diagnostics.clean({"file": private.strip("'")}, set()) == {"file": "[asset].bundle"}
+
+
+def test_game_name_search_stays_linear_on_long_names_with_apostrophes():
+    # A mod's names reach the logs; a match may not restart after each apostrophe inside a word.
+    started = time.monotonic()
+    diagnostics.private_text("a'" * 200_000, set())
+    assert time.monotonic() - started < 2
+
+
 # --- game files that differ from Steam's list (BL-019) ---
 
 def steam_install(tmp_path: Path, listed: dict[str, bytes], present: dict[str, bytes], name: str = "Steam") -> Path:
