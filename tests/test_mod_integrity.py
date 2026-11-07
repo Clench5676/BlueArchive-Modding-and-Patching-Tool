@@ -3,6 +3,7 @@
 import base64
 from copy import deepcopy
 import json
+import os
 import struct
 from pathlib import Path
 from types import SimpleNamespace
@@ -739,3 +740,21 @@ def test_pre_split_older_bundle_keeps_all_update_targets_in_add_and_batch(checks
     assert all(file.action == service.mod_install.InstallAction.UPDATE for file in group.files)
     assert set(group.target_paths) == set(targets)
     assert any(set(candidates) == set(targets) for _, candidates in upstream_matches)
+
+
+@pytest.mark.skipif(not Path(os.environ.get("BAMT_TEST_GAME_DIR") or "/nonexistent").is_dir(),
+                    reason="Set BAMT_TEST_GAME_DIR to a verified official view")
+def test_a_bundle_summary_gives_what_the_check_read_and_loads_nothing_new():
+    from bmpt.library import integrity
+
+    folder = Path(os.environ["BAMT_TEST_GAME_DIR"]) / "BlueArchive_Data/StreamingAssets/PUB/Resource/GameData/Windows"
+    path = next(folder.glob("assets-_mx-spinecharacters-ch0100_spr-_mxdependency-*_assets_all_*.bundle"))
+    inspection = integrity.Inspection()
+    assert inspection.summary(path) is None  # nothing read yet, and nothing read for it
+    assert path not in inspection._bundles
+    inspection.inspect(path)
+    summary = inspection.summary(path)
+    assert summary["platforms"] == ["StandaloneWindows64"]
+    assert summary["unity"] and all(version.count(".") == 1 for version in summary["unity"])
+    assert summary["cabs"] and all(name.startswith("cab-") for name in summary["cabs"])
+    assert isinstance(summary["references"], int)

@@ -18,6 +18,10 @@ from ba_modding_toolkit.models import AssetKey, AssetType, REPLACEABLE_ASSET_TYP
 from ba_modding_toolkit.spine import get_skel_version
 
 
+#: The own CABs a bundle summary names (a bundle holds one serialized file, two with a scene)
+SUMMARY_CABS = 10
+
+
 def basename(name: str) -> str:
     return name.replace("\\", "/").rsplit("/", 1)[-1].lower()
 
@@ -120,6 +124,27 @@ class Inspection:
             self._metadata[path] = metadata(path, inspection=self)
         self.check(path)
         return self._metadata[path]
+
+    def summary(self, path: Path) -> dict | None:
+        """What this snapshot has read of a bundle, for error reports and logs: its build targets, Unity versions, own
+        files (its CABs and their stream files, at most SUMMARY_CABS) and how many other CABs or stream files it
+        references. Reads the serialized-file headers of a bundle already loaded; loads nothing else."""
+        contents = self._contents.get(path)
+        meta = self._metadata.get(path)
+        if meta is None and path in self._bundles:
+            try:
+                meta = self.metadata(path)
+            except (ServiceError, OSError, ValueError):
+                meta = None
+        parts = [part for part in (meta, contents) if part is not None]
+        if not parts:
+            return None
+        own = set().union(*(part.files for part in parts))
+        return {"platforms": sorted(set().union(*(part.platforms for part in parts))),
+                "unity": sorted(set().union(*(part.versions for part in parts))),
+                "cabs": sorted(name for name in (contents.files if contents else meta.files)
+                               if not name.endswith((".bundle", ".backup")))[:SUMMARY_CABS],
+                "references": len(contents.references - own) if contents else None}
 
     def keys(self, path: Path) -> set[AssetKey]:
         self.check(path)
