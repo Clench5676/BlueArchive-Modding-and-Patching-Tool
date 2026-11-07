@@ -43,9 +43,10 @@ import { customAliases as aliasesOf, modName, modOriginalName, studentName } fro
 import { setTitle } from "./nav.js";
 import { KEYS, deltaOf, pacer, typing } from "./step-keys.js";
 import { closable, closed as popupClosed, frameReady, hit as hitNode, listPopup, message, notice, popupFrame, scrollArea } from "./popup.js";
-import { ALIAS, DETAILS, aliasFrame, detailsFrame } from "./popup-frames.js";
+import { ALIAS, DETAILS, aliasFrame, detailsFrame, popupContent } from "./popup-frames.js";
 import { statsBox } from "./stats-box.js";
-import { CHIP, COLOUR } from "./ui-tokens.js";
+import { CHIP, COLOUR, CONTROL, SPACE, TYPE } from "./ui-tokens.js";
+import { container, row, stack, textItem, toNode } from "./ui-grid.js";
 import { candidateStatus, detailStatus, selectionStatus, selectionError, intendedKey, isApplied, availableTab, coreOf, hasAsset, hasKind, primaryKind, appliedKey as keyOf, appliedOf, candidates as listSources, partsOf, popupMode, modelSource, previewBase, previewChanged, previewKey, sourceOf, switchKindOf } from "./switch-sources.js";
 import { $, DOT, RECRUIT, S, TAN10, advanceOf, at, clone, glyphsOf, hitButton, markedLabel, off, text, widget, wrapPath } from "./util.js";
 
@@ -269,10 +270,12 @@ const clipped = (name, pos, url, win, img, opts = {}) => node(name, pos, [{ clip
 // --- row 4 geometry ---
 const ROW4_Y = -552;                       // centre of row 4's visible part (Bg_W4: top -436, 234 tall, shadow below)
 const BOX_RIGHT = 332;                     // the first skill card's right edge: the box ends there
+// UICharacterDetail's Skill + SkillData + Bg supply these columns, pitch and bodies; keep the prefab's own values.
 const COLS = [461.9, 707.5, 953.2];        // skill cards 2-4 (Skill at 202 + SkillData x + Bg x 24)
-const BTN_COL = [1079.8, 1284.8];          // the one-click / add buttons' column
+const BTN_COL = [1079.8, 1284.8];          // expression pile's column, derived from the skill/Add cards; keep its x edges
 const CARD = { w: 242, h: 209 };           // Common_Btn_BG like the skill cards; the visible body is h - 13 (shadow below)
 const PITCH = 245.7;
+const LOCAL_FRAME = { cx: 0, cy: 0, w: 0, h: 0 };
 
 // --- the static screen: background, arrows, tabs, right panel, nameplate frame ---
 function screenTree() {
@@ -355,6 +358,7 @@ function screenTree() {
 
   // row 2: four actions on what the shown tab's game files carry. Title and icon centred as a group on the card's
   // slanted midline.
+  // Keep these action cards and row 3's Add card at their existing prefab-based positions and sizes.
   const isMod = !!sk && c.kind === "mod";
   const actions = [["SkillData_EX", "compatibility.check", "compare", isMod && !busy], ["SkillData_EX (1)", repairAction(c), "update", isMod && !busy],
     ["SkillData_EX (2)", "export.title", "extract", !busy], ["SkillData_EX (3)", "popup.apply", "apply", !!sk && !!coreOf(v, sk) && !busy && !isApplied(v, sk, shownSource(v, sk))]];
@@ -457,16 +461,12 @@ function screenTree() {
   }
   // Both names share the existing dark band, leaving room for the pencil after the main name.
   const original = originalName(v), shown = fullName(v), aliased = customAliases().length > 0;
-  const room = PLATE_RIGHT - 110 - PENCIL - 48;
-  const nm = fitText(shown, aliased ? 54 : 64, 44, room, 1), nameY = aliased ? 310 : 288;
-  text(t, `${np}/Label_Name`, nm.text, { w_: room, h_: aliased ? 64 : 76, fontSize: nm.fs, ellipsis: true, ariaLabel: shown });
-  at(t, `${np}/Label_Name`).pos = [110, nameY];
+  const { room } = aliasPlate(at(t, np), shown, aliased);
   if (aliased) {
     const secondary = fitText(original, 28, 24, room, 1);
     at(t, np).children.push(node("Label_OriginalName", [110, 258],
       [label(secondary.text, secondary.fs, "#ffffff/0.62", room, 36, { pivot: 3, depth: 22, ellipsis: true, ariaLabel: original })]));
   }
-  aliasPlate(at(t, np), 110 + Math.min(glyphsOf(nm.text, nm.fs), room), nameY);
   // the dark plate keeps its bottom edge and loses the level row; the game's shard texture is clipped to it
   widget(t, `${np}/BG`).h_ = 120;
   off(t, `${np}/BG/Deco`);
@@ -494,11 +494,33 @@ function screenTree() {
 }
 
 // The game's input-popup pencil opens the alias editor; its accessible name includes every saved alias.
-const PLATE_RIGHT = 925; // the plate's right edge at the name's height, less a margin
-const PENCIL = 46;
-function aliasPlate(np, nameEnd, y) {
-  np.children.push(node("Char_AliasBtn", [Math.min(nameEnd + 24 + PENCIL / 2, PLATE_RIGHT - PENCIL / 2), y],
+const PENCIL = CONTROL.icon.h; // App-created sprite, not a cloned prefab icon
+function nameplateRow(np, caption, aliased, ui = NGUI) {
+  const y = aliased ? 310 : 288, bg = find(np, "BG"), body = bg.widgets.find(w => "sprite" in w);
+  // The prefab band's right edge at the name's height, with the App's margin on the spacing scale.
+  // Its retained body is 120 high; include its pivot and shear rather than a hand-set right limit.
+  const [px, py] = toNode({ x: 0, y: 0, w: body.w_, h: 120 }, body.pivot, LOCAL_FRAME);
+  const right = bg.pos[0] - px + body.w_ + (y - (bg.pos[1] - py - 60)) * Math.tan((body.incline || 0) * Math.PI / 180);
+  const content = container({ x: 110, w: right - 110, h: 120, padding: [0, SPACE.xl, 0, 0] }).inner;
+  const room = content.w - PENCIL - SPACE.xs;
+  const type = { fs: aliased ? 54 : 64, min: 44 }, height = aliased ? 64 : 76;
+  let name;
+  do {
+    name = textItem(ui, caption, type, { maxW: room });
+    if (name.h <= height || type.fs === type.min) break;
+    type.fs = Math.max(type.min, type.fs - 2);
+  } while (true);
+  const line = row([name, { w: PENCIL, h: PENCIL }], { x: content.x, gap: SPACE.xs });
+  return { ...line, room, frame: { ...LOCAL_FRAME, cy: y + line.centre } };
+}
+function aliasPlate(np, caption, aliased) {
+  const layout = nameplateRow(np, caption, aliased), [name, pencil] = layout.boxes;
+  const main = find(np, "Label_Name");
+  Object.assign(main.widgets.find(w => "text" in w), { text: name.text, w_: name.w, h_: name.h, fontSize: name.fs, pivot: 3, ellipsis: true, ariaLabel: caption });
+  main.pos = toNode(name, 3, layout.frame);
+  np.children.push(node("Char_AliasBtn", toNode(pencil, 4, layout.frame),
     [sprite("Cafe_Icon_NameEdit", PENCIL, PENCIL, { type: 0, depth: 22, color: "#ffffff/0.85" })]));
+  return layout;
 }
 
 function renderScreen() { return drawScreen().catch(renderFailed); }
@@ -552,24 +574,44 @@ async function drawScreen() {
 }
 
 // the switch card has no label slot in the game; put the title and the portrait's name beside the picture
+function switchTextLayout(w, h, title, sub, arrow) {
+  // The prefab bust keeps the left half. The App composes the text and chevron inside the other half.
+  const content = container({ x: w / 2, w: w / 2, h, padding: SPACE.s }).inner;
+  const columns = row([{ grow: 1 }, ...(arrow ? [{ w: CONTROL.icon.h, h: CONTROL.icon.h }] : [])], { ...content, gap: SPACE.xs });
+  const room = columns.boxes[0];
+  let titleSize = TYPE.body.fs, subSize = TYPE.caption.fs, texts;
+  do {
+    texts = stack([
+      textItem(NGUI, title, { ...TYPE.body, fs: titleSize }, { maxW: room.w, lines: 2 }),
+      textItem(NGUI, sub, { ...TYPE.caption, fs: subSize }, { maxW: room.w, lines: 2 }),
+    ], { x: room.x, gap: SPACE.xs });
+    if (texts.h <= room.h || (titleSize === TYPE.body.min && subSize === TYPE.caption.min)) break;
+    titleSize = Math.max(TYPE.body.min, titleSize - 2);
+    subSize = Math.max(TYPE.caption.min, subSize - 2);
+  } while (true);
+  return { texts: texts.boxes.map(b => ({ ...b, y: b.y + room.y + (room.h - texts.h) / 2 })), arrow: columns.boxes[1], content };
+}
 function addSwitchText(host, view) {
   const cardEl = view.nodes.get(`Inventory_ListControl/${INFO}/Weapon/Equip_1/UIEquipmentCard/Btn_Target/Normal/Card_Bg`)?.els[0];
   if (!cardEl) return;
   const [l, t, w, h] = rect(cardEl);
   const box = document.createElement("div");
   box.className = "switch-text";
-  const textW = w * 0.42 - 44; // the chevron sits in the last 44 px
-  Object.assign(box.style, { left: `${l + w * 0.5}px`, top: `${t}px`, width: `${w * 0.42}px`, height: `${h * 0.94}px`, paddingRight: "44px" });
+  Object.assign(box.style, { left: `${l}px`, top: `${t}px`, width: `${w}px`, height: `${h}px`, display: "block", padding: "0" });
   const selectedStatus = selectionStatus(variant(), tabKind());
   const sub = [tab === "portrait" ? candidateLabel(current()) : sourceLabel(variant(), tabKind()), selectedStatus && T(selectedStatus)].filter(Boolean).join(" - ");
   const title = T(isSpecial(variant()) && tab === "lobby" ? "special.switch" : `row.switch.${tab}`);
-  const tf = fitText(title, 46, 34, textW / S), sf = fitText(sub, 32, 24, textW / S);
-  box.style.setProperty("--title-size", `${NGUI.fontSizeFor(title, tf.fs) * S}px`);
-  box.style.setProperty("--sub-size", `${NGUI.fontSizeFor(sub, sf.fs) * S}px`);
+  const layout = switchTextLayout(w / S, h / S, title, sub, !!switchKind());
   const b = document.createElement("b"), span = document.createElement("span"), go = document.createElement("i");
-  b.innerText = tf.text;
-  span.innerText = sf.text;
+  [b, span].forEach((el, i) => {
+    const item = layout.texts[i];
+    el.innerText = item.text;
+    Object.assign(el.style, { position: "absolute", left: `${item.x * S}px`, top: `${item.y * S}px`, width: `${item.w * S}px`,
+      height: `${item.h * S}px`, fontSize: `${item.px * S}px`, lineHeight: String(NGUI.LINE_PITCH), whiteSpace: "pre" });
+  });
   go.className = "switch-go";
+  if (layout.arrow) Object.assign(go.style, { left: `${layout.arrow.x * S}px`, top: `${layout.arrow.y * S}px`,
+    width: `${layout.arrow.w * S}px`, height: `${layout.arrow.h * S}px`, right: "auto", marginTop: "0" });
   // The chevron opens the shared source popup.
   box.append(b, span, ...(switchKind() ? [go] : []));
   host.appendChild(box);
@@ -880,20 +922,27 @@ function chipNode(name, pos, w, caption, active, swapped, mark, fresh = false) {
   if (fresh) kids.push(DOT([w / 2 - 4 + 36 * TAN10, 34], 30));
   return node(name, pos, [body], kids);
 }
+function chipBoxes(chips) {
+  // UICharacterDetail's 272 x 72 chip, 290 pitch and 84 row pitch are prefab geometry, not App spacing.
+  const width = CHIP_W + 2 * CHIP_PITCH;
+  const rows = stack([{ h: CHIP.h }, { h: CHIP.h }], { y: -(234 - 58) - CHIP.h / 2, w: width, gap: CHIP.rowPitch - CHIP.h });
+  const slots = rows.boxes.map(b => row(Array.from({ length: 3 }, () => ({ w: CHIP_W, h: CHIP.h })), {
+    x: 514 + (-b.y - CHIP.h / 2 - (234 - 101)) * TAN10 - width / 2, y: b.y, gap: CHIP.gap,
+  }).boxes);
+  return chips.map(chip => ({ ...chip, box: { ...slots[chip.row][chip.col], w: CHIP_W + (chip.span - 1) * CHIP_PITCH } }));
+}
 function renderChips() { return drawChips().catch(renderFailed); }
 async function drawChips() {
   const my = ++chipToken, gen = showGen;
   const ok = () => showable("chips", my, chipToken, gen);
   const host = $("ngui-chips");
   // Char_Target sits at (-1480, -720); BG2 (886 x 202, top-centre at 514, 234, sheared about its centre) holds the chips
-  const CENTRE_Y = 234 - 101;
   const chips = chipLayout();
-  const tree = node("Chips", [-1480, -720], [], chips.map(({ v, more, row, col, span }) => {
-    const y = 234 - 58 - row * CHIP.rowPitch, x = 514 + (y - CENTRE_Y) * TAN10 + (col + (span - 1) / 2 - 1) * CHIP_PITCH;
-    const w = CHIP_W + (span - 1) * CHIP_PITCH;
+  const tree = node("Chips", [-1480, -720], [], chipBoxes(chips).map(({ v, more, box }) => {
+    const pos = toNode(box, 4, LOCAL_FRAME), w = box.w;
     return v
-      ? chipNode(`Chip_${v.key}`, [x, y], w, shortName(v), v.key === variantKey, shownSource(v) !== "self", v.recruitable, hasFresh(v))
-      : chipNode("Chip_more", [x, y], w, T("chips.more", { n: more }), false, false, false);
+      ? chipNode(`Chip_${v.key}`, pos, w, shortName(v), v.key === variantKey, shownSource(v) !== "self", v.recruitable, hasFresh(v))
+      : chipNode("Chip_more", pos, w, T("chips.more", { n: more }), false, false, false);
   }));
   const next = document.createDocumentFragment();
   const view = await NGUI.render(tree, next, { scale: S, origin: ORIGIN, z: 20, deferImages: true });
@@ -919,6 +968,19 @@ async function drawChips() {
 }
 
 // --- row 4: a box, then cards on the columns of row 2's skill cards, the pile in the button column ---
+function expressionBoxes(count, nativeColumns = false) {
+  // Slots retain the prefab's pitch (including its rounded column coordinates); the bodies remain 242 x 209.
+  return row(Array.from({ length: count }, (_, i) => ({ w: nativeColumns && i + 1 < COLS.length ? COLS[i + 1] - COLS[i] : PITCH, h: CARD.h })), {
+    x: COLS[0] - CARD.w / 2, y: -ROW4_Y + 6.5 - CARD.h / 2,
+  }).boxes.map(b => ({ ...b, w: CARD.w }));
+}
+function pileBoxes() {
+  const w = BTN_COL[1] - BTN_COL[0] - SPACE.l;
+  // Overlapping row slots fan the pile inside its retained column; each step is SPACE.s across and in height.
+  return row(Array.from({ length: 3 }, (_, i) => ({ w: SPACE.s, h: CARD.h - i * SPACE.s })), {
+    x: BTN_COL[1] - w - 2 * SPACE.s, y: -ROW4_Y + 6.5 - CARD.h / 2,
+  }).boxes.map(b => ({ ...b, w }));
+}
 function stripCard(name, x, { w = CARD.w, h = CARD.h, thumb: pic = null, selected = false, dim = false, caption = "", body = "", placeholder = false, tone = "#ffffff" } = {}) {
   const vis = h - 13, cy = 6.5; // the visible body's centre sits 6.5 units above the widget's centre
   const kids = [node("Line", [1, cy], [sprite("Common_Line_Raius20px", w - 10, vis, { incline: 10, depth: 9, color: "#bebebe/1.00" })])];
@@ -992,23 +1054,26 @@ async function drawExpressions() {
   const host = $("ngui-expr");
   const list = row4Items(), sel = row4Selected(), unfolded = expanded, pics = [], thumbs = [];
   const picture = (it) => typeof it.thumb === "function" ? it.thumb() : it.thumb;
-  const cardOf = (it, x, extra = {}) => stripCard(`Item_${it.key}`, x, { thumb: picture(it), body: it.body, placeholder: it.placeholder, caption: it.caption, selected: it.key === sel, ...extra });
+  const placed = (name, box, options) => Object.assign(stripCard(name, 0, { w: box.w, h: box.h, ...options }), { pos: toNode(box, 4, LOCAL_FRAME) });
+  const cardOf = (it, box) => placed(`Item_${it.key}`, box, { thumb: picture(it), body: it.body, placeholder: it.placeholder, caption: it.caption, selected: it.key === sel });
   const cards = [];
   if (unfolded || list.length <= 4) {
-    list.forEach((it, i) => cards.push({ tree: cardOf(it, COLS[0] + i * PITCH), item: it }));
-    if (unfolded) cards.push({ tree: stripCard("Fold", COLS[0] + list.length * PITCH, { caption: T("fold.label"), tone: "#eef4f8" }), fold: true, name: T("fold.label") });
+    const boxes = expressionBoxes(list.length + (unfolded ? 1 : 0));
+    list.forEach((it, i) => cards.push({ tree: cardOf(it, boxes[i]), item: it }));
+    if (unfolded) cards.push({ tree: placed("Fold", boxes.at(-1), { caption: T("fold.label"), tone: "#eef4f8" }), fold: true, name: T("fold.label") });
   } else {
     // three cards; a chosen item further along takes the third card so it stays in view
     const shown = list.slice(0, 3);
     const chosen = list.find((it) => it.key === sel);
     if (chosen && !shown.includes(chosen)) shown[2] = chosen;
-    shown.forEach((it, i) => cards.push({ tree: cardOf(it, COLS[i]), item: it }));
+    const boxes = expressionBoxes(shown.length, true);
+    shown.forEach((it, i) => cards.push({ tree: cardOf(it, boxes[i]), item: it }));
     // the pile fills the button column: two plain cards behind, the top one darkened with the count
     const rest = list.filter((it) => !shown.includes(it));
-    const pw = 178, right = BTN_COL[1];
-    cards.push({ tree: stripCard("Pile_2", right - pw / 2, { w: pw, h: CARD.h - 24, tone: "#dfe8ef" }), pile: true, z: 100 });
-    cards.push({ tree: stripCard("Pile_1", right - pw / 2 - 14, { w: pw, h: CARD.h - 12, tone: "#eef4f8" }), pile: true, z: 140 });
-    cards.push({ tree: stripCard("Pile_0", right - pw / 2 - 28, { w: pw, thumb: picture(rest[0]), dim: !!rest[0].thumb, caption: `+${rest.length}`, tone: rest[0].thumb ? "#ffffff" : "#d3dee8" }),
+    const pile = pileBoxes();
+    cards.push({ tree: placed("Pile_2", pile[2], { tone: "#dfe8ef" }), pile: true, z: 100 });
+    cards.push({ tree: placed("Pile_1", pile[1], { tone: "#eef4f8" }), pile: true, z: 140 });
+    cards.push({ tree: placed("Pile_0", pile[0], { thumb: picture(rest[0]), dim: !!rest[0].thumb, caption: `+${rest.length}`, tone: rest[0].thumb ? "#ffffff" : "#d3dee8" }),
       pile: true, name: T("chips.more", { n: rest.length }), z: 180 });
   }
   // clip: the row's height, from the box's slanted right edge to the row's inner right edge
@@ -1044,7 +1109,8 @@ async function drawExpressions() {
   }
   if (unfolded) {
     clip.classList.add("expanded");
-    const width = (Rx - Lx) * S, contentW = (COLS[0] + list.length * PITCH + CARD.w / 2 + 24 - Lx) * S;
+    const last = cards.at(-1).tree;
+    const width = (Rx - Lx) * S, contentW = (last.pos[0] + CARD.w / 2 + SPACE.m - Lx) * S;
     track.style.width = `${contentW}px`;
     // the wheel, a mouse drag and touch scroll the strip as the popups' card rows do (Popup.scrollArea); a drag picks nothing
     horizontalScroll(clip, width, contentW);
@@ -1517,10 +1583,11 @@ function detailsInfo() {
 // the summary box and the file table, laid out from the top left of the scrolling area (units); returns the tree
 // and its height
 function detailsBody({ fields, rows }) {
-  const W = DT.r - DT.l, kids = [];
+  const W = popupContent(DT.w, DT.h).w, kids = [];
   // summary: captions, then values that wrap (paths), never cut; on the game's light stats box, as wide as the file table under
   // it. A mod's value leaves room at the right for its edit icon, and its original name stands under it.
-  const TOP = 12; // air under the scrolling area's top edge
+  const TOP = SPACE.s;
+  // The light stats box retains STATS_BOX's own geometry and typography (stats-box.js).
   const box = statsBox({ holder: "table", width: W, at: [W / 2, -TOP], name: "Summary", rows: fields.map(([k, v, mod]) => ({
     caption: k, value: String(v), ariaLabel: String(v), reserve: mod ? 70 : 0, secondary: mod?.alias ? modOriginalName(mod) : "",
     slot: mod ? ({ i, x, valueY, room, text }) => [node(`Edit_${i}`, [x + Math.min(glyphsOf(text.text, text.fs), room) + 32, valueY],
@@ -1531,32 +1598,36 @@ function detailsBody({ fields, rows }) {
   // the file table: the list header's light blue bar with the captions, then the bundles
   const cols = DT_COLS.filter((_, i) => i < 4 || rows.some((r) => r[4] !== null));
   const extra = DT_COLS.reduce((a, [, w]) => a + w, 0) - cols.reduce((a, [, w]) => a + w, 0);
-  const widths = cols.map(([, w], i) => w + (i === 0 ? extra : 0));
-  const xs = widths.map((_, i) => 30 + widths.slice(0, i).reduce((a, w) => a + w, 0));
-  let y = -TOP - boxH - 36;
-  kids.push(node("Head", [W / 2, y - 40], [sprite("Common_Bg_Raius10px", W, 80, { depth: 5, color: "#d1edff/1.00" })]));
-  cols.forEach(([key], i) => kids.push(node(`H_${i}`, [xs[i], y - 40], [label(T(key), fitText(T(key), 36, 28, widths[i] - 30).fs, "#294263/1.00", widths[i] - 20, 50, { pivot: 3, depth: 8 })])));
-  y -= 80;
-  rows.forEach((r, ri) => {
-    const name = wrapPath(r[0], 34, 26, widths[0] - 40, 2);
-    const h = Math.max(84, name.lines * name.fs * 1.25 + 28), cy = y - h / 2;
-    cols.forEach((_, i) => {
-      const [text, color] = i === 0 ? [name.text, "#000000"] : i === 3 ? r[3] : [r[i], "#000000"];
-      const fs = i === 0 ? name.fs : fitText(String(text), 34, 26, widths[i] - 30).fs;
-      kids.push(node(`R_${ri}_${i}`, [xs[i], cy], [label(String(text), fs, `${color}/1.00`, widths[i] - 20, (i === 0 ? name.lines : 1) * fs * 1.25 + 8, { pivot: 3, depth: 8 })]));
-    });
-    kids.push(node(`RL_${ri}`, [W / 2, y - h], [sprite("Common_Line_Dot", W - 40, 4, { type: 2, depth: 7, color: "#c0c9d4/1.00" })]));
-    y -= h;
+  const columns = row(cols.map(([, w], i) => ({ grow: w + (i === 0 ? extra : 0) })), { w: W }).boxes;
+  const widths = columns.map(b => b.w - 2 * SPACE.s);
+  const head = cols.map(([key], i) => textItem(NGUI, T(key), TYPE.caption, { maxW: widths[i], lines: 2 }));
+  const data = rows.map(r => cols.map((_, i) => {
+    const [value, color] = i === 3 ? r[3] : [r[i], "#000000"];
+    // Dense rows keep their 42-unit floor. Wrap paths at separators and other text at language-aware boundaries;
+    // longer values grow the row, keeping every character rather than escaping the range or clipping.
+    let fit = i === 0 ? wrapPath(value, TYPE.caption.fs, TYPE.caption.min, widths[i], Infinity)
+      : NGUI.wrapText(String(value), TYPE.caption.fs, widths[i], Infinity);
+    if (fit.overflow) fit = wrapPath(value, TYPE.caption.fs, TYPE.caption.min, widths[i], Infinity);
+    return { ...textItem({ ...NGUI, fitText: () => fit }, value, TYPE.caption, { maxW: widths[i], lines: Infinity }), color };
+  }));
+  const lines = [head, ...data].map(items => row(items.map((item, i) => ({ ...item, w: widths[i] })), { x: SPACE.s, gap: 2 * SPACE.s }));
+  const table = stack(lines.map(line => ({ w: W, h: line.h + 2 * SPACE.s })), { y: TOP + boxH + SPACE.xl, gap: SPACE.s });
+  table.boxes.forEach((box, ri) => {
+    const items = row(lines[ri].boxes, { x: SPACE.s, y: box.y + SPACE.s, gap: 2 * SPACE.s }).boxes;
+    if (!ri) kids.push(node("Head", toNode(box, 4, LOCAL_FRAME), [sprite("Common_Bg_Raius10px", W, box.h, { depth: 5, color: "#d1edff/1.00" })]));
+    items.forEach((item, i) => kids.push(node(ri ? `R_${ri - 1}_${i}` : `H_${i}`, toNode(item, 3, LOCAL_FRAME), [
+      label(item.text, item.fs, ri ? `${item.color}/1.00` : "#294263/1.00", item.w, item.h, { pivot: 3, depth: 8 }),
+    ])));
+    if (ri) kids.push(node(`RL_${ri - 1}`, [W / 2, -box.y - box.h], [sprite("Common_Line_Dot", W - 2 * SPACE.m, SPACE.hair, { type: 2, depth: 7, color: "#c0c9d4/1.00" })]));
   });
-  return { tree: node("Details", [0, 0], [], kids), height: -y + 20 };
+  return { tree: node("Details", [0, 0], [], kids), height: table.boxes.at(-1).y + table.boxes.at(-1).h + SPACE.m };
 }
 async function showDetails() {
   const host = $("popup");
   const info = detailsInfo();
   const body = detailsBody(info);
-  // the frame fits its content, up to almost the whole stage (then the content scrolls): the title takes 140 units
-  // above the content, the buttons 296.5 under it (popup-frames.js)
-  const { h, top, bottom } = detailsFrame(body.height);
+  // popup.js supplies the L frame; popupContent keeps the table 40 from either side (popup-frames.js).
+  const { h, top, bottom, content } = detailsFrame(body.height);
   const t = popupFrame(info.title, DT.w, h, { ok: T("picker.ok"), cancel: info.reveal ? T(platform === "mac" ? "open.mac" : "open.win") : null });
   host.hidden = false;
   const next = document.createElement("div");
@@ -1567,7 +1638,7 @@ async function showDetails() {
   hit("Center/Popup/Btn/Btn_Ok/BG (1)", done, T("picker.ok"), "ok");
   if (info.reveal) hit("Center/Popup/Btn/Btn_Cancel/BG (1)", () => reveal(info.reveal), T(platform === "mac" ? "open.mac" : "open.win"), "cancel");
   closable(view, host, done);
-  const inner = scrollArea(next, [960 + DT.l * S, 540 - top * S, (DT.r - DT.l) * S, (top - bottom) * S], body.height * S);
+  const inner = scrollArea(next, [960 + (content.x - DT.w / 2) * S, 540 - top * S, content.w * S, (top - bottom) * S], body.height * S);
   await inner.ready;
   const bodyView = await NGUI.render(body.tree, inner, { scale: S, origin: [0, 0], z: 20 });
   info.fields.forEach(([, , mod], i) => {
