@@ -262,8 +262,7 @@ export function createMissingFlow({ model, identify, kindName, ask, title = "", 
     if (model.state.analysisRevision !== revision || !model.state.entries.includes(entry)) return false;
     return model.add(entry.missing.found.map((file) => file.path));
   }
-  async function fillAll() {
-    const rows = fillable();
+  async function fillAll(rows = fillable()) {
     const revision = model.state.analysisRevision;
     if (!rows.length || model.busy()) return false;
     rows.forEach((entry) => shown.add(key(entry)));
@@ -281,10 +280,13 @@ export function createMissingFlow({ model, identify, kindName, ask, title = "", 
       old.paths.some((path) => entry.paths.includes(path))));
     incomplete = state.entries.filter(isIncomplete);
     if (completed) { model.select(completed.id); reveal(completed.id); }
-    const rows = fillable(), revision = seen;
-    if (rows.length === 1 && !shown.has(key(rows[0]))) defer(() => {
-      if (active() && !model.busy() && model.state.analysisRevision === revision && model.state.entries.includes(rows[0]))
-        promptRow(rows[0]).catch(failed);
+    // Rows not asked about yet prompt by themselves: one row with its files, several with one list confirmation.
+    // A declined row stays on Complete All until a Recheck.
+    const rows = fillable().filter((entry) => !shown.has(key(entry))), revision = seen;
+    if (rows.length) defer(() => {
+      if (active() && !model.busy() && model.state.analysisRevision === revision
+        && rows.every((entry) => model.state.entries.includes(entry)))
+        (rows.length === 1 ? promptRow(rows[0]) : fillAll(rows)).catch(failed);
     });
   }
   return { onChange, fillable, promptRow, fillAll };

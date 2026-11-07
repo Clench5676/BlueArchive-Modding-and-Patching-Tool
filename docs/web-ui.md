@@ -1206,10 +1206,10 @@ names are redacted.
 A blocked or incomplete row's status badge opens Details (`import-details.js`, the game's message popup with a compact frame: `Popup.message({ compact })` sizes the frame to its content, below the frame class's own height): the row's reason (its short label with the error text, a file name that opens or ends the text left out, or the missing-file status), then a paragraph a file (its name, `import.detail.platform`, `import.detail.unity`), the unresolved dependencies (`import.detail.unresolved`, then one CAB id a line, from `missing.cabs`) and the files of the same slot found in its folders (`missing.found`). Its hit area is the badge background's box (`badgeRect`), above the row's own; opening it does not select the row.
 
 The status shows the number of found files, or the unresolved count and the folder note when none were found. The
-Import State filter includes Missing Files before Imported; the footer counts incomplete groups. When exactly one
-row has found files after analysis, its confirmation opens automatically with the filenames, roster variant name and
-tab name. Several such rows use Complete All and one confirmation listing the groups. Complete All is available with
-one or more fillable rows. Declining suppresses the same prompt until Recheck. Confirming adds the found paths and
+Import State filter includes Missing Files before Imported; the footer counts incomplete groups. After an analysis,
+rows with found files that were not asked about yet open their confirmation automatically: one row with the
+filenames, roster variant name and tab name, several rows with Complete All's confirmation listing those groups.
+Complete All is available with one or more fillable rows. Declining suppresses the same prompt until Recheck. Confirming adds the found paths and
 analyses again. Files supplied later through Add Files, Add Folder or drop join the incomplete row by slot or missing
 CAB; an ambiguous owner or a conflicting part from another folder is refused with the candidate paths recorded in
 the row's error parameters. Initial selections from separate folders can join when a unique CAB dependency proves
