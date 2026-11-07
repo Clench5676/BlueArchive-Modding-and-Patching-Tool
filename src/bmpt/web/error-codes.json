@@ -1,0 +1,466 @@
+{
+  "alias_too_long": {
+    "code": "E6001",
+    "level": "notice"
+  },
+  "alias_too_many": {
+    "code": "E6002",
+    "level": "notice"
+  },
+  "asset_delete_confirm": {
+    "code": "E4001",
+    "level": "failed"
+  },
+  "asset_extraction_failed": {
+    "code": "E5001",
+    "level": "failed"
+  },
+  "asset_load_failed": {
+    "code": "E5002",
+    "level": "failed"
+  },
+  "asset_official": {
+    "code": "E4002",
+    "level": "notice"
+  },
+  "atlas_remap_asset_ambiguous": {
+    "code": "E5003",
+    "level": "failed"
+  },
+  "atlas_remap_atlas_missing": {
+    "code": "E5004",
+    "level": "failed"
+  },
+  "atlas_remap_bounds": {
+    "code": "E5005",
+    "level": "failed"
+  },
+  "atlas_remap_invalid": {
+    "code": "E5006",
+    "level": "failed"
+  },
+  "atlas_remap_page_ambiguous": {
+    "code": "E5007",
+    "level": "failed"
+  },
+  "atlas_remap_page_missing": {
+    "code": "E5008",
+    "level": "failed"
+  },
+  "atlas_remap_property": {
+    "code": "E5009",
+    "level": "failed"
+  },
+  "atlas_remap_region_ambiguous": {
+    "code": "E5010",
+    "level": "failed"
+  },
+  "atlas_remap_regions_missing": {
+    "code": "E5011",
+    "level": "failed"
+  },
+  "atlas_remap_source_missing": {
+    "code": "E5012",
+    "level": "failed"
+  },
+  "atlas_remap_structure": {
+    "code": "E5013",
+    "level": "failed"
+  },
+  "atlas_remap_target_mismatch": {
+    "code": "E5014",
+    "level": "failed"
+  },
+  "bad_params": {
+    "code": "E1001",
+    "level": "failed"
+  },
+  "bundle_invalid": {
+    "code": "E3001",
+    "level": "failed"
+  },
+  "busy": {
+    "code": "E1002",
+    "level": "notice"
+  },
+  "catalog_data_invalid": {
+    "code": "E2001",
+    "level": "failed"
+  },
+  "catalog_family_not_found": {
+    "code": "E2002",
+    "level": "failed"
+  },
+  "catalog_variant_not_found": {
+    "code": "E2003",
+    "level": "failed"
+  },
+  "classic_failed": {
+    "code": "E1003",
+    "level": "failed"
+  },
+  "classic_open": {
+    "code": "E1004",
+    "level": "notice"
+  },
+  "conflict": {
+    "code": "E3002",
+    "level": "failed"
+  },
+  "conversion_failed": {
+    "code": "E3003",
+    "level": "failed"
+  },
+  "conversion_names": {
+    "code": "E3004",
+    "level": "failed"
+  },
+  "crc_fix_failed": {
+    "code": "E4003",
+    "level": "failed"
+  },
+  "data_dir_readonly": {
+    "code": "E1005",
+    "level": "notice"
+  },
+  "dev_path_outside": {
+    "code": "E1006",
+    "level": "failed"
+  },
+  "entry_changed": {
+    "code": "E4004",
+    "level": "notice"
+  },
+  "export_empty": {
+    "code": "E4005",
+    "level": "notice"
+  },
+  "export_target_unavailable": {
+    "code": "E4006",
+    "level": "failed"
+  },
+  "failed": {
+    "code": "E1007",
+    "level": "failed"
+  },
+  "folder_changed": {
+    "code": "E1008",
+    "level": "notice"
+  },
+  "game_directory_missing": {
+    "code": "E2004",
+    "level": "notice"
+  },
+  "game_file_conflict": {
+    "code": "E3005",
+    "level": "failed"
+  },
+  "game_file_locked": {
+    "code": "E2005",
+    "level": "failed"
+  },
+  "game_file_not_found": {
+    "code": "E2006",
+    "level": "failed"
+  },
+  "game_file_outside_resources": {
+    "code": "E2007",
+    "level": "failed"
+  },
+  "game_not_found": {
+    "code": "E2008",
+    "level": "notice"
+  },
+  "game_running": {
+    "code": "E2009",
+    "level": "notice"
+  },
+  "game_status_unavailable": {
+    "code": "E2010",
+    "level": "failed"
+  },
+  "hall_conflict": {
+    "code": "E6003",
+    "level": "notice"
+  },
+  "hall_duplicate_memorial": {
+    "code": "E6004",
+    "level": "notice"
+  },
+  "hall_duplicate_portrait": {
+    "code": "E6005",
+    "level": "notice"
+  },
+  "hall_last_memorial": {
+    "code": "E6006",
+    "level": "notice"
+  },
+  "hall_last_portrait": {
+    "code": "E6007",
+    "level": "notice"
+  },
+  "internal": {
+    "code": "E1009",
+    "level": "failed"
+  },
+  "job_not_found": {
+    "code": "E1010",
+    "level": "failed"
+  },
+  "library_io_error": {
+    "code": "E4007",
+    "level": "failed"
+  },
+  "library_operation_failed": {
+    "code": "E4008",
+    "level": "failed"
+  },
+  "library_recovery_pending": {
+    "code": "E4009",
+    "level": "failed"
+  },
+  "library_state_unreadable": {
+    "code": "E4010",
+    "level": "failed"
+  },
+  "library_target_not_empty": {
+    "code": "E4011",
+    "level": "notice"
+  },
+  "lines_unavailable": {
+    "code": "E1011",
+    "level": "failed"
+  },
+  "mod_apply_failed": {
+    "code": "E4012",
+    "level": "failed"
+  },
+  "mod_in_use": {
+    "code": "E4013",
+    "level": "notice"
+  },
+  "mod_in_use_elsewhere": {
+    "code": "E4014",
+    "level": "notice"
+  },
+  "mod_last_copy": {
+    "code": "E4015",
+    "level": "notice"
+  },
+  "mod_not_found": {
+    "code": "E4016",
+    "level": "failed"
+  },
+  "mod_parts_missing": {
+    "code": "E3006",
+    "level": "failed"
+  },
+  "mod_platform_mismatch": {
+    "code": "E3007",
+    "level": "failed"
+  },
+  "mod_platform_unknown": {
+    "code": "E3008",
+    "level": "failed"
+  },
+  "mod_release_mismatch": {
+    "code": "E3009",
+    "level": "failed"
+  },
+  "mod_target_ambiguous": {
+    "code": "E3010",
+    "level": "failed"
+  },
+  "mod_target_mismatch": {
+    "code": "E3011",
+    "level": "failed"
+  },
+  "mod_target_unknown": {
+    "code": "E3012",
+    "level": "failed"
+  },
+  "mod_unity_version_mismatch": {
+    "code": "E3013",
+    "level": "failed"
+  },
+  "mod_unsupported": {
+    "code": "E3014",
+    "level": "failed"
+  },
+  "mod_update_failed": {
+    "code": "E4017",
+    "level": "failed"
+  },
+  "native_only": {
+    "code": "E1012",
+    "level": "notice"
+  },
+  "native_unavailable": {
+    "code": "E1013",
+    "level": "notice"
+  },
+  "no_matching_assets": {
+    "code": "E3015",
+    "level": "failed"
+  },
+  "no_target": {
+    "code": "E3016",
+    "level": "failed"
+  },
+  "not_enough_space": {
+    "code": "E1014",
+    "level": "failed"
+  },
+  "original_invalid": {
+    "code": "E2011",
+    "level": "failed"
+  },
+  "original_unavailable": {
+    "code": "E2012",
+    "level": "failed"
+  },
+  "path_not_found": {
+    "code": "E1015",
+    "level": "failed"
+  },
+  "photo_apply_failed": {
+    "code": "E6008",
+    "level": "failed"
+  },
+  "photo_capture_unavailable": {
+    "code": "E6009",
+    "level": "failed"
+  },
+  "photo_delete_other_variant": {
+    "code": "E6010",
+    "level": "failed"
+  },
+  "photo_in_use": {
+    "code": "E6011",
+    "level": "notice"
+  },
+  "photo_invalid": {
+    "code": "E6012",
+    "level": "failed"
+  },
+  "photo_library_invalid": {
+    "code": "E6013",
+    "level": "failed"
+  },
+  "photo_missing": {
+    "code": "E6014",
+    "level": "failed"
+  },
+  "photo_target_unavailable": {
+    "code": "E6015",
+    "level": "failed"
+  },
+  "platform_unsupported": {
+    "code": "E3017",
+    "level": "failed"
+  },
+  "profiles_unreadable": {
+    "code": "E1016",
+    "level": "failed"
+  },
+  "required_asset_apply_failed": {
+    "code": "E3018",
+    "level": "failed"
+  },
+  "required_asset_extract_failed": {
+    "code": "E3019",
+    "level": "failed"
+  },
+  "required_asset_stream_missing": {
+    "code": "E3020",
+    "level": "failed"
+  },
+  "required_assets_unmatched": {
+    "code": "E3021",
+    "level": "failed"
+  },
+  "reveal_failed": {
+    "code": "E1017",
+    "level": "failed"
+  },
+  "safe_restart_unavailable": {
+    "code": "E1018",
+    "level": "failed"
+  },
+  "scan_off": {
+    "code": "E1019",
+    "level": "notice"
+  },
+  "source_conflict": {
+    "code": "E3022",
+    "level": "failed"
+  },
+  "source_unknown": {
+    "code": "E3023",
+    "level": "failed"
+  },
+  "source_unsupported": {
+    "code": "E3024",
+    "level": "failed"
+  },
+  "spine_version": {
+    "code": "E3025",
+    "level": "failed"
+  },
+  "state_changed": {
+    "code": "E1020",
+    "level": "notice"
+  },
+  "steam_busy": {
+    "code": "E2013",
+    "level": "notice"
+  },
+  "target_unknown": {
+    "code": "E3026",
+    "level": "failed"
+  },
+  "unknown_method": {
+    "code": "E1021",
+    "level": "failed"
+  },
+  "unreadable": {
+    "code": "E3027",
+    "level": "failed"
+  },
+  "unsupported": {
+    "code": "E3028",
+    "level": "failed"
+  },
+  "update_check_failed": {
+    "code": "E7001",
+    "level": "failed"
+  },
+  "update_checksum_mismatch": {
+    "code": "E7002",
+    "level": "failed"
+  },
+  "update_download_failed": {
+    "code": "E7003",
+    "level": "failed"
+  },
+  "update_restart_failed": {
+    "code": "E7004",
+    "level": "failed"
+  },
+  "update_unavailable": {
+    "code": "E7005",
+    "level": "failed"
+  },
+  "update_unsupported": {
+    "code": "E7006",
+    "level": "failed"
+  },
+  "variant_incompatible": {
+    "code": "E2014",
+    "level": "failed"
+  },
+  "variant_not_found": {
+    "code": "E2015",
+    "level": "failed"
+  }
+}

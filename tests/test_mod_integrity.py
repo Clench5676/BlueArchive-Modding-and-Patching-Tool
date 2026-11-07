@@ -388,7 +388,7 @@ def test_add_keeps_the_source_and_reports_a_refused_switch(setup_library, monkey
         raise ServiceError("game_running")
     monkeypatch.setattr(env.library, "apply", refuse)
     report = env.library.add_and_apply([make_mod(env.original, env.tmp / "input")])
-    assert report.failed == [{"id": report[0].id, "code": "game_running", "params": {}}]
+    assert report.failed == [{"id": report[0].id, "code": "game_running", "ref": "E2009", "params": {}}]
     assert env.library.configured("test")["spr"] is None
     assert not report.applied
 

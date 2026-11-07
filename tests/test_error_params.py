@@ -134,7 +134,7 @@ def test_an_unreadable_source_names_its_own_file(env):
     entries = {e["paths"][0]: e for e in analyze(env, [good, broken])["entries"]}
     entry = entries[str(broken)]
     assert (entry["state"], entry["reason"]) == ("blocked", "unreadable")
-    assert entry["error"] == {"code": "bundle_invalid", "params": {"file": str(broken)}}
+    assert entry["error"] == {"code": "bundle_invalid", "ref": "E3001", "params": {"file": str(broken)}}
     assert entry["params"] == {"file": str(broken)}
 
 
@@ -166,7 +166,7 @@ def test_conflicting_game_files_name_the_entry_file(env, monkeypatch, problem):
         monkeypatch.setattr(env.library, "official_bundles", lambda *args, **kwargs: [])
     entry, = analyze(env, [source])["entries"]
     assert entry["reason"] == "game_file_conflict"
-    assert entry["error"] == {"code": "game_file_conflict", "params": {"file": str(source)}}
+    assert entry["error"] == {"code": "game_file_conflict", "ref": "E3005", "params": {"file": str(source)}}
 
 
 def test_a_mod_stored_under_another_target_names_the_entry_file(env):
@@ -179,7 +179,7 @@ def test_a_mod_stored_under_another_target_names_the_entry_file(env):
     assert stored.target != "another-target"
     env.services.batch_import._judge(candidate, env.library, env.library.current_pin())
     assert candidate.entry["reason"] == "mod_target_ambiguous"
-    assert candidate.entry["error"] == {"code": "mod_target_ambiguous", "params": {"file": str(source)}}
+    assert candidate.entry["error"] == {"code": "mod_target_ambiguous", "ref": "E3010", "params": {"file": str(source)}}
 
 
 def test_assigning_a_blocked_entry_keeps_the_recorded_file(env, monkeypatch):

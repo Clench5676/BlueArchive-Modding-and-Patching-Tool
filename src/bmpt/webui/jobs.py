@@ -11,7 +11,7 @@ import traceback
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
-from ..errors import ServiceError
+from ..errors import ServiceError, log_service_error
 from ba_modding_toolkit.i18n import t
 from .events import EventBus
 from .rpc import to_json
@@ -222,6 +222,7 @@ class JobRunner:
             flush()
             publish("job.done", {"id": job.id, "kind": job.kind, "result": job.result})
         except ServiceError as e:
+            log_service_error(logger, e)
             job.error = e.to_json()
             job.state = "failed"
             flush()
@@ -229,10 +230,13 @@ class JobRunner:
         except BaseException as e:  # report and keep the worker alive
             known = self.translate(e) if self.translate and isinstance(e, Exception) else None
             if known is not None:
+                log_service_error(logger, known)
                 job.error = known.to_json()
             else:
                 logger.exception("job %s (%s) failed", job.id, job.kind)
-                job.error = {"code": "internal", "params": {"error": f"{type(e).__name__}: {e}"}}
+                error = ServiceError("internal", error=f"{type(e).__name__}: {e}")
+                log_service_error(logger, error)
+                job.error = error.to_json()
                 job.log.append(traceback.format_exc())
                 if self.on_exception:
                     self.on_exception(type(e), e, e.__traceback__)
