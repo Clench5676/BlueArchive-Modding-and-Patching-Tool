@@ -286,7 +286,7 @@ def test_previous_spine_answers_are_true_before_the_first_screen(app, services, 
 def test_spine_consent_rpc_rejects_non_boolean_choices(app, services, granted):
     services.set_spine_consent(False)
     assert rpc(app, "app.spineConsent", granted=granted)["error"] == {
-        "code": "bad_params", "params": {"key": "granted"}}
+        "code": "bad_params", "ref": "E1001", "params": {"key": "granted"}}
     assert services.state.spine_consent is False
 
 
@@ -590,9 +590,9 @@ def test_own_aliases_are_kept_and_listed(app, services, tmp_path):
     assert UiState(tmp_path / "webui.json").aliases() == {"hoshino": kept}
     # past the limits nothing changes
     too_long = rpc(app, "aliases.set", family="hoshino", aliases=["x" * (ALIAS_LENGTH + 1)])["error"]
-    assert too_long == {"code": "alias_too_long", "params": {"max": ALIAS_LENGTH}}
+    assert too_long == {"code": "alias_too_long", "ref": "E6001", "params": {"max": ALIAS_LENGTH}}
     too_many = rpc(app, "aliases.set", family="hoshino", aliases=[f"a{i}" for i in range(ALIAS_MAX + 1)])["error"]
-    assert too_many == {"code": "alias_too_many", "params": {"max": ALIAS_MAX}}
+    assert too_many == {"code": "alias_too_many", "ref": "E6002", "params": {"max": ALIAS_MAX}}
     # repeats count once
     assert rpc(app, "aliases.set", family="hoshino", aliases=["a"] * (ALIAS_MAX + 1))["result"] == ["a"]
     assert rpc(app, "aliases.set", family="hoshino", aliases=kept)["result"] == kept
@@ -1147,7 +1147,7 @@ def test_job_failure_keeps_worker_alive():
     deadline = time.monotonic() + 5
     while time.monotonic() < deadline and jobs.get(good).state != "done":
         time.sleep(0.02)
-    assert jobs.get(bad).error == {"code": "game_file_locked", "params": {"file": "x"}}
+    assert jobs.get(bad).error == {"code": "game_file_locked", "ref": "E2005", "params": {"file": "x"}}
     assert jobs.get(good).result == 42
     jobs.shutdown()
 
