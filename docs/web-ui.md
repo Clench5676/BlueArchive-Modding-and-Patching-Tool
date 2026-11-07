@@ -1964,14 +1964,14 @@ optional, so a popup still works without them.
   dialogs use it; the tour keeps its own three-button cycle.
 - **Refusals and failures** (`notify`, `notice`; BL-045). An ordinary refusal, where the app declined an action because
   of a state or a rule and nothing broke, is the neutral notice: title Notice (`quit.title`), the line, Confirm only,
-  no Failed and no Error Report. `REFUSALS` lists the codes: `busy`, `game_running`, `steam_busy`, `classic_open`,
-  `game_not_found`, `game_directory_missing`, `state_changed`, `folder_changed`, `entry_changed`, `mod_in_use`,
-  `mod_in_use_elsewhere`, `mod_last_copy`, `asset_official`, `photo_in_use`, `library_target_not_empty`,
-  `hall_last_portrait`, `hall_last_memorial`, `hall_duplicate_portrait`, `hall_duplicate_memorial`, `hall_conflict`,
-  `alias_too_long`, `alias_too_many`, `export_empty`, `scan_off`, `native_only`, `native_unavailable`. Any other code,
+  no Failed and no Error Report. `REFUSALS` comes from the shared error registry's `level: "notice"` entries (27 names).
+  Any other code,
   or none, is a real failure: title Failed and the Error Report button (`game_status_unavailable` and
   `profiles_unreadable` report something unreadable, so they stay failures). A greyed switch or Apply names its reason
-  by its code, so the same rule decides. The classic modal and the Spine licence notice pass no `error`.
+  by its code, so the same rule decides. Failed notifications append the display reference to the message's last line
+  using the locale's `popup.withCode` form; notices and badges keep their existing text. A refused import row's Details
+  reason line uses the same form, including `mod_parts_missing` for incomplete rows. `errorText` remains unchanged.
+  The classic modal and the Spine licence notice pass no `error`.
 - **Buttons.** Every button of a popup is an invisible button over the drawn one, named for assistive technology by
   the caption it covers (`aria-label`) and marked with what it does (`data-action`). When a sprite is missing from
   the atlases its button is placed from the prefab node, so the popup can still be answered.
@@ -2898,7 +2898,17 @@ host exposes the current text through `role="status"` and `aria-label`; the Hall
 
 ### Local error reports and startup recovery
 
-**Error Report** in Settings' log row and error/refusal popups creates one local
+The shared registry, `src/bmpt/web/error-codes.json` (served at `/error-codes.json`), gives error and import-reason names
+permanent display references and a `failed` or `notice` level. Names remain the identity and locale message keys;
+references are `E` plus four digits, grouped by their first digit: 1 App/RPC/jobs, 2 game installation/official files,
+3 mod import, 4 mod library/switch/apply, 5 assets/Spine/atlas remap, 6 Hall/photography, and 7 updates. New names take the
+next free number in their block; references are never reused. Service error JSON keeps `code` as the name and adds
+`ref` for registered names, preserving all existing IDs. Python loads the packaged registry once; the front end loads
+it once and falls back to an empty registry if that load fails. RPC and job boundaries log service errors once
+as `E3006 mod_parts_missing {params}` with compact JSON parameters, at INFO for notices and WARNING for failures;
+an unregistered name is logged alone.
+
+**Error Report** in Settings' log row and failure popups creates one local
 `BAMT-report-<version>-<YYYYMMDD-HHMM>.zip`. The same action is available on the built-in startup failure page.
 The destination order is Desktop, Downloads, the app data directory, then the system temporary directory; Windows uses redirected shell folders.
 Repeated reports in one minute receive a numeric suffix. Finder/Explorer selects the archive and the clipboard
@@ -2918,7 +2928,9 @@ at least eight characters. Structured credential fields are always hidden; keys 
 
 Reports include app/build and OS details, system/UI locale, WebView2 or WebKit version, browser user agent,
 front-end page/phase/errors (including popup codes and sanitized parameters), screen size/scale, WebGL support/renderer when available, consent states, game metadata,
-library counts, boot timings, and the last failed job's error code/parameters. Backend exceptions create a report
+library counts, boot timings, and the last failed job's error code/parameters. Recorded error names in front-end events,
+popups, `triggeringError`, `lastFailedJob`, import rows and their source attempts carry the display reference in `ref`
+alongside `code` when registered; import row `id` values remain row IDs. Backend exceptions create a report
 in the data directory, with the same destination fallback chain on failure, at most once per minute, retaining three automatic archives with an `-auto` suffix. User-created reports are retained. A bounded redacted snapshot of
 the latest exception and its environment is embedded in later reports; archives are never nested.
 

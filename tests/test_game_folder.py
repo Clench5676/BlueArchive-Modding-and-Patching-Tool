@@ -129,7 +129,7 @@ def test_file_source_switch_refuses_a_folder_that_holds_no_game(env):
     env.settings.save()
     before = env.settings.path.read_bytes()
     reply = rpc(env.app, "settings.set", key="fileSource", value="windows_japan")
-    assert reply["error"] == {"code": "game_directory_missing", "params": {"region": "japan"}}
+    assert reply["error"] == {"code": "game_directory_missing", "ref": "E2004", "params": {"region": "japan"}}
     assert env.settings.get("file_source") == "windows_global" and env.settings.path.read_bytes() == before
     japan = install(env.tmp / "japan")
     assert "result" in rpc(env.app, "settings.set", key="gameDir.japan", value=str(japan))

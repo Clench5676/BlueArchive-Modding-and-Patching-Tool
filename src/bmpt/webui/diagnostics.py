@@ -24,6 +24,7 @@ from typing import Any
 from urllib.parse import unquote
 
 from .. import devmode, steam_records, updater
+from ..error_codes import code_of
 from ba_modding_toolkit.i18n import UI_LANGUAGES, i18n_manager
 from . import native, system
 from .session_log import redact
@@ -169,6 +170,13 @@ def configured_language(data_dir: Path) -> str:
     return i18n_manager.lang
 
 
+def with_ref(error: dict) -> dict:
+    """Retain a supplied display reference, or resolve a locally recorded name."""
+    if ref := error.get("ref") or code_of(error.get("code")):
+        return {**error, "ref": ref}
+    return error
+
+
 def import_row(entry: dict, secrets: set[str]) -> dict:
     """Use the same redacted, structured verdict in logs and reports."""
     from ba_modding_toolkit.naming import parse_filename
@@ -178,8 +186,10 @@ def import_row(entry: dict, secrets: set[str]) -> dict:
     target = entry.get("target") if isinstance(entry.get("target"), dict) else {}
     files = entry.get("files") if isinstance(entry.get("files"), list) else []
     route = " -> ".join(f"{side.get('server') or '?'}/{side.get('platform') or '?'}" for side in (source, target))
-    return clean({"id": entry.get("id"), "kind": entry.get("kind"), "state": entry.get("state"),
-                  "reason": entry.get("reason"), "code": detail.get("code") or entry.get("reason"),
+    return clean(with_ref({"id": entry.get("id"), "kind": entry.get("kind"), "state": entry.get("state"),
+                  "reason": entry.get("reason"), "code": detail.get("code") or entry.get("reason")
+                  or ("mod_parts_missing" if entry.get("state") == "incomplete" else None),
+                  "ref": detail.get("ref"),
                   "params": detail.get("params") or entry.get("params", {}),
                   "files": [{"filename": file.get("path"),
                              "part": parse_filename(str(file.get("path", "")).replace("\\", "/").rsplit("/", 1)[-1]).res_type}
@@ -190,8 +200,10 @@ def import_row(entry: dict, secrets: set[str]) -> dict:
                   "bundles": entry.get("bundles"), "missing": entry.get("missing"),
                   # how each file found its official parts, every guessed source tried, and whether the import
                   # preview composed the row: a refused row that previewed disagrees with the preview's rule
-                  "resolution": entry.get("resolution"), "attempts": entry.get("attempts"),
-                  "previewed": entry.get("previewed")}, secrets)
+                  "resolution": entry.get("resolution"),
+                  "attempts": [with_ref(attempt) if isinstance(attempt, dict) else attempt
+                               for attempt in entry["attempts"]] if isinstance(entry.get("attempts"), list) else None,
+                  "previewed": entry.get("previewed")}), secrets)
 
 
 def import_snapshot(value: Any, secrets: set[str]) -> dict | None:
@@ -268,7 +280,7 @@ class Reports:
                     self.imports = import_snapshot(context["batchImport"], self.secrets)
             if not isinstance(event, dict):
                 return False
-            item = clean({k: event[k] for k in ("message", "stack", "page", "phase", "kind", "source", "code", "params") if k in event}, self.secrets)
+            item = clean(with_ref({k: event[k] for k in ("message", "stack", "page", "phase", "kind", "source", "code", "ref", "params") if k in event}), self.secrets)
             key = json.dumps(item, sort_keys=True)
             self._seen = {k: t for k, t in self._seen.items() if now - t < 60}
             while self._times and now - self._times[0] >= 60:
@@ -285,7 +297,7 @@ class Reports:
 
     def job_finished(self, job: Any) -> None:
         if job.state == "failed":
-            self.last_job = clean({"kind": job.kind, **(job.error or {})}, self.secrets)
+            self.last_job = clean(with_ref({"kind": job.kind, **(job.error or {})}), self.secrets)
             logger.error("Failed job %s", json.dumps(self.last_job, ensure_ascii=False))
 
     def library_counts(self) -> dict | None:
@@ -443,8 +455,8 @@ class Reports:
             deadline = time.monotonic() + COLLECTION_TIMEOUT
             data = self.snapshot(deadline)
             if isinstance(trigger, dict):
-                data["triggeringError"] = self.optional("trigger", lambda: clean({
-                    k: trigger[k] for k in ("kind", "code", "params", "message") if k in trigger}, self.secrets), deadline)
+                data["triggeringError"] = self.optional("trigger", lambda: clean(with_ref({
+                    k: trigger[k] for k in ("kind", "code", "ref", "params", "message") if k in trigger}), self.secrets), deadline)
             folders = self.optional("folders", native.report_folders, deadline) or []
             logs = {name: self.optional(name, lambda name=name: log_tail(
                 self.log_path if name == "webui.log" else self.data_dir / name, self.secrets), deadline)

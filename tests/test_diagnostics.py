@@ -78,6 +78,7 @@ def test_report_content_redaction_clipboard_and_selection(reports, monkeypatch):
     assert data["consent"] == {"uiAssets": True, "spine": False}
     assert data["libraryCounts"] == {"spr": 2, "lobby": 1, "model": 0, "other": 0}
     assert data["lastFailedJob"]["code"] == "spine_version"
+    assert data["lastFailedJob"]["ref"] == "E3025"
     assert data["timings"]["page.info"]["seconds"] == .25
     assert data["frontend"]["webgl"]["renderer"] == "GPU 123"
     joined = "\n".join(files.values())
@@ -202,6 +203,12 @@ def test_report_includes_the_current_import_list_and_ui_language(reports, monkey
     imports = data["batchImport"]
     assert imports["total"] == 60 and imports["omitted"] == 0 and len(imports["rows"]) == 60
     assert imports["rows"][0]["params"] == {"file": "[asset].bundle", "name": "Body"}
+    assert imports["rows"][0]["id"] == "0"
+    assert imports["rows"][0]["code"] == "required_assets_unmatched"
+    assert imports["rows"][0]["ref"] == "E3021"
+    if popup:
+        assert data["triggeringError"]["ref"] == "E3021"
+        assert data["frontendErrors"][-1]["ref"] == "E3021"
     assert imports["rows"][0]["conversionRoute"] == "global/android -> global/windows"
     assert "Owner Mod" not in "\n".join(files.values())
     assert "[batchImport]" in files["report.txt"] and "required_assets_unmatched" in files["report.txt"]
@@ -215,6 +222,28 @@ def test_report_uses_backend_import_snapshot_when_frontend_is_unavailable(report
         "revision": 2, "rows": [{"id": "model", "kind": "model", "state": "blocked", "reason": "mod_target_unknown"}]})
     data = json.loads(contents(reports.generate())["report.json"])
     assert data["batchImport"]["rows"][0]["reason"] == "mod_target_unknown"
+    assert data["batchImport"]["rows"][0]["ref"] == "E3012"
+
+
+def test_import_row_references_keep_row_ids_and_match_details():
+    row = diagnostics.import_row({
+        "id": "row-1", "state": "incomplete", "reason": None,
+        "attempts": [{"code": "source_unknown", "server": "global"}]}, set())
+    assert row["id"] == "row-1"
+    assert row["code"] == "mod_parts_missing" and row["ref"] == "E3006"
+    assert row["attempts"] == [{"code": "source_unknown", "ref": "E3023", "server": "global"}]
+    row = diagnostics.import_row({"id": "row-2", "reason": "unreadable",
+                                  "error": {"code": "bundle_invalid", "ref": "E3999"}}, set())
+    assert row["id"] == "row-2"
+    assert row["code"] == "bundle_invalid" and row["ref"] == "E3999"
+
+
+def test_frontend_and_trigger_references_preserve_supplied_backend_values(reports):
+    event = {"kind": "popup", "code": "bundle_invalid", "ref": "E3999", "params": {}}
+    assert reports.frontend_event(event)
+    data = json.loads(contents(reports.generate(trigger=event))["report.json"])
+    assert data["frontendErrors"][-1]["ref"] == "E3999"
+    assert data["triggeringError"] == event
 
 
 def test_import_snapshot_bounds_large_lists_with_explicit_omission_count(reports):
@@ -350,7 +379,9 @@ def test_restart_safe_refuses_writers_and_restarts_only_after_lock_release(monke
     r = SimpleNamespace(jobs=SimpleNamespace(busy=lambda: True, reserve_quit=lambda: None, cancel_quit=lambda: None), window=object(), quit_handle=None,
                         restart_requested=False, quit=lambda *, restart=False: requested.append(restart), timings=Timings())
     rpc = build_api(r)
-    assert rpc.call("app.restartSafe", {})["error"]["code"] == "busy"
+    error = rpc.call("app.restartSafe", {})["error"]
+    assert error["code"] == "busy"
+    assert error["ref"] == "E1002"
     assert r.restart_requested is False
     r.jobs.busy = lambda: False
     assert "result" in rpc.call("app.restartSafe", {}) and requested == [True]
@@ -379,7 +410,9 @@ def test_unexpected_rpc_and_job_exceptions_create_reports(reports):
         raise RuntimeError("unexpected")
 
     rpc.method("fail")(fail)
-    assert rpc.call("fail", {})["error"]["code"] == "internal"
+    error = rpc.call("fail", {})["error"]
+    assert error["code"] == "internal"
+    assert error["ref"] == "E1009"
     assert len(list(reports.data_dir.glob("BAMT-report-*.zip"))) == 1
     reports._crash_at = -float("inf")
     jobs = JobRunner(EventBus())
@@ -389,6 +422,7 @@ def test_unexpected_rpc_and_job_exceptions_create_reports(reports):
         job = jobs.submit("fail", fail)
         assert jobs.wait(job, 5)
         assert reports.last_job["code"] == "internal"
+        assert reports.last_job["ref"] == "E1009"
         assert len(list(reports.data_dir.glob("BAMT-report-*.zip"))) == 2
     finally:
         jobs.shutdown()
@@ -575,6 +609,7 @@ def test_review_restart_safe_refuses_unsupported_launches(monkeypatch, compiled,
                         quit_handle=None, restart_requested=False, timings=Timings(), safe_mode=False)
     result = build_api(s).call("app.restartSafe", {})
     assert result["error"]["code"] == "safe_restart_unavailable"
+    assert result["error"]["ref"] == "E1018"
     assert s.restart_requested is False
     assert main.recovery_config(s)["canRestartSafe"] is False
 
@@ -622,6 +657,7 @@ def test_review_popup_report_records_error_code_and_private_parameters(reports):
     assert "result" in result
     error = json.loads(contents(result["result"])["report.json"])["frontendErrors"][-1]
     assert error["code"] == "library_io_error"
+    assert error["ref"] == "E4007"
     assert error["params"] == {"file": "[asset].bundle", "token": "[redacted]", "operation": "read"}
 
 
@@ -687,7 +723,7 @@ def test_review_popup_trigger_survives_a_full_error_rate_limit(reports):
     result = build_api(reports.services).call("app.report", {"event": {
         "kind": "popup", "code": "busy", "params": {"file": "Private Mod.bundle"}}})["result"]
     data = json.loads(contents(result)["report.json"])
-    assert data["triggeringError"] == {"kind": "popup", "code": "busy", "params": {"file": "[asset].bundle"}}
+    assert data["triggeringError"] == {"kind": "popup", "code": "busy", "ref": "E1002", "params": {"file": "[asset].bundle"}}
     assert "busy" in data["summary"]
 
 

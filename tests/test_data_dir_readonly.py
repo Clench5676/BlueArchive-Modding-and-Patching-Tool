@@ -103,7 +103,7 @@ def test_writes_into_a_read_only_data_folder_answer_data_dir_readonly(app, servi
     rpc(app, "ui.visit", variant="hoshino")  # writes fine while the folder takes files
     readonly()
     answer = rpc(app, "ui.visit", variant="shiroko")
-    assert answer["error"] == {"code": "data_dir_readonly", "params": {"path": str(services.data_dir)}}
+    assert answer["error"] == {"code": "data_dir_readonly", "ref": "E1005", "params": {"path": str(services.data_dir)}}
     assert rpc(app, "app.info")["result"]["dataDir"] == str(services.data_dir)  # reads go on working
     assert UiState_recent(services) == ["hoshino"]
 
@@ -123,7 +123,7 @@ def test_a_job_that_cannot_write_fails_with_data_dir_readonly(services, readonly
     while services.jobs.get(key).pending and time.monotonic() < deadline:
         time.sleep(0.01)
     job = services.jobs.get(key)
-    assert job.state == "failed" and job.error == {"code": "data_dir_readonly", "params": {"path": str(services.data_dir)}}
+    assert job.state == "failed" and job.error == {"code": "data_dir_readonly", "ref": "E1005", "params": {"path": str(services.data_dir)}}
 
 
 def test_a_failure_elsewhere_stays_internal(app, services, tmp_path):

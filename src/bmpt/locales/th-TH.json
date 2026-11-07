@@ -207,6 +207,7 @@
 			"label": "ยุบ"
 		},
 		"popup": {
+			"withCode": "{message} ({code})",
 			"switch": "เปลี่ยนภาพตัวละคร",
 			"apply": "ใช้",
 			"save": "บันทึก",

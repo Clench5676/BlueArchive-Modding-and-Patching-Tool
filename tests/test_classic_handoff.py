@@ -969,7 +969,7 @@ def test_a_queued_toggle_runs_after_the_close_and_a_stale_one_is_dropped():
     q.add(toggle(False, True), intent=True)
     run = q.run(Host(intent=True, pins={A: PINS[A]}))
     assert [d.code for d in run.dropped] == ["folder_changed"]
-    assert run.to_json()["dropped"][0]["error"] == {"code": "folder_changed", "params": {}}
+    assert run.to_json()["dropped"][0]["error"] == {"code": "folder_changed", "ref": "E1008", "params": {}}
 
 
 def test_an_empty_queue_does_nothing():
@@ -1066,7 +1066,7 @@ def test_an_unreadable_intent_drops_the_toggle_with_its_error_and_runs_the_rest(
     host = Unreadable()
     run = q.run(host)
     assert [m for m, _ in host.submitted] == ["actions.apply"] and len(q) == 0
-    assert [d.to_json()["error"] for d in run.dropped] == [{"code": "profiles_unreadable",
+    assert [d.to_json()["error"] for d in run.dropped] == [{"code": "profiles_unreadable", "ref": "E1016",
                                                             "params": {"file": "profiles.json"}}]
     assert run.dropped[0].call.toggle
 

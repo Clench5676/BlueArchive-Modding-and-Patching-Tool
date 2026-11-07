@@ -207,6 +207,7 @@
 			"label": "折りたたむ"
 		},
 		"popup": {
+			"withCode": "{message}（{code}）",
 			"switch": "立ち絵切り替え",
 			"apply": "適用",
 			"save": "保存",
