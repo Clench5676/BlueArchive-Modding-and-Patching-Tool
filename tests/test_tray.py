@@ -291,7 +291,7 @@ def test_a_refusal_opens_the_window_on_the_error(made):
     tray._toggle()
     assert services.raises == 1
     sent = [e for e in drain(events) if e[0] == "tray.open"]
-    assert sent == [("tray.open", {"view": "error", "code": "classic_open", "params": {}})]
+    assert sent == [("tray.open", {"view": "error", "code": "classic_open", "ref": "E1004", "params": {}})]
 
 
 def test_a_greyed_toggle_does_nothing(made):

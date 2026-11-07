@@ -207,6 +207,7 @@
 			"label": "收起"
 		},
 		"popup": {
+			"withCode": "{message}（{code}）",
 			"switch": "切换立绘",
 			"apply": "应用",
 			"save": "保存",

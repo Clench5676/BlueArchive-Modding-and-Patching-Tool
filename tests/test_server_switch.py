@@ -117,7 +117,7 @@ def test_missing_global_directory_preserves_japan_and_preferences(app, services,
     before = settings.path.read_bytes()
     monkeypatch.setattr(services, "reload_game", lambda: pytest.fail("missing folder must not refresh"))
     assert rpc(app, "settings.set", key="fileSource", value="windows_global")["error"] == {
-        "code": "game_directory_missing", "params": {"region": "global"}}
+        "code": "game_directory_missing", "ref": "E2004", "params": {"region": "global"}}
     assert settings.get("file_source") == "windows_japan"
     assert settings.path.read_bytes() == before
 

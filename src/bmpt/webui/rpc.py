@@ -6,7 +6,7 @@ import inspect
 import logging
 from typing import Any, Callable
 
-from ..errors import ServiceError
+from ..errors import ServiceError, log_service_error
 
 logger = logging.getLogger(__name__)
 
@@ -30,29 +30,33 @@ class RpcRegistry:
         return sorted(self._methods)
 
     def call(self, name: str, params: dict[str, Any] | None) -> dict[str, Any]:
-        """Run a method; returns ``{"result": ...}`` or ``{"error": {"code", "params"}}``, never raises."""
+        """Run a method; returns ``{"result": ...}`` or a coded ``error``, never raises."""
+        def failed(error: ServiceError) -> dict[str, Any]:
+            log_service_error(logger, error)
+            return {"error": error.to_json()}
+
         fn = self._methods.get(name)
         if fn is None:
-            return {"error": {"code": "unknown_method", "params": {"method": name}}}
+            return failed(ServiceError("unknown_method", method=name))
         params = params or {}
         if not isinstance(params, dict):
-            return {"error": {"code": "bad_params", "params": {"method": name}}}
+            return failed(ServiceError("bad_params", method=name))
         try:
             inspect.signature(fn).bind(**params)
         except TypeError as e:
-            return {"error": {"code": "bad_params", "params": {"method": name, "error": str(e)}}}
+            return failed(ServiceError("bad_params", method=name, error=str(e)))
         try:
             result = fn(**params)
         except ServiceError as e:
-            return {"error": e.to_json()}
+            return failed(e)
         except Exception as e:
             known = self.translate(e) if self.translate else None
             if known is not None:
-                return {"error": known.to_json()}
+                return failed(known)
             logger.exception("RPC %s failed", name)
             if self.on_exception:
                 self.on_exception(type(e), e, e.__traceback__)
-            return {"error": {"code": "internal", "params": {"method": name, "error": f"{type(e).__name__}: {e}"}}}
+            return failed(ServiceError("internal", method=name, error=f"{type(e).__name__}: {e}"))
         return {"result": to_json(result)}
 
 

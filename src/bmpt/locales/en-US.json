@@ -207,6 +207,7 @@
 			"label": "Collapse"
 		},
 		"popup": {
+			"withCode": "{message} ({code})",
 			"switch": "Switch Portrait",
 			"apply": "Apply",
 			"save": "Save",
