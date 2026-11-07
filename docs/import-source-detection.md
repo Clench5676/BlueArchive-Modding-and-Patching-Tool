@@ -13,7 +13,8 @@ A reliable platform or region is a constraint, including a region established by
 shared official CAB. Conflicting markers and unsupported build targets remain errors.
 The remaining choices use Global before Japan and Android before iOS before PC. The
 first valid choice wins. When none is valid, the row reports the first failure other
-than a cross-region file-name mismatch, which every wrong region guess produces. These choices describe compatible conversion inputs;
+than a cross-region file-name mismatch, which every wrong region guess produces, and
+the error report lists every choice tried with its failure. These choices describe compatible conversion inputs;
 indistinguishable bundles cannot prove their historical origin. Manual selections
 also cannot contradict reliable evidence.
 

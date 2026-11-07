@@ -124,6 +124,8 @@ class Candidate:
     direct: dict[Path, Path] = field(default_factory=dict)
     provenance: dict | None = None
     missing_cabs: set[str] = field(default_factory=set)
+    # the import preview composed this row (``BatchImport.preview``): a refusal of such a row is marked in reports
+    previewed: bool = False
 
 
 @dataclass
@@ -183,6 +185,19 @@ def bundle_evidence(candidate: Candidate, inspection: integrity.Inspection) -> l
         if summary is not None:
             rows.append({"file": path.name, **summary})
     return rows
+
+
+def target_evidence(entry: dict, resolution: Any, attempts: list[dict]) -> None:
+    """What a refused entry's check found of its targets, for the error report and the log: per file how the resolver
+    matched it and the official parts and dates it found (``Resolution.evidence``), and, for a guessed source, every
+    server and platform tried with its failure."""
+    if resolution is not None:
+        try:
+            entry["resolution"] = resolution.evidence()[:EVIDENCE_BUNDLES]
+        except (ServiceError, OSError, ValueError):
+            logger.debug("Batch import: no target evidence", exc_info=True)
+    if attempts:
+        entry["attempts"] = attempts
 
 
 def failure_detail(error: ServiceError, paths: Any, log: Any = no_log, *, secrets: set[str] | None = None) -> dict:
@@ -376,7 +391,8 @@ class BatchImport:
 
     def diagnostic_snapshot(self) -> dict:
         with self._lock:
-            return {"revision": self._revision, "rows": [deepcopy(c.entry) for c in self._latest.values()]}
+            return {"revision": self._revision,
+                    "rows": [{**deepcopy(c.entry), "previewed": c.previewed} for c in self._latest.values()]}
 
     def _log_analysis(self, candidate: Candidate, phase: str) -> None:
         from .diagnostics import import_row
@@ -537,6 +553,7 @@ class BatchImport:
         with self._lock:
             if key not in self._previews:
                 raise KeyError(key)
+            candidate.previewed = True
         return core_name, bundles
 
     def _collect(self, paths: list[str], recursive: bool, library: Any, *,
@@ -794,6 +811,9 @@ class BatchImport:
         candidate.provenance = None
         inspection = integrity.Inspection(asset_types if asset_types is not None else set(self.options()["types"]),
                                           header_only_missing=True)
+        entry.pop("resolution", None)
+        entry.pop("attempts", None)
+        resolution, attempts = None, []
         try:
             if candidate.error in ("mod_target_unknown", "mod_target_ambiguous") or entry.get("assignment"):
                 existing = library.find_import_output(list(candidate.files.values()))
@@ -954,6 +974,7 @@ class BatchImport:
                         failure = error.code
                 if failure:
                     if inferred:
+                        attempts.append({"server": choice["server"], "platform": choice["platform"], "code": failure})
                         # A guessed server whose file names the install lacks says less than why a guess with
                         # matching names failed, so that reason is kept.
                         if last_failure in (None, "conversion_names"):
@@ -968,7 +989,10 @@ class BatchImport:
                         available = set().union(*(inspection.keys(baseline[path]) for path in chosen))
                         if not required or not required <= available:
                             raise ServiceError("no_matching_assets")
-                    except (ServiceError, OSError, ValueError):
+                    except (ServiceError, OSError, ValueError) as error:
+                        if inferred:
+                            attempts.append({"server": choice["server"], "platform": choice["platform"],
+                                             "code": getattr(error, "code", "unreadable")})
                         inspection.validate()
                         raise
                 if not converting and not rebuild:
@@ -991,6 +1015,7 @@ class BatchImport:
             candidate.missing_cabs = set(inspection.missing_cabs)
             if evidence := bundle_evidence(candidate, inspection):
                 entry["bundles"] = evidence
+            target_evidence(entry, resolution, attempts)
             if error.code == "mod_parts_missing" and candidate.missing_cabs:
                 entry.update(state="incomplete", reason=None, missing=missing_detail(candidate.missing_cabs, []))
                 return
@@ -1002,6 +1027,7 @@ class BatchImport:
         except (OSError, ValueError) as error:
             if evidence := bundle_evidence(candidate, inspection):
                 entry["bundles"] = evidence
+            target_evidence(entry, resolution, attempts)
             detail = ServiceError("bundle_invalid", file=source_file(candidate), error=str(error))
             entry.update(state="blocked", reason="unreadable",
                          error=failure_detail(detail, candidate.files.values(), log,
