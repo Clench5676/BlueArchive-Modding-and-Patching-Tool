@@ -53,6 +53,36 @@ def test_source_preview_composes_missing_official_parts_and_never_writes_art_to_
     assert all(path.read_bytes() == data for path, data in before.items())
 
 
+def test_a_transferring_import_previews_only_the_asset_types_it_writes(env, monkeypatch):
+    from test_batch_import import rpc
+    source = game_bundle(env.tmp / "input", date="2025-01-01", payload=b"older mod")
+    text = game_bundle(env.game_dir, part="textassets", payload=b"official skeleton")
+    assets = {text.resolve(): {"test_spr.skel": ("TextAsset", b"official skeleton"),
+                               "test_spr.atlas": ("TextAsset", b"page.png\n")},
+              env.original.resolve(): {"page.png": ("Texture2D", b"official pixels")},
+              source.resolve(): {"test_spr.skel": ("TextAsset", b"mod skeleton"), "page.png": ("Texture2D", b"mod pixels")}}
+
+    def extract(paths, skip=None):
+        files = {}
+        for path in paths:
+            left = (skip or {}).get(path, frozenset())
+            files.update({name: data for name, (kind, data) in assets[path].items() if kind not in left})
+        return files
+
+    env.services._game = GameAssets([env.game_dir], AssetCache(allowed=True, root=env.tmp / "art-cache"))
+    monkeypatch.setattr("bmpt.gameassets.service.extract_spine", extract)
+    options = rpc(env, "import.options")
+    for types, skeleton in ((["Texture2D"], b"official skeleton"), (["Texture2D", "TextAsset"], b"mod skeleton")):
+        rpc(env, "import.setOptions", **{**options, "types": types})
+        entry, = analyze(env, [source])["entries"]
+        assert entry["state"] == "update", entry
+        app, prefix = preview_route(env, entry)
+        revision = json.loads(call(app, prefix + "/manifest.json")[2])["revision"]
+        # the import leaves the types its options do not name official, and so does its preview
+        assert call(app, f"{prefix}/{revision}/skeleton.skel")[2] == skeleton
+        assert call(app, f"{prefix}/{revision}/page.png")[2] == b"mod pixels"
+
+
 def test_source_preview_uses_the_identified_core_for_renamed_uploads(env, monkeypatch):
     target = game_bundle(env.game_dir, "test_home_gl")
     source = game_bundle(env.tmp / "renamed", date="2025-01-01", payload=b"renamed lobby")
