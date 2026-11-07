@@ -1,6 +1,8 @@
 // Verified LobbyCommon and LobbyCommonNight: identity ancestors, TweenController/CharPos at (-112, -886),
 // scale 111. Ordinary portrait SkeletonDataAssets use .01. The game's 16:9 UI camera spans 2960 x 1665 units.
 // These are a projection baseline, not a claim about every runtime camera/character composition.
+import { CONTROL, SPACE } from "./ui-tokens.js";
+import { row } from "./ui-grid.js";
 export const LOBBY_CHARACTER_POS = Object.freeze({ pos: [-112, -886], scale: [111, 111] });
 export const LOBBY_UI_WIDTH = 2960;
 export const PORTRAIT_SKELETON_SCALE = .01;
@@ -192,7 +194,7 @@ export function bindPortraitPointer(surface, { root, pick, hover, down, move, en
 }
 
 export const PORTRAIT_SIZE = Object.freeze({ min: .5, max: 2, default: 1 });
-// App-owned packing around native 62px icon buttons and the UILobby 104-unit slider body. The two rows never overlap.
+// App-owned packing around the existing 62px icon buttons and the UILobby 104-unit slider body. The two rows never overlap.
 // Centred directly above the portrait's visible head (`head`, stage units) and touching it, so the pointer can travel
 // from the portrait into the toolbar; without a head, above the portrait's box. Where that would leave the stage or cover
 // a control (the top bar, the Hall's top-right buttons and slider), it goes under the portrait's feet instead, or to the
@@ -200,10 +202,12 @@ export const PORTRAIT_SIZE = Object.freeze({ min: .5, max: 2, default: 1 });
 export const PORTRAIT_TOOLBAR_MARGIN = 16;
 // The second row is the slider body's height (UILobby Btn_RotateSpine/ConditionRoot/Able_Count/Bg, 156 x 104 units);
 // Reset beside it takes the same height (owner, 2026-11-04).
-export const PORTRAIT_TOOLBAR_ROW = 104 * 1920 / LOBBY_UI_WIDTH;
-export const PORTRAIT_TOOLBAR_HEIGHT = 74 + PORTRAIT_TOOLBAR_ROW;
+export const PORTRAIT_TOOLBAR_ROW = CONTROL.toolbar.h * 1920 / LOBBY_UI_WIDTH;
+export const PORTRAIT_TOOLBAR_HEIGHT = 62 + SPACE.l * 1920 / LOBBY_UI_WIDTH + PORTRAIT_TOOLBAR_ROW;
 export function portraitToolbarLayout(rect, count, obstacles = [], head = null) {
-  const icon = 62, gap = 6, width = Math.max(420, count * (icon + gap) - gap), height = PORTRAIT_TOOLBAR_HEIGHT, edge = 20, m = PORTRAIT_TOOLBAR_MARGIN;
+  const scale = 1920 / LOBBY_UI_WIDTH, icon = 62, gap = SPACE.m * scale;
+  const icons = row(Array.from({ length: count }, () => ({ w: icon, h: icon })), { gap });
+  const width = Math.max(420, icons.w), height = PORTRAIT_TOOLBAR_HEIGHT, edge = 20, m = PORTRAIT_TOOLBAR_MARGIN;
   const centre = head ? head.x : rect.x + rect.width / 2, top = head ? head.y : rect.y;
   const x = Math.max(edge, Math.min(1920 - edge - width, centre - width / 2));
   const covered = (y) => obstacles.filter((o) => x < o.x + o.width + m && x + width > o.x - m && y < o.y + o.height + m && y + height > o.y - m);
@@ -215,6 +219,10 @@ export function portraitToolbarLayout(rect, count, obstacles = [], head = null) 
   }
   // A head below the stage still keeps the toolbar on it.
   y = Math.max(edge, Math.min(1080 - edge - height, y));
-  const row = PORTRAIT_TOOLBAR_ROW;
-  return { x, y, width, height, icon, gap, slider: [0, 74 + row / 2, width - 168], reset: [width - 156, 74, 156, row] };
+  // The second row retains the slider prefab's 104-unit height and the existing Reset width of 156px.
+  const controls = row([{ grow: 1 }, { w: 156, h: PORTRAIT_TOOLBAR_ROW }],
+    { y: icon + SPACE.l * scale, w: width, h: PORTRAIT_TOOLBAR_ROW, gap });
+  const [slider, reset] = controls.boxes;
+  return { x, y, width, height, icon, gap, icons: icons.boxes,
+    slider: [slider.x, slider.y + slider.h / 2, slider.w], reset: [reset.x, reset.y, reset.w, reset.h] };
 }

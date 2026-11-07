@@ -183,3 +183,23 @@ test("the visible head ignores Spine's bounds: transparent props, additive halos
   assert.ok(Math.abs(head.x + 300) <= 8, "mirrored"); skeleton.scaleX = 1;
   skeleton.bones[0].active = false; assert.equal(visibleHead(skeleton, Runtime, pages), null);
 });
+
+import { portraitToolbarLayout, PORTRAIT_TOOLBAR_HEIGHT } from "../../src/bmpt/web/js/student-hall-framing.js";
+import { CONTROL, SPACE } from "../../src/bmpt/web/js/ui-tokens.js";
+for(const locale of ["en-US","zh-CN"])test(`portrait toolbar centres equal icons with scaled gaps in ${locale}`,()=>{
+  const S=1920/2960,box=portraitToolbarLayout({x:700,y:500,width:400,height:600},7);
+  assert.equal(box.icons.length,7);
+  for(let i=0;i<box.icons.length;i++){
+    const icon=box.icons[i];assert.deepEqual([icon.w,icon.h],[62,62]);assert.equal(icon.y+icon.h/2,31);
+    if(i)assert.ok(Math.abs(icon.x-box.icons[i-1].x-box.icons[i-1].w-SPACE.m*S)<1e-9);
+  }
+  assert.ok(Math.abs(box.reset[0]-box.slider[0]-box.slider[2]-SPACE.m*S)<1e-9);
+  assert.ok(Math.abs(box.reset[3]-CONTROL.toolbar.h*S)<1e-9);
+  assert.ok(Math.abs(box.reset[1]-62-SPACE.l*S)<1e-9);
+  assert.equal(box.height,PORTRAIT_TOOLBAR_HEIGHT);
+  assert.equal(box.y+box.height,500);
+  for(const viewport of [960,1600,2560])for(const density of [1,2]){
+    const k=viewport/1920*density;assert.ok(box.x*k>=0&&(box.x+box.width)*k<=viewport*density);
+    assert.ok(Math.abs((box.icons[1].x-box.icons[0].x-box.icon)*k-SPACE.m*S*k)<1e-9);
+  }
+});

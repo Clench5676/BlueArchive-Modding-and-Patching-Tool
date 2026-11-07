@@ -8,7 +8,9 @@ import {clone,S,hitButton} from '../util.js';
 import {captureScene} from './capture.js';
 import {photograph} from './shoot.js';
 import {cameraFeedback} from './feedback.js';
-import {FRAME,choiceLayout,OCCLUSION_BUTTON,TOOLBAR_CAPTION,otherMode,actionCaption} from './camera.js';
+import {FRAME,choiceLayout,otherMode,actionCaption} from './camera.js';
+import {CONTROL,SMALL_BUTTON,SPACE} from '../ui-tokens.js';
+import {row} from '../ui-grid.js';
 import {alignIcon,buttonCenter} from '../student-hall-icons.js';
 import {anchoredCentre} from '../visual-view.js';
 import {wheelKind,wheelStep} from '../lobby-touch.js';
@@ -39,8 +41,30 @@ function errorText(error){return error.code?T(`error.${error.code}`,error.params
 function safe(fn){return (...args)=>Promise.resolve().then(()=>fn(...args)).catch(error=>{if(error.name==='AbortError')return;console.error('Photography action failed',error);return Popup.message({title:P('failed'),lines:[errorText(error)],ok:P('confirm')});});}
 function node(name,widgets,children=[]){return {name,active:true,pos:[0,0],scale:[1,1,1],rotZ:0,widgets,children};}
 let whiteTemplate;
+// Back retains UICharacterVisualMode/Inventory_ListControl_PC/LeftTop/Btn_Back's own 171 x 116-unit body;
+// the separate shutter keeps its existing 146px circle. Composed toolbar controls use the design system.
+function photographyToolbarLayout(){
+  const textH=CONTROL.buttonS.h*S,icon={w:102,h:82};
+  const texts=row([{w:196,h:textH},{w:196,h:textH}],{gap:SPACE.m*S});
+  const top=row([texts,icon],{gap:SPACE.l*S});
+  const x=1890-top.w,y=25,asBox=b=>[b.x,b.y,b.w,b.h];
+  const textBoxes=texts.boxes.map(b=>asBox({...b,x:x+top.boxes[0].x+b.x,y:y+top.boxes[0].y+b.y}));
+  const mode=asBox({...top.boxes[1],x:x+top.boxes[1].x,y:y+top.boxes[1].y});
+  const bottom=row([icon,icon],{x:1890-2*icon.w-SPACE.m*S,y:950,gap:SPACE.m*S});
+  const gallery=row([icon],{x:25,y:950}).boxes[0];
+  return {occlusion:textBoxes[0],grid:textBoxes[1],mode,top:[x,y,top.w,top.h],
+    playback:asBox(bottom.boxes[0]),choices:asBox(bottom.boxes[1]),gallery:asBox(gallery),
+    caption:{size:CONTROL.buttonS.fs,min:SMALL_BUTTON.fsMin,width:196/S-2*CONTROL.buttonS.pad,height:CONTROL.buttonS.h-SMALL_BUTTON.boxInsetH}};
+}
+function galleryPair(width,x,y){
+  return row([{w:Math.max(width,CONTROL.buttonS.minW*S),h:CONTROL.buttonS.h*S},{w:Math.max(width,CONTROL.buttonS.minW*S),h:CONTROL.buttonS.h*S}],
+    {x,y,gap:SPACE.m*S}).boxes.map(b=>[b.x,b.y,b.w,b.h]);
+}
 // The captions of the two text buttons, one size for both states of the grid button too, so nothing changes size on a click.
-const toolbarCaptions=()=>NGUI.fitGroup([P('occlusion'),P('gridOn'),P('gridOff')],TOOLBAR_CAPTION.size,TOOLBAR_CAPTION.min,TOOLBAR_CAPTION.width/S,2,{maxH:TOOLBAR_CAPTION.height/S});
+const toolbarCaptions=()=>{
+  const {caption}=photographyToolbarLayout();
+  return NGUI.fitGroup([P('occlusion'),P('gridOn'),P('gridOff')],caption.size,caption.min,caption.width,2,{maxH:caption.height});
+};
 async function whiteButton(host,name,caption,box,action,{icon=null,atlas='Common',pressed=false,enabled=true,fit=null,corner=null,anchorBox=box}={}){
   whiteTemplate ||= NGUI.layout('UICharacterVisualMode').then(layout=>clone(NGUI.find(layout,'Inventory_ListControl_PC/LeftTop/Btn_Back')));
   const tree=clone(await whiteTemplate),[x,y,w,h]=box;
@@ -48,7 +72,7 @@ async function whiteButton(host,name,caption,box,action,{icon=null,atlas='Common
   const body=tree.widgets.find(widget=>'sprite' in widget);body.w_=w/S;body.h_=h/S;body.depth=60;
   if(pressed)body.color='#b9eeff/1.00';
   if(icon)tree.children.push(node('Icon',[{sprite:icon,atlas,w_:Math.min(w-30,h-26)/S,h_:Math.min(w-30,h-26)/S,pivot:4,depth:65,color:'#2b496e/1.00',type:0}]));
-  else tree.children.push(node('Label',[{text:fit?.text??caption,fontSize:fit?.fs??TOOLBAR_CAPTION.size,w_:(w-24)/S,h_:(h-16)/S,pivot:4,depth:65,color:'#2b496e/1.00',align:2}]));
+  else tree.children.push(node('Label',[{text:fit?.text??caption,fontSize:fit?.fs??CONTROL.buttonS.fs,w_:w/S-SMALL_BUTTON.boxInsetW,h_:h/S-SMALL_BUTTON.boxInsetH,pivot:4,depth:65,color:'#2b496e/1.00',align:2}]));
   const wrapper=document.createElement('div');wrapper.dataset.photoControl=name;host.append(wrapper);
   const view=await NGUI.render(tree,wrapper,{scale:S,origin:[x+w/2,y+h/2]});
   if(icon)await alignIcon(view,`${name}/Icon`,name,{height:h*.52,maxWidth:w*.64,center:'bounds',color:'#2b496e'});
@@ -60,7 +84,7 @@ async function whiteButton(host,name,caption,box,action,{icon=null,atlas='Common
       const probe=await NGUI.render(stencil,document.createElement('div'),{scale:S,origin:[x+w/2,y+h/2]});opticalBody=probe.nodes.get(name).els[0];
     }
     const center=await buttonCenter(opticalBody),label=view.nodes.get(`${name}/Label`).els[0];
-    Object.assign(label.style,{left:`${center.x-(w-24)/2}px`,top:`${center.y-(h-16)/2}px`,paddingBottom:'0px',justifyContent:'center'});
+    Object.assign(label.style,{left:`${center.x-(w-SMALL_BUTTON.boxInsetW*S)/2}px`,top:`${center.y-(h-SMALL_BUTTON.boxInsetH*S)/2}px`,paddingBottom:'0px',justifyContent:'center'});
     // The layer is not in the document yet, where computed style is empty: the size is the one the label was drawn with.
     label.style.translate=`0 ${NGUI.inkShift(fit?.text??caption,parseFloat(label.style.fontSize))}px`;
   }
@@ -170,15 +194,16 @@ async function shutter(layer){
 async function modeButton(host){
   // a skin without the other mode has nothing to switch to: no button, rather than one that can only fail
   if(!otherMode(mode,bridge.info()))return;
+  const boxes=photographyToolbarLayout(),[x,y,w,h]=boxes.mode;
   const wrapper=document.createElement('div');host.append(wrapper);
   const layout=await NGUI.layout('UILobby'),tree=clone(NGUI.find(layout,'Front/Right/Btn_RotateSpine/ConditionRoot/Able_Count'));
   tree.name='CameraMode';tree.pos=[0,0];tree.children=tree.children.filter(child=>['Bg','Icon'].includes(child.name));
-  const body=NGUI.find(tree,'Bg').widgets.find(w=>'sprite' in w);body.w_=102/S;body.h_=76/S;body.depth=60;
+  const body=NGUI.find(tree,'Bg').widgets.find(w=>'sprite' in w);body.w_=w/S;body.h_=h/S;body.depth=60;
   const icon=NGUI.find(tree,'Icon');icon.pos=[0,0];icon.scale=[1,1];icon.widgets.find(w=>'sprite' in w).depth=65;
-  const view=await NGUI.render(tree,wrapper,{scale:S,origin:[1839,63]});
+  const view=await NGUI.render(tree,wrapper,{scale:S,origin:[x+w/2,y+h/2]});
   await alignIcon(view,'CameraMode/Icon','CameraMode/Bg',{height:48*S,maxWidth:104*S,center:'bounds',color:'#2b496e'});
-  const hit=hitButton(wrapper,[1788,25,102,76],safe(switchMode),P(mode==='portrait'?'lobby':'portrait'),90);hit.dataset.photoAction='Mode';
-  bindCorner(wrapper,[1352,25,538,76],{corner:'top-right'});
+  const hit=hitButton(wrapper,boxes.mode,safe(switchMode),P(mode==='portrait'?'lobby':'portrait'),90);hit.dataset.photoAction='Mode';
+  bindCorner(wrapper,boxes.top,{corner:'top-right'});
 }
 
 async function backButton(host){
@@ -189,12 +214,13 @@ async function backButton(host){
 
 async function playbackButton(host){
   const wrapper=document.createElement('div');host.append(wrapper);
-  const {tree,textures}=bridge.playbackTree(paused),scale=82/141,width=145*scale,x=1788-20-width;
-  tree.widgets.find(w=>'sprite' in w).depth=60;
+  const boxes=photographyToolbarLayout(),[x,y,width,height]=boxes.playback;
+  const {tree,textures}=bridge.playbackTree(paused),scale=height/141;
+  Object.assign(tree.widgets.find(w=>'sprite' in w),{depth:60,w_:width/scale,h_:height/scale});
   for(const child of tree.children)for(const widget of child.widgets||[])widget.depth=65;
-  await NGUI.render(tree,wrapper,{scale,origin:[x+width/2,991],textureNames:textures});
-  const hit=hitButton(wrapper,[x,950,width,82],safe(async()=>{if(saving)return;paused=!paused;bridge.pause(paused);await drawControls();}),P(paused?'play':'pause'),90);
-  bindCorner(wrapper,[1788,950,102,82],{corner:'bottom-right'});
+  await NGUI.render(tree,wrapper,{scale,origin:[x+width/2,y+height/2],textureNames:textures});
+  const hit=hitButton(wrapper,boxes.playback,safe(async()=>{if(saving)return;paused=!paused;bridge.pause(paused);await drawControls();}),P(paused?'play':'pause'),90);
+  bindCorner(wrapper,boxes.choices,{corner:'bottom-right'});
   hit.dataset.photoAction='Playback';hit.setAttribute('aria-pressed',String(paused));
 }
 
@@ -232,19 +258,19 @@ async function drawControls(){
   const layer=document.createElement('div');panSurface(layer);
   const guide=document.createElement('div');guide.className='photo-guide'+(grid?'':' no-grid');guide.innerHTML='<i></i><i></i><i></i><i></i>';layer.append(guide);
   Object.assign(guide.style,{left:`${FRAME.x}px`,top:`${FRAME.y}px`,width:`${FRAME.width}px`,height:`${FRAME.height}px`});
-  const captions=toolbarCaptions();
+  const captions=toolbarCaptions(),boxes=photographyToolbarLayout();
   const buttons=[backButton(layer),
-    whiteButton(layer,'Occlusion',P('occlusion'),OCCLUSION_BUTTON,async()=>{occlusion=!occlusion;await drawControls();},{pressed:occlusion,fit:captions[0],corner:'top-right',anchorBox:[1352,25,538,76]}),
-    whiteButton(layer,'Grid',grid?P('gridOn'):P('gridOff'),[1570,25,196,76],async()=>{grid=!grid;await drawControls();},{pressed:grid,fit:captions[grid?1:2],corner:'top-right',anchorBox:[1352,25,538,76]}),
+    whiteButton(layer,'Occlusion',P('occlusion'),boxes.occlusion,async()=>{occlusion=!occlusion;await drawControls();},{pressed:occlusion,fit:captions[0],corner:'top-right',anchorBox:boxes.top}),
+    whiteButton(layer,'Grid',grid?P('gridOn'):P('gridOff'),boxes.grid,async()=>{grid=!grid;await drawControls();},{pressed:grid,fit:captions[grid?1:2],corner:'top-right',anchorBox:boxes.top}),
     modeButton(layer),
-    whiteButton(layer,'Gallery',P('gallery'),[25,950,130,82],openGallery,{icon:'Cafe_Icon_Photo',corner:'bottom-left'}),
+    whiteButton(layer,'Gallery',P('gallery'),boxes.gallery,openGallery,{icon:'Cafe_Icon_Photo',corner:'bottom-left'}),
     shutter(layer),
-    whiteButton(layer,'Choices',P(mode==='portrait'?'expressions':'actions'),[1788,950,102,82],async()=>{expanded=!expanded;await drawControls();},{...CHOICE_ICONS[mode],corner:'bottom-right'})];
+    whiteButton(layer,'Choices',P(mode==='portrait'?'expressions':'actions'),boxes.choices,async()=>{expanded=!expanded;await drawControls();},{...CHOICE_ICONS[mode],corner:'bottom-right'})];
   if(occlusion)buttons.push(occlusionGuide(layer));
   if(mode==='lobby')buttons.push(playbackButton(layer));
   if(expanded){
     const panelHost=document.createElement('div');layer.append(panelHost);
-    bindCorner(panelHost,[1788,950,102,82],{corner:'bottom-right'});
+    bindCorner(panelHost,boxes.choices,{corner:'bottom-right'});
     const entries=mode==='portrait'?bridge.expressions():bridge.actions(),box=choiceLayout(mode,entries.length);
     choiceShield(panelHost,box);await choicePanel(panelHost,box);
     if(mode==='portrait'){
@@ -312,22 +338,22 @@ async function galleryDraw(){
     if(selectedPhoto){
       await image(layer,selectedPhoto.url,[1190,270,320,320]);
       await UI.caption(layer,selectedPhoto.name,[1190,625,320],{align:2});
-      const pair=UI.buttonSize([P('apply'),P('delete')],140,64);
-      await UI.button(layer,'Apply',P('apply'),[1200,670,140,64],safe(applyGame),{semantic:"apply",size:pair,enabled:repository.applicable&&(!repository.game?.known||selected!==repository.game?.id||!!repository.game?.error||repository.game?.pending)});
-      if(selectedPhoto.managed!==false&&selectedPhoto.provenance!=='official')await UI.button(layer,'Delete',P('delete'),[1360,670,140,64],safe(deletePhoto),{size:pair});
+      const pairBoxes=galleryPair(140,1200,670),pair=UI.buttonSize([P('apply'),P('delete')],pairBoxes[0][2],pairBoxes[0][3]);
+      await UI.button(layer,'Apply',P('apply'),pairBoxes[0],safe(applyGame),{semantic:"apply",size:pair,enabled:repository.applicable&&(!repository.game?.known||selected!==repository.game?.id||!!repository.game?.error||repository.game?.pending)});
+      if(selectedPhoto.managed!==false&&selectedPhoto.provenance!=='official')await UI.button(layer,'Delete',P('delete'),pairBoxes[1],safe(deletePhoto),{size:pair});
     }
     if(allPhotos.length>6){
-      const paging=UI.buttonSize([P('previous'),P('next')],180,55);
-      await UI.button(layer,'Previous',P('previous'),[365,748,180,55],safe(async()=>{page=Math.max(0,page-1);await galleryDraw();}),{enabled:page>0,size:paging});
-      await UI.button(layer,'Next',P('next'),[565,748,180,55],safe(async()=>{page++;await galleryDraw();}),{enabled:(page+1)*6<allPhotos.length,size:paging});
+      const pagingBoxes=galleryPair(180,365,835-(SPACE.l+CONTROL.buttonS.h)*S),paging=UI.buttonSize([P('previous'),P('next')],pagingBoxes[0][2],pagingBoxes[0][3]);
+      await UI.button(layer,'Previous',P('previous'),pagingBoxes[0],safe(async()=>{page=Math.max(0,page-1);await galleryDraw();}),{enabled:page>0,size:paging});
+      await UI.button(layer,'Next',P('next'),pagingBoxes[1],safe(async()=>{page++;await galleryDraw();}),{enabled:(page+1)*6<allPhotos.length,size:paging});
     }
-    const tools=UI.buttonSize([P('restore'),P('export')],180,64);
-    await UI.button(layer,'Restore',P('restore'),[365,835,180,64],safe(async()=>{
+    const toolBoxes=galleryPair(180,365,835),tools=UI.buttonSize([P('restore'),P('export')],toolBoxes[0][2],toolBoxes[0][3]);
+    await UI.button(layer,'Restore',P('restore'),toolBoxes[0],safe(async()=>{
       const scope=generation;
       await Loading.task(async()=>{await waitJob(await call('restore',{png:await generatedPNG()}));if(scope!==generation)throw new DOMException('Photography ended','AbortError');await repositoryRead();});
       bridge.thumbnailChanged();selected=repository.app||DEFAULT;page=0;await galleryDraw();
     }),{enabled:repository.app!==repository.game?.id||!photo(repository.game?.id)?.builtin,size:tools});
-    await UI.button(layer,'Export',P('export'),[565,835,180,64],safe(async()=>{await Loading.task(async()=>call('export',{id:selected,png:selected===DEFAULT?await generatedPNG():null}));}),{enabled:!!selectedPhoto,size:tools});
+    await UI.button(layer,'Export',P('export'),toolBoxes[1],safe(async()=>{await Loading.task(async()=>call('export',{id:selected,png:selected===DEFAULT?await generatedPNG():null}));}),{enabled:!!selectedPhoto,size:tools});
     await UI.button(layer,'SaveSelection',P('saveSelection'),[1280,835,140,64],safe(async()=>{repository=normalized({...repository,...await call('select',{id:selectedKey(selected)})});bridge.thumbnailChanged();modal.close();modal=null;bridge.pause(paused);}),{semantic:"save",enabled:!!selected});
   },[],{width:2000,height:1200});
 }

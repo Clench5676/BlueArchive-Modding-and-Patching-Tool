@@ -45,6 +45,13 @@ without a portrait gets none. In the memorial camera's Dialogue / Actions list a
 screen names it (`lobby.dialogue`, "Dialogue 3"), never by its Spine clip name; the idle poses in that list have no label
 of their own yet and keep their clip names. The owner handles UAT/visual review.
 
+The composed camera controls use centred `ui-grid.js` rows: neighbours are `SPACE.m` (20 units times `S`) apart,
+groups `SPACE.l` (28 units times `S`). Occlusion Guide and Grid share 136-unit `CONTROL.buttonS` bodies and one
+48-to-34 caption size, including both grid states. Mode, Gallery, Playback and Choices share 102 x 82 px bodies;
+the mode control centres beside the taller text pair. Back retains its native 171 x 116-unit body and the shutter
+its separate 146 px circle. Gallery action, paging and tool pairs use buttonS bodies, one caption size per pair and
+20-unit gaps; the paging row leaves 28 units above the tool row.
+
 `photographs/` belongs to the movable/shared Mod library, not Preview Cache. Its atomic manifest retains per-student
 captures and App choices, IDs and SHA-256 digests; image publication rolls back if metadata cannot commit. Chosen
 App photographs and configured/applied game photographs cannot be deleted. Preview-cache clearing never removes
@@ -1641,6 +1648,10 @@ preserved. Editing and modal controls retain their own input, and disposal remov
 `student-hall.js` renders portrait-composition and memorial-lobby modes with the game's `UILobby` controls and
 `UILobbyCharacterSelectPopup_Slot` editor cards. Local actions precede the mode switch at the upper right. The global
 Home control comes from `UICharacterCollection/NUITop_Scenes/Top/Right/Lobby`; no bottom-nav Hall entry is added.
+The action and navigation groups use centred `ui-grid.js` rows, with 20-unit gaps between neighbours and 28 units
+between groups, converted to CSS pixels with `S`. Their cloned `Able_Count/Bg` bodies keep 156 x 104 units
+(`CONTROL.toolbar.h`); the selected action sprites retain their authored dimensions and existing optical sizing.
+Cancel/Save shares 136-unit buttonS bodies, one fitted 48-to-34 caption size and a 20-unit gap.
 Hall choices are separate from game application and detail preview selections. Every entry has its own UUID.
 The far-right Fullscreen action clones `UILobby/Front/Right/Btn_Screen_On`; the exit clones
 `Front/Right/ScreenshotMode/ModeInformation/Btn_Screen_Off`. Their icons use the same visible-size and native-body
@@ -1751,14 +1762,22 @@ up by the row's 16 px of free top space; its size and the name captions stay unc
 by its existing hit outset (x 240 to 228, width 960 to 972), while card/action stage horizontal centres stay unchanged.
 Even the tightest searched viewport (Japanese toolbar) holds a full row. Horizontal card pitch stays 220 px.
 
-The portrait toolbar's second row is the slider body's height (`UILobby` `Btn_RotateSpine/ConditionRoot/Able_Count/Bg`,
-104 u, 67.459 CSS px) from y 74, total 141.459 px (`PORTRAIT_TOOLBAR_ROW`, `PORTRAIT_TOOLBAR_HEIGHT`). Reset draws through
+The portrait toolbar uses centred rows: its equal 62 px icons stand 20 units times `S` apart, and its second row
+starts 28 units times `S` below the icons, at y 80.162 px. The second row is the slider body's height (`UILobby`
+`Btn_RotateSpine/ConditionRoot/Able_Count/Bg`, 104 u, 67.459 CSS px), total 147.622 px
+(`PORTRAIT_TOOLBAR_ROW`, `PORTRAIT_TOOLBAR_HEIGHT`). Slider and Reset stand 20 units times `S` apart. Reset draws through
 `button()` with that body height (`height` option) at its horizontal centre and width (156 px), so it is exactly as tall
 as the slider beside it (owner, 2026-11-04); its caption keeps the 48 to 34 range, its label box 84 u high, and every
 locale's caption is one line. Placement above the visible head, below the feet when blocked, inside the stage and clear
 of the top bar and right controls uses this total height.
 The memorial candidate Add and queue Remove still use `retainedButton` because their combined containing layout hits
 the full-row stop above; their row/card/panel sizes, drag pitch, marker and hit boxes remain unchanged.
+
+The shared roster toolbar lays out Group Alts, its two native segmented filters and its search/sort/order group as
+centred rows. Groups stand 28 units apart; search/sort/order neighbours stand 20 units apart. Search and order share
+150 x 116-unit bodies (the search prefab's own size) on the filters' native centre line. Sort keeps its own 116-unit
+height. The segmented prefab keeps its adjoining slots, 104-unit height and its
+existing caption fitting tiers. Group Alts' hit area follows the same 104-unit row and centre line.
 
 Hall mode changes retain the previous complete frame until the target background, actors, material/FX textures and
 first composite frame are ready. Portrait and current memorial sessions are retained separately; inactive sessions

@@ -50,6 +50,34 @@ def label(node):
     return next(w for w in node["widgets"] if "text" in w)
 
 
+def test_toolbar_height_is_the_lobby_clone(tokens, record_property):
+    roots = {}
+    for name in ("UILobby", "UICharacterCollection"):
+        with open_bundle(bundle_of(name)) as env:
+            roots[name] = export_layout(env, name, {})
+    lobby = roots["UILobby"]
+    clone = "Front/Right/Btn_RotateSpine/ConditionRoot/Able_Count"
+    assert sprite(subtree(lobby, f"{clone}/Bg"))["h_"] == tokens["CONTROL"]["toolbar"]["h"] == 104
+    # Derived widget geometry only, kept in the test report for the owner's before/after review.
+    geometry = {}
+    for root, path in (("UILobby", f"{clone}/Label_SpineCount"), *(
+        ("UICharacterCollection", f"SeletControl/TopMenu/{name}/Btn_Normal")
+        for name in ("SearchBtn", "SortBtn", "OrderBtn")
+    ), *(
+        ("UICharacterCollection", f"SeletControl/TopMenu/{name}")
+        for name in ("SearchBtn", "SortBtn", "OrderBtn", "Menubar")
+    )):
+        node = subtree(roots[root], path)
+        geometry[path] = {"pos": node["pos"], "widgets": [
+            {key: w[key] for key in ("w_", "h_", "pivot", "fontSize") if key in w}
+            for w in node["widgets"] if "w_" in w
+        ]}
+    for name in ("SearchBtn", "SortBtn", "OrderBtn"):
+        path = f"SeletControl/TopMenu/{name}/Btn_Normal"
+        assert sprite(subtree(roots["UICharacterCollection"], path))["h_"] == 116
+    record_property("toolbar_prefab_geometry", json.dumps(geometry))
+
+
 def test_legacy_popup_frame_and_footer_geometry_remain_pinned(tokens, layouts):
     sort = layouts["UIPopup_Sort"]
     base, bg = subtree(sort, "Center/Popup/Base"), subtree(sort, "Center/Popup/Base/BG")
