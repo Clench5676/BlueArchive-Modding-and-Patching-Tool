@@ -452,7 +452,7 @@
 			"conversion_failed": "Conversion Failed",
 			"conflict": "Conflicting Targets",
 			"spine_version": "Incompatible Spine Version",
-			"mod_unity_version_mismatch": "Incompatible Unity Version",
+			"mod_unity_version_mismatch": "Unity {version}, required {expected}",
 			"mod_release_mismatch": "Incompatible Game Release",
 			"crc_fix_failed": "CRC Repair Failed",
 			"export_empty": "No Mods to export",
@@ -855,6 +855,11 @@
 				"promptTail": "Possibly part of {student}, {kind}. Add to the import list?",
 				"addTogether": "Add",
 				"fillLine": "- {student}, {kind} ({n})"
+			},
+			"detail": {
+				"platform": "Build Target: {platforms}",
+				"unity": "Unity Version: {versions}",
+				"unresolved": "Unresolved Dependencies ({n}):"
 			}
 		},
 		"recovery": {

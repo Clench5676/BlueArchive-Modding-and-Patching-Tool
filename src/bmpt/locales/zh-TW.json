@@ -452,7 +452,7 @@
 			"conversion_failed": "轉換失敗",
 			"conflict": "目標衝突",
 			"spine_version": "Spine 版本不相容",
-			"mod_unity_version_mismatch": "Unity 版本不相容",
+			"mod_unity_version_mismatch": "Unity 版本 {version}，需要 {expected}",
 			"mod_release_mismatch": "遊戲版本不相容",
 			"crc_fix_failed": "CRC 修復失敗",
 			"export_empty": "沒有可匯出的 Mod",
@@ -855,6 +855,11 @@
 				"promptTail": "有可能同屬{student}的{kind}Mod，是否一併加入匯入檔案清單？",
 				"addTogether": "一併加入",
 				"fillLine": "- {student}的{kind}（{n}）"
+			},
+			"detail": {
+				"platform": "建置平台：{platforms}",
+				"unity": "Unity 版本：{versions}",
+				"unresolved": "未找到的相依項目（{n}）："
 			}
 		},
 		"recovery": {

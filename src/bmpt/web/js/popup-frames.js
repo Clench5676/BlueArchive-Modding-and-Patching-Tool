@@ -6,13 +6,14 @@ export function frameClass(width = "S") {
   if (typeof width === "string" && POPUP_FRAME[width]?.w) return POPUP_FRAME[width];
   return ["S", "M", "L", "XL"].map(key => POPUP_FRAME[key]).find(size => size.w >= width) || POPUP_FRAME.XL;
 }
-export function frameGeometry(width, height = 0) {
+// compact: the frame is as tall as its content needs, below the class's own height (a short message, e.g. Import Mod's details)
+export function frameGeometry(width, height = 0, { compact = false } = {}) {
   const size = frameClass(width);
-  return { w: size.w, h: Math.min(POPUP_FRAME.maxH, Math.max(size.h, height)), cx: 0, cy: POPUP_FRAME.frameY };
+  return { w: size.w, h: Math.min(POPUP_FRAME.maxH, compact && height ? height : Math.max(size.h, height)), cx: 0, cy: POPUP_FRAME.frameY };
 }
 // Text and panel content share their top and footer clearance. With no footer, keep the panel padding at the bottom.
-export function popupContent(width, height, { text = false, footer = true } = {}) {
-  const { w, h } = frameGeometry(width, height);
+export function popupContent(width, height, { text = false, footer = true, compact = false } = {}) {
+  const { w, h } = frameGeometry(width, height, { compact });
   return container({ w, h, padding: [POPUP_FRAME.contentTop, text ? SPACE.xxxl : SPACE.xl,
     footer ? POPUP_FRAME.footer.bottom + CONTROL.buttonL.h + SPACE.m : SPACE.xl,
     text ? SPACE.xxxl : SPACE.xl] }).inner;
