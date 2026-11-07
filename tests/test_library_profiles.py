@@ -887,6 +887,27 @@ def test_a_game_update_makes_a_configured_entry_updated(world, monkeypatch):
     assert successor.read_bytes() != header_bundle(b"updated!")
 
 
+def test_a_game_update_rebuilding_the_group_in_place_makes_a_configured_entry_updated(world):
+    """The game rebuilds a changed group under its name and date; only the CRC in the name is new."""
+    world.consent = True
+    mod = world.add(world.spr, fixed=True)
+    world.library.apply("test", f"mod:{mod.id}")
+    successor = game_update(world.spr, date=parse_filename(world.spr.name).date)
+    assert successor.name != world.spr.name
+    assert successor.name.rsplit("_", 1)[0] == world.spr.name.rsplit("_", 1)[0]
+    assert world.entries()[(world.key(), "test_spr")].state == "updated"
+    world.reload()  # the next start prunes: the outdated original goes, the marker stays
+    world.library.prune()
+    assert not world.original(world.spr).exists()
+    assert world.folder()["updated"].get("test_spr")
+    result = world.library.restore_drift([{"install": world.key(), "core": "test_spr", "state": "updated"}])
+    assert [item["core"] for item in result.done] == ["test_spr"], result
+    assert "test_spr" not in world.folder()["updated"]
+    assert world.entries()[(world.key(), "test_spr")].state == "ok"
+    assert successor.read_bytes() != header_bundle(b"updated!")
+    assert not world.spr.exists()  # the old name is not written beside the rebuilt group
+
+
 def test_one_repaired_part_of_two_is_a_reset_not_ok(world):
     world.consent = True
     parts = [game_bundle(world.game, "test_home", part=part, payload=part.encode() * 3) for part in ("002", "003")]

@@ -2424,3 +2424,98 @@ the new footer, Settings' value text 38 to 36 and row heights a few units shorte
 and toolbar gaps in units (20 x S instead of 20 px), the Hall's Cancel/Save as small buttons. The detail page's composed parts followed (`730a52fd`: the
 nameplate's pencil 46 to 60 and 8 from the name, the switch text 48/36, the details table's cells 34 to 36 with rows
 12 apart). The tool pages are upstream's classic windows, outside the web UI.
+
+## BL-098: Older releases' parts are found by asset path, over every date of the core
+
+- Status: Implemented by the lead; owner review pending.
+- Requested: 2026-11-07 (owner): research the game's asset files and their relationships and manage them accurately;
+  the research is `docs/asset-ecosystem.md`, the order of the work the lead's call.
+
+Lead's research (all 26,301 official bundles): a build keeps each asset path (`m_Container` key) in exactly one bundle
+(145,397 paths, none in two bundles); a core's parts sit under several dates (294 model and 4 lobby cores); a part
+number only counts the asset types of its own dated group (the same prefix and number under two dates holds other
+types in 454 of 769 cases). Upstream's update planner, which the library used for mod files of older releases, looks
+at the newest date of the prefix only: for five official parts (ch0100's meshes and textures, Airi's meshes,
+`ch0164_home`'s skeleton and page) offered under an older date it finds no target, though their assets are unchanged.
+The preview complements and the import check paired older files with the current file of the same part number.
+
+Implemented: Enable and Apply update an older file's assets into the core's parts that hold its asset paths, else its
+asset names and types, whatever their dates (`integrity.update_targets`, `ModLibrary._update_targets` and
+`_update_groups`); groups that reach a common part update it together; upstream's planner stays for files whose assets
+no part holds. A generic file of an older release finds its target by asset path among every date of its prefix
+(`_other_targets`, before the newest-date rule). A preview drops only the official parts whose every asset path the
+older files carry: a part they update in part keeps its other assets (before, ch0100's material dated 2025-07-25 was
+dropped with the animations numbered like it). The import check keeps its rules: an update keeps the target's CAB.
+Files without asset paths (or unreadable) keep the part-number rules. Tests: `tests/test_asset_identity.py`, on
+synthetic names and on the official files.
+
+## BL-099: A game update that rebuilds a group in place
+
+- Status: Implemented by the lead; owner review pending.
+- Requested: 2026-11-07 (owner, with BL-098).
+
+Lead's research: dates in names are when a group was created; the game rebuilds a changed group later under the same
+name and date, and only the CRC in its name changes (3,790 official bundles reference groups dated after their own; every
+bundle is built by Unity 2021.3.56f2, the ones dated 2021-10-29 included). The library took only a later-dated file of a
+part for the file a game update left: after an in-place rebuild of a modded part, the entry was `pending` (an On would
+write the old build's mod over the new one) instead of `updated`, and a restore could write the old name beside the
+rebuilt group.
+
+Implemented: the one other file of a part's group (its name less the CRC) in its folder is that part's successor
+(`service._rebuilt`), for the entry states, the prune of gone records and kept originals, and recovery; groups packed one
+asset per bundle, whose names differ only in the CRC, never name a successor this way. Tests: the profiles test of an
+in-place update (updated, then ok after Restore, the old name not written back) and `tests/test_asset_identity.py`.
+
+## BL-100: Unity's built-in resources never count as missing
+
+- Status: Implemented by the lead; owner review pending.
+
+3,779 official serialized files reference `Library/unity default resources`, which the player ships outside every
+bundle. A mod that referenced it where its official part does not would have been refused as incomplete. The missing-part
+check leaves Unity's built-in resource files out (`integrity.BUILTIN_RESOURCES`).
+
+## BL-101: Slots for groups packed one asset per bundle
+
+- Status: Candidate. Not scheduled.
+
+74 official groups emit one bundle per asset, and their bundles' names differ only in the CRC: 6,476 files, among them
+all 289 memorial lobby prefabs (`ui-uilobbyelement-_mxload-prefabs-…`), 681 scenario character prefabs and 1,864 effect
+prefabs. `judge.core_of` keys a generic file's slot by its prefix and part number, so each such group is one slot: by the
+code, mods of two different lobby prefabs get one slot and one target and exclude each other (not exercised). Proposed:
+key those slots by the bundle's CAB (stable per entry, in the CAB index) or its single asset path; a migration keeps
+stored records valid. Test: two official lobby prefab bundles added as two one-file mods give two slots.
+
+## BL-102: Official by Steam's depot manifest on Steam installs
+
+- Status: Candidate. Needs the owner's decision: whether the App may read Steam's depot cache.
+
+The library judges a file official when the CRC32 of its whole content equals the CRC in its name with nothing trailing;
+BL-019 already notes that a matching CRC proves no origin. Steam's depot manifest of the installed build lists the size
+and SHA-1 of every file (34,308 for the current Global build), and the library already hashes files with SHA-1
+(`storage.Fingerprints`) and reads Steam's app manifests (game watch). Proposed: on Steam installs, official means
+SHA-1 equality with the manifest; other installs keep the CRC rule. Check Game Files (BL-019) can then name every
+modified file, and two manifests give the exact list of files a game update changed.
+
+## BL-103: Dependency closures cached for previews and exports
+
+- Status: Candidate. Input for BL-092.
+
+A 3D model needs a median of 91 bundles outside its own parts (114 MiB; up to 765), a memorial lobby 5 (up to 65), a
+portrait 1 (the shader prolog). Proposed: keep each core's closure (bundle list and sizes) in the CAB index, keyed by its
+members' revisions, so previews and exports load a known set and the UI can show the size first.
+
+## BL-104: A release ledger per install
+
+- Status: Candidate.
+
+On each change of the resource version, record every group's file name (with its CRC) and size, and compare with the
+previous record: groups rebuilt, added and removed. Use it to report which library entries an update touched, to
+re-check only those, and to tell whether a mod file whose group matches but whose CRC differs was made for an earlier
+build of this install. With BL-102 the ledger is exact.
+
+## BL-105: Shared bundles in import and compatibility details
+
+- Status: Candidate. With BL-014.
+
+92 official bundles have 100 or more direct dependents (the audio mixer 4,207, the shader prolog 3,332). Proposed: mark a
+target with many dependents in the import and compatibility details and say how many bundles use it.
