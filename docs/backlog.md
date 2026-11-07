@@ -2422,4 +2422,4 @@ Recalibration (agents under the new tests-by-tier and lean-brief rules): popups 
 and the switch cards (Sonnet), the toolbars (Codex). Visible changes the owner should review: popup widths by class and
 the new footer, Settings' value text 38 to 36 and row heights a few units shorter, switch cards 8 units tighter, footer
 and toolbar gaps in units (20 x S instead of 20 px), the Hall's Cancel/Save as small buttons. Not yet done: the detail
-page's composed panels and the tool pages.
+page's composed parts. The tool pages are upstream's classic windows, outside the web UI.
