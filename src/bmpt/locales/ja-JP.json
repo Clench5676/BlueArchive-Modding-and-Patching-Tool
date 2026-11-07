@@ -452,7 +452,7 @@
 			"conversion_failed": "変換失敗",
 			"conflict": "対象が競合",
 			"spine_version": "Spineバージョン非対応",
-			"mod_unity_version_mismatch": "Unity バージョン非対応",
+			"mod_unity_version_mismatch": "Unity {version}、必要なバージョン {expected}",
 			"mod_release_mismatch": "ゲーム版非対応",
 			"crc_fix_failed": "CRC 修復失敗",
 			"export_empty": "出力可能な Mod がありません",
@@ -855,6 +855,11 @@
 				"promptTail": "{student}の{kind}MODの一部の可能性。インポートリストに追加しますか？",
 				"addTogether": "追加",
 				"fillLine": "- {student}、{kind}（{n}）"
+			},
+			"detail": {
+				"platform": "ビルド対象：{platforms}",
+				"unity": "Unity バージョン：{versions}",
+				"unresolved": "未解決の依存関係（{n}）："
 			}
 		},
 		"recovery": {

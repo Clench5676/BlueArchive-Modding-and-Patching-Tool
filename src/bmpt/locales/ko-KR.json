@@ -452,7 +452,7 @@
 			"conversion_failed": "변환 실패",
 			"conflict": "대상 충돌",
 			"spine_version": "호환되지 않는 Spine 버전",
-			"mod_unity_version_mismatch": "Unity 버전 호환 불가",
+			"mod_unity_version_mismatch": "Unity {version}, 필요한 버전 {expected}",
 			"mod_release_mismatch": "게임 버전 호환 불가",
 			"crc_fix_failed": "CRC 복구 실패",
 			"export_empty": "내보낼 Mod 없음",
@@ -855,6 +855,11 @@
 				"promptTail": "{student} {kind} 모드의 일부일 수 있음. 가져오기 목록에 추가할까요?",
 				"addTogether": "추가",
 				"fillLine": "- {student}, {kind} ({n})"
+			},
+			"detail": {
+				"platform": "빌드 대상: {platforms}",
+				"unity": "Unity 버전: {versions}",
+				"unresolved": "찾을 수 없는 종속성({n}):"
 			}
 		},
 		"recovery": {

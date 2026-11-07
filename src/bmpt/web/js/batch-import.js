@@ -19,7 +19,8 @@ import { FOOTER, SMALL_BUTTON, SPACE, TYPE, CONTROL, POPUP_FRAME } from "./ui-to
 import { row as layoutRow, stack as layoutStack, container } from "./ui-grid.js";
 import { ROW_W as OPTION_WIDTH, rowBase, radioRow } from "./settings-rows.js";
 import { BUTTON_BODY_H, loadImportLayouts, importArtwork, clipButtonPatterns, ROW_SCALE, ROW_WIDTH, ROW_HEIGHT, ROW_SELECTION, ROW_CHECK_TOP,
-  PAPER_CENTRE, emptyBlock, controlRect } from "./import-layout.js";
+  PAPER_CENTRE, emptyBlock, controlRect, badgeRect } from "./import-layout.js";
+import { hasDetails, detailLines, withoutFile } from "./import-details.js";
 import { suggestImports } from "./import-assistants.js";
 import { createImportState, countsOf, eligible, RESOURCE_TYPES, STATES, createMissingFlow, missingText, statusText, groupsText,
   needsChoose, chooseSize, CHOOSE, NOTE_LEFT, noteRoom, sourceFolder } from "./import-state.js";
@@ -294,7 +295,26 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
     if (!identities.has(entry)) identities.set(entry, entryIdentity(entry, catalog));
     return identities.get(entry);
   };
-  const rowNote = (entry) => entry.state === "blocked" && entry.reason !== "source_unknown" ? report(entry, entry) : "";
+  // a refused row's reason is on its badge (stateText); the note line keeps only what a badge cannot say: a missing official
+  // copy's repair guidance
+  const rowNote = (entry) => entry.state === "blocked" && entry.reason === "original_unavailable" ? report(entry, entry) : "";
+  // the badge's short reason: the row's reason label, the error's own text when it needs no parameters, or Import Check
+  // Failed (the details give the rest)
+  const ANY_PARAMETER = new Proxy({}, { get: () => "\u0000" });
+  const badgeReason = (entry) => {
+    if (REASONS.has(entry.reason)) return T(`import.reason.${entry.reason}`);
+    const key = `error.${entry.reason}`, text = T(key, ANY_PARAMETER);
+    return text !== key && !text.includes("\u0000") ? text : T("import.reason.failed");
+  };
+  // A refused row's badge opens its reason and what the check read of its files (import-details.js).
+  const detailReason = (entry) => {
+    if (entry.state === "incomplete") return statusText(entry.missing);
+    const detail = entry.error || { code: entry.reason, params: entry.params || {} }, label = report(entry, entry);
+    const key = `error.${detail.code}`, text = detail.code ? withoutFile(T, key, detail.params || {}) : key;
+    return text && text !== key && text !== label ? `${label} - ${text}` : label;
+  };
+  const showDetails = (entries) => popups.message({ title: T("info.details"), scroll: true, ok: T("picker.ok"), compact: true,
+    lines: entries.flatMap((entry) => detailLines(entry, { T, separator: listSeparator(), reason: detailReason(entry) })) });
 
   function build() {
     root = el("div", "import-page"); root.dataset.phase = model.state.phase;
@@ -628,6 +648,7 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
   }
 
   const stateText = (entry) => entry.state === "incomplete" ? statusText(entry.missing)
+    : entry.state === "blocked" && entry.reason !== "source_unknown" ? `${T("import.state.blocked")} - ${badgeReason(entry)}`
     : T(entry.libraryOnly && eligible(entry) ? "import.libraryOnly" : entry.reason === "source_unknown" ? "import.reason.source_unknown" : `import.state.${entry.state}`);
 
   function rowCopy(group, result = false) {
@@ -703,11 +724,17 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
         const prepare = () => picture ||= bindTexture(drawing, texturePath, thumbnail(entry, { incoming: true }), "import-thumb");
         const copy = place(el("button", "hit import-row-copy"), 0, 0, ROW_WIDTH - 72, parseFloat(row.style.height || ROW_HEIGHT) - 10); copy.type = "button"; copy.setAttribute("aria-label", name);
         copy.addEventListener("click", () => model.select(entry.id));
+        const detailed = group.entries.filter(hasDetails), badgeBox = detailed.length ? badgeRect(tree) : null;
+        const badgeHit = badgeBox ? place(el("button", "hit import-row-badge"), ...badgeBox) : null;
+        if (badgeHit) {
+          badgeHit.type = "button"; badgeHit.setAttribute("aria-label", T("info.details"));
+          badgeHit.addEventListener("click", (event) => { event.stopPropagation(); showDetails(detailed); });
+        }
         const check = checkbox("", model.state.checked.has(entry.id), (checked) => model.toggleGroup(group.entries.map((item) => item.id), checked));
         check.input.setAttribute("aria-label", T("import.selectNamed", { name })); place(check.label, ROW_WIDTH - 66, ROW_CHECK_TOP, 50, 50);
         const selection = place(el("div", "import-selection"), ROW_SELECTION.left, ROW_SELECTION.top, ROW_SELECTION.width, ROW_SELECTION.height);
         paint(selection, art.selection(), { scale: ROW_SELECTION.scale, origin: ROW_SELECTION.origin });
-        row.append(selection, copy, check.label);
+        row.append(selection, copy, ...badgeHit ? [badgeHit] : [], check.label);
         if (chooseEntry) {
           const [x, y, width, height] = controlRect(tree);
           const choose = button(missingText("choose"), "chooseFiles", { width, scale: CHOOSE.scale, bodyHeight: height / CHOOSE.scale });

@@ -60,6 +60,8 @@ input[type="text"], input[type="search"], textarea { cursor: text; }
 .import-panel, .import-detail { z-index: 1; }
 .import-button, .import-option, .import-option-note, .import-option-error, .import-row, .import-result-row { position: relative; }
 .import-button, .import-row-copy, .import-check { z-index: 40; }
+/* a refused row's badge opens its details (N-002): above the row's own hit area */
+.import-row-badge { z-index: 41; }
 /* the native bars are hidden: batch-import.js draws the game list's scrollbar (UICharacterCollection) over these areas */
 .import-list { overflow-y: auto; overflow-x: hidden; scrollbar-width: none; }
 .import-list::-webkit-scrollbar, .import-dialog-content::-webkit-scrollbar { display: none; }

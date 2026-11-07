@@ -355,6 +355,22 @@ test("an NPC model without a roster entry renders from the analyzed variant key"
     ["blob:model:en0002:live", "blob:model:en0002:import:source-en0002"]);
 });
 
+test("a refused row's badge opens its reason and what the check read of its files (N-002)", async () => {
+  const h = await fixture(), pending = h.page.drop(["/fixtures/folder"]); await flush();
+  const refused = { ...entry("e", "blocked", "model"), error: { code: "mod_platform_mismatch", params: { file: "e.bundle", platform: "Android", expected: "StandaloneWindows64" } },
+    reason: "mod_platform_mismatch", bundles: [{ file: "e.bundle", platforms: ["Android"], unity: ["2021.3"], cabs: ["cab-" + "1".repeat(32)], references: 0 }] };
+  h.analyses[0].resolve({ entries: [entry("a"), refused], skipped: 0 }); await pending; await h.page.settled();
+  assert.equal(h.row("a").querySelector(".import-row-badge"), null, "a ready row has no details");
+  const before = h.messages.length;
+  h.row("e").querySelector(".import-row-badge").click(); await flush();
+  const shown = h.messages.at(-1);
+  assert.equal(h.messages.length, before + 1); assert.equal(shown.title, "Details");
+  assert.equal(shown.lines[0], "Incompatible Platform - build target Android, required StandaloneWindows64", "no file name in the reason");
+  assert.deepEqual(shown.lines.slice(1), ["e.bundle\nBuild Target: Android\nUnity Version: 2021.3"]);
+  assert.equal(shown.compact, true);
+  assert.equal(h.page.model.state.selected, "a", "opening the details does not select the row");
+});
+
 test("analyzing locks edits; mixed states default to ready/update only, with aligned row cells", async () => {
   const h = await fixture(), pending = h.page.drop(["/fixtures/folder"]); await flush();
   assert.equal(h.phase(), "analyzing"); assert.doesNotMatch(h.host.textContent, /Analyzing/);
@@ -367,7 +383,9 @@ test("analyzing locks edits; mixed states default to ready/update only, with ali
   }
   assert.match(h.row("e").textContent, /No Matching Game File/);
   assert.match(h.row("a").textContent, /Saved Alias/);
-  assert.equal(h.row("a").children.length, h.row("e").children.length);
+  // the same cells, and a refused row's badge opens its details (N-002)
+  assert.equal(h.row("a").children.length + 1, h.row("e").children.length);
+  assert.ok(h.row("e").querySelector(".import-row-badge") && !h.row("a").querySelector(".import-row-badge"));
   assert.equal(h.thumbs.length, 0, "declined Spine licence leaves thumbnail slots empty");
 });
 
@@ -682,12 +700,22 @@ test("the page clones runtime Items/Mailbox widgets and has no invented empty pr
   assert.doesNotMatch(rules, /border-radius|box-shadow|#[0-9a-f]{3,8}|linear-gradient|drop-shadow/i);
 });
 
+// the kind (Portrait, Memorial Lobby, 3D) is on the name's line: right aligned on the divider's end, its box centred on the
+// name's (owner, 2026-11-07)
+const boxCentreY = (node) => { const w = node.widgets.find((w) => "text" in w); return node.pos[1] + [-1, 0, 1][Math.floor((w.pivot ?? 4) / 3)] * w.h_ / 2; };
+function kindOnTitle(tree) {
+  const from = find(tree, "Label_From");
+  assert.equal(from.pos[0], 926); assert.equal(from.widgets[0].pivot, 5);
+  assert.ok(Math.abs(boxCentreY(from) - boxCentreY(find(tree, "Label_System"))) <= 1e-9, "centred on the name");
+}
+
 test("mail row columns and native checkbox/selection widgets stay aligned for every state", async () => {
   const h = await fixture(); await h.analyze();
   const cards = h.rendered.filter(({ tree }) => ["List_01", "List_02"].includes(tree.name));
   assert.equal(cards.length, 5);
   for (const { tree } of cards) {
-    assert.equal(find(tree, "Label_From").pos[1], 20);
+    assert.equal(find(tree, "Label_Locale_Received").pos[1], 20);
+    kindOnTitle(tree);
     assert.ok(find(tree, "TimeLimit").pos[1] <= 20);
     assert.ok(find(tree, "Label_System").widgets[0].prefabMarker);
     assert.equal(find(tree, "Btn_Receive"), undefined, "row actions are selection, not a decorative receive button");
@@ -949,10 +977,10 @@ for (const wideFrame of [false, true]) test(`list and result text clears every t
     assert.ok(gap >= 28, `thumbnail-to-text gap: ${gap.toFixed(2)} stage px`);
     const { tree, opts } = drawn(h, row);
     assert.equal(find(tree, "BG").widgets[0].w_, 2208);
-    assert.equal(find(tree, "Label_From").pos[1], 20);
+    assert.equal(find(tree, "Label_Locale_Received").pos[1], 20);
     assert.ok(find(tree, "TimeLimit").pos[1] <= 20);
-    const title = text.find((box) => Math.abs(box[2] - (opts.origin[0] + 926 * opts.scale)) < 0.01);
-    assert.ok(title, "the title keeps its right edge");
+    const [kind] = artworkBounds(h, row, (path) => /\/Label_From$/.test(path));
+    assert.ok(kind && Math.abs(kind[2] - (opts.origin[0] + 926 * opts.scale)) < 0.01, "the kind ends on the divider's end");
     if (selection) closeTo(parseFloat(row.querySelector(".import-check").style.left), 1192.32 - 66);
     return gap;
   };
@@ -1620,14 +1648,14 @@ test("row metadata, kind, badge text and checkbox share a top edge and fixed fon
       const h = await fixture(); await h.analyze();
       for (const id of ["a", "b", "c", "d", "e"]) {
         const row = h.row(id), { tree } = drawn(h, row), prefix = tree.name;
-        const paths = ["Label_Locale_Received", "Label_From", "TimeLimit/Label_Locale_TimeLimit"];
-        const labels = paths.map((path) => find(tree, path).widgets[0]);
+        const paths = ["Label_Locale_Received", "TimeLimit/Label_Locale_TimeLimit"];
+        const labels = [...paths, "Label_From"].map((path) => find(tree, path).widgets[0]);
         assert.ok(labels[0].fontSize === 42);
         assert.deepEqual(labels.map((w) => w.fontSize), Array(3).fill(labels[0].fontSize));
         const tops = paths.map((path) => rectOf(row.art.children.find((el) => el.dataset.path === `${prefix}/${path}`))[1]);
         tops.push(parseFloat(row.querySelector(".import-check").style.top));
-        tops.slice(0, 2).forEach((top) => closeTo(top, tops[0]));
         assert.ok(tops.every((top) => top >= tops[0] - 1e-8));
+        kindOnTitle(tree);
         const divider = find(tree, "Line"), title = find(tree, "Label_System");
         assert.equal(divider.widgets[0].pivot, 3);
         assert.equal(divider.pos[0], title.pos[0]);
@@ -1682,7 +1710,7 @@ for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) tes
           shared ??= meta.fontSize; assert.equal(meta.fontSize, shared, "all rows share a size");
           const paths = ["Label_Locale_Received", ...(find(tree, "Label_From").children.length
             ? find(tree, "Label_From").children.map((n) => `Label_From/${n.name}/Count`) : ["Label_From"]),
-            ...(!result && !merged ? ["TimeLimit/Label_Locale_TimeLimit"] : [])];
+            ...(!result && !merged ? ["TimeLimit/Label_Locale_TimeLimit"] : [])].filter((path) => find(tree, path).active !== false);
           const boxes = [];
           for (const path of paths) {
             const w = find(tree, path).widgets[0];
@@ -1690,9 +1718,14 @@ for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) tes
             assert.doesNotMatch(w.text, /…/); assert.ok(String(w.text).split("\n").every((line) => line.length * w.fontSize <= w.w_ + 0.01), path);
             boxes.push(rectOf(row.art.children.find((el) => el.dataset.path === `${tree.name}/${path}`)));
           }
-          for (let i = 1; i < boxes.length; i++) assert.ok(boxes[i - 1][0] + boxes[i - 1][2] <= boxes[i][0] || boxes[i - 1][1] + boxes[i - 1][3] <= boxes[i][1], "text cells do not overlap");
-          const boundary = result ? parseFloat(h.action("go", row).style.left) : parseFloat(row.querySelector(".import-check").style.left);
-          assert.ok(boxes.at(-1)[0] + boxes.at(-1)[2] < boundary, "text clears the action control");
+          const apart = (a, b) => a[0] + a[2] <= b[0] || b[0] + b[2] <= a[0] || a[1] + a[3] <= b[1] || b[1] + b[3] <= a[1];
+          for (let i = 0; i < boxes.length; i++) for (let j = i + 1; j < boxes.length; j++) assert.ok(apart(boxes[i], boxes[j]), `text cells ${paths[i]} and ${paths[j]} do not overlap`);
+          // every text beside the action control (its rows of the card) ends before it; the name's line is above it
+          const control = result ? h.action("go", row) : row.querySelector(".import-check");
+          assert.ok(control, `${result ? "go" : "check"} control of ${row.dataset.entry || row.dataset.result} ${row.className}`);
+          const [left, top, height] = ["left", "top", "height"].map((key) => parseFloat(control.style[key]));
+          const beside = boxes.filter((box) => box[1] < top + height && top < box[1] + box[3]);
+          assert.ok(beside.length && beside.every((box) => box[0] + box[2] < left), "text clears the action control");
         }
       };
       const rows = walk(h.host).filter((el) => el.dataset.entry); check(rows);
@@ -1813,9 +1846,10 @@ for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) tes
         const kinds = sender.children.length ? sender.children.map((kind) => `Label_From/${kind.name}/Count`) : ["Label_From"];
         const paths = ["Label_Locale_Received", ...kinds, ...(result || merged) ? [] : ["TimeLimit/Label_Locale_TimeLimit"]];
         for (const path of paths) assert.equal(find(tree, path).widgets[0].fontSize, find(tree, paths[0]).widgets[0].fontSize, path);
-        const tops = paths.map((path) => rectOf(row.art.children.find((el) => el.dataset.path === `${tree.name}/${path}`))[1]);
+        const level = paths.filter((path) => path !== "Label_From");
+        const tops = level.map((path) => rectOf(row.art.children.find((el) => el.dataset.path === `${tree.name}/${path}`))[1]);
         if (!result) tops.push(parseFloat(row.querySelector(".import-check").style.top));
-        tops.slice(0, 2).forEach((top) => closeTo(top, tops[0]));
+        if (sender.children.length) closeTo(tops[1], tops[0]); else kindOnTitle(tree);
         assert.ok(tops.every((top) => top >= tops[0] - 1e-8));
       };
       for (const row of walk(h.host).filter((el) => el.dataset.entry)) check(row);
@@ -2054,10 +2088,15 @@ for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) tes
   }
 });
 
-test("blocked entry notes preserve error parameters", async () => {
+test("a blocked row's badge gives the short reason and its details keep the error's parameters", async () => {
   const h = await fixture(), path = "/profile/input/refused.bundle";
   await h.analyze([{ ...entry("a", "blocked"), reason: "dev_path_outside", params: { path } }]);
-  assert.ok(find(drawn(h, h.row("a")).tree, "Label_Locale_Limit").widgets[0].text.includes(path));
+  const { tree } = drawn(h, h.row("a"));
+  // a reason without a short label, whose text needs parameters: Import Check Failed on the badge, nothing under the metadata
+  assert.equal(find(tree, "TimeLimit/Label_Locale_TimeLimit").widgets[0].text.replace(/\n/g, ""), "Cannot Import - Import Check Failed");
+  assert.equal(find(tree, "Label_Locale_Limit").widgets[0].text, "");
+  h.row("a").querySelector(".import-row-badge").click(); await flush();
+  assert.ok(h.messages.at(-1).lines[0].includes(path));
 });
 
 test("blocked and library rows cannot enter requests through merged or stale selection", async () => {
@@ -2176,9 +2215,11 @@ for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
       const h = await fixture();
       await h.analyze(reasons.map((reason, index) => ({ ...entry(`blocked-${index}`, "blocked"), reason })));
       for (const [index, reason] of reasons.entries()) {
-        const note = find(drawn(h, h.row(`blocked-${index}`)).tree, "Label_Locale_Limit").widgets[0].text;
-        assert.equal(note, strings.webui.import.reason[reason]);
-        assert.notEqual(note, strings.webui.import.reason.no_target);
+        // (this fixture measures every character full width, so a long badge may wrap here; import_badge_ink measures it)
+        const { tree } = drawn(h, h.row(`blocked-${index}`)), badge = find(tree, "TimeLimit/Label_Locale_TimeLimit").widgets[0].text.replace(/\n/g, "");
+        assert.equal(badge, `${strings.webui.import.state.blocked} - ${strings.webui.import.reason[reason]}`);
+        assert.notEqual(badge, `${strings.webui.import.state.blocked} - ${strings.webui.import.reason.no_target}`);
+        assert.equal(find(tree, "Label_Locale_Limit").widgets[0].text, "", "the reason is on the badge only");
       }
       await h.analyze([entry("ready")]);
       await h.action("start").click(); await flush();
@@ -2333,8 +2374,11 @@ for (const locale of ["en-US", "th-TH", "zh-CN", "zh-TW", "ja-JP", "ko-KR"]) tes
     setStrings(locale, flatten(strings));
     const h = await fixture();
     await h.analyze([{ ...entry("blocked", "blocked"), reason: "original_unavailable" }]);
-    const note = find(drawn(h, h.row("blocked")).tree, "Label_Locale_Limit").widgets[0].text;
+    const { tree } = drawn(h, h.row("blocked")), note = find(tree, "Label_Locale_Limit").widgets[0].text;
+    // the repair guidance stays under the metadata; the badge gives the short reason
     for (const key of ["overwrittenTitle", "overwrittenNone", "repairGame", "repairThen"]) assert.ok(note.includes(strings.webui.mods[key]), key);
+    assert.equal(find(tree, "TimeLimit/Label_Locale_TimeLimit").widgets[0].text.replace(/\n/g, ""),
+      `${strings.webui.import.state.blocked} - ${strings.webui.error.original_unavailable}`);
     await h.analyze([entry("ready")]);
     await h.action("start").click(); await flush();
     h.runs[0].resolve({ results: [{ id: "ready", outcome: "imported", applied: true, incomplete: true, kept_current: true }] });
