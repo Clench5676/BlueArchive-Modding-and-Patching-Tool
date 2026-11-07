@@ -71,9 +71,21 @@ globalThis.IntersectionObserver = class {
 const { createImportPage, entryIdentity, catalogEntries } = await import("../../src/bmpt/web/js/batch-import.js");
 const { importAssistants, suggestImports } = await import("../../src/bmpt/web/js/import-assistants.js");
 const { importArtwork, clipButtonPatterns, selectionWindow, ROW_SELECTION, ROW_SCALE, ROW_WIDTH, ROW_HEIGHT, PAPER_CENTRE, EMPTY_GAP, emptyBlock } = await import("../../src/bmpt/web/js/import-layout.js");
+const { DIALOG_H } = await import("../../src/bmpt/web/js/batch-import.js");
 const { frameOutline } = await import("../../src/bmpt/web/js/row-thumbnail.js");
 const { ROW_W: OPTION_WIDTH, rowBase, radioRow } = await import("../../src/bmpt/web/js/settings-rows.js");
 const { S } = await import("../../src/bmpt/web/js/util.js");
+const { SPACE, TYPE, LINE, CONTROL, POPUP_FRAME } = await import("../../src/bmpt/web/js/ui-tokens.js");
+const { container } = await import("../../src/bmpt/web/js/ui-grid.js");
+// separate lines of a row stack LINE.stack of the row's one size apart (List_01's meta lines)
+const PITCH = LINE.stack * TYPE.dense.fs;
+// run a page test in en-US and zh-CN (the design system's geometry is checked in both), restoring en-US after
+const inLocales = (name, fn) => {
+  for (const locale of ["en-US", "zh-CN"]) test(`${name} in ${locale}`, async () => {
+    const load = (code) => flatten(JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${code}.json`, import.meta.url), "utf8")));
+    try { setStrings(locale, load(locale)); await fn(locale); } finally { setStrings("en-US", load("en-US")); }
+  });
+};
 const { createImportState, sourceFolder } = await import("../../src/bmpt/web/js/import-state.js");
 const { setStrings } = await import("../../src/bmpt/web/js/i18n.js");
 const flatten = (data, prefix = "", result = {}) => {
@@ -100,7 +112,7 @@ const catalog = { families: ["a", "b", "c", "d", "e"].map((id) => ({ key: id, va
 async function fixture({ licensed = false, native = true, suggest, countIcons = false, blockedConfirm = false } = {}) {
   body.replaceChildren(); observers.length = 0;
   const host = body.appendChild(new El()), dialog = body.appendChild(new El()); dialog.id = "dialog"; dialog.hidden = true;
-  const calls = [], analyses = [], runs = [], sources = [], messages = [], answers = [], thumbs = [], modelThumbs = [], scopes = [], popupStack = [], holds = [];
+  const calls = [], analyses = [], runs = [], sources = [], messages = [], answers = [], thumbs = [], modelThumbs = [], scopes = [], popupStack = [], holds = [], frames = [];
   let pickerHold = null, pickerPaths = [], pickError = null, optionsError = null, saveError = null, changed = 0;
   const call = async (method, params) => {
     calls.push({ method, params });
@@ -133,7 +145,7 @@ async function fixture({ licensed = false, native = true, suggest, countIcons = 
   };
   const popups = { ready: async () => {},
     message: async (message) => { messages.push(message); const answer = answers.shift() || { button: "cancel", checked: false }; return answer.promise || answer; },
-    popupFrame: () => node("Popup"), opened: (host, close, { el, loading } = {}) => {
+    popupFrame: (...args) => { frames.push(args); return node("Popup"); }, opened: (host, close, { el, loading } = {}) => {
       if (loading) { el.style.visibility = "hidden"; el.inert = true; }
       popupStack.push({ host, close });
     },
@@ -174,7 +186,7 @@ async function fixture({ licensed = false, native = true, suggest, countIcons = 
   const analyze = async (entries = mixed(), paths = entries.flatMap((entry) => entry.paths)) => {
     const adding = page.drop(paths); await flush(); analyses.at(-1).resolve({ entries, skipped: 0 }); await adding; await page.settled(); await flush(); return adding;
   };
-  return { page, context, destinations, host, dialog, layouts, layoutSnapshot, rendered, loaded, calls, drawnBars,
+  return { page, context, destinations, host, dialog, layouts, layoutSnapshot, rendered, loaded, calls, drawnBars, frames,
     holds, holdPicker: () => { pickerHold = deferred(); return pickerHold; }, holdThumbs: () => { thumbsHold = deferred(); return thumbsHold; },
     thumbnailFor: (fn) => { thumbnailFor = fn; },
     holdDecode: (predicate) => { decodeHold = { ...deferred(), predicate }; return decodeHold; },
@@ -1017,18 +1029,18 @@ test("the page gives the list's tools one size and the row under the list anothe
   assert.ok(tools[0] < 60 && size("options") < 60);
 });
 
-test("the row under the list is one row of the small button, right-aligned to the list's tools", async () => {
+inLocales("footer: the row under the list is one row of buttonS controls SPACE.m apart, right-aligned to the list's tools", async () => {
   const h = await fixture();
   await h.page.settled();
   const [options, recheck, start] = ["options", "recheck", "start"].map((action) => rectOf(h.action(action)));
   for (const rect of [options, recheck, start]) {
-    closeTo(rect[3], SMALL_BUTTON.h * S);
+    closeTo(rect[3], CONTROL.buttonS.h * S);
     closeTo(rect[1] + rect[3] / 2, 902);
   }
   closeTo(start[2], SMALL_BUTTON.w * S);
   closeTo(recheck[2], SMALL_BUTTON.w * S);
-  closeTo(start[0] - recheck[0] - recheck[2], SMALL_BUTTON.gap);
-  closeTo(recheck[0] - options[0] - options[2], SMALL_BUTTON.gap);
+  closeTo(start[0] - recheck[0] - recheck[2], SPACE.m * S);
+  closeTo(recheck[0] - options[0] - options[2], SPACE.m * S);
   const clear = rectOf(h.action("clear")), panelLeft = 602;
   closeTo(start[0] + start[2], panelLeft + clear[0] + clear[2]);
   // the left column's name plate ends where the list does (its box 587 down, the plate's foot 107 into the box)
@@ -1044,6 +1056,66 @@ test("the row under the list is one row of the small button, right-aligned to th
     const body = treeNodes(tree).flatMap((n) => n.widgets).find((w) => w.sprite === "Common_Btn_BG");
     assert.equal(body.h_, BUTTON_BODY_H, action);
   }
+});
+
+inLocales("footer: the list's tools fill the list's width in one row SPACE.m apart, level, a body high, SPACE.m under the list", async () => {
+  const h = await fixture();
+  await h.page.settled();
+  const keys = ["files", "folder", "all", "none", "remove", "removeImported", "clear"], rects = keys.map((key) => rectOf(h.action(key)));
+  const gap = SPACE.m * S, list = rectOf(h.host.querySelector(".import-list"));
+  closeTo(rects[0][0], list[0]);
+  closeTo(rects.at(-1)[0] + rects.at(-1)[2], list[0] + list[2]);
+  for (const [i, rect] of rects.entries()) {
+    closeTo(rect[1], list[1] + 506 + gap);
+    closeTo(rect[3], BUTTON_BODY_H * 0.34);
+    if (i) closeTo(rect[0] - rects[i - 1][0] - rects[i - 1][2], gap);
+  }
+  // each tool keeps the share of the strip its caption was fitted to: widths 174 190 126 140 150 224 156 in the same proportions
+  const shares = [174, 190, 126, 140, 150, 224, 156], total = shares.reduce((sum, share) => sum + share, 0);
+  shares.forEach((share, i) => closeTo(rects[i][2], share / total * (1220 - 6 * gap)));
+  // the row under the list ends where the tools do, and its four slots (Fill All, Advanced Options, Recheck, Import) are SPACE.m apart
+  const row = ["options", "recheck", "start"].map((key) => rectOf(h.action(key))), fill = rectOf(h.action("fillAll"));
+  closeTo(row[2][0] + row[2][2], 602 + list[0] + list[2]);
+  closeTo(row[0][0] - fill[0] - fill[2], gap);
+});
+
+inLocales("header: the merge toggle ends SPACE.l before the search button and shares its centre line", async () => {
+  const h = await fixture();
+  await h.page.settled();
+  const toggle = rectOf(h.action("merge")), search = rectOf(h.action("searchToggle"));
+  closeTo(search[0] - (toggle[0] + toggle[2]), SPACE.l * S);
+  closeTo(toggle[1] + toggle[3] / 2, search[1] + search[3] / 2);
+});
+
+inLocales("dialog: Advanced Options is the L frame with its content in a container padded SPACE.xl, the groups stacked SPACE.l apart", async () => {
+  const h = await fixture(); await h.page.openOptions(); await h.page.settled();
+  assert.equal(h.frames.at(-1)[1], POPUP_FRAME.L.w, "the frame is POPUP_FRAME.L wide");
+  const inner = container({ w: POPUP_FRAME.L.w, h: DIALOG_H, padding: [0, SPACE.xl] }).inner, area = h.dialog.querySelector(".import-dialog-content");
+  assert.equal(inner.w, POPUP_FRAME.L.w - 2 * SPACE.xl);
+  const [left, , width] = rectOf(area);
+  closeTo(left, 960 - POPUP_FRAME.L.w / 2 * S + SPACE.xl * S);
+  closeTo(width, inner.w * S);
+  closeTo(left + width / 2, 960);
+  // the stack: Settings' rows, OPTION_WIDTH wide, centred in the area less its 16 px for the scrollbar, SPACE.l apart, with the
+  // hint and the error line after them
+  const body = h.dialog.querySelector(".import-options"), parts = body.children;
+  assert.equal(parts.length, 11 + 2);
+  closeTo(parseFloat(body.style.width), width - 32);
+  parts.forEach((part, i) => {
+    const [x, y, w, height] = rectOf(part);
+    closeTo(w, OPTION_WIDTH * S); closeTo(x, (width - 32 - OPTION_WIDTH * S) / 2);
+    if (i) { const [, previousY, , previousH] = rectOf(parts[i - 1]); closeTo(y - previousY - previousH, SPACE.l * S); } else closeTo(y, 0);
+    if (i === parts.length - 1) closeTo(parseFloat(body.style.height), y + height);
+  });
+  // the groups keep Settings' row heights
+  const groups = walk(h.dialog).filter((element) => element.dataset.option);
+  assert.equal(groups.length, 11);
+  await h.action("close", h.dialog).click();
+  // Import State keeps the frame it had
+  await h.action("filter").click(); await flush(); await h.page.settled();
+  assert.equal(h.frames.at(-1)[1], 1800);
+  assert.equal(h.frames.at(-1)[2], DIALOG_H);
+  await h.action("close", h.dialog).click();
 });
 
 test("every page action swaps its whole disabled prefab, including both dotted patterns, through the job lifecycle", async () => {
@@ -1091,7 +1163,6 @@ test("advanced boolean, choice, resource and input rows share Settings' body, ti
     assert.deepEqual(find(tree, "Title"), find(base, "Title"));
     assert.deepEqual(find(tree, "DotLine"), find(base, "DotLine"));
     assert.equal(opts.scale, S); closeTo(parseFloat(group.style.width), OPTION_WIDTH * S);
-    closeTo(parseFloat(group.style.marginBottom), 24 * S);
   }
   assert.deepEqual(groups.slice(0, 2).map((group) => group.dataset.option), ["previewAfterImport", "enableAfterImport"]);
   const enable = groups.find((group) => group.dataset.option === "backup");
@@ -1515,7 +1586,7 @@ for (const merged of [false, true]) test(`only conversions reserve a platform li
       assert.ok(row.art.children.every((element) => !element.dataset.path.endsWith("/Platform")));
       assert.equal(note.pos[0] + note.widgets[0].w_, 926, "the note can use the row text band");
     }
-    assert.ok(note.pos[1] <= -36 && (20 - note.pos[1]) % 56 === 0, "notes follow the wrapped metadata and route");
+    assert.ok(note.pos[1] <= 20 - PITCH && (20 - note.pos[1]) % PITCH === 0, "notes follow the wrapped metadata and route, a LINE.stack pitch a line");
     const graphic = row.art.children.find((element) => element.dataset.path.endsWith("/Label_Locale_Limit"));
     closeTo(rectOf(graphic)[1], opts.origin[1] - note.pos[1] * opts.scale);
   };
@@ -1810,7 +1881,7 @@ for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) tes
       for (const [i, n] of labels.entries()) {
         const w = n.widgets[0]; assert.equal(w.fontSize, fs); assert.equal(w.pivot, 0);
         assert.ok(n.pos[1] - w.h_ >= -329 / 2 - (tree.rowHeight - 348) + 12, "text and descenders clear the card bottom");
-        if (i) assert.ok(labels[i - 1].pos[1] - n.pos[1] >= 56 && (labels[i - 1].pos[1] - n.pos[1]) % 56 === 0);
+        if (i) assert.ok(labels[i - 1].pos[1] - n.pos[1] >= PITCH && (labels[i - 1].pos[1] - n.pos[1]) % PITCH === 0);
       }
     }
   } finally { setStrings("en-US", flatten(JSON.parse(readFileSync(new URL("../../src/bmpt/locales/en-US.json", import.meta.url))))); }
@@ -1846,7 +1917,7 @@ for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) tes
       for (const [i, n] of paragraphs.entries()) {
         const w = n.widgets[0]; assert.equal(w.fontSize, paragraphs[0].widgets[0].fontSize);
         assert.equal(w.pivot, 0); assert.ok(n.pos[1] - w.h_ >= -329 / 2 - (tree.rowHeight - 348) + 12);
-        if (i) assert.ok(paragraphs[i - 1].pos[1] - n.pos[1] >= 56 && (paragraphs[i - 1].pos[1] - n.pos[1]) % 56 === 0);
+        if (i) assert.ok(paragraphs[i - 1].pos[1] - n.pos[1] >= PITCH && (paragraphs[i - 1].pos[1] - n.pos[1]) % PITCH === 0);
       }
     }
   } finally { setStrings("en-US", flatten(JSON.parse(readFileSync(new URL("../../src/bmpt/locales/en-US.json", import.meta.url))))); }
@@ -2174,16 +2245,16 @@ test("Advanced Options, Import State, Import Results and Assign Character each d
   const h = await fixture(); await h.analyze();
   const areaOf = () => h.dialog.querySelector(".import-dialog-content");
   const barOf = () => h.drawnBars.findLast((item) => item.parentNode?.parentNode === h.dialog);
-  // Advanced Options: a narrower body, the area follows it
+  // Advanced Options: the area is the L frame's container (SPACE.xl each side)
   await h.page.openOptions(); await h.page.settled();
   let area = areaOf(), bar = barOf();
-  const body = OPTION_WIDTH * S;
+  const body = OPTION_WIDTH * S, inner = container({ w: POPUP_FRAME.L.w, h: DIALOG_H, padding: [0, SPACE.xl] }).inner;
   assert.ok(bar && bar.parentNode.contains(area));
-  assert.deepEqual(bar.track, scrollbarTrack([960 - body / 2 - 16, DIALOG_AREA[1], body + 32, 640], S));
+  assert.deepEqual(bar.track, scrollbarTrack([960 + (inner.x - POPUP_FRAME.L.w / 2) * S, DIALOG_AREA[1], inner.w * S, 640], S));
   assert.equal(bar.options.className, "import-bar");
   overflow(area, 640, 1700, 120); await area.dispatch("scroll"); assert.deepEqual(bar.syncs.at(-1), [640, 1700, 120]);
   await h.action("close", h.dialog).click();
-  // Import State: Advanced Options' narrower body
+  // Import State: a narrower body, the area follows it
   await h.action("filter").click(); await flush(); await h.page.settled();
   area = areaOf(); bar = barOf();
   assert.deepEqual(bar.track, scrollbarTrack([960 - body / 2 - 16, DIALOG_AREA[1], body + 32, 640], S));

@@ -1191,10 +1191,17 @@ accepts `directory`; pywebview supports it on macOS and Windows). An analysis th
 scrolls it into view, clearing a filter that would hide it. Import runs only the ticked complete rows; missing rows
 retain their state and can receive files later in the session.
 
-The row's standalone badge keeps the divider-to-meta ink gap below the metadata (`import-layout.js`). Choose Files
-shares the badge background's top and bottom and ends at column 910, with at least 28 row units between them;
-when it cannot fit, it sits below the badge. Its caption matches the badge's screen size. Each side's caption padding
-is the body's atlas slice border plus 16 units at the button's scale; reference-glyph ink is centred on the face
+Import Mod's rows are laid out with the design system (`docs/design-system.md`; `import-layout.js` `row()` over the
+primitives of `ui-grid.js`). Every text of a row but the name is `TYPE.dense` (42, wrapped, never smaller). The name plate
+(title and divider) keeps the prefab's place; the first line (metadata and kind column, or the counts block of a merged row)
+has its tops level, and a badge on it sits on the same centre line (the reference glyph's centre, `textItem`'s `mid`). The
+lines under it (a badge on its own line, the route, the note) are `LINE.stack` of the size apart (57.75), the kind column ends
+`SPACE.l` (28) before a badge on the first line, and a badge's caption keeps `CONTROL.badge.pad` (16) each side.
+The row's standalone badge keeps the divider-to-meta ink gap below the metadata. Choose Files
+shares the badge background's top and bottom and ends at column 910, with at least `SPACE.l` row units between them;
+when it cannot fit, it sits below the badge. Its caption matches the badge's screen size. It is a `buttonS` control
+(`controlWidth`): its caption and `CONTROL.buttonS.pad` (45, the body's slice border included) each side, in the button's
+own units, 240 at least; reference-glyph ink is centred on the face
 between the top and bottom slice borders. Native button decoration still uses `clipButtonPatterns`. Footer buttons
 wrap at their group's shared size (`NGUI.wrapText`), preserving Thai word breaks instead of independently shrinking.
 
@@ -2103,12 +2110,15 @@ the prefab values, from the development view). It imports no other UI module.
   actions and the detail screen's Show in Finder / Explorer button.
 - **Caption exceptions** (`CAPTION_EXCEPTIONS`, checked by `captionMinimum`): only Thai at Hall's Done Adding (44),
   unsaved-changes footer group (36) and portrait Reset (30). The footer/small-button token minima stay 48/34.
-- **Batch Import's row under the list** is one row of the small button's size (136 high, caption 48 down to 34, 20 apart): Advanced
-  Options, Recheck and Import share one body height and one caption size, on the prefabs' own bodies (Mailbox `Btn_Receive` and
-  `ReceiveAll/Btn`, the popups' gold). Import stands out by its gold, not by its size. The row's right edge is the list tools'.
+- **Batch Import's row under the list** is one row of `buttonS` controls (136 high, caption 48 down to 34, `SPACE.m` apart, laid
+  out with `row`): Advanced Options, Recheck and Import share one body height and one caption size, on the prefabs' own bodies
+  (Mailbox `Btn_Receive` and `ReceiveAll/Btn`, the popups' gold). Import stands out by its gold, not by its size. The row's right
+  edge is the list tools'. The tools over it fill the list's width in one row `SPACE.m` apart, each in the share of it its caption
+  needs, `SPACE.m` under the list. Advanced Options is the L popup frame (`POPUP_FRAME.L`, 2098 wide) with its option groups in
+  a container padded `SPACE.xl`, `SPACE.l` apart (`stack`); the gaps are prefab units drawn at the stage scale, as the buttons.
 - **Batch Import's list** starts 12 under the grey paper's top edge, about 2.7 rows at a time. The count once above it is gone: the
   filter button says it. A grouped row reads like an ungrouped one: its kinds as text on the metadata line, its states on the
-  status tag. The left column's name plate ends where the list does; the filter popup has Advanced Options' frame.
+  status tag. The left column's name plate ends where the list does; the filter popup keeps the frame it had.
 - **Chip** (`CHIP`; UICharacterDetail `Char_Target/Type/MainType/BG`): 272 x 72 inclined 10 degrees, caption 40 down to 28,
   290 apart. The nameplate's variant chips (`detail.js`) and the list popup's details panel (`popup.js`) draw it. In the
   panel the chips stand in one centred row (three, the most a card has, about 283 apart so they stay inside it:

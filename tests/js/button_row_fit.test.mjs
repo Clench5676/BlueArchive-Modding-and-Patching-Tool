@@ -194,21 +194,24 @@ for (const locale of LOCALES) test(`Settings tabs and button pairs share one siz
   }
 });
 
-// --- Batch Import: the list's seven tools (widths 174 190 126 140 150 224 156 at scale 0.34) and the row under the list ---
+// --- Batch Import: the list's seven tools (their shares 174 190 126 140 150 224 156 of the list's 1220, SPACE.m apart, at scale 0.34)
+// and the row under the list ---
+const { CONTROL, SPACE, TYPE } = await import("../../src/bmpt/web/js/ui-tokens.js");
 for (const locale of LOCALES) test(`the import list's tools and the row under the list share one size and fit their bodies in ${locale}`, async () => {
   const page = await source("batch-import.js"), layout = await source("import-layout.js");
-  assert.match(page, /\["files", "addFiles", 26, 174\], \["folder", "addFolder", 210, 190\], \["all", "all", 410, 126\], \["none", "none", 546, 140\]/);
-  assert.match(page, /\["remove", "remove", 696, 150\], \["removeImported", "removeImported", 856, 224\], \["clear", "clear", 1090, 156\]/);
+  assert.match(page, /\["files", "addFiles", 174\], \["folder", "addFolder", 190\], \["all", "all", 126\], \["none", "none", 140\]/);
+  assert.match(page, /\["remove", "remove", 150\], \["removeImported", "removeImported", 224\], \["clear", "clear", 156\]/);
   assert.match(page, /\[\["fillAll", "options", "recheck", "start"\], FOOTER_ROW\.size\]/);
   assert.match(page, /wide: 330, width: SMALL_BUTTON\.w \* S/);
-  assert.match(layout, /ui\.fitGroup\(captions, max \?\? w\.fontSize, min \?\? w\.fontSize \* 0\.7, widths\.map\(\(width\) => width - 60\), 2, \{ maxH: t\.widgets\.find\(\(x\) => "sprite" in x\)\.h_ - 20 \}\)/);
+  assert.match(layout, /ui\.fitGroup\(captions, max \?\? w\.fontSize, min \?\? w\.fontSize \* 0\.7, widths\.map\(\(width\) => width - SMALL_BUTTON\.fitInset\), 2,\s*\{ maxH: t\.widgets\.find\(\(x\) => "sprite" in x\)\.h_ - SMALL_BUTTON\.boxInsetH \}/);
   document.documentElement.lang = locale;
-  // Btn_Receive: caption 60 units, body 162 high, the label box 20 less
-  const tools = [["addFiles", 174], ["addFolder", 190], ["all", 126], ["none", 140], ["remove", 150], ["removeImported", 224], ["clear", 156]];
-  const widths = tools.map(([, width]) => width / 0.34 - 60), captions = tools.map(([key]) => text(locale, `import.${key}`));
+  // Btn_Receive: caption 60 units, body 162 high, the label box 20 less; the tools share the list's width less six gaps
+  const shares = [["addFiles", 174], ["addFolder", 190], ["all", 126], ["none", 140], ["remove", 150], ["removeImported", 224], ["clear", 156]];
+  const total = shares.reduce((sum, [, share]) => sum + share, 0), pixels = (1220 - 6 * SPACE.m * S) / total;
+  const widths = shares.map(([, share]) => share * pixels / 0.34 - 60), captions = shares.map(([key]) => text(locale, `import.${key}`));
   assertGroup(fitGroup(captions, 60, 42, widths, 2, { maxH: 162 - 20 }), captions, widths, 142, `${locale} tools`);
-  // the row: the small button's 136 and caption 48 down to 34, on the prefabs' 162-high bodies, Import's caption in every form
-  const k = SMALL_BUTTON.h * S / 162, range = [SMALL_BUTTON.fs * 162 / SMALL_BUTTON.h, SMALL_BUTTON.fsMin * 162 / SMALL_BUTTON.h];
+  // the row: buttonS (136 high, caption 48 down to TYPE.body.min), on the prefabs' 162-high bodies, Import's caption in every form
+  const k = CONTROL.buttonS.h * S / 162, range = [CONTROL.buttonS.fs * 162 / CONTROL.buttonS.h, TYPE.body.min * 162 / CONTROL.buttonS.h];
   const rowWidths = [330, SMALL_BUTTON.w * S, SMALL_BUTTON.w * S].map((width) => width / k - 60);
   const action = text(locale, "import.action");
   for (const start of [action.replace("{n}", "0"), action.replace("{n}", "999"), text(locale, "import.results")]) {

@@ -82,7 +82,7 @@ test("the correction is the distance between the ink's centre and the background
 const Popup = await import("../../src/bmpt/web/js/popup.js");
 const { controlRect, ROW_WIDTH, ROW_TEXT_SIZE, BUTTON_BODY_H, clipButtonPatterns } = await import("../../src/bmpt/web/js/import-layout.js");
 const { CHOOSE, noteRoom, NOTE_LEFT } = await import("../../src/bmpt/web/js/import-state.js");
-const { SMALL_BUTTON, FOOTER } = await import("../../src/bmpt/web/js/ui-tokens.js");
+const { SMALL_BUTTON, FOOTER, CONTROL, SPACE, TYPE, LINE } = await import("../../src/bmpt/web/js/ui-tokens.js");
 const { S } = await import("../../src/bmpt/web/js/util.js");
 const { setStrings } = await import("../../src/bmpt/web/js/i18n.js");
 const missingLabel = (key, params = {}, locale) => text(locale, `import.missing.${({missing: "count", missingNotFound: "notFound"})[key] || key}`, params);
@@ -181,7 +181,9 @@ function measure(tree) {
   const bgTop = status.pos[1] + bg.pos[1], bgBottom = bgTop - bgSprite.h_;
   const cardBottom = card.pos[1] - [0, 0.5, 1][Math.floor((cardSprite.pivot ?? 4) / 3)] * cardSprite.h_;
   return { status, bgTop, bgBottom, right: status.pos[0] + bgSprite.w_ / 2, above: Math.min(metaInk.bottom, kindInk.bottom), metaInk,
-    dividerBottom: line.pos[1] - line.widgets[0].h_ / 2, cardBottom, second: status.pos[1] < 20 - 1 };
+    dividerBottom: line.pos[1] - line.widgets[0].h_ / 2, cardBottom,
+    // the badge is on its own line when its background starts under the ink of the first line
+    second: bgTop < Math.min(metaInk.bottom, kindInk.bottom) };
 }
 
 for (const locale of LOCALES) test(`badge-line: every Choose Files state shares the badge background without growing the row in ${locale}`, () => {
@@ -223,6 +225,129 @@ for (const locale of LOCALES) test(`fallback: a wrapped state or a control that 
   }
 });
 
+// --- the design system (docs/design-system.md) in Import Mod's rows: the scales and rules of decisions 1 to 3, in en-US and zh-CN ---
+// the scales the row takes, and the rules as assertions on its boxes
+const PITCH = LINE.stack * TYPE.dense.fs, DESIGN_LOCALES = ["en-US", "zh-CN"];
+const metaFor = (locale, n = 3) => text(locale, n === 1 ? "import.metaOne" : "import.meta", { id: "ch0163", n, size: "4.0 MB" });
+// y (up) of the reference centre of a label's first line, whose lines fill the top of its box (pivots 0 to 2)
+const firstLineCentre = (node) => {
+  const w = textOf(node), px = fontSizeFor(w.text, w.fontSize);
+  return node.pos[1] - (px * LINE_PITCH / 2 - NGUI.inkShift(lines(w.text)[0], px, { reference: true }));
+};
+const backgroundCentre = (status) => { const bg = find(status, "Bg"); return status.pos[1] + bg.pos[1] - bg.widgets[0].h_ / 2; };
+// a status text of about this width in units at the row's size, from the locale's own words
+const stateOf = (locale, width) => {
+  const word = text(locale, "import.state.convert"), join = /^(en|th)/.test(locale) ? " " : "";
+  let state = word;
+  while (NGUI.glyphWidth(state, ROW_TEXT_SIZE) < width) state += join + word;
+  return state;
+};
+
+test("badge-line: the scales the row is built from are the design system's", () => {
+  assert.equal(ROW_TEXT_SIZE, TYPE.dense.fs);
+  assert.equal(TYPE.dense.min, TYPE.dense.fs, "the row's text only wraps, it never shrinks");
+  assert.equal(PITCH, 57.75);
+  assert.equal(SPACE.l, 28); assert.equal(CONTROL.badge.pad, 16); assert.equal(CONTROL.buttonS.pad, 45);
+});
+
+for (const locale of DESIGN_LOCALES) test(`badge-line: every text of a row is TYPE.dense and sits on the card's first line in ${locale}`, () => {
+  setStrings(locale, {});
+  const rowArt = art(), kind = text(locale, "tab.lobby");
+  const tree = rowArt.row({ name: "Student", kind, state: text(locale, "import.state.ready"), stateKey: "ready", meta: metaFor(locale), route: "Global Android", note: "Note" });
+  for (const path of ["Label_Locale_Received", "Label_From", "Platform", "Label_Locale_Limit", "TimeLimit/Label_Locale_TimeLimit"]) {
+    assert.equal(textOf(find(tree, path)).fontSize, TYPE.dense.fs, path);
+  }
+  // the name plate (title and divider) keeps the prefab's place; the first line starts ROW_TEXT_TOP under the card's centre
+  const card = find(prefabs.UIMailBoxContent, "List_01");
+  assert.equal(find(tree, "Label_System").pos[1], find(card, "Label_System").pos[1]);
+  assert.equal(find(tree, "Line").pos[1], find(card, "Line").pos[1]);
+  assert.equal(find(tree, "Label_Locale_Received").pos[1], 20);
+  assert.equal(find(tree, "Label_From").pos[1], 20);
+});
+
+for (const locale of DESIGN_LOCALES) test(`badge-line: the first line's texts and a badge on it share one centre line, tops level, in ${locale}`, () => {
+  setStrings(locale, {});
+  const rowArt = art(), kind = text(locale, "tab.lobby");
+  for (const state of [text(locale, "import.state.ready"), text(locale, "import.state.update"), text(locale, "import.state.convert")]) {
+    const tree = rowArt.row({ name: "Student", kind, state, stateKey: "update", meta: metaFor(locale), muted: true });
+    const m = measure(tree), meta = find(tree, "Label_Locale_Received"), from = find(tree, "Label_From");
+    assert.ok(!m.second, `${locale} ${state}: the badge is on the first line`);
+    assert.equal(meta.pos[1], from.pos[1], "tops level");
+    // rule 1: the visual centre of every element of the row on its centre line (a text's reference glyph, a widget's box)
+    assert.ok(Math.abs(firstLineCentre(meta) - backgroundCentre(m.status)) <= .01, `${locale} ${state}: meta ${firstLineCentre(meta)} against badge ${backgroundCentre(m.status)}`);
+    // (Han, kana and Hangul have no reference glyph: their ink is their own, so a kind column of CJK is only level in its top)
+    if (NGUI.inkReference(textOf(from).text)) assert.ok(Math.abs(firstLineCentre(from) - backgroundCentre(m.status)) <= .01, `${locale} ${state}: kind`);
+    assert.equal(tree.rowHeight, 348, "a first-line badge leaves the row at its height");
+  }
+});
+
+for (const locale of DESIGN_LOCALES) test(`badge-line: separate lines stack LINE.stack x the row's size (57.75) apart in ${locale}`, () => {
+  setStrings(locale, {});
+  const rowArt = art(), kind = text(locale, "tab.lobby");
+  // a badge on its own line (unidentified), a route and a note: the badge's cell, then the route, then the note, a pitch a line
+  const tree = rowArt.row({ name: "Student", kind, state: text(locale, "import.reason.source_unknown"), stateKey: "blocked", meta: metaFor(locale), route: "Global Android",
+    note: "Note", unidentified: true, muted: true });
+  const m = measure(tree), route = find(tree, "Platform"), note = find(tree, "Label_Locale_Limit");
+  assert.ok(m.second);
+  assert.equal(lines(textOf(route).text).length, 1);
+  assert.equal(m.status.pos[1] - route.pos[1], PITCH, "the line after the badge");
+  assert.equal(route.pos[1] - note.pos[1], PITCH, "the line after the route");
+  // without a badge line the route follows the metadata and kind lines, a pitch each
+  for (const meta of [metaFor(locale), Array(60).fill(metaFor(locale)).join(/^en/.test(locale) ? " " : "")]) {
+    const plain = rowArt.row({ name: "Student", kind, state: text(locale, "import.state.ready"), stateKey: "ready", meta, route: "Global Android", note: "Note" });
+    const rows = Math.max(lines(textOf(find(plain, "Label_Locale_Received")).text).length, lines(textOf(find(plain, "Label_From")).text).length);
+    assert.equal(find(plain, "Platform").pos[1], 20 - rows * PITCH);
+    assert.equal(find(plain, "Label_Locale_Limit").pos[1], 20 - (rows + 1) * PITCH);
+  }
+});
+
+for (const locale of DESIGN_LOCALES) test(`badge-line: the kind column ends SPACE.l before the badge, whose caption keeps CONTROL.badge.pad each side, in ${locale}`, () => {
+  setStrings(locale, {});
+  const rowArt = art(), kind = text(locale, "tab.lobby");
+  // a wide badge pushes the kind column left of the aligned column: the gap between them is SPACE.l exactly
+  const state = stateOf(locale, 360);
+  const tree = rowArt.row({ name: "Student", kind, state, stateKey: "convert", meta: metaFor(locale) });
+  const m = measure(tree), from = textOf(find(tree, "Label_From")), bg = find(m.status, "Bg").widgets[0];
+  assert.ok(!m.second, "the wide badge still shares the first line");
+  const kindRight = find(tree, "Label_From").pos[0] + from.w_ / 2, badgeLeft = m.status.pos[0] - bg.w_ / 2;
+  assert.ok(Math.abs(badgeLeft - kindRight - SPACE.l) <= 1e-6, `${badgeLeft - kindRight} between the kind column and the badge`);
+  assert.ok(Math.abs(bg.w_ - NGUI.glyphWidth(state, ROW_TEXT_SIZE) - 2 * CONTROL.badge.pad) <= 1e-6, "the caption's padding is CONTROL.badge.pad each side");
+  assert.ok(Math.abs(m.right - 910) <= 1e-6, "the badge ends on the right column");
+  // a narrow badge leaves the kind column on its aligned column
+  const narrow = rowArt.row({ name: "Student", kind, state: text(locale, "import.state.ready"), stateKey: "ready", meta: metaFor(locale) });
+  const n = measure(narrow), narrowFrom = find(narrow, "Label_From"), narrowBg = find(n.status, "Bg").widgets[0];
+  assert.ok(narrowBg.w_ >= 330);
+  assert.ok(n.status.pos[0] - narrowBg.w_ / 2 - (narrowFrom.pos[0] + textOf(narrowFrom).w_ / 2) >= SPACE.l - 1e-6);
+  assert.ok(Math.abs(narrowFrom.pos[0] + textOf(narrowFrom).w_ / 2 - 550) <= 1e-6);
+});
+
+for (const locale of DESIGN_LOCALES) test(`badge-line: the Choose Files control is a buttonS control sharing the badge's line, SPACE.l or more from it, in ${locale}`, () => {
+  setStrings(locale, {});
+  const rowArt = art(), control = chooseSize(rowArt), caption = missingLabel("choose", {}, locale);
+  // width: the caption and CONTROL.buttonS.pad each side (the body's slice border included), 240 at least, in the button's own units
+  const button = find(prefabs.UIMailBoxContent, "List_01/Btn_Receive"), sx = button.scale?.[0] ?? 1, lx = find(button, "Label_Locale").scale?.[0] ?? 1;
+  const expected = Math.max(CONTROL.buttonS.minW, NGUI.glyphWidth(caption, control.size) * lx + 2 * CONTROL.buttonS.pad) * sx * CHOOSE.scale;
+  assert.ok(Math.abs(control.width - expected) <= 1e-6, `${control.width} against ${expected}`);
+  for (const state of statuses(locale)) {
+    const tree = rowArt.row({ name: "Student", kind: text(locale, "tab.lobby"), state, stateKey: "incomplete", meta: metaFor(locale), muted: true, control });
+    const m = measure(tree);
+    assert.ok(tree.control.beside && m.second, `${locale} ${state}`);
+    assert.ok(tree.control.right - tree.control.width - m.right >= SPACE.l - 1e-6, "SPACE.l or more between the badge and the control");
+    assert.ok(Math.abs(tree.control.right - 910) <= 1e-6, "the control ends on the right column");
+    assert.ok(Math.abs(tree.control.height - (m.bgTop - m.bgBottom)) <= 1e-6 && Math.abs(tree.control.top - m.bgTop) <= 1e-6, "level with the badge's background");
+    assert.ok(Math.abs(tree.control.width - control.width / ROW_SCALE) <= 1e-6);
+  }
+  // the badge keeps its minimum (330) beside the control exactly while the control leaves it SPACE.l: half a unit wider and the badge
+  // goes under it, the fallback
+  const data = { name: "Student", kind: text(locale, "tab.lobby"), state: text(locale, "import.state.ready"), stateKey: "ready", meta: metaFor(locale), muted: true };
+  const textLeft = find(rowArt.row(data), "Line").pos[0], limit = (910 - textLeft - SPACE.l - 330) * ROW_SCALE;
+  const edge = rowArt.row({ ...data, control: { ...control, width: limit } }), m = measure(edge);
+  assert.ok(edge.control.beside, "the minimum badge and the control just fit");
+  assert.equal(find(m.status, "Bg").widgets[0].w_, 330);
+  assert.ok(Math.abs(edge.control.right - edge.control.width - m.right - SPACE.l) <= 1e-6, "SPACE.l between the badge and the control");
+  assert.equal(rowArt.row({ ...data, control: { ...control, width: limit + .5 * ROW_SCALE } }).control.beside, false);
+});
+
 for (const locale of LOCALES) test(`rows without a control keep their height, a badge on the first line included, in ${locale}`, () => {
   setStrings(locale, {});
   const rowArt = art(), kind = text(locale, "tab.lobby");
@@ -258,12 +383,11 @@ for (const locale of LOCALES) test(`badge-line: the one-line Choose Files captio
   const sx = tree.scale[0] * CHOOSE.scale, sy = tree.scale[1] * CHOOSE.scale, ly = node.scale[1];
   assert.equal(label.text, caption); assert.equal(lines(label.text).length, 1); assert.ok(!label.ellipsis);
   assert.ok(Math.abs(fontSizeFor(caption, label.fontSize) * sy * ly - fontSizeFor(caption, ROW_TEXT_SIZE) * ROW_SCALE) <= .01);
-  assert.ok(widest(label.text, label.fontSize) * node.scale[0] <= body.w_ - (ui.atlasIndex().Common.Common_Btn_BG.borderLeft + ui.atlasIndex().Common.Common_Btn_BG.borderRight + 32) + 1e-9, "slice borders plus badge padding");
-  const metadata = ui.atlasIndex().Common.Common_Btn_BG;
+  assert.ok(widest(label.text, label.fontSize) * node.scale[0] <= body.w_ - 2 * CONTROL.buttonS.pad + 1e-9, "CONTROL.buttonS.pad each side");
   const leftPadding = body.w_ / 2 + node.pos[0] - label.w_ * node.scale[0] / 2;
   const rightPadding = body.w_ / 2 - node.pos[0] - label.w_ * node.scale[0] / 2;
-  assert.ok(Math.abs((leftPadding - metadata.borderLeft - 16) * sx) <= .01, "left slice border plus badge padding");
-  assert.ok(Math.abs((rightPadding - metadata.borderRight - 16) * sx) <= .01, "right slice border plus badge padding");
+  assert.ok(Math.abs(leftPadding - CONTROL.buttonS.pad) <= .01, "left padding is CONTROL.buttonS.pad (the slice border is part of it)");
+  assert.ok(Math.abs(rightPadding - CONTROL.buttonS.pad) <= .01, "right padding is CONTROL.buttonS.pad");
   assert.ok(Math.abs(body.h_ * sy - height) <= .01); assert.ok(Math.abs(body.w_ * sx - control.width) <= .01);
   const reference = NGUI.inkReference(caption), band = NGUI.inkBand(reference || caption, fontSizeFor(caption, label.fontSize));
   const ink = node.pos[1] - (fontSizeFor(caption, label.fontSize) * LINE_PITCH / 2 + (band.top + band.bottom) / 2) * ly;
