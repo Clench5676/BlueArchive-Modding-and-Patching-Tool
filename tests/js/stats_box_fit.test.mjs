@@ -40,7 +40,7 @@ export async function load(url, ctx, next) {
   const result = await next(url, ctx);
   if (url === ${JSON.stringify(DETAIL)}) {
     const source = typeof result.source === "string" ? result.source : new TextDecoder().decode(result.source);
-    return { ...result, source: source + "\\nexport { detailsBody };" };
+    return { ...result, source: source + "\\nexport { detailsBody, switchTextLayout, nameplateRow };" };
   }
   return result;
 }`)}`);
@@ -81,6 +81,69 @@ const rectOf = (n, w = n.widgets.find((x) => "w_" in x)) => {
   return { left, right: left + w.w_, top: n.pos[1] + w.h_ / 2, bottom: n.pos[1] - w.h_ / 2 };
 };
 const child = (nodes, name) => nodes.find((n) => n.name === name);
+
+// Job E's table and switch texts: pure prefab units, rendered at the default stage scale, for all six languages.
+for (const locale of LOCALES) test(`detail table columns stay in the L content box and wrap their rows in ${locale}`, () => {
+  const { text } = use(locale), { SPACE, TYPE } = Tokens;
+  const W = DETAILS.r - DETAILS.l;
+  const rows = [
+    ["ibuki_dress_spr_with_a_long_bundle_name.bundle", "18.5 MB", "2026-11-07", [text("crc.fixed"), "#0a6f2d"], text("status.original")],
+    ["ibuki_".repeat(25) + ".bundle", "123.4 MB", "2026-10-01", [text("crc.needed"), "#f14f00"], text("status.replaced").repeat(3)],
+  ];
+  for (const status of [true, false]) {
+    const result = Detail.detailsBody({ fields: [[text("field.folder"), "C:/synthetic/files"]], rows: rows.map(r => [...r.slice(0, 4), status ? r[4] : null]) });
+    const nodes = result.tree.children, head = child(nodes, "Head"), hr = rectOf(head);
+    const weights = status ? [1040, 220, 270, 290, 260] : [1300, 220, 270, 290];
+    assert.equal(W, 2018); assert.equal(DETAILS.w, 2098);
+    assert.equal((DETAILS.w - W) / 2, SPACE.xl);
+    assert.deepEqual([hr.left, hr.right], [0, W]);
+    assert.equal(child(nodes, `H_${weights.length}`), undefined);
+    for (let i = 0; i < weights.length; i++) {
+      const header = child(nodes, `H_${i}`), hw = header.widgets[0];
+      const expected = W * weights[i] / 2080;
+      assert.ok(Math.abs(hw.w_ + 2 * SPACE.s - expected) < 1e-9, "the existing column proportions are retained");
+      assert.ok(hw.fontSize <= TYPE.caption.fs && hw.fontSize >= TYPE.caption.min);
+      for (const line of hw.text.split("\n")) assert.ok(NGUI.glyphWidth(line, hw.fontSize) <= hw.w_ + 1e-9);
+      for (const [ri] of rows.entries()) {
+        const cell = child(nodes, `R_${ri}_${i}`), cw = cell.widgets[0], cr = rectOf(cell);
+        assert.ok(cw.fontSize <= TYPE.caption.fs && cw.fontSize >= TYPE.caption.min, `cell ${cw.fontSize}`);
+        assert.ok(cr.left >= 0 && cr.right <= W + 1e-9);
+        assert.equal(cr.left, rectOf(header).left);
+        const original = i === 3 ? rows[ri][3][0] : rows[ri][i];
+        assert.equal(cw.text.replace(/\s/g, ""), String(original).replace(/\s/g, ""), "wrapping keeps every non-space character");
+        for (const line of cw.text.split("\n")) assert.ok(NGUI.glyphWidth(line, cw.fontSize) <= cw.w_ + 1e-9, `${locale}: ${line}`);
+        assert.ok(cw.text.split("\n").length * NGUI.fontSizeFor(cw.text, cw.fontSize) * NGUI.LINE_PITCH <= cw.h_ + 1e-9);
+      }
+    }
+    const line0 = child(nodes, "RL_0"), line1 = child(nodes, "RL_1");
+    const row1Top = Math.max(...weights.map((_, i) => rectOf(child(nodes, `R_1_${i}`)).top));
+    assert.ok(Math.abs(line0.pos[1] - row1Top - SPACE.s * 2) < 1e-9, "12 between rows, then 12 inside the next row");
+    assert.ok(-line1.pos[1] < result.height, "the final divider stays in the scrollable body");
+  }
+});
+
+for (const locale of LOCALES) test(`detail switch texts fit their half of the prefab card in ${locale}`, () => {
+  const { text } = use(locale), { SPACE, TYPE, CONTROL } = Tokens;
+  for (const tab of ["portrait", "lobby", "model"]) for (const arrow of [true, false]) {
+    const title = text(`row.switch.${tab}`), sub = `Ibuki - ${text("status.applied")}`;
+    const layout = Detail.switchTextLayout(778, 209, title, sub, arrow);
+    const [a, b] = layout.texts, content = layout.content;
+    assert.ok(b.y - a.y - a.h >= SPACE.xs - 1e-9);
+    for (const [i, item] of layout.texts.entries()) {
+      const type = i ? TYPE.caption : TYPE.body;
+      assert.ok(item.fs <= type.fs && item.fs >= type.min);
+      assert.ok(item.lines <= 2);
+      assert.ok(item.x >= 778 / 2 + SPACE.s && item.x + item.w <= content.x + content.w + 1e-9);
+      assert.ok(item.y >= content.y - 1e-9 && item.y + item.h <= content.y + content.h + 1e-9);
+      for (const line of item.text.split("\n")) assert.ok(NGUI.glyphWidth(line, item.fs) <= item.w + 1e-9);
+    }
+    if (arrow) {
+      assert.equal(layout.arrow.h, CONTROL.icon.h);
+      assert.equal(layout.arrow.w, CONTROL.icon.h);
+      assert.ok(b.x + b.w + SPACE.xs <= layout.arrow.x + 1e-9);
+    }
+  }
+});
 
 // the checks every box shares: nodes = the flat list the site appended (the box first)
 function assertRows({ nodes, what, value = "V", caption = "F", divider = "L", count, slot = () => null, lines = B.value.lines }) {
