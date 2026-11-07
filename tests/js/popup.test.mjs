@@ -1676,8 +1676,8 @@ test("portrait spacing fits four tall cards at the standard width and selects ho
   for (const width of [1300, 1818, 2200]) {
     const { card, columns, pitch, overhang } = switchGrid("spr", width);
     assert.equal(card.h / card.w, 2.2);
-    assert.equal(pitch[0] - card.w, 48, "portrait gaps do not stretch to fill the viewport");
-    assert.equal(pitch[1] - card.h - card.bar, 48);
+    assert.equal(pitch[0] - card.w, 40, "portrait gaps do not stretch to fill the viewport (SPACE.xl: no prefab gives the cards a gap)");
+    assert.equal(pitch[1] - card.h - card.bar, 40);
     assert.ok(columns <= 4);
     assert.ok((columns - 1) * pitch[0] + card.w + overhang <= width - 80 + .001);
   }

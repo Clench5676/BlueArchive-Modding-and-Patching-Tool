@@ -2016,7 +2016,7 @@ no withdrawal control.
   Candidate rows start 40 NGUI units inside the list paper, measured from their inclined outer corners; short rows
   stay left-aligned. Portraits retain their tall cards in one horizontal row, with drag, horizontal trackpad input
   and vertical wheel input mapped to horizontal scrolling. Search occupies the header so the row keeps its full
-  height, with a fixed 48-unit gap between portrait bodies. Memorial lobbies use larger 790 by 444.375 cards in
+  height, with a fixed 40-unit gap (`SPACE.xl`) between portrait bodies. Memorial lobbies use larger 790 by 444.375 cards in
   two columns and models keep four, scrolling vertically. The horizontal track and thumb
   turn the complete `UICharacterCollection/SeletControl/List/Scroll Bar` prefab; the existing `UIPopup_Sort` frame,
   card sprites and `UINonEquipmentInventory/Inventory_ListControl/EquipPos/Texture` detail image stay intact.
