@@ -1199,9 +1199,14 @@ A blocked or incomplete row also carries `bundles`: for each of its files (at mo
 `Inspection.summary` (the analysis's own cache; only the serialized-file headers of a bundle it already loaded are read
 again): `file`, the build targets (`platforms`), the Unity versions (`unity`, major.minor), its own CABs and stream files
 (`cabs`, at most 10) and how many other CABs or stream files it references (`references`, `null` when only headers were
-read). A refusal from the files' format can so be told from one guessed from their names or targets. The error report's
-import rows and the analysis log carry `bundles` and `missing`; CAB ids and the game's own file names stay, other file
-names are redacted.
+read). A refusal from the files' format can so be told from one guessed from their names or targets. A blocked row
+carries the resolver's evidence as well, `resolution`: per file (at most 20) its `method` (`name`, `name_without_crc`,
+`cab`, `asset_path`, `asset_key`, `part`, `none`, or `null` when the analysis stopped before the asset stage) and the
+official parts (`targets`) and their `dates` it found; and, for a guessed source, `attempts`: every server and platform
+tried with its failure `code`. The error report's import rows and the analysis log carry `bundles`, `missing`,
+`resolution` and `attempts`, and the report's rows `previewed`: whether the import preview composed the row (a refused
+row that previewed shows the preview and the analysis disagreeing). CAB ids and the game's own file names stay, other
+file names are redacted.
 
 A blocked or incomplete row's status badge opens Details (`import-details.js`, the game's message popup with a compact frame: `Popup.message({ compact })` sizes the frame to its content, below the frame class's own height): the row's reason (its short label with the error text, a file name that opens or ends the text left out, or the missing-file status), then a paragraph a file (its name, `import.detail.platform`, `import.detail.unity`), the unresolved dependencies (`import.detail.unresolved`, then one CAB id a line, from `missing.cabs`) and the files of the same slot found in its folders (`missing.found`). Its hit area is the badge background's box (`badgeRect`), above the row's own; opening it does not select the row.
 

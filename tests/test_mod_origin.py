@@ -745,6 +745,26 @@ def test_partial_japan_evidence_cannot_fall_back_to_global(real_metadata):
     assert (entry["state"], entry["reason"], entry["source"]) == ("blocked", 'conversion_names', None)
 
 
+def test_a_refused_row_reports_how_its_files_matched_and_every_guess(real_metadata):
+    from bmpt.webui.diagnostics import import_snapshot
+    env = real_metadata
+    source = game_bundle(env.tmp / "input", part="textures")
+    unity_bundle(source, -2, cab="CAB-jp", payload=b"mod", references=["com.YostarJP.BlueArchive"])
+    entry, = analyze(env, [source])["entries"]
+    assert (entry["state"], entry["reason"]) == ("blocked", "conversion_names")
+    # placed by its asset name and type only, so its name decides across servers
+    assert entry["resolution"] == [{"file": source.name, "method": "asset_key", "targets": [env.original.name],
+                                    "dates": ["2026-01-01"]}]
+    assert entry["attempts"] == [{"server": "japan", "platform": platform, "code": "conversion_names"}
+                                 for platform in mod_origin.PLATFORMS]
+    batch = env.services.batch_import
+    row, = import_snapshot(batch.diagnostic_snapshot(), set())["rows"]
+    assert (row["resolution"], row["attempts"], row["previewed"]) == (entry["resolution"], entry["attempts"], False)
+    batch.preview(entry["preview"]["key"])
+    row, = import_snapshot(batch.diagnostic_snapshot(), set())["rows"]
+    assert row["previewed"] is True
+
+
 @pytest.mark.parametrize("platforms,refs,expected", [
     ({"NoTarget"}, {"com.YostarJP.BlueArchive"}, [("japan", p) for p in mod_origin.PLATFORMS]),
     ({"iOS"}, set(), [(s, "ios") for s in mod_origin.SERVERS]),

@@ -187,7 +187,11 @@ def import_row(entry: dict, secrets: set[str]) -> dict:
                   "source": source, "target": target, "conversionRoute": route,
                   "selected": entry.get("selected"), "libraryId": entry.get("libraryId"),
                   # what the check read of the files (build target, Unity, own CABs) and the CABs nothing held
-                  "bundles": entry.get("bundles"), "missing": entry.get("missing")}, secrets)
+                  "bundles": entry.get("bundles"), "missing": entry.get("missing"),
+                  # how each file found its official parts, every guessed source tried, and whether the import
+                  # preview composed the row: a refused row that previewed disagrees with the preview's rule
+                  "resolution": entry.get("resolution"), "attempts": entry.get("attempts"),
+                  "previewed": entry.get("previewed")}, secrets)
 
 
 def import_snapshot(value: Any, secrets: set[str]) -> dict | None:
