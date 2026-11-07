@@ -2,6 +2,8 @@
 import * as NGUI from "./ngui.js";
 import { S, clone, advanceOf, glyphsOf } from "./util.js";
 import { emptyBlock } from "./empty-block.js";
+import { CONTROL, SPACE } from "./ui-tokens.js";
+import { row } from "./ui-grid.js";
 
 export function searchTree(collection) {
   const box = clone(find(collection, "SeletControl/CharacterSearch"));
@@ -53,7 +55,7 @@ const { find, node, label, fitText } = NGUI;
 export function toolbarLayout(view, { title = T("roster.title"), left = -1270, right = 1412 } = {}) {
   const steps = [[230, 44, 56, 40, 62], [210, 40, 48, 38, 62], [200, 36, 44, 34, 58], [190, 34, 42, 32, 54], [180, 32, 40, 30, 50], [170, 30, 36, 28, 46]];
   for (const [segW, segFs, sortFs, cbFs, titleFs] of steps) {
-    const titleEnd = left + advanceOf(title, titleFs) + 40;
+    const titleEnd = left + advanceOf(title, titleFs) + SPACE.l;
     // the six segments of both filters share one size
     const segLabels = NGUI.fitGroup(["seg.all", "seg.mods", "seg.noMods", "seg.all", "seg.recruit", "seg.noRecruit"].map((k) => T(k)), segFs, 22, segW - 26, 2, { maxH: 96 });
     // the sort button is as wide as its longest key, so choosing another one moves nothing
@@ -62,14 +64,20 @@ export function toolbarLayout(view, { title = T("roster.title"), left = -1270, r
     const sortW = Math.max(300, ...sortTexts.map((s) => glyphsOf(s.text, s.fs) + 170));
     const cbText = fitText(T("roster.merge"), cbFs, 24, 400);
     const cbW = 131 + glyphsOf(cbText.text, cbText.fs) + 46;
-    let x = right;
-    const order = x - 243 / 2; x -= 243 + 16;
-    const sort = x - sortW / 2; x -= sortW + 16;
-    const search = x - 75; x -= 150 + 16;
-    const seg2 = x; x -= 3 * segW + 16;
-    const seg1 = x; x -= 3 * segW + 16;
-    const cbLeft = x - cbW;
-    if (cbLeft >= titleEnd || segW === 170) return { segW, segLabels, sortText, sortW, cbText, cbW, order, sort, search, seg1, seg2, cbLeft, titleFs };
+    // The segmented prefab keeps its three adjoining slots; composed groups use SPACE.l. Search and order share
+    // UICharacterCollection/SeletControl/TopMenu/SearchBtn/Btn_Normal's own 150 x 116-unit body. Sort and order
+    // also keep their prefab's 116-unit height; the segmented filters keep 104. Caption fitting tiers stay as before.
+    const h = CONTROL.toolbar.h, iconW = 150;
+    const nativeH = 116;
+    const tools = row([{ w: iconW, h: nativeH }, { w: sortW, h: nativeH }, { w: iconW, h: nativeH }], { gap: SPACE.m });
+    const groups = row([{ w: cbW, h }, { w: 3 * segW, h }, { w: 3 * segW, h }, tools], { gap: SPACE.l });
+    const cbLeft = right - groups.w, offset = (box) => ({ ...box, x: box.x + cbLeft });
+    const boxes = groups.boxes.slice(0, 3).map(offset);
+    boxes.push(...tools.boxes.map((box) => offset({ ...box, x: groups.boxes[3].x + box.x })));
+    const centre = (box) => box.x + box.w / 2;
+    if (cbLeft >= titleEnd || segW === 170) return { segW, segLabels, sortText, sortW, cbText, cbW,
+      order: centre(boxes[5]), sort: centre(boxes[4]), search: centre(boxes[3]),
+      seg1: boxes[1].x + boxes[1].w, seg2: boxes[2].x + boxes[2].w, cbLeft, titleFs, boxes };
   }
   return null;
 }
@@ -103,7 +111,7 @@ export function toggleHits(view, lay, segY = 720 - 219 - 50.2) {
   return [
     ...segments("mods", ["all", "mods", "none"], ["seg.all", "seg.mods", "seg.noMods"], lay.seg1),
     ...segments("recruit", ["all", "yes", "no"], ["seg.all", "seg.recruit", "seg.noRecruit"], lay.seg2),
-    { box: [lay.cbLeft + lay.cbW / 2, 720 - 273, lay.cbW, 110], name: T("roster.merge"), pressed: view.merged === true,
+    { box: [lay.cbLeft + lay.cbW / 2, segY, lay.cbW, CONTROL.toolbar.h], name: T("roster.merge"), pressed: view.merged === true,
       apply: (target) => { target.merged = !target.merged; } },
   ];
 }
@@ -137,28 +145,38 @@ export function toolbarTree(collection, checkbox, view, searching, lay = toolbar
     segFilter("RecruitFilter", lay.segLabels.slice(3), { all: 0, yes: 1, no: 2 }[view.recruit], lay.seg2));
   // search: the game's toggle, pressed while the search box is open
   const search = find(menu, "SearchBtn");
-  search.pos[0] = lay.search - 89;
   find(search, "Btn_Normal").active = !searching;
   find(search, "Btn_Pressed").active = searching;
   // sort: the current key, and the funnel in blue while a display setting filters the list
   const sort = find(menu, "SortBtn");
-  sort.pos[0] = lay.sort + 83;
   sort.children = sort.children.map((c) => c.name === "Btn_Normal" ? sortBody(collection, lay.sortText, lay.sortW, filtering(view.filters)) : c);
   // order: one arrow, down for descending (the prefab holds both, Icon_Up flipped)
   const orderBtn = find(menu, "OrderBtn");
-  orderBtn.pos[0] = lay.order + 45.1;
   orderBtn.children = orderBtn.children.map((c) => c.name === "Btn_Normal" ? orderBody(collection, view.order !== "desc") : c);
+  // The sprite's own pivot supplies its local centre; every state is centred on the same row, without hand offsets.
+  const centreY = -219 - 50.2; // UICharacterCollection/SeletControl/TopMenu/FilterBtn's authored centre line stays.
+  for (const [control, box] of [[search, lay.boxes[3]], [sort, lay.boxes[4]], [orderBtn, lay.boxes[5]]]) {
+    control.pos = [box.x + box.w / 2, centreY];
+    for (const state of control.children) {
+      const body = state.widgets.find((widget) => "sprite" in widget);
+      if (!body) continue;
+      const pivot = body.pivot ?? 4;
+      state.pos = [((pivot % 3) / 2 - .5) * box.w, (.5 - Math.floor(pivot / 3) / 2) * box.h];
+      body.w_ = box.w; body.h_ = box.h;
+    }
+  }
   // checkbox toggle after the title (game: "unowned students only" in the gacha character list)
   const cb = clone(checkbox);
   cb.name = "Merge";
-  cb.pos = [lay.cbLeft, -266];
-  Object.assign(cb.widgets.find((w) => "sprite" in w), { w_: lay.cbW, h_: 104 });
+  const menubar = find(menu, "Menubar");
+  cb.pos = [lay.cbLeft - menubar.pos[0], centreY - menubar.pos[1]];
+  Object.assign(cb.widgets.find((w) => "sprite" in w), { w_: lay.cbW, h_: CONTROL.toolbar.h, pivot: 3 });
   cb.children = cb.children.filter((c) => c.name !== "Locale_Text");
   for (const c of cb.children) {
     c.children = (c.children || []).filter((k) => k.name === "Check");
     c.active = (c.name === "Type_ON") === view.merged;
   }
   cb.children.push(node("Label", [131, 0], [label(lay.cbText.text, lay.cbText.fs, "#484e52/1.00", lay.cbW - 131, 50 * lay.cbText.lines, { pivot: 3, depth: 31 })]));
-  find(menu, "Menubar").children.push(cb);
+  menubar.children.push(cb);
   return menu;
 }

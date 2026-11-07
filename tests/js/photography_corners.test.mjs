@@ -9,6 +9,8 @@ import { FRAME, OCCLUSION_BUTTON, TOOLBAR_CAPTION, otherMode, actionCaption } fr
 import { visualPrefab } from './visual_prefabs.mjs';
 import { n, spr } from './control_prefabs.mjs';
 
+import { CONTROL, SMALL_BUTTON, SPACE } from "../../src/bmpt/web/js/ui-tokens.js";
+import { row } from "../../src/bmpt/web/js/ui-grid.js";
 const S = 1920 / 2960, near = (a, b) => assert.ok(Math.abs(a - b) < 1e-7, `${a} != ${b}`);
 const source = readFileSync(new URL('../../src/bmpt/web/js/photography/controller.js', import.meta.url), 'utf8');
 const visualSource = readFileSync(new URL('../../src/bmpt/web/js/visual-mode.js', import.meta.url), 'utf8');
@@ -58,7 +60,7 @@ globalThis.getComputedStyle = () => ({ getPropertyValue: () => '' });
 const NGUI = await import('../../src/bmpt/web/js/ngui.js');
 
 for (const locale of ['en-US', 'zh-CN', 'zh-TW', 'ja-JP', 'ko-KR', 'th-TH']) for (const mode of ['portrait', 'lobby']) {
-  test(`real ${mode} camera controls retain prefab dimensions and fit at all corner margins in ${locale}`, async () => {
+  test(`real ${mode} camera controls retain native Back dimensions and fit composed rows at all corner margins in ${locale}`, async () => {
     const webui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url))).webui;
     const strings = webui.photo;
     for (const platform of [null, 'darwin', 'win32']) for (const [width, height] of [[960, 540], [1600, 900], [2560, 1440], [2560, 1080], [960, 1200]]) {
@@ -69,7 +71,7 @@ for (const locale of ['en-US', 'zh-CN', 'zh-TW', 'ja-JP', 'ko-KR', 'th-TH']) for
         bamtWindowChrome: platform ? { active: true, platform, bounds: platform === 'darwin'
           ? { left: 12, right: 80, top: 8, bottom: 30 } : { left: width - 148, right: width, top: 8, bottom: 40 } } : null });
       const hits = new Map(), overlay = new Element(); let leftCamera = 0;
-      const env = { S, FRAME, OCCLUSION_BUTTON, TOOLBAR_CAPTION, otherMode, actionCaption, document: doc, mode, overlay, active: true,
+      const env = { CONTROL, SMALL_BUTTON, SPACE, row, S, FRAME, OCCLUSION_BUTTON, TOOLBAR_CAPTION, otherMode, actionCaption, document: doc, mode, overlay, active: true,
         controlsRevision: 0, grid: true, occlusion: false, expanded: false, paused: false, saving: false,
         P: key => strings[key], clone: structuredClone, safe: fn => fn, alignIcon: async () => {}, bindCorner, anchoredCentre, press() {},
         buttonCenter: async el => ({ x: parseFloat(el.style.left) + parseFloat(el.style.width) / 2, y: parseFloat(el.style.top) + parseFloat(el.style.height) / 2 }),
@@ -81,7 +83,7 @@ for (const locale of ['en-US', 'zh-CN', 'zh-TW', 'ja-JP', 'ko-KR', 'th-TH']) for
         // the student has both modes, so the mode button is drawn (the test of its omission is photography_choices.test.mjs)
         bridge: { info: () => ({ hasPortrait: true, hasLobby: true }),
           playbackTree: () => ({ tree: n('PhotoPlayback', [0, 0], [spr('Common_Bg_Raius5px_Shadow', 145, 141)]), textures: {} }) } };
-      vm.runInNewContext(`${code}\nglobalThis.draw = drawControls; globalThis.prepare = prepare; globalThis.exitControl = exitControl; globalThis.prepareSwitch = prepareSwitch;`, env);
+      vm.runInNewContext(`${code}\nglobalThis.draw = drawControls; globalThis.toolbarLayout = photographyToolbarLayout; globalThis.prepare = prepare; globalThis.exitControl = exitControl; globalThis.prepareSwitch = prepareSwitch;`, env);
       await env.draw();
       const rect = name => { const hit = hits.get(name); assert.ok(hit, name);
         const [dx, dy] = hit.parentElement.style.translate.split(' ').map(parseFloat);
@@ -94,7 +96,7 @@ for (const locale of ['en-US', 'zh-CN', 'zh-TW', 'ja-JP', 'ko-KR', 'th-TH']) for
       near(parseFloat(body.style.width), 171 * S); near(parseFloat(body.style.height), 116 * S);
       near(parseFloat(icon.style.width), 75 * S); near(parseFloat(icon.style.height), 63 * S);
       const dx = (228.83 - 171) * S / 2, dy = (165 - 116) * S / 2;
-      near(b[1] + dy, CORNER_MARGIN); near(rotate[1], CORNER_MARGIN); near(b[1] + dy, rotate[1]);
+      near(b[1] + dy, CORNER_MARGIN); near(guide[1], CORNER_MARGIN); near(guide[1]+guide[3]/2,rotate[1]+rotate[3]/2);
       near(b[2], 228.83 * S); near(b[3], 165 * S); assert.equal(backHit.label, strings.back);
       await backHit.action({ stopPropagation() {} }); assert.equal(leftCamera, 1);
       const overlap = (a, bounds) => a[0] < bounds.right / scale && a[0] + a[2] > bounds.left / scale && a[1] < bounds.bottom / scale && a[1] + a[3] > bounds.top / scale;
@@ -117,13 +119,15 @@ for (const locale of ['en-US', 'zh-CN', 'zh-TW', 'ja-JP', 'ko-KR', 'th-TH']) for
       for (const group of [portrait.groups.Btn_HideUI, lobbySwitch]) {
         near(bodyRect(group, sprite(group, 'RightTop/Btn_HideUI'))[1], cameraBox[1]);
       }
-      const rightCandidate = [width / scale - CORNER_MARGIN - 538, CORNER_MARGIN, 538, 76];
+      const top=env.toolbarLayout().top;
+      const rightCandidate = [width / scale - CORNER_MARGIN - top[2], CORNER_MARGIN, top[2], top[3]];
       near(width / scale - rotate[0] - rotate[2], native && overlap(rightCandidate, native) ? (width - native.left) / scale + CORNER_MARGIN : CORNER_MARGIN);
-      near(guide[1], rotate[1]); near(grid[1], rotate[1]); near(grid[0] - guide[0] - guide[2], 22); near(rotate[0] - grid[0] - grid[2], 22);
-      near(guide[2], 196); near(grid[3], 76); near(rotate[2], 102);
+      near(guide[1]+guide[3]/2, rotate[1]+rotate[3]/2); near(grid[1], guide[1]); near(grid[0] - guide[0] - guide[2], SPACE.m*S); near(rotate[0] - grid[0] - grid[2], SPACE.l*S);
+      near(guide[2], 196); near(grid[3], CONTROL.buttonS.h*S); near(rotate[2], 102);
+      near(rotate[2],choices[2]);near(rotate[3],choices[3]);near(gallery[2],choices[2]);near(gallery[3],choices[3]);
       near(gallery[0], CORNER_MARGIN); near(height / scale - gallery[1] - gallery[3], CORNER_MARGIN);
       near(width / scale - choices[0] - choices[2], CORNER_MARGIN); near(height / scale - choices[1] - choices[3], CORNER_MARGIN);
-      if (mode === 'lobby') { const playback = rect('Playback'); near(choices[0] - playback[0] - playback[2], 20); near(playback[1], choices[1]); }
+      if (mode === 'lobby') { const playback = rect('Playback'); near(choices[0] - playback[0] - playback[2], SPACE.m*S); near(playback[1], choices[1]);near(playback[2],choices[2]);near(playback[3],choices[3]); }
       for (const density of [1, 2, 3]) for (const name of hits.keys()) {
         const [x, y, w, h] = rect(name); assert.ok(x * scale * density >= 0 && (x + w) * scale * density <= width * density);
         assert.ok(y * scale * density >= 0 && (y + h) * scale * density <= height * density);

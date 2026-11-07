@@ -203,6 +203,7 @@ export const CONTROL = Object.freeze({
   buttonM: Object.freeze({ h: 162, fs: 60, pad: 45, minW: 348 }),          // List_01/Btn_Receive 348 x 162
   buttonL: Object.freeze({ h: 176, fs: 72, pad: 39.5, minW: 551 }),        // UIPopup_RaidEnterCheck footer, 551 x 176
   icon: Object.freeze({ h: 60 }),                                          // Common_Icon_Close, Common_Btn_Radio_BG
+  toolbar: Object.freeze({ h: 104 }), // UILobby/Front/Right/Btn_RotateSpine/ConditionRoot/Able_Count/Bg
 });
 
 // The grid inside any container: 12 columns, a gutter of SPACE.xl. A page's container keeps SPACE.xxl from the stage's
