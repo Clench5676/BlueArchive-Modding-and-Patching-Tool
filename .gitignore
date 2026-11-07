@@ -29,6 +29,14 @@ src/ba_modding_toolkit/locales/tmp/
 src/ba_modding_toolkit/locales/backup/
 src/ba_modding_toolkit/locales/*TMP.json
 
+# --- Project: agent development docs (local only) ---
+/docs/project-status.md
+/docs/feedback-*.md
+/docs/asset-ecosystem.md
+/docs/design/
+/docs/research/
+/docs/tours/
+
 # --- Project: file types never committed ---
 *.pdn
 *.exe

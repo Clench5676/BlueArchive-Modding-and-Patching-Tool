@@ -9,8 +9,8 @@ at runtime and never shipped with the program.
 Composed screens take their sizes, gaps and alignment from the design system ([`design-system.md`](design-system.md):
 the scales in `ui-tokens.js`, the layout primitives in `ui-grid.js`).
 
-The Student Hall, import/assignment, ZIP export and navigation changes tracked in
-[`backlog.md`](backlog.md) are included in 0.5.0, along with office backgrounds, global portrait scaling,
+The Student Hall, import/assignment, ZIP export and navigation changes are included in 0.5.0, along with office
+backgrounds, global portrait scaling,
 immersive Hall view and touch-friendly queue reordering. Local alpha review builds preceded the owner's stable
 release approval. Runtime checks cover Hall toolbars/selectors, portrait resource reuse and complete batch reveal,
 saved layering/mirroring, exclusive dialogue, and pointer-driven playlist reordering with save/reopen. Automated
@@ -2375,7 +2375,7 @@ none creates a hover tooltip.
 - Writer tasks own a separate indicator and lifetime. Loading stays bottom-right in both styles; only the action
   label and x/n progress use the bottom-left corner.
 - The start popups (the consent popup first) come after the first screen is revealed (Popups, "Start sequence").
-- Startup phase durations are recorded in the session log and `app.timings`; see [the beta loading report](startup-loading.md).
+- Startup phase durations are recorded in the session log and `app.timings`.
 
 ### Pointer and touch effect
 
@@ -2936,8 +2936,8 @@ reads the running version's file, and Settings' prerelease update preview ("Rele
 sample, so the notes can be read in the App before publishing.
 The explicit validated page argument remains attached to that offer even if a later check changes backend state.
 
-`tours.js` and `webui/tours.py` implement the local presentation framework described in
-[the feature-tour flow](feature-tour-flow.md). The shipped registry is empty. Text-only pages are the default;
+`tours.js` and `webui/tours.py` implement the local presentation framework for new-version
+feature tours. The shipped registry is empty. Text-only pages are the default;
 optional bundled PNGs may illustrate only the App's own UI, without game assets. The framework adds no startup
 capture, asset scan or network request. Settings' General/version area replays all available versions. Navigation,
 modal focus, disabled Previous, Close and Finish use the existing NGUI popup/control prefabs. The empty-manifest
