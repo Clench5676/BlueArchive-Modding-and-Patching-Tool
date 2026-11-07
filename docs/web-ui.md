@@ -1203,6 +1203,8 @@ read). A refusal from the files' format can so be told from one guessed from the
 import rows and the analysis log carry `bundles` and `missing`; CAB ids and the game's own file names stay, other file
 names are redacted.
 
+A blocked or incomplete row's status badge opens Details (`import-details.js`, the game's message popup with a compact frame: `Popup.message({ compact })` sizes the frame to its content, below the frame class's own height): the row's reason (its short label with the error text, a file name that opens or ends the text left out, or the missing-file status), then a paragraph a file (its name, `import.detail.platform`, `import.detail.unity`), the unresolved dependencies (`import.detail.unresolved`, then one CAB id a line, from `missing.cabs`) and the files of the same slot found in its folders (`missing.found`). Its hit area is the badge background's box (`badgeRect`), above the row's own; opening it does not select the row.
+
 The status shows the number of found files, or the unresolved count and the folder note when none were found. The
 Import State filter includes Missing Files before Imported; the footer counts incomplete groups. When exactly one
 row has found files after analysis, its confirmation opens automatically with the filenames, roster variant name and
@@ -1220,13 +1222,18 @@ retain their state and can receive files later in the session.
 
 Import Mod's rows are laid out with the design system (`docs/design-system.md`; `import-layout.js` `row()` over the
 primitives of `ui-grid.js`). Every text of a row but the name is `TYPE.dense` (42, wrapped, never smaller). The name plate
-(title and divider) keeps the prefab's place; the first line (metadata and kind column, or the counts block of a merged row)
-has its tops level, and a badge on it sits on the same centre line (the reference glyph's centre, `textItem`'s `mid`). The
-lines under it (a badge on its own line, the route, the note) are `LINE.stack` of the size apart (57.75), the kind column ends
-`SPACE.l` (28) before a badge on the first line, and a badge's caption keeps `CONTROL.badge.pad` (16) each side.
-The row's standalone badge keeps the divider-to-meta ink gap below the metadata. Choose Files
-shares the badge background's top and bottom and ends at column 910, with at least `SPACE.l` row units between them;
-when it cannot fit, it sits below the badge. Its caption matches the badge's screen size. It is a `buttonS` control
+(title and divider) keeps the prefab's place; the kind (Portrait, Memorial Lobby, 3D) is on the name's line, right aligned
+on the divider's end (926) above it, its box centred on the name's, `SPACE.l` after the name's box (owner, 2026-11-07). The
+first line (the metadata, or the counts block of a merged row) has its tops level, and the badge ends it on column 910 on
+the same centre line (the reference glyph's centre, `textItem`'s `mid`): one line, its caption `CONTROL.badge.pad` (16)
+each side, `SPACE.l` after the metadata, which takes the rest and wraps. Only a badge that would leave the metadata less
+than `COLUMNS.metaMin` (360) takes a line of its own (no shipped status in any language does). A row without a badge (a
+result row) ends its metadata on column 550, clear of its action control. The lines under the first (a badge on its own
+line, the route, the note) are `LINE.stack` of the size apart (57.75); a badge on its own line keeps the divider-to-meta
+ink gap below the metadata. A refused row's badge reads Cannot Import - <reason> (`import.reason.*`, else the error's own
+text when it needs no parameters, else Import Check Failed); the note under the metadata keeps only a missing official
+copy's repair guidance. Choose Files goes to the line under the badge, one gap below it, its right edge on the badge's,
+and the row grows for it (owner, 2026-11-07). Its caption matches the badge's screen size. It is a `buttonS` control
 (`controlWidth`): its caption and `CONTROL.buttonS.pad` (45, the body's slice border included) each side, in the button's
 own units, 240 at least; reference-glyph ink is centred on the face
 between the top and bottom slice borders. Native button decoration still uses `clipButtonPatterns`. Footer buttons

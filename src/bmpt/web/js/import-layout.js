@@ -35,10 +35,11 @@ const COLUMNS = Object.freeze({
   floor: -700,       // the text column starts here at the earliest
   titleRight: 926,
   right: 910,        // the right column: a badge or a control ends on it
-  kindRight: 550,    // the kind column's right edge, the same in every row
+  kindRight: 550,    // where a row without a badge (a result row) ends its metadata, clear of the row's action control
   kind: Object.freeze({ min: 200, max: 400 }),    // the kind column's width
   badgeMin: 330,     // a badge is this wide at least (1.5 x the prefab's 220)
-  share: 0.72,       // the share of the text column a badge and the kind column may take before the badge moves to its own line
+  metaMin: 360,      // the metadata keeps this much of the text column beside the badge (owner, 2026-11-07: the badge never leaves the line);
+                     // only a badge that would leave it less goes to its own line (no shipped status in any language does)
   counts: Object.freeze({ left: 120, list: 780, result: 500 }),    // a merged row's counts block: where it starts, and how wide
 });
 // NGUI's label box: a line of text takes this much of its size; a badge's label sits in a background SPACE.hair beyond it above and below
@@ -407,32 +408,38 @@ export function importArtwork(ui, layouts) {
           pivot, ellipsis: shaped.ellipsis, ariaLabel: shaped.caption });
         return shaped.lines;
       };
+      // The kind (Portrait, Memorial Lobby, 3D) sits on the name's line at the divider's right end, above the divider; the
+      // name keeps the rest of the line.
+      const kindWidth = Math.max(COLUMNS.kind.min, Math.min(COLUMNS.kind.max, ui.glyphWidth(kind, textSize) + 2 * SPACE.xs));
+      const kindOnTitle = Boolean(kind) && !counts;
       const title = ui.find(t, "Label_System"); title.pos[0] = textLeft;
-      label(title, name, room, 1);
+      label(title, name, kindOnTitle ? room - kindWidth - SPACE.l : room, 1);
 
-      // The status badge: as wide as its text and the caption padding (CONTROL.badge.pad each side), at least the App's minimum.
-      // A Choose Files control shares its line, SPACE.l away, while that leaves the badge its minimum; the badge goes to its own
-      // line beside a control, when it is unidentified, or when it and the kind column take too much of the text column.
+      // The status badge: one line, as wide as its text and the caption padding (CONTROL.badge.pad each side), at least the
+      // App's minimum. It ends the metadata's line; the metadata takes what is left and wraps (owner, 2026-11-07: a badge never
+      // leaves the line). A Choose Files control goes to the next line, its right edge on the badge's (owner, 2026-11-07). Only
+      // a badge that would leave the metadata less than COLUMNS.metaMin goes to a line of its own.
       const fullBadgeWidth = Math.max(COLUMNS.badgeMin, Math.min(room, ui.glyphWidth(state, textSize) + 2 * CONTROL.badge.pad));
       const controlW = control ? control.width / ROW_SCALE : 0;
       const controlRoom = control ? COLUMNS.right - textLeft - controlW - SPACE.l : 0;
       const besideWidth = Math.max(COLUMNS.badgeMin, Math.min(fullBadgeWidth, controlRoom));
       const beside = Boolean(control && badge && controlRoom >= COLUMNS.badgeMin && wrap(state, besideWidth - BADGE_LABEL_INSET).split("\n").length === 1
         && (control.minHeight || 0) <= (textSize * LABEL_BOX + 2 * SPACE.hair) * ROW_SCALE);
-      const badgeWidth = beside ? besideWidth : fullBadgeWidth;
+      const trailing = badge ? fullBadgeWidth : 0;
+      const inline = badge && trailing + SPACE.l <= COLUMNS.right - textLeft - COLUMNS.metaMin;
+      const badgeWidth = inline ? fullBadgeWidth : beside ? besideWidth : fullBadgeWidth;
       const badgeShape = shape(state, badgeWidth - BADGE_LABEL_INSET);
       // the label's box (NGUI: LABEL_BOX of the size a line) and the background round it, SPACE.hair beyond it above and below
       const labelBox = textSize * LABEL_BOX * badgeShape.text.split("\n").length, badgeH = labelBox + 2 * SPACE.hair;
-      const kindWidth = Math.max(COLUMNS.kind.min, Math.min(COLUMNS.kind.max, ui.glyphWidth(kind, textSize) + 2 * SPACE.xs));
-      const secondBadge = Boolean(control) || unidentified || badge && badgeWidth + kindWidth + 2 * SPACE.l > room * COLUMNS.share;
+      const secondBadge = badge && !inline;
       const own = secondBadge && badge;
-      const kindRight = badge && !secondBadge ? Math.min(COLUMNS.kindRight, COLUMNS.right - badgeWidth - SPACE.l) : COLUMNS.kindRight;
 
       // The first line: the metadata and the kind column (or, in a merged row, the counts block), top aligned. The kind column
       // ends on the aligned column (or SPACE.l before the badge when that is further left); the counts block starts at COLUMNS.counts.left.
       const countsW = result ? COLUMNS.counts.result : COLUMNS.counts.list;
       const columns = counts ? { w: COLUMNS.counts.left + countsW - textLeft, gap: 0, kindW: countsW }
-        : { w: kindRight - textLeft, gap: SPACE.l, kindW: kindWidth };
+        // without a badge (a result row) the metadata keeps clear of the row's action control, on the aligned column
+        : { w: (inline ? COLUMNS.right - trailing - SPACE.l : badge ? COLUMNS.titleRight : COLUMNS.kindRight) - textLeft, gap: 0, kindW: 0 };
       const metaShape = shape(meta, layoutRow([{ grow: 1, h: 0 }, { w: columns.kindW, h: 0 }], { x: textLeft, w: columns.w, gap: columns.gap }).boxes[0].w);
       const sender = ui.find(t, "Label_From");
       let kindShape = null, kindLines;
@@ -446,14 +453,14 @@ export function importArtwork(ui, layouts) {
           const count = ui.find(child, "Count"), w = count.widgets[0];
           kindLines = Math.max(kindLines, fill(count, shape(w.text, w.w_), w.pivot));
         }
-      } else { kindShape = shape(kind, kindWidth); kindLines = kindShape.lines; }
+      } else { kindShape = shape(kind, kindWidth); kindLines = 0; }
       // A line's centre line is the reference centre of its first text line (one per language, whatever the letters); a badge on
       // the line sits on it. Tops of the texts of one line stay level.
       // (without font metrics a text has no reference centre: the middle of its label box stands in)
       const lineFactor = ui.LINE_PITCH ?? 1.15, boxMid = textSize * LABEL_BOX / 2;
       const firstMid = (item) => item && (item.mid == null ? boxMid : item.mid - (item.lines - 1) * item.px * lineFactor / 2);
       const badgeMid = badgeShape.item?.mid ?? labelBox / 2;
-      const lineMid = firstMid(metaShape.item) ?? firstMid(kindShape?.item) ?? firstMid(badgeShape.item) ?? boxMid;
+      const lineMid = firstMid(metaShape.item) ?? firstMid(badgeShape.item) ?? boxMid;
       const onLine = (items, options) => layoutRow(items, { ...options, y: lineMid - layoutRow(items, options).centre });
       const lines1 = Math.max(metaShape.lines, kindLines);
       const first = onLine([{ grow: 1, h: metaShape.lines * pitch, mid: lineMid }, { w: columns.kindW, h: kindLines * pitch, mid: lineMid }],
@@ -461,8 +468,14 @@ export function importArtwork(ui, layouts) {
       const received = ui.find(t, "Label_Locale_Received"); received.children = [];
       fill(received, metaShape);
       put(received, first.boxes[0], 0);
-      if (kindShape) fill(sender, kindShape, 1);
-      put(sender, first.boxes[1], 1);
+      if (kindShape) {
+        // right aligned on the divider's end, its label box centred on the name's
+        const titleText = title.widgets.find((w) => "text" in w);
+        const titleMid = title.pos[1] + [-1, 0, 1][Math.floor((titleText.pivot ?? 4) / 3)] * titleText.h_ / 2;
+        fill(sender, kindShape, 5);
+        sender.pos = [COLUMNS.titleRight, titleMid];
+        sender.active = kindOnTitle;
+      } else put(sender, first.boxes[1], 1);
 
       // The prefab's vertical rhythm: the gap from the divider (Line) to the ink of the meta line. What hangs under the meta line
       // (a badge on its own line, then a control) keeps that gap from the ink or background above it.
@@ -471,7 +484,7 @@ export function importArtwork(ui, layouts) {
       // The lines under the first, one pitch a line (a badge on its own line counts one). A badge on its own line
       // hangs one gap under the ink of the meta (and kind) lines, not one pitch under their boxes; the lines after it move with it.
       const hangs = own && metaInk;
-      const inkBottom = Math.max(metaInk?.[1] ?? 0, kindShape?.item?.ink?.[1] ?? -Infinity);
+      const inkBottom = metaInk?.[1] ?? 0;
       const routeShape = route ? shape(route, room) : null;
       const under = layoutStack([...own ? [{ w: room, h: pitch }] : [], ...routeShape ? [{ w: room, h: routeShape.lines * pitch }] : [],
         { w: room, h: pitch }], { x: textLeft, y: hangs ? inkBottom + gap + SPACE.hair : lines1 * pitch, w: room });
@@ -498,6 +511,8 @@ export function importArtwork(ui, layouts) {
           { x: textLeft, y: cell.y - SPACE.hair, w: COLUMNS.right - textLeft, gap: SPACE.l, justify: beside ? "between" : "start" })
         : onLine([{ w: badgeWidth, h: badgeH }], { x: textLeft, w: COLUMNS.right - textLeft, justify: "end" });
       const badgeBox = badgeLine.boxes[0];
+      // the badge's box, for the hit area that opens a refused row's details (badgeRect)
+      t.badge = badge ? { right: badgeBox.x + badgeBox.w, width: badgeBox.w, height: badgeBox.h, top: up(badgeBox.y) } : null;
       // the status node sits at the label's top, SPACE.hair under the background's
       put(status, { ...badgeBox, y: badgeBox.y + SPACE.hair }, 1);
       ui.find(status, "Bg").widgets[0].w_ = badgeWidth;
@@ -523,7 +538,11 @@ export function importArtwork(ui, layouts) {
       // control inside the grown card.
       let reserved = null;
       if (control && badge) {
-        if (beside) {
+        if (inline) {
+          const below = layoutStack([{ w: badgeWidth, h: badgeH }, { w: controlW, h: control.height / ROW_SCALE }],
+            { x: badgeBox.x, y: badgeBox.y, w: badgeWidth, gap, align: "end" }).boxes[1];
+          reserved = { right: badgeBox.x + badgeBox.w, width: controlW, height: below.h, top: up(below.y), beside: false };
+        } else if (beside) {
           const box = badgeLine.boxes[1];
           reserved = { right: box.x + box.w, width: controlW, height: box.h, top: up(box.y), beside };
         } else {
@@ -544,7 +563,7 @@ export function importArtwork(ui, layouts) {
       for (const path of ["Label_Locale_Received", "Label_From", "Platform", "Label_Locale_Limit", "TimeLimit"]) {
         const n = ui.find(t, path); if (n) include(n);
       }
-      if (reserved && !beside) bottom = Math.max(bottom, gap - (reserved.top - reserved.height));
+      if (reserved && !reserved.beside) bottom = Math.max(bottom, gap - (reserved.top - reserved.height));
       const extra = bottom - LIST_ROW.h / 2;
       if (extra > 0) for (const name of ["BG", "Sprite"]) {
         const n = ui.find(t, name); if (!n) continue;
@@ -573,6 +592,12 @@ export function importArtwork(ui, layouts) {
 export function controlRect(tree) {
   const c = tree?.control;
   return c ? [ROW_WIDTH / 2 + (c.right - c.width) * ROW_SCALE, LIST_ROW.h * ROW_SCALE / 2 - c.top * ROW_SCALE, c.width * ROW_SCALE, c.height * ROW_SCALE] : null;
+}
+
+// The status badge's box [x, y, width, height] (px, from the row's top left), as controlRect, or null without a badge.
+export function badgeRect(tree) {
+  const b = tree?.badge;
+  return b ? [ROW_WIDTH / 2 + (b.right - b.width) * ROW_SCALE, LIST_ROW.h * ROW_SCALE / 2 - b.top * ROW_SCALE, b.width * ROW_SCALE, b.height * ROW_SCALE] : null;
 }
 
 export { clipButtonPatterns } from "./button-layout.js";

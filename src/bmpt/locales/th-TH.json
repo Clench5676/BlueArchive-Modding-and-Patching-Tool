@@ -452,7 +452,7 @@
 			"conversion_failed": "แปลงไม่สำเร็จ",
 			"conflict": "เป้าหมายขัดแย้งกัน",
 			"spine_version": "เวอร์ชัน Spine ไม่เข้ากัน",
-			"mod_unity_version_mismatch": "เวอร์ชัน Unity ไม่รองรับ",
+			"mod_unity_version_mismatch": "Unity {version}, ต้องใช้ {expected}",
 			"mod_release_mismatch": "เวอร์ชันเกมไม่รองรับ",
 			"crc_fix_failed": "ซ่อมแซม CRC ไม่สำเร็จ",
 			"export_empty": "ไม่มี Mod ให้ส่งออก",
@@ -855,6 +855,11 @@
 				"promptTail": "อาจเป็นส่วนหนึ่งของ Mod {kind} ของ {student} เพิ่มลงในรายการนำเข้าหรือไม่?",
 				"addTogether": "เพิ่ม",
 				"fillLine": "- {student}, {kind} ({n})"
+			},
+			"detail": {
+				"platform": "แพลตฟอร์ม: {platforms}",
+				"unity": "เวอร์ชัน Unity: {versions}",
+				"unresolved": "ไม่พบการอ้างอิง ({n}):"
 			}
 		},
 		"recovery": {
