@@ -36,6 +36,8 @@ function harness(locale, { native = true, sourceValue = 'windows_global', error 
     notify: (...args) => failures.push(args),
     // Popup.notice is message() with the notice caption and Confirm only (popup.js, tested in refusal_notice.test.mjs)
     Popup: { notice: async text => messages.push({ title: T('quit.title'), lines: [text], ok: T('picker.ok') }) },
+    // consent.js detectGame with the consent given (its consent path is tested in popup.test.mjs)
+    Consent: { detectGame: (region) => deps.rpc('settings.detectGame', { region }) }, ModSwitch: { askScan: async () => true },
     rpc: async (method, args) => {
       requests.push([method, args]);
       if (error && method === 'settings.set') throw error;

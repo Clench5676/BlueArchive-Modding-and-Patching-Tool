@@ -9,6 +9,7 @@ const errorText=(err)=>sharedErrorText(err,T); // the shared error text (i18n.js
 function run(failure){
   const notes=[],buttons=[];
   const env={ctx:{prefs:{fileSource:'windows_global'}},info:{native:true},T,errorText,
+    Consent:{detectGame:(region)=>env.rpc('settings.detectGame',{region})},
     rpc:async method=>{if(method==='settings.pickFolder')return '/picked';if(method==='settings.set')throw failure;return [];},
     refreshConfiguration:async()=>{},notify:(text,options)=>notes.push({text,options}),
     message:(title,text,list)=>buttons.push(...list)};
@@ -35,6 +36,8 @@ test('no error text in main.js reads a missing code as a key',()=>{
 function screen({ native = false, detected = [] } = {}) {
   const shown = [], notes = [];
   const env = { ctx: { prefs: { fileSource: 'windows_global' } }, info: { native }, T, errorText,
+    // consent.js detectGame with the consent given (its consent path is tested in popup.test.mjs)
+    Consent: { detectGame: (region) => env.rpc('settings.detectGame', { region }) },
     rpc: async method => (method === 'settings.detectGame' ? detected : '/picked'),
     refreshConfiguration: async () => {}, notify: (text, options) => notes.push({ text, options }),
     message: (title, hint, actions) => shown.push({ title, hint, actions }) };

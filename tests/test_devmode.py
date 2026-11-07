@@ -327,6 +327,9 @@ def test_web_ui_refuses_paths_outside_the_roots(dev, dev_services):
     reply = api.call("mods.add", {"paths": [str(dev.outside / "mod.bundle")]})
     assert reply["error"]["code"] == "dev_path_outside"
     assert dev_services.library.added == []
+    # finding the game reads Steam's records: refused without the Check Game Files consent, never searched in dev mode
+    assert api.call("settings.detectGame", {"region": "global"})["error"]["code"] == "scan_off"
+    dev_services.state.set_scan_consent(True)
     assert api.call("settings.detectGame", {"region": "global"}) == {"result": []}
     # inside the roots the same calls go through
     assert "result" in api.call("settings.set", {"key": "gameDir.global", "value": str(game)})
