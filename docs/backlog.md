@@ -466,29 +466,20 @@ interface for Mod authors and troubleshooting. Normal import/application should 
 CRC correction automatically. Defer a standalone new-interface page or advanced-tool migration until higher
 priorities are complete; do not add this as a routine step in the normal import workflow.
 
-## BL-019: Integrate file CRC checks and Mod inventory reports
+## BL-019: Game files that differ from Steam's list, in the error report
 
 - Status: Planned. Not started.
-- Requested: 2026-10-25.
+- Requested: 2026-10-25. Rescoped by the owner (2026-11-07): no inventory export and no list in the check results; the
+  error report carries the game files that differ. No new UI and no new strings.
 
-Extend Settings > Mods > Check Game Files and its current scan-result workflow instead of adding another mandatory
-top-level tool. Reuse the installation snapshot and existing background scan infrastructure to provide explicit
-CRC inspection results and export a Mod inventory. Share the resulting snapshot with the existing diagnostic
-report when relevant; an inventory of detected Mods and a fault/log report remain distinct outputs.
-
-The inventory should identify the installation, character/core, resource kind, filenames, managed or untracked
-state and available checksum evidence. Keep long reads off the UI thread, support cancellation, report monotonic
-progress and invalidate stale results when the install or source files change. Do not repeat a full checksum scan
-on language changes, list redraws or report generation when a valid snapshot is already available.
-
-CRC mismatch is evidence, not proof of corruption, and matching CRC is not proof that a bundle is official.
-Check readability, completeness and target identity before offering correction; do not make an unknown or damaged
-bundle appear valid merely by matching the filename's CRC. A read-only check or inventory export must never alter
-game files. Explicit corrections must use the existing protected writer, backup/rollback and verification paths,
-respect the master-switch and installation state, and report incomplete or failed work accurately.
-
-Validate using generated and isolated official fixtures: matching, corrected, unknown, corrupt, missing and
-externally changed files; stale snapshots and cancellation; export-only runs; and failed writes with rollback.
+Handoff notes: add one optional bounded read to `Reports.snapshot` (`webui/diagnostics.py`; `READ_TIMEOUT` 0.1 s,
+`COLLECTION_TIMEOUT` 1 s; never the library lock, as `library_counts`). Only with the Check Game Files consent
+(`services.scan_allowed()`): for each known install (`services.snapshot.status()["installs"]`, field `folder`) that has
+Steam's file list (`steam_records.OfficialFiles().bundles(folder)`: bundle name to size and SHA-1), compare the names and
+sizes of the bundles in `GameData/Windows` and `Preload/Windows`: size changed, not listed, listed but missing; counts
+and at most 100 names each (the game's own file names stay in reports, paths are redacted). Stat only, no hashing.
+Document it under "Local error reports" in `docs/web-ui.md`; test on a synthetic Steam layout (the helpers of
+`tests/test_steam_records.py`).
 
 ## BL-020: Release notes in update detection
 
@@ -2273,6 +2264,9 @@ Windows machine; then one export per key in flight with progress the page can wa
 server works, exports dropped when nobody waits, the visible detail ahead of thumbnails, short critical sections in the
 preview cache, and the CAB index's reverse lookup for model references.
 
+Asset research (2026-11-07, for the measurement): a 3D model needs a median of 91 bundles outside its own parts (114 MiB,
+up to 765), a memorial lobby 5 (up to 65), a portrait 1. Measure before adding any cache.
+
 ## BL-093: Add and Batch Import identify the same files differently
 
 - Status: Implemented (Codex, reviewed and merged by the lead, `3f2d3521`, merge `e3e47b63`); owner review pending.
@@ -2526,24 +2520,13 @@ Steam's records is asked again once. Tests: `tests/test_steam_records.py`, `test
 
 ## BL-103: Dependency closures cached for previews and exports
 
-- Status: Candidate. Input for BL-092.
-
-A 3D model needs a median of 91 bundles outside its own parts (114 MiB; up to 765), a memorial lobby 5 (up to 65), a
-portrait 1 (the shader prolog). Proposed: keep each core's closure (bundle list and sizes) in the CAB index, keyed by its
-members' revisions, so previews and exports load a known set and the UI can show the size first.
+- Status: Closed (2026-11-07): withdrawn on the owner's direction, no extra items.
 
 ## BL-104: A release ledger per install
 
-- Status: Candidate.
-
-On each change of the resource version, record every group's file name (with its CRC) and size, and compare with the
-previous record: groups rebuilt, added and removed. Use it to report which library entries an update touched, to
-re-check only those, and to tell whether a mod file whose group matches but whose CRC differs was made for an earlier
-build of this install. With BL-102 the ledger is exact.
+- Status: Closed (2026-11-07): withdrawn on the owner's direction, no extra items.
 
 ## BL-105: Shared bundles in import and compatibility details
 
-- Status: Candidate. With BL-014.
+- Status: Closed (2026-11-07): withdrawn on the owner's direction, no extra items.
 
-92 official bundles have 100 or more direct dependents (the audio mixer 4,207, the shader prolog 3,332). Proposed: mark a
-target with many dependents in the import and compatibility details and say how many bundles use it.

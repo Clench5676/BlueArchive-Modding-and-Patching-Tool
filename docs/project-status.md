@@ -7,7 +7,7 @@ As of 2026-11-07. Verify the actual branch, working tree and `pyproject.toml` ve
 
 | Branch | State |
 | --- | --- |
-| `main` | Local version `0.7.0-alpha.9`: the published 0.6.0, the upstream syncs to `6c61fdc8` and to v2.12.0 (`62ec9471`), the security policy, the fix that keeps files from a mod inside their output folder (`e8bee4c2`) and its own message for refused atlases (`ca44e051`), BL-065 through BL-069, BL-070 steps 1 to 3, BL-071, BL-072, BL-073, BL-076, BL-077, the BL-078 fixes (`1a2afd84`, `b186e93b`, `4841e30e`), BL-079, BL-081 through BL-100 (BL-092 step 1). Not pushed. Upstream published its fix for the same issue in v2.12.0 (2026-11-04), so 0.6.1 is no longer held back. |
+| `main` | Local version `0.7.0-alpha.9` (built from `80d8cf53`); since then BL-101 and BL-102 merged (`aab0b22a`), not built; the owner holds the full suite, version bump and build until told: the published 0.6.0, the upstream syncs to `6c61fdc8` and to v2.12.0 (`62ec9471`), the security policy, the fix that keeps files from a mod inside their output folder (`e8bee4c2`) and its own message for refused atlases (`ca44e051`), BL-065 through BL-069, BL-070 steps 1 to 3, BL-071, BL-072, BL-073, BL-076, BL-077, the BL-078 fixes (`1a2afd84`, `b186e93b`, `4841e30e`), BL-079, BL-081 through BL-100 (BL-092 step 1). Not pushed. Upstream published its fix for the same issue in v2.12.0 (2026-11-04), so 0.6.1 is no longer held back. |
 
 0.6.0 is published (tag `0.6.0` at `817ebeda`, 2026-10-30): macOS build uploaded, Windows build by the release workflow.
 
@@ -68,7 +68,8 @@ As of 2026-11-07. Verify the actual branch, working tree and `pyproject.toml` ve
 | BL-096 | Implemented (Codex, reviewed and merged, `2218bdcc`, prototype accepted by the owner): Import Mod tells which files of a mod are missing and adds them; owner review pending |
 | BL-097 | Implemented (2026-11-07): the design system (`docs/design-system.md`) and the popups, Import Mod, Settings, switch cards, toolbars and the detail page's composed parts on it; owner review pending |
 | BL-098 through BL-100 | Implemented by the lead (2026-11-07, research `docs/asset-ecosystem.md`): older releases' parts found by asset path over every date of the core, a group rebuilt in place under a new CRC taken for its part's successor, Unity's built-in resources never missing; owner review pending |
-| BL-101 through BL-105 | Candidates from the asset research, not scheduled; BL-102 needs the owner's decision |
+| BL-101, BL-102 | Implemented by the lead (2026-11-07): each bundle of a packed generic part its own slot (CAB), the configuration migrated; Steam's file list judges official files, read with the Check Game Files consent, which now covers Steam's records (Detect, the Steam watch); on `main`, not built; owner review pending |
+| BL-019 | Planned, rescoped by the owner (2026-11-07): game files that differ from Steam's list go into the error report only; handoff notes in the backlog |
 | BL-057, BL-058 | Accepted by the owner on macOS (alpha.12); Windows not reviewed |
 | BL-055 | Accepted by the owner on macOS (0.6.0 pre-review) |
 | BL-014 | Candidate, not scheduled |
