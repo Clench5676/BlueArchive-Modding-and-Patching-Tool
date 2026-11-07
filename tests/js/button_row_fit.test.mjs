@@ -201,7 +201,7 @@ for (const locale of LOCALES) test(`the import list's tools and the row under th
   assert.match(page, /\["remove", "remove", 696, 150\], \["removeImported", "removeImported", 856, 224\], \["clear", "clear", 1090, 156\]/);
   assert.match(page, /\[\["fillAll", "options", "recheck", "start"\], FOOTER_ROW\.size\]/);
   assert.match(page, /wide: 330, width: SMALL_BUTTON\.w \* S/);
-  assert.match(layout, /ui\.fitGroup\(captions, max \?\? w\.fontSize, min \?\? w\.fontSize \* 0\.7, widths\.map\(\(width\) => width - 60\), 2, \{ maxH: t\.widgets\.find\(\(x\) => "sprite" in x\)\.h_ - 20 \}\)/);
+  assert.match(layout, /ui\.fitGroup\(captions, max \?\? w\.fontSize, min \?\? w\.fontSize \* 0\.7, widths\.map\(\(width\) => width - SMALL_BUTTON\.fitInset\), 2,\s*\{ maxH: t\.widgets\.find\(\(x\) => "sprite" in x\)\.h_ - SMALL_BUTTON\.boxInsetH \}/);
   document.documentElement.lang = locale;
   // Btn_Receive: caption 60 units, body 162 high, the label box 20 less
   const tools = [["addFiles", 174], ["addFolder", 190], ["all", 126], ["none", 140], ["remove", 150], ["removeImported", 224], ["clear", 156]];

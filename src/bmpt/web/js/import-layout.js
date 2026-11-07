@@ -4,15 +4,22 @@ import { countNodes } from "./mod-counts.js";
 import { resizeButton } from "./button-layout.js";
 import { clone } from "./util.js";
 import { frameOutline, innerFrame } from "./row-thumbnail.js";
+import { SPACE, TYPE, LINE, CONTROL, LIST_ROW, SMALL_BUTTON } from "./ui-tokens.js";
+import { row as layoutRow, stack as layoutStack, textItem, controlWidth, toNode } from "./ui-grid.js";
 
 const INVENTORY = "Inventory_ListControl";
 const LIST = `${INVENTORY}/RightCanvas/ListBG`;
 const DETAIL = `${INVENTORY}/Left_Info/EquipInfo/Equip_Target`;
 const FILTER = "Center/Popup/Filter/ScrollView/Filter_List/Table_List/UIFilterObjectList_1";
 const RADIO = "Center/Popup/Sort/Scroll View/Sort_Normal/Option_Normal/Grid/UISortObjectListUnit/Label_Text";
-export const ROW_SCALE = 0.54, ROW_WIDTH = 2208 * ROW_SCALE, ROW_HEIGHT = 348 * ROW_SCALE;
-export const ROW_TEXT_SIZE = 42, ROW_TEXT_TOP = 20;
-export const ROW_CHECK_TOP = 329 * ROW_SCALE / 2 - ROW_TEXT_TOP * ROW_SCALE;
+// One row of the list is the card (UIMailBoxContent/List_01, LIST_ROW: 2208 x 329 units) and ROW_PITCH (348, the Mailbox list's
+// cell) down to the next, drawn at ROW_SCALE.
+const ROW_PITCH = 348;
+export const ROW_SCALE = 0.54, ROW_WIDTH = LIST_ROW.w * ROW_SCALE, ROW_HEIGHT = ROW_PITCH * ROW_SCALE;
+// The row's one text size (TYPE.dense: the App's floor for dense list rows) and the top of its first text line, in units down
+// from the card's centre (the App's own: it sets the prefab's gap under the divider, see row()).
+export const ROW_TEXT_SIZE = TYPE.dense.fs, ROW_TEXT_TOP = 20;
+export const ROW_CHECK_TOP = LIST_ROW.h * ROW_SCALE / 2 - ROW_TEXT_TOP * ROW_SCALE;
 export const ROW_SELECTION = { left: 19, top: 8, width: 164, height: 160, scale: 0.68, origin: [82, 80] };
 // Items/ListBG: its PaperBG and Inbox sit 60 units below the panel's centre, so that is the middle of the grey frame
 // (header strip and toolbar included), in panel px.
@@ -21,7 +28,26 @@ export const PAPER_CENTRE = (S) => [636, 352 + 60 * S];
 export const BUTTON_BODY_H = 162;
 export const NAME_ROOM = 1160;    // the Batch Import name plate's room for a name (units)
 export { EMPTY_GAP, emptyBlock } from "./empty-block.js";
-const rowGap = (ui, layouts) => 348 - ui.find(layouts.UIMailBoxContent, "List_01/BG").widgets.find((w) => "sprite" in w).h_;
+
+// The columns of a row's text, in units from the card's centre line. The App's own (a dense two-column list; the prefab's text column
+// is wider), except titleRight, which is the prefab's: where Label_System and the divider (Line) end.
+const COLUMNS = Object.freeze({
+  floor: -700,       // the text column starts here at the earliest
+  titleRight: 926,
+  right: 910,        // the right column: a badge or a control ends on it
+  kindRight: 550,    // the kind column's right edge, the same in every row
+  kind: Object.freeze({ min: 200, max: 400 }),    // the kind column's width
+  badgeMin: 330,     // a badge is this wide at least (1.5 x the prefab's 220)
+  share: 0.72,       // the share of the text column a badge and the kind column may take before the badge moves to its own line
+  counts: Object.freeze({ left: 120, list: 780, result: 500 }),    // a merged row's counts block: where it starts, and how wide
+});
+// NGUI's label box: a line of text takes this much of its size; a badge's label sits in a background SPACE.hair beyond it above and below
+const LABEL_BOX = 1.3;
+// a badge's label is this much narrower than its background (the sprite's slice border)
+const BADGE_LABEL_INSET = 30;
+// the gap under the divider, when no font metrics give the ink's
+const FALLBACK_GAP = 2 * SPACE.xs;
+const rowGap = (ui, layouts) => ROW_PITCH - ui.find(layouts.UIMailBoxContent, "List_01/BG").widgets.find((w) => "sprite" in w).h_;
 
 // Include child widgets, their pivots and inclined overhangs in the selection frame's drawn edge.
 function rightEdge(node, x = 0, sx = 1, sy = 1) {
@@ -66,7 +92,7 @@ export function selectionWindow(tree, atlas = {}, outline, pictureOutline = null
   }
   return { ...window,
     x: (ROW_SELECTION.left + ROW_SELECTION.origin[0] - ROW_WIDTH / 2) / ROW_SCALE + window.x * ratio,
-    y: (329 * ROW_SCALE / 2 - ROW_SELECTION.top - ROW_SELECTION.origin[1]) / ROW_SCALE + window.y * ratio,
+    y: (LIST_ROW.h * ROW_SCALE / 2 - ROW_SELECTION.top - ROW_SELECTION.origin[1]) / ROW_SCALE + window.y * ratio,
     width: window.width * ratio, height: window.height * ratio };
 }
 
@@ -206,15 +232,18 @@ export function importArtwork(ui, layouts) {
     // wrapping.
     buttonSize(captions, widths, { max = null, min = null } = {}) {
       const t = content("List_01/Btn_Receive"), w = ui.find(t, "Label_Locale").widgets.find((w) => "text" in w);
-      return ui.fitGroup(captions, max ?? w.fontSize, min ?? w.fontSize * 0.7, widths.map((width) => width - 60), 2, { maxH: t.widgets.find((x) => "sprite" in x).h_ - 20 })[0]?.fs;
+      return ui.fitGroup(captions, max ?? w.fontSize, min ?? w.fontSize * 0.7, widths.map((width) => width - SMALL_BUTTON.fitInset), 2,
+        { maxH: t.widgets.find((x) => "sprite" in x).h_ - SMALL_BUTTON.boxInsetH })[0]?.fs;
     },
-    // A row control's caption matches the badge's screen size. Preserve the prefab's transforms and caption padding.
+    // A row control's caption matches the badge's screen size. Preserve the prefab's transforms. The width is a buttonS control's
+    // (controlWidth: the caption and CONTROL.buttonS.pad each side, the body's slice border included; 240 at least), in the
+    // button's own units like the caption, then drawn at the prefab's scale and `scale`.
     controlSize(caption, scale) {
       const t = content("List_01/Btn_Receive"), node = ui.find(t, "Label_Locale"), body = t.widgets.find((w) => "sprite" in w);
       const sx = t.scale?.[0] ?? 1, sy = t.scale?.[1] ?? 1, lx = node.scale?.[0] ?? 1, ly = node.scale?.[1] ?? 1;
       const size = ROW_TEXT_SIZE * ROW_SCALE / (scale * sy * ly);
       const meta = ui.atlasIndex?.()[body.atlas || "Common"]?.[body.sprite];
-      return { width: (ui.glyphWidth(caption, size) * lx + (meta?.borderLeft || 0) + (meta?.borderRight || 0) + 32) * sx * scale,
+      return { width: controlWidth({ ...CONTROL.buttonS, fs: size }, caption, (text, fs) => ui.glyphWidth(text, fs) * lx) * sx * scale,
         height: BUTTON_BODY_H * scale, size, minHeight: ((meta?.borderTop || 0) + (meta?.borderBottom || 0)) * sy * scale };
     },
     // size: the row's shared caption size (buttonSize)
@@ -232,23 +261,25 @@ export function importArtwork(ui, layouts) {
         c.scale = c.scale.map(Math.abs);
       }
       const captionNode = ui.find(t, "Label_Locale");
-      const w = captionNode.widgets.find((w) => "text" in w), height = body.widgets.find((w) => "sprite" in w).h_ - 20;
+      const w = captionNode.widgets.find((w) => "text" in w), height = body.widgets.find((w) => "sprite" in w).h_ - SMALL_BUTTON.boxInsetH;
       if (bodyHeight != null) {
         const lx = captionNode.scale?.[0] ?? 1, ly = captionNode.scale?.[1] ?? 1, bg = body.widgets.find((w) => "sprite" in w);
         const meta = ui.atlasIndex?.()[bg.atlas || "Common"]?.[bg.sprite];
-        const left = (meta?.borderLeft || 0) + 16, right = (meta?.borderRight || 0) + 16;
-        const f = ui.fitText(caption, size ?? w.fontSize, size ?? w.fontSize, (bg.w_ - left - right) / lx, 1);
-        Object.assign(w, { text: f.text, fontSize: f.fs, w_: (bg.w_ - left - right) / lx, h_: bg.h_ / ly, pivot: 1 });
-        captionNode.pos = [(left - right) / 2, bg.h_ / 2 - inkDrop(w) * ly + ((meta?.borderBottom || 0) - (meta?.borderTop || 0)) / 2];
+        // the caption keeps CONTROL.buttonS.pad clear on each side (the body's slice border is part of it)
+        const pad = CONTROL.buttonS.pad, room = (bg.w_ - 2 * pad) / lx;
+        const f = ui.fitText(caption, size ?? w.fontSize, size ?? w.fontSize, room, 1);
+        Object.assign(w, { text: f.text, fontSize: f.fs, w_: room, h_: bg.h_ / ly, pivot: 1 });
+        captionNode.pos = [0, bg.h_ / 2 - inkDrop(w) * ly + ((meta?.borderBottom || 0) - (meta?.borderTop || 0)) / 2];
         return t;
       }
+      const fitRoom = width - SMALL_BUTTON.fitInset;
       if (size) {
         // the row's size: wrapped within the button at that size, whatever the prefab's own size is
-        const f = ui.wrapText?.(caption, size, width - 60, 2) ?? ui.fitText(caption, size, size, width - 60, 2);
-        Object.assign(w, { text: f.text, fontSize: f.fs, w_: Math.max(w.w_ || 0, width - 60), h_: height });
+        const f = ui.wrapText?.(caption, size, fitRoom, 2) ?? ui.fitText(caption, size, size, fitRoom, 2);
+        Object.assign(w, { text: f.text, fontSize: f.fs, w_: Math.max(w.w_ || 0, fitRoom), h_: height });
         return t;
       }
-      label(captionNode, caption, width - 60, 2);
+      label(captionNode, caption, fitRoom, 2);
       if (w.h_ > height) { w.fontSize *= height / w.h_; w.h_ = height; }
       return t;
     },
@@ -328,7 +359,7 @@ export function importArtwork(ui, layouts) {
       // Reserve 32 stage pixels beyond the entire selected slot, including the real prefab frame.
       // Metadata gets half the text band; kind and state keep separate one-line cells.
       const frameRight = ROW_SELECTION.left + ROW_SELECTION.origin[0] + rightEdge(selection()) * ROW_SELECTION.scale;
-      const textLeft = Math.max(-700, rightEdge(ui.find(t, "BG_Icon")) + 32 / ROW_SCALE,
+      const textLeft = Math.max(COLUMNS.floor, rightEdge(ui.find(t, "BG_Icon")) + 32 / ROW_SCALE,
         (frameRight + 32 - ROW_WIDTH / 2) / ROW_SCALE);
       // Stretch the complete mail highlight so its transparent end survives the wider card.
       for (const name of ["BG", "Sprite"]) {
@@ -340,16 +371,16 @@ export function importArtwork(ui, layouts) {
       }
       const divider = ui.find(t, "Line");
       divider.pos[0] = textLeft;
-      Object.assign(divider.widgets[0], { pivot: 3, w_: 926 - textLeft });
-      // The ink of a label whose lines fill the top of its box (pivots 0 to 2): its top and bottom as y (units, up). null without
-      // NGUI's metrics or text.
-      const ink = (node) => {
-        const w = node.widgets.find((x) => "text" in x);
-        if (!w?.text || typeof ui.inkBand !== "function") return null;
-        const px = ui.fontSizeFor?.(w.text, w.fontSize) ?? w.fontSize, half = String(w.text).split("\n").length * px * (ui.LINE_PITCH ?? 1.15) / 2;
-        const band = ui.inkBand(w.text, px);
-        return { top: node.pos[1] - (half + band.top), bottom: node.pos[1] - (half + band.bottom) };
-      };
+      Object.assign(divider.widgets[0], { pivot: 3, w_: COLUMNS.titleRight - textLeft });
+      // The row's one text type (every text at TYPE.dense: wrapped, never smaller) and the pitch of separate lines under each
+      // other (List_01's meta lines: 66 at 48, LINE.stack of the size).
+      const dense = { fs: textSize, min: textSize }, pitch = LINE.stack * textSize, room = COLUMNS.titleRight - textLeft;
+      // Layout boxes ({ x, y, w, h }) are in units from the card's centre line (x) and down from the first text line's top (y);
+      // toNode turns a box into the NGUI position of the widget that fills it. The name plate (Label_System, Line) keeps the
+      // prefab's place; the layout starts under the divider.
+      const frame = { cx: 0, cy: ROW_TEXT_TOP, w: 0, h: 0 }, up = (y) => ROW_TEXT_TOP - y;
+      // (sums of boxes leave dust of 1e-15 units in y; it is kept to a billionth)
+      const put = (n, b, pivot) => { const [x, y] = toNode(b, pivot, frame); n.pos = [x, Math.round(y * 1e9) / 1e9]; return n; };
       const wrap = (value, width) => {
         const fit = ui.wrapText?.(String(value ?? ""), textSize, width, Infinity)
           ?? ui.fitGroup?.([String(value ?? "")], textSize, textSize, width, Infinity)?.[0];
@@ -364,62 +395,111 @@ export function importArtwork(ui, layouts) {
         }
         rows.push(line); return rows.join("\n");
       };
-      const rowLabel = (n, caption, width, pivot = 0, ellipsis = false) => {
-        const w = n.widgets.find((w) => "text" in w), value = String(caption ?? "");
-        const text = ellipsis ? value.replace(/\s*\n\s*/g, " ") : wrap(value, width);
-        Object.assign(w, { text, fontSize: textSize, w_: width, h_: textSize * 1.3 * text.split("\n").length,
-          pivot, ellipsis, ariaLabel: value });
-        return text ? text.split("\n").length : 0;
+      // A row label's text at the row's one size: wrapped to the width, or one line with an ellipsis; item is its measured text
+      // (textItem: ink band, reference centre) and null for no text.
+      const shape = (value, width, ellipsis = false) => {
+        const caption = String(value ?? ""), text = ellipsis ? caption.replace(/\s*\n\s*/g, " ") : wrap(caption, width);
+        return { caption, text, width, ellipsis, lines: text ? text.split("\n").length : 0, item: text ? textItem(ui, text, dense) : null };
+      };
+      const fill = (n, shaped, pivot = 0) => {
+        const w = n.widgets.find((w) => "text" in w);
+        Object.assign(w, { text: shaped.text, fontSize: textSize, w_: shaped.width, h_: textSize * LABEL_BOX * shaped.text.split("\n").length,
+          pivot, ellipsis: shaped.ellipsis, ariaLabel: shaped.caption });
+        return shaped.lines;
       };
       const title = ui.find(t, "Label_System"); title.pos[0] = textLeft;
-      label(title, name, 926 - textLeft, 1);
-      const fullBadgeWidth = Math.max(330, Math.min(926 - textLeft, ui.glyphWidth(state, textSize) + 32));
-      const controlRoom = control ? 910 - textLeft - control.width / ROW_SCALE - 28 : 0;
-      const besideWidth = Math.max(330, Math.min(fullBadgeWidth, controlRoom));
-      const beside = Boolean(control && badge && controlRoom >= 330 && wrap(state, besideWidth - 30).split("\n").length === 1
-        && (control.minHeight || 0) <= (textSize * 1.3 + 8) * ROW_SCALE);
+      label(title, name, room, 1);
+
+      // The status badge: as wide as its text and the caption padding (CONTROL.badge.pad each side), at least the App's minimum.
+      // A Choose Files control shares its line, SPACE.l away, while that leaves the badge its minimum; the badge goes to its own
+      // line beside a control, when it is unidentified, or when it and the kind column take too much of the text column.
+      const fullBadgeWidth = Math.max(COLUMNS.badgeMin, Math.min(room, ui.glyphWidth(state, textSize) + 2 * CONTROL.badge.pad));
+      const controlW = control ? control.width / ROW_SCALE : 0;
+      const controlRoom = control ? COLUMNS.right - textLeft - controlW - SPACE.l : 0;
+      const besideWidth = Math.max(COLUMNS.badgeMin, Math.min(fullBadgeWidth, controlRoom));
+      const beside = Boolean(control && badge && controlRoom >= COLUMNS.badgeMin && wrap(state, besideWidth - BADGE_LABEL_INSET).split("\n").length === 1
+        && (control.minHeight || 0) <= (textSize * LABEL_BOX + 2 * SPACE.hair) * ROW_SCALE);
       const badgeWidth = beside ? besideWidth : fullBadgeWidth;
-      const kindWidth = Math.max(200, Math.min(400, ui.glyphWidth(kind, textSize) + 16));
-      const secondBadge = Boolean(control) || unidentified || badge && badgeWidth + kindWidth + 56 > (926 - textLeft) * .72;
-      const kindRight = badge && !secondBadge ? Math.min(550, 910 - badgeWidth - 28) : 550;
-      const metaRight = kindRight - kindWidth - 30;
-      const sender = ui.find(t, "Label_From"); at(sender, kindRight - kindWidth / 2, ROW_TEXT_TOP);
-      let kindLines = rowLabel(sender, kind, kindWidth, 1);
+      const badgeShape = shape(state, badgeWidth - BADGE_LABEL_INSET);
+      // the label's box (NGUI: LABEL_BOX of the size a line) and the background round it, SPACE.hair beyond it above and below
+      const labelBox = textSize * LABEL_BOX * badgeShape.text.split("\n").length, badgeH = labelBox + 2 * SPACE.hair;
+      const kindWidth = Math.max(COLUMNS.kind.min, Math.min(COLUMNS.kind.max, ui.glyphWidth(kind, textSize) + 2 * SPACE.xs));
+      const secondBadge = Boolean(control) || unidentified || badge && badgeWidth + kindWidth + 2 * SPACE.l > room * COLUMNS.share;
+      const own = secondBadge && badge;
+      const kindRight = badge && !secondBadge ? Math.min(COLUMNS.kindRight, COLUMNS.right - badgeWidth - SPACE.l) : COLUMNS.kindRight;
+
+      // The first line: the metadata and the kind column (or, in a merged row, the counts block), top aligned. The kind column
+      // ends on the aligned column (or SPACE.l before the badge when that is further left); the counts block starts at COLUMNS.counts.left.
+      const countsW = result ? COLUMNS.counts.result : COLUMNS.counts.list;
+      const columns = counts ? { w: COLUMNS.counts.left + countsW - textLeft, gap: 0, kindW: countsW }
+        : { w: kindRight - textLeft, gap: SPACE.l, kindW: kindWidth };
+      const metaShape = shape(meta, layoutRow([{ grow: 1, h: 0 }, { w: columns.kindW, h: 0 }], { x: textLeft, w: columns.w, gap: columns.gap }).boxes[0].w);
+      const sender = ui.find(t, "Label_From");
+      let kindShape = null, kindLines;
       if (counts) {
         const kinds = ["spr", "lobby", "model", "other"].filter((kind) => counts[kind] > 0);
-        at(sender, result ? 370 : 510, ROW_TEXT_TOP); sender.widgets = [];
-        sender.children = countNodes(counts, {}, ui.translate, { kinds, width: result ? 500 : 780,
+        sender.widgets = [];
+        sender.children = countNodes(counts, {}, ui.translate, { kinds, width: countsW,
           color: ui.find(t, "Label_System").widgets[0].color, fontSize: textSize, top: true });
         kindLines = 1;
         for (const child of sender.children) {
           const count = ui.find(child, "Count"), w = count.widgets[0];
-          kindLines = Math.max(kindLines, rowLabel(count, w.text, w.w_, w.pivot));
+          kindLines = Math.max(kindLines, fill(count, shape(w.text, w.w_), w.pivot));
         }
-      }
+      } else { kindShape = shape(kind, kindWidth); kindLines = kindShape.lines; }
+      // A line's centre line is the reference centre of its first text line (one per language, whatever the letters); a badge on
+      // the line sits on it. Tops of the texts of one line stay level.
+      // (without font metrics a text has no reference centre: the middle of its label box stands in)
+      const lineFactor = ui.LINE_PITCH ?? 1.15, boxMid = textSize * LABEL_BOX / 2;
+      const firstMid = (item) => item && (item.mid == null ? boxMid : item.mid - (item.lines - 1) * item.px * lineFactor / 2);
+      const badgeMid = badgeShape.item?.mid ?? labelBox / 2;
+      const lineMid = firstMid(metaShape.item) ?? firstMid(kindShape?.item) ?? firstMid(badgeShape.item) ?? boxMid;
+      const onLine = (items, options) => layoutRow(items, { ...options, y: lineMid - layoutRow(items, options).centre });
+      const lines1 = Math.max(metaShape.lines, kindLines);
+      const first = onLine([{ grow: 1, h: metaShape.lines * pitch, mid: lineMid }, { w: columns.kindW, h: kindLines * pitch, mid: lineMid }],
+        { x: textLeft, w: columns.w, gap: columns.gap });
       const received = ui.find(t, "Label_Locale_Received"); received.children = [];
-      const metaLines = rowLabel(received, meta, counts ? 120 - textLeft : metaRight - textLeft);
-      at(received, textLeft, ROW_TEXT_TOP);
+      fill(received, metaShape);
+      put(received, first.boxes[0], 0);
+      if (kindShape) fill(sender, kindShape, 1);
+      put(sender, first.boxes[1], 1);
+
       // The prefab's vertical rhythm: the gap from the divider (Line) to the ink of the meta line. What hangs under the meta line
       // (a badge on its own line, then a control) keeps that gap from the ink or background above it.
-      const metaInk = ink(received), dividerBottom = divider.pos[1] - divider.widgets[0].h_ / 2;
-      const gap = metaInk ? dividerBottom - metaInk.top : 16;
-      let nextLine = Math.max(metaLines, kindLines);
-      const badgeLine = secondBadge && badge ? nextLine++ : 0;
+      const metaInk = metaShape.item?.ink ?? null, dividerBottom = divider.pos[1] - divider.widgets[0].h_ / 2;
+      const gap = metaInk ? dividerBottom - up(metaInk[0]) : FALLBACK_GAP;
+      // The lines under the first, one pitch a line (a badge on its own line counts one). A badge on its own line
+      // hangs one gap under the ink of the meta (and kind) lines, not one pitch under their boxes; the lines after it move with it.
+      const hangs = own && metaInk;
+      const inkBottom = Math.max(metaInk?.[1] ?? 0, kindShape?.item?.ink?.[1] ?? -Infinity);
+      const routeShape = route ? shape(route, room) : null;
+      const under = layoutStack([...own ? [{ w: room, h: pitch }] : [], ...routeShape ? [{ w: room, h: routeShape.lines * pitch }] : [],
+        { w: room, h: pitch }], { x: textLeft, y: hangs ? inkBottom + gap + SPACE.hair : lines1 * pitch, w: room });
+      let next = 0;
+      const cell = own ? under.boxes[next++] : null;
       let platform = null;
-      if (route) {
-        platform = clone(received); platform.name = "Platform"; at(platform, textLeft, ROW_TEXT_TOP - nextLine * 56);
-        nextLine += rowLabel(platform, route, 926 - textLeft); t.children.push(platform);
+      if (routeShape) {
+        platform = clone(received); platform.name = "Platform";
+        fill(platform, routeShape); put(platform, under.boxes[next++], 0); t.children.push(platform);
       }
       let limit = ui.find(t, "Label_Locale_Limit");
       if (!limit) { limit = content("List_01/Label_Locale_Limit"); t.children.push(limit); }
-      limit.children = []; at(limit, textLeft, ROW_TEXT_TOP - nextLine * 56);
-      rowLabel(limit, note, 926 - textLeft, 0, true);
+      limit.children = [];
+      fill(limit, shape(note, room, true)); put(limit, under.boxes[next], 0);
+
       // TimeLimit is only present on the unread card; clone that same node for read cards as well.
       let status = ui.find(t, "TimeLimit");
       if (!status) { status = content("List_01/TimeLimit"); t.children.push(status); }
       status.active = badge;
-      at(status, secondBadge ? textLeft + badgeWidth / 2 : 910 - badgeWidth / 2,
-        ROW_TEXT_TOP - badgeLine * 56);
+      // the badge, and beside it the control: on its own line they share the line, the badge at the column's start and the control
+      // on the right column, level with its background; on the first line it ends on the right column
+      const badgeLine = own
+        ? layoutRow(beside ? [{ w: badgeWidth, h: badgeH }, { w: controlW, h: badgeH }] : [{ w: badgeWidth, h: badgeH }],
+          { x: textLeft, y: cell.y - SPACE.hair, w: COLUMNS.right - textLeft, gap: SPACE.l, justify: beside ? "between" : "start" })
+        : onLine([{ w: badgeWidth, h: badgeH }], { x: textLeft, w: COLUMNS.right - textLeft, justify: "end" });
+      const badgeBox = badgeLine.boxes[0];
+      // the status node sits at the label's top, SPACE.hair under the background's
+      put(status, { ...badgeBox, y: badgeBox.y + SPACE.hair }, 1);
       ui.find(status, "Bg").widgets[0].w_ = badgeWidth;
       const tones = {
         ready: inventory(`${DETAIL}/Text_Amount`).widgets[0].color,
@@ -433,45 +513,45 @@ export function importArtwork(ui, layouts) {
       ui.find(status, "Bg").widgets[0].color = tones[stateKey] || tones.blocked;
       const statusLabel = ui.find(status, "Label_Locale_TimeLimit");
       if (["ready", "convert", "update", "library"].includes(stateKey)) statusLabel.widgets[0].color = inventory(`${DETAIL}/Text_Type`).widgets[0].color;
-      at(statusLabel);
-      rowLabel(statusLabel, state, badgeWidth - 30, 1);
-      const statusBG = ui.find(status, "Bg"); at(statusBG, 0, 4);
-      Object.assign(statusBG.widgets[0], { pivot: 1, h_: statusLabel.widgets[0].h_ + 8 });
+      fill(statusLabel, badgeShape, 1);
+      const statusBG = ui.find(status, "Bg"); at(statusBG, 0, SPACE.hair);
+      Object.assign(statusBG.widgets[0], { pivot: 1, h_: badgeH });
       // the ink of the badge's text, not its line box, is centred on the badge (every state, one baseline per language)
-      statusLabel.pos[1] -= inkDrop(statusLabel.widgets[0]);
-      // A badge on its own line hangs one gap under the ink of the meta (and kind) lines, not one line pitch under their boxes; the
-      // lines after it move with it.
-      if (secondBadge && badge && metaInk) {
-        const above = Math.min(...[metaInk, counts ? null : ink(sender)].filter(Boolean).map((box) => box.bottom));
-        const y = above - gap - 4, drop = status.pos[1] - y;
-        status.pos[1] = y;
-        for (const node of [platform, limit]) if (node) node.pos[1] -= drop;
-      }
+      statusLabel.pos = [0, badgeMid - labelBox / 2];
       // The control shares the badge background's vertical box and ends at the right column. A wrapped badge or a control
-      // that cannot fit keeps the old layout: one gap below the badge, with a gap under the control inside the grown card.
-      const reserved = control && badge ? { right: beside ? 910 : status.pos[0] + badgeWidth / 2, width: control.width / ROW_SCALE,
-        height: beside ? statusBG.widgets[0].h_ : control.height / ROW_SCALE,
-        top: status.pos[1] + 4 - (beside ? 0 : statusBG.widgets[0].h_ + gap), beside } : null;
+      // that cannot fit keeps the old layout: one gap below the badge, its right edge on the badge's, with a gap under the
+      // control inside the grown card.
+      let reserved = null;
+      if (control && badge) {
+        if (beside) {
+          const box = badgeLine.boxes[1];
+          reserved = { right: box.x + box.w, width: controlW, height: box.h, top: up(box.y), beside };
+        } else {
+          const below = layoutStack([{ w: badgeWidth, h: badgeH }, { w: controlW, h: control.height / ROW_SCALE }],
+            { x: textLeft, y: badgeBox.y, w: badgeWidth, gap, align: "end" }).boxes[1];
+          reserved = { right: status.pos[0] + badgeWidth / 2, width: controlW, height: below.h, top: up(below.y), beside };
+        }
+      }
       // Longer metadata wraps in full. Grow the prefab body downwards rather
       // than clipping a route or shrinking the whole list. Notes remain one line.
-      let bottom = 329 / 2;
+      let bottom = LIST_ROW.h / 2;
       const include = (n, y = 0) => {
         if (n.active === false) return;
         y += n.pos?.[1] || 0;
-        for (const w of n.widgets || []) if (w.text) bottom = Math.max(bottom, -y + w.h_ + 16);
+        for (const w of n.widgets || []) if (w.text) bottom = Math.max(bottom, -y + w.h_ + 2 * SPACE.xs);
         for (const child of n.children || []) include(child, y);
       };
       for (const path of ["Label_Locale_Received", "Label_From", "Platform", "Label_Locale_Limit", "TimeLimit"]) {
         const n = ui.find(t, path); if (n) include(n);
       }
       if (reserved && !beside) bottom = Math.max(bottom, gap - (reserved.top - reserved.height));
-      const extra = bottom - 329 / 2;
+      const extra = bottom - LIST_ROW.h / 2;
       if (extra > 0) for (const name of ["BG", "Sprite"]) {
         const n = ui.find(t, name); if (!n) continue;
         n.pos[1] -= extra / 2;
         for (const w of n.widgets) if (w.h_) w.h_ += extra;
       }
-      t.rowHeight = 348 + extra;
+      t.rowHeight = ROW_PITCH + extra;
       t.control = reserved;
       return t;
     },
@@ -492,7 +572,7 @@ export function importArtwork(ui, layouts) {
 // The box [x, y, width, height] (px, from the row's top left) of the control a row reserved room for (row({ control })), or null.
 export function controlRect(tree) {
   const c = tree?.control;
-  return c ? [ROW_WIDTH / 2 + (c.right - c.width) * ROW_SCALE, 329 * ROW_SCALE / 2 - c.top * ROW_SCALE, c.width * ROW_SCALE, c.height * ROW_SCALE] : null;
+  return c ? [ROW_WIDTH / 2 + (c.right - c.width) * ROW_SCALE, LIST_ROW.h * ROW_SCALE / 2 - c.top * ROW_SCALE, c.width * ROW_SCALE, c.height * ROW_SCALE] : null;
 }
 
 export { clipButtonPatterns } from "./button-layout.js";

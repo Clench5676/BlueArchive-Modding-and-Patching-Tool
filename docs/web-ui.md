@@ -1191,10 +1191,17 @@ accepts `directory`; pywebview supports it on macOS and Windows). An analysis th
 scrolls it into view, clearing a filter that would hide it. Import runs only the ticked complete rows; missing rows
 retain their state and can receive files later in the session.
 
-The row's standalone badge keeps the divider-to-meta ink gap below the metadata (`import-layout.js`). Choose Files
-shares the badge background's top and bottom and ends at column 910, with at least 28 row units between them;
-when it cannot fit, it sits below the badge. Its caption matches the badge's screen size. Each side's caption padding
-is the body's atlas slice border plus 16 units at the button's scale; reference-glyph ink is centred on the face
+Import Mod's rows are laid out with the design system (`docs/design-system.md`; `import-layout.js` `row()` over the
+primitives of `ui-grid.js`). Every text of a row but the name is `TYPE.dense` (42, wrapped, never smaller). The name plate
+(title and divider) keeps the prefab's place; the first line (metadata and kind column, or the counts block of a merged row)
+has its tops level, and a badge on it sits on the same centre line (the reference glyph's centre, `textItem`'s `mid`). The
+lines under it (a badge on its own line, the route, the note) are `LINE.stack` of the size apart (57.75), the kind column ends
+`SPACE.l` (28) before a badge on the first line, and a badge's caption keeps `CONTROL.badge.pad` (16) each side.
+The row's standalone badge keeps the divider-to-meta ink gap below the metadata. Choose Files
+shares the badge background's top and bottom and ends at column 910, with at least `SPACE.l` row units between them;
+when it cannot fit, it sits below the badge. Its caption matches the badge's screen size. It is a `buttonS` control
+(`controlWidth`): its caption and `CONTROL.buttonS.pad` (45, the body's slice border included) each side, in the button's
+own units, 240 at least; reference-glyph ink is centred on the face
 between the top and bottom slice borders. Native button decoration still uses `clipButtonPatterns`. Footer buttons
 wrap at their group's shared size (`NGUI.wrapText`), preserving Thai word breaks instead of independently shrinking.
 
