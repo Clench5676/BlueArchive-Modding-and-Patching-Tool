@@ -48,6 +48,107 @@ def test_renderer_lists_that_name_the_primary_take_the_added_part():
     assert tree["mouth"] == _pptr(1) and tree["nested"]["list"] == [_pptr(3)]
 
 
+class _Graph:
+    """Typetrees are the objects themselves."""
+
+    def tree(self, obj):
+        return obj
+
+
+def _skeleton(bones):
+    """``bones``: (name, parent index, local position, local quaternion) after a root at the origin."""
+    skeleton = ma.Skeleton(_Graph())
+    skeleton.nodes.append(ma.Node("bone_root", "", None, ((0, 0, 0), (0, 0, 0, 1), (1, 1, 1)), None, None, True))
+    for name, parent, position, rotation in bones:
+        path = f"{skeleton.nodes[parent].path}/{name}" if parent else name
+        skeleton.nodes.append(ma.Node(name, path, parent, (position, rotation, (1, 1, 1)), None, None, True))
+    return skeleton
+
+
+def _arm(forearm=1.0, twist=True):
+    """An arm along +X: upper arm at 1 m height, forearm ``forearm`` m on, hand 1 m further; a Biped ForeTwist hangs off
+    the upper arm, half way along the forearm."""
+    bones = [("Bip001", 0, (0, 0, 0), (0, 0, 0, 1)),
+             ("Bip001 L UpperArm", 1, (0, 1, 0), (0, 0, 0, 1)),
+             ("Bip001 L Forearm", 2, (forearm, 0, 0), (0, 0, 0, 1)),
+             ("Bip001 L Hand", 3, (1, 0, 0), (0, 0, 0, 1))]
+    if twist:
+        bones.append(("Bip001 L ForeTwist", 2, (forearm + 0.5, 0, 0), (0, 0, 0, 1)))
+    return _skeleton(bones)
+
+
+def _bent(skeleton):
+    """The elbow bent by 90 degrees about Z, the wrist by 45 about Y; the ForeTwist keyed to turn with the forearm."""
+    turn = (0, 0, np.sin(np.pi / 4), np.cos(np.pi / 4))
+    forearm, twist = skeleton.first("Bip001 L Forearm"), skeleton.first("Bip001 L ForeTwist")
+    hand = skeleton.first("Bip001 L Hand")
+    length = skeleton.nodes[forearm].local[0][0]
+    local = {forearm: ma.trs(skeleton.nodes[forearm].local[0], turn, (1, 1, 1)),
+             hand: ma.trs(skeleton.nodes[hand].local[0], (0, np.sin(np.pi / 8), 0, np.cos(np.pi / 8)), (1, 1, 1))}
+    if twist is not None:
+        local[twist] = ma.trs((length, 0, 0), turn, (1, 1, 1)) @ ma.trs((0.5, 0, 0), (0, 0, 0, 1), (1, 1, 1))
+    return skeleton.world(local)
+
+
+def _flat(points, joints):
+    points = np.asarray(points, float)
+    joints = np.asarray(joints, int).reshape(-1, 1)
+    return ma.Flat(points, np.c_[joints, np.zeros((len(points), 3), int)],
+                   np.c_[np.ones(len(points)), np.zeros((len(points), 3))], np.zeros((0, 2), int),
+                   np.zeros((0, 3), int), [0], np.repeat(np.eye(3)[None], len(points), axis=0))
+
+
+def test_a_biped_bone_the_slot_lacks_goes_with_the_bone_it_moves_with():
+    """BL-128: a Battle NPC's ForeTwist hangs off the upper arm and turns with the forearm. On a slot without it the
+    sleeve goes with the forearm (by the source's own clips), not with the upper arm, its parent."""
+    source, target = _arm(), _arm(twist=False)
+    twist, forearm = source.first("Bip001 L ForeTwist"), source.first("Bip001 L Forearm")
+    flat = _flat([[1.4, 1.0, 0.05], [1.6, 1.0, -0.05]], [twist, twist])
+    carried = ma.carriers(target, source, flat, [_bent(source)])
+    assert carried == {twist: forearm}
+    mapping = ma.map_bones(target, source, [twist], carried)
+    assert mapping[twist] == target.first("Bip001 L Forearm")
+    assert ma.map_bones(target, source, [twist])[twist] == target.first("Bip001 L UpperArm")  # its parent's, before
+    assert ma.carriers(target, source, flat, []) == {}  # no clips, no carrier
+
+
+def test_the_refit_carries_each_vertex_by_its_anchor():
+    """BL-128: a costume made for a longer forearm, refitted to the slot's: the hand's vertices move by the hand's
+    joint gap, the upper arm's stay; a secondary bone's vertices go rigidly with its Biped anchor."""
+    source = _arm(forearm=1.2, twist=False)
+    source.nodes.append(ma.Node("bone_cuff", "x", source.first("Bip001 L Hand"), ((0.1, 0, 0), (0, 0, 0, 1), (1, 1, 1)),
+                                None, None, True))
+    target = _arm(forearm=1.0, twist=False)
+    hand, upper, cuff = source.first("Bip001 L Hand"), source.first("Bip001 L UpperArm"), len(source.nodes) - 1
+    flat = _flat([[0.5, 1.0, 0.0], [2.2, 1.0, 0.0], [2.4, 1.0, 0.0]], [upper, hand, cuff])
+    fit = ma.refit(target, source, flat)
+    assert np.allclose(fit.vertices, [[0.5, 1.0, 0.0], [2.0, 1.0, 0.0], [2.2, 1.0, 0.0]])
+    assert fit.shape == "refitted"
+    # the shape change past the common move (the median: 0.2 m back): the upper arm's vertex, 0.2 m
+    assert fit.largest == pytest.approx(0.2) and fit.size == pytest.approx(1.9)
+    # a costume that only sits elsewhere as a whole changes no shape
+    whole = ma.refit(_arm(forearm=1.0, twist=False), _skeleton([("Bip001", 0, (0.5, 0, 0), (0, 0, 0, 1)),
+                                                               ("Bip001 L UpperArm", 1, (0, 1, 0), (0, 0, 0, 1))]),
+                     _flat([[0.7, 1.0, 0.0], [1.0, 1.2, 0.0]], [2, 2]), shape="moved")
+    assert np.allclose(whole.vertices, [[0.2, 1.0, 0.0], [0.5, 1.2, 0.0]]) and whole.largest == pytest.approx(0.0)
+
+
+def test_the_costume_is_taken_where_its_bindposes_draw_it():
+    """BL-128: a mesh whose vertex data lies 1 m off its renderer's space, its bindposes bringing it back (Koharu's);
+    the costume is the shape the prefab draws, not the vertex data in the renderer's space."""
+    skeleton = _arm(twist=False)
+    hand = skeleton.first("Bip001 L Hand")
+    rest = skeleton.world()
+    bindpose = np.linalg.inv(rest[hand]) @ ma.trs((-1, 0, 0), (0, 0, 0, 1), (1, 1, 1))
+    mesh = {"m_BindPose": [{f"e{r}{c}": float(bindpose[r, c]) for r in range(4) for c in range(4)}]}
+    part = ma.Part(0, None, mesh, [], ["body"], [hand], 3)
+    vertices = np.array([[3.0, 1.0, 0.0], [3.0, 1.1, 0.0]])
+    skin = ma.Skin(vertices, np.zeros((2, 4), int), np.c_[np.ones(2), np.zeros((2, 3))], np.array([[0, 1]]))
+    flat = ma.flatten(ma.Costume(skeleton, [part], [skin]), rest)
+    assert np.allclose(flat.vertices, vertices - [1, 0, 0])
+    assert np.allclose(flat.linear, np.eye(3))
+
+
 def test_stretch_counts_shrinking_as_growing():
     rest = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0]], float)
     edges = np.array([[0, 1], [0, 2]])
@@ -127,7 +228,8 @@ def test_official_costume_on_a_slot(view, tmp_path, target, source, field, parts
         assert before.keys() <= after.keys()
         changed = {before[pid].type.name for pid in before if before[pid].get_raw_data() != after[pid].get_raw_data()}
         assert changed <= {"SkinnedMeshRenderer", "AssetBundle", "Transform", "MonoBehaviour"}, changed
-    # the slot read back: the costume drawn at rest exactly where the source draws it, and exportable
+    # the slot read back: the costume drawn at rest exactly in the shape it was bound and judged in (BL-128: as the
+    # source draws it, refitted to the slot's joints), and exportable
     adapted = dict(index)
     for path in written:
         for cab in cab_names(path):
@@ -138,7 +240,7 @@ def test_official_costume_on_a_slot(view, tmp_path, target, source, field, parts
     t = ma.Skeleton.of(graph, t_prefabs[ma.choose_prefab(t_prefabs, target)].deref())
     s = ma.Skeleton.of(graph, s_prefabs[ma.choose_prefab(s_prefabs, source)].deref())
     s_parts = [p for p in ma.roles(s, None) if p.role in ("primary", "costume")]
-    s_rest, t_rest = s.world(), t.world()
+    t_rest = t.world()
     # the hem's weights by slot bone path, in the order adapt takes the parts (the primary first)
     official = BundleGraph(index)
     o_prefabs = _prefabs(official, [p for p in slot if p.name.startswith("character-")])
@@ -158,7 +260,9 @@ def test_official_costume_on_a_slot(view, tmp_path, target, source, field, parts
         skin = ma.skin_of(mesh)
         bones = [t.by_transform[_key(graph.deref(renderer, b))] for b in tree["m_Bones"]]
         posed = ma.deform(skin, np.array([t_rest[b] for b in bones]) @ ma.bindposes(graph, mesh))
-        want = (np.c_[ma.skin_of(part.mesh).vertices, np.ones(len(skin.vertices))] @ s_rest[part.node].T)[:, :3]
+        fit = result.plan.fit
+        k = [p.mesh.peek_name() for p in ordered].index(mesh.peek_name())
+        want = fit.vertices[fit.starts[k]:(fit.starts + [len(fit.vertices)])[k + 1]]
         assert np.abs(posed - want).max() < 1e-4
         drawn.append(mesh.peek_name())
         change = changes.get(mesh.peek_name())
@@ -252,7 +356,7 @@ def _locks_free() -> list[str]:
 @official
 @pytest.mark.parametrize("target,source,refused", [
     ("hina_original", "ch0230", False),    # built: Hina <- Hina (Dress)
-    ("ch0205", "koharu_original", True),   # refused for its stretch: Koharu (Swimsuit) <- Koharu
+    ("hanako_original", "ch0209", True),   # refused for its stretch: Hanako <- Hanako (Swimsuit)
 ])
 def test_official_costume_build_leaves_no_bundle_locked(view, target, source, refused):
     """BL-122: a build opens many bundles, each under its path lock; it closes them all when it ends, built or
