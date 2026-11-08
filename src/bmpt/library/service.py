@@ -4239,7 +4239,10 @@ class ModLibrary:
         kinds = {}
         kept_current: list[str] = []
         incomplete = False
+        change = _ChoiceChange(self, pin, variant_key, source)
         try:
+            if on:
+                self._check_stopping(pin)
             with temporary_directory(prefix=devmode.LIBRARY_STAGING_PREFIX) as temporary:
                 work = Path(temporary)
                 build_keys: dict[Path, str] = {}
@@ -4263,14 +4266,14 @@ class ModLibrary:
                         return self._defer(pin, variant_key, {record["kind"]: cores[0]}, source)
                     kinds = {record["kind"]: cores[0]}
                     incomplete = self._incomplete(record, pin)
-                    self._configure(pin, variant_key, kinds, source)
+                    change.configure(kinds)
                     if own_model or core_of(record["files"][0]) == cores[0]:
                         view = self._view([pin], "full")
                         entry = view.entry(pin, cores[0])
                         identity = self._identity({path.name: path for path in self._paths(record)})
                         if entry.carried == source and self._matches_installed(identity, entry):
                             self._note_judged(view, entry)
-                            self._configure(pin, variant_key, {record["kind"]: cores[0]}, source)
+                            change.configure({record["kind"]: cores[0]})
                             self._selection_error(pin, kinds.values(), None)
                             return ApplyResult(variant_key, source, [], unchanged=True, incomplete=incomplete)
                         replacements = self._cached_build(self._paths(record), targets, pin,
@@ -4292,7 +4295,7 @@ class ModLibrary:
                     if not own or not targets:
                         raise ServiceError("game_file_not_found", variant=variant_key)
                     kinds = {"model": own.lower()}
-                    self._configure(pin, variant_key, kinds, source)
+                    change.configure(kinds)
                     if not on:
                         return self._defer(pin, variant_key, kinds, source)
                     _, inputs = self._costume_source(other, pin)
@@ -4313,7 +4316,7 @@ class ModLibrary:
                         kinds[current] = core_of(targets[0].name)
                     if not kinds:
                         raise ServiceError("game_file_not_found", variant=variant_key)
-                    self._configure(pin, variant_key, kinds, source)
+                    change.configure(kinds)
                     if on:
                         for current in kinds:
                             targets = self._game_files(variant_key, current, pin)
@@ -4330,7 +4333,7 @@ class ModLibrary:
                 prepared = time.perf_counter()
                 files = self._commit(replacements, source, log, progress, pin, prune=False, build_keys=build_keys,
                                      create_backup=create_backup, kept_current=kept_current)
-                self._configure(pin, variant_key, kinds, source)
+                change.configure(kinds)
                 self._selection_error(pin, kinds.values(), None)
                 for core in kinds.values():
                     self._clear_marker(pin, core)
@@ -4338,12 +4341,13 @@ class ModLibrary:
                 return ApplyResult(variant_key, source, files, unchanged=not files,
                                    kept_current=bool(kept_current), incomplete=incomplete)
         except Exception as error:
-            if kinds:
+            if not change.refused(error) and kinds:
                 self._selection_error(pin, kinds.values(), error.to_json() if isinstance(error, ServiceError)
                                       else {"code": "library_io_error" if isinstance(error, OSError) else "library_operation_failed",
                                             "params": {"operation": "apply"}})
             raise
         finally:
+            change.close()
             pruning = time.perf_counter()
             self._prune_quietly()
             logger.info("Mod apply prune: %.3f s; total: %.3f s", time.perf_counter() - pruning,
@@ -4367,9 +4371,11 @@ class ModLibrary:
         kinds = {core_of(path.name): core_of(path.name) for path in targets}
         if not profiles_mod.enabled(self.profiles.read()):
             return self._defer(pin, target, kinds, source)
-        self._configure(pin, target, kinds, source)
         kept_current: list[str] = []
+        change = _ChoiceChange(self, pin, target, source)
         try:
+            self._check_stopping(pin)
+            change.configure(kinds)
             with temporary_directory(prefix=devmode.LIBRARY_STAGING_PREFIX) as temporary:
                 build_keys = {}
                 replacements = self._cached_build(self._paths(record), targets, pin,
@@ -4382,11 +4388,13 @@ class ModLibrary:
                 self._clear_marker(pin, slot)
             return ApplyResult(target, source, files, unchanged=not files, kept_current=bool(kept_current))
         except Exception as error:
-            self._selection_error(pin, kinds, error.to_json() if isinstance(error, ServiceError)
-                                  else {"code": "library_io_error" if isinstance(error, OSError) else "library_operation_failed",
-                                        "params": {"operation": "apply"}})
+            if not change.refused(error):
+                self._selection_error(pin, kinds, error.to_json() if isinstance(error, ServiceError)
+                                      else {"code": "library_io_error" if isinstance(error, OSError) else "library_operation_failed",
+                                            "params": {"operation": "apply"}})
             raise
         finally:
+            change.close()
             self._prune_quietly()
 
     @_serialized
@@ -4786,9 +4794,11 @@ class ModLibrary:
                 folder["named_by"][self.data_id] = now()
         return folder
 
-    def _configure(self, pin: Pin, variant_key: str, kinds: dict[str, str], source: str | None) -> None:
+    def _configure(self, pin: Pin, variant_key: str, kinds: dict[str, str], source: str | None, *,
+                   dropped: list[dict] | None = None) -> None:
         """Set (or, with None, drop) the configured source of an entry's cores. A changed or dropped configuration
-        drops the entry's built copy and its updated marker."""
+        drops the entry's built copy and its updated marker. With ``dropped``, the dropped built keys go there and
+        their files stay until the caller deletes them (``_ChoiceChange.close``), else they are deleted at once."""
         kinds = {kind: self._core_map(pin).slot(core) if kind == "model" else core for kind, core in kinds.items()}
         stamp = now()
         dropped_keys: list[dict] = []
@@ -4820,7 +4830,42 @@ class ModLibrary:
                     dropped_keys.append(folder["built"].pop(core))
             return changed
 
+        if dropped is not None:
+            self._update_profiles(change)
+            dropped.extend(dropped_keys)
+            return
         self._update_profiles(change, after=lambda data: self._delete_built_files(dropped_keys, data))
+
+    def _check_stopping(self, pin: Pin) -> None:
+        """The refusals of the moment that the write-time checks (``_writable``) would give whatever the files: the
+        classic UI open, Steam changing the install, the game running. Checked before a choice is saved, so a write
+        refused for one of them (STOPPING) leaves the choice as it was and costs no build."""
+        if self._write_check is not None:
+            self._write_check(pin)
+        self._check_idle([pin])
+        safety.check_game_for(list(pin.dirs))
+
+    def _saved_choices(self, pin: Pin, kinds: dict[str, str]) -> dict[str, dict[str, Any]]:
+        """The saved entries of an entry's cores (configured, updated marker, built key), as ``_put_back_choices``
+        restores them."""
+        folder = (((self.profiles.read() or {}).get("folders") or {}).get(pin.key) or {})
+        cores = [self._core_map(pin).slot(core) if kind == "model" else core for kind, core in kinds.items()]
+        return {core: {part: copy.deepcopy((folder.get(part) or {}).get(core)) for part in ("configured", "updated", "built")}
+                for core in cores}
+
+    def _put_back_choices(self, pin: Pin, saved: dict[str, dict[str, Any]]) -> None:
+        def change(data: dict) -> bool:
+            folder = data["folders"].get(pin.key)
+            if folder is None:
+                return False
+            for core, parts in saved.items():
+                for part, value in parts.items():
+                    if value is None:
+                        folder.setdefault(part, {}).pop(core, None)
+                    else:
+                        folder.setdefault(part, {})[core] = copy.deepcopy(value)
+            return True
+        self._update_profiles(change)
 
     def _new_folder(self, data: dict, pin: Pin, named: bool) -> dict:
         folder = data["folders"][pin.key] = {"server": pin.server, "named_by": {}, "hidden": [], "configured": {},
@@ -5386,7 +5431,8 @@ class ModLibrary:
                 except ServiceError as error:
                     item = {"install": pin.key, "core": core, "kind": self._kind(core, pin) or "spr",
                             "variant": self._core_map(pin).key(core) or core}
-                    self._selection_error(pin, [core], error.to_json())
+                    if error.code not in STOPPING:  # a refusal of the moment belongs to the switch, not the choice
+                        self._selection_error(pin, [core], error.to_json())
                     result["failed"].append({"entry": item, "code": error.code, "params": error.to_json()["params"]})
                     outcomes[(pin.key, core)] = "pending"
                     if error.code in STOPPING:
@@ -6213,6 +6259,42 @@ def _pins_signature(pins: list[Pin]) -> list[tuple[str, tuple[str, ...]]]:
 
 
 @functools.cache
+class _ChoiceChange:
+    """One apply's change of saved choices. The choice is saved before the build (a failed build shows its error on
+    it); a write then refused for a reason of the moment (STOPPING: the game running, Steam busy, the classic UI open,
+    the installs changed) puts the cores' entries back as they were, and the built copies the new choice replaced are
+    deleted only once it stands (``close``)."""
+
+    def __init__(self, library: "ModLibrary", pin: Pin, variant_key: str, source: str):
+        self.library, self.pin, self.variant_key, self.source = library, pin, variant_key, source
+        self.saved: dict[str, dict[str, Any]] = {}
+        self.dropped: list[dict] = []
+
+    def configure(self, kinds: dict[str, str]) -> None:
+        for core, parts in self.library._saved_choices(self.pin, kinds).items():
+            self.saved.setdefault(core, parts)
+        self.library._configure(self.pin, self.variant_key, kinds, self.source, dropped=self.dropped)
+
+    def refused(self, error: BaseException) -> bool:
+        """Whether ``error`` is a refusal of the moment; the saved entries are put back then."""
+        if not (isinstance(error, ServiceError) and error.code in STOPPING):
+            return False
+        if self.saved:
+            self.library._put_back_choices(self.pin, self.saved)
+        return True
+
+    def close(self) -> None:
+        """Delete the replaced built copies no saved key references (none, after a put back)."""
+        if not self.dropped:
+            return
+        dropped, self.dropped = self.dropped, []
+        try:
+            self.library._update_profiles(lambda data: False,
+                                          after=lambda data: self.library._delete_built_files(dropped, data))
+        except Exception as error:  # the next prune deletes what is left
+            log_failure(logger, logging.WARNING, "Could not delete replaced built copies", error)
+
+
 def _build_version() -> str:
     """The program build: a cached build is never reused across versions."""
     from ba_modding_toolkit.utils import get_version_info

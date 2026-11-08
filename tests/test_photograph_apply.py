@@ -1,6 +1,7 @@
 """Real Collection compositions use verified test assets and temporary game copies only."""
 
 import base64
+import copy
 import hashlib
 import io
 import os
@@ -114,6 +115,34 @@ def test_outside_change_during_preparation_is_preserved(environment, monkeypatch
     with pytest.raises(ServiceError, match='entry_changed'):
         e.library.apply_photograph('a', e.keys[0], e.records[0])
     assert e.target.read_bytes() == changed
+
+
+def _png(color):
+    stream = io.BytesIO();Image.new('RGBA', (202, 228), color).save(stream, format='PNG')
+    return stream.getvalue()
+
+
+def test_a_photo_refused_while_the_game_runs_keeps_the_choice_it_had(environment, monkeypatch):
+    """BL-123: refused for the moment, before anything is built or saved, or at the write: the earlier photo stays."""
+    e = environment;lib = e.library;pin = lib.current_pin()
+    lib.apply_photograph('a', e.keys[0], e.records[0], pin)
+    written, choice = e.target.read_bytes(), lib.photograph_choice(e.records[0], pin)
+    configured = copy.deepcopy(lib.profiles.read()['folders'][pin.key]['configured'])
+    second = lib.photographs.save('a', 'data:image/png;base64,' + base64.b64encode(_png((90, 200, 60, 255))).decode(),
+                                  'portrait')['saved']
+    monkeypatch.setattr(safety, '_sandboxed', lambda paths: False)
+    for start in (0, 1):  # the game running already, or starting after the first check
+        checks = []
+        def running():
+            checks.append(True)
+            if len(checks) > start:
+                raise ServiceError('game_running')
+        monkeypatch.setattr(safety, 'check_game_not_running', running)
+        with pytest.raises(ServiceError, match='game_running'):
+            lib.apply_photograph('a', second, e.records[0], pin)
+        assert e.target.read_bytes() == written
+        assert lib.photograph_choice(e.records[0], pin) == choice
+        assert lib.profiles.read()['folders'][pin.key]['configured'] == configured
 
 
 def test_reset_game_file_keeps_intent_but_allows_reapplying(environment):

@@ -338,6 +338,8 @@ def apply(library: ModLibrary, variant: str, photo: str | None, png: bytes | Non
     if photo is None and configured_source == "official" and (
             library._hashes.get(target).sha1 == library._hashes.get(official).sha1):
         return _result(library.apply(core, "official", kind="other", pin=pin, log=log, progress=progress), variant, core)
+    if not configure_only and profiles.enabled(config):
+        library._check_stopping(pin)  # refused for the moment: nothing built, the choice as it was (BL-123)
     with temporary_directory(prefix=devmode.LIBRARY_STAGING_PREFIX) as temporary:
         work = Path(temporary)
         edits = {descriptor["name"]: png}
@@ -386,17 +388,23 @@ def apply(library: ModLibrary, variant: str, photo: str | None, png: bytes | Non
             library._defer(pin, saved["target"], {core: core}, source)
             result = PhotographApplyResult(variant, source, [], unchanged=True, deferred=True, cores=[core])
         else:
-            library._configure(pin, saved["target"], {core: core}, source)
+            from .service import _ChoiceChange
+
+            change = _ChoiceChange(library, pin, saved["target"], source)
             try:
+                change.configure({core: core})
                 files = library._commit({target: library._paths(saved)[0]}, source, log, progress, pin,
                                         prune=False, expected={target: before})
                 library._selection_error(pin, [core], None)
                 library._clear_marker(pin, core)
                 result = PhotographApplyResult(variant, source, files, unchanged=not files, cores=[core])
             except Exception as error:
-                library._selection_error(pin, [core], error.to_json() if isinstance(error, ServiceError) else {
-                    "code": "library_io_error", "params": {"file": str(target)}})
+                if not change.refused(error):
+                    library._selection_error(pin, [core], error.to_json() if isinstance(error, ServiceError) else {
+                        "code": "library_io_error", "params": {"file": str(target)}})
                 raise
+            finally:
+                change.close()
     _drop_migrated_choices(library, pin)
     # Captured PNGs persist; only obsolete compiled composites can be discarded.
     _prune_composites(library)
