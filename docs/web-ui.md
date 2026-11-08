@@ -612,6 +612,8 @@ class ModLibrary:
     def model_cores(self, variant_key: str, pin=None) -> list[str]  # prefab first, own installed dependency cores
     def official_bundles(self, core: str, pin=None, *, current_fallback=False) -> list[Path]  # whole slot;
                                                         # verified originals; model previews may allow current files
+    def preview_reads(self, policy: str, pin=None) -> PreviewReads  # "official" | "configured": the bytes a model
+                                                        # preview reads for the files its source does not supply
     def prune(self) -> list[Path]                        # kept originals deleted (see below)
     def update(self, mod_id: str, log, progress) -> UpdateResult   # rebuild against the current game file
     def extract(self, target: str, out_dir: Path, log) -> Path     # target "variant:<key>" or "mod:<id>"
@@ -1420,6 +1422,15 @@ Model `mod:` and `import:` sources must contain only model files of the variant'
 uses that variant's prefab. The `official` model preview overrides every slot file with its verified official copy,
 using the current file only when no official copy remains. This preview fallback does not supply an official baseline
 for rebuilding a Mod or make a file restorable. The default `official_bundles` call still requires verified originals.
+A model export also loads bundles outside the slot: shared shaders, and textures stored under another core (ch0263's
+materials take theirs from the NPC en0002's bundle, which another Mod may replace). Every model source but `live` reads
+those through `ModLibrary.preview_reads` (`GameAssets.model_glb(..., reads=...)`, applied to the prefab bundles and to
+every bundle the CAB index finds): `official` their verified official bytes, the current file only when no official
+copy remains; `mod:` and `import:` the bytes the configured source of each file's slot writes (its kept built copy,
+else the Mod's own file of that name, else the game file while it carries that source), else as `official`. So no
+source but `live` follows the Enable Mods switch or the game folder's current files. The export's cache key includes
+the rule (`PreviewReads.key`: the policy, and for `configured` the folder's configured and built entries); a persisted
+export that read library files is reused only for locations the rule admits (`PreviewReads.trusted`).
 
 New locale keys are present in all six locales. The reason keys also exist under `webui.error`
 with the same text, so both entry reasons and RPC/job failures translate consistently:

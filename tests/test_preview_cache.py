@@ -281,6 +281,40 @@ def test_model_export_reuses_disk_and_revalidates_dependencies(tmp_path, monkeyp
     assert len(builds) == 2
 
 
+def test_model_preview_reuses_disk_exports_only_for_the_locations_its_rule_admits(tmp_path, monkeypatch):
+    from bmpt.gameassets.preview_reads import PreviewReads
+
+    preview = PreviewCache(tmp_path / "previews", allowed=True)
+    game, root = _game(tmp_path, preview)
+    prefab = root / "character-ch0242-_mxload-2024-11-18_assets_all_1.bundle"
+    prefab.write_bytes(b"")
+    kept = tmp_path / "library" / "originals" / "assets-_mx-npcs-en0002-_mxdependency-2024-11-18_005_assets_all_2.bundle"
+    kept.parent.mkdir(parents=True)
+    kept.write_bytes(b"official")
+    builds = []
+
+    def export(graph, bundles, core):
+        graph.loaded.extend([str(prefab), str(kept)])  # a texture read from the library's official copy
+        builds.append(1)
+        return b"glTF" + kept.read_bytes()
+
+    def reads(trusted):
+        return PreviewReads(lambda path: path, "official", trusted)
+
+    monkeypatch.setattr(model, "export_chibi", export)
+    library = lambda path: path.resolve().is_relative_to(tmp_path / "library")  # noqa: E731
+    assert game.model_glb("ch0242", reads=reads(library)) == b"glTFofficial"
+    restarted, _ = _game(tmp_path, PreviewCache(preview.root, allowed=True))
+    assert restarted.model_glb("ch0242", reads=reads(library)) == b"glTFofficial"
+    assert len(builds) == 1
+    kept.write_bytes(b"official, kept again")
+    assert restarted.model_glb("ch0242", reads=reads(library)) == b"glTFofficial, kept again"
+    assert len(builds) == 2
+    again, _ = _game(tmp_path, PreviewCache(preview.root, allowed=True))
+    assert again.model_glb("ch0242", reads=reads(lambda path: False)) == b"glTFofficial, kept again"
+    assert len(builds) == 3  # a location outside the resource folders that the rule does not admit is not reused
+
+
 @pytest.mark.parametrize("change_at", ["opening", "export"])
 def test_model_dependency_replaced_during_decode_is_not_cached(tmp_path, monkeypatch, change_at):
     preview = PreviewCache(tmp_path / "previews", allowed=True)
