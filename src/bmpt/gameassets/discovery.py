@@ -94,6 +94,23 @@ def is_model_dependency(path: Path) -> bool:
             or "-_mx-shaders-" in name or "-_mx-program-animators-" in name)
 
 
+# parts of a character's or NPC's own dependency bundles named for an asset type that is never a model's root
+_NO_ROOT_PARTS = ("-textures-", "-materials-", "-audio-", "-textassets-", "-shaders-")
+
+
+def own_bundle(name: str, dev: str) -> bool:
+    """Whether a bundle belongs to a character's or NPC's own dependency bundles
+    (``assets-_mx-npcs|characters-<dev>-_mxdependency-*``)."""
+    parsed = parse_filename(name)
+    return parsed.category in ("npcs", "characters") and parsed.core.lower() == dev.lower()
+
+
+def may_hold_model_root(name: str) -> bool:
+    """Whether a part of those bundles can hold a model's root: any but those named for textures, materials, audio,
+    text or shaders."""
+    return not any(part in name for part in _NO_ROOT_PARTS)
+
+
 def is_lobby_prefab(path: Path) -> bool:
     """Whether a bundle holds memorial lobby prefabs (UILobbyElement/Lobby<Name>.prefab)."""
     return path.name.startswith("ui-uilobbyelement-")
