@@ -26,6 +26,8 @@ export function latestLoad() {
 // Each player owns its atlas and textures; a cancelled player's hooks never touch the next view's state.
 export function loadPlayer(create, config, { signal, timeout = 15000, onError, onResume, onRecover, manual = false } = {}) {
   let player, settled = false, disposed = false, failed = false, assetsReady = false, cancelTimer, frameTimer, resolve, reject;
+  let frames = 0;
+  const started = globalThis.performance?.now?.() ?? Date.now();
   const ready = new Promise((ok, fail) => { resolve = ok; reject = fail; });
   const finish = (error = null) => {
     if (settled) return;
@@ -80,6 +82,15 @@ export function loadPlayer(create, config, { signal, timeout = 15000, onError, o
       finally { dispose(); }
     });
   };
+  const timeoutState = () => {
+    const assets = player?.assetManager, gl = player?.context?.gl;
+    const count = (fn) => { try { return typeof fn === "function" ? fn.call(assets) : null; } catch { return null; } };
+    return { ms: Math.round((globalThis.performance?.now?.() ?? Date.now()) - started), player: !!player, assetsReady,
+      loaded: count(assets?.getLoaded), toLoad: count(assets?.getToLoad), errors: count(assets?.hasErrors) ? Object.keys(count(assets?.getErrors) || {}) : [],
+      frames, active: lifecycle.active(), recovering: lifecycle.recovering(), contextLost: !!gl?.isContextLost?.(),
+      canvas: player?.canvas ? `${player.canvas.width}x${player.canvas.height}` : null,
+      page: globalThis.document?.visibilityState ?? null };
+  };
   if (signal?.aborted) { dispose(); return { ready, dispose, player: null }; }
   try {
     const hooks = Object.fromEntries(["frame", "update", "draw", "updateWorldTransform"].filter((key) => config[key])
@@ -103,7 +114,9 @@ export function loadPlayer(create, config, { signal, timeout = 15000, onError, o
     signal?.addEventListener("abort", dispose, { once: true });
     if (disposed) player?.dispose(); // a synchronous constructor callback failed
     if (!settled) {
-      const expired = () => fail(new Error("Spine load timed out"), "load timeout");
+      // what a timeout reached, for the error report: the runtime's downloads, its success hook, frames drawn, the
+      // context and the page (BL-129)
+      const expired = () => fail(new Error(`Spine load timed out ${JSON.stringify(timeoutState())}`), "load timeout");
       if (manual) {
         const timer = setTimeout(expired, timeout);
         cancelTimer = () => clearTimeout(timer);
@@ -113,6 +126,7 @@ export function loadPlayer(create, config, { signal, timeout = 15000, onError, o
       // animation loop or resuming continuous playback in a background window.
       const render = () => {
         if (settled || disposed || failed || signal?.aborted || (manual && assetsReady)) return;
+        frames += 1;
         if ((manual || !lifecycle.active()) && !lifecycle.recovering()) {
           try {
             if (manual) player.drawFrame(false);
