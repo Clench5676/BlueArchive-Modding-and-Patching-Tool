@@ -32,7 +32,7 @@ from ..catalog.models import CoreMap
 from ..errors import ServiceError
 from ..filelock import file_lock
 from ..gameassets.cabs import CabIndex
-from ..gameassets.discovery import cab_names
+from ..gameassets.discovery import cab_names, may_hold_model_root, own_bundle
 from ..gameassets.preview_reads import PreviewReads
 from ba_modding_toolkit.i18n import t
 from ..logging_utils import log_failure
@@ -4016,8 +4016,9 @@ class ModLibrary:
 
     def _costume_files(self, other: str, pin: Pin) -> tuple[str, list[Path], list[Path]]:
         """Another variant's model as a costume source: its dev name, the game files that hold its prefab and every
-        game file of its own (the model slot; for a variant with only a field-mode model, the field character bundles,
-        which hold other students' field models as well)."""
+        game file of its own (the model slot; for a variant with a model but no slot, the field character bundles,
+        which hold other students' field models as well, and the parts of its own dependency bundles that can hold a
+        story-only or UI-only model)."""
         variant = self._variant(other)
         core = getattr(variant, "model", None)
         if core:
@@ -4028,8 +4029,8 @@ class ModLibrary:
         dev = getattr(variant, "field_model", None)
         if dev:
             names = self._names(pin)
-            files = sorted((path for name, path in names.items() if name.startswith("field-character-_mxload")),
-                           key=lambda path: path.name)
+            files = sorted((path for name, path in names.items() if name.startswith("field-character-_mxload")
+                            or (own_bundle(name, dev) and may_hold_model_root(name))), key=lambda path: path.name)
             if files:
                 return dev.lower(), files, files
         raise ServiceError("game_file_not_found", variant=other)

@@ -30,7 +30,7 @@ from UnityPy.helpers.MeshHelper import MeshHandler
 from UnityPy.helpers.PackedBitVector import reshape, unpack_floats, unpack_ints
 
 from ..texture_guard import texture_image
-from .discovery import cab_names
+from .discovery import cab_names, own_bundle
 from .errors import AssetNotFound
 from .unity import open_bundle
 
@@ -44,6 +44,9 @@ FALLBACK_IDLES = ("Normal_Idle", "Stand_Idle", "Idle")
 PREFAB_KINDS = {"echelon": "Echelon_{}", "battle": "{}", "cafe": "Cafe_{}", "strategy": "Strategy_{}",
                 # field-mode players (event and story variants with no battle model), Animancer-driven
                 "field": "Field_Player_{}", "field_nonweapon": "Field_Player_{}_NonWeapon"}
+# field-mode NPCs, named by the character's id and a description (Field_NPC_NP0060_Justice_Student, one per weapon for
+# NP0143: _AR_Weapon, _SG_Weapon, _SR_Weapon), in the field character bundles beside the field players
+NPC_PREFAB = re.compile(r"field_npc_((?:ch|np)\d{4})(?:_\w+)?", re.IGNORECASE)
 # the viewer's shading model for a shader, by name prefix (variants such as -Inline, -Transparent or -NoOutline share
 # their base shader's lighting); the first match wins
 SHADER_KINDS = (
@@ -552,6 +555,7 @@ class BundleGraph:
         self.objects: dict[tuple[str, int], Any] = {}
         self.trees: dict[tuple[str, int], Any] = {}
         self.loaded: list[str] = []
+        self.envs: dict[str, Any] = {}  # the loaded bundles' environments, by path (their containers)
         # Missing external CABs can arrive later without changing any already-read
         # file. Partial exports remain usable, but cannot be persisted as complete.
         self.missing_cabs: set[str] = set()
@@ -567,6 +571,7 @@ class BundleGraph:
         self.objects.clear()
         self.trees.clear()
         self.locations.clear()
+        self.envs.clear()
         self._unresolved.clear()
         self._stack.close()
 
@@ -577,6 +582,7 @@ class BundleGraph:
             return None
         self.loaded.append(path)
         env = self._stack.enter_context(self.opener(Path(path)))
+        self.envs[path] = env
         for obj in env.objects:
             self.objects[_key(obj)] = obj
             self.locations[obj.assets_file.name.lower()] = path
@@ -730,12 +736,100 @@ def _prefabs(graph: BundleGraph, bundles: Iterable[Path]) -> dict[str, Any]:
     """Prefab roots of the prefab bundles by lower-case stem (Echelon_CH0242, CH0242, ...)."""
     found = {}
     for path in bundles:
-        env = graph.add(path)
+        graph.add(path)
+        env = graph.envs.get(str(path))  # also when an earlier lookup loaded it
         for name, pointer in (env.container.items() if env is not None else ()):
             lower = name.lower()
             if lower.endswith(".prefab") and "/character/" in lower:
                 found[lower.rsplit("/", 1)[-1][:-7]] = pointer
     return found
+
+
+def npc_prefab(stems: Iterable[str], dev: str) -> str | None:
+    """The field NPC prefab of ``dev`` (a lower-case id such as np0060) among lower-case prefab stems: one with a halo
+    before its ``_NoHalo`` copy, then the first by name (NP0143's AR weapon before its SG and SR ones)."""
+    dev = dev.lower()
+    hits = [stem for stem in stems if (match := NPC_PREFAB.fullmatch(stem)) and match.group(1).lower() == dev]
+    return min(hits, key=lambda stem: ("nohalo" in stem.lower(), stem.lower()), default=None)
+
+
+def _subtree_renderers(graph: BundleGraph, transform: Any) -> int:
+    """The renderers (skinned and static) at or below a Transform."""
+    count, stack = 0, [transform]
+    while stack:
+        tr = stack.pop()
+        tree = graph.tree(tr)
+        go = graph.deref(tr, tree.get("m_GameObject"))
+        if go is not None:
+            count += sum(1 for c in graph.tree(go)["m_Component"]
+                         if (obj := graph.deref(go, c["component"])) is not None
+                         and obj.type.name in ("SkinnedMeshRenderer", "MeshRenderer"))
+        stack.extend(child for child in (graph.deref(tr, pointer) for pointer in tree.get("m_Children", []))
+                     if child is not None)
+    return count
+
+
+def asset_root(graph: BundleGraph, bundles: Iterable[Path], dev: str | None = None) -> tuple[Any, str] | None:
+    """The model kept in a character's or NPC's own dependency bundles (``assets-_mx-npcs|characters-<dev>-
+    _mxdependency-*``; with ``dev``, only those of ``bundles``) for a variant the game shows only in a story cutscene
+    or a UI scene (Ayame's story forms, Arona): the root GameObject of a container asset with renderers below it, as
+    (root, container path); the first of :func:`asset_roots`."""
+    found = asset_roots(graph, bundles, dev)
+    return (found[0][1], found[0][2]) if found else None
+
+
+def asset_roots(graph: BundleGraph, bundles: Iterable[Path], dev: str | None = None) -> list[tuple[tuple, Any, str]]:
+    """The roots :func:`asset_root` chooses from, best first, as (rank, root, container path). A prefab comes before
+    an imported model (the prefab carries the materials the game assigns), a root with an Animator before one
+    without, then the most renderers, then the name; the ranks of several bundles compare the same way."""
+    found: list[tuple[tuple, Any, str]] = []
+    seen: set[tuple[str, int]] = set()
+    for path in bundles:
+        if dev is not None and not own_bundle(Path(path).name, dev):
+            continue
+        graph.add(path)
+        env = graph.envs.get(str(path))
+        for name, pointer in (env.container.items() if env is not None else ()):
+            lower = name.lower()
+            if not lower.endswith((".prefab", ".fbx")):
+                continue
+            try:
+                go = pointer.deref()
+            except (ValueError, KeyError, TypeError):
+                continue
+            if go is None or go.type.name != "GameObject" or _key(go) in seen:
+                continue
+            seen.add(_key(go))
+            transform = graph.component(go, "Transform")
+            if transform is None or graph.tree(transform).get("m_Father", {}).get("m_PathID"):
+                continue
+            renderers = _subtree_renderers(graph, transform)
+            if renderers:
+                animator = graph.component(go, "Animator") is not None
+                stem = graph.tree(go)["m_Name"].lower()
+                found.append(((not lower.endswith(".prefab"), not animator, -renderers, stem), go, name))
+    return sorted(found, key=lambda entry: entry[0])
+
+
+def model_root(graph: BundleGraph, bundles: Iterable[Path], dev: str, prefab: str = "echelon") -> tuple[Any, str, str]:
+    """The prefab to show of ``dev`` in ``bundles``, as (root GameObject, its name, its kind): the ``prefab`` kind of
+    :data:`PREFAB_KINDS` where there is one, else the first of the others (Echelon, battle, cafe, strategy, field
+    player), else a field NPC prefab (kind ``npc``), else a model in the bundles of its own (kind ``asset``)."""
+    bundles = list(bundles)
+    prefabs = _prefabs(graph, bundles)
+    for kind in [prefab, *(k for k in PREFAB_KINDS if k != prefab)]:
+        pointer = prefabs.get(PREFAB_KINDS[kind].format(dev).lower())
+        if pointer is not None:
+            root = pointer.deref()
+            return root, root.peek_name(), kind
+    stem = npc_prefab(prefabs, dev)
+    if stem is not None:
+        root = prefabs[stem].deref()
+        return root, root.peek_name(), "npc"
+    found = asset_root(graph, bundles, dev)
+    if found is not None:
+        return found[0], graph.tree(found[0])["m_Name"], "asset"
+    raise AssetNotFound(("model", dev))
 
 
 class _Exporter:
@@ -1035,6 +1129,25 @@ class _Exporter:
                 clips.append(clip)
         return clips
 
+    def bound_clips(self, graph: BundleGraph, bundles: Iterable[Path]) -> list[Any]:
+        """The clips stored in ``bundles`` that move this hierarchy, most bound nodes first (a model of a story
+        cutscene or a UI scene has no controller; its bundles hold its own clips beside a prop's, such as Arona's
+        sack)."""
+        paths = {str(path) for path in bundles}
+        by_hash = {zlib.crc32(path.encode("utf-8")) for path in self.path_of.values()}
+        scored = []
+        for obj in list(graph.objects.values()):
+            if obj.type.name != "AnimationClip" or graph.locations.get(obj.assets_file.name.lower()) not in paths:
+                continue
+            try:
+                bindings = obj.read_typetree()["m_ClipBindingConstant"]["genericBindings"]
+            except (KeyError, TypeError, ValueError):
+                continue
+            bound = len({b["path"] for b in bindings} & by_hash)
+            if bound:
+                scored.append((-bound, obj.peek_name() or "", obj))
+        return [obj for *_, obj in sorted(scored, key=lambda entry: entry[:2])]
+
     def animations(self, clips: list[Any], wanted: Iterable[str]) -> None:
         glb = self.glb
         by_hash = {zlib.crc32(path.encode("utf-8")): index for index, path in self.path_of.items()}
@@ -1129,29 +1242,25 @@ class _Exporter:
 def export_chibi(graph: BundleGraph, bundles: Iterable[Path], dev: str, *, prefab: str = "echelon",
                  clips: Iterable[str] = DEFAULT_CLIPS) -> bytes:
     """Export one chibi to GLB bytes. ``bundles`` are the prefab bundles of ``dev``; the prefab is the Echelon
-    (formation) one where there is one, else the battle, cafe or strategy one, else a field-mode player (an event or
-    story variant with no battle model), played with the clips its FieldAnimancerController lists."""
-    prefabs = _prefabs(graph, bundles)
-    root, name = None, None
-    for kind in [prefab, *(k for k in PREFAB_KINDS if k != prefab)]:
-        pointer = prefabs.get(PREFAB_KINDS[kind].format(dev).lower())
-        if pointer is not None:
-            root = pointer.deref()
-            name = root.peek_name()
-            break
-    if root is None:
-        raise AssetNotFound(("model", dev))
+    (formation) one where there is one, else the battle, cafe or strategy one, else a field-mode player or NPC (an
+    event or story variant with no battle model), played with the clips its FieldAnimancerController lists, else a
+    model of its own dependency bundles (:func:`asset_root`; ``bundles`` are those bundles), played with an idle among
+    their clips that moves it, if any, or shown in its stored pose."""
+    bundles = list(bundles)
+    root, name, kind = model_root(graph, bundles, dev, prefab)
     exporter = _Exporter(graph, dev)
     exporter.visit(root, None, "", True)
     exporter.set_aside_ex_only()
     exporter.meshes()
-    exporter.glb.json["extras"] = exporter.extras(name)
+    exporter.glb.json["extras"] = {**exporter.extras(name), **({"source": kind} if kind in ("npc", "asset") else {})}
     if exporter.animancer is not None:
         # a field prefab lists its clips itself; its bundle holds other students' prefabs and controllers
         listed = graph.tree(exporter.animancer).get("animationClips", [])
         chosen = [c for c in (graph.deref(exporter.animancer, p) for p in listed) if c is not None]
+    elif kind == "asset":
+        chosen = exporter.bound_clips(graph, bundles)
     else:
-        chosen = exporter.controller_clips(prefabs)
+        chosen = exporter.controller_clips(_prefabs(graph, bundles))
     exporter.animations(chosen, clips)
     data = exporter.glb.finish()
     logger.debug("model %s (%s): %d bundles, %d KB", dev, name, len(graph.loaded), len(data) // 1024)
