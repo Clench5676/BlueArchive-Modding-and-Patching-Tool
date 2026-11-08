@@ -25,9 +25,11 @@ def describe(core: str, entries: dict, students: dict) -> tuple[str, dict, dict]
     prefix = person
     entry = entries.get(PEOPLE[person]) if person else None
     if entry is None:
+        # a name as a prefix only from three letters: two ("ui" for Ui) cannot tell a person from a word in asset names
+        # (ui_set holds the raid and world boss banners), so such a core keeps its own entry
         matches = [(alias.lower(), entry) for key, entry in entries.items()
                    for alias in [key, *entry.get("core_aliases", [])]
-                   if lower == alias.lower() or lower.startswith(alias.lower() + "_")]
+                   if lower == alias.lower() or (len(alias) >= 3 and lower.startswith(alias.lower() + "_"))]
         if matches:
             prefix, entry = max(matches, key=lambda item: len(item[0]))
             person = next((name for name, key in PEOPLE.items() if entries.get(key) is entry), None)
