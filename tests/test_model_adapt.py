@@ -80,13 +80,14 @@ def _slot(files, dev):
 
 
 @official
-@pytest.mark.parametrize("target,source,field,parts", [
-    ("hina_original", "np0009", True, 1),            # Hina <- Hina (Pajamas), a field-mode model
-    ("ch0172", "np0283", True, 1),                    # Niko <- Niko (FOX EATS): her separate hands go
-    ("hoshino_original", "hoshino_swimsuit", False, 3),  # a three-part costume: two renderers added
-    ("hoshino_swimsuit", "hoshino_original", False, 1),  # the swimsuit's own extra parts draw nothing
+@pytest.mark.parametrize("target,source,field,parts,hem", [
+    ("hina_original", "np0009", True, 1, "blend 0.5"),         # Hina <- Hina (Pajamas), a field-mode model
+    ("ch0172", "np0283", True, 1, "blend 0.5"),                 # Niko <- Niko (FOX EATS): her separate hands go
+    ("hoshino_original", "hoshino_swimsuit", False, 3, "rigid"),  # a three-part costume: two renderers added
+    ("hoshino_swimsuit", "hoshino_original", False, 1, "rigid"),  # the swimsuit's own extra parts draw nothing
+    ("ch0186", "mari_original", False, 1, "fit 0.5"),           # Mari (Track) <- Mari: a compressed mesh
 ])
-def test_official_costume_on_a_slot(view, tmp_path, target, source, field, parts):
+def test_official_costume_on_a_slot(view, tmp_path, target, source, field, parts, hem):
     from ba_modding_toolkit.bundle import Bundle
     from ba_modding_toolkit.models import SaveOptions
     from ba_modding_toolkit.naming import parse_filename
@@ -103,6 +104,15 @@ def test_official_costume_on_a_slot(view, tmp_path, target, source, field, parts
                       source_dev=source, open_writable=Bundle.load)
     assert result.parts == parts
     assert result.plan.stretch <= max(1.5 * result.plan.own, result.plan.own + 1.0)
+    # the hem (BL-118): less pass-through than rigid weights, no clip 5 points worse, stretch within the limit
+    hems = result.hems
+    assert hems.rule == hem, hems.summary()
+    if hem != "rigid":
+        rigid, chosen = hems.scores[0], hems.score(hem)
+        assert chosen.mean < rigid.mean
+        assert all(chosen.deep[clip] <= rigid.deep[clip] + 5 for clip in rigid.deep)
+        assert chosen.stretch <= max(hems.limit, rigid.stretch)
+        assert any(change is not None for change in hems.parts)
     out = tmp_path / "out"
     out.mkdir()
     for path, bundle in result.changed.items():
@@ -129,7 +139,13 @@ def test_official_costume_on_a_slot(view, tmp_path, target, source, field, parts
     s = ma.Skeleton.of(graph, s_prefabs[ma.choose_prefab(s_prefabs, source)].deref())
     s_parts = [p for p in ma.roles(s, None) if p.role in ("primary", "costume")]
     s_rest, t_rest = s.world(), t.world()
-    drawn, empty = [], 0
+    # the hem's weights by slot bone path, in the order adapt takes the parts (the primary first)
+    official = BundleGraph(index)
+    o_prefabs = _prefabs(official, [p for p in slot if p.name.startswith("character-")])
+    t0 = ma.Skeleton.of(official, o_prefabs[ma.choose_prefab(o_prefabs, target)].deref())
+    ordered = [p for p in s_parts if p.role == "primary"] + [p for p in s_parts if p.role == "costume"]
+    changes = {p.mesh.peek_name(): change for p, change in zip(ordered, hems.parts) if change is not None}
+    drawn, empty, reweighted = [], 0, 0
     for node, renderer in t.renderers:
         tree = graph.tree(renderer)
         mesh = graph.deref(renderer, tree["m_Mesh"])
@@ -145,7 +161,19 @@ def test_official_costume_on_a_slot(view, tmp_path, target, source, field, parts
         want = (np.c_[ma.skin_of(part.mesh).vertices, np.ones(len(skin.vertices))] @ s_rest[part.node].T)[:, :3]
         assert np.abs(posed - want).max() < 1e-4
         drawn.append(mesh.peek_name())
+        change = changes.get(mesh.peek_name())
+        if change is not None:  # the written skin is the hem's, merged per slot bone (compressed: 1/31 steps)
+            rows, nodes, weights = change
+            for row, n_row, w_row in zip(rows, nodes, weights):
+                got, wanted = {}, {}
+                for j, w in zip(skin.joints[row], skin.weights[row]):
+                    got[t.nodes[bones[j]].path] = got.get(t.nodes[bones[j]].path, 0.0) + w
+                for n, w in zip(n_row, w_row):
+                    wanted[t0.nodes[n].path] = wanted.get(t0.nodes[n].path, 0.0) + w
+                assert all(abs(got.get(k, 0.0) - wanted.get(k, 0.0)) <= 1 / 31 for k in set(got) | set(wanted))
+            reweighted += 1
     assert sorted(drawn) == sorted(p.mesh.peek_name() for p in s_parts)
+    assert reweighted == len(changes)
     assert empty == {"ch0172": 1, "hoshino_swimsuit": 2}.get(target, 0)
     data = export_chibi(BundleGraph(adapted), prefab_files, target)
     doc = json.loads(data[20:20 + struct.unpack_from("<I", data, 12)[0]])
