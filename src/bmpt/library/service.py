@@ -4065,9 +4065,12 @@ class ModLibrary:
             return {cab: str(self._official_or_current(Path(path), pin)) for cab, path in cabs.resolve(wanted, hint).items()}
 
         target_dev = self._core_map(pin).slot(core_of(targets[0].name))
-        result = adapt(index=index, resolver=resolver, target_files=list(staged.values()),
-                       target_dev=target_dev, source_files=[p for p in sources if p.name in chosen],
-                       source_dev=dev, open_writable=Bundle.load)
+        from ..gameassets.service import model_lock
+
+        with model_lock("costume"):
+            result = adapt(index=index, resolver=resolver, target_files=list(staged.values()),
+                           target_dev=target_dev, source_files=[p for p in sources if p.name in chosen],
+                           source_dev=dev, open_writable=Bundle.load)
         output = directory / "output"
         output.mkdir(parents=True, exist_ok=True)
         reverse = {value: key for key, value in staged.items()}

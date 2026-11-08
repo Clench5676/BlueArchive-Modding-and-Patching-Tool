@@ -40,6 +40,13 @@ _LAYOUT = "layout-v5/"
 _ATLASES = "atlases-v2/"
 # One model export at a time in the process: an export holds the path locks of every bundle it reads
 _MODEL_LOCK = threading.Lock()
+
+
+def model_lock(what: str) -> Any:
+    """The model lock, for every reader that holds several bundles open at once (exports, layouts, particles, costume
+    builds): each keeps the path lock of every bundle it read until it ends, so two of them at a time could wait on
+    each other's bundles. Taken after the library's lock, never before it."""
+    return spans.held(f"model-lock.{what}", _MODEL_LOCK, hold=True)
 _SPRITE_FIELDS = ("x", "y", "width", "height", "borderLeft", "borderRight", "borderTop",
                   "borderBottom", "paddingLeft", "paddingRight", "paddingTop", "paddingBottom")
 
