@@ -27,23 +27,23 @@ const options = (server, extra = {}) => ({ request: server.request, digest: asyn
 
 test("preview disk access waits for settings and cached lossless bytes survive a new page", async () => {
   const server = backend(), first = createPreviewCache(options(server));
-  assert.equal(first.ticket("source"), null);
+  assert.equal(first.ticket("source", "spine"), null);
   assert.equal(await first.get(null), null); assert.equal(await first.put(null, "blob:x"), false);
   assert.equal(server.calls.length, 0);
   configured(first);
-  assert.equal(await first.put(first.ticket("revision+camera"), "blob:x"), true);
+  assert.equal(await first.put(first.ticket("revision+camera", "spine"), "blob:x"), true);
   const second = createPreviewCache(options(server)); configured(second);
-  assert.equal(await second.get(second.ticket("revision+camera")), "blob:persisted");
-  assert.equal(await second.get(second.ticket("new-revision+camera")), null);
+  assert.equal(await second.get(second.ticket("revision+camera", "spine")), "blob:persisted");
+  assert.equal(await second.get(second.ticket("new-revision+camera", "spine")), null);
 });
 
 test("preview cache defaults on after settings load and preserves explicit opt-out", async () => {
   const server = backend(), store = createPreviewCache(options(server));
   store.configure({ previewCacheGeneration: "one" });
-  assert.ok(store.ticket("default-on"));
-  assert.equal(await store.put(store.ticket("default-on"), "blob:x"), true);
+  assert.ok(store.ticket("default-on", "spine"));
+  assert.equal(await store.put(store.ticket("default-on", "spine"), "blob:x"), true);
   store.configure({ previewCache: false, previewCacheGeneration: "one" });
-  assert.equal(store.ticket("saved-off"), null);
+  assert.equal(store.ticket("saved-off", "spine"), null);
   const calls = server.calls.length;
   assert.equal(await store.put(null, "blob:x"), false);
   assert.equal(server.calls.length, calls);
@@ -57,10 +57,10 @@ test("stalled optional cache RPCs time out and fall back without blocking render
     },
   }));
   configured(store);
-  assert.equal(await store.get(store.ticket("source")), null);
+  assert.equal(await store.get(store.ticket("source", "spine")), null);
   assert.equal(await store.modelTicket("source", "student", "live"), null);
-  assert.equal(await store.assetTicket(store.ticket("source"), ["/asset/art/bg/BG_Cafe.png"]), null);
-  assert.equal(await store.put(store.ticket("source"), "blob:x"), false);
+  assert.equal(await store.assetTicket(store.ticket("source", "spine"), ["/asset/art/bg/BG_Cafe.png"]), null);
+  assert.equal(await store.put(store.ticket("source", "spine"), "blob:x"), false);
   assert.deepEqual(calls, [["preview.cacheGet", 5], ["preview.modelRevision", 5], ["preview.assetRevision", 5], ["preview.cachePut", 5]]);
 });
 
@@ -70,7 +70,7 @@ test("clear or opt-out prevents a pending thumbnail upload from restoring old ca
     const store = createPreviewCache(options(server, { fetchImage: async () => ({
       blob: () => new Promise((resolve) => { release = () => resolve(new Blob([png], { type: "image/png" })); }),
     }) })); configured(store);
-    const pending = store.put(store.ticket("old"), "blob:x");
+    const pending = store.put(store.ticket("old", "spine"), "blob:x");
     await new Promise(setImmediate);
     if (clear) server.clear();
     configured(store, clear ? "two" : "one", clear);
@@ -82,21 +82,21 @@ test("an obsolete read cannot roll back a newer clear generation", async () => {
   const server = backend(); let release;
   const store = createPreviewCache(options(server, { request: () => new Promise((resolve) => { release = resolve; }) }));
   configured(store);
-  const pending = store.get(store.ticket("old")); await new Promise(setImmediate);
+  const pending = store.get(store.ticket("old", "spine")); await new Promise(setImmediate);
   configured(store, "two");
   release({ allowed: true, generation: "one", data: btoa(String.fromCharCode(...png)) });
   assert.equal(await pending, null);
-  assert.equal(store.ticket("new").generation, "two");
+  assert.equal(store.ticket("new", "spine").generation, "two");
 });
 
 test("oversized PNGs and cancelled reads do not alter picture quality or publish a result", async () => {
   const server = backend(), store = createPreviewCache(options(server, { fetchImage: async () => ({
     blob: async () => new Blob([new Uint8Array(2 * 1024 * 1024 + 1)], { type: "image/png" }),
   }) })); configured(store);
-  assert.equal(await store.put(store.ticket("large"), "blob:large"), false);
+  assert.equal(await store.put(store.ticket("large", "spine"), "blob:large"), false);
   assert.equal(server.files.size, 0);
   const controller = new AbortController(); controller.abort();
-  assert.equal(await store.get(store.ticket("a"), { signal: controller.signal }), null);
+  assert.equal(await store.get(store.ticket("a", "spine"), { signal: controller.signal }), null);
   assert.equal(server.calls.length, 0);
 });
 
@@ -115,9 +115,9 @@ test("model thumbnail identity includes exact validated GLB bytes", async () => 
 test("background and framing dependencies invalidate stills and are rechecked after capture", async () => {
   const server = backend(), store = createPreviewCache(options(server)); configured(store);
   const paths = ["/asset/art/bg/collection.png", `/asset/spine/lobby/core/${"f".repeat(64)}/framing.json`];
-  const a = await store.assetTicket(store.ticket("same-spine"), paths);
+  const a = await store.assetTicket(store.ticket("same-spine", "spine"), paths);
   server.revision("c".repeat(64));
-  const b = await store.assetTicket(store.ticket("same-spine"), paths);
+  const b = await store.assetTicket(store.ticket("same-spine", "spine"), paths);
   assert.notEqual(a.key, b.key);
   assert.equal(await store.put(a, "blob:old-background"), false);
   assert.equal(await store.put(b, "blob:current-background"), true);
@@ -134,4 +134,17 @@ test("a persisted model still avoids renderer creation and does not rewrite cach
   assert.equal(await thumbnail("student", "live", { version: "source" }), "blob:cached-model");
   assert.equal(reads, 1);
   await new Promise(setImmediate);
+});
+
+test("a still is kept only under the renderer that drew it, and the backend is told which", async () => {
+  const server = backend(), store = createPreviewCache(options(server)); configured(store);
+  assert.equal(store.ticket("source"), null, "a ticket names its renderer");
+  assert.equal(await store.put(store.ticket("source", "spine"), "blob:x"), true);
+  assert.equal(await store.get(store.ticket("source", "spine")), "blob:persisted");
+  const model = await store.modelTicket("source", "hina", "official");
+  assert.equal(model.renderer, "model");
+  assert.equal(await store.put(model, "blob:x"), true);
+  const sent = server.calls.filter(([method]) => method === "preview.cacheGet" || method === "preview.cachePut");
+  assert.deepEqual(sent.map(([method, args]) => [method, args.renderer]),
+    [["preview.cachePut", "spine"], ["preview.cacheGet", "spine"], ["preview.cachePut", "model"]]);
 });
