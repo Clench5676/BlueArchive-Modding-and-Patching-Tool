@@ -927,6 +927,23 @@ copies where available. Enable Mods, drift repair, adoption, removal and restore
 Switch 3D Model offers Mods from any of the slot's cores. Filenames and the library identity retain the physical core.
 A source-change event for any slot core refreshes the detail page and its model preview.
 
+Switch 3D Model also offers the student's other models as costumes (`variant:<key>`), field-mode models included
+(`gameassets/model_adapt.py`). The slot keeps its skeleton, clips, weapon, halo and props; the source's costume
+renderers (their meshes with bindposes rebound onto the slot's skeleton, their materials and textures) are added as
+new objects to the slot's own bundles, and the slot's prefabs draw them: the primary part in the slot's primary renderer,
+further parts in renderers added beside it, the slot's other costume parts and alternates with no mesh. Existing
+objects never change in place, since field, cutscene and other variants' bundles reference them. Roles, bone mapping
+and checks use data only (shading, rig, visibility, the slot's clips), never part names: Biped bones by name, other
+bones by structure, and each secondary group follows the slot's bones only while it stretches no more than the slot's
+own costume under the slot's clips (else it stays rigid). A pair whose checks fail is refused with `source_unsupported`.
+Apply builds through the library's build cache like any adaptation; a preview builds once per build signature into
+`built/previews/<signature>` (the newest four kept; Clear Built Mods clears them).
+
+A variant whose only model is a field-mode player prefab (`Field_Player_<dev>[_NonWeapon]` in the
+`field-character-_mxload-*` bundles: event and story costumes such as Hina (Pajamas) and Niko (FOX EATS)) gets
+`variant.field_model` (`fieldModel` in `family.get`): its 3D tab shows it with the clips its `FieldAnimancerController`
+lists, and it is offered as a costume; it has no slot, so it switches nothing itself.
+
 ## Game watch
 
 ### Checks before a write
@@ -1500,7 +1517,7 @@ is missing for now) is there: its link stays and the original stays not repairab
 | `/asset/spine/lobby/<core>/lobby.json` (prefab layout, touch boxes, clips, idle pools, sound events, post-processing, particle and mesh effects and sprites, page materials, pinned bones, the intro timeline (`gameassets/intro.py`); no skeleton is extracted) | heavy |
 | `/asset/spine/lobby/<core>/fx_<id>.png` (a particle, mesh, sprite or page shader texture the lobby's `fx.textures` lists) | heavy |
 | `/asset/spine/lobby/<core>/sfx_<id>.wav` (a sound clip the lobby's `sounds` list, decoded in memory) | heavy |
-| `/asset/model/<variant>.glb` (the variant's chibi, `model/gltf-binary`) | heavy |
+| `/asset/model/<variant>.glb` (the variant's chibi, `model/gltf-binary`; `?source=` `live`, `official`, `mod:<id>`, `import:<key>`, or `variant:<key>`: the slot carrying that variant's costume) | heavy |
 | `/asset/voice/<variant>/<clip>` (a lobby voice relayed from Kivo) | heavy |
 
 Thumbnails (faces, busts, expression cards, variant cards) are rendered in the page from the skeletons, in one

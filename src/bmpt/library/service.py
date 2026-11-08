@@ -41,6 +41,7 @@ from ba_modding_toolkit.models import AssetType, LogFunc, ProgressCallback
 from ba_modding_toolkit.naming import parse_filename
 from ba_modding_toolkit.searching import SEARCH_DIR_SUFFIXES, get_search_dirs
 from ba_modding_toolkit.utils import no_log
+from ba_modding_toolkit.utils.common import is_safe_file_name
 from . import profiles as profiles_mod
 from . import integrity, safety, staging
 from . import targets as resolver
@@ -73,6 +74,7 @@ logger = logging.getLogger(__name__)
 SPACE_MARGIN = 512 * 1024 * 1024  # left free on the library's volume by an Off and an adoption
 SAVE_EVERY = (10, 2.0)  # a toggle saves its unfinished list every 10 entries or 2 s
 BUILT_TEMP_MAX_AGE = 60 * 60  # seconds before an abandoned built copy can be cleared
+COSTUME_PREVIEWS = 4  # costume previews kept in built/previews (one folder per build signature)
 RECOVERY_RETRY = 60.0  # seconds before a read tries a recovery that failed (or waits) again, if the journals stay
 # a toggle's refusals that stop it: every later write would fail the same way
 STOPPING = ("game_running", "game_status_unavailable", "steam_busy", "folder_changed", "classic_open")
@@ -4005,6 +4007,115 @@ class ModLibrary:
             replacements[reverse[pair.source]] = pair.output
         return replacements
 
+    def _costume_files(self, other: str, pin: Pin) -> tuple[str, list[Path], list[Path]]:
+        """Another variant's model as a costume source: its dev name, the game files that hold its prefab and every
+        game file of its own (the model slot; for a variant with only a field-mode model, the field character bundles,
+        which hold other students' field models as well)."""
+        variant = self._variant(other)
+        core = getattr(variant, "model", None)
+        if core:
+            files = self._game_files(other, "model", pin)
+            prefabs = [path for path in files if path.name.startswith("character-")]
+            if prefabs:
+                return core.lower(), prefabs, files
+        dev = getattr(variant, "field_model", None)
+        if dev:
+            names = self._names(pin)
+            files = sorted((path for name, path in names.items() if name.startswith("field-character-_mxload")),
+                           key=lambda path: path.name)
+            if files:
+                return dev.lower(), files, files
+        raise ServiceError("game_file_not_found", variant=other)
+
+    def _costume_source(self, other: str, pin: Pin, *, preview: bool = False) -> tuple[str, list[Path]]:
+        """The dev name and the official copies of another variant's model files (the build's inputs)."""
+        dev, _, files = self._costume_files(other, pin)
+        resolve = self._official_or_current if preview else self._official_for
+        return dev, [resolve(path, pin) for path in files]
+
+    def _stage_costume(self, other: str, targets: list[Path], directory: Path, log: LogFunc, pin: Pin, *,
+                       preview: bool = False) -> dict[Path, Path]:
+        """The model slot ``targets`` (official copies) carrying the costume of ``other``'s model: changed parts built
+        into ``directory``, the others as staged official copies. Reads official bytes only: the slot's own parts, the
+        source model's files, and any other bundle the CAB index finds."""
+        from ..gameassets.model_adapt import adapt
+
+        staged = self._stage_official(targets, directory / "targets", pin, current_fallback=True)
+        dev, prefab_files, files = self._costume_files(other, pin)
+        resolve = self._official_or_current if preview else self._official_for
+        index: dict[str, Path] = {}
+        sources = [resolve(path, pin) for path in files]
+        chosen = {path.name for path in prefab_files}
+        for path in sources:
+            for cab in cab_names(path):
+                index.setdefault(cab, path)
+        for path in staged.values():
+            for cab in cab_names(path):
+                index[cab] = path
+        cabs = self._cab_index(pin)
+
+        def resolver(wanted: set[str], hint: Path | None) -> dict[str, str]:
+            return {cab: str(self._official_or_current(Path(path), pin)) for cab, path in cabs.resolve(wanted, hint).items()}
+
+        target_dev = self._core_map(pin).slot(core_of(targets[0].name))
+        result = adapt(index=index, resolver=resolver, target_files=list(staged.values()),
+                       target_dev=target_dev, source_files=[p for p in sources if p.name in chosen],
+                       source_dev=dev, open_writable=Bundle.load)
+        output = directory / "output"
+        output.mkdir(parents=True, exist_ok=True)
+        reverse = {value: key for key, value in staged.items()}
+        replacements = dict(staged)
+        for path, bundle in result.changed.items():
+            target = reverse[path]
+            ok, message = bundle.save(output / path.name, self.settings.save_options(self.settings.crc_needed(target)))
+            if not ok:
+                raise ServiceError("mod_apply_failed", file=target)
+            replacements[target] = output / path.name
+        return replacements
+
+    @_serialized
+    def costume_preview(self, variant_key: str, other: str, pin: Pin | None = None) -> list[Path]:
+        """The parts of a variant's model slot carrying another variant's costume, for a 3D preview: built once per
+        build signature into built/previews/<signature> and kept for the newest few (the export cache keys on their
+        paths). Reads official bytes where there are any, else the current ones, like the other previews."""
+        pin = self._current(pin)
+        variant = self._variant(variant_key)
+        if other == variant_key or self._variant(other).family != variant.family:
+            raise ServiceError("source_unsupported", source=f"variant:{other}")
+        targets = self._game_files(variant_key, "model", pin)
+        if not targets:
+            raise ServiceError("game_file_not_found", variant=variant_key)
+        _, inputs = self._costume_source(other, pin, preview=True)
+        try:
+            signature = self._build_signature(inputs, targets, pin)
+        except ServiceError as error:
+            if error.code != "original_unavailable":
+                raise
+            signature = hashlib.sha1(repr(("current", [(p.name, p.stat().st_size, p.stat().st_mtime_ns)
+                                                       for p in [*inputs, *targets]])).encode()).hexdigest()
+        folder = self.root / "built" / "previews" / signature
+        done = folder / "parts.json"
+        if done.is_file():
+            try:
+                names = json.loads(done.read_text())
+                parts = [folder / name for name in names if is_safe_file_name(name)]
+                if parts and all(path.is_file() for path in parts):
+                    os.utime(folder)
+                    return parts
+            except (OSError, ValueError):
+                pass
+        with temporary_directory(prefix=devmode.LIBRARY_STAGING_PREFIX) as temporary:
+            replacements = self._stage_costume(other, targets, Path(temporary) / "model", no_log, pin, preview=True)
+            built = [path for target, path in replacements.items() if path.parent.name == "output"]
+            folder.mkdir(parents=True, exist_ok=True)
+            for path in built:
+                atomic_copy(path, folder / path.name)
+            done.write_text(json.dumps([path.name for path in built]))
+        previews = sorted((p for p in folder.parent.iterdir() if p.is_dir()), key=lambda p: p.stat().st_mtime, reverse=True)
+        for stale in previews[COSTUME_PREVIEWS:]:
+            remove_tree(stale)
+        return [folder / path.name for path in built]
+
     def _install_direct(self, record: dict[str, Any], targets: list[Path], work: Path, log: LogFunc,
                         progress: ProgressCallback | None, pin: Pin) -> dict[Path, Path]:
         sources = {path.name: path for path in self._paths(record)}
@@ -4165,11 +4276,26 @@ class ModLibrary:
                     else:  # a lobby mod of another core of this variant: not offered, never written there
                         raise ServiceError("game_file_outside_resources", file=targets[0])
                     kinds = {record["kind"]: cores[0]}
+                elif source.startswith("variant:") and kind == "model":
+                    # another variant's costume put on this variant's model slot (gameassets.model_adapt)
+                    other = source[8:]
+                    if other == variant_key or self._variant(other).family != variant.family:
+                        raise ServiceError("source_unsupported", source=source)
+                    own = getattr(variant, "model", None)
+                    targets = self._game_files(variant_key, "model", pin)
+                    if not own or not targets:
+                        raise ServiceError("game_file_not_found", variant=variant_key)
+                    kinds = {"model": own.lower()}
+                    self._configure(pin, variant_key, kinds, source)
+                    if not on:
+                        return self._defer(pin, variant_key, kinds, source)
+                    _, inputs = self._costume_source(other, pin)
+                    replacements = self._cached_build(inputs, targets, pin,
+                        lambda: self._stage_costume(other, targets, work / "model", log, pin), build_keys)
                 elif source.startswith("variant:"):
                     other = source[8:]
                     self._variant(other)
                     if kind == "model":
-                        # Mesh names alone cannot adapt a prefab's rig, materials and object references.
                         raise ServiceError("source_unsupported", source=source)
                     replacements: dict[Path, Path] = {}
                     kinds = {}
@@ -4327,6 +4453,10 @@ class ModLibrary:
                         sources = self._preview(record, pin)
                         replacements = self._cached_build(sources, targets, pin,
                             lambda: self._stage_adapted(sources, targets, work / kind, log, pin), build_keys)
+                elif source.startswith("variant:") and kind == "model":
+                    _, inputs = self._costume_source(source[8:], pin)
+                    replacements = self._cached_build(inputs, targets, pin,
+                        lambda: self._stage_costume(source[8:], targets, work / kind, log, pin), build_keys)
                 elif source.startswith("variant:"):
                     other = self._core_map(pin).core(source[8:], kind)
                     sources = self._index(pin).get(other.lower(), []) if other else []
@@ -4529,6 +4659,11 @@ class ModLibrary:
             targets = index.get(own, [])
             replaced = self._replaced_parts({path.name: path for path in self._paths(record)}, targets, pin)
             return sorted(path.name for path in targets if path not in replaced)
+        if source.startswith("variant:") and self._kind(core, pin) == "model":
+            try:
+                return sorted(path.name for path in self._costume_files(source[8:], pin)[2])
+            except ServiceError:
+                return []
         if source.startswith("variant:"):
             other = self._core_map(pin).core(source[8:], self._kind(core, pin) or "spr")
             return sorted(path.name for path in index.get(other.lower(), [])) if other else []
@@ -4598,6 +4733,13 @@ class ModLibrary:
             for path in directory.glob("*.bundle"):
                 with contextlib.suppress(OSError):
                     path.unlink()
+            previews = directory / "previews"
+            if previews.is_dir():
+                for part in previews.rglob("*.bundle"):
+                    with contextlib.suppress(OSError):
+                        freed += part.stat().st_size
+                with contextlib.suppress(OSError):
+                    remove_tree(previews)
             cutoff = time.time() - BUILT_TEMP_MAX_AGE
             for path in directory.glob(".library-*"):
                 with contextlib.suppress(OSError):

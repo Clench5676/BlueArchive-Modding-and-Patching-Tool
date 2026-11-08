@@ -676,6 +676,33 @@ class GameAssets:
         """Lower-case dev names with a 3D chibi prefab bundle (character-<dev>-_mxload-*)."""
         return set(self._model_index())
 
+    def _field_index(self) -> dict[str, list[str]]:
+        """Field-mode player models (event and story variants with no battle model): lower-case dev name -> the
+        field character bundles holding ``Field_Player_<dev>[_NonWeapon]``, read from their containers."""
+        def build() -> dict[str, list[str]]:
+            out: dict[str, list[str]] = {}
+            for path in self._paths():
+                if not path.name.startswith("field-character-_mxload"):
+                    continue
+                try:
+                    with open_bundle(path) as env:
+                        names = list(env.container.keys())
+                except (ServiceError, OSError, ValueError) as error:
+                    logger.warning("Field character bundle %s unreadable: %s", path.name, error)
+                    continue
+                for name in names:
+                    match = re.fullmatch(r"Field_Player_([A-Za-z0-9_]+?)(_NonWeapon)?\.prefab", name.rsplit("/", 1)[-1])
+                    if match and "/character/" in name.lower():
+                        paths = out.setdefault(match.group(1).lower(), [])
+                        if str(path) not in paths:
+                            paths.append(str(path))
+            return out
+        return self._index("field-models", build, disk=False)
+
+    def field_model_cores(self) -> set[str]:
+        """Lower-case dev names of field-mode player models (``Field_Player_<dev>``)."""
+        return set(self._field_index())
+
     def _cab_discovery(self):
         from .cabs import CabIndex
 
@@ -699,10 +726,10 @@ class GameAssets:
         from .model import BundleGraph, export_chibi
 
         core = core.lower()
-        try:
-            bundles = [Path(path) for path in self._model_index()[core]]
-        except KeyError:
-            raise AssetNotFound(("model", core)) from None
+        listed = self._model_index().get(core) or self._field_index().get(core)
+        if not listed:
+            raise AssetNotFound(("model", core))
+        bundles = [Path(path) for path in listed]
         overrides = list(dict.fromkeys(Path(path).resolve() for path in overrides))
         # Prefabs are opened directly by the exporter; CAB overrides alone only replace their dependencies.
         slots = {(parse_filename(path.name).prefix, parse_filename(path.name).res_type): path for path in overrides}
