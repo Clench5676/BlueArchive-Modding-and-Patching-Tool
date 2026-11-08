@@ -998,3 +998,43 @@ def test_official_roster_partial_and_complete_mod_preflight(tmp_path, monkeypatc
     record_property('roster_seconds', round(elapsed, 3))
     print(f'Roster preflight: {counters}; variants={len(variants)}; sample={len(sample)}; seconds={elapsed:.3f}; full={full}')
     assert not failures, failures[:30]
+
+
+def test_costume_verdicts_are_kept_per_build_signature(model_env, monkeypatch):
+    """BL-122: a pair's verdict holds for the program and the official bytes it was judged on; the rule's refusals are
+    saved by the preview itself."""
+    from bmpt.gameassets import model_adapt
+    from bmpt.library import service
+
+    env = model_env
+    model_bundle(env.game_dir, core='hoshino_swimsuit', prefab=True, part='000', payload=b'swim prefab')
+    game = SimpleNamespace(spine_cores=lambda kind: {'hoshino_spr': [], 'hoshino_swimsuit_spr': []} if kind == 'spr' else {},
+                           collection_names=lambda: {}, model_cores=lambda: {'hoshino_original', 'hoshino_swimsuit'})
+    library = ModLibrary(env.root, Catalog(game, None), object(), env.settings, scan_allowed=lambda: True)
+    assert library.costume_verdict('hoshino', 'hoshino_swimsuit') is None
+
+    def refused(self, other, targets, directory, log, pin, *, preview=False):
+        raise model_adapt.refuse('stretch', adapted=8.84, own=5.85)
+
+    monkeypatch.setattr(ModLibrary, '_stage_costume', refused)
+    with pytest.raises(ServiceError, match='source_unsupported'):
+        library.costume_preview('hoshino', 'hoshino_swimsuit')
+    verdict = library.costume_verdict('hoshino', 'hoshino_swimsuit')
+    assert (verdict['ok'], verdict['reason'], verdict['detail']) == (
+        False, 'stretch', {'source': 'stretch', 'adapted': '8.84', 'own': '5.85'})
+    # another library over the same root reads it; a new program build judges again
+    assert ModLibrary(env.root, Catalog(game, None), object(), env.settings).costume_verdict(
+        'hoshino', 'hoshino_swimsuit')['ok'] is False
+    monkeypatch.setattr(service, '_build_version', lambda: 'next:build')
+    assert library.costume_verdict('hoshino', 'hoshino_swimsuit') is None
+    assert library.record_costume_verdict('hoshino', 'hoshino_swimsuit', True)['ok'] is True
+    assert library.costume_verdict('hoshino', 'hoshino_swimsuit')['ok'] is True
+    # bounded, newest kept; an unreadable file reads as none
+    monkeypatch.setattr(service, 'COSTUME_VERDICTS', 2)
+    for i in range(3):
+        library._save_verdict(f'signature-{i}', False, 'stretch')
+    assert sorted(library._verdicts()) == ['signature-1', 'signature-2']
+    (env.root / 'costume-verdicts.json').write_text('{not json')
+    assert library.costume_verdict('hoshino', 'hoshino_swimsuit') is None
+    with pytest.raises(ServiceError, match='source_unsupported'):
+        library.costume_verdict('hoshino', 'hoshino')

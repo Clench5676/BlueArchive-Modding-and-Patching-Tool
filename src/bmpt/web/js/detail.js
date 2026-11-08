@@ -47,7 +47,7 @@ import { ALIAS, DETAILS, aliasFrame, detailsFrame, popupContent } from "./popup-
 import { statsBox } from "./stats-box.js";
 import { CHIP, COLOUR, CONTROL, SPACE, TYPE } from "./ui-tokens.js";
 import { container, row, stack, textItem, toNode } from "./ui-grid.js";
-import { candidateStatus, detailStatus, selectionStatus, selectionError, intendedKey, isApplied, availableTab, coreOf, hasAsset, hasKind, primaryKind, appliedKey as keyOf, appliedOf, candidates as listSources, partsOf, popupMode, modelSource, previewBase, previewChanged, previewKey, sourceOf, switchKindOf } from "./switch-sources.js";
+import { candidateStatus, detailStatus, selectionStatus, selectionError, intendedKey, isApplied, availableTab, coreOf, costumeCandidates, hasAsset, hasKind, primaryKind, appliedKey as keyOf, appliedOf, candidates as listSources, partsOf, popupMode, modelSource, previewBase, previewChanged, previewKey, sourceOf, switchKindOf } from "./switch-sources.js";
 import { $, DOT, RECRUIT, S, TAN10, advanceOf, at, clone, glyphsOf, hitButton, markedLabel, off, text, widget, wrapPath } from "./util.js";
 
 const { node, sprite, label, find, rect } = NGUI;
@@ -210,10 +210,41 @@ const readFamily = (key) => rpc("family.get", { key });
 // what the switch card of a kind offers (switch-sources.js), with the names and marks the cards show: the variant's
 // own portrait or lobby and its added ones, then for the portrait the other variants' ones and their added ones
 function candidates(v = variant(), kind = "spr") {
-  return listSources(fam, v, kind).map((c) => (c.kind === "mod"
+  return listSources(fam, v, kind, costumeState.get(v.key)).map((c) => (c.kind === "mod"
     ? { ...c, label: modLabel(c.mod) }
     : { ...c, label: shortName(c.variant), recruit: c.variant.recruitable, fav: isFav(c.variant) }));
 }
+// Switch 3D Model offers another variant's costume only once that pair was built and exported for these files
+// (model.costumes, BL-122): the verdicts by variant, read when the 3D tab shows and checked to their end
+// (model.checkCostumes) in the background, or, when the switch opens first, while it waits.
+const costumeState = new Map(), costumeChecks = new Map();
+function costumesReady(v, { wait = false } = {}) {
+  const others = costumeCandidates(fam, v).map((o) => o.key);
+  if (!others.length) return Promise.resolve(false);
+  const key = `${v.key}|${others.join(",")}`;
+  let check = costumeChecks.get(key);
+  if (!check) {
+    check = (async () => {
+      const known = await rpc("model.costumes", { variant: v.key, others });
+      costumeState.set(v.key, { ...(costumeState.get(v.key) || {}), ...known });
+      const unknown = others.filter((o) => known[o] == null);
+      if (!unknown.length) return false;
+      const id = await rpc("model.checkCostumes", { variant: v.key, others: unknown });
+      const result = await waitJob(id, (p) => check.report?.(p));
+      costumeState.set(v.key, { ...(costumeState.get(v.key) || {}), ...result });
+      return true;
+    })().finally(() => costumeChecks.delete(key));
+    costumeChecks.set(key, check);
+  }
+  if (!wait) return check;
+  return Loading.task((report) => { check.report = report; return check; },
+    { label: T("progress.compatibility", { name: T("tab.model") }) });
+}
+// After a background check: the open Switch 3D Model popup lists what it found.
+function costumesChecked(v) {
+  if (open && variant() === v && popupKind === "model" && switchPopupPage === pageToken && !$("popup").hidden) void renderPopup();
+}
+
 // the kind of game file the shown tab is about, and the newest date of a kind's files
 const tabKind = () => (tab === "lobby" || tab === "model" ? tab : "spr");
 // The switch card uses the kind of the shown asset tab.
@@ -1352,6 +1383,10 @@ async function drawPopup(scroll = 0) {
 }
 async function openPopup(kind = "spr") {
   const family = fam, v = variant();
+  if (kind === "model") {
+    try { await costumesReady(v, { wait: true }); } catch (err) { console.error("Costume check failed", err); }
+    if (!open || fam !== family || variant() !== v) return;
+  }
   switchThumbnails?.cancel();
   switchThumbnails = thumbnailScope({ priority: "popup" });
   switchPopupPage = pageToken;
@@ -1677,6 +1712,10 @@ function changeInPlace(work) {
 function showTab(id) {
   if (busy || Loading.held()) return;
   tab = id;
+  if (id === "model") {
+    const v = variant();
+    void costumesReady(v).then((checked) => { if (checked) costumesChecked(v); }, (err) => console.error("Costume check failed", err));
+  }
   expanded = false;
   exprScroll = 0;
   lobbySeq = null;
@@ -1854,9 +1893,17 @@ async function showModel(v, my, alive = () => true) {
     // the official model asked for has a part with no official copy left: the install's own repair message, not
     // awaited (the left side's load has a time limit)
     if (err?.code === "original_unavailable") void overwrittenMessage(v, "model");
-    else notify(T("model.failed"), { kind: "error", error: err });
+    else if (err?.code === "source_unsupported" && v.previewSources?.model?.startsWith("variant:")
+             && !costumeRefusals.has(`${v.key}|${v.previewSources.model}`)) {
+      // a costume refused at its first build (saved before the check existed): read the family again, whose preview
+      // sources leave it out now, instead of an error
+      costumeRefusals.add(`${v.key}|${v.previewSources.model}`);
+      costumeState.set(v.key, { ...(costumeState.get(v.key) || {}), [v.previewSources.model.slice(8)]: "refused" });
+      void reload();
+    } else notify(T("model.failed"), { kind: "error", error: err });
   }
 }
+const costumeRefusals = new Set();
 function hideModel() {
   modelActions = [];
   modelAction = null;

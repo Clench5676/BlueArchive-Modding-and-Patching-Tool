@@ -55,8 +55,40 @@ FIELD_KINDS = ("Field_Player_{}", "Field_Player_{}_NonWeapon")
 
 
 def refuse(reason: str, **params: Any) -> ServiceError:
+    """A pair the rule cannot carry: ``reason`` names the failed check, ``params`` its detail (in the log and in the
+    error, for the costume verdicts and the diagnostics)."""
     logger.info("Costume adaptation refused: %s %s", reason, params)
-    return ServiceError("source_unsupported", source=reason)
+    return ServiceError("source_unsupported", source=reason, **{key: str(value) for key, value in params.items()})
+
+
+def _shader_name(shader: Any) -> str:
+    try:
+        return shader.read_typetree()["m_ParsedForm"]["m_Name"] or shader.peek_name()
+    except Exception:  # the name is detail for the diagnostics only
+        return shader.peek_name() or ""
+
+
+def loaded_with(graph: BundleGraph, prefab_files: Iterable[Path], slot: Mapping[str, str]) -> set[str]:
+    """The CABs the game loads with the target's prefab: its own files', and every CAB a loaded file references,
+    followed through the slot's files and whatever else is open (a bundle's catalog dependencies come from these
+    references). The slot's files are opened for it."""
+    for path in sorted(set(slot.values())):
+        graph.add(path)
+    files: dict[str, Any] = {}
+    for obj in graph.objects.values():
+        files.setdefault(obj.assets_file.name.lower(), obj.assets_file)
+    prefabs = {Path(p) for p in prefab_files}
+    seen: set[str] = set()
+    todo = [cab for cab, path in slot.items() if Path(path) in prefabs]
+    while todo:
+        cab = todo.pop()
+        if cab in seen:
+            continue
+        seen.add(cab)
+        sf = files.get(cab)
+        for entry in (getattr(sf, "externals", None) or []):
+            todo.append(entry.path.replace("\\", "/").rsplit("/", 1)[-1].lower())
+    return seen
 
 
 # --- skeleton ------------------------------------------------------------------------------------------------------
@@ -915,10 +947,24 @@ def adapt(*, index: Mapping[str, Path], resolver: Callable | None, target_files:
             break
     slot = {cab: path for cab, path in index.items() if Path(path) in set(target_files)}
     prefab_files = {Path(graph.locations[p.deref().assets_file.name.lower()]) for p in own.values()}
-    needed = {mesh_cab, material_cab, texture_cab} | {
-        cab for cab, path in slot.items() if Path(path) in prefab_files}
-    if None in needed or not needed <= set(slot):
-        raise refuse("costume outside the slot")
+    loaded = loaded_with(graph, prefab_files, slot)
+    # A target whose primary lives in another core's files (Izumi (Swimsuit) on Izumi's, ch0263 on the NPC en0002's)
+    # never gets objects written there: the new objects go to a slot file loaded with the prefab that holds that type.
+    kinds_in: dict[str, set[str]] = {}
+    for obj in graph.objects.values():
+        kinds_in.setdefault(obj.assets_file.name.lower(), set()).add(obj.type.name)
+    prefab_cabs = {cab for cab, path in slot.items() if Path(path) in prefab_files}
+
+    def home(cab: str | None, type_name: str) -> str:
+        if cab is not None and cab in slot:
+            return cab
+        for candidate in sorted(loaded & set(slot), key=lambda c: (c not in prefab_cabs, Path(slot[c]).name, c)):
+            if type_name in kinds_in.get(candidate, ()):
+                return candidate
+        raise refuse("costume outside the slot", part=type_name, file=Path(str(graph.locations.get(cab or "", "?"))).name)
+
+    mesh_cab, material_cab, texture_cab = home(mesh_cab, "Mesh"), home(material_cab, "Material"), home(texture_cab, "Texture2D")
+    needed = {mesh_cab, material_cab, texture_cab} | prefab_cabs
     opened: dict[Path, Any] = {}
     files: dict[str, Any] = {}
     for cab in needed:
@@ -932,8 +978,10 @@ def adapt(*, index: Mapping[str, Path], resolver: Callable | None, target_files:
     mesh_sf, material_sf, texture_sf = writer.file(mesh_cab), writer.file(material_cab), writer.file(texture_cab)
 
     def shared(cab: str) -> bool:
+        """Whether the game has ``cab`` whenever the target's prefab is loaded: a slot file, a file the prefab's
+        files already reference (its catalog dependencies), or an always-loaded (prolog) bundle."""
         path = index.get(cab) or (graph.locations.get(cab))
-        if cab in slot:
+        if cab in slot or cab in loaded:
             return True
         return path is not None and Path(path).name.startswith(("prologdepengroup-", "prologgroup-"))
 
@@ -947,7 +995,10 @@ def adapt(*, index: Mapping[str, Path], resolver: Callable | None, target_files:
             tree = material.read_typetree()
             shader_cab = _external_cab(material, tree["m_Shader"]["m_FileID"])
             if tree["m_Shader"]["m_PathID"] and not shared(shader_cab):
-                raise refuse("shader outside the always-loaded bundles")
+                shader = graph.deref(material, tree["m_Shader"])
+                raise refuse("shader outside the always-loaded bundles", material=tree.get("m_Name", ""),
+                             shader=_shader_name(shader) if shader is not None else shader_cab,
+                             file=Path(str(index.get(shader_cab) or graph.locations.get(shader_cab, "?"))).name)
             tree["m_Shader"] = {"m_FileID": writer.external(material_sf, shader_cab), "m_PathID": tree["m_Shader"]["m_PathID"]}
             for _, value in tree["m_SavedProperties"]["m_TexEnvs"]:
                 pointer = value["m_Texture"]

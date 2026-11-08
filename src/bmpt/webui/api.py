@@ -740,10 +740,14 @@ def build_api(s: Services) -> RpcRegistry:
                 return False
             other = variants.get(source[8:]) if variants is not None else s.catalog.variant(source[8:])
         elif source.startswith("variant:") and kind == "model":
-            # another variant's costume on this variant's model slot: any other model of the student
+            # another variant's costume on this variant's model slot: any other model of the student whose check did
+            # not refuse it (costume_check)
             other = variants.get(source[8:]) if variants is not None else s.catalog.variant(source[8:])
-            return bool(core) and other is not None and other.key != v.key and other.family == v.family and bool(
-                getattr(other, "model", None) or getattr(other, "field_model", None))
+            if not (bool(core) and other is not None and other.key != v.key and other.family == v.family and bool(
+                    getattr(other, "model", None) or getattr(other, "field_model", None))):
+                return False
+            verdict = getattr(s.library, "costume_verdict", lambda *args: None)(v.key, other.key)
+            return verdict is None or bool(verdict["ok"])
         else:
             return False
         return other is not None and other.family == v.family and bool(getattr(other, kind, None)) and (
@@ -765,6 +769,49 @@ def build_api(s: Services) -> RpcRegistry:
             except (ServiceError, KeyError):
                 pass
         return valid
+
+    def costume_keys(variant: str, others: Any) -> list[str]:
+        if (not isinstance(variant, str) or not variant or not isinstance(others, list) or len(others) > 64
+                or not all(isinstance(o, str) and o and len(o) <= 256 for o in others)):
+            raise ServiceError("bad_params", key="others")
+        return list(dict.fromkeys(others))
+
+    @rpc.method("model.costumes")
+    def model_costumes(variant: str, others: list[str]) -> dict[str, str | None]:
+        """The saved verdicts of other variants' costumes on a variant's model (Switch 3D Model, BL-122): "ok",
+        "refused", or None when not checked yet (``model.checkCostumes``). Only "ok" pairs are offered."""
+        out: dict[str, str | None] = {}
+        for other in costume_keys(variant, others):
+            try:
+                if not preview_source_valid(variant, "model", f"variant:{other}"):
+                    out[other] = "refused"
+                    continue
+                verdict = s.library.costume_verdict(variant, other)
+            except (ServiceError, KeyError):
+                out[other] = "refused"
+                continue
+            out[other] = None if verdict is None else "ok" if verdict["ok"] else "refused"
+        return out
+
+    @rpc.method("model.checkCostumes")
+    def model_check_costumes(variant: str, others: list[str]) -> str:
+        """A job checking other variants' costumes on a variant's model to their end (``Services.costume_check``);
+        its result is {other: "ok" | "refused"}. A refusal of the moment is "refused" and not saved."""
+        keys = costume_keys(variant, others)
+
+        def run(log: Any, progress: Any) -> dict[str, str]:
+            out: dict[str, str] = {}
+            for i, other in enumerate(keys):
+                if progress:
+                    progress(i, len(keys), "")
+                try:
+                    ok = preview_source_valid(variant, "model", f"variant:{other}") and s.costume_check(variant, other)["ok"]
+                except (ServiceError, KeyError):
+                    ok = False
+                out[other] = "ok" if ok else "refused"
+            return out
+
+        return s.submit("costume-check", run)
 
     @rpc.method("family.get")
     @s.timings.measure("detail.data")

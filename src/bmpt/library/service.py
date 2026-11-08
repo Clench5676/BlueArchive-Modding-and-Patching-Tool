@@ -21,7 +21,7 @@ from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from functools import wraps
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Hashable, Iterable, Iterator, Sequence
+from typing import TYPE_CHECKING, Any, Callable, Hashable, Iterable, Iterator, Mapping, Sequence
 
 from UnityPy.helpers.ResourceReader import get_resource_data
 
@@ -75,6 +75,7 @@ SPACE_MARGIN = 512 * 1024 * 1024  # left free on the library's volume by an Off 
 SAVE_EVERY = (10, 2.0)  # a toggle saves its unfinished list every 10 entries or 2 s
 BUILT_TEMP_MAX_AGE = 60 * 60  # seconds before an abandoned built copy can be cleared
 COSTUME_PREVIEWS = 4  # costume previews kept in built/previews (one folder per build signature)
+COSTUME_VERDICTS = 4000  # costume verdicts kept in costume-verdicts.json, newest first
 RECOVERY_RETRY = 60.0  # seconds before a read tries a recovery that failed (or waits) again, if the journals stay
 # a toggle's refusals that stop it: every later write would fail the same way
 STOPPING = ("game_running", "game_status_unavailable", "steam_busy", "folder_changed", "classic_open")
@@ -4079,12 +4080,9 @@ class ModLibrary:
             replacements[target] = output / path.name
         return replacements
 
-    @_serialized
-    def costume_preview(self, variant_key: str, other: str, pin: Pin | None = None) -> list[Path]:
-        """The parts of a variant's model slot carrying another variant's costume, for a 3D preview: built once per
-        build signature into built/previews/<signature> and kept for the newest few (the export cache keys on their
-        paths). Reads official bytes where there are any, else the current ones, like the other previews."""
-        pin = self._current(pin)
+    def _costume_signature(self, variant_key: str, other: str, pin: Pin) -> tuple[str, list[Path]]:
+        """The build signature of another variant's costume on a variant's model slot (the preview's, from official
+        bytes where there are any, else the current ones), and the slot's files."""
         variant = self._variant(variant_key)
         if other == variant_key or self._variant(other).family != variant.family:
             raise ServiceError("source_unsupported", source=f"variant:{other}")
@@ -4093,12 +4091,58 @@ class ModLibrary:
             raise ServiceError("game_file_not_found", variant=variant_key)
         _, inputs = self._costume_source(other, pin, preview=True)
         try:
-            signature = self._build_signature(inputs, targets, pin)
+            return self._build_signature(inputs, targets, pin), targets
         except ServiceError as error:
             if error.code != "original_unavailable":
                 raise
-            signature = hashlib.sha1(repr(("current", [(p.name, p.stat().st_size, p.stat().st_mtime_ns)
-                                                       for p in [*inputs, *targets]])).encode()).hexdigest()
+            return hashlib.sha1(repr(("current", _build_version(), [(p.name, p.stat().st_size, p.stat().st_mtime_ns)
+                                                                    for p in [*inputs, *targets]])).encode()).hexdigest(), targets
+
+    def _verdicts(self) -> dict[str, dict[str, Any]]:
+        path = self.root / "costume-verdicts.json"
+        try:
+            data = json.loads(path.read_text())
+        except (OSError, ValueError):
+            return {}
+        verdicts = data.get("verdicts") if isinstance(data, dict) and data.get("version") == 1 else None
+        return {key: value for key, value in (verdicts or {}).items()
+                if isinstance(key, str) and isinstance(value, dict) and isinstance(value.get("ok"), bool)}
+
+    def _save_verdict(self, signature: str, ok: bool, reason: str | None = None,
+                      detail: Mapping[str, Any] | None = None) -> dict[str, Any]:
+        verdict = {"ok": ok, "reason": reason, "detail": {str(k): str(v) for k, v in (detail or {}).items()},
+                   "at": now()}
+        verdicts = self._verdicts()
+        verdicts[signature] = verdict
+        kept = dict(sorted(verdicts.items(), key=lambda item: str(item[1].get("at", "")), reverse=True)[:COSTUME_VERDICTS])
+        try:
+            atomic_json(self.root / "costume-verdicts.json", {"version": 1, "verdicts": kept})
+        except OSError as error:  # the verdict is still returned; the pair is checked again next time
+            log_failure(logger, logging.WARNING, "Could not save a costume verdict", error)
+        return verdict
+
+    @_serialized
+    def costume_verdict(self, variant_key: str, other: str, pin: Pin | None = None) -> dict[str, Any] | None:
+        """Whether another variant's costume on a variant's model was built and exported for the current build
+        signature (the program, the official bytes of both models, the save options): {"ok", "reason", "detail",
+        "at"}, or None when not judged yet. A pair the Switch 3D Model card offers has one with ok (BL-122)."""
+        signature, _ = self._costume_signature(variant_key, other, self._current(pin))
+        return self._verdicts().get(signature)
+
+    @_serialized
+    def record_costume_verdict(self, variant_key: str, other: str, ok: bool, reason: str | None = None,
+                               detail: Mapping[str, Any] | None = None, pin: Pin | None = None) -> dict[str, Any]:
+        """Save the verdict of a pair checked to its end (its preview built and exported, or refused)."""
+        signature, _ = self._costume_signature(variant_key, other, self._current(pin))
+        return self._save_verdict(signature, ok, reason, detail)
+
+    @_serialized
+    def costume_preview(self, variant_key: str, other: str, pin: Pin | None = None) -> list[Path]:
+        """The parts of a variant's model slot carrying another variant's costume, for a 3D preview: built once per
+        build signature into built/previews/<signature> and kept for the newest few (the export cache keys on their
+        paths). Reads official bytes where there are any, else the current ones, like the other previews."""
+        pin = self._current(pin)
+        signature, targets = self._costume_signature(variant_key, other, pin)
         folder = self.root / "built" / "previews" / signature
         done = folder / "parts.json"
         if done.is_file():
@@ -4111,7 +4155,12 @@ class ModLibrary:
             except (OSError, ValueError):
                 pass
         with temporary_directory(prefix=devmode.LIBRARY_STAGING_PREFIX) as temporary:
-            replacements = self._stage_costume(other, targets, Path(temporary) / "model", no_log, pin, preview=True)
+            try:
+                replacements = self._stage_costume(other, targets, Path(temporary) / "model", no_log, pin, preview=True)
+            except ServiceError as error:
+                if error.code == "source_unsupported":  # the rule cannot carry this pair: never offered again
+                    self._save_verdict(signature, False, error.params.get("source"), error.params)
+                raise
             built = [path for target, path in replacements.items() if path.parent.name == "output"]
             folder.mkdir(parents=True, exist_ok=True)
             for path in built:

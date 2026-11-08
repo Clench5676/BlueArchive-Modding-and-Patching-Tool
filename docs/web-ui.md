@@ -938,9 +938,23 @@ further parts in renderers added beside it, the slot's other costume parts and a
 objects never change in place, since field, cutscene and other variants' bundles reference them. Roles, bone mapping
 and checks use data only (shading, rig, visibility, the slot's clips), never part names: Biped bones by name, other
 bones by structure, and each secondary group follows the slot's bones only while it stretches no more than the slot's
-own costume under the slot's clips (else it stays rigid). A pair whose checks fail is refused with `source_unsupported`.
+own costume under the slot's clips (else it stays rigid). A pair whose checks fail is refused with `source_unsupported`
+(`source` names the failed check, further params its detail). What the game loads with the slot's prefab counts as
+available: the slot's files, every CAB the prefab's files reference (followed through the files they reference: the
+catalog's dependencies), and the always-loaded prolog bundles. A slot whose primary mesh, materials or textures live in
+another core's files (Izumi (Swimsuit) on Izumi's) gets the new objects in one of its own files loaded with the prefab
+that holds that type; another core's files are never written.
 Apply builds through the library's build cache like any adaptation; a preview builds once per build signature into
 `built/previews/<signature>` (the newest four kept; Clear Built Mods clears them).
+
+A pair is offered only once it was checked to its end (BL-122): its preview built and exported
+(`Services.costume_check`). The verdict is kept in the library's `costume-verdicts.json`, keyed by the build signature
+(the program, the official bytes of both models, the save options; the newest 4000 kept): the rule's refusals, program
+errors and export failures are kept, so the pair is not offered again for these files; a refusal of the moment
+(`original_unavailable`, a locked file) is not kept. `model.costumes` reads the verdicts; `model.checkCostumes` checks
+the others, in the background when the 3D tab shows, or while the switch waits when it opens first
+(`progress.compatibility`). Cards list only "ok" pairs, and the one already chosen whatever its verdict; a refused pair
+is no preview source (`family.get` drops it) and its `/asset/model` route answers 404 without building it again.
 
 A variant whose only model is a field-mode player prefab (`Field_Player_<dev>[_NonWeapon]` in the
 `field-character-_mxload-*` bundles: event and story costumes such as Hina (Pajamas) and Niko (FOX EATS)) gets
@@ -1138,6 +1152,8 @@ stops the server (the page shows Closed); with `--serve` it gives `native_unavai
 | `mods.rename {id, label}` | |
 | `mods.seen {id}` or `{ids}` | stores seen mod IDs in `webui.json`, without writing the library; roster and family fresh flags come from this state |
 | `ui.preview {variant, kind, source}` | stores a preview choice in `webui.json`, scoped to the install and variant; returns `previewSources`; never changes the application manifest or game files |
+| `model.costumes {variant, others}` | the verdicts of other variants' costumes on a variant's 3D model: `{other: "ok" \| "refused" \| null}` (null: not checked yet); a pair outside the family, the variant itself or one with no model is "refused"; at most 64 `others` |
+| `model.checkCostumes {variant, others}` | job id (`costume-check`, not a writer): checks each pair to its end (`Services.costume_check`) and saves its verdict; result `{other: "ok" \| "refused"}`, a refusal of the moment "refused" and not saved |
 | `mods.state` | `{installs: [{id, key, server, folder, label, distinct, named}], current, enabled, available, reason, reasonParams, scan, explained, configured, pending, stuck, left, unfinished: {pending, left, stuck}, drift, untracked, damaged, sourceMissing, queued, scanned, tray, traySupported, busy, progress}` from the snapshot (above); `id` is the first 12 hex digits of the install key's SHA-1 (used in URLs), `named` tells a folder the settings name from a recorded one; `busy` while a toggle is queued or running or writes are queued for the classic window; `progress` is `{done, total}` of a running toggle |
 | `mods.sizes {kind}` | `{builtSize}` for `kind: "built"` or `{originalsSize}` for `kind: "originals"`, bytes measured on demand; Settings requests only the Mod Cache size; no size walks in `mods.state` |
 | `mods.toggle {enabled, expect}` | job id (`mods.toggle`): the switch over every known install, also Retry; `busy` while another toggle is queued or running, `classic_open` at submit; the job's refusals `state_changed`, `folder_changed`, `game_running`, `game_status_unavailable`, `steam_busy`, `classic_open`, `not_enough_space` |
