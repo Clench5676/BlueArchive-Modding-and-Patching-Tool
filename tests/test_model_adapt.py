@@ -181,6 +181,55 @@ def test_official_costume_on_a_slot(view, tmp_path, target, source, field, parts
 
 
 @official
+def test_official_costume_carries_a_shader_the_slot_does_not_load(view, tmp_path):
+    """BL-122: Hina (Dress)'s frill shader lives in a shader bundle Hina's slot does not load. A copy goes with the
+    costume into the materials' file, its type taken from the shader's file and its fallback still the player's own
+    resource; the copy is the shader as it is."""
+    from ba_modding_toolkit.bundle import Bundle
+    from ba_modding_toolkit.models import SaveOptions
+    from ba_modding_toolkit.naming import parse_filename
+    from ba_modding_toolkit.utils import compute_crc32
+    import UnityPy
+
+    files, index = view
+    slot = _slot(files, "hina_original")
+    sources = [p for p in files if re.match(r"character-ch0230-_mxload", p.name)]
+    result = ma.adapt(index=index, resolver=None, target_files=slot, target_dev="hina_original", source_files=sources,
+                      source_dev="ch0230", open_writable=Bundle.load)
+    out = tmp_path / "out"
+    out.mkdir()
+    for path, bundle in result.changed.items():
+        ok, message = bundle.save(out / path.name, SaveOptions(perform_crc=True, compression="lz4"))
+        assert ok, message
+    written = sorted(out.glob("*.bundle"))
+    assert written and all(compute_crc32(p) == int(parse_filename(p.name).crc) for p in written)
+    originals = {}
+    for path in files:
+        if "-_mx-shaders-" in path.name:
+            for obj in UnityPy.load(str(path)).objects:
+                if obj.type.name == "Shader":
+                    tree = obj.read_typetree()
+                    originals.setdefault(tree["m_ParsedForm"]["m_Name"], tree)
+    carried = []
+    for path in written:
+        for obj in UnityPy.load(str(path)).objects:
+            if obj.type.name != "Material":
+                continue
+            pointer = obj.read_typetree()["m_Shader"]
+            if pointer["m_FileID"] or not pointer["m_PathID"]:
+                continue
+            shader = obj.assets_file.objects[pointer["m_PathID"]]
+            tree = shader.read_typetree()
+            name = tree["m_ParsedForm"]["m_Name"]
+            carried.append(name)
+            assert {k: v for k, v in tree.items() if k != "m_Dependencies"} == {
+                k: v for k, v in originals[name].items() if k != "m_Dependencies"}
+            assert [(obj.assets_file.externals[d["m_FileID"] - 1].path, d["m_PathID"]) for d in tree["m_Dependencies"]] == [
+                ("Library/unity default resources", d["m_PathID"]) for d in originals[name]["m_Dependencies"]]
+    assert carried == ["MX/C-Simple-Transparent"]
+
+
+@official
 def test_official_field_models_are_found_and_exported(tmp_path):
     from bmpt.catalog import Catalog
     from bmpt.gameassets import AssetCache, GameAssets
