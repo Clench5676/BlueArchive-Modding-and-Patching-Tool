@@ -359,8 +359,9 @@ class Services:
             self.state.set("preview_cache", enabled)
             self.preview_cache.allowed = enabled
 
-    def preview_thumbnail_key(self, key: str) -> str:
-        """The client hashes all renderer inputs; the server isolates installation and export version."""
+    def preview_thumbnail_key(self, key: str, renderer: str) -> str:
+        """The client hashes all renderer inputs; the server isolates installation and export version, and the
+        renderer's own code (``stills.revision``): a release that draws a still differently never reuses the old one."""
         if not isinstance(key, str) or not key or len(key) > 4096:
             raise ServiceError("bad_params", key="key")
         try:
@@ -373,6 +374,9 @@ class Services:
         namespace = getattr(game, "preview_namespace", None)
         if namespace is None:
             namespace = json.dumps([self.settings.get("file_source"), str(self.settings.game_dir()), game.resource_version])
+        from . import stills
+
+        namespace += "\n" + stills.revision(renderer)
         return "thumbnail/" + hashlib.sha256((namespace + "\n" + key).encode()).hexdigest()
 
     def clear_cache(self) -> None:

@@ -462,22 +462,26 @@ def test_thumbnail_rpc_opt_in_clear_and_input_validation(preview_app, preview_se
     prefs = rpc(app, "settings.get")["result"]
     assert not prefs["previewCache"]
     generation = prefs["previewCacheGeneration"]
-    assert rpc(app, "preview.cachePut", key="test", data=encoded, generation=generation)["result"] is False
+    assert rpc(app, "preview.cachePut", renderer="spine", key="test", data=encoded, generation=generation)["result"] is False
     prefs = rpc(app, "settings.set", key="previewCache", value=True)["result"]
     generation = prefs["previewCacheGeneration"]
-    assert rpc(app, "preview.cacheGet", key="test")["result"] == {"allowed": True, "generation": generation, "data": None}
-    assert rpc(app, "preview.cachePut", key="test", data=encoded, generation=generation)["result"] is True
-    assert rpc(app, "preview.cacheGet", key="test")["result"]["data"] == encoded
-    assert call(app, "/api/rpc", method="POST", body={"method": "preview.cacheGet", "params": {"key": "test"}}, token=None)[0] == "403 Forbidden"
+    assert rpc(app, "preview.cacheGet", renderer="spine", key="test")["result"] == {"allowed": True, "generation": generation, "data": None}
+    assert rpc(app, "preview.cachePut", renderer="spine", key="test", data=encoded, generation=generation)["result"] is True
+    assert rpc(app, "preview.cacheGet", renderer="spine", key="test")["result"]["data"] == encoded
+    assert call(app, "/api/rpc", method="POST", body={"method": "preview.cacheGet", "params": {"key": "test", "renderer": "spine"}}, token=None)[0] == "403 Forbidden"
     for data in ("not base64", base64.b64encode(b"not a PNG").decode(), "A" * (3 * 1024 * 1024)):
-        assert rpc(app, "preview.cachePut", key="test", data=data, generation=generation)["error"]["code"] == "bad_params"
-    assert rpc(app, "preview.cacheGet", key="x" * 4097)["error"]["code"] == "bad_params"
-    assert rpc(app, "preview.cacheGet", key="\udcff")["error"]["code"] == "bad_params"
+        assert rpc(app, "preview.cachePut", renderer="spine", key="test", data=data, generation=generation)["error"]["code"] == "bad_params"
+    assert rpc(app, "preview.cacheGet", renderer="spine", key="x" * 4097)["error"]["code"] == "bad_params"
+    # an entry belongs to the renderer that drew it; an unnamed or unknown renderer is refused
+    assert rpc(app, "preview.cacheGet", renderer="model", key="test")["result"]["data"] is None
+    assert rpc(app, "preview.cacheGet", renderer="other", key="test")["error"]["code"] == "bad_params"
+    assert "error" in rpc(app, "preview.cacheGet", key="test")
+    assert rpc(app, "preview.cacheGet", renderer="spine", key="\udcff")["error"]["code"] == "bad_params"
     cleared = rpc(app, "settings.clearCache")["result"]
     assert cleared["previewCache"] is True
     assert cleared["previewCacheGeneration"] != generation
-    assert rpc(app, "preview.cachePut", key="test", data=encoded, generation=generation)["result"] is False
-    assert rpc(app, "preview.cacheGet", key="test")["result"]["data"] is None
+    assert rpc(app, "preview.cachePut", renderer="spine", key="test", data=encoded, generation=generation)["result"] is False
+    assert rpc(app, "preview.cacheGet", renderer="spine", key="test")["result"]["data"] is None
     assert rpc(app, "settings.set", key="previewCache", value=False)["result"]["previewCache"] is False
     assert rpc(app, "settings.clearCache")["result"]["previewCache"] is False
 

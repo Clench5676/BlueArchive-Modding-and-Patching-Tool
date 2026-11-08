@@ -396,7 +396,7 @@ async function companions(player, el, base, batch, signal) {
     if (!frame || queue.length || popupCapturesOpen()) continue;
     const key = keyOf(base, frame, null, q.lobby, q.framing, q.background);
     if (cache.has(key)) continue;
-    let persistent = await previewCache.assetTicket(previewCache.ticket(persistentKey(base, frame, null, q.lobby, q.framing, q.background)),
+    let persistent = await previewCache.assetTicket(previewCache.ticket(persistentKey(base, frame, null, q.lobby, q.framing, q.background), "spine"),
       persistentDependencies(base, q.lobby, q.framing, q.background));
     if (q.lobby && !q.framing && !player.bamtLobbyFrame) persistent = null;
     let url;
@@ -486,7 +486,7 @@ function request(base, frame = "bust", expr = null, lobby = false, framing = nul
   const key = keyOf(base, frame, expr, lobby, framing, background);
   if (!cache.has(key)) {
     const item = { key, base, frame, expr, lobby, framing, background, clients: new Set(), settled: false,
-      persistent: previewCache.ticket(persistentKey(base, frame, expr, lobby, framing, background)) };
+      persistent: previewCache.ticket(persistentKey(base, frame, expr, lobby, framing, background), "spine") };
     cache.set(key, item);
     const enqueue = () => {
       if (item.settled || item.forgotten) { complete(item, null); return; }

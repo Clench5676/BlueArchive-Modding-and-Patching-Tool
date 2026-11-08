@@ -244,7 +244,10 @@ App module dependencies follow `webui` → `library` → `catalog` → `gameasse
   UI asset permission and light UI caching. Stored under the configured cache directory's
   `previews/` folder, bounded to 2 GiB with least-recently-used eviction. Entries include installation/resource/export
   identity, source revisions and model dependencies. Still keys additionally include renderer parameters and current
-  background/framing content. Corrupt entries rebuild. A PNG above 2 MiB remains memory-only; it is not downscaled.
+  background/framing content, and the renderer's own code: every still names its renderer (`renderer` "model" or
+  "spine" in `preview.cacheGet` / `preview.cachePut`) and the backend keys it by the content hash of that renderer's
+  pixel files (`webui/stills.py`), so a release that draws a still differently never serves the old one;
+  `tests/test_still_renderers.py` holds every import of those files to a pixel or non-pixel list. Corrupt entries rebuild. A PNG above 2 MiB remains memory-only; it is not downscaled.
   **Clear Cache** deletes stored previews and backend memory without interrupting the active frontend scene or import
   selections. Clear, opt-out and location changes invalidate pending writes. Turning caching off keeps stored files
   until Clear; new renders after Clear may create new entries while caching remains enabled. Optional preview cache
