@@ -13,6 +13,8 @@ dependencies = [
     "ttkbootstrap>=1.10.1",
     "typed-argument-parser>=1.12.0",
     "unitypy==1.23.0",
+    # the 3D costume switch (gameassets.model_adapt) and the BL-056 refine engine
+    "numpy>=2.0",
 ]
 
 [build-system]
@@ -43,8 +45,6 @@ bamt = "bmpt.launcher:main"
 
 [dependency-groups]
 dev = [
-    # the BL-056 refine engine (refine_composite); no shipped path imports it yet, so builds leave it out
-    "numpy>=2.0",
     "pytest>=8.0.0",
 ]
 
