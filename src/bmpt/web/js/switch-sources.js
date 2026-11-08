@@ -65,15 +65,19 @@ export const overwrittenOf = (v, kind = "spr") => partsOf(v, kind).some((f) => !
 // origin (the variant a mod was made for), restorable (its files have an official copy), greyed (cannot be chosen:
 // on an overwritten kind every card but the one in use, and another variant's card whose files of the kind are
 // overwritten) }.
-export function candidates(fam, v, kind = "spr") {
+// The 3D model takes another variant's model as a costume only once that pair was built and exported for these files
+// (``costumes``: model.costumes' verdicts, "ok" | "refused" | null): unchecked and refused pairs are not offered, except
+// the one already chosen (BL-122).
+export function candidates(fam, v, kind = "spr", costumes = null) {
   const own = coreOf(v, kind);
   const cores = (kind === "model" && v.modelCores?.length ? v.modelCores : [own]).map((core) => String(core).toLowerCase());
   const mods = fam.variants.flatMap((o) => o.modList || []).filter((m) => m.kind === kind)
     .filter((m) => kind === "spr" || !m.core || !own || cores.includes(m.core));
   const across = (kind === "spr" || kind === "model") && !!own; // Cross-variant adaptation requires an actual local target.
-  // the 3D model takes any other model of the student as a costume, field-mode models included
-  const offered = (o) => (kind === "model" ? !!(coreOf(o, kind) || o.fieldModel) : !!coreOf(o, kind)) && coreOf(o, kind) !== own;
-  const others = across ? fam.variants.filter((o) => o.key !== v.key && offered(o)) : [];
+  const chosen = kind === "model" ? new Set([configuredKey(v, kind), sourceKey(v?.previewSources?.model)]) : null;
+  const others = !across ? [] : kind === "model"
+    ? costumeCandidates(fam, v).filter((o) => costumes?.[o.key] === "ok" || chosen.has(`v:${o.key}`))
+    : fam.variants.filter((o) => o.key !== v.key && !!coreOf(o, kind) && coreOf(o, kind) !== own);
   const mod = (m) => ({ key: `m:${m.id}`, kind: "mod", id: m.id, mod: m, core: null, origin: fam.variants.find((o) => o.key === m.target) || null });
   const list = [
     { key: "self", kind: "self", core: own, variant: v },
@@ -88,6 +92,15 @@ export function candidates(fam, v, kind = "spr") {
     return { ...c, restorable, greyed };
   });
 }
+
+// the other variants whose model a variant's 3D model may take as a costume, before their check: any other model of
+// the student, field-mode models included (model.costumes / model.checkCostumes judge each pair)
+export function costumeCandidates(fam, v) {
+  const own = coreOf(v, "model");
+  if (!own) return [];
+  return fam.variants.filter((o) => o.key !== v.key && !!(coreOf(o, "model") || o.fieldModel) && coreOf(o, "model") !== own);
+}
+const sourceKey = (source) => (typeof source === "string" && source.startsWith("variant:") ? `v:${source.slice(8)}` : null);
 
 // a configured source (family.get's configured[kind]) as a candidate key; null when the kind is not configured
 export function configuredKey(v, kind = "spr") {

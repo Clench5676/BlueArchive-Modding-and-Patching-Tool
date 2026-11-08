@@ -1403,6 +1403,33 @@ class Services:
             return AssetResponse(self.kivo.audio(variant.page_id or "", _stem(parts[2])), "audio/ogg", light=False)
         raise KeyError(path)
 
+    def costume_check(self, target: str, other: str) -> dict[str, Any]:
+        """Check another variant's costume on a variant's model to its end, as the Switch 3D Model card shows it:
+        the slot built (``library.costume_preview``) and its preview exported. Saved as the pair's verdict, keyed by
+        the build signature (BL-122): the rule's refusals, program errors and export failures, so the pair is never
+        offered; a refusal of the moment (a missing original, a locked file) is returned unsaved and checked again."""
+        library = self.library
+        verdict = library.costume_verdict(target, other)
+        if verdict is not None:
+            return verdict
+        core = self.catalog.variant(target).model
+        try:
+            bundles = library.costume_preview(target, other)
+        except ServiceError as error:
+            if error.code == "source_unsupported":
+                return library.costume_verdict(target, other) or {"ok": False, "reason": error.params.get("source")}
+            if error.code == "library_operation_failed":  # a program error, the same for these files every time
+                return library.record_costume_verdict(target, other, False, error.code)
+            return {"ok": False, "reason": error.code, "transient": True}
+        try:
+            self.game.model_glb(core, overrides=bundles, reads=library.preview_reads("official"))
+        except ServiceError as error:
+            return {"ok": False, "reason": error.code, "transient": True}
+        except Exception as error:  # the preview cannot be drawn: a program error, kept in the log
+            logger.exception("Costume preview export failed for %s <- %s", target, other)
+            return library.record_costume_verdict(target, other, False, "export", {"error": type(error).__name__})
+        return library.record_costume_verdict(target, other, True)
+
     def _model_asset(self, core: str, target: str, source: str, path: str) -> bytes:
         """A variant's 3D chibi as GLB from one source: live game files, official copies, a library mod or an
         import candidate (KeyError, a 404, for anything else). Every source but ``live`` reads the files outside its
@@ -1434,6 +1461,9 @@ class Services:
                 raise KeyError(path)
             return self.game.model_glb(core, overrides=bundles, reads=self.library.preview_reads("configured"))
         if source.startswith("variant:"):
+            verdict = self.library.costume_verdict(target, source[8:])
+            if verdict is not None and not verdict["ok"]:
+                raise KeyError(path)  # checked to its end and refused: never offered (costume_check)
             bundles = self.library.costume_preview(target, source[8:])
             if not fits(bundles):
                 raise KeyError(path)

@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
 import {
-  modelSource, modelUrl, appliedKey, appliedOf, availableTab, candidates, configuredKey, coreOf, hasAsset, hasKind, overwrittenOf, partsOf, popupMode, primaryKind, previewBase, previewChanged, previewKey, sourceOf, switchKindOf,
+  modelSource, modelUrl, appliedKey, appliedOf, availableTab, candidates, configuredKey, coreOf, costumeCandidates, hasAsset, hasKind, overwrittenOf, partsOf, popupMode, primaryKind, previewBase, previewChanged, previewKey, sourceOf, switchKindOf,
 } from "../../src/bmpt/web/js/switch-sources.js";
 
 const part = (kind, applied, extra = {}) => ({ file: `/game/${kind}-${applied}.bundle`, kind, applied, crc: "ok", ...extra });
@@ -327,8 +327,21 @@ test("the 3D model offers the student's other models as costumes, field-mode mod
   swimsuit.model = "hoshino_swimsuit";
   swimsuit.modList.push(mod("swim-model", swimsuit.key, "model"));  // another variant's mod: never a costume
   np.fieldModel = "np0045";  // an event costume with only a field-mode model
-  assert.deepEqual(candidates(fam, v, "model").map((c) => c.key), ["self", "v:hoshino_swimsuit", "v:np0045"]);
-  assert.deepEqual(candidates(fam, swimsuit, "model").map((c) => c.key), ["self", "m:swim-model", "v:hoshino", "v:np0045"]);
+  const ok = { hoshino: "ok", hoshino_swimsuit: "ok", np0045: "ok" };
+  assert.deepEqual(costumeCandidates(fam, v).map((o) => o.key), ["hoshino_swimsuit", "np0045"]);
+  assert.deepEqual(candidates(fam, v, "model", ok).map((c) => c.key), ["self", "v:hoshino_swimsuit", "v:np0045"]);
+  assert.deepEqual(candidates(fam, swimsuit, "model", ok).map((c) => c.key), ["self", "m:swim-model", "v:hoshino", "v:np0045"]);
+  // BL-122: a pair is offered only once checked to its end; unchecked and refused pairs stay out
+  assert.deepEqual(candidates(fam, v, "model").map((c) => c.key), ["self"]);
+  assert.deepEqual(candidates(fam, v, "model", { hoshino_swimsuit: "refused", np0045: null }).map((c) => c.key), ["self"]);
+  assert.deepEqual(candidates(fam, v, "model", { hoshino_swimsuit: "refused", np0045: "ok" }).map((c) => c.key), ["self", "v:np0045"]);
+  // ...but the one already chosen stays listed, whatever its check says
+  v.configured = { model: "variant:hoshino_swimsuit" };
+  assert.deepEqual(candidates(fam, v, "model", { hoshino_swimsuit: "refused" }).map((c) => c.key), ["self", "v:hoshino_swimsuit"]);
+  v.configured = {};
+  v.previewSources = { model: "variant:np0045" };
+  assert.deepEqual(candidates(fam, v, "model").map((c) => c.key), ["self", "v:np0045"]);
+  delete v.previewSources;
   // the field-only variant shows a 3D tab, with no slot to switch
   assert.equal(hasKind(np, "model"), true);
   assert.equal(availableTab(np, "model"), "model");
@@ -354,8 +367,8 @@ test("split model slots offer dependency mods and judge every slot part", async 
       { ...dependency, id: "foreign", core: "hoshino_original" }] };
   const fam = { variants: [v, { key: "hoshino", model: "hoshino_original", modList: [
     { ...dependency, id: "other", core: "hoshino_original", target: "hoshino" }] }] };
-  // other cores' mods stay out; the other variant's model is offered as a costume
-  assert.deepEqual(candidates(fam, v, "model").map((c) => c.key), ["self", "m:dependency", "v:hoshino"]);
+  // other cores' mods stay out; the other variant's model is offered as a costume once checked
+  assert.deepEqual(candidates(fam, v, "model", { hoshino: "ok" }).map((c) => c.key), ["self", "m:dependency", "v:hoshino"]);
   assert.equal(candidates(fam, v, "model")[0].greyed, true);
   assert.equal(appliedKey(v, "model"), "m:dependency");
   assert.equal(selectionStatus(v, "model"), "status.applied");

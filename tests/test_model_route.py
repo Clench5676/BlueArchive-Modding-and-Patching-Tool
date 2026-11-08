@@ -72,6 +72,7 @@ def test_model_route_uses_verified_official_or_own_mod_sources(tmp_path):
                       SimpleNamespace(id='foreign', kind='model', target='ch0252'),
                       SimpleNamespace(id='portrait', kind='spr', target='ch0242')],
         costume_preview=lambda target, other: costume(target, other),
+        costume_verdict=lambda target, other: None,
     )
     costume_parts = [tmp_path / 'character-ch0242-_mxload-2026-01-01_assets_all_2.bundle']
 
@@ -138,3 +139,97 @@ def test_prefab_overrides_keep_every_dated_prefab_bundle_of_a_slot():
     assert prefab_overrides([old, new], [other]) == [None, other]
     assert prefab_overrides([new], [other]) == [other]
     assert prefab_overrides([old, new], []) == [None, None]
+
+
+class CostumeCatalog:
+    """Hina's family: her model, the Dress's, the Pajamas' field-mode model; Momoi elsewhere."""
+    variants = {"hina": ("hina_original", None, "hina"), "ch0230": ("ch0230", None, "hina"),
+                "np0009": (None, "np0009", "hina"), "momoi": ("momoi_original", None, "momoi")}
+
+    def variant(self, key):
+        if key not in self.variants:
+            raise ServiceError("catalog_variant_not_found", key=key)
+        model, field, family = self.variants[key]
+        return SimpleNamespace(key=key, model=model, field_model=field, family=family, spr=None)
+
+
+def _costume_services(tmp_path, outcomes, export_error=None):
+    """Services over a library whose costume previews give ``outcomes[other]`` (parts, or an error to raise)."""
+    saved, built, exported = {}, [], []
+    part = tmp_path / "character-hina_original-_mxload-2026-01-01_assets_all_2.bundle"
+
+    def preview(target, other):
+        built.append(other)
+        outcome = outcomes[other]
+        if isinstance(outcome, ServiceError):
+            if outcome.code == "source_unsupported":  # the library saves the rule's refusals itself
+                saved[other] = {"ok": False, "reason": outcome.params["source"], "detail": {}}
+            raise outcome
+        return [part]
+
+    def record(target, other, ok, reason=None, detail=None):
+        saved[other] = {"ok": ok, "reason": reason, "detail": dict(detail or {})}
+        return saved[other]
+
+    def glb(core, overrides=(), reads=None):
+        exported.append((core, list(overrides)))
+        if export_error is not None:
+            raise export_error
+        return b"glTF"
+
+    game = RouteGame()
+    game.model_glb = glb
+    library = SimpleNamespace(costume_verdict=lambda target, other: saved.get(other), costume_preview=preview,
+                              record_costume_verdict=record, preview_reads=lambda policy: policy, mods=lambda: [],
+                              assigned_targets=lambda: set())
+    s = Services(Settings(tmp_path / "config.toml"), tmp_path, state=UiState(tmp_path / "webui.json"),
+                 cache=object(), game=game, catalog=CostumeCatalog(), library=library)
+    return s, saved, built, exported
+
+
+def test_costume_check_saves_what_holds_for_these_files_and_retries_a_refusal_of_the_moment(tmp_path):
+    """BL-122: a pair is judged by building and exporting it; the verdict is saved, except a refusal of the moment."""
+    outcomes = {"np0009": "parts", "ch0230": ServiceError("source_unsupported", source="stretch"),
+                "busy": ServiceError("original_unavailable"), "bug": ServiceError("library_operation_failed")}
+    s, saved, built, exported = _costume_services(tmp_path, outcomes)
+    try:
+        assert s.costume_check("hina", "np0009")["ok"] is True
+        assert exported == [("hina_original", [tmp_path / "character-hina_original-_mxload-2026-01-01_assets_all_2.bundle"])]
+        assert s.costume_check("hina", "np0009")["ok"] is True and built == ["np0009"]  # saved: not built again
+        assert s.costume_check("hina", "ch0230") == {"ok": False, "reason": "stretch", "detail": {}}
+        assert s.costume_check("hina", "busy") == {"ok": False, "reason": "original_unavailable", "transient": True}
+        assert "busy" not in saved
+        assert s.costume_check("hina", "bug")["ok"] is False and saved["bug"]["reason"] == "library_operation_failed"
+    finally:
+        s.close()
+    s, saved, _, _ = _costume_services(tmp_path, {"np0009": "parts"}, export_error=RuntimeError("no mesh"))
+    try:
+        assert s.costume_check("hina", "np0009") == {"ok": False, "reason": "export", "detail": {"error": "RuntimeError"}}
+    finally:
+        s.close()
+
+
+def test_costume_rpcs_offer_only_pairs_checked_to_their_end(tmp_path):
+    outcomes = {"np0009": "parts", "ch0230": ServiceError("source_unsupported", source="shader outside the always-loaded bundles")}
+    s, saved, built, _ = _costume_services(tmp_path, outcomes)
+    api = build_api(s)
+    try:
+        others = ["ch0230", "np0009", "momoi", "hina"]
+        assert api.call("model.costumes", {"variant": "hina", "others": others})["result"] == {
+            "ch0230": None, "np0009": None, "momoi": "refused", "hina": "refused"}  # another family, itself
+        job = api.call("model.checkCostumes", {"variant": "hina", "others": ["ch0230", "np0009", "momoi"]})["result"]
+        assert s.jobs.wait(job, 10)
+        assert s.jobs.get(job).result == {"ch0230": "refused", "np0009": "ok", "momoi": "refused"}
+        assert api.call("model.costumes", {"variant": "hina", "others": others})["result"] == {
+            "ch0230": "refused", "np0009": "ok", "momoi": "refused", "hina": "refused"}
+        assert sorted(built) == ["ch0230", "np0009"]
+        # a refused pair is no preview source, and its preview is not built again
+        import pytest
+        with pytest.raises(KeyError):
+            s.asset("model/hina.glb", {"source": "variant:ch0230"})
+        assert sorted(built) == ["ch0230", "np0009"]
+        for bad in ({"variant": "hina", "others": "np0009"}, {"variant": "hina", "others": ["x"] * 65},
+                    {"variant": "", "others": []}):
+            assert api.call("model.costumes", bad)["error"]["code"] == "bad_params"
+    finally:
+        s.close()
