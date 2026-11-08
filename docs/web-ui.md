@@ -2405,8 +2405,8 @@ detail screen, and in Settings' Mods tab.
   read anew (left and entered again, or reloaded by another action) is dropped; a change read that way is read again.
 - **The window back in front** after 30 s or more asks for a scan (`mods.scan`, only with scan consent), so a
   Steam check or a repair made meanwhile is found.
-- **While mods are off** an apply only saves the choice: the switch popup reads Save and starts on the configured
-  source, and a notice says "Saved, applied when mods are on" (`mods.saved`, from the apply job's `deferred`).
+- **While mods are off** an apply only saves the choice (the apply job's `deferred`): the switch popup reads Save and
+  starts on the configured source; no notice follows, as for any saved choice (owner, 2026-11-08).
 - **The tray's events** (see Tray): `tray.toggle` is followed like the page's own toggle, `tray.open` shows the first
   toggle's explanation (its button submits the tray's toggle), the tray's refusal as a notice (the tray never queues
   for the classic window) or the drift prompt. The page listens for them on the no-game screen too.
