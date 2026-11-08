@@ -18,7 +18,7 @@ async function apply(result, kind, { changedConfiguration = false } = {}) {
   if (changedConfiguration) next.configured[kind] = "mod:new";
   const enabled = !result.deferred;
   const ctx = {
-    busy: false, isApplied: () => false, switchPopupPage: null, pageToken: 1,
+    busy: false, isApplied: () => false, unfitCostume: () => false, switchPopupPage: null, pageToken: 1,
     coreOf, variant: () => ctx.fam.variants[0], sourceOf: (key) => key, ctx: { invalidateRoster: () => calls.push("roster") },
     forget: () => calls.push("forget"), spinePrefix: (kind, core) => `${kind}/${core}`,
     call: (fn) => fn(), readFamily: async () => ({ key: "family", variants: [next] }),
@@ -154,7 +154,7 @@ test("reload and a switch's reload drop a read that finishes after the screen wa
   for (const entry of ["reload()", 'applyCandidate("mod:test", "spr")']) {
     const read = deferred(), newer = { key: "family", variants: [v], newer: true };
     const ctx = {
-      busy: false, isApplied: () => false, switchPopupPage: null, pageToken: 1,
+      busy: false, isApplied: () => false, unfitCostume: () => false, switchPopupPage: null, pageToken: 1,
       coreOf, variant: () => ctx.fam.variants[0], sourceOf: (key) => key, ctx: { invalidateRoster: () => calls.push("roster") },
       forget() {}, spinePrefix: (kind, core) => `${kind}/${core}`,
       call: (fn) => fn(), readFamily: () => read.promise,

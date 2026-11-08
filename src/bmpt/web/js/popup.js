@@ -901,10 +901,14 @@ export async function listPopup(options) {
     const origin = detailsHost === next ? [960, 540] : [-panel.l * S, panel.t * S];
     const dv = await NGUI.render(tree, detailsHost, { scale: S, origin, z: 20 });
     if (sel.nameEdit) hit(detailsHost, dv, "Details/EditName", () => sel.nameEdit.fn(scroll()), { name: sel.nameEdit.label, action: "alias:details" });
-    d.actions.forEach(([caption, fn, disabled], i) => {
+    d.actions.forEach(([caption, fn, disabled, , hint], i) => {
       if (!fn) return;
       const button = hit(detailsHost, dv, `Details/Act_${i}/Body`, disabled ? () => {} : fn, { name: caption });
-      if (button) button.disabled = !!disabled;
+      if (!button) return;
+      // a greyed action with a reason keeps the pointer, so the reason shows on hover
+      if (disabled && hint) Object.assign(button, { title: hint }).setAttribute("aria-disabled", "true");
+      else button.disabled = !!disabled;
+      if (hint) button.setAttribute("aria-description", hint);
     });
   }
   if (tokens.get(host) !== my || host.hidden) return;
