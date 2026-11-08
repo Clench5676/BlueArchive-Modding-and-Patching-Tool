@@ -10,6 +10,7 @@
 // answered with a button takes Escape and does nothing with it, so nothing under it acts either.
 // The pure parts (the stack, the selection, the start sequence) are tested in Node (tests/js/popup.test.mjs).
 import * as NGUI from "./ngui.js";
+import { attachHint } from "./hover-hint.js";
 import { switchGrid, placeSwitchCards } from "./switch-layout.js";
 import { scrollbar, scrollbarTrack } from "./scrollbar.js";
 import { horizontalScroll } from "./horizontal-scroll.js";
@@ -905,8 +906,8 @@ export async function listPopup(options) {
       if (!fn) return;
       const button = hit(detailsHost, dv, `Details/Act_${i}/Body`, disabled ? () => {} : fn, { name: caption });
       if (!button) return;
-      // a greyed action with a reason keeps the pointer, so the reason shows on hover
-      if (disabled && hint) Object.assign(button, { title: hint }).setAttribute("aria-disabled", "true");
+      // a greyed action with a reason keeps the pointer, so the reason shows on hover (the game's tooltip)
+      if (disabled && hint) { button.setAttribute("aria-disabled", "true"); attachHint(button, hint); }
       else button.disabled = !!disabled;
       if (hint) button.setAttribute("aria-description", hint);
     });
