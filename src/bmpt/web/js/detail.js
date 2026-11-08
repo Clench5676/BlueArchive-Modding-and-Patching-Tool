@@ -227,6 +227,8 @@ function costumesReady(v, { wait = false } = {}) {
     check = (async () => {
       const known = await rpc("model.costumes", { variant: v.key, others });
       costumeState.set(v.key, { ...(costumeState.get(v.key) || {}), ...known });
+      // the Apply card follows the shown costume's verdict
+      if (open && variant() === v && tab === "model") void renderScreen();
       const unknown = others.filter((o) => known[o] == null);
       if (!unknown.length) return false;
       const id = await rpc("model.checkCostumes", { variant: v.key, others: unknown });
@@ -240,8 +242,12 @@ function costumesReady(v, { wait = false } = {}) {
   return Loading.task((report) => { check.report = report; return check; },
     { label: T("progress.compatibility", { name: T("tab.model") }) });
 }
+// a costume past the stretch limit (or refused) chosen as the 3D model's preview: shown, never applied
+const unfitCostume = (v, kind, key) => kind === "model" && typeof key === "string" && key.startsWith("v:")
+  && !!costumeState.get(v.key)?.[key.slice(2)] && costumeState.get(v.key)[key.slice(2)] !== "ok";
 // After a background check: the open Switch 3D Model popup lists what it found.
 function costumesChecked(v) {
+  if (open && variant() === v && tab === "model") void renderScreen();
   if (open && variant() === v && popupKind === "model" && switchPopupPage === pageToken && !$("popup").hidden) void renderPopup();
 }
 
@@ -395,7 +401,7 @@ function screenTree() {
   // Keep these action cards and row 3's Add card at their existing prefab-based positions and sizes.
   const isMod = !!sk && c.kind === "mod";
   const actions = [["SkillData_EX", "compatibility.check", "compare", isMod && !busy], ["SkillData_EX (1)", repairAction(c), "update", isMod && !busy],
-    ["SkillData_EX (2)", "export.title", "extract", !busy], ["SkillData_EX (3)", "popup.apply", "apply", !!sk && !!coreOf(v, sk) && !busy && !isApplied(v, sk, shownSource(v, sk))]];
+    ["SkillData_EX (2)", "export.title", "extract", !busy], ["SkillData_EX (3)", "popup.apply", "apply", !!sk && !!coreOf(v, sk) && !busy && !isApplied(v, sk, shownSource(v, sk)) && !unfitCostume(v, sk, shownSource(v, sk))]];
   // the row's white section spans x 58..1320 (Bg_W2 at 689, 1262 wide); cards keep the first card's 37-unit margins
   const ROW_L = 58 + 37, ROW_R = 1320 - 37, GAP = 6, CW = (ROW_R - ROW_L - 3 * GAP) / 4;
   actions.forEach(([card], i) => {
@@ -681,8 +687,11 @@ function hits(view, leftHost, rightHost) {
   act("SkillData_EX (2)", () => runExport(), T("export.title"));
   const apply = act("SkillData_EX (3)", () => applyCandidate(shownSource(variant(), sk), sk), T("popup.apply"));
   if (apply) {
-    apply.disabled = !sk || !coreOf(variant(), sk) || busy || isApplied(variant(), sk, shownSource(variant(), sk));
+    const unfit = unfitCostume(variant(), sk, shownSource(variant(), sk));
+    apply.disabled = !unfit && (!sk || !coreOf(variant(), sk) || busy || isApplied(variant(), sk, shownSource(variant(), sk)));
     if (!coreOf(variant(), sk)) apply.setAttribute("aria-description", T("import.reason.no_target"));
+    // a costume shown for a preview only: greyed, the reason on hover (the click does nothing, applyCandidate)
+    if (unfit) Object.assign(apply, { title: T("model.unfit") }).setAttribute("aria-disabled", "true");
   }
   add(leftHost, "LeftInfo/CharInfo/Char_Target/Pin/Pin_On/Bg", toggleFav, T("fav.label"));
   add(leftHost, "LeftInfo/CharInfo/Char_Target/Pin/Pin_Off/Bg", toggleFav, T("fav.label"));
@@ -865,7 +874,7 @@ async function runCompare() {
 // keeps what it replaces (an official file until it is official again, a mod in the library)
 async function applyCandidate(key, kind = "spr") {
   const v = variant();
-  if (!kind || !coreOf(v, kind) || busy || isApplied(v, kind, key)) return;
+  if (!kind || !coreOf(v, kind) || busy || isApplied(v, kind, key) || unfitCostume(v, kind, key)) return;
   await job("actions.apply", { variant: v.key, source: sourceOf(key), kind }, {
     onDone: (result) => {
       if (result?.files?.length) {
@@ -1361,7 +1370,7 @@ async function drawPopup(scroll = 0) {
         title: T(isSpecial(v) ? "special.background" : kind === "spr" ? "info.title.portrait" : `info.title.${kind}`),
         fields: [[T("field.file"), baseName(file)], [T("field.size"), sizeText(size)], [T("field.status"), [status && T(status), error && T(`error.${error.code}`, error.params)].filter(Boolean).join("\n") || "—", statusColor],
           [T("field.crc"), crc ? T(crc[0]) : "—", crc?.[1] && `${crc[1]}/1.00`]],
-        actions: [[T("popup.apply"), () => applyCandidate(c.key, kind), !coreOf(v, kind) || isApplied(v, kind, c.key) || !!c.greyed || busy, "apply"],
+        actions: [[T("popup.apply"), () => applyCandidate(c.key, kind), !coreOf(v, kind) || isApplied(v, kind, c.key) || !!c.greyed || !!c.previewOnly || busy, "apply", c.previewOnly ? T("model.unfit") : null],
           [T(platform === "mac" ? "open.mac" : "open.win"), () => reveal(file)],
           ...(c.kind === "mod" ? [[T("compatibility.check"), async () => {
             let rebuilt = false;

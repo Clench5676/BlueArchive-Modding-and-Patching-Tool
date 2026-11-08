@@ -17,9 +17,9 @@ import pytest
 GAME_DIR = Path(os.environ.get("BAMT_TEST_GAME_DIR") or "/nonexistent/bamt-real-game")
 official = pytest.mark.skipif(not GAME_DIR.is_dir(), reason="Set BAMT_TEST_GAME_DIR to a verified official view")
 
-# the check the rule may refuse a pair on today: a costume stretching more than the slot's own (G1, BL-118); a shader
-# the game does not load with the slot's prefab is carried with the costume
-RULE_REFUSALS = {"stretch"}
+# the checks the rule may refuse a pair on today: none. A costume stretching past the limit is built for a preview only
+# (shown, never applied), and a shader the game does not load with the slot's prefab is carried with the costume.
+RULE_REFUSALS: set[str] = set()
 WORKERS = 3
 
 _state = {}
@@ -85,6 +85,8 @@ def _run(job: tuple[str, str, str | None]) -> dict:
     if row["build"]["ok"]:
         row["export"] = _outcome(lambda: game.model_glb(variant.model, overrides=built["parts"],
                                                         reads=library.preview_reads("official")))
+        verdict = library.costume_verdict(key, other)
+        row["preview_only"] = bool(verdict and verdict.get("preview"))
     return row
 
 
@@ -106,10 +108,11 @@ def test_official_every_costume_pair_builds_or_is_refused_by_the_rule(tmp_path, 
     unknown = [(r["job"], r["build"]["check"]) for r in pairs
                if r["build"].get("code") == "source_unsupported" and r["build"]["check"] not in RULE_REFUSALS]
     unexported = [(r["job"], r["export"]) for r in pairs if r["build"]["ok"] and not r["export"]["ok"]]
-    offered = sum(1 for r in pairs if r["build"]["ok"] and r["export"]["ok"])
+    offered = sum(1 for r in pairs if r["build"]["ok"] and r["export"]["ok"] and not r["preview_only"])
+    shown = sum(1 for r in pairs if r["build"]["ok"] and r["export"]["ok"] and r["preview_only"])
     checks = Counter(r["build"]["check"] for r in pairs if r["build"].get("code") == "source_unsupported")
     record_property("costume_census", json.dumps({"models": len(own), "pairs": len(pairs), "offered": offered,
-                                                  "refused": dict(checks)}))
+                                                  "preview_only": shown, "refused": dict(checks)}))
     assert not failed_own, failed_own
     assert not errors, errors
     assert not unknown, unknown

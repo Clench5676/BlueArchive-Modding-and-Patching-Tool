@@ -1432,7 +1432,8 @@ class Services:
         except Exception as error:  # the preview cannot be drawn: a program error, kept in the log
             logger.exception("Costume preview export failed for %s <- %s", target, other)
             return library.record_costume_verdict(target, other, False, "export", {"error": type(error).__name__})
-        return library.record_costume_verdict(target, other, True)
+        # a costume past the stretch limit was saved by the preview as shown only
+        return library.costume_verdict(target, other) or library.record_costume_verdict(target, other, True)
 
     def _model_asset(self, core: str, target: str, source: str, path: str) -> bytes:
         """A variant's 3D chibi as GLB from one source: live game files, official copies, a library mod or an
@@ -1466,7 +1467,7 @@ class Services:
             return self.game.model_glb(core, overrides=bundles, reads=self.library.preview_reads("configured"))
         if source.startswith("variant:"):
             verdict = self.library.costume_verdict(target, source[8:])
-            if verdict is not None and not verdict["ok"]:
+            if verdict is not None and not verdict["ok"] and not verdict.get("preview"):
                 raise KeyError(path)  # checked to its end and refused: never offered (costume_check)
             bundles = self.library.costume_preview(target, source[8:])
             if not fits(bundles):

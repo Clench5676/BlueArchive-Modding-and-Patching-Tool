@@ -951,6 +951,15 @@ that holds that type; another core's files are never written.
 Apply builds through the library's build cache like any adaptation; a preview builds once per build signature into
 `built/previews/<signature>` (the newest four kept; Clear Built Mods clears them).
 
+A costume build holds the model lock (`gameassets.service.model_lock`, taken after the library's lock) and closes
+every bundle it opened when it ends: like an export it keeps the path lock of each bundle it reads until then, so two
+at a time could wait on each other (0.7.0-alpha.22 hung there).
+
+A pair past the stretch limit is built for a preview only (`adapt(strict=False)`, `plan.unfit`): its verdict is
+"preview" (kept with the build in `parts.json`), its card is listed with `previewOnly`, it can be shown and saved as the
+3D preview, and its Apply (the details panel's and the screen's) is greyed with `model.unfit` on hover; `apply` refuses
+a pair whose verdict is not ok (`source_unsupported`) before saving any choice, mods on or off.
+
 A pair is offered only once it was checked to its end (BL-122): its preview built and exported
 (`Services.costume_check`). The verdict is kept in the library's `costume-verdicts.json`, keyed by the build signature
 (the program, the official bytes of both models, the save options; the newest 4000 kept): the rule's refusals, program
@@ -1156,8 +1165,8 @@ stops the server (the page shows Closed); with `--serve` it gives `native_unavai
 | `mods.rename {id, label}` | |
 | `mods.seen {id}` or `{ids}` | stores seen mod IDs in `webui.json`, without writing the library; roster and family fresh flags come from this state |
 | `ui.preview {variant, kind, source}` | stores a preview choice in `webui.json`, scoped to the install and variant; returns `previewSources`; never changes the application manifest or game files |
-| `model.costumes {variant, others}` | the verdicts of other variants' costumes on a variant's 3D model: `{other: "ok" \| "refused" \| null}` (null: not checked yet); a pair outside the family, the variant itself or one with no model is "refused"; at most 64 `others` |
-| `model.checkCostumes {variant, others}` | job id (`costume-check`, not a writer): checks each pair to its end (`Services.costume_check`) and saves its verdict; result `{other: "ok" \| "refused"}`, a refusal of the moment "refused" and not saved |
+| `model.costumes {variant, others}` | the verdicts of other variants' costumes on a variant's 3D model: `{other: "ok" \| "preview" \| "refused" \| null}` ("preview": past the stretch limit, shown, never applied; null: not checked yet); a pair outside the family, the variant itself or one with no model is "refused"; at most 64 `others` |
+| `model.checkCostumes {variant, others}` | job id (`costume-check`, not a writer): checks each pair to its end (`Services.costume_check`) and saves its verdict; result `{other: "ok" \| "preview" \| "refused"}`, a refusal of the moment "refused" and not saved |
 | `mods.state` | `{installs: [{id, key, server, folder, label, distinct, named}], current, enabled, available, reason, reasonParams, scan, explained, configured, pending, stuck, left, unfinished: {pending, left, stuck}, drift, untracked, damaged, sourceMissing, queued, scanned, tray, traySupported, busy, progress}` from the snapshot (above); `id` is the first 12 hex digits of the install key's SHA-1 (used in URLs), `named` tells a folder the settings name from a recorded one; `busy` while a toggle is queued or running or writes are queued for the classic window; `progress` is `{done, total}` of a running toggle |
 | `mods.sizes {kind}` | `{builtSize}` for `kind: "built"` or `{originalsSize}` for `kind: "originals"`, bytes measured on demand; Settings requests only the Mod Cache size; no size walks in `mods.state` |
 | `mods.toggle {enabled, expect}` | job id (`mods.toggle`): the switch over every known install, also Retry; `busy` while another toggle is queued or running, `classic_open` at submit; the job's refusals `state_changed`, `folder_changed`, `game_running`, `game_status_unavailable`, `steam_busy`, `classic_open`, `not_enough_space` |

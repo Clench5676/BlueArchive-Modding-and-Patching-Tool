@@ -56,6 +56,7 @@ STRETCH_TOLERANCE = 1.1
 
 def stretch_limit(own: float) -> float:
     return STRETCH_TOLERANCE * max(1.5 * own, own + 1.0)
+
 # clips whose poses judge the mapping, by name suffix; the idle comes first
 PROBE_CLIPS = ("Formation_Idle", "Normal_Idle", "Move_Ing", "Vital_Death", "Formation_Pickup", "Cafe_Walk")
 IDLE_CLIPS = ("Formation_Idle", "Normal_Idle", "Cafe_Idle", "Stand_Idle", "Idle")
@@ -457,6 +458,7 @@ class Plan:
     stretch: float
     own: float
     groups: dict[int, list[int]] = field(default_factory=dict)  # source Biped node -> its secondary bones
+    unfit: bool = False  # past the stretch limit: built for a preview only (``strict=False``), never applied
 
 
 @dataclass
@@ -516,7 +518,7 @@ class OwnMesh:
         return np.vstack([deform(skin, np.array([pose[b] for b in bones]) @ bp) for skin, bp, bones in self.parts])
 
 
-def plan(target: Costume, source: Costume, probes: list[list[np.ndarray]]) -> Plan:
+def plan(target: Costume, source: Costume, probes: list[list[np.ndarray]], *, strict: bool = True) -> Plan:
     """The bone mapping with each group's choice, and the checks of the rest pose and the stretch."""
     t_rest, s_rest = target.skeleton.world(), source.skeleton.world()
     mapping = map_bones(target.skeleton, source.skeleton, source.bones())
@@ -572,9 +574,10 @@ def plan(target: Costume, source: Costume, probes: list[list[np.ndarray]]) -> Pl
         raise refuse("rest pose not reproduced")
     mine = max((stretch(sv, deform(flat, matrices(p, mapping)), se) for p in probes), default=1.0)
     own = max((stretch(tv, posed, te) for posed in posed_targets), default=1.0)
-    if mine > stretch_limit(own):
+    unfit = mine > stretch_limit(own)
+    if unfit and strict:
         raise refuse("stretch", adapted=round(mine, 2), own=round(own, 2))
-    return Plan(mapping, choices, mine, own, groups)
+    return Plan(mapping, choices, mine, own, groups, unfit)
 
 
 # --- skirts and hems (BL-118, see model_hems) ------------------------------------------------------------------------
@@ -942,18 +945,19 @@ def choose_prefab(prefabs: Mapping[str, Any], dev: str) -> str:
 
 
 def adapt(*, index: Mapping[str, Path], resolver: Callable | None, target_files: list[Path], target_dev: str,
-          source_files: list[Path], source_dev: str, open_writable: Callable[[Path], Any]) -> Result:
+          source_files: list[Path], source_dev: str, open_writable: Callable[[Path], Any], strict: bool = True) -> Result:
     """The changed bundles of ``target_files`` (the slot, official copies) carrying the costume of ``source_dev``'s
     model, whose prefab sits in ``source_files``. ``index`` maps CABs to files to read (the slot's own CABs to
     ``target_files``); ``resolver`` finds any other CAB. ``open_writable`` opens a slot file as an engine Bundle.
+    With ``strict=False`` a costume past the stretch limit is built anyway (``plan.unfit``), for a preview only.
     The caller holds the model lock (``gameassets.service.model_lock``): the graph holds the path lock of every bundle
     it reads until it closes, like an export's."""
     with BundleGraph(index, resolver=resolver) as graph:
-        return _adapt(graph, index, target_files, target_dev, source_files, source_dev, open_writable)
+        return _adapt(graph, index, target_files, target_dev, source_files, source_dev, open_writable, strict)
 
 
 def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Path], target_dev: str,
-           source_files: list[Path], source_dev: str, open_writable: Callable[[Path], Any]) -> Result:
+           source_files: list[Path], source_dev: str, open_writable: Callable[[Path], Any], strict: bool = True) -> Result:
     target_prefabs = _model_prefabs(graph, [f for f in target_files if f.name.startswith("character-")])
     source_prefabs = _model_prefabs(graph, source_files)
     t_name = choose_prefab(target_prefabs, target_dev)
@@ -977,7 +981,7 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
     target = Costume(t_skeleton, t_costume, [skin_of(p.mesh) for p in t_costume])
     source = Costume(s_skeleton, s_costume, [skin_of(p.mesh) for p in s_costume])
     probes = t_skeleton.poses(pick(t_clips, PROBE_CLIPS))
-    result = plan(target, source, probes)
+    result = plan(target, source, probes, strict=strict)
     t_rest, s_rest = t_skeleton.world(), s_skeleton.world()
     mesh_trees = [p.mesh.read_typetree() for p in s_costume]
     stores = [hm.store_of(tree) for tree in mesh_trees]

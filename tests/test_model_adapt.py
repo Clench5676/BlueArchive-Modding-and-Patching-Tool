@@ -269,6 +269,11 @@ def test_official_costume_build_leaves_no_bundle_locked(view, target, source, re
     except ServiceError as error:
         assert refused and error.params["source"] == "stretch"
     assert _locks_free() == []
+    if refused:  # built anyway for a preview, marked unfit
+        result = ma.adapt(index=index, resolver=None, target_files=_slot(files, target), target_dev=target,
+                          source_files=sources, source_dev=source, open_writable=Bundle.load, strict=False)
+        assert result.plan.unfit and result.plan.stretch > ma.stretch_limit(result.plan.own) and result.changed
+        assert _locks_free() == []
 
 
 def test_the_library_builds_a_costume_under_the_model_lock(monkeypatch, tmp_path):
