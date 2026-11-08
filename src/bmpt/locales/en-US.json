@@ -85,6 +85,7 @@
 			"has": "Yes",
 			"none": "None",
 			"failed": "3D model unavailable",
+			"unfit": "Model not adapted",
 			"action": {
 				"idle": "Idle",
 				"reaction": "Reaction",

@@ -747,7 +747,7 @@ def build_api(s: Services) -> RpcRegistry:
                     getattr(other, "model", None) or getattr(other, "field_model", None))):
                 return False
             verdict = getattr(s.library, "costume_verdict", lambda *args: None)(v.key, other.key)
-            return verdict is None or bool(verdict["ok"])
+            return verdict is None or bool(verdict["ok"]) or bool(verdict.get("preview"))
         else:
             return False
         return other is not None and other.family == v.family and bool(getattr(other, kind, None)) and (
@@ -779,7 +779,8 @@ def build_api(s: Services) -> RpcRegistry:
     @rpc.method("model.costumes")
     def model_costumes(variant: str, others: list[str]) -> dict[str, str | None]:
         """The saved verdicts of other variants' costumes on a variant's model (Switch 3D Model, BL-122): "ok",
-        "refused", or None when not checked yet (``model.checkCostumes``). Only "ok" pairs are offered."""
+        "preview" (past the stretch limit: shown, never applied), "refused", or None when not checked yet
+        (``model.checkCostumes``). "ok" and "preview" pairs are offered."""
         out: dict[str, str | None] = {}
         for other in costume_keys(variant, others):
             try:
@@ -790,13 +791,16 @@ def build_api(s: Services) -> RpcRegistry:
             except (ServiceError, KeyError):
                 out[other] = "refused"
                 continue
-            out[other] = None if verdict is None else "ok" if verdict["ok"] else "refused"
+            out[other] = verdict_kind(verdict)
         return out
+
+    def verdict_kind(verdict: dict | None) -> str | None:
+        return None if verdict is None else "ok" if verdict["ok"] else "preview" if verdict.get("preview") else "refused"
 
     @rpc.method("model.checkCostumes")
     def model_check_costumes(variant: str, others: list[str]) -> str:
         """A job checking other variants' costumes on a variant's model to their end (``Services.costume_check``);
-        its result is {other: "ok" | "refused"}. A refusal of the moment is "refused" and not saved."""
+        its result is {other: "ok" | "preview" | "refused"}. A refusal of the moment is "refused" and not saved."""
         keys = costume_keys(variant, others)
 
         def run(log: Any, progress: Any) -> dict[str, str]:
@@ -805,10 +809,11 @@ def build_api(s: Services) -> RpcRegistry:
                 if progress:
                     progress(i, len(keys), "")
                 try:
-                    ok = preview_source_valid(variant, "model", f"variant:{other}") and s.costume_check(variant, other)["ok"]
+                    verdict = s.costume_check(variant, other) if preview_source_valid(
+                        variant, "model", f"variant:{other}") else None
                 except (ServiceError, KeyError):
-                    ok = False
-                out[other] = "ok" if ok else "refused"
+                    verdict = None
+                out[other] = verdict_kind(verdict) or "refused"
             return out
 
         return s.submit("costume-check", run)

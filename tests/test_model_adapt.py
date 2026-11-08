@@ -103,7 +103,7 @@ def test_official_costume_on_a_slot(view, tmp_path, target, source, field, parts
     result = ma.adapt(index=index, resolver=None, target_files=slot, target_dev=target, source_files=sources,
                       source_dev=source, open_writable=Bundle.load)
     assert result.parts == parts
-    assert result.plan.stretch <= max(1.5 * result.plan.own, result.plan.own + 1.0)
+    assert result.plan.stretch <= ma.stretch_limit(result.plan.own)
     # the hem (BL-118): less pass-through than rigid weights, no clip 5 points worse, stretch within the limit
     hems = result.hems
     assert hems.rule == hem, hems.summary()
@@ -227,6 +227,76 @@ def test_official_costume_carries_a_shader_the_slot_does_not_load(view, tmp_path
             assert [(obj.assets_file.externals[d["m_FileID"] - 1].path, d["m_PathID"]) for d in tree["m_Dependencies"]] == [
                 ("Library/unity default resources", d["m_PathID"]) for d in originals[name]["m_Dependencies"]]
     assert carried == ["MX/C-Simple-Transparent"]
+
+
+def _locks_free() -> list[str]:
+    """The bundle path locks another thread cannot take at once (held by a reader that never closed)."""
+    import threading
+    from bmpt.gameassets import unity
+
+    stuck = []
+
+    def probe():
+        for path, lock in list(unity._locks.items()):
+            if lock.acquire(timeout=0.2):
+                lock.release()
+            else:
+                stuck.append(path.name)
+
+    thread = threading.Thread(target=probe)
+    thread.start()
+    thread.join()
+    return stuck
+
+
+@official
+@pytest.mark.parametrize("target,source,refused", [
+    ("hina_original", "ch0230", False),    # built: Hina <- Hina (Dress)
+    ("ch0205", "koharu_original", True),   # refused for its stretch: Koharu (Swimsuit) <- Koharu
+])
+def test_official_costume_build_leaves_no_bundle_locked(view, target, source, refused):
+    """BL-122: a build opens many bundles, each under its path lock; it closes them all when it ends, built or
+    refused, so an export on another thread never waits for them (0.7.0-alpha.22 hung there)."""
+    from ba_modding_toolkit.bundle import Bundle
+    from bmpt.errors import ServiceError
+
+    files, index = view
+    sources = [p for p in files if re.match(rf"character-{source}-_mxload", p.name)]
+    try:
+        ma.adapt(index=index, resolver=None, target_files=_slot(files, target), target_dev=target,
+                 source_files=sources, source_dev=source, open_writable=Bundle.load)
+        assert not refused
+    except ServiceError as error:
+        assert refused and error.params["source"] == "stretch"
+    assert _locks_free() == []
+    if refused:  # built anyway for a preview, marked unfit
+        result = ma.adapt(index=index, resolver=None, target_files=_slot(files, target), target_dev=target,
+                          source_files=sources, source_dev=source, open_writable=Bundle.load, strict=False)
+        assert result.plan.unfit and result.plan.stretch > ma.stretch_limit(result.plan.own) and result.changed
+        assert _locks_free() == []
+
+
+def test_the_library_builds_a_costume_under_the_model_lock(monkeypatch, tmp_path):
+    """Costume builds and exports hold many bundles at once: one at a time, under the model lock."""
+    from bmpt.gameassets import model_adapt, service as gameassets_service
+    from bmpt.library import service
+
+    held = []
+
+    def adapt(**kwargs):
+        held.append(gameassets_service._MODEL_LOCK.locked())
+        raise model_adapt.refuse("stretch", adapted=9.0, own=5.0)
+
+    library = object.__new__(service.ModLibrary)
+    monkeypatch.setattr(model_adapt, "adapt", adapt)
+    monkeypatch.setattr(service.ModLibrary, "_stage_official", lambda self, targets, folder, pin, **kw: {})
+    monkeypatch.setattr(service.ModLibrary, "_costume_files", lambda self, other, pin: ("dev", [], []))
+    monkeypatch.setattr(service.ModLibrary, "_cab_index", lambda self, pin: None)
+    monkeypatch.setattr(service.ModLibrary, "_core_map", lambda self, pin: type("M", (), {"slot": lambda s, c: c})())
+    target = tmp_path / "character-hina_original-_mxload-2026-01-01_assets_all_1.bundle"
+    with pytest.raises(Exception, match="source_unsupported"):
+        library._stage_costume("other", [target], tmp_path, print, None)
+    assert held == [True] and not gameassets_service._MODEL_LOCK.locked()
 
 
 @official

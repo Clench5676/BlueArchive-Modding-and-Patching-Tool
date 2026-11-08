@@ -4041,7 +4041,7 @@ class ModLibrary:
         return dev, [resolve(path, pin) for path in files]
 
     def _stage_costume(self, other: str, targets: list[Path], directory: Path, log: LogFunc, pin: Pin, *,
-                       preview: bool = False) -> dict[Path, Path]:
+                       preview: bool = False, report: dict[str, Any] | None = None) -> dict[Path, Path]:
         """The model slot ``targets`` (official copies) carrying the costume of ``other``'s model: changed parts built
         into ``directory``, the others as staged official copies. Reads official bytes only: the slot's own parts, the
         source model's files, and any other bundle the CAB index finds."""
@@ -4065,9 +4065,14 @@ class ModLibrary:
             return {cab: str(self._official_or_current(Path(path), pin)) for cab, path in cabs.resolve(wanted, hint).items()}
 
         target_dev = self._core_map(pin).slot(core_of(targets[0].name))
-        result = adapt(index=index, resolver=resolver, target_files=list(staged.values()),
-                       target_dev=target_dev, source_files=[p for p in sources if p.name in chosen],
-                       source_dev=dev, open_writable=Bundle.load)
+        from ..gameassets.service import model_lock
+
+        with model_lock("costume"):
+            result = adapt(index=index, resolver=resolver, target_files=list(staged.values()),
+                           target_dev=target_dev, source_files=[p for p in sources if p.name in chosen],
+                           source_dev=dev, open_writable=Bundle.load, strict=not preview)
+        if report is not None and result.plan.unfit:
+            report["unfit"] = {"source": "stretch", "adapted": f"{result.plan.stretch:.2f}", "own": f"{result.plan.own:.2f}"}
         output = directory / "output"
         output.mkdir(parents=True, exist_ok=True)
         reverse = {value: key for key, value in staged.items()}
@@ -4109,9 +4114,9 @@ class ModLibrary:
                 if isinstance(key, str) and isinstance(value, dict) and isinstance(value.get("ok"), bool)}
 
     def _save_verdict(self, signature: str, ok: bool, reason: str | None = None,
-                      detail: Mapping[str, Any] | None = None) -> dict[str, Any]:
+                      detail: Mapping[str, Any] | None = None, *, preview: bool = False) -> dict[str, Any]:
         verdict = {"ok": ok, "reason": reason, "detail": {str(k): str(v) for k, v in (detail or {}).items()},
-                   "at": now()}
+                   "at": now(), **({"preview": True} if preview and not ok else {})}
         verdicts = self._verdicts()
         verdicts[signature] = verdict
         kept = dict(sorted(verdicts.items(), key=lambda item: str(item[1].get("at", "")), reverse=True)[:COSTUME_VERDICTS])
@@ -4125,7 +4130,8 @@ class ModLibrary:
     def costume_verdict(self, variant_key: str, other: str, pin: Pin | None = None) -> dict[str, Any] | None:
         """Whether another variant's costume on a variant's model was built and exported for the current build
         signature (the program, the official bytes of both models, the save options): {"ok", "reason", "detail",
-        "at"}, or None when not judged yet. A pair the Switch 3D Model card offers has one with ok (BL-122)."""
+        "at"}, plus "preview" for a pair past the stretch limit (previewed, never applied), or None when not judged
+        yet. A pair the Switch 3D Model card offers has one with ok or preview (BL-122)."""
         signature, _ = self._costume_signature(variant_key, other, self._current(pin))
         return self._verdicts().get(signature)
 
@@ -4147,16 +4153,21 @@ class ModLibrary:
         done = folder / "parts.json"
         if done.is_file():
             try:
-                names = json.loads(done.read_text())
-                parts = [folder / name for name in names if is_safe_file_name(name)]
+                kept = json.loads(done.read_text())
+                kept = kept if isinstance(kept, dict) else {"parts": kept, "unfit": None}
+                parts = [folder / name for name in kept["parts"] if is_safe_file_name(name)]
                 if parts and all(path.is_file() for path in parts):
                     os.utime(folder)
+                    if kept.get("unfit") and signature not in self._verdicts():
+                        self._save_verdict(signature, False, "stretch", kept["unfit"], preview=True)
                     return parts
-            except (OSError, ValueError):
+            except (OSError, ValueError, KeyError, TypeError):
                 pass
+        report: dict[str, Any] = {}
         with temporary_directory(prefix=devmode.LIBRARY_STAGING_PREFIX) as temporary:
             try:
-                replacements = self._stage_costume(other, targets, Path(temporary) / "model", no_log, pin, preview=True)
+                replacements = self._stage_costume(other, targets, Path(temporary) / "model", no_log, pin, preview=True,
+                                                   report=report)
             except ServiceError as error:
                 if error.code == "source_unsupported":  # the rule cannot carry this pair: never offered again
                     self._save_verdict(signature, False, error.params.get("source"), error.params)
@@ -4165,7 +4176,9 @@ class ModLibrary:
             folder.mkdir(parents=True, exist_ok=True)
             for path in built:
                 atomic_copy(path, folder / path.name)
-            done.write_text(json.dumps([path.name for path in built]))
+            done.write_text(json.dumps({"parts": [path.name for path in built], "unfit": report.get("unfit")}))
+        if report.get("unfit"):  # past the stretch limit: shown, never applied
+            self._save_verdict(signature, False, "stretch", report["unfit"], preview=True)
         previews = sorted((p for p in folder.parent.iterdir() if p.is_dir()), key=lambda p: p.stat().st_mtime, reverse=True)
         for stale in previews[COSTUME_PREVIEWS:]:
             remove_tree(stale)
@@ -4343,6 +4356,9 @@ class ModLibrary:
                     targets = self._game_files(variant_key, "model", pin)
                     if not own or not targets:
                         raise ServiceError("game_file_not_found", variant=variant_key)
+                    verdict = self._verdicts().get(self._costume_signature(variant_key, other, pin)[0])
+                    if verdict is not None and not verdict["ok"]:  # refused or preview only: never saved or written
+                        raise ServiceError("source_unsupported", source=verdict.get("reason") or source)
                     kinds = {"model": own.lower()}
                     change.configure(kinds)
                     if not on:

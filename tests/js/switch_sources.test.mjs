@@ -335,9 +335,13 @@ test("the 3D model offers the student's other models as costumes, field-mode mod
   assert.deepEqual(candidates(fam, v, "model").map((c) => c.key), ["self"]);
   assert.deepEqual(candidates(fam, v, "model", { hoshino_swimsuit: "refused", np0045: null }).map((c) => c.key), ["self"]);
   assert.deepEqual(candidates(fam, v, "model", { hoshino_swimsuit: "refused", np0045: "ok" }).map((c) => c.key), ["self", "v:np0045"]);
+  // a pair past the stretch limit is listed for a preview only
+  assert.deepEqual(candidates(fam, v, "model", { hoshino_swimsuit: "preview", np0045: "ok" }).map((c) => [c.key, !!c.previewOnly]),
+    [["self", false], ["v:hoshino_swimsuit", true], ["v:np0045", false]]);
   // ...but the one already chosen stays listed, whatever its check says
   v.configured = { model: "variant:hoshino_swimsuit" };
-  assert.deepEqual(candidates(fam, v, "model", { hoshino_swimsuit: "refused" }).map((c) => c.key), ["self", "v:hoshino_swimsuit"]);
+  assert.deepEqual(candidates(fam, v, "model", { hoshino_swimsuit: "refused" }).map((c) => [c.key, !!c.previewOnly]),
+    [["self", false], ["v:hoshino_swimsuit", true]]);
   v.configured = {};
   v.previewSources = { model: "variant:np0045" };
   assert.deepEqual(candidates(fam, v, "model").map((c) => c.key), ["self", "v:np0045"]);
