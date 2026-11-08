@@ -6,6 +6,7 @@
 // as the fullscreen lobby reads them (attachInput). One view at a time; hide() frees its WebGL context at once.
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { straightTextureLoader } from "./png-decode.js";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { chibiMaterial, disposeDefaults, outlineMaterial, setOutlineScale } from "./chibi-materials.js";
 import { wheelKind, wheelStep } from "./lobby-touch.js";
@@ -327,6 +328,11 @@ class ChibiView {
 
   async load(url, { signal } = {}) {
     const loader = new GLTFLoader();
+    // textures read straight, never premultiplied by the browser: alpha is data beside colours (png-decode.js)
+    loader.register((parser) => {
+      parser.textureLoader = straightTextureLoader;
+      return { name: "BAMT_straight_textures" };
+    });
     const response = await fetch(url, { signal, cache: "no-store" });
     if (!response.ok) {
       const error = new Error(`${url}: HTTP ${response.status}`);
