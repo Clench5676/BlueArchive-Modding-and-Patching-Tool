@@ -630,7 +630,8 @@ def build_api(s: Services) -> RpcRegistry:
             "aliases": v.aliases,  # the search matches them, the page never shows them (the CN server's names)
             "recruitable": v.recruitable,  # on the selected server; playable is on some server
             "order": v.order, "spr": v.spr, "lobby": v.lobby, "date": v.date, "model": v.model,
-            # a field-mode model (an event or story variant with no battle model): previewed and offered as a costume
+            # a model with no slot (an event or story variant with no battle model: a field player or NPC, or a story
+            # cutscene's or a UI scene's model): previewed and offered as a costume
             "fieldModel": getattr(v, "field_model", None),
             "spineCategory": getattr(v, "spine_category", None),
             "bg": _url_bg(v.bg), "portrait": _url_portrait(v.portrait),

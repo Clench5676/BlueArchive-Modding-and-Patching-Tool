@@ -903,3 +903,213 @@ def test_model_preview_reads_the_files_outside_its_source_by_its_rule(tmp_path, 
     assert game.model_glb('ch0242') == b'glTF\x04'  # live: the game folder as it is
     assert seen[-1] == ([str(resources / prefab)], {'cab-tex': str(resources / texture)})
     assert not (tmp_path / 'cache').exists()
+
+
+# --- models with no slot: field NPCs and a character's own bundles (BL-127) ---
+
+def test_npc_prefab_picks_the_ids_prefab_with_a_halo_then_by_name():
+    stems = ["field_npc_np0143_sr_weapon", "field_npc_np0143_ar_weapon", "field_npc_np0143_sg_weapon",
+             "field_npc_np0060_justice_student", "field_npc_ch0171_nonweapon_nohalo", "field_npc_ch0171_nonweapon",
+             "field_npc_np01430", "field_npc_erika_original_nonweapon", "field_player_np0009"]
+    assert model.npc_prefab(stems, "np0143") == "field_npc_np0143_ar_weapon"
+    assert model.npc_prefab(stems, "NP0060") == "field_npc_np0060_justice_student"
+    assert model.npc_prefab(stems, "ch0171") == "field_npc_ch0171_nonweapon"  # its _NoHalo copy last
+    assert model.npc_prefab(["field_npc_ch0171_nonweapon_nohalo"], "ch0171") == "field_npc_ch0171_nonweapon_nohalo"
+    assert model.npc_prefab(stems, "np0009") is None  # a field player is not an NPC prefab
+    assert model.npc_prefab(stems, "erika") is None   # only ids name NPC prefabs
+
+
+def test_own_bundles_and_the_parts_that_can_hold_a_root():
+    from bmpt.gameassets.discovery import may_hold_model_root, own_bundle
+
+    assert own_bundle("assets-_mx-npcs-np0206-_mxdependency-2025-07-25_001_assets_all_1.bundle", "NP0206")
+    assert own_bundle("assets-_mx-characters-np0269-_mxdependency-meshes-2026-04-06_assets_all_2.bundle", "np0269")
+    assert not own_bundle("assets-_mx-npcs-np0229-_mxdependency-2025-07-25_001_assets_all_3.bundle", "np0206")
+    assert not own_bundle("character-np0206-_mxload-2025-07-25_assets_all_4.bundle", "np0206")
+    assert not own_bundle("assets-_mx-spinecharacters-np0206_spr-_mxdependency-2025-07-25_000_assets_all_5.bundle",
+                          "np0206")
+    assert may_hold_model_root("assets-_mx-npcs-arona-_mxdependency-meshes-2026-07-02_assets_all_6.bundle")
+    assert may_hold_model_root("assets-_mx-npcs-np0206-_mxdependency-2025-07-25_001_assets_all_7.bundle")
+    for part in ("textures", "materials", "audio", "textassets"):
+        assert not may_hold_model_root(f"assets-_mx-npcs-arona-_mxdependency-{part}-2026-07-02_assets_all_8.bundle")
+
+
+class _AssetGraph(_Graph):
+    """A BundleGraph stand-in with bundles: their containers, the objects' locations and component lookups."""
+
+    def __init__(self, bundles, *objects):
+        super().__init__(*objects)
+        self.envs = {}
+        self.locations = {}
+        for path, (cab, container) in bundles.items():
+            self.envs[path] = SimpleNamespace(container=SimpleNamespace(items=lambda c=container: list(c)))
+            self.locations[cab.lower()] = path
+        self.added = []
+
+    def add(self, path):
+        self.added.append(str(path))
+
+    def component(self, game_object, type_name):
+        for c in self.tree(game_object)["m_Component"]:
+            obj = self.deref(game_object, c["component"])
+            if obj is not None and obj.type.name == type_name:
+                return obj
+        return None
+
+
+def _entry(name, obj):
+    return name, SimpleNamespace(deref=lambda: obj)
+
+
+def test_asset_root_prefers_a_prefab_with_an_animator_then_the_most_renderers():
+    skinned = lambda pid: _object(pid, "SkinnedMeshRenderer", m_Enabled=1)  # noqa: E731
+    fbx = _game_object(1, "Arona_Original_Gacha", [], children=(10,))                       # imported, no Animator
+    fbx_part = _game_object(10, "Body", [skinned(12), skinned(13), skinned(14)])
+    fbx_part[1].tree["m_Father"] = {"m_FileID": 0, "m_PathID": 2}
+    small = _game_object(20, "Arona_Original_Mesh", [_object(23, "Animator"), skinned(24)])
+    gacha = _game_object(30, "Arona_Original_Gacha", [_object(33, "Animator"), skinned(34)], children=(40,))
+    gacha_part = _game_object(40, "Hair", [skinned(42)])
+    gacha_part[1].tree["m_Father"] = {"m_FileID": 0, "m_PathID": 31}
+    empty = _game_object(50, "Arona_Original_Empty", [_object(53, "Animator")])
+    a = "assets-_mx-npcs-arona-_mxdependency-2024-11-18_002_assets_all_1.bundle"
+    b = "assets-_mx-npcs-arona-_mxdependency-2024-11-18_003_assets_all_2.bundle"
+    other = "assets-_mx-npcs-np0206-_mxdependency-2025-07-25_001_assets_all_3.bundle"
+    graph = _AssetGraph({
+        a: ("CAB-A", [_entry("Assets/_MX/NPCs/Arona/Mesh/Arona_Original_Gacha.FBX", fbx[0]),
+                      _entry("Assets/_MX/NPCs/Arona/Mesh/Arona_Original_Gacha.FBX", fbx_part[0])]),
+        b: ("CAB-B", [_entry("Assets/_MX/NPCs/Arona/Arona_Original_Mesh.prefab", small[0]),
+                      _entry("Assets/_MX/NPCs/Arona/Arona_Original_Gacha.prefab", gacha[0]),
+                      _entry("Assets/_MX/NPCs/Arona/Arona_Original_Empty.prefab", empty[0])]),
+        other: ("CAB-C", [])}, *fbx, *fbx_part, *small, *gacha, *gacha_part, *empty)
+    root, name = model.asset_root(graph, [Path(a), Path(b), Path(other)])
+    # two prefabs with an Animator: the one with more renderers; the imported model and the empty prefab lose
+    assert (root.path_id, name) == (30, "Assets/_MX/NPCs/Arona/Arona_Original_Gacha.prefab")
+    root, _ = model.asset_root(graph, [Path(a)])
+    assert root.path_id == 1  # a child entry of the imported model is never a root
+    # with a dev name only the character's own bundles count
+    graph.added.clear()
+    assert model.asset_root(graph, [Path(b), Path(other)], "np0206") is None
+    assert graph.added == [other]
+    assert model.asset_root(graph, [], "arona") is None
+
+
+def test_bound_clips_keep_the_clips_that_move_the_model_most_bound_first():
+    def clip(pid, name, paths, cab="CAB-A"):
+        obj = _object(pid, "AnimationClip")
+        obj.assets_file = SimpleNamespace(name=cab)
+        obj.peek_name = lambda: name
+        obj.read_typetree = lambda: {"m_ClipBindingConstant": {"genericBindings": [
+            {"path": zlib.crc32(p.encode()), "typeID": 4, "attribute": 1} for p in paths]}}
+        return obj
+
+    bones = ["Bip001", "Bip001/Bip001 Pelvis", "Bip001/Bip001 Pelvis/Bip001 Spine"]
+    graph = _AssetGraph({"own.bundle": ("CAB-A", []), "other.bundle": ("CAB-B", [])},
+                        clip(1, "Arona_Original_Sack_Idle", ["Sack/Bone01", bones[0]]),
+                        clip(2, "Arona_Original_AroPla_Cacha_02_Idle", bones),
+                        clip(3, "Unrelated_Idle", ["Elsewhere"]),
+                        clip(4, "Arona_Other_Idle", bones, cab="CAB-B"))
+    exporter = model._Exporter(graph, "arona")
+    exporter.path_of = {0: "", **{i + 1: path for i, path in enumerate(bones)}}
+    chosen = exporter.bound_clips(graph, [Path("own.bundle")])
+    assert [c.peek_name() for c in chosen] == ["Arona_Original_AroPla_Cacha_02_Idle", "Arona_Original_Sack_Idle"]
+
+
+def _named(obj, name):
+    obj.peek_name = lambda: name
+    return obj
+
+
+def test_model_root_takes_prefab_kinds_then_a_field_npc_then_an_own_model(monkeypatch):
+    player = _named(_game_object(1, "Field_Player_NP0009", [])[0], "Field_Player_NP0009")
+    npc_ar = _named(_game_object(10, "Field_NPC_NP0143_AR_Weapon", [])[0], "Field_NPC_NP0143_AR_Weapon")
+    npc_sr = _named(_game_object(20, "Field_NPC_NP0143_SR_Weapon", [])[0], "Field_NPC_NP0143_SR_Weapon")
+    prefabs = {"field_player_np0009": SimpleNamespace(deref=lambda: player),
+               "field_npc_np0143_sr_weapon": SimpleNamespace(deref=lambda: npc_sr),
+               "field_npc_np0143_ar_weapon": SimpleNamespace(deref=lambda: npc_ar)}
+    monkeypatch.setattr(model, "_prefabs", lambda graph, bundles: prefabs)
+    own = object()
+    monkeypatch.setattr(model, "asset_root", lambda graph, bundles, dev: (own, "x.prefab") if dev == "np0206" else None)
+    graph = SimpleNamespace(tree=lambda obj: {"m_Name": "NP0206_Mesh"})
+    assert model.model_root(graph, [], "np0009")[1:] == ("Field_Player_NP0009", "field")
+    assert model.model_root(graph, [], "np0143") == (npc_ar, "Field_NPC_NP0143_AR_Weapon", "npc")
+    assert model.model_root(graph, [], "np0206") == (own, "NP0206_Mesh", "asset")
+    with pytest.raises(AssetNotFound):
+        model.model_root(graph, [], "np9999")
+
+
+def test_field_index_holds_field_npcs_by_id(tmp_path, monkeypatch):
+    first = "field-character-_mxload-2024-11-18_assets_all_1.bundle"
+    second = "field-character-_mxload-2026-07-02_assets_all_2.bundle"
+    game, resources = _game(tmp_path, first, second, "character-ch0242-_mxload-2024-11-18_assets_all_3.bundle")
+    folder = "Assets/_MX/AddressableAsset/Field/Character/"
+    containers = {first: [folder + "Field_Player_NP0009.prefab", folder + "Field_NPC_NP0143_AR_Weapon.prefab",
+                          folder + "Field_NPC_Erika_Original_NonWeapon.prefab", folder + "Field_NPC_Pan-Pan.prefab"],
+                  second: [folder + "Field_NPC_CH0171_NonWeapon.prefab", folder + "Field_NPC_NP0143_SG_Weapon.prefab",
+                           "Assets/_MX/Other/Field_NPC_NP0500.prefab"]}
+
+    class Env:
+        def __init__(self, path):
+            self.container = dict.fromkeys(containers[Path(path).name])
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+    monkeypatch.setattr(service, "open_bundle", Env)
+    assert game.field_model_cores() == {"np0009", "np0143", "ch0171"}
+    assert [Path(p).name for p in game._field_index()["np0143"]] == [first, second]
+
+
+def test_own_models_are_read_once_per_name_and_exported_from_their_bundles(tmp_path, monkeypatch):
+    names = ["assets-_mx-npcs-np0206-_mxdependency-2025-07-25_000_assets_all_1.bundle",
+             "assets-_mx-npcs-np0206-_mxdependency-2025-07-25_001_assets_all_2.bundle",
+             "assets-_mx-characters-np0269-_mxdependency-materials-2026-04-06_assets_all_3.bundle"]
+    game, resources = _game(tmp_path, *names)
+    reads = []
+
+    def own_model(self, core, paths):
+        reads.append((core, sorted(Path(p).name for p in paths)))
+        return [paths[1]] if core == "np0206" else None
+
+    monkeypatch.setattr(GameAssets, "_asset_model", own_model)
+    assert game.asset_model_cores({"np0206", "NP0269", "np0999"}) == {"np0206"}
+    assert game.asset_model_cores({"np0206", "np0269"}) == {"np0206"}
+    # read once each, and only the names with bundles of their own
+    assert reads == [("np0206", names[:2]), ("np0269", names[2:])]
+    exported = []
+
+    def export(graph, bundles, dev, **kwargs):
+        exported.append((dev, [p.name for p in bundles]))
+        return b"glTF"
+
+    monkeypatch.setattr(model, "export_chibi", export)
+    assert game.model_glb("np0206") == b"glTF"
+    assert exported == [("np0206", [names[1]])]
+    with pytest.raises(AssetNotFound):
+        game.model_glb("np0269")
+
+
+class NoSlotGame(ModelGame):
+    def __init__(self, models, fields, owned):
+        super().__init__(models)
+        self.fields, self.owned, self.asked = fields, owned, []
+
+    def field_model_cores(self):
+        return set(self.fields)
+
+    def asset_model_cores(self, candidates):
+        self.asked.append(set(candidates))
+        return set(self.owned) & set(candidates)
+
+
+def test_catalog_gives_a_variant_with_no_model_its_own_one():
+    game = NoSlotGame({"hoshino_original"}, {"np0001"}, {"ch0020", "ch0010"})
+    catalog = Catalog(game, FIXTURES / "characters.csv", FIXTURES / "catalog.json")
+    assert (catalog.variant("hoshino").model, catalog.variant("hoshino").field_model) == ("hoshino_original", None)
+    assert (catalog.variant("np0001").model, catalog.variant("np0001").field_model) == (None, "np0001")
+    assert (catalog.variant("ch0020").model, catalog.variant("ch0020").field_model) == (None, "ch0020")
+    # asked once, for the variants with neither a character nor a field model only
+    assert len(game.asked) == 1 and "ch0020" in game.asked[0] and not {"hoshino", "np0001"} & game.asked[0]
+    assert catalog.variant("ch0020").to_json()["field_model"] == "ch0020"

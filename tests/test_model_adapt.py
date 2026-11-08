@@ -320,6 +320,44 @@ def test_official_field_models_are_found_and_exported(tmp_path):
     assert [a["name"] for a in doc["animations"]] == ["Field_Player_NP0009_Normal_Idle"]
 
 
+# BL-127: variants with neither a battle nor a field player model whose model sits elsewhere: (variant, prefab,
+# source kind, a mesh it draws, whether it plays an idle)
+NO_SLOT_MODELS = [
+    ("ch0171", "Field_NPC_CH0171_NonWeapon", "npc", "OL_CH0171_Body", True),
+    ("np0060", "Field_NPC_NP0060_Justice_Student", "npc", "OL_NP0144_Body", True),
+    ("np0132", "Field_NPC_NP0132", "npc", "OL_Field_NPC_NP0132", True),
+    ("np0133", "Field_NPC_NP0133", "npc", "OL_Field_NPC_NP0133", True),
+    ("np0138", "Field_NPC_NP0138_NonWeapon", "npc", "OL_Attendant_Highlander_HG", True),
+    ("np0143", "Field_NPC_NP0143_AR_Weapon", "npc", "OL_Soldier_Helmet_Aranchino_AR_Mesh", True),
+    ("np0206", "NP0206_Mesh", "asset", "NP0206_Body", False),       # Ayame (Corrupted), a story cutscene's model
+    ("np0229", "NP0229_Mesh", "asset", "NP0229_Body", False),       # Ayame (Twilight)
+    ("arona", "Arona_Original_Gacha", "asset", "OL_Arona_Original_Body", True),
+    ("np0269", "NP0269_Body_Test", "asset", "NP0269_Body", False),  # Kei (Decagrammaton Body), a static mesh
+]
+
+
+@official
+def test_official_no_slot_models_are_found_and_exported(tmp_path):
+    from bmpt.catalog import Catalog
+    from bmpt.gameassets import AssetCache, GameAssets
+    from ba_modding_toolkit.searching import get_search_dirs
+
+    game = GameAssets(get_search_dirs(GAME_DIR), AssetCache(root=tmp_path / "cache", allowed=False))
+    catalog = Catalog(game, None, server="global")
+    for key, prefab, kind, mesh, idle in NO_SLOT_MODELS:
+        variant = catalog.variant(key)
+        assert (variant.model, variant.field_model) == (None, key)
+        data = game.model_glb(variant.field_model)
+        doc = json.loads(data[20:20 + struct.unpack_from("<I", data, 12)[0]])
+        assert (doc["extras"]["prefab"], doc["extras"]["source"]) == (prefab, kind), key
+        assert mesh in {m["name"] for m in doc["meshes"]}, key
+        assert bool(doc.get("animations")) == idle, key
+    # Arona's idle switches the gacha faces off: her own clip, never the sack's beside it
+    arona = game.model_glb("arona")
+    doc = json.loads(arona[20:20 + struct.unpack_from("<I", arona, 12)[0]])
+    assert [a["name"] for a in doc["animations"]] == ["Arona_Original_AroPla_Cacha_02_Idle"]
+
+
 @official
 def test_official_costume_apply_restore_and_preview_on_clones(tmp_path):
     from bmpt.catalog import Catalog
