@@ -972,7 +972,20 @@ is no preview source (`family.get` drops it) and its `/asset/model` route answer
 A variant whose only model is a field-mode player prefab (`Field_Player_<dev>[_NonWeapon]` in the
 `field-character-_mxload-*` bundles: event and story costumes such as Hina (Pajamas) and Niko (FOX EATS)) gets
 `variant.field_model` (`fieldModel` in `family.get`): its 3D tab shows it with the clips its `FieldAnimancerController`
-lists, and it is offered as a costume; it has no slot, so it switches nothing itself.
+lists, and it is offered as a costume; it has no slot, so it switches nothing itself. Two more sources fill the same
+field for a variant with neither a battle nor a field player model:
+
+- a field NPC prefab named by the character's id in the same bundles (`Field_NPC_<id>[_...]`, e.g. Yukino's
+  `Field_NPC_CH0171_NonWeapon`; of several, the one with a halo, then the first by name: NP0143's `_AR_Weapon`);
+- a model in the character's own dependency bundles (`assets-_mx-npcs|characters-<dev>-_mxdependency-*`) for one the
+  game shows only in a story cutscene or a UI scene (Ayame (Corrupted) and Ayame (Twilight): `NP0206_Mesh`,
+  `NP0229_Mesh`; Arona: `Arona_Original_Gacha`): the root of a container prefab, else of an imported model, with
+  renderers below it (`model.asset_root`). It plays the idle among those bundles' clips that moves it (Arona's), else
+  it rests in its stored pose. The catalog asks for these (`asset_model_cores`) only for the variants left without a
+  model, once per name. An unskinned one (Kei (Decagrammaton Body), a static mesh) is no costume: the rule refuses it
+  as `static model`.
+
+The GLB's root extras name the prefab (`prefab`) and, for these two, the source (`source`: `npc` or `asset`).
 
 ## Game watch
 

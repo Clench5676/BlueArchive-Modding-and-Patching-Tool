@@ -47,8 +47,9 @@ import numpy as np
 from ..errors import ServiceError
 from . import model_geometry as mg
 from . import model_hems as hm
+from .errors import AssetNotFound
 from .model import (BundleGraph, PREFAB_KINDS, _external_cab, _key, _prefabs, bind_tracks, decode_clip,
-                    euler_orders, euler_to_quat, ex_only_renderers, read_mesh, shader_kind, UNITY_ORDER)
+                    euler_orders, euler_to_quat, ex_only_renderers, model_root, read_mesh, shader_kind, UNITY_ORDER)
 
 logger = logging.getLogger(__name__)
 
@@ -1234,9 +1235,16 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
     target_prefabs = _model_prefabs(graph, [f for f in target_files if f.name.startswith("character-")])
     source_prefabs = _model_prefabs(graph, source_files)
     t_name = choose_prefab(target_prefabs, target_dev)
-    s_name = choose_prefab(source_prefabs, source_dev)
+    try:
+        # a battle or field model, else a field NPC or a story-only or UI-only model of its own bundles
+        s_root, s_name, _ = model_root(graph, source_files, source_dev)
+    except AssetNotFound:
+        raise refuse("no prefab", dev=source_dev) from None
     t_skeleton = Skeleton.of(graph, target_prefabs[t_name].deref())
-    s_skeleton = Skeleton.of(graph, source_prefabs[s_name].deref())
+    s_skeleton = Skeleton.of(graph, s_root)
+    if not s_skeleton.renderers:
+        # an unskinned model (Kei's Decagrammaton body, a static mesh): nothing to bind to the slot's bones
+        raise refuse("static model", dev=source_dev)
     own = {k: v for k, v in target_prefabs.items() if target_dev in k}
     t_clips = prefab_clips(graph, t_skeleton, own)
     s_clips = prefab_clips(graph, s_skeleton, {k: v for k, v in source_prefabs.items() if source_dev in k})

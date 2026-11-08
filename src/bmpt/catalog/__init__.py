@@ -47,6 +47,10 @@ class GameSource(Protocol):
         """Return the lower-case dev names of field-mode player models (optional for a game source)."""
         ...
 
+    def asset_model_cores(self, candidates: set[str]) -> set[str]:
+        """Return those of the lower-case candidates whose own bundles hold a model (optional for a game source)."""
+        ...
+
 
 def model_core(key: str, aliases: list[str], cores: set[str]) -> str | None:
     """The 3D chibi of a variant: its key, the key + '_original' (base variants, e.g. hoshino_original), then the
@@ -361,6 +365,7 @@ class Catalog:
                          parse_filename(paths[0].name).category != "spinelobbies"}
         keys, homes_of, aliases_of = self._map(entries, students, added, list(portraits), list(lobbies), special_cores)
         families, variants, cores = {}, {}, {}
+        unmodelled: dict[str, list[str]] = {}  # variants with neither a character nor a field model: key -> aliases
         for core, paths in sorted(portraits.items()):
             key = keys[core.lower()]
             entry = entries[key]
@@ -386,8 +391,18 @@ class Catalog:
             if variant.model is None:
                 # an event or story variant with only a field-mode model: shown and offered as a costume, no slot
                 variant.field_model = model_core(key, aliases[1:], fields)
+                if variant.field_model is None:
+                    unmodelled[key] = aliases[1:]
             family.variants.append(variant)
             variants[key] = variant
+        if unmodelled and hasattr(self.game, "asset_model_cores"):
+            # a story-only or UI-only character's model in its own bundles (a cutscene's NP0206, Arona): the same
+            # preview and costume source as a field-mode one, read for these variants only
+            names = {name.lower() for key, aliases in unmodelled.items()
+                     for name in (key, key + "_original", *aliases, *(alias + "_original" for alias in aliases))}
+            owned = self.game.asset_model_cores(names)
+            for key, aliases in unmodelled.items():
+                variants[key].field_model = model_core(key, aliases, owned)
         for core, paths in sorted(lobbies.items()):
             key = keys.get(core.lower(), "")
             if not key.startswith(SPECIAL_PREFIX):
