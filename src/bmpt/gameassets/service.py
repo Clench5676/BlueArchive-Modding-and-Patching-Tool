@@ -24,7 +24,8 @@ from .cache import AssetCache, PreviewCache, pack_preview_files, unpack_preview_
 from . import lobby
 from .discovery import (
     bundle_paths, cab_names, group_bundles, is_atlas, is_layout_texture,
-    is_lobby_prefab, is_model_dependency, is_pointer_texture, is_prefab, is_texture, resource_version,
+    is_lobby_prefab, is_model_dependency, is_pointer_texture, is_prefab, is_texture, may_hold_model_root,
+    resource_version,
 )
 from .errors import AssetNotFound
 from .layouts import export_layout, subtree
@@ -712,8 +713,11 @@ class GameAssets:
         return set(self._model_index())
 
     def _field_index(self) -> dict[str, list[str]]:
-        """Field-mode player models (event and story variants with no battle model): lower-case dev name -> the
-        field character bundles holding ``Field_Player_<dev>[_NonWeapon]``, read from their containers."""
+        """Field-mode models (event and story variants with no battle model): lower-case dev name -> the field
+        character bundles holding ``Field_Player_<dev>[_NonWeapon]``, or a field NPC named by the character's id
+        (``Field_NPC_<id>[_...]``, keyed by the lower-case id), read from their containers."""
+        from .model import NPC_PREFAB
+
         def build() -> dict[str, list[str]]:
             out: dict[str, list[str]] = {}
             for path in self._paths():
@@ -726,7 +730,9 @@ class GameAssets:
                     logger.warning("Field character bundle %s unreadable: %s", path.name, error)
                     continue
                 for name in names:
-                    match = re.fullmatch(r"Field_Player_([A-Za-z0-9_]+?)(_NonWeapon)?\.prefab", name.rsplit("/", 1)[-1])
+                    stem = name.rsplit("/", 1)[-1]
+                    match = (re.fullmatch(r"Field_Player_([A-Za-z0-9_]+?)(_NonWeapon)?\.prefab", stem)
+                             or (NPC_PREFAB.fullmatch(stem[:-7]) if stem.lower().endswith(".prefab") else None))
                     if match and "/character/" in name.lower():
                         paths = out.setdefault(match.group(1).lower(), [])
                         if str(path) not in paths:
@@ -735,8 +741,58 @@ class GameAssets:
         return self._index("field-models", build, disk=False)
 
     def field_model_cores(self) -> set[str]:
-        """Lower-case dev names of field-mode player models (``Field_Player_<dev>``)."""
+        """Lower-case dev names of field-mode models (``Field_Player_<dev>``, ``Field_NPC_<id>``)."""
         return set(self._field_index())
+
+    def _asset_families(self) -> dict[str, list[str]]:
+        """The characters' and NPCs' own dependency bundles (``assets-_mx-npcs|characters-<dev>-_mxdependency-*``)
+        by lower-case dev name, from the file names alone."""
+        def build() -> dict[str, list[str]]:
+            out: dict[str, list[str]] = {}
+            for category in ("npcs", "characters"):
+                for core, paths in group_bundles(self._paths(), category).items():
+                    out.setdefault(core, []).extend(str(path) for path in paths)
+            return out
+        return self._index("asset-families", build, disk=False)
+
+    def _asset_model(self, core: str, paths: list[str]) -> list[str] | None:
+        """The bundles to export a model of ``core``'s own dependency bundles from (:func:`model.asset_root`): the
+        one holding its root, then those holding clips. Parts that cannot hold a root are not opened
+        (:func:`discovery.may_hold_model_root`)."""
+        from .model import BundleGraph, asset_roots
+
+        best, owner, clips = None, None, []
+        # one bundle open at a time (a root's components and children are its own bundle's objects), so this needs
+        # no model lock and can run while the catalog builds
+        for path in (Path(path) for path in paths if may_hold_model_root(Path(path).name)):
+            try:
+                with BundleGraph({}) as graph:
+                    found = asset_roots(graph, [path], core)
+                    if any(obj.type.name == "AnimationClip" for obj in graph.objects.values()):
+                        clips.append(str(path))
+            except (ServiceError, OSError, ValueError) as error:
+                logger.warning("Model bundle %s unreadable: %s", path.name, error)
+                continue
+            if found and (best is None or found[0][0] < best):
+                best, owner = found[0][0], str(path)
+        return [owner, *(path for path in clips if path != owner)] if owner else None
+
+    def asset_model_cores(self, candidates: Iterable[str]) -> set[str]:
+        """Of ``candidates`` (lower-case dev names of variants with neither a character nor a field model), those
+        whose own dependency bundles hold a model: story-only and UI-only characters (Ayame's story forms in the
+        cutscene bundles' NP0206 and NP0229 models, Arona). Each name is read once, on first request."""
+        families = self._asset_families()
+        with self._lock("asset-models"):
+            found = self._indexes.setdefault("asset-models", {})
+            for core in sorted({str(c).lower() for c in candidates} - found.keys()):
+                paths = families.get(core)
+                found[core] = self._asset_model(core, paths) if paths else None
+            return {core for core in (str(c).lower() for c in candidates) if found.get(core)}
+
+    def _asset_bundles(self, core: str) -> list[str] | None:
+        if not self.asset_model_cores({core}):
+            return None
+        return self._indexes.get("asset-models", {}).get(core)
 
     def _cab_discovery(self):
         from .cabs import CabIndex
@@ -761,7 +817,7 @@ class GameAssets:
         from .model import BundleGraph, export_chibi
 
         core = core.lower()
-        listed = self._model_index().get(core) or self._field_index().get(core)
+        listed = self._model_index().get(core) or self._field_index().get(core) or self._asset_bundles(core)
         if not listed:
             raise AssetNotFound(("model", core))
         bundles = [Path(path) for path in listed]

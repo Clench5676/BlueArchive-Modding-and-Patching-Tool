@@ -17,9 +17,10 @@ import pytest
 GAME_DIR = Path(os.environ.get("BAMT_TEST_GAME_DIR") or "/nonexistent/bamt-real-game")
 official = pytest.mark.skipif(not GAME_DIR.is_dir(), reason="Set BAMT_TEST_GAME_DIR to a verified official view")
 
-# the checks the rule may refuse a pair on today: none. A costume stretching past the limit is built for a preview only
-# (shown, never applied), and a shader the game does not load with the slot's prefab is carried with the costume.
-RULE_REFUSALS: set[str] = set()
+# the checks the rule may refuse a pair on today: an unskinned source (Kei's Decagrammaton body, a static mesh in her
+# own bundles). A costume stretching past the limit is built for a preview only (shown, never applied), and a shader
+# the game does not load with the slot's prefab is carried with the costume.
+RULE_REFUSALS: set[str] = {"static model"}
 WORKERS = 3
 
 _state = {}
