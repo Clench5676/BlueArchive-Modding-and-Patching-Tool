@@ -869,3 +869,37 @@ def test_model_preview_overrides_the_prefab_root_as_well_as_dependencies(tmp_pat
     monkeypatch.setattr(model, 'export_chibi', export)
     assert game.model_glb('ch0242', overrides=[upload]) == b'glTF preview'
     assert calls == [([upload], str(upload))]
+
+
+def test_model_preview_reads_the_files_outside_its_source_by_its_rule(tmp_path, monkeypatch):
+    # ch0263's materials take their textures from the NPC en0002's bundle: another mod replaces it in the game folder.
+    from bmpt.gameassets.preview_reads import PreviewReads
+
+    prefab = 'character-ch0242-_mxload-2024-11-18_assets_all_1.bundle'
+    texture = 'assets-_mx-npcs-en0002-_mxdependency-2024-11-18_005_assets_all_2.bundle'
+    game, resources = _game(tmp_path, prefab)
+    (resources / texture).write_bytes(_unityfs(['CAB-tex']))
+    kept = tmp_path / 'library' / 'originals'
+    kept.mkdir(parents=True)
+    (kept / texture).write_bytes(_unityfs(['CAB-tex']))
+    (kept / prefab).write_bytes(b'')
+    seen = []
+
+    def export(graph, bundles, dev):
+        seen.append(([str(path) for path in bundles], graph.resolver({'cab-tex'}, None)))
+        return b'glTF' + bytes([len(seen)])
+
+    def rule(key, *names):
+        return PreviewReads(lambda path: kept / path.name if path.name in names else path, key,
+                            lambda path: path.resolve().is_relative_to(tmp_path / 'library'))
+
+    monkeypatch.setattr(model, 'export_chibi', export)
+    assert game.model_glb('ch0242', reads=rule('official', texture)) == b'glTF\x01'
+    assert seen[-1] == ([str(resources / prefab)], {'cab-tex': str(kept / texture)})
+    assert game.model_glb('ch0242', reads=rule('official', texture)) == b'glTF\x01'  # its rule's export, cached
+    assert game.model_glb('ch0242', reads=rule('configured:a', texture)) == b'glTF\x02'  # another rule
+    assert game.model_glb('ch0242', reads=rule('prefab', prefab)) == b'glTF\x03'
+    assert seen[-1][0] == [str(kept / prefab)]  # an unsupplied prefab bundle is read by the rule as well
+    assert game.model_glb('ch0242') == b'glTF\x04'  # live: the game folder as it is
+    assert seen[-1] == ([str(resources / prefab)], {'cab-tex': str(resources / texture)})
+    assert not (tmp_path / 'cache').exists()
