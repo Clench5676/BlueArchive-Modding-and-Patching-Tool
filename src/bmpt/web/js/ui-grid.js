@@ -75,10 +75,12 @@ export function row(items, { x = 0, y = 0, w = null, h = null, gap = 0, align = 
 }
 
 // Items one under the other, gap apart. align, across the stack: "start" (default), "center", "end" or "stretch" (each item
-// as wide as the stack). Returns { boxes, w, h }.
-export function stack(items, { x = 0, y = 0, w = null, gap = 0, align = "start" } = {}) {
+// as wide as the stack). justify, along it: "start" (default), "center" or "end" within h. Returns { boxes, w, h }.
+export function stack(items, { x = 0, y = 0, w = null, h = null, gap = 0, align = "start", justify = "start" } = {}) {
   const width = w ?? Math.max(0, ...items.map((item) => item.w || 0));
-  let cursor = y;
+  const used = items.reduce((sum, item) => sum + item.h, 0) + gap * Math.max(0, items.length - 1);
+  const height = h ?? used, free = Math.max(0, height - used);
+  let cursor = y + (justify === "end" ? free : justify === "center" ? free / 2 : 0);
   const boxes = items.map((item) => {
     const itemW = align === "stretch" ? width : item.w;
     const left = align === "center" ? x + (width - itemW) / 2 : align === "end" ? x + width - itemW : x;
@@ -86,7 +88,7 @@ export function stack(items, { x = 0, y = 0, w = null, gap = 0, align = "start" 
     cursor += item.h + gap;
     return out;
   });
-  return { boxes, w: width, h: Math.max(0, cursor - gap - y) };
+  return { boxes, w: width, h: height };
 }
 
 // A text item for row and stack: its fitted text and size, its box (the label's lines at NGUI's pitch, drawn from the box's
