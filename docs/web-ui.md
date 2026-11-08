@@ -938,7 +938,8 @@ further parts in renderers added beside it, the slot's other costume parts and a
 objects never change in place, since field, cutscene and other variants' bundles reference them. Roles, bone mapping
 and checks use data only (shading, rig, visibility, the slot's clips), never part names: Biped bones by name, other
 bones by structure, and each secondary group follows the slot's bones only while it stretches no more than the slot's
-own costume under the slot's clips (else it stays rigid). A pair whose checks fail is refused with `source_unsupported`
+own costume under the slot's clips (else it stays rigid). The whole costume may stretch under the slot's clips up to
+1.1 times `max(1.5 x own, own + 1)` (`model_adapt.stretch_limit`; owner, 2026-11-08). A pair whose checks fail is refused with `source_unsupported`
 (`source` names the failed check, further params its detail). What the game loads with the slot's prefab counts as
 available: the slot's files, every CAB the prefab's files reference (followed through the files they reference: the
 catalog's dependencies), and the always-loaded prolog bundles. A shader outside them is carried with the costume: a copy

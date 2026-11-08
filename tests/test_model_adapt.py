@@ -103,7 +103,7 @@ def test_official_costume_on_a_slot(view, tmp_path, target, source, field, parts
     result = ma.adapt(index=index, resolver=None, target_files=slot, target_dev=target, source_files=sources,
                       source_dev=source, open_writable=Bundle.load)
     assert result.parts == parts
-    assert result.plan.stretch <= max(1.5 * result.plan.own, result.plan.own + 1.0)
+    assert result.plan.stretch <= ma.stretch_limit(result.plan.own)
     # the hem (BL-118): less pass-through than rigid weights, no clip 5 points worse, stretch within the limit
     hems = result.hems
     assert hems.rule == hem, hems.summary()

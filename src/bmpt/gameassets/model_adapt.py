@@ -49,6 +49,13 @@ CHARACTER_KINDS = {"body", "face", "hair", "eyemouth", "eyebrow"}
 BIPED_CORE = re.compile(r"^Bip001 (Pelvis|Spine\d*|Neck|Head|[LR] (Thigh|Calf|UpperArm|Forearm|Clavicle))$")
 NEAR = 0.05           # a secondary bone maps onto a slot bone at most this far from it (prefab units, metres)
 STRETCH_FLOOR = 1.5   # a group may always stretch this much
+# how far a costume may stretch under the slot's clips past the slot's own costume (max(1.5 x own, own + 1)), with a
+# tenth more allowed (owner, 2026-11-08: pairs up to 1.1 times the limit, such as Momoi <- Momoi (Battle) at 1.01)
+STRETCH_TOLERANCE = 1.1
+
+
+def stretch_limit(own: float) -> float:
+    return STRETCH_TOLERANCE * max(1.5 * own, own + 1.0)
 # clips whose poses judge the mapping, by name suffix; the idle comes first
 PROBE_CLIPS = ("Formation_Idle", "Normal_Idle", "Move_Ing", "Vital_Death", "Formation_Pickup", "Cafe_Walk")
 IDLE_CLIPS = ("Formation_Idle", "Normal_Idle", "Cafe_Idle", "Stand_Idle", "Idle")
@@ -565,7 +572,7 @@ def plan(target: Costume, source: Costume, probes: list[list[np.ndarray]]) -> Pl
         raise refuse("rest pose not reproduced")
     mine = max((stretch(sv, deform(flat, matrices(p, mapping)), se) for p in probes), default=1.0)
     own = max((stretch(tv, posed, te) for posed in posed_targets), default=1.0)
-    if mine > max(1.5 * own, own + 1.0):
+    if mine > stretch_limit(own):
         raise refuse("stretch", adapted=round(mine, 2), own=round(own, 2))
     return Plan(mapping, choices, mine, own, groups)
 
