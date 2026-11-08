@@ -372,7 +372,7 @@ test("a refused row's badge opens its reason and what the check read of its file
   assert.equal(h.messages.length, before + 1); assert.equal(shown.title, "Details");
   assert.equal(shown.lines[0], "Incompatible Platform - build target Android, required StandaloneWindows64 (E3007)", "the reason carries the reference and no file name");
   assert.deepEqual(shown.lines.slice(1), ["e.bundle\nBuild Target: Android\nUnity Version: 2021.3"]);
-  assert.equal(shown.compact, true);
+  assert.ok(!("compact" in shown), "details use the default content-fitted frame");
   assert.equal(h.page.model.state.selected, "a", "opening the details does not select the row");
 });
 

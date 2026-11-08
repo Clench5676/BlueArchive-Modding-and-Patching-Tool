@@ -484,7 +484,7 @@ test("Thai footer exceptions cannot authorize another footer or another locale",
   }
   assert.match(read("js/student-hall-picker.js"), /captionSite: onReplace \? "hall.portraitReplacement" : "hall.doneAdding"/);
   assert.match(read("js/student-hall.js"), /captionSite: "hall.unsavedChanges"/);
-  assert.match(popupSource,/popupFrame\(title, w, height, \{ ok, cancel, buttons, close: dismissable, captionSite(?:, compact)? \}\)/);
+  assert.match(popupSource,/popupFrame\(title, w, height, \{ ok, cancel, buttons, close: dismissable, captionSite \}\)/);
 });
 for (const locale of ["en-US","th-TH","zh-CN","zh-TW","ja-JP","ko-KR"]) test(`Reset renders with its named caption allowance in ${locale}`, async () => {
   document.documentElement.lang=locale;

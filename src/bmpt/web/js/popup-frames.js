@@ -6,14 +6,14 @@ export function frameClass(width = "S") {
   if (typeof width === "string" && POPUP_FRAME[width]?.w) return POPUP_FRAME[width];
   return ["S", "M", "L", "XL"].map(key => POPUP_FRAME[key]).find(size => size.w >= width) || POPUP_FRAME.XL;
 }
-// compact: the frame is as tall as its content needs, below the class's own height (a short message, e.g. Import Mod's details)
-export function frameGeometry(width, height = 0, { compact = false } = {}) {
+// Explicit heights fit the content; omitted heights retain the scrolling viewer's exemplar height.
+export function frameGeometry(width, height = 0) {
   const size = frameClass(width);
-  return { w: size.w, h: Math.min(POPUP_FRAME.maxH, compact && height ? height : Math.max(size.h, height)), cx: 0, cy: POPUP_FRAME.frameY };
+  return { w: size.w, h: height ? Math.min(POPUP_FRAME.maxH, Math.max(POPUP_FRAME.minH, height)) : size.h, cx: 0, cy: POPUP_FRAME.frameY };
 }
 // Text and panel content share their top and footer clearance. With no footer, keep the panel padding at the bottom.
-export function popupContent(width, height, { text = false, footer = true, compact = false } = {}) {
-  const { w, h } = frameGeometry(width, height, { compact });
+export function popupContent(width, height, { text = false, footer = true } = {}) {
+  const { w, h } = frameGeometry(width, height);
   return container({ w, h, padding: [POPUP_FRAME.contentTop, text ? SPACE.xxxl : SPACE.xl,
     footer ? POPUP_FRAME.footer.bottom + CONTROL.buttonL.h + SPACE.m : SPACE.xl,
     text ? SPACE.xxxl : SPACE.xl] }).inner;
@@ -33,36 +33,44 @@ export function aliasFrame(n) {
   const f = frame("M", POPUP_FRAME.contentTop + n * ALIAS.rowH + Math.max(0, n - 1) * SPACE.m
     + POPUP_FRAME.footer.bottom + CONTROL.buttonL.h + SPACE.m);
   const content = popupContent(f.w, f.h, { text: true });
-  const rows = stack(Array.from({ length: n }, () => ({ w: content.w, h: ALIAS.rowH })), { ...content, gap: SPACE.m });
+  const rows = stack(Array.from({ length: n }, () => ({ w: content.w, h: ALIAS.rowH })), { ...content, gap: SPACE.m, justify: "center" });
   const ys = rows.boxes.map(b => place(b, f)[1]);
   return { ...f, ys, bottom: ys.at(-1) - ALIAS.rowH / 2, content };
 }
 
 export const DETAILS = { w: POPUP_FRAME.L.w, h: POPUP_FRAME.maxH, l: -POPUP_FRAME.L.w / 2 + SPACE.xl,
   r: POPUP_FRAME.L.w / 2 - SPACE.xl, title: POPUP_FRAME.contentTop,
-  bottom: POPUP_FRAME.footer.bottom + CONTROL.buttonL.h + SPACE.m, minH: POPUP_FRAME.L.h };
+  bottom: POPUP_FRAME.footer.bottom + CONTROL.buttonL.h + SPACE.m };
 export function detailsFrame(bodyHeight) {
   const f = frame("L", bodyHeight + DETAILS.title + DETAILS.bottom), content = popupContent(f.w, f.h);
-  return { ...f, top: place(content, f, 1)[1], bottom: place(content, f, 7)[1], content };
+  const body = stack([{ w: content.w, h: Math.min(bodyHeight, content.h) }], { ...content, justify: "center" }).boxes[0];
+  return { ...f, top: place(body, f, 1)[1], bottom: place(body, f, 7)[1], content };
 }
 
-const modFrame = frame("M"), modBox = popupContent(modFrame.w, modFrame.h, { text: true });
-const modRows = stack([{ w: modBox.w, h: SPACE.xxxl }, { w: modBox.w, h: SPACE.xxxl }], { ...modBox, gap: SPACE.m }).boxes;
+const modFrame = frame("M", POPUP_FRAME.contentTop + 2 * SPACE.xxxl + SPACE.m
+  + POPUP_FRAME.footer.bottom + CONTROL.buttonL.h + SPACE.m), modBox = popupContent(modFrame.w, modFrame.h, { text: true });
+const modRows = stack([{ w: modBox.w, h: SPACE.xxxl }, { w: modBox.w, h: SPACE.xxxl }],
+  { ...modBox, gap: SPACE.m, justify: "center" }).boxes;
 export const MOD_ALIAS = { ...modFrame, input: { y: place(modRows[0], modFrame)[1], w: modBox.w, h: modRows[0].h },
   hint: { dy: place(modRows[1], modFrame)[1] - place(modRows[0], modFrame)[1], h: modRows[1].h } };
 MOD_ALIAS.bottom = MOD_ALIAS.input.y + MOD_ALIAS.hint.dy - MOD_ALIAS.hint.h / 2;
 
-export function compareFrame(review) {
-  const f = frame("L", 1180), content = popupContent(f.w, f.h, { text: true, footer: review });
+export function compareFrame(review, count = 0) {
+  const cap = Math.floor(popupContent("L", 1180, { text: true, footer: review }).h / SPACE.xxl);
+  const bodyHeight = Math.max(1, Math.min(count, cap)) * SPACE.xxl;
+  const f = frame("L", review ? 1180 : POPUP_FRAME.contentTop + bodyHeight + SPACE.xl);
+  const content = popupContent(f.w, f.h, { text: true, footer: review });
   const top = place(content, f, 1)[1];
-  const rows = { y: top - SPACE.xxl / 2, pitch: SPACE.xxl, h: SPACE.xxl, max: Math.floor(content.h / SPACE.xxl) };
+  const body = stack([{ w: content.w, h: bodyHeight }], { ...content, justify: "center" }).boxes[0];
+  const rows = { y: (review ? top : place(body, f, 1)[1]) - SPACE.xxl / 2, pitch: SPACE.xxl, h: SPACE.xxl, max: cap };
   const scroll = { top, height: content.h, width: content.w };
   return { ...f, rows, scroll, lift: 0, bottom: top - content.h, content };
 }
 
-const exportFrame = frame("L", 1400), exportBox = popupContent(exportFrame.w, exportFrame.h);
+const exportFrame = frame("L", POPUP_FRAME.contentTop + 260 + 240 + 240 + 2 * SPACE.m
+  + POPUP_FRAME.footer.bottom + CONTROL.buttonL.h + SPACE.m), exportBox = popupContent(exportFrame.w, exportFrame.h);
 const exportRows = stack([{ w: exportBox.w, h: 260 }, { w: exportBox.w, h: 240 }, { w: exportBox.w, h: 240 }],
-  { ...exportBox, gap: SPACE.m }).boxes; // Settings option rows retain their prefab heights.
+  { ...exportBox, gap: SPACE.m, justify: "center" }).boxes; // Settings option rows retain their prefab heights.
 export const EXPORT = { ...exportFrame, rows: Object.fromEntries(["Destination", "Server", "Platform"].map((name, i) =>
   [name, { y: place(exportRows[i], exportFrame)[1], h: exportRows[i].h }])) };
 EXPORT.bottom = Math.min(...Object.values(EXPORT.rows).map(({ y, h }) => y - h / 2));

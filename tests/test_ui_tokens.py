@@ -361,3 +361,12 @@ def _origin(tree, path):
         x += node["pos"][0]; y += node["pos"][1]
     leaf = next(c for c in node["children"] if c["name"] == path.split("/")[-1])
     return x + leaf["pos"][0], y + leaf["pos"][1]
+
+
+def test_popup_minimum_is_the_client_version_frame(tokens):
+    name = "ui-_mxload-prefabs-2025-07-02_assets_all_3578173542.bundle"
+    with open_bundle(next(GAME_DIR.rglob(name))) as env:
+        tree = export_layout(env, "UIPopup_ClientVersion", {})
+    bg = sprite(subtree(tree, "Center/Popup/Base/BG"), "Common_Popup_Bg")
+    assert bg["w_"] == 1115
+    assert bg["h_"] == tokens["POPUP_FRAME"]["minH"] == 786

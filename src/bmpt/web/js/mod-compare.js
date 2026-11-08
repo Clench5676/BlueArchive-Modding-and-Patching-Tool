@@ -15,12 +15,13 @@ const { node, label, find } = NGUI;
 export async function show(result, title = T("act.compare"), hostId = "popup", review = null) {
   await ready();
   const host = $(hostId);
-  const frame = compareFrame(!!review);
+  const changed = (result.assets || []).filter((d) => d.status !== "same");
+  const frame = compareFrame(!!review, changed.length);
   const t = popupFrame(title, frame.w, frame.h, review ? { ok: review.accept, cancel: review.discard } : {});
   const popup = find(t, "Popup");
-  const rows = (result.assets || []).filter((d) => d.status !== "same").slice(0, frame.rows.max);
+  const rows = changed.slice(0, frame.rows.max);
   const color = { changed: COLOUR.warning, added: COLOUR.success, removed: COLOUR.error };
-  if (!review && !rows.length) popup.children.push(node("None", [0, 120], [label(T("compare.none"), 44, "#2d4664/1.00", 1600, 60, { depth: 8 })]));
+  if (!review && !rows.length) popup.children.push(node("None", [0, frame.rows.y], [label(T("compare.none"), 44, "#2d4664/1.00", 1600, 60, { depth: 8 })]));
   (review ? [] : rows).forEach((d, i) => {
     const y = frame.rows.y - i * frame.rows.pitch;
     popup.children.push(node(`R_${i}`, [-820, y], [label(`${d.type} - ${d.name}`, 38, "#2d4664/1.00", 1300, 50, { pivot: 3, depth: 8, ellipsis: true })]),

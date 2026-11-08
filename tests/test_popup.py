@@ -114,12 +114,12 @@ const Popup = await import(POPUP_URL);
 const NGUI = await import(NGUI_URL);
 const { POPUP_FRAME: P, CONTROL: C } = await import(TOKENS_URL);
 await Popup.frameReady();
-for (const key of ['S', 'M', 'L', 'XL']) for (const requested of [0, 2000]) for (const n of [1, 2, 3]) {
+for (const key of ['S', 'M', 'L', 'XL']) for (const requested of [0, 1, 786, 900, 1400, 2000]) for (const n of [1, 2, 3]) {
   const tree = Popup.popupFrame('Title', key, requested, { buttons: Array.from({ length: n }, () => ({ label: 'OK' })) });
   const bg = NGUI.find(tree, 'Popup/Base/BG'), body = bg.widgets.find(w => 'sprite' in w);
   assert.equal(body.sprite, 'Common_Popup_Bg');
   assert.equal(body.w_, P[key].w);
-  assert.equal(body.h_, Math.min(P.maxH, Math.max(P[key].h, requested)));
+  assert.equal(body.h_, requested ? Math.min(P.maxH, Math.max(P.minH, requested)) : P[key].h);
   const title = NGUI.find(bg, 'Label_Title_Locale'), close = NGUI.find(bg, 'Btn_Close');
   assert.ok(Math.abs(body.h_ / 2 - title.pos[1] - title.widgets[0].h_ / 2 - P.titleTop) < 1e-9);
   assert.equal(body.w_ / 2 - close.pos[0] - C.icon.h / 2, P.close.right);
