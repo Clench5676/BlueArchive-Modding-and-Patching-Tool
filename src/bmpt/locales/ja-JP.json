@@ -85,6 +85,7 @@
 			"has": "あり",
 			"none": "なし",
 			"failed": "3Dモデルを読み込めません",
+			"unfit": "モデル未対応",
 			"action": {
 				"idle": "待機",
 				"reaction": "反応",

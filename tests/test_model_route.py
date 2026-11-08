@@ -209,6 +209,26 @@ def test_costume_check_saves_what_holds_for_these_files_and_retries_a_refusal_of
         s.close()
 
 
+def test_a_costume_past_the_stretch_limit_is_shown_for_a_preview_only(tmp_path):
+    outcomes = {"np0009": "parts"}
+    s, saved, built, _ = _costume_services(tmp_path, outcomes)
+    preview = s.library.costume_preview
+
+    def unfit(target, other):  # the library saves such a pair as shown only while it builds the preview
+        saved[other] = {"ok": False, "preview": True, "reason": "stretch", "detail": {}}
+        return preview(target, other)
+
+    s.library.costume_preview = unfit
+    api = build_api(s)
+    try:
+        job = api.call("model.checkCostumes", {"variant": "hina", "others": ["np0009"]})["result"]
+        assert s.jobs.wait(job, 10) and s.jobs.get(job).result == {"np0009": "preview"}
+        assert api.call("model.costumes", {"variant": "hina", "others": ["np0009"]})["result"] == {"np0009": "preview"}
+        assert s.asset("model/hina.glb", {"source": "variant:np0009"}).body == b"glTF"  # its preview draws
+    finally:
+        s.close()
+
+
 def test_costume_rpcs_offer_only_pairs_checked_to_their_end(tmp_path):
     outcomes = {"np0009": "parts", "ch0230": ServiceError("source_unsupported", source="shader outside the always-loaded bundles")}
     s, saved, built, _ = _costume_services(tmp_path, outcomes)

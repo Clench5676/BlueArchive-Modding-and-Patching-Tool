@@ -1013,7 +1013,7 @@ def test_costume_verdicts_are_kept_per_build_signature(model_env, monkeypatch):
     library = ModLibrary(env.root, Catalog(game, None), object(), env.settings, scan_allowed=lambda: True)
     assert library.costume_verdict('hoshino', 'hoshino_swimsuit') is None
 
-    def refused(self, other, targets, directory, log, pin, *, preview=False):
+    def refused(self, other, targets, directory, log, pin, *, preview=False, report=None):
         raise model_adapt.refuse('stretch', adapted=8.84, own=5.85)
 
     monkeypatch.setattr(ModLibrary, '_stage_costume', refused)
@@ -1034,6 +1034,16 @@ def test_costume_verdicts_are_kept_per_build_signature(model_env, monkeypatch):
     for i in range(3):
         library._save_verdict(f'signature-{i}', False, 'stretch')
     assert sorted(library._verdicts()) == ['signature-1', 'signature-2']
+    # a pair judged unfit or refused is never saved as a choice or written, mods on or off
+    library._save_verdict(library._costume_signature('hoshino', 'hoshino_swimsuit', library.current_pin())[0], False,
+                          'stretch', preview=True)
+    assert library.costume_verdict('hoshino', 'hoshino_swimsuit')['preview'] is True
+    for enabled in (True, False):
+        if not enabled:
+            library.toggle(False, True)
+        with pytest.raises(ServiceError, match='source_unsupported'):
+            library.apply('hoshino', 'variant:hoshino_swimsuit', kind='model')
+        assert library.configured('hoshino').get('model') is None
     (env.root / 'costume-verdicts.json').write_text('{not json')
     assert library.costume_verdict('hoshino', 'hoshino_swimsuit') is None
     with pytest.raises(ServiceError, match='source_unsupported'):
