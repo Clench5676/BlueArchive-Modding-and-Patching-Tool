@@ -475,11 +475,11 @@ def build_api(s: Services) -> RpcRegistry:
         return settings_get()
 
     @rpc.method("preview.cacheGet")
-    def preview_cache_get(key: str) -> dict[str, Any]:
+    def preview_cache_get(key: str, renderer: str) -> dict[str, Any]:
         cache = s.preview_cache
         generation = cache.generation
         allowed = cache.allowed and not s.safe_mode
-        data = cache.get(s.preview_thumbnail_key(key)) if allowed else None
+        data = cache.get(s.preview_thumbnail_key(key, renderer)) if allowed else None
         # A concurrent clear/toggle must not return a stale generation as usable data.
         if cache.generation != generation:
             data = None
@@ -531,7 +531,7 @@ def build_api(s: Services) -> RpcRegistry:
         return {"revision": digest, "generation": generation}
 
     @rpc.method("preview.cachePut")
-    def preview_cache_put(key: str, data: str, generation: str) -> bool:
+    def preview_cache_put(key: str, data: str, generation: str, renderer: str) -> bool:
         cache = s.preview_cache
         if s.safe_mode or not cache.allowed or generation != cache.generation:
             return False
@@ -551,7 +551,7 @@ def build_api(s: Services) -> RpcRegistry:
                 image.verify()
         except (ValueError, binascii.Error, OSError, SyntaxError, Image.DecompressionBombError) as error:
             raise ServiceError("bad_params", key="data") from error
-        return cache.put(s.preview_thumbnail_key(key), raw, generation=generation)
+        return cache.put(s.preview_thumbnail_key(key, renderer), raw, generation=generation)
 
     @rpc.method("debug.trace")
     def debug_trace(events: list[Any]) -> None:
