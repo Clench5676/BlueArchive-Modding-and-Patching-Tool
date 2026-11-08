@@ -73,8 +73,9 @@ def is_pointer_texture(path: Path) -> bool:
 
 
 def is_prefab(path: Path) -> bool:
-    """Whether a bundle can contain a UI prefab root (Resources/UI holds the loading screen, UILoading)."""
-    return (path.name.startswith(("ui-_mxload-prefabs-", "ui-uiassetobject-"))
+    """Whether a bundle can contain a UI prefab root (Resources/UI holds the loading screen, UILoading; the tooltip
+    bundles the description tooltip, UIDescriptionTooltip)."""
+    return (path.name.startswith(("ui-_mxload-prefabs-", "ui-uiassetobject-", "ui-tooltip-_mxload-prefabs-"))
             or (path.name.startswith("prologdepengroup-") and "-addressableasset-ui-" in path.name)
             or (path.name.startswith("prologgroup-") and "-resources-ui-" in path.name))
 
