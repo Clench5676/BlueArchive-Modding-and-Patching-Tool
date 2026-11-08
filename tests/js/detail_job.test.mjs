@@ -134,12 +134,8 @@ test("detail progress identifies the target Mod's student variant and kind inste
   assert.doesNotMatch(h.progress.at(-1), /assets-|\.bundle|Portrait/);
 });
 
-test("an apply while mods are off says it only saved the choice; no other result adds a notice", async () => {
-  const saved = harness({ waitJob: async () => ({ deferred: true, unchanged: true, files: [] }) });
-  assert.equal(await saved.job("actions.apply", { variant: "v", source: "mod:a" }), true);
-  assert.deepEqual(saved.notices, ["mods.saved"]);
-  assert.deepEqual(saved.messages, [], "a notice, not an error");
-  for (const result of [{}, { deferred: false, files: ["a"] }, { unchanged: true }, null]) {
+test("an apply adds no notice, while mods are off (only saved) or on", async () => {
+  for (const result of [{ deferred: true, unchanged: true, files: [] }, {}, { deferred: false, files: ["a"] }, { unchanged: true }, null]) {
     const h = harness({ waitJob: async () => result });
     assert.equal(await h.job("actions.apply", { variant: "v", source: "mod:a" }), true);
     assert.deepEqual(h.notices, [], JSON.stringify(result));
@@ -154,12 +150,12 @@ test("an apply that failed shows its error and no saved notice; a failing reload
   const reload = harness({ waitJob: async () => ({ deferred: true }) });
   assert.equal(await reload.job("actions.apply", {}, { after: async () => { throw new Error("reload"); } }), false);
   assert.ok(reload.messages.some((s) => s.includes("reload")), "the error is reported");
-  assert.deepEqual(reload.notices, ["mods.saved"], "the choice was saved all the same");
+  assert.deepEqual(reload.notices, [], "a saved choice adds no notice");
 });
 
-test("the saved notice does not wait for the user: the job returns and releases busy first", async () => {
+test("a notice does not wait for the user: the job returns and releases busy first", async () => {
   let close;
-  const h = harness({ waitJob: async () => ({ deferred: true }), notice: () => new Promise((resolve) => { close = resolve; }) });
+  const h = harness({ waitJob: async () => ({ kept_current: true }), notice: () => new Promise((resolve) => { close = resolve; }) });
   assert.equal(await h.job("actions.apply", {}), true);
   assert.equal(h.busy(), false);
   close();
