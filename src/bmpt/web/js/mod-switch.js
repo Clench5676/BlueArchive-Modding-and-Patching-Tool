@@ -1,7 +1,8 @@
 import {segmentTree,segmentOrigin,segmentDensity,SEGMENT_SCALE} from './mod-switch-skin.js';
 // The Enable Mods switch (docs/web-ui.md, "Enable Mods switch"): one switch for every game folder, in the top bar
-// (#mod-switch) and in Settings' Mods tab. A click turns mods off or on at once (mods.toggle); the first toggle from
-// any place explains it once; the square "?" opens the help, with Retry and Details.
+// (#mod-switch) and in Settings' Mods tab. A click on the current state does nothing; a click on the other state asks
+// first, and only the confirmation submits mods.toggle; the first toggle from any place explains it once instead (its
+// button confirms); the square "?" opens the help, with Retry and Details.
 // A write refused while the classic UI is open opens the classic modal, which can queue it until the window closes.
 // The pure parts (the view from mods.state, the click, the help's lines, the result, the start prompts, the classic
 // modal's outcome) are tested in Node (tests/js/mod_switch.test.mjs).
@@ -64,17 +65,30 @@ export function view(state, { place = "top" } = {}) {
   };
 }
 
-// clickAction(state, explained): what a click on the switch does
-//   "busy": a toggle runs (refused, a message popup); "queued": writes wait for the classic window (the classic modal, its
-//   box ticked); "reason": unavailable (the reason as a message popup); "explain": the first toggle ever (the explanation,
-//   then the toggle); "classic": the classic window is open (the classic modal); "toggle": at once (decision 3)
-export function clickAction(state, explained = false) {
+// clickAction(state, explained, want): what a click on the switch does. want: the state clicked (true for ON, false
+// for OFF), null for the other one (the keyboard, which presses the switch as a whole)
+//   "none": the current state was clicked, nothing happens in any state; "busy": a toggle runs (refused, a message
+//   popup); "queued": writes wait for the classic window (the classic modal, its box ticked); "reason": unavailable (the
+//   reason as a message popup); "explain": the first toggle ever (the explanation, its button toggles); "classic": the
+//   classic window is open (the confirmation, then the classic modal); "confirm": the confirmation, then the toggle
+export function clickAction(state, explained = false, want = null) {
   if (!state) return "none";
+  if (want != null && !!want === (state.enabled !== false)) return "none";
   if (state.busy) return state.queued > 0 ? "queued" : "busy";
   if (state.available === false && state.reason !== "classic_open") return "reason";
   if (!state.explained && !explained) return "explain";
   if (state.available === false) return "classic";
-  return "toggle";
+  return "confirm";
+}
+
+// the state a click on the top bar's switch names: its ON or OFF segment, null when the click names neither (Enter or
+// Space on the focused switch)
+export function clickedState(target, root = null) {
+  for (let n = target; n && n !== root; n = n.parentNode) {
+    if (n.classList?.contains("ms-on")) return true;
+    if (n.classList?.contains("ms-off")) return false;
+  }
+  return null;
 }
 
 // the toggle a click submits, and the Retry of the help (the same intent again)
@@ -91,6 +105,12 @@ export const basics = () => [T("mods.helpOn"), T("mods.helpOff")];
 export function explanation(state) {
   const action = T(state?.enabled === false ? "mods.onTitle" : "mods.offTitle");
   return { title: action, lines: [...basics(), T("mods.explainOnce")], ok: action };
+}
+
+// the confirmation before a toggle, on the game's neutral notice: {title, lines, ok, cancel}; only ok toggles
+export function confirmation(state) {
+  const on = state?.enabled !== false;
+  return { title: T("quit.title"), lines: [T(on ? "mods.offAsk" : "mods.onAsk")], ok: T(on ? "mods.offTitle" : "mods.onTitle"), cancel: T("popup.cancel") };
 }
 
 // helpLines(state): the "?" help's lines, [{text, button: {id, label}}]. Buttons: retry (pending and left entries), details
@@ -280,7 +300,7 @@ function build() {
   help.className = "ms-help";
   help.setAttribute("aria-label", T("mods.guide"));
   help.appendChild(document.createElement("i"));
-  toggle.addEventListener("click", () => click("top"));
+  toggle.addEventListener("click", (ev) => click("top", clickedState(ev?.target, toggle)));
   help.addEventListener("click", () => openHelp());
   host.append(toggle, label, help);
   els = { toggle, dot, label, help };
@@ -337,10 +357,11 @@ async function render() {
 
 // --- clicks ---
 
-// click(from): the switch was clicked (the top bar, Settings); the same rules everywhere
-export async function click(from = "top") {
+// click(from, want): the switch was clicked (the top bar, Settings) on the state want (null: the other one); the same
+// rules everywhere
+export async function click(from = "top", want = null) {
   const s = state;
-  switch (clickAction(s, explainedHere)) {
+  switch (clickAction(s, explainedHere, want)) {
     case "busy": notify(T("error.busy"), { kind: "error", error: { code: "busy" } }); return;
     case "queued": classicModal({ queued: true }); return;
     case "reason": notify(reasonText(s), { kind: "error", error: { code: s.reason, params: s.reasonParams } }); return;
@@ -349,8 +370,8 @@ export async function click(from = "top") {
       // classic window opened meanwhile gives the classic modal
       if (await explain(s)) run(toggleParams(s));
       return;
-    case "classic": classicModal({ method: "mods.toggle", params: toggleParams(s) }); return;
-    case "toggle": run(toggleParams(s)); return;
+    case "classic": if (await confirm(s)) classicModal({ method: "mods.toggle", params: toggleParams(s) }); return;
+    case "confirm": if (await confirm(s)) run(toggleParams(s)); return;
     default:
   }
 }
@@ -361,6 +382,14 @@ async function explain(s) {
   const r = await Popup.message({ title: e.title, lines: e.lines, ok: e.ok, cancel: T("popup.cancel"), width: 2098, fitTogether: [0, 1], plain: true });
   explainedHere = true;
   rpc("mods.explained").catch(() => {});
+  return r.button === "ok";
+}
+
+// the confirmation; closing it in any way but its button toggles nothing. Switched elsewhere meanwhile, the job refuses
+// the toggle it named (state_changed)
+async function confirm(s) {
+  const c = confirmation(s);
+  const r = await Popup.message({ title: c.title, lines: c.lines, ok: c.ok, cancel: c.cancel });
   return r.button === "ok";
 }
 

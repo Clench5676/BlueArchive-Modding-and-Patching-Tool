@@ -2330,14 +2330,21 @@ detail screen, and in Settings' Mods tab.
   window (dimmed at the loading indicator's pace); unavailable, greyed with the reason as its accessible description (the game
   running or its state unknown, Steam busy, the classic window open, no game folder known, unreadable mod settings);
   the red dot (`Common_Icon_Reddot2`) while entries were not switched or were left as is. It is a `button` with
-  `role="switch"` and `aria-checked`; Space and Enter toggle. It always appears on the main
+  `role="switch"` and `aria-checked`; Space and Enter ask for the other state. It always appears on the main
   screens with a current install (Settings keeps it without one).
-- **A click** (`click(from)`, the same rules from the top bar and Settings): busy, a notice (`error.busy`), or the
+- **A click** (`click(from, want)`, the same rules from the top bar and Settings; `want` is the segment or option
+  clicked, `clickedState` in the top bar, none for Space and Enter): on the current state, nothing, in every state;
+  otherwise busy, a notice (`error.busy`), or the
   classic modal with its box ticked when writes wait for the classic window; unavailable, the reason as a notice (the
   Failed popup when it is no refusal); the
-  first toggle ever, the explanation; the classic window open, the classic modal; otherwise `mods.toggle {enabled:
-  !current, expect: current}` at once, with the corner indicator and "Working 12/40". The explanation (title and
-  button Turn Off Mods or Turn On Mods, the help's opening text and "Not shown again", and Cancel) shows once: closing it in any way calls `mods.explained`, and only its button toggles. The end
+  first toggle ever, the explanation; the classic window open, the confirmation, then the classic modal; otherwise the
+  confirmation, then `mods.toggle {enabled: !current, expect: current}`, with the corner indicator and "Working
+  12/40". The confirmation (`confirmation(state)`, message popup: title `quit.title` Notice, the line `mods.offAsk`
+  "Turn off mods?" or `mods.onAsk` "Turn on mods?", Cancel and Turn Off Mods or Turn On Mods) comes before every
+  toggle from the switch; only its button toggles. The tray's Enable Mods and the untracked prompt's Add and Turn On
+  Mods toggle without it. The explanation (title and
+  button Turn Off Mods or Turn On Mods, the help's opening text and "Not shown again", and Cancel) shows once, in
+  place of the confirmation: closing it in any way calls `mods.explained`, and only its button toggles. The end
   is silent (the switch shows the state), or, when entries were added to the library first, failed, were left as is or
   their adoption failed, a result popup: "Added to the library first: n", "Done: x, failed: y", "Left as is, no
   official copy: n", then each failed entry ("Airi, Portrait - ..."), the first six named and the rest counted.

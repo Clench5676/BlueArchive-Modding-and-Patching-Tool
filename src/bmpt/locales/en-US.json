@@ -246,6 +246,8 @@
 			"details": "Details",
 			"offTitle": "Turn Off Mods",
 			"onTitle": "Turn On Mods",
+			"offAsk": "Turn off mods?",
+			"onAsk": "Turn on mods?",
 			"toAdd": "Added to the library first: {n}",
 			"stuck": "Left as is, no official copy: {n}",
 			"size": "Total size: {size}",
