@@ -941,7 +941,10 @@ bones by structure, and each secondary group follows the slot's bones only while
 own costume under the slot's clips (else it stays rigid). A pair whose checks fail is refused with `source_unsupported`
 (`source` names the failed check, further params its detail). What the game loads with the slot's prefab counts as
 available: the slot's files, every CAB the prefab's files reference (followed through the files they reference: the
-catalog's dependencies), and the always-loaded prolog bundles. A slot whose primary mesh, materials or textures live in
+catalog's dependencies), and the always-loaded prolog bundles. A shader outside them is carried with the costume: a copy
+goes into the materials' file (its serialized type copied from the shader's file, both of the same build), its
+dependencies on the player's own resources (`Library/unity default resources`) kept as external entries, other
+dependencies carried the same way; a shader with fixed textures is refused. A slot whose primary mesh, materials or textures live in
 another core's files (Izumi (Swimsuit) on Izumi's) gets the new objects in one of its own files loaded with the prefab
 that holds that type; another core's files are never written.
 Apply builds through the library's build cache like any adaptation; a preview builds once per build signature into
