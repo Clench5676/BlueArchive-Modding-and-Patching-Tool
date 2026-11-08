@@ -21,6 +21,7 @@ import { ensureSpine, spineAllowed } from "./spine-runtime.js";
 import { decodeAll } from "./image-decode.js";
 import { withTimeout, nextFrame } from "./async.js";
 import { previewError } from "./preview-error.js";
+import { attachHint } from "./hover-hint.js";
 import * as Loading from "./loading.js";
 import * as ModAlias from "./mod-alias.js";
 import * as ModExport from "./mod-export.js";
@@ -691,7 +692,7 @@ function hits(view, leftHost, rightHost) {
     apply.disabled = !unfit && (!sk || !coreOf(variant(), sk) || busy || isApplied(variant(), sk, shownSource(variant(), sk)));
     if (!coreOf(variant(), sk)) apply.setAttribute("aria-description", T("import.reason.no_target"));
     // a costume shown for a preview only: greyed, the reason on hover (the click does nothing, applyCandidate)
-    if (unfit) Object.assign(apply, { title: T("model.unfit") }).setAttribute("aria-disabled", "true");
+    if (unfit) { apply.setAttribute("aria-disabled", "true"); apply.setAttribute("aria-description", T("model.unfit")); attachHint(apply, T("model.unfit")); }
   }
   add(leftHost, "LeftInfo/CharInfo/Char_Target/Pin/Pin_On/Bg", toggleFav, T("fav.label"));
   add(leftHost, "LeftInfo/CharInfo/Char_Target/Pin/Pin_Off/Bg", toggleFav, T("fav.label"));

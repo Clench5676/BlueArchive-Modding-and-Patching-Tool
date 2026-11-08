@@ -229,6 +229,7 @@ def test_bundle_discovery_grouping_and_family_filters(tmp_path):
     assert not is_texture(Path("uis-01_common-14_charactercollect-_mxload-2024-11-18.bundle"))
     assert is_prefab(Path("prologdepengroup-assets-_mx-addressableasset-ui-_mxprolog-example.bundle"))
     assert not is_prefab(Path("uis-00_images-_mxload-example.bundle"))
+    assert is_prefab(Path("ui-tooltip-_mxload-prefabs-2026-04-06_assets_all_1520611205.bundle"))
 
 
 def test_lazy_construction_and_missing_game(tmp_path, monkeypatch):
