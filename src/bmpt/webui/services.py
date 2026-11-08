@@ -1397,11 +1397,13 @@ class Services:
 
     def _model_asset(self, core: str, target: str, source: str, path: str) -> bytes:
         """A variant's 3D chibi as GLB from one source: live game files, official copies, a library mod or an
-        import candidate (KeyError, a 404, for anything else)."""
+        import candidate (KeyError, a 404, for anything else). Every source but ``live`` reads the files outside its
+        own parts by the library's rule (``preview_reads``), never as the game folder holds them now."""
         if source == "live":
             return self.game.model_glb(core)
         if source == "official":
-            return self.game.model_glb(core, overrides=self.library.official_bundles(core, current_fallback=True))
+            return self.game.model_glb(core, overrides=self.library.official_bundles(core, current_fallback=True),
+                                       reads=self.library.preview_reads("official"))
         from ..library.judge import core_of, kind_of_file
         try:
             cores = set(getattr(self.library, "model_cores", lambda key: [core])(target))
@@ -1422,12 +1424,12 @@ class Services:
             bundles = self.library.preview_bundles(mod_id)
             if not fits(bundles):
                 raise KeyError(path)
-            return self.game.model_glb(core, overrides=bundles)
+            return self.game.model_glb(core, overrides=bundles, reads=self.library.preview_reads("configured"))
         if source.startswith("import:"):
             preview_core, bundles = self.batch_import.preview(source[7:])
             if preview_core not in cores or not fits(bundles):
                 raise KeyError(path)
-            return self.game.model_glb(core, overrides=bundles)
+            return self.game.model_glb(core, overrides=bundles, reads=self.library.preview_reads("configured"))
         raise KeyError(path)
 
     def _ui_asset(self, parts: list[str], query: dict[str, str]) -> AssetResponse:

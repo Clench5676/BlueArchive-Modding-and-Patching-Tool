@@ -28,6 +28,7 @@ from .discovery import (
 )
 from .errors import AssetNotFound
 from .layouts import export_layout, subtree
+from .preview_reads import PreviewReads
 from .spine import extract_spine, png_bytes, skipped, spine_stamps
 from .unity import find_object, object_record, open_bundle, reference, ref_key
 
@@ -691,9 +692,10 @@ class GameAssets:
         """Explicit full-index compatibility path; preview requests resolve on demand."""
         return self._cab_discovery().all((lambda path: True) if everything else is_model_dependency)
 
-    def model_glb(self, core: str, overrides: Iterable[Path] = ()) -> bytes:
+    def model_glb(self, core: str, overrides: Iterable[Path] = (), *, reads: PreviewReads | None = None) -> bytes:
         """Export a chibi to lossless GLB bytes. ``overrides`` are bundles that replace the official bundles
-        holding the same CABs (mod previews)."""
+        holding the same CABs (mod previews). ``reads`` (a preview of a chosen source) names the bytes to read for
+        every other game file the export loads, so the preview never depends on what the game folder holds now."""
         from .model import BundleGraph, export_chibi
 
         core = core.lower()
@@ -704,8 +706,13 @@ class GameAssets:
         overrides = list(dict.fromkeys(Path(path).resolve() for path in overrides))
         # Prefabs are opened directly by the exporter; CAB overrides alone only replace their dependencies.
         slots = {(parse_filename(path.name).prefix, parse_filename(path.name).res_type): path for path in overrides}
-        bundles = [slots.get((parse_filename(path.name).prefix, parse_filename(path.name).res_type), path)
-                   for path in bundles]
+        own = [slots.get((parse_filename(path.name).prefix, parse_filename(path.name).res_type)) for path in bundles]
+        bundles = [mine if mine is not None else Path(reads.resolve(path)) if reads is not None else path
+                   for path, mine in zip(bundles, own)]
+        resolve_cabs = self._resolve_cabs
+        if reads is not None:
+            def resolve_cabs(wanted: set[str], hint_path: Path | None = None) -> dict[str, str]:
+                return {cab: str(reads.resolve(Path(path))) for cab, path in self._resolve_cabs(wanted, hint_path).items()}
         stamps = []
         for path in [*bundles, *overrides]:
             try:
@@ -713,8 +720,10 @@ class GameAssets:
             except FileNotFoundError:
                 raise AssetNotFound(str(path)) from None
             stamps.append((str(path), stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns))
-        # v2 excludes old partial exports whose missing CABs were not recorded.
-        key = _SCHEMA + "model/v2/" + json.dumps([core, stamps])
+        # v2 excludes old partial exports whose missing CABs were not recorded; v3 adds the rule that chose the files
+        # read outside the overrides.
+        key = _SCHEMA + ("model/v2/" + json.dumps([core, stamps]) if reads is None
+                         else "model/v3/" + json.dumps([core, stamps, reads.key]))
         generation, disk_generation = self.cache.generation, self._preview_generation()
 
         def valid_cached() -> bytes | None:
@@ -732,7 +741,8 @@ class GameAssets:
                     if not isinstance(read, dict) or not read or len(read) > 8192:
                         raise ValueError("Invalid model source manifest")
                     permitted = {str(path) for path in overrides}
-                    if any(not isinstance(path, str) or (Path(path).parent not in self.resource_dirs and path not in permitted)
+                    if any(not isinstance(path, str) or (Path(path).parent not in self.resource_dirs and path not in permitted
+                                                         and not (reads is not None and reads.trusted(Path(path))))
                            for path in read):
                         raise ValueError("Invalid model source location")
                     if all(isinstance(stamp, list) and len(stamp) == 3 and _stamp(path) == tuple(stamp)
@@ -771,7 +781,7 @@ class GameAssets:
                     if _stamp(path) != before:
                         raise AssetNotFound("Model dependency changed during extraction")
 
-            with self._cab_discovery().batch(), BundleGraph({}, overrides, resolver=self._resolve_cabs, opener=tracked_bundle) as graph:
+            with self._cab_discovery().batch(), BundleGraph({}, overrides, resolver=resolve_cabs, opener=tracked_bundle) as graph:
                 data = export_chibi(graph, bundles, core)
                 read = {path: _stamp(path) for path in graph.loaded}
                 complete = not graph.missing_cabs

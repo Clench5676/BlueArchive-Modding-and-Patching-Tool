@@ -33,6 +33,7 @@ from ..errors import ServiceError
 from ..filelock import file_lock
 from ..gameassets.cabs import CabIndex
 from ..gameassets.discovery import cab_names
+from ..gameassets.preview_reads import PreviewReads
 from ba_modding_toolkit.i18n import t
 from ..logging_utils import log_failure
 from ..openfiles import remove_tree, temporary_directory
@@ -3400,6 +3401,85 @@ class ModLibrary:
         else:
             replaced = resolver.resolve({name: Path(name) for name in names}, targets).replaced
         return [self._official_or_current(path, pin) for path in targets if path not in replaced]
+
+    def preview_reads(self, policy: str, pin: Pin | None = None) -> PreviewReads:
+        """The bytes a 3D preview of a chosen source reads for the game files its source does not supply. A model
+        export also loads shared bundles and textures stored under other cores (ch0263's materials take theirs from
+        the NPC en0002), which other mods replace; a preview never reads them as the game folder holds them now, so it
+        follows neither the mods switch nor the game's state:
+
+        - ``official`` (the Original card): verified official bytes (``_official_or_current``); the current bytes only
+          where no official copy is left at all, as for the slot's own parts.
+        - ``configured`` (a mod or an import): the bytes the configured source of each file's slot writes (its kept
+          built copy, else the mod's own file of that name, else the game file while it carries that source), else
+          as ``official``.
+
+        Not serialized, like ``official_bundles``: the export calls ``resolve`` under the model lock."""
+        if policy not in ("official", "configured"):
+            raise ValueError(f"Unknown preview policy {policy!r}")
+        pin = self._current(pin)
+        folder: dict[str, Any] = {}
+        if policy == "configured":
+            with contextlib.suppress(ServiceError):
+                folder = (((self.profiles.read() or {}).get("folders") or {}).get(pin.key) or {})
+        configured, built = folder.get("configured") or {}, folder.get("built") or {}
+        key = hashlib.sha256(json.dumps([policy, configured, built], sort_keys=True, default=str).encode()).hexdigest()
+        core_map = self._core_map(pin)
+        dirs = list(pin.dirs)
+        chosen: dict[Path, Path] = {}
+        lock = threading.Lock()
+
+        def official(path: Path) -> Path:
+            try:
+                check_resource_path(path, dirs)
+            except ServiceError:
+                return path  # outside this install's resource folders: the library holds nothing for it
+            return self._official_or_current(path, pin)
+
+        def configured_file(path: Path) -> Path | None:
+            kind = kind_of_file(path.name)
+            if not kind:
+                return None
+            core = core_of(path.name)
+            slot = core_map.slot(core) if kind == "model" else core  # the key _configure and the built copies use
+            source = (configured.get(slot) or {}).get("source") or ""
+            record = self._records.get(source[4:]) if source.startswith("mod:") else None
+            if record is None:
+                return None
+            own = {file.name: file for file in self._paths(record)}
+            kept = built.get(slot) or {}
+            part = (kept.get("parts") or {}).get(path.name) if kept.get("source") == source else None
+            if isinstance(part, dict):
+                sha1 = part.get("sha1")
+                candidate = own.get(part.get("mod_file")) if part.get("mod_file") else (
+                    self.root / "built" / f"{sha1}.bundle"
+                    if isinstance(sha1, str) and re.fullmatch(r"[0-9a-f]{40}", sha1) else None)
+                if candidate is not None and candidate.is_file() and self._hashes.get(candidate).sha1 == sha1:
+                    return candidate
+            if path.name in own and own[path.name].is_file():
+                return own[path.name]
+            applied = self._applied.get(str(path.resolve()))
+            if applied and applied.get("source") == source and self._hashes.get(path).sha1 == applied.get("sha1"):
+                return path  # the game file is the configured write (an adapted mod without a kept copy)
+            return None
+
+        def resolve(path: Path) -> Path:
+            path = Path(path)
+            with lock:
+                if path in chosen:
+                    return chosen[path]
+            result = (configured_file(path) if policy == "configured" else None) or official(path)
+            with lock:
+                chosen[path] = result
+            return result
+
+        def trusted(path: Path) -> bool:
+            try:
+                return Path(path).resolve().is_relative_to(self.root)
+            except (OSError, RuntimeError):
+                return False
+
+        return PreviewReads(resolve, key, trusted)
 
     def _incomplete(self, record: dict[str, Any], pin: Pin) -> bool:
         targets = self._spine_parts(core_of(record["files"][0]), pin)
