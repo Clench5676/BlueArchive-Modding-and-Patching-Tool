@@ -125,3 +125,18 @@ test("the scales agree with the tokens they grew from", () => {
   // the S popup's footer: two buttonL bodies, the gap and the sides fill the frame's width
   assert.equal(2 * CONTROL.buttonL.minW + POPUP_FRAME.footer.gap + 2 * POPUP_FRAME.footer.side, POPUP_FRAME.S.w);
 });
+
+
+test("a stack justifies its items along a supplied height without compressing them", () => {
+  const items = [{ w: 100, h: 50 }, { w: 300, h: 20 }];
+  for (const [justify, offset] of [["start", 0], ["center", 50], ["end", 100]]) {
+    const s = stack(items, { x: 5, y: 10, w: 400, h: 190, gap: 20, align: "center", justify });
+    assert.deepEqual(s.boxes.map(b => [b.x, b.y]), [[155, 10 + offset], [55, 80 + offset]]);
+    assert.equal(s.h, 190); assert.equal(s.w, 400);
+    const tight = stack(items, { y: 10, h: 30, gap: 20, justify });
+    assert.deepEqual(tight.boxes.map(b => b.y), [10, 80], "no negative free space");
+    assert.equal(tight.h, 30);
+    assert.equal(stack([], { h: 100, justify }).h, 100);
+    assert.equal(stack([], { gap: 20, justify }).h, 0);
+  }
+});

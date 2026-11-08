@@ -339,12 +339,12 @@ test("asset-free messages use the same class, title, close, check and footer box
   const action = name => walk(box).find(e => e.dataset?.action === name);
   const near = (a, b) => assert.ok(Math.abs(a - b) < 1e-9, `${a} != ${b}`);
   near(parseFloat(box.style.width), P.M.w * scale);
-  near(parseFloat(box.style.height), P.M.h * scale);
+  near(parseFloat(box.style.height), P.minH * scale);
   near(parseFloat(heading.style.top), P.titleTop * scale);
   near(parseFloat(action("close").style.left), (P.M.w - P.close.right - C.icon.h) * scale);
   near(parseFloat(action("close").style.top), P.close.top * scale);
   const footer = walk(box).find(e => e.className === "message-actions");
-  near(parseFloat(footer.style.top), (P.M.h - P.footer.bottom - C.buttonL.h) * scale);
+  near(parseFloat(footer.style.top), (P.minH - P.footer.bottom - C.buttonL.h) * scale);
   near(parseFloat(action("ok").style.width), C.buttonL.minW * scale);
   near(parseFloat(action("ok").style.left) - parseFloat(action("cancel").style.left), (C.buttonL.minW + P.footer.gap) * scale);
   action("check").click();
@@ -364,6 +364,8 @@ test("the asset-free text viewer uses the XL content box and keeps Copy and Clos
   assert.equal(parseFloat(box.style.width), TEXT_VIEWER.w * scale);
   assert.equal(parseFloat(pre.style.width), TEXT_VIEWER.box.width * scale);
   assert.equal(parseFloat(pre.style.height), TEXT_VIEWER.box.height * scale);
+  assert.equal(parseFloat(box.style.height), TEXT_VIEWER.h * scale);
+  assert.equal(parseFloat(pre.parentNode.style.top), 170 * scale);
   walk(box).find(e => e.dataset?.action === "copy").click();
   assert.equal(copies, 1);
   walk(box).find(e => e.dataset?.action === "close").click();
