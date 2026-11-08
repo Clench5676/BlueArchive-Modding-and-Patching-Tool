@@ -229,10 +229,18 @@ test("the switch's view from mods.state: on, off, busy, unavailable with its rea
   assert.equal(MS.view(null).hidden, true);
 });
 
-test("a click: the reason, busy, the classic modal, the first toggle's explanation, else the toggle at once", () => {
-  assert.equal(MS.clickAction(base()), "toggle");
+test("a click: the reason, busy, the classic modal, the first toggle's explanation, else the confirmation", () => {
+  assert.equal(MS.clickAction(base()), "confirm");
   assert.equal(MS.clickAction(base({ explained: false })), "explain");
-  assert.equal(MS.clickAction(base({ explained: false }), true), "toggle", "explained in this page already");
+  assert.equal(MS.clickAction(base({ explained: false }), true), "confirm", "explained in this page already");
+  // the current state clicked: nothing, in any state; the other one as the switch as a whole
+  for (const over of [{}, { explained: false }, { busy: true }, { busy: true, queued: 1 }, { available: false, reason: "game_running" },
+    { available: false, reason: "classic_open" }]) {
+    assert.equal(MS.clickAction(base(over), false, true), "none", JSON.stringify(over));
+    assert.equal(MS.clickAction(base({ ...over, enabled: false }), false, false), "none", JSON.stringify(over));
+    assert.equal(MS.clickAction(base(over), false, false), MS.clickAction(base(over)), JSON.stringify(over));
+    assert.equal(MS.clickAction(base({ ...over, enabled: false }), false, true), MS.clickAction(base({ ...over, enabled: false })), JSON.stringify(over));
+  }
   assert.equal(MS.clickAction(base({ busy: true })), "busy");
   assert.equal(MS.clickAction(base({ busy: true, queued: 1 })), "queued");
   assert.equal(MS.clickAction(base({ available: false, reason: "game_running" })), "reason");
@@ -243,6 +251,30 @@ test("a click: the reason, busy, the classic modal, the first toggle's explanati
   assert.deepEqual(MS.toggleParams(base({ enabled: false })), { enabled: true, expect: false });
   assert.deepEqual(MS.retryParams(base()), { enabled: true, expect: true });
   assert.deepEqual(MS.retryParams(base({ enabled: false })), { enabled: false, expect: false });
+});
+
+test("the clicked state: the ON or OFF segment, or none for the switch as a whole", () => {
+  const toggle = new El("button"), on = new El("span"), off = new El("span"), text = new El("b");
+  on.className = "ms-seg ms-on"; off.className = "ms-seg ms-off";
+  off.appendChild(text); toggle.append(on, off);
+  assert.equal(MS.clickedState(on, toggle), true);
+  assert.equal(MS.clickedState(text, toggle), false);
+  assert.equal(MS.clickedState(toggle, toggle), null);
+  assert.equal(MS.clickedState(null, toggle), null);
+});
+
+test("the confirmation: the neutral notice, the question and the action, in every locale", () => {
+  try {
+    for (const lang of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
+      const ui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url))).webui;
+      I18n.setStrings(lang, flat({ webui: ui }));
+      assert.deepEqual(MS.confirmation(base()), { title: ui.quit.title, lines: [ui.mods.offAsk], ok: ui.mods.offTitle, cancel: ui.popup.cancel }, lang);
+      assert.deepEqual(MS.confirmation(base({ enabled: false })), { title: ui.quit.title, lines: [ui.mods.onAsk], ok: ui.mods.onTitle, cancel: ui.popup.cancel }, lang);
+      for (const k of ["offAsk", "onAsk"]) assert.ok(typeof ui.mods[k] === "string" && ui.mods[k].length > 0 && !ui.mods[k].includes("\n"), `${lang} ${k}`);
+    }
+  } finally { I18n.setStrings("en-US", strings); }
+  assert.equal(S("mods.offAsk"), "Turn off mods?");
+  assert.equal(S("mods.onAsk"), "Turn on mods?");
 });
 
 test("the first toggle's explanation: the help's opening text, not shown again", () => {
@@ -399,10 +431,25 @@ test("the top bar's switch follows mods.state, and the first toggle explains onc
   action(dialog, "cancel").click();
   await until(() => called("mods.explained").length === 1, "mods.explained");
   assert.equal(called("mods.toggle").length, 0);
-  // the next click (the top bar) toggles at once: the explanation came once
+  // the next clicks (the top bar): the current state does nothing; the other one asks first, Cancel toggles nothing
+  const [onSeg, offSeg] = toggle.children.filter((e) => e.className.startsWith("ms-seg"));
+  onSeg.click();
+  for (let i = 0; i < 30; i++) await tick();
+  assert.equal(action(dialog, "cancel"), undefined, "no popup on the current state");
   answers["mods.toggle"] = "job-1";
   jobs["job-1"] = { state: "done", result: { enabled: false, done: [], adopted: [], failed: [], stuck: [], left: [] } };
+  offSeg.click();
+  await drawn(dialog, "cancel");
+  for (const text of [S("quit.title"), S("mods.offAsk")]) assert.ok(walk(dialog).some((e) => e.textContent === text), text);
+  assert.equal(action(dialog, "ok").getAttribute("aria-label"), S("mods.offTitle"));
+  assert.ok(!walk(dialog).some((e) => e.textContent === S("mods.explainOnce")), "the explanation came once");
+  action(dialog, "cancel").click();
+  await until(() => dialog.hidden, "confirmation closed");
+  assert.equal(called("mods.toggle").length, 0);
+  // the switch as a whole (Enter or Space) asks for the other state too; only the confirmation submits
   toggle.click();
+  await drawn(dialog, "ok");
+  action(dialog, "ok").click();
   await until(() => called("mods.toggle").length === 1, "mods.toggle");
   assert.deepEqual(called("mods.toggle")[0], { enabled: false, expect: true });
   assert.equal(called("mods.explained").length, 1, "no explanation the second time");
@@ -731,6 +778,8 @@ test("the classic modal queues the refused write only when its box is ticked, on
   await MS.refresh();
   answers["mods.toggle"] = { error: { code: "classic_open", params: {} } };
   MS.click("top");
+  await drawn(dialog, "ok");
+  action(dialog, "ok").click();
   await drawn(dialog, "check");
   assert.equal(walk(dialog).some((e) => e.attrs?.["aria-label"] === S("classic.front")), true);
   assert.deepEqual(actionsIn(dialog).map((e) => e.dataset.action).filter((name) => /^line/.test(name)), [], "the classic modal is no failure: no Error Report row");

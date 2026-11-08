@@ -229,9 +229,9 @@ function rows({ builtSize = null, sizeError = null } = {}) {
   } else if (tab === "mods") {
     const m = ModSwitch.current() || {};
     const v = ModSwitch.view(m, { place: "settings" });
-    // the same kill switch as the top bar's, with the same rules (the first toggle's explanation, the reasons, the
-    // classic modal): picking the other option is a click on the switch
-    const sw = radioRow("Switch", 0, T("mods.switch"), ON_OFF(), v.on, (value) => { if (value !== v.on) ModSwitch.click("settings"); },
+    // the same kill switch as the top bar's, with the same rules (the current option does nothing, the confirmation,
+    // the first toggle's explanation, the reasons, the classic modal)
+    const sw = radioRow("Switch", 0, T("mods.switch"), ON_OFF(), v.on, (value) => ModSwitch.click("settings", value),
       { dim: v.busy || v.unavailable, description: v.unavailable ? ModSwitch.reasonText(m) : "" });
     add(helpAfterTitle(sw, T("mods.switch"), v.dot));
     // the pair of 680 x 136 buttons under the dotted line
