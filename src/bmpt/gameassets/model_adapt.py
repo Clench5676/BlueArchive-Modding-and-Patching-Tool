@@ -12,8 +12,15 @@ own:
   and in the idle clip;
 - bone mapping (:func:`map_bones`): Biped bones (``Bip001 ...``, the names every clip and IK component uses) by name;
   every other bone by structure: the nearest bone of the slot's skeleton that hangs off the same Biped bone, in the chain
-  its parent maps to, else its parent's; per Biped bone, the group of secondary bones follows the matched bones only
-  while it stretches no more than the slot's own costume under the slot's clips, else it stays rigid;
+  its parent maps to, else its parent's; never a bone the slot's clips hide by scaling it to nothing. A Biped bone the
+  slot lacks, or a bone outside the Biped, goes with the Biped bone that moves it alike under the source's own clips
+  (:func:`carriers`: a Battle NPC's ForeTwist with the forearm, a bag's strap with the body). Per Biped bone, the group
+  of secondary bones follows the matched bones only while it stretches no more than the slot's own costume under the
+  slot's clips, else it stays rigid;
+- the shape (:func:`plan`, BL-128): the costume as its vertex data stores it, as its prefab draws it at rest (by its own
+  bindposes: some meshes lie a metre off their renderer), and refitted to the slot's joints (:func:`refit`), each
+  judged under the slot's clips; the least stretch wins and its vertices, normals and tangents are written
+  (``model_geometry``);
 - checks: every reference resolved, the rest pose reproduced, the stretch within the slot's own range. A pair that fails
   raises ``source_unsupported``;
 - the hem (:func:`hems`, rules in ``model_hems``): cloth around the legs that stays rigid gets new skin weights on the
@@ -38,6 +45,7 @@ from typing import Any, Callable, Iterable, Mapping
 import numpy as np
 
 from ..errors import ServiceError
+from . import model_geometry as mg
 from . import model_hems as hm
 from .errors import AssetNotFound
 from .model import (BundleGraph, PREFAB_KINDS, _external_cab, _key, _prefabs, bind_tracks, decode_clip,
@@ -48,6 +56,10 @@ logger = logging.getLogger(__name__)
 CHARACTER_KINDS = {"body", "face", "hair", "eyemouth", "eyebrow"}
 # torso, limb and head bones of the Biped: a costume part skins to at least one of them
 BIPED_CORE = re.compile(r"^Bip001 (Pelvis|Spine\d*|Neck|Head|[LR] (Thigh|Calf|UpperArm|Forearm|Clavicle))$")
+# the Biped's body chain, hands and feet with their fingers and toes: the bones a costume bone may be carried by
+# (never a weapon, prop or eye bone a vendor named Bip001 too)
+BIPED_CHAIN = re.compile(r"^Bip001 (Pelvis|Spine\d*|Neck\d*|Head|[LR] (Clavicle|UpperArm|Forearm|Hand|Thigh|Calf|Foot|"
+                         r"Finger\d+|Toe\d+))$")
 NEAR = 0.05           # a secondary bone maps onto a slot bone at most this far from it (prefab units, metres)
 STRETCH_FLOOR = 1.5   # a group may always stretch this much
 # how far a costume may stretch under the slot's clips past the slot's own costume (max(1.5 x own, own + 1)), with a
@@ -58,10 +70,20 @@ STRETCH_TOLERANCE = 1.1
 def stretch_limit(own: float) -> float:
     return STRETCH_TOLERANCE * max(1.5 * own, own + 1.0)
 
+
+# the shapes a costume may be bound in (BL-128), in the order they are judged: its vertex data in its renderer's space
+# (before BL-128), as its prefab draws it at rest, with its joints moved onto the slot's, refitted (moved and turned)
+SHAPES = ("stored", "drawn", "moved", "refitted")
+SHAPE_MARGIN = 0.02  # a later shape is taken when it stretches this share less
+CARRIER_SAMPLES = 200  # vertices measured, about, per unmatched bone
+CARRIER_SHARE = 0.5    # a carrier moves an unmatched bone's vertices at most this much as far off as its parent does
+HIDDEN = 1e-6  # a bone a pose scales to this share of its rest volume or less is hidden
+
 # clips whose poses judge the mapping, by name suffix; the idle comes first
 PROBE_CLIPS = ("Formation_Idle", "Normal_Idle", "Move_Ing", "Vital_Death", "Formation_Pickup", "Cafe_Walk")
 IDLE_CLIPS = ("Formation_Idle", "Normal_Idle", "Cafe_Idle", "Stand_Idle", "Idle")
 FIELD_KINDS = ("Field_Player_{}", "Field_Player_{}_NonWeapon")
+PROBE_SCAN = 24  # clips looked at, at most, for the probes
 
 
 def refuse(reason: str, **params: Any) -> ServiceError:
@@ -343,12 +365,42 @@ def prefab_clips(graph: BundleGraph, skeleton: Skeleton, prefabs: Mapping[str, A
 
 
 def pick(clips: list[Any], suffixes: Iterable[str]) -> list[Any]:
+    """The first clip named for each suffix: ``<model>_<suffix>``, or the suffix alone (a Battle NPC's)."""
     names = [(c.peek_name() or "").lower() for c in clips]
     out = []
     for suffix in suffixes:
         hit = next((c for c, n in zip(clips, names) if n.endswith("_" + suffix.lower())), None)
+        if hit is None:
+            hit = next((c for c, n in zip(clips, names) if n == suffix.lower()), None)
         if hit is not None and hit not in out:
             out.append(hit)
+    return out
+
+
+def probe_poses(skeleton: Skeleton, clips: list[Any], suffixes: Iterable[str] = PROBE_CLIPS) -> list[list[np.ndarray]]:
+    """World poses (first, middle and last frames) of the clips that judge a costume on ``skeleton``: those named for
+    ``suffixes`` that move its Biped; where none does, as many other clips that do (a Battle NPC's named states are
+    empty, its own clips carry its name), of the first ``PROBE_SCAN``."""
+    suffixes = tuple(suffixes)
+    named = pick(clips, suffixes)
+    out = _moving(skeleton, named, len(named))
+    return out or _moving(skeleton, [c for c in clips if c not in named][:PROBE_SCAN], len(suffixes))
+
+
+def _moving(skeleton: Skeleton, clips: list[Any], count: int) -> list[list[np.ndarray]]:
+    """The poses of the first ``count`` of ``clips`` that move the Biped."""
+    rest = skeleton.world()
+    out: list[list[np.ndarray]] = []
+    kept = 0
+    for clip in clips:
+        if kept >= count:
+            break
+        poses, animated = skeleton.clip_poses(clip)
+        biped = [i for i in animated if skeleton.nodes[i].name.startswith("Bip001")]
+        if not any(float(np.abs(pose[i] - rest[i]).max()) > 1e-5 for pose in poses for i in biped):
+            continue
+        out += poses
+        kept += 1
     return out
 
 
@@ -413,9 +465,89 @@ class Costume:
         return sorted({b for p in self.parts for b in p.bones if b is not None})
 
 
-def map_bones(target: Skeleton, source: Skeleton, bones: Iterable[int]) -> dict[int, int]:
-    """Source node -> target node for every source bone and its ancestors, before the per-group choice."""
+def unmatched(target: Skeleton, source: Skeleton, flat: Flat) -> list[int]:
+    """Among the costume's bones and their anchors: the source's Biped bones the slot has no bone of the name for,
+    and the bones outside the Biped (no Biped ancestor: a bag's strap hung off the prefab's root)."""
+    out = set()
+    for n in set(flat.joints[flat.weights > 0].tolist()) - {-1}:
+        anchor = source.biped_ancestor(n)
+        if not source.nodes[n].name.startswith("Bip001") and anchor is None and source.nodes[n].parent is not None:
+            out.add(n)
+        for b in (n, anchor):
+            if b is not None and source.nodes[b].name.startswith("Bip001") and target.first(source.nodes[b].name) is None:
+                out.add(b)
+    return sorted(out)
+
+
+def carriers(target: Skeleton, source: Skeleton, flat: Flat, poses: list[list[np.ndarray]]) -> dict[int, int]:
+    """For each unmatched source bone (``unmatched``), the source bone the slot has by name that moves its vertices
+    most alike under the source's own clips (``poses``): a Biped's ForeTwist hangs off the UpperArm but turns with the
+    forearm, and where the slot has no such bone the costume's sleeve goes with the forearm, not with the upper arm;
+    a bag's strap keyed to the body goes with the body. Measured on the vertices it or its secondary bones dominate
+    (else its own frame): the least mean distance between where the two carry them, which must be under
+    ``CARRIER_SHARE`` of the distance from where its parent carries them (else it stays with its parent, as before)."""
+    missing = unmatched(target, source, flat)
+    if not missing or not poses:
+        return {}
+    rest = source.world()
+    present = [i for i, node in enumerate(source.nodes) if BIPED_CHAIN.match(node.name)
+               and target.first(node.name) is not None]
+    if not present:
+        return {}
+    dominant = flat.joints[np.arange(len(flat.vertices)), np.argmax(flat.weights, axis=1)]
+    anchor = {n: (n if source.nodes[n].name.startswith("Bip001") or n in missing else source.biped_ancestor(n))
+              for n in set(dominant.tolist()) - {-1}}
+    parents = {m: source.nodes[m].parent for m in missing}
+    inverse = {i: np.linalg.inv(rest[i]) for i in {*present, *missing, *(p for p in parents.values() if p is not None)}}
+    out = {}
+    for m in missing:
+        rows = np.where(np.isin(dominant, [n for n, a in anchor.items() if a == m]))[0]
+        if len(rows):
+            points = flat.vertices[rows[::max(1, len(rows) // CARRIER_SAMPLES)]]
+        else:  # its frame: the joint and a point along each axis
+            points = rest[m][:3, 3] + np.vstack([np.zeros(3), 0.05 * rest[m][:3, :3].T])
+        homogeneous = np.c_[points, np.ones(len(points))]
+        errors = np.zeros(len(present))
+        stay = 0.0  # with its parent
+        parent = parents[m]
+        for pose in poses:
+            here = homogeneous @ (pose[m] @ inverse[m]).T
+            carried_by_parent = homogeneous @ (pose[parent] @ inverse[parent]).T if parent is not None else homogeneous
+            stay += float(np.linalg.norm(carried_by_parent - here, axis=1).mean())
+            stack = np.array([pose[c] @ inverse[c] for c in present])
+            there = np.einsum("cij,nj->cni", stack, homogeneous)
+            errors += np.linalg.norm(there - here[None], axis=2).mean(axis=1)
+        best = int(np.argmin(errors))
+        if stay > 1e-4 * len(poses) and errors[best] < CARRIER_SHARE * stay:
+            out[m] = present[best]
+    if out:
+        logger.debug("Costume bones the slot lacks, carried by: %s",
+                     {source.nodes[m].name: source.nodes[c].name for m, c in out.items()})
+    return out
+
+
+def hidden_bones(skeleton: Skeleton, poses: list[list[np.ndarray]]) -> set[int]:
+    """The bones a pose scales to (almost) nothing, at rest or in ``poses``: the parts a clip hides (Sena's prop in
+    her Formation_Pickup). A costume's vertices never follow them."""
+    if not skeleton.nodes:
+        return set()
+    rest = np.array(skeleton.world())
+    base = np.abs(np.linalg.det(rest[:, :3, :3]))
+    out = set(np.where(base < 1e-9)[0].tolist())
+    for pose in poses:
+        scale = np.abs(np.linalg.det(np.array(pose)[:, :3, :3]))
+        out |= set(np.where(scale < HIDDEN * np.maximum(base, 1e-9))[0].tolist())
+    return out
+
+
+def map_bones(target: Skeleton, source: Skeleton, bones: Iterable[int],
+              carried: Mapping[int, int] | None = None, hidden: set[int] | None = None) -> dict[int, int]:
+    """Source node -> target node for every source bone and its ancestors, before the per-group choice. An unmatched
+    bone the slot has no bone near goes to the slot's bone of its carrier's name (``carriers``); no secondary bone goes
+    to one the slot's clips hide (``hidden``)."""
     rest_t, rest_s = target.world(), source.world()
+    carried = carried or {}
+    hidden = hidden or set()
     mapping: dict[int, int] = {}
     root = 0
     wanted = set()
@@ -436,11 +568,12 @@ def map_bones(target: Skeleton, source: Skeleton, bones: Iterable[int]) -> dict[
                 continue
         parent = mapping.get(node.parent, root)
         anchor = source.biped_ancestor(i)
+        anchor = carried.get(anchor, anchor) if anchor is not None else None
         anchor_name = source.nodes[anchor].name if anchor is not None else None
         position = rest_s[i][:3, 3]
         best, distance = None, NEAR
         for c in [parent, *target.descendants(parent)]:
-            if target.nodes[c].name.startswith("Bip001"):
+            if target.nodes[c].name.startswith("Bip001") or c in hidden:
                 continue
             a = target.biped_ancestor(c)
             if (target.nodes[a].name if a is not None else None) != anchor_name:
@@ -448,8 +581,32 @@ def map_bones(target: Skeleton, source: Skeleton, bones: Iterable[int]) -> dict[
             d = float(np.linalg.norm(rest_t[c][:3, 3] - position))
             if d < distance:
                 best, distance = c, d
+        if best is None and i in carried and (same := target.first(source.nodes[carried[i]].name)) is not None:
+            best = same  # an unmatched bone the slot has nothing near: its carrier's
         mapping[i] = best if best is not None else parent
     return mapping
+
+
+@dataclass
+class Fit:
+    """A shape the costume may be bound in (BL-128), in the prefab root's space (``SHAPES``): per vertex its position
+    and the blended linear part from its part's mesh space, which turns its normal and tangent; for a refit, how far
+    it moves the vertices past the costume's common move (99th percentile and largest) and the costume's size."""
+
+    vertices: np.ndarray
+    linear: np.ndarray
+    shift: float
+    largest: float
+    size: float
+    starts: list[int] = field(default_factory=list)  # each part's first vertex
+    shape: str = "stored"
+
+    def part(self, k: int, world: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        """Part ``k``'s vertices and linear parts in the mesh space ``world`` (prefab root's space) defines."""
+        end = self.starts[k + 1] if k + 1 < len(self.starts) else len(self.vertices)
+        inverse = np.linalg.inv(world)
+        points = (np.c_[self.vertices[self.starts[k]:end], np.ones(end - self.starts[k])] @ inverse.T)[:, :3]
+        return points, inverse[:3, :3] @ self.linear[self.starts[k]:end]
 
 
 @dataclass
@@ -460,12 +617,14 @@ class Plan:
     own: float
     groups: dict[int, list[int]] = field(default_factory=dict)  # source Biped node -> its secondary bones
     unfit: bool = False  # past the stretch limit: built for a preview only (``strict=False``), never applied
+    fit: Fit | None = None  # the shape the costume is bound and judged in (``Fit``)
 
 
 @dataclass
 class Flat:
-    """Every costume part's vertices in the prefab root's space, with their bones as skeleton node indices (-1 for a
-    bone outside the prefab), edges and triangles; ``starts`` holds each part's first vertex."""
+    """Every costume part's vertices where the prefab draws them at rest, in its root's space, with their bones as
+    skeleton node indices (-1 for a bone outside the prefab), edges and triangles; ``starts`` holds each part's first
+    vertex, ``linear`` each vertex's blended linear part (its part's mesh space to the root's)."""
 
     vertices: np.ndarray
     joints: np.ndarray
@@ -473,13 +632,33 @@ class Flat:
     edges: np.ndarray
     triangles: np.ndarray
     starts: list[int]
+    linear: np.ndarray | None = None
+
+
+def drawn(skin: Skin, carry: np.ndarray, fallback: np.ndarray) -> np.ndarray:
+    """Per vertex, the blend of the 4 x 4 ``carry`` matrices of its bones by its weights; ``fallback`` where it has
+    no weight."""
+    total = skin.weights.sum(axis=1, keepdims=True)
+    blended = np.einsum("nk,nkij->nij", skin.weights / np.maximum(total, 1e-12), carry[skin.joints])
+    blended[total[:, 0] <= 1e-12] = fallback
+    return blended
 
 
 def flatten(costume: Costume, rest: list[np.ndarray]) -> Flat:
-    vertices, joints, weights, edges, triangles, starts, offset = [], [], [], [], [], [], 0
+    """The costume as the prefab draws it at rest: each part skinned by its own bindposes. A mesh's vertex data need
+    not sit in its renderer's space (some lie a metre or more off, their bindposes bringing them back), and a mesh
+    bound in another pose than the prefab's rest is drawn in that rest."""
+    vertices, linear, joints, weights, edges, triangles, starts, offset = [], [], [], [], [], [], [], 0
+    graph = costume.skeleton.graph
     for part, skin in zip(costume.parts, costume.skins):
-        world = rest[part.node]
-        vertices.append((np.c_[skin.vertices, np.ones(len(skin.vertices))] @ world.T)[:, :3])
+        node = rest[part.node]
+        bp = bindposes(graph, part.mesh)
+        carry = np.array([rest[b] @ bp[j] if b is not None and j < len(bp) else node
+                          for j, b in enumerate(part.bones)] or [node])
+        blended = drawn(Skin(skin.vertices, np.minimum(skin.joints, len(carry) - 1), skin.weights, skin.edges),
+                        carry, node)
+        vertices.append(np.einsum("nij,nj->ni", blended, np.c_[skin.vertices, np.ones(len(skin.vertices))])[:, :3])
+        linear.append(blended[:, :3, :3])
         joints.append(np.array([[part.bones[j] if part.bones[j] is not None else -1 for j in row]
                                 for row in skin.joints]).reshape(-1, skin.joints.shape[1]))
         weights.append(skin.weights)
@@ -489,7 +668,7 @@ def flatten(costume: Costume, rest: list[np.ndarray]) -> Flat:
         starts.append(offset)
         offset += len(skin.vertices)
     return Flat(np.vstack(vertices), np.vstack(joints), np.vstack(weights), np.vstack(edges), np.vstack(triangles),
-                starts)
+                starts, np.concatenate(linear))
 
 
 @dataclass
@@ -519,16 +698,115 @@ class OwnMesh:
         return np.vstack([deform(skin, np.array([pose[b] for b in bones]) @ bp) for skin, bp, bones in self.parts])
 
 
-def plan(target: Costume, source: Costume, probes: list[list[np.ndarray]], *, strict: bool = True) -> Plan:
-    """The bone mapping with each group's choice, and the checks of the rest pose and the stretch."""
-    t_rest, s_rest = target.skeleton.world(), source.skeleton.world()
-    mapping = map_bones(target.skeleton, source.skeleton, source.bones())
+def fit_anchor(target: Skeleton, source: Skeleton, node: int,
+               carried: Mapping[int, int] | None = None) -> tuple[int, int] | None:
+    """The Biped bone a source node is refitted by, with the slot's bone of its name: the node itself or its nearest
+    ancestor the slot has by name (a secondary bone's Biped anchor), an unmatched bone standing for its carrier
+    (``carriers``). None when there is none."""
+    carried = carried or {}
+    n: int | None = node
+    while n is not None:
+        name = source.nodes[n].name
+        if name.startswith("Bip001") and (same := target.first(name)) is not None:
+            return n, same
+        if n in carried and (same := target.first(source.nodes[carried[n]].name)) is not None:
+            return carried[n], same
+        n = source.nodes[n].parent
+    return None
+
+
+def stored(costume: Costume, rest: list[np.ndarray], flat: Flat) -> Fit:
+    """The shape the adapter bound costumes in before BL-128: each part's vertex data in its renderer's space."""
+    vertices, linear = [], []
+    for part, skin in zip(costume.parts, costume.skins):
+        node = rest[part.node]
+        vertices.append((np.c_[skin.vertices, np.ones(len(skin.vertices))] @ node.T)[:, :3])
+        linear.append(np.repeat(node[None, :3, :3], len(skin.vertices), axis=0))
+    return Fit(np.vstack(vertices), np.concatenate(linear), 0.0, 0.0, 0.0, list(flat.starts), "stored")
+
+
+def refit(target: Skeleton, source: Skeleton, flat: Flat, carried: Mapping[int, int] | None = None,
+          shape: str = "refitted") -> Fit:
+    """The costume carried from the source's rest skeleton to the slot's (BL-128): each vertex follows its bones by
+    their anchors' transforms (``fit_anchor``), so the Biped's proportions change and hair, skirts and props move
+    rigidly with their anchor; the skin weights stay. ``shape`` "moved": each anchor's joint move alone, "refitted":
+    its move and turn. ``shift`` and ``largest``: how far the vertices move past the costume's common move (a slot
+    whose prefab rests a metre aside, or lying, takes the costume along as a whole), for the log; what the refit does
+    to the costume's edges counts in its stretch (``plan``)."""
+    t_rest, s_rest = target.world(), source.world()
+    used = sorted(set(flat.joints[flat.weights > 0].tolist()) - {-1})
+    matrices = [np.eye(4)]  # column 0: a bone outside the prefab or without weight
+    columns = {}
+    for n in used:
+        hit = fit_anchor(target, source, n, carried)
+        if hit is None:
+            columns[n] = 0
+            continue
+        a, t = hit
+        m = t_rest[t] @ np.linalg.inv(s_rest[a])
+        if shape == "moved":  # the joint's move alone, no turn
+            m = np.eye(4)
+            m[:3, 3] = t_rest[t][:3, 3] - s_rest[a][:3, 3]
+        columns[n] = len(matrices)
+        matrices.append(m)
+    stack = np.array(matrices)
+    local = np.vectorize(lambda n: columns.get(int(n), 0), otypes=[int])(np.where(flat.weights > 0, flat.joints, -1))
+    blended = drawn(Skin(flat.vertices, local, flat.weights, flat.edges), stack, np.eye(4))
+    vertices = np.einsum("nij,nj->ni", blended, np.c_[flat.vertices, np.ones(len(flat.vertices))])[:, :3]
+    delta = vertices - flat.vertices
+    changed = np.linalg.norm(delta - np.median(delta, axis=0), axis=1) if len(delta) else np.zeros(0)
+    size = float(np.ptp(flat.vertices, axis=0).max()) if len(flat.vertices) else 0.0
+    linear = blended[:, :3, :3] @ flat.linear if flat.linear is not None else blended[:, :3, :3]
+    return Fit(vertices, linear, float(np.percentile(changed, 99)) if len(changed) else 0.0,
+               float(changed.max()) if len(changed) else 0.0, size, list(flat.starts), shape)
+
+
+def plan(target: Costume, source: Costume, probes: list[list[np.ndarray]], *, strict: bool = True,
+         fit: bool = True, own_probes: list[list[np.ndarray]] | None = None) -> Plan:
+    """The bone mapping with each group's choice, the shape the costume is bound in, and the checks of the rest pose
+    and the stretch. The mapping (``map_bones``) takes the carriers of the unmatched bones from the source's own clips
+    (``own_probes``, see ``carriers``) and leaves out the slot's hidden bones. With ``fit`` (the costume's geometry can
+    be rewritten), each of ``SHAPES`` is judged under the slot's clips and the least stretch wins, a later shape only
+    by more than ``SHAPE_MARGIN``; without, the costume keeps its stored shape."""
+    s_rest = source.skeleton.world()
     # every part's vertices in the root's space, with its bones as source node indices
     flat_source = flatten(source, s_rest)
-    sv, sj, sw, se = flat_source.vertices, flat_source.joints, flat_source.weights, flat_source.edges
+    sj, sw = flat_source.joints, flat_source.weights
     if (sj[sw > 0] < 0).any():
         raise refuse("costume bone outside the prefab")
+    carried = carriers(target.skeleton, source.skeleton, flat_source, own_probes or [])
+    mapping = map_bones(target.skeleton, source.skeleton, source.bones(), carried, hidden_bones(target.skeleton, probes))
     own_mesh = OwnMesh.of(target)
+    posed_targets = [own_mesh.posed(p) for p in probes]
+    own = max((stretch(own_mesh.rest, posed, own_mesh.edges) for posed in posed_targets), default=1.0)
+    shapes = [stored(source, s_rest, flat_source)]
+    if fit:
+        shapes.append(Fit(flat_source.vertices, flat_source.linear, 0.0, 0.0, 0.0, list(flat_source.starts), "drawn"))
+        shapes += [refit(target.skeleton, source.skeleton, flat_source, carried, shape) for shape in ("moved", "refitted")]
+    best: Plan | None = None
+    judged = []
+    for shape in shapes:
+        # a refit's own change of the costume counts: measured from the shape the source draws
+        reference = shape.vertices if shape.shape == "stored" else flat_source.vertices
+        candidate = _judge(target, source, probes, flat_source, shape, reference, dict(mapping), carried, own_mesh,
+                           posed_targets, own)
+        judged.append(f"{shape.shape} {candidate.stretch:.2f}")
+        if best is None or candidate.stretch < best.stretch * (1 - SHAPE_MARGIN):
+            best = candidate
+    assert best is not None
+    logger.debug("Costume shapes judged: %s; %s chosen", ", ".join(judged), best.fit.shape if best.fit else "?")
+    if best.unfit and strict:
+        raise refuse("stretch", adapted=round(best.stretch, 2), own=round(own, 2))
+    return best
+
+
+def _judge(target: Costume, source: Costume, probes: list[list[np.ndarray]], flat_source: Flat, shape: Fit,
+           reference: np.ndarray, mapping: dict[int, int], carried: Mapping[int, int], own_mesh: OwnMesh,
+           posed_targets: list[np.ndarray], own: float) -> Plan:
+    """One shape's plan: each group's choice (``mapping`` is changed in place), the rest pose, the stretch from
+    ``reference`` (the costume's shape before the refit)."""
+    t_rest = target.skeleton.world()
+    sv, sj, sw, se = shape.vertices, flat_source.joints, flat_source.weights, flat_source.edges
     tv, te, tdom = own_mesh.rest, own_mesh.edges, own_mesh.dominant
     sdom = np.array([row[np.argmax(w)] for row, w in zip(sj, sw)])
     nodes = sorted(set(sj[sw > 0].tolist()))
@@ -539,8 +817,6 @@ def plan(target: Costume, source: Costume, probes: list[list[np.ndarray]], *, st
     def matrices(pose: list[np.ndarray], m: Mapping[int, int]) -> np.ndarray:
         return np.array([pose[m[n]] @ np.linalg.inv(t_rest[m[n]]) for n in nodes])
 
-    target_posed = own_mesh.posed
-
     groups: dict[int, list[int]] = {}
     for n in nodes:
         if not source.skeleton.nodes[n].name.startswith("Bip001"):
@@ -548,23 +824,24 @@ def plan(target: Costume, source: Costume, probes: list[list[np.ndarray]], *, st
             if anchor is not None:
                 groups.setdefault(anchor, []).append(n)
     choices = {}
-    posed_targets = [target_posed(p) for p in probes]
     for anchor, members in groups.items():
         rigid = mapping[anchor]
         mask = np.isin(sdom, members)
         mask = mask[se[:, 0]] & mask[se[:, 1]]
         name = source.skeleton.nodes[anchor].name
+        slot_name = source.skeleton.nodes[carried.get(anchor, anchor)].name  # a Biped bone the slot lacks: its carrier
         if not probes or not mask.any():
             follow = False
         else:
             t_members = [j for j in set(tdom.tolist()) if not target.skeleton.nodes[j].name.startswith("Bip001")
                          and target.skeleton.biped_ancestor(j) is not None
-                         and target.skeleton.nodes[target.skeleton.biped_ancestor(j)].name == name]
+                         and target.skeleton.nodes[target.skeleton.biped_ancestor(j)].name == slot_name]
             t_mask = np.isin(tdom, t_members)
             t_mask = t_mask[te[:, 0]] & t_mask[te[:, 1]]
-            own = max((stretch(tv, posed, te, t_mask) for posed in posed_targets), default=1.0) if t_mask.any() else 1.0
-            mine = max(stretch(sv, deform(flat, matrices(p, mapping)), se, mask) for p in probes)
-            follow = mine <= max(STRETCH_FLOOR, own)
+            group_own = max((stretch(tv, posed, te, t_mask) for posed in posed_targets), default=1.0) \
+                if t_mask.any() else 1.0
+            mine = max(stretch(reference, deform(flat, matrices(p, mapping)), se, mask) for p in probes)
+            follow = mine <= max(STRETCH_FLOOR, group_own)
         choices[name] = "follow" if follow else "rigid"
         if not follow:
             for n in members:
@@ -573,12 +850,8 @@ def plan(target: Costume, source: Costume, probes: list[list[np.ndarray]], *, st
     rest = deform(flat, matrices(t_rest, mapping))
     if float(np.abs(rest - sv).max()) > 1e-4:
         raise refuse("rest pose not reproduced")
-    mine = max((stretch(sv, deform(flat, matrices(p, mapping)), se) for p in probes), default=1.0)
-    own = max((stretch(tv, posed, te) for posed in posed_targets), default=1.0)
-    unfit = mine > stretch_limit(own)
-    if unfit and strict:
-        raise refuse("stretch", adapted=round(mine, 2), own=round(own, 2))
-    return Plan(mapping, choices, mine, own, groups, unfit)
+    mine = max((stretch(reference, deform(flat, matrices(p, mapping)), se) for p in [t_rest, *probes]), default=1.0)
+    return Plan(mapping, choices, mine, own, groups, mine > stretch_limit(own), shape)
 
 
 # --- skirts and hems (BL-118, see model_hems) ------------------------------------------------------------------------
@@ -711,7 +984,7 @@ def hems(target: Costume, source: Costume, plan_: Plan, t_clips: list[Any], s_cl
     s_anchors = lower_anchors(ss, s_legs)
     rigid = sorted({n for anchor, members in plan_.groups.items() if anchor in s_anchors
                     and plan_.choices.get(ss.nodes[anchor].name) == "rigid" for n in members})
-    flat = flatten(source, ss.world())
+    flat = flatten(source, ss.world())  # the source's space, for the fit to its own clips
     on_rigid = np.isin(flat.joints, rigid) & (flat.weights > 0)
     share = (flat.weights * on_rigid).sum(axis=1)
     if not (share > 1e-6).any():
@@ -733,7 +1006,7 @@ def hems(target: Costume, source: Costume, plan_: Plan, t_clips: list[Any], s_cl
     knee = float(((at["calf L"] + at["calf R"]) / 2 - at["pelvis"]) @ up)
     if hip - knee < 1e-4:
         return Hems(note="no legs")
-    sv = flat.vertices
+    sv = plan_.fit.vertices if plan_.fit is not None else flat.vertices  # the shape bound on the slot
     left = hm.leg_distance(sv, at["thigh L"], at["calf L"], at["foot L"])
     right = hm.leg_distance(sv, at["thigh R"], at["calf R"], at["foot R"])
     axis = np.minimum(left, right)
@@ -988,10 +1261,17 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
     t_costume, s_costume = costume(t_parts), costume(s_parts)
     target = Costume(t_skeleton, t_costume, [skin_of(p.mesh) for p in t_costume])
     source = Costume(s_skeleton, s_costume, [skin_of(p.mesh) for p in s_costume])
-    probes = t_skeleton.poses(pick(t_clips, PROBE_CLIPS))
-    result = plan(target, source, probes, strict=strict)
-    t_rest, s_rest = t_skeleton.world(), s_skeleton.world()
+    probes = probe_poses(t_skeleton, t_clips)
     mesh_trees = [p.mesh.read_typetree() for p in s_costume]
+    layouts = [mg.geometry_of(tree) for tree in mesh_trees]
+    result = plan(target, source, probes, strict=strict, fit=all(layout is not None for layout in layouts),
+                  own_probes=probe_poses(s_skeleton, s_clips))
+    t_rest, s_rest = t_skeleton.world(), s_skeleton.world()
+    # each part's vertices in its renderer's space at the source's rest, as they are bound (the costume's shape)
+    shapes = [result.fit.part(k, s_rest[part.node]) for k, part in enumerate(s_costume)]
+    for k, (skin, (points, _)) in enumerate(zip(source.skins, shapes)):
+        if layouts[k] is None and float(np.abs(points - skin.vertices).max(initial=0.0)) > 1e-4:
+            raise refuse("costume geometry not writable", part=s_costume[k].mesh.peek_name())
     stores = [hm.store_of(tree) for tree in mesh_trees]
     hem = hems(target, source, result, t_clips, s_clips, [store is not None for store in stores])
 
@@ -1111,9 +1391,15 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
 
     # meshes: the source parts' meshes with bindposes on the target skeleton
     new_meshes = []
+    fitted_skins = []
     for k, (part, skin) in enumerate(zip(s_costume, source.skins)):
         tree = mesh_trees[k]
         nodes = [result.mapping.get(b, 0) if b is not None else 0 for b in part.bones]
+        points, linear = shapes[k]
+        if layouts[k] is not None and float(np.abs(points - skin.vertices).max(initial=0.0)) > 1e-6:
+            mg.write_geometry(tree, layouts[k], points, linear)
+        skin = Skin(points, skin.joints, skin.weights, skin.edges, skin.triangles)
+        fitted_skins.append(skin)
         joints, weights = skin.joints, skin.weights
         aabbs = len(tree["m_BonesAABB"]) == len(nodes)
         change = hem.parts[k] if k < len(hem.parts) else None
@@ -1159,9 +1445,10 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
                 _edit_prefabs(writer, sf, graph, t_meshes, t_primary_materials, mesh_cab, material_cab, new_meshes,
                               [[materials[_key(m)] for m in p.materials if m is not None] for p in s_costume],
                               [s_skeleton.nodes[p.node].name for p in s_costume], root_node, t_skeleton, s_costume,
-                              source.skins, result.mapping, s_rest)
-    logger.info("Costume of %s on %s: %d part(s), groups %s, stretch %.2f (own %.2f); hem %s", s_name, t_name,
-                len(s_costume), result.choices, result.stretch, result.own, hem.summary())
+                              fitted_skins, result.mapping, s_rest)
+    logger.info("Costume of %s on %s: %d part(s), groups %s, stretch %.2f (own %.2f), shape %s (changed %.3f, 99th "
+                "percentile %.3f); hem %s", s_name, t_name, len(s_costume), result.choices, result.stretch, result.own,
+                result.fit.shape, result.fit.largest, result.fit.shift, hem.summary())
     return Result(opened, result, len(s_costume), hem)
 
 
