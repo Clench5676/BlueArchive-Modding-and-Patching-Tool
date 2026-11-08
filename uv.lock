@@ -52,6 +52,7 @@ name = "blue-archive-modding-and-patching-tool"
 version = "0.7.0a17"
 source = { editable = "." }
 dependencies = [
+    { name = "numpy" },
     { name = "pillow" },
     { name = "pywebview" },
     { name = "spineatlas" },
@@ -64,12 +65,12 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
-    { name = "numpy" },
     { name = "pytest" },
 ]
 
 [package.metadata]
 requires-dist = [
+    { name = "numpy", specifier = ">=2.0" },
     { name = "pillow", specifier = ">=10.4.0" },
     { name = "pywebview", specifier = ">=6.2.1" },
     { name = "spineatlas", git = "https://github.com/Agent-0808/SpineAtlas.git?rev=fix%2Fbounds-not-first" },
@@ -81,10 +82,7 @@ requires-dist = [
 ]
 
 [package.metadata.requires-dev]
-dev = [
-    { name = "numpy", specifier = ">=2.0" },
-    { name = "pytest", specifier = ">=8.0.0" },
-]
+dev = [{ name = "pytest", specifier = ">=8.0.0" }]
 
 [[package]]
 name = "bottle"
