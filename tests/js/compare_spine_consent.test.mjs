@@ -55,11 +55,30 @@ test("compare and repair frames use L and keep their scrolling findings inside t
   for (const review of [false, true]) {
     const f = compareFrame(review);
     assert.equal(f.w, POPUP_FRAME.L.w);
-    assert.ok(f.h >= POPUP_FRAME.L.h && f.h <= POPUP_FRAME.maxH);
+    assert.ok(f.h >= POPUP_FRAME.minH && f.h <= POPUP_FRAME.maxH);
     assert.equal(f.scroll.width, f.w - 2 * SPACE.xxxl);
     assert.equal(f.scroll.top, f.cy + f.h / 2 - POPUP_FRAME.contentTop);
     assert.equal(f.bottom, f.scroll.top - f.scroll.height);
     if (review) assert.equal(f.bottom - (f.cy - f.h / 2 + POPUP_FRAME.footer.bottom + CONTROL.buttonL.h), SPACE.m);
-    assert.ok(f.rows.max * f.rows.pitch <= f.scroll.height);
+    if (review) {
+      assert.equal(f.h, 1180);
+      assert.ok(f.rows.max * f.rows.pitch <= f.scroll.height);
+    }
   }
+});
+
+
+test("comparison fits and centres zero, one or a capped set of rows; repair retains 1180", () => {
+  const cap = Math.floor((1180 - POPUP_FRAME.contentTop - SPACE.xl) / SPACE.xxl);
+  assert.equal(cap, 16);
+  for (const count of [0, 1, cap, cap + 100]) {
+    const f = compareFrame(false, count), used = Math.max(1, Math.min(count, cap)) * SPACE.xxl;
+    assert.equal(f.rows.max, cap, "shrinking the frame never shrinks the row cap");
+    assert.equal(f.h, Math.max(786, POPUP_FRAME.contentTop + used + SPACE.xl));
+    assert.ok(Math.abs(f.rows.y + SPACE.xxl / 2 - used / 2
+      - (f.cy + f.h / 2 - f.content.y - f.content.h / 2)) <= .5);
+    assert.equal(compareFrame(true, count).h, 1180);
+  }
+  assert.match(source, /compareFrame\(!!review, changed.length\)/);
+  assert.match(source, /node\("None", \[0, frame.rows.y\]/);
 });

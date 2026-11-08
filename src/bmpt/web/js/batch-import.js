@@ -316,7 +316,7 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
     const key = `error.${detail.code}`, text = detail.code ? withoutFile(T, key, detail.params || {}) : key;
     return text && text !== key && text !== label ? `${label} - ${text}` : label;
   };
-  const showDetails = (entries) => popups.message({ title: T("info.details"), scroll: true, ok: T("picker.ok"), compact: true,
+  const showDetails = (entries) => popups.message({ title: T("info.details"), scroll: true, ok: T("picker.ok"),
     lines: entries.flatMap((entry) => detailLines(entry, { T, separator: listSeparator(), reason: detailReason(entry) })) });
 
   function build() {

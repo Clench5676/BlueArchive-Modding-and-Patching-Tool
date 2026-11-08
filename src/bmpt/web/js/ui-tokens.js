@@ -219,6 +219,7 @@ export const GRID = Object.freeze({ columns: 12, gutter: 40, pageMargin: 60, sta
 // 33 apart and 102 above the frame's bottom, the pair centred (82.5 from each side; the exemplar's are 84 and 81).
 export const POPUP_FRAME = Object.freeze({
   frameY: -12, // UIPopup_Sort Base -20 + BG 8
+  minH: 786, // UIPopup_ClientVersion Center/Popup/Base/BG 1115 x 786, the smallest titled popup with a footer button
   maxH: 1560,
   S: Object.freeze({ w: 1300, h: 1050 }),
   M: Object.freeze({ w: 1540, h: 1073 }),

@@ -47,7 +47,7 @@ export function assetLayout(cacheDir) {
   const sections = stack([{ w: sectionW, h: cachedH }, { w: sectionW, h: neverH }, { w: note.w, h: note.h }],
     { w: sectionW, gap: SPACE.xl, align: "center" });
   const f = frameGeometry("L", POPUP_FRAME.contentTop + sections.h + POPUP_FRAME.footer.bottom + CONTROL.buttonL.h + SPACE.m);
-  const content = popupContent(f.w, f.h), placed = stack(sections.boxes, { ...content, gap: SPACE.xl, align: "center" }).boxes;
+  const content = popupContent(f.w, f.h), placed = stack(sections.boxes, { ...content, gap: SPACE.xl, align: "center", justify: "center" }).boxes;
   const cachedTop = toNode(placed[0], 1, f)[1], neverTop = toNode(placed[1], 1, f)[1];
   const path = pathRow.boxes[0], button = pathRow.boxes[1], rowY = -cachedBodyH - SPACE.m - pathRow.h / 2;
   return { ...f, content, sectionW, cachedTop, cachedH, cachedBodyH, neverTop, neverH,
@@ -223,8 +223,8 @@ function finishScan(host) {
   Popup.closed(host);
 }
 
-async function drawScan(host, over, resolve) {
-  await Popup.frameReady();
+// Pure geometry shared by the scan consent builder and its six-locale fit checks.
+export function scanLayout() {
   const W = POPUP_FRAME.L.w, panelW = W - 2 * SPACE.xl;
   const [checked, hc] = section("Checked", 0, T("mods.scan.will.label"), [T("mods.scan.will.steam"), T("mods.scan.will.items")], "#2d4c72", panelW);
   const [never, hn] = section("Never", 0, T("mods.scan.willNot.label"), [T("mods.scan.willNot.items")], COLOUR.neverBar, panelW);
@@ -232,11 +232,17 @@ async function drawScan(host, over, resolve) {
   const parts = [{ w: panelW, h: hc }, { w: panelW, h: hn }, { w: note.w, h: note.h }];
   const measured = stack(parts, { gap: SPACE.xl });
   const frame = frameGeometry("L", POPUP_FRAME.contentTop + measured.h + POPUP_FRAME.footer.bottom + CONTROL.buttonL.h + SPACE.m);
-  const content = popupContent(frame.w, frame.h), boxes = stack(parts, { ...content, gap: SPACE.xl, align: "center" }).boxes;
-  const { tree, popup } = consentFrame(T("mods.scan.title"), W, frame.h, [T("mods.scan.no"), T("mods.scan.yes")]);
-  checked.pos = toNode(boxes[0], 1, frame);
-  never.pos = toNode(boxes[1], 1, frame);
-  popup.children.push(checked, never, node("Note", toNode(boxes[2], 4, frame),
+  const content = popupContent(frame.w, frame.h), boxes = stack(parts, { ...content, gap: SPACE.xl, align: "center", justify: "center" }).boxes;
+  return { ...frame, content, boxes, checked, never, note };
+}
+
+async function drawScan(host, over, resolve) {
+  await Popup.frameReady();
+  const layout = scanLayout(), { checked, never, note, boxes } = layout;
+  const { tree, popup } = consentFrame(T("mods.scan.title"), layout.w, layout.h, [T("mods.scan.no"), T("mods.scan.yes")]);
+  checked.pos = toNode(boxes[0], 1, layout);
+  never.pos = toNode(boxes[1], 1, layout);
+  popup.children.push(checked, never, node("Note", toNode(boxes[2], 4, layout),
     [label(note.text, note.fs, `${COLOUR.note}/1.00`, note.w, note.h, { depth: 7 })]));
   host.classList.toggle("over", over);
   host.hidden = false;
