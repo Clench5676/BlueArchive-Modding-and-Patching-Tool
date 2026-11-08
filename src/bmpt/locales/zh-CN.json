@@ -85,7 +85,7 @@
 			"has": "有",
 			"none": "无",
 			"failed": "无法读取 3D 模型",
-			"unfit": "模型未适配",
+			"unfit": "无法自动适配",
 			"action": {
 				"idle": "待机",
 				"reaction": "互动",

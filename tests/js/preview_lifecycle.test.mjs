@@ -134,3 +134,18 @@ for (const kind of ["portrait", "lobby", "special L2D"]) test(`${kind} restarts 
   players[1].config.error(players[1], "Invalid GPU draw"); await tick();
   assert.equal(errors.length, 1, "a foreground render failure is still reported"); queue.cancel();
 });
+
+test("a Spine load that times out says how far it got (BL-129)", async () => {
+  const { loadPlayer } = await import("../../src/bmpt/web/js/spine-load.js");
+  const assetManager = { getLoaded: () => 2, getToLoad: () => 1, hasErrors: () => false, getErrors: () => ({}) };
+  const player = { assetManager, canvas: { width: 640, height: 360 }, context: { gl: { isContextLost: () => false } },
+    stopRendering() {}, drawFrame() {}, dispose() {} };
+  const { ready } = loadPlayer(() => player, { skeleton: "x.skel" }, { timeout: 30, manual: true });
+  const error = await ready.then(() => null, (err) => err);
+  assert.match(error.message, /^Spine load timed out \{/);
+  const state = JSON.parse(error.message.slice("Spine load timed out ".length));
+  assert.deepEqual([state.player, state.assetsReady, state.loaded, state.toLoad, state.errors, state.contextLost, state.canvas],
+    [true, false, 2, 1, [], false, "640x360"]);
+  assert.ok(state.frames >= 1 && state.ms >= 30);
+  assert.equal(error.step, "load timeout");
+});
