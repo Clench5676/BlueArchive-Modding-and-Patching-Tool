@@ -85,7 +85,7 @@
 			"has": "있음",
 			"none": "없음",
 			"failed": "3D 모델을 읽을 수 없음",
-			"unfit": "모델 미대응",
+			"unfit": "자동 맞춤 불가",
 			"action": {
 				"idle": "대기",
 				"reaction": "반응",
