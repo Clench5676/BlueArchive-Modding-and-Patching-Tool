@@ -15,7 +15,7 @@ import webbrowser
 from concurrent.futures import Future, TimeoutError as FutureTimeout
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Mapping, Callable
 
 from .. import devmode, spans, steam_records, updater
 from ..config import APP_DIR_NAME, Settings, managed_cache_dir
@@ -1633,14 +1633,9 @@ class Services:
         if name == "files.json":
             return _json(sorted(files), light=False)
         data = files.get(name)
-        if data is None:
-            # "skeleton.skel" / "skeleton.atlas" stand for the one skeleton in the files
-            suffix = Path(name).suffix
-            if Path(name).stem == "skeleton":
-                matches = [k for k in files if k.endswith(suffix)]
-                named = [k for k in matches if Path(k).stem.lower() == core.lower()]
-                pick = named or (matches if len(matches) == 1 else [])
-                data = files[pick[0]] if pick else None
+        if data is None and Path(name).stem == "skeleton":
+            picked = skeleton_file(files, core, Path(name).suffix)
+            data = files[picked] if picked else None
         if data is None:
             raise KeyError(name)
         return AssetResponse(data, MIME.get(Path(name).suffix, "application/octet-stream"), light=False)
@@ -1652,6 +1647,19 @@ class Services:
         self.classic.close()
         self.jobs.shutdown(wait=wait)
         self.events.close()
+
+
+def skeleton_file(files: Mapping[str, Any], core: str, suffix: str) -> str | None:
+    """The file "skeleton.skel" / "skeleton.atlas" stands for: the skeleton named after the core, else the only one,
+    else, for a set of several (ui_set holds 22 raid and world boss banners), the first by name; its atlas is the one
+    of the same stem."""
+    stems = sorted({Path(k).stem for k in files if k.endswith(".skel")} | {Path(k).stem for k in files if k.endswith(".atlas")})
+    named = [stem for stem in stems if stem.lower() == core.lower()]
+    stem = (named or sorted(Path(k).stem for k in files if k.endswith(".skel")) or stems or [None])[0]
+    if stem is not None and f"{stem}{suffix}" in files:
+        return f"{stem}{suffix}"
+    matches = [k for k in files if k.endswith(suffix)]
+    return matches[0] if len(matches) == 1 else None
 
 
 def _stem(name: str) -> str:
