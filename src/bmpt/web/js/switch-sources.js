@@ -9,7 +9,9 @@ export const switchKindOf = (tab) => ({ portrait: "spr", lobby: "lobby", model: 
 
 // the core of a variant's skeleton of a kind: its portrait or its memorial lobby
 export const coreOf = (v, kind = "spr") => (kind === "model" ? v.model : kind === "lobby" ? v.lobby : v.spr) || null;
-export const hasKind = (v, kind) => ["spr", "lobby", "model"].includes(kind) && (!!coreOf(v, kind) || !!v?.storedKinds?.includes(kind));
+// a variant with only a field-mode model (fieldModel: an event or story costume) has a 3D tab, but no slot to switch
+export const hasKind = (v, kind) => ["spr", "lobby", "model"].includes(kind)
+  && (!!coreOf(v, kind) || (kind === "model" && !!v?.fieldModel) || !!v?.storedKinds?.includes(kind));
 export const hasAsset = (v) => hasKind(v, "spr") || hasKind(v, "lobby") || hasKind(v, "model");
 export const primaryKind = (v) => hasKind(v, "spr") ? "spr" : hasKind(v, "lobby") ? "lobby" : hasKind(v, "model") ? "model" : "lobby";
 export function availableTab(v, tab) {
@@ -68,14 +70,16 @@ export function candidates(fam, v, kind = "spr") {
   const cores = (kind === "model" && v.modelCores?.length ? v.modelCores : [own]).map((core) => String(core).toLowerCase());
   const mods = fam.variants.flatMap((o) => o.modList || []).filter((m) => m.kind === kind)
     .filter((m) => kind === "spr" || !m.core || !own || cores.includes(m.core));
-  const across = kind === "spr" && !!own; // Cross-variant adaptation requires an actual local target.
-  const others = across ? fam.variants.filter((o) => o.key !== v.key && coreOf(o, kind) && coreOf(o, kind) !== own) : [];
+  const across = (kind === "spr" || kind === "model") && !!own; // Cross-variant adaptation requires an actual local target.
+  // the 3D model takes any other model of the student as a costume, field-mode models included
+  const offered = (o) => (kind === "model" ? !!(coreOf(o, kind) || o.fieldModel) : !!coreOf(o, kind)) && coreOf(o, kind) !== own;
+  const others = across ? fam.variants.filter((o) => o.key !== v.key && offered(o)) : [];
   const mod = (m) => ({ key: `m:${m.id}`, kind: "mod", id: m.id, mod: m, core: null, origin: fam.variants.find((o) => o.key === m.target) || null });
   const list = [
     { key: "self", kind: "self", core: own, variant: v },
     ...mods.filter((m) => m.target === v.key).map(mod),
     ...others.map((o) => ({ key: `v:${o.key}`, kind: "variant", core: coreOf(o, kind), variant: o })),
-    ...(across ? mods.filter((m) => m.target !== v.key).map(mod) : []),
+    ...(across && kind === "spr" ? mods.filter((m) => m.target !== v.key).map(mod) : []),
   ];
   const stuck = overwrittenOf(v, kind);
   return list.map((c) => {
@@ -127,7 +131,8 @@ export const previewChanged = (before, after, kind, beforeEnabled, enabled) => !
 export function modelSource(v, enabled = true) {
   if (enabled && !v?.configured && !v?.previewSources?.model) return "live";
   const key = previewKey(v, "model", enabled);
-  return key.startsWith("m:") ? `mod:${key.slice(2)}` : key === "self" ? "official" : "live";
+  return key.startsWith("m:") ? `mod:${key.slice(2)}` : key.startsWith("v:") ? `variant:${key.slice(2)}`
+    : key === "self" ? "official" : "live";
 }
 export const modelUrl = (key, source = "live") => `/asset/model/${encodeURIComponent(key)}.glb${source === "live" ? "" : `?source=${encodeURIComponent(source)}`}`;
 
