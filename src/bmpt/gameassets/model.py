@@ -41,7 +41,9 @@ DEFAULT_CLIPS = ("Formation_Idle", "Formation_Pickup", "Cafe_Idle", "Cafe_Reacti
                  "Victory_Start", "Victory_End")
 # idles used when a prefab has neither the formation nor the cafe idle (NPC and battle-only prefabs)
 FALLBACK_IDLES = ("Normal_Idle", "Stand_Idle", "Idle")
-PREFAB_KINDS = {"echelon": "Echelon_{}", "battle": "{}", "cafe": "Cafe_{}", "strategy": "Strategy_{}"}
+PREFAB_KINDS = {"echelon": "Echelon_{}", "battle": "{}", "cafe": "Cafe_{}", "strategy": "Strategy_{}",
+                # field-mode players (event and story variants with no battle model), Animancer-driven
+                "field": "Field_Player_{}", "field_nonweapon": "Field_Player_{}_NonWeapon"}
 # the viewer's shading model for a shader, by name prefix (variants such as -Inline, -Transparent or -NoOutline share
 # their base shader's lighting); the first match wins
 SHADER_KINDS = (
@@ -748,6 +750,7 @@ class _Exporter:
         self.disabled: dict[int, tuple[int, Any, Any]] = {}
         self.shown: set[int] = set()                     # nodes outside inactive and effect subtrees
         self.follower = self.mouth = None
+        self.animancer = None  # a field prefab's FieldAnimancerController: its own clip list
         self.textures: dict[tuple[str, int], int] = {}
         self.materials: dict[tuple[str, int], int] = {}
 
@@ -808,6 +811,8 @@ class _Exporter:
                     self.follower = (index, obj, g.tree(obj))
                 elif name == "CharacterAnimationEventReceiver":
                     self.mouth = (obj, g.tree(obj))
+                elif name == "FieldAnimancerController" and self.animancer is None:
+                    self.animancer = obj
         if not here or effect:
             node.setdefault("extras", {})["hidden"] = True
         for child in t["m_Children"]:
@@ -1124,7 +1129,8 @@ class _Exporter:
 def export_chibi(graph: BundleGraph, bundles: Iterable[Path], dev: str, *, prefab: str = "echelon",
                  clips: Iterable[str] = DEFAULT_CLIPS) -> bytes:
     """Export one chibi to GLB bytes. ``bundles`` are the prefab bundles of ``dev``; the prefab is the Echelon
-    (formation) one where there is one, else the battle, cafe or strategy one."""
+    (formation) one where there is one, else the battle, cafe or strategy one, else a field-mode player (an event or
+    story variant with no battle model), played with the clips its FieldAnimancerController lists."""
     prefabs = _prefabs(graph, bundles)
     root, name = None, None
     for kind in [prefab, *(k for k in PREFAB_KINDS if k != prefab)]:
@@ -1140,7 +1146,13 @@ def export_chibi(graph: BundleGraph, bundles: Iterable[Path], dev: str, *, prefa
     exporter.set_aside_ex_only()
     exporter.meshes()
     exporter.glb.json["extras"] = exporter.extras(name)
-    exporter.animations(exporter.controller_clips(prefabs), clips)
+    if exporter.animancer is not None:
+        # a field prefab lists its clips itself; its bundle holds other students' prefabs and controllers
+        listed = graph.tree(exporter.animancer).get("animationClips", [])
+        chosen = [c for c in (graph.deref(exporter.animancer, p) for p in listed) if c is not None]
+    else:
+        chosen = exporter.controller_clips(prefabs)
+    exporter.animations(chosen, clips)
     data = exporter.glb.finish()
     logger.debug("model %s (%s): %d bundles, %d KB", dev, name, len(graph.loaded), len(data) // 1024)
     return data
