@@ -246,6 +246,8 @@
 			"details": "詳情",
 			"offTitle": "關閉 Mod",
 			"onTitle": "開啟 Mod",
+			"offAsk": "關閉 Mod？",
+			"onAsk": "開啟 Mod？",
 			"toAdd": "先加入 Mod 倉庫：{n}",
 			"stuck": "維持不變，無原版備份：{n}",
 			"size": "總大小：{size}",

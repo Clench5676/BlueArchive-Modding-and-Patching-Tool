@@ -246,6 +246,8 @@
 			"details": "詳細",
 			"offTitle": "MODをOFF",
 			"onTitle": "MODをON",
+			"offAsk": "MODをOFFにしますか？",
+			"onAsk": "MODをONにしますか？",
 			"toAdd": "先にMODライブラリへ追加：{n}",
 			"stuck": "そのまま、オリジナルなし：{n}",
 			"size": "合計サイズ：{size}",
