@@ -219,6 +219,21 @@ def check_resource_path(path: Path, resource_dirs: list[Path]) -> Path:
     return resolved
 
 
+def _sandboxed(paths: list[Path]) -> bool:
+    """Every path in a dev sandbox (devmode): never the folder the game runs from."""
+    return bool(paths) and all(devmode.in_writable(path) for path in paths)
+
+
+def check_game_for(paths: list[Path]) -> None:
+    """game_running for writes to ``paths`` (files or the resource folders holding them), as ``writable_game_files``
+    checks it: skipped when every path lies in a dev sandbox. In dev mode a path outside the writable folders is
+    left to the write-time check, which refuses it by the file's name."""
+    if not all(devmode.allows_write(path) for path in paths):
+        return
+    if not _sandboxed(paths):
+        check_game_not_running()
+
+
 @contextmanager
 def writable_game_files(paths: list[Path], resource_dirs: list[Path], *,
                         game_folder: Path | None = None, allow_missing: bool = False) -> Iterator[None]:
@@ -230,7 +245,7 @@ def writable_game_files(paths: list[Path], resource_dirs: list[Path], *,
     """
     for path in paths:
         devmode.check_write(path)
-    if not (paths and all(devmode.in_writable(path) for path in paths)):
+    if not _sandboxed(paths):
         check_game_not_running()
         if game_folder is not None:
             check_steam_idle(game_folder)
