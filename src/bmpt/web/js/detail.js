@@ -803,8 +803,8 @@ async function job(method, params, { onDone, after = () => reload(), name = full
       else if (QUEUEABLE.includes(method)) await refused(refusal, method, params);
       else notify(errorText(refusal), { kind: "error", error: refusal });
     } else if (ok) {
-      const lines = [result?.deferred && T("mods.saved"), result?.kept_current && T("mods.keptCurrent"),
-        result?.incomplete && T("mods.incomplete")].filter(Boolean);
+      // an apply while mods are off only saves the choice, without a notice, like any other saved choice (owner)
+      const lines = [result?.kept_current && T("mods.keptCurrent"), result?.incomplete && T("mods.incomplete")].filter(Boolean);
       if (lines.length) void notice(lines.join("\n"));
     }
     resumeChanged();
