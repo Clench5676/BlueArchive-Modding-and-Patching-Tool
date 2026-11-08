@@ -218,7 +218,8 @@ def split_model_app(split_model_env):
 
     env = split_model_env
     env.previews = []
-    game = SimpleNamespace(model_glb=lambda core, overrides=(): env.previews.append((core, list(overrides))) or b'glTF')
+    game = SimpleNamespace(model_glb=lambda core, overrides=(), reads=None:
+                           env.previews.append((core, list(overrides), reads)) or b'glTF')
     env.services = Services(env.settings, env.tmp / 'app', cache=object(), game=game,
                             catalog=env.catalog, library=env.library)
     env.services.game_found = lambda: False
@@ -534,6 +535,33 @@ def test_split_model_preview_sources_use_prefab_and_every_own_core(split_model_a
     foreign, = env.library.add([make_mod(env.excluded[-1], env.tmp / 'foreign')])
     with pytest.raises(KeyError):
         env.services.asset('model/ch0258.glb', {'source': f'mod:{foreign.id}'})
+
+
+def test_model_cards_read_other_cores_by_their_source_whatever_the_mods_switch(split_model_app):
+    """A 3D look split across cores (the owner's case: a mesh mod for ch0263 and a texture mod for the NPC en0002,
+    whose bundle holds ch0263's textures): the Original card reads the textures' official bytes and a mod card the
+    configured texture mod, with mods on and off; a bundle no mod touches is read where it is."""
+    env = split_model_app
+    texture = game_bundle(env.game_dir, 'en0002', category='npcs', part='005', payload=b'official texture')
+    official = texture.read_bytes()
+    untouched = env.excluded[1]
+    mesh, = env.library.add_and_apply([make_mod(env.parts[1], env.tmp / 'mesh')])
+    skin, = env.library.add_and_apply([make_mod(texture, env.tmp / 'skin', payload=b'modded texture')])
+    modded = header_bundle(b'modded texture')
+    assert texture.read_bytes() == modded
+
+    def read(source, path):
+        assert env.services.asset('model/ch0258.glb', {'source': source}).body == b'glTF'
+        return env.previews[-1][2].resolve(path)
+
+    for enabled in (True, False):
+        if not enabled:
+            env.library.toggle(False, True)
+            assert texture.read_bytes() == official and env.parts[1].read_bytes() == env.official[env.parts[1]]
+        assert read('official', texture).read_bytes() == official
+        assert read(f'mod:{mesh.id}', texture).read_bytes() == modded
+        assert read('official', untouched) == read(f'mod:{mesh.id}', untouched) == untouched
+    assert env.library.configured('en0002')['model'] == f'mod:{skin.id}'
 
 
 @pytest.mark.parametrize('category', ['character', 'characters', 'npcs'])
