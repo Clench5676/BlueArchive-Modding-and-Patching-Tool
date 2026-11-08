@@ -372,6 +372,80 @@ def test_refusals_leave_the_intent_unchanged(world, monkeypatch):
     assert world.library.intent()["enabled"] is True
 
 
+def _choice(world, core="test_spr"):
+    folder = world.folder()
+    return {part: folder[part].get(core) for part in ("configured", "updated", "built")}
+
+
+@pytest.mark.parametrize("when", ["before", "during"])
+def test_an_apply_refused_while_the_game_runs_keeps_the_choice_it_had(world, monkeypatch, when):
+    """BL-123: the game running before the apply (refused at once, nothing built) or starting during its build
+    (refused at the write): the choice, its built copy and the game file stay as they were, with no error on it."""
+    first = world.add(world.spr, payload=b"first!!!", fixed=True)
+    rebuilding_installer(monkeypatch, payload=b"rebuilt1")
+    world.library.apply("test", f"mod:{first.id}")
+    world.toggle(False)  # an Off keeps the built copy; the On writes it back and the key stays
+    world.toggle(True)
+    before, written = _choice(world), world.spr.read_bytes()
+    kept = world.root / "built" / f"{before['built']['parts'][world.spr.name]['sha1']}.bundle"
+    assert kept.is_file() and before["configured"]["source"] == f"mod:{first.id}"
+    second = world.add(world.spr, payload=b"second!!", fixed=True)
+    checks = []
+
+    def running():
+        checks.append(True)
+        if when == "before" or len(checks) > 1:
+            raise ServiceError("game_running")
+
+    monkeypatch.setattr(safety, "check_game_not_running", running)
+    monkeypatch.setattr(safety, "_sandboxed", lambda paths: False)  # the test's game folder as the game's own
+    if when == "before":
+        no_installer(monkeypatch)
+    else:
+        rebuilding_installer(monkeypatch, payload=b"rebuilt2")
+    expect_error("game_running", lambda: world.library.apply("test", f"mod:{second.id}"))
+    assert len(checks) == (1 if when == "before" else 2)
+    assert _choice(world) == before and "error" not in world.folder()["configured"]["test_spr"]
+    assert world.spr.read_bytes() == written and kept.is_file()
+    # the game closed: the next apply takes the new choice and drops the old built copy
+    monkeypatch.setattr(safety, "check_game_not_running", lambda: None)
+    rebuilding_installer(monkeypatch, payload=b"rebuilt2")
+    world.library.apply("test", f"mod:{second.id}")
+    assert world.folder()["configured"]["test_spr"]["source"] == f"mod:{second.id}"
+    assert world.spr.read_bytes() != written and not kept.exists()
+
+
+def test_a_switch_refused_while_the_game_runs_leaves_no_error_on_the_choices(world, monkeypatch):
+    mod = world.add(world.spr)
+    world.library.apply("test", f"mod:{mod.id}")
+    checks = []
+
+    def running():  # the game starts after the switch's own check, before the entry's write
+        checks.append(True)
+        if len(checks) > 1:
+            raise ServiceError("game_running")
+
+    monkeypatch.setattr(safety, "check_game_not_running", running)
+    monkeypatch.setattr(safety, "_sandboxed", lambda paths: False)
+    expect_error("game_running", lambda: world.toggle(False))
+    assert len(checks) == 2 and "error" not in world.folder()["configured"]["test_spr"]
+
+
+def test_a_failed_build_still_shows_its_error_on_the_new_choice(world, monkeypatch):
+    first = world.add(world.spr)
+    world.library.apply("test", f"mod:{first.id}")
+    second = world.add(world.spr, payload=b"second!!", fixed=True)
+
+    def broken(*args, **kwargs):
+        raise ServiceError("mod_apply_failed", file=world.spr)
+
+    monkeypatch.setattr(service.ModLibrary, "_needs_crc_fix", lambda self, source, target: True)
+    monkeypatch.setattr(mod_install, "execute_mod_install", broken)
+    expect_error("mod_apply_failed", lambda: world.library.apply("test", f"mod:{second.id}"))
+    choice = world.folder()["configured"]["test_spr"]
+    assert choice["source"] == f"mod:{second.id}" and choice["error"]["code"] == "mod_apply_failed"
+
+
 def test_a_changed_set_of_game_folders_is_refused(world):
     pins = world.library.installs()
     other = world.tmp / "japan"
