@@ -93,6 +93,32 @@ def _stamp(path: str | Path) -> tuple[int, int, int] | None:
     return stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns
 
 
+
+def prefab_overrides(bundles: list[Path], overrides: list[Path]) -> list[Path | None]:
+    """The override standing in for each prefab bundle, or None, by the replacement rule of library.targets: the
+    override of the same name, else of the same slot (prefix and resource type) and date; an override of another
+    release stands in for its slot's newest prefab bundle that has none. A model whose prefabs span dated bundles of
+    one slot (2024-11-18 and 2025-07-25) keeps each of them: one override never stands in for two bundles."""
+    def slot(path: Path) -> tuple:
+        parsed = parse_filename(path.name)
+        return parsed.prefix, parsed.res_type
+
+    by_name = {path.name: path for path in overrides}
+    by_date = {(*slot(path), parse_filename(path.name).date): path for path in overrides}
+    out: list[Path | None] = [by_name.get(path.name) or by_date.get((*slot(path), parse_filename(path.name).date))
+                              for path in bundles]
+    used = {path for path in out if path is not None}
+    by_slot: dict[tuple, list[Path]] = {}
+    for path in overrides:
+        if path not in used:
+            by_slot.setdefault(slot(path), []).append(path)
+    for key, rest in by_slot.items():
+        free = [i for i, path in enumerate(bundles) if slot(path) == key and out[i] is None]
+        if len(rest) == 1 and free:
+            out[max(free, key=lambda i: parse_filename(bundles[i].name).date)] = rest[0]
+    return out
+
+
 class GameAssets:
     """Read light UI assets and heavy character art from the user's install.
 
@@ -732,8 +758,7 @@ class GameAssets:
         bundles = [Path(path) for path in listed]
         overrides = list(dict.fromkeys(Path(path).resolve() for path in overrides))
         # Prefabs are opened directly by the exporter; CAB overrides alone only replace their dependencies.
-        slots = {(parse_filename(path.name).prefix, parse_filename(path.name).res_type): path for path in overrides}
-        own = [slots.get((parse_filename(path.name).prefix, parse_filename(path.name).res_type)) for path in bundles]
+        own = prefab_overrides(bundles, overrides)
         bundles = [mine if mine is not None else Path(reads.resolve(path)) if reads is not None else path
                    for path, mine in zip(bundles, own)]
         resolve_cabs = self._resolve_cabs

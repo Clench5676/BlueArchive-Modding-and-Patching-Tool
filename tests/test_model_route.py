@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+from pathlib import Path
 from types import SimpleNamespace
 
 from bmpt.config import Settings
@@ -117,3 +118,23 @@ def test_indexed_npc_model_can_preview_without_a_student_entry(tmp_path):
             s.asset("model/unindexed.glb", {"source": "import:verified-token"})
     finally:
         s.close()
+
+
+def test_prefab_overrides_keep_every_dated_prefab_bundle_of_a_slot():
+    """BL-122: Yuuka's prefabs span two dated bundles of one slot; the official copies of both stand in for each
+    one, and a mod of another release for the newest only."""
+    from bmpt.gameassets.service import prefab_overrides
+
+    old = Path("character-yuuka_original-_mxload-2024-11-18_assets_all_3807259161.bundle")
+    new = Path("character-yuuka_original-_mxload-2025-07-25_assets_all_3996351917.bundle")
+    official = [Path("/official") / old.name, Path("/official") / new.name]
+    assert prefab_overrides([old, new], official) == official
+    assert prefab_overrides([old, new], official[::-1]) == official
+    # an unfixed CRC: the same slot and date
+    unfixed = Path("/mod/character-yuuka_original-_mxload-2025-07-25_assets_all_1.bundle")
+    assert prefab_overrides([old, new], [unfixed]) == [None, unfixed]
+    # another release: the newest bundle of the slot
+    other = Path("/mod/character-yuuka_original-_mxload-2023-01-01_assets_all_2.bundle")
+    assert prefab_overrides([old, new], [other]) == [None, other]
+    assert prefab_overrides([new], [other]) == [other]
+    assert prefab_overrides([old, new], []) == [None, None]
