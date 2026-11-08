@@ -2860,12 +2860,14 @@ const messageShapes = {
   fit: (n) => ({ lines: Array.from({ length: n }, (_, i) => `Line ${i}`), fitTogether: [0, 1], plain: true, ok: "OK" }),
 };
 
-test("message stacks grow from their class height to the stage cap, then scroll with 20-unit footer clearance", async () => {
+test("message stacks centre above the shared floor and grow to the stage cap, then scroll with 20-unit footer clearance", async () => {
   await Popup.ready();
   for (const [shape, make] of Object.entries(messageShapes)) for (let n = 0; n <= 40; n++) {
     const layout = Popup.messageLayout(make(n));
-    assert.ok(layout.height >= 1050 && layout.height <= 1560, `${shape} ${n}`);
-    assert.equal(layout.y0, Popup.FRAME_Y + layout.height / 2 - 170);
+    assert.ok(layout.height >= 786 && layout.height <= 1560, `${shape} ${n}`);
+    const usedHeight = layout.visible + (shape === "check" ? Popup.MSG.check : 0);
+    const free = layout.scroll ? 0 : Math.max(0, layout.content.h - usedHeight);
+    near2(layout.y0, Popup.FRAME_Y + layout.height / 2 - 170 - free / 2);
     assert.equal(layout.scroll, layout.body.height > layout.visible);
     const used = layout.visible + (shape === "check" ? Popup.MSG.check : 0);
     if (shape !== "none") assert.ok(layout.y0 - used >= Popup.footerTop(layout.height) + 20 - 1e-9);
@@ -2873,7 +2875,10 @@ test("message stacks grow from their class height to the stage cap, then scroll 
   }
   const asked = Popup.messageLayout({ ...messageShapes.plain(2), scroll: true });
   assert.equal(asked.scroll, true);
-  assert.equal(asked.height, 1050);
+  assert.equal(asked.height, 786);
+  // A scroll that is asked for but not needed keeps the body's own height, centred in the content box.
+  near2(asked.visible, asked.body.height);
+  near2(Popup.FRAME_Y + asked.height / 2 - asked.y0 + asked.visible / 2, asked.content.y + asked.content.h / 2);
 });
 
 const ADD_LOCALES = ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"];
@@ -3449,9 +3454,9 @@ test("numeric caller widths round up and every fixed popup chooses its assigned 
   assert.equal(Frames.MOD_ALIAS.w, 1540); assert.equal(Frames.ALIAS.w, 1540);
   assert.equal(Frames.compareFrame(false).w, 2098); assert.equal(Frames.compareFrame(true).w, 2098);
   for (let n = 1; n <= Frames.ALIAS.max; n++) {
-    const f = Frames.aliasFrame(n); assert.ok(f.h >= 1073 && f.h <= 1560); assert.ok(f.bottom >= Popup.footerTop(f.h) + 20);
+    const f = Frames.aliasFrame(n); assert.ok(f.h >= 786 && f.h <= 1560); assert.ok(f.bottom >= Popup.footerTop(f.h) + 20);
   }
-  for (const body of [0, 300, 2000]) { const f = Frames.detailsFrame(body); near2(f.bottom, Popup.footerTop(f.h) + 20); }
+  for (const body of [0, 300, 2000]) { const f = Frames.detailsFrame(body); assert.ok(f.bottom >= Popup.footerTop(f.h) + 20); }
   for (const f of [Frames.TEXT_VIEWER, Frames.MOD_ALIAS, Frames.EXPORT, Frames.compareFrame(true)]) assert.ok(f.bottom >= Popup.footerTop(f.h) + 20);
 });
 
@@ -3656,7 +3661,7 @@ for (const lang of LOCALE_LIST) test(`the asset consent's Change button (136 hig
       assert.ok(text[1] >= -L.cachedH - 1e-9, "the path text stays in the section");
       // The Note keeps the shared 20-unit footer clearance on the stage.
       assert.ok(L.noteBottom >= Popup.footerTop(L.h) + 20 - 1e-9, `${lang}: ${L.noteBottom} against ${Popup.footerTop(L.h)}`);
-      assert.ok(L.h <= Tokens.POPUP.maxH && L.h >= 1110);
+      assert.ok(L.h <= Tokens.POPUP.maxH && L.h >= 786);
       assert.ok(L.neverTop - L.neverH >= L.noteBottom + L.note.h + 40 - 1e-9, "the Never section clears the Note");
     }
     // as drawn
@@ -3905,4 +3910,96 @@ test("finding the game asks the Check Game Files consent first and searches only
     assert.deepEqual(await Consent.detectGame("global", async () => { asked++; return true; }), ["/games/BlueArchive"]);
     assert.equal(asked, 2, "an existing consent asks nothing");
   } finally { handlers.delete("settings.detectGame"); }
+});
+
+// BL-097: content-fitted heights and vertical centring, shared by prefab and fallback popups.
+const contentCentre = f => f.cy + f.h / 2 - f.content.y - f.content.h / 2;
+const messageTop = layout => Popup.FRAME_Y + layout.height / 2 - layout.y0;
+
+test("explicit frame heights use 786 through 1560; omitted or zero heights retain the exemplar", () => {
+  for (const key of ["S", "M", "L", "XL"]) {
+    assert.equal(Frames.frameGeometry(key).h, POPUP_FRAME[key].h);
+    assert.equal(Frames.frameGeometry(key, 0).h, POPUP_FRAME[key].h);
+    for (const [height, expected] of [[1, 786], [700, 786], [786, 786], [900, 900], [1400, 1400], [2000, 1560]])
+      assert.equal(Frames.frameGeometry(key, height).h, expected);
+  }
+  assert.ok(!("minH" in Popup.MSG) && !("minH" in Frames.DETAILS));
+});
+
+for (const lang of LOCALE_LIST) test(`messages fit and centre their body and check block in S, M and L in ${lang}`, async () => {
+  const ui = localeWebui(lang);
+  await Popup.ready();
+  try {
+    setStrings(lang, Object.fromEntries(strings(ui))); document.documentElement.lang = lang;
+    for (const width of ["S", "M", "L"]) for (const footer of [false, true]) {
+      const args = { lines: [ui.picker.ok], width, ok: footer ? ui.picker.ok : null };
+      const short = Popup.messageLayout(args);
+      assert.equal(short.height, 786); assert.equal(short.scroll, false);
+      near2(messageTop(short) + short.visible / 2, short.content.y + short.content.h / 2, .5);
+      const checked = Popup.messageLayout({ ...args, check: { label: ui.picker.ok, checked: false } });
+      assert.equal(checked.height, 786); assert.equal(checked.scroll, false);
+      near2(messageTop(checked) + (checked.visible + Popup.MSG.check) / 2, checked.content.y + checked.content.h / 2, .5);
+      near2(checked.checkBox.y, messageTop(checked) + checked.visible + SPACE.m);
+      // The same formula must hold when a tour reserves the tallest page's height.
+      const page = Popup.messageLayout({ ...args, height: 1200 });
+      assert.equal(page.height, 1200);
+      near2(messageTop(page) + page.visible / 2, page.content.y + page.content.h / 2, .5);
+      const tall = Popup.messageLayout({ ...args, lines: Array.from({ length: footer ? 6 : 8 }, () => ({ text: ui.picker.ok, fontSize: 52, minFontSize: 52 })) });
+      const need = Popup.MSG.title + tall.body.height + (footer ? Popup.MSG.buttons : Popup.MSG.none);
+      assert.ok(need > 786 && need < POPUP_FRAME.maxH);
+      near2(tall.height, need); near2(messageTop(tall), POPUP_FRAME.contentTop);
+      assert.equal(tall.scroll, false);
+      const scrolling = Popup.messageLayout({ ...args, scroll: true, check: { label: ui.picker.ok } });
+      near2(scrolling.visible, scrolling.body.height);
+      near2(messageTop(scrolling) + (scrolling.visible + Popup.MSG.check) / 2, scrolling.content.y + scrolling.content.h / 2, .5);
+      const layer = new El(), fallback = Popup.plainMessage(layer, { ...args, title: ui.picker.ok,
+        state: { label: ui.picker.ok, checked: false } }, () => {});
+      near2(parseFloat(fallback.content.style.top) / S, messageTop(fallback.layout));
+      near2(parseFloat(layer.querySelector(".plain-check").style.top) / S, fallback.layout.checkBox.y);
+      assert.equal(fallback.layout.height, checked.height);
+      // The body centre stays on its content centre at minimum, default and large windows, at 1x and 2x.
+      for (const [w, h] of [[960, 540], [1600, 900], [2560, 1440]]) for (const density of [1, 2]) {
+        const scale = Math.min(w / 1920, h / 1080) * S * density;
+        near2((short.y0 - short.visible / 2) * scale,
+          (Popup.FRAME_Y + short.height / 2 - short.content.y - short.content.h / 2) * scale, .5);
+      }
+    }
+  } finally { setStrings("en-US", Object.fromEntries(strings(english))); document.documentElement.lang = "en-US"; }
+});
+
+for (const lang of LOCALE_LIST) test(`both consent stacks fit and centre between title and footer in ${lang}`, async () => {
+  const Consent = await import("../../src/bmpt/web/js/consent.js"), ui = localeWebui(lang);
+  try {
+    setStrings(lang, Object.fromEntries(strings(ui))); document.documentElement.lang = lang;
+    const asset = Consent.assetLayout("/fixtures/cache");
+    const assetHeight = asset.cachedH + asset.neverH + asset.note.h + 2 * SPACE.xl;
+    near2(asset.h, Math.max(786, POPUP_FRAME.contentTop + assetHeight + Popup.MSG.buttons), 1);
+    near2((asset.cachedTop + asset.noteBottom) / 2, contentCentre(asset), .5);
+    const scan = Consent.scanLayout(), first = scan.boxes[0], last = scan.boxes.at(-1);
+    const scanHeight = scan.boxes.reduce((sum, b) => sum + b.h, 0) + 2 * SPACE.xl;
+    near2(scan.h, Math.max(786, POPUP_FRAME.contentTop + scanHeight + Popup.MSG.buttons), 1);
+    near2((first.y + last.y + last.h) / 2, scan.content.y + scan.content.h / 2, .5);
+    near2(first.y, POPUP_FRAME.contentTop);
+    for (const f of [asset, scan]) assert.ok(f.h <= POPUP_FRAME.maxH);
+  } finally { setStrings("en-US", Object.fromEntries(strings(english))); document.documentElement.lang = "en-US"; }
+});
+
+test("Mod Alias and Export fit their unchanged row envelopes and centre the whole body", () => {
+  const mod = Frames.MOD_ALIAS, content = Frames.popupContent(mod.w, mod.h, { text: true });
+  const modNeed = POPUP_FRAME.contentTop + 2 * SPACE.xxxl + SPACE.m + Popup.MSG.buttons;
+  near2(mod.h, Math.max(786, modNeed), 1);
+  assert.equal(mod.input.h, SPACE.xxxl); assert.equal(mod.hint.h, SPACE.xxxl);
+  near2((mod.input.y + mod.input.h / 2 + mod.bottom) / 2, contentCentre({ ...mod, content }), .5);
+  const exp = Frames.EXPORT, rows = Object.values(exp.rows), expContent = Frames.popupContent(exp.w, exp.h);
+  assert.deepEqual(rows.map(r => r.h), [260, 240, 240]);
+  near2(exp.h, Math.max(786, POPUP_FRAME.contentTop + 740 + 2 * SPACE.m + Popup.MSG.buttons), 1);
+  near2((rows[0].y + rows[0].h / 2 + exp.bottom) / 2, contentCentre({ ...exp, content: expContent }), .5);
+  for (let i = 1; i < rows.length; i++) near2(rows[i - 1].y - rows[i - 1].h / 2 - rows[i].y - rows[i].h / 2, SPACE.m);
+});
+
+test("scrolling text viewer and picker heights retain their pre-fit viewports", () => {
+  assert.equal(Frames.TEXT_VIEWER.h, 1353);
+  assert.equal(Frames.TEXT_VIEWER.box.height, 885);
+  for (const [kind, height] of [[null, 1353], ["spr", 1512], ["lobby", 1353], ["model", 1353]])
+    for (const check of [false, true]) assert.equal(Popup.listLayout(check, kind).frame.h, height, String(kind));
 });

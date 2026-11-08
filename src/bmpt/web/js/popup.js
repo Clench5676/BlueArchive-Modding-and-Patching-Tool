@@ -271,8 +271,8 @@ export function footerLabels(widgets, captions, options = {}) {
 //   buttons: [{label, primary, name}] instead of ok / cancel: named choices in a row (one centred, two as OK and Cancel,
 //            three or more share the available width); a node is Choice_<index> unless it names itself
 //   close: false for a popup that must be answered with a button (no close button)
-export function popupFrame(title, w, h, { ok = null, cancel = null, close = true, buttons = null, captionSite = null, compact = false } = {}) {
-  ({ w, h } = frameGeometry(w, h, { compact }));
+export function popupFrame(title, w, h, { ok = null, cancel = null, close = true, buttons = null, captionSite = null } = {}) {
+  ({ w, h } = frameGeometry(w, h));
   const t = clone(find(layouts.sortPopup, "Center"));
   const popup = find(t, "Popup");
   popup.children = popup.children.filter((c) => ["Base", "Btn"].includes(c.name));
@@ -424,7 +424,7 @@ export function listLayout(check = false, kind = null) {
   const cardHeight = native.h + Math.max(native.bar, LIST_CARD_NAME.padY + LIST_CARD_NAME.lines * LIST_CARD_NAME.fs * LIST_CARD_NAME.pitch);
   const need = POPUP_FRAME.contentTop + CONTROL.buttonS.h + 5 * SPACE.m + cardHeight
     + POPUP_FRAME.footer.bottom + CONTROL.buttonL.h + SPACE.m;
-  const frame = frameGeometry("XL", need), content = popupContent(frame.w, frame.h);
+  const frame = frameGeometry("XL", Math.max(need, POPUP_FRAME.XL.h)), content = popupContent(frame.w, frame.h);
   const panels = grid(content);
   const detailBox = { ...panels.span(4), h: content.h - (check ? CHECK_H + SPACE.m : 0) };
   const bounds = box => {
@@ -677,7 +677,7 @@ export function detailsTree(it, title, fields, actions, portraitTexture = null, 
     action.actionSemantic = disabled ? "secondary" : semantic; kids.push(action);
   });
   if (actions.length) bands.push({ name: "Actions", w, h: CONTROL.buttonS.h });
-  const placed = layoutStack(bands, { ...content, gap: SPACE.m });
+  const placed = layoutStack(bands, { x: content.x, y: content.y, w: content.w, gap: SPACE.m });
   const tree = node("Details", [0, 0], [], kids);
   const placeInfo = (box, x = 0) => {
     const target = { ...box, x: x + box.x };
@@ -935,7 +935,7 @@ export async function listPopup(options) {
 // --- the message popup ---
 export const MSG = { title: POPUP_FRAME.contentTop, gap: SPACE.l, rowButton: SMALL_BUTTON.h + SPACE.m,
   check: CHECK_H + SPACE.m, buttons: POPUP_FRAME.footer.bottom + CONTROL.buttonL.h + SPACE.m,
-  none: SPACE.xl, minH: POPUP_FRAME.S.h, cap: POPUP_FRAME.maxH };
+  none: SPACE.xl, cap: POPUP_FRAME.maxH };
 
 // message({title, lines, ok, cancel, check, host, width, close, confirmKeys, scroll}): a message on the popup frame, in host
 // (#dialog by default, over everything but the message popup). Resolves once it is closed, however it is closed, with
@@ -1013,7 +1013,7 @@ export function plainMessage(layer, { title, lines = [], ok, cancel, buttons, st
   if (dismissable) box.appendChild(styleBox(button("×", () => finish(null), "close"),
     { x: frame.w - POPUP_FRAME.close.right - CONTROL.icon.h, y: POPUP_FRAME.close.top, w: CONTROL.icon.h, h: CONTROL.icon.h }, CONTROL.icon.h));
   if (dismissable) box.children.at(-1).setAttribute("aria-label", T("display.close"));
-  const content = styleBox(el("div", "plain-message-lines"), { x: layout.content.x, y: layout.content.y,
+  const content = styleBox(el("div", "plain-message-lines"), { x: layout.content.x, y: FRAME_Y + frame.h / 2 - layout.y0,
     w: layout.content.w, h: layout.visible });
   Object.assign(content.style, { overflow: "auto", textAlign: plain ? "left" : "center" });
   const paragraphItems = layout.body.fitted.map(({ r, f, bf, bw, item: text }) => {
@@ -1138,31 +1138,34 @@ function messageLines(lines, w, fitTogether, plain, assets = true) {
 
 // Shared by ordinary messages and text-only tours, including row fitting, frame padding and footer clearance.
 // `scroll` in the result tells whether the lines scroll in the frame: asked for, or forced because the frame would
-// be taller than MSG.cap; each frame keeps its class minimum.
+// be taller than MSG.cap. Non-scrolling bodies, including their check row, centre in the content box.
 export function messageLayout({ lines = [], width, ok = null, cancel = null, buttons = null, check = null,
-  fitTogether = [], scroll = false, plain = false, assets = true, height: minimumHeight = 0, compact = false } = {}) {
+  fitTogether = [], scroll = false, plain = false, assets = true, height: minimumHeight = 0 } = {}) {
   let size;
   if (width != null) size = frameClass(width === 2100 ? "L" : width);
   else size = ["S", "M", "L"].map(key => frameClass(key)).find(candidate =>
     messageLines(lines, candidate.w, fitTogether, plain, false).fitted.every(({ f }) => f.lines <= 6)) || POPUP_FRAME.L;
   const body = messageLines(lines, size.w, fitTogether, plain, assets), hasButtons = !!(ok || cancel || buttons?.length);
   const need = MSG.title + body.height + (check ? MSG.check : 0) + (hasButtons ? MSG.buttons : MSG.none);
-  const { w, h: height } = frameGeometry(size.w, Math.max(need, minimumHeight), { compact }),
-    content = popupContent(w, height, { text: true, footer: hasButtons, compact });
-  const visible = Math.max(0, Math.min(body.height, content.h - (check ? MSG.check : 0)));
-  const scrolls = scroll || body.height > visible;
-  const y0 = toNode(content, 1, { w, h: height, cx: 0, cy: FRAME_Y })[1];
+  const { w, h: height } = frameGeometry(size.w, Math.max(need, minimumHeight)),
+    content = popupContent(w, height, { text: true, footer: hasButtons });
+  const available = Math.max(0, content.h - (check ? MSG.check : 0));
+  // A body that fits keeps its own height and centres, scrolling or not; only an overflowing one fills the content box.
+  const overflow = body.height > available + 1e-9, scrolls = scroll || overflow;
+  const visible = overflow ? available : body.height;
+  const bodyTop = content.y + Math.max(0, available - visible) / 2;
+  const y0 = toNode({ ...content, y: bodyTop }, 1, { w, h: height, cx: 0, cy: FRAME_Y })[1];
   let checkBox = null, checkCaption = null;
   if (check) {
     const cb = checkbox("Check", 0, 0, check.label, !!check.checked, content.w);
     checkCaption = cb.caption;
-    checkBox = row([{ w: cb.w, h: CHECK_H }], { x: content.x, y: content.y + visible + SPACE.m,
+    checkBox = row([{ w: cb.w, h: CHECK_H }], { x: content.x, y: bodyTop + visible + SPACE.m,
       w: content.w, gap: SPACE.m, justify: "center" }).boxes[0];
   }
   return { body, width: w, height, visible, y0, content, checkBox, checkCaption, scroll: scrolls };
 }
 
-async function showMessage({ title = "", lines = [], ok = null, cancel = null, buttons = null, check = null, host: hostArg = "dialog", width, close: dismissable = true, confirmKeys = null, fitTogether = [], scroll = false, plain = false, captionSite = null, compact = false }, resolve) {
+async function showMessage({ title = "", lines = [], ok = null, cancel = null, buttons = null, check = null, host: hostArg = "dialog", width, close: dismissable = true, confirmKeys = null, fitTogether = [], scroll = false, plain = false, captionSite = null }, resolve) {
   const host = hostOf(hostArg);
   const layer = document.createElement("div");
   layer.className = "popup-layer";
@@ -1201,10 +1204,10 @@ async function showMessage({ title = "", lines = [], ok = null, cancel = null, b
     return;
   }
   try {
-    const { body, width: w, height, visible, y0, content, checkBox, scroll: scrolls } = messageLayout({ lines, width, ok, cancel, buttons, check: state, fitTogether, scroll, plain, compact });
-    const t = popupFrame(title, w, height, { ok, cancel, buttons, close: dismissable, captionSite, compact });
+    const { body, width: w, height, visible, y0, content, checkBox, scroll: scrolls } = messageLayout({ lines, width, ok, cancel, buttons, check: state, fitTogether, scroll, plain });
+    const t = popupFrame(title, w, height, { ok, cancel, buttons, close: dismissable, captionSite });
     const popup = find(t, "Popup");
-    // The content starts at contentTop; the check row and footer remain outside a scrolling body.
+    // The body and check row centre together; a scrolling body fills the available content box.
     if (!scrolls) {
       body.tree.pos = [0, y0];
       popup.children.push(body.tree);
@@ -1283,9 +1286,11 @@ export function textViewer({ title, text, copy, close = T("display.close"), onCo
       } catch (err) {
         if (ended) return;
         console.warn("text popup without the game's frame", err);
-        const fallback = plainMessage(layer, { title, width: TEXT_VIEWER.w, height: TEXT_VIEWER.h,
+        const fallback = plainMessage(layer, { title, width: TEXT_VIEWER.w, height: TEXT_VIEWER.h, scroll: true,
           buttons: [{ label: copy, value: "copy" }, { label: close, value: "close" }] }, action => action === "copy" ? onCopy() : finish());
-        fallback.content.style.height = `${TEXT_VIEWER.box.height * S}px`;
+        // The document box keeps the viewer's own top and height, whatever the empty message body measures.
+        Object.assign(fallback.content.style, { top: `${(FRAME_Y + TEXT_VIEWER.h / 2 - TEXT_VIEWER.box.top) * S}px`,
+          height: `${TEXT_VIEWER.box.height * S}px` });
         Object.assign(pre.style, { position: "absolute", boxSizing: "border-box", margin: "0", left: "0px", top: "0px",
           width: `${TEXT_VIEWER.box.width * S}px`, height: `${TEXT_VIEWER.box.height * S}px` });
         fallback.content.replaceChildren(pre);

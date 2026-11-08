@@ -1208,7 +1208,7 @@ tried with its failure `code`. The error report's import rows and the analysis l
 row that previewed shows the preview and the analysis disagreeing). CAB ids and the game's own file names stay, other
 file names are redacted.
 
-A blocked or incomplete row's status badge opens Details (`import-details.js`, the game's message popup with a compact frame: `Popup.message({ compact })` sizes the frame to its content, below the frame class's own height): the row's reason (its short label with the error text, a file name that opens or ends the text left out, or the missing-file status), then a paragraph a file (its name, `import.detail.platform`, `import.detail.unity`), the unresolved dependencies (`import.detail.unresolved`, then one CAB id a line, from `missing.cabs`) and the files of the same slot found in its folders (`missing.found`). Its hit area is the badge background's box (`badgeRect`), above the row's own; opening it does not select the row.
+A blocked or incomplete row's status badge opens Details (`import-details.js`, the game's message popup, whose frame fits its content above the shared 786-unit minimum): the row's reason (its short label with the error text, a file name that opens or ends the text left out, or the missing-file status), then a paragraph a file (its name, `import.detail.platform`, `import.detail.unity`), the unresolved dependencies (`import.detail.unresolved`, then one CAB id a line, from `missing.cabs`) and the files of the same slot found in its folders (`missing.found`). Its hit area is the badge background's box (`badgeRect`), above the row's own; opening it does not select the row.
 
 The status shows the number of found files, or the unresolved count and the folder note when none were found. The
 Import State filter includes Missing Files before Imported; the footer counts incomplete groups. After an analysis,
@@ -1978,18 +1978,23 @@ optional, so a popup still works without them.
 - **`popupFrame(title, w, h, {ok, cancel, close, buttons})`**: the shared frame builder, including lists and
   consents. It keeps `UIPopup_Sort`'s `Common_Popup_Bg`, title, close and footer branches, resizing and positioning them
   with `POPUP_FRAME`, `CONTROL.buttonL`, `TYPE` and `SPACE`. Width classes are S 1300 x 1050, M 1540 x 1073,
-  L 2098 x 1110 and XL 2841 x 1353. A numeric width rounds up to the smallest class that holds it. Height starts at
-  the class minimum and grows with content, capped at 1560; the frame remains centred 12 units below the stage centre.
+  L 2098 x 1110 and XL 2841 x 1353 (the sizes of their exemplars). A numeric width rounds up to the smallest class
+  that holds it. The class sets the width; explicit heights fit content above `minH` 786, from `UIPopup_ClientVersion`
+  `Center/Popup/Base/BG` (1115 x 786), capped at 1560. Scrolling viewers that omit height retain the exemplar height;
+  scrolling lists explicitly keep at least XL's 1353. The frame remains centred 12 units below the stage centre.
   The title is one display line, 72 down to 48, with its top 36 below the frame top. The 60-unit close icon keeps
   48 from the right and 39 from the top. Content starts 170 below the top, with 40-unit panel/list side padding or
-  100-unit text side padding. Footer bodies are 551 x 176, 33 apart, 102 above the bottom, centred as one group;
+  100-unit text side padding. A body that fits centres vertically in that content box, above the footer clearance
+  (or bottom padding without buttons), even where scrolling is allowed; a message body and check row centre as one
+  block; only an overflowing body fills the content box and scrolls. Footer bodies are 551 x 176,
+  33 apart, 102 above the bottom, centred as one group;
   three or more share a reduced width when necessary to keep at least 82.5 at either side. Captions share one size,
   72 down to 48, up to two lines in the body's width less 2 x 39.5. The recorded Thai footer exceptions retain their
   existing floors (36 for the recorded footer groups; named Hall allowances 44 and 36), never fitting smaller than
   their former 400-unit-box result. No other group gets an exception. The lowest content stays 20 above the footer.
   `footerY`, `footerTop`, `footerSlots`, `footerScale`, `footerGap`, `footerFit` and `footerLabels` expose the same
   geometry to callers; `footerScale` describes the equal width reduction while the bodies keep their control height.
-  `popup-frames.js` holds the fixed content boxes: text viewer XL, aliases and Mod Alias M, file details and Export L,
+  `popup-frames.js` holds the shared content boxes: text viewer XL, aliases and Mod Alias M, file details and Export L,
   and comparison/repair L. `POPUP` and `FOOTER` remain pinned to the old Sort anatomy for callers awaiting migration.
 - **`message({title, lines, ok, cancel, check, close})`** in `#dialog`: lines of text, centred; when a line carries a
   small button (`{text, button: {label, fn}}`, the consent popup's light blue Change button), every line is a row of
@@ -2065,8 +2070,10 @@ or the classic UI is open, no drift while mods are off, nothing dismissed (see M
 
 The start sequence's `spine` step follows asset consent. It shows `spine.license.title`, the legal wording in
 `spine.license.notice`, and one centred Confirm (`picker.ok`) on `UIPopup_Sort`, built through `popup.js` by
-`consent.js spineFrame`. It uses class L; the body wraps at the message font size (52 units), and the frame grows
-or scrolls to keep the complete notice clear of the button. There is no close button; Escape and the backdrop do nothing. Closing the app window keeps its existing
+`consent.js spineFrame`. It uses class L for width; the body wraps at the message font size (52 units), and the frame
+fits its content above the shared 786-unit minimum or scrolls at the cap to keep the complete notice clear of the button.
+Non-scrolling bodies centre between the title and footer; the asset and scan consents centre their section stacks in
+the same content box. There is no close button; Escape and the backdrop do nothing. Closing the app window keeps its existing
 quit behaviour. Without asset consent the plain popup uses exactly the same title, body and Confirm.
 
 The notice says that continuing to use the software confirms that the user holds a Spine Editor licence.
