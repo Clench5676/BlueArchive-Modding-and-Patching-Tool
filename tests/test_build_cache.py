@@ -93,7 +93,8 @@ def test_refused_apply_leaves_no_persistent_build(setup_library, monkeypatch, ki
     monkeypatch.setattr(env.library, '_write_check', refuse)
     with pytest.raises(ServiceError, match='game_running'):
         env.library.apply('test', f'mod:{mod.id}', kind=kind)
-    assert calls == [mod.id] and target.read_bytes() == official
+    # a refusal of the moment comes before anything is built (BL-123)
+    assert calls == [] and target.read_bytes() == official
     assert not (env.root / 'built').exists()
     assert env.library.sizes('built')['builtSize'] == 0
 
