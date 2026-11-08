@@ -1,5 +1,6 @@
 // Default-on, revision-addressed PNG persistence with an explicit opt-out. Only the authenticated backend
-// writes user-space files; browser HTTP/storage caches never retain heavy art.
+// writes user-space files; browser HTTP/storage caches never retain heavy art. Every ticket names the renderer that
+// draws its still ("model", "spine"): the backend keys the entry by that renderer's code too (webui/stills.py).
 import { rpc } from "./api.js";
 import { withTimeout } from "./async.js";
 
@@ -26,7 +27,7 @@ export function createPreviewCache({ request = rpc, digest = hashKey, fetchImage
     const next = prefs?.previewCache !== false, token = prefs?.previewCacheGeneration || "";
     if (enabled !== next || generation !== token) { enabled = next; generation = token; epoch++; }
   };
-  const ticket = (key) => enabled && generation ? { key, generation, epoch } : null;
+  const ticket = (key, renderer) => enabled && generation && renderer ? { key, renderer, generation, epoch } : null;
   const keyOf = (item) => item.hash ||= Promise.resolve().then(() => digest(item.key));
   const observe = (reply) => {
     if (reply?.generation) configure({ previewCache: typeof reply.allowed === "boolean" ? reply.allowed : enabled, previewCacheGeneration: reply.generation });
@@ -41,18 +42,18 @@ export function createPreviewCache({ request = rpc, digest = hashKey, fetchImage
         if (!valid(current)) return null;
         observe(reply);
         if (!valid(current) || !/^[a-f0-9]{64}$/.test(reply?.revision || "")) return null;
-        return { ...ticket(JSON.stringify([current.key, reply.revision])), dependencies: paths, dependencyRevision: reply.revision };
+        return { ...ticket(JSON.stringify([current.key, reply.revision]), current.renderer), dependencies: paths, dependencyRevision: reply.revision };
       } catch { return null; }
     },
     async modelTicket(key, variant, source) {
-      const current = ticket(key);
+      const current = ticket(key, "model");
       if (!current) return null;
       try {
         const reply = await call("preview.modelRevision", { variant, source });
         if (!valid(current)) return null;
         observe(reply);
         if (!valid(current) || !/^[a-f0-9]{64}$/.test(reply?.revision || "")) return null;
-        return { ...ticket(JSON.stringify([key, reply.revision])), model: { variant, source }, modelRevision: reply.revision };
+        return { ...ticket(JSON.stringify([key, reply.revision]), "model"), model: { variant, source }, modelRevision: reply.revision };
       } catch { return null; }
     },
     async get(current, { signal } = {}) {
@@ -60,7 +61,7 @@ export function createPreviewCache({ request = rpc, digest = hashKey, fetchImage
       try {
         const key = await keyOf(current);
         if (!valid(current) || signal?.aborted) return null;
-        const reply = await call("preview.cacheGet", { key });
+        const reply = await call("preview.cacheGet", { key, renderer: current.renderer });
         if (!valid(current) || signal?.aborted) return null;
         observe(reply);
         if (!valid(current) || signal?.aborted || !reply?.allowed || typeof reply.data !== "string"
@@ -86,7 +87,7 @@ export function createPreviewCache({ request = rpc, digest = hashKey, fetchImage
           if (!valid(current) || reply?.generation !== current.generation
               || reply?.revision !== (current.modelRevision || current.dependencyRevision)) return false;
         }
-        return !!await call("preview.cachePut", { key, data, generation: current.generation });
+        return !!await call("preview.cachePut", { key, data, generation: current.generation, renderer: current.renderer });
       } catch { return false; }
     },
   };

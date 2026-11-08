@@ -200,7 +200,7 @@ def test_switch_rebuilds_game_library_catalog_and_cab_index(tmp_path, monkeypatc
         assert rpc(app, "app.info")["result"]["resourceContext"] != old_context
         assert preview.generation != generation
         assert preview.get("preserved") == b"saved preview"
-        assert rpc(app, "preview.cachePut", key="late", data="", generation=generation)["result"] is False
+        assert rpc(app, "preview.cachePut", renderer="spine", key="late", data="", generation=generation)["result"] is False
         assert services.library.current_pin().root == paths["japan"].parent
         assert services.catalog.server == "japan"
         assert services.game._cab_index(everything=True) == {"cab-shared": str(paths["japan"])}
