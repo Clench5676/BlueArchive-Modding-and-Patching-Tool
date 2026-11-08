@@ -70,7 +70,14 @@ def test_model_route_uses_verified_official_or_own_mod_sources(tmp_path):
         mods=lambda: [SimpleNamespace(id='own', kind='model', target='ch0242'),
                       SimpleNamespace(id='foreign', kind='model', target='ch0252'),
                       SimpleNamespace(id='portrait', kind='spr', target='ch0242')],
+        costume_preview=lambda target, other: costume(target, other),
     )
+    costume_parts = [tmp_path / 'character-ch0242-_mxload-2026-01-01_assets_all_2.bundle']
+
+    def costume(target, other):  # another variant's costume on the slot (BL-117); the library refuses the rest
+        if (target, other) != ('ch0242', 'ch0242_swimsuit'):
+            raise ServiceError('source_unsupported', source=f'variant:{other}')
+        return costume_parts
     s = Services(Settings(tmp_path / 'config.toml'), tmp_path, state=UiState(tmp_path / 'webui.json'),
                  cache=object(), game=game, catalog=RouteCatalog(), library=library)
     try:
@@ -78,10 +85,14 @@ def test_model_route_uses_verified_official_or_own_mod_sources(tmp_path):
         assert calls[-1] == ('ch0242', official, 'reads:official')
         assert s.asset('model/ch0242.glb', {'source': 'mod:own'}).body == b'glTF'
         assert calls[-1] == ('ch0242', mod_parts, 'reads:configured')
+        assert s.asset('model/ch0242.glb', {'source': 'variant:ch0242_swimsuit'}).body == b'glTF'
+        assert calls[-1] == ('ch0242', costume_parts, 'reads:official')
         import pytest
-        for source in ['mod:foreign', 'mod:portrait', 'mod:missing', 'variant:ch0252', '../elsewhere']:
+        for source in ['mod:foreign', 'mod:portrait', 'mod:missing', '../elsewhere']:
             with pytest.raises(KeyError):
                 s.asset('model/ch0242.glb', {'source': source})
+        with pytest.raises(ServiceError, match='source_unsupported'):
+            s.asset('model/ch0242.glb', {'source': 'variant:ch0252'})
     finally:
         s.close()
 

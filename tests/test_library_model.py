@@ -785,7 +785,8 @@ def test_model_missing_mesh_stream_and_platform_refuse_the_whole_upload(model_en
     assert env.library.mods() == []
 
 
-def test_model_variant_transplant_is_refused(model_env):
+def test_model_costume_of_itself_is_refused(model_env):
+    # another variant's costume is BL-117's (test_model_adapt.py); a variant's own model is no costume source
     env = model_env
     with pytest.raises(ServiceError, match='source_unsupported'):
         env.library.apply('hoshino', 'variant:hoshino', kind='model')
