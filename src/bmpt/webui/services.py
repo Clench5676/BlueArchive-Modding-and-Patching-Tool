@@ -1370,9 +1370,12 @@ class Services:
         if kind == "model" and len(parts) == 2 and parts[1].endswith(".glb"):
             # A variant's 3D chibi, exported losslessly and cached only with separate preview consent.
             key = _stem(parts[1])
+            field_only = False
             try:
                 variant = self.catalog.variant(key)
                 core, target = variant.model, variant.key
+                if not core and getattr(variant, "field_model", None):
+                    core, field_only = variant.field_model, True
             except (ServiceError, KeyError) as error:
                 if isinstance(error, ServiceError) and error.code != "catalog_variant_not_found":
                     raise
@@ -1386,8 +1389,13 @@ class Services:
             source = query.get("source", "live")
             kind = source.split(":", 1)[0]
             # How long each preview source takes end to end: lock waits, CRC checks and the export (BL-092).
-            with spans.span("asset.model." + (kind if kind in ("live", "official", "mod", "import") else "other")):
-                data = self._model_asset(core, target, source, path)
+            with spans.span("asset.model." + (kind if kind in ("live", "official", "mod", "import", "variant") else "other")):
+                if field_only:  # no slot: its own files only, never a mod or another costume
+                    if source not in ("live", "official"):
+                        raise KeyError(path)
+                    data = self.game.model_glb(core)
+                else:
+                    data = self._model_asset(core, target, source, path)
             return AssetResponse(data, MIME[".glb"], light=False)
         if kind == "voice" and len(parts) == 3:
             # a memorial lobby voice clip from Kivo, relayed so it is never cached
@@ -1425,6 +1433,11 @@ class Services:
             if not fits(bundles):
                 raise KeyError(path)
             return self.game.model_glb(core, overrides=bundles, reads=self.library.preview_reads("configured"))
+        if source.startswith("variant:"):
+            bundles = self.library.costume_preview(target, source[8:])
+            if not fits(bundles):
+                raise KeyError(path)
+            return self.game.model_glb(core, overrides=bundles, reads=self.library.preview_reads("official"))
         if source.startswith("import:"):
             preview_core, bundles = self.batch_import.preview(source[7:])
             if preview_core not in cores or not fits(bundles):

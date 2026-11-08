@@ -630,6 +630,8 @@ def build_api(s: Services) -> RpcRegistry:
             "aliases": v.aliases,  # the search matches them, the page never shows them (the CN server's names)
             "recruitable": v.recruitable,  # on the selected server; playable is on some server
             "order": v.order, "spr": v.spr, "lobby": v.lobby, "date": v.date, "model": v.model,
+            # a field-mode model (an event or story variant with no battle model): previewed and offered as a costume
+            "fieldModel": getattr(v, "field_model", None),
             "spineCategory": getattr(v, "spine_category", None),
             "bg": _url_bg(v.bg), "portrait": _url_portrait(v.portrait),
             "favorite": v.key in favorites, "mods": len({getattr(m, "repaired_from", "") or m.id for m in own}),
@@ -737,6 +739,11 @@ def build_api(s: Services) -> RpcRegistry:
             if not core:
                 return False
             other = variants.get(source[8:]) if variants is not None else s.catalog.variant(source[8:])
+        elif source.startswith("variant:") and kind == "model":
+            # another variant's costume on this variant's model slot: any other model of the student
+            other = variants.get(source[8:]) if variants is not None else s.catalog.variant(source[8:])
+            return bool(core) and other is not None and other.key != v.key and other.family == v.family and bool(
+                getattr(other, "model", None) or getattr(other, "field_model", None))
         else:
             return False
         return other is not None and other.family == v.family and bool(getattr(other, kind, None)) and (

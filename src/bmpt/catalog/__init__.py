@@ -43,6 +43,10 @@ class GameSource(Protocol):
         """Return the lower-case dev names of installed 3D chibi prefabs (optional for a game source)."""
         ...
 
+    def field_model_cores(self) -> set[str]:
+        """Return the lower-case dev names of field-mode player models (optional for a game source)."""
+        ...
+
 
 def model_core(key: str, aliases: list[str], cores: set[str]) -> str | None:
     """The 3D chibi of a variant: its key, the key + '_original' (base variants, e.g. hoshino_original), then the
@@ -351,6 +355,7 @@ class Catalog:
         if portraits and not collection:
             logger.warning("No collection portraits found; recruitable follows the shipped release flags")
         models = getattr(self.game, "model_cores", set)()
+        fields = getattr(self.game, "field_model_cores", set)()
         # the same mapping core_map gives any install, run on the core lists fetched once for this build
         special_cores = {core for core, paths in lobbies.items() if paths and
                          parse_filename(paths[0].name).category != "spinelobbies"}
@@ -378,6 +383,9 @@ class Catalog:
                               recruitable=self._recruitable(entry, portrait is not None, bool(collection)),
                               model=model_core(key, aliases[1:], models), schale_id=entry.get("schale_id"),
                               aliases=list(entry.get("aliases", [])))
+            if variant.model is None:
+                # an event or story variant with only a field-mode model: shown and offered as a costume, no slot
+                variant.field_model = model_core(key, aliases[1:], fields)
             family.variants.append(variant)
             variants[key] = variant
         for core, paths in sorted(lobbies.items()):

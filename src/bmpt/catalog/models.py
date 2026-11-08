@@ -23,6 +23,9 @@ class Variant:
     page_id: str | None = None  # the student page on Kivo (kivo.wiki), for lobby lines
     recruitable: bool = False  # playable on the selected server, not only on some server
     model: str | None = None  # the 3D chibi's dev name (character-<dev>-_mxload-* bundles)
+    # a field-mode model's dev name (Field_Player_<dev>) for a variant with no character model: preview and costume
+    # source only, the game has no slot of it to switch
+    field_model: str | None = None
     schale_id: int | None = None  # the game's character id (SchaleDB's student id), for the Global server's lines
     # names the roster search matches but the UI never shows (the CN server's zh-CN wording)
     aliases: list[str] = field(default_factory=list)
