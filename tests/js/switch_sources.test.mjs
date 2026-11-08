@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
 import {
-  modelSource, modelUrl, appliedKey, appliedOf, availableTab, candidates, configuredKey, coreOf, hasAsset, overwrittenOf, partsOf, popupMode, primaryKind, previewBase, previewChanged, previewKey, sourceOf, switchKindOf,
+  modelSource, modelUrl, appliedKey, appliedOf, availableTab, candidates, configuredKey, coreOf, hasAsset, hasKind, overwrittenOf, partsOf, popupMode, primaryKind, previewBase, previewChanged, previewKey, sourceOf, switchKindOf,
 } from "../../src/bmpt/web/js/switch-sources.js";
 
 const part = (kind, applied, extra = {}) => ({ file: `/game/${kind}-${applied}.bundle`, kind, applied, crc: "ok", ...extra });
@@ -321,6 +321,27 @@ test("model sources stay within the variant and use the shared configured/applie
   assert.equal(modelSource(v, false), "official");
 });
 
+test("the 3D model offers the student's other models as costumes, field-mode models included", () => {
+  const fam = family(), [v, swimsuit, np] = fam.variants;
+  v.model = "hoshino_original";
+  swimsuit.model = "hoshino_swimsuit";
+  swimsuit.modList.push(mod("swim-model", swimsuit.key, "model"));  // another variant's mod: never a costume
+  np.fieldModel = "np0045";  // an event costume with only a field-mode model
+  assert.deepEqual(candidates(fam, v, "model").map((c) => c.key), ["self", "v:hoshino_swimsuit", "v:np0045"]);
+  assert.deepEqual(candidates(fam, swimsuit, "model").map((c) => c.key), ["self", "m:swim-model", "v:hoshino", "v:np0045"]);
+  // the field-only variant shows a 3D tab, with no slot to switch
+  assert.equal(hasKind(np, "model"), true);
+  assert.equal(availableTab(np, "model"), "model");
+  assert.deepEqual(candidates(fam, np, "model").map((c) => [c.key, c.greyed]), [["self", true]]);
+  // a costume previews and applies as variant:<key>
+  v.previewSources = { model: "variant:np0045" };
+  assert.equal(modelSource(v, true), "variant:np0045");
+  assert.equal(previewBase(v, "model", true), "/asset/model/hoshino.glb?source=variant%3Anp0045");
+  assert.equal(sourceOf("v:np0045"), "variant:np0045");
+  // the portrait keeps its own rules: other variants' portrait mods, never models
+  assert.ok(candidates(fam, v, "spr").every((c) => c.kind !== "variant" || c.variant.spr));
+});
+
 test("split model slots offer dependency mods and judge every slot part", async () => {
   const { selectionStatus, candidateStatus } = await import("../../src/bmpt/web/js/switch-sources.js");
   const dependency = { id: "dependency", kind: "model", core: "ch0258", target: "ch0258" };
@@ -333,7 +354,8 @@ test("split model slots offer dependency mods and judge every slot part", async 
       { ...dependency, id: "foreign", core: "hoshino_original" }] };
   const fam = { variants: [v, { key: "hoshino", model: "hoshino_original", modList: [
     { ...dependency, id: "other", core: "hoshino_original", target: "hoshino" }] }] };
-  assert.deepEqual(candidates(fam, v, "model").map((c) => c.key), ["self", "m:dependency"]);
+  // other cores' mods stay out; the other variant's model is offered as a costume
+  assert.deepEqual(candidates(fam, v, "model").map((c) => c.key), ["self", "m:dependency", "v:hoshino"]);
   assert.equal(candidates(fam, v, "model")[0].greyed, true);
   assert.equal(appliedKey(v, "model"), "m:dependency");
   assert.equal(selectionStatus(v, "model"), "status.applied");

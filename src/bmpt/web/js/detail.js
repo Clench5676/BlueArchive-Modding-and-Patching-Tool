@@ -117,9 +117,12 @@ function collectionPortrait(base) {
   }
   return null;
 }
-const modelPicture = (c, v = variant(), work = thumbnailWork) => c.kind !== "mod" && !coreOf(v, "model") ? null
-  : modelThumbnail(v.key, c.kind === "mod" ? `mod:${c.id}` : "official",
-    { version: modelStillVersion(fam, v, modelGeneration), signal: work.signal });
+// a model card's still: another variant's costume shows that variant's own model
+const modelPicture = (c, v = variant(), work = thumbnailWork) => c.kind === "variant"
+  ? modelThumbnail(c.variant.key, "official", { version: modelStillVersion(fam, c.variant, modelGeneration), signal: work.signal })
+  : c.kind !== "mod" && !coreOf(v, "model") && !v.fieldModel ? null
+    : modelThumbnail(v.key, c.kind === "mod" ? `mod:${c.id}` : "official",
+      { version: modelStillVersion(fam, v, modelGeneration), signal: work.signal });
 function begin() {
   endWait();
   thumbnailWork.cancel();
