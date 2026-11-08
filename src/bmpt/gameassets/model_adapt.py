@@ -25,6 +25,7 @@ The caller supplies official copies of the files (``adapt``'s ``index``) and sav
 
 from __future__ import annotations
 
+import copy
 import logging
 import math
 import random
@@ -850,6 +851,42 @@ class _Writer:
         sf.objects.update(ordered)
         return new.path_id
 
+    def add_like(self, sf: Any, source: Any, tree: dict) -> int:
+        """A new object of ``source``'s type in ``sf``, the type copied from ``source``'s file when ``sf`` holds no
+        object of it (a shader carried with a costume). Both files must come from the same build."""
+        src_type, src_file = source.serialized_type, source.assets_file
+        if (src_type is None or sf.header.version != src_file.header.version or sf.unity_version != src_file.unity_version
+                or sf._enable_type_tree != src_file._enable_type_tree or sf.header.version < 16):
+            raise refuse("object type of another build", type=source.type.name)
+        index = next((i for i, typ in enumerate(sf.types) if typ.class_id == source.class_id
+                      and typ.old_type_hash == src_type.old_type_hash and typ.script_type_index == src_type.script_type_index), None)
+        if index is None:
+            if src_type.type_dependencies:
+                raise refuse("object type with dependencies", type=source.type.name)
+            sf.types.append(copy.copy(src_type))
+            index = len(sf.types) - 1
+        template = next(iter(sf.objects.values()))
+        new = object.__new__(type(template))
+        new.__dict__.update(template.__dict__)
+        new.type_id, new.serialized_type, new.class_id, new.type = index, sf.types[index], source.class_id, source.type
+        new.path_id = self.fresh(sf)
+        new.data = b""
+        new.save_typetree(tree)
+        sf.objects[new.path_id] = new
+        ordered = sorted(sf.objects.items())
+        sf.objects.clear()
+        sf.objects.update(ordered)
+        return new.path_id
+
+    def builtin(self, sf: Any, entry: Any) -> int:
+        """The file id of one of the player's own resource files (``Library/unity default resources``), its external
+        entry copied as it is when ``sf`` has none."""
+        for i, e in enumerate(sf.externals):
+            if e.path.lower() == entry.path.lower():
+                return i + 1
+        sf.externals.append(copy.copy(entry))
+        return len(sf.externals)
+
     def external(self, sf: Any, cab: str) -> int:
         if cab == sf.name.lower():
             return 0
@@ -985,6 +1022,33 @@ def adapt(*, index: Mapping[str, Path], resolver: Callable | None, target_files:
             return True
         return path is not None and Path(path).name.startswith(("prologdepengroup-", "prologgroup-"))
 
+    # shaders the game does not load with the slot's prefab, carried as copies in the materials' file (BL-122)
+    shaders: dict[tuple[str, int], int] = {}
+
+    def carried(shader: Any, cab: str) -> int:
+        if shader is None or shader.type.name != "Shader":
+            raise refuse("shader not found", file=Path(str(index.get(cab) or graph.locations.get(cab, "?"))).name)
+        if _key(shader) in shaders:
+            return shaders[_key(shader)]
+        s_tree = shader.read_typetree()
+        fixed = [pair[1] if isinstance(pair, (list, tuple)) else pair.get("second", {})
+                 for pair in s_tree.get("m_NonModifiableTextures", [])]
+        if any(isinstance(texture, dict) and texture.get("m_PathID") for texture in fixed):
+            raise refuse("shader with fixed textures", shader=_shader_name(shader))
+        for dependency in s_tree.get("m_Dependencies", []):
+            if not dependency["m_PathID"]:
+                continue
+            entry = shader.assets_file.externals[dependency["m_FileID"] - 1] if dependency["m_FileID"] else None
+            dependency_cab = _external_cab(shader, dependency["m_FileID"])
+            if entry is not None and not entry.path.lower().startswith("archive:"):
+                dependency["m_FileID"] = writer.builtin(material_sf, entry)  # the player's own resources
+            elif shared(dependency_cab):
+                dependency["m_FileID"] = writer.external(material_sf, dependency_cab)
+            else:
+                dependency.update(m_FileID=0, m_PathID=carried(graph.deref(shader, dependency), dependency_cab))
+        shaders[_key(shader)] = writer.add_like(material_sf, shader, s_tree)
+        return shaders[_key(shader)]
+
     # textures and materials
     textures: dict[tuple[str, int], int] = {}
     materials: dict[tuple[str, int], int] = {}
@@ -995,11 +1059,10 @@ def adapt(*, index: Mapping[str, Path], resolver: Callable | None, target_files:
             tree = material.read_typetree()
             shader_cab = _external_cab(material, tree["m_Shader"]["m_FileID"])
             if tree["m_Shader"]["m_PathID"] and not shared(shader_cab):
-                shader = graph.deref(material, tree["m_Shader"])
-                raise refuse("shader outside the always-loaded bundles", material=tree.get("m_Name", ""),
-                             shader=_shader_name(shader) if shader is not None else shader_cab,
-                             file=Path(str(index.get(shader_cab) or graph.locations.get(shader_cab, "?"))).name)
-            tree["m_Shader"] = {"m_FileID": writer.external(material_sf, shader_cab), "m_PathID": tree["m_Shader"]["m_PathID"]}
+                # a shader the game does not load with the slot's prefab: a copy of it goes into the material's file
+                tree["m_Shader"] = {"m_FileID": 0, "m_PathID": carried(graph.deref(material, tree["m_Shader"]), shader_cab)}
+            else:
+                tree["m_Shader"] = {"m_FileID": writer.external(material_sf, shader_cab), "m_PathID": tree["m_Shader"]["m_PathID"]}
             for _, value in tree["m_SavedProperties"]["m_TexEnvs"]:
                 pointer = value["m_Texture"]
                 if not pointer["m_PathID"]:

@@ -17,9 +17,9 @@ import pytest
 GAME_DIR = Path(os.environ.get("BAMT_TEST_GAME_DIR") or "/nonexistent/bamt-real-game")
 official = pytest.mark.skipif(not GAME_DIR.is_dir(), reason="Set BAMT_TEST_GAME_DIR to a verified official view")
 
-# the checks the rule may refuse a pair on today: a costume stretching more than the slot's own (G1, BL-118), and a
-# shader the game does not load with the slot's prefab
-RULE_REFUSALS = {"stretch", "shader outside the always-loaded bundles"}
+# the check the rule may refuse a pair on today: a costume stretching more than the slot's own (G1, BL-118); a shader
+# the game does not load with the slot's prefab is carried with the costume
+RULE_REFUSALS = {"stretch"}
 WORKERS = 3
 
 _state = {}
