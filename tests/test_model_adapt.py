@@ -205,7 +205,7 @@ def test_official_costume_apply_restore_and_preview_on_clones(tmp_path):
     settings.set("game_resource_dir", str(clone_dir))
     game = GameAssets([clone_dir], AssetCache(allowed=False, root=tmp_path / "cache"))
     catalog = Catalog(game, None, server="global")
-    library = ModLibrary(tmp_path / "library", catalog, game, settings)
+    library = ModLibrary(tmp_path / "library", catalog, game, settings, scan_allowed=lambda: True)
     slot = library._game_files("hina", "model")
     official_bytes = {path.name: hashlib.sha1(path.read_bytes()).hexdigest() for path in slot}
 
@@ -213,8 +213,22 @@ def test_official_costume_apply_restore_and_preview_on_clones(tmp_path):
     assert preview and library.costume_preview("hina", "np0009") == preview  # built once per signature
     assert {p.name for p in preview} <= set(official_bytes)
 
+    # with mods off the costume is saved, nothing is written, and the choice stays (a field-only source has no slot)
+    assert not library.toggle(False, True).failed
     result = library.apply("hina", "variant:np0009", kind="model")
-    assert result.files and not result.unchanged
+    assert result.deferred
+    library._prune_quietly()
+    assert library.configured("hina").get("model") == "variant:np0009"
+    assert {path.name: hashlib.sha1(path.read_bytes()).hexdigest() for path in slot} == official_bytes
+    # mods on: the master switch writes it
+    assert not library.toggle(True, False).failed
+    assert library.configured("hina").get("model") == "variant:np0009"
+    assert {path.name: hashlib.sha1(path.read_bytes()).hexdigest() for path in slot} != official_bytes
+    # the written costume is the library's own: never offered as an outside mod to add
+    states = {e.state for e in library.scan().entries if e.core == "hina_original"}
+    assert "untracked" not in states, states
+    result = library.apply("hina", "variant:np0009", kind="model")
+    assert result.unchanged or result.files
     data = game.model_glb("hina_original")
     doc = json.loads(data[20:20 + struct.unpack_from("<I", data, 12)[0]])
     assert "OL_NP0009_Body" in {m["name"] for m in doc["meshes"]}
