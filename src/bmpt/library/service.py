@@ -315,6 +315,12 @@ class _View:
         if source.startswith("mod:"):
             return source[4:] in self.mods or (held and source[4:] in self.held)
         if source.startswith("variant:"):
+            if kind == "model":  # a costume: any other model of the student, field-mode ones (no slot) included
+                try:
+                    other = self.library._variant(source[8:])
+                except ServiceError:
+                    return False
+                return bool(getattr(other, "model", None) or getattr(other, "field_model", None))
             cores = self.maps.get(key)
             return bool(cores and cores.core(source[8:], kind))
         return False
