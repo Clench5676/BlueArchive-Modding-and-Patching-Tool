@@ -938,8 +938,15 @@ def adapt(*, index: Mapping[str, Path], resolver: Callable | None, target_files:
           source_files: list[Path], source_dev: str, open_writable: Callable[[Path], Any]) -> Result:
     """The changed bundles of ``target_files`` (the slot, official copies) carrying the costume of ``source_dev``'s
     model, whose prefab sits in ``source_files``. ``index`` maps CABs to files to read (the slot's own CABs to
-    ``target_files``); ``resolver`` finds any other CAB. ``open_writable`` opens a slot file as an engine Bundle."""
-    graph = BundleGraph(index, resolver=resolver)
+    ``target_files``); ``resolver`` finds any other CAB. ``open_writable`` opens a slot file as an engine Bundle.
+    The caller holds the model lock (``gameassets.service.model_lock``): the graph holds the path lock of every bundle
+    it reads until it closes, like an export's."""
+    with BundleGraph(index, resolver=resolver) as graph:
+        return _adapt(graph, index, target_files, target_dev, source_files, source_dev, open_writable)
+
+
+def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Path], target_dev: str,
+           source_files: list[Path], source_dev: str, open_writable: Callable[[Path], Any]) -> Result:
     target_prefabs = _model_prefabs(graph, [f for f in target_files if f.name.startswith("character-")])
     source_prefabs = _model_prefabs(graph, source_files)
     t_name = choose_prefab(target_prefabs, target_dev)
