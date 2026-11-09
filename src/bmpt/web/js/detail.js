@@ -270,7 +270,9 @@ function crcOf(v, kind = "spr") {
 }
 const appliedKey = (v = variant(), kind = primaryKind(v)) => keyOf(v, kind);
 const shownSource = (v = variant(), kind = primaryKind(v)) => previewKey(v, kind, modsOn());
-const previewAvailable = (v, kind) => !!coreOf(v, kind) || shownSource(v, kind).startsWith("m:");
+// the left side draws a kind it can preview: a variant's own files, a field or NPC model without a slot (BL-117,
+// BL-127: shown, never switched), or an added mod
+const previewAvailable = (v, kind) => !!coreOf(v, kind) || (kind === "model" && !!v?.fieldModel) || shownSource(v, kind).startsWith("m:");
 const variantBase = (v, kind = "spr") => previewAvailable(v, kind) ? previewBase(v, kind, modsOn(), fam.variants) : null;
 // The configured portrait or lobby while mods are off; otherwise what the game files carry.
 const current = (kind = "spr") => candidates(variant(), kind).find((c) => c.key === shownSource(variant(), kind)) || candidates(variant(), kind)[0];
