@@ -827,6 +827,7 @@ def test_loading_screen_prefab_hints():
     assert service.PREFAB_HINTS["UILoading"].startswith("prologgroup-assets-_mx-resources-ui-")
     assert is_prefab(Path(service.PREFAB_HINTS["UILoading"]))
     assert is_prefab(Path(service.PREFAB_HINTS["UIRepeater"]))
+    assert is_prefab(Path(service.PREFAB_HINTS["UIRatioNoticePopup"]))  # the loading ring of a still being made
 
 
 def test_lobby_prefab_hint():
@@ -1190,6 +1191,20 @@ def test_layout_exports_loading_label_effect_colour_and_distance():
     assert label["effect"] == 2
     assert label["effectColor"] == "#1a334c/0.90"
     assert label["effectDistance"] == [2, -3]
+
+
+def test_a_tweener_exports_what_it_animates_and_how():
+    """BL-135: UIRatioNoticePopup's LoadingIcon turns by its TweenRotation; the layout carries the tween's values."""
+    from bmpt.gameassets.layouts import _widget
+
+    obj = SimpleNamespace(assets_file=SimpleNamespace(name="fixture", externals=[]))
+    tree = {"m_Script": {"m_FileID": 0, "m_PathID": 7}, "method": 0, "style": 1, "delay": 0.0, "duration": 3.0,
+            "from": {"x": -0.0, "y": 0.0, "z": 180.0}, "to": {"x": -0.0, "y": 0.0, "z": -180.0}, "quaternionLerp": 0}
+    widget = _widget(obj, tree, {}, {7: "TweenRotation"})
+    assert widget == {"cls": "TweenRotation", "tween": {"from": [-0.0, 0.0, 180.0], "to": [-0.0, 0.0, -180.0],
+                                                          "duration": 3.0, "delay": 0.0, "style": 1, "method": 0}}
+    alpha = _widget(obj, {**tree, "from": 0.0, "to": 1.0}, {}, {7: "TweenAlpha"})
+    assert alpha["tween"]["from"] == 0.0 and alpha["tween"]["to"] == 1.0
 
 
 def test_prefab_pin_gradient_is_exported_without_changing_its_white_tint():

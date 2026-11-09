@@ -263,6 +263,12 @@ App module dependencies follow `webui` → `library` → `catalog` → `gameasse
   permits the validated index and sprite PNGs in the app's disk cache.
   NGUI rejects empty or malformed atlas metadata and retries on a later render; a requested sprite missing from
   an otherwise valid index also invalidates it. Failures keep the existing placeholder geometry and log the cause.
+- **Stills being made.** A picture with a placeholder (`clipImage` with `placeholder`: switch cards, details panels,
+  import previews) holds its place with the game's loading ring while its still is made (BL-135):
+  `UIRatioNoticePopup/Center/Popup/Base/LoadingIcon` (`Common_Login_Loading`, 75 x 75), turned as its `TweenRotation`
+  turns it (the layout exports a tweener's `tween`: from, to, duration, delay, style, method; 180 to -180 degrees in
+  3 s, a loop) and shown after 0.2 s, so a still that comes at once never flashes it. The placeholder text
+  (`import.previewUnavailable`) shows only when the still fails; without the prefab the text stands in as before.
 - **Read-only data folder.** The services test the data folder at start by writing and removing a real temporary
   file (`folder_writable`; `app.info.dataDirWritable`). No fallback to another folder is made. A write that the
   permissions refuse, to a file in the data folder while that folder cannot be written, answers `data_dir_readonly`

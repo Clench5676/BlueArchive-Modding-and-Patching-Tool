@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import math
+from typing import Any
 
 from UnityPy.environment import Environment
 from UnityPy.files import ObjectReader
@@ -71,6 +72,13 @@ def _widget(obj: ObjectReader, tree: dict, names: dict[str, str], scripts: dict)
     if cls in ("UIGrid", "UITable") or "cellWidth" in tree:
         widget.update({key: tree.get(key) for key in (
             "cellWidth", "cellHeight", "maxPerLine", "arrangement", "columns", "padding")})
+    if cls and cls.startswith("Tween") and "duration" in tree:
+        # an NGUI tweener: what it animates from and to (a number, a vector or a colour as a list), how long, after what
+        # delay, its style (0 once, 1 loop, 2 ping-pong) and method (0 linear, 1 ease in, ...)
+        def value(v: Any) -> Any:
+            return [v[k] for k in ("x", "y", "z", "r", "g", "b", "a") if k in v] if isinstance(v, dict) else v
+        widget["tween"] = {"from": value(tree.get("from")), "to": value(tree.get("to")), "duration": tree.get("duration"),
+                           "delay": tree.get("delay"), "style": tree.get("style"), "method": tree.get("method")}
     if cls is None and "mSpriteName" not in tree and "mTexture" not in tree:
         widget["keys"] = [key for key in tree if key not in (
             "m_GameObject", "m_Enabled", "m_Script", "m_Name")][:8]
