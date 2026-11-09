@@ -34,6 +34,10 @@ export const captionWidth = (captions) => {
 // the room a value's text may fill: the box less its padding on both sides, the caption column, what the row reserves and the slack
 export const valueRoom = (holder, width, { capW = 0, reserve = 0 } = {}) => boxWidth(holder, width) - 2 * B.padX - capW - reserve - B.slack;
 
+// the height of a box whose values take these numbers of lines at the full value size (no secondary lines, no minH)
+export const boxHeight = (lines) => lines.reduce((sum, n) => sum + Math.max(B.rowMin, n * B.value.fs * B.linePitch + B.rowPad), 0)
+  + 2 * B.padY;
+
 // the value cut to its first `cut` lines and an ellipsis, when it takes more
 function cutTo(fitted, cut) {
   if (!cut || fitted.lines <= cut) return fitted;
