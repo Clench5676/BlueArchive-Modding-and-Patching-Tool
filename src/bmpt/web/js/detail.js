@@ -220,10 +220,10 @@ function candidates(v = variant(), kind = "spr") {
     ? { ...c, label: modLabel(c.mod) }
     : { ...c, label: shortName(c.variant), recruit: c.variant.recruitable, fav: isFav(c.variant) }));
 }
-// Switch 3D Model offers another variant's costume only once that pair was built and exported for these files
-// (model.costumes, BL-122): the verdicts by variant, read when the 3D tab shows and checked to their end
-// (model.checkCostumes) in the background, one pair at a time; the switch opens at once and lists each pair as its
-// check ends (BL-134).
+// Switch 3D Model lists every costume of the student at once and lets one be applied only once that pair was built
+// and exported for these files (model.costumes, BL-122, BL-136): the verdicts by variant, read when the 3D tab shows
+// and checked to their end (model.checkCostumes) in the background, one pair at a time; each card turns applicable
+// as its check ends (BL-134).
 const costumeState = new Map(), costumeChecks = new Map();
 function costumesReady(v) {
   const others = costumeCandidates(fam, v).map((o) => o.key);
@@ -234,8 +234,8 @@ function costumesReady(v) {
     check = (async () => {
       const known = await rpc("model.costumes", { variant: v.key, others });
       costumeState.set(v.key, { ...(costumeState.get(v.key) || {}), ...known });
-      // the Apply card follows the shown costume's verdict
-      if (open && variant() === v && tab === "model") void renderScreen();
+      // the Apply card follows the shown costume's verdict, and an open switch its cards' verdicts
+      costumesChecked(v);
       const unknown = others.filter((o) => known[o] == null);
       for (const other of unknown) {
         const id = await rpc("model.checkCostumes", { variant: v.key, others: [other] });
@@ -1462,7 +1462,7 @@ function closePopup(apply) {
   popupClosed($("popup"));
   const chosen = candidates(variant(), popupKind).find((c) => c.key === pending);
   // only a choice other than the start (what the game shows; while mods are off, the configured source)
-  if (apply && chosen && !chosen.greyed) return saveCandidate(pending, popupKind);
+  if (apply && chosen && !chosen.greyed && !chosen.refused) return saveCandidate(pending, popupKind);
 }
 
 // The confirmation is read again when opened, so configurations in other installs are included.
@@ -2322,6 +2322,10 @@ export async function show(context, familyData, key, { inPlace = false, kind = n
     await settleImages();
   });
   if (ready) arrived(familyData.key, key);
+  // a 3D tab entered directly (a link, a reload) reads and checks the costume verdicts as a click on the tab does,
+  // once the screen is drawn (their arrival redraws it)
+  if (ready && open && tab === "model")
+    void costumesReady(variant()).catch((err) => console.error("Costume check failed", err));
   // the server's index of the lobbies' prefabs takes seconds to build the first time: built in the background once
   // the screen is in, so the lobby tab does not wait for it
   if (open && hasLobby(variant())) rpc("lobby.warm").catch(() => {});

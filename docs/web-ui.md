@@ -966,7 +966,7 @@ A pair past the stretch limit is built for a preview only (`adapt(strict=False)`
 3D preview, and its Apply (the details panel's and the screen's) is greyed with `model.unfit` on hover; `apply` refuses
 a pair whose verdict is not ok (`source_unsupported`) before saving any choice, mods on or off.
 
-A pair is offered only once it was checked to its end (BL-122): its preview built and exported
+A pair can be applied only once it was checked to its end (BL-122): its preview built and exported
 (`Services.costume_check`). The verdict is kept in the library's `costume-verdicts.json`, keyed by the build signature
 (the costume rule's version `gameassets/costume_rule.COSTUME_RULE` in place of the program's, so a new program build
 keeps them; the official bytes of both models, the save options; the newest 4000 kept; BL-134): the rule's refusals,
@@ -974,10 +974,12 @@ program errors and export failures are kept, so the pair is not offered again fo
 (`original_unavailable`, a locked file) is not kept. The preview builds in `built/previews/<signature>` share the key.
 `COSTUME_RULE` is bumped with any change to what the build writes, refuses or measures; `tests/test_costume_rule.py`
 pins the rule's sources to it. `model.costumes` reads the verdicts; `model.checkCostumes` checks the others in the
-background when the 3D tab shows or the switch opens, one pair per job; the switch opens at once and lists each pair as
-its check ends, keeping its scroll. Cards list only "ok" pairs, and the one already chosen whatever its verdict; a
-refused pair is no preview source (`family.get` drops it) and its `/asset/model` route answers 404 without building it
-again.
+background when the 3D tab shows or the switch opens, one pair per job. The switch opens at once with every costume
+of the student (BL-136); a card whose pair is not "ok" (not checked yet, past the stretch limit or refused) is listed
+for a preview only, Apply greyed with `model.unfit` on hover, and turns applicable as its check ends (the open switch
+re-renders when the saved verdicts arrive and after each check, keeping its scroll). A refused pair is no preview
+source (`family.get` drops it; the switch does not save it) and its `/asset/model` route answers 404 without building
+it again.
 
 Optimize Physics (BL-132) is an action of the switch's details panel on the official model and on another variant's
 costume (not on 3D mods). The switch itself builds a costume with Rule A only (`adapt(physics=False)`); the action
