@@ -21,9 +21,9 @@ test("the hint takes the description tooltip's numbers", () => {
   assert.deepEqual([style.padX, style.maxW, style.padTop, style.padBottom, style.fs, style.color], [62, 710, 46, 60, 42, "#6a7b8f/1.00"]);
 });
 
-for (const locale of LOCALES) test(`Auto-fit unavailable fits the tooltip above the control (${locale})`, () => {
+for (const locale of LOCALES) for (const key of ["model.unfit", "model.crossCharacter"]) test(`${key} fits the tooltip above the control (${locale})`, () => {
   globalThis.document.documentElement.lang = locale;
-  const style = hintStyle(PREFAB), words = text(locale, "model.unfit");
+  const style = hintStyle(PREFAB), words = text(locale, key);
   // the details panel's Apply (a row near the bottom) and the screen's Apply card (the row's right end)
   for (const button of [[100, 637, 147, 74], [1700, 980, 200, 70]]) {
     const hint = hintLayout(words, button, 1920, 1080, style);

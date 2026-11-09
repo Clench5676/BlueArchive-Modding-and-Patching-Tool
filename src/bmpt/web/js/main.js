@@ -87,6 +87,8 @@ const ctx = {
     location.hash = `#/student/${encodeURIComponent(family)}/${encodeURIComponent(variant)}${tab}`;
   },
   invalidateRoster: () => { rosterStale = true; Roster.invalidate(); },
+  // roster.list's data (read again once invalidated): Switch 3D Model's other students (BL-131)
+  roster: () => roster(),
   // the card before or after the shown variant (merged: family) in the roster's order, within its filters
   step: async (delta, family, variant) => {
     const data = await roster();

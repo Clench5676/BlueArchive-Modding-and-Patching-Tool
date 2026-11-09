@@ -86,6 +86,7 @@
 			"none": "None",
 			"failed": "3D model unavailable",
 			"unfit": "Auto-fit unavailable",
+			"crossCharacter": "Cross-character model, may break",
 			"action": {
 				"idle": "Idle",
 				"reaction": "Reaction",

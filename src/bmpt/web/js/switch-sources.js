@@ -69,7 +69,9 @@ export const overwrittenOf = (v, kind = "spr") => partsOf(v, kind).some((f) => !
 // exported for these files can be applied (``costumes``: model.costumes' verdicts, "ok" | "preview" | "refused" |
 // null): "ok" pairs are offered, the others (past the stretch limit, not checked yet, refused) for a preview only
 // (``previewOnly``), and a refused pair cannot be chosen as the preview either (``refused``, BL-122).
-export function candidates(fam, v, kind = "spr", costumes = null) {
+// Another student's model (BL-131, ``families``: roster.list's) is offered through the popup's search only
+// (crossCandidates), save the one already chosen, listed last (``cross``).
+export function candidates(fam, v, kind = "spr", costumes = null, families = null) {
   const own = coreOf(v, kind);
   const cores = (kind === "model" && v.modelCores?.length ? v.modelCores : [own]).map((core) => String(core).toLowerCase());
   const mods = fam.variants.flatMap((o) => o.modList || []).filter((m) => m.kind === kind)
@@ -78,6 +80,8 @@ export function candidates(fam, v, kind = "spr", costumes = null) {
   const others = !across ? [] : kind === "model"
     ? costumeCandidates(fam, v)
     : fam.variants.filter((o) => o.key !== v.key && !!coreOf(o, kind) && coreOf(o, kind) !== own);
+  const chosen = kind === "model" ? new Set([configuredKey(v, kind), sourceKey(v?.previewSources?.model)]) : null;
+  const chosenCross = kind === "model" && across ? crossModels(families, v).filter((o) => chosen.has(`v:${o.key}`)) : [];
   const mod = (m) => ({ key: `m:${m.id}`, kind: "mod", id: m.id, mod: m, core: null, origin: fam.variants.find((o) => o.key === m.target) || null });
   const list = [
     { key: "self", kind: "self", core: own, variant: v },
@@ -87,10 +91,11 @@ export function candidates(fam, v, kind = "spr", costumes = null) {
       ...(kind === "model" && costumes?.[o.key] !== "ok" ? { previewOnly: true } : {}),
       ...(kind === "model" && costumes?.[o.key] === "refused" ? { refused: true } : {}) })),
     ...(across && kind === "spr" ? mods.filter((m) => m.target !== v.key).map(mod) : []),
+    ...chosenCross.map((o) => crossCard(o, costumes)),
   ];
   const stuck = overwrittenOf(v, kind);
   return list.map((c) => {
-    const restorable = c.kind === "mod" ? true : !overwrittenOf(c.variant, kind);
+    const restorable = c.cross || c.kind === "mod" ? true : !overwrittenOf(c.variant, kind);
     const greyed = (c.kind === "self" && (!own || stuck)) || (c.kind === "variant" && !restorable);
     return { ...c, restorable, greyed };
   });
@@ -103,6 +108,43 @@ export function costumeCandidates(fam, v) {
   if (!own) return [];
   return fam.variants.filter((o) => o.key !== v.key && !!(coreOf(o, "model") || o.fieldModel) && coreOf(o, "model") !== own);
 }
+
+// --- another student's model (BL-131) ---
+// The most cards a search adds to Switch 3D Model: the pairs one model.costumes or model.checkCostumes call takes
+// (webui/api.py costume_keys).
+export const CROSS_LIMIT = 64;
+// the other students' variants (roster.list's families) whose model a variant's 3D model may take as a costume: any
+// with a battle model or a field-mode or NPC one (BL-127)
+export function crossModels(families, v) {
+  if (!coreOf(v, "model")) return [];
+  return (families || []).flatMap((f) => f.variants || [])
+    .filter((o) => o.family !== v.family && o.key !== v.key && !!(coreOf(o, "model") || o.fieldModel));
+}
+// Another student's model is a deliberate choice: past the stretch limit ("preview") it is applied like "ok"; before its
+// verdict lands it waits (``pending``), and a refused one is shown for a preview only.
+export const crossCard = (o, costumes = null) => {
+  const verdict = costumes?.[o.key];
+  return { key: `v:${o.key}`, kind: "variant", core: coreOf(o, "model"), variant: o, cross: true, restorable: true, greyed: false,
+    ...(verdict === "ok" || verdict === "preview" ? {} : verdict == null ? { pending: true } : { previewOnly: true, refused: true }) };
+};
+// the cards a search adds after the popup's own (``exclude``: their keys): the other students' models ``match`` finds,
+// refused ones left out, in ``compare``'s order (the roster's name order), the first 64
+export function crossCandidates(families, v, costumes = null, { match = () => true, compare = null, exclude = [] } = {}) {
+  const skip = new Set(exclude);
+  const hits = crossModels(families, v).filter((o) => !skip.has(`v:${o.key}`) && costumes?.[o.key] !== "refused" && match(o));
+  if (compare) hits.sort(compare);
+  return hits.slice(0, CROSS_LIMIT).map((o) => crossCard(o, costumes));
+}
+// what keeps a 3D candidate from being applied by its costume check: null, "pending" (another student's model before
+// its verdict) or "unfit" (refused, or the student's own model past the stretch limit: shown, never applied, BL-122)
+export function costumeHold(fam, v, key, costumes) {
+  if (typeof key !== "string" || !key.startsWith("v:")) return null;
+  const other = key.slice(2), verdict = costumes?.[other];
+  if (fam.variants.some((o) => o.key === other)) return verdict && verdict !== "ok" ? "unfit" : null;
+  return verdict === "ok" || verdict === "preview" ? null : verdict == null ? "pending" : "unfit";
+}
+
+const sourceKey = (source) => (typeof source === "string" && source.startsWith("variant:") ? `v:${source.slice(8)}` : null);
 
 // a configured source (family.get's configured[kind]) as a candidate key; null when the kind is not configured
 export function configuredKey(v, kind = "spr") {
@@ -161,9 +203,9 @@ export function previewBase(v, kind = "spr", enabled = true, variants = []) {
 }
 
 // Start on the saved choice, including a pending or failed install. Keep Apply/Save labels.
-export function popupMode(fam, v, kind = "spr", enabled = true) {
+export function popupMode(fam, v, kind = "spr", enabled = true, families = null) {
   const set = configuredKey(v, kind);
-  const listed = candidates(fam, v, kind);
+  const listed = candidates(fam, v, kind, null, families);
   const want = previewKey(v, kind, enabled);
   const start = listed.some((c) => c.key === want) ? want : "self";
   return { start, button: "popup.save", set };

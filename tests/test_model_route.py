@@ -142,15 +142,18 @@ def test_prefab_overrides_keep_every_dated_prefab_bundle_of_a_slot():
 
 
 class CostumeCatalog:
-    """Hina's family: her model, the Dress's, the Pajamas' field-mode model; Momoi elsewhere."""
+    """Hina's family: her model, the Dress's, the Pajamas' field-mode model; Momoi elsewhere, and Midori without a
+    model."""
     variants = {"hina": ("hina_original", None, "hina"), "ch0230": ("ch0230", None, "hina"),
-                "np0009": (None, "np0009", "hina"), "momoi": ("momoi_original", None, "momoi")}
+                "np0009": (None, "np0009", "hina"), "momoi": ("momoi_original", None, "momoi"),
+                "midori": (None, None, "momoi")}
+    portraits = {"hina": "hina_spr", "ch0230": "ch0230_spr", "momoi": "momoi_spr"}
 
     def variant(self, key):
         if key not in self.variants:
             raise ServiceError("catalog_variant_not_found", key=key)
         model, field, family = self.variants[key]
-        return SimpleNamespace(key=key, model=model, field_model=field, family=family, spr=None)
+        return SimpleNamespace(key=key, model=model, field_model=field, family=family, spr=self.portraits.get(key))
 
 
 def _costume_services(tmp_path, outcomes, export_error=None):
@@ -230,24 +233,26 @@ def test_a_costume_past_the_stretch_limit_is_shown_for_a_preview_only(tmp_path):
 
 
 def test_costume_rpcs_offer_only_pairs_checked_to_their_end(tmp_path):
-    outcomes = {"np0009": "parts", "ch0230": ServiceError("source_unsupported", source="shader outside the always-loaded bundles")}
+    outcomes = {"np0009": "parts", "momoi": "parts",
+                "ch0230": ServiceError("source_unsupported", source="shader outside the always-loaded bundles")}
     s, saved, built, _ = _costume_services(tmp_path, outcomes)
     api = build_api(s)
     try:
-        others = ["ch0230", "np0009", "momoi", "hina"]
+        # another student's model is a source too (BL-131, the switch's search); a variant without one, itself not
+        others = ["ch0230", "np0009", "momoi", "hina", "midori"]
         assert api.call("model.costumes", {"variant": "hina", "others": others})["result"] == {
-            "ch0230": None, "np0009": None, "momoi": "refused", "hina": "refused"}  # another family, itself
-        job = api.call("model.checkCostumes", {"variant": "hina", "others": ["ch0230", "np0009", "momoi"]})["result"]
+            "ch0230": None, "np0009": None, "momoi": None, "hina": "refused", "midori": "refused"}
+        job = api.call("model.checkCostumes", {"variant": "hina", "others": ["ch0230", "np0009", "momoi", "midori"]})["result"]
         assert s.jobs.wait(job, 10)
-        assert s.jobs.get(job).result == {"ch0230": "refused", "np0009": "ok", "momoi": "refused"}
+        assert s.jobs.get(job).result == {"ch0230": "refused", "np0009": "ok", "momoi": "ok", "midori": "refused"}
         assert api.call("model.costumes", {"variant": "hina", "others": others})["result"] == {
-            "ch0230": "refused", "np0009": "ok", "momoi": "refused", "hina": "refused"}
-        assert sorted(built) == ["ch0230", "np0009"]
+            "ch0230": "refused", "np0009": "ok", "momoi": "ok", "hina": "refused", "midori": "refused"}
+        assert sorted(built) == ["ch0230", "momoi", "np0009"]
         # a refused pair is no preview source, and its preview is not built again
         import pytest
         with pytest.raises(KeyError):
             s.asset("model/hina.glb", {"source": "variant:ch0230"})
-        assert sorted(built) == ["ch0230", "np0009"]
+        assert sorted(built) == ["ch0230", "momoi", "np0009"]
         for bad in ({"variant": "hina", "others": "np0009"}, {"variant": "hina", "others": ["x"] * 65},
                     {"variant": "", "others": []}):
             assert api.call("model.costumes", bad)["error"]["code"] == "bad_params"
@@ -277,9 +282,46 @@ def test_optimize_physics_runs_as_a_library_job_on_the_official_model_or_a_costu
         for bad in ({"variant": "hina", "source": "", "name": ""}, {"variant": "hina", "source": "official", "name": "x" * 201},
                     {"variant": "", "source": "official", "name": ""}):
             assert api.call("model.optimize", bad)["error"]["code"] == "bad_params"
-        # another family's costume, a mod: not a source of Optimize Physics
-        for source in ("variant:momoi", "mod:abc"):
+        # a variant without a model, a mod: not a source of Optimize Physics; another student's model is (BL-131)
+        for source in ("variant:midori", "mod:abc"):
             assert api.call("model.optimize", {"variant": "hina", "source": source, "name": ""})["error"]["code"] == "source_unsupported"
         assert len(asked) == 2
+        job = api.call("model.optimize", {"variant": "hina", "source": "variant:momoi", "name": "Momoi"})["result"]
+        assert s.jobs.wait(job, 10) and asked[-1] == ("hina", "variant:momoi", "Momoi", "pin")
+    finally:
+        s.close()
+
+
+def test_another_students_model_is_a_preview_source_and_past_the_stretch_limit_still_offered(tmp_path):
+    """BL-131: a model of another student, chosen through the switch's search, stays a valid preview source (a
+    deliberate choice), and its "preview" verdict is offered like "ok"; the portrait still takes only the student's
+    own variants."""
+    outcomes = {"momoi": "parts"}
+    s, saved, built, _ = _costume_services(tmp_path, outcomes)
+    preview = s.library.costume_preview
+
+    def unfit(target, other):  # past the stretch limit: saved as "preview" while the preview builds
+        saved[other] = {"ok": False, "preview": True, "reason": "stretch", "detail": {}}
+        return preview(target, other)
+
+    s.library.costume_preview = unfit
+    s.library.current_pin = lambda: SimpleNamespace(key="pin")
+    api = build_api(s)
+    try:
+        job = api.call("model.checkCostumes", {"variant": "hina", "others": ["momoi"]})["result"]
+        assert s.jobs.wait(job, 10) and s.jobs.get(job).result == {"momoi": "preview"}
+        assert api.call("model.costumes", {"variant": "hina", "others": ["momoi"]})["result"] == {"momoi": "preview"}
+        assert s.asset("model/hina.glb", {"source": "variant:momoi"}).body == b"glTF"
+        sources = api.call("ui.preview", {"variant": "hina", "kind": "model", "source": "variant:momoi"})
+        assert sources["result"]["model"] == "variant:momoi"
+        # the portrait: the student's own variants only, as before
+        assert api.call("ui.preview", {"variant": "hina", "kind": "spr", "source": "variant:ch0230"})["result"]["spr"] == "variant:ch0230"
+        assert api.call("ui.preview", {"variant": "hina", "kind": "spr", "source": "variant:momoi"})["error"]["code"] == "bad_params"
+        # a refusal stays one for another student's model too
+        saved["momoi"] = {"ok": False, "reason": "static model", "detail": {}}
+        assert api.call("model.costumes", {"variant": "hina", "others": ["momoi"]})["result"] == {"momoi": "refused"}
+        import pytest
+        with pytest.raises(KeyError):
+            s.asset("model/hina.glb", {"source": "variant:momoi"})
     finally:
         s.close()
