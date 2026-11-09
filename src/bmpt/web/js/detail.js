@@ -233,7 +233,7 @@ function resetOthers() {
 function readOthers() {
   if (otherStudents || !ctx?.roster) return Promise.resolve(otherStudents);
   const epoch = othersEpoch;
-  return (othersLoad ||= Promise.resolve().then(() => ctx.roster())
+  return (othersLoad ||= Promise.resolve().then(() => ctx.roster({ stale: true }))
     .then((data) => epoch === othersEpoch ? (otherStudents = data?.families || null) : null)
     .catch((err) => { console.error("Roster read failed", err); return null; })
     .finally(() => { if (epoch === othersEpoch) othersLoad = null; }));
