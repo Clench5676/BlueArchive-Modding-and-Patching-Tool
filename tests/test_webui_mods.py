@@ -1105,12 +1105,12 @@ def test_background_add_replaces_a_scan_it_invalidates(env, monkeypatch, scan_fi
     entries = _View.entries
     scans = []
 
-    def blocked(view, pins, cancel=None, cores=None):
+    def blocked(view, pins, cancel=None, cores=None, **options):
         scans.append(cores)
         if len(scans) == 1:
             entered.set()
             assert release.wait(5)
-        return entries(view, pins, cancel, cores)
+        return entries(view, pins, cancel, cores, **options)
 
     monkeypatch.setattr(_View, 'entries', blocked)
     scanned = env.s.scanner._on_done
