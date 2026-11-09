@@ -1,6 +1,6 @@
 {
   "baseline": "65e901da1a8f7a9e5e80cf0e5f499cbbb0b45e58",
-  "upstream_reference": "62ec94719669d1f1568ee989eee80f118849ddb2",
+  "upstream_reference": "7374549f0e926f3ad7f4bbef947618aa2436cbd2",
   "engine_modules": {
     "src/ba_modding_toolkit/__init__.py": {
       "blob": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
@@ -78,9 +78,9 @@
       "masked_import_lines_sha256": "83d12865f0eea2ac6b726fd4ad6a777943eec264bc28628775ae8f3475dd25cd"
     },
     "src/ba_modding_toolkit/core/extraction.py": {
-      "blob": "33107ab6864f0b56514afa11204516eb5a18b35d",
-      "non_import_ast_sha256": "2d808cd19a7127060bbb002c5d2199d0fa8a8fdbb28f9342fb9a52ab2a6cb08c",
-      "masked_import_lines_sha256": "b7d841888345d573e66f8ae11dcc72830ba9408c602cab35b30b92bd24639e79"
+      "blob": "cdccfe34c22c5b6063ecb56343355fdcc60aac27",
+      "non_import_ast_sha256": "1b81413b4a12f3c1b868a37a03201d33d1cd699fd519ddf985b5beb79464d127",
+      "masked_import_lines_sha256": "cbb411505cbb700ca9a88d7bda18e5618c7aca72a8415546e04c0372f2f42fa0"
     },
     "src/ba_modding_toolkit/core/introspect.py": {
       "blob": "57bff22045d4db6e6a4204757ef2860d58da0320",
@@ -88,14 +88,14 @@
       "masked_import_lines_sha256": "0774a24a5f010d5a7f00b34bf3dd1b22c0f1d9149b8b44d9485ab49333b25d4e"
     },
     "src/ba_modding_toolkit/core/mod_install.py": {
-      "blob": "2362c65943244ac028fb4d9492bb52c3e65d894c",
-      "non_import_ast_sha256": "17a9981738081ae09aac37bc44c7f3319f1b9c4bca6592e3dd90f5978a73ea60",
-      "masked_import_lines_sha256": "9b8ec937a8725cd9d042757569f7a427557674addb11e7254eee07797efdecab"
+      "blob": "b4c9cbae30c35f918be6aeb837114b64f531666e",
+      "non_import_ast_sha256": "814418b1561a35334b15f7f1996bb349f8ab61f30b16ffde9e225fcdf465a411",
+      "masked_import_lines_sha256": "e05f21841e9456eded362b7d09c2584649f0c35007fe4a900c64779efe26933c"
     },
     "src/ba_modding_toolkit/core/mod_update.py": {
-      "blob": "8dc99475780167f494c24e0832d9218139f0a9b4",
-      "non_import_ast_sha256": "50158266f6597adddcd5a27e8ba307557c27a9d0cbf25a3bce7a5509c6bac797",
-      "masked_import_lines_sha256": "5312f7d65d72eceb0ec253f67aef9f5c8d3b737cf240e24ea0d06b84e9fedfd0"
+      "blob": "df1a5c980343059f27feca8a9ecc4f73186ab489",
+      "non_import_ast_sha256": "0c8d71270d6d137e427dbb4e1cca27c8adf99486a4f3f1b5175171c96653c323",
+      "masked_import_lines_sha256": "4a7002da0cadd9bd5cebdb4e2a5aa6563712f431a3da42650380066f6cb83cb3"
     },
     "src/ba_modding_toolkit/core/packing.py": {
       "blob": "d7b2b72f5d286b59ad630d4ac148a6d208547dc1",
@@ -103,9 +103,9 @@
       "masked_import_lines_sha256": "77fb8d5456afc7043675df0ae44360d854a1171b38734fdf3264fb592e19fe0e"
     },
     "src/ba_modding_toolkit/core/preview.py": {
-      "blob": "38da7c54f114fabd4131fb86f85f0ab78250d4da",
-      "non_import_ast_sha256": "eaa32283fb61ea664d8bfd34cb747f510a8f0018384493efc303494df8fe5bf2",
-      "masked_import_lines_sha256": "df33b6446820e67719a894b14b475e7a1b88f0895fa627ff63d5cf1805b893e6"
+      "blob": "46b0249932ca31203581f9a49fc3de12c88148c6",
+      "non_import_ast_sha256": "b2d4399bdb56210f72529e2d713f861c846f7cd3b1421daea223b5a08c0f6d33",
+      "masked_import_lines_sha256": "f71d8e2d2584cd2912eabb7befa5d777f15409fd7bdbdbea93910cd89f84fdce"
     },
     "src/ba_modding_toolkit/core/report.py": {
       "blob": "72db460a3f1c4ee662710f76097493c4a51fca49",
@@ -287,9 +287,9 @@
       "masked_import_lines_sha256": "f8ad9c004abedeea423dc6444032a14b8d5534e1efed01749fd4f505e9bdd911"
     },
     "src/ba_modding_toolkit/utils/__init__.py": {
-      "blob": "55cd272e8fca06597daf7ab43d74b5df3785e8ab",
-      "non_import_ast_sha256": "2a5a77a5135af9bc495a1c837f7edf5ae77ebaadf9bbc947adb467d6dd729651",
-      "masked_import_lines_sha256": "ea988ee03247b3b04ccf3b6a9d7548c22aa5d7d798c055268b500d8fdc27fcac"
+      "blob": "0db4ab419efe876d85ac141cfea0d030490b9d51",
+      "non_import_ast_sha256": "3b3ff3d602930b212f02d484a0de420bbb1de1627157805388299743001d4c2f",
+      "masked_import_lines_sha256": "27b1b12f28c36437e61ebe2d62dcd24e53eedf51a0affa845b2b42a48cae333a"
     },
     "src/ba_modding_toolkit/utils/about.py": {
       "blob": "2fd5cc6b77d7dd08e70b79ccccb992a553ff6afa",
@@ -297,9 +297,9 @@
       "masked_import_lines_sha256": "d400358eaab1d78a03fab9934a346998697f61bacde88b737e5c7844d56cc463"
     },
     "src/ba_modding_toolkit/utils/common.py": {
-      "blob": "59d745e271c86b6fbb39721aaaf07091ddebe291",
-      "non_import_ast_sha256": "42b492c48bc801b2dda9b946fd315cf7afee5b53e78999693c6e99647c82a067",
-      "masked_import_lines_sha256": "db27bce0844b904bdf242574ff642f448fbfe37e8b0e465dc46c88d9f64c2a1e"
+      "blob": "4be0646394b032570a0488b256cb51b320a94f13",
+      "non_import_ast_sha256": "82d7373f4146f6b8a86f650698652176b10cdf5bae21cdf1f290ba883bb5399b",
+      "masked_import_lines_sha256": "a5ddce0dcdee1f284db42bffff6e635ab850a578ffb735cdcfcb5d89426bce0f"
     },
     "src/ba_modding_toolkit/utils/crc.py": {
       "blob": "16422419578cad11fc5abb7ae006065cc33b5eac",
@@ -374,13 +374,13 @@
     },
     {
       "file": "src/ba_modding_toolkit/core/mod_install.py",
-      "line": 16,
+      "line": 14,
       "original": "from .. import devmode",
       "import": "from bmpt import devmode"
     },
     {
       "file": "src/ba_modding_toolkit/core/mod_update.py",
-      "line": 8,
+      "line": 7,
       "original": "from ..errors import ServiceError",
       "import": "from bmpt.errors import ServiceError"
     },
