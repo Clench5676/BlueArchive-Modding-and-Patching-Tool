@@ -454,6 +454,131 @@ def test_official_costume_takes_its_own_materials_on_a_body_drawn_from_two_mater
                                          "Hihumi_Original_EyeMouth", "Hihumi_Original_Hair", "Hihumi_Original_Body"]
 
 
+def _cross_build(view, tmp_path, source):
+    """Azusa's slot carrying ``source``'s costume as another student's (BL-131: non-strict, with its halo), saved with
+    the CRC fix: the written files, the CAB index over them, the official graph and the read-back graph."""
+    from ba_modding_toolkit.bundle import Bundle
+    from ba_modding_toolkit.models import SaveOptions
+    from ba_modding_toolkit.naming import parse_filename
+    from ba_modding_toolkit.utils import compute_crc32
+    from bmpt.gameassets.discovery import cab_names
+    from bmpt.gameassets.model import BundleGraph
+
+    files, index = view
+    slot = _slot(files, "azusa_original")
+    sources = [p for p in files if re.match(rf"character-{source}-_mxload", p.name)]
+    result = ma.adapt(index=index, resolver=None, target_files=slot, target_dev="azusa_original", source_files=sources,
+                      source_dev=source, open_writable=Bundle.load, strict=False, halo=True)
+    out = tmp_path / "out"
+    out.mkdir()
+    for path, bundle in result.changed.items():
+        ok, message = bundle.save(out / path.name, SaveOptions(perform_crc=True, compression="lz4"))
+        assert ok, message
+    written = sorted(out.glob("*.bundle"))
+    assert written and all(compute_crc32(p) == int(parse_filename(p.name).crc) for p in written)
+    adapted = dict(index)
+    for path in written:
+        for cab in cab_names(path):
+            adapted[cab] = path
+    return slot, sources, written, adapted, BundleGraph(index), BundleGraph(adapted)
+
+
+def _official_objects_kept(slot, written, allowed):
+    """Every object of the official files is still there, byte for byte, but those of ``allowed`` types; the new
+    objects by (file, path id) with their types."""
+    import UnityPy
+
+    new = {}
+    for path in written:
+        before = {o.path_id: o for o in UnityPy.load(str(next(p for p in slot if p.name == path.name))).objects}
+        after = {o.path_id: o for o in UnityPy.load(str(path)).objects}
+        assert before.keys() <= after.keys()
+        changed = {before[pid].type.name for pid in before if before[pid].get_raw_data() != after[pid].get_raw_data()}
+        assert changed <= allowed, changed
+        new.update({(after[pid].assets_file.name.lower(), pid): after[pid].type.name for pid in after.keys() - before.keys()})
+    return new
+
+
+@official
+def test_official_cross_costume_carries_the_source_halo(view, tmp_path):
+    """BL-131: another student's costume (Azusa <- Yukino's NPC model, ch0171_enemy) carries its halo: Yukino's halo
+    mesh (streamed from its bundle's resource file, taken along), material and texture are new objects in the slot's
+    files, Azusa's halo renderer in every prefab of the slot draws them where Yukino's draws her own (her extra level
+    folded into its node), and the follower takes Yukino's offset. Azusa's own halo objects stay as they were; the slot
+    exports, the halo with it."""
+    from bmpt.gameassets.model import _key, _prefabs, export_chibi, model_root, mpos, read_mesh
+
+    slot, sources, written, adapted, official, graph = _cross_build(view, tmp_path, "ch0171_enemy")
+    new = _official_objects_kept(slot, written, {"SkinnedMeshRenderer", "MeshRenderer", "MeshFilter", "AssetBundle",
+                                                 "Transform", "MonoBehaviour"})
+    o_prefabs = _prefabs(official, [p for p in slot if p.name.startswith("character-")])
+    before = ma.halo_of(ma.Skeleton.of(official, o_prefabs[ma.choose_prefab(o_prefabs, "azusa_original")].deref()))
+    s = ma.Skeleton.of(official, model_root(official, sources, "ch0171_enemy")[0])
+    source = ma.halo_of(s)
+    assert before.shape == source.shape == "single"
+    assert s.nodes[source.node].path == "HaloRoot/CH0171_Enemy_Halo/CH0171_Halo"  # an extra level
+    s_world = s.world()
+    placed = np.linalg.inv(s_world[source.root]) @ s_world[source.node]
+    prefab_files = [p for p in written if p.name.startswith("character-")]
+    t_prefabs = _prefabs(graph, prefab_files)
+    for name, pointer in t_prefabs.items():
+        if "azusa_original" not in name:
+            continue
+        t = ma.Skeleton.of(graph, pointer.deref())
+        halo = ma.halo_of(t)
+        assert halo.shape == "single" and t.nodes[halo.node].path == "HaloRoot/Azusa_Original_Halo", name
+        # new objects: Yukino's halo mesh with its vertex data, her materials and the texture they draw
+        assert new.get(_key(halo.mesh)) == "Mesh" and _key(halo.mesh) != _key(before.mesh)
+        assert halo.mesh.peek_name() == source.mesh.peek_name()
+        got, want = read_mesh(halo.mesh.read()), read_mesh(source.mesh.read())
+        assert np.allclose(got.vertices, want.vertices) and got.triangles == want.triangles and got.uv0 == want.uv0
+        assert [new.get(_key(m)) for m in halo.materials] == ["Material"] * len(source.materials)
+        assert [graph.tree(m)["m_Name"] for m in halo.materials] == [official.tree(m)["m_Name"] for m in source.materials]
+        textures = [graph.deref(m, v["m_Texture"]) for m in halo.materials
+                    for _, v in graph.tree(m)["m_SavedProperties"]["m_TexEnvs"] if v["m_Texture"]["m_PathID"]]
+        assert textures and all(new.get(_key(texture)) == "Texture2D" for texture in textures)
+        # drawn where Yukino's is, from the slot's own nodes; the follower takes her offsets
+        world = t.world()
+        assert np.allclose(np.linalg.inv(world[halo.root]) @ world[halo.node], placed, atol=1e-5)
+        for field in ma.FOLLOWER_OFFSETS:
+            assert graph.tree(halo.follower)[field] == pytest.approx(official.tree(source.follower)[field])
+    data = export_chibi(graph, prefab_files, "azusa_original")
+    doc = json.loads(data[20:20 + struct.unpack_from("<I", data, 12)[0]])
+    names = {m["name"] for m in doc["meshes"]}
+    assert source.mesh.peek_name() in names and before.mesh.peek_name() not in names and doc["animations"]
+    follower = doc["extras"]["haloFollower"]
+    assert follower["relativePosition"] == pytest.approx(
+        list(mpos([official.tree(source.follower)["TargetRelativePosition"][k] for k in "xyz"])))
+
+
+@official
+def test_official_cross_costume_without_a_halo_hides_the_slots(view, tmp_path):
+    """BL-131: another student's costume from a model without a halo (CH9999) hides the slot's: its renderer is turned
+    off and draws no mesh, so a clip that turns it on shows nothing either; its nodes and objects stay."""
+    from bmpt.gameassets.model import _key, _prefabs, export_chibi
+
+    slot, sources, written, adapted, official, graph = _cross_build(view, tmp_path, "ch9999")
+    s_prefabs = _prefabs(official, sources)
+    assert ma.halo_of(ma.Skeleton.of(official, s_prefabs[ma.choose_prefab(s_prefabs, "ch9999")].deref())).shape == "none"
+    new = _official_objects_kept(slot, written, {"SkinnedMeshRenderer", "MeshRenderer", "MeshFilter", "AssetBundle",
+                                                 "Transform", "MonoBehaviour"})
+    assert "Mesh" in new.values()  # the costume's
+    o_prefabs = _prefabs(official, [p for p in slot if p.name.startswith("character-")])
+    before = ma.halo_of(ma.Skeleton.of(official, o_prefabs[ma.choose_prefab(o_prefabs, "azusa_original")].deref()))
+    prefab_files = [p for p in written if p.name.startswith("character-")]
+    for name, pointer in _prefabs(graph, prefab_files).items():
+        if "azusa_original" not in name:
+            continue
+        t = ma.Skeleton.of(graph, pointer.deref())
+        node = t.nodes[t.first("Azusa_Original_Halo")]
+        renderer, filt = graph.component(node.go, "MeshRenderer"), graph.component(node.go, "MeshFilter")
+        assert not graph.tree(renderer)["m_Enabled"] and not graph.tree(filt)["m_Mesh"]["m_PathID"], name
+        assert ma.halo_of(t).shape == "no mesh"
+    data = export_chibi(graph, prefab_files, "azusa_original")
+    doc = json.loads(data[20:20 + struct.unpack_from("<I", data, 12)[0]])
+    assert before.mesh.peek_name() not in {m["name"] for m in doc["meshes"]} and doc["animations"]
+
+
 def _locks_free() -> list[str]:
     """The bundle path locks another thread cannot take at once (held by a reader that never closed)."""
     import threading

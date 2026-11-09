@@ -26,7 +26,12 @@ own:
 - the hem (:func:`hems`, rules in ``model_hems``): cloth around the legs that stays rigid gets new skin weights on the
   pelvis, thighs and calves, or (Rule B, ``model_skirts``) its skirt chains become new bones of the slot with rotation
   curves in the slot's clips, by the rule that keeps the legs inside best under the slot's own clips within the slot's
-  own stretch range; rigid weights stay where no rule does better.
+  own stretch range; rigid weights stay where no rule does better;
+- the halo (:func:`halo_of`, BL-131), for another student's costume only (``adapt``'s ``halo``): the source's halo mesh,
+  materials and textures are added like the costume's and the slot's halo renderer draws them where the source draws
+  its own, its follower offset taken from the source; a source without a halo hides the slot's. Any other halo shape
+  (several renderers, particles, a skinned halo) keeps the slot's halo. A costume of the same student keeps the slot's
+  halo as it is.
 
 The caller supplies official copies of the files (``adapt``'s ``index``) and saves the changed bundles.
 """
@@ -1400,6 +1405,131 @@ def skirt_curves(skeleton: Skeleton, skirt: Skirt, tree: dict, key: tuple[str, i
     return True
 
 
+# --- the halo (BL-131) ---------------------------------------------------------------------------------------------
+
+@dataclass
+class Halo:
+    """A prefab's halo: the node its ``FxFollower`` keeps beside the head (HaloRoot) and the one unskinned renderer
+    below it (``shape`` "single"). ``shape`` is "none" for a prefab without a halo; anything else names why the halo
+    is not one renderer that can be carried (several renderers, particles, a skinned halo, a halo with no follower)."""
+
+    shape: str
+    root: int | None = None      # the followed node
+    follower: Any = None         # its FxFollower
+    node: int | None = None      # the renderer's node, below the followed one
+    renderer: Any = None         # the MeshRenderer
+    mesh: Any = None             # its MeshFilter's mesh
+    materials: list[Any] = field(default_factory=list)
+
+
+@dataclass
+class HaloChange:
+    """What the slot's prefabs change on their halo (:func:`_halo_change`): the renderer at ``path`` drawing ``mesh``
+    (the slot's halo mesh) draws ``new_mesh`` with ``materials`` at ``local`` (position, rotation, scale), and the
+    follower at ``root`` takes ``follower``'s offsets; with ``new_mesh`` None it draws nothing."""
+
+    path: str
+    root: str
+    mesh: tuple[str, int]
+    new_mesh: int | None = None
+    materials: list[int] = field(default_factory=list)
+    local: tuple | None = None
+    follower: dict[str, Any] | None = None
+
+
+FOLLOWER_OFFSETS = ("TargetRelativePosition", "TargetRelativeRotation")
+
+
+def halo_of(skeleton: Skeleton) -> Halo:
+    """The halo of a prefab (see :class:`Halo`): the node an ``FxFollower`` moves that has something drawn below it.
+    Renderers with halo shading outside it (Aris's weapon effect) are not its halo."""
+    g = skeleton.graph
+    # (Rule B's new bones have no objects yet)
+    components = [[o for c in g.tree(node.go)["m_Component"] if (o := g.deref(node.go, c["component"])) is not None]
+                  if node.go is not None else [] for node in skeleton.nodes]
+
+    def follower(i: int) -> Any:
+        return next((o for o in components[i] if o.type.name == "MonoBehaviour" and g.script(o) == "FxFollower"), None)
+
+    def drawn(i: int) -> list[Any]:
+        return [o for o in components[i] if o.type.name.endswith("Renderer") or o.type.name == "ParticleSystem"]
+
+    def below(i: int) -> list[int]:
+        return [i] + skeleton.descendants(i)
+
+    roots = [i for i in range(len(skeleton.nodes)) if follower(i) is not None and any(drawn(j) for j in below(i))]
+    if not roots:
+        shaded = any(o.type.name in ("MeshRenderer", "SkinnedMeshRenderer") and "halo" in (
+            _shader_kind(g, g.deref(o, m)) for m in g.tree(o)["m_Materials"]) for objs in components for o in objs)
+        return Halo("halo without a follower" if shaded else "none")
+    if len(roots) > 1:
+        return Halo("several followed nodes")
+    root = roots[0]
+    found = [(j, o) for j in below(root) for o in drawn(j)]
+    if len(found) != 1 or found[0][1].type.name != "MeshRenderer":
+        return Halo(", ".join(sorted(o.type.name for _, o in found)))
+    node, renderer = found[0]
+    if node == root:
+        return Halo("renderer on the followed node")
+    filt = next((o for o in components[node] if o.type.name == "MeshFilter"), None)
+    mesh = g.deref(filt, g.tree(filt)["m_Mesh"]) if filt is not None else None
+    if mesh is None:
+        return Halo("no mesh")
+    materials = [g.deref(renderer, m) for m in g.tree(renderer)["m_Materials"]]
+    if not materials or any(m is None for m in materials):
+        return Halo("material not found")
+    return Halo("single", root, follower(root), node, renderer, mesh, materials)
+
+
+def _mesh_tree(mesh: Any) -> dict:
+    """A mesh's tree holding its vertex data: a mesh that streams it from its bundle's resource file (Yukino's halo)
+    takes it along, so the copy reads in any file."""
+    tree = mesh.read_typetree()
+    stream = tree.get("m_StreamData") or {}
+    if stream.get("size"):
+        from UnityPy.helpers.ResourceReader import get_resource_data
+
+        tree["m_VertexData"]["m_DataSize"] = get_resource_data(stream["path"], mesh.assets_file, stream["offset"],
+                                                               stream["size"])
+        tree["m_StreamData"] = {"offset": 0, "size": 0, "path": ""}
+    return tree
+
+
+def _halo_change(t_skeleton: Skeleton, s_skeleton: Skeleton, carry_mesh: Callable[[Any], int],
+                 carry_material: Callable[[Any], int], names: tuple[str, str]) -> HaloChange | None:
+    """The slot's halo for another student's costume: the source's carried (its mesh and materials added by
+    ``carry_mesh`` and ``carry_material``) and placed below the slot's followed node as the source's is below its own,
+    the levels between folded into the renderer's node; a source without a halo hides the slot's. None (the slot's
+    halo kept, logged) for any other shape of either."""
+    t, s = halo_of(t_skeleton), halo_of(s_skeleton)
+    s_name, t_name = names
+    if t.shape != "single" or s.shape not in ("single", "none"):
+        if t.shape != "none":
+            logger.info("Costume of %s on %s: the slot's halo kept (slot: %s, source: %s)", s_name, t_name, t.shape,
+                        s.shape)
+        return None
+    change = HaloChange(t_skeleton.nodes[t.node].path, t_skeleton.nodes[t.root].path, _key(t.mesh))
+    if s.shape == "none":
+        logger.info("Costume of %s on %s: the source has no halo, the slot's is hidden", s_name, t_name)
+        return change
+    s_world, t_world = s_skeleton.world(), t_skeleton.world()
+    placed = np.linalg.inv(s_world[s.root]) @ s_world[s.node]
+    parent = t_skeleton.nodes[t.node].parent
+    local = np.linalg.inv(np.linalg.inv(t_world[t.root]) @ t_world[parent]) @ placed
+    scale = np.linalg.norm(local[:3, :3], axis=0)
+    rotation = local[:3, :3] / scale
+    if np.linalg.det(rotation) < 0:  # a mirrored halo: the mirror goes into the scale
+        scale[0], rotation[:, 0] = -scale[0], -rotation[:, 0]
+    quaternion = ms.quaternion(rotation)
+    change.materials = [carry_material(m) for m in s.materials]
+    change.new_mesh = carry_mesh(s.mesh)
+    change.local = (local[:3, 3], quaternion, scale)
+    follower = s_skeleton.graph.tree(s.follower)
+    change.follower = {name: copy.deepcopy(follower[name]) for name in FOLLOWER_OFFSETS if name in follower}
+    logger.info("Costume of %s on %s: halo %s carried", s_name, t_name, s.mesh.peek_name())
+    return change
+
+
 # --- writing -------------------------------------------------------------------------------------------------------
 
 class _Writer:
@@ -1518,21 +1648,24 @@ def choose_prefab(prefabs: Mapping[str, Any], dev: str) -> str:
 
 def adapt(*, index: Mapping[str, Path], resolver: Callable | None, target_files: list[Path], target_dev: str,
           source_files: list[Path], source_dev: str, open_writable: Callable[[Path], Any], strict: bool = True,
-          physics: bool = False) -> Result:
+          physics: bool = False, halo: bool = False) -> Result:
     """The changed bundles of ``target_files`` (the slot, official copies) carrying the costume of ``source_dev``'s
     model, whose prefab sits in ``source_files``. ``index`` maps CABs to files to read (the slot's own CABs to
     ``target_files``); ``resolver`` finds any other CAB. ``open_writable`` opens a slot file as an engine Bundle.
-    With ``strict=False`` a costume past the stretch limit is built anyway (``plan.unfit``), for a preview only.
+    With ``strict=False`` a costume past the stretch limit is built anyway (``plan.unfit``): for a preview, or for
+    another student's costume, which is applied all the same (BL-131).
     ``physics`` (Optimize Physics, BL-132) lets the hem rule also offer Rule B, the skirt chains as new bones.
+    ``halo`` (another student's costume, BL-131) carries the source's halo onto the slot's (:func:`_halo_change`).
     The caller holds the model lock (``gameassets.service.model_lock``): the graph holds the path lock of every bundle
     it reads until it closes, like an export's."""
     with BundleGraph(index, resolver=resolver) as graph:
-        return _adapt(graph, index, target_files, target_dev, source_files, source_dev, open_writable, strict, physics)
+        return _adapt(graph, index, target_files, target_dev, source_files, source_dev, open_writable, strict, physics,
+                      halo)
 
 
 def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Path], target_dev: str,
            source_files: list[Path], source_dev: str, open_writable: Callable[[Path], Any], strict: bool = True,
-           physics: bool = False) -> Result:
+           physics: bool = False, halo: bool = False) -> Result:
     target_prefabs = _model_prefabs(graph, [f for f in target_files if f.name.startswith("character-")])
     source_prefabs = _model_prefabs(graph, source_files)
     t_name = choose_prefab(target_prefabs, target_dev)
@@ -1672,10 +1805,11 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
     # textures and materials
     textures: dict[tuple[str, int], int] = {}
     materials: dict[tuple[str, int], int] = {}
-    for part in s_costume:
-        for material in part.materials:
-            if material is None or _key(material) in materials:
-                continue
+
+    def carry_material(material: Any) -> int:
+        """A source material added to the slot's material file, with its textures (and its shader where the game does
+        not load it with the slot's prefab)."""
+        if _key(material) not in materials:
             tree = material.read_typetree()
             shader_cab = _external_cab(material, tree["m_Shader"]["m_FileID"])
             if tree["m_Shader"]["m_PathID"] and not shared(shader_cab):
@@ -1702,6 +1836,13 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
                 value["m_Texture"] = {"m_FileID": writer.external(material_sf, texture_cab),
                                       "m_PathID": textures[_key(texture)]}
             materials[_key(material)] = writer.add(material_sf, "Material", tree)
+        return materials[_key(material)]
+
+    for part in s_costume:
+        for material in part.materials:
+            if material is None or _key(material) in materials:
+                continue
+            carry_material(material)
 
     # meshes: the source parts' meshes with bindposes on the target skeleton
     new_meshes = []
@@ -1743,6 +1884,9 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
                 local = (np.c_[skin.vertices[hit], np.ones(hit.sum())] @ pose.T)[:, :3]
                 tree["m_BonesAABB"][i] = {"m_Min": _vector(local.min(axis=0)), "m_Max": _vector(local.max(axis=0))}
         new_meshes.append((writer.add(mesh_sf, "Mesh", tree), nodes))
+    # another student's halo (BL-131): an unskinned mesh, added as it is
+    halo_change = _halo_change(t_skeleton, s_skeleton, lambda mesh: writer.add(mesh_sf, "Mesh", _mesh_tree(mesh)),
+                               carry_material, (s_name, t_name)) if halo else None
 
     # prefabs: the primary takes the source primary, further parts get renderers of their own, the rest draws nothing
     rank = {"primary": 0, "costume": 1, "alternate": 2, "copy": 3}
@@ -1759,7 +1903,7 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
                 _edit_prefabs(writer, sf, graph, t_meshes, t_primary_materials, mesh_cab, material_cab, new_meshes,
                               [[materials[_key(m)] for m in p.materials if m is not None] for p in s_costume],
                               [s_skeleton.nodes[p.node].name for p in s_costume], root_node, t_skeleton, s_costume,
-                              fitted_skins, result.mapping, s_rest)
+                              fitted_skins, result.mapping, s_rest, halo_change)
     if hem.skirt is not None:
         for clip in skirt_clips:
             obj = writer.file(clip.assets_file.name.lower()).objects[clip.path_id]
@@ -1780,7 +1924,7 @@ def _edit_prefabs(writer: _Writer, sf: Any, graph: BundleGraph, t_meshes: Mappin
                   primary_materials: list[tuple[str, int]], mesh_cab: str, material_cab: str,
                   new_meshes: list[tuple[int, list[int]]], new_materials: list[list[int]], names: list[str],
                   root_node: int, t_skeleton: Skeleton, s_costume: list[Part], skins: list[Skin],
-                  mapping: Mapping[int, int], s_rest: list[np.ndarray]) -> None:
+                  mapping: Mapping[int, int], s_rest: list[np.ndarray], halo: HaloChange | None = None) -> None:
     objects = sf.objects
     trees: dict[int, dict] = {}
 
@@ -1890,9 +2034,10 @@ def _edit_prefabs(writer: _Writer, sf: Any, graph: BundleGraph, t_meshes: Mappin
             else:  # the target's other costume parts, alternates and their copies draw nothing
                 r["m_Mesh"] = {"m_FileID": 0, "m_PathID": 0}
             save(pid)
+        halo_added = _edit_halo(halo, by_path, objects, tree, save, mesh_fid, material_fid, sf) if halo else []
         if main is None:
-            if added:
-                additions[(info["preloadIndex"], info["preloadSize"])] = list(added)
+            if added or halo_added:
+                additions[(info["preloadIndex"], info["preloadSize"])] = list(added) + halo_added
             continue
         # further source parts: renderers of their own beside the primary
         template = tree(main)
@@ -1930,9 +2075,54 @@ def _edit_prefabs(writer: _Writer, sf: Any, graph: BundleGraph, t_meshes: Mappin
                     save(b)
         key = (info["preloadIndex"], info["preloadSize"])
         additions[key] = added + [{"m_FileID": mesh_fid, "m_PathID": m} for m, _ in new_meshes] + [
-            {"m_FileID": material_fid, "m_PathID": m} for ms in new_materials for m in ms]
+            {"m_FileID": material_fid, "m_PathID": m} for ms in new_materials for m in ms] + halo_added
     _extend_preload(asset_bundle, additions)
     bundle_object.save_typetree(asset_bundle)
+
+
+def _edit_halo(halo: HaloChange, by_path: Mapping[str, int], objects: Mapping[int, Any], tree: Callable[[int], dict],
+               save: Callable[[int], None], mesh_fid: int, material_fid: int, sf: Any) -> list[dict]:
+    """One prefab's halo changed (:class:`HaloChange`): its renderer that draws the slot's halo mesh, and the follower
+    of its followed node. The nodes stay, so the clips that move or toggle them still do. Returns the new objects the
+    prefab now loads (its preload entries)."""
+
+    def components(path: str) -> list[int]:
+        transform = by_path.get(path)
+        if transform is None:
+            return []
+        go = tree(transform)["m_GameObject"]["m_PathID"]
+        return [c["component"]["m_PathID"] for c in tree(go)["m_Component"]
+                if c["component"]["m_FileID"] == 0 and c["component"]["m_PathID"] in objects]
+
+    here = components(halo.path)
+    filt = next((pid for pid in here if objects[pid].type.name == "MeshFilter"), None)
+    renderer = next((pid for pid in here if objects[pid].type.name == "MeshRenderer"), None)
+    if filt is None or renderer is None:
+        return []
+    mesh = tree(filt)["m_Mesh"]
+    if not mesh["m_PathID"] or (_cab(sf, mesh["m_FileID"]), mesh["m_PathID"]) != halo.mesh:
+        return []
+    r = tree(renderer)
+    if halo.new_mesh is None:  # the source has no halo: the slot's draws nothing, even where a clip turns it on
+        r["m_Enabled"] = type(r["m_Enabled"])(0)
+        tree(filt)["m_Mesh"] = {"m_FileID": 0, "m_PathID": 0}
+        save(filt)
+        save(renderer)
+        return []
+    tree(filt)["m_Mesh"] = {"m_FileID": mesh_fid, "m_PathID": halo.new_mesh}
+    r["m_Materials"] = [{"m_FileID": material_fid, "m_PathID": m} for m in halo.materials]
+    position, rotation, scale = halo.local
+    transform = by_path[halo.path]
+    tree(transform).update(m_LocalPosition=_vector(position), m_LocalScale=_vector(scale),
+                           m_LocalRotation=dict(zip("xyzw", (float(x) for x in rotation))))
+    for pid in (filt, renderer, transform):
+        save(pid)
+    for pid in components(halo.root):  # the FxFollower: the one behaviour there with its offsets
+        if halo.follower and objects[pid].type.name == "MonoBehaviour" and all(name in tree(pid) for name in halo.follower):
+            tree(pid).update(copy.deepcopy(halo.follower))
+            save(pid)
+    return [{"m_FileID": mesh_fid, "m_PathID": halo.new_mesh}] + [
+        {"m_FileID": material_fid, "m_PathID": m} for m in halo.materials]
 
 
 def _cab(sf: Any, file_id: int) -> str:
