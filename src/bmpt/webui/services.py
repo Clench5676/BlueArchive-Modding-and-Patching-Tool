@@ -17,7 +17,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping, Callable
 
-from .. import devmode, spans, steam_records, updater
+from .. import devmode, preview_gate, spans, steam_records, updater
 from ..config import APP_DIR_NAME, Settings, managed_cache_dir
 from ..data_paths import OLD_APP_DIR_NAME
 from ..globallines import GlobalLines
@@ -1393,7 +1393,8 @@ class Services:
             source = query.get("source", "live")
             kind = source.split(":", 1)[0]
             # How long each preview source takes end to end: lock waits, CRC checks and the export (BL-092).
-            with spans.span("asset.model." + (kind if kind in ("live", "official", "mod", "import", "variant") else "other")):
+            with preview_gate.foreground(), \
+                    spans.span("asset.model." + (kind if kind in ("live", "official", "mod", "import", "variant") else "other")):
                 if field_only:  # no slot: its own files only, never a mod or another costume
                     if source not in ("live", "official"):
                         raise KeyError(path)

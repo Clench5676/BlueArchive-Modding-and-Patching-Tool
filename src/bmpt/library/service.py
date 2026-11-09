@@ -25,7 +25,7 @@ from typing import TYPE_CHECKING, Any, Callable, Hashable, Iterable, Iterator, M
 
 from UnityPy.helpers.ResourceReader import get_resource_data
 
-from bmpt import atlas_remap, devmode, game_paths, mod_origin, spans, steam_records
+from bmpt import atlas_remap, devmode, game_paths, mod_origin, preview_gate, spans, steam_records
 from ba_modding_toolkit import core, mod_install
 from ba_modding_toolkit.bundle import Bundle
 from ..catalog.models import CoreMap
@@ -550,14 +550,18 @@ class _View:
         return {self.maps[pin.key].slot(core) for core in cores}
 
     def entries(self, pins: list[Pin], cancel: Callable[[], bool] | None = None,
-                cores: set[str] | None = None) -> list[_Entry]:
-        """Every entry that is configured, not in its intended state, or overwritten."""
+                cores: set[str] | None = None, *, background: bool = False) -> list[_Entry]:
+        """Every entry that is configured, not in its intended state, or overwritten. A ``background`` pass (the
+        scan, outside the library lock) pauses while a model preview is exported; callers holding the library lock
+        never pause, since a preview may need that lock."""
         out = []
         for pin in pins:
             wanted = self.cores(pin)
             if cores is not None:
                 wanted &= {self.maps[pin.key].slot(core) for core in cores}
             for core in sorted(wanted):
+                if background:
+                    preview_gate.yield_to_previews(cancel)
                 if cancel and cancel():
                     return out
                 try:
@@ -5160,7 +5164,7 @@ class ModLibrary:
             pins = list(pins) if pins is not None else self.installs()
             view = self._view(pins, "scan", snapshot=True)
             version = self._version
-        found = view.entries(pins, cancel) if cores is None else view.entries(pins, cancel, cores)
+        found = view.entries(pins, cancel, cores, background=True)
         with self._lock, _errors("scan"):
             if self._version != version:
                 return ScanResult([], {}, stale=True)
