@@ -91,7 +91,8 @@
 				"reaction": "Reaction",
 				"walk": "Walk",
 				"victory": "Victory",
-				"pickup": "Pickup"
+				"pickup": "Pickup",
+				"story": "Story {n}"
 			},
 			"optimize": "Optimize Physics",
 			"optimizeHint": "Currently supports skirts",
