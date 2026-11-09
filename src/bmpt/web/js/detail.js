@@ -199,6 +199,11 @@ const hasModel = (v) => hasKind(v, "model");
 const modLabel = (m) => modName(m, familyMods(), T);
 const repairedId = (c) => c?.mod?.repaired_id && familyMods().some((m) => m.id === c.mod.repaired_id) ? c.mod.repaired_id : null;
 const repairAction = (c) => repairedId(c) ? "remap.go" : "act.update";
+// Optimize Physics (BL-132) runs on the official model (which needs none: its own clips move its skirt) and on another
+// variant's costume; the copy it made from a costume, a model mod of the variant, takes its place afterwards
+const optimizeSource = (c) => (c.kind === "self" ? "official" : c.kind === "variant" ? `variant:${c.variant.key}` : null);
+const optimizedCopy = (c, v = variant()) => (c.kind !== "variant" ? null : familyMods().find((m) => m.kind === "model"
+  && m.target === v.key && m.optimized_from === `variant:${c.variant.key}`) || null);
 // a candidate's skeleton: a mod's preview (its parts over the official ones), else the variant's own portrait or lobby
 const baseOf = (c, kind = "spr") => (c.kind === "mod" ? spineBase("mod", c.id) : c.core ? spineBase(`official-${kind}`, c.core) : null);
 // The installed portrait comes from the current game files; with mods off, preview the configured source.
@@ -764,7 +769,7 @@ async function job(method, params, { onDone, after = () => reload(), name = full
   const page = pageToken;
   let ok = false, result = null, refusal = null;
   const action = ({ "actions.apply": params.source === "official" ? "restore" : "apply", "actions.restore": "restore", "actions.update": "repair",
-    "actions.extract": "extract", "mods.remove": "delete" })[method] || "process";
+    "actions.extract": "extract", "mods.remove": "delete", "model.optimize": "optimize" })[method] || "process";
   const mod = fam?.variants?.flatMap((v) => v.modList || []).find((m) => m.id === (params.mod || params.id || params.target?.replace(/^mod:/, "")));
   const targetKey = params.variant || (params.target?.startsWith("variant:") ? params.target.slice(8) : mod?.target);
   const target = fam?.variants?.find((v) => v.key === targetKey) || variant();
@@ -1345,7 +1350,8 @@ async function drawPopup(scroll = 0) {
       dim: c.greyed,
       badge: c.greyed ? { ...GREYED_BADGE(), ...(!coreOf(v, kind) && c.kind === "self" ? { text: T("import.reason.no_target") } : {}) }
         : c.mod?.incomplete ? { text: T("mods.incomplete"), color: COLOUR.warning, ink: "#ffffff" } : null,
-      tag: c.mod?.repaired_from ? { text: T("remap.repaired"), color: "#d7eaf4", ink: "#2d4664" } : null,
+      tag: c.mod?.repaired_from ? { text: T("remap.repaired"), color: "#d7eaf4", ink: "#2d4664" }
+        : c.mod?.optimized_from ? { text: T("model.optimized"), color: "#d7eaf4", ink: "#2d4664" } : null,
     };
   })
     .filter((it) => popupSeg === 0 || (popupSeg === 1) === !!it.recruit)
@@ -1380,6 +1386,10 @@ async function drawPopup(scroll = 0) {
             await call(() => Compatibility.check(c.id, c.label, () => { rebuilt = true; return remapped(); }, c.mod, modProgressName(c)));
             if (open && !rebuilt) await renderPopup();
           }], ...(repairedId(c) ? [[T("remap.go"), () => jumpRepaired(c)]] : [[T("act.update"), () => runUpdate(c)]])] : []),
+          ...(kind === "model" && optimizeSource(c) ? [optimizedCopy(c, v)
+            ? [T("model.optimizedGo"), () => { pending = `m:${optimizedCopy(c, v).id}`; renderPopup(); }]
+            : [T("model.optimize"), () => runOptimize(c, v), busy || !!c.greyed || !!c.previewOnly || !coreOf(v, kind), "secondary",
+              c.previewOnly ? T("model.unfit") : T("model.optimizeHint")]] : []),
           c.kind === "mod"
             ? [T("btn.delete"), async () => {
               if (!(await removeMod(c.id))) return;
@@ -1392,6 +1402,18 @@ async function drawPopup(scroll = 0) {
       };
     },
   });
+}
+// Optimize Physics on a 3D candidate (model.optimize): the copy is selected, or "No optimization needed" shows
+async function runOptimize(c, v = variant()) {
+  const source = optimizeSource(c);
+  if (!source || busy) return;
+  const shown = c.kind === "self" ? shortName(v) : candidateLabel(c, v);
+  let result = null;
+  const ok = await job("model.optimize", { variant: v.key, source, name: shown }, { name: shown, onDone: (r) => { result = r; } });
+  if (!ok || !open || switchPopupPage !== pageToken || $("popup").hidden) return;
+  if (result?.unneeded) await message({ title: T("model.optimize"), lines: [T("model.optimizeUnneeded")], ok: T("picker.ok") });
+  else if (result?.mod) pending = `m:${result.mod}`;
+  await renderPopup($("popup").querySelector(".popup-cards")?.scrollTop || 0);
 }
 async function openPopup(kind = "spr") {
   const family = fam, v = variant();

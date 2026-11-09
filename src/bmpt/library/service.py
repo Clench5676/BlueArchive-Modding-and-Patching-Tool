@@ -995,6 +995,12 @@ class ModLibrary:
             return ""
         return mod_id if mod_id in self._records or mod_id in self._held_ids() else ""
 
+    @staticmethod
+    def _optimized_from(record: dict[str, Any]) -> str:
+        """The source an Optimize Physics copy was built from ("variant:<key>"), "" for any other mod (BL-132)."""
+        source = record.get("optimized_from")
+        return source if isinstance(source, str) and source.startswith("variant:") else ""
+
     def _entry(self, record: dict[str, Any]) -> ModEntry:
         paths = self._paths(record)
         parsed = parse_filename(paths[0].name)
@@ -1004,7 +1010,7 @@ class ModLibrary:
                         max(date_of(path.name) for path in paths), parsed.crc, core_of(paths[0].name),
                         repaired_from=record.get("repaired_from", ""), repaired_id=self._repaired_id(record),
                         user_added=record.get("user_added") is True, alias=record.get("alias", ""),
-                        label_base=record["label"])
+                        label_base=record["label"], optimized_from=self._optimized_from(record))
 
     def _label(self, record: dict[str, Any], seen: frozenset[str] = frozenset()) -> str:
         """Resolve internal aliases and repaired names without touching bundle names or bytes."""
@@ -1013,6 +1019,8 @@ class ModLibrary:
             return alias
         if record.get("roster_photography"):
             return t("webui.photo.modName")
+        if self._optimized_from(record):
+            return t("webui.model.optimizedName", name=record["label"])
         source = record.get("repaired_from")
         if isinstance(source, str) and source and source not in seen:
             parent = self._records.get(source)
@@ -4042,10 +4050,12 @@ class ModLibrary:
         return dev, [resolve(path, pin) for path in files]
 
     def _stage_costume(self, other: str, targets: list[Path], directory: Path, log: LogFunc, pin: Pin, *,
-                       preview: bool = False, report: dict[str, Any] | None = None) -> dict[Path, Path]:
+                       preview: bool = False, report: dict[str, Any] | None = None,
+                       physics: bool = False) -> dict[Path, Path]:
         """The model slot ``targets`` (official copies) carrying the costume of ``other``'s model: changed parts built
         into ``directory``, the others as staged official copies. Reads official bytes only: the slot's own parts, the
-        source model's files, and any other bundle the CAB index finds."""
+        source model's files, and any other bundle the CAB index finds. ``physics``: Optimize Physics (BL-132), the
+        build may also choose Rule B; ``report["skirt"]`` says whether it did."""
         from ..gameassets.model_adapt import adapt
 
         staged = self._stage_official(targets, directory / "targets", pin, current_fallback=True)
@@ -4071,9 +4081,11 @@ class ModLibrary:
         with model_lock("costume"):
             result = adapt(index=index, resolver=resolver, target_files=list(staged.values()),
                            target_dev=target_dev, source_files=[p for p in sources if p.name in chosen],
-                           source_dev=dev, open_writable=Bundle.load, strict=not preview)
+                           source_dev=dev, open_writable=Bundle.load, strict=not preview, physics=physics)
         if report is not None and result.plan.unfit:
             report["unfit"] = {"source": "stretch", "adapted": f"{result.plan.stretch:.2f}", "own": f"{result.plan.own:.2f}"}
+        if report is not None:
+            report["skirt"] = result.hems is not None and result.hems.skirt is not None
         output = directory / "output"
         output.mkdir(parents=True, exist_ok=True)
         reverse = {value: key for key, value in staged.items()}
@@ -4146,6 +4158,39 @@ class ModLibrary:
         """Save the verdict of a pair checked to its end (its preview built and exported, or refused)."""
         signature, _ = self._costume_signature(variant_key, other, self._current(pin))
         return self._save_verdict(signature, ok, reason, detail)
+
+    @_serialized
+    def optimize_costume(self, variant_key: str, source: str, name: str, pin: Pin | None = None) -> dict[str, Any]:
+        """Optimize Physics (BL-132): a variant's model slot carrying ``source``'s costume ("variant:<key>") built with
+        the physics rules (Rule B, the skirt chains as new bones), kept as a model mod of the variant named after
+        ``name`` (the costume as the screen shows it): {"mod": id}, the copy made before when there is one. {"unneeded":
+        True} for the official model, whose own clips move its skirt, and for a costume the physics rules do not
+        improve within the stretch limit."""
+        pin = self._current(pin)
+        self._variant(variant_key)
+        if source == "official":
+            return {"unneeded": True}
+        if not isinstance(source, str) or not source.startswith("variant:"):
+            raise ServiceError("source_unsupported", source=str(source))
+        other = source[8:]
+        signature, targets = self._costume_signature(variant_key, other, pin)
+        verdict = self._verdicts().get(signature)
+        if verdict is not None and not verdict["ok"]:  # refused or preview only: never built for the game
+            raise ServiceError("source_unsupported", source=verdict.get("reason") or source)
+        made = next((record for record in self._records.values() if self._optimized_from(record) == source
+                     and record["kind"] == "model" and self._target_of(record) == variant_key), None)
+        if made is not None:
+            return {"mod": made["id"]}
+        label = name.strip()[:200] if isinstance(name, str) and name.strip() else other
+        report: dict[str, Any] = {}
+        with temporary_directory(prefix=devmode.LIBRARY_STAGING_PREFIX) as temporary:
+            replacements = self._stage_costume(other, targets, Path(temporary) / "model", no_log, pin, report=report,
+                                               physics=True)
+            if not report.get("skirt"):
+                return {"unneeded": True}
+            built = {path.name: path for path in replacements.values() if path.parent.name == "output"}
+            record = self._store(built, label, variant_key, "model", metadata={"optimized_from": source})
+        return {"mod": record["id"]}
 
     @_serialized
     def costume_preview(self, variant_key: str, other: str, pin: Pin | None = None) -> list[Path]:

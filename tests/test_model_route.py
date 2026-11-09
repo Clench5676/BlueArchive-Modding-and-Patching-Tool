@@ -253,3 +253,33 @@ def test_costume_rpcs_offer_only_pairs_checked_to_their_end(tmp_path):
             assert api.call("model.costumes", bad)["error"]["code"] == "bad_params"
     finally:
         s.close()
+
+
+def test_optimize_physics_runs_as_a_library_job_on_the_official_model_or_a_costume(tmp_path):
+    """BL-132: model.optimize hands the source and its shown name to the library, as a library writer job."""
+    s, _, _, _ = _costume_services(tmp_path, {})
+    asked = []
+
+    def optimize(variant, source, name, pin=None):
+        asked.append((variant, source, name, pin))
+        return {"unneeded": True} if source == "official" else {"mod": "copy"}
+
+    s.library.optimize_costume = optimize
+    s.library.current_pin = lambda: "pin"
+    s.library.judge_unfinished = lambda: None  # what a library writer job's end asks
+    s.library.take_pruned_cores = lambda: set()
+    api = build_api(s)
+    try:
+        for source, result in (("official", {"unneeded": True}), ("variant:np0009", {"mod": "copy"})):
+            job = api.call("model.optimize", {"variant": "hina", "source": source, "name": "Pajamas"})["result"]
+            assert s.jobs.wait(job, 10) and s.jobs.get(job).result == result
+        assert asked == [("hina", "official", "Pajamas", "pin"), ("hina", "variant:np0009", "Pajamas", "pin")]
+        for bad in ({"variant": "hina", "source": "", "name": ""}, {"variant": "hina", "source": "official", "name": "x" * 201},
+                    {"variant": "", "source": "official", "name": ""}):
+            assert api.call("model.optimize", bad)["error"]["code"] == "bad_params"
+        # another family's costume, a mod: not a source of Optimize Physics
+        for source in ("variant:momoi", "mod:abc"):
+            assert api.call("model.optimize", {"variant": "hina", "source": source, "name": ""})["error"]["code"] == "source_unsupported"
+        assert len(asked) == 2
+    finally:
+        s.close()

@@ -979,6 +979,15 @@ its check ends, keeping its scroll. Cards list only "ok" pairs, and the one alre
 refused pair is no preview source (`family.get` drops it) and its `/asset/model` route answers 404 without building it
 again.
 
+Optimize Physics (BL-132) is an action of the switch's details panel on the official model and on another variant's
+costume (not on 3D mods). The switch itself builds a costume with Rule A only (`adapt(physics=False)`); the action
+builds it with the physics rules as well (`physics=True`: Rule B, the skirt chains as new bones of the slot) and keeps
+the result as a model mod of the variant (`optimized_from: "variant:<key>"`, named `model.optimizedName` after the
+costume, tagged `model.optimized` on its card). It answers "No optimization needed" (`model.optimizeUnneeded`) for the
+official model, whose own clips move its skirt, and when the build's measured choice is not Rule B (no rigid skirt
+chains, or Rule B past the stretch limit). A costume with a copy offers `model.optimizedGo` instead, which selects the
+copy; the copy offers no action. The button's hover hint (`model.optimizeHint`) names what it covers.
+
 A variant whose only model is a field-mode player prefab (`Field_Player_<dev>[_NonWeapon]` in the
 `field-character-_mxload-*` bundles: event and story costumes such as Hina (Pajamas) and Niko (FOX EATS)) gets
 `variant.field_model` (`fieldModel` in `family.get`): its 3D tab shows it with the clips its `FieldAnimancerController`
@@ -1190,6 +1199,7 @@ stops the server (the page shows Closed); with `--serve` it gives `native_unavai
 | `ui.preview {variant, kind, source}` | stores a preview choice in `webui.json`, scoped to the install and variant; returns `previewSources`; never changes the application manifest or game files |
 | `model.costumes {variant, others}` | the verdicts of other variants' costumes on a variant's 3D model: `{other: "ok" \| "preview" \| "refused" \| null}` ("preview": past the stretch limit, shown, never applied; null: not checked yet); a pair outside the family, the variant itself or one with no model is "refused"; at most 64 `others` |
 | `model.checkCostumes {variant, others}` | job id (`costume-check`, not a writer): checks each pair to its end (`Services.costume_check`) and saves its verdict; result `{other: "ok" \| "preview" \| "refused"}`, a refusal of the moment "refused" and not saved |
+| `model.optimize {variant, source, name}` | job id (`model.optimize`, a library writer): Optimize Physics (BL-132) on `source`, `"official"` or `"variant:<key>"`; result `{mod}` (the copy, a model mod of the variant with `optimized_from`; an existing copy is returned) or `{unneeded: true}`; `name` (at most 200 characters) is the source as the screen shows it, the copy's name; a refused or preview-only pair is `source_unsupported` |
 | `mods.state` | `{installs: [{id, key, server, folder, label, distinct, named}], current, enabled, available, reason, reasonParams, scan, explained, configured, pending, stuck, left, unfinished: {pending, left, stuck}, drift, untracked, damaged, sourceMissing, queued, scanned, tray, traySupported, busy, progress}` from the snapshot (above); `id` is the first 12 hex digits of the install key's SHA-1 (used in URLs), `named` tells a folder the settings name from a recorded one; `busy` while a toggle is queued or running or writes are queued for the classic window; `progress` is `{done, total}` of a running toggle |
 | `mods.sizes {kind}` | `{builtSize}` for `kind: "built"` or `{originalsSize}` for `kind: "originals"`, bytes measured on demand; Settings requests only the Mod Cache size; no size walks in `mods.state` |
 | `mods.toggle {enabled, expect}` | job id (`mods.toggle`): the switch over every known install, also Retry; `busy` while another toggle is queued or running, `classic_open` at submit; the job's refusals `state_changed`, `folder_changed`, `game_running`, `game_status_unavailable`, `steam_busy`, `classic_open`, `not_enough_space` |
