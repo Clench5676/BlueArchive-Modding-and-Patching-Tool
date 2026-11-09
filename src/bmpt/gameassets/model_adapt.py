@@ -213,6 +213,13 @@ class Skeleton:
     def first(self, name: str) -> int | None:
         return next((i for i, node in enumerate(self.nodes) if node.name == name), None)
 
+    def chain_ancestor(self, i: int) -> int | None:
+        """The nearest ancestor on the Biped's body chain (``BIPED_CHAIN``), or None."""
+        p = self.nodes[i].parent
+        while p is not None and not BIPED_CHAIN.match(self.nodes[p].name):
+            p = self.nodes[p].parent
+        return p
+
     def biped_ancestor(self, i: int) -> int | None:
         p = self.nodes[i].parent
         while p is not None and not self.nodes[p].name.startswith("Bip001"):
@@ -656,12 +663,23 @@ def flatten(costume: Costume, rest: list[np.ndarray]) -> Flat:
     not sit in its renderer's space (some lie a metre or more off, their bindposes bringing them back), and a mesh
     bound in another pose than the prefab's rest is drawn in that rest."""
     vertices, linear, joints, weights, edges, triangles, starts, offset = [], [], [], [], [], [], [], 0
-    graph = costume.skeleton.graph
+    skeleton = costume.skeleton
+    graph = skeleton.graph
     for part, skin in zip(costume.parts, costume.skins):
         node = rest[part.node]
         bp = bindposes(graph, part.mesh)
-        carry = np.array([rest[b] @ bp[j] if b is not None and j < len(bp) else node
-                          for j, b in enumerate(part.bones)] or [node])
+        carry = [rest[b] @ bp[j] if b is not None and j < len(bp) else node for j, b in enumerate(part.bones)]
+        # a face's eye, brow and mouth bones may rest off their bind (a default expression the clips replace): the
+        # face is drawn as bound, rigidly with the head, so no expression of the source's rest goes along (BL-128:
+        # Midori (Battle)'s brows rested 1.4 cm up, through Midori's bangs)
+        head = {b: j for j, b in enumerate(part.bones) if b is not None and skeleton.nodes[b].name == "Bip001 Head"}
+        for j, b in enumerate(part.bones):
+            if b is None or j >= len(bp) or not face_bone(skeleton, b):
+                continue
+            h = skeleton.chain_ancestor(b)
+            if h in head and head[h] < len(bp):
+                carry[j] = rest[h] @ bp[head[h]]
+        carry = np.array(carry or [node])
         blended = drawn(Skin(skin.vertices, np.minimum(skin.joints, len(carry) - 1), skin.weights, skin.edges),
                         carry, node)
         vertices.append(np.einsum("nij,nj->ni", blended, np.c_[skin.vertices, np.ones(len(skin.vertices))])[:, :3])
@@ -705,16 +723,29 @@ class OwnMesh:
         return np.vstack([deform(skin, np.array([pose[b] for b in bones]) @ bp) for skin, bp, bones in self.parts])
 
 
+def face_bone(skeleton: Skeleton, node: int) -> bool:
+    """An eye, brow or mouth bone: named Bip001 like the Biped, outside its body chain and twist bones, under the
+    head."""
+    name = skeleton.nodes[node].name
+    if not name.startswith("Bip001") or BIPED_CHAIN.match(name) or "Twist" in name:
+        return False
+    h = skeleton.chain_ancestor(node)
+    return h is not None and skeleton.nodes[h].name == "Bip001 Head"
+
+
 def fit_anchor(target: Skeleton, source: Skeleton, node: int,
                carried: Mapping[int, int] | None = None) -> tuple[int, int] | None:
     """The Biped bone a source node is refitted by, with the slot's bone of its name: the node itself or its nearest
     ancestor the slot has by name (a secondary bone's Biped anchor), an unmatched bone standing for its carrier
-    (``carriers``). None when there is none."""
+    (``carriers``). None when there is none. Only the body chain, hands, feet and their twist bones anchor
+    (``BIPED_CHAIN``): a face's eye, brow and mouth bones (named Bip001 too) go rigidly with the head, as two models'
+    face rigs differ (BL-128: Midori (Battle)'s lower eyelids sat 3.5 cm off Midori's and pulled the eye out)."""
     carried = carried or {}
     n: int | None = node
     while n is not None:
         name = source.nodes[n].name
-        if name.startswith("Bip001") and (same := target.first(name)) is not None:
+        if (BIPED_CHAIN.match(name) or (name.startswith("Bip001") and "Twist" in name)) \
+                and (same := target.first(name)) is not None:
             return n, same
         if n in carried and (same := target.first(source.nodes[carried[n]].name)) is not None:
             return carried[n], same
