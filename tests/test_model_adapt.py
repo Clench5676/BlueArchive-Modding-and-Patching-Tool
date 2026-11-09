@@ -418,6 +418,42 @@ def test_official_costume_carries_a_shader_the_slot_does_not_load(view, tmp_path
     assert carried == ["MX/C-Simple-Transparent"]
 
 
+@official
+def test_official_costume_takes_its_own_materials_on_a_body_drawn_from_two_material_files(view, tmp_path):
+    """BL-128: Hifumi (Swimsuit)'s body takes its materials from two files. The slot's body renderer was taken for a
+    copy and kept its own materials in its own order, so Hifumi's face drew with the swimsuit's hair material. The
+    body renderer now draws the costume with the costume's materials, in its submeshes' order."""
+    from ba_modding_toolkit.bundle import Bundle
+    from ba_modding_toolkit.models import SaveOptions
+    from bmpt.gameassets.discovery import cab_names
+    from bmpt.gameassets.model import BundleGraph, _prefabs
+
+    files, index = view
+    slot = _slot(files, "ch0058")
+    sources = [p for p in files if re.match(r"character-hihumi_original-_mxload", p.name)]
+    result = ma.adapt(index=index, resolver=None, target_files=slot, target_dev="ch0058", source_files=sources,
+                      source_dev="hihumi_original", open_writable=Bundle.load)
+    out = tmp_path / "out"
+    out.mkdir()
+    for path, bundle in result.changed.items():
+        ok, message = bundle.save(out / path.name, SaveOptions(perform_crc=True, compression="lz4"))
+        assert ok, message
+    adapted = dict(index)
+    for path in out.glob("*.bundle"):
+        for cab in cab_names(path):
+            adapted[cab] = path
+    graph = BundleGraph(adapted)
+    t_prefabs = _prefabs(graph, [p for p in out.glob("*.bundle") if p.name.startswith("character-")])
+    s_prefabs = _prefabs(graph, sources)
+    t = ma.Skeleton.of(graph, t_prefabs[ma.choose_prefab(t_prefabs, "ch0058")].deref())
+    s = ma.Skeleton.of(graph, s_prefabs[ma.choose_prefab(s_prefabs, "hihumi_original")].deref())
+    names = lambda part: [graph.tree(m)["m_Name"] for m in part.materials]  # noqa: E731
+    body = next(p for p in ma.roles(t, None) if p.role == "primary")
+    own = next(p for p in ma.roles(s, None) if p.role == "primary")
+    assert names(body) == names(own) == ["Hihumi_Original_Face", "Hihumi_Original_Eyebrow",
+                                         "Hihumi_Original_EyeMouth", "Hihumi_Original_Hair", "Hihumi_Original_Body"]
+
+
 def _locks_free() -> list[str]:
     """The bundle path locks another thread cannot take at once (held by a reader that never closed)."""
     import threading
