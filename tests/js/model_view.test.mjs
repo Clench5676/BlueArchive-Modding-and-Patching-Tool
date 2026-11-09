@@ -120,3 +120,35 @@ test("a story model's cutscene clips are its actions, in order, each held on its
   assert.equal(storyAction("idle"), null);
   assert.deepEqual(storyActions(new Map()), []);
 });
+
+test("the view follows the hips across the floor, so any clip plays in place (BL-127)", async () => {
+  const { anchorNode, followOffset } = await import("../../src/bmpt/web/js/model.js");
+  const root = new THREE.Group();
+  const boneRoot = new THREE.Bone(); boneRoot.name = "bone_root";
+  const hips = new THREE.Bone(); hips.name = "Bip001";
+  const pelvis = new THREE.Bone(); pelvis.name = "Bip001 Pelvis";
+  root.add(boneRoot); boneRoot.add(hips); hips.add(pelvis);
+  assert.equal(anchorNode(root), hips);
+  // without Bip001, a pelvis or hips bone; without either, none
+  const other = new THREE.Group(), p = new THREE.Bone();
+  p.name = "Character_Hips"; other.add(p);
+  assert.equal(anchorNode(other), p);
+  assert.equal(anchorNode(new THREE.Group()), null);
+  assert.equal(anchorNode(null), null);
+  // a clip that walks the root 2 units forward and 0.5 aside, and bobs 0.1 up: the target moves along the floor only
+  const rest = hips.getWorldPosition(new THREE.Vector3());
+  boneRoot.position.set(0.5, 0.1, 2);
+  root.updateMatrixWorld(true);
+  const off = followOffset(hips.getWorldPosition(new THREE.Vector3()), rest);
+  near(off.x, 0.5); near(off.y, 0); near(off.z, 2);
+});
+
+test("the target stands over the prefab's root, or over the hips of a model placed off its root (BL-127)", async () => {
+  const { standPoint } = await import("../../src/bmpt/web/js/model.js");
+  const origin = { x: 0, y: 0, z: 0 };
+  // a chibi's idle hips sway a few centimetres from its root: the formation screen's place is kept
+  assert.deepEqual(standPoint(origin, { x: -0.03, y: 0.38, z: 0.05 }), { x: 0, z: 0 });
+  assert.deepEqual(standPoint(origin, null), { x: 0, z: 0 });
+  // Arona's cutscene model stands 1.18 across and 0.84 deep from its root
+  assert.deepEqual(standPoint(origin, { x: 1.18, y: 0.96, z: 0.84 }), { x: 1.18, z: 0.84 });
+});
