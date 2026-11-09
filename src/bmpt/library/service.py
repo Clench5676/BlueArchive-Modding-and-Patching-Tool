@@ -4055,11 +4055,12 @@ class ModLibrary:
 
     def _stage_costume(self, other: str, targets: list[Path], directory: Path, log: LogFunc, pin: Pin, *,
                        preview: bool = False, report: dict[str, Any] | None = None,
-                       physics: bool = False) -> dict[Path, Path]:
+                       physics: bool = False, cross: bool = False) -> dict[Path, Path]:
         """The model slot ``targets`` (official copies) carrying the costume of ``other``'s model: changed parts built
         into ``directory``, the others as staged official copies. Reads official bytes only: the slot's own parts, the
         source model's files, and any other bundle the CAB index finds. ``physics``: Optimize Physics (BL-132), the
-        build may also choose Rule B; ``report["skirt"]`` says whether it did."""
+        build may also choose Rule B; ``report["skirt"]`` says whether it did. ``cross``: another student's costume
+        (``_costume_cross``, BL-131), built past the stretch limit as well and carrying its halo."""
         from ..gameassets.model_adapt import adapt
 
         staged = self._stage_official(targets, directory / "targets", pin, current_fallback=True)
@@ -4085,7 +4086,8 @@ class ModLibrary:
         with model_lock("costume"):
             result = adapt(index=index, resolver=resolver, target_files=list(staged.values()),
                            target_dev=target_dev, source_files=[p for p in sources if p.name in chosen],
-                           source_dev=dev, open_writable=Bundle.load, strict=not preview, physics=physics)
+                           source_dev=dev, open_writable=Bundle.load, strict=not (preview or cross), physics=physics,
+                           halo=cross)
         if report is not None and result.plan.unfit:
             report["unfit"] = {"source": "stretch", "adapted": f"{result.plan.stretch:.2f}", "own": f"{result.plan.own:.2f}"}
         if report is not None:
@@ -4109,9 +4111,10 @@ class ModLibrary:
         from ..gameassets.costume_rule import COSTUME_RULE
 
         rule = f"costume-rule:{COSTUME_RULE}"
-        variant = self._variant(variant_key)
-        if other == variant_key or self._variant(other).family != variant.family:
+        self._variant(variant_key)
+        if other == variant_key:
             raise ServiceError("source_unsupported", source=f"variant:{other}")
+        self._variant(other)
         targets = self._game_files(variant_key, "model", pin)
         if not targets:
             raise ServiceError("game_file_not_found", variant=variant_key)
@@ -4123,6 +4126,17 @@ class ModLibrary:
                 raise
             return hashlib.sha1(repr(("current", rule, [(p.name, p.stat().st_size, p.stat().st_mtime_ns)
                                                                     for p in [*inputs, *targets]])).encode()).hexdigest(), targets
+
+    def _costume_cross(self, slot: Any, other: str) -> bool:
+        """Whether another variant's costume on the model of ``slot`` (its variant, None when not known) is another
+        student's (BL-131): a deliberate choice, so such a pair is applied past the stretch limit too (its "preview"
+        verdict allows it) and carries its own halo. A costume of the same student never does either (BL-122)."""
+        return slot is not None and self._variant(other).family != slot.family
+
+    def _costume_allowed(self, verdict: dict[str, Any] | None, cross: bool) -> bool:
+        """Whether a pair's saved verdict lets it be built for the game: unchecked or "ok", and for another student's
+        costume also "preview" (past the stretch limit); never a refusal."""
+        return verdict is None or bool(verdict["ok"]) or (cross and bool(verdict.get("preview")))
 
     def _verdicts(self) -> dict[str, dict[str, Any]]:
         path = self.root / "costume-verdicts.json"
@@ -4179,7 +4193,8 @@ class ModLibrary:
         other = source[8:]
         signature, targets = self._costume_signature(variant_key, other, pin)
         verdict = self._verdicts().get(signature)
-        if verdict is not None and not verdict["ok"]:  # refused or preview only: never built for the game
+        cross = self._costume_cross(self._variant(variant_key), other)
+        if not self._costume_allowed(verdict, cross):  # refused or preview only: never built for the game
             raise ServiceError("source_unsupported", source=verdict.get("reason") or source)
         made = next((record for record in self._records.values() if self._optimized_from(record) == source
                      and record["kind"] == "model" and self._target_of(record) == variant_key), None)
@@ -4189,7 +4204,7 @@ class ModLibrary:
         report: dict[str, Any] = {}
         with temporary_directory(prefix=devmode.LIBRARY_STAGING_PREFIX) as temporary:
             replacements = self._stage_costume(other, targets, Path(temporary) / "model", no_log, pin, report=report,
-                                               physics=True)
+                                               physics=True, cross=cross)
             if not report.get("skirt"):
                 return {"unneeded": True}
             built = {path.name: path for path in replacements.values() if path.parent.name == "output"}
@@ -4203,6 +4218,7 @@ class ModLibrary:
         paths). Reads official bytes where there are any, else the current ones, like the other previews."""
         pin = self._current(pin)
         signature, targets = self._costume_signature(variant_key, other, pin)
+        cross = self._costume_cross(self._variant(variant_key), other)
         folder = self.root / "built" / "previews" / signature
         done = folder / "parts.json"
         if done.is_file():
@@ -4221,7 +4237,7 @@ class ModLibrary:
         with temporary_directory(prefix=devmode.LIBRARY_STAGING_PREFIX) as temporary:
             try:
                 replacements = self._stage_costume(other, targets, Path(temporary) / "model", no_log, pin, preview=True,
-                                                   report=report)
+                                                   report=report, cross=cross)
             except ServiceError as error:
                 if error.code == "source_unsupported":  # the rule cannot carry this pair: never offered again
                     self._save_verdict(signature, False, error.params.get("source"), error.params)
@@ -4404,14 +4420,15 @@ class ModLibrary:
                 elif source.startswith("variant:") and kind == "model":
                     # another variant's costume put on this variant's model slot (gameassets.model_adapt)
                     other = source[8:]
-                    if other == variant_key or self._variant(other).family != variant.family:
+                    if other == variant_key:
                         raise ServiceError("source_unsupported", source=source)
+                    cross = self._costume_cross(variant, other)
                     own = getattr(variant, "model", None)
                     targets = self._game_files(variant_key, "model", pin)
                     if not own or not targets:
                         raise ServiceError("game_file_not_found", variant=variant_key)
                     verdict = self._verdicts().get(self._costume_signature(variant_key, other, pin)[0])
-                    if verdict is not None and not verdict["ok"]:  # refused or preview only: never saved or written
+                    if not self._costume_allowed(verdict, cross):  # refused or preview only: never saved or written
                         raise ServiceError("source_unsupported", source=verdict.get("reason") or source)
                     kinds = {"model": own.lower()}
                     change.configure(kinds)
@@ -4419,7 +4436,7 @@ class ModLibrary:
                         return self._defer(pin, variant_key, kinds, source)
                     _, inputs = self._costume_source(other, pin)
                     replacements = self._cached_build(inputs, targets, pin,
-                        lambda: self._stage_costume(other, targets, work / "model", log, pin), build_keys)
+                        lambda: self._stage_costume(other, targets, work / "model", log, pin, cross=cross), build_keys)
                 elif source.startswith("variant:"):
                     other = source[8:]
                     self._variant(other)
@@ -4588,8 +4605,15 @@ class ModLibrary:
                             lambda: self._stage_adapted(sources, targets, work / kind, log, pin), build_keys)
                 elif source.startswith("variant:") and kind == "model":
                     _, inputs = self._costume_source(source[8:], pin)
+                    try:
+                        owner = self._core_map(pin).key(core)
+                        slot = self._variant(owner) if owner else None
+                    except ServiceError:
+                        slot = None  # a slot of no known variant: built as before, the same student's rule
+                    cross = self._costume_cross(slot, source[8:])
                     replacements = self._cached_build(inputs, targets, pin,
-                        lambda: self._stage_costume(source[8:], targets, work / kind, log, pin), build_keys)
+                        lambda: self._stage_costume(source[8:], targets, work / kind, log, pin, cross=cross),
+                        build_keys)
                 elif source.startswith("variant:"):
                     other = self._core_map(pin).core(source[8:], kind)
                     sources = self._index(pin).get(other.lower(), []) if other else []

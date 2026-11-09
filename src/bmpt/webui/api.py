@@ -741,10 +741,10 @@ def build_api(s: Services) -> RpcRegistry:
                 return False
             other = variants.get(source[8:]) if variants is not None else s.catalog.variant(source[8:])
         elif source.startswith("variant:") and kind == "model":
-            # another variant's costume on this variant's model slot: any other model of the student whose check did
-            # not refuse it (costume_check)
+            # another variant's costume on this variant's model slot: any other model, the student's own or, chosen
+            # through the switch's search, another student's (BL-131), whose check did not refuse it (costume_check)
             other = variants.get(source[8:]) if variants is not None else s.catalog.variant(source[8:])
-            if not (bool(core) and other is not None and other.key != v.key and other.family == v.family and bool(
+            if not (bool(core) and other is not None and other.key != v.key and bool(
                     getattr(other, "model", None) or getattr(other, "field_model", None))):
                 return False
             verdict = getattr(s.library, "costume_verdict", lambda *args: None)(v.key, other.key)
@@ -780,8 +780,9 @@ def build_api(s: Services) -> RpcRegistry:
     @rpc.method("model.costumes")
     def model_costumes(variant: str, others: list[str]) -> dict[str, str | None]:
         """The saved verdicts of other variants' costumes on a variant's model (Switch 3D Model, BL-122): "ok",
-        "preview" (past the stretch limit: shown, never applied), "refused", or None when not checked yet
-        (``model.checkCostumes``). "ok" and "preview" pairs are offered."""
+        "preview" (past the stretch limit: shown, and applied only for another student's costume, BL-131),
+        "refused", or None when not checked yet (``model.checkCostumes``). "ok" and "preview" pairs are offered;
+        ``others`` may name any student's variants (the switch's search hits)."""
         out: dict[str, str | None] = {}
         for other in costume_keys(variant, others):
             try:

@@ -1000,6 +1000,56 @@ def test_official_roster_partial_and_complete_mod_preflight(tmp_path, monkeypatc
     assert not failures, failures[:30]
 
 
+def test_another_students_costume_is_applied_past_the_stretch_limit(model_env, monkeypatch):
+    """BL-131: another student's costume (chosen through the switch's search) is a deliberate choice: its "preview"
+    verdict (past the stretch limit) is applied and optimized, built non-strict and with its halo (``cross``); the same
+    student's "preview" pair stays shown only (BL-122), and a refusal stays a refusal."""
+    env = model_env
+    model_bundle(env.game_dir, core='hoshino_swimsuit', prefab=True, part='000', payload=b'swim prefab')
+    model_bundle(env.game_dir, core='hina_original', prefab=True, part='000', payload=b'hina prefab')
+    game = SimpleNamespace(spine_cores=lambda kind: {'hoshino_spr': [], 'hoshino_swimsuit_spr': [], 'hina_spr': []}
+                           if kind == 'spr' else {}, collection_names=lambda: {},
+                           model_cores=lambda: {'hoshino_original', 'hoshino_swimsuit', 'hina_original'})
+    library = ModLibrary(env.root, Catalog(game, None), object(), env.settings, scan_allowed=lambda: True)
+    assert library.catalog.variant('hina').family != library.catalog.variant('hoshino').family
+    assert library.catalog.variant('hoshino_swimsuit').family == library.catalog.variant('hoshino').family
+    built = []
+
+    def stage(self, other, targets, directory, log, pin, *, preview=False, report=None, physics=False, cross=False):
+        built.append((other, preview, physics, cross))
+        if report is not None and physics:
+            report['skirt'] = True
+        out = make_mod(targets[0], directory / 'output', payload=b'costume ' + other.encode())
+        return {target: out if target == targets[0] else self._official_or_current(target, pin) for target in targets}
+
+    monkeypatch.setattr(ModLibrary, '_stage_costume', stage)
+    # unchecked: the same student's pair builds strict and without a halo of its own, another student's not
+    assert library.apply('hoshino', 'variant:hoshino_swimsuit', kind='model').files
+    assert built.pop() == ('hoshino_swimsuit', False, False, False)
+    library.restore('hoshino', kind='model')
+    assert all(path.read_bytes() == data for path, data in env.official.items())
+    pin = library.current_pin()
+    for other in ('hoshino_swimsuit', 'hina'):
+        library._save_verdict(library._costume_signature('hoshino', other, pin)[0], False, 'stretch', preview=True)
+    assert library.costume_verdict('hoshino', 'hina')['preview'] is True
+    with pytest.raises(ServiceError, match='source_unsupported'):
+        library.apply('hoshino', 'variant:hoshino_swimsuit', kind='model')
+    with pytest.raises(ServiceError, match='source_unsupported'):
+        library.optimize_costume('hoshino', 'variant:hoshino_swimsuit', 'Swimsuit')
+    assert built == [] and library.configured('hoshino').get('model') is None
+    result = library.apply('hoshino', 'variant:hina', kind='model')
+    assert result.files and built.pop() == ('hina', False, False, True)
+    assert library.configured('hoshino').get('model') == 'variant:hina'
+    assert library.costume_preview('hoshino', 'hina') and built.pop() == ('hina', True, False, True)
+    made = library.optimize_costume('hoshino', 'variant:hina', 'Hina')
+    assert made['mod'] and built.pop() == ('hina', False, True, True)
+    library.restore('hoshino', kind='model')
+    library._save_verdict(library._costume_signature('hoshino', 'hina', pin)[0], False, 'static model')
+    with pytest.raises(ServiceError, match='source_unsupported'):
+        library.apply('hoshino', 'variant:hina', kind='model')
+    assert built == []
+
+
 def test_costume_verdicts_are_kept_per_build_signature(model_env, monkeypatch):
     """BL-122: a pair's verdict holds for the costume rule and the official bytes it was judged on (BL-134: not the
     program build); the rule's refusals are saved by the preview itself."""
@@ -1013,7 +1063,7 @@ def test_costume_verdicts_are_kept_per_build_signature(model_env, monkeypatch):
     library = ModLibrary(env.root, Catalog(game, None), object(), env.settings, scan_allowed=lambda: True)
     assert library.costume_verdict('hoshino', 'hoshino_swimsuit') is None
 
-    def refused(self, other, targets, directory, log, pin, *, preview=False, report=None):
+    def refused(self, other, targets, directory, log, pin, *, preview=False, report=None, cross=False):
         raise model_adapt.refuse('stretch', adapted=8.84, own=5.85)
 
     monkeypatch.setattr(ModLibrary, '_stage_costume', refused)
