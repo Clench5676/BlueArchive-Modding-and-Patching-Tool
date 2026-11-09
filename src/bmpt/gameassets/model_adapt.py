@@ -62,6 +62,7 @@ BIPED_CORE = re.compile(r"^Bip001 (Pelvis|Spine\d*|Neck|Head|[LR] (Thigh|Calf|Up
 # (never a weapon, prop or eye bone a vendor named Bip001 too)
 BIPED_CHAIN = re.compile(r"^Bip001 (Pelvis|Spine\d*|Neck\d*|Head|[LR] (Clavicle|UpperArm|Forearm|Hand|Thigh|Calf|Foot|"
                          r"Finger\d+|Toe\d+))$")
+BIPED_ROOT = "Bip001"
 NEAR = 0.05           # a secondary bone maps onto a slot bone at most this far from it (prefab units, metres)
 STRETCH_FLOOR = 1.5   # a group may always stretch this much
 # how far a costume may stretch under the slot's clips past the slot's own costume (max(1.5 x own, own + 1)), with a
@@ -499,7 +500,10 @@ def carriers(target: Skeleton, source: Skeleton, flat: Flat, poses: list[list[np
     forearm, and where the slot has no such bone the costume's sleeve goes with the forearm, not with the upper arm;
     a bag's strap keyed to the body goes with the body. Measured on the vertices it or its secondary bones dominate
     (else its own frame): the least mean distance between where the two carry them, which must be under
-    ``CARRIER_SHARE`` of the distance from where its parent carries them (else it stays with its parent, as before)."""
+    ``CARRIER_SHARE`` of the distance from where its parent carries them (else it stays with its parent, as before).
+    A bone outside the Biped is judged with its whole branch (``group``: Sena (Casual)'s bag under a prop node the slot
+    lacks), against the nearest ancestor the slot has, where the mapping would leave it; the result is keyed by the
+    branch's top node."""
     missing = unmatched(target, source, flat)
     if not missing or not poses:
         return {}
@@ -509,23 +513,46 @@ def carriers(target: Skeleton, source: Skeleton, flat: Flat, poses: list[list[np
     if not present:
         return {}
     dominant = flat.joints[np.arange(len(flat.vertices)), np.argmax(flat.weights, axis=1)]
-    anchor = {n: (n if source.nodes[n].name.startswith("Bip001") or n in missing else source.biped_ancestor(n))
-              for n in set(dominant.tolist()) - {-1}}
-    parents = {m: source.nodes[m].parent for m in missing}
-    inverse = {i: np.linalg.inv(rest[i]) for i in {*present, *missing, *(p for p in parents.values() if p is not None)}}
+
+    def group(n: int) -> int:
+        """A Biped bone stands for itself; a bone outside the Biped for its branch: the node right under the nearest
+        ancestor the slot has by name (a prop's whole chain, never torn across the body)."""
+        if source.nodes[n].name.startswith("Bip001"):
+            return n
+        kept = _kept_ancestor(target, source, n)
+        while source.nodes[n].parent is not None and source.nodes[n].parent != kept \
+                and source.nodes[source.nodes[n].parent].parent is not None:
+            n = source.nodes[n].parent
+        return n
+
+    groups = sorted({group(m) for m in missing})
+    anchor = {n: (group(n) if n in missing else n if source.nodes[n].name.startswith("Bip001")
+                  else source.biped_ancestor(n)) for n in set(dominant.tolist()) - {-1}}
+    # a Biped bone against its parent (a finger's last joint bends with the one before); a prop's branch against
+    # where the mapping would leave it, the nearest ancestor the slot has
+    parents = {m: source.nodes[m].parent if source.nodes[m].name.startswith("Bip001")
+               else _kept_ancestor(target, source, m) for m in groups}
+    inverse = {i: np.linalg.inv(rest[i]) for i in {*present, *groups, *(p for p in parents.values() if p is not None)}}
     out = {}
-    for m in missing:
+    for m in groups:
         rows = np.where(np.isin(dominant, [n for n, a in anchor.items() if a == m]))[0]
         if len(rows):
-            points = flat.vertices[rows[::max(1, len(rows) // CARRIER_SAMPLES)]]
+            rows = rows[::max(1, len(rows) // CARRIER_SAMPLES)]
+            points, own = flat.vertices[rows], dominant[rows]
         else:  # its frame: the joint and a point along each axis
             points = rest[m][:3, 3] + np.vstack([np.zeros(3), 0.05 * rest[m][:3, :3].T])
+            own = np.full(len(points), m)
         homogeneous = np.c_[points, np.ones(len(points))]
+        bones = sorted(set(own.tolist()))
+        column = np.searchsorted(bones, own)
+        inverse.update({b: np.linalg.inv(rest[b]) for b in bones if b not in inverse})
         errors = np.zeros(len(present))
         stay = 0.0  # with its parent
         parent = parents[m]
         for pose in poses:
-            here = homogeneous @ (pose[m] @ inverse[m]).T
+            # where each vertex's own bone takes it
+            moves = np.array([pose[b] @ inverse[b] for b in bones])[column]
+            here = np.einsum("nij,nj->ni", moves, homogeneous)
             carried_by_parent = homogeneous @ (pose[parent] @ inverse[parent]).T if parent is not None else homogeneous
             stay += float(np.linalg.norm(carried_by_parent - here, axis=1).mean())
             stack = np.array([pose[c] @ inverse[c] for c in present])
@@ -538,6 +565,15 @@ def carriers(target: Skeleton, source: Skeleton, flat: Flat, poses: list[list[np
         logger.debug("Costume bones the slot lacks, carried by: %s",
                      {source.nodes[m].name: source.nodes[c].name for m, c in out.items()})
     return out
+
+
+def _kept_ancestor(target: Skeleton, source: Skeleton, node: int) -> int | None:
+    """The nearest ancestor of ``node`` the slot has a bone of the name for: where the mapping leaves an unmatched
+    bone that has no carrier (a bag hung off a prop node the slot lacks stays with the prefab's root, None)."""
+    p = source.nodes[node].parent
+    while p is not None and source.nodes[p].parent is not None and target.first(source.nodes[p].name) is None:
+        p = source.nodes[p].parent
+    return p if p is not None and source.nodes[p].parent is not None else None
 
 
 def hidden_bones(skeleton: Skeleton, poses: list[list[np.ndarray]]) -> set[int]:
@@ -582,6 +618,11 @@ def map_bones(target: Skeleton, source: Skeleton, bones: Iterable[int],
                 continue
         parent = mapping.get(node.parent, root)
         anchor = source.biped_ancestor(i)
+        if anchor is None:  # a bone outside the Biped matches near its branch's carrier's bones only
+            b: int | None = i
+            while b is not None and b not in carried:
+                b = source.nodes[b].parent
+            anchor = b
         anchor = carried.get(anchor, anchor) if anchor is not None else None
         anchor_name = source.nodes[anchor].name if anchor is not None else None
         position = rest_s[i][:3, 3]
@@ -738,13 +779,14 @@ def fit_anchor(target: Skeleton, source: Skeleton, node: int,
     """The Biped bone a source node is refitted by, with the slot's bone of its name: the node itself or its nearest
     ancestor the slot has by name (a secondary bone's Biped anchor), an unmatched bone standing for its carrier
     (``carriers``). None when there is none. Only the body chain, hands, feet and their twist bones anchor
-    (``BIPED_CHAIN``): a face's eye, brow and mouth bones (named Bip001 too) go rigidly with the head, as two models'
+    (``BIPED_CHAIN``), and the Biped's root (a skirt hung off Bip001, Sena (Casual)'s, moves with the body, not with
+    the prefab's root that a slot resting aside leaves behind): a face's eye, brow and mouth bones (named Bip001 too) go rigidly with the head, as two models'
     face rigs differ (BL-128: Midori (Battle)'s lower eyelids sat 3.5 cm off Midori's and pulled the eye out)."""
     carried = carried or {}
     n: int | None = node
     while n is not None:
         name = source.nodes[n].name
-        if (BIPED_CHAIN.match(name) or (name.startswith("Bip001") and "Twist" in name)) \
+        if (BIPED_CHAIN.match(name) or name == BIPED_ROOT or (name.startswith("Bip001") and "Twist" in name)) \
                 and (same := target.first(name)) is not None:
             return n, same
         if n in carried and (same := target.first(source.nodes[carried[n]].name)) is not None:
