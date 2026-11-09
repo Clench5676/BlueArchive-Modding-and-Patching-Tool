@@ -1159,7 +1159,13 @@ def _skirt_candidates(ts: Skeleton, ss: Skeleton, plan_: Plan, flat: Flat, sv: n
     for rule, dense in (("skirt", plain), ("skirt smooth", smooth)):
         if rule == "skirt smooth" and np.abs(smooth - plain).max() < 1e-9:
             continue
-        rows = np.where(dense[:, len(columns):].sum(axis=1) > 1e-9)[0]
+        on_chains = dense[:, len(columns):].sum(axis=1) > 1e-9
+        # with the ring of cloth around them that the chains do not carry, so that the edges across the seam keep
+        # their length too (a chain's head may move)
+        ring = np.zeros(len(on_chains), bool)
+        seam = on_chains[flat.edges[:, 0]] != on_chains[flat.edges[:, 1]]
+        ring[flat.edges[seam].ravel()] = True
+        rows = np.where(on_chains | ring)[0]
         joints4, weights4 = hm.keep_four(dense[rows])
         fixed = sorted({columns[c] for c in joints4[weights4 > 0].ravel().tolist() if c < len(columns)} | {anchor})
         slot = {c: fixed.index(columns[c]) + len(sources) for c in range(len(columns)) if columns[c] in fixed}
@@ -1362,7 +1368,8 @@ def skirt_sequence(skeleton: Skeleton, solver: ms.Solver, tree: Mapping[str, Any
 
 
 def skirt_curves(skeleton: Skeleton, skirt: Skirt, tree: dict, key: tuple[str, int] | None = None) -> bool:
-    """Rule B's rotation curves for the chains' first bones added to a clip typetree of the slot: the turns of
+    """Rule B's rotation and position curves for the chains' first bones added to a clip typetree of the slot: the
+    turns and shifts of
     :func:`skirt_sequence` (or those measured for the clip ``key``), interpolated onto its dense grid. False when the
     clip has a layout the writer does not edit."""
     grid = ms.dense_grid(tree)
@@ -1371,15 +1378,24 @@ def skirt_curves(skeleton: Skeleton, skirt: Skirt, tree: dict, key: tuple[str, i
     times = skeleton.clip_frames(tree)[0]
     frames, turns = skirt.solved.get(key) or skirt_sequence(skeleton, skirt.solver, tree)
     roots = skirt.solver.roots
-    solved = np.array([[ms.quaternion(t[root]) for root in roots] for t in turns])
+    rotations = np.array([[ms.quaternion(t[root][:3, :3]) for root in roots] for t in turns])
+    positions = np.array([[t[root][:3, 3] for root in roots] for t in turns])
     at = np.clip(grid, times[0], times[-1])
-    if len(frames) > 1:
-        samples = np.concatenate([ms.resample(np.array([times[f] for f in frames]), ms.continuous(solved[:, r]), at)
-                                  for r in range(len(roots))], axis=1)
-    else:
-        samples = np.repeat(solved[:1].reshape(1, -1), len(grid), axis=0)
+    columns = []
+    for r in range(len(roots)):  # per root its rotation (4 curves), then its position (3)
+        if len(frames) > 1:
+            solved_at = np.array([times[f] for f in frames])
+            columns.append(ms.resample(solved_at, ms.continuous(rotations[:, r]), at))
+            columns.append(np.stack([np.interp(at, solved_at, positions[:, r, k]) for k in range(3)], axis=1))
+        else:
+            columns.append(np.repeat(rotations[:1, r], len(grid), axis=0))
+            columns.append(np.repeat(positions[:1, r], len(grid), axis=0))
+    samples = np.concatenate(columns, axis=1)
     template = tree["m_ClipBindingConstant"]["genericBindings"][0]
-    bindings = [ms.rotation_binding(template, skeleton.nodes[skirt.node(root)].path) for root in roots]
+    bindings = []
+    for root in roots:
+        path = skeleton.nodes[skirt.node(root)].path
+        bindings += [ms.rotation_binding(template, path), ms.position_binding(template, path)]
     ms.add_dense_curves(tree, bindings, samples)
     return True
 

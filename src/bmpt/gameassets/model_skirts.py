@@ -8,10 +8,13 @@ solved frame by frame:
 
 - the legs: how far the costume's own leg vertices, on the slot's leg bones in that frame, reach from the body axis
   (the pelvis-carried vertical), per height and direction around it;
-- all chains at once turn about their first bones' heads (Gauss-Newton on their rotation vectors) to carry the cloth
-  inside the legs' reach straight out, away from the body axis, while the cloth already clear holds its place and no
-  edge of the cloth grows (the cloth between two chains pulls the one turned less along); never farther out than it
-  was at rest, at most ``MAX_ANGLE`` from the pelvis; the rest of each chain follows as it hangs at rest;
+- all chains at once turn about their first bones' heads and move those heads (Gauss-Newton on their rotation
+  vectors and shifts) to carry the cloth inside the legs' reach straight out, away from the body axis, while the cloth
+  already clear holds its place and no edge of the cloth grows (the cloth between two chains pulls the one turned less
+  along); never farther out than it was at rest, at most ``MAX_ANGLE`` from the pelvis. A turn moves only the cloth
+  below a head, so a knee raised to the height of the heads (the costume's chains often start at the pelvis) needs
+  the head itself to move: shifts cost ``SHIFT_COST`` against turns and stay within ``MAX_SHIFT``. The rest of each
+  chain follows as it hangs at rest;
 - in time: each frame starts from the turns of the frame before, let back toward rest (``RELEASE``), so that a chain
   lifted by a leg falls back over a few frames instead of jumping; a looping clip is run twice, so that its end leads
   into its start;
@@ -41,10 +44,13 @@ MARGIN = 0.015          # cloth keeps this far outside the legs (metres)
 STEP = 0.01             # height of a cell of the legs' reach along the body axis (metres)
 SECTORS = 64            # cells around the body axis
 LOW, HIGH = -1.6, 0.6   # heights the cells cover, from the pelvis (metres)
-ITERATIONS = 4          # Gauss-Newton steps per frame
+ITERATIONS = 8          # Gauss-Newton steps per frame
 HOLD = 0.1              # weight of cloth already clear of the legs, against the cloth pushed out
 MIN_ANGLE = 1e-4        # a smaller step ends a frame's iterations (radians)
-MAX_ANGLE = math.radians(45)  # a chain turns at most this far from where the pelvis carries it
+MAX_ANGLE = math.radians(100)  # a chain turns at most this far from where the pelvis carries it (the game's own
+                                # clips turn a front skirt up to 100 degrees when the knees come up)
+MAX_SHIFT = 0.06        # a chain's first bone moves at most this far from where the pelvis carries it (metres)
+SHIFT_COST = 1.0        # weight of a first bone's shift against a pushed vertex's place
 SMOOTH_SWEEPS = 6       # weight blending sweeps across the seams (the "smooth" variant)
 SOLVE_EVERY = 3         # clip frames between solved frames; the frames between are interpolated
 RELEASE = 0.3           # share of its turn a chain keeps after 0.1 s without a push (it falls back toward rest)
@@ -253,14 +259,21 @@ class Chains:
     def roots(self) -> list[int]:
         return [i for i, p in enumerate(self.parents) if p < 0]
 
+    def hanging(self, i: int) -> np.ndarray:
+        """Bone ``i``'s local transform at rest without its scale (the form of a turn)."""
+        out = self.local[i].copy()
+        out[:3, :3] = self.local[i][:3, :3] @ np.linalg.inv(scale_of(self.local[i]))
+        return out
+
     def posed(self, anchor: np.ndarray, turns: Mapping[int, np.ndarray] | None = None) -> np.ndarray:
-        """World matrices with the anchor at ``anchor``; a root in ``turns`` takes that local rotation (3x3)."""
+        """World matrices with the anchor at ``anchor``; a root in ``turns`` takes that local transform (4x4: rotation
+        and position, without the bone's scale)."""
         out = np.zeros((len(self.parents), 4, 4))
         for i, p in enumerate(self.parents):  # parents come first
             local = self.local[i]
             if turns is not None and i in turns:
-                local = local.copy()
-                local[:3, :3] = turns[i] @ scale_of(self.local[i])
+                local = turns[i].copy()
+                local[:3, :3] = turns[i][:3, :3] @ scale_of(self.local[i])
             out[i] = (out[p] if p >= 0 else anchor) @ local
         return out
 
@@ -350,8 +363,8 @@ class Solver:
         return target, moved
 
     def solve(self, pose: Sequence[np.ndarray], start: Mapping[int, np.ndarray] | None = None) -> dict[int, np.ndarray]:
-        """Each chain root's local rotation (3x3) for ``pose`` (world matrices of the slot's nodes), starting from the
-        roots' local rotations ``start`` (None: as they hang at rest)."""
+        """Each chain root's local transform (4x4: rotation and position, without its scale) for ``pose`` (world
+        matrices of the slot's nodes), starting from the roots' transforms ``start`` (None: as they hang at rest)."""
         ch = self.chains
         anchor = np.asarray(pose[ch.anchor])
         fixed = np.array([np.asarray(pose[f]) for f in self.cloth.fixed]).reshape(-1, 4, 4) @ self.fixed_inverse
@@ -363,7 +376,8 @@ class Solver:
         out = {}
         for i in self.roots:
             local = np.linalg.inv(anchor) @ world[i]
-            out[i] = local[:3, :3] @ np.linalg.inv(scale_of(local))
+            local[:3, :3] = local[:3, :3] @ np.linalg.inv(scale_of(local))
+            out[i] = local
         return out
 
     def released(self, turns: Mapping[int, np.ndarray], seconds: float) -> dict[int, np.ndarray]:
@@ -371,8 +385,11 @@ class Solver:
         keep = RELEASE ** (max(seconds, 0.0) / 0.1)
         out = {}
         for i, r in turns.items():
-            rest = self.chains.local[i][:3, :3] @ np.linalg.inv(scale_of(self.chains.local[i]))
-            out[i] = from_vector(rotation_vector(r @ rest.T) * keep) @ rest
+            rest = self.chains.hanging(i)
+            m = rest.copy()
+            m[:3, :3] = from_vector(rotation_vector(r[:3, :3] @ rest[:3, :3].T) * keep) @ rest[:3, :3]
+            m[:3, 3] = rest[:3, 3] + (r[:3, 3] - rest[:3, 3]) * keep
+            out[i] = m
         return out
 
     def sequence(self, times: Sequence[float], pose: Any, loop: bool = False) -> list[dict[int, np.ndarray]]:
@@ -403,12 +420,13 @@ class Solver:
             world[j] = world[ch.parents[j]] @ ch.local[j]
 
     def _joint(self, world: np.ndarray, base: np.ndarray, fixed: np.ndarray, grid: np.ndarray, frame: Frame) -> None:
-        """All chains at once: Gauss-Newton steps on the roots' turns (rotation vectors about their heads) that carry
-        the cloth inside the legs out, hold the cloth already clear, and keep the cloth's edges from growing."""
+        """All chains at once: Gauss-Newton steps on the roots' turns (rotation vectors about their heads) and the
+        heads' shifts that carry the cloth inside the legs out, hold the cloth already clear, and keep the cloth's edges
+        from growing."""
         c, roots = self.cloth, self.roots
         if not roots:
             return
-        count, width = len(c.rest), 3 * len(roots)
+        count, width = len(c.rest), 6 * len(roots)
         everything = np.arange(count)
         homogeneous = np.c_[c.rest, np.ones(count)]
         edges = c.edges
@@ -425,11 +443,13 @@ class Solver:
             partial = np.einsum("vkr,vki->rvi", self.parts, places, optimize=True)
             heads = np.array([world[r][:3, 3] for r in roots])
             arm = partial - self.part_share.T[:, :, None] * heads[:, None, :]  # (roots, vertices, 3)
-            # a vertex moves by sum_r omega_r x arm_r = -sum_r [arm_r]x omega_r
-            jacobian = np.zeros((count, 3, len(roots), 3))
+            # a vertex moves by sum_r (omega_r x arm_r + share_r shift_r) = sum_r (-[arm_r]x omega_r + share_r shift_r)
+            jacobian = np.zeros((count, 3, len(roots), 6))
             jacobian[:, 0, :, 1], jacobian[:, 0, :, 2] = arm[:, :, 2].T, -arm[:, :, 1].T
             jacobian[:, 1, :, 0], jacobian[:, 1, :, 2] = -arm[:, :, 2].T, arm[:, :, 0].T
             jacobian[:, 2, :, 0], jacobian[:, 2, :, 1] = arm[:, :, 1].T, -arm[:, :, 0].T
+            for axis in range(3):
+                jacobian[:, axis, :, 3 + axis] = self.part_share
             jacobian = jacobian.reshape(3 * count, width)
             weight = np.repeat(np.where(moved, 1.0, HOLD), 3)
             residual = np.where(moved[:, None], target - points, 0.0).ravel()
@@ -439,22 +459,35 @@ class Solver:
                 d = points[edges[:, 1]] - points[edges[:, 0]]
                 length = np.linalg.norm(d, axis=1)
                 unit = d / np.maximum(length, 1e-12)[:, None]
-                # an edge grows by unit . (move_b - move_a) = sum_r omega_r . ((arm_rb - arm_ra) x unit)
-                rows = np.cross(arm[:, edges[:, 1]] - arm[:, edges[:, 0]], unit[None])
-                rows = rows.transpose(1, 0, 2).reshape(len(edges), width)
+                # an edge grows by unit . (move_b - move_a)
+                #   = sum_r omega_r . ((arm_rb - arm_ra) x unit) + shift_r . unit (share_rb - share_ra)
+                turn = np.cross(arm[:, edges[:, 1]] - arm[:, edges[:, 0]], unit[None])
+                shift = (self.part_share[edges[:, 1]] - self.part_share[edges[:, 0]]).T[:, :, None] * unit[None]
+                rows = np.concatenate([turn, shift], axis=2).transpose(1, 0, 2).reshape(len(edges), width)
                 stretch = np.minimum(0.0, self.lengths - length)  # pull grown edges back, keep the others
                 a += LENGTH_WEIGHT * rows.T @ rows
                 b += LENGTH_WEIGHT * rows.T @ stretch
+            # a shift costs against the turns: the heads move only where a turn cannot reach
+            shifted = np.array([world[r][:3, 3] - base[r][:3, 3] for r in roots])
+            for k in range(len(roots)):
+                block = slice(6 * k + 3, 6 * k + 6)
+                a[block, block] += SHIFT_COST * np.eye(3)
+                b[block] -= SHIFT_COST * shifted[k]
             a += DAMPING * np.eye(width)
-            step = np.linalg.solve(a, b).reshape(len(roots), 3)
-            if float(np.abs(step).max()) < MIN_ANGLE:
+            step = np.linalg.solve(a, b).reshape(len(roots), 6)
+            if float(np.abs(step[:, :3]).max()) < MIN_ANGLE and float(np.abs(step[:, 3:]).max()) < MIN_ANGLE * 0.1:
                 break
             for k, r in enumerate(roots):
-                turned = from_vector(step[k]) @ world[r][:3, :3]
+                turned = from_vector(step[k, :3]) @ world[r][:3, :3]
                 total = turned @ base[r][:3, :3].T
                 if angle_of(total) > MAX_ANGLE:
                     turned = axis_angle(rotation_axis(total), MAX_ANGLE) @ base[r][:3, :3]
                 world[r][:3, :3] = turned
+                moved = shifted[k] + step[k, 3:]
+                length = float(np.linalg.norm(moved))
+                if length > MAX_SHIFT:
+                    moved *= MAX_SHIFT / length
+                world[r][:3, 3] = base[r][:3, 3] + moved
                 self._carry(world, r)
 
 
@@ -551,8 +584,17 @@ def add_dense_curves(tree: dict, bindings: list[dict], samples: np.ndarray) -> N
 
 def rotation_binding(template: Mapping[str, Any], path: str) -> dict:
     """A generic binding of a Transform's local rotation (four curves) at ``path`` below the animated root."""
+    return _transform_binding(template, path, 2)
+
+
+def position_binding(template: Mapping[str, Any], path: str) -> dict:
+    """A generic binding of a Transform's local position (three curves) at ``path`` below the animated root."""
+    return _transform_binding(template, path, 1)
+
+
+def _transform_binding(template: Mapping[str, Any], path: str, attribute: int) -> dict:
     binding = dict(template)
-    binding.update(path=zlib.crc32(path.encode()), attribute=2, typeID=4, customType=0, isPPtrCurve=0)
+    binding.update(path=zlib.crc32(path.encode()), attribute=attribute, typeID=4, customType=0, isPPtrCurve=0)
     if "script" in binding:
         binding["script"] = {"m_FileID": 0, "m_PathID": 0}
     return binding
