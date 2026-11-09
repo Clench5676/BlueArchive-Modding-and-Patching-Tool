@@ -82,7 +82,8 @@
 			"cameraOpen": "จัดมุมกล้อง",
 			"cameraSave": "บันทึกมุมกล้อง",
 			"cameraSaved": "บันทึกเป็นเมมโมเรียลล็อบบี้ใหม่แล้ว",
-			"cameraDetail": "สเกล {scale}, ออฟเซ็ต {offset}"
+			"cameraDetail": "สเกล {scale}, ออฟเซ็ต {offset}",
+			"cameraName": "กล้อง {n}"
 		},
 		"model": {
 			"original": "ต้นฉบับ",
@@ -490,6 +491,8 @@
 			"photo_in_use": "ภาพกำลังใช้งาน",
 			"photo_library_invalid": "ไม่สามารถอ่านคลังภาพ",
 			"photo_target_unavailable": "ไม่พบภาพในรายชื่อนักเรียน",
+			"lobby_camera_unsupported": "ใช้กล้องกับล็อบบี้ความทรงจำนี้ไม่ได้",
+			"lobby_camera_failed": "บันทึกกล้องไม่สำเร็จ",
 			"photo_apply_failed": "ใช้ภาพไม่สำเร็จ",
 			"hall_last_portrait": "ต้องเหลือภาพตัวละครอย่างน้อยหนึ่งภาพ",
 			"native_only": "ใช้งานได้ในแอปเดสก์ท็อป"
