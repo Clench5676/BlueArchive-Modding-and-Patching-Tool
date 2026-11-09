@@ -6,7 +6,7 @@ import { LOCALES, installFitPage, text } from "./helpers/fit_canvas.mjs";
 
 installFitPage();
 const { S } = await import("../../src/bmpt/web/js/util.js");
-const { BOX_INSET, hintLayout, hintStyle, hintTree } = await import("../../src/bmpt/web/js/hover-hint.js");
+const { BOX_INSET, hintHost, hintLayout, hintStyle, hintTree } = await import("../../src/bmpt/web/js/hover-hint.js");
 
 const sprite = (name, w, h, extra = {}) => ({ cls: "UISprite", sprite: name, atlas: "Common", w_: w, h_: h, pivot: 4, depth: 5, color: "#ffffff/1.00", flip: 0, ...extra });
 const PREFAB = { name: "UIDescriptionTooltip", pos: [0, 0], children: [
@@ -53,4 +53,22 @@ test("a control near the top gets the hint below it, inside the host", () => {
   assert.ok(hint.origin[0] - half >= 0 && hint.origin[0] + half <= 1920);
   const visibleTop = hint.origin[1] - (hint.h / 2 - BOX_INSET.top) * S;
   assert.ok(Math.abs(visibleTop - (20 + 40) - 12 * S) < 0.5);
+});
+
+test("a card's hint is drawn around its scrolling list, not inside it, where the list's edges would cut it off", () => {
+  const el = (cls, style = {}, extra = {}) => ({ classList: { contains: (c) => c === cls }, style, ...extra });
+  const host = el("popup-host");
+  const area = el("popup-cards", { left: "300px", top: "160px" }, { scrollLeft: 0, scrollTop: 250, parentElement: host });
+  const inner = el("popup-cards-inner", {}, { parentElement: area });
+  const card = { parentElement: inner };
+  // the list's offset in the popup, less what it is scrolled by
+  assert.deepEqual(hintHost(card), { host, dx: 300, dy: -90 });
+  // a first-row card's hint above it then stays inside the popup, above the list's top edge
+  const style = hintStyle(PREFAB), [l, t, w, h] = [20, 270, 200, 300];
+  const hint = hintLayout("Cross-character model, may break", [l + 300, t - 90, w, h], 1920, 1080, style);
+  assert.equal(hint.side, "top");
+  assert.ok(hint.origin[1] - (hint.h / 2 - BOX_INSET.top) * S >= 0);
+  // any other control keeps its own layer
+  const layer = el("side");
+  assert.deepEqual(hintHost({ parentElement: layer }), { host: layer, dx: 0, dy: 0 });
 });
