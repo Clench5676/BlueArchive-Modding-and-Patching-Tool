@@ -492,7 +492,7 @@ def test_release_creates_exact_version_tag_and_checksum(release_workspace, suffi
     assert head == tagged
     commands = [json.loads(line) for line in Path(env["BAMT_RELEASE_LOG"]).read_text().splitlines()]
     assert commands[0] == ["git", "push", "origin", "refs/tags/0.1.0"]
-    assert commands[-1] == ["gh", "release", "create", "0.1.0", "--verify-tag", "--title", "0.1.0", "--notes", "",
+    assert commands[-1] == ["gh", "release", "create", "0.1.0", "--draft", "--verify-tag", "--title", "0.1.0", "--notes", "",
                             name, name + ".md5"]
 
 
