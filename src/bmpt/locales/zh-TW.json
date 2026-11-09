@@ -91,7 +91,8 @@
 				"reaction": "反應",
 				"walk": "行走",
 				"victory": "勝利",
-				"pickup": "拎起"
+				"pickup": "拎起",
+				"story": "劇情 {n}"
 			},
 			"optimize": "優化物理效果",
 			"optimizeHint": "目前支援優化裙襬效果",

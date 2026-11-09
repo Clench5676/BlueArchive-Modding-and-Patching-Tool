@@ -1065,7 +1065,9 @@ function row4Items() {
       return text ? { key: sq.anim, body: text } : { key: sq.anim, body: none, placeholder: true };
     });
   }
-  if (tab === "model") return modelActions.map((a) => ({ key: a, caption: T(`model.action.${a}`) }));
+  // a story model's own cutscene clips read "Story 1", "Story 2", ... (BL-127)
+  if (tab === "model") return modelActions.map((a) => ({ key: a,
+    caption: /^story\d+$/.test(a) ? T("model.action.story", { n: a.slice(5) }) : T(`model.action.${a}`) }));
   if (!spineAllowed()) return [];
   const base = currentBase();
   if (!base) return [];

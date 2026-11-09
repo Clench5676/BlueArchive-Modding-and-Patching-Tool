@@ -246,6 +246,13 @@ const ACTIONS = {
   pickup: { slots: ["Formation_Pickup"] },
 };
 
+// a story model's own cutscene clips (slots Story_1, Story_2, ...; BL-127): actions story1, story2, ..., each played
+// once and held on its last frame
+const STORY = /^Story_(\d+)$/;
+export const storyActions = (clips) => [...(clips?.keys() || [])].map((slot) => STORY.exec(slot)?.[1]).filter(Boolean)
+  .map(Number).sort((a, b) => a - b).map((n) => `story${n}`);
+export const storyAction = (name) => (/^story\d+$/.test(name) ? { slots: [`Story_${name.slice(5)}`], hold: true } : null);
+
 const stageScale = () => (document.getElementById("stage")?.getBoundingClientRect().width || 1920) / 1920;
 
 let viewCount = 0;
@@ -435,7 +442,8 @@ class ChibiView {
     if (!this.clips.size) root.traverse((o) => { if (/^(prop_root|Bip001_Weapon)$/i.test(o.name)) o.scale.setScalar(0); });
     await this.setupHalo(ex.haloFollower);
     if (this.disposed) return;
-    this.act("idle", { fade: 0, quiet: true });
+    // a story model has no idle: it stands in its first story clip's pose, never its bind pose (BL-127)
+    if (!this.act("idle", { fade: 0, quiet: true })) this.act("story1", { fade: 0, quiet: true });
     this.measure();
   }
 
@@ -653,15 +661,16 @@ class ChibiView {
 
   // --- actions ---
   actions() {
-    return Object.keys(ACTIONS).filter((name) => ACTIONS[name].slots.some((s) => this.clips?.has(s)));
+    return [...Object.keys(ACTIONS).filter((name) => ACTIONS[name].slots.some((s) => this.clips?.has(s))),
+      ...storyActions(this.clips)];
   }
 
   act(name, { fade = 0.3, quiet = false } = {}) {
-    const def = ACTIONS[name];
+    const def = ACTIONS[name] || storyAction(name);
     const slot = def?.slots.find((s) => this.clips?.has(s));
     if (!slot) return false;
     this.current = name;
-    this.playSlot(slot, { fade, once: !!(def.then || def.next) });
+    this.playSlot(slot, { fade, once: !!(def.then || def.next || def.hold) });
     if (!quiet) this.onAction?.(name);
     return true;
   }

@@ -454,8 +454,8 @@ NO_SLOT_MODELS = [
     ("np0133", "Field_NPC_NP0133", "npc", "OL_Field_NPC_NP0133", True),
     ("np0138", "Field_NPC_NP0138_NonWeapon", "npc", "OL_Attendant_Highlander_HG", True),
     ("np0143", "Field_NPC_NP0143_AR_Weapon", "npc", "OL_Soldier_Helmet_Aranchino_AR_Mesh", True),
-    ("np0206", "NP0206_Mesh", "asset", "NP0206_Body", False),       # Ayame (Corrupted), a story cutscene's model
-    ("np0229", "NP0229_Mesh", "asset", "NP0229_Body", False),       # Ayame (Twilight)
+    ("np0206", "NP0206_Mesh", "asset", "NP0206_Body", True),        # Ayame (Corrupted), a story cutscene's model
+    ("np0229", "NP0229_Mesh", "asset", "NP0229_Body", True),        # Ayame (Twilight): both with their story clips
     ("arona", "Arona_Original_Gacha", "asset", "OL_Arona_Original_Body", True),
     ("np0269", "NP0269_Body_Test", "asset", "NP0269_Body", False),  # Kei (Decagrammaton Body), a static mesh
 ]
@@ -477,6 +477,31 @@ def test_official_no_slot_models_are_found_and_exported(tmp_path):
         assert (doc["extras"]["prefab"], doc["extras"]["source"]) == (prefab, kind), key
         assert mesh in {m["name"] for m in doc["meshes"]}, key
         assert bool(doc.get("animations")) == idle, key
+    # Ayame's story forms move with their own clips of the story cutscenes (BL-127), as Story_1, Story_2, ..., about
+    # where they rest: never in the bind pose, never placed off the view where the shot needed them
+    for core, prefix in (("np0206", "NP0206_Cutin_A_"), ("np0229", "NP0229_Cutin_B_")):
+        data = game.model_glb(core)
+        doc = json.loads(data[20:20 + struct.unpack_from("<I", data, 12)[0]])
+        animations = doc["animations"]
+        assert 1 < len(animations) <= 12 and all(a["name"].startswith(prefix) for a in animations), core
+        assert [a["extras"]["slot"] for a in animations] == [f"Story_{k}" for k in range(1, len(animations) + 1)]
+        names = [n.get("name") for n in doc["nodes"]]
+        start = 20 + struct.unpack_from("<I", data, 12)[0]
+        binary = data[start + 8:]
+
+        def values(index):
+            accessor, view = doc["accessors"][index], None
+            view = doc["bufferViews"][accessor["bufferView"]]
+            offset = view.get("byteOffset", 0) + accessor.get("byteOffset", 0)
+            return np.frombuffer(binary, np.float32, accessor["count"] * 3, offset).reshape(-1, 3)
+
+        for animation in animations:
+            for channel in animation["channels"]:
+                target = channel["target"]
+                if target["path"] == "translation" and names[target["node"]] in ("bone_root", "Bip001"):
+                    rest = np.array(doc["nodes"][target["node"]].get("translation", [0, 0, 0]))
+                    moved = values(animation["samplers"][channel["sampler"]]["output"]).mean(axis=0)
+                    assert abs(moved[0] - rest[0]) < 1e-3 and abs(moved[2] - rest[2]) < 1e-3, (core, animation["name"])
     # Arona's idle switches the gacha faces off: her own clip, never the sack's beside it
     arona = game.model_glb("arona")
     doc = json.loads(arona[20:20 + struct.unpack_from("<I", arona, 12)[0]])

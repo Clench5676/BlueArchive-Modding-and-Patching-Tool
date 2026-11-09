@@ -91,7 +91,8 @@
 				"reaction": "互动",
 				"walk": "行走",
 				"victory": "胜利",
-				"pickup": "拎起"
+				"pickup": "拎起",
+				"story": "剧情 {n}"
 			},
 			"optimize": "优化物理效果",
 			"optimizeHint": "当前支持优化裙摆效果",
