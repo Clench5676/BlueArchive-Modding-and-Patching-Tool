@@ -169,6 +169,57 @@ export function startClip(st, data, track, c, t, delta) {
   return e;
 }
 
+// --- the intro's GameObjects and skeletons at a time, for measuring -------------------------------------------------
+
+// the intro's GameObjects with their curves (activity, transform), control and activation clips
+export function nodesOf(intro) {
+  const nodes = (intro.nodes || []).map((n) => ({ ...n, curve: null, control: [], activation: null, on: n.own, L: null }));
+  for (const p of intro.props || []) {
+    if (p.on !== "node" || !nodes[p.i]) continue;
+    if (p.attr === "active") nodes[p.i].curve = p.c;
+    else (nodes[p.i][p.attr] ||= [])[p.k] = p.c;
+  }
+  for (const c of intro.control || []) nodes[c.node]?.control.push(c);
+  for (const a of intro.activation || []) if (nodes[a.node]) nodes[a.node].activation = a.clips;
+  return nodes;
+}
+const restLocalOf = (n) => { const r = n?.trs; return r ? trs(r.slice(0, 3), r.slice(3, 7), r.slice(7, 10)) : IDENTITY; };
+// where the intro has its skeletons at time t, without playing it: sample(t) gives, for each layer ({def, introOnly,
+// x, y, scale}: def the player's bamtLayer, the rest its resting place), whether it is shown, its place and the intro
+// clips its tracks play then ([track, animation, time in it, loop]), as create() would set them (no mixes)
+export function sampler(intro, layers) {
+  const nodes = nodesOf(intro), moved = nodes.filter((n) => n.trs);
+  const gateOn = (gate) => gate.every((i) => nodes[i]?.on);
+  const local = (i) => nodes[i].L || IDENTITY;
+  const items = layers.map((l) => {
+    const W = l.def?.moves ? compose(l.def.moves, (i) => restLocalOf(nodes[i])) : null;
+    return { l, ds: W ? l.scale / (Math.hypot(W[0], W[4]) || 1) : 1 };
+  });
+  const tracks = intro.spine || [];
+  return (t) => {
+    for (const n of nodes) n.on = activeAt(n, t);
+    for (const n of moved) n.L = localAt(n, t);
+    return items.map(({ l, ds }) => {
+      const def = l.def || {};
+      const shown = def.gate ? def.base !== false && gateOn(def.gate) : !l.introOnly;
+      let { x, y, scale } = l;
+      if (def.moves) {
+        const W = compose(def.moves, local);
+        x = W[3]; y = W[7]; scale = Math.hypot(W[0], W[4]) * ds;
+      }
+      const clips = [];
+      for (const tr of tracks) {
+        if (tr.skeleton !== def.name) continue;
+        const c = playingAt(tr.clips, t).at(-1);
+        if (!c?.anim) continue;
+        const speed = c.speed ?? 1;
+        clips.push([tr.track, c.anim, Math.max(0, t - c.t) * speed + (c.in || 0), !!c.loop]);
+      }
+      return { shown, x, y, scale, clips };
+    });
+  };
+}
+
 // --- the intro -----------------------------------------------------------------------------------------------------
 
 // Plays a lobby's intro. env: {layers: [{name, player, introOnly}] in stacking order, fx (particles-gl.js), post (the
@@ -179,22 +230,15 @@ export function startClip(st, data, track, c, t, delta) {
 // running(), pending(), done(), state(), dispose()}.
 export function create(intro, env) {
   const D = intro.duration || 0, hold = intro.wrap === "hold";
-  const nodes = (intro.nodes || []).map((n) => ({ ...n, curve: null, control: [], activation: null, on: n.own, L: null }));
+  const nodes = nodesOf(intro);
   const volumes = (intro.volumes || []).map((v) => ({ ...v, weightCurve: null, enabledCurve: null }));
   const effects = env.fx?.effects || null, systems = effects?.systems || [], sprites = env.fx?.sprites || [];
   const sysProps = new Map(), spriteProps = new Map();
   for (const p of intro.props || []) {
-    if (p.on === "node") {
-      const n = nodes[p.i];
-      if (!n) continue;
-      if (p.attr === "active") n.curve = p.c;
-      else (n[p.attr] ||= [])[p.k] = p.c;
-    } else if (p.on === "volume" && volumes[p.i]) volumes[p.i][p.attr === "weight" ? "weightCurve" : "enabledCurve"] = p.c;
+    if (p.on === "volume" && volumes[p.i]) volumes[p.i][p.attr === "weight" ? "weightCurve" : "enabledCurve"] = p.c;
     else if (p.on === "system" && systems[p.i]) (sysProps.get(p.i) || sysProps.set(p.i, []).get(p.i)).push(p);
     else if (p.on === "sprite" && sprites[p.i]) (spriteProps.get(p.i) || spriteProps.set(p.i, []).get(p.i)).push(p);
   }
-  for (const c of intro.control || []) nodes[c.node]?.control.push(c);
-  for (const a of intro.activation || []) if (nodes[a.node]) nodes[a.node].activation = a.clips;
   const moved = nodes.filter((n) => n.trs);
   const gateOn = (gate) => gate.every((i) => nodes[i]?.on);
   const local = (i) => nodes[i].L || IDENTITY;
