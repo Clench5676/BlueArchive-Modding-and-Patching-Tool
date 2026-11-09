@@ -78,7 +78,12 @@
 			"playAll": "Play All Dialogue",
 			"stop": "Stop",
 			"exit": "Exit Fullscreen",
-			"dialogue": "Dialogue {n}"
+			"dialogue": "Dialogue {n}",
+			"cameraOpen": "Frame Camera",
+			"cameraSave": "Save Camera",
+			"cameraSaved": "Saved as a new Memorial Lobby",
+			"cameraDetail": "Scale {scale}, offset {offset}",
+			"cameraName": "Camera {n}"
 		},
 		"model": {
 			"original": "Original",
@@ -486,6 +491,8 @@
 			"photo_in_use": "Photo is in use",
 			"photo_library_invalid": "Photo library cannot be read",
 			"photo_target_unavailable": "Roster portrait unavailable",
+			"lobby_camera_unsupported": "Memorial Lobby camera unavailable",
+			"lobby_camera_failed": "Camera could not be saved",
 			"photo_apply_failed": "Photo could not be applied",
 			"hall_last_portrait": "Keep at least one portrait",
 			"native_only": "Available in the desktop application"

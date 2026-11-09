@@ -48,6 +48,8 @@ class ModEntry(JsonResult):
     alias: str = ""
     label_base: str = ""  # stored name before aliases and localized repair suffixes
     optimized_from: str = ""  # an Optimize Physics copy: the costume it was built from, "variant:<key>" (BL-132)
+    # a memorial lobby camera (BL-137): {source, number, scale, offset}; listed as a lobby choice of its variant
+    camera: dict | None = None
 
 
 class AddResult(list[ModEntry]):

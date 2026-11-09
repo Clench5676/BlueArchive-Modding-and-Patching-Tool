@@ -124,12 +124,14 @@ const game = () => {
   return { ...v };
 };
 
-async function sourcesOf(core, mod, refresh = false, signal = null, official = false) {
-  const artSource = spineBase(mod ? "mod" : official ? "official-lobby" : "lobby", mod || core), layoutSource = core ? spineBase("lobby", core) : null;
+// camera: the mod is a lobby camera (BL-137), whose layout is its own prefab's (/asset/spine/mod/<id>/lobby.json)
+async function sourcesOf(core, mod, refresh = false, signal = null, official = false, camera = false) {
+  const artSource = spineBase(mod ? "mod" : official ? "official-lobby" : "lobby", mod || core);
+  const layoutSource = mod && camera ? artSource : core ? spineBase("lobby", core) : null;
   // A shown tab must not inherit a manifest request that belonged to a cancelled or previous source.
   if (refresh) for (const source of new Set([artSource, layoutSource].filter(Boolean))) forgetSpineAssets(source.slice(0, source.lastIndexOf("/")));
   const art = spineAssetBase(artSource, { signal });
-  const layout = !layoutSource ? Promise.resolve(null) : mod || official ? spineAssetBase(layoutSource, { signal }) : art;
+  const layout = !layoutSource ? Promise.resolve(null) : (mod && !camera) || official ? spineAssetBase(layoutSource, { signal }) : art;
   const dir = (base) => base?.slice(0, base.lastIndexOf("/") + 1) || null;
   const [artBase, base] = await Promise.all([art, layout]);
   return { artBase: dir(artBase), base: dir(base), official };
@@ -137,8 +139,8 @@ async function sourcesOf(core, mod, refresh = false, signal = null, official = f
 
 // the layers of a lobby in the prefab's draw order with its offsets and scales; skeletons the prefab keeps inactive
 // (talk-only scenes) are left out. Without prefab data every skeleton sits at the standard place, backgrounds first.
-export async function layersOf(core, mod = null, sources = null, framing = null, { signal, official = false } = {}) {
-  const { artBase, base } = sources || await sourcesOf(core, mod, false, signal, official);
+export async function layersOf(core, mod = null, sources = null, framing = null, { signal, official = false, camera = false } = {}) {
+  const { artBase, base } = sources || await sourcesOf(core, mod, false, signal, official, camera);
   if (!artBase) throw new Error(`Lobby source unavailable: ${core}`);
   const read = (url) => withTimeout(fetch(url, { signal }).then((r) => {
     if (!r.ok) throw new Error(`${url}: HTTP ${r.status}`);
@@ -516,6 +518,183 @@ function boundsRect(loaded) {
   return out;
 }
 
+// --- the camera framing (BL-137): a 16:9 view, centred across, zoomed and moved up or down, that the shutter keeps as
+// the lobby's resting view; it may go wider than the game's view as far as no pose shows past the art ---
+// Every pose the lobby goes through is painted: the idle, every clip (clipPoses) and the intro every CLIP_STEP with
+// its skeletons where its timeline has them (lobby-intro.js sampler). A cell outside the game's view that some pose
+// leaves unpainted is `bad`: a view may take in no bad cell. Cells inside the game's view never count: what the game
+// itself shows there is the lobby as made.
+function* measureFraming(all, loaded, meta, G, info) {
+  const grid = gridOf(G), { gw, gh, X0, Y0 } = grid, n = gw * gh;
+  const bad = new Uint8Array(n), cur = new Uint8Array(n), whole = [[cur, [[0, gw - 1, 0, gh - 1]]]];
+  const outside = new Uint8Array(n);
+  for (let j = 0; j < gh; j++) for (let i = 0; i < gw; i++) {
+    const x = X0 + (i + 0.5) * CELL, y = Y0 + (j + 0.5) * CELL;
+    outside[j * gw + i] = x < G.x || x > G.x + G.w || y < G.y || y > G.y + G.h ? 1 : 0;
+  }
+  const mark = () => { for (let k = 0; k < n; k++) if (outside[k] && !cur[k]) bad[k] = 1; };
+  const layers = loaded.map((l) => ({ ...l, data: l.player.skeleton.data, idle: idleOf(l.player.skeleton.data, l), main: l.name === meta.main }));
+  const posers = new Map(layers.map((l) => [l.name, poser(l)]));
+  const idlePose = (l, t) => {
+    const d = l.idle ? l.data.findAnimation(l.idle)?.duration || 0 : 0;
+    return l.idle ? [[0, l.idle, d ? t % d : 0, true]] : [];
+  };
+  // the lobby at rest and through its clips
+  const plan = [[-1, []], ...clipPoses(layers, info, meta.sequences.map((s) => s.anim), (l, name) => clipOf(l.player, name))];
+  let poses = 0;
+  for (const [index, tracks] of plan) {
+    cur.fill(0);
+    const t = tracks.length ? tracks[tracks.length - 1][2] : 0;
+    layers.forEach((l, j) => paint(grid, l, posers.get(l.name)(j === index ? tracks : idlePose(l, t)), whole));
+    mark(); poses++;
+    yield;
+  }
+  // the intro, its scenes included, where its timeline has its skeletons
+  const intro = info?.intro;
+  if (intro && intro.duration > 0) {
+    const every = all.map((l) => ({ ...l, data: l.player.skeleton.data, idle: l.introOnly ? null : idleOf(l.player.skeleton.data, l) }));
+    for (const l of every) if (!posers.has(l.name)) posers.set(l.name, poser(l));
+    const sample = Intro.sampler(intro, every.map((l) => ({ def: l.player.bamtLayer, introOnly: l.introOnly, x: l.x, y: l.y, scale: l.scale })));
+    const steps = Math.max(1, Math.ceil(intro.duration / CLIP_STEP - 1e-6));
+    for (let k = 0; k <= steps; k++) {
+      const t = Math.min(intro.duration, k * CLIP_STEP), states = sample(t);
+      cur.fill(0);
+      every.forEach((l, j) => {
+        const st = states[j];
+        if (!st.shown) return;
+        const own = st.clips.map((c) => c[0]), tracks = [...idlePose(l, t).filter((c) => !own.includes(c[0])), ...st.clips];
+        paint(grid, { ...l, x: st.x, y: st.y, scale: st.scale }, posers.get(l.name)(tracks), whole);
+      });
+      mark(); poses++;
+      yield;
+    }
+  }
+  return { ...framingLimits(G, grid, bad), poses, intro: !!intro };
+}
+// the camera's limits from the bad cells of a grid ({X0, Y0, gw, gh}, cells of CELL units): a summed-area table of
+// them for the view checks, and the widest view that fits
+export function framingLimits(G, grid, bad) {
+  const { gw, gh } = grid, sum = new Int32Array((gw + 1) * (gh + 1));
+  for (let j = 0; j < gh; j++) for (let i = 0, row = 0; i < gw; i++) {
+    row += bad[j * gw + i];
+    sum[(j + 1) * (gw + 1) + i + 1] = sum[j * (gw + 1) + i + 1] + row;
+  }
+  const lim = { G: { ...G }, grid, sum };
+  lim.wMax = widestFraming(lim);
+  return lim;
+}
+export const FRAMING_CELL = CELL;
+// the bad cells whose centres a rect takes in; a rect past the grid counts as bad
+function badIn(lim, x0, y0, x1, y1) {
+  const { X0, Y0, gw, gh } = lim.grid;
+  const i0 = Math.ceil((x0 - X0) / CELL - 0.5 - 1e-9), i1 = Math.floor((x1 - X0) / CELL - 0.5 + 1e-9);
+  const j0 = Math.ceil((y0 - Y0) / CELL - 0.5 - 1e-9), j1 = Math.floor((y1 - Y0) / CELL - 0.5 + 1e-9);
+  if (i1 < i0 || j1 < j0) return 0;
+  if (i0 < 0 || j0 < 0 || i1 >= gw || j1 >= gh) return Infinity;
+  const W = gw + 1, S = lim.sum;
+  return S[(j1 + 1) * W + i1 + 1] - S[j0 * W + i1 + 1] - S[(j1 + 1) * W + i0] + S[j0 * W + i0];
+}
+// whether a view of width w, centred across on the game's view, with its bottom at y, shows nothing past the art;
+// before the measurement is done only views inside the game's view do
+export function framingFits(lim, w, y) {
+  const G = lim.G, h = (w * 9) / 16, x0 = G.x + G.w / 2 - w / 2;
+  if (!lim.sum) return x0 >= G.x - 1e-6 && x0 + w <= G.x + G.w + 1e-6 && y >= G.y - 1e-6 && y + h <= G.y + G.h + 1e-6;
+  return badIn(lim, x0, y, x0 + w, y + h) === 0;
+}
+const FRAME_STEP = CELL / 4;
+// the nearest bottom to y at which a view of width w fits, or null
+function framingBottom(lim, w, y) {
+  if (framingFits(lim, w, y)) return y;
+  const span = lim.G.h * 3;
+  for (let d = FRAME_STEP; d <= span; d += FRAME_STEP) {
+    if (framingFits(lim, w, y + d)) return y + d;
+    if (framingFits(lim, w, y - d)) return y - d;
+  }
+  return null;
+}
+// the widest view that fits somewhere up or down
+function widestFraming(lim) {
+  const G = lim.G;
+  for (let w = Math.min(G.w * 3, G.w * ZOOM_OUT_MAX); w > G.w; w -= CELL / 2) {
+    if (framingBottom(lim, w, G.y + G.h / 2 - (w * 9) / 32) != null) return w;
+  }
+  return G.w;
+}
+// a view brought inside the camera's limits: centred across, ZOOM_IN x the game's view at most, as wide as fits at
+// most, then the nearest height at which it shows nothing past the art (narrower if none)
+export function framingView(v, lim) {
+  const G = lim.G, cx = G.x + G.w / 2;
+  let w = clamp(v.w, G.w / ZOOM_IN, lim.sum ? lim.wMax : G.w);
+  for (;;) {
+    const h = (w * 9) / 16, y = framingBottom(lim, w, v.y + (v.h - h) / 2);
+    if (y != null || w <= G.w / ZOOM_IN + 1e-6) return { x: cx - w / 2, y: y ?? G.y + (G.h - h) / 2, w, h };
+    w = Math.max(G.w / ZOOM_IN, w - CELL / 2);
+  }
+}
+// what the shutter keeps for a view V: the lobby scaled by k about the screen centre and moved by `offset` (NGUI
+// units), so that V fills the screen as the game's view did: the root's new place r1 = k (r0 - c) with c V's centre
+export function cameraParams(V, G) {
+  const k = G.w / V.w, cx = V.x + V.w / 2 - (G.x + G.w / 2), cy = V.y + V.h / 2 - (G.y + G.h / 2);
+  return { scale: k, offset: [-k * cx, -k * cy] };
+}
+let cameraOn = false;
+const framingCache = new Map(); // geometry key -> measured limits, for the session
+function measureCamera() {
+  const c = current, m = c?.meta;
+  if (!m || c.camera?.lim?.sum || c.camera?.measuring || !c.loaded) return;
+  const G = game(), key = geometryKey(c.all || c.loaded, G);
+  c.camera = { lim: { G, grid: null, sum: null, wMax: G.w }, measuring: true, started: performance.now() };
+  const done = (lim) => {
+    if (current !== c) return;
+    c.camera = { lim, measuring: false, ms: lim.ms };
+    reclamp();
+  };
+  const cached = key && framingCache.get(key);
+  if (cached) { done(cached); return; }
+  const job = measureFraming(c.all || c.loaded, c.loaded, m, G, c.info);
+  let busy = 0;
+  const slice = () => {
+    if (current !== c) return;
+    const from = performance.now(), until = from + SLICE_MS;
+    let step;
+    try {
+      do step = job.next(); while (!step.done && performance.now() < until);
+    } catch (err) {
+      console.warn("camera framing limits", err); // keep the game's view as the limit
+      c.camera.measuring = false;
+      return;
+    }
+    busy += performance.now() - from;
+    if (!step.done) { setTimeout(slice, 0); return; }
+    const lim = { ...step.value, ms: Math.round(busy) };
+    if (key) framingCache.set(key, lim);
+    done(lim);
+  };
+  setTimeout(slice, 0);
+}
+// the camera framing on or off: on, the lobby rests in fullscreen (no intro), the view starts at the game's and
+// measures how far it may go; off, the view goes back to the game's
+export function camera(on) {
+  cameraOn = !!on;
+  if (!current?.meta) return;
+  current.host?.classList.toggle("camera-framing", cameraOn);
+  Touch.setPanOnly(cameraOn);
+  if (cameraOn) {
+    current.intro?.skip();
+    measureCamera();
+  }
+  openEdge();
+  resetZoom();
+}
+// for the camera's controls and checks: the view, the game's view, the limits and what the shutter would keep
+export const cameraState = () => {
+  if (!current?.meta) return null;
+  const G = game(), V = current.target || current.view, lim = current.camera?.lim;
+  return { on: cameraOn, measuring: !!current.camera?.measuring, view: { ...V }, game: G, prefab: !!current.info?.prefab,
+    widest: lim?.sum ? lim.wMax : G.w, narrowest: G.w / ZOOM_IN, poses: lim?.poses || 0, intro: !!lim?.intro, ms: current.camera?.ms,
+    params: cameraParams(V, G) };
+};
+
 // --- views: {x, y, w, h} in NGUI units, y up ---
 // the largest 16:9 view no wider than w that fits P, centred on (cx, cy) as far as P allows
 function fit(P, w, cx, cy) {
@@ -707,6 +886,7 @@ export function photography(frame) {
   reclamp();if(current?.view)feather(current.view);
 }
 function clampView(v) {
+  if (cameraOn && current.camera?.lim) return framingView(v, current.camera.lim);
   const B = photoFrame?current.meta.edge:bounds();
   if(photoFrame)return lobbyCaptureView(v,B,photoFrame);
   return { x: clamp(v.x, B.x0, B.x1 - v.w), y: clamp(v.y, B.y0, B.y1 - v.h), w: v.w, h: v.h };
@@ -716,6 +896,11 @@ export function zoomAt(factor, sx, sy) {
   current.userFramed = true;
   const T = current.target, full = current.meta.full;
   const fx = sx / STAGE.w, fy = 1 - sy / STAGE.h, ux = T.x + fx * T.w, uy = T.y + fy * T.h;
+  if (cameraOn && current.camera?.lim) { // centred across: only the height under the pointer stays put
+    const w = T.w / factor, h = (w * 9) / 16;
+    setView(clampView({ x: 0, y: uy - fy * h, w, h }), false);
+    return;
+  }
   const w = clamp(T.w / factor, full.w / ZOOM_IN, photoFrame?lobbyMaximumWidth(current.meta.edge,full.w,photoFrame):Math.max(full.w, widest(bounds()))), h = (w * 9) / 16;
   setView(clampView({ x: ux - fx * w, y: uy - fy * h, w, h }), false);
 }
@@ -733,7 +918,7 @@ const measuresClips = () => !current?.framing && (zoomMode === "art" || zoomMode
 // (Persistent/Camera: solid colour clear), graded with PP on: the bottom layer draws it (linear.js setClear), the page
 // shows black behind it without WebGL2; sparse art keeps the edge extension
 function openEdge() {
-  const open = (zoomMode === "unlocked" || zoomMode === "custom") && !!current?.meta && !current.meta.sparse;
+  const open = (cameraOn || zoomMode === "unlocked" || zoomMode === "custom") && !!current?.meta && !current.meta.sparse;
   current?.host?.classList.toggle("open-edge", open);
 }
 // the game's PP option: off draws the lobby without its post-processing volumes (the next frame shows it)
@@ -744,7 +929,7 @@ export function setPostProcessing(on) {
 function reclamp() {
   if (!current?.meta || !current.target || mode !== "full") return;
   const T = current.target, full = current.meta.full;
-  if(photoFrame){setView(clampView(T),false);return;}
+  if(photoFrame||cameraOn){setView(clampView(T),false);return;}
   if (T.w <= full.w + 1e-6) { setView(clampView(T), false); return; }
   const cx = T.x + T.w / 2, cy = T.y + T.h / 2, w = Math.max(full.w, Math.min(T.w, widest(bounds()))), h = (w * 9) / 16;
   setView(clampView({ x: cx - w / 2, y: cy - h / 2, w, h }), false);
@@ -754,6 +939,7 @@ export function panBy(dx, dy) {
   if (mode !== "full" || !current?.meta) return;
   current.userFramed = true;
   const T = current.target;
+  if (cameraOn) dx = 0; // the camera moves up and down only
   setView(clampView({ x: T.x - (dx / STAGE.w) * T.w, y: T.y + (dy / STAGE.h) * T.h, w: T.w, h: T.h }), false);
 }
 // the view a zoom or pan is easing to, and putting one back (lobby-touch.js: a scroll taken for a wheel that turns out
@@ -952,7 +1138,7 @@ function feather(view) {
 
 // show(core, host) -> Promise<meta> (frame, sequences); resolves once every layer is in and framed
 const lobbyLoads = latestLoad(), sourceLoads = latestLoad(), playerLoads = new WeakMap();
-export function show(core, host, variant, { mod = null, framing = null, official = false, deferPlayback = false } = {}) {
+export function show(core, host, variant, { mod = null, framing = null, official = false, camera = false, deferPlayback = false } = {}) {
   if (current && (current.core !== core || current.mod !== mod || !!current.official !== !!official || current.framing !== framing || !current.meta)) {
     lobbyLoads.cancel();
     clearView(host);
@@ -968,7 +1154,7 @@ export function show(core, host, variant, { mod = null, framing = null, official
     const abort = () => lobbyLoads.cancel();
     sourceSignal.addEventListener("abort", abort, { once: true });
     const run = async () => {
-      let sources = await sourcesOf(core, mod, true, sourceSignal, official);
+      let sources = await sourcesOf(core, mod, true, sourceSignal, official, camera);
       for (let attempt = 0; ; attempt++) {
         if (stopped || sourceSignal.aborted) return null;
         if (!sources.artBase) throw atStep(new Error("Lobby source unavailable"), url.replace(/skeleton$/, "manifest.json"), "manifest");
@@ -978,7 +1164,7 @@ export function show(core, host, variant, { mod = null, framing = null, official
           return await lobbyLoads.run((signal) => showNow(core, host, variant, mod, sources, signal, framing, deferPlayback));
         } catch (err) {
           if (sourceSignal.aborted || attempt) throw err;
-          const fresh = await sourcesOf(core, mod, true, sourceSignal, official);
+          const fresh = await sourcesOf(core, mod, true, sourceSignal, official, camera);
           if (stopped || sourceSignal.aborted) return null;
           if (fresh.artBase === sources.artBase && fresh.base === sources.base) throw err;
           console.warn("Lobby source changed during load", url, err);

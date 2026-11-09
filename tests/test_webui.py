@@ -1934,3 +1934,17 @@ def test_both_review_features_share_the_running_version_gate(app, services, monk
         for page in result['automatic']['pages']:
             key = f"webui.tours.v0_6_0.{page['id']}"
             assert (page['title'], page['body']) == (localized[f'{key}.title'], localized[f'{key}.body'])
+
+
+def test_lobby_camera_save_checks_its_params_before_any_job(app, services):
+    """lobby.camera.save (BL-137): the variant's own lobby, a source the lobby can show, a framed view and a camera
+    in range; refused before a job starts otherwise."""
+    services.catalog.v.lobby = "hoshino_home"
+    good = {"variant": "hoshino", "lobby": "hoshino_home", "source": "official",
+            "view": {"x": -1000, "y": -600, "w": 2000, "h": 1125}, "scale": 1.48, "offset": [0, -120]}
+    for change, code in (({"lobby": "other_home"}, "bad_params"), ({"source": "mod:missing"}, "source_unsupported"),
+                         ({"view": {"x": 0}}, "bad_params"), ({"scale": 0}, "bad_params"),
+                         ({"offset": [0, float("1e9")]}, "bad_params")):
+        assert rpc(app, "lobby.camera.save", **{**good, **change})["error"]["code"] == code
+    # a lobby without a prefab cannot keep a camera
+    assert rpc(app, "lobby.camera.save", **good)["error"]["code"] == "lobby_camera_unsupported"

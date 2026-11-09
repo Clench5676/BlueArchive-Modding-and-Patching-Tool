@@ -19,4 +19,5 @@ def test_verified_ui_lobby_camera_matches_still_coordinates(tmp_path):
     assert info["main"] == "CH0169_home"
     assert info["view"] == {"x": -1480, "y": -832.5, "w": 2960, "h": 1665}
     layer, = [layer for layer in info["layers"] if layer["name"] == info["main"]]
-    assert {k: layer[k] for k in ("x", "y", "scale")} == {"x": 0, "y": -962, "scale": 1}
+    # the game's UIManualScaleByAspect at 16:9 (x 1.15 towards 4:3 by 5/13) scales the standard place about the centre
+    assert {k: layer[k] for k in ("x", "y", "scale")} == {"x": 0, "y": -1017.5, "scale": 1.05769}

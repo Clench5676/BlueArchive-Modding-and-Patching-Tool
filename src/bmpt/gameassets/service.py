@@ -994,14 +994,16 @@ class GameAssets:
             return names
         return self._index("lobby-prefabs", build)
 
-    def lobby_info(self, core: str) -> dict:
+    def lobby_info(self, core: str, prefab: Path | None = None) -> dict:
         """A memorial lobby's layout and interaction (see lobby.py), from its prefab and its own clip assets. It is
-        read from the character's bundles, so it stays in memory; the file stamps keep an applied mod apart."""
+        read from the character's bundles, so it stays in memory; the file stamps keep an applied mod apart. With
+        ``prefab``, that bundle file is read in place of the lobby's prefab bundle in the game folder (a lobby camera's
+        own prefab, BL-137)."""
         try:
             bundles = self.spine_cores("lobby")[core.lower()]
         except KeyError:
             raise AssetNotFound(("lobby", core)) from None
-        stamps = spine_stamps(bundles)
+        stamps = spine_stamps(bundles) + (spine_stamps([prefab]) if prefab is not None else [])
 
         def build() -> bytes:
             skeletons, behaviours, trees, keys = [], [], {}, {}
@@ -1030,27 +1032,35 @@ class GameAssets:
             skeletons = list(dict.fromkeys(skeletons))
             clips = lobby.Clips(behaviours, skeletons, sound=lambda owner, pointer: keys.get(
                 (owner, pointer.get("m_FileID", 0), pointer.get("m_PathID", 0))))
-            prefabs, prefab = self._lobby_prefabs(), None
+            prefabs, found = self._lobby_prefabs(), None
             for name in lobby.prefab_candidates(core, skeletons):
                 if name in prefabs:
-                    prefab = self._lobby_prefab(prefabs[name], name, skeletons, clips, trees)
-                    if prefab:
+                    found = self._lobby_prefab(prefabs[name], name, skeletons, clips, trees, path=prefab)
+                    if found:
                         break
             sounds = self._lobby_sound_events(clips.sound_events())
-            return json.dumps(lobby.lobby_info(skeletons, clips, prefab, sounds), ensure_ascii=True,
+            return json.dumps(lobby.lobby_info(skeletons, clips, found, sounds), ensure_ascii=True,
                               separators=(",", ":")).encode()
         return json.loads(self._cached("lobby/" + json.dumps([core.lower(), stamps]), build, disk=False))
 
+    def lobby_prefab(self, core: str) -> tuple[str, str] | None:
+        """The file name of a lobby's prefab bundle and the name of its root GameObject, None for a lobby without one
+        (a lobby camera keeps its framing there, BL-137)."""
+        root = self.lobby_info(core).get("prefab")
+        bundle = self._lobby_prefabs().get(str(root or "").lower())
+        return (bundle, root) if root and bundle else None
+
     def _lobby_prefab(self, bundle: str, root: str, skeletons: list[str], clips: lobby.Clips,
-                      behaviours: dict[tuple[str, int], dict] | None = None) -> dict | None:
-        """read_prefab on a prefab bundle; behaviours are the lobby core's MonoBehaviours by (CAB name, path id),
-        where the prefab's volume profiles usually are."""
+                      behaviours: dict[tuple[str, int], dict] | None = None, path: Path | None = None) -> dict | None:
+        """read_prefab on a prefab bundle (``path``: that file in its place); behaviours are the lobby core's
+        MonoBehaviours by (CAB name, path id), where the prefab's volume profiles usually are."""
         from .model import BundleGraph
 
-        try:
-            path = self._bundle_path(bundle)
-        except AssetNotFound:
-            return None
+        if path is None:
+            try:
+                path = self._bundle_path(bundle)
+            except AssetNotFound:
+                return None
         known = dict(behaviours or {})
         # the particle renderers' materials, textures and meshes sit in other bundles (the lobbies' shared effect
         # bundles, the shader bundles, a character's own): one graph holds them open, so it runs alone like a model

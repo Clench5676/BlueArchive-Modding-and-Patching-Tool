@@ -483,7 +483,8 @@ def register_api(rpc: Any, s: Any) -> None:
                                     "names": v.names, "label": "", "portrait": f"/asset/art/portrait/{v.portrait}.png" if v.portrait else None,
                                     **metadata(v, "official")})
         for mod in mods:
-            if mod.kind not in ("spr", "lobby"):
+            # a lobby camera (BL-137) frames the game's lobby, not the hall's
+            if mod.kind not in ("spr", "lobby") or getattr(mod, "camera", None):
                 continue
             v = variants.get(mod.target)
             if v is None:

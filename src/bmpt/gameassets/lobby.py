@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import math
 import re
+import struct
 from collections.abc import Callable, Iterable
 from typing import Any
 
@@ -30,8 +31,54 @@ _DATA_SCALE = 0.01
 _TRANSFORMS = ("Transform", "RectTransform")
 
 
+# The game scales every memorial lobby by its screen's aspect ratio with the prefab root's MX.Utils.UIManualScaleByAspect
+# (GameAssembly.dll): the standard aspect is the UI's 2960 x 1440, the narrowest 4:3 and the widest 2.1666667 (the float
+# 0x400aaaab); at 16:9 the lobby is on the narrow side of the standard
+ASPECT_STANDARD = 2960 / 1440
+ASPECT_NARROW = 4 / 3
+ASPECT_WIDE = 2.1666667
+ASPECT_VIEW = 16 / 9
+_ASPECT_SCRIPT = "UIManualScaleByAspect"
+
+
+def _f32(value: float) -> float:
+    """value rounded to single precision (the game computes in floats)."""
+    return struct.unpack("<f", struct.pack("<f", value))[0]
+
+
 def _r(value: float, digits: int = 2) -> float:
     return round(float(value), digits) + 0.0  # never "-0.0" in the JSON
+
+
+def aspect_rule(component: dict, aspect: float = ASPECT_VIEW) -> tuple[float, dict[int, tuple[int, int, int]]]:
+    """What a UIManualScaleByAspect does to its lobby on a screen of the given width / height: the factor each of its
+    scaleTransforms' local scale is multiplied by, and the whole-unit offset each offsetSettings Transform's local
+    position moves by ({transform path id: (x, y, z)}, rounded half to even like C# Math.Round). Below the standard
+    aspect the narrow values blend in by how far the screen is towards 4:3 (t, clamped to 1), above it the wide
+    ones towards 2.1666667; at the standard aspect nothing changes. component: the MonoBehaviour typetree."""
+    # in single precision, step by step as the game computes it, so a .5 offset rounds the way the game's does
+    a, std = _f32(aspect), _f32(_f32(2960.0) / _f32(1440.0))
+    if a < std:
+        t, scale, key = _f32(_f32(std - a) / _f32(std - _f32(ASPECT_NARROW))), "mostNarrowScale", "MostNarrowAdd"
+    elif a > std:
+        t, scale, key = _f32(_f32(a - std) / _f32(_f32(ASPECT_WIDE) - std)), "mostWideScale", "MostWideAdd"
+    else:
+        t, scale, key = 0.0, "mostNarrowScale", "MostNarrowAdd"
+    t = min(1.0, t)
+    factor = _f32(_f32(_f32(float(component.get(scale, 1.0))) - 1) * t + 1)
+    offsets: dict[int, tuple[int, int, int]] = {}
+    for setting in component.get("offsetSettings") or []:
+        pointer = setting.get("Transform") or {}
+        if pointer.get("m_FileID") or not pointer.get("m_PathID"):
+            continue
+        add = setting.get(key) or {}
+        offsets[pointer["m_PathID"]] = tuple(round(_f32(_f32(float(add.get(axis, 0.0))) * t)) for axis in "xyz")
+    return factor, offsets
+
+
+def aspect_targets(component: dict) -> list[int]:
+    """The path ids of a UIManualScaleByAspect's scaleTransforms (same-file Transforms)."""
+    return [p["m_PathID"] for p in component.get("scaleTransforms") or [] if p.get("m_PathID") and not p.get("m_FileID")]
 
 
 def prefab_candidates(core: str, skeletons: Iterable[str]) -> list[str]:
@@ -309,11 +356,25 @@ def read_prefab(kinds: dict[int, str], tree: Callable[[int], dict], scripts: dic
                 out.append((kind, pid, tree(pid)))
         return out
 
+    # the root's UIManualScaleByAspect, as the game applies it at 16:9: its scale targets' local scale times a factor,
+    # its offset targets' local position plus whole units (the same Transforms as the walk meets them)
+    scaled: dict[int, float] = {}
+    moved: dict[int, tuple[int, int, int]] = {}
+    for cls, _, comp in components(tree(top)["m_GameObject"]["m_PathID"]):
+        if cls == _ASPECT_SCRIPT:
+            factor, moved = aspect_rule(comp)
+            scaled = dict.fromkeys(aspect_targets(comp), factor)
+            break
+
     # one walk from the root: world transform, activity and components of every GameObject, in hierarchy order
     nodes: list[dict] = []
 
     def walk(tf: int, m: tuple[float, ...], m3: list[float], active: bool, parent: int, path: str) -> None:
         t = tree(tf)
+        if tf in scaled or tf in moved:
+            factor, pos = scaled.get(tf, 1.0), t["m_LocalPosition"]
+            t = {**t, "m_LocalScale": {k: v * factor for k, v in t["m_LocalScale"].items()},
+                 "m_LocalPosition": {**pos, **{k: pos.get(k, 0.0) + a for k, a in zip("xyz", moved.get(tf, (0, 0, 0)))}}}
         go = t["m_GameObject"]["m_PathID"]
         m = _mul(m, _local(t))
         local3 = particles.trs(t)

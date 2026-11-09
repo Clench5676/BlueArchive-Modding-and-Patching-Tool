@@ -8,6 +8,13 @@ export function modName(mod, entries, translate, seen = new Set()) {
   if (!mod) return "";
   if (mod.alias) return mod.alias;
   if (mod.optimized_from) return translate("model.optimizedName", { name: mod.label_base || mod.label });
+  // a memorial lobby camera (BL-137): its source's name, then its own, "<source> - Camera <n>"
+  if (mod.camera) {
+    const own = translate("lobby.cameraName", { n: mod.camera.number });
+    if (!mod.camera.source?.startsWith("mod:")) return `${translate("lobby.original")} - ${own}`;
+    const from = entries.find((entry) => entry.id === mod.camera.source.slice(4));
+    return from && !seen.has(from.id) ? `${modName(from, entries, translate, new Set([...seen, mod.id]))} - ${own}` : own;
+  }
   if (mod.repaired_from && !seen.has(mod.repaired_from)) {
     const parent = entries.find((entry) => entry.id === mod.repaired_from);
     const name = parent ? modName(parent, entries, translate, new Set([...seen, mod.id])) : mod.label_base;

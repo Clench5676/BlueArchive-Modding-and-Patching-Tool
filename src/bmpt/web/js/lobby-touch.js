@@ -20,6 +20,8 @@ const SCROLL_MS = 120;                           // wheel events this close toge
 const STAGE = { w: 1920, h: 1080 };
 
 let lobby = null, items = [], bodies = [], host = null, press = null, pointer = null, gesture = 1;
+let panOnly = false; // the camera framing (BL-137): every drag moves the view, the character is not touched
+export function setPanOnly(on) { panOnly = !!on; }
 let scroll = { kind: null, at: -Infinity }, pinchUntil = -Infinity, traceSink = null;
 const clamp = (v, a, b) => Math.max(Math.min(a, b), Math.min(Math.max(a, b), v));
 
@@ -130,7 +132,7 @@ function down(e) {
   trace("down", e, { blocked: lobby?.blocked() || undefined });
   if (!lobby || press) return;
   const [sx, sy] = stagePoint(e);
-  if (e.button === 1 || e.button === 2) {
+  if (e.button === 1 || e.button === 2 || (panOnly && e.button === 0)) {
     e.preventDefault();
     press = { id: e.pointerId, pan: true, last: [sx, sy] };
     capture(e);

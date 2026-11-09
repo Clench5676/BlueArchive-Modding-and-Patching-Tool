@@ -25,6 +25,7 @@ from ..kivo import Kivo
 from ..errors import ServiceError
 from ba_modding_toolkit.i18n import i18n_manager
 from ..logging_utils import log_failure
+from ..openfiles import temporary_directory
 from ba_modding_toolkit.naming import parse_filename
 from ba_modding_toolkit.utils import EXE_DIR
 from .classic import QUEUE_METHODS, ClassicQueue, ClassicWindow, NativeOps, QueuedCall, native_ops, stat_files
@@ -1591,8 +1592,13 @@ class Services:
                 return _json({"view": lobby.GAME_VIEW, "layer": lobby.STANDARD}, light=False)
         if kind == "lobby" and name == "lobby.json":
             # the lobby's layout and interaction from its prefab and clip assets; no skeleton file has this name, and
-            # it is answered without extracting (and PNG-encoding) the lobby's textures
-            return _json(game.lobby_info(core), light=False)
+            # it is answered without extracting (and PNG-encoding) the lobby's textures. While one of its cameras holds
+            # the prefab in the game, from the official prefab: no other choice's preview shows a camera's framing
+            base = getattr(self.library, "lobby_prefab_base", lambda *_args, **_kw: None)(core, pin=pin)
+            return _json(game.lobby_info(core, prefab=base) if base is not None else game.lobby_info(core), light=False)
+        if kind == "mod" and name == "lobby.json":
+            # a lobby camera's layout: its own prefab (BL-137); any other mod has none of its own
+            return _json(self._camera_layout(game, key), light=False)
         if kind == "lobby" and name.startswith("fx_") and name.endswith(".png"):
             # a texture of the lobby's particle effects (lobby.json fx.textures), read from the game files; any other
             # name is one of the skeletons' own files
@@ -1640,6 +1646,22 @@ class Services:
         if data is None:
             raise KeyError(name)
         return AssetResponse(data, MIME.get(Path(name).suffix, "application/octet-stream"), light=False)
+
+    def _camera_layout(self, game: Any, mod_id: str) -> dict:
+        from ..library.lobby_camera import patch_prefab
+
+        found = getattr(self.library, "camera_prefab", lambda _id: None)(mod_id)
+        if found is None:
+            raise KeyError("lobby.json")
+        meta, own, official = found
+        if official is None:
+            return game.lobby_info(meta["core"], prefab=own)
+        # a game update replaced the prefab it was made on and it was not made again yet: framed on the fly, from the
+        # stored parameters
+        with temporary_directory(prefix=devmode.LIBRARY_STAGING_PREFIX) as temporary:
+            output = Path(temporary) / official.name
+            patch_prefab(official, output, meta["root"], meta["scale"], tuple(meta["offset"]), crc=False)
+            return game.lobby_info(meta["core"], prefab=output)
 
     def close(self, wait: float | None = 600.0) -> None:
         if self.watch is not None:
