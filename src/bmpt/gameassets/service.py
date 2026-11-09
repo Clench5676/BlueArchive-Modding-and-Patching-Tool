@@ -8,6 +8,7 @@ import logging
 import math
 import re
 import threading
+import time
 from collections.abc import Iterable
 from contextlib import contextmanager
 from copy import deepcopy
@@ -897,7 +898,8 @@ class GameAssets:
             return None
 
         # Cached models need no Unity bundle locks and must not queue behind unrelated model or lobby exports.
-        cached = valid_cached()
+        with spans.span("export.model.cache-read"):
+            cached = valid_cached()
         if cached is not None:
             return cached
         with spans.held("model-lock.model", _MODEL_LOCK, hold=True):
@@ -905,13 +907,25 @@ class GameAssets:
             if cached is not None:
                 return cached
             started: dict[str, tuple[int, int, int] | None] = {}
+            # Export phases for the report (BL-092): bundle opening and CAB lookups are summed per export.
+            phases = {"open": 0.0, "resolve": 0.0}
+            find_cabs = resolve_cabs
+
+            def resolve_timed(wanted: set[str], hint_path: Path | None = None) -> dict[str, str]:
+                begun = time.perf_counter()
+                try:
+                    return find_cabs(wanted, hint_path)
+                finally:
+                    phases["resolve"] += time.perf_counter() - begun
 
             @contextmanager
             def tracked_bundle(path: Path):
                 before = _stamp(path)
                 if before is None:
                     raise AssetNotFound("Model dependency is unavailable")
+                begun = time.perf_counter()
                 with open_bundle(path) as env:
+                    phases["open"] += time.perf_counter() - begun
                     # The opener decodes before yielding. Never associate those decoded
                     # bytes with a replacement written while it was opening the bundle.
                     if _stamp(path) != before:
@@ -921,8 +935,13 @@ class GameAssets:
                     if _stamp(path) != before:
                         raise AssetNotFound("Model dependency changed during extraction")
 
-            with self._cab_discovery().batch(), BundleGraph({}, overrides, resolver=resolve_cabs, opener=tracked_bundle) as graph:
-                data = export_chibi(graph, bundles, core, **({"story": story} if story else {}))
+            with self._cab_discovery().batch(), BundleGraph({}, overrides, resolver=resolve_timed, opener=tracked_bundle) as graph:
+                try:
+                    with spans.span("export.model.convert"):
+                        data = export_chibi(graph, bundles, core, **({"story": story} if story else {}))
+                finally:
+                    spans.record("export.model.open", phases["open"])
+                    spans.record("export.model.resolve", phases["resolve"])
                 read = {path: _stamp(path) for path in graph.loaded}
                 complete = not graph.missing_cabs
                 if any(stamp is None or _stamp(path) != stamp for path, stamp in started.items()):
@@ -931,8 +950,9 @@ class GameAssets:
                 raise AssetNotFound("Model changed during extraction")
             self.cache.put(key, (data, read), version=self.cache_version, disk=False, size=len(data), generation=generation)
             if complete and read and all(stamp is not None for stamp in read.values()) and self.preview_cache is not None and self.preview_cache.allowed:
-                manifest = json.dumps({str(path): stamp for path, stamp in read.items()}).encode()
-                self._preview_put(key, pack_preview_files({"sources.json": manifest, "model.glb": data}), disk_generation)
+                with spans.span("export.model.cache-write"):
+                    manifest = json.dumps({str(path): stamp for path, stamp in read.items()}).encode()
+                    self._preview_put(key, pack_preview_files({"sources.json": manifest, "model.glb": data}), disk_generation)
             return data
 
     def _lobby_prefabs(self) -> dict[str, str]:

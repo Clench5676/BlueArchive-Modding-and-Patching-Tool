@@ -80,6 +80,7 @@ def test_report_content_redaction_clipboard_and_selection(reports, monkeypatch):
     assert data["lastFailedJob"]["code"] == "spine_version"
     assert data["lastFailedJob"]["ref"] == "E3025"
     assert data["timings"]["page.info"]["seconds"] == .25
+    assert data["running"] == []  # nothing unfinished while the report was taken
     assert data["frontend"]["webgl"]["renderer"] == "GPU 123"
     joined = "\n".join(files.values())
     for secret in ("PrivateUser", "OtherPerson", "Someone", "Private Mod", "private.bundle", "private.skel",
