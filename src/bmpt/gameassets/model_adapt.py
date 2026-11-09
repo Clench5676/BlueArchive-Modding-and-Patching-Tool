@@ -1104,11 +1104,11 @@ def _skirt_candidates(ts: Skeleton, ss: Skeleton, plan_: Plan, flat: Flat, sv: n
 
 
 def hems(target: Costume, source: Costume, plan_: Plan, t_clips: list[Any], s_clips: list[Any],
-         writable: list[bool]) -> Hems:
-    """Rule A of BL-118: new skin weights for the cloth the group choice left rigid around the legs, and Rule B of
-    BL-124: the skirt chains as new bones turned by the legs in every frame, picked by measurement under the slot's own
-    clips (see ``model_hems`` and ``model_skirts``). ``writable``: per source part, whether its mesh's skin can be
-    rewritten."""
+         writable: list[bool], physics: bool = False) -> Hems:
+    """Rule A of BL-118: new skin weights for the cloth the group choice left rigid around the legs, and, with
+    ``physics`` (Optimize Physics, BL-132), Rule B of BL-124: the skirt chains as new bones turned by the legs in every
+    frame; picked by measurement under the slot's own clips (see ``model_hems`` and ``model_skirts``). ``writable``:
+    per source part, whether its mesh's skin can be rewritten."""
     ts, ss = target.skeleton, source.skeleton
     t_legs, s_legs = legs_of(ts), legs_of(ss)
     if t_legs is None or s_legs is None:
@@ -1191,7 +1191,7 @@ def hems(target: Costume, source: Costume, plan_: Plan, t_clips: list[Any], s_cl
                 weights = hm.reweight(dense, rigid_part, fraction, moves, ramp_columns)
             rules.append((f"{name} {alpha}", weights, None))
     skirt_rules, skirt = _skirt_candidates(ts, ss, plan_, flat, sv, dominant, cloth, all_legs, t_legs, s_legs,
-                                           mapped, columns, rows_ok)
+                                           mapped, columns, rows_ok) if physics else ([], None)
     rules += [(c.rule, c.weights, c.solver) for c in skirt_rules]
     if len(rules) == 1:
         return Hems(note="skin not writable")
@@ -1428,19 +1428,22 @@ def choose_prefab(prefabs: Mapping[str, Any], dev: str) -> str:
 
 
 def adapt(*, index: Mapping[str, Path], resolver: Callable | None, target_files: list[Path], target_dev: str,
-          source_files: list[Path], source_dev: str, open_writable: Callable[[Path], Any], strict: bool = True) -> Result:
+          source_files: list[Path], source_dev: str, open_writable: Callable[[Path], Any], strict: bool = True,
+          physics: bool = False) -> Result:
     """The changed bundles of ``target_files`` (the slot, official copies) carrying the costume of ``source_dev``'s
     model, whose prefab sits in ``source_files``. ``index`` maps CABs to files to read (the slot's own CABs to
     ``target_files``); ``resolver`` finds any other CAB. ``open_writable`` opens a slot file as an engine Bundle.
     With ``strict=False`` a costume past the stretch limit is built anyway (``plan.unfit``), for a preview only.
+    ``physics`` (Optimize Physics, BL-132) lets the hem rule also offer Rule B, the skirt chains as new bones.
     The caller holds the model lock (``gameassets.service.model_lock``): the graph holds the path lock of every bundle
     it reads until it closes, like an export's."""
     with BundleGraph(index, resolver=resolver) as graph:
-        return _adapt(graph, index, target_files, target_dev, source_files, source_dev, open_writable, strict)
+        return _adapt(graph, index, target_files, target_dev, source_files, source_dev, open_writable, strict, physics)
 
 
 def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Path], target_dev: str,
-           source_files: list[Path], source_dev: str, open_writable: Callable[[Path], Any], strict: bool = True) -> Result:
+           source_files: list[Path], source_dev: str, open_writable: Callable[[Path], Any], strict: bool = True,
+           physics: bool = False) -> Result:
     target_prefabs = _model_prefabs(graph, [f for f in target_files if f.name.startswith("character-")])
     source_prefabs = _model_prefabs(graph, source_files)
     t_name = choose_prefab(target_prefabs, target_dev)
@@ -1482,7 +1485,7 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
         if layouts[k] is None and float(np.abs(points - skin.vertices).max(initial=0.0)) > 1e-4:
             raise refuse("costume geometry not writable", part=s_costume[k].mesh.peek_name())
     stores = [hm.store_of(tree) for tree in mesh_trees]
-    hem = hems(target, source, result, t_clips, s_clips, [store is not None for store in stores])
+    hem = hems(target, source, result, t_clips, s_clips, [store is not None for store in stores], physics)
     skirt_clips: list[Any] = []
     if hem.skirt is not None:  # Rule B: the chains join the slot's skeleton, the slot's clips that move it get curves
         skirt_bones(t_skeleton, hem.skirt)

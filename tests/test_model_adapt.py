@@ -182,14 +182,15 @@ def _slot(files, dev):
 
 
 @official
-@pytest.mark.parametrize("target,source,field,parts,hem", [
-    ("hina_original", "np0009", True, 1, "skirt smooth"),      # Hina <- Hina (Pajamas), a field-mode model: Rule B
-    ("ch0172", "np0283", True, 1, "skirt smooth"),              # Niko <- Niko (FOX EATS): her separate hands go
-    ("hoshino_original", "hoshino_swimsuit", False, 3, "rigid"),  # a three-part costume: two renderers added
-    ("hoshino_swimsuit", "hoshino_original", False, 1, "rigid"),  # the swimsuit's own extra parts draw nothing
-    ("ch0186", "mari_original", False, 1, "fit 0.5"),           # Mari (Track) <- Mari: a compressed mesh
-])
-def test_official_costume_on_a_slot(view, tmp_path, target, source, field, parts, hem):
+@pytest.mark.parametrize("target,source,field,parts,hem,physics", [
+    ("hina_original", "np0009", True, 1, "skirt smooth", True),   # Hina <- Hina (Pajamas), a field-mode model: Rule B
+    ("hina_original", "np0009", True, 1, "blend 0.5", False),     # the same without Optimize Physics: Rule A only
+    ("ch0172", "np0283", True, 1, "skirt smooth", True),           # Niko <- Niko (FOX EATS): her separate hands go
+    ("hoshino_original", "hoshino_swimsuit", False, 3, "rigid", False),  # a three-part costume: two renderers added
+    ("hoshino_swimsuit", "hoshino_original", False, 1, "rigid", False),  # the swimsuit's own extra parts draw nothing
+    ("ch0186", "mari_original", False, 1, "fit 0.5", True),        # Mari (Track) <- Mari: a compressed mesh; Rule B past
+])                                                                 # the stretch limit even when offered
+def test_official_costume_on_a_slot(view, tmp_path, target, source, field, parts, hem, physics):
     from ba_modding_toolkit.bundle import Bundle
     from ba_modding_toolkit.models import SaveOptions
     from ba_modding_toolkit.naming import parse_filename
@@ -203,7 +204,7 @@ def test_official_costume_on_a_slot(view, tmp_path, target, source, field, parts
     sources = [p for p in files if p.name.startswith("field-character-_mxload")] if field else [
         p for p in files if re.match(rf"character-{source}-_mxload", p.name)]
     result = ma.adapt(index=index, resolver=None, target_files=slot, target_dev=target, source_files=sources,
-                      source_dev=source, open_writable=Bundle.load)
+                      source_dev=source, open_writable=Bundle.load, physics=physics)
     assert result.parts == parts
     assert result.plan.stretch <= ma.stretch_limit(result.plan.own)
     # the hem (BL-118): less pass-through than rigid weights, no clip 5 points worse, stretch within the limit
@@ -532,7 +533,8 @@ def test_official_costume_apply_restore_and_preview_on_clones(tmp_path):
     # mods on: the master switch writes it
     assert not library.toggle(True, False).failed
     assert library.configured("hina").get("model") == "variant:np0009"
-    assert {path.name: hashlib.sha1(path.read_bytes()).hexdigest() for path in slot} != official_bytes
+    switched = {path.name: hashlib.sha1(path.read_bytes()).hexdigest() for path in slot}
+    assert switched != official_bytes
     # the written costume is the library's own: never offered as an outside mod to add
     states = {e.state for e in library.scan().entries if e.core == "hina_original"}
     assert "untracked" not in states, states
@@ -546,3 +548,21 @@ def test_official_costume_apply_restore_and_preview_on_clones(tmp_path):
     assert {path.name: hashlib.sha1(path.read_bytes()).hexdigest() for path in slot} == official_bytes
     with pytest.raises(Exception, match="source_unsupported"):
         library.apply("hina", "variant:hina", kind="model")
+
+    # Optimize Physics (BL-132): the switch above built Rule A; the action keeps a Rule B build as a model mod, once
+    assert library.optimize_costume("hina", "official", "Hina") == {"unneeded": True}
+    made = library.optimize_costume("hina", "variant:np0009", "Pajamas")
+    entry = next(m for m in library.mods() if m.id == made["mod"])
+    assert (entry.kind, entry.target, entry.optimized_from, entry.label_base) == ("model", "hina", "variant:np0009", "Pajamas")
+    assert "Pajamas" in entry.label and entry.label != "Pajamas"  # model.optimizedName
+    copy = {path.name: hashlib.sha1(path.read_bytes()).hexdigest() for path in library._paths(library._record(entry.id))}
+    assert copy.keys() <= official_bytes.keys() and any(switched[name] != sha for name, sha in copy.items())
+    assert library.optimize_costume("hina", "variant:np0009", "Pajamas") == made
+    library.apply("hina", f"mod:{entry.id}", kind="model")
+    assert {name: switched_now for name, switched_now in ((p.name, hashlib.sha1(p.read_bytes()).hexdigest()) for p in slot)
+            if name in copy} == copy
+    data = game.model_glb("hina_original")
+    doc = json.loads(data[20:20 + struct.unpack_from("<I", data, 12)[0]])
+    assert "OL_NP0009_Body" in {m["name"] for m in doc["meshes"]}
+    library.restore("hina", kind="model")
+    assert {path.name: hashlib.sha1(path.read_bytes()).hexdigest() for path in slot} == official_bytes

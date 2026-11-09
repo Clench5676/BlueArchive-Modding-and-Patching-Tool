@@ -262,6 +262,10 @@ export async function render(tree, host, opts = {}) {
   const needsPlaceholder = (n) => n.widgets?.some((w) => w.placeholder) || n.children?.some(needsPlaceholder);
   const placeholderLabel = needsPlaceholder(tree) ? find(await layout("UIPopup_Sort"),
     "Center/Popup/Btn/Btn_Cancel/Label_Locale").widgets.find((w) => "text" in w) : null;
+  // A still being made holds its place with the game's loading ring (BL-135): UIRatioNoticePopup's LoadingIcon and
+  // its TweenRotation; without that prefab the placeholder text stands in, as before.
+  const loadingIcon = needsPlaceholder(tree)
+    ? await layout("UIRatioNoticePopup").then((t) => find(t, "Center/Popup/Base/LoadingIcon") || null, () => null) : null;
   const S = opts.scale ?? 1920 / 2960;
   const [ox, oy] = opts.origin ?? [960, 540];
   const on = new Set(opts.on || []), off = new Set(opts.off || []);
@@ -299,6 +303,25 @@ export async function render(tree, host, opts = {}) {
     for (const c of n.children || []) walk(c, x, y, nsx, nsy, a, p);
   }
 
+  // the game's loading ring at a placeholder's centre, turned as its TweenRotation turns it (from and to about z, in
+  // degrees, over its duration; a loop or ping-pong); it shows after a moment, so a still that comes at once never
+  // flashes it
+  function spinner(n, icon, p, x, y, sx, sy, alpha, depth) {
+    const sprite = icon.widgets?.find((w) => "sprite" in w);
+    if (!sprite) return null;
+    const el = widget(n, { ...sprite, depth }, p, x, y, sx, sy, colorOf(sprite.color), alpha);
+    if (!el) return null;
+    const tween = icon.widgets.find((w) => w.cls === "TweenRotation")?.tween;
+    const from = tween?.from?.[2] ?? 180, to = tween?.to?.[2] ?? -180;
+    el.classList.add("ngui-loading");
+    // NGUI turns z anticlockwise, CSS clockwise
+    const turn = { "--turn-from": `${-from}deg`, "--turn-to": `${-to}deg`, "--turn-time": `${tween?.duration || 3}s`,
+      "--turn-loop": tween?.style === 2 ? "alternate" : "normal" };
+    for (const [key, value] of Object.entries(turn)) {
+      if (el.style.setProperty) el.style.setProperty(key, value); else el.style[key] = value;
+    }
+    return el;
+  }
   function widget(n, w, p, x, y, sx, sy, col, alpha) {
     const ww = w.w_ * sx, hh = w.h_ * sy;
     const left = x - PIVX[w.pivot ?? 4] * ww, top = y + PIVY[w.pivot ?? 4] * hh;
@@ -337,8 +360,11 @@ export async function render(tree, host, opts = {}) {
         `${p}/Placeholder`, x + placeholderRect.x * sx, y + placeholderRect.y * sy,
         sx, sy, colorOf(placeholderLabel.color), alpha) : null;
       const src = w.clipImage;
+      const spin = src && fitted && loadingIcon ? spinner(n, loadingIcon, `${p}/Loading`, x + placeholderRect.x * sx,
+        y + placeholderRect.y * sy, sx, sy, alpha, (w.depth || 0) + 1) : null;
       const failureNote = (visible) => {
-        if (note && w.placeholderOnFailure) { note.hidden = !visible; note.style.display = visible ? "flex" : "none"; }
+        if (visible) spin?.remove();
+        if (note && (w.placeholderOnFailure || spin)) { note.hidden = !visible; note.style.display = visible ? "flex" : "none"; }
       };
       failureNote(!src);
       if (src) {
@@ -354,6 +380,7 @@ export async function render(tree, host, opts = {}) {
             await load(u, { signal: src.signal || opts.signal });
             if (src.signal?.aborted || opts.signal?.aborted) return;
             note.remove();
+            spin?.remove();
           }
           pic.style.backgroundImage = `url("${u}")`;
           if (performance.now() - t0 < 50) pic.style.transition = "none";

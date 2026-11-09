@@ -819,6 +819,27 @@ def build_api(s: Services) -> RpcRegistry:
 
         return s.submit("costume-check", run)
 
+    @rpc.method("model.optimize")
+    def model_optimize(variant: str, source: str, name: str = "") -> str:
+        """A job running Optimize Physics on a variant's 3D model from one source (BL-132): "official" or
+        "variant:<key>", another variant's costume. Its result is {"mod": id}, the copy kept in the library, or
+        {"unneeded": true}. ``name`` is the source as the screen shows it, the copy's name."""
+        if not isinstance(variant, str) or not variant or not isinstance(source, str) or not source or len(source) > 264:
+            raise ServiceError("bad_params", key="source")
+        if not isinstance(name, str) or len(name) > 200:
+            raise ServiceError("bad_params", key="name")
+        if source != "official" and not preview_source_valid(variant, "model", source):
+            raise ServiceError("source_unsupported", source=source)
+
+        library = s.library
+        pin = s._current_pin(library)
+
+        def run(log: Any, progress: Any) -> dict[str, Any]:
+            progress({"current": 1, "total": 1, "step": ""})
+            return library.optimize_costume(variant, source, name, pin=pin)
+
+        return s.submit("model.optimize", run, writes="library", library=library)
+
     @rpc.method("family.get")
     @s.timings.measure("detail.data")
     def family_get(key: str) -> dict[str, Any]:

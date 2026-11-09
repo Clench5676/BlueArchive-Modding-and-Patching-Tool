@@ -23,7 +23,7 @@ import { T } from "./i18n.js";
 import { codeOf, noticeNames, withCode } from "./error-codes.js";
 import { withTimeout } from "./async.js";
 import { TEXT_VIEWER, frameClass, frameGeometry, popupContent } from "./popup-frames.js";
-import { statsBox, valueRoom } from "./stats-box.js";
+import { boxHeight, statsBox, valueRoom } from "./stats-box.js";
 import { BACKDROP, CHIP, COLOUR, CONTROL, POPUP_FRAME, SPACE, TYPE, SMALL_BUTTON, STATS_BOX, captionMinimum } from "./ui-tokens.js";
 import { DOT, RECRUIT, S, TAN10, clone, glyphsOf, hitButton, markedLabel, wrapPath } from "./util.js";
 
@@ -570,6 +570,8 @@ export function listCard(it, x, y, selected, card = LP.card, kind = null) {
 
 // The detail actions retain their existing 40–26 caption range and slanted-body inset. Their shared body height is buttonS.
 const ACTION_CLEAR = 28, ACTION_TEXT_H = 96;
+// The small button body's soft drop shadow under its solid art: 14 of its 176 rows (Btn_Cancel/BG (1) as drawn).
+const ACTION_SHADOW = 14 / 176;
 // Chip art and pitch remain UICharacterDetail's own; row/stack place complete chips inside the content column.
 const CHIP_MIN_GAP = SPACE.xs;
 export function chipPlaces(count, panelW) {
@@ -599,8 +601,11 @@ export function detailsTree(it, title, fields, actions, portraitTexture = null, 
     node("Label", [0, 0], [label(titleText.text, titleText.fs, "#ffffff/1.00", w - 2 * SPACE.xxl, titleText.h, { depth: 7 })]),
   ]);
   kids.push(titleNode); bands.push({ name: "Title_Bg", w, h: titleH });
-  const columns = grid(content), pictureColumn = portraitTexture ? columns.span(5) : content;
-  const infoColumn = portraitTexture ? columns.span(7, 5) : content;
+  // A 3D model's picture sits beside its name and chips, its fields full width below (BL-133), so the panel fits
+  // without scrolling and the picture keeps a usable size.
+  const side = !portraitTexture && kind === "model";
+  const columns = grid(content), pictureColumn = portraitTexture || side ? columns.span(5) : content;
+  const infoColumn = portraitTexture || side ? columns.span(7, 5) : content;
   const infoW = infoColumn.w, nameRoom = infoW - 2 * SPACE.m - (it.nameEdit ? CONTROL.icon.h + SPACE.m : 0);
   const nameFit = messageText(it.full, TYPE.heading.fs, TYPE.heading.min, nameRoom, 2, true);
   const name = textItem(NGUI, nameFit.text, { fs: nameFit.fs, min: nameFit.fs }, { maxW: nameRoom, lines: Infinity });
@@ -627,16 +632,24 @@ export function detailsTree(it, title, fields, actions, portraitTexture = null, 
   // stacks each caption and value as successive full-width rows; other sources retain the paired columns.
   const fieldRows = portraitTexture ? fields.flatMap(([caption, value, colour]) => [{ value: caption }, { value: String(value), colour }])
     : fields.map(([caption, value, colour], i) => ({ caption, value: String(value), colour, ariaLabel: String(value), cut: i === 2 ? 2 : 0 }));
-  const fieldBox = fields.length ? statsBox({ holder: "panel", width: infoW, at: [0, 0], name: "Fields", rows: fieldRows }) : { nodes: [], height: 0 };
+  const fieldW = side ? content.w : infoW;
+  const fieldBox = fields.length ? statsBox({ holder: "panel", width: fieldW, at: [0, 0], name: "Fields", rows: fieldRows }) : { nodes: [], height: 0 };
   if (portraitTexture) for (const part of fieldBox.nodes) {
     const match = /^V_(\d+)$/.exec(part.name);
     if (match) { const i = Number(match[1]); part.name = `${i % 2 ? "V" : "F"}_${Math.floor(i / 2)}`; }
   }
   kids.push(...fieldBox.nodes);
-  if (fields.length) info.push({ name: "Fields", w: infoW, h: fieldBox.height });
+  const fieldBand = fields.length ? { name: "Fields", w: fieldW, h: fieldBox.height } : null;
+  if (fieldBand && !side) info.push(fieldBand);
   const infoStack = layoutStack(info, { w: infoW, gap: SPACE.m });
 
-  const pictureW = portraitTexture ? pictureColumn.w : kind === "model" ? columns.span(7).w : w - 2 * SPACE.m;
+  // The model's square is one size for every candidate: what the title, the actions and fields with the file name on
+  // three lines (the others on one) leave, its 10 degree incline within its column. Only longer fields shrink it.
+  const roomFor = (fieldsH) => content.h - titleH - fieldsH - (actions.length ? CONTROL.buttonS.h : 0)
+    - SPACE.m * (1 + (fields.length ? 1 : 0) + (actions.length ? 1 : 0));
+  const reference = side && fields.length ? boxHeight(fields.map((_, i) => (i === 0 ? 3 : 1))) : 0;
+  const pictureW = portraitTexture ? pictureColumn.w
+    : side ? Math.max(0, Math.min(pictureColumn.w / (1 + TAN10), roomFor(reference), roomFor(fieldBand?.h || 0))) : w - 2 * SPACE.m;
   const texture = portraitTexture && clone(portraitTexture), native = texture?.widgets.find(widget => "texture" in widget);
   const portraitCard = texture && switchGrid("spr").card; // Keep the portrait card's native aspect in its preview column.
   const aspect = portraitCard ? portraitCard.w / portraitCard.h : kind === "model" ? 1 : 16 / 9, pictureH = pictureW / aspect;
@@ -658,6 +671,7 @@ export function detailsTree(it, title, fields, actions, portraitTexture = null, 
   }
   kids.push(picture);
   if (portraitTexture) bands.push({ name: "Portrait", w, h: Math.max(pictureH, infoStack.h) });
+  else if (side) bands.push({ name: "Portrait", w, h: Math.max(pictureH, infoStack.h) }, ...(fieldBand ? [fieldBand] : []));
   else bands.push({ name: "Picture", w, h: pictureH }, ...infoStack.boxes);
 
   const gap = SPACE.m, bw = (w - 2 * SPACE.m + gap) / Math.max(1, actions.length);
@@ -679,6 +693,9 @@ export function detailsTree(it, title, fields, actions, portraitTexture = null, 
   });
   if (actions.length) bands.push({ name: "Actions", w, h: CONTROL.buttonS.h });
   const placed = layoutStack(bands, { x: content.x, y: content.y, w: content.w, gap: SPACE.m });
+  // The model's actions stand on the panel's bottom, their solid art level with the list panel's (BL-133).
+  const pinned = side && actions.length && placed.h <= content.h;
+  if (pinned) placed.boxes.at(-1).y = content.y + content.h - CONTROL.buttonS.h * (1 - ACTION_SHADOW);
   const tree = node("Details", [0, 0], [], kids);
   const placeInfo = (box, x = 0) => {
     const target = { ...box, x: x + box.x };
@@ -697,17 +714,18 @@ export function detailsTree(it, title, fields, actions, portraitTexture = null, 
   };
   for (const box of placed.boxes) {
     if (box.name === "Portrait") {
-      const portraitRow = row([{ w: pictureColumn.w, h: pictureH }, { w: infoW, h: infoStack.h }],
-        { x: 0, y: box.y, w, gap: SPACE.xl, align: "start" }).boxes;
+      const portraitRow = row([{ w: side ? pictureW : pictureColumn.w, h: pictureH }, { w: infoW, h: infoStack.h }],
+        { x: side ? pictureColumn.x + (pictureColumn.w - pictureW) / 2 : 0, y: box.y, w, gap: SPACE.xl, align: side ? "center" : "start" }).boxes;
       picture.pos = toNode(portraitRow[0], 4, frame);
-      for (const part of infoStack.boxes) placeInfo({ ...part, y: part.y + box.y }, infoColumn.x);
+      const top = side ? portraitRow[1].y - box.y : 0;
+      for (const part of infoStack.boxes) placeInfo({ ...part, y: part.y + box.y + top }, infoColumn.x);
     } else if (box.name === "Actions") actionRow.boxes.forEach((action, i) => {
       find(tree, `Act_${i}`).pos = toNode({ ...action, y: box.y }, 4, frame);
     });
     else if (["Title_Bg", "Picture"].includes(box.name)) find(tree, box.name).pos = toNode(box, 4, frame);
     else placeInfo(box);
   }
-  tree.contentHeight = placed.h;
+  tree.contentHeight = pinned ? content.h : placed.h;
   tree.contentLayout = placed;
   return tree;
 }
@@ -906,10 +924,11 @@ export async function listPopup(options) {
       if (!fn) return;
       const button = hit(detailsHost, dv, `Details/Act_${i}/Body`, disabled ? () => {} : fn, { name: caption });
       if (!button) return;
-      // a greyed action with a reason keeps the pointer, so the reason shows on hover (the game's tooltip)
-      if (disabled && hint) { button.setAttribute("aria-disabled", "true"); attachHint(button, hint); }
+      // a greyed action with a reason keeps the pointer, so the reason shows on hover (the game's tooltip); an action's
+      // own hint (what it covers) shows the same way
+      if (disabled && hint) button.setAttribute("aria-disabled", "true");
       else button.disabled = !!disabled;
-      if (hint) button.setAttribute("aria-description", hint);
+      if (hint) { attachHint(button, hint); button.setAttribute("aria-description", hint); }
     });
   }
   if (tokens.get(host) !== my || host.hidden) return;

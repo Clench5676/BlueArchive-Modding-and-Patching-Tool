@@ -1886,6 +1886,39 @@ test("NGUI preview placeholders remain for pending, missing, rejected and undeco
   }
 });
 
+// BL-135: a still being made holds its place with the game's loading ring (UIRatioNoticePopup's LoadingIcon, turned by
+// its TweenRotation); the placeholder text shows only once it fails, and both go when it decodes
+test("a still being made shows the game's loading ring, the placeholder text only when it fails", async (t) => {
+  const NGUI = await import("../../src/bmpt/web/js/ngui.js");
+  const ICON = n("UIRatioNoticePopup", [0, 0], [], [n("Center", [0, 0], [], [n("Popup", [0, 0], [], [n("Base", [0, 0], [], [
+    n("LoadingIcon", [0, 0], [{ cls: "UISprite", sprite: "Common_Login_Loading", atlas: "Common", type: 1, flip: 1, w_: 75, h_: 75,
+      pivot: 4, depth: 10, color: "#ffffff/1.00" }, { cls: "TweenRotation", tween: { from: [0, 0, 180], to: [0, 0, -180], duration: 3,
+      delay: 0, style: 1, method: 0 } }])])])])]);
+  const base = globalThis.fetch;
+  t.mock.method(globalThis, "fetch", async (url, options) => url === "/asset/ui/layout/UIRatioNoticePopup.json" ? reply(ICON) : base(url, options));
+  const Original = Image;
+  globalThis.Image = class { set src(url) { queueMicrotask(() => this.onload?.()); } };
+  try {
+    for (const outcome of [null, "blob:ready"]) {
+      let finish;
+      const pending = Object.assign(new Promise((resolve) => { finish = resolve; }), { thumbnail: true });
+      const target = new El();
+      const view = await NGUI.render(n("Still", [0, 0], [{ clipImage: pending, placeholder: "Preview unavailable", w_: 320, h_: 704 }]), target);
+      const find = (path) => walk(target).find((e) => e.dataset.path === path);
+      const ring = find("Still/Loading");
+      assert.ok(ring, "the ring holds the place");
+      assert.ok(ring.className.split(" ").includes("ngui-loading"));
+      assert.deepEqual(["--turn-from", "--turn-to", "--turn-time", "--turn-loop"].map((k) => ring.style[k]),
+        ["-180deg", "180deg", "3s", "normal"], "the tween's turn, clockwise on screen, 3 s a loop");
+      assert.equal(find("Still/Placeholder").hidden, true, "no placeholder text while the still is made");
+      finish(outcome); await Promise.all(view.thumbnails);
+      if (outcome) await until(() => !find("Still/Placeholder"), "the still decoded");
+      assert.equal(find("Still/Loading"), undefined, "the ring goes when the still comes or fails");
+      if (outcome === null) assert.equal(find("Still/Placeholder").hidden, false, "a failed still shows the placeholder text");
+    }
+  } finally { globalThis.Image = Original; }
+});
+
 for (const kind of ["spr", "model"]) test(`${kind} card and info panel remove placeholders after their shared still succeeds`, async () => {
   let finish;
   const picture = Object.assign(new Promise((resolve) => { finish = resolve; }), { thumbnail: true });
@@ -3470,6 +3503,33 @@ for (const lang of ["en-US", "zh-CN"]) test(`list panels, check row and detail b
   const picture = NGUI.find(tree, "Picture"), name = NGUI.find(tree, "Name"), chip = NGUI.find(tree, "Chip_0");
   assert.ok(picture.pos[1] - 230 - name.pos[1] - name.widgets[0].h_ / 2 >= 20 - 1e-9);
   assert.ok(name.pos[1] - name.widgets[0].h_ / 2 - chip.pos[1] - 36 >= 20 - 1e-9);
+});
+
+// BL-133: a 3D model's details fit the list popup's panel without scrolling: the picture beside the name and chips,
+// inside its column with its incline, one size for every candidate, big enough to read with a long file name and six
+// actions, and the actions on the panel's bottom
+test("a 3D model's details fit the panel without scrolling", async () => {
+  const NGUI = await import("../../src/bmpt/web/js/ngui.js"); await Popup.ready();
+  const panel = Popup.listLayout().left, height = panel.t - panel.b, width = panel.r - panel.l;
+  const file = "assets-_mx-characters-hina_original-_mxdependency-2024-11-18_000_assets_all_3164161564.bundle";
+  const fields = [["File", file], ["Size", "7.2 MB"], ["Status", "Applied"], ["CRC", "Original"]];
+  const actions = ["Apply", "Show in Finder", "Check Compatibility", "Update", "Optimize Skirt", "Delete"].map((c) => [c, () => {}]);
+  const it = { ...items[0], full: "Hina (Pajamas) - Optimized", nameEdit: { label: "Alias", fn: () => {} } };
+  const sizes = new Set(), bottoms = new Set();
+  for (const n of [3, 4, 6]) for (const rows of [fields, fields.map(([c]) => [c, "-"])]) {
+    const tree = Popup.detailsTree(it, "3D Model Info", rows, actions.slice(0, n), null, "model", panel);
+    assert.ok(tree.contentHeight <= height + 1e-6, `${n} actions: ${tree.contentHeight} > ${height}`);
+    sizes.add(NGUI.find(tree, "Picture").widgets[0].w_.toFixed(6));
+    bottoms.add(NGUI.find(tree, "Act_0").pos[1].toFixed(6));
+    const picture = NGUI.find(tree, "Picture"), size = picture.widgets[0].w_, name = NGUI.find(tree, "Name");
+    assert.equal(picture.widgets[0].h_, size);
+    assert.ok(size >= 150, `picture ${size}`);
+    const TAN10 = Math.tan(Math.PI / 18), left = picture.pos[0] - size * (1 + TAN10) / 2, centre = (panel.l + panel.r) / 2;
+    assert.ok(left >= centre - width / 2 - 1e-6 && picture.pos[0] + size * (1 + TAN10) / 2 <= name.pos[0], `picture ${left}`);
+  }
+  // one picture size for every candidate, the actions on the panel's bottom whatever the fields hold
+  assert.equal(sizes.size, 1, [...sizes].join(", "));
+  assert.equal(bottoms.size, 1, [...bottoms].join(", "));
 });
 
 // --- design tokens, item C: one backdrop, the prefab's resting 0.80 (BlackBgClickArea's TweenAlpha runs 0 to 0.80, not the sprite's 0.94) ---

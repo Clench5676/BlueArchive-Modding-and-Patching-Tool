@@ -47,6 +47,7 @@ class ModEntry(JsonResult):
     user_added: bool = False  # explicit add, rather than adoption, recovery or re-filing
     alias: str = ""
     label_base: str = ""  # stored name before aliases and localized repair suffixes
+    optimized_from: str = ""  # an Optimize Physics copy: the costume it was built from, "variant:<key>" (BL-132)
 
 
 class AddResult(list[ModEntry]):

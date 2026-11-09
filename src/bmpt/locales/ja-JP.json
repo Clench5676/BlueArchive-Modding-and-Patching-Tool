@@ -92,7 +92,14 @@
 				"walk": "歩行",
 				"victory": "勝利",
 				"pickup": "持ち上げ"
-			}
+			},
+			"optimize": "物理効果を最適化",
+			"optimizeHint": "現在はスカートに対応",
+			"optimized": "最適化済み",
+			"optimizedGo": "最適化済み Mod を表示",
+			"optimizedName": "{name} - 最適化版",
+			"optimizeUnneeded": "最適化不要",
+			"optimizeDone": "最適化してライブラリに追加済み"
 		},
 		"visual": {
 			"reset": "リセット",
@@ -359,7 +366,8 @@
 			"actionExtract": "抽出",
 			"actionDelete": "削除",
 			"actionRemap": "テクスチャ再配置",
-			"actionCompatibility": "互換性確認"
+			"actionCompatibility": "互換性確認",
+			"actionOptimize": "物理効果の最適化"
 		},
 		"job": {
 			"running": "処理中",
