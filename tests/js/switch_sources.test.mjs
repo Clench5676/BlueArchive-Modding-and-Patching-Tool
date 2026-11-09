@@ -331,20 +331,21 @@ test("the 3D model offers the student's other models as costumes, field-mode mod
   assert.deepEqual(costumeCandidates(fam, v).map((o) => o.key), ["hoshino_swimsuit", "np0045"]);
   assert.deepEqual(candidates(fam, v, "model", ok).map((c) => c.key), ["self", "v:hoshino_swimsuit", "v:np0045"]);
   assert.deepEqual(candidates(fam, swimsuit, "model", ok).map((c) => c.key), ["self", "m:swim-model", "v:hoshino", "v:np0045"]);
-  // BL-122: a pair is offered only once checked to its end; unchecked and refused pairs stay out
-  assert.deepEqual(candidates(fam, v, "model").map((c) => c.key), ["self"]);
-  assert.deepEqual(candidates(fam, v, "model", { hoshino_swimsuit: "refused", np0045: null }).map((c) => c.key), ["self"]);
-  assert.deepEqual(candidates(fam, v, "model", { hoshino_swimsuit: "refused", np0045: "ok" }).map((c) => c.key), ["self", "v:np0045"]);
+  // BL-136: every pair is listed at once; one not checked yet or refused is listed for a preview only, and a refused
+  // one cannot be chosen as the preview either
+  const shape = (c) => [c.key, !!c.previewOnly, !!c.refused];
+  assert.deepEqual(candidates(fam, v, "model").map(shape),
+    [["self", false, false], ["v:hoshino_swimsuit", true, false], ["v:np0045", true, false]]);
+  assert.deepEqual(candidates(fam, v, "model", { hoshino_swimsuit: "refused", np0045: null }).map(shape),
+    [["self", false, false], ["v:hoshino_swimsuit", true, true], ["v:np0045", true, false]]);
+  assert.deepEqual(candidates(fam, v, "model", { hoshino_swimsuit: "refused", np0045: "ok" }).map(shape),
+    [["self", false, false], ["v:hoshino_swimsuit", true, true], ["v:np0045", false, false]]);
   // a pair past the stretch limit is listed for a preview only
-  assert.deepEqual(candidates(fam, v, "model", { hoshino_swimsuit: "preview", np0045: "ok" }).map((c) => [c.key, !!c.previewOnly]),
-    [["self", false], ["v:hoshino_swimsuit", true], ["v:np0045", false]]);
-  // ...but the one already chosen stays listed, whatever its check says
-  v.configured = { model: "variant:hoshino_swimsuit" };
-  assert.deepEqual(candidates(fam, v, "model", { hoshino_swimsuit: "refused" }).map((c) => [c.key, !!c.previewOnly]),
-    [["self", false], ["v:hoshino_swimsuit", true]]);
-  v.configured = {};
+  assert.deepEqual(candidates(fam, v, "model", { hoshino_swimsuit: "preview", np0045: "ok" }).map(shape),
+    [["self", false, false], ["v:hoshino_swimsuit", true, false], ["v:np0045", false, false]]);
+  // the popup starts on the saved preview before any verdict arrives
   v.previewSources = { model: "variant:np0045" };
-  assert.deepEqual(candidates(fam, v, "model").map((c) => c.key), ["self", "v:np0045"]);
+  assert.equal(popupMode(fam, v, "model").start, "v:np0045");
   delete v.previewSources;
   // the field-only variant shows a 3D tab, with no slot to switch
   assert.equal(hasKind(np, "model"), true);
@@ -371,8 +372,11 @@ test("split model slots offer dependency mods and judge every slot part", async 
       { ...dependency, id: "foreign", core: "hoshino_original" }] };
   const fam = { variants: [v, { key: "hoshino", model: "hoshino_original", modList: [
     { ...dependency, id: "other", core: "hoshino_original", target: "hoshino" }] }] };
-  // other cores' mods stay out; the other variant's model is offered as a costume once checked
-  assert.deepEqual(candidates(fam, v, "model", { hoshino: "ok" }).map((c) => c.key), ["self", "m:dependency", "v:hoshino"]);
+  // other cores' mods stay out; the other variant's model is listed as a costume, applicable once checked
+  assert.deepEqual(candidates(fam, v, "model", { hoshino: "ok" }).map((c) => [c.key, !!c.previewOnly]),
+    [["self", false], ["m:dependency", false], ["v:hoshino", false]]);
+  assert.deepEqual(candidates(fam, v, "model").map((c) => [c.key, !!c.previewOnly]),
+    [["self", false], ["m:dependency", false], ["v:hoshino", true]]);
   assert.equal(candidates(fam, v, "model")[0].greyed, true);
   assert.equal(appliedKey(v, "model"), "m:dependency");
   assert.equal(selectionStatus(v, "model"), "status.applied");
