@@ -187,7 +187,7 @@ for (const initial of ["roster", "detail"]) test(`${initial} to student stays co
 for (const [kind, tab] of [["spr", "portrait"], ["portrait", "portrait"], ["lobby", "lobby"], ["model", "model"]])
   test(`imported ${kind} navigation requests its ${tab} detail tab`, async () => {
     const h = harness("import");
-    const contextCode = source.slice(source.indexOf("const ctx = {"), source.indexOf("async function roster("));
+    const contextCode = source.slice(source.indexOf("const ctx = {"), source.indexOf("// one roster.list at a time"));
     const ctx = new Function("location", `${contextCode}\nreturn ctx;`)(h.location);
     ctx.go("ibuki", "ibuki", kind);
     assert.equal(h.location.hash, `#/student/ibuki/ibuki/${tab}`);
