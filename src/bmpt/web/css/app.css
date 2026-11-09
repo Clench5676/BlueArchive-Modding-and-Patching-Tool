@@ -354,6 +354,10 @@ input[type="text"], input[type="search"], textarea { cursor: text; }
 @keyframes ld-halo { 0%, 26.43% { opacity: 1; } 27.86%, 76.43% { opacity: .02; } 77.86%, 100% { opacity: 1; } }
 @keyframes ld-halo2 { 0%, 26.43% { opacity: .02; } 27.86%, 76.43% { opacity: 1; } 77.86%, 100% { opacity: .02; } }
 @keyframes ld-text { 0%, 100% { opacity: 1; } 50% { opacity: .8; } }
+/* a still being made: the game's loading ring (UIRatioNoticePopup LoadingIcon, its TweenRotation), shown after .2 s */
+.ngui-loading { animation: ngui-turn var(--turn-time, 3s) linear infinite var(--turn-loop, normal), ngui-loading-in .2s ease .2s both; }
+@keyframes ngui-turn { from { rotate: var(--turn-from, -180deg); } to { rotate: var(--turn-to, 180deg); } }
+@keyframes ngui-loading-in { from { opacity: 0; } to { opacity: 1; } }
 .loading-ind [data-path$="/dot"] { animation: ld-dot0 1.1667s ease-in-out infinite; }
 .loading-ind [data-path$="/dot (1)"] { animation: ld-dot1 1.1667s ease-in-out infinite; }
 .loading-ind [data-path$="/dot (2)"] { animation: ld-dot2 1.1667s ease-in-out infinite; }

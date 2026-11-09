@@ -37,7 +37,7 @@ logger = logging.getLogger(__name__)
 _SCHEMA = "gameassets-v1/"
 # The layout export's format, part of each cached layout's key: raise it whenever export_layout's output changes, so
 # layouts cached in an older format are rebuilt and no other cached asset is dropped (v3: label effect colours and distances)
-_LAYOUT = "layout-v5/"
+_LAYOUT = "layout-v6/"
 _ATLASES = "atlases-v2/"
 # One model export at a time in the process: an export holds the path locks of every bundle it reads
 _MODEL_LOCK = threading.Lock()
@@ -72,6 +72,8 @@ PREFAB_HINTS = {
     # the loading screen (Resources/UI/UILoading.prefab) and its "Now Loading" indicator
     "UILoading": "prologgroup-assets-_mx-resources-ui-_mxprolog-2026-04-13_assets_all_2006567787.bundle",
     "UIRepeater": "ui-_mxload-prefabs-2025-07-02_assets_all_1187726256.bundle",
+    # the loading ring a still being made shows in its place (UIRatioNoticePopup/Center/Popup/Base/LoadingIcon)
+    "UIRatioNoticePopup": "ui-_mxload-prefabs-2025-07-02_assets_all_3222685272.bundle",
     # the lobby, whose bottom menu entries hold the game's disabled look (layouts.py STATE_FIELDS)
     "UIPopup_Formation_CharEdit": "ui-_mxload-prefabs-2025-07-02_assets_all_762187506.bundle",
     "UIMailBox": "ui-_mxload-prefabs-2025-07-02_assets_all_2967155606.bundle",
