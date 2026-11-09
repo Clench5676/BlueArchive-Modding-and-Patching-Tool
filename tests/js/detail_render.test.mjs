@@ -1310,6 +1310,22 @@ test("the 3D tab dot only follows mods of its own kind", async (t) => {
   } finally { Detail.hide(); await flush(); t.mock.timers.reset(); }
 });
 
+test("a variant with only a field or NPC model draws it on the 3D tab", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  try {
+    errors.length = 0; closeLeftMessages();
+    family = modFamily("model");
+    const v = family.variants[0];
+    v.model = null; v.fieldModel = "np0206"; v.state.files = [];
+    modelRequests.length = 0;
+    await showPortrait(t);
+    const switching = tabButton(3).click();
+    for (let i = 0; i < 20; i++) { await new Promise(setImmediate); await flush(); }
+    await finish(t, switching);
+    assert.equal(modelRequests.at(-1)?.key, v.key, "the model viewer was asked for the variant's model");
+  } finally { closeLeftMessages(); Detail.hide(); await flush(); t.mock.timers.reset(); }
+});
+
 test("an official 3D model with no official copy left opens the overwritten message, not the generic failure", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   const show = globalThis.__detailModel.show;
