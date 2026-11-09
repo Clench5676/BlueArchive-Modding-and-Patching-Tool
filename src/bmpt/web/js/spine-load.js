@@ -127,7 +127,10 @@ export function loadPlayer(create, config, { signal, timeout = 15000, onError, o
       const render = () => {
         if (settled || disposed || failed || signal?.aborted || (manual && assetsReady)) return;
         frames += 1;
-        if ((manual || !lifecycle.active()) && !lifecycle.recovering()) {
+        // An owner may stop a player's own loop while it still loads (the hall pauses its scene); before the success
+        // hook nothing else would draw it, so the load would wait for its timeout (BL-129).
+        const stopped = !assetsReady && !!player?.stopRequestAnimationFrame;
+        if ((manual || !lifecycle.active() || stopped) && !lifecycle.recovering()) {
           try {
             if (manual) player.drawFrame(false);
             else player.drawFrame?.(false);
