@@ -59,6 +59,6 @@ PRERELEASE=()
 if gh release view "$VERSION" >/dev/null 2>&1; then
     gh release upload "$VERSION" --clobber "${FILES[@]}"
 else
-    gh release create "$VERSION" --verify-tag --title "$VERSION" --notes "" ${PRERELEASE[@]+"${PRERELEASE[@]}"} "${FILES[@]}"
+    gh release create "$VERSION" --draft --verify-tag --title "$VERSION" --notes "" ${PRERELEASE[@]+"${PRERELEASE[@]}"} "${FILES[@]}"
 fi
-echo "Released $VERSION: ${FILES[*]}"
+echo "Draft release $VERSION: ${FILES[*]} (publish it on GitHub)"
