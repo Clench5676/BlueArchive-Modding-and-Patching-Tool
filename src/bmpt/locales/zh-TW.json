@@ -92,7 +92,14 @@
 				"walk": "行走",
 				"victory": "勝利",
 				"pickup": "拎起"
-			}
+			},
+			"optimize": "優化物理效果",
+			"optimizeHint": "目前支援優化裙襬效果",
+			"optimized": "已優化",
+			"optimizedGo": "查看已優化 Mod",
+			"optimizedName": "{name} - 優化版",
+			"optimizeUnneeded": "無需優化",
+			"optimizeDone": "已優化並加入 Mod 倉庫"
 		},
 		"visual": {
 			"reset": "重置",
@@ -359,7 +366,8 @@
 			"actionExtract": "提取",
 			"actionDelete": "刪除",
 			"actionRemap": "重排貼圖",
-			"actionCompatibility": "檢查相容性"
+			"actionCompatibility": "檢查相容性",
+			"actionOptimize": "優化物理效果"
 		},
 		"job": {
 			"running": "處理中",

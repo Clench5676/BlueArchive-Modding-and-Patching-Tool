@@ -62,3 +62,14 @@ test("legacy labels remain usable and malformed repair cycles stay bounded", () 
   const a = { id: "a", repaired_from: "b", label_base: "A" }, b = { id: "b", repaired_from: "a", label_base: "B" };
   assert.equal(modName(a, [a, b], (_key, { name }) => `${name} repaired`), "B repaired");
 });
+
+test("an Optimize Physics copy is named after its costume in every language, its alias first", () => {
+  const copy = { id: "c", optimized_from: "variant:np0009", label_base: "Hina (Pajamas)", label: "stale" };
+  for (const lang of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
+    const table = flatten(JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url), "utf8")));
+    setStrings(lang, table);
+    assert.ok(table["webui.model.optimizedName"].includes("{name}"), lang);
+    assert.equal(modName(copy, [copy], T), table["webui.model.optimizedName"].replace("{name}", "Hina (Pajamas)"));
+    assert.equal(modName({ ...copy, alias: "Mine" }, [copy], T), "Mine");
+  }
+});
