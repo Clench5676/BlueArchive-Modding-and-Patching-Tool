@@ -1006,15 +1006,22 @@ class ModLibrary:
         return source if isinstance(source, str) and source.startswith("variant:") else ""
 
     def _entry(self, record: dict[str, Any]) -> ModEntry:
+        from .lobby_camera import meta_of
+
         paths = self._paths(record)
         parsed = parse_filename(paths[0].name)
+        # a memorial lobby camera is one of its variant's lobby choices (lobby_camera)
+        camera = meta_of(record)
         # The parts of one mod can carry different dates: the mod is dated by its newest part, not by the first one.
-        return ModEntry(record["id"], paths[0], self._label(record), self._target_of(record), record["kind"],
+        return ModEntry(record["id"], paths[0], self._label(record), camera["variant"] if camera else self._target_of(record),
+                        "lobby" if camera else record["kind"],
                         record["added"], not record["seen"], sum(p.stat().st_size for p in paths),
-                        max(date_of(path.name) for path in paths), parsed.crc, core_of(paths[0].name),
+                        max(date_of(path.name) for path in paths), parsed.crc,
+                        camera["core"] if camera else core_of(paths[0].name),
                         repaired_from=record.get("repaired_from", ""), repaired_id=self._repaired_id(record),
                         user_added=record.get("user_added") is True, alias=record.get("alias", ""),
-                        label_base=record["label"], optimized_from=self._optimized_from(record))
+                        label_base=record["label"], optimized_from=self._optimized_from(record),
+                        camera={key: camera[key] for key in ("source", "number", "scale", "offset")} if camera else None)
 
     def _label(self, record: dict[str, Any], seen: frozenset[str] = frozenset()) -> str:
         """Resolve internal aliases and repaired names without touching bundle names or bytes."""
@@ -1023,6 +1030,8 @@ class ModLibrary:
             return alias
         if record.get("roster_photography"):
             return t("webui.photo.modName")
+        if isinstance(record.get("lobby_camera"), dict):
+            return t("webui.lobby.cameraName", n=record["lobby_camera"].get("number", 1))
         if self._optimized_from(record):
             return t("webui.model.optimizedName", name=record["label"])
         source = record.get("repaired_from")
@@ -2048,7 +2057,7 @@ class ModLibrary:
         view = self._view([pin], "full") if pin else None
         rows = []
         for record in self._records.values():
-            if record["kind"] != "other" or record.get("roster_photography"):
+            if record["kind"] != "other" or record.get("roster_photography") or record.get("lobby_camera"):
                 continue
             source = f"mod:{record['id']}"
             try:
@@ -3228,7 +3237,10 @@ class ModLibrary:
         variant = self._variant(variant_key)
         pin = self._current(pin)
         folder = (((self.profiles.read() or {}).get("folders") or {}).get(pin.key) or {}).get("configured") or {}
-        return self._configured_sources(variant, folder)
+        from . import lobby_camera
+
+        return lobby_camera.overlay(lobby_camera.cameras(self, variant_key), folder,
+                                    self._configured_sources(variant, folder))
 
     @staticmethod
     def _configured_sources(variant: Any, folder: dict) -> dict[str, str | None]:
@@ -3250,9 +3262,15 @@ class ModLibrary:
         choices = (folder or {}).get("configured") or {}
         assigned = {record["assignment"] for record in self._records.values() if record.get("assignment")}
         configured = {}
+        from . import lobby_camera
+
+        made = {}
+        for record in lobby_camera.cameras(self):
+            made.setdefault(lobby_camera.meta_of(record)["variant"], []).append(record)
         for key in dict.fromkeys([*variant_keys, *sorted(assigned)]):
             try:
-                configured[key] = self._configured_sources(self._variant(key), choices) if pin else {"spr": None, "lobby": None}
+                configured[key] = lobby_camera.overlay(made.get(key, []), choices, self._configured_sources(
+                    self._variant(key), choices)) if pin else {"spr": None, "lobby": None}
             except ServiceError:
                 configured[key] = {"spr": None, "lobby": None}
         modified = {}
@@ -3280,28 +3298,35 @@ class ModLibrary:
             choice = folder.get(core.lower()) if core else None
             if not choice:
                 continue
-            paths = self._spine_parts(core, pin)
-            installed = bool(paths) and profiles_mod.enabled(config) and not choice.get("error")
-            try:
-                for path in paths:
-                    record = self._applied.get(str(path.resolve())) or {}
-                    if (record.get("source") != choice["source"] or record.get("removed")
-                            or self._hashes.get(path).sha1 != record.get("sha1")):
-                        installed = False
-                        break
-                recorded = {Path(name) for name, record in self._applied.items()
-                            if Path(name).parent in pin.dirs
-                            and self._core_map(pin).slot(core_of(Path(name).name)) == core.lower()
-                            and record.get("source") == choice["source"] and not record.get("removed")}
-                installed = installed and recorded == set(paths)
-            except (OSError, ServiceError):
-                installed = False
-            result[kind] = {"source": choice["source"], "installed": installed,
-                            "error": None if installed else choice.get("error")}
-            source = choice["source"]
-            if source.startswith("mod:") and source[4:] in self._records and self._incomplete(self._records[source[4:]], pin):
-                result[kind]["incomplete"] = True
-        return result
+            result[kind] = self._selection_of(pin, config, core, choice)
+        from . import lobby_camera
+
+        return lobby_camera.overlay_selection(self, variant_key, pin, config, folder, result)
+
+    def _selection_of(self, pin: Pin, config: dict | None, core: str, choice: dict) -> dict:
+        """One configured entry's saved choice and whether it is verified installed (``selection``)."""
+        paths = self._spine_parts(core, pin)
+        installed = bool(paths) and profiles_mod.enabled(config) and not choice.get("error")
+        try:
+            for path in paths:
+                record = self._applied.get(str(path.resolve())) or {}
+                if (record.get("source") != choice["source"] or record.get("removed")
+                        or self._hashes.get(path).sha1 != record.get("sha1")):
+                    installed = False
+                    break
+            recorded = {Path(name) for name, record in self._applied.items()
+                        if Path(name).parent in pin.dirs
+                        and self._core_map(pin).slot(core_of(Path(name).name)) == core.lower()
+                        and record.get("source") == choice["source"] and not record.get("removed")}
+            installed = installed and recorded == set(paths)
+        except (OSError, ServiceError):
+            installed = False
+        entry = {"source": choice["source"], "installed": installed,
+                 "error": None if installed else choice.get("error")}
+        source = choice["source"]
+        if source.startswith("mod:") and source[4:] in self._records and self._incomplete(self._records[source[4:]], pin):
+            entry["incomplete"] = True
+        return entry
 
     def _selection_error(self, pin: Pin, cores, error: dict | None) -> None:
         def change(data):
@@ -3402,7 +3427,41 @@ class ModLibrary:
         copies of the mod's own core in this install, falling back to its current files. Pass this order to
         ``GameAssets.spine_files_from`` so mod assets win.
         """
-        return self._preview(self._record(mod_id), self._current(pin))
+        from .lobby_camera import meta_of
+
+        pin = self._current(pin)
+        record = self._record(mod_id)
+        camera = meta_of(record)
+        if camera is not None:  # a lobby camera shows its source's art
+            source = camera["source"]
+            return (self._preview(self._record(source[4:]), pin) if source.startswith("mod:")
+                    else self.official_bundles(camera["core"], pin=pin))
+        return self._preview(record, pin)
+
+    @_serialized
+    def save_camera(self, variant_key: str, source: str, scale: float, offset: list[float], prefab: str, root: str,
+                    pin: Pin | None = None, log: LogFunc = no_log) -> dict[str, Any]:
+        """Keep a memorial lobby camera as a new lobby choice of a variant (``lobby_camera.save``)."""
+        from . import lobby_camera
+
+        return lobby_camera.save(self, variant_key, source, scale, offset, prefab, root, self._current(pin), log)
+
+    @_serialized
+    def camera_prefab(self, mod_id: str, pin: Pin | None = None) -> tuple[dict, Path, Path | None] | None:
+        """A lobby camera's parameters and preview prefab (``lobby_camera.preview_files``), None for another mod."""
+        from . import lobby_camera
+
+        record = self._record(mod_id)
+        meta = lobby_camera.meta_of(record)
+        return None if meta is None else (copy.deepcopy(meta), *lobby_camera.preview_files(self, record, self._current(pin)))
+
+    @_serialized
+    def lobby_prefab_base(self, core: str, pin: Pin | None = None) -> Path | None:
+        """The prefab the previews of a lobby's choices read when a camera holds its prefab (``lobby_camera.live_base``)."""
+        from . import lobby_camera
+
+        pin = pin or self.current_pin()
+        return lobby_camera.live_base(self, core, pin) if pin is not None and lobby_camera.cameras(self) else None
 
     def _preview(self, record: dict[str, Any], pin: Pin) -> list[Path]:
         paths = self._paths(record)
@@ -3511,8 +3570,17 @@ class ModLibrary:
     @_serialized
     def preview_incomplete(self, mod_id: str, pin: Pin | None = None) -> bool:
         """Whether previewing this partial mod needs non-official live parts in this install."""
+        from .lobby_camera import meta_of
+
         pin = pin or self.current_pin()
-        return bool(pin and self._incomplete(self._record(mod_id), pin))
+        record = self._record(mod_id)
+        camera = meta_of(record)
+        if camera is not None:  # a lobby camera is as complete as its source's art
+            source = camera["source"]
+            record = self._records.get(source[4:]) if source.startswith("mod:") else None
+            if record is None:
+                return False
+        return bool(pin and self._incomplete(record, pin))
 
     # --- switching ---
 
@@ -4346,6 +4414,22 @@ class ModLibrary:
     @_serialized
     def apply(self, variant_key: str, source: str, log: LogFunc = no_log, progress: ProgressCallback | None = None,
               kind: Kind | None = "spr", pin: Pin | None = None, *, create_backup: bool = False) -> ApplyResult:
+        """Install and configure one kind from a mod, variant, or originals (``_apply_choice``). A memorial lobby camera
+        (``lobby_camera``) is a lobby choice: its source's art and its own prefab; any other lobby choice puts the
+        variant's prefab back to its base."""
+        from . import lobby_camera
+
+        camera = lobby_camera.camera_of(self, source) if kind == "lobby" else None
+        if camera is not None:
+            return lobby_camera.apply(self, variant_key, camera, log, progress, self._current(pin), create_backup)
+        result = self._apply_choice(variant_key, source, log, progress, kind, pin, create_backup=create_backup)
+        if kind in ("lobby", None) and lobby_camera.cameras(self, variant_key):
+            lobby_camera.release(self, variant_key, self._current(pin), log, progress)
+        return result
+
+    def _apply_choice(self, variant_key: str, source: str, log: LogFunc = no_log,
+                      progress: ProgressCallback | None = None, kind: Kind | None = "spr", pin: Pin | None = None, *,
+                      create_backup: bool = False) -> ApplyResult:
         """Install and configure one kind from a mod, variant, or originals.
 
         None selects all kinds for originals, and both Spine kinds for variant adaptation.
@@ -4361,7 +4445,7 @@ class ModLibrary:
                 kinds = {(core_of(path.name) if kind == "other" else kind_of_file(path.name)): core_of(path.name)
                          for path in targets}
                 return self._defer(pin, variant_key, kinds, None)
-            return self.restore(variant_key, log, kind, pin=pin)
+            return self._restore(variant_key, log, kind, pin=pin)
         if kind == "other":
             return self._apply_other(variant_key, source, log, progress, self._current(pin), create_backup)
         variant = self._variant(variant_key)
@@ -4537,7 +4621,18 @@ class ModLibrary:
     def restore(self, variant_key: str, log: LogFunc = no_log, kind: Kind | None = "spr",
                 pin: Pin | None = None, progress: ProgressCallback | None = None) -> ApplyResult:
         """Restore one kind to official bytes and drop its configuration; None restores all kinds. Files that
-        are official already are not written (only recorded)."""
+        are official already are not written (only recorded). A lobby's restore puts its prefab back too, when one of
+        its cameras holds it (``lobby_camera.release``)."""
+        from . import lobby_camera
+
+        result = self._restore(variant_key, log, kind, pin, progress)
+        if kind in ("lobby", None) and not variant_key.startswith(("other:", "other-set:")) and (
+                lobby_camera.cameras(self, variant_key)):
+            lobby_camera.release(self, variant_key, self._current(pin), log, progress)
+        return result
+
+    def _restore(self, variant_key: str, log: LogFunc = no_log, kind: Kind | None = "spr",
+                 pin: Pin | None = None, progress: ProgressCallback | None = None) -> ApplyResult:
         pin = self._current(pin)
         self.profiles.read()
         targets = self._game_files(variant_key, kind, pin)
@@ -5517,7 +5612,9 @@ class ModLibrary:
             self._check_idle(pins)
             if drift is None:
                 from .portrait_edit import refresh_missing
+                from .lobby_camera import refresh
                 refresh_missing(self, pins, log)
+                refresh(self, pins, log)
                 config = self.profiles.read()
             if drift is not None:
                 if not current:  # mods off: official files are the intent, there is no drift to apply
