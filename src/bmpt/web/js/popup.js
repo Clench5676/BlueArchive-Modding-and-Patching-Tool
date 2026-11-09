@@ -15,7 +15,7 @@ import { switchGrid, placeSwitchCards } from "./switch-layout.js";
 import { scrollbar, scrollbarTrack } from "./scrollbar.js";
 import { horizontalScroll } from "./horizontal-scroll.js";
 import * as Buttons from "./game-buttons.js";
-import { searchTree, sortBody, orderBody, pickerItems } from "./roster-widgets.js";
+import { searchTree, sortBody, orderBody, pickerItems, toolbarFit, toolbarTree, TOOLBAR_CENTRE_Y } from "./roster-widgets.js";
 import { resizeButton } from "./button-layout.js";
 import { fitBadgeCaptions, selectedFrame, selectionArtWindow, SELECTION_PREFAB, SELECTION_SLOT } from "./selected-frames.js";
 import { frameOutline } from "./row-thumbnail.js";
@@ -377,17 +377,21 @@ export function scrollArea(host, [l, t, w, h], contentH, { horizontal = false, c
 // the gacha list's checkbox (Btn_Checkbox: its white plate, the box and its tick, a label after it), at x (its left
 // edge), y; the tick shows when on. Without the prefab, the same pieces drawn from its numbers.
 const CHECK_H = 104;
+// Btn_Checkbox drawn from its numbers (without the prefab): the plate, and the box with its tick in Type_ON, without in Type_OFF
+function checkboxPrefab() {
+  const box = (ticked) => node("Check", [-120, 8], [sprite("Common_Bg_Raius10px", 74, 72, { incline: 10, depth: 25, color: "#e4f3f8/1.00" })], [
+    node("Line", [0, 0], [sprite("Common_Line_Raius10px", 74, 72, { incline: 10, depth: 30, color: "#96b6c2/1.00" })]),
+    ...(ticked ? [node("Icon", [0.4, -1.8], [sprite("Common_Icon_Check_B", 59, 58, { depth: 35 })])] : []),
+  ]);
+  return node("Btn_Checkbox", [0, 0], [sprite("Resource_Bg_Radius10px", 798, 110, { incline: 10, pivot: 3, depth: 20 })],
+    [node("Type_ON", [178, -3.2], [], [box(true)]), node("Type_OFF", [178, -3.2], [], [box(false)])]);
+}
 export function checkbox(name, x, y, caption, on, maxW) {
   const fit = NGUI.fitText(caption, TYPE.body.fs, TYPE.body.min, maxW - 131 - SPACE.xl, 2, { maxH: CHECK_H });
   const f = textItem(NGUI, fit.text, { fs: fit.fs, min: fit.fs }, { maxW: maxW - 131 - SPACE.xl, lines: 2 });
   const parts = row([{ w: 131, h: CHECK_H }, { w: f.w + SPACE.m, h: f.h }], { gap: SPACE.m });
   const w = parts.w; // The checkbox branch keeps its prefab check plate and its 131-unit label origin.
-  const box = () => node("Check", [-120, 8], [sprite("Common_Bg_Raius10px", 74, 72, { incline: 10, depth: 25, color: "#e4f3f8/1.00" })], [
-    node("Line", [0, 0], [sprite("Common_Line_Raius10px", 74, 72, { incline: 10, depth: 30, color: "#96b6c2/1.00" })]),
-    node("Icon", [0.4, -1.8], [sprite("Common_Icon_Check_B", 59, 58, { depth: 35 })]),
-  ]);
-  const cb = layouts?.checkbox ? clone(layouts.checkbox)
-    : node("Btn_Checkbox", [0, 0], [sprite("Resource_Bg_Radius10px", 798, 110, { incline: 10, pivot: 3, depth: 20 })], [node("Type_ON", [178, -3.2], [], [box()])]);
+  const cb = layouts?.checkbox ? clone(layouts.checkbox) : checkboxPrefab();
   cb.name = name;
   cb.pos = [x, y];
   Object.assign(cb.widgets.find((x2) => "sprite" in x2), { w_: w, h_: CHECK_H });
@@ -446,7 +450,8 @@ export function listCardBox(layout, { searching = false, horizontal = false } = 
 }
 const LP = listLayout();
 // the student list's tools at the top right of the list: order, sort, search and, with segs, the segment filter
-function toolbar(right, y, { segs = null, sortKey = "sort.default", active = 0, ascending = true, filtered = false } = {}) {
+function toolbar(right, y, { segs = null, sortKey = "sort.default", active = 0, ascending = true, filtered = false, check = null, sortKeys = [sortKey] } = {}) {
+  if (check) return checkedToolbar(right, y, { segs, sortKey, sortKeys, active, ascending, filtered, check });
   const menu = find(layouts.collection, "SeletControl/TopMenu");
   const kids = [];
   const toolRow = row([{ w: 150, h: CONTROL.buttonS.h }, { w: 420, h: CONTROL.buttonS.h }, { w: 243, h: CONTROL.buttonS.h }],
@@ -492,6 +497,28 @@ function toolbar(right, y, { segs = null, sortKey = "sort.default", active = 0, 
     kids.push(filter);
   }
   return { tree: node("Toolbar", [0, 0], [], kids), segBox };
+}
+
+// the fit of that toolbar: the checkbox's ``label``, the ``segs`` captions' keys and the sort button's ``sortKeys`` (``sortKey``:
+// the one shown), between the list's left edge and ``right``
+export function checkedToolbarFit(right, { segs, sortKey, sortKeys, label }) {
+  return toolbarFit({ left: LP.list.l + SPACE.m, right, filters: [segs.map((key) => T(key))], sorts: sortKeys.map((key) => T(key)),
+    sortAt: sortKeys.indexOf(sortKey), check: label });
+}
+// The toolbar with a checkbox (Switch 3D Model's "Show other students", BL-131) is the student roster's: the checkbox
+// first, the three segments, search, sort and order, fitted by the roster's own steps (roster-widgets.js toolbarFit; the
+// sort button as wide as its longest key). Returns the tree, where the segments and the checkbox stand for the hit areas.
+function checkedToolbar(right, y, { segs, sortKey, sortKeys, active, ascending, filtered, check }) {
+  const lay = checkedToolbarFit(right, { segs, sortKey, sortKeys, label: check.label });
+  const tree = toolbarTree(layouts.collection, layouts.checkbox || checkboxPrefab(), {}, false, lay,
+    { filters: [{ name: "ModFilter", active }], checked: !!check.checked, filtered, ascending });
+  tree.name = "Toolbar";
+  tree.pos = [0, y - TOOLBAR_CENTRE_Y];
+  tree.children = tree.children.filter((child) => ["Menubar", "ModFilter", "SearchBtn", "SortBtn", "OrderBtn"].includes(child.name));
+  const bar = find(tree, "Menubar");
+  bar.children = bar.children.filter((child) => child.name === "Merge");
+  // the segments span the filter's right edge back three widths, the same slots the plain toolbar's hit areas count from
+  return { tree, lay, segBox: { right: lay.seg1 + 6, segW: lay.segW, y }, check: { x: lay.cbLeft + lay.cbW / 2, w: lay.cbW, y } };
 }
 
 // The list and details panels occupy the XL content grid; its footer uses the shared centred group.
@@ -742,17 +769,18 @@ export function detailsTree(it, title, fields, actions, portraitTexture = null, 
 //   onClose(how): the close button, the backdrop and Escape; null for a popup without them (it must be answered)
 //   A list with no card to show puts hall.noCandidates in the list paper; with tools, while the chosen card (selected)
 //   is not among the cards shown, the primary button is the game's disabled one and answers nothing.
-//   tools: {segs, seg, onSeg, sortKey, more} for the student list's tools over the cards, or null; without them, hint
-//          (left) and footer (right) show in their place. more(query): cards a search adds after the matching ones
-//          (Switch 3D Model's other students' models, BL-131; asked on every drawing, none for an empty query), ordered
-//          and turned like them
-//   items' shade: the picture partly greyed (still chosen and previewed like any card); hint: the card's hover hint
+//   tools: {segs, seg, onSeg, sortKey, more, check, onView} for the student list's tools over the cards, or null; without
+//          them, hint (left) and footer (right) show in their place. more(query): cards added after the matching ones
+//          (Switch 3D Model's other students' models, BL-131; asked on every drawing, with the search's words, which may be
+//          empty), ordered and turned like them. check: {label, checked, onChange(checked)}, a checkbox before the
+//          segments in the same toolbar (the roster's fit, see checkedToolbar); a click flips check.checked and draws the
+//          popup again, so the same object is passed to every drawing. onView(keys): the keys of the cards in view, after
+//          every drawing and scroll (the same signal that brings their thumbnails in)
+//   items' hint: the card's hover hint
 //   check: {label, checked, onChange} for a checkbox below the details; a click flips check.checked, so the same
 //          object is passed to every drawing
 //   details(it): {title, fields: [[caption, value, colour]], actions: [[caption, fn]]} for the panel on the left
 //   keepScroll: the list's offset on its scrolling axis (horizontal for portraits)
-// a card's partly greyed picture (shade): less colour, a little darker; a dim card's is wholly grey under a dark veil
-export const SHADE = "grayscale(0.6) brightness(0.85)";
 const toolStates = new WeakMap();
 const tokens = new Map(); // host -> the latest drawing's number: an older one that ends later is dropped
 export async function listPopup(options) {
@@ -802,7 +830,9 @@ export async function listPopup(options) {
   closable(view, host, onClose);
   const band = [];
   if (tools && layouts.collection && !(horizontal && toolState.searching)) {
-    const tb = toolbar(LP.list.r - SPACE.m, LP.list.t - SPACE.m - CONTROL.buttonS.h / 2, { segs: tools.segs, sortKey: toolState.sort === "name" ? "sort.name" : tools.sortKey, active: tools.seg ?? 0, ascending: toolState.ascending, filtered: !!toolState.query });
+    const sortKeys = [...new Set([tools.sortKey ?? "sort.default", "sort.name"])];
+    const tb = toolbar(LP.list.r - SPACE.m, LP.list.t - SPACE.m - CONTROL.buttonS.h / 2, { segs: tools.segs, sortKey: toolState.sort === "name" ? "sort.name" : tools.sortKey, sortKeys,
+      active: tools.seg ?? 0, ascending: toolState.ascending, filtered: !!toolState.query, check: tools.segs ? tools.check : null });
     const tv = await NGUI.render(tb.tree, next, { scale: S, origin: [960, 540], z: 20 });
     hit(next, tv, "Toolbar/OrderBtn/Btn_Normal", () => { toolState.ascending = !toolState.ascending; redraw(); },
       { name: T(toolState.ascending ? "roster.asc" : "roster.desc"), action: "order" });
@@ -817,6 +847,17 @@ export async function listPopup(options) {
           toolState.sort = draft.sort; toolState.ascending = draft.order === "asc"; redraw();
         } });
     }, { name: T("display.tab.sort"), action: "sort" });
+    if (tb.check) {
+      const { x, w, y } = tb.check, state = tools.check;
+      const box = hitButton(next, [960 + (x - w / 2) * S, 540 - (y + CONTROL.toolbar.h / 2) * S, w * S, CONTROL.toolbar.h * S], () => {
+        state.checked = !state.checked;
+        state.onChange?.(state.checked);
+        redraw();
+      }, state.label, 80);
+      box.dataset.action = "check";
+      box.setAttribute("role", "checkbox");
+      box.setAttribute("aria-checked", String(!!state.checked));
+    }
     if (tb.segBox && tools.onSeg) {
       const { right, segW, y } = tb.segBox;
       for (let i = 0; i < 3; i++) {
@@ -902,8 +943,8 @@ export async function listPopup(options) {
   const at = (i) => trees[i].pos;
   await Promise.all(items.map(async (it, i) => {
     const tree = trees[i];
-    const styles = it.dim ? { [`Card_${it.key}/Thumb`]: "filter: grayscale(1)" }
-      : it.shade ? { [`Card_${it.key}/Thumb`]: `filter: ${SHADE}` } : undefined;
+    // a dim card's picture is wholly grey under a dark veil
+    const styles = it.dim ? { [`Card_${it.key}/Thumb`]: "filter: grayscale(1)" } : undefined;
     const cv = await NGUI.render(tree, inner, { scale: S, origin, z: 30, styles });
     if (it.nameEdit) hit(inner, cv, `Card_${it.key}/Bar/EditName`, () => it.nameEdit.fn(scroll()), { name: it.nameEdit.label, action: `alias:${it.key}` });
   }));
@@ -947,13 +988,14 @@ export async function listPopup(options) {
   // the thumbnails render in the order they were asked for: the cards in view go first, again as the list scrolls
   const bumpShown = () => {
     if (tokens.get(host) !== my || host.hidden) return;
-    const offset = scroll();
+    const offset = scroll(), inView = [];
     for (let i = items.length - 1; i >= 0; i--) {
       const b = bounds[i];
       const first = horizontal ? (b.left - paper.left) * S : (top - b.top) * S;
       const last = horizontal ? (b.right - paper.left) * S : (top - b.bottom) * S;
-      if (last > offset && first < offset + (horizontal ? visW : visH)) items[i].thumb?.bump?.();
+      if (last > offset && first < offset + (horizontal ? visW : visH)) { items[i].thumb?.bump?.(); inView.unshift(items[i].key); }
     }
+    tools?.onView?.(inView);
   };
   bumpShown();
   let waiting = false;

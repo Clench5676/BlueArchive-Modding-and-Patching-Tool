@@ -981,6 +981,19 @@ re-renders when the saved verdicts arrive and after each check, keeping its scro
 source (`family.get` drops it; the switch does not save it) and its `/asset/model` route answers 404 without building
 it again.
 
+Another student's model (BL-131) is a deliberate choice, built past the stretch limit as well and with its halo
+(`cross`); its "preview" verdict is applied like "ok". The switch's search finds those models (at most 64, the keys one
+`model.costumes` call takes), and the checkbox "Show other students" (`model.showOthers`) in the toolbar's left end lists
+all of them after the student's own cards instead: in the roster's name order (favourites first), the segment tabs, the
+search, the sort and the order applying to them as to the own cards, no cap. It is off at every App start and kept only
+in memory (switch-sources.js `showOthers`), across students and popups. The toolbar with the checkbox is the roster's
+(`roster-widgets.js` `toolbarFit`: the checkbox first, the sort button as wide as its longest key, the segments and type
+sizes stepping down until everything stands after the list's left edge); the portrait and lobby switches and every other
+list popup keep their toolbar as it was. A search's hits are judged at once; the models of the checkbox only as they come
+into view (the list's `tools.onView`, the signal that brings the thumbnails in): `model.costumes` in calls of at most 64
+keys, then `model.checkCostumes` one pair at a time, the cards scrolled out of view dropped from the queue. Every such
+card shows `model.crossCharacter` on hover and is drawn like any other card.
+
 Optimize Physics (BL-132) is an action of the switch's details panel on the official model and on another variant's
 costume (not on 3D mods). The switch itself builds a costume with Rule A only (`adapt(physics=False)`); the action
 builds it with the physics rules as well (`physics=True`: Rule B, the skirt chains as new bones of the slot) and keeps

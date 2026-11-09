@@ -49,7 +49,7 @@ import { ALIAS, DETAILS, aliasFrame, detailsFrame, popupContent } from "./popup-
 import { statsBox } from "./stats-box.js";
 import { CHIP, COLOUR, CONTROL, SPACE, TYPE } from "./ui-tokens.js";
 import { container, row, stack, textItem, toNode } from "./ui-grid.js";
-import { CROSS_LIMIT, candidateStatus, detailStatus, selectionStatus, selectionError, intendedKey, isApplied, availableTab, coreOf, costumeCandidates, costumeHold, crossCandidates, crossCard, crossModels, hasAsset, hasKind, primaryKind, appliedKey as keyOf, appliedOf, candidates as listSources, partsOf, popupMode, modelSource, previewBase, previewChanged, previewKey, sourceOf, switchKindOf } from "./switch-sources.js";
+import { CROSS_LIMIT, crossExtras, setShowOthers, showOthers, candidateStatus, detailStatus, selectionStatus, selectionError, intendedKey, isApplied, availableTab, coreOf, costumeCandidates, costumeHold, crossCandidates, crossCard, crossModels, hasAsset, hasKind, primaryKind, appliedKey as keyOf, appliedOf, candidates as listSources, partsOf, popupMode, modelSource, previewBase, previewChanged, previewKey, sourceOf, switchKindOf } from "./switch-sources.js";
 import { pickerItems } from "./roster-widgets.js";
 import { $, DOT, RECRUIT, S, TAN10, advanceOf, at, clone, glyphsOf, hitButton, markedLabel, off, text, widget, wrapPath } from "./util.js";
 
@@ -233,6 +233,7 @@ function resetOthers() {
   otherStudents = null;
   othersLoad = null;
   crossWanted = { variant: null, keys: [] };
+  crossShown = [];
 }
 function readOthers() {
   if (otherStudents || !ctx?.roster) return Promise.resolve(otherStudents);
@@ -249,11 +250,13 @@ function popupCandidate(v, kind, key) {
   const o = crossModels(otherStudents, v).find((x) => x.key === key.slice(2));
   return o ? named(crossCard(o, costumeState.get(v.key))) : undefined;
 }
-// the search's hits (BL-131): the other students' models its words find, by the popup's own matching (their names, keys
-// and model ids) and segment, in the roster's name order (favourites first), at most CROSS_LIMIT; their verdicts are
-// asked for as they show
+// The other students' models after the popup's own cards (BL-131): the search's hits, or with "Show other students" all
+// of them (and the search narrows them). By the popup's own matching (their names, keys and model ids) and segment, in
+// the roster's name order (favourites first); a search's hits at most CROSS_LIMIT, all of them without. A search's hits
+// are judged at once; all the students' models only as they come into view (viewCross).
 function crossItems(v, query, own, item) {
-  if (!otherStudents || !query.trim()) {  // no search: today's cards only, and only the chosen pair is checked
+  const all = showOthers();
+  if (!otherStudents || (!all && !query.trim())) {  // today's cards only, and only the chosen pair is checked
     judgeCross(v);
     return [];
   }
@@ -263,9 +266,21 @@ function crossItems(v, query, own, item) {
   const hits = crossCandidates(otherStudents, v, costumeState.get(v.key), {
     match: (o) => (popupSeg === 0 || (popupSeg === 1) === !!o.recruitable) && pickerItems([{ label: shortName(o), full: fullName(o),
       original: originalName(o), key: `v:${o.key}`, terms: [o.fileId, o.model, o.fieldModel] }], { query }).length > 0,
-    compare: (a, b) => (isFav(b) - isFav(a)) || name(a, b), exclude: own });
-  judgeCross(v, hits.map((c) => c.variant.key));
+    compare: (a, b) => (isFav(b) - isFav(a)) || name(a, b), exclude: own, limit: all ? Infinity : CROSS_LIMIT });
+  const keys = hits.map((c) => c.variant.key);
+  const inView = new Set(crossShown);  // the cards in view, as the list last reported them (popup.js onView)
+  judgeCross(v, all ? keys.filter((key) => inView.has(key)) : keys);
   return hits.map((c) => item(named(c)));
+}
+// the list's cards in view (popup.js onView): with "Show other students" the models of other students among them are the
+// ones to judge, the others dropped from the queue; a scroll brings the next ones in
+let crossShown = [];
+function viewCross(v, keys) {
+  const shown = keys.filter((key) => typeof key === "string" && key.startsWith("v:")).map((key) => key.slice(2))
+    .filter((key) => !fam.variants.some((o) => o.key === key));
+  if (shown.length === crossShown.length && shown.every((key, i) => key === crossShown[i])) return;
+  crossShown = shown;
+  if (showOthers() && popupKind === "model" && variant() === v) judgeCross(v, shown);
 }
 // Switch 3D Model lists every costume of the student at once and lets one be applied only once that pair was built
 // and exported for these files (model.costumes, BL-122, BL-136): the verdicts by variant, read when the 3D tab shows
@@ -1452,8 +1467,8 @@ async function drawPopup(scroll = 0) {
       inUse: false, applied: !!coreOf(v, kind) && c.key === applied, fav: c.fav, isNew: c.kind === "mod" && c.mod.fresh && c.key !== applied, src: c,
       inUseText: c.mod?.incomplete ? T("mods.incomplete") : coreOf(v, kind) && c.key === applied ? T("status.applied") : null,
       dim: c.greyed,
-      // another student's model (BL-131): partly greyed, chosen and previewed like any card, with a word of caution
-      ...(c.cross ? { shade: true, hint: T("model.crossCharacter"), terms: [c.variant.fileId, c.variant.model, c.variant.fieldModel] } : {}),
+      // another student's model (BL-131): chosen and previewed like any card, with a word of caution
+      ...crossExtras(c, T("model.crossCharacter")),
       badge: c.greyed ? { ...GREYED_BADGE(), ...(!coreOf(v, kind) && c.kind === "self" ? { text: T("import.reason.no_target") } : {}) }
         : c.mod?.incomplete ? { text: T("mods.incomplete"), color: COLOUR.warning, ink: "#ffffff" } : null,
       tag: c.mod?.repaired_from ? { text: T("remap.repaired"), color: "#d7eaf4", ink: "#2d4664" }
@@ -1467,7 +1482,10 @@ async function drawPopup(scroll = 0) {
   const more = kind === "model" && coreOf(v, kind) ? (query) => crossItems(v, query, own.map((c) => c.key), item) : null;
   await listPopup({
     hostId: "popup", layoutKind: kind, title: T(isSpecial(v) ? "special.switch" : kind === "spr" ? "popup.switch" : `row.switch.${kind}`), okText: T(mode.button), okSemantic: "save", items, selected: pending, keepScroll: scroll,
-    tools: { segs: ["seg.all", "seg.recruit", "seg.noRecruit"], seg: popupSeg, onSeg: (i) => { popupSeg = i; renderPopup(); }, sortKey: "sort.default", more },
+    tools: { segs: ["seg.all", "seg.recruit", "seg.noRecruit"], seg: popupSeg, onSeg: (i) => { popupSeg = i; renderPopup(); }, sortKey: "sort.default", more,
+      // the checkbox lists every other student's model (BL-131); the cards in view are the ones judged
+      ...(more ? { check: { label: T("model.showOthers"), checked: showOthers(), onChange: (on) => { setShowOthers(on); crossShown = []; } },
+        onView: (keys) => viewCross(v, keys) } : {}) },
     onSelect: (key, s) => {
       const c = candidates(v, kind).find((x) => x.key === key);
       if (c?.kind === "mod") markSeen([c.mod], s);
@@ -1548,6 +1566,7 @@ async function openPopup(kind = "spr") {
   startLoose = kind === "model" && !otherStudents;
   pending = popupStart;
   popupSeg = 0;
+  crossShown = [];
   const mods = candidates(variant(), kind).filter((c) => c.kind === "mod").map((c) => c.mod);
   try {
     await drawPopup();
@@ -1576,6 +1595,7 @@ function closePopup(apply) {
   switchThumbnails?.cancel();
   switchThumbnails = null;
   switchPopupPage = null;
+  crossShown = [];
   $("popup").hidden = true;
   $("popup").innerHTML = "";
   popupClosed($("popup"));

@@ -23,7 +23,7 @@ for (const locale of LOCALES) test(`the model search shares picker matching and 
   const recruit = { key: "recruit", family: "other", model: "recruit", label: "Z recruit", full: "Z recruit", recruitable: true };
   const calls = [];
   const ctx = vm.createContext({ ...Sources, pickerItems, Intl, otherStudents: [{ variants: [recruit, npc, field] }], popupSeg: 0,
-    costumeState: new Map(), language: () => locale, shortName: (o) => o.label, fullName: (o) => o.full,
+    costumeState: new Map(), crossShown: [], language: () => locale, shortName: (o) => o.label, fullName: (o) => o.full,
     originalName: (o) => o.original || o.full, isFav: (o) => !!o.favorite, named: (c) => c,
     judgeCross: (_v, keys = []) => calls.push([...keys]), v,
   });
@@ -145,4 +145,113 @@ test("a stale cross verdict cannot populate the cache after game resources chang
   q.ctx.costumeState.clear();
   release({ hit: "ok" }); await flush();
   assert.equal(q.ctx.costumeState.size, 0);
+});
+
+// --- Show other students (BL-131): every other student's model listed, judged as it comes into view ---
+const makeSearch = (others, { seg = 0, shown = [] } = {}) => {
+  const v = { key: "slot", family: "own", model: "slot" }, calls = [];
+  const roster = [{ variants: others }];
+  const ctx = vm.createContext({ ...Sources, pickerItems, Intl, otherStudents: roster, popupSeg: seg, crossShown: shown,
+    costumeState: new Map(), language: () => "en-US", shortName: (o) => o.label, fullName: (o) => o.label,
+    originalName: (o) => o.label, isFav: (o) => !!o.favorite, named: (c) => c, judgeCross: (_v, keys = []) => calls.push([...keys]), v });
+  vm.runInContext(functionSource("crossItems"), ctx);
+  return { ctx, v, calls, hits: (query = "", own = []) => [...ctx.crossItems(v, query, own, (c) => ({ ...c, label: c.variant.label }))] };
+};
+const student = (key, label, extra = {}) => ({ key, family: `family-${key}`, model: key, label, recruitable: true, ...extra });
+
+test("with Show other students on, every other student's model follows the own cards, in the roster's order", () => {
+  const others = [student("c", "Charlie"), student("a", "Alpha", { favorite: true }), student("b", "Bravo", { recruitable: false }),
+    student("f", "Field NPC", { model: undefined, fieldModel: "np1", recruitable: false }), { ...student("own", "Mine"), family: "own" }];
+  const q = makeSearch(others);
+  try {
+    assert.deepEqual(q.hits(), [], "off: an empty query lists the own cards only");
+    assert.deepEqual(q.calls.at(-1), []);
+    Sources.setShowOthers(true);
+    assert.deepEqual(q.hits().map((c) => c.key), ["v:a", "v:b", "v:c", "v:f"], "favourites first, then the roster's name order; the student's own family is not among them");
+    assert.deepEqual(q.hits("", ["v:b"]).map((c) => c.key), ["v:a", "v:c", "v:f"], "a card the popup lists already is not repeated");
+    assert.ok(q.hits().every((c) => c.cross && c.variant.label === c.label));
+    q.ctx.popupSeg = 1;
+    assert.deepEqual(q.hits().map((c) => c.key), ["v:a", "v:c"], "the segment applies to them");
+    q.ctx.popupSeg = 2;
+    assert.deepEqual(q.hits().map((c) => c.key), ["v:b", "v:f"]);
+    q.ctx.popupSeg = 0;
+    assert.deepEqual(q.hits("NPC").map((c) => c.key), ["v:f"], "so does the search");
+    assert.deepEqual(q.hits("zzz"), []);
+    q.ctx.costumeState.set("slot", { a: "refused" });
+    assert.deepEqual(q.hits().map((c) => c.key), ["v:b", "v:c", "v:f"], "a refused pair is left out");
+  } finally { Sources.setShowOthers(false); }
+});
+
+test("with Show other students on there is no 64 cap, and only the cards in view are judged", () => {
+  const others = Array.from({ length: 150 }, (_, i) => student(`s${String(i).padStart(3, "0")}`, `Student ${String(i).padStart(3, "0")}`));
+  const q = makeSearch(others);
+  try {
+    // a search's hits: at most 64, all judged at once (the round-one behaviour)
+    assert.equal(q.hits("Student").length, 64);
+    assert.equal(q.calls.at(-1).length, 64);
+    assert.deepEqual(q.hits("").length, 0);
+    Sources.setShowOthers(true);
+    assert.equal(q.hits().length, 150, "all of them are listed");
+    assert.deepEqual(q.calls.at(-1), [], "none is in view yet: only the saved choice is judged");
+    q.ctx.crossShown = ["s003", "s004", "gone"];
+    q.hits();
+    assert.deepEqual(q.calls.at(-1), ["s003", "s004"], "the cards in view that are still listed");
+    assert.equal(q.hits("Student 14").length, 12, "the search narrows the list (014, 114 and 140 to 149)");
+    assert.deepEqual(q.calls.at(-1), [], "cards no longer listed are dropped");
+    Sources.setShowOthers(false);
+    assert.deepEqual(q.hits(), []);
+    assert.deepEqual(q.calls.at(-1), [], "unchecked again: today's cards only");
+  } finally { Sources.setShowOthers(false); }
+});
+
+function viewing({ variants = [{ key: "sibling" }], on = true, kind = "model" } = {}) {
+  const v = { key: "slot", model: "slot" }, calls = [];
+  const ctx = vm.createContext({ ...Sources, fam: { variants: [v, ...variants] }, crossShown: [], popupKind: kind, variant: () => ctx.current,
+    current: v, judgeCross: (_v, keys) => calls.push([...keys]) });
+  vm.runInContext(functionSource("viewCross"), ctx);
+  Sources.setShowOthers(on);
+  return { ctx, v, calls, view: (keys) => ctx.viewCross(v, keys) };
+}
+
+test("the cards in view are what the verdict queue is given, and a scroll replaces them", () => {
+  const w = viewing();
+  try {
+    w.view(["self", "m:mod", "v:sibling", "v:x1", "v:x2"]);
+    assert.deepEqual(w.calls, [["x1", "x2"]], "only other students' models: not the own card, a mod, or the student's sibling");
+    w.view(["self", "v:sibling", "v:x1", "v:x2"]);
+    assert.equal(w.calls.length, 1, "the same cards again: nothing new to ask");
+    w.view(["v:x2", "v:x3"]);
+    assert.deepEqual(w.calls.at(-1), ["x2", "x3"], "scrolled on: x1 is dropped, x3 queued");
+    w.view([]);
+    assert.deepEqual(w.calls.at(-1), [], "nothing in view");
+  } finally { Sources.setShowOthers(false); }
+  const off = viewing({ on: false });
+  off.view(["v:x1"]);
+  assert.deepEqual(off.calls, [], "unchecked: a search's hits are judged by the search, not by the view");
+  assert.deepEqual(off.ctx.crossShown, ["x1"], "the view is still remembered");
+  const away = viewing({ kind: "spr" });
+  away.view(["v:x1"]);
+  assert.deepEqual(away.calls, [], "only for Switch 3D Model");
+  Sources.setShowOthers(false);
+});
+
+test("in-view cards are read in calls of at most 64 keys, then checked one pair at a time; scrolling drops the rest", async () => {
+  let release;
+  const q = queue({ check: ({ others }) => others[0] === "v000" ? new Promise((resolve) => { release = resolve; }) : { [others[0]]: "preview" } });
+  const first = Array.from({ length: 150 }, (_, i) => `v${String(i).padStart(3, "0")}`);
+  q.want(first); await flush();
+  assert.deepEqual(q.calls.filter((c) => c.method === "model.costumes").map((c) => c.others.length), [64, 64, 22]);
+  assert.ok(release, "the first pair is being checked");
+  const second = ["w0", "w1"];
+  q.want(second);
+  release({ v000: "ok" }); await flush();
+  const checked = q.calls.filter((c) => c.method === "model.checkCostumes").map((c) => [...c.others]);
+  assert.deepEqual(checked, [["v000"], ["w0"], ["w1"]], "the cards scrolled out are not checked; the new ones are, one at a time");
+  assert.ok(checked.every((others) => others.length === 1));
+});
+
+test("another student's card is drawn like any card: no grey filter anywhere in the switch or the list", () => {
+  const read = (name) => readFileSync(new URL(`../../src/bmpt/web/js/${name}`, import.meta.url), "utf8");
+  assert.ok(!/shade:\s*true|\bSHADE\b|\.shade\b/.test(read("detail.js")), "detail.js");
+  assert.ok(!/shade:\s*true|\bSHADE\b|\.shade\b/.test(read("popup.js")), "popup.js");
 });

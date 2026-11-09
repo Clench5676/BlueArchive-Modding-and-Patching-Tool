@@ -69,8 +69,8 @@ export const overwrittenOf = (v, kind = "spr") => partsOf(v, kind).some((f) => !
 // exported for these files can be applied (``costumes``: model.costumes' verdicts, "ok" | "preview" | "refused" |
 // null): "ok" pairs are offered, the others (past the stretch limit, not checked yet, refused) for a preview only
 // (``previewOnly``), and a refused pair cannot be chosen as the preview either (``refused``, BL-122).
-// Another student's model (BL-131, ``families``: roster.list's) is offered through the popup's search only
-// (crossCandidates), save the one already chosen, listed last (``cross``).
+// Another student's model (BL-131, ``families``: roster.list's) is offered through the popup's search, or all at once
+// with "Show other students" (crossCandidates), save the one already chosen, listed last (``cross``).
 export function candidates(fam, v, kind = "spr", costumes = null, families = null) {
   const own = coreOf(v, kind);
   const cores = (kind === "model" && v.modelCores?.length ? v.modelCores : [own]).map((core) => String(core).toLowerCase());
@@ -113,6 +113,11 @@ export function costumeCandidates(fam, v) {
 // The most cards a search adds to Switch 3D Model: the pairs one model.costumes or model.checkCostumes call takes
 // (webui/api.py costume_keys).
 export const CROSS_LIMIT = 64;
+// "Show other students" (Switch 3D Model): every other student's model listed after the student's own, not only the
+// search's hits. Off at every App start and never saved: kept for as long as the page lives, across students and popups.
+const others = { shown: false };
+export const showOthers = () => others.shown;
+export const setShowOthers = (on) => { others.shown = !!on; };
 // the other students' variants (roster.list's families) whose model a variant's 3D model may take as a costume: any
 // with a battle model or a field-mode or NPC one (BL-127)
 export function crossModels(families, v) {
@@ -128,13 +133,18 @@ export const crossCard = (o, costumes = null) => {
     ...(verdict === "ok" || verdict === "preview" ? {} : verdict == null ? { pending: true } : { previewOnly: true, refused: true }) };
 };
 // the cards a search adds after the popup's own (``exclude``: their keys): the other students' models ``match`` finds,
-// refused ones left out, in ``compare``'s order (the roster's name order), the first 64
-export function crossCandidates(families, v, costumes = null, { match = () => true, compare = null, exclude = [] } = {}) {
+// refused ones left out, in ``compare``'s order (the roster's name order), the first ``limit`` (64: what one RPC call
+// takes; "Show other students" lists them all)
+export function crossCandidates(families, v, costumes = null, { match = () => true, compare = null, exclude = [], limit = CROSS_LIMIT } = {}) {
   const skip = new Set(exclude);
   const hits = crossModels(families, v).filter((o) => !skip.has(`v:${o.key}`) && costumes?.[o.key] !== "refused" && match(o));
   if (compare) hits.sort(compare);
-  return hits.slice(0, CROSS_LIMIT).map((o) => crossCard(o, costumes));
+  return hits.slice(0, limit).map((o) => crossCard(o, costumes));
 }
+// what a card of another student's model carries beyond any card's, from the search or from "Show other students" alike:
+// its word of caution on hover (``caution``), and the dev ids the popup's search also finds it by
+export const crossExtras = (c, caution) => (c.cross
+  ? { hint: caution, terms: [c.variant.fileId, c.variant.model, c.variant.fieldModel] } : {});
 // what keeps a 3D candidate from being applied by its costume check: null, "pending" (another student's model before
 // its verdict) or "unfit" (refused, or the student's own model past the stretch limit: shown, never applied, BL-122)
 export function costumeHold(fam, v, key, costumes) {

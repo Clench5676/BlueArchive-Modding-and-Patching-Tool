@@ -2,6 +2,7 @@
 // several cards ticked, the start sequence), web/js/update.js and detail.js's preview actions, on a small stand-in
 // DOM. Run by tests/test_popup.py with Node's test runner: node --test tests/js/popup.test.mjs
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { register } from "node:module";
 import { afterEach, test } from "node:test";
@@ -4064,7 +4065,7 @@ test("scrolling text viewer and picker heights retain their pre-fit viewports", 
     for (const check of [false, true]) assert.equal(Popup.listLayout(check, kind).frame.h, height, String(kind));
 });
 
-test("model search appends dimmed cross cards through the shared picker tools", async (t) => {
+test("model search appends cross cards, drawn like any card, through the shared picker tools", async (t) => {
   const NGUI = await import("../../src/bmpt/web/js/ngui.js");
   const collection = n("UICharacterCollection", [0, 0]);
   const base = "Inventory_ListControl/RightCanvas/ListBG";
@@ -4076,7 +4077,7 @@ test("model search appends dimmed cross cards through the shared picker tools", 
   const own = [{ key: "self", label: "Original", full: "Original" },
     { key: "mod", label: "Model mod", full: "Model mod" }, { key: "sibling", label: "Model sibling", full: "Model sibling" }];
   const extras = [{ key: "cross-z", label: "Model Zebra", full: "Model Zebra" }, { key: "cross-a", label: "Model Alpha", full: "Model Alpha" }]
-    .map((it) => ({ ...it, shade: true, hint: english.model.crossCharacter, thumb: "model.png", terms: ["ch0171_enemy"] }));
+    .map((it) => ({ ...it, hint: english.model.crossCharacter, thumb: "model.png", terms: ["ch0171_enemy"] }));
   const queries = [], chosen = [];
   const keys = () => walk(prompt).filter((e) => e.dataset.key).map((e) => e.dataset.key);
   try {
@@ -4101,9 +4102,10 @@ test("model search appends dimmed cross cards through the shared picker tools", 
     assert.equal(cross.getAttribute("aria-description"), english.model.crossCharacter);
     cross.click(); assert.deepEqual(chosen, ["cross-z"]);
     const thumb = walk(prompt).find((e) => e.dataset.path === "Card_cross-z/Thumb");
-    assert.ok(thumb.style.cssText.includes(`filter: ${Fresh.SHADE}`));
-    assert.ok(!walk(prompt).some((e) => ["Card_cross-z/Dim", "Card_cross-z/Using"].includes(e.dataset.path)), "no overwrite veil or badge");
     const ownThumb = walk(prompt).find((e) => e.dataset.path === "Card_mod/Thumb");
+    assert.ok(!thumb.style.cssText && !ownThumb.style.cssText, "no grey filter: a cross card's picture is drawn like an own card's");
+    assert.equal(Fresh.SHADE, undefined, "the grey filter is gone");
+    assert.ok(!walk(prompt).some((e) => ["Card_cross-z/Dim", "Card_cross-z/Using"].includes(e.dataset.path)), "no overwrite veil or badge");
     assert.deepEqual([thumb.style.width, thumb.style.height], [ownThumb.style.width, ownThumb.style.height], "cross cards keep the model card geometry");
     action(prompt, "order").click();
     await until(() => keys()[0] === "sibling");
@@ -4115,5 +4117,126 @@ test("model search appends dimmed cross cards through the shared picker tools", 
     action(prompt, "search-close").click();
     await until(() => !input());
     assert.deepEqual(keys(), ["sibling", "mod", "self"], "clearing search removes appended cards and preserves the active sort direction");
+  } finally { prompt.hidden = true; Fresh.closed(prompt); }
+});
+
+// --- the list popup's toolbar: with Switch 3D Model's checkbox (BL-131) and without ---
+// A collection stand-in whose TopMenu also carries the segment filter and Menubar the roster's toolbar clones.
+function toolbarCollection(NGUI) {
+  const collection = n("UICharacterCollection", [0, 0]);
+  const base = "Inventory_ListControl/RightCanvas/ListBG";
+  insert(collection, "SeletControl/TopMenu", structuredClone(NGUI.find(switchLayouts.inventory, `${base}/BG_Top_Widget`)));
+  insert(collection, "SeletControl/CharacterSearch", structuredClone(NGUI.find(switchLayouts.inventory, `${base}/Inbox/SearchInfo`)));
+  const menu = NGUI.find(collection, "SeletControl/TopMenu");
+  menu.children.push(n("FilterBtn", [0, -219], [], ["All", "Main", "Support"].map((name) => n(name, [0, 0], [],
+    ["Btn_Normal", "Btn_Pressed"].map((state) => n(state, [0, 0], [], [n("Caption", [0, 0], [{ texture: "Caption", color: "#ffffff/1.00" }])]))))),
+  n("Menubar", [0, 0]));
+  return collection;
+}
+// serves it as the page's collection (NGUI keeps the first one it was served for the whole run: forget that one)
+function serveToolbarCollection(t, NGUI) {
+  NGUI.setResourceContext("toolbar-test");
+  NGUI.setResourceContext(null);
+  const collection = toolbarCollection(NGUI), fetch = globalThis.fetch;
+  t.mock.method(globalThis, "fetch", async (url, options) => url === "/asset/ui/layout/UICharacterCollection.json" ? reply(collection) : fetch(url, options));
+}
+const SEGMENTS = ["seg.all", "seg.recruit", "seg.noRecruit"];
+const rectOf = (el) => ["left", "top", "width", "height"].map((k) => parseFloat(el.style[k]));
+// the hit areas of the list's tools, in the stand-in page's pixels, and a digest of everything drawn under Toolbar/
+async function toolbarOf(Fresh, tools, items) {
+  await Fresh.listPopup({ host: prompt, layoutKind: "model", title: "Models", items, selected: "a", okText: "Save", tools, onSelect() {} });
+  const named = (label) => walk(prompt).find((e) => e.className === "hit" && e.getAttribute("aria-label") === label);
+  const drawnTools = walk(prompt).filter((e) => (e.dataset.path || "").startsWith("Toolbar/"))
+    .map((e) => [e.dataset.path, ...rectOf(e), e.style.visibility || ""]);
+  return { order: rectOf(action(prompt, "order")), search: rectOf(action(prompt, "search")), sort: rectOf(action(prompt, "sort")),
+    segments: SEGMENTS.map((key) => rectOf(named(english.seg[key.slice(4)]))), drawn: drawnTools };
+}
+
+test("a list popup toolbar without the checkbox keeps its layout", async (t) => {
+  const NGUI = await import("../../src/bmpt/web/js/ngui.js");
+  serveToolbarCollection(t, NGUI);
+  const Fresh = await import("../../src/bmpt/web/js/popup.js?toolbar-plain");
+  const items = [{ key: "a", label: "Alpha", full: "Alpha", thumb: "a.png" }];
+  try {
+    const plain = await toolbarOf(Fresh, { segs: SEGMENTS, seg: 1, onSeg() {}, sortKey: "sort.default" }, items);
+    // measured on the layout before the checkbox existed (popup.js toolbar): not a pixel moves
+    const near = (got, want) => got.forEach((v, i) => assert.ok(Math.abs(v - want[i]) < 1e-6, `${got} against ${want}`));
+    near(plain.order, [1733.25, 238.7, 108.97, 75.24]);
+    near(plain.search, [1239.89, 238.7, 80.43, 75.24]);
+    near(plain.sort, [1453.16, 238.67, 272.7, 75.32]);
+    near(plain.segments[0], [824.7567567567569, 242.46486486486486, 149.1891891891892, 67.45945945945947]);
+    near(plain.segments[2], [1123.1351351351352, 242.46486486486486, 149.1891891891892, 67.45945945945947]);
+    assert.equal(plain.drawn.length, 15);
+    assert.equal(createHash("sha1").update(JSON.stringify(plain.drawn)).digest("hex"), "621aac4f9012a6e9104d3aed9f5b85da1b877c64");
+    assert.equal(action(prompt, "check"), undefined, "no checkbox in the toolbar");
+  } finally { prompt.hidden = true; Fresh.closed(prompt); }
+});
+
+test("Show other students is a checkbox of the model popup's toolbar: drawn from the roster's toggle, flipping on a click", async (t) => {
+  const NGUI = await import("../../src/bmpt/web/js/ngui.js");
+  serveToolbarCollection(t, NGUI);
+  const Fresh = await import("../../src/bmpt/web/js/popup.js?toolbar-check");
+  const items = [{ key: "a", label: "Alpha", full: "Alpha", thumb: "a.png" }, { key: "b", label: "Beta", full: "Beta", thumb: "b.png" }];
+  const check = { label: english.model.showOthers, checked: false, onChange(on) { changes.push(on); } };
+  const changes = [], views = [];
+  const tools = { segs: SEGMENTS, seg: 0, onSeg() {}, sortKey: "sort.default", check, onView: (keys) => views.push(keys) };
+  const box = () => action(prompt, "check");
+  const paths = (name) => walk(prompt).filter((e) => (e.dataset.path || "").includes(name));
+  try {
+    await toolbarOf(Fresh, tools, items);
+    assert.ok(box(), "the checkbox is in the toolbar");
+    assert.equal(box().getAttribute("role"), "checkbox");
+    assert.equal(box().getAttribute("aria-checked"), "false");
+    assert.equal(box().getAttribute("aria-label"), english.model.showOthers);
+    // it stands left of the three segments, on the toolbar's row, inside the list panel, and the tools keep their order
+    const [cx, cy, cw, ch] = rectOf(box());
+    const seg = ["All", "Playable", "NPC"].map((label) => rectOf(walk(prompt).find((e) => e.className === "hit" && e.getAttribute("aria-label") === label)));
+    const search = rectOf(action(prompt, "search")), sort = rectOf(action(prompt, "sort")), order = rectOf(action(prompt, "order"));
+    assert.ok(cx + cw <= seg[0][0], "the checkbox ends before the first segment");
+    assert.ok(seg[0][0] < seg[1][0] && seg[1][0] < seg[2][0] && seg[2][0] + seg[2][2] <= search[0] + 1e-6, "segments, then search");
+    assert.ok(search[0] < sort[0] && sort[0] < order[0]);
+    const listPanel = Fresh.listLayout(false, "model").list, left = 960 + listPanel.l * S, right = 960 + listPanel.r * S;
+    assert.ok(cx >= left && order[0] + order[2] <= right + 1e-6, "everything inside the list panel");
+    const centre = (r) => r[1] + r[3] / 2;
+    assert.ok(Math.abs(centre([cx, cy, cw, ch]) - centre(search)) < 1.5, "the checkbox is on the tools' centre line");
+    // drawn from the roster's toggle: its plate, the box and its Type_OFF state; no tick while off
+    assert.ok(paths("Toolbar/Menubar/Merge").length > 0);
+    assert.ok(paths("Merge/Type_OFF/Check").length > 0 && paths("Merge/Type_ON").length === 0);
+    assert.equal(paths("Toolbar/Menubar/Merge/Label").length > 0, true, "its caption");
+    // a click flips the shared state, tells the caller and draws the popup again with the tick
+    box().click();
+    assert.equal(check.checked, true);
+    assert.deepEqual(changes, [true]);
+    await until(() => box()?.getAttribute("aria-checked") === "true");
+    assert.ok(paths("Merge/Type_ON/Check/Icon").length > 0 && paths("Merge/Type_OFF").length === 0, "the tick shows while on");
+    box().click();
+    await until(() => box()?.getAttribute("aria-checked") === "false");
+    assert.deepEqual(changes, [true, false]);
+    // the cards in view are reported after every drawing
+    assert.ok(views.length >= 1 && views.at(-1).includes("a") && views.at(-1).includes("b"));
+    // other popups with tools, without the checkbox (portraits, lobbies), draw none and report nothing
+    await Fresh.listPopup({ host: prompt, layoutKind: "model", title: "Models", items, selected: "a", okText: "Save",
+      tools: { segs: SEGMENTS, seg: 0, onSeg() {}, sortKey: "sort.default" }, onSelect() {} });
+    assert.equal(box(), undefined);
+  } finally { prompt.hidden = true; Fresh.closed(prompt); }
+});
+
+test("the list reports the cards in view, and those a scroll brings in", async (t) => {
+  const NGUI = await import("../../src/bmpt/web/js/ngui.js");
+  serveToolbarCollection(t, NGUI);
+  const Fresh = await import("../../src/bmpt/web/js/popup.js?toolbar-view");
+  const items = Array.from({ length: 60 }, (_, i) => ({ key: `k${i}`, label: `Card ${i}`, full: `Card ${i}`, thumb: "c.png" }));
+  const views = [];
+  try {
+    await Fresh.listPopup({ host: prompt, layoutKind: "model", title: "Models", items, selected: "k0", okText: "Save", onSelect() {},
+      tools: { segs: SEGMENTS, seg: 0, onSeg() {}, sortKey: "sort.default", onView: (keys) => views.push(keys) } });
+    const first = views.at(-1);
+    assert.ok(first.length > 0 && first.length < items.length, `${first.length} of ${items.length} in view`);
+    assert.deepEqual(first, items.slice(0, first.length).map((it) => it.key), "the first rows, in the list's order");
+    const area = walk(prompt).find((e) => e.className === "popup-cards");
+    area.scrollTop = 3000; fire(area, "scroll");
+    await until(() => views.at(-1) !== first);
+    const later = views.at(-1);
+    assert.ok(later.length > 0 && !later.includes("k0") && later.length < items.length, "a scroll moves the window");
   } finally { prompt.hidden = true; Fresh.closed(prompt); }
 });
