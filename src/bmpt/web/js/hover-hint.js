@@ -47,6 +47,20 @@ export function hintTree(layout, style) {
   ]);
 }
 
+// Where the hint of a control is drawn: the control's own layer, or, for a control inside a scrolling card list
+// (popup.js scrollArea: .popup-cards around .popup-cards-inner, which clips), the layer around that list, so a card's
+// hint is not cut off by the list's edges. Returns the host and the offset (px) from the control's layer to it.
+export function hintHost(button) {
+  let host = button.parentElement, dx = 0, dy = 0;
+  while (host?.classList?.contains("popup-cards-inner") && host.parentElement?.parentElement) {
+    const area = host.parentElement;
+    dx += (parseFloat(area.style.left) || 0) - (area.scrollLeft || 0);
+    dy += (parseFloat(area.style.top) || 0) - (area.scrollTop || 0);
+    host = area.parentElement;
+  }
+  return { host, dx, dy };
+}
+
 // Show ``text`` by ``button`` while the pointer is over it (the button keeps the pointer: aria-disabled, not
 // disabled). Nothing shows when the game's tooltip prefab cannot be read.
 export function attachHint(button, text, { load = () => NGUI.layout(HINT_PREFAB) } = {}) {
@@ -57,9 +71,10 @@ export function attachHint(button, text, { load = () => NGUI.layout(HINT_PREFAB)
     const my = token;
     let style;
     try { style = hintStyle(await load()); } catch (err) { console.error("Hover hint unavailable", err); return; }
-    const host = button.parentElement;
+    const { host, dx, dy } = hintHost(button);
     if (my !== token || !host || !button.isConnected) return;
-    const layout = hintLayout(text, NGUI.rect(button), host.clientWidth || 1920, host.clientHeight || 1080, style);
+    const [l, t, w, h] = NGUI.rect(button);
+    const layout = hintLayout(text, [l + dx, t + dy, w, h], host.clientWidth || 1920, host.clientHeight || 1080, style);
     const layer = document.createElement("div");
     Object.assign(layer.style, { position: "absolute", left: "0", top: "0", pointerEvents: "none", zIndex: "200" });
     layer.className = "hover-hint";
@@ -69,6 +84,8 @@ export function attachHint(button, text, { load = () => NGUI.layout(HINT_PREFAB)
     catch (err) { console.error("Hover hint failed", err); hide(); }
   });
   button.addEventListener("pointerleave", hide);
+  // a list scrolled under the pointer moves the control away from its hint
+  button.addEventListener("wheel", hide, { passive: true });
   button.addEventListener("pointerdown", hide);
   return hide;
 }
