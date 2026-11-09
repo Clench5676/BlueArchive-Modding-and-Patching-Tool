@@ -5,6 +5,7 @@ import json
 import os
 import re
 import struct
+import zlib
 from pathlib import Path
 
 import numpy as np
@@ -182,8 +183,8 @@ def _slot(files, dev):
 
 @official
 @pytest.mark.parametrize("target,source,field,parts,hem", [
-    ("hina_original", "np0009", True, 1, "blend 0.5"),         # Hina <- Hina (Pajamas), a field-mode model
-    ("ch0172", "np0283", True, 1, "blend 0.5"),                 # Niko <- Niko (FOX EATS): her separate hands go
+    ("hina_original", "np0009", True, 1, "skirt smooth"),      # Hina <- Hina (Pajamas), a field-mode model: Rule B
+    ("ch0172", "np0283", True, 1, "skirt smooth"),              # Niko <- Niko (FOX EATS): her separate hands go
     ("hoshino_original", "hoshino_swimsuit", False, 3, "rigid"),  # a three-part costume: two renderers added
     ("hoshino_swimsuit", "hoshino_original", False, 1, "rigid"),  # the swimsuit's own extra parts draw nothing
     ("ch0186", "mari_original", False, 1, "fit 0.5"),           # Mari (Track) <- Mari: a compressed mesh
@@ -213,7 +214,12 @@ def test_official_costume_on_a_slot(view, tmp_path, target, source, field, parts
         assert chosen.mean < rigid.mean
         assert all(chosen.deep[clip] <= rigid.deep[clip] + 5 for clip in rigid.deep)
         assert chosen.stretch <= max(hems.limit, rigid.stretch)
-        assert any(change is not None for change in hems.parts)
+        # Rule A rewrites weights; Rule B adds bones (its smooth variant also blends weights) and curves
+        assert any(change is not None for change in hems.parts) or hem == "skirt"
+    skirt = hems.skirt
+    assert (skirt is not None) == hem.startswith("skirt")
+    if skirt is not None:
+        assert skirt.clips >= 20
     out = tmp_path / "out"
     out.mkdir()
     for path, bundle in result.changed.items():
@@ -227,7 +233,8 @@ def test_official_costume_on_a_slot(view, tmp_path, target, source, field, parts
         after = {o.path_id: o for o in UnityPy.load(str(path)).objects}
         assert before.keys() <= after.keys()
         changed = {before[pid].type.name for pid in before if before[pid].get_raw_data() != after[pid].get_raw_data()}
-        assert changed <= {"SkinnedMeshRenderer", "AssetBundle", "Transform", "MonoBehaviour"}, changed
+        allowed = {"SkinnedMeshRenderer", "AssetBundle", "Transform", "MonoBehaviour"}
+        assert changed <= allowed | ({"AnimationClip"} if skirt else set()), changed
     # the slot read back: the costume drawn at rest exactly in the shape it was bound and judged in (BL-128: as the
     # source draws it, refitted to the slot's joints), and exportable
     adapted = dict(index)
@@ -246,6 +253,19 @@ def test_official_costume_on_a_slot(view, tmp_path, target, source, field, parts
     o_prefabs = _prefabs(official, [p for p in slot if p.name.startswith("character-")])
     t0 = ma.Skeleton.of(official, o_prefabs[ma.choose_prefab(o_prefabs, target)].deref())
     ordered = [p for p in s_parts if p.role == "primary"] + [p for p in s_parts if p.role == "costume"]
+    paths = [n.path for n in t0.nodes]  # the slot's node paths, Rule B's new bones after its own
+    if skirt is not None:
+        for name, parent in zip(skirt.names, skirt.parents):
+            paths.append(f"{paths[skirt.node(parent)] if parent >= 0 else paths[skirt.anchor]}/{name}")
+        # every prefab of the slot has the new bones, and the slot's clips turn the chains' first bones
+        roots = {paths[skirt.node(k)] for k, parent in enumerate(skirt.parents) if parent < 0}
+        for pointer in t_prefabs.values():
+            assert set(paths[skirt.base:]) <= {n.path for n in ma.Skeleton.of(graph, pointer.deref()).nodes}
+        own = {k: v for k, v in t_prefabs.items() if target in k}
+        hashes = {zlib.crc32(path.encode()): path for path in roots}
+        turned = [c for c in ma.prefab_clips(graph, t, own) if roots == {hashes[b["path"]] for b in graph.tree(c)[
+            "m_ClipBindingConstant"]["genericBindings"] if b["path"] in hashes and b["attribute"] == 2}]
+        assert len(turned) == skirt.clips
     changes = {p.mesh.peek_name(): change for p, change in zip(ordered, hems.parts) if change is not None}
     drawn, empty, reweighted = [], 0, 0
     for node, renderer in t.renderers:
@@ -273,7 +293,7 @@ def test_official_costume_on_a_slot(view, tmp_path, target, source, field, parts
                 for j, w in zip(skin.joints[row], skin.weights[row]):
                     got[t.nodes[bones[j]].path] = got.get(t.nodes[bones[j]].path, 0.0) + w
                 for n, w in zip(n_row, w_row):
-                    wanted[t0.nodes[n].path] = wanted.get(t0.nodes[n].path, 0.0) + w
+                    wanted[paths[n]] = wanted.get(paths[n], 0.0) + w
                 assert all(abs(got.get(k, 0.0) - wanted.get(k, 0.0)) <= 1 / 31 for k in set(got) | set(wanted))
             reweighted += 1
     assert sorted(drawn) == sorted(p.mesh.peek_name() for p in s_parts)
