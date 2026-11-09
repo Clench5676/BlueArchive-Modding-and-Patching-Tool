@@ -134,6 +134,20 @@ def test_the_refit_carries_each_vertex_by_its_anchor():
     assert np.allclose(whole.vertices, [[0.2, 1.0, 0.0], [0.5, 1.2, 0.0]]) and whole.largest == pytest.approx(0.0)
 
 
+def test_a_face_goes_with_the_head_whatever_its_eye_bones():
+    """BL-128: Midori (Battle)'s face on Midori: the eye bones (Bip001 bone_eye_D_L, named Bip001 like the Biped) rest
+    elsewhere on the slot's face rig; refitting the eyelid by them pulled the eye out of the face. The face's vertices
+    go rigidly with the head."""
+    def head(eye_y):
+        return _skeleton([("Bip001", 0, (0, 0, 0), (0, 0, 0, 1)), ("Bip001 Head", 1, (0, 1, 0), (0, 0, 0, 1)),
+                          ("Bip001 bone_eye_D_L", 2, (0.05, eye_y, 0.08), (0, 0, 0, 1))])
+    source, target = head(0.0), head(-0.035)
+    eye, top = source.first("Bip001 bone_eye_D_L"), source.first("Bip001 Head")
+    assert ma.fit_anchor(target, source, eye) == (top, target.first("Bip001 Head"))
+    flat = _flat([[0.05, 1.0, 0.08], [0.0, 1.1, 0.0]], [eye, top])
+    assert np.allclose(ma.refit(target, source, flat).vertices, flat.vertices)  # same head: the face keeps its shape
+
+
 def test_the_costume_is_taken_where_its_bindposes_draw_it():
     """BL-128: a mesh whose vertex data lies 1 m off its renderer's space, its bindposes bringing it back (Koharu's);
     the costume is the shape the prefab draws, not the vertex data in the renderer's space."""
@@ -148,6 +162,23 @@ def test_the_costume_is_taken_where_its_bindposes_draw_it():
     flat = ma.flatten(ma.Costume(skeleton, [part], [skin]), rest)
     assert np.allclose(flat.vertices, vertices - [1, 0, 0])
     assert np.allclose(flat.linear, np.eye(3))
+
+
+def test_a_face_is_drawn_as_bound_whatever_its_bones_rest_in():
+    """BL-128: Midori (Battle)'s brow bones rest 1.4 cm above their bind (an expression her clips replace); the face is
+    drawn as bound, rigidly with the head, not with its brows raised (they came through Midori's bangs)."""
+    skeleton = _skeleton([("Bip001", 0, (0, 0, 0), (0, 0, 0, 1)), ("Bip001 Head", 1, (0, 1, 0), (0, 0, 0, 1)),
+                          ("Bip001 Xtra_eyeblowL1", 2, (0.05, 0.114, 0.08), (0, 0, 0, 1))])  # bound at 0.1 up
+    head, brow = skeleton.first("Bip001 Head"), skeleton.first("Bip001 Xtra_eyeblowL1")
+    rest = skeleton.world()
+    bound = [np.linalg.inv(rest[head]), np.linalg.inv(ma.trs((0.05, 1.1, 0.08), (0, 0, 0, 1), (1, 1, 1)))]
+    mesh = {"m_BindPose": [{f"e{r}{c}": float(m[r, c]) for r in range(4) for c in range(4)} for m in bound]}
+    part = ma.Part(0, None, mesh, [], ["face"], [head, brow], 3)
+    vertices = np.array([[0.05, 1.1, 0.09], [0.0, 1.05, 0.1]])  # a brow vertex, a cheek vertex
+    skin = ma.Skin(vertices, np.array([[1, 0, 0, 0], [0, 0, 0, 0]]), np.c_[np.ones(2), np.zeros((2, 3))], np.array([[0, 1]]))
+    flat = ma.flatten(ma.Costume(skeleton, [part], [skin]), rest)
+    assert np.allclose(flat.vertices, vertices)  # not 1.4 cm up
+    assert ma.face_bone(skeleton, brow) and not ma.face_bone(skeleton, head)
 
 
 def test_stretch_counts_shrinking_as_growing():
