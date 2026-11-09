@@ -129,10 +129,10 @@ def test_event_commit_cannot_change_after_publication(release_run, monkeypatch, 
         release_tag.main()
 
 
-def test_only_windows_gui_release_workflow_remains():
+def test_only_windows_gui_workflows_remain():
     workflows = sorted((ROOT / ".github/workflows").glob("*.y*ml"))
-    assert [path.name for path in workflows] == ["build.yml"]
-    workflow = workflows[0].read_text()
+    assert [path.name for path in workflows] == ["build.yml", "windows-build.yml"]
+    workflow = (ROOT / ".github/workflows/build.yml").read_text()
     trigger = workflow[workflow.index("on:\n"):workflow.index("permissions:\n")]
     assert trigger.strip() == "on:\n  release:\n    types: [published]"
     assert "github.event.release.prerelease == false" in workflow
@@ -227,3 +227,99 @@ $Py = "Build-Python"
         asset = tmp_path / "dist" / name
         expected = hashlib.md5(asset.read_bytes()).hexdigest()
         assert asset.with_suffix(".exe.md5").read_bytes() == f"{expected}  {name}\n".encode()
+
+
+PRERELEASE_WORKFLOW = ROOT / ".github/workflows/windows-build.yml"
+GH_HARNESS = """
+function gh {
+    $global:LASTEXITCODE = 0
+    Add-Content -LiteralPath "gh-calls.txt" -Value ($args -join " ")
+    if ($args[1] -eq "view") {
+        if (-not $env:TEST_RELEASE) { $global:LASTEXITCODE = 1; return }
+        Write-Output $env:TEST_RELEASE; return
+    }
+    if ($args[1] -eq "upload") { $args | ConvertTo-Json | Set-Content -LiteralPath "uploaded.json"; return }
+    throw "Unexpected GitHub command"
+}
+"""
+
+
+def workflow_step(name):
+    workflow = PRERELEASE_WORKFLOW.read_text()
+    start = workflow.index(f"      - name: {name}\n        run: |\n")
+    body = workflow[start:].split("        run: |\n", 1)[1]
+    end = body.find("\n\n      - name: ")
+    return textwrap.dedent(body if end < 0 else body[:end + 1])
+
+
+def draft(tag="0.7.0-alpha.28", **fields):
+    return json.dumps({"tagName": tag, "isDraft": True, "isPrerelease": True, **fields})
+
+
+def run_step(tmp_path, name, tag, release):
+    env = {**os.environ, "RELEASE_TAG": tag, "GITHUB_REPOSITORY": "owner/repo", "TEST_RELEASE": release or ""}
+    return subprocess.run([PWSH, "-NoProfile", "-NonInteractive", "-Command", GH_HARNESS + workflow_step(name)],
+                          cwd=tmp_path, env=env, capture_output=True, text=True, timeout=30)
+
+
+def test_prerelease_workflow_is_manual_and_uploads_only_to_releases():
+    workflow = PRERELEASE_WORKFLOW.read_text()
+    trigger = workflow[workflow.index("on:\n"):workflow.index("permissions:\n")]
+    assert trigger.splitlines()[:2] == ["on:", "  workflow_dispatch:"]
+    assert "push" not in trigger and "pull_request" not in trigger and "release" not in trigger.split("inputs:")[0]
+    assert "upload-artifact" not in workflow and "actions/cache" not in workflow
+    assert "ref: refs/tags/${{ inputs.tag }}" in workflow
+    assert "persist-credentials: false" in workflow
+    # Inputs reach scripts only through the environment.
+    for step in ("Validate Draft Pre-release", "Validate Checkout", "Upload EXE and MD5 to Draft Release"):
+        assert "${{" not in workflow_step(step)
+    order = [workflow.index(marker) for marker in (
+        "name: Validate Draft Pre-release", "name: Checkout Release Tag", "name: Validate Checkout",
+        "-Target Gui", "name: Upload EXE and MD5 to Draft Release")]
+    assert order == sorted(order)
+
+
+@pytest.mark.skipif(PWSH is None, reason="PowerShell is not installed")
+@pytest.mark.parametrize("tag,release,ok", [
+    ("0.7.0-alpha.28", draft(), True),
+    ("1.0.0-rc.1", draft("1.0.0-rc.1"), True),
+    ("0.7.0", draft("0.7.0"), False),
+    ("v0.7.0-alpha.28", draft("v0.7.0-alpha.28"), False),
+    ("0.7.0-alpha.28\n", draft("0.7.0-alpha.28\n"), False),
+    ("0.7.0-alpha.28;x", draft("0.7.0-alpha.28;x"), False),
+    ("07.0.0-alpha", draft("07.0.0-alpha"), False),
+    ("", draft(""), False),
+    ("0.7.0-alpha.28", None, False),
+    ("0.7.0-alpha.28", draft(isDraft=False), False),
+    ("0.7.0-alpha.28", draft(isPrerelease=False), False),
+    ("0.7.0-alpha.28", draft("0.7.0-alpha.27"), False),
+])
+def test_prerelease_build_requires_a_draft_prerelease(tmp_path, tag, release, ok):
+    result = run_step(tmp_path, "Validate Draft Pre-release", tag, release)
+    assert (result.returncode == 0) == ok, result.stdout + result.stderr
+    if not ok and release and json.loads(release)["tagName"] == tag and tag != "0.7.0-alpha.28":
+        assert not (tmp_path / "gh-calls.txt").exists()
+
+
+@pytest.mark.skipif(PWSH is None, reason="PowerShell is not installed")
+@pytest.mark.parametrize("failure", [None, "published", "stable", "tag", "checksum", "missing"])
+def test_prerelease_upload_uses_exact_gui_pair_and_rechecks_draft(tmp_path, failure):
+    tag = "0.7.0-alpha.28"
+    name = f"Blue-Archive-Modding-and-Patching-Tool-{tag}-windows-x64.exe"
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    executable = dist / name
+    executable.write_bytes(b"GUI executable")
+    digest = hashlib.md5(executable.read_bytes()).hexdigest()
+    (dist / (name + ".md5")).write_text(f'{"bad" if failure == "checksum" else digest}  {name}\n')
+    (dist / "unrelated.exe").write_bytes(b"must not upload")
+    release = {None: draft(), "published": draft(isDraft=False), "stable": draft(isPrerelease=False),
+               "tag": draft("0.7.0-alpha.27"), "checksum": draft(), "missing": None}[failure]
+    result = run_step(tmp_path, "Upload EXE and MD5 to Draft Release", tag, release)
+    if failure:
+        assert result.returncode != 0
+        assert not (tmp_path / "uploaded.json").exists()
+    else:
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert json.loads((tmp_path / "uploaded.json").read_text()) == [
+            "release", "upload", tag, "--repo", "owner/repo", "--clobber", str(executable), str(dist / (name + ".md5"))]
