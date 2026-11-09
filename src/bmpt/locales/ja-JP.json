@@ -86,6 +86,7 @@
 			"none": "なし",
 			"failed": "3Dモデルを読み込めません",
 			"unfit": "自動フィット不可",
+			"crossCharacter": "別キャラのモデル、表示が崩れる可能性あり",
 			"action": {
 				"idle": "待機",
 				"reaction": "反応",
