@@ -10,6 +10,7 @@ import re
 import threading
 import time
 from collections.abc import Iterable
+from concurrent.futures import Future
 from contextlib import contextmanager
 from copy import deepcopy
 from pathlib import Path
@@ -152,6 +153,8 @@ class GameAssets:
         self.preview_cache = preview_cache
         self._guard = threading.RLock()
         self._locks: dict[str, threading.RLock] = {}
+        self._model_flights_lock = threading.Lock()
+        self._model_flights: dict[str, Future[bytes]] = {}
         self._indexes: dict[str, Any] = {}
         self._shader_forms: dict[tuple[str, int], dict] = {}  # shader (cab, path id) -> name, properties, pass states
 
@@ -902,58 +905,81 @@ class GameAssets:
             cached = valid_cached()
         if cached is not None:
             return cached
-        with spans.held("model-lock.model", _MODEL_LOCK, hold=True):
-            cached = valid_cached()
-            if cached is not None:
-                return cached
-            started: dict[str, tuple[int, int, int] | None] = {}
-            # Export phases for the report (BL-092): bundle opening and CAB lookups are summed per export.
-            phases = {"open": 0.0, "resolve": 0.0}
-            find_cabs = resolve_cabs
+        with self._model_flights_lock:
+            flight = self._model_flights.get(key)
+            leader = flight is None
+            if flight is None:
+                flight = Future()
+                self._model_flights[key] = flight
+        if not leader:
+            with spans.span("export.model.join"):
+                return flight.result()
 
-            def resolve_timed(wanted: set[str], hint_path: Path | None = None) -> dict[str, str]:
-                begun = time.perf_counter()
-                try:
-                    return find_cabs(wanted, hint_path)
-                finally:
-                    phases["resolve"] += time.perf_counter() - begun
+        def export() -> bytes:
+            with spans.held("model-lock.model", _MODEL_LOCK, hold=True):
+                cached = valid_cached()
+                if cached is not None:
+                    return cached
+                started: dict[str, tuple[int, int, int] | None] = {}
+                # Export phases for the report (BL-092): bundle opening and CAB lookups are summed per export.
+                phases = {"open": 0.0, "resolve": 0.0}
+                find_cabs = resolve_cabs
 
-            @contextmanager
-            def tracked_bundle(path: Path):
-                before = _stamp(path)
-                if before is None:
-                    raise AssetNotFound("Model dependency is unavailable")
-                begun = time.perf_counter()
-                with open_bundle(path) as env:
-                    phases["open"] += time.perf_counter() - begun
-                    # The opener decodes before yielding. Never associate those decoded
-                    # bytes with a replacement written while it was opening the bundle.
-                    if _stamp(path) != before:
-                        raise AssetNotFound("Model dependency changed while opening")
-                    started[str(path)] = before
-                    yield env
-                    if _stamp(path) != before:
+                def resolve_timed(wanted: set[str], hint_path: Path | None = None) -> dict[str, str]:
+                    begun = time.perf_counter()
+                    try:
+                        return find_cabs(wanted, hint_path)
+                    finally:
+                        phases["resolve"] += time.perf_counter() - begun
+
+                @contextmanager
+                def tracked_bundle(path: Path):
+                    before = _stamp(path)
+                    if before is None:
+                        raise AssetNotFound("Model dependency is unavailable")
+                    begun = time.perf_counter()
+                    with open_bundle(path) as env:
+                        phases["open"] += time.perf_counter() - begun
+                        # The opener decodes before yielding. Never associate those decoded
+                        # bytes with a replacement written while it was opening the bundle.
+                        if _stamp(path) != before:
+                            raise AssetNotFound("Model dependency changed while opening")
+                        started[str(path)] = before
+                        yield env
+                        if _stamp(path) != before:
+                            raise AssetNotFound("Model dependency changed during extraction")
+
+                with self._cab_discovery().batch(), BundleGraph({}, overrides, resolver=resolve_timed, opener=tracked_bundle) as graph:
+                    try:
+                        with spans.span("export.model.convert"):
+                            data = export_chibi(graph, bundles, core, **({"story": story} if story else {}))
+                    finally:
+                        spans.record("export.model.open", phases["open"])
+                        spans.record("export.model.resolve", phases["resolve"])
+                    read = {path: _stamp(path) for path in graph.loaded}
+                    complete = not graph.missing_cabs
+                    if any(stamp is None or _stamp(path) != stamp for path, stamp in started.items()):
                         raise AssetNotFound("Model dependency changed during extraction")
+                if spine_stamps([*bundles, *overrides, *story]) != list(dict.fromkeys(stamps)):
+                    raise AssetNotFound("Model changed during extraction")
+                self.cache.put(key, (data, read), version=self.cache_version, disk=False, size=len(data), generation=generation)
+                if complete and read and all(stamp is not None for stamp in read.values()) and self.preview_cache is not None and self.preview_cache.allowed:
+                    with spans.span("export.model.cache-write"):
+                        manifest = json.dumps({str(path): stamp for path, stamp in read.items()}).encode()
+                        self._preview_put(key, pack_preview_files({"sources.json": manifest, "model.glb": data}), disk_generation)
+                return data
 
-            with self._cab_discovery().batch(), BundleGraph({}, overrides, resolver=resolve_timed, opener=tracked_bundle) as graph:
-                try:
-                    with spans.span("export.model.convert"):
-                        data = export_chibi(graph, bundles, core, **({"story": story} if story else {}))
-                finally:
-                    spans.record("export.model.open", phases["open"])
-                    spans.record("export.model.resolve", phases["resolve"])
-                read = {path: _stamp(path) for path in graph.loaded}
-                complete = not graph.missing_cabs
-                if any(stamp is None or _stamp(path) != stamp for path, stamp in started.items()):
-                    raise AssetNotFound("Model dependency changed during extraction")
-            if spine_stamps([*bundles, *overrides, *story]) != list(dict.fromkeys(stamps)):
-                raise AssetNotFound("Model changed during extraction")
-            self.cache.put(key, (data, read), version=self.cache_version, disk=False, size=len(data), generation=generation)
-            if complete and read and all(stamp is not None for stamp in read.values()) and self.preview_cache is not None and self.preview_cache.allowed:
-                with spans.span("export.model.cache-write"):
-                    manifest = json.dumps({str(path): stamp for path, stamp in read.items()}).encode()
-                    self._preview_put(key, pack_preview_files({"sources.json": manifest, "model.glb": data}), disk_generation)
+        try:
+            data = export()
+        except BaseException as error:
+            flight.set_exception(error)
+            raise
+        else:
+            flight.set_result(data)
             return data
+        finally:
+            with self._model_flights_lock:
+                del self._model_flights[key]
 
     def _lobby_prefabs(self) -> dict[str, str]:
         """Memorial lobby prefab names (lower case) -> bundle names, from the bundle containers alone (about 5 s
