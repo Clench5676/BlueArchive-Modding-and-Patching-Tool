@@ -223,7 +223,7 @@ const named = (c) => (c.kind === "mod" ? { ...c, label: modLabel(c.mod) }
   : { ...c, label: shortName(c.variant), recruit: c.variant.recruitable, fav: isFav(c.variant) });
 // Switch 3D Model takes any student's model, offered through its search only (BL-131): roster.list's families, read
 // with the 3D tab or the popup (the one already chosen keeps its card), for the life of the screen
-let otherStudents = null, othersLoad = null, othersEpoch = 0;
+let otherStudents = null, othersLoad = null, othersEpoch = 0, startLoose = false;
 function resetOthers() {
   othersEpoch++;
   otherStudents = null;
@@ -1524,16 +1524,24 @@ async function openPopup(kind = "spr") {
   const family = fam, v = variant();
   if (kind === "model") {
     void costumesReady(v).catch((err) => console.error("Costume check failed", err));
-    // another student's model already chosen keeps its card (BL-131): the roster is read first
-    await readOthers();
-    if (!open || fam !== family || variant() !== v) return;
-    judgeCross(v);
+    // the switch opens at once with the student's own cards (BL-136); another student's model already chosen
+    // (BL-131) gets its card, and the popup its start, once the roster is in
+    if (otherStudents) judgeCross(v);
+    else void readOthers().then((families) => {
+      if (!families || !open || fam !== family || variant() !== v || popupKind !== kind || switchPopupPage !== pageToken) return;
+      const start = popupMode(fam, v, kind, modsOn(), otherStudents).start;
+      if (pending === popupStart) pending = start;
+      popupStart = start;
+      startLoose = false;
+      void renderPopup($("popup").querySelector(".popup-cards")?.scrollTop || 0);
+    });
   }
   switchThumbnails?.cancel();
   switchThumbnails = thumbnailScope({ priority: "popup" });
   switchPopupPage = pageToken;
   popupKind = kind;
   popupStart = popupMode(fam, variant(), kind, modsOn(), otherStudents).start;
+  startLoose = kind === "model" && !otherStudents;
   pending = popupStart;
   popupSeg = 0;
   const mods = candidates(variant(), kind).filter((c) => c.kind === "mod").map((c) => c.mod);
@@ -1570,6 +1578,8 @@ function closePopup(apply) {
   const chosen = popupCandidate(variant(), popupKind, pending);
   if (popupKind === "model") judgeCross(variant());
   // only a choice other than the start (what the game shows; while mods are off, the configured source)
+  // a start taken before the roster was in may stand for another student's model not listed yet: kept as it is
+  if (apply && startLoose && pending === popupStart) return;
   if (apply && chosen && !chosen.greyed && !chosen.refused) return saveCandidate(pending, popupKind);
 }
 
