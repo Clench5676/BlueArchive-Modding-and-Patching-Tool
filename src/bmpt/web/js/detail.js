@@ -220,7 +220,10 @@ const readFamily = (key) => rpc("family.get", { key });
 function candidates(v = variant(), kind = "spr") {
   return listSources(fam, v, kind, costumeState.get(v.key), otherStudents).map(named);
 }
-const named = (c) => (c.kind === "mod" ? { ...c, label: modLabel(c.mod) }
+// a lobby camera framed on the official art (BL-137) takes the name of the variant's own card, as the cards show it
+const cameraLabel = (c) => (c.mod.camera && !c.mod.alias && !c.mod.camera.source?.startsWith("mod:") && c.origin
+  ? `${shortName(c.origin)} - ${T("lobby.cameraName", { n: c.mod.camera.number })}` : modLabel(c.mod));
+const named = (c) => (c.kind === "mod" ? { ...c, label: cameraLabel(c) }
   : { ...c, label: shortName(c.variant), recruit: c.variant.recruitable, fav: isFav(c.variant) });
 // Switch 3D Model takes any student's model, offered through its search only (BL-131): roster.list's families, read
 // with the 3D tab or the popup (the one already chosen keeps its card), for the life of the screen
