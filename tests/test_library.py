@@ -1372,6 +1372,22 @@ def test_extract_uses_core_and_returns_core_folder(setup_library, monkeypatch):
     assert calls == [[entry.file], [env.original]]
 
 
+
+@pytest.mark.parametrize("core_name", ["", "..", " . "])
+def test_extract_refuses_core_outside_output_folder(setup_library, monkeypatch, core_name):
+    env = setup_library
+    entry = env.library.add([make_mod(env.original, env.tmp / "input")])[0]
+    out_dir = env.tmp / "extracted"
+    out_dir.mkdir()
+    (out_dir / "keep.txt").write_bytes(b"keep")
+    monkeypatch.setattr(service, "parse_filename",
+                        lambda name: SimpleNamespace(core=core_name))
+    monkeypatch.setattr(core, "process_asset_extraction",
+                        lambda *args, **kwargs: pytest.fail("extraction must not run"))
+    with pytest.raises(ServiceError):
+        env.library.extract(f"mod:{entry.id}", out_dir)
+    assert (out_dir / "keep.txt").read_bytes() == b"keep"
+
 def fake_asset(name, type_name, raw):
     return SimpleNamespace(type=getattr(AssetType, type_name), peek_name=lambda: name,
                            get_raw_data=lambda: raw, read=lambda: SimpleNamespace(m_StreamData=None))
