@@ -78,7 +78,11 @@
 			"playAll": "会話をすべて再生",
 			"stop": "停止",
 			"exit": "フルスクリーン終了",
-			"dialogue": "会話{n}"
+			"dialogue": "会話{n}",
+			"cameraOpen": "カメラ構図",
+			"cameraSave": "カメラを保存",
+			"cameraSaved": "新しいメモリアルロビーとして保存しました",
+			"cameraDetail": "倍率 {scale}、オフセット {offset}"
 		},
 		"model": {
 			"original": "オリジナル",

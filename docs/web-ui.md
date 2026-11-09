@@ -2979,6 +2979,25 @@ it (decision 7); browser and serve mode have none.
   UIPopup_Sort, UIPopup_Option_PC, UICharacterDetail and the three BlackBgClickArea tweens from the development view
   (numbers only; skipped without `BAMT_TEST_GAME_DIR`).
 
+### Lobby camera framing (BL-137, preview behind `?proto=bl137`)
+
+- **Entry.** In the fullscreen memorial lobby a white visual-mode button with the game's `Common/Cafe_Icon_Video`
+  sits left of the photography button (`lobby-camera.js`). It enters the framing: the lobby rests (the intro skipped),
+  Back (UICharacterVisualMode `Btn_Back`), Reset and the photography shutter (`Common_Btn_Circle_W`) replace the
+  fullscreen controls, and a dashed outline marks the game's own view.
+- **Moves.** The wheel zooms at the pointer's height, any drag moves the view up or down (`lobby-touch.js` pan only);
+  the view stays 16:9 and centred across (`lobby.js framingView`).
+- **Limits.** `measureFraming` paints every pose the lobby goes through into 16-unit cells three game views across:
+  the idle, every clip (`clipPoses`) and the intro every 0.1 s with its skeletons where the timeline has them
+  (`lobby-intro.js sampler`: GameObject activity and transform curves, intro-only scenes, the Spine clips on their
+  tracks, no mixes). A cell outside the game's view that some pose leaves unpainted may not be shown; inside the game's
+  view everything may, as the game shows it. Zoom-in stops at 2x the game's view.
+- **Kept.** `cameraParams(V, G)`: the lobby scaled by `k = G.w / V.w` about the screen centre and moved by
+  `-k (V's centre - G's centre)` NGUI units, so that V fills the screen as G did.
+- **RPC `lobby.camera.save`** `{variant, lobby, view: {x, y, w, h}, scale, offset: [x, y]}` answers
+  `{variant, lobby, number, scale, offset}`. The preview answers it from a fake backend in `lobby-camera.js`; the real
+  one writes the lobby's prefab bundle (BL-137 step 3).
+
 ## Lobby lines
 
 Online data, fetched on demand and kept in memory only (never written to disk):

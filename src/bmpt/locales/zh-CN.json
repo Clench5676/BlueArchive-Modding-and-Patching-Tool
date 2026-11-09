@@ -78,7 +78,11 @@
 			"playAll": "播放全部对话",
 			"stop": "停止",
 			"exit": "退出全屏",
-			"dialogue": "对话 {n}"
+			"dialogue": "对话 {n}",
+			"cameraOpen": "镜头取景",
+			"cameraSave": "保存镜头",
+			"cameraSaved": "已另存为新的记忆大厅",
+			"cameraDetail": "缩放 {scale}，偏移 {offset}"
 		},
 		"model": {
 			"original": "原版",

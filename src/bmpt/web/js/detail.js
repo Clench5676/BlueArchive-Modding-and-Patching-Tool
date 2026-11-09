@@ -1,4 +1,5 @@
 import * as Photo from "./photography/controller.js";
+import * as Camera from "./lobby-camera.js";
 import { notify } from "./popup.js";
 import { jobProgress, progressName } from "./job-progress.js";
 // Detail screen, built from the game's own prefab (UICharacterDetail) by ngui.js. The prefab supplies every frame,
@@ -2111,9 +2112,13 @@ async function setFullscreen(on, { switching = false } = {}) {
   if (!on || tab === "lobby") { Lobby.frame(on ? "full" : "left"); Lobby.interactive(on); }
   if (!on || tab === "model") modelLib?.then((M) => M.frame(on ? "full" : "left"));
   showExit(on);
+  if (!on) Camera.close(false);
   await Photo.visualEntry(on);
+  await Camera.entry(on && tab === "lobby", cameraBridge);
   if (!on) { await photoBridge.release(); stillAfterFullscreen(); }
 }
+// the camera framing's view of the detail page (lobby-camera.js)
+const cameraBridge = { variant: () => variantKey, lobby: () => variant()?.lobby };
 // the UI slides out (app.css .stage.fullscreen) and out of the keyboard's reach; back, the visual mode closes and the
 // focus returns (visual-mode.js uiOut, uiBack)
 const slidOut = () => [$("ngui"), $("ngui-chips"), $("ngui-expr"), document.querySelector(".topbar"), stage().querySelector(".nav")];
@@ -2396,7 +2401,7 @@ addEventListener("blur", () => keySteps.release());
 // ready (the panels, primary preview and decoded UI images). In place (another
 // variant or family while the screen is shown), the shown screen stays until then and every part swaps in one frame.
 export async function show(context, familyData, key, { inPlace = false, kind = null } = {}) {
-  Photo.destroy();
+  Photo.destroy(); Camera.close(false); document.getElementById("camera-launcher")?.remove();
   ModAlias.close();
   leavePage();
   pageToken += 1;
@@ -2458,7 +2463,7 @@ export const currentVariant = () => (open || suspended) && fam ? variant().key :
 // Release page work before a destination waits on library locks, retaining the
 // complete current frame until that destination can replace it.
 export function suspend() {
-  Photo.destroy();
+  Photo.destroy(); Camera.close(false); document.getElementById("camera-launcher")?.remove();
   switchThumbnails?.cancel();
   switchThumbnails = null;
   ModAlias.close(); leavePage(); open = false; suspended = true;
@@ -2467,7 +2472,7 @@ export function suspend() {
 
 // leaving the screen: stop the players, drop any change being prepared
 export function hide() {
-  Photo.destroy();
+  Photo.destroy(); Camera.close(false); document.getElementById("camera-launcher")?.remove();
   switchThumbnails?.cancel();
   switchThumbnails = null;
   ModAlias.close();

@@ -78,7 +78,11 @@
 			"playAll": "대사 전체 재생",
 			"stop": "정지",
 			"exit": "전체 화면 종료",
-			"dialogue": "대사 {n}"
+			"dialogue": "대사 {n}",
+			"cameraOpen": "카메라 구도",
+			"cameraSave": "카메라 저장",
+			"cameraSaved": "새 메모리얼 로비로 저장됨",
+			"cameraDetail": "배율 {scale}, 오프셋 {offset}"
 		},
 		"model": {
 			"original": "원본",
