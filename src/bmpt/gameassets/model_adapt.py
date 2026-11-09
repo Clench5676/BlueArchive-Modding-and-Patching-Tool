@@ -1872,7 +1872,8 @@ def _edit_prefabs(writer: _Writer, sf: Any, graph: BundleGraph, t_meshes: Mappin
             if role is None:
                 continue
             if role == "primary":
-                own = [(material_cab, m["m_PathID"]) for m in r["m_Materials"] if m["m_FileID"] == material_fid]
+                # its materials wherever they live: a slot's body may take them from two files (Hifumi (Swimsuit))
+                own = [(_cab(sf, m["m_FileID"]), m["m_PathID"]) for m in r["m_Materials"] if m["m_PathID"]]
                 main_renderer = own == primary_materials
                 mesh_pid, nodes = new_meshes[0]
                 r["m_Mesh"] = {"m_FileID": mesh_fid, "m_PathID": mesh_pid}
