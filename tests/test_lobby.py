@@ -13,6 +13,7 @@ import pytest
 from bmpt.config import Settings
 from bmpt.errors import ServiceError
 from bmpt.gameassets import lobby
+from bmpt.gameassets.unity import open_bundle
 from bmpt.webui.services import Services
 from bmpt.webui.state import UiState
 
@@ -20,8 +21,10 @@ from bmpt.webui.state import UiState
 GAME_DIR = Path(os.environ.get("BAMT_TEST_GAME_DIR") or "/nonexistent/bamt-real-game")
 
 SA, CHARACTER, DRAG, BODY, WIDGET, CHAT, UTILITY, CONTAINER = range(5001, 5009)
+ASPECT = 5010  # 5009 is TOGGLE, below
 SCRIPTS = {SA: "SkeletonAnimation", CHARACTER: "SpineCharacter", DRAG: "SpineDragIK", BODY: "SpineCharacterBodyTouch",
-           WIDGET: "UIWidget", CHAT: "ChatDialog", UTILITY: "SkeletonUtilityBone", CONTAINER: "UILobbyContainer"}
+           WIDGET: "UIWidget", CHAT: "ChatDialog", UTILITY: "SkeletonUtilityBone", CONTAINER: "UILobbyContainer",
+           ASPECT: "UIManualScaleByAspect"}
 
 
 def ref(pid: int, fid: int = 0) -> dict:
@@ -248,6 +251,75 @@ def test_enlarged_lobby_scale_and_unknown_skeletons():
     # a mod with other skeleton names: the prefab places none of them
     assert build_prefab().read("LobbyTest", ["Other_home"], lobby.Clips([], ["Other_home"])) is None
     assert build_prefab().read("LobbyMissing", SKELETONS, core_clips()) is None
+
+
+def aspect_component(narrow: float = 1.15, wide: float = 1.3, scale=(2, 4), offsets=()) -> dict:
+    """A UIManualScaleByAspect typetree: scale targets and (node, wide add, narrow add) offset settings by GameObject
+    id (a node's Transform has the id + 100000)."""
+    def v(x, y, z):
+        return {"x": float(x), "y": float(y), "z": float(z)}
+    return {"mostWideScale": wide, "mostNarrowScale": narrow, "scaleTransforms": [ref(go + 100000) for go in scale],
+            "offsetSettings": [{"Transform": ref(go + 100000), "MostWideAdd": v(*w), "MostNarrowAdd": v(*n)}
+                               for go, w, n in offsets]}
+
+
+def test_aspect_rule_blends_towards_the_narrow_and_wide_ends():
+    comp = aspect_component(offsets=[(2, (24, 24, 24), (13, 26, 39)), (8, (0, 0, 0), (2.5, 3.5, -2.5))])
+    t = 5 / 13  # 16:9 is 5/13 of the way from the standard 2960 x 1440 to 4:3
+    assert lobby.ASPECT_VIEW == 16 / 9
+    factor, offsets = lobby.aspect_rule(comp)
+    assert factor == pytest.approx(1 + 0.15 * t) and factor == lobby.aspect_rule(comp, 16 / 9)[0]
+    assert offsets == {100002: (5, 10, 15), 100008: (1, 1, -1)}  # the second: 0.9, 1.3, -0.9
+    # the narrowest screen takes the narrow values whole, one narrower is clamped; offsets round half to even
+    factor, offsets = lobby.aspect_rule(comp, 4 / 3)
+    assert (factor, offsets[100002], offsets[100008]) == (pytest.approx(1.15), (13, 26, 39), (2, 4, -2))
+    assert lobby.aspect_rule(comp, 1.0) == lobby.aspect_rule(comp, 4 / 3)
+    # wider than the standard: the wide values, towards 2.1666667 and clamped there
+    mid = lobby.ASPECT_STANDARD + (lobby.ASPECT_WIDE - lobby.ASPECT_STANDARD) / 4
+    factor, offsets = lobby.aspect_rule(comp, mid)
+    assert factor == pytest.approx(1 + 0.3 * 0.25) and offsets[100002] == (6, 6, 6) and offsets[100008] == (0, 0, 0)
+    assert lobby.aspect_rule(comp, lobby.ASPECT_WIDE) == lobby.aspect_rule(comp, 21 / 9)
+    assert lobby.aspect_rule(comp, 21 / 9)[0] == pytest.approx(1.3) and lobby.aspect_rule(comp, 21 / 9)[1][100002] == (24, 24, 24)
+    # the standard aspect itself: nothing moves
+    assert lobby.aspect_rule(comp, lobby.ASPECT_STANDARD) == (1.0, {100002: (0, 0, 0), 100008: (0, 0, 0)})
+    assert lobby.aspect_targets(comp) == [100002, 100004]
+
+
+def test_prefab_follows_the_aspect_scale_at_16_9():
+    plain = build_prefab()
+    base = plain.read("LobbyTest", SKELETONS, core_clips())
+    p = build_prefab()
+    # LobbySpine and the background (a child of it) scale; LobbySpine moves by (5, 10, 15) and the dialogue by (5, 10)
+    p.mb(1, 1002, ASPECT, **aspect_component(scale=(2, 4), offsets=[(2, (0, 0, 0), (13, 26, 39)), (8, (0, 0, 0), (13, 26, 0))]))
+    info = p.read("LobbyTest", SKELETONS, core_clips())
+    s = 1 + 0.15 * 5 / 13
+    layers, old = {l["name"]: l for l in info["layers"]}, {l["name"]: l for l in base["layers"]}
+    assert (layers["Test_home"]["scale"], layers["Test_home"]["x"], layers["Test_home"]["y"], layers["Test_home"]["z"]) == (
+        round(s, 5), 5.0, -952.0, 15.0)
+    assert layers["Test_bg"]["scale"] == round(s * s, 5)  # both the LobbySpine and its child are scale targets
+    # the 3D matrix agrees (a particle system or pin below follows): z moved by the offset
+    assert old["Test_home"]["z"] == 0.0
+    assert info["dialog"] == {"Talk": [492.0, 39.0]}
+    # transforms that are no target keep their place: the touch boxes hang under the root, not the LobbySpine
+    assert info["touches"] == base["touches"] and info["drags"] == base["drags"]
+    # the prefab's own trees are left as they are
+    assert p.objects[2 + 100000][1]["m_LocalScale"]["x"] == 100.0 and p.objects[2 + 100000][1]["m_LocalPosition"]["y"] == -962.0
+    # an enlarged lobby ends at its own scale times the factor
+    big = build_prefab(-1106.3, 115.0)
+    big.mb(1, 1002, ASPECT, **aspect_component(scale=(2,)))
+    home = next(l for l in big.read("LobbyTest", SKELETONS, core_clips())["layers"] if l["name"] == "Test_home")
+    assert (home["y"], home["scale"]) == (-1106.3, round(1.15 * s, 5))
+
+
+def test_prefab_without_a_pull_or_with_a_neutral_one_is_unchanged():
+    base = build_prefab().read("LobbyTest", SKELETONS, core_clips())
+    neutral = build_prefab()  # CH0242: scale 1.0 and zero offsets
+    neutral.mb(1, 1002, ASPECT, **aspect_component(narrow=1.0, offsets=[(2, (0, 0, 0), (0, 0, 0))]))
+    assert neutral.read("LobbyTest", SKELETONS, core_clips()) == base
+    # only the root's component counts
+    elsewhere = build_prefab()
+    elsewhere.mb(5, 1002, ASPECT, **aspect_component(scale=(2,), offsets=[(8, (0, 0, 0), (13, 26, 0))]))
+    assert elsewhere.read("LobbyTest", SKELETONS, core_clips()) == base
 
 
 def param(value, override: int = 1) -> dict:
@@ -620,7 +692,8 @@ def test_real_lobbies(real_game, monkeypatch):
     assert {d["kind"] for d in hoshino["drags"]} >= {"pat", "look"} and hoshino["touches"]
     assert hoshino["defaultMix"]["Hoshino_home"] == 0.4
     momiji = real_game.lobby_info("momiji_home")
-    assert {(l["y"], l["scale"]) for l in momiji["layers"]} == {(-1106.3, 1.15)}
+    # the 1.15 prefabs end at 1.15 x the aspect factor (1.0576923 at 16:9, see lobby.aspect_rule)
+    assert {(l["y"], l["scale"]) for l in momiji["layers"]} == {(-1170.12, 1.21635)}
     aru = {l["name"]: l["active"] for l in real_game.lobby_info("aru_home")["layers"]}
     assert aru["Aru_home"] is True and False in aru.values()
     # the camera's post-processing from the prefab's volumes (PPV at weight 1; the flash and depth of field at 0)
@@ -753,3 +826,40 @@ def test_real_lobby_idle_clips_and_sounds(real_game, monkeypatch):
     with pytest.raises(AssetNotFound):
         real_game.lobby_sound("aru_home", clip_id)
     assert any("lobby-sound/" in key for key, _ in puts) and not any(disk for key, disk in puts if "lobby-sound/" in key)
+
+
+@pytest.mark.skipif(not GAME_DIR.is_dir(), reason="No local game install")
+def test_real_lobby_aspect_scale(real_game, monkeypatch):
+    from bmpt.gameassets import particles
+    s = 1 + (1.149999976158142 - 1) * 5 / 13  # the 16:9 factor of a mostNarrowScale 1.15 lobby
+    nodes = {}
+    build = particles.build
+
+    def spy(walked, *args, **kwargs):
+        nodes[walked[0]["name"]] = {n["name"]: n for n in walked}
+        return build(walked, *args, **kwargs)
+
+    monkeypatch.setattr(particles, "build", spy)
+    # Azusa's LobbySpine is serialized at 1: the skeleton ends at the factor, the standard place scaled about the centre
+    azusa, = real_game.lobby_info("azusa_home")["layers"]
+    assert (azusa["scale"], azusa["x"], azusa["y"]) == (round(s, 5), 0.0, round(-962 * s, 2))
+    # a lobby serialized at 1.15 ends at 1.15 times the factor, and CH0242 (mostNarrowScale 1.0) does not change
+    ch0205, = real_game.lobby_info("ch0205_home")["layers"]
+    assert (ch0205["scale"], ch0205["y"]) == (round(1.15 * s, 5), round(-1106.3 * s, 2))
+    ch0242, = real_game.lobby_info("ch0242_home")["layers"]
+    assert (ch0242["scale"], ch0242["x"], ch0242["y"]) == (1.0, 0.0, -962.0)
+    # Hina has two scale targets: her background and the LobbySpine both scale
+    real_game.lobby_info("hina_home")
+    with open_bundle(real_game._bundle_path(real_game._lobby_prefabs()["lobbyhina"])) as env:
+        raw = {o.path_id: o.read_typetree() for o in env.objects if o.type.name in
+               ("GameObject", "Transform", "RectTransform", "MonoBehaviour")}
+    comp = next(t for t in raw.values() if "mostNarrowScale" in t)
+    assert comp["mostNarrowScale"] == pytest.approx(1.15) and len(comp["scaleTransforms"]) == 2
+    names = {raw[p["m_PathID"]]["m_GameObject"]["m_PathID"]: raw[raw[p["m_PathID"]]["m_GameObject"]["m_PathID"]]["m_Name"]
+             for p in comp["scaleTransforms"]}
+    assert any(n.endswith("_BG") for n in names.values()) and any(n.endswith("LobbySpine") for n in names.values())
+    walked = {n["go"]: n for n in nodes["LobbyHina"].values()}
+    for go in names:
+        before, after = next(raw[p["m_PathID"]] for p in comp["scaleTransforms"]
+                             if raw[p["m_PathID"]]["m_GameObject"]["m_PathID"] == go)["m_LocalScale"], walked[go]["t"]["m_LocalScale"]
+        assert after["x"] == pytest.approx(before["x"] * s) and after["y"] == pytest.approx(before["y"] * s)
