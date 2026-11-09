@@ -253,6 +253,29 @@ export const storyActions = (clips) => [...(clips?.keys() || [])].map((slot) => 
   .map(Number).sort((a, b) => a - b).map((n) => `story${n}`);
 export const storyAction = (name) => (/^story\d+$/.test(name) ? { slots: [`Story_${name.slice(5)}`], hold: true } : null);
 
+// The node the view follows (BL-127): the hips (3ds Max's Bip001, else a pelvis or hips bone), whose horizontal
+// travel a clip's walk, run or cutscene path makes; null without one (the view then stays put).
+export function anchorNode(root) {
+  let found = root?.getObjectByName("Bip001") || null;
+  root?.traverse((o) => { if (!found && /(^|[\s_])(pelvis|hips)$/i.test(o.name)) found = o; });
+  return found;
+}
+
+// The orbit target's horizontal shift that keeps the anchor where it stood when the view was measured: the camera
+// moves with the character, which then acts in place whatever its clip does (height is the clip's own: jumps and
+// crouches still show).
+export function followOffset(position, rest, out = new THREE.Vector3()) {
+  return out.set(position.x - rest.x, 0, position.z - rest.z);
+}
+
+// Where the orbit target stands across the floor: over the prefab's root, as on the formation screen, unless the
+// hips stand further than `far` from it (a cutscene's model, placed off its own root, e.g. Arona's): then over the
+// hips, so the character is in the frame's point rather than beside it.
+export function standPoint(origin, hips, far = 0.2) {
+  const off = hips ? Math.hypot(hips.x - origin.x, hips.z - origin.z) : 0;
+  return off > far ? { x: hips.x, z: hips.z } : { x: origin.x, z: origin.z };
+}
+
 const stageScale = () => (document.getElementById("stage")?.getBoundingClientRect().width || 1920) / 1920;
 
 let viewCount = 0;
@@ -285,6 +308,7 @@ class ChibiView {
     this.goal = null; // the camera distance a zoom eases to
     this.pan = new THREE.Vector3(); // the orbit target's offset from the lifted target, and the one it eases to
     this.panGoal = new THREE.Vector3();
+    this.follow = new THREE.Vector3(); // followOffset of the anchor (the hips) this frame
     if (still) {
       this.mode = "still";
       this.view = { ...FRAMES.still };
@@ -514,11 +538,21 @@ class ChibiView {
     if (body.isEmpty()) body.copy(all);
     if (all.isEmpty()) all.set(new THREE.Vector3(-0.3, 0, -0.3), new THREE.Vector3(0.3, 1, 0.3));
     const origin = this.root.getWorldPosition(new THREE.Vector3());
+    this.anchor = anchorNode(this.root);
+    this.anchorRest = this.anchor?.getWorldPosition(new THREE.Vector3()) || null;
+    const stand = standPoint(origin, this.anchorRest);
     this.size = all.getSize(new THREE.Vector3());
-    this.target = new THREE.Vector3(origin.x, origin.y + FORMATION_VIEW.eye, origin.z);
+    this.target = new THREE.Vector3(stand.x, origin.y + FORMATION_VIEW.eye, stand.z);
     this.box = { min: all.min.clone().sub(this.target), max: all.max.clone().sub(this.target) };
     this.faceY = body.min.y + (body.max.y - body.min.y) * 0.78; // a chibi's face sits in the top quarter
     this.controls.target.copy(this.target);
+    this.follow.set(0, 0, 0);
+  }
+
+  // the anchor's travel since the view was measured (followOffset)
+  updateFollow() {
+    if (!this.anchor || !this.anchorRest) return;
+    followOffset(this.anchor.getWorldPosition(new THREE.Vector3()), this.anchorRest, this.follow);
   }
 
   // the front view, level, as on the formation screen
@@ -596,7 +630,7 @@ class ChibiView {
   liftTarget() {
     if (!this.fit) return;
     const o = this.controls, offset = this.camera.position.clone().sub(o.target);
-    o.target.set(this.target.x, this.target.y + this.lift(offset.length()), this.target.z).add(this.pan);
+    o.target.set(this.target.x, this.target.y + this.lift(offset.length()), this.target.z).add(this.pan).add(this.follow);
     this.camera.position.copy(o.target).add(offset);
   }
 
@@ -771,6 +805,7 @@ class ChibiView {
     this.applySwitches();
     this.updateMouth();
     this.followHalo(dt);
+    this.updateFollow();
     this.stepTween();
     this.stepZoom(dt);
     this.liftTarget();
@@ -823,9 +858,10 @@ class ChibiView {
   snapshot(aspect = 450 / 253) {
     if (!this.root || !this.fit) return null;
     const w = this.host.clientWidth || 1, h = this.host.clientHeight || 1;
-    const camera = stillCamera(this.camera, this.target, this.fit, FRAMES[this.mode], w, h);
+    const target = this.target.clone().add(this.follow); // where the character is now (followOffset)
+    const camera = stillCamera(this.camera, target, this.fit, FRAMES[this.mode], w, h);
     this.renderer.render(this.scene, camera);
-    const { x, y, w: cw, h: ch } = stillCrop(camera, this.target, this.box, this.canvas.width, this.canvas.height, aspect);
+    const { x, y, w: cw, h: ch } = stillCrop(camera, target, this.box, this.canvas.width, this.canvas.height, aspect);
     let still = null;
     if (ch >= 1) {
       const c = document.createElement("canvas");
@@ -924,10 +960,13 @@ export const actions = () => view?.actions() || [];
 export const current = () => view?.current || null;
 export function play(name) { return view?.act(name, { quiet: true }) || false; }
 export const snapshot = () => view?.snapshot() || null;
-// for checks: the camera's distance, the zoom's goal, range and place, the target's lift and the pan
+// for checks: the camera's distance, the zoom's goal, range and place, the target's lift, the pan and the follow, and
+// where the anchor (the hips) projects on the canvas (-1..1 across and up)
 export function zoomState() {
   if (!view?.limits) return null;
   const d = view.distance(), range = view.range();
   return { distance: d, goal: view.goal, fit: view.fit, min: view.limits.min, max: view.limits.max, share: zoomShare(d, range),
-    lift: view.lift(d, range), pan: view.pan.toArray(), panGoal: view.panGoal.toArray(), gliding: !!view.tween };
+    lift: view.lift(d, range), pan: view.pan.toArray(), panGoal: view.panGoal.toArray(), gliding: !!view.tween,
+    follow: view.follow.toArray(), anchor: view.anchor?.name || null,
+    anchorView: view.anchor ? view.anchor.getWorldPosition(new THREE.Vector3()).project(view.camera).toArray().slice(0, 2) : null };
 }
