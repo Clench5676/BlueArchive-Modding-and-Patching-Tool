@@ -86,9 +86,15 @@ const ctx = {
     const tab = ["portrait", "lobby", "model"].includes(target) ? `/${target}` : "";
     location.hash = `#/student/${encodeURIComponent(family)}/${encodeURIComponent(variant)}${tab}`;
   },
-  invalidateRoster: () => { rosterStale = true; Roster.invalidate(); },
-  // roster.list's data (read again once invalidated): Switch 3D Model's other students (BL-131)
-  roster: () => roster(),
+  invalidateRoster: () => { rosterStale = true; rosterGen += 1; Roster.invalidate(); },
+  // roster.list's data (read again once invalidated): Switch 3D Model's other students (BL-131). ``stale``: the copy in
+  // hand at once, even when invalidated, read again in the background (BL-136: roster.list waits for the library's
+  // lock, held by a costume check for seconds)
+  roster: ({ stale = false } = {}) => {
+    if (!stale || !rosterData || rosterEpoch !== resourceEpoch) return roster();
+    if (rosterStale) roster().catch(() => {});
+    return Promise.resolve(rosterData);
+  },
   // the card before or after the shown variant (merged: family) in the roster's order, within its filters
   step: async (delta, family, variant) => {
     const data = await roster();
@@ -98,16 +104,25 @@ const ctx = {
   },
 };
 
-async function roster() {
-  if (!rosterData || rosterStale) {
-    const before = rosterData;
+// one roster.list at a time: callers while it runs share its answer, unless the roster was invalidated since it began
+// (rosterGen); rosterEpoch: the resources the data was read for
+let rosterRead = null, rosterGen = 0, rosterEpoch = -1;
+function roster() {
+  if (rosterData && !rosterStale) return Promise.resolve(rosterData);
+  if (rosterRead?.gen === rosterGen) return rosterRead.done;
+  const gen = rosterGen;
+  const done = (async () => {
     const epoch=resourceEpoch,next=await rpc("roster.list");
     if(epoch!==resourceEpoch)throw new DOMException('Game resources changed','AbortError');
+    const before = rosterData;
     rosterData=next;
-    rosterStale = false;
+    rosterEpoch = epoch;
+    if (gen === rosterGen) rosterStale = false;
     forgetReplaced(before, rosterData);
-  }
-  return rosterData;
+    return rosterData;
+  })().finally(() => { if (rosterRead?.done === done) rosterRead = null; });
+  rosterRead = { gen, done };
+  return done;
 }
 
 // the portraits whose game files carry something else than before (the classic UI closed, a job that stopped midway:
