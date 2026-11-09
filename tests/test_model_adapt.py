@@ -247,11 +247,12 @@ def _slot(files, dev):
 @pytest.mark.parametrize("target,source,field,parts,hem,physics", [
     ("hina_original", "np0009", True, 1, "skirt smooth", True),   # Hina <- Hina (Pajamas), a field-mode model: Rule B
     ("hina_original", "np0009", True, 1, "blend 0.5", False),     # the same without Optimize Physics: Rule A only
-    ("ch0172", "np0283", True, 1, "skirt smooth", True),           # Niko <- Niko (FOX EATS): her separate hands go
+    ("ch0172", "np0283", True, 1, "blend 0.5", True),              # Niko <- Niko (FOX EATS): her separate hands go;
+                                                                   # Rule B past the stretch limit since the refit
     ("hoshino_original", "hoshino_swimsuit", False, 3, "rigid", False),  # a three-part costume: two renderers added
     ("hoshino_swimsuit", "hoshino_original", False, 1, "rigid", False),  # the swimsuit's own extra parts draw nothing
-    ("ch0186", "mari_original", False, 1, "fit 0.5", True),        # Mari (Track) <- Mari: a compressed mesh; Rule B past
-])                                                                 # the stretch limit even when offered
+    ("ch0186", "mari_original", False, 1, "skirt smooth", True),   # Mari (Track) <- Mari: a compressed mesh; Rule B
+])                                                                 # within the limit once the seam keeps its length
 def test_official_costume_on_a_slot(view, tmp_path, target, source, field, parts, hem, physics):
     from ba_modding_toolkit.bundle import Bundle
     from ba_modding_toolkit.models import SaveOptions
@@ -326,8 +327,9 @@ def test_official_costume_on_a_slot(view, tmp_path, target, source, field, parts
             assert set(paths[skirt.base:]) <= {n.path for n in ma.Skeleton.of(graph, pointer.deref()).nodes}
         own = {k: v for k, v in t_prefabs.items() if target in k}
         hashes = {zlib.crc32(path.encode()): path for path in roots}
-        turned = [c for c in ma.prefab_clips(graph, t, own) if roots == {hashes[b["path"]] for b in graph.tree(c)[
-            "m_ClipBindingConstant"]["genericBindings"] if b["path"] in hashes and b["attribute"] == 2}]
+        turned = [c for c in ma.prefab_clips(graph, t, own) if all(roots == {hashes[b["path"]] for b in graph.tree(c)[
+            "m_ClipBindingConstant"]["genericBindings"] if b["path"] in hashes and b["attribute"] == attribute}
+            for attribute in (1, 2))]  # each first bone turned and moved
         assert len(turned) == skirt.clips
     changes = {p.mesh.peek_name(): change for p, change in zip(ordered, hems.parts) if change is not None}
     drawn, empty, reweighted = [], 0, 0
