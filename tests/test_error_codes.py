@@ -57,7 +57,7 @@ BLOCKS = (
         'alias_too_long alias_too_many hall_conflict hall_duplicate_memorial hall_duplicate_portrait '
         'hall_last_memorial hall_last_portrait photo_apply_failed photo_capture_unavailable '
         'photo_delete_other_variant photo_in_use photo_invalid photo_library_invalid photo_missing '
-        'photo_target_unavailable '
+        'photo_target_unavailable lobby_camera_failed lobby_camera_unsupported '
     ).split(),
     (
         'update_check_failed update_checksum_mismatch update_download_failed update_restart_failed '

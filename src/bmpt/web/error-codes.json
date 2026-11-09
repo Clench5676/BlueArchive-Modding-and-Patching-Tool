@@ -231,6 +231,14 @@
     "code": "E1011",
     "level": "failed"
   },
+  "lobby_camera_failed": {
+    "code": "E6016",
+    "level": "failed"
+  },
+  "lobby_camera_unsupported": {
+    "code": "E6017",
+    "level": "failed"
+  },
   "mod_apply_failed": {
     "code": "E4012",
     "level": "failed"

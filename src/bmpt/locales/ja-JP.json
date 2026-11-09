@@ -82,7 +82,8 @@
 			"cameraOpen": "カメラ構図",
 			"cameraSave": "カメラを保存",
 			"cameraSaved": "新しいメモリアルロビーとして保存しました",
-			"cameraDetail": "倍率 {scale}、オフセット {offset}"
+			"cameraDetail": "倍率 {scale}、オフセット {offset}",
+			"cameraName": "カメラ {n}"
 		},
 		"model": {
 			"original": "オリジナル",
@@ -490,6 +491,8 @@
 			"photo_in_use": "使用中の写真です",
 			"photo_library_invalid": "フォトライブラリを読み込めません",
 			"photo_target_unavailable": "生徒一覧の画像が利用できません",
+			"lobby_camera_unsupported": "このメモリアルロビーではカメラを使用できません",
+			"lobby_camera_failed": "カメラを保存できません",
 			"photo_apply_failed": "写真を適用できません",
 			"hall_last_portrait": "立ち絵を1つ以上残してください",
 			"native_only": "デスクトップアプリで利用できます"

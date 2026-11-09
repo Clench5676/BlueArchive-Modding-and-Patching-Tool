@@ -82,7 +82,8 @@
 			"cameraOpen": "鏡頭取景",
 			"cameraSave": "儲存鏡頭",
 			"cameraSaved": "已另存為新的記憶大廳",
-			"cameraDetail": "縮放 {scale}，偏移 {offset}"
+			"cameraDetail": "縮放 {scale}，偏移 {offset}",
+			"cameraName": "鏡頭 {n}"
 		},
 		"model": {
 			"original": "原版",
@@ -490,6 +491,8 @@
 			"photo_in_use": "縮圖使用中",
 			"photo_library_invalid": "無法讀取縮圖庫",
 			"photo_target_unavailable": "學生名單縮圖資源無法使用",
+			"lobby_camera_unsupported": "此紀念大廳無法使用鏡頭",
+			"lobby_camera_failed": "鏡頭儲存失敗",
 			"photo_apply_failed": "縮圖套用失敗",
 			"hall_last_portrait": "至少保留一個立繪",
 			"native_only": "請在桌面應用程式中使用"
