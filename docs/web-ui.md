@@ -1000,11 +1000,18 @@ field for a variant with neither a battle nor a field player model:
   game shows only in a story cutscene or a UI scene (Ayame (Corrupted) and Ayame (Twilight): `NP0206_Mesh`,
   `NP0229_Mesh`; Arona: `Arona_Original_Gacha`): the root of a container prefab, else of an imported model, with
   renderers below it (`model.asset_root`). It plays the idle among those bundles' clips that moves it (Arona's), else
-  it rests in its stored pose. The catalog asks for these (`asset_model_cores`) only for the variants left without a
+  its own clips of the story cutscenes (BL-127): the clips named after it (`<dev>_...`, e.g. `NP0206_Cutin_A_01`)
+  in the cutscenes' dependency bundles (`assets-_mx-prodresources-sccutscene_*`, indexed once by clip name,
+  `_story_clips`), at most 12 (`STORY_CLIPS`), as slots `Story_1`, `Story_2`, ... in the order of their names; their
+  root (`bone_root`, `Bip001`) moves about where the model rests on the ground, its height kept, so the view keeps it
+  framed. The 3D tab lists them as actions `story1`, `story2`, ... (`model.action.story`: 剧情 1, Story 1), each
+  played once and held on its last frame; with no idle the first plays on opening, so the model never shows its bind
+  pose. Without any clip it rests in its stored pose. The catalog asks for these (`asset_model_cores`) only for the variants left without a
   model, once per name. An unskinned one (Kei (Decagrammaton Body), a static mesh) is no costume: the rule refuses it
   as `static model`.
 
-The GLB's root extras name the prefab (`prefab`) and, for these two, the source (`source`: `npc` or `asset`).
+The GLB's root extras name the prefab (`prefab`) and, for these two, the source (`source`: `npc` or `asset`). The 3D
+tab's left side draws a field or NPC model as it draws a slot's (`previewAvailable` counts `fieldModel`).
 
 ## Game watch
 

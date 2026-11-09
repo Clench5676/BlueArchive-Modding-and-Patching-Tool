@@ -10,7 +10,7 @@ register(`data:text/javascript,${encodeURIComponent(`export async function resol
   if (spec.startsWith("three/addons/")) return { url: ${JSON.stringify(VENDOR + "examples/jsm/")} + spec.slice(13), shortCircuit: true };
   return next(spec, ctx); }`)}`);
 const THREE = await import("three");
-const { FORMATION_VIEW, bustDistance, carryZoom, frameDistance, stillCamera, stillCrop } =
+const { FORMATION_VIEW, bustDistance, carryZoom, frameDistance, stillCamera, stillCrop, storyAction, storyActions } =
   await import("../../src/bmpt/web/js/model.js");
 
 const near = (a, b, eps = 1e-4) => assert.ok(Math.abs(a - b) <= eps, `${a} != ${b}`);
@@ -110,4 +110,13 @@ test("the switch card's still is the front view whatever the orbit and the zoom"
     // cropped by the live camera itself, the box's height collapses (from above: to nothing)
     assert.ok(stillCrop(c, target, KOHARU, 2000, 2160, aspect).h < home.h / 2);
   }
+});
+
+test("a story model's cutscene clips are its actions, in order, each held on its last frame", () => {
+  // BL-127: Ayame's story forms have no idle; their slots Story_1.. come from their cutscenes
+  const clips = new Map([["Story_10", {}], ["Story_2", {}], ["Story_1", {}], ["Formation_Idle", {}]]);
+  assert.deepEqual(storyActions(clips), ["story1", "story2", "story10"]);
+  assert.deepEqual(storyAction("story10"), { slots: ["Story_10"], hold: true });
+  assert.equal(storyAction("idle"), null);
+  assert.deepEqual(storyActions(new Map()), []);
 });

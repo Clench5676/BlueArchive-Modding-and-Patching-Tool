@@ -91,7 +91,8 @@
 				"reaction": "반응",
 				"walk": "걷기",
 				"victory": "승리",
-				"pickup": "들기"
+				"pickup": "들기",
+				"story": "스토리 {n}"
 			},
 			"optimize": "물리 효과 최적화",
 			"optimizeHint": "현재 스커트 최적화 지원",

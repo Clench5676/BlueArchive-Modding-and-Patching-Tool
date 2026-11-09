@@ -38,6 +38,7 @@ _SCHEMA = "gameassets-v1/"
 # The layout export's format, part of each cached layout's key: raise it whenever export_layout's output changes, so
 # layouts cached in an older format are rebuilt and no other cached asset is dropped (v3: label effect colours and distances)
 _LAYOUT = "layout-v6/"
+STORY_CLIP = re.compile(r"^((?:np|ch)\d{4})_", re.IGNORECASE)  # a story cutscene's clip named after its character
 _ATLASES = "atlases-v2/"
 # One model export at a time in the process: an export holds the path locks of every bundle it reads
 _MODEL_LOCK = threading.Lock()
@@ -791,6 +792,22 @@ class GameAssets:
                 found[core] = self._asset_model(core, paths) if paths else None
             return {core for core in (str(c).lower() for c in candidates) if found.get(core)}
 
+    def _story_clips(self) -> dict[str, list[str]]:
+        """The story cutscenes' clips by the character id they are named after (NP0206_Cutin_A_01): {id: [bundle]},
+        among the cutscenes' dependency bundles (assets-_mx-prodresources-sccutscene_*). A story model moves only there
+        (BL-127: Ayame's story forms)."""
+        def build() -> dict[str, list[str]]:
+            found: dict[str, set[str]] = {}
+            for path in self._paths():
+                if not path.name.startswith("assets-_mx-prodresources-sccutscene_"):
+                    continue
+                with open_bundle(path) as env:
+                    for obj in env.objects:
+                        if obj.type.name == "AnimationClip" and (m := STORY_CLIP.match(obj.peek_name() or "")):
+                            found.setdefault(m.group(1).lower(), set()).add(str(path))
+            return {core: sorted(paths) for core, paths in sorted(found.items())}
+        return self._index("story-clips", build)
+
     def _asset_bundles(self, core: str) -> list[str] | None:
         if not self.asset_model_cores({core}):
             return None
@@ -819,10 +836,14 @@ class GameAssets:
         from .model import BundleGraph, export_chibi
 
         core = core.lower()
-        listed = self._model_index().get(core) or self._field_index().get(core) or self._asset_bundles(core)
+        slot = self._model_index().get(core) or self._field_index().get(core)
+        listed = slot or self._asset_bundles(core)
         if not listed:
             raise AssetNotFound(("model", core))
         bundles = [Path(path) for path in listed]
+        # a story model (no prefab of its own) moves with its own clips of the story cutscenes
+        story = [] if slot else [Path(reads.resolve(Path(path))) if reads is not None else Path(path)
+                                 for path in self._story_clips().get(core, [])]
         overrides = list(dict.fromkeys(Path(path).resolve() for path in overrides))
         # Prefabs are opened directly by the exporter; CAB overrides alone only replace their dependencies.
         own = prefab_overrides(bundles, overrides)
@@ -833,7 +854,7 @@ class GameAssets:
             def resolve_cabs(wanted: set[str], hint_path: Path | None = None) -> dict[str, str]:
                 return {cab: str(reads.resolve(Path(path))) for cab, path in self._resolve_cabs(wanted, hint_path).items()}
         stamps = []
-        for path in [*bundles, *overrides]:
+        for path in [*bundles, *overrides, *story]:
             try:
                 stat = path.stat()
             except FileNotFoundError:
@@ -901,12 +922,12 @@ class GameAssets:
                         raise AssetNotFound("Model dependency changed during extraction")
 
             with self._cab_discovery().batch(), BundleGraph({}, overrides, resolver=resolve_cabs, opener=tracked_bundle) as graph:
-                data = export_chibi(graph, bundles, core)
+                data = export_chibi(graph, bundles, core, **({"story": story} if story else {}))
                 read = {path: _stamp(path) for path in graph.loaded}
                 complete = not graph.missing_cabs
                 if any(stamp is None or _stamp(path) != stamp for path, stamp in started.items()):
                     raise AssetNotFound("Model dependency changed during extraction")
-            if spine_stamps([*bundles, *overrides]) != list(dict.fromkeys(stamps)):
+            if spine_stamps([*bundles, *overrides, *story]) != list(dict.fromkeys(stamps)):
                 raise AssetNotFound("Model changed during extraction")
             self.cache.put(key, (data, read), version=self.cache_version, disk=False, size=len(data), generation=generation)
             if complete and read and all(stamp is not None for stamp in read.values()) and self.preview_cache is not None and self.preview_cache.allowed:

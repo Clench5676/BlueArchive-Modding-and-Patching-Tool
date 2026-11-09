@@ -37,6 +37,8 @@ from .unity import open_bundle
 logger = logging.getLogger(__name__)
 
 # The clips put in the GLB (by name suffix): the formation idle (weapon in hand) is the default loop.
+STORY_CLIPS = 12  # a story model's own cutscene clips exported at most (BL-127)
+STORY_ROOTS = {"bone_root", "bone_root/Bip001"}  # the nodes a cutscene places its character by
 DEFAULT_CLIPS = ("Formation_Idle", "Formation_Pickup", "Cafe_Idle", "Cafe_Reaction", "Cafe_Walk",
                  "Victory_Start", "Victory_End")
 # idles used when a prefab has neither the formation nor the cafe idle (NPC and battle-only prefabs)
@@ -1149,51 +1151,67 @@ class _Exporter:
         return [obj for *_, obj in sorted(scored, key=lambda entry: entry[:2])]
 
     def animations(self, clips: list[Any], wanted: Iterable[str]) -> None:
-        glb = self.glb
-        by_hash = {zlib.crc32(path.encode("utf-8")): index for index, path in self.path_of.items()}
-        rest = {i: (n.get("translation", [0, 0, 0]), n.get("rotation", [0, 0, 0, 1]), n.get("scale", [1, 1, 1]))
-                for i, n in enumerate(self.nodes)}
         names = [c.peek_name() for c in clips]
         exported = set()
         for index, slot in pick_clips(names, wanted, self.dev):
             if names[index] in exported:
                 continue
             exported.add(names[index])
-            tt = clips[index].read_typetree()
-            decoded = decode_clip(tt)
-            bindings = tt["m_ClipBindingConstant"]["genericBindings"]
-            tracks = bind_tracks(bindings, decoded.curves, by_hash)
-            orders = euler_orders(bindings, by_hash)
-            animation: dict[str, Any] = {"name": tt["m_Name"], "channels": [], "samplers": []}
-            times = glb.accessor(decoded.times, "SCALAR", minmax=True)
-            zero = None
-            for node, attrs in tracks.items():
-                for attribute, parts in attrs.items():
-                    path, values = track_values(attribute, parts, orders.get(node, UNITY_ORDER))
-                    if all(max(abs(a - b) for a, b in zip(v, values[0])) < 1e-5 for v in values):
-                        # constant over the clip: one key, or nothing when it is the rest pose (three.js restores
-                        # the original state of bindings no clip uses)
-                        rest_value = rest[node][{"translation": 0, "rotation": 1, "scale": 2}[path]]
-                        if max(abs(a - b) for a, b in zip(values[0], rest_value)) < 1e-5:
-                            continue
-                        if zero is None:
-                            zero = glb.accessor([0.0], "SCALAR", minmax=True)
-                        source, values = zero, values[:1]
-                    else:
-                        source = times
-                    output = glb.accessor(values, "VEC4" if path == "rotation" else "VEC3")
-                    animation["samplers"].append({"input": source, "output": output, "interpolation": "LINEAR"})
-                    animation["channels"].append({"sampler": len(animation["samplers"]) - 1,
-                                                  "target": {"node": node, "path": path}})
-            events = [{"time": round(e["time"], 4), "function": e["functionName"], "int": e["intParameter"]}
-                      for e in tt.get("m_Events", []) if e["functionName"] == "SetMouthTile"]
-            animation["extras"] = {"slot": slot, "loop": bool(tt["m_MuscleClip"]["m_LoopTime"]),
-                                   "duration": decoded.duration, "events": events}
-            toggles = self.toggles(tt, decoded, by_hash)
-            if toggles:
-                animation["extras"]["toggles"] = toggles
-            if animation["channels"]:  # NPC placeholders have no bindings
-                glb.json["animations"].append(animation)
+            self.animation(clips[index], slot)
+
+    def story(self, clips: list[Any]) -> None:
+        """A story model's own clips from its cutscenes (BL-127), as slots Story_1, Story_2, ... in the order of their
+        names (NP0206_Cutin_A_01, ...), at most ``STORY_CLIPS``: it has no standard clips to stand in."""
+        named = sorted(clips, key=lambda clip: clip.peek_name() or "")
+        for k, clip in enumerate(named[:STORY_CLIPS], 1):
+            self.animation(clip, f"Story_{k}")
+
+    def animation(self, clip: Any, slot: str) -> None:
+        glb = self.glb
+        by_hash = {zlib.crc32(path.encode("utf-8")): index for index, path in self.path_of.items()}
+        rest = {i: (n.get("translation", [0, 0, 0]), n.get("rotation", [0, 0, 0, 1]), n.get("scale", [1, 1, 1]))
+                for i, n in enumerate(self.nodes)}
+        tt = clip.read_typetree()
+        decoded = decode_clip(tt)
+        bindings = tt["m_ClipBindingConstant"]["genericBindings"]
+        tracks = bind_tracks(bindings, decoded.curves, by_hash)
+        orders = euler_orders(bindings, by_hash)
+        animation: dict[str, Any] = {"name": tt["m_Name"], "channels": [], "samplers": []}
+        times = glb.accessor(decoded.times, "SCALAR", minmax=True)
+        zero = None
+        for node, attrs in tracks.items():
+            for attribute, parts in attrs.items():
+                path, values = track_values(attribute, parts, orders.get(node, UNITY_ORDER))
+                if slot.startswith("Story_") and path == "translation" and self.path_of.get(node) in STORY_ROOTS:
+                    # a cutscene places its character where its shot needs it: the story clip moves about where the
+                    # model rests on the ground (its height kept: it may sit or crouch), so the view keeps it framed
+                    mean = [sum(value[axis] for value in values) / len(values) for axis in range(3)]
+                    shift = [r - m if axis != 1 else 0.0 for axis, (r, m) in enumerate(zip(rest[node][0], mean))]
+                    values = [[v + d for v, d in zip(value, shift)] for value in values]
+                if all(max(abs(a - b) for a, b in zip(v, values[0])) < 1e-5 for v in values):
+                    # constant over the clip: one key, or nothing when it is the rest pose (three.js restores
+                    # the original state of bindings no clip uses)
+                    rest_value = rest[node][{"translation": 0, "rotation": 1, "scale": 2}[path]]
+                    if max(abs(a - b) for a, b in zip(values[0], rest_value)) < 1e-5:
+                        continue
+                    if zero is None:
+                        zero = glb.accessor([0.0], "SCALAR", minmax=True)
+                    source, values = zero, values[:1]
+                else:
+                    source = times
+                output = glb.accessor(values, "VEC4" if path == "rotation" else "VEC3")
+                animation["samplers"].append({"input": source, "output": output, "interpolation": "LINEAR"})
+                animation["channels"].append({"sampler": len(animation["samplers"]) - 1,
+                                              "target": {"node": node, "path": path}})
+        events = [{"time": round(e["time"], 4), "function": e["functionName"], "int": e["intParameter"]}
+                  for e in tt.get("m_Events", []) if e["functionName"] == "SetMouthTile"]
+        animation["extras"] = {"slot": slot, "loop": bool(tt["m_MuscleClip"]["m_LoopTime"]),
+                               "duration": decoded.duration, "events": events}
+        toggles = self.toggles(tt, decoded, by_hash)
+        if toggles:
+            animation["extras"]["toggles"] = toggles
+        if animation["channels"]:  # NPC placeholders have no bindings
+            glb.json["animations"].append(animation)
 
     def toggles(self, tt: Mapping[str, Any], decoded: DecodedClip, by_hash: Mapping[int, int]) -> list[dict[str, Any]]:
         """The renderers a clip switches on and off ({node: mesh node, keys: [[time, 0 | 1], ...]}), such as the
@@ -1240,12 +1258,14 @@ class _Exporter:
 
 
 def export_chibi(graph: BundleGraph, bundles: Iterable[Path], dev: str, *, prefab: str = "echelon",
-                 clips: Iterable[str] = DEFAULT_CLIPS) -> bytes:
+                 clips: Iterable[str] = DEFAULT_CLIPS, story: Iterable[Path] = ()) -> bytes:
     """Export one chibi to GLB bytes. ``bundles`` are the prefab bundles of ``dev``; the prefab is the Echelon
     (formation) one where there is one, else the battle, cafe or strategy one, else a field-mode player or NPC (an
     event or story variant with no battle model), played with the clips its FieldAnimancerController lists, else a
     model of its own dependency bundles (:func:`asset_root`; ``bundles`` are those bundles), played with an idle among
-    their clips that moves it, if any, or shown in its stored pose."""
+    their clips that moves it, if any; else with its own clips of the story cutscenes in ``story`` (bundles holding
+    clips named after it, ``<dev>_...``, as Story_1, Story_2, ...), so it never stands in its bind pose where the game
+    moves it (BL-127: Ayame's story forms)."""
     bundles = list(bundles)
     root, name, kind = model_root(graph, bundles, dev, prefab)
     exporter = _Exporter(graph, dev)
@@ -1262,6 +1282,13 @@ def export_chibi(graph: BundleGraph, bundles: Iterable[Path], dev: str, *, prefa
     else:
         chosen = exporter.controller_clips(_prefabs(graph, bundles))
     exporter.animations(chosen, clips)
+    story = list(story)
+    if kind == "asset" and story and not exporter.glb.json.get("animations"):
+        for path in story:
+            graph.add(path)
+        prefix = f"{dev}_".lower()
+        exporter.story([clip for clip in exporter.bound_clips(graph, story)
+                        if (clip.peek_name() or "").lower().startswith(prefix)])
     data = exporter.glb.finish()
     logger.debug("model %s (%s): %d bundles, %d KB", dev, name, len(graph.loaded), len(data) // 1024)
     return data
