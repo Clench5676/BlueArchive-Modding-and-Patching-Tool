@@ -1001,8 +1001,8 @@ def test_official_roster_partial_and_complete_mod_preflight(tmp_path, monkeypatc
 
 
 def test_costume_verdicts_are_kept_per_build_signature(model_env, monkeypatch):
-    """BL-122: a pair's verdict holds for the program and the official bytes it was judged on; the rule's refusals are
-    saved by the preview itself."""
+    """BL-122: a pair's verdict holds for the costume rule and the official bytes it was judged on (BL-134: not the
+    program build); the rule's refusals are saved by the preview itself."""
     from bmpt.gameassets import model_adapt
     from bmpt.library import service
 
@@ -1022,10 +1022,13 @@ def test_costume_verdicts_are_kept_per_build_signature(model_env, monkeypatch):
     verdict = library.costume_verdict('hoshino', 'hoshino_swimsuit')
     assert (verdict['ok'], verdict['reason'], verdict['detail']) == (
         False, 'stretch', {'source': 'stretch', 'adapted': '8.84', 'own': '5.85'})
-    # another library over the same root reads it; a new program build judges again
+    # another library over the same root reads it; a new program build keeps it, a new costume rule judges again (BL-134)
     assert ModLibrary(env.root, Catalog(game, None), object(), env.settings).costume_verdict(
         'hoshino', 'hoshino_swimsuit')['ok'] is False
     monkeypatch.setattr(service, '_build_version', lambda: 'next:build')
+    assert library.costume_verdict('hoshino', 'hoshino_swimsuit')['ok'] is False
+    from bmpt.gameassets import costume_rule
+    monkeypatch.setattr(costume_rule, 'COSTUME_RULE', costume_rule.COSTUME_RULE + 1)
     assert library.costume_verdict('hoshino', 'hoshino_swimsuit') is None
     assert library.record_costume_verdict('hoshino', 'hoshino_swimsuit', True)['ok'] is True
     assert library.costume_verdict('hoshino', 'hoshino_swimsuit')['ok'] is True
