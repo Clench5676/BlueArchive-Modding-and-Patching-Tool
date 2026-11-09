@@ -109,3 +109,27 @@ test("runtime errors and hook exceptions after readiness notify the owner with U
     assert.equal(load.player.disposed, true);
   }
 });
+
+test("a load whose own loop an owner stopped still reaches its success hook while the window is active", async () => {
+  let draws = 0;
+  const load = loadPlayer((config) => {
+    const p = { config, stopRequestAnimationFrame: false, disposed: false, dispose() { this.disposed = true; },
+      stopRendering() { this.stopRequestAnimationFrame = true; },
+      // the runtime discovers its downloaded assets in drawFrame and only then calls success
+      drawFrame() { draws += 1; if (draws >= 2) config.success(p); } };
+    return p;
+  }, {}, { timeout: 2000 });
+  load.player.stopRendering(); // e.g. the hall's setActive(false) while this player loads
+  assert.equal(await load.ready, load.player);
+  assert.ok(draws >= 2);
+});
+
+test("a running load's own loop is not doubled by the bootstrap frames", async () => {
+  let draws = 0;
+  const load = loadPlayer((config) => ({ config, stopRequestAnimationFrame: false, dispose() {},
+    drawFrame() { draws += 1; } }), {}, { timeout: 2000 });
+  await new Promise((resolve) => setTimeout(resolve, 120));
+  assert.equal(draws, 0);
+  load.player.config.success(load.player);
+  await load.ready;
+});
