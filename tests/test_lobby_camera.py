@@ -185,7 +185,9 @@ def test_real_prefab_round_trip(real_game, tmp_path, core, k, offset):
     from ba_modding_toolkit.naming import parse_filename
 
     before = real_game.lobby_info(core)
-    base = real_game._bundle_path(real_game._lobby_prefabs()[before["prefab"].lower()])
+    name, root = real_game.lobby_prefab(core)
+    assert root == before["prefab"]
+    base = real_game._bundle_path(name)
     out = tmp_path / "out"
     out.mkdir()
     output = out / base.name
