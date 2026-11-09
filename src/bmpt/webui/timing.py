@@ -7,6 +7,8 @@ import threading
 import time
 from contextlib import contextmanager
 
+from .. import spans
+
 logger = logging.getLogger(__name__)
 
 
@@ -17,11 +19,12 @@ class Timings:
 
     @contextmanager
     def measure(self, phase: str):
-        started = time.perf_counter()
-        try:
-            yield
-        finally:
-            self.record(phase, time.perf_counter() - started)
+        # listed as unfinished while it runs, for a report taken meanwhile
+        with spans.running(phase) as started:
+            try:
+                yield
+            finally:
+                self.record(phase, time.perf_counter() - started)
 
     def record(self, phase: str, seconds: float) -> None:
         with self._lock:

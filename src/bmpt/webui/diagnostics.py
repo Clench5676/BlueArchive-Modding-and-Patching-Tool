@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import unquote
 
-from .. import devmode, steam_records, updater
+from .. import devmode, spans, steam_records, updater
 from ..error_codes import code_of
 from ba_modding_toolkit.i18n import UI_LANGUAGES, i18n_manager
 from . import native, system
@@ -441,6 +441,8 @@ class Reports:
                 "consent": read("consent", lambda: (s.state.diagnostic_state() or {}).get("consent") if hasattr(s.state, "diagnostic_state")
                                 else {"uiAssets": s.state.consent, "spine": s.state.spine_consent}) if s else None,
                 "timings": read("timings", lambda: s.timings.snapshot()) if s else None,
+                # what was still running when the report was taken: a timed-out request has no timing yet
+                "running": read("running", spans.active),
                 "previousBackendError": read("previous", self._previous_error)}
         sanitized = read("redaction", lambda: clean(data, self.secrets))
         return {**(sanitized if sanitized is not None else dict.fromkeys(data)), "app": app,
@@ -471,7 +473,7 @@ class Reports:
             data = {"summary": summary, **data}
             encoded = json.dumps(data, ensure_ascii=False, indent=2)
             # A malicious error payload must not inflate the archive. Keep the latest bounded fields.
-            for field in ("previousBackendError", "frontendErrors", "lastFailedJob", "frontend", "timings", "triggeringError", "batchImport",
+            for field in ("previousBackendError", "frontendErrors", "lastFailedJob", "frontend", "timings", "running", "triggeringError", "batchImport",
                           "gameFiles"):
                 if len(encoded.encode("utf-8")) <= DATA_CAP:
                     break
@@ -544,7 +546,7 @@ class Reports:
             data.pop("previousBackendError", None)
             data["error"] = private_text("".join(traceback.format_exception(exc_type, exc, tb)), self.secrets)[-32000:]
             encoded = json.dumps(data, ensure_ascii=False)
-            for field in ("frontendErrors", "frontend", "lastFailedJob", "timings", "batchImport", "gameFiles"):
+            for field in ("frontendErrors", "frontend", "lastFailedJob", "timings", "running", "batchImport", "gameFiles"):
                 if len(encoded.encode("utf-8")) <= DATA_CAP:
                     break
                 data[field] = "[Truncated]"
