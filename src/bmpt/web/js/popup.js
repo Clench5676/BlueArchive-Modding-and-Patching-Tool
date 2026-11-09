@@ -742,12 +742,17 @@ export function detailsTree(it, title, fields, actions, portraitTexture = null, 
 //   onClose(how): the close button, the backdrop and Escape; null for a popup without them (it must be answered)
 //   A list with no card to show puts hall.noCandidates in the list paper; with tools, while the chosen card (selected)
 //   is not among the cards shown, the primary button is the game's disabled one and answers nothing.
-//   tools: {segs, seg, onSeg, sortKey} for the student list's tools over the cards, or null; without them, hint
-//          (left) and footer (right) show in their place
+//   tools: {segs, seg, onSeg, sortKey, more} for the student list's tools over the cards, or null; without them, hint
+//          (left) and footer (right) show in their place. more(query): cards a search adds after the matching ones
+//          (Switch 3D Model's other students' models, BL-131; asked on every drawing, none for an empty query), ordered
+//          and turned like them
+//   items' shade: the picture partly greyed (still chosen and previewed like any card); hint: the card's hover hint
 //   check: {label, checked, onChange} for a checkbox below the details; a click flips check.checked, so the same
 //          object is passed to every drawing
 //   details(it): {title, fields: [[caption, value, colour]], actions: [[caption, fn]]} for the panel on the left
 //   keepScroll: the list's offset on its scrolling axis (horizontal for portraits)
+// a card's partly greyed picture (shade): less colour, a little darker; a dim card's is wholly grey under a dark veil
+export const SHADE = "grayscale(0.6) brightness(0.85)";
 const toolStates = new WeakMap();
 const tokens = new Map(); // host -> the latest drawing's number: an older one that ends later is dropped
 export async function listPopup(options) {
@@ -778,6 +783,7 @@ export async function listPopup(options) {
       host.dataset.pickerTitle = title;
     }
     items = pickerItems(items, toolState);
+    if (tools.more) items = [...items, ...pickerItems(tools.more(toolState.query) || [], toolState)];
   }
   const redraw = () => listPopup({ ...options, keepScroll: 0 });
   const ticked = multi ? new Set(selected || []) : null;
@@ -896,7 +902,8 @@ export async function listPopup(options) {
   const at = (i) => trees[i].pos;
   await Promise.all(items.map(async (it, i) => {
     const tree = trees[i];
-    const styles = it.dim ? { [`Card_${it.key}/Thumb`]: "filter: grayscale(1)" } : undefined;
+    const styles = it.dim ? { [`Card_${it.key}/Thumb`]: "filter: grayscale(1)" }
+      : it.shade ? { [`Card_${it.key}/Thumb`]: `filter: ${SHADE}` } : undefined;
     const cv = await NGUI.render(tree, inner, { scale: S, origin, z: 30, styles });
     if (it.nameEdit) hit(inner, cv, `Card_${it.key}/Bar/EditName`, () => it.nameEdit.fn(scroll()), { name: it.nameEdit.label, action: `alias:${it.key}` });
   }));
@@ -906,6 +913,7 @@ export async function listPopup(options) {
     const b = hitButton(inner, [sx - card.w / 2 * S, sy - card.h / 2 * S, card.w * S, (card.h + card.bar + 10) * S], () => onSelect(it.key, scroll()), it.full, 60);
     b.dataset.key = it.key;
     if (it.applied) b.setAttribute("aria-label", [it.full || it.label, T("status.applied")].filter(Boolean).join(" - "));
+    if (it.hint) { attachHint(b, it.hint); b.setAttribute("aria-description", it.hint); }
     if (multi) { b.setAttribute("role", "checkbox"); b.setAttribute("aria-checked", String(ticked.has(it.key))); }
   });
   const shown = multi ? focus ?? items.find((it) => ticked.has(it.key))?.key : selected;

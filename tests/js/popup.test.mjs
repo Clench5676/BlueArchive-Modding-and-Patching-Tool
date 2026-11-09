@@ -4063,3 +4063,57 @@ test("scrolling text viewer and picker heights retain their pre-fit viewports", 
   for (const [kind, height] of [[null, 1353], ["spr", 1512], ["lobby", 1353], ["model", 1353]])
     for (const check of [false, true]) assert.equal(Popup.listLayout(check, kind).frame.h, height, String(kind));
 });
+
+test("model search appends dimmed cross cards through the shared picker tools", async (t) => {
+  const NGUI = await import("../../src/bmpt/web/js/ngui.js");
+  const collection = n("UICharacterCollection", [0, 0]);
+  const base = "Inventory_ListControl/RightCanvas/ListBG";
+  insert(collection, "SeletControl/TopMenu", structuredClone(NGUI.find(switchLayouts.inventory, `${base}/BG_Top_Widget`)));
+  insert(collection, "SeletControl/CharacterSearch", structuredClone(NGUI.find(switchLayouts.inventory, `${base}/Inbox/SearchInfo`)));
+  const fetch = globalThis.fetch;
+  t.mock.method(globalThis, "fetch", async (url, options) => url === "/asset/ui/layout/UICharacterCollection.json" ? reply(collection) : fetch(url, options));
+  const Fresh = await import("../../src/bmpt/web/js/popup.js?cross-model-search");
+  const own = [{ key: "self", label: "Original", full: "Original" },
+    { key: "mod", label: "Model mod", full: "Model mod" }, { key: "sibling", label: "Model sibling", full: "Model sibling" }];
+  const extras = [{ key: "cross-z", label: "Model Zebra", full: "Model Zebra" }, { key: "cross-a", label: "Model Alpha", full: "Model Alpha" }]
+    .map((it) => ({ ...it, shade: true, hint: english.model.crossCharacter, thumb: "model.png", terms: ["ch0171_enemy"] }));
+  const queries = [], chosen = [];
+  const keys = () => walk(prompt).filter((e) => e.dataset.key).map((e) => e.dataset.key);
+  try {
+    await Fresh.listPopup({ host: prompt, layoutKind: "model", title: "Models", items: own, selected: "self", okText: "Save",
+      tools: { more: (query) => { queries.push(query); return query.trim() ? extras : []; } },
+      onSelect: (key) => chosen.push(key) });
+    assert.deepEqual(keys(), ["self", "mod", "sibling"], "empty query keeps exactly the original cards");
+    action(prompt, "search").click();
+    const input = () => walk(prompt).find((e) => e.className === "roster-search");
+    await until(() => !!input());
+    assert.equal(input().placeholder, english.roster.searchHint);
+    input().value = "Model";
+    for (const fn of input().listeners.input || []) fn({ isComposing: true });
+    await tick();
+    assert.deepEqual(keys(), ["self", "mod", "sibling"], "IME composition does not run a new search");
+    for (const fn of input().listeners.compositionend || []) fn({});
+    await until(() => keys().length === 4 && keys()[0] === "mod");
+    assert.deepEqual(keys(), ["mod", "sibling", "cross-z", "cross-a"]);
+    assert.equal(queries.at(-1), "Model");
+    const cross = walk(prompt).find((e) => e.dataset.key === "cross-z");
+    assert.equal(cross.disabled ?? false, false);
+    assert.equal(cross.getAttribute("aria-description"), english.model.crossCharacter);
+    cross.click(); assert.deepEqual(chosen, ["cross-z"]);
+    const thumb = walk(prompt).find((e) => e.dataset.path === "Card_cross-z/Thumb");
+    assert.ok(thumb.style.cssText.includes(`filter: ${Fresh.SHADE}`));
+    assert.ok(!walk(prompt).some((e) => ["Card_cross-z/Dim", "Card_cross-z/Using"].includes(e.dataset.path)), "no overwrite veil or badge");
+    const ownThumb = walk(prompt).find((e) => e.dataset.path === "Card_mod/Thumb");
+    assert.deepEqual([thumb.style.width, thumb.style.height], [ownThumb.style.width, ownThumb.style.height], "cross cards keep the model card geometry");
+    action(prompt, "order").click();
+    await until(() => keys()[0] === "sibling");
+    assert.deepEqual(keys(), ["sibling", "mod", "cross-a", "cross-z"], "direction applies within both groups");
+    input().value = "CH0171_ENEMY";
+    for (const fn of input().listeners.input || []) fn({ isComposing: false });
+    await until(() => keys().length === 2);
+    assert.deepEqual(keys(), ["cross-a", "cross-z"], "the shared matcher searches model dev ids");
+    action(prompt, "search-close").click();
+    await until(() => !input());
+    assert.deepEqual(keys(), ["sibling", "mod", "self"], "clearing search removes appended cards and preserves the active sort direction");
+  } finally { prompt.hidden = true; Fresh.closed(prompt); }
+});

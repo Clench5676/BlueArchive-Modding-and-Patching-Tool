@@ -48,7 +48,8 @@ import { ALIAS, DETAILS, aliasFrame, detailsFrame, popupContent } from "./popup-
 import { statsBox } from "./stats-box.js";
 import { CHIP, COLOUR, CONTROL, SPACE, TYPE } from "./ui-tokens.js";
 import { container, row, stack, textItem, toNode } from "./ui-grid.js";
-import { candidateStatus, detailStatus, selectionStatus, selectionError, intendedKey, isApplied, availableTab, coreOf, costumeCandidates, hasAsset, hasKind, primaryKind, appliedKey as keyOf, appliedOf, candidates as listSources, partsOf, popupMode, modelSource, previewBase, previewChanged, previewKey, sourceOf, switchKindOf } from "./switch-sources.js";
+import { CROSS_LIMIT, candidateStatus, detailStatus, selectionStatus, selectionError, intendedKey, isApplied, availableTab, coreOf, costumeCandidates, costumeHold, crossCandidates, crossCard, crossModels, hasAsset, hasKind, primaryKind, appliedKey as keyOf, appliedOf, candidates as listSources, partsOf, popupMode, modelSource, previewBase, previewChanged, previewKey, sourceOf, switchKindOf } from "./switch-sources.js";
+import { pickerItems } from "./roster-widgets.js";
 import { $, DOT, RECRUIT, S, TAN10, advanceOf, at, clone, glyphsOf, hitButton, markedLabel, off, text, widget, wrapPath } from "./util.js";
 
 const { node, sprite, label, find, rect } = NGUI;
@@ -69,7 +70,7 @@ const PORTRAIT_BOX = { left: 0, top: 0, width: 1920, height: 1080 };
 
 let ctx = null, fam = null, variantKey = null, layouts = null;
 // Prefabs and derived UI values belong to the selected installation.
-NGUI.onResourceChange?.(() => { layouts = null; fam = null; photoFaces.clear(); });
+NGUI.onResourceChange?.(() => { layouts = null; fam = null; resetOthers(); costumeState.clear(); photoFaces.clear(); });
 let previewEnabled = true;
 let tab = "portrait", fullscreen = false, expression = "00", expanded = false, exprScroll = 0;
 let mainPlayer = null, blinkTimer = null, pending = null, pickerSel = null, lobbySeq = null, busy = false, lobbyShot = null;
@@ -216,9 +217,51 @@ const readFamily = (key) => rpc("family.get", { key });
 // what the switch card of a kind offers (switch-sources.js), with the names and marks the cards show: the variant's
 // own portrait or lobby and its added ones, then for the portrait the other variants' ones and their added ones
 function candidates(v = variant(), kind = "spr") {
-  return listSources(fam, v, kind, costumeState.get(v.key)).map((c) => (c.kind === "mod"
-    ? { ...c, label: modLabel(c.mod) }
-    : { ...c, label: shortName(c.variant), recruit: c.variant.recruitable, fav: isFav(c.variant) }));
+  return listSources(fam, v, kind, costumeState.get(v.key), otherStudents).map(named);
+}
+const named = (c) => (c.kind === "mod" ? { ...c, label: modLabel(c.mod) }
+  : { ...c, label: shortName(c.variant), recruit: c.variant.recruitable, fav: isFav(c.variant) });
+// Switch 3D Model takes any student's model, offered through its search only (BL-131): roster.list's families, read
+// with the 3D tab or the popup (the one already chosen keeps its card), for the life of the screen
+let otherStudents = null, othersLoad = null, othersEpoch = 0;
+function resetOthers() {
+  othersEpoch++;
+  otherStudents = null;
+  othersLoad = null;
+  crossWanted = { variant: null, keys: [] };
+}
+function readOthers() {
+  if (otherStudents || !ctx?.roster) return Promise.resolve(otherStudents);
+  const epoch = othersEpoch;
+  return (othersLoad ||= Promise.resolve().then(() => ctx.roster())
+    .then((data) => epoch === othersEpoch ? (otherStudents = data?.families || null) : null)
+    .catch((err) => { console.error("Roster read failed", err); return null; })
+    .finally(() => { if (epoch === othersEpoch) othersLoad = null; }));
+}
+// a 3D candidate key as a card, another student's model found by the search included
+function popupCandidate(v, kind, key) {
+  const c = candidates(v, kind).find((x) => x.key === key);
+  if (c || kind !== "model" || typeof key !== "string" || !key.startsWith("v:")) return c;
+  const o = crossModels(otherStudents, v).find((x) => x.key === key.slice(2));
+  return o ? named(crossCard(o, costumeState.get(v.key))) : undefined;
+}
+// the search's hits (BL-131): the other students' models its words find, by the popup's own matching (their names, keys
+// and model ids) and segment, in the roster's name order (favourites first), at most CROSS_LIMIT; their verdicts are
+// asked for as they show
+function crossItems(v, query, own, item) {
+  if (!otherStudents || !query.trim()) {  // no search: today's cards only, and only the chosen pair is checked
+    judgeCross(v);
+    return [];
+  }
+  let collator = null;
+  try { collator = new Intl.Collator(language(), { numeric: true, sensitivity: "base" }); } catch { collator = null; }
+  const name = (a, b) => (collator ? collator.compare(fullName(a), fullName(b)) : fullName(a) < fullName(b) ? -1 : fullName(a) > fullName(b) ? 1 : 0);
+  const hits = crossCandidates(otherStudents, v, costumeState.get(v.key), {
+    match: (o) => (popupSeg === 0 || (popupSeg === 1) === !!o.recruitable) && pickerItems([{ label: shortName(o), full: fullName(o),
+      original: originalName(o), key: `v:${o.key}`, terms: [o.fileId, o.model, o.fieldModel] }], { query }).length > 0,
+    compare: (a, b) => (isFav(b) - isFav(a)) || name(a, b), exclude: own });
+  judgeCross(v, hits.map((c) => c.variant.key));
+  return hits.map((c) => item(named(c)));
 }
 // Switch 3D Model lists every costume of the student at once and lets one be applied only once that pair was built
 // and exported for these files (model.costumes, BL-122, BL-136): the verdicts by variant, read when the 3D tab shows
@@ -226,6 +269,12 @@ function candidates(v = variant(), kind = "spr") {
 // as its check ends (BL-134).
 const costumeState = new Map(), costumeChecks = new Map();
 function costumesReady(v) {
+  void readOthers().then((families) => {
+    if (!families || !open || variant() !== v) return;
+    // Loading the roster must not replace the popup's current hits with just the saved choices.
+    if (switchPopupPage !== pageToken || $("popup").hidden) judgeCross(v);
+    costumesChecked(v);
+  });
   const others = costumeCandidates(fam, v).map((o) => o.key);
   if (!others.length) return Promise.resolve(false);
   const key = `${v.key}|${others.join(",")}`;
@@ -249,9 +298,53 @@ function costumesReady(v) {
   }
   return check;
 }
-// a costume past the stretch limit (or refused) chosen as the 3D model's preview: shown, never applied
-const unfitCostume = (v, kind, key) => kind === "model" && typeof key === "string" && key.startsWith("v:")
-  && !!costumeState.get(v.key)?.[key.slice(2)] && costumeState.get(v.key)[key.slice(2)] !== "ok";
+// Another student's model (BL-131) is judged only once it shows: the chosen one, and the search's hits while they are
+// hits. Their saved verdicts are read at once (model.costumes), the rest checked in the background one pair at a time;
+// a pair no longer wanted (a new query, another variant) is not checked. Each card waits until its verdict lands.
+let crossWanted = { variant: null, keys: [] }, crossRunning = null;
+const chosenCross = (v) => (otherStudents ? candidates(v, "model").filter((c) => c.cross).map((c) => c.variant.key) : []);
+function judgeCross(v, hits = []) {
+  const keys = [...new Set([...chosenCross(v), ...hits])];
+  crossWanted = { variant: v, keys };
+  runCross();
+}
+function runCross() {
+  if (crossRunning || !crossWanted.variant || !crossWanted.keys.length) return;
+  const tried = new Set();
+  let handled = null;
+  crossRunning = (async () => {
+    for (;;) {
+      handled = crossWanted;
+      const { variant: v, keys } = crossWanted;
+      if (!v || !keys.length || !open || variant() !== v) return;
+      const epoch = othersEpoch;
+      const state = costumeState.get(v.key) || {};
+      // Saved choices can add to the 64 hits. Each read still respects costume_keys' limit.
+      const fresh = keys.filter((k) => !(k in state)).slice(0, CROSS_LIMIT);
+      if (fresh.length) {
+        const known = await rpc("model.costumes", { variant: v.key, others: fresh });
+        if (epoch !== othersEpoch) continue;
+        costumeState.set(v.key, { ...(costumeState.get(v.key) || {}), ...known });
+        costumesChecked(v);
+        continue;
+      }
+      const next = keys.find((k) => !tried.has(`${v.key}|${k}`) && state[k] == null);
+      if (!next) return;
+      tried.add(`${v.key}|${next}`);
+      const result = await waitJob(await rpc("model.checkCostumes", { variant: v.key, others: [next] }));
+      if (epoch !== othersEpoch) continue;
+      costumeState.set(v.key, { ...(costumeState.get(v.key) || {}), ...result });
+      costumesChecked(v);
+    }
+  })().catch((err) => console.error("Costume check failed", err)).finally(() => {
+    crossRunning = null;
+    if (handled !== crossWanted) runCross();
+  });
+}
+// what keeps a 3D source from being applied by its check (switch-sources.js costumeHold): a costume past the stretch
+// limit or refused ("unfit": shown, never applied), another student's model before its verdict ("pending")
+const costumeBlock = (v, kind, key) => (kind === "model" ? costumeHold(fam, v, key, costumeState.get(v.key)) : null);
+const unfitCostume = (v, kind, key) => !!costumeBlock(v, kind, key);
 // After a background check: the open Switch 3D Model popup lists what it found, where it was scrolled to.
 function costumesChecked(v) {
   if (open && variant() === v && tab === "model") void renderScreen();
@@ -697,10 +790,11 @@ function hits(view, leftHost, rightHost) {
   act("SkillData_EX (2)", () => runExport(), T("export.title"));
   const apply = act("SkillData_EX (3)", () => applyCandidate(shownSource(variant(), sk), sk), T("popup.apply"));
   if (apply) {
-    const unfit = unfitCostume(variant(), sk, shownSource(variant(), sk));
-    apply.disabled = !unfit && (!sk || !coreOf(variant(), sk) || busy || isApplied(variant(), sk, shownSource(variant(), sk)));
+    const hold = costumeBlock(variant(), sk, shownSource(variant(), sk)), unfit = hold === "unfit";
+    apply.disabled = !unfit && (!!hold || !sk || !coreOf(variant(), sk) || busy || isApplied(variant(), sk, shownSource(variant(), sk)));
     if (!coreOf(variant(), sk)) apply.setAttribute("aria-description", T("import.reason.no_target"));
-    // a costume shown for a preview only: greyed, the reason on hover (the click does nothing, applyCandidate)
+    // a costume shown for a preview only: greyed, the reason on hover (the click does nothing, applyCandidate); another
+    // student's model waits for its check
     if (unfit) { apply.setAttribute("aria-disabled", "true"); apply.setAttribute("aria-description", T("model.unfit")); attachHint(apply, T("model.unfit")); }
   }
   add(leftHost, "LeftInfo/CharInfo/Char_Target/Pin/Pin_On/Bg", toggleFav, T("fav.label"));
@@ -919,6 +1013,7 @@ async function saveCandidate(key, kind) {
     ctx.invalidateRoster();
     if (!open || fam !== family || variant() !== v) return;
     v.previewSources = sources;
+    if (kind === "model") judgeCross(v);
     resetPreview(kind);
     await changeInPlace(() => Promise.all([renderAll(), renderLeft()]));
   }, { all: true }));
@@ -1335,8 +1430,9 @@ function renderPopup(scroll = 0) { return drawPopup(scroll).catch(renderFailed);
 async function drawPopup(scroll = 0) {
   if (!switchThumbnails || switchPopupPage !== pageToken) return;
   const v = variant(), kind = popupKind, applied = intendedKey(v, kind);
-  const mode = popupMode(fam, v, kind, modsOn());
-  const items = candidates(v, kind).map((c) => {
+  const mode = popupMode(fam, v, kind, modsOn(), otherStudents);
+  const own = candidates(v, kind);
+  const item = (c) => {
     const work = switchThumbnails;
     const picture = lazyThumbnail(() => kind === "model" ? modelPicture(c, v, work)
       : thumb(baseOf(c, kind), kind === "spr" ? "portrait" : "landscape", null, kind === "lobby", specialFraming(v), (c.origin || c.variant || v).bg, work), work.signal);
@@ -1344,7 +1440,7 @@ async function drawPopup(scroll = 0) {
       key: c.key, kind: c.kind, recruit: c.kind !== "mod" && c.recruit,
       label: candidateLabel(c, v),
       full: c.kind === "mod" ? c.label : fullName(c.variant),
-      original: c.mod?.alias ? modOriginalName(c.mod) : "",
+      original: c.cross ? originalName(c.variant) : c.mod?.alias ? modOriginalName(c.mod) : "",
       nameEdit: c.kind === "mod" ? { label: T("modAlias.title"), fn: (s = scroll) => editModName(c.mod,
         () => switchPopupPage === pageToken && !$("popup").hidden ? renderPopup(s) : null) } : null,
       // The card and info panel consume one still, including its fallback, so they cannot disagree after a retry.
@@ -1352,17 +1448,22 @@ async function drawPopup(scroll = 0) {
       inUse: false, applied: !!coreOf(v, kind) && c.key === applied, fav: c.fav, isNew: c.kind === "mod" && c.mod.fresh && c.key !== applied, src: c,
       inUseText: c.mod?.incomplete ? T("mods.incomplete") : coreOf(v, kind) && c.key === applied ? T("status.applied") : null,
       dim: c.greyed,
+      // another student's model (BL-131): partly greyed, chosen and previewed like any card, with a word of caution
+      ...(c.cross ? { shade: true, hint: T("model.crossCharacter"), terms: [c.variant.fileId, c.variant.model, c.variant.fieldModel] } : {}),
       badge: c.greyed ? { ...GREYED_BADGE(), ...(!coreOf(v, kind) && c.kind === "self" ? { text: T("import.reason.no_target") } : {}) }
         : c.mod?.incomplete ? { text: T("mods.incomplete"), color: COLOUR.warning, ink: "#ffffff" } : null,
       tag: c.mod?.repaired_from ? { text: T("remap.repaired"), color: "#d7eaf4", ink: "#2d4664" }
         : c.mod?.optimized_from ? { text: T("model.optimized"), color: "#d7eaf4", ink: "#2d4664" } : null,
     };
-  })
+  };
+  const items = own.map(item)
     .filter((it) => popupSeg === 0 || (popupSeg === 1) === !!it.recruit)
     .sort((a, b) => (b.fav ? 1 : 0) - (a.fav ? 1 : 0));
+  // a search adds the other students' models after the matching cards (BL-131)
+  const more = kind === "model" && coreOf(v, kind) ? (query) => crossItems(v, query, own.map((c) => c.key), item) : null;
   await listPopup({
     hostId: "popup", layoutKind: kind, title: T(isSpecial(v) ? "special.switch" : kind === "spr" ? "popup.switch" : `row.switch.${kind}`), okText: T(mode.button), okSemantic: "save", items, selected: pending, keepScroll: scroll,
-    tools: { segs: ["seg.all", "seg.recruit", "seg.noRecruit"], seg: popupSeg, onSeg: (i) => { popupSeg = i; renderPopup(); }, sortKey: "sort.default" },
+    tools: { segs: ["seg.all", "seg.recruit", "seg.noRecruit"], seg: popupSeg, onSeg: (i) => { popupSeg = i; renderPopup(); }, sortKey: "sort.default", more },
     onSelect: (key, s) => {
       const c = candidates(v, kind).find((x) => x.key === key);
       if (c?.kind === "mod") markSeen([c.mod], s);
@@ -1383,7 +1484,7 @@ async function drawPopup(scroll = 0) {
         title: T(isSpecial(v) ? "special.background" : kind === "spr" ? "info.title.portrait" : `info.title.${kind}`),
         fields: [[T("field.file"), baseName(file)], [T("field.size"), sizeText(size)], [T("field.status"), [status && T(status), error && T(`error.${error.code}`, error.params)].filter(Boolean).join("\n") || "—", statusColor],
           [T("field.crc"), crc ? T(crc[0]) : "—", crc?.[1] && `${crc[1]}/1.00`]],
-        actions: [[T("popup.apply"), () => applyCandidate(c.key, kind), !coreOf(v, kind) || isApplied(v, kind, c.key) || !!c.greyed || !!c.previewOnly || busy, "apply", c.previewOnly ? T("model.unfit") : null],
+        actions: [[T("popup.apply"), () => applyCandidate(c.key, kind), !coreOf(v, kind) || isApplied(v, kind, c.key) || !!c.greyed || !!c.previewOnly || !!c.pending || busy, "apply", c.previewOnly ? T("model.unfit") : null],
           [T(platform === "mac" ? "open.mac" : "open.win"), () => reveal(file)],
           ...(c.kind === "mod" ? [[T("compatibility.check"), async () => {
             let rebuilt = false;
@@ -1392,14 +1493,14 @@ async function drawPopup(scroll = 0) {
           }], ...(repairedId(c) ? [[T("remap.go"), () => jumpRepaired(c)]] : [[T("act.update"), () => runUpdate(c)]])] : []),
           ...(kind === "model" && optimizeSource(c) ? [optimizedCopy(c, v)
             ? [T("model.optimizedGo"), () => { pending = `m:${optimizedCopy(c, v).id}`; renderPopup(); }]
-            : [T("model.optimize"), () => runOptimize(c, v), busy || !!c.greyed || !!c.previewOnly || !coreOf(v, kind), "secondary",
+            : [T("model.optimize"), () => runOptimize(c, v), busy || !!c.greyed || !!c.previewOnly || !!c.pending || !coreOf(v, kind), "secondary",
               c.previewOnly ? T("model.unfit") : T("model.optimizeHint")]] : []),
           c.kind === "mod"
             ? [T("btn.delete"), async () => {
               if (!(await removeMod(c.id))) return;
               await reload();
               ctx.invalidateRoster();
-              if (pending === c.key) pending = popupMode(fam, variant(), kind, modsOn()).start;
+              if (pending === c.key) pending = popupMode(fam, variant(), kind, modsOn(), otherStudents).start;
               renderPopup();
             }]
             : [T("btn.extract"), () => { closePopup(false); job("actions.extract", { target: `variant:${c.variant.key}` }, { name: fullName(c.variant), onDone: (r) => reveal(r?.folder) }); }]],
@@ -1421,12 +1522,18 @@ async function runOptimize(c, v = variant()) {
 }
 async function openPopup(kind = "spr") {
   const family = fam, v = variant();
-  if (kind === "model") void costumesReady(v).catch((err) => console.error("Costume check failed", err));
+  if (kind === "model") {
+    void costumesReady(v).catch((err) => console.error("Costume check failed", err));
+    // another student's model already chosen keeps its card (BL-131): the roster is read first
+    await readOthers();
+    if (!open || fam !== family || variant() !== v) return;
+    judgeCross(v);
+  }
   switchThumbnails?.cancel();
   switchThumbnails = thumbnailScope({ priority: "popup" });
   switchPopupPage = pageToken;
   popupKind = kind;
-  popupStart = popupMode(fam, variant(), kind, modsOn()).start;
+  popupStart = popupMode(fam, variant(), kind, modsOn(), otherStudents).start;
   pending = popupStart;
   popupSeg = 0;
   const mods = candidates(variant(), kind).filter((c) => c.kind === "mod").map((c) => c.mod);
@@ -1460,7 +1567,8 @@ function closePopup(apply) {
   $("popup").hidden = true;
   $("popup").innerHTML = "";
   popupClosed($("popup"));
-  const chosen = candidates(variant(), popupKind).find((c) => c.key === pending);
+  const chosen = popupCandidate(variant(), popupKind, pending);
+  if (popupKind === "model") judgeCross(variant());
   // only a choice other than the start (what the game shows; while mods are off, the configured source)
   if (apply && chosen && !chosen.greyed && !chosen.refused) return saveCandidate(pending, popupKind);
 }
@@ -2358,6 +2466,7 @@ export function hide() {
   open = false;
   suspended = false;
   switchPopupPage = null;
+  resetOthers();
   begin();
   batch = null;
   leftToken += 1;
