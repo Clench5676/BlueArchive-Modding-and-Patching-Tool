@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import math
 import re
+import struct
 from collections.abc import Callable, Iterable
 from typing import Any
 
@@ -40,6 +41,11 @@ ASPECT_VIEW = 16 / 9
 _ASPECT_SCRIPT = "UIManualScaleByAspect"
 
 
+def _f32(value: float) -> float:
+    """value rounded to single precision (the game computes in floats)."""
+    return struct.unpack("<f", struct.pack("<f", value))[0]
+
+
 def _r(value: float, digits: int = 2) -> float:
     return round(float(value), digits) + 0.0  # never "-0.0" in the JSON
 
@@ -50,21 +56,23 @@ def aspect_rule(component: dict, aspect: float = ASPECT_VIEW) -> tuple[float, di
     position moves by ({transform path id: (x, y, z)}, rounded half to even like C# Math.Round). Below the standard
     aspect the narrow values blend in by how far the screen is towards 4:3 (t, clamped to 1), above it the wide
     ones towards 2.1666667; at the standard aspect nothing changes. component: the MonoBehaviour typetree."""
-    if aspect < ASPECT_STANDARD:
-        t, scale, key = (ASPECT_STANDARD - aspect) / (ASPECT_STANDARD - ASPECT_NARROW), "mostNarrowScale", "MostNarrowAdd"
-    elif aspect > ASPECT_STANDARD:
-        t, scale, key = (aspect - ASPECT_STANDARD) / (ASPECT_WIDE - ASPECT_STANDARD), "mostWideScale", "MostWideAdd"
+    # in single precision, step by step as the game computes it, so a .5 offset rounds the way the game's does
+    a, std = _f32(aspect), _f32(_f32(2960.0) / _f32(1440.0))
+    if a < std:
+        t, scale, key = _f32(_f32(std - a) / _f32(std - _f32(ASPECT_NARROW))), "mostNarrowScale", "MostNarrowAdd"
+    elif a > std:
+        t, scale, key = _f32(_f32(a - std) / _f32(_f32(ASPECT_WIDE) - std)), "mostWideScale", "MostWideAdd"
     else:
         t, scale, key = 0.0, "mostNarrowScale", "MostNarrowAdd"
     t = min(1.0, t)
-    factor = 1 + (float(component.get(scale, 1.0)) - 1) * t
+    factor = _f32(_f32(_f32(float(component.get(scale, 1.0))) - 1) * t + 1)
     offsets: dict[int, tuple[int, int, int]] = {}
     for setting in component.get("offsetSettings") or []:
         pointer = setting.get("Transform") or {}
         if pointer.get("m_FileID") or not pointer.get("m_PathID"):
             continue
         add = setting.get(key) or {}
-        offsets[pointer["m_PathID"]] = tuple(round(float(add.get(axis, 0.0)) * t) for axis in "xyz")
+        offsets[pointer["m_PathID"]] = tuple(round(_f32(_f32(float(add.get(axis, 0.0))) * t)) for axis in "xyz")
     return factor, offsets
 
 
