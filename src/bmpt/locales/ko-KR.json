@@ -92,7 +92,14 @@
 				"walk": "걷기",
 				"victory": "승리",
 				"pickup": "들기"
-			}
+			},
+			"optimize": "물리 효과 최적화",
+			"optimizeHint": "현재 스커트 최적화 지원",
+			"optimized": "최적화됨",
+			"optimizedGo": "최적화된 Mod 보기",
+			"optimizedName": "{name} - 최적화 버전",
+			"optimizeUnneeded": "최적화 불필요",
+			"optimizeDone": "최적화 후 라이브러리에 추가됨"
 		},
 		"visual": {
 			"reset": "초기화",
@@ -359,7 +366,8 @@
 			"actionExtract": "추출",
 			"actionDelete": "삭제",
 			"actionRemap": "텍스처 재배치",
-			"actionCompatibility": "호환성 확인"
+			"actionCompatibility": "호환성 확인",
+			"actionOptimize": "물리 효과 최적화"
 		},
 		"job": {
 			"running": "처리 중",

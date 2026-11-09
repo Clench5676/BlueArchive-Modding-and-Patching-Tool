@@ -7,6 +7,7 @@ export const studentName = (variant, original) => customAliases(variant)[0] || o
 export function modName(mod, entries, translate, seen = new Set()) {
   if (!mod) return "";
   if (mod.alias) return mod.alias;
+  if (mod.optimized_from) return translate("model.optimizedName", { name: mod.label_base || mod.label });
   if (mod.repaired_from && !seen.has(mod.repaired_from)) {
     const parent = entries.find((entry) => entry.id === mod.repaired_from);
     const name = parent ? modName(parent, entries, translate, new Set([...seen, mod.id])) : mod.label_base;
