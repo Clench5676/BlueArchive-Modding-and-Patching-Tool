@@ -10,6 +10,7 @@ import logging
 import mimetypes
 import secrets
 import re
+import urllib.parse
 import socketserver
 import threading
 from dataclasses import dataclass
@@ -91,9 +92,10 @@ class WebApp:
         if path == RAISE_PATH:
             return self._raise(environ, method, start_response)
         if path == "/" and self._same(query.get("t", "")):
-            # first load: remember the token in a cookie and drop it from the address
+            # first load: remember the token in a cookie and drop it from the address (the rest of the query stays)
+            rest = urllib.parse.urlencode({k: v for k, v in query.items() if k != "t"})
             return self._respond(start_response, "303 See Other", b"", "text/plain",
-                                 [("Location", "/"), ("Set-Cookie", self._cookie())])
+                                 [("Location", "/" + ("?" + rest if rest else "")), ("Set-Cookie", self._cookie())])
         if not self._token_ok(environ):
             return self._text(start_response, "403 Forbidden", "forbidden")
 

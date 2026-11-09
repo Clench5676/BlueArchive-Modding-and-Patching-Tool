@@ -243,8 +243,20 @@ def test_dialogue_and_pat_boxes_share_prefab_root_coordinates(game):
                 and objects[t["m_GameObject"]["m_PathID"]]["m_Name"].lower() == "lobbych0100")
     descendants = []
     import math
-    def walk(t, parent=(1, 0, 0, 1, 0, 0)):
-        q, scale, pos = t["m_LocalRotation"], t["m_LocalScale"], t["m_LocalPosition"]
+    # the game's UIManualScaleByAspect on the root at 16:9 (t = 5/13 towards 4:3), worked out here without lobby.py
+    aspect = next(t for pid, t in objects.items() if kinds[pid] == "MonoBehaviour"
+                  and scripts.get(t.get("m_Script", {}).get("m_PathID")) == "UIManualScaleByAspect")
+    assert aspect["m_GameObject"]["m_PathID"] == root["m_GameObject"]["m_PathID"]
+    factor = 1 + (aspect["mostNarrowScale"] - 1) * 5 / 13
+    scaled = {p["m_PathID"] for p in aspect["scaleTransforms"]}
+    moved = {o["Transform"]["m_PathID"]: o["MostNarrowAdd"] for o in aspect["offsetSettings"]}
+
+    def walk(t, parent=(1, 0, 0, 1, 0, 0), tid=None):
+        q, scale, pos = t["m_LocalRotation"], dict(t["m_LocalScale"]), dict(t["m_LocalPosition"])
+        if tid in scaled:
+            scale = {k: v * factor for k, v in scale.items()}
+        if tid in moved:
+            pos = {k: v + round(moved[tid].get(k, 0.0) * 5 / 13) for k, v in pos.items()}
         assert [q["x"], q["y"]] == [0, 0]
         angle = 2 * math.atan2(q["z"], q["w"])
         c, s = math.cos(angle), math.sin(angle)
@@ -256,7 +268,7 @@ def test_dialogue_and_pat_boxes_share_prefab_root_coordinates(game):
         for child in t.get("m_Children", []):
             branch = objects[child["m_PathID"]]
             if contains_target(branch):
-                walk(branch, matrix)
+                walk(branch, matrix, child["m_PathID"])
     chat = next(t for pid, t in objects.items() if kinds[pid] == "MonoBehaviour"
                 and scripts.get(t.get("m_Script", {}).get("m_PathID")) == "ChatDialog"
                 and t.get("DialogBoxes"))
@@ -268,9 +280,9 @@ def test_dialogue_and_pat_boxes_share_prefab_root_coordinates(game):
     def contains_target(t):
         return t["m_GameObject"]["m_PathID"] in (talk_go, pat_go) or any(
             contains_target(objects[c["m_PathID"]]) for c in t.get("m_Children", []))
-    walk(root)
+    walk(root, tid=next(pid for pid, t in objects.items() if t is root))
     positions = dict(descendants)
-    assert list(positions[talk_go][4:]) == info["dialog"]["Talk"] == [-320, 503]
+    assert [round(v) for v in positions[talk_go][4:]] == info["dialog"]["Talk"] == [-338, 532]
     a, b, c, d, x, y = positions[pat_go]
     collider = next(t for pid, t in objects.items() if kinds[pid] == "BoxCollider"
                     and t["m_GameObject"]["m_PathID"] == pat_go)
@@ -278,5 +290,5 @@ def test_dialogue_and_pat_boxes_share_prefab_root_coordinates(game):
     x, y = x + a*centre["x"] + c*centre["y"], y + b*centre["x"] + d*centre["y"]
     hw, hh = size["x"]*math.hypot(a, b)/2, size["y"]*math.hypot(c, d)/2
     corners = [round(x-hw, 1), round(y-hh, 1), round(x+hw, 1), round(y+hh, 1)]
-    assert corners == info["drags"][0]["rect"] == [-1019, 186, -519, 536]
+    assert corners == info["drags"][0]["rect"] == [-1077.8, 196.7, -548.9, 566.9]
     assert info["drags"][0]["rot"] == round(math.degrees(math.atan2(b, a)), 2)

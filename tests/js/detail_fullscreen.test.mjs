@@ -20,7 +20,7 @@ function harness(start, hasLobby = true) {
     document: { querySelector: () => node('topbar') }, T: key => key,
     variant: () => ({ key: selection.skin }), previewAvailable: (_, kind) => kind !== 'lobby' || hasLobby,
     switchKindOf: part => part === 'portrait' ? 'spr' : part, detailViewport: () => ({ detail: true }),
-    Loading: { held: () => false }, Photo: { visualEntry: async on => calls.push(['launcher', on]) },
+    Loading: { held: () => false }, Photo: { visualEntry: async on => calls.push(['launcher', on]) }, Camera: { close() {}, entry: async () => {} },
     Lobby: { frame: value => calls.push(['lobby.frame', value]), interactive() {} }, modelLib: null,
     Visual: { close: options => calls.push(['visual.close', options]), uiOut() {}, uiBack: () => calls.push(['uiBack']),
       exitControl: async () => {}, prepareSwitch: async () => switchButton, prepare: async options => options,

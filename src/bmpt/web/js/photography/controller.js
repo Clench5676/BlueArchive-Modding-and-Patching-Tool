@@ -17,6 +17,8 @@ import {wheelKind,wheelStep} from '../lobby-touch.js';
 import {bindCorner,bindEdge} from '../corner-layout.js';
 import {prepareBack} from '../visual-mode.js';
 export {FRAME};
+// the white button of the visual mode's toolbar, for the lobby's camera framing (lobby-camera.js)
+export const visualButton = (...args) => whiteButton(...args);
 let sessionVariant=null,generation=0,repository,bridge,overlay,active=false,mode='portrait',grid=true,expanded=false,paused=false,selected=null,page=0,modal=null;
 let controlsRevision=0,saving=false,leaving=false,defaultThumbnail=null,generatedThumbnail=null,occlusion=false,feedback=null;
 const CHOICE_ICONS={portrait:{icon:'Common_Icon_Emoji',atlas:'Common'},lobby:{icon:'School_Icon_Chat',atlas:'Common'}};

@@ -908,6 +908,46 @@ def build_api(s: Services) -> RpcRegistry:
 
         threading.Thread(target=build, name="lobby-warm", daemon=True).start()
 
+    @rpc.method("lobby.camera.save")
+    def lobby_camera_save(variant: str, lobby: str, view: dict, scale: float, offset: list,
+                          source: str = "official") -> str:
+        """A job keeping the lobby's framing (``lobby.js cameraParams``) as a new Memorial Lobby choice of the variant
+        (``library/lobby_camera.py``): its art the source the lobby showed ("official", ``mod:<id>`` of a lobby mod of
+        the variant, or one of its cameras), its camera the prefab scaled by ``scale`` and moved by ``offset``. Its
+        result: {variant, lobby, number, scale, offset, mod}. ``view`` is the framed view, for the log only."""
+        from ..gameassets import AssetNotFound
+        from ..library import lobby_camera
+
+        v = visible_variant(variant) if isinstance(variant, str) else None
+        if v is None or not v.lobby or lobby != v.lobby:
+            raise ServiceError("bad_params", key="lobby")
+        if not isinstance(source, str) or len(source) > 264 or not (
+                source == "official" or preview_source_valid(variant, "lobby", source)):
+            raise ServiceError("source_unsupported", source=str(source)[:264])
+        if not isinstance(view, dict) or not all(lobby_camera._number(view.get(key)) for key in ("x", "y", "w", "h")):
+            raise ServiceError("bad_params", key="view")
+        k, (ox, oy) = lobby_camera.check_params(scale, offset)
+        finder = getattr(s.game, "lobby_prefab", None) if s.game_found() else None
+        try:
+            found = finder(v.lobby) if finder is not None else None
+        except (AssetNotFound, OSError, ValueError) as error:
+            raise ServiceError("lobby_camera_unsupported", name=v.lobby) from error
+        if found is None:
+            raise ServiceError("lobby_camera_unsupported", name=v.lobby)
+        prefab, root = found
+        library = s.library
+        pin = s._current_pin(library)
+
+        def run(log: Any, progress: Any) -> dict[str, Any]:
+            progress({"current": 1, "total": 1, "step": ""})
+            log(f"Lobby camera of {variant}: view {view}, scale {k:.4f}, offset {ox:.1f}, {oy:.1f}")
+            record = library.save_camera(variant, source, k, [ox, oy], prefab, root, pin=pin, log=log)
+            meta = record[lobby_camera.TAG]
+            return {"variant": variant, "lobby": v.lobby, "number": meta["number"], "scale": meta["scale"],
+                    "offset": meta["offset"], "mod": record["id"]}
+
+        return s.submit("lobby.camera.save", run, writes="library", library=library)
+
     @rpc.method("lobby.lines")
     def lobby_lines(variant: str, talks: dict[str, list[str]] | None = None, lang: str | None = None) -> dict[str, Any]:
         """The memorial lobby's lines by voice clip ({clip: {lang: text, "voice": bool}}): Kivo's (zh-CN, ja, the
