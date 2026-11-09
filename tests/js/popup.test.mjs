@@ -3472,6 +3472,33 @@ for (const lang of ["en-US", "zh-CN"]) test(`list panels, check row and detail b
   assert.ok(name.pos[1] - name.widgets[0].h_ / 2 - chip.pos[1] - 36 >= 20 - 1e-9);
 });
 
+// BL-133: a 3D model's details fit the list popup's panel without scrolling: the picture beside the name and chips,
+// inside its column with its incline, one size for every candidate, big enough to read with a long file name and six
+// actions, and the actions on the panel's bottom
+test("a 3D model's details fit the panel without scrolling", async () => {
+  const NGUI = await import("../../src/bmpt/web/js/ngui.js"); await Popup.ready();
+  const panel = Popup.listLayout().left, height = panel.t - panel.b, width = panel.r - panel.l;
+  const file = "assets-_mx-characters-hina_original-_mxdependency-2024-11-18_000_assets_all_3164161564.bundle";
+  const fields = [["File", file], ["Size", "7.2 MB"], ["Status", "Applied"], ["CRC", "Original"]];
+  const actions = ["Apply", "Show in Finder", "Check Compatibility", "Update", "Optimize Skirt", "Delete"].map((c) => [c, () => {}]);
+  const it = { ...items[0], full: "Hina (Pajamas) - Optimized", nameEdit: { label: "Alias", fn: () => {} } };
+  const sizes = new Set(), bottoms = new Set();
+  for (const n of [3, 4, 6]) for (const rows of [fields, fields.map(([c]) => [c, "-"])]) {
+    const tree = Popup.detailsTree(it, "3D Model Info", rows, actions.slice(0, n), null, "model", panel);
+    assert.ok(tree.contentHeight <= height + 1e-6, `${n} actions: ${tree.contentHeight} > ${height}`);
+    sizes.add(NGUI.find(tree, "Picture").widgets[0].w_.toFixed(6));
+    bottoms.add(NGUI.find(tree, "Act_0").pos[1].toFixed(6));
+    const picture = NGUI.find(tree, "Picture"), size = picture.widgets[0].w_, name = NGUI.find(tree, "Name");
+    assert.equal(picture.widgets[0].h_, size);
+    assert.ok(size >= 150, `picture ${size}`);
+    const TAN10 = Math.tan(Math.PI / 18), left = picture.pos[0] - size * (1 + TAN10) / 2, centre = (panel.l + panel.r) / 2;
+    assert.ok(left >= centre - width / 2 - 1e-6 && picture.pos[0] + size * (1 + TAN10) / 2 <= name.pos[0], `picture ${left}`);
+  }
+  // one picture size for every candidate, the actions on the panel's bottom whatever the fields hold
+  assert.equal(sizes.size, 1, [...sizes].join(", "));
+  assert.equal(bottoms.size, 1, [...bottoms].join(", "));
+});
+
 // --- design tokens, item C: one backdrop, the prefab's resting 0.80 (BlackBgClickArea's TweenAlpha runs 0 to 0.80, not the sprite's 0.94) ---
 test("every popup frame draws the one backdrop token", async () => {
   const NGUI = await import("../../src/bmpt/web/js/ngui.js");
