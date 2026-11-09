@@ -2140,6 +2140,12 @@ class ModLibrary:
 
         if self._removal_info(mod_id)["used"] and not confirm:
             raise ServiceError("asset_delete_confirm")
+        # the lobby cameras framed on this mod's art go with it (BL-137): each puts its prefab back first
+        from .lobby_camera import cameras, meta_of
+        for camera in [r["id"] for r in cameras(self) if meta_of(r).get("source") == source]:
+            gone = self.remove(camera, confirm=True, log=log)
+            if gone.failed:
+                return gone
         from .asset_delete import transaction
         done = []
         try:

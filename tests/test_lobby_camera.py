@@ -347,3 +347,27 @@ def test_camera_on_a_lobby_mod_and_after_a_game_update(camera_env):
     lib.apply("azusa", f"mod:{record['id']}", kind="lobby", pin=pin)
     assert updated.read_bytes() == lib._paths(fresh)[0].read_bytes()
     assert Bundle.check_crc_match(updated)
+
+
+def test_deleting_a_lobby_mod_deletes_the_cameras_framed_on_it(camera_env):
+    from ba_modding_toolkit.bundle import Bundle
+    from ba_modding_toolkit.models import SaveOptions
+    from bmpt.library import lobby_camera as lc
+
+    e, lib = camera_env, camera_env.library
+    pin = lib.current_pin()
+    art = sorted(e.art)[0]
+    made = e.folder.parent / "mod"
+    made.mkdir()
+    assert Bundle.load(art).save(made / art.name, SaveOptions(perform_crc=True, compression="lz4"))[0]
+    mod = lib._store({art.name: made / art.name}, "Azusa mod", "azusa", "lobby")
+    on_mod = save(e, source=f"mod:{mod['id']}")
+    on_official = save(e)
+    lib.apply("azusa", f"mod:{on_mod['id']}", kind="lobby", pin=pin)
+    assert e.prefab.read_bytes() != e.official
+    result = lib.remove(mod["id"], confirm=True)
+    assert not result.failed
+    left = {r["id"] for r in lc.cameras(lib)}
+    assert on_mod["id"] not in left and on_official["id"] in left
+    assert mod["id"] not in lib._records
+    assert e.prefab.read_bytes() == e.official  # the camera's prefab went back with it
