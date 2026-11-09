@@ -595,8 +595,9 @@ class _Game:
 
 def test_lobby_json_route_is_memory_only(tmp_path):
     game = _Game()
+    # the library only says no lobby camera holds the prefab (BL-137)
     services = Services(Settings(tmp_path / "config.toml"), tmp_path, state=UiState(tmp_path / "webui.json"),
-                        cache=object(), game=game, catalog=object(), library=object())
+                        cache=object(), game=game, catalog=object(), library=_Library())
     try:
         response = services.asset("spine/lobby/hoshino_home/lobby.json", {})
         assert json.loads(response.body) == {"prefab": "LobbyTest", "core": "hoshino_home"}

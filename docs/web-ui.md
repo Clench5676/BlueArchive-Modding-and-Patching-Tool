@@ -2979,7 +2979,7 @@ it (decision 7); browser and serve mode have none.
   UIPopup_Sort, UIPopup_Option_PC, UICharacterDetail and the three BlackBgClickArea tweens from the development view
   (numbers only; skipped without `BAMT_TEST_GAME_DIR`).
 
-### Lobby camera framing (BL-137, preview behind `?proto=bl137`)
+### Lobby camera framing (BL-137)
 
 - **Entry.** In the fullscreen memorial lobby a white visual-mode button with the game's `Common/Cafe_Icon_Video`
   sits left of the photography button (`lobby-camera.js`). It enters the framing: the lobby rests (the intro skipped),
@@ -2994,9 +2994,37 @@ it (decision 7); browser and serve mode have none.
   view everything may, as the game shows it. Zoom-in stops at 2x the game's view.
 - **Kept.** `cameraParams(V, G)`: the lobby scaled by `k = G.w / V.w` about the screen centre and moved by
   `-k (V's centre - G's centre)` NGUI units, so that V fills the screen as G did.
-- **RPC `lobby.camera.save`** `{variant, lobby, view: {x, y, w, h}, scale, offset: [x, y]}` answers
-  `{variant, lobby, number, scale, offset}`. The preview answers it from a fake backend in `lobby-camera.js`; the real
-  one writes the lobby's prefab bundle (BL-137 step 3).
+- **Entry shown** in every fullscreen lobby, except one whose lobby.json has no prefab.
+- **RPC `lobby.camera.save`** `{variant, lobby, source, view: {x, y, w, h}, scale, offset: [x, y]}` starts a job
+  (`writes="library"`) whose result is `{variant, lobby, number, scale, offset, mod}`. `source` is what the lobby
+  shows: `official`, `mod:<id>` of one of the variant's lobby mods, or one of its cameras (the new camera composes:
+  `k = k2 k1`, `offset = k2 o1 + o2`, on that camera's source). After it the detail reads the family again; the
+  popup says `lobby.cameraSaved` / `lobby.cameraDetail`.
+- **The prefab** (`library/lobby_camera.py`). In the student's own `ui-uilobbyelement-...` bundle (one prefab per
+  bundle), the root's `MX.Utils.UIManualScaleByAspect`: every `scaleTransforms` Transform's local scale times k, every
+  `scaleTransforms` and `offsetSettings` Transform moved to `k p + offset` in the root's frame (z kept), every
+  `MostWideAdd` / `MostNarrowAdd` times k; `mostWideScale` / `mostNarrowScale` kept. A similarity about the screen
+  centre at every aspect. Every other object and stream stays byte for byte; saved with the CRC fix (lz4) and checked
+  after. A prefab without the component on its root, or whose targets are not plain Transforms under unscaled,
+  unturned parents, is refused (`lobby_camera_unsupported`).
+- **The choice.** A camera is a generated generic mod of that prefab bundle (record key `lobby_camera`: variant, lobby
+  core, source, scale, offset, root, prefab file, slot, base, number). Its slot is the prefab's own, keyed by its CAB
+  (a group packed one asset per bundle); no lobby slot holds the prefab, so other lobby mods and students are as before.
+  The App lists it as a lobby mod of its variant (`kind` "lobby", `camera: {source, number, scale, offset}`), named
+  `<source's name> - lobby.cameraName` (`lobby.original` for the official art), in Switch Memorial Lobby with the
+  lobby mods; rename and delete as for mods; not in Settings' generic sources nor the Student Hall.
+- **Apply.** `actions.apply(variant, "mod:<camera>", "lobby")`: the source's art through the lobby's own apply, then
+  the prefab through the generic one (only saved while mods are off). Any other lobby choice of the variant and a
+  restore of its lobby put the prefab back to the camera's base (the official prefab, or the generic prefab mod it was
+  framed on). The master switch, Apply Mod Configuration, integrity and delete treat the prefab slot like any generic
+  slot. `configured` / `selection` give the camera as the lobby's source while the prefab slot holds it and the lobby
+  slot holds its source.
+- **Game update.** Before a master-switch plan and a camera's apply, a camera framed on the official prefab whose
+  prefab file the game replaced is made again on the new one with its scale and offset, in place (same id).
+- **Preview.** `/asset/spine/mod/<camera>/` serves the source's art and, as `lobby.json`, the camera's own prefab
+  (framed on the fly from the official one after a game update it was not made again for); `Lobby.show({camera})`
+  reads the layout there. `/asset/spine/lobby/<core>/lobby.json` reads the official prefab while a camera holds the
+  game's, so no other choice's preview shows a camera's framing.
 
 ## Lobby lines
 

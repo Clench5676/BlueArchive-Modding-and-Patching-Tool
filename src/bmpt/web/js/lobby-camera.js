@@ -2,9 +2,9 @@
 // Cafe_Icon_Video) enters a framing mode: the lobby rests (no intro), the view zooms at the pointer and moves up and
 // down, kept where no pose of the lobby (its intro, idle and every clip) shows past the art (lobby.js framingView);
 // the outline marks the game's own view. The shutter keeps the view as the lobby's camera: the lobby scaled about the
-// screen centre and moved (lobby.js cameraParams), saved as a new Memorial Lobby (lobby.camera.save, docs/web-ui.md).
-// Preview: only with ?proto=bl137, where a fake backend answers the save.
-import { rpc } from "./api.js";
+// screen centre and moved (lobby.js cameraParams), saved as a new Memorial Lobby choice of the student (lobby.camera.save,
+// a job; docs/web-ui.md), its art the source the lobby shows.
+import { rpc, waitJob } from "./api.js";
 import { T } from "./i18n.js";
 import * as NGUI from "./ngui.js";
 import * as Lobby from "./lobby.js";
@@ -16,28 +16,17 @@ import { prepareBack } from "./visual-mode.js";
 import { anchoredCentre } from "./visual-view.js";
 import { buttonCenter } from "./student-hall-icons.js";
 
-export const PROTO = typeof location !== "undefined" && new URLSearchParams(location.search).get("proto") === "bl137";
 const STAGE = { w: 1920, h: 1080 };
 
 let hooks = null, overlay = null, active = false, saving = false, feedback = null, frame = 0, generation = 0;
 const stage = () => document.getElementById("stage");
 
-// --- the preview's fake backend: lobby.camera.save answered as the real one will ---
-const fakeSaves = new Map();
-async function fake(method, params) {
-  if (method !== "lobby.camera.save") throw new Error(`No preview answer for ${method}`);
-  const n = (fakeSaves.get(params.variant) || 0) + 1;
-  fakeSaves.set(params.variant, n);
-  await new Promise((r) => setTimeout(r, 300));
-  return { variant: params.variant, lobby: params.lobby, number: n, scale: params.scale, offset: params.offset };
-}
-const call = (method, params) => (PROTO ? fake(method, params) : rpc(method, params));
-
-// the entry: beside the photography button, in the fullscreen lobby only
+// the entry: beside the photography button, in the fullscreen lobby only, and not in a lobby without a prefab (nothing
+// to keep the camera in)
 export async function entry(on, bridge) {
   document.getElementById("camera-launcher")?.remove();
   hooks = bridge || hooks;
-  if (!PROTO || !on || active || !hooks) return;
+  if (!on || active || !hooks || !hooks.lobby() || Lobby.cameraState()?.prefab === false) return;
   const my = ++generation;
   const layout = await NGUI.layout("UICharacterVisualMode"), corner = NGUI.find(layout, "Inventory_ListControl_PC/RightBottom");
   const reset = NGUI.find(corner, "Btn_RefreshPos"), body = NGUI.find(reset, "Btn_RefreshPos"), widget = body.widgets.find((w) => "sprite" in w);
@@ -123,8 +112,16 @@ async function save() {
   saving = true;
   feedback?.flash();
   const { scale, offset } = state.params;
-  const result = await call("lobby.camera.save", { variant: hooks.variant(), lobby: hooks.lobby(), view: state.view, scale, offset });
-  saving = false;
+  let result;
+  try {
+    const id = await rpc("lobby.camera.save", { variant: hooks.variant(), lobby: hooks.lobby(), source: hooks.source(),
+      view: state.view, scale, offset });
+    result = await waitJob(id);
+  } finally {
+    saving = false;
+  }
+  // the student's lobby choices again, with the new one
+  await hooks.saved?.(result);
   if (!active) return;
   await Popup.message({ title: T("lobby.cameraSaved"),
     lines: [T("lobby.cameraDetail", { scale: result.scale.toFixed(3), offset: result.offset.map((v) => Math.round(v)).join(", ") })],

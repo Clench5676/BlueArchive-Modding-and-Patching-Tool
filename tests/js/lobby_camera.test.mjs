@@ -91,3 +91,33 @@ test("the intro sampler places a moved skeleton by its timeline and plays its cl
   const c = sample(2);
   near(c[0].x, 0); assert.deepEqual(c[0].clips, []);
 });
+
+// --- a saved camera is a Memorial Lobby choice of the student (BL-137 step 3) ---
+const { modName } = await import("../../src/bmpt/web/js/names.js");
+const Sources = await import("../../src/bmpt/web/js/switch-sources.js");
+const words = { "lobby.original": "Original", "lobby.cameraName": "Camera {n}" };
+const translate = (key, params = {}) => (words[key] || key).replace(/\{(\w+)\}/g, (_, k) => params[k]);
+
+test("a camera is named after its source, then its number", () => {
+  const art = { id: "art", kind: "lobby", label: "Summer Art", target: "azusa", core: "azusa_home" };
+  const official = { id: "c1", kind: "lobby", label: "Camera 1", target: "azusa", core: "azusa_home",
+    camera: { source: "official", number: 1, scale: 1.2, offset: [0, -100] } };
+  const framed = { ...official, id: "c2", camera: { ...official.camera, source: "mod:art", number: 2 } };
+  const entries = [art, official, framed];
+  assert.equal(modName(official, entries, translate), "Original - Camera 1");
+  assert.equal(modName(framed, entries, translate), "Summer Art - Camera 2");
+  // its source deleted: its own name alone; an alias wins
+  assert.equal(modName(framed, [official, framed], translate), "Camera 2");
+  assert.equal(modName({ ...framed, alias: "Close" }, entries, translate), "Close");
+});
+
+test("Switch Memorial Lobby lists the cameras with the lobby mods and starts on the chosen one", () => {
+  const camera = { id: "c1", kind: "lobby", target: "azusa", core: "azusa_home", camera: { source: "official", number: 1 } };
+  const v = { key: "azusa", lobby: "Azusa_home", modList: [camera], configured: { lobby: "mod:c1" }, state: { files: [] } };
+  const fam = { variants: [v] };
+  const listed = Sources.candidates(fam, v, "lobby");
+  assert.deepEqual(listed.map((c) => c.key), ["self", "m:c1"]);
+  assert.equal(Sources.intendedKey(v, "lobby"), "m:c1");
+  assert.equal(Sources.popupMode(fam, v, "lobby").start, "m:c1");
+  assert.match(Sources.previewBase(v, "lobby"), /\/mod\/c1\//);
+});

@@ -1986,6 +1986,7 @@ async function showLobby(v, my, alive = () => true) {
   const c = current("lobby");
   const options = { framing: specialFraming(v),
     mod: c.kind === "mod" && (!!v.previewSources?.lobby || !!v.configured || !modsOn() || !v.lobby) ? c.id : null,
+    camera: !!c.mod?.camera,
     official: c.kind === "self" && (!!v.configured || !!v.previewSources?.lobby || !modsOn()) };
   let m = await Lobby.show(v.lobby, $("lobby"), v.key, options);
   if (!still()) return;
@@ -2118,7 +2119,10 @@ async function setFullscreen(on, { switching = false } = {}) {
   if (!on) { await photoBridge.release(); stillAfterFullscreen(); }
 }
 // the camera framing's view of the detail page (lobby-camera.js)
-const cameraBridge = { variant: () => variantKey, lobby: () => variant()?.lobby };
+// source: what the lobby shows (the camera's art); saved: the student's lobby choices read again with the new one
+const cameraBridge = { variant: () => variantKey, lobby: () => variant()?.lobby,
+  source: () => { const c = current("lobby"); return c?.kind === "mod" ? `mod:${c.id}` : "official"; },
+  saved: () => reload() };
 // the UI slides out (app.css .stage.fullscreen) and out of the keyboard's reach; back, the visual mode closes and the
 // focus returns (visual-mode.js uiOut, uiBack)
 const slidOut = () => [$("ngui"), $("ngui-chips"), $("ngui-expr"), document.querySelector(".topbar"), stage().querySelector(".nav")];
@@ -2519,7 +2523,7 @@ async function photoPreload(){
       (async()=>{
         if(!lobbyAvailable)return;
         const c=current('lobby'),options={framing:specialFraming(v),deferPlayback:true,
-          mod:c.kind==='mod'&&(!!v.previewSources?.lobby||!!v.configured||!modsOn()||!v.lobby)?c.id:null,
+          mod:c.kind==='mod'&&(!!v.previewSources?.lobby||!!v.configured||!modsOn()||!v.lobby)?c.id:null,camera:!!c.mod?.camera,
           official:c.kind==='self'&&(!!v.configured||!!v.previewSources?.lobby||!modsOn())};
         if(!await Lobby.show(v.lobby,lobby,v.key,options))throw new Error('Memorial renderer is not ready');
         lobbyFrom=fam.version;lobbyStale=false;Lobby.suspend();Lobby.frame('full');Lobby.photography(Photo.FRAME);Lobby.skipIntro();

@@ -124,12 +124,14 @@ const game = () => {
   return { ...v };
 };
 
-async function sourcesOf(core, mod, refresh = false, signal = null, official = false) {
-  const artSource = spineBase(mod ? "mod" : official ? "official-lobby" : "lobby", mod || core), layoutSource = core ? spineBase("lobby", core) : null;
+// camera: the mod is a lobby camera (BL-137), whose layout is its own prefab's (/asset/spine/mod/<id>/lobby.json)
+async function sourcesOf(core, mod, refresh = false, signal = null, official = false, camera = false) {
+  const artSource = spineBase(mod ? "mod" : official ? "official-lobby" : "lobby", mod || core);
+  const layoutSource = mod && camera ? artSource : core ? spineBase("lobby", core) : null;
   // A shown tab must not inherit a manifest request that belonged to a cancelled or previous source.
   if (refresh) for (const source of new Set([artSource, layoutSource].filter(Boolean))) forgetSpineAssets(source.slice(0, source.lastIndexOf("/")));
   const art = spineAssetBase(artSource, { signal });
-  const layout = !layoutSource ? Promise.resolve(null) : mod || official ? spineAssetBase(layoutSource, { signal }) : art;
+  const layout = !layoutSource ? Promise.resolve(null) : (mod && !camera) || official ? spineAssetBase(layoutSource, { signal }) : art;
   const dir = (base) => base?.slice(0, base.lastIndexOf("/") + 1) || null;
   const [artBase, base] = await Promise.all([art, layout]);
   return { artBase: dir(artBase), base: dir(base), official };
@@ -137,8 +139,8 @@ async function sourcesOf(core, mod, refresh = false, signal = null, official = f
 
 // the layers of a lobby in the prefab's draw order with its offsets and scales; skeletons the prefab keeps inactive
 // (talk-only scenes) are left out. Without prefab data every skeleton sits at the standard place, backgrounds first.
-export async function layersOf(core, mod = null, sources = null, framing = null, { signal, official = false } = {}) {
-  const { artBase, base } = sources || await sourcesOf(core, mod, false, signal, official);
+export async function layersOf(core, mod = null, sources = null, framing = null, { signal, official = false, camera = false } = {}) {
+  const { artBase, base } = sources || await sourcesOf(core, mod, false, signal, official, camera);
   if (!artBase) throw new Error(`Lobby source unavailable: ${core}`);
   const read = (url) => withTimeout(fetch(url, { signal }).then((r) => {
     if (!r.ok) throw new Error(`${url}: HTTP ${r.status}`);
@@ -688,7 +690,7 @@ export function camera(on) {
 export const cameraState = () => {
   if (!current?.meta) return null;
   const G = game(), V = current.target || current.view, lim = current.camera?.lim;
-  return { on: cameraOn, measuring: !!current.camera?.measuring, view: { ...V }, game: G,
+  return { on: cameraOn, measuring: !!current.camera?.measuring, view: { ...V }, game: G, prefab: !!current.info?.prefab,
     widest: lim?.sum ? lim.wMax : G.w, narrowest: G.w / ZOOM_IN, poses: lim?.poses || 0, intro: !!lim?.intro, ms: current.camera?.ms,
     params: cameraParams(V, G) };
 };
@@ -1136,7 +1138,7 @@ function feather(view) {
 
 // show(core, host) -> Promise<meta> (frame, sequences); resolves once every layer is in and framed
 const lobbyLoads = latestLoad(), sourceLoads = latestLoad(), playerLoads = new WeakMap();
-export function show(core, host, variant, { mod = null, framing = null, official = false, deferPlayback = false } = {}) {
+export function show(core, host, variant, { mod = null, framing = null, official = false, camera = false, deferPlayback = false } = {}) {
   if (current && (current.core !== core || current.mod !== mod || !!current.official !== !!official || current.framing !== framing || !current.meta)) {
     lobbyLoads.cancel();
     clearView(host);
@@ -1152,7 +1154,7 @@ export function show(core, host, variant, { mod = null, framing = null, official
     const abort = () => lobbyLoads.cancel();
     sourceSignal.addEventListener("abort", abort, { once: true });
     const run = async () => {
-      let sources = await sourcesOf(core, mod, true, sourceSignal, official);
+      let sources = await sourcesOf(core, mod, true, sourceSignal, official, camera);
       for (let attempt = 0; ; attempt++) {
         if (stopped || sourceSignal.aborted) return null;
         if (!sources.artBase) throw atStep(new Error("Lobby source unavailable"), url.replace(/skeleton$/, "manifest.json"), "manifest");
@@ -1162,7 +1164,7 @@ export function show(core, host, variant, { mod = null, framing = null, official
           return await lobbyLoads.run((signal) => showNow(core, host, variant, mod, sources, signal, framing, deferPlayback));
         } catch (err) {
           if (sourceSignal.aborted || attempt) throw err;
-          const fresh = await sourcesOf(core, mod, true, sourceSignal, official);
+          const fresh = await sourcesOf(core, mod, true, sourceSignal, official, camera);
           if (stopped || sourceSignal.aborted) return null;
           if (fresh.artBase === sources.artBase && fresh.base === sources.base) throw err;
           console.warn("Lobby source changed during load", url, err);

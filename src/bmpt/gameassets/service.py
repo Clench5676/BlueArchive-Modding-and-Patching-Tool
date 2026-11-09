@@ -1043,6 +1043,13 @@ class GameAssets:
                               separators=(",", ":")).encode()
         return json.loads(self._cached("lobby/" + json.dumps([core.lower(), stamps]), build, disk=False))
 
+    def lobby_prefab(self, core: str) -> tuple[str, str] | None:
+        """The file name of a lobby's prefab bundle and the name of its root GameObject, None for a lobby without one
+        (a lobby camera keeps its framing there, BL-137)."""
+        root = self.lobby_info(core).get("prefab")
+        bundle = self._lobby_prefabs().get(str(root or "").lower())
+        return (bundle, root) if root and bundle else None
+
     def _lobby_prefab(self, bundle: str, root: str, skeletons: list[str], clips: lobby.Clips,
                       behaviours: dict[tuple[str, int], dict] | None = None, path: Path | None = None) -> dict | None:
         """read_prefab on a prefab bundle (``path``: that file in its place); behaviours are the lobby core's
