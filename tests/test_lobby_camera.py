@@ -199,3 +199,149 @@ def test_real_prefab_round_trip(real_game, tmp_path, core, k, offset):
     # read again from the game's own prefab: the official framing, not the camera's
     assert real_game.lobby_info(core) == before
     shutil.rmtree(out)
+
+
+# --- the library: a camera is a Memorial Lobby choice of its student ---
+
+@pytest.fixture(scope="module")
+def lobby_sources(real_game):
+    """Azusa's lobby art and prefab bundles and Shiroko's prefab bundle (another student's, of the same group)."""
+    prefabs = real_game._lobby_prefabs()
+    try:
+        art = real_game.spine_cores("lobby")["azusa_home"]
+        azusa, shiroko = (real_game._bundle_path(prefabs[name]) for name in ("lobbyazusa", "lobbyshiroko"))
+    except KeyError:
+        pytest.skip("Lobby fixture is unavailable")
+    return art, azusa, shiroko
+
+
+@pytest.fixture
+def camera_env(tmp_path, monkeypatch, lobby_sources):
+    from types import SimpleNamespace
+    from bmpt.config import Settings
+    from bmpt.gameassets import AssetCache, GameAssets
+    from bmpt.library import ModLibrary, safety, storage
+    from test_library import FakeCatalog, FakeVariant
+
+    art, azusa, shiroko = lobby_sources
+    folder = tmp_path / "game"
+    folder.mkdir()
+    for source in (*art, azusa, shiroko):
+        if not storage.atomic_clone(source, folder / source.name):
+            shutil.copy2(source, folder / source.name)
+        (folder / source.name).chmod(0o644)
+    settings = Settings(tmp_path / "config.toml")
+    settings.set("game_resource_dir", str(folder))
+    settings.set("compression_method", "lz4")
+    settings.set("enable_crc_correction", "true")
+    game = GameAssets([folder], AssetCache(tmp_path / "cache", allowed=False))
+    monkeypatch.setattr(safety, "check_game_not_running", lambda: None)
+    library = ModLibrary(tmp_path / "library", FakeCatalog(FakeVariant("azusa", None, "Azusa_home")), game, settings)
+    return SimpleNamespace(library=library, game=game, folder=folder, prefab=folder / azusa.name,
+                           other=folder / shiroko.name, official=azusa.read_bytes(), other_bytes=shiroko.read_bytes(),
+                           art={folder / p.name: p.read_bytes() for p in art})
+
+
+def save(e, source="official", k=1.25, offset=(0.0, -120.0)):
+    pin = e.library.current_pin()
+    return e.library.save_camera("azusa", source, k, list(offset), e.prefab.name, "LobbyAzusa", pin=pin)
+
+
+@pytest.mark.skipif(not GAME_DIR.is_dir(), reason="No local game install")
+def test_camera_choice_applies_switches_and_restores(camera_env):
+    from bmpt.library import lobby_camera as lc
+    from bmpt.library.judge import core_of
+
+    e, lib = camera_env, camera_env.library
+    pin = lib.current_pin()
+    record = save(e)
+    meta = record[lc.TAG]
+    assert (meta["variant"], meta["source"], meta["number"], meta["base"], meta["root"]) == ("azusa", "official", 1, "official", "LobbyAzusa")
+    # its own slot, by the prefab's CAB: never Shiroko's
+    assert meta["slot"] == core_of(e.prefab.name) != core_of(e.other.name)
+    # listed as a lobby choice of Azusa; hidden from the generic sources
+    entry = next(m for m in lib.mods() if m.id == record["id"])
+    assert (entry.kind, entry.target, entry.core, entry.camera["number"], entry.camera["source"]) == ("lobby", "azusa", "azusa_home", 1, "official")
+    assert not lib.other_mods(pin)
+    assert e.prefab.read_bytes() == e.official  # saving writes nothing in the game
+    # the preview: the official art, the camera's layout
+    assert lib.preview_bundles(record["id"]) == lib.official_bundles("azusa_home")
+    before, after = e.game.lobby_info("azusa_home"), e.game.lobby_info("azusa_home", prefab=lib.camera_prefab(record["id"])[1])
+    assert_mapped(before, after, 1.25, (0.0, -120.0))
+
+    source = f"mod:{record['id']}"
+    result = lib.apply("azusa", source, kind="lobby", pin=pin)
+    assert not result.deferred and e.prefab.read_bytes() == lib._paths(lib._record(record["id"]))[0].read_bytes()
+    assert all(path.read_bytes() == data for path, data in e.art.items()) and e.other.read_bytes() == e.other_bytes
+    assert lib.configured("azusa")["lobby"] == source
+    assert lib.selection("azusa")["lobby"] == {"source": source, "installed": True, "error": None}
+    # the other choices' previews read the official prefab while the camera holds the game's
+    assert lib.lobby_prefab_base("azusa_home").read_bytes() == e.official
+    # the master switch: off puts the official prefab back, on the camera again
+    lib.toggle(False, True, [pin])
+    assert e.prefab.read_bytes() == e.official and lib.configured("azusa")["lobby"] == source
+    assert lib.apply("azusa", source, kind="lobby", pin=pin).deferred
+    lib.toggle(True, False, [pin])
+    assert e.prefab.read_bytes() != e.official and lib.selection("azusa")["lobby"]["installed"]
+    # another lobby choice of Azusa puts the prefab back
+    lib.apply("azusa", "official", kind="lobby", pin=pin)
+    assert e.prefab.read_bytes() == e.official and lib.configured("azusa")["lobby"] is None
+    assert lib.lobby_prefab_base("azusa_home") is None
+    # and so does a restore of her lobby
+    lib.apply("azusa", source, kind="lobby", pin=pin)
+    lib.restore("azusa", kind="lobby", pin=pin)
+    assert e.prefab.read_bytes() == e.official and lib.configured("azusa")["lobby"] is None
+    # a second camera is numbered after the first; framed on the first, it composes
+    second = save(e, source=source, k=1.2, offset=(0.0, 10.0))[lc.TAG]
+    assert second["number"] == 2 and second["source"] == "official"
+    assert second["scale"] == pytest.approx(1.5) and second["offset"] == pytest.approx([0.0, -134.0])
+    # deleting the applied camera puts the official prefab back
+    lib.apply("azusa", source, kind="lobby", pin=pin)
+    lib.remove(record["id"], confirm=True)
+    assert e.prefab.read_bytes() == e.official and lib.configured("azusa")["lobby"] is None
+
+
+@pytest.mark.skipif(not GAME_DIR.is_dir(), reason="No local game install")
+def test_camera_on_a_lobby_mod_and_after_a_game_update(camera_env):
+    import zlib
+    from ba_modding_toolkit.bundle import Bundle
+    from ba_modding_toolkit.models import SaveOptions
+    from bmpt.library import lobby_camera as lc
+
+    e, lib = camera_env, camera_env.library
+    pin = lib.current_pin()
+    # a lobby mod of Azusa: her art saved again (other bytes, the same assets)
+    art = sorted(e.art)[0]
+    made = e.folder.parent / "mod"
+    made.mkdir()
+    bundle = Bundle.load(art)
+    assert bundle.save(made / art.name, SaveOptions(perform_crc=True, compression="lz4"))[0]
+    mod = lib._store({art.name: made / art.name}, "Azusa mod", "azusa", "lobby")
+    record = save(e, source=f"mod:{mod['id']}")
+    assert record[lc.TAG]["source"] == f"mod:{mod['id']}"
+    assert lib.preview_bundles(record["id"])[-1] == lib._paths(mod)[0]
+    lib.apply("azusa", f"mod:{record['id']}", kind="lobby", pin=pin)
+    assert art.read_bytes() == (made / art.name).read_bytes() and e.prefab.read_bytes() != e.official
+    assert lib.configured("azusa")["lobby"] == f"mod:{record['id']}"
+    # the lobby mod alone: the prefab goes back, the art stays the mod's
+    lib.apply("azusa", f"mod:{mod['id']}", kind="lobby", pin=pin)
+    assert e.prefab.read_bytes() == e.official and lib.configured("azusa")["lobby"] == f"mod:{mod['id']}"
+    lib.apply("azusa", "official", kind="lobby", pin=pin)
+
+    # a game update gives Azusa a new prefab file: the camera is made again on it, in place
+    rebuilt = Bundle.load(e.prefab)
+    stage = e.folder.parent / "update"
+    stage.mkdir()
+    assert rebuilt.save(stage / "new.bundle", SaveOptions(perform_crc=False, compression="lz4"))[0]
+    crc = zlib.crc32((stage / "new.bundle").read_bytes())
+    updated = e.folder / e.prefab.name.replace(e.prefab.name.rsplit("_", 1)[1], f"{crc}.bundle")
+    assert updated != e.prefab
+    e.prefab.unlink()
+    shutil.move(stage / "new.bundle", updated)
+    lc.refresh(lib, [pin], print)
+    fresh = lib._record(record["id"])
+    assert fresh["files"] == [updated.name] and fresh[lc.TAG]["prefab"] == updated.name
+    assert lib._paths(fresh)[0].exists() and not (lib._paths(fresh)[0].parent / e.prefab.name).exists()
+    lib.apply("azusa", f"mod:{record['id']}", kind="lobby", pin=pin)
+    assert updated.read_bytes() == lib._paths(fresh)[0].read_bytes()
+    assert Bundle.check_crc_match(updated)
