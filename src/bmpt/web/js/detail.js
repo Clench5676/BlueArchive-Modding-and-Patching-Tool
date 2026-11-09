@@ -217,9 +217,10 @@ function candidates(v = variant(), kind = "spr") {
 }
 // Switch 3D Model offers another variant's costume only once that pair was built and exported for these files
 // (model.costumes, BL-122): the verdicts by variant, read when the 3D tab shows and checked to their end
-// (model.checkCostumes) in the background, or, when the switch opens first, while it waits.
+// (model.checkCostumes) in the background, one pair at a time; the switch opens at once and lists each pair as its
+// check ends (BL-134).
 const costumeState = new Map(), costumeChecks = new Map();
-function costumesReady(v, { wait = false } = {}) {
+function costumesReady(v) {
   const others = costumeCandidates(fam, v).map((o) => o.key);
   if (!others.length) return Promise.resolve(false);
   const key = `${v.key}|${others.join(",")}`;
@@ -231,25 +232,26 @@ function costumesReady(v, { wait = false } = {}) {
       // the Apply card follows the shown costume's verdict
       if (open && variant() === v && tab === "model") void renderScreen();
       const unknown = others.filter((o) => known[o] == null);
-      if (!unknown.length) return false;
-      const id = await rpc("model.checkCostumes", { variant: v.key, others: unknown });
-      const result = await waitJob(id, (p) => check.report?.(p));
-      costumeState.set(v.key, { ...(costumeState.get(v.key) || {}), ...result });
-      return true;
+      for (const other of unknown) {
+        const id = await rpc("model.checkCostumes", { variant: v.key, others: [other] });
+        const result = await waitJob(id);
+        costumeState.set(v.key, { ...(costumeState.get(v.key) || {}), ...result });
+        costumesChecked(v);
+      }
+      return unknown.length > 0;
     })().finally(() => costumeChecks.delete(key));
     costumeChecks.set(key, check);
   }
-  if (!wait) return check;
-  return Loading.task((report) => { check.report = report; return check; },
-    { label: T("progress.compatibility", { name: T("tab.model") }) });
+  return check;
 }
 // a costume past the stretch limit (or refused) chosen as the 3D model's preview: shown, never applied
 const unfitCostume = (v, kind, key) => kind === "model" && typeof key === "string" && key.startsWith("v:")
   && !!costumeState.get(v.key)?.[key.slice(2)] && costumeState.get(v.key)[key.slice(2)] !== "ok";
-// After a background check: the open Switch 3D Model popup lists what it found.
+// After a background check: the open Switch 3D Model popup lists what it found, where it was scrolled to.
 function costumesChecked(v) {
   if (open && variant() === v && tab === "model") void renderScreen();
-  if (open && variant() === v && popupKind === "model" && switchPopupPage === pageToken && !$("popup").hidden) void renderPopup();
+  if (open && variant() === v && popupKind === "model" && switchPopupPage === pageToken && !$("popup").hidden)
+    void renderPopup($("popup").querySelector(".popup-cards")?.scrollTop || 0);
 }
 
 // the kind of game file the shown tab is about, and the newest date of a kind's files
@@ -1393,10 +1395,7 @@ async function drawPopup(scroll = 0) {
 }
 async function openPopup(kind = "spr") {
   const family = fam, v = variant();
-  if (kind === "model") {
-    try { await costumesReady(v, { wait: true }); } catch (err) { console.error("Costume check failed", err); }
-    if (!open || fam !== family || variant() !== v) return;
-  }
+  if (kind === "model") void costumesReady(v).catch((err) => console.error("Costume check failed", err));
   switchThumbnails?.cancel();
   switchThumbnails = thumbnailScope({ priority: "popup" });
   switchPopupPage = pageToken;
@@ -1724,7 +1723,7 @@ function showTab(id) {
   tab = id;
   if (id === "model") {
     const v = variant();
-    void costumesReady(v).then((checked) => { if (checked) costumesChecked(v); }, (err) => console.error("Costume check failed", err));
+    void costumesReady(v).catch((err) => console.error("Costume check failed", err));
   }
   expanded = false;
   exprScroll = 0;

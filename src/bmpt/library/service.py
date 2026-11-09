@@ -4088,7 +4088,11 @@ class ModLibrary:
 
     def _costume_signature(self, variant_key: str, other: str, pin: Pin) -> tuple[str, list[Path]]:
         """The build signature of another variant's costume on a variant's model slot (the preview's, from official
-        bytes where there are any, else the current ones), and the slot's files."""
+        bytes where there are any, else the current ones), and the slot's files. Keyed by the costume rule's version
+        rather than the program's (BL-134): a new program build keeps the verdicts and previews of the same rule."""
+        from ..gameassets.costume_rule import COSTUME_RULE
+
+        rule = f"costume-rule:{COSTUME_RULE}"
         variant = self._variant(variant_key)
         if other == variant_key or self._variant(other).family != variant.family:
             raise ServiceError("source_unsupported", source=f"variant:{other}")
@@ -4097,11 +4101,11 @@ class ModLibrary:
             raise ServiceError("game_file_not_found", variant=variant_key)
         _, inputs = self._costume_source(other, pin, preview=True)
         try:
-            return self._build_signature(inputs, targets, pin), targets
+            return self._build_signature(inputs, targets, pin, rule), targets
         except ServiceError as error:
             if error.code != "original_unavailable":
                 raise
-            return hashlib.sha1(repr(("current", _build_version(), [(p.name, p.stat().st_size, p.stat().st_mtime_ns)
+            return hashlib.sha1(repr(("current", rule, [(p.name, p.stat().st_size, p.stat().st_mtime_ns)
                                                                     for p in [*inputs, *targets]])).encode()).hexdigest(), targets
 
     def _verdicts(self) -> dict[str, dict[str, Any]]:
@@ -4553,14 +4557,14 @@ class ModLibrary:
 
     # --- built copies ---
 
-    def _build_signature(self, sources: list[Path], targets: list[Path], pin: Pin) -> str:
-        """What a build is made from: the program, the bytes of its inputs, the official bytes of its targets and the
-        options. A game file written from it records this as its ``build``."""
+    def _build_signature(self, sources: list[Path], targets: list[Path], pin: Pin, version: str | None = None) -> str:
+        """What a build is made from: the program (or ``version``, a rule's own), the bytes of its inputs, the official
+        bytes of its targets and the options. A game file written from it records this as its ``build``."""
         inputs = [(path.name, self._hashes.get(path).sha1) for path in sources]
         originals = [(path.name, self._hashes.get(self._official_for(path, pin)).sha1) for path in targets]
         options = (sorted(self.settings.asset_types()), self.settings.save_options(self.settings.crc_needed(targets[0])),
                    self.settings.spine_options(), self.settings.anim_check_key())
-        return hashlib.sha1(repr((1, _build_version(), inputs, originals, options)).encode()).hexdigest()
+        return hashlib.sha1(repr((1, version or _build_version(), inputs, originals, options)).encode()).hexdigest()
 
     def _cached_build(self, sources: list[Path], targets: list[Path], pin: Pin,
                       build: Callable[[], dict[Path, Path]], build_keys: dict[Path, str]) -> dict[Path, Path]:
