@@ -6265,7 +6265,11 @@ class ModLibrary:
             raise ServiceError("source_unsupported", source=target)
         if not paths:
             raise ServiceError("game_file_not_found", target=target)
-        folder = Path(out_dir).resolve() / parse_filename(paths[0].name).core
+        name = parse_filename(paths[0].name).core
+        # The engine clears the output folder before extracting, so the folder must be a child of out_dir.
+        if not is_safe_file_name(name):
+            raise ServiceError("mod_unsupported", file=paths[0])
+        folder = Path(out_dir).resolve() / name
         folder.mkdir(parents=True, exist_ok=True)
         report = (lambda current, total, _name: progress({"current": current, "total": total,
                                                         "step": "import.step.extract"})) if progress else None
