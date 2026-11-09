@@ -92,6 +92,7 @@
 			"failed": "3D 모델을 읽을 수 없음",
 			"unfit": "자동 맞춤 불가",
 			"crossCharacter": "다른 캐릭터 모델, 외형이 깨질 수 있음",
+			"showOthers": "다른 학생 표시",
 			"action": {
 				"idle": "대기",
 				"reaction": "반응",

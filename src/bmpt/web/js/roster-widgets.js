@@ -54,17 +54,29 @@ import { T } from "./i18n.js";
 import { SORTS, filtering } from "./roster-order.js";
 const { find, node, label, fitText } = NGUI;
 
+// The student roster's toolbar: its Group Alts checkbox, the two segment filters, search, sort and order.
 export function toolbarLayout(view, { title = T("roster.title"), left = -1270, right = 1412 } = {}) {
+  return toolbarFit({ title, left, right,
+    filters: [["seg.all", "seg.mods", "seg.noMods"], ["seg.all", "seg.recruit", "seg.noRecruit"]].map((keys) => keys.map((k) => T(k))),
+    sorts: SORTS.map((k) => T(`sort.${k}`)), sortAt: SORTS.indexOf(view.sort), check: T("roster.merge") });
+}
+
+// A toolbar's fit, right to left from the order button, with the most generous sizes at which everything stands after
+// the title (the first step that fits; the last one regardless, ``fits`` says): a checkbox, the segment filters (``filters``:
+// the three captions of each), the search, sort and order tools. ``sorts``: every caption the sort button can show (it is as
+// wide as its longest, so choosing another moves nothing), ``sortAt``: the shown one; ``check``: the checkbox's caption.
+// The roster takes -1270 to 1412 after its title; a list popup its own width and no title (popup.js).
+export function toolbarFit({ title = "", left, right, filters, sorts, sortAt = 0, check }) {
   const steps = [[230, 44, 56, 40, 62], [210, 40, 48, 38, 62], [200, 36, 44, 34, 58], [190, 34, 42, 32, 54], [180, 32, 40, 30, 50], [170, 30, 36, 28, 46]];
   for (const [segW, segFs, sortFs, cbFs, titleFs] of steps) {
     const titleEnd = left + advanceOf(title, titleFs) + SPACE.l;
-    // the six segments of both filters share one size
-    const segLabels = NGUI.fitGroup(["seg.all", "seg.mods", "seg.noMods", "seg.all", "seg.recruit", "seg.noRecruit"].map((k) => T(k)), segFs, 22, segW - 26, 2, { maxH: 96 });
+    // the segments of every filter share one size
+    const segLabels = NGUI.fitGroup(filters.flat(), segFs, 22, segW - 26, 2, { maxH: 96 });
     // the sort button is as wide as its longest key, so choosing another one moves nothing
-    const sortTexts = SORTS.map((k) => fitText(T(`sort.${k}`), sortFs, 28, 420));
-    const sortText = sortTexts[Math.max(0, SORTS.indexOf(view.sort))];
+    const sortTexts = sorts.map((text) => fitText(text, sortFs, 28, 420));
+    const sortText = sortTexts[Math.max(0, sortAt)];
     const sortW = Math.max(300, ...sortTexts.map((s) => glyphsOf(s.text, s.fs) + 170));
-    const cbText = fitText(T("roster.merge"), cbFs, 24, 400);
+    const cbText = fitText(check, cbFs, 24, 400);
     const cbW = 131 + glyphsOf(cbText.text, cbText.fs) + 46;
     // The segmented prefab keeps its three adjoining slots; composed groups use SPACE.l. Search and order share
     // UICharacterCollection/SeletControl/TopMenu/SearchBtn/Btn_Normal's own 150 x 116-unit body. Sort and order
@@ -72,14 +84,21 @@ export function toolbarLayout(view, { title = T("roster.title"), left = -1270, r
     const h = CONTROL.toolbar.h, iconW = 150;
     const nativeH = 116;
     const tools = row([{ w: iconW, h: nativeH }, { w: sortW, h: nativeH }, { w: iconW, h: nativeH }], { gap: SPACE.m });
-    const groups = row([{ w: cbW, h }, { w: 3 * segW, h }, { w: 3 * segW, h }, tools], { gap: SPACE.l });
+    const groups = row([{ w: cbW, h }, ...filters.map(() => ({ w: 3 * segW, h })), tools], { gap: SPACE.l });
     const cbLeft = right - groups.w, offset = (box) => ({ ...box, x: box.x + cbLeft });
-    const boxes = groups.boxes.slice(0, 3).map(offset);
-    boxes.push(...tools.boxes.map((box) => offset({ ...box, x: groups.boxes[3].x + box.x })));
+    const lead = 1 + filters.length;  // the checkbox and the filters come before the tools
+    const boxes = groups.boxes.slice(0, lead).map(offset);
+    boxes.push(...tools.boxes.map((box) => offset({ ...box, x: groups.boxes[lead].x + box.x })));
     const centre = (box) => box.x + box.w / 2;
-    if (cbLeft >= titleEnd || segW === 170) return { segW, segLabels, sortText, sortW, cbText, cbW,
-      order: centre(boxes[5]), sort: centre(boxes[4]), search: centre(boxes[3]),
-      seg1: boxes[1].x + boxes[1].w, seg2: boxes[2].x + boxes[2].w, cbLeft, titleFs, boxes };
+    const fits = cbLeft >= titleEnd;
+    if (fits || segW === 170) {
+      const ends = filters.map((_, i) => boxes[1 + i].x + boxes[1 + i].w);
+      return { segW, segLabels, sortText, sortW, cbText, cbW,
+        order: centre(boxes.at(-1)), sort: centre(boxes.at(-2)), search: centre(boxes.at(-3)),
+        seg1: ends[0], seg2: ends[1], cbLeft, titleFs, boxes, fits,
+        // per filter: where its right edge is and its three captions
+        filters: ends.map((end, i) => ({ right: end, labels: segLabels.slice(3 * i, 3 * i + 3) })) };
+    }
   }
   return null;
 }
@@ -118,8 +137,19 @@ export function toggleHits(view, lay, segY = 720 - 219 - 50.2) {
   ];
 }
 
-// Shared complete UICharacterCollection toolbar; callers retain their own list and title.
-export function toolbarTree(collection, checkbox, view, searching, lay = toolbarLayout(view)) {
+// Where the toolbar's controls stand in SeletControl's units (y up from TopMenu's origin): their visual centre line.
+export const TOOLBAR_CENTRE_Y = -219 - 50.2;  // UICharacterCollection/SeletControl/TopMenu/FilterBtn's authored centre line
+
+// What a toolbar shows of its state: one entry per filter of the layout (its node's name and the active segment), the
+// checkbox, the sort button's funnel (a display setting filters the list) and the order arrow. The roster's own, from its view.
+export const rosterToolbarState = (view) => ({
+  filters: [{ name: "ModFilter", active: { all: 0, mods: 1, none: 2 }[view.mods] },
+    { name: "RecruitFilter", active: { all: 0, yes: 1, no: 2 }[view.recruit] }],
+  checked: view.merged, filtered: filtering(view.filters), ascending: view.order !== "desc" });
+
+// Shared complete UICharacterCollection toolbar; callers retain their own list and title. ``state``: what it shows
+// (``rosterToolbarState``), for a list popup's own.
+export function toolbarTree(collection, checkbox, view, searching, lay = toolbarLayout(view), state = rosterToolbarState(view)) {
   const menu = clone(find(collection, "SeletControl/TopMenu"));
   // segment filters: the game's All / STRIKER / SPECIAL control with our words in the same colours
   const segFilter = (name, labels, active, right) => {
@@ -142,22 +172,20 @@ export function toolbarTree(collection, checkbox, view, searching, lay = toolbar
     return f;
   };
   find(menu, "FilterBtn").active = false;
-  menu.children.push(
-    segFilter("ModFilter", lay.segLabels.slice(0, 3), { all: 0, mods: 1, none: 2 }[view.mods], lay.seg1),
-    segFilter("RecruitFilter", lay.segLabels.slice(3), { all: 0, yes: 1, no: 2 }[view.recruit], lay.seg2));
+  menu.children.push(...state.filters.map(({ name, active }, i) => segFilter(name, lay.filters[i].labels, active, lay.filters[i].right)));
   // search: the game's toggle, pressed while the search box is open
   const search = find(menu, "SearchBtn");
   find(search, "Btn_Normal").active = !searching;
   find(search, "Btn_Pressed").active = searching;
   // sort: the current key, and the funnel in blue while a display setting filters the list
   const sort = find(menu, "SortBtn");
-  sort.children = sort.children.map((c) => c.name === "Btn_Normal" ? sortBody(collection, lay.sortText, lay.sortW, filtering(view.filters)) : c);
+  sort.children = sort.children.map((c) => c.name === "Btn_Normal" ? sortBody(collection, lay.sortText, lay.sortW, state.filtered) : c);
   // order: one arrow, down for descending (the prefab holds both, Icon_Up flipped)
   const orderBtn = find(menu, "OrderBtn");
-  orderBtn.children = orderBtn.children.map((c) => c.name === "Btn_Normal" ? orderBody(collection, view.order !== "desc") : c);
+  orderBtn.children = orderBtn.children.map((c) => c.name === "Btn_Normal" ? orderBody(collection, state.ascending) : c);
   // The sprite's own pivot supplies its local centre; every state is centred on the same row, without hand offsets.
-  const centreY = -219 - 50.2; // UICharacterCollection/SeletControl/TopMenu/FilterBtn's authored centre line stays.
-  for (const [control, box] of [[search, lay.boxes[3]], [sort, lay.boxes[4]], [orderBtn, lay.boxes[5]]]) {
+  const centreY = TOOLBAR_CENTRE_Y; // the prefab's authored centre line stays.
+  for (const [control, box] of [[search, lay.boxes.at(-3)], [sort, lay.boxes.at(-2)], [orderBtn, lay.boxes.at(-1)]]) {
     control.pos = [box.x + box.w / 2, centreY];
     for (const state of control.children) {
       const body = state.widgets.find((widget) => "sprite" in widget);
@@ -176,7 +204,7 @@ export function toolbarTree(collection, checkbox, view, searching, lay = toolbar
   cb.children = cb.children.filter((c) => c.name !== "Locale_Text");
   for (const c of cb.children) {
     c.children = (c.children || []).filter((k) => k.name === "Check");
-    c.active = (c.name === "Type_ON") === view.merged;
+    c.active = (c.name === "Type_ON") === state.checked;
   }
   cb.children.push(node("Label", [131, 0], [label(lay.cbText.text, lay.cbText.fs, "#484e52/1.00", lay.cbW - 131, 50 * lay.cbText.lines, { pivot: 3, depth: 31 })]));
   menubar.children.push(cb);

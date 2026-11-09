@@ -163,7 +163,9 @@ for (const locale of LOCALES) test(`popup footer captions share one size and fit
 // --- segments: the roster's six and the list popup's three ---
 for (const locale of LOCALES) test(`the roster's six segments and the popup's three share one size in ${locale}`, async () => {
   const roster = await source("roster-widgets.js"), popup = await source("popup.js");
-  assert.match(roster, /fitGroup\(\["seg\.all", "seg\.mods", "seg\.noMods", "seg\.all", "seg\.recruit", "seg\.noRecruit"\]\.map\(\(k\) => T\(k\)\), segFs, 22, segW - 26, 2, \{ maxH: 96 \}\)/);
+  // the roster's two filters' six captions go through toolbarFit, which fits every filter's captions as one group
+  assert.match(roster, /filters: \[\["seg\.all", "seg\.mods", "seg\.noMods"\], \["seg\.all", "seg\.recruit", "seg\.noRecruit"\]\]\.map\(\(keys\) => keys\.map\(\(k\) => T\(k\)\)\)/);
+  assert.match(roster, /fitGroup\(filters\.flat\(\), segFs, 22, segW - 26, 2, \{ maxH: 96 \}\)/);
   assert.match(popup, /fitGroup\(segs\.map\(\(key\) => T\(key\)\), 44, 26, segW - 30, 2, \{ maxH: 96 \}\)/);
   document.documentElement.lang = locale;
   for (const [segW, segFs] of [[230, 44], [210, 40], [200, 36], [190, 34], [180, 32], [170, 30]]) {
