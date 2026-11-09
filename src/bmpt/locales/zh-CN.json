@@ -86,6 +86,7 @@
 			"none": "无",
 			"failed": "无法读取 3D 模型",
 			"unfit": "无法自动适配",
+			"crossCharacter": "跨角色模型，可能造成崩坏",
 			"action": {
 				"idle": "待机",
 				"reaction": "互动",

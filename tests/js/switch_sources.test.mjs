@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
 import {
-  modelSource, modelUrl, appliedKey, appliedOf, availableTab, candidates, configuredKey, coreOf, costumeCandidates, hasAsset, hasKind, overwrittenOf, partsOf, popupMode, primaryKind, previewBase, previewChanged, previewKey, sourceOf, switchKindOf,
+  modelSource, modelUrl, appliedKey, appliedOf, availableTab, candidates, configuredKey, coreOf, costumeCandidates, costumeHold, crossCandidates, crossModels, hasAsset, hasKind, overwrittenOf, partsOf, popupMode, primaryKind, previewBase, previewChanged, previewKey, sourceOf, switchKindOf,
 } from "../../src/bmpt/web/js/switch-sources.js";
 
 const part = (kind, applied, extra = {}) => ({ file: `/game/${kind}-${applied}.bundle`, kind, applied, crc: "ok", ...extra });
@@ -358,6 +358,59 @@ test("the 3D model offers the student's other models as costumes, field-mode mod
   assert.equal(sourceOf("v:np0045"), "variant:np0045");
   // the portrait keeps its own rules: other variants' portrait mods, never models
   assert.ok(candidates(fam, v, "spr").every((c) => c.kind !== "variant" || c.variant.spr));
+});
+
+test("other students' models stay out of the normal list and retain saved cross choices", () => {
+  const fam = family(), v = fam.variants[0];
+  fam.variants.forEach((o) => { o.family = fam.key; }); v.model = "hoshino_original";
+  fam.variants[1].model = "hoshino_swimsuit";
+  const npc = { key: "ch0171", family: "yukino", model: "ch0171_enemy", playable: false };
+  const field = { key: "field", family: "yukino", fieldModel: "ch0171_field" };
+  const roster = [fam, { key: "yukino", variants: [npc, field, { key: "portrait", family: "yukino", spr: "portrait" }] }];
+  const verdicts = { hoshino_swimsuit: "ok", ch0171: "preview" };
+  assert.deepEqual(candidates(fam, v, "model", verdicts, roster), candidates(fam, v, "model", verdicts));
+  assert.deepEqual(crossModels(roster, v).map((o) => o.key), ["ch0171", "field"]);
+  assert.deepEqual(crossModels(roster, field), [], "field-only models have no destination slot");
+  for (const property of ["configured", "previewSources"]) {
+    v[property] = { model: "variant:ch0171" };
+    const choices = candidates(fam, v, "model", verdicts, roster);
+    assert.deepEqual(choices.map((c) => c.key), ["self", "v:hoshino_swimsuit", "v:ch0171"]);
+    assert.equal(choices.at(-1).cross, true);
+    assert.equal(choices.at(-1).previewOnly, undefined);
+    assert.equal(popupMode(fam, v, "model", true, roster).start, "v:ch0171");
+    assert.equal(modelSource(v), "variant:ch0171");
+    assert.deepEqual(candidates(fam, v, "spr", verdicts, roster), candidates(fam, v, "spr", verdicts));
+    assert.deepEqual(candidates(fam, v, "lobby", verdicts, roster), candidates(fam, v, "lobby", verdicts));
+    delete v[property];
+  }
+});
+
+test("cross model hits are ordered and capped, flag pending cards, and omit hard refusals", () => {
+  const v = { key: "slot", family: "own", model: "slot" };
+  const variants = Array.from({ length: 70 }, (_, i) => ({ key: `npc${i}`, family: "other", fieldModel: `ch${i}` }));
+  const roster = [{ variants }];
+  const hits = crossCandidates(roster, v, { npc0: "refused", npc1: "preview", npc2: "ok" }, {
+    compare: (a, b) => Number(a.key.slice(3)) - Number(b.key.slice(3)), exclude: ["v:npc3"],
+  });
+  assert.equal(hits.length, 64);
+  assert.deepEqual(hits.slice(0, 3).map((c) => c.key), ["v:npc1", "v:npc2", "v:npc4"]);
+  assert.equal(hits.at(-1).key, "v:npc65");
+  assert.ok(hits.every((c) => c.cross && !c.greyed));
+  assert.ok(hits.slice(0, 2).every((c) => !c.pending && !c.previewOnly));
+  assert.ok(hits.slice(2).every((c) => c.pending));
+  assert.deepEqual(crossCandidates(roster, v, null, { match: (o) => o.key === "npc69" }).map((c) => c.key), ["v:npc69"]);
+});
+
+test("cross preview verdicts allow Apply while same-student previews and hard refusals stay blocked", () => {
+  const v = { key: "slot", family: "own", model: "slot" };
+  const fam = { variants: [v, { key: "sibling", family: "own", model: "sibling" }] };
+  for (const [verdict, ownHold, crossHold] of [["ok", null, null], ["preview", "unfit", null],
+    ["refused", "unfit", "unfit"], [null, null, "pending"]]) {
+    assert.equal(costumeHold(fam, v, "v:sibling", { sibling: verdict }), ownHold);
+    assert.equal(costumeHold(fam, v, "v:cross", { cross: verdict }), crossHold);
+  }
+  assert.equal(costumeHold(fam, v, "self", {}), null);
+  assert.equal(costumeHold(fam, v, "m:mod", {}), null);
 });
 
 test("split model slots offer dependency mods and judge every slot part", async () => {
