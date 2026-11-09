@@ -1,0 +1,93 @@
+name: Windows 构建
+
+# Builds the Windows GUI for a pre-release and attaches the EXE and MD5 to that pre-release's draft release.
+# Manual only. No workflow artifacts: draft releases and their assets are visible only to users with push access.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Pre-release tag with a draft release, e.g. 0.7.0-alpha.28
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: windows-build-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    timeout-minutes: 120
+    env:
+      PYTHON_VERSION: '3.12'
+      RELEASE_TAG: ${{ inputs.tag }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - name: Validate Draft Pre-release
+        run: |
+          $ErrorActionPreference = "Stop"
+          $Pattern = '\A(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*\z'
+          if ($env:RELEASE_TAG -cnotmatch $Pattern) {
+            throw "Only a MAJOR.MINOR.PATCH-PRERELEASE tag may build a Windows pre-release."
+          }
+          $ReleaseJson = gh release view "$env:RELEASE_TAG" --repo "$env:GITHUB_REPOSITORY" --json tagName,isDraft,isPrerelease
+          if ($LASTEXITCODE -ne 0) { throw "No release found for $env:RELEASE_TAG; create its draft with scripts/release.sh first." }
+          $Release = $ReleaseJson | ConvertFrom-Json
+          if ($Release.tagName -cne $env:RELEASE_TAG -or $Release.isDraft -ne $true -or $Release.isPrerelease -ne $true) {
+            throw "The release for $env:RELEASE_TAG is not a draft pre-release."
+          }
+
+      - name: Checkout Release Tag
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: refs/tags/${{ inputs.tag }}
+          persist-credentials: false
+
+      - name: Setup Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          architecture: 'x64'
+          check-latest: true
+
+      - name: Validate Checkout
+        run: |
+          $ErrorActionPreference = "Stop"
+          $Version = (python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])").Trim()
+          if ($LASTEXITCODE -ne 0) { throw "Cannot read the project version." }
+          if ($Version -cne $env:RELEASE_TAG) { throw "Project version $Version differs from tag $env:RELEASE_TAG." }
+          $Tagged = (git rev-parse --verify --quiet "refs/tags/$env:RELEASE_TAG^{commit}")
+          $Head = (git rev-parse HEAD)
+          if (-not $Tagged -or $Tagged.Trim() -cne $Head.Trim()) { throw "Tag $env:RELEASE_TAG does not point at the checked-out commit." }
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@38f3f104447c67c051c4a08e39b64a148898af3a # v4
+        with:
+          version: "0.13.1"
+
+      - name: Build Windows GUI
+        run: ./scripts/build_windows.ps1 -Target Gui -Python "$env:PYTHON_VERSION"
+
+      - name: Upload EXE and MD5 to Draft Release
+        run: |
+          $ErrorActionPreference = "Stop"
+          $ReleaseJson = gh release view "$env:RELEASE_TAG" --repo "$env:GITHUB_REPOSITORY" --json tagName,isDraft,isPrerelease
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $Release = $ReleaseJson | ConvertFrom-Json
+          if ($Release.tagName -cne $env:RELEASE_TAG -or $Release.isDraft -ne $true -or $Release.isPrerelease -ne $true) {
+            throw "The release is no longer a draft pre-release."
+          }
+          $Name = "Blue-Archive-Modding-and-Patching-Tool-$env:RELEASE_TAG-windows-x64.exe"
+          $Executable = Get-Item -LiteralPath (Join-Path "dist" $Name)
+          $Checksum = Get-Item -LiteralPath (Join-Path "dist" "$Name.md5")
+          $Expected = "{0}  {1}" -f (Get-FileHash -LiteralPath $Executable.FullName -Algorithm MD5).Hash.ToLowerInvariant(), $Name
+          if ((Get-Content -LiteralPath $Checksum.FullName -Raw).Trim() -cne $Expected) {
+            throw "The Windows executable checksum does not match."
+          }
+          gh release upload "$env:RELEASE_TAG" --repo "$env:GITHUB_REPOSITORY" --clobber $Executable.FullName $Checksum.FullName
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
