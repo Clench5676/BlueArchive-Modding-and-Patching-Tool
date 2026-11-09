@@ -148,6 +148,37 @@ def test_a_face_goes_with_the_head_whatever_its_eye_bones():
     assert np.allclose(ma.refit(target, source, flat).vertices, flat.vertices)  # same head: the face keeps its shape
 
 
+def test_a_skirt_on_the_biped_root_and_a_bag_off_a_prop_go_with_the_body():
+    """BL-128: Sena (Casual)'s skirt hangs off Bip001 and her bag off a prop node Sena lacks. On a slot whose prefab
+    rests 0.74 m aside, the refit took the skirt nowhere (no anchor on the body chain) and the bag stayed with the
+    prefab's root: both were left beside her. The skirt is refitted by the Biped's root; the bag, carried by the spine
+    under the source's clips, goes with the spine as one branch, never with a loose slot bone that happens to rest near it."""
+    def body(x, prop):
+        bones = [("Bip001", 0, (x, 1.0, 0), (0, 0, 0, 1)), ("Bip001 Pelvis", 1, (0, 0, 0), (0, 0, 0, 1)),
+                 ("Bip001 Spine", 2, (0, 0.2, 0), (0, 0, 0, 1)), ("bone_skirt_F_00", 1, (0, -0.1, 0.1), (0, 0, 0, 1))]
+        if prop:
+            bones += [("prop_root", 0, (0, 0, 0), (0, 0, 0, 1)), ("bone_bag_00", 5, (x + 0.2, 1.2, 0), (0, 0, 0, 1))]
+        else:
+            bones += [("Glow", 0, (x + 0.2, 1.2, 0), (0, 0, 0, 1))]
+        return _skeleton(bones)
+    source, target = body(0.0, True), body(0.74, False)
+    skirt, bag, spine = source.first("bone_skirt_F_00"), source.first("bone_bag_00"), source.first("Bip001 Spine")
+    assert ma.fit_anchor(target, source, skirt) == (source.first("Bip001"), target.first("Bip001"))
+    flat = _flat([[0.0, 0.9, 0.1], [0.2, 1.2, 0.0]], [skirt, bag])
+    moved = ma.refit(target, source, flat, shape="moved")
+    assert np.allclose(moved.vertices[0], [0.74, 0.9, 0.1])  # the skirt moves with the body
+    # the source's clips: the spine bends and the bag goes along with it
+    turn = (0, 0, np.sin(np.pi / 8), np.cos(np.pi / 8))
+    local = {spine: ma.trs((0, 0.2, 0), turn, (1, 1, 1))}
+    pose = source.world(local)
+    pose[bag] = pose[spine] @ np.linalg.inv(source.world()[spine]) @ source.world()[bag]
+    carried = ma.carriers(target, source, flat, [pose])
+    assert carried == {source.first("prop_root"): spine}  # the prop's branch goes as one
+    mapping = ma.map_bones(target, source, [skirt, bag], carried)
+    assert mapping[bag] == target.first("Bip001 Spine")  # not the slot's Glow resting where the bag does
+    assert ma.fit_anchor(target, source, bag, carried) == (spine, target.first("Bip001 Spine"))
+
+
 def test_the_costume_is_taken_where_its_bindposes_draw_it():
     """BL-128: a mesh whose vertex data lies 1 m off its renderer's space, its bindposes bringing it back (Koharu's);
     the costume is the shape the prefab draws, not the vertex data in the renderer's space."""
