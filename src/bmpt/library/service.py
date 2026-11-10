@@ -4161,7 +4161,7 @@ class ModLibrary:
         with model_lock("costume"):
             result = adapt(index=index, resolver=resolver, target_files=list(staged.values()),
                            target_dev=target_dev, source_files=[p for p in sources if p.name in chosen],
-                           source_dev=dev, open_writable=Bundle.load, strict=not (preview or cross), physics=physics,
+                           source_dev=dev, open_writable=Bundle.load, physics=physics,
                            halo=cross)
         if report is not None and result.plan.unfit:
             report["unfit"] = {"source": "stretch", "adapted": f"{result.plan.stretch:.2f}", "own": f"{result.plan.own:.2f}"}
@@ -4204,14 +4204,13 @@ class ModLibrary:
 
     def _costume_cross(self, slot: Any, other: str) -> bool:
         """Whether another variant's costume on the model of ``slot`` (its variant, None when not known) is another
-        student's (BL-131): a deliberate choice, so such a pair is applied past the stretch limit too (its "preview"
-        verdict allows it) and carries its own halo. A costume of the same student never does either (BL-122)."""
+        student's (BL-131) and carries its own halo. Every pair may be applied past the stretch limit (BL-138)."""
         return slot is not None and self._variant(other).family != slot.family
 
-    def _costume_allowed(self, verdict: dict[str, Any] | None, cross: bool) -> bool:
-        """Whether a pair's saved verdict lets it be built for the game: unchecked or "ok", and for another student's
-        costume also "preview" (past the stretch limit); never a refusal."""
-        return verdict is None or bool(verdict["ok"]) or (cross and bool(verdict.get("preview")))
+    def _costume_allowed(self, verdict: dict[str, Any] | None) -> bool:
+        """Whether a pair's saved verdict lets it be built for the game: unchecked, "ok" or "preview" (past the
+        stretch limit); never a refusal."""
+        return verdict is None or verdict["ok"] or verdict.get("preview")
 
     def _verdicts(self) -> dict[str, dict[str, Any]]:
         path = self.root / "costume-verdicts.json"
@@ -4240,7 +4239,7 @@ class ModLibrary:
     def costume_verdict(self, variant_key: str, other: str, pin: Pin | None = None) -> dict[str, Any] | None:
         """Whether another variant's costume on a variant's model was built and exported for the current build
         signature (the program, the official bytes of both models, the save options): {"ok", "reason", "detail",
-        "at"}, plus "preview" for a pair past the stretch limit (previewed, never applied), or None when not judged
+        "at"}, plus "preview" for a pair past the stretch limit (still offered), or None when not judged
         yet. A pair the Switch 3D Model card offers has one with ok or preview (BL-122)."""
         signature, _ = self._costume_signature(variant_key, other, self._current(pin))
         return self._verdicts().get(signature)
@@ -4269,7 +4268,7 @@ class ModLibrary:
         signature, targets = self._costume_signature(variant_key, other, pin)
         verdict = self._verdicts().get(signature)
         cross = self._costume_cross(self._variant(variant_key), other)
-        if not self._costume_allowed(verdict, cross):  # refused or preview only: never built for the game
+        if not self._costume_allowed(verdict):  # refused: never built for the game
             raise ServiceError("source_unsupported", source=verdict.get("reason") or source)
         made = next((record for record in self._records.values() if self._optimized_from(record) == source
                      and record["kind"] == "model" and self._target_of(record) == variant_key), None)
@@ -4322,7 +4321,7 @@ class ModLibrary:
             for path in built:
                 atomic_copy(path, folder / path.name)
             done.write_text(json.dumps({"parts": [path.name for path in built], "unfit": report.get("unfit")}))
-        if report.get("unfit"):  # past the stretch limit: shown, never applied
+        if report.get("unfit"):  # past the stretch limit: still offered, with a caution
             self._save_verdict(signature, False, "stretch", report["unfit"], preview=True)
         previews = sorted((p for p in folder.parent.iterdir() if p.is_dir()), key=lambda p: p.stat().st_mtime, reverse=True)
         for stale in previews[COSTUME_PREVIEWS:]:
@@ -4519,7 +4518,7 @@ class ModLibrary:
                     if not own or not targets:
                         raise ServiceError("game_file_not_found", variant=variant_key)
                     verdict = self._verdicts().get(self._costume_signature(variant_key, other, pin)[0])
-                    if not self._costume_allowed(verdict, cross):  # refused or preview only: never saved or written
+                    if not self._costume_allowed(verdict):  # refused: never saved or written
                         raise ServiceError("source_unsupported", source=verdict.get("reason") or source)
                     kinds = {"model": own.lower()}
                     change.configure(kinds)

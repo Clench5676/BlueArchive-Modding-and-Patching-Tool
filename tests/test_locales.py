@@ -63,6 +63,16 @@ def test_every_ui_language_ships():
     assert "th-TH" in TRANSLATIONS
 
 
+@pytest.mark.parametrize("code", [REFERENCE, *TRANSLATIONS])
+def test_past_limit_costume_hint(code):
+    model = load(code)["webui"]["model"]
+    assert model["beyondFit"] and model["beyondFit"] != model["unfit"]
+    if code == "en-US":
+        assert model["beyondFit"] == "Beyond auto-fit, may clip or distort"
+    if code == "zh-CN":
+        assert model["beyondFit"] == "\u8d85\u51fa\u81ea\u52a8\u9002\u914d\u8303\u56f4\uff0c\u53ef\u80fd\u7a7f\u6a21\u6216\u53d8\u5f62"
+
+
 @pytest.mark.parametrize("code", TRANSLATIONS)
 def test_same_keys_as_en_us(code):
     reference, translation = flatten(load(REFERENCE)), flatten(load(code))

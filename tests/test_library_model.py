@@ -1000,10 +1000,9 @@ def test_official_roster_partial_and_complete_mod_preflight(tmp_path, monkeypatc
     assert not failures, failures[:30]
 
 
-def test_another_students_costume_is_applied_past_the_stretch_limit(model_env, monkeypatch):
-    """BL-131: another student's costume (chosen through the switch's search) is a deliberate choice: its "preview"
-    verdict (past the stretch limit) is applied and optimized, built non-strict and with its halo (``cross``); the same
-    student's "preview" pair stays shown only (BL-122), and a refusal stays a refusal."""
+def test_every_costume_is_applied_past_the_stretch_limit(model_env, monkeypatch):
+    """BL-138: every costume with a "preview" verdict (past the stretch limit) is applied and optimized. Another
+    student's carries its halo (``cross``, BL-131); the same student's does not, and a refusal stays a refusal."""
     env = model_env
     model_bundle(env.game_dir, core='hoshino_swimsuit', prefab=True, part='000', payload=b'swim prefab')
     model_bundle(env.game_dir, core='hina_original', prefab=True, part='000', payload=b'hina prefab')
@@ -1024,7 +1023,7 @@ def test_another_students_costume_is_applied_past_the_stretch_limit(model_env, m
         return {target: out if target == targets[0] else self._official_or_current(target, pin) for target in targets}
 
     monkeypatch.setattr(ModLibrary, '_stage_costume', stage)
-    # unchecked: the same student's pair builds strict and without a halo of its own, another student's not
+    # unchecked: the same student's pair builds without a halo of its own
     assert library.apply('hoshino', 'variant:hoshino_swimsuit', kind='model').files
     assert built.pop() == ('hoshino_swimsuit', False, False, False)
     library.restore('hoshino', kind='model')
@@ -1033,11 +1032,14 @@ def test_another_students_costume_is_applied_past_the_stretch_limit(model_env, m
     for other in ('hoshino_swimsuit', 'hina'):
         library._save_verdict(library._costume_signature('hoshino', other, pin)[0], False, 'stretch', preview=True)
     assert library.costume_verdict('hoshino', 'hina')['preview'] is True
-    with pytest.raises(ServiceError, match='source_unsupported'):
-        library.apply('hoshino', 'variant:hoshino_swimsuit', kind='model')
-    with pytest.raises(ServiceError, match='source_unsupported'):
-        library.optimize_costume('hoshino', 'variant:hoshino_swimsuit', 'Swimsuit')
-    assert built == [] and library.configured('hoshino').get('model') is None
+    assert library.costume_verdict('hoshino', 'hoshino_swimsuit')['preview'] is True
+    assert library.apply('hoshino', 'variant:hoshino_swimsuit', kind='model').files
+    assert built.pop() == ('hoshino_swimsuit', False, False, False)
+    assert library.configured('hoshino').get('model') == 'variant:hoshino_swimsuit'
+    assert library.costume_preview('hoshino', 'hoshino_swimsuit') and built.pop() == ('hoshino_swimsuit', True, False, False)
+    assert library.optimize_costume('hoshino', 'variant:hoshino_swimsuit', 'Swimsuit')['mod']
+    assert built.pop() == ('hoshino_swimsuit', False, True, False)
+    library.restore('hoshino', kind='model')
     result = library.apply('hoshino', 'variant:hina', kind='model')
     assert result.files and built.pop() == ('hina', False, False, True)
     assert library.configured('hoshino').get('model') == 'variant:hina'
@@ -1050,9 +1052,12 @@ def test_another_students_costume_is_applied_past_the_stretch_limit(model_env, m
     assert library.optimize_costume('hina', 'variant:hoshino', 'Hoshino') == {'unneeded': True, 'reason': 'no_gain'}
     assert built.pop() == ('hoshino', False, True, True) and not [m for m in library.mods() if m.target == 'hina']
     library.restore('hoshino', kind='model')
-    library._save_verdict(library._costume_signature('hoshino', 'hina', pin)[0], False, 'static model')
-    with pytest.raises(ServiceError, match='source_unsupported'):
-        library.apply('hoshino', 'variant:hina', kind='model')
+    for other in ('hoshino_swimsuit', 'hina'):
+        library._save_verdict(library._costume_signature('hoshino', other, pin)[0], False, 'static model')
+        with pytest.raises(ServiceError, match='source_unsupported'):
+            library.apply('hoshino', f'variant:{other}', kind='model')
+        with pytest.raises(ServiceError, match='source_unsupported'):
+            library.optimize_costume('hoshino', f'variant:{other}', 'Refused')
     assert built == []
 
 
@@ -1070,14 +1075,14 @@ def test_costume_verdicts_are_kept_per_build_signature(model_env, monkeypatch):
     assert library.costume_verdict('hoshino', 'hoshino_swimsuit') is None
 
     def refused(self, other, targets, directory, log, pin, *, preview=False, report=None, cross=False):
-        raise model_adapt.refuse('stretch', adapted=8.84, own=5.85)
+        raise model_adapt.refuse('rest pose')
 
     monkeypatch.setattr(ModLibrary, '_stage_costume', refused)
     with pytest.raises(ServiceError, match='source_unsupported'):
         library.costume_preview('hoshino', 'hoshino_swimsuit')
     verdict = library.costume_verdict('hoshino', 'hoshino_swimsuit')
     assert (verdict['ok'], verdict['reason'], verdict['detail']) == (
-        False, 'stretch', {'source': 'stretch', 'adapted': '8.84', 'own': '5.85'})
+        False, 'rest pose', {'source': 'rest pose'})
     # another library over the same root reads it; a new program build keeps it, a new costume rule judges again (BL-134)
     assert ModLibrary(env.root, Catalog(game, None), object(), env.settings).costume_verdict(
         'hoshino', 'hoshino_swimsuit')['ok'] is False
@@ -1091,12 +1096,12 @@ def test_costume_verdicts_are_kept_per_build_signature(model_env, monkeypatch):
     # bounded, newest kept; an unreadable file reads as none
     monkeypatch.setattr(service, 'COSTUME_VERDICTS', 2)
     for i in range(3):
-        library._save_verdict(f'signature-{i}', False, 'stretch')
+        library._save_verdict(f'signature-{i}', False, 'rest pose')
     assert sorted(library._verdicts()) == ['signature-1', 'signature-2']
-    # a pair judged unfit or refused is never saved as a choice or written, mods on or off
+    # a refused pair is never saved as a choice or written, mods on or off
     library._save_verdict(library._costume_signature('hoshino', 'hoshino_swimsuit', library.current_pin())[0], False,
-                          'stretch', preview=True)
-    assert library.costume_verdict('hoshino', 'hoshino_swimsuit')['preview'] is True
+                          'rest pose')
+    assert not library.costume_verdict('hoshino', 'hoshino_swimsuit').get('preview')
     for enabled in (True, False):
         if not enabled:
             library.toggle(False, True)

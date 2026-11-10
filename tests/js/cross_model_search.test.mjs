@@ -15,6 +15,47 @@ const functionSource = (name) => {
 };
 const flush = async () => { for (let i = 0; i < 100; i++) await Promise.resolve(); };
 
+for (const locale of LOCALES) test(`past-limit own cards allow Apply and Optimize Physics with their caution (${locale})`, async () => {
+  const ui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8")).webui;
+  const v = { key: "slot", family: "own", model: "slot" };
+  const sibling = (key) => ({ key, family: "own", model: key });
+  const fam = { variants: [v, sibling("past"), sibling("refused"), sibling("unchecked")] };
+  const cards = [...Sources.candidates(fam, v, "model", { past: "preview", refused: "refused" }),
+    Sources.crossCard({ key: "cross", family: "other", model: "cross" }, { cross: "preview" })];
+  const applied = [], optimized = [];
+  let popup;
+  const ctx = vm.createContext({ ...Sources, fam, otherStudents: [], switchThumbnails: {}, switchPopupPage: 1, pageToken: 1,
+    popupKind: "model", popupSeg: 0, pending: "v:past", busy: false, platform: "mac", variant: () => v, modsOn: () => true,
+    candidates: () => cards, lazyThumbnail: () => ({ start: () => null }), candidateLabel: (c) => c.variant.key,
+    fullName: (o) => o.key, originalName: (o) => o.key, isSpecial: () => false, gameFile: () => "model.bundle",
+    baseName: (s) => s, sizeText: () => "0", crcOf: () => null, appliedKey: Sources.appliedKey,
+    T: (key) => key.split(".").reduce((o, part) => o?.[part], ui), COLOUR: { success: "green" },
+    optimizeSource: (c) => c.kind === "variant" ? `variant:${c.variant.key}` : "official", optimizedCopy: () => null,
+    listPopup: async (options) => { popup = options; }, applyCandidate: (key) => applied.push(key),
+    runOptimize: (c) => optimized.push(c.key),
+  });
+  vm.runInContext(functionSource("drawPopup"), ctx);
+  await ctx.drawPopup();
+  const item = (key) => popup.items.find((it) => it.key === `v:${key}`);
+  const actions = (key) => popup.details(item(key)).actions.filter(([label]) => [ui.popup.apply, ui.model.optimize].includes(label));
+  assert.equal(item("past").hint, ui.model.beyondFit);
+  assert.equal(item("cross").hint, ui.model.crossCharacter);
+  for (const key of ["past", "cross"]) {
+    assert.equal(actions(key).length, 2);
+    for (const [, run, disabled, , hint] of actions(key)) {
+      assert.equal(disabled, false);
+      if (key === "past") assert.equal(hint, ui.model.beyondFit);
+      run();
+    }
+  }
+  assert.deepEqual(applied, ["v:past", "v:cross"]);
+  assert.deepEqual(optimized, ["v:past", "v:cross"]);
+  for (const key of ["refused", "unchecked"]) for (const [, , disabled, , hint] of actions(key)) {
+    assert.equal(disabled, true);
+    assert.equal(hint, ui.model.unfit);
+  }
+});
+
 for (const locale of LOCALES) test(`the model search shares picker matching and appends roster-ordered hits (${locale})`, () => {
   const ui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8")).webui;
   const v = { key: "slot", family: "own", model: "slot" };
@@ -130,7 +171,7 @@ test("Apply uses the verdict gate for cross previews, same-student previews and 
     const at = source.indexOf("const costumeBlock ="), end = source.indexOf("// After a background check", at);
     vm.runInContext(source.slice(at, end) + functionSource("applyCandidate"), ctx);
     await ctx.applyCandidate(`v:${key}`, "model");
-    const allowed = verdict === "ok" || (key === "cross" && verdict === "preview") || (key === "sibling" && verdict == null);
+    const allowed = verdict === "ok" || verdict === "preview" || (key === "sibling" && verdict == null);
     assert.equal(calls.length, Number(allowed), `${key}: ${verdict}`);
     if (allowed) assert.deepEqual(calls[0], { method: "actions.apply", variant: "slot", kind: "model", source: `variant:${key}` });
   }

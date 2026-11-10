@@ -1,5 +1,5 @@
 // The hover hint (web/js/hover-hint.js): the game's description tooltip box (UIDescriptionTooltip/Default) above a
-// greyed control, in every shipped language. The prefab's numbers are the Global client's (2026-04-06 tooltip bundle).
+// control, in every shipped language. The prefab's numbers are the Global client's (2026-04-06 tooltip bundle).
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { LOCALES, installFitPage, text } from "./helpers/fit_canvas.mjs";
@@ -21,7 +21,7 @@ test("the hint takes the description tooltip's numbers", () => {
   assert.deepEqual([style.padX, style.maxW, style.padTop, style.padBottom, style.fs, style.color], [62, 710, 46, 60, 42, "#6a7b8f/1.00"]);
 });
 
-for (const locale of LOCALES) for (const key of ["model.unfit", "model.crossCharacter"]) test(`${key} fits the tooltip above the control (${locale})`, () => {
+for (const locale of LOCALES) for (const key of ["model.unfit", "model.crossCharacter", "model.beyondFit"]) test(`${key} fits the tooltip above the control (${locale})`, () => {
   globalThis.document.documentElement.lang = locale;
   const style = hintStyle(PREFAB), words = text(locale, key);
   // the details panel's Apply (a row near the bottom) and the screen's Apply card (the row's right end)
@@ -40,8 +40,18 @@ for (const locale of LOCALES) for (const key of ["model.unfit", "model.crossChar
     const [bg, label] = hintTree(hint, style).children;
     assert.deepEqual([bg.widgets[0].sprite, bg.widgets[0].w_, bg.widgets[0].h_], ["Common_Tooltip_Bg", hint.w, hint.h]);
     assert.equal(label.widgets[0].text, hint.text);
+    assert.equal(hint.text.replace(/\s/g, ""), words.replace(/\s/g, ""), "the complete hint fits");
     assert.ok(label.widgets[0].w_ >= hint.textW);
+    assert.ok(label.widgets[0].h_ >= hint.textH);
     assert.equal(hintTree(hint, style).children.length, 2, "no arrow");
+    // main.py's minimum and default windows, plus a large window; the fixed stage scales with the window.
+    for (const [windowW, windowH] of [[960, 540], [1600, 900], [2560, 1440]]) for (const density of [1, 2]) {
+      const scale = Math.min(windowW / 1920, windowH / 1080) * density;
+      assert.ok((cx - half) * scale >= 0 && (cx + half) * scale <= windowW * density);
+      assert.ok((cy - hint.h * S / 2) * scale >= 0 && (cy + hint.h * S / 2) * scale <= windowH * density);
+      assert.ok(hint.textW * S * scale <= label.widgets[0].w_ * S * scale);
+      assert.ok(hint.textH * S * scale <= label.widgets[0].h_ * S * scale);
+    }
   }
 });
 

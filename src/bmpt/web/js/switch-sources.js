@@ -67,8 +67,8 @@ export const overwrittenOf = (v, kind = "spr") => partsOf(v, kind).some((f) => !
 // overwritten) }.
 // The 3D model lists every other model of the student as a costume at once (BL-136); only a pair that was built and
 // exported for these files can be applied (``costumes``: model.costumes' verdicts, "ok" | "preview" | "refused" |
-// null): "ok" pairs are offered, the others (past the stretch limit, not checked yet, refused) for a preview only
-// (``previewOnly``), and a refused pair cannot be chosen as the preview either (``refused``, BL-122).
+// null): "ok" and "preview" pairs are offered, the latter with a caution (``beyondFit``). Unchecked or refused pairs
+// are for a preview only (``previewOnly``), and a refused pair cannot be chosen as the preview either (``refused``, BL-122).
 // Another student's model (BL-131, ``families``: roster.list's) is offered through the popup's search, or all at once
 // with "Show other students" (crossCandidates), save the one already chosen, listed last (``cross``).
 export function candidates(fam, v, kind = "spr", costumes = null, families = null) {
@@ -86,9 +86,10 @@ export function candidates(fam, v, kind = "spr", costumes = null, families = nul
   const list = [
     { key: "self", kind: "self", core: own, variant: v },
     ...mods.filter((m) => m.target === v.key).map(mod),
-    // previewOnly: past the stretch limit ("preview"), not checked yet or refused: shown, never applied
+    // beyondFit: past the stretch limit; previewOnly: not checked yet or refused, shown but never applied
     ...others.map((o) => ({ key: `v:${o.key}`, kind: "variant", core: coreOf(o, kind), variant: o,
-      ...(kind === "model" && costumes?.[o.key] !== "ok" ? { previewOnly: true } : {}),
+      ...(kind === "model" && costumes?.[o.key] === "preview" ? { beyondFit: true }
+        : kind === "model" && costumes?.[o.key] !== "ok" ? { previewOnly: true } : {}),
       ...(kind === "model" && costumes?.[o.key] === "refused" ? { refused: true } : {}) })),
     ...(across && kind === "spr" ? mods.filter((m) => m.target !== v.key).map(mod) : []),
     ...chosenCross.map((o) => crossCard(o, costumes)),
@@ -146,11 +147,11 @@ export function crossCandidates(families, v, costumes = null, { match = () => tr
 export const crossExtras = (c, caution) => (c.cross
   ? { hint: caution, terms: [c.variant.fileId, c.variant.model, c.variant.fieldModel] } : {});
 // what keeps a 3D candidate from being applied by its costume check: null, "pending" (another student's model before
-// its verdict) or "unfit" (refused, or the student's own model past the stretch limit: shown, never applied, BL-122)
+// its verdict) or "unfit" (refused: shown, never applied, BL-122)
 export function costumeHold(fam, v, key, costumes) {
   if (typeof key !== "string" || !key.startsWith("v:")) return null;
   const other = key.slice(2), verdict = costumes?.[other];
-  if (fam.variants.some((o) => o.key === other)) return verdict && verdict !== "ok" ? "unfit" : null;
+  if (fam.variants.some((o) => o.key === other)) return verdict != null && verdict !== "ok" && verdict !== "preview" ? "unfit" : null;
   return verdict === "ok" || verdict === "preview" ? null : verdict == null ? "pending" : "unfit";
 }
 

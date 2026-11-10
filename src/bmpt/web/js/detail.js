@@ -360,8 +360,8 @@ function runCross() {
     if (handled !== crossWanted) runCross();
   });
 }
-// what keeps a 3D source from being applied by its check (switch-sources.js costumeHold): a costume past the stretch
-// limit or refused ("unfit": shown, never applied), another student's model before its verdict ("pending")
+// what keeps a 3D source from being applied by its check (switch-sources.js costumeHold): a refused costume
+// ("unfit": shown, never applied), another student's model before its verdict ("pending")
 const costumeBlock = (v, kind, key) => (kind === "model" ? costumeHold(fam, v, key, costumeState.get(v.key)) : null);
 const unfitCostume = (v, kind, key) => !!costumeBlock(v, kind, key);
 // After a background check: the open Switch 3D Model popup lists what it found, where it was scrolled to.
@@ -818,7 +818,7 @@ function hits(view, leftHost, rightHost) {
     const hold = costumeBlock(variant(), sk, shownSource(variant(), sk)), unfit = hold === "unfit";
     apply.disabled = !unfit && (!!hold || !sk || !coreOf(variant(), sk) || busy || isApplied(variant(), sk, shownSource(variant(), sk)));
     if (!coreOf(variant(), sk)) apply.setAttribute("aria-description", T("import.reason.no_target"));
-    // a costume shown for a preview only: greyed, the reason on hover (the click does nothing, applyCandidate); another
+    // a refused costume: greyed, the reason on hover (the click does nothing, applyCandidate); another
     // student's model waits for its check
     if (unfit) { apply.setAttribute("aria-disabled", "true"); apply.setAttribute("aria-description", T("model.unfit")); attachHint(apply, T("model.unfit")); }
   }
@@ -1473,7 +1473,8 @@ async function drawPopup(scroll = 0) {
       inUse: false, applied: !!coreOf(v, kind) && c.key === applied, fav: c.fav, isNew: c.kind === "mod" && c.mod.fresh && c.key !== applied, src: c,
       inUseText: c.mod?.incomplete ? T("mods.incomplete") : coreOf(v, kind) && c.key === applied ? T("status.applied") : null,
       dim: c.greyed,
-      // another student's model (BL-131): chosen and previewed like any card, with a word of caution
+      // past-limit own costumes and another student's model (BL-131) carry their caution on hover
+      ...(c.beyondFit ? { hint: T("model.beyondFit") } : {}),
       ...crossExtras(c, T("model.crossCharacter")),
       badge: c.greyed ? { ...GREYED_BADGE(), ...(!coreOf(v, kind) && c.kind === "self" ? { text: T("import.reason.no_target") } : {}) }
         : c.mod?.incomplete ? { text: T("mods.incomplete"), color: COLOUR.warning, ink: "#ffffff" } : null,
@@ -1512,7 +1513,7 @@ async function drawPopup(scroll = 0) {
         title: T(isSpecial(v) ? "special.background" : kind === "spr" ? "info.title.portrait" : `info.title.${kind}`),
         fields: [[T("field.file"), baseName(file)], [T("field.size"), sizeText(size)], [T("field.status"), [status && T(status), error && T(`error.${error.code}`, error.params)].filter(Boolean).join("\n") || "—", statusColor],
           [T("field.crc"), crc ? T(crc[0]) : "—", crc?.[1] && `${crc[1]}/1.00`]],
-        actions: [[T("popup.apply"), () => applyCandidate(c.key, kind), !coreOf(v, kind) || isApplied(v, kind, c.key) || !!c.greyed || !!c.previewOnly || !!c.pending || busy, "apply", c.previewOnly ? T("model.unfit") : null],
+        actions: [[T("popup.apply"), () => applyCandidate(c.key, kind), !coreOf(v, kind) || isApplied(v, kind, c.key) || !!c.greyed || !!c.previewOnly || !!c.pending || busy, "apply", c.previewOnly ? T("model.unfit") : c.beyondFit ? T("model.beyondFit") : null],
           [T(platform === "mac" ? "open.mac" : "open.win"), () => reveal(file)],
           ...(c.kind === "mod" ? [[T("compatibility.check"), async () => {
             let rebuilt = false;
@@ -1522,7 +1523,7 @@ async function drawPopup(scroll = 0) {
           ...(kind === "model" && optimizeSource(c) ? [optimizedCopy(c, v)
             ? [T("model.optimizedGo"), () => { pending = `m:${optimizedCopy(c, v).id}`; renderPopup(); }]
             : [T("model.optimize"), () => runOptimize(c, v), busy || !!c.greyed || !!c.previewOnly || !!c.pending || !coreOf(v, kind), "secondary",
-              c.previewOnly ? T("model.unfit") : T("model.optimizeHint")]] : []),
+              c.previewOnly ? T("model.unfit") : c.beyondFit ? T("model.beyondFit") : T("model.optimizeHint")]] : []),
           c.kind === "mod"
             ? [T("btn.delete"), async () => {
               if (!(await removeMod(c.id))) return;
