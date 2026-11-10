@@ -11,6 +11,7 @@ import * as ModSwitch from "./mod-switch.js";
 import * as NGUI from "./ngui.js";
 import * as Popup from "./popup.js";
 import * as Prompts from "./prompts.js";
+import * as Impact from "./update-impact.js";
 import * as Roster from "./roster.js";
 import * as StudentHall from "./student-hall.js";
 import * as Settings from "./settings.js";
@@ -523,7 +524,7 @@ async function firstRun() {
     } }).catch((err) => console.error("update check", err));
   }
   await popups;
-  Tours.start({ info, ready: sessionReady, blocked: () => Loading.busy() || ModSwitch.current()?.busy || Prompts.isBusy()
+  Tours.start({ info, ready: sessionReady, blocked: () => Loading.busy() || ModSwitch.current()?.busy || Prompts.isBusy() || Impact.isBusy()
     || !!document.getElementById("bamt-recovery") }).catch((err) => console.warn("feature tour", err));
 }
 
@@ -553,6 +554,7 @@ function dataDirNotice() {
 //   - the asset consent;
 //   - the Spine licence notice, only while no answer was ever stored;
 //   - the scan consent, while it is unanswered and a game folder is known;
+//   - the impact of a game update on the library's mods, once per resource version (update-impact.js);
 //   - the prompts of mods back to official and of mods outside the library, if the start scan is already in;
 //     a later scan shows them once no other popup is open, only with the scan consent
 function startPopups() {
@@ -569,6 +571,7 @@ function startPopups() {
       if (info.spineConsent === true) await route();
     }],
     ["scan", () => due("scan") && Consent.scan($("consent"))],
+    ["impact", () => info.gameFound && Impact.check()],
     ["drift", () => Prompts.start("drift", info)],
     ["untracked", () => Prompts.start("untracked", info)],
   ];
@@ -616,6 +619,7 @@ async function start() {
     libraryChanged(null);
   });
   Prompts.init({ names: variantNames });
+  Impact.init({ names: variantNames });
   const settingsChanged = async (key, prefs) => {
     ctx.prefs = prefs;
     previewCache.configure(prefs);

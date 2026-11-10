@@ -660,6 +660,7 @@ class ModLibrary:
         self._names_cache: dict[str, tuple[int, dict[str, Path]]] = {}
         self._originals_cache: tuple[Any, dict[str, int]] | None = None
         self._backfill_misses: set[tuple] = set()
+        self._impacts: dict[tuple, str] = {}  # judged impacts of game updates (_impact)
         self._maps_cache: tuple[tuple, Any] | None = None
         self.profiles = Profiles(self.root)
         self.profiles.gate = self._check_writes  # no change of the configuration while writes are refused
@@ -3107,6 +3108,132 @@ class ModLibrary:
         record = self._record(mod_id)
         return self._built_against({path.name: path for path in self._paths(record)}, pin or self.current_pin(),
                                    "now")
+
+    # --- what a game update did under each mod ---
+
+    def _impact(self, record: dict[str, Any], pin: Pin | None) -> str:
+        """What a game update did to the official parts a mod was built against (``fingerprint.impact``), held
+        against its core's parts in ``pin``. Kept per mod files and official part names (a rebuilt part has another
+        CRC in its name), so a toggle reaching many entries reads each core once. Never raises."""
+        if pin is None:
+            return fingerprint.UNKNOWN
+        try:
+            files = {path.name: path for path in self._paths(record)}
+            if not files:
+                return fingerprint.UNKNOWN
+            targets = self._core_targets(files, pin)
+            key = (record["id"], tuple(sorted(self._mod_hashes(record).items())), pin.key,
+                   tuple(sorted(str(path) for path in targets)))
+            known = self._impacts.get(key)
+            if known is not None:
+                return known
+            if not targets:
+                # a variant whose core moved since (the catalog maps it elsewhere) is no target gone
+                mapped = (self._core_map(pin).core(self._target_of(record), record["kind"])
+                          if record["kind"] != "other" else None)
+                moved = bool(mapped) and mapped.lower() != core_of(next(iter(files)))
+                found = fingerprint.GONE if self._read_built_against(record) and not moved else fingerprint.UNKNOWN
+            else:
+                built = self._read_built_against(record) or self._backfill_built_against(record, pin)
+                found = fingerprint.impact(built, self._built_against(files, pin, "now")) if built else \
+                    fingerprint.UNKNOWN
+            if len(self._impacts) >= 4096:
+                self._impacts.clear()
+            self._impacts[key] = found
+            return found
+        except Exception as error:  # noqa: BLE001 - a judgement that cannot be made tells nothing
+            log_failure(logger, logging.DEBUG, "No impact judged for the mod", error)
+            return fingerprint.UNKNOWN
+
+    def _hold(self, pin: Pin, target: str) -> bool:
+        """Whether an On or its Retry holds an entry configured with ``target`` instead of writing it: a mod whose
+        official rig a game update changed (``fingerprint.RIG_CHANGED``), so the write would carry its old rig or
+        layout onto the new parts. Remapping or updating the mod records its new baseline and ends the hold; Apply
+        Mod Configuration and a switch on the detail screen write it as asked."""
+        if not target.startswith("mod:") or target[4:] not in self._records:
+            return False
+        return self._impact(self._records[target[4:]], pin) == fingerprint.RIG_CHANGED
+
+    def resource_version(self, pin: Pin) -> str | None:
+        """The resource version of an install (``discovery.resource_version``), None when it cannot be read."""
+        from ..gameassets.discovery import resource_version
+
+        try:
+            return resource_version(list(pin.dirs))
+        except OSError:
+            return None
+
+    def update_impact(self, pin: Pin | None = None, *, force: bool = False,
+                      progress: Callable[[dict], None] | None = None) -> dict[str, Any]:
+        """The impact summary of a game update on an install (the current one by default): when its resource version
+        differs from the last one seen there (or none was recorded yet), every library mod classified from the
+        fingerprint it was built against (``fingerprint.impact``). ``due`` is True when a mod needs telling (rebuilt,
+        new parts, changed rig or gone); a check with nothing to tell records the version as seen at once, one with
+        something waits for ``impact_seen``. ``force`` classifies whatever was seen. Read-only otherwise; never
+        fails on one mod."""
+        pin = pin or self.current_pin()
+        if pin is None:
+            return {"due": False, "install": None, "version": None, "previous": None, "mods": [], "counts": {}}
+        version = self.resource_version(pin)
+        config = self.profiles.read() or {}
+        seen = ((config.get("folders") or {}).get(pin.key) or {}).get("resource") or {}
+        previous = seen.get("version") if isinstance(seen, dict) else None
+        out: dict[str, Any] = {"due": False, "install": pin.key, "version": version, "previous": previous,
+                               "mods": [], "counts": {name: 0 for name in fingerprint.IMPACTS}}
+        if version is None or (version == previous and not force):
+            return out
+        configured = {entry.get("source") for entry in
+                      (((config.get("folders") or {}).get(pin.key) or {}).get("configured") or {}).values()}
+        with self._lock:
+            entries = {entry.id: entry for entry in self.mods()}
+            records = [self._records[mod_id] for mod_id in entries if mod_id in self._records]
+        for i, record in enumerate(records, 1):
+            if progress:
+                progress({"current": i, "total": len(records), "step": "import.step.check"})
+            with self._lock:
+                if record["id"] not in self._records:
+                    continue
+                found = self._impact(record, pin)
+            out["counts"][found] += 1
+            if found in (fingerprint.UNCHANGED, fingerprint.UNKNOWN):
+                continue
+            entry = entries[record["id"]]
+            out["mods"].append({"id": entry.id, "label": entry.label, "target": entry.target, "kind": entry.kind,
+                                "core": entry.core, "impact": found,
+                                "configured": f"mod:{entry.id}" in configured})
+        out["due"] = bool(out["mods"])
+        if not out["due"] and not force:
+            self.impact_seen(pin.key, version)
+        return out
+
+    def impacts(self, ids: Sequence[str], pin: Pin | None = None) -> list[dict[str, str]]:
+        """The impact of a game update under each of the mods ``ids`` (``fingerprint.impact``), in the install
+        ``pin`` (the current one by default); ids of no mod are left out."""
+        pin = pin or self.current_pin()
+        out = []
+        for mod_id in ids:
+            with self._lock:
+                record = self._records.get(mod_id)
+                if record is not None:
+                    out.append({"id": mod_id, "impact": self._impact(record, pin)})
+        return out
+
+    def impact_seen(self, install: str, version: str) -> None:
+        """Record a resource version of an install as seen (its impact summary shown or not needed)."""
+        if not isinstance(install, str) or not isinstance(version, str) or not version:
+            raise ServiceError("bad_params", key="version")
+        if self._writes_refused():
+            return
+
+        def change(data: dict) -> bool:
+            folder = data["folders"].setdefault(install, {})
+            if (folder.get("resource") or {}).get("version") == version:
+                return False
+            folder["resource"] = {"version": version, "seen": now()}
+            return True
+
+        with _errors("impact_seen"):
+            self.profiles.update(change)
 
     def _backfill_built_against(self, record: dict[str, Any], pin: Pin | None) -> dict | None:
         """A fingerprint for a mod stored without one, from evidence alone: the official files of its core (the
@@ -5709,16 +5836,22 @@ class ModLibrary:
     # --- the Enable Mods switch ---
 
     def intent(self) -> dict[str, Any]:
-        """The switch's shared intent: {enabled, toggled, unfinished: {pending, left, stuck}} over this data
-        directory's known installs; ``profiles_unreadable`` raised as is."""
+        """The switch's shared intent: {enabled, toggled, unfinished: {pending, left, stuck, held}, held: [{install,
+        core, variant, kind, source}]} over this data directory's known installs; ``profiles_unreadable`` raised as is."""
         config = self.profiles.read()
         keys = {pin.key for pin in self.installs()}
         counts = {why: 0 for why in profiles_mod.WHY}
+        held = []
         for item in (config or {}).get("unfinished", []):
             if item["install"] in keys:
                 counts[item["why"]] += 1
+                if item["why"] == "held":
+                    entry = ((((config or {}).get("folders") or {}).get(item["install"]) or {}).get("configured")
+                             or {}).get(item["core"]) or {}
+                    held.append({"install": item["install"], "core": item["core"], "variant": entry.get("variant"),
+                                 "kind": entry.get("kind"), "source": entry.get("source")})
         return {"enabled": profiles_mod.enabled(config), "toggled": (config or {}).get("toggled"),
-                "unfinished": counts}
+                "unfinished": counts, "held": held}
 
     def status(self) -> dict[str, Any]:
         """What the switch's snapshot needs from the library, from names and profiles.json only: the known
@@ -5746,7 +5879,7 @@ class ModLibrary:
             config = self.profiles.read()
             out.update(self.intent())
         except ServiceError as error:
-            out.update(enabled=True, toggled=None, unfinished={why: 0 for why in profiles_mod.WHY},
+            out.update(enabled=True, toggled=None, unfinished={why: 0 for why in profiles_mod.WHY}, held=[],
                        reason=error.code, file=error.params.get("file"))
             config = None
         keys = {pin.key for pin in pins}
@@ -5886,7 +6019,8 @@ class ModLibrary:
             with _errors("toggle"):
                 self.profiles.update(intent)
             logger.info("Mods %s: %d entries to reach", "on" if enabled else "off", len(plan))
-        result = {"done": [], "adopted": [], "failed": [], "stuck": [], "left": [], "skipped": [], "dropped": []}
+        result = {"done": [], "adopted": [], "failed": [], "stuck": [], "left": [], "skipped": [], "dropped": [],
+                  "held": []}
         outcomes: dict[tuple[str, str], str | None] = {}
         cores: set[str] = set()
         kinds: set[str] = set()
@@ -5934,7 +6068,8 @@ class ModLibrary:
         if stop is not None:
             raise stop
         return ToggleResult(bool(enabled), result["done"], result["adopted"], result["failed"], result["stuck"],
-                            result["left"], result["skipped"], result["dropped"], sorted(cores), sorted(kinds))
+                            result["left"], result["skipped"], result["dropped"], sorted(cores), sorted(kinds),
+                            result["held"])
 
     def _save_outcomes(self, outcomes: dict[tuple[str, str], str | None]) -> None:
         """The unfinished list after reached entries: an entry that holds its intent leaves, another keeps (or gets)
@@ -6057,6 +6192,11 @@ class ModLibrary:
         if entry.overwritten and not entry.configured:
             outcome["stuck"] = item
             return outcome, "stuck", item
+        if not drift and self._hold(pin, target):
+            # A game update changed the official rig under the mod: no On or Retry writes it until it is remapped or
+            # updated, or the user applies it as it is.
+            outcome["held"] = {**item, "mod": target[4:]}
+            return outcome, "held", item
         mod_count = len(self._records)
         try:
             self._switch(pin, core, target, log)

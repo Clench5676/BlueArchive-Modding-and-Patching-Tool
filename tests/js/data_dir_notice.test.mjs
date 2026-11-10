@@ -55,6 +55,7 @@ function bootHarness(info) {
     document: { getElementById: () => null },
     Consent: { init() {}, show: async () => true, spine: async () => true, scan: async () => {} },
     Prompts: { start: async () => {}, isBusy: () => false },
+    Impact: { check: async () => null, isBusy: () => false },
     Update: { check: async () => null },
     route: async () => {},
   };
@@ -67,7 +68,7 @@ test('the start shows the notice once, ahead of the other start popups', async (
   const h = bootHarness({ gameFound: true, dataDirWritable: false, dataDir: '/app/data', consent: true, spineConsent: true });
   await h.boot();
   assert.equal(h.sequences.length, 1);
-  assert.deepEqual(h.sequences[0], ['data-dir', 'consent', 'spine', 'scan', 'drift', 'untracked']);
+  assert.deepEqual(h.sequences[0], ['data-dir', 'consent', 'spine', 'scan', 'impact', 'drift', 'untracked']);
   assert.equal(h.messages.length, 1);
   assert.equal(h.messages[0].title, 'quit.title');
 });
@@ -76,7 +77,7 @@ test('a writable data folder leaves the start popups as they were', async () => 
   for (const dataDirWritable of [true, undefined]) {
     const h = bootHarness({ gameFound: true, dataDirWritable, dataDir: '/app/data' });
     await h.boot();
-    assert.deepEqual(h.sequences, [['consent', 'spine', 'scan', 'drift', 'untracked']]);
+    assert.deepEqual(h.sequences, [['consent', 'spine', 'scan', 'impact', 'drift', 'untracked']]);
     assert.deepEqual(h.messages, []);
   }
 });

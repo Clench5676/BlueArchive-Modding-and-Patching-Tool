@@ -274,3 +274,4 @@ class ToggleResult(JsonResult):
     dropped: list[dict]
     cores: list[str]
     kinds: list[str]
+    held: list[dict] = field(default_factory=list)  # entries an update's rig change holds ({..., mod})

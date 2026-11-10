@@ -332,6 +332,21 @@ test("the help's lines: game folders, Retry and Details, independent of scan con
   for (const l of MS.helpLines(counts)) assert.ok(!/^mods\./.test(l.text), `a string for ${l.text}`);
 });
 
+test("entries a game update's rig change holds: their own help line and Details, never a Retry; counted by the dot", () => {
+  const s = base({ held: 2, heldEntries: [{ install: "/a", core: "a_spr", variant: "a", kind: "spr" }, { install: "/a", core: "b_home", variant: "b", kind: "lobby" }] });
+  const lines = MS.helpLines(s);
+  assert.deepEqual(lines.filter((l) => l.button).map((l) => [l.text, l.button.id]), [["On hold, rig changed: 2", "held"]]);
+  assert.equal(MS.view(s).dot, true);
+  assert.equal(MS.view(base()).dot, false);
+  assert.deepEqual(MS.heldLines(s, (e) => e.variant.toUpperCase()),
+    ["A, Portrait", "B, Memorial Lobby", S("mods.impact.hint")]);
+  const many = base({ heldEntries: Array.from({ length: 8 }, (_, i) => ({ core: `c${i}_spr`, variant: `c${i}`, kind: "spr" })) });
+  assert.deepEqual(MS.heldLines(many).slice(-2), ["+2", S("mods.impact.hint")]);
+  // a toggle that held entries says so
+  const r = MS.resultSummary({ enabled: true, done: [{}], held: [{ core: "a_spr" }] });
+  assert.ok(r.lines.includes("On hold, rig changed: 1"));
+});
+
 test("a toggle's end: silence, or the result popup naming each failed entry with its error string", () => {
   assert.deepEqual(MS.resultSummary({ enabled: false, done: [{}, {}], adopted: [], failed: [], stuck: [], left: [], skipped: [{}] }), null);
   assert.deepEqual(MS.resultSummary({ enabled: true, done: [] }), null);
@@ -938,6 +953,9 @@ test("the tray's Back to Official opens the drift prompt: two buttons and no way
   answers["mods.entries"] = [entry("airi_spr", "reset", { configured: "mod:a" }), entry("hina_home", "updated", { configured: "mod:b" }), entry("noa_spr", "untracked")];
   answers["mods.restoreDrift"] = "job-drift";
   jobs["job-drift"] = { state: "done", result: { done: [{ install: GLOBAL, core: "airi_spr" }], failed: [], skipped: [], stuck: [] } };
+  // a game update changed the rig under Hina's mod: its card starts unticked
+  answers["mods.impact"] = "job-impact";
+  jobs["job-impact"] = { state: "done", result: { mods: [{ id: "a", impact: "rebuilt" }, { id: "b", impact: "rig_changed" }] } };
   const opened = MS.trayOpen({ view: "drift" });
   await drawn(prompt, "apply");
   assert.ok(action(prompt, "keep"), "Keep as Is");
@@ -945,9 +963,8 @@ test("the tray's Back to Official opens the drift prompt: two buttons and no way
   assert.ok(press("Escape").defaultPrevented, "Escape does nothing");
   assert.equal(prompt.hidden, false);
   const cards = () => walk(prompt).filter((e) => e.dataset?.key);
-  assert.deepEqual(cards().map((c) => [c.dataset.key, c.getAttribute("aria-checked")]), [[`${GLOBAL}|airi_spr`, "true"], [`${GLOBAL}|hina_home`, "true"]]);
-  cards().find((c) => c.dataset.key === `${GLOBAL}|hina_home`).click();
-  await until(() => cards().find((c) => c.dataset.key === `${GLOBAL}|hina_home`)?.getAttribute("aria-checked") === "false", "unticked");
+  assert.deepEqual(cards().map((c) => [c.dataset.key, c.getAttribute("aria-checked")]), [[`${GLOBAL}|airi_spr`, "true"], [`${GLOBAL}|hina_home`, "false"]]);
+  assert.deepEqual(called("mods.impact").at(-1), { ids: ["a", "b"] });
   action(prompt, "apply").click();
   await opened;
   await until(() => called("mods.restoreDrift").length === 1, "mods.restoreDrift");
@@ -1360,4 +1377,53 @@ test("Settings Spine value row opens the same read-only notice in every locale w
     for (const key of Object.keys(answers)) delete answers[key];
     Object.assign(answers, saved);
   }
+});
+
+// --- the impact of a game update (update-impact.js) and the drift prompt's held cards ---
+
+const Impact = await import("../../src/bmpt/web/js/update-impact.js");
+
+test("an update's impact: one count line per kind with mods, the held mods named, then how the hold ends", () => {
+  assert.equal(Impact.summary(null), null);
+  assert.equal(Impact.summary({ due: false, counts: { rebuilt: 1 } }), null);
+  const mods = [
+    { id: "1", target: "hoshino", core: "ch0101_spr", kind: "spr", impact: "rig_changed" },
+    { id: "2", target: "airi", core: "ch0200_spr", kind: "spr", impact: "rebuilt" },
+  ];
+  const r = Impact.summary({ due: true, mods, counts: { unchanged: 4, rebuilt: 1, rig_changed: 1, new_parts: 0, gone: 0, unknown: 2 } },
+    (e) => e.variant[0].toUpperCase() + e.variant.slice(1));
+  assert.equal(r.title, "Game Updated");
+  assert.deepEqual(r.lines, ["Rig changed, on hold: 1", "Hoshino, Portrait", S("mods.impact.hint"), "Rebuilt, same rig: 1",
+    "Not affected: 4", "Not determined: 2"]);
+  const many = Impact.summary({ due: true, counts: { rig_changed: 9 },
+    mods: Array.from({ length: 9 }, (_, i) => ({ id: `${i}`, target: `v${i}`, core: `c${i}_spr`, kind: "spr", impact: "rig_changed" })) });
+  assert.deepEqual(many.lines.slice(-2), ["+3", S("mods.impact.hint")]);
+  // every kind has its string in every locale
+  try {
+    for (const lang of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
+      const ui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url))).webui;
+      I18n.setStrings(lang, flat({ webui: ui }));
+      const counts = Object.fromEntries(Impact.KINDS.map((k) => [k, 1]));
+      const all = Impact.summary({ due: true, counts, mods: [] });
+      assert.equal(all.lines.length, Impact.KINDS.length, lang);
+      for (const line of [all.title, ...all.lines]) assert.ok(line && !/^mods\./.test(line) && line.includes(line === all.title ? "" : "1"), `${lang} ${line}`);
+      for (const k of ["held", "heldTitle", "heldBadge"]) assert.ok(typeof ui.mods[k] === "string" && ui.mods[k].length > 0, `${lang} ${k}`);
+    }
+  } finally { I18n.setStrings("en-US", strings); }
+});
+
+test("the drift prompt asks the impacts of the mods its entries are configured with and marks the held ones", () => {
+  const entries = [
+    { install: "/a", core: "a_spr", configured: "mod:1" },
+    { install: "/a", core: "b_spr", configured: "mod:2" },
+    { install: "/a", core: "c_spr", configured: "variant:x" },
+    { install: "/b", core: "a_spr", configured: "mod:1" },
+  ];
+  assert.deepEqual(Impact.configuredMods(entries), ["1", "2"]);
+  const held = Impact.heldKeys(entries, [{ id: "1", impact: "rig_changed" }, { id: "2", impact: "rebuilt" }]);
+  assert.deepEqual([...held], ["/a|a_spr", "/b|a_spr"]);
+  const items = P.heldCards([{ key: "/a|a_spr" }, { key: "/a|b_spr" }, { key: "/b|a_spr", disabled: true }], held);
+  assert.equal(items[0].badge.text, "Rig Changed");
+  assert.equal(items[1].badge, undefined);
+  assert.equal(items[2].badge, undefined, "a card that cannot be ticked keeps its own state");
 });
