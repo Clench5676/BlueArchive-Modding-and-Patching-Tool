@@ -694,7 +694,8 @@
 			"missingAnimations": "{name}, 필수 애니메이션 누락: {names}",
 			"ported": "현재 번들로 에셋 이식 완료",
 			"updateUnchecked": "호환성을 확인할 수 없습니다. 그래도 업데이트할까요?",
-			"forceUpdate": "현재 무결성에 문제가 없습니다. 그래도 강제로 업데이트하시겠습니까?"
+			"forceUpdate": "현재 무결성에 문제가 없습니다. 그래도 강제로 업데이트하시겠습니까?",
+			"rigChanged": "공식 추가 애니메이션: {n}, Mod에 없음"
 		},
 		"remap": {
 			"action": "업데이트",
@@ -715,7 +716,9 @@
 			"original": "원본",
 			"after": "복구 후",
 			"previewUnavailable": "미리보기 불가",
-			"unpainted": "미사용 빈 영역: {names}"
+			"unpainted": "미사용 빈 영역: {names}",
+			"official": "공식 영역: {names}",
+			"changed": "공식에서 다시 그린 영역: {names}"
 		},
 		"spine": {
 			"license": {

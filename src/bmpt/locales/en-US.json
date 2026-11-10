@@ -694,7 +694,8 @@
 			"missingAnimations": "{name}, required animations missing: {names}",
 			"ported": "Assets ported to current bundles",
 			"updateUnchecked": "Compatibility check unavailable. Update anyway?",
-			"forceUpdate": "Integrity checks found no problems. Are you sure you still want to force an update?"
+			"forceUpdate": "Integrity checks found no problems. Are you sure you still want to force an update?",
+			"rigChanged": "Official animations added: {n}, not in mod"
 		},
 		"remap": {
 			"action": "Update",
@@ -715,7 +716,9 @@
 			"original": "Original",
 			"after": "Repaired",
 			"previewUnavailable": "Preview unavailable",
-			"unpainted": "Unpainted unused regions: {names}"
+			"unpainted": "Unpainted unused regions: {names}",
+			"official": "Official regions: {names}",
+			"changed": "Regions redrawn by official: {names}"
 		},
 		"spine": {
 			"license": {

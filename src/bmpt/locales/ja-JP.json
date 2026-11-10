@@ -694,7 +694,8 @@
 			"missingAnimations": "{name}、必須アニメーション不足：{names}",
 			"ported": "現在のバンドルにアセットを移植済み",
 			"updateUnchecked": "互換性を確認できません。それでも更新しますか？",
-			"forceUpdate": "現在、整合性に問題はありません。それでも強制更新しますか？"
+			"forceUpdate": "現在、整合性に問題はありません。それでも強制更新しますか？",
+			"rigChanged": "公式で追加されたアニメーション：{n}、Mod に未収録"
 		},
 		"remap": {
 			"action": "更新",
@@ -715,7 +716,9 @@
 			"original": "元の Mod",
 			"after": "修復後",
 			"previewUnavailable": "プレビューを表示できません",
-			"unpainted": "未使用の空白領域：{names}"
+			"unpainted": "未使用の空白領域：{names}",
+			"official": "公式の領域：{names}",
+			"changed": "公式で描き直された領域：{names}"
 		},
 		"spine": {
 			"license": {
