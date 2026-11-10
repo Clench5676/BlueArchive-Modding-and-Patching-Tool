@@ -92,6 +92,7 @@
 			"failed": "无法读取 3D 模型",
 			"unfit": "无法自动适配",
 			"crossCharacter": "跨角色模型，可能造成崩坏",
+			"showOthers": "显示其他角色",
 			"action": {
 				"idle": "待机",
 				"reaction": "互动",
@@ -106,6 +107,7 @@
 			"optimizedGo": "查看已优化 Mod",
 			"optimizedName": "{name} - 优化版",
 			"optimizeUnneeded": "无需优化",
+			"optimizeNoGain": "暂无可用的物理优化",
 			"optimizeDone": "已优化并加入 Mod 仓库"
 		},
 		"visual": {

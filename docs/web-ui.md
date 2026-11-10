@@ -981,13 +981,31 @@ re-renders when the saved verdicts arrive and after each check, keeping its scro
 source (`family.get` drops it; the switch does not save it) and its `/asset/model` route answers 404 without building
 it again.
 
+Another student's model (BL-131) is a deliberate choice, built past the stretch limit as well and with its halo
+(`cross`); its "preview" verdict is applied like "ok". The switch's search finds those models (at most 64, the keys one
+`model.costumes` call takes), and the checkbox "Show other students" (`model.showOthers`) in the toolbar's left end lists
+all of them after the student's own cards instead: in the roster's name order (favourites first), the segment tabs, the
+search, the sort and the order applying to them as to the own cards, no cap. It is off at every App start and kept only
+in memory (switch-sources.js `showOthers`), across students and popups. The toolbar with the checkbox is the roster's
+(`roster-widgets.js` `toolbarFit`: the checkbox first, the sort button as wide as its longest key, the segments and type
+sizes stepping down until everything stands after the list's left edge); the portrait and lobby switches and every other
+list popup keep their toolbar as it was. A search's hits are judged at once; the models of the checkbox only as they come
+into view (the list's `tools.onView`, the signal that brings the thumbnails in): `model.costumes` in calls of at most 64
+keys, then `model.checkCostumes` one pair at a time, the cards scrolled out of view dropped from the queue. Every such
+card shows `model.crossCharacter` on hover and is drawn like any other card.
+
 Optimize Physics (BL-132) is an action of the switch's details panel on the official model and on another variant's
 costume (not on 3D mods). The switch itself builds a costume with Rule A only (`adapt(physics=False)`); the action
 builds it with the physics rules as well (`physics=True`: Rule B, the skirt chains as new bones of the slot) and keeps
 the result as a model mod of the variant (`optimized_from: "variant:<key>"`, named `model.optimizedName` after the
-costume, tagged `model.optimized` on its card). It answers "No optimization needed" (`model.optimizeUnneeded`) for the
-official model, whose own clips move its skirt, and when the build's measured choice is not Rule B (no rigid skirt
-chains, or Rule B past the stretch limit). A costume with a copy offers `model.optimizedGo` instead, which selects the
+costume, tagged `model.optimized` on its card). The leg-anchor groups the group choice set to `follow` (a costume's skirt
+bones driven by the slot's own) are judged again by pass-through: Rule A and Rule B are also built as if those groups
+were rigid, and the same choice compares them with the follow result, which they must beat within the same stretch ceiling
+(`model_adapt.hems`, rules named `regroup ...`); a build without `physics` never looks at them. It answers "No
+optimization needed" (`model.optimizeUnneeded`, reason `official`) for the official model, whose own clips move its skirt,
+and "No physics optimization available" (`model.optimizeNoGain`, reason `no_gain`) when the build's measured choice is
+neither Rule B nor a regrouped rule (no skirt chains to move, or no rule beating the default build within the stretch
+limit). A costume with a copy offers `model.optimizedGo` instead, which selects the
 copy; the copy offers no action. The button's hover hint (`model.optimizeHint`) names what it covers.
 
 A variant whose only model is a field-mode player prefab (`Field_Player_<dev>[_NonWeapon]` in the
@@ -1208,7 +1226,7 @@ stops the server (the page shows Closed); with `--serve` it gives `native_unavai
 | `ui.preview {variant, kind, source}` | stores a preview choice in `webui.json`, scoped to the install and variant; returns `previewSources`; never changes the application manifest or game files |
 | `model.costumes {variant, others}` | the verdicts of other variants' costumes on a variant's 3D model: `{other: "ok" \| "preview" \| "refused" \| null}` ("preview": past the stretch limit, shown, never applied; null: not checked yet); a pair outside the family, the variant itself or one with no model is "refused"; at most 64 `others` |
 | `model.checkCostumes {variant, others}` | job id (`costume-check`, not a writer): checks each pair to its end (`Services.costume_check`) and saves its verdict; result `{other: "ok" \| "preview" \| "refused"}`, a refusal of the moment "refused" and not saved |
-| `model.optimize {variant, source, name}` | job id (`model.optimize`, a library writer): Optimize Physics (BL-132) on `source`, `"official"` or `"variant:<key>"`; result `{mod}` (the copy, a model mod of the variant with `optimized_from`; an existing copy is returned) or `{unneeded: true}`; `name` (at most 200 characters) is the source as the screen shows it, the copy's name; a refused or preview-only pair is `source_unsupported` |
+| `model.optimize {variant, source, name}` | job id (`model.optimize`, a library writer): Optimize Physics (BL-132) on `source`, `"official"` or `"variant:<key>"`; result `{mod}` (the copy, a model mod of the variant with `optimized_from`; an existing copy is returned) or `{unneeded: true, reason: "official" | "no_gain"}`; `name` (at most 200 characters) is the source as the screen shows it, the copy's name; a refused or preview-only pair is `source_unsupported` |
 | `mods.state` | `{installs: [{id, key, server, folder, label, distinct, named}], current, enabled, available, reason, reasonParams, scan, explained, configured, pending, stuck, left, unfinished: {pending, left, stuck}, drift, untracked, damaged, sourceMissing, queued, scanned, tray, traySupported, busy, progress}` from the snapshot (above); `id` is the first 12 hex digits of the install key's SHA-1 (used in URLs), `named` tells a folder the settings name from a recorded one; `busy` while a toggle is queued or running or writes are queued for the classic window; `progress` is `{done, total}` of a running toggle |
 | `mods.sizes {kind}` | `{builtSize}` for `kind: "built"` or `{originalsSize}` for `kind: "originals"`, bytes measured on demand; Settings requests only the Mod Cache size; no size walks in `mods.state` |
 | `mods.toggle {enabled, expect}` | job id (`mods.toggle`): the switch over every known install, also Retry; `busy` while another toggle is queued or running, `classic_open` at submit; the job's refusals `state_changed`, `folder_changed`, `game_running`, `game_status_unavailable`, `steam_busy`, `classic_open`, `not_enough_space` |

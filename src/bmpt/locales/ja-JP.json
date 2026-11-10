@@ -92,6 +92,7 @@
 			"failed": "3Dモデルを読み込めません",
 			"unfit": "自動フィット不可",
 			"crossCharacter": "別キャラのモデル、表示が崩れる可能性あり",
+			"showOthers": "他の生徒を表示",
 			"action": {
 				"idle": "待機",
 				"reaction": "反応",
@@ -106,6 +107,7 @@
 			"optimizedGo": "最適化済み Mod を表示",
 			"optimizedName": "{name} - 最適化版",
 			"optimizeUnneeded": "最適化不要",
+			"optimizeNoGain": "利用できる物理最適化なし",
 			"optimizeDone": "最適化してライブラリに追加済み"
 		},
 		"visual": {

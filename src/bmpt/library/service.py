@@ -4133,7 +4133,8 @@ class ModLibrary:
         """The model slot ``targets`` (official copies) carrying the costume of ``other``'s model: changed parts built
         into ``directory``, the others as staged official copies. Reads official bytes only: the slot's own parts, the
         source model's files, and any other bundle the CAB index finds. ``physics``: Optimize Physics (BL-132), the
-        build may also choose Rule B; ``report["skirt"]`` says whether it did. ``cross``: another student's costume
+        build may also choose Rule B, or a rule built with the followed leg groups made rigid; ``report["physics"]`` says
+        whether it chose one of them. ``cross``: another student's costume
         (``_costume_cross``, BL-131), built past the stretch limit as well and carrying its halo."""
         from ..gameassets.model_adapt import adapt
 
@@ -4165,7 +4166,7 @@ class ModLibrary:
         if report is not None and result.plan.unfit:
             report["unfit"] = {"source": "stretch", "adapted": f"{result.plan.stretch:.2f}", "own": f"{result.plan.own:.2f}"}
         if report is not None:
-            report["skirt"] = result.hems is not None and result.hems.skirt is not None
+            report["physics"] = result.hems is not None and (result.hems.skirt is not None or result.hems.regrouped)
         output = directory / "output"
         output.mkdir(parents=True, exist_ok=True)
         reverse = {value: key for key, value in staged.items()}
@@ -4256,12 +4257,12 @@ class ModLibrary:
         """Optimize Physics (BL-132): a variant's model slot carrying ``source``'s costume ("variant:<key>") built with
         the physics rules (Rule B, the skirt chains as new bones), kept as a model mod of the variant named after
         ``name`` (the costume as the screen shows it): {"mod": id}, the copy made before when there is one. {"unneeded":
-        True} for the official model, whose own clips move its skirt, and for a costume the physics rules do not
-        improve within the stretch limit."""
+        True, "reason": ...} when there is nothing to build: "official" for the official model, whose own clips move its
+        skirt, and "no_gain" for a costume that no physics rule improves within the stretch limit."""
         pin = self._current(pin)
         self._variant(variant_key)
         if source == "official":
-            return {"unneeded": True}
+            return {"unneeded": True, "reason": "official"}
         if not isinstance(source, str) or not source.startswith("variant:"):
             raise ServiceError("source_unsupported", source=str(source))
         other = source[8:]
@@ -4279,8 +4280,8 @@ class ModLibrary:
         with temporary_directory(prefix=devmode.LIBRARY_STAGING_PREFIX) as temporary:
             replacements = self._stage_costume(other, targets, Path(temporary) / "model", no_log, pin, report=report,
                                                physics=True, cross=cross)
-            if not report.get("skirt"):
-                return {"unneeded": True}
+            if not report.get("physics"):
+                return {"unneeded": True, "reason": "no_gain"}
             built = {path.name: path for path in replacements.values() if path.parent.name == "output"}
             record = self._store(built, label, variant_key, "model", metadata={"optimized_from": source})
         return {"mod": record["id"]}
