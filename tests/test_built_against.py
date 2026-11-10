@@ -142,11 +142,15 @@ MOVED = [("page.png", (16, 16), [("body", -1, (8, 8), (4, 4), (4, 4), (0, 0), 0)
 def test_atlas_fingerprint_follows_the_layout_not_the_bytes():
     old = fingerprint.atlas(atlas_text(OLD).encode())
     assert old["regions"] == ["body"]
-    assert fingerprint.atlas(atlas_text(OLD, modern=True).encode()) == old  # another syntax, the same layout
+    assert old["text"] == atlas_text(OLD)  # the layout a texture-only mod is painted on, for a later remap
+    modern = fingerprint.atlas(atlas_text(OLD, modern=True).encode())
+    assert (modern["layout"], modern["regions"]) == (old["layout"], old["regions"])  # another syntax, the same layout
     moved = fingerprint.atlas(atlas_text(MOVED).encode())
     assert moved["layout"] != old["layout"] and moved["regions"] == ["body", "smile"]
     unreadable = fingerprint.atlas(b"\xff\xfe")
     assert unreadable == {"layout": hashlib.sha1(b"\xff\xfe").hexdigest(), "regions": None}
+    assert fingerprint.diff({"structure": None, "atlases": {"a": {**old, "text": None}}, "skeletons": {}, "textures": {}},
+                            {"structure": None, "atlases": {"a": old}, "skeletons": {}, "textures": {}})["atlases"] == {}
 
 
 def test_skeleton_fingerprint_names_the_animations_and_hashes_the_rig():

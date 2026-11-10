@@ -106,7 +106,7 @@ def test_repack_positions_rotations_trims_indices_and_page_changes(repacked):
                                       pack(old, art), pack(new, official_art))
     assert_pages(output, pack(new, expected_art))
     assert report == {"moved": ["added", "body", "face", "frame [0]", "frame [1]", "trim"],
-                      "added": [], "dropped": ["removed"], "upscaled": []}
+                      "added": [], "official": [], "changed": [], "dropped": ["removed"], "upscaled": []}
 
 
 @pytest.mark.parametrize("degrees", [0, 90, 180, 270])
@@ -146,7 +146,7 @@ def test_half_size_fixture_path_names_duplicates_and_per_axis_page_scales():
         assert output[f"current{i}.png"].crop((4, 4, 8, 8)).tobytes() == expected.tobytes()
     assert output["current0.png"].crop((10, 10, 14, 14)).tobytes() == mod["ch0261_home"].resize(
         (16, 16), Image.Resampling.LANCZOS).crop((2, 2, 6, 6)).tobytes()
-    assert report == {"moved": ["Intro_R_leg_01", path, path, path], "added": [], "dropped": [],
+    assert report == {"moved": ["Intro_R_leg_01", path, path, path], "added": [], "official": [], "changed": [], "dropped": [],
                       "upscaled": [{"page": name, "w": p.size[0], "h": p.size[1]} for name, p in old.pages.items()]}
 
 
