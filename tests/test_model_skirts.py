@@ -8,6 +8,7 @@ import pytest
 
 from bmpt.gameassets import model_skirts as ms
 from bmpt.gameassets.model import bind_tracks, decode_clip
+from bmpt.gameassets import model_adapt as ma
 from bmpt.gameassets.model_adapt import trs
 
 
@@ -186,3 +187,53 @@ def test_a_clip_of_another_layout_is_left_alone():
     split = _clip(3)
     split["m_ClipBindingConstant"]["genericBindings"][0]["attribute"] = 2  # a binding across the dense/constant seam
     assert ms.dense_grid(split) is None
+
+
+# --- the read-back of an edited clip (BL-139) ----------------------------------------------------------------------
+
+def _edited(dense_curves):
+    """A clip as Rule B edits it: (the snapshot before, the tree after, the number of added curves)."""
+    tree = _clip(dense_curves)
+    before = ma.clip_snapshot(tree)
+    template = tree["m_ClipBindingConstant"]["genericBindings"][0]
+    samples = np.array([[0.0, 0.0, math.sin(a / 2), math.cos(a / 2), 0.0, 0.01 * f, 0.02]
+                        for f, a in enumerate((0.0, 0.1, 0.2, 0.3))])
+    ms.add_dense_curves(tree, [ms.rotation_binding(template, "bone_root/Skirt"),
+                               ms.position_binding(template, "bone_root/Skirt")], samples)
+    return before, tree, 7
+
+
+@pytest.mark.parametrize("dense_curves", [0, 3])
+def test_a_clip_that_kept_every_curve_reads_back_as_edited(dense_curves):
+    before, tree, added = _edited(dense_curves)
+    assert ma.clip_edit_error(before, tree, added) is None
+
+
+@pytest.mark.parametrize("change,named", [
+    (lambda t: t["m_MuscleClip"]["m_Clip"]["data"]["m_ConstantClip"]["data"].__setitem__(1, 2.5), "curve 4 changed"),
+    (lambda t: t["m_MuscleClip"]["m_Clip"]["data"]["m_DenseClip"]["m_SampleArray"].__setitem__(12, 99.0),
+     "curve 2 changed"),  # frame 1 of an old dense curve: ten curves a frame now
+    (lambda t: t["m_MuscleClip"]["m_Clip"]["data"]["m_ConstantClip"]["data"].pop(), "curves"),
+    (lambda t: t.__setitem__("m_MuscleClipSize", t["m_MuscleClipSize"] + 4), "muscle clip size"),
+    (lambda t: (t["m_MuscleClip"]["m_ValueArrayDelta"].pop(), t.__setitem__("m_MuscleClipSize", ms.muscle_size(t))),
+     "12 value deltas"),
+    (lambda t: t["m_ClipBindingConstant"]["genericBindings"].pop(), "bindings and curves differ"),
+])
+def test_a_clip_that_lost_or_moved_a_curve_is_named(change, named):
+    before, tree, added = _edited(3)
+    change(tree)
+    assert ma.clip_edit_error(before, tree, added).startswith(named)
+
+
+def test_a_clip_with_other_curves_than_were_added_is_named():
+    before, tree, added = _edited(3)
+    assert ma.clip_edit_error(before, tree, added - 1).startswith("curves")
+
+
+def test_dense_values_compare_to_a_millionth_and_stored_values_exactly():
+    before, tree, added = _edited(3)
+    clip = tree["m_MuscleClip"]["m_Clip"]["data"]
+    clip["m_DenseClip"]["m_SampleArray"][12] += 5e-7
+    assert ma.clip_edit_error(before, tree, added) is None
+    clip["m_ConstantClip"]["data"][0] += 5e-7
+    assert ma.clip_edit_error(before, tree, added) == "curve 3 changed"
