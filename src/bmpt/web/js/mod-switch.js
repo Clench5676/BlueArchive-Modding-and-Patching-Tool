@@ -581,17 +581,20 @@ async function overwritten() {
   await Popup.message({ title: T("mods.overwrittenTitle"), lines: overwrittenLines({ names: listed, installs }, T), ok: T("picker.ok") });
 }
 
-// heldLines(state, nameOf): the names of the entries a game update's rig change holds, then how the hold ends
+// heldLines(state, nameOf): the names of the entries a game update's rig change holds ("name - kind"), then how the
+// hold ends
 export function heldLines(state, nameOf) {
   const entries = state?.heldEntries || [];
-  const listed = entries.slice(0, MAX_LISTED).map((e) => entryLabel(e, nameOf));
+  const listed = entries.slice(0, MAX_LISTED).map((e) => entryLabel(e, nameOf, " - "));
   if (entries.length > MAX_LISTED) listed.push(`+${entries.length - MAX_LISTED}`);
-  return [...listed, T("mods.impact.hint")];
+  return [...listed, T("mods.impact.hint", { action: T("act.update") })];
 }
 
 async function heldDetails(s) {
   const nameOf = await names().catch(() => undefined);
-  await Popup.message({ title: T("mods.heldTitle"), lines: heldLines(s, nameOf), ok: T("picker.ok") });
+  const lines = heldLines(s, nameOf);
+  await Popup.message({ title: T("mods.heldTitle"), ok: T("picker.ok"), plain: true,
+    lines: [...lines.slice(0, -1).map((text) => ({ text, marker: "\u2022", markerGap: 44, indent: 52 })), { text: lines.at(-1), gap: 32 }] });
 }
 
 // Settings' Game Files Check: a scan with the dismissed entries listed again; resolves once it is in (or after 60 s)

@@ -15,22 +15,26 @@ const KEYS = { rig_changed: "rigChanged", gone: "gone", new_parts: "newParts", r
   unchanged: "unchanged", unknown: "unknown" };
 const MAX_LISTED = 6; // held mods the summary names; the rest are counted
 
-// summary(result, nameOf): the message of an update's impact, {title, lines}; null when nothing needs telling.
-// Every kind with mods gets a count line; the mods held for a changed rig are named under theirs, with the hint that
-// updating them on their page ends the hold.
+// summary(result, nameOf): the message of an update's impact, {title, lines} for a plain (left-aligned) message;
+// null when nothing needs telling. The mods held for a changed rig come first: their count, each one as a list item
+// ("name - kind"), and how the hold ends; then, after a gap, a list item per other kind with mods.
+export const ITEM = Object.freeze({ marker: "\u2022", markerGap: 44, indent: 52 });
+const GROUP_GAP = 32;
 export function summary(result, nameOf = (e) => e?.variant || e?.core || "") {
   if (!result?.due) return null;
   const counts = result.counts || {};
   const held = (result.mods || []).filter((m) => m.impact === "rig_changed");
   const lines = [];
-  for (const kind of KINDS.filter((k) => counts[k] > 0)) {
-    lines.push(T(`mods.impact.${KEYS[kind]}`, { n: counts[kind] }));
-    if (kind !== "rig_changed" || !held.length) continue;
-    const named = held.map((m) => entryLabel({ variant: m.target, core: m.core, kind: m.kind }, nameOf));
-    lines.push(...named.slice(0, MAX_LISTED));
-    if (named.length > MAX_LISTED) lines.push(`+${named.length - MAX_LISTED}`);
-    lines.push(T("mods.impact.hint"));
+  if (counts.rig_changed > 0) {
+    lines.push({ text: T("mods.impact.rigChanged", { n: counts.rig_changed }) });
+    const named = held.map((m) => entryLabel({ variant: m.target, core: m.core, kind: m.kind }, nameOf, " - "));
+    lines.push(...named.slice(0, MAX_LISTED).map((text) => ({ text, ...ITEM })));
+    if (named.length > MAX_LISTED) lines.push({ text: `+${named.length - MAX_LISTED}`, ...ITEM });
+    if (named.length) lines.push({ text: T("mods.impact.hint", { action: T("act.update") }) });
   }
+  KINDS.filter((k) => k !== "rig_changed" && counts[k] > 0).forEach((kind, i) => {
+    lines.push({ text: T(`mods.impact.${KEYS[kind]}`, { n: counts[kind] }), ...ITEM, gap: i === 0 && lines.length ? GROUP_GAP : 0 });
+  });
   return { title: T("mods.impact.title"), lines };
 }
 
@@ -67,7 +71,7 @@ export async function check() {
     if (!message) return null;
     told.add(`${result.install}|${result.version}`);
     await Popup.whenIdle();
-    await Popup.message({ title: message.title, lines: message.lines, ok: T("picker.ok") });
+    await Popup.message({ title: message.title, lines: message.lines, ok: T("picker.ok"), plain: true });
     await rpc("mods.impactSeen", { install: result.install, version: result.version }).catch((err) => console.error("impact", err));
     return result;
   } catch (err) {

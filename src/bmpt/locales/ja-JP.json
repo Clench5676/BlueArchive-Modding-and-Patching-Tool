@@ -295,7 +295,7 @@
 			"repairGame": "ゲーム内：リソースの整合性確認、MODが置き換わらない場合あり",
 			"repairThen": "その後このアプリを再起動",
 			"driftTitle": "オリジナルに戻ったMOD",
-			"driftWhy": "ゲームファイルの検証、修復、更新",
+			"driftUpdated": "ゲーム本体の更新の影響を受けたMOD",
 			"driftApply": "MOD設定を適用",
 			"driftKeep": "現状のまま",
 			"stillOverwritten": "上書きのまま：{n}",
@@ -303,14 +303,14 @@
 			"heldTitle": "保留中のMOD",
 			"heldBadge": "ボーン変更",
 			"impact": {
-				"title": "ゲーム更新",
+				"title": "ゲーム本体が更新されました",
 				"rigChanged": "ボーン変更、保留中：{n}",
 				"gone": "ゲームから削除済み：{n}",
 				"newParts": "公式パーツ追加：{n}",
 				"rebuilt": "再構築済み、ボーン同一：{n}",
 				"unchanged": "影響なし：{n}",
 				"unknown": "判定不可：{n}",
-				"hint": "MODページで更新してから適用"
+				"hint": "生徒ページでこのMODを選び、「{action}」を押すと再び適用"
 			},
 			"deleteConfirm": "{name}を削除しますか？",
 			"deleteRestore": "使用中の項目はオリジナルまたは以前の設定に戻ります",
