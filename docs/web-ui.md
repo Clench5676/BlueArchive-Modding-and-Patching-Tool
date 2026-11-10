@@ -1292,7 +1292,9 @@ of prefab and dependency files becomes one row, one library Mod and one selected
 physical cores. The set stays together whatever its parts' dates (Spine textures and text, a model's prefab and
 dependencies), and an apply writes every selected part. When the install keeps multiple dates of one
 part side by side, those files also stay in one Mod. Only a repeated part whose dates the install does not keep together
-splits the whole set by date, one row or Mod per date. Collection batches keep their separate dated slots.
+splits the whole set by date, one row or Mod per date. In the batch import, a part of such a split that holds no asset
+of the import's types (a split bundle of animation data only) is no version of its own: when the rest of its set is one
+Mod it stays in that row, and the import leaves its official part as it is. Collection batches keep their separate dated slots.
 `other` bundles keep their own handling. A Mod's `date` is the newest date of its parts. Library Mods stored before this
 rule keep the split they were stored with; nothing is merged or migrated. Batch folders still separate alternatives.
 

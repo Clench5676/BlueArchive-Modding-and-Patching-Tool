@@ -634,7 +634,8 @@ class BatchImport:
         versions = library.import_versions([((path.parent, core, kind, variant), name)
                                       for path, name, kind, variant, core, _, _ in versioned], self._pin)
         version_by_path = {item[0]: version for item, version in zip(versioned, versions)}
-        active = [c for c in previous if set(c.files.values()) <= seen]
+        self._join_passengers(versioned, version_by_path, library)
+        active =[c for c in previous if set(c.files.values()) <= seen]
         owners = {path: c for c in active for path in c.files.values()}
         for path, name, kind, variant, core, error, failure in inspected:
             version = version_by_path.get(path, "")
@@ -708,6 +709,33 @@ class BatchImport:
                 pass  # The unreadable row above still reports all of its source paths.
             candidates.append(candidate)
         return candidates, skipped
+
+    def _join_passengers(self, versioned: list[tuple], version_by_path: dict[Path, str], library: Any) -> None:
+        """A part holding no asset of the import's types (a split bundle of animation data only) is no version of
+        its own: it stays with the one mod of its set, where the import leaves its target official. Only sets the
+        date rule split are read; a set with several versions besides, or with nothing else, keeps the date rule."""
+        sets: dict[tuple, list[tuple]] = {}
+        for path, name, kind, variant, core, error, _ in versioned:
+            sets.setdefault((path.parent, core, kind, variant), []).append((path, name, error))
+        inspection = integrity.Inspection(set(self.options()["types"]))
+        for key, items in sets.items():
+            if not any(version_by_path.get(path) for path, _, _ in items):
+                continue
+            passengers = []
+            for path, _, error in items:
+                try:
+                    if not error and not inspection.keys(path):
+                        passengers.append(path)
+                except Exception:  # noqa: BLE001 - an unreadable file stays under the date rule
+                    logger.debug("Batch import: contents not read for grouping", exc_info=True)
+            carriers = [(path, name) for path, name, _ in items if path not in passengers]
+            if not passengers or not carriers:
+                continue
+            versions = library.import_versions([(key, name) for _, name in carriers], self._pin)
+            if len(set(versions)) != 1:
+                continue
+            version_by_path.update({path: version for (path, _), version in zip(carriers, versions)})
+            version_by_path.update({path: versions[0] for path in passengers})
 
     @staticmethod
     def _folder_headers(folders: set[Path], progress: Any = None) -> dict[Path, set[str]]:
