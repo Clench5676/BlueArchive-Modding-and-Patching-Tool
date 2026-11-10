@@ -684,7 +684,10 @@ function nameplateRow(np, caption, aliased, ui = NGUI) {
 function aliasPlate(np, caption, aliased) {
   const layout = nameplateRow(np, caption, aliased), [name, pencil] = layout.boxes;
   const main = find(np, "Label_Name");
-  Object.assign(main.widgets.find(w => "text" in w), { text: name.text, w_: name.w, h_: name.h, fontSize: name.fs, pivot: 3, ellipsis: true, ariaLabel: caption });
+  // The box is the measured width; the ellipsis only applies when the name really exceeds the room, so a sub-pixel
+  // difference between canvas measurement and the web view's layout never cuts a name that fits.
+  const clipped = NGUI.glyphWidth(name.text, name.fs) > layout.room;
+  Object.assign(main.widgets.find(w => "text" in w), { text: name.text, w_: name.w, h_: name.h, fontSize: name.fs, pivot: 3, ellipsis: clipped, ariaLabel: caption });
   main.pos = toNode(name, 3, layout.frame);
   np.children.push(node("Char_AliasBtn", toNode(pencil, 4, layout.frame),
     [sprite("Cafe_Icon_NameEdit", PENCIL, PENCIL, { type: 0, depth: 22, color: "#ffffff/0.85" })]));
