@@ -1029,8 +1029,8 @@ export const MSG = { title: POPUP_FRAME.contentTop, gap: SPACE.l, rowButton: SMA
 // (#dialog by default, over everything but the message popup). Resolves once it is closed, however it is closed, with
 // {button, checked}: button "ok" or "cancel", or null for the close button, the backdrop or Escape; checked, the
 // checkbox's state then (null without one).
-//   lines: text, or {text, button: {label, fn}} for a line with a small button at its end (fn({close}), where
-//          close(button) closes the popup); with such a line every line shows as a row of the game's light box
+//   lines: text, or {text, button: {label, fn, inline}} for a line with a small button at its end (fn({close}), where
+//          close(button) closes the popup; inline, with plain: only as high as the line's text); with such a line every line shows as a row of the game's light box
 //          fontSize/minFontSize optionally keep a row's existing type size (the tour counter and body).
 //          With plain: indent (units) moves a line right, marker hangs a bullet left of its first line (markerGap wide,
 //          its font size by default), gap adds space above it (release notes' lists and sections), italic slants it.
@@ -1160,7 +1160,10 @@ function messageText(text, max, min, room, lines = 4, strict = false) {
 // a fitted text with its lines counted as drawn (a line break in the text itself counts)
 const counted = (fitted) => ({ ...fitted, lines: fitted.text.split("\n").length });
 
-const placeholderButton = (name, x, y, caption, { w }) => node(name, [x, y], [sprite("Common_Btn_BG", w, SMALL_BUTTON.h)]);
+const placeholderButton = (name, x, y, caption, { w, h = SMALL_BUTTON.h }) => node(name, [x, y], [sprite("Common_Btn_BG", w, h)]);
+// a plain line's inline button (button.inline): the small button only as high as its line's text, its caption at most
+// this share of the line's type size
+const INLINE_BUTTON = Object.freeze({ share: 0.75, fsMin: 24, pad: 60 });
 
 function messageLines(lines, w, fitTogether, plain, assets = true) {
   const rows = lines.map((l) => (typeof l === "string" ? { text: l } : l));
@@ -1173,6 +1176,13 @@ function messageLines(lines, w, fitTogether, plain, assets = true) {
     const bw = bf ? Math.max(SMALL_BUTTON.minW, glyphsOf(bf.text, bf.fs) + SMALL_BUTTON.glyphPad) : 0;
     const room = boxed ? valueRoom("frame", w, { reserve: bw ? bw + SPACE.m : 0 }) : w - 2 * SPACE.xxxl - (bw ? bw + SPACE.m : 0) - (plain ? r.indent || 0 : 0);
     const f = messageText(r.text, r.fontSize ?? max, r.minFontSize ?? min, room, most, boxed);
+    if (plain && r.button?.inline) {
+      // as high as one line of its text; the room the full-size button left stays, so the text keeps its fit
+      const bh = Math.round(f.fs * NGUI.LINE_PITCH), cap = Math.round(f.fs * INLINE_BUTTON.share);
+      const ib = fitText(r.button.label, cap, Math.min(cap, INLINE_BUTTON.fsMin), SMALL_BUTTON.w - SMALL_BUTTON.fitInset);
+      const ibw = glyphsOf(ib.text, ib.fs) + INLINE_BUTTON.pad, inlineRoom = w - 2 * SPACE.xxxl - ibw - SPACE.m - (r.indent || 0);
+      return { r, bf: ib, bw: ibw, bh, room: inlineRoom, f: counted(messageText(r.text, f.fs, f.fs, inlineRoom, most, boxed)) };
+    }
     return { r, bf, bw, room, f: counted(f) };
   });
   const group = fitTogether.map((i) => fitted[i]).filter(Boolean);
@@ -1201,12 +1211,12 @@ function messageLines(lines, w, fitTogether, plain, assets = true) {
   const out = [], textBox = container({ w, h: 0, padding: [0, SPACE.xxxl] }).inner;
   const sized = fitted.map(s => {
     const indent = plain ? s.r.indent || 0 : 0;
-    const lineRow = row([{ ...s.item, w: s.room }, ...(s.bf ? [{ w: s.bw, h: SMALL_BUTTON.h }] : [])],
+    const lineRow = row([{ ...s.item, w: s.room }, ...(s.bf ? [{ w: s.bw, h: s.bh ?? SMALL_BUTTON.h }] : [])],
       { x: textBox.x + indent, w: textBox.w - indent, gap: SPACE.m, justify: "center" });
     return { ...s, lineRow, w: textBox.w, h: lineRow.h + (plain ? s.r.gap || 0 : 0) };
   });
   const paragraphs = layoutStack(sized, { x: textBox.x, w: textBox.w, gap: SPACE.l });
-  paragraphs.boxes.forEach(({ r, f, bf, bw, room, y, lineRow: measured }, i) => {
+  paragraphs.boxes.forEach(({ r, f, bf, bw, bh, room, y, lineRow: measured }, i) => {
     const lineRow = { ...measured, boxes: measured.boxes.map(b => ({ ...b, y: b.y + y + (plain ? r.gap || 0 : 0) })) };
     const local = { w, h: 0, cx: 0, cy: 0 }, colour = `${r.color || "#2d4664"}/1.00`, box = lineRow.boxes[0];
     out.push(node(`Line_${i}`, toNode(box, plain ? 3 : 4, local),
@@ -1217,7 +1227,8 @@ function messageLines(lines, w, fitTogether, plain, assets = true) {
     }
     if (bf) {
       const [bx, by] = toNode(lineRow.boxes[1], 4, local);
-      out.push((assets ? Buttons.smallButton : placeholderButton)(`Btn_${i}`, bx, by, r.button.label, { w: bw, fs: SMALL_BUTTON.fs, min: SMALL_BUTTON.fsMin, depth: 8 }));
+      out.push((assets ? Buttons.smallButton : placeholderButton)(`Btn_${i}`, bx, by, r.button.label, bh
+        ? { w: bw, h: bh, fs: bf.fs, min: bf.fs, depth: 8 } : { w: bw, fs: SMALL_BUTTON.fs, min: SMALL_BUTTON.fsMin, depth: 8 }));
       buttons.push([i, r.button]);
     }
   });
