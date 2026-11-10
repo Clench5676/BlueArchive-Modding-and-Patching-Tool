@@ -9,7 +9,7 @@ import math
 import re
 import threading
 import time
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
 from concurrent.futures import Future
 from contextlib import contextmanager
 from copy import deepcopy
@@ -55,35 +55,64 @@ _SPRITE_FIELDS = ("x", "y", "width", "height", "borderLeft", "borderRight", "bor
                   "borderBottom", "paddingLeft", "paddingRight", "paddingTop", "paddingBottom")
 
 
-# Where the prefabs the UI uses are in the Global client (bundle file names, as of the 2026-10 resource version).
-# Checked before scanning every prefab bundle; a game update that renames them falls back to the scan.
+# Where the prefabs the UI uses are in the Global client (bundle file names, as of the 2026-11 resource version).
+# Checked before scanning every prefab bundle. A game update rebuilds a changed bundle under a new CRC, the last part
+# of its name: PREFAB_CABS then finds it among the bundles of the same name less the CRC.
 PREFAB_HINTS = {
-    "UICharacterCollection": "ui-_mxload-prefabs-2025-07-02_assets_all_2244454933.bundle",
-    "UICharacterCollectionPopulatorUnit": "ui-uiassetobject-_mxload-2024-11-18_assets_all_625906829.bundle",
-    "UIPopup_GachaCharList": "ui-_mxload-prefabs-2025-07-02_assets_all_2249507476.bundle",
-    "UIPopup_Sort": "ui-_mxload-prefabs-2025-07-02_assets_all_792282090.bundle",
-    "UIPopup_Mulligan": "ui-_mxload-prefabs-2025-07-02_assets_all_745642265.bundle",
+    "UICharacterCollection": "ui-_mxload-prefabs-2025-07-02_assets_all_3649883161.bundle",
+    "UICharacterCollectionPopulatorUnit": "ui-uiassetobject-_mxload-2024-11-18_assets_all_1995474029.bundle",
+    "UIPopup_GachaCharList": "ui-_mxload-prefabs-2025-07-02_assets_all_3329130623.bundle",
+    "UIPopup_Sort": "ui-_mxload-prefabs-2025-07-02_assets_all_1596625361.bundle",
+    "UIPopup_Mulligan": "ui-_mxload-prefabs-2025-07-02_assets_all_267995722.bundle",
     # the description tooltip: a greyed control's reason on hover (web/js/hover-hint.js)
-    "UIDescriptionTooltip": "ui-tooltip-_mxload-prefabs-2026-04-06_assets_all_1520611205.bundle",
+    "UIDescriptionTooltip": "ui-tooltip-_mxload-prefabs-2026-04-06_assets_all_413832495.bundle",
     # the student list's display settings popup (filter and sort tabs) and its filter group template
-    "UIPopup_FilterSort": "ui-_mxload-prefabs-2025-07-02_assets_all_2563991958.bundle",
-    "UIFilterObjectList": "ui-uiassetobject-_mxload-2024-11-18_assets_all_625906829.bundle",
-    "UICharacterDetail": "ui-_mxload-prefabs-2025-07-02_assets_all_2968814143.bundle",
+    "UIPopup_FilterSort": "ui-_mxload-prefabs-2025-07-02_assets_all_2229874793.bundle",
+    "UIFilterObjectList": "ui-uiassetobject-_mxload-2024-11-18_assets_all_1995474029.bundle",
+    "UICharacterDetail": "ui-_mxload-prefabs-2025-07-02_assets_all_4244715916.bundle",
     # the portrait's fullscreen view, opened by the detail screen's ZoomButton
-    "UICharacterVisualMode": "ui-_mxload-prefabs-2025-07-02_assets_all_1664527646.bundle",
-    "UIPopup_Option_PC": "ui-_mxload-prefabs-2025-11-28_assets_all_1183413113.bundle",
+    "UICharacterVisualMode": "ui-_mxload-prefabs-2025-07-02_assets_all_3863404692.bundle",
+    "UIPopup_Option_PC": "ui-_mxload-prefabs-2025-11-28_assets_all_3994951711.bundle",
     # the loading screen (Resources/UI/UILoading.prefab) and its "Now Loading" indicator
-    "UILoading": "prologgroup-assets-_mx-resources-ui-_mxprolog-2026-04-13_assets_all_2006567787.bundle",
+    "UILoading": "prologgroup-assets-_mx-resources-ui-_mxprolog-2026-04-13_assets_all_1341870950.bundle",
     "UIRepeater": "ui-_mxload-prefabs-2025-07-02_assets_all_1187726256.bundle",
     # the loading ring a still being made shows in its place (UIRatioNoticePopup/Center/Popup/Base/LoadingIcon)
-    "UIRatioNoticePopup": "ui-_mxload-prefabs-2025-07-02_assets_all_3222685272.bundle",
+    "UIRatioNoticePopup": "ui-_mxload-prefabs-2025-07-02_assets_all_2108580176.bundle",
     # the lobby, whose bottom menu entries hold the game's disabled look (layouts.py STATE_FIELDS)
-    "UIPopup_Formation_CharEdit": "ui-_mxload-prefabs-2025-07-02_assets_all_762187506.bundle",
-    "UIMailBox": "ui-_mxload-prefabs-2025-07-02_assets_all_2967155606.bundle",
-    "UILobby": "ui-_mxload-prefabs-2025-07-02_assets_all_2178802179.bundle",
+    "UIPopup_Formation_CharEdit": "ui-_mxload-prefabs-2025-07-02_assets_all_2190018216.bundle",
+    "UIMailBox": "ui-_mxload-prefabs-2025-07-02_assets_all_3761459989.bundle",
+    "UILobby": "ui-_mxload-prefabs-2025-07-02_assets_all_1122735527.bundle",
     # the student hall's first-screen slot template
-    "UILobbyCharacterSelectPopup_Slot": "ui-_mxload-prefabs-2025-07-02_assets_all_1360207439.bundle",
+    "UILobbyCharacterSelectPopup_Slot": "ui-_mxload-prefabs-2025-07-02_assets_all_3424282486.bundle",
 }
+# The internal (CAB) name of each hinted bundle: unlike the CRC, an update that rebuilds the bundle keeps it, and
+# reading it takes only the bundle's header.
+PREFAB_CABS = {
+    "UICharacterCollection": "cab-e017641da51ecb7ddc61c727fe7d42c8",
+    "UICharacterCollectionPopulatorUnit": "cab-d2c7f32eddfa3175eb350c1b4c586b33",
+    "UIPopup_GachaCharList": "cab-15457654181428fbffe12298d7846f73",
+    "UIPopup_Sort": "cab-7fb051b9251c7717ef5394a35da87c52",
+    "UIPopup_Mulligan": "cab-0289266f037a5e4b22c9ef25622fbc99",
+    "UIDescriptionTooltip": "cab-97c3b3fecdec100761a404aa17c35026",
+    "UIPopup_FilterSort": "cab-11f9127e73f96f5d1e83a9522c8cc298",
+    "UIFilterObjectList": "cab-d2c7f32eddfa3175eb350c1b4c586b33",
+    "UICharacterDetail": "cab-e478474fb06d2fa735098c2370feb7ac",
+    "UICharacterVisualMode": "cab-d14fefcfbe7f5f2903860f2d9e7f6776",
+    "UIPopup_Option_PC": "cab-c43e5ff2f665426af43eb0d550563fe2",
+    "UILoading": "cab-4c819d78e46be1ed1a32ad3e295e51e0",
+    "UIRepeater": "cab-3731528684e0b1d0a35dd40a37462b05",
+    "UIRatioNoticePopup": "cab-d19d2d22bd4d9320bc006c65e8d361a7",
+    "UIPopup_Formation_CharEdit": "cab-dd05055f5344e2f7817dd319c6c56a44",
+    "UIMailBox": "cab-df7afbdbff489d4ab5545b64b4904568",
+    "UILobby": "cab-6d02540d52a62021acf772e8b866c60a",
+    "UILobbyCharacterSelectPopup_Slot": "cab-a72e4fc32a67ea1e4fb3150a8b53b9ea",
+}
+_CRC = re.compile(r"_\d+(?=\.bundle$)")
+
+
+def less_crc(name: str) -> str:
+    """A bundle's file name less its CRC, the part a rebuilt bundle keeps."""
+    return _CRC.sub("", name)
 
 
 
@@ -464,23 +493,40 @@ class GameAssets:
         return self._index("prefabs", self._scan_prefabs)
 
     def _prefab_bundle(self, root: str) -> Path:
-        """The bundle holding a prefab root: the known bundle name first (one small read), else the full index
+        """The bundle holding a prefab root: the known bundle first (one small read), after a game update the
+        bundle of the same name less the CRC that holds the known CAB (a header read each), else the full index
         (a scan of every UI prefab bundle, about 12 s cold)."""
-        hint = PREFAB_HINTS.get(root)
-        if hint:
-            try:
-                path = self._bundle_path(hint)
-            except AssetNotFound:
-                path = None
-            if path is not None:
-                suffix = f"/{root.lower()}.prefab"
-                with open_bundle(path) as env:
-                    if any(name.lower().endswith(suffix) for name in env.container):
-                        return path
+        for path in self._hinted_bundles(root):
+            suffix = f"/{root.lower()}.prefab"
+            with open_bundle(path) as env:
+                if any(name.lower().endswith(suffix) for name in env.container):
+                    return path
         try:
             return self._bundle_path(self._prefabs()[root])
         except KeyError:
             raise AssetNotFound(root) from None
+
+    def _hinted_bundles(self, root: str) -> Iterator[Path]:
+        """The bundles PREFAB_HINTS points at for a root, likeliest first: the named one, then the rebuilt ones."""
+        hint = PREFAB_HINTS.get(root)
+        if not hint:
+            return
+        try:
+            yield self._bundle_path(hint)
+        except AssetNotFound:
+            pass
+        cab, stem = PREFAB_CABS.get(root), less_crc(hint)
+        if not cab:
+            return
+        for path in self._paths():
+            if path.name == hint or less_crc(path.name) != stem or not is_prefab(path):
+                continue
+            try:
+                names = cab_names(path)
+            except (OSError, ValueError):
+                continue
+            if cab in names:
+                yield path
 
     def _scan_prefabs(self) -> dict:
         roots = {}

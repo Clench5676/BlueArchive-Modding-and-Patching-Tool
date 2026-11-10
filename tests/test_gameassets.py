@@ -859,6 +859,63 @@ def test_hall_slot_hint_avoids_scan_and_falls_back_after_game_updates(tmp_path, 
     assert opened == ([] if hint_state == 'missing' else [hint.name])
 
 
+def test_prefab_hints_carry_a_cab_and_a_crc():
+    assert service.PREFAB_CABS.keys() == service.PREFAB_HINTS.keys()
+    for name in service.PREFAB_HINTS.values():
+        assert is_prefab(Path(name)) and service.less_crc(name) != name
+    assert service.less_crc('ui-_mxload-prefabs-2025-07-02_assets_all_1122735527.bundle') \
+        == 'ui-_mxload-prefabs-2025-07-02_assets_all.bundle'
+    assert service.less_crc('no-crc.bundle') == 'no-crc.bundle'
+
+
+@pytest.mark.parametrize('state', ['rebuilt', 'stale-and-rebuilt', 'cab-gone', 'unreadable'])
+def test_prefab_hint_follows_a_rebuilt_bundle_by_cab(tmp_path, monkeypatch, state):
+    """A game update rebuilds a prefab bundle under a new CRC: the hint finds it among the bundles of the same name
+    less the CRC by its CAB (header reads), opening no other bundle and scanning nothing."""
+    root = 'UILobby'
+    hint = service.PREFAB_HINTS[root]
+    stem = hint.rsplit('_', 1)[0]
+    rebuilt, sibling, other = f'{stem}_11.bundle', f'{stem}_22.bundle', 'ui-_mxload-prefabs-2026-09-21_assets_all_33.bundle'
+    for name in (rebuilt, sibling, other, 'updated-prefabs.bundle'):
+        (tmp_path / name).touch()
+    if state == 'stale-and-rebuilt':  # a leftover of the previous build, no longer holding the root
+        (tmp_path / hint).touch()
+    game = GameAssets([tmp_path], AssetCache(root=tmp_path / 'cache'))
+    opened, scans = [], []
+    # the other family's bundle holds the same CAB name: only the hinted family is searched
+    cabs = {rebuilt: [service.PREFAB_CABS[root]], sibling: ['cab-0'], other: [service.PREFAB_CABS[root]]}
+    if state == 'cab-gone':
+        cabs[rebuilt] = ['cab-1']
+
+    def cab_fake(path):
+        if state == 'unreadable':
+            raise ValueError(path)
+        return cabs.get(path.name, [])
+
+    @contextmanager
+    def open_fake(path):
+        opened.append(path.name)
+        yield SimpleNamespace(container={f'assets/ui/{root if path.name == rebuilt else "Old"}.prefab': None})
+
+    monkeypatch.setattr(service, 'open_bundle', open_fake)
+    monkeypatch.setattr(service, 'cab_names', cab_fake)
+    monkeypatch.setattr(game, '_scan_prefabs', lambda: scans.append(True) or {root: 'updated-prefabs.bundle'})
+    found = state in ('rebuilt', 'stale-and-rebuilt')
+    assert game._prefab_bundle(root).name == (rebuilt if found else 'updated-prefabs.bundle')
+    assert len(scans) == (0 if found else 1)
+    assert opened == ([hint] if state == 'stale-and-rebuilt' else []) + ([rebuilt] if found else [])
+
+
+@real_install
+@pytest.mark.parametrize('root', ['UILobby', 'UICharacterDetail', 'UILoading', 'UICharacterCollectionPopulatorUnit'])
+def test_real_stale_hint_finds_the_rebuilt_bundle_without_a_scan(tmp_path, monkeypatch, root):
+    current = service.PREFAB_HINTS[root]
+    monkeypatch.setitem(service.PREFAB_HINTS, root, current.rsplit('_', 1)[0] + '_1.bundle')
+    game = GameAssets(get_search_dirs(GAME_DIR), AssetCache(root=tmp_path / 'cache', allowed=True))
+    monkeypatch.setattr(game, '_scan_prefabs', lambda: pytest.fail(f'{root} must be found by its CAB'))
+    assert game._prefab_bundle(root).name == current
+
+
 @real_install
 @pytest.mark.parametrize('root', [
     'UILoading', 'UIRepeater', 'UICharacterDetail', 'UILobby', 'UICharacterCollection',
