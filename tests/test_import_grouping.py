@@ -186,3 +186,41 @@ def test_model_prefab_and_dependencies_with_other_dates_are_one_row_and_one_mod(
     assert mod.kind == "model" and mod.date == "2026-02-01" and len(stored_names(env.library, mod)) == 3
     assert [path.read_bytes() for path in env.parts] == [source.read_bytes() for source in sources]
     assert len(env.library.add(sources).duplicates) == 1 and len(env.library.mods()) == 1
+
+
+# A part with nothing the import transfers (BL-156)
+
+def passengers(monkeypatch, *paths):
+    """Makes the given files hold no asset of the import's types, every other file one texture."""
+    from bmpt.library import integrity
+    empty = {Path(path).resolve() for path in paths}
+    monkeypatch.setattr(integrity.Inspection, "keys",
+                        lambda self, path: set() if Path(path).resolve() in empty else {("texture", "Texture2D")})
+
+
+def test_a_part_without_assets_of_the_import_types_under_another_date_stays_in_its_mod(env, monkeypatch):
+    clips = game_bundle(env.tmp / "old-release", date="2025-01-01", payload=b"animation data")
+    sources = [make_mod(env.original, env.tmp / "input", payload=b"new texture"),
+               make_mod(clips, env.tmp / "input", payload=b"animation data")]
+    passengers(monkeypatch, sources[1])
+    entry, = analyze(env, [sources[0].parent])["entries"]
+    assert entry["paths"] == sorted(map(str, sources))
+    assert entry["reason"] != "no_matching_assets"
+
+
+def test_a_part_without_assets_does_not_join_one_of_several_versions(env, monkeypatch):
+    older = game_bundle(env.tmp / "old-release", date="2025-01-01", payload=b"old texture")
+    clips = game_bundle(env.tmp / "older-release", date="2024-01-01", payload=b"animation data")
+    sources = [make_mod(env.original, env.tmp / "input", payload=b"new texture"),
+               make_mod(older, env.tmp / "input", payload=b"old texture mod"),
+               make_mod(clips, env.tmp / "input", payload=b"animation data")]
+    passengers(monkeypatch, sources[2])
+    assert row_names(analyze(env, [sources[0].parent])["entries"]) == sorted([[source.name] for source in sources])
+
+
+def test_parts_without_assets_alone_keep_the_date_rule(env, monkeypatch):
+    older = game_bundle(env.tmp / "old-release", date="2025-01-01", payload=b"old data")
+    sources = [make_mod(env.original, env.tmp / "input", payload=b"new data"),
+               make_mod(older, env.tmp / "input", payload=b"old data mod")]
+    passengers(monkeypatch, *sources)
+    assert row_names(analyze(env, [sources[0].parent])["entries"]) == sorted([[source.name] for source in sources])
