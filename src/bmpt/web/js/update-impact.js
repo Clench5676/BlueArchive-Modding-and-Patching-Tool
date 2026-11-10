@@ -21,7 +21,8 @@ const MAX_LISTED = 6; // held mods the summary names; the rest are counted
 // button (its line's button closes the message with "expand", see check) over a list item per other kind with mods,
 // shown once expanded. With no mod held that list shows at once, without the button.
 export const ITEM = Object.freeze({ marker: "\u2022", markerGap: 44, indent: 52 });
-const GROUP_GAP = 32;
+const GROUP_GAP = 16;
+export const WIDTH = 2098;
 export function summary(result, nameOf = (e) => e?.variant || e?.core || "", { expanded = false } = {}) {
   if (!result?.due) return null;
   const counts = result.counts || {};
@@ -39,7 +40,7 @@ export function summary(result, nameOf = (e) => e?.variant || e?.core || "", { e
   if (!lines.length) return { title: T("mods.impact.title"), lines: others };
   if (others.length) {
     lines.push({ text: T("mods.impact.others"), gap: GROUP_GAP,
-      button: { label: T(expanded ? "mods.impact.collapse" : "mods.impact.expand"), fn: ({ close }) => close("expand") } });
+      button: { label: T(expanded ? "mods.impact.collapse" : "mods.impact.expand"), inline: true, fn: ({ close }) => close("expand") } });
     if (expanded) lines.push(...others);
   }
   return { title: T("mods.impact.title"), lines };
@@ -81,7 +82,8 @@ export async function check() {
     // the Expand / Collapse button closes the message, which opens again with the list the other way
     for (let expanded = false; ;) {
       const message = summary(result, nameOf, { expanded });
-      const answer = await Popup.message({ title: message.title, lines: message.lines, ok: T("picker.ok"), plain: true });
+      // the wide frame: the list unfolded keeps clear of the frame's height cap in every language
+      const answer = await Popup.message({ title: message.title, lines: message.lines, ok: T("picker.ok"), plain: true, width: WIDTH });
       if (answer.button !== "expand") break;
       expanded = !expanded;
     }
