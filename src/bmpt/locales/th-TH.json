@@ -734,7 +734,10 @@
 			"previewUnavailable": "ไม่มีตัวอย่าง",
 			"unpainted": "พื้นที่ว่างที่ไม่ได้ใช้: {names}",
 			"official": "พื้นที่ต้นฉบับ: {names}",
-			"changed": "พื้นที่ที่ต้นฉบับวาดใหม่: {names}"
+			"changed": "พื้นที่ที่ต้นฉบับวาดใหม่: {names}",
+			"zoomIn": "ขยาย",
+			"zoomOut": "ย่อ",
+			"marks": "ทำเครื่องหมายส่วนที่เปลี่ยน"
 		},
 		"spine": {
 			"license": {

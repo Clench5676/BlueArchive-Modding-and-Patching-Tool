@@ -62,16 +62,47 @@ export async function show(result, title = T("act.compare"), hostId = "popup", r
     const drawn = !!(drawings.original?.length || drawings.repaired?.length);
     // Both sides are looked at through one view: the wheel zooms at the pointer, a drag moves the picture, a double
     // click goes back to where it started. A lobby starts filling its frame, a portrait whole.
-    const views = [];
-    let view = { ...PanZoom.REST }, rest = view, framed = review.kind !== "lobby";
+    const views = [], marked = [];  // marked: per picture, where its rings go and what tells them
+    let view = { ...PanZoom.REST }, rest = view, framed = review.kind !== "lobby", marking = false;
     const show = (value) => {
       view = value;
       for (const el of views) Object.assign(el.style, PanZoom.style(view));
+    };
+    // Rings around the parts the report names (review.marks: region names), on both pictures; read when switched on.
+    const mark = (on) => {
+      marking = on;
+      for (const { layer, rings, toggle } of marked) {
+        layer.replaceChildren();
+        toggle?.setAttribute("aria-pressed", String(on));
+        for (const box of on ? rings() : []) Object.assign(part("repair-ring", layer).style, PanZoom.ringStyle(PanZoom.ring(box)));
+      }
+    };
+    const tool = (bar, caption, name, fn) => {
+      const button = document.createElement("button");
+      button.className = "plain-line-button";
+      button.textContent = caption;
+      button.setAttribute("aria-label", name);
+      // a press on a tool is not the start of a drag, nor half of a double click on the picture
+      for (const type of ["pointerdown", "dblclick"]) button.addEventListener(type, (event) => event.stopPropagation());
+      button.addEventListener("click", fn);
+      bar.appendChild(button);
+      return button;
     };
     const frameIn = (host) => {
       const el = part("repair-view", host);
       views.push(el);
       Object.assign(el.style, PanZoom.style(view));
+      // shown while the pointer is over the picture: smaller, larger and, when the report names parts, the rings
+      const bar = part("repair-tools", host), entry = { layer: null, rings: () => [], toggle: null };
+      tool(bar, "\u2212", T("remap.zoomOut"), () => show(PanZoom.zoomAt(view, 1 / 1.5)));
+      tool(bar, "+", T("remap.zoomIn"), () => show(PanZoom.zoomAt(view, 1.5)));
+      if (review.marks?.length) {
+        entry.toggle = tool(bar, "\u25ef", T("remap.marks"), () => mark(!marking));
+        entry.toggle.classList.add("repair-mark-toggle");
+        entry.toggle.setAttribute("aria-pressed", "false");
+      }
+      el.repairEntry = entry;
+      marked.push(entry);
       const point = (event) => {
         const box = host.getBoundingClientRect();
         return [box, (event.clientX - box.left) / (box.width || 1), (event.clientY - box.top) / (box.height || 1)];
@@ -106,9 +137,15 @@ export async function show(result, title = T("act.compare"), hostId = "popup", r
       const stage = part("repair-stage", panel);
       for (const scene of drawn ? drawings[side] || [] : []) {
         const playerHost = part("repair-player", stage), inside = frameIn(playerHost);
+        // the player has a box of its own (it empties the one it is given); the rings lie over it, inside the view,
+        // so they zoom and move with the drawing
+        const canvas = part("repair-canvas", inside);
+        inside.repairEntry.layer = part("repair-marks", inside);
         startPlayers.push(() => {
-          const player = previewPlayer(inside, scene, side, result.pages, (picture) => fill(playerHost, picture));
-          if (player) players.push(player);
+          const player = previewPlayer(canvas, scene, side, result.pages, (picture) => fill(playerHost, picture));
+          if (!player) return;
+          players.push(player);
+          inside.repairEntry.rings = () => player.parts(review.marks || []);
         });
       }
       // without a drawing (no skeleton in the files, no runtime) the pages themselves are the picture
@@ -159,7 +196,7 @@ export async function show(result, title = T("act.compare"), hostId = "popup", r
 
 // `drawn(width / height)` is told once, when the skeleton is up, with the proportions of the picture the player fits.
 function previewPlayer(host, scene, side, pages, drawn = () => {}) {
-  let disposed = false, load = null;
+  let disposed = false, load = null, live = null;
   const unavailable = () => { if (!disposed) host.textContent = T("remap.previewUnavailable"); };
   const start = async () => {
     try {
@@ -189,6 +226,7 @@ function previewPlayer(host, scene, side, pages, drawn = () => {}) {
         // the picture up to the frame's edges: the frame is small, and the view zooms and moves
         viewport: { padLeft: "2%", padRight: "2%", padTop: "2%", padBottom: "2%" },
         success: (p) => {
+          live = p;
           const idle = p.skeleton.data.animations.find((a) => /^Idle_01$/i.test(a.name)) || p.skeleton.data.animations[0];
           if (idle) p.animationState.setAnimation(0, idle.name, true);
           else p.animationState.setEmptyAnimation(0, 0).trackEnd = Number.MAX_VALUE;
@@ -207,5 +245,31 @@ function previewPlayer(host, scene, side, pages, drawn = () => {}) {
     } catch { unavailable(); }
   };
   start();
-  return { dispose: () => { disposed = true; load?.dispose(); } };
+  // Where the skeleton, as posed, draws the atlas regions `names`: one [left, top, right, bottom] per attachment, in
+  // sizes of the picture's box (0..1, from its top left), through the player's own camera. Nothing before it draws.
+  const parts = (names) => {
+    const player = live, wanted = new Set(names), boxes = [];
+    if (disposed || !player?.skeleton || !wanted.size) return boxes;
+    try {
+      const camera = player.sceneRenderer.camera;
+      camera.update();
+      const m = camera.projectionView.values;
+      for (const slot of player.skeleton.drawOrder) {
+        const a = slot.getAttachment();
+        if (!a || !slot.bone.active || !wanted.has(a.region?.name)) continue;
+        let v;
+        if (a instanceof spine.RegionAttachment) { v = new Float32Array(8); a.computeWorldVertices(slot, v, 0, 2); }
+        else if (a instanceof spine.MeshAttachment) { v = new Float32Array(a.worldVerticesLength); a.computeWorldVertices(slot, 0, v.length, v, 0, 2); }
+        else continue;
+        let left = Infinity, top = Infinity, right = -Infinity, bottom = -Infinity;
+        for (let i = 0; i < v.length; i += 2) {
+          const x = (m[0] * v[i] + m[4] * v[i + 1] + m[12] + 1) / 2, y = (1 - (m[1] * v[i] + m[5] * v[i + 1] + m[13])) / 2;
+          left = Math.min(left, x); right = Math.max(right, x); top = Math.min(top, y); bottom = Math.max(bottom, y);
+        }
+        if (Number.isFinite(left + top + right + bottom)) boxes.push([left, top, right, bottom]);
+      }
+    } catch { return []; }
+    return boxes;
+  };
+  return { dispose: () => { disposed = true; load?.dispose(); }, parts };
 }
