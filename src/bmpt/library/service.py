@@ -43,7 +43,7 @@ from ba_modding_toolkit.searching import SEARCH_DIR_SUFFIXES, get_search_dirs
 from ba_modding_toolkit.utils import no_log
 from ba_modding_toolkit.utils.common import is_safe_file_name
 from . import profiles as profiles_mod
-from . import integrity, safety, staging
+from . import fingerprint, integrity, safety, staging
 from . import targets as resolver
 from .identity import identify
 from .judge import (
@@ -659,6 +659,7 @@ class ModLibrary:
         self._maps: dict[str, tuple[int, CoreMap]] = {}
         self._names_cache: dict[str, tuple[int, dict[str, Path]]] = {}
         self._originals_cache: tuple[Any, dict[str, int]] | None = None
+        self._backfill_misses: set[tuple] = set()
         self._maps_cache: tuple[tuple, Any] | None = None
         self.profiles = Profiles(self.root)
         self.profiles.gate = self._check_writes  # no change of the configuration while writes are refused
@@ -1342,7 +1343,8 @@ class ModLibrary:
             target, kind = targets[key]
             if kind == "other":
                 target = other_target(group)
-            record = self._store(group, parsed.core, target, kind, user_added=True)
+            record = self._store(group, parsed.core, target, kind, user_added=True,
+                                 built_against=self._built_against(group, pin, "import"))
             known[signature_] = record["id"]
             entry = self._entry(record)
             added.append(entry)
@@ -1842,8 +1844,9 @@ class ModLibrary:
 
     def _store(self, files: dict[str, Path], label: str, target: str, kind: str,
                *, repaired_from: str = "", user_added: bool = False, assignment: str = "",
-               metadata: dict[str, Any] | None = None) -> dict[str, Any]:
-        """Publish a complete directory before its metadata, with durable recovery of either outcome."""
+               metadata: dict[str, Any] | None = None, built_against: dict | None = None) -> dict[str, Any]:
+        """Publish a complete directory before its metadata, with durable recovery of either outcome.
+        ``built_against`` (``_built_against``) is stored with the files, as part of the same directory."""
         names = sorted(files)
         if not names:
             raise ServiceError("source_unsupported")  # no file to name
@@ -1879,6 +1882,11 @@ class ModLibrary:
                 verify_file(staged / name, hashes[name])
                 if self._hashes.get(files[name]).sha1 != hashes[name]:
                     raise ServiceError("entry_changed", core=core_of(name))
+            if built_against is not None:
+                try:
+                    fingerprint.write(staged, built_against, hashes)
+                except OSError as error:  # the mod is whole without it
+                    log_failure(logger, logging.WARNING, "Could not store the official parts' fingerprint", error)
             data["phase"] = "publishing"
             atomic_json(journal, data)
             directory.parent.mkdir(parents=True, exist_ok=True)
@@ -2028,7 +2036,8 @@ class ModLibrary:
         if kind is None:
             raise ServiceError("mod_unsupported", file=paths[0])
         key = other_target(files) if kind == "other" else self._core_map(pin).key(core_name) or core_name.lower()
-        return self._store(files, label if kind == "other" else core_name, key, kind)["id"], True
+        return self._store(files, label if kind == "other" else core_name, key, kind,
+                           built_against=self._built_against(files, pin, "import"))["id"], True
 
     def _recognize_installed(self, mod_id: str, identity: frozenset) -> bool:
         """Adopt exact outside content without writing any game files."""
@@ -2971,6 +2980,148 @@ class ModLibrary:
         for mod_id in mod_ids:
             shutil.rmtree(self.root / "mods" / mod_id, ignore_errors=True)
 
+    # --- what a mod was built against ---
+
+    def _core_targets(self, files: Mapping[str, Path], pin: Pin) -> list[Path]:
+        """The official parts of the core a mod's files belong to."""
+        name = next(iter(files))
+        if kind_of_file(name) == "other":
+            return self._other_targets(dict(files), pin)
+        return self._spine_parts(core_of(name), pin)
+
+    def _built_against(self, files: Mapping[str, Path], pin: Pin | None, event: str) -> dict | None:
+        """The fingerprint (``fingerprint.document``) of the official parts a mod's files are built against: every
+        part its core has now, from a verified official copy, each with how the mod's own files stand to it
+        (``fingerprint.standing``). A part with no official copy is left out (``complete`` False). Headers and text
+        assets only. None when nothing can be told (no install, no part, unreadable files); it never fails the
+        import, update or remap that asks."""
+        if pin is None or not files:
+            return None
+        try:
+            inspection = integrity.Inspection()
+            mod = fingerprint.carried(inspection, list(files.values()))
+            parts, complete = [], True
+            for target in self._core_targets(files, pin):
+                try:
+                    official = self._official_for(target, pin, game_first=True)
+                except ServiceError as error:
+                    if error.code not in ("original_unavailable", "original_invalid"):
+                        raise
+                    complete = False
+                    continue
+                item = fingerprint.part(inspection, official, name=target.name, sha1=self._hashes.get(official).sha1)
+                item["mod"] = fingerprint.standing(item, mod)
+                parts.append(item)
+            return fingerprint.document(event, parts, complete=complete) if parts else None
+        except Exception as error:  # noqa: BLE001 - a fingerprint is never worth the operation
+            log_failure(logger, logging.DEBUG, "No fingerprint of the official parts", error)
+            return None
+
+    def _mod_hashes(self, record: dict[str, Any]) -> dict[str, str]:
+        return {path.name: self._hashes.get(path).sha1 for path in self._paths(record)}
+
+    def _read_built_against(self, record: dict[str, Any]) -> dict | None:
+        """The stored fingerprint of a mod's files as they are now, or None."""
+        try:
+            return fingerprint.read(self.root / "mods" / record["id"], self._mod_hashes(record))
+        except (OSError, ServiceError):
+            return None
+
+    def _write_built_against(self, record: dict[str, Any], data: dict | None) -> bool:
+        if data is None or self._state_error is not None:  # a library that refuses writes gets none
+            return False
+        try:
+            fingerprint.write(self.root / "mods" / record["id"], data, self._mod_hashes(record))
+        except (OSError, ServiceError) as error:
+            log_failure(logger, logging.WARNING, "Could not store the official parts' fingerprint", error)
+            return False
+        return True
+
+    @_serialized
+    def built_against(self, mod_id: str, pin: Pin | None = None) -> dict | None:
+        """The fingerprint of the official parts a mod was built against (``fingerprint``): the one recorded when
+        the mod was imported, updated or remapped, else one made now from the official files that still show it
+        (``_backfill_built_against``). None when nothing tells."""
+        record = self._record(mod_id)
+        return self._read_built_against(record) or self._backfill_built_against(record, pin or self.current_pin())
+
+    @_serialized
+    def official_parts_now(self, mod_id: str, pin: Pin | None = None) -> dict | None:
+        """The fingerprint the official parts of a mod's core give now, to hold against the one the mod was built
+        against (``built_against``, ``fingerprint.diff`` per part). Nothing is stored. None when nothing tells."""
+        record = self._record(mod_id)
+        return self._built_against({path.name: path for path in self._paths(record)}, pin or self.current_pin(),
+                                   "now")
+
+    def _backfill_built_against(self, record: dict[str, Any], pin: Pin | None) -> dict | None:
+        """A fingerprint for a mod stored without one, from evidence alone: the official files of its core (the
+        install's current parts and the kept originals) whose atlases, skeletons and textures the mod's own files
+        carry unchanged. One file per part: the install's part before a kept original. It is stored, as
+        incomplete (other parts of the core are not known). None, and nothing stored, when no file shows it."""
+        try:
+            paths = self._paths(record)
+            files = {path.name: path for path in paths}
+            miss = (record["id"], tuple(sorted(self._mod_hashes(record).items())), pin.key if pin else None,
+                    tuple(sorted(self._originals())))
+            if miss in self._backfill_misses:
+                return None
+            candidates: list[tuple[str, Path]] = []
+            if pin is not None:
+                for target in self._core_targets(files, pin):
+                    try:
+                        candidates.append((target.name, self._official_for(target, pin, game_first=True)))
+                    except ServiceError as error:
+                        if error.code not in ("original_unavailable", "original_invalid"):
+                            raise
+            generic = record["kind"] == "other"
+            cores = {core_of(name) for name in files}
+            keys = {integrity.replacement_key(name) for name in files}
+            for name in sorted(self._originals()):
+                if (integrity.replacement_key(name) in keys) if generic else (core_of(name) in cores):
+                    kept = self.root / "originals" / name
+                    if self._is_official(kept):
+                        candidates.append((name, kept))
+            inspection = integrity.Inspection()
+            mod = fingerprint.carried(inspection, paths)
+            parts, taken = [], set()
+            for name, official in candidates:
+                key = integrity.replacement_key(name)
+                if key in taken:
+                    continue
+                item = fingerprint.part(inspection, official, name=name, sha1=self._hashes.get(official).sha1)
+                if fingerprint.standing(item, mod) == fingerprint.SAME:
+                    item["mod"] = fingerprint.SAME
+                    parts.append(item)
+                    taken.add(key)
+            if not parts:
+                if len(self._backfill_misses) >= 4096:
+                    self._backfill_misses.clear()
+                self._backfill_misses.add(miss)
+                return None
+            data = fingerprint.document("backfill", parts, complete=False)
+            self._write_built_against(record, data)
+            return self._read_built_against(record) or data
+        except Exception as error:  # noqa: BLE001 - evidence that cannot be read is no evidence
+            log_failure(logger, logging.DEBUG, "No fingerprint made for the mod", error)
+            return None
+
+    def _backfill_before_release(self, name: str) -> None:
+        """Before a kept original goes: the mods of its core stored without a fingerprint get theirs while the
+        file that shows it is still here (``_backfill_built_against``, kept originals only). Never raises."""
+        try:
+            key, core = integrity.replacement_key(name), core_of(name)
+            for record in list(self._records.values()):
+                names = record.get("files") or []
+                if record["kind"] == "other":
+                    if key not in {integrity.replacement_key(file) for file in names}:
+                        continue
+                elif core not in {core_of(file) for file in names}:
+                    continue
+                if self._read_built_against(record) is None:
+                    self._backfill_built_against(record, None)
+        except Exception as error:  # noqa: BLE001 - releasing the original does not wait for it
+            log_failure(logger, logging.DEBUG, "No fingerprint made before the release", error)
+
     # --- kept originals ---
 
     def _needs_original(self, path: Path, record: dict[str, Any]) -> bool:
@@ -3053,12 +3204,13 @@ class ModLibrary:
 
     def _prune_originals(self) -> list[Path]:
         """Delete the kept originals no longer needed, over every known install, from names, stats and records only
-        (no game file's contents are read): an original whose name is present is released once every file of that
-        name is unchanged since the library wrote official bytes there; an original whose name is gone from every
-        known install is deleted when a game update superseded it (a later-dated file of the same part in the folder
-        of each of its gone records). Then the records of superseded gone files are dropped (with the entry's
-        ``updated`` marker when the library wrote non-official bytes there), and the built copies whose names are
-        gone.
+        (no game file's contents are read; an original about to go is read once for the mods of its core that have
+        no fingerprint of their official parts yet, ``_backfill_before_release``): an original whose name is present
+        is released once every file of that name is unchanged since the library wrote official bytes there; an
+        original whose name is gone from every known install is deleted when a game update superseded it (a
+        later-dated file of the same part in the folder of each of its gone records). Then the records of superseded
+        gone files are dropped (with the entry's ``updated`` marker when the library wrote non-official bytes there),
+        and the built copies whose names are gone.
 
         What it keeps is decided over the installs this data directory removed from its list too (``guarded``): a
         library shared with a data directory that names such an install keeps the same originals here as there, so
@@ -3098,6 +3250,7 @@ class ModLibrary:
                     continue
                 if self._needed_elsewhere(name, {str(path) for path in gone}, guarded):
                     continue
+            self._backfill_before_release(name)
             try:
                 original.unlink()
             except OSError as error:
@@ -4300,7 +4453,8 @@ class ModLibrary:
             if not report.get("physics"):
                 return {"unneeded": True, "reason": "no_gain"}
             built = {path.name: path for path in replacements.values() if path.parent.name == "output"}
-            record = self._store(built, label, variant_key, "model", metadata={"optimized_from": source})
+            record = self._store(built, label, variant_key, "model", metadata={"optimized_from": source},
+                                 built_against=self._built_against(built, pin, "import"))
         return {"mod": record["id"]}
 
     @_serialized
@@ -6111,6 +6265,7 @@ class ModLibrary:
             if identity != self._identity({path.name: path for path in paths}):
                 raise ServiceError("entry_changed")
             comparison = self._compare_paths(mod_id, list(generated.values()), paths)
+            built_against = self._built_against(generated, pin, "remap")
             repaired = atlas_remap.read_inputs(list(generated.values()))
 
             def png(image) -> str | None:
@@ -6143,6 +6298,7 @@ class ModLibrary:
                 "source": mod_id, "identity": identity,
                 "files": {name: path.read_bytes() for name, path in generated.items()},
                 "report": report, "compare": comparison, "expires": time.monotonic() + 3600,
+                "built_against": built_against,
             }
         return {"preview": token, "report": report, "compare": comparison.to_json(),
                 "pages": pages, "drawings": drawings}
@@ -6165,7 +6321,8 @@ class ModLibrary:
                 path = Path(temporary) / name
                 path.write_bytes(data)
                 files[name] = path
-            stored = self._store(files, self._label(record), record["target"], record["kind"], repaired_from=record["id"])
+            stored = self._store(files, self._label(record), record["target"], record["kind"],
+                                 repaired_from=record["id"], built_against=prepared.get("built_against"))
         self._remap_previews.pop(preview, None)
         return RemapResult(self._entry(stored), prepared["report"],
                            replace(prepared["compare"], mod_id=stored["id"]))
@@ -6211,6 +6368,10 @@ class ModLibrary:
             if all_unchanged or (len(generated) == len(paths) and all(
                     new.name == old.name and self._hashes.get(new).sha1 == self._hashes.get(old).sha1
                     for new, old in zip(sorted(generated), sorted(paths)))):
+                # the mod is what a rebuild on these official parts gives: they are its baseline
+                if self._read_built_against(record) is None:
+                    self._write_built_against(record, self._built_against(
+                        {path.name: path for path in paths}, pin, "update"))
                 return UpdateResult(self._entry(record), paths, [], unchanged=True)
             # Include unchanged parts when a rebuild splits a mod across bundles.
             names = {path.name for path in generated}
@@ -6218,7 +6379,10 @@ class ModLibrary:
                 if target.name not in names:
                     atomic_copy(self._official_for(target, pin), output / target.name)
                     generated.append(output / target.name)
+            built_against = self._built_against({path.name: path for path in generated}, pin, "update")
             record, previous = self._publish_update(mod_id, built_from, generated)
+            # after the commit: a fingerprint of the files before stays theirs if the update is rolled back
+            self._write_built_against(record, built_against)
         return UpdateResult(self._entry(record), self._paths(record), previous)
 
     @_mod_writer
