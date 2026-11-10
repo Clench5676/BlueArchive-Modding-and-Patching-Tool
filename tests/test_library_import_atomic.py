@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 from bmpt.errors import ServiceError
-from bmpt.library import service, storage
+from bmpt.library import fingerprint, service, storage
 
 from test_library import game_bundle, make_mod, reload_library, setup_library
 
@@ -18,6 +18,11 @@ def upload(env, folder="incoming"):
     directory = env.tmp / folder
     return [game_bundle(directory, part=part, payload=f"uploaded {folder} {part}".encode())
             for part in ("textures", "textassets")]
+
+
+def bundles(directory):
+    """The mod's files in its directory, without the fingerprint of its official parts stored beside them."""
+    return {path.name: path.read_bytes() for path in directory.iterdir() if path.name != fingerprint.FILE_NAME}
 
 
 def journals(env):
@@ -143,7 +148,7 @@ def test_restart_recovers_interrupted_multi_file_import_at_commit_boundaries(set
     env.library = reload_library(env)
     if boundary == "metadata":
         assert {mod.id for mod in env.library.mods()} == {old.id, new_id}
-        assert {path.name: path.read_bytes() for path in (env.root / "mods" / new_id).iterdir()} == {
+        assert bundles(env.root / "mods" / new_id) == {
             path.name: path.read_bytes() for path in paths}
         assert not journals(env)
     else:
@@ -338,7 +343,7 @@ def test_rollback_retry_syncs_already_removed_metadata_before_deleting_files(set
             env.library._recover_pending()
         assert len(root_syncs) > before
         assert journal.exists() and directory.is_dir()
-        assert {path.name: path.read_bytes() for path in directory.iterdir()} == {
+        assert bundles(directory) == {
             path.name: path.read_bytes() for path in paths}
     env.library = reload_library(env)
     assert_previous(env, old, metadata, files)
@@ -383,7 +388,7 @@ def test_committed_recovery_retains_journal_until_metadata_sync_succeeds(setup_l
         with pytest.raises(ServiceError, match="library_recovery_pending"):
             recovered.set_favorite("test", True)  # a write is refused
         assert journal.exists()
-        assert {path.name: path.read_bytes() for path in (env.root / "mods" / new_id).iterdir()} == {
+        assert bundles(env.root / "mods" / new_id) == {
             path.name: path.read_bytes() for path in paths}
     recovered = reload_library(env)
     assert {mod.id for mod in recovered.mods()} == {old.id, new_id}
