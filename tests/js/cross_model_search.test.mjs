@@ -23,7 +23,7 @@ for (const locale of LOCALES) test(`the model search shares picker matching and 
   const recruit = { key: "recruit", family: "other", model: "recruit", label: "Z recruit", full: "Z recruit", recruitable: true };
   const calls = [];
   const ctx = vm.createContext({ ...Sources, pickerItems, Intl, otherStudents: [{ variants: [recruit, npc, field] }], popupSeg: 0,
-    costumeState: new Map(), crossShown: [], language: () => locale, shortName: (o) => o.label, fullName: (o) => o.full,
+    costumeState: new Map(), crossShown: [], language: () => locale, shortName: (o) => o.label, crossLabel: (o) => o.label, fullName: (o) => o.full,
     originalName: (o) => o.original || o.full, isFav: (o) => !!o.favorite, named: (c) => c,
     judgeCross: (_v, keys = []) => calls.push([...keys]), v,
   });
@@ -152,7 +152,7 @@ const makeSearch = (others, { seg = 0, shown = [] } = {}) => {
   const v = { key: "slot", family: "own", model: "slot" }, calls = [];
   const roster = [{ variants: others }];
   const ctx = vm.createContext({ ...Sources, pickerItems, Intl, otherStudents: roster, popupSeg: seg, crossShown: shown,
-    costumeState: new Map(), language: () => "en-US", shortName: (o) => o.label, fullName: (o) => o.label,
+    costumeState: new Map(), language: () => "en-US", shortName: (o) => o.label, crossLabel: (o) => o.label, fullName: (o) => o.label,
     originalName: (o) => o.label, isFav: (o) => !!o.favorite, named: (c) => c, judgeCross: (_v, keys = []) => calls.push([...keys]), v });
   vm.runInContext(functionSource("crossItems"), ctx);
   return { ctx, v, calls, hits: (query = "", own = []) => [...ctx.crossItems(v, query, own, (c) => ({ ...c, label: c.variant.label }))] };

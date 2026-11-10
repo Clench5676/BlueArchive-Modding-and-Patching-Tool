@@ -41,7 +41,7 @@ import { lazyThumbnail } from "./lazy-thumbnail.js";
 import { portraitViewport } from "./portrait-view.js";
 import { colourSwitchCard } from "./switch-card.js";
 import { clearUnseen, hasUnseen as hasFresh, shownUnseen, switchUnseen } from "./unseen-assets.js";
-import { customAliases as aliasesOf, modName, modOriginalName, studentName } from "./names.js";
+import { crossName, customAliases as aliasesOf, modName, modOriginalName, studentName } from "./names.js";
 import { setTitle } from "./nav.js";
 import { KEYS, deltaOf, pacer, typing } from "./step-keys.js";
 import { closable, closed as popupClosed, frameReady, hit as hitNode, listPopup, message, notice, popupFrame, scrollArea } from "./popup.js";
@@ -264,7 +264,7 @@ function crossItems(v, query, own, item) {
   try { collator = new Intl.Collator(language(), { numeric: true, sensitivity: "base" }); } catch { collator = null; }
   const name = (a, b) => (collator ? collator.compare(fullName(a), fullName(b)) : fullName(a) < fullName(b) ? -1 : fullName(a) > fullName(b) ? 1 : 0);
   const hits = crossCandidates(otherStudents, v, costumeState.get(v.key), {
-    match: (o) => (popupSeg === 0 || (popupSeg === 1) === !!o.recruitable) && pickerItems([{ label: shortName(o), full: fullName(o),
+    match: (o) => (popupSeg === 0 || (popupSeg === 1) === !!o.recruitable) && pickerItems([{ label: crossLabel(o), full: fullName(o),
       original: originalName(o), key: `v:${o.key}`, terms: [o.fileId, o.model, o.fieldModel] }], { query }).length > 0,
     compare: (a, b) => (isFav(b) - isFav(a)) || name(a, b), exclude: own, limit: all ? Infinity : CROSS_LIMIT });
   const keys = hits.map((c) => c.variant.key);
@@ -388,8 +388,14 @@ const previewAvailable = (v, kind) => !!coreOf(v, kind) || (kind === "model" && 
 const variantBase = (v, kind = "spr") => previewAvailable(v, kind) ? previewBase(v, kind, modsOn(), fam.variants) : null;
 // The configured portrait or lobby while mods are off; otherwise what the game files carry.
 const current = (kind = "spr") => candidates(variant(), kind).find((c) => c.key === shownSource(variant(), kind)) || candidates(variant(), kind)[0];
-// a candidate's name on the cards: another variant's mod with that variant's name first
-const candidateLabel = (c, v = variant()) => (c.kind === "mod" && !c.mod.alias && c.origin && c.origin.key !== v.key ? `${shortName(c.origin)} - ${c.label}` : c.label);
+// another student's costume, named after the student: "Yukino (Original)" (the family's base name from the roster read)
+const crossLabel = (o) => {
+  const base = L(otherStudents?.find((f) => f.key === o.family)?.base);
+  return base ? crossName(o, base, L(o.names)?.short ?? o.key, T) : fullName(o);  // no family read: the variant's full name
+};
+// a candidate's name on the cards: another variant's mod with that variant's name first, another student's model with
+// the student's name first
+const candidateLabel = (c, v = variant()) => (c.cross ? crossLabel(c.variant) : c.kind === "mod" && !c.mod.alias && c.origin && c.origin.key !== v.key ? `${shortName(c.origin)} - ${c.label}` : c.label);
 // The lobby's preview source as a label: the original, a mod's or another variant's name, or "replaced".
 const lobbyLabel = (v) => sourceLabel(v, "lobby");
 function sourceLabel(v, kind) {
