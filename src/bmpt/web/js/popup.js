@@ -1161,9 +1161,9 @@ function messageText(text, max, min, room, lines = 4, strict = false) {
 const counted = (fitted) => ({ ...fitted, lines: fitted.text.split("\n").length });
 
 const placeholderButton = (name, x, y, caption, { w, h = SMALL_BUTTON.h }) => node(name, [x, y], [sprite("Common_Btn_BG", w, h)]);
-// a plain line's inline button (button.inline): the small button only as high as its line's text, its caption at most
-// this share of the line's type size
-const INLINE_BUTTON = Object.freeze({ share: 0.75, fsMin: 24, pad: 60 });
+// a plain line's inline button (button.inline): the small button, shadow included, within its line's text from top to
+// bottom (``height`` of the type size: the ink of a line, not its pitch), its caption at most ``share`` of the type size
+export const INLINE_BUTTON = Object.freeze({ height: 0.9, share: 0.55, fsMin: 20, pad: 50 });
 
 function messageLines(lines, w, fitTogether, plain, assets = true) {
   const rows = lines.map((l) => (typeof l === "string" ? { text: l } : l));
@@ -1177,8 +1177,8 @@ function messageLines(lines, w, fitTogether, plain, assets = true) {
     const room = boxed ? valueRoom("frame", w, { reserve: bw ? bw + SPACE.m : 0 }) : w - 2 * SPACE.xxxl - (bw ? bw + SPACE.m : 0) - (plain ? r.indent || 0 : 0);
     const f = messageText(r.text, r.fontSize ?? max, r.minFontSize ?? min, room, most, boxed);
     if (plain && r.button?.inline) {
-      // as high as one line of its text; the room the full-size button left stays, so the text keeps its fit
-      const bh = Math.round(f.fs * NGUI.LINE_PITCH), cap = Math.round(f.fs * INLINE_BUTTON.share);
+      // no higher than its line's text
+      const bh = Math.round(f.fs * INLINE_BUTTON.height), cap = Math.min(Math.round(f.fs * INLINE_BUTTON.share), bh - SMALL_BUTTON.boxInsetH);
       const ib = fitText(r.button.label, cap, Math.min(cap, INLINE_BUTTON.fsMin), SMALL_BUTTON.w - SMALL_BUTTON.fitInset);
       const ibw = glyphsOf(ib.text, ib.fs) + INLINE_BUTTON.pad, inlineRoom = w - 2 * SPACE.xxxl - ibw - SPACE.m - (r.indent || 0);
       return { r, bf: ib, bw: ibw, bh, room: inlineRoom, f: counted(messageText(r.text, f.fs, f.fs, inlineRoom, most, boxed)) };

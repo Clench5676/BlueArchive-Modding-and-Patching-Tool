@@ -4255,9 +4255,10 @@ test("a plain line's inline button is as high as the line's text and stays insid
         { text: ui.mods.impact.rigChanged.replace("{n}", "3") },
         { text: ui.mods.impact.others, gap: 32, button: { label: caption, inline: true, fn: () => {} } }] });
       const line = layout.body.boxes[1], [text, button] = line.lineRow.boxes;
-      assert.equal(button.h, Math.round(line.f.fs * 1.15), `${lang} ${caption}: as high as one line`);
+      assert.ok(button.h <= line.f.fs, `${lang} ${caption}: within the text's height`);
+      assert.ok(line.bf.fs <= button.h - 20, `${lang} ${caption}: the caption inside the button`);
       assert.ok(button.h < 136, `${lang}: smaller than the small button`);
-      assert.ok(line.bf.fs <= Math.round(line.f.fs * 0.75) && line.bf.text === caption, `${lang} ${caption}: caption whole`);
+      assert.ok(line.bf.text === caption, `${lang} ${caption}: caption whole`);
       if (glyphsOf) assert.ok(glyphsOf(line.bf.text, line.bf.fs) < button.w, `${lang} ${caption}: caption inside`);
       assert.ok(text.x + text.w <= button.x && button.x + button.w <= layout.width, `${lang} ${caption}: inside the frame`);
       assert.equal(text.x, layout.body.boxes[0].lineRow.boxes[0].x, `${lang} ${caption}: the text starts where the lines do`);
