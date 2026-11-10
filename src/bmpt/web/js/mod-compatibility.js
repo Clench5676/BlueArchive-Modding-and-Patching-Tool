@@ -145,7 +145,24 @@ export async function show(report, { onRemap } = {}) {
   }
 }
 
-export async function remap(id, onRemapped = () => {}, label = "", subject = label) {
+// The repair review's lines: one per kind of region with its count, the names behind a Details button. Regions are
+// named "<atlas> - <region>"; the atlas is left out when every region of the report is in the same one.
+export function reviewLines(report) {
+  const kinds = { unpainted: report.added || [], official: report.official || [], changed: report.changed || [], dropped: report.dropped || [] };
+  const atlases = new Set(Object.values(kinds).flat().map((name) => name.split(" - ")[0]));
+  const bare = (names) => atlases.size === 1 ? names.map((name) => name.slice(name.indexOf(" - ") + 3)) : names;
+  const details = (key, names) => ({ label: T("info.details"), fn: () => Popup.message({ title: T("info.details"),
+    lines: [T(`remap.${key}`, { names: joined(bare(names)) })], scroll: true, ok: T("picker.ok") }) });
+  const counted = (key, names) => !names.length ? [] : [{ text: T(`remap.${key}`, { names: names.length }), button: details(key, names) }];
+  // the first line counts the moved and the unused regions: the unused ones' names are behind its own button
+  const counts = T("remap.counts", { moved: report.moved.length, dropped: report.dropped.length });
+  return [kinds.dropped.length ? { text: counts, button: details("dropped", kinds.dropped) } : counts,
+    ...new Set((report.upscaled || []).map(({ w, h }) => T("remap.upscaled", { w, h }))),
+    ...counted("official", kinds.official), ...counted("changed", kinds.changed), ...counted("unpainted", kinds.unpainted),
+    ...report.warnings.map(({ key, name }) => T(`remap.${key}`, { name }))];
+}
+
+export async function remap(id, onRemapped = () => {}, label = "", subject = label, kind = "") {
   const result = await Loading.hold(() => Loading.page(() => progressTask("Remap", subject,
     async (update) => waitJob(await rpc("actions.remap", { mod: id }), update),
   )), { all: true });
@@ -155,16 +172,10 @@ export async function remap(id, onRemapped = () => {}, label = "", subject = lab
     return result;
   }
   const report = result.report;
-  const lines = [T("remap.counts", { moved: report.moved.length, dropped: report.dropped.length }),
-    ...new Set((report.upscaled || []).map(({ w, h }) => T("remap.upscaled", { w, h }))),
-    ...(report.added.length ? [T("remap.unpainted", { names: joined(report.added) })] : []),
-    ...(report.official?.length ? [T("remap.official", { names: shortList(report.official) })] : []),
-    ...(report.changed?.length ? [T("remap.changed", { names: shortList(report.changed) })] : []),
-    ...(report.dropped.length ? [T("remap.dropped", { names: joined(report.dropped) })] : []),
-    ...report.warnings.map(({ key, name }) => T(`remap.${key}`, { name }))];
+  const lines = reviewLines(report);
   try {
     const accepted = await Compare.show({ ...result.compare, pages: result.pages, drawings: result.drawings }, label || T("remap.action"), "dialog", {
-      lines, partial: report.partial, accept: T("remap.accept"), discard: T("remap.discard"),
+      lines, partial: report.partial, accept: T("remap.accept"), discard: T("remap.discard"), kind: kind || reports.get(id)?.kind || "spr",
     });
     if (!accepted) return null;
     const saved = await Loading.hold(() => Loading.page(() => progressTask("Repair", subject, async (update) => {
@@ -214,5 +225,5 @@ export async function forUpdate(id, label = "", subject = label) {
 export async function check(id, label = "", onRemapped = () => {}, mod = null, subject = label) {
   if (mod?.kind !== "model" && !await ensureSpine()) return;
   const report = await Loading.hold(() => inspect(id, label, null, subject), { all: true });
-  return show(report, { onRemap: () => remap(id, onRemapped, label, subject) });
+  return show(report, { onRemap: () => remap(id, onRemapped, label, subject, mod?.kind || report.kind) });
 }

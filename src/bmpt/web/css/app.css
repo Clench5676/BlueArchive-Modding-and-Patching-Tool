@@ -407,12 +407,19 @@ input[type="text"], input[type="search"], textarea { cursor: text; }
 .log-message { width: auto; max-width: 1550px; } /* the plain popup sized to the log, not to its 1000 px message width */
 .log-message .log-text { width: 1400px; height: 580px; margin: 24px 0; }
 
-.repair-compare { color: #2d4664; line-height: 1.4; overflow-wrap: anywhere; padding: 0 8px 16px; }
-.repair-compare > div { margin-bottom: 12px; }
-.repair-pages { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-.repair-pages > div { min-width: 0; text-align: center; }
-.repair-pages img { width: 100%; object-fit: contain; background: #dbe5ee; }
-.repair-player { position: relative; background: #dbe5ee; }
+.repair-compare { color: #2d4664; line-height: 1.4; overflow-wrap: anywhere; padding: 0 8px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 32px; overflow: hidden; }
+.repair-previews { display: grid; gap: 16px; min-height: 0; height: 100%; }
+.repair-previews[data-kind="tall"] { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.repair-previews[data-kind="wide"] { grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); }
+.repair-panel { display: flex; flex-direction: column; min-width: 0; min-height: 0; text-align: center; }
+.repair-stage { flex: 1; min-height: 0; display: flex; flex-direction: column; background: #dbe5ee; }
+.repair-stage img { flex: 1; min-height: 0; width: 100%; object-fit: contain; }
+.repair-player { flex: 1; min-height: 0; position: relative; }
+.repair-notes { min-height: 0; overflow-y: auto; }
+.repair-notes > div { margin-bottom: 12px; }
+.repair-verdict { font-size: 1.15em; }
+.repair-line { display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+.repair-line .plain-line-button { flex: none; margin-left: 0; font-size: .8em; padding: .3em .9em; }
 .repair-player .spine-player { background: transparent !important; }
 
 /* Frameless desktop controls; they remain outside the fixed-aspect game stage. */

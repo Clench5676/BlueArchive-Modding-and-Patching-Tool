@@ -180,8 +180,9 @@ test("repair previews ask first in every locale; only Accept saves and refreshes
     assert.equal(options.accept, h.strings.remap.accept);
     assert.equal(options.discard, h.strings.remap.discard);
     assert.equal(options.partial, true);
-    assert.ok(options.lines.some((line) => line.includes("test.skel")));
-    assert.ok(options.lines.every((line) => !/[{}]/.test(line) && !line.startsWith("remap.")));
+    const shown = options.lines.map((line) => line.text ?? line);
+    assert.ok(shown.some((line) => line.includes("test.skel")));
+    assert.ok(shown.every((line) => !/[{}]/.test(line) && !line.startsWith("remap.")));
     assert.equal(h.covers.length, accept ? 2 : 1);
     if (accept) {
       assert.equal(h.mod.canRemap("old-mod"), false);
@@ -352,22 +353,41 @@ test("a repack under the Mod's textures and official animations the Mod lacks ar
   assert.equal(mod.compare({ ...old, remappable: false }).remap, false);
 });
 
-test("the repair preview names the regions taken from the official texture and an update names the animations it lacks", async () => {
+test("the repair preview counts each kind of region, with the names behind Details, and an update names the animations it lacks", async () => {
   for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
     const h = await harness(locale, "ok", false), preview = prepared();
     preview.report.official = ["test.atlas - smile", "test.atlas - 15", "test.atlas - 16", "test.atlas - 17"];
     preview.report.changed = ["test.atlas - body"];
+    preview.report.dropped = ["test.atlas - old"]; preview.report.added = ["test.atlas - halo"];
     h.build(preview); h.use(mixedReport());
     await h.mod.check("old-mod", "Painted");
     const lines = h.comparisons[0][3].lines;
-    const line = lines.find((text) => text.includes("smile"));
-    assert.ok(lines.some((text) => text.includes("body") && text !== line), locale);
-    assert.ok(line && line.includes("15") && !line.includes("17") && line.includes("+1"), locale);
-    assert.ok(lines.every((text) => !/[{}]/.test(text) && !text.startsWith("remap.")));
+    const rows = lines.filter((line) => line.button);
+    // moved and unused on the first row, then official, redrawn, unpainted: a count each, no name on the row
+    assert.deepEqual(rows.map((row) => row.text.match(/\d+/)?.[0]), ["1", "4", "1", "1"], locale);
+    assert.equal(lines[0], rows[0]);
+    assert.ok(rows.every((row) => !/smile|body|old|halo|atlas/.test(row.text) && row.button.label === h.strings.info.details), locale);
+    assert.ok(lines.every((line) => !/[{}]/.test(line.text ?? line) && !(line.text ?? line).startsWith("remap.")));
+    const before = h.popups.length;
+    await rows[0].button.fn();
+    assert.ok(h.popups[before].lines[0].includes("old"), locale);  // the unused regions
+    await rows[1].button.fn();
+    const detail = h.popups[before + 1];
+    assert.equal(detail.title, h.strings.info.details);
+    assert.ok(["smile", "15", "16", "17"].every((name) => detail.lines[0].includes(name)), locale);
+    assert.ok(!detail.lines[0].includes("test.atlas"), locale);  // one atlas: not named
     const notice = h.mod.rigNotice({ rig: { animations: { "a.skel": ["15", "16"], "b.skel": ["16", "17"] } } });
     assert.ok(notice.includes("3") && !/[{}]/.test(notice) && !notice.startsWith("compatibility."), locale);
     assert.equal(h.mod.rigNotice({ rig: {} }), "");
     assert.equal(h.mod.rigNotice({ rig: { regions: { "a.atlas": ["x"] } } }), "");
     assert.equal(h.mod.rigNotice(null), "");
   }
+});
+
+test("regions of several atlases keep their atlas in the details", async () => {
+  const { mod, popups } = await harness();
+  const lines = mod.reviewLines({ moved: [], dropped: [], added: [], upscaled: [], warnings: [],
+    official: ["a.atlas - smile", "b.atlas - smile"], changed: [] });
+  await lines.find((line) => line.button).button.fn();
+  assert.ok(popups[0].lines[0].includes("a.atlas - smile") && popups[0].lines[0].includes("b.atlas - smile"));
 });
