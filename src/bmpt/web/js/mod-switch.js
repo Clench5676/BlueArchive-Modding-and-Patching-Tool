@@ -15,6 +15,7 @@ import { on, rpc, waitJob } from "./api.js";
 import { T, language } from "./i18n.js";
 import { overwrittenLines } from "./repairs.js";
 import { $ } from "./util.js";
+import { TYPE } from "./ui-tokens.js";
 
 // --- pure parts ---
 
@@ -594,7 +595,7 @@ async function heldDetails(s) {
   const nameOf = await names().catch(() => undefined);
   const lines = heldLines(s, nameOf);
   await Popup.message({ title: T("mods.heldTitle"), ok: T("picker.ok"), plain: true,
-    lines: [...lines.slice(0, -1).map((text) => ({ text, marker: "\u2022", markerGap: 44, indent: 52 })), { text: lines.at(-1), gap: 32, italic: true }] });
+    lines: [...lines.slice(0, -1).map((text) => ({ text, marker: "\u2022", markerGap: 44, indent: 52 })), { text: lines.at(-1), gap: 32, italic: true, fontSize: TYPE.dense.fs, minFontSize: TYPE.dense.fs }] });
 }
 
 // Settings' Game Files Check: a scan with the dismissed entries listed again; resolves once it is in (or after 60 s)

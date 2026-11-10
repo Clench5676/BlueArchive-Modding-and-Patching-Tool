@@ -8,6 +8,7 @@ import * as Popup from "./popup.js";
 import { on, rpc, waitJob } from "./api.js";
 import { T } from "./i18n.js";
 import { entryLabel } from "./mod-switch.js";
+import { TYPE } from "./ui-tokens.js";
 
 // the order the summary counts its kinds in, those that need the user first; unchanged and unknown close it
 export const KINDS = ["rig_changed", "gone", "new_parts", "rebuilt", "unchanged", "unknown"];
@@ -23,6 +24,8 @@ const MAX_LISTED = 6; // held mods the summary names; the rest are counted
 export const ITEM = Object.freeze({ marker: "\u2022", markerGap: 44, indent: 52 });
 const GROUP_GAP = 16;
 export const WIDTH = 2098;
+// how a hold ends: in italics, two steps under the lines' type (heading 52 > body 48 > dense 42)
+export const HINT = Object.freeze({ italic: true, fontSize: TYPE.dense.fs, minFontSize: TYPE.dense.fs });
 export function summary(result, nameOf = (e) => e?.variant || e?.core || "", { expanded = false } = {}) {
   if (!result?.due) return null;
   const counts = result.counts || {};
@@ -33,7 +36,7 @@ export function summary(result, nameOf = (e) => e?.variant || e?.core || "", { e
     const named = held.map((m) => entryLabel({ variant: m.target, core: m.core, kind: m.kind }, nameOf, " - "));
     lines.push(...named.slice(0, MAX_LISTED).map((text) => ({ text, ...ITEM })));
     if (named.length > MAX_LISTED) lines.push({ text: `+${named.length - MAX_LISTED}`, ...ITEM });
-    if (named.length) lines.push({ text: T("mods.impact.hint", { action: T("act.update") }), italic: true });
+    if (named.length) lines.push({ text: T("mods.impact.hint", { action: T("act.update") }), ...HINT });
   }
   const others = KINDS.filter((k) => k !== "rig_changed" && counts[k] > 0)
     .map((kind) => ({ text: T(`mods.impact.${KEYS[kind]}`, { n: counts[kind] }), ...ITEM }));
