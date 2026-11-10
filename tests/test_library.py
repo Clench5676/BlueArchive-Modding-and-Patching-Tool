@@ -2667,3 +2667,50 @@ def test_adapted_apply_without_official_target_keeps_the_outside_mod(setup_libra
     assert any(entry.file.read_bytes() == outside for entry in env.library.mods())
     assert not (env.root / "originals" / env.original.name).exists()
     expect_error("original_unavailable", lambda: env.library.restore("test"))
+
+
+def _old_release(env, directory):
+    """A mod file named as the official part but for the CRC: a release from before a game update rebuilt it."""
+    source = make_mod(env.original, directory)
+    crc = parse_filename(source.name).crc
+    return source.rename(source.with_name(source.name.replace(f"_{crc}.bundle", "_99.bundle")))
+
+
+def _plan_actions(env, entry):
+    library = env.library
+    return [(file.action, file.existing_path, group.target_paths)
+            for group in library._plan(library._record(entry.id), lambda message: None, library.current_pin())
+            for file in group.files]
+
+
+def test_a_rebuilt_parts_older_release_is_planned_as_an_asset_update(setup_library, monkeypatch):
+    env = setup_library
+    entry, = env.library.add([_old_release(env, env.tmp / "old")])
+    # the game update rebuilt the part: the game's file has another structure than the mod's
+    monkeypatch.setattr(service.integrity.Inspection, "structure", lambda self, path: frozenset(
+        {"rebuilt" if env.game_dir in path.parents else "old"}))
+    assert _plan_actions(env, entry) == [(mod_install.InstallAction.UPDATE, None, [env.original])]
+    files = {path.name: path for path in env.library._paths(env.library._record(entry.id))}
+    assert env.library._replacements(files, [env.original], env.library.current_pin()) == {}
+
+
+def test_a_file_built_on_the_part_as_it_is_replaces_it_whole_after_a_format_check(setup_library, monkeypatch):
+    env = setup_library
+    entry, = env.library.add([_old_release(env, env.tmp / "old")])
+    monkeypatch.setattr(service.integrity.Inspection, "structure", lambda self, path: frozenset({"same"}))
+    assert _plan_actions(env, entry) == [(mod_install.InstallAction.DIRECT_REPLACE, env.original, [])]
+    # another Unity version than the part's: never written whole
+    monkeypatch.setattr(service.integrity, "metadata", lambda path, **kwargs: service.integrity.Contents(
+        platforms={"StandaloneWindows64"}, versions={"2021.3" if env.game_dir in path.parents else "2022.3"}))
+    expect_error("mod_unity_version_mismatch", lambda: _plan_actions(env, entry))
+
+
+def test_a_file_whose_structure_cannot_be_read_keeps_the_name_rule(setup_library, monkeypatch):
+    env = setup_library
+    entry, = env.library.add([_old_release(env, env.tmp / "old")])
+
+    def unreadable(self, path):
+        raise ServiceError("bundle_invalid", file=path.name)
+
+    monkeypatch.setattr(service.integrity.Inspection, "structure", unreadable)
+    assert _plan_actions(env, entry) == [(mod_install.InstallAction.DIRECT_REPLACE, env.original, [])]
