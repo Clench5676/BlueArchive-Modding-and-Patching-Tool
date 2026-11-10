@@ -42,58 +42,56 @@ export async function show(result, title = T("act.compare"), hostId = "popup", r
   }
   const players = [], startPlayers = [];
   if (review) {
+    // Pictures on the left, the report on the right, as the import page lays an entry out: a portrait as two upright
+    // panels side by side, a memorial lobby as two wide ones above each other.
     const inner = scrollArea(next, [960 - frame.scroll.width / 2 * S, 540 - frame.scroll.top * S, frame.scroll.width * S, frame.scroll.height * S], 0);
     inner.classList.add("repair-compare");
     inner.style.fontSize = `${36 * S}px`;
-    const text = (value) => {
-      const line = document.createElement("div");
-      line.textContent = value;
-      inner.appendChild(line);
-      return line;
+    inner.style.height = `${frame.scroll.height * S}px`;
+    const part = (cls, parent = inner, value = "") => {
+      const el = document.createElement("div");
+      el.className = cls;
+      el.textContent = value;
+      parent.appendChild(el);
+      return el;
     };
-    text(T(review.partial ? "remap.partial" : "remap.preview"));
-    for (const line of review.lines) text(line);
+    const previews = part("repair-previews"), notes = part("repair-notes");
+    previews.dataset.kind = review.kind === "lobby" ? "wide" : "tall";
     const drawings = result.drawings || {};
-    if (drawings.original?.length || drawings.repaired?.length) {
-      const pair = text("");
-      pair.className = "repair-pages";
-      for (const side of ["original", "repaired"]) {
-        const panel = document.createElement("div"), caption = document.createElement("div");
-        caption.textContent = T(side === "original" ? "remap.original" : "remap.after");
-        panel.appendChild(caption);
-        pair.appendChild(panel);
-        for (const scene of drawings[side] || []) {
-          const playerHost = document.createElement("div");
-          playerHost.className = "repair-player";
-          playerHost.style.height = `${480 * S}px`;
-          panel.appendChild(playerHost);
-          startPlayers.push(() => {
-            const player = previewPlayer(playerHost, scene, side, result.pages);
-            if (player) players.push(player);
-          });
-        }
+    const drawn = !!(drawings.original?.length || drawings.repaired?.length);
+    for (const side of ["original", "repaired"]) {
+      const panel = part("repair-panel", previews);
+      const caption = part("repair-caption", panel, T(side === "original" ? "remap.original" : "remap.after"));
+      const stage = part("repair-stage", panel);
+      for (const scene of drawn ? drawings[side] || [] : []) {
+        const playerHost = part("repair-player", stage);
+        startPlayers.push(() => {
+          const player = previewPlayer(playerHost, scene, side, result.pages);
+          if (player) players.push(player);
+        });
+      }
+      // without a drawing (no skeleton in the files, no runtime) the pages themselves are the picture
+      for (const page of drawn ? [] : result.pages || []) {
+        if (!page[side]) continue;
+        const img = document.createElement("img");
+        img.src = page[side];
+        img.alt = `${caption.textContent} - ${page.name}`;
+        stage.appendChild(img);
       }
     }
-    for (const page of result.pages || []) {
-      text(page.name);
-      const pair = text("");
-      pair.className = "repair-pages";
-      for (const side of ["original", "repaired"]) {
-        const panel = document.createElement("div"), caption = document.createElement("div");
-        caption.textContent = T(side === "original" ? "remap.original" : "remap.after");
-        panel.appendChild(caption);
-        if (page[side]) {
-          const img = document.createElement("img");
-          img.src = page[side];
-          img.alt = `${caption.textContent} - ${page.name}`;
-          img.style.height = `${400 * S}px`;
-          panel.appendChild(img);
-        }
-        pair.appendChild(panel);
-      }
+    part("repair-verdict", notes, T(review.partial ? "remap.partial" : "remap.preview"));
+    // a line is text, or {text, button: {label, fn}} for one with a small button at its end, as in message popups
+    for (const line of review.lines) {
+      if (typeof line === "string") { part("", notes, line); continue; }
+      const row = part("repair-line", notes), caption = document.createElement("span"), button = document.createElement("button");
+      caption.textContent = line.text;
+      button.className = "plain-line-button";
+      button.textContent = line.button.label;
+      button.setAttribute("aria-label", `${line.button.label} - ${line.text}`);
+      button.addEventListener("click", () => line.button.fn?.());
+      row.appendChild(caption);
+      row.appendChild(button);
     }
-    for (const row of rows) text(`${row.type} - ${row.name} - ${T(`compare.${row.status}`)}`);
-    inner.style.height = "auto";
   }
   let finish;
   const closed = new Promise((resolve) => { finish = resolve; });
