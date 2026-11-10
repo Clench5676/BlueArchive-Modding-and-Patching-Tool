@@ -667,5 +667,5 @@ def test_wheels_hold_the_app_only():
     include = data["tool"]["setuptools"]["packages"]["find"]["include"]
     for name in ("ba_modding_toolkit", "bmpt", "bmpt.webui", "bmpt.library"):
         assert any(fnmatch.fnmatchcase(name, pattern) for pattern in include), name
-    for name in ("bamt_dev", "tests", "scripts", "tools", "tools.store"):
+    for name in ("bmpt_dev", "tests", "scripts", "tools", "tools.store"):
         assert not any(fnmatch.fnmatchcase(name, pattern) for pattern in include), name

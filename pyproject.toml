@@ -24,7 +24,7 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]
 where = ["src"]
 # Only the App and its engine go into wheels, whatever else lies under src/.
-include = ["bmpt*", "ba_modding_toolkit*"]
+include = ["bmpt", "bmpt.*", "ba_modding_toolkit*"]
 
 [tool.setuptools.package-data]
 ba_modding_toolkit = ["locales/*.json", "assets/*.ico", "assets/*.png", "py.typed"]

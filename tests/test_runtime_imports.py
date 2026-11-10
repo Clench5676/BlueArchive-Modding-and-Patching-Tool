@@ -50,7 +50,7 @@ def _imports(path: Path) -> set[str]:
 def test_shipped_modules_import_only_runtime_dependencies():
     allowed = _closure()
     providers = metadata.packages_distributions()
-    own = {"bmpt", "ba_modding_toolkit", "bamt_dev"}
+    own = {"bmpt", "ba_modding_toolkit", "bmpt_dev"}
     missing = {}
     for package in SHIPPED:
         for path in package.rglob("*.py"):
