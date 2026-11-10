@@ -424,12 +424,76 @@ def test_art_on_a_canvas_with_another_margin_keeps_its_place_on_the_art():
     assert page.crop((20, 28, 60, 60)).tobytes() == mod.crop((2, 2, 42, 34)).tobytes()
 
 
-def test_art_of_another_shape_is_placed_and_reported():
+def test_art_of_another_shape_keeps_the_official_pixels_and_is_reported():
     old = [("page.png", (64, 64), [("part", -1, (2, 2), (30, 20), (40, 40), (5, 10), 0)])]
     new = [("page.png", (64, 64), [("part", -1, (30, 30), (20, 30), (50, 35), (10, 5), 0)])]
     mod = Image.new("RGBA", (64, 64))
     mod.paste(RED, (2, 2, 32, 22))
-    pages, report = remap.remap_pages(remap.parse_atlas(atlas_text(old)), remap.parse_atlas(atlas_text(new)),
-                                      {"page": mod}, {"page": Image.new("RGBA", (64, 64))})
-    assert report["changed"] == ["part"]
-    assert RED in set(pages["page.png"].crop((30, 30, 50, 60)).getdata())  # placed all the same, for the review
+    atlases = remap.parse_atlas(atlas_text(old)), remap.parse_atlas(atlas_text(new))
+    official = {"page": Image.new("RGBA", (64, 64), BLUE)}
+    pages, report = remap.remap_pages(*atlases, {"page": mod}, official, fill=True)
+    assert report["changed"] == ["part"] and report["moved"] == []
+    assert set(pages["page.png"].crop((30, 30, 50, 60)).getdata()) == {BLUE}  # not the mod's pixels in the wrong place
+    # without the official pixels to fall back on, it is placed all the same and reported
+    pages, report = remap.remap_pages(*atlases, {"page": mod}, official)
+    assert report["changed"] == ["part"] and RED in set(pages["page.png"].crop((30, 30, 50, 60)).getdata())
+
+
+# --- an image the game cut into other pieces ---
+
+def cut_two_ways():
+    """One 20 x 40 picture (top half red, bottom half green, a blue dot at its very top). The old atlas cuts it in a
+    top and a bottom piece; the new one moves the seam down and swaps the pieces' names."""
+    old = [("page.png", (64, 64), [("halo", -1, (52, 2), (10, 10), (12, 12), (1, 1), 0),      # a picture of its own
+                                   ("body", -1, (2, 2), (20, 20), (20, 40), (0, 20), 0),      # the top half
+                                   ("body_c", -1, (30, 2), (20, 20), (20, 40), (0, 0), 0)])]  # the bottom half
+    new = [("page.png", (64, 64), [("halo", -1, (40, 44), (10, 10), (12, 12), (1, 1), 0),
+                                   ("body_c", -1, (2, 30), (20, 30), (20, 40), (0, 10), 0),   # the top three quarters
+                                   ("body", -1, (40, 30), (20, 10), (20, 40), (0, 0), 0)])]   # the bottom quarter
+    mod = Image.new("RGBA", (64, 64))
+    mod.paste((255, 255, 0, 255), (52, 2, 62, 12))
+    mod.paste(RED, (2, 2, 22, 22))
+    mod.putpixel((2, 2), BLUE)
+    mod.paste((0, 255, 0, 255), (30, 2, 50, 22))
+    return remap.parse_atlas(atlas_text(old)), remap.parse_atlas(atlas_text(new)), {"page": mod}
+
+
+def test_pieces_of_an_image_cut_another_way_are_cut_from_the_image_put_together():
+    old, new, mod = cut_two_ways()
+    pages, report = remap.remap_pages(old, new, mod, {"page": Image.new("RGBA", (64, 64), (255, 255, 255, 255))},
+                                      fill=True)
+    page = pages["page.png"]
+    assert report["moved"] == ["body", "body_c", "halo"] and report["changed"] == [] and report["official"] == []
+    assert report["dropped"] == []
+    assert page.getpixel((45, 49)) == (255, 255, 0, 255)  # a region moved the ordinary way, before the pieces
+    # the new top piece: the picture's top 30 rows, red then green from row 20 on
+    assert page.getpixel((2, 30)) == BLUE
+    assert page.getpixel((10, 40)) == RED and page.getpixel((10, 49)) == RED
+    assert page.getpixel((10, 50)) == (0, 255, 0, 255) and page.getpixel((10, 59)) == (0, 255, 0, 255)
+    # the new bottom piece: its last 10 rows, all green, though its namesake held the red half
+    assert set(page.crop((40, 30, 60, 40)).getdata()) == {(0, 255, 0, 255)}
+
+
+def test_pictures_of_one_size_are_not_pieces_of_one_image():
+    # two expressions of one size lie on each other: each keeps to its namesake
+    old = [("page.png", (64, 64), [("01", -1, (2, 2), (20, 16), (20, 16), (0, 0), 0),
+                                   ("02", -1, (30, 2), (20, 16), (20, 16), (0, 0), 0)])]
+    new = [("page.png", (64, 64), [("02", -1, (2, 30), (20, 16), (20, 16), (0, 0), 0),
+                                   ("01", -1, (30, 30), (20, 16), (20, 16), (0, 0), 0),
+                                   ("03", -1, (2, 48), (20, 16), (20, 16), (0, 0), 0)])]
+    left, right = remap.parse_atlas(atlas_text(old)), remap.parse_atlas(atlas_text(new))
+    assert remap._recut(left, right, remap._pair_regions(left, right)) == {}
+    mod = Image.new("RGBA", (64, 64))
+    mod.paste(RED, (2, 2, 22, 18))
+    mod.paste(BLUE, (30, 2, 50, 18))
+    pages, report = remap.remap_pages(left, right, {"page": mod}, {"page": Image.new("RGBA", (64, 64), (9, 9, 9, 255))},
+                                      fill=True)
+    assert pages["page.png"].getpixel((40, 38)) == RED and pages["page.png"].getpixel((10, 38)) == BLUE
+    assert report["official"] == ["03"] and pages["page.png"].getpixel((10, 56)) == (9, 9, 9, 255)
+
+
+def test_a_piece_that_kept_its_cut_moves_as_before():
+    old = [("page.png", (64, 64), [("body", -1, (2, 2), (20, 20), (20, 40), (0, 20), 0)])]
+    new = [("page.png", (64, 64), [("body", -1, (30, 30), (20, 20), (20, 40), (0, 20), 90)])]
+    left, right = remap.parse_atlas(atlas_text(old)), remap.parse_atlas(atlas_text(new))
+    assert remap._recut(left, right, remap._pair_regions(left, right)) == {}
