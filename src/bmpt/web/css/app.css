@@ -413,13 +413,18 @@ input[type="text"], input[type="search"], textarea { cursor: text; }
 .repair-previews[data-kind="wide"] { grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); }
 .repair-panel { display: flex; flex-direction: column; min-width: 0; min-height: 0; text-align: center; }
 .repair-stage { flex: 1; min-height: 0; display: flex; flex-direction: column; background: #dbe5ee; }
-.repair-stage img { flex: 1; min-height: 0; width: 100%; object-fit: contain; }
-.repair-player { flex: 1; min-height: 0; position: relative; }
-.repair-notes { min-height: 0; overflow-y: auto; }
-.repair-notes > div { margin-bottom: 12px; }
+.repair-player { flex: 1; min-height: 0; position: relative; overflow: hidden; cursor: grab; touch-action: none; }
+.repair-view { position: absolute; }
+.repair-view img { width: 100%; height: 100%; object-fit: contain; pointer-events: none; user-select: none; }
+/* the report starts level with the pictures, below their captions; its text keeps to its own column and the small
+   buttons stand in a column of their own to the right of it */
+.repair-notes { min-height: 0; overflow-y: auto; padding-top: 1.4em; display: grid; grid-template-columns: minmax(0, 1fr) max-content;
+  column-gap: 24px; row-gap: 12px; align-content: start; align-items: center; }
+.repair-notes > div { grid-column: 1; }
+.repair-notes > .repair-line { display: contents; }
+.repair-line > div { grid-column: 1; }
+.repair-line > .plain-line-button { grid-column: 2; margin-left: 0; font-size: .8em; padding: .3em .9em; }
 .repair-verdict { font-size: 1.15em; }
-.repair-line { display: flex; align-items: center; justify-content: space-between; gap: 24px; }
-.repair-line .plain-line-button { flex: none; margin-left: 0; font-size: .8em; padding: .3em .9em; }
 .repair-player .spine-player { background: transparent !important; }
 
 /* Frameless desktop controls; they remain outside the fixed-aspect game stage. */

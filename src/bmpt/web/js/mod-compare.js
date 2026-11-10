@@ -6,6 +6,7 @@ import { compareFrame } from "./popup-frames.js";
 import { COLOUR } from "./ui-tokens.js";
 import { loadPlayer } from "./spine-load.js";
 import { ensureSpine } from "./spine-runtime.js";
+import * as PanZoom from "./pan-zoom.js";
 
 const { node, label, find } = NGUI;
 
@@ -59,14 +60,54 @@ export async function show(result, title = T("act.compare"), hostId = "popup", r
     previews.dataset.kind = review.kind === "lobby" ? "wide" : "tall";
     const drawings = result.drawings || {};
     const drawn = !!(drawings.original?.length || drawings.repaired?.length);
+    // Both sides are looked at through one view: the wheel zooms at the pointer, a drag moves the picture, a double
+    // click goes back to where it started. A lobby starts filling its frame, a portrait whole.
+    const views = [];
+    let view = { ...PanZoom.REST }, rest = view, framed = review.kind !== "lobby";
+    const show = (value) => {
+      view = value;
+      for (const el of views) Object.assign(el.style, PanZoom.style(view));
+    };
+    const frameIn = (host) => {
+      const el = part("repair-view", host);
+      views.push(el);
+      Object.assign(el.style, PanZoom.style(view));
+      const point = (event) => {
+        const box = host.getBoundingClientRect();
+        return [box, (event.clientX - box.left) / (box.width || 1), (event.clientY - box.top) / (box.height || 1)];
+      };
+      host.addEventListener("wheel", (event) => {
+        event.preventDefault();
+        const [, px, py] = point(event);
+        show(PanZoom.zoomAt(view, 1.0015 ** -event.deltaY, px, py));
+      }, { passive: false });
+      let held = null;
+      host.addEventListener("pointerdown", (event) => { held = [event.clientX, event.clientY]; host.setPointerCapture?.(event.pointerId); });
+      host.addEventListener("pointermove", (event) => {
+        if (!held) return;
+        const [box] = point(event);
+        show(PanZoom.panBy(view, (event.clientX - held[0]) / (box.width || 1), (event.clientY - held[1]) / (box.height || 1)));
+        held = [event.clientX, event.clientY];
+      });
+      for (const type of ["pointerup", "pointercancel"]) host.addEventListener(type, () => { held = null; });
+      host.addEventListener("dblclick", () => show(rest));
+      return el;
+    };
+    // the first picture drawn tells its proportions: a lobby then fills the frame it is in
+    const fill = (host, picture) => {
+      if (framed) return;
+      framed = true;
+      const box = host.getBoundingClientRect?.();
+      if (box?.width > 0 && box?.height > 0) show(rest = PanZoom.cover(box.width / box.height, picture));
+    };
     for (const side of ["original", "repaired"]) {
       const panel = part("repair-panel", previews);
       const caption = part("repair-caption", panel, T(side === "original" ? "remap.original" : "remap.after"));
       const stage = part("repair-stage", panel);
       for (const scene of drawn ? drawings[side] || [] : []) {
-        const playerHost = part("repair-player", stage);
+        const playerHost = part("repair-player", stage), inside = frameIn(playerHost);
         startPlayers.push(() => {
-          const player = previewPlayer(playerHost, scene, side, result.pages);
+          const player = previewPlayer(inside, scene, side, result.pages, (picture) => fill(playerHost, picture));
           if (player) players.push(player);
         });
       }
@@ -76,14 +117,14 @@ export async function show(result, title = T("act.compare"), hostId = "popup", r
         const img = document.createElement("img");
         img.src = page[side];
         img.alt = `${caption.textContent} - ${page.name}`;
-        stage.appendChild(img);
+        frameIn(part("repair-player", stage)).appendChild(img);
       }
     }
     part("repair-verdict", notes, T(review.partial ? "remap.partial" : "remap.preview"));
     // a line is text, or {text, button: {label, fn}} for one with a small button at its end, as in message popups
     for (const line of review.lines) {
       if (typeof line === "string") { part("", notes, line); continue; }
-      const row = part("repair-line", notes), caption = document.createElement("span"), button = document.createElement("button");
+      const row = part("repair-line", notes), caption = document.createElement("div"), button = document.createElement("button");
       caption.textContent = line.text;
       button.className = "plain-line-button";
       button.textContent = line.button.label;
@@ -116,7 +157,8 @@ export async function show(result, title = T("act.compare"), hostId = "popup", r
   return closed;
 }
 
-function previewPlayer(host, scene, side, pages) {
+// `drawn(width / height)` is told once, when the skeleton is up, with the proportions of the picture the player fits.
+function previewPlayer(host, scene, side, pages, drawn = () => {}) {
   let disposed = false, load = null;
   const unavailable = () => { if (!disposed) host.textContent = T("remap.previewUnavailable"); };
   const start = async () => {
@@ -144,11 +186,21 @@ function previewPlayer(host, scene, side, pages) {
         skeleton, atlas: "skeleton.atlas", downloader, rawDataURIs,
         premultipliedAlpha: false, alpha: true, backgroundColor: "#00000000",
         showControls: false, showLoading: false, animation: undefined,
+        // the picture up to the frame's edges: the frame is small, and the view zooms and moves
+        viewport: { padLeft: "2%", padRight: "2%", padTop: "2%", padBottom: "2%" },
         success: (p) => {
           const idle = p.skeleton.data.animations.find((a) => /^Idle_01$/i.test(a.name)) || p.skeleton.data.animations[0];
           if (idle) p.animationState.setAnimation(0, idle.name, true);
           else p.animationState.setEmptyAnimation(0, 0).trackEnd = Number.MAX_VALUE;
           p.animationState.timeScale = 0;
+          // the player fits its picture when it draws its first frame
+          const fitted = (tries) => {
+            if (disposed) return;
+            const box = p.currentViewport;
+            if (box?.width > 0 && box?.height > 0) drawn(box.width / box.height);
+            else if (tries > 0) requestAnimationFrame(() => fitted(tries - 1));
+          };
+          fitted(60);
         },
       }, { onError: unavailable });
       load.ready.catch(unavailable);
