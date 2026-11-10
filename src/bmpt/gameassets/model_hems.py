@@ -309,11 +309,23 @@ def read_skin(mesh: Mapping[str, Any], layout: SkinLayout) -> tuple[np.ndarray, 
     return joints, weights
 
 
+class SkinNotWritable(ValueError):
+    """The skin cannot take the new bone indices in this mesh's index format (BL-139): the part keeps its skin."""
+
+
+INDEX_RANGE = {"B": (0, 1 << 8), "b": (-(1 << 7), 1 << 7), "H": (0, 1 << 16), "h": (-(1 << 15), 1 << 15),
+               "I": (0, 1 << 32), "i": (-(1 << 31), 1 << 31)}
+
+
 def write_skin(mesh: dict, layout: SkinLayout, rows: np.ndarray, joints: np.ndarray, weights: np.ndarray) -> None:
-    """Rewrite the skin of the vertices ``rows`` in place; every other byte stays as it is."""
+    """Rewrite the skin of the vertices ``rows`` in place; every other byte stays as it is. A bone index past what the
+    mesh's index format holds (8 bits: 255) raises :class:`SkinNotWritable` before anything changes."""
     data = mesh["m_VertexData"]
     raw = bytearray(data["m_DataSize"])
     (ws, wstride, wcode), (js, jstride, jcode) = layout.weights, layout.indices
+    low, high = INDEX_RANGE[jcode]
+    if len(joints) and (int(np.min(joints)) < low or int(np.max(joints)) >= high):
+        raise SkinNotWritable(f"bone index outside {low}..{high - 1}")
     for row, j, w in zip(rows.tolist(), joints.tolist(), weights.tolist()):
         struct.pack_into("<4" + wcode, raw, ws + row * wstride, *w)
         struct.pack_into("<4" + jcode, raw, js + row * jstride, *(int(x) for x in j))

@@ -95,6 +95,11 @@ PROBE_CLIPS = ("Formation_Idle", "Normal_Idle", "Move_Ing", "Vital_Death", "Form
 IDLE_CLIPS = ("Formation_Idle", "Normal_Idle", "Cafe_Idle", "Stand_Idle", "Idle")
 FIELD_KINDS = ("Field_Player_{}", "Field_Player_{}_NonWeapon")
 PROBE_SCAN = 24  # clips looked at, at most, for the probes
+# the sanity pass over what a run writes (BL-139)
+CONDITION_LIMIT = 1e8      # a rest matrix whose linear part is worse conditioned than this is singular
+BINDPOSE_LIMIT = 1e3       # a bindpose entry larger than this (in magnitude) is out of range
+VERTEX_LIMIT = 50.0        # a written vertex farther than this from the prefab's root bone (metres) is out of range
+WEIGHT_TOLERANCE = 1e-3    # a vertex's skin weights add up to 1 within this
 
 
 def refuse(reason: str, **params: Any) -> ServiceError:
@@ -102,6 +107,20 @@ def refuse(reason: str, **params: Any) -> ServiceError:
     error, for the costume verdicts and the diagnostics)."""
     logger.info("Costume adaptation refused: %s %s", reason, params)
     return ServiceError("source_unsupported", source=reason, **{key: str(value) for key, value in params.items()})
+
+
+def _inverse(matrix: np.ndarray, bone: str) -> np.ndarray:
+    """The inverse of a rest matrix; a singular or nearly singular one (a bone at no volume) is a refusal, not a
+    program error or bindposes of 1e4 and more."""
+    linear = matrix[:3, :3]
+    if not np.isfinite(matrix).all():
+        raise refuse("singular bone", bone=bone)
+    try:
+        if not np.linalg.cond(linear) <= CONDITION_LIMIT:
+            raise refuse("singular bone", bone=bone)
+        return np.linalg.inv(matrix)
+    except np.linalg.LinAlgError:
+        raise refuse("singular bone", bone=bone) from None
 
 
 def _shader_name(shader: Any) -> str:
@@ -831,7 +850,7 @@ def refit(target: Skeleton, source: Skeleton, flat: Flat, carried: Mapping[int, 
             columns[n] = 0
             continue
         a, t = hit
-        m = t_rest[t] @ np.linalg.inv(s_rest[a])
+        m = t_rest[t] @ _inverse(s_rest[a], source.nodes[a].name)
         if shape == "moved":  # the joint's move alone, no turn
             m = np.eye(4)
             m[:3, 3] = t_rest[t][:3, 3] - s_rest[a][:3, 3]
@@ -902,8 +921,15 @@ def _judge(target: Costume, source: Costume, probes: list[list[np.ndarray]], fla
     joints = np.vectorize(lambda n: index.get(n, 0))(np.where(sj < 0, nodes[0], sj))
     flat = Skin(sv, joints, sw, se)
 
+    inverses: dict[int, np.ndarray] = {}
+
+    def rest_inverse(node: int) -> np.ndarray:
+        if node not in inverses:
+            inverses[node] = _inverse(t_rest[node], target.skeleton.nodes[node].name)
+        return inverses[node]
+
     def matrices(pose: list[np.ndarray], m: Mapping[int, int]) -> np.ndarray:
-        return np.array([pose[m[n]] @ np.linalg.inv(t_rest[m[n]]) for n in nodes])
+        return np.array([pose[m[n]] @ rest_inverse(m[n]) for n in nodes])
 
     groups: dict[int, list[int]] = {}
     for n in nodes:
@@ -1682,6 +1708,83 @@ def _vector(v: Iterable[float]) -> dict[str, float]:
 
 
 @dataclass
+class Written:
+    """What a run wrote for one new costume mesh, as arrays in memory (:func:`_sanity`)."""
+
+    name: str
+    vertices: np.ndarray                 # (n, 3), mesh space, as written
+    linear: np.ndarray | None            # (n, 3, 3), what turned the normals and tangents
+    joints: np.ndarray                   # (n, 4), indices into the mesh's bone list
+    weights: np.ndarray                  # (n, 4)
+    bindposes: np.ndarray                # (bones, 4, 4)
+    bones: list[str]                     # the bones' names, as bindposes
+    submeshes: int
+    source_totals: np.ndarray | None = None  # per vertex, the source's weight sum (no weight is allowed where it had none)
+    source_materials: list[int] = field(default_factory=list)  # the source renderer's materials, 0 for none
+
+
+@dataclass
+class Rendered:
+    """What a run wrote on one renderer: the mesh it draws (``part``, an index into the :class:`Written` list)."""
+
+    part: int
+    bones: int
+    materials: list[int]  # path ids, 0 for none
+    bounds: dict          # m_AABB
+
+
+def _hole(pointers: Iterable[int]) -> bool:
+    """Whether a null comes before a non-null (the later materials would shift onto other submeshes)."""
+    gap = False
+    for pointer in pointers:
+        if not pointer:
+            gap = True
+        elif gap:
+            return True
+    return False
+
+
+def _sanity(meshes: list[Written], renderers: list[Rendered]) -> None:
+    """The last check before the bundles are returned (BL-139): what this run wrote must be numbers a player can
+    load. A failure refuses the pair (``source_unsupported``) rather than saving a mesh that draws nothing or flies
+    apart. Over arrays already in memory; nothing is read again."""
+    for mesh in meshes:
+        for what, array in (("bindposes", mesh.bindposes), ("vertices", mesh.vertices), ("normals", mesh.linear)):
+            if array is not None and not np.isfinite(array).all():
+                raise refuse("invalid data", what=what, part=mesh.name)
+        if len(mesh.bindposes):
+            largest = np.abs(mesh.bindposes).reshape(len(mesh.bindposes), -1).max(axis=1)
+            if largest.max() > BINDPOSE_LIMIT:
+                raise refuse("bindpose out of range", bone=mesh.bones[int(np.argmax(largest))], part=mesh.name)
+        count, used = len(mesh.bindposes), mesh.weights > 0
+        if (mesh.joints[used] >= count).any() or (mesh.joints[used] < 0).any():
+            raise refuse("skin inconsistent", part=mesh.name, what="bone index past the bindposes")
+        totals = mesh.weights.sum(axis=1)
+        none = np.zeros(len(totals), bool) if mesh.source_totals is None else \
+            (totals <= 1e-9) & (mesh.source_totals <= 1e-9)
+        if not (none | (np.abs(totals - 1.0) <= WEIGHT_TOLERANCE)).all():
+            raise refuse("skin inconsistent", part=mesh.name, what="weights do not add up to 1")
+        if _hole(mesh.source_materials):
+            raise refuse("materials inconsistent", part=mesh.name, what="a material missing between others")
+    for renderer in renderers:
+        mesh = meshes[renderer.part]
+        if renderer.bones != len(mesh.bindposes):
+            raise refuse("skin inconsistent", part=mesh.name,
+                         what=f"{renderer.bones} renderer bones for {len(mesh.bindposes)} bindposes")
+        centre = np.array([renderer.bounds["m_Center"][axis] for axis in "xyz"], float)
+        extent = np.array([renderer.bounds["m_Extent"][axis] for axis in "xyz"], float)
+        if not (np.isfinite(centre).all() and np.isfinite(extent).all()):
+            raise refuse("invalid data", what="bounds", part=mesh.name)
+        if float(np.max(np.abs(centre) + np.abs(extent))) > VERTEX_LIMIT:
+            raise refuse("vertices out of range", part=mesh.name)
+        if len(renderer.materials) > mesh.submeshes:
+            raise refuse("materials inconsistent", part=mesh.name,
+                         what=f"{len(renderer.materials)} materials for {mesh.submeshes} submeshes")
+        if _hole(renderer.materials):
+            raise refuse("materials inconsistent", part=mesh.name, what="a material missing between others")
+
+
+@dataclass
 class Result:
     changed: dict[Path, Any]  # slot file -> engine Bundle with the changes
     plan: Plan
@@ -1906,12 +2009,17 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
     # meshes: the source parts' meshes with bindposes on the target skeleton
     new_meshes = []
     fitted_skins = []
+    written: list[Written] = []
+    rendered: list[Rendered] = []
     for k, (part, skin) in enumerate(zip(s_costume, source.skins)):
         tree = mesh_trees[k]
         nodes = [result.mapping.get(b, 0) if b is not None else 0 for b in part.bones]
         points, linear = shapes[k]
         if layouts[k] is not None and float(np.abs(points - skin.vertices).max(initial=0.0)) > 1e-6:
-            mg.write_geometry(tree, layouts[k], points, linear)
+            try:
+                mg.write_geometry(tree, layouts[k], points, linear)
+            except OverflowError:  # a position past what half-precision or packed floats hold
+                raise refuse("vertices out of range", part=part.mesh.peek_name()) from None
         skin = Skin(points, skin.joints, skin.weights, skin.edges, skin.triangles)
         fitted_skins.append(skin)
         joints, weights = skin.joints, skin.weights
@@ -1922,15 +2030,22 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
             slots: dict[int, int] = {}
             for i, n in enumerate(nodes):
                 slots.setdefault(n, i)
+            grown = list(nodes)
             for n in slot_nodes.ravel().tolist():
                 if n not in slots:
-                    slots[n] = len(nodes)
-                    nodes.append(n)
+                    slots[n] = len(grown)
+                    grown.append(n)
             new_joints = np.vectorize(slots.get, otypes=[int])(slot_nodes)
-            hm.write_weights(tree, stores[k], rows, new_joints, new_weights)
-            joints, weights = joints.copy(), weights.copy()
-            joints[rows], weights[rows] = new_joints, new_weights
-        poses = [np.linalg.inv(t_rest[n]) @ s_rest[part.node] for n in nodes]
+            try:
+                hm.write_weights(tree, stores[k], rows, new_joints, new_weights)
+            except hm.SkinNotWritable as error:  # more bones than the mesh's index format holds: its skin stays
+                logger.info("Costume of %s on %s: hem skipped on part %s: %s", s_name, t_name, part.mesh.peek_name(), error)
+                hem.parts[k] = None
+            else:
+                nodes = grown
+                joints, weights = joints.copy(), weights.copy()
+                joints[rows], weights[rows] = new_joints, new_weights
+        poses = [_inverse(t_rest[n], t_skeleton.nodes[n].name) @ s_rest[part.node] for n in nodes]
         tree["m_BindPose"] = [_matrix(m) for m in poses]
         tree["m_BoneNameHashes"] = [zlib.crc32(t_skeleton.nodes[n].path.encode()) for n in nodes]
         tree["m_RootBoneNameHash"] = graph.tree(primary.mesh)["m_RootBoneNameHash"]
@@ -1942,6 +2057,10 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
             if hit.any() and i < len(tree["m_BonesAABB"]):
                 local = (np.c_[skin.vertices[hit], np.ones(hit.sum())] @ pose.T)[:, :3]
                 tree["m_BonesAABB"][i] = {"m_Min": _vector(local.min(axis=0)), "m_Max": _vector(local.max(axis=0))}
+        written.append(Written(
+            part.mesh.peek_name(), points, linear, joints, weights, np.array(poses), [t_skeleton.nodes[n].name for n in nodes],
+            len(tree["m_SubMeshes"]), source.skins[k].weights.sum(axis=1),
+            [0 if m is None else 1 for m in part.materials]))
         new_meshes.append((writer.add(mesh_sf, "Mesh", tree), nodes))
     # another student's halo (BL-131): an unskinned mesh, added as it is
     halo_change = _halo_change(t_skeleton, s_skeleton, lambda mesh: writer.add(mesh_sf, "Mesh", _mesh_tree(mesh)),
@@ -1962,7 +2081,7 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
                 _edit_prefabs(writer, sf, graph, t_meshes, t_primary_materials, mesh_cab, material_cab, new_meshes,
                               [[materials[_key(m)] for m in p.materials if m is not None] for p in s_costume],
                               [s_skeleton.nodes[p.node].name for p in s_costume], root_node, t_skeleton, s_costume,
-                              fitted_skins, result.mapping, s_rest, halo_change)
+                              fitted_skins, result.mapping, s_rest, halo_change, rendered)
     if hem.skirt is not None:
         for clip in skirt_clips:
             obj = writer.file(clip.assets_file.name.lower()).objects[clip.path_id]
@@ -1973,6 +2092,7 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
             else:
                 logger.info("Costume of %s on %s: clip %s left without skirt curves (layout)", s_name, t_name,
                             clip.peek_name())
+    _sanity(written, rendered)
     logger.info("Costume of %s on %s: %d part(s), groups %s, stretch %.2f (own %.2f), shape %s (changed %.3f, 99th "
                 "percentile %.3f); hem %s", s_name, t_name, len(s_costume), result.choices, result.stretch, result.own,
                 result.fit.shape, result.fit.largest, result.fit.shift, hem.summary())
@@ -1983,7 +2103,8 @@ def _edit_prefabs(writer: _Writer, sf: Any, graph: BundleGraph, t_meshes: Mappin
                   primary_materials: list[tuple[str, int]], mesh_cab: str, material_cab: str,
                   new_meshes: list[tuple[int, list[int]]], new_materials: list[list[int]], names: list[str],
                   root_node: int, t_skeleton: Skeleton, s_costume: list[Part], skins: list[Skin],
-                  mapping: Mapping[int, int], s_rest: list[np.ndarray], halo: HaloChange | None = None) -> None:
+                  mapping: Mapping[int, int], s_rest: list[np.ndarray], halo: HaloChange | None = None,
+                  rendered: list[Rendered] | None = None) -> None:
     objects = sf.objects
     trees: dict[int, dict] = {}
 
@@ -1999,6 +2120,7 @@ def _edit_prefabs(writer: _Writer, sf: Any, graph: BundleGraph, t_meshes: Mappin
     bundle_object = next(o for o in objects.values() if o.type.name == "AssetBundle")
     asset_bundle = bundle_object.read_typetree()
     additions: dict[tuple[int, int], list[dict]] = {}
+    seen = rendered if rendered is not None else []  # what is written on the renderers, for ``_sanity``
     for container, info in asset_bundle["m_Container"]:
         if not container.lower().endswith(".prefab") or info["asset"]["m_FileID"] != 0:
             continue
@@ -2090,6 +2212,7 @@ def _edit_prefabs(writer: _Writer, sf: Any, graph: BundleGraph, t_meshes: Mappin
                     r["m_Materials"] = (kept * count)[:count]
                 r["m_RootBone"] = bone(root_node)
                 r["m_AABB"] = _bounds(skins[0], s_costume[0], t_skeleton, root_node, s_rest)
+                seen.append(Rendered(0, len(r["m_Bones"]), [m["m_PathID"] for m in r["m_Materials"]], r["m_AABB"]))
             else:  # the target's other costume parts, alternates and their copies draw nothing
                 r["m_Mesh"] = {"m_FileID": 0, "m_PathID": 0}
             save(pid)
@@ -2118,6 +2241,7 @@ def _edit_prefabs(writer: _Writer, sf: Any, graph: BundleGraph, t_meshes: Mappin
             r["m_Bones"] = [bone(n) for n in nodes]
             r["m_RootBone"] = bone(root_node)
             r["m_AABB"] = _bounds(skins[k], s_costume[k], t_skeleton, root_node, s_rest)
+            seen.append(Rendered(k, len(r["m_Bones"]), [m["m_PathID"] for m in r["m_Materials"]], r["m_AABB"]))
             new_r = _add_with_id(writer, sf, "SkinnedMeshRenderer", r)
             g = {**go_tree, "m_Name": names[k], "m_IsActive": True,
                  "m_Component": [{"component": {"m_FileID": 0, "m_PathID": new_tf}},

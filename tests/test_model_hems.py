@@ -210,6 +210,20 @@ def test_vertex_skin_round_trip_leaves_every_other_byte():
     assert all(a == b for i, (a, b) in enumerate(zip(before, after)) if i not in touched)
 
 
+def test_vertex_skin_past_the_index_format_is_not_writable_and_changes_nothing():
+    mesh = _vertex_mesh()
+    wide = hm.store_of(mesh)
+    layout = hm.SkinLayout(wide.count, wide.weights, (wide.indices[0], wide.indices[1], "B"))  # one byte per index
+    before = mesh["m_VertexData"]["m_DataSize"]
+    rows, weights = np.array([1, 3]), np.array([[1.0, 0, 0, 0], [0.5, 0.5, 0, 0]])
+    with pytest.raises(hm.SkinNotWritable):
+        hm.write_weights(mesh, layout, rows, np.array([[255, 256, 0, 0], [1, 2, 3, 4]]), weights)
+    assert mesh["m_VertexData"]["m_DataSize"] == before
+    hm.write_weights(mesh, layout, rows, np.array([[255, 254, 0, 0], [1, 2, 3, 4]]), weights)  # 255 still fits
+    joints, _ = hm.read_skin(mesh, layout)
+    assert joints[1].tolist() == [255, 254, 0, 0]
+
+
 @pytest.mark.parametrize("change", [
     lambda m: m["m_CompressedMesh"]["m_Weights"].update(m_NumItems=4),
     lambda m: m["m_StreamData"].update(size=100),
