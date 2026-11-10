@@ -497,3 +497,60 @@ def test_a_piece_that_kept_its_cut_moves_as_before():
     new = [("page.png", (64, 64), [("body", -1, (30, 30), (20, 20), (20, 40), (0, 20), 90)])]
     left, right = remap.parse_atlas(atlas_text(old)), remap.parse_atlas(atlas_text(new))
     assert remap._recut(left, right, remap._pair_regions(left, right)) == {}
+
+
+# --- written inside the outline, layers in their draw order ---
+
+def test_a_region_moved_whole_does_not_erase_the_neighbour_packed_into_its_rectangle():
+    old, new, mod, official = nested()
+    # the old skeleton draws the L as a whole rectangle (no outline to cut its pixels by); the new one outlines it,
+    # and packs the new expression into its empty corner
+    pages, report = remap.remap_pages(old, new, mod, official, fill=True, hulls={"part": None, "eye": None},
+                                      official_hulls={"part": [L_SHAPE], "eye": None, "smile": None})
+    page = pages["page.png"]
+    assert page.getpixel((24, 40)) == RED and page.getpixel((8, 8)) == (0, 255, 0, 255)
+    assert page.getpixel((46, 30)) == BLUE  # the official expression is still there
+    # without an outline of the new L its rectangle is written whole, as before
+    whole, _ = remap.remap_pages(old, new, mod, official, fill=True, hulls={"part": None, "eye": None},
+                                 official_hulls={"eye": None, "smile": None})
+    assert whole["page.png"].getpixel((46, 30)) == (0, 255, 0, 255)
+
+
+def layers():
+    """One 20 x 40 picture drawn as a red base over all of it and a small green layer on its upper half; the new
+    atlas cuts the same picture into a top and a bottom half."""
+    old = [("page.png", (64, 64), [("base", -1, (2, 2), (20, 40), (20, 40), (0, 0), 0),
+                                   ("base_2", -1, (30, 2), (10, 10), (20, 40), (5, 25), 0)])]  # rows 5..15, columns 5..15
+    new = [("page.png", (64, 64), [("base", -1, (2, 44), (20, 20), (20, 40), (0, 20), 90),    # the top half
+                                   ("base_02", -1, (30, 20), (20, 20), (20, 40), (0, 0), 0)])]  # the bottom half
+    mod = Image.new("RGBA", (64, 64))
+    mod.paste(RED, (2, 2, 22, 42))
+    mod.paste((0, 255, 0, 255), (30, 2, 40, 12))
+    return remap.parse_atlas(atlas_text(old)), remap.parse_atlas(atlas_text(new)), {"page": mod}
+
+
+@pytest.mark.parametrize("order, top", [(["base", "base_2"], (0, 255, 0, 255)), (["base_2", "base"], RED)])
+def test_layers_of_an_image_are_laid_in_the_draw_order_of_their_skeleton(order, top):
+    old, new, mod = layers()
+    # one lies wholly on the other: parts of one image all the same, not two pictures of one size
+    assert set(remap._recut(old, new, remap._pair_regions(old, new))) == set(new.regions)
+    pages, report = remap.remap_pages(old, new, mod, {"page": Image.new("RGBA", (64, 64), (9, 9, 9, 255))}, fill=True,
+                                      hulls={name: None for name in order})
+    assert report["moved"] == ["base", "base_02"] and report["official"] == [] and report["dropped"] == []
+    upper = remap._rotate(pages["page.png"].crop((2, 44, 22, 64)), -90)  # the new top half, upright
+    assert upper.getpixel((10, 10)) == top and upper.getpixel((1, 1)) == RED and upper.getpixel((10, 18)) == RED
+    assert set(pages["page.png"].crop((30, 20, 50, 40)).getdata()) == {RED}  # the bottom half holds no layer
+
+
+def test_a_part_the_old_ones_do_not_hold_is_not_cut_from_them():
+    old, new, mod = layers()
+    old.regions = {key: region for key, region in old.regions.items() if region.name != "base"}
+    # only the small layer is left of the image: neither half of it can be cut from that
+    assert remap._recut(old, new, remap._pair_regions(old, new)) == {}
+
+
+def test_hulls_come_in_the_draw_order_of_the_slots():
+    data = json.loads(mesh_skeleton())
+    data["slots"] = [{"name": "front", "bone": "root"}, {"name": "slot", "bone": "root"}, {"name": "back", "bone": "root"}]
+    data["skins"][0]["attachments"] = {"back": {"z": {}}, "slot": data["skins"][0]["attachments"]["slot"], "front": {"a": {}}}
+    assert list(spine_names.hulls(json.dumps(data).encode())) == ["a", "part", "whole", "z"]
