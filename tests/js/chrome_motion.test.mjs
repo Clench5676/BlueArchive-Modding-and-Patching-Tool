@@ -67,17 +67,17 @@ test("the clip's Hermite keys: values at the keys, no overshoot, the share left 
     }
     near(M.remaining(keys, M.duration(keys)), 0);
   }
-  // 0.2 s into the clip the top bar is 28.55 units from its rest, the menu 29.52
-  near(M.hermite(LOBBY_ENTRY.top, .2), 28.55); near(M.hermite(LOBBY_ENTRY.bottom, .2), -29.52);
+  // 0.2 s into the clip the top bar is 28.55 units from its rest, the menu 31.52
+  near(M.hermite(LOBBY_ENTRY.top, .2), 28.55); near(M.hermite(LOBBY_ENTRY.bottom, .2), -31.52);
   const list = M.frames(LOBBY_ENTRY.top, 100, 0);
   assert.equal(list.length, 27); assert.equal(list[0], 100); assert.equal(list.at(-1), 0);
-  near(M.entryDistance(LOBBY_ENTRY.top, .5), 333.7 * S * .5); near(M.entryDistance(LOBBY_ENTRY.bottom, .5), 1043 * S * .5);
+  near(M.entryDistance(LOBBY_ENTRY.top, .5), 333.7 * S * .5); near(M.entryDistance(LOBBY_ENTRY.bottom, .5), 1045 * S * .5);
 });
 
 test("before the first screen both bars wait where the clip starts, hidden and out of reach", () => {
   const h = harness();
   assert.equal(h.header.style.translate, `0 ${-333.7 * S}px`, "stage pixels, the bar in the stage");
-  assert.equal(h.nav.style.translate, `0 ${1043 * S}px`);
+  assert.equal(h.nav.style.translate, `0 ${1045 * S}px`);
   assert.ok(h.root.classList.has("chrome-hide-top") && h.root.classList.has("chrome-hide-bottom"));
   assert.equal(h.motion.hidden("top"), true); assert.equal(h.motion.hidden("bottom"), true);
   h.motion.syncLights();
