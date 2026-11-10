@@ -1,5 +1,6 @@
 """The sanity pass and the named refusals of a costume build (gameassets.model_adapt, BL-139)."""
 
+import copy
 import struct
 
 import numpy as np
@@ -115,6 +116,78 @@ def test_sanity_refuses_a_null_material_between_others():
     assert _reason([_written(submeshes=3)], [_rendered(materials=[11, 0, 13])]) == "materials inconsistent"
     assert _reason([_written(source_materials=[1, 0, 1], submeshes=3)], [_rendered(materials=[11, 12])]) \
         == "materials inconsistent"
+
+
+def test_sanity_refuses_a_written_mesh_that_still_names_stream_data():
+    ma._sanity([_written(streamed=False)], [_rendered()])
+    assert _reason([_written(streamed=True)], [_rendered()]) == "streamed mesh"
+
+
+# --- streamed vertex data (BL-139) ---------------------------------------------------------------------------------
+
+class _FakeMesh:
+    """A mesh object with a typetree, as ``_mesh_tree`` reads one."""
+
+    assets_file = object()
+
+    def __init__(self, tree):
+        self.tree = tree
+
+    def read_typetree(self):
+        return copy.deepcopy(self.tree)
+
+    def peek_name(self):
+        return "hair"
+
+
+def _mesh_tree_of(size, path="archive:/CAB-1234/CAB-1234.resS"):
+    return {"m_Name": "hair", "m_VertexData": {"m_VertexCount": 3, "m_DataSize": b""},
+            "m_StreamData": {"offset": 16, "size": size, "path": path}}
+
+
+def test_a_streamed_mesh_takes_its_vertex_data_along(monkeypatch):
+    from UnityPy.helpers import ResourceReader
+
+    calls = []
+    mesh = _FakeMesh(_mesh_tree_of(8))
+
+    def read(path, assets_file, offset, size):
+        calls.append((path, assets_file, offset, size))
+        return b"12345678"
+
+    monkeypatch.setattr(ResourceReader, "get_resource_data", read)
+    tree = ma._mesh_tree(mesh)
+    assert calls == [("archive:/CAB-1234/CAB-1234.resS", mesh.assets_file, 16, 8)]
+    assert tree["m_VertexData"]["m_DataSize"] == b"12345678"
+    assert tree["m_StreamData"] == {"offset": 0, "size": 0, "path": ""}
+    assert mesh.tree["m_StreamData"]["size"] == 8  # the object's own tree is not touched
+
+
+@pytest.mark.parametrize("failure", [FileNotFoundError("Resource file CAB-1234.resS not found"), None])
+def test_a_streamed_mesh_whose_data_cannot_be_read_is_refused(monkeypatch, failure):
+    from UnityPy.helpers import ResourceReader
+
+    def read(path, assets_file, offset, size):
+        if failure is not None:
+            raise failure
+        return b"1234"  # the range runs past the end of the file: fewer bytes than the mesh states
+
+    monkeypatch.setattr(ResourceReader, "get_resource_data", read)
+    with pytest.raises(ServiceError) as caught:
+        ma._mesh_tree(_FakeMesh(_mesh_tree_of(8)))
+    assert caught.value.code == "source_unsupported"
+    assert caught.value.params == {"source": "streamed mesh", "part": "hair"}
+
+
+def test_a_mesh_that_holds_its_data_is_read_as_it_is(monkeypatch):
+    from UnityPy.helpers import ResourceReader
+
+    monkeypatch.setattr(ResourceReader, "get_resource_data", lambda *args: pytest.fail("nothing to read"))
+    held = {"m_Name": "hair", "m_VertexData": {"m_VertexCount": 3, "m_DataSize": b"123456"},
+            "m_StreamData": {"offset": 0, "size": 0, "path": ""}}
+    assert ma._mesh_tree(_FakeMesh(held)) == held
+    without = {"m_Name": "hair", "m_VertexData": {"m_VertexCount": 3, "m_DataSize": b"123456"}}
+    assert ma._mesh_tree(_FakeMesh(without)) == without
 
 
 # --- the named refusals ---------------------------------------------------------------------------------------------

@@ -1568,14 +1568,21 @@ def halo_of(skeleton: Skeleton) -> Halo:
 
 def _mesh_tree(mesh: Any) -> dict:
     """A mesh's tree holding its vertex data: a mesh that streams it from its bundle's resource file (Yukino's halo)
-    takes it along, so the copy reads in any file."""
+    takes it along, so the copy reads in any file. Costume meshes go through it too (BL-139): a streamed one would
+    name the source bundle's resource file, which the game need not have loaded. Data that cannot be read is a
+    refusal."""
     tree = mesh.read_typetree()
     stream = tree.get("m_StreamData") or {}
     if stream.get("size"):
         from UnityPy.helpers.ResourceReader import get_resource_data
 
-        tree["m_VertexData"]["m_DataSize"] = get_resource_data(stream["path"], mesh.assets_file, stream["offset"],
-                                                               stream["size"])
+        try:
+            data = get_resource_data(stream["path"], mesh.assets_file, stream["offset"], stream["size"])
+        except Exception:  # a missing resource file or a range past its end: the same refusal
+            data = None
+        if data is None or len(data) != stream["size"]:
+            raise refuse("streamed mesh", part=mesh.peek_name())
+        tree["m_VertexData"]["m_DataSize"] = data
         tree["m_StreamData"] = {"offset": 0, "size": 0, "path": ""}
     return tree
 
@@ -1721,6 +1728,7 @@ class Written:
     submeshes: int
     source_totals: np.ndarray | None = None  # per vertex, the source's weight sum (no weight is allowed where it had none)
     source_materials: list[int] = field(default_factory=list)  # the source renderer's materials, 0 for none
+    streamed: bool = False               # the written tree still names stream data (its vertices are not inlined)
 
 
 @dataclass
@@ -1749,6 +1757,8 @@ def _sanity(meshes: list[Written], renderers: list[Rendered]) -> None:
     load. A failure refuses the pair (``source_unsupported``) rather than saving a mesh that draws nothing or flies
     apart. Over arrays already in memory; nothing is read again."""
     for mesh in meshes:
+        if mesh.streamed:
+            raise refuse("streamed mesh", part=mesh.name)
         for what, array in (("bindposes", mesh.bindposes), ("vertices", mesh.vertices), ("normals", mesh.linear)):
             if array is not None and not np.isfinite(array).all():
                 raise refuse("invalid data", what=what, part=mesh.name)
@@ -1858,7 +1868,7 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
     target = Costume(t_skeleton, t_costume, [skin_of(p.mesh) for p in t_costume])
     source = Costume(s_skeleton, s_costume, [skin_of(p.mesh) for p in s_costume])
     probes = probe_poses(t_skeleton, t_clips)
-    mesh_trees = [p.mesh.read_typetree() for p in s_costume]
+    mesh_trees = [_mesh_tree(p.mesh) for p in s_costume]
     layouts = [mg.geometry_of(tree) for tree in mesh_trees]
     result = plan(target, source, probes, strict=strict, fit=all(layout is not None for layout in layouts),
                   own_probes=probe_poses(s_skeleton, s_clips))
@@ -2060,7 +2070,7 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
         written.append(Written(
             part.mesh.peek_name(), points, linear, joints, weights, np.array(poses), [t_skeleton.nodes[n].name for n in nodes],
             len(tree["m_SubMeshes"]), source.skins[k].weights.sum(axis=1),
-            [0 if m is None else 1 for m in part.materials]))
+            [0 if m is None else 1 for m in part.materials], bool((tree.get("m_StreamData") or {}).get("size"))))
         new_meshes.append((writer.add(mesh_sf, "Mesh", tree), nodes))
     # another student's halo (BL-131): an unskinned mesh, added as it is
     halo_change = _halo_change(t_skeleton, s_skeleton, lambda mesh: writer.add(mesh_sf, "Mesh", _mesh_tree(mesh)),
