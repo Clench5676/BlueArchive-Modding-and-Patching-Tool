@@ -2516,16 +2516,20 @@ overwritten entry need none (the detail screen judges its files cheaply).
   the toggle, with the first toggle's explanation), and Later (also the close button, the backdrop and Escape); Don't
   Ask Again dismisses the cards not added (`mods.dismiss untracked`). Damaged entries are listed apart, dim and never
   ticked, their Details giving the repair lines.
-- **Game Updated** (`update-impact.js`, a message popup): once per resource version of the current install, when
-  `mods.impact` finds mods a game update touched: a count line per kind with mods ("Rig changed, on hold: n", "Gone
-  from the game: n", "New official parts: n", "Rebuilt, same rig: n", "Not affected: n", "Not determined: n"), the
-  held mods named (six at most, then "+n") and "Update on the mod's page, then apply". Closing it records the version
+- **Game Updated** (`update-impact.js`, a plain, left-aligned message popup): once per resource version of the
+  current install, when `mods.impact` finds mods a game update touched. First "Rig changed, on hold: n", the held
+  mods as list items ("name - kind", six at most, then "+n") and how the hold ends ("Select the mod on the student
+  page and press Update to apply it again"); then, after a gap, a list item per other kind with mods ("Gone from the
+  game: n", "New official parts: n", "Rebuilt, same rig: n", "Not affected: n", "Not determined: n"). Closing it records the version
   (`mods.impactSeen`). At the start before the prompts below, and after `config.changed` (a game update while the
   program runs rebuilds the game services) once no other popup is open.
-- **Mods Back to Official** (while mods are on): the `reset` and `updated` entries, every card ticked but those whose
+- **Mods Back to Official** (while mods are on; titled Mods Affected by a Game Update when every listed entry is
+  `updated`): the `reset` and `updated` entries, every card ticked but those whose
   configured mod's rig a game update changed (`mods.impact {ids}`): those carry the Rig Changed badge and start
   unticked, so Apply Mod Configuration writes them only when ticked; with the install
-  chip; entries still overwritten are listed apart ("Still overwritten: n", their Details the repair lines). Exactly
+  chip; no hint over the cards (only "Still overwritten: n" when there are such entries), the band over the paper as
+  slim as the count, the cards from the paper's left edge and a portrait's details upright beside its stacked fields
+  (`listPopup` `slimBand`, `alignStart`, `detailKind`; both prompts place their cards that way); entries still overwritten are listed apart ("Still overwritten: n", their Details the repair lines). Exactly
   two buttons (decision 16) and no way out but them (no close button; Escape and the backdrop do nothing): Apply Mod
   Configuration sends the ticked cards (`mods.restoreDrift`) and keeps the others as they are, Keep as Is keeps them
   all (`mods.dismiss drift`). Apply is greyed with the reason while the game runs or Steam is busy; while the classic

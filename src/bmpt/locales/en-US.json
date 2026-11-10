@@ -295,7 +295,7 @@
 			"repairGame": "In the game: Restore Resources, may not replace mods",
 			"repairThen": "Then start this app again",
 			"driftTitle": "Mods Back to Official",
-			"driftWhy": "Game files verified, repaired or updated",
+			"driftUpdated": "Mods Affected by a Game Update",
 			"driftApply": "Apply Mod Configuration",
 			"driftKeep": "Keep as Is",
 			"stillOverwritten": "Still overwritten: {n}",
@@ -310,7 +310,7 @@
 				"rebuilt": "Rebuilt, same rig: {n}",
 				"unchanged": "Not affected: {n}",
 				"unknown": "Not determined: {n}",
-				"hint": "Update on the mod's page, then apply"
+				"hint": "Select the mod on the student page and press {action} to apply it again"
 			},
 			"deleteConfirm": "Delete {name}?",
 			"deleteRestore": "Entries using it go back to official or their previous setting",

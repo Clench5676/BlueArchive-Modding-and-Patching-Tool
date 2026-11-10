@@ -251,7 +251,9 @@ async function cardsOf(entries, state, which) {
   const nameOf = await names().catch(() => undefined);
   return entries.map((e) => {
     const base = entryBase(e, state), lobby = e?.kind === "lobby";
-    return { ...card(e, { state, nameOf, which }), thumb: thumb(base, "card", null, lobby), big: () => thumb(base, "bust", null, lobby) };
+    // a portrait's details show it upright, as the portrait switch popup does
+    const big = e?.kind === "spr" ? () => thumb(base, "portrait") : () => thumb(base, "bust", null, lobby);
+    return { ...card(e, { state, nameOf, which }), thumb: thumb(base, "card", null, lobby), big };
   });
 }
 
@@ -270,6 +272,7 @@ function listPrompt({ title, items, buttons, hint, check, closable, which, untic
     };
     const draw = (scroll = 0) => Popup.listPopup({
       host, title, items, selected: [...selection], multi: true, focus, keepScroll: scroll, hint,
+      detailKind: (it) => it.entry?.kind, alignStart: true, slimBand: true,
       footer: footer(items, selection, { size: which === "untracked" }), check,
       buttons: buttons.map((b) => ({ ...b, fn: () => (b.greyed ? notify(b.why || "", { kind: "error", error: b.whyError }) : done(b.action)) })),
       onClose: closable ? () => done("later") : null,
@@ -300,15 +303,19 @@ export function heldCards(items, held) {
     ? { ...it, badge: { text: T("mods.heldBadge"), color: COLOUR.warning, ink: "#ffffff" } } : it));
 }
 
+// the drift prompt's title: Mods Affected by a Game Update when a game update put every listed entry back (updated),
+// else Mods Back to Official (a Steam check or a repair among them)
+export const driftTitle = (listed) => T(listed.length && listed.every((e) => e.state === "updated") ? "mods.driftUpdated" : "mods.driftTitle");
+
 // "Mods Back to Official": exactly two buttons (decision 16), no Later and no close; Escape and the backdrop do
 // nothing. Apply Mod Configuration sends the ticked cards (the others are kept as they are); Keep as Is keeps them all.
 async function driftPrompt(lists, s) {
   const held = Impact.heldKeys(lists.listed, await Impact.impacts(lists.listed));
   const items = heldCards([...(await cardsOf(lists.listed, s, "drift")), ...(await cardsOf(lists.apart, s, "drift"))], held);
   const blocked = s.available === false ? ModSwitch.reasonText(s) : "";
-  const hint = lists.apart.length ? `${T("mods.driftWhy")}${ModSwitch.listSep()}${T("mods.stillOverwritten", { n: lists.apart.length })}` : T("mods.driftWhy");
+  const hint = lists.apart.length ? T("mods.stillOverwritten", { n: lists.apart.length }) : "";
   const answer = await listPrompt({
-    title: T("mods.driftTitle"), items, hint, closable: false, which: "drift", unticked: held,
+    title: driftTitle(lists.listed), items, hint, closable: false, which: "drift", unticked: held,
     buttons: [
       { label: T("mods.driftKeep"), action: "keep" },
       { label: T("mods.driftApply"), action: "apply", primary: true, greyed: !!blocked && s.reason !== "classic_open", why: blocked, whyError: { code: s.reason, params: s.reasonParams } },

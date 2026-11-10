@@ -440,10 +440,12 @@ export function listLayout(check = false, kind = null) {
     // Card artwork and the native card-placement helper retain their prefab envelope and scroll pitch.
     card: { w: 250, h: 226, bar: 68 }, pitch: [284, 350] };
 }
-export function listCardBox(layout, { searching = false, horizontal = false } = {}) {
+// the band over a list's paper: the toolbar's height, or a slimmer one (``slim``) that only holds the footer's count
+export const LIST_BAND = Object.freeze({ tools: CONTROL.buttonS.h, slim: 60 });
+export function listCardBox(layout, { searching = false, horizontal = false, band = LIST_BAND.tools } = {}) {
   const b = layout.list, f = layout.frame;
   const panel = { x: b.l + f.w / 2, y: f.cy + f.h / 2 - b.t, w: b.r - b.l, h: b.t - b.b };
-  const paper = container({ ...panel, padding: [CONTROL.buttonS.h + 2 * SPACE.m
+  const paper = container({ ...panel, padding: [band + 2 * SPACE.m
     + (searching && !horizontal ? CONTROL.buttonS.h + SPACE.m : 0), SPACE.m, SPACE.m, SPACE.m] }).inner;
   // The grid owns the card viewport; native card envelopes and their un-stretched pitch are placed inside it.
   return grid(paper).span(12);
@@ -522,7 +524,7 @@ function checkedToolbar(right, y, { segs, sortKey, sortKeys, active, ascending, 
 }
 
 // The list and details panels occupy the XL content grid; its footer uses the shared centred group.
-export function listFrame(title, buttons, closeButton, check = false, kind = null) {
+export function listFrame(title, buttons, closeButton, check = false, kind = null, band = LIST_BAND.tools) {
   const layout = listLayout(check, kind);
   const t = popupFrame(title, layout.frame.w, layout.frame.h, { close: closeButton,
     buttons: buttons.map((b, i) => ({ ...b, name: `Btn_${i}` })) });
@@ -532,7 +534,7 @@ export function listFrame(title, buttons, closeButton, check = false, kind = nul
     [sprite("Common_Bg_Raius10px", b.r - b.l, b.t - b.b, { depth: 3, color: tone })]);
   const b = layout.list;
   const paper = container({ x: b.l, y: -b.t, w: b.r - b.l, h: b.t - b.b,
-    padding: [CONTROL.buttonS.h + SPACE.m, SPACE.m, SPACE.m, SPACE.m] }).inner;
+    padding: [band + SPACE.m, SPACE.m, SPACE.m, SPACE.m] }).inner;
   popup.children.push(panel("LeftPanel", layout.left, "#ffffff/0.00"), panel("ListPanel", b, "#d7eaf4/1.00"),
     node("ListPaper", [paper.x + paper.w / 2, -paper.y - paper.h / 2],
       [sprite("Common_Bg_Raius10px", paper.w, paper.h, { depth: 4, color: "#f4fcfe/1.00" })]));
@@ -781,6 +783,10 @@ export function detailsTree(it, title, fields, actions, portraitTexture = null, 
 //          object is passed to every drawing
 //   details(it): {title, fields: [[caption, value, colour]], actions: [[caption, fn]]} for the panel on the left
 //   keepScroll: the list's offset on its scrolling axis (horizontal for portraits)
+//   detailKind(it): the kind whose details panel a card shows when it differs from layoutKind's ("spr": the portrait
+//                   panel, an upright picture beside the stacked fields), for lists of several kinds
+//   alignStart: the generic grid's cards from the paper's left edge, as the kinds' grids place them
+//   slimBand: without tools and hint, the band over the paper only as high as the footer's count
 const toolStates = new WeakMap();
 const tokens = new Map(); // host -> the latest drawing's number: an older one that ends later is dropped
 export async function listPopup(options) {
@@ -796,12 +802,19 @@ export async function listPopup(options) {
   await ready();
   let portraitTexture = null;
   if (items.some(it => typeof it.applied === "boolean")) await selectionReady();
+  const detailKind = options.detailKind || (() => options.layoutKind);
   if (options.layoutKind === "spr") {
     const inventory = await NGUI.layout("UINonEquipmentInventory");
     portraitTexture = find(inventory, "Inventory_ListControl/EquipPos/Texture");
+  } else if (options.detailKind && items.some((it) => options.detailKind(it) === "spr")) {
+    // a list of several kinds: without the prefab its portraits' details fall back to the generic panel
+    const inventory = await NGUI.layout("UINonEquipmentInventory").catch(() => null);
+    portraitTexture = inventory ? find(inventory, "Inventory_ListControl/EquipPos/Texture") : null;
   }
   const LP = listLayout(!!check, options.layoutKind);
-  const cardGrid = switchGrid(options.layoutKind), { card, columns, pitch, horizontal } = cardGrid;
+  const cardGrid = { ...switchGrid(options.layoutKind), ...(options.alignStart ? { leftAligned: true } : {}) };
+  const { card, columns, pitch, horizontal } = cardGrid;
+  const band0 = options.slimBand && !tools && !hint ? LIST_BAND.slim : LIST_BAND.tools;
   const scrollKey = horizontal ? "scrollLeft" : "scrollTop";
   let toolState = toolStates.get(host);
   if (tools) {
@@ -821,7 +834,7 @@ export async function listPopup(options) {
   const btns = (buttons || [{ label: okText, fn: onOk, primary: true, semantic: options.okSemantic || "confirm", action: "ok" }])
     .map((b) => (b.primary && filteredOut ? { ...b, greyed: true, blocked: true } : b));
   const next = document.createElement("div");
-  const view = await NGUI.render(listFrame(title, btns, !!onClose, !!check, options.layoutKind), next, { scale: S, origin: [960, 540] });
+  const view = await NGUI.render(listFrame(title, btns, !!onClose, !!check, options.layoutKind, band0), next, { scale: S, origin: [960, 540] });
   btns.forEach((b, i) => {
     const button = hit(next, view, `Center/Popup/Btn/Btn_${i}/BG (1)`, b.blocked ? () => {} : b.fn, { name: b.label, action: b.action || `button${i}` });
     if (button && b.blocked) { button.disabled = true; button.setAttribute("aria-disabled", "true"); }
@@ -870,8 +883,8 @@ export async function listPopup(options) {
     const room = LP.list.r - LP.list.l - 80;
     const ft = footer ? fitText(footer, 40, 28, room / 2, 1) : null;
     const ht = hint ? fitText(hint, 40, 28, room - (ft ? glyphsOf(ft.text, ft.fs) + 40 : 0), 2) : null;
-    if (ht) band.push(node("Hint", [LP.list.l + 40, LP.list.t - SPACE.m - CONTROL.buttonS.h / 2], [label(ht.text, ht.fs, "#2d4664/1.00", room, 50 * ht.lines, { pivot: 3, depth: 8 })]));
-    if (ft) band.push(node("Footer", [LP.list.r - 40, LP.list.t - SPACE.m - CONTROL.buttonS.h / 2], [label(ft.text, ft.fs, "#2d4664/1.00", room / 2, 50, { pivot: 5, depth: 8 })]));
+    if (ht) band.push(node("Hint", [LP.list.l + 40, LP.list.t - SPACE.m - band0 / 2], [label(ht.text, ht.fs, "#2d4664/1.00", room, 50 * ht.lines, { pivot: 3, depth: 8 })]));
+    if (ft) band.push(node("Footer", [LP.list.r - 40, LP.list.t - SPACE.m - band0 / 2], [label(ft.text, ft.fs, "#2d4664/1.00", room / 2, 50, { pivot: 5, depth: 8 })]));
   }
   let cb = null;
   if (check) {
@@ -920,7 +933,7 @@ export async function listPopup(options) {
       next.appendChild(searchInput);
     }
   }
-  const cardBox = listCardBox(LP, { searching: tools && toolState.searching, horizontal });
+  const cardBox = listCardBox(LP, { searching: tools && toolState.searching, horizontal, band: band0 });
   const [cardLeft, top] = toNode(cardBox, 0, LP.frame), bottom = top - cardBox.h;
   if (!items.length) {
     // nothing to show: the list paper says so, as the Hall's pickers do
@@ -961,7 +974,8 @@ export async function listPopup(options) {
   const sel = items.find((it) => it.key === shown) || items[0];
   if (sel && details) {
     const d = details(sel);
-    const tree = detailsTree(sel, d.title, d.fields, d.actions, portraitTexture, options.layoutKind, LP.left);
+    const kind = detailKind(sel);
+    const tree = detailsTree(sel, d.title, d.fields, d.actions, kind === "spr" ? portraitTexture : null, kind, LP.left);
     const panel = LP.left, panelH = panel.t - panel.b;
     const detailsHost = tree.contentHeight > panelH ? scrollArea(next,
       [960 + panel.l * S, 540 - panel.t * S, (panel.r - panel.l) * S, panelH * S], tree.contentHeight * S) : next;

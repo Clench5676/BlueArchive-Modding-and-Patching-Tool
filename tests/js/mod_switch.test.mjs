@@ -338,10 +338,10 @@ test("entries a game update's rig change holds: their own help line and Details,
   assert.deepEqual(lines.filter((l) => l.button).map((l) => [l.text, l.button.id]), [["On hold, rig changed: 2", "held"]]);
   assert.equal(MS.view(s).dot, true);
   assert.equal(MS.view(base()).dot, false);
-  assert.deepEqual(MS.heldLines(s, (e) => e.variant.toUpperCase()),
-    ["A, Portrait", "B, Memorial Lobby", S("mods.impact.hint")]);
+  const hint = "Select the mod on the student page and press Update to apply it again";
+  assert.deepEqual(MS.heldLines(s, (e) => e.variant.toUpperCase()), ["A - Portrait", "B - Memorial Lobby", hint]);
   const many = base({ heldEntries: Array.from({ length: 8 }, (_, i) => ({ core: `c${i}_spr`, variant: `c${i}`, kind: "spr" })) });
-  assert.deepEqual(MS.heldLines(many).slice(-2), ["+2", S("mods.impact.hint")]);
+  assert.deepEqual(MS.heldLines(many).slice(-2), ["+2", hint]);
   // a toggle that held entries says so
   const r = MS.resultSummary({ enabled: true, done: [{}], held: [{ core: "a_spr" }] });
   assert.ok(r.lines.includes("On hold, rig changed: 1"));
@@ -1393,11 +1393,15 @@ test("an update's impact: one count line per kind with mods, the held mods named
   const r = Impact.summary({ due: true, mods, counts: { unchanged: 4, rebuilt: 1, rig_changed: 1, new_parts: 0, gone: 0, unknown: 2 } },
     (e) => e.variant[0].toUpperCase() + e.variant.slice(1));
   assert.equal(r.title, "Game Updated");
-  assert.deepEqual(r.lines, ["Rig changed, on hold: 1", "Hoshino, Portrait", S("mods.impact.hint"), "Rebuilt, same rig: 1",
-    "Not affected: 4", "Not determined: 2"]);
+  const hint = "Select the mod on the student page and press Update to apply it again";
+  const item = (text, gap = 0) => ({ text, ...Impact.ITEM, gap });
+  assert.deepEqual(r.lines, [{ text: "Rig changed, on hold: 1" }, { text: "Hoshino - Portrait", ...Impact.ITEM }, { text: hint },
+    item("Rebuilt, same rig: 1", 32), item("Not affected: 4"), item("Not determined: 2")]);
+  // without held mods the other kinds start the list, with no gap above them
+  assert.deepEqual(Impact.summary({ due: true, mods: [], counts: { rebuilt: 2 } }).lines, [item("Rebuilt, same rig: 2")]);
   const many = Impact.summary({ due: true, counts: { rig_changed: 9 },
     mods: Array.from({ length: 9 }, (_, i) => ({ id: `${i}`, target: `v${i}`, core: `c${i}_spr`, kind: "spr", impact: "rig_changed" })) });
-  assert.deepEqual(many.lines.slice(-2), ["+3", S("mods.impact.hint")]);
+  assert.deepEqual(many.lines.slice(-2).map((l) => l.text), ["+3", hint]);
   // every kind has its string in every locale
   try {
     for (const lang of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
@@ -1406,8 +1410,9 @@ test("an update's impact: one count line per kind with mods, the held mods named
       const counts = Object.fromEntries(Impact.KINDS.map((k) => [k, 1]));
       const all = Impact.summary({ due: true, counts, mods: [] });
       assert.equal(all.lines.length, Impact.KINDS.length, lang);
-      for (const line of [all.title, ...all.lines]) assert.ok(line && !/^mods\./.test(line) && line.includes(line === all.title ? "" : "1"), `${lang} ${line}`);
-      for (const k of ["held", "heldTitle", "heldBadge"]) assert.ok(typeof ui.mods[k] === "string" && ui.mods[k].length > 0, `${lang} ${k}`);
+      for (const line of [{ text: all.title }, ...all.lines]) assert.ok(line.text && !/^mods\./.test(line.text) && line.text.includes(line.text === all.title ? "" : "1"), `${lang} ${line.text}`);
+      for (const k of ["held", "heldTitle", "heldBadge", "driftUpdated"]) assert.ok(typeof ui.mods[k] === "string" && ui.mods[k].length > 0, `${lang} ${k}`);
+      assert.ok(ui.mods.impact.hint.includes("{action}") && !("driftWhy" in ui.mods), lang);
     }
   } finally { I18n.setStrings("en-US", strings); }
 });
@@ -1422,6 +1427,8 @@ test("the drift prompt asks the impacts of the mods its entries are configured w
   assert.deepEqual(Impact.configuredMods(entries), ["1", "2"]);
   const held = Impact.heldKeys(entries, [{ id: "1", impact: "rig_changed" }, { id: "2", impact: "rebuilt" }]);
   assert.deepEqual([...held], ["/a|a_spr", "/b|a_spr"]);
+  assert.equal(P.driftTitle([{ state: "updated" }, { state: "updated" }]), "Mods Affected by a Game Update");
+  assert.equal(P.driftTitle([{ state: "updated" }, { state: "reset" }]), S("mods.driftTitle"));
   const items = P.heldCards([{ key: "/a|a_spr" }, { key: "/a|b_spr" }, { key: "/b|a_spr", disabled: true }], held);
   assert.equal(items[0].badge.text, "Rig Changed");
   assert.equal(items[1].badge, undefined);
