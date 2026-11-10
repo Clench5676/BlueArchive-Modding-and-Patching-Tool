@@ -3002,7 +3002,7 @@ it (decision 7); browser and serve mode have none.
 - **Entry.** In the fullscreen memorial lobby a white visual-mode button with the game's `Common/Cafe_Icon_Video`
   sits left of the photography button (`lobby-camera.js`). It enters the framing: the lobby rests (the intro skipped),
   Back (UICharacterVisualMode `Btn_Back`), Reset and the photography shutter (`Common_Btn_Circle_W`) replace the
-  fullscreen controls, and a dashed outline marks the game's own view.
+  fullscreen controls.
 - **Moves.** The wheel zooms at the pointer's height, any drag moves the view up or down (`lobby-touch.js` pan only);
   the view stays 16:9 and centred across (`lobby.js framingView`).
 - **Limits.** `measureFraming` paints every pose the lobby goes through into 16-unit cells three game views across:
