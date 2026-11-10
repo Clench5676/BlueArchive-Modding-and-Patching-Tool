@@ -14,6 +14,7 @@ import { on, rpc, spineBase, waitJob } from "./api.js";
 import { T } from "./i18n.js";
 import { addFirstLines, overwrittenLines } from "./repairs.js";
 import { thumb } from "./thumbs.js";
+import * as Impact from "./update-impact.js";
 
 // --- pure parts ---
 
@@ -250,15 +251,17 @@ async function cardsOf(entries, state, which) {
   const nameOf = await names().catch(() => undefined);
   return entries.map((e) => {
     const base = entryBase(e, state), lobby = e?.kind === "lobby";
-    return { ...card(e, { state, nameOf, which }), thumb: thumb(base, "card", null, lobby), big: () => thumb(base, "bust", null, lobby) };
+    // a portrait's details show it upright, as the portrait switch popup does
+    const big = e?.kind === "spr" ? () => thumb(base, "portrait") : () => thumb(base, "bust", null, lobby);
+    return { ...card(e, { state, nameOf, which }), thumb: thumb(base, "card", null, lobby), big };
   });
 }
 
 // a prompt as a list popup in #prompt, every card that can be ticked ticked; resolves with {button, selection,
 // checked} once one of its buttons (or, where it has one, its close) answered it
-function listPrompt({ title, items, buttons, hint, check, closable, which }) {
+function listPrompt({ title, items, buttons, hint, check, closable, which, unticked = new Set() }) {
   const host = document.getElementById("prompt");
-  let selection = Popup.selectable(items);
+  let selection = new Set([...Popup.selectable(items)].filter((key) => !unticked.has(key)));
   let focus = null;
   return new Promise((resolve) => {
     const done = (button) => {
@@ -269,6 +272,7 @@ function listPrompt({ title, items, buttons, hint, check, closable, which }) {
     };
     const draw = (scroll = 0) => Popup.listPopup({
       host, title, items, selected: [...selection], multi: true, focus, keepScroll: scroll, hint,
+      detailKind: (it) => it.entry?.kind, alignStart: true, slimBand: true,
       footer: footer(items, selection, { size: which === "untracked" }), check,
       buttons: buttons.map((b) => ({ ...b, fn: () => (b.greyed ? notify(b.why || "", { kind: "error", error: b.whyError }) : done(b.action)) })),
       onClose: closable ? () => done("later") : null,
@@ -292,14 +296,26 @@ function repairMessage(items, s) {
   return Popup.message({ title, lines: overwrittenLines({ names: named, installs }, T), ok: T("picker.ok") });
 }
 
+// heldCards(items, held): the cards of entries whose configured mod's rig a game update changed (``held``: their keys)
+// carry the Rig Changed badge; they start unticked, so Apply Mod Configuration writes them only when ticked
+export function heldCards(items, held) {
+  return items.map((it) => (held.has(it.key) && !it.disabled
+    ? { ...it, badge: { text: T("mods.heldBadge"), color: COLOUR.warning, ink: "#ffffff" } } : it));
+}
+
+// the drift prompt's title: Mods Affected by a Game Update when a game update put every listed entry back (updated),
+// else Mods Back to Official (a Steam check or a repair among them)
+export const driftTitle = (listed) => T(listed.length && listed.every((e) => e.state === "updated") ? "mods.driftUpdated" : "mods.driftTitle");
+
 // "Mods Back to Official": exactly two buttons (decision 16), no Later and no close; Escape and the backdrop do
 // nothing. Apply Mod Configuration sends the ticked cards (the others are kept as they are); Keep as Is keeps them all.
 async function driftPrompt(lists, s) {
-  const items = [...(await cardsOf(lists.listed, s, "drift")), ...(await cardsOf(lists.apart, s, "drift"))];
+  const held = Impact.heldKeys(lists.listed, await Impact.impacts(lists.listed));
+  const items = heldCards([...(await cardsOf(lists.listed, s, "drift")), ...(await cardsOf(lists.apart, s, "drift"))], held);
   const blocked = s.available === false ? ModSwitch.reasonText(s) : "";
-  const hint = lists.apart.length ? `${T("mods.driftWhy")}${ModSwitch.listSep()}${T("mods.stillOverwritten", { n: lists.apart.length })}` : T("mods.driftWhy");
+  const hint = lists.apart.length ? T("mods.stillOverwritten", { n: lists.apart.length }) : "";
   const answer = await listPrompt({
-    title: T("mods.driftTitle"), items, hint, closable: false, which: "drift",
+    title: driftTitle(lists.listed), items, hint, closable: false, which: "drift", unticked: held,
     buttons: [
       { label: T("mods.driftKeep"), action: "keep" },
       { label: T("mods.driftApply"), action: "apply", primary: true, greyed: !!blocked && s.reason !== "classic_open", why: blocked, whyError: { code: s.reason, params: s.reasonParams } },

@@ -721,10 +721,11 @@ Off").
 
 **Configuration (`profiles.json`).** Older builds rewrite `state.json` with their own keys only, so the configuration
 lives beside it in a file of its own: the Enable Mods switch (`enabled`, one intent for every known install; missing
-means on), its last change (`toggled`), the entries not switched yet (`unfinished`, each `pending`, `left` or
-`stuck`), and per install key its server, the data directories naming it or hiding it (`named_by`, `hidden`), the
-configured source per core (`configured`), the `updated` markers, the built copies (`built`) and the dismissed prompts
-(`dismissed`, files by name, size and date). The user's switch popup sets and drops configured sources; the switch
+means on), its last change (`toggled`), the entries not switched yet (`unfinished`, each `pending`, `left`, `stuck`
+or `held`), and per install key its server, the data directories naming it or hiding it (`named_by`, `hidden`), the
+configured source per core (`configured`), the `updated` markers, the built copies (`built`), the dismissed prompts
+(`dismissed`, files by name, size and date) and the last resource version whose game update impact was told
+(`resource`, `{version, seen}`). The user's switch popup sets and drops configured sources; the switch
 never changes them. Every change is applied to the file as it is, under `profiles.json.lock`, unknown keys kept, the
 last good file kept as `profiles.json.prev` (read instead of an unreadable file, which is kept as
 `profiles.json.bad`); with neither readable the switch is unavailable (`profiles_unreadable`) and nothing is written.
@@ -758,6 +759,19 @@ record's under a new date (a backup tool, `touch`) has its date stamped again, a
 official (no trailing bytes, the official size) whose bytes were changed outside the library is remembered as such
 by its size and date (`outside`, dropped by the next write there). Without that, the next scan would list the first
 in the untracked prompt again, and the second in the drift prompt at every start for Apply Mod Configuration to skip.
+
+**Game update impact** (`update_impact`, `impacts`, `impact_seen`; `fingerprint.impact`). What a game update did
+under a mod is told from the fingerprint of the official parts it was built against (`built-against.json`) held
+against the one its core's parts give now, matched by the assets they hold (a part renamed by the update compares
+with the one it replaced): `unchanged` (the same files), `rebuilt` (other files, the same rig), `new_parts` (official
+parts beside those the mod knows; only for a fingerprint that knew every part), `rig_changed` (an atlas repacked or
+with other regions, a skeleton with other bones, slots or animations, a texture of another size, an asset gone),
+`gone` (no official part of the core left) and `unknown` (no fingerprint, unreadable parts). `update_impact`
+classifies every library mod once the install's resource version differs from the one in `resource` (or none is
+recorded); with nothing but `unchanged` and `unknown` it records the version at once, otherwise `due` stays true until
+`impact_seen`. An On and its Retry hold an entry configured with a mod whose rig changed (`held`, `why` `held`)
+instead of writing it: the write would carry the old rig or layout onto the new parts. Updating or remapping the mod
+records its new baseline and ends the hold; Apply Mod Configuration and the detail screen's switch write it as asked.
 Refusals before anything is written: `folder_changed`, `state_changed` (another place switched first), the game
 running, Steam busy, and `not_enough_space` (what an Off copies, with 512 MiB to spare); a running game, Steam busy or
 changed folders stop a job midway, the rest stays listed. An Off leaves overwritten entries (no official copy
@@ -1146,6 +1160,8 @@ The services hold what the Enable Mods switch, the prompts and the classic hand-
   `profiles_unreadable`, the game watch's answer (`game_running`, `game_status_unavailable`, `steam_busy`, a classic
   window an earlier instance left), this instance's classic window (`classic_open`). With the scan consent, `pending`
   and `stuck` count the last scan's entries; without it, they and `left` count the `unfinished` list by `why`.
+  `held` always counts the `unfinished` list's held entries (`heldEntries`: `{install, core, variant, kind, source}`
+  from the configuration), and a held entry is not counted as `pending`.
 - **The library** is built without a current install too (ADB mode, the selected folder missing), from the library
   folder, the catalog and the settings, with `scan_allowed` (the pref `scan_consent`, read at each use, so a change
   needs no rebuild), `data_id` and `write_check`, which refuses every game file write with `classic_open` while a
@@ -1227,7 +1243,7 @@ stops the server (the page shows Closed); with `--serve` it gives `native_unavai
 | `model.costumes {variant, others}` | the verdicts of other variants' costumes on a variant's 3D model: `{other: "ok" \| "preview" \| "refused" \| null}` ("preview": past the stretch limit, shown, never applied; null: not checked yet); a pair outside the family, the variant itself or one with no model is "refused"; at most 64 `others` |
 | `model.checkCostumes {variant, others}` | job id (`costume-check`, not a writer): checks each pair to its end (`Services.costume_check`) and saves its verdict; result `{other: "ok" \| "preview" \| "refused"}`, a refusal of the moment "refused" and not saved |
 | `model.optimize {variant, source, name}` | job id (`model.optimize`, a library writer): Optimize Physics (BL-132) on `source`, `"official"` or `"variant:<key>"`; result `{mod}` (the copy, a model mod of the variant with `optimized_from`; an existing copy is returned) or `{unneeded: true, reason: "official" | "no_gain"}`; `name` (at most 200 characters) is the source as the screen shows it, the copy's name; a refused or preview-only pair is `source_unsupported` |
-| `mods.state` | `{installs: [{id, key, server, folder, label, distinct, named}], current, enabled, available, reason, reasonParams, scan, explained, configured, pending, stuck, left, unfinished: {pending, left, stuck}, drift, untracked, damaged, sourceMissing, queued, scanned, tray, traySupported, busy, progress}` from the snapshot (above); `id` is the first 12 hex digits of the install key's SHA-1 (used in URLs), `named` tells a folder the settings name from a recorded one; `busy` while a toggle is queued or running or writes are queued for the classic window; `progress` is `{done, total}` of a running toggle |
+| `mods.state` | `{installs: [{id, key, server, folder, label, distinct, named}], current, enabled, available, reason, reasonParams, scan, explained, configured, pending, stuck, left, held, heldEntries, unfinished: {pending, left, stuck, held}, drift, untracked, damaged, sourceMissing, queued, scanned, tray, traySupported, busy, progress}` from the snapshot (above); `id` is the first 12 hex digits of the install key's SHA-1 (used in URLs), `named` tells a folder the settings name from a recorded one; `busy` while a toggle is queued or running or writes are queued for the classic window; `progress` is `{done, total}` of a running toggle |
 | `mods.sizes {kind}` | `{builtSize}` for `kind: "built"` or `{originalsSize}` for `kind: "originals"`, bytes measured on demand; Settings requests only the Mod Cache size; no size walks in `mods.state` |
 | `mods.toggle {enabled, expect}` | job id (`mods.toggle`): the switch over every known install, also Retry; `busy` while another toggle is queued or running, `classic_open` at submit; the job's refusals `state_changed`, `folder_changed`, `game_running`, `game_status_unavailable`, `steam_busy`, `classic_open`, `not_enough_space` |
 | `mods.consent {granted}` | `{}`; saves `scan_consent`; granting enables startup checks and requests a scan immediately; withdrawing stops the scans and empties the entries |
@@ -1235,6 +1251,8 @@ stops the server (the page shows Closed); with `--serve` it gives `native_unavai
 | `mods.scan {dismissed = false}` | `{requested: bool}`; the result comes as `library.scanned`; `scan_off` without scan consent; `dismissed: true` is Settings' explicit Check |
 | `mods.entries` | the last scan's entries (`{install, core, variant, names, kind, source, configured, state, overwritten, fixed, size, files, dismissed}`), updated by every writer job's result until the next scan; empty without scan consent |
 | `mods.adopt {entries}` | job id (`library.adopt`): Add to Library for `[{install, core}]`, allowed while the game runs and while a classic window is open; `not_enough_space` |
+| `mods.impact {ids?}` | reader job id: without `ids`, the current install's game update impact (`update_impact`: `{due, install, version, previous, mods: [{id, label, target, kind, core, impact, configured}], counts}`, `mods` only those not `unchanged` or `unknown`); with `ids`, `{mods: [{id, impact}]}` for those mods now |
+| `mods.impactSeen {install, version}` | `{}`: the impact summary of that resource version was shown |
 | `mods.restoreDrift {entries}` | job id (`mods.restore`): Apply Mod Configuration; `classic_open` at submit |
 | `mods.dismiss {kind, entries}` | `{}`; `kind` `drift` (Keep as Is) or `untracked` (Don't Ask Again) |
 | `mods.clearBuilt` | job id (`library.clearBuilt`); its result `{freed}` |
@@ -2182,7 +2200,8 @@ Download progress and errors stay in the popup; its buttons and Escape are block
 download shows Download Complete with Later / Restart. Later keeps it for this session; the next check for that
 version opens ready to restart. Only Restart installs, and a refusal stays ready with an error and a retry. A
 successful retry clears the failure, so Later / Escape then resolve as `later`. A step that fails is logged and the
-next one comes. The prompts of mods back to official and of mods outside
+next one comes. Then, with a game folder, the impact of a game update on the library's mods (`update-impact.js`,
+see Mods already in use). The prompts of mods back to official and of mods outside
 the library come last if the start scan is already in. An unfinished scan stays in the background; its results
 show once no other popup is open, including a tour. Each prompt appears when `startDue` says it is due:
 only with the scan consent, never while the game runs, Steam is busy
@@ -2420,7 +2439,8 @@ detail screen, and in Settings' Mods tab.
   when more than one game folder is known; "Not switched: n" with Retry (the
   same toggle again) for pending and left entries; "Left as is, no official copy: n" with Details, the Overwritten
   message (the entries, known from the last scan with the scan consent, "No official copy left" and the repair lines
-  of `repairs.js`, see Mods already in use; never a repair button); "Gone from the library: n". The counts are the
+  of `repairs.js`, see Mods already in use; never a repair button); "On hold, rig changed: n" with Details (the held
+  entries' names and "Update on the mod's page, then apply"; never a Retry); "Gone from the library: n". The counts are the
   services': the last scan's with the scan consent, the unfinished list's by why without it. Retry and Details stay
   at their line's right end. There is no scan-off row or Allow Check button; file-check consent stays in Settings.
 - **The scan consent popup** (`consent.js scan`, built like the asset consent): Check Game Files; This app will:
@@ -2496,8 +2516,22 @@ overwritten entry need none (the detail screen judges its files cheaply).
   the toggle, with the first toggle's explanation), and Later (also the close button, the backdrop and Escape); Don't
   Ask Again dismisses the cards not added (`mods.dismiss untracked`). Damaged entries are listed apart, dim and never
   ticked, their Details giving the repair lines.
-- **Mods Back to Official** (while mods are on): the `reset` and `updated` entries, every card ticked, with the install
-  chip; entries still overwritten are listed apart ("Still overwritten: n", their Details the repair lines). Exactly
+- **Game Updated** (`update-impact.js`, a plain, left-aligned message popup on the wide frame): once per resource version of the
+  current install, when `mods.impact` finds mods a game update touched. First "Rig changed, on hold: n", the held
+  mods as list items ("name - kind", six at most, then "+n") and how the hold ends ("Select the mod on the student
+  page and press Update to apply it again", in italics); then, after a gap, "Other affected mods" with an inline Expand /
+  Collapse button over a list item per other kind with mods ("Gone from the game: n", "New official parts: n",
+  "Rebuilt, same rig: n", "Not affected: n", "Not determined: n"), folded at first; the button closes the message
+  and opens it again the other way. With no mod held that list shows at once, without the button. Closing it records the version
+  (`mods.impactSeen`). At the start before the prompts below, and after `config.changed` (a game update while the
+  program runs rebuilds the game services) once no other popup is open.
+- **Mods Back to Official** (while mods are on; titled Mods Affected by a Game Update when every listed entry is
+  `updated`): the `reset` and `updated` entries, every card ticked but those whose
+  configured mod's rig a game update changed (`mods.impact {ids}`): those carry the Rig Changed badge and start
+  unticked, so Apply Mod Configuration writes them only when ticked; with the install
+  chip; no hint over the cards (only "Still overwritten: n" when there are such entries), the band over the paper as
+  slim as the count, the cards from the paper's left edge and a portrait's details upright beside its stacked fields
+  (`listPopup` `slimBand`, `alignStart`, `detailKind`; both prompts place their cards that way); entries still overwritten are listed apart ("Still overwritten: n", their Details the repair lines). Exactly
   two buttons (decision 16) and no way out but them (no close button; Escape and the backdrop do nothing): Apply Mod
   Configuration sends the ticked cards (`mods.restoreDrift`) and keeps the others as they are, Keep as Is keeps them
   all (`mods.dismiss drift`). Apply is greyed with the reason while the game runs or Steam is busy; while the classic

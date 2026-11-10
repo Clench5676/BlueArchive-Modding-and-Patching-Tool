@@ -54,7 +54,7 @@ export function view(state, { place = "top" } = {}) {
   if (!state) return { hidden: true, on: true, busy: false, unavailable: false, reason: null, dot: false };
   const busy = !!state.busy;
   const unavailable = !busy && state.available === false;
-  const counts = (state.pending || 0) + (state.stuck || 0) + (state.left || 0);
+  const counts = (state.pending || 0) + (state.stuck || 0) + (state.left || 0) + (state.held || 0);
   return {
     hidden: place === "top" && !state.current,
     on: state.enabled !== false,
@@ -114,7 +114,7 @@ export function confirmation(state) {
 }
 
 // helpLines(state): the "?" help's lines, [{text, button: {id, label}}]. Buttons: retry (pending and left entries), details
-// (stuck entries: the Overwritten message, never a Retry)
+// (stuck entries: the Overwritten message, never a Retry), held (entries a game update's rig change holds: their names)
 export function helpLines(state, { sep = listSep() } = {}) {
   const s = state || {};
   const lines = basics().map((text) => ({ text }));
@@ -123,6 +123,7 @@ export function helpLines(state, { sep = listSep() } = {}) {
   const notSwitched = (s.pending || 0) + (s.left || 0);
   if (notSwitched > 0) lines.push({ text: T("mods.notSwitched", { n: notSwitched }), button: { id: "retry", label: T("mods.retry") } });
   if (s.stuck > 0) lines.push({ text: T("mods.stuck", { n: s.stuck }), button: { id: "details", label: T("mods.details") } });
+  if (s.held > 0) lines.push({ text: T("mods.held", { n: s.held }), button: { id: "held", label: T("mods.details") } });
   if (s.sourceMissing > 0) lines.push({ text: T("mods.sourceMissing", { n: s.sourceMissing }) });
   return lines;
 }
@@ -145,13 +146,14 @@ export function resultSummary(result, nameOf) {
   const list = (k) => result?.[k] || [];
   const title = T(result?.enabled === false ? "mods.offState" : "mods.onState");
   const kept = list("done").some((item) => item.kept_current), incomplete = list("done").some((item) => item.incomplete);
-  if (!list("adopted").length && !list("failed").length && !list("stuck").length && !list("left").length && !kept && !incomplete) return null;
+  if (!list("adopted").length && !list("failed").length && !list("stuck").length && !list("left").length && !list("held").length && !kept && !incomplete) return null;
   const lines = [];
   if (kept) lines.push(T("mods.keptCurrent"));
   if (incomplete) lines.push(T("mods.incomplete"));
   if (list("adopted").length) lines.push(T("mods.toAdd", { n: list("adopted").length }));
   lines.push(T("mods.result", { done: list("done").length, failed: list("failed").length + list("left").length }));
   if (list("stuck").length) lines.push(T("mods.stuck", { n: list("stuck").length }));
+  if (list("held").length) lines.push(T("mods.held", { n: list("held").length }));
   const failures = [
     ...list("failed").map((f) => `${entryLabel(f.entry, nameOf)} - ${errorText(f.code, f.params)}`),
     ...list("left").map((e) => `${entryLabel(e, nameOf)} - ${errorText(e.code || "library_io_error", e.params)}`),
@@ -230,7 +232,7 @@ export function onChange(fn) { listeners.add(fn); return () => listeners.delete(
 
 // the parts of mods.state the switch and Settings draw
 const signature = (s) => JSON.stringify(s && [s.enabled, s.available, s.reason, s.busy, s.queued > 0, s.scan,
-  s.explained, s.pending, s.stuck, s.left, s.sourceMissing, s.drift, s.untracked,
+  s.explained, s.pending, s.stuck, s.left, s.held, s.sourceMissing, s.drift, s.untracked,
   s.damaged, s.tray, s.current, (s.installs || []).map((i) => [i.key, i.label, i.named])]);
 
 function update(next) {
@@ -543,6 +545,7 @@ export async function openHelp() {
   const act = {
     retry: ({ close }) => { close(null); run(retryParams(state || s)); },
     details: () => overwritten(),
+    held: () => heldDetails(state || s),
   };
   const lines = helpLines(state || s).map((l) => (l.button ? { text: l.text, button: { label: l.button.label, fn: act[l.button.id] } } : l.text));
   await Popup.message({ title: T("mods.switch"), lines, width: 2098, fitTogether: [0, 1], plain: true });
@@ -576,6 +579,22 @@ async function overwritten() {
   const listed = entries.slice(0, MAX_LISTED).map((e) => entryLabel(e, nameOf));
   if (entries.length > MAX_LISTED) listed.push(`+${entries.length - MAX_LISTED}`);
   await Popup.message({ title: T("mods.overwrittenTitle"), lines: overwrittenLines({ names: listed, installs }, T), ok: T("picker.ok") });
+}
+
+// heldLines(state, nameOf): the names of the entries a game update's rig change holds ("name - kind"), then how the
+// hold ends
+export function heldLines(state, nameOf) {
+  const entries = state?.heldEntries || [];
+  const listed = entries.slice(0, MAX_LISTED).map((e) => entryLabel(e, nameOf, " - "));
+  if (entries.length > MAX_LISTED) listed.push(`+${entries.length - MAX_LISTED}`);
+  return [...listed, T("mods.impact.hint", { action: T("act.update") })];
+}
+
+async function heldDetails(s) {
+  const nameOf = await names().catch(() => undefined);
+  const lines = heldLines(s, nameOf);
+  await Popup.message({ title: T("mods.heldTitle"), ok: T("picker.ok"), plain: true,
+    lines: [...lines.slice(0, -1).map((text) => ({ text, marker: "\u2022", markerGap: 44, indent: 52 })), { text: lines.at(-1), gap: 32, italic: true }] });
 }
 
 // Settings' Game Files Check: a scan with the dismissed entries listed again; resolves once it is in (or after 60 s)
