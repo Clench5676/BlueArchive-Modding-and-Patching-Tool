@@ -19,8 +19,8 @@ def test_popup_in_node():
 
 
 def test_popup_keeps_the_official_sort_source_branches(request, tmp_path):
-    if not request.config.pluginmanager.hasplugin("bamt_dev.testing"):
-        pytest.skip("Requires the official development view (-p bamt_dev.testing)")
+    if not request.config.pluginmanager.hasplugin("bmpt_dev.testing"):
+        pytest.skip("Requires the official development view (-p bmpt_dev.testing)")
     from bmpt.gameassets import AssetCache, GameAssets
     from bmpt.gameassets.layouts import subtree
 
@@ -42,8 +42,8 @@ def test_popup_keeps_the_official_sort_source_branches(request, tmp_path):
 
 
 def test_review_controls_use_official_popup_and_settings_nodes(request, tmp_path):
-    if not request.config.pluginmanager.hasplugin("bamt_dev.testing"):
-        pytest.skip("Requires the official development view (-p bamt_dev.testing)")
+    if not request.config.pluginmanager.hasplugin("bmpt_dev.testing"):
+        pytest.skip("Requires the official development view (-p bmpt_dev.testing)")
     from bmpt.gameassets import AssetCache, GameAssets
     from bmpt.gameassets.layouts import subtree
 
@@ -87,8 +87,8 @@ def test_review_controls_use_official_popup_and_settings_nodes(request, tmp_path
 
 @pytest.mark.skipif(NODE is None, reason="Node.js is not installed")
 def test_popup_resizes_official_sort_branches_to_each_class(request, tmp_path):
-    if not request.config.pluginmanager.hasplugin("bamt_dev.testing"):
-        pytest.skip("Requires the official development view (-p bamt_dev.testing)")
+    if not request.config.pluginmanager.hasplugin("bmpt_dev.testing"):
+        pytest.skip("Requires the official development view (-p bmpt_dev.testing)")
     from bmpt.gameassets import AssetCache, GameAssets
 
     official = request.getfixturevalue("official_game")

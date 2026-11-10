@@ -14,8 +14,8 @@ SOURCE = Path(__file__).parents[1] / "src/bmpt/web/js/selected-frames.js"
 
 @pytest.fixture
 def official_badge_assets(request, tmp_path):
-    if not request.config.pluginmanager.hasplugin("bamt_dev.testing"):
-        pytest.skip("Requires the official development view (-p bamt_dev.testing)")
+    if not request.config.pluginmanager.hasplugin("bmpt_dev.testing"):
+        pytest.skip("Requires the official development view (-p bmpt_dev.testing)")
     official = request.getfixturevalue("official_game")
     official.require_ui()
     cache = AssetCache(root=tmp_path / "memory-only", allowed=False)
