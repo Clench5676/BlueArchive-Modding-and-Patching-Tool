@@ -540,7 +540,7 @@ def test_an_overwritten_untracked_entry_is_adopted_and_left_stuck(world):
     assert world.spr.read_bytes() == data  # left as it is, its mod now safe in the library
     assert world.library.mods()[0].file.read_bytes() == data
     assert world.unfinished() == [{"install": world.key(), "core": "test_spr", "why": "stuck"}]
-    assert world.library.intent()["unfinished"] == {"pending": 0, "left": 0, "stuck": 1}
+    assert world.library.intent()["unfinished"] == {"pending": 0, "left": 0, "stuck": 1, "held": 0}
 
 
 def test_without_scan_consent_an_off_reverts_what_the_library_wrote_and_nothing_else(world):
@@ -1149,7 +1149,7 @@ def test_a_crash_without_consent_leaves_the_rest_listed(world, monkeypatch):
     listed = {item["core"]: item["why"] for item in world.unfinished()}
     assert set(listed) == set(files) and set(listed.values()) == {"pending"}
     assert world.library.intent() == {"enabled": False, "toggled": world.profiles()["toggled"],
-                                      "unfinished": {"pending": 3, "left": 0, "stuck": 0}}
+                                      "unfinished": {"pending": 3, "left": 0, "stuck": 0, "held": 0}, "held": []}
     monkeypatch.undo()
     monkeypatch.setattr(safety, "check_game_not_running", lambda: None)
     world.reload()
@@ -1220,7 +1220,7 @@ def test_an_on_retries_the_set_source_after_an_unfinished_off(world, monkeypatch
     assert result.done == [] and not result.failed
     assert [item["why"] for item in result.skipped] == ["changed"]
     assert world.unfinished() == []
-    assert world.library.intent()["unfinished"] == {"pending": 0, "left": 0, "stuck": 0}
+    assert world.library.intent()["unfinished"] == {"pending": 0, "left": 0, "stuck": 0, "held": 0}
     assert not world.library.selection("test")["spr"]["installed"]
     assert world.spr.read_bytes() == outside != mod.file.read_bytes()
     world.consent = True
@@ -1240,7 +1240,7 @@ def test_a_stuck_item_stays_stuck_across_a_crash(world, monkeypatch):
     with pytest.raises(KeyboardInterrupt):
         world.library.toggle(False, False)  # a Retry of the Off, cut short after its intent was saved
     assert world.unfinished() == [{"install": world.key(), "core": "test_spr", "why": "stuck"}]
-    assert world.library.intent()["unfinished"] == {"pending": 0, "left": 0, "stuck": 1}
+    assert world.library.intent()["unfinished"] == {"pending": 0, "left": 0, "stuck": 1, "held": 0}
 
 
 def test_a_toggle_never_replaces_the_list(world):
@@ -1249,7 +1249,7 @@ def test_a_toggle_never_replaces_the_list(world):
     world.toggle(False)
     world.toggle(True)
     assert world.unfinished() == [{"install": "/another/data/directory/game", "core": "test_spr", "why": "pending"}]
-    assert world.library.intent()["unfinished"] == {"pending": 0, "left": 0, "stuck": 0}  # not a known install
+    assert world.library.intent()["unfinished"] == {"pending": 0, "left": 0, "stuck": 0, "held": 0}  # not a known install
 
 
 def test_an_on_reaches_removed_parts(world):
@@ -1331,7 +1331,7 @@ def test_a_toggle_where_an_install_is_hidden_lists_it_for_the_directory_naming_i
     listed = {(item["core"], item["why"]) for item in world.unfinished() if item["install"] == world.key()}
     assert listed == {("test_spr", "pending"), ("own_spr", "stuck")}
     assert world.library.intent()["enabled"] is False
-    assert world.library.intent()["unfinished"] == {"pending": 1, "left": 0, "stuck": 1}
+    assert world.library.intent()["unfinished"] == {"pending": 1, "left": 0, "stuck": 1, "held": 0}
     world.library.toggle(False, False)  # A's Retry
     assert world.spr.read_bytes() == OFFICIAL
     assert {item["core"] for item in world.unfinished()} == {"own_spr"}
@@ -1720,7 +1720,7 @@ def test_an_on_and_its_retry_never_write_over_an_outside_change(world, consent):
         assert world.spr.read_bytes() == data
         assert [m.id for m in world.library.mods()] == [mod.id]  # the outside bytes are not stored by an On
         assert world.unfinished() == []
-        assert world.library.intent()["unfinished"] == {"pending": 0, "left": 0, "stuck": 0}
+        assert world.library.intent()["unfinished"] == {"pending": 0, "left": 0, "stuck": 0, "held": 0}
         assert world.folder()["configured"]["test_spr"]["source"] == f"mod:{mod.id}"
     if consent:  # the prompt that offers it: Mods Not in the Library lists a configured changed entry
         world.consent = True
@@ -2814,7 +2814,7 @@ def test_the_status_lists_installs_with_ids_and_distinct_folder_names(world):
     assert installs[world.key()]["distinct"] == "game" and installs[world.key(other)]["distinct"] == "global2"
     assert len(installs[world.key()]["id"]) == 12 and status["current"] == world.key(other)
     assert (status["enabled"], status["reason"], status["configured"]) == (True, None, 1)
-    assert status["unfinished"] == {"pending": 0, "left": 0, "stuck": 0}
+    assert status["unfinished"] == {"pending": 0, "left": 0, "stuck": 0, "held": 0}
     (world.root / "profiles.json").write_text("{broken")
     (world.root / "profiles.json.prev").write_text("{broken")
     assert world.library.status()["reason"] == "profiles_unreadable"

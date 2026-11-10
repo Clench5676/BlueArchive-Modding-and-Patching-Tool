@@ -228,3 +228,62 @@ def diff(before: dict, after: dict) -> dict:
             else:
                 result[kind][name] = {"before": a, "after": b}
     return result
+
+
+#: what a game update did to the official parts a mod was built against (``impact``), from the least to the most
+#: that needs the user: the same files; rebuilt with the rig the mod was made for; new official parts beside those the
+#: mod knows; the rig itself changed (atlas layout or regions, skeleton bones, slots or animations, texture sizes, an
+#: asset gone); no official part of the core left. ``unknown``: nothing tells (no fingerprint, unreadable parts).
+UNCHANGED, REBUILT, NEW_PARTS, RIG_CHANGED, GONE, UNKNOWN = (
+    "unchanged", "rebuilt", "new_parts", "rig_changed", "gone", "unknown")
+IMPACTS = (UNCHANGED, REBUILT, NEW_PARTS, RIG_CHANGED, GONE, UNKNOWN)
+
+
+def _merged(parts: list[dict], kinds: tuple[str, ...] = ("atlases", "skeletons", "textures")) -> dict:
+    merged: dict[str, Any] = {"structure": None, **{kind: {} for kind in kinds}}
+    for item in parts:
+        for kind in kinds:
+            merged[kind].update(item.get(kind) or {})
+    return merged
+
+
+def _rig_changed(changes: dict) -> bool:
+    """Whether a ``diff`` of a core's assets names a change of its rig: an asset gone, an atlas repacked or with
+    other regions, a skeleton with other bones, slots or animations (or other bytes where its rig cannot be read),
+    a texture of another size. A new asset alone is a new part, not a change of the rig."""
+    for name, change in changes["atlases"].items():
+        if change.get("present") == "before" or change.get("layout") or change.get("added") or change.get("removed"):
+            return True
+    for name, change in changes["skeletons"].items():
+        if change.get("present") == "before" or change.get("rig") or change.get("added") or change.get("removed"):
+            return True
+        if change.get("changed") and change.get("rig") is None and "present" not in change:
+            return True
+    return any(change.get("present") != "after" for change in changes["textures"].values())
+
+
+def impact(built: dict | None, now: dict | None) -> str:
+    """What a game update did under a mod (``IMPACTS``): the fingerprint it was built against (``built``) held
+    against the one its core's official parts give now (``now``: None when the core has no official part left, which
+    is ``gone``). Parts are matched by the assets they hold, so a part renamed by the update compares with the one
+    it replaced. A fingerprint that does not know every part of the core then (``complete`` False) tells no new
+    parts."""
+    if not built or not built.get("parts"):
+        return UNKNOWN
+    if now is None:
+        return GONE
+    if not now.get("parts"):
+        return UNKNOWN
+    before = {item["name"] for item in built["parts"]}
+    after = {item["name"] for item in now["parts"]}
+    complete = bool(built.get("complete"))
+    if before == after or (not complete and before <= after):
+        return UNCHANGED
+    changes = diff(_merged(built["parts"]), _merged(now["parts"]))
+    if _rig_changed(changes):
+        return RIG_CHANGED
+    added = any(change.get("present") == "after" for kind in ("atlases", "skeletons", "textures")
+                for change in changes[kind].values())
+    if complete and (added or len(after) > len(before)):
+        return NEW_PARTS
+    return REBUILT

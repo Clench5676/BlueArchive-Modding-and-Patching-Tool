@@ -4244,3 +4244,40 @@ test("the list reports the cards in view, and those a scroll brings in", async (
     assert.ok(later.length > 0 && !later.includes("k0") && later.length < items.length, "a scroll moves the window");
   } finally { prompt.hidden = true; Fresh.closed(prompt); }
 });
+
+test("a plain line's inline button is as high as the line's text and stays inside the frame, in every locale", async () => {
+  await Popup.ready();
+  const { glyphsOf } = await import("../../src/bmpt/web/js/ngui.js").then((m) => ({ glyphsOf: m.glyphsOf || null }));
+  for (const lang of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
+    const ui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url))).webui;
+    for (const caption of [ui.mods.impact.expand, ui.mods.impact.collapse]) {
+      const layout = Popup.messageLayout({ plain: true, ok: "OK", lines: [
+        { text: ui.mods.impact.rigChanged.replace("{n}", "3") },
+        { text: ui.mods.impact.others, gap: 32, button: { label: caption, inline: true, fn: () => {} } }] });
+      const line = layout.body.boxes[1], [text, button] = line.lineRow.boxes;
+      assert.equal(button.h, Math.round(line.f.fs * 1.15), `${lang} ${caption}: as high as one line`);
+      assert.ok(button.h < 136, `${lang}: smaller than the small button`);
+      assert.ok(line.bf.fs <= Math.round(line.f.fs * 0.75) && line.bf.text === caption, `${lang} ${caption}: caption whole`);
+      if (glyphsOf) assert.ok(glyphsOf(line.bf.text, line.bf.fs) < button.w, `${lang} ${caption}: caption inside`);
+      assert.ok(text.x + text.w <= button.x && button.x + button.w <= layout.width, `${lang} ${caption}: inside the frame`);
+      assert.equal(text.x, layout.body.boxes[0].lineRow.boxes[0].x, `${lang} ${caption}: the text starts where the lines do`);
+    }
+  }
+});
+
+test("the update summary unfolded fits its wide frame without scrolling, in every locale", async () => {
+  await Popup.ready();
+  const I18n = await import("../../src/bmpt/web/js/i18n.js");
+  const Impact = await import("../../src/bmpt/web/js/update-impact.js");
+  const flat = (o, p = "", out = {}) => { for (const [k, v] of Object.entries(o)) { if (v && typeof v === "object") flat(v, `${p}${k}.`, out); else out[`${p}${k}`] = v; } return out; };
+  try {
+    for (const lang of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
+      I18n.setStrings(lang, flat(JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url)))));
+      const mods = [1, 2, 3].map((i) => ({ id: `${i}`, target: "hoshino_swimsuit", core: "hoshino_swimsuit_spr", kind: "spr", impact: "rig_changed" }));
+      const m = Impact.summary({ due: true, mods, counts: { rig_changed: 3, gone: 1, new_parts: 2, rebuilt: 5, unchanged: 37, unknown: 4 } },
+        () => "Hoshino (Swimsuit)", { expanded: true });
+      const layout = Popup.messageLayout({ lines: m.lines, ok: "OK", plain: true, width: Impact.WIDTH });
+      assert.equal(layout.scroll, false, `${lang} ${layout.height} ${layout.body.height} ${layout.visible}`);
+    }
+  } finally { setStrings("en-US", Object.fromEntries(strings(english))); }
+});

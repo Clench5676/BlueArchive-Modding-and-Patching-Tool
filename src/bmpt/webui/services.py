@@ -1095,10 +1095,13 @@ class Services:
             status = self.refresh_status() or {}
         consent = self.state.scan_consent
         entries = self.snapshot.entries() if consent is True else []
-        unfinished = {"pending": 0, "left": 0, "stuck": 0, **(status.get("unfinished") or {})}
+        unfinished = {"pending": 0, "left": 0, "stuck": 0, "held": 0, **(status.get("unfinished") or {})}
+        held = [item for item in status.get("held") or [] if isinstance(item, dict)]
+        holding = {(item.get("install"), item.get("core")) for item in held}
         count = lambda test: sum(1 for e in entries if test(e))  # noqa: E731
         if consent is True:
-            pending = count(lambda e: e.state == "pending" and not e.overwritten)
+            # a held entry is told as held, not as one to retry
+            pending = count(lambda e: e.state == "pending" and not e.overwritten and (e.install, e.core) not in holding)
             stuck = count(lambda e: e.state == "pending" and e.overwritten)
             left = unfinished["left"]  # an adopt that failed: only the toggle that made it knows
         else:
@@ -1121,8 +1124,10 @@ class Services:
             "pending": pending,
             "stuck": stuck,
             "left": left,
+            "held": unfinished["held"],
+            "heldEntries": held,
             "unfinished": {"pending": unfinished["pending"], "left": unfinished["left"],
-                           "stuck": unfinished["stuck"]},
+                           "stuck": unfinished["stuck"], "held": unfinished["held"]},
             "drift": count(lambda e: e.state in ("reset", "updated") and not e.dismissed),
             "untracked": count(lambda e: e.state in ("untracked", "changed") and not e.dismissed),
             "damaged": count(lambda e: e.state == "damaged"),
