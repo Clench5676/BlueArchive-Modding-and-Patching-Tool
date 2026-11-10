@@ -12,6 +12,7 @@ import * as Popup from "./popup.js";
 import { S, hitButton } from "./util.js";
 import { visualButton as whiteButton } from "./photography/controller.js";
 import { cameraFeedback } from "./photography/feedback.js";
+import * as Loading from "./loading.js";
 import { prepareBack } from "./visual-mode.js";
 import { anchoredCentre } from "./visual-view.js";
 import { buttonCenter } from "./student-hall-icons.js";
@@ -95,14 +96,16 @@ async function save() {
   const { scale, offset } = state.params;
   let result;
   try {
-    const id = await rpc("lobby.camera.save", { variant: hooks.variant(), lobby: hooks.lobby(), source: hooks.source(),
-      view: state.view, scale, offset });
-    result = await waitJob(id);
+    // Now Loading locks the screen until the saved choice is in and the student's choices are refreshed
+    result = await Loading.task(async () => {
+      const saved = await waitJob(await rpc("lobby.camera.save", { variant: hooks.variant(), lobby: hooks.lobby(),
+        source: hooks.source(), view: state.view, scale, offset }));
+      await hooks.saved?.(saved);
+      return saved;
+    });
   } finally {
     saving = false;
   }
-  // the student's lobby choices again, with the new one
-  await hooks.saved?.(result);
   if (!active) return;
   await Popup.message({ title: T("lobby.cameraSaved"),
     lines: [T("lobby.cameraDetail", { scale: result.scale.toFixed(3), offset: result.offset.map((v) => Math.round(v)).join(", ") })],
