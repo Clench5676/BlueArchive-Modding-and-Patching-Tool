@@ -387,7 +387,7 @@ def test_prefab_volumes_follow_only_the_volumes_that_count():
     p.mb(12, 1201, 7777, weight=1.0, sharedProfile=ref(-501, 4), **fields)
     p.node(13, "PPV_C", father=12, layer=30)
     p.mb(13, 1301, 7777, weight=0.0, sharedProfile=ref(-502, 4), **fields)
-    # a volume on the UI layer, which the lobby's camera never blends (Erika's, Yoshimi's)
+    # a volume on the UI layer, which the lobby's camera never blends (Yoshimi's, Shimiko's)
     p.node(14, "PPV_UI", father=1, layer=5)
     p.mb(14, 1401, 7777, weight=1.0, sharedProfile=ref(-503, 4), **fields)
     profiles = {-501: [component("ChromaticAberration", intensity=param(0.1))],
@@ -701,11 +701,16 @@ def test_real_lobbies(real_game, monkeypatch):
     assert hoshino["post"] == {
         "chromaticAberration": 0.12, "panini": {"distance": 1.0, "cropToFit": 1.0},
         "liftGammaGain": {"lift": [1.0, 1.0, 1.0, 0.0], "gamma": [1.0, 1.0, 1.0, 0.0], "gain": [1.0, 0.9116, 0.96201, 0.0]}}
-    # Erika's volumes sit on the UI layer, outside the lobby camera's volume mask: no post-processing in the game
-    assert real_game.lobby_info("erika_home")["post"] == {}
+    # Yoshimi's volumes sit on the UI layer, outside the lobby camera's volume mask: no post-processing in the game
+    assert real_game.lobby_info("yoshimi_home")["post"] == {}
+    # Erika's sat there too until the 2026-11 update moved them onto the camera's volume layer
+    assert real_game.lobby_info("erika_home")["post"] == {
+        "chromaticAberration": 0.1, "panini": {"distance": 1.0, "cropToFit": 1.0},
+        "liftGammaGain": {"lift": [1.0, 1.0, 1.0, 0.0], "gamma": [1.0, 0.99644, 0.98578, 0.0],
+                          "gain": [0.99832, 1.0, 0.99665, 0.0]}}
     # lobby data is derived from character bundles: kept in memory, and nothing but the prefab name index reaches the
     # disk cache (consent is on)
-    assert sum(key.startswith(_SCHEMA + "lobby/") and not disk for key, disk in puts) == 4
+    assert sum(key.startswith(_SCHEMA + "lobby/") and not disk for key, disk in puts) == 5
     on_disk = {key for key, disk in puts if disk}
     assert on_disk == {_SCHEMA + "lobby-prefabs"}
     files = {p for p in cache.root.rglob("*") if p.is_file()}

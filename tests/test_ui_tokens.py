@@ -13,7 +13,8 @@ from pathlib import Path
 import pytest
 
 from bmpt.gameassets.layouts import export_layout, subtree
-from bmpt.gameassets.service import PREFAB_HINTS
+from bmpt.gameassets.discovery import cab_names
+from bmpt.gameassets.service import PREFAB_HINTS, less_crc
 from bmpt.gameassets.unity import open_bundle
 
 NODE = shutil.which("node")
@@ -32,6 +33,14 @@ def tokens():
 
 def bundle_of(root):
     return next(GAME_DIR.rglob(PREFAB_HINTS[root]))
+
+
+def bundle_by_cab(name, cab):
+    """A bundle the App has no hint for: by its file name, or after a game update rebuilt it under a new CRC by its
+    CAB among the bundles of the same name less the CRC (a header read each)."""
+    stem = less_crc(name)[:-len(".bundle")]
+    paths = list(GAME_DIR.rglob(name)) or [p for p in GAME_DIR.rglob(stem + "_*.bundle") if cab in cab_names(p)]
+    return paths[0]
 
 
 @pytest.fixture(scope="module")
@@ -211,7 +220,7 @@ def test_applied_selection_gold_is_the_mulligan_selectline_sprite(tokens):
 
 def test_lobby_entry_is_uiani_lobby(tokens, tmp_path_factory):
     # UILobby's root plays its legacy Animation clip as the lobby opens: the top bar and bottom menu keys, as offsets
-    # from where the prefab puts the nodes (chrome-motion.js plays them on the App's bars).
+    # from where the clip leaves the nodes (chrome-motion.js plays them on the App's bars).
     from bmpt.gameassets import AssetCache, GameAssets
     from bmpt.gameassets.model import BundleGraph
     from ba_modding_toolkit.searching import get_search_dirs
@@ -225,8 +234,11 @@ def test_lobby_entry_is_uiani_lobby(tokens, tmp_path_factory):
     assert clip["m_Name"] == "UIAni_Lobby" and clip["m_Legacy"]
     curves = {c["path"]: c["curve"]["m_Curve"] for c in clip["m_PositionCurves"]}
     for edge, path in (("top", "Front/NUITop/Top/Right"), ("bottom", "Front/Bottom/Menu")):
-        keys, rest = curves[path], subtree(layout, path)["pos"][1]
-        assert keys[-1]["value"]["y"] == rest
+        keys = curves[path]
+        # the clip ends the top bar where the prefab puts it and, since the 2026-11 update, the bottom menu 2 units
+        # above (-678 for the prefab's -680): the offsets are from where the clip leaves the node
+        rest = keys[-1]["value"]["y"]
+        assert rest - subtree(layout, path)["pos"][1] == {"top": 0, "bottom": 2}[edge]
         assert all(k["weightedMode"] == 0 for k in keys)
         got = [[k["time"], k["value"]["y"] - rest, k["outSlope"]["y"]] for k in keys]
         assert all(k["inSlope"]["y"] == k["outSlope"]["y"] for k in keys)
@@ -237,7 +249,8 @@ def test_lobby_entry_is_uiani_lobby(tokens, tmp_path_factory):
 # --- the design system's scales (ui-tokens.js SPACE, TYPE, CONTROL, POPUP_FRAME, PANEL, LIST_ROW; docs/design-system.md) ---
 
 # exemplars the App does not load at run time (so not in PREFAB_HINTS): their bundles in the development view
-EXEMPLAR_BUNDLES = {"UIPopup_RaidEnterCheck": "ui-_mxload-prefabs-2025-07-02_assets_all_3668241127.bundle"}
+EXEMPLAR_BUNDLES = {"UIPopup_RaidEnterCheck": ("ui-_mxload-prefabs-2025-07-02_assets_all_847805749.bundle",
+                                               "cab-37025ca400586bb89016f910aa00592b")}
 ROW = "Center/ScrollView/ScrollViewController/Grid/UIMailBoxContent/List_01"
 PX = [0, 0.5, 1]
 
@@ -246,8 +259,8 @@ PX = [0, 0.5, 1]
 def exemplars():
     out = {}
     for root in ("UIMailBox", "UIPopup_GachaCharList", "UIPopup_RaidEnterCheck"):
-        name = PREFAB_HINTS.get(root) or EXEMPLAR_BUNDLES[root]
-        with open_bundle(next(GAME_DIR.rglob(name))) as env:
+        path = bundle_of(root) if root in PREFAB_HINTS else bundle_by_cab(*EXEMPLAR_BUNDLES[root])
+        with open_bundle(path) as env:
             out[root] = export_layout(env, root, {})
     return out
 
@@ -364,8 +377,8 @@ def _origin(tree, path):
 
 
 def test_popup_minimum_is_the_client_version_frame(tokens):
-    name = "ui-_mxload-prefabs-2025-07-02_assets_all_3578173542.bundle"
-    with open_bundle(next(GAME_DIR.rglob(name))) as env:
+    path = bundle_by_cab("ui-_mxload-prefabs-2025-07-02_assets_all_197929148.bundle", "cab-f132af15cc4169b45772a043d884cb2c")
+    with open_bundle(path) as env:
         tree = export_layout(env, "UIPopup_ClientVersion", {})
     bg = sprite(subtree(tree, "Center/Popup/Base/BG"), "Common_Popup_Bg")
     assert bg["w_"] == 1115

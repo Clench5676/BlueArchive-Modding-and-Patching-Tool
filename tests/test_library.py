@@ -6,6 +6,7 @@ import json
 import os
 import shutil
 import threading
+from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
@@ -1972,12 +1973,16 @@ def test_integration_variant_swap_adapts_names_and_atlas_pages(tmp_path, monkeyp
     all_files = [path for directory in resources for path in directory.glob("assets-_mx-spinecharacters-*.bundle")]
     textures = sorted((path for path in all_files if parse_filename(path.name).core.endswith("_spr")
                        and parse_filename(path.name).res_type in ("003", "textures")), key=lambda p: p.stat().st_size)
-    cores = []
+    # the two smallest portraits made of the same parts: a variant with another set of parts is rightly refused
+    parts, cores = defaultdict(list), []
+    for path in all_files:
+        parts[parse_filename(path.name).core].append(parse_filename(path.name).res_type)
     for path in textures:
         core_name = parse_filename(path.name).core
-        if core_name not in cores:
+        if not cores:
             cores.append(core_name)
-        if len(cores) == 2:
+        elif core_name not in cores and sorted(parts[core_name]) == sorted(parts[cores[0]]):
+            cores.append(core_name)
             break
     if len(cores) < 2:
         pytest.skip("Two portrait variants unavailable")
