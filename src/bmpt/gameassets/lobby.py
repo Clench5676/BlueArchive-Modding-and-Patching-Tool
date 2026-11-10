@@ -260,8 +260,8 @@ _POST_KEYS = {"ChromaticAberration": "chromaticAberration", "LiftGammaGain": "li
               "PaniniProjection": "panini", "ColorAdjustments": "colorAdjustments"}
 # The lobby is drawn by the PC client's main Camera (level1 Persistent/Camera, whose culling mask has the lobby's layer
 # 12), and URP blends only the volumes on the layers of that camera's volume mask (UniversalAdditionalCameraData
-# m_VolumeLayerMask 0x40020000). Every lobby keeps its volumes on 30, but for four (Erika, Yoshimi, Shimiko and
-# CH0356) on the UI layer 5, which the camera never blends.
+# m_VolumeLayerMask 0x40020000). Every lobby keeps its volumes on 30, but for three (Yoshimi, Shimiko and CH0356;
+# Erika too before the 2026-11 update) on the UI layer 5, which the camera never blends.
 CAMERA_VOLUME_LAYERS = frozenset({17, 30})
 
 
