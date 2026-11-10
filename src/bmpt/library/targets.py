@@ -5,8 +5,11 @@ Apply, and generic file slots delegate here, so a mod whose preview finds its of
 another path for its targets.
 
 Order, per file: its exact name, its name without the CRC, a unique CAB (each makes the file the part's current
-release: it replaces that part whole). The other files (an older release, another build's names) are judged per name
-prefix by what a build guarantees: an asset path lives in exactly one bundle, while a core keeps its parts under
+release: it replaces that part whole). A name without the CRC or a CAB only names the part: a game update rebuilds a
+part under its name and CABs, so such a file is the current release only when the readers find it built on the part
+as it is now (``Readers.release``); otherwise it is a file of an older release. The other files (an older release,
+another build's names) are judged per name prefix by what a build guarantees: an asset path lives in exactly one
+bundle, while a core keeps its parts under
 several dates and a part number only counts its own dated group. So they update the parts holding their asset paths
 over every date of the core, else the parts sharing an asset name and type; the part (prefix and resource type or
 number) at its newest date only for files whose assets cannot be read. A file whose readable assets no part holds
@@ -47,13 +50,20 @@ def _nothing(path: Path) -> set:
     return set()
 
 
+def _same_release(source: Path, target: Path) -> bool:
+    return True
+
+
 @dataclass(frozen=True)
 class Readers:
     """What the resolver may read of a file: its CABs, asset paths and asset names and types. Each returns an empty
-    set for a file it cannot read; a target is read from its official copy where there is one."""
+    set for a file it cannot read; a target is read from its official copy where there is one.
+    ``release(source, target)`` says whether a file that names a part without its CRC, or by its CABs, was built on
+    that part as it is now; the names alone (no reader) take it as such."""
     cabs: Callable[[Path], Iterable[str]] = _nothing
     paths: Callable[[Path], set[str]] = _nothing
     keys: Callable[[Path], set] = _nothing
+    release: Callable[[Path, Path], bool] = _same_release
 
 
 #: Names only: the cheap rule of a preview before its files are read
@@ -77,11 +87,14 @@ class Group:
 
 
 def current(files: Mapping[str, Path], targets: Sequence[Path],
-            cabs: Callable[[Path], Iterable[str]] = _nothing) -> tuple[dict[Path, Path], dict[str, str]]:
+            cabs: Callable[[Path], Iterable[str]] = _nothing,
+            release: Callable[[Path, Path], bool] = _same_release) -> tuple[dict[Path, Path], dict[str, str]]:
     """The files that are a part's current release, {target: source}, and the method each was found by.
 
-    A name or CAB match proves the release current; coexisting dates of a part stay apart. Two files on one part, or
-    a name or CAB that several parts share without a part number to tell them apart, are ambiguous."""
+    An exact name proves the release current; a name without the CRC or a CAB match does when ``release`` finds the
+    file built on the part as it is now (a game update rebuilds a part under its name and CABs: such a file of the
+    release before is left to the asset stage). Coexisting dates of a part stay apart. Two files on one part, or a
+    name or CAB that several parts share without a part number to tell them apart, are ambiguous."""
     result: dict[Path, Path] = {}
     methods: dict[str, str] = {}
     for name, source in files.items():
@@ -102,6 +115,8 @@ def current(files: Mapping[str, Path], targets: Sequence[Path],
             matches = [path for path in targets if part_of(path.name) == part_of(name)]
         if len(matches) != 1 or matches[0] in result:
             raise ServiceError("mod_target_ambiguous", file=name)
+        if method != NAME and not release(source, matches[0]):
+            continue
         result[matches[0]] = source
         methods[name] = method
     return result, methods
@@ -153,7 +168,7 @@ class Resolution:
         self.targets = list(targets)
         self.readers = readers
         if whole:
-            self.current, self._methods = current(self.files, self.targets, readers.cabs)
+            self.current, self._methods = current(self.files, self.targets, readers.cabs, readers.release)
         else:
             self.current, self._methods = {}, {}
         sources = set(self.current.values())
@@ -281,7 +296,7 @@ def generic(files: Mapping[str, Path], available: Sequence[Path], readers: Reade
             if exact:
                 result[name] = Match(NAME, exact)
                 continue
-        found, methods = current({name: source}, available, readers.cabs)
+        found, methods = current({name: source}, available, readers.cabs, readers.release)
         if found:
             result[name] = Match(methods[name], list(found))
             continue

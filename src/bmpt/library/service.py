@@ -1542,10 +1542,11 @@ class ModLibrary:
         return self._cab_indexes[key]
 
     def _readers(self, targets: Sequence[Path], pin: Pin | None, inspection: integrity.Inspection | None = None,
-                 *, keys: bool = True) -> resolver.Readers:
+                 *, keys: bool = True, release: bool = True) -> resolver.Readers:
         """What the resolver reads of a file: its CABs, asset paths and (with ``keys``) asset names and types; a file
         of ``targets`` is read from its official copy where there is one, else as it is. Asset evidence is on top of
-        the name rules: a file the readers cannot read gives none."""
+        the name rules: a file the readers cannot read gives none. With ``release``, a file naming a part without its
+        CRC or by its CABs is that part's current release only with the part's structure (``Inspection.structure``)."""
         inspection = inspection or integrity.Inspection()
         members, baselines = set(targets), {}
 
@@ -1578,18 +1579,29 @@ class ModLibrary:
                 logger.debug("No asset keys read from %s", path.name, exc_info=True)
                 return set()
 
-        return resolver.Readers(cabs, paths, asset_keys)
+        def same_release(source: Path, target: Path) -> bool:
+            # A part rebuilt by a game update keeps its name (less the CRC) and CABs. Only a file of the part's
+            # structure as it is now replaces it whole; unread files give no evidence and keep the name rule.
+            try:
+                return inspection.structure(source) == inspection.structure(baseline(target))
+            except Exception:  # noqa: BLE001 - any reader failure means no evidence
+                logger.debug("No structure read for %s", source.name, exc_info=True)
+                return True
+
+        return resolver.Readers(cabs, paths, asset_keys, same_release if release else resolver.NAMES_ONLY.release)
 
     def _resolve(self, files: dict[str, Path], targets: Sequence[Path], pin: Pin | None,
                  inspection: integrity.Inspection | None = None, *, whole: bool = True,
-                 keys: bool = True) -> resolver.Resolution:
+                 keys: bool = True, release: bool = True) -> resolver.Resolution:
         """The one rule for the official parts these files replace or update (``targets.resolve``)."""
-        return resolver.resolve(files, targets, self._readers(targets, pin, inspection, keys=keys), whole=whole)
+        return resolver.resolve(files, targets, self._readers(targets, pin, inspection, keys=keys, release=release),
+                                whole=whole)
 
     def _replacements(self, files: dict[str, Path], targets: list[Path], pin: Pin | None,
-                      inspection: integrity.Inspection | None = None) -> dict[Path, Path]:
-        """The files that are a part's current release: {target: source}."""
-        return self._resolve(files, targets, pin, inspection).current
+                      inspection: integrity.Inspection | None = None, *, release: bool = True) -> dict[Path, Path]:
+        """The files that are a part's current release: {target: source}. ``release=False`` takes the names and
+        CABs alone, for a caller that judges the release itself."""
+        return self._resolve(files, targets, pin, inspection, release=release).current
 
     def _update_groups(self, older: dict[str, Path], targets: Sequence[Path], pin: Pin,
                        inspection: integrity.Inspection | None = None) -> list[mod_install.ModGroup]:
@@ -1633,7 +1645,8 @@ class ModLibrary:
         targets = (self._other_targets(files, pin) if kind_of_file(name) == "other"
                    else self._spine_parts(core_of(name), pin))
         inspection = inspection or integrity.Inspection()
-        replacements = self._replacements(files, targets, pin, inspection)
+        # Named for current parts: this check judges their release itself and refuses another one by name.
+        replacements = self._replacements(files, targets, pin, inspection, release=False)
         if len(replacements) != len(files):
             return None
         selected, official, originals = integrity.Contents(), integrity.Contents(), []
@@ -3598,7 +3611,12 @@ class ModLibrary:
         resolution = self._resolve(files, targets, pin)
         current = resolution.current
         groups = {}
+        inspection = integrity.Inspection()
         for target, path in current.items():
+            if path.name != target.name:
+                # A whole file under another name is written as it is: it must use the part's serialized format.
+                integrity.check_format(inspection.metadata(path), path,
+                                       inspection.metadata(self._official_or_current(target, pin)))
             parsed = parse_filename(path.name)
             group = groups.setdefault(parsed.prefix, mod_install.ModGroup(parsed.prefix, parsed.category, parsed.core, []))
             group.files.append(mod_install.ModFilePlan(path, parsed, mod_install.InstallAction.DIRECT_REPLACE,
