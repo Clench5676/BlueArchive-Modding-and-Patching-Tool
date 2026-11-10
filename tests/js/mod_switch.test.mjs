@@ -1395,7 +1395,8 @@ test("an update's impact: one count line per kind with mods, the held mods named
   assert.equal(r.title, "Game Updated");
   const hint = "Select the mod on the student page and press Update to apply it again";
   const item = (text) => ({ text, ...Impact.ITEM });
-  const head = [{ text: "Rig changed, on hold: 1" }, { text: "Hoshino - Portrait", ...Impact.ITEM }, { text: hint, italic: true }];
+  const head = [{ text: "Rig changed, on hold: 1" }, { text: "Hoshino - Portrait", ...Impact.ITEM }, { text: hint, ...Impact.HINT }];
+  assert.equal(Impact.HINT.fontSize, 42, "two steps under the 52 of the lines");
   const others = (label) => ({ text: "Other affected mods", gap: 16, button: { label, inline: true, fn: r.lines[3].button.fn } });
   // the other kinds are folded under their line, its button closes the message to open it the other way
   assert.deepEqual(r.lines, [...head, others("Expand")]);
