@@ -4075,7 +4075,8 @@ test("model search appends cross cards, drawn like any card, through the shared 
   t.mock.method(globalThis, "fetch", async (url, options) => url === "/asset/ui/layout/UICharacterCollection.json" ? reply(collection) : fetch(url, options));
   const Fresh = await import("../../src/bmpt/web/js/popup.js?cross-model-search");
   const own = [{ key: "self", label: "Original", full: "Original" },
-    { key: "mod", label: "Model mod", full: "Model mod" }, { key: "sibling", label: "Model sibling", full: "Model sibling" }];
+    { key: "mod", label: "Model mod", full: "Model mod" },
+    { key: "sibling", label: "Model sibling", full: "Model sibling", hint: english.model.beyondFit }];
   const extras = [{ key: "cross-z", label: "Model Zebra", full: "Model Zebra" }, { key: "cross-a", label: "Model Alpha", full: "Model Alpha" }]
     .map((it) => ({ ...it, hint: english.model.crossCharacter, thumb: "model.png", terms: ["ch0171_enemy"] }));
   const queries = [], chosen = [];
@@ -4085,6 +4086,9 @@ test("model search appends cross cards, drawn like any card, through the shared 
       tools: { more: (query) => { queries.push(query); return query.trim() ? extras : []; } },
       onSelect: (key) => chosen.push(key) });
     assert.deepEqual(keys(), ["self", "mod", "sibling"], "empty query keeps exactly the original cards");
+    const sibling = walk(prompt).find((e) => e.dataset.key === "sibling");
+    assert.equal(sibling.disabled ?? false, false);
+    assert.equal(sibling.getAttribute("aria-description"), english.model.beyondFit);
     action(prompt, "search").click();
     const input = () => walk(prompt).find((e) => e.className === "roster-search");
     await until(() => !!input());

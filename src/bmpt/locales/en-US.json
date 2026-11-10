@@ -92,6 +92,7 @@
 			"failed": "3D model unavailable",
 			"unfit": "Auto-fit unavailable",
 			"crossCharacter": "Cross-character model, may break",
+			"beyondFit": "Beyond auto-fit, may clip or distort",
 			"showOthers": "Show other students",
 			"action": {
 				"idle": "Idle",
