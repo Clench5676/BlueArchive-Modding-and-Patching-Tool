@@ -33,6 +33,8 @@ class Contents:
     platforms: set[str] = field(default_factory=set)
     versions: set[str] = field(default_factory=set)
     layout: dict[str, tuple[tuple[int, int], ...]] = field(default_factory=dict)
+    # per serialized file, the files its objects point into, in file id order
+    externals: dict[str, tuple[str, ...]] = field(default_factory=dict)
     names: set[str] = field(default_factory=set)
     # the bundle's asset paths (its AssetBundle container keys), lower case: each is held by one bundle of a build
     paths: set[str] = field(default_factory=set)
@@ -48,7 +50,7 @@ class Contents:
     def merge(self, other: Contents) -> None:
         for key in ("platforms", "versions", "names", "paths", "files", "references", "reference_paths", "streams"):
             getattr(self, key).update(getattr(other, key))
-        for key in ("skeletons", "atlases", "textures", "reference_names", "layout"):
+        for key in ("skeletons", "atlases", "textures", "reference_names", "layout", "externals"):
             getattr(self, key).update(getattr(other, key))
 
     def spine(self) -> dict:
@@ -153,6 +155,15 @@ class Inspection:
         self.check(path)
         return self._keys[path]
 
+    def structure(self, path: Path) -> tuple:
+        """What a bundle is as a release of a part, whatever its content: its serialized files, each one's objects
+        (path id and type) and the files its objects point into, in order. A mod built on a part keeps them; a game
+        update that rebuilt the part (objects added or dropped, another dependency) changes them, though the part
+        keeps its name but for the CRC and its CABs. Read from the headers alone."""
+        contents = self.metadata(path)
+        return (frozenset(contents.files), tuple(sorted(contents.layout.items())),
+                tuple(sorted(contents.externals.items())))
+
     def readable_keys(self, path: Path, *, targets: tuple[Path, ...] = ()) -> set[AssetKey]:
         self.check(path)
         for target in targets:
@@ -185,6 +196,7 @@ def metadata(path: Path, *, inspection: Inspection) -> Contents:
             identity = basename(name)
             result.files.add(identity)
             result.layout[identity] = tuple(sorted((obj.path_id, obj.type.value) for obj in file.objects.values()))
+            result.externals[identity] = tuple(basename(ref.path) for ref in file.externals)
             platform = file.target_platform
             result.platforms.add(getattr(platform, "name", str(platform)))
             version = re.match(r"^(\d+\.\d+)(?:\.|$)", file.unity_version)
