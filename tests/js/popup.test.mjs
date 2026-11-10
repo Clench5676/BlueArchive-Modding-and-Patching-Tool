@@ -4261,6 +4261,7 @@ test("a plain line's inline button is as high as the line's text and stays insid
       assert.ok(line.bf.text === caption, `${lang} ${caption}: caption whole`);
       if (glyphsOf) assert.ok(glyphsOf(line.bf.text, line.bf.fs) < button.w, `${lang} ${caption}: caption inside`);
       assert.ok(text.x + text.w <= button.x && button.x + button.w <= layout.width, `${lang} ${caption}: inside the frame`);
+      assert.ok(button.x - (text.x + text.w) <= 40, `${lang} ${caption}: right after the text`);
       assert.equal(text.x, layout.body.boxes[0].lineRow.boxes[0].x, `${lang} ${caption}: the text starts where the lines do`);
     }
   }
