@@ -2519,7 +2519,7 @@ overwritten entry need none (the detail screen judges its files cheaply).
 - **Game Updated** (`update-impact.js`, a plain, left-aligned message popup on the wide frame): once per resource version of the
   current install, when `mods.impact` finds mods a game update touched. First "Rig changed, on hold: n", the held
   mods as list items ("name - kind", six at most, then "+n") and how the hold ends ("Select the mod on the student
-  page and press Update to apply it again", in italics); then, after a gap, "Other affected mods" with an inline Expand /
+  page and press Update to apply it again", in italics); then, after a gap, "Other affected mods" followed by an inline Expand /
   Collapse button over a list item per other kind with mods ("Gone from the game: n", "New official parts: n",
   "Rebuilt, same rig: n", "Not affected: n", "Not determined: n"), folded at first; the button closes the message
   and opens it again the other way. With no mod held that list shows at once, without the button. Closing it records the version

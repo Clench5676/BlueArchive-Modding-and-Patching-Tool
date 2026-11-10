@@ -1030,7 +1030,7 @@ export const MSG = { title: POPUP_FRAME.contentTop, gap: SPACE.l, rowButton: SMA
 // {button, checked}: button "ok" or "cancel", or null for the close button, the backdrop or Escape; checked, the
 // checkbox's state then (null without one).
 //   lines: text, or {text, button: {label, fn, inline}} for a line with a small button at its end (fn({close}), where
-//          close(button) closes the popup; inline, with plain: only as high as the line's text); with such a line every line shows as a row of the game's light box
+//          close(button) closes the popup; inline, with plain: only as high as the line's text, right after it); with such a line every line shows as a row of the game's light box
 //          fontSize/minFontSize optionally keep a row's existing type size (the tour counter and body).
 //          With plain: indent (units) moves a line right, marker hangs a bullet left of its first line (markerGap wide,
 //          its font size by default), gap adds space above it (release notes' lists and sections), italic slants it.
@@ -1211,8 +1211,10 @@ function messageLines(lines, w, fitTogether, plain, assets = true) {
   const out = [], textBox = container({ w, h: 0, padding: [0, SPACE.xxxl] }).inner;
   const sized = fitted.map(s => {
     const indent = plain ? s.r.indent || 0 : 0;
-    const lineRow = row([{ ...s.item, w: s.room }, ...(s.bf ? [{ w: s.bw, h: s.bh ?? SMALL_BUTTON.h }] : [])],
-      { x: textBox.x + indent, w: textBox.w - indent, gap: SPACE.m, justify: "center" });
+    // an inline button follows its text; another sits at the line's right end
+    const inline = !!s.bh;
+    const lineRow = row([{ ...s.item, w: inline ? s.item.w : s.room }, ...(s.bf ? [{ w: s.bw, h: s.bh ?? SMALL_BUTTON.h }] : [])],
+      { x: textBox.x + indent, w: textBox.w - indent, gap: SPACE.m, justify: inline ? "start" : "center" });
     return { ...s, lineRow, w: textBox.w, h: lineRow.h + (plain ? s.r.gap || 0 : 0) };
   });
   const paragraphs = layoutStack(sized, { x: textBox.x, w: textBox.w, gap: SPACE.l });
