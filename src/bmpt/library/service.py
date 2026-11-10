@@ -1325,8 +1325,11 @@ class ModLibrary:
             group[name] = source
 
         # Validate every group before storing any part of this upload.
-        for group in groups.values():
-            if not direct or not self.direct_import(group, pin):
+        whole = set()  # groups copied whole as files made for the current parts
+        for key, group in groups.items():
+            if direct and self.direct_import(group, pin):
+                whole.add(key)
+            else:
                 self._check_group(group, pin, compatibility=False)
         added = AddResult()
         for key, group in groups.items():
@@ -1344,7 +1347,7 @@ class ModLibrary:
             if kind == "other":
                 target = other_target(group)
             record = self._store(group, parsed.core, target, kind, user_added=True,
-                                 built_against=self._built_against(group, pin, "import"))
+                                 built_against=self._built_against(group, pin, "import", painted=key in whole))
             known[signature_] = record["id"]
             entry = self._entry(record)
             added.append(entry)
@@ -1357,7 +1360,11 @@ class ModLibrary:
 
     def _check_group(self, files: dict[str, Path], pin: Pin | None, *, compatibility: bool = True,
                      dependencies: bool = True, conversion: bool = False, variant_key: str | None = None,
-                     inspection: integrity.Inspection | None = None) -> dict:
+                     inspection: integrity.Inspection | None = None, built: dict | None = None) -> dict:
+        """``built`` is the stored fingerprint of the files when they are a library mod's (``_read_built_against``).
+        The report's ``rig`` names what the official rig changed under the mod: atlases repacked since its textures
+        were drawn (``layout``), animations its skeleton lacks and regions its atlas lacks (``atlas_remap.rig_gains``).
+        ``remappable`` is any of them or a page size the texture does not fit (``misfit``)."""
         inspect = inspection.inspect if inspection else integrity.inspect
         cab_inspection = inspection or integrity.Inspection()
         selected, official, effective = integrity.Contents(), integrity.Contents(), integrity.Contents()
@@ -1462,9 +1469,18 @@ class ModLibrary:
             mixed = {name: data for name, data in effective.atlases.items() if name not in selected.atlases
                      and any(integrity.texture_key(page) in selected.textures
                              for page in atlas_remap.parse_atlas(data, name).pages)}
-            report["remappable"] = not unavailable and bool(mixed) and atlas_remap.page_size_mismatch(mixed, effective.textures)
+            misfit = bool(mixed) and atlas_remap.page_size_mismatch(mixed, effective.textures)
+            layout = fingerprint.changed_layouts(built, mixed)
+            gains = atlas_remap.rig_gains(selected.atlases, selected.skeletons, official.atlases, official.skeletons)
+            rerig = atlas_remap.rerigged(gains, selected.atlases, selected.skeletons, official.atlases,
+                                         official.skeletons, selected.textures)
+            report["rig"] = {"layout": sorted(layout), "animations": gains["animations"],
+                             "regions": {name: gains["regions"][name] for name in rerig if name in gains["regions"]}}
+            report["misfit"] = not unavailable and misfit
+            report["remappable"] = not unavailable and (misfit or bool(layout) or bool(rerig))
         except (ValueError, UnicodeError):
-            report["remappable"] = False
+            report["rig"] = {"layout": [], "animations": {}, "regions": {}}
+            report["misfit"] = report["remappable"] = False
         return report
 
     @_serialized
@@ -1502,7 +1518,7 @@ class ModLibrary:
         if progress:
             progress({"current": 1, "total": 1, "step": "import.step.check"})
         report = self._check_group({path.name: path for path in self._paths(record)}, pin or self.current_pin(),
-                                   variant_key=self._target_of(record))
+                                   variant_key=self._target_of(record), built=self._read_built_against(record))
         report["repaired_from"], report["repaired_id"] = record.get("repaired_from", ""), self._repaired_id(record)
         report["remappable"] = report["remappable"] and not (report["repaired_from"] or report["repaired_id"])
         return report
@@ -2037,7 +2053,7 @@ class ModLibrary:
             raise ServiceError("mod_unsupported", file=paths[0])
         key = other_target(files) if kind == "other" else self._core_map(pin).key(core_name) or core_name.lower()
         return self._store(files, label if kind == "other" else core_name, key, kind,
-                           built_against=self._built_against(files, pin, "import"))["id"], True
+                           built_against=self._built_against(files, pin, "import", painted=True))["id"], True
 
     def _recognize_installed(self, mod_id: str, identity: frozenset) -> bool:
         """Adopt exact outside content without writing any game files."""
@@ -2989,18 +3005,25 @@ class ModLibrary:
             return self._other_targets(dict(files), pin)
         return self._spine_parts(core_of(name), pin)
 
-    def _built_against(self, files: Mapping[str, Path], pin: Pin | None, event: str) -> dict | None:
+    def _built_against(self, files: Mapping[str, Path], pin: Pin | None, event: str, *,
+                       painted: bool | Mapping[str, dict] | None = None) -> dict | None:
         """The fingerprint (``fingerprint.document``) of the official parts a mod's files are built against: every
         part its core has now, from a verified official copy, each with how the mod's own files stand to it
         (``fingerprint.standing``). A part with no official copy is left out (``complete`` False). Headers and text
         assets only. None when nothing can be told (no install, no part, unreadable files); it never fails the
-        import, update or remap that asks."""
+        import, update or remap that asks.
+
+        ``painted`` tells which atlas layout the mod's textures follow where the mod carries no atlas
+        (``fingerprint.painted``): True when the files are known to be made for these parts (a whole-file copy of
+        files named for them), the record of the files before when a rebuild only moved their textures over, and
+        nothing when no one knows."""
         if pin is None or not files:
             return None
         try:
             inspection = integrity.Inspection()
             mod = fingerprint.carried(inspection, list(files.values()))
             parts, complete = [], True
+            skeletons: dict[str, bytes] = {}
             for target in self._core_targets(files, pin):
                 try:
                     official = self._official_for(target, pin, game_first=True)
@@ -3012,10 +3035,42 @@ class ModLibrary:
                 item = fingerprint.part(inspection, official, name=target.name, sha1=self._hashes.get(official).sha1)
                 item["mod"] = fingerprint.standing(item, mod)
                 parts.append(item)
-            return fingerprint.document(event, parts, complete=complete) if parts else None
+                if painted is True:
+                    skeletons.update(inspection.inspect(official, allow_unknown=True).skeletons)
+            if not parts:
+                return None
+            if painted is True:
+                known = fingerprint.painted(parts, mod, skeletons)
+            elif painted:
+                known = {name: entry for name, entry in painted.items() if name not in mod["atlases"]}
+            else:
+                known = None
+            return fingerprint.document(event, parts, complete=complete, painted=known)
         except Exception as error:  # noqa: BLE001 - a fingerprint is never worth the operation
             log_failure(logger, logging.DEBUG, "No fingerprint of the official parts", error)
             return None
+
+    def _rig_gains(self, files: Mapping[str, Path], pin: Pin | None) -> dict:
+        """What the official rig of a mod's core has that the files lack (``atlas_remap.rig_gains``), with only its
+        non-empty kinds; empty when nothing, or nothing can be told. Text assets only; never raises."""
+        if pin is None or not files:
+            return {}
+        try:
+            inspection = integrity.Inspection()
+            mod, official = integrity.Contents(), integrity.Contents()
+            for path in files.values():
+                mod.merge(inspection.inspect(path, allow_unknown=True))
+            for target in self._core_targets(files, pin):
+                try:
+                    official.merge(inspection.inspect(self._official_for(target, pin, game_first=True)))
+                except ServiceError as error:
+                    if error.code not in ("original_unavailable", "original_invalid"):
+                        raise
+            gains = atlas_remap.rig_gains(mod.atlases, mod.skeletons, official.atlases, official.skeletons)
+            return {kind: names for kind, names in gains.items() if names}
+        except Exception as error:  # noqa: BLE001 - a notice is never worth the operation
+            log_failure(logger, logging.DEBUG, "No comparison with the official rig", error)
+            return {}
 
     def _mod_hashes(self, record: dict[str, Any]) -> dict[str, str]:
         return {path.name: self._hashes.get(path).sha1 for path in self._paths(record)}
@@ -6218,18 +6273,52 @@ class ModLibrary:
                 mixed = {name: data for name, data in original_view.atlases.items() if name not in mod.atlases
                          and any(atlas_remap.texture_key(page) in mod.textures
                                  for page in atlas_remap.parse_atlas(data, name).pages)}
-                if not mixed or not atlas_remap.page_size_mismatch(
-                        mixed, {name: image.size for name, image in original_view.textures.items()}):
+                misfit = bool(mixed) and atlas_remap.page_size_mismatch(
+                    mixed, {name: image.size for name, image in original_view.textures.items()})
+                # Atlases repacked since the mod's textures were drawn on them, with the layout they follow.
+                layout = fingerprint.changed_layouts(self._read_built_against(record), mixed)
+                # The mod's own atlases that give way to the official rig, which gained what the mod lacks.
+                gains = atlas_remap.rig_gains(mod.atlases, mod.skeletons, official.atlases, official.skeletons)
+                rerig = atlas_remap.rerigged(gains, mod.atlases, mod.skeletons, official.atlases,
+                                             official.skeletons, mod.textures)
+                if not (misfit or layout or rerig):
                     return {"unchanged": True}
-                mod.atlases = {**mod.atlases, **self._remap_source_atlases(paths, {}, mixed, list(originals.values()))}
-                target_inputs = replace(official, atlases=original_view.atlases, skeletons=original_view.skeletons)
+                sources = {name: entry["text"].encode("utf-8") for name, entry in layout.items()}
+                mod.hulls = {name: entry["hulls"] for name, entry in layout.items()
+                             if isinstance(entry.get("hulls"), dict)}
+                rest = {name: data for name, data in mixed.items() if name not in sources}
+                if rest and misfit:
+                    sources.update(self._remap_source_atlases(paths, {}, rest, list(originals.values())))
+                else:
+                    sources.update(rest)  # nothing says they moved: the textures follow the layout as it is
+                given = {source: name for name, source in
+                         atlas_remap.pair_atlases(mod.atlases, official.atlases).items() if name in rerig}
+                given_skeletons = {source: name for name, source in
+                                   atlas_remap.pair_atlases(mod.skeletons, official.skeletons).items()
+                                   if name in rerig.values()}
+                mod.atlases = {**mod.atlases, **sources}
+                target_inputs = replace(
+                    official,
+                    atlases={**{name: data for name, data in original_view.atlases.items() if name not in given},
+                             **{name: official.atlases[name] for name in rerig}},
+                    skeletons={**{name: data for name, data in original_view.skeletons.items()
+                                  if name not in given_skeletons},
+                               **{name: official.skeletons[name] for name in rerig.values() if name}})
                 patch, report = atlas_remap.prepare_patch(mod, target_inputs)
-                # Preserve the winning mod skeleton and atlas when porting the texture patch.
+                for source, name in sorted(given_skeletons.items()):
+                    if not atlas_remap.same_rig(mod.skeletons[source], official.skeletons[name]):
+                        report["warnings"].append({"key": "rig", "name": name})
+                report["partial"] = bool(report["warnings"] or report["changed"])
+                if rerig:
+                    report["unchanged"] = False
+                # Preserve the winning mod skeleton and atlas when porting the texture patch, but for the ones
+                # that give way to the official rig.
                 text_patch = {}
                 for path in paths:
                     bundle = Bundle.load(path)
                     extracted, _ = bundle.extract_patch({"TextAsset"}, "cont_name_type")
-                    text_patch.update(extracted)
+                    text_patch.update({key: value for key, value in extracted.items()
+                                       if key.name not in given and key.name not in given_skeletons})
                 target_keys = set().union(*(Bundle.load(path).get_asset_keys("cont_name_type") for path in originals.values()))
                 if text_patch.keys() - target_keys:
                     raise atlas_remap.RemapError("atlas_remap_target_mismatch", file=paths[0].name,
@@ -6344,6 +6433,7 @@ class ModLibrary:
         record = self._record(mod_id)
         paths = self._paths(record)
         built_from = {path.name: self._hashes.get(path).sha1 for path in paths}
+        painted = (self._read_built_against(record) or {}).get("painted")  # the textures move over as they are
         targets = self._plan_targets(self._plan(record, log, pin))
         with temporary_directory(prefix=devmode.LIBRARY_STAGING_PREFIX + "update-") as temporary:
             output = Path(temporary)
@@ -6372,18 +6462,21 @@ class ModLibrary:
                 if self._read_built_against(record) is None:
                     self._write_built_against(record, self._built_against(
                         {path.name: path for path in paths}, pin, "update"))
-                return UpdateResult(self._entry(record), paths, [], unchanged=True)
+                return UpdateResult(self._entry(record), paths, [], unchanged=True,
+                                    rig=self._rig_gains({path.name: path for path in paths}, pin))
             # Include unchanged parts when a rebuild splits a mod across bundles.
             names = {path.name for path in generated}
             for target in targets:
                 if target.name not in names:
                     atomic_copy(self._official_for(target, pin), output / target.name)
                     generated.append(output / target.name)
-            built_against = self._built_against({path.name: path for path in generated}, pin, "update")
+            built_against = self._built_against({path.name: path for path in generated}, pin, "update",
+                                                painted=painted)
+            rig = self._rig_gains({path.name: path for path in generated}, pin)
             record, previous = self._publish_update(mod_id, built_from, generated)
             # after the commit: a fingerprint of the files before stays theirs if the update is rolled back
             self._write_built_against(record, built_against)
-        return UpdateResult(self._entry(record), self._paths(record), previous)
+        return UpdateResult(self._entry(record), self._paths(record), previous, rig=rig)
 
     @_mod_writer
     def _publish_update(self, mod_id: str, built_from: dict[str, str],

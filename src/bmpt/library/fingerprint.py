@@ -1,10 +1,11 @@
 """What a mod was built against: a small fingerprint of the official parts of its core, kept beside the mod's files.
 
 A game update rebuilds a part in place and the library releases the official file it kept of the release before, so
-the mod's own baseline is gone by the time anyone asks what changed under it. The fingerprint keeps what that takes,
-and nothing of the game's content: per part its name, the hash of its structure, per atlas a layout hash and the
-region names, per skeleton its hash, a rig hash and the animation names, and the texture sizes. It is made from
-headers and text assets (no image is decoded), and two fingerprints are compared as plain data (``diff``).
+the mod's own baseline is gone by the time anyone asks what changed under it. The fingerprint keeps what that takes:
+per part its name, the hash of its structure, per atlas a layout hash, the region names and the atlas text (the
+layout a texture-only mod was painted on, which moving its pixels to a repacked atlas needs), per skeleton its hash,
+a rig hash and the animation names, and the texture sizes. It is made from headers and text assets (no image is
+decoded), and two fingerprints are compared as plain data (``diff``).
 """
 
 from __future__ import annotations
@@ -34,8 +35,8 @@ def _digest(value: Any) -> str:
 
 
 def atlas(data: bytes) -> dict:
-    """An atlas as a layout hash (pages with their sizes, regions with their places) and its region names. An atlas
-    that cannot be read keeps the hash of its bytes and no names."""
+    """An atlas as a layout hash (pages with their sizes, regions with their places), its region names and its
+    text. An atlas that cannot be read keeps the hash of its bytes alone."""
     try:
         parsed = atlas_remap.parse_atlas(data)
     except (atlas_remap.RemapError, ValueError, UnicodeError):
@@ -44,8 +45,12 @@ def atlas(data: bytes) -> dict:
     regions = sorted([region.page, region.name, region.index, list(region.xy), list(region.size),
                       list(region.original), list(region.offset), region.degrees]
                      for region in parsed.regions.values())
+    try:
+        text = data.decode("utf-8")
+    except UnicodeError:
+        text = None
     return {"layout": _digest([pages, regions]),
-            "regions": sorted({region.label for region in parsed.regions.values()})}
+            "regions": sorted({region.label for region in parsed.regions.values()}), "text": text}
 
 
 def skeleton(data: bytes) -> dict:
@@ -105,11 +110,54 @@ def standing(official: dict, mod: dict) -> str:
     return SAME if found else ABSENT
 
 
-def document(event: str, parts: list[dict], *, complete: bool) -> dict:
+def painted(parts: list[dict], mod: dict, skeletons: dict[str, bytes] | None = None) -> dict:
+    """The official atlases a mod's textures are drawn on without the mod carrying them (``carried``): per atlas
+    name its entry in ``parts``, with the hull outlines of the official skeleton that draws it (``hulls``, from
+    ``skeletons``: the parts' own, by name; None when it cannot be read). For a mod known to be made for these
+    parts; a later repack of such an atlas leaves the mod's texture on the old layout, which this keeps, with what
+    it takes to move each region's own pixels to the new one."""
+    result = {}
+    for item in parts:
+        for name, entry in item["atlases"].items():
+            if name in mod["atlases"] or not entry.get("text"):
+                continue
+            try:
+                pages = atlas_remap.parse_atlas(entry["text"]).pages
+            except (atlas_remap.RemapError, ValueError):
+                continue
+            if any(integrity.texture_key(page) in mod["textures"] for page in pages):
+                result[name] = dict(entry)
+    drawn_by = atlas_remap.pair_atlases(skeletons or {}, dict.fromkeys(result))
+    for name, entry in result.items():
+        try:
+            entry["hulls"] = spine_names.hulls(skeletons[drawn_by[name]]) if name in drawn_by else None
+        except ValueError:
+            entry["hulls"] = None
+    return result
+
+
+def changed_layouts(data: dict | None, atlases: dict[str, bytes]) -> dict[str, dict]:
+    """Of the official ``atlases`` as they are now, the ones repacked since a mod's textures were drawn on them
+    (``painted`` in its fingerprint): per atlas name the entry of the layout the textures follow (``text``,
+    ``hulls``)."""
+    known = (data or {}).get("painted") or {}
+    result = {}
+    for name, current in atlases.items():
+        entry = known.get(integrity.basename(name))
+        if entry and isinstance(entry.get("text"), str) and entry.get("layout") != atlas(current)["layout"]:
+            result[name] = entry
+    return result
+
+
+def document(event: str, parts: list[dict], *, complete: bool, painted: dict | None = None) -> dict:
     """A fingerprint to store: ``event`` is what made it (import, update, remap, backfill); ``complete`` says the
-    parts are every part the mod's core had then."""
-    return {"version": VERSION, "event": event, "recorded": datetime.now(timezone.utc).isoformat(),
+    parts are every part the mod's core had then; ``painted`` (``painted``) is left out when nothing tells which
+    layout the mod's textures follow."""
+    data = {"version": VERSION, "event": event, "recorded": datetime.now(timezone.utc).isoformat(),
             "complete": complete, "parts": parts}
+    if painted is not None:
+        data["painted"] = painted
+    return data
 
 
 def write(directory: Path, data: dict, files: dict[str, str]) -> None:
@@ -129,6 +177,10 @@ def read(directory: Path, files: dict[str, str]) -> dict | None:
         return None
     if (not isinstance(data, dict) or data.get("version") != VERSION or data.get("files") != files
             or not isinstance(data.get("parts"), list)):
+        return None
+    known = data.get("painted")
+    if known is not None and (not isinstance(known, dict)
+                              or any(not isinstance(entry, dict) for entry in known.values())):
         return None
     for item in data["parts"]:
         if (not isinstance(item, dict) or not isinstance(item.get("name"), str)
@@ -161,7 +213,9 @@ def diff(before: dict, after: dict) -> dict:
                 result[kind][name] = {"present": "before" if name in old else "after"}
                 continue
             a, b = old[name], new[name]
-            if a == b:
+            if a == b or (kind == "atlases" and a["layout"] == b["layout"]
+                          and names(a, "regions") == names(b, "regions")):
+                # the atlas text is kept for the remap, not compared: older fingerprints lack it
                 continue
             if kind == "atlases":
                 result[kind][name] = {"layout": a["layout"] != b["layout"],

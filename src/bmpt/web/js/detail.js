@@ -963,11 +963,15 @@ async function runUpdate(c = shownMod()) {
       cancel: T("popup.cancel"), ok: T("act.update") });
     if (answer.button !== "ok" || page !== pageToken || !open) return false;
   }
-  return job("actions.update", { mod: c.id }, {
+  let notice = "";
+  const done = await job("actions.update", { mod: c.id }, {
     name: c.label,
-    onDone: () => { forget(spinePrefix("mod", c.id)); },
+    onDone: (result) => { forget(spinePrefix("mod", c.id)); notice = Compatibility.rigNotice(result); },
     after: (ok) => reload(ok ? [kind] : []),
   });
+  // An update that kept the Mod's own skeleton says what the official one has since gained.
+  if (done && notice && page === pageToken && open) await message({ title: T("act.update"), lines: [notice], ok: T("picker.ok") });
+  return done;
 }
 async function runCompatibility() {
   const c = shownMod();

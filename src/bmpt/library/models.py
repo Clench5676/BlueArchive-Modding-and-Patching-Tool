@@ -158,6 +158,8 @@ class UpdateResult(JsonResult):
     files: list[Path]
     previous: list[Path]
     unchanged: bool = False
+    # what the official rig has that the mod as it stands lacks (atlas_remap.rig_gains); empty when nothing
+    rig: dict = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

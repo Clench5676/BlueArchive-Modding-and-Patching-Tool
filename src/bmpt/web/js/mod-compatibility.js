@@ -109,9 +109,12 @@ export function compare(report, runtime = globalThis.spine, summarize = false) {
     if (!size || !page.width || !page.height || size[0] * page.height !== size[1] * page.width)
       add("atlasSize", { name: page.name, atlas: `${page.width} × ${page.height}`, texture: size?.join(" × ") || "—" });
   }
+  // Atlases the game repacked since the Mod's textures were drawn on them (the library's record of the Mod).
+  for (const name of report.rig?.layout || []) add("atlasLayout", { name: key(name) });
   const available = !issues.some(({ key }) => key === "unavailable");
   return { available, issues, author: issues.some(({ key }) => key !== "unavailable"),
-    remap: available && eligible(report) && report.remappable === true && issues.some(({ key }) => ["regions", "atlasSize"].includes(key)) };
+    remap: available && eligible(report) && report.remappable === true
+      && issues.some(({ key }) => ["regions", "atlasSize", "atlasLayout", "missingAnimations"].includes(key)) };
 }
 
 async function assess(report) {
@@ -155,6 +158,8 @@ export async function remap(id, onRemapped = () => {}, label = "", subject = lab
   const lines = [T("remap.counts", { moved: report.moved.length, dropped: report.dropped.length }),
     ...new Set((report.upscaled || []).map(({ w, h }) => T("remap.upscaled", { w, h }))),
     ...(report.added.length ? [T("remap.unpainted", { names: joined(report.added) })] : []),
+    ...(report.official?.length ? [T("remap.official", { names: shortList(report.official) })] : []),
+    ...(report.changed?.length ? [T("remap.changed", { names: shortList(report.changed) })] : []),
     ...(report.dropped.length ? [T("remap.dropped", { names: joined(report.dropped) })] : []),
     ...report.warnings.map(({ key, name }) => T(`remap.${key}`, { name }))];
   try {
@@ -174,6 +179,12 @@ export async function remap(id, onRemapped = () => {}, label = "", subject = lab
   } finally {
     await rpc("actions.discardRemap", { preview: result.preview });
   }
+}
+
+// The official animations a Mod lacks after an update that kept its own skeleton (UpdateResult.rig), as a line.
+export function rigNotice(result) {
+  const names = new Set(Object.values(result?.rig?.animations || {}).flat());
+  return names.size ? T("compatibility.rigChanged", { n: names.size }) : "";
 }
 
 export async function inspect(id, label = "", stamp = null, subject = label) {
