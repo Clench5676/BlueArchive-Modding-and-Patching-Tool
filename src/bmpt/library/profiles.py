@@ -6,7 +6,8 @@ configuration lives in a file of its own that older builds never open::
     {"version": 1,
      "enabled": true,                       # the Enable Mods switch, one intent for every game folder; missing: on
      "toggled": "<ISO>",                    # the last change of enabled
-     "unfinished": [{"install", "core", "why"}],   # entries the toggles have not switched yet (pending, left, stuck)
+     "unfinished": [{"install", "core", "why"}],   # entries the toggles have not switched yet (pending, left, stuck,
+                                                   # held: a game update changed the rig under the mod)
      "folders": {"<install key>": {
          "server": "global",
          "named_by": {"<data directory id>": "<ISO>"}, "hidden": ["<data directory id>"],
@@ -14,6 +15,7 @@ configuration lives in a file of its own that older builds never open::
          "updated": {"<core>": "<ISO>"},
          "built": {"<core>": {"source", "inputs": [...], "parts": {"<file name>": {"sha1", "mod_file"}}}},
          "dismissed": {"drift": {"<core>": [[name, size, mtime_ns]]}, "untracked": {...}},
+         "resource": {"version", "seen"},   # the last resource version whose game update impact was told
          "scanned": "<ISO>"}}}
 
 Several instances may share one library: every change is applied to the file as it is at that moment, read again under
@@ -44,7 +46,7 @@ from ..logging_utils import log_failure
 logger = logging.getLogger(__name__)
 
 FILE = "profiles.json"
-WHY = ("pending", "left", "stuck")
+WHY = ("pending", "left", "stuck", "held")
 
 
 def _parse(path: Path) -> dict[str, Any]:

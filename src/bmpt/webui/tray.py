@@ -47,7 +47,7 @@ MENUBAR_POINTS = 18.0  # the menu bar icon's size; its PDF is drawn at that size
 WINDOW_WAIT = 30.0  # seconds the tray waits for the window to show before it makes the icon anyway
 TOOLTIP_MAX = 63  # NotifyIcon.Text's limit on .NET Framework
 CLOSE_WAIT_MS = 2000  # how long quitting waits for the tray icon's own thread to remove it
-RESULT_KEYS = ("failed", "stuck", "left")  # a toggle's entries that bring the window to the front
+RESULT_KEYS = ("failed", "stuck", "left", "held")  # a toggle's entries that bring the window to the front
 
 
 # --- the model ---
@@ -143,7 +143,7 @@ def toggle_action(snapshot: dict[str, Any] | None) -> tuple[str, dict[str, bool]
 
 def needs_window(state: str, result: Any) -> bool:
     """Whether a tray toggle's end brings the window to the front, where the page shows the error or the result
-    popup: the job failed (a refusal, ``not_enough_space`` included), or entries failed, stuck or were left."""
+    popup: the job failed (a refusal, ``not_enough_space`` included), or entries failed, stuck, were left or held."""
     if state == "failed":
         return True
     return state == "done" and isinstance(result, dict) and any(result.get(key) for key in RESULT_KEYS)

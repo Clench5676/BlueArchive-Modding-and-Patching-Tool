@@ -318,6 +318,7 @@ function bootHarness({ compiled = true, startupUpdate = true } = {}) {
     document: { getElementById: () => recovery },
     Consent: { show: () => { events.push("consent"); return consent.promise; }, scan: async () => events.push("scan") },
     Prompts: { start: async (name) => events.push(name), isBusy: () => promptBusy },
+    Impact: { check: async () => events.push("impact"), isBusy: () => false },
     Update: { check: (_host, _info, options) => { events.push("update-check"); offers.push(options); return update.promise; } },
   };
   // the first-run sequence, boot() and the start popups
@@ -343,7 +344,7 @@ test("startup launches its update check only after reveal and finishes while the
   h.consent.resolve(true);
   await boot;
   await offer;
-  assert.deepEqual(h.events.slice(4), ["scan", "drift", "untracked"], "scan prompts never wait for the network check");
+  assert.deepEqual(h.events.slice(4), ["scan", "impact", "drift", "untracked"], "scan prompts never wait for the network check");
   const blocked = h.blockers[0];
   assert.equal(blocked(), false);
   h.setLoading(true); assert.equal(blocked(), true);

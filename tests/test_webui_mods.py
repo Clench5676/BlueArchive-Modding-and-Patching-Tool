@@ -195,7 +195,7 @@ def test_mods_state_has_its_shape_and_answers_while_the_library_lock_is_held(env
     assert (state["current"], state["enabled"], state["available"], state["reason"]) == (env.key(), True, True, None)
     assert (state["scan"], state["explained"], state["busy"], state["queued"]) == (
         None, False, False, 0)
-    assert state["unfinished"] == {"pending": 0, "left": 0, "stuck": 0}
+    assert state["unfinished"] == {"pending": 0, "left": 0, "stuck": 0, "held": 0}
     # answered from the snapshot: another thread holding the library lock does not hold it up
     library, held, release = env.s.library, threading.Event(), threading.Event()
 
