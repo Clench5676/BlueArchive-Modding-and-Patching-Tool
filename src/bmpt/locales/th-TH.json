@@ -107,6 +107,7 @@
 			"optimizedGo": "ดู Mod ที่ปรับแล้ว",
 			"optimizedName": "{name} - ปรับแล้ว",
 			"optimizeUnneeded": "ไม่ต้องปรับ",
+			"optimizeNoGain": "ไม่มีการปรับฟิสิกส์ที่ใช้ได้",
 			"optimizeDone": "ปรับและเพิ่มในคลัง Mod แล้ว"
 		},
 		"visual": {

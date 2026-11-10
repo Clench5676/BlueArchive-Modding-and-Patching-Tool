@@ -107,6 +107,7 @@
 			"optimizedGo": "View optimized Mod",
 			"optimizedName": "{name} - Optimized",
 			"optimizeUnneeded": "No optimization needed",
+			"optimizeNoGain": "No physics optimization available",
 			"optimizeDone": "Optimized and Added to Library"
 		},
 		"visual": {

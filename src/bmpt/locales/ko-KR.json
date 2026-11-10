@@ -107,6 +107,7 @@
 			"optimizedGo": "최적화된 Mod 보기",
 			"optimizedName": "{name} - 최적화 버전",
 			"optimizeUnneeded": "최적화 불필요",
+			"optimizeNoGain": "사용 가능한 물리 최적화 없음",
 			"optimizeDone": "최적화 후 라이브러리에 추가됨"
 		},
 		"visual": {

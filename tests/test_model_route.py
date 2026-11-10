@@ -267,7 +267,7 @@ def test_optimize_physics_runs_as_a_library_job_on_the_official_model_or_a_costu
 
     def optimize(variant, source, name, pin=None):
         asked.append((variant, source, name, pin))
-        return {"unneeded": True} if source == "official" else {"mod": "copy"}
+        return {"unneeded": True, "reason": "official"} if source == "official" else {"mod": "copy"}
 
     s.library.optimize_costume = optimize
     s.library.current_pin = lambda: "pin"
@@ -275,7 +275,7 @@ def test_optimize_physics_runs_as_a_library_job_on_the_official_model_or_a_costu
     s.library.take_pruned_cores = lambda: set()
     api = build_api(s)
     try:
-        for source, result in (("official", {"unneeded": True}), ("variant:np0009", {"mod": "copy"})):
+        for source, result in (("official", {"unneeded": True, "reason": "official"}), ("variant:np0009", {"mod": "copy"})):
             job = api.call("model.optimize", {"variant": "hina", "source": source, "name": "Pajamas"})["result"]
             assert s.jobs.wait(job, 10) and s.jobs.get(job).result == result
         assert asked == [("hina", "official", "Pajamas", "pin"), ("hina", "variant:np0009", "Pajamas", "pin")]
