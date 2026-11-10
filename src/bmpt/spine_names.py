@@ -473,10 +473,15 @@ def _json_drawn(data: bytes) -> list:
     skins = root.get("skins") if isinstance(root, dict) else None
     if isinstance(skins, dict):  # 3.x: by name
         skins = [{"attachments": value} for value in skins.values()]
+    slots = root.get("slots") if isinstance(root, dict) else None
+    # a slot is told by its place in the draw order, as in the binary layout; one the skeleton does not list is last
+    places = {slot.get("name"): index for index, slot in enumerate(slots)
+              if isinstance(slot, dict)} if isinstance(slots, list) else {}
     drawn = []
     try:
         for skin in skins or []:
-            for slot, attachments in (skin.get("attachments") or {}).items():
+            for slot_name, attachments in (skin.get("attachments") or {}).items():
+                slot = places.get(slot_name, len(places))
                 for name, attachment in attachments.items():
                     kind = attachment.get("type", "region")
                     path = attachment.get("path") or name
@@ -505,7 +510,8 @@ def hulls(data: bytes) -> dict[str, list[list[float]] | None]:
     """What a skeleton draws of each atlas region, by region name: the hull outlines of the meshes that use it, each
     a flat list of x and y as fractions of the region's untrimmed image (y from the top), or None for one drawn
     whole (a region attachment, a mesh without an outline). A region the skeleton does not draw is not named.
-    ``ValueError`` as ``read``."""
+    The regions come in the skeleton's draw order (its slots, the first drawn first): a later one lies over an
+    earlier one. ``ValueError`` as ``read``."""
     drawn: list | None = None
     if data.lstrip()[:1] == b"{":
         try:
@@ -520,7 +526,7 @@ def hulls(data: bytes) -> dict[str, list[list[float]] | None]:
             raise ValueError("skeleton data unreadable") from error
     meshes = {(slot, name): value for kind, slot, name, _path, _sequence, value in drawn if kind == "mesh"}
     result: dict[str, list[list[float]] | None] = {}
-    for kind, slot, _name, path, sequence, value in drawn:
+    for kind, slot, _name, path, sequence, value in sorted(drawn, key=lambda item: item[1]):
         outline = value if kind == "mesh" else meshes.get((slot, value)) if kind == "linked" else None
         if not isinstance(path, str):
             continue
