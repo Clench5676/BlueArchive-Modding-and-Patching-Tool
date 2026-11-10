@@ -1490,6 +1490,69 @@ def skirt_curves(skeleton: Skeleton, skirt: Skirt, tree: dict, key: tuple[str, i
     return True
 
 
+@dataclass
+class ClipBefore:
+    """A clip as it reads before Rule B edits it (:func:`clip_snapshot`), to compare the edited clip against."""
+
+    decoded: Any                  # model.DecodedClip
+    layout: tuple[int, int, int]  # streamed, dense and constant curve counts
+
+
+def _clip_layout(tree: Mapping[str, Any]) -> tuple[int, int, int]:
+    clip = tree["m_MuscleClip"]["m_Clip"]["data"]
+    return clip["m_StreamedClip"]["curveCount"], clip["m_DenseClip"]["m_CurveCount"], len(clip["m_ConstantClip"]["data"])
+
+
+def saved_tree(obj: Any) -> dict:
+    """The tree of what ``obj.save_typetree`` just stored, parsed from the object's new bytes (``read_typetree`` on an
+    edited object still reads the file's original bytes)."""
+    from UnityPy.helpers import TypeTreeHelper
+    from UnityPy.streams import EndianBinaryReader
+
+    reader = EndianBinaryReader(obj.data, endian=obj.reader.endian)
+    return TypeTreeHelper.read_typetree(obj._get_typetree_node(), reader, as_dict=True, byte_size=len(obj.data),
+                                        assetsfile=obj.assets_file)
+
+
+def clip_snapshot(tree: Mapping[str, Any]) -> ClipBefore:
+    return ClipBefore(decode_clip(tree), _clip_layout(tree))
+
+
+def clip_edit_error(before: ClipBefore, tree: Mapping[str, Any], added: int) -> str | None:
+    """What differs between a clip as it was and the edited ``tree`` read back from the saved object (BL-139), None
+    when it is what Rule B meant: ``added`` curves more, between the dense and the constant ones, every curve it had
+    before reading value for value as before (the constant ones now ``added`` places on), and the muscle clip's size,
+    value deltas and bindings agreeing with its arrays. The streamed and constant values are stored data and compare
+    exactly; the dense ones are read on the clip's grid and compare to 1e-6."""
+    streamed, dense, constant = before.layout
+    layout = _clip_layout(tree)
+    if layout != (streamed, dense + added, constant):
+        return f"curves {layout} for {(streamed, dense + added, constant)}"
+    muscle = tree["m_MuscleClip"]
+    curves = sum(layout)
+    if tree.get("m_MuscleClipSize") != ms.muscle_size(tree):
+        return f"muscle clip size {tree.get('m_MuscleClipSize')} for {ms.muscle_size(tree)}"
+    if len(muscle["m_ValueArrayDelta"]) != curves:
+        return f"{len(muscle['m_ValueArrayDelta'])} value deltas for {curves} curves"
+    if sum(ms.binding_dims(b) for b in tree["m_ClipBindingConstant"]["genericBindings"]) != curves:
+        return "bindings and curves differ"
+    after = decode_clip(tree)
+    if len(after.times) != len(before.decoded.times) or len(after.curves) != curves:
+        return "times or curve count"
+    for index, values in before.decoded.curves.items():
+        place = index if index < streamed + dense else index + added
+        got = after.curves.get(place)
+        if got is None or len(got) != len(values):
+            return f"curve {index} missing"
+        if streamed <= index < streamed + dense:
+            same = np.allclose(got, values, rtol=0.0, atol=1e-6, equal_nan=True)
+        else:
+            same = np.array_equal(got, values, equal_nan=True)
+        if not same:
+            return f"curve {index} changed"
+    return None
+
+
 # --- the halo (BL-131) ---------------------------------------------------------------------------------------------
 
 @dataclass
@@ -2096,8 +2159,13 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
         for clip in skirt_clips:
             obj = writer.file(clip.assets_file.name.lower()).objects[clip.path_id]
             tree = obj.read_typetree()
+            before = clip_snapshot(tree) if ms.dense_grid(tree) is not None else None
             if skirt_curves(t_skeleton, hem.skirt, tree, _key(clip)):
                 obj.save_typetree(tree)
+                # each chain's first bone got a rotation (4 curves) and a position (3): read the saved clip back
+                problem = clip_edit_error(before, saved_tree(obj), 7 * len(hem.skirt.solver.roots))
+                if problem is not None:
+                    raise refuse("clip edit not verified", clip=clip.peek_name(), what=problem)
                 hem.skirt.clips += 1
             else:
                 logger.info("Costume of %s on %s: clip %s left without skirt curves (layout)", s_name, t_name,

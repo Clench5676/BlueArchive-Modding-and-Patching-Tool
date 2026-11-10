@@ -370,6 +370,52 @@ def test_official_costume_on_a_slot(view, tmp_path, target, source, field, parts
 
 
 @official
+def test_official_rule_b_clip_edit_is_read_back_and_a_changed_curve_is_refused(view, monkeypatch):
+    """BL-139: every clip Rule B edits is read back from its saved bytes and compared with what it was. Hina <- Hina
+    (Pajamas) with Optimize Physics edits 31 clips; one whose old constant curve changes on its way to the object is
+    refused, naming the clip, and the pair is not returned."""
+    from ba_modding_toolkit.bundle import Bundle
+    from bmpt.errors import ServiceError
+
+    files, index = view
+    slot = _slot(files, "hina_original")
+    sources = [p for p in files if p.name.startswith("field-character-_mxload")]
+
+    def build():
+        return ma.adapt(index=index, resolver=None, target_files=slot, target_dev="hina_original",
+                        source_files=sources, source_dev="np0009", open_writable=Bundle.load, physics=True)
+
+    checked = []
+    real_error = ma.clip_edit_error
+
+    def watched(before, tree, added):
+        problem = real_error(before, tree, added)
+        checked.append((problem, added))
+        return problem
+
+    monkeypatch.setattr(ma, "clip_edit_error", watched)
+    result = build()
+    assert result.hems.skirt.clips >= 20 and len(checked) == result.hems.skirt.clips
+    assert all(problem is None and added == 7 * len(result.hems.skirt.solver.roots) for problem, added in checked)
+
+    real_curves, edited = ma.skirt_curves, []
+
+    def damaging(skeleton, skirt, tree, key=None):
+        done = real_curves(skeleton, skirt, tree, key)
+        edited.append(tree["m_Name"])
+        if done and len(edited) == 3:  # the third clip loses an old constant on its way
+            tree["m_MuscleClip"]["m_Clip"]["data"]["m_ConstantClip"]["data"][0] += 0.25
+        return done
+
+    monkeypatch.setattr(ma, "skirt_curves", damaging)
+    with pytest.raises(ServiceError) as caught:
+        build()
+    assert caught.value.code == "source_unsupported"
+    assert caught.value.params["source"] == "clip edit not verified"
+    assert caught.value.params["clip"] == edited[2]
+
+
+@official
 def test_official_costume_carries_a_shader_the_slot_does_not_load(view, tmp_path):
     """BL-122: Hina (Dress)'s frill shader lives in a shader bundle Hina's slot does not load. A copy goes with the
     costume into the materials' file, its type taken from the shader's file and its fallback still the player's own
