@@ -332,3 +332,42 @@ test("missing runtime, declined consent and runtime load failures remain unavail
   assert.deepEqual(checked.assessment.issues, []);
   assert.equal(h.calls.filter(([method, params]) => method === "actions.compatibility" && params.mod === "healthy-mod").length, 1);
 });
+
+test("a repack under the Mod's textures and official animations the Mod lacks are findings that offer the repair", async () => {
+  const { mod } = await harness(), r = report();
+  // nothing differs in what the Mod carries: only the library's record tells the atlas was repacked since
+  r.rig = { layout: ["Folder/Test.atlas"], animations: {}, regions: {} };
+  let result = mod.compare(r);
+  assert.deepEqual(result.issues, [{ key: "atlasLayout", params: { name: "test.atlas" } }]);
+  assert.equal(result.remap, true);
+  assert.equal(mod.compare({ ...r, remappable: false }).remap, false);
+  // the Mod's own skeleton lacks an animation the official one has: the library offers the official rig
+  const data = structuredClone(fixture.official);
+  delete data.animations.Talk_01;
+  const old = report();
+  old.mod.skeletons["test.skel"] = encoded(data);
+  result = mod.compare(old);
+  assert.deepEqual(result.issues.map(({ key }) => key), ["missingAnimations"]);
+  assert.equal(result.remap, true);
+  assert.equal(mod.compare({ ...old, remappable: false }).remap, false);
+});
+
+test("the repair preview names the regions taken from the official texture and an update names the animations it lacks", async () => {
+  for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
+    const h = await harness(locale, "ok", false), preview = prepared();
+    preview.report.official = ["test.atlas - smile", "test.atlas - 15", "test.atlas - 16", "test.atlas - 17"];
+    preview.report.changed = ["test.atlas - body"];
+    h.build(preview); h.use(mixedReport());
+    await h.mod.check("old-mod", "Painted");
+    const lines = h.comparisons[0][3].lines;
+    const line = lines.find((text) => text.includes("smile"));
+    assert.ok(lines.some((text) => text.includes("body") && text !== line), locale);
+    assert.ok(line && line.includes("15") && !line.includes("17") && line.includes("+1"), locale);
+    assert.ok(lines.every((text) => !/[{}]/.test(text) && !text.startsWith("remap.")));
+    const notice = h.mod.rigNotice({ rig: { animations: { "a.skel": ["15", "16"], "b.skel": ["16", "17"] } } });
+    assert.ok(notice.includes("3") && !/[{}]/.test(notice) && !notice.startsWith("compatibility."), locale);
+    assert.equal(h.mod.rigNotice({ rig: {} }), "");
+    assert.equal(h.mod.rigNotice({ rig: { regions: { "a.atlas": ["x"] } } }), "");
+    assert.equal(h.mod.rigNotice(null), "");
+  }
+});

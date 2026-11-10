@@ -694,7 +694,8 @@
 			"missingAnimations": "{name}，缺少必需动画：{names}",
 			"ported": "资源已移植到当前资源包",
 			"updateUnchecked": "无法检查兼容性，仍要更新？",
-			"forceUpdate": "目前完整性无问题，是否确定仍要强制更新？"
+			"forceUpdate": "目前完整性无问题，是否确定仍要强制更新？",
+			"rigChanged": "原版新增动画：{n}，Mod 未包含"
 		},
 		"remap": {
 			"action": "更新",
@@ -715,7 +716,9 @@
 			"original": "原始",
 			"after": "修复后",
 			"previewUnavailable": "预览不可用",
-			"unpainted": "未使用的留空区域：{names}"
+			"unpainted": "未使用的留空区域：{names}",
+			"official": "原版区域：{names}",
+			"changed": "原版已重绘的区域：{names}"
 		},
 		"spine": {
 			"license": {

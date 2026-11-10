@@ -1491,9 +1491,11 @@ def test_copy_compatibility_keeps_retained_atlas_validation(monkeypatch):
     monkeypatch.setattr(batch_import, "get_skel_version", lambda data: data.decode())
     report = {"official": {"skeletons": {"a.skel": {"version": "4.2.33"}, "b.skel": {"version": "4.1.24"}}},
               "mod": {"skeletons": {"a.skel": {"version": "3.8.75"}, "b.skel": {"version": "4.1.24"}}},
-              "remappable": True}
+              "remappable": True, "misfit": True}
     assert batch_import.copy_compatibility(report, integrity.Contents(skeletons={"a.skel": b"3.8.75"})) == (
         {"a.skel": {"4.2.33"}}, {"a.skel": "3.8.75"}, True)
+    # what the official rig changed under a mod never refuses the copy: only a page size the texture does not fit
+    assert batch_import.copy_compatibility({**report, "misfit": False}, integrity.Contents())[2] is False
 
 
 def test_failed_install_result_keeps_set_note_and_error(env, monkeypatch):

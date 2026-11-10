@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from PIL import Image, ImageMath
+from PIL import Image, ImageDraw, ImageFilter, ImageMath
 
-from . import devmode
+from . import devmode, spine_names
 from ba_modding_toolkit.bundle import Bundle
 from ba_modding_toolkit.models import ContNameTypeKey, Patch
 from ba_modding_toolkit.spine import get_skel_version
@@ -279,6 +280,85 @@ def _resize(image: Image.Image, size: tuple[int, int], box: tuple, pma: bool) ->
     return Image.merge("RGBA", (*channels, resized_alpha.convert("L")))
 
 
+#: how far two regions' trimmed rectangles may differ, as fractions of their untrimmed images, and still be one frame
+FRAME_TOLERANCE = 0.01
+#: the share of a region's trimmed rectangle the old one must hold of the same canvas to be the same piece of it
+FRAME_HELD = 0.9
+#: how far two trimmed rectangles' proportions may differ and still bound the same art
+TRIM_TOLERANCE = 0.03
+#: how far the art's share of its image may drift when the image is exported again with other margins
+CANVAS_DRIFT = 0.15
+#: how far the proportions of two untrimmed images may differ and still be one canvas at two scales
+CANVAS_TOLERANCE = 0.005
+#: pixels kept around a hull outline: the art's soft edge and the sampling of a mesh drawn a little differently
+HULL_MARGIN = 3
+
+
+def _hull_mask(region: Region, outlines: list[list[float]], size: tuple[int, int]) -> Image.Image:
+    """The part of a region's packed rectangle (unrotated, ``size`` pixels) its meshes draw: their hull outlines
+    (``spine_names.hulls``: fractions of the untrimmed image), widened by ``HULL_MARGIN``. Atlases pack regions into
+    the empty corners of each other's rectangles, so a rectangle holds pixels of its neighbours too."""
+    sx, sy = size[0] / region.size[0], size[1] / region.size[1]
+    width, height = region.original[0] * sx, region.original[1] * sy
+    left, top = region.offset[0] * sx, (region.original[1] - region.offset[1] - region.size[1]) * sy
+    mask = Image.new("L", size)
+    draw = ImageDraw.Draw(mask)
+    for outline in outlines:
+        points = [(outline[i] * width - left, outline[i + 1] * height - top) for i in range(0, len(outline) - 1, 2)]
+        if len(points) >= 3:
+            draw.polygon(points, fill=255)
+    return mask.filter(ImageFilter.MaxFilter(2 * HULL_MARGIN + 1))
+
+
+def _frame(region: Region) -> tuple[float, ...]:
+    """A region's trimmed rectangle as fractions of its untrimmed image."""
+    return (region.offset[0] / region.original[0], region.offset[1] / region.original[1],
+            region.size[0] / region.original[0], region.size[1] / region.original[1])
+
+
+def _placement(source: Region, target: Region) -> tuple[str, bool]:
+    """How a region's pixels go from one layout to the other, and whether its art changed between them.
+
+    ``frame``: both trim the same untrimmed image (the same canvas, scaled or not), so the pixels keep their place
+    in it. That holds too when the game cut the canvas into other pieces: each piece takes its part.
+    ``trim``: a game update may export the image again on another canvas (a margin added, a side cropped). The
+    art then keeps, nearly, its share of the image while the image changes its proportions: the trimmed rectangles
+    bound the same art and are laid on each other.
+
+    The art changed when the canvas did and the trimmed rectangles differ in shape as well (nothing then says where
+    the old pixels belong), or when the region is another piece of its canvas; the caller reports the region."""
+    if max(abs(a - b) for a, b in zip(_frame(source), _frame(target))) < FRAME_TOLERANCE:
+        return "frame", False
+    (sw, sh), (tw, th) = source.size, target.size
+    (ow, oh), (nw, nh) = source.original, target.original
+    if abs(nw * oh - nh * ow) <= CANVAS_TOLERANCE * nw * oh:
+        # One canvas. Where the game cut it into other pieces, the part of this piece the old one did not hold
+        # has no pixels of the mod's: the art changed as far as this region goes.
+        (sx, sy, sw_, sh_), (tx, ty, tw_, th_) = _frame(source), _frame(target)
+        held = (max(0.0, min(sx + sw_, tx + tw_) - max(sx, tx)) * max(0.0, min(sy + sh_, ty + th_) - max(sy, ty)))
+        return "frame", held < FRAME_HELD * tw_ * th_
+
+    def close(value: float, wanted: float) -> bool:
+        # a pixel of rounding, but for regions of a few pixels, where it is the shape
+        return abs(value - wanted) <= max(TRIM_TOLERANCE * wanted, min(1.5, 0.15 * wanted))
+
+    same_shape = close(sw * th / sh, tw) and close(sh * tw / sw, th)
+    if all(1 - CANVAS_DRIFT <= trimmed / canvas <= 1 / (1 - CANVAS_DRIFT)
+           for trimmed, canvas in ((tw / sw, nw / ow), (th / sh, nh / oh))):
+        return "trim", not same_shape
+    return "frame", True
+
+
+def _outlines(hulls: dict | None, name: str) -> list | None:
+    """The hull outlines of a region when its skeleton tells them; None for one moved as its whole rectangle."""
+    value = (hulls or {}).get(name)
+    # Outlines come from a mod's skeleton or a stored record: a number that is no place in an image is no outline.
+    if not isinstance(value, list) or not all(isinstance(outline, list) and len(outline) >= 6 and all(
+            isinstance(number, (int, float)) and -8 <= number <= 8 for number in outline) for outline in value):
+        return None
+    return value or None
+
+
 def _pair_regions(old: Atlas, new: Atlas) -> dict[tuple[str, str, int], Region]:
     """Unique names can move pages; repeated names are identified by page order."""
     result = {}
@@ -317,9 +397,19 @@ def _page_image(atlas: Atlas, page: str, images: dict[str, Image.Image]) -> Imag
 
 
 def remap_pages(old: Atlas, new: Atlas, mod_pages: dict[str, Image.Image],
-                official_pages: dict[str, Image.Image], required: set[str] | None = None) -> tuple[dict[str, Image.Image], dict]:
-    """Move only painted pixels onto transparent pages; refuse unavailable required regions."""
+                official_pages: dict[str, Image.Image], required: set[str] | None = None,
+                fill: bool = False, hulls: dict | None = None,
+                official_hulls: dict | None = None) -> tuple[dict[str, Image.Image], dict]:
+    """Move only painted pixels onto transparent pages; refuse unavailable required regions. With ``fill`` a
+    required region the mod has no pixels for takes the official ones instead (``official`` in the summary), and
+    only a mod with no region to move at all is refused.
+
+    ``hulls`` and ``official_hulls`` (``spine_names.hulls`` of the skeleton the mod's texture and the official one
+    are drawn by) keep a region to what its meshes draw: only those pixels move, and only those are written, so a
+    neighbour packed into the same rectangle neither comes along nor is erased. A region they do not outline moves
+    as its whole rectangle."""
     mod_pages, official_pages = dict(mod_pages), dict(official_pages)
+    official_sources = dict(official_pages)
     upscaled = []
     for atlas, images in ((old, mod_pages), (new, official_pages)):
         keys = set()
@@ -352,40 +442,84 @@ def remap_pages(old: Atlas, new: Atlas, mod_pages: dict[str, Image.Image],
     available = {target.name for key, target in new.regions.items() if key in pairs
                  and texture_key(pairs[key].page) in mod_pages}
     missing = needed - available
-    if missing:
+    if missing and (not fill or not available):
         raise RemapError("atlas_remap_regions_missing", names=", ".join(sorted(missing)))
     output = {name: Image.new("RGBA", _page_image(new, name, official_pages).size) for name in new.pages}
-    moved, added = [], []
-    for key, target in new.regions.items():
+    moved, added, official = [], [], []
+    def unpainted(item) -> bool:
+        source = pairs.get(item[0])
+        return source is None or texture_key(source.page) not in mod_pages
+
+    def outlines(item) -> list | None:
+        return (_outlines(official_hulls, item[1].name) if unpainted(item)
+                else _outlines(hulls, pairs[item[0]].name))
+
+    changed = []
+
+    # Official pixels first, the mod's over them, and whole rectangles before outlined regions: where rectangles
+    # overlap, the mod's pixels and the outlined ones are kept.
+    for key, target in sorted(new.regions.items(), key=lambda item: (not unpainted(item), outlines(item) is not None)):
         target_page = new.pages[target.page]
         destination = output[target.page]
         box = _box(target, target_page, destination, new.file)
         source = pairs.get(key)
-        if source is None or texture_key(source.page) not in mod_pages:
-            added.append(target.label)
+        outline = outlines((key, target))
+        size = box[2] - box[0], box[3] - box[1]
+        if unpainted((key, target)):
+            if target.name in missing:
+                # The official page as it is stored, which may be smaller than the atlas declares.
+                image = _page_image(new, target.page, official_sources)
+                cut = image.crop(_box(target, target_page, image, new.file))
+                mask = None
+                if outline is not None:
+                    mask = _rotate(_hull_mask(target, outline, size[::-1] if target.degrees % 180 else size),
+                                   target.degrees)
+                destination.paste(cut if cut.size == size else cut.resize(size, Image.Resampling.LANCZOS), box[:2],
+                                  mask)
+                official.append(target.label)
+            else:
+                added.append(target.label)
             continue
         source_page = old.pages[source.page]
         image = _page_image(old, source.page, mod_pages)
         cut = _rotate(image.crop(_box(source, source_page, image, old.file)), -source.degrees)
-        # Work in the untrimmed coordinate space; offsets are measured from the bottom left.
-        # Keep the source's physical resolution until the target crop is resampled.
-        sx, sy = cut.width / source.size[0], cut.height / source.size[1]
-        full = Image.new("RGBA", (round(source.original[0] * sx), round(source.original[1] * sy)))
-        full.paste(cut, (round(source.offset[0] * sx),
-                        round((source.original[1] - source.offset[1] - source.size[1]) * sy)))
-        tx, ty = full.width / target.original[0], full.height / target.original[1]
-        crop = (target.offset[0] * tx, (target.original[1] - target.offset[1] - target.size[1]) * ty,
-                (target.offset[0] + target.size[0]) * tx, (target.original[1] - target.offset[1]) * ty)
-        size = box[2] - box[0], box[3] - box[1]
+        # What the region's meshes draw of its rectangle, as the source lays it out: it moves with the pixels.
+        mask = _hull_mask(source, outline, cut.size) if outline is not None else None
         if target.degrees % 180:
             size = size[::-1]
+        placement, redrawn = _placement(source, target)
+        if redrawn:
+            changed.append(target.label)
+        if placement == "frame":
+            # Work in the untrimmed coordinate space; offsets are measured from the bottom left.
+            # Keep the source's physical resolution until the target crop is resampled.
+            sx, sy = cut.width / source.size[0], cut.height / source.size[1]
+            canvas = round(source.original[0] * sx), round(source.original[1] * sy)
+            corner = (round(source.offset[0] * sx),
+                      round((source.original[1] - source.offset[1] - source.size[1]) * sy))
+            full = Image.new("RGBA", canvas)
+            full.paste(cut, corner)
+            tx, ty = full.width / target.original[0], full.height / target.original[1]
+            crop = (target.offset[0] * tx, (target.original[1] - target.offset[1] - target.size[1]) * ty,
+                    (target.offset[0] + target.size[0]) * tx, (target.original[1] - target.offset[1]) * ty)
+            if mask is not None:
+                whole = Image.new("L", canvas)
+                whole.paste(mask, corner)
+                mask = whole
+        else:
+            # The image was exported again on another canvas: the trimmed rectangles bound the same art.
+            full, crop = cut, (0, 0, cut.width, cut.height)
         cut = _resize(full, size, crop, source_page.pma)
         cut = _alpha(cut, source_page.pma, target_page.pma)
-        destination.paste(_rotate(cut, target.degrees), box[:2])
+        if mask is not None:
+            mask = _rotate(mask.resize(size, Image.Resampling.BILINEAR, box=crop).point(lambda v: 255 if v else 0),
+                           target.degrees)
+        destination.paste(_rotate(cut, target.degrees), box[:2], mask)
         if region_layout(source, old) != region_layout(target, new):
             moved.append(target.label)
     matched = {(region.page, *region.key) for region in pairs.values()}
-    return output, {"moved": sorted(moved), "added": sorted(added), "upscaled": upscaled,
+    return output, {"moved": sorted(moved), "added": sorted(added), "official": sorted(official),
+                    "changed": sorted(changed), "upscaled": upscaled,
                     "dropped": sorted(region.label for key, region in old.regions.items() if key not in matched)}
 
 
@@ -395,6 +529,9 @@ class Inputs:
     skeletons: dict[str, bytes] = field(default_factory=dict)
     textures: dict[str, Image.Image] = field(default_factory=dict)
     keys: dict[str, ContNameTypeKey] = field(default_factory=dict)
+    # per atlas name, the hull outlines of the skeleton its textures are drawn by (spine_names.hulls), where a
+    # caller knows them and the inputs carry no such skeleton
+    hulls: dict[str, dict] = field(default_factory=dict)
 
 
 def read_inputs(paths: list[Path]) -> Inputs:
@@ -452,27 +589,117 @@ def skeleton_warnings(old: dict[str, bytes], new: dict[str, bytes]) -> list[dict
     return warnings
 
 
+def rig_gains(mod_atlases: dict[str, bytes], mod_skeletons: dict[str, bytes],
+              official_atlases: dict[str, bytes], official_skeletons: dict[str, bytes]) -> dict:
+    """What the official rig has that a mod carrying its own atlas or skeleton lacks, per official asset name:
+    ``animations`` the mod's counterpart skeleton does not declare, ``regions`` its counterpart atlas does not hold.
+    Assets without a counterpart in the mod, and ones that cannot be read, are left out."""
+    result: dict[str, dict[str, list[str]]] = {"animations": {}, "regions": {}}
+    for name, source in pair_atlases(mod_skeletons, official_skeletons).items():
+        try:
+            have = set(spine_names.read(mod_skeletons[source]).animations)
+            missing = [animation for animation in spine_names.read(official_skeletons[name]).animations
+                       if animation not in have]
+        except ValueError:
+            continue
+        if missing:
+            result["animations"][name] = missing
+    for name, source in pair_atlases(mod_atlases, official_atlases).items():
+        try:
+            have = {region.label for region in parse_atlas(mod_atlases[source], source).regions.values()}
+            missing = sorted({region.label for region in parse_atlas(official_atlases[name], name).regions.values()}
+                             - have)
+        except (ValueError, UnicodeError):
+            continue
+        if missing:
+            result["regions"][name] = missing
+    return result
+
+
+def rerigged(gains: dict, mod_atlases: dict[str, bytes], mod_skeletons: dict[str, bytes],
+             official_atlases: dict[str, bytes], official_skeletons: dict[str, bytes],
+             textures: Iterable[str]) -> dict[str, str | None]:
+    """The official atlases a mod's own atlas should give way to (``rig_gains``), each with its official skeleton:
+    the mod's skeleton lacks animations the official one has, or the mod brings no skeleton and its atlas lacks
+    regions the official skeleton draws. Only atlases the mod has a page texture for (``textures``: texture keys)."""
+    textures = set(textures)
+    skeleton_of = pair_atlases(official_skeletons, official_atlases)
+    carried = set(pair_atlases(mod_skeletons, official_skeletons))
+    result = {}
+    for name, source in pair_atlases(mod_atlases, official_atlases).items():
+        skeleton = skeleton_of.get(name)
+        if skeleton in gains["animations"] or (skeleton not in carried and name in gains["regions"]):
+            try:
+                pages = parse_atlas(mod_atlases[source], source).pages
+            except (ValueError, UnicodeError):
+                continue
+            if any(texture_key(page) in textures for page in pages):
+                result[name] = skeleton
+    return result
+
+
+def same_rig(mod: bytes, official: bytes) -> bool:
+    """Whether a mod's skeleton declares nothing the official one lacks (bones with their parents, slots with
+    their bones, animations): an earlier official skeleton, as far as names tell."""
+    try:
+        left, right = spine_names.read(mod), spine_names.read(official)
+    except ValueError:
+        return False
+    return (set(left.bones) <= set(right.bones) and set(left.slots) <= set(right.slots)
+            and set(left.animations) <= set(right.animations))
+
+
+def _hulls_of(skeleton: bytes | None) -> dict | None:
+    if skeleton is None:
+        return None
+    try:
+        return spine_names.hulls(skeleton)
+    except ValueError:
+        return None
+
+
 def prepare_patch(mod: Inputs, official: Inputs) -> tuple[Patch, dict]:
     pairs = pair_atlases(mod.atlases, official.atlases)
     if not pairs:
         raise RemapError("atlas_remap_atlas_missing", file=", ".join(official.atlases) or "*.atlas")
-    report = {"moved": [], "added": [], "dropped": [], "upscaled": [],
+    report = {"moved": [], "added": [], "official": [], "changed": [], "dropped": [], "upscaled": [],
               "warnings": []}
     current_pages = {name: Image.new("RGBA", image.size) for name, image in official.textures.items()}
     patch = {official.keys[name]: image for name, image in current_pages.items() if name in official.keys}
     skeleton_pairs = pair_atlases(official.skeletons, official.atlases)
+    mod_skeletons = pair_atlases(mod.skeletons, mod.atlases)
     for name, text in official.atlases.items():
         target = parse_atlas(text, name)
         skeleton = official.skeletons.get(skeleton_pairs.get(name, ""))
+        official_hulls = _hulls_of(skeleton)
         required = skeleton_regions({name: skeleton}) if skeleton is not None else None
         if name not in pairs:
-            raise RemapError("atlas_remap_regions_missing", names=", ".join(sorted(
-                required if required is not None else {r.name for r in target.regions.values()})))
+            # An atlas the mod has no counterpart of keeps the official pixels of its regions.
+            for region in target.regions.values():
+                key = texture_key(region.page)
+                if key not in official.keys or key not in official.textures:
+                    raise RemapError("atlas_remap_page_missing", file=name, page=region.page)
+                image, destination = official.textures[key], current_pages[key]
+                cut = image.crop(_box(region, target.pages[region.page], image, target.file))
+                box = _box(region, target.pages[region.page], destination, target.file)
+                size = box[2] - box[0], box[3] - box[1]
+                outline, mask = _outlines(official_hulls, region.name), None
+                if outline is not None:
+                    mask = _rotate(_hull_mask(region, outline, size[::-1] if region.degrees % 180 else size),
+                                   region.degrees)
+                destination.paste(cut if cut.size == size else cut.resize(size, Image.Resampling.LANCZOS), box[:2],
+                                  mask)
+                report["official"].append(f"{name} - {region.label}")
+            continue
         source = parse_atlas(mod.atlases[pairs[name]], pairs[name])
         if skeleton is not None and required is None:
             # Without a binary attachment reader, require every source and target region.
             required = {r.name for atlas in (source, target) for r in atlas.regions.values()}
-        pages, summary = remap_pages(source, target, mod.textures, official.textures, required)
+        hulls = mod.hulls.get(pairs[name])
+        if hulls is None:
+            hulls = _hulls_of(mod.skeletons.get(mod_skeletons.get(pairs[name], "")))
+        pages, summary = remap_pages(source, target, mod.textures, official.textures, required, fill=True,
+                                     hulls=hulls, official_hulls=official_hulls)
         report["upscaled"].extend({"atlas": name, **page} for page in summary["upscaled"])
         for page, image in pages.items():
             key = texture_key(page)
@@ -487,11 +714,13 @@ def prepare_patch(mod: Inputs, official: Inputs) -> tuple[Patch, dict]:
                     box = _box(region, target.pages[page], image, target.file)
                     destination.paste(image.crop(box), box[:2])
             patch[official.keys[key]] = destination
-        for key in ("moved", "added", "dropped"):
+        for key in ("moved", "added", "official", "changed", "dropped"):
             report[key].extend(f"{name} - {region}" for region in summary[key])
     for name in mod.atlases.keys() - set(pairs.values()):
         report["dropped"].extend(f"{name} - {r.label}" for r in parse_atlas(mod.atlases[name], name).regions.values())
-    report["partial"] = bool(report["warnings"])
+    # Art the game drew anew under the same name cannot be told from art exported on another canvas: the result
+    # needs a look.
+    report["partial"] = bool(report["warnings"] or report["changed"])
     report["unchanged"] = (
         set(current_pages) == set(mod.textures) and all(
             image.size == mod.textures[key].size and image.tobytes() == mod.textures[key].tobytes()
