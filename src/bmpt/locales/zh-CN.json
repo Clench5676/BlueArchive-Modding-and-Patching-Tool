@@ -92,6 +92,7 @@
 			"failed": "无法读取 3D 模型",
 			"unfit": "无法自动适配",
 			"crossCharacter": "跨角色模型，可能造成崩坏",
+			"beyondFit": "超出自动适配范围，可能穿模或变形",
 			"showOthers": "显示其他角色",
 			"action": {
 				"idle": "待机",

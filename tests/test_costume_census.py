@@ -18,7 +18,7 @@ GAME_DIR = Path(os.environ.get("BAMT_TEST_GAME_DIR") or "/nonexistent/bamt-real-
 official = pytest.mark.skipif(not GAME_DIR.is_dir(), reason="Set BAMT_TEST_GAME_DIR to a verified official view")
 
 # the checks the rule may refuse a pair on today: an unskinned source (Kei's Decagrammaton body, a static mesh in her
-# own bundles). A costume stretching past the limit is built for a preview only (shown, never applied), and a shader
+# own bundles). A costume stretching past the limit is still offered, and a shader
 # the game does not load with the slot's prefab is carried with the costume.
 RULE_REFUSALS: set[str] = {"static model"}
 WORKERS = 3
@@ -87,7 +87,7 @@ def _run(job: tuple[str, str, str | None]) -> dict:
         row["export"] = _outcome(lambda: game.model_glb(variant.model, overrides=built["parts"],
                                                         reads=library.preview_reads("official")))
         verdict = library.costume_verdict(key, other)
-        row["preview_only"] = bool(verdict and verdict.get("preview"))
+        row["past_limit"] = bool(verdict and verdict.get("preview"))
     return row
 
 
@@ -109,11 +109,11 @@ def test_official_every_costume_pair_builds_or_is_refused_by_the_rule(tmp_path, 
     unknown = [(r["job"], r["build"]["check"]) for r in pairs
                if r["build"].get("code") == "source_unsupported" and r["build"]["check"] not in RULE_REFUSALS]
     unexported = [(r["job"], r["export"]) for r in pairs if r["build"]["ok"] and not r["export"]["ok"]]
-    offered = sum(1 for r in pairs if r["build"]["ok"] and r["export"]["ok"] and not r["preview_only"])
-    shown = sum(1 for r in pairs if r["build"]["ok"] and r["export"]["ok"] and r["preview_only"])
+    offered = sum(1 for r in pairs if r["build"]["ok"] and r["export"]["ok"])
+    past_limit = sum(1 for r in pairs if r["build"]["ok"] and r["export"]["ok"] and r["past_limit"])
     checks = Counter(r["build"]["check"] for r in pairs if r["build"].get("code") == "source_unsupported")
     record_property("costume_census", json.dumps({"models": len(own), "pairs": len(pairs), "offered": offered,
-                                                  "preview_only": shown, "refused": dict(checks)}))
+                                                  "past_limit": past_limit, "refused": dict(checks)}))
     assert not failed_own, failed_own
     assert not errors, errors
     assert not unknown, unknown

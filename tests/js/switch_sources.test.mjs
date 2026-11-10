@@ -340,9 +340,16 @@ test("the 3D model offers the student's other models as costumes, field-mode mod
     [["self", false, false], ["v:hoshino_swimsuit", true, true], ["v:np0045", true, false]]);
   assert.deepEqual(candidates(fam, v, "model", { hoshino_swimsuit: "refused", np0045: "ok" }).map(shape),
     [["self", false, false], ["v:hoshino_swimsuit", true, true], ["v:np0045", false, false]]);
-  // a pair past the stretch limit is listed for a preview only
+  // a pair past the stretch limit is offered with a caution
   assert.deepEqual(candidates(fam, v, "model", { hoshino_swimsuit: "preview", np0045: "ok" }).map(shape),
-    [["self", false, false], ["v:hoshino_swimsuit", true, false], ["v:np0045", false, false]]);
+    [["self", false, false], ["v:hoshino_swimsuit", false, false], ["v:np0045", false, false]]);
+  const [pastLimit, refused] = candidates(fam, v, "model", { hoshino_swimsuit: "preview", np0045: "refused" }).slice(1);
+  assert.equal(pastLimit.beyondFit, true);
+  assert.equal(pastLimit.previewOnly, undefined);
+  assert.equal(pastLimit.refused, undefined);
+  assert.equal(refused.previewOnly, true);
+  assert.equal(refused.refused, true);
+  assert.equal(refused.beyondFit, undefined);
   // the popup starts on the saved preview before any verdict arrives
   v.previewSources = { model: "variant:np0045" };
   assert.equal(popupMode(fam, v, "model").start, "v:np0045");
@@ -449,11 +456,11 @@ test("a card of another student's model carries the caution and its ids, from a 
   assert.deepEqual(crossExtras({ key: "self", kind: "self" }, "careful"), {});
 });
 
-test("cross preview verdicts allow Apply while same-student previews and hard refusals stay blocked", () => {
+test("past-limit verdicts allow Apply for every pair while hard refusals stay blocked", () => {
   const v = { key: "slot", family: "own", model: "slot" };
   const fam = { variants: [v, { key: "sibling", family: "own", model: "sibling" }] };
-  for (const [verdict, ownHold, crossHold] of [["ok", null, null], ["preview", "unfit", null],
-    ["refused", "unfit", "unfit"], [null, null, "pending"]]) {
+  for (const [verdict, ownHold, crossHold] of [["ok", null, null], ["preview", null, null],
+    ["refused", "unfit", "unfit"], ["unknown", "unfit", "unfit"], [null, null, "pending"], [undefined, null, "pending"]]) {
     assert.equal(costumeHold(fam, v, "v:sibling", { sibling: verdict }), ownHold);
     assert.equal(costumeHold(fam, v, "v:cross", { cross: verdict }), crossHold);
   }
@@ -476,6 +483,8 @@ test("split model slots offer dependency mods and judge every slot part", async 
   // other cores' mods stay out; the other variant's model is listed as a costume, applicable once checked
   assert.deepEqual(candidates(fam, v, "model", { hoshino: "ok" }).map((c) => [c.key, !!c.previewOnly]),
     [["self", false], ["m:dependency", false], ["v:hoshino", false]]);
+  assert.deepEqual(candidates(fam, v, "model", { hoshino: "preview" }).map((c) => [c.key, !!c.previewOnly, !!c.beyondFit]),
+    [["self", false, false], ["m:dependency", false, false], ["v:hoshino", false, true]]);
   assert.deepEqual(candidates(fam, v, "model").map((c) => [c.key, !!c.previewOnly]),
     [["self", false], ["m:dependency", false], ["v:hoshino", true]]);
   assert.equal(candidates(fam, v, "model")[0].greyed, true);
