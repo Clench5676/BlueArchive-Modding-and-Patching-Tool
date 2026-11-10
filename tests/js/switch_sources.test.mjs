@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
 import {
-  modelSource, modelUrl, appliedKey, appliedOf, availableTab, candidates, configuredKey, coreOf, costumeCandidates, costumeHold, crossCandidates, crossModels, hasAsset, hasKind, overwrittenOf, partsOf, popupMode, primaryKind, previewBase, previewChanged, previewKey, sourceOf, switchKindOf,
+  modelSource, modelUrl, appliedKey, appliedOf, availableTab, candidates, configuredKey, coreOf, costumeCandidates, costumeHold, crossCandidates, crossExtras, crossModels, hasAsset, hasKind, overwrittenOf, partsOf, popupMode, primaryKind, previewBase, previewChanged, previewKey, setShowOthers, showOthers, sourceOf, switchKindOf,
 } from "../../src/bmpt/web/js/switch-sources.js";
 
 const part = (kind, applied, extra = {}) => ({ file: `/game/${kind}-${applied}.bundle`, kind, applied, crc: "ok", ...extra });
@@ -399,6 +399,54 @@ test("cross model hits are ordered and capped, flag pending cards, and omit hard
   assert.ok(hits.slice(0, 2).every((c) => !c.pending && !c.previewOnly));
   assert.ok(hits.slice(2).every((c) => c.pending));
   assert.deepEqual(crossCandidates(roster, v, null, { match: (o) => o.key === "npc69" }).map((c) => c.key), ["v:npc69"]);
+});
+
+test("every other student's model is listed without the 64 cap, in the same order, when asked for", () => {
+  const v = { key: "slot", family: "own", model: "slot" };
+  const variants = Array.from({ length: 200 }, (_, i) => ({ key: `npc${i}`, family: "other", fieldModel: `ch${i}` }));
+  const roster = [{ variants }], compare = (a, b) => Number(a.key.slice(3)) - Number(b.key.slice(3));
+  const verdicts = { npc0: "refused", npc5: "preview" };
+  const capped = crossCandidates(roster, v, verdicts, { compare });
+  assert.equal(capped.length, 64, "a search's hits stop at what one RPC call takes");
+  const all = crossCandidates(roster, v, verdicts, { compare, limit: Infinity });
+  assert.equal(all.length, 199, "every other model but the refused one");
+  assert.deepEqual(all.slice(0, 64).map((c) => c.key), capped.map((c) => c.key), "the first 64 are the capped list");
+  assert.deepEqual(all.map((c) => c.key), all.map((c) => c.key).sort((a, b) => Number(a.slice(5)) - Number(b.slice(5))));
+  assert.ok(all.every((c) => c.cross && !c.greyed) && all.find((c) => c.key === "v:npc5").pending === undefined);
+  // the student's own variants and models of the same student are never among them
+  assert.deepEqual(crossCandidates([{ variants: [{ key: "mine", family: "own", model: "mine" }, ...variants.slice(0, 2)] }], v,
+    null, { limit: Infinity }).map((c) => c.key), ["v:npc0", "v:npc1"]);
+});
+
+test("Show other students is off at every start and is kept only in memory", async () => {
+  const fresh = await import("../../src/bmpt/web/js/switch-sources.js?fresh-start");
+  assert.equal(showOthers(), false, "off by default");
+  assert.equal(fresh.showOthers(), false);
+  setShowOthers(1);
+  assert.equal(showOthers(), true, "kept across students and popup openings");
+  assert.equal(fresh.showOthers(), false, "a page that starts again begins unchecked");
+  setShowOthers(false);
+  assert.equal(showOthers(), false);
+  // nothing writes it down: no storage, no settings, no library call mentions it
+  for (const file of ["switch-sources.js", "detail.js"]) {
+    const lines = readFileSync(new URL(`../../src/bmpt/web/js/${file}`, import.meta.url), "utf8").split("\n");
+    for (const line of lines.filter((l) => /showOthers|ShowOthers/.test(l))) assert.ok(!/localStorage|sessionStorage|settings|rpc\(|fetch\(/.test(line), `${file}: ${line}`);
+  }
+});
+
+test("a card of another student's model carries the caution and its ids, from a search or from the checkbox", () => {
+  const v = { key: "slot", family: "own", model: "slot" };
+  const roster = [{ variants: [{ key: "a", family: "other", model: "ch1", fileId: "f1" }, { key: "b", family: "other", fieldModel: "np2" }] }];
+  for (const cards of [crossCandidates(roster, v, null, { match: (o) => o.key === "a" }), crossCandidates(roster, v, null, { limit: Infinity })]) {
+    assert.ok(cards.length > 0);
+    for (const card of cards) {
+      const extras = crossExtras(card, "careful");
+      assert.equal(extras.hint, "careful");
+      assert.deepEqual(extras.terms, [card.variant.fileId, card.variant.model, card.variant.fieldModel]);
+    }
+  }
+  assert.deepEqual(crossExtras({ key: "v:sibling", kind: "variant" }, "careful"), {}, "the student's own costumes carry none");
+  assert.deepEqual(crossExtras({ key: "self", kind: "self" }, "careful"), {});
 });
 
 test("cross preview verdicts allow Apply while same-student previews and hard refusals stay blocked", () => {

@@ -92,6 +92,7 @@
 			"failed": "3D model unavailable",
 			"unfit": "Auto-fit unavailable",
 			"crossCharacter": "Cross-character model, may break",
+			"showOthers": "Show other students",
 			"action": {
 				"idle": "Idle",
 				"reaction": "Reaction",
@@ -106,6 +107,7 @@
 			"optimizedGo": "View optimized Mod",
 			"optimizedName": "{name} - Optimized",
 			"optimizeUnneeded": "No optimization needed",
+			"optimizeNoGain": "No physics optimization available",
 			"optimizeDone": "Optimized and Added to Library"
 		},
 		"visual": {
