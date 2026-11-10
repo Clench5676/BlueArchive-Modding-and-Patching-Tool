@@ -176,6 +176,8 @@ export async function remap(id, onRemapped = () => {}, label = "", subject = lab
   try {
     const accepted = await Compare.show({ ...result.compare, pages: result.pages, drawings: result.drawings }, label || T("remap.action"), "dialog", {
       lines, partial: report.partial, accept: T("remap.accept"), discard: T("remap.discard"), kind: kind || reports.get(id)?.kind || "spr",
+      // the regions whose pixels are not the mod's own any more, or may sit wrong: what the pictures can ring
+      marks: [...new Set([...(report.official || []), ...(report.changed || [])].map((name) => name.slice(name.indexOf(" - ") + 3)))],
     });
     if (!accepted) return null;
     const saved = await Loading.hold(() => Loading.page(() => progressTask("Repair", subject, async (update) => {

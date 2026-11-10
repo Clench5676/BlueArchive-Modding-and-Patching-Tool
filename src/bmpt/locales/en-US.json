@@ -734,7 +734,10 @@
 			"previewUnavailable": "Preview unavailable",
 			"unpainted": "Unpainted unused regions: {names}",
 			"official": "Official regions: {names}",
-			"changed": "Regions redrawn by official: {names}"
+			"changed": "Regions redrawn by official: {names}",
+			"zoomIn": "Zoom in",
+			"zoomOut": "Zoom out",
+			"marks": "Mark changes"
 		},
 		"spine": {
 			"license": {

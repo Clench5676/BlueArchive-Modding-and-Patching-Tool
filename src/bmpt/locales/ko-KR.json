@@ -734,7 +734,10 @@
 			"previewUnavailable": "미리보기 불가",
 			"unpainted": "미사용 빈 영역: {names}",
 			"official": "공식 영역: {names}",
-			"changed": "공식에서 다시 그린 영역: {names}"
+			"changed": "공식에서 다시 그린 영역: {names}",
+			"zoomIn": "확대",
+			"zoomOut": "축소",
+			"marks": "변경 부분 표시"
 		},
 		"spine": {
 			"license": {

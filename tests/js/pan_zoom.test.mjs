@@ -38,3 +38,11 @@ test("a contained picture fills its frame, centred", () => {
 test("the view is the picture's box in frame sizes", () => {
   assert.deepEqual(style({ zoom: 2.25, x: -0.625, y: -0.5 }), { width: "225%", height: "225%", left: "-62.5%", top: "-50%" });
 });
+
+test("a ring stands a little wider than its part and is never a dot", async () => {
+  const { ring, ringStyle } = await import("../../src/bmpt/web/js/pan-zoom.js");
+  const around = ring([0.2, 0.4, 0.6, 0.5]);
+  near(around.cx, 0.4); near(around.cy, 0.45); near(around.rx, 0.24); near(around.ry, 0.06);
+  assert.deepEqual(ring([0.5, 0.5, 0.5, 0.5]), { cx: 0.5, cy: 0.5, rx: 0.03, ry: 0.03 });
+  assert.deepEqual(ringStyle({ cx: 0.5, cy: 0.25, rx: 0.25, ry: 0.125 }), { left: "25%", top: "12.5%", width: "50%", height: "25%" });
+});

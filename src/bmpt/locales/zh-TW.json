@@ -734,7 +734,10 @@
 			"previewUnavailable": "預覽不可用",
 			"unpainted": "未使用的留空區域：{names}",
 			"official": "原版區域：{names}",
-			"changed": "原版已重繪的區域：{names}"
+			"changed": "原版已重繪的區域：{names}",
+			"zoomIn": "放大",
+			"zoomOut": "縮小",
+			"marks": "標出變更"
 		},
 		"spine": {
 			"license": {

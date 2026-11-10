@@ -734,7 +734,10 @@
 			"previewUnavailable": "プレビューを表示できません",
 			"unpainted": "未使用の空白領域：{names}",
 			"official": "公式の領域：{names}",
-			"changed": "公式で描き直された領域：{names}"
+			"changed": "公式で描き直された領域：{names}",
+			"zoomIn": "拡大",
+			"zoomOut": "縮小",
+			"marks": "変更箇所を表示"
 		},
 		"spine": {
 			"license": {
