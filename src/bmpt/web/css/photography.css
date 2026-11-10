@@ -32,5 +32,4 @@
 #camera-launcher .hit{pointer-events:auto}
 #camera-overlay{position:absolute;inset:0;z-index:500;pointer-events:none;overflow:hidden}
 #camera-overlay .hit,#camera-overlay button{pointer-events:auto}
-.camera-guide{position:absolute;box-sizing:border-box;border:2px dashed rgba(255,255,255,.85);box-shadow:0 0 0 1px rgba(43,73,110,.55);pointer-events:none}
 .lobby-camera #visual-ui,.lobby-camera #fs-exit,.lobby-camera #photo-launcher,.lobby-camera #camera-launcher{display:none}
