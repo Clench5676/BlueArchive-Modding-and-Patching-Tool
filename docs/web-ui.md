@@ -2519,8 +2519,10 @@ overwritten entry need none (the detail screen judges its files cheaply).
 - **Game Updated** (`update-impact.js`, a plain, left-aligned message popup): once per resource version of the
   current install, when `mods.impact` finds mods a game update touched. First "Rig changed, on hold: n", the held
   mods as list items ("name - kind", six at most, then "+n") and how the hold ends ("Select the mod on the student
-  page and press Update to apply it again"); then, after a gap, a list item per other kind with mods ("Gone from the
-  game: n", "New official parts: n", "Rebuilt, same rig: n", "Not affected: n", "Not determined: n"). Closing it records the version
+  page and press Update to apply it again", in italics); then, after a gap, "Other affected mods" with an Expand /
+  Collapse button over a list item per other kind with mods ("Gone from the game: n", "New official parts: n",
+  "Rebuilt, same rig: n", "Not affected: n", "Not determined: n"), folded at first; the button closes the message
+  and opens it again the other way. With no mod held that list shows at once, without the button. Closing it records the version
   (`mods.impactSeen`). At the start before the prompts below, and after `config.changed` (a game update while the
   program runs rebuilds the game services) once no other popup is open.
 - **Mods Back to Official** (while mods are on; titled Mods Affected by a Game Update when every listed entry is

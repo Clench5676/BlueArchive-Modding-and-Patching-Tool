@@ -310,7 +310,10 @@
 				"rebuilt": "Rebuilt, same rig: {n}",
 				"unchanged": "Not affected: {n}",
 				"unknown": "Not determined: {n}",
-				"hint": "Select the mod on the student page and press {action} to apply it again"
+				"hint": "Select the mod on the student page and press {action} to apply it again",
+				"others": "Other affected mods",
+				"expand": "Expand",
+				"collapse": "Collapse"
 			},
 			"deleteConfirm": "Delete {name}?",
 			"deleteRestore": "Entries using it go back to official or their previous setting",
