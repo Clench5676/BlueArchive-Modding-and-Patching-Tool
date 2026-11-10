@@ -7,7 +7,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from PIL import Image, ImageDraw, ImageFilter, ImageMath
+from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageMath
 
 from . import devmode, spine_names
 from ba_modding_toolkit.bundle import Bundle
@@ -284,6 +284,9 @@ def _resize(image: Image.Image, size: tuple[int, int], box: tuple, pma: bool) ->
 FRAME_TOLERANCE = 0.01
 #: the share of a region's trimmed rectangle the old one must hold of the same canvas to be the same piece of it
 FRAME_HELD = 0.9
+#: the share of the smaller of two regions they may have in common and still be pieces of one image, not two
+#: pictures of one size
+PIECE_OVERLAP = 0.5
 #: how far two trimmed rectangles' proportions may differ and still bound the same art
 TRIM_TOLERANCE = 0.03
 #: how far the art's share of its image may drift when the image is exported again with other margins
@@ -347,6 +350,61 @@ def _placement(source: Region, target: Region) -> tuple[str, bool]:
            for trimmed, canvas in ((tw / sw, nw / ow), (th / sh, nh / oh))):
         return "trim", not same_shape
     return "frame", True
+
+
+def _rect(region: Region) -> tuple[float, float, float, float]:
+    """A region's trimmed rectangle on its untrimmed image as fractions of it: left, top, right, bottom."""
+    (w, h), (ow, oh), (ox, oy) = region.size, region.original, region.offset
+    top = oh - oy - h
+    return ox / ow, top / oh, (ox + w) / ow, (top + h) / oh
+
+
+def _pieces(regions: list[Region]) -> bool:
+    """Whether regions of one untrimmed size are pieces cut from one image (they lie beside each other, with the
+    seams they share) rather than pictures of that size (which lie on each other, as a face's expressions do)."""
+    rects = [_rect(region) for region in regions]
+    for i, a in enumerate(rects):
+        for b in rects[i + 1:]:
+            shared = max(0.0, min(a[2], b[2]) - max(a[0], b[0])) * max(0.0, min(a[3], b[3]) - max(a[1], b[1]))
+            smaller = min((a[2] - a[0]) * (a[3] - a[1]), (b[2] - b[0]) * (b[3] - b[1]))
+            if smaller <= 0 or shared > PIECE_OVERLAP * smaller:
+                return False
+    return True
+
+
+def _recut(old: Atlas, new: Atlas, pairs: dict) -> dict[tuple, list[Region]]:
+    """The regions of the new atlas that are pieces of an image the old atlas cut another way, each with the old
+    pieces of that image.
+
+    A game update may cut a body into other pieces (two where there was one, the seam elsewhere, the names
+    swapped), so a piece's namesake holds another part of the picture. The image is told by its untrimmed size:
+    the new pieces share one, their namesakes in the old atlas share one of the same proportions, and on either
+    side the regions of that size lie beside each other. Their old pieces put together are the image again."""
+    by_size: dict[tuple, list] = {}
+    for key, region in new.regions.items():
+        by_size.setdefault((None, region.original), []).append((key, region))
+    old_by_size: dict[tuple, list[Region]] = {}
+    for region in old.regions.values():
+        old_by_size.setdefault(region.original, []).append(region)
+    result = {}
+    for (_page, (nw, nh)), members in by_size.items():
+        sizes = {pairs[key].original for key, _region in members if key in pairs}
+        if len(sizes) != 1:
+            continue
+        (ow, oh), = sizes
+        sources = old_by_size[(ow, oh)]
+        if abs(nw * oh - nh * ow) > 2 * CANVAS_TOLERANCE * nw * oh:
+            continue
+        if not _pieces([region for _key, region in members]) or not _pieces(sources):
+            continue
+        # one piece that kept its name and its place is no other cut
+        if len(members) == 1 and len(sources) == 1 and not _placement(sources[0], members[0][1])[1]:
+            continue
+        if len(members) == 1 and len(sources) == 1 and _placement(sources[0], members[0][1])[0] == "trim":
+            continue
+        for key, _region in members:
+            result[key] = sources
+    return result
 
 
 def _outlines(hulls: dict | None, name: str) -> list | None:
@@ -438,21 +496,55 @@ def remap_pages(old: Atlas, new: Atlas, mod_pages: dict[str, Image.Image],
                 if region.page == page:
                     _box(region, atlas.pages[page], image, atlas.file)
     pairs = _pair_regions(old, new)
+    # Pieces of an image the old atlas cut another way: every old piece of it has to be among the mod's pages.
+    # (Straight alpha only, as the game's pages are: premultiplied pieces are moved one by one as before.)
+    recut = {key: sources for key, sources in _recut(old, new, pairs).items()
+             if all(texture_key(source.page) in mod_pages and not old.pages[source.page].pma for source in sources)}
+    canvases: dict[tuple, Image.Image] = {}
     needed = required if required is not None else {r.name for r in new.regions.values()}
-    available = {target.name for key, target in new.regions.items() if key in pairs
-                 and texture_key(pairs[key].page) in mod_pages}
+    available = {target.name for key, target in new.regions.items()
+                 if key in recut or (key in pairs and texture_key(pairs[key].page) in mod_pages)}
     missing = needed - available
     if missing and (not fill or not available):
         raise RemapError("atlas_remap_regions_missing", names=", ".join(sorted(missing)))
     output = {name: Image.new("RGBA", _page_image(new, name, official_pages).size) for name in new.pages}
     moved, added, official = [], [], []
     def unpainted(item) -> bool:
+        if item[0] in recut:
+            return False
         source = pairs.get(item[0])
         return source is None or texture_key(source.page) not in mod_pages
 
     def outlines(item) -> list | None:
-        return (_outlines(official_hulls, item[1].name) if unpainted(item)
-                else _outlines(hulls, pairs[item[0]].name))
+        # a piece cut anew is written inside the outline the official skeleton draws of it
+        if unpainted(item) or item[0] in recut:
+            return _outlines(official_hulls, item[1].name)
+        return _outlines(hulls, pairs[item[0]].name)
+
+    def assembled(sources: list[Region]) -> Image.Image:
+        """The old pieces of one image put together on its untrimmed canvas, at the mod's resolution: each piece
+        inside the outline its skeleton draws of it, the lower ones first so that a piece lies over the one below
+        it where they share a seam."""
+        identity = tuple(sorted((source.page, *source.key) for source in sources))
+        if identity not in canvases:
+            whole = None
+            for source in sorted(sources, key=lambda region: -_rect(region)[1]):
+                page = old.pages[source.page]
+                image = _page_image(old, source.page, mod_pages)
+                cut = _rotate(image.crop(_box(source, page, image, old.file)), -source.degrees)
+                sx, sy = cut.width / source.size[0], cut.height / source.size[1]
+                if whole is None:
+                    whole = Image.new("RGBA", (round(source.original[0] * sx), round(source.original[1] * sy)))
+                outline = _outlines(hulls, source.name)
+                if outline is not None:
+                    cut.putalpha(ImageChops.multiply(cut.getchannel("A"), _hull_mask(source, outline, cut.size)))
+                corner = (round(source.offset[0] * sx),
+                          round((source.original[1] - source.offset[1] - source.size[1]) * sy))
+                layer = Image.new("RGBA", whole.size)
+                layer.paste(cut, corner)
+                whole = Image.alpha_composite(whole, layer)
+            canvases[identity] = whole
+        return canvases[identity]
 
     changed = []
 
@@ -480,6 +572,20 @@ def remap_pages(old: Atlas, new: Atlas, mod_pages: dict[str, Image.Image],
             else:
                 added.append(target.label)
             continue
+        if key in recut:
+            # A piece of an image cut another way: taken from the image as the old pieces give it.
+            sources = recut[key]
+            source_page = old.pages[sources[0].page]
+            full = assembled(sources)
+            left, top, right, bottom = _rect(target)
+            crop = (left * full.width, top * full.height, right * full.width, bottom * full.height)
+            if target.degrees % 180:
+                size = size[::-1]
+            cut = _alpha(_resize(full, size, crop, source_page.pma), source_page.pma, target_page.pma)
+            mask = _rotate(_hull_mask(target, outline, size), target.degrees) if outline is not None else None
+            destination.paste(_rotate(cut, target.degrees), box[:2], mask)
+            moved.append(target.label)
+            continue
         source_page = old.pages[source.page]
         image = _page_image(old, source.page, mod_pages)
         cut = _rotate(image.crop(_box(source, source_page, image, old.file)), -source.degrees)
@@ -490,6 +596,18 @@ def remap_pages(old: Atlas, new: Atlas, mod_pages: dict[str, Image.Image],
         placement, redrawn = _placement(source, target)
         if redrawn:
             changed.append(target.label)
+            if fill:
+                # Nothing says where the old pixels belong on art the game drew anew: the region keeps the official
+                # ones rather than the mod's in the wrong place.
+                image = _page_image(new, target.page, official_sources)
+                cut = image.crop(_box(target, target_page, image, new.file))
+                size = box[2] - box[0], box[3] - box[1]
+                over = _outlines(official_hulls, target.name)
+                mask = (_rotate(_hull_mask(target, over, size[::-1] if target.degrees % 180 else size), target.degrees)
+                        if over is not None else None)
+                destination.paste(cut if cut.size == size else cut.resize(size, Image.Resampling.LANCZOS), box[:2],
+                                  mask)
+                continue
         if placement == "frame":
             # Work in the untrimmed coordinate space; offsets are measured from the bottom left.
             # Keep the source's physical resolution until the target crop is resampled.
@@ -518,6 +636,7 @@ def remap_pages(old: Atlas, new: Atlas, mod_pages: dict[str, Image.Image],
         if region_layout(source, old) != region_layout(target, new):
             moved.append(target.label)
     matched = {(region.page, *region.key) for region in pairs.values()}
+    matched.update((source.page, *source.key) for sources in recut.values() for source in sources)
     return output, {"moved": sorted(moved), "added": sorted(added), "official": sorted(official),
                     "changed": sorted(changed), "upscaled": upscaled,
                     "dropped": sorted(region.label for key, region in old.regions.items() if key not in matched)}
