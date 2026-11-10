@@ -15,12 +15,14 @@ const KEYS = { rig_changed: "rigChanged", gone: "gone", new_parts: "newParts", r
   unchanged: "unchanged", unknown: "unknown" };
 const MAX_LISTED = 6; // held mods the summary names; the rest are counted
 
-// summary(result, nameOf): the message of an update's impact, {title, lines} for a plain (left-aligned) message;
-// null when nothing needs telling. The mods held for a changed rig come first: their count, each one as a list item
-// ("name - kind"), and how the hold ends; then, after a gap, a list item per other kind with mods.
+// summary(result, nameOf, {expanded}): the message of an update's impact, {title, lines} for a plain (left-aligned)
+// message; null when nothing needs telling. The mods held for a changed rig come first: their count, each one as a
+// list item ("name - kind") and, in italics, how the hold ends. Then "Other affected mods" with an Expand / Collapse
+// button (its line's button closes the message with "expand", see check) over a list item per other kind with mods,
+// shown once expanded. With no mod held that list shows at once, without the button.
 export const ITEM = Object.freeze({ marker: "\u2022", markerGap: 44, indent: 52 });
 const GROUP_GAP = 32;
-export function summary(result, nameOf = (e) => e?.variant || e?.core || "") {
+export function summary(result, nameOf = (e) => e?.variant || e?.core || "", { expanded = false } = {}) {
   if (!result?.due) return null;
   const counts = result.counts || {};
   const held = (result.mods || []).filter((m) => m.impact === "rig_changed");
@@ -30,11 +32,16 @@ export function summary(result, nameOf = (e) => e?.variant || e?.core || "") {
     const named = held.map((m) => entryLabel({ variant: m.target, core: m.core, kind: m.kind }, nameOf, " - "));
     lines.push(...named.slice(0, MAX_LISTED).map((text) => ({ text, ...ITEM })));
     if (named.length > MAX_LISTED) lines.push({ text: `+${named.length - MAX_LISTED}`, ...ITEM });
-    if (named.length) lines.push({ text: T("mods.impact.hint", { action: T("act.update") }) });
+    if (named.length) lines.push({ text: T("mods.impact.hint", { action: T("act.update") }), italic: true });
   }
-  KINDS.filter((k) => k !== "rig_changed" && counts[k] > 0).forEach((kind, i) => {
-    lines.push({ text: T(`mods.impact.${KEYS[kind]}`, { n: counts[kind] }), ...ITEM, gap: i === 0 && lines.length ? GROUP_GAP : 0 });
-  });
+  const others = KINDS.filter((k) => k !== "rig_changed" && counts[k] > 0)
+    .map((kind) => ({ text: T(`mods.impact.${KEYS[kind]}`, { n: counts[kind] }), ...ITEM }));
+  if (!lines.length) return { title: T("mods.impact.title"), lines: others };
+  if (others.length) {
+    lines.push({ text: T("mods.impact.others"), gap: GROUP_GAP,
+      button: { label: T(expanded ? "mods.impact.collapse" : "mods.impact.expand"), fn: ({ close }) => close("expand") } });
+    if (expanded) lines.push(...others);
+  }
   return { title: T("mods.impact.title"), lines };
 }
 
@@ -67,11 +74,17 @@ export async function check() {
   try {
     const result = await waitJob(await rpc("mods.impact"));
     if (!result?.due || told.has(`${result.install}|${result.version}`)) return null;
-    const message = summary(result, await names().catch(() => undefined));
-    if (!message) return null;
+    const nameOf = await names().catch(() => undefined);
+    if (!summary(result, nameOf)) return null;
     told.add(`${result.install}|${result.version}`);
     await Popup.whenIdle();
-    await Popup.message({ title: message.title, lines: message.lines, ok: T("picker.ok"), plain: true });
+    // the Expand / Collapse button closes the message, which opens again with the list the other way
+    for (let expanded = false; ;) {
+      const message = summary(result, nameOf, { expanded });
+      const answer = await Popup.message({ title: message.title, lines: message.lines, ok: T("picker.ok"), plain: true });
+      if (answer.button !== "expand") break;
+      expanded = !expanded;
+    }
     await rpc("mods.impactSeen", { install: result.install, version: result.version }).catch((err) => console.error("impact", err));
     return result;
   } catch (err) {

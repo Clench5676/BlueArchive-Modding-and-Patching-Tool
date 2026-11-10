@@ -1033,7 +1033,7 @@ export const MSG = { title: POPUP_FRAME.contentTop, gap: SPACE.l, rowButton: SMA
 //          close(button) closes the popup); with such a line every line shows as a row of the game's light box
 //          fontSize/minFontSize optionally keep a row's existing type size (the tour counter and body).
 //          With plain: indent (units) moves a line right, marker hangs a bullet left of its first line (markerGap wide,
-//          its font size by default), gap adds space above it (release notes' lists and sections).
+//          its font size by default), gap adds space above it (release notes' lists and sections), italic slants it.
 //   fitTogether: line indices fitted at one shared size, using the smallest fit within the popup's size floor
 //   plain: left-aligned lines without a box or separators, including lines with a button at the right
 //   ok, cancel: the buttons' labels (either may be left out); check: {label, checked}
@@ -1210,7 +1210,7 @@ function messageLines(lines, w, fitTogether, plain, assets = true) {
     const lineRow = { ...measured, boxes: measured.boxes.map(b => ({ ...b, y: b.y + y + (plain ? r.gap || 0 : 0) })) };
     const local = { w, h: 0, cx: 0, cy: 0 }, colour = `${r.color || "#2d4664"}/1.00`, box = lineRow.boxes[0];
     out.push(node(`Line_${i}`, toNode(box, plain ? 3 : 4, local),
-      [label(f.text, f.fs, colour, room, box.h, { pivot: plain ? 3 : 4, depth: 8 })]));
+      [label(f.text, f.fs, colour, room, box.h, { pivot: plain ? 3 : 4, depth: 8, ...(plain && r.italic ? { italic: true } : {}) })]));
     if (plain && r.marker) {
       const marker = { x: box.x - (r.markerGap ?? f.fs), y: box.y, w: r.markerGap ?? f.fs, h: f.fs * NGUI.LINE_PITCH };
       out.push(node(`Mark_${i}`, toNode(marker, 3, local), [label(r.marker, f.fs, colour, marker.w, marker.h, { pivot: 3, depth: 8 })]));

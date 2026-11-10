@@ -1394,10 +1394,17 @@ test("an update's impact: one count line per kind with mods, the held mods named
     (e) => e.variant[0].toUpperCase() + e.variant.slice(1));
   assert.equal(r.title, "Game Updated");
   const hint = "Select the mod on the student page and press Update to apply it again";
-  const item = (text, gap = 0) => ({ text, ...Impact.ITEM, gap });
-  assert.deepEqual(r.lines, [{ text: "Rig changed, on hold: 1" }, { text: "Hoshino - Portrait", ...Impact.ITEM }, { text: hint },
-    item("Rebuilt, same rig: 1", 32), item("Not affected: 4"), item("Not determined: 2")]);
-  // without held mods the other kinds start the list, with no gap above them
+  const item = (text) => ({ text, ...Impact.ITEM });
+  const head = [{ text: "Rig changed, on hold: 1" }, { text: "Hoshino - Portrait", ...Impact.ITEM }, { text: hint, italic: true }];
+  const others = (label) => ({ text: "Other affected mods", gap: 32, button: { label, fn: r.lines[3].button.fn } });
+  // the other kinds are folded under their line, its button closes the message to open it the other way
+  assert.deepEqual(r.lines, [...head, others("Expand")]);
+  let closed = null; r.lines[3].button.fn({ close: (b) => { closed = b; } }); assert.equal(closed, "expand");
+  const open = Impact.summary({ due: true, mods, counts: { unchanged: 4, rebuilt: 1, rig_changed: 1, unknown: 2 } },
+    (e) => e.variant[0].toUpperCase() + e.variant.slice(1), { expanded: true });
+  assert.deepEqual(open.lines.map(({ button, ...l }) => (button ? { ...l, button: button.label } : l)),
+    [...head, { text: "Other affected mods", gap: 32, button: "Collapse" }, item("Rebuilt, same rig: 1"), item("Not affected: 4"), item("Not determined: 2")]);
+  // without held mods the other kinds show at once, without the button
   assert.deepEqual(Impact.summary({ due: true, mods: [], counts: { rebuilt: 2 } }).lines, [item("Rebuilt, same rig: 2")]);
   const many = Impact.summary({ due: true, counts: { rig_changed: 9 },
     mods: Array.from({ length: 9 }, (_, i) => ({ id: `${i}`, target: `v${i}`, core: `c${i}_spr`, kind: "spr", impact: "rig_changed" })) });
@@ -1408,9 +1415,11 @@ test("an update's impact: one count line per kind with mods, the held mods named
       const ui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url))).webui;
       I18n.setStrings(lang, flat({ webui: ui }));
       const counts = Object.fromEntries(Impact.KINDS.map((k) => [k, 1]));
-      const all = Impact.summary({ due: true, counts, mods: [] });
-      assert.equal(all.lines.length, Impact.KINDS.length, lang);
-      for (const line of [{ text: all.title }, ...all.lines]) assert.ok(line.text && !/^mods\./.test(line.text) && line.text.includes(line.text === all.title ? "" : "1"), `${lang} ${line.text}`);
+      const all = Impact.summary({ due: true, counts, mods: [] }, undefined, { expanded: true });
+      assert.equal(all.lines.length, Impact.KINDS.length + 1, lang);
+      const toggle = all.lines.find((l) => l.button);
+      assert.ok(toggle.text === ui.mods.impact.others && toggle.button.label === ui.mods.impact.collapse && ui.mods.impact.expand, lang);
+      for (const line of [{ text: all.title }, ...all.lines.filter((l) => !l.button)]) assert.ok(line.text && !/^mods\./.test(line.text) && line.text.includes(line.text === all.title ? "" : "1"), `${lang} ${line.text}`);
       for (const k of ["held", "heldTitle", "heldBadge", "driftUpdated"]) assert.ok(typeof ui.mods[k] === "string" && ui.mods[k].length > 0, `${lang} ${k}`);
       assert.ok(ui.mods.impact.hint.includes("{action}") && !("driftWhy" in ui.mods), lang);
     }

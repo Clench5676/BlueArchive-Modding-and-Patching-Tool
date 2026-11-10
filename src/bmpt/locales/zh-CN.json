@@ -310,7 +310,10 @@
 				"rebuilt": "已重建，骨骼未变：{n}",
 				"unchanged": "未受影响：{n}",
 				"unknown": "无法判断：{n}",
-				"hint": "在学生页面选中该 Mod，点「{action}」后恢复应用"
+				"hint": "在学生页面选中该 Mod，点「{action}」后恢复应用",
+				"others": "其余受影响的 Mod",
+				"expand": "展开",
+				"collapse": "收起"
 			},
 			"deleteConfirm": "删除 {name}？",
 			"deleteRestore": "使用中的条目将恢复原版或之前的配置",

@@ -310,7 +310,10 @@
 				"rebuilt": "재구성됨, 본 동일: {n}",
 				"unchanged": "영향 없음: {n}",
 				"unknown": "판단 불가: {n}",
-				"hint": "학생 페이지에서 이 모드를 선택하고 '{action}'을 누르면 다시 적용"
+				"hint": "학생 페이지에서 이 모드를 선택하고 '{action}'을 누르면 다시 적용",
+				"others": "기타 영향을 받은 모드",
+				"expand": "펼치기",
+				"collapse": "접기"
 			},
 			"deleteConfirm": "{name} 삭제?",
 			"deleteRestore": "사용 중인 항목은 원본 또는 이전 설정으로 복원",
