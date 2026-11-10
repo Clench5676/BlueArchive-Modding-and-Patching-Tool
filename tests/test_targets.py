@@ -50,6 +50,51 @@ def test_current_releases_by_name_name_without_crc_and_cab():
         renamed.name: resolver.NAME_CRC, other.name: resolver.CAB}
 
 
+def test_a_rebuilt_parts_older_release_is_not_its_current_release():
+    # a game update rebuilt SKEL and PAGE in place: same names but for the CRC, same CABs
+    old_skel = Path("/mod") / SKEL.name.replace("_1.bundle", "_99.bundle")
+    old_page = Path("/mod/renamed.bundle")
+    files = {old_skel.name: old_skel, old_page.name: old_page}
+    held = {**HELD, old_skel: HELD[SKEL], old_page: HELD[PAGE]}
+    cabs = {old_page: {"cab-page"}, PAGE: {"cab-page"}}
+    asked = []
+
+    def rebuilt(source, target):
+        asked.append((source, target))
+        return False
+
+    resolution = resolve(files, CORE, Readers(cabs=lambda path: cabs.get(path, set()),
+                                              paths=lambda path: set(held.get(path, set())), release=rebuilt))
+    assert asked == [(old_skel, SKEL), (old_page, PAGE)]
+    assert resolution.current == {} and set(resolution.older) == set(files)
+    # they update the parts through their assets, as the files of any older release do
+    assert resolution.updated == [SKEL, PAGE]
+    assert {match.method for match in resolution.matches().values()} == {resolver.ASSET_PATH}
+    # built on the parts as they are now, they replace them whole
+    same = resolve(files, CORE, Readers(cabs=lambda path: cabs.get(path, set()), release=lambda source, target: True))
+    assert same.current == {SKEL: old_skel, PAGE: old_page}
+
+
+def test_an_exact_name_is_the_current_release_without_asking_for_the_structure():
+    source = Path("/mod") / SKEL.name
+
+    def never(source, target):
+        raise AssertionError("an exact name needs no structure")
+
+    assert resolve({source.name: source}, CORE, Readers(release=never)).current == {SKEL: source}
+
+
+def test_a_generic_file_of_a_rebuilt_slot_updates_it_through_its_assets():
+    target = Path("/game/uis-03_scenario-01_background-bg_a-2024-11-18_assets_all_1.bundle")
+    old = Path("/mod") / target.name.replace("_1.bundle", "_99.bundle")
+    held = {target: {"bg/a.png"}, old: {"bg/a.png"}}
+    reads = Readers(paths=lambda path: set(held.get(path, set())), release=lambda source, target: False)
+    found = resolver.generic({old.name: old}, [target], reads, container_keys=lambda path, source: set())
+    assert found[old.name].method == resolver.ASSET_PATH and found[old.name].targets == [target]
+    whole = resolver.generic({old.name: old}, [target], Readers(), container_keys=lambda path, source: set())
+    assert whole[old.name].method == resolver.NAME_CRC
+
+
 def test_another_builds_files_update_the_parts_holding_their_asset_paths_whatever_their_date():
     text, page = mobile("2025-07-02", "textassets"), mobile("2025-07-02", "textures")
     paths = {**HELD, text: HELD[SKEL], page: HELD[PAGE]}

@@ -556,7 +556,10 @@ def test_replacement_precedence_cab_match_old_release_and_ambiguity(checks, monk
     targets = [first, second]
     assert e.library._replacements({source.name: source}, targets, pin) == {first: source}
     different_crc = source.name.rsplit('_', 1)[0] + '_1.bundle'
-    assert e.library._replacements({different_crc: source}, targets, pin) == {first: source}
+    # The name without the CRC names the part; only a file of the part's structure is its current release.
+    assert e.library._replacements({different_crc: source}, targets, pin) == {}
+    built_on_first = e.register(make_mod(first, e.tmp / 'same', payload=b'built on first'), cab='cab-a')
+    assert e.library._replacements({different_crc: built_on_first}, targets, pin) == {first: built_on_first}
     renamed = different_crc.replace('2026-01-01', '2025-01-01')
     assert e.library._replacements({renamed: source}, targets, pin) == {second: source}
     assert not e.library._check_group({renamed: source}, pin)['outdated']
@@ -753,3 +756,71 @@ def test_a_bundle_summary_gives_what_the_check_read_and_loads_nothing_new():
     assert summary["unity"] and all(version.count(".") == 1 for version in summary["unity"])
     assert summary["cabs"] and all(name.startswith("cab-") for name in summary["cabs"])
     assert isinstance(summary["references"], int)
+
+
+def test_a_bundles_structure_ignores_content_and_tells_a_rebuild(tmp_path, monkeypatch):
+    from bmpt.library import integrity
+
+    def contents(layout=((1, 142), (2, 49), (3, 28)), externals=("cab-shared", "cab-material"), cab="cab-a"):
+        return integrity.Contents(files={cab}, layout={cab: tuple(layout)}, externals={cab: tuple(externals)})
+
+    bundles = {
+        "official": contents(),
+        "mod": contents(),  # a mod differs from its part in content only
+        "added": contents(layout=((1, 142), (2, 49), (3, 28), (4, 1))),
+        "removed": contents(layout=((1, 142), (2, 49))),
+        "retyped": contents(layout=((1, 142), (2, 49), (3, 213))),
+        "dependency": contents(externals=("cab-shared", "cab-rebuilt-material")),
+        "order": contents(externals=("cab-material", "cab-shared")),
+        "cab": contents(cab="cab-b"),
+    }
+    paths = {}
+    for name in bundles:
+        paths[name] = tmp_path / f"{name}.bundle"
+        paths[name].write_bytes(name.encode())
+    monkeypatch.setattr(integrity, "metadata", lambda path, **kwargs: bundles[path.stem])
+    inspection = integrity.Inspection()
+    structure = inspection.structure(paths["official"])
+    assert inspection.structure(paths["mod"]) == structure
+    for rebuilt in ("added", "removed", "retyped", "dependency", "order", "cab"):
+        assert inspection.structure(paths[rebuilt]) != structure, rebuilt
+
+
+@pytest.mark.skipif(not Path(os.environ.get("BAMT_TEST_GAME_DIR") or "/nonexistent").is_dir(),
+                    reason="Set BAMT_TEST_GAME_DIR to a verified official view")
+def test_an_official_parts_structure_survives_an_edit_and_not_a_dropped_object(tmp_path):
+    import UnityPy
+
+    from bmpt.library import integrity
+
+    folder = Path(os.environ["BAMT_TEST_GAME_DIR"]) / "BlueArchive_Data/StreamingAssets/PUB/Resource/GameData/Windows"
+    # the smallest part holding content a mod replaces
+    parts = sorted(folder.glob("assets-_mx-spinecharacters-ch0100_spr-_mxdependency-*_assets_all_*.bundle"),
+                   key=lambda item: item.stat().st_size)
+    for path in parts:
+        kinds = {obj.type.name for obj in UnityPy.load(str(path)).objects}
+        if kinds & {"TextAsset", "Texture2D"}:
+            break
+    structure = integrity.Inspection().structure(path)
+    assert structure[0] and structure[1]
+
+    def saved(name, change):
+        env = UnityPy.load(str(path))
+        change(env)
+        result = tmp_path / name
+        result.write_bytes(env.file.save())
+        return result
+
+    def edit(env):
+        obj = next(obj for obj in env.objects if obj.type.name in ("TextAsset", "Texture2D"))
+        tree = obj.read_typetree()
+        tree["m_Name"] += "_mod"
+        obj.save_typetree(tree)
+
+    def drop(env):
+        obj = next(obj for obj in env.objects if obj.type.name in ("TextAsset", "Texture2D"))
+        del obj.assets_file.objects[obj.path_id]
+        obj.assets_file.mark_changed()
+
+    assert integrity.Inspection().structure(saved("mod.bundle", edit)) == structure
+    assert integrity.Inspection().structure(saved("rebuilt.bundle", drop)) != structure
