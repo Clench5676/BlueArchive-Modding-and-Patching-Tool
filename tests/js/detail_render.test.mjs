@@ -897,6 +897,7 @@ test("student aliases lead the existing name band, keep the variant's original, 
       const invalidated = invalidations;
       await walk(hosts.popup).find((el) => el.dataset.action === "ok").click(); await flush();
       assert.equal(part("Label_Name").getAttribute("aria-label"), "Changed name");
+      assert.equal(part("Label_Name").children.length, 0, "a name that fits never ends in an ellipsis");
       assert.equal(rpcRequests.findLast((r) => r.method === "aliases.set").params.variant, "ibuki_dress");
       assert.deepEqual(base.custom, ["Original nickname"]);
       assert.equal(invalidations, invalidated + 1, "roster will reload aliases and name order");
@@ -905,6 +906,7 @@ test("student aliases lead the existing name band, keep the variant's original, 
       await walk(hosts.popup).find((el) => el.dataset.action === "ok").click(); await flush();
       assert.equal(part("Label_Name").getAttribute("aria-label"), original);
       assert.equal(part("Label_OriginalName"), undefined);
+      assert.equal(part("Label_Name").children[0]?.style.textOverflow, "ellipsis", "a name beyond the room still ends in an ellipsis");
       await showPortrait(t, "ibuki");
       assert.equal(part("Label_Name").getAttribute("aria-label"), "Original nickname");
       Detail.hide();
