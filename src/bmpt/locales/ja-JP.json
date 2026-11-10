@@ -107,6 +107,7 @@
 			"optimizedGo": "最適化済み Mod を表示",
 			"optimizedName": "{name} - 最適化版",
 			"optimizeUnneeded": "最適化不要",
+			"optimizeNoGain": "利用できる物理最適化なし",
 			"optimizeDone": "最適化してライブラリに追加済み"
 		},
 		"visual": {

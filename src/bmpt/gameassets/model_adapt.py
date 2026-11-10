@@ -26,7 +26,9 @@ own:
 - the hem (:func:`hems`, rules in ``model_hems``): cloth around the legs that stays rigid gets new skin weights on the
   pelvis, thighs and calves, or (Rule B, ``model_skirts``) its skirt chains become new bones of the slot with rotation
   curves in the slot's clips, by the rule that keeps the legs inside best under the slot's own clips within the slot's
-  own stretch range; rigid weights stay where no rule does better;
+  own stretch range; rigid weights stay where no rule does better. Optimize Physics (``physics``) also judges the
+  leg-anchor groups set to ``follow`` again: the rules are built as if they were rigid too and must beat the follow
+  result by the same measure;
 - the halo (:func:`halo_of`, BL-131), for another student's costume only (``adapt``'s ``halo``): the source's halo mesh,
   materials and textures are added like the costume's and the slot's halo renderer draws them where the source draws
   its own, its follower offset taken from the source; a source without a halo hides the slot's. Any other halo shape
@@ -39,6 +41,7 @@ The caller supplies official copies of the files (``adapt``'s ``index``) and sav
 from __future__ import annotations
 
 import copy
+import dataclasses
 import logging
 import math
 import random
@@ -949,6 +952,7 @@ HEM_RULES = (("blend", 0.5), ("short", 0.5), ("short", 0.7), ("short", 1.0), ("f
 RAMPS = {"blend": (1.0, (1.0, 2.0)), "short": (0.3, (0.9, 1.3))}  # rise in thigh lengths, thigh -> calf change
 LEG_KEYS = ("pelvis", "thigh L", "thigh R", "calf L", "calf R", "foot L", "foot R")
 FIT_KEYS = LEG_KEYS[:5]
+REGROUP = "regroup "  # Optimize Physics: a rule built as if the leg-anchor groups set to ``follow`` were rigid
 
 
 def legs_of(skeleton: Skeleton) -> dict[str, int] | None:
@@ -971,6 +975,13 @@ def lower_anchors(skeleton: Skeleton, legs: Mapping[str, int]) -> set[int]:
         thigh = legs[f"thigh {side}"]
         out |= {thigh} | {j for j in skeleton.descendants(thigh) if skeleton.nodes[j].name.startswith("Bip001")}
     return out
+
+
+def followed_groups(plan_: Plan, skeleton: Skeleton, anchors: set[int]) -> dict[int, list[int]]:
+    """The leg-anchor groups (``anchors``: :func:`lower_anchors`) that the group choice set to ``follow``, with their
+    secondary bones: Optimize Physics judges them again by pass-through (:func:`hems`)."""
+    return {anchor: members for anchor, members in plan_.groups.items() if members and anchor in anchors
+            and plan_.choices.get(skeleton.nodes[anchor].name) == "follow"}
 
 
 def chain_root(skeleton: Skeleton, node: int) -> int:
@@ -1058,7 +1069,9 @@ class Skirt:
 class Hems:
     """What became of the hem: the rule chosen ("rigid" when nothing moves), why nothing was measured, the stretch
     limit, the scores (rigid first) and, per source part, the rewritten vertices (rows, slot nodes, weights); for
-    Rule B (rule "skirt" or "skirt smooth") the new bones."""
+    Rule B (rule "skirt" or "skirt smooth") the new bones. With Optimize Physics a rule may carry the ``REGROUP``
+    prefix: it was built as if the leg-anchor groups the group choice set to ``follow`` were rigid (``regrouped``),
+    and the first score, the default build's, is the baseline it had to beat."""
 
     rule: str = "rigid"
     note: str = ""
@@ -1066,6 +1079,7 @@ class Hems:
     scores: list[hm.Score] = field(default_factory=list)
     parts: list[tuple[np.ndarray, np.ndarray, np.ndarray] | None] = field(default_factory=list)
     skirt: Skirt | None = None
+    regrouped: bool = False
 
     def score(self, rule: str) -> hm.Score | None:
         return next((s for s in self.scores if s.rule == rule), None)
@@ -1192,7 +1206,12 @@ def hems(target: Costume, source: Costume, plan_: Plan, t_clips: list[Any], s_cl
     """Rule A of BL-118: new skin weights for the cloth the group choice left rigid around the legs, and, with
     ``physics`` (Optimize Physics, BL-132), Rule B of BL-124: the skirt chains as new bones turned by the legs in every
     frame; picked by measurement under the slot's own clips (see ``model_hems`` and ``model_skirts``). ``writable``:
-    per source part, whether its mesh's skin can be rewritten."""
+    per source part, whether its mesh's skin can be rewritten.
+
+    With ``physics`` the leg-anchor groups the group choice set to ``follow`` are judged again by pass-through: both
+    rules are also built as if those groups were rigid (named with the ``REGROUP`` prefix), and ``model_hems.choose``
+    compares them with the follow result, the first score, which they must beat within the same stretch ceiling. A build
+    without ``physics`` never looks at them."""
     ts, ss = target.skeleton, source.skeleton
     t_legs, s_legs = legs_of(ts), legs_of(ss)
     if t_legs is None or s_legs is None:
@@ -1200,14 +1219,22 @@ def hems(target: Costume, source: Costume, plan_: Plan, t_clips: list[Any], s_cl
     s_anchors = lower_anchors(ss, s_legs)
     rigid = sorted({n for anchor, members in plan_.groups.items() if anchor in s_anchors
                     and plan_.choices.get(ss.nodes[anchor].name) == "rigid" for n in members})
+    followed = followed_groups(plan_, ss, s_anchors) if physics else {}
     flat = flatten(source, ss.world())  # the source's space, for the fit to its own clips
     on_rigid = np.isin(flat.joints, rigid) & (flat.weights > 0)
     share = (flat.weights * on_rigid).sum(axis=1)
-    if not (share > 1e-6).any():
+    # Optimize Physics: the same cloth with the followed groups rigid as well
+    on_regroup = np.isin(flat.joints, sorted({*rigid, *(n for members in followed.values() for n in members)})) \
+        & (flat.weights > 0) if followed else None
+    share_regroup = (flat.weights * on_regroup).sum(axis=1) if followed else share
+    if not (share > 1e-6).any() and not (share_regroup > 1e-6).any():
         return Hems(note="no rigid cloth")
     rows_ok = np.concatenate([np.full(len(skin.vertices), ok) for skin, ok in zip(source.skins, writable)])
     on_rigid &= rows_ok[:, None]
     share = np.where(rows_ok, share, 0.0)
+    if followed:
+        on_regroup &= rows_ok[:, None]
+        share_regroup = np.where(rows_ok, share_regroup, 0.0)
 
     # the slot's legs at rest; heights along Unity's vertical (+Y of the prefab's space), from the pelvis
     t_rest = ts.world()
@@ -1248,35 +1275,63 @@ def hems(target: Costume, source: Costume, plan_: Plan, t_clips: list[Any], s_cl
 
     # dense weights per slot node, with the rigid part apart
     mapped = np.vectorize(lambda n: plan_.mapping.get(int(n), 0), otypes=[int])(flat.joints)
-    columns = sorted(set(mapped[flat.weights > 0].tolist()) | {t_legs[k] for k in FIT_KEYS})
+    used = set(mapped[flat.weights > 0].tolist())
+    if followed:  # the followed groups' secondary bones on the anchor's slot node, as a rigid group is mapped
+        regroup = {**plan_.mapping, **{n: plan_.mapping[anchor] for anchor, members in followed.items() for n in members}}
+        mapped_regroup = np.vectorize(lambda n: regroup.get(int(n), 0), otypes=[int])(flat.joints)
+        used |= set(mapped_regroup[flat.weights > 0].tolist())
+    columns = sorted(used | {t_legs[k] for k in FIT_KEYS})
     index = {n: k for k, n in enumerate(columns)}
-    cols = np.vectorize(index.get, otypes=[int])(np.where(flat.weights > 0, mapped, columns[0]))
+    column_of = lambda nodes: np.vectorize(index.get, otypes=[int])(np.where(flat.weights > 0, nodes, columns[0]))  # noqa: E731
+    cols = column_of(mapped)
     dense = hm.densify(cols, flat.weights, len(columns))
     rigid_part = hm.densify(cols, np.where(on_rigid, flat.weights, 0.0), len(columns))
 
     # the rules: Rule A where a part's skin can be rewritten, Rule B (its smooth variant likewise)
     rules: list[tuple[str, np.ndarray, ms.Solver | None]] = [("rigid", dense, None)]
-    if (share > 1e-6).any():
+    if (share > 1e-6).any() or (followed and (share_regroup > 1e-6).any()):
         height = (hip - (sv - at["pelvis"]) @ up) / (hip - knee)
         near = 1 - hm.smoothstep(hip_width, 2 * hip_width, axis)
         sigma = hip_width / 2
         close_l, close_r = np.exp(-(left / sigma) ** 2), np.exp(-(right / sigma) ** 2)
         ramp_columns = [index[t_legs[k]] for k in ("thigh L", "thigh R", "calf L", "calf R")]
         fit_columns = [index[t_legs[k]] for k in FIT_KEYS]
-        fitted = fit_own(ss, flat, on_rigid, share, s_legs, s_clips)
-        for name, alpha in HEM_RULES:
-            if name == "fit":
-                if fitted is None:
-                    continue
-                weights = hm.reweight(dense, rigid_part, alpha * (share > 1e-6), fitted, fit_columns)
-            else:
-                top, change = RAMPS[name]
-                fraction, moves = hm.ramp(height, near, close_l, close_r, alpha, top, change)
-                weights = hm.reweight(dense, rigid_part, fraction, moves, ramp_columns)
-            rules.append((f"{name} {alpha}", weights, None))
+
+        def rule_a(base: np.ndarray, part: np.ndarray, covered_share: np.ndarray, on: np.ndarray, prefix: str):
+            fitted = fit_own(ss, flat, on, covered_share, s_legs, s_clips)
+            out = []
+            for name, alpha in HEM_RULES:
+                if name == "fit":
+                    if fitted is None:
+                        continue
+                    weights = hm.reweight(base, part, alpha * (covered_share > 1e-6), fitted, fit_columns)
+                else:
+                    top, change = RAMPS[name]
+                    fraction, moves = hm.ramp(height, near, close_l, close_r, alpha, top, change)
+                    weights = hm.reweight(base, part, fraction, moves, ramp_columns)
+                out.append((f"{prefix}{name} {alpha}", weights, None))
+            return out
+
+        if (share > 1e-6).any():
+            rules += rule_a(dense, rigid_part, share, on_rigid, "")
     skirt_rules, skirt = _skirt_candidates(ts, ss, plan_, flat, sv, dominant, cloth, all_legs, t_legs, s_legs,
                                            mapped, columns, rows_ok) if physics else ([], None)
     rules += [(c.rule, c.weights, c.solver) for c in skirt_rules]
+    if followed:
+        # the same rules with the followed groups rigid: the pelvis group's chains only where it was followed
+        cols_regroup = column_of(mapped_regroup)
+        dense_regroup = hm.densify(cols_regroup, flat.weights, len(columns))
+        part_regroup = hm.densify(cols_regroup, np.where(on_regroup, flat.weights, 0.0), len(columns))
+        if (share_regroup > 1e-6).any():
+            rules += rule_a(dense_regroup, part_regroup, share_regroup, on_regroup, REGROUP)
+        if s_legs["pelvis"] in followed:
+            lowered = dataclasses.replace(plan_, mapping=regroup, choices={
+                **plan_.choices, **{ss.nodes[anchor].name: "rigid" for anchor in followed}})
+            again, again_skirt = _skirt_candidates(ts, ss, lowered, flat, sv, dominant, cloth, all_legs, t_legs, s_legs,
+                                                   mapped_regroup, columns, rows_ok)
+            again = [dataclasses.replace(c, rule=REGROUP + c.rule) for c in again]
+            skirt_rules, skirt = skirt_rules + again, again_skirt if skirt is None else skirt
+            rules += [(c.rule, c.weights, c.solver) for c in again]
     if len(rules) == 1:
         return Hems(note="skin not writable")
 
@@ -1326,14 +1381,18 @@ def hems(target: Costume, source: Costume, plan_: Plan, t_clips: list[Any], s_cl
     joints4, weights4 = four[best.rule]
     chosen = next(weights for rule, weights, _ in rules if rule == best.rule)
     bounds = [*flat.starts, len(sv)]
-    if best.rule.startswith("skirt"):
+    result.regrouped = best.rule.startswith(REGROUP)
+    if best.rule.removeprefix(REGROUP).startswith("skirt"):
         candidate = next(c for c in skirt_rules if c.rule == best.rule)
         result.skirt = skirt
         skirt.solver = candidate.solver
         skirt.solved = {key: value for (rule, key), value in solved.items() if rule == best.rule}
         nodes = np.array(columns + [skirt.node(k) for k in range(len(skirt.sources))])
-        plain = skirt_rules[0].weights
-        changed = np.abs(chosen - plain).max(axis=1) > 1e-9  # the smooth variant rewrites the blended vertices
+        if result.regrouped:  # every vertex that differs from the follow result is written: the groups' other bones too
+            changed = np.abs(chosen - np.pad(dense, ((0, 0), (0, len(skirt.sources))))).max(axis=1) > 1e-9
+        else:
+            plain = skirt_rules[0].weights
+            changed = np.abs(chosen - plain).max(axis=1) > 1e-9  # the smooth variant rewrites the blended vertices
     else:
         nodes = np.array(columns)
         changed = np.abs(chosen - dense).max(axis=1) > 1e-9

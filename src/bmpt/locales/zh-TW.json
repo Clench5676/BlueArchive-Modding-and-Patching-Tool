@@ -107,6 +107,7 @@
 			"optimizedGo": "查看已優化 Mod",
 			"optimizedName": "{name} - 優化版",
 			"optimizeUnneeded": "無需優化",
+			"optimizeNoGain": "暫無可用的物理優化",
 			"optimizeDone": "已優化並加入 Mod 倉庫"
 		},
 		"visual": {

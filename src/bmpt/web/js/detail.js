@@ -1538,7 +1538,8 @@ async function runOptimize(c, v = variant()) {
   let result = null;
   const ok = await job("model.optimize", { variant: v.key, source, name: shown }, { name: shown, onDone: (r) => { result = r; } });
   if (!ok || !open || switchPopupPage !== pageToken || $("popup").hidden) return;
-  if (result?.unneeded) await message({ title: T("model.optimize"), lines: [T("model.optimizeUnneeded")], ok: T("picker.ok") });
+  // nothing to build: the official model needs none; a costume that no physics rule improves says it has no gain (BL-131)
+  if (result?.unneeded) await message({ title: T("model.optimize"), lines: [T(result.reason === "no_gain" ? "model.optimizeNoGain" : "model.optimizeUnneeded")], ok: T("picker.ok") });
   else if (result?.mod) pending = `m:${result.mod}`;
   await renderPopup($("popup").querySelector(".popup-cards")?.scrollTop || 0);
 }

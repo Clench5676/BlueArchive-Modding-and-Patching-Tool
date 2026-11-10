@@ -255,3 +255,37 @@ test("another student's card is drawn like any card: no grey filter anywhere in 
   assert.ok(!/shade:\s*true|\bSHADE\b|\.shade\b/.test(read("detail.js")), "detail.js");
   assert.ok(!/shade:\s*true|\bSHADE\b|\.shade\b/.test(read("popup.js")), "popup.js");
 });
+
+// --- Optimize Physics answers (BL-131): the official model needs none; a costume no physics rule improves has no gain ---
+const LOCALE_FILES = ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"];
+const ui = (locale) => JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8")).webui;
+async function optimizeAnswer(result, locale = "en-US") {
+  const web = ui(locale), messages = [];
+  const ctx = vm.createContext({ busy: false, open: true, switchPopupPage: 1, pageToken: 1, pending: "v:x", variant: () => ({ key: "slot" }),
+    shortName: () => "Slot", candidateLabel: () => "Costume", $: () => ({ hidden: false, querySelector: () => null }),
+    T: (key) => key.split(".").reduce((o, part) => o?.[part], web), renderPopup: async () => {},
+    message: async (opts) => { messages.push(opts); }, job: async (_method, _params, { onDone }) => { onDone(result); return true; } });
+  const start = source.indexOf("const optimizeSource ="), end = source.indexOf("\n", start);
+  vm.runInContext(`${source.slice(start, end)}\n${functionSource("runOptimize")}`, ctx);
+  await ctx.runOptimize({ kind: "variant", variant: { key: "costume" }, key: "v:costume" });
+  return { messages, pending: ctx.pending, web };
+}
+
+for (const locale of LOCALE_FILES) test(`Optimize Physics says why there is nothing to build, in ${locale}`, async () => {
+  const official = await optimizeAnswer({ unneeded: true, reason: "official" }, locale);
+  assert.deepEqual(official.messages.map((m) => [...m.lines]), [[official.web.model.optimizeUnneeded]]);
+  const noGain = await optimizeAnswer({ unneeded: true, reason: "no_gain" }, locale);
+  assert.deepEqual(noGain.messages.map((m) => [...m.lines]), [[noGain.web.model.optimizeNoGain]]);
+  assert.notEqual(noGain.web.model.optimizeNoGain, noGain.web.model.optimizeUnneeded);
+  const older = await optimizeAnswer({ unneeded: true }, locale);
+  assert.deepEqual(older.messages.map((m) => [...m.lines]), [[older.web.model.optimizeUnneeded]], "no reason: the old answer");
+  const made = await optimizeAnswer({ mod: "copy" }, locale);
+  assert.deepEqual([made.messages.length, made.pending], [0, "m:copy"]);
+});
+
+test("the new Optimize Physics answer reads as agreed in zh-CN and en-US", () => {
+  assert.equal(ui("zh-CN").model.optimizeNoGain, "暂无可用的物理优化");
+  assert.equal(ui("en-US").model.optimizeNoGain, "No physics optimization available");
+  assert.equal(ui("zh-CN").model.optimizeUnneeded, "无需优化", "the official model's answer is unchanged");
+  assert.equal(ui("en-US").model.optimizeUnneeded, "No optimization needed");
+});

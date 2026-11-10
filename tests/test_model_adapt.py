@@ -551,6 +551,50 @@ def test_official_cross_costume_carries_the_source_halo(view, tmp_path):
         list(mpos([official.tree(source.follower)["TargetRelativePosition"][k] for k in "xyz"])))
 
 
+def test_only_leg_anchor_groups_set_to_follow_are_judged_again_by_pass_through():
+    """BL-131: Optimize Physics judges the leg-anchor groups the group choice set to follow again; a rigid group, a
+    group of another Biped bone and an empty group are not among them."""
+    skeleton = _skeleton([("Bip001", 0, (0, 0, 0), (0, 0, 0, 1)), ("Bip001 Pelvis", 1, (0, 1, 0), (0, 0, 0, 1)),
+                          ("Bip001 L Thigh", 2, (0.1, 0, 0), (0, 0, 0, 1)), ("Bip001 R Thigh", 2, (-0.1, 0, 0), (0, 0, 0, 1)),
+                          ("Bip001 Spine", 2, (0, 0.2, 0), (0, 0, 0, 1))])
+    pelvis, left, right, spine = (skeleton.first(n) for n in ("Bip001 Pelvis", "Bip001 L Thigh", "Bip001 R Thigh", "Bip001 Spine"))
+    plan = ma.Plan({}, {"Bip001 Pelvis": "follow", "Bip001 L Thigh": "rigid", "Bip001 R Thigh": "follow",
+                        "Bip001 Spine": "follow"}, 1.0, 1.0, {pelvis: [10, 11], left: [12], right: [], spine: [13]})
+    anchors = {pelvis, left, right}
+    assert ma.followed_groups(plan, skeleton, anchors) == {pelvis: [10, 11]}
+    assert ma.followed_groups(plan, skeleton, anchors | {spine}) == {pelvis: [10, 11], spine: [13]}
+
+
+@official
+def test_optimize_physics_judges_a_followed_skirt_again_by_pass_through(view):
+    """BL-131: Azusa <- Yukino's NPC model. The group choice sets Yukino's skirt (18 bones off the pelvis) to follow
+    Azusa's own skirt chains, which leaves nothing rigid: the build without Optimize Physics measures nothing, and
+    the skirt passes through the legs in 19 % of the measured frames' covered samples (Vital_Death 40 %). With
+    ``physics`` the pelvis group is judged again as if it were rigid: a rule of the regrouped build (the skirt as new
+    bones) beats the follow result within the same stretch ceiling and the no-clip-worse rule."""
+    from ba_modding_toolkit.bundle import Bundle
+
+    files, index = view
+    slot = _slot(files, "azusa_original")
+    sources = [p for p in files if re.match(r"character-ch0171_enemy-_mxload", p.name)]
+
+    def build(physics):
+        return ma.adapt(index=index, resolver=None, target_files=slot, target_dev="azusa_original", source_files=sources,
+                        source_dev="ch0171_enemy", open_writable=Bundle.load, strict=False, halo=True, physics=physics).hems
+
+    default = build(False)
+    assert (default.rule, default.note, default.skirt, default.regrouped) == ("rigid", "no rigid cloth", None, False)
+    hems = build(True)
+    assert hems.regrouped and hems.skirt is not None and hems.rule.startswith(ma.REGROUP + "skirt"), hems.summary()
+    follow, chosen = hems.scores[0], hems.score(hems.rule)
+    assert follow.rule == "rigid" and follow.mean > 10  # the baseline: Yukino's skirt follows Azusa's, through her legs
+    assert chosen.mean < follow.mean
+    assert all(chosen.deep[clip] <= follow.deep[clip] + 5 for clip in follow.deep)
+    assert chosen.stretch <= max(hems.limit, follow.stretch)
+    # her skirt chains become bones of the slot, and the vertices that left the followed bones are written
+    assert hems.skirt.clips >= 20 and any(change is not None for change in hems.parts)
+
+
 @official
 def test_official_cross_costume_without_a_halo_hides_the_slots(view, tmp_path):
     """BL-131: another student's costume from a model without a halo (CH9999) hides the slot's: its renderer is turned
@@ -800,7 +844,7 @@ def test_official_costume_apply_restore_and_preview_on_clones(tmp_path):
         library.apply("hina", "variant:hina", kind="model")
 
     # Optimize Physics (BL-132): the switch above built Rule A; the action keeps a Rule B build as a model mod, once
-    assert library.optimize_costume("hina", "official", "Hina") == {"unneeded": True}
+    assert library.optimize_costume("hina", "official", "Hina") == {"unneeded": True, "reason": "official"}
     made = library.optimize_costume("hina", "variant:np0009", "Pajamas")
     entry = next(m for m in library.mods() if m.id == made["mod"])
     assert (entry.kind, entry.target, entry.optimized_from, entry.label_base) == ("model", "hina", "variant:np0009", "Pajamas")

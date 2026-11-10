@@ -1014,11 +1014,12 @@ def test_another_students_costume_is_applied_past_the_stretch_limit(model_env, m
     assert library.catalog.variant('hina').family != library.catalog.variant('hoshino').family
     assert library.catalog.variant('hoshino_swimsuit').family == library.catalog.variant('hoshino').family
     built = []
+    gain = {'physics': True}  # whether the physics build chose a rule (a skirt, or a regrouped rule)
 
     def stage(self, other, targets, directory, log, pin, *, preview=False, report=None, physics=False, cross=False):
         built.append((other, preview, physics, cross))
         if report is not None and physics:
-            report['skirt'] = True
+            report['physics'] = gain['physics']
         out = make_mod(targets[0], directory / 'output', payload=b'costume ' + other.encode())
         return {target: out if target == targets[0] else self._official_or_current(target, pin) for target in targets}
 
@@ -1043,6 +1044,11 @@ def test_another_students_costume_is_applied_past_the_stretch_limit(model_env, m
     assert library.costume_preview('hoshino', 'hina') and built.pop() == ('hina', True, False, True)
     made = library.optimize_costume('hoshino', 'variant:hina', 'Hina')
     assert made['mod'] and built.pop() == ('hina', False, True, True)
+    # nothing to build: the official model needs none, a costume that no physics rule improves says so (reasons apart)
+    assert library.optimize_costume('hoshino', 'official', 'Hoshino') == {'unneeded': True, 'reason': 'official'}
+    gain['physics'] = False
+    assert library.optimize_costume('hina', 'variant:hoshino', 'Hoshino') == {'unneeded': True, 'reason': 'no_gain'}
+    assert built.pop() == ('hoshino', False, True, True) and not [m for m in library.mods() if m.target == 'hina']
     library.restore('hoshino', kind='model')
     library._save_verdict(library._costume_signature('hoshino', 'hina', pin)[0], False, 'static model')
     with pytest.raises(ServiceError, match='source_unsupported'):

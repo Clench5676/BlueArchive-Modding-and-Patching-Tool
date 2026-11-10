@@ -824,7 +824,8 @@ def build_api(s: Services) -> RpcRegistry:
     def model_optimize(variant: str, source: str, name: str = "") -> str:
         """A job running Optimize Physics on a variant's 3D model from one source (BL-132): "official" or
         "variant:<key>", another variant's costume. Its result is {"mod": id}, the copy kept in the library, or
-        {"unneeded": true}. ``name`` is the source as the screen shows it, the copy's name."""
+        {"unneeded": true, "reason": "official" | "no_gain"}. ``name`` is the source as the screen shows it, the copy's
+        name."""
         if not isinstance(variant, str) or not variant or not isinstance(source, str) or not source or len(source) > 264:
             raise ServiceError("bad_params", key="source")
         if not isinstance(name, str) or len(name) > 200:
