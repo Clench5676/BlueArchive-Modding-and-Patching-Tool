@@ -455,7 +455,7 @@ def test_official_costume_takes_its_own_materials_on_a_body_drawn_from_two_mater
 
 
 def _cross_build(view, tmp_path, source):
-    """Azusa's slot carrying ``source``'s costume as another student's (BL-131: non-strict, with its halo), saved with
+    """Azusa's slot carrying ``source``'s costume as another student's (BL-131: with its halo), saved with
     the CRC fix: the written files, the CAB index over them, the official graph and the read-back graph."""
     from ba_modding_toolkit.bundle import Bundle
     from ba_modding_toolkit.models import SaveOptions
@@ -468,7 +468,7 @@ def _cross_build(view, tmp_path, source):
     slot = _slot(files, "azusa_original")
     sources = [p for p in files if re.match(rf"character-{source}-_mxload", p.name)]
     result = ma.adapt(index=index, resolver=None, target_files=slot, target_dev="azusa_original", source_files=sources,
-                      source_dev=source, open_writable=Bundle.load, strict=False, halo=True)
+                      source_dev=source, open_writable=Bundle.load, halo=True)
     out = tmp_path / "out"
     out.mkdir()
     for path, bundle in result.changed.items():
@@ -580,7 +580,7 @@ def test_optimize_physics_judges_a_followed_skirt_again_by_pass_through(view):
 
     def build(physics):
         return ma.adapt(index=index, resolver=None, target_files=slot, target_dev="azusa_original", source_files=sources,
-                        source_dev="ch0171_enemy", open_writable=Bundle.load, strict=False, halo=True, physics=physics).hems
+                        source_dev="ch0171_enemy", open_writable=Bundle.load, halo=True, physics=physics).hems
 
     default = build(False)
     assert (default.rule, default.note, default.skirt, default.regrouped) == ("rigid", "no rigid cloth", None, False)
@@ -644,30 +644,23 @@ def _locks_free() -> list[str]:
 
 
 @official
-@pytest.mark.parametrize("target,source,refused", [
+@pytest.mark.parametrize("target,source,unfit", [
     ("hina_original", "ch0230", False),    # built: Hina <- Hina (Dress)
-    ("hanako_original", "ch0209", True),   # refused for its stretch: Hanako <- Hanako (Swimsuit)
+    ("hanako_original", "ch0209", True),   # past the stretch limit: Hanako <- Hanako (Swimsuit)
 ])
-def test_official_costume_build_leaves_no_bundle_locked(view, target, source, refused):
+def test_official_costume_build_leaves_no_bundle_locked(view, target, source, unfit):
     """BL-122: a build opens many bundles, each under its path lock; it closes them all when it ends, built or
-    refused, so an export on another thread never waits for them (0.7.0-alpha.22 hung there)."""
+    refused, so an export on another thread never waits for them (0.7.0-alpha.22 hung there). Past-limit pairs build
+    as well (BL-138), with their stretch kept as information."""
     from ba_modding_toolkit.bundle import Bundle
-    from bmpt.errors import ServiceError
 
     files, index = view
     sources = [p for p in files if re.match(rf"character-{source}-_mxload", p.name)]
-    try:
-        ma.adapt(index=index, resolver=None, target_files=_slot(files, target), target_dev=target,
-                 source_files=sources, source_dev=source, open_writable=Bundle.load)
-        assert not refused
-    except ServiceError as error:
-        assert refused and error.params["source"] == "stretch"
+    result = ma.adapt(index=index, resolver=None, target_files=_slot(files, target), target_dev=target,
+                      source_files=sources, source_dev=source, open_writable=Bundle.load)
+    assert result.changed and result.plan.unfit == unfit
+    assert (result.plan.stretch > ma.stretch_limit(result.plan.own)) == unfit
     assert _locks_free() == []
-    if refused:  # built anyway for a preview, marked unfit
-        result = ma.adapt(index=index, resolver=None, target_files=_slot(files, target), target_dev=target,
-                          source_files=sources, source_dev=source, open_writable=Bundle.load, strict=False)
-        assert result.plan.unfit and result.plan.stretch > ma.stretch_limit(result.plan.own) and result.changed
-        assert _locks_free() == []
 
 
 def test_the_library_builds_a_costume_under_the_model_lock(monkeypatch, tmp_path):
@@ -679,7 +672,7 @@ def test_the_library_builds_a_costume_under_the_model_lock(monkeypatch, tmp_path
 
     def adapt(**kwargs):
         held.append(gameassets_service._MODEL_LOCK.locked())
-        raise model_adapt.refuse("stretch", adapted=9.0, own=5.0)
+        raise model_adapt.refuse("rest pose")
 
     library = object.__new__(service.ModLibrary)
     monkeypatch.setattr(model_adapt, "adapt", adapt)

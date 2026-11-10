@@ -679,7 +679,7 @@ class Plan:
     stretch: float
     own: float
     groups: dict[int, list[int]] = field(default_factory=dict)  # source Biped node -> its secondary bones
-    unfit: bool = False  # past the stretch limit: built for a preview only (``strict=False``), never applied
+    unfit: bool = False  # past the stretch limit: may clip or distort, still built and applied
     fit: Fit | None = None  # the shape the costume is bound and judged in (``Fit``)
 
 
@@ -849,8 +849,8 @@ def refit(target: Skeleton, source: Skeleton, flat: Flat, carried: Mapping[int, 
                float(changed.max()) if len(changed) else 0.0, size, list(flat.starts), shape)
 
 
-def plan(target: Costume, source: Costume, probes: list[list[np.ndarray]], *, strict: bool = True,
-         fit: bool = True, own_probes: list[list[np.ndarray]] | None = None) -> Plan:
+def plan(target: Costume, source: Costume, probes: list[list[np.ndarray]], *, fit: bool = True,
+         own_probes: list[list[np.ndarray]] | None = None) -> Plan:
     """The bone mapping with each group's choice, the shape the costume is bound in, and the checks of the rest pose
     and the stretch. The mapping (``map_bones``) takes the carriers of the unmatched bones from the source's own clips
     (``own_probes``, see ``carriers``) and leaves out the slot's hidden bones. With ``fit`` (the costume's geometry can
@@ -883,8 +883,6 @@ def plan(target: Costume, source: Costume, probes: list[list[np.ndarray]], *, st
             best = candidate
     assert best is not None
     logger.debug("Costume shapes judged: %s; %s chosen", ", ".join(judged), best.fit.shape if best.fit else "?")
-    if best.unfit and strict:
-        raise refuse("stretch", adapted=round(best.stretch, 2), own=round(own, 2))
     return best
 
 
@@ -1706,24 +1704,23 @@ def choose_prefab(prefabs: Mapping[str, Any], dev: str) -> str:
 
 
 def adapt(*, index: Mapping[str, Path], resolver: Callable | None, target_files: list[Path], target_dev: str,
-          source_files: list[Path], source_dev: str, open_writable: Callable[[Path], Any], strict: bool = True,
+          source_files: list[Path], source_dev: str, open_writable: Callable[[Path], Any],
           physics: bool = False, halo: bool = False) -> Result:
     """The changed bundles of ``target_files`` (the slot, official copies) carrying the costume of ``source_dev``'s
     model, whose prefab sits in ``source_files``. ``index`` maps CABs to files to read (the slot's own CABs to
     ``target_files``); ``resolver`` finds any other CAB. ``open_writable`` opens a slot file as an engine Bundle.
-    With ``strict=False`` a costume past the stretch limit is built anyway (``plan.unfit``): for a preview, or for
-    another student's costume, which is applied all the same (BL-131).
+    A costume past the stretch limit is built and applied all the same (``plan.unfit``).
     ``physics`` (Optimize Physics, BL-132) lets the hem rule also offer Rule B, the skirt chains as new bones.
     ``halo`` (another student's costume, BL-131) carries the source's halo onto the slot's (:func:`_halo_change`).
     The caller holds the model lock (``gameassets.service.model_lock``): the graph holds the path lock of every bundle
     it reads until it closes, like an export's."""
     with BundleGraph(index, resolver=resolver) as graph:
-        return _adapt(graph, index, target_files, target_dev, source_files, source_dev, open_writable, strict, physics,
+        return _adapt(graph, index, target_files, target_dev, source_files, source_dev, open_writable, physics,
                       halo)
 
 
 def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Path], target_dev: str,
-           source_files: list[Path], source_dev: str, open_writable: Callable[[Path], Any], strict: bool = True,
+           source_files: list[Path], source_dev: str, open_writable: Callable[[Path], Any],
            physics: bool = False, halo: bool = False) -> Result:
     target_prefabs = _model_prefabs(graph, [f for f in target_files if f.name.startswith("character-")])
     source_prefabs = _model_prefabs(graph, source_files)
@@ -1757,7 +1754,7 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
     probes = probe_poses(t_skeleton, t_clips)
     mesh_trees = [p.mesh.read_typetree() for p in s_costume]
     layouts = [mg.geometry_of(tree) for tree in mesh_trees]
-    result = plan(target, source, probes, strict=strict, fit=all(layout is not None for layout in layouts),
+    result = plan(target, source, probes, fit=all(layout is not None for layout in layouts),
                   own_probes=probe_poses(s_skeleton, s_clips))
     t_rest, s_rest = t_skeleton.world(), s_skeleton.world()
     # each part's vertices in its renderer's space at the source's rest, as they are bound (the costume's shape)
