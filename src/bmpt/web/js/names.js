@@ -1,6 +1,11 @@
 // The first saved variant alias is the display name; all saved aliases remain searchable and editable.
 export const customAliases = (variant) => (Array.isArray(variant?.custom) ? variant.custom.filter((a) => typeof a === "string" && a) : []);
 export const studentName = (variant, original) => customAliases(variant)[0] || original;
+// Another student's costume (BL-131): "Student (Costume)" in the language's brackets, the rule job progress names a
+// variant by (progress.subject). The student is the family's base name, or the user's alias of the variant; the
+// costume is always named, the original one too.
+export const crossName = (variant, student, costume, translate) =>
+  translate("progress.subject", { name: studentName(variant, student), parts: costume });
 
 // The backend's label is presentation text in the language of its last read.
 // Rebuild repair suffixes from stable names so a locale change needs no reread.
