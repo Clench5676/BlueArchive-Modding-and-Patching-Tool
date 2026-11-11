@@ -5,7 +5,7 @@
 // 20 apart); the other numbers of the card's anatomy (240, 109, the dotted line's size and place, 100, 19, 5) are kept as the rows
 // had them, and everything the App adds comes from the scales (ui-tokens.js).
 import { node, sprite, label, fitText, fitGroup } from "./ngui.js";
-import { PANEL, SPACE, CONTROL, SMALL_BUTTON, TYPE, COLOUR } from "./ui-tokens.js";
+import { PANEL, SPACE, CONTROL, XS_BUTTON, TYPE, COLOUR } from "./ui-tokens.js";
 import { container, grid, row as layoutRow, stack as layoutStack, toNode } from "./ui-grid.js";
 
 // UIPopup_Option_PC's card: 1552 wide (PANEL.padCard 58 each side), 240 high with one line of options, its dotted line (Common_Dotline,
@@ -101,12 +101,12 @@ export function radioRow(name, y, title, options, selected, onPick, { dim = fals
 }
 
 // --- a value with buttons on the right (folders, version, cache); long values wrap, never cut ---
-// The value takes the content box's left; the light-blue buttons (SMALL_BUTTON: 402 x 136, SPACE.m apart) stand right-aligned
+// The value takes the content box's left; the light-blue buttons (XS_BUTTON: 402 x 136, SPACE.m apart) stand right-aligned
 // on its right edge. Beside the value they leave it the content box less their pitches, and no fewer than four grid columns
 // (the least a path is read in); buttons that do not fit wrap to a second line, right-aligned as the first. Under the value
 // (below) the whole line is theirs. A value alone is at least TEXT_MIN high.
 const TEXT_MIN = SPACE.xxxl;
-const buttonPitch = SMALL_BUTTON.w + SPACE.m;
+const buttonPitch = XS_BUTTON.w + SPACE.m;
 const valueMin = () => grid(cardContent(0).inner).span(4).w;
 
 // how many buttons each line holds: [first line, second line, ...]
@@ -123,7 +123,7 @@ export const valueRoom = (count, below = false) => below ? cardContent(0).inner.
 // value the first line of buttons is centred on it; under it the lines of buttons follow the value, SPACE.l below. noteH: a note
 // (NOTE) of that height under the dotted line, the value and the buttons NOTE.gap under it.
 export function valueGeometry(count, textH, { below = false, noteH = 0 } = {}) {
-  const inner = cardContent(0).inner, lines = buttonLines(count, below), { w: bw } = SMALL_BUTTON, bh = CONTROL.buttonS.h;
+  const inner = cardContent(0).inner, lines = buttonLines(count, below), { w: bw } = XS_BUTTON, bh = CONTROL.buttonXS.h;
   const noteBox = noteH ? { x: inner.x, y: CARD.line + NOTE.top, w: inner.w, h: noteH } : null;
   const start = noteBox ? noteBox.y + noteBox.h + NOTE.gap : inner.y;
   const blockH = Math.max(textH, below || !count ? TEXT_MIN : bh);
@@ -159,7 +159,7 @@ export function valueGeometry(count, textH, { below = false, noteH = 0 } = {}) {
 // A row of `count` buttons `width` wide under the dotted line (the Export pair), SPACE.xxl apart and centred in the content box:
 // the card's height, the buttons' centres across (xs, NGUI space) and their line (y).
 export function buttonRowGeometry(count, width) {
-  const inner = cardContent(0).inner, bh = CONTROL.buttonS.h, h = inner.y + bh + SPACE.l;
+  const inner = cardContent(0).inner, bh = CONTROL.buttonXS.h, h = inner.y + bh + SPACE.l;
   const { boxes } = layoutRow(Array.from({ length: count }, () => ({ w: width, h: bh })), { x: inner.x, y: inner.y, w: inner.w, h: bh, gap: SPACE.xxl, justify: "center" });
   const frame = frameOf(h);
   return { h, xs: boxes.map((box) => toNode(box, 4, frame)[0]), y: toNode(boxes[0], 4, frame)[1], boxes };

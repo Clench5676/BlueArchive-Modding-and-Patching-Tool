@@ -4,6 +4,7 @@
 import * as Buttons from "./game-buttons.js";
 import * as NGUI from "./ngui.js";
 import * as Popup from "./popup.js";
+import { frameGeometry } from "./popup-frames.js";
 import { rpc, waitJob } from "./api.js";
 import { T, errorText, language } from "./i18n.js";
 import { notesFor } from "./release-notes.js";
@@ -82,10 +83,13 @@ export function check(host, info, { onCheck, onError, beforeShow, simulation = f
   return done;
 }
 
-// the offer's three captions (Label_Locale widgets) on the slanted 496-wide bodies: the popups' footer fit (popupFrame
-// applies the same to the three choices), a long one wraps to two lines before it shrinks, clear of the body's edges; all
-// three share one size
-export const offerCaptions = (widgets) => Popup.footerLabels(widgets, widgets.map((l) => l.text));
+// the offer's three captions (Label_Locale widgets) on the footer's bodies in the frame (FRAME_W wide, taken to the popup
+// frames' class): the popups' footer fit (popupFrame applies the same to the three choices), a long one wraps to two lines
+// before it shrinks, clear of the body's edges; all three share one size
+export function offerCaptions(widgets) {
+  const texts = widgets.map((l) => l.text), { kind, room } = Popup.footerLayout(texts, frameGeometry(FRAME_W).w);
+  return Popup.footerLabels(widgets, texts, { width: room, caption: kind.caption });
+}
 
 // the frame, 1700 wide, as high as its content needs: the light box where a message's lines start under the title, then Status
 // (96 high) and the Progress bar (20 high, the lowest content), and POPUP.clearance between that and the three buttons' tops

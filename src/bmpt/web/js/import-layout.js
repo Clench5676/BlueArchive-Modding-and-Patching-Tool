@@ -4,7 +4,7 @@ import { countNodes } from "./mod-counts.js";
 import { resizeButton } from "./button-layout.js";
 import { clone } from "./util.js";
 import { frameOutline, innerFrame } from "./row-thumbnail.js";
-import { SPACE, TYPE, LINE, CONTROL, LIST_ROW, SMALL_BUTTON } from "./ui-tokens.js";
+import { SPACE, TYPE, LINE, CONTROL, LIST_ROW, XS_BUTTON } from "./ui-tokens.js";
 import { row as layoutRow, stack as layoutStack, textItem, controlWidth, toNode } from "./ui-grid.js";
 
 const INVENTORY = "Inventory_ListControl";
@@ -233,18 +233,18 @@ export function importArtwork(ui, layouts) {
     // wrapping.
     buttonSize(captions, widths, { max = null, min = null } = {}) {
       const t = content("List_01/Btn_Receive"), w = ui.find(t, "Label_Locale").widgets.find((w) => "text" in w);
-      return ui.fitGroup(captions, max ?? w.fontSize, min ?? w.fontSize * 0.7, widths.map((width) => width - SMALL_BUTTON.fitInset), 2,
-        { maxH: t.widgets.find((x) => "sprite" in x).h_ - SMALL_BUTTON.boxInsetH })[0]?.fs;
+      return ui.fitGroup(captions, max ?? w.fontSize, min ?? w.fontSize * 0.7, widths.map((width) => width - XS_BUTTON.fitInset), 2,
+        { maxH: t.widgets.find((x) => "sprite" in x).h_ - XS_BUTTON.boxInsetH })[0]?.fs;
     },
     // A row control's caption matches the badge's screen size. Preserve the prefab's transforms. The width is a buttonS control's
-    // (controlWidth: the caption and CONTROL.buttonS.pad each side, the body's slice border included; 240 at least), in the
+    // (controlWidth: the caption and CONTROL.buttonXS.pad each side, the body's slice border included; 200 at least), in the
     // button's own units like the caption, then drawn at the prefab's scale and `scale`.
     controlSize(caption, scale) {
       const t = content("List_01/Btn_Receive"), node = ui.find(t, "Label_Locale"), body = t.widgets.find((w) => "sprite" in w);
       const sx = t.scale?.[0] ?? 1, sy = t.scale?.[1] ?? 1, lx = node.scale?.[0] ?? 1, ly = node.scale?.[1] ?? 1;
       const size = ROW_TEXT_SIZE * ROW_SCALE / (scale * sy * ly);
       const meta = ui.atlasIndex?.()[body.atlas || "Common"]?.[body.sprite];
-      return { width: controlWidth({ ...CONTROL.buttonS, fs: size }, caption, (text, fs) => ui.glyphWidth(text, fs) * lx) * sx * scale,
+      return { width: controlWidth({ ...CONTROL.buttonXS, fs: size }, caption, (text, fs) => ui.glyphWidth(text, fs) * lx) * sx * scale,
         height: BUTTON_BODY_H * scale, size, minHeight: ((meta?.borderTop || 0) + (meta?.borderBottom || 0)) * sy * scale };
     },
     // size: the row's shared caption size (buttonSize)
@@ -262,18 +262,18 @@ export function importArtwork(ui, layouts) {
         c.scale = c.scale.map(Math.abs);
       }
       const captionNode = ui.find(t, "Label_Locale");
-      const w = captionNode.widgets.find((w) => "text" in w), height = body.widgets.find((w) => "sprite" in w).h_ - SMALL_BUTTON.boxInsetH;
+      const w = captionNode.widgets.find((w) => "text" in w), height = body.widgets.find((w) => "sprite" in w).h_ - XS_BUTTON.boxInsetH;
       if (bodyHeight != null) {
         const lx = captionNode.scale?.[0] ?? 1, ly = captionNode.scale?.[1] ?? 1, bg = body.widgets.find((w) => "sprite" in w);
         const meta = ui.atlasIndex?.()[bg.atlas || "Common"]?.[bg.sprite];
-        // the caption keeps CONTROL.buttonS.pad clear on each side (the body's slice border is part of it)
-        const pad = CONTROL.buttonS.pad, room = (bg.w_ - 2 * pad) / lx;
+        // the caption keeps CONTROL.buttonXS.pad clear on each side (the body's slice border is part of it)
+        const pad = CONTROL.buttonXS.pad, room = (bg.w_ - 2 * pad) / lx;
         const f = ui.fitText(caption, size ?? w.fontSize, size ?? w.fontSize, room, 1);
         Object.assign(w, { text: f.text, fontSize: f.fs, w_: room, h_: bg.h_ / ly, pivot: 1 });
         captionNode.pos = [0, bg.h_ / 2 - inkDrop(w) * ly + ((meta?.borderBottom || 0) - (meta?.borderTop || 0)) / 2];
         return t;
       }
-      const fitRoom = width - SMALL_BUTTON.fitInset;
+      const fitRoom = width - XS_BUTTON.fitInset;
       if (size) {
         // the row's size: wrapped within the button at that size, whatever the prefab's own size is
         const f = ui.wrapText?.(caption, size, fitRoom, 2) ?? ui.fitText(caption, size, size, fitRoom, 2);

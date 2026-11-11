@@ -24,7 +24,7 @@ import { codeOf, noticeNames, withCode } from "./error-codes.js";
 import { withTimeout } from "./async.js";
 import { TEXT_VIEWER, frameClass, frameGeometry, popupContent } from "./popup-frames.js";
 import { boxHeight, statsBox, valueRoom } from "./stats-box.js";
-import { BACKDROP, CHIP, COLOUR, CONTROL, POPUP_FRAME, SPACE, TYPE, SMALL_BUTTON, STATS_BOX, captionMinimum } from "./ui-tokens.js";
+import { BACKDROP, CHIP, COLOUR, CONTROL, POPUP_FRAME, SPACE, TYPE, SMALL_BUTTON, XS_BUTTON, STATS_BOX, captionMinimum } from "./ui-tokens.js";
 import { DOT, RECRUIT, S, TAN10, clone, glyphsOf, hitButton, markedLabel, wrapPath } from "./util.js";
 
 import { container, grid, row, stack as layoutStack, textItem, toNode } from "./ui-grid.js";
@@ -239,11 +239,11 @@ export const FRAME_Y = POPUP_FRAME.frameY;
 // --- the footer: one set of numbers for every popup frame (UIPopup_Sort/Center/Popup/Btn) ---
 export const footerY = (h, control = CONTROL.buttonL) => FRAME_Y - h / 2 + POPUP_FRAME.footer.bottom + control.h / 2;
 export const footerTop = (h, n = 1) => footerY(h) + CONTROL.buttonL.h / 2;
-export function footerScale(n, w = Infinity, control = CONTROL.buttonL) {
+export function footerScale(n, w = Infinity, control = footerSize().control) {
   return n < 3 ? 1 : Math.min(1, (w - 2 * POPUP_FRAME.footer.side - POPUP_FRAME.footer.gap * (n - 1)) / n / control.minW);
 }
 export const footerGap = (n) => POPUP_FRAME.footer.gap;
-export function footerSlots(n, w, control = CONTROL.buttonL) {
+export function footerSlots(n, w, control = footerSize().control) {
   if (!n) return { scale: 1, xs: [] };
   const scale = footerScale(n, w, control);
   w = Number.isFinite(w) ? w : n * control.minW * scale + (n - 1) * footerGap(n);
@@ -251,21 +251,45 @@ export function footerSlots(n, w, control = CONTROL.buttonL) {
     { w, gap: footerGap(n), justify: "center" }).boxes;
   return { scale, xs: boxes.map(b => toNode(b, 4, { w, h: control.h, cx: 0, cy: 0 })[0]) };
 }
-const CAPTION = { fs: TYPE.display.fs, fsMin: TYPE.display.min, w: CONTROL.buttonL.minW - 2 * CONTROL.buttonL.pad,
+const CAPTION_L = { fs: TYPE.display.fs, fsMin: TYPE.display.min, w: CONTROL.buttonL.minW - 2 * CONTROL.buttonL.pad,
   lines: 2, h: BUTTON_TEXT_H };
-// The footer's sizes: "L", every popup's buttonL with display captions; "M", one size smaller (the buttonM control, its
-// caption 60 down to TYPE.body's floor), as the repair review has them; "S", two sizes smaller (the Settings value row's
-// small button, SMALL_BUTTON, 402 x 136, its caption 48 down to TYPE.body's floor), as the compatibility result has them
-// (owner, 2026-11-11: each one size down).
+// The footer's sizes: "L", the buttonL control with display captions (UIPopup_RaidEnterCheck's footer); "M", one size smaller
+// (the buttonM control, its caption 60 down to TYPE.body's floor); "S", two sizes smaller (the Settings value row's small
+// button, SMALL_BUTTON, 402 x 136, its caption 48 down to TYPE.body's floor). Every button went one size down (owner,
+// 2026-11-11, BL-173): a popup's footer is "M" unless its call site says otherwise, and the compatibility result ("S") and
+// the repair review ("M") had gone down once already (BL-168).
 const FOOTER_S = Object.freeze({ ...CONTROL.buttonS, minW: SMALL_BUTTON.w });
 export const FOOTER = Object.freeze({
-  L: Object.freeze({ control: CONTROL.buttonL, caption: CAPTION }),
+  L: Object.freeze({ control: CONTROL.buttonL, caption: CAPTION_L }),
   M: Object.freeze({ control: CONTROL.buttonM, caption: Object.freeze({ fs: CONTROL.buttonM.fs, fsMin: TYPE.body.min,
     w: CONTROL.buttonM.minW - 2 * CONTROL.buttonM.pad, lines: 2, h: CONTROL.buttonM.h - SPACE.m }) }),
   S: Object.freeze({ control: FOOTER_S, caption: Object.freeze({ fs: FOOTER_S.fs, fsMin: TYPE.body.min,
     w: FOOTER_S.minW - 2 * FOOTER_S.pad, lines: 2, h: FOOTER_S.h - SPACE.m }) }),
 });
-const footerSize = (size) => FOOTER[size] || FOOTER.L;
+export const FOOTER_DEFAULT = "M";
+// A footer's body width, units: the control's own minimum, wider where the longest caption needs it (its widest line, at the
+// size the group fits the widest body, buttonL's, with the control's padding each side), the same for every button of the
+// row. A tier is a height and a caption size; the width follows the captions, as the small button's does (glyphPad), so a
+// caption that fitted the old body still fits at its size.
+export function footerWidth(captions, kind = footerSize()) {
+  const { control, caption } = kind, room = CONTROL.buttonL.minW - 2 * CONTROL.buttonL.pad;
+  const labels = (captions || []).filter((text) => text);
+  if (!labels.length) return control.minW;
+  const fits = NGUI.fitGroup(labels, caption.fs, caption.fsMin, room, caption.lines, { maxH: caption.h });
+  const need = Math.max(...fits.map((fit) => Math.max(...fit.text.split("\n").map((line) => NGUI.glyphWidth(line, fit.fs)))));
+  return Math.min(CONTROL.buttonL.minW, Math.max(control.minW, Math.ceil(need + 2 * control.pad)));
+}
+// A footer row of these captions in a frame w wide: its size, the bodies' width and how far the row scales them down, their x
+// centres and the room a caption has inside a body. footer: the size a call site names, or null for the default's (the bodies
+// follow the captions, footerWidth).
+export function footerLayout(labels, w, footer = null) {
+  const kind = footerSize(footer), control = kind.control;
+  const baseW = footer == null ? footerWidth(labels, kind) : control.minW;
+  const { scale, xs } = footerSlots(labels.length, w, { ...control, minW: baseW }), bodyW = baseW * scale;
+  return { kind, control, scale, xs, bodyW, room: bodyW - 2 * control.pad };
+}
+const CAPTION = FOOTER[FOOTER_DEFAULT].caption;
+function footerSize(size) { return FOOTER[size] || FOOTER[FOOTER_DEFAULT]; }
 function checkFooterFits(fits, { site = null, locale = globalThis.document?.documentElement?.lang, caption = CAPTION } = {}) {
   if (site && fits.some((fit) => fit.overflow || fit.fs < captionMinimum(site, locale, caption.fsMin)))
     throw new RangeError(`Popup footer cannot fit: ${site} (${locale})`);
@@ -284,15 +308,15 @@ export function footerLabels(widgets, captions, options = {}) {
 }
 
 // the game's popup frame at a size: backdrop, title, close button and, when given, its Cancel and OK buttons with
-// these labels on centred buttonL bodies, with the shared gap and bottom inset.
+// these labels on centred bodies of the footer's size (FOOTER_DEFAULT unless `footer` names one), with the shared gap and bottom inset.
 //   buttons: [{label, primary, name}] instead of ok / cancel: named choices in a row (one centred, two as OK and Cancel,
 //            three or more share the available width); a node is Choice_<index> unless it names itself
 //   close: false for a popup that must be answered with a button (no close button)
 //   titleCentre: the title's ink centre this far under the frame's top, in units, in place of the shared title top (the
 //                header band's centre puts the title where UIPopup_Sort has it)
-//   footer: the buttons' size, "L" (default), "M" or "S" (FOOTER)
+//   footer: the buttons' size, "S", "M" or "L" (FOOTER); without it the default size, M, its bodies as wide as the captions need
 export function popupFrame(title, w, h, { ok = null, cancel = null, close = true, buttons = null, captionSite = null,
-  titleCentre = null, footer = "L" } = {}) {
+  titleCentre = null, footer = null } = {}) {
   ({ w, h } = frameGeometry(w, h));
   const t = clone(find(layouts.sortPopup, "Center"));
   const popup = find(t, "Popup");
@@ -315,8 +339,8 @@ export function popupFrame(title, w, h, { ok = null, cancel = null, close = true
   const actions = buttons?.length ? buttons : [
     ...(cancel ? [{ label: cancel, name: "Btn_Cancel" }] : []), ...(ok ? [{ label: ok, name: "Btn_Ok", primary: true }] : []),
   ];
-  const footerKind = footerSize(footer), control = footerKind.control;
-  const { scale, xs } = footerSlots(actions.length, w, control), bodyW = control.minW * scale;
+  // the default footer's bodies follow their captions (footerWidth); a size a call site names keeps its own width
+  const { kind: footerKind, control, xs, bodyW, room } = footerLayout(actions.map((action) => action.label), w, footer);
   btn.active = !!actions.length;
   btn.pos = [0, footerY(h, control)];
   // Keep both named branches for callers that overlay a disabled confirm button.
@@ -335,7 +359,7 @@ export function popupFrame(title, w, h, { ok = null, cancel = null, close = true
     return child;
   }) : [];
   footerLabels(btn.children.map(child => find(child, "Label_Locale").widgets[0]), actions.map(action => action.label),
-    { site: captionSite, width: bodyW - 2 * control.pad, caption: footerKind.caption });
+    { site: captionSite, width: room, caption: footerKind.caption });
   if (!buttons?.length) for (const [name, source] of [["Btn_Ok", primary], ["Btn_Cancel", secondary]]) {
     if (!find(btn, name)) { source.active = false; btn.children.push(source); }
   }
@@ -714,7 +738,7 @@ export function detailsTree(it, title, fields, actions, portraitTexture = null, 
 
   // The model's square is one size for every candidate: what the title, the actions and fields with the file name on
   // three lines (the others on one) leave, its 10 degree incline within its column. Only longer fields shrink it.
-  const roomFor = (fieldsH) => content.h - titleH - fieldsH - (actions.length ? CONTROL.buttonS.h : 0)
+  const roomFor = (fieldsH) => content.h - titleH - fieldsH - (actions.length ? CONTROL.buttonXS.h : 0)
     - SPACE.m * (1 + (fields.length ? 1 : 0) + (actions.length ? 1 : 0));
   const reference = side && fields.length ? boxHeight(fields.map((_, i) => (i === 0 ? 3 : 1))) : 0;
   const pictureW = portraitTexture ? pictureColumn.w
@@ -745,14 +769,14 @@ export function detailsTree(it, title, fields, actions, portraitTexture = null, 
 
   const gap = SPACE.m, bw = (w - 2 * SPACE.m + gap) / Math.max(1, actions.length);
   const fits = NGUI.fitRow(actions.map(([caption]) => caption), 40, 26, actions.length * (bw - gap), ACTION_CLEAR, 2, { maxH: ACTION_TEXT_H });
-  const actionRow = row(fits.map(f => ({ w: f.width, h: CONTROL.buttonS.h })), { x: SPACE.m, w: w - 2 * SPACE.m, gap, justify: "center" });
+  const actionRow = row(fits.map(f => ({ w: f.width, h: CONTROL.buttonXS.h })), { x: SPACE.m, w: w - 2 * SPACE.m, gap, justify: "center" });
   actions.forEach(([caption, , disabled, semantic = "secondary"], i) => {
     let body = clone(find(layouts.sortPopup, "Center/Popup/Btn/Btn_Cancel/BG (1)")), ink = "#2d5164/1.00";
     if (disabled) {
       const grey = Buttons.disable(node("Action", [0, 0], [], [body]));
       body = clone(find(grey, "BG (1)")); ink = find(grey, "Label_Locale").widgets[0].color;
     }
-    const bg = body.widgets.find(widget => "sprite" in widget), k = CONTROL.buttonS.h / bg.h_;
+    const bg = body.widgets.find(widget => "sprite" in widget), k = CONTROL.buttonXS.h / bg.h_;
     body.name = "Body"; body.pos = [0, 0]; body.scale = [k, k]; resizeButton(body, fits[i].width / k);
     Object.assign(bg, { depth: 6, ...(!disabled ? { color: "#dbeef5/1.00" } : {}) });
     for (const child of body.children || []) for (const widget of child.widgets) if ("w_" in widget) widget.depth = 7;
@@ -760,11 +784,11 @@ export function detailsTree(it, title, fields, actions, portraitTexture = null, 
       [label(fits[i].text, fits[i].fs, ink, fits[i].width - ACTION_CLEAR, ACTION_TEXT_H, { depth: 8 })])]);
     action.actionSemantic = disabled ? "secondary" : semantic; kids.push(action);
   });
-  if (actions.length) bands.push({ name: "Actions", w, h: CONTROL.buttonS.h });
+  if (actions.length) bands.push({ name: "Actions", w, h: CONTROL.buttonXS.h });
   const placed = layoutStack(bands, { x: content.x, y: content.y, w: content.w, gap: SPACE.m });
   // The model's actions stand on the panel's bottom, their solid art level with the list panel's (BL-133).
   const pinned = side && actions.length && placed.h <= content.h;
-  if (pinned) placed.boxes.at(-1).y = content.y + content.h - CONTROL.buttonS.h * (1 - ACTION_SHADOW);
+  if (pinned) placed.boxes.at(-1).y = content.y + content.h - CONTROL.buttonXS.h * (1 - ACTION_SHADOW);
   const tree = node("Details", [0, 0], [], kids);
   const placeInfo = (box, x = 0) => {
     const target = { ...box, x: x + box.x };
@@ -1061,7 +1085,7 @@ export async function listPopup(options) {
 }
 
 // --- the message popup ---
-export const MSG = { title: POPUP_FRAME.contentTop, gap: SPACE.l, rowButton: SMALL_BUTTON.h + SPACE.m,
+export const MSG = { title: POPUP_FRAME.contentTop, gap: SPACE.l, rowButton: XS_BUTTON.h + SPACE.m,
   check: CHECK_H + SPACE.m, buttons: POPUP_FRAME.footer.bottom + CONTROL.buttonL.h + SPACE.m,
   none: SPACE.xl, cap: POPUP_FRAME.maxH };
 
@@ -1080,7 +1104,7 @@ export const MSG = { title: POPUP_FRAME.contentTop, gap: SPACE.l, rowButton: SMA
 //          {rule: true} is the game's dotted divider (Common_Line_Dot, as the light stats box draws it) across the text
 //   ok, cancel: the buttons' labels (either may be left out); check: {label, checked}
 //   buttons: optional named footer choices [{label, value, primary}], instead of ok/cancel
-//   footer: the footer buttons' size, "L" (default), "M" or "S" (FOOTER)
+//   footer: the footer buttons' size, "S", "M" or "L" (FOOTER); without it the default size, M, its bodies as wide as the captions need
 //   close: false for a popup that must be answered with a button (no close button; the backdrop and Escape do nothing)
 //   confirmKeys: keys that press OK while the popup is in front and holds the focus itself (a focused button takes its
 //                own key), as the PC client binds its popups' confirm (["Enter", " "]); none by default
@@ -1118,7 +1142,7 @@ export function confirmKey(ev, keys) {
 
 // the message without the game's prefab: a plain box on a dark backdrop, the same buttons, marked the same way
 export function plainMessage(layer, { title, lines = [], ok, cancel, buttons, state = null, dismissable = true,
-  scroll = false, plain = false, width, height, fitTogether = [], captionSite = null, footer = "L" }, finish) {
+  scroll = false, plain = false, width, height, fitTogether = [], captionSite = null, footer = null }, finish) {
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
   const button = (caption, fn, action, cls = "message-button") => {
     const b = el("button", cls, caption); b.dataset.action = action; b.setAttribute("aria-label", caption);
@@ -1149,7 +1173,7 @@ export function plainMessage(layer, { title, lines = [], ok, cancel, buttons, st
   Object.assign(content.style, { overflow: "auto", textAlign: plain ? "left" : "center" });
   const paragraphItems = layout.body.fitted.map(({ r, f, bf, bw, more = [], item: text }) => {
     return { r, f, bf, bw, more, text, w: layout.content.w,
-      h: r.rule ? RULE.h : Math.max(r.button ? SMALL_BUTTON.h : 0, text.h) + (plain ? r.gap || 0 : 0) };
+      h: r.rule ? RULE.h : Math.max(r.button ? XS_BUTTON.h : 0, text.h) + (plain ? r.gap || 0 : 0) };
   });
   const paragraphs = layoutStack(paragraphItems, { w: layout.content.w, gap: SPACE.l });
   paragraphs.boxes.forEach(({ r, f, bf, bw, more, text, x, y, w }, i) => {
@@ -1161,8 +1185,8 @@ export function plainMessage(layer, { title, lines = [], ok, cancel, buttons, st
     }
     const indent = plain ? r.indent || 0 : 0;
     const taken = (r.button ? bw + SPACE.m : 0) + more.reduce((n, m) => n + m.bw + SPACE.m, 0);
-    const parts = row([{ ...text, w: w - indent - taken }, ...(r.button ? [{ w: bw, h: SMALL_BUTTON.h }] : []),
-      ...more.map((m) => ({ w: m.bw, h: SMALL_BUTTON.h }))],
+    const parts = row([{ ...text, w: w - indent - taken }, ...(r.button ? [{ w: bw, h: XS_BUTTON.h }] : []),
+      ...more.map((m) => ({ w: m.bw, h: XS_BUTTON.h }))],
       { x: x + indent, y: y + (plain ? r.gap || 0 : 0), w: w - indent, gap: SPACE.m, justify: "center" }).boxes;
     const p = styleBox(el("p", "", f.text), parts[0], NGUI.fontSizeFor(f.text, f.fs));
     content.appendChild(p);
@@ -1188,10 +1212,8 @@ export function plainMessage(layer, { title, lines = [], ok, cancel, buttons, st
   }
   const actions = buttons?.length ? buttons : [...(cancel ? [{ label: cancel, value: "cancel" }] : []), ...(ok ? [{ label: ok, value: "ok" }] : [])];
   if (actions.length) {
-    const size = footerSize(footer), control = size.control;
-    const slots = footerSlots(actions.length, frame.w, control), bodyW = control.minW * slots.scale;
-    const fits = footerFit(actions.map(action => action.label), { site: captionSite, width: bodyW - 2 * control.pad,
-      caption: size.caption });
+    const { kind: size, control, bodyW, room } = footerLayout(actions.map((action) => action.label), frame.w, footer);
+    const fits = footerFit(actions.map(action => action.label), { site: captionSite, width: room, caption: size.caption });
     const actionRow = el("div", "message-actions");
     styleBox(actionRow, { x: 0, y: frame.h - POPUP_FRAME.footer.bottom - control.h, w: frame.w, h: control.h });
     const boxes = row(actions.map(() => ({ w: bodyW, h: control.h })), { w: frame.w, gap: POPUP_FRAME.footer.gap, justify: "center" }).boxes;
@@ -1217,17 +1239,19 @@ function messageText(text, max, min, room, lines = 4, strict = false) {
 // a fitted text with its lines counted as drawn (a line break in the text itself counts)
 const counted = (fitted) => ({ ...fitted, lines: fitted.text.split("\n").length });
 
-const placeholderButton = (name, x, y, caption, { w, h = SMALL_BUTTON.h }) => node(name, [x, y], [sprite("Common_Btn_BG", w, h)]);
+const placeholderButton = (name, x, y, caption, { w, h = XS_BUTTON.h }) => node(name, [x, y], [sprite("Common_Btn_BG", w, h)]);
+// the inline buttons went one size down with the small button (owner, 2026-11-11, BL-173): the XS body's height over the S one's
+const XS_RATIO = XS_BUTTON.h / SMALL_BUTTON.h;
 // a plain message's divider row ({rule: true}): the light stats box's dotted line, its height
 export const RULE = Object.freeze({ h: 4 });
 // a plain line's inline button (button.inline): the small button, shadow included, within its line's text from top to
 // bottom (``height`` of the type size: the ink of a line, not its pitch), its caption at most ``share`` of the type size
-// pad: the small button fits its caption again within its width less SMALL_BUTTON.fitInset, so the pad is at least that
-export const INLINE_BUTTON = Object.freeze({ height: 0.9, share: 0.55, fsMin: 20, pad: SMALL_BUTTON.fitInset });
+// pad: the small button fits its caption again within its width less XS_BUTTON.fitInset, so the pad is at least that
+export const INLINE_BUTTON = Object.freeze({ height: 0.9 * XS_RATIO, share: 0.55 * XS_RATIO, fsMin: 20, pad: XS_BUTTON.fitInset });
 // button.inline "line": the button's face as high as its line of text (the line's pitch, the small button's shadow
 // inset added around it), its caption ``share`` of the type size, ``fsMin`` at least (the compatibility result's Details,
 // owner 2026-11-11)
-export const LINE_BUTTON = Object.freeze({ share: 0.6, fsMin: TYPE.badge.min, pad: SMALL_BUTTON.fitInset });
+export const LINE_BUTTON = Object.freeze({ share: 0.6 * XS_RATIO, height: XS_RATIO, fsMin: TYPE.badge.min, pad: XS_BUTTON.fitInset });
 function inlineButton(r, fs, w) {
   const first = oneInlineButton(r, r.button, fs);
   // more inline buttons after the first (r.more: [{label, fn}]), the same size, SPACE.m apart
@@ -1237,12 +1261,12 @@ function inlineButton(r, fs, w) {
 }
 function oneInlineButton(r, button, fs) {
   const line = button.inline === "line";
-  const bh = line ? Math.round(fs * NGUI.LINE_PITCH) + SMALL_BUTTON.boxInsetH : Math.round(fs * INLINE_BUTTON.height);
+  const bh = line ? Math.round(fs * NGUI.LINE_PITCH * LINE_BUTTON.height) + XS_BUTTON.boxInsetH : Math.round(fs * INLINE_BUTTON.height);
   const cap = line ? Math.max(LINE_BUTTON.fsMin, Math.round(fs * LINE_BUTTON.share))
-    : Math.min(Math.round(fs * INLINE_BUTTON.share), bh - SMALL_BUTTON.boxInsetH);
+    : Math.min(Math.round(fs * INLINE_BUTTON.share), bh - XS_BUTTON.boxInsetH);
   // one line: as high as the text beside it, a two-word caption (Go to) never folds
   const ib = fitText(button.label, cap, Math.min(cap, line ? LINE_BUTTON.fsMin : INLINE_BUTTON.fsMin),
-    SMALL_BUTTON.w - SMALL_BUTTON.fitInset, 1);
+    XS_BUTTON.w - XS_BUTTON.fitInset, 1);
   const ibw = glyphsOf(ib.text, ib.fs) + (line ? LINE_BUTTON.pad : INLINE_BUTTON.pad);
   return { bf: ib, bw: ibw, bh };
 }
@@ -1255,8 +1279,8 @@ function messageLines(lines, w, fitTogether, plain, assets = true) {
   const fitted = rows.map((r) => {
     if (r.rule) return { r, room: w - 2 * SPACE.xxxl, f: counted({ text: "", fs: min }) };
     // a line button is the small button: 136 high, as wide as its caption needs and 90 more (240 at least), the caption 48 down to 34
-    const bf = r.button ? fitText(r.button.label, SMALL_BUTTON.fs, SMALL_BUTTON.fsMin, SMALL_BUTTON.w - SMALL_BUTTON.fitInset) : null;
-    const bw = bf ? Math.max(SMALL_BUTTON.minW, glyphsOf(bf.text, bf.fs) + SMALL_BUTTON.glyphPad) : 0;
+    const bf = r.button ? fitText(r.button.label, XS_BUTTON.fs, XS_BUTTON.fsMin, XS_BUTTON.w - XS_BUTTON.fitInset) : null;
+    const bw = bf ? Math.max(XS_BUTTON.minW, glyphsOf(bf.text, bf.fs) + XS_BUTTON.glyphPad) : 0;
     const room = boxed ? valueRoom("frame", w, { reserve: bw ? bw + SPACE.m : 0 }) : w - 2 * SPACE.xxxl - (bw ? bw + SPACE.m : 0) - (plain ? r.indent || 0 : 0);
     const f = messageText(r.text, r.fontSize ?? max, r.minFontSize ?? min, room, most, boxed);
     if (plain && r.button?.inline) {
@@ -1287,8 +1311,8 @@ function messageLines(lines, w, fitTogether, plain, assets = true) {
       value: f, colour: `${r.color || "#2d4664"}/1.00`, minH: bf ? MSG.rowButton : STATS_BOX.rowMin, reserve: bw ? bw + SPACE.m : 0,
       slot: bf ? ({ right, y }) => {
         buttons.push([i, r.button]);
-        const buttonRow = row([{ w: bw, h: SMALL_BUTTON.h }], { x: right - bw, w: bw, gap: SPACE.m, justify: "center" });
-        return [(assets ? Buttons.smallButton : placeholderButton)(`Btn_${i}`, buttonRow.boxes[0].x + bw / 2, y, r.button.label, { w: bw, fs: SMALL_BUTTON.fs, min: SMALL_BUTTON.fsMin, depth: 8 })];
+        const buttonRow = row([{ w: bw, h: XS_BUTTON.h }], { x: right - bw, w: bw, gap: SPACE.m, justify: "center" });
+        return [(assets ? Buttons.smallButton : placeholderButton)(`Btn_${i}`, buttonRow.boxes[0].x + bw / 2, y, r.button.label, { w: bw, fs: XS_BUTTON.fs, min: XS_BUTTON.fsMin, depth: 8 })];
       } : undefined,
     })) });
     return { tree: node("Lines", [0, 0], [], box.nodes), height: box.height, buttons, fitted };
@@ -1302,7 +1326,7 @@ function messageLines(lines, w, fitTogether, plain, assets = true) {
     const indent = plain ? s.r.indent || 0 : 0;
     // an inline button follows its text; another sits at the line's right end
     const inline = !!s.bh;
-    const lineRow = row([{ ...s.item, w: inline ? s.item.w : s.room }, ...(s.bf ? [{ w: s.bw, h: s.bh ?? SMALL_BUTTON.h }] : []),
+    const lineRow = row([{ ...s.item, w: inline ? s.item.w : s.room }, ...(s.bf ? [{ w: s.bw, h: s.bh ?? XS_BUTTON.h }] : []),
       ...(s.more || []).map((m) => ({ w: m.bw, h: s.bh }))],
       { x: textBox.x + indent, w: textBox.w - indent, gap: SPACE.m, justify: inline ? "start" : "center" });
     return { ...s, lineRow, w: textBox.w, h: lineRow.h + (plain ? s.r.gap || 0 : 0) };
@@ -1325,7 +1349,7 @@ function messageLines(lines, w, fitTogether, plain, assets = true) {
     if (bf) {
       const [bx, by] = toNode(lineRow.boxes[1], 4, local);
       out.push((assets ? Buttons.smallButton : placeholderButton)(`Btn_${i}`, bx, by, r.button.label, bh
-        ? { w: bw, h: bh, fs: bf.fs, min: bf.fs, depth: 8 } : { w: bw, fs: SMALL_BUTTON.fs, min: SMALL_BUTTON.fsMin, depth: 8 }));
+        ? { w: bw, h: bh, fs: bf.fs, min: bf.fs, depth: 8 } : { w: bw, fs: XS_BUTTON.fs, min: XS_BUTTON.fsMin, depth: 8 }));
       buttons.push([i, r.button]);
     }
     more.forEach((m, k) => {
@@ -1367,7 +1391,7 @@ export function messageLayout({ lines = [], width, ok = null, cancel = null, but
   return { body, width: w, height, visible, y0, content, checkBox, checkCaption, scroll: scrolls };
 }
 
-async function showMessage({ title = "", lines = [], ok = null, cancel = null, buttons = null, check = null, host: hostArg = "dialog", width, close: dismissable = true, confirmKeys = null, fitTogether = [], scroll = false, plain = false, captionSite = null, footer = "L" }, resolve) {
+async function showMessage({ title = "", lines = [], ok = null, cancel = null, buttons = null, check = null, host: hostArg = "dialog", width, close: dismissable = true, confirmKeys = null, fitTogether = [], scroll = false, plain = false, captionSite = null, footer = null }, resolve) {
   const host = hostOf(hostArg);
   const layer = document.createElement("div");
   layer.className = "popup-layer";

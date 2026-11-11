@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { box, inset, container, grid, row, stack, textItem, controlWidth, centreOf, toNode } from "../../src/bmpt/web/js/ui-grid.js";
-import { SPACE, TYPE, CONTROL, GRID, POPUP_FRAME, PANEL, LIST_ROW, SMALL_BUTTON, CHIP, SETTINGS } from "../../src/bmpt/web/js/ui-tokens.js";
+import { SPACE, TYPE, CONTROL, GRID, POPUP_FRAME, PANEL, LIST_ROW, XS_BUTTON, CHIP, SETTINGS } from "../../src/bmpt/web/js/ui-tokens.js";
 
 const near = (a, b, eps = 1e-9) => Math.abs(a - b) <= eps;
 
@@ -93,8 +93,8 @@ test("a text item fits its role, measures its lines and places its ink and refer
 
 test("a caption-sized control keeps its padding each side and its minimum width", () => {
   const measure = (text, fs) => text.length * fs * 0.5;
-  assert.equal(controlWidth(CONTROL.buttonS, "OK", measure), CONTROL.buttonS.minW);
-  assert.equal(controlWidth(CONTROL.buttonS, "Choose Files and More", measure), 21 * 24 + 2 * 45);
+  assert.equal(controlWidth(CONTROL.buttonXS, "OK", measure), CONTROL.buttonXS.minW);
+  assert.equal(controlWidth(CONTROL.buttonXS, "Choose Files and More", measure), 21 * 20 + 2 * 34);
   assert.equal(controlWidth(CONTROL.badge, "Ready", measure), CONTROL.badge.minW);
 });
 
@@ -108,18 +108,18 @@ test("a box becomes the NGUI position of a widget with any pivot", () => {
 });
 
 test("the scales agree with the tokens they grew from", () => {
-  assert.deepEqual([CONTROL.buttonS.h, CONTROL.buttonS.fs, CONTROL.buttonS.minW, 2 * CONTROL.buttonS.pad],
-    [SMALL_BUTTON.h, SMALL_BUTTON.fs, SMALL_BUTTON.minW, SMALL_BUTTON.glyphPad]);
+  assert.deepEqual([CONTROL.buttonXS.h, CONTROL.buttonXS.fs, CONTROL.buttonXS.minW, 2 * CONTROL.buttonXS.pad],
+    [XS_BUTTON.h, XS_BUTTON.fs, XS_BUTTON.minW, XS_BUTTON.glyphPad]);
   assert.deepEqual([CONTROL.chip.h, CONTROL.chip.fs, CONTROL.chip.minW], [CHIP.h, CHIP.fs, CHIP.w]);
   assert.equal(TYPE.chip.fs, CHIP.fs); assert.equal(TYPE.chip.min, CHIP.fsMin);
-  assert.equal(SPACE.m, SMALL_BUTTON.gap); assert.equal(SPACE.s, SETTINGS.rowGap); assert.equal(PANEL.stackGap, SETTINGS.rowGap);
+  assert.equal(SPACE.m, XS_BUTTON.gap); assert.equal(SPACE.s, SETTINGS.rowGap); assert.equal(PANEL.stackGap, SETTINGS.rowGap);
   assert.equal(GRID.gutter, SPACE.xl); assert.equal(GRID.pageMargin, SPACE.xxl);
   // every role's floor is at most its size, and the ramp descends
   const sizes = Object.values(TYPE).map((t) => t.fs);
   assert.deepEqual(sizes, [...sizes].sort((a, b) => b - a));
   for (const t of Object.values(TYPE)) assert.ok(t.min <= t.fs);
   // controls climb, and a row's action fits the row (List_01: buttonM 27 above its bottom)
-  const heights = ["badge", "chip", "buttonS", "buttonM", "buttonL"].map((k) => CONTROL[k].h);
+  const heights = ["badge", "chip", "buttonXS", "buttonS", "buttonM", "buttonL"].map((k) => CONTROL[k].h);
   assert.deepEqual(heights, [...heights].sort((a, b) => a - b));
   assert.ok(LIST_ROW.h - LIST_ROW.actionBottom - CONTROL.buttonM.h > LIST_ROW.titleTop);
   // the S popup's footer: two buttonL bodies, the gap and the sides fill the frame's width

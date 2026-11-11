@@ -17,7 +17,7 @@ import * as ModExport from "./mod-export.js";
 import * as Tours from "./tours.js";
 import * as Update from "./update.js";
 import * as Buttons from "./game-buttons.js";
-import { BACKDROP, SMALL_BUTTON, TYPE } from "./ui-tokens.js";
+import { BACKDROP, XS_BUTTON, TYPE } from "./ui-tokens.js";
 import { rowBase, radioRow, valueGeometry, valueRoom, afterTitle, buttonRowGeometry, stackCards, noteFit, noteNode } from "./settings-rows.js";
 import { on, rpc } from "./api.js";
 import { T, errorText, platform } from "./i18n.js";
@@ -115,8 +115,8 @@ function valueRow(name, y, title, value, buttons, { below = false, showValue = t
   // Action-only rows keep the same spacing without a value label.
   if (showValue) row.children.push(node("Value", layout.value, [label(f.text, f.fs, "#2d4664/1.00", layout.room, lineH * f.lines + 10, { pivot: 3, depth: 8 })]));
   // buttons side by side share one caption size (the small button's range, 48 down to 34)
-  const size = buttons.length > 1 ? NGUI.fitGroup(buttons.map(([caption]) => caption), SMALL_BUTTON.fs, SMALL_BUTTON.fsMin,
-    SMALL_BUTTON.w - SMALL_BUTTON.fitInset, 2, { maxH: SMALL_BUTTON.h - SMALL_BUTTON.boxInsetH })[0].fs : null;
+  const size = buttons.length > 1 ? NGUI.fitGroup(buttons.map(([caption]) => caption), XS_BUTTON.fs, XS_BUTTON.fsMin,
+    XS_BUTTON.w - XS_BUTTON.fitInset, 2, { maxH: XS_BUTTON.h - XS_BUTTON.boxInsetH })[0].fs : null;
   let at = 0;
   layout.lines.forEach((count, line) => {
     for (let i = 0; i < count; i++, at++) {
@@ -238,13 +238,13 @@ function rows({ builtSize = null, sizeError = null } = {}) {
       { dim: v.busy || v.unavailable, description: v.unavailable ? ModSwitch.reasonText(m) : "" });
     add(helpAfterTitle(sw, T("mods.switch"), v.dot));
     // the pair of 680 x 136 buttons under the dotted line
-    const pair = buttonRowGeometry(2, SMALL_BUTTON.wideW), exportH = pair.h;
+    const pair = buttonRowGeometry(2, XS_BUTTON.wideW), exportH = pair.h;
     const exportRow = rowBase("Export", 0, exportH, T("export.title"));
     const exportHits = [];
-    const exportSize = NGUI.fitGroup([T("export.library"), T("export.applied")], SMALL_BUTTON.fs, SMALL_BUTTON.fsMin, SMALL_BUTTON.wideW - SMALL_BUTTON.fitInset, 2,
-      { maxH: SMALL_BUTTON.h - SMALL_BUTTON.boxInsetH })[0].fs;
+    const exportSize = NGUI.fitGroup([T("export.library"), T("export.applied")], XS_BUTTON.fs, XS_BUTTON.fsMin, XS_BUTTON.wideW - XS_BUTTON.fitInset, 2,
+      { maxH: XS_BUTTON.h - XS_BUTTON.boxInsetH })[0].fs;
     [["library", "export.library"], ["applied", "export.applied"]].forEach(([scope, key], i) => {
-      exportRow.children.push(buttonNode(`Btn_${i}`, pair.xs[i], pair.y, T(key), { w: SMALL_BUTTON.wideW, fs: exportSize, min: exportSize }));
+      exportRow.children.push(buttonNode(`Btn_${i}`, pair.xs[i], pair.y, T(key), { w: XS_BUTTON.wideW, fs: exportSize, min: exportSize }));
       exportHits.push({ path: `Export/Btn_${i}`, fn: () => ModExport.open({ scope }), name: T(key) });
     });
     add({ tree: exportRow, h: exportH, hits: exportHits });

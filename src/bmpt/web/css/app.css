@@ -355,6 +355,14 @@ input[type="text"], input[type="search"], textarea { cursor: text; }
 @keyframes ld-halo2 { 0%, 26.43% { opacity: .02; } 27.86%, 76.43% { opacity: 1; } 77.86%, 100% { opacity: .02; } }
 @keyframes ld-text { 0%, 100% { opacity: 1; } 50% { opacity: .8; } }
 /* a still being made: the game's loading ring (UIRatioNoticePopup LoadingIcon, its TweenRotation), shown after .2 s */
+/* developer previews: the size preset (S, M, L) or the height of a button body, at its top left (BL-173); not a game widget */
+.ngui-tier { position: absolute; pointer-events: none; padding: 1px 5px; font: 700 13px/16px ui-monospace, Menlo, monospace;
+  color: #fff; background: rgba(214, 40, 40, 0.85); border-radius: 3px; }
+.ngui-tier.off { background: rgba(90, 100, 115, 0.85); }
+/* a tag that would cover the caption is a dot at the corner; its label shows on hover, without a native tooltip */
+.ngui-tier.dot { width: 8px; height: 8px; padding: 0; border-radius: 50%; pointer-events: auto; }
+.ngui-tier.dot:hover::after { content: attr(data-size); position: absolute; left: 10px; top: -4px; padding: 1px 5px; border-radius: 3px;
+  background: inherit; color: #fff; font: 700 13px/16px ui-monospace, Menlo, monospace; white-space: nowrap; pointer-events: none; }
 .ngui-loading { animation: ngui-turn var(--turn-time, 3s) linear infinite var(--turn-loop, normal), ngui-loading-in .2s ease .2s both; }
 @keyframes ngui-turn { from { rotate: var(--turn-from, -180deg); } to { rotate: var(--turn-to, 180deg); } }
 @keyframes ngui-loading-in { from { opacity: 0; } to { opacity: 1; } }

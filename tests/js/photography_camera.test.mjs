@@ -57,16 +57,16 @@ test('memorial framing stays painted at every zoom and both pan extremes',()=>{
 
 test('composed occlusion control keeps the right edge, centred neighbours and scaled gaps',async()=>{
   const controller=await readFile(new URL('../../src/bmpt/web/js/photography/controller.js',import.meta.url),'utf8');
-  const {CONTROL,SMALL_BUTTON,SPACE}=await import('../../src/bmpt/web/js/ui-tokens.js');
+  const {CONTROL,XS_BUTTON,SPACE}=await import('../../src/bmpt/web/js/ui-tokens.js');
   const {row}=await import('../../src/bmpt/web/js/ui-grid.js');
   const S=1920/2960,code=controller.slice(controller.indexOf('function photographyToolbarLayout('),controller.indexOf('function galleryPair('));
-  const boxes=new Function('CONTROL','SMALL_BUTTON','SPACE','row','S',`${code};return photographyToolbarLayout();`)(CONTROL,SMALL_BUTTON,SPACE,row,S);
+  const boxes=new Function('CONTROL','XS_BUTTON','SPACE','row','S',`${code};return photographyToolbarLayout();`)(CONTROL,XS_BUTTON,SPACE,row,S);
   const near=(a,b)=>assert.ok(Math.abs(a-b)<1e-9,`${a} != ${b}`);
   near(boxes.top[0]+boxes.top[2],1890);near(boxes.grid[0]-boxes.occlusion[0]-boxes.occlusion[2],SPACE.m*S);
   near(boxes.mode[0]-boxes.grid[0]-boxes.grid[2],SPACE.l*S);
   for(const scale of [.75,1,1.25,1.5,2])for(const box of [boxes.occlusion,boxes.grid,boxes.mode]){
     assert.ok(box[2]*scale>=44);assert.ok(box[3]*scale>=44);
-    near((box[1]+box[3]/2)*scale,(25+CONTROL.buttonS.h*S/2)*scale);
+    near((box[1]+box[3]/2)*scale,(25+Math.max(CONTROL.buttonXS.h*S,82)/2)*scale); // the row is as high as its tallest control, the 82 px icon
   }
   assert.match(controller,/P\('occlusion'\),boxes\.occlusion/);
   assert.doesNotMatch(controller,/getComputedStyle/);
