@@ -77,7 +77,7 @@ for (const locale of LOCALES) test(`photography toolbar and gallery pairs use sh
   document.documentElement.lang=locale;
   const near=(a,b)=>assert.ok(Math.abs(a-b)<1e-9,`${a} != ${b}`),g=photographyToolbarLayout();
   near(g.grid[0]-g.occlusion[0]-g.occlusion[2],SPACE.m*S);
-  near(g.mode[0]-g.grid[0]-g.grid[2],SPACE.l*S);
+  near(g.mode[0]-g.grid[0]-g.grid[2],SPACE.m*S);
   near(g.choices[0]-g.playback[0]-g.playback[2],SPACE.m*S);
   for(const box of [g.grid,g.mode])near(box[1]+box[3]/2,g.occlusion[1]+g.occlusion[3]/2);
   for(const box of [g.mode,g.gallery,g.playback])assert.deepEqual(box.slice(2),g.choices.slice(2));
