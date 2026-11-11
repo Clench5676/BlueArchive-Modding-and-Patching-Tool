@@ -37,8 +37,6 @@ export const ITEM = Object.freeze({ marker: "\u2022", markerGap: 44, indent: 52 
 export const WIDTH = 2098;
 // a mod listed under another kind's count
 export const SUB = 104;
-// how a hold ends: in italics, the description type (caption 36), a step under the changes' dense 42 (owner, 2026-11-11)
-export const HINT = Object.freeze({ italic: true, fontSize: TYPE.caption.fs, minFontSize: TYPE.caption.fs });
 // what changed in a mod's official parts, under its line: the dense type, held close to the line it belongs to (a
 // label to its own decoration, SPACE.xs, instead of the lines' SPACE.l)
 export const DETAIL = Object.freeze({ fontSize: TYPE.dense.fs, minFontSize: TYPE.dense.fs, gap: SPACE.xs - SPACE.l });
@@ -104,19 +102,22 @@ export function reappliable(entries, result) {
 // Collapse button (open: "reapplied"). Then, after a rule, "Other affected mods" folded the same way (open:
 // "others") over a list item per other kind with its count and its mods. With nothing above them the other kinds show
 // at once, without the button. A fold's button closes the message with "expand:<fold>" (see present).
+// heldOf(result): the held mods the summary lists: a mod whose rig changed, unless a repaired copy took its place (it
+// has one and its student is not configured with it)
+export const heldOf = (result) => (result?.mods || []).filter((m) => m.impact === "rig_changed" && !(m.repaired_id && !m.configured));
+
 export function summary(result, nameOf = (e) => e?.variant || e?.core || "", { reapplied = [], open = [], always = false } = {}) {
   if (!result || (!result.due && !always && !reapplied.length)) return null;
   const counts = result.counts || {};
   const mods = result.mods || [];
-  const held = mods.filter((m) => m.impact === "rig_changed");
+  const held = heldOf(result);
   const lines = [];
   const fold = (name) => ({ label: T(open.includes(name) ? "mods.impact.collapse" : "mods.impact.expand"), inline: true,
     fn: ({ close }) => close(`expand:${name}`) });
-  if (counts.rig_changed > 0) {
+  if (held.length) {
     lines.push({ text: T("mods.impact.rigChanged"),
       ...(held.length ? { button: { label: T("mods.impact.fixAll"), inline: true, fn: ({ close }) => close(FIX_ALL) } } : {}) });
     lines.push(...held.flatMap((m) => modLines(m, nameOf, { fix: true })));
-    if (held.length) lines.push({ text: T("mods.impact.hint", { go: T("add.go"), fix: T("mods.impact.fix") }), ...HINT });
   }
   if (reapplied.length) {
     if (lines.length) lines.push({ rule: true });
@@ -243,7 +244,7 @@ async function present({ result, reapplied = [], failed = [] }, nameOf, options 
       open = open.includes(name) ? open.filter((n) => n !== name) : [...open, name];
       continue;
     }
-    const held = (result.mods || []).filter((m) => m.impact === "rig_changed");
+    const held = heldOf(result);
     if (button === FIX_ALL) return { fix: held };
     if (button.startsWith(FIX)) return { fix: held.filter((m) => m.id === button.slice(FIX.length)) };
     if (button.startsWith(GO)) {
@@ -262,6 +263,12 @@ async function fix(mods, nameOf) {
   for (const mod of mods) {
     const subject = modName({ ...mod, configured: false }, nameOf);
     try {
+      // a repaired copy made before (the student page's Update): it takes the mod's place
+      if (mod.repaired_id) {
+        if (mod.configured) await waitJob(await rpc("actions.apply", { variant: mod.target, source: `mod:${mod.repaired_id}`, kind: mod.kind }));
+        repaired.push(mod);
+        continue;
+      }
       const report = await Loading.hold(() => Compatibility.forUpdate(mod.id, mod.label, subject), { all: true });
       if (!report) continue;
       if (Compatibility.eligible(mod) && Compatibility.canRemap(mod.id, mod)) {
@@ -285,11 +292,10 @@ async function fix(mods, nameOf) {
 export const heldMods = (entries) => (entries || []).map((e) => ({ id: /^mod:(.+)$/.exec(e?.source || "")?.[1] || "",
   target: e?.variant, core: e?.core, kind: e?.kind, label: e?.label || "", configured: true }));
 
-// heldLines(entries, nameOf): the held entries, each as the summary names a held mod (Go To and Fix where its mod is
-// known), then how the hold ends
+// heldLines(entries, nameOf): the held entries, each as the summary names a held mod (Go To and Fix and Apply where its
+// mod is known); no hint under them (owner, 2026-11-11)
 export function heldLines(entries, nameOf) {
-  const lines = heldMods(entries).flatMap((m) => modLines(m, nameOf, { fix: true }));
-  return [...lines, { text: T("mods.impact.hint", { go: T("add.go"), fix: T("mods.impact.fix") }), gap: 32, ...HINT }];
+  return heldMods(entries).flatMap((m) => modLines(m, nameOf, { fix: true }));
 }
 
 // the switch help's Details of the held entries; resolves with what a button asked ({go: mod} or {fix: [mod]}, the

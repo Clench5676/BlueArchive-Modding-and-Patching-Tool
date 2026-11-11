@@ -118,7 +118,8 @@ def test_the_summary_of_an_update_names_the_mods_whose_rig_changed(spine):
     assert summary["due"] is True and summary["previous"] == first["version"] != summary["version"]
     assert summary["mods"] == [{"id": entry.id, "label": summary["mods"][0]["label"], "target": "test",
                                 "kind": "spr", "core": "test_spr", "impact": "rig_changed",
-                                "changes": {"repacked": True, "animations": 1}, "configured": True}]
+                                "changes": {"repacked": True, "animations": 1}, "configured": True,
+                                "repaired_id": ""}]
     assert summary["counts"]["rig_changed"] == 1
     assert library.update_impact()["due"] is True  # told until the page says it was shown
     library.impact_seen(summary["install"], summary["version"])

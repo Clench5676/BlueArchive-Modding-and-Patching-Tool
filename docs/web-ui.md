@@ -2561,17 +2561,18 @@ overwritten entry need none (the detail screen judges its files cheaply).
   only button OK): first "Official .skel or .atlas file changed, not applied until updated" with an inline Fix All, then
   every held mod as a list item ("student - kind - mod name", the mod's own name left out where it only repeats the
   student's, "Applied" for a mod its student is configured with, whatever the switch says) with inline Go To and Fix
-  (popup.js line `more`), under it what the update changed in its official parts in the dense type, close to its line
-  ("Official Portrait changes: .atlas file layout changed, 1 new animation in the .skel file"; Chinese joins them with
-  a comma and counts new animations as xN), and how the hold ends in italics, the caption type ("Fix repairs and
-  applies the mod, Go to opens its student page"). After the game's dotted rule, "Overwritten by official files in the
+  and Apply (popup.js line `more`), under it what the update changed in its official parts in the dense type, close to
+  its line ("Official Portrait changes: .atlas file layout changed, 1 new animation in the .skel file"; Chinese joins
+  them with a comma and counts new animations as xN); no hint under them (owner, 2026-11-11). Held mods whose repaired
+  copy took their place (a repaired copy, their student not configured with them) are left out. After the game's
+  dotted rule, "Overwritten by official files in the
   game update, applied again: n" folded with an inline Expand / Collapse (the entries, each with Go To); after another
   rule, "Other affected mods" folded the same way over a list item per other kind with its count and its mods ("Gone
   from the game: n", "New official parts: n", "Rebuilt, .skel and .atlas files unchanged: n", "Not affected: n", "Not
   determined: n"). With nothing above them the other kinds show at once. A long list scrolls in the frame. Go To closes
   it and opens the mod's student page on the tab of its kind with its switch open and the mod's card selected (its
-  details hold Update; `detail.js want`/`takeWanted`, Settings closed first). Fix and Fix All run the student page's
-  Update for each held mod here (`mod-compatibility.js forUpdate`, then the repair with its choice and review,
+  details hold Update; `detail.js want`/`takeWanted`, Settings closed first). Fix and Apply and Fix All run the
+  student page's Update for each held mod here (a repaired copy made before takes the mod's place at once) (`mod-compatibility.js forUpdate`, then the repair with its choice and review,
   `remap`, or the asset update, `actions.update`); a repaired copy of a mod its student is configured with takes its
   place (`actions.apply`, only configured while mods are off); the summary opens again as the mods stand then.
   Closing it records the version (`mods.impactSeen`); entries the check could not apply again follow in a message
@@ -2582,8 +2583,13 @@ overwritten entry need none (the detail screen judges its files cheaply).
   Configuration, Settings' other mods and the photography gallery. "Affected by the game update: n", then the entries
   as list items ("name - kind", six at most, then "+n"); Apply Anyway (`mods.confirmUntested`, then the same call
   again) and Cancel (nothing changes).
+- **A game update's drift** (`prompts.js reconcile`): with mods on and the file check allowed, the scan's `updated`
+  entries (overwritten by a game update) that need no repair are applied again by themselves, no prompt
+  (`mods.restoreDrift`; owner, 2026-11-11: the configuration says they are applied); those whose configured mod's rig
+  changed stay held. Mods off: nothing; turning them on writes the configuration. A refusal (the game running) leaves
+  them for the next scan.
 - **Mods Back to Official** (while mods are on: with mods off the game is meant to be official, so nothing was put
-  back): the `reset` entries (a Steam check or a repair; a game update's `updated` ones are the update summary's),
+  back): the `reset` entries (a Steam check or a repair; a game update's `updated` ones are reconciled above),
   every card ticked but those whose configured mod's official .skel or .atlas file a game update changed
   (`mods.impact {ids}`): those carry the Files Changed badge and start
   unticked, so Apply Mod Configuration writes them only when ticked; with the install
