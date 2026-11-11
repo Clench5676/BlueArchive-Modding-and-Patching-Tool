@@ -645,9 +645,10 @@ def test_cocoa_installs_and_removes_a_window_scoped_mouse_monitor(cocoa_drag):
     assert aspect == [(16, 9)]
     assert monitors[0][0] == api.NSEventMaskLeftMouseDown
     assert monitors[0][1](f.event()) is None
-    assert f.calls == ['drag'] and not any(button.hidden for button in buttons)
+    assert f.calls == ['drag'] and all(button.hidden for button in buttons), "hidden until the page places them"
+    assert host.held
     host.dispose()
-    assert all(button.hidden for button in buttons)
+    assert not host.held and all(button.hidden for button in buttons)
     assert monitors[1][0] == api.NSEventMaskMouseMoved, "the pointer's log watches moves"
     assert removed == observers + [monitors[0][1], monitors[1][1]]
     assert host.monitor is None and not hasattr(host, 'overlay')
@@ -900,6 +901,48 @@ def test_cocoa_buttons_play_the_top_bar_motion_and_hide_once_above_the_window(fl
     assert [b.frame().origin.x for b in host.buttons] == [12, 32, 52]
     host.slide([0.0], 1 / 60)
     assert tops(host) == pytest.approx([18] * 3)
+
+
+@pytest.mark.parametrize('flipped', [True, False])
+def test_cocoa_buttons_stay_hidden_until_the_page_places_the_top_bar(flipped):
+    host, pending, _ = cocoa_motion(flipped)
+    host.held, host.hid = True, False
+    for button in host.buttons:
+        button.hidden = True
+    host.measure({'centre': 22})
+    host.measure({'centre': 25})
+    assert all(b.hidden for b in host.buttons), "aligning them shows nothing"
+    # the page's first motion takes the top bar away: the buttons were never shown, so nothing plays
+    host.slide([0.0, 15.0, 40.0], 1 / 60)
+    assert not host.held and host.offset == 40.0 and all(b.hidden for b in host.buttons) and pending == []
+    # the entry motion then plays as always
+    host.slide([30.0, 0.0], 1 / 60)
+    pending.pop(0)[1]()
+    assert not any(b.hidden for b in host.buttons)
+
+
+@pytest.mark.parametrize('flipped', [True, False])
+def test_cocoa_buttons_show_at_once_when_the_first_motion_ends_at_rest(flipped):
+    host, pending, _ = cocoa_motion(flipped)
+    host.held, host.hid = True, False
+    for button in host.buttons:
+        button.hidden = True
+    host.measure({'centre': 22})
+    host.slide([12.0, 0.0], 1 / 60)
+    assert not any(b.hidden for b in host.buttons) and tops(host) == pytest.approx([15] * 3) and pending == []
+
+
+@pytest.mark.parametrize('flipped', [True, False])
+def test_cocoa_buttons_appear_after_the_hold_limit_when_the_page_never_speaks(flipped):
+    host, pending, _ = cocoa_motion(flipped)
+    host.held, host.hid = True, False
+    for button in host.buttons:
+        button.hidden = True
+    host.measure({'centre': 22})
+    host.release()
+    assert not host.held and not any(b.hidden for b in host.buttons)
+    host.release()  # a second call changes nothing
+    assert not any(b.hidden for b in host.buttons)
 
 
 @pytest.mark.parametrize('flipped', [True, False])
