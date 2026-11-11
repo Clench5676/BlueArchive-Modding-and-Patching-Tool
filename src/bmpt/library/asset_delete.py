@@ -114,7 +114,7 @@ class Deletion:
             verify_file(self.directory / entry['backup'], entry['before'])
             source = (data['applied'].get(str(target)) or {}).get('source', 'official')
             library._commit({target: self.directory / entry['backup']}, source, lambda _: None,
-                            pin=pin, prune=False, expected={target: current})
+                            pin=pin, prune=False, expected={target: current}, untested=False)
         # A held record (its files were missing at the start) that came back meanwhile is not a record this
         # transaction created: it keeps its folder and its place in the library.
         held = set(data.get('held', []))

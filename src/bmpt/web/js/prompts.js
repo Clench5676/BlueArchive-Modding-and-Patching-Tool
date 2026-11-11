@@ -343,6 +343,7 @@ async function applyDrift(entries) {
     ModSwitch.refused(err, "mods.restoreDrift", params);
     return;
   }
+  let refusal = null;
   const running = T("progress.apply", { name: T("progress.mods") });
   try {
     const result = await Loading.task((update) => waitJob(id, update), { label: running });
@@ -351,8 +352,10 @@ async function applyDrift(entries) {
     await Popup.message({ title: summary.title, lines: summary.lines, ok: T("picker.ok"),
       error: { code: result.failed?.[0]?.code || "internal", params: { failed: result.failed, left: result.left } } });
   } catch (err) {
-    ModSwitch.refused(err, "mods.restoreDrift", params);
+    refusal = err;
   }
+  // an untested game build's confirmation applies the same entries again, once the loading screen is gone
+  if (refusal) await ModSwitch.refused(refusal, "mods.restoreDrift", params, () => applyDrift(entries));
 }
 
 // "Mods Not in the Library": every card ticked; Add to Library, with mods off also Add and Turn On Mods, and Later;

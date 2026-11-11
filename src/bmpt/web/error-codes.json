@@ -443,6 +443,10 @@
     "code": "E3028",
     "level": "failed"
   },
+  "untested_build": {
+    "code": "E2016",
+    "level": "notice"
+  },
   "update_check_failed": {
     "code": "E7001",
     "level": "failed"

@@ -13,6 +13,7 @@ let busy = false;
 async function write(method, params, name, changed) {
   if (busy) return;
   busy = true;
+  let refusal = null;
   try {
     await Loading.task(async (update) => waitJob(await rpc(method, params), update), {
       label: T(method === "mods.remove" ? "progress.delete" : method === "actions.restore" ? "progress.restore" : "progress.apply", { name }),
@@ -27,8 +28,10 @@ async function write(method, params, name, changed) {
       await Popup.message({ title: T("mods.overwrittenTitle"), lines: overwrittenLines({
         installs: (state.installs || []).filter((item) => item.key === state.current),
       }, T), ok: T("picker.ok") });
-    } else ModSwitch.refused(err, method, params);
+    } else refusal = err;
   } finally { busy = false; await changed(); }
+  // an untested game build's confirmation makes the write again
+  if (refusal) await ModSwitch.refused(refusal, method, params, () => write(method, params, name, changed));
 }
 
 export async function select(mod, changed, useMod = !mod.selected) {

@@ -101,7 +101,9 @@ test("refused writes keep the list and expose the shared refusal flow", async ()
   const error = { code: "classic_open" }, h = harness({ error });
   await h.select(mod, h.changed);
   assert.equal(h.changes(), 1);
-  assert.deepEqual(h.refused, [[error, "actions.apply", { variant: mod.target, kind: "other", source: "mod:m1" }]]);
+  assert.deepEqual(h.refused.map((args) => args.slice(0, 3)), [[error, "actions.apply", { variant: mod.target, kind: "other", source: "mod:m1" }]]);
+  // an untested game build's confirmation makes the same write again
+  assert.equal(typeof h.refused[0][3], "function");
 });
 
 class El {

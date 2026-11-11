@@ -315,6 +315,11 @@
 				"expand": "展开",
 				"collapse": "收起"
 			},
+			"untested": {
+				"title": "游戏新版本",
+				"affected": "受游戏本体更新影响：{n}",
+				"apply": "仍然应用"
+			},
 			"deleteConfirm": "删除 {name}？",
 			"deleteRestore": "使用中的条目将恢复原版或之前的配置",
 			"alreadyInUse": "已在使用",
@@ -455,6 +460,7 @@
 			"variant_incompatible": "两者结构不同，无法互换",
 			"variant_not_found": "找不到这个换皮",
 			"steam_busy": "Steam 正在更新或校验游戏",
+			"untested_build": "游戏新版本，文件已变更",
 			"classic_open": "请先关闭经典界面",
 			"entry_changed": "游戏文件已变化，请重新检查",
 			"folder_changed": "游戏目录已变更，请重试",
