@@ -680,13 +680,14 @@ export function chipFit(caption, { chip = DETAILS.chip, mark = false, maxW = Inf
   return { w: Math.min(maxW, Math.max(chip.minW, need)), h: chip.h };
 }
 // Chips side by side in rows within panelW: each as wide as `widths` says, `gap` apart, a row centred, a new row where the
-// next one would not fit (its incline counted). Gives each chip's row and its centre's x from the panel's centre.
-export function chipPlaces(widths, panelW, { h = DETAILS.chip.h, gap = DETAILS.chipGap } = {}) {
+// next one would not fit (its incline counted). Gives each chip's row and its centre's x from the panel's centre;
+// wrap: false keeps them on one row (the details panel's, whose widths the caller fitted to the panel).
+export function chipPlaces(widths, panelW, { h = DETAILS.chip.h, gap = DETAILS.chipGap, wrap = true } = {}) {
   if (typeof widths === "number") widths = Array.from({ length: widths }, () => CHIP.w);
   const slant = h * TAN10, rows = [[]];
   for (const [i, w] of widths.entries()) {
     const cur = rows.at(-1), used = cur.reduce((n, j) => n + widths[j] + gap, 0);
-    if (cur.length && used + w + slant > panelW) rows.push([i]); else cur.push(i);
+    if (wrap && cur.length && used + w + slant > panelW) rows.push([i]); else cur.push(i);
   }
   const boxes = [];
   rows.forEach((indices, r) => {
@@ -731,11 +732,26 @@ export function detailsTree(it, title, fields, actions, portraitTexture = null, 
   const using = it.inUseText || (it.inUse ? T("popup.inUse") : null);
   const chips = it.chips || [it.tag?.text || (it.recruit ? T("type.recruit") : it.kind === "mod" ? T("type.added") : T("type.noRecruit")), ...(using ? [using] : [])];
   const dark = !it.chips && it.recruit, chip = DETAILS.chip;
-  const chipW = chips.map((caption, i) => chipFit(caption, { mark: i === 0 && dark, maxW: infoW - 2 * SPACE.m }).w);
-  const chipsW = chipW.reduce((n, cw) => n + cw, 0) + Math.max(0, chips.length - 1) * DETAILS.chipGap + chip.h * TAN10;
-  // the chips beside a one-line name when the line holds both, else in their own rows under it
-  const beside = chips.length > 0 && !nameFit.text.includes("\n") && nameW + edit + SPACE.l + chipsW <= infoW - 2 * SPACE.m;
-  const places = beside ? null : chipPlaces(chipW, infoW - 2 * SPACE.m), rows = !beside && chips.length ? Math.max(...places.map((p) => p.row)) + 1 : 0;
+  // the chips stay on one row (owner, 2026-11-11: never wrapped one under another): where their captions need more than the
+  // column, the widest give up width first (one cap for all), and a squeezed caption may shrink to the XS chip's floor
+  const chipRoom = infoW - 2 * SPACE.m, chipGaps = Math.max(0, chips.length - 1) * DETAILS.chipGap + chip.h * TAN10;
+  let chipW = chips.map((caption, i) => chipFit(caption, { mark: i === 0 && dark, maxW: chipRoom }).w);
+  const squeezed = chipW.reduce((n, cw) => n + cw, 0) + chipGaps > chipRoom;
+  if (squeezed) {
+    const room = chipRoom - chipGaps, sorted = [...chipW].sort((a, b) => a - b);
+    let cap = room / chips.length;
+    for (let k = 0, used = 0; k < sorted.length; used += sorted[k], k += 1) {
+      const c = (room - used) / (sorted.length - k);
+      if (sorted[k] >= c) { cap = c; break; }
+    }
+    chipW = chipW.map((cw) => Math.min(cw, Math.floor(cap)));
+  }
+  const chipFloor = squeezed ? CHIP_TIERS.XS.fsMin : chip.fsMin;
+  const chipsW = chipW.reduce((n, cw) => n + cw, 0) + chipGaps;
+  // the chips beside a one-line name when the line holds both, else on their own row under it; a 3D model's beside its
+  // picture always under the name (owner, 2026-11-11)
+  const beside = !side && chips.length > 0 && !nameFit.text.includes("\n") && nameW + edit + SPACE.l + chipsW <= chipRoom;
+  const places = beside ? null : chipPlaces(chipW, chipRoom, { wrap: false }), rows = !beside && chips.length ? Math.max(...places.map((p) => p.row)) + 1 : 0;
   const headH = beside ? Math.max(name.h, chip.h) : name.h;
   const info = [{ name: "Head", w: infoW, h: headH }];
   kids.push(node("Name", [0, 0], [label(name.text, name.fs, "#2d4664/1.00", beside ? nameW + 2 : nameRoom, name.h, { depth: 8, ellipsis: !!it.original, ariaLabel: it.full })]));
@@ -743,7 +759,7 @@ export function detailsTree(it, title, fields, actions, portraitTexture = null, 
   chips.forEach((caption, i) => kids.push(node(`Chip_${i}`, [0, 0],
     [sprite("Common_Bg_Raius10px", chipW[i], chip.h, { incline: 10, depth: 6, tier: "chip", color: i === 0 && dark ? "#2c4564/1.00" : "#ffffff/1.00" })], [
       node("Line", [0, 0], [sprite("Common_Line_Raius10px", chipW[i], chip.h, { incline: 10, depth: 7, color: "#c0c9d4/1.00" })]),
-      node("Text", [0, 0], [], markedLabel(caption, { fs: chip.fs, fsMin: chip.fsMin,
+      node("Text", [0, 0], [], markedLabel(caption, { fs: chip.fs, fsMin: chipFloor,
         color: i === 0 && dark ? "#ffffff/1.00" : "#2c4564/1.00", maxW: chipW[i] - 2 * chip.pad, mark: i === 0 && dark, depth: 8, maxLines: 1 }).nodes),
     ])));
   if (rows) info.push({ name: "Chips", w: infoW, h: rows * chip.h + (rows - 1) * SPACE.s });
