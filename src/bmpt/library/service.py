@@ -28,7 +28,7 @@ from UnityPy.helpers.ResourceReader import get_resource_data
 from bmpt import atlas_remap, devmode, game_paths, mod_origin, preview_gate, rebake, spans, steam_records
 from bmpt.engine import (
     SEARCH_DIR_SUFFIXES, AssetType, Bundle, LogFunc, ProgressCallback, core, get_search_dirs, get_skel_version,
-    is_safe_file_name, mod_install, no_log, parse_filename, t,
+    is_safe_file_name, no_log, parse_filename, t,
 )
 from ..catalog.models import CoreMap
 from ..errors import ServiceError
@@ -40,6 +40,8 @@ from ..logging_utils import log_failure
 from ..openfiles import remove_tree, temporary_directory
 from . import profiles as profiles_mod
 from . import fingerprint, integrity, safety, staging
+from .install import Action, PlannedFile, PlannedGroup, backup_file, install_staged
+from .rebuild import rebuild
 from . import targets as resolver
 from .identity import identify
 from .judge import (
@@ -1638,25 +1640,23 @@ class ModLibrary:
         return self._resolve(files, targets, pin, inspection, release=release).current
 
     def _update_groups(self, older: dict[str, Path], targets: Sequence[Path], pin: Pin,
-                       inspection: integrity.Inspection | None = None) -> list[mod_install.ModGroup]:
+                       inspection: integrity.Inspection | None = None) -> list[PlannedGroup]:
         """Install groups for files of older releases or other builds (every file treated as one)."""
         return self._groups_of(self._resolve(older, targets, pin, inspection, whole=False))
 
     @staticmethod
-    def _groups_of(resolution: resolver.Resolution) -> list[mod_install.ModGroup]:
-        """Upstream's install groups for the files the resolution does not replace whole: per name prefix and core,
-        the parts they update (groups reaching a common part update it together); files that found no part keep
-        upstream's NOT_FOUND."""
-        planned: list[mod_install.ModGroup] = []
+    def _groups_of(resolution: resolver.Resolution) -> list[PlannedGroup]:
+        """Install groups for the files the resolution does not replace whole: per name prefix and core, the parts
+        they update (groups reaching a common part update it together); files that found no part are NOT_FOUND."""
+        planned: list[PlannedGroup] = []
         for group in resolution.groups:
             parsed = parse_filename(group.names[0])
             if not group.targets:
-                planned.append(mod_install.ModGroup(parsed.prefix, parsed.category, parsed.core, [
-                    mod_install.ModFilePlan(path, parse_filename(path.name), mod_install.InstallAction.NOT_FOUND)
-                    for path in group.sources]))
+                planned.append(PlannedGroup(parsed.prefix, parsed.category, parsed.core, [
+                    PlannedFile(path, parse_filename(path.name), Action.NOT_FOUND) for path in group.sources]))
                 continue
-            merged = mod_install.ModGroup(parsed.prefix, parsed.category, parsed.core, [
-                mod_install.ModFilePlan(path, parse_filename(path.name), mod_install.InstallAction.UPDATE)
+            merged = PlannedGroup(parsed.prefix, parsed.category, parsed.core, [
+                PlannedFile(path, parse_filename(path.name), Action.UPDATE)
                 for path in group.sources], target_paths=sorted(group.targets))
             for other in [other for other in planned if set(other.target_paths) & set(merged.target_paths)]:
                 planned.remove(other)
@@ -3953,7 +3953,7 @@ class ModLibrary:
 
     # --- switching ---
 
-    def _plan(self, record: dict[str, Any], log: LogFunc, pin: Pin) -> list[mod_install.ModGroup]:
+    def _plan(self, record: dict[str, Any], log: LogFunc, pin: Pin) -> list[PlannedGroup]:
         paths = self._paths(record)
         files = {path.name: path for path in paths}
         targets = (self._other_targets(files, pin) if record["kind"] == "other" else
@@ -3968,25 +3968,24 @@ class ModLibrary:
                 integrity.check_format(inspection.metadata(path), path,
                                        inspection.metadata(self._official_or_current(target, pin)))
             parsed = parse_filename(path.name)
-            group = groups.setdefault(parsed.prefix, mod_install.ModGroup(parsed.prefix, parsed.category, parsed.core, []))
-            group.files.append(mod_install.ModFilePlan(path, parsed, mod_install.InstallAction.DIRECT_REPLACE,
-                                                       existing_path=target))
+            group = groups.setdefault(parsed.prefix, PlannedGroup(parsed.prefix, parsed.category, parsed.core, []))
+            group.files.append(PlannedFile(path, parsed, Action.DIRECT_REPLACE, existing_path=target))
         planned = list(groups.values())
         older = {name: path for name, path in files.items() if path not in current.values()}
         if older:
             if record["kind"] == "other":
-                planned.append(mod_install.ModGroup(prefix="", category=None, core=record["target"], files=[
-                    mod_install.ModFilePlan(path, parse_filename(name), mod_install.InstallAction.UPDATE)
+                planned.append(PlannedGroup(prefix="", category=None, core=record["target"], files=[
+                    PlannedFile(path, parse_filename(name), Action.UPDATE)
                     for name, path in older.items()], target_paths=self._other_targets(older, pin)))
             else:
                 planned.extend(self._groups_of(resolution))
-        if not planned or any(file.action not in (mod_install.InstallAction.DIRECT_REPLACE, mod_install.InstallAction.UPDATE)
+        if not planned or any(file.action not in (Action.DIRECT_REPLACE, Action.UPDATE)
                               for group in planned for file in group.files):
             raise ServiceError("game_file_not_found", variant=record["target"])
         return planned
 
     @staticmethod
-    def _plan_targets(groups: list[mod_install.ModGroup]) -> list[Path]:
+    def _plan_targets(groups: list[PlannedGroup]) -> list[Path]:
         return sorted({path for group in groups for path in (
             group.target_paths + [file.existing_path for file in group.files if file.existing_path is not None])})
 
@@ -4391,7 +4390,7 @@ class ModLibrary:
                         if target in officials:
                             self._keep_original(target, pin, moving=True)
                         kept_original = self._original_path(target).is_file()
-                        mod_install.backup_file(target, create_backup and not kept_original, log)
+                        backup_file(target, create_backup and not kept_original, log)
                         if not item["official"]:
                             backup = self.root / item["rollback"]
                             if not atomic_clone(target, backup):
@@ -4455,7 +4454,7 @@ class ModLibrary:
         output.mkdir(parents=True)
         adapted = adapt_variant_sources(
             sources, list(staged.values()), directory / "sources", self.settings.asset_types(), log)
-        result = core.process_mod_update(
+        result = rebuild(
             adapted, list(staged.values()), output,
             self.settings.asset_types(), self.settings.save_options(self.settings.crc_needed(targets[0])),
             self.settings.spine_options(), skip_unchanged=True, match_strategy="name_type",
@@ -4726,20 +4725,17 @@ class ModLibrary:
                         continue
                     # Same-name mods retain the whole uploaded bundle, including types outside the update filter.
                     parsed = parse_filename(exact.name)
-                    group = mod_install.ModGroup(parsed.prefix, parsed.category, parsed.core, [
-                        mod_install.ModFilePlan(exact, parsed, mod_install.InstallAction.DIRECT_REPLACE,
-                                                existing_path=original, need_crc_fix=True)])
-                    result = mod_install.execute_mod_install(
-                        [group], output, self.settings.asset_types(),
-                        self.settings.save_options(self.settings.crc_needed(target)),
-                        self.settings.spine_options(), create_backup=False, log=log)
-                    if result.failed_groups:
+                    group = PlannedGroup(parsed.prefix, parsed.category, parsed.core, [
+                        PlannedFile(exact, parsed, Action.DIRECT_REPLACE, existing_path=original, need_crc_fix=True)])
+                    if install_staged([group], output, self.settings.asset_types(),
+                                      self.settings.save_options(self.settings.crc_needed(target)),
+                                      self.settings.spine_options(), log=log):
                         raise ServiceError("mod_apply_failed", id=record["id"])
                     continue
                 matching = resolver.same_prefix(sources, target)
                 if not matching:
                     raise ServiceError("mod_target_mismatch", id=record["id"], variant=core_of(target.name))
-                result = core.process_mod_update(matching, [original], output, self.settings.asset_types(),
+                result = rebuild(matching, [original], output, self.settings.asset_types(),
                     self.settings.save_options(self.settings.crc_needed(target)), self.settings.spine_options(),
                     match_strategy="cont_name_type", skip_unchanged=True,
                     anim_check=self.settings.anim_check_options(), log=log)
@@ -4755,26 +4751,25 @@ class ModLibrary:
         if any(path not in allowed for path in planned):
             raise ServiceError("game_file_outside_resources", file=next(p for p in planned if p not in allowed))
         updating = {path for group in groups for path in group.target_paths
-                    if any(file.action == mod_install.InstallAction.UPDATE for file in group.files)}
+                    if any(file.action == Action.UPDATE for file in group.files)}
         staged = self._stage_direct(targets, sources, work / "targets", pin, updating)
         logger.info("Mod apply plan and stage: %.3f s", time.perf_counter() - started)
         started = time.perf_counter()
-        # Execute only against temporary copies. The classic installer may
-        # copy directly or rebuild; all real game writes go through _commit.
+        # Build only into temporary copies: a part is copied whole or rebuilt; all real game writes go through
+        # _commit.
         staged_groups = [replace(group, files=[replace(file,
             existing_path=staged.get(file.existing_path),
             need_crc_fix=self._needs_crc_fix(file.mod_path, file.existing_path)
             if file.existing_path else False) for file in group.files],
             target_paths=[staged[path] for path in group.target_paths]) for group in groups]
-        result = mod_install.execute_mod_install(
+        failures = install_staged(
             staged_groups, work / "output", self.settings.asset_types(),
             self.settings.save_options(self.settings.crc_needed(targets[0])),
-            self.settings.spine_options(), anim_check=self.settings.anim_check_options(),
-            create_backup=False, log=log, progress_callback=(
+            self.settings.spine_options(), anim_check=self.settings.anim_check_options(), log=log, progress=(
                 lambda current, total, name: progress(current, total, t("webui.progress.process", name=name))
             ) if progress else None)
         logger.info("Mod apply build and CRC: %.3f s", time.perf_counter() - started)
-        if result.failed_groups:
+        if failures:
             raise ServiceError("mod_apply_failed", id=record["id"])
         return staged
 
@@ -6636,7 +6631,7 @@ class ModLibrary:
                 local_patch.update({key: patch[official.keys[atlas_remap.texture_key(key.name)]]
                                     for key in keys if key.type == "Texture2D"})
                 if local_patch:
-                    result = core.process_mod_update([], [original], output, {"Texture2D"},
+                    result = rebuild([], [original], output, {"Texture2D"},
                         self.settings.save_options(self.settings.crc_needed(target)),
                         match_strategy="cont_name_type", log=log, prepared_patch=local_patch,
                         on_step=lambda key: step(key, i))
@@ -6739,14 +6734,14 @@ class ModLibrary:
                         progress({"current": i, "total": len(targets), "step": f"import.step.{key}"})
 
                 step("check")
-                result = core.process_mod_update(
+                result = rebuild(
                     paths, [self._official_for(target, pin)], output, self.settings.asset_types(),
                     self.settings.save_options(self.settings.crc_needed(target)), self.settings.spine_options(),
                     skip_unchanged=True, match_strategy="cont_name_type",
                     anim_check=self.settings.anim_check_options(), log=log, on_step=step)
                 if not result.success:
                     raise ServiceError("mod_update_failed", id=mod_id)
-                if result.message != "all_targets_unchanged":
+                if not result.all_unchanged:
                     all_unchanged = False
                 generated.extend(pair.output for pair in result.file_pairs)
             if all_unchanged or (len(generated) == len(paths) and all(

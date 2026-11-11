@@ -198,7 +198,8 @@ def test_current_release_platform_override_cannot_relabel_serialized_target(real
 @pytest.mark.parametrize('change,reason', [('platform', 'mod_platform_mismatch'),
                                            ('version', 'mod_unity_version_mismatch')])
 def test_current_release_cross_platform_rebuild_rejects_invalid_output(real_metadata, monkeypatch, change, reason):
-    from ba_modding_toolkit.models import FilePair, ModUpdateResult
+    from ba_modding_toolkit.models import FilePair
+    from bmpt.library.rebuild import RebuildResult
 
     env = real_metadata
     source = unity_bundle(env.tmp / 'input' / env.original.name, 13, cab='CAB-mobile', payload=b'mod',
@@ -213,9 +214,9 @@ def test_current_release_cross_platform_rebuild_rejects_invalid_output(real_meta
                               payload=b'bad rebuild')
         if change == 'version':
             output.write_bytes(output.read_bytes().replace(b'2021.3.0f1', b'2020.3.0f1'))
-        return ModUpdateResult(True, 'converted', [FilePair(output, target)])
+        return RebuildResult(True, 'converted', [FilePair(output, target)])
 
-    monkeypatch.setattr(batch_import.core, 'process_mod_update', foreign_output)
+    monkeypatch.setattr(batch_import, 'rebuild', foreign_output)
     result, = run(env, [entry], types=['TextAsset'])
     assert (result['outcome'], result['reason'], result['applied']) == ('failed', reason, False)
     assert env.original.read_bytes() == before and not env.library.mods()
@@ -371,7 +372,7 @@ def test_converted_source_is_already_in_library_after_move_and_restart(real_meta
     def forbidden(*args, **kwargs):
         pytest.fail('A remembered conversion must not rebuild, add, or apply')
 
-    monkeypatch.setattr(batch_import.core, 'process_mod_update', forbidden)
+    monkeypatch.setattr(batch_import, 'rebuild', forbidden)
     monkeypatch.setattr(env.library, 'add_files', forbidden)
     monkeypatch.setattr(env.library, 'apply_import', forbidden)
     repeated, = analyze(env, [moved])['entries']
@@ -423,7 +424,7 @@ def test_legacy_converted_output_is_verified_without_reimporting(real_metadata, 
     assert (repeated['state'], repeated['libraryId']) == ('library', result['libraryId'])
     assert env.library._records[result['libraryId']].get('import_sources')
     assert env.original.read_bytes() == before and len(env.library.mods()) == 1
-    monkeypatch.setattr(batch_import.core, 'process_mod_update', forbidden)
+    monkeypatch.setattr(batch_import, 'rebuild', forbidden)
     assert analyze(env, [source])['entries'][0]['state'] == 'library'
 
 
@@ -573,14 +574,14 @@ def test_ios_target_folder_is_found_by_settings_resource_search(tmp_path):
 
 
 def test_conversion_failure_cannot_store_or_apply_mobile_bytes(real_metadata, monkeypatch):
-    from ba_modding_toolkit.models import ModUpdateResult
+    from bmpt.library.rebuild import RebuildResult
 
     env = real_metadata
     source = old_bundle(env.tmp / 'input' / env.original.name, 13, cab='CAB-mobile', payload=b'mod',
                           references=['com.nexon.bluearchive'])
     entry, = analyze(env, [source])['entries']
     before = env.original.read_bytes()
-    monkeypatch.setattr(batch_import.core, 'process_mod_update', lambda **kwargs: ModUpdateResult(False, 'failed', []))
+    monkeypatch.setattr(batch_import, 'rebuild', lambda **kwargs: RebuildResult(False, 'failed', []))
     result, = run(env, [entry], types=['TextAsset'])
     assert result['outcome'] == 'failed' and result['reason'] == 'conversion_failed'
     assert not result['applied'] and not env.library.mods() and env.original.read_bytes() == before
@@ -599,13 +600,13 @@ def test_conversion_stages_only_inside_the_pinned_library_with_dev_guards(real_m
     entry, = analyze(env, [source])['entries']
     assert entry['state'] == 'convert'
     seen = []
-    update = batch_import.core.process_mod_update
+    update = batch_import.rebuild
 
     def convert(**kwargs):
         seen.extend([kwargs['output_dir'], *kwargs['target_paths']])
         return update(**kwargs)
 
-    monkeypatch.setattr(batch_import.core, 'process_mod_update', convert)
+    monkeypatch.setattr(batch_import, 'rebuild', convert)
     result, = run(env, [entry], types=['TextAsset'], output=str(env.tmp / 'output') if output else None)
     assert result['outcome'] == 'updated' and result['applied'], result
     assert seen and all(path.is_relative_to(env.library.root / 'staging') for path in seen)
@@ -645,7 +646,8 @@ def test_system_temp_conversion_output_reproduces_the_dev_read_guard_failure(rea
 
 @pytest.mark.parametrize('current_release', [False, True])
 def test_converted_output_still_requires_full_dependency_validation(real_metadata, monkeypatch, current_release):
-    from ba_modding_toolkit.models import FilePair, ModUpdateResult
+    from ba_modding_toolkit.models import FilePair
+    from bmpt.library.rebuild import RebuildResult
 
     env = real_metadata
     source = (unity_bundle if current_release else old_bundle)(env.tmp / 'input' / env.original.name, 13,
@@ -655,9 +657,9 @@ def test_converted_output_still_requires_full_dependency_validation(real_metadat
     def broken_output(**kwargs):
         target = kwargs['target_paths'][0]
         output = unity_bundle(kwargs['output_dir'] / target.name, 19, payload=b'bad rebuild', references=['CAB-missing'])
-        return ModUpdateResult(True, 'converted', [FilePair(output, target)])
+        return RebuildResult(True, 'converted', [FilePair(output, target)])
 
-    monkeypatch.setattr(batch_import.core, 'process_mod_update', broken_output)
+    monkeypatch.setattr(batch_import, 'rebuild', broken_output)
     result, = run(env, [entry], types=['TextAsset'])
     assert result['outcome'] == 'failed' and result['reason'] == 'mod_parts_missing'
     assert not env.library.mods() and not result['applied']
@@ -845,7 +847,7 @@ def test_inference_rejects_only_selected_unreadable_assets(real_metadata, monkey
 @pytest.mark.parametrize("manual", [False, True])
 @pytest.mark.parametrize("counterpart", ["missing", "identical", "changed"])
 def test_import_uses_current_counterparts_and_reports_omissions(real_metadata, monkeypatch, manual, counterpart):
-    from tests.test_core.test_update_failures import asset
+    from tests.test_rebuild_failures import asset
     from ba_modding_toolkit.models import AssetType
     env = real_metadata
     source = old_bundle(env.tmp / "input" / env.original.name, -2, cab="CAB-unknown", payload=b"modded")
@@ -1042,12 +1044,12 @@ def test_legacy_recognition_rebuilds_only_when_source_hashes_are_missing(real_me
         pytest.fail('Analysis must never rebuild a legacy conversion')
 
     if recorded:
-        monkeypatch.setattr(batch_import.core, 'process_mod_update', forbidden)
+        monkeypatch.setattr(batch_import, 'rebuild', forbidden)
         monkeypatch.setattr(batch_import.staging, 'import_directory', forbidden)
     for _ in range(2):
         repeated, = analyze(env, [source])['entries']
         assert repeated['state'] == 'library'
-        monkeypatch.setattr(batch_import.core, 'process_mod_update', forbidden)
+        monkeypatch.setattr(batch_import, 'rebuild', forbidden)
     assert len(env.library.mods()) == 1
 
 

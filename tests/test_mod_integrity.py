@@ -575,7 +575,7 @@ def test_replacement_precedence_cab_match_old_release_and_ambiguity(checks, monk
     # With neither matching name nor CAB, it is older, however many parts are live.
     e.register(source, cab='cab-new')
     assert e.library._replacements({renamed: source}, targets, pin) == {}
-    monkeypatch.setattr(service.mod_install, 'asset_match', lambda sources, candidates, log: (candidates, ''))
+    monkeypatch.setattr('ba_modding_toolkit.core.mod_install.asset_match', lambda sources, candidates, log: (candidates, ''))
     e.library._check_group({renamed: source}, pin, compatibility=False)
     assert e.library.direct_import({renamed: source}, pin) is None
     assert e.library._check_group({renamed: source}, pin)['outdated']
@@ -735,7 +735,7 @@ def test_pre_split_older_bundle_keeps_all_update_targets_in_add_and_batch(checks
     mod, = e.library.add_files(kind, [old])
     assert e.library.compatibility(mod.id, pin)['outdated']
     group, = e.library._plan(e.library._record(mod.id), lambda text: None, pin)
-    assert all(file.action == service.mod_install.InstallAction.UPDATE for file in group.files)
+    assert all(file.action == service.Action.UPDATE for file in group.files)
     assert set(group.target_paths) == set(targets)
 
 

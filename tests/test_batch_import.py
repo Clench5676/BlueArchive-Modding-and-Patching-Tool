@@ -16,7 +16,8 @@ from ba_modding_toolkit.bundle import Bundle
 from bmpt.errors import ServiceError
 from bmpt.library import integrity
 from bmpt.library import targets as resolver
-from ba_modding_toolkit.models import AssetType, FilePair, ModUpdateResult, PatchResult
+from ba_modding_toolkit.models import AssetType, FilePair, PatchResult
+from bmpt.library.rebuild import RebuildResult
 from bmpt.webui import batch_import, native
 from bmpt.webui.api import build_api
 from bmpt.webui.services import Services
@@ -536,9 +537,9 @@ def updater(monkeypatch, calls, payload=b"updated mod"):
             from test_library import header_bundle
             output.write_bytes(header_bundle(payload))
             pairs.append(FilePair(output, target))
-        return ModUpdateResult(True, "ok", pairs)
+        return RebuildResult(True, "ok", pairs)
 
-    monkeypatch.setattr(batch_import.core, "process_mod_update", update)
+    monkeypatch.setattr(batch_import, "rebuild", update)
 
 
 # The review's example: a library folder of 73 characters and the longest official bundle names (134 characters).
@@ -560,7 +561,7 @@ def test_staging_paths_fit_the_windows_limit_with_the_longest_bundle_names(env, 
     assert entry["state"] == "update" and len(entry["id"]) == 64
     calls = []
     updater(monkeypatch, calls)
-    update = batch_import.core.process_mod_update
+    update = batch_import.rebuild
     staged = []
 
     def record(**kwargs):
@@ -568,7 +569,7 @@ def test_staging_paths_fit_the_windows_limit_with_the_longest_bundle_names(env, 
         staged.extend(kwargs["output_dir"] / path.name for path in kwargs["target_paths"])
         return update(**kwargs)
 
-    monkeypatch.setattr(batch_import.core, "process_mod_update", record)
+    monkeypatch.setattr(batch_import, "rebuild", record)
     snapshot = env.services.batch_import._snapshot_originals
 
     def snapshot_and_record(candidate, temporary, snapshots):
@@ -599,7 +600,7 @@ def test_omitted_assets_are_available_in_the_settings_app_log(env, monkeypatch):
     source = game_bundle(env.tmp / "old", date="2025-01-01", payload=b"old mod")
     entry, = analyze(env, [source])["entries"]
     updater(monkeypatch, [])
-    update = batch_import.core.process_mod_update
+    update = batch_import.rebuild
     omitted = [f"[Texture2D] removed_page_{i}" for i in range(50)]
 
     def with_omissions(**kwargs):
@@ -607,7 +608,7 @@ def test_omitted_assets_are_available_in_the_settings_app_log(env, monkeypatch):
         result.not_transferred = omitted
         return result
 
-    monkeypatch.setattr(batch_import.core, "process_mod_update", with_omissions)
+    monkeypatch.setattr(batch_import, "rebuild", with_omissions)
     env.services.log_path.parent.mkdir(parents=True, exist_ok=True)
     handler = logging.FileHandler(env.services.log_path, encoding="utf-8")
     handler.setFormatter(RedactingFormatter(env.services.log_secrets))
@@ -885,7 +886,7 @@ def test_per_entry_failures_keep_successful_imports_and_error_codes(env, monkeyp
         env.original, env.tmp / "bad", payload=b"bad")
     entries = analyze(env, [bad, good])["entries"]
     if phase == "update":
-        monkeypatch.setattr(batch_import.core, "process_mod_update", lambda **kwargs: ModUpdateResult(False, "message", []))
+        monkeypatch.setattr(batch_import, "rebuild", lambda **kwargs: RebuildResult(False, "message", []))
         code = "mod_update_failed"
     elif phase == "add":
         add = env.library.add
@@ -918,8 +919,8 @@ def test_per_entry_failures_keep_successful_imports_and_error_codes(env, monkeyp
 def test_skip_unchanged_update_and_modified_source_are_safe(env, monkeypatch):
     old = game_bundle(env.tmp / "old", date="2025-01-01", payload=b"mod")
     entry, = analyze(env, [old])["entries"]
-    monkeypatch.setattr(batch_import.core, "process_mod_update", lambda **kwargs:
-                        ModUpdateResult(True, "all_targets_unchanged", []))
+    monkeypatch.setattr(batch_import, "rebuild", lambda **kwargs:
+                        RebuildResult(True, "", [], all_unchanged=True))
     result, = run(env, [entry])
     assert result["outcome"] == "unchanged" and not env.library.mods()
     assert env.services.batch_import._latest[entry["id"]].entry["state"] != "done"
@@ -977,13 +978,13 @@ def test_update_reads_kept_official_bytes_instead_of_the_installed_mod(env, monk
     assert entry["state"] == "update"
     calls = []
     updater(monkeypatch, calls)
-    update = batch_import.core.process_mod_update
+    update = batch_import.rebuild
 
     def checked(**kwargs):
         assert kwargs["target_paths"][0].read_bytes() == official
         return update(**kwargs)
 
-    monkeypatch.setattr(batch_import.core, "process_mod_update", checked)
+    monkeypatch.setattr(batch_import, "rebuild", checked)
     assert run(env, [entry], enableAfterImport=False)[0]["outcome"] == "updated"
     assert env.original.read_bytes() == current_mod.read_bytes()
 
@@ -1014,7 +1015,7 @@ def test_workers_parallelize_updates_while_library_adds_remain_serial(env, monke
     assert {e["state"] for e in entries} == {"update"}
     calls, threads = [], set()
     updater(monkeypatch, calls)
-    update = batch_import.core.process_mod_update
+    update = batch_import.rebuild
     barrier = threading.Barrier(2)
 
     def parallel(**kwargs):
@@ -1022,7 +1023,7 @@ def test_workers_parallelize_updates_while_library_adds_remain_serial(env, monke
         barrier.wait(timeout=5)
         return update(**kwargs)
 
-    monkeypatch.setattr(batch_import.core, "process_mod_update", parallel)
+    monkeypatch.setattr(batch_import, "rebuild", parallel)
     results = run(env, entries, workers=2, enableAfterImport=False)
     assert [r["outcome"] for r in results] == ["updated", "updated"]
     assert len(threads) == 2 and len(env.library.mods()) == 2
@@ -1144,12 +1145,12 @@ def test_later_worker_uses_frozen_official_bytes_after_an_earlier_apply(env, mon
             output = kwargs['output_dir'] / target.name
             output.write_bytes(kwargs['source_paths'][0].read_bytes())
             pairs.append(FilePair(output, target))
-        return ModUpdateResult(True, 'ok', pairs)
+        return RebuildResult(True, 'ok', pairs)
 
     monkeypatch.setattr(batch_import, 'atomic_clone', tracked_clone)
     monkeypatch.setattr(env.services.batch_import, '_prepare', delayed)
     monkeypatch.setattr(env.library, 'apply_import', applying)
-    monkeypatch.setattr(batch_import.core, 'process_mod_update', update)
+    monkeypatch.setattr(batch_import, 'rebuild', update)
     results = run(env, entries, workers=2)
     assert all(result['outcome'] == 'updated' and result['applied'] for result in results)
     assert baselines == [original, original]

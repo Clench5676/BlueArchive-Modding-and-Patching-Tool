@@ -12,10 +12,9 @@ from UnityPy.helpers.Tpk import get_typetree_node
 from UnityPy.streams import EndianBinaryWriter
 
 from bmpt import atlas_remap as remap
-from ba_modding_toolkit import core
 from ba_modding_toolkit.bundle import Bundle
-from ba_modding_toolkit.core import mod_update
 from ba_modding_toolkit.i18n import I18n, t
+from bmpt.library import rebuild as app_rebuild, service
 from bmpt.library.integrity import inspect as inspect_bundle
 from ba_modding_toolkit.models import ContNameTypeKey, SaveOptions
 from ba_modding_toolkit.utils import CRCUtils
@@ -347,8 +346,8 @@ def test_unity_bundle_round_trip_uses_update_crc_and_official_rig(tmp_path, repa
     patch, report = remap.prepare_patch(remap.read_inputs([mod]), remap.read_inputs([official]))
     output = tmp_path / "output"
     output.mkdir()
-    result = core.process_mod_update([], [official], output, {"Texture2D"}, SaveOptions(perform_crc=True, compression="lz4"),
-                                     match_strategy="cont_name_type", prepared_patch=patch)
+    result = app_rebuild.rebuild([], [official], output, {"Texture2D"}, SaveOptions(perform_crc=True, compression="lz4"),
+                                 match_strategy="cont_name_type", prepared_patch=patch)
     assert result.success, result.message
     built = result.file_pairs[0].output
     assert CRCUtils.compute_crc32(built.read_bytes()) == 123456
@@ -519,15 +518,15 @@ def test_self_contained_split_bundles_do_not_use_official_layout(setup_library, 
 
 @pytest.mark.parametrize("language", ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR"])
 def test_an_unapplied_prepared_page_refuses_the_build(tmp_path, monkeypatch, language):
-    monkeypatch.setattr(mod_update, "t", I18n(language).t)
+    monkeypatch.setattr(app_rebuild, "t", I18n(language).t)
     name = "assets-_mx-spinecharacters-test_spr-_mxdependency-2026-01-01_003_assets_all_123.bundle"
     target = write_bundle(tmp_path / name, {}, {"page": Image.new("RGBA", (8, 8))})
     output = tmp_path / "out"
     output.mkdir()
     patch = {ContNameTypeKey(None, "page", "Texture2D"): Image.new("RGBA", (8, 8), "red"),
              ContNameTypeKey(None, "missing", "Texture2D"): Image.new("RGBA", (8, 8), "red")}
-    result = core.process_mod_update([], [target], output, {"Texture2D"}, SaveOptions(perform_crc=False),
-                                     match_strategy="cont_name_type", prepared_patch=patch)
+    result = app_rebuild.rebuild([], [target], output, {"Texture2D"}, SaveOptions(perform_crc=False),
+                                 match_strategy="cont_name_type", prepared_patch=patch)
     assert not result.success
     assert target.name in result.message
     assert "1/2" in result.message
@@ -704,7 +703,7 @@ def test_unchanged_pages_never_build_or_store_a_mod(setup_library, monkeypatch):
                           {"page": Image.new("RGBA", (16, 16), "red")})
     entry, = env.library.add([source])
     before = (env.library.root / "state.json").read_bytes(), entry.file.read_bytes()
-    monkeypatch.setattr(core, "process_mod_update", lambda *a, **kw: pytest.fail("no build for equal pages"))
+    monkeypatch.setattr(service, "rebuild", lambda *a, **kw: pytest.fail("no build for equal pages"))
     result = env.library.remap(entry.id, geometry=rig_geometry(env.library, entry.id))
     assert result["unchanged"]
     assert not env.library._remap_previews
@@ -750,12 +749,12 @@ def test_source_changed_during_remapping_never_becomes_an_acceptable_preview(rep
     from bmpt.errors import ServiceError
 
     env, entry, _, _ = repair_review
-    process = core.process_mod_update
+    process = service.rebuild
     def changed(*args, **kwargs):
         result = process(*args, **kwargs)
         entry.file.write_bytes(entry.file.read_bytes() + b"changed by another writer")
         return result
-    monkeypatch.setattr(core, "process_mod_update", changed)
+    monkeypatch.setattr(service, "rebuild", changed)
     with pytest.raises(ServiceError, match="entry_changed"):
         env.library.remap(entry.id, geometry=rig_geometry(env.library, entry.id))
     assert not env.library._remap_previews

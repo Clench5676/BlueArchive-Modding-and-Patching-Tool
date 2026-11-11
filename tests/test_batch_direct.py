@@ -99,7 +99,7 @@ def test_model_direct_replacement_never_transfers_assets(batch_model_env, monkey
 
     monkeypatch.setattr(Bundle, 'extract_patch', forbidden)
     monkeypatch.setattr(resolver, 'sharing_keys', forbidden)
-    monkeypatch.setattr(batch_import.core, 'process_mod_update', forbidden)
+    monkeypatch.setattr(batch_import, 'rebuild', forbidden)
     monkeypatch.setattr(Bundle, 'check_need_crc', lambda *args: True)
     entry, = analyze(env, [source])['entries']
     assert (entry['state'], entry['reason'], entry['files'][0]['target']) == ('ready', None, target.name)
