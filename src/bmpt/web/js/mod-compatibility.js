@@ -18,8 +18,10 @@ function progressTask(action, name, run) {
   return Loading.task((update) => run((p) => update({ label: text(p) })), { label: text() });
 }
 export const eligible = (mod) => mod?.kind !== "model" && !mod?.repaired_from && !mod?.repaired_id;
+// The remap, or for a portrait the game drew anew its old rig as a whole (assessment.oldRig): both are Update.
 export const canRemap = (id, mod = null) => eligible(mod) && eligible(reports.get(id))
-  && reports.get(id)?.remappable === true && reports.get(id)?.assessment?.remap === true;
+  && reports.get(id)?.remappable === true
+  && (reports.get(id)?.assessment?.remap === true || reports.get(id)?.assessment?.oldRig === true);
 
 export function readSkeleton(input, runtime = globalThis.spine) {
   const bytes = Uint8Array.from(atob(input.data), (c) => c.charCodeAt(0));
@@ -115,10 +117,16 @@ export function compare(report, runtime = globalThis.spine, summarize = false) {
   // The game drew the portrait anew (actions.redrawn): nothing can be moved, so no remap is offered.
   const redrawn = report.redrawn?.redrawn === true;
   if (redrawn) add("redrawn");
+  // Such a portrait can keep the rig its textures were drawn for, as a whole (actions.oldRig), unless the official
+  // skeleton has animations the old one lacks: the game calls them by name.
+  const gained = redrawn ? [...new Set(Object.values(report.oldRig?.animations || {}).flat())] : [];
+  if (gained.length) add("oldRigAnimations", { names: list(gained) }, summarize ? { names: joined(gained) } : null);
   const available = !issues.some(({ key }) => key === "unavailable");
   return { available, issues, author: issues.some(({ key }) => key !== "unavailable"),
     remap: available && eligible(report) && report.remappable === true && !redrawn
-      && issues.some(({ key }) => ["regions", "atlasSize", "atlasLayout", "missingAnimations"].includes(key)) };
+      && issues.some(({ key }) => ["regions", "atlasSize", "atlasLayout", "missingAnimations"].includes(key)),
+    oldRig: available && eligible(report) && report.remappable === true && redrawn && !gained.length
+      && report.oldRig?.available === true };
 }
 
 async function assess(report) {
@@ -138,20 +146,25 @@ export async function show(report, { onRemap } = {}) {
       Popup.message({ title: T("info.details"), lines: [full], scroll: true, ok: T("picker.ok") }) } };
   });
   if (!lines.length) lines.push(T("compatibility.matches"));
+  if (result.oldRig) lines.push(T("compatibility.oldRig"));
   if (result.author) lines.push(T("compatibility.authorHint"));
-  if (result.author || result.remap) lines.push(T("compatibility.crcHint"));
+  if (result.author || result.remap || result.oldRig) lines.push(T("compatibility.crcHint"));
+  const repair = (result.remap || result.oldRig) && onRemap;
   const response = await Popup.message({ title: T("compatibility.check"), lines,
     scroll: true,
-    ok: T(result.remap && onRemap ? "remap.action" : "picker.ok"),
-    cancel: (result.remap && onRemap) ? T("popup.cancel") : null });
+    ok: T(repair ? "remap.action" : "picker.ok"),
+    cancel: repair ? T("popup.cancel") : null });
   if (response.button === "ok") {
-    if (result.remap && onRemap) await onRemap();
+    if (repair) await onRemap();
   }
 }
 
 // The repair review's lines: one per kind of region with its count, the names behind a Details button. Regions are
 // named "<atlas> - <region>"; the atlas is left out when every region of the report is in the same one.
 export function reviewLines(report) {
+  // an old rig set up as a whole (actions.oldRig) moves nothing: its line names the atlases kept
+  if (report.rigs?.length) return [T("remap.oldRig", { names: joined(report.rigs) }),
+    ...report.warnings.map(({ key, name }) => T(`remap.${key}`, { name }))];
   const kinds = { unpainted: report.added || [], official: report.official || [], dropped: report.dropped || [] };
   const atlases = new Set(Object.values(kinds).flat().map((name) => name.split(" - ")[0]));
   const bare = (names) => atlases.size === 1 ? names.map((name) => name.slice(name.indexOf(" - ") + 3)) : names;
@@ -170,9 +183,12 @@ export async function remap(id, onRemapped = () => {}, label = "", subject = lab
   // A portrait is baked through world space: the page poses both rigs with the runtime and posts what they draw.
   let checked = reports.get(id);
   if (!checked && kind === "spr") checked = await inspect(id, label, null, subject);
-  const geometry = checked?.kind === "spr" && await ensureSpine() ? RigGeometry.forRemap(checked, globalThis.spine) : undefined;
+  // A portrait the game drew anew keeps its old rig as a whole (actions.oldRig): no geometry to post.
+  const old = checked?.assessment?.oldRig === true;
+  const geometry = !old && checked?.kind === "spr" && await ensureSpine() ? RigGeometry.forRemap(checked, globalThis.spine) : undefined;
   const result = await Loading.hold(() => Loading.page(() => progressTask("Remap", subject,
-    async (update) => waitJob(await rpc("actions.remap", geometry ? { mod: id, geometry } : { mod: id }), update),
+    async (update) => waitJob(await rpc(old ? "actions.oldRig" : "actions.remap",
+      old || !geometry ? { mod: id } : { mod: id, geometry }), update),
   )), { all: true });
   if (result.unchanged) {
     reports.set(id, { ...reports.get(id), remappable: false });

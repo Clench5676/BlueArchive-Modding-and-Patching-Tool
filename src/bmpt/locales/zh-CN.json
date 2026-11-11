@@ -488,6 +488,8 @@
 			"mod_parts_missing": "Mod 文件不完整，缺少：{files}",
 			"atlas_remap_invalid": "无法重排：{file} - {reason}",
 			"atlas_remap_redrawn": "无法重排：原版立绘已重绘",
+			"old_rig_unavailable": "无法沿用旧骨骼：未记录 Mod 绘制时的骨骼",
+			"old_rig_animations": "无法沿用旧骨骼：原版新增动画 {names}",
 			"atlas_remap_target_mismatch": "无法重排：{file} - 匹配资源 {matched}/{expected}",
 			"atlas_remap_property": "无法重排：{file} - {field} 无效：{value}（页面：{page}，区域：{region}）",
 			"atlas_remap_structure": "无法重排：{file} - 第 {line} 行图集结构无效：{value}",
@@ -732,7 +734,9 @@
 			"updateUnchecked": "无法检查兼容性，仍要更新？",
 			"forceUpdate": "目前完整性无问题，是否确定仍要强制更新？",
 			"rigChanged": "原版新增动画：{n}，Mod 未包含",
-			"redrawn": "原版立绘已重绘"
+			"redrawn": "原版立绘已重绘",
+			"oldRig": "更新：沿用 Mod 绘制时的骨骼",
+			"oldRigAnimations": "原版新增动画：{names}，无法沿用旧骨骼"
 		},
 		"remap": {
 			"action": "更新",
@@ -757,7 +761,8 @@
 			"official": "原版区域：{names}",
 			"zoomIn": "放大",
 			"zoomOut": "缩小",
-			"marks": "标出改动"
+			"marks": "标出改动",
+			"oldRig": "沿用旧骨骼和图集：{names}"
 		},
 		"spine": {
 			"license": {
