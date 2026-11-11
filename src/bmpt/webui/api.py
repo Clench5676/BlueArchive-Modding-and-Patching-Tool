@@ -1257,6 +1257,31 @@ def build_api(s: Services) -> RpcRegistry:
         return s.submit("library.forget", lambda log, progress: library.forget(install), writes="library",
                         library=library)
 
+    # --- Troubleshoot Mods (pre-release builds only): every choice to official, then back ---
+
+    def troubleshoot_gate() -> None:
+        if not updater.prerelease_previews(get_version_info().get("version") or ""):
+            raise ServiceError("unknown_method", method="mods.troubleshoot")
+
+    @rpc.method("mods.troubleshootState")
+    def mods_troubleshoot_state() -> dict[str, Any]:
+        """{active, count, since}: whether a configuration is saved to restore."""
+        troubleshoot_gate()
+        from ..library import troubleshoot
+        return troubleshoot.status(s.library)
+
+    @rpc.method("mods.applyOfficial")
+    def mods_apply_official() -> str:
+        """Apply Official to All: a game writer job, {toggle, check}."""
+        troubleshoot_gate()
+        return s.submit_troubleshoot("apply")
+
+    @rpc.method("mods.restoreConfig")
+    def mods_restore_config() -> str:
+        """Restore Configuration: a game writer job, {toggle, check}."""
+        troubleshoot_gate()
+        return s.submit_troubleshoot("restore")
+
     # --- actions (jobs) ---
 
     @rpc.method("actions.apply")

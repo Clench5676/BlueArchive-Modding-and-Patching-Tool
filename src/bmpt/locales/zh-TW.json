@@ -705,6 +705,18 @@
 			"spine": {
 				"label": "Spine 授權",
 				"view": "查看"
+			},
+			"troubleshoot": {
+				"label": "排查 Mod",
+				"inactive": "未在排查",
+				"active": "排查中，已儲存 {n} 項設定",
+				"apply": "一鍵套用原版",
+				"restore": "還原設定",
+				"applyConfirm": "所有選擇改為原版，目前設定另存",
+				"restoreConfirm": "還原排查前的設定，排查期間的選擇將被取代",
+				"match": "與官方一致",
+				"differ": "{n} 個檔案與官方不一致",
+				"unverified": "未核對：無 Steam 檔案清單"
 			}
 		},
 		"cacheTo": "快取到 {path}",
