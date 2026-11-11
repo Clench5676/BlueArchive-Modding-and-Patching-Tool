@@ -341,7 +341,7 @@ test("the Switch Portrait panel keeps the line 5 larger than its box", () => {
 });
 
 // the boxed message rows take the box's value range; a message without a box keeps its own
-test("a message with a line button sets its rows 38 down to 26 and shares one size across a group; one without keeps 52 down to 44", () => {
+test("a message with a line button sets its rows 38 down to 26 and shares one size across a group; one without keeps 48 down to 40", () => {
   use("en-US");
   const shortRow = { text: "Short row", button: { label: "Go", fn() {} } };
   const long = "A finding that is rather long and needs several words to say what is different in this file".repeat(2);
@@ -358,9 +358,9 @@ test("a message with a line button sets its rows 38 down to 26 and shares one si
   assert.equal(rows.find((n) => n.name === "Dot_0").pos[1] - rows.find((n) => n.name === "Dot_1").pos[1], 64);
   assert.equal(-12 - rows.find((n) => n.name === "Dot_0").pos[1], Popup.MSG.rowButton);
   assert.equal(Popup.MSG.rowButton, 124);
-  // no box, no change: 52 down to 44, lines of 1.3
+  // no box: POPUP_TYPE.text, 48 down to 40 (BL-176), lines of 1.3
   const plain = Popup.messageLayout({ lines: ["Short row", long], width: 1700, ok: "OK" }).body.tree.children;
-  assert.equal(size(plain, "Line_0"), 52);
-  assert.ok(size(plain, "Line_1") <= 52 && size(plain, "Line_1") >= 44 - 8);
+  assert.equal(size(plain, "Line_0"), 48);
+  assert.ok(size(plain, "Line_1") <= 48 && size(plain, "Line_1") >= 40 - 8);
   assert.equal(plain.some((n) => n.name === "Box"), false);
 });

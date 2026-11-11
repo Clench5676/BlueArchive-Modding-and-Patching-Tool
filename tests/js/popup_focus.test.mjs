@@ -342,7 +342,10 @@ test("asset-free messages use the same class, title, close, check and footer box
   // as high as its lines, check and footer need (BL-176), as the prefab popup's layout says
   const layout = Popup.messageLayout({ lines: ["Line"], width: 1301, ok: "OK", cancel: "Cancel", check: { label: "Check", checked: false }, assets: false });
   near(parseFloat(box.style.height), layout.height * scale);
-  near(parseFloat(heading.style.top), P.titleTop * scale);
+  // the title one size under the game's (BL-176), centred where the game's 72 stood
+  const NGUI = await import("../../src/bmpt/web/js/ngui.js"), { textItem } = await import("../../src/bmpt/web/js/ui-grid.js");
+  const { POPUP_TYPE, TYPE } = await import("../../src/bmpt/web/js/ui-tokens.js");
+  near(parseFloat(heading.style.top), (P.titleTop + (textItem(NGUI, "Title", TYPE.display).h - textItem(NGUI, "Title", POPUP_TYPE.title).h) / 2) * scale);
   near(parseFloat(action("close").style.left), (P.M.w - P.close.right - C.icon.h) * scale);
   near(parseFloat(action("close").style.top), P.close.top * scale);
   const footer = walk(box).find(e => e.className === "message-actions");

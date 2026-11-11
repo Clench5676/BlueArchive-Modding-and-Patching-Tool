@@ -16,7 +16,7 @@ import { spineAllowed } from "./spine-runtime.js";
 import { thumbnailScope, forget } from "./thumbs.js";
 import { modelThumbnail } from "./model-still.js";
 import { S } from "./util.js";
-import { XS_BUTTON, SPACE, TYPE, CONTROL, POPUP_FRAME } from "./ui-tokens.js";
+import { XS_BUTTON, SPACE, TYPE, CONTROL, POPUP_FRAME, POPUP_TYPE } from "./ui-tokens.js";
 import { row as layoutRow, stack as layoutStack, container } from "./ui-grid.js";
 import { ROW_W as OPTION_WIDTH, rowBase, radioRow } from "./settings-rows.js";
 import { BUTTON_BODY_H, loadImportLayouts, importArtwork, clipButtonPatterns, ROW_SCALE, ROW_WIDTH, ROW_HEIGHT, ROW_SELECTION, ROW_CHECK_TOP,
@@ -922,7 +922,7 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
         return group;
       };
       const choice = (key, title, values, getValue, onPick, { multiple = false, parent = null } = {}) => {
-        const makeRow = () => radioRow(`Option_${key}`, 0, title, values, getValue(), onPick, { columns: Math.min(values.length, 3) });
+        const makeRow = () => radioRow(`Option_${key}`, 0, title, values, getValue(), onPick, { columns: Math.min(values.length, 3), type: POPUP_TYPE.card });
         const group = add(key, makeRow().h, parent), controls = [];
         group.setAttribute("role", multiple ? "group" : "radiogroup"); group.setAttribute("aria-label", title);
         const refresh = () => {
@@ -970,7 +970,7 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
         }, { multiple: true, parent: types });
       for (const key of ["extraBytes", "workers", "output"]) {
         const group = add(key, 240);
-        paint(group, rowBase(`Option_${key}`, 0, 240, T(`import.options.${key}`)), { scale: S, origin: [OPTION_WIDTH * S / 2, 120 * S] });
+        paint(group, rowBase(`Option_${key}`, 0, 240, T(`import.options.${key}`), POPUP_TYPE.card), { scale: S, origin: [OPTION_WIDTH * S / 2, 120 * S] });
         const control = inputControl(T(`import.options.${key}`), draft[key] ?? "", { type: key === "workers" ? "number" : "text", width: (OPTION_WIDTH - 110) * S });
         place(control.wrap, 55 * S, 120 * S, (OPTION_WIDTH - 110) * S, 112 * S); group.appendChild(control.wrap);
         const input = control.input;

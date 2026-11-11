@@ -80,7 +80,7 @@ const { DIALOG_H } = await import("../../src/bmpt/web/js/batch-import.js");
 const { frameOutline } = await import("../../src/bmpt/web/js/row-thumbnail.js");
 const { ROW_W: OPTION_WIDTH, rowBase, radioRow } = await import("../../src/bmpt/web/js/settings-rows.js");
 const { S } = await import("../../src/bmpt/web/js/util.js");
-const { SPACE, TYPE, LINE, CONTROL, POPUP_FOOTER, POPUP_FRAME } = await import("../../src/bmpt/web/js/ui-tokens.js");
+const { SPACE, TYPE, LINE, CONTROL, POPUP_FOOTER, POPUP_FRAME, POPUP_TYPE } = await import("../../src/bmpt/web/js/ui-tokens.js");
 const { container } = await import("../../src/bmpt/web/js/ui-grid.js");
 // separate lines of a row stack LINE.stack of the row's one size apart (List_01's meta lines)
 const PITCH = LINE.stack * TYPE.dense.fs;
@@ -1206,7 +1206,8 @@ test("advanced boolean, choice, resource and input rows share Settings' body, ti
   for (const group of groups) {
     const { tree, opts } = drawn(h, group), key = group.dataset.option;
     const height = parseFloat(group.style.height) / S;
-    const base = rowBase(`Option_${key}`, 0, height, find(tree, "Title").widgets[0].text);
+    // a popup's cards, one size under the Settings page's (POPUP_TYPE.card, BL-176)
+    const base = rowBase(`Option_${key}`, 0, height, find(tree, "Title").widgets[0].text, POPUP_TYPE.card);
     assert.deepEqual(tree.widgets, base.widgets);
     assert.deepEqual(find(tree, "Title"), find(base, "Title"));
     assert.deepEqual(find(tree, "DotLine"), find(base, "DotLine"));
@@ -1219,7 +1220,7 @@ test("advanced boolean, choice, resource and input rows share Settings' body, ti
   await off.click(); await h.page.settled();
   assert.equal(off.getAttribute("aria-checked"), "true");
   assert.equal(walk(enable).find((element) => element.dataset.value === "true").getAttribute("aria-checked"), "false");
-  const expected = radioRow("Option_backup", 0, "Create Backup", [[true, "On"], [false, "Off"]], false, () => {}).tree;
+  const expected = radioRow("Option_backup", 0, "Create Backup", [[true, "On"], [false, "Off"]], false, () => {}, { type: POPUP_TYPE.card }).tree;
   assert.deepEqual(drawn(h, enable).tree, expected);
   await h.action("ok", h.dialog).click();
   assert.equal(h.calls.find((call) => call.method === "import.setOptions").params.backup, false);

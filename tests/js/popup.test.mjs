@@ -241,7 +241,7 @@ test("fitting message lines together keeps the size floor and all text when extr
   // this message is taller than the scroll cap (about 1800 units of lines): its lines are in the scrolling list
   assert.ok(walk(dialog).some((e) => e.className === "popup-cards"));
   const lines = [0, 1].map((i) => walk(dialog).find((e) => e.dataset.path === `Lines/Line_${i}`));
-  const size = `${(NGUI.fontSizeFor(text, 44) * S).toFixed(2)}px`;
+  const size = `${(NGUI.fontSizeFor(text, 40) * S).toFixed(2)}px`;  // POPUP_TYPE.text's floor (BL-176)
   assert.equal(lines[0].style.fontSize, size);
   assert.equal(lines[1].style.fontSize, size);
   assert.ok(lines[1].textContent.split("\n").length > 4);
@@ -396,7 +396,7 @@ test("shared message sizes and scrolling preserve complete paths with and withou
     const area = walk(dialog).find((el) => el.className === "popup-cards");
     const prefix = boxed ? "Row" : "Line";
     const rows = [0, 1, 2].map((i) => walk(area).find((el) => el.dataset.path === `Lines/${prefix}_${i}`));
-    const size = `${(NGUI.fontSizeFor(path, boxed ? 26 : 44) * S).toFixed(2)}px`;
+    const size = `${(NGUI.fontSizeFor(path, boxed ? 26 : 40) * S).toFixed(2)}px`;
     assert.equal(rows[0].style.fontSize, size);
     assert.equal(rows[1].style.fontSize, size);
     assert.equal(rows[1].textContent.replaceAll("\n", ""), path);
@@ -481,7 +481,7 @@ test("the compatibility result's list, rule, inline Details and smaller footer f
         assert.equal(new Set(layout.body.fitted.filter(({ r }) => !r.rule).map(({ f }) => f.fs)).size, 1, `${what}: one type size`);
         for (const { r, f, room, bf, bw, bh } of layout.body.fitted) {
           if (r.rule) continue;
-          assert.ok(f.fs >= 44, `${what}: "${r.text}" keeps the plain message's floor`);
+          assert.ok(f.fs >= 40, `${what}: "${r.text}" keeps the plain message's floor`);
           for (const line of f.text.split("\n")) assert.ok(glyphsOf(line, f.fs) <= room + 1e-6, `${what}: "${line}" within its room`);
           if (r.button) {
             // its face as high as its line of text (the shadow inset around it), its caption readable and inside it
@@ -3647,8 +3647,10 @@ for (const lang of ["en-US", "zh-CN"]) test(`each popup class positions its fram
       const bg = NGUI.find(tree, "Popup/Base/BG"), title = NGUI.find(bg, "Label_Title_Locale"), close = NGUI.find(bg, "Btn_Close");
       assert.deepEqual([bg.widgets[0].w_, bg.widgets[0].h_], [f.w, f.h]);
       assert.equal(bg.widgets[0].sprite, "Common_Popup_Bg");
-      near2(f.h / 2 - title.pos[1] - title.widgets[0].h_ / 2, 36);
-      assert.equal(title.pos[0], 0); assert.ok(title.widgets[0].fontSize >= 48 && title.widgets[0].fontSize <= 72);
+      // the title one size under the game's (POPUP_TYPE.title, BL-176), centred where the game's 72 stood under the top's 36
+      const big = (await import("../../src/bmpt/web/js/ui-grid.js")).textItem(NGUI, ui.quit.title, TYPE.display, { lines: 1 });
+      near2(f.h / 2 - title.pos[1], 36 + big.h / 2);
+      assert.equal(title.pos[0], 0); assert.ok(title.widgets[0].fontSize >= 48 && title.widgets[0].fontSize <= 62);
       assert.ok(!title.widgets[0].text.includes("\n"));
       near2(f.w / 2 - close.pos[0] - 30, 48); near2(f.h / 2 - close.pos[1] - 30, 39);
       const btn = NGUI.find(tree, "Popup/Btn"), widths = btn.children.map(b => NGUI.find(b, "BG (1)").widgets[0].w_);
@@ -4121,8 +4123,8 @@ test("the startup Spine notice wraps inside UIPopup_Sort at message sizes in eve
       assert.equal(heading.text.replace(/\s/g, ""), title.replace(/\s/g, ""));
       const lineNode = NGUI.find(popup, "Lines/Line_0"), line = lineNode.widgets[0];
       assert.equal(line.text.replace(/\s/g, ""), notice.replace(/\s/g, ""));
-      if (NGUI.glyphWidth(notice, 52) > line.w_) assert.ok(line.text.includes("\n"), `${lang} wraps when needed`);
-      assert.ok(line.fontSize >= 44 && line.fontSize <= 52, `${lang} message size ${line.fontSize}`);
+      if (NGUI.glyphWidth(notice, line.fontSize) > line.w_) assert.ok(line.text.includes("\n"), `${lang} wraps when needed`);
+      assert.ok(line.fontSize >= 40 && line.fontSize <= 48, `${lang} message size ${line.fontSize}`);
       assert.ok(line.text.split("\n").length * NGUI.fontSizeFor(line.text, line.fontSize) * NGUI.LINE_PITCH <= line.h_);
       const caption = NGUI.find(ok, "Label_Locale").widgets[0];
       assert.equal(caption.text.replace(/\s/g, ""), ui.picker.ok.replace(/\s/g, ""));
@@ -4172,7 +4174,7 @@ test("missing-original apply results fit the message frame in every locale", asy
     for (const [index, text] of lines.entries()) {
       const widget = NGUI.find(body.tree, `Line_${index}`).widgets[0];
       assert.equal(widget.text.replace(/\s/g, ""), text.replace(/\s/g, ""));
-      assert.ok(widget.fontSize >= 44 && widget.fontSize <= 52, lang);
+      assert.ok(widget.fontSize >= 40 && widget.fontSize <= 48, lang);
       assert.ok(NGUI.glyphWidth(widget.text, widget.fontSize) <= widget.w_, lang);
       assert.ok(widget.h_ >= widget.text.split("\n").length * widget.fontSize, lang);
     }
@@ -4572,7 +4574,7 @@ test("the held entries' Details fit their wide frame with four mods, Go To and F
           assert.ok(button.h <= line.f.fs, `${lang} ${label}: within the text's height`);
           assert.ok(fit.text === label, `${lang} ${label}: caption whole, on one line`);
           // the small button fits its caption again within its width less its inset: still one line
-          assert.ok(!NGUI.fitText(label, fit.fs, fit.fs, button.w - XS_BUTTON.fitInset).text.includes("\n"), `${lang} ${label}: drawn on one line`);
+          assert.ok(!NGUI.fitText(label, fit.fs, fit.fs, button.w - XS_BUTTON.fitInset + 1e-6).text.includes("\n"), `${lang} ${label}: drawn on one line`);
           assert.ok(text.x + text.w <= button.x && button.x + button.w <= layout.width, `${lang} ${label}: inside the frame`);
         }
         assert.ok(buttons[0].x + buttons[0].w <= buttons[1].x, `${lang}: side by side`);

@@ -24,7 +24,7 @@ import { codeOf, noticeNames, withCode } from "./error-codes.js";
 import { withTimeout } from "./async.js";
 import { TEXT_VIEWER, XL_CONTENT_H, frameClass, frameGeometry, popupContent } from "./popup-frames.js";
 import { STATS_BOX_S, boxHeight, statsBox, valueRoom } from "./stats-box.js";
-import { BACKDROP, CHIP, CHIP_TIERS, COLOUR, CONTROL, POPUP_FOOTER, POPUP_FRAME, SPACE, TYPE, SMALL_BUTTON, XS_BUTTON, STATS_BOX, captionMinimum } from "./ui-tokens.js";
+import { BACKDROP, CHIP, CHIP_TIERS, COLOUR, CONTROL, POPUP_FOOTER, POPUP_FRAME, POPUP_TYPE, SPACE, TYPE, SMALL_BUTTON, XS_BUTTON, STATS_BOX, captionMinimum } from "./ui-tokens.js";
 import { DOT, RECRUIT, S, TAN10, clone, glyphsOf, hitButton, markedLabel, wrapPath } from "./util.js";
 
 import { container, grid, row, stack as layoutStack, textItem, toNode } from "./ui-grid.js";
@@ -313,6 +313,8 @@ export function footerLabels(widgets, captions, options = {}) {
     width, caption.lines, { maxH: caption.h }), { ...options, caption });
 }
 
+// the height of a title's line at the game's size (TYPE.display, one line): where a popup's smaller title is centred
+const titleHeight = (title) => textItem(NGUI, title, TYPE.display, { lines: 1 }).h;
 // the game's popup frame at a size: backdrop, title, close button and, when given, its Cancel and OK buttons with
 // these labels on centred bodies of the footer's size (FOOTER_DEFAULT unless `footer` names one), with the shared gap and bottom inset.
 //   buttons: [{label, primary, name}] instead of ok / cancel: named choices in a row (one centred, two as OK and Cancel,
@@ -333,8 +335,9 @@ export function popupFrame(title, w, h, { ok = null, cancel = null, close = true
   find(bg, "Texture_Top").pos = [-w / 2 + 248, h / 2 - 66];
   const titleNode = find(bg, "Label_Title_Locale");
   const titleBox = container({ w, h, padding: [POPUP_FRAME.titleTop, SPACE.xxxl, 0, SPACE.xxxl] }).inner;
-  const tf = textItem(NGUI, title, TYPE.display, { maxW: titleBox.w, lines: 1 });
-  titleNode.pos = toNode({ ...titleBox, y: titleCentre == null ? titleBox.y : titleCentre - (tf.mid ?? tf.h / 2), h: tf.h }, 4, local);
+  // the title one size under the game's (POPUP_TYPE), centred where the game's 72 would stand
+  const tf = textItem(NGUI, title, POPUP_TYPE.title, { maxW: titleBox.w, lines: 1 }), lift = (titleHeight(title) - tf.h) / 2;
+  titleNode.pos = toNode({ ...titleBox, y: titleCentre == null ? titleBox.y + lift : titleCentre - (tf.mid ?? tf.h / 2), h: tf.h }, 4, local);
   Object.assign(titleNode.widgets[0], { text: tf.text, fontSize: tf.fs, w_: titleBox.w, h_: tf.h, pivot: 4 });
   find(titleNode, "Line").widgets[0].w_ = glyphsOf(tf.text, tf.fs) + SPACE.s;
   const closeBtn = find(bg, "Btn_Close"), size = POPUP_FRAME.close.size;
@@ -1271,8 +1274,8 @@ export function plainMessage(layer, { title, lines = [], ok, cancel, buttons, st
   Object.assign(box.style, { position: "absolute", boxSizing: "border-box", transform: "none", margin: "0", padding: "0",
     left: `${960 - frame.w * S / 2}px`, top: `${540 - (FRAME_Y + frame.h / 2) * S}px`,
     width: `${frame.w * S}px`, height: `${frame.h * S}px`, maxWidth: "none", maxHeight: "none" });
-  const heading = textItem(NGUI, title, TYPE.display, { maxW: frame.w - 2 * SPACE.xxxl, lines: 1 });
-  box.appendChild(styleBox(el("h2", "", heading.text), { x: SPACE.xxxl, y: POPUP_FRAME.titleTop,
+  const heading = textItem(NGUI, title, POPUP_TYPE.title, { maxW: frame.w - 2 * SPACE.xxxl, lines: 1 });
+  box.appendChild(styleBox(el("h2", "", heading.text), { x: SPACE.xxxl, y: POPUP_FRAME.titleTop + (titleHeight(title) - heading.h) / 2,
     w: frame.w - 2 * SPACE.xxxl, h: heading.h }, NGUI.fontSizeFor(heading.text, heading.fs)));
   if (dismissable) box.appendChild(styleBox(button("×", () => finish(null), "close"),
     { x: frame.w - POPUP_FRAME.close.right - CONTROL.icon.h, y: POPUP_FRAME.close.top, w: CONTROL.icon.h, h: CONTROL.icon.h }, CONTROL.icon.h));
@@ -1383,8 +1386,9 @@ function oneInlineButton(r, button, fs) {
 function messageLines(lines, w, fitTogether, plain, assets = true) {
   const rows = lines.map((l) => (typeof l === "string" ? { text: l } : l));
   const boxed = !plain && rows.some((r) => r.button);
-  // Light stats rows retain their value range (38–26); unboxed paragraphs retain 52–44. Width selection allows six lines.
-  const min = boxed ? STATS_BOX.value.fsMin : 44, max = boxed ? STATS_BOX.value.fs : TYPE.heading.fs, most = 6; // Existing message floor and stats-box type range.
+  // paragraphs at POPUP_TYPE.text (BL-176: one size under the 52 down to 44 they had), light stats rows their own range
+  // (38 down to 26); the width selection allows six lines
+  const min = boxed ? STATS_BOX.value.fsMin : POPUP_TYPE.text.min, max = boxed ? STATS_BOX.value.fs : POPUP_TYPE.text.fs, most = 6;
   const fitted = rows.map((r) => {
     if (r.rule) return { r, room: w - 2 * SPACE.xxxl, f: counted({ text: "", fs: min }) };
     // a line button is the small button: 136 high, as wide as its caption needs and 90 more (240 at least), the caption 48 down to 34

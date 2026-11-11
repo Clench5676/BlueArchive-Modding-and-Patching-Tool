@@ -506,7 +506,7 @@ for (const locale of LOCALES) test(`the prompt fits the popup frame in ${locale}
     labels.forEach((label, i) => {
       assert.equal(label.text.replace(/\s/g, ""), promptLines[i].replace(/\s/g, ""), "nothing dropped or ellipsized");
       assert.ok(widest(label.text, label.fontSize) <= room + 1e-9, `${promptLines[i].slice(0, 30)}: ${widest(label.text, label.fontSize)} in ${room}`);
-      assert.ok(label.fontSize >= 44 - 1e-9, `${label.fontSize}`);
+      assert.ok(label.fontSize >= 40 - 1e-9, `${label.fontSize}`);  // POPUP_TYPE.text's floor (BL-176)
     });
     assert.ok(layout.height <= Popup.MSG.cap + 1e-9);
     if (count >= 9) assert.equal(layout.scroll, true, "a long list scrolls inside the frame");

@@ -13,7 +13,7 @@ import * as Popup from "./popup.js";
 import { rpc } from "./api.js";
 import { T, errorText } from "./i18n.js";
 import { setSpineConsent } from "./spine-runtime.js";
-import { COLOUR, CONTROL, POPUP_FOOTER, POPUP_FRAME, SPACE, TYPE, XS_BUTTON } from "./ui-tokens.js";
+import { COLOUR, CONTROL, POPUP_FOOTER, POPUP_FRAME, POPUP_TYPE, SPACE, TYPE, XS_BUTTON } from "./ui-tokens.js";
 import { frameGeometry, popupContent } from "./popup-frames.js";
 import { container, row, stack, textItem, toNode } from "./ui-grid.js";
 import { S, hitButton, wrapPath } from "./util.js";
@@ -131,7 +131,7 @@ export function spine(host, { over = false, readOnly = false } = {}) {
 export function spineFrame() {
   const ok = T("picker.ok");
   const { body, width, height, y0, visible, scroll } = Popup.messageLayout({
-    lines: [{ text: T("spine.license.notice"), fontSize: 52, minFontSize: 52 }], width: POPUP_FRAME.L.w, ok,
+    lines: [{ text: T("spine.license.notice"), fontSize: POPUP_TYPE.text.fs, minFontSize: POPUP_TYPE.text.fs }], width: POPUP_FRAME.L.w, ok,
   });
   const tree = Popup.popupFrame(T("spine.license.title"), width, height, { ok, close: false });
   body.tree.pos = [0, y0];
@@ -159,7 +159,7 @@ async function drawSpine(host, over, readOnly, resolve) {
   const next = document.createElement("div");
   if (!assetsAllowed) {
     const fallback = Popup.plainMessage(next, { title: T("spine.license.title"), width: POPUP_FRAME.L.w,
-      lines: [{ text: T("spine.license.notice"), fontSize: TYPE.heading.fs, minFontSize: TYPE.heading.fs }],
+      lines: [{ text: T("spine.license.notice"), fontSize: POPUP_TYPE.text.fs, minFontSize: POPUP_TYPE.text.fs }],
       ok: T("picker.ok"), dismissable: false }, choose);
     fallback.box.classList.add("spine-license-plain");
   } else {

@@ -249,6 +249,15 @@ export const CONTROL = Object.freeze({
 // edges: 2840 across, so a column is 200 and its pitch 240.
 export const GRID = Object.freeze({ columns: 12, gutter: 40, pageMargin: 60, stageW: 2960, stageH: 1665 });
 
+// Popup text, one size under the game's (owner, 2026-11-11, BL-176: "弹窗的标题和正文字号也应该小一号"): the title TYPE.title
+// in place of TYPE.display (72), a message's paragraphs 48 down to 40 in place of 52 down to 44, and a popup's option cards
+// (settings-rows.js) a step under the Settings page's: card titles 44 (50), options 42 (48), a path 40 (44).
+export const POPUP_TYPE = Object.freeze({
+  title: Object.freeze({ fs: 62, min: 48 }),
+  text: Object.freeze({ fs: 48, min: 40 }),
+  card: Object.freeze({ title: Object.freeze({ fs: 44, min: 36 }), option: Object.freeze({ fs: 42, min: 30 }), path: Object.freeze({ fs: 40, min: 28 }) }),
+});
+
 // Every popup's footer (owner, 2026-11-11, BL-176): XS bodies, as far above the frame's bottom as the prefab's 102 under its
 // 176-high buttonL bodies scaled to theirs (popup.js footerBottom: 60), the content SPACE.xl above their tops. clearance:
 // the room a frame keeps under its content for the footer.
