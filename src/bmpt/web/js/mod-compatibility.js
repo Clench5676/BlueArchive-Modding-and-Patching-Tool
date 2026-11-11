@@ -297,8 +297,9 @@ export async function remap(id, onRemapped = () => {}, label = "", subject = lab
       // pictures can ring
       marks: report.grafted ? report.marks || []
         : [...new Set((report.official || []).map((name) => name.slice(name.indexOf(" - ") + 3)))],
-      // a graft's review steps through the expressions it added
+      // a graft's review steps through the expressions it added, under a verdict of its own
       expressions: report.grafted || [],
+      verdict: report.grafted ? (report.partial ? "remap.graftPartial" : "remap.graftDone") : null,
     });
     if (!accepted) return null;
     const saved = await Loading.hold(() => Loading.page(() => progressTask("Repair", subject, async (update) => {

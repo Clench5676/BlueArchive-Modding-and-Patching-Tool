@@ -159,10 +159,10 @@ export async function show(result, title = T("act.compare"), hostId = "popup", r
         frameIn(part("repair-player", stage)).appendChild(img);
       }
     }
-    part("repair-verdict", notes, T(review.partial ? "remap.partial" : "remap.preview"));
+    part("repair-verdict", notes, T(review.verdict || (review.partial ? "remap.partial" : "remap.preview")));
     // a graft's expressions, one at a time on both pictures (a picture without it stays in its rest pose)
     if (review.expressions?.length) {
-      const row = part("repair-line repair-steps", notes), caption = document.createElement("div");
+      const row = part("repair-steps", notes), caption = document.createElement("div");
       let at = 0;
       const go = (step) => {
         at = (at + step + review.expressions.length) % review.expressions.length;

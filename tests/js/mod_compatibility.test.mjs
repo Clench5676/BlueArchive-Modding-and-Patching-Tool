@@ -533,6 +533,7 @@ test("a mod with its own skeleton the official one outgrew is offered the graft 
     assert.deepEqual(options.expressions, ["17", "18"], locale);
     assert.deepEqual(options.marks, ["17"], locale);
     assert.ok(options.partial, locale);
+    assert.equal(options.verdict, "remap.graftPartial", locale);  // its own verdict: nothing was repacked
   }
 });
 
