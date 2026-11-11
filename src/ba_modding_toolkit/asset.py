@@ -14,7 +14,7 @@ from .models import (
 )
 from .spine import SkelConverter, check_skel_animation_diff
 from bmpt.texture_guard import encodable_image, texture_image
-from .utils import is_same_texture, no_log
+from .utils import no_log
 
 
 # -------- 提取/应用上下文 --------
@@ -233,7 +233,12 @@ def apply_asset(obj, content: AssetContent, ctx: ApplyContext, *, data=None) -> 
     if obj.type == AssetType.Texture2D:
         new_image = content
         # 带容差的一致性判定
-        if is_same_texture(texture_image(data), new_image):
+        # Fork: compare exactly. The tolerance treats small mod edits (a recoloured eye, a decal) as unchanged and
+        # drops them; an exact miss only costs one extra save.
+        current_image = texture_image(data)
+        if (current_image.mode == new_image.mode
+                and current_image.size == new_image.size
+                and current_image.tobytes() == new_image.tobytes()):
             return ApplyOutcome(applied=False)
         data.image = encodable_image(new_image, data.m_TextureFormat)
         data.save()
