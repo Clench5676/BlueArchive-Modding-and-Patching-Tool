@@ -3097,6 +3097,21 @@ test("the display settings' sort keys and filter options each share one font siz
   } finally { setStrings("en-US", Object.fromEntries(strings(english))); document.documentElement.lang = "en-US"; }
 });
 
+// the header's triangle pattern inside the header, from its left end (owner, 2026-11-11, BL-176: the prefab stands it from
+// the header's right end outwards, and in the narrower frame it showed past the frame's right edge)
+test("Display Settings' header pattern stays inside the header", async () => {
+  const Display = await import("../../src/bmpt/web/js/display.js"), { find } = await import("../../src/bmpt/web/js/ngui.js");
+  const root = n("UIPopup_FilterSort"); displayLayouts(root);
+  const popup = find(root, "Center/Popup");
+  Display.narrow(popup);
+  const tag = find(popup, "Filter/BG_Tag"), deco = find(tag, "DecoTex_Normal");
+  const tagW = tag.widgets[0].w_, decoW = deco.widgets[0].w_;
+  assert.equal(tag.widgets[0].pivot, 1); assert.equal(deco.widgets[0].pivot, 0);  // top centre, top left
+  assert.equal(tagW, 2244 - (2810 - Tokens.POPUP_FRAME.L.w));
+  assert.equal(deco.pos[0], -tagW / 2, "from the header's left end");
+  assert.ok(deco.pos[0] + decoW <= tagW / 2, "within the header");
+});
+
 // --- long messages scroll by themselves (the Add result, the dropped queue list) ---
 const messageShapes = {
   boxed: (n) => ({ lines: Array.from({ length: n }, (_, i) => ({ text: `Mod ${i} belongs to a student\nApplied`, button: { label: "Go To", fn() {} } })), ok: "Go To", cancel: "Stay Here" }),
