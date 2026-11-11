@@ -3,8 +3,8 @@
 // cover the caption. Run by tests/test_ngui_fit.py's runner with the other JS tests: node --test tests/js/button_tiers.test.mjs
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { BUTTON_TIERS, PILL, TAG, buttonTier, inkBox, isPill, overlaps, tagBox, tagOf } from "../../src/bmpt/web/js/button-layout.js";
-import { CONTROL, SMALL_BUTTON, XS_BUTTON } from "../../src/bmpt/web/js/ui-tokens.js";
+import { BUTTON_TIERS, CHIP_TIER_LIST, PILL, TAG, buttonTier, chipTier, inkBox, isPill, overlaps, tagBox, tagOf } from "../../src/bmpt/web/js/button-layout.js";
+import { CHIP_TIERS, CONTROL, SMALL_BUTTON, XS_BUTTON } from "../../src/bmpt/web/js/ui-tokens.js";
 
 test("the presets are the controls' heights, XS under S under M under L", () => {
   assert.deepEqual(BUTTON_TIERS.map(([tier, control]) => [tier, control.h]), [["XS", 104], ["S", 136], ["M", 162], ["L", 176]]);
@@ -126,4 +126,31 @@ test("a caption that reaches the corner turns the tag into a dot that keeps the 
   assert.equal(covered[0].dataset.size, "60");
   const preset = await render(t, pill(160, 104, "A caption"), { tags: true });
   assert.equal(preset[0].dataset.size, "XS 104", "a preset's label names its tier and height");
+});
+
+// --- the details panel's narrow actions and the chips (owner, 2026-11-11: both are tagged by their size) ---
+test("a body that says it is a button is tagged whatever its shape; a chip by the chips' four sizes", () => {
+  // the details panel's five actions are 155 wide and 104 high: narrower than a pill, still buttons
+  assert.equal(tagOf(155, 104), null);
+  assert.deepEqual(tagOf(155, 104, "button"), { tier: "XS", text: "XS" });
+  assert.deepEqual(CHIP_TIER_LIST.map(([tier, chip]) => [tier, chip.h]), [["XS", 42], ["S", 54], ["M", 62], ["L", 72]]);
+  for (const [tier, chip] of CHIP_TIER_LIST) {
+    assert.equal(chipTier(chip.h), tier);
+    assert.deepEqual(tagOf(chip.minW, chip.h, "chip"), { tier, text: tier });
+  }
+  assert.deepEqual(tagOf(200, 50, "chip"), { tier: null, text: "50" }, "a chip of no size shows its height");
+  assert.equal(CHIP_TIERS.S.h, CONTROL.badge.h);
+});
+
+const chipBody = (w, h) => ({ name: "Chip", active: true, pos: [0, 0], scale: [1, 1], rotZ: 0, children: [],
+  widgets: [{ sprite: "Common_Bg_Raius10px", atlas: "Common", type: 1, w_: w, h_: h, pivot: 4, depth: 5, color: "#ffffff/1.00", incline: 10, flip: 0, tier: "chip" }] });
+test("a developer preview tags a chip with its size, marked as a chip", async (t) => {
+  const tags = await render(t, chipBody(108, 54), { tags: true });
+  assert.equal(tags.length, 1);
+  assert.equal(tags[0].textContent, "S");
+  assert.match(tags[0].className, /\bchip\b/);
+  const narrow = pill(155, 104);
+  narrow.widgets[0].tier = "button";
+  assert.equal((await render(t, narrow, { tags: true }))[0].dataset.tier, "XS");
+  assert.deepEqual(await render(t, chipBody(108, 54), { tags: false }), []);
 });

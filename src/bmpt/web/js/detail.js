@@ -49,7 +49,7 @@ import { ALIAS, DETAILS, aliasFrame, detailsFrame, popupContent } from "./popup-
 import { statsBox } from "./stats-box.js";
 import { CHIP, COLOUR, CONTROL, SPACE, TYPE } from "./ui-tokens.js";
 import { container, row, stack, textItem, toNode } from "./ui-grid.js";
-import { CROSS_LIMIT, crossExtras, setShowOthers, showOthers, candidateStatus, detailStatus, selectionStatus, selectionError, intendedKey, isApplied, availableTab, coreOf, costumeCandidates, costumeHold, crossCandidates, crossCard, crossModels, hasAsset, hasKind, primaryKind, appliedKey as keyOf, appliedOf, candidates as listSources, partsOf, popupMode, modelSource, previewBase, previewChanged, previewKey, sourceOf, switchKindOf } from "./switch-sources.js";
+import { CROSS_LIMIT, crossExtras, setShowOthers, showOthers, detailStatus, selectionStatus, selectionError, intendedKey, isApplied, availableTab, coreOf, costumeCandidates, costumeHold, crossCandidates, crossCard, crossModels, hasAsset, hasKind, primaryKind, appliedKey as keyOf, appliedOf, candidates as listSources, partsOf, popupMode, modelSource, previewBase, previewChanged, previewKey, sourceOf, switchKindOf } from "./switch-sources.js";
 import { pickerItems } from "./roster-widgets.js";
 import { $, DOT, RECRUIT, S, TAN10, advanceOf, at, clone, glyphsOf, hitButton, markedLabel, off, text, widget, wrapPath } from "./util.js";
 
@@ -1553,15 +1553,14 @@ async function drawPopup(scroll = 0) {
       const c = it.src;
       const file = c.kind === "mod" ? c.mod.file : gameFile(c.variant, kind);
       const size = c.kind === "mod" ? c.mod.size : partsOf(c.variant, kind).reduce((n, f) => n + (f.size || 0), 0);
-      const status = !coreOf(v, kind) ? "import.reason.no_target" : candidateStatus(v, kind, c.key, c.mod);
-      const statusColor = status && coreOf(v, kind) ? `${COLOUR.success}/1.00` : null;
+      // File and Size; no State or CRC rows (owner, 2026-11-11: the chips say what is applied): only a problem shows, a
+      // row of its own in the warning colour (no file of this kind in the game, the configured choice's error)
       const error = c.key === mode.set ? selectionError(v, kind) : null;
-      const crcState = c.key === appliedKey(v, kind) ? crcOf(v, kind) : null;
-      const crc = crcState === "fixed" ? ["crc.fixed", COLOUR.success] : crcState === "needs_fix" ? ["crc.needed", COLOUR.warning] : crcState === "ok" ? ["crc.original", ""] : null;
+      const problem = [!coreOf(v, kind) && T("import.reason.no_target"), error && T(`error.${error.code}`, error.params)].filter(Boolean).join("\n");
       return {
         title: T(isSpecial(v) ? "special.background" : kind === "spr" ? "info.title.portrait" : `info.title.${kind}`),
-        fields: [[T("field.file"), baseName(file)], [T("field.size"), sizeText(size)], [T("field.status"), [status && T(status), error && T(`error.${error.code}`, error.params)].filter(Boolean).join("\n") || "—", statusColor],
-          [T("field.crc"), crc ? T(crc[0]) : "—", crc?.[1] && `${crc[1]}/1.00`]],
+        fields: [[T("field.file"), baseName(file)], [T("field.size"), sizeText(size)], ...(problem ? [[null, problem, `${COLOUR.warning}/1.00`]] : [])],
+        truncate: true,
         actions: [[T("popup.apply"), () => applyCandidate(c.key, kind), !coreOf(v, kind) || isApplied(v, kind, c.key) || !!c.greyed || !!c.previewOnly || !!c.pending || busy, "apply", c.previewOnly ? T("model.unfit") : c.beyondFit ? T("model.beyondFit") : null],
           [T(platform === "mac" ? "open.mac" : "open.win"), () => reveal(file)],
           ...(c.kind === "mod" ? [[T("compatibility.check"), async () => {

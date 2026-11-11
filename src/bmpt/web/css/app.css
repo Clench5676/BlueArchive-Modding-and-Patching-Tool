@@ -361,6 +361,8 @@ input[type="text"], input[type="search"], textarea { cursor: text; }
 .ngui-tier { position: absolute; pointer-events: none; padding: 1px 5px; font: 700 13px/16px ui-monospace, Menlo, monospace;
   color: #fff; background: rgba(214, 40, 40, 0.85); border-radius: 3px; }
 .ngui-tier.off { background: rgba(90, 100, 115, 0.85); }
+/* a chip's tag (CHIP_TIERS) in blue, a button's in red */
+.ngui-tier.chip:not(.off) { background: rgba(34, 110, 196, 0.85); }
 /* a tag that would cover the caption is a dot at the corner; its label shows on hover, without a native tooltip */
 .ngui-tier.dot { width: 8px; height: 8px; padding: 0; border-radius: 50%; pointer-events: auto; }
 .ngui-tier.dot:hover::after { content: attr(data-size); position: absolute; left: 10px; top: -4px; padding: 1px 5px; border-radius: 3px;

@@ -1380,8 +1380,9 @@ test("switch cards and details label manifest choices Applied with either switch
         await Detail.renderPopup();
         const captions = walk(switchHost).map((el) => el.textContent);
         const caption = ui.status.applied;
-        assert.equal(captions.filter((c) => c === caption).length, 3,
-          `${lang} ${kind} ${source}: badge, chip and configured status`);
+        // the card's badge and the details' chip; the details have no State row (owner, 2026-11-11)
+        assert.equal(captions.filter((c) => c === caption).length, 2,
+          `${lang} ${kind} ${source}: badge and chip`);
         const key = source.startsWith("mod:") ? `m:${source.slice(4)}` : `v:${source.slice(8)}`;
         assert.ok(walk(switchHost).some(el => el.dataset.path === `Card_${key}/Select/AppliedBadge`));
         assert.equal(walk(switchHost).find(el => el.dataset.path === `Card_${key}/Select/AppliedLabel`).textContent, caption);
@@ -3688,8 +3689,13 @@ for (const lang of ["en-US", "zh-CN"]) test(`list panels, check row and detail b
   near2(layout.left.b - (Popup.footerTop(frame.h) + 20), 124);
   const tree = Popup.detailsTree(items[0], "Details", [["File", "one.bundle"]], [["Open", () => {}]]);
   const picture = NGUI.find(tree, "Picture"), name = NGUI.find(tree, "Name"), chip = NGUI.find(tree, "Chip_0");
-  assert.ok(picture.pos[1] - 230 - name.pos[1] - name.widgets[0].h_ / 2 >= 20 - 1e-9);
-  assert.ok(name.pos[1] - name.widgets[0].h_ / 2 - chip.pos[1] - 36 >= 20 - 1e-9);
+  const chipH = Tokens.CHIP_TIERS.S.h, headH = Math.max(name.widgets[0].h_, chipH);
+  // a short name has its chips beside it, on one line, under the picture with 20 between
+  assert.ok(picture.pos[1] - picture.widgets[0].h_ / 2 - name.pos[1] - headH / 2 >= 20 - 1e-9);
+  assert.ok(Math.abs(name.pos[1] - chip.pos[1]) < 1e-6, "the chip on the name's line");
+  assert.ok(chip.pos[0] - name.pos[0] >= name.widgets[0].w_ / 2, "the chip after the name");
+  const base = Popup.listLayout().left;
+  assert.equal(tree.contentHeight, base.t - base.b, "the panel is filled to its bottom (the actions there), not scrolled");
 });
 
 // BL-133: a 3D model's details fit the list popup's panel without scrolling: the picture beside the name and chips,
@@ -3717,6 +3723,59 @@ test("a 3D model's details fit the panel without scrolling", async () => {
   // one picture size for every candidate, the actions on the panel's bottom whatever the fields hold
   assert.equal(sizes.size, 1, [...sizes].join(", "));
   assert.equal(bottoms.size, 1, [...bottoms].join(", "));
+});
+
+// BL-173 rework (owner, 2026-11-11): the switch popups' details do not scroll: each value on one line, a "…" button where it
+// is cut, the picture taking what the rest leaves, the actions on the panel's bottom; the list's footer is S
+for (const lang of ["en-US", "zh-CN", "th-TH"]) test(`the switch details fit their panel, values on one line and a "…" where cut, in ${lang}`, async () => {
+  const NGUI = await import("../../src/bmpt/web/js/ngui.js"); await Popup.ready();
+  const ui = localeWebui(lang);
+  setStrings(lang, Object.fromEntries(strings(ui)));
+  try {
+    const panel = Popup.listLayout().left, height = panel.t - panel.b;
+    const texture = NGUI.node("Texture", [0, 0], [{ texture: "portrait", w_: 10, h_: 10, pivot: 4 }]);
+    const long = "assets-_mx-spinelobbies-ch0252_home-_mxdependency-assets-2026-09-21_assets_all_2715888018.bundle";
+    const actions = [ui.popup.apply, ui.open.mac, ui.compatibility.check, ui.act.update, ui.btn.delete].map((c) => [c, () => {}]);
+    const it = { ...items[0], kind: "mod", full: "ch0252_spr - Repaired", chips: [ui.type.added, ui.status.applied], nameEdit: { label: "Alias", fn: () => {} } };
+    for (const [kind, tex] of [["spr", texture], ["lobby", null], ["model", null]]) for (const file of ["short.bundle", long]) {
+      const fields = [[ui.field.file, file], [ui.field.size, "7.1 MB"]];
+      const tree = Popup.detailsTree(it, "Info", fields, actions, tex, kind, panel, { truncate: true });
+      const what = `${lang} ${kind} ${file.length}`;
+      assert.ok(tree.contentHeight <= height + 1e-6, `${what}: ${tree.contentHeight} > ${height}`);
+      // the actions on the bottom: their solid art at the panel's foot
+      const act = NGUI.find(tree, "Act_0");
+      const xs = Tokens.CONTROL.buttonXS.h;
+      assert.ok(Math.abs(act.pos[1] - (panel.b + xs / 2 - xs * 14 / 176)) < 1e-6, `${what}: actions at the bottom (${act.pos[1]})`);
+      const values = tree.children.filter((c) => /^V_\d+$/.test(c.name)).map((c) => c.widgets[0]);
+      for (const v of values) assert.equal(v.text.split("\n").length, 1, `${what}: ${v.text} on one line`);
+      const more = NGUI.find(tree, "More_0");
+      assert.equal(!!more, file === long, `${what}: the "…" only for a cut value`);
+      assert.deepEqual(tree.more.map((m) => m.value), file === long ? [long] : []);
+      if (more) {
+        const value = values.find((v) => v.ariaLabel === long);
+        assert.ok(long.startsWith(value.text) && value.text.length < long.length, `${what}: the value cut, not shrunk`);
+        assert.equal(value.fontSize, 34);
+        assert.equal(more.widgets.find((w) => "sprite" in w).tier, "button");
+      }
+      // the chips on one row; a 3D model's under its name, a lobby's beside a short one
+      const chipY = it.chips.map((_, i) => NGUI.find(tree, `Chip_${i}`).pos[1]);
+      assert.ok(chipY.every((y) => Math.abs(y - chipY[0]) < 1e-6), `${what}: the chips on one row`);
+      if (kind === "model") assert.ok(NGUI.find(tree, "Name").pos[1] > chipY[0] + 1, `${what}: the model's chips under its name`);
+      // the chips are the S chip and the actions are tagged as buttons
+      assert.equal(NGUI.find(tree, "Chip_0").widgets[0].h_, Tokens.CHIP_TIERS.S.h);
+      assert.equal(NGUI.find(tree, "Chip_0").widgets[0].tier, "chip");
+      assert.equal(NGUI.find(tree, "Act_0/Body").widgets.find((w) => "sprite" in w).tier, "button");
+    }
+  } finally { setStrings("en-US", Object.fromEntries(strings(english))); }
+});
+
+test("the list popups' footer is the S button", async () => {
+  const NGUI = await import("../../src/bmpt/web/js/ngui.js"); await Popup.ready();
+  assert.equal(Popup.LIST_FOOTER, "S");
+  const tree = Popup.listFrame("Switch Portrait", [{ label: "Save", primary: true }], true);
+  assert.equal(NGUI.find(tree, "Popup/Btn/Btn_0/BG (1)").widgets.find((w) => "sprite" in w).h_, Tokens.CONTROL.buttonS.h);
+  const named = Popup.listFrame("Mods", [{ label: "Close" }], true, false, null, undefined, "M");
+  assert.equal(NGUI.find(named, "Popup/Btn/Btn_0/BG (1)").widgets.find((w) => "sprite" in w).h_, Tokens.CONTROL.buttonM.h);
 });
 
 // --- design tokens, item C: one backdrop, the prefab's resting 0.80 (BlackBgClickArea's TweenAlpha runs 0 to 0.80, not the sprite's 0.94) ---
@@ -3924,35 +3983,35 @@ for (const lang of LOCALE_LIST) test(`the asset consent's Change button (104 hig
   } finally { consent.hidden = true; Popup.closed(consent); setStrings("en-US", Object.fromEntries(strings(english))); document.documentElement.lang = "en-US"; }
 });
 
-// --- design tokens, item E: one chip (272 x 72, caption 40 down to 28, 290 apart) in the list popup's details panel ---
-test("chipPlaces stands chips in centred rows that fit inside the 850-unit panel, 290 apart or closer", () => {
-  const { CHIP } = Tokens;
-  const slant = CHIP.h * Math.tan(10 * Math.PI / 180);
-  for (const panel of [850, 790]) for (let n = 1; n <= 7; n++) {
-    const places = Popup.chipPlaces(n, panel), rows = Math.max(...places.map((p) => p.row)) + 1;
+// --- design tokens, item E: chips in four sizes (CHIP_TIERS), the details panel's the S chip, as wide as its caption ---
+test("chipPlaces stands chips as wide as their captions in centred rows inside the panel, SPACE.s apart", () => {
+  const { CHIP_TIERS, SPACE } = Tokens, h = CHIP_TIERS.S.h, slant = h * Math.tan(10 * Math.PI / 180);
+  for (const panel of [850, 470]) for (let n = 1; n <= 7; n++) {
+    const widths = Array.from({ length: n }, (_, i) => 108 + 37 * i);
+    const places = Popup.chipPlaces(widths, panel), rows = Math.max(...places.map((p) => p.row)) + 1;
     assert.equal(places.length, n);
     for (let row = 0; row < rows; row++) {
-      const xs = places.filter((p) => p.row === row).map((p) => p.x);
-      xs.slice(1).forEach((x, i) => {
-        const pitch = x - xs[i];
-        assert.ok(pitch <= CHIP.pitch + 1e-9 && pitch >= CHIP.w + 8 - 1e-9, `${n} chips in ${panel}: pitch ${pitch}`);
-        assert.ok(Math.abs(pitch - (xs[1] - xs[0])) < 1e-9, "one pitch in a row");
-      });
-      assert.ok(Math.abs(xs.reduce((a, b) => a + b, 0)) < 1e-9, "centred");
-      const left = Math.min(...xs) - CHIP.w / 2 - slant / 2, right = Math.max(...xs) + CHIP.w / 2 + slant / 2;
-      assert.ok(left >= -panel / 2 - 1e-9 && right <= panel / 2 + 1e-9, `${n} chips in ${panel}: row ${row} is ${left} to ${right}`);
+      const at = places.map((p, i) => ({ ...p, w: widths[i] })).filter((p) => p.row === row);
+      at.slice(1).forEach((p, k) => assert.ok(Math.abs(p.x - p.w / 2 - (at[k].x + at[k].w / 2) - SPACE.s) < 1e-9, `${n} chips in ${panel}: one gap`));
+      const left = at[0].x - at[0].w / 2, right = at.at(-1).x + at.at(-1).w / 2;
+      assert.ok(Math.abs(left + right) < 1e-9, "centred");
+      assert.ok(left - slant / 2 >= -panel / 2 - 1e-9 && right + slant / 2 <= panel / 2 + 1e-9, `${n} chips in ${panel}: row ${row}`);
     }
-    // rows are filled in order: no row is started before the one above is full
-    const counts = Array.from({ length: rows }, (_, row) => places.filter((p) => p.row === row).length);
-    assert.ok(counts.slice(0, -1).every((c) => c === counts[0]) && counts.at(-1) <= counts[0]);
+    // rows filled in order
+    assert.deepEqual(places.map((p) => p.row), [...places.map((p) => p.row)].sort((a, b) => a - b));
   }
-  assert.deepEqual(Popup.chipPlaces(3, 850).map((p) => p.row), [0, 0, 0], "the most a card has, three chips, stay on one row, so the fields box keeps its place");
-  assert.deepEqual(Popup.chipPlaces(2, 850).map((p) => p.x), [-145, 145]);
+  // the four sizes: L the prefab chip, S the time limit badge, XS the card badge, M between; heights and captions step down
+  assert.equal(CHIP_TIERS.L.h, Tokens.CHIP.h); assert.equal(CHIP_TIERS.S.h, Tokens.CONTROL.badge.h);
+  const order = ["XS", "S", "M", "L"].map((k) => CHIP_TIERS[k]);
+  order.slice(1).forEach((t, i) => assert.ok(t.h > order[i].h && t.fs >= order[i].fs));
+  const fit = Popup.chipFit("Mod");
+  assert.equal(fit.h, CHIP_TIERS.S.h);
+  assert.equal(fit.w, CHIP_TIERS.S.minW, "a short caption keeps the chip's minimum, no wider");
 });
 
-for (const lang of LOCALE_LIST) test(`the details panel's chips are 272 x 72, inside the panel and clear of the fields box and the name, in ${lang}`, async () => {
+for (const lang of LOCALE_LIST) test(`the details panel's chips are S chips as wide as their captions, inside the panel and clear of the fields box and the name, in ${lang}`, async () => {
   const NGUI = await import("../../src/bmpt/web/js/ngui.js");
-  const { CHIP } = Tokens;
+  const CHIP = Tokens.CHIP_TIERS.S;
   const ui = localeWebui(lang);
   const lists = [[ui.type.noRecruit], [ui.type.added, ui.popup.inUse], [ui.type.recruit, ui.settings.server.global, ui.mods.copy.none],
     [ui.type.added, ui.settings.server.japan, ui.mods.copy.none, ui.popup.inUse]];
@@ -3970,7 +4029,7 @@ for (const lang of LOCALE_LIST) test(`the details panel's chips are 272 x 72, in
       const what = `${lang} ${chips.length} chips${original ? " with an original" : ""}, ${full.length > 10 ? "long" : "short"} name`;
       chips.forEach((_, i) => {
         const chip = stageRect(part(`Chip_${i}`), NGUI);
-        assert.ok(Math.abs(chip[2] - CHIP.w * S) < 0.02 && Math.abs(chip[3] - CHIP.h * S) < 0.02, `${what}: chip ${i} is ${chip[2] / S} x ${chip[3] / S}`);
+        assert.ok(chip[2] >= CHIP.minW * S - 0.02 && Math.abs(chip[3] - CHIP.h * S) < 0.02, `${what}: chip ${i} is ${chip[2] / S} x ${chip[3] / S}`);
         assert.ok(chip[0] - slant / 2 >= panel[0] - 0.02 && chip[0] + chip[2] + slant / 2 <= panel[1] + 0.02, `${what}: chip ${i} inside the panel`);
         assert.ok(chip[1] + chip[3] + 20 * S <= fields[1] + 0.02, `${what}: chip ${i} keeps 20 above the fields box`);
         // its caption stays in the chip
@@ -3982,15 +4041,18 @@ for (const lang of LOCALE_LIST) test(`the details panel's chips are 272 x 72, in
           assert.ok(fs <= NGUI.fontSizeFor(el.textContent, CHIP.fs) * S + 0.02, `${what}: chip ${i} at ${fs}`);
         }
       });
-      // the chips of one row are level and the name above does not reach into them (an original line sits between)
-      const first = stageRect(part("Chip_0"), NGUI);
-      if (!original && full.length < 10) assert.ok(name[1] + name[3] <= first[1] + 0.02, `${what}: the name clears the chips`);
+      // the chips never overlap the name: beside it on its line, or under it
+      chips.forEach((_, i) => {
+        const c = stageRect(part(`Chip_${i}`), NGUI);
+        const apart = c[0] >= name[0] + name[2] - 0.02 || c[1] >= name[1] + name[3] - 0.02;
+        assert.ok(apart, `${what}: chip ${i} clears the name`);
+      });
       prompt.hidden = true;
     }
   } finally { prompt.hidden = true; setStrings("en-US", Object.fromEntries(strings(english))); document.documentElement.lang = "en-US"; }
 });
 
-test("the portrait panel's chips (72 high) stay in the right half and 20 above the fields box", async () => {
+test("the portrait panel's chips (the S chip) stay in the right half and 20 above the fields box", async () => {
   const NGUI = await import("../../src/bmpt/web/js/ngui.js");
   const b = Popup.listLayout().left, w = b.r - b.l;
   const ui = localeWebui("en-US");
@@ -4004,7 +4066,7 @@ test("the portrait panel's chips (72 high) stay in the right half and 20 above t
       const fields = stageRect(part("Fields"), NGUI);
       chips.forEach((_, i) => {
         const chip = stageRect(part(`Chip_${i}`), NGUI);
-        assert.ok(Math.abs(chip[3] - 72 * S) < 0.02, `${chips.length} chips: chip ${i} is 72 high`);
+        assert.ok(Math.abs(chip[3] - Tokens.CHIP_TIERS.S.h * S) < 0.02, `${chips.length} chips: chip ${i} is the S chip's height`);
         assert.ok(chip[0] >= left - 0.02 && chip[0] + chip[2] <= right + 0.02, `${chips.length} chips: chip ${i} in the right half`);
         assert.ok(chip[1] + chip[3] + 20 * S <= fields[1] + 0.02, `${chips.length} chips: chip ${i} keeps 20 above the fields box`);
       });

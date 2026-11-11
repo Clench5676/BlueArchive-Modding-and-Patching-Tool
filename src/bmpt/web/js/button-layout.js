@@ -1,6 +1,6 @@
 // Button patterns are separate NGUI widgets: their anchors, pivot and size follow the body, not its caption.
 import { maskWithSprite, spriteMaskTransform } from "./sprite-mask.js";
-import { CONTROL } from "./ui-tokens.js";
+import { CHIP_TIERS, CONTROL } from "./ui-tokens.js";
 const PIVX = [0, 0.5, 1, 0, 0.5, 1, 0, 0.5, 1];
 const PIVY = [1, 1, 1, 0.5, 0.5, 0.5, 0, 0, 0];
 
@@ -78,10 +78,17 @@ export function buttonTier(height, tolerance = 0.5) {
   return BUTTON_TIERS.find(([, control]) => Math.abs(height - control.h) <= tolerance)?.[0] ?? null;
 }
 export const isPill = (width, height) => height <= PILL.maxH && width >= PILL.ratio * height;
-// the tag of a body: its tier, "" for an off-preset pill (the tag shows the height) or null for a body that is no button
-export function tagOf(width, height) {
-  if (!isPill(width, height)) return null;
-  const tier = buttonTier(height);
+// The chips' four sizes (CHIP_TIERS), tagged the same way as the buttons (owner, 2026-11-11).
+export const CHIP_TIER_LIST = Object.freeze(["XS", "S", "M", "L"].map((name) => [name, CHIP_TIERS[name]]));
+export function chipTier(height, tolerance = 0.5) {
+  return CHIP_TIER_LIST.find(([, chip]) => Math.abs(height - chip.h) <= tolerance)?.[0] ?? null;
+}
+// the tag of a body: its tier, "" for an off-preset pill (the tag shows the height) or null for a body that is no button.
+// kind: what the widget says it is (its `tier`), "button" for a button whatever its shape (a narrow body in a row of
+// actions), "chip" for a chip, measured against the chips' sizes; without it, a Common_Btn_BG pill is a button.
+export function tagOf(width, height, kind = null) {
+  if (kind !== "button" && kind !== "chip" && !isPill(width, height)) return null;
+  const tier = kind === "chip" ? chipTier(height) : buttonTier(height);
   return { tier, text: tier ?? String(Math.round(height)) };
 }
 
