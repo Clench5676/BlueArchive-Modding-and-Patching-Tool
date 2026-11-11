@@ -755,7 +755,8 @@
 			"graft": "Mod の .skel ファイルを維持し、公式の新しい表情を追加",
 			"graftOldRig": "Mod 作成時の .skel ファイルと .atlas ファイルを使い、公式の新しい表情を追加",
 			"graftAction": "表情を追加",
-			"remapAction": "公式 .skel ファイルを使用"
+			"remapAction": "公式 .skel ファイルを使用",
+			"rigUnknown": "Mod 作成時の .skel ファイルの記録なし、自動修復不可"
 		},
 		"remap": {
 			"action": "更新",

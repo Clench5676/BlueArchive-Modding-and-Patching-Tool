@@ -755,7 +755,8 @@
 			"graft": "Mod의 .skel 파일 유지, 공식 신규 표정 추가",
 			"graftOldRig": "Mod 제작 당시 .skel 파일과 .atlas 파일 사용, 공식 신규 표정 추가",
 			"graftAction": "표정 추가",
-			"remapAction": "공식 .skel 파일 사용"
+			"remapAction": "공식 .skel 파일 사용",
+			"rigUnknown": "Mod 제작 당시 .skel 파일 기록 없음, 자동 수정 불가"
 		},
 		"remap": {
 			"action": "업데이트",

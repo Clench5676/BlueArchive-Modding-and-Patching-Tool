@@ -755,7 +755,8 @@
 			"graft": "Keep the Mod's .skel file, add the official new expressions",
 			"graftOldRig": "Keep the .skel and .atlas files the Mod was drawn for, add the official new expressions",
 			"graftAction": "Add Expressions",
-			"remapAction": "Use Official .skel File"
+			"remapAction": "Use Official .skel File",
+			"rigUnknown": ".skel file the Mod was drawn for not recorded, no automatic repair"
 		},
 		"remap": {
 			"action": "Update",

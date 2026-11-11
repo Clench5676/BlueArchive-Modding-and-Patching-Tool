@@ -551,3 +551,23 @@ test("a redrawn portrait whose official rig gained expressions is offered its ol
     [["graft", h.strings.compatibility.graftOldRig]]);
   assert.equal(h.mod.canRemap("old-mod", { kind: "spr" }), true);
 });
+
+test("a repack no kept rig repairs is named, and Update is not offered for it", async () => {
+  for (const locale of ["zh-CN", "en-US"]) {
+    const h = await harness(locale, "ok");
+    h.use({ ...report(), kind: "spr", remappable: false, rig: { layout: ["test.atlas"], animations: {}, regions: {}, unknown: ["test.atlas"] } });
+    const checked = await h.mod.inspect("old-mod");
+    const keys = checked.assessment.issues.map(({ key }) => key);
+    assert.ok(keys.includes("atlasLayout") && keys.includes("rigUnknown"), locale);
+    assert.equal(h.mod.rigUnknown("old-mod"), true, locale);
+    assert.equal(h.mod.canRemap("old-mod", { kind: "spr" }), false, locale);
+    await h.mod.show(checked, { onRemap: () => assert.fail("nothing to repair") });
+    const texts = h.popups[0].lines.map((line) => (typeof line === "string" ? line : line.text));
+    assert.ok(texts.includes(h.strings.compatibility.rigUnknown) && !/[{}]/.test(h.strings.compatibility.rigUnknown), locale);
+    assert.equal(h.popups[0].ok, h.strings.picker.ok, locale);
+    // a repack a kept rig repairs is not
+    h.use({ ...report(), kind: "spr", rig: { layout: ["test.atlas"], animations: {}, regions: {}, unknown: [] } });
+    await h.mod.inspect("old-mod");
+    assert.equal(h.mod.rigUnknown("old-mod"), false, locale);
+  }
+});
