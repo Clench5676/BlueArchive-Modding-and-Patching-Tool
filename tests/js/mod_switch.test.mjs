@@ -1431,6 +1431,11 @@ test("an update's impact as a list: the held mods, those applied again and the o
     ["1", "Hoshino", "Bunny Hoshino", ["Portrait", "Applied", "Official"], "Files Changed"]);
   assert.deepEqual(Impact.card(tabs.others[0], "others", nameOf).chips, ["Portrait"], "no changes known: no chip");
   assert.ok(held.thumb && typeof held.big === "function");
+  // a generic mod's card names the mod itself, never its set's key
+  const generic = Impact.card({ id: "g", target: "other-set:0d9415b79fe5", core: "other-set:0d9415b79fe5", kind: "other", impact: "rebuilt",
+    label: "UI Font" }, "others", (e) => e.variant);
+  assert.deepEqual([generic.label, generic.full, generic.thumb], ["UI Font", "UI Font", null]);
+  assert.equal(Impact.card({ id: "g", target: "other-set:0d94", kind: "other", impact: "rebuilt" }, "others", (e) => e.variant).label, "Other Mods");
   // another kind's card says what happened to it
   assert.equal(Impact.card(tabs.others[1], "others", nameOf).badge.text, "Gone");
   assert.equal(Impact.card(tabs.reapplied[0], "reapplied", nameOf).badge, undefined);
@@ -1450,7 +1455,8 @@ test("an update's impact as a list: the held mods, those applied again and the o
       const m = ui.mods.impact;
       for (const k of ["title", "fix", "preview", "noPreview", "chipOfficial", "kindRebuilt", "kindNewParts", "kindGone",
         "gateTitle", "gateAsk", "gateCheck", "checking", "reapplying", "sep"]) assert.ok(typeof m[k] === "string" && m[k].length > 0, `${lang} ${k}`);
-      for (const k of ["tabHeld", "tabReapplied", "tabOthers", "fixSelected", "partial"]) assert.ok(m[k].includes("{n}"), `${lang} ${k}`);
+      for (const k of ["tabHeld", "tabReapplied", "tabOthers", "partial"]) assert.ok(m[k].includes("{n}"), `${lang} ${k}`);
+      assert.ok(!("fixSelected" in m), `${lang}: the footer's Fix and Apply carries no count (the list's footer has it)`);
       assert.ok(m.checkingMod.includes("{name}"), lang);
       for (const gone of ["hint", "reset", "rigChanged", "fixAll", "reapplied", "others", "expand", "collapse", "gone", "newParts", "rebuilt", "unchanged", "unknown"])
         assert.ok(!(gone in m), `${lang}: ${gone} no longer used`);
@@ -1555,7 +1561,9 @@ test("the start asks before the first screen, checks under the loading screen, a
     // the list once the first screen is in: the held mod first, ticked, the entry applied again under its segment
     const shown = Impact.check();
     await until(() => !prompt.hidden && walk(prompt).some((e) => e.dataset?.key === "b"), "the list");
-    assert.equal(walk(prompt).find((e) => e.dataset?.key === "b").getAttribute("aria-checked"), "true");
+    // ticked at first, by its corner's tick box; the card itself only shows it
+    assert.equal(walk(prompt).find((e) => e.dataset?.tick === "b").getAttribute("aria-checked"), "true");
+    assert.equal(walk(prompt).find((e) => e.dataset?.key === "b").getAttribute("role"), null);
     walk(prompt).find((e) => e.tagName === "BUTTON" && e.getAttribute("aria-label") === S("display.close")).click();
     await shown;
     assert.deepEqual(called("mods.impactSeen").at(-1), { install: GLOBAL, version: "v3" });
@@ -1593,4 +1601,54 @@ test("the drift prompt asks the impacts of the mods its entries are configured w
   }
   assert.equal(items[1].badge, undefined);
   assert.equal(items[2].badge, undefined, "a card that cannot be ticked keeps its own state");
+});
+
+test("the impact list: a card's click shows it, its corner ticks it; Fix and Apply runs over the list, which stays open", async () => {
+  const saved = { ...answers };
+  // memorial lobbies: the generic list (the portrait frame's prefab is not in this stand-in)
+  const held = (extra = {}) => ({ id: "r", target: "hina", core: "hina_home", kind: "lobby", impact: "rig_changed", label: "Night",
+    configured: true, repaired_id: "r2", ...extra });
+  const result = { due: true, install: GLOBAL, version: "v4", counts: { rig_changed: 2 },
+    mods: [held(), held({ id: "s", target: "airi", core: "airi_home", label: "Band", repaired_id: "" })] };
+  try {
+    answers["mods.updateDue"] = { due: true, install: GLOBAL, version: "v4", previous: "v3" };
+    answers["mods.state"] = base({ scan: false });
+    await MS.refresh();
+    let fixed = false;
+    answers["mods.impact"] = (params) => (params?.force && fixed ? "job-impact-after" : "job-impact-list");
+    jobs["job-impact-list"] = { state: "done", result };
+    jobs["job-impact-after"] = { state: "done", result: { ...result, counts: { rig_changed: 1 }, mods: [result.mods[1]] } };
+    answers["actions.apply"] = (params) => { fixed = true; return "job-apply-list"; };
+    jobs["job-apply-list"] = { state: "done", result: { files: [] } };
+    const gated = Impact.gate();
+    await drawn(dialog, "check");
+    action(dialog, "check").click();
+    assert.equal(await gated, true);
+    const shown = Impact.check();
+    await until(() => !prompt.hidden && walk(prompt).some((e) => e.dataset?.tick === "s"), "the list");
+    const tick = (key) => walk(prompt).find((e) => e.dataset?.tick === key);
+    assert.equal(tick("s").getAttribute("aria-checked"), "true", "held mods start ticked");
+    // the card's own click shows it, its tick stays
+    walk(prompt).find((e) => e.dataset?.key === "s").click();
+    await until(() => walk(prompt).some((e) => (e.textContent || "").includes("Band")), "the details show it");
+    assert.equal(tick("s").getAttribute("aria-checked"), "true");
+    // the corner's box unticks it
+    tick("s").click();
+    await until(() => tick("s")?.getAttribute("aria-checked") === "false", "unticked");
+    // Fix and Apply in the details of Hina's mod (a repaired copy made before): it takes the mod's place, the list stays
+    walk(prompt).find((e) => e.dataset?.key === "r").click();
+    await until(() => walk(prompt).some((e) => (e.textContent || "").includes("Night")), "Hina's details");
+    walk(prompt).find((e) => e.tagName === "BUTTON" && e.getAttribute("aria-label") === "Fix and Apply").click();
+    await until(() => called("actions.apply").length > 0, "applied");
+    assert.deepEqual(called("actions.apply").at(-1), { variant: "hina", source: "mod:r2", kind: "lobby" });
+    await until(() => !prompt.hidden && !walk(prompt).some((e) => e.dataset?.key === "r"), "the list again, without the fixed mod");
+    assert.equal(prompt.hidden, false, "never closed under the user");
+    walk(prompt).find((e) => e.tagName === "BUTTON" && e.getAttribute("aria-label") === S("display.close")).click();
+    await shown;
+    assert.equal(prompt.hidden, true);
+  } finally {
+    for (const key of Object.keys(answers)) delete answers[key];
+    Object.assign(answers, saved);
+    await tick?.(); dialog.hidden = true; prompt.hidden = true;
+  }
 });
