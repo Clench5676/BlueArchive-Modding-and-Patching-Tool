@@ -472,6 +472,24 @@ export function listCardBox(layout, { searching = false, horizontal = false, ban
   return grid(paper).span(12);
 }
 const LP = listLayout();
+// a segment's caption: a string key, or {text} for a caption the caller wrote (a count in it)
+const segText = (seg) => (typeof seg === "string" ? T(seg) : seg?.text ?? "");
+// The segments' width: the prefab's 230, wider by steps up to what the list leaves them (room: from the list's left to
+// the tools) where a caption's count would otherwise sit on a line of its own (owner, 2026-11-11: a tab may grow, a
+// number never wraps alone). Captions without a count keep 230 and their fit.
+export const SEG = Object.freeze({ w: 230, step: 10, max: 320, fs: 44, min: 26, inset: 30, maxH: 96 });
+export function segmentWidth(captions, room = SEG.max * 3) {
+  const lone = (f) => /\n\s*[\d+]+\s*$/.test(f.text);
+  const top = Math.max(SEG.w, Math.min(SEG.max, Math.floor(room / 3)));
+  for (let w = SEG.w; w <= top; w += SEG.step) {
+    const fits = NGUI.fitGroup(captions, SEG.fs, SEG.min, w - SEG.inset, 2, { maxH: SEG.maxH });
+    if (!fits.some(lone)) return { w, fits };
+  }
+  // still too long at the widest: one line, smaller (down to the floor), rather than a count alone
+  const one = NGUI.fitGroup(captions, SEG.fs, SEG.min, top - SEG.inset, 1, { maxH: SEG.maxH });
+  if (!one.some((f) => f.text.includes("\n"))) return { w: top, fits: one };
+  return { w: top, fits: NGUI.fitGroup(captions, SEG.fs, SEG.min, top - SEG.inset, 2, { maxH: SEG.maxH }) };
+}
 // the student list's tools at the top right of the list: order, sort, search and, with segs, the segment filter
 function toolbar(right, y, { segs = null, sortKey = "sort.default", active = 0, ascending = true, filtered = false, check = null, sortKeys = [sortKey] } = {}) {
   if (check) return checkedToolbar(right, y, { segs, sortKey, sortKeys, active, ascending, filtered, check });
@@ -498,10 +516,10 @@ function toolbar(right, y, { segs = null, sortKey = "sort.default", active = 0, 
   let segBox = null;
   if (segs) {
     const filter = clone(find(menu, "FilterBtn"));
-    const segW = 230, sx = segW / 328;
+    // the three segments share one size, as wide as their captions need (segmentWidth), within the list's room
+    const { w: segW, fits: segFits } = segmentWidth(segs.map(segText), x - (LP.list.l + SPACE.m));
+    const sx = segW / 328;
     filter.scale = [sx, 1];
-    // the three segments share one size
-    const segFits = NGUI.fitGroup(segs.map((key) => T(key)), 44, 26, segW - 30, 2, { maxH: 96 });
     [["All", segs[0]], ["Main", segs[1]], ["Support", segs[2]]].forEach(([k, key], i) => {
       const seg = find(filter, k);
       for (const state of seg.children) {
@@ -525,7 +543,7 @@ function toolbar(right, y, { segs = null, sortKey = "sort.default", active = 0, 
 // the fit of that toolbar: the checkbox's ``label``, the ``segs`` captions' keys and the sort button's ``sortKeys`` (``sortKey``:
 // the one shown), between the list's left edge and ``right``
 export function checkedToolbarFit(right, { segs, sortKey, sortKeys, label }) {
-  return toolbarFit({ left: LP.list.l + SPACE.m, right, filters: [segs.map((key) => T(key))], sorts: sortKeys.map((key) => T(key)),
+  return toolbarFit({ left: LP.list.l + SPACE.m, right, filters: [segs.map(segText)], sorts: sortKeys.map((key) => T(key)),
     sortAt: sortKeys.indexOf(sortKey), check: label });
 }
 // The toolbar with a checkbox (Switch 3D Model's "Show other students", BL-131) is the student roster's: the checkbox
@@ -896,7 +914,7 @@ export async function listPopup(options) {
       const { right, segW, y } = tb.segBox;
       for (let i = 0; i < 3; i++) {
         const ux = right - (3 - i) * segW + segW / 2 - 6, uy = y + 50.2 - 50;
-        hitButton(next, [960 + (ux - segW / 2) * S, 540 - (uy + 52) * S, segW * S, 104 * S], () => tools.onSeg(i), T(tools.segs[i]), 80);
+        hitButton(next, [960 + (ux - segW / 2) * S, 540 - (uy + 52) * S, segW * S, 104 * S], () => tools.onSeg(i), segText(tools.segs[i]), 80);
       }
     }
   } else {

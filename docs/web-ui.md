@@ -2557,27 +2557,26 @@ overwritten entry need none (the detail screen judges its files cheaply).
   classifies the mods; with mods on and the file check allowed a new scan (`mods.scan`) finds the applied entries the
   update overwrote with official files, and those that need no repair (not held) are applied again
   (`mods.restoreDrift`). Then the first screen, and the summary with the start popups.
-- **Mods Impacted by Game Update** (`update-impact.js check`, a plain, left-aligned message popup on the wide frame, its
-  only button OK): first "Official .skel or .atlas file changed, not applied until updated" with an inline Fix All, then
-  every held mod as a list item ("student - kind - mod name", the mod's own name left out where it only repeats the
-  student's, "Applied" for a mod its student is configured with, whatever the switch says) with inline Go To and Fix
-  and Apply (popup.js line `more`), under it what the update changed in its official parts in the dense type, close to
-  its line ("Official Portrait changes: .atlas file layout changed, 1 new animation in the .skel file"; Chinese joins
-  them with a comma and counts new animations as xN); no hint under them (owner, 2026-11-11). Held mods whose repaired
-  copy took their place (a repaired copy, their student not configured with them) are left out. After the game's
-  dotted rule, "Overwritten by official files in the
-  game update, applied again: n" folded with an inline Expand / Collapse (the entries, each with Go To); after another
-  rule, "Other affected mods" folded the same way over a list item per other kind with its count and its mods ("Gone
-  from the game: n", "New official parts: n", "Rebuilt, .skel and .atlas files unchanged: n", "Not affected: n", "Not
-  determined: n"). With nothing above them the other kinds show at once. A long list scrolls in the frame. Go To closes
-  it and opens the mod's student page on the tab of its kind with its switch open and the mod's card selected (its
-  details hold Update; `detail.js want`/`takeWanted`, Settings closed first). Fix and Apply and Fix All run the
-  student page's Update for each held mod here (a repaired copy made before takes the mod's place at once) (`mod-compatibility.js forUpdate`, then the repair with its choice and review,
-  `remap`, or the asset update, `actions.update`); a repaired copy of a mod its student is configured with takes its
-  place (`actions.apply`, only configured while mods are off); the summary opens again as the mods stand then.
-  Closing it records the version (`mods.impactSeen`); entries the check could not apply again follow in a message
-  with their errors. Settings' Mods tab runs the check again (Game Update Impact, View: `mods.impact {force}`), as do
-  the tray's Back to Official and Settings' Check when only a game update's entries are there.
+- **Mods Impacted by Game Update** (`update-impact.js check`, the drift prompt's list popup in `#prompt`; owner,
+  2026-11-11): three segments over the cards (`listPopup` `tools.segs`, captions with their counts): Needs Fix (the held
+  mods, `heldOf`: a mod whose rig changed, unless a repaired copy took its place; ticked at first, each with the Files
+  Changed badge), Applied Again (the entries the check applied again) and Other Affected (rebuilt, new parts, gone,
+  each with that as its badge); it opens on the first segment with cards. A card names the student, its picture is
+  the mod's own (`spineBase("mod", id)`; none for a 3D model), its chips the kind and Applied (configured, whatever the
+  switch says). The details name the mod and give what the update changed in its official parts and its state, with
+  Go To and, for a held mod, Preview Fix (the repair's preview: `mod-compatibility.js prepare`, the choice when more
+  than one repair applies, then `review`, whose Accept is Fix and Apply and Discard Back; a mod the asset update takes
+  instead says it has no preview, with Back and Fix and Apply) and Fix and Apply (the default repair, no review).
+  The footer: Close and, on Needs Fix, Fix and Apply (n) for the ticked mods (the default repair each, no review; a
+  partial repair is neither stored nor applied, and those are named in a message afterwards). A fixed mod's repaired
+  copy takes its place where its student is configured with it (`actions.apply`, only configured while mods are off);
+  a repaired copy made before does so at once; an asset update that changes nothing makes the parts now its baseline
+  (`update`), which ends the hold. The list opens again as the mods stand then. Go To closes it and opens the mod's
+  student page on the tab of its kind with its switch open and the mod's card selected (`detail.js want`/`takeWanted`,
+  Settings closed first). Closing it records the version (`mods.impactSeen`); entries the check could not apply again
+  follow in a message with their errors. Settings' Mods tab runs the check again (Game Update Impact, View:
+  `mods.impact {force}`), as do the tray's Back to Official and Settings' Check when only a game update's entries are
+  there. The switch help's held entries (Details) are listed as text lines, each with Go To and Fix and Apply.
 - **New Game Version** (`mod-switch.js confirmUntested`, a plain message popup): a write refused with
   `untested_build`, from the switch (the tray's toggle too, once the window is in front), the detail screen, Apply Mod
   Configuration, Settings' other mods and the photography gallery. "Affected by the game update: n", then the entries

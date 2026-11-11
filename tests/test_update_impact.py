@@ -206,3 +206,22 @@ def test_the_impact_check_names_each_mod_in_its_progress(spine):
     env.library.update_impact(force=True, progress=steps.append)
     assert steps == [{"current": 1, "total": 1, "step": "import.step.check", "variant": "test", "kind": "spr",
                       "label": entry.label}]
+
+
+def test_an_update_that_changes_nothing_ends_the_hold(spine, monkeypatch):
+    env = spine
+    entry = configured(env)
+    updated(env, (MOVED, ("Idle_01", "00")))
+    library = reload_library(env)
+    assert library.impacts([entry.id]) == [{"id": entry.id, "impact": "rig_changed"}]
+    # the rebuild gives the mod's own files back: the parts now are its baseline
+    from bmpt.library import service as service_module
+
+    class Same:
+        success, all_unchanged, file_pairs = True, True, []
+
+    monkeypatch.setattr(service_module, "rebuild", lambda *args, **kwargs: Same())
+    result = library.update(entry.id)
+    assert result.unchanged
+    assert library.impacts([entry.id]) == [{"id": entry.id, "impact": "unchanged"}]
+    assert not library._hold(library.current_pin(), f"mod:{entry.id}")

@@ -3144,6 +3144,8 @@ class ModLibrary:
         except (OSError, ServiceError) as error:
             log_failure(logger, logging.WARNING, "Could not store the official parts' fingerprint", error)
             return False
+        # a new baseline: the impacts judged from the one before go (the same files can now tell otherwise)
+        self._impacts = {key: found for key, found in self._impacts.items() if key[0] != record["id"]}
         return True
 
     @_serialized
@@ -7346,10 +7348,11 @@ class ModLibrary:
             if all_unchanged or (len(generated) == len(paths) and all(
                     new.name == old.name and self._hashes.get(new).sha1 == self._hashes.get(old).sha1
                     for new, old in zip(sorted(generated), sorted(paths)))):
-                # the mod is what a rebuild on these official parts gives: they are its baseline
-                if self._read_built_against(record) is None:
+                # the mod is what a rebuild on these official parts gives: they are its baseline, also in place of
+                # one of earlier parts whose change held it (an update ends the hold, BL-159)
+                if self._read_built_against(record) is None or self._impact(record, pin) != fingerprint.UNCHANGED:
                     self._write_built_against(record, self._built_against(
-                        {path.name: path for path in paths}, pin, "update"))
+                        {path.name: path for path in paths}, pin, "update", painted=painted))
                 return UpdateResult(self._entry(record), paths, [], unchanged=True,
                                     rig=self._rig_gains({path.name: path for path in paths}, pin))
             # Include unchanged parts when a rebuild splits a mod across bundles.
