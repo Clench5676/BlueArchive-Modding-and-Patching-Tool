@@ -1096,6 +1096,16 @@ watch's own Steam poll runs only with the consent (`steam_allowed`).
   server, a dev sandbox) means no check. The app running bit (64) is not used.
 - **The call.** `writable_game_files(paths, resource_dirs, *, game_folder=None)`: with `game_folder` (the install the
   files belong to), Steam is checked for it after the game.
+- **Refusals by cause.** A destination the system refuses, at the preflight or while writing, is named by
+  `write_refusal(error, path)` from the OS error behind it, Windows' `winerror` first (Python maps several of them to
+  `EACCES`): `game_file_locked` for a sharing or lock conflict (WinError 32 or 33, `EAGAIN`, `EBUSY`, `ETXTBSY`, and a
+  replace refused with WinError 5, which is how Windows refuses to replace a file another program holds open),
+  `game_disk_full` (WinError 39 or 112, `ENOSPC`, `EDQUOT`), `game_file_not_found` (WinError 2 or 3, `ENOENT`),
+  `game_app_denied` (macOS `EPERM` inside an `.app` bundle: App Management), `game_file_denied` (WinError 5 or 19,
+  `EACCES`, `EPERM`, `EROFS`, a read-only file or folder) and `game_file_write_failed` for anything else. During the
+  write, a denied or failed copy into the library's own folder (the rollback backup) is `library_io_error`. On
+  Windows the preflight's probe and every replace wait up to 5 s (`filelock.IN_USE_WAIT`) while another program, a
+  virus scanner reading a large bundle, holds the file.
 
 ### The poller
 

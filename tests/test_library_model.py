@@ -499,13 +499,13 @@ def test_split_model_journal_rolls_back_prefab_and_dependency_together(split_mod
         return copy(source, target)
 
     monkeypatch.setattr(service, 'atomic_copy', fail_second)
-    with pytest.raises(ServiceError, match='game_file_locked'):
+    with pytest.raises(ServiceError, match='game_file_denied'):
         env.library.apply('ch0258', f'mod:{mod.id}', kind='model')
     assert len(written) == 2
     assert all(path.read_bytes() == data for path, data in env.official.items())
     assert not list((env.root / 'transactions').glob('*/journal.json'))
     assert env.library.configured('ch0258')['model'] == f'mod:{mod.id}'
-    assert env.library.selection('ch0258')['model']['error']['code'] == 'game_file_locked'
+    assert env.library.selection('ch0258')['model']['error']['code'] == 'game_file_denied'
 
 
 def test_split_model_preview_sources_use_prefab_and_every_own_core(split_model_app):
