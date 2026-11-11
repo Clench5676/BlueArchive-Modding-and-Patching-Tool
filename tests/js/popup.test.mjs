@@ -1342,6 +1342,24 @@ test("Update of a portrait drawn on a rig the App no longer has shows why and ch
   assert.equal(await updating, false);
 });
 
+test("the impact list's Fix leaves a portrait drawn on a rig the App no longer has held, with no update", async () => {
+  setStrings("en-US", Object.fromEntries(strings(english)));
+  await modsEnabled(false);
+  const fam = previewFamily();
+  Detail.setupPreviewTest(fam, "spr");
+  const Impact = await import("../../src/bmpt/web/js/update-impact.js");
+  const inputs = { skeletons: {}, atlases: {}, textures: {} };
+  handlers.set("actions.compatibilityStamp", () => "stamp-impact");
+  handlers.set("actions.compatibility", () => ({ result: "compatibility" }));
+  handlers.set("actions.update", () => assert.fail("an update would leave it as it is"));
+  handlers.set("jobs.get", () => ({ result: { state: "done", result: { kind: "spr", official: inputs, mod: inputs, remappable: false,
+    rig: { layout: ["test.atlas"], animations: {}, regions: {}, unknown: ["test.atlas"] } } } }));
+  const before = calls.length;
+  const fixed = await Impact.repair([{ id: "unknown-rig", target: "hina", core: "hina_spr", kind: "spr", label: "Old", configured: true }]);
+  assert.deepEqual(fixed, []);
+  assert.ok(!calls.slice(before).includes("actions.update"));
+});
+
 test("each mod card exposes a read-only compatibility check for its own mod", async () => {
   setStrings("en-US", Object.fromEntries(strings(english)));
   await modsEnabled(false);
