@@ -105,14 +105,14 @@ test("detail thumbnail fallbacks use collection portraits only for the matching 
 });
 
 import { ALIAS, MOD_ALIAS, aliasFrame, detailsFrame } from "../../src/bmpt/web/js/popup-frames.js";
-import { CONTROL, POPUP_FRAME, SPACE } from "../../src/bmpt/web/js/ui-tokens.js";
+import { POPUP_FOOTER, POPUP_FRAME, SPACE } from "../../src/bmpt/web/js/ui-tokens.js";
 test("detail caller frames preserve their rows and scroll bounds with the shared anatomy", () => {
   for (const height of [0, 300, 800, 2000, 20000]) {
     const f = detailsFrame(height);
     assert.equal(f.w, POPUP_FRAME.L.w);
     assert.ok(f.h >= POPUP_FRAME.minH && f.h <= POPUP_FRAME.maxH);
-    const need = POPUP_FRAME.contentTop + height + POPUP_FRAME.footer.bottom + CONTROL.buttonL.h + SPACE.m;
-    assert.equal(f.h, Math.min(POPUP_FRAME.maxH, Math.max(786, need)));
+    const need = POPUP_FRAME.contentTop + height + POPUP_FOOTER.clearance;
+    assert.equal(f.h, Math.min(POPUP_FRAME.maxH, Math.max(POPUP_FRAME.minH, need)));
     assert.equal(f.top - f.bottom, Math.min(height, f.content.h));
     assert.equal((f.top + f.bottom) / 2, f.cy + f.h / 2 - f.content.y - f.content.h / 2);
   }
@@ -121,10 +121,10 @@ test("detail caller frames preserve their rows and scroll bounds with the shared
     assert.equal(f.w, POPUP_FRAME.M.w);
     assert.equal(f.ys.length, n);
     const used = n * ALIAS.rowH + (n - 1) * SPACE.m;
-    const need = POPUP_FRAME.contentTop + used + POPUP_FRAME.footer.bottom + CONTROL.buttonL.h + SPACE.m;
-    assert.equal(f.h, Math.max(786, need));
+    const need = POPUP_FRAME.contentTop + used + POPUP_FOOTER.clearance;
+    assert.equal(f.h, Math.max(POPUP_FRAME.minH, need));
     assert.equal((f.ys[0] + ALIAS.rowH / 2 + f.bottom) / 2, f.cy + f.h / 2 - f.content.y - f.content.h / 2);
-    assert.ok(f.bottom >= f.cy - f.h / 2 + POPUP_FRAME.footer.bottom + CONTROL.buttonL.h + SPACE.m);
+    assert.ok(f.bottom >= f.cy - f.h / 2 + POPUP_FOOTER.clearance);
   }
   assert.equal(MOD_ALIAS.w, POPUP_FRAME.M.w);
 });

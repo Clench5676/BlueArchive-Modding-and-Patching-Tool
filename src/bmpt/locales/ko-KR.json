@@ -350,7 +350,7 @@
 			"configured": "설정됨"
 		},
 		"field": {
-			"file": "파일",
+			"file": "파일 이름",
 			"type": "종류",
 			"size": "크기",
 			"status": "상태",
@@ -1020,6 +1020,8 @@
 			"changePortrait": "일러스트 변경",
 			"add": "추가",
 			"remove": "제거",
+			"selectStudent": "학생을 선택",
+			"removeConfirm": "이 메모리얼 로비를 목록에서 제거",
 			"previous": "이전",
 			"next": "다음",
 			"done": "완료",
