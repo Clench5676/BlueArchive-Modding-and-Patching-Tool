@@ -848,12 +848,19 @@ def test_a_texture_only_mod_previews_on_the_rig_its_textures_were_drawn_for(app,
     plain = json.loads(call(app, prefix + "/manifest.json")[2])["revision"]
     assert call(app, f"{prefix}/{plain}/skeleton.skel")[2] == b"new skeleton"
     entry = {**fingerprint.atlas(old.encode()), "skeleton": base64.b64encode(b"old skeleton").decode()}
-    monkeypatch.setattr(services.library, "recorded_rig", lambda mod: {"hoshino_spr.atlas": entry}, raising=False)
+    monkeypatch.setattr(services.library, "recorded_rig", lambda mod, atlases=None: {"hoshino_spr.atlas": entry},
+                        raising=False)
     drawn = json.loads(call(app, prefix + "/manifest.json")[2])["revision"]
     assert drawn != plain  # a preview drawn on the official rig before is drawn again
     assert call(app, f"{prefix}/{drawn}/skeleton.skel")[2] == b"old skeleton"
     assert call(app, f"{prefix}/{drawn}/skeleton.atlas")[2] == old.encode()
     assert call(app, f"{prefix}/{drawn}/page.png")[2] == b"page"  # the page as the recorded atlas names it
+    # a rig kept in the archive (several layouts of the core): the preview is drawn again when the archive changes
+    monkeypatch.setattr(services.library, "rig_stamp", lambda mod: "kept 1", raising=False)
+    kept = json.loads(call(app, prefix + "/manifest.json")[2])["revision"]
+    monkeypatch.setattr(services.library, "rig_stamp", lambda mod: "kept 2", raising=False)
+    assert len({drawn, kept, json.loads(call(app, prefix + "/manifest.json")[2])["revision"]}) == 3
+    monkeypatch.setattr(services.library, "rig_stamp", lambda mod: "", raising=False)
     # the official atlas as the textures follow it: drawn as the files have it
     monkeypatch.setattr(services.game, "spine_files_from", lambda paths: {
         "Hoshino_spr.atlas": old.encode(), "Hoshino_spr.skel": b"new skeleton", "Page.png": b"page"}, raising=False)
@@ -1023,6 +1030,9 @@ def test_startup_maintenance_waits_for_reveal_and_respects_the_preference(servic
     monkeypatch.setattr(services, "start_watch", lambda: None)
     monkeypatch.setattr(services.scanner, "request", lambda *args: calls.append("scan"))
     monkeypatch.setattr(services.library, "prune", lambda: calls.append("prune") or [])
+    # the official portrait rigs are kept after the prune (BL-166), with the same consent, and stop at shutdown
+    monkeypatch.setattr(services.library, "archive_rigs", lambda cancel: calls.append(
+        "rigs" if "prune" in calls and cancel() is False else "rigs too early") or 0, raising=False)
     warm = services._warm
 
     def warmed():
@@ -1040,13 +1050,14 @@ def test_startup_maintenance_waits_for_reveal_and_respects_the_preference(servic
     if enabled:
         assert services.jobs.wait(services._prune_job, 5)
         assert services.jobs.get(services._prune_job).state == "done"
-        assert sorted(calls) == ["prune", "scan"]
+        assert sorted(calls) == ["prune", "rigs", "scan"]
         assert services.timings.snapshot()["library.prune"]["count"] == 1
+        assert services.timings.snapshot()["library.rigs"]["count"] == 1
     else:
         assert calls == [] and services._prune_job is None
         assert services.request_scan(dismissed=True) is None
     services.ready()
-    assert sorted(calls) == (["prune", "scan"] if enabled else [])
+    assert sorted(calls) == (["prune", "rigs", "scan"] if enabled else [])
 
 
 def test_startup_preferences_round_trip_and_update_info(app, services):

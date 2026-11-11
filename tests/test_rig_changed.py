@@ -120,7 +120,8 @@ def test_a_mod_with_its_own_old_rig_moves_onto_the_official_one(real):
                           {"test.atlas": atlas_text(OLD)}, textures(RED), skeleton(["00"]))
     entry, = env.library.add([source])
     report = env.library.compatibility(entry.id)
-    assert report["rig"] == {"layout": [], "animations": {"test.skel": ["01"]}, "regions": {"test.atlas": ["smile"]}}
+    assert report["rig"] == {"layout": [], "animations": {"test.skel": ["01"]}, "regions": {"test.atlas": ["smile"]},
+                            "unknown": []}
     assert report["remappable"] and not report["misfit"]
     preview = env.library.remap(entry.id, geometry=rig_geometry(env.library, entry.id))
     assert preview["report"]["official"] == ["test.atlas - smile"] and preview["report"]["moved"] == ["test.atlas - part"]
@@ -157,7 +158,7 @@ def test_a_mod_with_its_own_complete_rig_is_left_alone(real):
                           {"test.atlas": atlas_text(OLD)}, textures(RED), skeleton(["00", "Dance"]))
     entry, = env.library.add([source])
     report = env.library.compatibility(entry.id)
-    assert report["rig"] == {"layout": [], "animations": {}, "regions": {}} and not report["remappable"]
+    assert report["rig"] == {"layout": [], "animations": {}, "regions": {}, "unknown": []} and not report["remappable"]
     assert env.library.remap(entry.id, geometry=rig_geometry(env.library, entry.id)) == {"unchanged": True}
     from bmpt.errors import ServiceError
     with pytest.raises(ServiceError, match="bad_params"):  # a portrait is baked from the page's geometry
@@ -373,3 +374,84 @@ def test_the_old_rig_is_refused_without_the_recorded_skeleton(real):
     with pytest.raises(ServiceError, match="old_rig_unavailable"):
         library.old_rig(entry.id)
     assert not library._remap_previews
+
+
+# --- the archive of official rigs: a mod no record covers finds the release its textures were drawn for ---
+
+
+def archived_then_updated(env, animations=("00",), record=False):
+    """The library keeps the official rigs of the installed release, a texture-only mod made for it is added with no
+    record of its rig (``record``: with one), then a game update draws the portrait anew on NEW."""
+    env.library._scan_allowed = lambda: True
+    rig = skeleton(["00"])
+    current = split_official(_official_name(write_bundle(env.original, {"test.atlas": atlas_text(OLD)},
+                                                         textures(BLUE), rig)))
+    text_part = next(path for path in env.game_dir.glob("*.bundle") if "textassets" in path.name)
+    assert env.library.archive_rigs() == 1
+    assert env.library.archive_rigs() == 0  # the same release: nothing read again
+    source = write_bundle(env.tmp / "upload" / current.name, {}, textures(RED), skeleton=None)
+    entry, = env.library.add([source], direct=record)
+    assert ("painted" in json.loads(sidecar(env, entry.id).read_text())) is record
+    text_part.unlink()
+    current.unlink()
+    split_official(_official_name(write_bundle(
+        env.original, {"test.atlas": atlas_text(NEW)}, textures({"part": BLUE, "smile": (0, 255, 0, 255)}, NEW),
+        skeleton(list(animations), ("part", "smile")))))
+    library = reload_library(env)
+    library._scan_allowed = lambda: True
+    return library, entry, rig
+
+
+def test_a_mod_with_no_record_of_its_rig_is_matched_to_the_release_it_was_drawn_for(real):
+    env = real
+    library, entry, rig = archived_then_updated(env)
+    report = library.compatibility(entry.id)
+    assert report["rig"]["layout"] == ["test.atlas"] and report["rig"]["unknown"] == []
+    assert report["source"]["atlases"] == {"test.atlas": atlas_text(OLD)}
+    assert report["source"]["skeletons"]["test.skel"]["data"] == base64.b64encode(rig).decode()
+    assert report["remappable"] and report["oldRig"]["available"]
+    result = library.accept_remap(library.old_rig(entry.id)["preview"])
+    built = remap.read_inputs(sorted(result.mod.file.parent.glob("*.bundle")))
+    assert built.atlases == {"test.atlas": atlas_text(OLD).encode()} and built.skeletons == {"test.skel": rig}
+    # the new release is kept too, once the library sees it
+    assert library.archive_rigs() == 1 and len(library.rigs.rigs("test_spr")) == 2
+    # its preview is drawn on that rig as well
+    assert library.recorded_rig(entry.id, {"Test.atlas": atlas_text(NEW).encode()})["test.atlas"]["text"] == atlas_text(OLD)
+    assert library.rig_stamp(entry.id)
+
+
+def test_a_mod_made_for_the_installed_release_is_not_matched_to_an_earlier_one(real):
+    env = real
+    library, entry, _rig = archived_then_updated(env)
+    assert library.archive_rigs() == 1
+    made_now = write_bundle(env.tmp / "upload2" / next(p.name for p in env.game_dir.glob("*.bundle")
+                                                        if "textassets" not in p.name), {},
+                            textures({"part": RED, "smile": RED}, NEW), skeleton=None)
+    mod, = library.add([made_now])
+    report = library.compatibility(mod.id)
+    assert report["rig"]["layout"] == [] and not report["remappable"] and not report["oldRig"]["available"]
+    assert library.recorded_rig(mod.id, {"Test.atlas": atlas_text(NEW).encode()}) == {}
+
+
+def test_a_repack_with_no_rig_kept_anywhere_is_named_and_offers_nothing(real):
+    env = real
+    library, entry, _rig, _source = redrawn(env)
+    record = json.loads(sidecar(env, entry.id).read_text())
+    del record["painted"]["test.atlas"]["skeleton"]
+    sidecar(env, entry.id).write_text(json.dumps(record))
+    library = reload_library(env)
+    report = library.compatibility(entry.id)
+    assert report["rig"]["layout"] == ["test.atlas"] and report["rig"]["unknown"] == ["test.atlas"]
+    assert not report["remappable"] and not report["oldRig"]["available"]
+
+
+def test_the_archive_needs_the_scan_consent_and_keeps_only_verified_official_files(real):
+    env = real
+    current = split_official(_official_name(write_bundle(env.original, {"test.atlas": atlas_text(OLD)},
+                                                         textures(BLUE), skeleton(["00"]))))
+    assert env.library.archive_rigs() == 0 and env.library.rigs.rigs("test_spr") == []  # no consent
+    env.library._scan_allowed = lambda: True
+    text_part = next(path for path in env.game_dir.glob("*.bundle") if "textassets" in path.name)
+    text_part.write_bytes(text_part.read_bytes() + b"modded")  # no longer the file its name's CRC tells
+    assert env.library.archive_rigs() == 0 and env.library.rigs.rigs("test_spr") == []
+    assert current.is_file()
