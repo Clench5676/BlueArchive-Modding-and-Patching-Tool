@@ -1,5 +1,6 @@
 # bundle.py
 
+import os
 import traceback
 from dataclasses import dataclass
 from functools import cached_property
@@ -7,7 +8,7 @@ from pathlib import Path
 from typing import Callable
 
 import UnityPy
-from UnityPy.files import SerializedFile
+from UnityPy.files import BundleFile, SerializedFile
 from UnityPy.environment import Environment as Env
 
 from .asset import ApplyContext, ExtractContext, apply_asset, extract_asset
@@ -60,6 +61,26 @@ def get_cab_names(bundle_path: Path) -> set[str] | None:
         return set(names) if names is not None else None
     except (OSError, ValueError):
         return None
+
+
+def _load_closing(bundle_path: Path) -> Env:
+    """Load a bundle file and close it again before returning.
+
+    UnityPy reads every block of a bundle into memory while loading it, but keeps the file it opened by path until
+    the environment is garbage collected, which its reference cycles delay. Windows cannot replace, rename or delete
+    a file that is still open, so a bundle read moments ago could not be written over. A file that is not a bundle
+    is read lazily from its stream, so it keeps the stream open, as UnityPy.load does."""
+    name = str(bundle_path)
+    stream = open(name, 'rb')
+    try:
+        # path: where UnityPy looks for dependencies, the bundle's folder as with UnityPy.load(name)
+        env = UnityPy.Environment(stream, path=os.path.dirname(name))
+    except BaseException:
+        stream.close()
+        raise
+    if env.files and all(isinstance(f, BundleFile) for f in env.files.values()):
+        stream.close()
+    return env
 
 
 class Bundle:
@@ -286,7 +307,7 @@ class Bundle:
         # 尝试加载
         try:
             if trailing == 0:
-                env = UnityPy.load(str(bundle_path))
+                env = _load_closing(bundle_path)
             else:
                 data = bundle_path.read_bytes()[:-trailing]
                 env = UnityPy.load(data)
