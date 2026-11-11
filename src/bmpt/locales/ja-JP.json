@@ -316,7 +316,7 @@
 				"collapse": "折りたたむ"
 			},
 			"untested": {
-				"title": "未検証のゲームバージョン",
+				"title": "新しいゲームバージョン",
 				"affected": "ゲーム本体の更新の影響：{n}",
 				"apply": "それでも適用"
 			},
@@ -460,7 +460,7 @@
 			"variant_incompatible": "構造が異なるため、入れ替えできません",
 			"variant_not_found": "バリエーションが見つかりません",
 			"steam_busy": "Steamがゲームを更新または検証中です",
-			"untested_build": "未検証のゲームバージョン、ファイル変更済み",
+			"untested_build": "新しいゲームバージョン、ファイル変更済み",
 			"classic_open": "先にクラシック画面を閉じてください",
 			"entry_changed": "ゲームファイル変更あり、再チェック",
 			"folder_changed": "ゲームフォルダー変更あり、再試行",
