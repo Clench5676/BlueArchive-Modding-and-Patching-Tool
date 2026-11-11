@@ -182,7 +182,8 @@ def verified_move(source: Path, target: Path, sha1: str) -> None:
     with source.open("r+b" if os.name == "nt" else "rb") as stream:
         os.fsync(stream.fileno())
     try:
-        os.replace(source, target)
+        # Like every other replacement: wait a moment for another program (a virus scanner) to let go of the file
+        replace_file(source, target)
     except OSError as error:
         if error.errno != errno.EXDEV:
             raise
