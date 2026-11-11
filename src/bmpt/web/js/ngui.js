@@ -578,8 +578,14 @@ function tokensOf(str, cjkBreaks) {
   const seg = typeof Intl !== "undefined" && Intl.Segmenter ? new Intl.Segmenter(textLang() || "zh", { granularity: "word" }) : null;
   // "chars": CJK may break between any two characters (the kinsoku rules below still hold), for a word wider than its line
   const perChar = (tok) => tok.match(/[\u3040-\u30ff\u3400-\u9fff\uff00-\uffef]|[^\u3040-\u30ff\u3400-\u9fff\uff00-\uffef]+/g);
+  // the segmenter cuts a Latin run at its punctuation (".skel" into "." and "skel"): printable ASCII runs stay one word
+  const ascii = /^[\x21-\x7e]+$/;
+  const words = (tok) => [...seg.segment(tok)].map((x) => x.segment).reduce((out, part) => {
+    if (out.length && ascii.test(part) && ascii.test(out.at(-1))) out[out.length - 1] += part; else out.push(part);
+    return out;
+  }, []);
   if (cjkBreaks) tokens = tokens.flatMap((tok) => (!(CJK.test(tok) || THAI.test(tok)) ? [tok]
-    : cjkBreaks === "chars" && CJK.test(tok) ? perChar(tok) : seg ? [...seg.segment(tok)].map((x) => x.segment) : perChar(tok)));
+    : cjkBreaks === "chars" && CJK.test(tok) ? perChar(tok) : seg ? words(tok) : perChar(tok)));
   // a token that may not start a line joins the one before it, one after an opening bracket joins that bracket
   const merged = [];
   for (const tok of tokens) {

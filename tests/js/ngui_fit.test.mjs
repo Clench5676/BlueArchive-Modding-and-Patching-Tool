@@ -55,6 +55,22 @@ test("Korean breaks at spaces and keeps its punctuation on the line before", () 
   assert.ok(lines.every((l) => !/^\s|\s$/.test(l)));
 });
 
+test("a Latin run inside CJK text is never split (.skel and .atlas file names, owner 2026-11-11)", () => {
+  for (const [lang, text] of [["zh-CN", "原版新增动画：17、18、19、+1，无法沿用旧.skel（骨骼）文件"],
+    ["zh-CN", "沿用Mod绘制时的.skel（骨骼）文件和.atlas（图集）文件进行适配"],
+    ["zh-TW", "沿用Mod繪製時的.skel（骨架）檔案與.atlas（圖集）檔案進行適配"],
+    ["ja-JP", "旧 .skel ファイル使用不可：公式で追加されたアニメーション 17, 18, 19, 20"]]) {
+    for (const w of [6, 7, 8, 9, 10, 11, 12, 13, 14]) {
+      document.documentElement.lang = lang;
+      const lines = fitText(text, 40, 32, w * 32, 8).text.split("\n");
+      // every run of printable ASCII in the text is on one line (a break at a space between two runs is fine)
+      for (const run of text.match(/[\x21-\x7e]+/g)) {
+        assert.ok(lines.some((line) => line.includes(run)), `${lang} at ${w}: ${run} in ${JSON.stringify(lines)}`);
+      }
+    }
+  }
+});
+
 test("Simplified Chinese still breaks at its separators first", () => {
   document.documentElement.lang = "zh-CN";
   assert.equal(fitText("星野（一年级，学校泳装）", 40, 32, 6 * 32).text, "星野（一年级，\n学校泳装）");
