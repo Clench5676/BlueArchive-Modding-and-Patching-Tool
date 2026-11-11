@@ -1,7 +1,7 @@
 // Complete option and disabled button branches; captions and dimensions are the only substitutions.
 import * as NGUI from "./ngui.js";
 import { resizeButton } from "./button-layout.js";
-import { CONTROL, SPACE, TYPE, SMALL_BUTTON } from "./ui-tokens.js";
+import { CONTROL, SPACE, TYPE, XS_BUTTON } from "./ui-tokens.js";
 import { clone } from "./util.js";
 
 let layouts, loading;
@@ -36,15 +36,15 @@ export const disable = (original) => disabledButton(layouts.filter, original);
 // The popups' light-blue button (ETCSetting/ButtonBg): 402 x 136, caption 48 down to 34 fitted to the width less 60, its label
 // box 30 less across and 20 less down. Callers vary the width (240 at least) and pass their own sizes where a screen has
 // its own (the Hall's boxes).
-export function optionButton(option, filter, name, x, y, caption, { w = SMALL_BUTTON.w, h = SMALL_BUTTON.h, enabled = true, fs = SMALL_BUTTON.fs, min = SMALL_BUTTON.fsMin, depth = 10, semantic = "secondary" } = {}) {
+export function optionButton(option, filter, name, x, y, caption, { w = XS_BUTTON.w, h = XS_BUTTON.h, enabled = true, fs = XS_BUTTON.fs, min = XS_BUTTON.fsMin, depth = 10, semantic = "secondary" } = {}) {
   let tree = clone(NGUI.find(option, "Center/Popup/List/Sound_Setting/ETCSetting/ButtonBg"));
   tree.name = name;
   tree.pos = [x, y];
   resizeButton(tree, w, h);
   const label = NGUI.find(tree, "Label_Locale");
-  NGUI.fitLabel(label.widgets[0], caption, fs, min, w - SMALL_BUTTON.fitInset);
-  label.widgets[0].w_ = w - SMALL_BUTTON.boxInsetW;
-  label.widgets[0].h_ = h - SMALL_BUTTON.boxInsetH;
+  NGUI.fitLabel(label.widgets[0], caption, fs, min, w - XS_BUTTON.fitInset);
+  label.widgets[0].w_ = w - XS_BUTTON.boxInsetW;
+  label.widgets[0].h_ = h - XS_BUTTON.boxInsetH;
   if (!enabled) tree = disabledButton(filter, tree);
   const shift = (n, d = 0) => {
     for (const widget of n.widgets) if ("sprite" in widget || "text" in widget) widget.depth = depth + ("text" in widget ? 2 : d);

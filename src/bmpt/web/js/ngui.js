@@ -7,7 +7,7 @@
 // Depth becomes z-index; NGUI y points up, the stage's y points down.
 import {hasAffirmative,skinAffirmatives,goldTemplate} from "./affirmative-buttons.js";
 import { labelEffect, labelClipPadding } from "./ngui-label.js";
-import { clipButtonPatterns } from "./button-layout.js";
+import { clipButtonPatterns, tagOf, tagBox, overlaps, inkBox } from "./button-layout.js";
 import { spriteUrl, uiExportUrl, setAssetContext } from "./api.js";
 import { decodeAll, imageUrls, imageDecoder } from "./image-decode.js";
 import { withTimeout } from "./async.js";
@@ -58,6 +58,12 @@ let atlasDone = null, texturesDone = null;
 const images = new Map(), tints = new Map();
 let resourceContext = null, resourceRevision = 0;
 const resourceListeners = new Set();
+// Developer previews (pre-release builds) tag every button body with its size preset, XS, S, M or L (BL-173); stable builds do not.
+// A body's size in the app's own units is what it measures on the stage: its prefab size, the nodes' scales and the render's
+// scale against the stage's (a button drawn at a smaller render scale is a smaller button).
+const STAGE_SCALE = 1920 / 2960;
+let tierTags = false;
+export const setTierTags = (on) => { tierTags = !!on; };
 export function onResourceChange(fn) { resourceListeners.add(fn); return () => resourceListeners.delete(fn); }
 export function setResourceContext(value) {
   if (value === resourceContext) return false;
@@ -273,6 +279,7 @@ export async function render(tree, host, opts = {}) {
   const nodes = new Map();
   const jobs = [], post = [], pictures = [], thumbnails = [];
   const frameFailures = [];
+  const bodies = [], inks = [];
   const failed = (p, err) => {
     console.error("NGUI image failed", p, err);
     if (popup && /(?:\/Popup\/Base\/BG|\/BlackBg\/BlackBgClickArea)$/.test(p)) frameFailures.push(err);
@@ -297,6 +304,8 @@ export async function render(tree, host, opts = {}) {
       if ("sprite" in w || "texture" in w || "text" in w || "clipImage" in w) {
         const el = widget(n, w, p, x, y, nsx, nsy, col, alpha);
         if (el) entry.els.push(el);
+        if (el && tierTags && w.sprite === "Common_Btn_BG") bodies.push({ el, path: p, w: w.w_ * Math.abs(nsx) * S / STAGE_SCALE, h: w.h_ * Math.abs(nsy) * S / STAGE_SCALE });
+        else if (el && tierTags && "text" in w && el.textContent) inks.push({ el, w, sx: Math.abs(nsx), sy: Math.abs(nsy) });
       }
       a = alpha * col.a; // NGUI widgets pass their alpha on to child widgets
     }
@@ -479,6 +488,7 @@ export async function render(tree, host, opts = {}) {
   if (opts.deferImages) pictures.push(...jobs);
   else await Promise.all(jobs);
   for (const [el, css] of post) el.style.cssText += css;
+  for (const body of bodies) { const tag = tierTag(body, opts.z || 0, inks, S); if (tag) host.appendChild(tag); }
   const view = { nodes, scale: S, origin: [ox, oy], pictures, images: pictures.filter((p) => !thumbnails.includes(p)), thumbnails };
   await clipButtonPatterns(view, { load });
   if (popup) await Promise.all(view.images);
@@ -490,6 +500,29 @@ export async function render(tree, host, opts = {}) {
     for (const child of [...host.children]) target.appendChild(child);
   }
   return view;
+}
+
+// The size tag at a button body's top left corner: the preset's letters, or the height in units when the pill is none of them.
+// Where it would cover the caption (the inks of the text widgets inside the body) it is a dot there, the same label on hover.
+function tierTag({ el, path, w, h }, z, inks, S) {
+  const info = tagOf(w, h);
+  if (!info) return null;
+  const px = (name) => parseFloat(el.style[name]), body = [px("left"), px("top"), px("width"), px("height")];
+  const covered = inks.some(({ el: textEl, w: tw, sx, sy }) => {
+    const box = ["left", "top", "width", "height"].map((name) => parseFloat(textEl.style[name]));
+    if (box[0] + box[2] / 2 < body[0] || box[0] + box[2] / 2 > body[0] + body[2] || box[1] + box[3] / 2 < body[1] || box[1] + box[3] / 2 > body[1] + body[3]) return false;
+    const lines = textEl.textContent.split("\n"), fs = tw.fontSize || 40;
+    const inkW = glyphWidth(textEl.textContent, fs) * sx * S, inkH = lines.length * fontSizeFor(textEl.textContent, fs) * LINE_PITCH * sy * S;
+    const align = [, "left", "center", "right", "justify"][tw.align] || ["left", "center", "right"][(tw.pivot ?? 4) % 3];
+    const vertical = ["flex-start", "center", "flex-end"][Math.floor((tw.pivot ?? 4) / 3)];
+    return overlaps(tagBox(info.text, body[0], body[1]), inkBox(box, inkW, inkH, align, vertical));
+  });
+  const tag = document.createElement("div");
+  tag.className = `ngui-tier${info.tier ? "" : " off"}${covered ? " dot" : ""}`;
+  Object.assign(tag.dataset, { tier: info.tier ?? "", w: w.toFixed(1), h: h.toFixed(1), path, size: `${info.tier ? `${info.tier} ` : ""}${Math.round(h)}` });
+  if (!covered) tag.textContent = info.text;
+  Object.assign(tag.style, { left: el.style.left, top: el.style.top, zIndex: String(z + 1000) });
+  return tag;
 }
 
 // find a subtree by path ("A/B/C", relative to the given node)

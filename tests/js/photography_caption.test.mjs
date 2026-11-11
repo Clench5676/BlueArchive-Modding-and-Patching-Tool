@@ -20,12 +20,12 @@ globalThis.document = {
 };
 globalThis.getComputedStyle = () => ({ getPropertyValue: () => "" });
 const NGUI = await import("../../src/bmpt/web/js/ngui.js");
-const { CONTROL, SMALL_BUTTON, SPACE } = await import("../../src/bmpt/web/js/ui-tokens.js");
+const { CONTROL, XS_BUTTON, SPACE } = await import("../../src/bmpt/web/js/ui-tokens.js");
 const { row } = await import("../../src/bmpt/web/js/ui-grid.js");
 const controller = await readFile(new URL("../../src/bmpt/web/js/photography/controller.js", import.meta.url), "utf8");
 const layoutCode = controller.slice(controller.indexOf("function photographyToolbarLayout("), controller.indexOf("async function whiteButton("));
 const S = 1920 / 2960;
-const { photographyToolbarLayout, galleryPair, toolbarCaptions } = new Function("CONTROL", "SMALL_BUTTON", "SPACE", "row", "S", "NGUI", "P", `${layoutCode}; return {photographyToolbarLayout,galleryPair,toolbarCaptions};`)(CONTROL, SMALL_BUTTON, SPACE, row, S, NGUI, key=>strings[key]);
+const { photographyToolbarLayout, galleryPair, toolbarCaptions } = new Function("CONTROL", "XS_BUTTON", "SPACE", "row", "S", "NGUI", "P", `${layoutCode}; return {photographyToolbarLayout,galleryPair,toolbarCaptions};`)(CONTROL, XS_BUTTON, SPACE, row, S, NGUI, key=>strings[key]);
 let strings;
 const geometry = photographyToolbarLayout(), OCCLUSION_BUTTON=geometry.occlusion;
 const TOOLBAR_CAPTION={...geometry.caption,width:geometry.caption.width*S,height:geometry.caption.height*S};
@@ -60,9 +60,9 @@ test("a caption wider than the body wraps at its space instead of shrinking or s
 });
 
 test("the text button uses a buttonS body and caption insets", () => {
-  assert.equal(OCCLUSION_BUTTON[2],196);assert.equal(OCCLUSION_BUTTON[3],CONTROL.buttonS.h*S);
-  assert.equal(TOOLBAR_CAPTION.width,196-2*CONTROL.buttonS.pad*S);
-  assert.equal(TOOLBAR_CAPTION.height,(CONTROL.buttonS.h-SMALL_BUTTON.boxInsetH)*S);
+  assert.equal(OCCLUSION_BUTTON[2],196);assert.equal(OCCLUSION_BUTTON[3],CONTROL.buttonXS.h*S);
+  assert.equal(TOOLBAR_CAPTION.width,196-2*CONTROL.buttonXS.pad*S);
+  assert.equal(TOOLBAR_CAPTION.height,(CONTROL.buttonXS.h-XS_BUTTON.boxInsetH)*S);
 });
 
 test("the toolbar button code no longer depends on computed style", async () => {
@@ -81,10 +81,10 @@ for (const locale of LOCALES) test(`photography toolbar and gallery pairs use sh
   near(g.choices[0]-g.playback[0]-g.playback[2],SPACE.m*S);
   for(const box of [g.grid,g.mode])near(box[1]+box[3]/2,g.occlusion[1]+g.occlusion[3]/2);
   for(const box of [g.mode,g.gallery,g.playback])assert.deepEqual(box.slice(2),g.choices.slice(2));
-  for(const [keys,width,x,y] of [[["apply","delete"],140,1200,670],[["previous","next"],180,365,835-(SPACE.l+CONTROL.buttonS.h)*S],[["restore","export"],180,365,835]]){
+  for(const [keys,width,x,y] of [[["apply","delete"],140,1200,670],[["previous","next"],180,365,835-(SPACE.l+CONTROL.buttonXS.h)*S],[["restore","export"],180,365,835]]){
     const pair=galleryPair(width,x,y),captions=keys.map(key=>ui[key]);
-    assert.deepEqual(pair[0].slice(2),pair[1].slice(2));near(pair[0][3],CONTROL.buttonS.h*S);near(pair[1][0]-pair[0][0]-pair[0][2],SPACE.m*S);
-    const fits=NGUI.fitGroup(captions,CONTROL.buttonS.fs,SMALL_BUTTON.fsMin,pair[0][2]/S-SMALL_BUTTON.fitInset,2,{maxH:CONTROL.buttonS.h-SMALL_BUTTON.boxInsetH});
+    assert.deepEqual(pair[0].slice(2),pair[1].slice(2));near(pair[0][3],CONTROL.buttonXS.h*S);near(pair[1][0]-pair[0][0]-pair[0][2],SPACE.m*S);
+    const fits=NGUI.fitGroup(captions,CONTROL.buttonXS.fs,XS_BUTTON.fsMin,pair[0][2]/S-XS_BUTTON.fitInset,2,{maxH:CONTROL.buttonXS.h-XS_BUTTON.boxInsetH});
     assert.equal(new Set(fits.map(f=>f.fs)).size,1);
     for(const fit of fits)assert.ok(!fit.overflow,`${locale}: ${fit.text}`);
   }

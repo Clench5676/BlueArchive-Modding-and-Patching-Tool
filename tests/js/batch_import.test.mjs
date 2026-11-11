@@ -802,7 +802,9 @@ test("resized real button patterns are clipped to the inclined body at every pag
   }
 });
 
-const { SMALL_BUTTON } = await import("../../src/bmpt/web/js/ui-tokens.js");
+const { XS_BUTTON } = await import("../../src/bmpt/web/js/ui-tokens.js");
+// the list's tools: the Items prefab's 162-high bodies at the page's tool scale, which went down with the small button (BL-173)
+const TOOL_SCALE = 0.34 * CONTROL.buttonXS.h / CONTROL.buttonS.h;
 const { BUTTON_BODY_H } = await import("../../src/bmpt/web/js/import-layout.js");
 const drawn = (h, element) => h.rendered.findLast((item) => item.host === element.art);
 const rectOf = (element) => ["left", "top", "width", "height"].map((key) => parseFloat(element.style[key]));
@@ -1036,21 +1038,21 @@ test("buttons side by side share one caption size: the list's tools, and Advance
   } };
   const layouts = makeImportLayouts(), art = importArtwork(ui, layouts);
   const captions = ["Add Files", "Add Folder", "Select All", "Deselect All", "Remove", "Remove Imported", "Clear"];
-  const widths = [174, 190, 126, 140, 150, 224, 156].map((width) => width / 0.34);
+  const widths = [174, 190, 126, 140, 150, 224, 156].map((width) => width / TOOL_SCALE);
   const size = art.buttonSize(captions, widths);
-  // the prefab's own size (Btn_Receive) down to 70 %, each caption's room 60 less than its button, inside the body less 20
+  // the prefab's own size (Btn_Receive) down to 70 %, each caption's room XS_BUTTON.fitInset less than its button, inside the body less XS_BUTTON.boxInsetH
   const body = find(layouts.UIMailBoxContent, "List_01/Btn_Receive"), label = find(body, "Label_Locale").widgets.find((w) => "text" in w);
   assert.equal(asked[0].max, label.fontSize);
   assert.equal(asked[0].min, label.fontSize * 0.7);
-  assert.deepEqual(asked[0].widths, widths.map((width) => width - 60));
+  assert.deepEqual(asked[0].widths, widths.map((width) => width - XS_BUTTON.fitInset));
   assert.equal(asked[0].lines, 2);
-  assert.equal(asked[0].opts.maxH, body.widgets.find((w) => "sprite" in w).h_ - 20);
+  assert.equal(asked[0].opts.maxH, body.widgets.find((w) => "sprite" in w).h_ - XS_BUTTON.boxInsetH);
   const sizes = widths.map((width, i) => {
     const tree = art.button(captions[i], width, false, true, size);
     const text = treeNodes(tree).flatMap((n) => n.widgets).find((w) => "text" in w && w.text === captions[i]);
     assert.ok(text, captions[i]);
-    assert.ok(text.w_ >= width - 60, "the label box is as wide as the room the caption was fitted to");
-    assert.equal(text.h_, body.widgets.find((w) => "sprite" in w).h_ - 20);
+    assert.ok(text.w_ >= width - XS_BUTTON.fitInset, "the label box is as wide as the room the caption was fitted to");
+    assert.equal(text.h_, body.widgets.find((w) => "sprite" in w).h_ - XS_BUTTON.boxInsetH);
     return text.fontSize;
   });
   assert.equal(new Set(sizes).size, 1, `one size on every button: ${sizes}`);
@@ -1072,7 +1074,7 @@ test("the page gives the list's tools one size and the row under the list anothe
   assert.equal(size("options"), size("recheck"));
   assert.equal(size("start"), size("recheck"), "Import's caption is its neighbours' size, not the Items prefab's 72");
   // the shared size comes from the group fit (the stand-in takes 2 off the prefab's size), not from each caption alone
-  assert.ok(tools[0] < 60 && size("options") < 60);
+  assert.ok(tools[0] < 60 && size("options") < XS_BUTTON.fs * BUTTON_BODY_H / CONTROL.buttonXS.h);
 });
 
 inLocales("footer: the row under the list is one row of buttonS controls SPACE.m apart, right-aligned to the list's tools", async () => {
@@ -1080,11 +1082,11 @@ inLocales("footer: the row under the list is one row of buttonS controls SPACE.m
   await h.page.settled();
   const [options, recheck, start] = ["options", "recheck", "start"].map((action) => rectOf(h.action(action)));
   for (const rect of [options, recheck, start]) {
-    closeTo(rect[3], CONTROL.buttonS.h * S);
+    closeTo(rect[3], CONTROL.buttonXS.h * S);
     closeTo(rect[1] + rect[3] / 2, 902);
   }
-  closeTo(start[2], SMALL_BUTTON.w * S);
-  closeTo(recheck[2], SMALL_BUTTON.w * S);
+  closeTo(start[2], XS_BUTTON.w * S);
+  closeTo(recheck[2], XS_BUTTON.w * S);
   closeTo(start[0] - recheck[0] - recheck[2], SPACE.m * S);
   closeTo(recheck[0] - options[0] - options[2], SPACE.m * S);
   const clear = rectOf(h.action("clear")), panelLeft = 602;
@@ -1098,7 +1100,7 @@ inLocales("footer: the row under the list is one row of buttonS controls SPACE.m
   // every body is drawn at one scale and one height, gold or blue, enabled or not
   for (const action of ["options", "recheck", "start"]) {
     const { tree, opts } = drawn(h, h.action(action));
-    closeTo(opts.scale, SMALL_BUTTON.h * S / BUTTON_BODY_H);
+    closeTo(opts.scale, XS_BUTTON.h * S / BUTTON_BODY_H);
     const body = treeNodes(tree).flatMap((n) => n.widgets).find((w) => w.sprite === "Common_Btn_BG");
     assert.equal(body.h_, BUTTON_BODY_H, action);
   }
@@ -1113,7 +1115,7 @@ inLocales("footer: the list's tools fill the list's width in one row SPACE.m apa
   closeTo(rects.at(-1)[0] + rects.at(-1)[2], list[0] + list[2]);
   for (const [i, rect] of rects.entries()) {
     closeTo(rect[1], list[1] + 506 + gap);
-    closeTo(rect[3], BUTTON_BODY_H * 0.34);
+    closeTo(rect[3], BUTTON_BODY_H * TOOL_SCALE);
     if (i) closeTo(rect[0] - rects[i - 1][0] - rects[i - 1][2], gap);
   }
   // each tool keeps the share of the strip its caption was fitted to: widths 174 190 126 140 150 224 156 in the same proportions

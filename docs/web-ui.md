@@ -46,10 +46,10 @@ screen names it (`lobby.dialogue`, "Dialogue 3"), never by its Spine clip name; 
 of their own yet and keep their clip names. The owner handles UAT/visual review.
 
 The composed camera controls use centred `ui-grid.js` rows: neighbours are `SPACE.m` (20 units times `S`) apart,
-groups `SPACE.l` (28 units times `S`). Occlusion Guide and Grid share 136-unit `CONTROL.buttonS` bodies and one
-48-to-34 caption size, including both grid states. Mode, Gallery, Playback and Choices share 102 x 82 px bodies;
-the mode control centres beside the taller text pair. Back retains its native 171 x 116-unit body and the shutter
-its separate 146 px circle. Gallery action, paging and tool pairs use buttonS bodies, one caption size per pair and
+groups `SPACE.l` (28 units times `S`). Occlusion Guide and Grid share 104-unit `CONTROL.buttonXS` bodies and one
+40-to-28 caption size, including both grid states. Mode, Gallery, Playback and Choices share 102 x 82 px bodies;
+the row is as high as the mode control and the text pair centres beside it. Back retains its native 171 x 116-unit body and the shutter
+its separate 146 px circle. Gallery action, paging and tool pairs use buttonXS bodies, one caption size per pair and
 20-unit gaps; the paging row leaves 28 units above the tool row.
 
 `photographs/` belongs to the movable/shared Mod library, not Preview Cache. Its atomic manifest retains per-student
@@ -1397,9 +1397,9 @@ line, the route, the note) are `LINE.stack` of the size apart (57.75); a badge o
 ink gap below the metadata. A refused row's badge reads Cannot Import - <reason> (`import.reason.*`, else the error's own
 text when it needs no parameters, else Import Check Failed); the note under the metadata keeps only a missing official
 copy's repair guidance. Choose Files goes to the line under the badge, one gap below it, its right edge on the badge's,
-and the row grows for it (owner, 2026-11-07). Its caption matches the badge's screen size. It is a `buttonS` control
-(`controlWidth`): its caption and `CONTROL.buttonS.pad` (45, the body's slice border included) each side, in the button's
-own units, 240 at least; reference-glyph ink is centred on the face
+and the row grows for it (owner, 2026-11-07). Its caption matches the badge's screen size. It is a `buttonXS` control
+(`controlWidth`): its caption and `CONTROL.buttonXS.pad` (34, the body's slice border included) each side, in the button's
+own units, 200 at least; reference-glyph ink is centred on the face
 between the top and bottom slice borders. Native button decoration still uses `clipButtonPatterns`. Footer buttons
 wrap at their group's shared size (`NGUI.wrapText`), preserving Thai word breaks instead of independently shrinking.
 
@@ -1875,7 +1875,7 @@ Home control comes from `UICharacterCollection/NUITop_Scenes/Top/Right/Lobby`; n
 The action and navigation groups use centred `ui-grid.js` rows, with 20-unit gaps between neighbours and 28 units
 between groups, converted to CSS pixels with `S`. Their cloned `Able_Count/Bg` bodies keep 156 x 104 units
 (`CONTROL.toolbar.h`); the selected action sprites retain their authored dimensions and existing optical sizing.
-Cancel/Save shares 136-unit buttonS bodies, one fitted 48-to-34 caption size and a 20-unit gap.
+Cancel/Save shares 104-unit buttonXS bodies, one fitted 40-to-28 caption size and a 20-unit gap.
 Hall choices are separate from game application and detail preview selections. Every entry has its own UUID.
 The far-right Fullscreen action clones `UILobby/Front/Right/Btn_Screen_On`; the exit clones
 `Front/Right/ScreenshotMode/ModeInformation/Btn_Screen_Off`. Their icons use the same visible-size and native-body
@@ -1958,8 +1958,8 @@ Hall `createModal().draw` sends its actions through `popupFrame` and its shared 
 semantic and enabled state; the background picker keeps its frame, list and footer. The portrait/replacement picker
 (BL-171) draws in `PORTRAIT_FRAME`: the L frame (2098 u wide, 1300 high) whose panels keep `SPACE.xl` at each side, the
 title's ink centred in the 132 u header band (`titleCentre`, where UIPopup_Sort has it), and a compact footer (a Done
-or Cancel body `COMPACT_BUTTON_H` = half a buttonS body high, `COMPACT_FOOTER_W` wide or as wide as its caption needs
-at the 34 u floor, `SPACE.xl` above the frame's foot). Under the header band the picker is a column with `SPACE.l`
+or Cancel body `COMPACT_BUTTON_H` = half a buttonXS body high, `COMPACT_FOOTER_W` wide or as wide as its caption needs
+at the compact floor (`TYPE.micro.min`, 24 u), `SPACE.xl` above the frame's foot). Under the header band the picker is a column with `SPACE.l`
 between its parts: the toolbar bar (with the search field flush under it when open), the list and the footer. A
 student's name stands `SPACE.xxl` in from the row plate's inclined left edge. The background picker moves its
 [130, 190, 760, 650] list up to y 176.70, retaining its viewport height and full rows; it ends at 826.70, with footer
@@ -1973,18 +1973,20 @@ Tests cover the migrated layouts in all six locales and both search states, and 
 
 `CAPTION_EXCEPTIONS` names exactly four Thai-only allowances: `hall.doneAdding` (44 u in its shared footer),
 `hall.unsavedChanges` (36 u shared by Keep Editing / Discard / Save and Leave), `hall.scaleReset` (30 u) and
-`hall.add` (20 u, the portrait picker's compact Add / Added / Select, one line in a half-height body).
+`hall.add` (16 u, the portrait picker's compact Add / Added / Select, one line in a half-height body). Since the footers
+follow their captions and the small button's floor is 28, only `hall.add` still lowers a floor: `captionMinimum` takes the lower of an
+allowance and the floor, never the higher.
 Call sites explicitly pass `captionSite`; the popup and small-button renderers validate the resulting size against that
-site and the page locale. The token minima remain 48 and 34. Other Hall sites and all other locales retain those minima;
+site and the page locale. The token minima are the footer's 34 and the small button's 28. Other Hall sites and all other locales retain those minima;
 wording stays unchanged and every caption retains every character.
 
-Hall `student-hall-ui.js` `button()` uses `SMALL_BUTTON`: height 136 u, caption 48 down to 34, fit width w-60,
-label box w-30 by 116. `buttonBox` preserves each caller's centre and width, raising only widths below 240 u;
+Hall `student-hall-ui.js` `button()` uses `XS_BUTTON`: height 104 u, caption 40 down to 28, fit width w-46,
+label box w-24 by 88. `buttonBox` preserves each caller's centre and width, raising only widths below 200 u;
 `buttonSize` gives sibling groups one size. The two 460 x 70 CSS px first-run buttons now draw 460 x 88.216 at
 centre (960, 595). `updateAction` preserves the original control's migrated/retained role when refreshing it.
 
 The portrait picker Add/Select bodies sit 8 CSS px below the unchanged name strip and draw through `button()` as compact
-bodies (BL-171): half a buttonS body (68 u, 44.1 px) high, 155.676 px (240 u) wide at least, keeping the former horizontal
+bodies (BL-171, one size down in BL-173): half a buttonXS body (52 u, 33.7 px) high, 129.7 px (200 u) wide at least, keeping the former horizontal
 centre, their caption the largest size that fits one line (`compactButtonSize`). Portrait row plates and nested strips
 are 393 px high with vertical pitch 397: this reserves the name strip's largest 103.6 u two-line case, the compact button
 and the horizontal scrollbar's 12.973 px painted band. The strip extends 12 px left by its existing hit outset (x 240 to
@@ -2363,22 +2365,24 @@ the prefab values, from the development view). It imports no other UI module.
   `POPUP` and `FOOTER` retain the old anatomy for unmigrated callers.
 - **Lobby entry** (`LOBBY_ENTRY`; UILobby's `UIAni_Lobby`): the top bar's and the bottom menu's unweighted Hermite keys,
   `[time, offset from rest, slope]`: 333.7 / 28.55 / 0 and -1043 / -29.52 / 0 units at 0, 0.2 and 0.42 s. See Bar motion.
-- **Small button** (`SMALL_BUTTON`; UIPopup_Option_PC `Center/Popup/List/Sound_Setting/ETCSetting/ButtonBg`): 402 x 136, caption
-  48 down to 34 fitted to the width less 60, its label box 30 less across and 20 less down; only the width varies, 240 at
-  least. `game-buttons.js` `optionButton` takes these as its defaults; Hall `button()` also uses them, retaining each
-  caller's centre and width (raised to 240 u if necessary). The stopped memorial sites use `retainedButton`. Settings'
+- **Small button** (`XS_BUTTON`, BL-173: the app's small button is XS, one size under UIPopup_Option_PC
+  `Center/Popup/List/Sound_Setting/ETCSetting/ButtonBg`, which stays as `SMALL_BUTTON`, 402 x 136, for the S popup footers):
+  308 x 104, caption 40 down to 28 fitted to the width less 46, its label box 24 less across and 16 less down; only the
+  width varies, 200 at least. `game-buttons.js` `optionButton` takes these as its defaults; Hall `button()` also uses them, retaining each
+  caller's centre and width (raised to 200 u if necessary). The stopped memorial sites use `retainedButton`. Settings'
   value rows
-  put the buttons right-aligned to the card's content box (the 1552-wide card less its 58 padding, so to x 718), 422 apart,
-  beside the value while it keeps at least four grid columns (452; two buttons to a line) and under it three to a line; the
+  put the buttons right-aligned to the card's content box (the 1552-wide card less its 58 padding, so to x 718), 328 apart,
+  beside the value while it keeps at least four grid columns (452; three buttons to a line) and under it four to a line; the
   rest wrap to a second line, right-aligned like the first (`settings-rows.js` `valueGeometry`, laid out with the design
-  system's `container`, `row` and `stack`). The Export pair is 680 x 136, 60 apart and centred. A message's line button is 136 high and as wide as its caption plus
-  90 (240 at least) in a row at least 156 high; the asset consent's Change button the same, on a line of its own under
+  system's `container`, `row` and `stack`). The Export pair is 520 x 104, 60 apart and centred. A message's line button is 104 high and as wide as its caption plus
+  68 (200 at least) in a row at least 124 high; the asset consent's Change button the same, on a line of its own under
   the item (`consent.js` `assetLayout`). Not migrated yet: the stopped memorial candidate, queue and footer buttons,
   the photography toolbar and the detail screen's Show in Finder / Explorer button. Popup detail actions use the
-  136-unit control height and retain their existing 40–26 caption range for the narrow shared action row.
+  104-unit control height and retain their existing 40–26 caption range for the narrow shared action row.
 - **Caption exceptions** (`CAPTION_EXCEPTIONS`, checked by `captionMinimum`): only Thai at Hall's Done Adding (44),
-  unsaved-changes footer group (36), portrait Reset (30) and the picker's compact Add (20). The footer/small-button token minima stay 48/34.
-- **Batch Import's row under the list** is one row of `buttonS` controls (136 high, caption 48 down to 34, `SPACE.m` apart, laid
+  unsaved-changes footer group (36), portrait Reset (30) and the picker's compact Add (16); an allowance only lowers a floor, and
+  only the compact Add's is below one now. The footer and small-button token minima are 34 and 28.
+- **Batch Import's row under the list** is one row of `buttonXS` controls (104 high, caption 40 down to 28, `SPACE.m` apart, laid
   out with `row`): Advanced Options, Recheck and Import share one body height and one caption size, on the prefabs' own bodies
   (Mailbox `Btn_Receive` and `ReceiveAll/Btn`, the popups' gold). Import stands out by its gold, not by its size. The row's right
   edge is the list tools'. The tools over it fill the list's width in one row `SPACE.m` apart, each in the share of it its caption

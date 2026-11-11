@@ -26,7 +26,7 @@ const { wrapPath, S, glyphsOf } = await import(new URL("util.js", web));
 const Rows = await import(new URL("settings-rows.js", web));
 const ButtonsModule = await import(new URL("game-buttons.js", web));
 const { errorText } = await import(new URL("i18n.js", web));
-const { BACKDROP, SMALL_BUTTON, TYPE, SPACE, PANEL, CONTROL } = await import(new URL("ui-tokens.js", web));
+const { BACKDROP, XS_BUTTON, TYPE, SPACE, PANEL, CONTROL } = await import(new URL("ui-tokens.js", web));
 const { option, filter } = controls();
 const Buttons = { smallButton: (...args) => ButtonsModule.optionButton(option, filter, ...args) };
 
@@ -47,7 +47,7 @@ function harness(locale, tab) {
     lobbyZoom: { mode: "custom", custom: 2 }, voiceVolume: 80 };
   const ModSwitch = { current: () => ({ scan: true }), view: () => ({ on: true, busy: false, unavailable: false, dot: false }), listSep: () => ", ",
     sizeText: (n) => `${n} B`, reasonText: () => "", openHelp() {}, click() {} };
-  const deps = { NGUI, T, wrapPath, S, glyphsOf, ...Rows, Buttons, BACKDROP, SMALL_BUTTON, TYPE, platform: "mac", errorText: (err) => errorText(err, T),
+  const deps = { NGUI, T, wrapPath, S, glyphsOf, ...Rows, Buttons, BACKDROP, XS_BUTTON, TYPE, platform: "mac", errorText: (err) => errorText(err, T),
     ModSwitch, DOT: () => ({ name: "Dot", pos: [0, 0], widgets: [], children: [] }), rpc: async () => prefs };
   const api = new Function("deps", "initial", `const {${Object.keys(deps)}} = deps; ${strip(source)};
     prefs = initial; tab = ${JSON.stringify(tab)}; return { rows };`)(deps, prefs);
@@ -88,9 +88,9 @@ for (const locale of LOCALES) for (const tab of ["general", "mods", "folders"]) 
   for (const row of harness(locale, tab).rows.rows) {
     const buttons = buttonsOf(row.tree);
     if (!buttons.length || row.tree.name === "Export") continue;   // the Export pair is centred (below)
-    const boxes = buttons.map((b) => { const body = bodyOf(b), w = body.w_ ?? SMALL_BUTTON.w; return { x: b.pos[0] - w / 2, y: b.pos[1], w, h: body.h_ }; });
+    const boxes = buttons.map((b) => { const body = bodyOf(b), w = body.w_ ?? XS_BUTTON.w; return { x: b.pos[0] - w / 2, y: b.pos[1], w, h: body.h_ }; });
     // every button of a row has the control height and a row's captions share one size
-    for (const box of boxes) near(box.h, CONTROL.buttonS.h, `${line(row)}: control height`);
+    for (const box of boxes) near(box.h, CONTROL.buttonXS.h, `${line(row)}: control height`);
     const sizes = new Set(buttons.map((b) => NGUI.find(b, "Label_Locale").widgets[0].fontSize));
     if (buttons.length > 1) assert.equal(sizes.size, 1, `${line(row)}: one caption size`);
     // lines of buttons: the right end of each line is the content box's right edge, neighbours SPACE.m apart
@@ -141,16 +141,16 @@ for (const locale of LOCALES) test(`${locale} general: radio groups keep the pre
   }
 });
 
-test("the Export pair is two SMALL_BUTTON.wideW buttons SPACE.xxl apart, centred in the content box, one size", () => {
+test("the Export pair is two XS_BUTTON.wideW buttons SPACE.xxl apart, centred in the content box, one size", () => {
   for (const locale of LOCALES) {
     const row = harness(locale, "mods").rows.rows.find((r) => r.tree.name === "Export"), buttons = buttonsOf(row.tree);
     assert.equal(buttons.length, 2);
     const [a, b] = buttons.map((button) => button.pos[0]);
-    near(b - a - SMALL_BUTTON.wideW, SPACE.xxl);
+    near(b - a - XS_BUTTON.wideW, SPACE.xxl);
     near((a + b) / 2, (LEFT + RIGHT) / 2, "centred");
     assert.equal(buttons[0].pos[1], buttons[1].pos[1]);
-    near(buttons[0].pos[1] + CONTROL.buttonS.h / 2, row.h / 2 - TOP, "the content's top");
-    near(row.h, 109 + SPACE.m + CONTROL.buttonS.h + SPACE.l);
+    near(buttons[0].pos[1] + CONTROL.buttonXS.h / 2, row.h / 2 - TOP, "the content's top");
+    near(row.h, 109 + SPACE.m + CONTROL.buttonXS.h + SPACE.l);
     assert.equal(new Set(buttons.map((x) => NGUI.find(x, "Label_Locale").widgets[0].fontSize)).size, 1);
   }
 });

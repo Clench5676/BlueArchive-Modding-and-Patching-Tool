@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { readFile } from "node:fs/promises";
 
-import { CONTROL, SMALL_BUTTON, SPACE } from "../../src/bmpt/web/js/ui-tokens.js";
+import { CONTROL, XS_BUTTON, SPACE } from "../../src/bmpt/web/js/ui-tokens.js";
 const S = 1920 / 2960;
 const near = (a,b) => assert.ok(Math.abs(a-b)<1e-9, `${a} != ${b}`);
 const node = (name, children = [], widgets = [], more = {}) => ({ name, children, widgets, pos: [0, 0], scale: [1, 1], active: true, ...more });
@@ -32,7 +32,7 @@ globalThis.hallControlsHarness = { S, clone: structuredClone, NGUI: { find, fitG
   document: { createElement: () => ({ style: {}, children: [], append(child) { this.children.push(child); } }), querySelectorAll: () => [] }, lobby };
 let source = await readFile(new URL("../../src/bmpt/web/js/student-hall.js", import.meta.url), "utf8");
 source = source.replace(/^import .*;$/gm, "");
-source = `import { CONTROL, SMALL_BUTTON, SPACE } from "${new URL("../../src/bmpt/web/js/ui-tokens.js", import.meta.url).href}";\nimport { row } from "${new URL("../../src/bmpt/web/js/ui-grid.js", import.meta.url).href}";\n` + source;
+source = `import { CONTROL, XS_BUTTON, SPACE } from "${new URL("../../src/bmpt/web/js/ui-tokens.js", import.meta.url).href}";\nimport { row } from "${new URL("../../src/bmpt/web/js/ui-grid.js", import.meta.url).href}";\n` + source;
 source = `import { portraitReplacements } from "${new URL("../../src/bmpt/web/js/student-hall-model.js", import.meta.url).href}";\nimport { portraitRect, portraitToolbarLayout, PORTRAIT_SIZE } from "${new URL("../../src/bmpt/web/js/student-hall-framing.js", import.meta.url).href}";\nimport { bindCorner } from "${new URL("../../src/bmpt/web/js/corner-layout.js", import.meta.url).href}";\n` + source;
 source = `const {S,clone,NGUI,alignIcon,text,T,Popup,document,UI}=globalThis.hallControlsHarness;\n${source}\nexport {lobbyControl,controls,renderChrome,renderPortraitActions};
 export function setPortraits(value){portraits=value;}
@@ -182,16 +182,16 @@ for(const locale of ["en-US","zh-CN","zh-TW","ja-JP","ko-KR","th-TH"]) test(`Hal
     near(pair[1][2]-pair[0][2]-pair[0][3],SPACE.m*S);
     for(const viewport of [960,1600,2560])for(const density of [1,2]){
       const k=viewport/1920*density;
-      for(const action of actions){const body=find(rendered,`${action[0]}/Bg`).widgets[0];assert.ok(action[2]*k>=0&&(action[2]+action[3])*k<=viewport*density);near(body.h_*S*k,(action[6]?CONTROL.buttonS.h:CONTROL.toolbar.h)*S*k);}
+      for(const action of actions){const body=find(rendered,`${action[0]}/Bg`).widgets[0];assert.ok(action[2]*k>=0&&(action[2]+action[3])*k<=viewport*density);near(body.h_*S*k,(action[6]?CONTROL.buttonXS.h:CONTROL.toolbar.h)*S*k);}
       near((pair[1][2]-pair[0][2]-pair[0][3])*k,SPACE.m*S*k);
     }
     const labels=pair.map(([name])=>find(rendered,`${name}/Label_SpineCount`).widgets[0]);
     assert.equal(new Set(labels.map(w=>w.fontSize)).size,1);
     for(let i=0;i<pair.length;i++){
       const [name,key,,width]=pair[i],body=find(rendered,`${name}/Bg`).widgets[0],label=labels[i];
-      assert.equal(body.h_,CONTROL.buttonS.h);assert.ok(label.fontSize>=SMALL_BUTTON.fsMin&&label.fontSize<=CONTROL.buttonS.fs);
+      assert.equal(body.h_,CONTROL.buttonXS.h);assert.ok(label.fontSize>=XS_BUTTON.fsMin&&label.fontSize<=CONTROL.buttonXS.fs);
       assert.equal(label.text.replace(/\s/g,""),fixture.T(key).replace(/\s/g,""));
-      for(const line of label.text.split("\n"))assert.ok(real.glyphWidth(line,label.fontSize)<=width/S-2*CONTROL.buttonS.pad+1e-9);
+      for(const line of label.text.split("\n"))assert.ok(real.glyphWidth(line,label.fontSize)<=width/S-2*CONTROL.buttonXS.pad+1e-9);
       assert.ok(label.text.split("\n").length*real.fontSizeFor(label.text,label.fontSize)*real.LINE_PITCH<=label.h_+1e-9);
     }
   }finally{fixture.NGUI.fitGroup=previous;delete fixture.strings;}

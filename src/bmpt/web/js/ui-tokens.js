@@ -63,15 +63,38 @@ export const SMALL_BUTTON = Object.freeze({
   wideW: 680,
 });
 
+// The app's own small button, one size under the S preset above (owner, 2026-11-11, BL-173): the S button drawn at 0.765 of
+// its height, 104 high, which is the game's own toolbar and tab height (Common_Filter_Tab_Type1, UILobby Able_Count/Bg). Its
+// numbers are SMALL_BUTTON's scaled, the slice borders' insets (the sprite's structure) a little smaller, and its caption 40 down
+// to 28. Every small button of the app takes these; SMALL_BUTTON stays for the popups whose footers the owner set to S.
+export const XS_BUTTON = Object.freeze({
+  w: 308,
+  h: 104,
+  minW: 200,
+  fs: 40,
+  fsMin: 28,
+  // the caption is fitted to w - 46, its label box is w - 24 by h - 16
+  fitInset: 46,
+  boxInsetW: 24,
+  boxInsetH: 16,
+  // buttons side by side: 20 apart
+  gap: 20,
+  pitch: 308 + 20,
+  // a line button's width is its caption's width and this much more
+  glyphPad: 68,
+  // the Export pair in Settings
+  wideW: 520,
+});
+
 // Owner-approved wording exceptions, scoped to a single Hall site and locale. The prefab minima above stay unchanged.
 export const CAPTION_EXCEPTIONS = Object.freeze({
   "hall.doneAdding": Object.freeze({ "th-TH": 44 }),
   "hall.unsavedChanges": Object.freeze({ "th-TH": 36 }),
   "hall.scaleReset": Object.freeze({ "th-TH": 30 }),
-  // the picker's compact Add, Added and Select (a body half a buttonS body high holds one line): Thai "Added" is nine code points
-  "hall.add": Object.freeze({ "th-TH": 20 }),
+  // the picker's compact Add, Added and Select (a body half an XS body high holds one line): Thai "Added" is nine code points
+  "hall.add": Object.freeze({ "th-TH": 16 }),
 });
-export const captionMinimum = (site, locale, minimum) => CAPTION_EXCEPTIONS[site]?.[locale] ?? minimum;
+export const captionMinimum = (site, locale, minimum) => Math.min(CAPTION_EXCEPTIONS[site]?.[locale] ?? minimum, minimum);
 
 // UICharacterDetail/Inventory_ListControl/LeftInfo/CharInfo/Char_Target/Type/MainType/BG: Common_Bg_Raius10px 272 x 72
 // inclined 10 degrees, Label fs 40. Chips stand 290 apart, a second row 84 under the first (the nameplate's rows).
@@ -203,7 +226,8 @@ export const LINE = Object.freeze({ label: 1.15, stack: 1.375 });
 export const CONTROL = Object.freeze({
   badge: Object.freeze({ h: 54, fs: 34, pad: 16, minW: 220 }),             // List_01/TimeLimit/Bg 220 x 54
   chip: Object.freeze({ h: 72, fs: 40, pad: 20, minW: 272 }),              // CHIP
-  buttonS: Object.freeze({ h: 136, fs: 48, pad: 45, minW: 240 }),          // SMALL_BUTTON (glyphPad 90)
+  buttonXS: Object.freeze({ h: 104, fs: 40, pad: 34, minW: 200 }),         // XS_BUTTON (glyphPad 68), the app's small button
+  buttonS: Object.freeze({ h: 136, fs: 48, pad: 45, minW: 240 }),          // SMALL_BUTTON (glyphPad 90), the S preset
   buttonM: Object.freeze({ h: 162, fs: 60, pad: 45, minW: 348 }),          // List_01/Btn_Receive 348 x 162
   buttonL: Object.freeze({ h: 176, fs: 72, pad: 39.5, minW: 551 }),        // UIPopup_RaidEnterCheck footer, 551 x 176
   icon: Object.freeze({ h: 60 }),                                          // Common_Icon_Close, Common_Btn_Radio_BG

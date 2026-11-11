@@ -13,7 +13,7 @@ import * as Popup from "./popup.js";
 import { rpc } from "./api.js";
 import { T, errorText } from "./i18n.js";
 import { setSpineConsent } from "./spine-runtime.js";
-import { COLOUR, CONTROL, POPUP_FRAME, SPACE, TYPE, SMALL_BUTTON } from "./ui-tokens.js";
+import { COLOUR, CONTROL, POPUP_FRAME, SPACE, TYPE, XS_BUTTON } from "./ui-tokens.js";
 import { frameGeometry, popupContent } from "./popup-frames.js";
 import { container, row, stack, textItem, toNode } from "./ui-grid.js";
 import { S, hitButton, wrapPath } from "./util.js";
@@ -32,13 +32,13 @@ export async function show(host, cacheDir, native = false) {
 // The consent sections are stacks inside the shared L content box. Paths keep the small-button row's centre line.
 export function assetLayout(cacheDir) {
   const w = POPUP_FRAME.L.w, sectionW = w - 2 * SPACE.xl;
-  const bf = NGUI.fitText(T("consent.change"), SMALL_BUTTON.fs, SMALL_BUTTON.fsMin, SMALL_BUTTON.w - SMALL_BUTTON.fitInset);
-  const bw = Math.max(SMALL_BUTTON.minW, NGUI.glyphWidth(bf.text, bf.fs) + SMALL_BUTTON.glyphPad);
+  const bf = NGUI.fitText(T("consent.change"), XS_BUTTON.fs, XS_BUTTON.fsMin, XS_BUTTON.w - XS_BUTTON.fitInset);
+  const bw = Math.max(XS_BUTTON.minW, NGUI.glyphWidth(bf.text, bf.fs) + XS_BUTTON.glyphPad);
   const room = sectionW - 2 * SPACE.m - bw - SPACE.m;
   const to = wrapPath(T("cacheTo", { path: cacheDir }), TYPE.chip.fs, TYPE.chip.min, room, 2);
   const pathItem = textItem({ ...NGUI, fitText: () => to }, to.text, { fs: to.fs, min: to.fs }, { maxW: room, lines: Infinity });
   const pathH = pathItem.h;
-  const pathRow = row([{ ...pathItem, w: room }, { w: bw, h: SMALL_BUTTON.h }],
+  const pathRow = row([{ ...pathItem, w: room }, { w: bw, h: XS_BUTTON.h }],
     { x: SPACE.m, w: sectionW - 2 * SPACE.m, gap: SPACE.m, justify: "center" });
   const [, cachedBodyH] = section("Cached", 0, T("consent.cached.label"), [T("consent.cached.items"), T("consent.cached.previews")], "#2d4c72", sectionW);
   const [, neverH] = section("Never", 0, T("consent.never.label"), [T("consent.never.items"), T("consent.never.how")], COLOUR.neverBar, sectionW);

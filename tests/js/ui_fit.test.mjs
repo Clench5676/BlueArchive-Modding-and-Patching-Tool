@@ -305,11 +305,11 @@ for (const locale of LOCALES) test(`dropping the kind from a prompt card's label
 // the Hall's student cards (student-hall-ui.js formationCardTree: 36 down to 24, two lines, 190 wide)
 const hall = await (async () => {
   let source = readFileSync(new URL("../../src/bmpt/web/js/student-hall-ui.js", import.meta.url), "utf8");
-  const { POPUP, POPUP_FRAME, CONTROL, TYPE, SPACE, SMALL_BUTTON } = await import("../../src/bmpt/web/js/ui-tokens.js");
+  const { POPUP, POPUP_FRAME, CONTROL, TYPE, SPACE, XS_BUTTON } = await import("../../src/bmpt/web/js/ui-tokens.js");
   const { stack: layoutStack } = await import("../../src/bmpt/web/js/ui-grid.js");
-  globalThis.hallHarness = { NGUI, Popup: {}, clone: structuredClone, Loading: {}, withTimeout: () => {}, T: (key) => key, POPUP, POPUP_FRAME, CONTROL, TYPE, SPACE, SMALL_BUTTON, layoutStack };
+  globalThis.hallHarness = { NGUI, Popup: {}, clone: structuredClone, Loading: {}, withTimeout: () => {}, T: (key) => key, POPUP, POPUP_FRAME, CONTROL, TYPE, SPACE, XS_BUTTON, layoutStack };
   source = source.replace(/^import .*;$/gm, "");
-  source = `const { Popup, clone, NGUI, Loading, withTimeout, T, POPUP, POPUP_FRAME, CONTROL, TYPE, SPACE, SMALL_BUTTON, layoutStack } = globalThis.hallHarness; const S = 1920 / 2960;\n${source}\n//# sourceURL=hall-ui-fit.js`;
+  source = `const { Popup, clone, NGUI, Loading, withTimeout, T, POPUP, POPUP_FRAME, CONTROL, TYPE, SPACE, XS_BUTTON, layoutStack } = globalThis.hallHarness; const S = 1920 / 2960;\n${source}\n//# sourceURL=hall-ui-fit.js`;
   return import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`);
 })();
 const hallLabel = (name) => {
