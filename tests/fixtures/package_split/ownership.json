@@ -48,9 +48,9 @@
       "masked_import_lines_sha256": "aa55f9ff74b9f582afe9d108aa7e34a54e2cb393e58321429c667303bec0f601"
     },
     "src/ba_modding_toolkit/bundle.py": {
-      "blob": "2db0b956fd0b953c90c941e6c247fdf8543c4fed",
-      "non_import_ast_sha256": "17399a19611e83141efbe045894f13f635a0531195312a1e24b2dedb43424ebe",
-      "masked_import_lines_sha256": "66f618626fdf844001f4384103f2e197147a2f85bc8573236725899ea41e5574"
+      "blob": "ee5d0163474c67abbe90d5dfaf57cd84994fd303",
+      "non_import_ast_sha256": "bc24d44f040ae25897bf1fd38e9565770356940665366f7d440243572f630e2d",
+      "masked_import_lines_sha256": "304ebb18bb192e35539b73238471d3a35ff35f46b21a4ec5126f9e491c3350d6"
     },
     "src/ba_modding_toolkit/cli/__main__.py": {
       "blob": "d24c3ec2f890ae7ae00da4d3641ad2a07789af81",
@@ -333,19 +333,19 @@
     },
     {
       "file": "src/ba_modding_toolkit/bundle.py",
-      "line": 14,
+      "line": 15,
       "original": "from .bundle_guard import check_bundle",
       "import": "from bmpt.bundle_guard import check_bundle"
     },
     {
       "file": "src/ba_modding_toolkit/bundle.py",
-      "line": 16,
+      "line": 17,
       "original": "from .errors import ServiceError",
       "import": "from bmpt.errors import ServiceError"
     },
     {
       "file": "src/ba_modding_toolkit/bundle.py",
-      "line": 56,
+      "line": 57,
       "original": "from .unityfs import read_cab_names",
       "import": "from bmpt.unityfs import read_cab_names"
     },
