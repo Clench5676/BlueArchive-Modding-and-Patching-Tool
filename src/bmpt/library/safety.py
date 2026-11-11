@@ -14,6 +14,7 @@ None of these read game files: the process list and Steam's manifests are not ga
 from __future__ import annotations
 
 import csv
+import errno
 import functools
 import io
 import logging
@@ -252,11 +253,17 @@ def writable_game_files(paths: list[Path], resource_dirs: list[Path], *,
     with ExitStack() as stack:
         for path in sorted(set(paths)):
             check_resource_path(path, resource_dirs)
+            step = "stat"  # what failed, for the log: the user only sees game_file_locked
             try:
                 if allow_missing and not path.exists() and path.parent.stat().st_mode & 0o222:
                     continue  # a journaled rename may have left this destination absent
-                if not path.is_file() or not path.stat().st_mode & 0o222 or not path.parent.stat().st_mode & 0o222:
-                    raise PermissionError(str(path))
+                if not path.is_file():
+                    raise FileNotFoundError(errno.ENOENT, "not a file")
+                if not path.stat().st_mode & 0o222:
+                    raise PermissionError(errno.EACCES, "read-only file")
+                if not path.parent.stat().st_mode & 0o222:
+                    raise PermissionError(errno.EACCES, "read-only folder")
+                step = "open"
                 if os.name == "nt":
                     # Python's Windows file handles do not share delete access;
                     # keeping our probe open would block our own atomic replace.
@@ -266,7 +273,9 @@ def writable_game_files(paths: list[Path], resource_dirs: list[Path], *,
                     import fcntl
 
                     stream = stack.enter_context(path.open("r+b"))
+                    step = "lock"
                     fcntl.flock(stream.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
             except OSError as error:
+                log_failure(logger, logging.WARNING, f"Game file not writable before replacement ({step})", error)
                 raise ServiceError("game_file_locked", file=path) from error
         yield

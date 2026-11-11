@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import errno
 import json
+import logging
 import os
 import shutil
 import threading
@@ -951,16 +953,41 @@ def test_symlink_destination_cannot_escape_resources(setup_library, monkeypatch,
     assert not (env.root / "originals").exists()
 
 
-def test_read_only_files_fail_cleanly(setup_library):
+def test_read_only_files_fail_cleanly(setup_library, caplog):
     env = setup_library
     entry = env.library.add([make_mod(env.original, env.tmp / "input")])[0]
     before = env.original.read_bytes()
     env.original.chmod(0o444)
     try:
-        expect_error("game_file_locked", lambda: env.library.apply("test", f"mod:{entry.id}"))
+        with caplog.at_level(logging.WARNING, logger="bmpt.library.safety"):
+            expect_error("game_file_locked", lambda: env.library.apply("test", f"mod:{entry.id}"))
     finally:
         env.original.chmod(0o644)
     assert env.original.read_bytes() == before
+    # the log says why, the path stays out of it
+    assert "Game file not writable before replacement (stat): PermissionError" in caplog.text
+    assert f"errno={errno.EACCES}" in caplog.text and "read-only file" in caplog.text
+    assert str(env.original) not in caplog.text
+
+
+def test_failed_game_write_logs_os_error(setup_library, monkeypatch, caplog):
+    env = setup_library
+    entry = env.library.add([make_mod(env.original, env.tmp / "input")])[0]
+    before = env.original.read_bytes()
+    original_copy = service.atomic_copy
+
+    def copy(source, target):
+        if Path(target) == env.original:
+            raise OSError(errno.ENOSPC, "No space left on device", str(target))
+        original_copy(source, target)
+
+    monkeypatch.setattr(service, "atomic_copy", copy)
+    with caplog.at_level(logging.WARNING, logger="bmpt.library.service"):
+        expect_error("game_file_locked", lambda: env.library.apply("test", f"mod:{entry.id}"))
+    assert env.original.read_bytes() == before
+    assert "Library write failed (write, game_file_locked): OSError" in caplog.text
+    assert f"errno={errno.ENOSPC}" in caplog.text and "No space left on device" in caplog.text
+    assert str(env.original) not in caplog.text
 
 
 def test_running_game_blocks_replacement(setup_library, monkeypatch):
@@ -982,7 +1009,7 @@ def test_detects_game_process(monkeypatch):
     expect_error("game_running", safety.check_game_not_running)
 
 
-def test_posix_advisory_lock_is_reported(setup_library):
+def test_posix_advisory_lock_is_reported(setup_library, caplog):
     if os.name == "nt":
         pytest.skip("POSIX advisory lock test")
     import fcntl
@@ -990,7 +1017,9 @@ def test_posix_advisory_lock_is_reported(setup_library):
     entry = env.library.add([make_mod(env.original, env.tmp / "input")])[0]
     with env.original.open("rb") as stream:
         fcntl.flock(stream.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-        expect_error("game_file_locked", lambda: env.library.apply("test", f"mod:{entry.id}"))
+        with caplog.at_level(logging.WARNING, logger="bmpt.library.safety"):
+            expect_error("game_file_locked", lambda: env.library.apply("test", f"mod:{entry.id}"))
+    assert "Game file not writable before replacement (lock): BlockingIOError" in caplog.text
 
 
 def test_target_mismatch_and_missing_targets(setup_library):
