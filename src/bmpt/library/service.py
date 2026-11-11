@@ -6937,6 +6937,8 @@ class ModLibrary:
             if isinstance(entry.get("skeleton"), str) and isinstance(entry.get("text"), str):
                 with contextlib.suppress(ValueError):
                     base = (entry["text"], base64.b64decode(entry["skeleton"], validate=True))
+            if base is not None and base[1] == official.skeletons[skeleton]:
+                base = None  # an official copy that kept the mod's date is the current rig: it tells no origin
             try:
                 text = mod.atlases[own_atlases[name]].decode("utf-8-sig")
             except UnicodeError:
@@ -7111,6 +7113,9 @@ class ModLibrary:
             report["grown"] = max([report["grown"], *one.pages.grown.values()])
             for animation, outcome in result.results.items():
                 report["grafted"].append(animation)
+                shown = [c for key in one.graft.shown.get(animation, []) if (c := one.graft.carried.get(key))]
+                if any(c.slot in one.unanchored for c in shown):  # placed without an anchor: rung for a look
+                    marks += [c.region for c in shown if c.region]
                 if outcome["candidate"]:
                     report["corrected"].append(animation)
                 if not outcome["fixed"]:

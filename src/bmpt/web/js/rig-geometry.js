@@ -131,7 +131,7 @@ export function setupOf(S, atlasText, skeletonData) {
   skeleton.updateWorldTransform(S.Physics.update);
   const finite = (values) => { if (!values.every(Number.isFinite)) throw new Error("Non-finite setup geometry"); return values; };
   const bones = Object.fromEntries(skeleton.bones.map((b) => [b.data.name,
-    finite([b.a, b.b, b.c, b.d, b.worldX, b.worldY]).map((v) => round(v, 1e6))]));
+    finite([b.a, b.b, b.c, b.d, b.worldX, b.worldY]).map((v) => round(v, 1e6) || 0)]));
   const slotBones = Object.fromEntries(Array.from(data.slots, (slot) => [slot.name, slot.boneData.name]));
   const skin = [];
   for (const sk of data.skins) for (const entry of sk.getAttachments()) {
