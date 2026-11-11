@@ -470,6 +470,7 @@
 			"mod_platform_mismatch": "{file}，建置平台 {platform}，需要 {expected}",
 			"mod_parts_missing": "Mod 檔案不完整，缺少：{files}",
 			"atlas_remap_invalid": "無法重排：{file} - {reason}",
+			"atlas_remap_redrawn": "無法重排：原版立繪已重繪",
 			"atlas_remap_target_mismatch": "無法重排：{file} - 相符資源 {matched}/{expected}",
 			"atlas_remap_property": "無法重排：{file} - {field} 無效：{value}（頁面：{page}，區域：{region}）",
 			"atlas_remap_structure": "無法重排：{file} - 第 {line} 行圖集結構無效：{value}",
@@ -711,7 +712,8 @@
 			"ported": "資源已移植至目前資源包",
 			"updateUnchecked": "無法檢查相容性，仍要更新？",
 			"forceUpdate": "目前完整性無問題，是否確定仍要強制更新？",
-			"rigChanged": "原版新增動畫：{n}，Mod 未包含"
+			"rigChanged": "原版新增動畫：{n}，Mod 未包含",
+			"redrawn": "原版立繪已重繪"
 		},
 		"remap": {
 			"action": "更新",
@@ -734,7 +736,6 @@
 			"previewUnavailable": "預覽不可用",
 			"unpainted": "未使用的留空區域：{names}",
 			"official": "原版區域：{names}",
-			"changed": "原版已重繪的區域：{names}",
 			"zoomIn": "放大",
 			"zoomOut": "縮小",
 			"marks": "標出變更"

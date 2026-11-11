@@ -1,5 +1,4 @@
-"""The names a Spine skeleton declares, read without a Spine runtime: bones, slots, skins and animations, and the
-outlines its attachments draw of their atlas regions (``hulls``).
+"""The names a Spine skeleton declares, read without a Spine runtime: bones, slots, skins and animations.
 
 Binary skeletons are read in the 4.2 layout (the game's), walked only as far as it takes to step over each section;
 JSON skeletons through their keys. Skeleton data comes from mods too: every read is bounded by the data, and anything
@@ -10,7 +9,6 @@ from __future__ import annotations
 
 import json
 import re
-import struct
 from dataclasses import dataclass, field
 
 #: binary layouts this reader walks, by the major.minor of the skeleton's version string
@@ -99,11 +97,6 @@ class _Reader:
             if self.byte() == 2:
                 self.skip(curves * _CURVE)
 
-    def floats(self, count: int) -> tuple[float, ...]:
-        start = self.pos
-        self.skip(count * _FLOAT)
-        return struct.unpack_from(f">{count}f", self.data, start)
-
     def vertices(self, weighted: bool) -> int:
         count = self.varint()
         if not weighted:
@@ -116,40 +109,20 @@ class _Reader:
         return count
 
 
-def _ref(strings: list[str | None], index: int) -> str | None:
-    """A shared string by its reference: 0 is none."""
-    if index == 0:
-        return None
-    if index > len(strings):
-        raise ValueError("skeleton string reference unknown")
-    return strings[index - 1]
-
-
-def _attachment(reader: _Reader, nonessential: bool, strings: list[str | None] | None = None,
-                name: str | None = None, slot: int = 0, drawn: list | None = None) -> None:
-    """Step over one attachment. With ``drawn``, what it draws of the atlas is added to it: (kind, slot, name, path,
-    sequence, value), the value being a mesh's hull outline or a linked mesh's parent."""
+def _attachment(reader: _Reader, nonessential: bool) -> None:
     flags = reader.byte()
     if flags & 8:
-        index = reader.varint()  # name
-        if drawn is not None:
-            name = _ref(strings, index)
+        reader.varint()  # name
     kind = flags & 7
-    path, sequence = name, None
     if kind in (0, 2, 3):  # region, mesh, linked mesh: path, colour, sequence
         if flags & 16:
-            index = reader.varint()
-            if drawn is not None:
-                path = _ref(strings, index) or name
+            reader.varint()
         if flags & 32:
             reader.skip(4)
         if flags & 64:
-            sequence = (reader.varint(), reader.varint(), reader.varint())  # count, start, digits
-            reader.varint()
+            reader.varints(4)
     if kind == 0:
         reader.skip(_FLOAT * (7 if flags & 128 else 6))
-        if drawn is not None:
-            drawn.append(("region", slot, name, path, sequence, None))
     elif kind == 1:
         reader.vertices(bool(flags & 16))
         if nonessential:
@@ -157,21 +130,13 @@ def _attachment(reader: _Reader, nonessential: bool, strings: list[str | None] |
     elif kind == 2:
         hull = reader.varint()
         count = reader.vertices(bool(flags & 128)) * 2
-        if drawn is None:
-            reader.skip(count * _FLOAT)
-        else:
-            uvs = reader.floats(count)
-            # the hull's vertices come first, in order
-            drawn.append(("mesh", slot, name, path, sequence, uvs[:hull * 2] if 3 <= hull <= count // 2 else None))
+        reader.skip(count * _FLOAT)
         reader.varints((count - hull - 2) * 3)
         if nonessential:
             reader.varints(reader.varint())
             reader.skip(2 * _FLOAT)
     elif kind == 3:
-        reader.varint()  # skin
-        index = reader.varint()
-        if drawn is not None:
-            drawn.append(("linked", slot, name, path, sequence, _ref(strings, index)))
+        reader.varints(2)
         if nonessential:
             reader.skip(2 * _FLOAT)
     elif kind == 4:
@@ -192,8 +157,7 @@ def _attachment(reader: _Reader, nonessential: bool, strings: list[str | None] |
         raise ValueError("skeleton attachment type unknown")
 
 
-def _skin(reader: _Reader, default: bool, nonessential: bool, strings: list[str | None] | None = None,
-          drawn: list | None = None) -> str | None:
+def _skin(reader: _Reader, default: bool, nonessential: bool) -> str | None:
     if default:
         slots = reader.varint()
         if slots == 0:
@@ -207,10 +171,10 @@ def _skin(reader: _Reader, default: bool, nonessential: bool, strings: list[str 
             reader.varints(reader.varint())
         slots = reader.varint()
     for _ in range(slots):
-        slot = reader.varint()
+        reader.varint()
         for _ in range(reader.varint()):
-            index = reader.varint()
-            _attachment(reader, nonessential, strings, _ref(strings, index) if drawn is not None else None, slot, drawn)
+            reader.varint()
+            _attachment(reader, nonessential)
     return name
 
 
@@ -333,7 +297,7 @@ def _animation(reader: _Reader, audio: list[bool]) -> None:
             reader.skip(2 * _FLOAT)
 
 
-def _binary(data: bytes, drawn: list | None = None) -> Names:
+def _binary(data: bytes) -> Names:
     reader = _Reader(data)
     reader.skip(8)  # hash
     names = Names(version=reader.string() or "")
@@ -345,7 +309,8 @@ def _binary(data: bytes, drawn: list | None = None) -> Names:
         reader.skip(_FLOAT)
         reader.string()
         reader.string()
-    strings = [reader.string() for _ in range(reader.varint())]  # shared
+    for _ in range(reader.varint()):  # shared strings
+        reader.string()
     for index in range(reader.varint()):
         name = reader.name()
         parent = ""
@@ -398,11 +363,11 @@ def _binary(data: bytes, drawn: list | None = None) -> Names:
         reader.flagged(reader.byte(), (2, 4, 8, 16, 32, 64, 128))
         reader.skip(1 + 5 * _FLOAT)
         reader.flagged(reader.byte(), (128,))
-    skin = _skin(reader, True, nonessential, strings, drawn)
+    skin = _skin(reader, True, nonessential)
     if skin:
         names.skins.append(skin)
     for _ in range(reader.varint()):
-        names.skins.append(_skin(reader, False, nonessential, strings, drawn) or "")
+        names.skins.append(_skin(reader, False, nonessential) or "")
     audio = []
     for _ in range(reader.varint()):  # events
         reader.name()
@@ -463,86 +428,6 @@ def read(data: bytes) -> Names:
         return _binary(data)
     except (IndexError, UnicodeError, OverflowError, MemoryError) as error:
         raise ValueError("skeleton data unreadable") from error
-
-
-def _json_drawn(data: bytes) -> list:
-    try:
-        root = json.loads(data.decode("utf-8-sig"))
-    except (UnicodeError, ValueError, RecursionError) as error:
-        raise ValueError("skeleton JSON unreadable") from error
-    skins = root.get("skins") if isinstance(root, dict) else None
-    if isinstance(skins, dict):  # 3.x: by name
-        skins = [{"attachments": value} for value in skins.values()]
-    slots = root.get("slots") if isinstance(root, dict) else None
-    # a slot is told by its place in the draw order, as in the binary layout; one the skeleton does not list is last
-    places = {slot.get("name"): index for index, slot in enumerate(slots)
-              if isinstance(slot, dict)} if isinstance(slots, list) else {}
-    drawn = []
-    try:
-        for skin in skins or []:
-            for slot_name, attachments in (skin.get("attachments") or {}).items():
-                slot = places.get(slot_name, len(places))
-                for name, attachment in attachments.items():
-                    kind = attachment.get("type", "region")
-                    path = attachment.get("path") or name
-                    sequence = attachment.get("sequence")
-                    if sequence is not None:
-                        sequence = (int(sequence["count"]), int(sequence.get("start", 1)), int(sequence.get("digits", 0)))
-                    if kind == "region":
-                        drawn.append(("region", slot, name, path, sequence, None))
-                    elif kind == "mesh":
-                        uvs, hull = attachment["uvs"], int(attachment.get("hull", 0))
-                        outline = tuple(float(value) for value in uvs[:hull * 2])
-                        drawn.append(("mesh", slot, name, path, sequence,
-                                      outline if 3 <= hull <= len(uvs) // 2 else None))
-                    elif kind == "linkedmesh":
-                        drawn.append(("linked", slot, name, path, sequence, attachment.get("parent")))
-    except (AttributeError, KeyError, TypeError, ValueError, OverflowError) as error:
-        raise ValueError("skeleton JSON attachments unreadable") from error
-    return drawn
-
-
-#: decimals kept of a hull's coordinates, which are fractions of the region's image
-_HULL_DIGITS = 5
-
-
-def hulls(data: bytes) -> dict[str, list[list[float]] | None]:
-    """What a skeleton draws of each atlas region, by region name: the hull outlines of the meshes that use it, each
-    a flat list of x and y as fractions of the region's untrimmed image (y from the top), or None for one drawn
-    whole (a region attachment, a mesh without an outline). A region the skeleton does not draw is not named.
-    The regions come in the skeleton's draw order (its slots, the first drawn first): a later one lies over an
-    earlier one. ``ValueError`` as ``read``."""
-    drawn: list | None = None
-    if data.lstrip()[:1] == b"{":
-        try:
-            drawn = _json_drawn(data)
-        except ValueError:
-            drawn = None
-    if drawn is None:
-        drawn = []
-        try:
-            _binary(data, drawn)
-        except (IndexError, UnicodeError, OverflowError, MemoryError, struct.error) as error:
-            raise ValueError("skeleton data unreadable") from error
-    meshes = {(slot, name): value for kind, slot, name, _path, _sequence, value in drawn if kind == "mesh"}
-    result: dict[str, list[list[float]] | None] = {}
-    for kind, slot, _name, path, sequence, value in sorted(drawn, key=lambda item: item[1]):
-        outline = value if kind == "mesh" else meshes.get((slot, value)) if kind == "linked" else None
-        if not isinstance(path, str):
-            continue
-        if sequence is None:
-            regions = [path]
-        else:
-            count, start, digits = sequence
-            if not 0 <= count <= 4096 or not 0 <= digits <= 16:
-                raise ValueError("skeleton sequence unreadable")
-            regions = [path + str(start + index).zfill(digits) for index in range(count)]
-        for region in regions:
-            if outline is None:
-                result[region] = None
-            elif result.get(region, []) is not None:
-                result.setdefault(region, []).append([round(value, _HULL_DIGITS) for value in outline])
-    return result
 
 
 def version(data: bytes) -> str:

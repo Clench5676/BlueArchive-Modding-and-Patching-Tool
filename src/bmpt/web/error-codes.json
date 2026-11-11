@@ -51,6 +51,10 @@
     "code": "E5009",
     "level": "failed"
   },
+  "atlas_remap_redrawn": {
+    "code": "E5015",
+    "level": "failed"
+  },
   "atlas_remap_region_ambiguous": {
     "code": "E5010",
     "level": "failed"
