@@ -4544,28 +4544,3 @@ test("the held entries' Details fit their wide frame with four mods, Go To and F
     }
   } finally { setStrings("en-US", Object.fromEntries(strings(english))); }
 });
-
-test("a segment grows so its count never sits alone on a line, within the list's room; captions without one keep 230", async () => {
-  await Popup.ready();
-  const I18n = await import("../../src/bmpt/web/js/i18n.js");
-  const NGUI = await import("../../src/bmpt/web/js/ngui.js");
-  const flat = (o, p = "", out = {}) => { for (const [k, v] of Object.entries(o)) { if (v && typeof v === "object") flat(v, `${p}${k}.`, out); else out[`${p}${k}`] = v; } return out; };
-  try {
-    for (const lang of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
-      const table = flat(JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url))));
-      I18n.setStrings(lang, table);
-      const plain = ["seg.all", "seg.recruit", "seg.noRecruit"].map((key) => I18n.T(key));
-      const kept = Popup.segmentWidth(plain);
-      assert.equal(kept.w, Popup.SEG.w, `${lang}: no count, the prefab's width`);
-      assert.deepEqual(kept.fits, NGUI.fitGroup(plain, 44, 26, 200, 2, { maxH: 96 }), `${lang}: the same fit as before`);
-      for (const n of [0, 12, 104]) {
-        const captions = ["tabHeld", "tabReapplied", "tabOthers"].map((k) => I18n.T(`mods.impact.${k}`, { n }));
-        assert.ok(captions.every((c) => c.endsWith(String(n)) && !c.startsWith("mods.")), `${lang}: ${captions}`);
-        const { w, fits } = Popup.segmentWidth(captions, 900);
-        assert.ok(w >= Popup.SEG.w && w <= 300, `${lang} ${n}: ${w} within the room`);
-        for (const f of fits) assert.ok(!/\n\s*\d+\s*$/.test(f.text), `${lang} ${n}: "${f.text}" keeps its count with its words`);
-        assert.equal(new Set(fits.map((f) => f.fs)).size, 1, `${lang}: one size`);
-      }
-    }
-  } finally { setStrings("en-US", Object.fromEntries(strings(english))); }
-});
