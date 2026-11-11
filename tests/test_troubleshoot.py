@@ -126,3 +126,17 @@ def test_without_a_steam_list_or_consent_the_check_is_unverified(world, consent)
     world.library._steam_files = FakeSteam() if consent else FakeSteam(world.spr)
     check = troubleshoot.check(world.library, _pins(world))
     assert check["verified"] is False and check["unverified"] == [world.key()] and check["checked"] == 0
+
+
+def test_troubleshooting_keeps_the_originals_of_the_saved_configuration(world):
+    other = game_bundle(world.game, "other_spr", payload=b"other!!!")
+    portrait, tried = world.add(world.spr), world.add(other, payload=b"tried!!!")
+    world.library.apply("test", f"mod:{portrait.id}")
+    assert world.original(world.spr).exists()
+    troubleshoot.apply_official(world.library, _pins(world))
+    world.library.apply("other", f"mod:{tried.id}")  # a write prunes the kept originals
+    world.library.prune()
+    assert world.original(world.spr).exists(), "kept while its choice is saved to restore"
+    troubleshoot.restore(world.library, _pins(world))
+    assert world.spr.read_bytes() == portrait.file.read_bytes() and world.original(world.spr).exists()
+    assert world.original(world.spr).read_bytes() == OFFICIAL
