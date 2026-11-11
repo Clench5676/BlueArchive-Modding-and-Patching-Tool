@@ -135,12 +135,12 @@ async function scanned(step) {
 
 // run({force}): the check under the loading screen with its progress: classify, scan, apply again what needs no repair.
 // force: Settings' View, whatever was seen. Resolves with {result, reapplied, failed}; throws what the jobs refuse.
-async function run({ force = false } = {}) {
+async function run({ force = false, scan = true } = {}) {
   const nameOf = await names().catch(() => undefined);
   return Loading.task(async (update) => {
     const step = stepper(update, nameOf);
     const result = await waitJob(await rpc("mods.impact", force ? { force: true } : {}), step("mods.impact.checking"));
-    const again = reappliable(await scanned(step), result);
+    const again = scan ? reappliable(await scanned(step), result) : [];
     let reapplied = [], failed = [];
     if (again.length) {
       const plain = again.map((e) => ({ install: e.install, core: e.core, state: e.state }));
@@ -420,7 +420,9 @@ export async function show() {
   if (busy) return false;
   try {
     busy = true;
-    pending = await run({ force: true });
+    // the summary as it stands: the library answers at once when nothing changed since its last check; no new scan
+    // (a game update's drift is reconciled by the scans themselves, prompts.js reconcile)
+    pending = await run({ force: true, scan: false });
   } catch (err) {
     notify(errorText(err.code, err.params), { kind: "error", error: err });
     return false;

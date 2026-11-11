@@ -225,3 +225,21 @@ def test_an_update_that_changes_nothing_ends_the_hold(spine, monkeypatch):
     assert result.unchanged
     assert library.impacts([entry.id]) == [{"id": entry.id, "impact": "unchanged"}]
     assert not library._hold(library.current_pin(), f"mod:{entry.id}")
+
+
+def test_the_summary_answers_from_its_last_check_while_nothing_changed(spine, monkeypatch):
+    env = spine
+    entry = configured(env)
+    updated(env, (MOVED, ("Idle_01", "00")))
+    library = reload_library(env)
+    first = library.update_impact(force=True)
+    assert first["mods"][0]["impact"] == "rig_changed"
+    calls = []
+    monkeypatch.setattr(library, "_impact_of", lambda *args: calls.append(args) or ("unchanged", {}))
+    assert library.update_impact(force=True)["mods"] == first["mods"] and not calls, "the same answer, nothing judged"
+    # a new baseline (an update, a repair) is a change: judged again
+    import os, time
+    baseline = env.root / "mods" / entry.id / fingerprint.FILE_NAME
+    later = time.time() + 5
+    os.utime(baseline, (later, later))
+    assert library.update_impact(force=True)["mods"] == [] and calls

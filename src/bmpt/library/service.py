@@ -665,6 +665,7 @@ class ModLibrary:
         self._rig_matches: dict[tuple, dict] = {}
         self._mod_masks: dict[tuple, dict] = {}
         self._impacts: dict[tuple, tuple[str, dict]] = {}  # judged impacts of game updates (_impact_of)
+        self._impact_cache: dict[str, tuple[str, dict]] = {}  # the last summary per install (update_impact)
         self._untested_ok: dict[tuple[str, str], set[str]] = {}  # confirmed cores of an untested build (confirm_untested)
         self._maps_cache: tuple[tuple, Any] | None = None
         self.profiles = Profiles(self.root)
@@ -3265,6 +3266,14 @@ class ModLibrary:
         with self._lock:
             entries = {entry.id: entry for entry in self.mods()}
             records = [self._records[mod_id] for mod_id in entries if mod_id in self._records]
+            # the same resource version, the same mods and baselines and configuration as the last check: its answer
+            # (owner, 2026-11-11: Settings' View shows the summary at once when nothing changed)
+            stamp = self._impact_stamp(pin, version, records, configured)
+        cached = self._impact_cache.get(pin.key)
+        if cached and cached[0] == stamp:
+            out.update(mods=[dict(mod) for mod in cached[1]["mods"]], counts=dict(cached[1]["counts"]))
+            out["due"] = bool(out["mods"])
+            return out
         for i, record in enumerate(records, 1):
             if progress:
                 entry = entries[record["id"]]
@@ -3282,9 +3291,23 @@ class ModLibrary:
                                 "core": entry.core, "impact": found, "changes": changes,
                                 "configured": f"mod:{entry.id}" in configured, "repaired_id": entry.repaired_id})
         out["due"] = bool(out["mods"])
+        self._impact_cache[pin.key] = (stamp, {"mods": [dict(mod) for mod in out["mods"]], "counts": dict(out["counts"])})
         if not out["due"] and not force:
             self.impact_seen(pin.key, version)
         return out
+
+    def _impact_stamp(self, pin: Pin, version: str, records: list[dict[str, Any]], configured: set) -> str:
+        """What an impact summary depends on: the resource version, each mod's files and stored baseline (by its
+        modification time) and the configured sources. Names, sizes and times only."""
+        parts = [pin.key, version, sorted(str(source) for source in configured if source)]
+        for record in records:
+            baseline = self.root / "mods" / record["id"] / fingerprint.FILE_NAME
+            try:
+                mark = baseline.stat().st_mtime_ns
+            except OSError:
+                mark = None
+            parts.append([record["id"], sorted(record.get("files") or []), record.get("label"), mark])
+        return hashlib.sha1(json.dumps(parts, sort_keys=True, default=str).encode()).hexdigest()
 
     def update_due(self, pin: Pin | None = None) -> dict[str, Any]:
         """Whether the start asks to check the library's mods against a game update: the install's resource version

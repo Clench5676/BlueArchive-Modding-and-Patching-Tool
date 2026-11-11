@@ -2583,8 +2583,9 @@ overwritten entry need none (the detail screen judges its files cheaply).
   (`update`), which ends the hold. The list opens again as the mods stand then. Go To closes it and opens the mod's
   student page on the tab of its kind with its switch open and the mod's card selected (`detail.js want`/`takeWanted`,
   Settings closed first). Closing it records the version (`mods.impactSeen`); entries the check could not apply again
-  follow in a message with their errors. Settings' Mods tab runs the check again (Game Update Impact, View:
-  `mods.impact {force}`), as do the tray's Back to Official and Settings' Check when only a game update's entries are
+  follow in a message with their errors. Settings' Mods tab shows it again (Game Update Impact, View:
+  `mods.impact {force}`, no new scan; the library answers from its last check while the resource version, the mods,
+  their baselines and the configuration are the same), as do the tray's Back to Official and Settings' Check when only a game update's entries are
   there. The switch help's held entries (Details) are listed as text lines, each with Go To and Fix and Apply.
 - **New Game Version** (`mod-switch.js confirmUntested`, a plain message popup): a write refused with
   `untested_build`, from the switch (the tray's toggle too, once the window is in front), the detail screen, Apply Mod
