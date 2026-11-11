@@ -14,6 +14,9 @@ export function displayLayouts(filter) {
     for (const state of ["Tab_On", "Tab_Off"]) put(`Center/Popup/Tab/${widget}/${id}/${state}/Label_Locale`, n("Label_Locale", [0, 0], [lbl()]));
   }
   put("Center/Popup/Filter/BG_List", n("BG_List", [212, 0], [spr("Common_Square_Bg", 2244, 781)]));
+  // the filter panel's header (pivot top) and its triangle pattern, from the header's right end outwards as in the prefab
+  put("Center/Popup/Filter/BG_Tag", n("BG_Tag", [1, 516], [spr("Common_Bg_Raius10px", 2244, 139, { pivot: 1, depth: 9 })], [
+    n("DecoTex_Normal", [1122, 0.6], [{ texture: "Img_Deco_Weapon", w_: 655, h_: 135, pivot: 0, depth: 11, color: "#d1edff/0.76" }])]));
   put("Center/Popup/Filter/BG_Tag/Label_Locale_ListAll", n("Label_Locale_ListAll", [0, 0], [lbl()]));
   put("Center/Popup/Filter/BG_Tag/Btn_Reset/LabelLocale", n("LabelLocale", [0, 0], [lbl()]));
   put("Center/Popup/Sort/BG_List", n("BG_List", [212, 0], [spr("Common_Square_Bg", 2244, 781)]));
