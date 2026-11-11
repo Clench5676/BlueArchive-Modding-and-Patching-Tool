@@ -232,6 +232,7 @@ def _run_window(s: Services, server: Server, debug: bool) -> None:
         if sys.platform == "win32":
             s.chrome.install()
         if sys.platform == "darwin":
+            native.keep_web_view_black(window)
             commands = native.install_window_commands(s, s.chrome)
         logger.info("Native lifecycle: before-show complete")
 

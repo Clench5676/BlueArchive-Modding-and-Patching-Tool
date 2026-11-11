@@ -2622,7 +2622,7 @@ overwritten entry need none (the detail screen judges its files cheaply).
 `loading.js` draws the game's own loading screen: UILoading's black backdrop with nothing in the middle (the game
 shows an illustration there; the tool does not) and UIRepeater in the bottom-right corner ("Now Loading", the
 hopping dots and Arona turning round, animated in `app.css` from the keyframes of the clip `UIAni_Repeat 1`; its
-UIAudioPlay is never played). Before asset consent, covers use neutral system text, a grey
+UIAudioPlay is never played). Before asset consent, covers use neutral system text, a black
 background and no game layouts, sprites or fonts. The server selects the initial document's style from consent and
 the current resource version's disk cache, so a cached launch is stylized before modules or RPC replies arrive.
 `app.info.uiCached` reports the same cache state. A cold cache upgrades after consent and successful

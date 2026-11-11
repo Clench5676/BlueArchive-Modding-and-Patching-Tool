@@ -320,7 +320,7 @@ test("the initial document uses a neutral system style before modules and locale
   assert.match(html, /id="loading-boot"[\s\S]*?class="loading-plain"><span><\/span>/);
   const fallback = readFileSync(new URL("../../src/bmpt/web/css/fallback.css", import.meta.url), "utf8");
   assert.match(fallback, /\.loading-plain \{[^}]*system-ui, sans-serif/);
-  assert.match(fallback, /\.loading\.neutral \.loading-back \{[^}]*#f4f4f4/);
+  assert.match(fallback, /\.loading\.neutral \.loading-back \{ background: #000 !important; \}/, "the boot cover is black, never a light backdrop");
   assert.match(css, /\.loading-fallback \{[^}]*bottom: 44px[^}]*color: #8de4ff[^}]*"RHR"[^}]*text-stroke: 1px #fff/);
 });
 

@@ -245,6 +245,22 @@ def install_edit_menu() -> None:
     AppHelper.callAfter(install)
 
 
+def keep_web_view_black(window) -> None:
+    """macOS: stop the web view painting a background of its own. WKWebView fills itself white until the page has drawn
+    its first frame, which showed as a white flash after the window opened; without that fill the window's black
+    (``background_color``) stays visible until the page paints, and the page's own backdrop is black too."""
+    import AppKit
+    from webview.platforms.cocoa import BrowserView
+
+    try:
+        view = BrowserView.instances[window.uid].webview
+        view.setValue_forKey_(False, "drawsBackground")
+        if view.respondsToSelector_("setUnderPageBackgroundColor:"):
+            view.setUnderPageBackgroundColor_(AppKit.NSColor.blackColor())
+    except Exception:  # a flash is better than no window
+        logger.warning("could not make the web view background transparent", exc_info=True)
+
+
 def install_window_commands(services, chrome):
     """Intercept Command-Q before WKWebView's direct app.stop_ path, including in inputs."""
     import AppKit

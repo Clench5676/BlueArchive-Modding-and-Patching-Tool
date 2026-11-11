@@ -1018,3 +1018,31 @@ def test_windows_host_prototypes_a_user32_of_its_own(monkeypatch):
     library = window_windows.private_user32()
     assert calls == [(("user32",), {"use_last_error": True})]
     assert library is not getattr(getattr(ctypes, "windll", None), "user32", None)
+
+
+def test_macos_web_view_keeps_the_window_black_until_the_page_paints(monkeypatch):
+    from bmpt.webui.native import keep_web_view_black
+    calls = []
+    class View:
+        def setValue_forKey_(self, value, key): calls.append(('value', key, value))
+        def respondsToSelector_(self, name): calls.append(('responds', name)); return True
+        def setUnderPageBackgroundColor_(self, colour): calls.append(('under page', colour))
+    window = NS(uid='master')
+    cocoa = NS(BrowserView=NS(instances={'master': NS(webview=View())}))
+    monkeypatch.setitem(sys.modules, 'AppKit', NS(NSColor=NS(blackColor=lambda: 'black')))
+    monkeypatch.setitem(sys.modules, 'webview', NS())
+    monkeypatch.setitem(sys.modules, 'webview.platforms', NS())
+    monkeypatch.setitem(sys.modules, 'webview.platforms.cocoa', cocoa)
+    keep_web_view_black(window)
+    assert calls == [('value', 'drawsBackground', False), ('responds', 'setUnderPageBackgroundColor:'),
+                     ('under page', 'black')]
+
+
+def test_macos_web_view_black_never_blocks_the_window(monkeypatch, caplog):
+    from bmpt.webui.native import keep_web_view_black
+    monkeypatch.setitem(sys.modules, 'AppKit', NS(NSColor=NS(blackColor=lambda: 'black')))
+    monkeypatch.setitem(sys.modules, 'webview', NS())
+    monkeypatch.setitem(sys.modules, 'webview.platforms', NS())
+    monkeypatch.setitem(sys.modules, 'webview.platforms.cocoa', NS(BrowserView=NS(instances={})))
+    keep_web_view_black(NS(uid='missing'))
+    assert 'could not make the web view background transparent' in caplog.text
