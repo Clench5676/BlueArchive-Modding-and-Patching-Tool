@@ -358,9 +358,12 @@ class Services:
             self.state.set("preview_cache", enabled)
             self.preview_cache.allowed = enabled
 
-    def preview_thumbnail_key(self, key: str, renderer: str) -> str:
-        """The client hashes all renderer inputs; the server isolates installation and export version, and the
-        renderer's own code (``stills.revision``): a release that draws a still differently never reuses the old one."""
+    def preview_thumbnail_key(self, key: str, renderer: str, *, by_version: bool = False) -> str:
+        """The client hashes all renderer inputs, the revision of every source a still was drawn from included (the
+        stamps of its Spine bundles, the bytes of its background and framing, its model's export); the server isolates
+        the installation and the renderer's own code (``stills.revision``): a release that draws a still differently
+        never reuses the old one. Not the install's resource version: a game update then redraws only the stills
+        whose sources it changed (BL-155). ``by_version``: the key stills had while it held the resource version."""
         if not isinstance(key, str) or not key or len(key) > 4096:
             raise ServiceError("bad_params", key="key")
         try:
@@ -370,13 +373,31 @@ class Services:
         if len(encoded) > 4096:
             raise ServiceError("bad_params", key="key")
         game = self.game
-        namespace = getattr(game, "preview_namespace", None)
-        if namespace is None:
-            namespace = json.dumps([self.settings.get("file_source"), str(self.settings.game_dir()), game.resource_version])
+        dirs = getattr(game, "resource_dirs", None)
+        if by_version:
+            namespace = getattr(game, "preview_namespace", None)
+            if namespace is None:
+                namespace = json.dumps([self.settings.get("file_source"), str(self.settings.game_dir()),
+                                        game.resource_version])
+        elif dirs is not None:
+            namespace = json.dumps(["install", [str(path) for path in dirs]])
+        else:
+            namespace = json.dumps(["install", self.settings.get("file_source"), str(self.settings.game_dir())])
         from . import stills
 
         namespace += "\n" + stills.revision(renderer)
         return "thumbnail/" + hashlib.sha256((namespace + "\n" + key).encode()).hexdigest()
+
+    def preview_thumbnail(self, key: str, renderer: str) -> bytes | None:
+        """A persisted still, or None. One stored under its former key (with the resource version) moves to its
+        current one, so stills drawn before keys left the version out are not drawn again."""
+        cache = self.preview_cache
+        found = cache.get(self.preview_thumbnail_key(key, renderer))
+        if found is None:
+            found = cache.get(self.preview_thumbnail_key(key, renderer, by_version=True))
+            if found is not None:
+                cache.put(self.preview_thumbnail_key(key, renderer), found, generation=cache.generation)
+        return found
 
     def clear_cache(self) -> None:
         with self._lock:
