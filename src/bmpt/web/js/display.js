@@ -31,8 +31,9 @@ const TEXT = { title: POPUP_TYPE.title, tab: { fs: 48, min: 36 }, count: { fs: 4
 // (a node a prefab build lacks is left alone)
 const moveX = (n, dx) => { if (n?.pos) n.pos = [n.pos[0] + dx, n.pos[1]]; };
 const widen = (n, dw) => { for (const w of n?.widgets || []) if (w.w_ != null) w.w_ += dw; };
-// the prefab's frame CUT narrower: the frame, its sides' decorations and controls, the panels and their headers
-function narrow(popup) {
+// the prefab's frame CUT narrower: the frame, its sides' decorations and controls, the panels and their headers (exported
+// for the tests)
+export function narrow(popup) {
   const at = (n, path) => (n ? find(n, path) : null);
   const bg = at(popup, "Base/BG");
   widen(bg, -CUT);
@@ -43,7 +44,11 @@ function narrow(popup) {
   moveX(at(popup, "Tab"), HALF);
   widen(at(popup, "BG"), -CUT);
   const tag = at(popup, "Filter/BG_Tag");
-  widen(tag, -CUT); moveX(at(tag, "Label_Locale_ListAll"), HALF); moveX(at(tag, "DecoTex_Normal"), -HALF); moveX(at(tag, "Btn_Reset"), -HALF);
+  widen(tag, -CUT); moveX(at(tag, "Label_Locale_ListAll"), HALF); moveX(at(tag, "Btn_Reset"), -HALF);
+  // the header's triangle pattern (Img_Deco_Weapon, its rounded corners on the left, fading to the right) from the header's
+  // left end: the prefab stands it from the right end outwards, past the header and the frame (owner, 2026-11-11, BL-176)
+  const deco = at(tag, "DecoTex_Normal"), tagW = tag?.widgets.find((w) => w.w_ != null)?.w_;
+  if (deco?.pos && tagW) deco.pos = [-tagW / 2, deco.pos[1]];
   widen(at(popup, "Filter/BG_List"), -CUT); widen(at(popup, "Sort/BG_List"), -CUT);
   const bar = at(popup, "Sort/Scroll View/Sort_Normal/Title_Normal");
   widen(bar, -CUT); moveX(at(bar, "Deco_R"), -HALF); moveX(at(bar, "Deco_L"), HALF);
