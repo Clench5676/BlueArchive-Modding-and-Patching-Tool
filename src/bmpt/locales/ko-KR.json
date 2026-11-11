@@ -782,7 +782,9 @@
 			"graftUnanchored": "신규 표정은 공식 위치에 배치",
 			"expression": "표정 {name} ({n}/{total})",
 			"previousExpression": "이전 표정",
-			"nextExpression": "다음 표정"
+			"nextExpression": "다음 표정",
+			"graftDone": "표정 추가됨",
+			"graftPartial": "표정 추가됨, 일부 확인 필요"
 		},
 		"spine": {
 			"license": {

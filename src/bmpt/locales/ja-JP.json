@@ -782,7 +782,9 @@
 			"graftUnanchored": "新しい表情は公式の位置に配置",
 			"expression": "表情 {name}（{n}/{total}）",
 			"previousExpression": "前の表情",
-			"nextExpression": "次の表情"
+			"nextExpression": "次の表情",
+			"graftDone": "表情を追加済み",
+			"graftPartial": "表情を追加済み、一部要確認"
 		},
 		"spine": {
 			"license": {

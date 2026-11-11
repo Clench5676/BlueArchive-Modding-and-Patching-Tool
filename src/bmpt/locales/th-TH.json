@@ -782,7 +782,9 @@
 			"graftUnanchored": "สีหน้าใหม่อยู่ในตำแหน่งต้นฉบับ",
 			"expression": "สีหน้า {name} ({n}/{total})",
 			"previousExpression": "สีหน้าก่อนหน้า",
-			"nextExpression": "สีหน้าถัดไป"
+			"nextExpression": "สีหน้าถัดไป",
+			"graftDone": "เพิ่มสีหน้าแล้ว",
+			"graftPartial": "เพิ่มสีหน้าแล้ว บางส่วนต้องตรวจสอบ"
 		},
 		"spine": {
 			"license": {

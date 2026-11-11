@@ -782,7 +782,9 @@
 			"graftUnanchored": "New expressions at the official position",
 			"expression": "Expression {name} ({n}/{total})",
 			"previousExpression": "Previous Expression",
-			"nextExpression": "Next Expression"
+			"nextExpression": "Next Expression",
+			"graftDone": "Expressions added",
+			"graftPartial": "Expressions added, some to check"
 		},
 		"spine": {
 			"license": {

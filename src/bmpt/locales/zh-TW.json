@@ -782,7 +782,9 @@
 			"graftUnanchored": "新表情依原版位置放置",
 			"expression": "表情 {name}（{n}/{total}）",
 			"previousExpression": "上一個表情",
-			"nextExpression": "下一個表情"
+			"nextExpression": "下一個表情",
+			"graftDone": "已補上新表情",
+			"graftPartial": "已補上新表情，部分需核對"
 		},
 		"spine": {
 			"license": {
