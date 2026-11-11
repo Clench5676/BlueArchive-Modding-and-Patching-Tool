@@ -304,7 +304,8 @@ export async function render(tree, host, opts = {}) {
       if ("sprite" in w || "texture" in w || "text" in w || "clipImage" in w) {
         const el = widget(n, w, p, x, y, nsx, nsy, col, alpha);
         if (el) entry.els.push(el);
-        if (el && tierTags && w.sprite === "Common_Btn_BG") bodies.push({ el, path: p, w: w.w_ * Math.abs(nsx) * S / STAGE_SCALE, h: w.h_ * Math.abs(nsy) * S / STAGE_SCALE });
+        // a widget may say what it is (tier: "button" or "chip"); any other Common_Btn_BG body is judged by its shape
+        if (el && tierTags && (w.tier || w.sprite === "Common_Btn_BG")) bodies.push({ el, path: p, kind: w.tier || null, w: w.w_ * Math.abs(nsx) * S / STAGE_SCALE, h: w.h_ * Math.abs(nsy) * S / STAGE_SCALE });
         else if (el && tierTags && "text" in w && el.textContent) inks.push({ el, w, sx: Math.abs(nsx), sy: Math.abs(nsy) });
       }
       a = alpha * col.a; // NGUI widgets pass their alpha on to child widgets
@@ -504,8 +505,8 @@ export async function render(tree, host, opts = {}) {
 
 // The size tag at a button body's top left corner: the preset's letters, or the height in units when the pill is none of them.
 // Where it would cover the caption (the inks of the text widgets inside the body) it is a dot there, the same label on hover.
-function tierTag({ el, path, w, h }, z, inks, S) {
-  const info = tagOf(w, h);
+function tierTag({ el, path, w, h, kind }, z, inks, S) {
+  const info = tagOf(w, h, kind);
   if (!info) return null;
   const px = (name) => parseFloat(el.style[name]), body = [px("left"), px("top"), px("width"), px("height")];
   const covered = inks.some(({ el: textEl, w: tw, sx, sy }) => {
@@ -518,7 +519,7 @@ function tierTag({ el, path, w, h }, z, inks, S) {
     return overlaps(tagBox(info.text, body[0], body[1]), inkBox(box, inkW, inkH, align, vertical));
   });
   const tag = document.createElement("div");
-  tag.className = `ngui-tier${info.tier ? "" : " off"}${covered ? " dot" : ""}`;
+  tag.className = `ngui-tier${info.tier ? "" : " off"}${covered ? " dot" : ""}${kind === "chip" ? " chip" : ""}`;
   Object.assign(tag.dataset, { tier: info.tier ?? "", w: w.toFixed(1), h: h.toFixed(1), path, size: `${info.tier ? `${info.tier} ` : ""}${Math.round(h)}` });
   if (!covered) tag.textContent = info.text;
   Object.assign(tag.style, { left: el.style.left, top: el.style.top, zIndex: String(z + 1000) });

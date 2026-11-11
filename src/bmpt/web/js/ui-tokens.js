@@ -110,6 +110,17 @@ export const CHIP = Object.freeze({
   inset: 40,
 });
 
+// Chips in four sizes, as the buttons have (owner, 2026-11-11, BL-173): L is the prefab chip above (72 high, caption 40), S
+// the mailbox list's time limit badge (List_01/TimeLimit/Bg, CONTROL.badge: 54 high, caption 34), XS the list card's badge
+// (42 high, caption 26 down to 20), M between L and S. A sized chip is as wide as its caption and its pad on each side,
+// minW at least (twice its height), its body inclined 10 degrees as the prefab's.
+export const CHIP_TIERS = Object.freeze({
+  XS: Object.freeze({ h: 42, fs: 26, fsMin: 20, pad: 12, minW: 84 }),
+  S: Object.freeze({ h: 54, fs: 34, fsMin: 26, pad: 16, minW: 108 }),
+  M: Object.freeze({ h: 62, fs: 36, fsMin: 28, pad: 18, minW: 124 }),
+  L: Object.freeze({ h: 72, fs: 40, fsMin: 28, pad: 20, minW: 144 }),
+});
+
 // The light stats box, UICharacterDetail/Inventory_ListControl/RightInfo/Target/Active/1_NormalInfo/Status: Bg
 // (Common_Bg_Raius10px #ecf5f9), its Deco (Common_Line_Raius10px #c0c9d4) and Bar (Common_Line_Dot #c0c9d4, 4 high). The
 // prefab's own rows are 82 high with no padding and its captions 42; the app's rows, captions and paddings below are its own.

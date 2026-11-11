@@ -23,8 +23,8 @@ import { T } from "./i18n.js";
 import { codeOf, noticeNames, withCode } from "./error-codes.js";
 import { withTimeout } from "./async.js";
 import { TEXT_VIEWER, frameClass, frameGeometry, popupContent } from "./popup-frames.js";
-import { boxHeight, statsBox, valueRoom } from "./stats-box.js";
-import { BACKDROP, CHIP, COLOUR, CONTROL, POPUP_FRAME, SPACE, TYPE, SMALL_BUTTON, XS_BUTTON, STATS_BOX, captionMinimum } from "./ui-tokens.js";
+import { STATS_BOX_S, boxHeight, statsBox, valueRoom } from "./stats-box.js";
+import { BACKDROP, CHIP, CHIP_TIERS, COLOUR, CONTROL, POPUP_FRAME, SPACE, TYPE, SMALL_BUTTON, XS_BUTTON, STATS_BOX, captionMinimum } from "./ui-tokens.js";
 import { DOT, RECRUIT, S, TAN10, clone, glyphsOf, hitButton, markedLabel, wrapPath } from "./util.js";
 
 import { container, grid, row, stack as layoutStack, textItem, toNode } from "./ui-grid.js";
@@ -587,9 +587,12 @@ function checkedToolbar(right, y, { segs, sortKey, sortKeys, active, ascending, 
 }
 
 // The list and details panels occupy the XL content grid; its footer uses the shared centred group.
-export function listFrame(title, buttons, closeButton, check = false, kind = null, band = LIST_BAND.tools) {
+// The list popups' footer is S, one size under the other popups' M (owner, 2026-11-11: Switch Portrait, Memorial Lobby, 3D
+// Model and the like); footer: another size for one list.
+export const LIST_FOOTER = "S";
+export function listFrame(title, buttons, closeButton, check = false, kind = null, band = LIST_BAND.tools, footer = LIST_FOOTER) {
   const layout = listLayout(check, kind);
-  const t = popupFrame(title, layout.frame.w, layout.frame.h, { close: closeButton,
+  const t = popupFrame(title, layout.frame.w, layout.frame.h, { close: closeButton, footer,
     buttons: buttons.map((b, i) => ({ ...b, name: `Btn_${i}` })) });
   const popup = find(t, "Popup"), btn = find(popup, "Btn");
   btn.children = btn.children.map((child, i) => buttons[i].greyed ? Buttons.disable(child) : child);
@@ -660,31 +663,54 @@ export function listCard(it, x, y, selected, card = LP.card, kind = null) {
   return tree;
 }
 
-// The detail actions retain their existing 40–26 caption range and slanted-body inset. Their shared body height is buttonS.
+// The detail actions retain their existing 40–26 caption range and slanted-body inset. Their shared body height is buttonXS.
 const ACTION_CLEAR = 28, ACTION_TEXT_H = 96;
 // The small button body's soft drop shadow under its solid art: 14 of its 176 rows (Btn_Cancel/BG (1) as drawn).
 const ACTION_SHADOW = 14 / 176;
-// Chip art and pitch remain UICharacterDetail's own; row/stack place complete chips inside the content column.
+// The details panel one size down (owner, 2026-11-11, BL-173): its title and the name TYPE.body (the size under
+// TYPE.heading), its chips the S chip (CHIP_TIERS), as wide as their captions, its light box STATS_BOX_S; its actions keep
+// the XS button, the smallest. The chips stand on the name's line where they fit beside it, SPACE.s apart.
+export const DETAILS = Object.freeze({ title: TYPE.body, name: TYPE.body, chip: CHIP_TIERS.S, box: STATS_BOX_S, chipGap: SPACE.s });
 const CHIP_MIN_GAP = SPACE.xs;
-export function chipPlaces(count, panelW) {
-  const slant = CHIP.h * TAN10;
-  let perRow = 1;
-  while ((perRow + 1) * CHIP.w + perRow * CHIP_MIN_GAP + slant <= panelW) perRow += 1;
-  const boxes = [];
-  for (let first = 0; first < count; first += perRow) {
-    const inRow = Math.min(perRow, count - first);
-    const gap = inRow > 1 ? Math.min(CHIP.gap, (panelW - slant - inRow * CHIP.w) / (inRow - 1)) : 0;
-    const chips = row(Array.from({ length: inRow }, () => ({ w: CHIP.w, h: CHIP.h })), { w: panelW, gap, justify: "center" });
-    boxes.push(...chips.boxes.map(b => ({ row: first / perRow, x: b.x + b.w / 2 - panelW / 2 })));
+// a sized chip (CHIP_TIERS) for a caption: its width (the caption, the recruit mark before it, the pad on each side; minW at
+// least, maxW at most) and the caption's fit
+export function chipFit(caption, { chip = DETAILS.chip, mark = false, maxW = Infinity } = {}) {
+  const iconW = mark ? chip.fs * 1.35 / RECRUIT.ratio + 6 : 0;
+  const need = Math.ceil(iconW + glyphsOf(caption, chip.fs) + 2 * chip.pad);
+  return { w: Math.min(maxW, Math.max(chip.minW, need)), h: chip.h };
+}
+// Chips side by side in rows within panelW: each as wide as `widths` says, `gap` apart, a row centred, a new row where the
+// next one would not fit (its incline counted). Gives each chip's row and its centre's x from the panel's centre.
+export function chipPlaces(widths, panelW, { h = DETAILS.chip.h, gap = DETAILS.chipGap } = {}) {
+  if (typeof widths === "number") widths = Array.from({ length: widths }, () => CHIP.w);
+  const slant = h * TAN10, rows = [[]];
+  for (const [i, w] of widths.entries()) {
+    const cur = rows.at(-1), used = cur.reduce((n, j) => n + widths[j] + gap, 0);
+    if (cur.length && used + w + slant > panelW) rows.push([i]); else cur.push(i);
   }
+  const boxes = [];
+  rows.forEach((indices, r) => {
+    const placed = row(indices.map((i) => ({ w: widths[i], h })), { w: panelW, gap: indices.length > 1 ? Math.max(CHIP_MIN_GAP, gap) : 0, justify: "center" });
+    placed.boxes.forEach((b, k) => boxes[indices[k]] = { row: r, x: b.x + b.w / 2 - panelW / 2 });
+  });
   return boxes;
 }
-// the details panel: title bar, the picture, name, kind chips, fields, actions (exported for the tests, like chipPlaces)
-export function detailsTree(it, title, fields, actions, portraitTexture = null, kind = null, panel = LP.left) {
+// the "…" at the end of a value cut to one line (owner, 2026-11-11: the panel does not scroll, a value shows whole in a
+// popup): the line button (LINE_BUTTON) of the light box's line
+export function moreButton(fs = DETAILS.box.value.fs) {
+  const h = Math.round(fs * NGUI.LINE_PITCH * LINE_BUTTON.height) + XS_BUTTON.boxInsetH;
+  const cap = Math.max(LINE_BUTTON.fsMin, Math.round(fs * LINE_BUTTON.share));
+  return { h, fs: cap, w: Math.ceil(glyphsOf(MORE, cap)) + LINE_BUTTON.pad, gap: SPACE.s };
+}
+const MORE = "…";
+// the details panel: title bar, the picture, name and chips, fields, actions (exported for the tests, like chipPlaces).
+// options.truncate: each field's value on one line, a "…" button opening it whole where it is cut (tree.more lists them).
+// The picture takes what the rest leaves of the panel, so the panel does not scroll; the actions stand on its bottom.
+export function detailsTree(it, title, fields, actions, portraitTexture = null, kind = null, panel = LP.left, options = {}) {
   const w = panel.r - panel.l, cx = (panel.l + panel.r) / 2;
   const frame = { w, h: 0, cx, cy: panel.t }, content = container({ w, h: panel.t - panel.b }).inner;
-  const kids = [], bands = [];
-  const titleText = textItem(NGUI, title, TYPE.heading, { maxW: w - 2 * SPACE.xxl, lines: 1 });
+  const kids = [], bands = [], more = [];
+  const titleText = textItem(NGUI, title, DETAILS.title, { maxW: w - 2 * SPACE.xxl, lines: 1 });
   const titleH = Math.max(73, titleText.h); // The section bar and its decoration keep their prefab heights.
   const titleNode = node("Title_Bg", [cx, 0], [sprite("Common_Bg_Raius10px", w - SPACE.m, titleH,
     { depth: 5, color: "#2d4c72/1.00", incline: 10 })], [
@@ -698,35 +724,56 @@ export function detailsTree(it, title, fields, actions, portraitTexture = null, 
   const side = !portraitTexture && kind === "model";
   const columns = grid(content), pictureColumn = portraitTexture || side ? columns.span(5) : content;
   const infoColumn = portraitTexture || side ? columns.span(7, 5) : content;
-  const infoW = infoColumn.w, nameRoom = infoW - 2 * SPACE.m - (it.nameEdit ? CONTROL.icon.h + SPACE.m : 0);
-  const nameFit = messageText(it.full, TYPE.heading.fs, TYPE.heading.min, nameRoom, 2, true);
+  const infoW = infoColumn.w, edit = it.nameEdit ? CONTROL.icon.h + SPACE.m : 0, nameRoom = infoW - 2 * SPACE.m - edit;
+  const nameFit = messageText(it.full, DETAILS.name.fs, DETAILS.name.min, nameRoom, 2, true);
   const name = textItem(NGUI, nameFit.text, { fs: nameFit.fs, min: nameFit.fs }, { maxW: nameRoom, lines: Infinity });
-  const info = [{ name: "Name", w: infoW, h: name.h }];
-  kids.push(node("Name", [0, 0], [label(name.text, name.fs, "#2d4664/1.00", nameRoom, name.h, { depth: 8, ellipsis: !!it.original, ariaLabel: it.full })]));
+  const nameW = Math.min(nameRoom, Math.ceil(Math.max(...nameFit.text.split("\n").map((line) => glyphsOf(line, nameFit.fs)))));
+  const using = it.inUseText || (it.inUse ? T("popup.inUse") : null);
+  const chips = it.chips || [it.tag?.text || (it.recruit ? T("type.recruit") : it.kind === "mod" ? T("type.added") : T("type.noRecruit")), ...(using ? [using] : [])];
+  const dark = !it.chips && it.recruit, chip = DETAILS.chip;
+  const chipW = chips.map((caption, i) => chipFit(caption, { mark: i === 0 && dark, maxW: infoW - 2 * SPACE.m }).w);
+  const chipsW = chipW.reduce((n, cw) => n + cw, 0) + Math.max(0, chips.length - 1) * DETAILS.chipGap + chip.h * TAN10;
+  // the chips beside a one-line name when the line holds both, else in their own rows under it
+  const beside = chips.length > 0 && !nameFit.text.includes("\n") && nameW + edit + SPACE.l + chipsW <= infoW - 2 * SPACE.m;
+  const places = beside ? null : chipPlaces(chipW, infoW - 2 * SPACE.m), rows = !beside && chips.length ? Math.max(...places.map((p) => p.row)) + 1 : 0;
+  const headH = beside ? Math.max(name.h, chip.h) : name.h;
+  const info = [{ name: "Head", w: infoW, h: headH }];
+  kids.push(node("Name", [0, 0], [label(name.text, name.fs, "#2d4664/1.00", beside ? nameW + 2 : nameRoom, name.h, { depth: 8, ellipsis: !!it.original, ariaLabel: it.full })]));
   if (it.nameEdit) kids.push(node("EditName", [0, 0], [sprite("Cafe_Icon_NameEdit", CONTROL.icon.h, CONTROL.icon.h, { type: 0, depth: 9, color: "#2d4664/1.00" })]));
+  chips.forEach((caption, i) => kids.push(node(`Chip_${i}`, [0, 0],
+    [sprite("Common_Bg_Raius10px", chipW[i], chip.h, { incline: 10, depth: 6, tier: "chip", color: i === 0 && dark ? "#2c4564/1.00" : "#ffffff/1.00" })], [
+      node("Line", [0, 0], [sprite("Common_Line_Raius10px", chipW[i], chip.h, { incline: 10, depth: 7, color: "#c0c9d4/1.00" })]),
+      node("Text", [0, 0], [], markedLabel(caption, { fs: chip.fs, fsMin: chip.fsMin,
+        color: i === 0 && dark ? "#ffffff/1.00" : "#2c4564/1.00", maxW: chipW[i] - 2 * chip.pad, mark: i === 0 && dark, depth: 8, maxLines: 1 }).nodes),
+    ])));
+  if (rows) info.push({ name: "Chips", w: infoW, h: rows * chip.h + (rows - 1) * SPACE.s });
   if (it.original) {
     const original = textItem(NGUI, it.original, TYPE.micro, { maxW: infoW - 2 * SPACE.m, lines: 2 });
     kids.push(node("OriginalName", [0, 0], [label(original.text, original.fs, "#2d4664/0.65", infoW - 2 * SPACE.m, original.h, { depth: 8, ellipsis: true, ariaLabel: it.original })]));
-    info.push({ name: "OriginalName", w: infoW, h: original.h });
+    info.splice(1, 0, { name: "OriginalName", w: infoW, h: original.h });
   }
-  const using = it.inUseText || (it.inUse ? T("popup.inUse") : null);
-  const chips = it.chips || [it.tag?.text || (it.recruit ? T("type.recruit") : it.kind === "mod" ? T("type.added") : T("type.noRecruit")), ...(using ? [using] : [])];
-  const places = chipPlaces(chips.length, infoW), rows = chips.length ? Math.max(...places.map(p => p.row)) + 1 : 0;
-  const dark = !it.chips && it.recruit;
-  chips.forEach((caption, i) => kids.push(node(`Chip_${i}`, [0, 0],
-    [sprite("Common_Bg_Raius10px", CHIP.w, CHIP.h, { incline: 10, depth: 6, color: i === 0 && dark ? "#2c4564/1.00" : "#ffffff/1.00" })], [
-      node("Line", [0, 0], [sprite("Common_Line_Raius10px", CHIP.w, CHIP.h, { incline: 10, depth: 7, color: "#c0c9d4/1.00" })]),
-      node("Text", [0, 0], [], markedLabel(caption, { fs: CHIP.fs, fsMin: CHIP.fsMin,
-        color: i === 0 && dark ? "#ffffff/1.00" : "#2c4564/1.00", maxW: CHIP.w - CHIP.inset, mark: i === 0 && dark, depth: 8 }).nodes),
-    ])));
-  if (rows) info.push({ name: "Chips", w: infoW, h: rows * CHIP.h + (rows - 1) * SPACE.s });
-  // The light stats box keeps its own padding, row sizes, caption/value types and decoration. A portrait's narrow column
-  // stacks each caption and value as successive full-width rows; other sources retain the paired columns.
-  // a field without a caption (null) is its value alone
-  const fieldRows = portraitTexture ? fields.flatMap(([caption, value, colour]) => [...(caption == null ? [] : [{ value: caption }]), { value: String(value), colour }])
-    : fields.map(([caption, value, colour], i) => ({ caption: caption ?? "", value: String(value), colour, ariaLabel: String(value), cut: i === 2 ? 2 : 0 }));
+  // The light stats box keeps its own padding, row sizes and decoration, one size down. A portrait's narrow column stacks
+  // each caption and value as successive full-width rows; other sources retain the paired columns. A field without a caption
+  // (null) is its value alone. With options.truncate a value keeps one line, and a "…" at its end where it is cut.
+  const button = moreButton();
+  const cutRow = (field, caption, value) => options.truncate ? {
+    more: button.w + button.gap,
+    slot: ({ i, right, valueY, cut }) => {
+      if (!cut) return [];
+      more.push({ field, row: i, caption: caption ?? "", value: String(value) });
+      const b = Buttons.smallButton(`More_${field}`, right - button.w / 2, valueY, MORE,
+        { w: button.w, h: button.h, fs: button.fs, min: button.fs, depth: 9 });
+      const bg = b.widgets.find((x) => "sprite" in x);
+      if (bg) bg.tier = "button";
+      return [b];
+    },
+  } : {};
+  const fieldRows = portraitTexture ? fields.flatMap(([caption, value, colour], field) => [...(caption == null ? [] : [{ value: caption }]),
+    { value: String(value), colour, ariaLabel: String(value), ...cutRow(field, caption, value) }])
+    : fields.map(([caption, value, colour], i) => ({ caption: caption ?? "", value: String(value), colour, ariaLabel: String(value),
+      cut: options.truncate ? 0 : i === 2 ? 2 : 0, ...cutRow(i, caption, value) }));
   const fieldW = side ? content.w : infoW;
-  const fieldBox = fields.length ? statsBox({ holder: "panel", width: fieldW, at: [0, 0], name: "Fields", rows: fieldRows }) : { nodes: [], height: 0 };
+  const fieldBox = fields.length ? statsBox({ holder: "panel", width: fieldW, at: [0, 0], name: "Fields", rows: fieldRows, type: DETAILS.box }) : { nodes: [], height: 0 };
   if (portraitTexture) for (const part of fieldBox.nodes) {
     const match = /^V_(\d+)$/.exec(part.name);
     if (match) { const i = Number(match[1]); part.name = `${i % 2 ? "V" : "F"}_${Math.floor(i / 2)}`; }
@@ -736,16 +783,21 @@ export function detailsTree(it, title, fields, actions, portraitTexture = null, 
   if (fieldBand && !side) info.push(fieldBand);
   const infoStack = layoutStack(info, { w: infoW, gap: SPACE.m });
 
-  // The model's square is one size for every candidate: what the title, the actions and fields with the file name on
-  // three lines (the others on one) leave, its 10 degree incline within its column. Only longer fields shrink it.
-  const roomFor = (fieldsH) => content.h - titleH - fieldsH - (actions.length ? CONTROL.buttonXS.h : 0)
-    - SPACE.m * (1 + (fields.length ? 1 : 0) + (actions.length ? 1 : 0));
-  const reference = side && fields.length ? boxHeight(fields.map((_, i) => (i === 0 ? 3 : 1))) : 0;
-  const pictureW = portraitTexture ? pictureColumn.w
-    : side ? Math.max(0, Math.min(pictureColumn.w / (1 + TAN10), roomFor(reference), roomFor(fieldBand?.h || 0))) : w - 2 * SPACE.m;
+  // The picture takes the room the title, the actions and the rest leave (the 3D model's square is one size for every
+  // candidate: what fields with the file name on three lines and the others on one leave, its 10 degree incline within its
+  // column; only longer fields shrink it).
+  const actionsH = actions.length ? CONTROL.buttonXS.h : 0;
+  const roomFor = (otherH, others) => content.h - titleH - otherH - actionsH - SPACE.m * (1 + others + (actions.length ? 1 : 0));
+  const reference = side && fields.length ? boxHeight(fields.map((_, i) => (i === 0 && !options.truncate ? 3 : 1)), DETAILS.box) : 0;
   const texture = portraitTexture && clone(portraitTexture), native = texture?.widgets.find(widget => "texture" in widget);
   const portraitCard = texture && switchGrid("spr").card; // Keep the portrait card's native aspect in its preview column.
-  const aspect = portraitCard ? portraitCard.w / portraitCard.h : kind === "model" ? 1 : 16 / 9, pictureH = pictureW / aspect;
+  const aspect = portraitCard ? portraitCard.w / portraitCard.h : kind === "model" ? 1 : 16 / 9;
+  let pictureW;
+  if (portraitTexture) pictureW = Math.max(0, Math.min(pictureColumn.w, roomFor(0, 0) * aspect));
+  else if (side) pictureW = Math.max(0, Math.min(pictureColumn.w / (1 + TAN10), roomFor(reference, fields.length ? 1 : 0),
+    roomFor(fieldBand?.h || 0, fields.length ? 1 : 0)));
+  else pictureW = Math.max(0, Math.min(w - 2 * SPACE.m, roomFor(infoStack.h, 1) * aspect));
+  const pictureH = pictureW / aspect;
   const source = typeof it.big === "function" ? it.big() : it.big;
   const picture = node("Picture", [0, 0], [], []);
   if (texture) {
@@ -778,7 +830,8 @@ export function detailsTree(it, title, fields, actions, portraitTexture = null, 
     }
     const bg = body.widgets.find(widget => "sprite" in widget), k = CONTROL.buttonXS.h / bg.h_;
     body.name = "Body"; body.pos = [0, 0]; body.scale = [k, k]; resizeButton(body, fits[i].width / k);
-    Object.assign(bg, { depth: 6, ...(!disabled ? { color: "#dbeef5/1.00" } : {}) });
+    // a button however narrow the row makes it: the pre-release size tag marks it (owner, 2026-11-11)
+    Object.assign(bg, { depth: 6, tier: "button", ...(!disabled ? { color: "#dbeef5/1.00" } : {}) });
     for (const child of body.children || []) for (const widget of child.widgets) if ("w_" in widget) widget.depth = 7;
     const action = node(`Act_${i}`, [0, 0], [], [body, node("Label", [0, 0],
       [label(fits[i].text, fits[i].fs, ink, fits[i].width - ACTION_CLEAR, ACTION_TEXT_H, { depth: 8 })])]);
@@ -786,8 +839,9 @@ export function detailsTree(it, title, fields, actions, portraitTexture = null, 
   });
   if (actions.length) bands.push({ name: "Actions", w, h: CONTROL.buttonXS.h });
   const placed = layoutStack(bands, { x: content.x, y: content.y, w: content.w, gap: SPACE.m });
-  // The model's actions stand on the panel's bottom, their solid art level with the list panel's (BL-133).
-  const pinned = side && actions.length && placed.h <= content.h;
+  // The actions stand on the panel's bottom, their solid art level with the list panel's (BL-133; every panel, owner
+  // 2026-11-11).
+  const pinned = actions.length && placed.h <= content.h;
   if (pinned) placed.boxes.at(-1).y = content.y + content.h - CONTROL.buttonXS.h * (1 - ACTION_SHADOW);
   const tree = node("Details", [0, 0], [], kids);
   const placeInfo = (box, x = 0) => {
@@ -796,14 +850,25 @@ export function detailsTree(it, title, fields, actions, portraitTexture = null, 
       const [px, py] = toNode(target, 1, frame);
       for (const part of fieldBox.nodes) { part.pos[0] += px; part.pos[1] += py; }
     } else if (box.name === "Chips") chips.forEach((_, i) => {
-      find(tree, `Chip_${i}`).pos = toNode({ x: target.x + infoW / 2 + places[i].x - CHIP.w / 2,
-        y: target.y + places[i].row * (CHIP.h + SPACE.s), w: CHIP.w, h: CHIP.h }, 4, frame);
+      find(tree, `Chip_${i}`).pos = toNode({ x: target.x + infoW / 2 + places[i].x - chipW[i] / 2,
+        y: target.y + places[i].row * (chip.h + SPACE.s), w: chipW[i], h: chip.h }, 4, frame);
     });
-    else {
-      find(tree, box.name).pos = toNode(target, 4, frame);
-      if (box.name === "Name" && it.nameEdit) find(tree, "EditName").pos = toNode({ x: target.x + infoW - SPACE.m - CONTROL.icon.h,
-        y: target.y + (target.h - CONTROL.icon.h) / 2, w: CONTROL.icon.h, h: CONTROL.icon.h }, 4, frame);
-    }
+    else if (box.name === "Head") {
+      // the name, its pencil and (beside) the chips as one centred group
+      const parts = [{ w: beside ? nameW : nameRoom, h: name.h }, ...(it.nameEdit ? [{ w: CONTROL.icon.h, h: CONTROL.icon.h }] : []),
+        ...(beside ? chipW.map((cw) => ({ w: cw, h: chip.h })) : [])];
+      const gaps = parts.map((_, i) => (i === 0 ? 0 : beside && i === (it.nameEdit ? 2 : 1) ? SPACE.l : i === 1 && it.nameEdit ? SPACE.m : DETAILS.chipGap));
+      const total = parts.reduce((n, p, i) => n + p.w + gaps[i], 0) + (beside ? chip.h * TAN10 : 0);
+      let left = target.x + (infoW - total) / 2;
+      parts.forEach((p, i) => {
+        left += gaps[i];
+        const at = toNode({ x: left, y: target.y + (target.h - p.h) / 2, w: p.w, h: p.h }, 4, frame);
+        if (i === 0) find(tree, "Name").pos = at;
+        else if (i === 1 && it.nameEdit) find(tree, "EditName").pos = at;
+        else find(tree, `Chip_${i - 1 - (it.nameEdit ? 1 : 0)}`).pos = at;
+        left += p.w;
+      });
+    } else find(tree, box.name).pos = toNode(target, 4, frame);
   };
   for (const box of placed.boxes) {
     if (box.name === "Portrait") {
@@ -820,6 +885,7 @@ export function detailsTree(it, title, fields, actions, portraitTexture = null, 
   }
   tree.contentHeight = pinned ? content.h : placed.h;
   tree.contentLayout = placed;
+  tree.more = more;
   return tree;
 }
 
@@ -845,7 +911,9 @@ export function detailsTree(it, title, fields, actions, portraitTexture = null, 
 //   items' hint: the card's hover hint
 //   check: {label, checked, onChange} for a checkbox below the details; a click flips check.checked, so the same
 //          object is passed to every drawing
-//   details(it): {title, fields: [[caption, value, colour]], actions: [[caption, fn]]} for the panel on the left
+//   details(it): {title, fields: [[caption, value, colour]], actions: [[caption, fn]], truncate} for the panel on the left;
+//                truncate: each value on one line, a "…" button showing a cut one whole
+//   footer: the footer buttons' size, LIST_FOOTER ("S") unless named
 //   keepScroll: the list's offset on its scrolling axis (horizontal for portraits)
 //   detailKind(it): the kind whose details panel a card shows when it differs from layoutKind's ("spr": the portrait
 //                   panel, an upright picture beside the stacked fields), for lists of several kinds
@@ -898,7 +966,7 @@ export async function listPopup(options) {
   const btns = (buttons || [{ label: okText, fn: onOk, primary: true, semantic: options.okSemantic || "confirm", action: "ok" }])
     .map((b) => (b.primary && filteredOut ? { ...b, greyed: true, blocked: true } : b));
   const next = document.createElement("div");
-  const view = await NGUI.render(listFrame(title, btns, !!onClose, !!check, options.layoutKind, band0), next, { scale: S, origin: [960, 540] });
+  const view = await NGUI.render(listFrame(title, btns, !!onClose, !!check, options.layoutKind, band0, options.footer ?? LIST_FOOTER), next, { scale: S, origin: [960, 540] });
   btns.forEach((b, i) => {
     const button = hit(next, view, `Center/Popup/Btn/Btn_${i}/BG (1)`, b.blocked ? () => {} : b.fn, { name: b.label, action: b.action || `button${i}` });
     if (button && b.blocked) { button.disabled = true; button.setAttribute("aria-disabled", "true"); }
@@ -1039,7 +1107,7 @@ export async function listPopup(options) {
   if (sel && details) {
     const d = details(sel);
     const kind = detailKind(sel);
-    const tree = detailsTree(sel, d.title, d.fields, d.actions, kind === "spr" ? portraitTexture : null, kind, LP.left);
+    const tree = detailsTree(sel, d.title, d.fields, d.actions, kind === "spr" ? portraitTexture : null, kind, LP.left, { truncate: !!d.truncate });
     const panel = LP.left, panelH = panel.t - panel.b;
     const detailsHost = tree.contentHeight > panelH ? scrollArea(next,
       [960 + panel.l * S, 540 - panel.t * S, (panel.r - panel.l) * S, panelH * S], tree.contentHeight * S) : next;
@@ -1047,6 +1115,12 @@ export async function listPopup(options) {
     const origin = detailsHost === next ? [960, 540] : [-panel.l * S, panel.t * S];
     const dv = await NGUI.render(tree, detailsHost, { scale: S, origin, z: 20 });
     if (sel.nameEdit) hit(detailsHost, dv, "Details/EditName", () => sel.nameEdit.fn(scroll()), { name: sel.nameEdit.label, action: "alias:details" });
+    // a value cut to one line shows whole in a message over the list, titled with its caption
+    for (const cut of tree.more) {
+      const button = hit(detailsHost, dv, `Details/More_${cut.field}`, () => message({ title: cut.caption || d.title, lines: [cut.value],
+        ok: T("picker.ok") }), { name: cut.caption || d.title, action: `more:${cut.field}` });
+      button?.setAttribute("aria-description", cut.value);
+    }
     d.actions.forEach(([caption, fn, disabled, , hint], i) => {
       if (!fn) return;
       const button = hit(detailsHost, dv, `Details/Act_${i}/Body`, disabled ? () => {} : fn, { name: caption });
