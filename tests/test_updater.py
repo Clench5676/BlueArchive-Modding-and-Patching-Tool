@@ -558,3 +558,11 @@ def test_release_notes_belong_to_the_exact_detected_tag():
 ])
 def test_prerelease_preview_gate_uses_running_version(version, expected):
     assert updater.prerelease_previews(version) is expected
+
+
+@pytest.mark.parametrize('version, expected', [
+    ('0.7.0-alpha.9', True), ('0.7.0-beta.3', True), ('0.7.0-rc.2-dev', True), ('0.7.0-dev', True),
+    ('0.7.0-rc.2', False), ('0.7.0-rc', False), ('0.7.0', False), ('invalid', False), (None, False),
+])
+def test_button_size_tags_skip_packaged_release_candidates(version, expected):
+    assert updater.button_size_tags(version) is expected

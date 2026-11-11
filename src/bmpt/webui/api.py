@@ -362,6 +362,7 @@ def build_api(s: Services) -> RpcRegistry:
             "previewCacheGeneration": s.preview_cache.generation,
             "version": version, "native": s.window is not None,
             "prereleasePreviews": updater.prerelease_previews(version),
+            "buttonSizeTags": updater.button_size_tags(version),
             "logPath": str(s.log_path),
             # the tray or menu bar icon, the hand-off prompt
             "tray": s.state.flag("tray"),

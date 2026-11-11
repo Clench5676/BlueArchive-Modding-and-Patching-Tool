@@ -87,10 +87,10 @@ popups whose footers are set to S. A popup's footer is M unless its call site na
 inline buttons of a plain popup line and the Batch Import tool row are the XS body scaled by its ratio to S. A new button
 takes its size from these; it never states a height.
 
-Developer previews (a pre-release version, `prereleasePreviews`) tag every `Common_Btn_BG` pill at its top left with its preset,
+Developer previews (a pre-release version other than a packaged release candidate, `buttonSizeTags`) tag every `Common_Btn_BG` pill at its top left with its preset,
 XS, S, M or L, by its height on the stage; a pill that is none of them shows its measured height in grey, and a body that is
 no pill (a card, a thumbnail, a square action button) none. A tag that would cover the caption is a dot with the same label on
-hover. Stable builds show no tag.
+hover. Release candidates and stable builds show no tag.
 
 ### Grid (`GRID`)
 
