@@ -7,7 +7,7 @@ import json
 import os
 from pathlib import Path
 
-from ba_modding_toolkit.naming import parse_filename
+from bmpt.engine import parse_filename
 
 
 def bundle_paths(resource_dirs: list[Path]) -> list[Path]:

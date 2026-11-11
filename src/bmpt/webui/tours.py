@@ -141,8 +141,7 @@ def presented(state: UiState, versions: list[str], tours: list[dict]) -> None:
 
 
 def register(rpc: Any, services: Any) -> None:
-    from ba_modding_toolkit.utils import get_version_info
-    from ba_modding_toolkit.i18n import i18n_manager
+    from bmpt.engine import get_version_info, i18n_manager
 
     def available() -> tuple[str, list[dict]]:
         current = get_version_info().get('version') or ''

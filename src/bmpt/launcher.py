@@ -12,7 +12,7 @@ register_locales()
 def main(argv: list[str] | None = None) -> None:
     args = list(sys.argv[1:] if argv is None else argv)
     if "--classic" in args or "--tab" in args or "--settings" in args:
-        from ba_modding_toolkit.gui.main import main as classic
+        from bmpt.engine import classic_main as classic
 
         classic([a for a in args if a != "--classic"])
     else:

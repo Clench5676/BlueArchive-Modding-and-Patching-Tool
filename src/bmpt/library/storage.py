@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from ba_modding_toolkit.bundle import Bundle
+from bmpt.engine import Bundle
 from ..filelock import replace as replace_file
 
 logger = logging.getLogger(__name__)

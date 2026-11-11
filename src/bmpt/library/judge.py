@@ -16,8 +16,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Hashable, Iterable, Sequence
 
-from ba_modding_toolkit.naming import parse_filename, spine_kind
-from ba_modding_toolkit.searching import SEARCH_DIR_SUFFIXES
+from bmpt.engine import SEARCH_DIR_SUFFIXES, parse_filename, spine_kind
 
 LIBRARY_SOURCES = ("mod:", "variant:")
 CRC_STATES = ("ok", "fixed", "needs_fix")

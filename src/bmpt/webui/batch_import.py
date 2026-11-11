@@ -15,19 +15,16 @@ from pathlib import Path
 from typing import Any
 
 from bmpt import atlas_remap, devmode, mod_origin
-from ba_modding_toolkit import core
-from ba_modding_toolkit.bundle import Bundle, UpdateScope
+from bmpt.engine import (
+    AssetType, Bundle, CRCUtils, SaveOptions, UpdateScope, core, get_skel_version, no_log, parse_filename,
+    parse_hex_bytes, t,
+)
 from ..errors import ServiceError
 from ..gameassets.spine import PREVIEW_TYPES, Composition, spine_revision
 from ..gameassets.discovery import cab_names
-from ba_modding_toolkit.i18n import t
 from ..library import integrity, staging, manual_identity
 from ..library.judge import core_of, kind_of, part_of
 from ..library.storage import Fingerprints, atomic_clone, verify_file
-from ba_modding_toolkit.models import AssetType, SaveOptions
-from ba_modding_toolkit.naming import parse_filename
-from ba_modding_toolkit.spine import get_skel_version
-from ba_modding_toolkit.utils import CRCUtils, no_log, parse_hex_bytes
 
 logger = logging.getLogger(__name__)
 PREF = "batch_import"
