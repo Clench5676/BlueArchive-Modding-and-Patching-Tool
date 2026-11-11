@@ -7087,7 +7087,8 @@ class ModLibrary:
                 posted = geometry.get(name)
                 if not isinstance(posted, dict):
                     raise ServiceError("bad_params", key="geometry")
-                test = rebake.rig(posted.get("test"), atlas_remap.parse_atlas(one.test_atlas, name))
+                test = rebake.rig(posted.get("test"), atlas_remap.parse_atlas(one.test_atlas, name),
+                                  max_poses=len(one.candidates) + len(one.slots) + 1)
                 reference = rebake.rig(posted.get("official"), atlas_remap.parse_atlas(one.official_text, name))
                 pages = {**{key: mod.textures[key] for key in state["rigs"][name]["pages"]}, **one.pages.images}
                 checked[name] = grafting.choose(one, reference, test, official.textures, pages)

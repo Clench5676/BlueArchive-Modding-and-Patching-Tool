@@ -47,6 +47,8 @@ ROWS = 4
 #: pixels per world unit of a rendered part, and the most pixels a part may take
 PART_SCALE = 1.0
 MAX_PART_PIXELS = 4_000_000
+#: the largest page (declared and grown) a graft packs; official portrait pages are at most 4096 square
+MAX_PAGE_PIXELS = 8192 * 8192
 #: an anchor fit whose worst point is further off than this share of the slot's extent is not used
 ANCHOR_SLACK = 0.01
 #: candidate corrections of a flagged part: placement, atlas rotate, attachment turned
@@ -526,8 +528,8 @@ def free_spot(occupied: np.ndarray, width: int, height: int) -> tuple[int, int] 
     w, h = width + 2 * PAD, height + 2 * PAD
     if w > columns or h > rows:
         return None
-    integral = np.zeros((rows + 1, columns + 1), dtype=np.int64)
-    integral[1:, 1:] = occupied.cumsum(0).cumsum(1)
+    integral = np.zeros((rows + 1, columns + 1), dtype=np.int32)
+    integral[1:, 1:] = occupied.cumsum(0, dtype=np.int32).cumsum(1, dtype=np.int32)
     total = integral[h:, w:] - integral[:-h, w:] - integral[h:, :-w] + integral[:-h, :-w]
     spots = np.argwhere(total == 0)
     if not len(spots):
@@ -589,6 +591,8 @@ def pack(mod_text: str, official_text: str, regions: list[str], mod_pages: dict[
         image = mod_pages.get(key)
         if image is None or not page.size[0] or not page.size[1]:
             continue
+        if page.size[0] * page.size[1] > MAX_PAGE_PIXELS:
+            raise GraftError("graft_region_too_large", region=page.name)
         scales[page.name] = (image.size[0] / page.size[0], image.size[1] / page.size[1])
         occupancy[page.name] = sampled(mod_setup, key, page.size)
     if not occupancy:
@@ -606,6 +610,8 @@ def pack(mod_text: str, official_text: str, regions: list[str], mod_pages: dict[
         if spot is None:
             page_name = next(iter(occupancy))
             occupied = occupancy[page_name]
+            if (occupied.shape[0] + h + 2 * PAD + ROWS) * occupied.shape[1] > MAX_PAGE_PIXELS:
+                raise GraftError("graft_region_too_large", region=name)
             taller = np.zeros((occupied.shape[0] + h + 2 * PAD + ROWS, occupied.shape[1]), dtype=bool)
             taller[:occupied.shape[0]] = occupied
             occupancy[page_name] = occupied = taller
