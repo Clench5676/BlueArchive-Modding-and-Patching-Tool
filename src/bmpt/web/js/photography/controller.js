@@ -10,7 +10,7 @@ import {captureScene} from './capture.js';
 import {photograph} from './shoot.js';
 import {cameraFeedback} from './feedback.js';
 import {FRAME,choiceLayout,otherMode,actionCaption} from './camera.js';
-import {CONTROL,XS_BUTTON,SPACE} from '../ui-tokens.js';
+import {CONTROL,XS_BUTTON,SPACE,FULLSCREEN_BUTTON} from '../ui-tokens.js';
 import {row} from '../ui-grid.js';
 import {alignIcon,buttonCenter} from '../student-hall-icons.js';
 import {anchoredCentre} from '../visual-view.js';
@@ -44,10 +44,10 @@ function errorText(error){return error.code?T(`error.${error.code}`,error.params
 function safe(fn){return (...args)=>Promise.resolve().then(()=>fn(...args)).catch(error=>{if(error.name==='AbortError')return;console.error('Photography action failed',error);return Popup.message({title:P('failed'),lines:[errorText(error)],ok:P('confirm')});});}
 function node(name,widgets,children=[]){return {name,active:true,pos:[0,0],scale:[1,1,1],rotZ:0,widgets,children};}
 let whiteTemplate;
-// Back retains UICharacterVisualMode/Inventory_ListControl_PC/LeftTop/Btn_Back's own 171 x 116-unit body;
-// the separate shutter keeps its existing 146px circle. Composed toolbar controls use the design system.
+// Back, the text and the icon buttons share the fullscreen views' one button size (ui-tokens.js FULLSCREEN_BUTTON, BL-188),
+// the text buttons wide enough for their captions; the separate shutter keeps its existing 146px circle.
 function photographyToolbarLayout(){
-  const textH=CONTROL.buttonXS.h*S,icon={w:102,h:82};
+  const textH=FULLSCREEN_BUTTON.h*S,icon={w:FULLSCREEN_BUTTON.w*S,h:FULLSCREEN_BUTTON.h*S};
   const texts=row([{w:196,h:textH},{w:196,h:textH}],{gap:SPACE.m*S});
   const top=row([texts,icon],{gap:SPACE.l*S});
   const x=1890-top.w,y=25,asBox=b=>[b.x,b.y,b.w,b.h];
@@ -57,7 +57,7 @@ function photographyToolbarLayout(){
   const gallery=row([icon],{x:25,y:950}).boxes[0];
   return {occlusion:textBoxes[0],grid:textBoxes[1],mode,top:[x,y,top.w,top.h],
     playback:asBox(bottom.boxes[0]),choices:asBox(bottom.boxes[1]),gallery:asBox(gallery),
-    caption:{size:CONTROL.buttonXS.fs,min:XS_BUTTON.fsMin,width:196/S-2*CONTROL.buttonXS.pad,height:CONTROL.buttonXS.h-XS_BUTTON.boxInsetH}};
+    caption:{size:CONTROL.buttonXS.fs,min:XS_BUTTON.fsMin,width:196/S-2*CONTROL.buttonXS.pad,height:FULLSCREEN_BUTTON.h-XS_BUTTON.boxInsetH}};
 }
 function galleryPair(width,x,y){
   return row([{w:Math.max(width,CONTROL.buttonXS.minW*S),h:CONTROL.buttonXS.h*S},{w:Math.max(width,CONTROL.buttonXS.minW*S),h:CONTROL.buttonXS.h*S}],
@@ -68,18 +68,24 @@ const toolbarCaptions=()=>{
   const {caption}=photographyToolbarLayout();
   return NGUI.fitGroup([P('occlusion'),P('gridOn'),P('gridOff')],caption.size,caption.min,caption.width,2,{maxH:caption.height});
 };
-async function whiteButton(host,name,caption,box,action,{icon=null,atlas='Common',pressed=false,enabled=true,fit=null,corner=null,anchorBox=box}={}){
+async function whiteButton(host,name,caption,box,action,{icon=null,atlas='Common',glyph=null,pressed=false,enabled=true,fit=null,corner=null,anchorBox=box}={}){
   whiteTemplate ||= NGUI.layout('UICharacterVisualMode').then(layout=>clone(NGUI.find(layout,'Inventory_ListControl_PC/LeftTop/Btn_Back')));
   const tree=clone(await whiteTemplate),[x,y,w,h]=box;
   tree.name=name;tree.pos=[0,0];tree.children=[];
   const body=tree.widgets.find(widget=>'sprite' in widget);body.w_=w/S;body.h_=h/S;body.depth=60;
   if(pressed)body.color='#b9eeff/1.00';
   if(icon)tree.children.push(node('Icon',[{sprite:icon,atlas,w_:Math.min(w-30,h-26)/S,h_:Math.min(w-30,h-26)/S,pivot:4,depth:65,color:'#2b496e/1.00',type:0}]));
-  else tree.children.push(node('Label',[{text:fit?.text??caption,fontSize:fit?.fs??CONTROL.buttonXS.fs,w_:w/S-XS_BUTTON.boxInsetW,h_:h/S-XS_BUTTON.boxInsetH,pivot:4,depth:65,color:'#2b496e/1.00',align:2}]));
+  else if(glyph)tree.children.push(node('Icon',[{texture:'glyph',w_:glyph.size/S,h_:glyph.size/S,pivot:4,depth:65,color:'#ffffff/1.00'}]));
+  else if(!glyph)tree.children.push(node('Label',[{text:fit?.text??caption,fontSize:fit?.fs??CONTROL.buttonXS.fs,w_:w/S-XS_BUTTON.boxInsetW,h_:h/S-XS_BUTTON.boxInsetH,pivot:4,depth:65,color:'#2b496e/1.00',align:2}]));
   const wrapper=document.createElement('div');wrapper.dataset.photoControl=name;host.append(wrapper);
-  const view=await NGUI.render(tree,wrapper,{scale:S,origin:[x+w/2,y+h/2]});
+  const view=await NGUI.render(tree,wrapper,{scale:S,origin:[x+w/2,y+h/2],textureNames:glyph?{glyph:glyph.url}:undefined});
   if(icon)await alignIcon(view,`${name}/Icon`,name,{height:h*.52,maxWidth:w*.64,center:'bounds',color:'#2b496e'});
-  else{
+  else if(glyph){
+    // a texture glyph that fills its image, centred on the white body as alignIcon centres a sprite's ink
+    const center=await buttonCenter(view.nodes.get(name).els[0]),el=view.nodes.get(`${name}/Icon`).els[0];
+    Object.assign(el.style,{left:`${center.x-glyph.size/2}px`,top:`${center.y-glyph.size/2}px`,width:`${glyph.size}px`,height:`${glyph.size}px`});
+  }
+  else if(!glyph){
     let opticalBody=view.nodes.get(name).els[0];
     if(pressed){
       // A cyan tint falls below the white-body detector's threshold. Measure the identical white stencil.
@@ -108,9 +114,9 @@ export async function visualEntry(on){
   document.getElementById('photo-launcher')?.remove();
   if(!on||active||!bridge||!['portrait','lobby'].includes(bridge.info().mode))return;
   const layout=await NGUI.layout('UICharacterVisualMode'),corner=NGUI.find(layout,'Inventory_ListControl_PC/RightBottom');
-  const reset=NGUI.find(corner,'Btn_RefreshPos'),body=NGUI.find(reset,'Btn_RefreshPos'),widget=body.widgets.find(w=>'sprite' in w);
+  const reset=NGUI.find(corner,'Btn_RefreshPos'),body=NGUI.find(reset,'Btn_RefreshPos');
   const at=anchoredCentre(corner.widgets.find(w=>w.anchors))||corner.pos;
-  const width=widget.w_*S,height=widget.h_*S;
+  const width=FULLSCREEN_BUTTON.w*S,height=FULLSCREEN_BUTTON.h*S;
   const x=960+(at[0]+reset.pos[0]+body.pos[0])*S-width/2-(bridge.info().mode==='lobby'?0:width+26);
   const y=540-(at[1]+reset.pos[1]+body.pos[1])*S-height/2;
   const host=document.createElement('div');host.id='photo-launcher';stage().append(host);
@@ -216,15 +222,12 @@ async function backButton(host){
 }
 
 async function playbackButton(host){
-  const wrapper=document.createElement('div');host.append(wrapper);
-  const boxes=photographyToolbarLayout(),[x,y,width,height]=boxes.playback;
-  const {tree,textures}=bridge.playbackTree(paused),scale=height/141;
-  Object.assign(tree.widgets.find(w=>'sprite' in w),{depth:60,w_:width/scale,h_:height/scale});
-  for(const child of tree.children)for(const widget of child.widgets||[])widget.depth=65;
-  await NGUI.render(tree,wrapper,{scale,origin:[x+width/2,y+height/2],textureNames:textures});
-  const hit=hitButton(wrapper,boxes.playback,safe(async()=>{if(saving)return;paused=!paused;bridge.pause(paused);await drawControls();}),P(paused?'play':'pause'),90);
-  bindCorner(wrapper,boxes.choices,{corner:'bottom-right'});
-  hit.dataset.photoAction='Playback';hit.setAttribute('aria-pressed',String(paused));
+  // the same white button as its neighbours: the game's play icon, or the stop square at the play icon's ink height
+  const {playback,choices}=photographyToolbarLayout(),label=P(paused?'play':'pause');
+  const stop=`data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 28 28"><rect width="28" height="28" rx="4" fill="#2b496e"/></svg>')}`;
+  const hit=await whiteButton(host,'Playback',label,playback,async()=>{if(saving)return;paused=!paused;bridge.pause(paused);await drawControls();},
+    paused?{icon:'Common_Icon_Play',atlas:'Common',corner:'bottom-right',anchorBox:choices}:{glyph:{url:stop,size:Math.round(playback[3]*.4)},corner:'bottom-right',anchorBox:choices});
+  hit.setAttribute('aria-pressed',String(paused));
 }
 
 // The list's whole box takes the pointer, blank space and frame included: the pan surface below never sees a press, a wheel

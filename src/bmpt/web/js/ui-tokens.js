@@ -246,6 +246,11 @@ export const CONTROL = Object.freeze({
   toolbar: Object.freeze({ h: 104 }), // UILobby/Front/Right/Btn_RotateSpine/ConditionRoot/Able_Count/Bg
 });
 
+// Every button of the fullscreen views (portrait, memorial lobby, 3D model) and of the photography and camera framing
+// opened from them, one size (owner, 2026-11-12, BL-188: the larger one): UICharacterVisualMode's Btn_Back body width (171)
+// and the photography toolbar's former 82 px height (126). NGUI units; a caption-sized button keeps its own width.
+export const FULLSCREEN_BUTTON = Object.freeze({ w: 171, h: 126 });
+
 // The grid inside any container: 12 columns, a gutter of SPACE.xl. A page's container keeps SPACE.xxl from the stage's
 // edges: 2840 across, so a column is 200 and its pitch 240.
 export const GRID = Object.freeze({ columns: 12, gutter: 40, pageMargin: 60, stageW: 2960, stageH: 1665 });

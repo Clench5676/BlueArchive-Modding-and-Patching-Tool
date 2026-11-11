@@ -9,7 +9,7 @@ import { FRAME, OCCLUSION_BUTTON, TOOLBAR_CAPTION, otherMode, actionCaption } fr
 import { visualPrefab } from './visual_prefabs.mjs';
 import { n, spr } from './control_prefabs.mjs';
 
-import { CONTROL, XS_BUTTON, SPACE } from "../../src/bmpt/web/js/ui-tokens.js";
+import { CONTROL, XS_BUTTON, SPACE, FULLSCREEN_BUTTON } from "../../src/bmpt/web/js/ui-tokens.js";
 import { row } from "../../src/bmpt/web/js/ui-grid.js";
 const S = 1920 / 2960, near = (a, b) => assert.ok(Math.abs(a - b) < 1e-7, `${a} != ${b}`);
 const source = readFileSync(new URL('../../src/bmpt/web/js/photography/controller.js', import.meta.url), 'utf8');
@@ -71,7 +71,7 @@ for (const locale of ['en-US', 'zh-CN', 'zh-TW', 'ja-JP', 'ko-KR', 'th-TH']) for
         bamtWindowChrome: platform ? { active: true, platform, bounds: platform === 'darwin'
           ? { left: 12, right: 80, top: 8, bottom: 30 } : { left: width - 148, right: width, top: 8, bottom: 40 } } : null });
       const hits = new Map(), overlay = new Element(); let leftCamera = 0;
-      const env = { CONTROL, XS_BUTTON, SPACE, row, S, FRAME, OCCLUSION_BUTTON, TOOLBAR_CAPTION, otherMode, actionCaption, document: doc, mode, overlay, active: true,
+      const env = { CONTROL, XS_BUTTON, SPACE, FULLSCREEN_BUTTON, row, S, FRAME, OCCLUSION_BUTTON, TOOLBAR_CAPTION, otherMode, actionCaption, document: doc, mode, overlay, active: true,
         controlsRevision: 0, grid: true, occlusion: false, expanded: false, paused: false, saving: false,
         P: key => strings[key], clone: structuredClone, safe: fn => fn, alignIcon: async () => {}, bindCorner, anchoredCentre, press() {},
         buttonCenter: async el => ({ x: parseFloat(el.style.left) + parseFloat(el.style.width) / 2, y: parseFloat(el.style.top) + parseFloat(el.style.height) / 2 }),
@@ -93,14 +93,14 @@ for (const locale of ['en-US', 'zh-CN', 'zh-TW', 'ja-JP', 'ko-KR', 'th-TH']) for
       const icon = backHit.parentElement.children.find(el => el.dataset.path?.endsWith('LeftTop/Btn_Back/Icon'));
       assert.equal(body.widget.sprite, 'Common_Bg_Raius5px_Shadow');
       assert.equal(icon.widget.sprite, 'Common_Icon_Back');
-      near(parseFloat(body.style.width), 171 * S); near(parseFloat(body.style.height), 116 * S);
+      near(parseFloat(body.style.width), 171 * S); near(parseFloat(body.style.height), FULLSCREEN_BUTTON.h * S); // BL-188
       near(parseFloat(icon.style.width), 75 * S); near(parseFloat(icon.style.height), 63 * S);
-      const dx = (228.83 - 171) * S / 2, dy = (165 - 116) * S / 2;
+      const hitH = 165 + FULLSCREEN_BUTTON.h - 116, dx = (228.83 - 171) * S / 2, dy = (hitH - FULLSCREEN_BUTTON.h) * S / 2;
       near(b[1] + dy, CORNER_MARGIN); near(guide[1] + guide[3] / 2, CORNER_MARGIN + env.toolbarLayout().top[3] / 2); // centred in the row, which the 82 px icon makes as high as it is near(guide[1]+guide[3]/2,rotate[1]+rotate[3]/2);
-      near(b[2], 228.83 * S); near(b[3], 165 * S); assert.equal(backHit.label, strings.back);
+      near(b[2], 228.83 * S); near(b[3], hitH * S); assert.equal(backHit.label, strings.back);
       await backHit.action({ stopPropagation() {} }); assert.equal(leftCamera, 1);
       const overlap = (a, bounds) => a[0] < bounds.right / scale && a[0] + a[2] > bounds.left / scale && a[1] < bounds.bottom / scale && a[1] + a[3] > bounds.top / scale;
-      const native = globalThis.bamtWindowChrome?.bounds, backCandidate = [CORNER_MARGIN, CORNER_MARGIN, 171 * S, 116 * S];
+      const native = globalThis.bamtWindowChrome?.bounds, backCandidate = [CORNER_MARGIN, CORNER_MARGIN, 171 * S, FULLSCREEN_BUTTON.h * S];
       near(b[0] + dx, native && overlap(backCandidate, native) ? native.right / scale + CORNER_MARGIN : backCandidate[0]);
       const bodyRect = (group, sprite) => {
         const [tx, ty] = group.style.translate.split(' ').map(parseFloat);
@@ -123,7 +123,7 @@ for (const locale of ['en-US', 'zh-CN', 'zh-TW', 'ja-JP', 'ko-KR', 'th-TH']) for
       const rightCandidate = [width / scale - CORNER_MARGIN - top[2], CORNER_MARGIN, top[2], top[3]];
       near(width / scale - rotate[0] - rotate[2], native && overlap(rightCandidate, native) ? (width - native.left) / scale + CORNER_MARGIN : CORNER_MARGIN);
       near(guide[1]+guide[3]/2, rotate[1]+rotate[3]/2); near(grid[1], guide[1]); near(grid[0] - guide[0] - guide[2], SPACE.m*S); near(rotate[0] - grid[0] - grid[2], SPACE.l*S);
-      near(guide[2], 196); near(grid[3], CONTROL.buttonXS.h*S); near(rotate[2], 102);
+      near(guide[2], 196); near(grid[3], FULLSCREEN_BUTTON.h*S); near(rotate[2], FULLSCREEN_BUTTON.w*S); near(rotate[3], FULLSCREEN_BUTTON.h*S);
       near(rotate[2],choices[2]);near(rotate[3],choices[3]);near(gallery[2],choices[2]);near(gallery[3],choices[3]);
       near(gallery[0], CORNER_MARGIN); near(height / scale - gallery[1] - gallery[3], CORNER_MARGIN);
       near(width / scale - choices[0] - choices[2], CORNER_MARGIN); near(height / scale - choices[1] - choices[3], CORNER_MARGIN);
