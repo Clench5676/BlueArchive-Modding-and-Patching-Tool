@@ -53,11 +53,12 @@ function assertGroup(fits, captions, widths, maxH, label) {
 // --- the source pickers' action row (popup.js detailsTree), 850 wide panel, 120 high bodies ---
 test("the picker's constants are the ones asserted here", async () => {
   const popup = await source("popup.js");
-  // the actions' captions 34 down to 24, the XS button's padding each side (BL-176)
-  assert.match(popup, /const ACTION_CAPTION = Object\.freeze\(\{ fs: 34, min: 24 \}\), ACTION_CLEAR = 2 \* CONTROL\.buttonXS\.pad, ACTION_TEXT_H = 96;/);
+  // the actions' captions 34 down to 24 on XS bodies, 30 down to 22 on XXS ones, the button's padding each side (BL-176)
+  assert.match(popup, /Object\.freeze\(\{ control: CONTROL\.buttonXS, fs: 34, min: 24 \}\),\n  Object\.freeze\(\{ control: CONTROL\.buttonXXS, fs: 30, min: 22 \}\),/);
+  assert.match(popup, /const ACTION_CLEAR = 2 \* BTN\.pad, ACTION_TEXT_H = BTN\.h - 8;/);
   assert.match(popup, /left: bounds\(detailBox\)/);
   assert.match(popup, /const gap = actionGap, inRow = Math\.min\(perRow, Math\.max\(1, actions\.length\)\), bw =/);
-  assert.match(popup, /NGUI\.fitRow\(captions, ACTION_CAPTION\.fs, ACTION_CAPTION\.min, captions\.length \* \(bw - gap\), ACTION_CLEAR, 2, \{ maxH: ACTION_TEXT_H \}\)/);
+  assert.match(popup, /NGUI\.fitRow\(captions, actionTier\.fs, actionTier\.min, captions\.length \* \(bw - gap\), ACTION_CLEAR, 2, \{ maxH: ACTION_TEXT_H \}\)/);
 });
 
 // the list popup's details: four and a half columns of the L class's grid; the actions' captions 34 down to 24 with the XS
@@ -74,8 +75,20 @@ const actionSets = (locale) => {
     "variant picker (two)": [open, t("btn.extract")],
   };
 };
-// rows of as many XS bodies as the panel holds at their minimum width (popup.js detailsTree), one caption size for all
+// one row where the XS or XXS bodies at their minimum width fit it (a 3D model's four, owner 2026-11-11, BL-176), else rows
+// of as many XS bodies as the panel holds (popup.js detailsTree), one caption size for all
 const XS_MIN_W = 200, PER_ROW = Math.max(1, Math.floor((PANEL - 40 + GAP) / (XS_MIN_W + GAP)));
+const XXS = { minW: 140, h: 88, pad: 26, fs: 30, min: 22 };
+for (const locale of LOCALES) test(`a 3D model's four actions stand on one XXS row in ${locale}`, () => {
+  document.documentElement.lang = locale;
+  const t = (key) => text(locale, key);
+  const captions = [t("popup.apply"), t("open.mac"), t("model.optimize"), t("btn.extract")];
+  assert.ok(4 * XS_MIN_W + 3 * GAP > PANEL - 40, "the XS row would fit: no XXS needed");
+  assert.ok(4 * XXS.minW + 3 * GAP <= PANEL - 40);
+  const total = 4 * ((PANEL - 40 + GAP) / 4 - GAP), clear = 2 * XXS.pad, maxH = XXS.h - 8;
+  const row = fitRow(captions, XXS.fs, XXS.min, total, clear, 2, { maxH });
+  assertGroup(row, captions, row.map((f) => f.width - clear), maxH, `${locale} model`);
+});
 for (const locale of LOCALES) test(`every source picker's action row shares one size and fits its buttons in ${locale}`, () => {
   document.documentElement.lang = locale;
   for (const [name, captions] of Object.entries(actionSets(locale))) {

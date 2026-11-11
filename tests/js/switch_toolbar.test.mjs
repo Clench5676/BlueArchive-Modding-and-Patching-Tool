@@ -32,12 +32,14 @@ for (const locale of ORDER) test(`the list toolbar fits the list's width in ${lo
   for (const sortKey of SORTS) {
     const lay = layoutFor(locale, sortKey), { boxes } = lay;
     assert.equal(lay.fits, true, `${locale}: the segments stand after the list's left edge (steps down to the roster's last)`);
-    // segments, search, sort, order: left to right, SPACE.l between the groups and SPACE.m among the tools
+    // segments at the list's left padding, search, sort, order at its right (owner, 2026-11-11, BL-176): at least SPACE.l
+    // between the groups and SPACE.m among the tools
     assert.equal(boxes.length, 4);
-    assert.ok(lay.cbLeft >= LEFT, `${locale}: ${lay.cbLeft} against ${LEFT}`);
+    assert.ok(Math.abs(lay.cbLeft - LEFT) < 1e-9, `${locale}: ${lay.cbLeft} against ${LEFT}`);
     for (let i = 1; i < boxes.length; i++) {
       const gap = boxes[i].x - boxes[i - 1].x - boxes[i - 1].w;
-      assert.ok(Math.abs(gap - (i < 2 ? SPACE.l : SPACE.m)) < 1e-9, `${locale}: gap ${i} is ${gap}`);
+      if (i < 2) assert.ok(gap >= SPACE.l - 1e-9, `${locale}: gap ${i} is ${gap}`);
+      else assert.ok(Math.abs(gap - SPACE.m) < 1e-9, `${locale}: gap ${i} is ${gap}`);
     }
     assert.ok(Math.abs(boxes.at(-1).x + boxes.at(-1).w - RIGHT) < 1e-9, "the order button ends at the list's right padding");
     assert.equal(boxes[0].x, lay.cbLeft);

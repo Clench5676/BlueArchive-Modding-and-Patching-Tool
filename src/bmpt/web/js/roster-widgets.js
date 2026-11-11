@@ -67,7 +67,8 @@ export function toolbarLayout(view, { title = T("roster.title"), left = -1270, r
 // wide as its longest, so choosing another moves nothing), ``sortAt``: the shown one; ``check``: the checkbox's caption.
 // The roster takes -1270 to 1412 after its title; a list popup its own width and no title (popup.js).
 // icons: how many icon toggles (the search button's body, another icon) stand before search (a list popup's, BL-176)
-export function toolbarFit({ title = "", left, right, filters, sorts, sortAt = 0, check, icons = 0 }) {
+// spread: the checkbox and the filters from the left edge, the tools at the right (a list popup's, owner 2026-11-11, BL-176)
+export function toolbarFit({ title = "", left, right, filters, sorts, sortAt = 0, check, icons = 0, spread = false }) {
   // the last three steps only a list popup's narrower list reaches (BL-176: the L class)
   const steps = [[230, 44, 56, 40, 62], [210, 40, 48, 38, 62], [200, 36, 44, 34, 58], [190, 34, 42, 32, 54], [180, 32, 40, 30, 50], [170, 30, 36, 28, 46],
     [160, 28, 34, 26, 44], [150, 26, 32, 24, 42], [140, 24, 30, 22, 40]];
@@ -94,7 +95,7 @@ export function toolbarFit({ title = "", left, right, filters, sorts, sortAt = 0
     const groups = row([...(cb ? [{ w: cbW, h }] : []), ...filters.map(() => ({ w: 3 * segW, h })), tools], { gap: SPACE.l });
     const cbLeft = right - groups.w, offset = (box) => ({ ...box, x: box.x + cbLeft });
     const lead = cb + filters.length;  // the checkbox and the filters come before the tools
-    const boxes = groups.boxes.slice(0, lead).map(offset);
+    const boxes = groups.boxes.slice(0, lead).map(spread ? (box) => ({ ...box, x: box.x + titleEnd }) : offset);
     boxes.push(...tools.boxes.map((box) => offset({ ...box, x: groups.boxes[lead].x + box.x })));
     const centre = (box) => box.x + box.w / 2;
     const fits = cbLeft >= titleEnd;
@@ -103,7 +104,7 @@ export function toolbarFit({ title = "", left, right, filters, sorts, sortAt = 0
       return { segW, segLabels, sortText, sortW, cbText, cbW,
         order: centre(boxes.at(-1)), sort: centre(boxes.at(-2)), search: centre(boxes.at(-3)),
         icons: boxes.slice(boxes.length - 3 - icons, boxes.length - 3),
-        seg1: ends[0], seg2: ends[1], cbLeft, titleFs, boxes, fits,
+        seg1: ends[0], seg2: ends[1], cbLeft: spread ? titleEnd : cbLeft, titleFs, boxes, fits,
         // per filter: where its right edge is and its three captions
         filters: ends.map((end, i) => ({ right: end, labels: segLabels.slice(3 * i, 3 * i + 3) })) };
     }

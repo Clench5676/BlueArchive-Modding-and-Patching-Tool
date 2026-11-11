@@ -23,7 +23,7 @@ import { frameOutline } from "./row-thumbnail.js";
 import { T } from "./i18n.js";
 import { codeOf, noticeNames, withCode } from "./error-codes.js";
 import { withTimeout } from "./async.js";
-import { TEXT_VIEWER, XL_CONTENT_H, frameClass, frameGeometry, popupContent } from "./popup-frames.js";
+import { TEXT_VIEWER, frameClass, frameGeometry, popupContent } from "./popup-frames.js";
 import { STATS_BOX_S, boxHeight, statsBox, valueRoom } from "./stats-box.js";
 import { BACKDROP, CHIP, CHIP_TIERS, COLOUR, CONTROL, POPUP_FOOTER, POPUP_FRAME, POPUP_TYPE, SPACE, TYPE, SMALL_BUTTON, XS_BUTTON, STATS_BOX, captionMinimum } from "./ui-tokens.js";
 import { DOT, RECRUIT, S, TAN10, clone, glyphsOf, hitButton, markedLabel, wrapPath } from "./util.js";
@@ -507,8 +507,8 @@ export function listLayout(check = false, kind = null) {
   // One complete native card, its name band and the toolbar determine the minimum useful viewport. Additional cards scroll.
   const cardHeight = native.h + Math.max(native.bar, LIST_CARD_NAME.padY + LIST_CARD_NAME.lines * LIST_CARD_NAME.fs * LIST_CARD_NAME.pitch);
   const need = POPUP_FRAME.contentTop + CONTROL.buttonS.h + 5 * SPACE.m + cardHeight + POPUP_FOOTER.clearance;
-  // the XL prefab's content box (XL_CONTENT_H) over the XS footer: the panels keep their size, the footer's padding goes
-  const frame = frameGeometry("XL", Math.max(need, POPUP_FRAME.contentTop + XL_CONTENT_H + POPUP_FOOTER.clearance));
+  // every list popup one height, the Hall's editors' (owner, 2026-11-11, BL-176: the three were as tall as their cards)
+  const frame = frameGeometry("XL", Math.max(need, POPUP_FRAME.panelH));
   const content = popupContent(frame.w, frame.h);
   const panels = grid(content);
   // the details four and a half columns, the list seven and a half (owner, 2026-11-11, BL-176: the details' share smaller
@@ -548,10 +548,10 @@ function toolbar(right, y, { segs = null, sortKey = "sort.default", active = 0, 
 export const TOGGLE_ICON = Object.freeze({ sprite: "Common_Charlist_Icon_ViewSmall", atlas: "Common", size: [57, 57] });
 
 // the fit of that toolbar: the checkbox's ``label``, the ``segs`` captions' keys and the sort button's ``sortKeys`` (``sortKey``:
-// the one shown), between the list's left edge and ``right``
+// the one shown), between the list's left edge and ``right``: the segments at the left, the icons at the right (BL-176)
 export function checkedToolbarFit(right, { segs, sortKey, sortKeys, label = null, left = LP.list.l + SPACE.m, icons = 0 }) {
   return toolbarFit({ left, right, filters: segs ? [segs.map(segText)] : [], sorts: sortKeys.map((key) => T(key)),
-    sortAt: sortKeys.indexOf(sortKey), check: label, icons });
+    sortAt: sortKeys.indexOf(sortKey), check: label, icons, spread: true });
 }
 // The toolbar with a checkbox (Switch 3D Model's "Show other students", BL-131) is the student roster's: the checkbox
 // first, the three segments, search, sort and order, fitted by the roster's own steps (roster-widgets.js toolbarFit; the
@@ -663,8 +663,12 @@ export function listCard(it, x, y, selected, card = LP.card, kind = null, tick =
 }
 
 // The detail actions: the XS body, their captions 34 down to 24 (owner, 2026-11-11, BL-176: smaller, with more padding),
-// the XS button's padding each side of the caption (the body's slant inside it).
-const ACTION_CAPTION = Object.freeze({ fs: 34, min: 24 }), ACTION_CLEAR = 2 * CONTROL.buttonXS.pad, ACTION_TEXT_H = 96;
+// the button's padding each side of the caption (the body's slant inside it). All of them on one row (owner, BL-176): the
+// XXS body, its captions 30 down to 22, where the row of XS bodies at their minimum width does not fit.
+const ACTION_TIERS = Object.freeze([
+  Object.freeze({ control: CONTROL.buttonXS, fs: 34, min: 24 }),
+  Object.freeze({ control: CONTROL.buttonXXS, fs: 30, min: 22 }),
+]);
 // The small button body's soft drop shadow under its solid art: 14 of its 176 rows (Btn_Cancel/BG (1) as drawn).
 const ACTION_SHADOW = 14 / 176;
 // The details panel one size down (owner, 2026-11-11, BL-173): its title and the name TYPE.body (the size under
@@ -817,9 +821,13 @@ export function detailsTree(it, title, fields, actions, portraitTexture = null, 
   // column; only longer fields shrink it).
   // the actions in rows of as many XS buttons as the panel holds at their minimum width (BL-176: the narrower panel, the
   // captions' padding kept), the rows SPACE.m apart
-  const actionGap = SPACE.m, perRow = Math.max(1, Math.floor((w - 2 * SPACE.m + actionGap) / (CONTROL.buttonXS.minW + actionGap)));
+  const actionGap = SPACE.m, rowFits = (tier) => actions.length * (tier.control.minW + actionGap) - actionGap <= w - 2 * SPACE.m;
+  // more than even the XXS row holds (a Mod's five): rows of XS bodies, as many a row as the panel holds at their minimum
+  const oneRow = ACTION_TIERS.find(rowFits), actionTier = oneRow ?? ACTION_TIERS[0], BTN = actionTier.control;
+  const ACTION_CLEAR = 2 * BTN.pad, ACTION_TEXT_H = BTN.h - 8;
+  const perRow = oneRow ? Math.max(1, actions.length) : Math.max(1, Math.floor((w - 2 * SPACE.m + actionGap) / (BTN.minW + actionGap)));
   const actionRows = actions.length ? Math.ceil(actions.length / perRow) : 0;
-  const actionsH = actionRows ? actionRows * CONTROL.buttonXS.h + (actionRows - 1) * actionGap : 0;
+  const actionsH = actionRows ? actionRows * BTN.h + (actionRows - 1) * actionGap : 0;
   const roomFor = (otherH, others) => content.h - titleH - otherH - actionsH - SPACE.m * (1 + others + (actions.length ? 1 : 0));
   const reference = side && fields.length ? boxHeight(fields.map((_, i) => (i === 0 && !options.truncate ? 3 : 1)), DETAILS.box) : 0;
   const texture = portraitTexture && clone(portraitTexture), native = texture?.widgets.find(widget => "texture" in widget);
@@ -855,13 +863,13 @@ export function detailsTree(it, title, fields, actions, portraitTexture = null, 
   // every row's bodies fitted together (one caption size for all the actions), each row centred
   const gap = actionGap, inRow = Math.min(perRow, Math.max(1, actions.length)), bw = (w - 2 * SPACE.m + gap) / inRow;
   const groups = Array.from({ length: actionRows }, (_, r) => actions.slice(r * perRow, (r + 1) * perRow).map(([caption]) => caption));
-  const rowFits = groups.map((captions) => NGUI.fitRow(captions, ACTION_CAPTION.fs, ACTION_CAPTION.min, captions.length * (bw - gap), ACTION_CLEAR, 2, { maxH: ACTION_TEXT_H }));
-  const shared = Math.min(ACTION_CAPTION.fs, ...rowFits.flat().map((f) => f.fs));
-  const fits = groups.flatMap((captions, r) => rowFits[r].some((f) => f.fs !== shared)
-    ? NGUI.fitRow(captions, shared, shared, captions.length * (bw - gap), ACTION_CLEAR, 2, { maxH: ACTION_TEXT_H }) : rowFits[r]);
+  const groupFits = groups.map((captions) => NGUI.fitRow(captions, actionTier.fs, actionTier.min, captions.length * (bw - gap), ACTION_CLEAR, 2, { maxH: ACTION_TEXT_H }));
+  const shared = Math.min(actionTier.fs, ...groupFits.flat().map((f) => f.fs));
+  const fits = groups.flatMap((captions, r) => groupFits[r].some((f) => f.fs !== shared)
+    ? NGUI.fitRow(captions, shared, shared, captions.length * (bw - gap), ACTION_CLEAR, 2, { maxH: ACTION_TEXT_H }) : groupFits[r]);
   const actionRow = { boxes: groups.flatMap((captions, r) => {
     const start = groups.slice(0, r).reduce((n, g) => n + g.length, 0);
-    return row(fits.slice(start, start + captions.length).map((f) => ({ w: f.width, h: CONTROL.buttonXS.h })),
+    return row(fits.slice(start, start + captions.length).map((f) => ({ w: f.width, h: BTN.h })),
       { x: SPACE.m, w: w - 2 * SPACE.m, gap, justify: "center" }).boxes.map((b) => ({ ...b, row: r }));
   }) };
   actions.forEach(([caption, , disabled, semantic = "secondary"], i) => {
@@ -870,7 +878,7 @@ export function detailsTree(it, title, fields, actions, portraitTexture = null, 
       const grey = Buttons.disable(node("Action", [0, 0], [], [body]));
       body = clone(find(grey, "BG (1)")); ink = find(grey, "Label_Locale").widgets[0].color;
     }
-    const bg = body.widgets.find(widget => "sprite" in widget), k = CONTROL.buttonXS.h / bg.h_;
+    const bg = body.widgets.find(widget => "sprite" in widget), k = BTN.h / bg.h_;
     body.name = "Body"; body.pos = [0, 0]; body.scale = [k, k]; resizeButton(body, fits[i].width / k);
     // a button however narrow the row makes it: the pre-release size tag marks it (owner, 2026-11-11)
     Object.assign(bg, { depth: 6, tier: "button", ...(!disabled ? { color: "#dbeef5/1.00" } : {}) });
@@ -884,7 +892,7 @@ export function detailsTree(it, title, fields, actions, portraitTexture = null, 
   // The actions stand on the panel's bottom, their solid art level with the list panel's (BL-133; every panel, owner
   // 2026-11-11).
   const pinned = actions.length && placed.h <= content.h;
-  if (pinned) placed.boxes.at(-1).y = content.y + content.h - actionsH + CONTROL.buttonXS.h * ACTION_SHADOW;
+  if (pinned) placed.boxes.at(-1).y = content.y + content.h - actionsH + BTN.h * ACTION_SHADOW;
   const tree = node("Details", [0, 0], [], kids);
   const placeInfo = (box, x = 0) => {
     const target = { ...box, x: x + box.x };
@@ -915,12 +923,13 @@ export function detailsTree(it, title, fields, actions, portraitTexture = null, 
   for (const box of placed.boxes) {
     if (box.name === "Portrait") {
       const portraitRow = row([{ w: side ? pictureW : pictureColumn.w, h: pictureH }, { w: infoW, h: infoStack.h }],
-        { x: side ? pictureColumn.x + (pictureColumn.w - pictureW) / 2 : 0, y: box.y, w, gap: SPACE.xl, align: side ? "center" : "start" }).boxes;
+        { x: side ? pictureColumn.x + (pictureColumn.w - pictureW) / 2 : 0, y: box.y, w, gap: SPACE.xl, align: "center" }).boxes;
       picture.pos = toNode(portraitRow[0], 4, frame);
-      const top = side ? portraitRow[1].y - box.y : 0;
+      // the name, chips and fields centred down the picture's height (owner, 2026-11-11, BL-176)
+      const top = portraitRow[1].y - box.y;
       for (const part of infoStack.boxes) placeInfo({ ...part, y: part.y + box.y + top }, infoColumn.x);
     } else if (box.name === "Actions") actionRow.boxes.forEach((action, i) => {
-      find(tree, `Act_${i}`).pos = toNode({ ...action, y: box.y + action.row * (CONTROL.buttonXS.h + gap) }, 4, frame);
+      find(tree, `Act_${i}`).pos = toNode({ ...action, y: box.y + action.row * (BTN.h + gap) }, 4, frame);
     });
     else if (["Title_Bg", "Picture"].includes(box.name)) find(tree, box.name).pos = toNode(box, 4, frame);
     else placeInfo(box);

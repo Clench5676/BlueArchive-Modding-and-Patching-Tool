@@ -694,7 +694,7 @@ test("switch detail actions retain the prefab pattern at every button width and 
       const path = `Details/Act_${i}/Body`, findPart = (p) => walk(prompt).find((e) => e.dataset.path === p);
       const body = findPart(path), corner = findPart(`${path}/Corner`), box = (el) =>
         ["left", "top", "width", "height"].map((key) => parseFloat(el.style[key]));
-      const [x, y, w, h] = box(body), [dx, dy, dw, dh] = box(corner), k = 104 / 177 * S; // the Sort prefab's 177-high body drawn at the XS height
+      const [x, y, w, h] = box(body), [dx, dy, dw, dh] = box(corner), k = (count < 4 ? 104 : 88) / 177 * S; // the Sort prefab's 177-high body drawn at the XS height, four on one XXS row (BL-176)
       near(x + w - dx - dw, 4 * k);
       near(dy - y, 6 * k);
       near(dw, 126 * k);
@@ -3758,7 +3758,9 @@ test("a 3D model's details fit the panel without scrolling", async () => {
     const tree = Popup.detailsTree(it, "3D Model Info", rows, actions.slice(0, n), null, "model", panel, { truncate: true });
     assert.ok(tree.contentHeight <= height + 1e-6, `${n} actions: ${tree.contentHeight} > ${height}`);
     sizes.add(NGUI.find(tree, "Picture").widgets[0].w_.toFixed(6));
-    bottoms.add(NGUI.find(tree, `Act_${n - 1}`).pos[1].toFixed(6));  // the last row (the actions in rows, BL-176)
+    // the last row's solid art (the actions in rows, BL-176; four on one XXS row, the others XS)
+    const bh = n === 4 ? 88 : 104;
+    bottoms.add((NGUI.find(tree, `Act_${n - 1}`).pos[1] - bh / 2 + bh * 14 / 176).toFixed(6));
     const picture = NGUI.find(tree, "Picture"), size = picture.widgets[0].w_, name = NGUI.find(tree, "Name");
     assert.equal(picture.widgets[0].h_, size);
     assert.ok(size >= 150, `picture ${size}`);
@@ -4366,8 +4368,8 @@ test("scrolling text viewer and picker heights retain their pre-fit viewports", 
   // the XL prefab's content box (885) over the XS footer (BL-176): the frames lose the old footer's padding (94)
   assert.equal(Frames.TEXT_VIEWER.h, 1259);
   assert.equal(Frames.TEXT_VIEWER.box.height, 885);
-  // a portrait strip's frame as high as its smaller cards need (PORTRAIT_SCALE, BL-176)
-  for (const [kind, height] of [[null, 1259], ["spr", 1330], ["lobby", 1259], ["model", 1259]])
+  // every list popup as high as the Hall's editors (POPUP_FRAME.panelH, owner 2026-11-11, BL-176)
+  for (const [kind, height] of [[null, 1450], ["spr", 1450], ["lobby", 1450], ["model", 1450]])
     for (const check of [false, true]) assert.equal(Popup.listLayout(check, kind).frame.h, height, String(kind));
 });
 

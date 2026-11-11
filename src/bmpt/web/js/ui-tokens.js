@@ -237,6 +237,7 @@ export const LINE = Object.freeze({ label: 1.15, stack: 1.375 });
 export const CONTROL = Object.freeze({
   badge: Object.freeze({ h: 54, fs: 34, pad: 16, minW: 220 }),             // List_01/TimeLimit/Bg 220 x 54
   chip: Object.freeze({ h: 72, fs: 40, pad: 20, minW: 272 }),              // CHIP
+  buttonXXS: Object.freeze({ h: 88, fs: 34, pad: 26, minW: 140 }),        // XS at 0.85 (BL-176: a details panel's row of four)
   buttonXS: Object.freeze({ h: 104, fs: 40, pad: 34, minW: 200 }),         // XS_BUTTON (glyphPad 68), the app's small button
   buttonS: Object.freeze({ h: 136, fs: 48, pad: 45, minW: 240 }),          // SMALL_BUTTON (glyphPad 90), the S preset
   buttonM: Object.freeze({ h: 162, fs: 60, pad: 45, minW: 348 }),          // List_01/Btn_Receive 348 x 162
@@ -274,6 +275,8 @@ export const POPUP_FRAME = Object.freeze({
   // button, UIPopup_ClientVersion's 1115 x 786, kept far more padding than the owner wants)
   minH: 170 + POPUP_FOOTER.clearance,
   maxH: 1560,
+  // the panel popups' height (owner, 2026-11-11, BL-176): the Hall's editors and the list popups share one outline
+  panelH: 1450,
   S: Object.freeze({ w: 1300, h: 1050 }),
   M: Object.freeze({ w: 1540, h: 1073 }),
   L: Object.freeze({ w: 2098, h: 1110 }),

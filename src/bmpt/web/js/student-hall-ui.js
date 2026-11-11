@@ -7,6 +7,7 @@ import * as Buttons from "./game-buttons.js";
 import { searchTree, orderBody, toolbarLayout, toolbarTree } from "./roster-widgets.js";
 import { clone, S, hitButton } from "./util.js";
 import { T } from "./i18n.js";
+import { spriteUrl } from "./api.js";
 import { bindScale } from "./student-hall-scale.js";
 import { POPUP, POPUP_FRAME, XS_BUTTON, CONTROL, TYPE, SPACE, captionMinimum } from "./ui-tokens.js";
 import { stack as layoutStack } from "./ui-grid.js";
@@ -67,7 +68,7 @@ export function createModal(title, onClose, { level = 0 } = {}) {
       held.forEach(([el, inert]) => { if (el.isConnected) el.inert = inert; });
       if (previous?.isConnected && !previous.inert) previous.focus?.();
     },
-    async draw(build, actions = [], { width = POPUP_FRAME.L.w, height = 1450, retainedFooter = false, compactFooter = false, titleCentre = null, captionSite = "hall.modal", align = "center" } = {}) {
+    async draw(build, actions = [], { width = POPUP_FRAME.L.w, height = POPUP_FRAME.panelH, retainedFooter = false, compactFooter = false, titleCentre = null, captionSite = "hall.modal", align = "center" } = {}) {
       drawing?.abort(); const nextDrawing = new AbortController(); drawing = nextDrawing;
       const drawSignal = nextDrawing.signal, token = ++revision;
       const cancelled = new Promise((resolve) => drawSignal.addEventListener("abort", resolve, { once: true }));
@@ -183,8 +184,8 @@ export const WIDE = Object.freeze({ left: 960 - POPUP_FRAME.L.w * S / 2 + SPACE.
 export const BACKGROUND = Object.freeze({ list: 600, scale: .32, pitch: [296, 186], first: [152, 88], caption: 46 });
 // the list from SPACE.l under the header band down to SPACE.xl over the footer (BL-176: the footer's clearance); the
 // preview level with its top
-const backgroundTop = () => frameTop(1450) + HEADER_H * S + SPACE.l * S;
-const backgroundBottom = () => 540 - (Popup.footerTop(1450, 2) + SPACE.xl) * S;
+const backgroundTop = () => frameTop(POPUP_FRAME.panelH) + HEADER_H * S + SPACE.l * S;
+const backgroundBottom = () => 540 - (Popup.footerTop(POPUP_FRAME.panelH, 2) + SPACE.xl) * S;
 export const backgroundPickerBox = () => [WIDE.left + WIDE.width - BACKGROUND.list, backgroundTop(), BACKGROUND.list, backgroundBottom() - backgroundTop()];
 export function backgroundPreviewBox() {
   const left = WIDE.left, width = WIDE.width - BACKGROUND.list - SPACE.l * S, height = 1080 * width / 1920;
@@ -364,19 +365,22 @@ export const MEMORIAL_QUEUE_PITCH = (720 + 405 * Math.tan(Math.PI / 18)) * QUEUE
 // the trash button over a queue card's top right corner (a 40 px square inside the inclined art)
 export const queueTrashBox = (pitch) => [pitch / 2 + 360 * QUEUE.scale + 405 * QUEUE.scale * Math.tan(Math.PI / 18) / 2 - 52, QUEUE.y - 405 * QUEUE.scale / 2 + 8, 40, 40];
 // A trash button: shown while the pointer is over its host, grey, red while the pointer is over it; a click asks the caller
-// (owner, 2026-11-11, BL-176). The game has no trash icon, so it is a plain drawn can in the game's grey and red.
-export const TRASH = Object.freeze({ grey: "#8a96a3", red: "#e0474c" });
-const TRASH_SVG = (colour) => `<svg viewBox="0 0 24 24" width="100%" height="100%" aria-hidden="true"><g fill="none" stroke="${colour}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16"/><path d="M9 7V4.5h6V7"/><path d="M6.5 7l1 13h9l1-13"/><path d="M10 11v6M14 11v6"/></g></svg>`;
+// (owner, 2026-11-11, BL-176). The icon is the Hall's own Remove (CCG_Icon_Dump), its shape a mask over the colour.
+export const TRASH = Object.freeze({ grey: "#8a96a3", red: "#e0474c", atlas: "CardGame", sprite: "CCG_Icon_Dump" });
 export async function trashButton(host, name, label, [x, y, width, height], action) {
   const hit = hitButton(host, [x, y, width, height], action, label, 96);
   hit.dataset.action = "hall-trash";
   Object.assign(hit.style, { visibility: "hidden", background: "rgba(255,255,255,.9)", borderRadius: `${8 * S}px`, padding: `${6 * S}px`, boxSizing: "border-box" });
-  hit.innerHTML = TRASH_SVG(TRASH.grey);
+  const icon = document.createElement("span");
+  const mask = `url("${spriteUrl(TRASH.atlas, TRASH.sprite)}") center / contain no-repeat`;
+  Object.assign(icon.style, { display: "block", width: "100%", height: "100%", background: TRASH.grey, mask, webkitMask: mask });
+  icon.setAttribute("aria-hidden", "true");
+  hit.replaceChildren(icon);
   const show = (on) => { hit.style.visibility = on ? "visible" : "hidden"; };
   host.addEventListener("pointerenter", () => show(true));
   host.addEventListener("pointerleave", () => show(false));
-  hit.addEventListener("pointerenter", () => { hit.innerHTML = TRASH_SVG(TRASH.red); });
-  hit.addEventListener("pointerleave", () => { hit.innerHTML = TRASH_SVG(TRASH.grey); });
+  hit.addEventListener("pointerenter", () => { icon.style.background = TRASH.red; });
+  hit.addEventListener("pointerleave", () => { icon.style.background = TRASH.grey; });
   hit.addEventListener("focus", () => show(true));
   hit.addEventListener("blur", () => show(false));
   return hit;
