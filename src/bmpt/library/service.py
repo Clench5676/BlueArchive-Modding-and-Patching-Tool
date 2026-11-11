@@ -3588,12 +3588,19 @@ class ModLibrary:
     def _kept_for_configuration(self, name: str, config: dict | None, pins: list[Pin]) -> bool:
         """Whether a configured entry keeps the original of a name: its game file of that name exists in that
         install, and the configured source may write non-official bytes there (no record there shows the configured
-        source leaving that part official). When unsure, the original stays."""
+        source leaving that part official). When unsure, the original stays. While troubleshooting (BL-185), the
+        configuration saved to restore keeps its originals too: releasing them all would be a long pass for nothing."""
         core = core_of(name)
+        saved = (config or {}).get("troubleshoot")
+        saved = saved.get("folders") if isinstance(saved, dict) else None
+        saved = saved if isinstance(saved, dict) else {}
         for pin in pins:
             slot = self._core_map(pin).slot(core)
             entry = ((((config or {}).get("folders") or {}).get(pin.key) or {}).get("configured") or {}).get(slot)
             if not entry:
+                kept = saved.get(pin.key)
+                entry = kept.get(slot) if isinstance(kept, dict) else None
+            if not isinstance(entry, dict) or not isinstance(entry.get("source"), str):
                 continue
             path = next((path for path in self._index(pin).get(core, []) if path.name == name), None)
             if path is None:
