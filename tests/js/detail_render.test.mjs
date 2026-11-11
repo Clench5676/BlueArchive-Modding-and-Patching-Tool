@@ -2299,6 +2299,75 @@ test("variant chips are 272 x 72 with the caption at 40 down to 28, the second c
   } finally { Detail.hide(); await flush(); t.mock.timers.reset(); setStrings("en-US", localeTable("en-US")); }
 });
 
+// --- BL-153: the chips are drawn in their own layer, in Char_Target's frame read from the prefab; with the plate where
+// the game puts it they stay in the white panel under the dark band, whatever the name and the language ---
+test("variant chips stay under the nameplate's band, in the plate's prefab frame, for short and long names in every locale", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  // UICharacterDetail of the 2026-11 game build: LeftInfo at (0, 1) and CharInfo at (-1480, -743) put Char_Target at
+  // (-1480, -742); its BG (906 x 171, bottom-left pivot) ends at y 226 and BG2 (886 x 202, top-centre pivot) starts at 234
+  const leftInfo = add("LeftInfo"), charInfo = add("LeftInfo/CharInfo"), plate = add(PLATE), band = add(`${PLATE}/BG`);
+  const before = { left: leftInfo.pos, info: charInfo.pos, band: band.pos, body: { ...band.widgets[0] } };
+  const panel = node("BG2");
+  panel.pos = [514, 234];
+  panel.widgets = [{ sprite: "Common_Bg_Raius10px", w_: 886, h_: 202, pivot: 1, incline: 10, color: "#ffffff/0.80" }];
+  leftInfo.pos = [0, 1]; charInfo.pos = [-1480, -743]; band.pos = [71, 226];
+  Object.assign(band.widgets[0], { w_: 906, h_: 171, pivot: 6, incline: 10 });
+  plate.children.push(panel);
+  const names = {
+    "en-US": ["Azusa", "Shiroko*Terror", "Hoshino (First Year, School Swimsuit) and Friends"],
+    "zh-CN": ["梓", "白子（恐怖）", "星野（一年级，学校泳装）星野（一年级，学校泳装）"],
+    "zh-TW": ["梓", "白子（恐怖）", "星野（一年級，學校泳裝）星野（一年級，學校泳裝）"],
+    "ja-JP": ["アズサ", "シロコ＊テラー", "ホシノ（1年生、スクール水着）ホシノ（1年生、スクール水着）"],
+    "ko-KR": ["아즈사", "시로코*테러", "호시노(1학년, 학교 수영복) 호시노(1학년, 학교 수영복)"],
+    "th-TH": ["อาซึสะ", "ชิโรโกะ*เทอร์เรอร์", "โฮชิโนะ (ปีหนึ่ง, ชุดว่ายน้ำโรงเรียน) โฮชิโนะ (ปีหนึ่ง, ชุดว่ายน้ำโรงเรียน)"],
+  };
+  const nameKey = { "en-US": "en", "zh-CN": "zh-CN", "zh-TW": "zh-TW", "ja-JP": "ja", "ko-KR": "ko", "th-TH": "th" };
+  const eps = 0.02, bottom = (r) => r[1] + r[3];
+  const part = (host, suffix, text) => walk(host).find((e) => e.dataset.path?.endsWith(suffix) && !!e.style.fontSize === text);
+  try {
+    for (const [lang, own] of Object.entries(names)) {
+      setStrings(lang, localeTable(lang));
+      for (const [i, name] of own.entries()) for (const aliased of [false, true]) {
+        family = modFamily();
+        family.variants[0].names = { [nameKey[lang]]: { full: name, short: name } };
+        family.variants[0].custom = aliased ? [name] : [];
+        family.variants.push(...Array.from({ length: 5 }, (_, k) => ({
+          key: `skin_${k}`, spr: `skin_${k}_spr`, order: k + 1, recruitable: true, modList: [], custom: [],
+          names: { en: { full: `Variant ${k}`, short: `Skin ${k}` } },
+        })));
+        await showPortrait(t);
+        const where = `${lang}, ${aliased ? "alias " : ""}"${name}"`;
+        const dark = NGUI.rect(part(hosts.ngui, `${PLATE}/BG`, false)), white = NGUI.rect(part(hosts.ngui, `${PLATE}/BG2`, false));
+        const chips = walk(hosts["ngui-chips"]).filter((e) => /\/Chip_[^/]+$/.test(e.dataset.path || "")).map((e) => NGUI.rect(e));
+        assert.ok(chips.length >= 4, `${where}: two rows of chips are drawn`);
+        for (const chip of chips) {
+          assert.ok(chip[1] >= bottom(dark) - eps, `${where}: a chip (top ${chip[1]}) reaches into the dark band (bottom ${bottom(dark)})`);
+          assert.ok(chip[1] >= white[1] - eps && bottom(chip) <= bottom(white) + eps, `${where}: the chips stay in the white panel`);
+        }
+        // the name lines and the pencil stay inside the dark band
+        for (const suffix of ["Label_Name", "Label_OriginalName"]) {
+          const label = part(hosts.ngui, `${PLATE}/${suffix}`, true);
+          if (!label) { assert.equal(suffix === "Label_OriginalName" && !aliased, true, `${where}: ${suffix} drawn`); continue; }
+          const r = NGUI.rect(label);
+          assert.ok(r[1] >= dark[1] - eps && bottom(r) <= bottom(dark) + eps, `${where}: ${suffix} inside the band`);
+        }
+        const pencil = NGUI.rect(part(hosts.ngui, `${PLATE}/Char_AliasBtn`, false));
+        assert.ok(pencil[1] >= dark[1] - eps && bottom(pencil) <= bottom(dark) + eps, `${where}: the pencil inside the band`);
+        // a name that fits is drawn whole; only one longer than the room ends in an ellipsis
+        const main = part(hosts.ngui, `${PLATE}/Label_Name`, true);
+        assert.equal(main.getAttribute("aria-label"), name);
+        assert.equal(main.children[0]?.style.textOverflow === "ellipsis", i === 2, `${where}: ellipsis only for the long name`);
+        Detail.hide(); await flush();
+      }
+    }
+  } finally {
+    Detail.hide(); await flush(); t.mock.timers.reset(); setStrings("en-US", localeTable("en-US"));
+    Object.assign(leftInfo, { pos: before.left }); Object.assign(charInfo, { pos: before.info });
+    band.pos = before.band; band.widgets[0] = before.body;
+    plate.children.splice(plate.children.indexOf(panel), 1);
+  }
+});
+
 test("incomplete mods use the existing card and popup status widgets in all locales", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   try {

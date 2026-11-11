@@ -611,7 +611,7 @@ function screenTree() {
   at(t, `${INFO}/Equip`).children.push(box);
 
   // nameplate: favourite pin, name, the white panel for the variant chips; no stars, level, heart, squad or terrain
-  const np = "LeftInfo/CharInfo/Char_Target";
+  const np = PLATE_PATH;
   off(t, `${np}/Icon_Star`, `${np}/Text_Lv`, `${np}/FavorBG`, `${np}/SquadType`, `${np}/Type`, `${np}/Terrain`, `${np}/Char_ProfileBtn`);
   const fav = isFav(v);
   at(t, `${np}/Pin/Pin_On`).active = fav;
@@ -1113,19 +1113,31 @@ function chipBoxes(chips) {
   }).boxes);
   return chips.map(chip => ({ ...chip, box: { ...slots[chip.row][chip.col], w: CHIP_W + (chip.span - 1) * CHIP_PITCH } }));
 }
+// Char_Target's frame in the screen: the prefab's offsets down to it, summed as NGUI.render does. The chips are drawn in
+// their own layer and take the plate's frame from the layout, so they stay in its white panel wherever the game puts it.
+const PLATE_PATH = "LeftInfo/CharInfo/Char_Target";
+function plateFrame(list) {
+  let x = list.pos[0], y = list.pos[1], sx = list.scale?.[0] ?? 1, sy = list.scale?.[1] ?? 1, at = list;
+  for (const name of PLATE_PATH.split("/")) {
+    at = at.children.find((k) => k.name === name);
+    x += at.pos[0] * sx; y += at.pos[1] * sy;
+    sx *= at.scale?.[0] ?? 1; sy *= at.scale?.[1] ?? 1;
+  }
+  return { pos: [x, y], scale: [sx, sy] };
+}
 function renderChips() { return drawChips().catch(renderFailed); }
 async function drawChips() {
   const my = ++chipToken, gen = showGen;
   const ok = () => showable("chips", my, chipToken, gen);
   const host = $("ngui-chips");
-  // Char_Target sits at (-1480, -720); BG2 (886 x 202, top-centre at 514, 234, sheared about its centre) holds the chips
-  const chips = chipLayout();
-  const tree = node("Chips", [-1480, -720], [], chipBoxes(chips).map(({ v, more, box }) => {
+  // BG2 (886 x 202, top-centre at 514, 234 in Char_Target, sheared about its centre) holds the chips
+  const chips = chipLayout(), plate = plateFrame(layouts.list);
+  const tree = node("Chips", plate.pos, [], chipBoxes(chips).map(({ v, more, box }) => {
     const pos = toNode(box, 4, LOCAL_FRAME), w = box.w;
     return v
       ? chipNode(`Chip_${v.key}`, pos, w, shortName(v), v.key === variantKey, shownSource(v) !== "self", v.recruitable, hasFresh(v))
       : chipNode("Chip_more", pos, w, T("chips.more", { n: more }), false, false, false);
-  }));
+  }), plate.scale);
   const next = document.createDocumentFragment();
   const view = await NGUI.render(tree, next, { scale: S, origin: ORIGIN, z: 20, deferImages: true });
   if (my === chipToken) {
