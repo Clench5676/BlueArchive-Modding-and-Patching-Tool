@@ -20,10 +20,11 @@ import hashlib
 import json
 import logging
 import threading
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Iterable, Mapping
+from typing import Any, Iterable, Iterator, Mapping
 
 import numpy as np
 from PIL import Image
@@ -124,6 +125,8 @@ class RigArchive:
         self._lock = threading.Lock()
         self._data: dict[str, Any] | None = None
         self._generation = 0
+        self._deferring = 0  # open deferred() blocks: the index is written when the last one ends
+        self._dirty = False
 
     def _load(self) -> dict[str, Any]:
         if self._data is None:
@@ -140,7 +143,25 @@ class RigArchive:
         return self._data
 
     def _save(self) -> None:
+        if self._deferring:
+            self._dirty = True
+            return
         atomic_json(self.folder / "index.json", self._load())
+        self._dirty = False
+
+    @contextmanager
+    def deferred(self) -> Iterator[None]:
+        """Write the index once, at the end of the block, instead of at every rig kept (BL-183: the startup archive
+        wrote its whole index, megabytes by the end, once per portrait). The kept files are written as they come."""
+        with self._lock:
+            self._deferring += 1
+        try:
+            yield
+        finally:
+            with self._lock:
+                self._deferring -= 1
+                if not self._deferring and self._dirty:
+                    self._save()
 
     @staticmethod
     def _rig(core: str, item: Any) -> Rig | None:

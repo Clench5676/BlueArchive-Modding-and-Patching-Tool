@@ -75,6 +75,8 @@ SAVE_EVERY = (10, 2.0)  # a toggle saves its unfinished list every 10 entries or
 BUILT_TEMP_MAX_AGE = 60 * 60  # seconds before an abandoned built copy can be cleared
 COSTUME_PREVIEWS = 4  # costume previews kept in built/previews (one folder per build signature)
 COSTUME_VERDICTS = 4000  # costume verdicts kept in costume-verdicts.json, newest first
+# the startup rig archive (archive_rigs) works only once no other caller used the library for this long (BL-183)
+RIG_ARCHIVE_QUIET = 1.0
 RECOVERY_RETRY = 60.0  # seconds before a read tries a recovery that failed (or waits) again, if the journals stay
 # a toggle's refusals that stop it: every later write would fail the same way
 STOPPING = ("game_running", "game_status_unavailable", "steam_busy", "folder_changed", "classic_open", "untested_build")
@@ -89,6 +91,37 @@ def _game_folder(game_file: Path) -> Path:
         if len(folder.parts) > len(parts) and tuple(part.lower() for part in folder.parts[-len(parts):]) == parts:
             return Path(*folder.parts[:-len(parts)])
     return folder
+
+
+# set on a thread while it does background work that steps aside for everyone else (archive_rigs)
+_background = threading.local()
+
+
+class _LibraryLock:
+    """The library's lock (re-entrant) that notes when any caller but background work (``_background``) last took or
+    gave it back: what background work steps aside for (``ModLibrary._yield_to_foreground``, BL-183)."""
+
+    def __init__(self) -> None:
+        self._lock = threading.RLock()
+        self.used = 0.0  # time.monotonic() of the last foreground acquire or release
+
+    def _note(self) -> None:
+        if not getattr(_background, "on", False):
+            self.used = time.monotonic()
+
+    def acquire(self, blocking: bool = True, timeout: float = -1) -> bool:
+        self._note()
+        return self._lock.acquire(blocking, timeout)
+
+    def release(self) -> None:
+        self._lock.release()
+        self._note()
+
+    def __enter__(self) -> bool:
+        return self.acquire()
+
+    def __exit__(self, *exc: Any) -> None:
+        self.release()
 
 
 def _serialized(method: Callable) -> Callable:
@@ -622,7 +655,7 @@ class ModLibrary:
         self.data_id = data_id
         self._scan_allowed_input = scan_allowed
         self._write_check = write_check
-        self._lock = threading.RLock()
+        self._lock = _LibraryLock()
         self._hashes = Fingerprints()
         self._steam_files = steam_files if steam_files is not None else steam_records.OfficialFiles()
         self._steam_roots_cache: tuple[float, list[Path]] | None = None
@@ -4038,8 +4071,10 @@ class ModLibrary:
         """Keep the official rig of every portrait of an install (default the current one) in the archive
         (``rig_archive``): its atlas and skeleton with its pages' alpha masks, from verified official copies only, each
         distinct rig once. Done again only when the install's portrait files changed (their names carry their CRC).
-        With the scan consent only, a core at a time under the library lock, yielding to foreground previews. Returns
-        how many rigs it kept; a core that cannot be read is skipped. Never raises."""
+        With the scan consent only, a core at a time under the library lock, each once nothing else used the library
+        for ``RIG_ARCHIVE_QUIET`` (BL-183: page changes, previews and mod switches never queue behind it). Returns how
+        many rigs it kept; a core that cannot be read is skipped. Never raises."""
+        _background.on = True
         try:
             pin = pin or self.current_pin()
             if pin is None or not self._scan_allowed():
@@ -4052,18 +4087,38 @@ class ModLibrary:
                                      .encode()).hexdigest()
             if self.rigs.stamp(pin.key) == stamp:
                 return 0
-            kept = 0
-            for core in cores:
-                if cancel and cancel():
-                    return kept
-                preview_gate.yield_to_previews(cancel)
-                kept += self._archive_core(core, pin)
-            self.rigs.set_stamp(pin.key, stamp)
+            kept, waited = 0, 0.0
+            with self.rigs.deferred():
+                try:
+                    for core in cores:
+                        preview_gate.yield_to_previews(cancel)
+                        wait = self._yield_to_foreground(cancel)
+                        if wait is None:
+                            return kept
+                        waited += wait
+                        kept += self._archive_core(core, pin)
+                finally:
+                    spans.record("library.rigs.yield", waited)
+                self.rigs.set_stamp(pin.key, stamp)
             logger.info("Rig archive: %d portrait rigs kept of %d cores", kept, len(cores))
             return kept
         except Exception as error:  # never in the way of the program; the next start tries again
             log_failure(logger, logging.WARNING, "Could not keep the official portrait rigs", error)
             return 0
+        finally:
+            _background.on = False
+
+    def _yield_to_foreground(self, cancel: Callable[[], bool] | None) -> float | None:
+        """Wait until no other caller used the library's lock for ``RIG_ARCHIVE_QUIET`` seconds: how long it waited, None
+        once cancelled."""
+        started = time.monotonic()
+        while True:
+            if cancel is not None and cancel():
+                return None
+            quiet = time.monotonic() - self._lock.used
+            if quiet >= RIG_ARCHIVE_QUIET:
+                return time.monotonic() - started
+            time.sleep(min(0.1, RIG_ARCHIVE_QUIET - quiet))
 
     @_serialized
     def _archive_core(self, core: str, pin: Pin) -> int:

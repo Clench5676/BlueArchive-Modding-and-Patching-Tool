@@ -78,3 +78,23 @@ def test_an_unreadable_index_is_an_empty_archive(tmp_path):
     (tmp_path / "rigs" / "index.json").write_text(json.dumps({"version": 1, "rigs": {"test_spr": [{"atlas": "x"}, 5]},
                                                               "stamps": {}}))
     assert archive.RigArchive(tmp_path / "rigs").rigs("test_spr") == []
+
+
+def test_a_deferred_block_writes_the_index_once_at_its_end(tmp_path, monkeypatch):
+    store = archive.RigArchive(tmp_path / "rigs")
+    mask = {"page": archive.alpha_mask(page([(0, 0, 32, 32)]))}
+    writes = []
+    real = archive.atomic_json
+    monkeypatch.setattr(archive, "atomic_json", lambda path, data: (writes.append(path), real(path, data)))
+    with store.deferred():
+        for i in range(3):
+            assert store.add(f"c{i}_spr", "Test.atlas", f"atlas {i}".encode(), "Test.skel", f"skel {i}".encode(),
+                             "layout", mask)
+        store.set_stamp("install", "stamp")
+        assert writes == [] and len(store.rigs("c2_spr")) == 1  # kept in memory meanwhile
+    assert len(writes) == 1
+    again = archive.RigArchive(tmp_path / "rigs")
+    assert again.stamp("install") == "stamp" and all(len(again.rigs(f"c{i}_spr")) == 1 for i in range(3))
+    with store.deferred():
+        pass
+    assert len(writes) == 1  # nothing kept, nothing written
