@@ -17,7 +17,6 @@ from bmpt.errors import ServiceError
 from .utils import apply_crc_fix, compute_crc32, no_log, throttle_progress
 from .spine import SkelConverter, check_skel_animation_diff
 from .naming import RESOURCE_TYPES_NUM, parse_filename, ParsedFilename
-from .asset import find_stream_refs, collect_stream_companions, rewrite_stream_ref_prefixes
 from .models import (
     AssetKey, AssetContent, AssetType, Patch, KeyFunc,
     NameTypeKey, ContNameTypeKey, MatchStrategy, LogFunc,
@@ -50,65 +49,6 @@ class BundleFileInfo:
 
 # 流式引用辅助（STREAM_REF_* / find_stream_refs / rewrite_stream_ref_prefixes /
 # collect_stream_companions / install_raw_content）已迁移至 asset.py
-
-
-class UpdateScope:
-    """Counterparts in the new release, shared by preflight and execution."""
-
-    def __init__(self, targets: list["Bundle"], strategy: MatchStrategy, asset_types: set[str]):
-        key_of = Bundle._get_key_func(strategy)
-        self.counterparts: dict[AssetKey, list[tuple["Bundle", object]]] = {}
-        self.not_transferred: set[AssetKey] = set()
-        self.unchanged: set[AssetKey] = set()
-        for target in targets:
-            for obj in target.env.objects:
-                if obj.type in REPLACEABLE_ASSET_TYPES and ("ALL" in asset_types or obj.type.name in asset_types):
-                    key = key_of(obj)
-                    if key is not None:
-                        self.counterparts.setdefault(key, []).append((target, obj))
-
-    def includes(self, key: AssetKey) -> bool:
-        if key in self.counterparts:
-            return True
-        self.not_transferred.add(key)
-        return False
-
-    @staticmethod
-    def serialized(bundle: "Bundle", obj) -> tuple[bytes, dict[str, bytes]]:
-        raw = obj.get_raw_data()
-        companions = collect_stream_companions(raw, bundle.env.file)
-        if companions is None:
-            raise ValueError(t("webui.error.required_asset_stream_missing"))
-        # Compare the object's own stream range when metadata can be read without decoding it.
-        try:
-            data = obj.read()
-            stream = getattr(data, "m_StreamData", None)
-            resource = getattr(data, "m_Resource", None)
-        except Exception:
-            stream = resource = None
-        ranges = []
-        if stream and stream.path:
-            ranges.append((stream.path, stream.offset, stream.size))
-        if resource and resource.m_Source:
-            ranges.append((resource.m_Source, resource.m_Offset, resource.m_Size))
-        for path, offset, size in ranges:
-            name = path.replace("\\", "/").rsplit("/", 1)[-1]
-            payload = companions.get(name)
-            if payload is None or offset < 0 or size < 0 or offset + size > len(payload):
-                raise ValueError(t("webui.error.required_asset_stream_missing"))
-            companions[name] = payload[offset:offset + size]
-        return raw, companions
-
-    def skip_unchanged(self, source: "Bundle", obj, key: AssetKey) -> bool:
-        try:
-            content = self.serialized(source, obj)
-            if all(content == self.serialized(target, counterpart)
-                   for target, counterpart in self.counterparts[key]):
-                self.unchanged.add(key)
-                return True
-        except Exception:
-            pass  # Unproven equality must retain the original extraction failure.
-        return False
 
 
 def get_cab_names(bundle_path: Path) -> set[str] | None:
@@ -542,6 +482,7 @@ class Bundle:
         applied_assets_log = []
         matched_keys: list[AssetKey] = []
         anim_diffs: dict[str, list[str]] = {}
+        skipped_keys: list[AssetKey] = []
         ctx = ApplyContext(env=self.env, anim_check=anim_check, log=self.log)
 
         tasks = {key: value for key, value in patch.items() if key != "__mode__"}
@@ -571,6 +512,7 @@ class Bundle:
                     if not outcome.applied:
                         self.log(f'  ⏭️ {t("log.replace_skipped_same_content", type=obj.type.name, name=resource_name)}')
                         skipped_count += 1
+                        skipped_keys.append(asset_key)
                         continue
 
                     if outcome.missing_anims:
@@ -598,6 +540,7 @@ class Bundle:
             unmatched_keys=list(tasks.keys()),
             matched_keys=matched_keys,
             anim_diffs=anim_diffs,
+            skipped_keys=skipped_keys,
         )
 
     def extract_patch(
@@ -605,7 +548,7 @@ class Bundle:
         asset_types_to_replace: set[ReplaceAssetType],
         match_strategy: MatchStrategy = 'path_id',
         spine_options: SkelConvertOptions | None = None,
-        *, scope: UpdateScope | None = None,
+        *, scope=None,
     ) -> tuple[Patch, list[SkelVersionConflict]]:
         """
         从当前 Bundle 提取资源，生成补丁。
@@ -614,6 +557,7 @@ class Bundle:
             asset_types_to_replace: 要替换的资源类型集合（如 {"Texture2D", "TextAsset", "Mesh"} 或 {"ALL"}）
             match_strategy: 匹配策略，用于生成资源键
             spine_options: Spine 资源版本检测与转换选项
+            scope: the App's counterpart filter (``includes``, ``counterparts``, ``skip_unchanged``), or None
 
         Returns:
             (资源补丁 { asset_key: content }, skel 版本冲突列表)

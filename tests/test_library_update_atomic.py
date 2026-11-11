@@ -7,10 +7,10 @@ import json
 
 import pytest
 
-from ba_modding_toolkit import core
 from bmpt.errors import ServiceError
 from bmpt.library import service
-from ba_modding_toolkit.models import FilePair, ModUpdateResult
+from ba_modding_toolkit.models import FilePair
+from bmpt.library.rebuild import RebuildResult
 
 from test_library import game_bundle, header_bundle, make_mod, reload_library, setup_library
 
@@ -39,9 +39,9 @@ def two_part_mod(setup_library, monkeypatch):
     def rebuild(sources, current, output, *args, **kwargs):
         result = output / current[0].name
         result.write_bytes(header_bundle(b"rebuilt " + current[0].name.encode()[-20:]))
-        return ModUpdateResult(True, "updated", [FilePair(result, current[0])])
+        return RebuildResult(True, "updated", [FilePair(result, current[0])])
 
-    monkeypatch.setattr(core, "process_mod_update", rebuild)
+    monkeypatch.setattr(service, "rebuild", rebuild)
     env.entry, env.directory, env.old = entry, directory, old
     env.record = raw_record(env, entry.id)
     return env
@@ -134,15 +134,15 @@ def test_a_split_update_interrupted_after_a_new_part_removes_it(setup_library, m
     env.original.unlink()
     for part in ("002", "003"):
         game_bundle(env.game_dir, part=part, date="2026-10-01", payload=part.encode())
-    from ba_modding_toolkit import mod_install
+    from ba_modding_toolkit.core import mod_install
     monkeypatch.setattr(mod_install, "asset_match", lambda sources, candidates, log: (candidates, ""))
 
     def rebuild(sources, current, output, *args, **kwargs):
         result = output / current[0].name
         result.write_bytes(header_bundle(b"split " + current[0].name.encode()[-12:]))
-        return ModUpdateResult(True, "updated", [FilePair(result, current[0])])
+        return RebuildResult(True, "updated", [FilePair(result, current[0])])
 
-    monkeypatch.setattr(core, "process_mod_update", rebuild)
+    monkeypatch.setattr(service, "rebuild", rebuild)
     copy = service.atomic_copy
 
     def copying(source, target):
@@ -170,9 +170,9 @@ def test_only_the_newest_previous_copy_is_kept(two_part_mod, monkeypatch):
     def again(sources, current, output, *args, **kwargs):
         result = output / current[0].name
         result.write_bytes(header_bundle(b"again " + current[0].name.encode()[-20:]))
-        return ModUpdateResult(True, "updated", [FilePair(result, current[0])])
+        return RebuildResult(True, "updated", [FilePair(result, current[0])])
 
-    monkeypatch.setattr(core, "process_mod_update", again)
+    monkeypatch.setattr(service, "rebuild", again)
     second = env.library.update(env.entry.id)
     folders = list((env.directory / "previous").iterdir())
     assert folders == [second.previous[0].parent]
@@ -194,13 +194,13 @@ def test_the_update_publishes_under_the_mod_writer_and_refuses_changed_files(two
         env.library.update(env.entry.id)
     assert seen and all(seen)
     current = {path.name: path.read_bytes() for path in env.directory.glob("*.bundle")}
-    rebuild = core.process_mod_update
+    rebuild = service.rebuild
 
     def changing(sources, targets, output, *args, **kwargs):
         sources[0].write_bytes(header_bundle(b"changed meanwhile"))
         return rebuild(sources, targets, output, *args, **kwargs)
 
-    monkeypatch.setattr(core, "process_mod_update", lambda *args, **kwargs: changing(*args, **kwargs))
+    monkeypatch.setattr(service, "rebuild", lambda *args, **kwargs: changing(*args, **kwargs))
     with pytest.raises(ServiceError, match="entry_changed"):
         env.library.update(env.entry.id)
     assert not journals(env)

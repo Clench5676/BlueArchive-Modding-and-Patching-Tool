@@ -9,10 +9,10 @@ import json
 import pytest
 from PIL import Image
 
-from ba_modding_toolkit import core
-from ba_modding_toolkit.models import FilePair, ModUpdateResult
+from ba_modding_toolkit.models import FilePair
+from bmpt.library.rebuild import RebuildResult
 from bmpt import atlas_remap as remap
-from bmpt.library import fingerprint
+from bmpt.library import fingerprint, service
 from bmpt.library.integrity import inspect as inspect_bundle
 
 from rebake_geometry import geometry as rig_geometry
@@ -231,15 +231,14 @@ def test_update_tells_what_the_official_rig_gained_and_keeps_the_layout_of_the_t
     def update(sources, targets, output, *args, **kwargs):
         result = output / targets[0].name
         result.write_bytes(header_bundle(b"updated!"))
-        return ModUpdateResult(True, "updated", [FilePair(result, targets[0])])
+        return RebuildResult(True, "updated", [FilePair(result, targets[0])])
 
-    monkeypatch.setattr(core, "process_mod_update", update)
+    monkeypatch.setattr(service, "rebuild", update)
     result = env.library.update(entry.id)
     assert result.rig == {"animations": {"Test.skel": ["00"]}}
     assert result.to_json()["rig"] == {"animations": {"Test.skel": ["00"]}}
     # an update that changes nothing says it too
-    monkeypatch.setattr(core, "process_mod_update",
-                        lambda *args, **kwargs: ModUpdateResult(True, "all_targets_unchanged", []))
+    monkeypatch.setattr(service, "rebuild", lambda *args, **kwargs: RebuildResult(True, "", [], all_unchanged=True))
     again = env.library.update(entry.id)
     assert again.unchanged and again.rig == {"animations": {"Test.skel": ["00"]}}
 
@@ -256,9 +255,9 @@ def test_update_carries_the_layout_texture_only_files_follow(spine, monkeypatch)
     def update(sources, targets, output, *args, **kwargs):
         result = output / targets[0].name
         result.write_bytes(header_bundle(b"rebuilt!"))
-        return ModUpdateResult(True, "updated", [FilePair(result, targets[0])])
+        return RebuildResult(True, "updated", [FilePair(result, targets[0])])
 
-    monkeypatch.setattr(core, "process_mod_update", update)
+    monkeypatch.setattr(service, "rebuild", update)
     assert env.library.update(entry.id).rig == {}
     stored = json.loads(sidecar(env, entry.id).read_text())
     assert stored["event"] == "update" and stored["painted"] == data["painted"]

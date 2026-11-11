@@ -11,8 +11,8 @@ from pathlib import Path
 
 import pytest
 
-from ba_modding_toolkit import core
-from ba_modding_toolkit.models import FilePair, ModUpdateResult
+from ba_modding_toolkit.models import FilePair
+from bmpt.library.rebuild import RebuildResult
 from bmpt import spine_names
 from bmpt.library import fingerprint, service
 from bmpt.library.integrity import Contents
@@ -323,9 +323,9 @@ def test_update_records_the_parts_it_rebuilt_the_mod_on(spine, monkeypatch):
     def update(sources, targets, output, *args, **kwargs):
         result = output / targets[0].name
         result.write_bytes(header_bundle(b"updated!"))
-        return ModUpdateResult(True, "updated", [FilePair(result, targets[0])])
+        return RebuildResult(True, "updated", [FilePair(result, targets[0])])
 
-    monkeypatch.setattr(core, "process_mod_update", update)
+    monkeypatch.setattr(service, "rebuild", update)
     result = env.library.update(entry.id)
     stored = json.loads(sidecar(env, entry.id).read_text())
     assert stored["event"] == "update" and stored["parts"][0]["mod"] == "same"

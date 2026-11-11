@@ -16,13 +16,14 @@ from typing import Any
 
 from bmpt import atlas_remap, devmode, mod_origin
 from bmpt.engine import (
-    AssetType, Bundle, CRCUtils, SaveOptions, UpdateScope, core, get_skel_version, no_log, parse_filename,
+    AssetType, Bundle, CRCUtils, SaveOptions, get_skel_version, no_log, parse_filename,
     parse_hex_bytes, t,
 )
 from ..errors import ServiceError
 from ..gameassets.spine import PREVIEW_TYPES, Composition, spine_revision
 from ..gameassets.discovery import cab_names
 from ..library import integrity, staging, manual_identity
+from ..library.rebuild import UpdateScope, rebuild
 from ..library.judge import core_of, kind_of, part_of
 from ..library.storage import Fingerprints, atomic_clone, verify_file
 
@@ -1356,7 +1357,7 @@ class BatchImport:
         for prefix, group in groups.items():
             sources = [path for name, path in candidate.files.items()
                        if not prefix or parse_filename(name).prefix == prefix]
-            updated = core.process_mod_update(source_paths=sources, target_paths=group,
+            updated = rebuild(source_paths=sources, target_paths=group,
                 output_dir=output, asset_types_to_replace=settings.asset_types(),
                 save_options=settings.save_options(settings.crc_needed(group[0])), spine_options=spine,
                 skip_unchanged=settings.options["skipUnchanged"],
@@ -1368,7 +1369,7 @@ class BatchImport:
                     raise updated.error
                 raise ServiceError("conversion_failed" if candidate.conversion else "mod_update_failed")
             candidate.not_transferred = sorted(set(candidate.not_transferred) | set(updated.not_transferred))
-            if updated.message != "all_targets_unchanged":
+            if not updated.all_unchanged:
                 if not updated.file_pairs:
                     raise ServiceError("mod_update_failed")
                 unchanged = False

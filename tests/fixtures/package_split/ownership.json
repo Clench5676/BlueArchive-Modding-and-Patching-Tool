@@ -48,9 +48,9 @@
       "masked_import_lines_sha256": "41084e4975b85c6369f95f155c43f73ef40367f07d4eef36267a3432c1dd4d8a"
     },
     "src/ba_modding_toolkit/bundle.py": {
-      "blob": "1d30d0721fe52385f7d2504c37d072ff7d973a1f",
-      "non_import_ast_sha256": "4d87af0ea46a282b198a8ebcc400e58feeceb77e95f7a4ebe3ab651a50186a75",
-      "masked_import_lines_sha256": "f9f994c8760689242ad699f48efb74023010ca88a10cd895b5278d7a30f91bc7"
+      "blob": "2db0b956fd0b953c90c941e6c247fdf8543c4fed",
+      "non_import_ast_sha256": "17399a19611e83141efbe045894f13f635a0531195312a1e24b2dedb43424ebe",
+      "masked_import_lines_sha256": "66f618626fdf844001f4384103f2e197147a2f85bc8573236725899ea41e5574"
     },
     "src/ba_modding_toolkit/cli/__main__.py": {
       "blob": "d24c3ec2f890ae7ae00da4d3641ad2a07789af81",
@@ -88,14 +88,14 @@
       "masked_import_lines_sha256": "0774a24a5f010d5a7f00b34bf3dd1b22c0f1d9149b8b44d9485ab49333b25d4e"
     },
     "src/ba_modding_toolkit/core/mod_install.py": {
-      "blob": "b4c9cbae30c35f918be6aeb837114b64f531666e",
-      "non_import_ast_sha256": "814418b1561a35334b15f7f1996bb349f8ab61f30b16ffde9e225fcdf465a411",
-      "masked_import_lines_sha256": "e05f21841e9456eded362b7d09c2584649f0c35007fe4a900c64779efe26933c"
+      "blob": "ee4149369d420b32cc0df4f79af627dbb05ddbce",
+      "non_import_ast_sha256": "4084555dedafa48f55ced7392b82e8abe0df4cb18b4531313925d9ba27d04aed",
+      "masked_import_lines_sha256": "f89f62fd87be80777c15bc81e28f393610fce693f49b29919545330de798dfd2"
     },
     "src/ba_modding_toolkit/core/mod_update.py": {
-      "blob": "df1a5c980343059f27feca8a9ecc4f73186ab489",
-      "non_import_ast_sha256": "0c8d71270d6d137e427dbb4e1cca27c8adf99486a4f3f1b5175171c96653c323",
-      "masked_import_lines_sha256": "4a7002da0cadd9bd5cebdb4e2a5aa6563712f431a3da42650380066f6cb83cb3"
+      "blob": "a9098e8dfff44b5b7b2783e2e40fc69e0a47dc04",
+      "non_import_ast_sha256": "5637aacec53def6a36076c132184cab1ed712ceb9c1cf9b1405a69c1ce9aa29a",
+      "masked_import_lines_sha256": "e81bdea409ec2c874c65d78e0940768851f9b6dbb07a1e89504f82c50c3260c1"
     },
     "src/ba_modding_toolkit/core/packing.py": {
       "blob": "d7b2b72f5d286b59ad630d4ac148a6d208547dc1",
@@ -251,15 +251,10 @@
       "blob": "62fb8e1b370d831a43e291cf93657a5d5786f810",
       "non_import_ast_sha256": "e01790554e1394601e81b551728201aab8d0c71d167c1af3da75b3e2f7d76b50"
     },
-    "src/ba_modding_toolkit/mod_install.py": {
-      "blob": "97386ea73d3ea686b58273d5c31df0d6df494fdc",
-      "non_import_ast_sha256": "1d0df8d43c4c1dd72485d040e9e1784515472b04f97e32e59ae11a8dd5a1a4f7",
-      "masked_import_lines_sha256": "b5f21efa7c268aab1c29f62627f97e68c891a4e29584952080009196fe344899"
-    },
     "src/ba_modding_toolkit/models.py": {
-      "blob": "add0e1cf16230c70afeaa84b33baa03c92606fdc",
-      "non_import_ast_sha256": "d465e714b65d5fc1ffcb0eda75a191f2ac317741bc70cc5152dc73063a574202",
-      "masked_import_lines_sha256": "33ea38f19619e96b8eee34aa9220c8986c24b468389a7b9a7d7815caed6225be"
+      "blob": "003371fa01b4833224ab374ad858d01158887eed",
+      "non_import_ast_sha256": "fa0d86513772b8aa931a50e0a3247554a21d037f08aa0cd832bc006594573317",
+      "masked_import_lines_sha256": "bc399c4cb92342e617508c5b38065e9fd59bf955b4c9bb28febe20d6f3d42ba1"
     },
     "src/ba_modding_toolkit/naming.py": {
       "blob": "e8c7930c3e97928875babae1577da00eb5c69483",
@@ -350,7 +345,7 @@
     },
     {
       "file": "src/ba_modding_toolkit/bundle.py",
-      "line": 116,
+      "line": 56,
       "original": "from .unityfs import read_cab_names",
       "import": "from bmpt.unityfs import read_cab_names"
     },
@@ -371,18 +366,6 @@
       "line": 22,
       "original": "from ..texture_guard import texture_image",
       "import": "from bmpt.texture_guard import texture_image"
-    },
-    {
-      "file": "src/ba_modding_toolkit/core/mod_install.py",
-      "line": 14,
-      "original": "from .. import devmode",
-      "import": "from bmpt import devmode"
-    },
-    {
-      "file": "src/ba_modding_toolkit/core/mod_update.py",
-      "line": 7,
-      "original": "from ..errors import ServiceError",
-      "import": "from bmpt.errors import ServiceError"
     },
     {
       "file": "src/ba_modding_toolkit/gui/configs.py",
@@ -425,12 +408,6 @@
       "line": 17,
       "original": "from ...game_paths import GameRegion, find_game_dirs",
       "import": "from bmpt.game_paths import GameRegion, find_game_dirs"
-    },
-    {
-      "file": "src/ba_modding_toolkit/models.py",
-      "line": 8,
-      "original": "from .errors import ServiceError",
-      "import": "from bmpt.errors import ServiceError"
     },
     {
       "file": "src/ba_modding_toolkit/searching.py",

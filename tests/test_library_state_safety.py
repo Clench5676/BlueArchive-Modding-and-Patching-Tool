@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 import test_webui_mods
-from ba_modding_toolkit import core, i18n
+from ba_modding_toolkit import i18n
 from bmpt import data_paths
 from ba_modding_toolkit.bundle import Bundle
 from bmpt.errors import ServiceError
@@ -1257,7 +1257,7 @@ def test_reads_answer_and_writes_refuse_through_the_rpc_registry_while_a_recover
 
 def test_a_mod_update_is_refused_before_the_rebuild_while_a_recovery_has_failed(world, monkeypatch):
     library, mods = pending(world)
-    monkeypatch.setattr(core, "process_mod_update", lambda *a, **k: pytest.fail("the rebuild started"))
+    monkeypatch.setattr(service, "rebuild", lambda *a, **k: pytest.fail("the rebuild started"))
     expect_error("classic_open", lambda: library.update(mods[0].id))
 
 
