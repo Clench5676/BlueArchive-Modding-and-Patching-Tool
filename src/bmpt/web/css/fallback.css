@@ -1,5 +1,6 @@
 /* Built-in fallback shared by the no-game screen, loading cover and startup recovery. */
-.loading.neutral .loading-back { background: #f4f4f4 !important; }
+/* black like the game's loading screen: from the first painted frame nothing but black shows until the indicator or a popup */
+.loading.neutral .loading-back { background: #000 !important; }
 .loading.neutral .loading-ind { background: none; }
 .loading.neutral { font-family: system-ui, sans-serif; }
 .loading.neutral .loading-progress { color: #444; background: #f4f4f4; border-radius: 0; }
