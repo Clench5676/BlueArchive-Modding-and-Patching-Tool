@@ -39,14 +39,14 @@ async function harness(locale = "en-US", button = "cancel", accept = false) {
     rpc: async (method, params) => {
       if (method === "actions.compatibilityStamp") return stamp;
       calls.push([method, params]);
-      if (["actions.remap", "actions.acceptRemap"].includes(method)) assert.ok(held && covered && taskActive);
+      if (["actions.remap", "actions.oldRig", "actions.acceptRemap"].includes(method)) assert.ok(held && covered && taskActive);
       return method;
     },
     waitJob: async (id, update) => {
       assert.equal(typeof update, "function");
       update({ current: 2, total: 3, label: "assets-raw.bundle", step: "import.step.replace" });
       if (id === "actions.compatibility") afterCheck();
-      return id === "actions.remap" ? rebuilt : id === "actions.acceptRemap" ? saved : id === "actions.redrawn" ? redrawn : nextReport;
+      return ["actions.remap", "actions.oldRig"].includes(id) ? rebuilt : id === "actions.acceptRemap" ? saved : id === "actions.redrawn" ? redrawn : nextReport;
     },
     Loading: { task: async (fn, options) => {
         labels.push(options.label); taskActive = true;
@@ -420,4 +420,52 @@ test("a portrait the game drew anew is named by the check and offers no remap", 
   h.use(mixedReport());
   await h.mod.inspect("old-mod");
   assert.ok(!h.calls.slice(before).some(([method]) => method === "actions.redrawn"));
+});
+
+test("a portrait the game drew anew keeps the rig its textures were drawn for, unless the official one gained animations", async () => {
+  for (const locale of ["zh-CN", "en-US", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
+    const h = await harness(locale, "ok", true);
+    const portrait = (oldRig) => ({ ...mixedReport(), kind: "spr", oldRig });
+    h.use(portrait({ atlases: ["test.atlas"], animations: {}, available: true }));
+    h.redraw({ redrawn: true, overlap: 0.52 });
+    h.build({ preview: "review", compare: { differences: [] }, pages: [], drawings: {},
+      report: { rigs: ["test"], moved: [], dropped: [], added: [], official: [], upscaled: [], warnings: [], partial: false } });
+    const first = await h.mod.inspect("old-mod");
+    assert.equal(first.assessment.oldRig, true, locale);
+    assert.equal(first.assessment.remap, false, locale);
+    assert.equal(h.mod.canRemap("old-mod", { kind: "spr" }), true, locale);  // Update takes this way
+    h.calls.length = 0;
+    await h.mod.check("old-mod", "Mod", () => {}, { kind: "spr" });
+    assert.equal(h.mod.canRemap("old-mod", { kind: "spr" }), false, locale);  // repaired: its copy is the one now
+    const [popup] = h.popups;
+    assert.ok(popup.lines.includes(h.strings.compatibility.redrawn) && popup.lines.includes(h.strings.compatibility.oldRig), locale);
+    assert.equal(popup.ok, h.strings.remap.action, locale);
+    // no geometry: the old rig is set up as a whole
+    assert.deepEqual(h.calls.map(([method]) => method),
+      ["actions.compatibility", "actions.redrawn", "actions.oldRig", "actions.acceptRemap", "actions.discardRemap"], locale);
+    assert.deepEqual(h.calls[2][1], { mod: "old-mod" }, locale);
+    const [, , , options] = h.comparisons[0];
+    assert.deepEqual(options.lines, [h.strings.remap.oldRig.replace("{names}", "test")], locale);
+    assert.ok(!/[{}]/.test(options.lines[0]) && !options.partial, locale);
+
+    // the official skeleton gained animations the game calls: named, and Update offers nothing
+    const g = await harness(locale, "ok");
+    g.use(portrait({ atlases: ["test.atlas"], animations: { "test.skel": ["11", "12"] }, available: false }));
+    g.redraw({ redrawn: true, overlap: 0.52 });
+    const gained = await g.mod.inspect("old-mod");
+    assert.equal(gained.assessment.oldRig, false, locale);
+    assert.equal(g.mod.canRemap("old-mod", { kind: "spr" }), false, locale);
+    const issue = gained.assessment.issues.find(({ key }) => key === "oldRigAnimations");
+    assert.deepEqual(issue.params, { names: g.mod.compare(gained).issues.find(({ key }) => key === "oldRigAnimations").params.names }, locale);
+    assert.ok(["11", "12"].every((name) => issue.params.names.includes(name)), locale);
+    await g.mod.show(gained, { onRemap: () => assert.fail("nothing to repair") });
+    assert.equal(g.popups[0].ok, g.strings.picker.ok, locale);
+    assert.ok(g.popups[0].lines.some((line) => line === g.strings.compatibility.oldRigAnimations.replace("{names}", issue.params.names)), locale);
+    // drawn anew without a recorded rig: named as before, nothing offered
+    const n = await harness(locale, "ok");
+    n.use(portrait({ atlases: [], animations: {}, available: false })); n.redraw({ redrawn: true, overlap: 0.52 });
+    const none = await n.mod.inspect("old-mod");
+    assert.equal(none.assessment.oldRig, false, locale);
+    assert.ok(!none.assessment.issues.some(({ key }) => key === "oldRigAnimations"), locale);
+  }
 });

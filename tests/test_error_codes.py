@@ -51,7 +51,8 @@ BLOCKS = (
         'asset_extraction_failed asset_load_failed atlas_remap_asset_ambiguous atlas_remap_atlas_missing '
         'atlas_remap_bounds atlas_remap_invalid atlas_remap_page_ambiguous atlas_remap_page_missing '
         'atlas_remap_property atlas_remap_region_ambiguous atlas_remap_regions_missing atlas_remap_source_missing '
-        'atlas_remap_structure atlas_remap_target_mismatch atlas_remap_redrawn '
+        'atlas_remap_structure atlas_remap_target_mismatch atlas_remap_redrawn old_rig_animations '
+        'old_rig_unavailable '
     ).split(),
     (
         'alias_too_long alias_too_many hall_conflict hall_duplicate_memorial hall_duplicate_portrait '

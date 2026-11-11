@@ -10,6 +10,7 @@ import pytest
 from PIL import Image
 
 from ba_modding_toolkit.models import FilePair
+from bmpt.errors import ServiceError
 from bmpt.library.rebuild import RebuildResult
 from bmpt import atlas_remap as remap
 from bmpt.library import fingerprint, service
@@ -261,3 +262,101 @@ def test_update_carries_the_layout_texture_only_files_follow(spine, monkeypatch)
     assert env.library.update(entry.id).rig == {}
     stored = json.loads(sidecar(env, entry.id).read_text())
     assert stored["event"] == "update" and stored["painted"] == data["painted"]
+
+
+# --- a portrait the game drew anew: the mod keeps the rig its textures were drawn for, as a whole ---
+
+
+def test_the_old_rig_plan_takes_the_recorded_rig_or_the_mods_own_skeleton():
+    old, new = binary_skeleton([animation("Idle_01")]), binary_skeleton([animation("Idle_01"), animation("00")])
+    entry = {"text": atlas_text(OLD), "skeleton": base64.b64encode(old).decode()}
+    official = {"Test.atlas": atlas_text(NEW).encode()}
+
+    def plan(sources, skeletons, mod_skeletons=None, textures=("page",)):
+        return remap.old_rig_plan(sources, official, skeletons, mod_skeletons or {}, textures, ["page"])
+
+    gained = plan({"Test.atlas": entry}, {"Test.skel": new})
+    assert gained.atlases == {"Test.atlas": (atlas_text(OLD).encode(), "Test.skel", old)}
+    # the game calls the official skeleton's animations by name: the old one lacks one
+    assert gained.animations == {"Test.skel": ["00"]} and gained.complete and not gained.available
+    assert plan({"Test.atlas": entry}, {"Test.skel": old}).available
+    # a skeleton of the mod's own stands for the recorded one
+    own = plan({"Test.atlas": entry}, {"Test.skel": new}, {"folder/test.skel": new})
+    assert own.atlases["Test.atlas"][2] == new and own.available
+    other_version = base64.b64encode(binary_skeleton([animation("Idle_01")], "4.1.10")).decode()
+    for sources, skeletons, textures in (
+            ({"Test.atlas": {"text": atlas_text(OLD)}}, {"Test.skel": old}, ["page"]),  # no skeleton recorded
+            ({"Test.atlas": {**entry, "skeleton": other_version}}, {"Test.skel": old}, ["page"]),
+            ({"Test.atlas": {**entry, "skeleton": "not base64!"}}, {"Test.skel": old}, ["page"]),
+            ({"Test.atlas": entry}, {"Test.skel": old}, []),  # a page the mod does not paint
+            ({"Test.atlas": entry}, {}, ["page"])):  # no official skeleton draws the atlas
+        incomplete = plan(sources, skeletons, textures=textures)
+        assert not incomplete.complete and not incomplete.available and not incomplete.atlases
+    assert not remap.OldRig().available  # nothing recorded: nothing to set up
+
+
+def redrawn(env, animations=("00",)):
+    """A texture-only mod recorded on OLD with its rig, then a game update that draws the portrait anew on NEW (its
+    skeleton with ``animations``): the library read again, the mod's entry, its rig and its file."""
+    rig = skeleton(["00"])
+    current = split_official(_official_name(write_bundle(env.original, {"test.atlas": atlas_text(OLD)},
+                                                         textures(BLUE), rig)))
+    text_part = next(path for path in env.game_dir.glob("*.bundle") if "textassets" in path.name)
+    source = write_bundle(env.tmp / "upload" / current.name, {}, textures(RED), skeleton=None)
+    entry, = env.library.add([source], direct=True)
+    text_part.unlink()
+    current.unlink()
+    split_official(_official_name(write_bundle(
+        env.original, {"test.atlas": atlas_text(NEW)}, textures({"part": BLUE, "smile": (0, 255, 0, 255)}, NEW),
+        skeleton(list(animations), ("part", "smile")))))
+    return reload_library(env), entry, rig, source
+
+
+def test_a_portrait_drawn_anew_is_applied_with_the_rig_its_textures_were_drawn_for(real):
+    env = real
+    library, entry, rig, source = redrawn(env)
+    report = library.compatibility(entry.id)
+    assert report["remappable"] and report["rig"]["layout"] == ["test.atlas"]
+    assert report["oldRig"] == {"atlases": ["test.atlas"], "animations": {}, "available": True}
+    preview = library.old_rig(entry.id)
+    assert preview["report"]["rigs"] == ["test"] and not preview["report"]["partial"]
+    # before: the mod's texture on the official rig, as the game draws it now; after: on its own rig
+    assert preview["drawings"]["original"][0]["atlas"] == atlas_text(NEW)
+    assert preview["drawings"]["repaired"][0]["atlas"] == atlas_text(OLD)
+    assert base64.b64decode(preview["drawings"]["repaired"][0]["skeleton"]) == rig
+    assert len(library.mods()) == 1  # nothing stored before the review is accepted
+    result = library.accept_remap(preview["preview"])
+    files = sorted(result.mod.file.parent.glob("*.bundle"))
+    assert [path.name for path in files] == sorted(path.name for path in env.game_dir.glob("*.bundle"))
+    built = remap.read_inputs(files)
+    assert built.atlases == {"test.atlas": atlas_text(OLD).encode()} and built.skeletons == {"test.skel": rig}
+    assert built.textures["page"].tobytes() == textures(RED)["page"].tobytes()
+    assert entry.file.read_bytes() == source.read_bytes()  # the mod itself is as it was
+    again = library.compatibility(result.mod.id)
+    assert not again["remappable"] and not again["oldRig"]["available"]
+    with pytest.raises(ServiceError, match="entry_changed"):  # the mod has its repaired copy now
+        library.old_rig(entry.id)
+
+
+def test_the_old_rig_is_refused_where_the_official_one_gained_animations(real):
+    env = real
+    library, entry, _rig, _source = redrawn(env, ("00", "01"))
+    report = library.compatibility(entry.id)
+    assert report["oldRig"] == {"atlases": ["test.atlas"], "animations": {"test.skel": ["01"]}, "available": False}
+    with pytest.raises(ServiceError) as caught:
+        library.old_rig(entry.id)
+    assert (caught.value.code, caught.value.params) == ("old_rig_animations", {"names": "01"})
+    assert not library._remap_previews and len(library.mods()) == 1
+
+
+def test_the_old_rig_is_refused_without_the_recorded_skeleton(real):
+    env = real
+    library, entry, _rig, _source = redrawn(env)
+    record = json.loads(sidecar(env, entry.id).read_text())
+    del record["painted"]["test.atlas"]["skeleton"]
+    sidecar(env, entry.id).write_text(json.dumps(record))
+    library = reload_library(env)
+    assert not library.compatibility(entry.id)["oldRig"]["available"]
+    with pytest.raises(ServiceError, match="old_rig_unavailable"):
+        library.old_rig(entry.id)
+    assert not library._remap_previews

@@ -488,6 +488,8 @@
 			"mod_parts_missing": "Mod 檔案不完整，缺少：{files}",
 			"atlas_remap_invalid": "無法重排：{file} - {reason}",
 			"atlas_remap_redrawn": "無法重排：原版立繪已重繪",
+			"old_rig_unavailable": "無法沿用舊骨架：未記錄 Mod 繪製時的骨架",
+			"old_rig_animations": "無法沿用舊骨架：原版新增動畫 {names}",
 			"atlas_remap_target_mismatch": "無法重排：{file} - 相符資源 {matched}/{expected}",
 			"atlas_remap_property": "無法重排：{file} - {field} 無效：{value}（頁面：{page}，區域：{region}）",
 			"atlas_remap_structure": "無法重排：{file} - 第 {line} 行圖集結構無效：{value}",
@@ -732,7 +734,9 @@
 			"updateUnchecked": "無法檢查相容性，仍要更新？",
 			"forceUpdate": "目前完整性無問題，是否確定仍要強制更新？",
 			"rigChanged": "原版新增動畫：{n}，Mod 未包含",
-			"redrawn": "原版立繪已重繪"
+			"redrawn": "原版立繪已重繪",
+			"oldRig": "更新：沿用 Mod 繪製時的骨架",
+			"oldRigAnimations": "原版新增動畫：{names}，無法沿用舊骨架"
 		},
 		"remap": {
 			"action": "更新",
@@ -757,7 +761,8 @@
 			"official": "原版區域：{names}",
 			"zoomIn": "放大",
 			"zoomOut": "縮小",
-			"marks": "標出變更"
+			"marks": "標出變更",
+			"oldRig": "沿用舊骨架與圖集：{names}"
 		},
 		"spine": {
 			"license": {

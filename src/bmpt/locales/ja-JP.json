@@ -488,6 +488,8 @@
 			"mod_parts_missing": "Mod ファイル不足：{files}",
 			"atlas_remap_invalid": "再配置不可：{file} - {reason}",
 			"atlas_remap_redrawn": "再配置不可：公式立ち絵が描き直し済み",
+			"old_rig_unavailable": "旧スケルトン使用不可：Mod 作成時のスケルトンの記録なし",
+			"old_rig_animations": "旧スケルトン使用不可：公式で追加されたアニメーション {names}",
 			"atlas_remap_target_mismatch": "再配置不可：{file} - 一致アセット {matched}/{expected}",
 			"atlas_remap_property": "再配置不可：{file} - {field} が無効：{value}（ページ：{page}、領域：{region}）",
 			"atlas_remap_structure": "再配置不可：{file} - {line} 行目のアトラス構造が無効：{value}",
@@ -732,7 +734,9 @@
 			"updateUnchecked": "互換性を確認できません。それでも更新しますか？",
 			"forceUpdate": "現在、整合性に問題はありません。それでも強制更新しますか？",
 			"rigChanged": "公式で追加されたアニメーション：{n}、Mod に未収録",
-			"redrawn": "公式立ち絵が描き直し済み"
+			"redrawn": "公式立ち絵が描き直し済み",
+			"oldRig": "更新：Mod 作成時のスケルトンを使用",
+			"oldRigAnimations": "公式で追加されたアニメーション：{names}、旧スケルトン使用不可"
 		},
 		"remap": {
 			"action": "更新",
@@ -757,7 +761,8 @@
 			"official": "公式の領域：{names}",
 			"zoomIn": "拡大",
 			"zoomOut": "縮小",
-			"marks": "変更箇所を表示"
+			"marks": "変更箇所を表示",
+			"oldRig": "旧スケルトンとアトラスを使用：{names}"
 		},
 		"spine": {
 			"license": {

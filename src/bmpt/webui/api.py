@@ -1288,6 +1288,14 @@ def build_api(s: Services) -> RpcRegistry:
         return s.submit("remap", lambda log, progress: library.remap(mod, log=log, progress=progress, pin=pin,
                                                                      geometry=geometry))
 
+    @rpc.method("actions.oldRig")
+    def actions_old_rig(mod: str) -> str:
+        """The repair review of a texture-only portrait with the rig it was drawn for (ModLibrary.old_rig); accepted
+        or discarded as a remap's."""
+        library = s.library
+        pin = s._current_pin(library)
+        return s.submit("remap", lambda log, progress: library.old_rig(mod, log=log, progress=progress, pin=pin))
+
     @rpc.method("actions.redrawn")
     def actions_redrawn(mod: str, geometry: Any) -> str:
         library = s.library
