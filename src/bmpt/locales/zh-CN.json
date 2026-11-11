@@ -755,7 +755,8 @@
 			"graft": "保留 Mod 的 .skel 文件，补上原版新增表情",
 			"graftOldRig": "沿用 Mod 绘制时的 .skel 文件和 .atlas 文件，补上原版新增表情",
 			"graftAction": "补上新表情",
-			"remapAction": "改用原版 .skel 文件"
+			"remapAction": "改用原版 .skel 文件",
+			"rigUnknown": "未记录 Mod 绘制时的 .skel 文件，无法自动修复"
 		},
 		"remap": {
 			"action": "更新",

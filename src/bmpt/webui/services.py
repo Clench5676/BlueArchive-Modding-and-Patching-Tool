@@ -1218,6 +1218,14 @@ class Services:
                 self.request_scan()
             if self.refresh_status() is not None:
                 self.publish_state()
+            # the official rigs of the portraits as this release has them, kept before an update replaces them
+            # (BL-166): after the prune, away from the job queue, a core at a time
+            if self._prune_job is not None:
+                self.jobs.wait(self._prune_job, PRUNE_WAIT)
+            archive = getattr(library, "archive_rigs", None)
+            if archive is not None and self.scan_allowed():
+                with self.timings.measure("library.rigs"):
+                    archive(cancel=lambda: self.jobs.closing)
         except Exception:
             logger.exception("startup maintenance failed")
 
@@ -1670,8 +1678,11 @@ class Services:
             raise KeyError(name)
         return AssetResponse(data, MIME.get(Path(name).suffix, "application/octet-stream"), light=False)
 
-    def _recorded_rig(self, mod_id: str) -> dict[str, dict]:
-        return getattr(self.library, "recorded_rig", lambda _id: {})(mod_id)
+    def _recorded_rig(self, mod_id: str, atlases: dict[str, bytes] | None = None) -> dict[str, dict]:
+        library = self.library
+        if not hasattr(library, "recorded_rig"):
+            return {}
+        return library.recorded_rig(mod_id, atlases) if atlases else library.recorded_rig(mod_id)
 
     def _revision(self, kind: str, key: str, bundles: list[Path]) -> str:
         """A Spine preview's revision: its composition's (``spine_revision``) and, for a mod, the rigs its fingerprint
@@ -1681,11 +1692,12 @@ class Services:
 
         revision = spine_revision(bundles)
         recorded = self._recorded_rig(key) if kind == "mod" else {}
-        if not recorded:
+        kept = getattr(self.library, "rig_stamp", lambda _id: "")(key) if kind == "mod" else ""
+        if not recorded and not kept:
             return revision
         rigs = sorted([name, entry.get("layout"), hashlib.sha1(entry["skeleton"].encode("ascii")).hexdigest()]
                       for name, entry in recorded.items())
-        return hashlib.sha256(json.dumps([revision, rigs]).encode()).hexdigest()
+        return hashlib.sha256(json.dumps([revision, rigs, kept]).encode()).hexdigest()
 
     def _drawn_as_made(self, mod_id: str, files: dict[str, bytes]) -> dict[str, bytes]:
         """A texture-only portrait mod's preview files on the rig its textures were drawn for, where the game
@@ -1695,7 +1707,8 @@ class Services:
         from ..gameassets.spine import atlas_pages
         from ..library.fingerprint import drawn_on
 
-        recorded = self._recorded_rig(mod_id)
+        recorded = self._recorded_rig(mod_id, {name: data for name, data in files.items()
+                                               if name.lower().endswith(".atlas")})
         rig = drawn_on(recorded, files) if recorded else {}
         if not rig:
             return files

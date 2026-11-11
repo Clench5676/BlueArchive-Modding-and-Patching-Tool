@@ -126,6 +126,12 @@ class JobRunner:
         with self._lock:
             return next((j for j in self._jobs.values() if j.state == "running"), None)
 
+    @property
+    def closing(self) -> bool:
+        """Whether the runner is shutting down (``shutdown``): long background work stops at its next step."""
+        with self._lock:
+            return self._closing
+
     def wait(self, job_id: str, timeout: float | None = None) -> bool:
         """Wait until a job ran (done, failed or dropped) and the listeners heard its end; whether it did in time. An
         unknown job counts as done."""
