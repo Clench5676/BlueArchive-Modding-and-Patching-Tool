@@ -2562,7 +2562,8 @@ overwritten entry need none (the detail screen judges its files cheaply).
   update overwrote with official files, and those that need no repair (not held) are applied again
   (`mods.restoreDrift`). Then the first screen, and the summary with the start popups.
 - **Mods Impacted by Game Update** (`update-impact.js check`, the drift prompt's list popup in `#prompt`; owner,
-  2026-11-11): three segments over the cards (`listPopup` `tools.segs`, captions with their counts): Needs Fix (the held
+  2026-11-11): three segments over the cards (`listPopup` `tools.segs`, no counts; an empty segment says "No mods affected" in
+  the middle of its paper, `listPopup` `empty`): Needs Fix (the held
   mods, `heldOf`: a mod whose rig changed, unless a repaired copy took its place; ticked at first, each with the Files
   Changed badge), Applied Again (the entries the check applied again) and Other Affected (rebuilt, new parts, gone,
   each with that as its badge); it opens on the first segment with cards. A card names the student, its picture is
@@ -2570,7 +2571,8 @@ overwritten entry need none (the detail screen judges its files cheaply).
   switch says). The details name the mod and give what the update changed in its official parts and its state, with
   Go To and, for a held mod, Preview Fix (the repair's preview: `mod-compatibility.js prepare`, the choice when more
   than one repair applies, then `review`, whose Accept is Fix and Apply and Discard Back; a mod the asset update takes
-  instead says it looks the same after the fix, with Back and Fix and Apply) and Fix and Apply (the default repair, no
+  instead says it looks the same after the fix, on a compact notice with XS buttons (`message` `compact`, `footer:
+  "XS"`), with Back and Fix and Apply) and Fix and Apply (the default repair, no
   review). A click on a card shows it in the details; on Needs Fix the tick box at the card's top right corner ticks it
   (`listPopup` `tick`; owner, 2026-11-11), and the cards are placed as if all were selected, so ticking never moves
   them. Preview Fix and Fix and Apply run over the list, which stays open and is drawn again as the mods stand then.

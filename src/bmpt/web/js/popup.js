@@ -265,6 +265,9 @@ export const FOOTER = Object.freeze({
     w: CONTROL.buttonM.minW - 2 * CONTROL.buttonM.pad, lines: 2, h: CONTROL.buttonM.h - SPACE.m }) }),
   S: Object.freeze({ control: FOOTER_S, caption: Object.freeze({ fs: FOOTER_S.fs, fsMin: TYPE.body.min,
     w: FOOTER_S.minW - 2 * FOOTER_S.pad, lines: 2, h: FOOTER_S.h - SPACE.m }) }),
+  // a compact notice's (owner, 2026-11-11): the app's small button
+  XS: Object.freeze({ control: CONTROL.buttonXS, caption: Object.freeze({ fs: CONTROL.buttonXS.fs, fsMin: TYPE.badge.min,
+    w: CONTROL.buttonXS.minW - 2 * CONTROL.buttonXS.pad, lines: 2, h: CONTROL.buttonXS.h - SPACE.s }) }),
 });
 export const FOOTER_DEFAULT = "M";
 // A footer's body width, units: the control's own minimum, wider where the longest caption needs it (its widest line, at the
@@ -498,22 +501,6 @@ export function listCardBox(layout, { searching = false, horizontal = false, ban
 const LP = listLayout();
 // a segment's caption: a string key, or {text} for a caption the caller wrote (a count in it)
 const segText = (seg) => (typeof seg === "string" ? T(seg) : seg?.text ?? "");
-// The segments' width: the prefab's 230, wider by steps up to what the list leaves them (room: from the list's left to
-// the tools) where a caption's count would otherwise sit on a line of its own (owner, 2026-11-11: a tab may grow, a
-// number never wraps alone). Captions without a count keep 230 and their fit.
-export const SEG = Object.freeze({ w: 230, step: 10, max: 320, fs: 44, min: 26, inset: 30, maxH: 96 });
-export function segmentWidth(captions, room = SEG.max * 3) {
-  const lone = (f) => /\n\s*[\d+]+\s*$/.test(f.text);
-  const top = Math.max(SEG.w, Math.min(SEG.max, Math.floor(room / 3)));
-  for (let w = SEG.w; w <= top; w += SEG.step) {
-    const fits = NGUI.fitGroup(captions, SEG.fs, SEG.min, w - SEG.inset, 2, { maxH: SEG.maxH });
-    if (!fits.some(lone)) return { w, fits };
-  }
-  // still too long at the widest: one line, smaller (down to the floor), rather than a count alone
-  const one = NGUI.fitGroup(captions, SEG.fs, SEG.min, top - SEG.inset, 1, { maxH: SEG.maxH });
-  if (!one.some((f) => f.text.includes("\n"))) return { w: top, fits: one };
-  return { w: top, fits: NGUI.fitGroup(captions, SEG.fs, SEG.min, top - SEG.inset, 2, { maxH: SEG.maxH }) };
-}
 // the student list's tools at the top right of the list: order, sort, search and, with segs, the segment filter
 function toolbar(right, y, { segs = null, sortKey = "sort.default", active = 0, ascending = true, filtered = false, check = null, sortKeys = [sortKey] } = {}) {
   if (check) return checkedToolbar(right, y, { segs, sortKey, sortKeys, active, ascending, filtered, check });
@@ -540,10 +527,10 @@ function toolbar(right, y, { segs = null, sortKey = "sort.default", active = 0, 
   let segBox = null;
   if (segs) {
     const filter = clone(find(menu, "FilterBtn"));
-    // the three segments share one size, as wide as their captions need (segmentWidth), within the list's room
-    const { w: segW, fits: segFits } = segmentWidth(segs.map(segText), x - (LP.list.l + SPACE.m));
-    const sx = segW / 328;
+    const segW = 230, sx = segW / 328;
     filter.scale = [sx, 1];
+    // the three segments share one size
+    const segFits = NGUI.fitGroup(segs.map(segText), 44, 26, segW - 30, 2, { maxH: 96 });
     [["All", segs[0]], ["Main", segs[1]], ["Support", segs[2]]].forEach(([k, key], i) => {
       const seg = find(filter, k);
       for (const state of seg.children) {
@@ -942,6 +929,7 @@ export function detailsTree(it, title, fields, actions, portraitTexture = null, 
 //   keepScroll: the list's offset on its scrolling axis (horizontal for portraits)
 //   tick: {keys, onTick(key, scroll)}: cards ticked apart from being shown (owner, 2026-11-11): a click on a card shows
 //         it in the details (onSelect, selected), a click on its corner's tick box ticks or unticks it (onTick)
+//   empty: what an empty list says, in the middle of its paper (hall.noCandidates by default)
 //   detailKind(it): the kind whose details panel a card shows when it differs from layoutKind's ("spr": the portrait
 //                   panel, an upright picture beside the stacked fields), for lists of several kinds
 //   alignStart: the generic grid's cards from the paper's left edge, as the kinds' grids place them
@@ -951,7 +939,7 @@ const tokens = new Map(); // host -> the latest drawing's number: an older one t
 export async function listPopup(options) {
   let {
   host: hostArg, hostId, title, items, selected = null, multi = false, focus = null, onSelect, buttons = null, okText, onOk,
-  onClose = null, tools = null, hint = "", footer = "", check = null, details, keepScroll = 0, tick = null,
+  onClose = null, tools = null, hint = "", footer = "", check = null, details, keepScroll = 0, tick = null, empty = null,
 } = options;
   const host = hostOf(hostArg ?? hostId);
   const my = (tokens.get(host) || 0) + 1;
@@ -1096,7 +1084,7 @@ export async function listPopup(options) {
   const [cardLeft, top] = toNode(cardBox, 0, LP.frame), bottom = top - cardBox.h;
   if (!items.length) {
     // nothing to show: the list paper says so, as the Hall's pickers do
-    const room = LP.list.r - LP.list.l - 160, f = fitText(T("hall.noCandidates"), 48, 32, room, 2);
+    const room = LP.list.r - LP.list.l - 160, f = fitText(empty ?? T("hall.noCandidates"), 48, 32, room, 2);
     await NGUI.render(node("Empty", [(LP.list.l + LP.list.r) / 2, (top + bottom) / 2],
       [label(f.text, f.fs, "#2d4664/1.00", room, f.fs * 1.3 * f.lines + 8, { depth: 8 })]), next, { scale: S, origin: [960, 540], z: 20 });
   }
@@ -1202,6 +1190,8 @@ export async function listPopup(options) {
 }
 
 // --- the message popup ---
+// a compact notice's frame width (messageLayout compact): UIPopup_ClientVersion's
+export const COMPACT_W = 1115;
 export const MSG = { title: POPUP_FRAME.contentTop, gap: SPACE.l, rowButton: XS_BUTTON.h + SPACE.m,
   check: CHECK_H + SPACE.m, buttons: POPUP_FRAME.footer.bottom + CONTROL.buttonL.h + SPACE.m,
   none: SPACE.xl, cap: POPUP_FRAME.maxH };
@@ -1221,7 +1211,8 @@ export const MSG = { title: POPUP_FRAME.contentTop, gap: SPACE.l, rowButton: XS_
 //          {rule: true} is the game's dotted divider (Common_Line_Dot, as the light stats box draws it) across the text
 //   ok, cancel: the buttons' labels (either may be left out); check: {label, checked}
 //   buttons: optional named footer choices [{label, value, primary}], instead of ok/cancel
-//   footer: the footer buttons' size, "S", "M" or "L" (FOOTER); without it the default size, M, its bodies as wide as the captions need
+//   footer: the footer buttons' size, "XS", "S", "M" or "L" (FOOTER); without it the default size, M, its bodies as wide as the captions need
+//   compact: a short notice on the smallest frame (COMPACT_W wide, as high as it needs), with little padding
 //   close: false for a popup that must be answered with a button (no close button; the backdrop and Escape do nothing)
 //   confirmKeys: keys that press OK while the popup is in front and holds the focus itself (a focused button takes its
 //                own key), as the PC client binds its popups' confirm (["Enter", " "]); none by default
@@ -1259,13 +1250,13 @@ export function confirmKey(ev, keys) {
 
 // the message without the game's prefab: a plain box on a dark backdrop, the same buttons, marked the same way
 export function plainMessage(layer, { title, lines = [], ok, cancel, buttons, state = null, dismissable = true,
-  scroll = false, plain = false, width, height, fitTogether = [], captionSite = null, footer = null }, finish) {
+  scroll = false, plain = false, width, height, fitTogether = [], captionSite = null, footer = null, compact = false }, finish) {
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
   const button = (caption, fn, action, cls = "message-button") => {
     const b = el("button", cls, caption); b.dataset.action = action; b.setAttribute("aria-label", caption);
     b.addEventListener("click", fn); return b;
   };
-  const layout = messageLayout({ lines, ok, cancel, buttons, check: state, scroll, plain, width, height, fitTogether, assets: false });
+  const layout = messageLayout({ lines, ok, cancel, buttons, check: state, scroll, plain, width, height, fitTogether, assets: false, footer, compact });
   const frame = { w: layout.width, h: layout.height, cx: 0, cy: FRAME_Y };
   const styleBox = (element, box, fs) => {
     Object.assign(element.style, { position: "absolute", boxSizing: "border-box", margin: "0", padding: "0",
@@ -1483,15 +1474,21 @@ function messageLines(lines, w, fitTogether, plain, assets = true) {
 // `scroll` in the result tells whether the lines scroll in the frame: asked for, or forced because the frame would
 // be taller than MSG.cap. Non-scrolling bodies, including their check row, centre in the content box.
 export function messageLayout({ lines = [], width, ok = null, cancel = null, buttons = null, check = null,
-  fitTogether = [], scroll = false, plain = false, assets = true, height: minimumHeight = 0 } = {}) {
+  fitTogether = [], scroll = false, plain = false, assets = true, height: minimumHeight = 0, footer = null, compact = false } = {}) {
   let size;
-  if (width != null) size = frameClass(width === 2100 ? "L" : width);
+  // compact: a one-line notice (owner, 2026-11-11): the game's smallest titled popup's width (UIPopup_ClientVersion
+  // 1115), as high as its lines and footer need, its footer's own buttons' clearance
+  if (compact) size = { w: COMPACT_W, h: 0 };
+  else if (width != null) size = frameClass(width === 2100 ? "L" : width);
   else size = ["S", "M", "L"].map(key => frameClass(key)).find(candidate =>
     messageLines(lines, candidate.w, fitTogether, plain, false).fitted.every(({ f }) => f.lines <= 6)) || POPUP_FRAME.L;
   const body = messageLines(lines, size.w, fitTogether, plain, assets), hasButtons = !!(ok || cancel || buttons?.length);
-  const need = MSG.title + body.height + (check ? MSG.check : 0) + (hasButtons ? MSG.buttons : MSG.none);
-  const { w, h: height } = frameGeometry(size.w, Math.max(need, minimumHeight)),
-    content = popupContent(w, height, { text: true, footer: hasButtons });
+  const buttonsH = compact ? POPUP_FRAME.footer.bottom + footerSize(footer).control.h + SPACE.l : MSG.buttons;
+  const need = MSG.title + body.height + (check ? MSG.check : 0) + (hasButtons ? buttonsH : MSG.none);
+  const { w, h: height } = compact ? { w: size.w, h: Math.min(POPUP_FRAME.maxH, Math.max(need, minimumHeight)) }
+    : frameGeometry(size.w, Math.max(need, minimumHeight));
+  const content = compact ? container({ w, h: height, padding: [POPUP_FRAME.contentTop, SPACE.xxl, hasButtons ? buttonsH : SPACE.xl, SPACE.xxl] }).inner
+    : popupContent(w, height, { text: true, footer: hasButtons });
   const available = Math.max(0, content.h - (check ? MSG.check : 0));
   // A body that fits keeps its own height and centres, scrolling or not; only an overflowing one fills the content box.
   const overflow = body.height > available + 1e-9, scrolls = scroll || overflow;
@@ -1508,7 +1505,7 @@ export function messageLayout({ lines = [], width, ok = null, cancel = null, but
   return { body, width: w, height, visible, y0, content, checkBox, checkCaption, scroll: scrolls };
 }
 
-async function showMessage({ title = "", lines = [], ok = null, cancel = null, buttons = null, check = null, host: hostArg = "dialog", width, close: dismissable = true, confirmKeys = null, fitTogether = [], scroll = false, plain = false, captionSite = null, footer = null }, resolve) {
+async function showMessage({ title = "", lines = [], ok = null, cancel = null, buttons = null, check = null, host: hostArg = "dialog", width, close: dismissable = true, confirmKeys = null, fitTogether = [], scroll = false, plain = false, captionSite = null, footer = null, compact = false }, resolve) {
   const host = hostOf(hostArg);
   const layer = document.createElement("div");
   layer.className = "popup-layer";
@@ -1542,12 +1539,12 @@ async function showMessage({ title = "", lines = [], ok = null, cancel = null, b
   } catch (err) {
     console.warn("message popup without the game's frame", err);
     if (ended) return;
-    plainMessage(layer, { title, lines, ok, cancel, buttons, state, dismissable, scroll, plain, width, fitTogether, captionSite, footer }, finish);
+    plainMessage(layer, { title, lines, ok, cancel, buttons, state, dismissable, scroll, plain, width, fitTogether, captionSite, footer, compact }, finish);
     layer.focus?.({ preventScroll: true });
     return;
   }
   try {
-    const { body, width: w, height, visible, y0, content, checkBox, scroll: scrolls } = messageLayout({ lines, width, ok, cancel, buttons, check: state, fitTogether, scroll, plain });
+    const { body, width: w, height, visible, y0, content, checkBox, scroll: scrolls } = messageLayout({ lines, width, ok, cancel, buttons, check: state, fitTogether, scroll, plain, footer, compact });
     const t = popupFrame(title, w, height, { ok, cancel, buttons, close: dismissable, captionSite, footer });
     const popup = find(t, "Popup");
     // The body and check row centre together; a scrolling body fills the available content box.

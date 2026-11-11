@@ -1424,7 +1424,7 @@ test("an update's impact as a list: the held mods, those applied again and the o
   // a held mod a repaired copy replaced is no longer listed; unchanged ones never are
   assert.deepEqual([tabs.held.map((m) => m.id), tabs.reapplied.map((m) => m.id), tabs.others.map((m) => m.id)], [["1"], ["6"], ["2", "3"]]);
   assert.deepEqual(Impact.TABS, ["held", "reapplied", "others"]);
-  assert.deepEqual(Impact.tabCaptions(tabs).map((c) => c.text), ["Needs Fix 1", "Applied Again 1", "Other Affected 2"]);
+  assert.deepEqual(Impact.tabCaptions().map((k) => S(k)), ["Needs Fix", "Applied Again", "Other Affected"], "no counts");
   // a held card: the student's name, its kind and Applied as chips, the Files Changed badge, its own picture
   const held = Impact.card(tabs.held[0], "held", nameOf);
   assert.deepEqual([held.key, held.label, held.full, held.chips, held.badge.text],
@@ -1455,7 +1455,8 @@ test("an update's impact as a list: the held mods, those applied again and the o
       const m = ui.mods.impact;
       for (const k of ["title", "fix", "preview", "noPreview", "chipOfficial", "kindRebuilt", "kindNewParts", "kindGone",
         "gateTitle", "gateAsk", "gateCheck", "checking", "reapplying", "sep"]) assert.ok(typeof m[k] === "string" && m[k].length > 0, `${lang} ${k}`);
-      for (const k of ["tabHeld", "tabReapplied", "tabOthers", "partial"]) assert.ok(m[k].includes("{n}"), `${lang} ${k}`);
+      for (const k of ["tabHeld", "tabReapplied", "tabOthers"]) assert.ok(!m[k].includes("{n}"), `${lang} ${k}: no count`);
+      assert.ok(m.partial.includes("{n}") && m.none.length > 0, lang);
       assert.ok(!("fixSelected" in m), `${lang}: the footer's Fix and Apply carries no count (the list's footer has it)`);
       assert.ok(m.checkingMod.includes("{name}"), lang);
       for (const gone of ["hint", "reset", "rigChanged", "fixAll", "reapplied", "others", "expand", "collapse", "gone", "newParts", "rebuilt", "unchanged", "unknown"])

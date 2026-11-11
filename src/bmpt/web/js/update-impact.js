@@ -196,11 +196,8 @@ export function tabMods({ result, reapplied = [] } = {}) {
     others: mods.filter((m) => m.impact in OTHER_KINDS) };
 }
 
-// the segments' captions with their counts, as the list's toolbar takes them
-export const tabCaptions = (tabs) => [
-  { text: T("mods.impact.tabHeld", { n: tabs.held.length }) },
-  { text: T("mods.impact.tabReapplied", { n: tabs.reapplied.length }) },
-  { text: T("mods.impact.tabOthers", { n: tabs.others.length }) }];
+// the segments' captions (no counts, owner 2026-11-11), as the list's toolbar takes them
+export const tabCaptions = () => ["mods.impact.tabHeld", "mods.impact.tabReapplied", "mods.impact.tabOthers"];
 
 // card(mod, tab, nameOf): a mod's card: the student's name, its own picture (none for a 3D model), the kind and Applied
 // as chips; a held mod with the Files Changed badge, another kind with what happened to it as its badge
@@ -279,7 +276,7 @@ function presentList(outcome, nameOf) {
       const ticked = tabs.held.filter((m) => selection.has(m.id));
       Popup.listPopup({
         host, title: T("mods.impact.title"), items, selected: focus, focus, keepScroll: keep,
-        detailKind: (it) => it.mod?.kind, alignStart: true,
+        detailKind: (it) => it.mod?.kind, alignStart: true, empty: T("mods.impact.none"),
         // portraits alone: the portrait switch's frame and tall cards, whose details keep their actions in view
         ...(items.length && items.every((it) => it.mod?.kind === "spr") ? { layoutKind: "spr" } : {}),
         ...(held ? { tick: { keys: [...selection], onTick: (key, s) => {
@@ -330,7 +327,7 @@ async function fix(mods, nameOf, { review = false } = {}) {
         // the asset update moves the mod's assets onto the new parts as they are: it looks the same after, said so
         if (review) {
           const answer = await Popup.message({ title: T("mods.impact.preview"), lines: [T("mods.impact.noPreview")],
-            cancel: T("photo.back"), ok: T("mods.impact.fix") });
+            cancel: T("photo.back"), ok: T("mods.impact.fix"), footer: "XS", compact: true });
           if (answer.button !== "ok") continue;
         }
         await Loading.task(async (update) => waitJob(await rpc("actions.update", { mod: mod.id }), update),
