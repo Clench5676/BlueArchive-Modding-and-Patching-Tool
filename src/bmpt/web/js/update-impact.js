@@ -204,7 +204,8 @@ export function card(mod, tab, nameOf = (e) => e?.variant || e?.core || "") {
   const entry = { variant: mod.target, core: mod.core, kind: mod.kind };
   const base = mod.kind === "model" || mod.kind === "other" || !mod.id ? null : spineBase("mod", mod.id);
   const lobby = mod.kind === "lobby";
-  const chips = [T(kindKey(mod.kind)), ...(mod.configured ? [T("status.applied")] : [])];
+  // an Official chip over the details' one line of the official changes (owner, 2026-11-11)
+  const chips = [T(kindKey(mod.kind)), ...(mod.configured ? [T("status.applied")] : []), ...(changeText(mod) ? [T("mods.impact.chipOfficial")] : [])];
   const badge = tab === "held" ? { text: T("mods.heldBadge"), color: COLOUR.warning, ink: "#ffffff" }
     : tab === "others" ? { text: T(`mods.impact.${OTHER_KINDS[mod.impact]}`), color: COLOUR.greyed, ink: "#ffffff" } : null;
   // the details name the mod itself (the card names the student), its kind and Applied as chips
@@ -214,14 +215,12 @@ export function card(mod, tab, nameOf = (e) => e?.variant || e?.core || "") {
     big: base ? () => thumb(base, mod.kind === "spr" ? "portrait" : "bust", null, lobby) : null };
 }
 
-// details(mod, tab): the details panel of a card (its name is the mod's, card.full): what the update changed, its
-// state; Go To, and for a held mod the repair's preview and Fix and Apply. Two fields, so the actions stay in view
-// beside an upright portrait.
+// details(mod, tab): the details panel of a card (its name is the mod's, card.full; the Official chip over it):
+// what the update changed, one line, no caption (owner, 2026-11-11: the state is the card's badge and the segment's);
+// Go To, and for a held mod the repair's preview and Fix and Apply.
 export function details(mod, tab) {
   const changes = changeText(mod).replace(/^[^:：]*[:：]\s*/, "");
-  const fields = [...(changes ? [[T("mods.impact.fieldChanges"), changes]] : []),
-    [T("field.status"), tab === "held" ? T("mods.heldBadge") : tab === "reapplied" ? T("mods.impact.stateReapplied")
-      : T(`mods.impact.${OTHER_KINDS[mod.impact]}`)]];
+  const fields = changes ? [[null, changes]] : [];
   const page = !!(mod.id && mod.kind !== "other" && mod.target);
   const actions = [...(page ? [["go", T("add.go")]] : []),
     ...(tab === "held" ? [["preview", T("mods.impact.preview")], ["fix", T("mods.impact.fix"), "apply"]] : [])];

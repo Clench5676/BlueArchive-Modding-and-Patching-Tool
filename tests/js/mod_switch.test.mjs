@@ -1428,7 +1428,8 @@ test("an update's impact as a list: the held mods, those applied again and the o
   // a held card: the student's name, its kind and Applied as chips, the Files Changed badge, its own picture
   const held = Impact.card(tabs.held[0], "held", nameOf);
   assert.deepEqual([held.key, held.label, held.full, held.chips, held.badge.text],
-    ["1", "Hoshino", "Bunny Hoshino", ["Portrait", "Applied"], "Files Changed"]);
+    ["1", "Hoshino", "Bunny Hoshino", ["Portrait", "Applied", "Official"], "Files Changed"]);
+  assert.deepEqual(Impact.card(tabs.others[0], "others", nameOf).chips, ["Portrait"], "no changes known: no chip");
   assert.ok(held.thumb && typeof held.big === "function");
   // another kind's card says what happened to it
   assert.equal(Impact.card(tabs.others[1], "others", nameOf).badge.text, "Gone");
@@ -1436,18 +1437,18 @@ test("an update's impact as a list: the held mods, those applied again and the o
   // the details: the mod's name, what changed (without the kind's prefix), its state; Go To, the preview, Fix and Apply
   const d = Impact.details(tabs.held[0], "held");
   assert.equal(d.title, S("info.title.portrait"));
-  assert.deepEqual(d.fields, [["Official Changes", ".atlas file layout changed, 3 new animations in the .skel file"],
-    [S("field.status"), "Files Changed"]]);
+  // the changes alone, no caption: the chip above names them, the badge and the segment give the state
+  assert.deepEqual(d.fields, [[null, ".atlas file layout changed, 3 new animations in the .skel file"]]);
   assert.deepEqual(d.actions.map(([id]) => id), ["go", "preview", "fix"]);
   assert.deepEqual(Impact.details(tabs.others[0], "others").actions.map(([id]) => id), ["go"]);
-  assert.equal(Impact.details(tabs.reapplied[0], "reapplied").fields.at(-1)[1], "Overwritten by official files, applied again");
+  assert.deepEqual(Impact.details(tabs.reapplied[0], "reapplied").fields, []);
   // every string in every locale
   try {
     for (const lang of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
       const ui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url))).webui;
       I18n.setStrings(lang, flat({ webui: ui }));
       const m = ui.mods.impact;
-      for (const k of ["title", "fix", "preview", "noPreview", "fieldChanges", "stateReapplied", "kindRebuilt", "kindNewParts", "kindGone",
+      for (const k of ["title", "fix", "preview", "noPreview", "chipOfficial", "kindRebuilt", "kindNewParts", "kindGone",
         "gateTitle", "gateAsk", "gateCheck", "checking", "reapplying", "sep"]) assert.ok(typeof m[k] === "string" && m[k].length > 0, `${lang} ${k}`);
       for (const k of ["tabHeld", "tabReapplied", "tabOthers", "fixSelected", "partial"]) assert.ok(m[k].includes("{n}"), `${lang} ${k}`);
       assert.ok(m.checkingMod.includes("{name}"), lang);
