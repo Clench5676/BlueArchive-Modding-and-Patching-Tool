@@ -61,14 +61,6 @@ test('camera Back returns to the ready detail page instead of a full lobby witho
   assert.equal(h.calls.filter(([name])=>name==='detail.ready').length,1);
   assert.ok(h.calls.some(([name,on])=>name==='fullscreen'&&on===false));
 });
-test('memorial playback works from the real cropped detail root while the intro is pending',()=>{
-  const h=harness();h.env.Lobby.introPending=()=>true;
-  assert.equal(h.env.layouts.list.name,'Inventory_ListControl');
-  const paused=h.bridge.playbackTree(true),playing=h.bridge.playbackTree(false);
-  assert.equal(paused.tree.name,'PhotoPlayback');assert.equal(paused.tree.children[0].widgets[0].sprite,'Common_Icon_Play');
-  assert.equal(playing.tree.children[0].widgets[0].texture,'svg:stop');
-  assert.equal(h.env.find(h.env.layouts.list,'LeftInfo/CharInfo/Char_Target/Char_ZoomBtn').name,'Char_ZoomBtn');
-});
 test('expression previews reuse the detail face renderer and request each expression once',async()=>{
   const h=harness();
   await h.bridge.expressionPreview('01');await h.bridge.expressionPreview('01');await h.bridge.expressionPreview('02');

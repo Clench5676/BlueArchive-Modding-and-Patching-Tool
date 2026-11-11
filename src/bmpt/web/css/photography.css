@@ -4,7 +4,7 @@
 .photo-choice-shield{position:absolute}
 #photo-launcher{position:absolute;inset:0;z-index:500;pointer-events:none}
 #photo-launcher .hit{pointer-events:auto}
-.photo-active #photo-launcher{display:none}
+.photo-active #photo-launcher,.photo-active #camera-launcher{display:none}
 .photo-shutter-ring{position:absolute;width:98px;height:98px;box-sizing:border-box;border:3px solid #2b496e;border-radius:50%;z-index:75;pointer-events:none}
 .photo-preloading{opacity:0!important;pointer-events:none!important}
 .photo-active #stage{background:#0d1626}
