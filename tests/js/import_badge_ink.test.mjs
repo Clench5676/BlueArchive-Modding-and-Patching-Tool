@@ -82,7 +82,7 @@ test("the correction is the distance between the ink's centre and the background
 const Popup = await import("../../src/bmpt/web/js/popup.js");
 const { controlRect, badgeRect, ROW_WIDTH, ROW_TEXT_SIZE, BUTTON_BODY_H, clipButtonPatterns } = await import("../../src/bmpt/web/js/import-layout.js");
 const { CHOOSE, noteRoom, NOTE_LEFT } = await import("../../src/bmpt/web/js/import-state.js");
-const { XS_BUTTON, FOOTER, CONTROL, SPACE, TYPE, LINE } = await import("../../src/bmpt/web/js/ui-tokens.js");
+const { XS_BUTTON, CONTROL, SPACE, TYPE, LINE } = await import("../../src/bmpt/web/js/ui-tokens.js");
 const { S } = await import("../../src/bmpt/web/js/util.js");
 const { setStrings } = await import("../../src/bmpt/web/js/i18n.js");
 const missingLabel = (key, params = {}, locale) => text(locale, `import.missing.${({missing: "count", missingNotFound: "notFound"})[key] || key}`, params);
@@ -521,8 +521,8 @@ for (const locale of LOCALES) test(`the list action's confirmation lists 25 rows
   assert.equal(layout.scroll, true); assert.ok(layout.height <= Popup.MSG.cap + 1e-9);
   const room = layout.content.w;
   for (const label of labelsOf(layout)) assert.ok(widest(label.text, label.fontSize) <= room + 1e-9);
-  // the footer's pair: Cancel and the owner's Add label at one size within the prefab's 72 down to 48
-  const caption = FOOTER.caption, pair = [text(locale, "popup.cancel"), missingLabel("addTogether", {}, locale)];
+  // the footer's pair: Cancel and the owner's Add label at one size within the default footer's range (XS, BL-176)
+  const caption = Popup.FOOTER[Popup.FOOTER_DEFAULT].caption, pair = [text(locale, "popup.cancel"), missingLabel("addTogether", {}, locale)];
   const fits = Popup.footerFit(pair);
   assert.equal(new Set(fits.map((f) => f.fs)).size, 1);
   fits.forEach((f, i) => {

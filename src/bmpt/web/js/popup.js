@@ -22,9 +22,9 @@ import { frameOutline } from "./row-thumbnail.js";
 import { T } from "./i18n.js";
 import { codeOf, noticeNames, withCode } from "./error-codes.js";
 import { withTimeout } from "./async.js";
-import { TEXT_VIEWER, frameClass, frameGeometry, popupContent } from "./popup-frames.js";
+import { TEXT_VIEWER, XL_CONTENT_H, frameClass, frameGeometry, popupContent } from "./popup-frames.js";
 import { STATS_BOX_S, boxHeight, statsBox, valueRoom } from "./stats-box.js";
-import { BACKDROP, CHIP, CHIP_TIERS, COLOUR, CONTROL, POPUP_FRAME, SPACE, TYPE, SMALL_BUTTON, XS_BUTTON, STATS_BOX, captionMinimum } from "./ui-tokens.js";
+import { BACKDROP, CHIP, CHIP_TIERS, COLOUR, CONTROL, POPUP_FOOTER, POPUP_FRAME, SPACE, TYPE, SMALL_BUTTON, XS_BUTTON, STATS_BOX, captionMinimum } from "./ui-tokens.js";
 import { DOT, RECRUIT, S, TAN10, clone, glyphsOf, hitButton, markedLabel, wrapPath } from "./util.js";
 
 import { container, grid, row, stack as layoutStack, textItem, toNode } from "./ui-grid.js";
@@ -237,8 +237,11 @@ export const BUTTON_TEXT_H = CONTROL.buttonL.h - SPACE.m;
 export const FRAME_Y = POPUP_FRAME.frameY;
 
 // --- the footer: one set of numbers for every popup frame (UIPopup_Sort/Center/Popup/Btn) ---
-export const footerY = (h, control = CONTROL.buttonL) => FRAME_Y - h / 2 + POPUP_FRAME.footer.bottom + control.h / 2;
-export const footerTop = (h, n = 1) => footerY(h) + CONTROL.buttonL.h / 2;
+// a footer's bodies above the frame's bottom: the prefab's 102 under its buttonL bodies, scaled to the bodies' height (60 for
+// the XS footer every popup has, POPUP_FOOTER.bottom)
+export const footerBottom = (control = POPUP_FOOTER.control) => Math.round(POPUP_FRAME.footer.bottom * control.h / CONTROL.buttonL.h);
+export const footerY = (h, control = POPUP_FOOTER.control) => FRAME_Y - h / 2 + footerBottom(control) + control.h / 2;
+export const footerTop = (h, n = 1) => footerY(h) + POPUP_FOOTER.control.h / 2;
 export function footerScale(n, w = Infinity, control = footerSize().control) {
   return n < 3 ? 1 : Math.min(1, (w - 2 * POPUP_FRAME.footer.side - POPUP_FRAME.footer.gap * (n - 1)) / n / control.minW);
 }
@@ -253,7 +256,8 @@ export function footerSlots(n, w, control = footerSize().control) {
 }
 const CAPTION_L = { fs: TYPE.display.fs, fsMin: TYPE.display.min, w: CONTROL.buttonL.minW - 2 * CONTROL.buttonL.pad,
   lines: 2, h: BUTTON_TEXT_H };
-// The footer's sizes: "L", the buttonL control with display captions (UIPopup_RaidEnterCheck's footer); "M", one size smaller
+// The footer's sizes: "XS", the app's small button (CONTROL.buttonXS), every popup's footer (owner, 2026-11-11, BL-176:
+// "弹窗的按钮弄成 XS", every popup of the App); "L", the buttonL control with display captions (UIPopup_RaidEnterCheck's footer); "M", one size smaller
 // (the buttonM control, its caption 60 down to TYPE.body's floor); "S", two sizes smaller (the Settings value row's small
 // button, SMALL_BUTTON, 402 x 136, its caption 48 down to TYPE.body's floor). Every button went one size down (owner,
 // 2026-11-11, BL-173): a popup's footer is "M" unless its call site says otherwise, and the compatibility result ("S") and
@@ -265,11 +269,10 @@ export const FOOTER = Object.freeze({
     w: CONTROL.buttonM.minW - 2 * CONTROL.buttonM.pad, lines: 2, h: CONTROL.buttonM.h - SPACE.m }) }),
   S: Object.freeze({ control: FOOTER_S, caption: Object.freeze({ fs: FOOTER_S.fs, fsMin: TYPE.body.min,
     w: FOOTER_S.minW - 2 * FOOTER_S.pad, lines: 2, h: FOOTER_S.h - SPACE.m }) }),
-  // a compact notice's (owner, 2026-11-11): the app's small button
   XS: Object.freeze({ control: CONTROL.buttonXS, caption: Object.freeze({ fs: CONTROL.buttonXS.fs, fsMin: TYPE.badge.min,
     w: CONTROL.buttonXS.minW - 2 * CONTROL.buttonXS.pad, lines: 2, h: CONTROL.buttonXS.h - SPACE.s }) }),
 });
-export const FOOTER_DEFAULT = "M";
+export const FOOTER_DEFAULT = "XS";
 // A footer's body width, units: the control's own minimum, wider where the longest caption needs it (its widest line, at the
 // size the group fits the widest body, buttonL's, with the control's padding each side), the same for every button of the
 // row. A tier is a height and a caption size; the width follows the captions, as the small button's does (glyphPad), so a
@@ -287,8 +290,7 @@ export function footerWidth(captions, kind = footerSize()) {
 // follow the captions, footerWidth).
 export function footerLayout(labels, w, footer = null) {
   const kind = footerSize(footer), control = kind.control;
-  // the default size's bodies and the XS notice's follow their captions (a caption on one line where it fits)
-  const baseW = footer == null || footer === "XS" ? footerWidth(labels, kind) : control.minW;
+  const baseW = footer == null || footer === FOOTER_DEFAULT ? footerWidth(labels, kind) : control.minW;
   const { scale, xs } = footerSlots(labels.length, w, { ...control, minW: baseW }), bodyW = baseW * scale;
   return { kind, control, scale, xs, bodyW, room: bodyW - 2 * control.pad };
 }
@@ -318,7 +320,7 @@ export function footerLabels(widgets, captions, options = {}) {
 //   close: false for a popup that must be answered with a button (no close button)
 //   titleCentre: the title's ink centre this far under the frame's top, in units, in place of the shared title top (the
 //                header band's centre puts the title where UIPopup_Sort has it)
-//   footer: the buttons' size, "S", "M" or "L" (FOOTER); without it the default size, M, its bodies as wide as the captions need
+//   footer: the buttons' size, "XS", "S", "M" or "L" (FOOTER); without it the default size, XS, its bodies as wide as the captions need
 export function popupFrame(title, w, h, { ok = null, cancel = null, close = true, buttons = null, captionSite = null,
   titleCentre = null, footer = null } = {}) {
   ({ w, h } = frameGeometry(w, h));
@@ -476,9 +478,10 @@ export function listLayout(check = false, kind = null) {
   const native = switchGrid(kind).card;
   // One complete native card, its name band and the toolbar determine the minimum useful viewport. Additional cards scroll.
   const cardHeight = native.h + Math.max(native.bar, LIST_CARD_NAME.padY + LIST_CARD_NAME.lines * LIST_CARD_NAME.fs * LIST_CARD_NAME.pitch);
-  const need = POPUP_FRAME.contentTop + CONTROL.buttonS.h + 5 * SPACE.m + cardHeight
-    + POPUP_FRAME.footer.bottom + CONTROL.buttonL.h + SPACE.m;
-  const frame = frameGeometry("XL", Math.max(need, POPUP_FRAME.XL.h)), content = popupContent(frame.w, frame.h);
+  const need = POPUP_FRAME.contentTop + CONTROL.buttonS.h + 5 * SPACE.m + cardHeight + POPUP_FOOTER.clearance;
+  // the XL prefab's content box (XL_CONTENT_H) over the XS footer: the panels keep their size, the footer's padding goes
+  const frame = frameGeometry("XL", Math.max(need, POPUP_FRAME.contentTop + XL_CONTENT_H + POPUP_FOOTER.clearance));
+  const content = popupContent(frame.w, frame.h);
   const panels = grid(content);
   const detailBox = { ...panels.span(4), h: content.h - (check ? CHECK_H + SPACE.m : 0) };
   const bounds = box => {
@@ -575,9 +578,9 @@ function checkedToolbar(right, y, { segs, sortKey, sortKeys, active, ascending, 
 }
 
 // The list and details panels occupy the XL content grid; its footer uses the shared centred group.
-// The list popups' footer is S, one size under the other popups' M (owner, 2026-11-11: Switch Portrait, Memorial Lobby, 3D
-// Model and the like); footer: another size for one list.
-export const LIST_FOOTER = "S";
+// The list popups' footer is the XS every popup has (owner, 2026-11-11, BL-176; it was S, one size under the other popups'
+// M, earlier the same day); footer: another size for one list.
+export const LIST_FOOTER = FOOTER_DEFAULT;
 export function listFrame(title, buttons, closeButton, check = false, kind = null, band = LIST_BAND.tools, footer = LIST_FOOTER) {
   const layout = listLayout(check, kind);
   const t = popupFrame(title, layout.frame.w, layout.frame.h, { close: closeButton, footer,
@@ -926,7 +929,7 @@ export function detailsTree(it, title, fields, actions, portraitTexture = null, 
 //          object is passed to every drawing
 //   details(it): {title, fields: [[caption, value, colour]], actions: [[caption, fn]], truncate} for the panel on the left;
 //                truncate: each value on one line, a "…" button showing a cut one whole
-//   footer: the footer buttons' size, LIST_FOOTER ("S") unless named
+//   footer: the line over the paper's right (the ticked cards, their size); the footer buttons are LIST_FOOTER's size
 //   keepScroll: the list's offset on its scrolling axis (horizontal for portraits)
 //   tick: {keys, onTick(key, scroll)}: cards ticked apart from being shown (owner, 2026-11-11): a click on a card shows
 //         it in the details (onSelect, selected), a click on its corner's tick box ticks or unticks it (onTick)
@@ -982,7 +985,7 @@ export async function listPopup(options) {
   const btns = (buttons || [{ label: okText, fn: onOk, primary: true, semantic: options.okSemantic || "confirm", action: "ok" }])
     .map((b) => (b.primary && filteredOut ? { ...b, greyed: true, blocked: true } : b));
   const next = document.createElement("div");
-  const view = await NGUI.render(listFrame(title, btns, !!onClose, !!check, options.layoutKind, band0, options.footer ?? LIST_FOOTER), next, { scale: S, origin: [960, 540] });
+  const view = await NGUI.render(listFrame(title, btns, !!onClose, !!check, options.layoutKind, band0), next, { scale: S, origin: [960, 540] });
   btns.forEach((b, i) => {
     const button = hit(next, view, `Center/Popup/Btn/Btn_${i}/BG (1)`, b.blocked ? () => {} : b.fn, { name: b.label, action: b.action || `button${i}` });
     if (button && b.blocked) { button.disabled = true; button.setAttribute("aria-disabled", "true"); }
@@ -1191,10 +1194,8 @@ export async function listPopup(options) {
 }
 
 // --- the message popup ---
-// a compact notice's frame width (messageLayout compact): UIPopup_ClientVersion's
-export const COMPACT_W = 1115;
 export const MSG = { title: POPUP_FRAME.contentTop, gap: SPACE.l, rowButton: XS_BUTTON.h + SPACE.m,
-  check: CHECK_H + SPACE.m, buttons: POPUP_FRAME.footer.bottom + CONTROL.buttonL.h + SPACE.m,
+  check: CHECK_H + SPACE.m, buttons: POPUP_FOOTER.clearance,
   none: SPACE.xl, cap: POPUP_FRAME.maxH };
 
 // message({title, lines, ok, cancel, check, host, width, close, confirmKeys, scroll}): a message on the popup frame, in host
@@ -1212,8 +1213,7 @@ export const MSG = { title: POPUP_FRAME.contentTop, gap: SPACE.l, rowButton: XS_
 //          {rule: true} is the game's dotted divider (Common_Line_Dot, as the light stats box draws it) across the text
 //   ok, cancel: the buttons' labels (either may be left out); check: {label, checked}
 //   buttons: optional named footer choices [{label, value, primary}], instead of ok/cancel
-//   footer: the footer buttons' size, "XS", "S", "M" or "L" (FOOTER); without it the default size, M, its bodies as wide as the captions need
-//   compact: a short notice on the smallest frame (COMPACT_W wide, as high as it needs), with little padding
+//   footer: the footer buttons' size, "XS", "S", "M" or "L" (FOOTER); without it the default size, XS, its bodies as wide as the captions need
 //   close: false for a popup that must be answered with a button (no close button; the backdrop and Escape do nothing)
 //   confirmKeys: keys that press OK while the popup is in front and holds the focus itself (a focused button takes its
 //                own key), as the PC client binds its popups' confirm (["Enter", " "]); none by default
@@ -1251,13 +1251,13 @@ export function confirmKey(ev, keys) {
 
 // the message without the game's prefab: a plain box on a dark backdrop, the same buttons, marked the same way
 export function plainMessage(layer, { title, lines = [], ok, cancel, buttons, state = null, dismissable = true,
-  scroll = false, plain = false, width, height, fitTogether = [], captionSite = null, footer = null, compact = false }, finish) {
+  scroll = false, plain = false, width, height, fitTogether = [], captionSite = null, footer = null }, finish) {
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
   const button = (caption, fn, action, cls = "message-button") => {
     const b = el("button", cls, caption); b.dataset.action = action; b.setAttribute("aria-label", caption);
     b.addEventListener("click", fn); return b;
   };
-  const layout = messageLayout({ lines, ok, cancel, buttons, check: state, scroll, plain, width, height, fitTogether, assets: false, footer, compact });
+  const layout = messageLayout({ lines, ok, cancel, buttons, check: state, scroll, plain, width, height, fitTogether, assets: false, footer });
   const frame = { w: layout.width, h: layout.height, cx: 0, cy: FRAME_Y };
   const styleBox = (element, box, fs) => {
     Object.assign(element.style, { position: "absolute", boxSizing: "border-box", margin: "0", padding: "0",
@@ -1324,7 +1324,7 @@ export function plainMessage(layer, { title, lines = [], ok, cancel, buttons, st
     const { kind: size, control, bodyW, room } = footerLayout(actions.map((action) => action.label), frame.w, footer);
     const fits = footerFit(actions.map(action => action.label), { site: captionSite, width: room, caption: size.caption });
     const actionRow = el("div", "message-actions");
-    styleBox(actionRow, { x: 0, y: frame.h - POPUP_FRAME.footer.bottom - control.h, w: frame.w, h: control.h });
+    styleBox(actionRow, { x: 0, y: frame.h - footerBottom(control) - control.h, w: frame.w, h: control.h });
     const boxes = row(actions.map(() => ({ w: bodyW, h: control.h })), { w: frame.w, gap: POPUP_FRAME.footer.gap, justify: "center" }).boxes;
     actions.forEach((action, i) => {
       const b = styleBox(button(fits[i].text, () => finish(action.value), action.value), boxes[i], NGUI.fontSizeFor(fits[i].text, fits[i].fs));
@@ -1475,21 +1475,16 @@ function messageLines(lines, w, fitTogether, plain, assets = true) {
 // `scroll` in the result tells whether the lines scroll in the frame: asked for, or forced because the frame would
 // be taller than MSG.cap. Non-scrolling bodies, including their check row, centre in the content box.
 export function messageLayout({ lines = [], width, ok = null, cancel = null, buttons = null, check = null,
-  fitTogether = [], scroll = false, plain = false, assets = true, height: minimumHeight = 0, footer = null, compact = false } = {}) {
+  fitTogether = [], scroll = false, plain = false, assets = true, height: minimumHeight = 0 } = {}) {
   let size;
-  // compact: a one-line notice (owner, 2026-11-11): the game's smallest titled popup's width (UIPopup_ClientVersion
-  // 1115), as high as its lines and footer need, its footer's own buttons' clearance
-  if (compact) size = { w: COMPACT_W, h: 0 };
-  else if (width != null) size = frameClass(width === 2100 ? "L" : width);
+  if (width != null) size = frameClass(width === 2100 ? "L" : width);
   else size = ["S", "M", "L"].map(key => frameClass(key)).find(candidate =>
     messageLines(lines, candidate.w, fitTogether, plain, false).fitted.every(({ f }) => f.lines <= 6)) || POPUP_FRAME.L;
   const body = messageLines(lines, size.w, fitTogether, plain, assets), hasButtons = !!(ok || cancel || buttons?.length);
-  const buttonsH = compact ? POPUP_FRAME.footer.bottom + footerSize(footer).control.h + SPACE.l : MSG.buttons;
-  const need = MSG.title + body.height + (check ? MSG.check : 0) + (hasButtons ? buttonsH : MSG.none);
-  const { w, h: height } = compact ? { w: size.w, h: Math.min(POPUP_FRAME.maxH, Math.max(need, minimumHeight)) }
-    : frameGeometry(size.w, Math.max(need, minimumHeight));
-  const content = compact ? container({ w, h: height, padding: [POPUP_FRAME.contentTop, SPACE.xxl, hasButtons ? buttonsH : SPACE.xl, SPACE.xxl] }).inner
-    : popupContent(w, height, { text: true, footer: hasButtons });
+  // as high as the lines and the footer need (BL-176: no taller minimum frame, so no padding round a short message)
+  const need = MSG.title + body.height + (check ? MSG.check : 0) + (hasButtons ? MSG.buttons : MSG.none);
+  const { w, h: height } = frameGeometry(size.w, Math.max(need, minimumHeight)),
+    content = popupContent(w, height, { text: true, footer: hasButtons });
   const available = Math.max(0, content.h - (check ? MSG.check : 0));
   // A body that fits keeps its own height and centres, scrolling or not; only an overflowing one fills the content box.
   const overflow = body.height > available + 1e-9, scrolls = scroll || overflow;
@@ -1506,7 +1501,7 @@ export function messageLayout({ lines = [], width, ok = null, cancel = null, but
   return { body, width: w, height, visible, y0, content, checkBox, checkCaption, scroll: scrolls };
 }
 
-async function showMessage({ title = "", lines = [], ok = null, cancel = null, buttons = null, check = null, host: hostArg = "dialog", width, close: dismissable = true, confirmKeys = null, fitTogether = [], scroll = false, plain = false, captionSite = null, footer = null, compact = false }, resolve) {
+async function showMessage({ title = "", lines = [], ok = null, cancel = null, buttons = null, check = null, host: hostArg = "dialog", width, close: dismissable = true, confirmKeys = null, fitTogether = [], scroll = false, plain = false, captionSite = null, footer = null }, resolve) {
   const host = hostOf(hostArg);
   const layer = document.createElement("div");
   layer.className = "popup-layer";
@@ -1540,12 +1535,12 @@ async function showMessage({ title = "", lines = [], ok = null, cancel = null, b
   } catch (err) {
     console.warn("message popup without the game's frame", err);
     if (ended) return;
-    plainMessage(layer, { title, lines, ok, cancel, buttons, state, dismissable, scroll, plain, width, fitTogether, captionSite, footer, compact }, finish);
+    plainMessage(layer, { title, lines, ok, cancel, buttons, state, dismissable, scroll, plain, width, fitTogether, captionSite, footer }, finish);
     layer.focus?.({ preventScroll: true });
     return;
   }
   try {
-    const { body, width: w, height, visible, y0, content, checkBox, scroll: scrolls } = messageLayout({ lines, width, ok, cancel, buttons, check: state, fitTogether, scroll, plain, footer, compact });
+    const { body, width: w, height, visible, y0, content, checkBox, scroll: scrolls } = messageLayout({ lines, width, ok, cancel, buttons, check: state, fitTogether, scroll, plain });
     const t = popupFrame(title, w, height, { ok, cancel, buttons, close: dismissable, captionSite, footer });
     const popup = find(t, "Popup");
     // The body and check row centre together; a scrolling body fills the available content box.

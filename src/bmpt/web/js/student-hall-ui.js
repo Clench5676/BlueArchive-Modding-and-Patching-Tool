@@ -82,7 +82,8 @@ export function createModal(title, onClose, { level = 0 } = {}) {
         Popup.hit(layer, frame, "Center/Popup/Base/BG/Btn_Close", onClose, { name: T("display.close") });
         await build(layer, live, drawSignal);
         if (retainedFooter) {
-          // The memorial editor cannot retain a full candidate row above the taller queue and shared footer.
+          // The memorial editor keeps its own footer under its fixed queue panel: small buttons (66 px, about the XS
+          // body every popup's footer has) at the frame's bottom right.
           const actionWidth = Math.min(280, (width * S - 180) / Math.max(1, actions.length) - 20);
           const right = 960 + width * S / 2 - 70, bottom = 540 + (height / 2 - 120) * S;
           const footerSize = retainedButtonSize(actions.map((action) => action.label), actionWidth, 66);

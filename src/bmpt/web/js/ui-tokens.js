@@ -249,6 +249,11 @@ export const CONTROL = Object.freeze({
 // edges: 2840 across, so a column is 200 and its pitch 240.
 export const GRID = Object.freeze({ columns: 12, gutter: 40, pageMargin: 60, stageW: 2960, stageH: 1665 });
 
+// Every popup's footer (owner, 2026-11-11, BL-176): XS bodies, as far above the frame's bottom as the prefab's 102 under its
+// 176-high buttonL bodies scaled to theirs (popup.js footerBottom: 60), the content SPACE.xl above their tops. clearance:
+// the room a frame keeps under its content for the footer.
+export const POPUP_FOOTER = Object.freeze({ control: CONTROL.buttonXS, bottom: 60, above: 40, clearance: 60 + 104 + 40 });
+
 // Popup frames (Common_Popup_Bg), by width class: S 1300 x 1050 (19 popups; UIPopup_RaidEnterCheck), M 1540 (UIPopup_
 // ConquestBattleEnter_Sub), L 2098 x 1110 (UIPopup_Option_PC), XL 2841 x 1353 (UIPopup_GachaCharList). Their anatomy is
 // the S class's, the survey's most common: the title's top 36 under the frame's (fs 72), the close icon 48 from the right and
@@ -256,7 +261,9 @@ export const GRID = Object.freeze({ columns: 12, gutter: 40, pageMargin: 60, sta
 // 33 apart and 102 above the frame's bottom, the pair centred (82.5 from each side; the exemplar's are 84 and 81).
 export const POPUP_FRAME = Object.freeze({
   frameY: -12, // UIPopup_Sort Base -20 + BG 8
-  minH: 786, // UIPopup_ClientVersion Center/Popup/Base/BG 1115 x 786, the smallest titled popup with a footer button
+  // the smallest frame (BL-176): the title's band over the footer's clearance (the game's smallest titled popup with a footer
+  // button, UIPopup_ClientVersion's 1115 x 786, kept far more padding than the owner wants)
+  minH: 170 + POPUP_FOOTER.clearance,
   maxH: 1560,
   S: Object.freeze({ w: 1300, h: 1050 }),
   M: Object.freeze({ w: 1540, h: 1073 }),

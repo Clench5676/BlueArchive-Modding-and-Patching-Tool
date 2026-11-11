@@ -821,7 +821,7 @@ test("update progress stays in NGUI, blocks buttons and Escape, and completion w
   assert.ok(bar.top - status.bottom >= 6 * S, "the status has a gap above the bar");
   for (const name of ["Btn_Ok", "Btn_Cancel"]) {
     const button = bounds(part(`Btn/${name}/BG (1)`));
-    assert.ok(Math.abs(button.height - CONTROL.buttonM.h * S) < 0.01, "check the prefab's button background height at the three-choice scale");
+    assert.ok(Math.abs(button.height - CONTROL.buttonXS.h * S) < 0.01, "check the prefab's button background height at the three-choice scale");
     assert.ok(button.top - bar.bottom >= 12 * S, "the full button background clears the progress bar");
     assert.ok(button.bottom < frame.bottom, "the buttons stay within the frame");
   }
@@ -2276,15 +2276,15 @@ test("release-note button captions fit the resized UIPopup_Sort branches in all 
       const controls = NGUI.find(tree, 'Popup/Btn').children;
       const labels = controls.map(child => NGUI.find(child, 'Label_Locale').widgets[0]);
       assert.equal(new Set(labels.map(w => w.fontSize)).size, 1, lang);
-      // the default footer is the M size (one under the old L), its bodies as wide as the captions need
-      const { control, caption } = Popup.FOOTER.M, bodyW = Popup.footerWidth(captions), room = bodyW - 2 * control.pad;
+      // the default footer is the XS size (BL-176), its bodies as wide as the captions need
+      const { control, caption } = Popup.FOOTER[Popup.FOOTER_DEFAULT], bodyW = Popup.footerWidth(captions), room = bodyW - 2 * control.pad;
       assert.ok(bodyW >= control.minW && bodyW <= CONTROL.buttonL.minW, lang);
       for (const [i, child] of controls.entries()) {
         const w = labels[i], body = NGUI.find(child, 'BG (1)');
         assert.deepEqual(child.pos, [(i - .5) * (bodyW + POPUP_FRAME.footer.gap), 0]); // two bodies, the shared gap apart
         assert.deepEqual(child.scale, [1, 1]);
         assert.deepEqual(body.pos, [0, 0]);
-        assert.deepEqual([body.widgets[0].w_, body.widgets[0].h_], [bodyW, CONTROL.buttonM.h]);
+        assert.deepEqual([body.widgets[0].w_, body.widgets[0].h_], [bodyW, control.h]);
         assert.deepEqual(NGUI.find(child, 'Label_Locale').pos, [0, 0]);
         assert.equal(w.text.replace(/\s/g, ''), captions[i].replace(/\s/g, ''), lang);
         const lines = w.text.split('\n');
@@ -2301,11 +2301,11 @@ test("release-note button captions fit the resized UIPopup_Sort branches in all 
   } finally { setStrings('en-US', Object.fromEntries(strings(english))); }
 });
 
-// UI-32: the offer's three captions wrap to two lines before they shrink, in the footer's 60 to 34 range, at one size
+// UI-32: the offer's three captions wrap to two lines before they shrink, in the default footer's range, at one size
 test("the update offer's captions wrap before they shrink, share one size and fit in every locale", async () => {
   const NGUI = await import("../../src/bmpt/web/js/ngui.js");
   await Popup.ready();
-  const { caption: range } = Popup.FOOTER.M, H = range.h;
+  const { caption: range } = Popup.FOOTER[Popup.FOOTER_DEFAULT], H = range.h;
   let W = 0; // the caption room on the footer's bodies for the captions at hand (Popup.footerLayout)
   const inside = (w, scale = 1) => {
     const lines = w.text.split("\n");
@@ -2483,7 +2483,7 @@ test('tour pages and sibling controls fit all six locales inside the notice pref
         if (image) {
           const slot = NGUI.find(popup, 'ImageSlot'), caption = NGUI.find(popup, 'Caption');
           assert.ok(copy.pos[1] - bodyWidget.h_ / 2 >= slot.pos[1] + 250);
-          // the caption's bottom edge keeps 16 clear of the footer's tops (the footer sits 190.5 above the frame's bottom)
+          // the caption's bottom edge keeps 20 clear of the footer's tops (the XS footer, BL-176)
           assert.ok(caption.pos[1] - 35 >= Popup.footerTop(NGUI.find(popup, "Base/BG").widgets[0].h_) + 20);
         }
         for (const widget of [titleWidget, bodyWidget]) for (const line of widget.text.split('\n')) {
@@ -2491,10 +2491,12 @@ test('tour pages and sibling controls fit all six locales inside the notice pref
         }
         const captions = ['Btn_Cancel', 'Btn_Ok'].map((name) => NGUI.find(popup, `Btn/${name}/Label_Locale`).widgets[0]);
         assert.equal(captions[0].fontSize, captions[1].fontSize);
+        // the default footer's caption range (XS, BL-176), inside the body's room
+        const range = Popup.FOOTER[Popup.FOOTER_DEFAULT].caption;
         for (const widget of captions) {
-          assert.ok(widget.fontSize >= 48 && widget.fontSize <= 72);
+          assert.ok(widget.fontSize >= range.fsMin && widget.fontSize <= range.fs);
           assert.ok(widget.text.split('\n').length <= 2);
-          for (const line of widget.text.split('\n')) assert.ok(NGUI.glyphWidth(line, widget.fontSize) <= 400);
+          for (const line of widget.text.split('\n')) assert.ok(NGUI.glyphWidth(line, widget.fontSize) <= widget.w_ + 1e-9);
         }
       }
     }
@@ -2729,13 +2731,13 @@ test('shipped text-only tours use one fitted message frame in every locale, wind
         const large = NGUI.find(Tours.pageTree({ ...page, image: '/tours/app-ui.png' }, index, pages.length), 'Popup');
         assert.deepEqual(controls.children, NGUI.find(large, 'Btn').children, 'footer widgets, captions and states are unchanged');
         const bodies = ['Btn_Cancel', 'Btn_Ok'].map((name) => NGUI.find(controls, `${name}/BG (1)`));
-        // the footer is the default M size, its two bodies as wide as the captions need and the shared gap apart
+        // the footer is the default XS size (BL-176), its two bodies as wide as the captions need and the shared gap apart
         const bodyW = bodies[0].widgets[0].w_;
-        assert.ok(bodyW >= CONTROL.buttonM.minW && bodyW <= CONTROL.buttonL.minW, `${lang}: ${bodyW}`);
+        assert.ok(bodyW >= CONTROL.buttonXS.minW && bodyW <= CONTROL.buttonL.minW, `${lang}: ${bodyW}`);
         for (const [i, name] of ['Btn_Cancel', 'Btn_Ok'].entries()) {
           assert.deepEqual(NGUI.find(controls, name).pos, [(i - .5) * (bodyW + POPUP_FRAME.footer.gap), 0], 'footer spacing');
           assert.deepEqual(bodies[i].pos, [0, 0]);
-          assert.deepEqual([bodies[i].widgets[0].w_, bodies[i].widgets[0].h_], [bodyW, CONTROL.buttonM.h], 'design-system buttonM size');
+          assert.deepEqual([bodies[i].widgets[0].w_, bodies[i].widgets[0].h_], [bodyW, CONTROL.buttonXS.h], 'design-system buttonXS size');
         }
         const close = NGUI.find(popup, 'Base/BG/Btn_Close');
         assert.equal(close.active, true);
@@ -2784,17 +2786,18 @@ test('illustrated and mixed tours retain the original geometry, including a miss
   await Popup.ready();
   const pages = [tourPages[0], { ...tourPages[1], image: '/tours/missing-ui.png', caption: 'App controls' }];
   const size = Tours.pageSize(pages);
-  // the frame is 68.5 taller for the footer's rise and its content half of that higher: the original room under the caption
-  const lift = 34.25;
-  assert.deepEqual(size, { width: 2458, height: 1468.5, image: [-1000, -400 + lift, 2000, 500], bottom: -445 + lift - 35 });
+  // the frame is 46.5 shorter for the XS footer (BL-176: its tops 164 above the bottom, the original's 210.5) and its content
+  // half of that lower: the original room under the caption
+  const lift = -23.25;
+  assert.deepEqual(size, { width: 2458, height: 1353.5, image: [-1000, -400 + lift, 2000, 500], bottom: -445 + lift - 35 });
   for (const [i, page] of pages.entries()) {
     const popup = NGUI.find(Tours.pageTree(page, i, pages.length, size), 'Popup');
-    assert.deepEqual([NGUI.find(popup, 'Base/BG').widgets[0].w_, NGUI.find(popup, 'Base/BG').widgets[0].h_], [2841, 1468.5]);
+    assert.deepEqual([NGUI.find(popup, 'Base/BG').widgets[0].w_, NGUI.find(popup, 'Base/BG').widgets[0].h_], [2841, 1353.5]);
     assert.deepEqual(NGUI.find(popup, 'Count').pos, [0, 520 + lift]);
     assert.deepEqual(NGUI.find(popup, 'FeatureTitle').pos, [0, (page.image ? 405 : 300) + lift]);
     assert.deepEqual(NGUI.find(popup, 'FeatureBody').pos, [0, (page.image ? 220 : -40) + lift]);
     assert.equal(NGUI.find(popup, 'FeatureTitle').widgets[0].w_, 2100);
-    assert.deepEqual(NGUI.find(popup, 'Btn').pos, [0, Popup.footerY(1468.5, Popup.FOOTER.M.control)]);
+    assert.deepEqual(NGUI.find(popup, 'Btn').pos, [0, Popup.footerY(1353.5)]);
     if (page.image) {
       const slot = NGUI.find(popup, 'ImageSlot');
       assert.deepEqual(slot.pos, [0, -150 + lift]);
@@ -2927,9 +2930,9 @@ test('simulated offers use the real prefab and notes builder, intercept every ac
         assert.equal(actionsIn(consent).length, 3);
         const wanted = Popup.footerLayout([ui.update.later, ui.update.notes, ui.update.now], 2098);
         for (const el of geometry) {
-          // Three choices keep equal M bodies, as wide as the captions need, at this L width.
+          // Three choices keep equal XS bodies (BL-176), as wide as the captions need, at this L width.
           assert.ok(Math.abs(parseFloat(el.style.width) - wanted.bodyW * S) < 0.01);
-          assert.ok(Math.abs(parseFloat(el.style.height) - CONTROL.buttonM.h * S) < 0.01);
+          assert.ok(Math.abs(parseFloat(el.style.height) - CONTROL.buttonXS.h * S) < 0.01);
         }
         for (let i = 1; i < geometry.length; i++) assert.ok(parseFloat(geometry[i - 1].style.left) + parseFloat(geometry[i - 1].style.width) < parseFloat(geometry[i].style.left));
         const labels = ['Btn_Cancel', 'Btn_Notes', 'Btn_Ok'].map((name) => byPath(consent, `Center/Popup/Btn/${name}/Label_Locale`));
@@ -3090,9 +3093,10 @@ const messageShapes = {
 
 test("message stacks centre above the shared floor and grow to the stage cap, then scroll with 20-unit footer clearance", async () => {
   await Popup.ready();
+  const Tokens = await import("../../src/bmpt/web/js/ui-tokens.js");
   for (const [shape, make] of Object.entries(messageShapes)) for (let n = 0; n <= 40; n++) {
     const layout = Popup.messageLayout(make(n));
-    assert.ok(layout.height >= 786 && layout.height <= 1560, `${shape} ${n}`);
+    assert.ok(layout.height >= Tokens.POPUP_FRAME.minH && layout.height <= 1560, `${shape} ${n}`);
     const usedHeight = layout.visible + (shape === "check" ? Popup.MSG.check : 0);
     const free = layout.scroll ? 0 : Math.max(0, layout.content.h - usedHeight);
     near2(layout.y0, Popup.FRAME_Y + layout.height / 2 - 170 - free / 2);
@@ -3103,7 +3107,8 @@ test("message stacks centre above the shared floor and grow to the stage cap, th
   }
   const asked = Popup.messageLayout({ ...messageShapes.plain(2), scroll: true });
   assert.equal(asked.scroll, true);
-  assert.equal(asked.height, 786);
+  // as high as its lines and footer need (BL-176)
+  assert.equal(asked.height, Math.max(Tokens.POPUP_FRAME.minH, Popup.MSG.title + asked.body.height + Popup.MSG.buttons));
   // A scroll that is asked for but not needed keeps the body's own height, centred in the content box.
   near2(asked.visible, asked.body.height);
   near2(Popup.FRAME_Y + asked.height / 2 - asked.y0 + asked.visible / 2, asked.content.y + asked.content.h / 2);
@@ -3620,7 +3625,7 @@ test("the custom zoom-out limit's slider is a range input with the value as its 
 // --- design-system popup anatomy, independent of the Sort prefab's original dimensions ---
 const Tokens = await import("../../src/bmpt/web/js/ui-tokens.js");
 const Frames = await import("../../src/bmpt/web/js/popup-frames.js");
-const { FOOTER, POPUP, POPUP_FRAME, CONTROL, SPACE, TYPE } = Tokens;
+const { FOOTER, POPUP, POPUP_FOOTER, POPUP_FRAME, CONTROL, SPACE, TYPE } = Tokens;
 const STAGE_HALF = 540 / S;
 const unitsOf = (el) => {
   const [top, height, left, width] = ["top", "height", "left", "width"].map((key) => parseFloat(el.style[key]));
@@ -3649,22 +3654,23 @@ for (const lang of ["en-US", "zh-CN"]) test(`each popup class positions its fram
       const btn = NGUI.find(tree, "Popup/Btn"), widths = btn.children.map(b => NGUI.find(b, "BG (1)").widgets[0].w_);
       assert.equal(new Set(widths).size, 1);
       assert.equal(new Set(btn.children.map(b => NGUI.find(b, "Label_Locale").widgets[0].fontSize)).size, 1);
-      near2(btn.pos[1] - CONTROL.buttonM.h / 2 - (Popup.FRAME_Y - f.h / 2), 102);
+      // the XS footer (BL-176): its bodies POPUP_FOOTER.bottom above the frame's bottom
+      near2(btn.pos[1] - CONTROL.buttonXS.h / 2 - (Popup.FRAME_Y - f.h / 2), POPUP_FOOTER.bottom);
       for (let i = 0; i < n; i++) {
         const body = NGUI.find(btn.children[i], "BG (1)");
-        assert.deepEqual(body.pos, [0, 0]); assert.equal(body.widgets[0].h_, CONTROL.buttonM.h);
+        assert.deepEqual(body.pos, [0, 0]); assert.equal(body.widgets[0].h_, CONTROL.buttonXS.h);
         const caption = NGUI.find(btn.children[i], "Label_Locale").widgets[0];
-        assert.equal(caption.w_, widths[i] - 2 * CONTROL.buttonM.pad); assert.equal(caption.h_, Popup.FOOTER.M.caption.h);
+        assert.equal(caption.w_, widths[i] - 2 * CONTROL.buttonXS.pad); assert.equal(caption.h_, Popup.FOOTER.XS.caption.h);
         if (i) near2(btn.children[i].pos[0] - btn.children[i-1].pos[0] - widths[i], 33);
       }
       near2(btn.children[0].pos[0] + btn.children.at(-1).pos[0], 0);
       // the default footer's bodies are as wide as the captions need (Confirm in this language), a row of three is scaled to the frame
       assert.equal(widths[0], Popup.footerLayout(actions.map((a) => a.label), f.w).bodyW);
-      assert.ok(widths[0] >= CONTROL.buttonM.minW && widths[0] <= CONTROL.buttonL.minW);
+      assert.ok(widths[0] >= CONTROL.buttonXS.minW && widths[0] <= CONTROL.buttonL.minW);
       if (n === 3) near2(btn.children[0].pos[0] - widths[0] / 2 + f.w / 2, Math.max(82.5, (f.w - n * widths[0] - 66) / 2));
       const box = Frames.popupContent(f.w, f.h);
       assert.deepEqual([box.x, box.y, box.w], [40, 170, f.w - 80]);
-      near2(Popup.FRAME_Y + f.h / 2 - box.y - box.h, Popup.footerTop(f.h) + 20);
+      near2(Popup.FRAME_Y + f.h / 2 - box.y - box.h, Popup.footerTop(f.h) + POPUP_FOOTER.above);
       const text = Frames.popupContent(f.w, f.h, { text: true }); assert.deepEqual([text.x, text.w], [100, f.w - 200]);
     }
   } finally { setStrings("en-US", Object.fromEntries(strings(english))); document.documentElement.lang = "en-US"; }
@@ -3693,7 +3699,7 @@ test("numeric caller widths round up and every fixed popup chooses its assigned 
   assert.equal(Frames.MOD_ALIAS.w, 1540); assert.equal(Frames.ALIAS.w, 1540);
   assert.equal(Frames.compareFrame(false).w, 2098); assert.equal(Frames.compareFrame(true).w, 2098);
   for (let n = 1; n <= Frames.ALIAS.max; n++) {
-    const f = Frames.aliasFrame(n); assert.ok(f.h >= 786 && f.h <= 1560); assert.ok(f.bottom >= Popup.footerTop(f.h) + 20);
+    const f = Frames.aliasFrame(n); assert.ok(f.h >= POPUP_FRAME.minH && f.h <= 1560); assert.ok(f.bottom >= Popup.footerTop(f.h) + 20);
   }
   for (const body of [0, 300, 2000]) { const f = Frames.detailsFrame(body); assert.ok(f.bottom >= Popup.footerTop(f.h) + 20); }
   for (const f of [Frames.TEXT_VIEWER, Frames.MOD_ALIAS, Frames.EXPORT, Frames.compareFrame(true)]) assert.ok(f.bottom >= Popup.footerTop(f.h) + 20);
@@ -3704,7 +3710,7 @@ for (const lang of ["en-US", "zh-CN"]) test(`list panels, check row and detail b
   const layout = Popup.listLayout(true), { content, frame } = layout;
   near2(layout.left.l, -frame.w / 2 + 40); near2(layout.list.r, frame.w / 2 - 40);
   near2(layout.list.l - layout.left.r, 40); near2(frame.cy + frame.h / 2 - layout.left.t, 170);
-  near2(layout.left.b - (Popup.footerTop(frame.h) + 20), 124);
+  near2(layout.left.b - (Popup.footerTop(frame.h) + POPUP_FOOTER.above), 124);
   const tree = Popup.detailsTree(items[0], "Details", [["File", "one.bundle"]], [["Open", () => {}]]);
   const picture = NGUI.find(tree, "Picture"), name = NGUI.find(tree, "Name"), chip = NGUI.find(tree, "Chip_0");
   const chipH = Tokens.CHIP_TIERS.S.h, headH = Math.max(name.widgets[0].h_, chipH);
@@ -3787,11 +3793,11 @@ for (const lang of ["en-US", "zh-CN", "th-TH"]) test(`the switch details fit the
   } finally { setStrings("en-US", Object.fromEntries(strings(english))); }
 });
 
-test("the list popups' footer is the S button", async () => {
+test("the list popups' footer is the XS button every popup has", async () => {
   const NGUI = await import("../../src/bmpt/web/js/ngui.js"); await Popup.ready();
-  assert.equal(Popup.LIST_FOOTER, "S");
+  assert.equal(Popup.LIST_FOOTER, "XS");
   const tree = Popup.listFrame("Switch Portrait", [{ label: "Save", primary: true }], true);
-  assert.equal(NGUI.find(tree, "Popup/Btn/Btn_0/BG (1)").widgets.find((w) => "sprite" in w).h_, Tokens.CONTROL.buttonS.h);
+  assert.equal(NGUI.find(tree, "Popup/Btn/Btn_0/BG (1)").widgets.find((w) => "sprite" in w).h_, Tokens.CONTROL.buttonXS.h);
   const named = Popup.listFrame("Mods", [{ label: "Close" }], true, false, null, undefined, "M");
   assert.equal(NGUI.find(named, "Popup/Btn/Btn_0/BG (1)").widgets.find((w) => "sprite" in w).h_, Tokens.CONTROL.buttonM.h);
 });
@@ -3985,7 +3991,7 @@ for (const lang of LOCALE_LIST) test(`the asset consent's Change button (104 hig
       assert.ok(text[1] >= -L.cachedH - 1e-9, "the path text stays in the section");
       // The Note keeps the shared 20-unit footer clearance on the stage.
       assert.ok(L.noteBottom >= Popup.footerTop(L.h) + 20 - 1e-9, `${lang}: ${L.noteBottom} against ${Popup.footerTop(L.h)}`);
-      assert.ok(L.h <= Tokens.POPUP.maxH && L.h >= 786);
+      assert.ok(L.h <= Tokens.POPUP.maxH && L.h >= Tokens.POPUP_FRAME.minH);
       assert.ok(L.neverTop - L.neverH >= L.noteBottom + L.note.h + 40 - 1e-9, "the Never section clears the Note");
     }
     // as drawn
@@ -4120,7 +4126,7 @@ test("the startup Spine notice wraps inside UIPopup_Sort at message sizes in eve
       assert.ok(line.text.split("\n").length * NGUI.fontSizeFor(line.text, line.fontSize) * NGUI.LINE_PITCH <= line.h_);
       const caption = NGUI.find(ok, "Label_Locale").widgets[0];
       assert.equal(caption.text.replace(/\s/g, ""), ui.picker.ok.replace(/\s/g, ""));
-      assert.ok(caption.fontSize >= FOOTER.caption.fsMin);
+      assert.ok(caption.fontSize >= Popup.FOOTER[Popup.FOOTER_DEFAULT].caption.fsMin);
       for (const [name, widget] of [["heading", heading], ["body", line], ["caption", caption]]) {
         for (const text of widget.text.split("\n")) assert.ok(NGUI.glyphWidth(text, widget.fontSize) <= widget.w_, `${lang} ${name}`);
       }
@@ -4186,18 +4192,18 @@ for (const lang of LOCALE_LIST) test(`the rendered footer labels keep every capt
     setStrings(lang, Object.fromEntries(strings(ui))); document.documentElement.lang = lang;
     for (const keys of groups) {
       const captions = keys.map(key => byDots(ui, key));
-      const before = NGUI.fitGroup(captions, 72, 48, 400, 2, { maxH: 140 })[0].fs;
-      const known = lang === "th-TH" && (keys[0] === "update.later" || keys.join("/") === "recovery.report/picker.ok");
       const tree = Popup.popupFrame(ui.quit.title, keys.length > 2 ? "L" : "S", 0,
         { buttons: captions.map(label => ({ label })) });
       const labels = NGUI.find(tree, "Popup/Btn").children.map(child => NGUI.find(child, "Label_Locale").widgets[0]);
       assert.equal(new Set(labels.map(label => label.fontSize)).size, 1);
+      // the default footer's range (XS, BL-176), inside each body's room
+      const range = Popup.FOOTER[Popup.FOOTER_DEFAULT].caption;
       labels.forEach((label, i) => {
-        assert.ok(label.fontSize >= (known ? Math.max(36, before) : 48) && label.fontSize <= 72, `${lang} ${keys.join("/")}`);
+        assert.ok(label.fontSize >= range.fsMin && label.fontSize <= range.fs, `${lang} ${keys.join("/")}`);
         assert.equal(label.text.replace(/\s/g, ""), captions[i].replace(/\s/g, ""));
         assert.ok(label.text.split("\n").length <= 2);
-        for (const line of label.text.split("\n")) assert.ok(NGUI.glyphWidth(line, label.fontSize) <= 472);
-        assert.ok(label.text.split("\n").length * NGUI.fontSizeFor(label.text, label.fontSize) * NGUI.LINE_PITCH <= Popup.BUTTON_TEXT_H);
+        for (const line of label.text.split("\n")) assert.ok(NGUI.glyphWidth(line, label.fontSize) <= label.w_ + 1e-9);
+        assert.ok(label.text.split("\n").length * NGUI.fontSizeFor(label.text, label.fontSize) * NGUI.LINE_PITCH <= range.h + 1e-9);
       });
     }
   } finally { setStrings("en-US", Object.fromEntries(strings(english))); document.documentElement.lang = "en-US"; }
@@ -4220,7 +4226,7 @@ test("portrait and ordinary detail scroll areas keep the complete last field and
       assert.ok(a[1] + a[3] <= parseFloat(area.children[0].style.height) + 0.02);
       const layout = Popup.listLayout(false, kind);
       assert.ok(Math.abs(parseFloat(area.style.top) + parseFloat(area.style.height)
-        - (540 - (Popup.footerTop(layout.frame.h) + 20) * S)) < 0.02);
+        - (540 - (Popup.footerTop(layout.frame.h) + POPUP_FOOTER.above) * S)) < 0.02);
     }
   } finally { prompt.hidden = true; Popup.closed(prompt); }
 });
@@ -4243,11 +4249,13 @@ test("finding the game asks the Check Game Files consent first and searches only
 const contentCentre = f => f.cy + f.h / 2 - f.content.y - f.content.h / 2;
 const messageTop = layout => Popup.FRAME_Y + layout.height / 2 - layout.y0;
 
-test("explicit frame heights use 786 through 1560; omitted or zero heights retain the exemplar", () => {
+test("explicit frame heights use POPUP_FRAME.minH through 1560; omitted or zero heights retain the exemplar", () => {
   for (const key of ["S", "M", "L", "XL"]) {
     assert.equal(Frames.frameGeometry(key).h, POPUP_FRAME[key].h);
     assert.equal(Frames.frameGeometry(key, 0).h, POPUP_FRAME[key].h);
-    for (const [height, expected] of [[1, 786], [700, 786], [786, 786], [900, 900], [1400, 1400], [2000, 1560]])
+    const min = POPUP_FRAME.minH; // the title's band over the XS footer's clearance (BL-176)
+    assert.equal(min, 170 + POPUP_FOOTER.clearance);
+    for (const [height, expected] of [[1, min], [min - 1, min], [min, min], [700, 700], [900, 900], [1400, 1400], [2000, 1560]])
       assert.equal(Frames.frameGeometry(key, height).h, expected);
   }
   assert.ok(!("minH" in Popup.MSG) && !("minH" in Frames.DETAILS));
@@ -4261,10 +4269,13 @@ for (const lang of LOCALE_LIST) test(`messages fit and centre their body and che
     for (const width of ["S", "M", "L"]) for (const footer of [false, true]) {
       const args = { lines: [ui.picker.ok], width, ok: footer ? ui.picker.ok : null };
       const short = Popup.messageLayout(args);
-      assert.equal(short.height, 786); assert.equal(short.scroll, false);
+      // as high as the line and the footer need (BL-176), no taller minimum
+      assert.equal(short.height, Math.max(POPUP_FRAME.minH, Popup.MSG.title + short.body.height + (footer ? Popup.MSG.buttons : Popup.MSG.none)));
+      assert.equal(short.scroll, false);
       near2(messageTop(short) + short.visible / 2, short.content.y + short.content.h / 2, .5);
       const checked = Popup.messageLayout({ ...args, check: { label: ui.picker.ok, checked: false } });
-      assert.equal(checked.height, 786); assert.equal(checked.scroll, false);
+      assert.equal(checked.height, Math.max(POPUP_FRAME.minH, Popup.MSG.title + checked.body.height + Popup.MSG.check + (footer ? Popup.MSG.buttons : Popup.MSG.none)));
+      assert.equal(checked.scroll, false);
       near2(messageTop(checked) + (checked.visible + Popup.MSG.check) / 2, checked.content.y + checked.content.h / 2, .5);
       near2(checked.checkBox.y, messageTop(checked) + checked.visible + SPACE.m);
       // The same formula must hold when a tour reserves the tallest page's height.
@@ -4273,7 +4284,7 @@ for (const lang of LOCALE_LIST) test(`messages fit and centre their body and che
       near2(messageTop(page) + page.visible / 2, page.content.y + page.content.h / 2, .5);
       const tall = Popup.messageLayout({ ...args, lines: Array.from({ length: footer ? 6 : 8 }, () => ({ text: ui.picker.ok, fontSize: 52, minFontSize: 52 })) });
       const need = Popup.MSG.title + tall.body.height + (footer ? Popup.MSG.buttons : Popup.MSG.none);
-      assert.ok(need > 786 && need < POPUP_FRAME.maxH);
+      assert.ok(need > POPUP_FRAME.minH && need < POPUP_FRAME.maxH);
       near2(tall.height, need); near2(messageTop(tall), POPUP_FRAME.contentTop);
       assert.equal(tall.scroll, false);
       const scrolling = Popup.messageLayout({ ...args, scroll: true, check: { label: ui.picker.ok } });
@@ -4300,11 +4311,11 @@ for (const lang of LOCALE_LIST) test(`both consent stacks fit and centre between
     setStrings(lang, Object.fromEntries(strings(ui))); document.documentElement.lang = lang;
     const asset = Consent.assetLayout("/fixtures/cache");
     const assetHeight = asset.cachedH + asset.neverH + asset.note.h + 2 * SPACE.xl;
-    near2(asset.h, Math.max(786, POPUP_FRAME.contentTop + assetHeight + Popup.MSG.buttons), 1);
+    near2(asset.h, Math.max(POPUP_FRAME.minH, POPUP_FRAME.contentTop + assetHeight + Popup.MSG.buttons), 1);
     near2((asset.cachedTop + asset.noteBottom) / 2, contentCentre(asset), .5);
     const scan = Consent.scanLayout(), first = scan.boxes[0], last = scan.boxes.at(-1);
     const scanHeight = scan.boxes.reduce((sum, b) => sum + b.h, 0) + 2 * SPACE.xl;
-    near2(scan.h, Math.max(786, POPUP_FRAME.contentTop + scanHeight + Popup.MSG.buttons), 1);
+    near2(scan.h, Math.max(POPUP_FRAME.minH, POPUP_FRAME.contentTop + scanHeight + Popup.MSG.buttons), 1);
     near2((first.y + last.y + last.h) / 2, scan.content.y + scan.content.h / 2, .5);
     near2(first.y, POPUP_FRAME.contentTop);
     for (const f of [asset, scan]) assert.ok(f.h <= POPUP_FRAME.maxH);
@@ -4314,20 +4325,21 @@ for (const lang of LOCALE_LIST) test(`both consent stacks fit and centre between
 test("Mod Alias and Export fit their unchanged row envelopes and centre the whole body", () => {
   const mod = Frames.MOD_ALIAS, content = Frames.popupContent(mod.w, mod.h, { text: true });
   const modNeed = POPUP_FRAME.contentTop + 2 * SPACE.xxxl + SPACE.m + Popup.MSG.buttons;
-  near2(mod.h, Math.max(786, modNeed), 1);
+  near2(mod.h, Math.max(POPUP_FRAME.minH, modNeed), 1);
   assert.equal(mod.input.h, SPACE.xxxl); assert.equal(mod.hint.h, SPACE.xxxl);
   near2((mod.input.y + mod.input.h / 2 + mod.bottom) / 2, contentCentre({ ...mod, content }), .5);
   const exp = Frames.EXPORT, rows = Object.values(exp.rows), expContent = Frames.popupContent(exp.w, exp.h);
   assert.deepEqual(rows.map(r => r.h), [260, 240, 240]);
-  near2(exp.h, Math.max(786, POPUP_FRAME.contentTop + 740 + 2 * SPACE.m + Popup.MSG.buttons), 1);
+  near2(exp.h, Math.max(POPUP_FRAME.minH, POPUP_FRAME.contentTop + 740 + 2 * SPACE.m + Popup.MSG.buttons), 1);
   near2((rows[0].y + rows[0].h / 2 + exp.bottom) / 2, contentCentre({ ...exp, content: expContent }), .5);
   for (let i = 1; i < rows.length; i++) near2(rows[i - 1].y - rows[i - 1].h / 2 - rows[i].y - rows[i].h / 2, SPACE.m);
 });
 
 test("scrolling text viewer and picker heights retain their pre-fit viewports", () => {
-  assert.equal(Frames.TEXT_VIEWER.h, 1353);
+  // the XL prefab's content box (885) over the XS footer (BL-176): the frames lose the old footer's padding (94)
+  assert.equal(Frames.TEXT_VIEWER.h, 1259);
   assert.equal(Frames.TEXT_VIEWER.box.height, 885);
-  for (const [kind, height] of [[null, 1353], ["spr", 1512], ["lobby", 1353], ["model", 1353]])
+  for (const [kind, height] of [[null, 1259], ["spr", 1418], ["lobby", 1259], ["model", 1259]])
     for (const check of [false, true]) assert.equal(Popup.listLayout(check, kind).frame.h, height, String(kind));
 });
 
@@ -4429,15 +4441,21 @@ test("a list popup toolbar without the checkbox keeps its layout", async (t) => 
   const items = [{ key: "a", label: "Alpha", full: "Alpha", thumb: "a.png" }];
   try {
     const plain = await toolbarOf(Fresh, { segs: SEGMENTS, seg: 1, onSeg() {}, sortKey: "sort.default" }, items);
-    // measured on the layout before the checkbox existed (popup.js toolbar): not a pixel moves
-    const near = (got, want) => got.forEach((v, i) => assert.ok(Math.abs(v - want[i]) < 1e-6, `${got} against ${want}`));
+    // measured on the layout before the checkbox existed (popup.js toolbar): not a pixel moves against the frame's top, which
+    // stands half the old footer's padding lower since the XS footer (BL-176: the frame 94 units shorter)
+    const down = (1353 - Fresh.listLayout(false, "model").frame.h) / 2 * (1920 / 2960);
+    const near = (got, want) => got.forEach((v, i) => assert.ok(Math.abs(v - (i === 1 ? want[i] + down : want[i])) < (i === 1 ? 0.01 : 1e-6), `${got} against ${want}`));
     near(plain.order, [1733.25, 238.7, 108.97, 75.24]);
     near(plain.search, [1239.89, 238.7, 80.43, 75.24]);
     near(plain.sort, [1453.16, 238.67, 272.7, 75.32]);
     near(plain.segments[0], [824.7567567567569, 242.46486486486486, 149.1891891891892, 67.45945945945947]);
     near(plain.segments[2], [1123.1351351351352, 242.46486486486486, 149.1891891891892, 67.45945945945947]);
     assert.equal(plain.drawn.length, 15);
-    assert.equal(createHash("sha1").update(JSON.stringify(plain.drawn)).digest("hex"), "621aac4f9012a6e9104d3aed9f5b85da1b877c64");
+    // the drawing: everything but the tops as it was (digest), the tops as they were against the frame's
+    assert.equal(createHash("sha1").update(JSON.stringify(plain.drawn.map(([path, left, , ...rest]) => [path, left, ...rest]))).digest("hex"),
+      "27b382b1c5701b404a1f5b566eeb312bc3adb722");
+    const tops = [238.7, 255.57, 238.67, 246.78, 238.02, 238.02, 247.11, 255.55, 238.7, 251.03, 238.7, 251.03, 224.3, 224.3, 224.3];
+    plain.drawn.forEach(([path, , top], i) => assert.ok(Math.abs(top - down - tops[i]) < 0.01, `${path}: ${top - down} against ${tops[i]}`));
     assert.equal(action(prompt, "check"), undefined, "no checkbox in the toolbar");
   } finally { prompt.hidden = true; Fresh.closed(prompt); }
 });

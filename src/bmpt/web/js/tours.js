@@ -5,15 +5,17 @@ import * as Popup from "./popup.js";
 import * as Buttons from "./game-buttons.js";
 import { rpc } from "./api.js";
 import { T } from "./i18n.js";
-import { FOOTER } from "./ui-tokens.js";
+import { FOOTER, POPUP_FOOTER } from "./ui-tokens.js";
 import { S, wrapPath } from "./util.js";
 
 const { node, label, sprite, find } = NGUI;
-// An illustrated page keeps the original frame and content, the frame 68.5 taller for the footer's rise and the content
-// lifted by half of it (the frame grows both ways from its centre), so the room under the caption is what it was.
-const LIFT = FOOTER.rise / 2;
+// An illustrated page keeps the original frame and content, the frame as much taller (or shorter) as the footer's top stands
+// above the original's (its 177-high bodies centred 122 above the bottom), the content moved by half of it (the frame grows
+// both ways from its centre), so the room under the caption is what it was. The XS footer (BL-176) stands lower: -46.5.
+const RISE = POPUP_FOOTER.bottom + POPUP_FOOTER.control.h - (FOOTER.centre - FOOTER.rise + FOOTER.body.h / 2);
+const LIFT = RISE / 2;
 // bottom: the lowest content edge of an illustrated page, the caption (centre -445, 70 high)
-export const GEOMETRY = { width: 2458, height: 1400 + FOOTER.rise, image: [-1000, -400 + LIFT, 2000, 500], bottom: -445 + LIFT - 35 };
+export const GEOMETRY = { width: 2458, height: 1400 + RISE, image: [-1000, -400 + LIFT, 2000, 500], bottom: -445 + LIFT - 35 };
 let active = null;
 const shown = new Set();
 const paint = () => new Promise((resolve) => (globalThis.requestAnimationFrame || queueMicrotask)(resolve));
@@ -50,12 +52,6 @@ export function pageTree(page, index, count, size = pageSize([page])) {
     { cancel: previous, ok: next });
   const popup = find(tree, "Popup"), controls = find(popup, "Btn");
   find(controls, "Btn_Ok").actionSemantic = index === count - 1 ? "finish" : "navigation";
-  const { fs: fsMax, fsMin, w: room, lines } = FOOTER.caption;
-  const fs = Math.min(...[previous, next].map((text) => wrapPath(text, fsMax, fsMin, room, lines).fs));
-  for (const [name, text] of [["Btn_Cancel", previous], ["Btn_Ok", next]]) {
-    const fitted = wrapPath(text, fs, fs, room, lines);
-    Object.assign(find(controls, `${name}/Label_Locale`).widgets[0], { text: fitted.text, fontSize: fs, w_: room });
-  }
   if (index === 0) controls.children[controls.children.findIndex((child) => child.name === "Btn_Cancel")] = Buttons.disable(find(controls, "Btn_Cancel"));
   find(popup, "Base/BG/Label_Title_Locale").widgets[0].h_ = 100;
   if (!size.image) {

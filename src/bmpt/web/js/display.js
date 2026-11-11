@@ -2,7 +2,7 @@
 // tabs on the left; on the right the filter groups (UIFilterObjectList: title with its tag, dotted line, check boxes)
 // under the list header with Reset All, or the sort keys as the game's radio buttons (UISortObjectListUnit); Cancel
 // and Confirm below. It edits a draft of the view; Confirm hands the draft back.
-import { opened, closed, FOOTER as FOOTERS, footerWidth } from "./popup.js";
+import { opened, closed, FOOTER as FOOTERS, FOOTER_DEFAULT, footerWidth } from "./popup.js";
 import { resizeButton } from "./button-layout.js";
 import { scrollbar } from "./scrollbar.js";
 import * as NGUI from "./ngui.js";
@@ -82,9 +82,10 @@ function frameTree() {
     sortKeys.map((key) => T(`sort.${key}`)), 48, 34, 360);
   sort.children = [find(sort, "BG_List"), bar, ...options];
   find(popup, "Btn_Section/Btn_Disable").active = false;
-  // the footer buttons keep the prefab's Btn_Section positions; they went one size down, from the prefab's 521 x 180 to the
-  // footer's M (owner, 2026-11-11, BL-173): its height, its caption range and room, the bodies as wide as the captions need
-  const { control, caption } = FOOTERS.M, captions = [T("picker.ok"), T("popup.cancel")], bodyW = footerWidth(captions, FOOTERS.M);
+  // the footer buttons keep the prefab's Btn_Section positions, at the size every popup's footer has (XS, BL-176; the
+  // prefab's are 521 x 180): its height, its caption range and room, the bodies as wide as the captions need
+  const footer = FOOTERS[FOOTER_DEFAULT], { control, caption } = footer, captions = [T("picker.ok"), T("popup.cancel")];
+  const bodyW = footerWidth(captions, footer);
   const labels = [];
   for (const name of ["Btn_Ok", "Btn_Cancel"]) {
     const button = find(popup, `Btn_Section/${name}`), label = find(button, "Label_Locale").widgets.find((x) => "text" in x);

@@ -18,8 +18,8 @@ export async function show(result, title = T("act.compare"), hostId = "popup", r
   const host = $(hostId);
   const changed = (result.assets || []).filter((d) => d.status !== "same");
   const frame = compareFrame(!!review, changed.length);
-  // a review's Discard and Accept one size smaller than other footers (owner, 2026-11-11)
-  const t = popupFrame(title, frame.w, frame.h, review ? { ok: review.accept, cancel: review.discard, footer: "M" } : {});
+  // a review's Discard and Accept: the XS footer every popup has (BL-176)
+  const t = popupFrame(title, frame.w, frame.h, review ? { ok: review.accept, cancel: review.discard } : {});
   const popup = find(t, "Popup");
   const rows = changed.slice(0, frame.rows.max);
   const color = { changed: COLOUR.warning, added: COLOUR.success, removed: COLOUR.error };

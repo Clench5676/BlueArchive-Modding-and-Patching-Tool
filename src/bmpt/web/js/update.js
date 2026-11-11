@@ -9,7 +9,7 @@ import { rpc, waitJob } from "./api.js";
 import { T, errorText, language } from "./i18n.js";
 import { notesFor } from "./release-notes.js";
 import { statsBox } from "./stats-box.js";
-import { COLOUR, FOOTER, POPUP, STATS_BOX } from "./ui-tokens.js";
+import { COLOUR, POPUP, POPUP_FOOTER, STATS_BOX } from "./ui-tokens.js";
 import { S, clone } from "./util.js";
 
 const { node, sprite, label, find } = NGUI;
@@ -92,7 +92,7 @@ export function offerCaptions(widgets) {
 }
 
 // the frame, 1700 wide, as high as its content needs: the light box where a message's lines start under the title, then Status
-// (96 high) and the Progress bar (20 high, the lowest content), and POPUP.clearance between that and the three buttons' tops
+// (96 high) and the Progress bar (20 high, the lowest content), and the popups' footer clearance (POPUP_FOOTER) under that
 const STATUS = { gap: 6, h: 96 };
 const PROGRESS = { gap: 8, h: 20 };
 const TOP = Popup.MSG.title;
@@ -101,8 +101,7 @@ const FRAME_W = 1700;
 // lowest content edge
 export function frameFor(boxH) {
   const below = STATUS.gap + STATUS.h + PROGRESS.gap + PROGRESS.h;
-  const footer = FOOTER.centre + FOOTER.body.h * Popup.footerScale(3, FRAME_W) / 2;
-  const h = Math.ceil(TOP + boxH + below + POPUP.clearance + footer);
+  const h = Math.ceil(TOP + boxH + below + POPUP_FOOTER.clearance);
   const boxTop = POPUP.frameY + h / 2 - TOP, boxBottom = boxTop - boxH;
   const status = boxBottom - STATUS.gap - STATUS.h / 2, progress = boxBottom - STATUS.gap - STATUS.h - PROGRESS.gap - PROGRESS.h / 2;
   return { w: FRAME_W, h, boxTop, status, progress, contentBottom: progress - PROGRESS.h / 2 };

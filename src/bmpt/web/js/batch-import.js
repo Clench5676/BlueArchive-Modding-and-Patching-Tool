@@ -16,7 +16,7 @@ import { spineAllowed } from "./spine-runtime.js";
 import { thumbnailScope, forget } from "./thumbs.js";
 import { modelThumbnail } from "./model-still.js";
 import { S } from "./util.js";
-import { FOOTER, XS_BUTTON, SPACE, TYPE, CONTROL, POPUP_FRAME } from "./ui-tokens.js";
+import { XS_BUTTON, SPACE, TYPE, CONTROL, POPUP_FRAME } from "./ui-tokens.js";
 import { row as layoutRow, stack as layoutStack, container } from "./ui-grid.js";
 import { ROW_W as OPTION_WIDTH, rowBase, radioRow } from "./settings-rows.js";
 import { BUTTON_BODY_H, loadImportLayouts, importArtwork, clipButtonPatterns, ROW_SCALE, ROW_WIDTH, ROW_HEIGHT, ROW_SELECTION, ROW_CHECK_TOP,
@@ -44,9 +44,10 @@ const sizeText = (size) => size >= 1048576 ? `${(size / 1048576).toFixed(1)} MB`
 const baseName = (path) => path?.split(/[\\/]/).pop() || "";
 const listSeparator = () => /^(zh|ja)/i.test(language()) ? "、" : ", ";
 // the dialogs' scrolling area [left, top, width, height] (px in the stage; app.css .import-dialog-content has the same numbers)
-// and their frame's height: 1360 plus the footer's rise (68.5), the area 22 px (half of it in px) higher
-export const DIALOG_H = 1360 + FOOTER.rise;
-export const DIALOG_AREA = [228, 168, 1464, 640];
+// and their frame's height: the area 83.5 px under the frame's top, and the XS footer every popup has (BL-176) about
+// SPACE.xl under the area (POPUP_FOOTER.clearance)
+export const DIALOG_H = 1320.5;
+export const DIALOG_AREA = [228, 203, 1464, 640];
 
 export function catalogEntries(data) {
   return (data?.families || []).flatMap((family) => (family.variants || []).map((variant) => ({ ...variant, family })));

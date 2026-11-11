@@ -80,7 +80,7 @@ const { DIALOG_H } = await import("../../src/bmpt/web/js/batch-import.js");
 const { frameOutline } = await import("../../src/bmpt/web/js/row-thumbnail.js");
 const { ROW_W: OPTION_WIDTH, rowBase, radioRow } = await import("../../src/bmpt/web/js/settings-rows.js");
 const { S } = await import("../../src/bmpt/web/js/util.js");
-const { SPACE, TYPE, LINE, CONTROL, POPUP_FRAME } = await import("../../src/bmpt/web/js/ui-tokens.js");
+const { SPACE, TYPE, LINE, CONTROL, POPUP_FOOTER, POPUP_FRAME } = await import("../../src/bmpt/web/js/ui-tokens.js");
 const { container } = await import("../../src/bmpt/web/js/ui-grid.js");
 // separate lines of a row stack LINE.stack of the row's one size apart (List_01's meta lines)
 const PITCH = LINE.stack * TYPE.dense.fs;
@@ -1371,9 +1371,13 @@ test("footer artwork clears the whole bottom nav and the list and dialog content
   assert.match(css, /\.import-search-clear\s*\{\s*z-index:\s*40/);
   const rule = css.match(/\.import-dialog-content\s*\{([^}]+)\}/)[1];
   const top = Number(rule.match(/top:\s*(\d+)px/)[1]), height = Number(rule.match(/height:\s*(\d+)px/)[1]);
-  // the dialog frame is 68.5 taller than it was; its footer's centre sits 190.5 above the bottom edge, the body 4 below that
-  const popupButtonTop = 540 - (-12 - (1360 + 68.5) / 2 + 190.5 - 4) * S - 177 * S / 2;
-  assert.ok(top + height < popupButtonTop - 16);
+  // the dialog's XS footer (BL-176): its bodies' tops POPUP_FOOTER.bottom + the body's height above the frame's bottom edge;
+  // the area ends about SPACE.xl (26 px) above them, and its frame's top keeps the title's band over it
+  const frameTop = 540 - (POPUP_FRAME.frameY + DIALOG_H / 2) * S, frameBottom = 540 - (POPUP_FRAME.frameY - DIALOG_H / 2) * S;
+  const popupButtonTop = frameBottom - (POPUP_FOOTER.bottom + POPUP_FOOTER.control.h) * S;
+  assert.ok(top + height <= popupButtonTop - SPACE.xl * S + 1, `${top + height} ${popupButtonTop}`);
+  assert.ok(top + height >= popupButtonTop - SPACE.xl * S - 4, "no more padding than SPACE.xl over the footer");
+  assert.ok(top - frameTop >= 83 && top - frameTop <= 84, "the area keeps its place under the title's band");
 });
 
 test("all six locales retain option labels, On/Off choices and the same saved values", async () => {

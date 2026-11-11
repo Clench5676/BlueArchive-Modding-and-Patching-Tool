@@ -119,24 +119,24 @@ for (const locale of LOCALES) test(`the four action cards and the three tabs sha
   }
 });
 
-// --- popup buttons: the default footer is M (BL-173), 162 high, display captions 60 down to 34 in a box 20 less high; its bodies
-// are as wide as the captions need (348 at least, 551 at most), so the room is the body less its padding each side ---
+// --- popup buttons: the default footer is XS (BL-176), 104 high, captions 40 down to 28 in a box 12 less high; its bodies
+// are as wide as the captions need (200 at least, 551 at most), so the room is the body less its padding each side ---
 const { CONTROL, SPACE, TYPE } = await import("../../src/bmpt/web/js/ui-tokens.js");
 const PAIRS = [["picker.ok", "popup.cancel"], ["popup.save", "popup.cancel"], ["consent.no", "consent.yes"], ["mods.scan.no", "mods.scan.yes"],
   ["update.later", "update.notes", "update.now"], ["update.later", "update.notes", "update.restart"],
   ["update.later", "update.notes", "update.page"]];
-const M_CAPTION = { fs: CONTROL.buttonM.fs, fsMin: TYPE.body.min, lines: 2, h: CONTROL.buttonM.h - SPACE.m };
-// popup.js footerWidth: the group fitted in the widest body's room, then its widest line and the padding, within 348 and 551
+const M_CAPTION = { fs: CONTROL.buttonXS.fs, fsMin: 28, lines: 2, h: CONTROL.buttonXS.h - SPACE.s }; // XS_BUTTON.fsMin
+// popup.js footerWidth: the group fitted in the widest body's room, then its widest line and the padding, within 200 and 551
 function footerBody(captions) {
   const room = CONTROL.buttonL.minW - 2 * CONTROL.buttonL.pad;
   const fits = fitGroup(captions, M_CAPTION.fs, M_CAPTION.fsMin, room, M_CAPTION.lines, { maxH: M_CAPTION.h });
   const need = Math.max(...fits.map((f) => Math.max(...f.text.split("\n").map((line) => glyphWidth(line, f.fs)))));
-  return Math.min(CONTROL.buttonL.minW, Math.max(CONTROL.buttonM.minW, Math.ceil(need + 2 * CONTROL.buttonM.pad)));
+  return Math.min(CONTROL.buttonL.minW, Math.max(CONTROL.buttonXS.minW, Math.ceil(need + 2 * CONTROL.buttonXS.pad)));
 }
-for (const locale of LOCALES) test(`popup footer captions share one size and fit the default M body in ${locale}`, async () => {
+for (const locale of LOCALES) test(`popup footer captions share one size and fit the default XS body in ${locale}`, async () => {
   const popup = await source("popup.js"), consent = await source("consent.js"), update = await source("update.js");
   assert.match(popup, /export const BUTTON_TEXT_H = CONTROL.buttonL.h - SPACE.m;/);
-  assert.match(popup, /export const FOOTER_DEFAULT = "M";/);
+  assert.match(popup, /export const FOOTER_DEFAULT = "XS";/);
   assert.match(popup, /NGUI.fitLabels\(widgets, captions, caption.fs, caption.fsMin/);
   assert.match(popup, /const caption = options.caption \|\| CAPTION/);
   assert.match(popup, /NGUI.fitGroup\(captions, caption.fs, caption.fsMin/);
@@ -147,13 +147,13 @@ for (const locale of LOCALES) test(`popup footer captions share one size and fit
   assert.match(consent, /Popup\.popupFrame\(title, w, h, \{ ok: yes, cancel: no, close: false \}\)/);
   assert.match(update, /Popup\.footerLabels\(widgets, texts, \{ width: room, caption: kind\.caption \}\)/);
   for (const [name, text] of [["popup", popup], ["consent", consent], ["update", update]]) assert.doesNotMatch(text, /\b64, 40\b/, `${name} has no private caption range`);
-  assert.deepEqual([CONTROL.buttonM.minW, CONTROL.buttonM.h, CONTROL.buttonM.pad, CONTROL.buttonM.fs], [348, 162, 45, 60]);
+  assert.deepEqual([CONTROL.buttonXS.minW, CONTROL.buttonXS.h, CONTROL.buttonXS.pad, CONTROL.buttonXS.fs], [200, 104, 34, 40]);
   document.documentElement.lang = locale;
   const max = M_CAPTION.fs, min = M_CAPTION.fsMin, lines = 2, height = M_CAPTION.h;
   for (const keys of PAIRS) {
     const captions = keys.map((key) => text(locale, key)), [a, b] = [keys[0], keys.slice(1).join("/")];
-    const bodyW = footerBody(captions), width = bodyW - 2 * CONTROL.buttonM.pad;
-    assert.ok(bodyW >= CONTROL.buttonM.minW && bodyW <= CONTROL.buttonL.minW, `${locale} ${a}/${b}: body ${bodyW}`);
+    const bodyW = footerBody(captions), width = bodyW - 2 * CONTROL.buttonXS.pad;
+    assert.ok(bodyW >= CONTROL.buttonXS.minW && bodyW <= CONTROL.buttonL.minW, `${locale} ${a}/${b}: body ${bodyW}`);
     const widgets = captions.map(() => ({ text: "", fontSize: max, w_: width }));
     const fits = fitLabels(widgets, captions, max, min, width, lines, { maxH: height });
     assertGroup(fits, captions, captions.map(() => width), height, `${locale} footer ${a}/${b}`);
@@ -272,24 +272,23 @@ for (const locale of LOCALES) test(`Hall portrait swap choice fits its existing 
   assertGroup([fit],[caption],[room],height,`${locale} portrait choice`);
 });
 
-// --- the compatibility result's three repair choices (mod-compatibility.js repairButtons): footer "S", SMALL_BUTTON bodies
-// sharing the frame's width (popup.js footerScale), in the smallest frame the result popup can take ---
+// --- the compatibility result's three repair choices (mod-compatibility.js repairButtons): the XS footer every popup has
+// (BL-176), bodies as wide as the captions need and sharing the frame's width (popup.js footerScale), in each frame the
+// result popup can take ---
 const { POPUP_FRAME } = await import("../../src/bmpt/web/js/ui-tokens.js");
 for (const locale of LOCALES) test(`the three repair choices share one size and fit their small button bodies in ${locale}`, async () => {
   const popup = await source("popup.js"), compatibility = await source("mod-compatibility.js");
   assert.match(popup, /return n < 3 \? 1 : Math\.min\(1, \(w - 2 \* POPUP_FRAME\.footer\.side - POPUP_FRAME\.footer\.gap \* \(n - 1\)\) \/ n \/ control\.minW\);/);
-  assert.match(popup, /const FOOTER_S = Object\.freeze\(\{ \.\.\.CONTROL\.buttonS, minW: SMALL_BUTTON\.w \}\);/);
-  assert.match(popup, /S: Object\.freeze\(\{ control: FOOTER_S, caption: Object\.freeze\(\{ fs: FOOTER_S\.fs, fsMin: TYPE\.body\.min,/);
-  assert.match(compatibility, /footer: "S"/);
-  assert.doesNotMatch(compatibility, /footer: "M"/);
+  assert.match(popup, /const \{ scale, xs \} = footerSlots\(labels\.length, w, \{ \.\.\.control, minW: baseW \}\)/);
+  assert.doesNotMatch(compatibility, /footer: "[SML]"/);
   document.documentElement.lang = locale;
-  const control = { ...CONTROL.buttonS, minW: SMALL_BUTTON.w }, captions = ["popup.cancel", "compatibility.remapAction", "compatibility.graftAction"]
+  const control = CONTROL.buttonXS, captions = ["popup.cancel", "compatibility.remapAction", "compatibility.graftAction"]
     .map((key) => text(locale, key));
   for (const size of ["S", "M", "L"]) {
-    const w = POPUP_FRAME[size].w, n = captions.length;
-    const scale = Math.min(1, (w - 2 * POPUP_FRAME.footer.side - POPUP_FRAME.footer.gap * (n - 1)) / n / control.minW);
-    const width = control.minW * scale - 2 * control.pad, height = control.h - SPACE.m;
-    const fits = fitGroup(captions, control.fs, TYPE.body.min, width, 2, { maxH: height });
+    const w = POPUP_FRAME[size].w, n = captions.length, bodyW = footerBody(captions);
+    const scale = Math.min(1, (w - 2 * POPUP_FRAME.footer.side - POPUP_FRAME.footer.gap * (n - 1)) / n / bodyW);
+    const width = bodyW * scale - 2 * control.pad, height = M_CAPTION.h;
+    const fits = fitGroup(captions, M_CAPTION.fs, M_CAPTION.fsMin, width, 2, { maxH: height });
     assertGroup(fits, captions, captions.map(() => width), height, `${locale} repair choices in ${size}`);
   }
 });
