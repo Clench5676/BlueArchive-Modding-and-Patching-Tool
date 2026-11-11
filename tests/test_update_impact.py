@@ -179,3 +179,29 @@ def test_a_held_entry_survives_a_reload_of_the_configuration(tmp_path):
     data = normalized({"unfinished": [{"install": "k", "core": "c", "why": "held"},
                                       {"install": "k", "core": "d", "why": "other"}]})
     assert data["unfinished"] == [{"install": "k", "core": "c", "why": "held"}]
+
+
+def test_the_start_asks_only_after_a_seen_version_changed_and_with_mods(spine):
+    env = spine
+    library = env.library
+    first = library.update_due()
+    # a first start (no version seen) asks nothing and records the version
+    assert first["due"] is False and first["previous"] is None
+    assert library.update_due()["previous"] == first["version"]
+    configured(env)
+    updated(env, (MOVED, ("Idle_01", "00")))
+    library = reload_library(env)
+    due = library.update_due()
+    assert due["due"] is True and due["previous"] == first["version"] != due["version"]
+    assert library.update_due()["due"] is True  # asked until checked
+    library.impact_seen(due["install"], due["version"])
+    assert library.update_due()["due"] is False
+
+
+def test_the_impact_check_names_each_mod_in_its_progress(spine):
+    env = spine
+    entry = configured(env)
+    steps = []
+    env.library.update_impact(force=True, progress=steps.append)
+    assert steps == [{"current": 1, "total": 1, "step": "import.step.check", "variant": "test", "kind": "spr",
+                      "label": entry.label}]

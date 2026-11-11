@@ -3250,7 +3250,9 @@ class ModLibrary:
             records = [self._records[mod_id] for mod_id in entries if mod_id in self._records]
         for i, record in enumerate(records, 1):
             if progress:
-                progress({"current": i, "total": len(records), "step": "import.step.check"})
+                entry = entries[record["id"]]
+                progress({"current": i, "total": len(records), "step": "import.step.check", "variant": entry.target,
+                          "kind": entry.kind, "label": entry.label})
             with self._lock:
                 if record["id"] not in self._records:
                     continue
@@ -3265,6 +3267,33 @@ class ModLibrary:
         out["due"] = bool(out["mods"])
         if not out["due"] and not force:
             self.impact_seen(pin.key, version)
+        return out
+
+    def update_due(self, pin: Pin | None = None) -> dict[str, Any]:
+        """Whether the start asks to check the library's mods against a game update: the install's resource version
+        differs from the last one seen there and the library has mods. Reads only the version file and the
+        configuration. With no version seen yet (a first start, a newly chosen folder) or no mod, the version is
+        recorded as seen at once and nothing is asked. Never fails: a version that cannot be read asks nothing."""
+        pin = pin or self.current_pin()
+        out: dict[str, Any] = {"due": False, "install": None, "version": None, "previous": None}
+        if pin is None:
+            return out
+        version = self.resource_version(pin)
+        config = self.profiles.read() or {}
+        seen = ((config.get("folders") or {}).get(pin.key) or {}).get("resource") or {}
+        previous = seen.get("version") if isinstance(seen, dict) else None
+        out.update(install=pin.key, version=version, previous=previous)
+        if version is None or version == previous:
+            return out
+        with self._lock:
+            has_mods = bool(self._records)
+        if previous is None or not has_mods:
+            try:
+                self.impact_seen(pin.key, version)
+            except ServiceError as error:
+                log_failure(logger, logging.DEBUG, "Could not record the resource version as seen", error)
+            return out
+        out["due"] = True
         return out
 
     def impacts(self, ids: Sequence[str], pin: Pin | None = None) -> list[dict[str, str]]:

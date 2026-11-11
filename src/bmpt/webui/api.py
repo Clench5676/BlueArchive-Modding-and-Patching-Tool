@@ -1213,6 +1213,13 @@ def build_api(s: Services) -> RpcRegistry:
                                                                                       progress=progress))
         return s.submit("mods.impact", lambda log, progress: {"mods": library.impacts(ids, pin)})
 
+    @rpc.method("mods.updateDue")
+    def mods_update_due() -> dict[str, Any]:
+        """Whether the start asks to check the mods against a game update (``update_due``): {due, install, version,
+        previous}. Reads the version file and the configuration only."""
+        library = s.library
+        return library.update_due(library.current_pin())  # no game folder: nothing is asked
+
     @rpc.method("mods.impactSeen")
     def mods_impact_seen(install: str, version: str) -> dict[str, Any]:
         """The impact summary of a game update was shown: its resource version is not told again."""
