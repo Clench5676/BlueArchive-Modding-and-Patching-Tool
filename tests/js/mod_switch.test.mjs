@@ -390,7 +390,7 @@ test("the start prompts: their order, the scan consent, and no prompt from the s
   assert.deepEqual(due(base({ scan: false })), [], "answered: not asked again");
   const reset = { install: "/g", core: "airi_spr", state: "reset" }, untracked = { install: "/g", core: "ch0251_spr", state: "untracked" };
   assert.deepEqual(due(base(), [reset, untracked]), ["drift", "untracked"]);
-  assert.deepEqual(due(base(), [{ ...reset, state: "updated" }, { ...untracked, state: "changed" }]), ["drift", "untracked"]);
+  assert.deepEqual(due(base(), [{ ...reset, state: "updated" }, { ...untracked, state: "changed" }]), ["untracked"], "a game update's entries are the update summary's");
   for (const reason of MS.PROMPT_BLOCKERS) assert.deepEqual(due(base({ available: false, reason }), [reset, untracked]), [], reason);
   assert.deepEqual(due(base({ available: false, reason: "game_status_unavailable" }), [reset]), ["drift"]);
   assert.deepEqual(due(base({ scan: false }), [reset, untracked]), [], "no drift or untracked prompt without the scan consent");
@@ -844,9 +844,9 @@ test("which entries each prompt lists: drift while mods are on, untracked and ch
     entry("yuzu_spr", "damaged"), entry("aris_spr", "pending", { overwritten: true }), entry("noa_spr", "ok"), entry("kei_spr", "reset", { dismissed: true })];
   const keys = (list) => list.map((e) => e.core);
   const drift = P.promptEntries(all, "drift");
-  assert.deepEqual(keys(drift.listed), ["airi_spr", "airi_home"]);
+  assert.deepEqual(keys(drift.listed), ["airi_spr"], "a game update's (airi_home) are the update summary's");
   assert.deepEqual(keys(drift.apart), ["aris_spr"], "stuck: no repair brought it back");
-  assert.deepEqual(keys(P.promptEntries(all, "drift", { dismissed: true }).listed), ["airi_spr", "airi_home", "kei_spr"], "Settings' Check");
+  assert.deepEqual(keys(P.promptEntries(all, "drift", { dismissed: true }).listed), ["airi_spr", "kei_spr"], "Settings' Check");
   assert.deepEqual(P.promptEntries(all, "drift", { enabled: false }).listed, [], "mods off: official files are the intent");
   const untracked = P.promptEntries(all, "untracked");
   assert.deepEqual(keys(untracked.listed), ["hina_spr", "mika_spr"]);
@@ -975,7 +975,7 @@ test("the tray's Back to Official opens the drift prompt: two buttons and no way
   P.init({ names: async () => (e) => ({ airi: "Airi", hina: "Hina" })[e.variant] || e.variant });
   answers["mods.state"] = base();
   await MS.refresh();
-  answers["mods.entries"] = [entry("airi_spr", "reset", { configured: "mod:a" }), entry("hina_home", "updated", { configured: "mod:b" }), entry("noa_spr", "untracked")];
+  answers["mods.entries"] = [entry("airi_spr", "reset", { configured: "mod:a" }), entry("hina_home", "reset", { configured: "mod:b" }), entry("noa_spr", "untracked")];
   answers["mods.restoreDrift"] = "job-drift";
   jobs["job-drift"] = { state: "done", result: { done: [{ install: GLOBAL, core: "airi_spr" }], failed: [], skipped: [], stuck: [] } };
   // a game update changed the rig under Hina's mod: its card starts unticked
@@ -994,7 +994,7 @@ test("the tray's Back to Official opens the drift prompt: two buttons and no way
   await opened;
   await until(() => called("mods.restoreDrift").length === 1, "mods.restoreDrift");
   assert.deepEqual(called("mods.restoreDrift")[0], { entries: [{ install: GLOBAL, core: "airi_spr", state: "reset" }] });
-  assert.deepEqual(called("mods.dismiss").at(-1), { kind: "drift", entries: [{ install: GLOBAL, core: "hina_home", state: "updated" }] });
+  assert.deepEqual(called("mods.dismiss").at(-1), { kind: "drift", entries: [{ install: GLOBAL, core: "hina_home", state: "reset" }] });
   assert.equal(prompt.hidden, true);
   await tick(); assert.equal(dialog.hidden, true, "plain confirmations stay silent");
   // nothing back to official any more: the tray's item was stale, the page says so
@@ -1413,7 +1413,7 @@ test("an update's impact: one count line per kind, each mod named with Go To and
   assert.equal(Impact.summary(null), null);
   assert.equal(Impact.summary({ due: false, counts: { rebuilt: 1 } }), null);
   const mods = [
-    { id: "1", target: "hoshino", core: "ch0101_spr", kind: "spr", impact: "rig_changed", label: "Bunny Hoshino",
+    { id: "1", target: "hoshino", core: "ch0101_spr", kind: "spr", impact: "rig_changed", label: "Bunny Hoshino", configured: true,
       changes: { repacked: true, animations: 3, textures: true } },
     { id: "2", target: "airi", core: "ch0200_spr", kind: "spr", impact: "rebuilt", label: "Airi", changes: {} },
   ];
@@ -1425,7 +1425,7 @@ test("an update's impact: one count line per kind, each mod named with Go To and
   const plain = (lines) => lines.map(({ button, ...l }) => (button ? { ...l, button: button.label } : l));
   // the held mod: student, kind and its own name with Go To; under it, what the update changed in its official portrait
   const head = [{ text: "Official .skel or .atlas file changed, not applied until updated: 1" },
-    { text: "Hoshino - Portrait - Bunny Hoshino", ...Impact.ITEM, button: "Go to" },
+    { text: "Hoshino - Portrait - Bunny Hoshino - Applied", ...Impact.ITEM, button: "Go to" },
     { text: "Official Portrait: .atlas file layout changed, 3 new animations in the .skel file", indent: Impact.ITEM.indent, ...Impact.DETAIL },
     { text: hint, ...Impact.HINT }];
   assert.equal(Impact.HINT.fontSize, 42, "two steps under the 52 of the lines");
@@ -1461,7 +1461,8 @@ test("an update's impact: one count line per kind, each mod named with Go To and
       const toggle = all.lines.find((l) => l.button);
       assert.ok(toggle.text === ui.mods.impact.others && toggle.button.label === ui.mods.impact.collapse && ui.mods.impact.expand, lang);
       for (const line of [{ text: all.title }, ...all.lines.filter((l) => !l.button)]) assert.ok(line.text && !/^mods\./.test(line.text) && line.text.includes(line.text === all.title ? "" : "1"), `${lang} ${line.text}`);
-      for (const k of ["held", "heldTitle", "heldBadge", "driftUpdated"]) assert.ok(typeof ui.mods[k] === "string" && ui.mods[k].length > 0, `${lang} ${k}`);
+      for (const k of ["held", "heldTitle", "heldBadge"]) assert.ok(typeof ui.mods[k] === "string" && ui.mods[k].length > 0, `${lang} ${k}`);
+      assert.ok(ui.mods.impact.reset.includes("{n}") && !("driftUpdated" in ui.mods), lang);
       assert.ok(ui.mods.impact.hint.includes("{action}") && ui.mods.impact.hint.includes("{go}") && !("driftWhy" in ui.mods), lang);
       const every = { repacked: true, animations: 2, rig: true, removed: true, added: true };
       for (const [kind, changes] of [["spr", every], ["lobby", { animations: 1 }], ["model", { textures: true }], ["other", { removed: true }]]) {
@@ -1497,7 +1498,55 @@ test("the held entries' Details name each mod with Go To where its mod is known,
   assert.deepEqual(Impact.heldMods(entries)[0], { id: "1", target: "a", core: "a_spr", kind: "spr", label: "Swim A" });
 });
 
-test("the drift prompt asks the impacts of the mods its entries are configured with and marks the held ones", () => {
+test("a game update's put-back entries join the update summary: listed with Go To, Apply Mod Configuration and Keep as Is", async () => {
+  const result = { due: true, install: GLOBAL, version: "v2", counts: { rig_changed: 1, rebuilt: 1 },
+    mods: [{ id: "b", target: "hina", core: "hina_home", kind: "lobby", impact: "rig_changed", label: "Night", configured: true },
+      { id: "a", target: "airi", core: "airi_spr", kind: "spr", impact: "rebuilt", label: "Band", configured: true }] };
+  const updated = [entry("airi_spr", "updated", { configured: "mod:a" }), entry("hina_home", "updated", { configured: "mod:b" }),
+    entry("noa_spr", "updated", { configured: "mod:c", dismissed: true }), entry("aru_spr", "reset", { configured: "mod:d" })];
+  // the held one (its configured mod's rig changed) stays with its mod, not re-applied; dismissed ones only when asked
+  const { reset, held } = Impact.resetEntries(updated, result);
+  assert.deepEqual([reset.map((e) => e.core), held.map((e) => e.core)], [["airi_spr"], ["hina_home"]]);
+  assert.deepEqual(Impact.resetEntries(updated, result, { dismissed: true }).reset.map((e) => e.core), ["airi_spr", "noa_spr"]);
+  const nameOf = (e) => e.variant[0].toUpperCase() + e.variant.slice(1);
+  const m = Impact.summary(result, nameOf, { reset, held });
+  const texts = m.lines.map((l) => l.text);
+  assert.ok(texts.includes("Reset to official by the game update: 1"));
+  const line = m.lines.find((l) => l.text === "Airi - Portrait - Applied");
+  assert.equal(line?.button?.label, "Go to", "a put-back entry: its student, kind, Applied, Go To");
+  // nothing else to tell: the put-back entries alone still make a summary
+  assert.ok(Impact.summary({ due: false, counts: {}, mods: [] }, nameOf, { reset }));
+  assert.equal(Impact.summary({ due: false, counts: {}, mods: [] }, nameOf, { reset: [] }), null);
+
+  // the page: mods on, the file check allowed and done; Apply Mod Configuration writes the put-back entry again and keeps
+  // the held one as it is
+  const saved = { ...answers };
+  try {
+    answers["mods.state"] = base({ scanned: "2026-11-11T10:00:00Z" });
+    await MS.refresh();
+    answers["mods.entries"] = updated;
+    answers["mods.impact"] = "job-impact-summary";
+    jobs["job-impact-summary"] = { state: "done", result };
+    answers["mods.restoreDrift"] = "job-drift-summary";
+    jobs["job-drift-summary"] = { state: "done", result: { done: [{ install: GLOBAL, core: "airi_spr" }], failed: [], skipped: [], stuck: [] } };
+    const checking = Impact.check();
+    await drawn(dialog, "apply");
+    assert.ok(action(dialog, "keep"), "Keep as Is");
+    assert.equal(action(dialog, "close"), undefined, "no close button: Apply Mod Configuration or Keep as Is");
+    action(dialog, "apply").click();
+    await checking;
+    await until(() => called("mods.restoreDrift").length > 0, "mods.restoreDrift");
+    assert.deepEqual(called("mods.restoreDrift").at(-1), { entries: [{ install: GLOBAL, core: "airi_spr", state: "updated" }] });
+    assert.deepEqual(called("mods.dismiss").at(-1), { kind: "drift", entries: [{ install: GLOBAL, core: "hina_home", state: "updated" }] });
+    assert.deepEqual(called("mods.impactSeen").at(-1), { install: GLOBAL, version: "v2" });
+  } finally {
+    for (const key of Object.keys(answers)) delete answers[key];
+    Object.assign(answers, saved);
+    await tick(); dialog.hidden = true;
+  }
+});
+
+test("the drift prompt asks the impacts of the mods its entries are configured with and marks the held ones", async () => {
   const entries = [
     { install: "/a", core: "a_spr", configured: "mod:1" },
     { install: "/a", core: "b_spr", configured: "mod:2" },
@@ -1507,10 +1556,20 @@ test("the drift prompt asks the impacts of the mods its entries are configured w
   assert.deepEqual(Impact.configuredMods(entries), ["1", "2"]);
   const held = Impact.heldKeys(entries, [{ id: "1", impact: "rig_changed" }, { id: "2", impact: "rebuilt" }]);
   assert.deepEqual([...held], ["/a|a_spr", "/b|a_spr"]);
-  assert.equal(P.driftTitle([{ state: "updated" }, { state: "updated" }]), "Mods Affected by a Game Update");
-  assert.equal(P.driftTitle([{ state: "updated" }, { state: "reset" }]), S("mods.driftTitle"));
   const items = P.heldCards([{ key: "/a|a_spr" }, { key: "/a|b_spr" }, { key: "/b|a_spr", disabled: true }], held);
-  assert.equal(items[0].badge.text, "Rig Changed");
+  assert.equal(items[0].badge.text, "Files Changed");
+  // the badge keeps its whole word on the generic list's card (250 wide: popup.js listCard, 26 down to 20, 70 kept)
+  const NGUI = await import("../../src/bmpt/web/js/ngui.js");
+  {
+    try {
+      for (const lang of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
+        const ui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url))).webui;
+        const bf = NGUI.fitText(ui.mods.heldBadge, 26, 20, 250 - 70, 1);
+        assert.equal(bf.text, ui.mods.heldBadge, `${lang}: whole`);
+        assert.ok(NGUI.glyphWidth(bf.text, bf.fs) <= 250 - 70, `${lang}: inside the card`);
+      }
+    } finally { I18n.setStrings("en-US", strings); }
+  }
   assert.equal(items[1].badge, undefined);
   assert.equal(items[2].badge, undefined, "a card that cannot be ticked keeps its own state");
 });

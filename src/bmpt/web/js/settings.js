@@ -95,6 +95,8 @@ async function checkFiles() {
   if (!m.drift && !m.untracked && !m.damaged) return;
   const entries = await rpc("mods.entries").catch(() => []);
   await Prompts.show("drift", { entries, dismissed: true });
+  // entries a game update put back: the update summary's
+  if (m.enabled !== false && entries.some((e) => e?.state === "updated")) await Impact.show();
   await Prompts.show("untracked", { entries, dismissed: true });
   render();
 }
