@@ -705,6 +705,18 @@
 			"spine": {
 				"label": "Spine ライセンス",
 				"view": "表示"
+			},
+			"troubleshoot": {
+				"label": "MODの切り分け",
+				"inactive": "未実行",
+				"active": "切り分け中、設定 {n} 件を保存済み",
+				"apply": "すべて公式に戻す",
+				"restore": "設定を復元",
+				"applyConfirm": "すべての選択を公式に変更、現在の設定は保存",
+				"restoreConfirm": "切り分け前の設定を復元、以降の選択は置き換え",
+				"match": "公式と一致",
+				"differ": "{n} 件のファイルが公式と不一致",
+				"unverified": "未確認：Steam のファイルリストなし"
 			}
 		},
 		"cacheTo": "キャッシュ先：{path}",

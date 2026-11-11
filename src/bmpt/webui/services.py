@@ -860,6 +860,27 @@ class Services:
         self.publish_state()
         return job
 
+    def submit_troubleshoot(self, action: str) -> str:
+        """``mods.applyOfficial`` / ``mods.restoreConfig`` (Troubleshoot Mods): over every known install, pinned at
+        submit; ``busy`` while a toggle is queued or running, ``classic_open`` while a classic window is open."""
+        from ..library import troubleshoot
+
+        library = self.library
+        pins = library.installs()
+        work = troubleshoot.apply_official if action == "apply" else troubleshoot.restore
+
+        def run(log: Any, progress: Any) -> Any:
+            self.check_classic()
+            return work(library, pins, log=log, progress=self._progress(progress))
+
+        with self.classic.starting():
+            if self.jobs.active("mods.toggle") or self.jobs.active("mods.troubleshoot"):
+                raise ServiceError("busy")
+            self.check_classic()
+            job = self.submit("mods.troubleshoot", run, writes="game", library=library)
+        self.publish_state()
+        return job
+
     def submit_restore_drift(self, entries: list[dict]) -> str:
         """``mods.restoreDrift``: Apply Mod Configuration of the given entries, pinned at submit."""
         if not isinstance(entries, list) or not all(isinstance(item, dict) for item in entries):

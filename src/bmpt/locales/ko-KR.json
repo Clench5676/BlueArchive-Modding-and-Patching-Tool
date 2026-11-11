@@ -705,6 +705,18 @@
 			"spine": {
 				"label": "Spine 라이선스",
 				"view": "보기"
+			},
+			"troubleshoot": {
+				"label": "모드 문제 확인",
+				"inactive": "사용 안 함",
+				"active": "확인 중 - 설정 {n}개 저장됨",
+				"apply": "모두 공식으로 적용",
+				"restore": "설정 복원",
+				"applyConfirm": "모든 선택을 공식으로 변경, 현재 설정은 저장",
+				"restoreConfirm": "확인 전 설정 복원, 이후 선택은 교체",
+				"match": "공식과 일치",
+				"differ": "파일 {n}개가 공식과 다름",
+				"unverified": "확인 안 됨: Steam 파일 목록 없음"
 			}
 		},
 		"cacheTo": "캐시 위치: {path}",
