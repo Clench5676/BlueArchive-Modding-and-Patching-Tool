@@ -323,6 +323,14 @@
     "code": "E1014",
     "level": "failed"
   },
+  "old_rig_animations": {
+    "code": "E5016",
+    "level": "failed"
+  },
+  "old_rig_unavailable": {
+    "code": "E5017",
+    "level": "failed"
+  },
   "original_invalid": {
     "code": "E2011",
     "level": "failed"

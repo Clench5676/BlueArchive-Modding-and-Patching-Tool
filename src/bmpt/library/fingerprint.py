@@ -149,6 +149,31 @@ def changed_layouts(data: dict | None, atlases: dict[str, bytes]) -> dict[str, d
     return result
 
 
+def drawn_on(painted: dict[str, dict], files: dict[str, bytes]) -> dict[str, bytes]:
+    """The rig a texture-only mod is drawn on in its previews, so that it shows as it was made: of a preview's Spine
+    ``files`` (name to bytes: the official parts with the mod's over them), every atlas repacked since the mod's
+    textures were drawn on it (``changed_layouts`` against ``painted``, the entries that keep their ``skeleton``), as
+    the recorded atlas text, with the skeleton of its stem as the recorded skeleton. Names as in ``files``; empty when
+    nothing changed."""
+    known = {name: entry for name, entry in painted.items()
+             if isinstance(entry, dict) and isinstance(entry.get("skeleton"), str)}
+    atlases = {name: data for name, data in files.items() if name.lower().endswith(".atlas")}
+    skeletons = {name: data for name, data in files.items() if name.lower().endswith(".skel")}
+    changed = changed_layouts({"painted": known}, atlases)
+    drawn_by = atlas_remap.pair_atlases(skeletons, dict.fromkeys(changed))
+    result = {}
+    for name, entry in changed.items():
+        if name not in drawn_by:
+            continue
+        try:
+            skeleton = base64.b64decode(entry["skeleton"], validate=True)
+            text = entry["text"].encode("utf-8")
+        except (ValueError, UnicodeError):
+            continue
+        result[name], result[drawn_by[name]] = text, skeleton
+    return result
+
+
 def document(event: str, parts: list[dict], *, complete: bool, painted: dict | None = None) -> dict:
     """A fingerprint to store: ``event`` is what made it (import, update, remap, backfill); ``complete`` says the
     parts are every part the mod's core had then; ``painted`` (``painted``) is left out when nothing tells which
