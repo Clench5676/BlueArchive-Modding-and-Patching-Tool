@@ -287,7 +287,8 @@ export function footerWidth(captions, kind = footerSize()) {
 // follow the captions, footerWidth).
 export function footerLayout(labels, w, footer = null) {
   const kind = footerSize(footer), control = kind.control;
-  const baseW = footer == null ? footerWidth(labels, kind) : control.minW;
+  // the default size's bodies and the XS notice's follow their captions (a caption on one line where it fits)
+  const baseW = footer == null || footer === "XS" ? footerWidth(labels, kind) : control.minW;
   const { scale, xs } = footerSlots(labels.length, w, { ...control, minW: baseW }), bodyW = baseW * scale;
   return { kind, control, scale, xs, bodyW, room: bodyW - 2 * control.pad };
 }
