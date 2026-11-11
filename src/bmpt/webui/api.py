@@ -25,12 +25,10 @@ from urllib.parse import unquote
 from .. import devmode, globallines, updater
 from ..catalog.special import SPECIAL_PREFIX
 from ..errors import ServiceError
-from ba_modding_toolkit.i18n import i18n_manager, offered_languages, t
+from bmpt.engine import get_version_info, i18n_manager, offered_languages, parse_filename, t
 from .strings import get_locale_dir
 from ..kivo import clip_id
 from ..library.storage import trailing_bytes
-from ba_modding_toolkit.naming import parse_filename
-from ba_modding_toolkit.utils import get_version_info
 from . import strings
 from .rpc import RpcRegistry, to_json
 from .services import Services
@@ -383,7 +381,7 @@ def build_api(s: Services) -> RpcRegistry:
         elif key == "fileSource":
             if value not in ("windows_global", "windows_japan"):
                 raise ServiceError("bad_params", key=key)
-            from ba_modding_toolkit.searching import is_game_install
+            from bmpt.engine import is_game_install
 
             # Validate before publishing the preference or invalidating a usable Hall.
             with s._lock:
@@ -399,7 +397,7 @@ def build_api(s: Services) -> RpcRegistry:
         elif key in ("gameDir.global", "gameDir.japan"):
             path = Path(str(value)).expanduser()
             devmode.check_read(path)
-            from ba_modding_toolkit.searching import is_game_install
+            from bmpt.engine import is_game_install
 
             if not path.is_dir() or not is_game_install(path):
                 raise ServiceError("game_not_found")

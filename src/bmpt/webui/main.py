@@ -15,8 +15,7 @@ from ..localization import register_locales
 register_locales()
 
 from .. import devmode
-from ba_modding_toolkit.i18n import i18n_manager, t
-from ba_modding_toolkit.utils import EXE_DIR
+from bmpt.engine import EXE_DIR, i18n_manager, t
 from .api import build_api
 from .instance import InstanceLock, raise_running
 from .server import Server, WebApp

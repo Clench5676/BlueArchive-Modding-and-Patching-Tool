@@ -26,23 +26,18 @@ from typing import TYPE_CHECKING, Any, Callable, Hashable, Iterable, Iterator, M
 from UnityPy.helpers.ResourceReader import get_resource_data
 
 from bmpt import atlas_remap, devmode, game_paths, mod_origin, preview_gate, rebake, spans, steam_records
-from ba_modding_toolkit import core, mod_install
-from ba_modding_toolkit.bundle import Bundle
+from bmpt.engine import (
+    SEARCH_DIR_SUFFIXES, AssetType, Bundle, LogFunc, ProgressCallback, core, get_search_dirs, get_skel_version,
+    is_safe_file_name, mod_install, no_log, parse_filename, t,
+)
 from ..catalog.models import CoreMap
 from ..errors import ServiceError
 from ..filelock import file_lock
 from ..gameassets.cabs import CabIndex
 from ..gameassets.discovery import cab_names, may_hold_model_root, own_bundle
 from ..gameassets.preview_reads import PreviewReads
-from ba_modding_toolkit.i18n import t
 from ..logging_utils import log_failure
 from ..openfiles import remove_tree, temporary_directory
-from ba_modding_toolkit.models import AssetType, LogFunc, ProgressCallback
-from ba_modding_toolkit.naming import parse_filename
-from ba_modding_toolkit.searching import SEARCH_DIR_SUFFIXES, get_search_dirs
-from ba_modding_toolkit.spine import get_skel_version
-from ba_modding_toolkit.utils import no_log
-from ba_modding_toolkit.utils.common import is_safe_file_name
 from . import profiles as profiles_mod
 from . import fingerprint, integrity, safety, staging
 from . import targets as resolver
@@ -7121,7 +7116,7 @@ class _ChoiceChange:
 
 def _build_version() -> str:
     """The program build: a cached build is never reused across versions."""
-    from ba_modding_toolkit.utils import get_version_info
+    from bmpt.engine import get_version_info
 
     info = get_version_info()
     return f"{info.get('version')}:{info.get('commit_hash')}"

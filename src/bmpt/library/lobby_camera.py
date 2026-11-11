@@ -19,8 +19,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from ba_modding_toolkit.bundle import Bundle
-from ba_modding_toolkit.models import SaveOptions
+from bmpt.engine import Bundle, SaveOptions
 
 from .. import devmode
 from ..errors import ServiceError

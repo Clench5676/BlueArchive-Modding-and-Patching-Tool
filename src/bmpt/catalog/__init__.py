@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Iterable, Protocol
 
 from ..errors import ServiceError
-from ba_modding_toolkit.naming import parse_filename
+from bmpt.engine import parse_filename
 from ._data import base_rank, csv_entry, read_character_map
 from ._names import BASE_SHORT, LANGUAGES, apply_thai_names, cn_aliases, cn_base, cn_words, csv_bases, csv_names, name_head
 from .models import CoreMap, Family, Variant

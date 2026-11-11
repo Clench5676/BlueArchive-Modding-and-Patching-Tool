@@ -12,10 +12,9 @@ from PIL import Image, ImageOps
 from UnityPy.helpers.ResourceReader import get_resource_data
 
 from .. import devmode
-from ba_modding_toolkit.bundle import Bundle
+from bmpt.engine import Bundle, SaveOptions
 from ..errors import ServiceError
 from ..openfiles import temporary_directory
-from ba_modding_toolkit.models import SaveOptions
 from ..texture_guard import texture_image
 from . import profiles
 from .judge import core_of, date_of, other_target

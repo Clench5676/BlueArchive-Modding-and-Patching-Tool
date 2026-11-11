@@ -16,9 +16,7 @@ from pathlib import Path
 from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageOps
 
 from bmpt import atlas_remap as remap, devmode
-from ba_modding_toolkit import core
-from ba_modding_toolkit.bundle import Bundle
-from ba_modding_toolkit.models import SaveOptions
+from bmpt.engine import Bundle, SaveOptions, core
 from bmpt.openfiles import temporary_directory
 from .texture_guard import texture_image
 

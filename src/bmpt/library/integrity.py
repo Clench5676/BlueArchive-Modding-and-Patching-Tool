@@ -8,12 +8,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from .. import devmode
-from ba_modding_toolkit.bundle import Bundle, UpdateScope
+from bmpt.engine import REPLACEABLE_ASSET_TYPES, AssetKey, AssetType, Bundle, UpdateScope, get_skel_version
 from ..errors import ServiceError
 from ..gameassets.spine import atlas_pages
 from ..gameassets.discovery import cab_names
-from ba_modding_toolkit.models import AssetKey, AssetType, REPLACEABLE_ASSET_TYPES
-from ba_modding_toolkit.spine import get_skel_version
 
 
 #: The own CABs a bundle summary names (a bundle holds one serialized file, two with a scene)

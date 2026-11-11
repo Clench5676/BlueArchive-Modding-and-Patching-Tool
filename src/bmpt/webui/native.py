@@ -194,7 +194,7 @@ def message_box(title: str, message: str) -> None:
 
 
 def startup_failure(reports, error: BaseException, *, runtime: bool = False) -> dict | None:
-    from ba_modding_toolkit.i18n import t
+    from bmpt.engine import t
     result, report_path = None, None
     try:
         reports.frontend_event({"kind": "native", "message": str(error), "phase": "native.initialize"})
@@ -213,7 +213,7 @@ def startup_failure(reports, error: BaseException, *, runtime: bool = False) -> 
 
 
 def _install_edit_menu(api, main):
-    from ba_modding_toolkit.i18n import t
+    from bmpt.engine import t
 
     for existing in main.itemArray():
         submenu = existing.submenu()

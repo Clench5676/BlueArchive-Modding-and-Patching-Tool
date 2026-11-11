@@ -5,9 +5,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from ba_modding_toolkit.bundle import Bundle
+from bmpt.engine import Bundle, parse_filename
 from ..errors import ServiceError
-from ba_modding_toolkit.naming import parse_filename
 from .judge import MODEL_CATEGORIES, kind_of, kind_of_file, other_target
 
 # Match complete Spine core names, including asset names followed by a page or role.
