@@ -339,7 +339,8 @@ def release(library: ModLibrary, variant: str, pin: Pin, log, progress) -> None:
         base = meta.get("base", "official")
         base_record = library._records.get(base[4:]) if isinstance(base, str) and base.startswith("mod:") else None
         if base_record is not None and base_record.get("kind") == "other":
-            library._apply_other(base_record["target"], base, log, progress, pin, False)
+            # the prefab mod the camera was framed on, put back: no untested build's confirmation (tested_build)
+            library._apply_other(base_record["target"], base, log, progress, pin, False, untested=False)
         else:
             library.apply(slot, "official", log=log, progress=progress, kind="other", pin=pin)
 

@@ -315,6 +315,11 @@
 				"expand": "Expand",
 				"collapse": "Collapse"
 			},
+			"untested": {
+				"title": "Untested Game Version",
+				"affected": "Affected by the game update: {n}",
+				"apply": "Apply Anyway"
+			},
 			"deleteConfirm": "Delete {name}?",
 			"deleteRestore": "Entries using it go back to official or their previous setting",
 			"alreadyInUse": "Already in use",
@@ -455,6 +460,7 @@
 			"variant_incompatible": "Built differently, cannot be swapped",
 			"variant_not_found": "Alt not found",
 			"steam_busy": "Steam is updating or verifying the game",
+			"untested_build": "Untested game version, files changed",
 			"classic_open": "Close the classic UI first",
 			"entry_changed": "Game files changed, check again",
 			"folder_changed": "Game folders changed, try again",

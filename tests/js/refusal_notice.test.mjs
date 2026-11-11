@@ -100,8 +100,8 @@ test("every refusal code is a code the page can say: a string in all six languag
     "state_changed", "folder_changed", "entry_changed", "mod_in_use", "mod_in_use_elsewhere", "mod_last_copy", "asset_official",
     "photo_in_use", "library_target_not_empty", "hall_last_portrait", "hall_last_memorial", "hall_duplicate_portrait",
     "hall_duplicate_memorial", "hall_conflict", "alias_too_long", "alias_too_many", "export_empty", "scan_off",
-    "native_only", "native_unavailable",
-  ].sort(), "the registry preserves all 27 original notices");
+    "native_only", "native_unavailable", "untested_build",
+  ].sort(), "the registry preserves all 27 original notices, untested_build after them");
 });
 
 test("the refusals are state and rule refusals; unreadable or unknown states stay failures", () => {

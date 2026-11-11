@@ -315,6 +315,11 @@
 				"expand": "展開",
 				"collapse": "收合"
 			},
+			"untested": {
+				"title": "遊戲版本未經測試",
+				"affected": "受遊戲本體更新影響：{n}",
+				"apply": "仍要套用"
+			},
 			"deleteConfirm": "刪除 {name}？",
 			"deleteRestore": "使用中的項目將還原為原版或之前的設定",
 			"alreadyInUse": "使用中",
@@ -455,6 +460,7 @@
 			"variant_incompatible": "兩者結構不同，無法互換",
 			"variant_not_found": "找不到這個換皮",
 			"steam_busy": "Steam 正在更新或驗證遊戲",
+			"untested_build": "遊戲版本未經測試，檔案已變更",
 			"classic_open": "請先關閉經典介面",
 			"entry_changed": "遊戲檔案已變更，請重新檢查",
 			"folder_changed": "遊戲資料夾已變更，請重試",

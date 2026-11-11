@@ -887,7 +887,8 @@ function addMods() {
 // a job with a sticky progress line; the family is re-read afterwards (after(ok, result) instead, when given).
 // A switch the classic UI's open window refuses opens the classic modal, which can queue it (mod-switch.js).
 // An apply while mods are off only saves the choice (deferred): a notice says so ("Saved, applied when mods are on").
-async function job(method, params, { onDone, after = () => reload(), name = fullName(variant()) } = {}) {
+async function job(method, params, options = {}) {
+  const { onDone, after = () => reload(), name = fullName(variant()) } = options;
   if (busy) { notify(T("error.busy"), { kind: "error", error: { code: "busy" } }); return false; }
   busy = true;
   const page = pageToken;
@@ -931,7 +932,8 @@ async function job(method, params, { onDone, after = () => reload(), name = full
     if (refusal) {
       if (page === pageToken && open && refusal.code === "original_unavailable" && QUEUEABLE.includes(method))
         await overwrittenMessage(variant(), params.kind || "spr");
-      else if (QUEUEABLE.includes(method)) await refused(refusal, method, params);
+      // an untested game build's confirmation makes the call again, from this same page only
+      else if (QUEUEABLE.includes(method)) await refused(refusal, method, params, page === pageToken && open ? () => job(method, params, options) : null);
       else notify(errorText(refusal), { kind: "error", error: refusal });
     } else if (ok) {
       // an apply while mods are off only saves the choice, without a notice, like any other saved choice (owner)

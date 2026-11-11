@@ -35,6 +35,17 @@ def _isolated_user_folders(tmp_path, monkeypatch):
     monkeypatch.setenv("XDG_CACHE_HOME", str(home / ".cache"))
 
 
+@pytest.fixture(autouse=True)
+def _no_tested_build():
+    """Test installs are no untested game build: writes onto them need no confirmation (bmpt.library.tested_build).
+    The tests of that confirmation give their own tested build. A patch of its own, which a test's
+    ``monkeypatch.undo()`` keeps."""
+    from bmpt.library import tested_build
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(tested_build, "for_server", lambda server: None)
+        yield
+
+
 @pytest.fixture(autouse=True, scope="session")
 def _no_game_detection():
     """Tests never look for the user's game install: settings without game folders find none, instead of
