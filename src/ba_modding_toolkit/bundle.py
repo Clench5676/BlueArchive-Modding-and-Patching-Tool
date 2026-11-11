@@ -336,7 +336,10 @@ class Bundle:
         # 尝试加载
         try:
             if trailing == 0:
-                env = UnityPy.load(str(bundle_path))
+                env = Env(path=str(bundle_path.parent))
+                env.load_file(bundle_path.read_bytes(), name=str(bundle_path))
+                if len(env.files) == 1:
+                    env.file = next(iter(env.files.values()))
             else:
                 data = bundle_path.read_bytes()[:-trailing]
                 env = UnityPy.load(data)
