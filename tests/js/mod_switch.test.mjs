@@ -1409,61 +1409,51 @@ test("Settings Spine value row opens the same read-only notice in every locale w
 
 const Impact = await import("../../src/bmpt/web/js/update-impact.js");
 
-test("an update's impact: one count line per kind, each mod named with Go To and what changed, then how the hold ends", () => {
-  assert.equal(Impact.summary(null), null);
-  assert.equal(Impact.summary({ due: false, counts: { rebuilt: 1 } }), null);
+test("an update's impact as a list: the held mods, those applied again and the others, each a card with its details", () => {
   const mods = [
     { id: "1", target: "hoshino", core: "ch0101_spr", kind: "spr", impact: "rig_changed", label: "Bunny Hoshino", configured: true,
       changes: { repacked: true, animations: 3, textures: true } },
     { id: "2", target: "airi", core: "ch0200_spr", kind: "spr", impact: "rebuilt", label: "Airi", changes: {} },
+    { id: "3", target: "hina", core: "ch0063_home", kind: "lobby", impact: "gone", label: "Night" },
+    { id: "4", target: "aru", core: "aru_spr", kind: "spr", impact: "unchanged" },
+    { id: "5", target: "aris", core: "aris_spr", kind: "spr", impact: "rig_changed", repaired_id: "5r", configured: false },
   ];
   const nameOf = (e) => e.variant[0].toUpperCase() + e.variant.slice(1);
-  const r = Impact.summary({ due: true, mods, counts: { unchanged: 4, rebuilt: 1, rig_changed: 1, new_parts: 0, gone: 0, unknown: 2 } }, nameOf);
-  assert.equal(r.title, "Mods Impacted by Game Update");
-  const hint = "Go to opens the mod, then press Update to apply it again";
-  const item = (text) => ({ text, ...Impact.ITEM });
-  const plain = (lines) => lines.map(({ button, ...l }) => (button ? { ...l, button: button.label } : l));
-  // the held mod: student, kind and its own name with Go To; under it, what the update changed in its official portrait
-  const head = [{ text: "Official .skel or .atlas file changed, not applied until updated: 1" },
-    { text: "Hoshino - Portrait - Bunny Hoshino - Applied", ...Impact.ITEM, button: "Go to" },
-    { text: "Official Portrait: .atlas file layout changed, 3 new animations in the .skel file", indent: Impact.ITEM.indent, ...Impact.DETAIL },
-    { text: hint, ...Impact.HINT }];
-  assert.equal(Impact.HINT.fontSize, 42, "two steps under the 52 of the lines");
-  assert.equal(Impact.DETAIL.fontSize, 42);
-  // the other kinds are folded under their line, its button closes the message to open it the other way
-  assert.deepEqual(plain(r.lines), [...head, { text: "Other affected mods", gap: 16, button: "Expand" }]);
-  let closed = null; r.lines[4].button.fn({ close: (b) => { closed = b; } }); assert.equal(closed, "expand");
-  r.lines[1].button.fn({ close: (b) => { closed = b; } }); assert.equal(closed, `${Impact.GO}1`, "Go To names its mod");
-  assert.ok(r.lines[1].button.inline, "right after the name, as high as its text");
-  const open = Impact.summary({ due: true, mods, counts: { unchanged: 4, rebuilt: 1, rig_changed: 1, unknown: 2 } }, nameOf, { expanded: true });
-  // each other kind's mods under its count, with Go To (a mod's own name that only repeats the student's is left out)
-  assert.deepEqual(plain(open.lines), [...head, { text: "Other affected mods", gap: 16, button: "Collapse" },
-    item("Rebuilt, .skel and .atlas files unchanged: 1"), { text: "Airi - Portrait", indent: Impact.SUB, button: "Go to" }, item("Not affected: 4"), item("Not determined: 2")]);
-  // without held mods the other kinds show at once, without the button
-  assert.deepEqual(Impact.summary({ due: true, mods: [], counts: { rebuilt: 2 } }).lines, [item("Rebuilt, .skel and .atlas files unchanged: 2")]);
-  // every held mod is listed (the message scrolls past its cap)
-  const many = Impact.summary({ due: true, counts: { rig_changed: 9 },
-    mods: Array.from({ length: 9 }, (_, i) => ({ id: `${i}`, target: `v${i}`, core: `c${i}_spr`, kind: "spr", impact: "rig_changed" })) });
-  assert.equal(many.lines.filter((l) => l.button).length, 9);
-  assert.equal(many.lines.at(-1).text, hint);
-  // Settings' View tells the counts even when nothing is affected, and an empty library as such
-  assert.equal(Impact.summary({ due: false, mods: [], counts: { unchanged: 3 } }), null);
-  assert.deepEqual(Impact.summary({ due: false, mods: [], counts: { unchanged: 3 } }, nameOf, { always: true }).lines, [item("Not affected: 3")]);
-  assert.deepEqual(Impact.summary({ due: false, mods: [], counts: {} }, nameOf, { always: true }).lines, [{ text: "No Mods" }]);
-  // every kind has its string in every locale
+  const outcome = { result: { due: true, mods }, reapplied: [entry("mika_spr", "updated", { configured: "mod:6" })] };
+  const tabs = Impact.tabMods(outcome);
+  // a held mod a repaired copy replaced is no longer listed; unchanged ones never are
+  assert.deepEqual([tabs.held.map((m) => m.id), tabs.reapplied.map((m) => m.id), tabs.others.map((m) => m.id)], [["1"], ["6"], ["2", "3"]]);
+  assert.deepEqual(Impact.TABS, ["held", "reapplied", "others"]);
+  assert.deepEqual(Impact.tabCaptions(tabs).map((c) => c.text), ["Needs Fix 1", "Applied Again 1", "Other Affected 2"]);
+  // a held card: the student's name, its kind and Applied as chips, the Files Changed badge, its own picture
+  const held = Impact.card(tabs.held[0], "held", nameOf);
+  assert.deepEqual([held.key, held.label, held.full, held.chips, held.badge.text],
+    ["1", "Hoshino", "Bunny Hoshino", ["Portrait", "Applied"], "Files Changed"]);
+  assert.ok(held.thumb && typeof held.big === "function");
+  // another kind's card says what happened to it
+  assert.equal(Impact.card(tabs.others[1], "others", nameOf).badge.text, "Gone");
+  assert.equal(Impact.card(tabs.reapplied[0], "reapplied", nameOf).badge, undefined);
+  // the details: the mod's name, what changed (without the kind's prefix), its state; Go To, the preview, Fix and Apply
+  const d = Impact.details(tabs.held[0], "held");
+  assert.equal(d.title, S("info.title.portrait"));
+  assert.deepEqual(d.fields, [["Official Changes", ".atlas file layout changed, 3 new animations in the .skel file"],
+    [S("field.status"), "Files Changed"]]);
+  assert.deepEqual(d.actions.map(([id]) => id), ["go", "preview", "fix"]);
+  assert.deepEqual(Impact.details(tabs.others[0], "others").actions.map(([id]) => id), ["go"]);
+  assert.equal(Impact.details(tabs.reapplied[0], "reapplied").fields.at(-1)[1], "Overwritten by official files, applied again");
+  // every string in every locale
   try {
     for (const lang of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
       const ui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url))).webui;
       I18n.setStrings(lang, flat({ webui: ui }));
-      const counts = Object.fromEntries(Impact.KINDS.map((k) => [k, 1]));
-      const all = Impact.summary({ due: true, counts, mods: [] }, undefined, { expanded: true });
-      assert.equal(all.lines.length, Impact.KINDS.length + 1, lang);
-      const toggle = all.lines.find((l) => l.button);
-      assert.ok(toggle.text === ui.mods.impact.others && toggle.button.label === ui.mods.impact.collapse && ui.mods.impact.expand, lang);
-      for (const line of [{ text: all.title }, ...all.lines.filter((l) => !l.button)]) assert.ok(line.text && !/^mods\./.test(line.text) && line.text.includes(line.text === all.title ? "" : "1"), `${lang} ${line.text}`);
+      const m = ui.mods.impact;
+      for (const k of ["title", "fix", "preview", "noPreview", "fieldChanges", "stateReapplied", "kindRebuilt", "kindNewParts", "kindGone",
+        "gateTitle", "gateAsk", "gateCheck", "checking", "reapplying", "sep"]) assert.ok(typeof m[k] === "string" && m[k].length > 0, `${lang} ${k}`);
+      for (const k of ["tabHeld", "tabReapplied", "tabOthers", "fixSelected", "partial"]) assert.ok(m[k].includes("{n}"), `${lang} ${k}`);
+      assert.ok(m.checkingMod.includes("{name}"), lang);
+      for (const gone of ["hint", "reset", "rigChanged", "fixAll", "reapplied", "others", "expand", "collapse", "gone", "newParts", "rebuilt", "unchanged", "unknown"])
+        assert.ok(!(gone in m), `${lang}: ${gone} no longer used`);
       for (const k of ["held", "heldTitle", "heldBadge"]) assert.ok(typeof ui.mods[k] === "string" && ui.mods[k].length > 0, `${lang} ${k}`);
-      assert.ok(ui.mods.impact.reset.includes("{n}") && !("driftUpdated" in ui.mods), lang);
-      assert.ok(ui.mods.impact.hint.includes("{action}") && ui.mods.impact.hint.includes("{go}") && !("driftWhy" in ui.mods), lang);
       const every = { repacked: true, animations: 2, rig: true, removed: true, added: true };
       for (const [kind, changes] of [["spr", every], ["lobby", { animations: 1 }], ["model", { textures: true }], ["other", { removed: true }]]) {
         const text = Impact.changeText({ kind, changes });
@@ -1471,74 +1461,104 @@ test("an update's impact: one count line per kind, each mod named with Go To and
       }
       assert.ok(typeof ui.settings.mods.impact === "string" && typeof ui.settings.mods.view === "string", lang);
     }
+    // Chinese: the changes after a comma, the new animations as xN (owner, 2026-11-11)
+    I18n.setStrings("zh-CN", flat({ webui: JSON.parse(readFileSync(new URL("../../src/bmpt/locales/zh-CN.json", import.meta.url))).webui }));
+    assert.equal(Impact.changeText({ kind: "spr", changes: { repacked: true, animations: 1 } }), "官方立绘变动：.atlas 文件布局改变，.skel 文件新增动画 x1");
   } finally { I18n.setStrings("en-US", strings); }
 });
 
 test("what an update changed in a mod's official parts: each change once, a repack carrying its texture sizes", () => {
   assert.equal(Impact.changeText({ kind: "spr", changes: {} }), "");
   assert.equal(Impact.changeText({ kind: "spr" }), "");
-  assert.equal(Impact.changeText({ kind: "spr", changes: { animations: 1 } }), "Official Portrait: 1 new animation in the .skel file");
+  assert.equal(Impact.changeText({ kind: "spr", changes: { animations: 1 } }), "Official Portrait changes: 1 new animation in the .skel file");
   assert.equal(Impact.changeText({ kind: "lobby", changes: { repacked: true, textures: true, rig: true } }),
-    "Official Memorial Lobby: .atlas file layout changed, .skel file structure changed");
+    "Official Memorial Lobby changes: .atlas file layout changed, .skel file structure changed");
   assert.equal(Impact.changeText({ kind: "model", changes: { textures: true, removed: true, added: true } }),
-    "Official 3D Model: texture size changed, part removed, new parts");
+    "Official 3D Model changes: texture size changed, part removed, new parts");
   assert.equal(Impact.changeText({ kind: "other", changes: { removed: true } }), "Official files: part removed");
-  // a generic mod: its own name and the kind, no Go To (no student page)
+  // a generic mod: its own name and the kind, no Go To (no student page); a held one keeps Fix
   const other = Impact.modLines({ id: "9", kind: "other", label: "UI Font", target: "", changes: { removed: true } });
   assert.equal(other[0].text, "UI Font - Other Mods");
   assert.equal(other[0].button, undefined);
+  assert.equal(Impact.modLines({ id: "9", kind: "other", label: "UI Font", target: "" }, undefined, { fix: true })[0].button.label, "Fix and Apply");
 });
 
-test("the held entries' Details name each mod with Go To where its mod is known, then how the hold ends", () => {
+test("the held entries' Details name each mod with Go To and Fix where its mod is known, then how the hold ends", () => {
   const entries = [{ install: "/a", core: "a_spr", variant: "a", kind: "spr", source: "mod:1", label: "Swim A" },
     { install: "/a", core: "b_home", variant: "b", kind: "lobby", source: "variant:c" }];
   const lines = Impact.heldLines(entries, (e) => e.variant.toUpperCase());
-  assert.deepEqual(lines.map((l) => [l.text, l.button?.label || null]),
-    [["A - Portrait - Swim A", "Go to"], ["B - Memorial Lobby", null], ["Go to opens the mod, then press Update to apply it again", null]]);
-  assert.deepEqual(Impact.heldMods(entries)[0], { id: "1", target: "a", core: "a_spr", kind: "spr", label: "Swim A" });
+  assert.deepEqual(lines.map((l) => [l.text, l.button?.label || null, (l.more || []).map((b) => b.label)]),
+    [["A - Portrait - Swim A - Applied", "Go to", ["Fix and Apply"]], ["B - Memorial Lobby - Applied", null, []]]);
+  assert.deepEqual(Impact.heldMods(entries)[0], { id: "1", target: "a", core: "a_spr", kind: "spr", label: "Swim A", configured: true });
 });
 
-test("a game update's put-back entries join the update summary: listed with Go To, Apply Mod Configuration and Keep as Is", async () => {
-  const result = { due: true, install: GLOBAL, version: "v2", counts: { rig_changed: 1, rebuilt: 1 },
-    mods: [{ id: "b", target: "hina", core: "hina_home", kind: "lobby", impact: "rig_changed", label: "Night", configured: true },
-      { id: "a", target: "airi", core: "airi_spr", kind: "spr", impact: "rebuilt", label: "Band", configured: true }] };
-  const updated = [entry("airi_spr", "updated", { configured: "mod:a" }), entry("hina_home", "updated", { configured: "mod:b" }),
+test("the entries a game update overwrote that need no repair are applied again; the held ones wait for their fix", async () => {
+  const result = { mods: [{ id: "b", impact: "rig_changed" }, { id: "a", impact: "rebuilt" }] };
+  const entries = [entry("airi_spr", "updated", { configured: "mod:a" }), entry("hina_home", "updated", { configured: "mod:b" }),
     entry("noa_spr", "updated", { configured: "mod:c", dismissed: true }), entry("aru_spr", "reset", { configured: "mod:d" })];
-  // the held one (its configured mod's rig changed) stays with its mod, not re-applied; dismissed ones only when asked
-  const { reset, held } = Impact.resetEntries(updated, result);
-  assert.deepEqual([reset.map((e) => e.core), held.map((e) => e.core)], [["airi_spr"], ["hina_home"]]);
-  assert.deepEqual(Impact.resetEntries(updated, result, { dismissed: true }).reset.map((e) => e.core), ["airi_spr", "noa_spr"]);
-  const nameOf = (e) => e.variant[0].toUpperCase() + e.variant.slice(1);
-  const m = Impact.summary(result, nameOf, { reset, held });
-  const texts = m.lines.map((l) => l.text);
-  assert.ok(texts.includes("Reset to official by the game update: 1"));
-  const line = m.lines.find((l) => l.text === "Airi - Portrait - Applied");
-  assert.equal(line?.button?.label, "Go to", "a put-back entry: its student, kind, Applied, Go To");
-  // nothing else to tell: the put-back entries alone still make a summary
-  assert.ok(Impact.summary({ due: false, counts: {}, mods: [] }, nameOf, { reset }));
-  assert.equal(Impact.summary({ due: false, counts: {}, mods: [] }, nameOf, { reset: [] }), null);
-
-  // the page: mods on, the file check allowed and done; Apply Mod Configuration writes the put-back entry again and keeps
-  // the held one as it is
+  assert.deepEqual(Impact.reappliable(entries, result).map((e) => e.core), ["airi_spr"]);
+  // a repaired copy that took a mod's place: not held any more, unless its student is still configured with the mod
+  const fixed = { mods: [{ id: "x", impact: "rig_changed", repaired_id: "y", configured: false },
+    { id: "z", impact: "rig_changed", repaired_id: "w", configured: true }, { id: "v", impact: "rig_changed" }] };
+  assert.deepEqual(Impact.heldOf(fixed).map((m) => m.id), ["z", "v"]);
+  // with mods on, the scan's overwritten entries that need no repair are applied again by themselves, no prompt
   const saved = { ...answers };
   try {
+    answers["mods.impact"] = "job-impact-reconcile";
+    jobs["job-impact-reconcile"] = { state: "done", result: { mods: [{ id: "a", impact: "rebuilt" }, { id: "b", impact: "rig_changed" }] } };
+    answers["mods.restoreDrift"] = "job-reconcile";
+    jobs["job-reconcile"] = { state: "done", result: { done: [{ install: GLOBAL, core: "airi_spr" }], failed: [], skipped: [], stuck: [] } };
+    assert.equal(await P.reconcile(entries, base({ enabled: false })), false, "mods off: nothing written");
+    assert.equal(await P.reconcile(entries, base({ scan: false })), false, "no file check: nothing known");
+    assert.equal(await P.reconcile(entries, base()), true);
+    assert.deepEqual(called("mods.restoreDrift").at(-1), { entries: [{ install: GLOBAL, core: "airi_spr", state: "updated" }] });
+    assert.equal(dialog.hidden, true, "silently");
+  } finally {
+    for (const key of Object.keys(answers)) delete answers[key];
+    Object.assign(answers, saved);
+  }
+});
+
+test("the start asks before the first screen, checks under the loading screen, applies again what needs no repair", async () => {
+  const saved = { ...answers };
+  const result = { due: true, install: GLOBAL, version: "v3", counts: { rig_changed: 1, rebuilt: 1 },
+    mods: [{ id: "b", target: "hina", core: "hina_home", kind: "lobby", impact: "rig_changed", label: "Night", configured: true },
+      { id: "a", target: "airi", core: "airi_spr", kind: "spr", impact: "rebuilt", label: "Band", configured: true }] };
+  try {
+    // nothing to ask: no popup
+    answers["mods.updateDue"] = { due: false };
+    assert.equal(await Impact.gate(), false);
+    assert.equal(dialog.hidden, true);
+    answers["mods.updateDue"] = { due: true, install: GLOBAL, version: "v3", previous: "v2" };
     answers["mods.state"] = base({ scanned: "2026-11-11T10:00:00Z" });
     await MS.refresh();
-    answers["mods.entries"] = updated;
-    answers["mods.impact"] = "job-impact-summary";
-    jobs["job-impact-summary"] = { state: "done", result };
-    answers["mods.restoreDrift"] = "job-drift-summary";
-    jobs["job-drift-summary"] = { state: "done", result: { done: [{ install: GLOBAL, core: "airi_spr" }], failed: [], skipped: [], stuck: [] } };
-    const checking = Impact.check();
-    await drawn(dialog, "apply");
-    assert.ok(action(dialog, "keep"), "Keep as Is");
-    assert.equal(action(dialog, "close"), undefined, "no close button: Apply Mod Configuration or Keep as Is");
-    action(dialog, "apply").click();
-    await checking;
-    await until(() => called("mods.restoreDrift").length > 0, "mods.restoreDrift");
+    answers["mods.entries"] = [entry("airi_spr", "updated", { configured: "mod:a" }), entry("hina_home", "updated", { configured: "mod:b" })];
+    answers["mods.impact"] = "job-impact-gate";
+    jobs["job-impact-gate"] = { state: "done", result };
+    answers["mods.scan"] = () => { setTimeout(() => emit("library.scanned", { entries: [] }), 0); return {}; };
+    answers["mods.restoreDrift"] = "job-reapply-gate";
+    jobs["job-reapply-gate"] = { state: "done", result: { done: [{ install: GLOBAL, core: "airi_spr" }], failed: [], skipped: [], stuck: [] } };
+    // Later: nothing checked, asked again next time
+    let gated = Impact.gate();
+    await drawn(dialog, "later");
+    assert.equal(action(dialog, "close"), undefined, "answered with a button");
+    action(dialog, "later").click();
+    assert.equal(await gated, false);
+    assert.equal(called("mods.impact").filter((c) => !c?.ids).length, 0);
+    gated = Impact.gate();
+    await drawn(dialog, "check");
+    action(dialog, "check").click();
+    assert.equal(await gated, true);
+    // the overwritten entry that needs no repair is applied again; the held one waits for its fix
     assert.deepEqual(called("mods.restoreDrift").at(-1), { entries: [{ install: GLOBAL, core: "airi_spr", state: "updated" }] });
-    assert.deepEqual(called("mods.dismiss").at(-1), { kind: "drift", entries: [{ install: GLOBAL, core: "hina_home", state: "updated" }] });
-    assert.deepEqual(called("mods.impactSeen").at(-1), { install: GLOBAL, version: "v2" });
+    // the list once the first screen is in: the held mod first, ticked, the entry applied again under its segment
+    const shown = Impact.check();
+    await until(() => !prompt.hidden && walk(prompt).some((e) => e.dataset?.key === "b"), "the list");
+    assert.equal(walk(prompt).find((e) => e.dataset?.key === "b").getAttribute("aria-checked"), "true");
+    walk(prompt).find((e) => e.tagName === "BUTTON" && e.getAttribute("aria-label") === S("display.close")).click();
+    await shown;
+    assert.deepEqual(called("mods.impactSeen").at(-1), { install: GLOBAL, version: "v3" });
+    assert.equal(await Impact.check(), null, "told once");
   } finally {
     for (const key of Object.keys(answers)) delete answers[key];
     Object.assign(answers, saved);

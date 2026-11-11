@@ -3144,6 +3144,8 @@ class ModLibrary:
         except (OSError, ServiceError) as error:
             log_failure(logger, logging.WARNING, "Could not store the official parts' fingerprint", error)
             return False
+        # a new baseline: the impacts judged from the one before go (the same files can now tell otherwise)
+        self._impacts = {key: found for key, found in self._impacts.items() if key[0] != record["id"]}
         return True
 
     @_serialized
@@ -3250,7 +3252,9 @@ class ModLibrary:
             records = [self._records[mod_id] for mod_id in entries if mod_id in self._records]
         for i, record in enumerate(records, 1):
             if progress:
-                progress({"current": i, "total": len(records), "step": "import.step.check"})
+                entry = entries[record["id"]]
+                progress({"current": i, "total": len(records), "step": "import.step.check", "variant": entry.target,
+                          "kind": entry.kind, "label": entry.label})
             with self._lock:
                 if record["id"] not in self._records:
                     continue
@@ -3261,10 +3265,37 @@ class ModLibrary:
             entry = entries[record["id"]]
             out["mods"].append({"id": entry.id, "label": entry.label, "target": entry.target, "kind": entry.kind,
                                 "core": entry.core, "impact": found, "changes": changes,
-                                "configured": f"mod:{entry.id}" in configured})
+                                "configured": f"mod:{entry.id}" in configured, "repaired_id": entry.repaired_id})
         out["due"] = bool(out["mods"])
         if not out["due"] and not force:
             self.impact_seen(pin.key, version)
+        return out
+
+    def update_due(self, pin: Pin | None = None) -> dict[str, Any]:
+        """Whether the start asks to check the library's mods against a game update: the install's resource version
+        differs from the last one seen there and the library has mods. Reads only the version file and the
+        configuration. With no version seen yet (a first start, a newly chosen folder) or no mod, the version is
+        recorded as seen at once and nothing is asked. Never fails: a version that cannot be read asks nothing."""
+        pin = pin or self.current_pin()
+        out: dict[str, Any] = {"due": False, "install": None, "version": None, "previous": None}
+        if pin is None:
+            return out
+        version = self.resource_version(pin)
+        config = self.profiles.read() or {}
+        seen = ((config.get("folders") or {}).get(pin.key) or {}).get("resource") or {}
+        previous = seen.get("version") if isinstance(seen, dict) else None
+        out.update(install=pin.key, version=version, previous=previous)
+        if version is None or version == previous:
+            return out
+        with self._lock:
+            has_mods = bool(self._records)
+        if previous is None or not has_mods:
+            try:
+                self.impact_seen(pin.key, version)
+            except ServiceError as error:
+                log_failure(logger, logging.DEBUG, "Could not record the resource version as seen", error)
+            return out
+        out["due"] = True
         return out
 
     def impacts(self, ids: Sequence[str], pin: Pin | None = None) -> list[dict[str, str]]:
@@ -7317,10 +7348,11 @@ class ModLibrary:
             if all_unchanged or (len(generated) == len(paths) and all(
                     new.name == old.name and self._hashes.get(new).sha1 == self._hashes.get(old).sha1
                     for new, old in zip(sorted(generated), sorted(paths)))):
-                # the mod is what a rebuild on these official parts gives: they are its baseline
-                if self._read_built_against(record) is None:
+                # the mod is what a rebuild on these official parts gives: they are its baseline, also in place of
+                # one of earlier parts whose change held it (an update ends the hold, BL-159)
+                if self._read_built_against(record) is None or self._impact(record, pin) != fingerprint.UNCHANGED:
                     self._write_built_against(record, self._built_against(
-                        {path.name: path for path in paths}, pin, "update"))
+                        {path.name: path for path in paths}, pin, "update", painted=painted))
                 return UpdateResult(self._entry(record), paths, [], unchanged=True,
                                     rig=self._rig_gains({path.name: path for path in paths}, pin))
             # Include unchanged parts when a rebuild splits a mod across bundles.

@@ -201,11 +201,36 @@ export function init(options = {}) {
 }
 
 // Ready scan results keep startup priority. An unfinished background scan never holds the usable first screen's tour.
+// reconcile(entries, s): a game update's overwritten entries (state updated) that need no repair are applied again by
+// themselves while mods are on, no prompt (owner, 2026-11-11: the configuration says they are applied; with the switch
+// on, or once it is turned on again, the drift is reconciled). Those whose configured mod's rig changed stay held.
+// Resolves true when it wrote; a refusal (the game running, Steam busy) leaves them for the next scan.
+let reconciling = false;
+export async function reconcile(entries, s) {
+  if (reconciling || s?.enabled === false || s?.scan !== true || s?.available === false) return false;
+  const updated = (entries || []).filter((e) => e?.state === "updated" && !e.dismissed);
+  if (!updated.length) return false;
+  const held = Impact.heldKeys(updated, await Impact.impacts(updated));
+  const again = updated.filter((e) => !held.has(entryKey(e)));
+  if (!again.length) return false;
+  reconciling = true;
+  try {
+    await waitJob(await rpc("mods.restoreDrift", { entries: again.map((e) => ({ install: e.install, core: e.core, state: e.state })) }));
+    return true;
+  } catch (err) {
+    console.warn("drift reconcile", err);
+    return false;
+  } finally {
+    reconciling = false;
+  }
+}
+
 export async function start(which, info) {
   try {
     const s = await ModSwitch.refresh();
     if (s?.scan === true && !s.scanned) return;
     const entries = s?.scan === true ? await rpc("mods.entries").catch(() => []) : [];
+    if (which === "drift") await reconcile(entries, s);
     if (ModSwitch.startDue(which, { info, state: s, entries })) await show(which, { entries });
   } finally {
     if (which === "untracked") {
@@ -223,6 +248,8 @@ async function later() {
   const s = await ModSwitch.refresh();
   if (s?.scan !== true || !s.scanned) return;
   const entries = await rpc("mods.entries").catch(() => []);
+  // the writes publish a scan of their own, which comes back here
+  if (await reconcile(entries, s)) return;
   for (const which of ["drift", "untracked"]) {
     if (!ModSwitch.startDue(which, { info: {}, state: s, entries })) continue;
     await Popup.whenIdle();

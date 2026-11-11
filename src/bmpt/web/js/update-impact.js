@@ -1,41 +1,30 @@
-// What a game update did under the library's mods (docs/web-ui.md, "Game update impact"): once the current install's
-// resource version differs from the last one told, the library classifies every mod from the official parts it was
-// built against (mods.impact) and the page tells it in one message: official rig changed (those entries are not
-// applied by an On or its Retry until updated), gone from the game, new official parts, rebuilt with the same rig, and
-// how many were not affected or not determined. Each mod is named with its student, kind and own name, what the update
-// changed in its official parts, and a Go To button that opens its student's switch on it. Closing it records the
-// version as told (mods.impactSeen); Settings' Game Update Impact shows it again (show). The pure parts are tested in
-// Node (tests/js/mod_switch.test.mjs).
+// What a game update did under the library's mods (docs/web-ui.md, "Game update impact"). At the start, before the
+// first screen (gate): once the current install's resource version differs from the last one seen and the library has
+// mods (mods.updateDue), the page asks whether to check them; Check runs under the loading screen with its progress
+// (run): the library classifies every mod from the official parts it was built against (mods.impact), with mods on
+// and the file check allowed the game files are scanned and the applied entries the update overwrote with official
+// files, which need no repair, are applied again (mods.restoreDrift). Once the first screen is in, the summary shows
+// it as a list (check; owner, 2026-11-11: the drift prompt's popup): three segments, the held mods (ticked, with the
+// Files Changed badge; Fix and Apply for the ticked ones), the entries applied again, the other affected mods; a
+// card's details hold Go To and, for a held mod, the repair's preview (the review, whose Accept is Fix and Apply) and
+// Fix and Apply. Closing it records the version as seen (mods.impactSeen); Settings' Game Update Impact runs it again
+// (show). The pure parts are tested in Node (tests/js/mod_switch.test.mjs).
+import * as Compatibility from "./mod-compatibility.js";
 import * as Loading from "./loading.js";
 import * as Popup from "./popup.js";
 import { notify } from "./popup.js";
-import { on, rpc, waitJob } from "./api.js";
+import { on, rpc, spineBase, waitJob } from "./api.js";
+import { thumb } from "./thumbs.js";
 import { T, errorText } from "./i18n.js";
 import * as ModSwitch from "./mod-switch.js";
-import { entryLabel, listSep } from "./mod-switch.js";
-import { SPACE, TYPE } from "./ui-tokens.js";
+import { entryLabel } from "./mod-switch.js";
+import { COLOUR, SPACE, TYPE } from "./ui-tokens.js";
 
-// the order the summary counts its kinds in, those that need the user first; unchanged and unknown close it
-export const KINDS = ["rig_changed", "gone", "new_parts", "rebuilt", "unchanged", "unknown"];
-const KEYS = { rig_changed: "rigChanged", gone: "gone", new_parts: "newParts", rebuilt: "rebuilt",
-  unchanged: "unchanged", unknown: "unknown" };
-// a mod line's Go To closes the message with "go:<mod id>"
-export const GO = "go:";
-
-// summary(result, nameOf, {expanded, always}): the message of an update's impact, {title, lines} for a plain
-// (left-aligned) message; null when nothing needs telling (always: Settings' View, which tells the counts even then).
-// The mods whose official rig changed come first: their count, each one as a list item ("student - kind - mod name",
-// Go To), what changed in its official parts under it, and, in italics, how the hold ends. Then "Other affected mods"
-// with an Expand / Collapse button (its line's button closes the message with "expand", see check) over a list item
-// per other kind with its count and its mods, shown once expanded. With no mod held that list shows at once, without
-// the button.
+// a held entry's line (the switch help's Details): Go To closes the message with "go:<mod id>", Fix and Apply with
+// "fix:<mod id>"
+export const GO = "go:", FIX = "fix:";
 export const ITEM = Object.freeze({ marker: "\u2022", markerGap: 44, indent: 52 });
-const GROUP_GAP = 16;
 export const WIDTH = 2098;
-// a mod listed under another kind's count
-export const SUB = 104;
-// how a hold ends: in italics, two steps under the lines' type (heading 52 > body 48 > dense 42)
-export const HINT = Object.freeze({ italic: true, fontSize: TYPE.dense.fs, minFontSize: TYPE.dense.fs });
 // what changed in a mod's official parts, under its line: the dense type, held close to the line it belongs to (a
 // label to its own decoration, SPACE.xs, instead of the lines' SPACE.l)
 export const DETAIL = Object.freeze({ fontSize: TYPE.dense.fs, minFontSize: TYPE.dense.fs, gap: SPACE.xs - SPACE.l });
@@ -44,7 +33,7 @@ const kindKey = (kind) => (kind === "model" ? "tab.model" : kind === "lobby" ? "
 
 // changeText(mod): what the update changed in a mod's official parts ("Official Portrait: atlas repacked, 1 new
 // animation", from mods.impact's changes), "" when nothing is known. A repack carries its texture sizes.
-export function changeText(mod, sep = listSep()) {
+export function changeText(mod, sep = T("mods.impact.sep")) {
   const c = mod?.changes || {};
   const parts = [];
   if (c.repacked) parts.push(T("mods.impact.change.repacked"));
@@ -68,10 +57,13 @@ export function modName(mod, nameOf = (e) => e?.variant || e?.core || "") {
   return `${mod?.label && mod.label !== nameOf(entry) ? `${named} - ${mod.label}` : named}${applied}`;
 }
 
-// a mod's lines: its name with Go To (none for a generic mod: no student page), then what changed in its official parts
-export function modLines(mod, nameOf, { indent = ITEM.indent, marker = true } = {}) {
-  const go = mod?.id && mod.kind !== "other" && mod.target
-    ? { button: { label: T("add.go"), inline: true, fn: ({ close }) => close(`${GO}${mod.id}`) } } : {};
+// a mod's lines: its name with Go To (none for a generic mod: no student page) and, for a held mod (fix), Fix after
+// it; then what changed in its official parts
+export function modLines(mod, nameOf, { indent = ITEM.indent, marker = true, fix = false } = {}) {
+  const page = mod?.id && mod.kind !== "other" && mod.target;
+  const repair = fix && mod?.id ? [{ label: T("mods.impact.fix"), fn: ({ close }) => close(`${FIX}${mod.id}`) }] : [];
+  const go = page ? { button: { label: T("add.go"), inline: true, fn: ({ close }) => close(`${GO}${mod.id}`) }, more: repair }
+    : repair.length ? { button: { ...repair[0], inline: true } } : {};
   const line = { text: modName(mod, nameOf), indent, ...(marker ? { marker: ITEM.marker, markerGap: ITEM.markerGap } : {}), ...go };
   const change = changeText(mod);
   return change ? [line, { text: change, indent, ...DETAIL }] : [line];
@@ -81,44 +73,13 @@ export function modLines(mod, nameOf, { indent = ITEM.indent, marker = true } = 
 export const entryMod = (e) => ({ id: /^mod:(.+)$/.exec(e?.configured || "")?.[1] || "", target: e?.variant, core: e?.core,
   kind: e?.kind, label: "", configured: true });
 
-// resetEntries(entries, result): the scan's entries a game update put back to official (state updated) that Apply Mod
-// Configuration would write again: not dismissed (unless asked), not those whose configured mod's rig changed (held:
-// listed with their mods above, applied only after an update); and those held ones apart
-export function resetEntries(entries, result, { dismissed = false } = {}) {
-  const updated = (entries || []).filter((e) => e && e.state === "updated" && (dismissed || !e.dismissed));
+// reappliable(entries, result): the scan's entries a game update overwrote with official files (state updated, not
+// dismissed) that need no repair: not those whose configured mod's rig changed (held: listed with their mods, applied
+// only once repaired)
+export function reappliable(entries, result) {
+  const updated = (entries || []).filter((e) => e && e.state === "updated" && !e.dismissed);
   const held = heldKeys(updated, result?.mods || []);
-  const key = (e) => `${e.install}|${e.core}`;
-  return { reset: updated.filter((e) => !held.has(key(e))), held: updated.filter((e) => held.has(key(e))) };
-}
-
-export function summary(result, nameOf = (e) => e?.variant || e?.core || "", { expanded = false, always = false, reset = [] } = {}) {
-  if (!result || (!result.due && !always && !reset.length)) return null;
-  const counts = result.counts || {};
-  const mods = result.mods || [];
-  const held = mods.filter((m) => m.impact === "rig_changed");
-  const lines = [];
-  if (counts.rig_changed > 0) {
-    lines.push({ text: T("mods.impact.rigChanged", { n: counts.rig_changed }) });
-    lines.push(...held.flatMap((m) => modLines(m, nameOf)));
-    if (held.length) lines.push({ text: T("mods.impact.hint", { go: T("add.go"), action: T("act.update") }), ...HINT });
-  }
-  // the applied entries the update put back to official, Apply Mod Configuration's (the held ones stay listed above)
-  if (reset.length) {
-    lines.push({ text: T("mods.impact.reset", { n: reset.length }), ...(lines.length ? { gap: GROUP_GAP } : {}) });
-    lines.push(...reset.flatMap((e) => modLines(entryMod(e), nameOf)));
-  }
-  const others = KINDS.filter((k) => k !== "rig_changed" && counts[k] > 0).flatMap((kind) => [
-    { text: T(`mods.impact.${KEYS[kind]}`, { n: counts[kind] }), ...ITEM },
-    ...mods.filter((m) => m.impact === kind).flatMap((m) => modLines(m, nameOf, { indent: SUB, marker: false })),
-  ]);
-  const title = T("mods.impact.title");
-  if (!lines.length) return { title, lines: others.length ? others : [{ text: T("settings.mods.empty") }] };
-  if (others.length) {
-    lines.push({ text: T("mods.impact.others"), gap: GROUP_GAP,
-      button: { label: T(expanded ? "mods.impact.collapse" : "mods.impact.expand"), inline: true, fn: ({ close }) => close("expand") } });
-    if (expanded) lines.push(...others);
-  }
-  return { title, lines };
+  return updated.filter((e) => !held.has(`${e.install}|${e.core}`));
 }
 
 // the mods a drift prompt's entries are configured with ("mod:<id>"), for mods.impact {ids}
@@ -135,105 +96,293 @@ export function heldKeys(entries, impacts) {
 let names = async () => (e) => e?.variant || e?.core || "";
 let goTo = async () => {}; // main.js: a mod's student page with its switch open on the mod
 let busy = false;
-const told = new Set(); // install|version told in this page
+let pending = null; // a check's outcome waiting for the first screen: {result, reapplied, failed}
 export const isBusy = () => busy;
 
 export function init(options = {}) {
   if (options.names) names = options.names;
   if (options.go) goTo = options.go;
   // a game update while the program runs: the game services were rebuilt for the new resource version
-  on("config.changed", () => { Popup.whenIdle().then(() => check()).catch((err) => console.error("impact", err)); });
-  // a scan after the start (the start's own scan finishing after the summary, the window back in front): entries the
-  // update put back to official that no summary showed yet
-  on("library.scanned", () => { if (started) Popup.whenIdle().then(() => check({ later: true })).catch((err) => console.error("impact", err)); });
-}
-let started = false; // the start sequence reached the summary (its first check): later scans may show it
-
-// the summary's message until it is closed for good; resolves with the mod its Go To named, if one did. With entries
-// the update put back to official (switch on, file check allowed: options.reset, options.held) the message has the
-// drift prompt's two buttons and no other way out but them and Go To (decision 16): Apply Mod Configuration writes
-// those entries again and keeps the held ones as they are, Keep as Is keeps them all (mods.dismiss drift); Go To
-// leaves them for later.
-async function present(result, nameOf, options = {}) {
-  const reset = options.reset || [], held = options.held || [];
-  const plain = (e) => ({ install: e.install, core: e.core, state: e.state });
-  const buttons = reset.length ? [{ label: T("mods.driftKeep"), value: "keep" }, { label: T("mods.driftApply"), value: "apply", primary: true }] : null;
-  // the Expand / Collapse button closes the message, which opens again with the list the other way
-  for (let expanded = false; ;) {
-    const message = summary(result, nameOf, { ...options, expanded });
-    // the wide frame: the list unfolded keeps clear of the frame's height cap in every language
-    const answer = await Popup.message({ title: message.title, lines: message.lines, plain: true, width: WIDTH,
-      ...(buttons ? { buttons, close: false } : { ok: T("picker.ok") }) });
-    if (answer.button === "expand") { expanded = !expanded; continue; }
-    if (answer.button === "keep" || answer.button === "apply") {
-      const dismiss = answer.button === "keep" ? [...reset, ...held] : held;
-      if (dismiss.length) await rpc("mods.dismiss", { kind: "drift", entries: dismiss.map(plain) }).catch((err) => notify(errorText(err.code, err.params), { kind: "error", error: err }));
-      if (answer.button === "apply") await (await import("./prompts.js")).applyDrift(reset.map(plain));
-      return null;
-    }
-    const id = typeof answer.button === "string" && answer.button.startsWith(GO) ? answer.button.slice(GO.length) : null;
-    return id ? [...(result.mods || []), ...reset.map(entryMod)].find((m) => m.id === id) || null : null;
-  }
-}
-
-// the scan's entries for the summary: [] unless mods are on and the file check is allowed and done
-async function scanned() {
-  const s = ModSwitch.current() || (await ModSwitch.refresh().catch(() => null));
-  if (s?.scan !== true || s.enabled === false || !s.scanned) return [];
-  return (await rpc("mods.entries").catch(() => [])) || [];
+  on("config.changed", () => {
+    Popup.whenIdle().then(async () => { if (await gate()) await check(); }).catch((err) => console.error("impact", err));
+  });
 }
 
 // open(mod): Go To, the mod's student page with its switch open on the mod
 export const open = (mod) => Promise.resolve(goTo({ id: mod.id, variant: mod.target, kind: mod.kind })).catch((err) => console.error("impact", err));
 
-// the mods.state entries a game update's rig change holds ({install, core, variant, kind, source, label}) as the
-// summary's mods
-export const heldMods = (entries) => (entries || []).map((e) => ({ id: /^mod:(.+)$/.exec(e?.source || "")?.[1] || "",
-  target: e?.variant, core: e?.core, kind: e?.kind, label: e?.label || "" }));
-
-// heldLines(entries, nameOf): the held entries, each as the summary names a mod (Go To where its mod is known), then
-// how the hold ends
-export function heldLines(entries, nameOf) {
-  const lines = heldMods(entries).flatMap((m) => modLines(m, nameOf));
-  return [...lines, { text: T("mods.impact.hint", { go: T("add.go"), action: T("act.update") }), gap: 32, ...HINT }];
+// the progress of a check (Loading.task's update): its step and, while the mods are classified, the mod at hand
+function stepper(update, nameOf) {
+  return (key) => (p = {}) => update({ ...p,
+    label: key === "mods.impact.checking" && p.variant
+      ? T("mods.impact.checkingMod", { name: modName({ target: p.variant, kind: p.kind, label: p.label }, nameOf) }) : T(key) });
 }
 
-// the switch help's Details of the held entries; resolves with the mod a Go To named (the caller closes the help
-// first, then opens it), else null
+// the scan the check reads its overwritten entries from: a new one, with mods on and the file check allowed; [] else
+async function scanned(step) {
+  const s = ModSwitch.current() || (await ModSwitch.refresh().catch(() => null));
+  if (s?.scan !== true || s.enabled === false) return [];
+  step("progress.check")();
+  const done = new Promise((resolve) => {
+    let off = null;
+    const timer = setTimeout(() => { off?.(); resolve(null); }, 60000);
+    off = on("library.scanned", (data) => { clearTimeout(timer); off(); resolve(data); });
+  });
+  await rpc("mods.scan", {});
+  await done;
+  return (await rpc("mods.entries").catch(() => [])) || [];
+}
+
+// run({force}): the check under the loading screen with its progress: classify, scan, apply again what needs no repair.
+// force: Settings' View, whatever was seen. Resolves with {result, reapplied, failed}; throws what the jobs refuse.
+async function run({ force = false } = {}) {
+  const nameOf = await names().catch(() => undefined);
+  return Loading.task(async (update) => {
+    const step = stepper(update, nameOf);
+    const result = await waitJob(await rpc("mods.impact", force ? { force: true } : {}), step("mods.impact.checking"));
+    const again = reappliable(await scanned(step), result);
+    let reapplied = [], failed = [];
+    if (again.length) {
+      const plain = again.map((e) => ({ install: e.install, core: e.core, state: e.state }));
+      const done = await waitJob(await rpc("mods.restoreDrift", { entries: plain }), step("mods.impact.reapplying"));
+      const ok = new Set((done?.done || []).map((d) => `${d.install}|${d.core}`));
+      reapplied = again.filter((e) => ok.has(`${e.install}|${e.core}`));
+      failed = done?.failed || [];
+    }
+    return { result, reapplied, failed };
+  }, { label: T("mods.impact.checking") });
+}
+
+// gate(): at the start before the first screen (and after a game update while the program runs): the question, then the
+// check. Resolves true when a summary waits (check shows it); Later asks again at the next start.
+export async function gate() {
+  if (busy) return false;
+  const due = await rpc("mods.updateDue").catch(() => null);
+  if (!due?.due) return false;
+  busy = true;
+  try {
+    const answer = await Popup.message({ title: T("mods.impact.gateTitle"), lines: [T("mods.impact.gateAsk")], close: false,
+      buttons: [{ label: T("update.later"), value: "later" }, { label: T("mods.impact.gateCheck"), value: "check", primary: true }] });
+    if (answer.button !== "check") return false;
+    pending = await run();
+    return true;
+  } catch (err) {
+    console.error("impact", err);
+    notify(errorText(err.code, err.params), { kind: "error", error: err });
+    return false;
+  } finally {
+    busy = false;
+  }
+}
+
+// --- the list (owner, 2026-11-11: the drift prompt's popup; the wireframe of the thread) ---
+
+// the segments over the cards: the held mods, the entries the check applied again, the other affected mods
+export const TABS = ["held", "reapplied", "others"];
+const OTHER_KINDS = { rebuilt: "kindRebuilt", new_parts: "kindNewParts", gone: "kindGone" };
+
+// heldOf(result): the held mods the list shows: a mod whose rig changed, unless a repaired copy took its place (it has
+// one and its student is not configured with it)
+export const heldOf = (result) => (result?.mods || []).filter((m) => m.impact === "rig_changed" && !(m.repaired_id && !m.configured));
+
+// tabMods(outcome): the mods each segment lists ({held, reapplied, others})
+export function tabMods({ result, reapplied = [] } = {}) {
+  const mods = result?.mods || [];
+  return { held: heldOf(result), reapplied: reapplied.map(entryMod),
+    others: mods.filter((m) => m.impact in OTHER_KINDS) };
+}
+
+// the segments' captions with their counts, as the list's toolbar takes them
+export const tabCaptions = (tabs) => [
+  { text: T("mods.impact.tabHeld", { n: tabs.held.length }) },
+  { text: T("mods.impact.tabReapplied", { n: tabs.reapplied.length }) },
+  { text: T("mods.impact.tabOthers", { n: tabs.others.length }) }];
+
+// card(mod, tab, nameOf): a mod's card: the student's name, its own picture (none for a 3D model), the kind and Applied
+// as chips; a held mod with the Files Changed badge, another kind with what happened to it as its badge
+export function card(mod, tab, nameOf = (e) => e?.variant || e?.core || "") {
+  const entry = { variant: mod.target, core: mod.core, kind: mod.kind };
+  const base = mod.kind === "model" || mod.kind === "other" || !mod.id ? null : spineBase("mod", mod.id);
+  const lobby = mod.kind === "lobby";
+  const chips = [T(kindKey(mod.kind)), ...(mod.configured ? [T("status.applied")] : [])];
+  const badge = tab === "held" ? { text: T("mods.heldBadge"), color: COLOUR.warning, ink: "#ffffff" }
+    : tab === "others" ? { text: T(`mods.impact.${OTHER_KINDS[mod.impact]}`), color: COLOUR.greyed, ink: "#ffffff" } : null;
+  // the details name the mod itself (the card names the student), its kind and Applied as chips
+  return { key: mod.id || `${mod.core}`, label: nameOf(entry) || mod.label || mod.core || "", full: mod.label || nameOf(entry) || mod.core || "", chips,
+    ...(badge ? { badge } : {}), mod,
+    thumb: base ? thumb(base, "card", null, lobby) : null,
+    big: base ? () => thumb(base, mod.kind === "spr" ? "portrait" : "bust", null, lobby) : null };
+}
+
+// details(mod, tab): the details panel of a card (its name is the mod's, card.full): what the update changed, its
+// state; Go To, and for a held mod the repair's preview and Fix and Apply. Two fields, so the actions stay in view
+// beside an upright portrait.
+export function details(mod, tab) {
+  const changes = changeText(mod).replace(/^[^:：]*[:：]\s*/, "");
+  const fields = [...(changes ? [[T("mods.impact.fieldChanges"), changes]] : []),
+    [T("field.status"), tab === "held" ? T("mods.heldBadge") : tab === "reapplied" ? T("mods.impact.stateReapplied")
+      : T(`mods.impact.${OTHER_KINDS[mod.impact]}`)]];
+  const page = !!(mod.id && mod.kind !== "other" && mod.target);
+  const actions = [...(page ? [["go", T("add.go")]] : []),
+    ...(tab === "held" ? [["preview", T("mods.impact.preview")], ["fix", T("mods.impact.fix"), "apply"]] : [])];
+  return { title: T(mod.kind === "lobby" ? "info.title.lobby" : mod.kind === "model" ? "info.title.model" : "info.title.portrait"),
+    fields, actions };
+}
+
+// the list until a button answers it: {go: mod}, {preview: mod}, {fix: [mods]}, or {} (Close)
+function presentList(outcome, nameOf) {
+  const host = document.getElementById("prompt");
+  const tabs = tabMods(outcome);
+  let tab = TABS.findIndex((name) => tabs[name].length);
+  if (tab < 0) tab = 0;
+  let selection = new Set(tabs.held.map((m) => m.id)), focus = null;
+  return new Promise((resolve) => {
+    const done = (answer) => {
+      host.hidden = true;
+      host.innerHTML = "";
+      Popup.closed(host);
+      resolve(answer);
+    };
+    const draw = (scroll = 0) => {
+      const name = TABS[tab], held = name === "held";
+      const items = tabs[name].map((mod) => card(mod, name, nameOf));
+      const ticked = tabs.held.filter((m) => selection.has(m.id));
+      Popup.listPopup({
+        host, title: T("mods.impact.title"), items, selected: held ? [...selection] : focus ? [focus] : [], multi: held, focus,
+        keepScroll: scroll, detailKind: (it) => it.mod?.kind, alignStart: true,
+        // portraits alone: the portrait switch's frame and tall cards, whose details keep their actions in view
+        ...(items.length && items.every((it) => it.mod?.kind === "spr") ? { layoutKind: "spr" } : {}),
+        tools: { segs: tabCaptions(tabs), seg: tab, onSeg: (i) => { tab = i; focus = null; draw(); }, sortKey: "sort.default" },
+        buttons: [{ label: T("display.close"), fn: () => done({}) },
+          ...(held ? [{ label: T("mods.impact.fixSelected", { n: ticked.length }), primary: true, greyed: !ticked.length,
+            fn: () => (ticked.length ? done({ fix: ticked }) : null) }] : [])],
+        onClose: () => done({}),
+        onSelect: (key, s) => { focus = key; if (held) selection = Popup.toggled(selection, items, key); draw(s); },
+        details: (it) => {
+          const d = details(it.mod, name);
+          const act = { go: () => done({ go: it.mod }), preview: () => done({ preview: it.mod }), fix: () => done({ fix: [it.mod] }) };
+          return { title: d.title, fields: d.fields, actions: d.actions.map(([id, caption, semantic]) => [caption, act[id], false, semantic]) };
+        },
+      }).catch((err) => { console.error("impact list", err); done({}); });
+    };
+    draw();
+  });
+}
+
+// the repaired copy takes a mod's place where its student is configured with it (actions.apply: only configured while
+// mods are off)
+async function applyRepaired(mod, id) {
+  if (mod.configured) await waitJob(await rpc("actions.apply", { variant: mod.target, source: `mod:${id}`, kind: mod.kind }));
+}
+
+// fix(mods, nameOf, {review}): the student page's Update for each held mod, here: a repaired copy made before takes
+// its place at once; a mod the repair can take is prepared with the default repair (review: the choice and the review,
+// whose Accept is Fix and Apply) and, unless partial, stored and put in its place; another gets the asset update.
+// Resolves with {fixed, partial}: the mods fixed, and those whose repair was partial (not stored, not applied).
+async function fix(mods, nameOf, { review = false } = {}) {
+  const fixed = [], partial = [];
+  for (const mod of mods) {
+    const subject = modName({ ...mod, configured: false }, nameOf);
+    try {
+      if (mod.repaired_id) {
+        await applyRepaired(mod, mod.repaired_id);
+        fixed.push(mod);
+        continue;
+      }
+      const report = await Loading.hold(() => Compatibility.forUpdate(mod.id, mod.label, subject), { all: true });
+      if (!report) continue;
+      if (!(Compatibility.eligible(mod) && Compatibility.canRemap(mod.id, mod))) {
+        // the asset update moves the mod's assets onto the new parts as they are: nothing to preview, said so
+        if (review) {
+          const answer = await Popup.message({ title: T("mods.impact.preview"), lines: [T("mods.impact.noPreview")],
+            cancel: T("photo.back"), ok: T("mods.impact.fix") });
+          if (answer.button !== "ok") continue;
+        }
+        await Loading.task(async (update) => waitJob(await rpc("actions.update", { mod: mod.id }), update),
+          { label: T("progress.process", { name: subject }) });
+        fixed.push(mod);
+        continue;
+      }
+      const result = await Compatibility.prepare(mod.id, mod.label, subject, mod.kind, review ? null : "default");
+      if (!result || result.unchanged) continue;
+      try {
+        if (review) {
+          if (!await Compatibility.review(mod.id, result, { label: subject, kind: mod.kind, accept: T("mods.impact.fix"), discard: T("photo.back") })) continue;
+        } else if (result.report?.partial) {
+          partial.push(mod);
+          continue;
+        }
+        const saved = await Compatibility.accept(mod.id, result, () => {}, subject);
+        if (saved?.mod?.id) await applyRepaired(mod, saved.mod.id);
+        fixed.push(mod);
+      } finally {
+        await Compatibility.discard(result);
+      }
+    } catch (err) {
+      notify(errorText(err.code, err.params), { kind: "error", error: err });
+    }
+  }
+  return { fixed, partial };
+}
+
+// the mods.state entries a game update's rig change holds ({install, core, variant, kind, source, label}) as the
+// summary's mods (applied by definition)
+export const heldMods = (entries) => (entries || []).map((e) => ({ id: /^mod:(.+)$/.exec(e?.source || "")?.[1] || "",
+  target: e?.variant, core: e?.core, kind: e?.kind, label: e?.label || "", configured: true }));
+
+// heldLines(entries, nameOf): the held entries, each as the summary names a held mod (Go To and Fix and Apply where its
+// mod is known); no hint under them (owner, 2026-11-11)
+export function heldLines(entries, nameOf) {
+  return heldMods(entries).flatMap((m) => modLines(m, nameOf, { fix: true }));
+}
+
+// the switch help's Details of the held entries; resolves with what a button asked ({go: mod} or {fix: [mod]}, the
+// caller closes the help first, then opens or repairs it), else {}
 export async function heldDetails(entries) {
   const nameOf = await names().catch(() => undefined);
   const answer = await Popup.message({ title: T("mods.heldTitle"), ok: T("picker.ok"), plain: true, width: WIDTH, lines: heldLines(entries, nameOf) });
-  const id = typeof answer.button === "string" && answer.button.startsWith(GO) ? answer.button.slice(GO.length) : null;
-  return id ? heldMods(entries).find((m) => m.id === id) || null : null;
+  const button = typeof answer.button === "string" ? answer.button : "";
+  const find = (id) => heldMods(entries).find((m) => m.id === id) || null;
+  if (button.startsWith(GO)) return { go: find(button.slice(GO.length)) };
+  if (button.startsWith(FIX)) return { fix: [find(button.slice(FIX.length))].filter(Boolean) };
+  return {};
 }
 
-// check({later}): the summary of the current install's update, if one is due or the update put applied entries back to
-// official that it has not shown yet; resolves once its message closed. later: after a scan (library.scanned), only for
-// such entries.
-const shownReset = new Set(); // install|core|state of the put-back entries a summary showed in this page
-let lastResult = null;
-export async function check({ later = false } = {}) {
-  if (!later) started = true;
-  if (busy) return null;
+// repair(mods): Fix from outside the summary (the switch help's Details)
+export async function repair(mods) {
+  if (busy || !mods?.length) return [];
+  busy = true;
+  try { return (await fix(mods, await names().catch(() => undefined))).fixed; } finally { busy = false; }
+}
+
+// check(): once the first screen is in, the summary a check left (gate), as the list, until it is closed; its preview
+// and fixes run here and the list opens again as the mods stand then; Go To leaves for the mod's student page
+export async function check() {
+  if (busy || !pending) return null;
   busy = true;
   let chosen = null;
+  const outcome = pending;
+  pending = null;
   try {
-    const result = later && lastResult ? lastResult : await waitJob(await rpc("mods.impact"));
-    lastResult = result;
-    const { reset, held } = resetEntries(await scanned(), result);
-    const fresh = reset.some((e) => !shownReset.has(`${e.install}|${e.core}|${e.state}`));
-    const due = !later && result?.due && !told.has(`${result.install}|${result.version}`);
-    if (!due && !fresh) return null;
     const nameOf = await names().catch(() => undefined);
-    const options = { always: !due, reset, held };
-    if (!summary(due ? result : { ...result, mods: [], counts: {} }, nameOf, options)) return null;
-    if (due) told.add(`${result.install}|${result.version}`);
-    for (const e of reset) shownReset.add(`${e.install}|${e.core}|${e.state}`);
     await Popup.whenIdle();
-    chosen = await present(due ? result : { ...result, mods: (result.mods || []).filter((m) => m.impact === "rig_changed"),
-      counts: { rig_changed: (result.mods || []).filter((m) => m.impact === "rig_changed").length } }, nameOf, options);
-    if (due) await rpc("mods.impactSeen", { install: result.install, version: result.version }).catch((err) => console.error("impact", err));
-    return result;
+    let current = outcome;
+    for (;;) {
+      const answer = await presentList(current, nameOf);
+      if (answer.preview || answer.fix?.length) {
+        const { partial } = await fix(answer.preview ? [answer.preview] : answer.fix, nameOf, { review: !!answer.preview });
+        if (partial.length) await Popup.message({ title: T("mods.impact.title"), ok: T("picker.ok"), plain: true, width: WIDTH,
+          lines: [T("mods.impact.partial", { n: partial.length }), ...partial.map((m) => ({ text: modName(m, nameOf), ...ITEM }))] });
+        const id = await rpc("mods.impact", { force: true });
+        current = { ...current, result: await Loading.task((update) => waitJob(id, update), { label: T("mods.impact.checking") }) };
+        continue;
+      }
+      chosen = answer.go || null;
+      break;
+    }
+    if (outcome.result?.version) await rpc("mods.impactSeen", { install: outcome.result.install, version: outcome.result.version }).catch((err) => console.error("impact", err));
+    if (outcome.failed?.length) await Popup.message({ title: T("mods.impact.title"), lines: outcome.failed.map((f) => `${ModSwitch.entryLabel(f.entry, nameOf)} - ${errorText(f.code, f.params)}`), ok: T("picker.ok") });
+    return outcome.result;
   } catch (err) {
     console.error("impact", err);
     return null;
@@ -243,25 +392,22 @@ export async function check({ later = false } = {}) {
   }
 }
 
-// show(): Settings' Game Update Impact, the summary of the mods as they stand now, whatever was told before; resolves
-// with true when a Go To left for a student page
+// show(): Settings' Game Update Impact: the check again, whatever was seen, then its summary; resolves with true when
+// a Go To left for a student page
 export async function show() {
   if (busy) return false;
-  busy = true;
-  let chosen = null;
   try {
-    const id = await rpc("mods.impact", { force: true });
-    const result = await Loading.task((update) => waitJob(id, update), { label: T("progress.compatibility", { name: T("progress.mods") }) });
-    // the put-back entries again, those kept as they are included
-    const { reset, held } = resetEntries(await scanned(), result, { dismissed: true });
-    chosen = await present(result, await names().catch(() => undefined), { always: true, reset, held });
+    busy = true;
+    pending = await run({ force: true });
   } catch (err) {
     notify(errorText(err.code, err.params), { kind: "error", error: err });
+    return false;
   } finally {
     busy = false;
   }
-  if (chosen) await open(chosen);
-  return !!chosen;
+  const before = location.hash;
+  await check();
+  return location.hash !== before;
 }
 
 // impacts(entries): the impacts of the mods the entries are configured with, [] when none or on a failure

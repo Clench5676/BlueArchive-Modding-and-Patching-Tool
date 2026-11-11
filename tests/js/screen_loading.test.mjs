@@ -287,8 +287,10 @@ test("startup scan prompts follow current consent without a separate startup mod
     ModSwitch: { refresh: async () => ({ scan: false }), startDue: () => false },
     rpc: () => assert.fail("Off must not fetch entries"), show: () => assert.fail("Off has no prompt"),
     later: async () => calls.push("later"),
+    // a game update's drift is reconciled before the drift prompt; Off has none
+    reconcile: async (entries, s) => { assert.equal(s.scan, false); assert.deepEqual(entries, []); return false; },
   };
-  const h = new Function("deps", `let { ModSwitch, rpc, show, later } = deps; let started = false; ${start} return { start, started: () => started };`)(deps);
+  const h = new Function("deps", `let { ModSwitch, rpc, show, later, reconcile } = deps; let started = false; ${start} return { start, started: () => started };`)(deps);
   await h.start("drift", {});
   await h.start("untracked", {});
   assert.deepEqual(calls, ["later"]);
