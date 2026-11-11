@@ -350,7 +350,7 @@
 			"configured": "설정됨"
 		},
 		"field": {
-			"file": "파일",
+			"file": "파일 이름",
 			"type": "종류",
 			"size": "크기",
 			"status": "상태",

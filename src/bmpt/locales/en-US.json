@@ -350,7 +350,7 @@
 			"configured": "Set"
 		},
 		"field": {
-			"file": "File",
+			"file": "File Name",
 			"type": "Type",
 			"size": "Size",
 			"status": "Status",

@@ -350,7 +350,7 @@
 			"configured": "已設定"
 		},
 		"field": {
-			"file": "檔案",
+			"file": "檔案名稱",
 			"type": "類型",
 			"size": "大小",
 			"status": "狀態",
