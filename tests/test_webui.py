@@ -1,5 +1,6 @@
 """Tests for the web UI server, RPC layer, jobs and events, driven through the WSGI app without a window."""
 
+import base64
 import binascii
 import io
 import json
@@ -832,6 +833,31 @@ def test_spine_revision_routes_reject_switched_files(app, services, monkeypatch,
         assert headers["Cache-Control"] == "no-store"
     if kind == "lobby":
         assert json.loads(call(app, f"{prefix}/{after}/lobby.json")[2])["content"] == bundle.read_bytes().hex()
+
+
+def test_a_texture_only_mod_previews_on_the_rig_its_textures_were_drawn_for(app, services, monkeypatch, tmp_path):
+    from bmpt.library import fingerprint
+
+    old = "page.png\nsize: 16,16\nfilter: Linear,Linear\npart\n  bounds: 1,1,4,4\n"
+    new = "Page.png\nsize: 16,16\nfilter: Linear,Linear\npart\n  bounds: 8,8,4,4\n"
+    bundle = _bundle(tmp_path, "assets-_mx-spinecharacters-hoshino_spr-_mxdependency-2026-01-01_assets_all")
+    monkeypatch.setattr(services.game, "spine_files_from", lambda paths: {
+        "Hoshino_spr.atlas": new.encode(), "Hoshino_spr.skel": b"new skeleton", "Page.png": b"page"}, raising=False)
+    monkeypatch.setattr(services.library, "preview_bundles", lambda mod: [bundle], raising=False)
+    prefix = "/asset/spine/mod/m1"
+    plain = json.loads(call(app, prefix + "/manifest.json")[2])["revision"]
+    assert call(app, f"{prefix}/{plain}/skeleton.skel")[2] == b"new skeleton"
+    entry = {**fingerprint.atlas(old.encode()), "skeleton": base64.b64encode(b"old skeleton").decode()}
+    monkeypatch.setattr(services.library, "recorded_rig", lambda mod: {"hoshino_spr.atlas": entry}, raising=False)
+    drawn = json.loads(call(app, prefix + "/manifest.json")[2])["revision"]
+    assert drawn != plain  # a preview drawn on the official rig before is drawn again
+    assert call(app, f"{prefix}/{drawn}/skeleton.skel")[2] == b"old skeleton"
+    assert call(app, f"{prefix}/{drawn}/skeleton.atlas")[2] == old.encode()
+    assert call(app, f"{prefix}/{drawn}/page.png")[2] == b"page"  # the page as the recorded atlas names it
+    # the official atlas as the textures follow it: drawn as the files have it
+    monkeypatch.setattr(services.game, "spine_files_from", lambda paths: {
+        "Hoshino_spr.atlas": old.encode(), "Hoshino_spr.skel": b"new skeleton", "Page.png": b"page"}, raising=False)
+    assert call(app, f"{prefix}/{drawn}/skeleton.skel")[2] == b"new skeleton"
 
 
 @pytest.mark.parametrize("kind", ["spr", "lobby"])

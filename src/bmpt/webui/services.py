@@ -1575,12 +1575,10 @@ class Services:
             return self._spine_response(kind, key, name, revision)
 
     def _spine_response(self, kind: str, key: str, name: str, revision: str | None = None) -> AssetResponse:
-        from ..gameassets.spine import spine_revision
-
         bundles = None
         if name == "manifest.json" or revision is not None or kind.startswith("official-"):
             bundles = self._spine_bundles(kind, key)
-            current = spine_revision(bundles)
+            current = self._revision(kind, key, bundles)
             if revision is not None and revision != current:
                 raise KeyError(f"Spine revision changed: requested {revision}, current {current}")
             if name == "manifest.json":
@@ -1588,7 +1586,8 @@ class Services:
         response = self._spine_file(kind, key, name, bundles)
         # A switch between the skeleton and page requests must fail the load, never mix revisions. Also reject
         # changes during extraction, before any bytes from the changed composition reach the player.
-        if bundles is not None and (spine_revision(bundles) != current or self._spine_bundles(kind, key) != bundles):
+        if bundles is not None and (self._revision(kind, key, bundles) != current
+                                    or self._spine_bundles(kind, key) != bundles):
             raise KeyError(f"Spine source changed during extraction: {kind}/{key}")
         return response
 
@@ -1653,7 +1652,7 @@ class Services:
             files = game.spine_files_from(bundles) if bundles is not None else game.spine_files(kind, core)
         elif kind == "mod":
             bundles = bundles if bundles is not None else self.library.preview_bundles(key)
-            files = game.spine_files_from(bundles)
+            files = self._drawn_as_made(key, game.spine_files_from(bundles))
             # the mod's own core names its skeleton (a lobby has more than one: the character and its background)
             core = parse_filename(bundles[-1].name).core
         elif kind == "import":
@@ -1670,6 +1669,48 @@ class Services:
         if data is None:
             raise KeyError(name)
         return AssetResponse(data, MIME.get(Path(name).suffix, "application/octet-stream"), light=False)
+
+    def _recorded_rig(self, mod_id: str) -> dict[str, dict]:
+        return getattr(self.library, "recorded_rig", lambda _id: {})(mod_id)
+
+    def _revision(self, kind: str, key: str, bundles: list[Path]) -> str:
+        """A Spine preview's revision: its composition's (``spine_revision``) and, for a mod, the rigs its fingerprint
+        recorded where there are any (``_drawn_as_made`` draws on them), so that a preview drawn before on the
+        official rig is drawn again."""
+        from ..gameassets.spine import spine_revision
+
+        revision = spine_revision(bundles)
+        recorded = self._recorded_rig(key) if kind == "mod" else {}
+        if not recorded:
+            return revision
+        rigs = sorted([name, entry.get("layout"), hashlib.sha1(entry["skeleton"].encode("ascii")).hexdigest()]
+                      for name, entry in recorded.items())
+        return hashlib.sha256(json.dumps([revision, rigs]).encode()).hexdigest()
+
+    def _drawn_as_made(self, mod_id: str, files: dict[str, bytes]) -> dict[str, bytes]:
+        """A texture-only portrait mod's preview files on the rig its textures were drawn for, where the game
+        repacked the atlas since (``fingerprint.drawn_on``, BL-166), so that an old mod shows as it was made; its
+        pages keep the names the recorded atlas gives them."""
+        from ..gameassets import AssetNotFound
+        from ..gameassets.spine import atlas_pages
+        from ..library.fingerprint import drawn_on
+
+        recorded = self._recorded_rig(mod_id)
+        rig = drawn_on(recorded, files) if recorded else {}
+        if not rig:
+            return files
+        result = {**files, **rig}
+        pages = {Path(name).stem.lower(): data for name, data in files.items() if name.lower().endswith(".png")}
+        for name, data in rig.items():
+            if not name.lower().endswith(".atlas"):
+                continue
+            for page in atlas_pages(data):
+                if page not in result:
+                    content = pages.get(Path(page).stem.lower())
+                    if content is None:
+                        raise AssetNotFound(page)
+                    result[page] = content
+        return result
 
     def _camera_layout(self, game: Any, mod_id: str) -> dict:
         from ..library.lobby_camera import patch_prefab

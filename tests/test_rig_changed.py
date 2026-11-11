@@ -295,6 +295,19 @@ def test_the_old_rig_plan_takes_the_recorded_rig_or_the_mods_own_skeleton():
     assert not remap.OldRig().available  # nothing recorded: nothing to set up
 
 
+def test_previews_draw_a_texture_only_mod_on_the_rig_its_textures_were_drawn_for():
+    part = {"name": "a", "atlases": {"test.atlas": fingerprint.atlas(atlas_text(OLD).encode())}, "skeletons": {},
+            "textures": {"page": [16, 16]}}
+    texture_only = {"atlases": {}, "skeletons": {}, "textures": {"page": [16, 16]}}
+    painted = fingerprint.painted([part], texture_only, {"Test.skel": b"old skeleton"})
+    files = {"Test.atlas": atlas_text(NEW).encode(), "Test.skel": b"new skeleton", "page.png": b"png"}
+    assert fingerprint.drawn_on(painted, files) == {"Test.atlas": atlas_text(OLD).encode(), "Test.skel": b"old skeleton"}
+    # the layout the textures follow, a record without the rig, a preview without a skeleton: as the files have it
+    assert fingerprint.drawn_on(painted, {**files, "Test.atlas": atlas_text(OLD).encode()}) == {}
+    assert fingerprint.drawn_on(fingerprint.painted([part], texture_only), files) == {}
+    assert fingerprint.drawn_on(painted, {"Test.atlas": files["Test.atlas"]}) == {}
+
+
 def redrawn(env, animations=("00",)):
     """A texture-only mod recorded on OLD with its rig, then a game update that draws the portrait anew on NEW (its
     skeleton with ``animations``): the library read again, the mod's entry, its rig and its file."""

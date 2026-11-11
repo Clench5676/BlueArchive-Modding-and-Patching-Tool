@@ -3927,6 +3927,18 @@ class ModLibrary:
         pin = pin or self.current_pin()
         return lobby_camera.live_base(self, core, pin) if pin is not None and lobby_camera.cameras(self) else None
 
+    @_serialized
+    def recorded_rig(self, mod_id: str) -> dict[str, dict]:
+        """What a portrait mod's fingerprint recorded of the rigs its textures were drawn for
+        (``fingerprint.painted``, the entries that keep their skeleton), per atlas basename; empty for another mod.
+        Its previews draw it on them where the official atlas was repacked since (``fingerprint.drawn_on``)."""
+        record = self._record(mod_id)
+        if record.get("kind") != "spr":
+            return {}
+        painted = (self._read_built_against(record) or {}).get("painted") or {}
+        return {name: entry for name, entry in painted.items()
+                if isinstance(entry.get("text"), str) and isinstance(entry.get("skeleton"), str)}
+
     def _preview(self, record: dict[str, Any], pin: Pin) -> list[Path]:
         paths = self._paths(record)
         targets = self._spine_parts(core_of(paths[0].name), pin)
