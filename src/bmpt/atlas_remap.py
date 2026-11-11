@@ -10,9 +10,7 @@ from pathlib import Path
 from PIL import Image, ImageMath
 
 from . import devmode, spine_names
-from ba_modding_toolkit.bundle import Bundle
-from ba_modding_toolkit.models import ContNameTypeKey, Patch
-from ba_modding_toolkit.spine import get_skel_version
+from bmpt.engine import Bundle, ContNameTypeKey, Patch, get_skel_version
 from .texture_guard import texture_image
 
 

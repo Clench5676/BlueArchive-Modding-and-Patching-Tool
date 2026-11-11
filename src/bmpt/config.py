@@ -24,13 +24,12 @@ from typing import Any, Callable
 import toml
 
 from bmpt import devmode
-from ba_modding_toolkit import utils
+from bmpt.engine import (
+    EXE_DIR, AnimCheckOptions, CharacterInternalIDMap, SaveOptions, SkelConvertOptions, get_BA_path, get_spine_backend,
+    parse_hex_bytes, utils,
+)
 from .data_paths import APP_DIR_NAME, OLD_APP_DIR_NAME, default_cache_dir, migrate_cache_dir
 from .logging_utils import log_failure
-from ba_modding_toolkit.models import AnimCheckOptions, SaveOptions, SkelConvertOptions
-from ba_modding_toolkit.naming import CharacterInternalIDMap
-from ba_modding_toolkit.spine import get_spine_backend
-from ba_modding_toolkit.utils import EXE_DIR, get_BA_path, parse_hex_bytes
 
 CONFIG_FILE = EXE_DIR / "config.toml"
 
@@ -343,7 +342,7 @@ class Settings:
 
     def resource_dirs(self) -> list[Path]:
         """The existing resource folders of the local game (empty when there is none)."""
-        from ba_modding_toolkit.searching import get_search_dirs
+        from bmpt.engine import get_search_dirs
 
         base = self.game_dir()
         return get_search_dirs(base) if base and base.exists() else []
@@ -365,7 +364,7 @@ class Settings:
             return True
         if setting == "false" or target is None:
             return False
-        from ba_modding_toolkit.bundle import Bundle
+        from bmpt.engine import Bundle
 
         return Bundle.check_need_crc(target)
 

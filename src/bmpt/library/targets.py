@@ -25,7 +25,7 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping, Sequence
 
-from ba_modding_toolkit.naming import parse_filename
+from bmpt.engine import parse_filename
 
 from ..errors import ServiceError
 from .integrity import replacement_key

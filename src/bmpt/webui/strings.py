@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from ba_modding_toolkit.i18n import fallback_language
+from bmpt.engine import fallback_language
 from ..localization import LOCALES
 
 

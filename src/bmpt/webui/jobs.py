@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable
 
 from ..errors import ServiceError, log_service_error
-from ba_modding_toolkit.i18n import t
+from bmpt.engine import t
 from .events import EventBus
 from .rpc import to_json
 

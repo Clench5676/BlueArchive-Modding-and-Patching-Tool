@@ -25,7 +25,7 @@ from typing import Callable
 
 from . import devmode
 from .errors import ServiceError
-from ba_modding_toolkit.utils import get_version_info
+from bmpt.engine import get_version_info
 
 logger = logging.getLogger(__name__)
 

@@ -23,11 +23,9 @@ from ..data_paths import OLD_APP_DIR_NAME
 from ..globallines import GlobalLines
 from ..kivo import Kivo
 from ..errors import ServiceError
-from ba_modding_toolkit.i18n import i18n_manager
+from bmpt.engine import EXE_DIR, i18n_manager, parse_filename
 from ..logging_utils import log_failure
 from ..openfiles import temporary_directory
-from ba_modding_toolkit.naming import parse_filename
-from ba_modding_toolkit.utils import EXE_DIR
 from .classic import QUEUE_METHODS, ClassicQueue, ClassicWindow, NativeOps, QueuedCall, native_ops, stat_files
 from ..library.relocate import relocate
 from .events import EventBus
@@ -426,7 +424,7 @@ class Services:
         """Whether the selected game folder is a game install (``searching.is_game_install``). A positive verdict is
         kept while the search directories keep their listing stamps; a folder without the game is checked again at
         every call, so a download that adds the UI bundles is seen."""
-        from ba_modding_toolkit.searching import get_search_dirs, is_game_install
+        from bmpt.engine import get_search_dirs, is_game_install
 
         base = self.settings.game_dir()
         if base is None:

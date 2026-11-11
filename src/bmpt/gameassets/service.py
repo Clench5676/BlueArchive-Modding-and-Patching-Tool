@@ -20,7 +20,7 @@ from PIL import Image
 
 from .. import devmode, spans
 from ..errors import ServiceError
-from ba_modding_toolkit.naming import parse_filename, spine_kind
+from bmpt.engine import parse_filename, spine_kind
 from ..texture_guard import texture_image
 from .cache import AssetCache, PreviewCache, pack_preview_files, unpack_preview_files
 from . import lobby

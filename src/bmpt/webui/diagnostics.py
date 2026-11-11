@@ -25,7 +25,7 @@ from urllib.parse import unquote
 
 from .. import devmode, spans, steam_records, updater
 from ..error_codes import code_of
-from ba_modding_toolkit.i18n import UI_LANGUAGES, i18n_manager
+from bmpt.engine import UI_LANGUAGES, i18n_manager
 from . import native, system
 from .session_log import redact
 
@@ -179,7 +179,7 @@ def with_ref(error: dict) -> dict:
 
 def import_row(entry: dict, secrets: set[str]) -> dict:
     """Use the same redacted, structured verdict in logs and reports."""
-    from ba_modding_toolkit.naming import parse_filename
+    from bmpt.engine import parse_filename
 
     detail = entry.get("error") if isinstance(entry.get("error"), dict) else {}
     source = entry.get("source") if isinstance(entry.get("source"), dict) else {}

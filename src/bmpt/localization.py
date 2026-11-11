@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from ba_modding_toolkit.i18n import register_locale_dir
+from bmpt.engine import register_locale_dir
 
 LOCALES = Path(__file__).resolve().parent / "locales"
 
