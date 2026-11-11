@@ -93,7 +93,8 @@ test("stopped memorial sites explicitly retain their existing button boxes and c
   assert.match(hall, /retainedButtonSize = .*NGUI\.fitGroup\(captions, 40, 26, width \/ S - 60, 2, \{ maxH: height \/ S - 20 \}\)/);
   assert.match(hall, /actions.map\(\(action, index\) => retainedButton/);
   assert.match(hall, /kind === "spr" \? button : retainedButton/);
-  assert.match(read("js/student-hall-picker.js"), /UI\.retainedButton\(box, `Remove/);
+  // the queue's Remove is a trash button over the card now (BL-176)
+  assert.match(read("js/student-hall-picker.js"), /UI\.trashButton\(box, `Remove/);
   assert.match(read("js/student-hall.js"), /UI\.button\(destination, "HallPortraitScaleReset"/);
 });
 
@@ -301,10 +302,13 @@ for (const locale of ["en-US", "th-TH", "zh-CN", "zh-TW", "ja-JP", "ko-KR"]) tes
   // the background picker in the L class (BL-176): the list at WIDE's left, the preview after it up to WIDE's right
   const bg = layout.backgroundPickerBox(), preview = layout.backgroundPreviewBox();
   near(layout.WIDE.left, 960 - (Tokens.POPUP_FRAME.L.w / 2 - Tokens.SPACE.xl) * S);
-  assert.deepEqual([bg[0], bg[2]], [layout.WIDE.left, layout.BACKGROUND.list]);
+  // the list on the right, the preview on the left (BL-176)
+  assert.deepEqual([bg[0], bg[2]], [layout.WIDE.left + layout.WIDE.width - layout.BACKGROUND.list, layout.BACKGROUND.list]);
   near(bg[1], 540 - (Tokens.POPUP.frameY + 1450 / 2 - 132 - Tokens.SPACE.l) * S);
-  near(bg[1] + bg[3], 540 - (footerHelpers.footerTop(1450, 2) + Tokens.SPACE.xl) * S); near(preview.top, bg[1]);
-  near(preview.left, bg[0] + bg[2] + Tokens.SPACE.l * S); near(preview.left + preview.width, layout.WIDE.left + layout.WIDE.width);
+  near(bg[1] + bg[3], 540 - (footerHelpers.footerTop(1450, 2) + Tokens.SPACE.xl) * S);
+  // the preview and its caption centred down the list's height
+  near(preview.top + (preview.height + layout.BACKGROUND.caption + 40 * S * 1.3) / 2, bg[1] + bg[3] / 2);
+  near(preview.left, layout.WIDE.left); near(preview.left + preview.width + Tokens.SPACE.l * S, bg[0]);
   near(preview.height, preview.width * 1080 / 1920);
   assert.ok(bg[1] + bg[3] <= 540 - (Tokens.POPUP.frameY - 1450 / 2) * S, "inside the frame");
   assert.ok(bg[1] >= 540 - (Tokens.POPUP.frameY + 1450 / 2 - 132) * S);
@@ -317,7 +321,9 @@ test("the memorial modal keeps its retained footer: XS-high buttons at the frame
   // the queue panel ends at 915 px; the retained buttons (the XS body, BL-176) stand under it
   const S = 1920 / 2960, bottom = 540 + (1450 / 2 - 120) * S;
   assert.ok(bottom >= 720 + 195, `${bottom}`);
-  assert.match(read("js/student-hall-ui.js"), /const bodyH = CONTROL\.buttonXS\.h \* S, footerSize = retainedButtonSize\(actions\.map\(\(action\) => action\.label\), actionWidth, bodyH\)/);
+  // each as wide as its caption needs, their right edge on the panels' (BL-176)
+  assert.match(read("js/student-hall-ui.js"), /const bodyH = CONTROL\.buttonXS\.h \* S, captions = actions\.map\(\(action\) => action\.label\);/);
+  assert.match(read("js/student-hall-ui.js"), /let x = WIDE\.left \+ WIDE\.width - widths\.reduce/);
   assert.match(read("js/student-hall-picker.js"), /memorial \? \{ retainedFooter: true \}/);
   // the queue across WIDE, the L class's content (BL-176)
   assert.match(read("js/student-hall-picker.js"), /queuePanel\(layer, \[wideLeft, 720, wideW, 195\]/);

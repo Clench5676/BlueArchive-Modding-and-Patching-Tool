@@ -4,13 +4,13 @@ import { readFile } from "node:fs/promises";
 import { createDraft, sourceKey, portraitRows, studentChoices, memorialChoices } from "../../src/bmpt/web/js/student-hall-model.js";
 import { normalizeView } from "../../src/bmpt/web/js/roster-order.js";
 class Element {style={};dataset={};children=[];append(child){child.parentElement=this;this.children.push(child);}setAttribute(){}querySelector(){return null;}}
-const drawn=[],cards=[],errors=[],captions=[],plates=[];
+const drawn=[],cards=[],errors=[],captions=[],plates=[],heads=[];
 const signal=new AbortController().signal,layer=new Element(),frames=[],modal={host:new Element(),live:()=>true,close(){},async draw(build,actions,options){frames.push({actions,options});const promise=build(layer,()=>true,signal);drawn.push(promise);await promise;}};
 globalThis.document={createElement:()=>new Element()};
 globalThis.pickerFixture={normalizeView,sourceKey,portraitRows,studentChoices,memorialChoices,
   bindReorder(){},dragFeedback:()=>({}),Display:{},Popup:{top:()=>null},T:key=>key,L:names=>names?.en,language:()=>"en",spineBase:()=>"source",
   thumbnailScope:()=>({signal,cancel(){}}),lazyThumbnail:()=>({}),
-  UI:{buttonSize:()=>48,compactButtonSize:()=>41,PORTRAIT_FRAME:{width:2098,height:1300,compactFooter:true,titleCentre:66},portraitRowLayout:()=>({height:393,pitch:397,width:1309,name:[110,170,148],cardX:117,cardY:138,stripX:228,stripW:972}),portraitPickerLayout:()=>({toolbar:{x:305.5,y:270,width:1309},search:[305.5,311,1309],list:[305.5,330,1309,551]}),MEMORIAL_QUEUE_PITCH:244,WIDE:{left:305.5,width:1308.6},MEMORIAL:{students:650,gap:20,heads:4,headPitch:155,cardScale:.37,cardPitch:290,cardX:165},createModal:()=>modal,rowPlate:async(...args)=>{plates.push(args);},rosterToolbar:async()=>{},caption:async(...args)=>{captions.push(args);},panel:async()=>{},studentCard:async()=>{},queuePanel:async()=>{},queueMarker:async()=>new Element(),retainedButton:async()=>{},button:async()=>{},
+  UI:{buttonSize:()=>48,compactButtonSize:()=>41,PORTRAIT_FRAME:{width:2098,height:1300,compactFooter:true,titleCentre:66},portraitRowLayout:()=>({height:393,pitch:397,width:1309,name:[110,170,148],cardX:117,cardY:138,stripX:228,stripW:972}),portraitPickerLayout:()=>({toolbar:{x:305.5,y:270,width:1309},search:[305.5,311,1309],list:[305.5,330,1309,551]}),MEMORIAL_QUEUE_PITCH:244,WIDE:{left:305.5,width:1308.6},MEMORIAL:{students:650,gap:20,heads:4,headPitch:155,cardScale:.37,cardPitch:290,cardX:165},createModal:()=>modal,rowPlate:async(...args)=>{plates.push(args);},rosterToolbar:async()=>{},caption:async(...args)=>{captions.push(args);},panel:async()=>{},studentCard:async(...args)=>{heads.push(args);},trashButton:async()=>new Element(),queueTrashBox:()=>[0,0,40,40],QUEUE:{scale:.32,y:84},queuePanel:async()=>{},queueMarker:async()=>new Element(),retainedButton:async()=>{},button:async()=>{},
     async card(host,item,options){cards.push({item,options});return{visual:new Element(),hit:new Element(),actionBox:[0,0,180,36]};},
     virtualArea(host,box,count,pitch,render){const scroll=new Element(),inner=new Element();scroll.append(inner);host.append(scroll);const pending=[];
       for(let i=0;i<count;i++){const cell=new Element();inner.append(cell);pending.push(render(cell,i,signal));}return{inner,ready:Promise.all(pending)};}}};
@@ -21,6 +21,9 @@ test("adding a memorial disables its current control synchronously and the redra
   const draft=createDraft({revision:0,mode:"memorial",portraits:[],memorials:[],active:null});draft.begin("memorial");
   const choice={variant:"hero",family:"hero",kind:"lobby",source:"official",core:"hero_home",names:{en:{full:"Hero"}}};
   const picker=API.openPicker({kind:"lobby",choices:[choice],draft,onError:error=>errors.push(error),onCancel(){}});await settle();
+  // the candidates are the chosen student's (BL-176): none before one is chosen, the panel asking for one
+  assert.equal(cards.filter(card=>card.options.onAdd).length,0);assert.ok(captions.some(([, text])=>text==="hall.selectStudent"));
+  heads.at(-1)[4]();await settle();
   const candidate=cards.find(card=>card.options.onAdd);assert.equal(candidate.options.onPreview,undefined);
   const hit={disabled:false};const pending=candidate.options.onAdd({currentTarget:hit});
   assert.equal(hit.disabled,true);assert.equal(draft.current().memorials.length,1);await pending;

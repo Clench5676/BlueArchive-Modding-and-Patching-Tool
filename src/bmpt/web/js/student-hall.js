@@ -609,22 +609,27 @@ function chooseBackground() {
     thumb: lazyThumbnail(() => Backgrounds.preview(background, { signal: work.signal }), work.signal) }));
   const draw = () => modal.draw(async (target, alive, signal) => {
     const B = UI.BACKGROUND, preview = UI.backgroundPreviewBox();
+    // the chosen background in the gold frame (applied: the list popups' selection, BL-176)
     const list = UI.virtualArea(target, UI.backgroundPickerBox(), Math.ceil(items.length / 2), B.pitch[1],
-      (cell, row) => Promise.all(items.slice(row * 2, row * 2 + 2).map((item, index) => UI.card(cell, item, {
-        x: B.first[0] + index * B.pitch[0], y: B.first[1], scale: B.scale, selected: item.key === selectedBackground,
+      (cell, row) => Promise.all(items.slice(row * 2, row * 2 + 2).map((item, index) => UI.card(cell, { ...item, applied: item.key === selectedBackground, frameCaption: false }, {
+        x: B.first[0] + index * B.pitch[0], y: B.first[1], scale: B.scale, selected: false,
         onPreview: () => { selectedBackground = item.key; draw().catch(fail); } }))),
       { key: "hall-backgrounds", signal, positions, onError: fail });
     await list.ready;
     if (!alive()) return;
-    const panel = layer(target, "", 25); Object.assign(panel.style, { inset: "auto", left: `${preview.left}px`, top: `${preview.top}px`, width: "1920px", height: "1080px", transform: `scale(${preview.scale})`, transformOrigin: "0 0" });
+    // the preview in the memorial lobby card's rhombus, its caption centred under it (owner, 2026-11-11, BL-176)
+    await UI.previewFrame(target, preview);
+    const slant = UI.PREVIEW_SLANT;
+    const panel = layer(target, "", 25); Object.assign(panel.style, { inset: "auto", left: `${preview.left}px`, top: `${preview.top}px`, width: "1920px", height: "1080px", transform: `scale(${preview.scale})`, transformOrigin: "0 0",
+      clipPath: `polygon(${slant}px 0, 1920px 0, ${1920 - slant}px 1080px, 0 1080px)` });
     await Backgrounds.render(Backgrounds.backgroundChoice(selectedBackground, options.backgrounds), panel, { signal: work.signal, choices: options.backgrounds });
-    await UI.caption(target, items.find((item) => item.key === selectedBackground)?.label || "", [preview.left, preview.top + preview.height + 46, preview.width]);
-  }, [{ label: T("popup.cancel"), fn: close }, { label: T("hall.useBackground"), fn: async () => {
+    await UI.caption(target, items.find((item) => item.key === selectedBackground)?.label || "", [preview.left, preview.top + preview.height + UI.BACKGROUND.caption, preview.width], { align: 2 });
+  }, [{ label: T("popup.cancel"), fn: close, tone: "bright" }, { label: T("popup.save"), primary: true, semantic: "save", fn: async () => {
     if (gen !== page || !root) return;
     if (store.kind()) current().background = selectedBackground;
     else { const next = clone(store.saved()); next.background = selectedBackground; const result = await persist(next); if (gen !== page || !root) return; store.accept(result); }
     close(); await renderScene();
-  } }]);
+  } }], { align: "right" });
   draw().catch(fail);
 }
 async function fullscreenExit(close) {

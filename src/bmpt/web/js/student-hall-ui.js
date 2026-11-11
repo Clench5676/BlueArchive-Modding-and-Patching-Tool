@@ -67,7 +67,7 @@ export function createModal(title, onClose, { level = 0 } = {}) {
       held.forEach(([el, inert]) => { if (el.isConnected) el.inert = inert; });
       if (previous?.isConnected && !previous.inert) previous.focus?.();
     },
-    async draw(build, actions = [], { width = POPUP_FRAME.L.w, height = 1450, retainedFooter = false, compactFooter = false, titleCentre = null, captionSite = "hall.modal" } = {}) {
+    async draw(build, actions = [], { width = POPUP_FRAME.L.w, height = 1450, retainedFooter = false, compactFooter = false, titleCentre = null, captionSite = "hall.modal", align = "center" } = {}) {
       drawing?.abort(); const nextDrawing = new AbortController(); drawing = nextDrawing;
       const drawSignal = nextDrawing.signal, token = ++revision;
       const cancelled = new Promise((resolve) => drawSignal.addEventListener("abort", resolve, { once: true }));
@@ -75,20 +75,23 @@ export function createModal(title, onClose, { level = 0 } = {}) {
       try { await Loading.hold(async () => {
         await ready(); if (!live()) return;
         const layer = document.createElement("div"); layer.className = "popup-layer";
-        const tree = modalFrame(title, width, height, retainedFooter || compactFooter ? [] : actions, captionSite, titleCentre);
+        const tree = modalFrame(title, width, height, retainedFooter || compactFooter ? [] : actions, captionSite, titleCentre, align);
         const frame = await NGUI.render(tree, layer, { scale: S, origin: [960, 540], signal: drawSignal });
         if (!live()) return;
         Popup.closable(frame, host, onClose);
         Popup.hit(layer, frame, "Center/Popup/Base/BG/Btn_Close", onClose, { name: T("display.close") });
         await build(layer, live, drawSignal);
         if (retainedFooter) {
-          // The memorial editor keeps its own footer under its queue panel: XS buttons at the frame's bottom right.
-          const actionWidth = Math.min(280, (width * S - 180) / Math.max(1, actions.length) - 20);
-          const right = 960 + width * S / 2 - 70, bottom = 540 + (height / 2 - 120) * S;
-          // the XS body every popup's footer has (BL-176)
-          const bodyH = CONTROL.buttonXS.h * S, footerSize = retainedButtonSize(actions.map((action) => action.label), actionWidth, bodyH);
+          // The memorial editor keeps its own footer under its queue panel: XS buttons at its bottom right, their right edge on
+          // the panels' (WIDE), each as wide as its caption needs (BL-176)
+          const bodyH = CONTROL.buttonXS.h * S, captions = actions.map((action) => action.label);
+          const footerSize = retainedButtonSize(captions, XS_BUTTON.w * 2 * S, bodyH) ?? XS_BUTTON.fs;
+          const widths = captions.map((caption) => Math.max(CONTROL.buttonXS.minW, NGUI.glyphWidth(caption, footerSize) + 2 * CONTROL.buttonXS.pad) * S);
+          const gap = SPACE.m * S, bottom = 540 + (height / 2 - 120) * S;
+          let x = WIDE.left + WIDE.width - widths.reduce((n, w) => n + w, 0) - gap * (widths.length - 1);
+          const boxes = widths.map((w) => { const box = [x, bottom, w, bodyH]; x += w + gap; return box; });
           await Promise.all(actions.map((action, index) => retainedButton(layer, `Footer${index}`, action.label,
-            [right - (actions.length - index) * (actionWidth + 20), bottom, actionWidth, bodyH], action.fn, { enabled: action.enabled !== false, semantic: action.semantic, size: footerSize })));
+            boxes[index], action.fn, { enabled: action.enabled !== false, semantic: action.semantic, size: footerSize })));
         } else if (compactFooter) {
           const labels = actions.map((action) => action.label), bodyW = compactFooterWidth(labels), size = compactButtonSize(labels, bodyW);
           await Promise.all(compactFooterBoxes(height, labels.map(() => bodyW)).map((box, index) => button(layer, `Footer${index}`, actions[index].label, box,
@@ -133,9 +136,9 @@ export function createModal(title, onClose, { level = 0 } = {}) {
   };
   Popup.opened(host, onClose); return api;
 }
-export function modalFrame(title, width, height, actions, captionSite = "hall.modal", titleCentre = null) {
+export function modalFrame(title, width, height, actions, captionSite = "hall.modal", titleCentre = null, align = "center") {
   const tree = Popup.popupFrame(title, width, height, { buttons: actions.map((action, index) => ({ ...action,
-    name: `Footer${index}`, semantic: action.semantic || (action.primary ? "confirm" : "secondary") })), captionSite, titleCentre });
+    name: `Footer${index}`, semantic: action.semantic || (action.primary ? "confirm" : "secondary") })), captionSite, titleCentre, align });
   if (actions.length) {
     const row = NGUI.find(tree, "Popup/Btn");
     row.children = row.children.map((child, index) => actions[index].enabled === false ? Buttons.disable(child) : child);
@@ -174,21 +177,36 @@ export function portraitPickerLayout(view, searching) {
 // The hall's wide modals (Adjust Memorial Lobby, Background) are the L class (BL-176: no popup wider): their content
 // between these stage x positions (px), SPACE.xl in from the frame's sides.
 export const WIDE = Object.freeze({ left: 960 - POPUP_FRAME.L.w * S / 2 + SPACE.xl * S, width: (POPUP_FRAME.L.w - 2 * SPACE.xl) * S });
-// The background picker: the list at the left (two cards a row, .32 of their size, 296 px apart, rows 224 px), the
-// preview and its caption on the right, as wide as the room left after SPACE.l.
-export const BACKGROUND = Object.freeze({ list: 600, scale: .32, pitch: [296, 224], first: [152, 88] });
+// The background picker (owner, 2026-11-11, BL-176): the preview and its caption on the left, as wide as the room the list
+// leaves after SPACE.l, centred down the list's height; the list on the right (two cards a row, .32 of their size, 296 px
+// apart, rows 186 px: SPACE.xl px between them).
+export const BACKGROUND = Object.freeze({ list: 600, scale: .32, pitch: [296, 186], first: [152, 88], caption: 46 });
 // the list from SPACE.l under the header band down to SPACE.xl over the footer (BL-176: the footer's clearance); the
 // preview level with its top
 const backgroundTop = () => frameTop(1450) + HEADER_H * S + SPACE.l * S;
 const backgroundBottom = () => 540 - (Popup.footerTop(1450, 2) + SPACE.xl) * S;
-export const backgroundPickerBox = () => [WIDE.left, backgroundTop(), BACKGROUND.list, backgroundBottom() - backgroundTop()];
+export const backgroundPickerBox = () => [WIDE.left + WIDE.width - BACKGROUND.list, backgroundTop(), BACKGROUND.list, backgroundBottom() - backgroundTop()];
 export function backgroundPreviewBox() {
-  const left = WIDE.left + BACKGROUND.list + SPACE.l * S, width = WIDE.left + WIDE.width - left;
-  return { left, top: backgroundTop(), width, scale: width / 1920, height: 1080 * width / 1920 };
+  const left = WIDE.left, width = WIDE.width - BACKGROUND.list - SPACE.l * S, height = 1080 * width / 1920;
+  // the picture and its caption (40 high) centred down the list's height
+  const block = height + BACKGROUND.caption + 40 * S * 1.3, top = backgroundTop() + (backgroundBottom() - backgroundTop() - block) / 2;
+  return { left, top, width, scale: width / 1920, height };
+}
+// the preview's rhombus (the memorial lobby card's 10 degree incline): the clip of the 1920 x 1080 scene it shows, and the
+// card body and line drawn round it (Popup.listCard's), in stage px
+export const PREVIEW_SLANT = 1080 * Math.tan(Math.PI / 18);
+export async function previewFrame(host, { left, top, width, height }) {
+  await ready();
+  const k = width / 1920, w = (width - PREVIEW_SLANT * k) / S, h = height / S;
+  const tree = NGUI.node("PreviewFrame", [0, 0], [NGUI.sprite("Common_Btn_BG", w + 16, h + 16, { incline: 10, depth: 4, color: "#ffffff/1.00" })], [
+    NGUI.node("Line", [0, 0], [NGUI.sprite("Common_Line_Raius20px", w + 4, h + 4, { incline: 10, depth: 30, color: "#ffffff/1.00" })])]);
+  return NGUI.render(tree, host, { scale: S, origin: [left + width / 2, top + height / 2], z: 20 });
 }
 // Adjust Memorial Lobby: the students (four heads a row) and the candidates (two cards a row) side by side, the queue
 // across under them.
-export const MEMORIAL = Object.freeze({ students: 650, gap: 20, heads: 4, headPitch: 155, cardScale: .37, cardPitch: 290, cardX: 165 });
+// (owner, 2026-11-11, BL-176: the heads and cards clear of their panels' scrollbars, the toolbar one size down)
+export const MEMORIAL = Object.freeze({ students: 650, gap: 20, heads: 4, headX: 74, headPitch: 145, cardScale: .34, cardPitch: 278, cardX: 145,
+  toolbar: .8 });
 export function portraitRowLayout() {
   const name = Popup.LIST_CARD_NAME, bar = Math.max(88, name.padY + name.lines * name.fs * name.pitch);
   // Use the row's 16 free pixels above the artwork before growing it; reserve the native horizontal scrollbar's
@@ -316,6 +334,7 @@ function observePicture(element, picture) {
 }
 export async function card(host, item, { x, y, kind = "lobby", scale = .48, selected = false, onPreview, onAdd, addLabel = T("hall.add"), addEnabled = true, addSize, fitAdd = false, label = true, interactive = !!onPreview }) {
   const geometry = kind === "spr" ? { w: 320, h: 600, bar: 88 } : { w: 720, h: 405, bar: 88 };
+  if (typeof item.applied === "boolean") await Popup.selectionReady();
   const tree = Popup.listCard(item, 0, 0, selected, geometry, kind);
   NGUI.find(tree, "Thumb").widgets.find((widget) => "clipImage" in widget).placeholderOnFailure = true;
   const bar = NGUI.find(tree, "Bar"), barWidget = bar.widgets.find((w) => "sprite" in w);
@@ -339,7 +358,29 @@ export async function card(host, item, { x, y, kind = "lobby", scale = .48, sele
   }
   return { view, visual, hit, width, height, actionBox: [actionX, y + height / 2 + 8, actionWidth, 36] };
 }
-export const MEMORIAL_QUEUE_PITCH = (290 + (720 + 405 * Math.tan(Math.PI / 18)) * .25) / 2;
+// the queue's cards (no Remove button under them, BL-176): .32 of the card, centred in the 175 px row, SPACE.l apart
+export const QUEUE = Object.freeze({ scale: .32, y: 84 });
+export const MEMORIAL_QUEUE_PITCH = (720 + 405 * Math.tan(Math.PI / 18)) * QUEUE.scale + SPACE.l;
+// the trash button over a queue card's top right corner (a 40 px square inside the inclined art)
+export const queueTrashBox = (pitch) => [pitch / 2 + 360 * QUEUE.scale + 405 * QUEUE.scale * Math.tan(Math.PI / 18) / 2 - 52, QUEUE.y - 405 * QUEUE.scale / 2 + 8, 40, 40];
+// A trash button: shown while the pointer is over its host, grey, red while the pointer is over it; a click asks the caller
+// (owner, 2026-11-11, BL-176). The game has no trash icon, so it is a plain drawn can in the game's grey and red.
+export const TRASH = Object.freeze({ grey: "#8a96a3", red: "#e0474c" });
+const TRASH_SVG = (colour) => `<svg viewBox="0 0 24 24" width="100%" height="100%" aria-hidden="true"><g fill="none" stroke="${colour}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16"/><path d="M9 7V4.5h6V7"/><path d="M6.5 7l1 13h9l1-13"/><path d="M10 11v6M14 11v6"/></g></svg>`;
+export async function trashButton(host, name, label, [x, y, width, height], action) {
+  const hit = hitButton(host, [x, y, width, height], action, label, 96);
+  hit.dataset.action = "hall-trash";
+  Object.assign(hit.style, { visibility: "hidden", background: "rgba(255,255,255,.9)", borderRadius: `${8 * S}px`, padding: `${6 * S}px`, boxSizing: "border-box" });
+  hit.innerHTML = TRASH_SVG(TRASH.grey);
+  const show = (on) => { hit.style.visibility = on ? "visible" : "hidden"; };
+  host.addEventListener("pointerenter", () => show(true));
+  host.addEventListener("pointerleave", () => show(false));
+  hit.addEventListener("pointerenter", () => { hit.innerHTML = TRASH_SVG(TRASH.red); });
+  hit.addEventListener("pointerleave", () => { hit.innerHTML = TRASH_SVG(TRASH.grey); });
+  hit.addEventListener("focus", () => show(true));
+  hit.addEventListener("blur", () => show(false));
+  return hit;
+}
 export async function queuePanel(host, [x, y, width, height]) {
   await ready(); const tree = clone(NGUI.find(assets.collection, "ListBG/PaperBG"));
   tree.name = "MemorialQueuePanel"; tree.pos = [0, 0]; tree.children = [];
@@ -396,12 +437,13 @@ export async function panel(host, name, [x, y, width, height], title) {
   await NGUI.render(tree, host, { scale: S, origin: [x + width / 2, y + height / 2] });
 }
 
-export async function rosterToolbar(host, view, searching, actions, { x = 115, y = 206, width = 1685 } = {}) {
+// scale: the toolbar's size under the width's fit (the memorial editor's one size down, BL-176)
+export async function rosterToolbar(host, view, searching, actions, { x = 115, y = 206, width = 1685, scale: k = 1 } = {}) {
   await ready();
   const lay = toolbarLayout(view, { title: "" }), tree = toolbarTree(assets.collection, assets.checkbox, view, searching, lay);
   tree.pos = [0, 0]; tree.children = tree.children.filter((n) => ["Menubar", "ModFilter", "RecruitFilter", "SearchBtn", "SortBtn", "OrderBtn"].includes(n.name));
   const menu = NGUI.find(tree, "Menubar"); menu.children = menu.children.filter((child) => child.name === "Merge");
-  const span = 1412 - lay.cbLeft, scale = Math.min(1660 / 2840, width / (span + 28));
+  const span = 1412 - lay.cbLeft, scale = Math.min(1660 / 2840, width / (span + 28)) * k;
   const origin = [x + (width - span * scale) / 2 - lay.cbLeft * scale, y - 273.5 * scale];
   const frame = clone(NGUI.find(assets.collection, "ListBG")); frame.name = "HallToolbarBG"; frame.pos = [0, 0]; frame.children = [];
   Object.assign(frame.widgets.find((w) => "sprite" in w), { w_: width / scale, h_: 140 });

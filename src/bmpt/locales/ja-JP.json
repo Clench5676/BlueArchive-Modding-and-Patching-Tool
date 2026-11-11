@@ -1020,6 +1020,8 @@
 			"changePortrait": "立ち絵変更",
 			"add": "追加",
 			"remove": "削除",
+			"selectStudent": "生徒を選択",
+			"removeConfirm": "このメモリアルロビーをリストから削除",
 			"previous": "前へ",
 			"next": "次へ",
 			"done": "完了",

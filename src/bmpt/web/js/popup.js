@@ -11,6 +11,7 @@
 // The pure parts (the stack, the selection, the start sequence) are tested in Node (tests/js/popup.test.mjs).
 import * as NGUI from "./ngui.js";
 import { attachHint } from "./hover-hint.js";
+import { installScrollFades } from "./scroll-fade.js";
 import { switchGrid, placeSwitchCards, cardInkBounds } from "./switch-layout.js";
 import { scrollbar, scrollbarTrack } from "./scrollbar.js";
 import { horizontalScroll } from "./horizontal-scroll.js";
@@ -63,6 +64,8 @@ export function frameReady() {
 }
 const optional = (name) => NGUI.layout(name).catch((err) => { console.warn("popup layout", name, err); return null; });
 export function ready() {
+  // every scrolling area fades at an edge with more past it (scroll-fade.js, BL-176); once, from the first popup on
+  installScrollFades();
   loading ||= Promise.all([frameReady(), optional("UICharacterCollection"), optional("UIPopup_GachaCharList.Btn_Checkbox"), Buttons.ready()])
     .then(([, collection, checkbox]) => { layouts = { ...layouts, collection, checkbox }; }, (err) => { loading = null; throw err; });
   return loading;
@@ -641,7 +644,8 @@ export function listCard(it, x, y, selected, card = LP.card, kind = null, tick =
     // Keep the existing list's measured envelope, hit boxes and scroll pitch when replacing its decoration.
     tree.layoutChildren = [...kids];
     tree.children = kids.filter(n => n.name !== "Select");
-    const caption = (it.applied || selected) ? selectionCaptions(card)?.[it.applied ? "applied" : "preview"] : null;
+    // frameCaption false: the frame alone, no Applied word in it (the Hall's chosen background, BL-176)
+    const caption = it.frameCaption !== false && (it.applied || selected) ? selectionCaptions(card)?.[it.applied ? "applied" : "preview"] : null;
     const frame = selectedFrame(selectionSlot, card, it.applied, selected, caption);
     if (frame) {
       const window = selectionArtWindow(frame, selectionSprite, selectionOutline);

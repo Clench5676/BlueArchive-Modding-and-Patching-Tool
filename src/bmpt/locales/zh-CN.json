@@ -1020,6 +1020,8 @@
 			"changePortrait": "更换立绘",
 			"add": "添加",
 			"remove": "移除",
+			"selectStudent": "请选择学生",
+			"removeConfirm": "从清单中移除此记忆大厅",
 			"previous": "上一个",
 			"next": "下一个",
 			"done": "完成",
