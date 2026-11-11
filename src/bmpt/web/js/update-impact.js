@@ -160,6 +160,9 @@ export async function gate() {
   const due = await rpc("mods.updateDue").catch(() => null);
   if (!due?.due) return false;
   busy = true;
+  // At the start, the boot watchdog holds from here: the answer is the user's, and the check, a job over every library
+  // mod, shows its own progress (a first check after an upgrade fingerprints each mod and can take minutes)
+  const release = globalThis.BAMTRecovery?.hold?.();
   try {
     const answer = await Popup.message({ title: T("mods.impact.gateTitle"), lines: [T("mods.impact.gateAsk")], close: false,
       buttons: [{ label: T("update.later"), value: "later" }, { label: T("mods.impact.gateCheck"), value: "check", primary: true }] });
@@ -172,6 +175,7 @@ export async function gate() {
     return false;
   } finally {
     busy = false;
+    release?.();
   }
 }
 

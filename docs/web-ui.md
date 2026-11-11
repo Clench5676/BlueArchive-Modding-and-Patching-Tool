@@ -3236,7 +3236,9 @@ Recovery code, its six-locale strings and the shared built-in fallback styleshee
 wait for game UI cache detection; the normal loading code adopts cached/game styling after `app.info`. During boot,
 uncaught errors, rejected promises and failed scripts/styles show a built-in recovery page immediately. Media
 failures are logged and retain their existing placeholders. The watchdog resets on every phase start and end,
-failing after 45 seconds without progress. A later `ready()` removes the failure page and reveals the app;
+failing after 45 seconds without progress; pending requests keep it waiting up to 180 seconds of boot. `hold()` stops
+its clock while the user's part runs (the game update question and the check it starts, `update-impact.js` gate):
+held time counts toward neither limit. A later `ready()` removes the failure page and reveals the app;
 the recorded failure remains in diagnostics. Error forwarding is deduplicated for 60 seconds and capped at
 ten distinct errors per minute on both sides.
 
