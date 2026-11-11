@@ -490,6 +490,11 @@
 			"atlas_remap_redrawn": "无法重排：原版立绘已重绘",
 			"old_rig_unavailable": "无法沿用旧 .skel 文件：未记录 Mod 绘制时的 .skel 文件",
 			"old_rig_animations": "无法沿用旧 .skel 文件：原版新增动画 {names}",
+			"graft_unavailable": "无法补上新表情：Mod 不含可用的 .skel 文件",
+			"graft_refused": "无法补上新表情：{names}",
+			"graft_page_missing": "无法补上新表情：缺少贴图 {page}",
+			"graft_region_too_large": "无法补上新表情：区域 {region} 超出贴图宽度",
+			"graft_spine_licence": "无法补上新表情：未确认 Spine 授权",
 			"atlas_remap_target_mismatch": "无法重排：{file} - 匹配资源 {matched}/{expected}",
 			"atlas_remap_property": "无法重排：{file} - {field} 无效：{value}（页面：{page}，区域：{region}）",
 			"atlas_remap_structure": "无法重排：{file} - 第 {line} 行 .atlas 文件结构无效：{value}",
@@ -738,7 +743,11 @@
 			"result": "兼容性检查结果",
 			"changes": "变动：",
 			"autoUpdate": "可自动更新：",
-			"remapUpdate": "按当前 .atlas 文件重新排布 Mod 贴图"
+			"remapUpdate": "按当前 .atlas 文件重新排布 Mod 贴图",
+			"graft": "保留 Mod 的 .skel 文件，补上原版新增表情",
+			"graftOldRig": "沿用 Mod 绘制时的 .skel 文件和 .atlas 文件，补上原版新增表情",
+			"graftAction": "补上新表情",
+			"remapAction": "改用原版 .skel 文件"
 		},
 		"remap": {
 			"action": "更新",
@@ -764,7 +773,16 @@
 			"zoomIn": "放大",
 			"zoomOut": "缩小",
 			"marks": "标出改动",
-			"oldRig": "沿用旧 .skel 文件和 .atlas 文件：{names}"
+			"oldRig": "沿用旧 .skel 文件和 .atlas 文件：{names}",
+			"grafted": "新增表情：{n}",
+			"graftCorrected": "已自动校正：{n}",
+			"graftUnfixed": "需手动修复：{n}",
+			"graftRefused": "未补上的动画：{n}",
+			"graftGrown": "贴图加高 {n} 像素",
+			"graftUnanchored": "新表情按原版位置放置",
+			"expression": "表情 {name}（{n}/{total}）",
+			"previousExpression": "上一个表情",
+			"nextExpression": "下一个表情"
 		},
 		"spine": {
 			"license": {

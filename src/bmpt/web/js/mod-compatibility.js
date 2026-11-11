@@ -18,10 +18,12 @@ function progressTask(action, name, run) {
   return Loading.task((update) => run((p) => update({ label: text(p) })), { label: text() });
 }
 export const eligible = (mod) => mod?.kind !== "model" && !mod?.repaired_from && !mod?.repaired_id;
-// The remap, or for a portrait the game drew anew its old rig as a whole (assessment.oldRig): both are Update.
+// The remap, for a portrait the game drew anew its old rig as a whole (assessment.oldRig), and the graft of the
+// official rig's new animations into the mod's own rig (assessment.graft): all are Update.
 export const canRemap = (id, mod = null) => eligible(mod) && eligible(reports.get(id))
-  && reports.get(id)?.remappable === true
-  && (reports.get(id)?.assessment?.remap === true || reports.get(id)?.assessment?.oldRig === true);
+  && ((reports.get(id)?.remappable === true
+    && (reports.get(id)?.assessment?.remap === true || reports.get(id)?.assessment?.oldRig === true))
+    || reports.get(id)?.assessment?.graft === true);
 
 export function readSkeleton(input, runtime = globalThis.spine) {
   const bytes = Uint8Array.from(atob(input.data), (c) => c.charCodeAt(0));
@@ -120,13 +122,20 @@ export function compare(report, runtime = globalThis.spine, summarize = false) {
   // Such a portrait can keep the rig its textures were drawn for, as a whole (actions.oldRig), unless the official
   // skeleton has animations the old one lacks: the game calls them by name.
   const gained = redrawn ? [...new Set(Object.values(report.oldRig?.animations || {}).flat())] : [];
-  if (gained.length) add("oldRigAnimations", { names: list(gained) }, summarize ? { names: joined(gained) } : null);
+  // The graft (actions.graft) keeps the mod's own rig, or that old rig, and adds what the official one gained.
+  const graftable = eligible(report) && report.graft?.available === true
+    && (report.graft.kind === "own" || (report.graft.kind === "oldRig" && redrawn && gained.length > 0));
+  if (gained.length && graftable) {
+    for (const [name, names] of Object.entries(report.oldRig.animations))
+      add("missingAnimations", { name, names: list(names) }, summarize ? { name, names: joined(names) } : null);
+  } else if (gained.length) add("oldRigAnimations", { names: list(gained) }, summarize ? { names: joined(gained) } : null);
   const available = !issues.some(({ key }) => key === "unavailable");
   return { available, issues, author: issues.some(({ key }) => key !== "unavailable"),
     remap: available && eligible(report) && report.remappable === true && !redrawn
       && issues.some(({ key }) => ["regions", "atlasSize", "atlasLayout", "missingAnimations"].includes(key)),
     oldRig: available && eligible(report) && report.remappable === true && redrawn && !gained.length
-      && report.oldRig?.available === true };
+      && report.oldRig?.available === true,
+    graft: available && graftable, graftOldRig: report.graft?.kind === "oldRig" };
 }
 
 async function assess(report) {
@@ -152,24 +161,43 @@ export function resultLines(result, repair) {
       Popup.message({ title: T("info.details"), lines: [full], scroll: true, ok: T("picker.ok") }) } });
   }
   const lines = changes.size ? [T("compatibility.changes"), ...[...changes.values()].map(item)] : [T("compatibility.matches")];
-  if (repair) lines.push({ rule: true }, T("compatibility.autoUpdate"),
-    item(T(result.oldRig ? "compatibility.oldRig" : "compatibility.remapUpdate")));
+  if (repair) lines.push({ rule: true }, T("compatibility.autoUpdate"), ...repairs(result).map(({ text }) => item(text)));
   return lines;
 }
+
+// What Update can do, first the default: the graft keeps the mod's own rig (owner, 2026-11-11), the remap puts the
+// mod's pixels on the official rig, the old rig keeps a redrawn portrait's whole rig.
+export function repairs(result) {
+  const out = [];
+  if (result.graft) out.push({ kind: "graft", text: T(result.graftOldRig ? "compatibility.graftOldRig" : "compatibility.graft"),
+    label: T("compatibility.graftAction") });
+  if (result.remap) out.push({ kind: "remap", text: T("compatibility.remapUpdate"), label: T("compatibility.remapAction") });
+  if (result.oldRig) out.push({ kind: "oldRig", text: T("compatibility.oldRig"), label: T("remap.action") });
+  return out;
+}
+
+// The footer of a popup that offers the repairs: Update for one, a named button each for more (the default last).
+function repairButtons(choices) {
+  if (choices.length < 2) return { ok: T("remap.action"), cancel: T("popup.cancel") };
+  return { buttons: [{ label: T("popup.cancel"), value: "cancel" },
+    ...choices.slice(1).map(({ kind, label }) => ({ label, value: kind })),
+    { label: choices[0].label, value: choices[0].kind, primary: true }] };
+}
+const chosen = (response, choices) => response.button === "ok" ? choices[0]?.kind
+  : choices.some(({ kind }) => kind === response.button) ? response.button : null;
 
 export async function show(report, { onRemap } = {}) {
   if (report.kind !== "model" && !await ensureSpine()) return;
   const result = compare(report, globalThis.spine, true);
-  const repair = !!((result.remap || result.oldRig) && onRemap);
+  const choices = onRemap ? repairs(result) : [];
+  const repair = choices.length > 0;
   const lines = resultLines(result, repair);
   // the lines share one type size, as siblings do (docs/ui-guidelines.md)
   const response = await Popup.message({ title: T("compatibility.result"), lines, scroll: true, plain: true, footer: "M",
     fitTogether: lines.flatMap((line, i) => (line.rule ? [] : [i])),
-    ok: T(repair ? "remap.action" : "picker.ok"),
-    cancel: repair ? T("popup.cancel") : null });
-  if (response.button === "ok") {
-    if (repair) await onRemap();
-  }
+    ...(repair ? repairButtons(choices) : { ok: T("picker.ok") }) });
+  const kind = repair ? chosen(response, choices) : null;
+  if (kind) await onRemap(kind);
 }
 
 // The repair review's lines: one per kind of region with its count, the names behind a Details button. Regions are
@@ -178,6 +206,16 @@ export function reviewLines(report) {
   // an old rig set up as a whole (actions.oldRig) moves nothing: its line names the atlases kept
   if (report.rigs?.length) return [T("remap.oldRig", { names: joined(report.rigs) }),
     ...report.warnings.map(({ key, name }) => T(`remap.${key}`, { name }))];
+  // a graft (actions.graft) counts the expressions it added, corrected and could not match, the names behind Details
+  if (report.grafted) {
+    const named = (key, names) => !names.length ? [] : [{ text: T(`remap.${key}`, { n: names.length }), button: {
+      label: T("info.details"), fn: () => Popup.message({ title: T("info.details"), lines: [joined(names)], scroll: true,
+        ok: T("picker.ok") }) } }];
+    return [...named("grafted", report.grafted), ...named("graftCorrected", report.corrected || []),
+      ...named("graftUnfixed", report.unfixed || []), ...named("graftRefused", Object.keys(report.refused || {})),
+      ...(report.grown ? [T("remap.graftGrown", { n: report.grown })] : []),
+      ...(report.unanchored ? [T("remap.graftUnanchored")] : [])];
+  }
   const kinds = { unpainted: report.added || [], official: report.official || [], dropped: report.dropped || [] };
   const atlases = new Set(Object.values(kinds).flat().map((name) => name.split(" - ")[0]));
   const bare = (names) => atlases.size === 1 ? names.map((name) => name.slice(name.indexOf(" - ") + 3)) : names;
@@ -192,17 +230,59 @@ export function reviewLines(report) {
     ...report.warnings.map(({ key, name }) => T(`remap.${key}`, { name }))];
 }
 
-export async function remap(id, onRemapped = () => {}, label = "", subject = label, kind = "") {
+// The graft (actions.graft, graftBuild, graftCheck): the page poses the rigs the library names, the library splices and
+// packs and hands back a test rig with every candidate correction, the page poses that, and the library checks and
+// prepares the review. A graft left between its steps is dropped.
+async function grafted(id, subject) {
+  if (!await ensureSpine()) return null;
+  const S = globalThis.spine;
+  let token = null;
+  try {
+    return await Loading.hold(() => Loading.page(() => progressTask("Remap", subject, async (update) => {
+      const first = await waitJob(await rpc("actions.graft", { mod: id }), update);
+      token = first.token;
+      const skeleton = (rig) => ({ data: rig.skeleton });
+      const setup = Object.fromEntries(Object.entries(first.rigs).map(([name, rig]) => [name, {
+        mod: RigGeometry.setupOf(S, rig.mod.atlas, skeleton(rig.mod)),
+        official: RigGeometry.setupOf(S, rig.official.atlas, skeleton(rig.official)),
+        base: rig.base ? RigGeometry.setupOf(S, rig.base.atlas, skeleton(rig.base)) : null }]));
+      const built = await waitJob(await rpc("actions.graftBuild", { token, geometry: setup }), update);
+      const posed = Object.fromEntries(Object.entries(built.rigs).map(([name, rig]) => [name, {
+        test: RigGeometry.partPoses(S, rig.atlas, skeleton(rig), rig.check),
+        official: RigGeometry.partPoses(S, first.rigs[name].official.atlas, skeleton(first.rigs[name].official), rig.official) }]));
+      const result = await waitJob(await rpc("actions.graftCheck", { token, geometry: posed }), update);
+      token = null;  // the check takes it
+      return result;
+    })), { all: true });
+  } finally {
+    if (token) await rpc("actions.discardGraft", { token }).catch(() => {});
+  }
+}
+
+export async function remap(id, onRemapped = () => {}, label = "", subject = label, kind = "", choice = null) {
   // A portrait is baked through world space: the page poses both rigs with the runtime and posts what they draw.
   let checked = reports.get(id);
   if (!checked && kind === "spr") checked = await inspect(id, label, null, subject);
+  // More than one repair (Update without the result popup): the same choice as there.
+  if (!choice && checked?.assessment) {
+    const choices = repairs(checked.assessment);
+    if (choices.length > 1) {
+      const lines = [T("compatibility.autoUpdate"), ...choices.map(({ text }) => ({ text, ...ITEM }))];
+      choice = chosen(await Popup.message({ title: T("act.update"), lines, plain: true, footer: "M",
+        fitTogether: lines.map((_line, i) => i), ...repairButtons(choices) }), choices);
+      if (!choice) return null;
+    } else choice = choices[0]?.kind ?? null;
+  }
   // A portrait the game drew anew keeps its old rig as a whole (actions.oldRig): no geometry to post.
-  const old = checked?.assessment?.oldRig === true;
-  const geometry = !old && checked?.kind === "spr" && await ensureSpine() ? RigGeometry.forRemap(checked, globalThis.spine) : undefined;
-  const result = await Loading.hold(() => Loading.page(() => progressTask("Remap", subject,
-    async (update) => waitJob(await rpc(old ? "actions.oldRig" : "actions.remap",
-      old || !geometry ? { mod: id } : { mod: id, geometry }), update),
-  )), { all: true });
+  const old = choice === "oldRig" || (!choice && checked?.assessment?.oldRig === true);
+  const result = choice === "graft" ? await grafted(id, subject) : await (async () => {
+    const geometry = !old && checked?.kind === "spr" && await ensureSpine() ? RigGeometry.forRemap(checked, globalThis.spine) : undefined;
+    return Loading.hold(() => Loading.page(() => progressTask("Remap", subject,
+      async (update) => waitJob(await rpc(old ? "actions.oldRig" : "actions.remap",
+        old || !geometry ? { mod: id } : { mod: id, geometry }), update),
+    )), { all: true });
+  })();
+  if (!result) return null;
   if (result.unchanged) {
     reports.set(id, { ...reports.get(id), remappable: false });
     await Popup.message({ title: T("remap.action"), lines: [T("remap.unneeded")], ok: T("picker.ok") });
@@ -213,8 +293,12 @@ export async function remap(id, onRemapped = () => {}, label = "", subject = lab
   try {
     const accepted = await Compare.show({ ...result.compare, pages: result.pages, drawings: result.drawings }, label || T("remap.action"), "dialog", {
       lines, partial: report.partial, accept: T("remap.accept"), discard: T("remap.discard"), kind: kind || reports.get(id)?.kind || "spr",
-      // the regions whose pixels are not the mod's own: what the pictures can ring
-      marks: [...new Set((report.official || []).map((name) => name.slice(name.indexOf(" - ") + 3)))],
+      // the regions whose pixels are not the mod's own, or a graft's parts that match no candidate: what the
+      // pictures can ring
+      marks: report.grafted ? report.marks || []
+        : [...new Set((report.official || []).map((name) => name.slice(name.indexOf(" - ") + 3)))],
+      // a graft's review steps through the expressions it added
+      expressions: report.grafted || [],
     });
     if (!accepted) return null;
     const saved = await Loading.hold(() => Loading.page(() => progressTask("Repair", subject, async (update) => {
@@ -271,5 +355,5 @@ export async function forUpdate(id, label = "", subject = label) {
 export async function check(id, label = "", onRemapped = () => {}, mod = null, subject = label) {
   if (mod?.kind !== "model" && !await ensureSpine()) return;
   const report = await Loading.hold(() => inspect(id, label, null, subject), { all: true });
-  return show(report, { onRemap: () => remap(id, onRemapped, label, subject, mod?.kind || report.kind) });
+  return show(report, { onRemap: (choice) => remap(id, onRemapped, label, subject, mod?.kind || report.kind, choice) });
 }

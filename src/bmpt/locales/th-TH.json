@@ -490,6 +490,11 @@
 			"atlas_remap_redrawn": "จัดใหม่ไม่ได้: ภาพตัวละครต้นฉบับถูกวาดใหม่",
 			"old_rig_unavailable": "ใช้ไฟล์ .skel เดิมไม่ได้: ไม่มีบันทึกไฟล์ .skel ที่ Mod ใช้ตอนวาด",
 			"old_rig_animations": "ใช้ไฟล์ .skel เดิมไม่ได้: แอนิเมชันที่ต้นฉบับเพิ่ม {names}",
+			"graft_unavailable": "เพิ่มสีหน้าไม่ได้: Mod ไม่มีไฟล์ .skel ที่ใช้ได้",
+			"graft_refused": "เพิ่มสีหน้าไม่ได้: {names}",
+			"graft_page_missing": "เพิ่มสีหน้าไม่ได้: ไม่มีพื้นผิว {page}",
+			"graft_region_too_large": "เพิ่มสีหน้าไม่ได้: พื้นที่ {region} กว้างกว่าพื้นผิว",
+			"graft_spine_licence": "เพิ่มสีหน้าไม่ได้: ยังไม่ได้ยืนยันสิทธิ์ใช้งาน Spine",
 			"atlas_remap_target_mismatch": "จัดใหม่ไม่ได้: {file} - ทรัพยากรตรงกัน {matched}/{expected}",
 			"atlas_remap_property": "จัดใหม่ไม่ได้: {file} - {field} ไม่ถูกต้อง: {value} (หน้า {page}, พื้นที่ {region})",
 			"atlas_remap_structure": "จัดใหม่ไม่ได้: {file} - โครงสร้างไฟล์ .atlas ไม่ถูกต้องที่บรรทัด {line}: {value}",
@@ -738,7 +743,11 @@
 			"result": "ผลตรวจความเข้ากันได้",
 			"changes": "การเปลี่ยนแปลง:",
 			"autoUpdate": "อัปเดตอัตโนมัติได้:",
-			"remapUpdate": "จัดพื้นผิวของ Mod ใหม่ตามไฟล์ .atlas ปัจจุบัน"
+			"remapUpdate": "จัดพื้นผิวของ Mod ใหม่ตามไฟล์ .atlas ปัจจุบัน",
+			"graft": "คงไฟล์ .skel ของ Mod และเพิ่มสีหน้าใหม่ของต้นฉบับ",
+			"graftOldRig": "ใช้ไฟล์ .skel และไฟล์ .atlas ที่ Mod ใช้ตอนวาด และเพิ่มสีหน้าใหม่ของต้นฉบับ",
+			"graftAction": "เพิ่มสีหน้า",
+			"remapAction": "ใช้ไฟล์ .skel ต้นฉบับ"
 		},
 		"remap": {
 			"action": "อัปเดต",
@@ -764,7 +773,16 @@
 			"zoomIn": "ขยาย",
 			"zoomOut": "ย่อ",
 			"marks": "ทำเครื่องหมายส่วนที่เปลี่ยน",
-			"oldRig": "ใช้ไฟล์ .skel และไฟล์ .atlas เดิม: {names}"
+			"oldRig": "ใช้ไฟล์ .skel และไฟล์ .atlas เดิม: {names}",
+			"grafted": "สีหน้าที่เพิ่ม: {n}",
+			"graftCorrected": "แก้ไขอัตโนมัติ: {n}",
+			"graftUnfixed": "ต้องซ่อมด้วยตนเอง: {n}",
+			"graftRefused": "แอนิเมชันที่ไม่ได้เพิ่ม: {n}",
+			"graftGrown": "ขยายพื้นผิว {n} px",
+			"graftUnanchored": "สีหน้าใหม่อยู่ในตำแหน่งต้นฉบับ",
+			"expression": "สีหน้า {name} ({n}/{total})",
+			"previousExpression": "สีหน้าก่อนหน้า",
+			"nextExpression": "สีหน้าถัดไป"
 		},
 		"spine": {
 			"license": {
