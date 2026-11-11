@@ -320,6 +320,7 @@ async function refreshConfiguration(){
   if(revision!==configurationRevision)return;
   info=next;ctx.info=next;ctx.prefs=prefs;
   previewCache.configure(prefs);
+  NGUI.setTierTags?.(prefs?.prereleasePreviews === true);
   if (NGUI.setResourceContext?.(next.resourceContext)) forget();
   await renderNav(-1,{game:!!next.gameFound});
   if(revision!==configurationRevision)return;
@@ -603,6 +604,7 @@ async function start() {
   ui.catch(() => {}); // observed below after the strings and fonts
   ctx.prefs = await prefs;
   previewCache.configure(ctx.prefs);
+  NGUI.setTierTags?.(ctx.prefs?.prereleasePreviews === true);
   Roster.init(ctx.prefs?.roster);
   setStrings(info.language, await timed("strings", () => rpc("i18n.strings", { lang: info.language })));
   Loading.relabel();
@@ -636,6 +638,7 @@ async function start() {
   const settingsChanged = async (key, prefs) => {
     ctx.prefs = prefs;
     previewCache.configure(prefs);
+    NGUI.setTierTags?.(prefs?.prereleasePreviews === true);
     if (key === "cacheCleared" || key === "previewCache" || key === "cacheDir") return;
     if (key === "language") { await refreshLanguage(prefs.language); return; }
     Detail.applyPrefs(prefs);

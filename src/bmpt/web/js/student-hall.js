@@ -21,7 +21,7 @@ import { T, L, errorText, language } from "./i18n.js";
 import { clone, S, hitButton, text } from "./util.js";
 import { lazyThumbnail } from "./lazy-thumbnail.js";
 import { thumbnailScope } from "./thumbs.js";
-import { CONTROL, SMALL_BUTTON, SPACE } from "./ui-tokens.js";
+import { CONTROL, XS_BUTTON, SPACE } from "./ui-tokens.js";
 import { row } from "./ui-grid.js";
 
 let ctx, store, options, root, art, chrome, hits, subtitle, layouts, dialogue, fullscreen, sceneCamera;
@@ -114,7 +114,7 @@ function controls() {
   actions.push(["Fullscreen", "lobby.fullscreen", fullBox.x, width, () => fullscreen?.enter()]);
   if (editing()) {
     const width = (TOOLBAR.width - TOOLBAR.gap) / 2, left = TOOLBAR.right - TOOLBAR.width;
-    const pair = row([{ w: width, h: CONTROL.buttonS.h * S }, { w: width, h: CONTROL.buttonS.h * S }], { x: left, gap: TOOLBAR.gap });
+    const pair = row([{ w: width, h: CONTROL.buttonXS.h * S }, { w: width, h: CONTROL.buttonXS.h * S }], { x: left, gap: TOOLBAR.gap });
     actions.push(["Cancel", "popup.cancel", pair.boxes[0].x, width, () => cancelDraft(), true, 230],
       ["Save", "popup.save", pair.boxes[1].x, width, () => saveDraft(), true, 230]);
   }
@@ -126,7 +126,7 @@ function lobbyControl(name, caption, x, width, enabled = true, y = 145, fit = nu
   const iconAction = Object.hasOwn(ACTION_ICONS, name), iconOnly = name === "Mode" || name === "Fullscreen" || iconAction;
   tree.name = name; tree.pos = [(x + width / 2 - 960) / S, (540 - y) / S];
   tree.children = tree.children.filter((node) => (iconOnly ? ["Bg", "Icon"] : ["Bg", "Label_SpineCount"]).includes(node.name));
-  Object.assign(NGUI.find(tree, "Bg").widgets.find((w) => "sprite" in w), { w_: width / S, h_: iconOnly ? CONTROL.toolbar.h : CONTROL.buttonS.h });
+  Object.assign(NGUI.find(tree, "Bg").widgets.find((w) => "sprite" in w), { w_: width / S, h_: iconOnly ? CONTROL.toolbar.h : CONTROL.buttonXS.h });
   const dutyIcon = NGUI.find(layouts.lobby, `Front/NUITop/Top/Right/Btn_LobbyCharacter/${enabled ? "Able" : "Disable"}/Icon`);
   const tint = dutyIcon.widgets.find((widget) => "sprite" in widget).color;
   if (iconAction) {
@@ -142,9 +142,9 @@ function lobbyControl(name, caption, x, width, enabled = true, y = 145, fit = nu
     widget.w_ *= size; widget.h_ *= size; widget.color = tint;
     node.pos = [0, 0]; node.scale = [1, 1];
   } else {
-    const fitted = fit || NGUI.fitGroup([caption], CONTROL.buttonS.fs, SMALL_BUTTON.fsMin, width / S - 2 * CONTROL.buttonS.pad, 2, { maxH: CONTROL.buttonS.h - SMALL_BUTTON.boxInsetH })[0];
+    const fitted = fit || NGUI.fitGroup([caption], CONTROL.buttonXS.fs, XS_BUTTON.fsMin, width / S - 2 * CONTROL.buttonXS.pad, 2, { maxH: CONTROL.buttonXS.h - XS_BUTTON.boxInsetH })[0];
     const label = NGUI.find(tree, "Label_SpineCount"); label.pos = [0, 0]; label.scale = [1, 1];
-    text(tree, "Label_SpineCount", fitted.text, { w_: width / S - SMALL_BUTTON.boxInsetW, h_: CONTROL.buttonS.h - SMALL_BUTTON.boxInsetH, fontSize: fitted.fs, pivot: 4, align: 2 });
+    text(tree, "Label_SpineCount", fitted.text, { w_: width / S - XS_BUTTON.boxInsetW, h_: CONTROL.buttonXS.h - XS_BUTTON.boxInsetH, fontSize: fitted.fs, pivot: 4, align: 2 });
   }
   if (!enabled) for (const node of tree.children) if (node.name !== "Bg") for (const widget of node.widgets) if (widget.color) widget.color = tint;
   return tree;
@@ -155,8 +155,8 @@ async function renderChrome({ publish = true } = {}) {
   Object.assign(destination.style, { position: "absolute", inset: "0" });
   const actionHost = document.createElement("div"); Object.assign(actionHost.style, { position: "absolute", inset: "0" }); destination.append(actionHost);
   const actions = controls(), textActions = actions.filter((action) => action[6]);
-  const fits = textActions.length ? NGUI.fitGroup(textActions.map(([, key]) => T(key)), CONTROL.buttonS.fs, SMALL_BUTTON.fsMin,
-    textActions[0][3] / S - 2 * CONTROL.buttonS.pad, 2, { maxH: CONTROL.buttonS.h - SMALL_BUTTON.boxInsetH }) : [];
+  const fits = textActions.length ? NGUI.fitGroup(textActions.map(([, key]) => T(key)), CONTROL.buttonXS.fs, XS_BUTTON.fsMin,
+    textActions[0][3] / S - 2 * CONTROL.buttonXS.pad, 2, { maxH: CONTROL.buttonXS.h - XS_BUTTON.boxInsetH }) : [];
   const nodes = actions.map(([name, key, x, width, , enabled, y]) => lobbyControl(name, T(key), x, width, enabled !== false && pendingWrites === 0, y,
     fits[textActions.findIndex((action) => action[0] === name)]));
   const view = await NGUI.render(NGUI.node("Hall", [0, 0], [], nodes), actionHost, { scale: S, origin: [960, 540] });

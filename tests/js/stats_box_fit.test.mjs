@@ -353,10 +353,11 @@ test("a message with a line button sets its rows 38 down to 26 and shares one si
   const grouped = Popup.messageLayout({ lines: [shortRow, long, "Third row"], width: 1700, ok: "OK", fitTogether: [0, 1, 2] }).body.tree.children;
   assert.equal(new Set([0, 1, 2].map((i) => size(grouped, `Row_${i}`))).size, 1, "one size across the group");
   assert.ok(size(grouped, "Row_0") >= 26 && size(grouped, "Row_0") <= 38);
-  // rows without a button: the box's 64; with one: 156
+  // rows without a button: the box's 64; with one: the XS body and the shared gap, 124
   const rows = Popup.messageLayout({ lines: [shortRow, "Plain row", "Plain row two"], width: 1700, ok: "OK" }).body.tree.children;
   assert.equal(rows.find((n) => n.name === "Dot_0").pos[1] - rows.find((n) => n.name === "Dot_1").pos[1], 64);
-  assert.equal(-12 - rows.find((n) => n.name === "Dot_0").pos[1], 156);
+  assert.equal(-12 - rows.find((n) => n.name === "Dot_0").pos[1], Popup.MSG.rowButton);
+  assert.equal(Popup.MSG.rowButton, 124);
   // no box, no change: 52 down to 44, lines of 1.3
   const plain = Popup.messageLayout({ lines: ["Short row", long], width: 1700, ok: "OK" }).body.tree.children;
   assert.equal(size(plain, "Line_0"), 52);

@@ -344,9 +344,11 @@ test("asset-free messages use the same class, title, close, check and footer box
   near(parseFloat(action("close").style.left), (P.M.w - P.close.right - C.icon.h) * scale);
   near(parseFloat(action("close").style.top), P.close.top * scale);
   const footer = walk(box).find(e => e.className === "message-actions");
-  near(parseFloat(footer.style.top), (P.minH - P.footer.bottom - C.buttonL.h) * scale);
-  near(parseFloat(action("ok").style.width), C.buttonL.minW * scale);
-  near(parseFloat(action("ok").style.left) - parseFloat(action("cancel").style.left), (C.buttonL.minW + P.footer.gap) * scale);
+  // the default footer is M, its bodies as wide as the captions need
+  const bodyW = Popup.footerLayout(["Cancel", "OK"], P.M.w).bodyW;
+  near(parseFloat(footer.style.top), (P.minH - P.footer.bottom - C.buttonM.h) * scale);
+  near(parseFloat(action("ok").style.width), bodyW * scale);
+  near(parseFloat(action("ok").style.left) - parseFloat(action("cancel").style.left), (bodyW + P.footer.gap) * scale);
   action("check").click();
   assert.equal(action("check").getAttribute("aria-checked"), "true");
   action("close").click();

@@ -5,7 +5,7 @@ import {readFileSync} from 'node:fs';
 import {test} from 'node:test';
 import {otherMode,actionCaption,choiceLayout} from '../../src/bmpt/web/js/photography/camera.js';
 
-import { CONTROL, SMALL_BUTTON, SPACE } from "../../src/bmpt/web/js/ui-tokens.js";
+import { CONTROL, XS_BUTTON, SPACE } from "../../src/bmpt/web/js/ui-tokens.js";
 import { row } from "../../src/bmpt/web/js/ui-grid.js";
 const web=new URL('../../src/bmpt/web/js/',import.meta.url);
 const controller=readFileSync(new URL('photography/controller.js',web),'utf8');
@@ -28,7 +28,7 @@ function harness({mode='portrait',info}={}){
   const node=name=>({name,pos:[0,0],scale:[1,1],widgets:[{sprite:name,w_:1,h_:1}],children:[]});
   const tree={name:'Able_Count',children:[{...node('Bg'),widgets:[{sprite:'Bg',w_:156,h_:104,depth:1}]},{...node('Icon'),widgets:[{sprite:'Icon',w_:116,h_:84,depth:1}]}],widgets:[]};
   const find=(root,path)=>path.split('/').reduce((n,key)=>n.children.find(child=>child.name===key),root);
-  const env={CONTROL,SMALL_BUTTON,SPACE,row,mode,otherMode,bridge:{info:()=>info},S:1920/2960,P:key=>key,safe:fn=>fn,switchMode(){},
+  const env={CONTROL,XS_BUTTON,SPACE,row,mode,otherMode,bridge:{info:()=>info},S:1920/2960,P:key=>key,safe:fn=>fn,switchMode(){},
     clone:structuredClone,bindCorner:(...args)=>corners.push(args),alignIcon:async()=>{},
     document:{createElement:()=>({append(child){this.child=child;},dataset:{}})},
     NGUI:{layout:async()=>({}),find:(root,path)=>path==='Front/Right/Btn_RotateSpine/ConditionRoot/Able_Count'?tree:find(root,path),render:async(t)=>{drawn.push(t.name);return {};}},
@@ -52,10 +52,10 @@ test('a skin with both modes keeps the right edge and names the mode it switches
     await h.run(h.host);
     assert.equal(h.hits.length,1);
     const box=h.hits[0].box;assert.equal(box[0]+box[2],1890);assert.equal(box[2],102);assert.equal(box[3],82);
-    assert.ok(Math.abs(box[1]+box[3]/2-(25+CONTROL.buttonS.h*(1920/2960)/2))<1e-9);
+    assert.ok(Math.abs(box[1]+box[3]/2-(25+Math.max(CONTROL.buttonXS.h*(1920/2960),82)/2))<1e-9);
     assert.equal(h.hits[0].label,name);
     assert.equal(h.hits[0].dataset.photoAction,'Mode');
-    const [anchor,options]=h.corners[0].slice(1);assert.equal(anchor[0]+anchor[2],1890);assert.equal(anchor[1],25);assert.equal(anchor[3],CONTROL.buttonS.h*(1920/2960));assert.deepEqual(options,{corner:'top-right'});
+    const [anchor,options]=h.corners[0].slice(1);assert.equal(anchor[0]+anchor[2],1890);assert.equal(anchor[1],25);assert.equal(anchor[3],Math.max(CONTROL.buttonXS.h*(1920/2960),82));assert.deepEqual(options,{corner:'top-right'});
   }
 });
 test('the camera draws the mode button through that check, and switching still refuses without the mode',()=>{

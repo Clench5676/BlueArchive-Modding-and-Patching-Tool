@@ -16,7 +16,7 @@ import { spineAllowed } from "./spine-runtime.js";
 import { thumbnailScope, forget } from "./thumbs.js";
 import { modelThumbnail } from "./model-still.js";
 import { S } from "./util.js";
-import { FOOTER, SMALL_BUTTON, SPACE, TYPE, CONTROL, POPUP_FRAME } from "./ui-tokens.js";
+import { FOOTER, XS_BUTTON, SPACE, TYPE, CONTROL, POPUP_FRAME } from "./ui-tokens.js";
 import { row as layoutRow, stack as layoutStack, container } from "./ui-grid.js";
 import { ROW_W as OPTION_WIDTH, rowBase, radioRow } from "./settings-rows.js";
 import { BUTTON_BODY_H, loadImportLayouts, importArtwork, clipButtonPatterns, ROW_SCALE, ROW_WIDTH, ROW_HEIGHT, ROW_SELECTION, ROW_CHECK_TOP,
@@ -200,14 +200,14 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
     b.caption = caption; b.setAttribute("aria-label", b.accessibleName || caption); b.refresh();
   }
   const EMPTY_BOX = [1200, 100];   // each empty-list label's box (px), its text centred in it
-  // The row under the list is one row of buttonS controls (CONTROL.buttonS: 136 high, caption 48 down to TYPE.body.min), SPACE.m
+  // The row under the list is one row of buttonXS controls (CONTROL.buttonXS: 104 high, caption 40 down to XS_BUTTON.fsMin), SPACE.m
   // apart, drawn from the prefabs' 162-high bodies. Import stands out by its gold, not by its size. Its right edge is the list
   // tools'. The 902 is the row's centre line in the stage (px; the App's own: the row clears the bottom nav's 104 px area).
-  const FOOTER_ROW = { scale: CONTROL.buttonS.h * S / BUTTON_BODY_H, y: 902, right: 1848, wide: 330, width: SMALL_BUTTON.w * S,
-    gap: SPACE.m * S, size: { max: CONTROL.buttonS.fs * BUTTON_BODY_H / CONTROL.buttonS.h, min: TYPE.body.min * BUTTON_BODY_H / CONTROL.buttonS.h } };
+  const FOOTER_ROW = { scale: CONTROL.buttonXS.h * S / BUTTON_BODY_H, y: 902, right: 1848, wide: 330, width: XS_BUTTON.w * S,
+    gap: SPACE.m * S, size: { max: CONTROL.buttonXS.fs * BUTTON_BODY_H / CONTROL.buttonXS.h, min: XS_BUTTON.fsMin * BUTTON_BODY_H / CONTROL.buttonXS.h } };
   // The list's tools (the Items prefab's Btn_Receive bodies at TOOL_SCALE) fill the list's width, SPACE.m apart, each in the share of
   // it its caption needs in the longest language: [key, caption key, share].
-  const TOOL_SCALE = 0.34;
+  const TOOL_SCALE = 0.34 * CONTROL.buttonXS.h / CONTROL.buttonS.h;
   const TOOLBAR = [["files", "addFiles", 174], ["folder", "addFolder", 190], ["all", "all", 126], ["none", "none", 140],
     ["remove", "remove", 150], ["removeImported", "removeImported", 224], ["clear", "clear", 156]];
   // the tools, in px of the panel: a row under the list, level with it, as high as the body
