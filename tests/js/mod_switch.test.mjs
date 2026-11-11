@@ -1409,68 +1409,51 @@ test("Settings Spine value row opens the same read-only notice in every locale w
 
 const Impact = await import("../../src/bmpt/web/js/update-impact.js");
 
-test("an update's impact: Fix All over the held mods, each with Go To and Fix and what changed, the rest folded under rules", () => {
-  assert.equal(Impact.summary(null), null);
-  assert.equal(Impact.summary({ due: false, counts: { rebuilt: 1 } }), null);
+test("an update's impact as a list: the held mods, those applied again and the others, each a card with its details", () => {
   const mods = [
     { id: "1", target: "hoshino", core: "ch0101_spr", kind: "spr", impact: "rig_changed", label: "Bunny Hoshino", configured: true,
       changes: { repacked: true, animations: 3, textures: true } },
     { id: "2", target: "airi", core: "ch0200_spr", kind: "spr", impact: "rebuilt", label: "Airi", changes: {} },
+    { id: "3", target: "hina", core: "ch0063_home", kind: "lobby", impact: "gone", label: "Night" },
+    { id: "4", target: "aru", core: "aru_spr", kind: "spr", impact: "unchanged" },
+    { id: "5", target: "aris", core: "aris_spr", kind: "spr", impact: "rig_changed", repaired_id: "5r", configured: false },
   ];
   const nameOf = (e) => e.variant[0].toUpperCase() + e.variant.slice(1);
-  const result = { due: true, mods, counts: { unchanged: 4, rebuilt: 1, rig_changed: 1, new_parts: 0, gone: 0, unknown: 2 } };
-  const r = Impact.summary(result, nameOf);
-  assert.equal(r.title, "Mods Impacted by Game Update");
-  const item = (text) => ({ text, ...Impact.ITEM });
-  const plain = (lines) => lines.map(({ button, more, ...l }) => ({ ...l, ...(button ? { button: button.label } : {}),
-    ...(more?.length ? { more: more.map((b) => b.label) } : {}) }));
-  // what holds them, no count, with Fix All; each held mod: student, kind, its own name, Applied, Go To and Fix
-  const head = [{ text: "Official .skel or .atlas file changed, not applied until updated", button: "Fix All" },
-    { text: "Hoshino - Portrait - Bunny Hoshino - Applied", ...Impact.ITEM, button: "Go to", more: ["Fix and Apply"] },
-    { text: "Official Portrait changes: .atlas file layout changed, 3 new animations in the .skel file", indent: Impact.ITEM.indent, ...Impact.DETAIL }];
-  assert.equal(Impact.DETAIL.fontSize, 42);
-  // the other kinds after the game's dotted rule, folded under their line
-  assert.deepEqual(plain(r.lines), [...head, { rule: true }, { text: "Other affected mods", button: "Expand" }]);
-  const answer = (line, i = null) => { let closed = null; (i == null ? line.button : line.more[i]).fn({ close: (b) => { closed = b; } }); return closed; };
-  assert.equal(answer(r.lines[0]), Impact.FIX_ALL);
-  assert.equal(answer(r.lines[1]), `${Impact.GO}1`, "Go To names its mod");
-  assert.equal(answer(r.lines[1], 0), `${Impact.FIX}1`, "Fix names its mod");
-  assert.equal(answer(r.lines[4]), "expand:others");
-  assert.ok(r.lines[1].button.inline, "right after the name, as high as its text");
-  const open = Impact.summary(result, nameOf, { open: ["others"] });
-  assert.deepEqual(plain(open.lines), [...head, { rule: true }, { text: "Other affected mods", button: "Collapse" },
-    item("Rebuilt, .skel and .atlas files unchanged: 1"), { text: "Airi - Portrait", indent: Impact.SUB, button: "Go to" },
-    item("Not affected: 4"), item("Not determined: 2")]);
-  // the entries the check applied again: after a rule, folded under their count
-  const again = [entry("airi_spr", "updated", { configured: "mod:2" })];
-  const withAgain = Impact.summary(result, nameOf, { reapplied: again });
-  const at = withAgain.lines.findIndex((l) => l.text === "Overwritten by official files in the game update, applied again: 1");
-  assert.ok(at > 0 && withAgain.lines[at - 1].rule && withAgain.lines[at].button.label === "Expand");
-  const unfolded = Impact.summary(result, nameOf, { reapplied: again, open: ["reapplied"] });
-  assert.ok(unfolded.lines.some((l) => l.text === "Airi - Portrait - Applied" && l.button?.label === "Go to" && !l.more?.length));
-  // nothing held: the other kinds show at once, without the button
-  assert.deepEqual(Impact.summary({ due: true, mods: [], counts: { rebuilt: 2 } }).lines, [item("Rebuilt, .skel and .atlas files unchanged: 2")]);
-  // every held mod is listed (the message scrolls past its cap)
-  const many = Impact.summary({ due: true, counts: { rig_changed: 9 },
-    mods: Array.from({ length: 9 }, (_, i) => ({ id: `${i}`, target: `v${i}`, core: `c${i}_spr`, kind: "spr", impact: "rig_changed" })) });
-  assert.equal(many.lines.filter((l) => l.more?.length).length, 9);
-  // Settings' View tells the counts even when nothing is affected, and an empty library as such
-  assert.deepEqual(Impact.summary({ due: false, mods: [], counts: { unchanged: 3 } }, nameOf, { always: true }).lines, [item("Not affected: 3")]);
-  assert.deepEqual(Impact.summary({ due: false, mods: [], counts: {} }, nameOf, { always: true }).lines, [{ text: "No Mods" }]);
+  const outcome = { result: { due: true, mods }, reapplied: [entry("mika_spr", "updated", { configured: "mod:6" })] };
+  const tabs = Impact.tabMods(outcome);
+  // a held mod a repaired copy replaced is no longer listed; unchanged ones never are
+  assert.deepEqual([tabs.held.map((m) => m.id), tabs.reapplied.map((m) => m.id), tabs.others.map((m) => m.id)], [["1"], ["6"], ["2", "3"]]);
+  assert.deepEqual(Impact.TABS, ["held", "reapplied", "others"]);
+  assert.deepEqual(Impact.tabCaptions(tabs).map((c) => c.text), ["Needs Fix 1", "Applied Again 1", "Other Affected 2"]);
+  // a held card: the student's name, its kind and Applied as chips, the Files Changed badge, its own picture
+  const held = Impact.card(tabs.held[0], "held", nameOf);
+  assert.deepEqual([held.key, held.label, held.full, held.chips, held.badge.text],
+    ["1", "Hoshino", "Bunny Hoshino", ["Portrait", "Applied"], "Files Changed"]);
+  assert.ok(held.thumb && typeof held.big === "function");
+  // another kind's card says what happened to it
+  assert.equal(Impact.card(tabs.others[1], "others", nameOf).badge.text, "Gone");
+  assert.equal(Impact.card(tabs.reapplied[0], "reapplied", nameOf).badge, undefined);
+  // the details: the mod's name, what changed (without the kind's prefix), its state; Go To, the preview, Fix and Apply
+  const d = Impact.details(tabs.held[0], "held");
+  assert.equal(d.title, S("info.title.portrait"));
+  assert.deepEqual(d.fields, [["Official Changes", ".atlas file layout changed, 3 new animations in the .skel file"],
+    [S("field.status"), "Files Changed"]]);
+  assert.deepEqual(d.actions.map(([id]) => id), ["go", "preview", "fix"]);
+  assert.deepEqual(Impact.details(tabs.others[0], "others").actions.map(([id]) => id), ["go"]);
+  assert.equal(Impact.details(tabs.reapplied[0], "reapplied").fields.at(-1)[1], "Overwritten by official files, applied again");
   // every string in every locale
   try {
     for (const lang of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
       const ui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url))).webui;
       I18n.setStrings(lang, flat({ webui: ui }));
-      const counts = Object.fromEntries(Impact.KINDS.map((k) => [k, 1]));
-      const all = Impact.summary({ due: true, counts, mods: [] }, undefined, { open: ["others"] });
-      for (const line of [{ text: all.title }, ...all.lines.filter((l) => !l.rule)]) assert.ok(line.text && !/^mods\./.test(line.text), `${lang} ${line.text}`);
-      for (const k of ["held", "heldTitle", "heldBadge"]) assert.ok(typeof ui.mods[k] === "string" && ui.mods[k].length > 0, `${lang} ${k}`);
       const m = ui.mods.impact;
-      assert.ok(!("hint" in m) && m.reapplied.includes("{n}") && !("reset" in m) && !("driftUpdated" in ui.mods), lang);
-      assert.ok(!m.rigChanged.includes("{n}"), `${lang}: no count after the held line`);
-      for (const k of ["fix", "fixAll", "gateTitle", "gateAsk", "gateCheck", "checking", "reapplying", "sep"]) assert.ok(typeof m[k] === "string" && m[k].length > 0, `${lang} ${k}`);
+      for (const k of ["title", "fix", "preview", "noPreview", "fieldChanges", "stateReapplied", "kindRebuilt", "kindNewParts", "kindGone",
+        "gateTitle", "gateAsk", "gateCheck", "checking", "reapplying", "sep"]) assert.ok(typeof m[k] === "string" && m[k].length > 0, `${lang} ${k}`);
+      for (const k of ["tabHeld", "tabReapplied", "tabOthers", "fixSelected", "partial"]) assert.ok(m[k].includes("{n}"), `${lang} ${k}`);
       assert.ok(m.checkingMod.includes("{name}"), lang);
+      for (const gone of ["hint", "reset", "rigChanged", "fixAll", "reapplied", "others", "expand", "collapse", "gone", "newParts", "rebuilt", "unchanged", "unknown"])
+        assert.ok(!(gone in m), `${lang}: ${gone} no longer used`);
+      for (const k of ["held", "heldTitle", "heldBadge"]) assert.ok(typeof ui.mods[k] === "string" && ui.mods[k].length > 0, `${lang} ${k}`);
       const every = { repacked: true, animations: 2, rig: true, removed: true, added: true };
       for (const [kind, changes] of [["spr", every], ["lobby", { animations: 1 }], ["model", { textures: true }], ["other", { removed: true }]]) {
         const text = Impact.changeText({ kind, changes });
@@ -1568,11 +1551,11 @@ test("the start asks before the first screen, checks under the loading screen, a
     assert.equal(await gated, true);
     // the overwritten entry that needs no repair is applied again; the held one waits for its fix
     assert.deepEqual(called("mods.restoreDrift").at(-1), { entries: [{ install: GLOBAL, core: "airi_spr", state: "updated" }] });
-    // the summary once the first screen is in, the entry applied again folded under its count
+    // the list once the first screen is in: the held mod first, ticked, the entry applied again under its segment
     const shown = Impact.check();
-    await drawn(dialog, "ok");
-    assert.ok(walk(dialog).some((e) => (e.textContent || "").replace(/\s+/g, " ").includes("applied again: 1")), "the entry applied again, counted");
-    action(dialog, "ok").click();
+    await until(() => !prompt.hidden && walk(prompt).some((e) => e.dataset?.key === "b"), "the list");
+    assert.equal(walk(prompt).find((e) => e.dataset?.key === "b").getAttribute("aria-checked"), "true");
+    walk(prompt).find((e) => e.tagName === "BUTTON" && e.getAttribute("aria-label") === S("display.close")).click();
     await shown;
     assert.deepEqual(called("mods.impactSeen").at(-1), { install: GLOBAL, version: "v3" });
     assert.equal(await Impact.check(), null, "told once");
