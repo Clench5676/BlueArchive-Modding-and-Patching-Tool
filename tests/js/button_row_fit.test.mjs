@@ -268,3 +268,23 @@ for (const locale of LOCALES) test(`Hall portrait swap choice fits its existing 
   const fit=fitGroup([caption],40,26,room,2,{maxH:height})[0];
   assertGroup([fit],[caption],[room],height,`${locale} portrait choice`);
 });
+
+// --- the compatibility result's three repair choices (mod-compatibility.js repairButtons): footer "M", buttonM bodies
+// sharing the frame's width (popup.js footerScale), in the smallest frame the result popup can take ---
+const { POPUP_FRAME } = await import("../../src/bmpt/web/js/ui-tokens.js");
+for (const locale of LOCALES) test(`the three repair choices share one size and fit their buttonM bodies in ${locale}`, async () => {
+  const popup = await source("popup.js"), compatibility = await source("mod-compatibility.js");
+  assert.match(popup, /return n < 3 \? 1 : Math\.min\(1, \(w - 2 \* POPUP_FRAME\.footer\.side - POPUP_FRAME\.footer\.gap \* \(n - 1\)\) \/ n \/ control\.minW\);/);
+  assert.match(popup, /M: Object\.freeze\(\{ control: CONTROL\.buttonM, caption: Object\.freeze\(\{ fs: CONTROL\.buttonM\.fs, fsMin: TYPE\.body\.min,/);
+  assert.match(compatibility, /footer: "M"/);
+  document.documentElement.lang = locale;
+  const control = CONTROL.buttonM, captions = ["popup.cancel", "compatibility.remapAction", "compatibility.graftAction"]
+    .map((key) => text(locale, key));
+  for (const size of ["S", "M", "L"]) {
+    const w = POPUP_FRAME[size].w, n = captions.length;
+    const scale = Math.min(1, (w - 2 * POPUP_FRAME.footer.side - POPUP_FRAME.footer.gap * (n - 1)) / n / control.minW);
+    const width = control.minW * scale - 2 * control.pad, height = control.h - SPACE.m;
+    const fits = fitGroup(captions, control.fs, TYPE.body.min, width, 2, { maxH: height });
+    assertGroup(fits, captions, captions.map(() => width), height, `${locale} repair choices in ${size}`);
+  }
+});

@@ -6900,13 +6900,14 @@ class ModLibrary:
     # --- the graft of new official animations into a mod's own rig (bmpt.graft) ---
 
     def _graft_rigs(self, record: dict, paths: list[Path], inputs: dict,
-                    originals: dict[Path, Path]) -> dict[str, dict]:
+                    available: Iterable[Path]) -> dict[str, dict]:
         """The rigs a graft adds the official rig's new animations to, per official atlas name: the mod's own binary
         skeleton and atlas where it carries them and the official skeleton has animations it lacks (``kind`` "own";
         ``base``: the official rig the mod was made from, as the fingerprint recorded it or the official copy of the
         mod's date, where known), else the rig a texture-only portrait's textures were drawn for
         (``atlas_remap.old_rig_plan``; ``kind`` "oldRig", its own base). Each with the official ``skeleton`` name,
-        the ``animations`` it gains and the mod's ``pages`` (texture keys)."""
+        the ``animations`` it gains and the mod's ``pages`` (texture keys). ``available``: verified official files
+        that may be of the mod's date (``_dated_rig``)."""
         mod, official = inputs["mod"], inputs["official"]
         gains = atlas_remap.rig_gains(mod.atlases, mod.skeletons, official.atlases, official.skeletons)
         skeleton_of = atlas_remap.pair_atlases(official.skeletons, official.atlases)
@@ -6932,7 +6933,7 @@ class ModLibrary:
                 continue
             entry = painted.get(integrity.basename(name)) or {}
             if not isinstance(entry.get("skeleton"), str) or not isinstance(entry.get("text"), str):
-                entry = self._dated_rig(paths, [name], official.atlases, originals.values()).get(name) or {}
+                entry = self._dated_rig(paths, [name], official.atlases, available).get(name) or {}
             base = None
             if isinstance(entry.get("skeleton"), str) and isinstance(entry.get("text"), str):
                 with contextlib.suppress(ValueError):
@@ -6997,7 +6998,8 @@ class ModLibrary:
             originals = self._stage_official(targets, Path(temporary) / "official", pin)
             try:
                 inputs = self._remap_view(record, paths, targets, originals, pin)
-                rigs = self._graft_rigs(record, paths, inputs, originals)
+                sources = [self._official_for(target, pin) for target in targets]
+                rigs = self._graft_rigs(record, paths, inputs, sources)
             except atlas_remap.RemapError as error:
                 raise ServiceError(error.code, **error.params) from error
             except (ValueError, KeyError, EOFError, OSError) as error:
