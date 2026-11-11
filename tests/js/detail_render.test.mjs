@@ -1809,7 +1809,7 @@ function assertPhotographyCorner(mode) {
   const hit = walk(launcher).find((el) => el.tagName === 'BUTTON'), scale = 1920 / 2960;
   // the fullscreen views' one button size (BL-188)
   const width = 171 * scale, height = 126 * scale;
-  const expected = [960 + 1352 * scale - width / 2 - (mode === 'portrait' ? width + 26 : 0),
+  const expected = [960 + 1352 * scale - width / 2 - (mode === 'portrait' ? width + 20 * scale : 0), // SPACE.m apart (BL-188)
     540 - (-112.5 - 658 + 61.1) * scale - height / 2, width, height];
   ['left', 'top', 'width', 'height'].forEach((key, index) => assert.ok(Math.abs(parseFloat(hit.style[key]) - expected[index]) < 0.02, `Photography ${key} follows the existing ${mode} corner`));
 }

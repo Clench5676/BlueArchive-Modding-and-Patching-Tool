@@ -122,7 +122,7 @@ for (const locale of ['en-US', 'zh-CN', 'zh-TW', 'ja-JP', 'ko-KR', 'th-TH']) for
       const top=env.toolbarLayout().top;
       const rightCandidate = [width / scale - CORNER_MARGIN - top[2], CORNER_MARGIN, top[2], top[3]];
       near(width / scale - rotate[0] - rotate[2], native && overlap(rightCandidate, native) ? (width - native.left) / scale + CORNER_MARGIN : CORNER_MARGIN);
-      near(guide[1]+guide[3]/2, rotate[1]+rotate[3]/2); near(grid[1], guide[1]); near(grid[0] - guide[0] - guide[2], SPACE.m*S); near(rotate[0] - grid[0] - grid[2], SPACE.l*S);
+      near(guide[1]+guide[3]/2, rotate[1]+rotate[3]/2); near(grid[1], guide[1]); near(grid[0] - guide[0] - guide[2], SPACE.m*S); near(rotate[0] - grid[0] - grid[2], SPACE.m*S);
       near(guide[2], 196); near(grid[3], FULLSCREEN_BUTTON.h*S); near(rotate[2], FULLSCREEN_BUTTON.w*S); near(rotate[3], FULLSCREEN_BUTTON.h*S);
       near(rotate[2],choices[2]);near(rotate[3],choices[3]);near(gallery[2],choices[2]);near(gallery[3],choices[3]);
       near(gallery[0], CORNER_MARGIN); near(height / scale - gallery[1] - gallery[3], CORNER_MARGIN);

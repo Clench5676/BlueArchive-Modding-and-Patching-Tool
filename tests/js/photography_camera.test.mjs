@@ -63,7 +63,7 @@ test('composed occlusion control keeps the right edge, centred neighbours and sc
   const boxes=new Function('CONTROL','XS_BUTTON','SPACE','FULLSCREEN_BUTTON','row','S',`${code};return photographyToolbarLayout();`)(CONTROL,XS_BUTTON,SPACE,FULLSCREEN_BUTTON,row,S);
   const near=(a,b)=>assert.ok(Math.abs(a-b)<1e-9,`${a} != ${b}`);
   near(boxes.top[0]+boxes.top[2],1890);near(boxes.grid[0]-boxes.occlusion[0]-boxes.occlusion[2],SPACE.m*S);
-  near(boxes.mode[0]-boxes.grid[0]-boxes.grid[2],SPACE.l*S);
+  near(boxes.mode[0]-boxes.grid[0]-boxes.grid[2],SPACE.m*S); // one gap between every two buttons (BL-188)
   for(const scale of [.75,1,1.25,1.5,2])for(const box of [boxes.occlusion,boxes.grid,boxes.mode]){
     assert.ok(box[2]*scale>=44);assert.ok(box[3]*scale>=44);
     near((box[1]+box[3]/2)*scale,(25+FULLSCREEN_BUTTON.h*S/2)*scale); // every control of the row has the fullscreen buttons' one height (BL-188)

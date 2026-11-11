@@ -49,7 +49,7 @@ let whiteTemplate;
 function photographyToolbarLayout(){
   const textH=FULLSCREEN_BUTTON.h*S,icon={w:FULLSCREEN_BUTTON.w*S,h:FULLSCREEN_BUTTON.h*S};
   const texts=row([{w:196,h:textH},{w:196,h:textH}],{gap:SPACE.m*S});
-  const top=row([texts,icon],{gap:SPACE.l*S});
+  const top=row([texts,icon],{gap:SPACE.m*S}); // one gap between every two buttons (BL-188)
   const x=1890-top.w,y=25,asBox=b=>[b.x,b.y,b.w,b.h];
   const textBoxes=texts.boxes.map(b=>asBox({...b,x:x+top.boxes[0].x+b.x,y:y+top.boxes[0].y+b.y}));
   const mode=asBox({...top.boxes[1],x:x+top.boxes[1].x,y:y+top.boxes[1].y});
@@ -117,10 +117,10 @@ export async function visualEntry(on){
   const reset=NGUI.find(corner,'Btn_RefreshPos'),body=NGUI.find(reset,'Btn_RefreshPos');
   const at=anchoredCentre(corner.widgets.find(w=>w.anchors))||corner.pos;
   const width=FULLSCREEN_BUTTON.w*S,height=FULLSCREEN_BUTTON.h*S;
-  const x=960+(at[0]+reset.pos[0]+body.pos[0])*S-width/2-(bridge.info().mode==='lobby'?0:width+26);
+  const gap=SPACE.m*S,x=960+(at[0]+reset.pos[0]+body.pos[0])*S-width/2-(bridge.info().mode==='lobby'?0:width+gap);
   const y=540-(at[1]+reset.pos[1]+body.pos[1])*S-height/2;
   const host=document.createElement('div');host.id='photo-launcher';stage().append(host);
-  await whiteButton(host,'Entry',P('open'),[x,y,width,height],()=>open(bridge),{icon:'Combat_Icon_Camera',atlas:'Combat',corner:'bottom-right',anchorBox:[x+(bridge.info().mode==='lobby'?0:width+26),y,width,height]});
+  await whiteButton(host,'Entry',P('open'),[x,y,width,height],()=>open(bridge),{icon:'Combat_Icon_Camera',atlas:'Combat',corner:'bottom-right',anchorBox:[x+(bridge.info().mode==='lobby'?0:width+gap),y,width,height]});
 }
 async function open(hooks){
   if(active)return;bridge=hooks;const scope=++generation;sessionVariant=hooks.info().variant;

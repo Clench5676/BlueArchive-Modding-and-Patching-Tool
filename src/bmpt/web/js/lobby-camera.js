@@ -16,7 +16,7 @@ import * as Loading from "./loading.js";
 import { prepareBack } from "./visual-mode.js";
 import { anchoredCentre } from "./visual-view.js";
 import { buttonCenter } from "./student-hall-icons.js";
-import { FULLSCREEN_BUTTON } from "./ui-tokens.js";
+import { FULLSCREEN_BUTTON, SPACE } from "./ui-tokens.js";
 
 const STAGE = { w: 1920, h: 1080 };
 
@@ -35,14 +35,15 @@ export async function entry(on, bridge) {
   const at = anchoredCentre(corner.widgets.find((w) => w.anchors)) || corner.pos;
   // the fullscreen views' one button size (ui-tokens.js FULLSCREEN_BUTTON, BL-188)
   const width = FULLSCREEN_BUTTON.w * S, height = FULLSCREEN_BUTTON.h * S;
-  const x = 960 + (at[0] + reset.pos[0] + body.pos[0]) * S - width / 2 - (width + 26);
+  // the gap between every two fullscreen buttons (SPACE.m, as the photography toolbar's)
+  const gap = SPACE.m * S, x = 960 + (at[0] + reset.pos[0] + body.pos[0]) * S - width / 2 - (width + gap);
   const y = 540 - (at[1] + reset.pos[1] + body.pos[1]) * S - height / 2;
   if (my !== generation || active) return;
   const host = document.createElement("div");
   host.id = "camera-launcher";
   stage().append(host);
   await whiteButton(host, "CameraEntry", T("lobby.cameraOpen"), [x, y, width, height], open,
-    { icon: "Cafe_Icon_Video", atlas: "Common", corner: "bottom-right", anchorBox: [x + width + 26, y, width, height] });
+    { icon: "Cafe_Icon_Video", atlas: "Common", corner: "bottom-right", anchorBox: [x + width + gap, y, width, height] });
 }
 
 async function open() {
