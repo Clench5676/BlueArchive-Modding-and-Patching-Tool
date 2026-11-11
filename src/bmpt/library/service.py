@@ -3263,7 +3263,7 @@ class ModLibrary:
             entry = entries[record["id"]]
             out["mods"].append({"id": entry.id, "label": entry.label, "target": entry.target, "kind": entry.kind,
                                 "core": entry.core, "impact": found, "changes": changes,
-                                "configured": f"mod:{entry.id}" in configured})
+                                "configured": f"mod:{entry.id}" in configured, "repaired_id": entry.repaired_id})
         out["due"] = bool(out["mods"])
         if not out["due"] and not force:
             self.impact_seen(pin.key, version)
