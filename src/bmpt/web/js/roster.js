@@ -552,6 +552,14 @@ function warm() {
   }, 2500);
 }
 
+// The roster's prefabs. After a game update or a cache clear the populator takes over a second to export, so a start
+// with a game asks for them once its first screen is up (preload, from main.js start()); NGUI.layout shares that
+// request with show() and drops a failed one, which show() then asks for again.
+const PREFABS = ["UICharacterCollection", "UICharacterCollectionPopulatorUnit", "UIPopup_GachaCharList.Btn_Checkbox"];
+const prefabs = () => Promise.all(PREFABS.map((name) => NGUI.layout(name)));
+// Never awaited: a failure surfaces when show() asks again.
+export function preload() { prefabs().catch(() => {}); }
+
 // Show the roster from its saved data. Required UI and available pictures decode
 // before reveal. Offscreen rows do not extend that barrier.
 export async function show(context, rosterData) {
@@ -561,9 +569,7 @@ export async function show(context, rosterData) {
   await NGUI.init();
   countIcons ||= iconsOf(NGUI.atlasIndex());
   if (!layouts) {
-    const [collection, unit, checkbox] = await Promise.all([
-      NGUI.layout("UICharacterCollection"), NGUI.layout("UICharacterCollectionPopulatorUnit"), NGUI.layout("UIPopup_GachaCharList.Btn_Checkbox"),
-    ]);
+    const [collection, unit, checkbox] = await prefabs();
     layouts = { collection, checkbox, card: find(unit, "Grid/UICollectCard"), bar: find(unit, "UnownedBG") };
   }
   if (rosterData !== data || dirty) {
