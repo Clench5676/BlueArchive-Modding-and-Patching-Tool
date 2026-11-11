@@ -324,6 +324,12 @@ async function fix(mods, nameOf, { review = false } = {}) {
       const report = await Loading.hold(() => Compatibility.forUpdate(mod.id, mod.label, subject), { all: true });
       if (!report) continue;
       if (!(Compatibility.eligible(mod) && Compatibility.canRemap(mod.id, mod))) {
+        // drawn on a rig the App does not have: an update would change nothing, so it stays held; the preview shows
+        // the compatibility result that says why, as the student page's Update does
+        if (Compatibility.rigUnknown(mod.id)) {
+          if (review) await Compatibility.show(report);
+          continue;
+        }
         // the asset update moves the mod's assets onto the new parts as they are: it looks the same after, said so
         if (review) {
           const answer = await Popup.message({ title: T("mods.impact.preview"), lines: [T("mods.impact.noPreview")],
