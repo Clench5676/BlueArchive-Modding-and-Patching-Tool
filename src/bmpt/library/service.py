@@ -39,7 +39,7 @@ from ..gameassets.preview_reads import PreviewReads
 from ..logging_utils import log_failure
 from ..openfiles import remove_tree, temporary_directory
 from . import profiles as profiles_mod
-from . import fingerprint, integrity, safety, staging
+from . import fingerprint, integrity, safety, staging, tested_build
 from .install import Action, PlannedFile, PlannedGroup, backup_file, install_staged
 from .rebuild import rebuild
 from . import targets as resolver
@@ -76,7 +76,7 @@ COSTUME_PREVIEWS = 4  # costume previews kept in built/previews (one folder per 
 COSTUME_VERDICTS = 4000  # costume verdicts kept in costume-verdicts.json, newest first
 RECOVERY_RETRY = 60.0  # seconds before a read tries a recovery that failed (or waits) again, if the journals stay
 # a toggle's refusals that stop it: every later write would fail the same way
-STOPPING = ("game_running", "game_status_unavailable", "steam_busy", "folder_changed", "classic_open")
+STOPPING = ("game_running", "game_status_unavailable", "steam_busy", "folder_changed", "classic_open", "untested_build")
 
 
 def _game_folder(game_file: Path) -> Path:
@@ -659,6 +659,7 @@ class ModLibrary:
         self._originals_cache: tuple[Any, dict[str, int]] | None = None
         self._backfill_misses: set[tuple] = set()
         self._impacts: dict[tuple, str] = {}  # judged impacts of game updates (_impact)
+        self._untested_ok: dict[tuple[str, str], set[str]] = {}  # confirmed cores of an untested build (confirm_untested)
         self._maps_cache: tuple[tuple, Any] | None = None
         self.profiles = Profiles(self.root)
         self.profiles.gate = self._check_writes  # no change of the configuration while writes are refused
@@ -3250,6 +3251,82 @@ class ModLibrary:
         with _errors("impact_seen"):
             self.profiles.update(change)
 
+    # --- an untested game build (tested_build) ---
+
+    def untested_version(self, pin: Pin) -> str | None:
+        """An install's resource version when the App was not tested on it: its server has tested data and the version
+        is not among the tested ones. None otherwise (tested, no data for the server, or the version unreadable)."""
+        tested = tested_build.for_server(pin.server)
+        if tested is None:
+            return None
+        version = self.resource_version(pin)
+        return None if version is None or version in tested.versions else version
+
+    def _untested_cores(self, pin: Pin, targets: Iterable[Path], version: str | None) -> list[str]:
+        """The cores of ``targets`` the untested build of resource version ``version`` (``untested_version``) changed
+        and the user has not confirmed writing: a core with a bundle whose name the tested build does not have (a part
+        rebuilt under a new CRC, or a new part). Names only."""
+        targets = list(targets)
+        if version is None or not targets:
+            return []
+        tested = tested_build.for_server(pin.server)
+        confirmed = self._untested_ok.get((pin.key, version), set())
+        index = self._index(pin)
+        changed = []
+        for core in sorted({core_of(path.name) for path in targets}):
+            names = [path.name for path in index.get(core) or [path for path in targets if core_of(path.name) == core]]
+            if core not in confirmed and any(not tested.has(name) for name in names):
+                changed.append(core)
+        return changed
+
+    def _untested_entry(self, pin: Pin, core: str, targets: Sequence[Path], variant: str | None = None,
+                        kind: str | None = None) -> dict[str, Any]:
+        """An entry an untested build's confirmation names: {install, core, variant, kind}, with its file names for a
+        generic part."""
+        kind = kind or self._kind(core, pin) or "spr"
+        entry = {"install": pin.key, "core": core, "variant": variant or self._core_map(pin).key(core) or core,
+                 "kind": kind}
+        if kind == "other":
+            entry["files"] = [{"file": path.name} for path in targets]
+        return entry
+
+    def _check_untested(self, writes: Sequence[tuple[Pin, dict[str, Any], Sequence[Path]]]) -> None:
+        """Refuse writes onto cores an untested build changed until the user confirms them (``untested_build``, a
+        refusal of the moment: nothing is written or configured). ``writes`` holds, per entry to write, its install,
+        the entry the refusal names (``_untested_entry``) and its target files. The refusal's ``confirm``
+        ({install: {version, cores}}) is what ``confirm_untested`` takes back."""
+        entries: list[dict[str, Any]] = []
+        confirm: dict[str, dict[str, Any]] = {}
+        versions: dict[str, str | None] = {}  # read once per install
+        for pin, entry, targets in writes:
+            if pin.key not in versions:
+                versions[pin.key] = self.untested_version(pin)
+            version = versions[pin.key]
+            cores = self._untested_cores(pin, targets, version)
+            if not cores:
+                continue
+            entries.append(entry)
+            item = confirm.setdefault(pin.key, {"version": version, "cores": []})
+            item["cores"] = sorted({*item["cores"], *cores})
+        if entries:
+            logger.info("Untested game build: %d entries need a confirmation", len(entries))
+            raise ServiceError("untested_build", entries=entries, confirm=confirm)
+
+    def confirm_untested(self, confirm: Mapping[str, Mapping[str, Any]]) -> None:
+        """The user confirmed writing onto the cores an ``untested_build`` refusal named ({install: {version, cores}}):
+        writes onto them pass while the program runs and the install keeps that resource version."""
+        if not isinstance(confirm, Mapping) or len(confirm) > 64:
+            raise ServiceError("bad_params", key="confirm")
+        for install, item in confirm.items():
+            cores = item.get("cores") if isinstance(item, Mapping) else None
+            version = item.get("version") if isinstance(item, Mapping) else None
+            if (not isinstance(install, str) or not isinstance(version, str) or not version
+                    or not isinstance(cores, list) or len(cores) > 65536
+                    or not all(isinstance(core, str) and core for core in cores)):
+                raise ServiceError("bad_params", key="confirm")
+            self._untested_ok.setdefault((install, version), set()).update(cores)
+            logger.info("Untested game build: %d cores confirmed in %s", len(cores), install)
+
     def _backfill_built_against(self, record: dict[str, Any], pin: Pin | None) -> dict | None:
         """A fingerprint for a mod stored without one, from evidence alone: the official files of its core (the
         install's current parts and the kept originals) whose atlases, skeletons and textures the mod's own files
@@ -4027,11 +4104,14 @@ class ModLibrary:
     def _commit(self, replacements: dict[Path, Path], source: str, log: LogFunc,
                 progress: ProgressCallback | None = None, pin: Pin | None = None, prune: bool = True,
                 build_keys: dict[Path, str] | None = None, create_backup: bool = False,
-                expected: dict[Path, str] | None = None, kept_current: list[str] | None = None) -> list[Path]:
+                expected: dict[Path, str] | None = None, kept_current: list[str] | None = None,
+                untested: bool = True) -> list[Path]:
         """Write prepared files over game files as one unit, keeping what they replace: the official file in
         originals/ (once), a file kept nowhere else as a library mod (_keep_replaced). Every written part is rolled
         back on failure. With ``prune``, kept originals no longer needed are deleted afterwards, whatever the
-        outcome; bulk operations prune once at their end."""
+        outcome; bulk operations prune once at their end. ``untested``: a write of another source than official onto
+        a core an untested build changed needs the user's confirmation (``_check_untested``); False for a rollback
+        that puts back what was there."""
         pin = self._current(pin)
         deletion = getattr(self, '_asset_deletion', None)
         if deletion:
@@ -4039,7 +4119,8 @@ class ModLibrary:
         try:
             with self._transaction_lock():
                 return self._write(replacements, source, log, progress, pin, build_keys,
-                                   create_backup=create_backup, **({"expected": expected} if expected else {}),
+                                   create_backup=create_backup, untested=untested,
+                                   **({"expected": expected} if expected else {}),
                                    **({"kept_current": kept_current} if kept_current is not None else {}))
         finally:
             if prune:
@@ -4293,7 +4374,7 @@ class ModLibrary:
     def _write(self, replacements: dict[Path, Path], source: str, log: LogFunc,
                progress: ProgressCallback | None, pin: Pin, build_keys: dict[Path, str] | None = None,
                *, create_backup: bool = False, expected: dict[Path, str] | None = None,
-               kept_current: list[str] | None = None) -> list[Path]:
+               kept_current: list[str] | None = None, untested: bool = True) -> list[Path]:
         dirs = list(pin.dirs)
         for target, prepared in replacements.items():
             check_resource_path(target, dirs)
@@ -4301,6 +4382,10 @@ class ModLibrary:
                 raise ServiceError("bundle_invalid", file=prepared)
         changed = {target: prepared for target, prepared in replacements.items()
                    if self._hashes.get(target).sha1 != self._hashes.get(prepared).sha1}
+        if changed and untested and source != "official":
+            # the last check: every write path asked before it built (apply, a toggle's plan); one that did not, asks
+            written = sorted(changed)
+            self._check_untested([(pin, self._untested_entry(pin, core_of(written[0].name), written), written)])
         fingerprints = {target: self._hashes.get(prepared) for target, prepared in replacements.items()}
         tails = {target: read_tail(prepared) if fingerprints[target].trailing else None
                  for target, prepared in replacements.items()}
@@ -4790,6 +4875,8 @@ class ModLibrary:
         from . import lobby_camera
 
         camera = lobby_camera.camera_of(self, source) if kind == "lobby" else None
+        if source != "official":
+            self._untested_apply(variant_key, source, kind, self._current(pin), camera)
         if camera is not None:
             return lobby_camera.apply(self, variant_key, camera, log, progress, self._current(pin), create_backup)
         result = self._apply_choice(variant_key, source, log, progress, kind, pin, create_backup=create_backup)
@@ -4943,6 +5030,25 @@ class ModLibrary:
             logger.info("Mod apply prune: %.3f s; total: %.3f s", time.perf_counter() - pruning,
                         time.perf_counter() - started)
 
+    def _untested_apply(self, variant_key: str, source: str, kind: Kind | None, pin: Pin,
+                        camera: dict[str, Any] | None) -> None:
+        """An apply's confirmation on an untested build (``_check_untested``), before anything is built or configured:
+        the targets of each kind it writes, a camera's art and prefab together. Nothing to confirm while mods are off,
+        when an apply only configures."""
+        if self.untested_version(pin) is None or not profiles_mod.enabled(self.profiles.read()):
+            return
+        if camera is not None:  # one entry, the lobby, for the art and the prefab it holds
+            groups = [(variant_key, "lobby", [*self._game_files(variant_key, "lobby", pin),
+                                              *self._game_files(camera["target"], "other", pin)])]
+        elif kind == "other":
+            groups = [(variant_key, "other", self._game_files(variant_key, "other", pin))]
+        else:
+            record = self._records.get(source[4:]) if source.startswith("mod:") else None
+            kinds = (kind,) if kind else ((record["kind"],) if record else ("spr", "lobby"))
+            groups = [(variant_key, current, self._game_files(variant_key, current, pin)) for current in kinds]
+        self._check_untested([(pin, self._untested_entry(pin, core_of(targets[0].name), targets, variant, current),
+                               targets) for variant, current, targets in groups if targets])
+
     def _defer(self, pin: Pin, variant_key: str, kinds: dict[str, str], source: str | None) -> ApplyResult:
         """While mods are off: configure the source without writing, applied when mods are on."""
         self._configure(pin, variant_key, kinds, source)
@@ -4951,7 +5057,7 @@ class ModLibrary:
         return ApplyResult(variant_key, source or "official", [], unchanged=True, deferred=True)
 
     def _apply_other(self, target: str, source: str, log: LogFunc, progress: ProgressCallback | None,
-                     pin: Pin, create_backup: bool) -> ApplyResult:
+                     pin: Pin, create_backup: bool, *, untested: bool = True) -> ApplyResult:
         if not source.startswith("mod:"):
             raise ServiceError("source_unsupported", source=source)
         record = self._record(source[4:])
@@ -4971,7 +5077,8 @@ class ModLibrary:
                 replacements = self._cached_build(self._paths(record), targets, pin,
                     lambda: self._install_direct(record, targets, Path(temporary), log, progress, pin), build_keys)
                 files = self._commit(replacements, source, log, progress, pin, prune=False,
-                                     build_keys=build_keys, create_backup=create_backup, kept_current=kept_current)
+                                     build_keys=build_keys, create_backup=create_backup, kept_current=kept_current,
+                                     untested=untested)
             self._configure(pin, target, kinds, source)
             self._selection_error(pin, kinds, None)
             for slot in kinds:
@@ -6012,6 +6119,8 @@ class ModLibrary:
                 if not enabled:
                     self._check_space(self._off_space(plan, found, config))
             hidden = self._hidden_items(config) if drift is None else []
+            if enabled:  # an On, its Retry or Apply Mod Configuration: confirmed before the intent changes
+                self._untested_plan(plan, config, drift is not None)
         stamp = now()
         if drift is None:
             def intent(data: dict) -> None:
@@ -6080,6 +6189,26 @@ class ModLibrary:
         return ToggleResult(bool(enabled), result["done"], result["adopted"], result["failed"], result["stuck"],
                             result["left"], result["skipped"], result["dropped"], sorted(cores), sorted(kinds),
                             result["held"])
+
+    def _untested_plan(self, plan: Sequence[tuple[Pin, str]], config: dict | None, drift: bool) -> None:
+        """The confirmation of a toggle's writes on an untested build (``_check_untested``): every planned entry
+        configured with a source other than official, but those an On or its Retry holds for a changed rig
+        (``_hold``)."""
+        writes = []
+        untested = {key: self.untested_version(pin) for key, pin in {pin.key: pin for pin, _core in plan}.items()}
+        for pin, core in plan:
+            if untested[pin.key] is None:
+                continue
+            entry = ((((config or {}).get("folders") or {}).get(pin.key) or {}).get("configured") or {}).get(core) or {}
+            source = entry.get("source")
+            if not isinstance(source, str) or not source or source == "official" or (
+                    not drift and self._hold(pin, source)):
+                continue
+            targets = self._spine_parts(self._core_map(pin).slot(core), pin)
+            if targets:
+                writes.append((pin, self._untested_entry(pin, core, targets, entry.get("variant"), entry.get("kind")),
+                               targets))
+        self._check_untested(writes)
 
     def _save_outcomes(self, outcomes: dict[tuple[str, str], str | None]) -> None:
         """The unfinished list after reached entries: an entry that holds its intent leaves, another keeps (or gets)

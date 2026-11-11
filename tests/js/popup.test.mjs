@@ -351,6 +351,40 @@ test('photo deletion warnings fit the UIPopup_Sort frame in all six locales', as
   } finally { setStrings('en-US',Object.fromEntries(strings(english))); }
 });
 
+test('the untested game version confirmation fits the UIPopup_Sort frame in all six locales', async () => {
+  const NGUI = await import('../../src/bmpt/web/js/ngui.js');
+  const bounds = el => { const [left, top, width, height] = NGUI.rect(el); return {left, top, right:left+width, bottom:top+height}; };
+  const item = { marker: "\u2022", markerGap: 44, indent: 52 };
+  try {
+    for(const locale of ['en-US','th-TH','ko-KR','ja-JP','zh-CN','zh-TW']){
+      const ui=JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`,import.meta.url),'utf8')).webui;
+      setStrings(locale,Object.fromEntries(strings(ui)));
+      // mod-switch.js untestedLines: the count, then six entries at most and the rest counted
+      const names=Array.from({length:6},(_,i)=>`Hoshino (First Year, School Swimsuit) ${i} - ${ui.tab.lobby}`);
+      const lines=[{text:ui.mods.untested.affected.replace('{n}','8')},...[...names,'+2'].map(text=>({text,...item}))];
+      const pending=Popup.message({title:ui.mods.untested.title,lines,ok:ui.mods.untested.apply,cancel:ui.popup.cancel,plain:true});
+      const ok=await drawn(dialog,'ok');
+      const part=path=>walk(dialog).find(el=>el.dataset.path===`Center/Popup/${path}`);
+      const frame=bounds(part('Base/BG'));
+      const buttons=['Btn_Ok','Btn_Cancel'].map(name=>bounds(part(`Btn/${name}/BG (1)`)));
+      for(let i=0;i<lines.length;i++){
+        const line=part(`Lines/Line_${i}`),text=bounds(line);
+        assert.ok(line,`${locale}: line ${i}`);
+        assert.ok(text.left>=frame.left&&text.right<=frame.right,`${locale}: line ${i} inside the frame`);
+        assert.ok(text.bottom<Math.min(...buttons.map(b=>b.top)),`${locale}: line ${i} above the buttons`);
+      }
+      // the two captions: one size, at most two lines inside the slanted bodies' 472-unit room (0.6 em stand-in glyphs)
+      const captions=['Btn_Ok','Btn_Cancel'].map(name=>part(`Btn/${name}/Label_Locale`));
+      assert.equal(new Set(captions.map(el=>el.style.fontSize)).size,1,`${locale}: one caption size`);
+      for(const caption of captions){
+        const fs=parseFloat(caption.style.fontSize),rows=caption.textContent.split('\n');
+        assert.ok(rows.length<=2&&rows.every(row=>row.length*.6*fs<=472+.01),`${locale}: ${caption.textContent} at ${fs}`);
+      }
+      ok.click();await pending;
+    }
+  } finally { setStrings('en-US',Object.fromEntries(strings(english))); }
+});
+
 test("shared message sizes and scrolling preserve complete paths with and without row buttons", async () => {
   const NGUI = await import("../../src/bmpt/web/js/ngui.js");
   // long enough to scroll at the light box's smaller type as well

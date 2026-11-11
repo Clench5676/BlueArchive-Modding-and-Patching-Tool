@@ -754,6 +754,35 @@ test("the scan consent renders the two replacement sections in every locale and 
   } finally { I18n.setStrings("en-US", strings); }
 });
 
+test("an untested game build: the confirmation names the entries, Apply Anyway confirms and calls again, Cancel leaves it", async () => {
+  const entries = Array.from({ length: 8 }, (_, i) => ({ install: "/g", core: `c${i}_spr`, variant: `c${i}`, kind: i ? "spr" : "lobby" }));
+  const lines = MS.untestedLines({ entries }, (e) => e.variant.toUpperCase());
+  assert.equal(lines[0].text, "Affected by the game update: 8");
+  assert.deepEqual(lines.slice(1).map((l) => l.text), ["C0 - Memorial Lobby", "C1 - Portrait", "C2 - Portrait", "C3 - Portrait",
+    "C4 - Portrait", "C5 - Portrait", "+2"]);
+  assert.ok(lines.slice(1).every((l) => l.marker === "\u2022"));
+  const err = { code: "untested_build", params: { entries: entries.slice(1, 2), confirm: { "/g": { version: "v", cores: ["c1_spr"] } } } };
+  const params = { enabled: true, expect: false };
+  let retried = 0;
+  let refusal = MS.refused(err, "mods.toggle", params, () => { retried++; });
+  await drawn(dialog, "ok");
+  assert.ok(walk(dialog).some((e) => e.textContent === S("mods.untested.title")));
+  assert.ok(labels(dialog).includes(S("mods.untested.apply")));
+  action(dialog, "ok").click();
+  await refusal;
+  assert.deepEqual(called("mods.confirmUntested").at(-1), { confirm: err.params.confirm });
+  assert.equal(retried, 1);
+  refusal = MS.refused(err, "mods.toggle", params, () => { retried++; });
+  await drawn(dialog, "cancel");
+  action(dialog, "cancel").click();
+  await refusal;
+  assert.equal(called("mods.confirmUntested").length, 1);
+  assert.equal(retried, 1, "Cancel: nothing confirmed, nothing written");
+  // a caller with its own message: another refusal is left to it
+  assert.equal(await MS.untestedRetry({ code: "game_running" }, () => { retried++; }), false);
+  assert.equal(retried, 1);
+});
+
 test("the classic modal queues the refused write only when its box is ticked, on any close", async () => {
   const queued = () => called("classic.queue").length;
   // unticked, closed with OK: nothing

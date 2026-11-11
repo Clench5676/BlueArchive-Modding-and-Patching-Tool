@@ -1217,6 +1217,13 @@ def build_api(s: Services) -> RpcRegistry:
         s.library.impact_seen(install, version)
         return {}
 
+    @rpc.method("mods.confirmUntested")
+    def mods_confirm_untested(confirm: dict[str, Any]) -> dict[str, Any]:
+        """The user confirmed the writes an ``untested_build`` refusal named: its ``confirm`` given back
+        ({install: {version, cores}}); the refused call is then made again."""
+        s.library.confirm_untested(confirm)
+        return {}
+
     @rpc.method("mods.sizes")
     def mods_sizes(kind: str) -> dict[str, int]:
         return s.library.sizes(kind)

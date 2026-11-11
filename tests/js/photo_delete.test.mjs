@@ -12,7 +12,7 @@ test('gallery cards and their accessible Applied label consume only the target-s
   const env={CONTROL,SPACE,row,S:1920/2960,Popup:{selectionReady:async()=>{},listCard:(item,x,y,selected)=>{cards.push({...item,selected});return item;}},
     galleryPhotos:()=>photos,photo:()=>null,modal:{draw:fn=>fn({})},NGUI:{render:async()=>{}},
     UI:{buttonSize:()=>({}),button:async()=>{}},
-    hitButton:(_layer,_box,_fn,label)=>hits.push(label),safe:fn=>fn,P:key=>key};
+    hitButton:(_layer,_box,_fn,label)=>hits.push(label),safe:fn=>fn,P:key=>key,restoreGame:async()=>{}};
   await new Function('env',`const {${Object.keys(env)}}=env;let page=0,selected='other',repository={game:{id:'own'}};const OFFICIAL='official';${drawCode};return galleryDraw();`)(env);
   assert.deepEqual(cards.map(card=>[card.key,card.applied,card.selected]),[['own',true,false],['other',false,true]]);
   assert.deepEqual(hits,['Own skin - applied','Other skin']);
