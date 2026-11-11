@@ -2916,6 +2916,15 @@ class ModLibrary:
     def _original_path(self, game_file: Path) -> Path:
         return self.root / "originals" / game_file.name
 
+    def _in_library(self, path: str | os.PathLike[str] | None) -> bool:
+        """Whether a path an OS error names lies in the library's own folder rather than in the game."""
+        if path is None:
+            return False
+        try:
+            return Path(os.fsdecode(path)).resolve().is_relative_to(self.root)
+        except (OSError, RuntimeError, TypeError, ValueError):
+            return False
+
     def _elsewhere(self, game_file: Path) -> list[Path]:
         """Files of a game file's name in the other known installs and the folders of the library's records."""
         name, exclude = game_file.name, game_file.resolve()
@@ -4794,7 +4803,9 @@ class ModLibrary:
                         restored = False
                         log_failure(logger, logging.ERROR, "Could not roll back library write", rollback_error)
                     if isinstance(error, OSError):
-                        code = "library_io_error" if saving_state else "game_file_locked"
+                        code = "library_io_error" if saving_state else safety.write_refusal(error)
+                        if code in ("game_file_denied", "game_file_write_failed") and self._in_library(error.filename):
+                            code = "library_io_error"  # the backup copy into the library failed, not the game file
                         log_failure(logger, logging.WARNING, f"Library write failed ({stage}, {code})", error)
                         raise ServiceError(code, file=error.filename) from error
                     raise
