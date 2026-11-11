@@ -12,7 +12,7 @@
 import * as NGUI from "./ngui.js";
 import { attachHint } from "./hover-hint.js";
 import { installScrollFades } from "./scroll-fade.js";
-import { switchGrid, placeSwitchCards, cardInkBounds } from "./switch-layout.js";
+import { switchGrid, placeSwitchCards } from "./switch-layout.js";
 import { scrollbar, scrollbarTrack } from "./scrollbar.js";
 import { horizontalScroll } from "./horizontal-scroll.js";
 import * as Buttons from "./game-buttons.js";
@@ -1138,16 +1138,13 @@ export async function listPopup(options) {
   const tickKeys = tick ? new Set(tick.keys || []) : null;
   const trees = items.map((it) => listCard(it, 0, 0, isSelected(it.key), card, options.layoutKind, tickKeys ? tickKeys.has(it.key) : null));
   const paper = { left: cardLeft, right: cardLeft + cardBox.w, top: top + SPACE.m };
-  // a list whose cards are ticked: placed as if every card were selected, so ticking never moves the cards (owner,
-  // 2026-11-11: the list's padding is fixed whatever is ticked); a list of one choice keeps its measured insets
-  const locked = multi || !!tickKeys;
-  const shapes = locked ? items.map((it) => listCard(it, 0, 0, true, card, options.layoutKind, tickKeys ? true : null)) : trees;
-  placeSwitchCards(shapes, cardGrid, paper);
-  // the cards' own ink where they stand, for the scroll extent
-  const bounds = trees.map((tree, i) => {
-    tree.pos = shapes[i].pos;
-    return cardInkBounds(tree);  // the root's pos included
-  });
+  // every list is placed as if every card were selected, so choosing or ticking a card, or a segment that hides the
+  // chosen one, never moves the cards (owner, 2026-11-11: the list's padding is fixed whatever is ticked; BL-182: and
+  // whatever is chosen); a card's own marks (the selection's check, the new dot) stand over that envelope
+  const shapes = items.map((it) => listCard(it, 0, 0, true, card, options.layoutKind, tickKeys ? true : null));
+  // the envelopes where they stand, for the scroll extent and the cards in view: the same whatever is chosen
+  const bounds = placeSwitchCards(shapes, cardGrid, paper);
+  trees.forEach((tree, i) => { tree.pos = shapes[i].pos; });
   const rows = Math.ceil(items.length / columns), visH = (top - bottom) * S, visW = (paper.right - paper.left) * S;
   const contentH = horizontal ? visH : (rows * pitch[1] + 20) * S;
   const contentW = horizontal ? Math.max(visW, ...bounds.map((b) => (b.right - paper.left + 40) * S)) : visW;

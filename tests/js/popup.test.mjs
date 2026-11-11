@@ -1883,7 +1883,9 @@ test("portrait spacing fits four tall cards at the standard width and selects ho
 });
 
 // Measure rendered CSS rectangles independently of switch-layout's calculations. Include each widget's shear.
-test("every kind left-aligns outer corners, with compact portrait gaps and balanced vertical grids", async () => {
+// The cards are placed by their envelope as a chosen card (its selection frame and check, BL-182): a card's body stays
+// where it is whichever card is chosen, or with the chosen one hidden by a segment; the new dot stands over the envelope.
+test("every kind left-aligns outer corners, with compact portrait gaps and balanced vertical grids, wherever the chosen card is", async () => {
   const { rect } = await import("../../src/bmpt/web/js/ngui.js");
   const { switchGrid } = await import("../../src/bmpt/web/js/switch-layout.js");
   const outer = (el) => {
@@ -1891,43 +1893,61 @@ test("every kind left-aligns outer corners, with compact portrait gaps and balan
     const overhang = Math.abs(Math.tan(angle * Math.PI / 180) * h / 2);
     return { left: x - overhang, right: x + w + overhang, top: y, bottom: y + h };
   };
+  const union = (boxes) => ({ left: Math.min(...boxes.map((b) => b.left)), right: Math.max(...boxes.map((b) => b.right)),
+    top: Math.min(...boxes.map((b) => b.top)), bottom: Math.max(...boxes.map((b) => b.bottom)) });
+  const mark = (path) => /\/(Select|Dot)(\/|$)/.test(path);
   const headerInsets = [], leftInsets = [];
   for (const kind of ["spr", "lobby", "model"]) {
     const { columns } = switchGrid(kind, Popup.listCardBox(Popup.listLayout(false, kind)).w);  // the list's paper (BL-176)
-    for (const count of new Set([0, 1, 2, columns, columns + 1, 2 * columns, 19])) for (const selected of new Set(["0", String(count - 1), null])) {
-      const items = Array.from({ length: count }, (_, i) => ({ key: String(i), full: "Owner label", label: "Owner label", isNew: true }));
-      await Popup.listPopup({ host: prompt, layoutKind: kind, items, selected, title: kind, okText: "Set" });
-      const paper = outer(walk(prompt).find((e) => e.dataset.path === "Center/Popup/ListPaper"));
-      const area = walk(prompt).find((e) => e.className === "popup-cards");
-      const dx = parseFloat(area.style.left), dy = parseFloat(area.style.top);
-      const rowSize = kind === "spr" ? Math.max(1, count) : columns;
-      for (let start = 0; start < count; start += rowSize) {
-        const names = items.slice(start, start + rowSize).map((it) => `Card_${it.key}`);
-        const ink = walk(prompt).filter((e) => e.style.backgroundImage && names.some((n) => e.dataset.path === n || e.dataset.path?.startsWith(`${n}/`))).map(outer);
-        const left = Math.min(...ink.map((b) => b.left)) + dx - paper.left;
-        const right = paper.right - Math.max(...ink.map((b) => b.right)) - dx;
-        leftInsets.push(left);
-        assert.ok(Math.abs(left - 40 * S) <= 1, `${kind}, ${count} cards, row ${start}: fixed left inset, no centring offset`);
-        // a full row of two or more spreads edge to edge; a single column stays at the left (the lobby in the L class)
-        if (kind !== "spr" && names.length === columns && columns > 1) assert.ok(Math.abs(left - right) <= 1, `${kind}: equal insets for a full row`);
-        if (kind !== "spr" || count <= columns) assert.ok(right >= left - 1, "short rows leave spare space on the right");
-        if (kind === "spr") {
-          assert.ok(Math.min(...ink.map((b) => b.top)) >= 0, "the row starts inside the viewport");
-          assert.ok(Math.max(...ink.map((b) => b.bottom)) <= parseFloat(area.style.height), `portrait row including names fits the paper: ${Math.max(...ink.map(b => b.bottom)) / S} <= ${parseFloat(area.style.height) / S}`);
-          const inner = area.children[0], extent = parseFloat(inner.style.width), visible = parseFloat(area.style.width);
-          assert.equal(inner.style.height, area.style.height, "no vertical overflow");
-          assert.equal(area.style.overflowX, "auto"); assert.equal(area.style.overflowY, "hidden");
-          assert.ok(extent >= visible);
-          const lastRight = Math.max(...ink.map((b) => b.right));
-          assert.ok(lastRight <= extent - 40 * S + 1, "scroll extent includes the last inclined corner and trailing inset");
-          if (count > columns) assert.ok(Math.abs(extent - lastRight - left) <= 1, "last card reaches the matching right inset at the scroll end");
+    let grow = null;  // the chosen card's envelope beyond its body, measured on the first chosen card drawn
+    for (const count of new Set([0, 1, 2, columns, columns + 1, 2 * columns, 19])) {
+      const bodies = new Map();  // every card's body, by the chosen card
+      for (const selected of new Set(["0", String(count - 1), "hidden", null])) {
+        const items = Array.from({ length: count }, (_, i) => ({ key: String(i), full: "Owner label", label: "Owner label", isNew: true }));
+        await Popup.listPopup({ host: prompt, layoutKind: kind, items, selected, title: kind, okText: "Set" });
+        const paper = outer(walk(prompt).find((e) => e.dataset.path === "Center/Popup/ListPaper"));
+        const area = walk(prompt).find((e) => e.className === "popup-cards");
+        const dx = parseFloat(area.style.left), dy = parseFloat(area.style.top);
+        const parts = (key) => walk(prompt).filter((e) => e.style.backgroundImage && (e.dataset.path === `Card_${key}` || e.dataset.path?.startsWith(`Card_${key}/`)));
+        const body = (key) => union(parts(key).filter((e) => !mark(e.dataset.path)).map(outer));
+        if (items.some((it) => it.key === selected)) {
+          const b = body(selected), full = union(parts(selected).map(outer));
+          const g = { left: b.left - full.left, right: full.right - b.right, top: b.top - full.top };
+          assert.ok(g.left >= 0 && g.right >= 0 && g.top > 0, `${kind}: the chosen card's check and frame stand beyond its body`);
+          if (grow) for (const side of ["left", "right", "top"]) assert.ok(Math.abs(g[side] - grow[side]) < .05, `${kind}: one envelope`);
+          grow ??= g;
         }
-        if (!start) headerInsets.push(Math.min(...ink.map((b) => b.top)) + dy - paper.top);
+        bodies.set(selected, items.map((it) => [body(it.key).left, body(it.key).top].map((v) => Math.round(v * 1000))));
+        const rowSize = kind === "spr" ? Math.max(1, count) : columns;
+        for (let start = 0; start < count; start += rowSize) {
+          const row = items.slice(start, start + rowSize).map((it) => body(it.key));
+          const ink = union(row), envelope = { left: ink.left - grow.left, right: ink.right + grow.right, top: ink.top - grow.top, bottom: ink.bottom };
+          const left = envelope.left + dx - paper.left;
+          const right = paper.right - envelope.right - dx;
+          leftInsets.push(left);
+          assert.ok(Math.abs(left - 40 * S) <= 1, `${kind}, ${count} cards, row ${start}: fixed left inset, no centring offset`);
+          // a full row of two or more spreads edge to edge; a single column stays at the left (the lobby in the L class)
+          if (kind !== "spr" && row.length === columns && columns > 1) assert.ok(Math.abs(left - right) <= 1, `${kind}: equal insets for a full row`);
+          if (kind !== "spr" || count <= columns) assert.ok(right >= left - 1, "short rows leave spare space on the right");
+          if (kind === "spr") {
+            assert.ok(envelope.top >= 0, "the row starts inside the viewport");
+            assert.ok(envelope.bottom <= parseFloat(area.style.height), `portrait row including names fits the paper: ${envelope.bottom / S} <= ${parseFloat(area.style.height) / S}`);
+            const inner = area.children[0], extent = parseFloat(inner.style.width), visible = parseFloat(area.style.width);
+            assert.equal(inner.style.height, area.style.height, "no vertical overflow");
+            assert.equal(area.style.overflowX, "auto"); assert.equal(area.style.overflowY, "hidden");
+            assert.ok(extent >= visible);
+            assert.ok(envelope.right <= extent - 40 * S + 1, "scroll extent includes the last inclined corner and trailing inset");
+            if (count > columns) assert.ok(Math.abs(extent - envelope.right - left) <= 1, "last card reaches the matching right inset at the scroll end");
+          }
+          if (!start) headerInsets.push(envelope.top + dy - paper.top);
+        }
+        prompt.hidden = true;
       }
-      prompt.hidden = true;
+      const [first, ...others] = [...bodies.entries()];
+      for (const [selected, other] of others) assert.deepEqual(other, first[1], `${kind}, ${count} cards, ${selected} chosen: no card moves`);
     }
   }
-  assert.ok(Math.max(...headerInsets) - Math.min(...headerInsets) < 1, "all kinds share the top inset");
+  assert.ok(Math.max(...headerInsets) - Math.min(...headerInsets) < 1, "all kinds and choices share the top inset");
   assert.ok(Math.max(...leftInsets) - Math.min(...leftInsets) < 1, "all kinds and incomplete rows share the left inset");
   assert.ok(Math.abs(headerInsets[0] - 40 * S) < 1);
 });
