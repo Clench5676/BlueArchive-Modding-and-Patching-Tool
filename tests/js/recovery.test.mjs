@@ -236,6 +236,53 @@ test("request completions, phase changes and activity cannot extend the absolute
   assert.ok(h.panel());
 });
 
+test("the update check's question and job hold the watchdog past both limits (beta.3 report, 262 mods)", async () => {
+  const h = harness();
+  h.api.begin("boot");
+  await h.advance(20000);
+  h.api.begin("update-check");
+  const release = h.api.hold();
+  await h.advance(60000); // the question left open for a minute
+  for (let i = 0; i < 160; i++) { const done = h.api.request(); await h.advance(1500); done(); } // the job's polls
+  assert.equal(h.panel(), undefined);
+  release(); release(); // a second release is ignored
+  h.api.end("update-check", 300000);
+  h.api.begin("first-screen");
+  await h.advance(44999);
+  assert.equal(h.panel(), undefined);
+  await h.advance(1);
+  assert.ok(h.panel());
+  assert.ok(h.calls.some(([name, p]) => name === "app.frontendError"
+    && p.event?.message === "Boot timeout: first-screen"));
+});
+
+test("held time counts toward neither limit; the clock runs again once the last hold is released", async () => {
+  const h = harness();
+  h.api.begin("first-screen");
+  h.api.request();
+  await h.advance(100000);
+  const outer = h.api.hold(), inner = h.api.hold();
+  await h.advance(200000);
+  outer();
+  await h.advance(300000);
+  assert.equal(h.panel(), undefined);
+  inner();
+  await h.advance(79999); // 180 s of boot less the 100 s before the hold
+  assert.equal(h.panel(), undefined);
+  await h.advance(1);
+  assert.ok(h.panel());
+});
+
+test("a hold after ready changes nothing", async () => {
+  const h = harness();
+  h.api.ready();
+  const release = h.api.hold();
+  await h.advance(180000);
+  release();
+  await h.advance(180000);
+  assert.equal(h.panel(), undefined);
+});
+
 test("ready suppresses late request cleanup and requests made after boot", async () => {
   const h = harness();
   const late = h.api.request();

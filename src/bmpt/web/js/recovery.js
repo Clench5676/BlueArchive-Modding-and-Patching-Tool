@@ -131,20 +131,35 @@
       gl.getExtension("WEBGL_lose_context")?.loseContext();
     } catch (error) { webgl = { supported: false, renderer: null, error: String(error) }; }
   }
-  let watchdog;
+  // Held time (hold) is the user's: a question waiting for an answer and the work it starts under its own progress.
+  // The watchdog stops for it, and the boot deadline counts only the App's own start-up work.
+  let watchdog, holds = 0, held = 0, heldSince = 0;
+  const elapsed = () => Date.now() - began - held - (holds ? Date.now() - heldSince : 0);
   function progress() {
     clearTimeout(watchdog);
-    if (finished || failed) return;
-    const remaining = 180000 - (Date.now() - began);
+    if (finished || failed || holds) return;
+    const remaining = 180000 - elapsed();
     watchdog = setTimeout(() => {
       // A live page awaiting backend work gets grace, but no activity can move the boot deadline.
-      if (requests.size && Date.now() - began < 180000) progress();
+      if (requests.size && elapsed() < 180000) progress();
       else fail(new Error(`Boot timeout: ${phase}`), "watchdog");
     }, Math.max(0, Math.min(45000, remaining)));
   }
   progress();
   window.BAMTRecovery = {
-    activity() { if (Date.now() - began < 180000) progress(); },
+    activity() { if (elapsed() < 180000) progress(); },
+    hold() {
+      if (finished || failed) return () => {};
+      if (!holds++) heldSince = Date.now();
+      clearTimeout(watchdog);
+      let released = false;
+      return () => {
+        if (released) return;
+        released = true;
+        if (!--holds) held += Date.now() - heldSince;
+        progress();
+      };
+    },
     request() {
       if (finished || failed) return () => {};
       const token = {};
