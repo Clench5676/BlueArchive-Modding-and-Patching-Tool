@@ -772,6 +772,22 @@ recorded); with nothing but `unchanged` and `unknown` it records the version at 
 `impact_seen`. An On and its Retry hold an entry configured with a mod whose rig changed (`held`, `why` `held`)
 instead of writing it: the write would carry the old rig or layout onto the new parts. Updating or remapping the mod
 records its new baseline and ends the hold; Apply Mod Configuration and the detail screen's switch write it as asked.
+
+**Untested game build** (`tested_build`, `untested_version`, `confirm_untested`). The App ships, per server, the
+resource versions it was tested on and a 6-byte hash of every bundle name of the newest
+(`catalog/data/tested_build.json`, written by `scripts/build_tested_build.py` from the official folder the suite passed
+on). On another resource version of a server with that data (Global; Japan has none and is never untested) reads work
+as always, and a write of any source but official onto a changed core (one with a bundle name the tested build does
+not have: a part rebuilt under a new CRC, or a new part) is refused with `untested_build` (a notice, a refusal of the
+moment: nothing is written or configured) until the user confirms it: `params.entries` ([{install, core, variant,
+kind, files?}], what the confirmation names) and `params.confirm` ({install: {version, cores}}), which
+`mods.confirmUntested {confirm}` gives back; the page then makes the refused call again. An apply asks for every kind
+it writes (a camera's art and prefab as one lobby entry) before it builds; an On, its Retry and Apply Mod
+Configuration ask for every planned entry configured with another source than official (an On or Retry leaves out
+those it holds for a changed rig) before the intent changes, so Cancel leaves the switch as it was; the write itself
+asks last. Confirmed cores pass while the program runs and the install keeps that resource version. Off, restores
+and rollbacks never ask. Places without a confirmation (an import's Enable After Import, an added mod) show the
+refusal's string on the row.
 Refusals before anything is written: `folder_changed`, `state_changed` (another place switched first), the game
 running, Steam busy, and `not_enough_space` (what an Off copies, with 512 MiB to spare); a running game, Steam busy or
 changed folders stop a job midway, the rest stays listed. An Off leaves overwritten entries (no official copy
@@ -1253,6 +1269,7 @@ stops the server (the page shows Closed); with `--serve` it gives `native_unavai
 | `mods.adopt {entries}` | job id (`library.adopt`): Add to Library for `[{install, core}]`, allowed while the game runs and while a classic window is open; `not_enough_space` |
 | `mods.impact {ids?}` | reader job id: without `ids`, the current install's game update impact (`update_impact`: `{due, install, version, previous, mods: [{id, label, target, kind, core, impact, configured}], counts}`, `mods` only those not `unchanged` or `unknown`); with `ids`, `{mods: [{id, impact}]}` for those mods now |
 | `mods.impactSeen {install, version}` | `{}`: the impact summary of that resource version was shown |
+| `mods.confirmUntested {confirm}` | `{}`: the writes an `untested_build` refusal named are confirmed (its `params.confirm`); the page makes the refused call again |
 | `mods.restoreDrift {entries}` | job id (`mods.restore`): Apply Mod Configuration; `classic_open` at submit |
 | `mods.dismiss {kind, entries}` | `{}`; `kind` `drift` (Keep as Is) or `untracked` (Don't Ask Again) |
 | `mods.clearBuilt` | job id (`library.clearBuilt`); its result `{freed}` |
@@ -2526,6 +2543,11 @@ overwritten entry need none (the detail screen judges its files cheaply).
   and opens it again the other way. With no mod held that list shows at once, without the button. Closing it records the version
   (`mods.impactSeen`). At the start before the prompts below, and after `config.changed` (a game update while the
   program runs rebuilds the game services) once no other popup is open.
+- **New Game Version** (`mod-switch.js confirmUntested`, a plain message popup): a write refused with
+  `untested_build`, from the switch (the tray's toggle too, once the window is in front), the detail screen, Apply Mod
+  Configuration, Settings' other mods and the photography gallery. "Affected by the game update: n", then the entries
+  as list items ("name - kind", six at most, then "+n"); Apply Anyway (`mods.confirmUntested`, then the same call
+  again) and Cancel (nothing changes).
 - **Mods Back to Official** (while mods are on; titled Mods Affected by a Game Update when every listed entry is
   `updated`): the `reset` and `updated` entries, every card ticked but those whose
   configured mod's rig a game update changed (`mods.impact {ids}`): those carry the Rig Changed badge and start

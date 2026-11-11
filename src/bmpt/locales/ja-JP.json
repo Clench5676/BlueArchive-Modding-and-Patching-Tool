@@ -315,6 +315,11 @@
 				"expand": "展開",
 				"collapse": "折りたたむ"
 			},
+			"untested": {
+				"title": "新しいゲームバージョン",
+				"affected": "ゲーム本体の更新の影響：{n}",
+				"apply": "それでも適用"
+			},
 			"deleteConfirm": "{name}を削除しますか？",
 			"deleteRestore": "使用中の項目はオリジナルまたは以前の設定に戻ります",
 			"alreadyInUse": "使用中",
@@ -455,6 +460,7 @@
 			"variant_incompatible": "構造が異なるため、入れ替えできません",
 			"variant_not_found": "バリエーションが見つかりません",
 			"steam_busy": "Steamがゲームを更新または検証中です",
+			"untested_build": "新しいゲームバージョン、ファイル変更済み",
 			"classic_open": "先にクラシック画面を閉じてください",
 			"entry_changed": "ゲームファイル変更あり、再チェック",
 			"folder_changed": "ゲームフォルダー変更あり、再試行",

@@ -400,6 +400,7 @@ async function confirm(s) {
 async function run(params) {
   if (inFlight) { notify(T("error.busy"), { kind: "error", error: { code: "busy" } }); return; }
   inFlight = true;
+  let refusal = null;
   try {
     const result = await Loading.hold(async (update) => {
       const id = await rpc("mods.toggle", params, { timeout: 30000 });
@@ -414,10 +415,11 @@ async function run(params) {
     }, { all: true });
     await finished(result);
   } catch (err) {
-    refused(err, "mods.toggle", params);
+    refusal = err;
   } finally {
     inFlight = false;
   }
+  if (refusal) await refused(refusal, "mods.toggle", params, () => run(params));
 }
 
 // a toggle job followed to its end: the indicator, action and count, then the message popup or the result popup. method: the
@@ -426,7 +428,7 @@ async function follow(id, params, method) {
   try {
     await finished(await toggleJob(id, params));
   } catch (err) {
-    refused(err, method, params);
+    await refused(err, method, params, () => run(params));
   }
 }
 
@@ -484,13 +486,52 @@ async function finished(result) {
       ? { code: result.failed?.[0]?.code || "internal", params: { failed: result.failed, left: result.left, stuck: result.stuck } } : null });
 }
 
-// a refusal (at submit or from the job): the classic modal for the classic window, else its string; switched
-// elsewhere first, the switch redraws from mods.state
-export function refused(err, method = null, params = null) {
+// a refusal (at submit or from the job): the classic modal for the classic window, the untested build's confirmation
+// (with retry, the refused call made again once confirmed), else its string; switched elsewhere first, the switch
+// redraws from mods.state
+export async function refused(err, method = null, params = null, retry = null) {
   const code = err?.code || "internal";
+  if (code === "untested_build" && retry) { if (await confirmUntested(err)) await retry(); return; }
   if (code === "classic_open" && QUEUEABLE.includes(method)) { classicModal({ method, params }); return; }
   notify(errorText(code, err?.params || { error: String(err) }), { kind: "error", error: err });
   if (code === "state_changed") refresh();
+}
+
+// --- an untested game build (docs/web-ui.md, "Untested game build"): the writes onto the cores its update changed
+// wait for a confirmation; Apply Anyway gives the refusal's confirm back (mods.confirmUntested) and the call is made
+// again, Cancel leaves everything as it was ---
+
+// untestedLines(params, nameOf): the confirmation's lines, how many entries the update affected, then each one as a
+// list item ("name - kind"), the rest counted
+export function untestedLines(params, nameOf = (e) => e?.variant || e?.core || "") {
+  const entries = params?.entries || [];
+  const listed = entries.slice(0, MAX_LISTED).map((e) => entryLabel(e, nameOf, " - "));
+  if (entries.length > MAX_LISTED) listed.push(`+${entries.length - MAX_LISTED}`);
+  return [{ text: T("mods.untested.affected", { n: entries.length }) },
+    ...listed.map((text) => ({ text, marker: "\u2022", markerGap: 44, indent: 52 }))];
+}
+
+// confirmUntested(err): true once the user confirmed the writes an untested_build refusal named
+export async function confirmUntested(err) {
+  try {
+    const nameOf = await names().catch(() => undefined);
+    const answer = await Popup.message({ title: T("mods.untested.title"), lines: untestedLines(err?.params, nameOf),
+      ok: T("mods.untested.apply"), cancel: T("popup.cancel"), plain: true });
+    if (answer?.button !== "ok") return false;
+    await rpc("mods.confirmUntested", { confirm: err?.params?.confirm || {} });
+    return true;
+  } catch (error) {
+    notify(errorText(error?.code, error?.params), { kind: "error", error });
+    return false;
+  }
+}
+
+// untestedRetry(err, retry): for a caller with its own error message, the confirmation and the call again; false for
+// another refusal, which the caller shows itself
+export async function untestedRetry(err, retry) {
+  if (err?.code !== "untested_build") return false;
+  if (await confirmUntested(err)) await retry();
+  return true;
 }
 
 // --- the classic modal (decision 5): "Close the classic UI first", with "Apply automatically once it closes". Any

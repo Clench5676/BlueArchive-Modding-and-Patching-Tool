@@ -4,6 +4,7 @@ import * as NGUI from '../ngui.js';
 import * as UI from '../student-hall-ui.js';
 import * as Popup from '../popup.js';
 import * as Loading from '../loading.js';
+import {untestedRetry} from '../mod-switch.js';
 import {clone,S,hitButton} from '../util.js';
 import {captureScene} from './capture.js';
 import {photograph} from './shoot.js';
@@ -350,11 +351,7 @@ async function galleryDraw(){
       await UI.button(layer,'Next',P('next'),pagingBoxes[1],safe(async()=>{page++;await galleryDraw();}),{enabled:(page+1)*6<allPhotos.length,size:paging});
     }
     const toolBoxes=galleryPair(180,365,835),tools=UI.buttonSize([P('restore'),P('export')],toolBoxes[0][2],toolBoxes[0][3]);
-    await UI.button(layer,'Restore',P('restore'),toolBoxes[0],safe(async()=>{
-      const scope=generation;
-      await Loading.task(async()=>{await waitJob(await call('restore',{png:await generatedPNG()}));if(scope!==generation)throw new DOMException('Photography ended','AbortError');await repositoryRead();});
-      bridge.thumbnailChanged();selected=repository.app||DEFAULT;page=0;await galleryDraw();
-    }),{enabled:repository.app!==repository.game?.id||!photo(repository.game?.id)?.builtin,size:tools});
+    await UI.button(layer,'Restore',P('restore'),toolBoxes[0],safe(restoreGame),{enabled:repository.app!==repository.game?.id||!photo(repository.game?.id)?.builtin,size:tools});
     await UI.button(layer,'Export',P('export'),toolBoxes[1],safe(async()=>{await Loading.task(async()=>call('export',{id:selected,png:selected===DEFAULT?await generatedPNG():null}));}),{enabled:!!selectedPhoto,size:tools});
     await UI.button(layer,'SaveSelection',P('saveSelection'),[1280,835,140,64],safe(async()=>{repository=normalized({...repository,...await call('select',{id:selectedKey(selected)})});bridge.thumbnailChanged();modal.close();modal=null;bridge.pause(paused);}),{semantic:"save",enabled:!!selected});
   },[],{width:2000,height:1200});
@@ -376,10 +373,18 @@ async function deletePhoto(){
   bridge.thumbnailChanged();selected=repository.photos.at(-1)?.id||DEFAULT;await galleryDraw();
 }
 
+// an untested game build's confirmation (mod-switch.js untestedRetry) makes the write again
+async function restoreGame(){
+  const scope=generation;
+  try{await Loading.task(async()=>{await waitJob(await call('restore',{png:await generatedPNG()}));if(scope!==generation)throw new DOMException('Photography ended','AbortError');await repositoryRead();});}
+  catch(error){if(scope===generation&&await untestedRetry(error,restoreGame))return;throw error;}
+  bridge.thumbnailChanged();selected=repository.app||DEFAULT;page=0;await galleryDraw();
+}
 async function applyGame(){
   if(!photo(selected)||!repository.applicable)return;
   const scope=generation;
-  await Loading.task(async()=>{await waitJob(await call('apply',{id:selected,png:selected===DEFAULT?await generatedPNG():null}));if(scope!==generation)throw new DOMException('Photography ended','AbortError');await repositoryRead();});
+  try{await Loading.task(async()=>{await waitJob(await call('apply',{id:selected,png:selected===DEFAULT?await generatedPNG():null}));if(scope!==generation)throw new DOMException('Photography ended','AbortError');await repositoryRead();});}
+  catch(error){if(scope===generation&&await untestedRetry(error,applyGame))return;throw error;}
   await galleryDraw();
 }
 // Escape leaves the camera; a popup over it (a capture error) takes it first, and closes alone
