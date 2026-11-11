@@ -335,16 +335,12 @@ test("the help's lines: game folders, Retry and Details, independent of scan con
 test("entries a game update's rig change holds: their own help line and Details, never a Retry; counted by the dot", () => {
   const s = base({ held: 2, heldEntries: [{ install: "/a", core: "a_spr", variant: "a", kind: "spr" }, { install: "/a", core: "b_home", variant: "b", kind: "lobby" }] });
   const lines = MS.helpLines(s);
-  assert.deepEqual(lines.filter((l) => l.button).map((l) => [l.text, l.button.id]), [["On hold, rig changed: 2", "held"]]);
+  assert.deepEqual(lines.filter((l) => l.button).map((l) => [l.text, l.button.id]), [["Official .skel or .atlas file changed, not applied: 2", "held"]]);
   assert.equal(MS.view(s).dot, true);
   assert.equal(MS.view(base()).dot, false);
-  const hint = "Select the mod on the student page and press Update to apply it again";
-  assert.deepEqual(MS.heldLines(s, (e) => e.variant.toUpperCase()), ["A - Portrait", "B - Memorial Lobby", hint]);
-  const many = base({ heldEntries: Array.from({ length: 8 }, (_, i) => ({ core: `c${i}_spr`, variant: `c${i}`, kind: "spr" })) });
-  assert.deepEqual(MS.heldLines(many).slice(-2), ["+2", hint]);
   // a toggle that held entries says so
   const r = MS.resultSummary({ enabled: true, done: [{}], held: [{ core: "a_spr" }] });
-  assert.ok(r.lines.includes("On hold, rig changed: 1"));
+  assert.ok(r.lines.includes("Official .skel or .atlas file changed, not applied: 1"));
 });
 
 test("a toggle's end: silence, or the result popup naming each failed entry with its error string", () => {
@@ -1380,7 +1376,8 @@ test("Settings Spine value row opens the same read-only notice in every locale w
       const previous = JSON.stringify(prefs), allowed = Runtime.spineAllowed();
       await Settings.open((key) => changes.push(key));
       button(S("settings.tab.general"))?.click();
-      await until(() => button(S("settings.spine.view")), "Spine View");
+      // the General tab's own View (the Mods tab has a View of its own, Game Update Impact)
+      await until(() => button(S("settings.spine.view")) && walk(settingsHost).some((e) => e.dataset.path === "Rows/Spine/Title"), "Spine View");
       const paths = walk(settingsHost).map((e) => e.dataset.path).filter(Boolean);
       const rows = paths.filter((p) => /^Rows\/[^/]+$/.test(p));
       assert.equal(rows[rows.indexOf("Rows/Cache") + 1], "Rows/PreviewCache");
@@ -1412,33 +1409,47 @@ test("Settings Spine value row opens the same read-only notice in every locale w
 
 const Impact = await import("../../src/bmpt/web/js/update-impact.js");
 
-test("an update's impact: one count line per kind with mods, the held mods named, then how the hold ends", () => {
+test("an update's impact: one count line per kind, each mod named with Go To and what changed, then how the hold ends", () => {
   assert.equal(Impact.summary(null), null);
   assert.equal(Impact.summary({ due: false, counts: { rebuilt: 1 } }), null);
   const mods = [
-    { id: "1", target: "hoshino", core: "ch0101_spr", kind: "spr", impact: "rig_changed" },
-    { id: "2", target: "airi", core: "ch0200_spr", kind: "spr", impact: "rebuilt" },
+    { id: "1", target: "hoshino", core: "ch0101_spr", kind: "spr", impact: "rig_changed", label: "Bunny Hoshino",
+      changes: { repacked: true, animations: 3, textures: true } },
+    { id: "2", target: "airi", core: "ch0200_spr", kind: "spr", impact: "rebuilt", label: "Airi", changes: {} },
   ];
-  const r = Impact.summary({ due: true, mods, counts: { unchanged: 4, rebuilt: 1, rig_changed: 1, new_parts: 0, gone: 0, unknown: 2 } },
-    (e) => e.variant[0].toUpperCase() + e.variant.slice(1));
-  assert.equal(r.title, "Game Updated");
-  const hint = "Select the mod on the student page and press Update to apply it again";
+  const nameOf = (e) => e.variant[0].toUpperCase() + e.variant.slice(1);
+  const r = Impact.summary({ due: true, mods, counts: { unchanged: 4, rebuilt: 1, rig_changed: 1, new_parts: 0, gone: 0, unknown: 2 } }, nameOf);
+  assert.equal(r.title, "Mods Impacted by Game Update");
+  const hint = "Go to opens the mod, then press Update to apply it again";
   const item = (text) => ({ text, ...Impact.ITEM });
-  const head = [{ text: "Rig changed, on hold: 1" }, { text: "Hoshino - Portrait", ...Impact.ITEM }, { text: hint, ...Impact.HINT }];
+  const plain = (lines) => lines.map(({ button, ...l }) => (button ? { ...l, button: button.label } : l));
+  // the held mod: student, kind and its own name with Go To; under it, what the update changed in its official portrait
+  const head = [{ text: "Official .skel or .atlas file changed, not applied until updated: 1" },
+    { text: "Hoshino - Portrait - Bunny Hoshino", ...Impact.ITEM, button: "Go to" },
+    { text: "Official Portrait: .atlas file layout changed, 3 new animations in the .skel file", indent: Impact.ITEM.indent, ...Impact.DETAIL },
+    { text: hint, ...Impact.HINT }];
   assert.equal(Impact.HINT.fontSize, 42, "two steps under the 52 of the lines");
-  const others = (label) => ({ text: "Other affected mods", gap: 16, button: { label, inline: true, fn: r.lines[3].button.fn } });
+  assert.equal(Impact.DETAIL.fontSize, 42);
   // the other kinds are folded under their line, its button closes the message to open it the other way
-  assert.deepEqual(r.lines, [...head, others("Expand")]);
-  let closed = null; r.lines[3].button.fn({ close: (b) => { closed = b; } }); assert.equal(closed, "expand");
-  const open = Impact.summary({ due: true, mods, counts: { unchanged: 4, rebuilt: 1, rig_changed: 1, unknown: 2 } },
-    (e) => e.variant[0].toUpperCase() + e.variant.slice(1), { expanded: true });
-  assert.deepEqual(open.lines.map(({ button, ...l }) => (button ? { ...l, button: button.label } : l)),
-    [...head, { text: "Other affected mods", gap: 16, button: "Collapse" }, item("Rebuilt, same rig: 1"), item("Not affected: 4"), item("Not determined: 2")]);
+  assert.deepEqual(plain(r.lines), [...head, { text: "Other affected mods", gap: 16, button: "Expand" }]);
+  let closed = null; r.lines[4].button.fn({ close: (b) => { closed = b; } }); assert.equal(closed, "expand");
+  r.lines[1].button.fn({ close: (b) => { closed = b; } }); assert.equal(closed, `${Impact.GO}1`, "Go To names its mod");
+  assert.ok(r.lines[1].button.inline, "right after the name, as high as its text");
+  const open = Impact.summary({ due: true, mods, counts: { unchanged: 4, rebuilt: 1, rig_changed: 1, unknown: 2 } }, nameOf, { expanded: true });
+  // each other kind's mods under its count, with Go To (a mod's own name that only repeats the student's is left out)
+  assert.deepEqual(plain(open.lines), [...head, { text: "Other affected mods", gap: 16, button: "Collapse" },
+    item("Rebuilt, .skel and .atlas files unchanged: 1"), { text: "Airi - Portrait", indent: Impact.SUB, button: "Go to" }, item("Not affected: 4"), item("Not determined: 2")]);
   // without held mods the other kinds show at once, without the button
-  assert.deepEqual(Impact.summary({ due: true, mods: [], counts: { rebuilt: 2 } }).lines, [item("Rebuilt, same rig: 2")]);
+  assert.deepEqual(Impact.summary({ due: true, mods: [], counts: { rebuilt: 2 } }).lines, [item("Rebuilt, .skel and .atlas files unchanged: 2")]);
+  // every held mod is listed (the message scrolls past its cap)
   const many = Impact.summary({ due: true, counts: { rig_changed: 9 },
     mods: Array.from({ length: 9 }, (_, i) => ({ id: `${i}`, target: `v${i}`, core: `c${i}_spr`, kind: "spr", impact: "rig_changed" })) });
-  assert.deepEqual(many.lines.slice(-2).map((l) => l.text), ["+3", hint]);
+  assert.equal(many.lines.filter((l) => l.button).length, 9);
+  assert.equal(many.lines.at(-1).text, hint);
+  // Settings' View tells the counts even when nothing is affected, and an empty library as such
+  assert.equal(Impact.summary({ due: false, mods: [], counts: { unchanged: 3 } }), null);
+  assert.deepEqual(Impact.summary({ due: false, mods: [], counts: { unchanged: 3 } }, nameOf, { always: true }).lines, [item("Not affected: 3")]);
+  assert.deepEqual(Impact.summary({ due: false, mods: [], counts: {} }, nameOf, { always: true }).lines, [{ text: "No Mods" }]);
   // every kind has its string in every locale
   try {
     for (const lang of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
@@ -1451,9 +1462,39 @@ test("an update's impact: one count line per kind with mods, the held mods named
       assert.ok(toggle.text === ui.mods.impact.others && toggle.button.label === ui.mods.impact.collapse && ui.mods.impact.expand, lang);
       for (const line of [{ text: all.title }, ...all.lines.filter((l) => !l.button)]) assert.ok(line.text && !/^mods\./.test(line.text) && line.text.includes(line.text === all.title ? "" : "1"), `${lang} ${line.text}`);
       for (const k of ["held", "heldTitle", "heldBadge", "driftUpdated"]) assert.ok(typeof ui.mods[k] === "string" && ui.mods[k].length > 0, `${lang} ${k}`);
-      assert.ok(ui.mods.impact.hint.includes("{action}") && !("driftWhy" in ui.mods), lang);
+      assert.ok(ui.mods.impact.hint.includes("{action}") && ui.mods.impact.hint.includes("{go}") && !("driftWhy" in ui.mods), lang);
+      const every = { repacked: true, animations: 2, rig: true, removed: true, added: true };
+      for (const [kind, changes] of [["spr", every], ["lobby", { animations: 1 }], ["model", { textures: true }], ["other", { removed: true }]]) {
+        const text = Impact.changeText({ kind, changes });
+        assert.ok(text && !/[{}]|mods\./.test(text), `${lang} ${kind} ${text}`);
+      }
+      assert.ok(typeof ui.settings.mods.impact === "string" && typeof ui.settings.mods.view === "string", lang);
     }
   } finally { I18n.setStrings("en-US", strings); }
+});
+
+test("what an update changed in a mod's official parts: each change once, a repack carrying its texture sizes", () => {
+  assert.equal(Impact.changeText({ kind: "spr", changes: {} }), "");
+  assert.equal(Impact.changeText({ kind: "spr" }), "");
+  assert.equal(Impact.changeText({ kind: "spr", changes: { animations: 1 } }), "Official Portrait: 1 new animation in the .skel file");
+  assert.equal(Impact.changeText({ kind: "lobby", changes: { repacked: true, textures: true, rig: true } }),
+    "Official Memorial Lobby: .atlas file layout changed, .skel file structure changed");
+  assert.equal(Impact.changeText({ kind: "model", changes: { textures: true, removed: true, added: true } }),
+    "Official 3D Model: texture size changed, part removed, new parts");
+  assert.equal(Impact.changeText({ kind: "other", changes: { removed: true } }), "Official files: part removed");
+  // a generic mod: its own name and the kind, no Go To (no student page)
+  const other = Impact.modLines({ id: "9", kind: "other", label: "UI Font", target: "", changes: { removed: true } });
+  assert.equal(other[0].text, "UI Font - Other Mods");
+  assert.equal(other[0].button, undefined);
+});
+
+test("the held entries' Details name each mod with Go To where its mod is known, then how the hold ends", () => {
+  const entries = [{ install: "/a", core: "a_spr", variant: "a", kind: "spr", source: "mod:1", label: "Swim A" },
+    { install: "/a", core: "b_home", variant: "b", kind: "lobby", source: "variant:c" }];
+  const lines = Impact.heldLines(entries, (e) => e.variant.toUpperCase());
+  assert.deepEqual(lines.map((l) => [l.text, l.button?.label || null]),
+    [["A - Portrait - Swim A", "Go to"], ["B - Memorial Lobby", null], ["Go to opens the mod, then press Update to apply it again", null]]);
+  assert.deepEqual(Impact.heldMods(entries)[0], { id: "1", target: "a", core: "a_spr", kind: "spr", label: "Swim A" });
 });
 
 test("the drift prompt asks the impacts of the mods its entries are configured with and marks the held ones", () => {

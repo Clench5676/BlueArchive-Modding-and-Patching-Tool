@@ -299,21 +299,32 @@
 			"driftApply": "모드 설정 적용",
 			"driftKeep": "현재대로 유지",
 			"stillOverwritten": "여전히 덮어씀: {n}",
-			"held": "보류, 본 변경됨: {n}",
-			"heldTitle": "보류된 모드",
+			"held": "공식 .skel 파일 또는 .atlas 파일 변경됨, 적용 안 됨: {n}",
+			"heldTitle": "공식 파일 변경으로 적용되지 않은 모드",
 			"heldBadge": "본 변경됨",
 			"impact": {
-				"title": "게임 본체 업데이트됨",
-				"rigChanged": "본 변경됨, 보류: {n}",
+				"title": "게임 업데이트의 영향을 받은 모드",
+				"rigChanged": "공식 .skel 파일 또는 .atlas 파일 변경됨, 업데이트 전까지 적용 안 함: {n}",
 				"gone": "게임에서 삭제됨: {n}",
 				"newParts": "공식 파트 추가: {n}",
-				"rebuilt": "재구성됨, 본 동일: {n}",
+				"rebuilt": "재구성됨, .skel 파일과 .atlas 파일 동일: {n}",
 				"unchanged": "영향 없음: {n}",
 				"unknown": "판단 불가: {n}",
-				"hint": "학생 페이지에서 이 모드를 선택하고 '{action}'을 누르면 다시 적용",
+				"hint": "'{go}'로 이 모드를 열고 '{action}'을 누르면 다시 적용",
 				"others": "기타 영향을 받은 모드",
 				"expand": "펼치기",
-				"collapse": "접기"
+				"collapse": "접기",
+				"official": "공식 {kind}: {changes}",
+				"officialFiles": "공식 파일: {changes}",
+				"change": {
+					"repacked": ".atlas 파일 배치 변경",
+					"animation": ".skel 파일 애니메이션 1개 추가",
+					"animations": ".skel 파일 애니메이션 {n}개 추가",
+					"rig": ".skel 파일 구조 변경",
+					"textures": "텍스처 크기 변경",
+					"removed": "파트 삭제됨",
+					"added": "파트 추가됨"
+				}
 			},
 			"untested": {
 				"title": "새 게임 버전",
@@ -615,6 +626,8 @@
 				},
 				"files": "게임 파일 설정 드리프트 검사",
 				"check": "검사",
+				"impact": "게임 업데이트 영향",
+				"view": "보기",
 				"clean": "드리프트 없음",
 				"driftHelp": {
 					"title": "설정 드리프트",

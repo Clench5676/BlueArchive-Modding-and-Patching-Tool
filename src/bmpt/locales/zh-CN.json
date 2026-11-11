@@ -299,21 +299,32 @@
 			"driftApply": "应用 Mod 配置",
 			"driftKeep": "保持现状",
 			"stillOverwritten": "仍被覆盖：{n}",
-			"held": "暂不应用，骨骼已变：{n}",
-			"heldTitle": "暂不应用的 Mod",
+			"held": "官方 .skel 文件或 .atlas 文件已变，未应用：{n}",
+			"heldTitle": "因官方文件变动未应用的 Mod",
 			"heldBadge": "骨骼已变",
 			"impact": {
-				"title": "游戏本体发生更新",
-				"rigChanged": "骨骼已变，暂不应用：{n}",
+				"title": "受游戏更新影响的 Mod",
+				"rigChanged": "官方 .skel 文件或 .atlas 文件已变，更新前不应用：{n}",
 				"gone": "游戏内已无对应文件：{n}",
 				"newParts": "新增官方部件：{n}",
-				"rebuilt": "已重建，骨骼未变：{n}",
+				"rebuilt": "已重建，.skel 文件和 .atlas 文件未变：{n}",
 				"unchanged": "未受影响：{n}",
 				"unknown": "无法判断：{n}",
-				"hint": "在学生页面选中该 Mod，点「{action}」后恢复应用",
+				"hint": "点「{go}」打开该 Mod，再点「{action}」恢复应用",
 				"others": "其余受影响的 Mod",
 				"expand": "展开",
-				"collapse": "收起"
+				"collapse": "收起",
+				"official": "官方{kind}：{changes}",
+				"officialFiles": "官方文件：{changes}",
+				"change": {
+					"repacked": ".atlas 文件布局改变",
+					"animation": ".skel 文件新增动画 1",
+					"animations": ".skel 文件新增动画 {n}",
+					"rig": ".skel 文件结构改变",
+					"textures": "贴图尺寸改变",
+					"removed": "部件已移除",
+					"added": "新增部件"
+				}
 			},
 			"untested": {
 				"title": "游戏新版本",
@@ -615,6 +626,8 @@
 				},
 				"files": "游戏文件配置漂移检测",
 				"check": "检查",
+				"impact": "游戏更新影响",
+				"view": "查看",
 				"clean": "未发现漂移",
 				"driftHelp": {
 					"title": "配置漂移",
