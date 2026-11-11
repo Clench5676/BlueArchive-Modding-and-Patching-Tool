@@ -2570,9 +2570,14 @@ overwritten entry need none (the detail screen judges its files cheaply).
   switch says). The details name the mod and give what the update changed in its official parts and its state, with
   Go To and, for a held mod, Preview Fix (the repair's preview: `mod-compatibility.js prepare`, the choice when more
   than one repair applies, then `review`, whose Accept is Fix and Apply and Discard Back; a mod the asset update takes
-  instead says it has no preview, with Back and Fix and Apply) and Fix and Apply (the default repair, no review).
-  The footer: Close and, on Needs Fix, Fix and Apply (n) for the ticked mods (the default repair each, no review; a
-  partial repair is neither stored nor applied, and those are named in a message afterwards). A fixed mod's repaired
+  instead says it looks the same after the fix, with Back and Fix and Apply) and Fix and Apply (the default repair, no
+  review). A click on a card shows it in the details; on Needs Fix the tick box at the card's top right corner ticks it
+  (`listPopup` `tick`; owner, 2026-11-11), and the cards are placed as if all were selected, so ticking never moves
+  them. Preview Fix and Fix and Apply run over the list, which stays open and is drawn again as the mods stand then.
+  A generic mod's card names the mod (never its set's key). The footer buttons are one size down (S).
+  The footer: Close and, on Needs Fix, Fix and Apply for the ticked mods (greyed with none ticked) (the default repair each, no review; a
+  partial repair is neither stored nor applied, and those are named in a message afterwards). Only Close and Go To
+  close the list. A fixed mod's repaired
   copy takes its place where its student is configured with it (`actions.apply`, only configured while mods are off);
   a repaired copy made before does so at once; an asset update that changes nothing makes the parts now its baseline
   (`update`), which ends the hold. The list opens again as the mods stand then. Go To closes it and opens the mod's

@@ -11,7 +11,7 @@
 // The pure parts (the stack, the selection, the start sequence) are tested in Node (tests/js/popup.test.mjs).
 import * as NGUI from "./ngui.js";
 import { attachHint } from "./hover-hint.js";
-import { switchGrid, placeSwitchCards } from "./switch-layout.js";
+import { switchGrid, placeSwitchCards, cardInkBounds } from "./switch-layout.js";
 import { scrollbar, scrollbarTrack } from "./scrollbar.js";
 import { horizontalScroll } from "./horizontal-scroll.js";
 import * as Buttons from "./game-buttons.js";
@@ -610,7 +610,12 @@ export function listFrame(title, buttons, closeButton, check = false, kind = nul
 // one card of the list: the game's card body, the picture clipped to its window, a name bar under it. A card that
 // cannot be chosen (dim) is darkened like the roster's not-owned cards, its picture without colour; its badge (In Use,
 // or the caller's) stays bright.
-export function listCard(it, x, y, selected, card = LP.card, kind = null) {
+// tick: null, or whether the card is ticked, for a list whose cards are ticked apart from being shown (listPopup
+// tick): a check box at the card's top right corner, the selection frame then without its check (it marks the card
+// the details show)
+export const TICK_BOX = Object.freeze({ w: 60, h: 58, icon: 48, inset: 42 });
+export const tickPlace = (card) => [card.w / 2 - TICK_BOX.inset + (card.h / 2 - TICK_BOX.inset) * TAN10, card.h / 2 - TICK_BOX.inset];
+export function listCard(it, x, y, selected, card = LP.card, kind = null, tick = null) {
   const { w, h, bar } = card;
   // The same upright image must reach both inclined edges even in a tall portrait window.
   const overscan = Math.max(.15, (h - 26) * TAN10 / (2 * (w - 16)));
@@ -640,7 +645,11 @@ export function listCard(it, x, y, selected, card = LP.card, kind = null) {
   // In-use mods already have a badge; a picked card's check takes the corner.
   if (it.isNew && !it.inUse && !it.applied && !selected) kids.push(DOT(corner(w / 2 - 4, h / 2 - 6), 34));
   if (selected) kids.push(node("Select", [1, 4], [sprite("Card_Ability_Select_Line", w + 4, h - 8, { incline: 10, depth: 20 })],
-    [node("Check", [w / 2 - 28 + (h / 2 - 30) * TAN10, h / 2 - 30], [sprite("Card_Ability_Select_Line_Icon", 66, 65, { type: 0, depth: 21 })])]));
+    tick === null ? [node("Check", [w / 2 - 28 + (h / 2 - 30) * TAN10, h / 2 - 30], [sprite("Card_Ability_Select_Line_Icon", 66, 65, { type: 0, depth: 21 })])] : []));
+  // the tick box, as the checkbox prefab draws one (Btn_Checkbox: plate, line, check), in the corner
+  if (tick !== null) kids.push(node("Tick", tickPlace(card), [sprite("Common_Bg_Raius10px", TICK_BOX.w, TICK_BOX.h, { incline: 10, depth: 25, color: "#e4f3f8/1.00" })], [
+    node("Line", [0, 0], [sprite("Common_Line_Raius10px", TICK_BOX.w, TICK_BOX.h, { incline: 10, depth: 26, color: "#96b6c2/1.00" })]),
+    ...(tick ? [node("Icon", [0, -1], [sprite("Common_Icon_Check_B", TICK_BOX.icon, TICK_BOX.icon - 1, { depth: 27 })])] : [])]));
   const tree = node(`Card_${it.key}`, [x, y], [sprite("Common_Btn_BG", w, h, { incline: 10, depth: 7, color: "#ffffff/1.00" })], kids);
   if (typeof it.applied === "boolean") {
     // Keep the existing list's measured envelope, hit boxes and scroll pitch when replacing its decoration.
@@ -931,6 +940,8 @@ export function detailsTree(it, title, fields, actions, portraitTexture = null, 
 //                truncate: each value on one line, a "…" button showing a cut one whole
 //   footer: the footer buttons' size, LIST_FOOTER ("S") unless named
 //   keepScroll: the list's offset on its scrolling axis (horizontal for portraits)
+//   tick: {keys, onTick(key, scroll)}: cards ticked apart from being shown (owner, 2026-11-11): a click on a card shows
+//         it in the details (onSelect, selected), a click on its corner's tick box ticks or unticks it (onTick)
 //   detailKind(it): the kind whose details panel a card shows when it differs from layoutKind's ("spr": the portrait
 //                   panel, an upright picture beside the stacked fields), for lists of several kinds
 //   alignStart: the generic grid's cards from the paper's left edge, as the kinds' grids place them
@@ -940,7 +951,7 @@ const tokens = new Map(); // host -> the latest drawing's number: an older one t
 export async function listPopup(options) {
   let {
   host: hostArg, hostId, title, items, selected = null, multi = false, focus = null, onSelect, buttons = null, okText, onOk,
-  onClose = null, tools = null, hint = "", footer = "", check = null, details, keepScroll = 0,
+  onClose = null, tools = null, hint = "", footer = "", check = null, details, keepScroll = 0, tick = null,
 } = options;
   const host = hostOf(hostArg ?? hostId);
   const my = (tokens.get(host) || 0) + 1;
@@ -1091,9 +1102,19 @@ export async function listPopup(options) {
   }
   const [aL, aT] = [960 + cardLeft * S, 540 - top * S];
   // Measure the actual prefab widgets, including the name band's asymmetric incline and selection marks.
-  const trees = items.map((it) => listCard(it, 0, 0, isSelected(it.key), card, options.layoutKind));
+  const tickKeys = tick ? new Set(tick.keys || []) : null;
+  const trees = items.map((it) => listCard(it, 0, 0, isSelected(it.key), card, options.layoutKind, tickKeys ? tickKeys.has(it.key) : null));
   const paper = { left: cardLeft, right: cardLeft + cardBox.w, top: top + SPACE.m };
-  const bounds = placeSwitchCards(trees, cardGrid, paper);
+  // a list whose cards are ticked: placed as if every card were selected, so ticking never moves the cards (owner,
+  // 2026-11-11: the list's padding is fixed whatever is ticked); a list of one choice keeps its measured insets
+  const locked = multi || !!tickKeys;
+  const shapes = locked ? items.map((it) => listCard(it, 0, 0, true, card, options.layoutKind, tickKeys ? true : null)) : trees;
+  placeSwitchCards(shapes, cardGrid, paper);
+  // the cards' own ink where they stand, for the scroll extent
+  const bounds = trees.map((tree, i) => {
+    tree.pos = shapes[i].pos;
+    return cardInkBounds(tree);  // the root's pos included
+  });
   const rows = Math.ceil(items.length / columns), visH = (top - bottom) * S, visW = (paper.right - paper.left) * S;
   const contentH = horizontal ? visH : (rows * pitch[1] + 20) * S;
   const contentW = horizontal ? Math.max(visW, ...bounds.map((b) => (b.right - paper.left + 40) * S)) : visW;
@@ -1117,6 +1138,12 @@ export async function listPopup(options) {
     if (it.applied) b.setAttribute("aria-label", [it.full || it.label, T("status.applied")].filter(Boolean).join(" - "));
     if (it.hint) { attachHint(b, it.hint); b.setAttribute("aria-description", it.hint); }
     if (multi) { b.setAttribute("role", "checkbox"); b.setAttribute("aria-checked", String(ticked.has(it.key))); }
+    if (tickKeys) {
+      const [tx, ty] = tickPlace(card), box = { w: TICK_BOX.w + 2 * SPACE.s, h: TICK_BOX.h + 2 * SPACE.s };
+      const t = hitButton(inner, [sx + (tx - box.w / 2) * S, sy - (ty + box.h / 2) * S, box.w * S, box.h * S], () => tick.onTick(it.key, scroll()), it.full, 61);
+      t.dataset.tick = it.key;
+      t.setAttribute("role", "checkbox"); t.setAttribute("aria-checked", String(tickKeys.has(it.key)));
+    }
   });
   const shown = multi ? focus ?? items.find((it) => ticked.has(it.key))?.key : selected;
   const sel = items.find((it) => it.key === shown) || items[0];
