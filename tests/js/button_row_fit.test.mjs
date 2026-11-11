@@ -210,7 +210,8 @@ for (const locale of LOCALES) test(`Settings tabs and button pairs share one siz
   const exported = ["export.library", "export.applied"].map((key) => text(locale, key));
   assertGroup(fitGroup(exported, fs, fsMin, wideW - fitInset, 2, { maxH: h - boxInsetH }), exported, exported.map(() => wideW - fitInset), h - boxInsetH, `${locale} export`);
   // the value rows' buttons: Open and Change / Clear cache style captions
-  for (const pair of [["settings.change", "settings.detect"], ["settings.mods.clear", "open.mac"], ["open.mac", "settings.change"]]) {
+  for (const pair of [["settings.change", "settings.detect"], ["settings.mods.clear", "open.mac"], ["open.mac", "settings.change"],
+    ["settings.troubleshoot.apply", "settings.troubleshoot.restore"]]) {
     const captions = pair.map((key) => text(locale, key));
     assertGroup(fitGroup(captions, fs, fsMin, w - fitInset, 2, { maxH: h - boxInsetH }), captions, captions.map(() => w - fitInset), h - boxInsetH, `${locale} ${pair}`);
   }

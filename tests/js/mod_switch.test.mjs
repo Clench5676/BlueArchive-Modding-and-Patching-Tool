@@ -552,6 +552,60 @@ test("Settings measures built mods only when its Mods row is drawn, and remeasur
   answers["mods.sizes"] = ({ kind }) => ({ [`${kind}Size`]: 0 });
 });
 
+test("Troubleshoot Mods shows only in pre-release builds, and Apply Official to All confirms, runs and shows the check", async () => {
+  const Settings = await import("../../src/bmpt/web/js/settings.js");
+  const T = await import("../../src/bmpt/web/js/troubleshoot.js");
+  const button = (name) => walk(settingsHost).find((e) => e.tagName === "BUTTON" && e.getAttribute("aria-label") === name);
+  const hasText = (text) => walk(settingsHost).some((e) => e.textContent === text);
+  const prefs = { languages: [{ code: "en-US", name: "English" }], language: "en-US", consent: false, cacheDir: "/cache",
+    native: false, version: "1.0", logPath: "/log" };
+  answers["mods.other"] = [];
+  // a stable build: no row, no state asked
+  answers["settings.get"] = { ...prefs, prereleasePreviews: false };
+  await Settings.open(null, "mods");
+  await until(() => !!button(S("settings.mods.check")), "Mods tab");
+  assert.ok(!hasText(S("settings.troubleshoot.label")));
+  assert.equal(called("mods.troubleshootState").length, 0);
+  button(S("display.close")).click();
+  // a pre-release build: the row, Restore Configuration only with a saved configuration
+  answers["settings.get"] = { ...prefs, version: "1.0.0-rc.1", prereleasePreviews: true };
+  answers["mods.troubleshootState"] = { active: false, count: 0, since: null };
+  await Settings.open(null, "mods");
+  await until(() => hasText(S("settings.troubleshoot.inactive")), "row state");
+  assert.ok(hasText(S("settings.troubleshoot.label")));
+  assert.ok(button(S("settings.troubleshoot.apply")));
+  assert.equal(button(S("settings.troubleshoot.restore")), undefined);
+  // Cancel runs nothing; OK runs the job and shows the check
+  button(S("settings.troubleshoot.apply")).click();
+  await drawn(dialog, "cancel");
+  const said = (text) => walk(dialog).some((e) => e.textContent.replaceAll("\n", " ") === text);
+  assert.ok(said(S("settings.troubleshoot.applyConfirm")));
+  action(dialog, "cancel").click();
+  await until(() => dialog.hidden, "confirmation closed");
+  assert.equal(called("mods.applyOfficial").length, 0);
+  answers["mods.applyOfficial"] = "job-official";
+  jobs["job-official"] = { state: "done", result: { enabled: true, done: [], adopted: [], failed: [], stuck: [], left: [],
+    held: [], check: { verified: true, checked: 3, changed: ["a.bundle"], changedCount: 1, missing: [], missingCount: 0, unverified: [] } } };
+  answers["mods.troubleshootState"] = { active: true, count: 2, since: "t" };
+  button(S("settings.troubleshoot.apply")).click();
+  await drawn(dialog, "ok");
+  action(dialog, "ok").click();
+  await until(() => said("a.bundle"), "result popup");
+  assert.equal(called("mods.applyOfficial").length, 1);
+  assert.ok(said(S("settings.troubleshoot.differ").replace("{n}", "1")));
+  action(dialog, "ok").click();
+  await until(() => !!button(S("settings.troubleshoot.restore")), "Restore Configuration enabled");
+  assert.ok(hasText(S("settings.troubleshoot.active").replace("{n}", "2")));
+  button(S("display.close")).click();
+  // the check's lines
+  assert.deepEqual(T.checkLines(null), []);
+  assert.deepEqual(T.checkLines({ verified: false }), [S("settings.troubleshoot.unverified")]);
+  assert.deepEqual(T.checkLines({ verified: true, changedCount: 0, missingCount: 0 }), [S("settings.troubleshoot.match")]);
+  const many = Array.from({ length: 12 }, (_, i) => `${i}.bundle`);
+  const lines = T.checkLines({ verified: true, changed: many.slice(0, 11), changedCount: 11, missing: ["m.bundle"], missingCount: 1 });
+  assert.deepEqual(lines, [S("settings.troubleshoot.differ").replace("{n}", "12"), ...many.slice(0, 10), "+2"]);
+});
+
 test("the help fits its opening lines together in every locale, with and without action rows", async () => {
   const NGUI = await import("../../src/bmpt/web/js/ngui.js");
   const { S: scale } = await import("../../src/bmpt/web/js/util.js");

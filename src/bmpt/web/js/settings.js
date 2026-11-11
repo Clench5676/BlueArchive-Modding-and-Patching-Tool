@@ -15,6 +15,7 @@ import * as Consent from "./consent.js";
 import * as OtherMods from "./settings-other.js";
 import * as ModExport from "./mod-export.js";
 import * as Tours from "./tours.js";
+import * as Troubleshoot from "./troubleshoot.js";
 import * as Update from "./update.js";
 import * as Buttons from "./game-buttons.js";
 import { BACKDROP, XS_BUTTON, TYPE } from "./ui-tokens.js";
@@ -32,6 +33,7 @@ const CONTENT = { x: 209, top: 375, w: 1576, h: 854 }; // the panel's inner list
 let layout = null, prefs = null, tab = "general", scroll = 0, onChange = null, token = 0;
 let checkingUpdate = false;
 let otherMods = null, otherRequest = 0;
+let trouble = null; // Troubleshoot Mods: mods.troubleshootState, pre-release builds only
 
 async function call(fn) {
   try { return await fn(); } catch (err) {
@@ -266,6 +268,13 @@ function rows({ builtSize = null, sizeError = null } = {}) {
     add(helpAfterTitle(valueRow("Files", 0, T("settings.mods.files"), filesValue(m), [[T("settings.mods.check"), checkFiles]]),
       T("settings.mods.files"), false, driftHelp));
     // the game update summary again, as the mods stand now (its Go To leaves Settings for the mod's student page)
+    // Troubleshoot Mods (pre-release builds): every choice to official with mods on, and the saved configuration back
+    if (p.prereleasePreviews === true) {
+      const done = (ran) => { if (ran) refreshOtherMods(); };
+      add(valueRow("Troubleshoot", 0, T("settings.troubleshoot.label"), trouble ? Troubleshoot.statusText(trouble) : T("job.running"), [
+        [T("settings.troubleshoot.apply"), async () => done(await Troubleshoot.applyOfficial())],
+        [T("settings.troubleshoot.restore"), async () => done(await Troubleshoot.restore()), trouble?.active === true]]));
+    }
     add(valueRow("Impact", 0, T("settings.mods.impact"), "", [[T("settings.mods.view"), () => Impact.show()]], { showValue: false }));
     if (otherMods?.length) {
       add({ tree: rowBase("OtherMods", 0, 130, T("settings.mods.other")), h: 130, hits: [] });
@@ -489,13 +498,17 @@ export function close() {
   Popup.closed(host);
 }
 
+// Troubleshoot Mods' state, only where its row shows
+const troubleState = () => (prefs?.prereleasePreviews === true ? call(Troubleshoot.state) : Promise.resolve(null));
+
 // the Mods tab follows the switch's state (mods.state: a toggle elsewhere, the game starting, the file check)
 let following = false;
 async function refreshOtherMods() {
   const request = ++otherRequest;
-  const next = await call(() => rpc("mods.other"));
+  const [next, state] = await Promise.all([call(() => rpc("mods.other")), troubleState()]);
   if (request !== otherRequest) return;
   if (next) otherMods = next;
+  if (state) trouble = state;
   if (!$("settings").hidden && tab === "mods") await render();
 }
 function follow() {
@@ -515,7 +528,7 @@ export async function open(changed, initialTab = null) {
   if (!prefs) return;
   if (!ModSwitch.current()) await ModSwitch.refresh();
   otherRequest++;
-  otherMods = tab === "mods" ? await call(() => rpc("mods.other")) : null;
+  [otherMods, trouble] = tab === "mods" ? await Promise.all([call(() => rpc("mods.other")), troubleState()]) : [null, null];
   $("settings").hidden = false;
   // on the popup stack from the start: Escape closes it, and a popup opened over it takes the key first
   Popup.opened($("settings"), close);
