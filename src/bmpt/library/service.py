@@ -4749,6 +4749,7 @@ class ModLibrary:
                                        "server": pin.server}, "files": items, "kept": kept,
                                "old_applied": {item["target"]: old_applied.get(item["target"]) for item in items}}
                 atomic_json(journal, transaction)
+                stage = "backup"  # what failed, for the log: the user only sees the error code
                 try:
                     for item, target in zip(items, changed):
                         # The verified original kept first is the baseline, so no adjacent .backup is written then
@@ -4764,6 +4765,7 @@ class ModLibrary:
                             verify_file(backup, item["before"])
                     transaction["phase"] = "writing"
                     atomic_json(journal, transaction)
+                    stage = "write"
                     for i, (target, prepared) in enumerate(changed.items(), 1):
                         check_resource_path(target, dirs)
                         if source == "official" and prepared == self._original_path(target):
@@ -4781,6 +4783,7 @@ class ModLibrary:
                             progress(i, len(changed), t("webui.progress.restore" if source == "official"
                                                         else "webui.progress.apply", name=target.name))
                     saving_state = True
+                    stage = "state"
                     self._applied.update(records())
                     self._save()
                 except Exception as error:
@@ -4792,6 +4795,7 @@ class ModLibrary:
                         log_failure(logger, logging.ERROR, "Could not roll back library write", rollback_error)
                     if isinstance(error, OSError):
                         code = "library_io_error" if saving_state else "game_file_locked"
+                        log_failure(logger, logging.WARNING, f"Library write failed ({stage}, {code})", error)
                         raise ServiceError(code, file=error.filename) from error
                     raise
                 # An uncertain commit marker stays for recovery to decide, before any originals are released.
