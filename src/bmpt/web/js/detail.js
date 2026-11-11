@@ -2673,17 +2673,6 @@ const photoBridge={
   generatedThumbnail:async()=>variant().spr?await thumbnailWork.thumb(currentBase(),'roster'):variant().portrait,
   defaultThumbnail:async()=>variant().portrait||(variant().spr?await thumb(spineBase('official-spr',variant().spr),'roster'):null),
   thumbnailChanged(){ctx?.invalidateRoster();},
-  playbackTree(paused){
-    // layouts.list already starts at Inventory_ListControl.
-    const source=find(layouts.list,'LeftInfo/CharInfo/Char_Target/Char_ZoomBtn');
-    if(!source)throw new Error('Memorial playback control is unavailable');
-    const tree=clone(source);
-    tree.name='PhotoPlayback';tree.pos=[0,0];
-    const icon=tree.children[0].widgets[0];
-    if(paused){delete icon.texture;Object.assign(icon,{sprite:'Common_Icon_Play',w_:64,h_:64,color:'#2b496e/1.00'});}
-    else{delete icon.sprite;Object.assign(icon,{texture:'svg:stop',w_:54,h_:54,color:'#2b496e/1.00'});}
-    return {tree,textures:TEXTURES};
-  },
   expressions:()=>(mainPlayer?.skeleton?.data.animations||[]).map(a=>a.name).filter(name=>/^\d{2}$/.test(name)),
   expressionPreview(key){
     if(!photoFaces.has(key))photoFaces.set(key,thumbnailWork.thumb(currentBase(),'face',key));
