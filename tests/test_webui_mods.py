@@ -1046,25 +1046,25 @@ def test_a_lobby_from_another_core_fails_and_the_next_switch_still_runs(env, ena
 
 @pytest.mark.parametrize("failure", ["result", "exception"])
 def test_failed_build_finishes_the_apply_and_releases_its_locks(env, monkeypatch, failure):
-    from ba_modding_toolkit import mod_install
+    from bmpt.library import service
 
     mod = env.add(env.spr)
     original = env.spr.read_bytes()
-    execute = mod_install.execute_mod_install
+    execute = service.install_staged
     needs_fix = env.s.library._needs_crc_fix
 
     def fail(*args, **kwargs):
         if failure == "exception":
             raise RuntimeError("build failed")
-        return SimpleNamespace(failed_groups=["mismatched bundle"])
+        return [("test_spr", "mismatched bundle")]
 
-    monkeypatch.setattr(mod_install, "execute_mod_install", fail)
+    monkeypatch.setattr(service, "install_staged", fail)
     monkeypatch.setattr(env.s.library, "_needs_crc_fix", lambda *args: True)
     job = env.job("actions.apply", variant="test", source=f"mod:{mod.id}")
     assert job.state == "failed"
     assert job.error["code"] in ("mod_apply_failed", "library_operation_failed")
     assert env.spr.read_bytes() == original and not env.s.jobs.busy()
-    monkeypatch.setattr(mod_install, "execute_mod_install", execute)
+    monkeypatch.setattr(service, "install_staged", execute)
     monkeypatch.setattr(env.s.library, "_needs_crc_fix", needs_fix)
     assert env.job("actions.apply", variant="test", source=f"mod:{mod.id}").state == "done"
     assert env.job("actions.restore", variant="test").state == "done"

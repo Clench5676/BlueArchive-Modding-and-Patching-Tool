@@ -9,7 +9,7 @@ from PIL import Image
 from ba_modding_toolkit.gui.components import CanvasSyncGroup, DualZoomableCanvas, ZoomableCanvas
 from ba_modding_toolkit.gui.windows import mod_install_dialog as preview
 from ba_modding_toolkit.models import AnimCheckOptions
-from ba_modding_toolkit.mod_install import InstallAction, ModFilePlan, ModGroup
+from ba_modding_toolkit.core.mod_install import InstallAction, ModFilePlan, ModGroup
 from ba_modding_toolkit.naming import parse_filename
 from ba_modding_toolkit.spine import SpineViewer
 

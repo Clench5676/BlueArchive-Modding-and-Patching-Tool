@@ -1,11 +1,9 @@
 # models.py
 from pathlib import Path
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Callable, Literal, NamedTuple
 from enum import StrEnum
 from PIL import Image
-
-from bmpt.errors import ServiceError
 
 
 from UnityPy.enums import ClassIDType as AssetType
@@ -144,8 +142,6 @@ class ModUpdateResult:
     message: str
     file_pairs: list[FilePair]
     anim_diffs: AnimDiffMap | None = None
-    error: ServiceError | None = None
-    not_transferred: list[str] = field(default_factory=list)
 
 @dataclass
 class BatchUpdateResult:
@@ -164,6 +160,7 @@ class PatchResult(NamedTuple):
     unmatched_keys: list[AssetKey]  # 未匹配的资源键
     matched_keys: list[AssetKey]    # 匹配成功的资源键（包括修改和跳过的）
     anim_diffs: dict[str, list[str]] | None = None  # 动画差异字典 {skel名称: [缺失动画列表]}
+    skipped_keys: list[AssetKey] | None = None  # matched keys left as they were (same content)
     
     @property
     def matched_count(self) -> int:

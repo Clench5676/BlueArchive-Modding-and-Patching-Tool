@@ -5,7 +5,7 @@ import pytest
 from PIL import Image
 
 from ba_modding_toolkit.bundle import Bundle
-from ba_modding_toolkit.core import process_mod_update
+from bmpt.library.rebuild import rebuild
 from ba_modding_toolkit.models import AssetType, SaveOptions
 
 
@@ -95,7 +95,7 @@ def test_update_rejects_partial_extraction(tmp_path, monkeypatch, kind, failure)
     saved = []
     monkeypatch.setattr(Bundle, "load", lambda path, *args: bundles[path])
     monkeypatch.setattr(Bundle, "save", lambda *args: (saved.append(args) or True, "saved"))
-    result = process_mod_update([source], [target], tmp_path, {"ALL"}, SaveOptions(), match_strategy="name_type")
+    result = rebuild([source], [target], tmp_path, {"ALL"}, SaveOptions(), match_strategy="name_type")
     assert not result.success
     assert not result.file_pairs and not saved
     assert broken in result.message
@@ -109,7 +109,7 @@ def test_update_rejects_partial_application_before_saving(tmp_path, monkeypatch)
     saved = []
     monkeypatch.setattr(Bundle, "load", lambda path, *args: bundles[path])
     monkeypatch.setattr(Bundle, "save", lambda *args: (saved.append(args) or True, "saved"))
-    result = process_mod_update([source], [target], tmp_path, {"TextAsset"}, SaveOptions(), match_strategy="name_type")
+    result = rebuild([source], [target], tmp_path, {"TextAsset"}, SaveOptions(), match_strategy="name_type")
     assert not result.success
     assert not result.file_pairs and not saved
     assert "required.atlas" in result.message
@@ -124,8 +124,8 @@ def test_every_required_key_must_be_applied_across_targets(tmp_path, monkeypatch
     saved = []
     monkeypatch.setattr(Bundle, "load", lambda path, *args: bundles[path])
     monkeypatch.setattr(Bundle, "save", lambda *args: (saved.append(args) or True, "saved"))
-    result = process_mod_update([source], [first, second] if split else [first], tmp_path,
-                                {"ALL"}, SaveOptions(), match_strategy="name_type")
+    result = rebuild([source], [first, second] if split else [first], tmp_path,
+                     {"ALL"}, SaveOptions(), match_strategy="name_type")
     assert result.success and saved
     assert len(result.file_pairs) == (2 if split else 1)
     assert result.not_transferred == ([] if split else ["[TextAsset] required.atlas"])
@@ -163,8 +163,8 @@ def test_update_skips_obsolete_assets_without_an_own_release_baseline(
     saved = []
     monkeypatch.setattr(Bundle, "load", lambda path, *args: bundles[path])
     monkeypatch.setattr(Bundle, "save", lambda *args: (saved.append(args) or True, "saved"))
-    result = process_mod_update([original], [target], tmp_path / "output", {"TextAsset"},
-                                SaveOptions(), match_strategy=strategy)
+    result = rebuild([original], [target], tmp_path / "output", {"TextAsset"},
+                     SaveOptions(), match_strategy=strategy)
     assert result.success and result.file_pairs and saved, result.message
     assert len(result.not_transferred) == 1
     assert result.not_transferred[0] in result.message
@@ -188,7 +188,7 @@ def test_undecodable_texture_is_optional_only_when_serialized_content_matches(tm
     saved = []
     monkeypatch.setattr(Bundle, "load", lambda path, *args: bundles[path])
     monkeypatch.setattr(Bundle, "save", lambda *args: (saved.append(args) or True, "saved"))
-    result = process_mod_update([source], [target], tmp_path, {"ALL"}, SaveOptions(), match_strategy="name_type")
+    result = rebuild([source], [target], tmp_path, {"ALL"}, SaveOptions(), match_strategy="name_type")
     assert result.success is not changed
     assert bool(saved) is not changed
     if changed:
@@ -206,7 +206,7 @@ def test_update_skips_removed_assets_and_reports_them(tmp_path, monkeypatch, unr
                target: bundle(target, [asset("note", AssetType.TextAsset, payload=b"official")])}
     monkeypatch.setattr(Bundle, "load", lambda path, *args: bundles[path])
     monkeypatch.setattr(Bundle, "save", lambda *args: (True, "saved"))
-    result = process_mod_update([source], [target], tmp_path, {"ALL"}, SaveOptions(), match_strategy="name_type")
+    result = rebuild([source], [target], tmp_path, {"ALL"}, SaveOptions(), match_strategy="name_type")
     assert result.success and result.file_pairs
     assert any("obsolete_stock" in key for key in result.not_transferred)
     assert "obsolete_stock" in result.message
@@ -217,5 +217,5 @@ def test_update_still_requires_a_nonempty_match(tmp_path, monkeypatch):
     bundles = {source: bundle(source, [asset("obsolete_stock", AssetType.TextAsset)]),
                target: bundle(target, [asset("unrelated", AssetType.TextAsset)])}
     monkeypatch.setattr(Bundle, "load", lambda path, *args: bundles[path])
-    result = process_mod_update([source], [target], tmp_path, {"ALL"}, SaveOptions(), match_strategy="name_type")
+    result = rebuild([source], [target], tmp_path, {"ALL"}, SaveOptions(), match_strategy="name_type")
     assert not result.success and not result.file_pairs

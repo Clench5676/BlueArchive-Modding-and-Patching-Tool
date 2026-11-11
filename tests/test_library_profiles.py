@@ -14,7 +14,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from ba_modding_toolkit import core, mod_install
+from ba_modding_toolkit import core
+from ba_modding_toolkit.core import mod_install
 from ba_modding_toolkit.bundle import Bundle
 from bmpt.config import Settings
 from bmpt.errors import ServiceError
@@ -23,7 +24,8 @@ from bmpt.library import ModLibrary, safety, service, storage
 from bmpt.library import profiles as profiles_module
 from bmpt.library.judge import carried_of, classify, install_key, install_root, leaves
 from bmpt.library.profiles import Profiles
-from ba_modding_toolkit.models import FilePair, ModUpdateResult
+from ba_modding_toolkit.models import FilePair
+from bmpt.library.rebuild import RebuildResult
 from ba_modding_toolkit.naming import parse_filename
 from ba_modding_toolkit.utils import CRCUtils
 
@@ -440,7 +442,7 @@ def test_a_failed_build_still_shows_its_error_on_the_new_choice(world, monkeypat
         raise ServiceError("mod_apply_failed", file=world.spr)
 
     monkeypatch.setattr(service.ModLibrary, "_needs_crc_fix", lambda self, source, target: True)
-    monkeypatch.setattr(mod_install, "execute_mod_install", broken)
+    monkeypatch.setattr(service, "install_staged", broken)
     expect_error("mod_apply_failed", lambda: world.library.apply("test", f"mod:{second.id}"))
     choice = world.folder()["configured"]["test_spr"]
     assert choice["source"] == f"mod:{second.id}" and choice["error"]["code"] == "mod_apply_failed"
@@ -634,13 +636,13 @@ def no_installer(monkeypatch):
     def fail(*args, **kwargs):
         raise AssertionError("the installer must not run")
 
-    monkeypatch.setattr(mod_install, "execute_mod_install", fail)
-    monkeypatch.setattr(core, "process_mod_update", fail)
+    monkeypatch.setattr(service, "install_staged", fail)
+    monkeypatch.setattr(service, "rebuild", fail)
 
 
 def rebuilding_installer(monkeypatch, payload=b"rebuilt!", only=None):
     """An installer that rebuilds the mod (CRC-fixed bytes no file of the mod holds)."""
-    real = mod_install.execute_mod_install
+    real = service.install_staged
     needs_fix = service.ModLibrary._needs_crc_fix
 
     def rebuilding(self, source, target):
@@ -655,9 +657,9 @@ def rebuilding_installer(monkeypatch, payload=b"rebuilt!", only=None):
             # a mod for this game file, or one of an earlier release updated to the files there now
             for target in [file.existing_path for file in group.files if file.existing_path] or group.target_paths:
                 target.write_bytes(CRCUtils.apply_crc_fix(header_bundle(payload), int(parse_filename(target.name).crc)))
-        return mod_install.InstallResult()
+        return []
 
-    monkeypatch.setattr(mod_install, "execute_mod_install", install)
+    monkeypatch.setattr(service, "install_staged", install)
     monkeypatch.setattr(service.ModLibrary, "_needs_crc_fix", rebuilding)
 
 
@@ -1103,10 +1105,10 @@ def test_another_installs_variant_source_stays_configured_and_is_applied_from_th
         calls.append([source.name for source in sources])
         result = output / targets[0].name
         result.write_bytes(CRCUtils.apply_crc_fix(header_bundle(b"adapted!"), int(parse_filename(targets[0].name).crc)))
-        return ModUpdateResult(True, "updated", [FilePair(result, targets[0])])
+        return RebuildResult(True, "updated", [FilePair(result, targets[0])])
 
     monkeypatch.setattr("bmpt.library.service.adapt_variant_sources", lambda sources, *args: sources)
-    monkeypatch.setattr(core, "process_mod_update", update)
+    monkeypatch.setattr(service, "rebuild", update)
     # configured there by an earlier build, with a variant the current catalog lacks
     world.library.profiles.update(lambda data: data["folders"].setdefault(pin.key, {"server": "japan"}).update(
         configured={"test_spr": {"variant": "test", "kind": "spr", "source": "variant:ch9999", "since": "2026-01-01"}}))
@@ -1489,10 +1491,10 @@ def test_a_variant_record_without_its_core_there_is_unknown_and_adopted(world, m
     def update(sources, targets, output, *args, **kwargs):
         result = output / targets[0].name
         result.write_bytes(swap)
-        return ModUpdateResult(True, "updated", [FilePair(result, targets[0])])
+        return RebuildResult(True, "updated", [FilePair(result, targets[0])])
 
     monkeypatch.setattr("bmpt.library.service.adapt_variant_sources", lambda sources, *args: sources)
-    monkeypatch.setattr(core, "process_mod_update", update)
+    monkeypatch.setattr(service, "rebuild", update)
     world.library.apply("test", "variant:other")
     other.unlink()  # that variant's portrait is gone from this install
     world.reload()
@@ -1824,9 +1826,9 @@ def test_the_official_flag_compares_the_written_bytes_with_the_official_copy(wor
                 if file.existing_path.name == atlas.name:
                     continue  # this part left official
                 file.existing_path.write_bytes(header_bundle(b"in place"))
-        return mod_install.InstallResult()
+        return []
 
-    monkeypatch.setattr(mod_install, "execute_mod_install", install)
+    monkeypatch.setattr(service, "install_staged", install)
     monkeypatch.setattr(world.library, "_needs_crc_fix", lambda *args: True)
     world.library.apply("test", f"mod:{pack.id}")
     applied = json.loads((world.root / "state.json").read_text())["applied"]
@@ -2106,7 +2108,7 @@ def test_a_mod_retargeted_by_a_later_catalog_is_listed_and_installed_there_direc
     def fail(*args, **kwargs):
         raise AssertionError("adapted onto its own variant")
 
-    monkeypatch.setattr(core, "process_mod_update", fail)
+    monkeypatch.setattr(service, "rebuild", fail)
     world.library.restore("ch0042")
     world.library.apply("ch0042", f"mod:{mod.id}")
     assert newcomer.read_bytes() == data
@@ -2534,10 +2536,10 @@ def test_a_variant_entry_whose_source_files_changed_is_rebuilt(world, monkeypatc
         built.append([source.name for source in sources])
         result = output / targets[0].name
         result.write_bytes(CRCUtils.apply_crc_fix(header_bundle(b"adapted!"), int(parse_filename(targets[0].name).crc)))
-        return ModUpdateResult(True, "updated", [FilePair(result, targets[0])])
+        return RebuildResult(True, "updated", [FilePair(result, targets[0])])
 
     monkeypatch.setattr("bmpt.library.service.adapt_variant_sources", lambda sources, *args: sources)
-    monkeypatch.setattr(core, "process_mod_update", update)
+    monkeypatch.setattr(service, "rebuild", update)
     world.library.apply("test", "variant:other")
     world.toggle(False)
     assert world.folder()["built"]["test_spr"]["inputs"] == [other.name]
@@ -2884,7 +2886,7 @@ def test_real_bundles_off_on_drift_and_adoption(tmp_path, monkeypatch):
     def fail(*args, **kwargs):
         raise AssertionError("the installer must not run")
 
-    monkeypatch.setattr(mod_install, "execute_mod_install", fail)
+    monkeypatch.setattr(service, "install_staged", fail)
     library.toggle(True, False)
     assert texture_file.read_bytes() == applied  # byte for byte, from the built copy
 
@@ -3329,9 +3331,9 @@ def updating(monkeypatch, payload: bytes = b"new build") -> None:
     def update(sources, targets, output, *args, **kwargs):
         result = output / targets[0].name
         result.write_bytes(header_bundle(payload))
-        return ModUpdateResult(True, "updated", [FilePair(result, targets[0])])
+        return RebuildResult(True, "updated", [FilePair(result, targets[0])])
 
-    monkeypatch.setattr(core, "process_mod_update", update)
+    monkeypatch.setattr(service, "rebuild", update)
 
 
 def forget_markers(world: World) -> None:
@@ -3408,10 +3410,10 @@ def test_an_update_that_changed_nothing_sets_no_marker_and_keeps_built_copies(wo
     assert "test_spr" in before["folders"][world.key()]["built"]
     def same(sources, targets, output, *args, **kwargs):  # the rebuild yields the very bytes the mod holds
         (output / targets[0].name).write_bytes(mod.file.read_bytes())
-        return ModUpdateResult(True, "updated", [FilePair(output / targets[0].name, targets[0])])
+        return RebuildResult(True, "updated", [FilePair(output / targets[0].name, targets[0])])
 
-    monkeypatch.setattr(core, "process_mod_update", same if same_bytes else
-                        lambda *args, **kwargs: ModUpdateResult(True, "all_targets_unchanged", []))
+    monkeypatch.setattr(service, "rebuild", same if same_bytes else
+                        lambda *args, **kwargs: RebuildResult(True, "", [], all_unchanged=True))
     assert world.library.update(mod.id).unchanged
     assert world.profiles() == before and world.folder()["updated"] == {}
     assert world.entries()[(world.key(), "test_spr")].state == "ok"

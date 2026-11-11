@@ -15,7 +15,8 @@ from types import SimpleNamespace
 import pytest
 from PIL import Image, ImageChops, ImageStat
 
-from ba_modding_toolkit import core, mod_install
+from ba_modding_toolkit import core
+from ba_modding_toolkit.core import mod_install
 from ba_modding_toolkit.bundle import Bundle
 from bmpt.catalog.models import CoreMap
 from bmpt.config import Settings
@@ -23,7 +24,9 @@ from bmpt.errors import ServiceError
 from ba_modding_toolkit.i18n import I18n
 from bmpt.library import ModLibrary
 from bmpt.library import safety, service, storage
-from ba_modding_toolkit.models import AssetType, FilePair, ModUpdateResult
+from ba_modding_toolkit.models import AssetType, FilePair
+from bmpt.library.install import Action
+from bmpt.library.rebuild import RebuildResult
 from ba_modding_toolkit.naming import parse_filename
 from ba_modding_toolkit.searching import get_search_dirs
 from ba_modding_toolkit.utils import CRCUtils
@@ -138,13 +141,13 @@ def test_direct_install_build_progress_names_processing(setup_library, monkeypat
     monkeypatch.setattr(service, "t", translate)
     source = make_mod(env.original, env.tmp / "upload")
     entry, = env.library.add([source])
-    execute = mod_install.execute_mod_install
+    execute = service.install_staged
 
     def report(*args, **kwargs):
-        kwargs["progress_callback"](0, 1, "test_spr")
+        kwargs["progress"](0, 1, "test_spr")
         return execute(*args, **kwargs)
 
-    monkeypatch.setattr(mod_install, "execute_mod_install", report)
+    monkeypatch.setattr(service, "install_staged", report)
     progress = []
     env.library.apply("test", f"mod:{entry.id}", progress=lambda *args: progress.append(args))
     assert (0, 1, "Processing: test_spr") in progress
@@ -1049,8 +1052,8 @@ def test_variant_apply_and_restore_select_kinds(setup_library, monkeypatch, kind
             result = output / target.name
             result.write_bytes(sources[0].read_bytes())
             pairs.append(FilePair(result, target))
-        return ModUpdateResult(True, "updated", pairs)
-    monkeypatch.setattr(core, "process_mod_update", update)
+        return RebuildResult(True, "updated", pairs)
+    monkeypatch.setattr(service, "rebuild", update)
     selected = {path for path in originals if kind is None or (path == env.original) == (kind == "spr")}
     result = env.library.apply("test", "variant:other", kind=kind)
     assert set(result.files) == selected
@@ -1085,8 +1088,8 @@ def test_default_portrait_choices_ignore_unavailable_lobby_originals(setup_libra
     def update(sources, targets, output, *args, **kwargs):
         result = output / targets[0].name
         result.write_bytes(header_bundle(b"adapted portrait"))
-        return ModUpdateResult(True, "updated", [FilePair(result, targets[0])])
-    monkeypatch.setattr(core, "process_mod_update", update)
+        return RebuildResult(True, "updated", [FilePair(result, targets[0])])
+    monkeypatch.setattr(service, "rebuild", update)
     env.library.apply("test", "variant:other")
     assert {path: path.read_bytes() for path in untouched} == untouched
     expect_error("original_unavailable", lambda: env.library.restore("test", kind=None))
@@ -1118,9 +1121,9 @@ def test_cross_variant_mod_uses_mod_parts_official_baselines_and_tracks_source(s
         target = next(path for path in targets if path.name == env.original.name)
         result = output / target.name
         result.write_bytes(header_bundle(b"adapted selected mod"))
-        return ModUpdateResult(True, "updated", [FilePair(result, target)])
+        return RebuildResult(True, "updated", [FilePair(result, target)])
     monkeypatch.setattr("bmpt.library.service.adapt_variant_sources", adapt)
-    monkeypatch.setattr(core, "process_mod_update", update)
+    monkeypatch.setattr(service, "rebuild", update)
     result = env.library.apply("test", f"mod:{source_mod.id}")
     assert set(result.files) == {target_atlas, env.original}
     assert target_atlas.read_bytes() == official[target_atlas]
@@ -1153,8 +1156,8 @@ def test_variant_swap_uses_official_source_and_keeps_target_original(setup_libra
         calls.append((sources, targets, kwargs))
         result = output / targets[0].name
         result.write_bytes(header_bundle(b"variant!"))
-        return ModUpdateResult(True, "updated", [FilePair(result, targets[0])])
-    monkeypatch.setattr(core, "process_mod_update", update)
+        return RebuildResult(True, "updated", [FilePair(result, targets[0])])
+    monkeypatch.setattr(service, "rebuild", update)
     original_bytes = env.original.read_bytes()
     result = env.library.apply("test", "variant:other")
     assert result.files == [env.original]
@@ -1220,8 +1223,8 @@ def test_update_uses_official_baseline_preserves_previous_and_reports_unchanged(
                 kwargs["on_step"](step)
         result = output / targets[0].name
         result.write_bytes(header_bundle(b"updated!"))
-        return ModUpdateResult(True, "updated", [FilePair(result, targets[0])])
-    monkeypatch.setattr(core, "process_mod_update", update)
+        return RebuildResult(True, "updated", [FilePair(result, targets[0])])
+    monkeypatch.setattr(service, "rebuild", update)
     progress = []
     result = env.library.update(entry.id, progress=lambda *args: progress.append(args))
     assert progress == [({"current": 1, "total": 1, "step": f"import.step.{step}"},)
@@ -1234,8 +1237,8 @@ def test_update_uses_official_baseline_preserves_previous_and_reports_unchanged(
     assert calls == [[env.root / "originals" / env.original.name]]
     assert reload_library(env).mods()[0] == result.mod
     assert env.library.update(entry.id).unchanged
-    monkeypatch.setattr(core, "process_mod_update", lambda *args, **kwargs:
-                        ModUpdateResult(True, "all_targets_unchanged", []))
+    monkeypatch.setattr(service, "rebuild", lambda *args, **kwargs:
+                        RebuildResult(True, "", [], all_unchanged=True))
     assert env.library.update(entry.id).unchanged
     json.dumps(result.to_json())
 
@@ -1253,8 +1256,8 @@ def test_update_can_split_an_old_mod_into_current_bundle_parts(setup_library, mo
     def update(sources, current, output, *args, **kwargs):
         result = output / current[0].name
         result.write_bytes(header_bundle(b"split mod " + parse_filename(current[0].name).res_type.encode()))
-        return ModUpdateResult(True, "updated", [FilePair(result, current[0])])
-    monkeypatch.setattr(core, "process_mod_update", update)
+        return RebuildResult(True, "updated", [FilePair(result, current[0])])
+    monkeypatch.setattr(service, "rebuild", update)
     result = env.library.update(entry.id)
     assert len(result.files) == 2 and len(result.previous) == 1
     assert result.previous[0].read_bytes() == old_bytes
@@ -1271,8 +1274,8 @@ def test_failed_rebuild_keeps_mod_and_game_bytes(setup_library, monkeypatch):
     env = setup_library
     entry = env.library.add([make_mod(env.original, env.tmp / "input")])[0]
     mod_bytes, game_bytes = entry.file.read_bytes(), env.original.read_bytes()
-    monkeypatch.setattr(core, "process_mod_update", lambda *args, **kwargs:
-                        ModUpdateResult(False, "failed", []))
+    monkeypatch.setattr(service, "rebuild", lambda *args, **kwargs:
+                        RebuildResult(False, "failed", []))
     expect_error("mod_update_failed", lambda: env.library.update(entry.id))
     assert entry.file.read_bytes() == mod_bytes
     assert env.original.read_bytes() == game_bytes
@@ -1284,8 +1287,8 @@ def test_failed_install_preparation_keeps_game_and_originals(setup_library, monk
     entry = env.library.add([make_mod(env.original, env.tmp / "input")])[0]
     game_bytes = env.original.read_bytes()
     monkeypatch.setattr(env.library, '_needs_crc_fix', lambda *args: True)
-    monkeypatch.setattr(mod_install, "execute_mod_install", lambda *args, **kwargs:
-                        mod_install.InstallResult(failed_groups=[("test_spr", "failed")]))
+    monkeypatch.setattr(service, "install_staged", lambda *args, **kwargs:
+                        [("test_spr", "failed")])
     expect_error("mod_apply_failed", lambda: env.library.apply("test", f"mod:{entry.id}"))
     assert env.original.read_bytes() == game_bytes
     assert not (env.root / "originals").exists()
@@ -1453,8 +1456,8 @@ def swap_by_copying(monkeypatch, payload=b"adapted"):
     def update(sources, targets, output, *args, **kwargs):
         result = output / targets[0].name
         result.write_bytes(header_bundle(payload))
-        return ModUpdateResult(True, "updated", [FilePair(result, targets[0])])
-    monkeypatch.setattr(core, "process_mod_update", update)
+        return RebuildResult(True, "updated", [FilePair(result, targets[0])])
+    monkeypatch.setattr(service, "rebuild", update)
 
 
 @pytest.mark.parametrize("kind", ["spr", "lobby"])
@@ -2689,7 +2692,7 @@ def test_a_rebuilt_parts_older_release_is_planned_as_an_asset_update(setup_libra
     # the game update rebuilt the part: the game's file has another structure than the mod's
     monkeypatch.setattr(service.integrity.Inspection, "structure", lambda self, path: frozenset(
         {"rebuilt" if env.game_dir in path.parents else "old"}))
-    assert _plan_actions(env, entry) == [(mod_install.InstallAction.UPDATE, None, [env.original])]
+    assert _plan_actions(env, entry) == [(Action.UPDATE, None, [env.original])]
     files = {path.name: path for path in env.library._paths(env.library._record(entry.id))}
     assert env.library._replacements(files, [env.original], env.library.current_pin()) == {}
 
@@ -2698,7 +2701,7 @@ def test_a_file_built_on_the_part_as_it_is_replaces_it_whole_after_a_format_chec
     env = setup_library
     entry, = env.library.add([_old_release(env, env.tmp / "old")])
     monkeypatch.setattr(service.integrity.Inspection, "structure", lambda self, path: frozenset({"same"}))
-    assert _plan_actions(env, entry) == [(mod_install.InstallAction.DIRECT_REPLACE, env.original, [])]
+    assert _plan_actions(env, entry) == [(Action.DIRECT_REPLACE, env.original, [])]
     # another Unity version than the part's: never written whole
     monkeypatch.setattr(service.integrity, "metadata", lambda path, **kwargs: service.integrity.Contents(
         platforms={"StandaloneWindows64"}, versions={"2021.3" if env.game_dir in path.parents else "2022.3"}))
@@ -2713,4 +2716,4 @@ def test_a_file_whose_structure_cannot_be_read_keeps_the_name_rule(setup_library
         raise ServiceError("bundle_invalid", file=path.name)
 
     monkeypatch.setattr(service.integrity.Inspection, "structure", unreadable)
-    assert _plan_actions(env, entry) == [(mod_install.InstallAction.DIRECT_REPLACE, env.original, [])]
+    assert _plan_actions(env, entry) == [(Action.DIRECT_REPLACE, env.original, [])]

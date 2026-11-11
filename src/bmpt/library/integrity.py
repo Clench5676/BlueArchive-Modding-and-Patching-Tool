@@ -8,8 +8,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from .. import devmode
-from bmpt.engine import REPLACEABLE_ASSET_TYPES, AssetKey, AssetType, Bundle, UpdateScope, get_skel_version
+from bmpt.engine import REPLACEABLE_ASSET_TYPES, AssetKey, AssetType, Bundle, get_skel_version
 from ..errors import ServiceError
+from .rebuild import UpdateScope
 from ..gameassets.spine import atlas_pages
 from ..gameassets.discovery import cab_names
 
