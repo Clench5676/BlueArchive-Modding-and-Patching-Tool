@@ -545,7 +545,7 @@ function toolbar(right, y, { segs = null, sortKey = "sort.default", active = 0, 
   return fittedToolbar(right, y, { segs, sortKey, sortKeys, active, ascending, filtered, toggle });
 }
 // the icon of a list's toggle in the toolbar (Show Other Students, BL-176; the owner's pick of the game's icons)
-export const TOGGLE_ICON = Object.freeze({ sprite: "School_Icon_Student", atlas: "Common", size: [60, 66] });
+export const TOGGLE_ICON = Object.freeze({ sprite: "Common_Charlist_Icon_ViewSmall", atlas: "Common", size: [57, 57] });
 
 // the fit of that toolbar: the checkbox's ``label``, the ``segs`` captions' keys and the sort button's ``sortKeys`` (``sortKey``:
 // the one shown), between the list's left edge and ``right``
