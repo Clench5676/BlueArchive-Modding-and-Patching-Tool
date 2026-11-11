@@ -1020,6 +1020,8 @@
 			"changePortrait": "更換立繪",
 			"add": "新增",
 			"remove": "移除",
+			"selectStudent": "請選擇學生",
+			"removeConfirm": "從清單中移除此紀念大廳",
 			"previous": "上一個",
 			"next": "下一個",
 			"done": "完成",
