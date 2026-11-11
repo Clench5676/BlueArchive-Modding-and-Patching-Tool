@@ -168,8 +168,9 @@ export function reviewLines(report) {
 
 export async function remap(id, onRemapped = () => {}, label = "", subject = label, kind = "") {
   // A portrait is baked through world space: the page poses both rigs with the runtime and posts what they draw.
-  const checked = reports.get(id);
-  const geometry = checked?.kind === "spr" ? RigGeometry.forRemap(checked, globalThis.spine) : undefined;
+  let checked = reports.get(id);
+  if (!checked && kind === "spr") checked = await inspect(id, label, null, subject);
+  const geometry = checked?.kind === "spr" && await ensureSpine() ? RigGeometry.forRemap(checked, globalThis.spine) : undefined;
   const result = await Loading.hold(() => Loading.page(() => progressTask("Remap", subject,
     async (update) => waitJob(await rpc("actions.remap", geometry ? { mod: id, geometry } : { mod: id }), update),
   )), { all: true });
