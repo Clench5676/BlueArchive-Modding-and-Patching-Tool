@@ -1323,6 +1323,25 @@ test("a compatibility check never updates an existing mod even when its bundle d
   await done;
 });
 
+test("Update of a portrait drawn on a rig the App no longer has shows why and changes nothing", async () => {
+  setStrings("en-US", Object.fromEntries(strings(english)));
+  await modsEnabled(false);
+  const fam = previewFamily();
+  Detail.setupPreviewTest(fam, "spr");
+  const inputs = { skeletons: {}, atlases: {}, textures: {} };
+  handlers.set("actions.compatibilityStamp", () => "stamp");
+  handlers.set("actions.compatibility", () => ({ result: "compatibility" }));
+  handlers.set("actions.update", () => assert.fail("an update would leave it as it is"));
+  handlers.set("jobs.get", () => ({ result: { state: "done", result: { kind: "spr", official: inputs, mod: inputs, remappable: false,
+    rig: { layout: ["test.atlas"], animations: {}, regions: {}, unknown: ["test.atlas"] } } } }));
+  const updating = Detail.runUpdate();
+  const ok = await drawn(dialog, "ok");
+  const text = walk(dialog).map((el) => el.textContent).join(" ").replace(/\s+/g, " ");
+  assert.ok(text.includes(english.compatibility.rigUnknown), text);
+  ok.click();
+  assert.equal(await updating, false);
+});
+
 test("each mod card exposes a read-only compatibility check for its own mod", async () => {
   setStrings("en-US", Object.fromEntries(strings(english)));
   await modsEnabled(false);
