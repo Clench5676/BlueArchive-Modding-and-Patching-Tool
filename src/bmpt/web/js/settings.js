@@ -10,6 +10,7 @@ import * as ModSwitch from "./mod-switch.js";
 import * as NGUI from "./ngui.js";
 import * as Popup from "./popup.js";
 import * as Prompts from "./prompts.js";
+import * as Impact from "./update-impact.js";
 import * as Consent from "./consent.js";
 import * as OtherMods from "./settings-other.js";
 import * as ModExport from "./mod-export.js";
@@ -94,6 +95,8 @@ async function checkFiles() {
   if (!m.drift && !m.untracked && !m.damaged) return;
   const entries = await rpc("mods.entries").catch(() => []);
   await Prompts.show("drift", { entries, dismissed: true });
+  // entries a game update put back: the update summary's
+  if (m.enabled !== false && entries.some((e) => e?.state === "updated")) await Impact.show();
   await Prompts.show("untracked", { entries, dismissed: true });
   render();
 }
@@ -262,6 +265,8 @@ function rows({ builtSize = null, sizeError = null } = {}) {
     }));
     add(helpAfterTitle(valueRow("Files", 0, T("settings.mods.files"), filesValue(m), [[T("settings.mods.check"), checkFiles]]),
       T("settings.mods.files"), false, driftHelp));
+    // the game update summary again, as the mods stand now (its Go To leaves Settings for the mod's student page)
+    add(valueRow("Impact", 0, T("settings.mods.impact"), "", [[T("settings.mods.view"), () => Impact.show()]], { showValue: false }));
     if (otherMods?.length) {
       add({ tree: rowBase("OtherMods", 0, 130, T("settings.mods.other")), h: 130, hits: [] });
       OtherMods.rows(otherMods, valueRow, refreshOtherMods).forEach(add);
@@ -477,7 +482,7 @@ async function render({ builtSize = null, sizeError = null } = {}) {
   }
 }
 
-function close() {
+export function close() {
   const host = $("settings");
   host.hidden = true;
   host.innerHTML = "";

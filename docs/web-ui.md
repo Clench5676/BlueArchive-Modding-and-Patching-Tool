@@ -769,7 +769,11 @@ with other regions, a skeleton with other bones, slots or animations, a texture 
 `gone` (no official part of the core left) and `unknown` (no fingerprint, unreadable parts). `update_impact`
 classifies every library mod once the install's resource version differs from the one in `resource` (or none is
 recorded); with nothing but `unchanged` and `unknown` it records the version at once, otherwise `due` stays true until
-`impact_seen`. An On and its Retry hold an entry configured with a mod whose rig changed (`held`, `why` `held`)
+`impact_seen`; `force` (Settings' Game Update Impact) classifies them whatever was seen. Each mod named carries
+`changes` (`fingerprint.changes`): what the update changed in its official parts, `repacked` (an atlas with other
+places or regions), `animations` (how many added), `rig` (bones or slots, animations removed, a skeleton that cannot
+be read), `textures` (another size), `removed` and `added` assets, `gone`; only what is true is kept. An On and its
+Retry hold an entry configured with a mod whose rig changed (`held`, `why` `held`)
 instead of writing it: the write would carry the old rig or layout onto the new parts. Updating or remapping the mod
 records its new baseline and ends the hold; Apply Mod Configuration and the detail screen's switch write it as asked.
 
@@ -1176,8 +1180,9 @@ The services hold what the Enable Mods switch, the prompts and the classic hand-
   `profiles_unreadable`, the game watch's answer (`game_running`, `game_status_unavailable`, `steam_busy`, a classic
   window an earlier instance left), this instance's classic window (`classic_open`). With the scan consent, `pending`
   and `stuck` count the last scan's entries; without it, they and `left` count the `unfinished` list by `why`.
-  `held` always counts the `unfinished` list's held entries (`heldEntries`: `{install, core, variant, kind, source}`
-  from the configuration), and a held entry is not counted as `pending`.
+  `held` always counts the `unfinished` list's held entries (`heldEntries`: `{install, core, variant, kind, source,
+  label}` from the configuration, `label` the configured mod's name while it is in the library), and a held entry is
+  not counted as `pending`.
 - **The library** is built without a current install too (ADB mode, the selected folder missing), from the library
   folder, the catalog and the settings, with `scan_allowed` (the pref `scan_consent`, read at each use, so a change
   needs no rebuild), `data_id` and `write_check`, which refuses every game file write with `classic_open` while a
@@ -1267,7 +1272,7 @@ stops the server (the page shows Closed); with `--serve` it gives `native_unavai
 | `mods.scan {dismissed = false}` | `{requested: bool}`; the result comes as `library.scanned`; `scan_off` without scan consent; `dismissed: true` is Settings' explicit Check |
 | `mods.entries` | the last scan's entries (`{install, core, variant, names, kind, source, configured, state, overwritten, fixed, size, files, dismissed}`), updated by every writer job's result until the next scan; empty without scan consent |
 | `mods.adopt {entries}` | job id (`library.adopt`): Add to Library for `[{install, core}]`, allowed while the game runs and while a classic window is open; `not_enough_space` |
-| `mods.impact {ids?}` | reader job id: without `ids`, the current install's game update impact (`update_impact`: `{due, install, version, previous, mods: [{id, label, target, kind, core, impact, configured}], counts}`, `mods` only those not `unchanged` or `unknown`); with `ids`, `{mods: [{id, impact}]}` for those mods now |
+| `mods.impact {ids?, force?}` | reader job id: without `ids`, the current install's game update impact (`update_impact`: `{due, install, version, previous, mods: [{id, label, target, kind, core, impact, changes, configured}], counts}`, `mods` only those not `unchanged` or `unknown`; `force`: classified even when the version was seen, Settings' Game Update Impact); with `ids`, `{mods: [{id, impact}]}` for those mods now |
 | `mods.impactSeen {install, version}` | `{}`: the impact summary of that resource version was shown |
 | `mods.confirmUntested {confirm}` | `{}`: the writes an `untested_build` refusal named are confirmed (its `params.confirm`); the page makes the refused call again |
 | `mods.restoreDrift {entries}` | job id (`mods.restore`): Apply Mod Configuration; `classic_open` at submit |
@@ -2461,8 +2466,9 @@ detail screen, and in Settings' Mods tab.
   when more than one game folder is known; "Not switched: n" with Retry (the
   same toggle again) for pending and left entries; "Left as is, no official copy: n" with Details, the Overwritten
   message (the entries, known from the last scan with the scan consent, "No official copy left" and the repair lines
-  of `repairs.js`, see Mods already in use; never a repair button); "On hold, rig changed: n" with Details (the held
-  entries' names and "Update on the mod's page, then apply"; never a Retry); "Gone from the library: n". The counts are the
+  of `repairs.js`, see Mods already in use; never a repair button); "Official .skel or .atlas file changed, not
+  applied: n" with Details ("Mods Not Applied: Official Files Changed": each held entry as the update summary names a mod, with Go To where
+  its mod is known, which closes the help and opens the mod; never a Retry); "Gone from the library: n". The counts are the
   services': the last scan's with the scan consent, the unfinished list's by why without it. Retry and Details stay
   at their line's right end. There is no scan-off row or Allow Check button; file-check consent stays in Settings.
 - **The scan consent popup** (`consent.js scan`, built like the asset consent): Check Game Files; This app will:
@@ -2538,23 +2544,39 @@ overwritten entry need none (the detail screen judges its files cheaply).
   the toggle, with the first toggle's explanation), and Later (also the close button, the backdrop and Escape); Don't
   Ask Again dismisses the cards not added (`mods.dismiss untracked`). Damaged entries are listed apart, dim and never
   ticked, their Details giving the repair lines.
-- **Game Updated** (`update-impact.js`, a plain, left-aligned message popup on the wide frame): once per resource version of the
-  current install, when `mods.impact` finds mods a game update touched. First "Rig changed, on hold: n", the held
-  mods as list items ("name - kind", six at most, then "+n") and how the hold ends ("Select the mod on the student
-  page and press Update to apply it again", in italics, two type steps smaller); then, after a gap, "Other affected mods" followed by an inline Expand /
-  Collapse button over a list item per other kind with mods ("Gone from the game: n", "New official parts: n",
-  "Rebuilt, same rig: n", "Not affected: n", "Not determined: n"), folded at first; the button closes the message
-  and opens it again the other way. With no mod held that list shows at once, without the button. Closing it records the version
-  (`mods.impactSeen`). At the start before the prompts below, and after `config.changed` (a game update while the
-  program runs rebuilds the game services) once no other popup is open.
+- **Mods Impacted by Game Update** (`update-impact.js`, a plain, left-aligned message popup on the wide frame): once per
+  resource version of the current install, when `mods.impact` finds mods a game update touched. First "Official .skel
+  or .atlas file changed, not applied until updated: n", then every held mod as a list item ("student - kind - mod name", the mod's
+  own name left out where it only repeats the student's) with an inline Go To, under it what the update changed in
+  its official parts in the dense type, close to its line ("Official Portrait: .atlas file layout changed, 1 new animation in the .skel file"), and
+  how the hold ends ("Go to opens the mod, then press Update to apply it again", in italics, two type steps smaller);
+  then, after a gap, "Other affected mods" followed by an inline Expand / Collapse button over a list item per other
+  kind with mods ("Gone from the game: n", "New official parts: n", "Rebuilt, .skel and .atlas files unchanged: n", "Not affected: n", "Not
+  determined: n"), each kind's mods under it with Go To, folded at first; the button closes the message and opens it
+  again the other way. With no mod held that list shows at once, without the button. A long list scrolls in the
+  frame. Go To closes the message and opens the mod's student page on the tab of its kind with its switch open and
+  the mod's card selected (its details hold Update; `detail.js want`/`takeWanted`, Settings closed first). Closing it
+  records the version (`mods.impactSeen`). At the start before the prompts below, and after `config.changed` (a
+  game update while the program runs rebuilds the game services) once no other popup is open. Settings' Mods tab
+  shows it again (Game Update Impact, View: `mods.impact {force}` under the loading screen, the mods as they stand
+  now; with none affected, the counts). Every mod line ends with "Applied" for a mod its student is configured with,
+  whatever the switch says (`configured`). It is also the game update's drift prompt: while mods are on and the file
+  check is allowed and done, the applied entries the update put back to official (`mods.entries` state `updated`,
+  not dismissed; Settings' View lists the dismissed ones too) are listed after the held mods ("Reset to official by
+  the game update: n", each with Go To), those whose configured mod's rig changed staying with their mod above; the
+  message then has the drift prompt's two buttons and no close (decision 16): Apply Mod Configuration
+  (`mods.restoreDrift` for the put-back entries, `prompts.js applyDrift`, the held ones dismissed) and Keep as Is
+  (`mods.dismiss drift` for all). Put-back entries a later scan finds (`library.scanned`) bring it back for them alone,
+  with the held mods. The tray's Back to Official and Settings' Check open it when only such entries are there.
 - **New Game Version** (`mod-switch.js confirmUntested`, a plain message popup): a write refused with
   `untested_build`, from the switch (the tray's toggle too, once the window is in front), the detail screen, Apply Mod
   Configuration, Settings' other mods and the photography gallery. "Affected by the game update: n", then the entries
   as list items ("name - kind", six at most, then "+n"); Apply Anyway (`mods.confirmUntested`, then the same call
   again) and Cancel (nothing changes).
-- **Mods Back to Official** (while mods are on; titled Mods Affected by a Game Update when every listed entry is
-  `updated`): the `reset` and `updated` entries, every card ticked but those whose
-  configured mod's rig a game update changed (`mods.impact {ids}`): those carry the Rig Changed badge and start
+- **Mods Back to Official** (while mods are on: with mods off the game is meant to be official, so nothing was put
+  back): the `reset` entries (a Steam check or a repair; a game update's `updated` ones are the update summary's),
+  every card ticked but those whose configured mod's official .skel or .atlas file a game update changed
+  (`mods.impact {ids}`): those carry the Files Changed badge and start
   unticked, so Apply Mod Configuration writes them only when ticked; with the install
   chip; no hint over the cards (only "Still overwritten: n" when there are such entries), the band over the paper as
   slim as the count, the cards from the paper's left edge and a portrait's details upright beside its stacked fields

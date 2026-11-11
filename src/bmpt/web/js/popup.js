@@ -1165,7 +1165,8 @@ const counted = (fitted) => ({ ...fitted, lines: fitted.text.split("\n").length 
 const placeholderButton = (name, x, y, caption, { w, h = SMALL_BUTTON.h }) => node(name, [x, y], [sprite("Common_Btn_BG", w, h)]);
 // a plain line's inline button (button.inline): the small button, shadow included, within its line's text from top to
 // bottom (``height`` of the type size: the ink of a line, not its pitch), its caption at most ``share`` of the type size
-export const INLINE_BUTTON = Object.freeze({ height: 0.9, share: 0.55, fsMin: 20, pad: 50 });
+// pad: the small button fits its caption again within its width less SMALL_BUTTON.fitInset, so the pad is at least that
+export const INLINE_BUTTON = Object.freeze({ height: 0.9, share: 0.55, fsMin: 20, pad: SMALL_BUTTON.fitInset });
 
 function messageLines(lines, w, fitTogether, plain, assets = true) {
   const rows = lines.map((l) => (typeof l === "string" ? { text: l } : l));
@@ -1181,7 +1182,8 @@ function messageLines(lines, w, fitTogether, plain, assets = true) {
     if (plain && r.button?.inline) {
       // no higher than its line's text
       const bh = Math.round(f.fs * INLINE_BUTTON.height), cap = Math.min(Math.round(f.fs * INLINE_BUTTON.share), bh - SMALL_BUTTON.boxInsetH);
-      const ib = fitText(r.button.label, cap, Math.min(cap, INLINE_BUTTON.fsMin), SMALL_BUTTON.w - SMALL_BUTTON.fitInset);
+      // one line: as high as the text beside it, a two-word caption (Go to) never folds
+      const ib = fitText(r.button.label, cap, Math.min(cap, INLINE_BUTTON.fsMin), SMALL_BUTTON.w - SMALL_BUTTON.fitInset, 1);
       const ibw = glyphsOf(ib.text, ib.fs) + INLINE_BUTTON.pad, inlineRoom = w - 2 * SPACE.xxxl - ibw - SPACE.m - (r.indent || 0);
       return { r, bf: ib, bw: ibw, bh, room: inlineRoom, f: counted(messageText(r.text, f.fs, f.fs, inlineRoom, most, boxed)) };
     }

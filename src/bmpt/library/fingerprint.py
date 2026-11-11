@@ -262,6 +262,33 @@ def _rig_changed(changes: dict) -> bool:
     return any(change.get("present") != "after" for change in changes["textures"].values())
 
 
+def changes(built: dict | None, now: dict | None) -> dict[str, Any]:
+    """What a game update changed in the official parts a mod was built against, as the impact summary names it: an
+    atlas ``repacked`` (other places or regions), ``animations`` added (count), the ``rig`` itself (bones, slots,
+    animations removed, or a skeleton that cannot be read), ``textures`` of another size, assets ``removed`` and
+    ``added``. Only what is true is kept; ``{"gone": True}`` when the core has no official part left, ``{}`` when
+    nothing tells."""
+    if not built or not built.get("parts"):
+        return {}
+    if now is None:
+        return {"gone": True}
+    if not now.get("parts"):
+        return {}
+    found = diff(_merged(built["parts"]), _merged(now["parts"]))
+    atlases, skeletons, textures = found["atlases"].values(), found["skeletons"].values(), found["textures"].values()
+    every = [*atlases, *skeletons, *textures]
+    result: dict[str, Any] = {
+        "repacked": any("present" not in c and (c["layout"] or c["added"] or c["removed"]) for c in atlases),
+        "animations": sum(len(c.get("added") or ()) for c in skeletons if "present" not in c),
+        "rig": any("present" not in c and (c["rig"] or c["removed"] or (c["changed"] and c["rig"] is None))
+                   for c in skeletons),
+        "textures": any("present" not in c for c in textures),
+        "removed": any(c.get("present") == "before" for c in every),
+        "added": any(c.get("present") == "after" for c in every),
+    }
+    return {key: value for key, value in result.items() if value}
+
+
 def impact(built: dict | None, now: dict | None) -> str:
     """What a game update did under a mod (``IMPACTS``): the fingerprint it was built against (``built``) held
     against the one its core's official parts give now (``now``: None when the core has no official part left, which

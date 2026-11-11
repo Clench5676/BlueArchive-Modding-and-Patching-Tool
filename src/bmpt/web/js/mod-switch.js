@@ -15,7 +15,6 @@ import { on, rpc, waitJob } from "./api.js";
 import { T, language } from "./i18n.js";
 import { overwrittenLines } from "./repairs.js";
 import { $ } from "./util.js";
-import { TYPE } from "./ui-tokens.js";
 
 // --- pure parts ---
 
@@ -176,7 +175,8 @@ export function classicOutcome({ queued = false, checked = false } = {}) {
 //   consent: the asset consent until it is given; spine: its licence confirmation while unanswered;
 //   scan: the scan consent while unanswered and a game folder is known;
 //   update: released builds; drift and untracked: only with the scan consent, from the start scan's entries not
-//   dismissed, never while the game, Steam or the classic UI may be writing; no drift while mods are off
+//   dismissed, never while the game, Steam or the classic UI may be writing; no drift while mods are off, and none
+//   for a game update (entries updated: the update summary tells them, update-impact.js)
 export const START = ["consent", "spine", "scan", "update", "drift", "untracked"];
 export function startDue(name, { info = {}, state = null, entries = [] } = {}) {
   const scanned = state?.scan === true && !PROMPT_BLOCKERS.includes(state?.reason);
@@ -186,7 +186,7 @@ export function startDue(name, { info = {}, state = null, entries = [] } = {}) {
     case "spine": return info.spineConsent == null;
     case "scan": return !!state && state.scan == null && (state.installs || []).length > 0;
     case "update": return !!info.compiled && info.startupUpdate !== false;
-    case "drift": return scanned && state.enabled !== false && entries.some((e) => open(e) && ["reset", "updated"].includes(e.state));
+    case "drift": return scanned && state.enabled !== false && entries.some((e) => open(e) && e.state === "reset");
     case "untracked": return scanned && entries.some((e) => open(e) && ["untracked", "changed"].includes(e.state));
     default: return false;
   }
@@ -587,7 +587,14 @@ export async function openHelp() {
   const act = {
     retry: ({ close }) => { close(null); run(retryParams(state || s)); },
     details: () => overwritten(),
-    held: () => heldDetails(state || s),
+    // a Go To closes the help, then opens the mod's student page
+    held: async ({ close }) => {
+      const Impact = await import("./update-impact.js");
+      const mod = await Impact.heldDetails((state || s).heldEntries);
+      if (!mod) return;
+      close(null);
+      await Impact.open(mod);
+    },
   };
   const lines = helpLines(state || s).map((l) => (l.button ? { text: l.text, button: { label: l.button.label, fn: act[l.button.id] } } : l.text));
   await Popup.message({ title: T("mods.switch"), lines, width: 2098, fitTogether: [0, 1], plain: true });
@@ -621,22 +628,6 @@ async function overwritten() {
   const listed = entries.slice(0, MAX_LISTED).map((e) => entryLabel(e, nameOf));
   if (entries.length > MAX_LISTED) listed.push(`+${entries.length - MAX_LISTED}`);
   await Popup.message({ title: T("mods.overwrittenTitle"), lines: overwrittenLines({ names: listed, installs }, T), ok: T("picker.ok") });
-}
-
-// heldLines(state, nameOf): the names of the entries a game update's rig change holds ("name - kind"), then how the
-// hold ends
-export function heldLines(state, nameOf) {
-  const entries = state?.heldEntries || [];
-  const listed = entries.slice(0, MAX_LISTED).map((e) => entryLabel(e, nameOf, " - "));
-  if (entries.length > MAX_LISTED) listed.push(`+${entries.length - MAX_LISTED}`);
-  return [...listed, T("mods.impact.hint", { action: T("act.update") })];
-}
-
-async function heldDetails(s) {
-  const nameOf = await names().catch(() => undefined);
-  const lines = heldLines(s, nameOf);
-  await Popup.message({ title: T("mods.heldTitle"), ok: T("picker.ok"), plain: true,
-    lines: [...lines.slice(0, -1).map((text) => ({ text, marker: "\u2022", markerGap: 44, indent: 52 })), { text: lines.at(-1), gap: 32, italic: true, fontSize: TYPE.dense.fs, minFontSize: TYPE.dense.fs }] });
 }
 
 // Settings' Game Files Check: a scan with the dismissed entries listed again; resolves once it is in (or after 60 s)
