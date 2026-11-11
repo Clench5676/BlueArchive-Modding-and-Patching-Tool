@@ -1420,15 +1420,23 @@ def test_remap_rpc_is_read_only_and_accept_publishes_a_new_library_mod(env, monk
     result = RemapResult(rebuilt, {"partial": False}, CompareResult(rebuilt.id, []))
     calls = []
 
-    def remap(mod, log=None, progress=None, pin=None):
-        calls.append((mod, pin))
+    def remap(mod, log=None, progress=None, pin=None, geometry=None):
+        calls.append((mod, pin, geometry))
         return {"preview": "review", "report": result.report}
 
     monkeypatch.setattr(env.s.library, "remap", remap)
-    job = env.job("actions.remap", mod=entry.id)
+    geometry = {"test.atlas": {"source": {"slots": [], "poses": {"": []}}, "target": {"slots": [], "poses": {"": []}}}}
+    job = env.job("actions.remap", mod=entry.id, geometry=geometry)
     assert job.state == "done" and job.writes is None
     assert job.result == {"preview": "review", "report": result.report}
-    assert calls == [(entry.id, env.s.library.current_pin())]
+    assert calls == [(entry.id, env.s.library.current_pin(), geometry)]
+    # the redrawn check: a read-only job that hands the rest poses to the library
+    monkeypatch.setattr(env.s.library, "redrawn", lambda mod, geometry, pin=None: calls.append(("redrawn", mod, geometry))
+                        or {"redrawn": True, "overlap": 0.5})
+    job = env.job("actions.redrawn", mod=entry.id, geometry=geometry)
+    assert job.state == "done" and job.writes is None and job.result == {"redrawn": True, "overlap": 0.5}
+    assert calls[-1] == ("redrawn", entry.id, geometry)
+    del calls[1:]
     monkeypatch.setattr(env.s.library, "accept_remap", lambda preview: result if preview == "review" else None)
     job = env.job("actions.acceptRemap", preview="review")
     assert job.state == "done" and job.writes == "library"

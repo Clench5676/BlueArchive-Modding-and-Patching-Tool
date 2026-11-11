@@ -3,8 +3,8 @@
 
 from __future__ import annotations
 
+import base64
 import json
-import struct
 
 import pytest
 from PIL import Image
@@ -12,10 +12,10 @@ from PIL import Image
 from ba_modding_toolkit import core
 from ba_modding_toolkit.models import FilePair, ModUpdateResult
 from bmpt import atlas_remap as remap
-from bmpt import spine_names
 from bmpt.library import fingerprint
 from bmpt.library.integrity import inspect as inspect_bundle
 
+from rebake_geometry import geometry as rig_geometry
 from test_atlas_remap import (_official_name, atlas_text, pack, repacked, split_official,  # noqa: F401 - fixture
                               write_bundle)
 from test_built_against import animation, binary_skeleton, sidecar, spine  # noqa: F401 - fixture
@@ -36,145 +36,6 @@ def skeleton(animations, regions=("part",)):
 
 
 # --- what a skeleton draws of each region ---
-
-L_SHAPE = [0.0, 0.0, 0.3, 0.0, 0.3, 0.7, 1.0, 0.7, 1.0, 1.0, 0.0, 1.0]
-
-
-def mesh_skeleton(sequence=False, linked=False):
-    """A JSON skeleton: an L-shaped mesh on ``part``, a region attachment on ``whole``."""
-    mesh = {"type": "mesh", "path": "part", "uvs": L_SHAPE + [0.1, 0.9], "hull": 6, "triangles": [], "vertices": []}
-    if sequence:
-        mesh = {**mesh, "path": "frame", "sequence": {"count": 2, "start": 3, "digits": 2}}
-    slot = {"body": mesh, "whole": {}}
-    if linked:
-        slot["other"] = {"type": "linkedmesh", "parent": "body", "path": "costume"}
-    return json.dumps({"skeleton": {"spine": "4.2.33"}, "bones": [{"name": "root"}],
-                       "slots": [{"name": "slot", "bone": "root"}],
-                       "skins": [{"name": "default", "attachments": {"slot": slot}}]}).encode()
-
-
-def binary_mesh_skeleton():
-    """A 4.2 binary skeleton whose one slot holds the L-shaped mesh on ``part`` (by path), a linked mesh of it on
-    ``costume`` and a region attachment named ``whole``."""
-    def varint(value):
-        return bytes([value])
-
-    def text(value):
-        return varint(len(value) + 1) + value.encode()
-
-    def floats(*values):
-        return struct.pack(f">{len(values)}f", *values)
-
-    head = bytes(8) + text("4.2.33") + floats(0, 0, 10, 10, 100) + b"\x00"
-    strings = varint(5) + b"".join(map(text, ("body", "part", "whole", "other", "costume")))
-    bones = varint(1) + text("root") + floats(*[0] * 8) + b"\x00\x00"
-    slots = varint(1) + text("slot") + varint(0) + bytes(4) + b"\xff\xff\xff\xff" + varint(0) + varint(0)
-    uvs = L_SHAPE + [0.1, 0.9]
-    mesh = (bytes([2 | 16]) + varint(2)  # mesh with a path: "part"
-            + varint(6) + varint(7) + floats(*[0] * 14) + floats(*uvs) + varint(0) * ((14 - 6 - 2) * 3))
-    linked = bytes([3 | 16]) + varint(5) + varint(0) + varint(1)  # path "costume", default skin, parent "body"
-    region = bytes([0]) + floats(*[0] * 6)
-    skin = (varint(1) + varint(0) + varint(3) + varint(1) + mesh + varint(4) + linked + varint(3) + region)
-    return head + strings + bones + slots + varint(0) * 4 + skin + varint(0) + varint(0) + varint(0)
-
-
-@pytest.mark.parametrize("data", [mesh_skeleton(linked=True), binary_mesh_skeleton()], ids=["json", "binary"])
-def test_hulls_name_the_outline_of_each_region_a_mesh_draws(data):
-    found = spine_names.hulls(data)
-    assert set(found) == {"part", "costume", "whole"}
-    assert found["whole"] is None  # a region attachment draws its whole rectangle
-    assert found["part"] == [pytest.approx(L_SHAPE)] and found["costume"] == found["part"]  # the parent's outline
-    assert spine_names.read(data).bones == [("root", "")]  # the names are read as before
-
-
-def test_hulls_of_sequences_and_of_unreadable_skeletons():
-    found = spine_names.hulls(mesh_skeleton(sequence=True))
-    assert found == {"frame03": [L_SHAPE], "frame04": [L_SHAPE], "whole": None}
-    for damaged in (b"3.8.99 old", binary_mesh_skeleton()[:-9], b'{"skins": [{"attachments": {"slot": {"a": {"type": "mesh"}}}}]}'):
-        with pytest.raises(ValueError):
-            spine_names.hulls(damaged)
-    data = json.loads(mesh_skeleton(sequence=True))
-    data["skins"][0]["attachments"]["slot"]["body"]["sequence"]["digits"] = 10 ** 9
-    with pytest.raises(ValueError):
-        spine_names.hulls(json.dumps(data).encode())
-    # a mesh whose hull is no outline is drawn whole
-    data = json.loads(mesh_skeleton())
-    data["skins"][0]["attachments"]["slot"]["body"]["hull"] = 2
-    assert spine_names.hulls(json.dumps(data).encode())["part"] is None
-
-
-# --- the engine ---
-
-def nested():
-    """Two layouts of one page. The L-shaped ``part`` has ``eye`` packed into the empty corner of its rectangle in
-    the old one; in the new one ``part`` and ``eye`` moved and the new ``smile`` sits in that corner."""
-    old = [("page.png", (64, 64), [("part", -1, (0, 0), (40, 40), (40, 40), (0, 0), 0),
-                                   ("eye", -1, (20, 4), (12, 12), (12, 12), (0, 0), 0)])]
-    new = [("page.png", (64, 64), [("part", -1, (20, 20), (40, 40), (40, 40), (0, 0), 0),
-                                   ("eye", -1, (2, 2), (12, 12), (12, 12), (0, 0), 0),
-                                   ("smile", -1, (40, 24), (12, 12), (12, 12), (0, 0), 0)])]
-    mod = Image.new("RGBA", (64, 64))
-    mod.paste(RED, (0, 0, 12, 40))
-    mod.paste(RED, (0, 28, 40, 40))
-    mod.paste((0, 255, 0, 255), (20, 4, 32, 16))
-    official = Image.new("RGBA", (64, 64), (255, 255, 255, 255))
-    official.paste(BLUE, (40, 24, 52, 36))
-    return remap.parse_atlas(atlas_text(old)), remap.parse_atlas(atlas_text(new)), {"page": mod}, {"page": official}
-
-
-def test_only_the_pixels_a_region_draws_move_and_are_written():
-    old, new, mod, official = nested()
-    hulls = {"part": [L_SHAPE], "eye": None}
-    pages, report = remap.remap_pages(old, new, mod, official, fill=True, hulls=hulls, official_hulls={"smile": None})
-    page = pages["page.png"]
-    assert report["official"] == ["smile"] and report["moved"] == ["eye", "part"]
-    assert page.getpixel((24, 40)) == RED and page.getpixel((50, 56)) == RED  # the L, where the new layout has it
-    assert page.getpixel((8, 8)) == (0, 255, 0, 255)  # the eye, at its own new place
-    assert page.getpixel((46, 30)) == BLUE  # the new expression in the corner: neither the old eye nor erased
-    assert page.getpixel((56, 26)) == (0, 0, 0, 0)  # the rest of the corner stays empty
-    # as whole rectangles the old eye comes along with the L and lands on the new expression
-    unmasked, _ = remap.remap_pages(old, new, mod, official, fill=True)
-    assert unmasked["page.png"].getpixel((46, 30)) == (0, 255, 0, 255)
-
-
-def test_an_official_region_is_filled_inside_its_outline_only():
-    old, new, mod, official = nested()
-    old.regions = {key: region for key, region in old.regions.items() if region.name != "part"}
-    # the official texture holds a neighbour's pixels (white) in the corner of the L's rectangle
-    pages, report = remap.remap_pages(old, new, mod, official, fill=True, official_hulls={"part": [L_SHAPE]})
-    page = pages["page.png"]
-    assert report["official"] == ["part", "smile"]
-    assert page.getpixel((24, 40)) == (255, 255, 255, 255)  # the official L
-    assert page.getpixel((56, 26)) == (0, 0, 0, 0)  # not the rest of its rectangle
-    assert page.getpixel((46, 30)) == BLUE
-
-
-def test_outlines_that_are_not_outlines_move_the_whole_rectangle():
-    old, new, mod, official = nested()
-    for hulls in ({"part": "junk"}, {"part": [[0.0, 0.0, 1.0]]}, {"part": [["a"] * 6]}, {"part": []}, None,
-                  {"part": [[float("nan")] * 6]}, {"part": [[float("inf"), 0, 1, 0, 1, 1]]}, {"part": [[1e30] * 6]}):
-        pages, _ = remap.remap_pages(old, new, mod, official, fill=True, hulls=hulls)
-        assert pages["page.png"].getpixel((46, 30)) == (0, 255, 0, 255)
-
-def test_a_required_region_the_mod_lacks_takes_the_official_pixels(repacked):
-    old, new, art, official_art, _ = repacked
-    source, target = remap.parse_atlas(atlas_text(old)), remap.parse_atlas(atlas_text(new))
-    source.regions = {key: region for key, region in source.regions.items() if region.name != "added"}
-    official = pack(new, official_art)
-    pages, report = remap.remap_pages(source, target, pack(old, art), official, {"body", "added"}, fill=True)
-    assert report["official"] == ["added"] and report["added"] == []
-    assert pages["extra.png"].crop((8, 8, 12, 11)).tobytes() == official["extra"].crop((8, 8, 12, 11)).tobytes()
-    # the mod's own regions still move
-    assert "body" in report["moved"]
-    assert pages["current.png"].crop((20, 1, 23, 6)).tobytes() != official["current"].crop((20, 1, 23, 6)).tobytes()
-
-
-def test_a_mod_with_no_region_to_move_is_still_refused(repacked):
-    old, new, art, official_art, _ = repacked
-    source, target = remap.parse_atlas(atlas_text(old)), remap.parse_atlas(atlas_text(new))
-    source.regions = {key: region for key, region in source.regions.items() if region.name == "removed"}
-    with pytest.raises(remap.RemapError, match="atlas_remap_regions_missing"):
-        remap.remap_pages(source, target, pack(old, art), pack(new, official_art), fill=True)
 
 
 def test_rig_gains_name_what_the_official_rig_has_and_the_mod_lacks():
@@ -211,10 +72,12 @@ def test_the_fingerprint_keeps_the_layout_texture_only_files_follow():
             "textures": {"page": [16, 16]}}
     texture_only = {"atlases": {}, "skeletons": {}, "textures": {"page": [16, 16]}}
     known = fingerprint.painted([part], texture_only)
-    assert known == {"test.atlas": {**part["atlases"]["test.atlas"], "hulls": None}}
-    drawn = fingerprint.painted([part], texture_only, {"Folder/Test.skel": mesh_skeleton()})
-    assert drawn["test.atlas"]["hulls"] == {"part": [L_SHAPE], "whole": None}
-    assert fingerprint.painted([part], texture_only, {"Test.skel": b"not a skeleton"})["test.atlas"]["hulls"] is None
+    assert known == {"test.atlas": part["atlases"]["test.atlas"]}  # no skeleton to keep
+    drawn = fingerprint.painted([part], texture_only, {"Folder/Test.skel": b"skeleton bytes"})
+    assert drawn["test.atlas"]["skeleton"] == base64.b64encode(b"skeleton bytes").decode()
+    # a record of the branch before keeps no outlines
+    assert "hulls" not in fingerprint.painted([{**part, "atlases": {"test.atlas": {**part["atlases"]["test.atlas"],
+                                                                                  "hulls": None}}}], texture_only)["test.atlas"]
     assert fingerprint.painted([part], {**texture_only, "atlases": {"test.atlas": {}}}) == {}  # carries its own
     assert fingerprint.painted([part], {**texture_only, "textures": {"other": [4, 4]}}) == {}
     data = fingerprint.document("import", [part], complete=True, painted=known)
@@ -231,6 +94,9 @@ def test_the_fingerprint_keeps_the_layout_texture_only_files_follow():
 @pytest.fixture
 def real(setup_library, monkeypatch):
     monkeypatch.setattr("bmpt.library.integrity.inspect", inspect_bundle)
+    # The synthetic rigs (rebake_geometry) draw every region at a place of its own name, an expression beside the
+    # body rather than over it: the rest pictures of rigs that gained one do not overlap as real ones do.
+    monkeypatch.setattr("bmpt.rebake.REDRAWN_BELOW", 0)
     env = setup_library
     env.original.unlink()
     return env
@@ -255,9 +121,9 @@ def test_a_mod_with_its_own_old_rig_moves_onto_the_official_one(real):
     report = env.library.compatibility(entry.id)
     assert report["rig"] == {"layout": [], "animations": {"test.skel": ["01"]}, "regions": {"test.atlas": ["smile"]}}
     assert report["remappable"] and not report["misfit"]
-    preview = env.library.remap(entry.id)
+    preview = env.library.remap(entry.id, geometry=rig_geometry(env.library, entry.id))
     assert preview["report"]["official"] == ["test.atlas - smile"] and preview["report"]["moved"] == ["test.atlas - part"]
-    assert preview["report"]["warnings"] == [] and not preview["report"]["partial"]
+    assert preview["report"]["warnings"] == [] and preview["report"]["partial"]  # the expression is the official one
     result = env.library.accept_remap(preview["preview"])
     built = remap.read_inputs(sorted(result.mod.file.parent.glob("*.bundle")))
     official = remap.read_inputs([current])
@@ -277,7 +143,7 @@ def test_a_custom_skeleton_that_gives_way_is_reported(real):
     source = write_bundle(env.tmp / "upload" / current.name.replace("2026-01-01", "2025-01-01"),
                           {"test.atlas": atlas_text(OLD)}, textures(RED), skeleton(["00", "Dance"]))
     entry, = env.library.add([source])
-    report = env.library.remap(entry.id)["report"]
+    report = env.library.remap(entry.id, geometry=rig_geometry(env.library, entry.id))["report"]
     assert report["warnings"] == [{"key": "rig", "name": "test.skel"}] and report["partial"]
 
 
@@ -291,7 +157,10 @@ def test_a_mod_with_its_own_complete_rig_is_left_alone(real):
     entry, = env.library.add([source])
     report = env.library.compatibility(entry.id)
     assert report["rig"] == {"layout": [], "animations": {}, "regions": {}} and not report["remappable"]
-    assert env.library.remap(entry.id) == {"unchanged": True}
+    assert env.library.remap(entry.id, geometry=rig_geometry(env.library, entry.id)) == {"unchanged": True}
+    from bmpt.errors import ServiceError
+    with pytest.raises(ServiceError, match="bad_params"):  # a portrait is baked from the page's geometry
+        env.library.remap(entry.id)
 
 
 def test_a_texture_drawn_on_the_layout_before_a_repack_is_found_and_moved(real):
@@ -305,7 +174,7 @@ def test_a_texture_drawn_on_the_layout_before_a_repack_is_found_and_moved(real):
     entry, = env.library.add([source], direct=True)
     stored = json.loads(sidecar(env, entry.id).read_text())
     assert stored["painted"]["test.atlas"]["text"] == atlas_text(OLD)
-    assert stored["painted"]["test.atlas"]["hulls"] == {"part": None}  # drawn whole by the official skeleton
+    assert stored["painted"]["test.atlas"]["skeleton"] == base64.b64encode(rig).decode()  # the rig that drew it
     report = env.library.compatibility(entry.id)
     assert report["rig"]["layout"] == [] and not report["remappable"]
     # the game repacks the atlas on a page of the same size and adds an expression
@@ -314,10 +183,24 @@ def test_a_texture_drawn_on_the_layout_before_a_repack_is_found_and_moved(real):
     updated = split_official(_official_name(write_bundle(
         env.original, {"test.atlas": atlas_text(NEW)}, textures({"part": BLUE, "smile": (0, 255, 0, 255)}, NEW),
         skeleton(["00", "01"], ("part", "smile")))))
+    # a record without the rig (written before it was kept) tells the repack but gives nothing to bake from
+    record = json.loads(sidecar(env, entry.id).read_text())
+    bare = json.loads(json.dumps(record))
+    del bare["painted"]["test.atlas"]["skeleton"]
+    sidecar(env, entry.id).write_text(json.dumps(bare))
+    library = reload_library(env)
+    report = library.compatibility(entry.id)
+    assert report["rig"]["layout"] == ["test.atlas"] and not report["remappable"] and report["source"]["atlases"] == {}
+    sidecar(env, entry.id).write_text(json.dumps(record))
     library = reload_library(env)
     report = library.compatibility(entry.id)
     assert report["rig"]["layout"] == ["test.atlas"] and report["remappable"] and not report["misfit"]
-    preview = library.remap(entry.id)
+    assert report["source"]["atlases"] == {"test.atlas": atlas_text(OLD)}
+    assert report["source"]["skeletons"]["test.skel"]["data"] == base64.b64encode(rig).decode()
+    # the two rest pictures overlap as far as the rigs draw the same: here the body, not the new expression
+    gate = library.redrawn(entry.id, rig_geometry(library, entry.id))
+    assert not gate["redrawn"] and 0.4 < gate["overlap"] < 0.6
+    preview = library.remap(entry.id, geometry=rig_geometry(library, entry.id))
     assert preview["report"]["moved"] == ["test.atlas - part"]
     assert preview["report"]["official"] == ["test.atlas - smile"]
     result = library.accept_remap(preview["preview"])
@@ -379,57 +262,3 @@ def test_update_carries_the_layout_texture_only_files_follow(spine, monkeypatch)
     assert env.library.update(entry.id).rig == {}
     stored = json.loads(sidecar(env, entry.id).read_text())
     assert stored["event"] == "update" and stored["painted"] == data["painted"]
-
-
-# --- art exported again on another canvas ---
-
-def region(size, original, offset=(0, 0)):
-    return remap.Region("part", -1, "page.png", (0, 0), size, original, offset, 0)
-
-
-@pytest.mark.parametrize("source, target, expected", [
-    # the same image, trimmed the same: scaled or not
-    (region((100, 80), (120, 100), (10, 10)), region((200, 160), (240, 200), (20, 20)), ("frame", False)),
-    # a margin of 12 pixels added around the canvas: the art keeps its size and sits elsewhere in the image
-    (region((180, 150), (232, 205), (26, 27)), region((180, 150), (244, 217), (38, 39)), ("trim", False)),
-    # exported larger on a canvas of other proportions
-    (region((90, 70), (114, 91), (12, 10)), region((205, 160), (259, 211), (20, 30)), ("trim", False)),
-    # the same canvas, trimmed anew: the trimmed rectangle of a few pixels grows to the whole image
-    (region((4, 4), (6, 6), (1, 1)), region((3, 3), (6, 6), (2, 1)), ("frame", False)),
-    # the same canvas at another scale, cut into another piece
-    (region((1729, 1257), (1729, 1257)), region((1706, 764), (2075, 1508), (0, 744)), ("frame", False)),
-    # ... into a piece the old one held only half of
-    (region((1000, 1000), (1000, 2000), (0, 1000)), region((1000, 1000), (1000, 2000), (0, 500)), ("frame", True)),
-    # another canvas and nearly the same share of it, in another shape: the art changed a little
-    (region((203, 92), (203, 92)), region((206, 102), (217, 108), (5, 3)), ("trim", True)),
-    # another canvas and another piece of it: nothing says where the pixels belong
-    (region((1056, 1339), (1136, 2729), (40, 1390)), region((1125, 1687), (1128, 2686), (0, 999)), ("frame", True)),
-])
-def test_how_a_region_is_laid_on_its_new_rectangle(source, target, expected):
-    assert remap._placement(source, target) == expected
-
-
-def test_art_on_a_canvas_with_another_margin_keeps_its_place_on_the_art():
-    # the old canvas is the art alone; the new one adds 2 pixels on every side, at the same scale
-    old = [("page.png", (64, 64), [("part", -1, (2, 2), (40, 32), (40, 32), (0, 0), 0)])]
-    new = [("page.png", (64, 64), [("part", -1, (20, 28), (40, 32), (44, 36), (2, 2), 0)])]
-    mod = Image.new("RGBA", (64, 64))
-    mod.paste(RED, (2, 2, 42, 34))
-    mod.putpixel((2, 2), BLUE)  # the art's top left corner
-    pages, report = remap.remap_pages(remap.parse_atlas(atlas_text(old)), remap.parse_atlas(atlas_text(new)),
-                                      {"page": mod}, {"page": Image.new("RGBA", (64, 64))})
-    page = pages["page.png"]
-    assert report["changed"] == [] and report["moved"] == ["part"]
-    assert page.getpixel((20, 28)) == BLUE and page.getpixel((59, 59)) == RED  # the whole art, corner on corner
-    assert page.crop((20, 28, 60, 60)).tobytes() == mod.crop((2, 2, 42, 34)).tobytes()
-
-
-def test_art_of_another_shape_is_placed_and_reported():
-    old = [("page.png", (64, 64), [("part", -1, (2, 2), (30, 20), (40, 40), (5, 10), 0)])]
-    new = [("page.png", (64, 64), [("part", -1, (30, 30), (20, 30), (50, 35), (10, 5), 0)])]
-    mod = Image.new("RGBA", (64, 64))
-    mod.paste(RED, (2, 2, 32, 22))
-    pages, report = remap.remap_pages(remap.parse_atlas(atlas_text(old)), remap.parse_atlas(atlas_text(new)),
-                                      {"page": mod}, {"page": Image.new("RGBA", (64, 64))})
-    assert report["changed"] == ["part"]
-    assert RED in set(pages["page.png"].crop((30, 30, 50, 60)).getdata())  # placed all the same, for the review

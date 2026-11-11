@@ -25,7 +25,7 @@ from typing import TYPE_CHECKING, Any, Callable, Hashable, Iterable, Iterator, M
 
 from UnityPy.helpers.ResourceReader import get_resource_data
 
-from bmpt import atlas_remap, devmode, game_paths, mod_origin, preview_gate, spans, steam_records
+from bmpt import atlas_remap, devmode, game_paths, mod_origin, preview_gate, rebake, spans, steam_records
 from ba_modding_toolkit import core, mod_install
 from ba_modding_toolkit.bundle import Bundle
 from ..catalog.models import CoreMap
@@ -40,6 +40,7 @@ from ..openfiles import remove_tree, temporary_directory
 from ba_modding_toolkit.models import AssetType, LogFunc, ProgressCallback
 from ba_modding_toolkit.naming import parse_filename
 from ba_modding_toolkit.searching import SEARCH_DIR_SUFFIXES, get_search_dirs
+from ba_modding_toolkit.spine import get_skel_version
 from ba_modding_toolkit.utils import no_log
 from ba_modding_toolkit.utils.common import is_safe_file_name
 from . import profiles as profiles_mod
@@ -1470,17 +1471,36 @@ class ModLibrary:
             mixed = {name: data for name, data in effective.atlases.items() if name not in selected.atlases
                      and any(integrity.texture_key(page) in selected.textures
                              for page in atlas_remap.parse_atlas(data, name).pages)}
-            misfit = bool(mixed) and atlas_remap.page_size_mismatch(mixed, effective.textures)
+            misfits = {name for name, data in mixed.items()
+                       if atlas_remap.page_size_mismatch({name: data}, effective.textures)}
+            misfit = bool(misfits)
             layout = fingerprint.changed_layouts(built, mixed)
             gains = atlas_remap.rig_gains(selected.atlases, selected.skeletons, official.atlases, official.skeletons)
             rerig = atlas_remap.rerigged(gains, selected.atlases, selected.skeletons, official.atlases,
                                          official.skeletons, selected.textures)
             report["rig"] = {"layout": sorted(layout), "animations": gains["animations"],
                              "regions": {name: gains["regions"][name] for name in rerig if name in gains["regions"]}}
+            # The rig a repacked atlas's textures were drawn for, where it was recorded: the source of the
+            # world-space rebake (rig-geometry.js forRemap).
+            recorded = {name: entry for name, entry in layout.items() if isinstance(entry.get("skeleton"), str)}
+            dated = (self._dated_rig(list(files.values()), misfits - recorded.keys(), official.atlases, original_paths)
+                     if kind == "spr" and not unavailable else {})
+            drawn_by = atlas_remap.pair_atlases(official.skeletons, dict.fromkeys({**dated, **recorded}))
+            report["source"] = {"atlases": {name: entry["text"] for name, entry in {**dated, **recorded}.items()},
+                                "skeletons": {}}
+            for name, entry in {**dated, **recorded}.items():
+                if not isinstance(entry.get("skeleton"), str):
+                    continue
+                data = base64.b64decode(entry["skeleton"])
+                skeleton = drawn_by.get(name) or f"{Path(name).stem}.skel"
+                report["source"]["skeletons"][skeleton] = {"version": get_skel_version(data), "data": entry["skeleton"]}
             report["misfit"] = not unavailable and misfit
-            report["remappable"] = not unavailable and (misfit or bool(layout) or bool(rerig))
+            # Portraits are baked through world space; other kinds only move regions onto a page size that fits.
+            wanted = misfit or bool(recorded) or bool(rerig) if kind == "spr" else misfit
+            report["remappable"] = not unavailable and wanted
         except (ValueError, UnicodeError):
             report["rig"] = {"layout": [], "animations": {}, "regions": {}}
+            report["source"] = {"atlases": {}, "skeletons": {}}
             report["misfit"] = report["remappable"] = False
         return report
 
@@ -6379,10 +6399,167 @@ class ModLibrary:
                                          date=", ".join(sorted(dates)) or "—")
         return result
 
+    def _remap_view(self, record: dict, paths: list[Path], targets: list[Path], originals: dict[Path, Path],
+                    pin: Pin) -> dict:
+        """What a remap starts from: the mod's own inputs (``mod``), the official ones (``official``, from
+        ``originals``: per target its verified official copy), the official files with the mod's over them (``view``),
+        the official atlases the mod paints without carrying them (``mixed``), and why a remap is wanted: those whose
+        page the texture does not fit (``misfit``), those repacked since its textures were drawn on them (``layout``,
+        ``fingerprint.changed_layouts``) and the mod's own atlases that give way to the official rig, with its
+        skeleton (``rerig``, ``atlas_remap.rerigged``). ``dated``: the rig of the mod's date of the misfit atlases
+        the fingerprint does not record (``_dated_rig``)."""
+        mod = atlas_remap.read_inputs(paths)
+        official = atlas_remap.read_inputs(list(originals.values()))
+        replaced = self._replaced_parts({path.name: path for path in paths}, targets, pin)
+        others = [original for target, original in originals.items() if target not in replaced]
+        view = atlas_remap.read_inputs(others + paths)
+        mixed = {name: data for name, data in view.atlases.items() if name not in mod.atlases
+                 and any(atlas_remap.texture_key(page) in mod.textures
+                         for page in atlas_remap.parse_atlas(data, name).pages)}
+        sizes = {name: image.size for name, image in view.textures.items()}
+        misfit = {name for name, data in mixed.items() if atlas_remap.page_size_mismatch({name: data}, sizes)}
+        layout = fingerprint.changed_layouts(self._read_built_against(record), mixed)
+        gains = atlas_remap.rig_gains(mod.atlases, mod.skeletons, official.atlases, official.skeletons)
+        rerig = atlas_remap.rerigged(gains, mod.atlases, mod.skeletons, official.atlases, official.skeletons,
+                                     mod.textures)
+        unrecorded = {name for name in misfit if not isinstance((layout.get(name) or {}).get("skeleton"), str)}
+        dated = self._dated_rig(paths, unrecorded, official.atlases, originals.values())
+        return {"mod": mod, "official": official, "view": view, "mixed": mixed, "misfit": misfit, "layout": layout,
+                "rerig": rerig, "dated": dated}
+
+    @staticmethod
+    def _rebake_plan(inputs: dict) -> dict[str, bytes]:
+        """The portrait atlases the world-space rebake bakes (``bmpt.rebake``), each with the atlas the mod's textures
+        were drawn on, chosen as ``rig-geometry.js`` ``forRemap`` chooses it (the mod's own, else the recorded one:
+        the fingerprint's, or the official copy of the mod's date, else the official one): the mod's own atlases that give way to the official rig, and the official ones it
+        paints without carrying them where they were repacked under a recorded rig or the texture does not fit. An
+        atlas the mod carries otherwise keeps its own rig and textures."""
+        mod, official = inputs["mod"], inputs["official"]
+        carried = atlas_remap.pair_atlases(mod.atlases, official.atlases)
+        plan = {}
+        for name, text in official.atlases.items():
+            recorded = inputs["layout"].get(name) or {}
+            if name in inputs["rerig"]:
+                plan[name] = mod.atlases[carried[name]]
+            elif name in carried:
+                continue
+            elif isinstance(recorded.get("skeleton"), str):
+                plan[name] = recorded["text"].encode("utf-8")
+            elif name in inputs["misfit"]:
+                dated = inputs["dated"].get(name)
+                plan[name] = dated["text"].encode("utf-8") if dated else text
+        return plan
+
+    @staticmethod
+    def _posted_rigs(geometry: Any, name: str, source: bytes, target: bytes) -> tuple:
+        """The posted geometry of an atlas's two rigs (``rig-geometry.js`` ``forRemap``), checked against the atlases
+        read here (``rebake.rig``), with the two atlases."""
+        posted = geometry.get(name) if isinstance(geometry, dict) else None
+        if not isinstance(posted, dict):
+            raise atlas_remap.RemapError("bad_params", key="geometry")
+        source_atlas, target_atlas = atlas_remap.parse_atlas(source, name), atlas_remap.parse_atlas(target, name)
+        return (rebake.rig(posted.get("source"), source_atlas), rebake.rig(posted.get("target"), target_atlas),
+                source_atlas, target_atlas)
+
+    @staticmethod
+    def _rebake_pages(inputs: dict, source: atlas_remap.Atlas, target: atlas_remap.Atlas,
+                      done: dict | None = None) -> tuple[dict, dict]:
+        """The mod's pages of the source atlas and the official pages of the target one, keyed by texture key; a page
+        an earlier atlas baked (``done``) is taken as it came out."""
+        mod, official = inputs["mod"], inputs["official"]
+        source_pages = {key: mod.textures[key] for key in map(atlas_remap.texture_key, source.pages)
+                        if key in mod.textures}
+        official_pages = {}
+        for page in target.pages:
+            key = atlas_remap.texture_key(page)
+            if key not in official.textures:
+                raise atlas_remap.RemapError("atlas_remap_page_missing", file=target.file, page=page)
+            official_pages[key] = (done or {}).get(key, official.textures[key])
+        return source_pages, official_pages
+
+    def _rebake(self, inputs: dict, plan: dict[str, bytes], geometry: Any) -> tuple[dict, dict]:
+        """The texture patch of a portrait remap: every planned atlas baked (``rebake.bake``), every other page as the
+        official files with the mod's over them have it."""
+        official, view = inputs["official"], inputs["view"]
+        report = {"moved": [], "added": [], "official": [], "dropped": [], "upscaled": [], "warnings": []}
+        baked: dict[str, Any] = {}
+        for name, source_text in plan.items():
+            source, target, source_atlas, target_atlas = self._posted_rigs(
+                geometry, name, source_text, official.atlases[name])
+            source_pages, official_pages = self._rebake_pages(inputs, source_atlas, target_atlas, baked)
+            pages, summary = rebake.bake(source, target, source_pages, official_pages)
+            baked.update(pages)
+            for key in ("moved", "official"):
+                report[key].extend(f"{name} - {region}" for region in summary[key])
+        patch = {official.keys[key]: baked.get(key, view.textures.get(key, image))
+                 for key, image in official.textures.items() if key in official.keys}
+        report["partial"], report["unchanged"] = bool(report["official"]), False
+        return patch, report
+
+    @_serialized
+    def redrawn(self, mod_id: str, geometry: Any, pin: Pin | None = None) -> dict:
+        """Whether the game drew a portrait mod's picture anew since its textures were drawn: the smallest overlap of
+        the two rest pictures (``rebake.overlap``) over the atlases a remap would bake. Read-only."""
+        pin = self._current(pin)
+        record = self._record(mod_id)
+        paths = self._paths(record)
+        if kind_of_file(paths[0].name) != "spr":
+            return {"redrawn": False, "overlap": 1.0}
+        if not isinstance(geometry, dict):
+            raise ServiceError("bad_params", key="geometry")
+        targets = self._spine_parts(core_of(paths[0].name), pin)
+        if not targets:
+            raise ServiceError("game_file_not_found", variant=record["target"])
+        originals = {target: self._official_for(target, pin) for target in targets}
+        lowest = 1.0
+        try:
+            inputs = self._remap_view(record, paths, targets, originals, pin)
+            for name, source_text in self._rebake_plan(inputs).items():
+                source, target, source_atlas, target_atlas = self._posted_rigs(
+                    geometry, name, source_text, inputs["official"].atlases[name])
+                lowest = min(lowest, rebake.overlap(source, target, *self._rebake_pages(inputs, source_atlas,
+                                                                                         target_atlas)))
+        except atlas_remap.RemapError as error:
+            raise ServiceError(error.code, **error.params) from error
+        except (ValueError, KeyError, EOFError, OSError) as error:
+            raise ServiceError("atlas_remap_invalid", file=", ".join(path.name for path in paths),
+                               reason=str(error)) from error
+        return {"redrawn": lowest < rebake.REDRAWN_BELOW, "overlap": round(lowest, 4)}
+
+    def _dated_rig(self, paths: list[Path], names: Iterable[str], official: dict[str, bytes],
+                   available: Iterable[Path] = ()) -> dict[str, dict]:
+        """Of the official atlases ``names``, those a verified official copy of the mod's date holds (one the
+        library kept, or one of ``available`` of that date), each as a ``fingerprint.painted`` entry: that copy's
+        atlas ``text`` and, where it has one, the base64 ``skeleton`` of the same stem. The rig a texture-only mod's
+        textures were drawn for when its fingerprint does not record it."""
+        names = set(names)
+        if not names or not paths:
+            return {}
+        core = core_of(paths[0].name)
+        dates = {date_of(path.name) for path in paths} - {""}
+        candidates = {name: self.root / "originals" / name for name in self._originals()}
+        candidates.update({path.name: path for path in available})
+        atlases: dict[str, bytes] = {}
+        skeletons: dict[str, bytes] = {}
+        for name, path in sorted(candidates.items()):
+            if core_of(name) != core or date_of(name) not in dates or not self._is_official(path):
+                continue
+            contents = integrity.inspect(path)
+            atlases.update(contents.atlases)
+            skeletons.update(contents.skeletons)
+        pairs = atlas_remap.pair_atlases(atlases, {name: official[name] for name in names if name in official})
+        drawn_by = atlas_remap.pair_atlases(skeletons, dict.fromkeys(pairs))
+        return {name: {"text": atlases[source].decode("utf-8-sig"),
+                       **({"skeleton": base64.b64encode(skeletons[drawn_by[name]]).decode("ascii")}
+                          if name in drawn_by else {})}
+                for name, source in pairs.items()}
+
     @_serialized
     def remap(self, mod_id: str, log: LogFunc = no_log,
-              progress: Callable[[dict], None] | None = None, pin: Pin | None = None) -> dict:
-        """Prepare a review in temporary storage; only accept_remap can add it to the library."""
+              progress: Callable[[dict], None] | None = None, pin: Pin | None = None, geometry: Any = None) -> dict:
+        """Prepare a review in temporary storage; only accept_remap can add it to the library. A portrait's pages are
+        baked through world space from ``geometry`` (``rig-geometry.js`` ``forRemap``, required); other kinds move
+        regions by name onto a page size the texture does not fit."""
         pin = self._current(pin)
         record = self._record(mod_id)
         if record.get("repaired_from") or self._repaired_id(record):
@@ -6390,6 +6567,9 @@ class ModLibrary:
         self._remap_previews = {token: preview for token, preview in self._remap_previews.items()
                                 if preview["expires"] > time.monotonic() and preview["source"] != mod_id}
         paths = self._paths(record)
+        portrait = kind_of_file(paths[0].name) == "spr"
+        if portrait and not isinstance(geometry, dict):
+            raise ServiceError("bad_params", key="geometry")
         identity = self._identity({path.name: path for path in paths})
         targets = self._spine_parts(core_of(paths[0].name), pin)
         if not targets:
@@ -6404,53 +6584,32 @@ class ModLibrary:
             originals = self._stage_official(targets, output / "official", pin)
             try:
                 step("extract")
-                mod = atlas_remap.read_inputs(paths)
-                official = atlas_remap.read_inputs(list(originals.values()))
-
-                replaced = self._replaced_parts({path.name: path for path in paths}, targets, pin)
-                others = [original for target, original in originals.items() if target not in replaced]
-                original_view = atlas_remap.read_inputs(others + paths)
-                mixed = {name: data for name, data in original_view.atlases.items() if name not in mod.atlases
-                         and any(atlas_remap.texture_key(page) in mod.textures
-                                 for page in atlas_remap.parse_atlas(data, name).pages)}
-                misfit = bool(mixed) and atlas_remap.page_size_mismatch(
-                    mixed, {name: image.size for name, image in original_view.textures.items()})
-                # Atlases repacked since the mod's textures were drawn on them, with the layout they follow.
-                layout = fingerprint.changed_layouts(self._read_built_against(record), mixed)
-                # The mod's own atlases that give way to the official rig, which gained what the mod lacks.
-                gains = atlas_remap.rig_gains(mod.atlases, mod.skeletons, official.atlases, official.skeletons)
-                rerig = atlas_remap.rerigged(gains, mod.atlases, mod.skeletons, official.atlases,
-                                             official.skeletons, mod.textures)
-                if not (misfit or layout or rerig):
-                    return {"unchanged": True}
-                sources = {name: entry["text"].encode("utf-8") for name, entry in layout.items()}
-                mod.hulls = {name: entry["hulls"] for name, entry in layout.items()
-                             if isinstance(entry.get("hulls"), dict)}
-                rest = {name: data for name, data in mixed.items() if name not in sources}
-                if rest and misfit:
-                    sources.update(self._remap_source_atlases(paths, {}, rest, list(originals.values())))
-                else:
-                    sources.update(rest)  # nothing says they moved: the textures follow the layout as it is
+                inputs = self._remap_view(record, paths, targets, originals, pin)
+                mod, official, original_view = inputs["mod"], inputs["official"], inputs["view"]
+                rerig = inputs["rerig"] if portrait else {}
                 given = {source: name for name, source in
                          atlas_remap.pair_atlases(mod.atlases, official.atlases).items() if name in rerig}
                 given_skeletons = {source: name for name, source in
                                    atlas_remap.pair_atlases(mod.skeletons, official.skeletons).items()
                                    if name in rerig.values()}
-                mod.atlases = {**mod.atlases, **sources}
-                target_inputs = replace(
-                    official,
-                    atlases={**{name: data for name, data in original_view.atlases.items() if name not in given},
-                             **{name: official.atlases[name] for name in rerig}},
-                    skeletons={**{name: data for name, data in original_view.skeletons.items()
-                                  if name not in given_skeletons},
-                               **{name: official.skeletons[name] for name in rerig.values() if name}})
-                patch, report = atlas_remap.prepare_patch(mod, target_inputs)
-                for source, name in sorted(given_skeletons.items()):
-                    if not atlas_remap.same_rig(mod.skeletons[source], official.skeletons[name]):
-                        report["warnings"].append({"key": "rig", "name": name})
-                report["partial"] = bool(report["warnings"] or report["changed"])
-                if rerig:
-                    report["unchanged"] = False
+                if portrait:
+                    plan = self._rebake_plan(inputs)
+                    if not plan:
+                        return {"unchanged": True}
+                    patch, report = self._rebake(inputs, plan, geometry)
+                    for source, name in sorted(given_skeletons.items()):
+                        if not atlas_remap.same_rig(mod.skeletons[source], official.skeletons[name]):
+                            report["warnings"].append({"key": "rig", "name": name})
+                    report["partial"] = bool(report["warnings"] or report["official"])
+                else:
+                    mixed = inputs["mixed"]
+                    if not inputs["misfit"]:
+                        return {"unchanged": True}
+                    mod.atlases = {**mod.atlases,
+                                   **self._remap_source_atlases(paths, {}, mixed, list(originals.values()))}
+                    target_inputs = replace(official, atlases=original_view.atlases,
+                                            skeletons=original_view.skeletons)
+                    patch, report = atlas_remap.prepare_patch(mod, target_inputs)
                 # Preserve the winning mod skeleton and atlas when porting the texture patch, but for the ones
                 # that give way to the official rig.
                 text_patch = {}

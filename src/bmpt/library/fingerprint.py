@@ -10,6 +10,7 @@ decoded), and two fingerprints are compared as plain data (``diff``).
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
 from datetime import datetime, timezone
@@ -112,10 +113,10 @@ def standing(official: dict, mod: dict) -> str:
 
 def painted(parts: list[dict], mod: dict, skeletons: dict[str, bytes] | None = None) -> dict:
     """The official atlases a mod's textures are drawn on without the mod carrying them (``carried``): per atlas
-    name its entry in ``parts``, with the hull outlines of the official skeleton that draws it (``hulls``, from
-    ``skeletons``: the parts' own, by name; None when it cannot be read). For a mod known to be made for these
-    parts; a later repack of such an atlas leaves the mod's texture on the old layout, which this keeps, with what
-    it takes to move each region's own pixels to the new one."""
+    name its entry in ``parts``, with the official skeleton that draws it (``skeleton``: base64 of its bytes, from
+    ``skeletons``: the parts' own, by name; left out when there is none). For a mod known to be made for these parts;
+    a later repack of such an atlas leaves the mod's texture on the old layout, which this keeps with the rig that
+    drew it, the source of the world-space rebake (``bmpt.rebake``)."""
     result = {}
     for item in parts:
         for name, entry in item["atlases"].items():
@@ -129,17 +130,16 @@ def painted(parts: list[dict], mod: dict, skeletons: dict[str, bytes] | None = N
                 result[name] = dict(entry)
     drawn_by = atlas_remap.pair_atlases(skeletons or {}, dict.fromkeys(result))
     for name, entry in result.items():
-        try:
-            entry["hulls"] = spine_names.hulls(skeletons[drawn_by[name]]) if name in drawn_by else None
-        except ValueError:
-            entry["hulls"] = None
+        entry.pop("hulls", None)
+        if name in drawn_by:
+            entry["skeleton"] = base64.b64encode(skeletons[drawn_by[name]]).decode("ascii")
     return result
 
 
 def changed_layouts(data: dict | None, atlases: dict[str, bytes]) -> dict[str, dict]:
     """Of the official ``atlases`` as they are now, the ones repacked since a mod's textures were drawn on them
-    (``painted`` in its fingerprint): per atlas name the entry of the layout the textures follow (``text``,
-    ``hulls``)."""
+    (``painted`` in its fingerprint): per atlas name the entry of the layout the textures follow (``text``, and
+    ``skeleton`` where it was recorded)."""
     known = (data or {}).get("painted") or {}
     result = {}
     for name, current in atlases.items():

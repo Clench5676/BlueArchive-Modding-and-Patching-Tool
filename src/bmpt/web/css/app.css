@@ -407,12 +407,33 @@ input[type="text"], input[type="search"], textarea { cursor: text; }
 .log-message { width: auto; max-width: 1550px; } /* the plain popup sized to the log, not to its 1000 px message width */
 .log-message .log-text { width: 1400px; height: 580px; margin: 24px 0; }
 
-.repair-compare { color: #2d4664; line-height: 1.4; overflow-wrap: anywhere; padding: 0 8px 16px; }
-.repair-compare > div { margin-bottom: 12px; }
-.repair-pages { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-.repair-pages > div { min-width: 0; text-align: center; }
-.repair-pages img { width: 100%; object-fit: contain; background: #dbe5ee; }
-.repair-player { position: relative; background: #dbe5ee; }
+.repair-compare { color: #2d4664; line-height: 1.4; overflow-wrap: anywhere; padding: 0 8px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 32px; overflow: hidden; }
+.repair-previews { display: grid; gap: 16px; min-height: 0; height: 100%; }
+.repair-previews[data-kind="tall"] { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.repair-previews[data-kind="wide"] { grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); }
+.repair-panel { display: flex; flex-direction: column; min-width: 0; min-height: 0; text-align: center; }
+.repair-stage { flex: 1; min-height: 0; display: flex; flex-direction: column; background: #dbe5ee; }
+.repair-player { flex: 1; min-height: 0; position: relative; overflow: hidden; cursor: grab; touch-action: none; }
+.repair-view { position: absolute; }
+.repair-canvas { position: absolute; inset: 0; }
+.repair-marks { position: absolute; inset: 0; pointer-events: none; }
+.repair-ring { position: absolute; border: 3px solid #ff00ff; border-radius: 50%; box-sizing: border-box; }
+.repair-tools { position: absolute; right: 8px; bottom: 8px; display: flex; gap: 6px; opacity: 0; transition: opacity .12s; cursor: var(--cursor-press); }
+.repair-player:hover .repair-tools, .repair-tools:focus-within { opacity: 1; }
+@media (hover: none) { .repair-tools { opacity: 1; } }
+.repair-tools .plain-line-button { margin-left: 0; min-width: 1.9em; padding: .25em .5em; font-size: .8em; }
+.repair-mark-toggle { color: #c800c8; }
+.repair-mark-toggle[aria-pressed="true"] { background: #ff00ff; color: #fff; }
+.repair-view img { width: 100%; height: 100%; object-fit: contain; pointer-events: none; user-select: none; }
+/* the report starts level with the pictures, below their captions; its text keeps to its own column and the small
+   buttons stand in a column of their own to the right of it */
+.repair-notes { min-height: 0; overflow-y: auto; padding-top: 1.4em; display: grid; grid-template-columns: minmax(0, 1fr) max-content;
+  column-gap: 24px; row-gap: 12px; align-content: start; align-items: center; }
+.repair-notes > div { grid-column: 1; }
+.repair-notes > .repair-line { display: contents; }
+.repair-line > div { grid-column: 1; }
+.repair-line > .plain-line-button { grid-column: 2; margin-left: 0; font-size: .8em; padding: .3em .9em; }
+.repair-verdict { font-size: 1.15em; }
 .repair-player .spine-player { background: transparent !important; }
 
 /* Frameless desktop controls; they remain outside the fixed-aspect game stage. */
