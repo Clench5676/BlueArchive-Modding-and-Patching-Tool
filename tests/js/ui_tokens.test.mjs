@@ -303,7 +303,7 @@ for (const locale of ["en-US", "th-TH", "zh-CN", "zh-TW", "ja-JP", "ko-KR"]) tes
   near(layout.WIDE.left, 960 - (Tokens.POPUP_FRAME.L.w / 2 - Tokens.SPACE.xl) * S);
   assert.deepEqual([bg[0], bg[2]], [layout.WIDE.left, layout.BACKGROUND.list]);
   near(bg[1], 540 - (Tokens.POPUP.frameY + 1450 / 2 - 132 - Tokens.SPACE.l) * S);
-  near(bg[1] + bg[3], layout.modalContentBottom(1450, 2)); near(preview.top, bg[1]);
+  near(bg[1] + bg[3], 540 - (footerHelpers.footerTop(1450, 2) + Tokens.SPACE.xl) * S); near(preview.top, bg[1]);
   near(preview.left, bg[0] + bg[2] + Tokens.SPACE.l * S); near(preview.left + preview.width, layout.WIDE.left + layout.WIDE.width);
   near(preview.height, preview.width * 1080 / 1920);
   assert.ok(bg[1] + bg[3] <= 540 - (Tokens.POPUP.frameY - 1450 / 2) * S, "inside the frame");

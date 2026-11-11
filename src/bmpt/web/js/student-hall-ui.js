@@ -177,9 +177,11 @@ export const WIDE = Object.freeze({ left: 960 - POPUP_FRAME.L.w * S / 2 + SPACE.
 // The background picker: the list at the left (two cards a row, .32 of their size, 296 px apart, rows 224 px), the
 // preview and its caption on the right, as wide as the room left after SPACE.l.
 export const BACKGROUND = Object.freeze({ list: 600, scale: .32, pitch: [296, 224], first: [152, 88] });
-// the list from SPACE.l under the header band down to the footer's clearance; the preview level with its top
+// the list from SPACE.l under the header band down to SPACE.xl over the footer (BL-176: the footer's clearance); the
+// preview level with its top
 const backgroundTop = () => frameTop(1450) + HEADER_H * S + SPACE.l * S;
-export const backgroundPickerBox = () => [WIDE.left, backgroundTop(), BACKGROUND.list, modalContentBottom(1450, 2) - backgroundTop()];
+const backgroundBottom = () => 540 - (Popup.footerTop(1450, 2) + SPACE.xl) * S;
+export const backgroundPickerBox = () => [WIDE.left, backgroundTop(), BACKGROUND.list, backgroundBottom() - backgroundTop()];
 export function backgroundPreviewBox() {
   const left = WIDE.left + BACKGROUND.list + SPACE.l * S, width = WIDE.left + WIDE.width - left;
   return { left, top: backgroundTop(), width, scale: width / 1920, height: 1080 * width / 1920 };
