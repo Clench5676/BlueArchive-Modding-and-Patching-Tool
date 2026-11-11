@@ -4088,17 +4088,18 @@ class ModLibrary:
             if self.rigs.stamp(pin.key) == stamp:
                 return 0
             kept, waited = 0, 0.0
-            try:
-                for core in cores:
-                    preview_gate.yield_to_previews(cancel)
-                    wait = self._yield_to_foreground(cancel)
-                    if wait is None:
-                        return kept
-                    waited += wait
-                    kept += self._archive_core(core, pin)
-            finally:
-                spans.record("library.rigs.yield", waited)
-            self.rigs.set_stamp(pin.key, stamp)
+            with self.rigs.deferred():
+                try:
+                    for core in cores:
+                        preview_gate.yield_to_previews(cancel)
+                        wait = self._yield_to_foreground(cancel)
+                        if wait is None:
+                            return kept
+                        waited += wait
+                        kept += self._archive_core(core, pin)
+                finally:
+                    spans.record("library.rigs.yield", waited)
+                self.rigs.set_stamp(pin.key, stamp)
             logger.info("Rig archive: %d portrait rigs kept of %d cores", kept, len(cores))
             return kept
         except Exception as error:  # never in the way of the program; the next start tries again
