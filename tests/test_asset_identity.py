@@ -9,7 +9,6 @@ from pathlib import Path
 
 import pytest
 
-from ba_modding_toolkit.core.mod_install import _search_latest_targets
 from bmpt.library import service as service_module
 from bmpt.library.integrity import BUILTIN_RESOURCES, Contents, missing_parts
 from bmpt.library.targets import Readers, by_assets
@@ -138,8 +137,6 @@ def test_a_part_of_an_older_release_updates_the_official_file_holding_its_assets
     older = re.sub(r"-\d{4}-\d{2}-\d{2}_", "-2023-01-01_", source.name)
     targets = library._spine_parts(core_of(source.name), pin)
     assert len({re.search(r"\d{4}-\d{2}-\d{2}", path.name)[0] for path in targets}) > 1
-    # upstream's planner looks at the newest date only, where these assets are not
-    assert _search_latest_targets([source], directories, lambda *_: None)[0] == []
     group, = library._update_groups({older: source}, targets, pin)
     assert group.target_paths == [source]
     assert {file.action for file in group.files} == {"update"}

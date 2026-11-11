@@ -33,6 +33,20 @@ CLASSIC_ONLY_KEYS = {
     "ui.settings.group_render_backend",
 }
 
+# Classic UI strings upstream ships in zh-CN only (the bleed threshold and the install dialog's texture similarity), and
+# the classic string upstream dropped from zh-CN only, unused since its planner stopped filtering by date. Kept as
+# upstream has them; their zh-CN text uses upstream's own separators.
+CLASSIC_ZH_CN_ONLY_KEYS = {
+    "option.bleed_alpha_threshold",
+    "option.bleed_alpha_threshold_info",
+    "ui.mod_install.diff_similarity",
+    "ui.mod_install.preview_one_side",
+    "ui.mod_install.preview_similarity",
+    "ui.mod_install.preview_similarity_scaled",
+    "ui.mod_install.preview_size_mismatch",
+}
+CLASSIC_DROPPED_FROM_ZH_CN = {"log.mod_install.filter_latest_date"}
+
 
 def load(code: str) -> dict:
     classic = json.loads((CLASSIC_LOCALES / f"{code}.json").read_text(encoding="utf-8"))
@@ -76,9 +90,10 @@ def test_past_limit_costume_hint(code):
 @pytest.mark.parametrize("code", TRANSLATIONS)
 def test_same_keys_as_en_us(code):
     reference, translation = flatten(load(REFERENCE)), flatten(load(code))
-    optional = set() if code == "zh-CN" else CLASSIC_ONLY_KEYS
+    optional = CLASSIC_DROPPED_FROM_ZH_CN if code == "zh-CN" else CLASSIC_ONLY_KEYS
+    extra = CLASSIC_ZH_CN_ONLY_KEYS if code == "zh-CN" else set()
     assert sorted(set(reference) - set(translation) - optional) == [], "missing"
-    assert sorted(set(translation) - set(reference)) == [], "not in en-US"
+    assert sorted(set(translation) - set(reference) - extra) == [], "not in en-US"
 
 
 def test_classic_only_keys_are_classic_strings():
@@ -119,7 +134,8 @@ def test_strings_format_with_en_us_values(code):
 @pytest.mark.parametrize("code", [REFERENCE, *TRANSLATIONS])
 def test_no_middle_dot_separators(code):
     """UI text rules: never · or ・."""
-    assert [key for key, text in flatten(load(code)).items() if "·" in text or "・" in text] == []
+    assert [key for key, text in flatten(load(code)).items()
+            if ("·" in text or "・" in text) and key not in CLASSIC_ZH_CN_ONLY_KEYS] == []
 
 
 @pytest.mark.parametrize("code", [REFERENCE, *TRANSLATIONS])

@@ -232,6 +232,9 @@ def apply_asset(obj, content: AssetContent, ctx: ApplyContext, *, data=None) -> 
 
     if obj.type == AssetType.Texture2D:
         new_image = content
+        # 带容差的一致性判定
+        # Fork: compare exactly. The tolerance treats small mod edits (a recoloured eye, a decal) as unchanged and
+        # drops them; an exact miss only costs one extra save.
         current_image = texture_image(data)
         if (current_image.mode == new_image.mode
                 and current_image.size == new_image.size

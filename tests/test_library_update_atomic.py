@@ -135,7 +135,7 @@ def test_a_split_update_interrupted_after_a_new_part_removes_it(setup_library, m
     for part in ("002", "003"):
         game_bundle(env.game_dir, part=part, date="2026-10-01", payload=part.encode())
     from ba_modding_toolkit.core import mod_install
-    monkeypatch.setattr(mod_install, "asset_match", lambda sources, candidates, log: (candidates, ""))
+    monkeypatch.setattr("ba_modding_toolkit.searching.asset_match", lambda sources, candidates, log: (candidates, ""))
 
     def rebuild(sources, current, output, *args, **kwargs):
         result = output / current[0].name

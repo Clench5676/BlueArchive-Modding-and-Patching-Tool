@@ -918,7 +918,7 @@ def test_refuses_install_plan_outside_resource_dirs(setup_library, monkeypatch, 
     source = make_mod(env.original, env.tmp / "input")
     if release == "older":
         source = source.rename(source.with_name(source.name.replace("2026-01-01", "2025-01-01")))
-        monkeypatch.setattr(mod_install, "asset_match", lambda sources, candidates, log: (candidates, ""))
+        monkeypatch.setattr("ba_modding_toolkit.searching.asset_match", lambda sources, candidates, log: (candidates, ""))
     entry = env.library.add([source])[0]
     groups = mod_install.plan_mod_install([entry.file], [outside.parent])
     monkeypatch.setattr(env.library, "_plan", lambda *args: groups)
@@ -936,7 +936,7 @@ def test_symlink_destination_cannot_escape_resources(setup_library, monkeypatch,
     source = make_mod(env.original, env.tmp / "input")
     if release == "older":
         source = source.rename(source.with_name(source.name.replace("2026-01-01", "2025-01-01")))
-        monkeypatch.setattr(mod_install, "asset_match", lambda sources, candidates, log: (candidates, ""))
+        monkeypatch.setattr("ba_modding_toolkit.searching.asset_match", lambda sources, candidates, log: (candidates, ""))
     entry = env.library.add([source])[0]
     groups = mod_install.plan_mod_install([entry.file], [env.game_dir])
     env.original.unlink()

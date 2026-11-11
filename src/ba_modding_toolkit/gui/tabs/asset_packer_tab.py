@@ -65,6 +65,17 @@ class AssetPackerTab(TabFrame):
             tooltip=t("option.enable_bleed_info")
         )
 
+        # Bleed 的 alpha 阈值：不超过该值的像素按透明处理
+        SettingRow.create_spinbox_row(
+            options_frame,
+            label=t("option.bleed_alpha_threshold"),
+            int_var=self.app.bleed_alpha_threshold_var,
+            from_=0,
+            to=32,
+            tooltip=t("option.bleed_alpha_threshold_info"),
+            app=self.app,
+        )
+
         # 操作按钮区域
         action_button_frame = tb.Frame(self)
         action_button_frame.pack(fill=tk.X, pady=10)
@@ -188,6 +199,7 @@ class AssetPackerTab(TabFrame):
             spine_options = spine_options,
             enable_rename_fix = self.app.enable_spine38_namefix_var.get(),
             enable_bleed = self.app.enable_bleed_var.get(),
+            bleed_alpha_threshold = self.app.bleed_alpha_threshold_var.get(),
             skip_unchanged = self.app.skip_unchanged_var.get(),
             anim_check=self.app.build_anim_check_options(),
             log = self.logger.log
