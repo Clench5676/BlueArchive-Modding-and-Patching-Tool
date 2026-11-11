@@ -2547,6 +2547,23 @@ detail screen, and in Settings' Mods tab.
   toggle's explanation (its button submits the tray's toggle), the tray's refusal as a notice (the tray never queues
   for the classic window) or the drift prompt. The page listens for them on the no-game screen too.
 
+### Troubleshoot Mods (pre-release builds)
+
+A Settings row of the Mods tab, shown and answered only where `prereleasePreviews` is true (`unknown_method`
+otherwise), to find which mod the game refuses one at a time (`troubleshoot.js`, `library/troubleshoot.py`).
+
+- `mods.troubleshootState` → `{active, count, since}`: whether a configuration is saved to restore.
+- `mods.applyOfficial` (game writer job, `mods.troubleshoot`): the switch's Off over every known install (it adopts
+  the changed files it meets), the configuration of those installs saved as `profiles.json`'s `troubleshoot` (an
+  earlier one is kept), cleared, and mods on: every later choice writes at once.
+- `mods.restoreConfig` (same job kind): a choice made meanwhile and absent from the saved configuration back to
+  official, the saved configuration back, the toggle to the intent it was saved with; `state_changed` without one.
+  A refusal (`untested_build`, the game running) keeps it for the same call again.
+- Both results are the toggle's (`ToggleResult`, read by the switch's result summary) plus `check`: every bundle
+  Steam's file list names, by size and SHA-1, `{verified, checked, changed, changedCount, missing, missingCount,
+  unverified}` (names cut at 200; unverified without the scan consent or a readable list). Restore checks only when it
+  turns mods off.
+
 ### Mods already in use
 
 Item 1's prompts and messages (`prompts.js`; the pure parts tested in Node from `tests/test_mod_switch.py`). The

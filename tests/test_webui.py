@@ -1985,3 +1985,16 @@ def test_lobby_camera_save_checks_its_params_before_any_job(app, services):
         assert rpc(app, "lobby.camera.save", **{**good, **change})["error"]["code"] == code
     # a lobby without a prefab cannot keep a camera
     assert rpc(app, "lobby.camera.save", **good)["error"]["code"] == "lobby_camera_unsupported"
+
+
+@pytest.mark.parametrize('version, enabled', [('0.7.0-rc.2', True), ('0.7.0-dev', True), ('0.7.0', False)])
+def test_troubleshoot_mods_answers_only_in_pre_release_builds(app, services, monkeypatch, version, enabled):
+    monkeypatch.setattr('bmpt.webui.api.get_version_info', lambda: {'version': version})
+    monkeypatch.setattr('bmpt.library.troubleshoot.status', lambda library: {'active': False, 'count': 0, 'since': None})
+    app.rpc = build_api(services)
+    state = rpc(app, 'mods.troubleshootState')
+    if enabled:
+        assert state['result'] == {'active': False, 'count': 0, 'since': None}
+    else:
+        for method in ('mods.troubleshootState', 'mods.applyOfficial', 'mods.restoreConfig'):
+            assert rpc(app, method)['error']['code'] == 'unknown_method'

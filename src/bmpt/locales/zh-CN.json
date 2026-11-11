@@ -705,6 +705,18 @@
 			"spine": {
 				"label": "Spine 授权",
 				"view": "查看"
+			},
+			"troubleshoot": {
+				"label": "排查 Mod",
+				"inactive": "未在排查",
+				"active": "排查中，已保存 {n} 项配置",
+				"apply": "一键应用原版",
+				"restore": "恢复配置",
+				"applyConfirm": "所有选择改为原版，当前配置另存",
+				"restoreConfirm": "恢复排查前的配置，排查期间的选择将被替换",
+				"match": "与官方一致",
+				"differ": "{n} 个文件与官方不一致",
+				"unverified": "未核对：无 Steam 文件清单"
 			}
 		},
 		"cacheTo": "缓存到 {path}",

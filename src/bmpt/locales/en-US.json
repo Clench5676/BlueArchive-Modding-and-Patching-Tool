@@ -705,6 +705,18 @@
 			"spine": {
 				"label": "Spine License",
 				"view": "View"
+			},
+			"troubleshoot": {
+				"label": "Troubleshoot Mods",
+				"inactive": "Not active",
+				"active": "Active - {n} choices saved",
+				"apply": "Apply Official to All",
+				"restore": "Restore Configuration",
+				"applyConfirm": "All choices set to official, current configuration saved",
+				"restoreConfirm": "Restore the configuration saved before troubleshooting, choices made since are replaced",
+				"match": "All files match official",
+				"differ": "{n} files differ from official",
+				"unverified": "Not verified: no Steam file list"
 			}
 		},
 		"cacheTo": "Cached in {path}",

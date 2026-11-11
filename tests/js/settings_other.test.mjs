@@ -47,10 +47,12 @@ test("opening Settings on Mods selects the tab before loading generic sources", 
     Popup: { opened: (stacked, close) => calls.push(["opened", stacked === host, typeof close]) },
     ModSwitch: { current: () => ({}), refresh: () => assert.fail("already loaded") },
     rpc: async (method) => { calls.push(method); return method === "settings.get" ? prefs : [mod]; },
+    // Troubleshoot Mods' state: none outside pre-release builds
+    troubleState: async () => null,
     render: async () => calls.push("render") };
   const h = new Function("deps", `const {${Object.keys(deps)}} = deps;
     const TABS = ["general", "mods", "sound", "l2d", "folders"];
-    let onChange, layout = {}, tab = "folders", scroll = 250, prefs, otherRequest = 0, otherMods;
+    let onChange, layout = {}, tab = "folders", scroll = 250, prefs, otherRequest = 0, otherMods, trouble;
     ${strip(openSource)}
     return { open, state: () => ({ tab, scroll, prefs, otherMods, onChange }) };`)(deps);
   const changed = () => {};
