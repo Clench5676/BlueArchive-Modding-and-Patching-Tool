@@ -6,6 +6,7 @@ import * as Popup from "./popup.js";
 import * as Compare from "./mod-compare.js";
 import { ensureSpine } from "./spine-runtime.js";
 import { jobProgress } from "./job-progress.js";
+import * as RigGeometry from "./rig-geometry.js";
 
 const key = (name) => name.replaceAll("\\", "/").split("/").at(-1).toLowerCase().replace(/\.png$/i, "");
 const joined = (items) => items.join(/^(zh|ja)/i.test(language()) ? "、" : ", ") || "—";
@@ -111,9 +112,12 @@ export function compare(report, runtime = globalThis.spine, summarize = false) {
   }
   // Atlases the game repacked since the Mod's textures were drawn on them (the library's record of the Mod).
   for (const name of report.rig?.layout || []) add("atlasLayout", { name: key(name) });
+  // The game drew the portrait anew (actions.redrawn): nothing can be moved, so no remap is offered.
+  const redrawn = report.redrawn?.redrawn === true;
+  if (redrawn) add("redrawn");
   const available = !issues.some(({ key }) => key === "unavailable");
   return { available, issues, author: issues.some(({ key }) => key !== "unavailable"),
-    remap: available && eligible(report) && report.remappable === true
+    remap: available && eligible(report) && report.remappable === true && !redrawn
       && issues.some(({ key }) => ["regions", "atlasSize", "atlasLayout", "missingAnimations"].includes(key)) };
 }
 
@@ -145,9 +149,30 @@ export async function show(report, { onRemap } = {}) {
   }
 }
 
-export async function remap(id, onRemapped = () => {}, label = "", subject = label) {
+// The repair review's lines: one per kind of region with its count, the names behind a Details button. Regions are
+// named "<atlas> - <region>"; the atlas is left out when every region of the report is in the same one.
+export function reviewLines(report) {
+  const kinds = { unpainted: report.added || [], official: report.official || [], dropped: report.dropped || [] };
+  const atlases = new Set(Object.values(kinds).flat().map((name) => name.split(" - ")[0]));
+  const bare = (names) => atlases.size === 1 ? names.map((name) => name.slice(name.indexOf(" - ") + 3)) : names;
+  const details = (key, names) => ({ label: T("info.details"), fn: () => Popup.message({ title: T("info.details"),
+    lines: [T(`remap.${key}`, { names: joined(bare(names)) })], scroll: true, ok: T("picker.ok") }) });
+  const counted = (key, names) => !names.length ? [] : [{ text: T(`remap.${key}`, { names: names.length }), button: details(key, names) }];
+  // the first line counts the moved and the unused regions: the unused ones' names are behind its own button
+  const counts = T("remap.counts", { moved: report.moved.length, dropped: report.dropped.length });
+  return [kinds.dropped.length ? { text: counts, button: details("dropped", kinds.dropped) } : counts,
+    ...new Set((report.upscaled || []).map(({ w, h }) => T("remap.upscaled", { w, h }))),
+    ...counted("official", kinds.official), ...counted("unpainted", kinds.unpainted),
+    ...report.warnings.map(({ key, name }) => T(`remap.${key}`, { name }))];
+}
+
+export async function remap(id, onRemapped = () => {}, label = "", subject = label, kind = "") {
+  // A portrait is baked through world space: the page poses both rigs with the runtime and posts what they draw.
+  let checked = reports.get(id);
+  if (!checked && kind === "spr") checked = await inspect(id, label, null, subject);
+  const geometry = checked?.kind === "spr" && await ensureSpine() ? RigGeometry.forRemap(checked, globalThis.spine) : undefined;
   const result = await Loading.hold(() => Loading.page(() => progressTask("Remap", subject,
-    async (update) => waitJob(await rpc("actions.remap", { mod: id }), update),
+    async (update) => waitJob(await rpc("actions.remap", geometry ? { mod: id, geometry } : { mod: id }), update),
   )), { all: true });
   if (result.unchanged) {
     reports.set(id, { ...reports.get(id), remappable: false });
@@ -155,16 +180,12 @@ export async function remap(id, onRemapped = () => {}, label = "", subject = lab
     return result;
   }
   const report = result.report;
-  const lines = [T("remap.counts", { moved: report.moved.length, dropped: report.dropped.length }),
-    ...new Set((report.upscaled || []).map(({ w, h }) => T("remap.upscaled", { w, h }))),
-    ...(report.added.length ? [T("remap.unpainted", { names: joined(report.added) })] : []),
-    ...(report.official?.length ? [T("remap.official", { names: shortList(report.official) })] : []),
-    ...(report.changed?.length ? [T("remap.changed", { names: shortList(report.changed) })] : []),
-    ...(report.dropped.length ? [T("remap.dropped", { names: joined(report.dropped) })] : []),
-    ...report.warnings.map(({ key, name }) => T(`remap.${key}`, { name }))];
+  const lines = reviewLines(report);
   try {
     const accepted = await Compare.show({ ...result.compare, pages: result.pages, drawings: result.drawings }, label || T("remap.action"), "dialog", {
-      lines, partial: report.partial, accept: T("remap.accept"), discard: T("remap.discard"),
+      lines, partial: report.partial, accept: T("remap.accept"), discard: T("remap.discard"), kind: kind || reports.get(id)?.kind || "spr",
+      // the regions whose pixels are not the mod's own: what the pictures can ring
+      marks: [...new Set((report.official || []).map((name) => name.slice(name.indexOf(" - ") + 3)))],
     });
     if (!accepted) return null;
     const saved = await Loading.hold(() => Loading.page(() => progressTask("Repair", subject, async (update) => {
@@ -191,6 +212,13 @@ export async function inspect(id, label = "", stamp = null, subject = label) {
   stamp ??= await rpc("actions.compatibilityStamp", { mod: id });
   const report = await progressTask("Compatibility", subject,
     async (update) => waitJob(await rpc("actions.compatibility", { mod: id }), update));
+  // A portrait the remap could repair: whether the game drew it anew, from the two rigs' rest poses.
+  if (report.kind === "spr" && report.remappable === true && await ensureSpine().catch(() => false)) {
+    let geometry = null;
+    try { geometry = RigGeometry.restOnly(RigGeometry.forRemap(report, globalThis.spine)); } catch { geometry = null; }
+    if (geometry && Object.keys(geometry).length) report.redrawn = await progressTask("Compatibility", subject,
+      async (update) => waitJob(await rpc("actions.redrawn", { mod: id, geometry }), update));
+  }
   const current = await rpc("actions.compatibilityStamp", { mod: id });
   if (current !== stamp) {
     stamps.delete(id); reports.delete(id);
@@ -214,5 +242,5 @@ export async function forUpdate(id, label = "", subject = label) {
 export async function check(id, label = "", onRemapped = () => {}, mod = null, subject = label) {
   if (mod?.kind !== "model" && !await ensureSpine()) return;
   const report = await Loading.hold(() => inspect(id, label, null, subject), { all: true });
-  return show(report, { onRemap: () => remap(id, onRemapped, label, subject) });
+  return show(report, { onRemap: () => remap(id, onRemapped, label, subject, mod?.kind || report.kind) });
 }

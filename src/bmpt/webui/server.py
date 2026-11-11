@@ -172,7 +172,8 @@ class WebApp:
         try:
             body = json.loads(environ["wsgi.input"].read(length))
             name, params = body["method"], body.get("params") or {}
-            if length > MAX_BODY and name not in ("photography.save", "photography.apply", "photography.restore", "photography.export"):
+            if length > MAX_BODY and name not in ("photography.save", "photography.apply", "photography.restore", "photography.export",
+                                                    "actions.remap", "actions.redrawn"):
                 raise ValueError("Oversized RPC body")
         except (ValueError, KeyError, TypeError):
             return self._json(start_response, {"error": {"code": "bad_request", "params": {}}}, "400 Bad Request")

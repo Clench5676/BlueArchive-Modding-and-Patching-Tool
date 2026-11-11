@@ -985,7 +985,7 @@ async function remapped() {
 }
 async function runRemap(c) {
   if (!c || busy || !Compatibility.eligible(c.mod)) return;
-  await call(() => Compatibility.remap(c.id, remapped, c.label, modProgressName(c)));
+  await call(() => Compatibility.remap(c.id, remapped, c.label, modProgressName(c), c.mod?.kind));
 }
 async function jumpRepaired(c) {
   const id = repairedId(c);

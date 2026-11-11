@@ -17,6 +17,7 @@ from bmpt import spine_names
 from bmpt.library import fingerprint, service
 from bmpt.library.integrity import Contents
 
+from rebake_geometry import geometry as rig_geometry
 from test_atlas_remap import atlas_text, repair_review  # noqa: F401 - fixture
 from test_library import game_bundle, header_bundle, kept_copy, make_mod, reload_library, setup_library  # noqa: F401
 
@@ -354,7 +355,7 @@ def test_remap_records_the_layout_it_rebuilt_the_mod_on(repair_review):
     # the upload carries a page of the layout before: it differs from the part as it is now
     assert imported["event"] == "import"
     assert {part["mod"] for part in imported["parts"]} == {"differs", "absent"}
-    result = env.library.accept_remap(env.library.remap(entry.id)["preview"])
+    result = env.library.accept_remap(env.library.remap(entry.id, geometry=rig_geometry(env.library, entry.id))["preview"])
     stored = env.library.built_against(result.mod.id)
     assert stored["event"] == "remap" and stored["complete"] is True
     assert {part["mod"] for part in stored["parts"]} == {"same"}
