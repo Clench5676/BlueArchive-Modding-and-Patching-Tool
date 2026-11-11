@@ -1,6 +1,6 @@
-// BL-131: Switch 3D Model's toolbar with its "Show other students" checkbox, laid out the way the student roster's toolbar fits
-// its Group Alts checkbox (roster-widgets.js toolbarFit): the checkbox first, the three segments, search, sort and order, in
-// every shipped language, longest first (English, Thai), against the locale files' real strings. Text is measured on the fit
+// The list popups' toolbar (BL-176: every list popup the L class): the student roster's toolbar fitted by its own steps
+// (roster-widgets.js toolbarFit), the three segments, search, sort and order, without a checkbox (Switch 3D Model's "Show
+// other students", BL-131, stands under the details, the toolbar has no room for it at this width), in every shipped language, longest first (English, Thai), against the locale files' real strings. Text is measured on the fit
 // tests' stand-in canvas (helpers/fit_canvas.mjs), so what is asserted is the logic, not a font.
 import assert from "node:assert/strict";
 import { test } from "node:test";
@@ -15,7 +15,7 @@ const JS = "../../src/bmpt/web/js/";
 const NGUI = await import(`${JS}ngui.js`);
 const Popup = await import(`${JS}popup.js`);
 const { CONTROL, SPACE } = await import(`${JS}ui-tokens.js`);
-const { S, glyphsOf } = await import(`${JS}util.js`);
+const { S } = await import(`${JS}util.js`);
 const { setStrings } = await import(`${JS}i18n.js`);
 
 const flat = (value, prefix = "webui") => Object.entries(value).flatMap(([key, item]) => typeof item === "object" ? flat(item, `${prefix}.${key}`) : [[`${prefix}.${key}`, item]]);
@@ -25,31 +25,24 @@ const list = Popup.listLayout(false, "model").list, RIGHT = list.r - SPACE.m, LE
 function layoutFor(locale, sortKey = "sort.default") {
   setStrings(locale, Object.fromEntries(flat(webui(locale))));
   document.documentElement.lang = locale;
-  return Popup.checkedToolbarFit(RIGHT, { segs: SEGMENTS, sortKey, sortKeys: SORTS, label: text(locale, "model.showOthers") });
+  return Popup.checkedToolbarFit(RIGHT, { segs: SEGMENTS, sortKey, sortKeys: SORTS });
 }
 
-for (const locale of ORDER) test(`the checkbox toolbar fits the list's width in ${locale}`, () => {
-  const label = text(locale, "model.showOthers");
-  assert.ok(label && label !== "model.showOthers");
+for (const locale of ORDER) test(`the list toolbar fits the list's width in ${locale}`, () => {
   for (const sortKey of SORTS) {
     const lay = layoutFor(locale, sortKey), { boxes } = lay;
-    assert.equal(lay.fits, true, `${locale}: the checkbox stands after the list's left edge (steps down to the roster's last)`);
-    // checkbox, segments, search, sort, order: left to right, SPACE.l between the groups and SPACE.m among the tools
-    assert.equal(boxes.length, 5);
-    assert.ok(lay.cbLeft >= LEFT + SPACE.l, `${locale}: ${lay.cbLeft} against ${LEFT + SPACE.l}`);
+    assert.equal(lay.fits, true, `${locale}: the segments stand after the list's left edge (steps down to the roster's last)`);
+    // segments, search, sort, order: left to right, SPACE.l between the groups and SPACE.m among the tools
+    assert.equal(boxes.length, 4);
+    assert.ok(lay.cbLeft >= LEFT, `${locale}: ${lay.cbLeft} against ${LEFT}`);
     for (let i = 1; i < boxes.length; i++) {
       const gap = boxes[i].x - boxes[i - 1].x - boxes[i - 1].w;
-      assert.ok(Math.abs(gap - (i < 3 ? SPACE.l : SPACE.m)) < 1e-9, `${locale}: gap ${i} is ${gap}`);
+      assert.ok(Math.abs(gap - (i < 2 ? SPACE.l : SPACE.m)) < 1e-9, `${locale}: gap ${i} is ${gap}`);
     }
     assert.ok(Math.abs(boxes.at(-1).x + boxes.at(-1).w - RIGHT) < 1e-9, "the order button ends at the list's right padding");
     assert.equal(boxes[0].x, lay.cbLeft);
-    assert.equal(lay.boxes[1].w, 3 * lay.segW);
-    // the checkbox: the label inside its box, up to two lines, never past the room it was fitted to
-    const { cbText, cbW } = lay;
-    assert.ok(!cbText.overflow, `${locale}: ${cbText.text}`);
-    assert.ok(cbText.lines <= 2 && cbText.fs >= 24);
-    for (const line of cbText.text.split("\n")) assert.ok(NGUI.glyphWidth(line, cbText.fs) <= 400 + 1e-9);
-    assert.ok(Math.abs(cbW - (131 + glyphsOf(cbText.text, cbText.fs) + 46)) < 1e-9, `${locale}: the box is as wide as its label needs`);
+    assert.equal(lay.boxes[0].w, 3 * lay.segW);
+    assert.equal(lay.cbText, null, "no checkbox");
     // the three segments share one size, each caption inside its slot
     assert.equal(new Set(lay.segLabels.map((f) => f.fs)).size, 1, `${locale}: one segment size`);
     for (const f of lay.segLabels) {
@@ -64,7 +57,7 @@ for (const locale of ORDER) test(`the checkbox toolbar fits the list's width in 
   assert.deepEqual(layoutFor(locale, "sort.default").boxes, layoutFor(locale, "sort.name").boxes);
 });
 
-for (const locale of ORDER) test(`the checkbox toolbar stays inside the list and the window at every size in ${locale}`, () => {
+for (const locale of ORDER) test(`the list toolbar stays inside the list and the window at every size in ${locale}`, () => {
   const { boxes } = layoutFor(locale);
   // the default window is 1600 x 1000 (the stage is 1920 x 1080 units scaled to the smaller side); also the smallest and a large one
   for (const [width, height] of [[960, 540], [1600, 1000], [2560, 1440]]) for (const density of [1, 2]) {

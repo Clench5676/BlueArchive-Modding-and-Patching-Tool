@@ -2,7 +2,6 @@
 // several cards ticked, the start sequence), web/js/update.js and detail.js's preview actions, on a small stand-in
 // DOM. Run by tests/test_popup.py with Node's test runner: node --test tests/js/popup.test.mjs
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { register } from "node:module";
 import { afterEach, test } from "node:test";
@@ -1796,7 +1795,9 @@ test("switch geometry: per-kind columns, aspects, card bounds, labels and portra
     for (const lang of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
       const ui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url))).webui;
       setStrings(lang, Object.fromEntries(strings(ui)));
-      for (const [kind, columns] of [["spr", 4], ["lobby", 2], ["model", 4]]) {
+      for (const kind of ["spr", "lobby", "model"]) {
+        // the columns the list's paper holds (BL-176: the L class)
+        const { columns } = (await import("../../src/bmpt/web/js/switch-layout.js")).switchGrid(kind, Popup.listCardBox(Popup.listLayout(false, kind)).w);
         const items = Array.from({ length: 9 }, (_, i) => ({ key: String(i), kind: "mod", full: "ch0200_spr", label: "ch0200_spr",
           nameEdit: { label: ui.modAlias.title, fn() {} }, inUseText: ui.switch.configured,
           badge: { text: ui.switch.configured, color: "#8de4ff" } }));
@@ -1892,7 +1893,7 @@ test("every kind left-aligns outer corners, with compact portrait gaps and balan
   };
   const headerInsets = [], leftInsets = [];
   for (const kind of ["spr", "lobby", "model"]) {
-    const { columns } = switchGrid(kind);
+    const { columns } = switchGrid(kind, Popup.listCardBox(Popup.listLayout(false, kind)).w);  // the list's paper (BL-176)
     for (const count of new Set([0, 1, 2, columns, columns + 1, 2 * columns, 19])) for (const selected of new Set(["0", String(count - 1), null])) {
       const items = Array.from({ length: count }, (_, i) => ({ key: String(i), full: "Owner label", label: "Owner label", isNew: true }));
       await Popup.listPopup({ host: prompt, layoutKind: kind, items, selected, title: kind, okText: "Set" });
@@ -1907,7 +1908,8 @@ test("every kind left-aligns outer corners, with compact portrait gaps and balan
         const right = paper.right - Math.max(...ink.map((b) => b.right)) - dx;
         leftInsets.push(left);
         assert.ok(Math.abs(left - 40 * S) <= 1, `${kind}, ${count} cards, row ${start}: fixed left inset, no centring offset`);
-        if (kind !== "spr" && names.length === columns) assert.ok(Math.abs(left - right) <= 1, `${kind}: equal insets for a full row`);
+        // a full row of two or more spreads edge to edge; a single column stays at the left (the lobby in the L class)
+        if (kind !== "spr" && names.length === columns && columns > 1) assert.ok(Math.abs(left - right) <= 1, `${kind}: equal insets for a full row`);
         if (kind !== "spr" || count <= columns) assert.ok(right >= left - 1, "short rows leave spare space on the right");
         if (kind === "spr") {
           assert.ok(Math.min(...ink.map((b) => b.top)) >= 0, "the row starts inside the viewport");
@@ -2238,7 +2240,7 @@ test("release notes draw their Markdown in the UI language: headings larger, ite
 test("release notes use one type size on every line: short, wrapped, long and unbroken lines alike", async () => {
   const NGUI = await import("../../src/bmpt/web/js/ngui.js");
   setStrings("en-US", Object.fromEntries(strings(english)));
-  const room = 2841 - 200; // the plain message's text room at the notes popup's width
+  const room = 2098 - 200; // the plain message's text room at the notes popup's width (the L class, BL-176)
   let over = "Fixed an issue";
   while (NGUI.glyphWidth(over, 44) <= room) over += " with the mod";
   const longest = "Words that wrap on and on ".repeat(320).trim();
@@ -2789,19 +2791,20 @@ test('illustrated and mixed tours retain the original geometry, including a miss
   // the frame is 46.5 shorter for the XS footer (BL-176: its tops 164 above the bottom, the original's 210.5) and its content
   // half of that lower: the original room under the caption
   const lift = -23.25;
-  assert.deepEqual(size, { width: 2458, height: 1353.5, image: [-1000, -400 + lift, 2000, 500], bottom: -445 + lift - 35 });
+  // the L class (BL-176): text 1800 across, the illustration 1800 x 450 centred where the 2000 x 500 one was
+  assert.deepEqual(size, { width: 2098, height: 1353.5, image: [-900, -375 + lift, 1800, 450], bottom: -445 + lift - 35 });
   for (const [i, page] of pages.entries()) {
     const popup = NGUI.find(Tours.pageTree(page, i, pages.length, size), 'Popup');
-    assert.deepEqual([NGUI.find(popup, 'Base/BG').widgets[0].w_, NGUI.find(popup, 'Base/BG').widgets[0].h_], [2841, 1353.5]);
+    assert.deepEqual([NGUI.find(popup, 'Base/BG').widgets[0].w_, NGUI.find(popup, 'Base/BG').widgets[0].h_], [2098, 1353.5]);
     assert.deepEqual(NGUI.find(popup, 'Count').pos, [0, 520 + lift]);
     assert.deepEqual(NGUI.find(popup, 'FeatureTitle').pos, [0, (page.image ? 405 : 300) + lift]);
     assert.deepEqual(NGUI.find(popup, 'FeatureBody').pos, [0, (page.image ? 220 : -40) + lift]);
-    assert.equal(NGUI.find(popup, 'FeatureTitle').widgets[0].w_, 2100);
+    assert.equal(NGUI.find(popup, 'FeatureTitle').widgets[0].w_, 1800);
     assert.deepEqual(NGUI.find(popup, 'Btn').pos, [0, Popup.footerY(1353.5)]);
     if (page.image) {
       const slot = NGUI.find(popup, 'ImageSlot');
       assert.deepEqual(slot.pos, [0, -150 + lift]);
-      assert.deepEqual([slot.widgets[0].w_, slot.widgets[0].h_], [2000, 500]);
+      assert.deepEqual([slot.widgets[0].w_, slot.widgets[0].h_], [1800, 450]);
       assert.deepEqual(NGUI.find(popup, 'Caption').pos, [0, -445 + lift]);
     }
   }
@@ -2814,7 +2817,7 @@ test('illustrated and mixed tours retain the original geometry, including a miss
   assert.deepEqual(frame(), initial);
   const image = walk(dialog).find((el) => el.tagName === 'IMG');
   assert.deepEqual([image.style.left, image.style.top, image.style.width, image.style.height],
-    [`${960 - 1000 * S}px`, `${540 - (100 + lift) * S}px`, `${2000 * S}px`, `${500 * S}px`]);
+    [`${960 - 900 * S}px`, `${540 - (75 + lift) * S}px`, `${1800 * S}px`, `${450 * S}px`]);
   image.onerror();
   assert.deepEqual(frame(), initial);
   action(dialog, 'close').click(); await opened;
@@ -3703,14 +3706,15 @@ test("titleCentre puts the title's ink centre that far under the frame's top and
 
 test("numeric caller widths round up and every fixed popup chooses its assigned class", async () => {
   const NGUI = await import("../../src/bmpt/web/js/ngui.js"); await Popup.ready();
-  for (const [width, expected] of [[700,1300],[1301,1540],[1541,2098],[2100,2841],[2458,2841]])
+  // no popup wider than the L class (BL-176): a wider call, or XL, gets L
+  for (const [width, expected] of [[700,1300],[1301,1540],[1541,2098],[2100,2098],[2458,2098],["XL",2098]])
     assert.equal(NGUI.find(Popup.popupFrame("T", width, 1), "Popup/Base/BG").widgets[0].w_, expected);
   assert.equal(Popup.messageLayout({ lines: ["Short"] }).width, 1300);
   assert.equal(Popup.messageLayout({ width: 2100 }).width, 2098);
-  assert.equal(Popup.messageLayout({ width: 2101 }).width, 2841);
+  assert.equal(Popup.messageLayout({ width: 2101 }).width, 2098);
   const candidates = Array.from({ length: 100 }, (_, n) => "word ".repeat(n + 1));
   for (const width of [1300,1540,2098]) assert.ok(candidates.some(text => Popup.messageLayout({ lines: [text] }).width === width));
-  assert.equal(Frames.TEXT_VIEWER.w, 2841); assert.equal(Popup.listLayout().frame.w, 2841);
+  assert.equal(Frames.TEXT_VIEWER.w, 2098); assert.equal(Popup.listLayout().frame.w, 2098);
   assert.equal(Frames.DETAILS.w, 2098); assert.equal(Frames.EXPORT.w, 2098);
   assert.equal(Frames.MOD_ALIAS.w, 1540); assert.equal(Frames.ALIAS.w, 1540);
   assert.equal(Frames.compareFrame(false).w, 2098); assert.equal(Frames.compareFrame(true).w, 2098);
@@ -4267,8 +4271,10 @@ const messageTop = layout => Popup.FRAME_Y + layout.height / 2 - layout.y0;
 
 test("explicit frame heights use POPUP_FRAME.minH through 1560; omitted or zero heights retain the exemplar", () => {
   for (const key of ["S", "M", "L", "XL"]) {
-    assert.equal(Frames.frameGeometry(key).h, POPUP_FRAME[key].h);
-    assert.equal(Frames.frameGeometry(key, 0).h, POPUP_FRAME[key].h);
+    // XL is L now (BL-176): no popup wider
+    const exemplar = POPUP_FRAME[key === "XL" ? "L" : key].h;
+    assert.equal(Frames.frameGeometry(key).h, exemplar);
+    assert.equal(Frames.frameGeometry(key, 0).h, exemplar);
     const min = POPUP_FRAME.minH; // the title's band over the XS footer's clearance (BL-176)
     assert.equal(min, 170 + POPUP_FOOTER.clearance);
     for (const [height, expected] of [[1, min], [min - 1, min], [min, min], [700, 700], [900, 900], [1400, 1400], [2000, 1560]])
@@ -4450,80 +4456,25 @@ async function toolbarOf(Fresh, tools, items) {
     segments: SEGMENTS.map((key) => rectOf(named(english.seg[key.slice(4)]))), drawn: drawnTools };
 }
 
-test("a list popup toolbar without the checkbox keeps its layout", async (t) => {
+test("a list popup's toolbar is the roster's, fitted inside the L class's list panel", async (t) => {
   const NGUI = await import("../../src/bmpt/web/js/ngui.js");
   serveToolbarCollection(t, NGUI);
   const Fresh = await import("../../src/bmpt/web/js/popup.js?toolbar-plain");
   const items = [{ key: "a", label: "Alpha", full: "Alpha", thumb: "a.png" }];
   try {
     const plain = await toolbarOf(Fresh, { segs: SEGMENTS, seg: 1, onSeg() {}, sortKey: "sort.default" }, items);
-    // measured on the layout before the checkbox existed (popup.js toolbar): not a pixel moves against the frame's top, which
-    // stands half the old footer's padding lower since the XS footer (BL-176: the frame 94 units shorter)
-    const down = (1353 - Fresh.listLayout(false, "model").frame.h) / 2 * (1920 / 2960);
-    const near = (got, want) => got.forEach((v, i) => assert.ok(Math.abs(v - (i === 1 ? want[i] + down : want[i])) < (i === 1 ? 0.01 : 1e-6), `${got} against ${want}`));
-    near(plain.order, [1733.25, 238.7, 108.97, 75.24]);
-    near(plain.search, [1239.89, 238.7, 80.43, 75.24]);
-    near(plain.sort, [1453.16, 238.67, 272.7, 75.32]);
-    near(plain.segments[0], [824.7567567567569, 242.46486486486486, 149.1891891891892, 67.45945945945947]);
-    near(plain.segments[2], [1123.1351351351352, 242.46486486486486, 149.1891891891892, 67.45945945945947]);
-    assert.equal(plain.drawn.length, 15);
-    // the drawing: everything but the tops as it was (digest), the tops as they were against the frame's
-    assert.equal(createHash("sha1").update(JSON.stringify(plain.drawn.map(([path, left, , ...rest]) => [path, left, ...rest]))).digest("hex"),
-      "27b382b1c5701b404a1f5b566eeb312bc3adb722");
-    const tops = [238.7, 255.57, 238.67, 246.78, 238.02, 238.02, 247.11, 255.55, 238.7, 251.03, 238.7, 251.03, 224.3, 224.3, 224.3];
-    plain.drawn.forEach(([path, , top], i) => assert.ok(Math.abs(top - down - tops[i]) < 0.01, `${path}: ${top - down} against ${tops[i]}`));
+    // segments, search, sort, order left to right, inside the list panel, the order button at its right padding (BL-176)
+    const list = Fresh.listLayout(false, "model").list, left = 960 + list.l * S, right = 960 + list.r * S;
+    const [seg0, , seg2] = plain.segments;
+    assert.ok(seg0[0] >= left && seg2[0] + seg2[2] <= plain.search[0] + 1e-6, "the segments, then search");
+    assert.ok(plain.search[0] < plain.sort[0] && plain.sort[0] < plain.order[0], "search, sort, order");
+    assert.ok(Math.abs(plain.order[0] + plain.order[2] - (right - 20 * S)) < 1, "order at the list's right padding");
+    const centre = (r) => r[1] + r[3] / 2;
+    for (const r of [plain.search, plain.sort, plain.order]) assert.ok(Math.abs(centre(r) - centre(plain.search)) < 1.5, "one centre line");
     assert.equal(action(prompt, "check"), undefined, "no checkbox in the toolbar");
   } finally { prompt.hidden = true; Fresh.closed(prompt); }
 });
 
-test("Show other students is a checkbox of the model popup's toolbar: drawn from the roster's toggle, flipping on a click", async (t) => {
-  const NGUI = await import("../../src/bmpt/web/js/ngui.js");
-  serveToolbarCollection(t, NGUI);
-  const Fresh = await import("../../src/bmpt/web/js/popup.js?toolbar-check");
-  const items = [{ key: "a", label: "Alpha", full: "Alpha", thumb: "a.png" }, { key: "b", label: "Beta", full: "Beta", thumb: "b.png" }];
-  const check = { label: english.model.showOthers, checked: false, onChange(on) { changes.push(on); } };
-  const changes = [], views = [];
-  const tools = { segs: SEGMENTS, seg: 0, onSeg() {}, sortKey: "sort.default", check, onView: (keys) => views.push(keys) };
-  const box = () => action(prompt, "check");
-  const paths = (name) => walk(prompt).filter((e) => (e.dataset.path || "").includes(name));
-  try {
-    await toolbarOf(Fresh, tools, items);
-    assert.ok(box(), "the checkbox is in the toolbar");
-    assert.equal(box().getAttribute("role"), "checkbox");
-    assert.equal(box().getAttribute("aria-checked"), "false");
-    assert.equal(box().getAttribute("aria-label"), english.model.showOthers);
-    // it stands left of the three segments, on the toolbar's row, inside the list panel, and the tools keep their order
-    const [cx, cy, cw, ch] = rectOf(box());
-    const seg = ["All", "Playable", "NPC"].map((label) => rectOf(walk(prompt).find((e) => e.className === "hit" && e.getAttribute("aria-label") === label)));
-    const search = rectOf(action(prompt, "search")), sort = rectOf(action(prompt, "sort")), order = rectOf(action(prompt, "order"));
-    assert.ok(cx + cw <= seg[0][0], "the checkbox ends before the first segment");
-    assert.ok(seg[0][0] < seg[1][0] && seg[1][0] < seg[2][0] && seg[2][0] + seg[2][2] <= search[0] + 1e-6, "segments, then search");
-    assert.ok(search[0] < sort[0] && sort[0] < order[0]);
-    const listPanel = Fresh.listLayout(false, "model").list, left = 960 + listPanel.l * S, right = 960 + listPanel.r * S;
-    assert.ok(cx >= left && order[0] + order[2] <= right + 1e-6, "everything inside the list panel");
-    const centre = (r) => r[1] + r[3] / 2;
-    assert.ok(Math.abs(centre([cx, cy, cw, ch]) - centre(search)) < 1.5, "the checkbox is on the tools' centre line");
-    // drawn from the roster's toggle: its plate, the box and its Type_OFF state; no tick while off
-    assert.ok(paths("Toolbar/Menubar/Merge").length > 0);
-    assert.ok(paths("Merge/Type_OFF/Check").length > 0 && paths("Merge/Type_ON").length === 0);
-    assert.equal(paths("Toolbar/Menubar/Merge/Label").length > 0, true, "its caption");
-    // a click flips the shared state, tells the caller and draws the popup again with the tick
-    box().click();
-    assert.equal(check.checked, true);
-    assert.deepEqual(changes, [true]);
-    await until(() => box()?.getAttribute("aria-checked") === "true");
-    assert.ok(paths("Merge/Type_ON/Check/Icon").length > 0 && paths("Merge/Type_OFF").length === 0, "the tick shows while on");
-    box().click();
-    await until(() => box()?.getAttribute("aria-checked") === "false");
-    assert.deepEqual(changes, [true, false]);
-    // the cards in view are reported after every drawing
-    assert.ok(views.length >= 1 && views.at(-1).includes("a") && views.at(-1).includes("b"));
-    // other popups with tools, without the checkbox (portraits, lobbies), draw none and report nothing
-    await Fresh.listPopup({ host: prompt, layoutKind: "model", title: "Models", items, selected: "a", okText: "Save",
-      tools: { segs: SEGMENTS, seg: 0, onSeg() {}, sortKey: "sort.default" }, onSelect() {} });
-    assert.equal(box(), undefined);
-  } finally { prompt.hidden = true; Fresh.closed(prompt); }
-});
 
 test("the list reports the cards in view, and those a scroll brings in", async (t) => {
   const NGUI = await import("../../src/bmpt/web/js/ngui.js");

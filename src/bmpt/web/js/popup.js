@@ -15,7 +15,7 @@ import { switchGrid, placeSwitchCards, cardInkBounds } from "./switch-layout.js"
 import { scrollbar, scrollbarTrack } from "./scrollbar.js";
 import { horizontalScroll } from "./horizontal-scroll.js";
 import * as Buttons from "./game-buttons.js";
-import { searchTree, sortBody, orderBody, pickerItems, toolbarFit, toolbarTree, TOOLBAR_CENTRE_Y } from "./roster-widgets.js";
+import { searchTree, pickerItems, toolbarFit, toolbarTree, TOOLBAR_CENTRE_Y } from "./roster-widgets.js";
 import { resizeButton } from "./button-layout.js";
 import { fitBadgeCaptions, selectedFrame, selectionArtWindow, SELECTION_PREFAB, SELECTION_SLOT } from "./selected-frames.js";
 import { frameOutline } from "./row-thumbnail.js";
@@ -486,12 +486,13 @@ export function listLayout(check = false, kind = null) {
   const frame = frameGeometry("XL", Math.max(need, POPUP_FRAME.contentTop + XL_CONTENT_H + POPUP_FOOTER.clearance));
   const content = popupContent(frame.w, frame.h);
   const panels = grid(content);
-  const detailBox = { ...panels.span(4), h: content.h - (check ? CHECK_H + SPACE.m : 0) };
+  // the details five columns, the list seven (BL-176: in the L class four would leave the details too narrow for their actions)
+  const detailBox = { ...panels.span(5), h: content.h - (check ? CHECK_H + SPACE.m : 0) };
   const bounds = box => {
     const [l, t] = toNode(box, 0, frame);
     return { l, r: l + box.w, t, b: t - box.h };
   };
-  return { frame, content, left: bounds(detailBox), list: bounds(panels.span(8, 4)),
+  return { frame, content, left: bounds(detailBox), list: bounds(panels.span(7, 5)),
     // Card artwork and the native card-placement helper retain their prefab envelope and scroll pitch.
     card: { w: 250, h: 226, bar: 68 }, pitch: [284, 350] };
 }
@@ -508,76 +509,34 @@ export function listCardBox(layout, { searching = false, horizontal = false, ban
 const LP = listLayout();
 // a segment's caption: a string key, or {text} for a caption the caller wrote (a count in it)
 const segText = (seg) => (typeof seg === "string" ? T(seg) : seg?.text ?? "");
-// the student list's tools at the top right of the list: order, sort, search and, with segs, the segment filter
+// the student list's tools at the top right of the list: order, sort, search and, with segs, the segment filter; check:
+// the roster's checkbox before them. One toolbar, the roster's, fitted by its own steps to the list's width (BL-176: the
+// list popups are the L class, too narrow for the prefab's 230-wide segments and 420-wide sort button).
 function toolbar(right, y, { segs = null, sortKey = "sort.default", active = 0, ascending = true, filtered = false, check = null, sortKeys = [sortKey] } = {}) {
-  if (check) return checkedToolbar(right, y, { segs, sortKey, sortKeys, active, ascending, filtered, check });
-  const menu = find(layouts.collection, "SeletControl/TopMenu");
-  const kids = [];
-  const toolRow = row([{ w: 150, h: CONTROL.buttonS.h }, { w: 420, h: CONTROL.buttonS.h }, { w: 243, h: CONTROL.buttonS.h }],
-    { x: LP.list.l + SPACE.m, y: -y - CONTROL.buttonS.h / 2, w: right - LP.list.l - SPACE.m,
-      gap: SPACE.m, justify: "end" });
-  const local = { w: 0, h: 0, cx: 0, cy: 0 };
-  const centers = toolRow.boxes.map(box => toNode(box, 4, local));
-  // Corrections from each complete collection tool's origin to its visual body centre are prefab-owned.
-  const x = toolRow.boxes[0].x - SPACE.m;
-  const order = clone(find(menu, "OrderBtn"));
-  order.pos = [centers[2][0] + 45.1, centers[2][1]];
-  const sort = clone(find(menu, "SortBtn"));
-  const sortW = 420;
-  order.children = order.children.map((child) => child.name === "Btn_Normal" ? orderBody(layouts.collection, ascending) : child);
-  const st = fitText(T(sortKey), 56, 36, sortW - 150);
-  sort.children = sort.children.map((child) => child.name === "Btn_Normal" ? sortBody(layouts.collection, st, sortW, filtered) : child);
-  sort.pos = [centers[1][0] + 83, centers[1][1]];
-  const search = clone(find(menu, "SearchBtn"));
-  search.pos = [centers[0][0] - 89, centers[0][1]];
-  kids.push(order, sort, search);
-  let segBox = null;
-  if (segs) {
-    const filter = clone(find(menu, "FilterBtn"));
-    const segW = 230, sx = segW / 328;
-    filter.scale = [sx, 1];
-    // the three segments share one size
-    const segFits = NGUI.fitGroup(segs.map(segText), 44, 26, segW - 30, 2, { maxH: 96 });
-    [["All", segs[0]], ["Main", segs[1]], ["Support", segs[2]]].forEach(([k, key], i) => {
-      const seg = find(filter, k);
-      for (const state of seg.children) {
-        for (const c of state.children || []) {
-          const tex = c.widgets.find((w) => "texture" in w);
-          if (tex) {
-            const f = segFits[i];
-            c.widgets = [label(f.text, f.fs, tex.color, (segW - 20) / sx, Math.max(60, f.fs * f.lines * 1.3), { depth: 9 })];
-          }
-        }
-        state.active = (state.name === "Btn_Pressed") === (i === active);
-      }
-    });
-    filter.pos = [x - 3 * segW + 123 * sx + 164 * sx - 6, y + 50.2];
-    segBox = { right: x, segW, y };
-    kids.push(filter);
-  }
-  return { tree: node("Toolbar", [0, 0], [], kids), segBox };
+  return fittedToolbar(right, y, { segs, sortKey, sortKeys, active, ascending, filtered, check });
 }
 
 // the fit of that toolbar: the checkbox's ``label``, the ``segs`` captions' keys and the sort button's ``sortKeys`` (``sortKey``:
 // the one shown), between the list's left edge and ``right``
-export function checkedToolbarFit(right, { segs, sortKey, sortKeys, label }) {
-  return toolbarFit({ left: LP.list.l + SPACE.m, right, filters: [segs.map(segText)], sorts: sortKeys.map((key) => T(key)),
+export function checkedToolbarFit(right, { segs, sortKey, sortKeys, label = null }) {
+  return toolbarFit({ left: LP.list.l + SPACE.m, right, filters: segs ? [segs.map(segText)] : [], sorts: sortKeys.map((key) => T(key)),
     sortAt: sortKeys.indexOf(sortKey), check: label });
 }
 // The toolbar with a checkbox (Switch 3D Model's "Show other students", BL-131) is the student roster's: the checkbox
 // first, the three segments, search, sort and order, fitted by the roster's own steps (roster-widgets.js toolbarFit; the
 // sort button as wide as its longest key). Returns the tree, where the segments and the checkbox stand for the hit areas.
-function checkedToolbar(right, y, { segs, sortKey, sortKeys, active, ascending, filtered, check }) {
-  const lay = checkedToolbarFit(right, { segs, sortKey, sortKeys, label: check.label });
+function fittedToolbar(right, y, { segs, sortKey, sortKeys, active, ascending, filtered, check }) {
+  const lay = checkedToolbarFit(right, { segs, sortKey, sortKeys, label: check?.label ?? null });
   const tree = toolbarTree(layouts.collection, layouts.checkbox || checkboxPrefab(), {}, false, lay,
-    { filters: [{ name: "ModFilter", active }], checked: !!check.checked, filtered, ascending });
+    { filters: segs ? [{ name: "ModFilter", active }] : [], checked: !!check?.checked, filtered, ascending });
   tree.name = "Toolbar";
   tree.pos = [0, y - TOOLBAR_CENTRE_Y];
   tree.children = tree.children.filter((child) => ["Menubar", "ModFilter", "SearchBtn", "SortBtn", "OrderBtn"].includes(child.name));
   const bar = find(tree, "Menubar");
-  bar.children = bar.children.filter((child) => child.name === "Merge");
+  if (bar) bar.children = bar.children.filter((child) => child.name === "Merge");
   // the segments span the filter's right edge back three widths, the same slots the plain toolbar's hit areas count from
-  return { tree, lay, segBox: { right: lay.seg1 + 6, segW: lay.segW, y }, check: { x: lay.cbLeft + lay.cbW / 2, w: lay.cbW, y } };
+  return { tree, lay, segBox: segs ? { right: lay.seg1 + 6, segW: lay.segW, y } : null,
+    check: check ? { x: lay.cbLeft + lay.cbW / 2, w: lay.cbW, y } : null };
 }
 
 // The list and details panels occupy the XL content grid; its footer uses the shared centred group.
@@ -920,13 +879,12 @@ export function detailsTree(it, title, fields, actions, portraitTexture = null, 
 //   onClose(how): the close button, the backdrop and Escape; null for a popup without them (it must be answered)
 //   A list with no card to show puts hall.noCandidates in the list paper; with tools, while the chosen card (selected)
 //   is not among the cards shown, the primary button is the game's disabled one and answers nothing.
-//   tools: {segs, seg, onSeg, sortKey, more, check, onView} for the student list's tools over the cards, or null; without
+//   tools: {segs, seg, onSeg, sortKey, more, onView} for the student list's tools over the cards, or null; without
 //          them, hint (left) and footer (right) show in their place. more(query): cards added after the matching ones
 //          (Switch 3D Model's other students' models, BL-131; asked on every drawing, with the search's words, which may be
-//          empty), ordered and turned like them. check: {label, checked, onChange(checked)}, a checkbox before the
-//          segments in the same toolbar (the roster's fit, see checkedToolbar); a click flips check.checked and draws the
-//          popup again, so the same object is passed to every drawing. onView(keys): the keys of the cards in view, after
-//          every drawing and scroll (the same signal that brings their thumbnails in)
+//          empty), ordered and turned like them. onView(keys): the keys of the cards in view, after every drawing and
+//          scroll (the same signal that brings their thumbnails in). The toolbar has no room for a checkbox in the L class
+//          (BL-176): a list's checkbox is `check`, under the details.
 //   items' hint: the card's hover hint
 //   check: {label, checked, onChange} for a checkbox below the details; a click flips check.checked, so the same
 //          object is passed to every drawing
@@ -966,7 +924,8 @@ export async function listPopup(options) {
     portraitTexture = inventory ? find(inventory, "Inventory_ListControl/EquipPos/Texture") : null;
   }
   const LP = listLayout(!!check, options.layoutKind);
-  const cardGrid = { ...switchGrid(options.layoutKind), ...(options.alignStart ? { leftAligned: true } : {}) };
+  // the cards' columns follow the list's paper (BL-176: the L class's narrower list holds fewer)
+  const cardGrid = { ...switchGrid(options.layoutKind, listCardBox(LP).w), ...(options.alignStart ? { leftAligned: true } : {}) };
   const { card, columns, pitch, horizontal } = cardGrid;
   const band0 = options.slimBand && !tools && !hint ? LIST_BAND.slim : LIST_BAND.tools;
   const scrollKey = horizontal ? "scrollLeft" : "scrollTop";
@@ -999,7 +958,7 @@ export async function listPopup(options) {
   if (tools && layouts.collection && !(horizontal && toolState.searching)) {
     const sortKeys = [...new Set([tools.sortKey ?? "sort.default", "sort.name"])];
     const tb = toolbar(LP.list.r - SPACE.m, LP.list.t - SPACE.m - CONTROL.buttonS.h / 2, { segs: tools.segs, sortKey: toolState.sort === "name" ? "sort.name" : tools.sortKey, sortKeys,
-      active: tools.seg ?? 0, ascending: toolState.ascending, filtered: !!toolState.query, check: tools.segs ? tools.check : null });
+      active: tools.seg ?? 0, ascending: toolState.ascending, filtered: !!toolState.query });
     const tv = await NGUI.render(tb.tree, next, { scale: S, origin: [960, 540], z: 20 });
     hit(next, tv, "Toolbar/OrderBtn/Btn_Normal", () => { toolState.ascending = !toolState.ascending; redraw(); },
       { name: T(toolState.ascending ? "roster.asc" : "roster.desc"), action: "order" });
@@ -1014,17 +973,6 @@ export async function listPopup(options) {
           toolState.sort = draft.sort; toolState.ascending = draft.order === "asc"; redraw();
         } });
     }, { name: T("display.tab.sort"), action: "sort" });
-    if (tb.check) {
-      const { x, w, y } = tb.check, state = tools.check;
-      const box = hitButton(next, [960 + (x - w / 2) * S, 540 - (y + CONTROL.toolbar.h / 2) * S, w * S, CONTROL.toolbar.h * S], () => {
-        state.checked = !state.checked;
-        state.onChange?.(state.checked);
-        redraw();
-      }, state.label, 80);
-      box.dataset.action = "check";
-      box.setAttribute("role", "checkbox");
-      box.setAttribute("aria-checked", String(!!state.checked));
-    }
     if (tb.segBox && tools.onSeg) {
       const { right, segW, y } = tb.segBox;
       for (let i = 0; i < 3; i++) {

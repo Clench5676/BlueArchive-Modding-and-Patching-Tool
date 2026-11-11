@@ -59,7 +59,8 @@ test("the picker's constants are the ones asserted here", async () => {
   assert.match(popup, /fitRow\(actions\.map\(\(\[caption\]\) => caption\), 40, 26, actions\.length \* \(bw - gap\), ACTION_CLEAR, 2, \{ maxH: ACTION_TEXT_H \}\)/);
 });
 
-const PANEL = (2841 - 80 + 40) / 12 * 4 - 40, GAP = 20, CLEAR = 28, ACTION_H = 96;
+// the list popup's details: five columns of the L class's grid (BL-176)
+const PANEL = (2098 - 80 + 40) / 12 * 5 - 40, GAP = 20, CLEAR = 28, ACTION_H = 96;
 const actionSets = (locale) => {
   const t = (key) => text(locale, key), open = t("open.mac"), openWindows = t("open.win");
   return {
@@ -169,15 +170,17 @@ for (const locale of LOCALES) test(`the roster's six segments and the popup's th
   // the roster's two filters' six captions go through toolbarFit, which fits every filter's captions as one group
   assert.match(roster, /filters: \[\["seg\.all", "seg\.mods", "seg\.noMods"\], \["seg\.all", "seg\.recruit", "seg\.noRecruit"\]\]\.map\(\(keys\) => keys\.map\(\(k\) => T\(k\)\)\)/);
   assert.match(roster, /fitGroup\(filters\.flat\(\), segFs, 22, segW - 26, 2, \{ maxH: 96 \}\)/);
-  assert.match(popup, /fitGroup\(segs\.map\(segText\), 44, 26, segW - 30, 2, \{ maxH: 96 \}\)/);
+  // the list popups' three go through the same toolbarFit (BL-176), as one filter
+  assert.match(popup, /toolbarFit\(\{ left: LP\.list\.l \+ SPACE\.m, right, filters: segs \? \[segs\.map\(segText\)\] : \[\]/);
   assert.match(popup, /const segText = \(seg\) => \(typeof seg === "string" \? T\(seg\) : seg\?\.text \?\? ""\);/);
   document.documentElement.lang = locale;
-  for (const [segW, segFs] of [[230, 44], [210, 40], [200, 36], [190, 34], [180, 32], [170, 30]]) {
+  for (const [segW, segFs] of [[230, 44], [210, 40], [200, 36], [190, 34], [180, 32], [170, 30], [160, 28], [150, 26], [140, 24]]) {
     const six = ["seg.all", "seg.mods", "seg.noMods", "seg.all", "seg.recruit", "seg.noRecruit"].map((key) => text(locale, key));
     assertGroup(fitGroup(six, segFs, 22, segW - 26, 2, { maxH: 96 }), six, six.map(() => segW - 26), 96, `${locale} roster ${segW}`);
   }
   const three = ["seg.all", "seg.recruit", "seg.noRecruit"].map((key) => text(locale, key));
-  assertGroup(fitGroup(three, 44, 26, 230 - 30, 2, { maxH: 96 }), three, three.map(() => 200), 96, `${locale} popup`);
+  for (const [segW, segFs] of [[170, 30], [160, 28], [150, 26], [140, 24]])
+    assertGroup(fitGroup(three, segFs, 22, segW - 26, 2, { maxH: 96 }), three, three.map(() => segW - 26), 96, `${locale} popup ${segW}`);
 });
 
 // --- Settings: tabs (300 wide), the buttons of a value row (402 x 136, the prefab's small button), the export pair (680 x 136) ---

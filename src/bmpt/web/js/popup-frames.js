@@ -2,9 +2,13 @@
 import { CONTROL, POPUP_FOOTER, POPUP_FRAME, SPACE } from "./ui-tokens.js";
 import { container, stack, toNode } from "./ui-grid.js";
 
+// No popup is wider than the L class (owner, 2026-11-11, BL-176: every wide popup down to Display Settings' 2098): a call
+// for XL, or for a width over L's, gets L, and its layout follows the frame's content box.
+export const WIDEST = "L";
 export function frameClass(width = "S") {
+  if (width === "XL") return POPUP_FRAME[WIDEST];
   if (typeof width === "string" && POPUP_FRAME[width]?.w) return POPUP_FRAME[width];
-  return ["S", "M", "L", "XL"].map(key => POPUP_FRAME[key]).find(size => size.w >= width) || POPUP_FRAME.XL;
+  return ["S", "M", "L"].map(key => POPUP_FRAME[key]).find(size => size.w >= width) || POPUP_FRAME[WIDEST];
 }
 // Explicit heights fit the content; omitted heights retain the scrolling viewer's exemplar height.
 export function frameGeometry(width, height = 0) {

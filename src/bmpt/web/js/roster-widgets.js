@@ -67,32 +67,37 @@ export function toolbarLayout(view, { title = T("roster.title"), left = -1270, r
 // wide as its longest, so choosing another moves nothing), ``sortAt``: the shown one; ``check``: the checkbox's caption.
 // The roster takes -1270 to 1412 after its title; a list popup its own width and no title (popup.js).
 export function toolbarFit({ title = "", left, right, filters, sorts, sortAt = 0, check }) {
-  const steps = [[230, 44, 56, 40, 62], [210, 40, 48, 38, 62], [200, 36, 44, 34, 58], [190, 34, 42, 32, 54], [180, 32, 40, 30, 50], [170, 30, 36, 28, 46]];
+  // the last three steps only a list popup's narrower list reaches (BL-176: the L class)
+  const steps = [[230, 44, 56, 40, 62], [210, 40, 48, 38, 62], [200, 36, 44, 34, 58], [190, 34, 42, 32, 54], [180, 32, 40, 30, 50], [170, 30, 36, 28, 46],
+    [160, 28, 34, 26, 44], [150, 26, 32, 24, 42], [140, 24, 30, 22, 40]];
   for (const [segW, segFs, sortFs, cbFs, titleFs] of steps) {
-    const titleEnd = left + advanceOf(title, titleFs) + SPACE.l;
+    // after the title and SPACE.l; from the left edge itself without one (a list popup's toolbar)
+    const titleEnd = title ? left + advanceOf(title, titleFs) + SPACE.l : left;
     // the segments of every filter share one size
     const segLabels = NGUI.fitGroup(filters.flat(), segFs, 22, segW - 26, 2, { maxH: 96 });
     // the sort button is as wide as its longest key, so choosing another one moves nothing
     const sortTexts = sorts.map((text) => fitText(text, sortFs, 28, 420));
     const sortText = sortTexts[Math.max(0, sortAt)];
     const sortW = Math.max(300, ...sortTexts.map((s) => glyphsOf(s.text, s.fs) + 170));
-    const cbText = fitText(check, cbFs, 24, 400);
-    const cbW = 131 + glyphsOf(cbText.text, cbText.fs) + 46;
+    // no checkbox (check null: a list popup's toolbar without one): no room kept for it
+    const cbText = check == null ? null : fitText(check, cbFs, 24, 400);
+    const cbW = cbText ? 131 + glyphsOf(cbText.text, cbText.fs) + 46 : 0;
     // The segmented prefab keeps its three adjoining slots; composed groups use SPACE.l. Search and order share
     // UICharacterCollection/SeletControl/TopMenu/SearchBtn/Btn_Normal's own 150 x 116-unit body. Sort and order
     // also keep their prefab's 116-unit height; the segmented filters keep 104. Caption fitting tiers stay as before.
     const h = CONTROL.toolbar.h, iconW = 150;
     const nativeH = 116;
     const tools = row([{ w: iconW, h: nativeH }, { w: sortW, h: nativeH }, { w: iconW, h: nativeH }], { gap: SPACE.m });
-    const groups = row([{ w: cbW, h }, ...filters.map(() => ({ w: 3 * segW, h })), tools], { gap: SPACE.l });
+    const cb = cbText ? 1 : 0;
+    const groups = row([...(cb ? [{ w: cbW, h }] : []), ...filters.map(() => ({ w: 3 * segW, h })), tools], { gap: SPACE.l });
     const cbLeft = right - groups.w, offset = (box) => ({ ...box, x: box.x + cbLeft });
-    const lead = 1 + filters.length;  // the checkbox and the filters come before the tools
+    const lead = cb + filters.length;  // the checkbox and the filters come before the tools
     const boxes = groups.boxes.slice(0, lead).map(offset);
     boxes.push(...tools.boxes.map((box) => offset({ ...box, x: groups.boxes[lead].x + box.x })));
     const centre = (box) => box.x + box.w / 2;
     const fits = cbLeft >= titleEnd;
-    if (fits || segW === 170) {
-      const ends = filters.map((_, i) => boxes[1 + i].x + boxes[1 + i].w);
+    if (fits || segW === steps.at(-1)[0]) {
+      const ends = filters.map((_, i) => boxes[cb + i].x + boxes[cb + i].w);
       return { segW, segLabels, sortText, sortW, cbText, cbW,
         order: centre(boxes.at(-1)), sort: centre(boxes.at(-2)), search: centre(boxes.at(-3)),
         seg1: ends[0], seg2: ends[1], cbLeft, titleFs, boxes, fits,
@@ -171,12 +176,13 @@ export function toolbarTree(collection, checkbox, view, searching, lay = toolbar
     });
     return f;
   };
-  find(menu, "FilterBtn").active = false;
+  // (a stand-in prefab without a node leaves it out)
+  const filterBtn = find(menu, "FilterBtn");
+  if (filterBtn) filterBtn.active = false;
   menu.children.push(...state.filters.map(({ name, active }, i) => segFilter(name, lay.filters[i].labels, active, lay.filters[i].right)));
   // search: the game's toggle, pressed while the search box is open
   const search = find(menu, "SearchBtn");
-  find(search, "Btn_Normal").active = !searching;
-  find(search, "Btn_Pressed").active = searching;
+  for (const [name, on] of [["Btn_Normal", !searching], ["Btn_Pressed", searching]]) { const n = find(search, name); if (n) n.active = on; }
   // sort: the current key, and the funnel in blue while a display setting filters the list
   const sort = find(menu, "SortBtn");
   sort.children = sort.children.map((c) => c.name === "Btn_Normal" ? sortBody(collection, lay.sortText, lay.sortW, state.filtered) : c);
@@ -195,7 +201,8 @@ export function toolbarTree(collection, checkbox, view, searching, lay = toolbar
       body.w_ = box.w; body.h_ = box.h;
     }
   }
-  // checkbox toggle after the title (game: "unowned students only" in the gacha character list)
+  // checkbox toggle after the title (game: "unowned students only" in the gacha character list); none without one
+  if (!lay.cbText) return menu;
   const cb = clone(checkbox);
   cb.name = "Merge";
   const menubar = find(menu, "Menubar");

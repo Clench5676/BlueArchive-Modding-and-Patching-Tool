@@ -41,7 +41,7 @@ export function notesLines(markdown, lang = language()) {
 export async function releaseNotes(info, { simulation = false, onSimulatedPage } = {}) {
   const lines = notesLines(info.notes);
   const result = await Popup.message({ title: `${dialogTitle("update.notes", simulation)} - ${info.version}`,
-    lines, plain: true, scroll: true, width: 2458,
+    lines, plain: true, scroll: true, width: "L",
     buttons: [{ label: T("update.releasePage"), value: "page" },
       { label: T("display.close"), value: "dismiss" }] });
   if (result.button === "page") {

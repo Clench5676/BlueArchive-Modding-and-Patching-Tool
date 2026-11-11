@@ -1539,9 +1539,12 @@ async function drawPopup(scroll = 0) {
   await listPopup({
     hostId: "popup", layoutKind: kind, title: T(isSpecial(v) ? "special.switch" : kind === "spr" ? "popup.switch" : `row.switch.${kind}`), okText: T(mode.button), okSemantic: "save", items, selected: pending, keepScroll: scroll,
     tools: { segs: ["seg.all", "seg.recruit", "seg.noRecruit"], seg: popupSeg, onSeg: (i) => { popupSeg = i; renderPopup(); }, sortKey: "sort.default", more,
-      // the checkbox lists every other student's model (BL-131); the cards in view are the ones judged
-      ...(more ? { check: { label: T("model.showOthers"), checked: showOthers(), onChange: (on) => { setShowOthers(on); crossShown = []; } },
-        onView: (keys) => viewCross(v, keys) } : {}) },
+      // the cards in view are the ones judged
+      ...(more ? { onView: (keys) => viewCross(v, keys) } : {}) },
+    // the checkbox lists every other student's model (BL-131), under the details: the L-class popup's toolbar has no room
+    // for it (BL-176)
+    ...(more ? { check: { label: T("model.showOthers"), checked: showOthers(),
+      onChange: (on) => { setShowOthers(on); crossShown = []; renderPopup($("popup").querySelector(".popup-cards")?.scrollTop || 0); } } } : {}),
     onSelect: (key, s) => {
       const c = candidates(v, kind).find((x) => x.key === key);
       if (c?.kind === "mod") markSeen([c.mod], s);
