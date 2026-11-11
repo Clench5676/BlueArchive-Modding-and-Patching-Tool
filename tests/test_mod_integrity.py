@@ -575,7 +575,7 @@ def test_replacement_precedence_cab_match_old_release_and_ambiguity(checks, monk
     # With neither matching name nor CAB, it is older, however many parts are live.
     e.register(source, cab='cab-new')
     assert e.library._replacements({renamed: source}, targets, pin) == {}
-    monkeypatch.setattr('ba_modding_toolkit.core.mod_install.asset_match', lambda sources, candidates, log: (candidates, ''))
+    monkeypatch.setattr('ba_modding_toolkit.searching.asset_match', lambda sources, candidates, log: (candidates, ''))
     e.library._check_group({renamed: source}, pin, compatibility=False)
     assert e.library.direct_import({renamed: source}, pin) is None
     assert e.library._check_group({renamed: source}, pin)['outdated']
