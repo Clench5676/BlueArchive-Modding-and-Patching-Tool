@@ -470,10 +470,11 @@ test("the compatibility result's list, rule, inline Details and smaller footer f
         assert.equal(texts[0], ui.compatibility.changes, what);
         assert.equal(texts.filter((text) => text === ui.compatibility.atlasLayout).length <= 1, true, `${what}: one line per finding`);
         const rule = lines.findIndex((line) => line.rule);
-        assert.ok(rule > 1, what);
-        assert.deepEqual(texts.slice(rule + 1), repair
-          ? [ui.compatibility.autoUpdate, result.oldRig ? ui.compatibility.oldRig : ui.compatibility.remapUpdate]
-          : [ui.compatibility.authorHint, ui.compatibility.crcHint], what);
+        // the rule and what Update does only where it repairs; nothing a user does not act on
+        if (repair) {
+          assert.ok(rule > 1, what);
+          assert.deepEqual(texts.slice(rule + 1), [ui.compatibility.autoUpdate, result.oldRig ? ui.compatibility.oldRig : ui.compatibility.remapUpdate], what);
+        } else assert.equal(rule, -1, what);
         const ok = repair ? ui.remap.action : ui.picker.ok, cancel = repair ? ui.popup.cancel : null;
         const fitTogether = lines.flatMap((line, i) => (line.rule ? [] : [i]));
         const layout = Popup.messageLayout({ lines, plain: true, scroll: true, ok, cancel, fitTogether });
@@ -490,12 +491,14 @@ test("the compatibility result's list, rule, inline Details and smaller footer f
             assert.ok(glyphsOf(bf.text, bf.fs) < bw, `${what}: Details caption inside`);
           }
         }
-        const divider = NGUI.find(layout.body.tree, `Rule_${rule}`).widgets[0];
-        assert.deepEqual([divider.sprite, divider.h_, divider.color, divider.pivot], ["Common_Line_Dot", Popup.RULE.h, `${STATS_BOX.divider}/1.00`, 3], what);
-        // across the text: from the lines' left edge, as wide as their box
-        const ruleNode = NGUI.find(layout.body.tree, `Rule_${rule}`), heading = NGUI.find(layout.body.tree, "Line_0");
-        assert.equal(ruleNode.pos[0], heading.pos[0], `${what}: the rule starts where the lines start`);
-        assert.equal(divider.w_, layout.width - 2 * 100, `${what}: the rule spans the text box`);
+        if (rule >= 0) {
+          const divider = NGUI.find(layout.body.tree, `Rule_${rule}`).widgets[0];
+          assert.deepEqual([divider.sprite, divider.h_, divider.color, divider.pivot], ["Common_Line_Dot", Popup.RULE.h, `${STATS_BOX.divider}/1.00`, 3], what);
+          // across the text: from the lines' left edge, as wide as their box
+          const ruleNode = NGUI.find(layout.body.tree, `Rule_${rule}`), heading = NGUI.find(layout.body.tree, "Line_0");
+          assert.equal(ruleNode.pos[0], heading.pos[0], `${what}: the rule starts where the lines start`);
+          assert.equal(divider.w_, layout.width - 2 * 100, `${what}: the rule spans the text box`);
+        }
         // the footer one size smaller: buttonM bodies, captions at its size range
         const frame = Popup.popupFrame(ui.compatibility.result, layout.width, layout.height, { ok, cancel, footer: "M" });
         const btn = NGUI.find(frame, "Popup/Btn");

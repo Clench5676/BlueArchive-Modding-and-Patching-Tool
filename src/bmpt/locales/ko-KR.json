@@ -722,8 +722,6 @@
 			"atlasSize": "{name}, .atlas 파일 크기: {atlas}, 텍스처: {texture}",
 			"textureSize": "{name}, 텍스처: {mod}, 공식 {official}",
 			"updateHint": "업데이트: 현재 공식 파일로 이식, Spine 버전 변환이 필요할 수 있음",
-			"authorHint": "현재 버전에 맞게 수정된 Mod 필요",
-			"crcHint": "CRC 수정은 체크섬만 변경",
 			"atlasLayout": ".atlas 파일 변경됨",
 			"geometry": "{name}, 어태치먼트 또는 메시 형상 다름",
 			"rig": "{name}, 본 구조 다름",

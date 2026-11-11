@@ -722,8 +722,6 @@
 			"atlasSize": "{name}, ขนาดในไฟล์ .atlas: {atlas}, พื้นผิว: {texture}",
 			"textureSize": "{name}, พื้นผิว: {mod}, ต้นฉบับ {official}",
 			"updateHint": "อัปเดต: ย้ายทรัพยากรไปยัง Bundle ต้นฉบับปัจจุบัน, อาจต้องแปลงเวอร์ชัน Spine",
-			"authorHint": "ต้องใช้ Mod ที่ปรับให้เข้ากับเวอร์ชันปัจจุบัน",
-			"crcHint": "การแก้ไข CRC เปลี่ยนเฉพาะค่าตรวจสอบ",
 			"atlasLayout": "ไฟล์ .atlas เปลี่ยนแปลง",
 			"geometry": "{name}, รูปทรง Attachment หรือ Mesh ต่างกัน",
 			"rig": "{name}, โครงสร้างกระดูกต่างกัน",
