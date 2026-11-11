@@ -1273,10 +1273,22 @@ def build_api(s: Services) -> RpcRegistry:
         return s.library.compare(mod)
 
     @rpc.method("actions.remap")
-    def actions_remap(mod: str) -> str:
+    def actions_remap(mod: str, geometry: Any = None) -> str:
         library = s.library
         pin = s._current_pin(library)
-        return s.submit("remap", lambda log, progress: library.remap(mod, log=log, progress=progress, pin=pin))
+        return s.submit("remap", lambda log, progress: library.remap(mod, log=log, progress=progress, pin=pin,
+                                                                     geometry=geometry))
+
+    @rpc.method("actions.redrawn")
+    def actions_redrawn(mod: str, geometry: Any) -> str:
+        library = s.library
+        pin = s._current_pin(library)
+
+        def check(log: Any, progress: Any) -> Any:
+            progress({"current": 1, "total": 1, "step": "import.step.check"})
+            return library.redrawn(mod, geometry, pin=pin)
+
+        return s.submit("compatibility", check)
 
     @rpc.method("actions.acceptRemap")
     def actions_accept_remap(preview: str) -> str:

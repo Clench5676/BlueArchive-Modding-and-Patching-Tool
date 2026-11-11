@@ -470,6 +470,7 @@
 			"mod_platform_mismatch": "{file}, แพลตฟอร์ม {platform}, ต้องใช้ {expected}",
 			"mod_parts_missing": "Mod ไม่ครบ, ขาดไฟล์: {files}",
 			"atlas_remap_invalid": "จัดใหม่ไม่ได้: {file} - {reason}",
+			"atlas_remap_redrawn": "จัดใหม่ไม่ได้: ภาพตัวละครต้นฉบับถูกวาดใหม่",
 			"atlas_remap_target_mismatch": "จัดใหม่ไม่ได้: {file} - ทรัพยากรตรงกัน {matched}/{expected}",
 			"atlas_remap_property": "จัดใหม่ไม่ได้: {file} - {field} ไม่ถูกต้อง: {value} (หน้า {page}, พื้นที่ {region})",
 			"atlas_remap_structure": "จัดใหม่ไม่ได้: {file} - โครงสร้าง Atlas ไม่ถูกต้องที่บรรทัด {line}: {value}",
@@ -711,7 +712,8 @@
 			"ported": "ย้ายทรัพยากรไปยัง Bundle ปัจจุบันแล้ว",
 			"updateUnchecked": "ตรวจสอบความเข้ากันไม่ได้ ยังจะอัปเดตหรือไม่?",
 			"forceUpdate": "ขณะนี้ไม่พบปัญหาความสมบูรณ์ คุณยังยืนยันว่าจะบังคับอัปเดตหรือไม่?",
-			"rigChanged": "แอนิเมชันที่ต้นฉบับเพิ่ม: {n}, ไม่มีใน Mod"
+			"rigChanged": "แอนิเมชันที่ต้นฉบับเพิ่ม: {n}, ไม่มีใน Mod",
+			"redrawn": "ภาพตัวละครต้นฉบับถูกวาดใหม่"
 		},
 		"remap": {
 			"action": "อัปเดต",
@@ -734,7 +736,6 @@
 			"previewUnavailable": "ไม่มีตัวอย่าง",
 			"unpainted": "พื้นที่ว่างที่ไม่ได้ใช้: {names}",
 			"official": "พื้นที่ต้นฉบับ: {names}",
-			"changed": "พื้นที่ที่ต้นฉบับวาดใหม่: {names}",
 			"zoomIn": "ขยาย",
 			"zoomOut": "ย่อ",
 			"marks": "ทำเครื่องหมายส่วนที่เปลี่ยน"

@@ -20,6 +20,7 @@ from bmpt.library.integrity import inspect as inspect_bundle
 from ba_modding_toolkit.models import ContNameTypeKey, SaveOptions
 from ba_modding_toolkit.utils import CRCUtils
 
+from rebake_geometry import geometry as rig_geometry
 from test_library import reload_library, setup_library
 
 
@@ -106,7 +107,7 @@ def test_repack_positions_rotations_trims_indices_and_page_changes(repacked):
                                       pack(old, art), pack(new, official_art))
     assert_pages(output, pack(new, expected_art))
     assert report == {"moved": ["added", "body", "face", "frame [0]", "frame [1]", "trim"],
-                      "added": [], "official": [], "changed": [], "dropped": ["removed"], "upscaled": []}
+                      "added": [], "dropped": ["removed"], "upscaled": []}
 
 
 @pytest.mark.parametrize("degrees", [0, 90, 180, 270])
@@ -146,7 +147,7 @@ def test_half_size_fixture_path_names_duplicates_and_per_axis_page_scales():
         assert output[f"current{i}.png"].crop((4, 4, 8, 8)).tobytes() == expected.tobytes()
     assert output["current0.png"].crop((10, 10, 14, 14)).tobytes() == mod["ch0261_home"].resize(
         (16, 16), Image.Resampling.LANCZOS).crop((2, 2, 6, 6)).tobytes()
-    assert report == {"moved": ["Intro_R_leg_01", path, path, path], "added": [], "official": [], "changed": [], "dropped": [],
+    assert report == {"moved": ["Intro_R_leg_01", path, path, path], "added": [], "dropped": [],
                       "upscaled": [{"page": name, "w": p.size[0], "h": p.size[1]} for name, p in old.pages.items()]}
 
 
@@ -393,27 +394,30 @@ def test_self_contained_mod_does_not_remap_to_official_layout(setup_library, rep
     current.write_bytes(source.read_bytes())
     before = {path: path.read_bytes() for path in (current, kept, entry.file)}
     assert not env.library.compatibility(entry.id)["remappable"]
-    assert env.library.remap(entry.id) == {"unchanged": True}
+    assert env.library.remap(entry.id, geometry=rig_geometry(env.library, entry.id)) == {"unchanged": True}
     assert not env.library._remap_previews
     assert len(env.library.mods()) == 1
     assert all(path.read_bytes() == content for path, content in before.items())
 
 
-def test_library_remap_refuses_missing_dated_atlas_without_storing(setup_library, monkeypatch):
+def test_a_portrait_without_an_official_copy_of_its_date_follows_the_official_layout(setup_library, monkeypatch):
     env = setup_library
     env.original.unlink()
     pages = [("page.png", (8, 8), [("part", -1, (1, 1), (2, 2), (2, 2), (0, 0), 0)])]
-    current = _official_name(write_bundle(env.original, {"test.atlas": atlas_text(pages)}, {"page": Image.new("RGBA", (8, 8))}))
+    current = _official_name(write_bundle(env.original, {"test.atlas": atlas_text(pages)},
+                                          {"page": Image.new("RGBA", (8, 8), "blue")}))
     current = split_official(current)
-    source = write_bundle(env.tmp / "upload" / current.name.replace("2026-01-01", "2025-01-01"), {},
-                          {"page": Image.new("RGBA", (8, 4), "red")})
+    mod = Image.new("RGBA", (8, 4), "blue")
+    mod.paste("red", (0, 0, 2, 2))
+    source = write_bundle(env.tmp / "upload" / current.name.replace("2026-01-01", "2025-01-01"), {}, {"page": mod})
     entry, = env.library.add([source])
-    from bmpt.errors import ServiceError
-    with pytest.raises(ServiceError, match="atlas_remap_source_missing") as caught:
-        env.library.remap(entry.id)
-    assert caught.value.params == {"file": "test.atlas", "date": "2025-01-01"}
-    assert [mod.id for mod in env.library.mods()] == [entry.id]
-    assert not (entry.file.parent / "previous").exists()
+    preview = env.library.remap(entry.id, geometry=rig_geometry(env.library, entry.id))
+    result = env.library.accept_remap(preview["preview"])
+    built = remap.read_inputs(sorted(result.mod.file.parent.glob("*.bundle")))
+    # the texture is the official layout at half height: the region's place on it
+    assert built.textures["page"].getpixel((1, 2)) == (255, 0, 0, 255)
+    assert built.textures["page"].getpixel((5, 5)) == (0, 0, 255, 255)
+    assert len(env.library.mods()) == 2
 
 
 def test_library_remap_missing_atlas_can_use_verified_current_copy_of_same_date(setup_library, monkeypatch):
@@ -428,7 +432,7 @@ def test_library_remap_missing_atlas_can_use_verified_current_copy_of_same_date(
     source = write_bundle(env.tmp / "upload" / current.name, {}, {"page": Image.new("RGBA", (4, 4), "red")})
     entry, = env.library.add([source])
     monkeypatch.setattr(integrity, "inspect", lambda path: integrity.Contents(atlases=remap.read_inputs([path]).atlases))
-    preview = env.library.remap(entry.id)
+    preview = env.library.remap(entry.id, geometry=rig_geometry(env.library, entry.id))
     assert preview["unchanged"]
     assert [mod.id for mod in env.library.mods()] == [entry.id]
     assert not env.library._remap_previews
@@ -457,17 +461,16 @@ def test_library_remap_uses_only_kept_atlas_of_mod_date(setup_library, monkeypat
     monkeypatch.setattr(integrity, "inspect", lambda path: integrity.Contents(atlases=remap.read_inputs([path]).atlases))
     before = current.read_bytes(), entry.file.read_bytes()
     if date != "2025-01-01":
-        from bmpt.errors import ServiceError
-        with pytest.raises(ServiceError, match="atlas_remap_source_missing"):
-            env.library.remap(entry.id)
-        assert len(env.library.mods()) == 1
+        # no official copy of the mod's date: the official layout
+        assert set(rig_geometry(env.library, entry.id)["test.atlas"]["source"]["poses"][""][0]["uvs"]) == {10 / 16, 14 / 16}
     else:
-        preview = env.library.remap(entry.id)
+        assert set(rig_geometry(env.library, entry.id)["test.atlas"]["source"]["poses"][""][0]["uvs"]) == {2 / 16, 6 / 16}
+        preview = env.library.remap(entry.id, geometry=rig_geometry(env.library, entry.id))
         assert preview["drawings"]["original"][0]["atlas"] == atlas_text(new)
         result = env.library.accept_remap(preview["preview"])
         built = remap.read_inputs(sorted(result.mod.file.parent.glob("*.bundle")))
         assert built.textures["page"].getpixel((10, 10)) == (255, 0, 0, 255)
-        assert built.textures["page"].getpixel((2, 2)) == (0, 0, 0, 0)
+        assert built.textures["page"].getpixel((2, 2)) == (0, 0, 255, 255)  # drawn by nothing: as official
         assert not result.report["partial"] and not result.report["warnings"]
         assert built.atlases == {"test.atlas": atlas_text(new).encode()}
     assert before == (current.read_bytes(), entry.file.read_bytes())
@@ -509,7 +512,7 @@ def test_self_contained_split_bundles_do_not_use_official_layout(setup_library, 
     entry, = env.library.add(sources)
     before = {path: path.read_bytes() for path in [text_target, texture_target, *env.library._paths(env.library._records[entry.id])]}
     assert not env.library.compatibility(entry.id)["remappable"]
-    assert env.library.remap(entry.id)["unchanged"]
+    assert env.library.remap(entry.id, geometry=rig_geometry(env.library, entry.id))["unchanged"]
     assert len(env.library.mods()) == 1
     assert all(path.read_bytes() == data for path, data in before.items())
 
@@ -567,7 +570,7 @@ def test_remap_review_and_discard_leave_no_mod_files_or_metadata(repair_review):
     env, entry, current, source = repair_review
     paths = [current, source, entry.file, env.library.root / "state.json"]
     before = {path: path.read_bytes() for path in paths}
-    preview = env.library.remap(entry.id)
+    preview = env.library.remap(entry.id, geometry=rig_geometry(env.library, entry.id))
     assert [mod.id for mod in env.library.mods()] == [entry.id]
     assert set(preview) == {"preview", "report", "compare", "pages", "drawings"}
     assert preview["drawings"]["original"][0]["json"]
@@ -599,10 +602,10 @@ def test_accept_stores_reviewed_bytes_once_and_persists_both_markers(repair_revi
         env.library = reload_library(env)
         entry, = env.library.mods()
     before = {path: path.read_bytes() for path in (entry.file, current, source)}
-    preview = env.library.remap(entry.id)
+    preview = env.library.remap(entry.id, geometry=rig_geometry(env.library, entry.id))
     reviewed = dict(env.library._remap_previews[preview["preview"]]["files"])
     other = ModLibrary(env.library.root, env.catalog, settings=env.settings)
-    competing = other.remap(entry.id)
+    competing = other.remap(entry.id, geometry=rig_geometry(other, entry.id))
     result = env.library.accept_remap(preview["preview"])
     assert {path.name: path.read_bytes() for path in result.mod.file.parent.glob("*.bundle")} == reviewed
     assert result.mod.repaired_from == entry.id
@@ -621,7 +624,7 @@ def test_accept_stores_reviewed_bytes_once_and_persists_both_markers(repair_revi
     assert not result.mod.user_added and not mods[result.mod.id].user_added
     for mod_id in mods:
         with pytest.raises(ServiceError, match="entry_changed"):
-            reloaded.remap(mod_id)
+            reloaded.remap(mod_id, geometry=rig_geometry(reloaded, mod_id))
         assert not reloaded.compatibility(mod_id)["remappable"]
     assert len({mod.repaired_from or mod.id for mod in reloaded.mods()}) == 1
     for mod_id in mods:
@@ -630,7 +633,7 @@ def test_accept_stores_reviewed_bytes_once_and_persists_both_markers(repair_revi
 
     reloaded.remove(result.mod.id, confirm=True)
     assert not reloaded.mods()[0].repaired_id  # the link goes with the repaired copy
-    assert reloaded.remap(entry.id)["preview"]  # and the original can be repaired again
+    assert reloaded.remap(entry.id, geometry=rig_geometry(reloaded, entry.id))["preview"]  # and the original can be repaired again
 
 
 
@@ -643,7 +646,7 @@ def test_accept_keeps_alias_names_and_repair_metadata_together(repair_review, mo
     monkeypatch.setattr("bmpt.library.service.t", translate)
     before = {path: (path.read_bytes(), path.stat().st_mtime_ns) for path in (entry.file, current, source)}
     env.library.rename(entry.id, "Before review")
-    preview = env.library.remap(entry.id)
+    preview = env.library.remap(entry.id, geometry=rig_geometry(env.library, entry.id))
     env.library.rename(entry.id, "Reviewed painting")
     result = env.library.accept_remap(preview["preview"])
     expected = translate("webui.remap.name", name="Reviewed painting")
@@ -663,7 +666,7 @@ def test_accept_keeps_alias_names_and_repair_metadata_together(repair_review, mo
         "webui.remap.name", name="Updated painting")
     for mod_id in mods:
         with pytest.raises(ServiceError, match="entry_changed"):
-            library.remap(mod_id)
+            library.remap(mod_id, geometry=rig_geometry(library, mod_id))
     assert all((path.read_bytes(), path.stat().st_mtime_ns) == stamp for path, stamp in before.items())
     library.remove(entry.id)
     assert reload_library(env).mods()[0].label == expected
@@ -673,7 +676,7 @@ def test_accept_refuses_changed_or_removed_original_and_expired_preview(repair_r
     from bmpt.errors import ServiceError
 
     env, entry, _, _ = repair_review
-    preview = env.library.remap(entry.id)["preview"]
+    preview = env.library.remap(entry.id, geometry=rig_geometry(env.library, entry.id))["preview"]
     original = entry.file.read_bytes()
     entry.file.write_bytes(original + b"changed")
     with pytest.raises(ServiceError, match="entry_changed"):
@@ -683,7 +686,7 @@ def test_accept_refuses_changed_or_removed_original_and_expired_preview(repair_r
     with pytest.raises(ServiceError, match="entry_changed"):
         env.library.accept_remap(preview)
     assert not env.library._remap_previews
-    preview = env.library.remap(entry.id)["preview"]
+    preview = env.library.remap(entry.id, geometry=rig_geometry(env.library, entry.id))["preview"]
     env.library.remove(entry.id, confirm=True)
     with pytest.raises(ServiceError, match="mod_not_found"):
         env.library.accept_remap(preview)
@@ -702,7 +705,7 @@ def test_unchanged_pages_never_build_or_store_a_mod(setup_library, monkeypatch):
     entry, = env.library.add([source])
     before = (env.library.root / "state.json").read_bytes(), entry.file.read_bytes()
     monkeypatch.setattr(core, "process_mod_update", lambda *a, **kw: pytest.fail("no build for equal pages"))
-    result = env.library.remap(entry.id)
+    result = env.library.remap(entry.id, geometry=rig_geometry(env.library, entry.id))
     assert result["unchanged"]
     assert not env.library._remap_previews
     assert len(env.library.mods()) == 1
@@ -726,7 +729,7 @@ def test_layout_check_ignores_unused_rects_page_metadata_and_uniform_density():
 
 def test_accept_failure_rolls_back_both_markers_and_the_new_directory(repair_review, monkeypatch):
     env, entry, _, _ = repair_review
-    preview = env.library.remap(entry.id)["preview"]
+    preview = env.library.remap(entry.id, geometry=rig_geometry(env.library, entry.id))["preview"]
     save = env.library._save
     before = (env.library.root / "state.json").read_bytes()
     def fail():
@@ -754,38 +757,27 @@ def test_source_changed_during_remapping_never_becomes_an_acceptable_preview(rep
         return result
     monkeypatch.setattr(core, "process_mod_update", changed)
     with pytest.raises(ServiceError, match="entry_changed"):
-        env.library.remap(entry.id)
+        env.library.remap(entry.id, geometry=rig_geometry(env.library, entry.id))
     assert not env.library._remap_previews
     assert len(env.library.mods()) == 1
 
 
-@pytest.mark.parametrize("missing", ["source_region", "source_page", "target_region"])
-def test_required_regions_refuse_before_building_or_creating_anything(repair_review, monkeypatch, missing):
-    from bmpt.errors import ServiceError
+def test_a_region_the_source_lacks_keeps_the_official_pixels_and_is_reported(repair_review, monkeypatch):
+    from bmpt import rebake
 
     env, entry, current, _ = repair_review
     kept = next(path for path in (env.library.root / "originals").glob("*.bundle") if "2025-01-01" in path.name)
     inputs = remap.read_inputs([kept])
-    text = inputs.atlases["test.atlas"].decode()
-    if missing == "source_region":
-        text = text.replace("\npart\n", "\nother\n")
-    elif missing == "source_page":
-        text = text.replace("page.png", "absent.png")
-    else:
-        text_path = next(path for path in env.game_dir.glob("*.bundle") if "textassets" in path.name)
-        live = remap.read_inputs([text_path])
-        _official_name(write_bundle(text_path, {"test.atlas": live.atlases["test.atlas"].replace(b"\npart\n", b"\nother\n")},
-                                    {}, live.skeletons["test.skel"]))
     kept.unlink()
-    _official_name(write_bundle(kept, {"test.atlas": text}, {}, inputs.skeletons["test.skel"]))
-    before = {path: path.read_bytes() for path in env.tmp.rglob("*") if path.is_file()}
-    monkeypatch.setattr(core, "process_mod_update", lambda *a, **kw: pytest.fail("missing art must never build"))
-    with pytest.raises(ServiceError, match="atlas_remap_regions_missing") as caught:
-        env.library.remap(entry.id)
-    assert caught.value.params == {"names": "part"}
-    assert {path: path.read_bytes() for path in env.tmp.rglob("*") if path.is_file()} == before
-    assert not env.library._remap_previews
-    assert [mod.id for mod in env.library.mods()] == [entry.id]
+    _official_name(write_bundle(kept, {"test.atlas": inputs.atlases["test.atlas"].decode().replace("\npart\n", "\nother\n")},
+                                {}, inputs.skeletons["test.skel"]))
+    # the synthetic rigs draw each region on a place of its own name: nothing is where "part" is
+    monkeypatch.setattr(rebake, "REDRAWN_BELOW", 0)
+    preview = env.library.remap(entry.id, geometry=rig_geometry(env.library, entry.id))
+    assert preview["report"]["official"] == ["test.atlas - part"] and preview["report"]["partial"]
+    result = env.library.accept_remap(preview["preview"])
+    built = remap.read_inputs(sorted(result.mod.file.parent.glob("*.bundle")))
+    assert set(built.textures["page"].getdata()) == {(0, 0, 255, 255)}
 
 
 @pytest.mark.parametrize("official_source", ["kept", "backup"])
@@ -802,14 +794,14 @@ def test_mixed_origin_remap_uses_mod_pixels_only_and_keeps_winning_rig(repair_re
     report = env.library.compatibility(entry.id)
     assert report["remappable"]
     monkeypatch.setattr(env.settings, "crc_needed", lambda path: True)
-    preview = env.library.remap(entry.id)
+    preview = env.library.remap(entry.id, geometry=rig_geometry(env.library, entry.id))
     result = env.library.accept_remap(preview["preview"])
     paths = sorted(result.mod.file.parent.glob("*.bundle"))
     built = remap.read_inputs(paths)
     assert built.skeletons == {"test.skel": skeleton}
-    assert set(built.textures["page"].getdata()) == {(255, 0, 0, 255), (0, 0, 0, 0)}
+    assert set(built.textures["page"].getdata()) == {(255, 0, 0, 255), (0, 0, 255, 255)}
     assert built.textures["page"].getpixel((8, 8)) == (255, 0, 0, 255)
-    assert built.textures["page"].getpixel((1, 1)) == (0, 0, 0, 0)
+    assert built.textures["page"].getpixel((1, 1)) == (0, 0, 255, 255)  # drawn by nothing: as official
     assert all(CRCUtils.compute_crc32(path.read_bytes()) == int(path.stem.rsplit("_", 1)[1]) for path in paths)
     assert all(path.read_bytes() == data for path, data in before.items())
     assert len(env.library.mods()) == 2
@@ -844,7 +836,7 @@ def test_merged_inputs_take_the_last_bundle_assets(tmp_path):
 def test_remap_progress_reports_real_steps_without_bundle_names(repair_review):
     env, source, _, _ = repair_review
     progress = []
-    result = env.library.remap(source.id, progress=progress.append)
+    result = env.library.remap(source.id, progress=progress.append, geometry=rig_geometry(env.library, source.id))
     assert result["preview"]
     steps = [item["step"] for item in progress]
     assert steps[:2] == ["import.step.check", "import.step.extract"]
@@ -857,7 +849,7 @@ def test_remap_progress_reports_real_steps_without_bundle_names(repair_review):
 # --- a repaired copy and the link from its original (FUN-11) ---
 
 def _repair(env, entry):
-    return env.library.accept_remap(env.library.remap(entry.id)["preview"]).mod
+    return env.library.accept_remap(env.library.remap(entry.id, geometry=rig_geometry(env.library, entry.id))["preview"]).mod
 
 
 def _links(library):
@@ -884,7 +876,7 @@ def test_deleting_the_repaired_copy_clears_the_link_in_the_same_state_write(repa
     assert without_child and all("repaired_id" not in parent(data) for data in without_child)
     assert all(parent(data).get("repaired_id") == child.id for data in writes if data not in without_child)
     assert _links(env.library) == _links(reload_library(env)) == {entry.id: ""}
-    assert env.library.remap(entry.id)["preview"]  # repairable again
+    assert env.library.remap(entry.id, geometry=rig_geometry(env.library, entry.id))["preview"]  # repairable again
 
 
 def test_a_failed_deletion_of_the_repaired_copy_restores_the_link(repair_review):
@@ -904,7 +896,7 @@ def test_a_failed_deletion_of_the_repaired_copy_restores_the_link(repair_review)
     assert {record["id"]: record.get("repaired_id", "") for record in stored} == expected
     assert (child.file.parent / child.file.name).is_file()
     with pytest.raises(ServiceError, match="entry_changed"):
-        env.library.remap(entry.id)  # still linked to a copy that exists
+        env.library.remap(entry.id, geometry=rig_geometry(env.library, entry.id))  # still linked to a copy that exists
 
 
 def test_recovering_an_interrupted_deletion_of_the_repaired_copy_restores_the_link(repair_review):
@@ -939,10 +931,10 @@ def test_a_repaired_id_pointing_at_no_record_counts_as_none_without_a_migration(
     monkeypatch.setattr(library, "_check_group", lambda *args, **kwargs: {"remappable": True})
     report = library.compatibility(entry.id)
     assert report["repaired_id"] == "" and report["remappable"] is True
-    child = library.accept_remap(library.remap(entry.id)["preview"]).mod
+    child = library.accept_remap(library.remap(entry.id, geometry=rig_geometry(library, entry.id))["preview"]).mod
     assert _links(library) == _links(reload_library(env)) == {entry.id: child.id, child.id: ""}
     with pytest.raises(ServiceError, match="entry_changed"):
-        library.remap(entry.id)
+        library.remap(entry.id, geometry=rig_geometry(library, entry.id))
 
 
 def test_a_repaired_id_held_by_a_missing_folder_stays_and_repair_stays_refused(repair_review, monkeypatch):
@@ -961,7 +953,7 @@ def test_a_repaired_id_held_by_a_missing_folder_stays_and_repair_stays_refused(r
     report = library.compatibility(entry.id)
     assert report["repaired_id"] == child.id and report["remappable"] is False
     with pytest.raises(ServiceError, match="entry_changed"):
-        library.remap(entry.id)
+        library.remap(entry.id, geometry=rig_geometry(library, entry.id))
     library.set_favorite("test", True)  # a save writes the held record and the link back unchanged
     stored = {record["id"]: record for record in json.loads((env.root / "state.json").read_text())["mods"]}
     assert stored[entry.id]["repaired_id"] == child.id and stored[child.id]["repaired_from"] == entry.id

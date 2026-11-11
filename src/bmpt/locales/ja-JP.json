@@ -470,6 +470,7 @@
 			"mod_platform_mismatch": "{file}、ビルド対象 {platform}、必要な対象 {expected}",
 			"mod_parts_missing": "Mod ファイル不足：{files}",
 			"atlas_remap_invalid": "再配置不可：{file} - {reason}",
+			"atlas_remap_redrawn": "再配置不可：公式立ち絵が描き直し済み",
 			"atlas_remap_target_mismatch": "再配置不可：{file} - 一致アセット {matched}/{expected}",
 			"atlas_remap_property": "再配置不可：{file} - {field} が無効：{value}（ページ：{page}、領域：{region}）",
 			"atlas_remap_structure": "再配置不可：{file} - {line} 行目のアトラス構造が無効：{value}",
@@ -711,7 +712,8 @@
 			"ported": "現在のバンドルにアセットを移植済み",
 			"updateUnchecked": "互換性を確認できません。それでも更新しますか？",
 			"forceUpdate": "現在、整合性に問題はありません。それでも強制更新しますか？",
-			"rigChanged": "公式で追加されたアニメーション：{n}、Mod に未収録"
+			"rigChanged": "公式で追加されたアニメーション：{n}、Mod に未収録",
+			"redrawn": "公式立ち絵が描き直し済み"
 		},
 		"remap": {
 			"action": "更新",
@@ -734,7 +736,6 @@
 			"previewUnavailable": "プレビューを表示できません",
 			"unpainted": "未使用の空白領域：{names}",
 			"official": "公式の領域：{names}",
-			"changed": "公式で描き直された領域：{names}",
 			"zoomIn": "拡大",
 			"zoomOut": "縮小",
 			"marks": "変更箇所を表示"
