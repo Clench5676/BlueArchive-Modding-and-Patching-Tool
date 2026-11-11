@@ -3069,11 +3069,25 @@ test("the display settings' sort keys and filter options each share one font siz
         const sizes = label(display, /\/Sort_\w+\/Label_Text\/(On\/)?Label_On$/).map((e) => e.style.fontSize);
         assert.equal(sizes.length, 5, `${locale}: five sort keys`);
         assert.equal(new Set(sizes).size, 1, `${locale}: the sort keys at ${sizes}`);
+        // three keys to a line in the narrower panel, 480 apart (BL-176)
+        const captions = new Set(Object.values(ui.sort));
+        const lefts = walk(display).filter((e) => e.className === "hit" && captions.has(e.getAttribute("aria-label"))).map((e) => parseFloat(e.style.left));
+        assert.equal(lefts.length, 5, `${locale}: five sort keys' hits`);
+        assert.ok(Math.abs(lefts[1] - lefts[0] - 480 * S) < 0.05 && Math.abs(lefts[3] - lefts[0]) < 0.05, `${locale}: three to a line, 480 apart`);
       } else {
         // the eight options of the four groups
         await until(() => label(display, /Unit_\w+\/SwitchObject_Columns_4\/Label_Text$/).length === 8);
         const sizes = label(display, /Unit_\w+\/SwitchObject_Columns_4\/Label_Text$/).map((e) => e.style.fontSize);
         assert.equal(new Set(sizes).size, 1, `${locale}: the filter options at ${sizes}`);
+        // the footer (BL-176): the two XS bodies the shared gap apart, centred under the narrower frame
+        const hitOf = (name) => walk(display).find((e) => e.className === "hit" && e.getAttribute("aria-label") === name);
+        const [cancel, ok] = [ui.popup.cancel, ui.picker.ok].map((name) => ["left", "top", "width", "height"].map((k) => parseFloat(hitOf(name).style[k])));
+        assert.ok(Math.abs(ok[2] - cancel[2]) < 0.01 && Math.abs(ok[3] - Tokens.CONTROL.buttonXS.h * S) < 0.01, `${locale}: XS bodies`);
+        assert.ok(Math.abs(ok[0] - (cancel[0] + cancel[2]) - Tokens.POPUP_FRAME.footer.gap * S) < 0.01, `${locale}: the shared gap`);
+        assert.ok(Math.abs((cancel[0] + ok[0] + ok[2]) / 2 - 960) < 0.01, `${locale}: centred`);
+        // the frame the L class's 2098 when the prefab's is 2810: here a stand-in frame, as much narrower
+        const frame = walk(display).find((e) => e.dataset.path === "Center/Popup/Base/BG");
+        assert.ok(Math.abs(parseFloat(frame.style.width) - (2458 - (2810 - Tokens.POPUP_FRAME.L.w)) * S) < 0.05, `${locale}: frame ${frame.style.width}`);
       }
       press("Escape");
     }
