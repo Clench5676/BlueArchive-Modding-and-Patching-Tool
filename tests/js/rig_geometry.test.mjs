@@ -92,3 +92,26 @@ test("the remap pairs each official atlas with its skeleton and takes the mod's 
   const rest = restOnly(forRemap(report, S));
   assert.deepEqual(Object.keys(rest["a.atlas"].source.poses), [""]);
 });
+
+test("the graft's setup pose gives each bone's world matrix, each slot's bone and each skin attachment as set up", async () => {
+  const { setupOf, partPoses } = await import("../../src/bmpt/web/js/rig-geometry.js");
+  const rig = setupOf(S, ATLAS, skeleton());
+  assert.deepEqual(rig.bones.root, [1, 0, 0, 1, 0, 0]);
+  assert.deepEqual(rig.slotBones, { body: "root", face: "root", glow: "root" });
+  const names = rig.skin.map((item) => `${item.slot}/${item.name}`).sort();
+  assert.deepEqual(names, ["body/body", "face/face_a", "face/face_b", "glow/glow"]);
+  const faceB = rig.skin.find((item) => item.name === "face_b");
+  assert.equal(faceB.page, "page.png");
+  assert.equal(faceB.world.length, 8);
+  assert.deepEqual(faceB.tris, [0, 1, 2, 2, 3, 0]);
+  // the idle does not move the setup pose
+  assert.deepEqual([Math.min(...faceB.world.filter((_, i) => i % 2 === 0)), Math.max(...faceB.world.filter((_, i) => i % 2 === 0))], [-2, 2]);
+  assert.ok(Math.min(...faceB.uvs.filter((_, i) => i % 2 === 0)) >= 20 / 64 - 1e-6);
+
+  // the check's poses: only the animations asked for, only their slots, the rest pose empty
+  const parts = partPoses(S, ATLAS, skeleton(), { "01": ["face"], missing: ["face"] });
+  assert.deepEqual(Object.keys(parts.poses).sort(), ["", "01"]);
+  assert.deepEqual(parts.poses[""], []);
+  assert.deepEqual(parts.poses["01"].map((d) => [d.slot, d.region]), [["face", "face_b"]]);
+  assert.deepEqual(parts.slots, ["body", "face", "glow"]);
+});

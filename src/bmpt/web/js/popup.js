@@ -254,11 +254,16 @@ export function footerSlots(n, w, control = CONTROL.buttonL) {
 const CAPTION = { fs: TYPE.display.fs, fsMin: TYPE.display.min, w: CONTROL.buttonL.minW - 2 * CONTROL.buttonL.pad,
   lines: 2, h: BUTTON_TEXT_H };
 // The footer's sizes: "L", every popup's buttonL with display captions; "M", one size smaller (the buttonM control, its
-// caption 60 down to TYPE.body's floor), as the compatibility result has them (owner, 2026-11-11).
+// caption 60 down to TYPE.body's floor), as the repair review has them; "S", two sizes smaller (the Settings value row's
+// small button, SMALL_BUTTON, 402 x 136, its caption 48 down to TYPE.body's floor), as the compatibility result has them
+// (owner, 2026-11-11: each one size down).
+const FOOTER_S = Object.freeze({ ...CONTROL.buttonS, minW: SMALL_BUTTON.w });
 export const FOOTER = Object.freeze({
   L: Object.freeze({ control: CONTROL.buttonL, caption: CAPTION }),
   M: Object.freeze({ control: CONTROL.buttonM, caption: Object.freeze({ fs: CONTROL.buttonM.fs, fsMin: TYPE.body.min,
     w: CONTROL.buttonM.minW - 2 * CONTROL.buttonM.pad, lines: 2, h: CONTROL.buttonM.h - SPACE.m }) }),
+  S: Object.freeze({ control: FOOTER_S, caption: Object.freeze({ fs: FOOTER_S.fs, fsMin: TYPE.body.min,
+    w: FOOTER_S.minW - 2 * FOOTER_S.pad, lines: 2, h: FOOTER_S.h - SPACE.m }) }),
 });
 const footerSize = (size) => FOOTER[size] || FOOTER.L;
 function checkFooterFits(fits, { site = null, locale = globalThis.document?.documentElement?.lang, caption = CAPTION } = {}) {
@@ -285,7 +290,7 @@ export function footerLabels(widgets, captions, options = {}) {
 //   close: false for a popup that must be answered with a button (no close button)
 //   titleCentre: the title's ink centre this far under the frame's top, in units, in place of the shared title top (the
 //                header band's centre puts the title where UIPopup_Sort has it)
-//   footer: the buttons' size, "L" (default) or "M" (FOOTER)
+//   footer: the buttons' size, "L" (default), "M" or "S" (FOOTER)
 export function popupFrame(title, w, h, { ok = null, cancel = null, close = true, buttons = null, captionSite = null,
   titleCentre = null, footer = "L" } = {}) {
   ({ w, h } = frameGeometry(w, h));
@@ -1055,7 +1060,7 @@ export const MSG = { title: POPUP_FRAME.contentTop, gap: SPACE.l, rowButton: SMA
 //          {rule: true} is the game's dotted divider (Common_Line_Dot, as the light stats box draws it) across the text
 //   ok, cancel: the buttons' labels (either may be left out); check: {label, checked}
 //   buttons: optional named footer choices [{label, value, primary}], instead of ok/cancel
-//   footer: the footer buttons' size, "L" (default) or "M" (FOOTER)
+//   footer: the footer buttons' size, "L" (default), "M" or "S" (FOOTER)
 //   close: false for a popup that must be answered with a button (no close button; the backdrop and Escape do nothing)
 //   confirmKeys: keys that press OK while the popup is in front and holds the focus itself (a focused button takes its
 //                own key), as the PC client binds its popups' confirm (["Enter", " "]); none by default

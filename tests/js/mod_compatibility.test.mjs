@@ -29,7 +29,8 @@ async function harness(locale = "en-US", button = "cancel", accept = false) {
   const calls = [], popups = [], comparisons = [], covers = [], labels = [], progress = [];
   let nextReport = report(), rebuilt = null, held = false, covered = false, licensed = true, confirms = 0;
   let taskActive = false, stamp = "inputs-1", afterCheck = () => {}, redrawn = { redrawn: false, overlap: 0.99 };
-  const geometries = [];
+  const geometries = [], posed = [];
+  let steps = {};
   const saved = { mod: { id: "new-mod", repaired_from: "old-mod" } };
   globalThis.compatibilityDeps = {
     jobProgress,
@@ -46,6 +47,7 @@ async function harness(locale = "en-US", button = "cancel", accept = false) {
       assert.equal(typeof update, "function");
       update({ current: 2, total: 3, label: "assets-raw.bundle", step: "import.step.replace" });
       if (id === "actions.compatibility") afterCheck();
+      if (id in steps) return steps[id];
       return ["actions.remap", "actions.oldRig"].includes(id) ? rebuilt : id === "actions.acceptRemap" ? saved : id === "actions.redrawn" ? redrawn : nextReport;
     },
     Loading: { task: async (fn, options) => {
@@ -57,7 +59,9 @@ async function harness(locale = "en-US", button = "cancel", accept = false) {
     },
     Popup: { message: async (options) => { assert.ok(!held && !covered && !taskActive); popups.push(options); return { button }; } },
     RigGeometry: { forRemap: (report) => { geometries.push(report); return { "test.atlas": { source: { slots: [], poses: { "": [] } }, target: { slots: [], poses: { "": [] } } } }; },
-      restOnly: (geometry) => ({ ...geometry, rest: true }) },
+      restOnly: (geometry) => ({ ...geometry, rest: true }),
+      setupOf: (_S, atlasText) => { posed.push(["setup", atlasText]); return { bones: {}, slotBones: {}, skin: [] }; },
+      partPoses: (_S, atlasText, _skeleton, check) => { posed.push(["poses", atlasText, check]); return { slots: [], poses: { "": [] } }; } },
     Compare: { show: async (...args) => { assert.ok(!held && !covered && !taskActive); comparisons.push(args); return accept; } },
   };
   const code = `const { T, language, rpc, waitJob, Loading, Popup, Compare, ensureSpine, jobProgress, RigGeometry } = globalThis.compatibilityDeps;\n${source.replace(/^import .*;$/gm, "")}\n// ${sequence++}`;
@@ -66,7 +70,7 @@ async function harness(locale = "en-US", button = "cancel", accept = false) {
     use: (value) => { nextReport = value; }, build: (value) => { rebuilt = value; },
     stamp: (value) => { stamp = value; }, afterCheck: (fn) => { afterCheck = fn; },
     license: (value) => { licensed = value; }, confirms: () => confirms,
-    redraw: (value) => { redrawn = value; }, geometries };
+    redraw: (value) => { redrawn = value; }, geometries, posed, steps: (value) => { steps = value; } };
 }
 
 test("pending acknowledgement skips the runtime check without a licence popup or blocking update inputs", async () => {
@@ -440,7 +444,7 @@ test("a portrait the game drew anew keeps the rig its textures were drawn for, u
     const [popup] = h.popups, texts = popup.lines.map((line) => (typeof line === "string" ? line : line.text));
     // plain and left-aligned: what changed as list items, the dotted rule, then what Update does (owner, 2026-11-11)
     assert.equal(popup.title, h.strings.compatibility.result, locale);
-    assert.ok(popup.plain && popup.footer === "M", locale);
+    assert.ok(popup.plain && popup.footer === "S", locale);
     assert.equal(texts[0], h.strings.compatibility.changes, locale);
     assert.ok(popup.lines.some((line) => line.text === h.strings.compatibility.redrawn && line.marker), locale);
     const rule = popup.lines.findIndex((line) => line.rule);
@@ -484,4 +488,66 @@ test("a portrait the game drew anew keeps the rig its textures were drawn for, u
     assert.equal(none.assessment.oldRig, false, locale);
     assert.ok(!none.assessment.issues.some(({ key }) => key === "oldRigAnimations"), locale);
   }
+});
+
+test("a mod with its own skeleton the official one outgrew is offered the graft beside the remap, the graft first", async () => {
+  for (const locale of ["zh-CN", "en-US", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
+    const h = await harness(locale, "graft", true);
+    const own = { ...mixedReport(), kind: "spr", graft: { kind: "own", animations: { "test.skel": ["17", "18"] }, available: true } };
+    h.use(own);
+    const rig = (atlas) => ({ atlas, skeleton: "c2tlbA==" });
+    h.steps({
+      "actions.graft": { token: "t1", rigs: { "test.atlas": { kind: "own", animations: ["17", "18"], mod: rig("mod"), base: null,
+        official: rig("official") } } },
+      "actions.graftBuild": { rigs: { "test.atlas": { skeleton: "dGVzdA==", atlas: "test", check: { "17": ["face"], "bmpt~0~17": ["face"] },
+        official: { "17": ["face"] } } }, refused: {} },
+      "actions.graftCheck": { preview: "review", compare: { differences: [] }, pages: [], drawings: {},
+        report: { grafted: ["17", "18"], corrected: ["18"], unfixed: [], refused: { "19": ["bone:hat"] }, grown: 132, unanchored: true,
+          marks: ["17"], moved: [], dropped: [], added: [], official: [], upscaled: [], warnings: [], partial: true } },
+    });
+    const checked = await h.mod.inspect("old-mod");
+    assert.equal(checked.assessment.graft, true, locale);
+    assert.equal(checked.assessment.remap, true, locale);
+    assert.deepEqual(h.mod.repairs(checked.assessment).map(({ kind }) => kind), ["graft", "remap"], locale);
+    h.calls.length = 0;
+    await h.mod.check("old-mod", "Mod", () => {}, { kind: "spr" });
+    const [popup] = h.popups, texts = popup.lines.map((line) => (typeof line === "string" ? line : line.text));
+    const rule = popup.lines.findIndex((line) => line.rule);
+    assert.deepEqual(texts.slice(rule + 1), [h.strings.compatibility.autoUpdate, h.strings.compatibility.graft,
+      h.strings.compatibility.remapUpdate], locale);
+    // three buttons: Cancel, the remap, and the graft as the primary one
+    assert.deepEqual(popup.buttons.map(({ label, value, primary }) => [label, value, !!primary]), [
+      [h.strings.popup.cancel, "cancel", false], [h.strings.compatibility.remapAction, "remap", false],
+      [h.strings.compatibility.graftAction, "graft", true]], locale);
+    assert.deepEqual(h.calls.map(([method]) => method), ["actions.compatibility", "actions.redrawn", "actions.graft",
+      "actions.graftBuild", "actions.graftCheck", "actions.acceptRemap", "actions.discardRemap"], locale);
+    assert.deepEqual(h.calls[3][1], { token: "t1", geometry: { "test.atlas": { mod: { bones: {}, slotBones: {}, skin: [] },
+      official: { bones: {}, slotBones: {}, skin: [] }, base: null } } }, locale);
+    assert.deepEqual(h.posed.map(([kind, atlas]) => [kind, atlas]), [["setup", "mod"], ["setup", "official"], ["poses", "test"],
+      ["poses", "official"]], locale);
+    const [, , , options] = h.comparisons[0];
+    const lines = options.lines.map((line) => (typeof line === "string" ? line : line.text));
+    assert.deepEqual(lines, [h.strings.remap.grafted.replace("{n}", 2), h.strings.remap.graftCorrected.replace("{n}", 1),
+      h.strings.remap.graftRefused.replace("{n}", 1), h.strings.remap.graftGrown.replace("{n}", 132),
+      h.strings.remap.graftUnanchored], locale);
+    assert.deepEqual(options.expressions, ["17", "18"], locale);
+    assert.deepEqual(options.marks, ["17"], locale);
+    assert.ok(options.partial, locale);
+    assert.equal(options.verdict, "remap.graftPartial", locale);  // its own verdict: nothing was repacked
+  }
+});
+
+test("a redrawn portrait whose official rig gained expressions is offered its old rig with them grafted", async () => {
+  const h = await harness("zh-CN", "ok", false);
+  h.use({ ...mixedReport(), kind: "spr", oldRig: { atlases: ["test.atlas"], animations: { "test.skel": ["11"] }, available: false },
+    graft: { kind: "oldRig", animations: { "test.skel": ["11"] }, available: true } });
+  h.redraw({ redrawn: true, overlap: 0.5 });
+  const checked = await h.mod.inspect("old-mod");
+  assert.equal(checked.assessment.graft, true);
+  assert.equal(checked.assessment.oldRig, false);
+  assert.ok(!checked.assessment.issues.some(({ key }) => key === "oldRigAnimations"));
+  assert.ok(checked.assessment.issues.some(({ key }) => key === "missingAnimations"));
+  assert.deepEqual(h.mod.repairs(checked.assessment).map(({ kind, text }) => [kind, text]),
+    [["graft", h.strings.compatibility.graftOldRig]]);
+  assert.equal(h.mod.canRemap("old-mod", { kind: "spr" }), true);
 });

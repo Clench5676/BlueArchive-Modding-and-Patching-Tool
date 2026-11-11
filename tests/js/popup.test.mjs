@@ -499,16 +499,18 @@ test("the compatibility result's list, rule, inline Details and smaller footer f
           assert.equal(ruleNode.pos[0], heading.pos[0], `${what}: the rule starts where the lines start`);
           assert.equal(divider.w_, layout.width - 2 * 100, `${what}: the rule spans the text box`);
         }
-        // the footer one size smaller: buttonM bodies, captions at its size range
-        const frame = Popup.popupFrame(ui.compatibility.result, layout.width, layout.height, { ok, cancel, footer: "M" });
+        // the footer two sizes smaller (owner, 2026-11-11): the small button's 402 x 136 bodies, captions at its size range
+        const frame = Popup.popupFrame(ui.compatibility.result, layout.width, layout.height, { ok, cancel, footer: "S" });
         const btn = NGUI.find(frame, "Popup/Btn");
         for (const child of btn.children.filter((c) => c.active)) {
           const bg = NGUI.find(child, "BG (1)").widgets.find((w) => "sprite" in w && "w_" in w);
-          assert.deepEqual([bg.w_, bg.h_], [CONTROL.buttonM.minW, CONTROL.buttonM.h], what);
+          assert.deepEqual([bg.w_, bg.h_], [SMALL_BUTTON.w, SMALL_BUTTON.h], what);
           const caption = NGUI.find(child, "Label_Locale").widgets[0];
-          assert.ok(caption.fontSize <= CONTROL.buttonM.fs && caption.fontSize >= TYPE.body.min, `${what}: ${caption.text}`);
+          assert.ok(caption.fontSize <= SMALL_BUTTON.fs && caption.fontSize >= TYPE.body.min, `${what}: ${caption.text}`);
         }
         assert.deepEqual(Popup.FOOTER.M.control, CONTROL.buttonM);
+        assert.deepEqual([Popup.FOOTER.S.control.h, Popup.FOOTER.S.control.fs, Popup.FOOTER.S.control.minW],
+          [SMALL_BUTTON.h, SMALL_BUTTON.fs, SMALL_BUTTON.w]);
         // the title, centred, keeps clear of the close button
         const title = NGUI.find(frame, "Popup/Base/BG/Label_Title_Locale").widgets[0];
         const clear = layout.width - 2 * (POPUP_FRAME.close.right + POPUP_FRAME.close.size);

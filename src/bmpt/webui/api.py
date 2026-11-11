@@ -1296,6 +1296,44 @@ def build_api(s: Services) -> RpcRegistry:
         pin = s._current_pin(library)
         return s.submit("remap", lambda log, progress: library.old_rig(mod, log=log, progress=progress, pin=pin))
 
+    def spine_licensed() -> None:
+        # the graft writes skeletons with code derived from the Spine runtime: only after the user's licence answer
+        if s.state.spine_consent is not True:
+            raise ServiceError("graft_spine_licence")
+
+    @rpc.method("actions.graft")
+    def actions_graft(mod: str) -> str:
+        """The first step of a graft of the official rig's new animations into a mod's own rig (ModLibrary.graft):
+        the rigs for the page to pose."""
+        spine_licensed()
+        library = s.library
+        pin = s._current_pin(library)
+        return s.submit("remap", lambda log, progress: library.graft(mod, log=log, progress=progress, pin=pin))
+
+    @rpc.method("actions.graftBuild")
+    def actions_graft_build(token: str, geometry: Any = None) -> str:
+        spine_licensed()
+        library = s.library
+
+        def build(log: Any, progress: Any) -> Any:
+            progress({"current": 1, "total": 1, "step": "import.step.extract"})
+            return library.graft_build(token, geometry)
+
+        return s.submit("remap", build)
+
+    @rpc.method("actions.graftCheck")
+    def actions_graft_check(token: str, geometry: Any = None) -> str:
+        """The last step: the review of the grafted copy, accepted or discarded as a remap's."""
+        spine_licensed()
+        library = s.library
+        pin = s._current_pin(library)
+        return s.submit("remap", lambda log, progress: library.graft_check(token, geometry, log=log,
+                                                                           progress=progress, pin=pin))
+
+    @rpc.method("actions.discardGraft")
+    def actions_discard_graft(token: str) -> None:
+        s.library.discard_graft(token)
+
     @rpc.method("actions.redrawn")
     def actions_redrawn(mod: str, geometry: Any) -> str:
         library = s.library

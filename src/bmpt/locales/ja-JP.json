@@ -490,6 +490,11 @@
 			"atlas_remap_redrawn": "再配置不可：公式立ち絵が描き直し済み",
 			"old_rig_unavailable": "旧 .skel ファイル使用不可：Mod 作成時の .skel ファイルの記録なし",
 			"old_rig_animations": "旧 .skel ファイル使用不可：公式で追加されたアニメーション {names}",
+			"graft_unavailable": "表情を追加できません：Mod に使用できる .skel ファイルがありません",
+			"graft_refused": "表情を追加できません：{names}",
+			"graft_page_missing": "表情を追加できません：テクスチャ {page} がありません",
+			"graft_region_too_large": "表情を追加できません：領域 {region} がテクスチャの幅を超えています",
+			"graft_spine_licence": "表情を追加できません：Spine ライセンス未確認",
 			"atlas_remap_target_mismatch": "再配置不可：{file} - 一致アセット {matched}/{expected}",
 			"atlas_remap_property": "再配置不可：{file} - {field} が無効：{value}（ページ：{page}、領域：{region}）",
 			"atlas_remap_structure": "再配置不可：{file} - {line} 行目の .atlas ファイル構造が無効：{value}",
@@ -738,7 +743,11 @@
 			"result": "互換性チェック結果",
 			"changes": "変更：",
 			"autoUpdate": "自動更新可能：",
-			"remapUpdate": "現在の .atlas ファイルに合わせて Mod のテクスチャを再配置"
+			"remapUpdate": "現在の .atlas ファイルに合わせて Mod のテクスチャを再配置",
+			"graft": "Mod の .skel ファイルを維持し、公式の新しい表情を追加",
+			"graftOldRig": "Mod 作成時の .skel ファイルと .atlas ファイルを使い、公式の新しい表情を追加",
+			"graftAction": "表情を追加",
+			"remapAction": "公式 .skel ファイルを使用"
 		},
 		"remap": {
 			"action": "更新",
@@ -764,7 +773,18 @@
 			"zoomIn": "拡大",
 			"zoomOut": "縮小",
 			"marks": "変更箇所を表示",
-			"oldRig": "旧 .skel ファイルと .atlas ファイルを使用：{names}"
+			"oldRig": "旧 .skel ファイルと .atlas ファイルを使用：{names}",
+			"grafted": "追加した表情：{n}",
+			"graftCorrected": "自動補正：{n}",
+			"graftUnfixed": "手動修正が必要：{n}",
+			"graftRefused": "追加できなかったアニメーション：{n}",
+			"graftGrown": "テクスチャを {n} px 拡張",
+			"graftUnanchored": "新しい表情は公式の位置に配置",
+			"expression": "表情 {name}（{n}/{total}）",
+			"previousExpression": "前の表情",
+			"nextExpression": "次の表情",
+			"graftDone": "表情を追加済み",
+			"graftPartial": "表情を追加済み、一部要確認"
 		},
 		"spine": {
 			"license": {

@@ -490,6 +490,11 @@
 			"atlas_remap_redrawn": "Cannot remap: official portrait redrawn",
 			"old_rig_unavailable": "Cannot keep old .skel file: .skel file the Mod was drawn for not recorded",
 			"old_rig_animations": "Cannot keep old .skel file: official animations added: {names}",
+			"graft_unavailable": "Cannot add expressions: no usable .skel file in the Mod",
+			"graft_refused": "Cannot add expressions: {names}",
+			"graft_page_missing": "Cannot add expressions: texture {page} missing",
+			"graft_region_too_large": "Cannot add expressions: region {region} wider than the texture",
+			"graft_spine_licence": "Cannot add expressions: Spine license not confirmed",
 			"atlas_remap_target_mismatch": "Cannot remap: {file} - matched assets {matched}/{expected}",
 			"atlas_remap_property": "Cannot remap: {file} - invalid {field}: {value} (page {page}, region {region})",
 			"atlas_remap_structure": "Cannot remap: {file} - invalid .atlas file structure at line {line}: {value}",
@@ -738,7 +743,11 @@
 			"result": "Compatibility Results",
 			"changes": "Changes:",
 			"autoUpdate": "Auto update:",
-			"remapUpdate": "Repack the Mod's textures onto the current .atlas file"
+			"remapUpdate": "Repack the Mod's textures onto the current .atlas file",
+			"graft": "Keep the Mod's .skel file, add the official new expressions",
+			"graftOldRig": "Keep the .skel and .atlas files the Mod was drawn for, add the official new expressions",
+			"graftAction": "Add Expressions",
+			"remapAction": "Use Official .skel File"
 		},
 		"remap": {
 			"action": "Update",
@@ -764,7 +773,18 @@
 			"zoomIn": "Zoom in",
 			"zoomOut": "Zoom out",
 			"marks": "Mark changes",
-			"oldRig": "Old .skel and .atlas files kept: {names}"
+			"oldRig": "Old .skel and .atlas files kept: {names}",
+			"grafted": "Expressions added: {n}",
+			"graftCorrected": "Corrected automatically: {n}",
+			"graftUnfixed": "Manual repair needed: {n}",
+			"graftRefused": "Animations not added: {n}",
+			"graftGrown": "Texture extended by {n} px",
+			"graftUnanchored": "New expressions at the official position",
+			"expression": "Expression {name} ({n}/{total})",
+			"previousExpression": "Previous Expression",
+			"nextExpression": "Next Expression",
+			"graftDone": "Expressions added",
+			"graftPartial": "Expressions added, some to check"
 		},
 		"spine": {
 			"license": {
