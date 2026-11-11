@@ -8,11 +8,12 @@ import { searchTree, orderBody, toolbarLayout, toolbarTree } from "./roster-widg
 import { clone, S, hitButton } from "./util.js";
 import { T } from "./i18n.js";
 import { bindScale } from "./student-hall-scale.js";
-import { POPUP, POPUP_FRAME, SMALL_BUTTON, CONTROL, TYPE, SPACE, captionMinimum } from "./ui-tokens.js";
+import { POPUP, POPUP_FRAME, XS_BUTTON, CONTROL, TYPE, SPACE, captionMinimum } from "./ui-tokens.js";
 import { stack as layoutStack } from "./ui-grid.js";
 // A Hall small button is a buttonS control (docs/design-system.md): its height, minimum width and caption size are the system's, the
-// caption's floor the body role's. Its fit insets are the Common_Btn_BG body's (SMALL_BUTTON), not a scale value.
-const BUTTON = CONTROL.buttonS, BUTTON_FLOOR = TYPE.body.min;
+// caption's floor the body role's. Its fit insets are the Common_Btn_BG body's (XS_BUTTON), not a scale value.
+// the compact bodies (half an XS body high) hold one line at TYPE.micro's size, down to its floor
+const BUTTON = CONTROL.buttonXS, BUTTON_FLOOR = XS_BUTTON.fsMin, COMPACT_FLOOR = TYPE.micro.min;
 let assets;
 const visibleReadiness = new WeakMap(), virtualControls = new WeakMap();
 function pictureReadiness(host, picture, view) {
@@ -90,7 +91,7 @@ export function createModal(title, onClose, { level = 0 } = {}) {
         } else if (compactFooter) {
           const labels = actions.map((action) => action.label), bodyW = compactFooterWidth(labels), size = compactButtonSize(labels, bodyW);
           await Promise.all(compactFooterBoxes(height, labels.map(() => bodyW)).map((box, index) => button(layer, `Footer${index}`, actions[index].label, box,
-            actions[index].fn, { enabled: actions[index].enabled !== false, semantic: actions[index].semantic, height: COMPACT_BUTTON_H * S, size })));
+            actions[index].fn, { enabled: actions[index].enabled !== false, semantic: actions[index].semantic, height: COMPACT_BUTTON_H * S, size, floor: COMPACT_FLOOR })));
         } else actions.forEach((action, index) => {
           const hit = Popup.hit(layer, frame, `Center/Popup/Btn/Footer${index}/BG (1)`, action.fn, { name: action.label, action: `Footer${index}` });
           if (hit) { hit.disabled = action.enabled === false; hit.dataset.focusKey = `Footer${index}`; }
@@ -192,14 +193,14 @@ export function buttonBox([x, y, width, height], bodyHeight = BUTTON.h * S) {
   const w = Math.max(BUTTON.minW * S, width), h = bodyHeight;
   return [x + (width - w) / 2, y + (height - h) / 2, w, h];
 }
-export const buttonSize = (captions, width, bodyHeight = BUTTON.h) => NGUI.fitGroup(captions, BUTTON.fs, BUTTON_FLOOR,
-  Math.max(BUTTON.minW, width / S) - SMALL_BUTTON.fitInset, 2,
-  { maxH: bodyHeight - SMALL_BUTTON.boxInsetH })[0]?.fs;
-export const compactButtonSize = (captions, width) => buttonSize(captions, width, COMPACT_BUTTON_H);
+export const buttonSize = (captions, width, bodyHeight = BUTTON.h, floor = BUTTON_FLOOR) => NGUI.fitGroup(captions, BUTTON.fs, floor,
+  Math.max(BUTTON.minW, width / S) - XS_BUTTON.fitInset, 2,
+  { maxH: bodyHeight - XS_BUTTON.boxInsetH })[0]?.fs;
+export const compactButtonSize = (captions, width) => buttonSize(captions, width, COMPACT_BUTTON_H, COMPACT_FLOOR);
 // The footer's bodies share one width: COMPACT_FOOTER_W, or what the widest caption needs on its one line at the body role's
 // floor (a caption of a longer language widens its body, never shrinks below the floor).
 export const compactFooterWidth = (captions) => Math.max(COMPACT_FOOTER_W,
-  ...captions.map((caption) => NGUI.glyphWidth(caption, BUTTON_FLOOR) + SMALL_BUTTON.fitInset)) * S;
+  ...captions.map((caption) => NGUI.glyphWidth(caption, COMPACT_FLOOR) + XS_BUTTON.fitInset)) * S;
 
 // The memorial editor's footer, candidate Add and queue Remove still hit the full-row stop rule.
 // Their existing bodies/captions stay until their containing layout can change.
@@ -211,9 +212,10 @@ export const retainedButton = (host, name, caption, box, action, opts = {}) => d
 // height: the body height in stage pixels where the site sets it (buttonBox); the token's otherwise.
 export async function button(host, name, caption, box, action, opts = {}) {
   await ready();
-  const placed = buttonBox(box, opts.height), fit = NGUI.fitGroup([caption], opts.size ?? BUTTON.fs, opts.size ?? BUTTON_FLOOR,
-    placed[2] / S - SMALL_BUTTON.fitInset, 2, { maxH: placed[3] / S - SMALL_BUTTON.boxInsetH })[0];
-  if (fit.overflow || fit.fs < captionMinimum(opts.captionSite, document.documentElement.lang, BUTTON_FLOOR)) throw new RangeError(`Hall small button cannot fit: ${name}`);
+  const floor = opts.floor ?? BUTTON_FLOOR;
+  const placed = buttonBox(box, opts.height), fit = NGUI.fitGroup([caption], opts.size ?? BUTTON.fs, opts.size ?? floor,
+    placed[2] / S - XS_BUTTON.fitInset, 2, { maxH: placed[3] / S - XS_BUTTON.boxInsetH })[0];
+  if (fit.overflow || fit.fs < captionMinimum(opts.captionSite, document.documentElement.lang, floor)) throw new RangeError(`Hall small button cannot fit: ${name}`);
   return drawButton(host, name, caption, placed, action, { ...opts, fs: fit.fs, min: fit.fs, fit });
 }
 async function drawButton(host, name, caption, [x, y, width, height], action,
@@ -315,7 +317,7 @@ export async function card(host, item, { x, y, kind = "lobby", scale = .48, sele
     const size = kind === "spr" ? compactButtonSize : (captions, width) => retainedButtonSize(captions, width, height);
     await draw(host, `Add${item.key}`, addLabel,
       [actionX, y - bar.pos[1] * scale + barWidget.h_ * scale / 2 + 8, actionWidth, height], onAdd,
-      { enabled: addEnabled, ...(kind === "spr" ? { height, captionSite: "hall.add" } : {}), ...(addSize != null ? { size: addSize } : fitAdd ? { size: size([addLabel], actionWidth) } : {}) });
+      { enabled: addEnabled, ...(kind === "spr" ? { height, captionSite: "hall.add", floor: COMPACT_FLOOR } : {}), ...(addSize != null ? { size: addSize } : fitAdd ? { size: size([addLabel], actionWidth) } : {}) });
   }
   return { view, visual, hit, width, height, actionBox: [actionX, y + height / 2 + 8, actionWidth, 36] };
 }

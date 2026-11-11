@@ -10,7 +10,7 @@ import {captureScene} from './capture.js';
 import {photograph} from './shoot.js';
 import {cameraFeedback} from './feedback.js';
 import {FRAME,choiceLayout,otherMode,actionCaption} from './camera.js';
-import {CONTROL,SMALL_BUTTON,SPACE} from '../ui-tokens.js';
+import {CONTROL,XS_BUTTON,SPACE} from '../ui-tokens.js';
 import {row} from '../ui-grid.js';
 import {alignIcon,buttonCenter} from '../student-hall-icons.js';
 import {anchoredCentre} from '../visual-view.js';
@@ -47,7 +47,7 @@ let whiteTemplate;
 // Back retains UICharacterVisualMode/Inventory_ListControl_PC/LeftTop/Btn_Back's own 171 x 116-unit body;
 // the separate shutter keeps its existing 146px circle. Composed toolbar controls use the design system.
 function photographyToolbarLayout(){
-  const textH=CONTROL.buttonS.h*S,icon={w:102,h:82};
+  const textH=CONTROL.buttonXS.h*S,icon={w:102,h:82};
   const texts=row([{w:196,h:textH},{w:196,h:textH}],{gap:SPACE.m*S});
   const top=row([texts,icon],{gap:SPACE.l*S});
   const x=1890-top.w,y=25,asBox=b=>[b.x,b.y,b.w,b.h];
@@ -57,10 +57,10 @@ function photographyToolbarLayout(){
   const gallery=row([icon],{x:25,y:950}).boxes[0];
   return {occlusion:textBoxes[0],grid:textBoxes[1],mode,top:[x,y,top.w,top.h],
     playback:asBox(bottom.boxes[0]),choices:asBox(bottom.boxes[1]),gallery:asBox(gallery),
-    caption:{size:CONTROL.buttonS.fs,min:SMALL_BUTTON.fsMin,width:196/S-2*CONTROL.buttonS.pad,height:CONTROL.buttonS.h-SMALL_BUTTON.boxInsetH}};
+    caption:{size:CONTROL.buttonXS.fs,min:XS_BUTTON.fsMin,width:196/S-2*CONTROL.buttonXS.pad,height:CONTROL.buttonXS.h-XS_BUTTON.boxInsetH}};
 }
 function galleryPair(width,x,y){
-  return row([{w:Math.max(width,CONTROL.buttonS.minW*S),h:CONTROL.buttonS.h*S},{w:Math.max(width,CONTROL.buttonS.minW*S),h:CONTROL.buttonS.h*S}],
+  return row([{w:Math.max(width,CONTROL.buttonXS.minW*S),h:CONTROL.buttonXS.h*S},{w:Math.max(width,CONTROL.buttonXS.minW*S),h:CONTROL.buttonXS.h*S}],
     {x,y,gap:SPACE.m*S}).boxes.map(b=>[b.x,b.y,b.w,b.h]);
 }
 // The captions of the two text buttons, one size for both states of the grid button too, so nothing changes size on a click.
@@ -75,7 +75,7 @@ async function whiteButton(host,name,caption,box,action,{icon=null,atlas='Common
   const body=tree.widgets.find(widget=>'sprite' in widget);body.w_=w/S;body.h_=h/S;body.depth=60;
   if(pressed)body.color='#b9eeff/1.00';
   if(icon)tree.children.push(node('Icon',[{sprite:icon,atlas,w_:Math.min(w-30,h-26)/S,h_:Math.min(w-30,h-26)/S,pivot:4,depth:65,color:'#2b496e/1.00',type:0}]));
-  else tree.children.push(node('Label',[{text:fit?.text??caption,fontSize:fit?.fs??CONTROL.buttonS.fs,w_:w/S-SMALL_BUTTON.boxInsetW,h_:h/S-SMALL_BUTTON.boxInsetH,pivot:4,depth:65,color:'#2b496e/1.00',align:2}]));
+  else tree.children.push(node('Label',[{text:fit?.text??caption,fontSize:fit?.fs??CONTROL.buttonXS.fs,w_:w/S-XS_BUTTON.boxInsetW,h_:h/S-XS_BUTTON.boxInsetH,pivot:4,depth:65,color:'#2b496e/1.00',align:2}]));
   const wrapper=document.createElement('div');wrapper.dataset.photoControl=name;host.append(wrapper);
   const view=await NGUI.render(tree,wrapper,{scale:S,origin:[x+w/2,y+h/2]});
   if(icon)await alignIcon(view,`${name}/Icon`,name,{height:h*.52,maxWidth:w*.64,center:'bounds',color:'#2b496e'});
@@ -87,7 +87,7 @@ async function whiteButton(host,name,caption,box,action,{icon=null,atlas='Common
       const probe=await NGUI.render(stencil,document.createElement('div'),{scale:S,origin:[x+w/2,y+h/2]});opticalBody=probe.nodes.get(name).els[0];
     }
     const center=await buttonCenter(opticalBody),label=view.nodes.get(`${name}/Label`).els[0];
-    Object.assign(label.style,{left:`${center.x-(w-SMALL_BUTTON.boxInsetW*S)/2}px`,top:`${center.y-(h-SMALL_BUTTON.boxInsetH*S)/2}px`,paddingBottom:'0px',justifyContent:'center'});
+    Object.assign(label.style,{left:`${center.x-(w-XS_BUTTON.boxInsetW*S)/2}px`,top:`${center.y-(h-XS_BUTTON.boxInsetH*S)/2}px`,paddingBottom:'0px',justifyContent:'center'});
     // The layer is not in the document yet, where computed style is empty: the size is the one the label was drawn with.
     label.style.translate=`0 ${NGUI.inkShift(fit?.text??caption,parseFloat(label.style.fontSize))}px`;
   }
@@ -346,7 +346,7 @@ async function galleryDraw(){
       if(selectedPhoto.managed!==false&&selectedPhoto.provenance!=='official')await UI.button(layer,'Delete',P('delete'),pairBoxes[1],safe(deletePhoto),{size:pair});
     }
     if(allPhotos.length>6){
-      const pagingBoxes=galleryPair(180,365,835-(SPACE.l+CONTROL.buttonS.h)*S),paging=UI.buttonSize([P('previous'),P('next')],pagingBoxes[0][2],pagingBoxes[0][3]);
+      const pagingBoxes=galleryPair(180,365,835-(SPACE.l+CONTROL.buttonXS.h)*S),paging=UI.buttonSize([P('previous'),P('next')],pagingBoxes[0][2],pagingBoxes[0][3]);
       await UI.button(layer,'Previous',P('previous'),pagingBoxes[0],safe(async()=>{page=Math.max(0,page-1);await galleryDraw();}),{enabled:page>0,size:paging});
       await UI.button(layer,'Next',P('next'),pagingBoxes[1],safe(async()=>{page++;await galleryDraw();}),{enabled:(page+1)*6<allPhotos.length,size:paging});
     }

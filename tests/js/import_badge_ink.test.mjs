@@ -82,7 +82,7 @@ test("the correction is the distance between the ink's centre and the background
 const Popup = await import("../../src/bmpt/web/js/popup.js");
 const { controlRect, badgeRect, ROW_WIDTH, ROW_TEXT_SIZE, BUTTON_BODY_H, clipButtonPatterns } = await import("../../src/bmpt/web/js/import-layout.js");
 const { CHOOSE, noteRoom, NOTE_LEFT } = await import("../../src/bmpt/web/js/import-state.js");
-const { SMALL_BUTTON, FOOTER, CONTROL, SPACE, TYPE, LINE } = await import("../../src/bmpt/web/js/ui-tokens.js");
+const { XS_BUTTON, FOOTER, CONTROL, SPACE, TYPE, LINE } = await import("../../src/bmpt/web/js/ui-tokens.js");
 const { S } = await import("../../src/bmpt/web/js/util.js");
 const { setStrings } = await import("../../src/bmpt/web/js/i18n.js");
 const missingLabel = (key, params = {}, locale) => text(locale, `import.missing.${({missing: "count", missingNotFound: "notFound"})[key] || key}`, params);
@@ -254,7 +254,7 @@ test("badge-line: the scales the row is built from are the design system's", () 
   assert.equal(ROW_TEXT_SIZE, TYPE.dense.fs);
   assert.equal(TYPE.dense.min, TYPE.dense.fs, "the row's text only wraps, it never shrinks");
   assert.equal(PITCH, 57.75);
-  assert.equal(SPACE.l, 28); assert.equal(CONTROL.badge.pad, 16); assert.equal(CONTROL.buttonS.pad, 45);
+  assert.equal(SPACE.l, 28); assert.equal(CONTROL.badge.pad, 16); assert.equal(CONTROL.buttonXS.pad, 34);
 });
 
 for (const locale of DESIGN_LOCALES) test(`badge-line: every text of a row is TYPE.dense and sits on the card's first line in ${locale}`, () => {
@@ -330,9 +330,9 @@ for (const locale of DESIGN_LOCALES) test(`badge-line: the kind ends the name's 
 for (const locale of DESIGN_LOCALES) test(`badge-line: the Choose Files control is a buttonS control on the line under the badge, its right edge on the badge's, in ${locale}`, () => {
   setStrings(locale, {});
   const rowArt = art(), control = chooseSize(rowArt), caption = missingLabel("choose", {}, locale);
-  // width: the caption and CONTROL.buttonS.pad each side (the body's slice border included), 240 at least, in the button's own units
+  // width: the caption and CONTROL.buttonXS.pad each side (the body's slice border included), 240 at least, in the button's own units
   const button = find(prefabs.UIMailBoxContent, "List_01/Btn_Receive"), sx = button.scale?.[0] ?? 1, lx = find(button, "Label_Locale").scale?.[0] ?? 1;
-  const expected = Math.max(CONTROL.buttonS.minW, NGUI.glyphWidth(caption, control.size) * lx + 2 * CONTROL.buttonS.pad) * sx * CHOOSE.scale;
+  const expected = Math.max(CONTROL.buttonXS.minW, NGUI.glyphWidth(caption, control.size) * lx + 2 * CONTROL.buttonXS.pad) * sx * CHOOSE.scale;
   assert.ok(Math.abs(control.width - expected) <= 1e-6, `${control.width} against ${expected}`);
   for (const state of statuses(locale)) {
     const data = { name: "Student", kind: text(locale, "tab.lobby"), state, stateKey: "incomplete", meta: metaFor(locale), muted: true };
@@ -379,11 +379,11 @@ for (const locale of LOCALES) test(`badge-line: the one-line Choose Files captio
   const sx = tree.scale[0] * CHOOSE.scale, sy = tree.scale[1] * CHOOSE.scale, ly = node.scale[1];
   assert.equal(label.text, caption); assert.equal(lines(label.text).length, 1); assert.ok(!label.ellipsis);
   assert.ok(Math.abs(fontSizeFor(caption, label.fontSize) * sy * ly - fontSizeFor(caption, ROW_TEXT_SIZE) * ROW_SCALE) <= .01);
-  assert.ok(widest(label.text, label.fontSize) * node.scale[0] <= body.w_ - 2 * CONTROL.buttonS.pad + 1e-9, "CONTROL.buttonS.pad each side");
+  assert.ok(widest(label.text, label.fontSize) * node.scale[0] <= body.w_ - 2 * CONTROL.buttonXS.pad + 1e-9, "CONTROL.buttonXS.pad each side");
   const leftPadding = body.w_ / 2 + node.pos[0] - label.w_ * node.scale[0] / 2;
   const rightPadding = body.w_ / 2 - node.pos[0] - label.w_ * node.scale[0] / 2;
-  assert.ok(Math.abs(leftPadding - CONTROL.buttonS.pad) <= .01, "left padding is CONTROL.buttonS.pad (the slice border is part of it)");
-  assert.ok(Math.abs(rightPadding - CONTROL.buttonS.pad) <= .01, "right padding is CONTROL.buttonS.pad");
+  assert.ok(Math.abs(leftPadding - CONTROL.buttonXS.pad) <= .01, "left padding is CONTROL.buttonXS.pad (the slice border is part of it)");
+  assert.ok(Math.abs(rightPadding - CONTROL.buttonXS.pad) <= .01, "right padding is CONTROL.buttonXS.pad");
   assert.ok(Math.abs(body.h_ * sy - height) <= .01); assert.ok(Math.abs(body.w_ * sx - control.width) <= .01);
   const reference = NGUI.inkReference(caption), band = NGUI.inkBand(reference || caption, fontSizeFor(caption, label.fontSize));
   const ink = node.pos[1] - (fontSizeFor(caption, label.fontSize) * LINE_PITCH / 2 + (band.top + band.bottom) / 2) * ly;
@@ -431,8 +431,8 @@ for (const locale of LOCALES) test(`clipping: Choose Files keeps native decorati
 });
 
 // the footer's buttons, as batch-import.js sizes them: the three of the row and the list action, one caption size
-const FOOTER_SCALE = SMALL_BUTTON.h * S / BUTTON_BODY_H, WIDE_PX = 330, NARROW_PX = SMALL_BUTTON.w * S;
-const FOOTER_RANGE = { max: SMALL_BUTTON.fs * BUTTON_BODY_H / SMALL_BUTTON.h, min: SMALL_BUTTON.fsMin * BUTTON_BODY_H / SMALL_BUTTON.h };
+const FOOTER_SCALE = XS_BUTTON.h * S / BUTTON_BODY_H, WIDE_PX = 330, NARROW_PX = XS_BUTTON.w * S;
+const FOOTER_RANGE = { max: XS_BUTTON.fs * BUTTON_BODY_H / XS_BUTTON.h, min: XS_BUTTON.fsMin * BUTTON_BODY_H / XS_BUTTON.h };
 
 for (const locale of LOCALES) test(`the list action shares the footer row's caption size and fits its 330 px button in ${locale}`, () => {
   setStrings(locale, {});
@@ -447,21 +447,21 @@ for (const locale of LOCALES) test(`the list action shares the footer row's capt
       const tree = rowArt.button(caption, widths[i], i === 3, true, size), label = textOf(find(tree, "Label_Locale_Use") || find(tree, "Label_Locale"));
       assert.equal(label.fontSize, size, "one size across the row");
       assert.ok(lines(label.text).length <= 2, `${caption}: ${lines(label.text).length} lines`);
-      assert.ok(widest(label.text, label.fontSize) <= widths[i] - 60 + 1e-9, `${caption}: ${widest(label.text, label.fontSize)} wide in ${widths[i] - 60}`);
+      assert.ok(widest(label.text, label.fontSize) <= widths[i] - XS_BUTTON.fitInset + 1e-9, `${caption}: ${widest(label.text, label.fontSize)} wide in ${widths[i] - XS_BUTTON.fitInset}`);
       assert.equal(label.text.replace(/\s/g, ""), caption.replace(/\s/g, ""));
     });
   }
 });
 
 test("the footer's count and the list action leave the left edge room: the note's room is positive and ends before the action", () => {
-  const footer = { left: 957, gap: SMALL_BUTTON.gap, wide: WIDE_PX };
+  const footer = { left: 957, gap: XS_BUTTON.gap, wide: WIDE_PX };
   assert.ok(noteRoom(footer) > 400, `${noteRoom(footer)} px`);
   assert.equal(NOTE_LEFT + noteRoom(footer) + 24, footer.left - footer.gap - footer.wide);
 });
 
 for (const locale of LOCALES) test(`the footer count fits its room on at most two lines at the prefab's size in ${locale}`, () => {
   setStrings(locale, {});
-  const room = noteRoom({ left: 957, gap: SMALL_BUTTON.gap, wide: WIDE_PX }) / S, tree = art().note("x"), label = textOf(tree);
+  const room = noteRoom({ left: 957, gap: XS_BUTTON.gap, wide: WIDE_PX }) / S, tree = art().note("x"), label = textOf(tree);
   for (const n of [1, 2, 9, 25, 99, 999]) {
     const caption = groupsText(n, locale), fit = NGUI.fitText(caption, label.fontSize, label.fontSize * 0.7, room, 2);
     assert.ok(!fit.overflow, `${caption} overflows`);

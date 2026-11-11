@@ -447,7 +447,7 @@ test("the compatibility result's list, rule, inline Details and smaller footer f
   const Compatibility = await import("../../src/bmpt/web/js/mod-compatibility.js");
   const NGUI = await import("../../src/bmpt/web/js/ngui.js");
   const { glyphsOf } = await import("../../src/bmpt/web/js/util.js");
-  const { CONTROL, POPUP_FRAME, SMALL_BUTTON, STATS_BOX, TYPE } = await import("../../src/bmpt/web/js/ui-tokens.js");
+  const { CONTROL, POPUP_FRAME, SMALL_BUTTON, XS_BUTTON, STATS_BOX, TYPE } = await import("../../src/bmpt/web/js/ui-tokens.js");
   await Popup.ready();
   const results = [
     // a portrait drawn anew whose old rig Update keeps
@@ -486,8 +486,8 @@ test("the compatibility result's list, rule, inline Details and smaller footer f
           if (r.button) {
             // its face as high as its line of text (the shadow inset around it), its caption readable and inside it
             assert.equal(r.button.inline, "line", what);
-            assert.equal(bh - SMALL_BUTTON.boxInsetH, Math.round(f.fs * NGUI.LINE_PITCH), `${what}: Details as high as its line`);
-            assert.ok(bf.fs >= Popup.LINE_BUTTON.fsMin && bf.fs < bh - SMALL_BUTTON.boxInsetH, `${what}: Details caption ${bf.fs}`);
+            assert.equal(bh - XS_BUTTON.boxInsetH, Math.round(f.fs * NGUI.LINE_PITCH * Popup.LINE_BUTTON.height), `${what}: Details one XS ratio under its line`);
+            assert.ok(bf.fs >= Popup.LINE_BUTTON.fsMin && bf.fs < bh - XS_BUTTON.boxInsetH, `${what}: Details caption ${bf.fs}`);
             assert.ok(glyphsOf(bf.text, bf.fs) < bw, `${what}: Details caption inside`);
           }
         }
@@ -695,7 +695,7 @@ test("switch detail actions retain the prefab pattern at every button width and 
       const path = `Details/Act_${i}/Body`, findPart = (p) => walk(prompt).find((e) => e.dataset.path === p);
       const body = findPart(path), corner = findPart(`${path}/Corner`), box = (el) =>
         ["left", "top", "width", "height"].map((key) => parseFloat(el.style[key]));
-      const [x, y, w, h] = box(body), [dx, dy, dw, dh] = box(corner), k = 136 / 177 * S;
+      const [x, y, w, h] = box(body), [dx, dy, dw, dh] = box(corner), k = 104 / 177 * S; // the Sort prefab's 177-high body drawn at the XS height
       near(x + w - dx - dw, 4 * k);
       near(dy - y, 6 * k);
       near(dw, 126 * k);
@@ -821,7 +821,7 @@ test("update progress stays in NGUI, blocks buttons and Escape, and completion w
   assert.ok(bar.top - status.bottom >= 6 * S, "the status has a gap above the bar");
   for (const name of ["Btn_Ok", "Btn_Cancel"]) {
     const button = bounds(part(`Btn/${name}/BG (1)`));
-    assert.ok(Math.abs(button.height - 176 * S) < 0.01, "check the prefab's button background height at the three-choice scale");
+    assert.ok(Math.abs(button.height - CONTROL.buttonM.h * S) < 0.01, "check the prefab's button background height at the three-choice scale");
     assert.ok(button.top - bar.bottom >= 12 * S, "the full button background clears the progress bar");
     assert.ok(button.bottom < frame.bottom, "the buttons stay within the frame");
   }
@@ -2226,6 +2226,7 @@ test("release notes use one type size on every line: short, wrapped, long and un
 
 test("release-note button captions fit the resized UIPopup_Sort branches in all locales and window sizes", async () => {
   const NGUI = await import("../../src/bmpt/web/js/ngui.js");
+  const { CONTROL, POPUP_FRAME } = await import("../../src/bmpt/web/js/ui-tokens.js");
   await Popup.ready();
   try {
     for (const lang of ['en-US', 'th-TH', 'ko-KR', 'ja-JP', 'zh-CN', 'zh-TW']) {
@@ -2237,33 +2238,37 @@ test("release-note button captions fit the resized UIPopup_Sort branches in all 
       const controls = NGUI.find(tree, 'Popup/Btn').children;
       const labels = controls.map(child => NGUI.find(child, 'Label_Locale').widgets[0]);
       assert.equal(new Set(labels.map(w => w.fontSize)).size, 1, lang);
+      // the default footer is the M size (one under the old L), its bodies as wide as the captions need
+      const { control, caption } = Popup.FOOTER.M, bodyW = Popup.footerWidth(captions), room = bodyW - 2 * control.pad;
+      assert.ok(bodyW >= control.minW && bodyW <= CONTROL.buttonL.minW, lang);
       for (const [i, child] of controls.entries()) {
         const w = labels[i], body = NGUI.find(child, 'BG (1)');
-        assert.deepEqual(child.pos, [(i - .5) * 584, 0]); // two bodies at the prefab's +/-292, 88 apart
+        assert.deepEqual(child.pos, [(i - .5) * (bodyW + POPUP_FRAME.footer.gap), 0]); // two bodies, the shared gap apart
         assert.deepEqual(child.scale, [1, 1]);
         assert.deepEqual(body.pos, [0, 0]);
-        assert.deepEqual([body.widgets[0].w_, body.widgets[0].h_], [551, 176]);
+        assert.deepEqual([body.widgets[0].w_, body.widgets[0].h_], [bodyW, CONTROL.buttonM.h]);
         assert.deepEqual(NGUI.find(child, 'Label_Locale').pos, [0, 0]);
         assert.equal(w.text.replace(/\s/g, ''), captions[i].replace(/\s/g, ''), lang);
         const lines = w.text.split('\n');
         assert.ok(lines.length <= 2, `${lang}: ${JSON.stringify(w.text)}`);
-        assert.ok(w.fontSize >= 48 && w.fontSize <= 72, lang);
+        assert.ok(w.fontSize >= caption.fsMin && w.fontSize <= caption.fs, lang);
         for (const [width, height] of [[960, 540], [1600, 900], [2560, 1440]]) for (const density of [1, 2]) {
           const scale = Math.min(width / 1920, height / 1080) * (1920 / 2960) * child.scale[0] * density;
-          assert.ok(NGUI.glyphWidth(w.text, w.fontSize) * scale <= 472 * scale + 1e-9, `${lang}: width`);
+          assert.ok(NGUI.glyphWidth(w.text, w.fontSize) * scale <= room * scale + 1e-9, `${lang}: width`);
           assert.ok(lines.length * NGUI.fontSizeFor(w.text, w.fontSize) * NGUI.LINE_PITCH * scale
-            <= Popup.BUTTON_TEXT_H * scale + 1e-9, `${lang}: height`);
+            <= caption.h * scale + 1e-9, `${lang}: height`);
         }
       }
     }
   } finally { setStrings('en-US', Object.fromEntries(strings(english))); }
 });
 
-// UI-32: the offer's three captions wrap to two lines before they shrink, in the popups' 72 to 48 range, at one size
+// UI-32: the offer's three captions wrap to two lines before they shrink, in the footer's 60 to 34 range, at one size
 test("the update offer's captions wrap before they shrink, share one size and fit in every locale", async () => {
   const NGUI = await import("../../src/bmpt/web/js/ngui.js");
   await Popup.ready();
-  const W = 472, H = Popup.BUTTON_TEXT_H; // the caption room on the slanted 496 x 177 bodies (UIPopup_Sort Btn_Ok)
+  const { caption: range } = Popup.FOOTER.M, H = range.h;
+  let W = 0; // the caption room on the footer's bodies for the captions at hand (Popup.footerLayout)
   const inside = (w, scale = 1) => {
     const lines = w.text.split("\n");
     return lines.length <= 2 && lines.every((line) => NGUI.glyphWidth(line, w.fontSize) * scale <= W * scale + 1e-9)
@@ -2275,12 +2280,13 @@ test("the update offer's captions wrap before they shrink, share one size and fi
       setStrings(lang, Object.fromEntries(strings(ui)));
       for (const ok of [ui.update.now, ui.update.page, ui.update.restart]) {
         const texts = [ui.update.later, ui.update.notes, ok], widgets = texts.map((text) => ({ text }));
+        W = Popup.footerLayout(texts, 2098).room; // the 1700 frame takes the L class
         Update.offerCaptions(widgets);
         const fs = widgets[0].fontSize, what = `${lang} ${ok}`;
         assert.equal(new Set(widgets.map((w) => w.fontSize)).size, 1, `${what}: one size`);
-        // this file's stand-in canvas is 0.6 em a character, harsher than the real font: where a caption cannot hold 48 in it,
-        // the group takes the next sizes down (never under the old floor of 40); the logic is the shared fit
-        assert.ok(fs >= 40 && fs <= 72, `${what}: ${fs}`);
+        // this file's stand-in canvas is 0.6 em a character, harsher than the real font: where a caption cannot hold its size
+        // in it, the group takes the next sizes down (never under the footer's floor); the logic is the shared fit
+        assert.ok(fs >= range.fsMin && fs <= range.fs, `${what}: ${fs}`);
         for (const [i, w] of widgets.entries()) {
           assert.equal(w.text.replace(/\s/g, ""), texts[i].replace(/\s/g, ""), what);
           for (const [width, height] of [[960, 540], [1600, 900], [2560, 1440]]) for (const density of [1, 2]) {
@@ -2294,19 +2300,19 @@ test("the update offer's captions wrap before they shrink, share one size and fi
           NGUI.fitLabels(at, texts, size, size, W, 2, { maxH: H });
           return at.every((w) => w.fontSize === size && inside(w));
         };
-        let best = 72;
-        while (best > 40 && !holds(best)) best -= 2;
+        let best = range.fs;
+        while (best > range.fsMin && !holds(best)) best -= 2;
         if (widgets.some((w) => w.text.includes("\n"))) assert.equal(fs, best, what);
         else assert.ok(fs >= best - 4, `${what}: one line at ${fs}, two lines at ${best}`);
         // never smaller than the old single line
-        assert.ok(fs >= NGUI.fitGroup(texts, 72, 34, W, 1)[0].fs, what);
+        assert.ok(fs >= NGUI.fitGroup(texts, range.fs, 34, W, 1)[0].fs, what);
       }
     }
     // the review's case: Open Download Page in English drew all three at 34 on one line
     setStrings('en-US', Object.fromEntries(strings(english)));
     const widgets = [english.update.later, english.update.notes, english.update.page].map((text) => ({ text }));
     Update.offerCaptions(widgets);
-    assert.ok(widgets[0].fontSize > 34);
+    assert.ok(widgets[0].fontSize > range.fsMin);
     // the drawn offer uses the same fit
     const offered = Update.check(consent, { ...available, installable: false });
     await drawn(consent, 'page');
@@ -2479,16 +2485,16 @@ for (const lang of ['en-US', 'zh-CN', 'zh-TW', 'ja-JP', 'ko-KR', 'th-TH']) {
       assert.equal(byPath('Log/Value').textContent, ui.settings.notSet);
       const row = NGUI.rect(byPath('Tours')), button = NGUI.rect(byPath('Tours/Btn_0'));
       // UIPopup_Option_PC: the card (1552 wide, padding 58, title 17 from its top, dotted line 109 down) and ETCSetting/ButtonBg
-      // (402 x 136): the content box starts SPACE.m (20) under the dotted line, ends SPACE.l (28) above the foot and holds the
+      // (308 x 104 now): the content box starts SPACE.m (20) under the dotted line, ends SPACE.l (28) above the foot and holds the
       // button against its right edge, 58 in from the card's.
-      near(row[2], 1552 * S); near(row[3], (109 + 20 + 136 + 28) * S);
+      near(row[2], 1552 * S); near(row[3], (109 + 20 + 104 + 28) * S);
       const titleRect = NGUI.rect(title);
       near(titleRect[0] - row[0], 58 * S);
       near(titleRect[1] - row[1], 17 * S);
       near(titleRect[2], (1552 - 2 * 58) * S); near(titleRect[3], 76 * S);
-      near(button[0] - row[0], (1552 - 58 - 402) * S);
+      near(button[0] - row[0], (1552 - 58 - 308) * S);
       near(button[1] - row[1], (109 + 20) * S);
-      near(button[2], 402 * S); near(button[3], 136 * S);
+      near(button[2], 308 * S); near(button[3], 104 * S);
       const tag = NGUI.rect(byPath('Tours/Title/TagDeco'));
       near(tag[2], 6 * S); near(tag[3], 45 * S);
       for (const el of [title, caption]) {
@@ -2659,6 +2665,7 @@ test('source cards use the state badge and fitted locale caption in every picker
 
 test('shipped text-only tours use one fitted message frame in every locale, window and density', async () => {
   const NGUI = await import('../../src/bmpt/web/js/ngui.js');
+  const { CONTROL, POPUP_FRAME } = await import('../../src/bmpt/web/js/ui-tokens.js');
   await Popup.ready();
   try {
     for (const lang of ['en-US', 'zh-CN', 'zh-TW', 'ja-JP', 'ko-KR', 'th-TH']) {
@@ -2684,10 +2691,13 @@ test('shipped text-only tours use one fitted message frame in every locale, wind
         const large = NGUI.find(Tours.pageTree({ ...page, image: '/tours/app-ui.png' }, index, pages.length), 'Popup');
         assert.deepEqual(controls.children, NGUI.find(large, 'Btn').children, 'footer widgets, captions and states are unchanged');
         const bodies = ['Btn_Cancel', 'Btn_Ok'].map((name) => NGUI.find(controls, `${name}/BG (1)`));
+        // the footer is the default M size, its two bodies as wide as the captions need and the shared gap apart
+        const bodyW = bodies[0].widgets[0].w_;
+        assert.ok(bodyW >= CONTROL.buttonM.minW && bodyW <= CONTROL.buttonL.minW, `${lang}: ${bodyW}`);
         for (const [i, name] of ['Btn_Cancel', 'Btn_Ok'].entries()) {
-          assert.deepEqual(NGUI.find(controls, name).pos, [i ? 292 : -292, 0], 'buttonL spacing');
+          assert.deepEqual(NGUI.find(controls, name).pos, [(i - .5) * (bodyW + POPUP_FRAME.footer.gap), 0], 'footer spacing');
           assert.deepEqual(bodies[i].pos, [0, 0]);
-          assert.deepEqual([bodies[i].widgets[0].w_, bodies[i].widgets[0].h_], [551, 176], 'design-system buttonL size');
+          assert.deepEqual([bodies[i].widgets[0].w_, bodies[i].widgets[0].h_], [bodyW, CONTROL.buttonM.h], 'design-system buttonM size');
         }
         const close = NGUI.find(popup, 'Base/BG/Btn_Close');
         assert.equal(close.active, true);
@@ -2746,7 +2756,7 @@ test('illustrated and mixed tours retain the original geometry, including a miss
     assert.deepEqual(NGUI.find(popup, 'FeatureTitle').pos, [0, (page.image ? 405 : 300) + lift]);
     assert.deepEqual(NGUI.find(popup, 'FeatureBody').pos, [0, (page.image ? 220 : -40) + lift]);
     assert.equal(NGUI.find(popup, 'FeatureTitle').widgets[0].w_, 2100);
-    assert.deepEqual(NGUI.find(popup, 'Btn').pos, [0, -12 - 1468.5 / 2 + 190]);
+    assert.deepEqual(NGUI.find(popup, 'Btn').pos, [0, Popup.footerY(1468.5, Popup.FOOTER.M.control)]);
     if (page.image) {
       const slot = NGUI.find(popup, 'ImageSlot');
       assert.deepEqual(slot.pos, [0, -150 + lift]);
@@ -2833,8 +2843,8 @@ test('Settings exposes one prerelease simulation row with both cases and stable 
           assert.ok((parseFloat(value.style.left) + parseFloat(value.style.width)) * scale < parseFloat(bodies[0].style.left) * scale);
           assert.ok((parseFloat(bodies[0].style.left) + parseFloat(bodies[0].style.width)) * scale < parseFloat(bodies[1].style.left) * scale);
           for (const body of bodies) {
-            assert.ok(Math.abs(parseFloat(body.style.width) - 402 * S) < 0.01);
-            assert.ok(Math.abs(parseFloat(body.style.height) - 136 * S) < 0.01);
+            assert.ok(Math.abs(parseFloat(body.style.width) - 308 * S) < 0.01);
+            assert.ok(Math.abs(parseFloat(body.style.height) - 104 * S) < 0.01);
             const centre = (el) => parseFloat(el.style.top) + parseFloat(el.style.height) / 2;
             assert.ok(Math.abs(centre(body) - centre(value)) * scale < 0.01 * scale);
           }
@@ -2863,6 +2873,7 @@ test('Settings exposes one prerelease simulation row with both cases and stable 
 });
 
 test('simulated offers use the real prefab and notes builder, intercept every action and fit every locale', async () => {
+  const { CONTROL } = await import('../../src/bmpt/web/js/ui-tokens.js');
   const byPath = (root, path) => walk(root).find((el) => el.dataset.path === path);
   try {
     for (const lang of ['en-US', 'zh-CN', 'zh-TW', 'ja-JP', 'ko-KR', 'th-TH']) {
@@ -2876,17 +2887,19 @@ test('simulated offers use the real prefab and notes builder, intercept every ac
         assert.equal(title.textContent.replace(/\n/g, ''), ui.update.title + ui.update.simulation.suffix);
         const geometry = ['Btn_Cancel', 'Btn_Notes', 'Btn_Ok'].map((name) => byPath(consent, `Center/Popup/Btn/${name}/BG (1)`));
         assert.equal(actionsIn(consent).length, 3);
+        const wanted = Popup.footerLayout([ui.update.later, ui.update.notes, ui.update.now], 2098);
         for (const el of geometry) {
-          // Three choices keep equal buttonL bodies at this L width.
-          assert.ok(Math.abs(parseFloat(el.style.width) - 551 * S) < 0.01);
-          assert.ok(Math.abs(parseFloat(el.style.height) - 176 * S) < 0.01);
+          // Three choices keep equal M bodies, as wide as the captions need, at this L width.
+          assert.ok(Math.abs(parseFloat(el.style.width) - wanted.bodyW * S) < 0.01);
+          assert.ok(Math.abs(parseFloat(el.style.height) - CONTROL.buttonM.h * S) < 0.01);
         }
         for (let i = 1; i < geometry.length; i++) assert.ok(parseFloat(geometry[i - 1].style.left) + parseFloat(geometry[i - 1].style.width) < parseFloat(geometry[i].style.left));
         const labels = ['Btn_Cancel', 'Btn_Notes', 'Btn_Ok'].map((name) => byPath(consent, `Center/Popup/Btn/${name}/Label_Locale`));
         assert.equal(new Set(labels.map((el) => el.style.fontSize)).size, 1);
         for (const el of [title, ...labels]) {
           const fs = parseFloat(el.style.fontSize);
-          for (const line of el.textContent.split('\n')) assert.ok(line.length * 0.6 * fs <= parseFloat(el.style.width) + 0.01, `${lang}: ${line}`);
+          // a body as wide as its caption needs holds the widest line exactly: the styles are rounded to 0.01 px
+          for (const line of el.textContent.split('\n')) assert.ok(line.length * 0.6 * fs <= parseFloat(el.style.width) + 0.1, `${lang}: ${line}`);
         }
         (await drawn(consent, 'notes')).click();
         await drawn(dialog, 'page');
@@ -3598,17 +3611,19 @@ for (const lang of ["en-US", "zh-CN"]) test(`each popup class positions its fram
       const btn = NGUI.find(tree, "Popup/Btn"), widths = btn.children.map(b => NGUI.find(b, "BG (1)").widgets[0].w_);
       assert.equal(new Set(widths).size, 1);
       assert.equal(new Set(btn.children.map(b => NGUI.find(b, "Label_Locale").widgets[0].fontSize)).size, 1);
-      near2(btn.pos[1] - 88 - (Popup.FRAME_Y - f.h / 2), 102);
+      near2(btn.pos[1] - CONTROL.buttonM.h / 2 - (Popup.FRAME_Y - f.h / 2), 102);
       for (let i = 0; i < n; i++) {
         const body = NGUI.find(btn.children[i], "BG (1)");
-        assert.deepEqual(body.pos, [0, 0]); assert.equal(body.widgets[0].h_, 176);
+        assert.deepEqual(body.pos, [0, 0]); assert.equal(body.widgets[0].h_, CONTROL.buttonM.h);
         const caption = NGUI.find(btn.children[i], "Label_Locale").widgets[0];
-        assert.equal(caption.w_, widths[i] - 79); assert.equal(caption.h_, Popup.BUTTON_TEXT_H);
+        assert.equal(caption.w_, widths[i] - 2 * CONTROL.buttonM.pad); assert.equal(caption.h_, Popup.FOOTER.M.caption.h);
         if (i) near2(btn.children[i].pos[0] - btn.children[i-1].pos[0] - widths[i], 33);
       }
       near2(btn.children[0].pos[0] + btn.children.at(-1).pos[0], 0);
-      if (n < 3) assert.equal(widths[0], 551);
-      else near2(btn.children[0].pos[0] - widths[0] / 2 + f.w / 2, Math.max(82.5, (f.w - n * 551 - 66) / 2));
+      // the default footer's bodies are as wide as the captions need (Confirm in this language), a row of three is scaled to the frame
+      assert.equal(widths[0], Popup.footerLayout(actions.map((a) => a.label), f.w).bodyW);
+      assert.ok(widths[0] >= CONTROL.buttonM.minW && widths[0] <= CONTROL.buttonL.minW);
+      if (n === 3) near2(btn.children[0].pos[0] - widths[0] / 2 + f.w / 2, Math.max(82.5, (f.w - n * widths[0] - 66) / 2));
       const box = Frames.popupContent(f.w, f.h);
       assert.deepEqual([box.x, box.y, box.w], [40, 170, f.w - 80]);
       near2(Popup.FRAME_Y + f.h / 2 - box.y - box.h, Popup.footerTop(f.h) + 20);
@@ -3705,12 +3720,12 @@ test("every popup frame draws the one backdrop token", async () => {
   }
 });
 
-// --- design tokens, item D: one small button (402 x 136, caption 48 down to 34) ---
+// --- design tokens, item D: one small button (XS: 308 x 104, caption 40 down to 28) ---
 const LOCALE_LIST = ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"];
 const localeWebui = (lang) => JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url))).webui;
 const byDots = (ui, key) => key.split(".").reduce((o, part) => o[part], ui);
 
-for (const lang of LOCALE_LIST) test(`message line buttons are 136 high, as wide as their caption and 90 (240 at least), and their rows hold them in ${lang}`, async () => {
+for (const lang of LOCALE_LIST) test(`message line buttons are 104 high, as wide as their caption and 68 (200 at least), and their rows hold them in ${lang}`, async () => {
   const NGUI = await import("../../src/bmpt/web/js/ngui.js");
   await Popup.ready();
   const ui = localeWebui(lang);
@@ -3724,42 +3739,42 @@ for (const lang of LOCALE_LIST) test(`message line buttons are 136 high, as wide
         const { body } = Popup.messageLayout({ lines, width, ok: "OK", plain });
         const button = NGUI.find(body.tree, "Btn_1"), bg = button.widgets.find((w) => w.sprite === "Common_Btn_BG"), text = NGUI.find(body.tree, `${plain ? "Line" : "Row"}_1`);
         const label = NGUI.find(button, "Label_Locale").widgets[0];
-        const fit = NGUI.fitText(caption, 48, 34, 402 - 60);
-        assert.equal(bg.h_, 136, `${lang} ${key}`);
-        assert.equal(bg.w_, Math.max(240, NGUI.glyphWidth(fit.text, fit.fs) + 90), `${lang} ${key}: the caption's width and 90, 240 at least`);
-        assert.ok(label.fontSize <= 48 && label.fontSize >= 34 - 8, `${lang} ${key}: ${label.fontSize}`);
+        const fit = NGUI.fitText(caption, 40, 28, 308 - 46);
+        assert.equal(bg.h_, 104, `${lang} ${key}`);
+        assert.equal(bg.w_, Math.max(200, NGUI.glyphWidth(fit.text, fit.fs) + 68), `${lang} ${key}: the caption's width and 68, 200 at least`);
+        assert.ok(label.fontSize <= 40 && label.fontSize >= 28 - 8, `${lang} ${key}: ${label.fontSize}`);
         for (const line of label.text.split("\n")) assert.ok(NGUI.glyphWidth(line, label.fontSize) <= label.w_, `${lang} ${key}: inside its label box`);
         assert.ok(label.text.split("\n").length * label.fontSize * 1.15 * NGUI.fontSizeFor(label.text, 1) <= label.h_, `${lang} ${key}: the lines fit the box's height`);
         // the text keeps clear of the button
         const t = text.widgets[0], textRight = text.pos[0] + t.w_, buttonLeft = button.pos[0] - bg.w_ / 2;
         assert.ok(textRight + 20 <= buttonLeft + 1e-9, `${lang} ${key} ${width}: text ends ${textRight}, the button starts ${buttonLeft}`);
         assert.ok(button.pos[0] + bg.w_ / 2 <= Popup.messageLayout({lines,width,plain}).width / 2 - 100, "inside the text content box");
-        // a row with a button holds it (156 in the light box); rows without keep the box's minimum (64)
+        // a row with a button holds it (124 in the light box); rows without keep the box's minimum (64)
         const rows = (tree) => ["Row_0", "Row_1", "Row_2"].map((name) => NGUI.find(tree, name)).filter(Boolean);
         if (!plain) {
           const [r0, r1, r2] = rows(body.tree);
-          assert.equal(r0.pos[1] - r1.pos[1], (64 + 156) / 2, `${lang}: row heights 64, 156`);
-          assert.equal(r1.pos[1] - r2.pos[1], (156 + 64) / 2);
+          assert.equal(r0.pos[1] - r1.pos[1], (64 + 124) / 2, `${lang}: row heights 64, 124`);
+          assert.equal(r1.pos[1] - r2.pos[1], (124 + 64) / 2);
         }
       }
     }
   } finally { setStrings("en-US", Object.fromEntries(strings(english))); document.documentElement.lang = "en-US"; }
 });
 
-test("value rows lay their 402 x 136 buttons right-aligned 422 apart in the card's content box and wrap to a second line, never shrinking one", async () => {
+test("value rows lay their 308 x 104 buttons right-aligned 328 apart in the card's content box and wrap to a second line, never shrinking one", async () => {
   const Rows = await import("../../src/bmpt/web/js/settings-rows.js");
-  const { SMALL_BUTTON: B, SPACE, PANEL } = Tokens;
+  const { XS_BUTTON: B, SPACE, PANEL } = Tokens;
   // the content box: the 1552-wide card less its padding (58 each side), SPACE.m under the dotted line (109 down), SPACE.l above the foot
   const left = -1552 / 2 + PANEL.padCard, right = 1552 / 2 - PANEL.padCard, top = 109 + SPACE.m;
-  // beside the value: two buttons to a line (the value keeps its four grid columns, 452); under it: three (the line is 1436 wide)
-  assert.deepEqual([0, 1, 2, 3, 4, 5, 6, 7].map((n) => Rows.buttonLines(n)), [[], [1], [2], [2, 1], [2, 2], [2, 2, 1], [2, 2, 2], [2, 2, 2, 1]]);
-  assert.deepEqual([0, 1, 2, 3, 4, 5, 6, 7].map((n) => Rows.buttonLines(n, true)), [[], [1], [2], [3], [3, 1], [3, 2], [3, 3], [3, 3, 1]]);
+  // beside the value: three buttons to a line (the value keeps its four grid columns, 452); under it: four (the line is 1436 wide)
+  assert.deepEqual([0, 1, 2, 3, 4, 5, 6, 7].map((n) => Rows.buttonLines(n)), [[], [1], [2], [3], [3, 1], [3, 2], [3, 3], [3, 3, 1]]);
+  assert.deepEqual([0, 1, 2, 3, 4, 5, 6, 7].map((n) => Rows.buttonLines(n, true)), [[], [1], [2], [3], [4], [4, 1], [4, 2], [4, 3]]);
   assert.equal(Rows.valueRoom(0), right - left, "a value alone takes the content box");
   for (const below of [false, true]) for (let n = 0; n <= 7; n++) for (const textH of [0, 49.4, 98.8, 148.2, 300]) {
     const layout = Rows.valueGeometry(n, textH, { below }), room = Rows.valueRoom(n, below);
     assert.equal(layout.xs.length, n);
     assert.equal(layout.room, room, "the value's room is what valueRoom says");
-    // right-aligned to the content box's right edge, 422 apart on each line
+    // right-aligned to the content box's right edge, 328 apart on each line
     let at = 0;
     layout.lines.forEach((count, line) => {
       near2(layout.xs[at + count - 1] + B.w / 2, right);
@@ -3769,7 +3784,7 @@ test("value rows lay their 402 x 136 buttons right-aligned 422 apart in the card
       if (!below && line === 0) assert.ok(room >= 452 && left + room + SPACE.m <= layout.xs[0] - B.w / 2 + 1e-9, `${n}: the value keeps ${room}`);
       if (!below) assert.ok(layout.xs[at - count] - B.w / 2 >= layout.xs[0] - B.w / 2 - 1e-9, "a later line starts no further left than the first");
     });
-    // every button inside the row, 136 high, in the content box: under its top and above the row's foot
+    // every button inside the row, 104 high, in the content box: under its top and above the row's foot
     for (let line = 0; line < layout.lines.length; line++) {
       assert.ok(layout.ys[line] + B.h / 2 <= layout.h / 2 - top + 1e-9, `${n} buttons, below ${below}: under the dotted line`);
       assert.ok(layout.ys[line] - B.h / 2 >= -layout.h / 2 + SPACE.l - 1e-9, `${n} buttons, below ${below}: above the row's foot`);
@@ -3825,22 +3840,22 @@ for (const lang of LOCALE_LIST) test(`Settings tabs keep every value row's butto
         for (const [j, button] of buttons.entries()) {
           const box = rectOf(button);
           assert.ok(inside(box, row.box), `${tabName} ${row.name} button ${j} inside its row`);
-          assert.ok(Math.abs(box[3] - 136 * S) < 0.02, `${tabName} ${row.name}: 136 high`);
-          assert.ok(Math.abs(box[2] - (row.name === "Export" ? 680 : 402) * S) < 0.02, `${tabName} ${row.name}: ${box[2] / S} wide`);
+          assert.ok(Math.abs(box[3] - 104 * S) < 0.02, `${tabName} ${row.name}: 104 high`);
+          assert.ok(Math.abs(box[2] - (row.name === "Export" ? 520 : 308) * S) < 0.02, `${tabName} ${row.name}: ${box[2] / S} wide`);
           if (value) assert.ok(apart(box, rectOf(value)), `${tabName} ${row.name}: the buttons clear the value`);
           for (const other of buttons.slice(j + 1)) assert.ok(apart(box, rectOf(other)), `${tabName} ${row.name}: the buttons do not overlap`);
           const caption = walk(settings).find((e) => e.dataset.path === `${button.dataset.path}/Label_Locale`);
           const fs = parseFloat(caption.style.fontSize);
-          for (const line of caption.textContent.split("\n")) assert.ok(line.length * 0.6 * fs <= box[2] - 30 * S + 0.1, `${tabName} ${row.name}: ${line} inside the button`);
-          assert.ok(caption.textContent.split("\n").length * fs * 1.15 <= box[3] - 20 * S + 0.1);
+          for (const line of caption.textContent.split("\n")) assert.ok(line.length * 0.6 * fs <= box[2] - 24 * S + 0.1, `${tabName} ${row.name}: ${line} inside the button`);
+          assert.ok(caption.textContent.split("\n").length * fs * 1.15 <= box[3] - 16 * S + 0.1);
         }
         if (buttons.length > 1) assert.equal(new Set(buttons.map((b) => walk(settings).find((e) => e.dataset.path === `${b.dataset.path}/Label_Locale`).style.fontSize)).size, 1, `${tabName} ${row.name}: one caption size`);
       }
       if (tabName === "general") {
-        // the Log row's three buttons: two beside the value, the third on a line of its own under them, right-aligned
+        // the Log row's three buttons: all three beside the value on one line, right-aligned
         const [a, b, c] = [0, 1, 2].map((i) => rectOf(walk(settings).find((e) => e.dataset.path === `Rows/Log/Btn_${i}`)));
-        assert.ok(a[1] === b[1] && c[1] >= a[1] + a[3] + 20 * S - 0.05, "the third button wraps");
-        near2(c[0] + c[2], b[0] + b[2]);
+        assert.ok(a[1] === b[1] && b[1] === c[1], "three XS buttons fit on the value's line");
+        assert.ok(a[0] + a[2] < b[0] && b[0] + b[2] < c[0], "left to right, apart");
       }
       // scrolling reaches the last row: the inner area is as tall as the rows' bottom
       const last = rows.at(-1).box, innerH = parseFloat(inner.style.height);
@@ -3850,7 +3865,7 @@ for (const lang of LOCALE_LIST) test(`Settings tabs keep every value row's butto
   } finally { settings.hidden = true; Popup.closed(settings); handlers.clear(); setStrings("en-US", Object.fromEntries(strings(english))); document.documentElement.lang = "en-US"; }
 });
 
-for (const lang of LOCALE_LIST) test(`the asset consent's Change button (136 high) clears the item and path text and the buttons below, in ${lang}`, async () => {
+for (const lang of LOCALE_LIST) test(`the asset consent's Change button (104 high) clears the item and path text and the buttons below, in ${lang}`, async () => {
   const NGUI = await import("../../src/bmpt/web/js/ngui.js");
   const Consent = await import("../../src/bmpt/web/js/consent.js");
   const ui = localeWebui(lang);
@@ -3861,10 +3876,10 @@ for (const lang of LOCALE_LIST) test(`the asset consent's Change button (136 hig
     document.documentElement.lang = lang;
     for (const path of ["/c", "/Users/someone/Library/Application Support/bluearchive-modding-patching-tool/cache", "/Users/someone/".repeat(30)]) {
       const L = Consent.assetLayout(path), { change } = L;
-      const bf = NGUI.fitText(ui.consent.change, 48, 34, 402 - 60);
-      assert.equal(change.w, Math.max(240, NGUI.glyphWidth(bf.text, bf.fs) + 90), "the caption's width and 90, 240 at least");
+      const bf = NGUI.fitText(ui.consent.change, 40, 28, 308 - 46);
+      assert.equal(change.w, Math.max(200, NGUI.glyphWidth(bf.text, bf.fs) + 68), "the caption's width and 68, 200 at least");
       // the section's own coordinates: x from its centre, y down from its top
-      const button = [change.x - change.w / 2, L.rowY - 68, change.x + change.w / 2, L.rowY + 68];
+      const button = [change.x - change.w / 2, L.rowY - 52, change.x + change.w / 2, L.rowY + 52];
       const item = [L.itemBox[0], L.itemBox[1], L.itemBox[0] + NGUI.glyphWidth(ui.consent.cached.items, 40), L.itemBox[2]];
       const text = [-L.sectionW / 2 + 20, L.pathY - L.pathH / 2, -L.sectionW / 2 + 20 + L.room, L.pathY + L.pathH / 2];
       assert.ok(apartBoxes(button, item), `${lang}: the button clears the item text`);
@@ -3884,7 +3899,7 @@ for (const lang of LOCALE_LIST) test(`the asset consent's Change button (136 hig
     const [change, item, path] = ["Cached/Change", "Cached/Item_0", "Cached/Path"].map((name) => NGUI.rect(get(name)));
     const box = ([x, y, w, h]) => [x, y, x + w, y + h];
     assert.ok(apartBoxes(box(change), box(item)) && apartBoxes(box(change), box(path)));
-    assert.ok(Math.abs(change[3] - 136 * S) < 0.02);
+    assert.ok(Math.abs(change[3] - 104 * S) < 0.02);
     walk(consent).find((e) => e.tagName === "BUTTON").click();
     await asked;
   } finally { consent.hidden = true; Popup.closed(consent); setStrings("en-US", Object.fromEntries(strings(english))); document.documentElement.lang = "en-US"; }
@@ -4408,8 +4423,8 @@ test("a plain line's inline button is as high as the line's text and stays insid
         { text: ui.mods.heldTitle, gap: 32, button: { label: caption, inline: true, fn: () => {} } }] });
       const line = layout.body.boxes[1], [text, button] = line.lineRow.boxes;
       assert.ok(button.h <= line.f.fs, `${lang} ${caption}: within the text's height`);
-      assert.ok(line.bf.fs <= button.h - 20, `${lang} ${caption}: the caption inside the button`);
-      assert.ok(button.h < 136, `${lang}: smaller than the small button`);
+      assert.ok(line.bf.fs <= button.h - Tokens.XS_BUTTON.boxInsetH, `${lang} ${caption}: the caption inside the button`);
+      assert.ok(button.h < 104, `${lang}: smaller than the XS small button`);
       assert.ok(line.bf.text === caption, `${lang} ${caption}: caption whole`);
       if (glyphsOf) assert.ok(glyphsOf(line.bf.text, line.bf.fs) < button.w, `${lang} ${caption}: caption inside`);
       assert.ok(text.x + text.w <= button.x && button.x + button.w <= layout.width, `${lang} ${caption}: inside the frame`);
@@ -4424,7 +4439,7 @@ test("the held entries' Details fit their wide frame with four mods, Go To and F
   const I18n = await import("../../src/bmpt/web/js/i18n.js");
   const Impact = await import("../../src/bmpt/web/js/update-impact.js");
   const NGUI = await import("../../src/bmpt/web/js/ngui.js");
-  const { SMALL_BUTTON } = await import("../../src/bmpt/web/js/ui-tokens.js");
+  const { XS_BUTTON } = await import("../../src/bmpt/web/js/ui-tokens.js");
   const flat = (o, p = "", out = {}) => { for (const [k, v] of Object.entries(o)) { if (v && typeof v === "object") flat(v, `${p}${k}.`, out); else out[`${p}${k}`] = v; } return out; };
   try {
     for (const lang of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
@@ -4440,7 +4455,7 @@ test("the held entries' Details fit their wide frame with four mods, Go To and F
           assert.ok(button.h <= line.f.fs, `${lang} ${label}: within the text's height`);
           assert.ok(fit.text === label, `${lang} ${label}: caption whole, on one line`);
           // the small button fits its caption again within its width less its inset: still one line
-          assert.ok(!NGUI.fitText(label, fit.fs, fit.fs, button.w - SMALL_BUTTON.fitInset).text.includes("\n"), `${lang} ${label}: drawn on one line`);
+          assert.ok(!NGUI.fitText(label, fit.fs, fit.fs, button.w - XS_BUTTON.fitInset).text.includes("\n"), `${lang} ${label}: drawn on one line`);
           assert.ok(text.x + text.w <= button.x && button.x + button.w <= layout.width, `${lang} ${label}: inside the frame`);
         }
         assert.ok(buttons[0].x + buttons[0].w <= buttons[1].x, `${lang}: side by side`);

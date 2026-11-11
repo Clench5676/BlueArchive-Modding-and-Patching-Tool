@@ -125,10 +125,10 @@ for (const key of ['S', 'M', 'L', 'XL']) for (const requested of [0, 1, 786, 900
   assert.equal(body.w_ / 2 - close.pos[0] - C.icon.h / 2, P.close.right);
   assert.equal(body.h_ / 2 - close.pos[1] - C.icon.h / 2, P.close.top);
   const btn = NGUI.find(tree, 'Popup/Btn');
-  assert.equal(btn.pos[1] - C.buttonL.h / 2 - (P.frameY - body.h_ / 2), P.footer.bottom);
+  assert.equal(btn.pos[1] - C.buttonM.h / 2 - (P.frameY - body.h_ / 2), P.footer.bottom);
   assert.equal(btn.children.length, n);
   assert.equal(new Set(btn.children.map(child => NGUI.find(child, 'Label_Locale').widgets[0].fontSize)).size, 1);
-  for (const child of btn.children) assert.equal(NGUI.find(child, 'BG (1)').widgets[0].h_, C.buttonL.h);
+  for (const child of btn.children) assert.equal(NGUI.find(child, 'BG (1)').widgets[0].h_, C.buttonM.h);
 }
 """
     for marker, filename in (("POPUP_URL", "popup.js"), ("NGUI_URL", "ngui.js"), ("TOKENS_URL", "ui-tokens.js")):

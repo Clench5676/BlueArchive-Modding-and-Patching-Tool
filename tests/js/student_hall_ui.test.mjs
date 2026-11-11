@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { readFile } from "node:fs/promises";
-import { POPUP, POPUP_FRAME, SMALL_BUTTON, CONTROL, TYPE, SPACE, captionMinimum } from "../../src/bmpt/web/js/ui-tokens.js";
+import { POPUP, POPUP_FRAME, XS_BUTTON, CONTROL, TYPE, SPACE, captionMinimum } from "../../src/bmpt/web/js/ui-tokens.js";
 import { stack as layoutStack } from "../../src/bmpt/web/js/ui-grid.js";
 import { withTimeout } from "../../src/bmpt/web/js/async.js";
 class Element {
@@ -21,9 +21,9 @@ class Element {
 let stage=new Element("stage"),top;
 globalThis.document={createElement:()=>new Element(),getElementById:()=>stage,activeElement:null};
 const find=(tree,path)=>path.split("/").reduce((node,key)=>node.children.find((child)=>child.name===key),tree);
-globalThis.uiHarness={captionMinimum,POPUP,POPUP_FRAME,SMALL_BUTTON,CONTROL,TYPE,SPACE,layoutStack,withTimeout,Loading:{hold:async(work)=>work()},T:key=>key,clone:structuredClone,NGUI:{find,fitLabel(widget,text){widget.text=text;},fitGroup:(captions)=>captions.map(()=>({fs:40}))},Popup:{opened(host,close){top={host,close};},closed(){top=null;},top:()=>top}};
+globalThis.uiHarness={captionMinimum,POPUP,POPUP_FRAME,XS_BUTTON,CONTROL,TYPE,SPACE,layoutStack,withTimeout,Loading:{hold:async(work)=>work()},T:key=>key,clone:structuredClone,NGUI:{find,fitLabel(widget,text){widget.text=text;},fitGroup:(captions)=>captions.map(()=>({fs:40}))},Popup:{opened(host,close){top={host,close};},closed(){top=null;},top:()=>top}};
 let source=await readFile(new URL("../../src/bmpt/web/js/student-hall-ui.js",import.meta.url),"utf8");
-source=source.replace(/^import .*;$/gm,"");source=`const {Popup,clone,NGUI,Loading,withTimeout,T,POPUP,POPUP_FRAME,SMALL_BUTTON,CONTROL,TYPE,SPACE,layoutStack,captionMinimum}=globalThis.uiHarness; const Buttons={disable:(...args)=>globalThis.uiHarness.Buttons.disable(...args)}; const S=1920/2960;\n${source}\nexport function areaFixture(fn){area=fn;} export function assetsFixture(value){assets=value;} export function readinessFixture(host,fn){visibleReadiness.set(host,fn);} export {pictureReadiness};\n//# sourceURL=hall-ui-fixture.js`;
+source=source.replace(/^import .*;$/gm,"");source=`const {Popup,clone,NGUI,Loading,withTimeout,T,POPUP,POPUP_FRAME,XS_BUTTON,CONTROL,TYPE,SPACE,layoutStack,captionMinimum}=globalThis.uiHarness; const Buttons={disable:(...args)=>globalThis.uiHarness.Buttons.disable(...args)}; const S=1920/2960;\n${source}\nexport function areaFixture(fn){area=fn;} export function assetsFixture(value){assets=value;} export function readinessFixture(host,fn){visibleReadiness.set(host,fn);} export {pictureReadiness};\n//# sourceURL=hall-ui-fixture.js`;
 const UI=await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`);
 UI.areaFixture((host,box,height,key)=>{const scroll=new Element();scroll.dataset.scroll=key;scroll.isConnected=host.isConnected;const inner=new Element();scroll.append(inner);host.append(scroll);return inner;});
 const settle=()=>new Promise((resolve)=>setTimeout(resolve,40));
@@ -79,7 +79,7 @@ test("white native row plates reserve equal margins beyond their outer inclined 
   assert.ok(Math.abs((1320-outer)/2-32)<.001);
   assert.equal(row.cardY-600*.46/2,0);
   assert.ok(row.cardY+(600/2+10+103.6)*.46+8+UI.COMPACT_BUTTON_H*scale<=row.height-SPACE.m*scale+1e-9);
-  assert.equal(UI.COMPACT_BUTTON_H,CONTROL.buttonS.h/2,"the Add button is half a buttonS body");
+  assert.equal(UI.COMPACT_BUTTON_H,CONTROL.buttonXS.h/2,"the Add button is half a buttonS body");
   // the student's name stands SPACE.xxl in from the plate's inclined left edge and clears the first card
   const [nameX,nameY,nameWidth]=row.name,edge=32+row.height*Math.tan(Math.PI/18)*(1-nameY/row.height);
   assert.ok(Math.abs(nameX-edge-SPACE.xxl*scale)<1e-9);

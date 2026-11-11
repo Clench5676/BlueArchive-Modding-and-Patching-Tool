@@ -22,8 +22,11 @@ export function displayLayouts(filter) {
     n("On", [0, 0], [spr("Common_Square_Bg", 60, 60)], [n("Label_On", [0, 0], [lbl()])]),
     n("Label_On", [0, 0], [lbl()]),
   ]));
-  put("Center/Popup/Btn_Section/Btn_Ok/Label_Locale", n("Label_Locale", [0, 0], [lbl()]));
-  put("Center/Popup/Btn_Section/Btn_Cancel/Label_Locale", n("Label_Locale", [0, 0], [lbl()]));
+  // the footer's two buttons: the prefab's 521 x 180 bodies and their captions
+  for (const name of ["Btn_Ok", "Btn_Cancel"]) {
+    put(`Center/Popup/Btn_Section/${name}/BG (1)`, n("BG (1)", [0, 0], [spr("Common_Btn_BG", 521, 180)]));
+    put(`Center/Popup/Btn_Section/${name}/Label_Locale`, n("Label_Locale", [0, 0], [lbl()]));
+  }
   const group = n("UIFilterObjectList", [0, 0], [], [n("Label_Title", [0, 0], [lbl()])]);
   insert(group, "Table_Align/Line_Deco_Bottom", n("Line_Deco_Bottom", [0, -176], [spr("Common_Square_Bg", 2000, 4)]));
   insert(group, "Table_Align/Table_ListUnit/UIFilterObjectListUnit", n("UIFilterObjectListUnit", [0, 0], [], [
