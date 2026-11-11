@@ -53,14 +53,16 @@ function assertGroup(fits, captions, widths, maxH, label) {
 // --- the source pickers' action row (popup.js detailsTree), 850 wide panel, 120 high bodies ---
 test("the picker's constants are the ones asserted here", async () => {
   const popup = await source("popup.js");
-  assert.match(popup, /const ACTION_CLEAR = 28, ACTION_TEXT_H = 96;/);
+  // the actions' captions 34 down to 24, the XS button's padding each side (BL-176)
+  assert.match(popup, /const ACTION_CAPTION = Object\.freeze\(\{ fs: 34, min: 24 \}\), ACTION_CLEAR = 2 \* CONTROL\.buttonXS\.pad, ACTION_TEXT_H = 96;/);
   assert.match(popup, /left: bounds\(detailBox\)/);
-  assert.match(popup, /const gap = SPACE.m, bw =/);
-  assert.match(popup, /fitRow\(actions\.map\(\(\[caption\]\) => caption\), 40, 26, actions\.length \* \(bw - gap\), ACTION_CLEAR, 2, \{ maxH: ACTION_TEXT_H \}\)/);
+  assert.match(popup, /const gap = actionGap, inRow = Math\.min\(perRow, Math\.max\(1, actions\.length\)\), bw =/);
+  assert.match(popup, /NGUI\.fitRow\(captions, ACTION_CAPTION\.fs, ACTION_CAPTION\.min, captions\.length \* \(bw - gap\), ACTION_CLEAR, 2, \{ maxH: ACTION_TEXT_H \}\)/);
 });
 
-// the list popup's details: five columns of the L class's grid (BL-176)
-const PANEL = (2098 - 80 + 40) / 12 * 5 - 40, GAP = 20, CLEAR = 28, ACTION_H = 96;
+// the list popup's details: four and a half columns of the L class's grid; the actions' captions 34 down to 24 with the XS
+// button's padding each side (BL-176)
+const PANEL = (2098 - 80 + 40) / 12 * 4.5 - 40, GAP = 20, CLEAR = 68, ACTION_H = 96, FS = 34, MIN = 24;
 const actionSets = (locale) => {
   const t = (key) => text(locale, key), open = t("open.mac"), openWindows = t("open.win");
   return {
@@ -72,24 +74,20 @@ const actionSets = (locale) => {
     "variant picker (two)": [open, t("btn.extract")],
   };
 };
+// rows of as many XS bodies as the panel holds at their minimum width (popup.js detailsTree), one caption size for all
+const XS_MIN_W = 200, PER_ROW = Math.max(1, Math.floor((PANEL - 40 + GAP) / (XS_MIN_W + GAP)));
 for (const locale of LOCALES) test(`every source picker's action row shares one size and fits its buttons in ${locale}`, () => {
   document.documentElement.lang = locale;
   for (const [name, captions] of Object.entries(actionSets(locale))) {
-    const n = captions.length, slot = (PANEL - 40 + GAP) / n, total = n * (slot - GAP);
-    const row = fitRow(captions, 40, 26, total, CLEAR, 2, { maxH: ACTION_H });
-    assertGroup(row, captions, row.map((f) => f.width - CLEAR), ACTION_H, `${locale} ${name}`);
-    near(row.reduce((sum, f) => sum + f.width, 0), total);
-    // bodies are the equal slots, unless equal slots would take the size under the prefab's own floor of 26
-    const equal = fitGroup(captions, 40, 26, slot - GAP - CLEAR, 2, { maxH: ACTION_H });
-    if (equal[0].fs >= 26) {
-      assert.ok(row.every((f) => Math.abs(f.width - (slot - GAP)) < 1e-9), `${locale} ${name}: equal bodies`);
-      assert.equal(row[0].fs, equal[0].fs);
-    } else {
-      assert.ok(row[0].fs >= equal[0].fs, `${locale} ${name}: never smaller than equal bodies give`);
+    const inRow = Math.min(PER_ROW, captions.length), slot = (PANEL - 40 + GAP) / inRow;
+    for (let start = 0; start < captions.length; start += PER_ROW) {
+      const group = captions.slice(start, start + PER_ROW), total = group.length * (slot - GAP);
+      const row = fitRow(group, FS, MIN, total, CLEAR, 2, { maxH: ACTION_H });
+      assertGroup(row, group, row.map((f) => f.width - CLEAR), ACTION_H, `${locale} ${name} row ${start / PER_ROW}`);
+      near(row.reduce((sum, f) => sum + f.width, 0), total);
+      const span = row.reduce((sum, f) => sum + f.width + GAP, -GAP);
+      assert.ok(span <= PANEL - 40 + 1e-9);
     }
-    // the row sits in the panel: from the first body's left edge to the last one's right edge
-    const span = row.reduce((sum, f) => sum + f.width + GAP, -GAP);
-    assert.ok(span <= PANEL - 40 + 1e-9);
   }
 });
 const near = (a, b, eps = 1e-6) => assert.ok(Math.abs(a - b) < eps, `${a} != ${b}`);
@@ -97,8 +95,8 @@ const near = (a, b, eps = 1e-6) => assert.ok(Math.abs(a - b) < eps, `${a} != ${b
 test("with the Chinese wording the five-button row keeps equal bodies at a full size", () => {
   document.documentElement.lang = "zh-CN";
   const captions = actionSets("zh-CN")["mod (five)"];
-  const row = fitRow(captions, 40, 26, 5 * ((PANEL - 40 + GAP) / 5 - GAP), CLEAR, 2, { maxH: ACTION_H });
-  assert.ok(row[0].fs >= 36, `${row[0].fs}`);
+  const first = captions.slice(0, PER_ROW), row = fitRow(first, FS, MIN, first.length * ((PANEL - 40 + GAP) / PER_ROW - GAP), CLEAR, 2, { maxH: ACTION_H });
+  assert.ok(row[0].fs >= MIN, `${row[0].fs}`);
   assert.ok(row.every((f) => f.width === row[0].width));
 });
 
@@ -171,7 +169,7 @@ for (const locale of LOCALES) test(`the roster's six segments and the popup's th
   assert.match(roster, /filters: \[\["seg\.all", "seg\.mods", "seg\.noMods"\], \["seg\.all", "seg\.recruit", "seg\.noRecruit"\]\]\.map\(\(keys\) => keys\.map\(\(k\) => T\(k\)\)\)/);
   assert.match(roster, /fitGroup\(filters\.flat\(\), segFs, 22, segW - 26, 2, \{ maxH: 96 \}\)/);
   // the list popups' three go through the same toolbarFit (BL-176), as one filter
-  assert.match(popup, /toolbarFit\(\{ left: LP\.list\.l \+ SPACE\.m, right, filters: segs \? \[segs\.map\(segText\)\] : \[\]/);
+  assert.match(popup, /toolbarFit\(\{ left, right, filters: segs \? \[segs\.map\(segText\)\] : \[\]/);
   assert.match(popup, /const segText = \(seg\) => \(typeof seg === "string" \? T\(seg\) : seg\?\.text \?\? ""\);/);
   document.documentElement.lang = locale;
   for (const [segW, segFs] of [[230, 44], [210, 40], [200, 36], [190, 34], [180, 32], [170, 30], [160, 28], [150, 26], [140, 24]]) {

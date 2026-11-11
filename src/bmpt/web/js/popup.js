@@ -323,8 +323,11 @@ const titleHeight = (title) => textItem(NGUI, title, TYPE.display, { lines: 1 })
 //   titleCentre: the title's ink centre this far under the frame's top, in units, in place of the shared title top (the
 //                header band's centre puts the title where UIPopup_Sort has it)
 //   footer: the buttons' size, "XS", "S", "M" or "L" (FOOTER); without it the default size, XS, its bodies as wide as the captions need
+//   align: "right" for a footer at the frame's bottom right, its last body's right edge SPACE.xl in from the frame's (the
+//          panels' edge; owner, 2026-11-11, BL-176: the list popups and the Hall's background picker); centred otherwise
+//   a button's tone: "bright" for the Settings small button's bright blue (BRIGHT_BUTTON) in place of the pale secondary
 export function popupFrame(title, w, h, { ok = null, cancel = null, close = true, buttons = null, captionSite = null,
-  titleCentre = null, footer = null } = {}) {
+  titleCentre = null, footer = null, align = "center" } = {}) {
   ({ w, h } = frameGeometry(w, h));
   const t = clone(find(layouts.sortPopup, "Center"));
   const popup = find(t, "Popup");
@@ -349,7 +352,9 @@ export function popupFrame(title, w, h, { ok = null, cancel = null, close = true
     ...(cancel ? [{ label: cancel, name: "Btn_Cancel" }] : []), ...(ok ? [{ label: ok, name: "Btn_Ok", primary: true }] : []),
   ];
   // the default footer's bodies follow their captions (footerWidth); a size a call site names keeps its own width
-  const { kind: footerKind, control, xs, bodyW, room } = footerLayout(actions.map((action) => action.label), w, footer);
+  const { kind: footerKind, control, xs: centred, bodyW, room } = footerLayout(actions.map((action) => action.label), w, footer);
+  const shift = align === "right" && centred.length ? w / 2 - SPACE.xl - (centred.at(-1) + bodyW / 2) : 0;
+  const xs = centred.map((x) => x + shift);
   btn.active = !!actions.length;
   btn.pos = [0, footerY(h, control)];
   // Keep both named branches for callers that overlay a disabled confirm button.
@@ -365,6 +370,7 @@ export function popupFrame(title, w, h, { ok = null, cancel = null, close = true
     body.pos = [0, 0];
     resizeButton(body, bodyW, control.h);
     find(child, "Label_Locale").pos = [0, 0];
+    if (action.tone === "bright" && !action.primary) brighten(child);
     return child;
   }) : [];
   footerLabels(btn.children.map(child => find(child, "Label_Locale").widgets[0]), actions.map(action => action.label),
@@ -376,6 +382,17 @@ export function popupFrame(title, w, h, { ok = null, cancel = null, close = true
   return t;
 }
 
+// The Settings small button's bright blue (UIPopup_Option_PC/.../ETCSetting/ButtonBg: Common_Btn_BG #8de4ff, its
+// Common_Btn_Normal_B_S_Pt patterns, caption #314665), on a footer's secondary body (owner, 2026-11-11: the list popups'
+// Cancel, BL-176)
+export const BRIGHT_BUTTON = Object.freeze({ body: "#8de4ff/1.00", pattern: "Common_Btn_Normal_B_S_Pt", ink: "#314665/1.00" });
+function brighten(button) {
+  const body = find(button, "BG (1)"), bg = body.widgets.find((x) => "sprite" in x);
+  bg.color = BRIGHT_BUTTON.body;
+  for (const child of body.children || []) for (const x of child.widgets || []) if (/_Pt$/.test(x.sprite || "")) x.sprite = BRIGHT_BUTTON.pattern;
+  find(button, "Label_Locale").widgets[0].color = BRIGHT_BUTTON.ink;
+  button.actionSemantic = "cancel";
+}
 // popupFrame's confirm button as the game's disabled one, alone at the frame's place: a popup that can block its confirm
 // lays this over the live one while it is blocked (the list popup draws its blocked primary button the same way)
 export function disabledConfirm(frame) {
@@ -476,9 +493,14 @@ export function wireCheck(host, view, path, state, onChange) {
 }
 
 // --- the list popup ---
+// the details' columns of the L class's twelve (the list has the rest), and the list's paper width: its columns less the
+// panel's padding (listCardBox's)
+const LIST_SPLIT = 4.5;
+const LIST_PAPER_W = grid(container({ w: POPUP_FRAME.L.w, h: 0, padding: [0, SPACE.xl] }).inner).span(12 - LIST_SPLIT, LIST_SPLIT).w - 2 * SPACE.m;
 export const LIST_CARD_NAME = Object.freeze({ fs: 34, fsMin: 24, lines: 2, padY: 22, pitch: 1.2 });
 export function listLayout(check = false, kind = null) {
-  const native = switchGrid(kind).card;
+  // the card as the list's paper holds it (the L class's eight columns less the paper's padding)
+  const native = switchGrid(kind, LIST_PAPER_W).card;
   // One complete native card, its name band and the toolbar determine the minimum useful viewport. Additional cards scroll.
   const cardHeight = native.h + Math.max(native.bar, LIST_CARD_NAME.padY + LIST_CARD_NAME.lines * LIST_CARD_NAME.fs * LIST_CARD_NAME.pitch);
   const need = POPUP_FRAME.contentTop + CONTROL.buttonS.h + 5 * SPACE.m + cardHeight + POPUP_FOOTER.clearance;
@@ -486,22 +508,26 @@ export function listLayout(check = false, kind = null) {
   const frame = frameGeometry("XL", Math.max(need, POPUP_FRAME.contentTop + XL_CONTENT_H + POPUP_FOOTER.clearance));
   const content = popupContent(frame.w, frame.h);
   const panels = grid(content);
-  // the details five columns, the list seven (BL-176: in the L class four would leave the details too narrow for their actions)
-  const detailBox = { ...panels.span(5), h: content.h - (check ? CHECK_H + SPACE.m : 0) };
+  // the details four and a half columns, the list seven and a half (owner, 2026-11-11, BL-176: the details' share smaller
+  // than five; four leaves their actions and chips no room)
+  const detailBox = { ...panels.span(LIST_SPLIT), h: content.h - (check ? CHECK_H + SPACE.m : 0) };
   const bounds = box => {
     const [l, t] = toNode(box, 0, frame);
     return { l, r: l + box.w, t, b: t - box.h };
   };
-  return { frame, content, left: bounds(detailBox), list: bounds(panels.span(7, 5)),
+  return { frame, content, left: bounds(detailBox), list: bounds(panels.span(12 - LIST_SPLIT, LIST_SPLIT)),
     // Card artwork and the native card-placement helper retain their prefab envelope and scroll pitch.
     card: { w: 250, h: 226, bar: 68 }, pitch: [284, 350] };
 }
 // the band over a list's paper: the toolbar's height, or a slimmer one (``slim``) that only holds the footer's count
-export const LIST_BAND = Object.freeze({ tools: CONTROL.buttonS.h, slim: 60 });
+// The list popups' toolbar: the roster's, one size down (BL-176: "太高了，弄矮一些，再弄小一档"), its 116-unit tools 93 high
+export const LIST_TOOLBAR = Object.freeze({ scale: .8 });
+export const LIST_BAND = Object.freeze({ tools: Math.round(116 * LIST_TOOLBAR.scale), slim: 60 });
 export function listCardBox(layout, { searching = false, horizontal = false, band = LIST_BAND.tools } = {}) {
   const b = layout.list, f = layout.frame;
   const panel = { x: b.l + f.w / 2, y: f.cy + f.h / 2 - b.t, w: b.r - b.l, h: b.t - b.b };
-  const paper = container({ ...panel, padding: [band + 2 * SPACE.m
+  // the drawn paper SPACE.m under the toolbar's band (SPACE.m above it too, BL-176), the cards' box SPACE.m inside it
+  const paper = container({ ...panel, padding: [band + 3 * SPACE.m
     + (searching && !horizontal ? CONTROL.buttonS.h + SPACE.m : 0), SPACE.m, SPACE.m, SPACE.m] }).inner;
   // The grid owns the card viewport; native card envelopes and their un-stretched pitch are placed inside it.
   return grid(paper).span(12);
@@ -512,31 +538,37 @@ const segText = (seg) => (typeof seg === "string" ? T(seg) : seg?.text ?? "");
 // the student list's tools at the top right of the list: order, sort, search and, with segs, the segment filter; check:
 // the roster's checkbox before them. One toolbar, the roster's, fitted by its own steps to the list's width (BL-176: the
 // list popups are the L class, too narrow for the prefab's 230-wide segments and 420-wide sort button).
-function toolbar(right, y, { segs = null, sortKey = "sort.default", active = 0, ascending = true, filtered = false, check = null, sortKeys = [sortKey] } = {}) {
-  return fittedToolbar(right, y, { segs, sortKey, sortKeys, active, ascending, filtered, check });
+function toolbar(right, y, { segs = null, sortKey = "sort.default", active = 0, ascending = true, filtered = false, toggle = null, sortKeys = [sortKey] } = {}) {
+  return fittedToolbar(right, y, { segs, sortKey, sortKeys, active, ascending, filtered, toggle });
 }
+// the icon of a list's toggle in the toolbar (Show Other Students, BL-176; the owner's pick of the game's icons)
+export const TOGGLE_ICON = Object.freeze({ sprite: "School_Icon_Student", atlas: "Common", size: [60, 66] });
 
 // the fit of that toolbar: the checkbox's ``label``, the ``segs`` captions' keys and the sort button's ``sortKeys`` (``sortKey``:
 // the one shown), between the list's left edge and ``right``
-export function checkedToolbarFit(right, { segs, sortKey, sortKeys, label = null }) {
-  return toolbarFit({ left: LP.list.l + SPACE.m, right, filters: segs ? [segs.map(segText)] : [], sorts: sortKeys.map((key) => T(key)),
-    sortAt: sortKeys.indexOf(sortKey), check: label });
+export function checkedToolbarFit(right, { segs, sortKey, sortKeys, label = null, left = LP.list.l + SPACE.m, icons = 0 }) {
+  return toolbarFit({ left, right, filters: segs ? [segs.map(segText)] : [], sorts: sortKeys.map((key) => T(key)),
+    sortAt: sortKeys.indexOf(sortKey), check: label, icons });
 }
 // The toolbar with a checkbox (Switch 3D Model's "Show other students", BL-131) is the student roster's: the checkbox
 // first, the three segments, search, sort and order, fitted by the roster's own steps (roster-widgets.js toolbarFit; the
 // sort button as wide as its longest key). Returns the tree, where the segments and the checkbox stand for the hit areas.
-function fittedToolbar(right, y, { segs, sortKey, sortKeys, active, ascending, filtered, check }) {
-  const lay = checkedToolbarFit(right, { segs, sortKey, sortKeys, label: check?.label ?? null });
+// The toolbar is drawn at LIST_TOOLBAR.scale, its right edge at `right`: it is fitted to the list's width over that scale.
+// toggle: {label, checked, onChange} for an icon toggle before search (TOGGLE_ICON).
+function fittedToolbar(right, y, { segs, sortKey, sortKeys, active, ascending, filtered, toggle }) {
+  const k = LIST_TOOLBAR.scale, px = right * (1 - k), at = (x) => px + k * x;
+  const lay = checkedToolbarFit(right, { segs, sortKey, sortKeys, left: (LP.list.l + SPACE.m - px) / k, icons: toggle ? 1 : 0 });
   const tree = toolbarTree(layouts.collection, layouts.checkbox || checkboxPrefab(), {}, false, lay,
-    { filters: segs ? [{ name: "ModFilter", active }] : [], checked: !!check?.checked, filtered, ascending });
+    { filters: segs ? [{ name: "ModFilter", active }] : [], filtered, ascending,
+      toggles: toggle ? [{ name: "ToggleBtn", ...TOGGLE_ICON, pressed: !!toggle.checked }] : [] });
   tree.name = "Toolbar";
-  tree.pos = [0, y - TOOLBAR_CENTRE_Y];
-  tree.children = tree.children.filter((child) => ["Menubar", "ModFilter", "SearchBtn", "SortBtn", "OrderBtn"].includes(child.name));
-  const bar = find(tree, "Menubar");
-  if (bar) bar.children = bar.children.filter((child) => child.name === "Merge");
-  // the segments span the filter's right edge back three widths, the same slots the plain toolbar's hit areas count from
-  return { tree, lay, segBox: segs ? { right: lay.seg1 + 6, segW: lay.segW, y } : null,
-    check: check ? { x: lay.cbLeft + lay.cbW / 2, w: lay.cbW, y } : null };
+  tree.scale = [k, k];
+  tree.pos = [px, y - k * TOOLBAR_CENTRE_Y];
+  tree.children = tree.children.filter((child) => ["ModFilter", "SearchBtn", "SortBtn", "OrderBtn", "ToggleBtn"].includes(child.name));
+  // the segments span the filter's right edge back three widths (stage units, at the toolbar's scale)
+  const icon = lay.icons?.[0];
+  return { tree, lay, segBox: segs ? { right: at(lay.seg1 + 6), segW: k * lay.segW, y, scale: k } : null,
+    toggle: toggle && icon ? { x: at(icon.x + icon.w / 2), w: k * icon.w, h: k * icon.h, y } : null };
 }
 
 // The list and details panels occupy the XL content grid; its footer uses the shared centred group.
@@ -545,7 +577,8 @@ function fittedToolbar(right, y, { segs, sortKey, sortKeys, active, ascending, f
 export const LIST_FOOTER = FOOTER_DEFAULT;
 export function listFrame(title, buttons, closeButton, check = false, kind = null, band = LIST_BAND.tools, footer = LIST_FOOTER) {
   const layout = listLayout(check, kind);
-  const t = popupFrame(title, layout.frame.w, layout.frame.h, { close: closeButton, footer,
+  // the footer at the frame's bottom right (owner, 2026-11-11, BL-176)
+  const t = popupFrame(title, layout.frame.w, layout.frame.h, { close: closeButton, footer, align: "right",
     buttons: buttons.map((b, i) => ({ ...b, name: `Btn_${i}` })) });
   const popup = find(t, "Popup"), btn = find(popup, "Btn");
   btn.children = btn.children.map((child, i) => buttons[i].greyed ? Buttons.disable(child) : child);
@@ -553,7 +586,7 @@ export function listFrame(title, buttons, closeButton, check = false, kind = nul
     [sprite("Common_Bg_Raius10px", b.r - b.l, b.t - b.b, { depth: 3, color: tone })]);
   const b = layout.list;
   const paper = container({ x: b.l, y: -b.t, w: b.r - b.l, h: b.t - b.b,
-    padding: [band + SPACE.m, SPACE.m, SPACE.m, SPACE.m] }).inner;
+    padding: [band + 2 * SPACE.m, SPACE.m, SPACE.m, SPACE.m] }).inner;  // SPACE.m above and below the toolbar (BL-176)
   popup.children.push(panel("LeftPanel", layout.left, "#ffffff/0.00"), panel("ListPanel", b, "#d7eaf4/1.00"),
     node("ListPaper", [paper.x + paper.w / 2, -paper.y - paper.h / 2],
       [sprite("Common_Bg_Raius10px", paper.w, paper.h, { depth: 4, color: "#f4fcfe/1.00" })]));
@@ -625,8 +658,9 @@ export function listCard(it, x, y, selected, card = LP.card, kind = null, tick =
   return tree;
 }
 
-// The detail actions retain their existing 40–26 caption range and slanted-body inset. Their shared body height is buttonXS.
-const ACTION_CLEAR = 28, ACTION_TEXT_H = 96;
+// The detail actions: the XS body, their captions 34 down to 24 (owner, 2026-11-11, BL-176: smaller, with more padding),
+// the XS button's padding each side of the caption (the body's slant inside it).
+const ACTION_CAPTION = Object.freeze({ fs: 34, min: 24 }), ACTION_CLEAR = 2 * CONTROL.buttonXS.pad, ACTION_TEXT_H = 96;
 // The small button body's soft drop shadow under its solid art: 14 of its 176 rows (Btn_Cancel/BG (1) as drawn).
 const ACTION_SHADOW = 14 / 176;
 // The details panel one size down (owner, 2026-11-11, BL-173): its title and the name TYPE.body (the size under
@@ -693,11 +727,16 @@ export function detailsTree(it, title, fields, actions, portraitTexture = null, 
   const nameW = Math.min(nameRoom, Math.ceil(Math.max(...nameFit.text.split("\n").map((line) => glyphsOf(line, nameFit.fs)))));
   const using = it.inUseText || (it.inUse ? T("popup.inUse") : null);
   const chips = it.chips || [it.tag?.text || (it.recruit ? T("type.recruit") : it.kind === "mod" ? T("type.added") : T("type.noRecruit")), ...(using ? [using] : [])];
-  const dark = !it.chips && it.recruit, chip = DETAILS.chip;
+  const dark = !it.chips && it.recruit, chipRoom = infoW - 2 * SPACE.m;
   // the chips stay on one row (owner, 2026-11-11: never wrapped one under another): where their captions need more than the
-  // column, the widest give up width first (one cap for all), and a squeezed caption may shrink to the XS chip's floor
-  const chipRoom = infoW - 2 * SPACE.m, chipGaps = Math.max(0, chips.length - 1) * DETAILS.chipGap + chip.h * TAN10;
-  let chipW = chips.map((caption, i) => chipFit(caption, { mark: i === 0 && dark, maxW: chipRoom }).w);
+  // column at the S chip, the XS chip (one size down, BL-176: the L class's narrower panel); where they still do, the widest
+  // give up width first (one cap for all), and a squeezed caption may shrink to the XS chip's floor
+  const widthsAt = (tier) => chips.map((caption, i) => chipFit(caption, { chip: tier, mark: i === 0 && dark, maxW: chipRoom }).w);
+  const gapsAt = (tier) => Math.max(0, chips.length - 1) * DETAILS.chipGap + tier.h * TAN10;
+  const sum = (ws) => ws.reduce((n, cw) => n + cw, 0);
+  const chip = sum(widthsAt(DETAILS.chip)) + gapsAt(DETAILS.chip) <= chipRoom ? DETAILS.chip : CHIP_TIERS.XS;
+  const chipGaps = gapsAt(chip);
+  let chipW = widthsAt(chip);
   const squeezed = chipW.reduce((n, cw) => n + cw, 0) + chipGaps > chipRoom;
   if (squeezed) {
     const room = chipRoom - chipGaps, sorted = [...chipW].sort((a, b) => a - b);
@@ -712,8 +751,9 @@ export function detailsTree(it, title, fields, actions, portraitTexture = null, 
   const chipsW = chipW.reduce((n, cw) => n + cw, 0) + chipGaps;
   // the chips beside a one-line name when the line holds both, else on their own row under it; a 3D model's beside its
   // picture always under the name (owner, 2026-11-11)
-  const beside = !side && chips.length > 0 && !nameFit.text.includes("\n") && nameW + edit + SPACE.l + chipsW <= chipRoom;
-  const places = beside ? null : chipPlaces(chipW, chipRoom, { wrap: false }), rows = !beside && chips.length ? Math.max(...places.map((p) => p.row)) + 1 : 0;
+  // a portrait's name always centred on its own line, its chips under it (owner, 2026-11-11, BL-176)
+  const beside = !side && !portraitTexture && chips.length > 0 && !nameFit.text.includes("\n") && nameW + edit + SPACE.l + chipsW <= chipRoom;
+  const places = beside ? null : chipPlaces(chipW, chipRoom, { wrap: false, h: chip.h }), rows = !beside && chips.length ? Math.max(...places.map((p) => p.row)) + 1 : 0;
   const headH = beside ? Math.max(name.h, chip.h) : name.h;
   const info = [{ name: "Head", w: infoW, h: headH }];
   kids.push(node("Name", [0, 0], [label(name.text, name.fs, "#2d4664/1.00", beside ? nameW + 2 : nameRoom, name.h, { depth: 8, ellipsis: !!it.original, ariaLabel: it.full })]));
@@ -746,13 +786,20 @@ export function detailsTree(it, title, fields, actions, portraitTexture = null, 
       return [b];
     },
   } : {};
-  const fieldRows = portraitTexture ? fields.flatMap(([caption, value, colour], field) => [...(caption == null ? [] : [{ value: caption }]),
-    { value: String(value), colour, ariaLabel: String(value), ...cutRow(field, caption, value) }])
-    : fields.map(([caption, value, colour], i) => ({ caption: caption ?? "", value: String(value), colour, ariaLabel: String(value),
-      cut: options.truncate ? 0 : i === 2 ? 2 : 0, ...cutRow(i, caption, value) }));
+  // the captions bold (owner, 2026-11-11, BL-176). A portrait's column, or a box whose captions leave a value no room for
+  // its lines, stacks each caption over its value: the two rows joined, no divider between.
+  const stackedRows = () => fields.flatMap(([caption, value, colour], field) => [...(caption == null ? [] : [{ value: caption, bold: true, joined: true }]),
+    { value: String(value), colour, ariaLabel: String(value), ...cutRow(field, caption, value) }]);
+  const pairedRows = () => fields.map(([caption, value, colour], i) => ({ caption: caption ?? "", value: String(value), colour, ariaLabel: String(value),
+    cut: options.truncate ? 0 : i === 2 ? 2 : 0, ...cutRow(i, caption, value) }));
   const fieldW = side ? content.w : infoW;
-  const fieldBox = fields.length ? statsBox({ holder: "panel", width: fieldW, at: [0, 0], name: "Fields", rows: fieldRows, type: DETAILS.box }) : { nodes: [], height: 0 };
-  if (portraitTexture) for (const part of fieldBox.nodes) {
+  const boxOf = (rows) => statsBox({ holder: "panel", width: fieldW, at: [0, 0], name: "Fields", rows, type: DETAILS.box, boldCaptions: true });
+  let fieldBox = { nodes: [], height: 0 }, stacked = !!portraitTexture;
+  if (fields.length) {
+    fieldBox = boxOf(stacked ? stackedRows() : pairedRows());
+    if (!stacked && fieldBox.rows.some((r) => r.text.lines > DETAILS.box.value.lines)) { stacked = true; fieldBox = boxOf(stackedRows()); }
+  }
+  if (stacked) for (const part of fieldBox.nodes) {
     const match = /^V_(\d+)$/.exec(part.name);
     if (match) { const i = Number(match[1]); part.name = `${i % 2 ? "V" : "F"}_${Math.floor(i / 2)}`; }
   }
@@ -764,7 +811,11 @@ export function detailsTree(it, title, fields, actions, portraitTexture = null, 
   // The picture takes the room the title, the actions and the rest leave (the 3D model's square is one size for every
   // candidate: what fields with the file name on three lines and the others on one leave, its 10 degree incline within its
   // column; only longer fields shrink it).
-  const actionsH = actions.length ? CONTROL.buttonXS.h : 0;
+  // the actions in rows of as many XS buttons as the panel holds at their minimum width (BL-176: the narrower panel, the
+  // captions' padding kept), the rows SPACE.m apart
+  const actionGap = SPACE.m, perRow = Math.max(1, Math.floor((w - 2 * SPACE.m + actionGap) / (CONTROL.buttonXS.minW + actionGap)));
+  const actionRows = actions.length ? Math.ceil(actions.length / perRow) : 0;
+  const actionsH = actionRows ? actionRows * CONTROL.buttonXS.h + (actionRows - 1) * actionGap : 0;
   const roomFor = (otherH, others) => content.h - titleH - otherH - actionsH - SPACE.m * (1 + others + (actions.length ? 1 : 0));
   const reference = side && fields.length ? boxHeight(fields.map((_, i) => (i === 0 && !options.truncate ? 3 : 1)), DETAILS.box) : 0;
   const texture = portraitTexture && clone(portraitTexture), native = texture?.widgets.find(widget => "texture" in widget);
@@ -797,9 +848,18 @@ export function detailsTree(it, title, fields, actions, portraitTexture = null, 
   else if (side) bands.push({ name: "Portrait", w, h: Math.max(pictureH, infoStack.h) }, ...(fieldBand ? [fieldBand] : []));
   else bands.push({ name: "Picture", w, h: pictureH }, ...infoStack.boxes);
 
-  const gap = SPACE.m, bw = (w - 2 * SPACE.m + gap) / Math.max(1, actions.length);
-  const fits = NGUI.fitRow(actions.map(([caption]) => caption), 40, 26, actions.length * (bw - gap), ACTION_CLEAR, 2, { maxH: ACTION_TEXT_H });
-  const actionRow = row(fits.map(f => ({ w: f.width, h: CONTROL.buttonXS.h })), { x: SPACE.m, w: w - 2 * SPACE.m, gap, justify: "center" });
+  // every row's bodies fitted together (one caption size for all the actions), each row centred
+  const gap = actionGap, inRow = Math.min(perRow, Math.max(1, actions.length)), bw = (w - 2 * SPACE.m + gap) / inRow;
+  const groups = Array.from({ length: actionRows }, (_, r) => actions.slice(r * perRow, (r + 1) * perRow).map(([caption]) => caption));
+  const rowFits = groups.map((captions) => NGUI.fitRow(captions, ACTION_CAPTION.fs, ACTION_CAPTION.min, captions.length * (bw - gap), ACTION_CLEAR, 2, { maxH: ACTION_TEXT_H }));
+  const shared = Math.min(ACTION_CAPTION.fs, ...rowFits.flat().map((f) => f.fs));
+  const fits = groups.flatMap((captions, r) => rowFits[r].some((f) => f.fs !== shared)
+    ? NGUI.fitRow(captions, shared, shared, captions.length * (bw - gap), ACTION_CLEAR, 2, { maxH: ACTION_TEXT_H }) : rowFits[r]);
+  const actionRow = { boxes: groups.flatMap((captions, r) => {
+    const start = groups.slice(0, r).reduce((n, g) => n + g.length, 0);
+    return row(fits.slice(start, start + captions.length).map((f) => ({ w: f.width, h: CONTROL.buttonXS.h })),
+      { x: SPACE.m, w: w - 2 * SPACE.m, gap, justify: "center" }).boxes.map((b) => ({ ...b, row: r }));
+  }) };
   actions.forEach(([caption, , disabled, semantic = "secondary"], i) => {
     let body = clone(find(layouts.sortPopup, "Center/Popup/Btn/Btn_Cancel/BG (1)")), ink = "#2d5164/1.00";
     if (disabled) {
@@ -815,12 +875,12 @@ export function detailsTree(it, title, fields, actions, portraitTexture = null, 
       [label(fits[i].text, fits[i].fs, ink, fits[i].width - ACTION_CLEAR, ACTION_TEXT_H, { depth: 8 })])]);
     action.actionSemantic = disabled ? "secondary" : semantic; kids.push(action);
   });
-  if (actions.length) bands.push({ name: "Actions", w, h: CONTROL.buttonXS.h });
+  if (actions.length) bands.push({ name: "Actions", w, h: actionsH });
   const placed = layoutStack(bands, { x: content.x, y: content.y, w: content.w, gap: SPACE.m });
   // The actions stand on the panel's bottom, their solid art level with the list panel's (BL-133; every panel, owner
   // 2026-11-11).
   const pinned = actions.length && placed.h <= content.h;
-  if (pinned) placed.boxes.at(-1).y = content.y + content.h - CONTROL.buttonXS.h * (1 - ACTION_SHADOW);
+  if (pinned) placed.boxes.at(-1).y = content.y + content.h - actionsH + CONTROL.buttonXS.h * ACTION_SHADOW;
   const tree = node("Details", [0, 0], [], kids);
   const placeInfo = (box, x = 0) => {
     const target = { ...box, x: x + box.x };
@@ -856,7 +916,7 @@ export function detailsTree(it, title, fields, actions, portraitTexture = null, 
       const top = side ? portraitRow[1].y - box.y : 0;
       for (const part of infoStack.boxes) placeInfo({ ...part, y: part.y + box.y + top }, infoColumn.x);
     } else if (box.name === "Actions") actionRow.boxes.forEach((action, i) => {
-      find(tree, `Act_${i}`).pos = toNode({ ...action, y: box.y }, 4, frame);
+      find(tree, `Act_${i}`).pos = toNode({ ...action, y: box.y + action.row * (CONTROL.buttonXS.h + gap) }, 4, frame);
     });
     else if (["Title_Bg", "Picture"].includes(box.name)) find(tree, box.name).pos = toNode(box, 4, frame);
     else placeInfo(box);
@@ -883,8 +943,8 @@ export function detailsTree(it, title, fields, actions, portraitTexture = null, 
 //          them, hint (left) and footer (right) show in their place. more(query): cards added after the matching ones
 //          (Switch 3D Model's other students' models, BL-131; asked on every drawing, with the search's words, which may be
 //          empty), ordered and turned like them. onView(keys): the keys of the cards in view, after every drawing and
-//          scroll (the same signal that brings their thumbnails in). The toolbar has no room for a checkbox in the L class
-//          (BL-176): a list's checkbox is `check`, under the details.
+//          scroll (the same signal that brings their thumbnails in). toggle: {label, checked, onChange(checked)}, an icon
+//          toggle (TOGGLE_ICON) before search, its label the hover hint; a click flips toggle.checked and draws again.
 //   items' hint: the card's hover hint
 //   check: {label, checked, onChange} for a checkbox below the details; a click flips check.checked, so the same
 //          object is passed to every drawing
@@ -944,7 +1004,9 @@ export async function listPopup(options) {
   const isSelected = (key) => (multi ? ticked.has(key) : key === selected);
   // a search or segment that hides the chosen card: confirming would act on a card the user cannot see
   const filteredOut = !!tools && !multi && selected != null && !items.some((it) => it.key === selected);
-  const btns = (buttons || [{ label: okText, fn: onOk, primary: true, semantic: options.okSemantic || "confirm", action: "ok" }])
+  // cancelText: a bright blue Cancel before the primary button (owner, 2026-11-11, BL-176: the switch popups)
+  const btns = (buttons || [...(options.cancelText && onClose ? [{ label: options.cancelText, fn: () => onClose("cancel"), tone: "bright", action: "cancel" }] : []),
+    { label: okText, fn: onOk, primary: true, semantic: options.okSemantic || "confirm", action: "ok" }])
     .map((b) => (b.primary && filteredOut ? { ...b, greyed: true, blocked: true } : b));
   const next = document.createElement("div");
   const view = await NGUI.render(listFrame(title, btns, !!onClose, !!check, options.layoutKind, band0), next, { scale: S, origin: [960, 540] });
@@ -957,8 +1019,9 @@ export async function listPopup(options) {
   const band = [];
   if (tools && layouts.collection && !(horizontal && toolState.searching)) {
     const sortKeys = [...new Set([tools.sortKey ?? "sort.default", "sort.name"])];
-    const tb = toolbar(LP.list.r - SPACE.m, LP.list.t - SPACE.m - CONTROL.buttonS.h / 2, { segs: tools.segs, sortKey: toolState.sort === "name" ? "sort.name" : tools.sortKey, sortKeys,
-      active: tools.seg ?? 0, ascending: toolState.ascending, filtered: !!toolState.query });
+    // the toolbar centred in its band: SPACE.m above and below it (BL-176)
+    const tb = toolbar(LP.list.r - SPACE.m, LP.list.t - SPACE.m - LIST_BAND.tools / 2, { segs: tools.segs, sortKey: toolState.sort === "name" ? "sort.name" : tools.sortKey, sortKeys,
+      active: tools.seg ?? 0, ascending: toolState.ascending, filtered: !!toolState.query, toggle: tools.toggle });
     const tv = await NGUI.render(tb.tree, next, { scale: S, origin: [960, 540], z: 20 });
     hit(next, tv, "Toolbar/OrderBtn/Btn_Normal", () => { toolState.ascending = !toolState.ascending; redraw(); },
       { name: T(toolState.ascending ? "roster.asc" : "roster.desc"), action: "order" });
@@ -974,11 +1037,22 @@ export async function listPopup(options) {
         } });
     }, { name: T("display.tab.sort"), action: "sort" });
     if (tb.segBox && tools.onSeg) {
-      const { right, segW, y } = tb.segBox;
+      const { right, segW, y, scale: k } = tb.segBox, h = CONTROL.toolbar.h * k;
       for (let i = 0; i < 3; i++) {
-        const ux = right - (3 - i) * segW + segW / 2 - 6, uy = y + 50.2 - 50;
-        hitButton(next, [960 + (ux - segW / 2) * S, 540 - (uy + 52) * S, segW * S, 104 * S], () => tools.onSeg(i), segText(tools.segs[i]), 80);
+        const ux = right - (3 - i) * segW + segW / 2 - 6 * k;
+        hitButton(next, [960 + (ux - segW / 2) * S, 540 - (y + h / 2) * S, segW * S, h * S], () => tools.onSeg(i), segText(tools.segs[i]), 80);
       }
+    }
+    if (tb.toggle) {
+      const { x, w, h, y } = tb.toggle, state = tools.toggle;
+      const box = hitButton(next, [960 + (x - w / 2) * S, 540 - (y + h / 2) * S, w * S, h * S], () => {
+        state.checked = !state.checked;
+        state.onChange?.(state.checked);
+        redraw();
+      }, state.label, 80);
+      box.dataset.action = "toggle";
+      box.setAttribute("aria-pressed", String(!!state.checked));
+      attachHint(box, state.label);
     }
   } else {
     // the band over the cards: a hint at the left, the footer (the ticked cards, their size) at the right
@@ -1005,11 +1079,11 @@ export async function listPopup(options) {
   if (tools && toolState.searching && layouts.collection) {
     const search = searchTree(layouts.collection);
     // Portraits need the paper's full height: search replaces their toolbar in the header.
-    search.pos = [(LP.list.l + LP.list.r) / 2, LP.list.t - CONTROL.buttonS.h - SPACE.m - SPACE.xs];
+    search.pos = [(LP.list.l + LP.list.r) / 2, LP.list.t - LIST_BAND.tools - SPACE.m - SPACE.xs];
     find(search, "SearchName").pos = [0, 0];
     if (horizontal) {
       const area = find(search, "SearchName/SearchNameArea"), w = area.widgets.find((w) => "sprite" in w);
-      search.pos[1] = LP.list.t - SPACE.m - CONTROL.buttonS.h / 2 - area.pos[1] - (Math.floor((w.pivot ?? 4) / 3) / 2 - .5) * w.h_;
+      search.pos[1] = LP.list.t - SPACE.m - LIST_BAND.tools / 2 - area.pos[1] - (Math.floor((w.pivot ?? 4) / 3) / 2 - .5) * w.h_;
     }
     const sv = await NGUI.render(search, next, { scale: S, origin: [960, 540], z: 25 });
     const r = nodeRect(sv, `${search.name}/SearchName/SearchNameArea/InputField/Label_Search`);

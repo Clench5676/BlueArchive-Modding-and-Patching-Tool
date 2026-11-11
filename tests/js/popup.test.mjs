@@ -1812,7 +1812,7 @@ test("switch geometry: per-kind columns, aspects, card bounds, labels and portra
           assert.ok(Math.abs(1 / ratio - 2.2) < .01, "portrait height follows the latest 2.2:1 sketch");
         }
         if (kind === "lobby") assert.ok(Math.abs(ratio - 16 / 9) < .02);
-        if (kind === "model") { assert.equal(ratio, 1); assert.ok(cards[0][2] > 220); }
+        if (kind === "model") { assert.equal(ratio, 1); assert.ok(cards[0][2] > 180); }
         const rowSize = kind === "spr" ? items.length : columns;
         for (let i = 0; i < cards.length; i++) {
           if (i % rowSize) assert.ok(cards[i][0] > cards[i - 1][0] + cards[i - 1][2] + 8, `${kind}: column gap`);
@@ -1868,7 +1868,7 @@ test("portrait spacing fits four tall cards at the standard width and selects ho
   const { switchGrid } = await import("../../src/bmpt/web/js/switch-layout.js");
   for (const width of [1300, 1818, 2200]) {
     const { card, columns, pitch, overhang } = switchGrid("spr", width);
-    assert.equal(card.h / card.w, 2.2);
+    assert.ok(Math.abs(card.h / card.w - 2.2) < 1e-9);
     assert.equal(pitch[0] - card.w, 40, "portrait gaps do not stretch to fill the viewport (SPACE.xl: no prefab gives the cards a gap)");
     assert.equal(pitch[1] - card.h - card.bar, 40);
     assert.ok(columns <= 4);
@@ -3754,10 +3754,11 @@ test("a 3D model's details fit the panel without scrolling", async () => {
   const it = { ...items[0], full: "Hina (Pajamas) - Optimized", nameEdit: { label: "Alias", fn: () => {} } };
   const sizes = new Set(), bottoms = new Set();
   for (const n of [3, 4, 6]) for (const rows of [fields, fields.map(([c]) => [c, "-"])]) {
-    const tree = Popup.detailsTree(it, "3D Model Info", rows, actions.slice(0, n), null, "model", panel);
+    // the switch popups' values on one line (BL-173 rework), as the narrower L-class panel needs (BL-176)
+    const tree = Popup.detailsTree(it, "3D Model Info", rows, actions.slice(0, n), null, "model", panel, { truncate: true });
     assert.ok(tree.contentHeight <= height + 1e-6, `${n} actions: ${tree.contentHeight} > ${height}`);
     sizes.add(NGUI.find(tree, "Picture").widgets[0].w_.toFixed(6));
-    bottoms.add(NGUI.find(tree, "Act_0").pos[1].toFixed(6));
+    bottoms.add(NGUI.find(tree, `Act_${n - 1}`).pos[1].toFixed(6));  // the last row (the actions in rows, BL-176)
     const picture = NGUI.find(tree, "Picture"), size = picture.widgets[0].w_, name = NGUI.find(tree, "Name");
     assert.equal(picture.widgets[0].h_, size);
     assert.ok(size >= 150, `picture ${size}`);
@@ -3787,7 +3788,8 @@ for (const lang of ["en-US", "zh-CN", "th-TH"]) test(`the switch details fit the
       const what = `${lang} ${kind} ${file.length}`;
       assert.ok(tree.contentHeight <= height + 1e-6, `${what}: ${tree.contentHeight} > ${height}`);
       // the actions on the bottom: their solid art at the panel's foot
-      const act = NGUI.find(tree, "Act_0");
+      // the last row of actions on the bottom (the actions in rows, BL-176)
+      const act = NGUI.find(tree, `Act_${actions.length - 1}`);
       const xs = Tokens.CONTROL.buttonXS.h;
       assert.ok(Math.abs(act.pos[1] - (panel.b + xs / 2 - xs * 14 / 176)) < 1e-6, `${what}: actions at the bottom (${act.pos[1]})`);
       const values = tree.children.filter((c) => /^V_\d+$/.test(c.name)).map((c) => c.widgets[0]);
@@ -3806,7 +3808,7 @@ for (const lang of ["en-US", "zh-CN", "th-TH"]) test(`the switch details fit the
       assert.ok(chipY.every((y) => Math.abs(y - chipY[0]) < 1e-6), `${what}: the chips on one row`);
       if (kind === "model") assert.ok(NGUI.find(tree, "Name").pos[1] > chipY[0] + 1, `${what}: the model's chips under its name`);
       // the chips are the S chip and the actions are tagged as buttons
-      assert.equal(NGUI.find(tree, "Chip_0").widgets[0].h_, Tokens.CHIP_TIERS.S.h);
+      assert.ok([Tokens.CHIP_TIERS.S.h, Tokens.CHIP_TIERS.XS.h].includes(NGUI.find(tree, "Chip_0").widgets[0].h_));  // XS where S would not fit (BL-176)
       assert.equal(NGUI.find(tree, "Chip_0").widgets[0].tier, "chip");
       assert.equal(NGUI.find(tree, "Act_0/Body").widgets.find((w) => "sprite" in w).tier, "button");
     }
@@ -4073,7 +4075,9 @@ for (const lang of LOCALE_LIST) test(`the details panel's chips are S chips as w
       const what = `${lang} ${chips.length} chips${original ? " with an original" : ""}, ${full.length > 10 ? "long" : "short"} name`;
       chips.forEach((_, i) => {
         const chip = stageRect(part(`Chip_${i}`), NGUI);
-        assert.ok(chip[2] >= CHIP.minW * S - 0.02 && Math.abs(chip[3] - CHIP.h * S) < 0.02, `${what}: chip ${i} is ${chip[2] / S} x ${chip[3] / S}`);
+        // the S chip, or the XS one where the S row would not fit the narrower panel (BL-176)
+        const tier = Math.abs(chip[3] - CHIP.h * S) < 0.02 ? CHIP : Tokens.CHIP_TIERS.XS;
+        assert.ok(chip[2] >= tier.minW * S - 0.02 && Math.abs(chip[3] - tier.h * S) < 0.02, `${what}: chip ${i} is ${chip[2] / S} x ${chip[3] / S}`);
         assert.ok(chip[0] - slant / 2 >= panel[0] - 0.02 && chip[0] + chip[2] + slant / 2 <= panel[1] + 0.02, `${what}: chip ${i} inside the panel`);
         assert.ok(chip[1] + chip[3] + 20 * S <= fields[1] + 0.02, `${what}: chip ${i} keeps 20 above the fields box`);
         // its caption stays in the chip
@@ -4082,7 +4086,7 @@ for (const lang of LOCALE_LIST) test(`the details panel's chips are S chips as w
         for (const el of text) {
           const r = stageRect(el, NGUI), fs = parseFloat(el.style.fontSize);
           assert.ok(r[0] >= chip[0] - 0.02 && r[0] + r[2] <= chip[0] + chip[2] + 0.02 && r[1] >= chip[1] - 0.02 && r[1] + r[3] <= chip[1] + chip[3] + 0.02, `${what}: chip ${i}'s caption inside it`);
-          assert.ok(fs <= NGUI.fontSizeFor(el.textContent, CHIP.fs) * S + 0.02, `${what}: chip ${i} at ${fs}`);
+          assert.ok(fs <= NGUI.fontSizeFor(el.textContent, tier.fs) * S + 0.02, `${what}: chip ${i} at ${fs}`);
         }
       });
       // the chips never overlap the name: beside it on its line, or under it
@@ -4110,7 +4114,8 @@ test("the portrait panel's chips (the S chip) stay in the right half and 20 abov
       const fields = stageRect(part("Fields"), NGUI);
       chips.forEach((_, i) => {
         const chip = stageRect(part(`Chip_${i}`), NGUI);
-        assert.ok(Math.abs(chip[3] - Tokens.CHIP_TIERS.S.h * S) < 0.02, `${chips.length} chips: chip ${i} is the S chip's height`);
+        // the S chip, or the XS one where the S row would not fit the column (BL-176)
+        assert.ok([Tokens.CHIP_TIERS.S.h, Tokens.CHIP_TIERS.XS.h].some((h) => Math.abs(chip[3] - h * S) < 0.02), `${chips.length} chips: chip ${i} is the S or XS chip's height`);
         assert.ok(chip[0] >= left - 0.02 && chip[0] + chip[2] <= right + 0.02, `${chips.length} chips: chip ${i} in the right half`);
         assert.ok(chip[1] + chip[3] + 20 * S <= fields[1] + 0.02, `${chips.length} chips: chip ${i} keeps 20 above the fields box`);
       });
@@ -4361,7 +4366,8 @@ test("scrolling text viewer and picker heights retain their pre-fit viewports", 
   // the XL prefab's content box (885) over the XS footer (BL-176): the frames lose the old footer's padding (94)
   assert.equal(Frames.TEXT_VIEWER.h, 1259);
   assert.equal(Frames.TEXT_VIEWER.box.height, 885);
-  for (const [kind, height] of [[null, 1259], ["spr", 1418], ["lobby", 1259], ["model", 1259]])
+  // a portrait strip's frame as high as its smaller cards need (PORTRAIT_SCALE, BL-176)
+  for (const [kind, height] of [[null, 1259], ["spr", 1330], ["lobby", 1259], ["model", 1259]])
     for (const check of [false, true]) assert.equal(Popup.listLayout(check, kind).frame.h, height, String(kind));
 });
 
@@ -4475,6 +4481,27 @@ test("a list popup's toolbar is the roster's, fitted inside the L class's list p
   } finally { prompt.hidden = true; Fresh.closed(prompt); }
 });
 
+
+test("Show Other Students is an icon toggle before search in the list's toolbar, its label the hover hint", async (t) => {
+  const NGUI = await import("../../src/bmpt/web/js/ngui.js");
+  serveToolbarCollection(t, NGUI);
+  const Fresh = await import("../../src/bmpt/web/js/popup.js?toolbar-toggle");
+  const items = [{ key: "a", label: "Alpha", full: "Alpha", thumb: "a.png" }];
+  const changes = [], toggle = { label: english.model.showOthers, checked: false, onChange: (on) => changes.push(on) };
+  try {
+    await toolbarOf(Fresh, { segs: SEGMENTS, seg: 0, onSeg() {}, sortKey: "sort.default", toggle }, items);
+    const box = action(prompt, "toggle");
+    assert.ok(box, "the toggle's hit area");
+    assert.equal(box.getAttribute("aria-label"), english.model.showOthers);
+    assert.equal(box.getAttribute("aria-pressed"), "false");
+    const search = rectOf(action(prompt, "search")), own = rectOf(box);
+    assert.ok(own[0] + own[2] <= search[0] + 1e-6, "before search");
+    assert.ok(walk(prompt).some((e) => (e.dataset.path || "").startsWith("Toolbar/ToggleBtn")), "drawn from the search button's body");
+    box.click();
+    assert.equal(toggle.checked, true);
+    assert.deepEqual(changes, [true]);
+  } finally { prompt.hidden = true; Fresh.closed(prompt); }
+});
 
 test("the list reports the cards in view, and those a scroll brings in", async (t) => {
   const NGUI = await import("../../src/bmpt/web/js/ngui.js");

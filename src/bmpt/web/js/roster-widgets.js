@@ -66,7 +66,8 @@ export function toolbarLayout(view, { title = T("roster.title"), left = -1270, r
 // the three captions of each), the search, sort and order tools. ``sorts``: every caption the sort button can show (it is as
 // wide as its longest, so choosing another moves nothing), ``sortAt``: the shown one; ``check``: the checkbox's caption.
 // The roster takes -1270 to 1412 after its title; a list popup its own width and no title (popup.js).
-export function toolbarFit({ title = "", left, right, filters, sorts, sortAt = 0, check }) {
+// icons: how many icon toggles (the search button's body, another icon) stand before search (a list popup's, BL-176)
+export function toolbarFit({ title = "", left, right, filters, sorts, sortAt = 0, check, icons = 0 }) {
   // the last three steps only a list popup's narrower list reaches (BL-176: the L class)
   const steps = [[230, 44, 56, 40, 62], [210, 40, 48, 38, 62], [200, 36, 44, 34, 58], [190, 34, 42, 32, 54], [180, 32, 40, 30, 50], [170, 30, 36, 28, 46],
     [160, 28, 34, 26, 44], [150, 26, 32, 24, 42], [140, 24, 30, 22, 40]];
@@ -87,7 +88,8 @@ export function toolbarFit({ title = "", left, right, filters, sorts, sortAt = 0
     // also keep their prefab's 116-unit height; the segmented filters keep 104. Caption fitting tiers stay as before.
     const h = CONTROL.toolbar.h, iconW = 150;
     const nativeH = 116;
-    const tools = row([{ w: iconW, h: nativeH }, { w: sortW, h: nativeH }, { w: iconW, h: nativeH }], { gap: SPACE.m });
+    const tools = row([...Array.from({ length: icons }, () => ({ w: iconW, h: nativeH })), { w: iconW, h: nativeH }, { w: sortW, h: nativeH },
+      { w: iconW, h: nativeH }], { gap: SPACE.m });
     const cb = cbText ? 1 : 0;
     const groups = row([...(cb ? [{ w: cbW, h }] : []), ...filters.map(() => ({ w: 3 * segW, h })), tools], { gap: SPACE.l });
     const cbLeft = right - groups.w, offset = (box) => ({ ...box, x: box.x + cbLeft });
@@ -100,6 +102,7 @@ export function toolbarFit({ title = "", left, right, filters, sorts, sortAt = 0
       const ends = filters.map((_, i) => boxes[cb + i].x + boxes[cb + i].w);
       return { segW, segLabels, sortText, sortW, cbText, cbW,
         order: centre(boxes.at(-1)), sort: centre(boxes.at(-2)), search: centre(boxes.at(-3)),
+        icons: boxes.slice(boxes.length - 3 - icons, boxes.length - 3),
         seg1: ends[0], seg2: ends[1], cbLeft, titleFs, boxes, fits,
         // per filter: where its right edge is and its three captions
         filters: ends.map((end, i) => ({ right: end, labels: segLabels.slice(3 * i, 3 * i + 3) })) };
@@ -201,6 +204,25 @@ export function toolbarTree(collection, checkbox, view, searching, lay = toolbar
       body.w_ = box.w; body.h_ = box.h;
     }
   }
+  // icon toggles before search (a list popup's Show Other Students, BL-176): the search button's body and states with
+  // another icon, pressed while on; state.toggles: [{ name, sprite, atlas, size: [w, h], pressed }]
+  (state.toggles || []).forEach((toggle, i) => {
+    const box = lay.icons?.[i];
+    if (!box) return;
+    const t = clone(search);
+    t.name = toggle.name;
+    t.pos = [box.x + box.w / 2, centreY];
+    for (const st of t.children) {
+      st.active = (st.name === "Btn_Pressed") === !!toggle.pressed;
+      for (const icon of st.children || []) {
+        const w = icon.widgets?.find((x) => "sprite" in x);
+        if (!w) continue;
+        icon.name = "Icon";
+        Object.assign(w, { sprite: toggle.sprite, atlas: toggle.atlas ?? w.atlas, ...(toggle.size ? { w_: toggle.size[0], h_: toggle.size[1] } : {}) });
+      }
+    }
+    menu.children.push(t);
+  });
   // checkbox toggle after the title (game: "unowned students only" in the gacha character list); none without one
   if (!lay.cbText) return menu;
   const cb = clone(checkbox);

@@ -350,7 +350,7 @@
 			"configured": "設定済み"
 		},
 		"field": {
-			"file": "ファイル",
+			"file": "ファイル名",
 			"type": "種類",
 			"size": "サイズ",
 			"status": "状態",

@@ -218,6 +218,21 @@ for (const locale of LOCALES) test(`the details panel's light box holds its capt
     const what = `${locale} details panel, set ${n}`;
     const nodes = tree.children.filter((c) => c.name === "Fields" || /^(F|V|L)_\d+$/.test(c.name));
     assert.equal(nodes[0].name, "Fields");
+    // where the captions leave a value no room for its lines (the L class's narrower panel, BL-176), each caption stands
+    // bold over its value: every value within three lines and its room, inside the box
+    const f0 = nodes.find((c) => c.name === "F_0"), v0 = nodes.find((c) => c.name === "V_0");
+    if (f0 && v0 && f0.pos[0] === v0.pos[0]) {
+      const box = rectOf(nodes[0]);
+      fields.forEach((_, k) => {
+        const cap = nodes.find((c) => c.name === `F_${k}`).widgets[0], v = nodes.find((c) => c.name === `V_${k}`), vw = v.widgets[0];
+        assert.equal(cap.bold, true, `${what}: caption ${k} bold`);
+        assert.ok(vw.text.split("\n").length <= Box.STATS_BOX_S.value.lines, `${what}: value ${k} ${JSON.stringify(vw.text)}`);
+        for (const line of vw.text.split("\n")) assert.ok(NGUI.glyphWidth(line, vw.fontSize) <= vw.w_ + 1e-9, `${what}: ${line}`);
+        const r = rectOf(v);
+        assert.ok(r.left >= box.left - 1e-9 && r.right <= box.right + 1e-9, `${what}: value ${k} inside the box`);
+      });
+      continue;
+    }
     const { fill, boxRect } = assertRows({ nodes, what, count: fields.length, size: Box.STATS_BOX_S });
     // The stats box keeps its own inset inside the new four-column details panel.
     const bounds = Popup.listLayout().left, panel = bounds.r - bounds.l;
