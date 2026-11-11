@@ -2333,7 +2333,8 @@ test("Advanced Options, Import State, Import Results and Assign Character each d
   const unknown = { ...entry("unidentified", "blocked", "lobby"), variant: null, reason: "mod_target_unknown" };
   await h.analyze([unknown]); await h.action("assignCharacter").click(); await flush(); await h.page.settled();
   area = areaOf(); bar = barOf();
-  assert.deepEqual(bar.track, scrollbarTrack(DIALOG_AREA, S));
+  // the L class's content box, as Advanced Options' (BL-176: no dialog wider)
+  assert.deepEqual(bar.track, scrollbarTrack([960 + (inner.x - POPUP_FRAME.L.w / 2) * S, DIALOG_AREA[1], inner.w * S, 640], S));
   await h.action("close", h.dialog).click();
 });
 
@@ -2345,7 +2346,9 @@ test("Import Results draws the game's scrollbar on its area", async () => {
   await h.page.results();
   const area = h.dialog.querySelector(".import-results"), bar = h.drawnBars.findLast((item) => item.parentNode?.parentNode === h.dialog);
   assert.ok(area && bar, "bound to the results");
-  assert.deepEqual(bar.track, scrollbarTrack(DIALOG_AREA, S));
+  // the L class's content box (BL-176)
+  const inner = container({ w: POPUP_FRAME.L.w, h: DIALOG_H, padding: [0, SPACE.xl] }).inner;
+  assert.deepEqual(bar.track, scrollbarTrack([960 + (inner.x - POPUP_FRAME.L.w / 2) * S, DIALOG_AREA[1], inner.w * S, 640], S));
   overflow(area, 640, 1400, 60); await area.dispatch("scroll");
   assert.deepEqual(bar.syncs.at(-1), [640, 1400, 60]);
   await h.action("ok", h.dialog).click();

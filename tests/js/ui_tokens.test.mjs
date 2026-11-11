@@ -269,7 +269,7 @@ const toolbarFor = (web) => new Function("NGUI", "T", "advanceOf", "glyphsOf", "
 const modalLayoutFor = (web) => {
   const source = read("js/student-hall-ui.js");
   return new Function("Popup", "POPUP", "POPUP_FRAME", "S", "toolbarLayout", "SPACE", "BUTTON", "layoutStack", `${source.slice(source.indexOf("export const modalContentBottom"), source.indexOf("// Keep a caller's centre"))
-    .replaceAll("export ", "")}; return {modalContentBottom, portraitPickerLayout, backgroundPickerBox, portraitRowLayout, compactFooterBoxes, COMPACT_BUTTON_H, COMPACT_FOOTER_W, PORTRAIT_FRAME};`)({ ...footerHelpers, LIST_CARD_NAME: { fs: 34, lines: 2, padY: 22, pitch: 1.2 } }, Tokens.POPUP, Tokens.POPUP_FRAME, 1920 / 2960, toolbarFor(web), Tokens.SPACE, Tokens.CONTROL.buttonXS, layoutStack);
+    .replaceAll("export ", "")}; return {modalContentBottom, portraitPickerLayout, backgroundPickerBox, backgroundPreviewBox, WIDE, BACKGROUND, portraitRowLayout, compactFooterBoxes, COMPACT_BUTTON_H, COMPACT_FOOTER_W, PORTRAIT_FRAME};`)({ ...footerHelpers, LIST_CARD_NAME: { fs: 34, lines: 2, padY: 22, pitch: 1.2 } }, Tokens.POPUP, Tokens.POPUP_FRAME, 1920 / 2960, toolbarFor(web), Tokens.SPACE, Tokens.CONTROL.buttonXS, layoutStack);
 };
 for (const locale of ["en-US", "th-TH", "zh-CN", "zh-TW", "ja-JP", "ko-KR"]) test(`Hall modal content keeps its gaps and clears the compact footer, keeping full rows in both search states in ${locale}`, () => {
   document.documentElement.lang = locale;
@@ -298,8 +298,15 @@ for (const locale of ["en-US", "th-TH", "zh-CN", "zh-TW", "ja-JP", "ko-KR"]) tes
       assert.ok((y + h) * k <= height * dpr);
     }
   }
-  const bg = layout.backgroundPickerBox();
-  assert.deepEqual([bg[0], bg[2], bg[3]], [130, 760, 650]);
+  // the background picker in the L class (BL-176): the list at WIDE's left, the preview after it up to WIDE's right
+  const bg = layout.backgroundPickerBox(), preview = layout.backgroundPreviewBox();
+  near(layout.WIDE.left, 960 - (Tokens.POPUP_FRAME.L.w / 2 - Tokens.SPACE.xl) * S);
+  assert.deepEqual([bg[0], bg[2]], [layout.WIDE.left, layout.BACKGROUND.list]);
+  near(bg[1], 540 - (Tokens.POPUP.frameY + 1450 / 2 - 132 - Tokens.SPACE.l) * S);
+  near(bg[1] + bg[3], layout.modalContentBottom(1450, 2)); near(preview.top, bg[1]);
+  near(preview.left, bg[0] + bg[2] + Tokens.SPACE.l * S); near(preview.left + preview.width, layout.WIDE.left + layout.WIDE.width);
+  near(preview.height, preview.width * 1080 / 1920);
+  assert.ok(bg[1] + bg[3] <= 540 - (Tokens.POPUP.frameY - 1450 / 2) * S, "inside the frame");
   assert.ok(bg[1] >= 540 - (Tokens.POPUP.frameY + 1450 / 2 - 132) * S);
   assert.ok(bg[3] >= 280);
   assert.ok(bg[1] + bg[3] + Tokens.POPUP.clearance * S <= 540 - footerHelpers.footerTop(1450, 2) * S + 1e-9);
@@ -307,13 +314,13 @@ for (const locale of ["en-US", "th-TH", "zh-CN", "zh-TW", "ja-JP", "ko-KR"]) tes
   assert.match(read("js/student-hall.js"), /UI\.backgroundPickerBox\(\)/);
 });
 test("the memorial modal keeps its retained footer: XS-high buttons at the frame's bottom right, under its fixed queue", () => {
-  // the queue panel ends at 915 px; the retained buttons (66 px, about the XS body's 104 units) stand under it
+  // the queue panel ends at 915 px; the retained buttons (the XS body, BL-176) stand under it
   const S = 1920 / 2960, bottom = 540 + (1450 / 2 - 120) * S;
-  assert.ok(Math.abs(66 - Tokens.CONTROL.buttonXS.h * S) < 2);
   assert.ok(bottom >= 720 + 195, `${bottom}`);
-  assert.match(read("js/student-hall-ui.js"), /retainedButtonSize\(actions\.map\(\(action\) => action\.label\), actionWidth, 66\)/);
+  assert.match(read("js/student-hall-ui.js"), /const bodyH = CONTROL\.buttonXS\.h \* S, footerSize = retainedButtonSize\(actions\.map\(\(action\) => action\.label\), actionWidth, bodyH\)/);
   assert.match(read("js/student-hall-picker.js"), /memorial \? \{ retainedFooter: true \}/);
-  assert.match(read("js/student-hall-picker.js"), /queuePanel\(layer, \[115, 720, 1685, 195\]/);
+  // the queue across WIDE, the L class's content (BL-176)
+  assert.match(read("js/student-hall-picker.js"), /queuePanel\(layer, \[wideLeft, 720, wideW, 195\]/);
 });
 const HALL_FOOTERS = [["popup.cancel", "hall.savePlaylist"], ["hall.doneAdding"], ["popup.cancel"],
   ["popup.cancel", "hall.useBackground"], ["hall.keepEditing", "hall.discard", "hall.saveLeave"]];

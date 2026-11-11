@@ -61,8 +61,8 @@ export function openPicker({ kind, choices, draft, onPreview, onChange, onSave, 
       change: (next) => { if (isSaving()) return; view = normalizeView({ ...view, ...next }); student = null; positions.clear(); draw().catch(onError); },
       search: toggleSearch,
       display: safe(display),
-    }, memorial ? {} : UI.portraitPickerLayout(view, searching).toolbar);
-    if (searching) await UI.search(layer, query, (value) => { query = value; positions.clear(); changed(); }, memorial ? [130, 252, 1640] : UI.portraitPickerLayout(view, searching).search,
+    }, memorial ? { x: UI.WIDE.left, width: UI.WIDE.width } : UI.portraitPickerLayout(view, searching).toolbar);
+    if (searching) await UI.search(layer, query, (value) => { query = value; positions.clear(); changed(); }, memorial ? [UI.WIDE.left + 15, 252, UI.WIDE.width - 30] : UI.portraitPickerLayout(view, searching).search,
       { onEscape: toggleSearch });
   }
   async function drawPortraits(layer, alive, signal) {
@@ -86,27 +86,29 @@ export function openPicker({ kind, choices, draft, onPreview, onChange, onSave, 
     const shown = students(); if (student && !shown.some((s) => s.key === student)) student = null;
     const candidates = memorialChoices(choices, shown, student, view, query, viewed, L, language());
     const top = searching ? 330 : 250, height = searching ? 370 : 450;
+    // the L class (BL-176): the students and the candidates side by side within WIDE, the queue across under them
+    const M = UI.MEMORIAL, { left: wideLeft, width: wideW } = UI.WIDE, candX = wideLeft + M.students + M.gap, candW = wideW - M.students - M.gap;
     await Promise.all([
-      UI.panel(layer, "StudentsPanel", [115, top, 980, height], T("top.students")),
-      UI.panel(layer, "CandidatesPanel", [1115, top, 685, height], student ? shown.find((s) => s.key === student)?.name || T("hall.memorial") : T(view.sort === "recent" ? "hall.recentMemorials" : "hall.memorialCandidates")),
+      UI.panel(layer, "StudentsPanel", [wideLeft, top, M.students, height], T("top.students")),
+      UI.panel(layer, "CandidatesPanel", [candX, top, candW, height], student ? shown.find((s) => s.key === student)?.name || T("hall.memorial") : T(view.sort === "recent" ? "hall.recentMemorials" : "hall.memorialCandidates")),
     ]);
-    const heads = UI.virtualArea(layer, [130, top + 58, 945, height - 73], Math.ceil(shown.length / 6), 195, (cell, row) => Promise.all(shown.slice(row * 6, row * 6 + 6).map((entry, i) => {
+    const heads = UI.virtualArea(layer, [wideLeft + 15, top + 58, M.students - 35, height - 73], Math.ceil(shown.length / M.heads), 195, (cell, row) => Promise.all(shown.slice(row * M.heads, row * M.heads + M.heads).map((entry, i) => {
       if (!headsPictures.has(entry.key)) headsPictures.set(entry.key, lazyThumbnail(() => entry.portrait, work.signal));
-      return UI.studentCard(cell, { ...entry, thumb: headsPictures.get(entry.key) }, [84 + i * 155, 4], student === entry.key,
+      return UI.studentCard(cell, { ...entry, thumb: headsPictures.get(entry.key) }, [84 + i * M.headPitch, 4], student === entry.key,
         () => { student = student === entry.key ? null : entry.key; if (!student) { view.sort = "recent"; view.order = "desc"; } positions.delete("memorial-candidates"); draw().catch(onError); });
     })), { key: "memorial-students", signal, positions, onError });
-    const cards = UI.virtualArea(layer, [1130, top + 58, 650, height - 73], Math.ceil(candidates.length / 2), 275,
+    const cards = UI.virtualArea(layer, [candX + 15, top + 58, candW - 35, height - 73], Math.ceil(candidates.length / 2), 275,
       (cell, row) => Promise.all(candidates.slice(row * 2, row * 2 + 2).map((choice, i) => UI.card(cell, item(choice), {
-        x: 177 + i * 315, y: 93, scale: .39, onAdd: safe((event) => add(choice, event?.currentTarget)), addLabel: addLabel(choice), addEnabled: canAdd(choice) }))),
+        x: M.cardX + i * M.cardPitch, y: 93, scale: M.cardScale, onAdd: safe((event) => add(choice, event?.currentTarget)), addLabel: addLabel(choice), addEnabled: canAdd(choice) }))),
       { key: "memorial-candidates", signal, positions, onError });
     await Promise.all([heads.ready, cards.ready]); if (!alive()) return;
-    if (!candidates.length) await UI.caption(cards.inner, T("hall.noCandidates"), [30, 70, 590]);
+    if (!candidates.length) await UI.caption(cards.inner, T("hall.noCandidates"), [30, 70, candW - 95]);
     const list = draft.current().memorials;
-    await UI.queuePanel(layer, [115, 720, 1685, 195]);
+    await UI.queuePanel(layer, [wideLeft, 720, wideW, 195]);
     const pitch = UI.MEMORIAL_QUEUE_PITCH;
     const reorder = (id, index) => { const target = list[index]; if (target && !isSaving() && draft.move(id, target.id)) { onChange?.(); draw().catch(onError); } };
     let marker;
-    const queue = UI.virtualArea(layer, [130, 735, 1640, 175], list.length, pitch, async (cell, index, rowSignal) => {
+    const queue = UI.virtualArea(layer, [wideLeft + 15, 735, wideW - 30, 175], list.length, pitch, async (cell, index, rowSignal) => {
       const entry = list[index];
       const choice = choices.find((c) => c.kind === "lobby" && sourceKey(c) === sourceKey(entry));
       const box = document.createElement("div"); Object.assign(box.style, { position: "absolute", left: "0", top: "0", width: `${pitch}px`, height: "175px" });

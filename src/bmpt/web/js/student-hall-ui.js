@@ -67,7 +67,7 @@ export function createModal(title, onClose, { level = 0 } = {}) {
       held.forEach(([el, inert]) => { if (el.isConnected) el.inert = inert; });
       if (previous?.isConnected && !previous.inert) previous.focus?.();
     },
-    async draw(build, actions = [], { width = 2800, height = 1450, retainedFooter = false, compactFooter = false, titleCentre = null, captionSite = "hall.modal" } = {}) {
+    async draw(build, actions = [], { width = POPUP_FRAME.L.w, height = 1450, retainedFooter = false, compactFooter = false, titleCentre = null, captionSite = "hall.modal" } = {}) {
       drawing?.abort(); const nextDrawing = new AbortController(); drawing = nextDrawing;
       const drawSignal = nextDrawing.signal, token = ++revision;
       const cancelled = new Promise((resolve) => drawSignal.addEventListener("abort", resolve, { once: true }));
@@ -82,13 +82,13 @@ export function createModal(title, onClose, { level = 0 } = {}) {
         Popup.hit(layer, frame, "Center/Popup/Base/BG/Btn_Close", onClose, { name: T("display.close") });
         await build(layer, live, drawSignal);
         if (retainedFooter) {
-          // The memorial editor keeps its own footer under its fixed queue panel: small buttons (66 px, about the XS
-          // body every popup's footer has) at the frame's bottom right.
+          // The memorial editor keeps its own footer under its queue panel: XS buttons at the frame's bottom right.
           const actionWidth = Math.min(280, (width * S - 180) / Math.max(1, actions.length) - 20);
           const right = 960 + width * S / 2 - 70, bottom = 540 + (height / 2 - 120) * S;
-          const footerSize = retainedButtonSize(actions.map((action) => action.label), actionWidth, 66);
+          // the XS body every popup's footer has (BL-176)
+          const bodyH = CONTROL.buttonXS.h * S, footerSize = retainedButtonSize(actions.map((action) => action.label), actionWidth, bodyH);
           await Promise.all(actions.map((action, index) => retainedButton(layer, `Footer${index}`, action.label,
-            [right - (actions.length - index) * (actionWidth + 20), bottom, actionWidth, 66], action.fn, { enabled: action.enabled !== false, semantic: action.semantic, size: footerSize })));
+            [right - (actions.length - index) * (actionWidth + 20), bottom, actionWidth, bodyH], action.fn, { enabled: action.enabled !== false, semantic: action.semantic, size: footerSize })));
         } else if (compactFooter) {
           const labels = actions.map((action) => action.label), bodyW = compactFooterWidth(labels), size = compactButtonSize(labels, bodyW);
           await Promise.all(compactFooterBoxes(height, labels.map(() => bodyW)).map((box, index) => button(layer, `Footer${index}`, actions[index].label, box,
@@ -171,7 +171,22 @@ export function portraitPickerLayout(view, searching) {
   return { headerBottom, scale, toolbar: { x: left, y: bar.y + bar.h / 2, width }, search: field ? [field.x, field.y, field.w] : [left, top, width],
     list: [left, top, width, footer[1] - gap - top], footer };
 }
-export const backgroundPickerBox = () => [130, modalContentBottom(1450, 2) - 650, 760, 650];
+// The hall's wide modals (Adjust Memorial Lobby, Background) are the L class (BL-176: no popup wider): their content
+// between these stage x positions (px), SPACE.xl in from the frame's sides.
+export const WIDE = Object.freeze({ left: 960 - POPUP_FRAME.L.w * S / 2 + SPACE.xl * S, width: (POPUP_FRAME.L.w - 2 * SPACE.xl) * S });
+// The background picker: the list at the left (two cards a row, .32 of their size, 296 px apart, rows 224 px), the
+// preview and its caption on the right, as wide as the room left after SPACE.l.
+export const BACKGROUND = Object.freeze({ list: 600, scale: .32, pitch: [296, 224], first: [152, 88] });
+// the list from SPACE.l under the header band down to the footer's clearance; the preview level with its top
+const backgroundTop = () => frameTop(1450) + HEADER_H * S + SPACE.l * S;
+export const backgroundPickerBox = () => [WIDE.left, backgroundTop(), BACKGROUND.list, modalContentBottom(1450, 2) - backgroundTop()];
+export function backgroundPreviewBox() {
+  const left = WIDE.left + BACKGROUND.list + SPACE.l * S, width = WIDE.left + WIDE.width - left;
+  return { left, top: backgroundTop(), width, scale: width / 1920, height: 1080 * width / 1920 };
+}
+// Adjust Memorial Lobby: the students (four heads a row) and the candidates (two cards a row) side by side, the queue
+// across under them.
+export const MEMORIAL = Object.freeze({ students: 650, gap: 20, heads: 4, headPitch: 155, cardScale: .37, cardPitch: 290, cardX: 165 });
 export function portraitRowLayout() {
   const name = Popup.LIST_CARD_NAME, bar = Math.max(88, name.padY + name.lines * name.fs * name.pitch);
   // Use the row's 16 free pixels above the artwork before growing it; reserve the native horizontal scrollbar's

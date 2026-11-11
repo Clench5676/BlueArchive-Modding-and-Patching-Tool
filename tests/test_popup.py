@@ -119,8 +119,8 @@ for (const key of ['S', 'M', 'L', 'XL']) for (const requested of [0, 1, 374, 786
   const tree = Popup.popupFrame('Title', key, requested, { buttons: Array.from({ length: n }, () => ({ label: 'OK' })) });
   const bg = NGUI.find(tree, 'Popup/Base/BG'), body = bg.widgets.find(w => 'sprite' in w);
   assert.equal(body.sprite, 'Common_Popup_Bg');
-  assert.equal(body.w_, P[key].w);
-  assert.equal(body.h_, requested ? Math.min(P.maxH, Math.max(P.minH, requested)) : P[key].h);
+  assert.equal(body.w_, P[key === 'XL' ? 'L' : key].w);  // no popup wider than L (BL-176)
+  assert.equal(body.h_, requested ? Math.min(P.maxH, Math.max(P.minH, requested)) : P[key === 'XL' ? 'L' : key].h);
   const title = NGUI.find(bg, 'Label_Title_Locale'), close = NGUI.find(bg, 'Btn_Close');
   // the title one size under the game's (BL-176), centred where the game's 72 stood under the frame's top
   assert.ok(Math.abs(body.h_ / 2 - title.pos[1] - P.titleTop - Grid.textItem(NGUI, 'Title', T.display, { lines: 1 }).h / 2) < 1e-9);

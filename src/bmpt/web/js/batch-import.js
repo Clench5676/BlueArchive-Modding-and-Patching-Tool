@@ -627,10 +627,10 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
     if (model.busy()) return;
     let server = entry.source?.server || entry.target.server, platform = entry.source?.platform || "android";
     await dialog(T("import.source.choose"), { action: T("picker.ok"), cancel: T("popup.cancel"),
-      onAction: () => model.setSource(entry.id, server, platform) }, (area) => {
+      onAction: () => model.setSource(entry.id, server, platform) }, (area, { width }) => {
       const choices = (key, values, value, change) => {
         const title = el("div"); Object.assign(title.style, { height: "60px", position: "relative" }); area.appendChild(title);
-        textWidget(title, T(`import.source.${key}`), "empty", { scale: 0.5, origin: [685, 30] });
+        textWidget(title, T(`import.source.${key}`), "empty", { scale: 0.5, origin: [width / 2, 30] });
         const group = radioOptions(area, values, value, change, { columns: values.length });
         group.setAttribute("aria-label", T(`import.source.${key}`));
       };
@@ -845,7 +845,8 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
   // until primary(true); it may be called while the content is built.
   // width: the frame's (units); bodyWidth: the content's, centred (px). padding instead: the content fills the frame's container
   // (container: the frame less padding units on each side), and content gets its width in px.
-  async function dialog(title, { action = T("display.close"), cancel = null, onAction = () => true, width = 2458, bodyWidth = null, padding = null } = {}, content) {
+  // the dialogs are the L class at most (BL-176), their area the frame's content box (padding SPACE.xl) unless one names its own
+  async function dialog(title, { action = T("display.close"), cancel = null, onAction = () => true, width = POPUP_FRAME.L.w, bodyWidth = null, padding = bodyWidth ? null : SPACE.xl } = {}, content) {
     await popups.ready();
     if (!visible || dialogClose) return;
     const dialogHost = document.getElementById("dialog"), layer = el("div", "popup-layer import-dialog-layer"), before = document.activeElement;
@@ -990,22 +991,25 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
   }
 
   async function results() {
-    await dialog(T("import.resultTitle"), {}, (area) => {
+    await dialog(T("import.resultTitle"), {}, (area, { width }) => {
       area.classList.add("import-results");
+      // the rows drawn for a 1400 px wide area, scaled to the L-class dialog's (BL-176)
+      const k = Math.min(1, width / 1400);
       const pictures = [];
       const groups = importGroups(model.state.taskEntries, merged, identified);
       const textSize = art.rowTextSize(groups.map((group) => paragraphCopy(group, true)));
-      const resultScale = 0.62, resultTextSize = textSize;
+      const resultScale = 0.62 * k, resultTextSize = textSize;
       for (const group of groups) {
         const entry = representative(group.entries), row = el("div", "import-result-row");
+        Object.assign(row.style, { width: `${1400 * k}px`, height: `${216 * k}px` });
         row.dataset.result = entry.id;
         const drawing = paint(row, art.row({ name: identified(entry).name, ...paragraphCopy(group, true), textSize: resultTextSize }),
-        { scale: resultScale, origin: [700, 104], textures: { "Icon_Arona": Promise.resolve(null) } });
+        { scale: resultScale, origin: [700 * k, 104 * k], textures: { "Icon_Arona": Promise.resolve(null) } });
         let picture;
-        pictures.push({ row, height: 216, prepare: () => picture ||= bindTexture(drawing,
+        pictures.push({ row, height: 216 * k, prepare: () => picture ||= bindTexture(drawing,
           "List_01/BG_Icon/Icon_Arona", thumbnail(entry, { incoming: true }), "import-thumb") });
-        const go = button(T("add.go"), "go", { width: 225, scale: 0.4 });
-        place(go, 1115, 86, 225, 65);
+        const go = button(T("add.go"), "go", { width: 225 * k, scale: 0.4 * k });
+        place(go, 1115 * k, 86 * k, 225 * k, 65 * k);
         const navigate = (item) => {
           dialogClose?.();
           const variant = identified(item).variant;
