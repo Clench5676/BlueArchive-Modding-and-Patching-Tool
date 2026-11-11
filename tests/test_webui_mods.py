@@ -1466,3 +1466,32 @@ def test_extract_rpc_forwards_step_progress(env, monkeypatch):
 
 def test_the_library_and_the_error_report_share_steams_file_list(env):
     assert env.s.library._steam_files is env.s.steam_files
+
+
+def test_a_scan_waits_for_the_writer_job_running_and_follows_it(env, monkeypatch):
+    # BL-183: scans requested while Enable Mods ran (by its own progress) held the library between its entries
+    env.s.set_scan_consent(True)
+    assert env.s.scanner.wait_idle(5)
+    started, release = threading.Event(), threading.Event()
+    scans = []
+    scan = env.s.library.scan
+
+    def measured(*args, **kwargs):
+        scans.append(release.is_set())
+        return scan(*args, **kwargs)
+
+    monkeypatch.setattr(env.s.library, 'scan', measured)
+
+    def writer(log, progress):
+        started.set()
+        assert release.wait(5)
+
+    job = env.s.submit('test.writer', writer, writes='game', library=env.s.library)
+    assert started.wait(5)
+    env.s.request_scan()
+    assert not env.s.scanner.wait_idle(0.6)  # waiting for the job, not scanning
+    assert scans == []
+    release.set()
+    assert env.s.jobs.wait(job, 5)
+    assert env.s.scanner.wait_idle(5)
+    assert scans and all(scans)

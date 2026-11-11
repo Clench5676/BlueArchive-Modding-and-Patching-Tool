@@ -40,6 +40,7 @@ logger = logging.getLogger(__name__)
 
 PRUNE_WAIT = 120.0  # seconds the start scan waits for the library.prune job submitted with the library
 PROGRESS_PUBLISH = 0.25  # seconds between two mods.state events while a toggle reports its progress
+SCAN_WRITER_POLL = 0.2  # seconds between two looks of a waiting scan at the writer jobs (_scan)
 UPDATE_QUIT_WAIT = 3.0  # seconds for the native window to close for an update
 # the library's files and folders a library move takes along; the lock files are made again where needed
 LIBRARY_ITEMS = ("mods", "originals", "built", "transactions", "import-transactions", "asset-deletions", "photographs",
@@ -709,10 +710,17 @@ class Services:
         return self.scanner.request(cores=cores) if cores is not None else self.scanner.request()
 
     def _scan(self, cancel: Callable[[], bool], dismissed: bool, cores: set[str] | None = None) -> Any:
-        """One scan over every known install, on the scanner's thread. The start scan waits for the prune job."""
+        """One scan over every known install, on the scanner's thread. The start scan waits for the prune job, and
+        every scan for the writer jobs queued or running: a scan between a job's steps holds the library while the job
+        waits (a 209-entry Enable Mods waited a minute for the scans its own progress requested, BL-183), and reads
+        files the job is replacing; the end of each writer job requests the scan that follows it."""
         if self._prune_job is not None:
             with self.timings.measure("scan.prune-wait"):
                 self.jobs.wait(self._prune_job, PRUNE_WAIT)
+        if self.jobs.busy():
+            with self.timings.measure("scan.writer-wait"):
+                while self.jobs.busy() and not cancel():
+                    time.sleep(SCAN_WRITER_POLL)
         library = self.library
         start = time.perf_counter()
         with self.timings.measure("scan.files"):
