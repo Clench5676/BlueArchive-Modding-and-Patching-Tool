@@ -58,7 +58,8 @@ let atlasDone = null, texturesDone = null;
 const images = new Map(), tints = new Map();
 let resourceContext = null, resourceRevision = 0;
 const resourceListeners = new Set();
-// Developer previews (pre-release builds) tag every button body with its size preset, XS, S, M or L (BL-173); stable builds do not.
+// Developer previews (pre-release builds and development runs) tag every button body with its size preset, XS, S, M or L (BL-173);
+// packaged release candidates and stable builds do not (settings.get `buttonSizeTags`).
 // A body's size in the app's own units is what it measures on the stage: its prefab size, the nodes' scales and the render's
 // scale against the stage's (a button drawn at a smaller render scale is a smaller button).
 const STAGE_SCALE = 1920 / 2960;
