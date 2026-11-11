@@ -72,3 +72,103 @@ def remove_slot(data: bytes, name: str):
             patches[(a, b)] = draw_order_bytes(order)
     out = sk.emit(0, sk.size, lambda kind, v: v - (v > i) if kind == "slot" else v, patches)
     return out, [a["name"] for a in gone]
+
+
+# --- synthetic binary skeletons (the 4.2 layout bmpt.spine_binary walks)
+
+def _varint(value: int) -> bytes:
+    return varint_bytes(value)
+
+
+def _text(value: str | None) -> bytes:
+    if value is None:
+        return b"\x00"
+    data = value.encode()
+    return _varint(len(data) + 1) + data
+
+
+def _floats(*values: float) -> bytes:
+    import struct
+    return struct.pack(f">{len(values)}f", *values)
+
+
+def region(x=0.0, y=0.0, w=4.0, h=4.0, rotation=None, path=None) -> dict:
+    return {"kind": "region", "floats": (x, y, 1.0, 1.0, w, h), "rotation": rotation, "path": path}
+
+
+def mesh(vertices, uvs, triangles, hull=None, path=None) -> dict:
+    return {"kind": "mesh", "vertices": vertices, "uvs": uvs, "triangles": triangles,
+            "hull": len(vertices) // 2 if hull is None else hull, "path": path}
+
+
+def skeleton(*, bones=(("root", None),), slots=(("face", "root", None),), skin=None, animations=(),
+             nonessential=False, bone_floats=None) -> bytes:
+    """A binary 4.2 skeleton: ``bones`` (name, parent), ``slots`` (name, bone, setup attachment), ``skin`` {slot:
+    [(key, attachment)]} for the default skin, ``animations`` [(name, {slot: [attachment, ...]}, [draw-order frames as
+    slot orders] )]."""
+    strings: list[str] = []
+
+    def ref(text):
+        if text is None:
+            return _varint(0)
+        if text not in strings:
+            strings.append(text)
+        return _varint(strings.index(text) + 1)
+
+    bone_names = [name for name, _ in bones]
+    slot_names = [name for name, _b, _a in slots]
+    out = bytearray()
+    for i, (name, parent) in enumerate(bones):
+        out += _text(name)
+        if i:
+            out += _varint(bone_names.index(parent))
+        out += _floats(*((bone_floats or {}).get(name, (0, 0, 0, 1, 1, 0, 0, 0))))
+        out += b"\x00\x00"
+        if nonessential:
+            out += b"\xff\xff\xff\xff" + _text(None) + b"\x01"
+    body = _varint(len(bones)) + bytes(out)
+    out = bytearray(_varint(len(slots)))
+    for name, bone, attachment in slots:
+        out += _text(name) + _varint(bone_names.index(bone)) + b"\xff\xff\xff\xff" + b"\xff\xff\xff\xff"
+        out += ref(attachment) + _varint(0)
+        if nonessential:
+            out += b"\x01"
+    body += bytes(out) + _varint(0) * 4  # no constraints
+    entries = list((skin or {}).items())
+    out = bytearray(_varint(len(entries)))
+    for slot, atts in entries:
+        out += _varint(slot_names.index(slot)) + _varint(len(atts))
+        for key, a in atts:
+            out += ref(key)
+            path = a.get("path")
+            if a["kind"] == "region":
+                flags = (128 if a["rotation"] is not None else 0) | (16 if path else 0)
+                out += bytes([flags]) + (ref(path) if path else b"")
+                out += _floats(*(((a["rotation"],) if a["rotation"] is not None else ()) + a["floats"]))
+            else:
+                flags = 2 | (16 if path else 0)
+                out += bytes([flags]) + (ref(path) if path else b"")
+                count = len(a["vertices"]) // 2
+                out += _varint(a["hull"]) + _varint(count) + _floats(*a["vertices"]) + _floats(*a["uvs"])
+                out += b"".join(_varint(i) for i in a["triangles"])
+                if nonessential:
+                    out += _varint(0) + _floats(0, 0)
+    body += bytes(out) + _varint(0) + _varint(0)  # no other skins, no events
+    out = bytearray(_varint(len(animations)))
+    for name, timelines, orders in animations:
+        out += _text(name) + _varint(len(timelines) + (1 if orders else 0))
+        out += _varint(len(timelines))
+        for slot, names in timelines.items():
+            out += _varint(slot_names.index(slot)) + _varint(1) + b"\x00" + _varint(len(names))
+            for i, attachment in enumerate(names):
+                out += _floats(i / 10) + ref(attachment)
+        out += _varint(0) * 6  # bones, IK, transform, path, physics, attachment timelines
+        out += _varint(len(orders))
+        for i, order in enumerate(orders):
+            out += _floats(i / 10) + draw_order_bytes([slot_names.index(slot) for slot in order])
+        out += _varint(0)  # events
+    body += bytes(out)
+    head = b"\x01" * 8 + _text("4.2.33") + _floats(0, 0, 100, 100, 100) + (b"\x01" if nonessential else b"\x00")
+    if nonessential:
+        head += _floats(30) + _text(None) + _text(None)
+    return head + _varint(len(strings)) + b"".join(_text(s) for s in strings) + body

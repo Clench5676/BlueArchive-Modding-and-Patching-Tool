@@ -810,7 +810,7 @@ class Prepared:
     mod_setup: Setup
     official_setup: Setup
     anchors: dict[str, Matrix]
-    unanchored: list[str]  # slots placed without a fitted anchor although a base rig was given
+    unanchored: list[str]  # slots placed without a fitted anchor: no base rig, or the fit did not hold
     notes: dict[str, str]
     skeleton: bytes  # the primary graft
     atlas: str
@@ -835,8 +835,9 @@ def prepare(mod_skeleton: bytes, mod_atlas: str, mod_pages: dict[str, Image.Imag
     pages = pack(mod_atlas, official_atlas, regions, mod_pages, official_pages, mod_setup)
     anchors, unanchored = {}, []
     for slot in sorted({c.slot for c in graft.carried.values()}):
-        if base_setup is None:
+        if base_setup is None:  # placed as if the mod had not moved the face: the review rings it for a look
             anchors[slot] = np.eye(3)
+            unanchored.append(slot)
             continue
         anchors[slot], fitted = fit_anchor(mod_setup, base_setup, slot)
         if not fitted:
