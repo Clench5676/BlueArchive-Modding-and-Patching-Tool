@@ -1,6 +1,6 @@
 // What a portrait rig draws, pose by pose, for the remap's world-space rebake (rebake.py): per drawn slot its
 // region, page, blend, alpha, world vertices, page UVs and triangles. The caller supplies the shipped Spine runtime;
-// all posing uses its public API, as refine-composite.js does.
+// all posing uses its public API.
 
 const round = (value, scale) => Math.round(value * scale) / scale;
 // as atlas_remap.pair_atlases pairs them: the file name without directory, case and extension
