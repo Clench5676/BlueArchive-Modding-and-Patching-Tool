@@ -28,7 +28,8 @@ async function harness(locale = "en-US", button = "cancel", accept = false) {
   setStrings(locale, flat(strings));
   const calls = [], popups = [], comparisons = [], covers = [], labels = [], progress = [];
   let nextReport = report(), rebuilt = null, held = false, covered = false, licensed = true, confirms = 0;
-  let taskActive = false, stamp = "inputs-1", afterCheck = () => {};
+  let taskActive = false, stamp = "inputs-1", afterCheck = () => {}, redrawn = { redrawn: false, overlap: 0.99 };
+  const geometries = [];
   const saved = { mod: { id: "new-mod", repaired_from: "old-mod" } };
   globalThis.compatibilityDeps = {
     jobProgress,
@@ -45,7 +46,7 @@ async function harness(locale = "en-US", button = "cancel", accept = false) {
       assert.equal(typeof update, "function");
       update({ current: 2, total: 3, label: "assets-raw.bundle", step: "import.step.replace" });
       if (id === "actions.compatibility") afterCheck();
-      return id === "actions.remap" ? rebuilt : id === "actions.acceptRemap" ? saved : nextReport;
+      return id === "actions.remap" ? rebuilt : id === "actions.acceptRemap" ? saved : id === "actions.redrawn" ? redrawn : nextReport;
     },
     Loading: { task: async (fn, options) => {
         labels.push(options.label); taskActive = true;
@@ -55,14 +56,17 @@ async function harness(locale = "en-US", button = "cancel", accept = false) {
       page: async (fn) => { covered = true; covers.push(true); try { return await fn(); } finally { covered = false; } },
     },
     Popup: { message: async (options) => { assert.ok(!held && !covered && !taskActive); popups.push(options); return { button }; } },
+    RigGeometry: { forRemap: (report) => { geometries.push(report); return { "test.atlas": { source: { slots: [], poses: { "": [] } }, target: { slots: [], poses: { "": [] } } } }; },
+      restOnly: (geometry) => ({ ...geometry, rest: true }) },
     Compare: { show: async (...args) => { assert.ok(!held && !covered && !taskActive); comparisons.push(args); return accept; } },
   };
-  const code = `const { T, language, rpc, waitJob, Loading, Popup, Compare, ensureSpine, jobProgress } = globalThis.compatibilityDeps;\n${source.replace(/^import .*;$/gm, "")}\n// ${sequence++}`;
+  const code = `const { T, language, rpc, waitJob, Loading, Popup, Compare, ensureSpine, jobProgress, RigGeometry } = globalThis.compatibilityDeps;\n${source.replace(/^import .*;$/gm, "")}\n// ${sequence++}`;
   const mod = await import(`data:text/javascript;base64,${Buffer.from(code).toString("base64")}`);
   return { mod, calls, popups, comparisons, covers, labels, progress, strings, saved,
     use: (value) => { nextReport = value; }, build: (value) => { rebuilt = value; },
     stamp: (value) => { stamp = value; }, afterCheck: (fn) => { afterCheck = fn; },
-    license: (value) => { licensed = value; }, confirms: () => confirms };
+    license: (value) => { licensed = value; }, confirms: () => confirms,
+    redraw: (value) => { redrawn = value; }, geometries };
 }
 
 test("pending acknowledgement skips the runtime check without a licence popup or blocking update inputs", async () => {
@@ -357,14 +361,13 @@ test("the repair preview counts each kind of region, with the names behind Detai
   for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
     const h = await harness(locale, "ok", false), preview = prepared();
     preview.report.official = ["test.atlas - smile", "test.atlas - 15", "test.atlas - 16", "test.atlas - 17"];
-    preview.report.changed = ["test.atlas - body"];
     preview.report.dropped = ["test.atlas - old"]; preview.report.added = ["test.atlas - halo"];
     h.build(preview); h.use(mixedReport());
     await h.mod.check("old-mod", "Painted");
     const lines = h.comparisons[0][3].lines;
     const rows = lines.filter((line) => line.button);
-    // moved and unused on the first row, then official, redrawn, unpainted: a count each, no name on the row
-    assert.deepEqual(rows.map((row) => row.text.match(/\d+/)?.[0]), ["1", "4", "1", "1"], locale);
+    // moved and unused on the first row, then official, unpainted: a count each, no name on the row
+    assert.deepEqual(rows.map((row) => row.text.match(/\d+/)?.[0]), ["1", "4", "1"], locale);
     assert.equal(lines[0], rows[0]);
     assert.ok(rows.every((row) => !/smile|body|old|halo|atlas/.test(row.text) && row.button.label === h.strings.info.details), locale);
     assert.ok(lines.every((line) => !/[{}]/.test(line.text ?? line) && !(line.text ?? line).startsWith("remap.")));
@@ -387,7 +390,34 @@ test("the repair preview counts each kind of region, with the names behind Detai
 test("regions of several atlases keep their atlas in the details", async () => {
   const { mod, popups } = await harness();
   const lines = mod.reviewLines({ moved: [], dropped: [], added: [], upscaled: [], warnings: [],
-    official: ["a.atlas - smile", "b.atlas - smile"], changed: [] });
+    official: ["a.atlas - smile", "b.atlas - smile"] });
   await lines.find((line) => line.button).button.fn();
   assert.ok(popups[0].lines[0].includes("a.atlas - smile") && popups[0].lines[0].includes("b.atlas - smile"));
+});
+
+test("a portrait the game drew anew is named by the check and offers no remap", async () => {
+  const h = await harness("zh-CN", "ok");
+  const portrait = () => ({ ...mixedReport(), kind: "spr" });
+  h.use(portrait()); h.redraw({ redrawn: true, overlap: 0.52 });
+  const checked = await h.mod.inspect("old-mod");
+  const redrawn = h.calls.find(([method]) => method === "actions.redrawn");
+  assert.deepEqual(redrawn[1].geometry.rest, true);  // the rest poses only
+  assert.deepEqual(checked.redrawn, { redrawn: true, overlap: 0.52 });
+  assert.deepEqual(checked.assessment.issues.map(({ key }) => key).includes("redrawn"), true);
+  assert.equal(checked.assessment.remap, false);
+  assert.equal(h.mod.canRemap("old-mod", { kind: "spr" }), false);
+  assert.equal(h.strings.compatibility.redrawn, "原版立绘已重绘");
+  // drawn as before: the remap posts the whole geometry
+  h.use(portrait()); h.redraw({ redrawn: false, overlap: 0.99 });
+  const fine = await h.mod.inspect("old-mod");
+  assert.equal(fine.assessment.remap, true);
+  h.build({ unchanged: true });
+  await h.mod.remap("old-mod");
+  const posted = h.calls.filter(([method]) => method === "actions.remap").at(-1)[1];
+  assert.ok(posted.geometry["test.atlas"] && !posted.geometry.rest);
+  // other kinds neither ask nor post geometry
+  const before = h.calls.length;
+  h.use(mixedReport());
+  await h.mod.inspect("old-mod");
+  assert.ok(!h.calls.slice(before).some(([method]) => method === "actions.redrawn"));
 });
