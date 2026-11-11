@@ -698,8 +698,9 @@ export function detailsTree(it, title, fields, actions, portraitTexture = null, 
   if (rows) info.push({ name: "Chips", w: infoW, h: rows * CHIP.h + (rows - 1) * SPACE.s });
   // The light stats box keeps its own padding, row sizes, caption/value types and decoration. A portrait's narrow column
   // stacks each caption and value as successive full-width rows; other sources retain the paired columns.
-  const fieldRows = portraitTexture ? fields.flatMap(([caption, value, colour]) => [{ value: caption }, { value: String(value), colour }])
-    : fields.map(([caption, value, colour], i) => ({ caption, value: String(value), colour, ariaLabel: String(value), cut: i === 2 ? 2 : 0 }));
+  // a field without a caption (null) is its value alone
+  const fieldRows = portraitTexture ? fields.flatMap(([caption, value, colour]) => [...(caption == null ? [] : [{ value: caption }]), { value: String(value), colour }])
+    : fields.map(([caption, value, colour], i) => ({ caption: caption ?? "", value: String(value), colour, ariaLabel: String(value), cut: i === 2 ? 2 : 0 }));
   const fieldW = side ? content.w : infoW;
   const fieldBox = fields.length ? statsBox({ holder: "panel", width: fieldW, at: [0, 0], name: "Fields", rows: fieldRows }) : { nodes: [], height: 0 };
   if (portraitTexture) for (const part of fieldBox.nodes) {
