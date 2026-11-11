@@ -299,21 +299,32 @@
 			"driftApply": "MOD設定を適用",
 			"driftKeep": "現状のまま",
 			"stillOverwritten": "上書きのまま：{n}",
-			"held": "保留中、ボーン変更：{n}",
-			"heldTitle": "保留中のMOD",
+			"held": "公式の .skelファイルまたは .atlasファイルが変更、未適用：{n}",
+			"heldTitle": "公式ファイルの変更で未適用のMOD",
 			"heldBadge": "ボーン変更",
 			"impact": {
-				"title": "ゲーム本体が更新されました",
-				"rigChanged": "ボーン変更、保留中：{n}",
+				"title": "ゲーム更新の影響を受けたMOD",
+				"rigChanged": "公式の .skelファイルまたは .atlasファイルが変更、更新まで適用しない：{n}",
 				"gone": "ゲームから削除済み：{n}",
 				"newParts": "公式パーツ追加：{n}",
-				"rebuilt": "再構築済み、ボーン同一：{n}",
+				"rebuilt": "再構築済み、.skelファイルと .atlasファイルは同一：{n}",
 				"unchanged": "影響なし：{n}",
 				"unknown": "判定不可：{n}",
-				"hint": "生徒ページでこのMODを選び、「{action}」を押すと再び適用",
+				"hint": "「{go}」でこのMODを開き、「{action}」を押すと再び適用",
 				"others": "その他の影響を受けたMOD",
 				"expand": "展開",
-				"collapse": "折りたたむ"
+				"collapse": "折りたたむ",
+				"official": "公式{kind}：{changes}",
+				"officialFiles": "公式ファイル：{changes}",
+				"change": {
+					"repacked": ".atlasファイルの配置変更",
+					"animation": ".skelファイルにアニメーション追加 1",
+					"animations": ".skelファイルにアニメーション追加 {n}",
+					"rig": ".skelファイルの構成変更",
+					"textures": "テクスチャサイズ変更",
+					"removed": "パーツ削除",
+					"added": "パーツ追加"
+				}
 			},
 			"untested": {
 				"title": "新しいゲームバージョン",
@@ -615,6 +626,8 @@
 				},
 				"files": "ゲームファイルの設定ずれチェック",
 				"check": "チェック",
+				"impact": "ゲーム更新の影響",
+				"view": "表示",
 				"clean": "ずれなし",
 				"driftHelp": {
 					"title": "設定のずれ",

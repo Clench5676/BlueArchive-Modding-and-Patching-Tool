@@ -1196,17 +1196,21 @@ def build_api(s: Services) -> RpcRegistry:
         return {}
 
     @rpc.method("mods.impact")
-    def mods_impact(ids: list[str] | None = None) -> str:
+    def mods_impact(ids: list[str] | None = None, force: bool = False) -> str:
         """What a game update did under the library's mods (a reader job). Without ``ids``: the impact summary of the
-        current install, classified only when its resource version differs from the last one seen
-        (``update_impact``). With ``ids``: those mods' impacts now, {mods: [{id, impact}]}."""
+        current install, classified only when its resource version differs from the last one seen, or always with
+        ``force`` (Settings' View) (``update_impact``). With ``ids``: those mods' impacts now, {mods: [{id,
+        impact}]}."""
         if ids is not None and (not isinstance(ids, list) or len(ids) > 4096
                                 or not all(isinstance(v, str) and v for v in ids)):
             raise ServiceError("bad_params", key="ids")
+        if not isinstance(force, bool):
+            raise ServiceError("bad_params", key="force")
         library = s.library
         pin = s._current_pin(library)
         if ids is None:
-            return s.submit("mods.impact", lambda log, progress: library.update_impact(pin, progress=progress))
+            return s.submit("mods.impact", lambda log, progress: library.update_impact(pin, force=force,
+                                                                                      progress=progress))
         return s.submit("mods.impact", lambda log, progress: {"mods": library.impacts(ids, pin)})
 
     @rpc.method("mods.impactSeen")
