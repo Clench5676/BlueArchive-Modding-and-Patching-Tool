@@ -19,6 +19,7 @@ import { bindCorner } from "./corner-layout.js";
 import { ensureSpine } from "./spine-runtime.js";
 import { wheelKind, wheelStep } from "./lobby-touch.js";
 import { S, clone, hitButton } from "./util.js";
+import { FULLSCREEN_BUTTON } from "./ui-tokens.js";
 import {
   SLIDE, SLIDE_S, STAGE, anchoredCentre, artBox, atHome, homeView, limits, mix, panBy, slideFrames, viewOf, viewport, zoomAt,
 } from "./visual-view.js";
@@ -28,8 +29,9 @@ const GLIDE_MS = 450;           // in and out, in step with the UI slide (app.cs
 const RESET_MS = 300;           // Btn_RefreshPos: back to the whole art
 const ZOOM_TAU = 0.08;          // s: a wheel zoom eases to its target, as in the lobby
 const WHEEL = 0.0015, LINE = 40, PINCH = 0.01, SCROLL_MS = 120; // as lobby-touch.js
-// the buttons' BoxColliders [width, height, centre y] in NGUI units around their node; the greyed reset has none
-const HIT = { Btn_Back: [228.83, 165, 0], Btn_HideUI: [228.83, 165, 0], Btn_RefreshPos: [228.83, 195.2, 32] };
+// the buttons' BoxColliders [width, height, centre y] in NGUI units around their node; the greyed reset has none. They
+// grow with the bodies' fullscreen height (fullscreenBody): the prefab's bodies are 116 high.
+const HIT = { Btn_Back: [228.83, 165 + FULLSCREEN_BUTTON.h - 116, 0], Btn_HideUI: [228.83, 165 + FULLSCREEN_BUTTON.h - 116, 0], Btn_RefreshPos: [228.83, 195.2 + FULLSCREEN_BUTTON.h - 116, 32] };
 const CORNERS = [["LeftTop", ["Btn_Back"]], ["RightTop", ["Btn_HideUI"]], ["RightBottom", ["Btn_RefreshPos", "Btn_RefreshPos_Disable"]]];
 // the buttons the clip moves, and their keys
 const MOVING = { Btn_Back: SLIDE.Btn_Back, Btn_HideUI: SLIDE.Btn_HideUI, Btn_RefreshPos: SLIDE.Btn_RefreshPos, Btn_RefreshPos_Disable: SLIDE.Btn_RefreshPos };
@@ -70,7 +72,7 @@ export async function prepareBack({ layout, label, onBack }) {
 export async function exitControl(host, layout) {
   const source = NGUI.find(layout, "Inventory_ListControl_PC/LeftTop/Btn_Back");
   if (!source) return;
-  const tree = clone(source), body = tree.widgets.find((w) => "sprite" in w);
+  const tree = fullscreenBody(clone(source)), body = tree.widgets.find((w) => "sprite" in w);
   tree.pos = [0, 0];
   const w = body.w_ * S, h = body.h_ * S, next = document.createElement("div");
   await NGUI.render(tree, next, { scale: S, origin: [w / 2, h / 2] });
@@ -224,6 +226,14 @@ async function renderBg(pc, bg) {
   return [...host.children];
 }
 
+// every white body of a button tree (the prefab's 171 x 116 Common_Bg_Raius5px_Shadow) at the fullscreen views' one
+// button size, about its own centre (BL-188)
+function fullscreenBody(tree) {
+  for (const w of tree.widgets || []) if (w.sprite === "Common_Bg_Raius5px_Shadow") Object.assign(w, { w_: FULLSCREEN_BUTTON.w, h_: FULLSCREEN_BUTTON.h });
+  for (const child of tree.children || []) fullscreenBody(child);
+  return tree;
+}
+
 // one layer per button, so each slides on its own; the corners are anchored to the screen's edges
 async function renderButtons(pc, strings, corners = CORNERS, onPress = press) {
   const groups = {}, made = [];
@@ -238,7 +248,7 @@ async function renderButtons(pc, strings, corners = CORNERS, onPress = press) {
       if (!n) continue;
       const el = document.createElement("div");
       el.className = "visual-btn";
-      const tree = NGUI.node(corner, at, [], [{ ...clone(n), active: true }]);
+      const tree = NGUI.node(corner, at, [], [fullscreenBody({ ...clone(n), active: true })]);
       if (name === "Btn_HideUI") {
         // Student Hall's Flip sprite is 80x80. Fit it into this button's own 79x67 icon slot (67x67 ink).
         const icon = NGUI.find(tree, `${name}/Icon`).widgets.find((w) => "sprite" in w);

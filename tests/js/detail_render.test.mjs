@@ -1807,8 +1807,9 @@ const zoomButton = () => walk(hosts.ngui).find((el) => el.dataset.part === `${PL
 function assertPhotographyCorner(mode) {
   const launcher = document.getElementById('photo-launcher');
   const hit = walk(launcher).find((el) => el.tagName === 'BUTTON'), scale = 1920 / 2960;
-  const width = 171 * scale, height = 116 * scale;
-  const expected = [960 + 1352 * scale - width / 2 - (mode === 'portrait' ? width + 26 : 0),
+  // the fullscreen views' one button size (BL-188)
+  const width = 171 * scale, height = 126 * scale;
+  const expected = [960 + 1352 * scale - width / 2 - (mode === 'portrait' ? width + 20 * scale : 0), // SPACE.m apart (BL-188)
     540 - (-112.5 - 658 + 61.1) * scale - height / 2, width, height];
   ['left', 'top', 'width', 'height'].forEach((key, index) => assert.ok(Math.abs(parseFloat(hit.style[key]) - expected[index]) < 0.02, `Photography ${key} follows the existing ${mode} corner`));
 }
@@ -1849,7 +1850,7 @@ for (const enabled of [true, false]) test(`fullscreen switches both ways on the 
     assert.equal(visualButton('Btn_HideUI').getAttribute('aria-label'), 'Switch Portrait');
     assert.equal(document.activeElement, visualButton('Btn_HideUI'), 'The replacement switch retains keyboard focus');
     assert.equal(hosts['fs-exit'].hidden, false, 'Back remains available in the lobby');
-    const s = 1920 / 2960, backBounds = [960 + (-1354 - 171 / 2) * s, 540 - (650 + 116 / 2) * s, 171 * s, 116 * s];
+    const s = 1920 / 2960, backBounds = [960 + (-1354 - 171 / 2) * s, 540 - (650 + 126 / 2) * s, 171 * s, 126 * s]; // BL-188 size
     ['left', 'top', 'width', 'height'].forEach((key, index) => assert.ok(Math.abs(parseFloat(hosts['fs-exit'].style[key]) - backBounds[index]) < 0.02, `Lobby Back ${key} keeps its existing position`));
     assertPhotographyCorner('lobby');
     await clickFullscreen(t, visualButton('Btn_HideUI'));
@@ -1964,9 +1965,10 @@ for (const lang of ['en-US', 'zh-CN', 'zh-TW', 'ja-JP', 'ko-KR', 'th-TH']) test(
   const backBox = bounds(button(parts.groups.Btn_Back));
   const resetBox = bounds(button(parts.groups.Btn_RefreshPos));
   const expected = [
-    [switchBox, [960 + (1352 - 228.83 / 2) * scale, 540 - (78.5 + 650 + 165 / 2) * scale, 228.83 * scale, 165 * scale]],
-    [backBox, [960 + (-1354 - 228.83 / 2) * scale, switchBox[1], 228.83 * scale, 165 * scale]],
-    [resetBox, [switchBox[0], 540 - (-112.5 - 658 + 32 + 195.2 / 2) * scale, 228.83 * scale, 195.2 * scale]],
+    // the prefab's colliders, grown with the bodies' fullscreen height (116 to 126, BL-188)
+    [switchBox, [960 + (1352 - 228.83 / 2) * scale, 540 - (78.5 + 650 + 175 / 2) * scale, 228.83 * scale, 175 * scale]],
+    [backBox, [960 + (-1354 - 228.83 / 2) * scale, switchBox[1], 228.83 * scale, 175 * scale]],
+    [resetBox, [switchBox[0], 540 - (-112.5 - 658 + 32 + 205.2 / 2) * scale, 228.83 * scale, 205.2 * scale]],
   ];
   for (const [width, height] of [[960, 540], [1600, 900], [2560, 1440], [2560, 1080], [960, 1200]]) for (const density of [1, 2]) {
     const factor = Math.min(width / 1920, height / 1080) * density;

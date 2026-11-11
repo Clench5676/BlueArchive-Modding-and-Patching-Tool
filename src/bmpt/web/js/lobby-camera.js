@@ -16,6 +16,7 @@ import * as Loading from "./loading.js";
 import { prepareBack } from "./visual-mode.js";
 import { anchoredCentre } from "./visual-view.js";
 import { buttonCenter } from "./student-hall-icons.js";
+import { FULLSCREEN_BUTTON, SPACE } from "./ui-tokens.js";
 
 const STAGE = { w: 1920, h: 1080 };
 
@@ -30,17 +31,19 @@ export async function entry(on, bridge) {
   if (!on || active || !hooks || !hooks.lobby() || Lobby.cameraState()?.prefab === false) return;
   const my = ++generation;
   const layout = await NGUI.layout("UICharacterVisualMode"), corner = NGUI.find(layout, "Inventory_ListControl_PC/RightBottom");
-  const reset = NGUI.find(corner, "Btn_RefreshPos"), body = NGUI.find(reset, "Btn_RefreshPos"), widget = body.widgets.find((w) => "sprite" in w);
+  const reset = NGUI.find(corner, "Btn_RefreshPos"), body = NGUI.find(reset, "Btn_RefreshPos");
   const at = anchoredCentre(corner.widgets.find((w) => w.anchors)) || corner.pos;
-  const width = widget.w_ * S, height = widget.h_ * S;
-  const x = 960 + (at[0] + reset.pos[0] + body.pos[0]) * S - width / 2 - (width + 26);
+  // the fullscreen views' one button size (ui-tokens.js FULLSCREEN_BUTTON, BL-188)
+  const width = FULLSCREEN_BUTTON.w * S, height = FULLSCREEN_BUTTON.h * S;
+  // the gap between every two fullscreen buttons (SPACE.m, as the photography toolbar's)
+  const gap = SPACE.m * S, x = 960 + (at[0] + reset.pos[0] + body.pos[0]) * S - width / 2 - (width + gap);
   const y = 540 - (at[1] + reset.pos[1] + body.pos[1]) * S - height / 2;
   if (my !== generation || active) return;
   const host = document.createElement("div");
   host.id = "camera-launcher";
   stage().append(host);
   await whiteButton(host, "CameraEntry", T("lobby.cameraOpen"), [x, y, width, height], open,
-    { icon: "Cafe_Icon_Video", atlas: "Common", corner: "bottom-right", anchorBox: [x + width + 26, y, width, height] });
+    { icon: "Cafe_Icon_Video", atlas: "Common", corner: "bottom-right", anchorBox: [x + width + gap, y, width, height] });
 }
 
 async function open() {
@@ -66,7 +69,7 @@ async function back() {
 async function resetButton() {
   const host = document.createElement("div");
   overlay.append(host);
-  const hit = await whiteButton(host, "CameraReset", T("visual.reset"), [1890 - 196, 25, 196, 76], () => Lobby.resetZoom(), { corner: "top-right" });
+  const hit = await whiteButton(host, "CameraReset", T("visual.reset"), [1890 - 196, 25, 196, FULLSCREEN_BUTTON.h * S], () => Lobby.resetZoom(), { corner: "top-right" });
   hit.dataset.cameraAction = "Reset";
 }
 async function shutter() {
