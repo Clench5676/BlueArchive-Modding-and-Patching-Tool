@@ -671,6 +671,9 @@ async function start() {
   if (!location.hash) history.replaceState(null, "", ROOT_ROUTE);
   addEventListener("hashchange", route);
   if(!info.gameFound){noGame();return;}
+  // a game update since the last start: asked, and checked under the loading screen, before the first screen
+  // (update-impact.js gate; the summary follows with the start popups)
+  await timed("update-check", () => Impact.gate()).catch((err) => console.error("update check", err));
   await timed("first-screen", route);
 }
 

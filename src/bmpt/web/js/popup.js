@@ -1051,7 +1051,8 @@ export const MSG = { title: POPUP_FRAME.contentTop, gap: SPACE.l, rowButton: SMA
 // {button, checked}: button "ok" or "cancel", or null for the close button, the backdrop or Escape; checked, the
 // checkbox's state then (null without one).
 //   lines: text, or {text, button: {label, fn, inline}} for a line with a small button at its end (fn({close}), where
-//          close(button) closes the popup; inline, with plain: only as high as the line's text, right after it); with such a line every line shows as a row of the game's light box
+//          close(button) closes the popup; inline, with plain: only as high as the line's text, right after it; more:
+//          [{label, fn}] further inline buttons after it, the same size); with such a line every line shows as a row of the game's light box
 //          fontSize/minFontSize optionally keep a row's existing type size (the tour counter and body).
 //          With plain: indent (units) moves a line right, marker hangs a bullet left of its first line (markerGap wide,
 //          its font size by default), gap adds space above it (release notes' lists and sections), italic slants it.
@@ -1127,12 +1128,12 @@ export function plainMessage(layer, { title, lines = [], ok, cancel, buttons, st
   const content = styleBox(el("div", "plain-message-lines"), { x: layout.content.x, y: FRAME_Y + frame.h / 2 - layout.y0,
     w: layout.content.w, h: layout.visible });
   Object.assign(content.style, { overflow: "auto", textAlign: plain ? "left" : "center" });
-  const paragraphItems = layout.body.fitted.map(({ r, f, bf, bw, item: text }) => {
-    return { r, f, bf, bw, text, w: layout.content.w,
+  const paragraphItems = layout.body.fitted.map(({ r, f, bf, bw, more = [], item: text }) => {
+    return { r, f, bf, bw, more, text, w: layout.content.w,
       h: r.rule ? RULE.h : Math.max(r.button ? SMALL_BUTTON.h : 0, text.h) + (plain ? r.gap || 0 : 0) };
   });
   const paragraphs = layoutStack(paragraphItems, { w: layout.content.w, gap: SPACE.l });
-  paragraphs.boxes.forEach(({ r, f, bf, bw, text, x, y, w }, i) => {
+  paragraphs.boxes.forEach(({ r, f, bf, bw, more, text, x, y, w }, i) => {
     if (r.rule) {
       const line = styleBox(el("div", "plain-message-rule"), { x: x + SPACE.xxxl, y, w: w - 2 * SPACE.xxxl, h: RULE.h });
       line.style.borderTop = `${Math.max(1, RULE.h * S)}px dotted ${STATS_BOX.divider}`;
@@ -1140,7 +1141,9 @@ export function plainMessage(layer, { title, lines = [], ok, cancel, buttons, st
       return;
     }
     const indent = plain ? r.indent || 0 : 0;
-    const parts = row([{ ...text, w: w - indent - (r.button ? bw + SPACE.m : 0) }, ...(r.button ? [{ w: bw, h: SMALL_BUTTON.h }] : [])],
+    const taken = (r.button ? bw + SPACE.m : 0) + more.reduce((n, m) => n + m.bw + SPACE.m, 0);
+    const parts = row([{ ...text, w: w - indent - taken }, ...(r.button ? [{ w: bw, h: SMALL_BUTTON.h }] : []),
+      ...more.map((m) => ({ w: m.bw, h: SMALL_BUTTON.h }))],
       { x: x + indent, y: y + (plain ? r.gap || 0 : 0), w: w - indent, gap: SPACE.m, justify: "center" }).boxes;
     const p = styleBox(el("p", "", f.text), parts[0], NGUI.fontSizeFor(f.text, f.fs));
     content.appendChild(p);
@@ -1150,6 +1153,10 @@ export function plainMessage(layer, { title, lines = [], ok, cancel, buttons, st
       const b = styleBox(button(bf.text, () => r.button.fn?.({ close: finish }), `line${i}`, "plain-line-button"), parts[1], NGUI.fontSizeFor(bf.text, bf.fs));
       b.setAttribute("aria-label", r.button.label); content.appendChild(b);
     }
+    more.forEach((m, k) => {
+      const b = styleBox(button(m.bf.text, () => m.button.fn?.({ close: finish }), `line${i}_${k + 1}`, "plain-line-button"), parts[2 + k], NGUI.fontSizeFor(m.bf.text, m.bf.fs));
+      b.setAttribute("aria-label", m.button.label); content.appendChild(b);
+    });
   });
   // Use the measured body height for the scroll viewport, including the native stats-box row envelope.
   if (paragraphs.h > layout.visible) content.style.overflowY = "auto";
@@ -1203,15 +1210,22 @@ export const INLINE_BUTTON = Object.freeze({ height: 0.9, share: 0.55, fsMin: 20
 // owner 2026-11-11)
 export const LINE_BUTTON = Object.freeze({ share: 0.6, fsMin: TYPE.badge.min, pad: SMALL_BUTTON.fitInset });
 function inlineButton(r, fs, w) {
-  const line = r.button.inline === "line";
+  const first = oneInlineButton(r, r.button, fs);
+  // more inline buttons after the first (r.more: [{label, fn}]), the same size, SPACE.m apart
+  const more = (r.more || []).map((button) => ({ button, ...oneInlineButton(r, { ...button, inline: r.button.inline }, fs) }));
+  const taken = [first, ...more].reduce((n, b) => n + b.bw + SPACE.m, 0);
+  return { bf: first.bf, bw: first.bw, bh: first.bh, more, room: w - 2 * SPACE.xxxl - taken - (r.indent || 0) };
+}
+function oneInlineButton(r, button, fs) {
+  const line = button.inline === "line";
   const bh = line ? Math.round(fs * NGUI.LINE_PITCH) + SMALL_BUTTON.boxInsetH : Math.round(fs * INLINE_BUTTON.height);
   const cap = line ? Math.max(LINE_BUTTON.fsMin, Math.round(fs * LINE_BUTTON.share))
     : Math.min(Math.round(fs * INLINE_BUTTON.share), bh - SMALL_BUTTON.boxInsetH);
   // one line: as high as the text beside it, a two-word caption (Go to) never folds
-  const ib = fitText(r.button.label, cap, Math.min(cap, line ? LINE_BUTTON.fsMin : INLINE_BUTTON.fsMin),
+  const ib = fitText(button.label, cap, Math.min(cap, line ? LINE_BUTTON.fsMin : INLINE_BUTTON.fsMin),
     SMALL_BUTTON.w - SMALL_BUTTON.fitInset, 1);
   const ibw = glyphsOf(ib.text, ib.fs) + (line ? LINE_BUTTON.pad : INLINE_BUTTON.pad);
-  return { bf: ib, bw: ibw, bh, room: w - 2 * SPACE.xxxl - ibw - SPACE.m - (r.indent || 0) };
+  return { bf: ib, bw: ibw, bh };
 }
 
 function messageLines(lines, w, fitTogether, plain, assets = true) {
@@ -1269,12 +1283,13 @@ function messageLines(lines, w, fitTogether, plain, assets = true) {
     const indent = plain ? s.r.indent || 0 : 0;
     // an inline button follows its text; another sits at the line's right end
     const inline = !!s.bh;
-    const lineRow = row([{ ...s.item, w: inline ? s.item.w : s.room }, ...(s.bf ? [{ w: s.bw, h: s.bh ?? SMALL_BUTTON.h }] : [])],
+    const lineRow = row([{ ...s.item, w: inline ? s.item.w : s.room }, ...(s.bf ? [{ w: s.bw, h: s.bh ?? SMALL_BUTTON.h }] : []),
+      ...(s.more || []).map((m) => ({ w: m.bw, h: s.bh }))],
       { x: textBox.x + indent, w: textBox.w - indent, gap: SPACE.m, justify: inline ? "start" : "center" });
     return { ...s, lineRow, w: textBox.w, h: lineRow.h + (plain ? s.r.gap || 0 : 0) };
   });
   const paragraphs = layoutStack(sized, { x: textBox.x, w: textBox.w, gap: SPACE.l });
-  paragraphs.boxes.forEach(({ r, f, bf, bw, bh, room, y, lineRow: measured }, i) => {
+  paragraphs.boxes.forEach(({ r, f, bf, bw, bh, more = [], room, y, lineRow: measured }, i) => {
     const lineRow = { ...measured, boxes: measured.boxes.map(b => ({ ...b, y: b.y + y + (plain ? r.gap || 0 : 0) })) };
     const local = { w, h: 0, cx: 0, cy: 0 }, colour = `${r.color || "#2d4664"}/1.00`, box = lineRow.boxes[0];
     if (r.rule) {
@@ -1294,6 +1309,12 @@ function messageLines(lines, w, fitTogether, plain, assets = true) {
         ? { w: bw, h: bh, fs: bf.fs, min: bf.fs, depth: 8 } : { w: bw, fs: SMALL_BUTTON.fs, min: SMALL_BUTTON.fsMin, depth: 8 }));
       buttons.push([i, r.button]);
     }
+    more.forEach((m, k) => {
+      const [mx, my] = toNode(lineRow.boxes[2 + k], 4, local);
+      out.push((assets ? Buttons.smallButton : placeholderButton)(`Btn_${i}_${k + 1}`, mx, my, m.button.label,
+        { w: m.bw, h: bh, fs: m.bf.fs, min: m.bf.fs, depth: 8 }));
+      buttons.push([`${i}_${k + 1}`, m.button]);
+    });
   });
   return { tree: node("Lines", [0, 0], [], out), height: paragraphs.h, buttons, fitted, boxes: paragraphs.boxes };
 }
