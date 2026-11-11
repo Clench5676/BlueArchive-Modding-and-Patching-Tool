@@ -724,11 +724,11 @@ export function detailsTree(it, title, fields, actions, portraitTexture = null, 
     node("Label", [0, 0], [label(titleText.text, titleText.fs, "#ffffff/1.00", w - 2 * SPACE.xxl, titleText.h, { depth: 7 })]),
   ]);
   kids.push(titleNode); bands.push({ name: "Title_Bg", w, h: titleH });
-  // A 3D model's picture sits beside its name and chips, its fields full width below (BL-133), so the panel fits
-  // without scrolling and the picture keeps a usable size.
-  const side = !portraitTexture && kind === "model";
-  const columns = grid(content), pictureColumn = portraitTexture || side ? columns.span(5) : content;
-  const infoColumn = portraitTexture || side ? columns.span(7, 5) : content;
+  // A 3D model's picture spans the panel, its name, chips and fields under it (owner, 2026-11-11, BL-176; beside them
+  // before, BL-133), one size for every candidate (model).
+  const model = !portraitTexture && kind === "model";
+  const columns = grid(content), pictureColumn = portraitTexture ? columns.span(5) : content;
+  const infoColumn = portraitTexture ? columns.span(7, 5) : content;
   const infoW = infoColumn.w, edit = it.nameEdit ? CONTROL.icon.h + SPACE.m : 0, nameRoom = infoW - 2 * SPACE.m - edit;
   const nameFit = messageText(it.full, DETAILS.name.fs, DETAILS.name.min, nameRoom, 2, true);
   const name = textItem(NGUI, nameFit.text, { fs: nameFit.fs, min: nameFit.fs }, { maxW: nameRoom, lines: Infinity });
@@ -760,7 +760,7 @@ export function detailsTree(it, title, fields, actions, portraitTexture = null, 
   // the chips beside a one-line name when the line holds both, else on their own row under it; a 3D model's beside its
   // picture always under the name (owner, 2026-11-11)
   // a portrait's name always centred on its own line, its chips under it (owner, 2026-11-11, BL-176)
-  const beside = !side && !portraitTexture && chips.length > 0 && !nameFit.text.includes("\n") && nameW + edit + SPACE.l + chipsW <= chipRoom;
+  const beside = !model && !portraitTexture && chips.length > 0 && !nameFit.text.includes("\n") && nameW + edit + SPACE.l + chipsW <= chipRoom;
   const places = beside ? null : chipPlaces(chipW, chipRoom, { wrap: false, h: chip.h }), rows = !beside && chips.length ? Math.max(...places.map((p) => p.row)) + 1 : 0;
   const headH = beside ? Math.max(name.h, chip.h) : name.h;
   const info = [{ name: "Head", w: infoW, h: headH }];
@@ -800,7 +800,7 @@ export function detailsTree(it, title, fields, actions, portraitTexture = null, 
     { value: String(value), colour, ariaLabel: String(value), ...cutRow(field, caption, value) }]);
   const pairedRows = () => fields.map(([caption, value, colour], i) => ({ caption: caption ?? "", value: String(value), colour, ariaLabel: String(value),
     cut: options.truncate ? 0 : i === 2 ? 2 : 0, ...cutRow(i, caption, value) }));
-  const fieldW = side ? content.w : infoW;
+  const fieldW = infoW;
   const boxOf = (rows) => statsBox({ holder: "panel", width: fieldW, at: [0, 0], name: "Fields", rows, type: DETAILS.box, boldCaptions: true });
   let fieldBox = { nodes: [], height: 0 }, stacked = !!portraitTexture;
   if (fields.length) {
@@ -813,7 +813,7 @@ export function detailsTree(it, title, fields, actions, portraitTexture = null, 
   }
   kids.push(...fieldBox.nodes);
   const fieldBand = fields.length ? { name: "Fields", w: fieldW, h: fieldBox.height } : null;
-  if (fieldBand && !side) info.push(fieldBand);
+  if (fieldBand) info.push(fieldBand);
   const infoStack = layoutStack(info, { w: infoW, gap: SPACE.m });
 
   // The picture takes the room the title, the actions and the rest leave (the 3D model's square is one size for every
@@ -829,14 +829,18 @@ export function detailsTree(it, title, fields, actions, portraitTexture = null, 
   const actionRows = actions.length ? Math.ceil(actions.length / perRow) : 0;
   const actionsH = actionRows ? actionRows * BTN.h + (actionRows - 1) * actionGap : 0;
   const roomFor = (otherH, others) => content.h - titleH - otherH - actionsH - SPACE.m * (1 + others + (actions.length ? 1 : 0));
-  const reference = side && fields.length ? boxHeight(fields.map((_, i) => (i === 0 && !options.truncate ? 3 : 1)), DETAILS.box) : 0;
+  // a model's picture as large as the most its name (two lines) and fields (the file name on three lines unless truncated)
+  // leave, whatever this candidate's hold
+  const reference = model ? infoStack.h - name.h + Math.max(name.h, textItem(NGUI, "X\nX", { fs: DETAILS.name.fs, min: DETAILS.name.fs }, { maxW: nameRoom, lines: 2 }).h)
+    + (fields.length ? boxHeight(fields.map((_, i) => (i === 0 && !options.truncate ? 3 : 1)), DETAILS.box) - fieldBox.height : 0) : 0;
   const texture = portraitTexture && clone(portraitTexture), native = texture?.widgets.find(widget => "texture" in widget);
   const portraitCard = texture && switchGrid("spr").card; // Keep the portrait card's native aspect in its preview column.
   const aspect = portraitCard ? portraitCard.w / portraitCard.h : kind === "model" ? 1 : 16 / 9;
   let pictureW;
   if (portraitTexture) pictureW = Math.max(0, Math.min(pictureColumn.w, roomFor(0, 0) * aspect));
-  else if (side) pictureW = Math.max(0, Math.min(pictureColumn.w / (1 + TAN10), roomFor(reference, fields.length ? 1 : 0),
-    roomFor(fieldBand?.h || 0, fields.length ? 1 : 0)));
+  // a model's square beside the reference and the most room actions take (two rows of XS bodies): one size for all
+  else if (model) pictureW = Math.max(0, Math.min((w - 2 * SPACE.m) / (1 + TAN10),
+    roomFor(reference, 1) + actionsH - Math.max(actionsH, 2 * CONTROL.buttonXS.h + actionGap)));
   else pictureW = Math.max(0, Math.min(w - 2 * SPACE.m, roomFor(infoStack.h, 1) * aspect));
   const pictureH = pictureW / aspect;
   const source = typeof it.big === "function" ? it.big() : it.big;
@@ -857,7 +861,6 @@ export function detailsTree(it, title, fields, actions, portraitTexture = null, 
   }
   kids.push(picture);
   if (portraitTexture) bands.push({ name: "Portrait", w, h: Math.max(pictureH, infoStack.h) });
-  else if (side) bands.push({ name: "Portrait", w, h: Math.max(pictureH, infoStack.h) }, ...(fieldBand ? [fieldBand] : []));
   else bands.push({ name: "Picture", w, h: pictureH }, ...infoStack.boxes);
 
   // every row's bodies fitted together (one caption size for all the actions), each row centred
@@ -922,8 +925,8 @@ export function detailsTree(it, title, fields, actions, portraitTexture = null, 
   };
   for (const box of placed.boxes) {
     if (box.name === "Portrait") {
-      const portraitRow = row([{ w: side ? pictureW : pictureColumn.w, h: pictureH }, { w: infoW, h: infoStack.h }],
-        { x: side ? pictureColumn.x + (pictureColumn.w - pictureW) / 2 : 0, y: box.y, w, gap: SPACE.xl, align: "center" }).boxes;
+      const portraitRow = row([{ w: pictureColumn.w, h: pictureH }, { w: infoW, h: infoStack.h }],
+        { x: 0, y: box.y, w, gap: SPACE.xl, align: "center" }).boxes;
       picture.pos = toNode(portraitRow[0], 4, frame);
       // the name, chips and fields centred down the picture's height (owner, 2026-11-11, BL-176)
       const top = portraitRow[1].y - box.y;

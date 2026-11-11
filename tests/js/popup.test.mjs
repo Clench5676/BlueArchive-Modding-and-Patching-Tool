@@ -3764,8 +3764,10 @@ test("a 3D model's details fit the panel without scrolling", async () => {
     const picture = NGUI.find(tree, "Picture"), size = picture.widgets[0].w_, name = NGUI.find(tree, "Name");
     assert.equal(picture.widgets[0].h_, size);
     assert.ok(size >= 150, `picture ${size}`);
-    const TAN10 = Math.tan(Math.PI / 18), left = picture.pos[0] - size * (1 + TAN10) / 2, centre = (panel.l + panel.r) / 2;
-    assert.ok(left >= centre - width / 2 - 1e-6 && picture.pos[0] + size * (1 + TAN10) / 2 <= name.pos[0], `picture ${left}`);
+    // the picture across the panel, the name under it (owner, 2026-11-11, BL-176)
+    const TAN10 = Math.tan(Math.PI / 18), centre = (panel.l + panel.r) / 2;
+    assert.ok(Math.abs(picture.pos[0] - centre) < 1e-6 && size * (1 + TAN10) <= width - 40 + 1e-6, `picture ${size}`);
+    assert.ok(picture.pos[1] - size / 2 > name.pos[1], "the name under the picture");
   }
   // one picture size for every candidate, the actions on the panel's bottom whatever the fields hold
   assert.equal(sizes.size, 1, [...sizes].join(", "));
