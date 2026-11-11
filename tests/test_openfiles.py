@@ -1,4 +1,5 @@
-"""Bundle readers keep their files open until a garbage collection: removal and replacement release them first."""
+"""Bundle readers may keep their files open until a garbage collection: removal and replacement release them first;
+the engine closes a bundle it loaded by path right away."""
 
 from __future__ import annotations
 
@@ -146,7 +147,10 @@ def _holders(path: Path) -> int:
 
 @pytest.mark.skipif(not GAME_DIR.is_dir() or sys.platform not in ("darwin", "linux"),
                     reason="needs an official game folder and a way to list open files")
-def test_a_loaded_bundle_stays_open_until_released(tmp_path, no_automatic_collection):
+def test_a_loaded_bundle_is_closed_once_loaded_and_still_reads_and_saves(tmp_path, no_automatic_collection):
+    """A bundle the engine loaded by path holds no file of it, even before a garbage collection: Windows can replace,
+    move or delete it at once (a game file shown in a preview, then written over by an apply)."""
+    import UnityPy
     from ba_modding_toolkit.bundle import Bundle
     from ba_modding_toolkit.searching import get_search_dirs
 
@@ -156,8 +160,10 @@ def test_a_loaded_bundle_stays_open_until_released(tmp_path, no_automatic_collec
     copy = tmp_path / source.name
     shutil.copyfile(source, copy)
     bundle = Bundle.load(copy)
-    assert bundle is not None and _holders(copy) >= 1
-    del bundle
-    assert _holders(copy) >= 1  # the reader's cycles keep the file open
-    openfiles.release()
+    assert bundle is not None and _holders(copy) == 0
+    expected = UnityPy.load(copy.read_bytes())
+    assert [(o.path_id, o.type.name) for o in bundle.env.objects] == [(o.path_id, o.type.name) for o in expected.objects]
+    assert all(obj.read() is not None for obj in bundle.env.objects)  # objects read from memory, after the close
+    assert bundle.env.file.save() == expected.file.save()
     assert _holders(copy) == 0
+    os.replace(copy, tmp_path / "moved.bundle")  # with the bundle still alive
