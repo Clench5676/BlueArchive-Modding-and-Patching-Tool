@@ -247,17 +247,18 @@ for (const locale of locales) test(`every footer's captions share one size in th
 
 // Hall modals use the shared footer; the memorial editor still hits its full-row stop rule.
 const popupSource = read("js/popup.js");
-const footerHelpers = new Function("CONTROL", "POPUP_FRAME", "SPACE", "TYPE", "BUTTON_TEXT_H", "row", "toNode", "FRAME_Y", "NGUI", "captionMinimum", "SMALL_BUTTON", `${popupSource.slice(popupSource.indexOf("export const footerY"), popupSource.indexOf("// the game's popup frame at a size"))
-  .replaceAll("export ", "")}; return {footerY, footerTop, footerSlots, footerFit, footerLabels, footerWidth, footerLayout};`)(Tokens.CONTROL, Tokens.POPUP_FRAME, Tokens.SPACE, Tokens.TYPE, 156, row, toNode, Tokens.POPUP_FRAME.frameY, NGUI, Tokens.captionMinimum, Tokens.SMALL_BUTTON);
-test("Hall modal footers use the default M for one, two and three actions", () => {
-  const M = Tokens.CONTROL.buttonM;
+const footerHelpers = new Function("CONTROL", "POPUP_FOOTER", "POPUP_FRAME", "SPACE", "TYPE", "BUTTON_TEXT_H", "row", "toNode", "FRAME_Y", "NGUI", "captionMinimum", "SMALL_BUTTON", "XS_BUTTON", `${popupSource.slice(popupSource.indexOf("export const footerBottom"), popupSource.indexOf("// the game's popup frame at a size"))
+  .replaceAll("export ", "")}; return {footerBottom, footerY, footerTop, footerSlots, footerFit, footerLabels, footerWidth, footerLayout};`)(Tokens.CONTROL, Tokens.POPUP_FOOTER, Tokens.POPUP_FRAME, Tokens.SPACE, Tokens.TYPE, 156, row, toNode, Tokens.POPUP_FRAME.frameY, NGUI, Tokens.captionMinimum, Tokens.SMALL_BUTTON, Tokens.XS_BUTTON);
+test("Hall modal footers use the default XS for one, two and three actions", () => {
+  const M = Tokens.CONTROL.buttonXS;
   for (const n of [1, 2, 3]) {
     // the slots of a row of bodies the control's minimum wide (footerLayout widens them with the captions)
     const { scale, xs } = footerHelpers.footerSlots(n, 2800, M);
     assert.equal(scale, 1);
     assert.equal(xs.reduce((sum, x) => sum + x, 0), 0);
     for (let i = 1; i < n; i++) assert.ok(Math.abs(xs[i] - xs[i-1] - M.minW * scale - Tokens.POPUP_FRAME.footer.gap) < 1e-9);
-    assert.equal(footerHelpers.footerY(1450, M) - (Tokens.POPUP.frameY - 1450 / 2), Tokens.POPUP_FRAME.footer.bottom + M.h / 2);
+    assert.equal(footerHelpers.footerY(1450) - (Tokens.POPUP.frameY - 1450 / 2), Tokens.POPUP_FOOTER.bottom + M.h / 2);
+    assert.equal(footerHelpers.footerBottom(), Tokens.POPUP_FOOTER.bottom, "the prefab's 102 under 176, scaled to 104");
   }
 });
 const { SORTS } = await import("../../src/bmpt/web/js/roster-order.js");
@@ -305,16 +306,12 @@ for (const locale of ["en-US", "th-TH", "zh-CN", "zh-TW", "ja-JP", "ko-KR"]) tes
   assert.match(read("js/student-hall-picker.js"), /UI\.portraitPickerLayout\(view, searching\)\.list/);
   assert.match(read("js/student-hall.js"), /UI\.backgroundPickerBox\(\)/);
 });
-test("the memorial modal remains stopped: even tightly stacked full rows cannot clear the shared footer", () => {
-  const S = 1920 / 2960, limit = 540 - (footerHelpers.footerTop(1450, 2) + Tokens.POPUP.clearance) * S;
-  const titleBottom = 540 - (Tokens.POPUP.frameY + 1450 / 2 - (64 + 52 + 6)) * S;
-  const candidate = 93 + (202.5 + 10 + 88) * .39 + 8 + Tokens.SMALL_BUTTON.h * S;
-  const queue = 119 + Tokens.SMALL_BUTTON.h * S;
-  // A generous lower bound: no inter-panel gaps, shortest name strip, search only its native body's height.
-  for (const searching of [false, true]) {
-    const bottom = titleBottom + 140 * (1660 / 2840) + (searching ? 90 * S : 0) + 58 + candidate + 15 + 15 + queue + 5;
-    assert.ok(bottom > limit, `${searching}: ${bottom} exceeds ${limit}`);
-  }
+test("the memorial modal keeps its retained footer: XS-high buttons at the frame's bottom right, under its fixed queue", () => {
+  // the queue panel ends at 915 px; the retained buttons (66 px, about the XS body's 104 units) stand under it
+  const S = 1920 / 2960, bottom = 540 + (1450 / 2 - 120) * S;
+  assert.ok(Math.abs(66 - Tokens.CONTROL.buttonXS.h * S) < 2);
+  assert.ok(bottom >= 720 + 195, `${bottom}`);
+  assert.match(read("js/student-hall-ui.js"), /retainedButtonSize\(actions\.map\(\(action\) => action\.label\), actionWidth, 66\)/);
   assert.match(read("js/student-hall-picker.js"), /memorial \? \{ retainedFooter: true \}/);
   assert.match(read("js/student-hall-picker.js"), /queuePanel\(layer, \[115, 720, 1685, 195\]/);
 });
