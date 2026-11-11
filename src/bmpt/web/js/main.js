@@ -678,6 +678,9 @@ async function start() {
   // (update-impact.js gate; the summary follows with the start popups)
   await timed("update-check", () => Impact.gate()).catch((err) => console.error("update check", err));
   await timed("first-screen", route);
+  // the roster's prefabs, the slowest to export after a game update: asked for once the first screen is up (earlier
+  // they slow its own exports), never awaited, and taken up by Roster.show()
+  Roster.preload();
 }
 
 boot().catch((err) => {
