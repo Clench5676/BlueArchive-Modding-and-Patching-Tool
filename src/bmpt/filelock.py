@@ -77,8 +77,9 @@ def file_lock(path: Path, *, timeout: float | None = None) -> Iterator[None]:
 
 
 # Windows: a file another program has open without delete sharing (a virus scanner or the search indexer looking at
-# the new file) cannot be replaced for a moment
-REPLACE_TRIES, REPLACE_WAIT = (20, 0.05) if os.name == "nt" else (1, 0.0)
+# the new file) cannot be replaced for a moment; a scanner may take seconds over a large game bundle
+IN_USE_WAIT = 5.0 if os.name == "nt" else 0.0
+REPLACE_TRIES, REPLACE_WAIT = (100, 0.05) if os.name == "nt" else (1, 0.0)
 
 
 def replace(src: str | Path, dst: Path, tries: int = REPLACE_TRIES, wait: float = REPLACE_WAIT) -> None:

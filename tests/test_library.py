@@ -785,7 +785,7 @@ def test_multi_part_install_rolls_back_every_part_on_write_failure(setup_library
     monkeypatch.setattr(service, "atomic_copy", copy)
     monkeypatch.setattr(service, "atomic_clone", clone)
     monkeypatch.setattr(service, "verified_move", move)
-    expect_error("game_file_locked", lambda: env.library.apply("test", f"mod:{entry.id}"))
+    expect_error("game_file_denied", lambda: env.library.apply("test", f"mod:{entry.id}"))
     assert written == ([atlas, atlas] if cloning else [atlas, env.original, atlas])
     assert {path: path.read_bytes() for path in targets} == before
     assert reload_library(env).state("test").applied == "official"
@@ -885,7 +885,7 @@ def test_failed_apply_without_official_rolls_back_the_outside_bytes(setup_librar
         return copy(source, target)
 
     monkeypatch.setattr(service, "atomic_copy", fail_second)
-    expect_error("game_file_locked", lambda: env.library.apply("test", f"mod:{mod.id}"))
+    expect_error("game_file_denied", lambda: env.library.apply("test", f"mod:{mod.id}"))
     assert failed and {path: path.read_bytes() for path in targets} == before
     assert [entry.id for entry in env.library.mods()] == [mod.id]
     assert not list((env.root / "transactions").glob("*/journal.json"))
@@ -960,7 +960,7 @@ def test_read_only_files_fail_cleanly(setup_library, caplog):
     env.original.chmod(0o444)
     try:
         with caplog.at_level(logging.WARNING, logger="bmpt.library.safety"):
-            expect_error("game_file_locked", lambda: env.library.apply("test", f"mod:{entry.id}"))
+            expect_error("game_file_denied", lambda: env.library.apply("test", f"mod:{entry.id}"))
     finally:
         env.original.chmod(0o644)
     assert env.original.read_bytes() == before
@@ -983,11 +983,102 @@ def test_failed_game_write_logs_os_error(setup_library, monkeypatch, caplog):
 
     monkeypatch.setattr(service, "atomic_copy", copy)
     with caplog.at_level(logging.WARNING, logger="bmpt.library.service"):
-        expect_error("game_file_locked", lambda: env.library.apply("test", f"mod:{entry.id}"))
+        expect_error("game_disk_full", lambda: env.library.apply("test", f"mod:{entry.id}"))
     assert env.original.read_bytes() == before
-    assert "Library write failed (write, game_file_locked): OSError" in caplog.text
+    assert "Library write failed (write, game_disk_full): OSError" in caplog.text
     assert f"errno={errno.ENOSPC}" in caplog.text and "No space left on device" in caplog.text
     assert str(env.original) not in caplog.text
+
+
+def _os_error(cls=OSError, number=None, *, winerror=None, filename="game/a.bundle", filename2=None):
+    error = cls(number, "synthetic", filename, None, filename2) if number is not None else cls("synthetic")
+    if winerror is not None:
+        error.winerror = winerror  # set by Windows only; the classification reads it first
+    return error
+
+
+@pytest.mark.parametrize("error,code", [
+    (_os_error(PermissionError, errno.EACCES, winerror=32), "game_file_locked"),
+    (_os_error(PermissionError, errno.EACCES, winerror=33), "game_file_locked"),
+    (_os_error(PermissionError, errno.EACCES, winerror=5, filename2="game/b.bundle"), "game_file_locked"),
+    (_os_error(PermissionError, errno.EACCES, winerror=5), "game_file_denied"),
+    (_os_error(PermissionError, errno.EACCES, winerror=19), "game_file_denied"),
+    (_os_error(OSError, errno.ENOSPC, winerror=112), "game_disk_full"),
+    (_os_error(OSError, errno.ENOSPC, winerror=39), "game_disk_full"),
+    (_os_error(FileNotFoundError, errno.ENOENT, winerror=3), "game_file_not_found"),
+    (_os_error(BlockingIOError, errno.EAGAIN), "game_file_locked"),
+    (_os_error(OSError, errno.EBUSY), "game_file_locked"),
+    (_os_error(OSError, errno.ENOSPC), "game_disk_full"),
+    (_os_error(OSError, errno.EDQUOT), "game_disk_full"),
+    (_os_error(FileNotFoundError, errno.ENOENT), "game_file_not_found"),
+    (_os_error(PermissionError, errno.EACCES), "game_file_denied"),
+    (_os_error(OSError, errno.EROFS), "game_file_denied"),
+    (_os_error(PermissionError), "game_file_denied"),
+    (_os_error(OSError, errno.EIO), "game_file_write_failed"),
+    (_os_error(OSError), "game_file_write_failed"),
+])
+def test_write_refusal_names_the_cause(error, code):
+    assert safety.write_refusal(error) == code
+
+
+@pytest.mark.parametrize("platform,path,code", [
+    ("darwin", "/Applications/Blue Archive.app/Contents/Resources/a.bundle", "game_app_denied"),
+    ("darwin", "/Users/x/Games/BlueArchive/a.bundle", "game_file_denied"),
+    ("linux", "/opt/Blue Archive.app/a.bundle", "game_file_denied"),
+])
+def test_app_management_refusal_only_for_app_bundles_on_macos(monkeypatch, platform, path, code):
+    monkeypatch.setattr(safety.sys, "platform", platform)
+    assert safety.write_refusal(_os_error(PermissionError, errno.EPERM, filename=None), path) == code
+    assert safety.write_refusal(_os_error(PermissionError, errno.EPERM, filename=path)) == code
+
+
+def test_windows_probe_waits_while_another_program_holds_the_file(monkeypatch):
+    attempts = []
+    monkeypatch.setattr(safety.time, "sleep", lambda seconds: None)
+    monkeypatch.setattr(safety, "IN_USE_WAIT", 5.0)  # the Windows wait, on any system
+
+    class Held:
+        def __init__(self, busy, winerror=32):
+            self.busy, self.winerror = busy, winerror
+
+        def open(self, mode):
+            attempts.append(mode)
+            if len(attempts) <= self.busy:
+                raise _os_error(PermissionError, errno.EACCES, winerror=self.winerror)
+            return open(os.devnull, "rb")
+
+    safety._probe_when_free(Held(3))
+    assert attempts == ["r+b"] * 4
+    attempts.clear()
+    with pytest.raises(PermissionError):  # access denied is not waited for
+        safety._probe_when_free(Held(3, winerror=5))
+    assert len(attempts) == 1
+    attempts.clear()
+    monkeypatch.setattr(safety, "IN_USE_WAIT", 0.0)
+    with pytest.raises(PermissionError):  # held past the wait
+        safety._probe_when_free(Held(10))
+    assert len(attempts) == 1
+
+
+def test_failed_backup_into_the_library_is_a_library_error(setup_library, monkeypatch):
+    env = setup_library
+    entry = env.library.add([make_mod(env.original, env.tmp / "input")])[0]
+    before = env.original.read_bytes()
+    clone, copy = service.atomic_clone, service.atomic_copy
+
+    def refuse(real):
+        def write(source, target):
+            if Path(target).resolve().is_relative_to(env.root) and Path(source) == env.original:
+                raise PermissionError(errno.EACCES, "Permission denied", str(target))
+            return real(source, target)
+        return write
+
+    monkeypatch.setattr(service, "atomic_clone", refuse(clone))
+    monkeypatch.setattr(service, "atomic_copy", refuse(copy))
+    monkeypatch.setattr(service, "verified_move", lambda source, target, sha1: (_ for _ in ()).throw(
+        PermissionError(errno.EACCES, "Permission denied", str(target))))
+    expect_error("library_io_error", lambda: env.library.apply("test", f"mod:{entry.id}"))
+    assert env.original.read_bytes() == before
 
 
 def test_running_game_blocks_replacement(setup_library, monkeypatch):
@@ -1915,7 +2006,7 @@ def test_kept_mods_are_dropped_when_the_switch_is_rolled_back(setup_library, mon
             raise PermissionError(13, "Write failure", str(target))
         original_copy(source, target)
     monkeypatch.setattr(service, "atomic_copy", copy)
-    expect_error("game_file_locked", lambda: env.library.apply("test", f"mod:{second.id}"))
+    expect_error("game_file_denied", lambda: env.library.apply("test", f"mod:{second.id}"))
     assert env.original.read_bytes() == external
     assert [m.id for m in env.library.mods()] == [first.id, second.id]
     assert [m.id for m in reload_library(env).mods()] == [first.id, second.id]
@@ -2480,7 +2571,7 @@ def test_recovery_repeats_game_and_caller_checks_before_restoring_missing_file(s
     mode = env.game_dir.stat().st_mode & 0o777
     env.game_dir.chmod(0o555)
     try:
-        expect_error("game_file_locked", write)
+        expect_error("game_file_denied", write)
         assert not env.original.exists()
     finally:
         env.game_dir.chmod(mode)
@@ -2670,7 +2761,7 @@ def test_missing_official_journal_recovers_outside_bytes_after_interrupted_rollb
 
     monkeypatch.setattr(service, "atomic_copy", fail_second)
     monkeypatch.setattr(env.library, "_rollback_write", interrupted)
-    expect_error("game_file_locked", lambda: env.library.apply("test", f"mod:{mod.id}"))
+    expect_error("game_file_denied", lambda: env.library.apply("test", f"mod:{mod.id}"))
     assert list((env.root / "transactions").glob("*/journal.json"))
     assert len(env.library.mods()) == 2
     monkeypatch.setattr(service, "atomic_copy", copy)
