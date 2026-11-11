@@ -137,21 +137,35 @@ async function assess(report) {
   return compare(report, available ? globalThis.spine : null);
 }
 
+// The result popup (owner, 2026-11-11), plain and left-aligned: what changed, under "Changes:", one list item each (a
+// Details button as high as its line), then the game's dotted rule and what Update does, under "Auto update:"; where
+// Update repairs nothing, the hints that the Mod needs its author follow the rule instead. Footer buttons one size
+// smaller (Popup.FOOTER.M); every line at one type size.
+const ITEM = Object.freeze({ marker: "\u2022", markerGap: 44, indent: 52 });
+export function resultLines(result, repair) {
+  const item = (line) => ({ ...(typeof line === "string" ? { text: line } : line), ...ITEM });
+  const changes = new Map();
+  for (const { key, params, detail } of result.issues) {
+    const text = T(`compatibility.${key}`, params), full = detail ? T(`compatibility.${key}`, detail) : text;
+    if (changes.has(text)) continue;  // one line per finding: several atlases can tell the same
+    changes.set(text, text === full ? text : { text, button: { label: T("info.details"), inline: "line", fn: () =>
+      Popup.message({ title: T("info.details"), lines: [full], scroll: true, ok: T("picker.ok") }) } });
+  }
+  const lines = changes.size ? [T("compatibility.changes"), ...[...changes.values()].map(item)] : [T("compatibility.matches")];
+  if (repair) lines.push({ rule: true }, T("compatibility.autoUpdate"),
+    item(T(result.oldRig ? "compatibility.oldRig" : "compatibility.remapUpdate")));
+  else if (result.author) lines.push({ rule: true }, T("compatibility.authorHint"), T("compatibility.crcHint"));
+  return lines;
+}
+
 export async function show(report, { onRemap } = {}) {
   if (report.kind !== "model" && !await ensureSpine()) return;
   const result = compare(report, globalThis.spine, true);
-  const lines = result.issues.map(({ key, params, detail }) => {
-    const text = T(`compatibility.${key}`, params), full = detail ? T(`compatibility.${key}`, detail) : text;
-    return text === full ? text : { text, button: { label: T("info.details"), fn: () =>
-      Popup.message({ title: T("info.details"), lines: [full], scroll: true, ok: T("picker.ok") }) } };
-  });
-  if (!lines.length) lines.push(T("compatibility.matches"));
-  if (result.oldRig) lines.push(T("compatibility.oldRig"));
-  if (result.author) lines.push(T("compatibility.authorHint"));
-  if (result.author || result.remap || result.oldRig) lines.push(T("compatibility.crcHint"));
-  const repair = (result.remap || result.oldRig) && onRemap;
-  const response = await Popup.message({ title: T("compatibility.check"), lines,
-    scroll: true,
+  const repair = !!((result.remap || result.oldRig) && onRemap);
+  const lines = resultLines(result, repair);
+  // the lines share one type size, as siblings do (docs/ui-guidelines.md)
+  const response = await Popup.message({ title: T("compatibility.result"), lines, scroll: true, plain: true, footer: "M",
+    fitTogether: lines.flatMap((line, i) => (line.rule ? [] : [i])),
     ok: T(repair ? "remap.action" : "picker.ok"),
     cancel: repair ? T("popup.cancel") : null });
   if (response.button === "ok") {

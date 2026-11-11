@@ -237,34 +237,45 @@ export const BUTTON_TEXT_H = CONTROL.buttonL.h - SPACE.m;
 export const FRAME_Y = POPUP_FRAME.frameY;
 
 // --- the footer: one set of numbers for every popup frame (UIPopup_Sort/Center/Popup/Btn) ---
-export const footerY = (h) => FRAME_Y - h / 2 + POPUP_FRAME.footer.bottom + CONTROL.buttonL.h / 2;
+export const footerY = (h, control = CONTROL.buttonL) => FRAME_Y - h / 2 + POPUP_FRAME.footer.bottom + control.h / 2;
 export const footerTop = (h, n = 1) => footerY(h) + CONTROL.buttonL.h / 2;
-export function footerScale(n, w = Infinity) {
-  return n < 3 ? 1 : Math.min(1, (w - 2 * POPUP_FRAME.footer.side - POPUP_FRAME.footer.gap * (n - 1)) / n / CONTROL.buttonL.minW);
+export function footerScale(n, w = Infinity, control = CONTROL.buttonL) {
+  return n < 3 ? 1 : Math.min(1, (w - 2 * POPUP_FRAME.footer.side - POPUP_FRAME.footer.gap * (n - 1)) / n / control.minW);
 }
 export const footerGap = (n) => POPUP_FRAME.footer.gap;
-export function footerSlots(n, w) {
+export function footerSlots(n, w, control = CONTROL.buttonL) {
   if (!n) return { scale: 1, xs: [] };
-  const scale = footerScale(n, w);
-  w = Number.isFinite(w) ? w : n * CONTROL.buttonL.minW * scale + (n - 1) * footerGap(n);
-  const boxes = row(Array.from({ length: n }, () => ({ w: CONTROL.buttonL.minW * scale, h: CONTROL.buttonL.h })),
+  const scale = footerScale(n, w, control);
+  w = Number.isFinite(w) ? w : n * control.minW * scale + (n - 1) * footerGap(n);
+  const boxes = row(Array.from({ length: n }, () => ({ w: control.minW * scale, h: control.h })),
     { w, gap: footerGap(n), justify: "center" }).boxes;
-  return { scale, xs: boxes.map(b => toNode(b, 4, { w, h: CONTROL.buttonL.h, cx: 0, cy: 0 })[0]) };
+  return { scale, xs: boxes.map(b => toNode(b, 4, { w, h: control.h, cx: 0, cy: 0 })[0]) };
 }
 const CAPTION = { fs: TYPE.display.fs, fsMin: TYPE.display.min, w: CONTROL.buttonL.minW - 2 * CONTROL.buttonL.pad,
   lines: 2, h: BUTTON_TEXT_H };
-function checkFooterFits(fits, { site = null, locale = globalThis.document?.documentElement?.lang } = {}) {
-  if (site && fits.some((fit) => fit.overflow || fit.fs < captionMinimum(site, locale, CAPTION.fsMin)))
+// The footer's sizes: "L", every popup's buttonL with display captions; "M", one size smaller (the buttonM control, its
+// caption 60 down to TYPE.body's floor), as the compatibility result has them (owner, 2026-11-11).
+export const FOOTER = Object.freeze({
+  L: Object.freeze({ control: CONTROL.buttonL, caption: CAPTION }),
+  M: Object.freeze({ control: CONTROL.buttonM, caption: Object.freeze({ fs: CONTROL.buttonM.fs, fsMin: TYPE.body.min,
+    w: CONTROL.buttonM.minW - 2 * CONTROL.buttonM.pad, lines: 2, h: CONTROL.buttonM.h - SPACE.m }) }),
+});
+const footerSize = (size) => FOOTER[size] || FOOTER.L;
+function checkFooterFits(fits, { site = null, locale = globalThis.document?.documentElement?.lang, caption = CAPTION } = {}) {
+  if (site && fits.some((fit) => fit.overflow || fit.fs < captionMinimum(site, locale, caption.fsMin)))
     throw new RangeError(`Popup footer cannot fit: ${site} (${locale})`);
   return fits;
 }
-export const footerFit = (captions, options = {}) => checkFooterFits(NGUI.fitGroup(captions, CAPTION.fs, CAPTION.fsMin,
-  options.width ?? CAPTION.w, CAPTION.lines, { maxH: CAPTION.h }), options);
+export const footerFit = (captions, options = {}) => {
+  const caption = options.caption || CAPTION;
+  return checkFooterFits(NGUI.fitGroup(captions, caption.fs, caption.fsMin, options.width ?? caption.w, caption.lines,
+    { maxH: caption.h }), { ...options, caption });
+};
 export function footerLabels(widgets, captions, options = {}) {
-  const width = options.width ?? CAPTION.w;
-  widgets.forEach((widget, i) => Object.assign(widget, { w_: Array.isArray(width) ? width[i] : width, h_: CAPTION.h }));
-  return checkFooterFits(NGUI.fitLabels(widgets, captions, CAPTION.fs, CAPTION.fsMin,
-    options.width ?? CAPTION.w, CAPTION.lines, { maxH: CAPTION.h }), options);
+  const caption = options.caption || CAPTION, width = options.width ?? caption.w;
+  widgets.forEach((widget, i) => Object.assign(widget, { w_: Array.isArray(width) ? width[i] : width, h_: caption.h }));
+  return checkFooterFits(NGUI.fitLabels(widgets, captions, caption.fs, caption.fsMin,
+    width, caption.lines, { maxH: caption.h }), { ...options, caption });
 }
 
 // the game's popup frame at a size: backdrop, title, close button and, when given, its Cancel and OK buttons with
@@ -274,7 +285,9 @@ export function footerLabels(widgets, captions, options = {}) {
 //   close: false for a popup that must be answered with a button (no close button)
 //   titleCentre: the title's ink centre this far under the frame's top, in units, in place of the shared title top (the
 //                header band's centre puts the title where UIPopup_Sort has it)
-export function popupFrame(title, w, h, { ok = null, cancel = null, close = true, buttons = null, captionSite = null, titleCentre = null } = {}) {
+//   footer: the buttons' size, "L" (default) or "M" (FOOTER)
+export function popupFrame(title, w, h, { ok = null, cancel = null, close = true, buttons = null, captionSite = null,
+  titleCentre = null, footer = "L" } = {}) {
   ({ w, h } = frameGeometry(w, h));
   const t = clone(find(layouts.sortPopup, "Center"));
   const popup = find(t, "Popup");
@@ -297,9 +310,10 @@ export function popupFrame(title, w, h, { ok = null, cancel = null, close = true
   const actions = buttons?.length ? buttons : [
     ...(cancel ? [{ label: cancel, name: "Btn_Cancel" }] : []), ...(ok ? [{ label: ok, name: "Btn_Ok", primary: true }] : []),
   ];
-  const { scale, xs } = footerSlots(actions.length, w), bodyW = CONTROL.buttonL.minW * scale;
+  const footerKind = footerSize(footer), control = footerKind.control;
+  const { scale, xs } = footerSlots(actions.length, w, control), bodyW = control.minW * scale;
   btn.active = !!actions.length;
-  btn.pos = [0, footerY(h)];
+  btn.pos = [0, footerY(h, control)];
   // Keep both named branches for callers that overlay a disabled confirm button.
   btn.children = actions.length ? actions.map((action, index) => {
     const child = clone(action.primary ? primary : secondary);
@@ -311,12 +325,12 @@ export function popupFrame(title, w, h, { ok = null, cancel = null, close = true
     child.actionSemantic = action.semantic || (action.primary ? "confirm" : "secondary");
     const body = find(child, "BG (1)");
     body.pos = [0, 0];
-    resizeButton(body, bodyW, CONTROL.buttonL.h);
+    resizeButton(body, bodyW, control.h);
     find(child, "Label_Locale").pos = [0, 0];
     return child;
   }) : [];
   footerLabels(btn.children.map(child => find(child, "Label_Locale").widgets[0]), actions.map(action => action.label),
-    { site: captionSite, width: bodyW - 2 * CONTROL.buttonL.pad });
+    { site: captionSite, width: bodyW - 2 * control.pad, caption: footerKind.caption });
   if (!buttons?.length) for (const [name, source] of [["Btn_Ok", primary], ["Btn_Cancel", secondary]]) {
     if (!find(btn, name)) { source.active = false; btn.children.push(source); }
   }
@@ -1037,9 +1051,11 @@ export const MSG = { title: POPUP_FRAME.contentTop, gap: SPACE.l, rowButton: SMA
 //          With plain: indent (units) moves a line right, marker hangs a bullet left of its first line (markerGap wide,
 //          its font size by default), gap adds space above it (release notes' lists and sections), italic slants it.
 //   fitTogether: line indices fitted at one shared size, using the smallest fit within the popup's size floor
-//   plain: left-aligned lines without a box or separators, including lines with a button at the right
+//   plain: left-aligned lines without a box or separators, including lines with a button at the right; a line
+//          {rule: true} is the game's dotted divider (Common_Line_Dot, as the light stats box draws it) across the text
 //   ok, cancel: the buttons' labels (either may be left out); check: {label, checked}
 //   buttons: optional named footer choices [{label, value, primary}], instead of ok/cancel
+//   footer: the footer buttons' size, "L" (default) or "M" (FOOTER)
 //   close: false for a popup that must be answered with a button (no close button; the backdrop and Escape do nothing)
 //   confirmKeys: keys that press OK while the popup is in front and holds the focus itself (a focused button takes its
 //                own key), as the PC client binds its popups' confirm (["Enter", " "]); none by default
@@ -1077,7 +1093,7 @@ export function confirmKey(ev, keys) {
 
 // the message without the game's prefab: a plain box on a dark backdrop, the same buttons, marked the same way
 export function plainMessage(layer, { title, lines = [], ok, cancel, buttons, state = null, dismissable = true,
-  scroll = false, plain = false, width, height, fitTogether = [], captionSite = null }, finish) {
+  scroll = false, plain = false, width, height, fitTogether = [], captionSite = null, footer = "L" }, finish) {
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
   const button = (caption, fn, action, cls = "message-button") => {
     const b = el("button", cls, caption); b.dataset.action = action; b.setAttribute("aria-label", caption);
@@ -1108,10 +1124,16 @@ export function plainMessage(layer, { title, lines = [], ok, cancel, buttons, st
   Object.assign(content.style, { overflow: "auto", textAlign: plain ? "left" : "center" });
   const paragraphItems = layout.body.fitted.map(({ r, f, bf, bw, item: text }) => {
     return { r, f, bf, bw, text, w: layout.content.w,
-      h: Math.max(r.button ? SMALL_BUTTON.h : 0, text.h) + (plain ? r.gap || 0 : 0) };
+      h: r.rule ? RULE.h : Math.max(r.button ? SMALL_BUTTON.h : 0, text.h) + (plain ? r.gap || 0 : 0) };
   });
   const paragraphs = layoutStack(paragraphItems, { w: layout.content.w, gap: SPACE.l });
   paragraphs.boxes.forEach(({ r, f, bf, bw, text, x, y, w }, i) => {
+    if (r.rule) {
+      const line = styleBox(el("div", "plain-message-rule"), { x: x + SPACE.xxxl, y, w: w - 2 * SPACE.xxxl, h: RULE.h });
+      line.style.borderTop = `${Math.max(1, RULE.h * S)}px dotted ${STATS_BOX.divider}`;
+      content.appendChild(line);
+      return;
+    }
     const indent = plain ? r.indent || 0 : 0;
     const parts = row([{ ...text, w: w - indent - (r.button ? bw + SPACE.m : 0) }, ...(r.button ? [{ w: bw, h: SMALL_BUTTON.h }] : [])],
       { x: x + indent, y: y + (plain ? r.gap || 0 : 0), w: w - indent, gap: SPACE.m, justify: "center" }).boxes;
@@ -1135,14 +1157,16 @@ export function plainMessage(layer, { title, lines = [], ok, cancel, buttons, st
   }
   const actions = buttons?.length ? buttons : [...(cancel ? [{ label: cancel, value: "cancel" }] : []), ...(ok ? [{ label: ok, value: "ok" }] : [])];
   if (actions.length) {
-    const slots = footerSlots(actions.length, frame.w), bodyW = CONTROL.buttonL.minW * slots.scale;
-    const fits = footerFit(actions.map(action => action.label), { site: captionSite, width: bodyW - 2 * CONTROL.buttonL.pad });
+    const size = footerSize(footer), control = size.control;
+    const slots = footerSlots(actions.length, frame.w, control), bodyW = control.minW * slots.scale;
+    const fits = footerFit(actions.map(action => action.label), { site: captionSite, width: bodyW - 2 * control.pad,
+      caption: size.caption });
     const actionRow = el("div", "message-actions");
-    styleBox(actionRow, { x: 0, y: frame.h - POPUP_FRAME.footer.bottom - CONTROL.buttonL.h, w: frame.w, h: CONTROL.buttonL.h });
-    const boxes = row(actions.map(() => ({ w: bodyW, h: CONTROL.buttonL.h })), { w: frame.w, gap: POPUP_FRAME.footer.gap, justify: "center" }).boxes;
+    styleBox(actionRow, { x: 0, y: frame.h - POPUP_FRAME.footer.bottom - control.h, w: frame.w, h: control.h });
+    const boxes = row(actions.map(() => ({ w: bodyW, h: control.h })), { w: frame.w, gap: POPUP_FRAME.footer.gap, justify: "center" }).boxes;
     actions.forEach((action, i) => {
       const b = styleBox(button(fits[i].text, () => finish(action.value), action.value), boxes[i], NGUI.fontSizeFor(fits[i].text, fits[i].fs));
-      b.style.padding = `0 ${CONTROL.buttonL.pad * S}px`; b.setAttribute("aria-label", action.label); actionRow.appendChild(b);
+      b.style.padding = `0 ${control.pad * S}px`; b.setAttribute("aria-label", action.label); actionRow.appendChild(b);
     });
     box.appendChild(actionRow);
   }
@@ -1163,10 +1187,27 @@ function messageText(text, max, min, room, lines = 4, strict = false) {
 const counted = (fitted) => ({ ...fitted, lines: fitted.text.split("\n").length });
 
 const placeholderButton = (name, x, y, caption, { w, h = SMALL_BUTTON.h }) => node(name, [x, y], [sprite("Common_Btn_BG", w, h)]);
+// a plain message's divider row ({rule: true}): the light stats box's dotted line, its height
+export const RULE = Object.freeze({ h: 4 });
 // a plain line's inline button (button.inline): the small button, shadow included, within its line's text from top to
 // bottom (``height`` of the type size: the ink of a line, not its pitch), its caption at most ``share`` of the type size
 // pad: the small button fits its caption again within its width less SMALL_BUTTON.fitInset, so the pad is at least that
 export const INLINE_BUTTON = Object.freeze({ height: 0.9, share: 0.55, fsMin: 20, pad: SMALL_BUTTON.fitInset });
+// button.inline "line": the button's face as high as its line of text (the line's pitch, the small button's shadow
+// inset added around it), its caption ``share`` of the type size, ``fsMin`` at least (the compatibility result's Details,
+// owner 2026-11-11)
+export const LINE_BUTTON = Object.freeze({ share: 0.6, fsMin: TYPE.badge.min, pad: SMALL_BUTTON.fitInset });
+function inlineButton(r, fs, w) {
+  const line = r.button.inline === "line";
+  const bh = line ? Math.round(fs * NGUI.LINE_PITCH) + SMALL_BUTTON.boxInsetH : Math.round(fs * INLINE_BUTTON.height);
+  const cap = line ? Math.max(LINE_BUTTON.fsMin, Math.round(fs * LINE_BUTTON.share))
+    : Math.min(Math.round(fs * INLINE_BUTTON.share), bh - SMALL_BUTTON.boxInsetH);
+  // one line: as high as the text beside it, a two-word caption (Go to) never folds
+  const ib = fitText(r.button.label, cap, Math.min(cap, line ? LINE_BUTTON.fsMin : INLINE_BUTTON.fsMin),
+    SMALL_BUTTON.w - SMALL_BUTTON.fitInset, 1);
+  const ibw = glyphsOf(ib.text, ib.fs) + (line ? LINE_BUTTON.pad : INLINE_BUTTON.pad);
+  return { bf: ib, bw: ibw, bh, room: w - 2 * SPACE.xxxl - ibw - SPACE.m - (r.indent || 0) };
+}
 
 function messageLines(lines, w, fitTogether, plain, assets = true) {
   const rows = lines.map((l) => (typeof l === "string" ? { text: l } : l));
@@ -1174,6 +1215,7 @@ function messageLines(lines, w, fitTogether, plain, assets = true) {
   // Light stats rows retain their value range (38–26); unboxed paragraphs retain 52–44. Width selection allows six lines.
   const min = boxed ? STATS_BOX.value.fsMin : 44, max = boxed ? STATS_BOX.value.fs : TYPE.heading.fs, most = 6; // Existing message floor and stats-box type range.
   const fitted = rows.map((r) => {
+    if (r.rule) return { r, room: w - 2 * SPACE.xxxl, f: counted({ text: "", fs: min }) };
     // a line button is the small button: 136 high, as wide as its caption needs and 90 more (240 at least), the caption 48 down to 34
     const bf = r.button ? fitText(r.button.label, SMALL_BUTTON.fs, SMALL_BUTTON.fsMin, SMALL_BUTTON.w - SMALL_BUTTON.fitInset) : null;
     const bw = bf ? Math.max(SMALL_BUTTON.minW, glyphsOf(bf.text, bf.fs) + SMALL_BUTTON.glyphPad) : 0;
@@ -1181,22 +1223,23 @@ function messageLines(lines, w, fitTogether, plain, assets = true) {
     const f = messageText(r.text, r.fontSize ?? max, r.minFontSize ?? min, room, most, boxed);
     if (plain && r.button?.inline) {
       // no higher than its line's text
-      const bh = Math.round(f.fs * INLINE_BUTTON.height), cap = Math.min(Math.round(f.fs * INLINE_BUTTON.share), bh - SMALL_BUTTON.boxInsetH);
-      // one line: as high as the text beside it, a two-word caption (Go to) never folds
-      const ib = fitText(r.button.label, cap, Math.min(cap, INLINE_BUTTON.fsMin), SMALL_BUTTON.w - SMALL_BUTTON.fitInset, 1);
-      const ibw = glyphsOf(ib.text, ib.fs) + INLINE_BUTTON.pad, inlineRoom = w - 2 * SPACE.xxxl - ibw - SPACE.m - (r.indent || 0);
-      return { r, bf: ib, bw: ibw, bh, room: inlineRoom, f: counted(messageText(r.text, f.fs, f.fs, inlineRoom, most, boxed)) };
+      const inline = inlineButton(r, f.fs, w);
+      return { r, ...inline, f: counted(messageText(r.text, f.fs, f.fs, inline.room, most, boxed)) };
     }
     return { r, bf, bw, room, f: counted(f) };
   });
   const group = fitTogether.map((i) => fitted[i]).filter(Boolean);
   if (group.length) {
     const fs = Math.max(min, Math.min(...group.map(({ f }) => f.fs)));
-    // Rewrap at the shared size; extra lines keep the popup's minimum instead of shrinking below it.
-    for (const s of group) s.f = boxed ? counted(wrapPath(s.r.text, fs, fs, s.room, Infinity)) : wrapPath(s.r.text, fs, fs, s.room, Infinity);
+    // Rewrap at the shared size; extra lines keep the popup's minimum instead of shrinking below it. An inline button
+    // follows its line's new size.
+    for (const s of group) {
+      if (s.bh) Object.assign(s, inlineButton(s.r, fs, w));
+      s.f = boxed ? counted(wrapPath(s.r.text, fs, fs, s.room, Infinity)) : wrapPath(s.r.text, fs, fs, s.room, Infinity);
+    }
   }
   // Text is already wrapped and fitted. textItem measures that fit without repeating the line-break search.
-  for (const s of fitted) s.item = textItem({ ...NGUI, fitText: () => s.f }, s.f.text,
+  for (const s of fitted) s.item = s.r.rule ? { w: s.room, h: RULE.h } : textItem({ ...NGUI, fitText: () => s.f }, s.f.text,
     { fs: s.f.fs, min: s.f.fs }, { maxW: s.room, lines: Infinity });
   const buttons = [];
   if (boxed) {
@@ -1214,6 +1257,10 @@ function messageLines(lines, w, fitTogether, plain, assets = true) {
   }
   const out = [], textBox = container({ w, h: 0, padding: [0, SPACE.xxxl] }).inner;
   const sized = fitted.map(s => {
+    if (s.r.rule) {
+      const lineRow = row([{ w: textBox.w, h: RULE.h }], { x: textBox.x, w: textBox.w, justify: "start" });
+      return { ...s, lineRow, w: textBox.w, h: lineRow.h };
+    }
     const indent = plain ? s.r.indent || 0 : 0;
     // an inline button follows its text; another sits at the line's right end
     const inline = !!s.bh;
@@ -1225,6 +1272,11 @@ function messageLines(lines, w, fitTogether, plain, assets = true) {
   paragraphs.boxes.forEach(({ r, f, bf, bw, bh, room, y, lineRow: measured }, i) => {
     const lineRow = { ...measured, boxes: measured.boxes.map(b => ({ ...b, y: b.y + y + (plain ? r.gap || 0 : 0) })) };
     const local = { w, h: 0, cx: 0, cy: 0 }, colour = `${r.color || "#2d4664"}/1.00`, box = lineRow.boxes[0];
+    if (r.rule) {
+      out.push(node(`Rule_${i}`, toNode(box, 3, local), [sprite("Common_Line_Dot", box.w, RULE.h,
+        { type: 2, depth: 7, color: `${STATS_BOX.divider}/1.00`, pivot: 3 })]));
+      return;
+    }
     out.push(node(`Line_${i}`, toNode(box, plain ? 3 : 4, local),
       [label(f.text, f.fs, colour, room, box.h, { pivot: plain ? 3 : 4, depth: 8, ...(plain && r.italic ? { italic: true } : {}) })]));
     if (plain && r.marker) {
@@ -1270,7 +1322,7 @@ export function messageLayout({ lines = [], width, ok = null, cancel = null, but
   return { body, width: w, height, visible, y0, content, checkBox, checkCaption, scroll: scrolls };
 }
 
-async function showMessage({ title = "", lines = [], ok = null, cancel = null, buttons = null, check = null, host: hostArg = "dialog", width, close: dismissable = true, confirmKeys = null, fitTogether = [], scroll = false, plain = false, captionSite = null }, resolve) {
+async function showMessage({ title = "", lines = [], ok = null, cancel = null, buttons = null, check = null, host: hostArg = "dialog", width, close: dismissable = true, confirmKeys = null, fitTogether = [], scroll = false, plain = false, captionSite = null, footer = "L" }, resolve) {
   const host = hostOf(hostArg);
   const layer = document.createElement("div");
   layer.className = "popup-layer";
@@ -1304,13 +1356,13 @@ async function showMessage({ title = "", lines = [], ok = null, cancel = null, b
   } catch (err) {
     console.warn("message popup without the game's frame", err);
     if (ended) return;
-    plainMessage(layer, { title, lines, ok, cancel, buttons, state, dismissable, scroll, plain, width, fitTogether, captionSite }, finish);
+    plainMessage(layer, { title, lines, ok, cancel, buttons, state, dismissable, scroll, plain, width, fitTogether, captionSite, footer }, finish);
     layer.focus?.({ preventScroll: true });
     return;
   }
   try {
     const { body, width: w, height, visible, y0, content, checkBox, scroll: scrolls } = messageLayout({ lines, width, ok, cancel, buttons, check: state, fitTogether, scroll, plain });
-    const t = popupFrame(title, w, height, { ok, cancel, buttons, close: dismissable, captionSite });
+    const t = popupFrame(title, w, height, { ok, cancel, buttons, close: dismissable, captionSite, footer });
     const popup = find(t, "Popup");
     // The body and check row centre together; a scrolling body fills the available content box.
     if (!scrolls) {

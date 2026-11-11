@@ -289,7 +289,7 @@ test("model checks use bundle integrity without requesting the Spine runtime or 
   assert.equal(h.confirms(), 0);
   assert.equal(h.mod.eligible({ kind: "model" }), false);
   assert.equal(h.mod.canRemap("model-mod"), false);
-  assert.ok(h.popups.some((p) => p.title === h.strings.compatibility.check));
+  assert.ok(h.popups.some((p) => p.title === h.strings.compatibility.result));
 });
 
 
@@ -406,7 +406,7 @@ test("a portrait the game drew anew is named by the check and offers no remap", 
   assert.deepEqual(checked.assessment.issues.map(({ key }) => key).includes("redrawn"), true);
   assert.equal(checked.assessment.remap, false);
   assert.equal(h.mod.canRemap("old-mod", { kind: "spr" }), false);
-  assert.equal(h.strings.compatibility.redrawn, "原版立绘已重绘");
+  assert.equal(h.strings.compatibility.redrawn, "官方原版立绘已重绘");
   // drawn as before: the remap posts the whole geometry
   h.use(portrait()); h.redraw({ redrawn: false, overlap: 0.99 });
   const fine = await h.mod.inspect("old-mod");
@@ -437,8 +437,16 @@ test("a portrait the game drew anew keeps the rig its textures were drawn for, u
     h.calls.length = 0;
     await h.mod.check("old-mod", "Mod", () => {}, { kind: "spr" });
     assert.equal(h.mod.canRemap("old-mod", { kind: "spr" }), false, locale);  // repaired: its copy is the one now
-    const [popup] = h.popups;
-    assert.ok(popup.lines.includes(h.strings.compatibility.redrawn) && popup.lines.includes(h.strings.compatibility.oldRig), locale);
+    const [popup] = h.popups, texts = popup.lines.map((line) => (typeof line === "string" ? line : line.text));
+    // plain and left-aligned: what changed as list items, the dotted rule, then what Update does (owner, 2026-11-11)
+    assert.equal(popup.title, h.strings.compatibility.result, locale);
+    assert.ok(popup.plain && popup.footer === "M", locale);
+    assert.equal(texts[0], h.strings.compatibility.changes, locale);
+    assert.ok(popup.lines.some((line) => line.text === h.strings.compatibility.redrawn && line.marker), locale);
+    const rule = popup.lines.findIndex((line) => line.rule);
+    assert.deepEqual(texts.slice(rule + 1), [h.strings.compatibility.autoUpdate, h.strings.compatibility.oldRig], locale);
+    assert.ok(popup.lines.at(-1).marker, locale);
+    assert.ok(!texts.includes(h.strings.compatibility.authorHint) && !texts.includes(h.strings.compatibility.crcHint), locale);
     assert.equal(popup.ok, h.strings.remap.action, locale);
     // no geometry: the old rig is set up as a whole
     assert.deepEqual(h.calls.map(([method]) => method),
@@ -450,17 +458,23 @@ test("a portrait the game drew anew keeps the rig its textures were drawn for, u
 
     // the official skeleton gained animations the game calls: named, and Update offers nothing
     const g = await harness(locale, "ok");
-    g.use(portrait({ atlases: ["test.atlas"], animations: { "test.skel": ["11", "12"] }, available: false }));
+    g.use(portrait({ atlases: ["test.atlas"], animations: { "test.skel": ["11", "12", "13", "14"] }, available: false }));
     g.redraw({ redrawn: true, overlap: 0.52 });
     const gained = await g.mod.inspect("old-mod");
     assert.equal(gained.assessment.oldRig, false, locale);
     assert.equal(g.mod.canRemap("old-mod", { kind: "spr" }), false, locale);
     const issue = gained.assessment.issues.find(({ key }) => key === "oldRigAnimations");
     assert.deepEqual(issue.params, { names: g.mod.compare(gained).issues.find(({ key }) => key === "oldRigAnimations").params.names }, locale);
-    assert.ok(["11", "12"].every((name) => issue.params.names.includes(name)), locale);
+    assert.ok(["11", "12", "13", "14"].every((name) => issue.params.names.includes(name)), locale);
     await g.mod.show(gained, { onRemap: () => assert.fail("nothing to repair") });
     assert.equal(g.popups[0].ok, g.strings.picker.ok, locale);
-    assert.ok(g.popups[0].lines.some((line) => line === g.strings.compatibility.oldRigAnimations.replace("{names}", issue.params.names)), locale);
+    const short = g.mod.compare(gained, globalThis.spine, true).issues.find(({ key }) => key === "oldRigAnimations").params.names;
+    const listed = g.popups[0].lines.find((line) => line.text === g.strings.compatibility.oldRigAnimations.replace("{names}", short));
+    // the whole list behind Details, a button as high as its line
+    assert.ok(listed?.marker && listed.button?.inline, locale);
+    // nothing to update: the hints that the Mod needs its author follow the rule
+    const after = g.popups[0].lines.slice(g.popups[0].lines.findIndex((line) => line.rule) + 1);
+    assert.deepEqual(after, [g.strings.compatibility.authorHint, g.strings.compatibility.crcHint], locale);
     // drawn anew without a recorded rig: named as before, nothing offered
     const n = await harness(locale, "ok");
     n.use(portrait({ atlases: [], animations: {}, available: false })); n.redraw({ redrawn: true, overlap: 0.52 });

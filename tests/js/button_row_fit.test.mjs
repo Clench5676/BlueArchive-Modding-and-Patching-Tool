@@ -131,8 +131,9 @@ const BELOW_MINIMUM = {
 for (const locale of LOCALES) test(`popup footer captions share one size and fit the buttonL body in ${locale}`, async () => {
   const popup = await source("popup.js"), consent = await source("consent.js"), update = await source("update.js");
   assert.match(popup, /export const BUTTON_TEXT_H = CONTROL.buttonL.h - SPACE.m;/);
-  assert.match(popup, /NGUI.fitLabels\(widgets, captions, CAPTION.fs, CAPTION.fsMin/);
-  assert.match(popup, /NGUI.fitGroup\(captions, CAPTION.fs, CAPTION.fsMin/);
+  assert.match(popup, /NGUI.fitLabels\(widgets, captions, caption.fs, caption.fsMin/);
+  assert.match(popup, /const caption = options.caption \|\| CAPTION/);
+  assert.match(popup, /NGUI.fitGroup\(captions, caption.fs, caption.fsMin/);
   // the other footers take that fit: popupFrame, listFrame and the update offer call it, consent calls popupFrame
   assert.match(popup, /buttons: buttons.map/);
   assert.match(consent, /Popup\.popupFrame\(title, w, h, \{ ok: yes, cancel: no, close: false \}\)/);

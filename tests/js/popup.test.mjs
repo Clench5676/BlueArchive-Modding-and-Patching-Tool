@@ -424,7 +424,7 @@ test("compatibility details scroll the complete list and return to the same Rema
     { onRemap: () => { remapped++; } });
   const remap = await drawn(dialog, "ok"), cancel = action(dialog, "cancel");
   assert.equal(remap.getAttribute("aria-label"), english.remap.action);
-  const detail = action(dialog, "line0");
+  const detail = action(dialog, "line1");  // under the "Changes:" heading
   assert.equal(detail.getAttribute("aria-label"), english.info.details);
   const viewing = detail.click();
   await until(() => dialog.children.length === 2 && actionsIn(dialog).filter((el) => el.dataset.action === "ok").length === 2);
@@ -439,6 +439,80 @@ test("compatibility details scroll the complete list and return to the same Rema
   remap.click();
   await pending;
   assert.equal(remapped, 1);
+});
+
+// The compatibility result (owner, 2026-11-11): plain lines, "Changes:" as list items with their Details button as high as
+// the line, the game's dotted rule, then "Auto update:" (or the author hints), and footer buttons one size smaller.
+test("the compatibility result's list, rule, inline Details and smaller footer fit in every locale", async () => {
+  const Compatibility = await import("../../src/bmpt/web/js/mod-compatibility.js");
+  const NGUI = await import("../../src/bmpt/web/js/ngui.js");
+  const { glyphsOf } = await import("../../src/bmpt/web/js/util.js");
+  const { CONTROL, POPUP_FRAME, SMALL_BUTTON, STATS_BOX, TYPE } = await import("../../src/bmpt/web/js/ui-tokens.js");
+  await Popup.ready();
+  const results = [
+    // a portrait drawn anew whose old rig Update keeps
+    [{ issues: [{ key: "atlasLayout", params: { name: "ch0252_spr.atlas" } }, { key: "atlasLayout", params: { name: "other.atlas" } },
+      { key: "redrawn", params: {} }], author: true, oldRig: true }, true],
+    // drawn anew, official animations the old skeleton lacks: named, the whole list behind Details, nothing to update
+    [{ issues: [{ key: "atlasLayout", params: { name: "ako_spr.atlas" } }, { key: "redrawn", params: {} },
+      { key: "oldRigAnimations", params: { names: "17、18、19、+1" }, detail: { names: "17、18、19、20" } }], author: true }, false],
+    // the remap
+    [{ issues: [{ key: "regions", params: { names: "face, body" } }, { key: "atlasSize", params: { name: "page.png", atlas: "2048 × 2048", texture: "1024 × 512" } }],
+      author: true, remap: true }, true],
+  ];
+  try {
+    for (const lang of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
+      const ui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url))).webui;
+      setStrings(lang, Object.fromEntries(strings(ui)));
+      for (const [n, [result, repair]] of results.entries()) {
+        const what = `${lang} result ${n}`, lines = Compatibility.resultLines(result, repair);
+        const texts = lines.map((line) => (typeof line === "string" ? line : line.text));
+        assert.equal(texts[0], ui.compatibility.changes, what);
+        assert.equal(texts.filter((text) => text === ui.compatibility.atlasLayout).length <= 1, true, `${what}: one line per finding`);
+        const rule = lines.findIndex((line) => line.rule);
+        assert.ok(rule > 1, what);
+        assert.deepEqual(texts.slice(rule + 1), repair
+          ? [ui.compatibility.autoUpdate, result.oldRig ? ui.compatibility.oldRig : ui.compatibility.remapUpdate]
+          : [ui.compatibility.authorHint, ui.compatibility.crcHint], what);
+        const ok = repair ? ui.remap.action : ui.picker.ok, cancel = repair ? ui.popup.cancel : null;
+        const fitTogether = lines.flatMap((line, i) => (line.rule ? [] : [i]));
+        const layout = Popup.messageLayout({ lines, plain: true, scroll: true, ok, cancel, fitTogether });
+        assert.equal(new Set(layout.body.fitted.filter(({ r }) => !r.rule).map(({ f }) => f.fs)).size, 1, `${what}: one type size`);
+        for (const { r, f, room, bf, bw, bh } of layout.body.fitted) {
+          if (r.rule) continue;
+          assert.ok(f.fs >= 44, `${what}: "${r.text}" keeps the plain message's floor`);
+          for (const line of f.text.split("\n")) assert.ok(glyphsOf(line, f.fs) <= room + 1e-6, `${what}: "${line}" within its room`);
+          if (r.button) {
+            // its face as high as its line of text (the shadow inset around it), its caption readable and inside it
+            assert.equal(r.button.inline, "line", what);
+            assert.equal(bh - SMALL_BUTTON.boxInsetH, Math.round(f.fs * NGUI.LINE_PITCH), `${what}: Details as high as its line`);
+            assert.ok(bf.fs >= Popup.LINE_BUTTON.fsMin && bf.fs < bh - SMALL_BUTTON.boxInsetH, `${what}: Details caption ${bf.fs}`);
+            assert.ok(glyphsOf(bf.text, bf.fs) < bw, `${what}: Details caption inside`);
+          }
+        }
+        const divider = NGUI.find(layout.body.tree, `Rule_${rule}`).widgets[0];
+        assert.deepEqual([divider.sprite, divider.h_, divider.color, divider.pivot], ["Common_Line_Dot", Popup.RULE.h, `${STATS_BOX.divider}/1.00`, 3], what);
+        // across the text: from the lines' left edge, as wide as their box
+        const ruleNode = NGUI.find(layout.body.tree, `Rule_${rule}`), heading = NGUI.find(layout.body.tree, "Line_0");
+        assert.equal(ruleNode.pos[0], heading.pos[0], `${what}: the rule starts where the lines start`);
+        assert.equal(divider.w_, layout.width - 2 * 100, `${what}: the rule spans the text box`);
+        // the footer one size smaller: buttonM bodies, captions at its size range
+        const frame = Popup.popupFrame(ui.compatibility.result, layout.width, layout.height, { ok, cancel, footer: "M" });
+        const btn = NGUI.find(frame, "Popup/Btn");
+        for (const child of btn.children.filter((c) => c.active)) {
+          const bg = NGUI.find(child, "BG (1)").widgets.find((w) => "sprite" in w && "w_" in w);
+          assert.deepEqual([bg.w_, bg.h_], [CONTROL.buttonM.minW, CONTROL.buttonM.h], what);
+          const caption = NGUI.find(child, "Label_Locale").widgets[0];
+          assert.ok(caption.fontSize <= CONTROL.buttonM.fs && caption.fontSize >= TYPE.body.min, `${what}: ${caption.text}`);
+        }
+        assert.deepEqual(Popup.FOOTER.M.control, CONTROL.buttonM);
+        // the title, centred, keeps clear of the close button
+        const title = NGUI.find(frame, "Popup/Base/BG/Label_Title_Locale").widgets[0];
+        const clear = layout.width - 2 * (POPUP_FRAME.close.right + POPUP_FRAME.close.size);
+        assert.ok(glyphsOf(title.text, title.fontSize) <= clear, `${what}: title "${title.text}" at ${title.fontSize} clear of the close button`);
+      }
+    }
+  } finally { setStrings("en-US", Object.fromEntries(strings(english))); }
 });
 
 test("a message resolves with the button and the checkbox however it closes", async () => {
