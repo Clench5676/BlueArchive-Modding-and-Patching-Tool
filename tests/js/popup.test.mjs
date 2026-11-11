@@ -3757,6 +3757,10 @@ for (const lang of ["en-US", "zh-CN", "th-TH"]) test(`the switch details fit the
         assert.equal(value.fontSize, 34);
         assert.equal(more.widgets.find((w) => "sprite" in w).tier, "button");
       }
+      // the chips on one row; a 3D model's under its name, a lobby's beside a short one
+      const chipY = it.chips.map((_, i) => NGUI.find(tree, `Chip_${i}`).pos[1]);
+      assert.ok(chipY.every((y) => Math.abs(y - chipY[0]) < 1e-6), `${what}: the chips on one row`);
+      if (kind === "model") assert.ok(NGUI.find(tree, "Name").pos[1] > chipY[0] + 1, `${what}: the model's chips under its name`);
       // the chips are the S chip and the actions are tagged as buttons
       assert.equal(NGUI.find(tree, "Chip_0").widgets[0].h_, Tokens.CHIP_TIERS.S.h);
       assert.equal(NGUI.find(tree, "Chip_0").widgets[0].tier, "chip");
