@@ -151,12 +151,24 @@
     "code": "E1008",
     "level": "notice"
   },
+  "game_app_denied": {
+    "code": "E2018",
+    "level": "failed"
+  },
   "game_directory_missing": {
     "code": "E2004",
     "level": "notice"
   },
+  "game_disk_full": {
+    "code": "E2019",
+    "level": "failed"
+  },
   "game_file_conflict": {
     "code": "E3005",
+    "level": "failed"
+  },
+  "game_file_denied": {
+    "code": "E2017",
     "level": "failed"
   },
   "game_file_locked": {
@@ -169,6 +181,10 @@
   },
   "game_file_outside_resources": {
     "code": "E2007",
+    "level": "failed"
+  },
+  "game_file_write_failed": {
+    "code": "E2020",
     "level": "failed"
   },
   "game_not_found": {

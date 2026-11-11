@@ -3,7 +3,8 @@
 - The game must not run: ``game_processes`` lists its processes (a Toolhelp snapshot on Windows, ``ps`` elsewhere).
 - Steam must not be updating or verifying the install: ``check_steam_idle`` reads ``StateFlags`` from the Steam
   library's app manifest. A folder outside a Steam library is not checked.
-- Every destination must be inside the resource folders and lockable.
+- Every destination must be inside the resource folders and lockable. A refusal is named by its cause
+  (``write_refusal``): in use, denied, App Management on macOS, disk full, missing, or another failure.
 
 The JP server's launcher, which may update or repair files on its own, is not matched: its process name is not
 known yet.
@@ -21,12 +22,15 @@ import logging
 import os
 import re
 import subprocess
+import sys
+import time
 from contextlib import ExitStack, contextmanager
 from pathlib import Path
 from typing import Iterator
 
 from .. import devmode, game_paths
 from ..errors import ServiceError
+from ..filelock import IN_USE_WAIT
 from ..logging_utils import log_failure
 
 logger = logging.getLogger(__name__)
@@ -253,10 +257,12 @@ def writable_game_files(paths: list[Path], resource_dirs: list[Path], *,
     with ExitStack() as stack:
         for path in sorted(set(paths)):
             check_resource_path(path, resource_dirs)
-            step = "stat"  # what failed, for the log: the user only sees game_file_locked
+            step = "stat"  # what failed, for the log: the user only sees the reason write_refusal gives
             try:
-                if allow_missing and not path.exists() and path.parent.stat().st_mode & 0o222:
-                    continue  # a journaled rename may have left this destination absent
+                if allow_missing and not path.exists():
+                    if path.parent.stat().st_mode & 0o222:
+                        continue  # a journaled rename may have left this destination absent
+                    raise PermissionError(errno.EACCES, "read-only folder")
                 if not path.is_file():
                     raise FileNotFoundError(errno.ENOENT, "not a file")
                 if not path.stat().st_mode & 0o222:
@@ -267,8 +273,7 @@ def writable_game_files(paths: list[Path], resource_dirs: list[Path], *,
                 if os.name == "nt":
                     # Python's Windows file handles do not share delete access;
                     # keeping our probe open would block our own atomic replace.
-                    with path.open("r+b"):
-                        pass
+                    _probe_when_free(path)
                 else:
                     import fcntl
 
@@ -277,5 +282,71 @@ def writable_game_files(paths: list[Path], resource_dirs: list[Path], *,
                     fcntl.flock(stream.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
             except OSError as error:
                 log_failure(logger, logging.WARNING, f"Game file not writable before replacement ({step})", error)
-                raise ServiceError("game_file_locked", file=path) from error
+                raise ServiceError(write_refusal(error, path), file=path) from error
         yield
+
+
+def _probe_when_free(path: Path) -> None:
+    """Open a destination for writing on Windows, waiting a moment while another program (a virus scanner reading
+    a large bundle) holds it."""
+    deadline = time.monotonic() + IN_USE_WAIT
+    while True:
+        try:
+            with path.open("r+b"):
+                return
+        except OSError as error:
+            if getattr(error, "winerror", None) not in _WIN_IN_USE or time.monotonic() >= deadline:
+                raise
+            time.sleep(0.1)
+
+
+# --- why a write was refused ---
+
+# Windows system error codes (OSError.winerror); Python maps several of them to EACCES, so they are read first
+_WIN_IN_USE = {32, 33}  # ERROR_SHARING_VIOLATION, ERROR_LOCK_VIOLATION
+_WIN_ACCESS_DENIED = 5
+_WIN_DENIED = {_WIN_ACCESS_DENIED, 19}  # ERROR_ACCESS_DENIED, ERROR_WRITE_PROTECT
+_WIN_DISK_FULL = {39, 112}  # ERROR_HANDLE_DISK_FULL, ERROR_DISK_FULL
+_WIN_NOT_FOUND = {2, 3}  # ERROR_FILE_NOT_FOUND, ERROR_PATH_NOT_FOUND
+
+_IN_USE = {errno.EAGAIN, errno.EWOULDBLOCK, errno.EBUSY, getattr(errno, "ETXTBSY", None)} - {None}
+_DISK_FULL = {errno.ENOSPC, getattr(errno, "EDQUOT", None)} - {None}
+_DENIED = {errno.EACCES, errno.EPERM, errno.EROFS}
+
+
+def _in_app_bundle(path: str | os.PathLike[str] | None) -> bool:
+    return path is not None and any(part.casefold().endswith(".app") for part in Path(path).parts)
+
+
+def write_refusal(error: OSError, path: str | os.PathLike[str] | None = None) -> str:
+    """The error name for a game file the system refused to write, by the cause behind ``error``.
+
+    ``path`` is the destination; the error's own file name is used without one. The game process check has passed by
+    then, so only a sharing or lock conflict is a file in use (game_file_locked).
+    """
+    path = path if path is not None else error.filename
+    winerror = getattr(error, "winerror", None)
+    if winerror in _WIN_IN_USE:
+        return "game_file_locked"
+    if winerror in _WIN_DISK_FULL:
+        return "game_disk_full"
+    if winerror in _WIN_NOT_FOUND:
+        return "game_file_not_found"
+    if winerror in _WIN_DENIED:
+        # Replacing a file another program holds open fails with access denied rather than a sharing violation;
+        # an os.replace error names two files, and the preflight had opened the destination for writing.
+        if winerror == _WIN_ACCESS_DENIED and error.filename2 is not None:
+            return "game_file_locked"
+        return "game_file_denied"
+    number = error.errno
+    if number in _IN_USE or isinstance(error, BlockingIOError):
+        return "game_file_locked"
+    if number in _DISK_FULL:
+        return "game_disk_full"
+    if number == errno.ENOENT or isinstance(error, FileNotFoundError):
+        return "game_file_not_found"
+    if number == errno.EPERM and sys.platform == "darwin" and _in_app_bundle(path):
+        return "game_app_denied"  # App Management: macOS keeps other apps from changing an app bundle's contents
+    if number in _DENIED or isinstance(error, PermissionError):
+        return "game_file_denied"
+    return "game_file_write_failed"

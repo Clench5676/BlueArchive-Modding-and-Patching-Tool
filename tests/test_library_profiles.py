@@ -3,6 +3,7 @@ header-only bundles in temporary game folders (never a real install, library or 
 
 from __future__ import annotations
 
+import errno
 import json
 import os
 import shutil
@@ -1856,19 +1857,19 @@ def lock_game_file(monkeypatch, path: Path) -> None:
 
     def copy(source, target):
         if Path(target) == path:
-            raise PermissionError(13, "Locked", str(target))
+            raise OSError(errno.EBUSY, "Locked", str(path))  # another program holds the game file
         return real(source, target)
 
     monkeypatch.setattr(service, "atomic_copy", copy)
 
     def clone_locked(source, target):
         if Path(target) == path:
-            raise PermissionError(13, "Locked", str(target))
+            raise OSError(errno.EBUSY, "Locked", str(path))  # another program holds the game file
         return clone(source, target)
 
     def move_locked(source, target, sha1):
         if path in (Path(source), Path(target)):
-            raise PermissionError(13, "Locked", str(target))
+            raise OSError(errno.EBUSY, "Locked", str(path))  # another program holds the game file
         return move(source, target, sha1)
 
     monkeypatch.setattr(service, "atomic_clone", clone_locked)

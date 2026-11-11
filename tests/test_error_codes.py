@@ -31,7 +31,8 @@ BLOCKS = (
         'catalog_data_invalid catalog_family_not_found catalog_variant_not_found game_directory_missing '
         'game_file_locked game_file_not_found game_file_outside_resources game_not_found game_running '
         'game_status_unavailable original_invalid original_unavailable steam_busy variant_incompatible '
-        'variant_not_found untested_build '
+        'variant_not_found untested_build game_file_denied game_app_denied game_disk_full '
+        'game_file_write_failed '
     ).split(),
     (
         'bundle_invalid conflict conversion_failed conversion_names game_file_conflict mod_parts_missing '
