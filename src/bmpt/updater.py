@@ -59,6 +59,15 @@ def prerelease_previews(version: str) -> bool:
     return key is not None and key[3][0] == 0
 
 
+def button_size_tags(version: str) -> bool:
+    """The button size tags (BL-173) mark pre-release builds and development runs, but not a packaged release
+    candidate, which shows the App as a stable release will."""
+    if not prerelease_previews(version):
+        return False
+    pre = version.strip().split("-", 1)[1]
+    return pre.endswith("-dev") or pre == "dev" or not pre.startswith("rc")
+
+
 def current_version() -> str:
     """This build's version; development runs report ``<version>-dev``."""
     return get_version_info().get("version") or "0.0.0"
