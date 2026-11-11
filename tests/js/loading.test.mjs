@@ -271,6 +271,23 @@ test("the initial cover measures the fallback and sprite portions through reveal
   assert.deepEqual(h.loading.timings(), { "fallback-loading": 200, "sprite-loading": 1000 });
 });
 
+test("the stage stays hidden at its default scale until the first fit, so the start screen is black", async () => {
+  const css = readFileSync(new URL("../../src/bmpt/web/css/app.css", import.meta.url), "utf8");
+  assert.match(css, /\.stage \{[^}]*scale\(var\(--scale, \.5\)\)[^}]*visibility: hidden;/);
+  const old = Object.fromEntries(["document", "innerWidth", "innerHeight", "bamtHeaderGeometry"].map((k) => [k, globalThis[k]]));
+  globalThis.document = { createElement: () => ({ getContext: () => ({}) }) };
+  const { fitStage } = await import("../../src/bmpt/web/js/util.js");
+  const style = { setProperty(key, value) { this[key] = value; }, removeProperty(key) { delete this[key]; } };
+  const stage = { style, getBoundingClientRect: () => ({ left: 0, top: 0, width: 1600, height: 900 }) };
+  try {
+    Object.assign(globalThis, { innerWidth: 1600, innerHeight: 900, bamtHeaderGeometry: null,
+      document: { getElementById: () => stage, querySelector: () => null } });
+    assert.equal(style.visibility, undefined);
+    fitStage();
+    assert.equal(style.visibility, "visible");
+  } finally { Object.assign(globalThis, old); }
+});
+
 for (const mode of ["scene", "wait", "task"]) test(`${mode} waits for the real prefab without a substitute after consent`, async () => {
   const h = await harness(), work = deferred();
   const pending = mode === "scene" ? h.loading.scene(() => work.promise) : mode === "wait" ? h.loading.wait(work.promise) : h.loading.task(() => work.promise);
