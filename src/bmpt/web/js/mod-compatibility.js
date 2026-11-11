@@ -149,7 +149,8 @@ async function assess(report) {
 // The result popup (owner, 2026-11-11), plain and left-aligned: what changed, under "Changes:", one list item each (a
 // Details button as high as its line), then, where Update repairs it, the game's dotted rule and what Update does, under
 // "Auto update:". Nothing a user does not act on (owner, 2026-11-11: no "Mod adapted to the current version required",
-// no "CRC fix changes checksums only"). Footer buttons one size smaller (Popup.FOOTER.M); every line at one type size.
+// no "CRC fix changes checksums only"). Footer buttons two sizes smaller (Popup.FOOTER.S, owner 2026-11-11); every line at
+// one type size.
 const ITEM = Object.freeze({ marker: "\u2022", markerGap: 44, indent: 52 });
 export function resultLines(result, repair) {
   const item = (line) => ({ ...(typeof line === "string" ? { text: line } : line), ...ITEM });
@@ -193,7 +194,7 @@ export async function show(report, { onRemap } = {}) {
   const repair = choices.length > 0;
   const lines = resultLines(result, repair);
   // the lines share one type size, as siblings do (docs/ui-guidelines.md)
-  const response = await Popup.message({ title: T("compatibility.result"), lines, scroll: true, plain: true, footer: "M",
+  const response = await Popup.message({ title: T("compatibility.result"), lines, scroll: true, plain: true, footer: "S",
     fitTogether: lines.flatMap((line, i) => (line.rule ? [] : [i])),
     ...(repair ? repairButtons(choices) : { ok: T("picker.ok") }) });
   const kind = repair ? chosen(response, choices) : null;
@@ -268,7 +269,7 @@ export async function remap(id, onRemapped = () => {}, label = "", subject = lab
     const choices = repairs(checked.assessment);
     if (choices.length > 1) {
       const lines = [T("compatibility.autoUpdate"), ...choices.map(({ text }) => ({ text, ...ITEM }))];
-      choice = chosen(await Popup.message({ title: T("act.update"), lines, plain: true, footer: "M",
+      choice = chosen(await Popup.message({ title: T("act.update"), lines, plain: true, footer: "S",
         fitTogether: lines.map((_line, i) => i), ...repairButtons(choices) }), choices);
       if (!choice) return null;
     } else choice = choices[0]?.kind ?? null;

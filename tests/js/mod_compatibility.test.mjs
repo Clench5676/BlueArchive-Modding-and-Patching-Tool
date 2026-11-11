@@ -444,7 +444,7 @@ test("a portrait the game drew anew keeps the rig its textures were drawn for, u
     const [popup] = h.popups, texts = popup.lines.map((line) => (typeof line === "string" ? line : line.text));
     // plain and left-aligned: what changed as list items, the dotted rule, then what Update does (owner, 2026-11-11)
     assert.equal(popup.title, h.strings.compatibility.result, locale);
-    assert.ok(popup.plain && popup.footer === "M", locale);
+    assert.ok(popup.plain && popup.footer === "S", locale);
     assert.equal(texts[0], h.strings.compatibility.changes, locale);
     assert.ok(popup.lines.some((line) => line.text === h.strings.compatibility.redrawn && line.marker), locale);
     const rule = popup.lines.findIndex((line) => line.rule);
