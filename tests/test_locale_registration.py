@@ -7,10 +7,10 @@ from types import SimpleNamespace
 
 import pytest
 
-from ba_modding_toolkit import asset, bundle, i18n
-from ba_modding_toolkit.core import mod_update
+from ba_modding_toolkit import asset, i18n
 from ba_modding_toolkit.models import AssetType, SaveOptions
 from bmpt.errors import ServiceError
+from bmpt.library import rebuild
 from bmpt.localization import LOCALES, register_locales
 from bmpt.webui.strings import ui_strings
 
@@ -18,7 +18,7 @@ EXPECTED = json.loads((Path(__file__).parent / "fixtures" / "package_split" / "m
 
 
 @pytest.mark.parametrize("lang", ["en-US", "zh-CN", "th-TH"])
-def test_three_engine_callers_keep_their_original_app_messages(lang, monkeypatch, tmp_path):
+def test_engine_and_library_callers_keep_their_original_app_messages(lang, monkeypatch, tmp_path):
     register_locales()
     manager = i18n.i18n_manager
     previous = manager.lang
@@ -30,21 +30,20 @@ def test_three_engine_callers_keep_their_original_app_messages(lang, monkeypatch
             asset.extract_asset(obj, asset.ExtractContext(SimpleNamespace(files={}), None, lambda *_: None))
         assert str(caught.value) == EXPECTED[lang]["stream"]
 
-        monkeypatch.setattr(bundle, "collect_stream_companions", lambda *_: None)
+        monkeypatch.setattr(rebuild, "collect_stream_companions", lambda *_: None)
         obj = SimpleNamespace(get_raw_data=lambda: b"synthetic")
         with pytest.raises(ValueError) as caught:
-            bundle.UpdateScope.serialized(SimpleNamespace(env=SimpleNamespace(file=None)), obj)
+            rebuild.UpdateScope.serialized(SimpleNamespace(env=SimpleNamespace(file=None)), obj)
         assert str(caught.value) == EXPECTED[lang]["stream"]
 
         failure = ServiceError("required_asset_extract_failed", file="example.bundle", name="required.atlas", error="synthetic")
         def fail(*args, **kwargs):
             raise failure
-        monkeypatch.setattr(mod_update.Bundle, "load", fail)
-        result = mod_update.process_mod_update([tmp_path / "source"], [tmp_path / "target"], tmp_path,
-                                               {"ALL"}, SaveOptions())
+        monkeypatch.setattr(rebuild.Bundle, "load", fail)
+        result = rebuild.rebuild([tmp_path / "source"], [tmp_path / "target"], tmp_path, {"ALL"}, SaveOptions())
         assert not result.success and result.error is failure
         assert result.message == EXPECTED[lang]["extract"]
-        assert mod_update.t("webui.import.notTransferred", names="example") == EXPECTED[lang]["not_transferred"]
+        assert rebuild.t("webui.import.notTransferred", names="example") == EXPECTED[lang]["not_transferred"]
     finally:
         manager.set_language(previous)
 

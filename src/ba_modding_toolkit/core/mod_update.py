@@ -3,8 +3,6 @@
 
 import traceback
 from pathlib import Path
-from typing import Callable
-from bmpt.errors import ServiceError
 
 from ..i18n import t
 from ..utils import no_log, run_batch
@@ -15,7 +13,7 @@ from ..models import (
     AnimDiffMap, ModUpdateResult, BatchUpdateResult, SkelVersionConflict,
     ReplaceAssetType,
 )
-from ..bundle import Bundle, UpdateScope
+from ..bundle import Bundle
 from ..searching import find_target_bundles
 
 
@@ -43,8 +41,6 @@ def process_mod_update(
     match_strategy: MatchStrategy = 'path_id',
     anim_check: AnimCheckOptions | None = None,
     log: LogFunc = no_log,
-    prepared_patch: Patch | None = None,
-    on_step: Callable[[str], None] | None = None,
 ) -> ModUpdateResult:
     """
     自动化Mod更新流程 (N-to-N)。
@@ -73,24 +69,14 @@ def process_mod_update(
     try:
         # 1. 提取资源 (Extraction)
         log(f'\n--- {t("log.section.extracting_patches")} ---')
-        if on_step:
-            on_step("extract")
-        patches: Patch = dict(prepared_patch or {})
+        patches: Patch = {}
         skel_conflicts: list[SkelVersionConflict] = []
-        targets = []
-        for path in target_paths:
-            target = Bundle.load(path, log)
-            if target is None:
-                return ModUpdateResult(False, t("message.load_failed"), [])
-            targets.append(target)
-        scope = UpdateScope(targets, match_strategy, asset_types_to_replace) if prepared_patch is None else None
 
         for src in source_paths:
             src_bundle = Bundle.load(src, log)
             if not src_bundle:
-                return ModUpdateResult(False, t("message.load_failed"), [])
-            patch, conflicts = src_bundle.extract_patch(asset_types_to_replace, match_strategy, spine_options,
-                                                        **({"scope": scope} if scope is not None else {}))
+                continue
+            patch, conflicts = src_bundle.extract_patch(asset_types_to_replace, match_strategy, spine_options)
             patches.update(patch)
             skel_conflicts.extend(conflicts)
 
@@ -100,89 +86,55 @@ def process_mod_update(
             log(f"❌ {msg}")
             return ModUpdateResult(False, msg, [])
 
-        required_keys = set(patches) - {"__mode__"}
-        unchanged_keys = scope.unchanged if scope is not None else set()
-        not_transferred = sorted(map(str, scope.not_transferred)) if scope is not None else []
-        if not required_keys and not unchanged_keys:
-            return ModUpdateResult(False, t("message.mod_update.no_assets_extracted"), [])
-        warning = t("webui.import.notTransferred", names=", ".join(not_transferred)) if not_transferred else ""
-        if warning:
-            log(warning)
+        if not patches:
+            return False, t("message.mod_update.no_assets_extracted"), []
 
         log(f"  > {t('log.mod_update.pool_built', count=len(patches))}")
 
         # 2. 按需注入 (Application)
         log(f'\n--- {t("log.section.applying_to_targets")} ---')
         file_pairs: list[FilePair] = []
-        total_matched = len(unchanged_keys)
+        total_matched = 0  # 总匹配数（包括跳过的）
         anim_diffs: dict[str, set[str]] = {}
-        failed_targets = False
-        matched_keys = set()
-        pending_saves = []
 
-        for tgt, tgt_bundle in zip(target_paths, targets):
-            retained = {key for key in unchanged_keys
-                        if any(target is tgt_bundle for target, _ in scope.counterparts[key])}
+        for tgt in target_paths:
+            tgt_bundle = Bundle.load(tgt, log)
+            if not tgt_bundle:
+                log(f"  ❌ {t('message.load_failed')}: {tgt.name}")
+                continue
 
-            if on_step:
-                on_step("replace")
             result = tgt_bundle.apply_patch(patches, match_strategy, anim_check)
-            if prepared_patch is not None and result.matched_count != len(patches):
-                return ModUpdateResult(False, t("webui.error.atlas_remap_target_mismatch", file=tgt.name,
-                                                matched=result.matched_count, expected=len(patches)), [])
             total_matched += result.matched_count
-            matched_keys.update(result.matched_keys)
 
             # 汇总动画差异
             for name, anims in (result.anim_diffs or {}).items():
                 anim_diffs.setdefault(name, set()).update(anims)
 
-            if skip_unchanged and result.applied_count == 0 and (result.skipped_count > 0 or retained):
+            if skip_unchanged and result.applied_count == 0 and result.skipped_count > 0:
                 log(f"  ⏭️ {t('log.mod_update.target_unchanged', name=tgt.name, count=result.skipped_count)}")
                 continue
 
-            if result.is_success or retained:
-                pending_saves.append((tgt, tgt_bundle, result))
+            if result.is_success:
+                output_path = output_dir / tgt.name
+                save_ok, save_message = tgt_bundle.save(output_path, save_options)
+                if save_ok:
+                    file_pairs.append(FilePair(output_path, tgt))
+                    log(f"  ✅ {t('log.mod_update.target_processed', name=tgt.name, applied=result.applied_count)}")
+                else:
+                    log(f"  ❌ {t('log.file.save_failed', path=output_path, error=save_message)}")
             else:
                 log(f"  > {t('log.file.no_changes_made')} ({tgt.name})")
-
-        missing = required_keys - matched_keys
-        if missing:
-            raise ServiceError("required_assets_unmatched", names=", ".join(sorted(map(str, missing))))
-        # Validate every target before publishing any output for this Mod.
-        for tgt, tgt_bundle, result in pending_saves:
-            output_path = output_dir / tgt.name
-            save_ok, save_message = (tgt_bundle.save(output_path, save_options, on_step)
-                                     if on_step else tgt_bundle.save(output_path, save_options))
-            if save_ok:
-                file_pairs.append(FilePair(output_path, tgt))
-                log(f"  ✅ {t('log.mod_update.target_processed', name=tgt.name, applied=result.applied_count)}")
-            else:
-                log(f"  ❌ {t('log.file.save_failed', path=output_path, error=save_message)}")
-                failed_targets = True
 
         # 3. 归一化动画差异（按 skel 名排序）
         final_anim_diffs: AnimDiffMap = {k: sorted(v) for k, v in anim_diffs.items()}
 
-        # A partial save is a failed mod, even when another part was unchanged or saved successfully.
-        if failed_targets:
-            return ModUpdateResult(False, t("message.mod_update.no_targets_processed"), [], final_anim_diffs)
-
         if not file_pairs:
             # 区分：完全没有匹配 vs 匹配了但都被跳过
             if total_matched > 0 and skip_unchanged:
-                return ModUpdateResult(True, "all_targets_unchanged", [], final_anim_diffs,
-                                       not_transferred=not_transferred)
+                return ModUpdateResult(True, "all_targets_unchanged", [], final_anim_diffs)
             return ModUpdateResult(False, t("message.mod_update.no_targets_processed"), [], final_anim_diffs)
 
-        message = "\n".join(filter(None, [t("message.mod_update.success"), warning]))
-        return ModUpdateResult(True, message, file_pairs, final_anim_diffs,
-                               not_transferred=not_transferred)
-
-    except ServiceError as error:
-        message = t("webui.error." + error.code, **error.params)
-        log(message)
-        return ModUpdateResult(False, message, [], error=error)
+        return ModUpdateResult(True, t("message.mod_update.success"), file_pairs, final_anim_diffs)
 
     except Exception as e:
         log(f"\n❌ {t('common.error')}: {t('log.error_processing', error=e)}")
@@ -244,11 +196,10 @@ def _process_single_mod_update(
     if result.success:
         if result.message in ("unchanged", "all_targets_unchanged"):
             log(f'  ⏭️ {t("log.batch.process_unchanged", filename=mod_path.name)}')
-            return ModUpdateResult(True, "unchanged", [], result.anim_diffs, not_transferred=result.not_transferred)
+            return ModUpdateResult(True, "unchanged", [], result.anim_diffs)
         else:
             log(f'  ✅ {t("log.batch.process_success", filename=mod_path.name)}')
-            return ModUpdateResult(True, result.message if result.not_transferred else "", result.file_pairs,
-                                   result.anim_diffs, not_transferred=result.not_transferred)
+            return ModUpdateResult(True, "", result.file_pairs, result.anim_diffs)
     else:
         log(f'  ❌ {t("log.batch.process_failed", filename=mod_path.name, message=result.message)}')
         return ModUpdateResult(False, result.message, [], result.anim_diffs)

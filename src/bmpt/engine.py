@@ -8,8 +8,8 @@ tests.
 Names resolve lazily (PEP 562): importing this module imports nothing from the engine, an App module still loads
 only the engine modules whose names it imports, at the moment it imports them, and every access reads the engine
 module's current attribute, so engine module state (``utils.EXE_DIR``) and monkeypatched functions behave exactly as
-with a direct import. Modules are exported as modules where the App calls through them (``core.process_mod_update``)
-so that a replacement set on the engine module is the one the App calls.
+with a direct import. Modules are exported as modules where the App calls through them
+(``core.process_asset_extraction``) so that a replacement set on the engine module is the one the App calls.
 
 Adding a name: add it to ``_EXPORTS`` and to the ``TYPE_CHECKING`` imports; the contract tests keep both in step.
 """
@@ -26,11 +26,9 @@ ENGINE_PACKAGE = "ba_modding_toolkit"
 _EXPORTS: dict[str, tuple[str, str | None]] = {
     # Processing pipelines, called through their modules
     "core": ("core", None),
-    "mod_install": ("core.mod_install", None),
     "format_skel_conflicts": ("core.mod_update", "_format_skel_conflicts"),
-    # Bundle I/O and the update scope
+    # Bundle I/O
     "Bundle": ("bundle", "Bundle"),
-    "UpdateScope": ("bundle", "UpdateScope"),
     "collect_stream_companions": ("asset", "collect_stream_companions"),
     # Data types and options
     "AnimCheckOptions": ("models", "AnimCheckOptions"),
@@ -87,8 +85,7 @@ __all__ = ["ENGINE_PACKAGE", *_EXPORTS]
 if TYPE_CHECKING:
     from ba_modding_toolkit import core, utils
     from ba_modding_toolkit.asset import collect_stream_companions
-    from ba_modding_toolkit.bundle import Bundle, UpdateScope
-    from ba_modding_toolkit.core import mod_install
+    from ba_modding_toolkit.bundle import Bundle
     from ba_modding_toolkit.core.mod_update import _format_skel_conflicts as format_skel_conflicts
     from ba_modding_toolkit.gui.main import main as classic_main
     from ba_modding_toolkit.i18n import (UI_LANGUAGES, fallback_language, i18n_manager, offered_languages,

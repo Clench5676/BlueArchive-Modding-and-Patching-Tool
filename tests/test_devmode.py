@@ -262,18 +262,6 @@ def test_library_takes_mods_from_inside_the_roots_only(dev):
     assert not (dev.root / "library" / "mods").exists()
 
 
-def test_mod_install_plans_inside_the_roots_only(dev):
-    from ba_modding_toolkit.mod_install import plan_mod_install
-
-    name = "assets-_mx-spinecharacters-test_spr-_mxdependency-2026-01-01_003_assets_all_1.bundle"
-    (dev.root / "game").mkdir()
-    (dev.root / name).write_bytes(b"mod")
-    (dev.outside / name).write_bytes(b"user's mod")
-    expect_outside(lambda: plan_mod_install([dev.outside / name], [dev.root / "game"]))
-    expect_outside(lambda: plan_mod_install([dev.root / name], [dev.outside]))
-    assert plan_mod_install([dev.root / name], [dev.root / "game"])
-
-
 class _Library:
     def __init__(self):
         self.added = []
@@ -533,17 +521,20 @@ def test_a_switch_never_writes_a_view(sandboxed, monkeypatch, header_only_bundle
     assert env.game_file.read_bytes() == env.official
 
 
-def test_mod_install_writes_writable_folders_only(sandboxed):
-    from ba_modding_toolkit.mod_install import _backup_and_replace
+def test_library_build_writes_writable_folders_only(sandboxed):
+    from bmpt.library.install import _replace, backup_file
 
     source = sandboxed.root / "mod.bundle"
     source.write_bytes(b"mod")
     for folder, allowed in ((sandboxed.sandboxes, True), (sandboxed.view, False), (sandboxed.outside, False)):
         target = folder / "game.bundle"
         target.write_bytes(b"official")
-        log = _Log()
-        assert _backup_and_replace(source, target, True, log.log) is allowed
+        assert _replace(source, target, _Log().log) is allowed
         assert target.read_bytes() == (b"mod" if allowed else b"official")
+        if allowed:
+            backup_file(target, True)
+        else:
+            expect_outside(lambda: backup_file(target, True))
         assert (folder / "game.bundle.backup").exists() is allowed
 
 
