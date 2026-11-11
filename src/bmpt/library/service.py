@@ -40,7 +40,7 @@ from ..gameassets.preview_reads import PreviewReads
 from ..logging_utils import log_failure
 from ..openfiles import remove_tree, temporary_directory
 from . import profiles as profiles_mod
-from . import fingerprint, integrity, safety, staging, tested_build
+from . import fingerprint, integrity, rig_archive, safety, staging, tested_build
 from .install import Action, PlannedFile, PlannedGroup, backup_file, install_staged
 from .rebuild import rebuild
 from . import targets as resolver
@@ -660,6 +660,10 @@ class ModLibrary:
         self._names_cache: dict[str, tuple[int, dict[str, Path]]] = {}
         self._originals_cache: tuple[Any, dict[str, int]] | None = None
         self._backfill_misses: set[tuple] = set()
+        # the official rigs of portraits kept per game release, and what was matched against them (_archived_rigs)
+        self.rigs = rig_archive.RigArchive(self.root / "rigs")
+        self._rig_matches: dict[tuple, dict] = {}
+        self._mod_masks: dict[tuple, dict] = {}
         self._impacts: dict[tuple, tuple[str, dict]] = {}  # judged impacts of game updates (_impact_of)
         self._untested_ok: dict[tuple[str, str], set[str]] = {}  # confirmed cores of an untested build (confirm_untested)
         self._maps_cache: tuple[tuple, Any] | None = None
@@ -1475,6 +1479,13 @@ class ModLibrary:
                        if atlas_remap.page_size_mismatch({name: data}, effective.textures)}
             misfit = bool(misfits)
             layout = fingerprint.changed_layouts(built, mixed)
+            if kind == "spr" and not unavailable:
+                # Where no record keeps the rig the mod's textures were drawn for, the earlier release the archive
+                # keeps that they follow (rig_archive), against the installed pages of the verified official copies.
+                unrecorded = {name: data for name, data in mixed.items()
+                              if not isinstance((layout.get(name) or {}).get("skeleton"), str)}
+                layout = {**layout, **self._archived_rigs(list(files.values()), unrecorded,
+                                                          lambda: self._official_page_masks(original_paths))}
             gains = atlas_remap.rig_gains(selected.atlases, selected.skeletons, official.atlases, official.skeletons)
             rerig = atlas_remap.rerigged(gains, selected.atlases, selected.skeletons, official.atlases,
                                          official.skeletons, selected.textures)
@@ -1485,6 +1496,10 @@ class ModLibrary:
             recorded = {name: entry for name, entry in layout.items() if isinstance(entry.get("skeleton"), str)}
             dated = (self._dated_rig(list(files.values()), misfits - recorded.keys(), official.atlases, original_paths)
                      if kind == "spr" and not unavailable else {})
+            # repacked since the textures were drawn, with no rig to repair them from (mod-compatibility.js tells it)
+            report["rig"]["unknown"] = sorted(name for name, entry in layout.items()
+                                              if not isinstance(entry.get("skeleton"), str)
+                                              and not isinstance((dated.get(name) or {}).get("skeleton"), str))
             drawn_by = atlas_remap.pair_atlases(official.skeletons, dict.fromkeys({**dated, **recorded}))
             report["source"] = {"atlases": {name: entry["text"] for name, entry in {**dated, **recorded}.items()},
                                 "skeletons": {}}
@@ -1513,7 +1528,7 @@ class ModLibrary:
             wanted = misfit or bool(recorded) or bool(rerig) if kind == "spr" else misfit
             report["remappable"] = not unavailable and wanted
         except (ValueError, UnicodeError):
-            report["rig"] = {"layout": [], "animations": {}, "regions": {}}
+            report["rig"] = {"layout": [], "animations": {}, "regions": {}, "unknown": []}
             report["source"] = {"atlases": {}, "skeletons": {}}
             report["oldRig"] = {"atlases": [], "animations": {}, "available": False}
             report["graft"] = {"kind": None, "animations": {}, "available": False}
@@ -3985,17 +4000,172 @@ class ModLibrary:
         pin = pin or self.current_pin()
         return lobby_camera.live_base(self, core, pin) if pin is not None and lobby_camera.cameras(self) else None
 
+    # --- the official rigs of portraits, kept per release (rig_archive) ---
+
+    def archive_rigs(self, pin: Pin | None = None, cancel: Callable[[], bool] | None = None) -> int:
+        """Keep the official rig of every portrait of an install (default the current one) in the archive
+        (``rig_archive``): its atlas and skeleton with its pages' alpha masks, from verified official copies only, each
+        distinct rig once. Done again only when the install's portrait files changed (their names carry their CRC).
+        With the scan consent only, a core at a time under the library lock, yielding to foreground previews. Returns
+        how many rigs it kept; a core that cannot be read is skipped. Never raises."""
+        try:
+            pin = pin or self.current_pin()
+            if pin is None or not self._scan_allowed():
+                return 0
+            with self._lock:
+                index = self._index(pin)
+                cores = sorted(core for core, paths in index.items()
+                               if paths and all(kind_of_file(path.name) == "spr" for path in paths))
+                stamp = hashlib.sha1(json.dumps([[core, sorted(p.name for p in index[core])] for core in cores])
+                                     .encode()).hexdigest()
+            if self.rigs.stamp(pin.key) == stamp:
+                return 0
+            kept = 0
+            for core in cores:
+                if cancel and cancel():
+                    return kept
+                preview_gate.yield_to_previews(cancel)
+                kept += self._archive_core(core, pin)
+            self.rigs.set_stamp(pin.key, stamp)
+            logger.info("Rig archive: %d portrait rigs kept of %d cores", kept, len(cores))
+            return kept
+        except Exception as error:  # never in the way of the program; the next start tries again
+            log_failure(logger, logging.WARNING, "Could not keep the official portrait rigs", error)
+            return 0
+
     @_serialized
-    def recorded_rig(self, mod_id: str) -> dict[str, dict]:
-        """What a portrait mod's fingerprint recorded of the rigs its textures were drawn for
-        (``fingerprint.painted``, the entries that keep their skeleton), per atlas basename; empty for another mod.
-        Its previews draw it on them where the official atlas was repacked since (``fingerprint.drawn_on``)."""
+    def _archive_core(self, core: str, pin: Pin) -> int:
+        """Keep the official rigs of one portrait core (``archive_rigs``)."""
+        try:
+            parts = sorted(self._spine_parts(core, pin), key=lambda path: path.stat().st_size)
+        except (OSError, ServiceError):
+            return 0
+        atlases: dict[str, bytes] = {}
+        skeletons: dict[str, bytes] = {}
+        holders: dict[str, Path] = {}  # texture key -> the verified official part that holds it
+        for part in parts:
+            try:
+                official = self._official_for(part, pin, game_first=True)
+                contents = integrity.inspect(official, allow_unknown=True)
+            except (ServiceError, OSError, ValueError):
+                continue
+            atlases.update(contents.atlases)
+            skeletons.update(contents.skeletons)
+            holders.update({key: official for key in contents.textures})
+        drawn_by = atlas_remap.pair_atlases(skeletons, atlases)
+        kept = 0
+        for name, text in atlases.items():
+            skeleton = drawn_by.get(name)
+            if skeleton is None or self.rigs.has(core, hashlib.sha1(text).hexdigest(),
+                                                 hashlib.sha1(skeletons[skeleton]).hexdigest()):
+                continue
+            try:
+                pages = {atlas_remap.texture_key(page) for page in atlas_remap.parse_atlas(text, name).pages}
+                images = atlas_remap.read_inputs(sorted({holders[key] for key in pages if key in holders})).textures
+            except (atlas_remap.RemapError, ValueError, UnicodeError, OSError, EOFError):
+                continue
+            masks = {key: rig_archive.alpha_mask(images[key]) for key in pages if key in images}
+            if masks and self.rigs.add(core, name, text, skeleton, skeletons[skeleton],
+                                       fingerprint.atlas(text)["layout"], masks):
+                kept += 1
+        return kept
+
+    def _mod_page_masks(self, paths: list[Path]) -> dict:
+        """The alpha masks of a mod's own pages (texture key to mask), kept per file content."""
+        key = tuple(sorted((path.name, self._hashes.get(path).sha1) for path in paths))
+        masks = self._mod_masks.get(key)
+        if masks is None:
+            textures = atlas_remap.read_inputs(paths).textures
+            masks = {name: rig_archive.alpha_mask(image) for name, image in textures.items()}
+            if len(self._mod_masks) >= 256:
+                self._mod_masks.clear()
+            self._mod_masks[key] = masks
+        return masks
+
+    def _official_page_masks(self, paths: list[Path]) -> dict:
+        """The alpha masks of the pages of verified official copies (texture key to mask), kept per file content."""
+        return self._mod_page_masks(paths)
+
+    def _archived_rigs(self, paths: list[Path], atlases: Mapping[str, bytes],
+                       current: Callable[[], Mapping[str, Any]] | None = None) -> dict[str, dict]:
+        """Of the official ``atlases`` as they are now that a mod's textures paint without the mod carrying them, the
+        ones its pages were drawn for in an earlier release the archive keeps (``rig_archive.best``): per atlas name a
+        ``fingerprint.painted``-style entry (``text``, base64 ``skeleton``, ``layout``, ``archived``). ``current`` gives
+        the installed release's page masks; without it, the archive's rig of the installed layout stands for them, and
+        an atlas whose installed rig the archive does not keep is left out. Nothing is decoded unless the archive keeps
+        a rig of another layout for the core. Never raises."""
+        if not paths or not atlases:
+            return {}
+        core = core_of(paths[0].name)
+        try:
+            kept = self.rigs.rigs(core)
+            now = {name: fingerprint.atlas(text)["layout"] for name, text in atlases.items()}
+            stem = lambda name: Path(atlas_remap.texture_key(name)).stem
+            candidates = {name: [rig for rig in kept if stem(rig.atlas) == stem(name) and rig.layout != layout]
+                          for name, layout in now.items()}
+            if not any(candidates.values()):
+                return {}
+            key = (tuple(sorted((path.name, self._hashes.get(path).sha1) for path in paths)),
+                   tuple(sorted(now.items())), self.rigs.generation(), current is not None)
+            if key in self._rig_matches:
+                return self._rig_matches[key]
+            mod = self._mod_page_masks(paths)
+            masks_now = current() if current is not None else None
+            result = {}
+            for name, rigs in candidates.items():
+                installed = masks_now if masks_now is not None else next(
+                    (rig.unpacked() for rig in kept if stem(rig.atlas) == stem(name) and rig.layout == now[name]), None)
+                if not rigs or installed is None:
+                    continue
+                found = rig_archive.best(rigs, mod, installed)
+                if found is None:
+                    continue
+                rig = found[0]
+                text, skeleton = self.rigs.read(rig.atlas_sha1), self.rigs.read(rig.skeleton_sha1)
+                if text is None or skeleton is None:
+                    continue
+                result[name] = {"text": text.decode("utf-8-sig"), "layout": rig.layout, "archived": True,
+                                "skeleton": base64.b64encode(skeleton).decode("ascii")}
+            if len(self._rig_matches) >= 256:
+                self._rig_matches.clear()
+            self._rig_matches[key] = result
+            return result
+        except (atlas_remap.RemapError, ValueError, UnicodeError, OSError, EOFError, ServiceError) as error:
+            log_failure(logger, logging.WARNING, "Could not match a mod against the kept rigs", error)
+            return {}
+
+    @_serialized
+    def recorded_rig(self, mod_id: str, atlases: Mapping[str, bytes] | None = None) -> dict[str, dict]:
+        """The rigs a portrait mod's textures were drawn for, per atlas basename: what its fingerprint recorded
+        (``fingerprint.painted``, the entries that keep their skeleton) and, for the ``atlases`` its preview draws with
+        (name to bytes) that no record covers, the earlier release the archive keeps that its pages follow
+        (``_archived_rigs``). Empty for another mod. Its previews draw it on them where the atlas was repacked since
+        (``fingerprint.drawn_on``)."""
         record = self._record(mod_id)
         if record.get("kind") != "spr":
             return {}
         painted = (self._read_built_against(record) or {}).get("painted") or {}
-        return {name: entry for name, entry in painted.items()
-                if isinstance(entry.get("text"), str) and isinstance(entry.get("skeleton"), str)}
+        known = {name: entry for name, entry in painted.items()
+                 if isinstance(entry.get("text"), str) and isinstance(entry.get("skeleton"), str)}
+        unrecorded = {name: data for name, data in (atlases or {}).items() if integrity.basename(name) not in known}
+        if unrecorded:
+            archived = self._archived_rigs(self._paths(record), unrecorded)
+            known.update({integrity.basename(name): entry for name, entry in archived.items()})
+        return known
+
+    @_serialized
+    def rig_stamp(self, mod_id: str) -> str:
+        """What a portrait mod's preview drawn on a kept rig depends on beyond its files: the archive's state for its
+        core (``recorded_rig``), as a short stamp; empty for another mod and for a core the archive keeps one layout of
+        at most (nothing to draw on but the installed rig), so a first archive redraws no preview."""
+        record = self._record(mod_id)
+        if record.get("kind") != "spr":
+            return ""
+        paths = self._paths(record)
+        rigs = self.rigs.rigs(core_of(paths[0].name)) if paths else []
+        if len({rig.layout for rig in rigs}) < 2:
+            return ""
+        return hashlib.sha1(json.dumps([[rig.atlas_sha1, rig.skeleton_sha1] for rig in rigs]).encode()).hexdigest()[:16]
 
     def _preview(self, record: dict[str, Any], pin: Pin) -> list[Path]:
         paths = self._paths(record)
@@ -6631,6 +6801,12 @@ class ModLibrary:
         sizes = {name: image.size for name, image in view.textures.items()}
         misfit = {name for name, data in mixed.items() if atlas_remap.page_size_mismatch({name: data}, sizes)}
         layout = fingerprint.changed_layouts(self._read_built_against(record), mixed)
+        if kind_of_file(paths[0].name) == "spr":
+            # the rig the archive keeps for textures no record covers, as compatibility finds it
+            unrecorded = {name: data for name, data in mixed.items()
+                          if not isinstance((layout.get(name) or {}).get("skeleton"), str)}
+            layout = {**layout, **self._archived_rigs(paths, unrecorded, lambda: {
+                key: rig_archive.alpha_mask(image) for key, image in official.textures.items()})}
         gains = atlas_remap.rig_gains(mod.atlases, mod.skeletons, official.atlases, official.skeletons)
         rerig = atlas_remap.rerigged(gains, mod.atlases, mod.skeletons, official.atlases, official.skeletons,
                                      mod.textures)
