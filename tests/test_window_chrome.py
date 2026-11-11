@@ -645,9 +645,10 @@ def test_cocoa_installs_and_removes_a_window_scoped_mouse_monitor(cocoa_drag):
     assert aspect == [(16, 9)]
     assert monitors[0][0] == api.NSEventMaskLeftMouseDown
     assert monitors[0][1](f.event()) is None
-    assert f.calls == ['drag'] and not any(button.hidden for button in buttons)
+    assert f.calls == ['drag'] and all(button.hidden for button in buttons), "hidden until the page places them"
+    assert host.held
     host.dispose()
-    assert all(button.hidden for button in buttons)
+    assert not host.held and all(button.hidden for button in buttons)
     assert monitors[1][0] == api.NSEventMaskMouseMoved, "the pointer's log watches moves"
     assert removed == observers + [monitors[0][1], monitors[1][1]]
     assert host.monitor is None and not hasattr(host, 'overlay')
@@ -903,6 +904,48 @@ def test_cocoa_buttons_play_the_top_bar_motion_and_hide_once_above_the_window(fl
 
 
 @pytest.mark.parametrize('flipped', [True, False])
+def test_cocoa_buttons_stay_hidden_until_the_page_places_the_top_bar(flipped):
+    host, pending, _ = cocoa_motion(flipped)
+    host.held, host.hid = True, False
+    for button in host.buttons:
+        button.hidden = True
+    host.measure({'centre': 22})
+    host.measure({'centre': 25})
+    assert all(b.hidden for b in host.buttons), "aligning them shows nothing"
+    # the page's first motion takes the top bar away: the buttons were never shown, so nothing plays
+    host.slide([0.0, 15.0, 40.0], 1 / 60)
+    assert not host.held and host.offset == 40.0 and all(b.hidden for b in host.buttons) and pending == []
+    # the entry motion then plays as always
+    host.slide([30.0, 0.0], 1 / 60)
+    pending.pop(0)[1]()
+    assert not any(b.hidden for b in host.buttons)
+
+
+@pytest.mark.parametrize('flipped', [True, False])
+def test_cocoa_buttons_show_at_once_when_the_first_motion_ends_at_rest(flipped):
+    host, pending, _ = cocoa_motion(flipped)
+    host.held, host.hid = True, False
+    for button in host.buttons:
+        button.hidden = True
+    host.measure({'centre': 22})
+    host.slide([12.0, 0.0], 1 / 60)
+    assert not any(b.hidden for b in host.buttons) and tops(host) == pytest.approx([15] * 3) and pending == []
+
+
+@pytest.mark.parametrize('flipped', [True, False])
+def test_cocoa_buttons_appear_after_the_hold_limit_when_the_page_never_speaks(flipped):
+    host, pending, _ = cocoa_motion(flipped)
+    host.held, host.hid = True, False
+    for button in host.buttons:
+        button.hidden = True
+    host.measure({'centre': 22})
+    host.release()
+    assert not host.held and not any(b.hidden for b in host.buttons)
+    host.release()  # a second call changes nothing
+    assert not any(b.hidden for b in host.buttons)
+
+
+@pytest.mark.parametrize('flipped', [True, False])
 def test_cocoa_fullscreen_gets_back_only_what_the_motion_changed(flipped):
     host, pending, fullscreen = cocoa_motion(flipped)
     host.measure({'centre': 22})
@@ -1018,3 +1061,31 @@ def test_windows_host_prototypes_a_user32_of_its_own(monkeypatch):
     library = window_windows.private_user32()
     assert calls == [(("user32",), {"use_last_error": True})]
     assert library is not getattr(getattr(ctypes, "windll", None), "user32", None)
+
+
+def test_macos_web_view_keeps_the_window_black_until_the_page_paints(monkeypatch):
+    from bmpt.webui.native import keep_web_view_black
+    calls = []
+    class View:
+        def setValue_forKey_(self, value, key): calls.append(('value', key, value))
+        def respondsToSelector_(self, name): calls.append(('responds', name)); return True
+        def setUnderPageBackgroundColor_(self, colour): calls.append(('under page', colour))
+    window = NS(uid='master')
+    cocoa = NS(BrowserView=NS(instances={'master': NS(webview=View())}))
+    monkeypatch.setitem(sys.modules, 'AppKit', NS(NSColor=NS(blackColor=lambda: 'black')))
+    monkeypatch.setitem(sys.modules, 'webview', NS())
+    monkeypatch.setitem(sys.modules, 'webview.platforms', NS())
+    monkeypatch.setitem(sys.modules, 'webview.platforms.cocoa', cocoa)
+    keep_web_view_black(window)
+    assert calls == [('value', 'drawsBackground', False), ('responds', 'setUnderPageBackgroundColor:'),
+                     ('under page', 'black')]
+
+
+def test_macos_web_view_black_never_blocks_the_window(monkeypatch, caplog):
+    from bmpt.webui.native import keep_web_view_black
+    monkeypatch.setitem(sys.modules, 'AppKit', NS(NSColor=NS(blackColor=lambda: 'black')))
+    monkeypatch.setitem(sys.modules, 'webview', NS())
+    monkeypatch.setitem(sys.modules, 'webview.platforms', NS())
+    monkeypatch.setitem(sys.modules, 'webview.platforms.cocoa', NS(BrowserView=NS(instances={})))
+    keep_web_view_black(NS(uid='missing'))
+    assert 'could not make the web view background transparent' in caplog.text

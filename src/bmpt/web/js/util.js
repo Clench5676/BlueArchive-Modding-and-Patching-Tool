@@ -84,6 +84,7 @@ export function fitStage() {
   const stage = document.getElementById("stage"), header = globalThis.bamtHeaderGeometry;
   const scale = header?.contentScale ?? Math.min(innerWidth / 1920, innerHeight / 1080);
   stage.style.setProperty("--scale", scale);
+  stage.style.visibility = "visible"; // hidden in app.css until the first fit: no unscaled stage on the black start screen
   stage.style.setProperty("--cover-bleed", `${stageCoverBleed(scale, globalThis.devicePixelRatio || 1)}px`);
   if (header) stage.style.top = `calc(50% + ${header.extra / 2}px)`;
   else stage.style.removeProperty("top");

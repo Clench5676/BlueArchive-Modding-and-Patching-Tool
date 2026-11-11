@@ -55,6 +55,10 @@ class PointerProbe:
 class CocoaHost:
     # A missing content view is measured again this often, this many times (pywebview swaps it while it loads).
     RETRY_DELAY, RETRY_LIMIT = 0.25, 8
+    # The buttons start hidden and stay so until the page says where its top bar is (its first motion), so no coloured
+    # dots show on the black start screen; this long after install they appear anyway, should the page never speak.
+    HOLD_LIMIT = 8.0
+    held = False
     # The top bar's offset the buttons share (points up, chrome-motion.js), the motion playing it, where they were
     # aligned (origins) and rest (content rect), and what of the offset and hiding is on them now.
     offset, motion, base, resting, applied, hid = 0.0, 0, (), None, 0.0, False
@@ -125,7 +129,9 @@ class CocoaHost:
                 raise RuntimeError("AppKit standard window button missing")
             self.buttons.append(button)
             self.original.append((button.frame().origin, button.isHidden()))
-            button.setHidden_(False)
+            button.setHidden_(True)
+        self.held = True
+        self.later(self.HOLD_LIMIT, self.release)
         self.monitor = api.NSEvent.addLocalMonitorForEventsMatchingMask_handler_(api.NSEventMaskLeftMouseDown, self.mouse_down)
         self.probe = PointerProbe(api)
         self.pointer_monitor = api.NSEvent.addLocalMonitorForEventsMatchingMask_handler_(api.NSEventMaskMouseMoved,
@@ -167,10 +173,24 @@ class CocoaHost:
                 return False
         return True
 
+    def release(self):
+        """End the start hold: the buttons take the place the offset gives them (hidden when it is wholly above the window)."""
+        if not self.held:
+            return
+        self.held = False
+        self.hid = True  # _place() decides the visibility from the offset now
+        self._place()
+
     def slide(self, frames, period):
         """Play the page's top bar offsets on the buttons, one per period; a newer motion replaces this one."""
         self.motion += 1
         token = self.motion
+        if self.held:
+            # the page's first word on its top bar: the buttons take that place at once, for they were never shown at the
+            # place the motion starts from
+            self.offset = frames[-1]
+            self.release()
+            return
 
         def step(index):
             if token != self.motion:
@@ -184,7 +204,7 @@ class CocoaHost:
     def _place(self):
         """The buttons at their aligned place moved up by the offset, hidden once wholly above the window. macOS
         fullscreen shows and hides them itself: there they only get back what this changed."""
-        if not self.base or self.transition or self.window.contentView() is None:
+        if self.held or not self.base or self.transition or self.window.contentView() is None:
             return
         fullscreen = self.state()["fullscreen"]
         offset = 0.0 if fullscreen else self.offset
@@ -286,6 +306,7 @@ class CocoaHost:
 
     def dispose(self):
         self.motion += 1
+        self.held = False
         centre = self.api.NSNotificationCenter.defaultCenter()
         for observer in self.observers:
             centre.removeObserver_(observer)
