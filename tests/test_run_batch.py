@@ -46,7 +46,10 @@ class TestRunBatch:
         assert failures == []
         # 每个任务恰好推进一次进度，最终到达 total
         assert sorted(c for c, _, _ in progress) == [1, 2, 3, 4, 5]
-        assert progress[-1] == (5, 5, "5")
+        # In parallel the last task to finish can be any of them; only the serial run ends on task 5.
+        assert progress[-1][:2] == (5, 5)
+        if max_workers == 1:
+            assert progress[-1] == (5, 5, "5")
 
     @pytest.mark.parametrize("max_workers,fail_on", [
         (1, {3}),
