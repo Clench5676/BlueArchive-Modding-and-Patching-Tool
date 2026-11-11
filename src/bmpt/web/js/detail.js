@@ -450,6 +450,9 @@ function screenTree() {
   const t = clone(layouts.list);
   off(t, "Top", "NUITop_Scenes", "LeftInfo/CharInfo_Disable", "LeftInfo/CharCombatStyle", "RightInfo/Target/Disable",
     "RightInfo/Target/Active/2_LevelUp", "RightInfo/Target/Active/3_Transcendence", "RightInfo/Target/Active/FullCollier", "RightInfo/Target/Active/Effect");
+  // The right panel is its Target only: buttons a game update adds beside it are game features the App does not
+  // have (the 2026-11 update's Btn_Engrave, whose label is the prefab's untranslated text).
+  for (const n of at(t, "RightInfo")?.children || []) if (n.name !== "Target") n.active = false;
   const v = variant(), sk = switchKind(), c = current(sk || "spr"), kind = tabKind();
   // layer 1 of the panel: measured on the game screenshots it lets about 55 % of the background through
   widget(t, "RightInfo/Target/Active/Bg").color = "#0c284b/0.45";
