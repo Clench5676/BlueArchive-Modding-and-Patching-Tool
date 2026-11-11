@@ -135,12 +135,12 @@ async function scanned(step) {
 
 // run({force}): the check under the loading screen with its progress: classify, scan, apply again what needs no repair.
 // force: Settings' View, whatever was seen. Resolves with {result, reapplied, failed}; throws what the jobs refuse.
-async function run({ force = false } = {}) {
+async function run({ force = false, scan = true } = {}) {
   const nameOf = await names().catch(() => undefined);
   return Loading.task(async (update) => {
     const step = stepper(update, nameOf);
     const result = await waitJob(await rpc("mods.impact", force ? { force: true } : {}), step("mods.impact.checking"));
-    const again = reappliable(await scanned(step), result);
+    const again = scan ? reappliable(await scanned(step), result) : [];
     let reapplied = [], failed = [];
     if (again.length) {
       const plain = again.map((e) => ({ install: e.install, core: e.core, state: e.state }));
@@ -196,11 +196,8 @@ export function tabMods({ result, reapplied = [] } = {}) {
     others: mods.filter((m) => m.impact in OTHER_KINDS) };
 }
 
-// the segments' captions with their counts, as the list's toolbar takes them
-export const tabCaptions = (tabs) => [
-  { text: T("mods.impact.tabHeld", { n: tabs.held.length }) },
-  { text: T("mods.impact.tabReapplied", { n: tabs.reapplied.length }) },
-  { text: T("mods.impact.tabOthers", { n: tabs.others.length }) }];
+// the segments' captions (no counts, owner 2026-11-11), as the list's toolbar takes them
+export const tabCaptions = () => ["mods.impact.tabHeld", "mods.impact.tabReapplied", "mods.impact.tabOthers"];
 
 // card(mod, tab, nameOf): a mod's card: the student's name, its own picture (none for a 3D model), the kind and Applied
 // as chips; a held mod with the Files Changed badge, another kind with what happened to it as its badge
@@ -213,7 +210,9 @@ export function card(mod, tab, nameOf = (e) => e?.variant || e?.core || "") {
   const badge = tab === "held" ? { text: T("mods.heldBadge"), color: COLOUR.warning, ink: "#ffffff" }
     : tab === "others" ? { text: T(`mods.impact.${OTHER_KINDS[mod.impact]}`), color: COLOUR.greyed, ink: "#ffffff" } : null;
   // the details name the mod itself (the card names the student), its kind and Applied as chips
-  return { key: mod.id || `${mod.core}`, label: nameOf(entry) || mod.label || mod.core || "", full: mod.label || nameOf(entry) || mod.core || "", chips,
+  // a generic mod (other) has no student: its own name, never its set's key (owner, 2026-11-11)
+  const name = mod.kind === "other" ? mod.label || T("settings.mods.other") : nameOf(entry) || mod.label || mod.core || "";
+  return { key: mod.id || `${mod.core}`, label: name, full: mod.label || name, chips,
     ...(badge ? { badge } : {}), mod,
     thumb: base ? thumb(base, "card", null, lobby) : null,
     big: base ? () => thumb(base, mod.kind === "spr" ? "portrait" : "bust", null, lobby) : null };
@@ -232,38 +231,68 @@ export function details(mod, tab) {
     fields, actions };
 }
 
-// the list until a button answers it: {go: mod}, {preview: mod}, {fix: [mods]}, or {} (Close)
+// presentList(outcome, nameOf): the list until Close or Go To answers it ({go: mod} or {}). A click on a card shows it
+// in the details; on Needs Fix the tick box at its corner ticks it (owner, 2026-11-11). Preview Fix and Fix and Apply
+// run over the list, which stays open and is drawn again as the mods stand then (owner, 2026-11-11: never closed under
+// the user).
 function presentList(outcome, nameOf) {
   const host = document.getElementById("prompt");
-  const tabs = tabMods(outcome);
+  let current = outcome, tabs = tabMods(current);
   let tab = TABS.findIndex((name) => tabs[name].length);
   if (tab < 0) tab = 0;
-  let selection = new Set(tabs.held.map((m) => m.id)), focus = null;
+  let selection = new Set(tabs.held.map((m) => m.id)), focus = null, scroll = 0, running = false;
   return new Promise((resolve) => {
     const done = (answer) => {
+      if (running) return;
       host.hidden = true;
       host.innerHTML = "";
       Popup.closed(host);
       resolve(answer);
     };
-    const draw = (scroll = 0) => {
+    // a repair over the list, then the list as the mods stand: the result read again, the ticks kept where they still apply
+    const work = async (mods, review) => {
+      if (running || !mods.length) return;
+      running = true;
+      try {
+        const { partial } = await fix(mods, nameOf, { review });
+        if (partial.length) await Popup.message({ title: T("mods.impact.title"), ok: T("picker.ok"), plain: true, width: WIDTH,
+          lines: [T("mods.impact.partial", { n: partial.length }), ...partial.map((m) => ({ text: modName(m, nameOf), ...ITEM }))] });
+        const id = await rpc("mods.impact", { force: true });
+        current = { ...current, result: await Loading.task((update) => waitJob(id, update), { label: T("mods.impact.checking") }) };
+        tabs = tabMods(current);
+        selection = new Set(tabs.held.map((m) => m.id).filter((id2) => selection.has(id2)));
+      } catch (err) {
+        notify(errorText(err.code, err.params), { kind: "error", error: err });
+      } finally {
+        running = false;
+        draw(scroll);
+      }
+    };
+    const draw = (keep = 0) => {
+      scroll = keep;
       const name = TABS[tab], held = name === "held";
       const items = tabs[name].map((mod) => card(mod, name, nameOf));
+      if (!items.some((it) => it.key === focus)) focus = items[0]?.key ?? null;
       const ticked = tabs.held.filter((m) => selection.has(m.id));
       Popup.listPopup({
-        host, title: T("mods.impact.title"), items, selected: held ? [...selection] : focus ? [focus] : [], multi: held, focus,
-        keepScroll: scroll, detailKind: (it) => it.mod?.kind, alignStart: true,
+        host, title: T("mods.impact.title"), items, selected: focus, focus, keepScroll: keep,
+        detailKind: (it) => it.mod?.kind, alignStart: true, empty: T("mods.impact.none"),
         // portraits alone: the portrait switch's frame and tall cards, whose details keep their actions in view
         ...(items.length && items.every((it) => it.mod?.kind === "spr") ? { layoutKind: "spr" } : {}),
+        ...(held ? { tick: { keys: [...selection], onTick: (key, s) => {
+          selection = selection.has(key) ? new Set([...selection].filter((k) => k !== key)) : new Set([...selection, key]);
+          draw(s);
+        } } } : {}),
         tools: { segs: tabCaptions(tabs), seg: tab, onSeg: (i) => { tab = i; focus = null; draw(); }, sortKey: "sort.default" },
+        // Fix and Apply without a count, so the S footer's caption keeps to one line; the tick boxes show what it fixes
         buttons: [{ label: T("display.close"), fn: () => done({}) },
-          ...(held ? [{ label: T("mods.impact.fixSelected", { n: ticked.length }), primary: true, greyed: !ticked.length,
-            fn: () => (ticked.length ? done({ fix: ticked }) : null) }] : [])],
+          ...(held ? [{ label: T("mods.impact.fix"), primary: true, greyed: !ticked.length,
+            fn: () => work(ticked, false) }] : [])],
         onClose: () => done({}),
-        onSelect: (key, s) => { focus = key; if (held) selection = Popup.toggled(selection, items, key); draw(s); },
+        onSelect: (key, s) => { focus = key; draw(s); },
         details: (it) => {
           const d = details(it.mod, name);
-          const act = { go: () => done({ go: it.mod }), preview: () => done({ preview: it.mod }), fix: () => done({ fix: [it.mod] }) };
+          const act = { go: () => done({ go: it.mod }), preview: () => work([it.mod], true), fix: () => work([it.mod], false) };
           return { title: d.title, fields: d.fields, actions: d.actions.map(([id, caption, semantic]) => [caption, act[id], false, semantic]) };
         },
       }).catch((err) => { console.error("impact list", err); done({}); });
@@ -295,10 +324,16 @@ async function fix(mods, nameOf, { review = false } = {}) {
       const report = await Loading.hold(() => Compatibility.forUpdate(mod.id, mod.label, subject), { all: true });
       if (!report) continue;
       if (!(Compatibility.eligible(mod) && Compatibility.canRemap(mod.id, mod))) {
-        // the asset update moves the mod's assets onto the new parts as they are: nothing to preview, said so
+        // drawn on a rig the App does not have: an update would change nothing, so it stays held; the preview shows
+        // the compatibility result that says why, as the student page's Update does
+        if (Compatibility.rigUnknown(mod.id)) {
+          if (review) await Compatibility.show(report);
+          continue;
+        }
+        // the asset update moves the mod's assets onto the new parts as they are: it looks the same after, said so
         if (review) {
           const answer = await Popup.message({ title: T("mods.impact.preview"), lines: [T("mods.impact.noPreview")],
-            cancel: T("photo.back"), ok: T("mods.impact.fix") });
+            cancel: T("photo.back"), ok: T("mods.impact.fix"), footer: "XS", compact: true });
           if (answer.button !== "ok") continue;
         }
         await Loading.task(async (update) => waitJob(await rpc("actions.update", { mod: mod.id }), update),
@@ -358,8 +393,8 @@ export async function repair(mods) {
   try { return (await fix(mods, await names().catch(() => undefined))).fixed; } finally { busy = false; }
 }
 
-// check(): once the first screen is in, the summary a check left (gate), as the list, until it is closed; its preview
-// and fixes run here and the list opens again as the mods stand then; Go To leaves for the mod's student page
+// check(): once the first screen is in, the summary a check left (gate), as the list, until it is closed (its preview
+// and fixes run over it, presentList); Go To leaves for the mod's student page
 export async function check() {
   if (busy || !pending) return null;
   busy = true;
@@ -369,20 +404,7 @@ export async function check() {
   try {
     const nameOf = await names().catch(() => undefined);
     await Popup.whenIdle();
-    let current = outcome;
-    for (;;) {
-      const answer = await presentList(current, nameOf);
-      if (answer.preview || answer.fix?.length) {
-        const { partial } = await fix(answer.preview ? [answer.preview] : answer.fix, nameOf, { review: !!answer.preview });
-        if (partial.length) await Popup.message({ title: T("mods.impact.title"), ok: T("picker.ok"), plain: true, width: WIDTH,
-          lines: [T("mods.impact.partial", { n: partial.length }), ...partial.map((m) => ({ text: modName(m, nameOf), ...ITEM }))] });
-        const id = await rpc("mods.impact", { force: true });
-        current = { ...current, result: await Loading.task((update) => waitJob(id, update), { label: T("mods.impact.checking") }) };
-        continue;
-      }
-      chosen = answer.go || null;
-      break;
-    }
+    chosen = (await presentList(outcome, nameOf)).go || null;
     if (outcome.result?.version) await rpc("mods.impactSeen", { install: outcome.result.install, version: outcome.result.version }).catch((err) => console.error("impact", err));
     if (outcome.failed?.length) await Popup.message({ title: T("mods.impact.title"), lines: outcome.failed.map((f) => `${ModSwitch.entryLabel(f.entry, nameOf)} - ${errorText(f.code, f.params)}`), ok: T("picker.ok") });
     return outcome.result;
@@ -401,7 +423,9 @@ export async function show() {
   if (busy) return false;
   try {
     busy = true;
-    pending = await run({ force: true });
+    // the summary as it stands: the library answers at once when nothing changed since its last check; no new scan
+    // (a game update's drift is reconciled by the scans themselves, prompts.js reconcile)
+    pending = await run({ force: true, scan: false });
   } catch (err) {
     notify(errorText(err.code, err.params), { kind: "error", error: err });
     return false;
