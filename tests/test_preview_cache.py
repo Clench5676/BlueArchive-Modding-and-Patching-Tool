@@ -537,3 +537,39 @@ def test_asset_revision_rejects_non_dependency_urls(preview_app, preview_service
     preview_services.set_preview_cache(True)
     monkeypatch.setattr(preview_services, "asset", lambda *args: pytest.fail("Invalid path reached asset service"))
     assert rpc(preview_app, "preview.assetRevision", paths=paths)["error"]["code"] == "bad_params"
+
+
+def test_thumbnails_survive_a_game_update_but_not_another_install(preview_app, preview_services, tmp_path):
+    """A still's key carries the revision of every source it was drawn from, so the install's resource version is
+    left out of it: a game update redraws only the stills whose sources changed (BL-155). Another install, or another
+    renderer, never shares one."""
+    app, services = preview_app, preview_services
+    generation = rpc(app, "settings.set", key="previewCache", value=True)["result"]["previewCacheGeneration"]
+    encoded = base64.b64encode(_png()).decode()
+    assert rpc(app, "preview.cachePut", renderer="spine", key="k", data=encoded, generation=generation)["result"] is True
+    services.game.resource_version = "rv2"  # the game updated
+    assert rpc(app, "preview.cacheGet", renderer="spine", key="k")["result"]["data"] == encoded
+    assert rpc(app, "preview.cacheGet", renderer="model", key="k")["result"]["data"] is None
+    # the install's folders name it: a still of one install is no still of another
+    services.game.resource_dirs = [tmp_path / "install-a"]
+    first = services.preview_thumbnail_key("k", "spine")
+    services.game.resource_version = "rv3"
+    assert services.preview_thumbnail_key("k", "spine") == first
+    services.game.resource_dirs = [tmp_path / "install-b"]
+    assert services.preview_thumbnail_key("k", "spine") != first
+
+
+def test_a_still_under_its_former_versioned_key_moves_to_its_current_one(preview_app, preview_services):
+    app, services = preview_app, preview_services
+    generation = rpc(app, "settings.set", key="previewCache", value=True)["result"]["previewCacheGeneration"]
+    raw = _png()
+    cache = services.preview_cache
+    assert cache.put(services.preview_thumbnail_key("k", "spine", by_version=True), raw, generation=generation)
+    assert cache.get(services.preview_thumbnail_key("k", "spine")) is None
+    assert rpc(app, "preview.cacheGet", renderer="spine", key="k")["result"]["data"] == base64.b64encode(raw).decode()
+    assert cache.get(services.preview_thumbnail_key("k", "spine")) == raw
+    # a former key of another resource version is not this still's
+    services.game.resource_version = "rv2"
+    assert cache.put(services.preview_thumbnail_key("other", "spine", by_version=True), raw, generation=generation)
+    services.game.resource_version = "rv3"
+    assert rpc(app, "preview.cacheGet", renderer="spine", key="other")["result"]["data"] is None

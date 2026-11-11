@@ -197,6 +197,8 @@ function add(path, root = list) {
 const INFO = "RightInfo/Target/Active/1_NormalInfo", PLATE = "LeftInfo/CharInfo/Char_Target";
 for (const path of ["BG", "CharacterPos", "Arrow_L/Left", "Arrow_R/Right", "RightInfo/Target/Active/Bg",
   `${INFO}/Title_Bg/Label_Locale`, `${INFO}/Detail_Btn/Label_Locale`, `${INFO}/Equip`]) add(path);
+// a button a game update added beside the panel's Target (2026-11: Btn_Engrave, untranslated prefab text)
+add("RightInfo/Btn_Engrave/Label").widgets = [{ text: "\uac01\uc778", w_: 62, h_: 40, fontSize: 39 }];
 add("BG").widgets = [{ texture: "Detail_Background", w_: 2960, h_: 1665, color: "#ffffff/1.00" }];
 for (const tab of ["Tab_1", "Tab_2", "Tab_3"]) for (const state of ["Tab_On", "Tab_Off"]) {
   add(`RightInfo/Target/Active/CharacterTab/${tab}/${state}/Label`);
@@ -2209,6 +2211,8 @@ for (const lang of ["en-US", "zh-CN"]) test(`detail keeps its prefab cards and c
     family.variants[0].names = { en: { full: localizedName, short: localizedName } };
     await showPortrait(t);
     const tree = Detail.screenTree();
+    assert.equal(NGUI.find(tree, "RightInfo/Btn_Engrave").active, false, "a game button beside the Target is not drawn");
+    assert.notEqual(NGUI.find(tree, "RightInfo/Target").active, false);
     for (const [i, card] of ["SkillData_EX", "SkillData_EX (1)", "SkillData_EX (2)", "SkillData_EX (3)"].entries()) {
       const base = NGUI.find(tree, `${INFO}/Skill/${card}`);
       near(base.pos[0], [39.25, 337.75, 636.25, 934.75][i]);
