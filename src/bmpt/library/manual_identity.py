@@ -4,7 +4,7 @@ from pathlib import Path
 
 from .. import mod_origin
 from ..errors import ServiceError
-from ba_modding_toolkit.naming import parse_filename
+from bmpt.engine import parse_filename
 from . import integrity
 from .identity import content_cores
 from .judge import kind_of

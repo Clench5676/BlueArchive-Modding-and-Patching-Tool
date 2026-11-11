@@ -9,6 +9,7 @@ from pathlib import Path
 
 from ..errors import ServiceError
 from .. import devmode, updater
+from ..engine import ENGINE_PACKAGE
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +58,7 @@ def program_command() -> list[str]:
         if argv0.is_file():
             return [str(argv0.resolve())]
         return [sys.executable]
-    return [sys.executable, "-m", "ba_modding_toolkit"]
+    return [sys.executable, "-m", ENGINE_PACKAGE]
 
 
 def can_restart_safe() -> bool:

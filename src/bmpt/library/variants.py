@@ -5,9 +5,8 @@ from __future__ import annotations
 from collections import defaultdict
 from pathlib import Path
 
-from ba_modding_toolkit.bundle import Bundle
+from bmpt.engine import AssetType, Bundle, LogFunc, Obj, ReplaceAssetType, SaveOptions
 from ..errors import ServiceError
-from ba_modding_toolkit.models import AssetType, LogFunc, Obj, ReplaceAssetType, SaveOptions
 
 
 def adapt_variant_sources(sources: list[Path], targets: list[Path], directory: Path,

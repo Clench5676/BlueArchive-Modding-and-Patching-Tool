@@ -37,7 +37,7 @@ from pathlib import Path
 from typing import Any, Callable, Protocol
 
 from ..errors import ServiceError
-from ba_modding_toolkit.i18n import i18n_manager, t
+from bmpt.engine import i18n_manager, t
 from .strings import fill, ui_strings
 
 logger = logging.getLogger(__name__)

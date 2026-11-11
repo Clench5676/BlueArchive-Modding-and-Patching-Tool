@@ -11,7 +11,7 @@ from typing import Iterator
 from UnityPy.environment import Environment
 from UnityPy.files import ObjectReader
 
-from ba_modding_toolkit.bundle import Bundle
+from bmpt.engine import Bundle
 from ..errors import ServiceError
 
 logger = logging.getLogger(__name__)

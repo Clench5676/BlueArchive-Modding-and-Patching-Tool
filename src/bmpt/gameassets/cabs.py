@@ -11,7 +11,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Callable, Iterable
 
-from ba_modding_toolkit.naming import PRELOAD_PREFIX, parse_filename
+from bmpt.engine import PRELOAD_PREFIX, parse_filename
 from .cache import PreviewCache
 from .discovery import cab_names
 
