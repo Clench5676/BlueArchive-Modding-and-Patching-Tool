@@ -20,6 +20,9 @@ function progressTask(action, name, run) {
 export const eligible = (mod) => mod?.kind !== "model" && !mod?.repaired_from && !mod?.repaired_id;
 // The remap, for a portrait the game drew anew its old rig as a whole (assessment.oldRig), and the graft of the
 // official rig's new animations into the mod's own rig (assessment.graft): all are Update.
+// A portrait whose textures were drawn on a rig the App no longer has: nothing repairs it, and a plain update would
+// leave it as it is (report.rig.unknown).
+export const rigUnknown = (id) => reports.get(id)?.assessment?.issues?.some(({ key }) => key === "rigUnknown") === true;
 export const canRemap = (id, mod = null) => eligible(mod) && eligible(reports.get(id))
   && ((reports.get(id)?.remappable === true
     && (reports.get(id)?.assessment?.remap === true || reports.get(id)?.assessment?.oldRig === true))
@@ -114,8 +117,10 @@ export function compare(report, runtime = globalThis.spine, summarize = false) {
     if (!size || !page.width || !page.height || size[0] * page.height !== size[1] * page.width)
       add("atlasSize", { name: page.name, atlas: `${page.width} × ${page.height}`, texture: size?.join(" × ") || "—" });
   }
-  // Atlases the game repacked since the Mod's textures were drawn on them (the library's record of the Mod).
+  // Atlases the game repacked since the Mod's textures were drawn on them (the library's record of the Mod, or the
+  // earlier release it keeps that the textures follow), and those of them no kept rig repairs (owner, 2026-11-11).
   for (const name of report.rig?.layout || []) add("atlasLayout", { name: key(name) });
+  if (report.rig?.unknown?.length) add("rigUnknown");
   // The game drew the portrait anew (actions.redrawn): nothing can be moved, so no remap is offered.
   const redrawn = report.redrawn?.redrawn === true;
   if (redrawn) add("redrawn");

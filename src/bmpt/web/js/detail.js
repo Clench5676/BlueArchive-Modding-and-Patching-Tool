@@ -963,6 +963,11 @@ async function runUpdate(c = shownMod()) {
   const report = await call(() => Loading.hold(() => Compatibility.forUpdate(c.id, c.label, modProgressName(c)), { all: true }));
   if (!report || page !== pageToken || !open) return false;
   if (Compatibility.eligible(c.mod) && Compatibility.canRemap(c.id, c.mod)) return runRemap(c);
+  // drawn on a rig the App does not have: an update would change nothing, so the result says why instead
+  if (Compatibility.rigUnknown(c.id)) {
+    await call(() => Compatibility.show(report));
+    return false;
+  }
   if (!report.assessment.available || !report.assessment.issues.length) {
     const answer = await message({ title: T("act.update"), lines: [T(report.assessment.available ? "compatibility.forceUpdate" : "compatibility.updateUnchecked")],
       cancel: T("popup.cancel"), ok: T("act.update") });
