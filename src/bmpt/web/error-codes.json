@@ -183,6 +183,26 @@
     "code": "E2010",
     "level": "failed"
   },
+  "graft_page_missing": {
+    "code": "E5020",
+    "level": "failed"
+  },
+  "graft_refused": {
+    "code": "E5019",
+    "level": "failed"
+  },
+  "graft_region_too_large": {
+    "code": "E5021",
+    "level": "failed"
+  },
+  "graft_spine_licence": {
+    "code": "E5022",
+    "level": "failed"
+  },
+  "graft_unavailable": {
+    "code": "E5018",
+    "level": "failed"
+  },
   "hall_conflict": {
     "code": "E6003",
     "level": "notice"

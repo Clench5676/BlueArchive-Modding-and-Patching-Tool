@@ -25,7 +25,8 @@ from typing import TYPE_CHECKING, Any, Callable, Hashable, Iterable, Iterator, M
 
 from UnityPy.helpers.ResourceReader import get_resource_data
 
-from bmpt import atlas_remap, devmode, game_paths, mod_origin, preview_gate, rebake, spans, steam_records
+from bmpt import atlas_remap, devmode, game_paths, graft as grafting, mod_origin, preview_gate, rebake, spans, \
+    steam_records
 from bmpt.engine import (
     SEARCH_DIR_SUFFIXES, AssetType, Bundle, LogFunc, ProgressCallback, core, get_search_dirs, get_skel_version,
     is_safe_file_name, no_log, parse_filename, t,
@@ -636,6 +637,7 @@ class ModLibrary:
         self._waiting: set[str] = set()  # write journals waiting for their install, already logged
         self._records: dict[str, dict[str, Any]] = {}
         self._remap_previews: dict[str, dict] = {}
+        self._grafts: dict[str, dict] = {}  # graft jobs between their steps (graft, graft_build, graft_check)
         self._favorites: set[str] = set()
         self._applied: dict[str, dict[str, Any]] = {}
         self._migrations: set[str] = set()
@@ -1499,6 +1501,13 @@ class ModLibrary:
                        if kind == "spr" else atlas_remap.OldRig())
             report["oldRig"] = {"atlases": sorted(old_rig.atlases), "animations": old_rig.animations,
                                 "available": not unavailable and old_rig.available}
+            # The graft (bmpt.graft): the mod's own binary skeleton keeps its rig and takes the animations the
+            # official one gained; or the old rig above takes them, where they keep it from being offered.
+            own = {name: names for name, names in gains["animations"].items() if self._graftable(
+                selected, official, name)} if kind == "spr" else {}
+            gained = old_rig.animations if kind == "spr" and old_rig.atlases and old_rig.complete else {}
+            report["graft"] = {"kind": "own" if own else "oldRig" if gained else None,
+                               "animations": own or gained, "available": not unavailable and bool(own or gained)}
             report["misfit"] = not unavailable and misfit
             # Portraits are baked through world space; other kinds only move regions onto a page size that fits.
             wanted = misfit or bool(recorded) or bool(rerig) if kind == "spr" else misfit
@@ -1507,8 +1516,24 @@ class ModLibrary:
             report["rig"] = {"layout": [], "animations": {}, "regions": {}}
             report["source"] = {"atlases": {}, "skeletons": {}}
             report["oldRig"] = {"atlases": [], "animations": {}, "available": False}
+            report["graft"] = {"kind": None, "animations": {}, "available": False}
             report["misfit"] = report["remappable"] = False
         return report
+
+    def _graftable(self, selected: integrity.Contents, official: integrity.Contents, skeleton: str) -> bool:
+        """Whether the mod carries a binary 4.2 skeleton for the official ``skeleton`` and the atlas of its stem
+        with the pages of that atlas."""
+        own = atlas_remap.pair_atlases(selected.skeletons, official.skeletons).get(skeleton)
+        atlas = next((name for name, other in atlas_remap.pair_atlases(official.skeletons, official.atlases).items()
+                      if other == skeleton), None)
+        source = atlas_remap.pair_atlases(selected.atlases, official.atlases).get(atlas) if atlas else None
+        if own is None or source is None or not self._binary_42(selected.skeletons[own]):
+            return False
+        try:
+            pages = {atlas_remap.texture_key(page) for page in atlas_remap.parse_atlas(selected.atlases[source]).pages}
+        except (ValueError, UnicodeError):
+            return False
+        return bool(pages) and pages <= set(selected.textures)
 
     @_serialized
     def compatibility_stamp(self, mod_id: str, pin: Pin | None = None) -> str:
@@ -1550,6 +1575,8 @@ class ModLibrary:
         report["remappable"] = report["remappable"] and not (report["repaired_from"] or report["repaired_id"])
         old_rig = report.setdefault("oldRig", {"atlases": [], "animations": {}, "available": False})
         old_rig["available"] = old_rig["available"] and report["remappable"]
+        graft = report.setdefault("graft", {"kind": None, "animations": {}, "available": False})
+        graft["available"] = graft["available"] and not (report["repaired_from"] or report["repaired_id"])
         return report
 
     @_serialized
@@ -6868,6 +6895,282 @@ class ModLibrary:
             patch[texts[name]] = atlas
             patch[texts[skeleton]] = data
         patch.update({official.keys[key]: image for key, image in mod.textures.items() if key in official.keys})
+        return patch
+
+    # --- the graft of new official animations into a mod's own rig (bmpt.graft) ---
+
+    def _graft_rigs(self, record: dict, paths: list[Path], inputs: dict,
+                    originals: dict[Path, Path]) -> dict[str, dict]:
+        """The rigs a graft adds the official rig's new animations to, per official atlas name: the mod's own binary
+        skeleton and atlas where it carries them and the official skeleton has animations it lacks (``kind`` "own";
+        ``base``: the official rig the mod was made from, as the fingerprint recorded it or the official copy of the
+        mod's date, where known), else the rig a texture-only portrait's textures were drawn for
+        (``atlas_remap.old_rig_plan``; ``kind`` "oldRig", its own base). Each with the official ``skeleton`` name,
+        the ``animations`` it gains and the mod's ``pages`` (texture keys)."""
+        mod, official = inputs["mod"], inputs["official"]
+        gains = atlas_remap.rig_gains(mod.atlases, mod.skeletons, official.atlases, official.skeletons)
+        skeleton_of = atlas_remap.pair_atlases(official.skeletons, official.atlases)
+        own_skeletons = atlas_remap.pair_atlases(mod.skeletons, official.skeletons)
+        own_atlases = atlas_remap.pair_atlases(mod.atlases, official.atlases)
+        painted = (self._read_built_against(record) or {}).get("painted") or {}
+        rigs: dict[str, dict] = {}
+
+        def rig(kind: str, name: str, skeleton: str, text: str, data: bytes, base: tuple | None) -> None:
+            try:
+                pages = {atlas_remap.texture_key(page) for page in atlas_remap.parse_atlas(text, name).pages}
+            except (ValueError, UnicodeError):
+                return
+            if not pages or not pages <= set(mod.textures) or not self._binary_42(data):
+                return
+            if base is not None and not self._binary_42(base[1]):
+                base = None
+            rigs[name] = {"kind": kind, "skeleton": skeleton, "atlas": text, "data": data, "base": base,
+                          "animations": gains["animations"].get(skeleton, []), "pages": sorted(pages)}
+
+        for name, skeleton in skeleton_of.items():
+            if skeleton not in gains["animations"] or skeleton not in own_skeletons or name not in own_atlases:
+                continue
+            entry = painted.get(integrity.basename(name)) or {}
+            if not isinstance(entry.get("skeleton"), str) or not isinstance(entry.get("text"), str):
+                entry = self._dated_rig(paths, [name], official.atlases, originals.values()).get(name) or {}
+            base = None
+            if isinstance(entry.get("skeleton"), str) and isinstance(entry.get("text"), str):
+                with contextlib.suppress(ValueError):
+                    base = (entry["text"], base64.b64decode(entry["skeleton"], validate=True))
+            try:
+                text = mod.atlases[own_atlases[name]].decode("utf-8-sig")
+            except UnicodeError:
+                continue
+            rig("own", name, skeleton, text, mod.skeletons[own_skeletons[skeleton]], base)
+        if rigs:
+            return rigs
+        plan = atlas_remap.old_rig_plan({**inputs["layout"], **inputs["dated"]}, official.atlases,
+                                        official.skeletons, mod.skeletons, mod.textures, official.keys)
+        if plan.complete:
+            for name, (atlas, skeleton, data) in plan.atlases.items():
+                if skeleton in plan.animations:
+                    gains["animations"][skeleton] = plan.animations[skeleton]
+                    text = atlas.decode("utf-8")
+                    rig("oldRig", name, skeleton, text, data, (text, data))
+        return rigs
+
+    @staticmethod
+    def _binary_42(data: bytes) -> bool:
+        try:
+            return (get_skel_version(data) or "").startswith("4.2.") and not data.lstrip()[:1] == b"{"
+        except (ValueError, UnicodeError):
+            return False
+
+    def _graft_state(self, token: str, mod_id: str | None = None) -> dict:
+        state = self._grafts.get(token) if isinstance(token, str) else None
+        if state is None or state["expires"] <= time.monotonic() or (mod_id and state["source"] != mod_id):
+            self._grafts.pop(token, None) if isinstance(token, str) else None
+            raise ServiceError("entry_changed")
+        return state
+
+    @_serialized
+    def graft(self, mod_id: str, log: LogFunc = no_log, progress: Callable[[dict], None] | None = None,
+              pin: Pin | None = None) -> dict:
+        """The first step of a graft (``bmpt.graft``): the rigs to pose, per official atlas name the mod's rig, the
+        official rig it was made from (``base``, or None) and the official rig, each as ``atlas`` text and base64
+        ``skeleton``; kept under a ``token`` for ``graft_build`` and ``graft_check``. Refused with
+        ``graft_unavailable`` when no rig gains animations a graft could carry (``_graft_rigs``)."""
+        pin = self._current(pin)
+        record = self._record(mod_id)
+        if record.get("repaired_from") or self._repaired_id(record):
+            raise ServiceError("entry_changed")
+        now = time.monotonic()
+        self._grafts = {token: state for token, state in self._grafts.items()
+                        if state["expires"] > now and state["source"] != mod_id}
+        paths = self._paths(record)
+        if kind_of_file(paths[0].name) != "spr":
+            raise ServiceError("graft_unavailable")
+        identity = self._identity({path.name: path for path in paths})
+        targets = self._spine_parts(core_of(paths[0].name), pin)
+        if not targets:
+            raise ServiceError("game_file_not_found", variant=record["target"])
+        if progress:
+            progress({"current": 1, "total": 1, "step": "import.step.check"})
+        with temporary_directory(prefix=devmode.LIBRARY_STAGING_PREFIX + "remap-") as temporary:
+            originals = self._stage_official(targets, Path(temporary) / "official", pin)
+            try:
+                inputs = self._remap_view(record, paths, targets, originals, pin)
+                rigs = self._graft_rigs(record, paths, inputs, originals)
+            except atlas_remap.RemapError as error:
+                raise ServiceError(error.code, **error.params) from error
+            except (ValueError, KeyError, EOFError, OSError) as error:
+                raise ServiceError("atlas_remap_invalid", file=", ".join(path.name for path in paths),
+                                   reason=str(error)) from error
+        if not rigs:
+            raise ServiceError("graft_unavailable")
+        official = inputs["official"]
+        token = uuid.uuid4().hex
+        self._grafts[token] = {"source": mod_id, "identity": identity, "pin": pin.key, "expires": now + 3600,
+                               "rigs": rigs, "inputs": inputs, "prepared": None}
+
+        def b64(data: bytes) -> str:
+            return base64.b64encode(data).decode("ascii")
+
+        posed = {}
+        for name, rig in rigs.items():
+            base = rig["base"]
+            posed[name] = {"kind": rig["kind"], "animations": rig["animations"],
+                           "mod": {"atlas": rig["atlas"], "skeleton": b64(rig["data"])},
+                           "base": {"atlas": base[0], "skeleton": b64(base[1])} if base else None,
+                           "official": {"atlas": official.atlases[name].decode("utf-8-sig"),
+                                        "skeleton": b64(official.skeletons[rig["skeleton"]])}}
+        return {"token": token, "rigs": posed}
+
+    @_serialized
+    def graft_build(self, token: str, geometry: Any) -> dict:
+        """The second step: splice and pack every rig (``graft.prepare``) from the posted setup poses
+        (``rig-geometry.js`` ``setupOf``: per atlas name ``mod``, ``official`` and ``base``), and hand back the
+        test rigs to pose: per atlas the ``skeleton`` (base64) and ``atlas``, and ``check``: per animation to pose
+        the slots whose part is compared; ``official``: the same for the official rig."""
+        state = self._graft_state(token)
+        if not isinstance(geometry, dict):
+            raise ServiceError("bad_params", key="geometry")
+        official = state["inputs"]["official"]
+        prepared, out, refused = {}, {}, {}
+        try:
+            for name, rig in state["rigs"].items():
+                posted = geometry.get(name)
+                if not isinstance(posted, dict):
+                    raise ServiceError("bad_params", key="geometry")
+                mod_atlas = atlas_remap.parse_atlas(rig["atlas"], name)
+                official_text = official.atlases[name].decode("utf-8-sig")
+                mod_setup = grafting.setup(posted.get("mod"), mod_atlas)
+                official_setup = grafting.setup(posted.get("official"))
+                base_setup = grafting.setup(posted["base"]) if rig["base"] and posted.get("base") else None
+                mod_pages = {key: state["inputs"]["mod"].textures[key] for key in rig["pages"]}
+                one = grafting.prepare(rig["data"], rig["atlas"], mod_pages, official.skeletons[rig["skeleton"]],
+                                       official_text, official.textures, mod_setup, official_setup, base_setup)
+                prepared[name] = one
+                refused.update(one.graft.refused)
+                check = {animation: slots for animation, slots in one.slots.items()}
+                check.update({test: one.slots[animation] for test, (animation, _c) in one.candidates.items()})
+                out[name] = {"skeleton": base64.b64encode(one.test_skeleton).decode("ascii"), "atlas": one.test_atlas,
+                             "check": check, "official": dict(one.slots)}
+        except grafting.GraftError as error:
+            raise ServiceError(error.code, **error.params) from error
+        except atlas_remap.RemapError as error:
+            raise ServiceError(error.code, **error.params) from error
+        state["prepared"] = prepared
+        return {"rigs": out, "refused": refused}
+
+    @_serialized
+    def graft_check(self, token: str, geometry: Any, log: LogFunc = no_log,
+                    progress: Callable[[dict], None] | None = None, pin: Pin | None = None) -> dict:
+        """The last step: check every grafted expression against the official one from the posted poses of the test
+        and the official rigs (``graft.choose``), and prepare the review of the repaired copy as a remap's
+        (``_remap_review``; accepted with ``accept_remap``)."""
+        state = self._graft_state(token)
+        pin = self._current(pin)
+        if state["prepared"] is None or not isinstance(geometry, dict):
+            raise ServiceError("bad_params", key="geometry")
+        if pin.key != state["pin"]:
+            raise ServiceError("entry_changed")
+        mod_id = state["source"]
+        record = self._record(mod_id)
+        paths = self._paths(record)
+        if state["identity"] != self._identity({path.name: path for path in paths}):
+            raise ServiceError("entry_changed")
+        inputs = state["inputs"]
+        mod, official = inputs["mod"], inputs["official"]
+        checked: dict[str, grafting.Checked] = {}
+        try:
+            for name, one in state["prepared"].items():
+                posted = geometry.get(name)
+                if not isinstance(posted, dict):
+                    raise ServiceError("bad_params", key="geometry")
+                test = rebake.rig(posted.get("test"), atlas_remap.parse_atlas(one.test_atlas, name))
+                reference = rebake.rig(posted.get("official"), atlas_remap.parse_atlas(one.official_text, name))
+                pages = {**{key: mod.textures[key] for key in state["rigs"][name]["pages"]}, **one.pages.images}
+                checked[name] = grafting.choose(one, reference, test, official.textures, pages)
+        except grafting.GraftError as error:
+            raise ServiceError(error.code, **error.params) from error
+        except atlas_remap.RemapError as error:
+            raise ServiceError(error.code, **error.params) from error
+        self._grafts.pop(token, None)
+        targets = self._spine_parts(core_of(paths[0].name), pin)
+        if not targets:
+            raise ServiceError("game_file_not_found", variant=record["target"])
+
+        def step(key: str, current: int = 1) -> None:
+            if progress:
+                progress({"current": current, "total": len(targets), "step": f"import.step.{key}"})
+
+        report = {"moved": [], "added": [], "official": [], "dropped": [], "upscaled": [], "warnings": [],
+                  "grafted": [], "refused": {}, "corrected": [], "unfixed": [], "grown": 0, "unanchored": False,
+                  "unchanged": False}
+        marks: list[str] = []
+        for name, one in state["prepared"].items():
+            result = checked[name]
+            report["refused"].update(one.graft.refused)
+            report["unanchored"] = report["unanchored"] or bool(one.unanchored)
+            report["grown"] = max([report["grown"], *one.pages.grown.values()])
+            for animation, outcome in result.results.items():
+                report["grafted"].append(animation)
+                if outcome["candidate"]:
+                    report["corrected"].append(animation)
+                if not outcome["fixed"]:
+                    report["unfixed"].append(animation)
+                    marks += [c.region for key in one.graft.shown.get(animation, [])
+                              if (c := one.graft.carried.get(key)) and c.region]
+        report["marks"] = sorted(set(marks))
+        report["partial"] = bool(report["unfixed"] or report["refused"] or report["unanchored"])
+        with temporary_directory(prefix=devmode.LIBRARY_STAGING_PREFIX + "remap-") as temporary:
+            output = Path(temporary)
+            step("check")
+            originals = self._stage_official(targets, output / "official", pin)
+            try:
+                patch = self._graft_patch(paths, originals, official, mod, state["rigs"], checked)
+            except atlas_remap.RemapError as error:
+                raise ServiceError(error.code, **error.params) from error
+            return self._remap_review(mod_id, state["identity"], paths, originals, official, inputs["view"], output,
+                                      patch, report, pin, log, step)
+
+    @_serialized
+    def discard_graft(self, token: str) -> None:
+        """Drop a graft between its steps without changing any mod or game file."""
+        if isinstance(token, str):
+            self._grafts.pop(token, None)
+
+    @staticmethod
+    def _graft_patch(paths: list[Path], originals: dict[Path, Path], official: atlas_remap.Inputs,
+                     mod: atlas_remap.Inputs, rigs: dict[str, dict], checked: dict) -> dict:
+        """The patch of a grafted copy: the mod's own text assets, every grafted skeleton and atlas over the official
+        ones of their names, the mod's own textures and the grafted pages, all by ``cont_name_type``."""
+        patch: dict = {}
+        texts: dict[str, Any] = {}
+        for original in originals.values():
+            bundle = Bundle.load(original)
+            if bundle is None:
+                raise ServiceError("bundle_invalid", file=original.name)
+            for key in bundle.get_asset_keys("cont_name_type"):
+                if key.type == "TextAsset":
+                    texts.setdefault(key.name, key)
+        for path in paths:
+            bundle = Bundle.load(path)
+            if bundle is None:
+                raise ServiceError("bundle_invalid", file=path.name)
+            extracted, _ = bundle.extract_patch({"TextAsset"}, "cont_name_type")
+            patch.update(extracted)
+        if patch.keys() - set(texts.values()):
+            raise atlas_remap.RemapError("atlas_remap_target_mismatch", file=paths[0].name,
+                                         matched=len(patch.keys() & set(texts.values())), expected=len(patch))
+        patch.update({official.keys[key]: image for key, image in mod.textures.items() if key in official.keys})
+        for name, rig in rigs.items():
+            result = checked[name]
+            if name not in texts or rig["skeleton"] not in texts:
+                raise atlas_remap.RemapError("atlas_remap_target_mismatch", file=paths[0].name,
+                                             matched=0, expected=2)
+            patch[texts[name]] = result.atlas.encode("utf-8")
+            patch[texts[rig["skeleton"]]] = result.skeleton
+            for key, image in result.pages.items():
+                if key not in official.keys:
+                    raise ServiceError("graft_page_missing", page=key)
+                patch[official.keys[key]] = image
         return patch
 
     def _remap_review(self, mod_id: str, identity: Any, paths: list[Path], originals: dict[Path, Path],

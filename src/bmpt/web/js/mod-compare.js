@@ -63,6 +63,7 @@ export async function show(result, title = T("act.compare"), hostId = "popup", r
     // Both sides are looked at through one view: the wheel zooms at the pointer, a drag moves the picture, a double
     // click goes back to where it started. A lobby starts filling its frame, a portrait whole.
     const views = [], marked = [];  // marked: per picture, where its rings go and what tells them
+    let expression = null;  // the graft's expression the pictures show
     let view = { ...PanZoom.REST }, rest = view, framed = review.kind !== "lobby", marking = false;
     const show = (value) => {
       view = value;
@@ -146,6 +147,7 @@ export async function show(result, title = T("act.compare"), hostId = "popup", r
           if (!player) return;
           players.push(player);
           inside.repairEntry.rings = () => player.parts(review.marks || []);
+          if (expression) player.play(expression);
         });
       }
       // without a drawing (no skeleton in the files, no runtime) the pages themselves are the picture
@@ -158,6 +160,22 @@ export async function show(result, title = T("act.compare"), hostId = "popup", r
       }
     }
     part("repair-verdict", notes, T(review.partial ? "remap.partial" : "remap.preview"));
+    // a graft's expressions, one at a time on both pictures (a picture without it stays in its rest pose)
+    if (review.expressions?.length) {
+      const row = part("repair-line repair-steps", notes), caption = document.createElement("div");
+      let at = 0;
+      const go = (step) => {
+        at = (at + step + review.expressions.length) % review.expressions.length;
+        expression = review.expressions[at];
+        caption.textContent = T("remap.expression", { name: expression, n: at + 1, total: review.expressions.length });
+        for (const player of players) player.play(expression);
+        if (marking) mark(true);
+      };
+      tool(row, "\u25c0", T("remap.previousExpression"), () => go(-1));
+      row.appendChild(caption);
+      tool(row, "\u25b6", T("remap.nextExpression"), () => go(1));
+      go(0);
+    }
     // a line is text, or {text, button: {label, fn}} for one with a small button at its end, as in message popups
     for (const line of review.lines) {
       if (typeof line === "string") { part("", notes, line); continue; }
@@ -198,6 +216,15 @@ export async function show(result, title = T("act.compare"), hostId = "popup", r
 function previewPlayer(host, scene, side, pages, drawn = () => {}) {
   let disposed = false, load = null, live = null;
   const unavailable = () => { if (!disposed) host.textContent = T("remap.previewUnavailable"); };
+  let wanted = null;  // the animation on track 1, once the skeleton is up
+  const show = () => {
+    const p = live;
+    if (!p?.skeleton || disposed) return;
+    if (wanted && p.skeleton.data.findAnimation(wanted)) p.animationState.setAnimation(1, wanted, true);
+    else p.animationState.setEmptyAnimation(1, 0);
+    p.animationState.apply(p.skeleton);
+    p.skeleton.updateWorldTransform(spine.Physics.update);
+  };
   const start = async () => {
     try {
       const allowed = await ensureSpine();
@@ -231,6 +258,7 @@ function previewPlayer(host, scene, side, pages, drawn = () => {}) {
           if (idle) p.animationState.setAnimation(0, idle.name, true);
           else p.animationState.setEmptyAnimation(0, 0).trackEnd = Number.MAX_VALUE;
           p.animationState.timeScale = 0;
+          show();
           // the player fits its picture when it draws its first frame
           const fitted = (tries) => {
             if (disposed) return;
@@ -271,5 +299,6 @@ function previewPlayer(host, scene, side, pages, drawn = () => {}) {
     } catch { return []; }
     return boxes;
   };
-  return { dispose: () => { disposed = true; load?.dispose(); }, parts };
+  const play = (name) => { wanted = name; show(); };
+  return { dispose: () => { disposed = true; load?.dispose(); }, parts, play };
 }

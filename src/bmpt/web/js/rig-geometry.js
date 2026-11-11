@@ -121,3 +121,51 @@ export function restOnly(geometry) {
     source: { slots: source.slots, poses: { "": source.poses[""] } },
     target: { slots: target.slots, poses: { "": target.poses[""] } } }]));
 }
+
+// The setup pose of a rig for the graft (graft.py setup): per bone its world matrix [a, b, c, d, x, y], per slot its
+// bone, and per skin attachment that draws a region its page, world vertices, page UVs and triangles.
+export function setupOf(S, atlasText, skeletonData) {
+  const { data, missing } = load(S, atlasText, skeletonData);
+  const skeleton = new S.Skeleton(data);
+  skeleton.setToSetupPose();
+  skeleton.updateWorldTransform(S.Physics.update);
+  const finite = (values) => { if (!values.every(Number.isFinite)) throw new Error("Non-finite setup geometry"); return values; };
+  const bones = Object.fromEntries(skeleton.bones.map((b) => [b.data.name,
+    finite([b.a, b.b, b.c, b.d, b.worldX, b.worldY]).map((v) => round(v, 1e6))]));
+  const slotBones = Object.fromEntries(Array.from(data.slots, (slot) => [slot.name, slot.boneData.name]));
+  const skin = [];
+  for (const sk of data.skins) for (const entry of sk.getAttachments()) {
+    const a = entry.attachment, slot = skeleton.slots[entry.slotIndex];
+    if (missing.has(a) || !a.region || !a.uvs) continue;
+    let world, triangles;
+    if (a instanceof S.RegionAttachment) {
+      world = new Float32Array(8); a.computeWorldVertices(slot, world, 0, 2); triangles = [0, 1, 2, 2, 3, 0];
+    } else if (a instanceof S.MeshAttachment) {
+      // the attachment as set up: no deform of the slot's current one
+      world = new Float32Array(a.worldVerticesLength);
+      const deform = slot.deform;
+      slot.deform = [];
+      a.computeWorldVertices(slot, 0, a.worldVerticesLength, world, 0, 2);
+      slot.deform = deform;
+      triangles = Array.from(a.triangles);
+    } else continue;
+    skin.push({ slot: slot.data.name, name: entry.name, page: a.region.page.name,
+      world: finite(Array.from(world)).map((v) => round(v, 1000)), uvs: finite(Array.from(a.uvs)).map((v) => round(v, 1e6)),
+      tris: triangles });
+  }
+  return { bones, slotBones, skin };
+}
+
+// Poses for the graft's check (graft.py choose), in rebake.rig's shape: the rest pose left empty and, per animation of
+// `check` (name -> slots) the skeleton has, what those slots draw with the idle on track 0 and the animation on track 1.
+export function partPoses(S, atlasText, skeletonData, check) {
+  const { data, missing } = load(S, atlasText, skeletonData);
+  const idle = idleOf(data);
+  const result = { "": [] };
+  for (const [name, slots] of Object.entries(check || {})) {
+    if (!data.findAnimation(name)) continue;
+    const wanted = new Set(slots);
+    result[name] = pose(S, data, missing, idle, name).filter((item) => wanted.has(item.slot));
+  }
+  return { slots: Array.from(data.slots, (slot) => slot.name), poses: result };
+}
