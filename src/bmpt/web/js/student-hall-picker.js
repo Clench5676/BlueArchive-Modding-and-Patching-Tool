@@ -69,11 +69,11 @@ export function openPicker({ kind, choices, draft, onPreview, onChange, onSave, 
     const groups = rows();
     if (!groups.length) return UI.caption(layer, T("hall.noCandidates"), [320, 390, 1200]);
     const rowLayout = UI.portraitRowLayout();
-    const addSize = UI.buttonSize((onReplace ? ["import.select"] : ["hall.add", "hall.added"]).map((key) => T(key)), (320 - 22) * .46);
+    const addSize = UI.compactButtonSize((onReplace ? ["import.select"] : ["hall.add", "hall.added"]).map((key) => T(key)), (320 - 22) * .46);
     const list = UI.virtualArea(layer, UI.portraitPickerLayout(view, searching).list, groups.length, rowLayout.pitch, async (rowHost, rowIndex, rowSignal) => {
       const row = groups[rowIndex];
-      await UI.rowPlate(rowHost, [1320, rowLayout.height]);
-      await UI.caption(rowHost, row.student.name, [90, 170, 150], { size: 44 });
+      await UI.rowPlate(rowHost, [rowLayout.width, rowLayout.height]);
+      await UI.caption(rowHost, row.student.name, rowLayout.name, { size: 44 });
       if (rowSignal.aborted) return;
       const strip = UI.virtualArea(rowHost, [rowLayout.stripX, 0, rowLayout.stripW, rowLayout.height], row.choices.length, 220, (cell, i) => UI.card(cell, item(row.choices[i]), {
         x: rowLayout.cardX, y: rowLayout.cardY, kind: "spr", scale: .46, onAdd: safe((event) => add(row.choices[i], event?.currentTarget)), addLabel: addLabel(row.choices[i]), addEnabled: canAdd(row.choices[i]), addSize, fitAdd: !!onReplace }),
@@ -129,7 +129,7 @@ export function openPicker({ kind, choices, draft, onPreview, onChange, onSave, 
   async function draw() {
     await modal.draw(async (layer, alive, signal) => { await toolbar(layer); if (!alive()) return; await (memorial ? drawMemorials(layer, alive, signal) : drawPortraits(layer, alive, signal)); },
       memorial ? [{ label: T("popup.cancel"), fn: safe(onCancel) }, { label: T("hall.savePlaylist"), fn: safe(onSave), enabled: draft.current().memorials.length > 0 }]
-        : [{ label: T(onReplace ? "popup.cancel" : "hall.doneAdding"), fn: safe(onDone) }], memorial ? { retainedFooter: true } : { width: 2150, height: 1300, captionSite: onReplace ? "hall.portraitReplacement" : "hall.doneAdding" });
+        : [{ label: T(onReplace ? "popup.cancel" : "hall.doneAdding"), fn: safe(onDone) }], memorial ? { retainedFooter: true } : UI.PORTRAIT_FRAME);
   }
   draw().catch(onError);
   const closeNested = () => { if (displayOwned && Popup.top()?.host?.id === "display") Popup.top().close?.("navigation"); displayOwned = false; };

@@ -272,7 +272,9 @@ export function footerLabels(widgets, captions, options = {}) {
 //   buttons: [{label, primary, name}] instead of ok / cancel: named choices in a row (one centred, two as OK and Cancel,
 //            three or more share the available width); a node is Choice_<index> unless it names itself
 //   close: false for a popup that must be answered with a button (no close button)
-export function popupFrame(title, w, h, { ok = null, cancel = null, close = true, buttons = null, captionSite = null } = {}) {
+//   titleCentre: the title's ink centre this far under the frame's top, in units, in place of the shared title top (the
+//                header band's centre puts the title where UIPopup_Sort has it)
+export function popupFrame(title, w, h, { ok = null, cancel = null, close = true, buttons = null, captionSite = null, titleCentre = null } = {}) {
   ({ w, h } = frameGeometry(w, h));
   const t = clone(find(layouts.sortPopup, "Center"));
   const popup = find(t, "Popup");
@@ -284,7 +286,7 @@ export function popupFrame(title, w, h, { ok = null, cancel = null, close = true
   const titleNode = find(bg, "Label_Title_Locale");
   const titleBox = container({ w, h, padding: [POPUP_FRAME.titleTop, SPACE.xxxl, 0, SPACE.xxxl] }).inner;
   const tf = textItem(NGUI, title, TYPE.display, { maxW: titleBox.w, lines: 1 });
-  titleNode.pos = toNode({ ...titleBox, h: tf.h }, 4, local);
+  titleNode.pos = toNode({ ...titleBox, y: titleCentre == null ? titleBox.y : titleCentre - (tf.mid ?? tf.h / 2), h: tf.h }, 4, local);
   Object.assign(titleNode.widgets[0], { text: tf.text, fontSize: tf.fs, w_: titleBox.w, h_: tf.h, pivot: 4 });
   find(titleNode, "Line").widgets[0].w_ = glyphsOf(tf.text, tf.fs) + SPACE.s;
   const closeBtn = find(bg, "Btn_Close"), size = POPUP_FRAME.close.size;
