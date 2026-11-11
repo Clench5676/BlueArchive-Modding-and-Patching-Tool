@@ -2543,7 +2543,7 @@ overwritten entry need none (the detail screen judges its files cheaply).
   and opens it again the other way. With no mod held that list shows at once, without the button. Closing it records the version
   (`mods.impactSeen`). At the start before the prompts below, and after `config.changed` (a game update while the
   program runs rebuilds the game services) once no other popup is open.
-- **Untested Game Version** (`mod-switch.js confirmUntested`, a plain message popup): a write refused with
+- **New Game Version** (`mod-switch.js confirmUntested`, a plain message popup): a write refused with
   `untested_build`, from the switch (the tray's toggle too, once the window is in front), the detail screen, Apply Mod
   Configuration, Settings' other mods and the photography gallery. "Affected by the game update: n", then the entries
   as list items ("name - kind", six at most, then "+n"); Apply Anyway (`mods.confirmUntested`, then the same call
