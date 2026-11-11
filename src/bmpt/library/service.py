@@ -1492,6 +1492,13 @@ class ModLibrary:
                 data = base64.b64decode(entry["skeleton"])
                 skeleton = drawn_by.get(name) or f"{Path(name).stem}.skel"
                 report["source"]["skeletons"][skeleton] = {"version": get_skel_version(data), "data": entry["skeleton"]}
+            # The whole rig a texture-only portrait's textures were drawn for (``old_rig``): what Update offers for
+            # a portrait the game drew anew, which the rebake cannot move (mod-compatibility.js).
+            old_rig = (atlas_remap.old_rig_plan({**layout, **dated}, official.atlases, official.skeletons,
+                                                selected.skeletons, selected.textures, official.textures)
+                       if kind == "spr" else atlas_remap.OldRig())
+            report["oldRig"] = {"atlases": sorted(old_rig.atlases), "animations": old_rig.animations,
+                                "available": not unavailable and old_rig.available}
             report["misfit"] = not unavailable and misfit
             # Portraits are baked through world space; other kinds only move regions onto a page size that fits.
             wanted = misfit or bool(recorded) or bool(rerig) if kind == "spr" else misfit
@@ -1499,6 +1506,7 @@ class ModLibrary:
         except (ValueError, UnicodeError):
             report["rig"] = {"layout": [], "animations": {}, "regions": {}}
             report["source"] = {"atlases": {}, "skeletons": {}}
+            report["oldRig"] = {"atlases": [], "animations": {}, "available": False}
             report["misfit"] = report["remappable"] = False
         return report
 
@@ -1540,6 +1548,8 @@ class ModLibrary:
                                    variant_key=self._target_of(record), built=self._read_built_against(record))
         report["repaired_from"], report["repaired_id"] = record.get("repaired_from", ""), self._repaired_id(record)
         report["remappable"] = report["remappable"] and not (report["repaired_from"] or report["repaired_id"])
+        old_rig = report.setdefault("oldRig", {"atlases": [], "animations": {}, "available": False})
+        old_rig["available"] = old_rig["available"] and report["remappable"]
         return report
 
     @_serialized
@@ -3916,6 +3926,18 @@ class ModLibrary:
 
         pin = pin or self.current_pin()
         return lobby_camera.live_base(self, core, pin) if pin is not None and lobby_camera.cameras(self) else None
+
+    @_serialized
+    def recorded_rig(self, mod_id: str) -> dict[str, dict]:
+        """What a portrait mod's fingerprint recorded of the rigs its textures were drawn for
+        (``fingerprint.painted``, the entries that keep their skeleton), per atlas basename; empty for another mod.
+        Its previews draw it on them where the official atlas was repacked since (``fingerprint.drawn_on``)."""
+        record = self._record(mod_id)
+        if record.get("kind") != "spr":
+            return {}
+        painted = (self._read_built_against(record) or {}).get("painted") or {}
+        return {name: entry for name, entry in painted.items()
+                if isinstance(entry.get("text"), str) and isinstance(entry.get("skeleton"), str)}
 
     def _preview(self, record: dict[str, Any], pin: Pin) -> list[Path]:
         paths = self._paths(record)
@@ -6762,64 +6784,159 @@ class ModLibrary:
                                    reason=str(error)) from error
             if report["unchanged"]:
                 return {"unchanged": True, "report": report}
-            generated = {}
-            for i, (target, original) in enumerate(originals.items(), 1):
-                step("replace", i)
-                bundle = Bundle.load(original)
-                if bundle is None:
-                    raise ServiceError("bundle_invalid", file=original.name)
-                keys = bundle.get_asset_keys("cont_name_type")
-                local_patch = {key: value for key, value in patch.items() if key in keys}
-                local_patch.update({key: patch[official.keys[atlas_remap.texture_key(key.name)]]
-                                    for key in keys if key.type == "Texture2D"})
-                if local_patch:
-                    result = rebuild([], [original], output, {"Texture2D"},
-                        self.settings.save_options(self.settings.crc_needed(target)),
-                        match_strategy="cont_name_type", log=log, prepared_patch=local_patch,
-                        on_step=lambda key: step(key, i))
-                    if not result.success or len(result.file_pairs) != 1:
-                        raise ServiceError("mod_update_failed", id=mod_id)
-                else:
-                    atomic_copy(original, output / target.name)
-                generated[target.name] = output / target.name
-            if identity != self._identity({path.name: path for path in paths}):
-                raise ServiceError("entry_changed")
-            comparison = self._compare_paths(mod_id, list(generated.values()), paths)
-            built_against = self._built_against(generated, pin, "remap")
-            repaired = atlas_remap.read_inputs(list(generated.values()))
+            return self._remap_review(mod_id, identity, paths, originals, official, original_view, output, patch,
+                                      report, pin, log, step)
 
-            def png(image) -> str | None:
-                if image is None:
-                    return None
-                stream = io.BytesIO()
-                image.save(stream, format="PNG")
-                return "data:image/png;base64," + base64.b64encode(stream.getvalue()).decode("ascii")
+    @_serialized
+    def old_rig(self, mod_id: str, log: LogFunc = no_log, progress: Callable[[dict], None] | None = None,
+                pin: Pin | None = None) -> dict:
+        """Prepare the review of a texture-only portrait mod applied with the rig its textures were drawn for, as a
+        whole (``atlas_remap.old_rig_plan`` over the recorded rig, ``_remap_view`` ``layout``, or the official copy
+        of the mod's date, ``dated``): that atlas and skeleton with the mod's textures, ported into the current
+        official parts. Only accept_remap can add it to the library. For a portrait the game drew anew, whose pixels
+        the rebake cannot move (``rebake.REDRAWN_BELOW``). Refused with ``old_rig_animations`` when an official
+        skeleton has animations the old one lacks (the game calls them by name), and with ``old_rig_unavailable``
+        when a recorded rig cannot be set up."""
+        pin = self._current(pin)
+        record = self._record(mod_id)
+        if record.get("repaired_from") or self._repaired_id(record):
+            raise ServiceError("entry_changed")
+        self._remap_previews = {token: preview for token, preview in self._remap_previews.items()
+                                if preview["expires"] > time.monotonic() and preview["source"] != mod_id}
+        paths = self._paths(record)
+        if kind_of_file(paths[0].name) != "spr":
+            raise ServiceError("old_rig_unavailable")
+        identity = self._identity({path.name: path for path in paths})
+        targets = self._spine_parts(core_of(paths[0].name), pin)
+        if not targets:
+            raise ServiceError("game_file_not_found", variant=record["target"])
 
-            pages = [{"name": name, "original": png(original_view.textures.get(name)),
-                      "repaired": png(repaired.textures.get(name))}
-                     for name in sorted(original_view.textures.keys() | repaired.textures.keys())]
+        def step(key: str, current: int = 1) -> None:
+            if progress:
+                progress({"current": current, "total": len(targets), "step": f"import.step.{key}"})
 
-            def scenes(inputs) -> list[dict]:
-                atlas_by_stem = {Path(name).stem.lower(): data for name, data in inputs.atlases.items()}
-                result = []
-                for name, data in inputs.skeletons.items():
-                    atlas = atlas_by_stem.get(Path(name).stem.lower())
-                    if atlas is None and len(inputs.atlases) == 1:
-                        atlas = next(iter(inputs.atlases.values()))
-                    if atlas is not None:
-                        result.append({"name": name, "json": data.decode("utf-8-sig", errors="replace").lstrip().startswith("{"),
-                                       "skeleton": base64.b64encode(data).decode("ascii"),
-                                       "atlas": atlas.decode("utf-8-sig")})
-                return result
+        with temporary_directory(prefix=devmode.LIBRARY_STAGING_PREFIX + "remap-") as temporary:
+            output = Path(temporary)
+            step("check")
+            originals = self._stage_official(targets, output / "official", pin)
+            try:
+                step("extract")
+                inputs = self._remap_view(record, paths, targets, originals, pin)
+                mod, official = inputs["mod"], inputs["official"]
+                plan = atlas_remap.old_rig_plan({**inputs["layout"], **inputs["dated"]}, official.atlases,
+                                                official.skeletons, mod.skeletons, mod.textures, official.keys)
+                patch = self._old_rig_patch(paths, originals, official, mod, plan) if plan.available else {}
+            except atlas_remap.RemapError as error:
+                raise ServiceError(error.code, **error.params) from error
+            except (ValueError, KeyError, EOFError, OSError) as error:
+                raise ServiceError("atlas_remap_invalid", file=", ".join(path.name for path in paths),
+                                   reason=str(error)) from error
+            if plan.animations:
+                names = dict.fromkeys(name for missing in plan.animations.values() for name in missing)
+                raise ServiceError("old_rig_animations", names=", ".join(names))
+            if not plan.available:
+                raise ServiceError("old_rig_unavailable")
+            report = {"moved": [], "added": [], "official": [], "dropped": [], "upscaled": [], "warnings": [],
+                      "rigs": sorted(Path(name).stem for name in plan.atlases), "partial": False, "unchanged": False}
+            return self._remap_review(mod_id, identity, paths, originals, official, inputs["view"], output, patch,
+                                      report, pin, log, step)
 
-            drawings = {"original": scenes(original_view), "repaired": scenes(repaired)}
-            token = uuid.uuid4().hex
-            self._remap_previews[token] = {
-                "source": mod_id, "identity": identity,
-                "files": {name: path.read_bytes() for name, path in generated.items()},
-                "report": report, "compare": comparison, "expires": time.monotonic() + 3600,
-                "built_against": built_against,
-            }
+    @staticmethod
+    def _old_rig_patch(paths: list[Path], originals: dict[Path, Path], official: atlas_remap.Inputs,
+                       mod: atlas_remap.Inputs, plan: atlas_remap.OldRig) -> dict:
+        """The patch of an old-rig set (``old_rig``): the mod's own text assets, the plan's atlases and skeletons
+        over the official ones of their names, and the mod's own textures, all by ``cont_name_type``."""
+        patch: dict = {}
+        texts: dict[str, Any] = {}
+        for original in originals.values():
+            bundle = Bundle.load(original)
+            if bundle is None:
+                raise ServiceError("bundle_invalid", file=original.name)
+            for key in bundle.get_asset_keys("cont_name_type"):
+                if key.type == "TextAsset":
+                    texts.setdefault(key.name, key)
+        for path in paths:
+            bundle = Bundle.load(path)
+            if bundle is None:
+                raise ServiceError("bundle_invalid", file=path.name)
+            extracted, _ = bundle.extract_patch({"TextAsset"}, "cont_name_type")
+            patch.update(extracted)
+        if patch.keys() - set(texts.values()):
+            raise atlas_remap.RemapError("atlas_remap_target_mismatch", file=paths[0].name,
+                                         matched=len(patch.keys() & set(texts.values())), expected=len(patch))
+        for name, (atlas, skeleton, data) in plan.atlases.items():
+            patch[texts[name]] = atlas
+            patch[texts[skeleton]] = data
+        patch.update({official.keys[key]: image for key, image in mod.textures.items() if key in official.keys})
+        return patch
+
+    def _remap_review(self, mod_id: str, identity: Any, paths: list[Path], originals: dict[Path, Path],
+                      official: atlas_remap.Inputs, original_view: atlas_remap.Inputs, output: Path, patch: dict,
+                      report: dict, pin: Pin, log: LogFunc, step: Callable[..., None]) -> dict:
+        """The review of a prepared repair: the official parts (``originals``) with ``patch`` ported in by
+        ``cont_name_type`` and CRC fixed as the settings ask, in ``output``; kept in temporary storage under a token
+        that only accept_remap can add to the library. Every Texture2D of a part takes the patch's image of its
+        texture key where the patch has one. ``original_view``: the official files with the mod's over them, the
+        review's "before"."""
+        generated = {}
+        for i, (target, original) in enumerate(originals.items(), 1):
+            step("replace", i)
+            bundle = Bundle.load(original)
+            if bundle is None:
+                raise ServiceError("bundle_invalid", file=original.name)
+            keys = bundle.get_asset_keys("cont_name_type")
+            local_patch = {key: value for key, value in patch.items() if key in keys}
+            local_patch.update({key: patch[official.keys[atlas_remap.texture_key(key.name)]]
+                                for key in keys if key.type == "Texture2D"
+                                and official.keys.get(atlas_remap.texture_key(key.name)) in patch})
+            if local_patch:
+                result = rebuild([], [original], output, {"Texture2D"},
+                    self.settings.save_options(self.settings.crc_needed(target)),
+                    match_strategy="cont_name_type", log=log, prepared_patch=local_patch,
+                    on_step=lambda key: step(key, i))
+                if not result.success or len(result.file_pairs) != 1:
+                    raise ServiceError("mod_update_failed", id=mod_id)
+            else:
+                atomic_copy(original, output / target.name)
+            generated[target.name] = output / target.name
+        if identity != self._identity({path.name: path for path in paths}):
+            raise ServiceError("entry_changed")
+        comparison = self._compare_paths(mod_id, list(generated.values()), paths)
+        built_against = self._built_against(generated, pin, "remap")
+        repaired = atlas_remap.read_inputs(list(generated.values()))
+
+        def png(image) -> str | None:
+            if image is None:
+                return None
+            stream = io.BytesIO()
+            image.save(stream, format="PNG")
+            return "data:image/png;base64," + base64.b64encode(stream.getvalue()).decode("ascii")
+
+        pages = [{"name": name, "original": png(original_view.textures.get(name)),
+                  "repaired": png(repaired.textures.get(name))}
+                 for name in sorted(original_view.textures.keys() | repaired.textures.keys())]
+
+        def scenes(inputs) -> list[dict]:
+            atlas_by_stem = {Path(name).stem.lower(): data for name, data in inputs.atlases.items()}
+            result = []
+            for name, data in inputs.skeletons.items():
+                atlas = atlas_by_stem.get(Path(name).stem.lower())
+                if atlas is None and len(inputs.atlases) == 1:
+                    atlas = next(iter(inputs.atlases.values()))
+                if atlas is not None:
+                    result.append({"name": name, "json": data.decode("utf-8-sig", errors="replace").lstrip().startswith("{"),
+                                   "skeleton": base64.b64encode(data).decode("ascii"),
+                                   "atlas": atlas.decode("utf-8-sig")})
+            return result
+
+        drawings = {"original": scenes(original_view), "repaired": scenes(repaired)}
+        token = uuid.uuid4().hex
+        self._remap_previews[token] = {
+            "source": mod_id, "identity": identity,
+            "files": {name: path.read_bytes() for name, path in generated.items()},
+            "report": report, "compare": comparison, "expires": time.monotonic() + 3600,
+            "built_against": built_against,
+        }
         return {"preview": token, "report": report, "compare": comparison.to_json(),
                 "pages": pages, "drawings": drawings}
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import json
 from collections.abc import Iterable
 from dataclasses import dataclass, field
@@ -509,6 +510,71 @@ def same_rig(mod: bytes, official: bytes) -> bool:
         return False
     return (set(left.bones) <= set(right.bones) and set(left.slots) <= set(right.slots)
             and set(left.animations) <= set(right.animations))
+
+
+@dataclass
+class OldRig:
+    """A texture-only portrait mod set on the rig its textures were drawn for (``old_rig_plan``). ``atlases``: per
+    official atlas name the set's atlas text, the name of the official skeleton it stands in for and the set's
+    skeleton. ``animations``: per official skeleton the animations it has that the set's lacks, which the game calls
+    by name. ``complete``: every recorded rig could be set up."""
+    atlases: dict[str, tuple[bytes, str, bytes]] = field(default_factory=dict)
+    animations: dict[str, list[str]] = field(default_factory=dict)
+    complete: bool = True
+
+    @property
+    def available(self) -> bool:
+        return bool(self.atlases) and self.complete and not self.animations
+
+
+def _minor(version: str | None) -> str:
+    return ".".join((version or "").split(".")[:2])
+
+
+def old_rig_plan(sources: dict[str, dict], official_atlases: dict[str, bytes], official_skeletons: dict[str, bytes],
+                 mod_skeletons: dict[str, bytes], mod_textures: Iterable[str],
+                 official_textures: Iterable[str]) -> OldRig:
+    """The set that applies a portrait mod's textures with the rig they were drawn for: per official atlas of
+    ``sources`` (atlas name to a ``fingerprint.painted`` entry, the atlas ``text`` and the base64 ``skeleton``), that
+    atlas with the mod's own skeleton of the official one's stem, else the recorded one, in place of the official
+    atlas and the official skeleton that draws it. An entry is left out, and the plan is incomplete, when no official
+    skeleton draws its atlas, it has no skeleton, its skeleton is of another Spine version (major and minor) than the
+    official one or cannot be read, or a page of its atlas is not one the mod paints (``mod_textures``) in a texture
+    the official parts hold (``official_textures``, both texture keys)."""
+    mod_textures, official_textures = set(mod_textures), set(official_textures)
+    drawn_by = pair_atlases(official_skeletons, dict.fromkeys(sources))
+    own = pair_atlases(mod_skeletons, official_skeletons)
+    plan = OldRig()
+    for name, entry in sources.items():
+        skeleton = drawn_by.get(name)
+        data = None
+        if skeleton in own:
+            data = mod_skeletons[own[skeleton]]
+        elif skeleton is not None and isinstance(entry.get("skeleton"), str):
+            try:
+                data = base64.b64decode(entry["skeleton"], validate=True)
+            except ValueError:
+                data = None
+        text = entry.get("text")
+        try:
+            if data is None or not isinstance(text, str):
+                raise ValueError("no rig recorded")
+            atlas = text.encode("utf-8")
+            pages = {texture_key(page) for page in parse_atlas(atlas, name).pages}
+            if not pages or not pages <= mod_textures & official_textures:
+                raise ValueError("pages not painted")
+            official = official_skeletons[skeleton]
+            if _minor(get_skel_version(data)) != _minor(get_skel_version(official)):
+                raise ValueError("another Spine version")
+            have = set(spine_names.read(data).animations)
+            missing = [animation for animation in spine_names.read(official).animations if animation not in have]
+        except (ValueError, UnicodeError):
+            plan.complete = False
+            continue
+        plan.atlases[name] = (atlas, skeleton, data)
+        if missing:
+            plan.animations[skeleton] = missing
+    return plan
 
 
 def prepare_patch(mod: Inputs, official: Inputs) -> tuple[Patch, dict]:
