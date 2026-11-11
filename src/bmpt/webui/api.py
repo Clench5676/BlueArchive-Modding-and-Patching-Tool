@@ -477,7 +477,7 @@ def build_api(s: Services) -> RpcRegistry:
         cache = s.preview_cache
         generation = cache.generation
         allowed = cache.allowed and not s.safe_mode
-        data = cache.get(s.preview_thumbnail_key(key, renderer)) if allowed else None
+        data = s.preview_thumbnail(key, renderer) if allowed else None
         # A concurrent clear/toggle must not return a stale generation as usable data.
         if cache.generation != generation:
             data = None
