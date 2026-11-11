@@ -722,8 +722,6 @@
 			"atlasSize": "{name}，.atlas 文件尺寸：{atlas}，贴图尺寸：{texture}",
 			"textureSize": "{name}，贴图尺寸：{mod}，原版 {official}",
 			"updateHint": "更新：移植到当前原版文件，可能需要转换 Spine 版本",
-			"authorHint": "需要适配当前版本的 Mod",
-			"crcHint": "CRC 修正仅调整校验值",
 			"atlasLayout": ".atlas 文件发生改变",
 			"geometry": "{name}，附件或网格几何不同",
 			"rig": "{name}，骨骼结构不同",

@@ -722,8 +722,6 @@
 			"atlasSize": "{name}、.atlas ファイルのサイズ：{atlas}、テクスチャ：{texture}",
 			"textureSize": "{name}、テクスチャ：{mod}、公式 {official}",
 			"updateHint": "更新：現在の公式ファイルへ移植、Spine バージョン変換が必要な場合あり",
-			"authorHint": "現在のバージョンに対応した Mod が必要",
-			"crcHint": "CRC 修正はチェックサムのみ変更",
 			"atlasLayout": ".atlas ファイルが変更済み",
 			"geometry": "{name}、アタッチメントまたはメッシュ形状が相違",
 			"rig": "{name}、ボーン構造が相違",

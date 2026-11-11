@@ -446,7 +446,9 @@ test("a portrait the game drew anew keeps the rig its textures were drawn for, u
     const rule = popup.lines.findIndex((line) => line.rule);
     assert.deepEqual(texts.slice(rule + 1), [h.strings.compatibility.autoUpdate, h.strings.compatibility.oldRig], locale);
     assert.ok(popup.lines.at(-1).marker, locale);
-    assert.ok(!texts.includes(h.strings.compatibility.authorHint) && !texts.includes(h.strings.compatibility.crcHint), locale);
+    // nothing a user does not act on (owner): the author and CRC hints are gone
+    assert.equal(h.strings.compatibility.authorHint, undefined, locale);
+    assert.equal(h.strings.compatibility.crcHint, undefined, locale);
     assert.equal(popup.ok, h.strings.remap.action, locale);
     // no geometry: the old rig is set up as a whole
     assert.deepEqual(h.calls.map(([method]) => method),
@@ -472,9 +474,9 @@ test("a portrait the game drew anew keeps the rig its textures were drawn for, u
     const listed = g.popups[0].lines.find((line) => line.text === g.strings.compatibility.oldRigAnimations.replace("{names}", short));
     // the whole list behind Details, a button as high as its line
     assert.ok(listed?.marker && listed.button?.inline, locale);
-    // nothing to update: the hints that the Mod needs its author follow the rule
-    const after = g.popups[0].lines.slice(g.popups[0].lines.findIndex((line) => line.rule) + 1);
-    assert.deepEqual(after, [g.strings.compatibility.authorHint, g.strings.compatibility.crcHint], locale);
+    // nothing to update: the list of changes alone, no rule
+    assert.ok(!g.popups[0].lines.some((line) => line.rule), locale);
+    assert.equal(g.popups[0].lines.at(-1), listed, locale);
     // drawn anew without a recorded rig: named as before, nothing offered
     const n = await harness(locale, "ok");
     n.use(portrait({ atlases: [], animations: {}, available: false })); n.redraw({ redrawn: true, overlap: 0.52 });

@@ -138,9 +138,9 @@ async function assess(report) {
 }
 
 // The result popup (owner, 2026-11-11), plain and left-aligned: what changed, under "Changes:", one list item each (a
-// Details button as high as its line), then the game's dotted rule and what Update does, under "Auto update:"; where
-// Update repairs nothing, the hints that the Mod needs its author follow the rule instead. Footer buttons one size
-// smaller (Popup.FOOTER.M); every line at one type size.
+// Details button as high as its line), then, where Update repairs it, the game's dotted rule and what Update does, under
+// "Auto update:". Nothing a user does not act on (owner, 2026-11-11: no "Mod adapted to the current version required",
+// no "CRC fix changes checksums only"). Footer buttons one size smaller (Popup.FOOTER.M); every line at one type size.
 const ITEM = Object.freeze({ marker: "\u2022", markerGap: 44, indent: 52 });
 export function resultLines(result, repair) {
   const item = (line) => ({ ...(typeof line === "string" ? { text: line } : line), ...ITEM });
@@ -154,7 +154,6 @@ export function resultLines(result, repair) {
   const lines = changes.size ? [T("compatibility.changes"), ...[...changes.values()].map(item)] : [T("compatibility.matches")];
   if (repair) lines.push({ rule: true }, T("compatibility.autoUpdate"),
     item(T(result.oldRig ? "compatibility.oldRig" : "compatibility.remapUpdate")));
-  else if (result.author) lines.push({ rule: true }, T("compatibility.authorHint"), T("compatibility.crcHint"));
   return lines;
 }
 

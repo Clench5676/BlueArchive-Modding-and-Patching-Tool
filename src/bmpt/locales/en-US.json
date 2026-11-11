@@ -722,8 +722,6 @@
 			"atlasSize": "{name}, .atlas file size: {atlas}, texture: {texture}",
 			"textureSize": "{name}, texture: {mod}, official {official}",
 			"updateHint": "Update: port assets to current official bundles, Spine conversion may be required",
-			"authorHint": "Mod adapted to the current version required",
-			"crcHint": "CRC fix changes checksums only",
 			"atlasLayout": ".atlas file changed",
 			"geometry": "{name}, attachment or mesh geometry differs",
 			"rig": "{name}, bone structure differs",
