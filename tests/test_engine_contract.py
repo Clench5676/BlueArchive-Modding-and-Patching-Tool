@@ -281,6 +281,34 @@ def test_load_save_round_trip_keeps_every_object_and_the_name_crc(official_sampl
     assert pixels  # the portrait's texture came through, not only object headers
 
 
+
+# --- applying a texture ---
+
+@needs_game
+def test_a_small_texture_edit_is_applied_and_an_identical_texture_skipped(official_samples):
+    """The engine applies any changed pixel: a tolerance would drop small mod edits (a recoloured eye, a decal)."""
+    path = official_samples[0]
+    bundle = Bundle.load(path)
+    texture = max((obj for obj in bundle.env.objects if obj.type.name == "Texture2D"),
+                  key=lambda obj: obj.read().m_Width * obj.read().m_Height)
+    image = texture.read().image.convert("RGBA")
+    assert image.width * image.height >= 256 * 256
+    unchanged = Bundle.load(path).apply_patch({texture.path_id: image.copy()}, "path_id")
+    assert unchanged.matched_count == 1 and unchanged.applied_count == 0 and unchanged.skipped_count == 1
+    # shift 2% of the opaque pixels by 20 levels per channel: a mean squared error of 6, a small but visible edit
+    edited = image.copy()
+    pixels = edited.load()
+    budget = image.width * image.height // 50
+    for y in range(image.height):
+        for x in range(image.width):
+            r, g, b, a = pixels[x, y]
+            if budget and a > 200:
+                pixels[x, y] = (*(value + 20 if value < 128 else value - 20 for value in (r, g, b)), a)
+                budget -= 1
+    assert budget == 0
+    result = Bundle.load(path).apply_patch({texture.path_id: edited}, "path_id")
+    assert result.matched_count == 1 and result.applied_count == 1 and result.skipped_count == 0
+
 def _stream(obj) -> bytes | None:
     """A texture's pixels, kept outside the object in the bundle's resource file."""
     return bytes(obj.read().get_image_data()) if obj.type.name == "Texture2D" else None
