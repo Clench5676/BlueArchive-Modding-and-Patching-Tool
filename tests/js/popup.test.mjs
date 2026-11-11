@@ -3508,6 +3508,15 @@ for (const lang of ["en-US", "zh-CN"]) test(`each popup class positions its fram
   } finally { setStrings("en-US", Object.fromEntries(strings(english))); document.documentElement.lang = "en-US"; }
 });
 
+test("titleCentre puts the title's ink centre that far under the frame's top and leaves the shared title top without it", async () => {
+  const NGUI = await import("../../src/bmpt/web/js/ngui.js"); await Popup.ready();
+  const at = (options) => NGUI.find(Popup.popupFrame("Title", 2098, 1300, options), "Popup/Base/BG/Label_Title_Locale").pos[1];
+  const shared = at({}), centred = at({ titleCentre: 66 }), lower = at({ titleCentre: 90 });
+  assert.equal(at({ titleCentre: null }), shared);
+  near2(centred - lower, 24);
+  assert.ok(centred > shared, "the centred title stands above the shared one (y grows upwards)");
+});
+
 test("numeric caller widths round up and every fixed popup chooses its assigned class", async () => {
   const NGUI = await import("../../src/bmpt/web/js/ngui.js"); await Popup.ready();
   for (const [width, expected] of [[700,1300],[1301,1540],[1541,2098],[2100,2841],[2458,2841]])

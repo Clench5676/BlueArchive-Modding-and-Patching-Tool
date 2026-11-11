@@ -1945,11 +1945,15 @@ dialogue. Missing sources remain distinguishable from an empty playlist. A libra
 local scene-layout resource, using the renderer's existing layout fallback.
 
 Hall `createModal().draw` sends its actions through `popupFrame` and its shared `FOOTER` layout, preserving each
-semantic and enabled state. Frame sizes stay unchanged. The 2150 x 1300 u portrait/replacement picker packs its toolbar
-below the native title underline, then its optional search box and list, using the free header space before reducing
-the viewport. Both search states end at 778.05 CSS px; the footer centre is 845.84 px (formerly 916.78). The background
-picker moves its [130, 190, 760, 650] list up to y 176.70, retaining its viewport height and full rows; it ends at 826.70,
-with footer centre 894.49 px (formerly 965.43). These content limits include `POPUP.clearance` (16 u).
+semantic and enabled state; the background picker keeps its frame, list and footer. The portrait/replacement picker
+(BL-171) draws in `PORTRAIT_FRAME`: the L frame (2098 u wide, 1300 high) whose panels keep `SPACE.xl` at each side, the
+title's ink centred in the 132 u header band (`titleCentre`, where UIPopup_Sort has it), and a compact footer (a Done
+or Cancel body `COMPACT_BUTTON_H` = half a buttonS body high, `COMPACT_FOOTER_W` wide or as wide as its caption needs
+at the 34 u floor, `SPACE.xl` above the frame's foot). Under the header band the picker is a column with `SPACE.l`
+between its parts: the toolbar bar (with the search field flush under it when open), the list and the footer. A
+student's name stands `SPACE.xxl` in from the row plate's inclined left edge. The background picker moves its
+[130, 190, 760, 650] list up to y 176.70, retaining its viewport height and full rows; it ends at 826.70, with footer
+centre 894.49 px (formerly 965.43). These content limits include `POPUP.clearance` (16 u).
 
 The memorial editor remains stopped, with its original panels, candidate/queue controls and 66 px footer. Growing the
 candidate Add and queue Remove bodies while retaining a full row cannot fit above the shared footer. Even a generous
@@ -1957,8 +1961,9 @@ lower bound with no inter-panel gaps ends at 845.11 px without search, or 903.49
 the 826.70 limit. Its current queue panel stays [115, 720, 1685, 195], ending at 915; footer centre stays 965.43 px.
 Tests cover the migrated layouts in all six locales and both search states, and pin this remaining stop numerically.
 
-`CAPTION_EXCEPTIONS` names exactly three Thai-only allowances: `hall.doneAdding` (44 u in its shared footer),
-`hall.unsavedChanges` (36 u shared by Keep Editing / Discard / Save and Leave), and `hall.scaleReset` (30 u).
+`CAPTION_EXCEPTIONS` names exactly four Thai-only allowances: `hall.doneAdding` (44 u in its shared footer),
+`hall.unsavedChanges` (36 u shared by Keep Editing / Discard / Save and Leave), `hall.scaleReset` (30 u) and
+`hall.add` (20 u, the portrait picker's compact Add / Added / Select, one line in a half-height body).
 Call sites explicitly pass `captionSite`; the popup and small-button renderers validate the resulting size against that
 site and the page locale. The token minima remain 48 and 34. Other Hall sites and all other locales retain those minima;
 wording stays unchanged and every caption retains every character.
@@ -1968,13 +1973,12 @@ label box w-30 by 116. `buttonBox` preserves each caller's centre and width, rai
 `buttonSize` gives sibling groups one size. The two 460 x 70 CSS px first-run buttons now draw 460 x 88.216 at
 centre (960, 595). `updateAction` preserves the original control's migrated/retained role when refreshing it.
 
-The portrait picker Add/Select bodies now sit 8 CSS px below the unchanged name strip and draw through `button()`.
-Their minimum width is 155.676 px (240 u), keeping the former horizontal centre. Portrait row plates and nested strips
-grow from 402 to 437.445 px, with vertical pitch 406 to 441.445: this reserves the existing name strip's largest
-103.6 u two-line case, the 88.216 px button and the horizontal scrollbar's 12.973 px painted band. The artwork moves
-up by the row's 16 px of free top space; its size and the name captions stay unchanged. The strip extends 12 px left
-by its existing hit outset (x 240 to 228, width 960 to 972), while card/action stage horizontal centres stay unchanged.
-Even the tightest searched viewport (Japanese toolbar) holds a full row. Horizontal card pitch stays 220 px.
+The portrait picker Add/Select bodies sit 8 CSS px below the unchanged name strip and draw through `button()` as compact
+bodies (BL-171): half a buttonS body (68 u, 44.1 px) high, 155.676 px (240 u) wide at least, keeping the former horizontal
+centre, their caption the largest size that fits one line (`compactButtonSize`). Portrait row plates and nested strips
+are 393 px high with vertical pitch 397: this reserves the name strip's largest 103.6 u two-line case, the compact button
+and the horizontal scrollbar's 12.973 px painted band. The strip extends 12 px left by its existing hit outset (x 240 to
+228, width 960 to 972), while card/action stage horizontal centres stay unchanged. Horizontal card pitch stays 220 px.
 
 The portrait toolbar uses centred rows: its equal 62 px icons stand 20 units times `S` apart, and its second row
 starts 28 units times `S` below the icons, at y 80.162 px. The second row is the slider body's height (`UILobby`
@@ -2363,7 +2367,7 @@ the prefab values, from the development view). It imports no other UI module.
   the photography toolbar and the detail screen's Show in Finder / Explorer button. Popup detail actions use the
   136-unit control height and retain their existing 40–26 caption range for the narrow shared action row.
 - **Caption exceptions** (`CAPTION_EXCEPTIONS`, checked by `captionMinimum`): only Thai at Hall's Done Adding (44),
-  unsaved-changes footer group (36) and portrait Reset (30). The footer/small-button token minima stay 48/34.
+  unsaved-changes footer group (36), portrait Reset (30) and the picker's compact Add (20). The footer/small-button token minima stay 48/34.
 - **Batch Import's row under the list** is one row of `buttonS` controls (136 high, caption 48 down to 34, `SPACE.m` apart, laid
   out with `row`): Advanced Options, Recheck and Import share one body height and one caption size, on the prefabs' own bodies
   (Mailbox `Btn_Receive` and `ReceiveAll/Btn`, the popups' gold). Import stands out by its gold, not by its size. The row's right

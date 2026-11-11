@@ -68,6 +68,8 @@ export const CAPTION_EXCEPTIONS = Object.freeze({
   "hall.doneAdding": Object.freeze({ "th-TH": 44 }),
   "hall.unsavedChanges": Object.freeze({ "th-TH": 36 }),
   "hall.scaleReset": Object.freeze({ "th-TH": 30 }),
+  // the picker's compact Add, Added and Select (a body half a buttonS body high holds one line): Thai "Added" is nine code points
+  "hall.add": Object.freeze({ "th-TH": 20 }),
 });
 export const captionMinimum = (site, locale, minimum) => CAPTION_EXCEPTIONS[site]?.[locale] ?? minimum;
 

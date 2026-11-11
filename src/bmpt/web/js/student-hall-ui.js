@@ -8,7 +8,7 @@ import { searchTree, orderBody, toolbarLayout, toolbarTree } from "./roster-widg
 import { clone, S, hitButton } from "./util.js";
 import { T } from "./i18n.js";
 import { bindScale } from "./student-hall-scale.js";
-import { POPUP, SMALL_BUTTON, CONTROL, TYPE, SPACE, captionMinimum } from "./ui-tokens.js";
+import { POPUP, POPUP_FRAME, SMALL_BUTTON, CONTROL, TYPE, SPACE, captionMinimum } from "./ui-tokens.js";
 import { stack as layoutStack } from "./ui-grid.js";
 // A Hall small button is a buttonS control (docs/design-system.md): its height, minimum width and caption size are the system's, the
 // caption's floor the body role's. Its fit insets are the Common_Btn_BG body's (SMALL_BUTTON), not a scale value.
@@ -66,7 +66,7 @@ export function createModal(title, onClose, { level = 0 } = {}) {
       held.forEach(([el, inert]) => { if (el.isConnected) el.inert = inert; });
       if (previous?.isConnected && !previous.inert) previous.focus?.();
     },
-    async draw(build, actions = [], { width = 2800, height = 1450, retainedFooter = false, captionSite = "hall.modal" } = {}) {
+    async draw(build, actions = [], { width = 2800, height = 1450, retainedFooter = false, compactFooter = false, titleCentre = null, captionSite = "hall.modal" } = {}) {
       drawing?.abort(); const nextDrawing = new AbortController(); drawing = nextDrawing;
       const drawSignal = nextDrawing.signal, token = ++revision;
       const cancelled = new Promise((resolve) => drawSignal.addEventListener("abort", resolve, { once: true }));
@@ -74,7 +74,7 @@ export function createModal(title, onClose, { level = 0 } = {}) {
       try { await Loading.hold(async () => {
         await ready(); if (!live()) return;
         const layer = document.createElement("div"); layer.className = "popup-layer";
-        const tree = modalFrame(title, width, height, retainedFooter ? [] : actions, captionSite);
+        const tree = modalFrame(title, width, height, retainedFooter || compactFooter ? [] : actions, captionSite, titleCentre);
         const frame = await NGUI.render(tree, layer, { scale: S, origin: [960, 540], signal: drawSignal });
         if (!live()) return;
         Popup.closable(frame, host, onClose);
@@ -87,6 +87,10 @@ export function createModal(title, onClose, { level = 0 } = {}) {
           const footerSize = retainedButtonSize(actions.map((action) => action.label), actionWidth, 66);
           await Promise.all(actions.map((action, index) => retainedButton(layer, `Footer${index}`, action.label,
             [right - (actions.length - index) * (actionWidth + 20), bottom, actionWidth, 66], action.fn, { enabled: action.enabled !== false, semantic: action.semantic, size: footerSize })));
+        } else if (compactFooter) {
+          const labels = actions.map((action) => action.label), bodyW = compactFooterWidth(labels), size = compactButtonSize(labels, bodyW);
+          await Promise.all(compactFooterBoxes(height, labels.map(() => bodyW)).map((box, index) => button(layer, `Footer${index}`, actions[index].label, box,
+            actions[index].fn, { enabled: actions[index].enabled !== false, semantic: actions[index].semantic, height: COMPACT_BUTTON_H * S, size })));
         } else actions.forEach((action, index) => {
           const hit = Popup.hit(layer, frame, `Center/Popup/Btn/Footer${index}/BG (1)`, action.fn, { name: action.label, action: `Footer${index}` });
           if (hit) { hit.disabled = action.enabled === false; hit.dataset.focusKey = `Footer${index}`; }
@@ -127,9 +131,9 @@ export function createModal(title, onClose, { level = 0 } = {}) {
   };
   Popup.opened(host, onClose); return api;
 }
-export function modalFrame(title, width, height, actions, captionSite = "hall.modal") {
+export function modalFrame(title, width, height, actions, captionSite = "hall.modal", titleCentre = null) {
   const tree = Popup.popupFrame(title, width, height, { buttons: actions.map((action, index) => ({ ...action,
-    name: `Footer${index}`, semantic: action.semantic || (action.primary ? "confirm" : "secondary") })), captionSite });
+    name: `Footer${index}`, semantic: action.semantic || (action.primary ? "confirm" : "secondary") })), captionSite, titleCentre });
   if (actions.length) {
     const row = NGUI.find(tree, "Popup/Btn");
     row.children = row.children.map((child, index) => actions[index].enabled === false ? Buttons.disable(child) : child);
@@ -137,17 +141,33 @@ export function modalFrame(title, width, height, actions, captionSite = "hall.mo
   return tree;
 }
 export const modalContentBottom = (height, actions = 1) => 540 - (Popup.footerTop(height, actions) + POPUP.clearance) * S;
-// UIPopup_Sort's title is 64 below the top, its underline another 52 down, with half its 12-unit height below that.
-// Under the title the picker is a stack: the toolbar's bar (140 units at the toolbar's scale), the search field when it is open (60)
-// and the list, flush against one another (the bar and the field are one panel with the list, no gap between).
+// The portrait picker's Add buttons and its Done are compact (owner, 2026-11-11): half a buttonS body, the caption the largest
+// size that fits one line there. The Done is COMPACT_FOOTER_W wide and stands SPACE.xl above the frame's foot, centred.
+export const COMPACT_BUTTON_H = BUTTON.h / 2;
+export const COMPACT_FOOTER_W = BUTTON.minW + SPACE.xxl;
+// UIPopup_Sort's header band (Popup_Img_Deco_2 is 132 high): the title's ink is centred in it, where the prefab has it.
+const HEADER_H = 132;
+// The L frame (UIPopup_Option_PC, 2098 wide) keeps SPACE.xl at each side of the picker's panels, in place of the XL frame's
+// roughly 260 stage px of empty frame on each side.
+export const PORTRAIT_FRAME = Object.freeze({ width: POPUP_FRAME.L.w, height: 1300, compactFooter: true, titleCentre: HEADER_H / 2 });
+const frameTop = (height) => 540 - (POPUP.frameY + height / 2) * S;
+// The footer's bodies, one per width given (stage px), in a row centred on the frame.
+export function compactFooterBoxes(height, widths) {
+  const gap = SPACE.m * S, left = 960 - (widths.reduce((sum, w) => sum + w, 0) + (widths.length - 1) * gap) / 2;
+  const y = frameTop(height) + (height - SPACE.xl - COMPACT_BUTTON_H) * S;
+  let x = left;
+  return widths.map((w) => { const box = [x, y, w, COMPACT_BUTTON_H * S]; x += w + gap; return box; });
+}
+// Under the header band the picker is a column with SPACE.l between its parts: the header, the head panel (the toolbar's bar and,
+// when it is open, the search field, one panel with no gap between them), the list and the footer's Done.
 export function portraitPickerLayout(view, searching) {
-  const width = 1320, lay = toolbarLayout(view, { title: "" });
+  const width = (PORTRAIT_FRAME.width - 2 * SPACE.xl) * S, left = 960 - width / 2, gap = SPACE.l * S, lay = toolbarLayout(view, { title: "" });
   const scale = Math.min(1660 / 2840, width / (1412 - lay.cbLeft + SPACE.l));
-  const titleBottom = 540 - (POPUP.frameY + 1300 / 2 - (64 + 52 + 6)) * S;
-  const head = layoutStack([{ w: width, h: 140 * scale }, ...searching ? [{ w: width, h: 60 }] : []], { x: 300, y: titleBottom, w: width });
-  const [bar, field] = head.boxes, top = titleBottom + head.h;
-  return { titleBottom, scale, toolbar: { x: 300, y: bar.y + bar.h / 2, width }, search: field ? [field.x, field.y, field.w] : [300, top, width],
-    list: [300, top, width, modalContentBottom(1300) - top] };
+  const headerBottom = frameTop(PORTRAIT_FRAME.height) + HEADER_H * S;
+  const head = layoutStack([{ w: width, h: 140 * scale }, ...searching ? [{ w: width, h: 60 }] : []], { x: left, y: headerBottom + gap, w: width });
+  const [bar, field] = head.boxes, top = headerBottom + gap + head.h + gap, footer = compactFooterBoxes(PORTRAIT_FRAME.height, [COMPACT_FOOTER_W * S])[0];
+  return { headerBottom, scale, toolbar: { x: left, y: bar.y + bar.h / 2, width }, search: field ? [field.x, field.y, field.w] : [left, top, width],
+    list: [left, top, width, footer[1] - gap - top], footer };
 }
 export const backgroundPickerBox = () => [130, modalContentBottom(1450, 2) - 650, 760, 650];
 export function portraitRowLayout() {
@@ -155,12 +175,16 @@ export function portraitRowLayout() {
   // Use the row's 16 free pixels above the artwork before growing it; reserve the native horizontal scrollbar's
   // painted 20-unit band (SPACE.m, scrollbarTrack) below the button. Its viewport gains the card's existing 12px hit outset
   // on the left, keeping the artwork and action's stage x unchanged while admitting the wider body.
-  // The row is a stack: the artwork down to the foot of its name strip, 8 px (the card's gap) and the action's body (a buttonS
-  // control), then the scrollbar's band.
+  // The row is a stack: the artwork down to the foot of its name strip, 8 px (the card's gap) and the action's body (a compact
+  // button), then the scrollbar's band.
   const cardY = 600 * .46 / 2;
-  const column = layoutStack([{ w: 0, h: cardY + (600 / 2 + 10 + bar) * .46 }, { w: 0, h: BUTTON.h * S }], { gap: 8 });
-  const height = column.h + SPACE.m * S;
-  return { height, pitch: height + 4, cardX: 105 + 12, cardY, stripX: 240 - 12, stripW: 960 + 12 };
+  const column = layoutStack([{ w: 0, h: cardY + (600 / 2 + 10 + bar) * .46 }, { w: 0, h: COMPACT_BUTTON_H * S }], { gap: 8 });
+  const height = column.h + SPACE.m * S, cardX = 105 + 12, stripX = 240 - 12;
+  // The student's name starts SPACE.xxl (a card's padding) in from the plate's inclined left edge, 32 px at its foot and the
+  // incline's overhang more at its top, and ends SPACE.m before the first card's edge.
+  const edge = (y) => 32 + height * Math.tan(Math.PI / 18) * (1 - y / height), nameY = 170, nameX = edge(nameY) + SPACE.xxl * S;
+  return { height, pitch: height + 4, width: (PORTRAIT_FRAME.width - 2 * SPACE.xl) * S, cardX, cardY, stripX, stripW: 960 + 12,
+    name: [nameX, nameY, cardX + stripX - 320 * .46 / 2 - SPACE.m * S - nameX] };
 }
 // Keep a caller's centre and width; only the minimum width and the shared small-button height constrain its body.
 // bodyHeight: a site whose neighbour sets the height (the portrait toolbar's Reset beside its slider).
@@ -168,9 +192,14 @@ export function buttonBox([x, y, width, height], bodyHeight = BUTTON.h * S) {
   const w = Math.max(BUTTON.minW * S, width), h = bodyHeight;
   return [x + (width - w) / 2, y + (height - h) / 2, w, h];
 }
-export const buttonSize = (captions, width) => NGUI.fitGroup(captions, BUTTON.fs, BUTTON_FLOOR,
+export const buttonSize = (captions, width, bodyHeight = BUTTON.h) => NGUI.fitGroup(captions, BUTTON.fs, BUTTON_FLOOR,
   Math.max(BUTTON.minW, width / S) - SMALL_BUTTON.fitInset, 2,
-  { maxH: BUTTON.h - SMALL_BUTTON.boxInsetH })[0]?.fs;
+  { maxH: bodyHeight - SMALL_BUTTON.boxInsetH })[0]?.fs;
+export const compactButtonSize = (captions, width) => buttonSize(captions, width, COMPACT_BUTTON_H);
+// The footer's bodies share one width: COMPACT_FOOTER_W, or what the widest caption needs on its one line at the body role's
+// floor (a caption of a longer language widens its body, never shrinks below the floor).
+export const compactFooterWidth = (captions) => Math.max(COMPACT_FOOTER_W,
+  ...captions.map((caption) => NGUI.glyphWidth(caption, BUTTON_FLOOR) + SMALL_BUTTON.fitInset)) * S;
 
 // The memorial editor's footer, candidate Add and queue Remove still hit the full-row stop rule.
 // Their existing bodies/captions stay until their containing layout can change.
@@ -282,11 +311,11 @@ export async function card(host, item, { x, y, kind = "lobby", scale = .48, sele
   // The name strip is inclined: its visual centre is left of the artwork centre.
   const actionWidth = barWidget.w_ * scale, actionX = x + bar.pos[0] * scale - actionWidth / 2;
   if (onAdd) {
-    const draw = kind === "spr" ? button : retainedButton, height = kind === "spr" ? BUTTON.h * S : 40;
-    const size = kind === "spr" ? buttonSize : (captions, width) => retainedButtonSize(captions, width, height);
+    const draw = kind === "spr" ? button : retainedButton, height = kind === "spr" ? COMPACT_BUTTON_H * S : 40;
+    const size = kind === "spr" ? compactButtonSize : (captions, width) => retainedButtonSize(captions, width, height);
     await draw(host, `Add${item.key}`, addLabel,
       [actionX, y - bar.pos[1] * scale + barWidget.h_ * scale / 2 + 8, actionWidth, height], onAdd,
-      { enabled: addEnabled, ...(addSize != null ? { size: addSize } : fitAdd ? { size: size([addLabel], actionWidth) } : {}) });
+      { enabled: addEnabled, ...(kind === "spr" ? { height, captionSite: "hall.add" } : {}), ...(addSize != null ? { size: addSize } : fitAdd ? { size: size([addLabel], actionWidth) } : {}) });
   }
   return { view, visual, hit, width, height, actionBox: [actionX, y + height / 2 + 8, actionWidth, 36] };
 }
