@@ -52,7 +52,7 @@ def make_desktop(monkeypatch, tmp_path, platform):
 
     state = SimpleNamespace(block=None, entered=threading.Event(), resume=threading.Event(),
                             complete=threading.Event(), workers=[], deferred=[],
-                            registered=[], callbacks=[], chrome_installed=[], run=lambda: None, platform=platform)
+                            registered=[], callbacks=[], chrome_installed=[], black=[], run=lambda: None, platform=platform)
 
     def evaluate(event):
         if threading.current_thread() not in state.workers:
@@ -102,6 +102,7 @@ def make_desktop(monkeypatch, tmp_path, platform):
     monkeypatch.setattr(main.sys, "platform", platform)
     monkeypatch.setattr(native, "webview2_version", lambda: "130.0.0.0")
     monkeypatch.setattr(native, "install_window_commands", commands)
+    monkeypatch.setattr(native, "keep_web_view_black", lambda window: state.black.append(window))
     monkeypatch.setattr(Tray, "supported", staticmethod(lambda: False))
     monkeypatch.setitem(sys.modules, "webview", SimpleNamespace(settings={}, create_window=lambda *a, **kw: window,
                                                                 start=start))
@@ -119,6 +120,11 @@ def desktop(monkeypatch, tmp_path, request):
     for worker in state.workers:
         worker.join(3)
         assert not worker.is_alive()
+
+
+def test_web_view_is_made_black_before_show_on_macos_only(desktop):
+    run_window(desktop)
+    assert desktop.black == ([desktop.window] if desktop.platform == "darwin" else [])
 
 
 def run_window(desktop):
