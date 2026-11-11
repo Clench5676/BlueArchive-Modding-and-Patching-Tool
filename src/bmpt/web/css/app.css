@@ -434,6 +434,8 @@ input[type="text"], input[type="search"], textarea { cursor: text; }
 .repair-line > div { grid-column: 1; }
 .repair-line > .plain-line-button { grid-column: 2; margin-left: 0; font-size: .8em; padding: .3em .9em; }
 .repair-verdict { font-size: 1.15em; }
+.repair-notes > .repair-steps { grid-column: 1 / -1; display: flex; align-items: center; gap: .6em; }
+.repair-steps > .plain-line-button { margin-left: 0; font-size: .8em; padding: .3em .9em; }
 .repair-player .spine-player { background: transparent !important; }
 
 /* Frameless desktop controls; they remain outside the fixed-aspect game stage. */

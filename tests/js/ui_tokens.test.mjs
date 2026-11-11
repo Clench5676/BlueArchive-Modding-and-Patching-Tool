@@ -247,8 +247,8 @@ for (const locale of locales) test(`every footer's captions share one size in th
 
 // Hall modals use the shared footer; the memorial editor still hits its full-row stop rule.
 const popupSource = read("js/popup.js");
-const footerHelpers = new Function("CONTROL", "POPUP_FRAME", "SPACE", "TYPE", "BUTTON_TEXT_H", "row", "toNode", "FRAME_Y", "NGUI", "captionMinimum", `${popupSource.slice(popupSource.indexOf("export const footerY"), popupSource.indexOf("// the game's popup frame at a size"))
-  .replaceAll("export ", "")}; return {footerY, footerTop, footerSlots, footerFit, footerLabels};`)(Tokens.CONTROL, Tokens.POPUP_FRAME, Tokens.SPACE, Tokens.TYPE, 156, row, toNode, Tokens.POPUP_FRAME.frameY, NGUI, Tokens.captionMinimum);
+const footerHelpers = new Function("CONTROL", "POPUP_FRAME", "SPACE", "TYPE", "BUTTON_TEXT_H", "row", "toNode", "FRAME_Y", "NGUI", "captionMinimum", "SMALL_BUTTON", `${popupSource.slice(popupSource.indexOf("export const footerY"), popupSource.indexOf("// the game's popup frame at a size"))
+  .replaceAll("export ", "")}; return {footerY, footerTop, footerSlots, footerFit, footerLabels};`)(Tokens.CONTROL, Tokens.POPUP_FRAME, Tokens.SPACE, Tokens.TYPE, 156, row, toNode, Tokens.POPUP_FRAME.frameY, NGUI, Tokens.captionMinimum, Tokens.SMALL_BUTTON);
 test("Hall modal footers use buttonL for one, two and three actions", () => {
   for (const n of [1, 2, 3]) {
     const { scale, xs } = footerHelpers.footerSlots(n, 2800);
