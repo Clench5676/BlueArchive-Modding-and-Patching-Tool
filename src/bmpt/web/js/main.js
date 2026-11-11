@@ -150,6 +150,19 @@ async function variantNames() {
   };
 }
 
+// Go To from the update summary or the held entries' Details (update-impact.js): the mod's student page on the tab of
+// its kind, its switch open on the mod (Detail.takeWanted); Settings closes first
+async function openMod({ id, variant, kind }) {
+  const data = await roster().catch(() => rosterData);
+  const family = (data?.families || []).find((f) => f.variants.some((v) => v.key === variant));
+  if (!family || !id) return;
+  if (!$("settings").hidden) Settings.close();
+  Detail.want({ id, variant, kind });
+  const before = location.hash;
+  ctx.go(family.key, variant, kind);
+  if (location.hash === before) await Detail.takeWanted();
+}
+
 // --- library.changed: a writer job switched game files ({cores, kinds}), or anything may have changed (no data: the
 // classic UI closed, a job stopped midway, the mod list changed). The roster is read again, the thumbnails of those
 // cores are forgotten (both live and official sources, including other installs' bases) and the detail screen
@@ -619,7 +632,7 @@ async function start() {
     libraryChanged(null);
   });
   Prompts.init({ names: variantNames });
-  Impact.init({ names: variantNames });
+  Impact.init({ names: variantNames, go: openMod });
   const settingsChanged = async (key, prefs) => {
     ctx.prefs = prefs;
     previewCache.configure(prefs);

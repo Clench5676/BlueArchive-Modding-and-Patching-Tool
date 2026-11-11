@@ -1429,6 +1429,36 @@ test("repaired names carry their localized tag and originals jump to their repai
   switchHost.hidden = true;
 });
 
+test("Go To from the update summary opens the switch on its mod once the student page of its kind is in", async () => {
+  setStrings("en-US", Object.fromEntries(strings(english)));
+  await modsEnabled(false);
+  const fam = previewFamily();
+  fam.variants[0].modList.push({ id: "q", target: "a", kind: "spr", label: "Second portrait mod" });
+  // another variant, another kind's tab, a request the page did not reach soon: the switch stays closed
+  for (const [request, at] of [[{ id: "p", variant: "b", kind: "spr" }, 0], [{ id: "l", variant: "a", kind: "lobby" }, 0],
+    [{ id: "p", variant: "a", kind: "spr" }, 31000]]) {
+    Detail.setupPreviewTest(fam, "spr");
+    switchHost.hidden = true;
+    const now = Date.now;
+    Detail.want(request);
+    Date.now = () => now() + at;
+    try { await Detail.takeWanted(); } finally { Date.now = now; }
+    assert.equal(switchHost.hidden, true, JSON.stringify(request));
+  }
+  Detail.setupPreviewTest(fam, "spr");
+  switchHost.hidden = true;
+  Detail.want({ id: "q", variant: "a", kind: "spr" });
+  await Detail.takeWanted();
+  assert.equal(switchHost.hidden, false);
+  assert.equal(Detail.previewTestState().pending, "m:q", "the mod's card selected, its details with Update");
+  assert.ok(walk(switchHost).some((el) => el.getAttribute("aria-label") === english.act.update));
+  // taken once
+  Detail.setupPreviewTest(fam, "spr");
+  await Detail.takeWanted();
+  assert.notEqual(Detail.previewTestState().pending, "m:q");
+  switchHost.hidden = true;
+});
+
 test("repair comparison uses separate in-memory players and disposes both on close", async () => {
   const Compare = await import("../../src/bmpt/web/js/mod-compare.js");
   const previous = globalThis.spine, created = [];
@@ -4310,19 +4340,40 @@ test("a plain line's inline button is as high as the line's text and stays insid
   }
 });
 
-test("the update summary unfolded fits its wide frame without scrolling, in every locale", async () => {
+test("the update summary folded fits its wide frame without scrolling with two held mods, in every locale; longer lists scroll by themselves", async () => {
   await Popup.ready();
   const I18n = await import("../../src/bmpt/web/js/i18n.js");
   const Impact = await import("../../src/bmpt/web/js/update-impact.js");
+  const NGUI = await import("../../src/bmpt/web/js/ngui.js");
+  const { SMALL_BUTTON } = await import("../../src/bmpt/web/js/ui-tokens.js");
   const flat = (o, p = "", out = {}) => { for (const [k, v] of Object.entries(o)) { if (v && typeof v === "object") flat(v, `${p}${k}.`, out); else out[`${p}${k}`] = v; } return out; };
   try {
     for (const lang of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
       I18n.setStrings(lang, flat(JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url)))));
-      const mods = [1, 2, 3].map((i) => ({ id: `${i}`, target: "hoshino_swimsuit", core: "hoshino_swimsuit_spr", kind: "spr", impact: "rig_changed" }));
-      const m = Impact.summary({ due: true, mods, counts: { rig_changed: 3, gone: 1, new_parts: 2, rebuilt: 5, unchanged: 37, unknown: 4 } },
-        () => "Hoshino (Swimsuit)", { expanded: true });
+      // four held mods, each with its own name and what changed, and a mod under another kind
+      const mods = [1, 2, 3, 4].map((i) => ({ id: `${i}`, target: "hoshino_swimsuit", core: "hoshino_swimsuit_spr", kind: "spr", impact: "rig_changed",
+        label: `Swimsuit Hoshino v${i}`, changes: { repacked: true, animations: 2, rig: true } }));
+      mods.push({ id: "5", target: "airi", core: "airi_spr", kind: "spr", impact: "rebuilt", label: "Airi Band", changes: {} });
+      const counts = { rig_changed: 4, gone: 1, new_parts: 2, rebuilt: 1, unchanged: 37, unknown: 4 };
+      const two = mods.slice(0, 2).concat(mods.slice(4));
+      const folded = Impact.summary({ due: true, mods: two, counts: { ...counts, rig_changed: 2 } }, () => "Hoshino (Swimsuit)");
+      const short = Popup.messageLayout({ lines: folded.lines, ok: "OK", plain: true, width: Impact.WIDTH });
+      assert.equal(short.scroll, false, `${lang} ${short.height} ${short.body.height} ${short.visible}`);
+      const four = Popup.messageLayout({ lines: Impact.summary({ due: true, mods, counts }, () => "Hoshino (Swimsuit)").lines, ok: "OK", plain: true, width: Impact.WIDTH });
+      assert.ok(four.height <= Popup.MSG.cap + 1e-9, `${lang}: four held mods keep the frame within its cap`);
+      const m = Impact.summary({ due: true, mods, counts }, () => "Hoshino (Swimsuit)", { expanded: true });
       const layout = Popup.messageLayout({ lines: m.lines, ok: "OK", plain: true, width: Impact.WIDTH });
-      assert.equal(layout.scroll, false, `${lang} ${layout.height} ${layout.body.height} ${layout.visible}`);
+      assert.ok(layout.height <= Popup.MSG.cap + 1e-9, `${lang}: the frame stays within its cap, the lines scroll`);
+      // each Go To is as high as its line's text, right after it and inside the frame
+      for (const line of layout.body.boxes.filter((b) => b.r.button && b.r.button.label !== m.lines.find((l) => l.gap)?.button?.label)) {
+        const [text, button] = line.lineRow.boxes;
+        assert.ok(button.h <= line.f.fs, `${lang}: Go To within the text's height`);
+        assert.ok(line.bf.text === line.r.button.label, `${lang}: Go To caption whole, on one line`);
+        // the small button fits its caption again within its width less its inset: still one line
+        const drawn = NGUI.fitText(line.r.button.label, line.bf.fs, line.bf.fs, button.w - SMALL_BUTTON.fitInset);
+        assert.ok(!drawn.text.includes("\n"), `${lang}: Go To drawn on one line`);
+        assert.ok(text.x + text.w <= button.x && button.x + button.w <= layout.width, `${lang}: Go To inside the frame`);
+      }
     }
   } finally { setStrings("en-US", Object.fromEntries(strings(english))); }
 });

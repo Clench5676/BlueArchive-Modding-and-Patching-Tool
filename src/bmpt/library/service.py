@@ -658,7 +658,7 @@ class ModLibrary:
         self._names_cache: dict[str, tuple[int, dict[str, Path]]] = {}
         self._originals_cache: tuple[Any, dict[str, int]] | None = None
         self._backfill_misses: set[tuple] = set()
-        self._impacts: dict[tuple, str] = {}  # judged impacts of game updates (_impact)
+        self._impacts: dict[tuple, tuple[str, dict]] = {}  # judged impacts of game updates (_impact_of)
         self._untested_ok: dict[tuple[str, str], set[str]] = {}  # confirmed cores of an untested build (confirm_untested)
         self._maps_cache: tuple[tuple, Any] | None = None
         self.profiles = Profiles(self.root)
@@ -3129,14 +3129,19 @@ class ModLibrary:
 
     def _impact(self, record: dict[str, Any], pin: Pin | None) -> str:
         """What a game update did to the official parts a mod was built against (``fingerprint.impact``), held
-        against its core's parts in ``pin``. Kept per mod files and official part names (a rebuilt part has another
-        CRC in its name), so a toggle reaching many entries reads each core once. Never raises."""
+        against its core's parts in ``pin``. Never raises."""
+        return self._impact_of(record, pin)[0]
+
+    def _impact_of(self, record: dict[str, Any], pin: Pin | None) -> tuple[str, dict[str, Any]]:
+        """``_impact`` with what changed in those parts (``fingerprint.changes``). Kept per mod files and official
+        part names (a rebuilt part has another CRC in its name), so a toggle reaching many entries reads each core
+        once. Never raises."""
         if pin is None:
-            return fingerprint.UNKNOWN
+            return fingerprint.UNKNOWN, {}
         try:
             files = {path.name: path for path in self._paths(record)}
             if not files:
-                return fingerprint.UNKNOWN
+                return fingerprint.UNKNOWN, {}
             targets = self._core_targets(files, pin)
             key = (record["id"], tuple(sorted(self._mod_hashes(record).items())), pin.key,
                    tuple(sorted(str(path) for path in targets)))
@@ -3148,18 +3153,20 @@ class ModLibrary:
                 mapped = (self._core_map(pin).core(self._target_of(record), record["kind"])
                           if record["kind"] != "other" else None)
                 moved = bool(mapped) and mapped.lower() != core_of(next(iter(files)))
-                found = fingerprint.GONE if self._read_built_against(record) and not moved else fingerprint.UNKNOWN
+                gone = bool(self._read_built_against(record)) and not moved
+                found = (fingerprint.GONE, {"gone": True}) if gone else (fingerprint.UNKNOWN, {})
             else:
                 built = self._read_built_against(record) or self._backfill_built_against(record, pin)
-                found = fingerprint.impact(built, self._built_against(files, pin, "now")) if built else \
-                    fingerprint.UNKNOWN
+                now = self._built_against(files, pin, "now") if built else None
+                found = ((fingerprint.impact(built, now), fingerprint.changes(built, now)) if built
+                         else (fingerprint.UNKNOWN, {}))
             if len(self._impacts) >= 4096:
                 self._impacts.clear()
             self._impacts[key] = found
             return found
         except Exception as error:  # noqa: BLE001 - a judgement that cannot be made tells nothing
             log_failure(logger, logging.DEBUG, "No impact judged for the mod", error)
-            return fingerprint.UNKNOWN
+            return fingerprint.UNKNOWN, {}
 
     def _hold(self, pin: Pin, target: str) -> bool:
         """Whether an On or its Retry holds an entry configured with ``target`` instead of writing it: a mod whose
@@ -3183,7 +3190,8 @@ class ModLibrary:
                       progress: Callable[[dict], None] | None = None) -> dict[str, Any]:
         """The impact summary of a game update on an install (the current one by default): when its resource version
         differs from the last one seen there (or none was recorded yet), every library mod classified from the
-        fingerprint it was built against (``fingerprint.impact``). ``due`` is True when a mod needs telling (rebuilt,
+        fingerprint it was built against (``fingerprint.impact``), each mod told with what changed in its official
+        parts (``changes``: ``fingerprint.changes``). ``due`` is True when a mod needs telling (rebuilt,
         new parts, changed rig or gone); a check with nothing to tell records the version as seen at once, one with
         something waits for ``impact_seen``. ``force`` classifies whatever was seen. Read-only otherwise; never
         fails on one mod."""
@@ -3209,13 +3217,13 @@ class ModLibrary:
             with self._lock:
                 if record["id"] not in self._records:
                     continue
-                found = self._impact(record, pin)
+                found, changes = self._impact_of(record, pin)
             out["counts"][found] += 1
             if found in (fingerprint.UNCHANGED, fingerprint.UNKNOWN):
                 continue
             entry = entries[record["id"]]
             out["mods"].append({"id": entry.id, "label": entry.label, "target": entry.target, "kind": entry.kind,
-                                "core": entry.core, "impact": found,
+                                "core": entry.core, "impact": found, "changes": changes,
                                 "configured": f"mod:{entry.id}" in configured})
         out["due"] = bool(out["mods"])
         if not out["due"] and not force:
@@ -5954,7 +5962,8 @@ class ModLibrary:
 
     def intent(self) -> dict[str, Any]:
         """The switch's shared intent: {enabled, toggled, unfinished: {pending, left, stuck, held}, held: [{install,
-        core, variant, kind, source}]} over this data directory's known installs; ``profiles_unreadable`` raised as is."""
+        core, variant, kind, source, label}]} over this data directory's known installs (``label``: the configured
+        mod's name, while it is in the library); ``profiles_unreadable`` raised as is."""
         config = self.profiles.read()
         keys = {pin.key for pin in self.installs()}
         counts = {why: 0 for why in profiles_mod.WHY}
@@ -5965,8 +5974,12 @@ class ModLibrary:
                 if item["why"] == "held":
                     entry = ((((config or {}).get("folders") or {}).get(item["install"]) or {}).get("configured")
                              or {}).get(item["core"]) or {}
+                    source = entry.get("source")
+                    record = (self._records.get(source[4:])
+                              if isinstance(source, str) and source.startswith("mod:") else None)
                     held.append({"install": item["install"], "core": item["core"], "variant": entry.get("variant"),
-                                 "kind": entry.get("kind"), "source": entry.get("source")})
+                                 "kind": entry.get("kind"), "source": source,
+                                 **({"label": self._label(record)} if record else {})})
         return {"enabled": profiles_mod.enabled(config), "toggled": (config or {}).get("toggled"),
                 "unfinished": counts, "held": held}
 

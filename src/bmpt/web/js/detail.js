@@ -999,6 +999,26 @@ async function jumpRepaired(c) {
   pending = `m:${id}`;
   await renderPopup();
 }
+// Go To from the update summary (update-impact.js, main.js openMod): once the mod's student page is in on the tab of
+// its kind, the switch opens with the mod's card selected (its details hold Update) and in view. A request the page
+// did not reach soon (a hall that kept the screen, another route) is dropped.
+let wanted = null;
+const WANTED_MS = 30000;
+export function want(request) { wanted = request ? { ...request, at: Date.now() } : null; }
+export async function takeWanted() {
+  const w = wanted;
+  wanted = null;
+  if (!w || Date.now() - w.at > WANTED_MS || !open || variantKey !== w.variant) return;
+  const kind = ["lobby", "model"].includes(w.kind) ? w.kind : "spr";
+  if (switchKind() !== kind) return;
+  if (popupKind !== kind || $("popup").hidden) await openPopup(kind);
+  if (!open || $("popup").hidden || popupKind !== kind || variantKey !== w.variant) return;
+  const key = `m:${w.id}`;
+  if (!candidates(variant(), kind).some((c) => c.key === key)) return;
+  pending = key;
+  await renderPopup();
+  [...$("popup").querySelectorAll("[data-key]")].find((el) => el.dataset.key === key)?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+}
 function runExport() {
   const c = shownMod();
   if (busy) return;
@@ -2504,6 +2524,7 @@ export async function show(context, familyData, key, { inPlace = false, kind = n
     await settleImages();
   });
   if (ready) arrived(familyData.key, key);
+  if (ready && open) void takeWanted().catch(renderFailed);
   // a 3D tab entered directly (a link, a reload) reads and checks the costume verdicts as a click on the tab does,
   // once the screen is drawn (their arrival redraws it)
   if (ready && open && tab === "model")

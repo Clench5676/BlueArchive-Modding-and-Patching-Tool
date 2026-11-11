@@ -48,6 +48,24 @@ def test_a_part_rebuilt_with_another_rig(change):
     assert fingerprint.impact(built, document(named(now, "a_2.bundle"))) == fingerprint.RIG_CHANGED
 
 
+def test_the_changes_name_what_an_update_did_to_the_official_parts():
+    built = document(named(part_of(), "a_1.bundle"))
+    # repacked, a new animation, another texture size: the summary names each
+    now = named(part_of(MOVED, animations=("Idle_01", "00"), size=(32, 16)), "a_2.bundle")
+    assert fingerprint.changes(built, document(now)) == {"repacked": True, "animations": 1, "textures": True}
+    # the same rig rebuilt changes nothing the summary names
+    same = named(part_of(structure="s2"), "a_2.bundle")
+    assert fingerprint.changes(built, document(same)) == {}
+    # an asset gone, a new one beside it
+    swapped = named({**part_of(), "textures": {"page2": [8, 8]}}, "a_2.bundle")
+    assert fingerprint.changes(built, document(swapped)) == {"removed": True, "added": True}
+    unread = named({**part_of(), "skeletons": {"test.skel": {
+        "sha1": "f" * 40, "version": "4.2.33", "rig": None, "animations": None}}}, "a_2.bundle")
+    assert fingerprint.changes(built, document(unread)) == {"rig": True}
+    assert fingerprint.changes(built, None) == {"gone": True}
+    assert fingerprint.changes(None, document(now)) == fingerprint.changes(built, {"parts": []}) == {}
+
+
 def test_new_official_parts_beside_the_ones_the_mod_knows():
     built = document(named(part_of(), "a_1.bundle"))
     extra = {"name": "b_1.bundle", "sha1": None, "structure": "x", "atlases": {}, "skeletons": {},
@@ -99,7 +117,8 @@ def test_the_summary_of_an_update_names_the_mods_whose_rig_changed(spine):
     summary = library.update_impact()
     assert summary["due"] is True and summary["previous"] == first["version"] != summary["version"]
     assert summary["mods"] == [{"id": entry.id, "label": summary["mods"][0]["label"], "target": "test",
-                                "kind": "spr", "core": "test_spr", "impact": "rig_changed", "configured": True}]
+                                "kind": "spr", "core": "test_spr", "impact": "rig_changed",
+                                "changes": {"repacked": True, "animations": 1}, "configured": True}]
     assert summary["counts"]["rig_changed"] == 1
     assert library.update_impact()["due"] is True  # told until the page says it was shown
     library.impact_seen(summary["install"], summary["version"])
@@ -120,7 +139,7 @@ def test_a_retry_holds_an_entry_whose_rig_changed_and_apply_mod_configuration_wr
     assert unfinished(env) == [{"install": key(env), "core": "test_spr", "why": "held"}]
     assert library.intent()["unfinished"]["held"] == 1
     assert library.intent()["held"] == [{"install": key(env), "core": "test_spr", "variant": "test", "kind": "spr",
-                                         "source": f"mod:{entry.id}"}]
+                                         "source": f"mod:{entry.id}", "label": entry.label}]
 
     written = []
     monkeypatch.setattr(library, "_switch", lambda pin, core, source, log: written.append((core, source)))
