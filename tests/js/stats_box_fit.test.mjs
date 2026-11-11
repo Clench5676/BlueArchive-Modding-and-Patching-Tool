@@ -146,7 +146,7 @@ for (const locale of LOCALES) test(`detail switch texts fit their half of the pr
 });
 
 // the checks every box shares: nodes = the flat list the site appended (the box first)
-function assertRows({ nodes, what, value = "V", caption = "F", divider = "L", count, slot = () => null, lines = B.value.lines }) {
+function assertRows({ nodes, what, value = "V", caption = "F", divider = "L", count, slot = () => null, lines = B.value.lines, size = B }) {
   const box = nodes[0], fill = box.widgets[0], line = box.children[0].widgets[0];
   const boxRect = rectOf(box);
   // drawn through the component: the tokens' fill, a line 5 larger across and down, dotted dividers of the divider colour
@@ -163,16 +163,16 @@ function assertRows({ nodes, what, value = "V", caption = "F", divider = "L", co
     const row = { top: edges[i], bottom: edges[i + 1] };
     const v = child(nodes, `${value}_${i}`), vw = v.widgets[0], vr = rectOf(v);
     const name = `${what} row ${i}`;
-    assert.ok(row.top - row.bottom >= B.rowMin - 1e-9, `${name}: at least ${B.rowMin} high`);
+    assert.ok(row.top - row.bottom >= size.rowMin - 1e-9, `${name}: at least ${size.rowMin} high`);
     // the value inside its row and its box, 30 short of both sides
     assert.ok(vr.top <= row.top + 1e-9 && vr.bottom >= row.bottom - 1e-9, `${name}: ${JSON.stringify(vw.text)} inside its row (${vr.bottom}..${vr.top} in ${row.bottom}..${row.top})`);
     assert.ok(vr.left >= boxRect.left + B.padX - 1e-9 && vr.right <= boxRect.right - B.padX + 1e-9, `${name}: inside the box's sides`);
     // its text inside its label, within the size range, the lines kept to three, every character kept
     const shown = vw.text.split("\n");
-    assert.ok(vw.fontSize <= B.value.fs && vw.fontSize >= B.value.fsMin, `${name}: ${vw.fontSize} is outside ${B.value.fsMin} to ${B.value.fs}`);
+    assert.ok(vw.fontSize <= size.value.fs && vw.fontSize >= size.value.fsMin, `${name}: ${vw.fontSize} is outside ${size.value.fsMin} to ${size.value.fs}`);
     assert.ok(shown.length <= lines, `${name}: ${JSON.stringify(vw.text)} takes ${shown.length} lines at ${vw.fontSize}`);
     for (const line of shown) assert.ok(NGUI.glyphWidth(line, vw.fontSize) <= vw.w_ - B.slack + 1e-9, `${name}: ${JSON.stringify(line)} wider than its room`);
-    assert.ok(shown.length * NGUI.fontSizeFor(vw.text, vw.fontSize) * NGUI.LINE_PITCH <= vw.h_ + 1e-9, `${name}: the lines taller than their label`);
+    assert.ok(shown.length * NGUI.fontSizeFor(vw.text, vw.fontSize) * NGUI.LINE_PITCH <= vw.h_ + 1e-9, `${name}: the lines taller than their label ${JSON.stringify(vw.text)} ${vw.fontSize} ${vw.h_}`);
     // the caption, when the row has one, stands left of the value and inside the row
     const c = child(nodes, `${caption}_${i}`);
     if (c) {
@@ -218,7 +218,7 @@ for (const locale of LOCALES) test(`the details panel's light box holds its capt
     const what = `${locale} details panel, set ${n}`;
     const nodes = tree.children.filter((c) => c.name === "Fields" || /^(F|V|L)_\d+$/.test(c.name));
     assert.equal(nodes[0].name, "Fields");
-    const { fill, boxRect } = assertRows({ nodes, what, count: fields.length });
+    const { fill, boxRect } = assertRows({ nodes, what, count: fields.length, size: Box.STATS_BOX_S });
     // The stats box keeps its own inset inside the new four-column details panel.
     const bounds = Popup.listLayout().left, panel = bounds.r - bounds.l;
     assert.equal(fill.w_, panel - 40, what);
