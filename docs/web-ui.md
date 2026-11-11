@@ -3143,11 +3143,11 @@ it (decision 7); browser and serve mode have none.
   fullscreen controls.
 - **Moves.** The wheel zooms at the pointer's height, any drag moves the view up or down (`lobby-touch.js` pan only);
   the view stays 16:9 and centred across (`lobby.js framingView`).
-- **Limits.** `measureFraming` paints every pose the lobby goes through into 16-unit cells three game views across:
-  the idle, every clip (`clipPoses`) and the intro every 0.1 s with its skeletons where the timeline has them
-  (`lobby-intro.js sampler`: GameObject activity and transform curves, intro-only scenes, the Spine clips on their
-  tracks, no mixes). A cell outside the game's view that some pose leaves unpainted may not be shown; inside the game's
-  view everything may, as the game shows it. Zoom-in stops at 2x the game's view.
+- **Limits.** `measureFraming` paints every pose the lobby rests in into 16-unit cells three game views across: the
+  idle and every clip (`clipPoses`). The intro does not count (BL-184): some intros move the whole scene for seconds
+  (Mika (Swimsuit)'s lifts it off her feet), so a framing that shows the lobby at rest may show the camera's clear
+  colour during them. A cell outside the game's view that some pose leaves unpainted may not be shown; inside the
+  game's view everything may, as the game shows it. Zoom-in stops at 2x the game's view.
 - **Kept.** `cameraParams(V, G)`: the lobby scaled by `k = G.w / V.w` about the screen centre and moved by
   `-k (V's centre - G's centre)` NGUI units, so that V fills the screen as G did.
 - **Entry shown** in every fullscreen lobby, except one whose lobby.json has no prefab.

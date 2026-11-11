@@ -520,9 +520,10 @@ function boundsRect(loaded) {
 
 // --- the camera framing (BL-137): a 16:9 view, centred across, zoomed and moved up or down, that the shutter keeps as
 // the lobby's resting view; it may go wider than the game's view as far as no pose shows past the art ---
-// Every pose the lobby goes through is painted: the idle, every clip (clipPoses) and the intro every CLIP_STEP with
-// its skeletons where its timeline has them (lobby-intro.js sampler). A cell outside the game's view that some pose
-// leaves unpainted is `bad`: a view may take in no bad cell. Cells inside the game's view never count: what the game
+// Every pose the lobby rests in is painted: the idle and every clip (clipPoses). The intro does not count (owner,
+// BL-184): some intros move the whole scene (Mika (Swimsuit)'s lifts it off her feet for seconds), and the view the
+// owner frames is the lobby at rest; such an intro may show the camera's clear colour past the art. A cell outside the
+// game's view that some pose leaves unpainted is `bad`: a view may take in no bad cell. Cells inside the game's view never count: what the game
 // itself shows there is the lobby as made.
 function* measureFraming(all, loaded, meta, G, info) {
   const grid = gridOf(G), { gw, gh, X0, Y0 } = grid, n = gw * gh;
@@ -549,27 +550,7 @@ function* measureFraming(all, loaded, meta, G, info) {
     mark(); poses++;
     yield;
   }
-  // the intro, its scenes included, where its timeline has its skeletons
-  const intro = info?.intro;
-  if (intro && intro.duration > 0) {
-    const every = all.map((l) => ({ ...l, data: l.player.skeleton.data, idle: l.introOnly ? null : idleOf(l.player.skeleton.data, l) }));
-    for (const l of every) if (!posers.has(l.name)) posers.set(l.name, poser(l));
-    const sample = Intro.sampler(intro, every.map((l) => ({ def: l.player.bamtLayer, introOnly: l.introOnly, x: l.x, y: l.y, scale: l.scale })));
-    const steps = Math.max(1, Math.ceil(intro.duration / CLIP_STEP - 1e-6));
-    for (let k = 0; k <= steps; k++) {
-      const t = Math.min(intro.duration, k * CLIP_STEP), states = sample(t);
-      cur.fill(0);
-      every.forEach((l, j) => {
-        const st = states[j];
-        if (!st.shown) return;
-        const own = st.clips.map((c) => c[0]), tracks = [...idlePose(l, t).filter((c) => !own.includes(c[0])), ...st.clips];
-        paint(grid, { ...l, x: st.x, y: st.y, scale: st.scale }, posers.get(l.name)(tracks), whole);
-      });
-      mark(); poses++;
-      yield;
-    }
-  }
-  return { ...framingLimits(G, grid, bad), poses, intro: !!intro };
+  return { ...framingLimits(G, grid, bad), poses };
 }
 // the camera's limits from the bad cells of a grid ({X0, Y0, gw, gh}, cells of CELL units): a summed-area table of
 // them for the view checks, and the widest view that fits
@@ -691,7 +672,7 @@ export const cameraState = () => {
   if (!current?.meta) return null;
   const G = game(), V = current.target || current.view, lim = current.camera?.lim;
   return { on: cameraOn, measuring: !!current.camera?.measuring, view: { ...V }, game: G, prefab: !!current.info?.prefab,
-    widest: lim?.sum ? lim.wMax : G.w, narrowest: G.w / ZOOM_IN, poses: lim?.poses || 0, intro: !!lim?.intro, ms: current.camera?.ms,
+    widest: lim?.sum ? lim.wMax : G.w, narrowest: G.w / ZOOM_IN, poses: lim?.poses || 0, ms: current.camera?.ms,
     params: cameraParams(V, G) };
 };
 
