@@ -4402,10 +4402,10 @@ test("a plain line's inline button is as high as the line's text and stays insid
   const { glyphsOf } = await import("../../src/bmpt/web/js/ngui.js").then((m) => ({ glyphsOf: m.glyphsOf || null }));
   for (const lang of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
     const ui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url))).webui;
-    for (const caption of [ui.mods.impact.expand, ui.mods.impact.collapse]) {
+    for (const caption of [ui.add.go, ui.mods.impact.fix]) {
       const layout = Popup.messageLayout({ plain: true, ok: "OK", lines: [
-        { text: ui.mods.impact.rigChanged.replace("{n}", "3") },
-        { text: ui.mods.impact.others, gap: 32, button: { label: caption, inline: true, fn: () => {} } }] });
+        { text: ui.mods.held.replace("{n}", "3") },
+        { text: ui.mods.heldTitle, gap: 32, button: { label: caption, inline: true, fn: () => {} } }] });
       const line = layout.body.boxes[1], [text, button] = line.lineRow.boxes;
       assert.ok(button.h <= line.f.fs, `${lang} ${caption}: within the text's height`);
       assert.ok(line.bf.fs <= button.h - 20, `${lang} ${caption}: the caption inside the button`);
@@ -4419,7 +4419,7 @@ test("a plain line's inline button is as high as the line's text and stays insid
   }
 });
 
-test("the update summary folded fits its wide frame without scrolling with two held mods, in every locale; longer lists scroll by themselves", async () => {
+test("the held entries' Details fit their wide frame with four mods, Go To and Fix and Apply on one line each, in every locale", async () => {
   await Popup.ready();
   const I18n = await import("../../src/bmpt/web/js/i18n.js");
   const Impact = await import("../../src/bmpt/web/js/update-impact.js");
@@ -4429,29 +4429,46 @@ test("the update summary folded fits its wide frame without scrolling with two h
   try {
     for (const lang of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
       I18n.setStrings(lang, flat(JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url)))));
-      // four held mods, each with its own name and what changed, and a mod under another kind
-      const mods = [1, 2, 3, 4].map((i) => ({ id: `${i}`, target: "hoshino_swimsuit", core: "hoshino_swimsuit_spr", kind: "spr", impact: "rig_changed",
-        label: `Swimsuit Hoshino v${i}`, changes: { repacked: true, animations: 2, rig: true } }));
-      mods.push({ id: "5", target: "airi", core: "airi_spr", kind: "spr", impact: "rebuilt", label: "Airi Band", changes: {} });
-      const counts = { rig_changed: 4, gone: 1, new_parts: 2, rebuilt: 1, unchanged: 37, unknown: 4 };
-      const two = mods.slice(0, 2).concat(mods.slice(4));
-      const folded = Impact.summary({ due: true, mods: two, counts: { ...counts, rig_changed: 2 } }, () => "Hoshino (Swimsuit)");
-      const short = Popup.messageLayout({ lines: folded.lines, ok: "OK", plain: true, width: Impact.WIDTH });
-      assert.equal(short.scroll, false, `${lang} ${short.height} ${short.body.height} ${short.visible}`);
-      const four = Popup.messageLayout({ lines: Impact.summary({ due: true, mods, counts }, () => "Hoshino (Swimsuit)").lines, ok: "OK", plain: true, width: Impact.WIDTH });
-      assert.ok(four.height <= Popup.MSG.cap + 1e-9, `${lang}: four held mods keep the frame within its cap`);
-      const m = Impact.summary({ due: true, mods, counts }, () => "Hoshino (Swimsuit)", { expanded: true });
-      const layout = Popup.messageLayout({ lines: m.lines, ok: "OK", plain: true, width: Impact.WIDTH });
-      assert.ok(layout.height <= Popup.MSG.cap + 1e-9, `${lang}: the frame stays within its cap, the lines scroll`);
-      // each Go To is as high as its line's text, right after it and inside the frame
-      for (const line of layout.body.boxes.filter((b) => b.r.button && b.r.button.label !== m.lines.find((l) => l.gap)?.button?.label)) {
-        const [text, button] = line.lineRow.boxes;
-        assert.ok(button.h <= line.f.fs, `${lang}: Go To within the text's height`);
-        assert.ok(line.bf.text === line.r.button.label, `${lang}: Go To caption whole, on one line`);
-        // the small button fits its caption again within its width less its inset: still one line
-        const drawn = NGUI.fitText(line.r.button.label, line.bf.fs, line.bf.fs, button.w - SMALL_BUTTON.fitInset);
-        assert.ok(!drawn.text.includes("\n"), `${lang}: Go To drawn on one line`);
-        assert.ok(text.x + text.w <= button.x && button.x + button.w <= layout.width, `${lang}: Go To inside the frame`);
+      const entries = [1, 2, 3, 4].map((i) => ({ install: "/g", core: "hoshino_swimsuit_spr", variant: "hoshino_swimsuit", kind: "spr",
+        source: `mod:${i}`, label: `Swimsuit Hoshino v${i}` }));
+      const layout = Popup.messageLayout({ lines: Impact.heldLines(entries, () => "Hoshino (Swimsuit)"), ok: "OK", plain: true, width: Impact.WIDTH });
+      assert.equal(layout.scroll, false, `${lang} ${layout.height} ${layout.body.height} ${layout.visible}`);
+      for (const line of layout.body.boxes.filter((b) => b.r.button)) {
+        const [text, ...buttons] = line.lineRow.boxes;
+        assert.equal(buttons.length, 2, `${lang}: Go To and Fix and Apply`);
+        for (const [button, fit, label] of [[buttons[0], line.bf, line.r.button.label], [buttons[1], line.more[0].bf, line.more[0].button.label]]) {
+          assert.ok(button.h <= line.f.fs, `${lang} ${label}: within the text's height`);
+          assert.ok(fit.text === label, `${lang} ${label}: caption whole, on one line`);
+          // the small button fits its caption again within its width less its inset: still one line
+          assert.ok(!NGUI.fitText(label, fit.fs, fit.fs, button.w - SMALL_BUTTON.fitInset).text.includes("\n"), `${lang} ${label}: drawn on one line`);
+          assert.ok(text.x + text.w <= button.x && button.x + button.w <= layout.width, `${lang} ${label}: inside the frame`);
+        }
+        assert.ok(buttons[0].x + buttons[0].w <= buttons[1].x, `${lang}: side by side`);
+      }
+    }
+  } finally { setStrings("en-US", Object.fromEntries(strings(english))); }
+});
+
+test("a segment grows so its count never sits alone on a line, within the list's room; captions without one keep 230", async () => {
+  await Popup.ready();
+  const I18n = await import("../../src/bmpt/web/js/i18n.js");
+  const NGUI = await import("../../src/bmpt/web/js/ngui.js");
+  const flat = (o, p = "", out = {}) => { for (const [k, v] of Object.entries(o)) { if (v && typeof v === "object") flat(v, `${p}${k}.`, out); else out[`${p}${k}`] = v; } return out; };
+  try {
+    for (const lang of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
+      const table = flat(JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url))));
+      I18n.setStrings(lang, table);
+      const plain = ["seg.all", "seg.recruit", "seg.noRecruit"].map((key) => I18n.T(key));
+      const kept = Popup.segmentWidth(plain);
+      assert.equal(kept.w, Popup.SEG.w, `${lang}: no count, the prefab's width`);
+      assert.deepEqual(kept.fits, NGUI.fitGroup(plain, 44, 26, 200, 2, { maxH: 96 }), `${lang}: the same fit as before`);
+      for (const n of [0, 12, 104]) {
+        const captions = ["tabHeld", "tabReapplied", "tabOthers"].map((k) => I18n.T(`mods.impact.${k}`, { n }));
+        assert.ok(captions.every((c) => c.endsWith(String(n)) && !c.startsWith("mods.")), `${lang}: ${captions}`);
+        const { w, fits } = Popup.segmentWidth(captions, 900);
+        assert.ok(w >= Popup.SEG.w && w <= 300, `${lang} ${n}: ${w} within the room`);
+        for (const f of fits) assert.ok(!/\n\s*\d+\s*$/.test(f.text), `${lang} ${n}: "${f.text}" keeps its count with its words`);
+        assert.equal(new Set(fits.map((f) => f.fs)).size, 1, `${lang}: one size`);
       }
     }
   } finally { setStrings("en-US", Object.fromEntries(strings(english))); }

@@ -260,60 +260,80 @@ async function grafted(id, subject) {
   }
 }
 
-export async function remap(id, onRemapped = () => {}, label = "", subject = label, kind = "", choice = null) {
+// prepare(id, label, subject, kind, choice): the repair's preview, no review: the compatibility check if none is in
+// hand, the repair (the choice given; "default": the first of repairs(), no question; null: asked when there are more),
+// its job under the loading screen. Resolves with the job's result ({preview, report, compare, pages, drawings}, or
+// {unchanged}), or null when nothing was made (no repair chosen). The caller accepts (accept) or discards it.
+export async function prepare(id, label = "", subject = label, kind = "", choice = null) {
   // A portrait is baked through world space: the page poses both rigs with the runtime and posts what they draw.
   let checked = reports.get(id);
   if (!checked && kind === "spr") checked = await inspect(id, label, null, subject);
-  // More than one repair (Update without the result popup): the same choice as there.
-  if (!choice && checked?.assessment) {
+  if (checked?.assessment && (!choice || choice === "default")) {
     const choices = repairs(checked.assessment);
-    if (choices.length > 1) {
+    // More than one repair (Update without the result popup): the same choice as there.
+    if (choices.length > 1 && choice !== "default") {
       const lines = [T("compatibility.autoUpdate"), ...choices.map(({ text }) => ({ text, ...ITEM }))];
       choice = chosen(await Popup.message({ title: T("act.update"), lines, plain: true, footer: "S",
         fitTogether: lines.map((_line, i) => i), ...repairButtons(choices) }), choices);
       if (!choice) return null;
     } else choice = choices[0]?.kind ?? null;
   }
+  if (choice === "default") choice = null;
   // A portrait the game drew anew keeps its old rig as a whole (actions.oldRig): no geometry to post.
   const old = choice === "oldRig" || (!choice && checked?.assessment?.oldRig === true);
-  const result = choice === "graft" ? await grafted(id, subject) : await (async () => {
+  return choice === "graft" ? grafted(id, subject) : (async () => {
     const geometry = !old && checked?.kind === "spr" && await ensureSpine() ? RigGeometry.forRemap(checked, globalThis.spine) : undefined;
     return Loading.hold(() => Loading.page(() => progressTask("Remap", subject,
       async (update) => waitJob(await rpc(old ? "actions.oldRig" : "actions.remap",
         old || !geometry ? { mod: id } : { mod: id, geometry }), update),
     )), { all: true });
   })();
+}
+
+// accept(id, result, onRemapped, subject): store a prepared repair (actions.acceptRemap); resolves with the saved
+// copy ({mod: {id}}). The preview is the caller's to discard (discard) either way.
+export async function accept(id, result, onRemapped = () => {}, subject = "") {
+  return Loading.hold(() => Loading.page(() => progressTask("Repair", subject, async (update) => {
+    const saved = await waitJob(await rpc("actions.acceptRemap", { preview: result.preview }), update);
+    reports.set(id, { ...reports.get(id), remappable: false, repaired_id: saved.mod.id });
+    stamps.delete(id); stamps.delete(saved.mod.id);
+    reports.set(saved.mod.id, { remappable: false, repaired_from: id });
+    await onRemapped(saved);
+    return saved;
+  })), { all: true });
+}
+
+export const discard = (result) => (result?.preview ? rpc("actions.discardRemap", { preview: result.preview }).catch(() => {}) : Promise.resolve());
+
+// review(id, result, options): the repair review (Compare.show): both pictures, the report's lines and marks; resolves
+// true when accepted. options: {label, kind, accept, discard}: the review's title, kind and button labels.
+export function review(id, result, { label = "", kind = "", accept: acceptLabel = T("remap.accept"), discard: discardLabel = T("remap.discard") } = {}) {
+  const report = result.report;
+  return Compare.show({ ...result.compare, pages: result.pages, drawings: result.drawings }, label || T("remap.action"), "dialog", {
+    lines: reviewLines(report), partial: report.partial, accept: acceptLabel, discard: discardLabel, kind: kind || reports.get(id)?.kind || "spr",
+    // the regions whose pixels are not the mod's own, or a graft's parts that match no candidate: what the
+    // pictures can ring
+    marks: report.grafted ? report.marks || []
+      : [...new Set((report.official || []).map((name) => name.slice(name.indexOf(" - ") + 3)))],
+    // a graft's review steps through the expressions it added, under a verdict of its own
+    expressions: report.grafted || [],
+    verdict: report.grafted ? (report.partial ? "remap.graftPartial" : "remap.graftDone") : null,
+  });
+}
+
+export async function remap(id, onRemapped = () => {}, label = "", subject = label, kind = "", choice = null) {
+  const result = await prepare(id, label, subject, kind, choice);
   if (!result) return null;
   if (result.unchanged) {
     reports.set(id, { ...reports.get(id), remappable: false });
     await Popup.message({ title: T("remap.action"), lines: [T("remap.unneeded")], ok: T("picker.ok") });
     return result;
   }
-  const report = result.report;
-  const lines = reviewLines(report);
   try {
-    const accepted = await Compare.show({ ...result.compare, pages: result.pages, drawings: result.drawings }, label || T("remap.action"), "dialog", {
-      lines, partial: report.partial, accept: T("remap.accept"), discard: T("remap.discard"), kind: kind || reports.get(id)?.kind || "spr",
-      // the regions whose pixels are not the mod's own, or a graft's parts that match no candidate: what the
-      // pictures can ring
-      marks: report.grafted ? report.marks || []
-        : [...new Set((report.official || []).map((name) => name.slice(name.indexOf(" - ") + 3)))],
-      // a graft's review steps through the expressions it added, under a verdict of its own
-      expressions: report.grafted || [],
-      verdict: report.grafted ? (report.partial ? "remap.graftPartial" : "remap.graftDone") : null,
-    });
-    if (!accepted) return null;
-    const saved = await Loading.hold(() => Loading.page(() => progressTask("Repair", subject, async (update) => {
-      const saved = await waitJob(await rpc("actions.acceptRemap", { preview: result.preview }), update);
-      reports.set(id, { ...reports.get(id), remappable: false, repaired_id: saved.mod.id });
-      stamps.delete(id); stamps.delete(saved.mod.id);
-      reports.set(saved.mod.id, { remappable: false, repaired_from: id });
-      await onRemapped(saved);
-      return saved;
-    })), { all: true });
-    return saved;
+    if (!await review(id, result, { label, kind })) return null;
+    return await accept(id, result, onRemapped, subject);
   } finally {
-    await rpc("actions.discardRemap", { preview: result.preview });
+    await discard(result);
   }
 }
 

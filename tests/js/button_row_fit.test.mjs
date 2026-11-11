@@ -167,7 +167,9 @@ for (const locale of LOCALES) test(`the roster's six segments and the popup's th
   // the roster's two filters' six captions go through toolbarFit, which fits every filter's captions as one group
   assert.match(roster, /filters: \[\["seg\.all", "seg\.mods", "seg\.noMods"\], \["seg\.all", "seg\.recruit", "seg\.noRecruit"\]\]\.map\(\(keys\) => keys\.map\(\(k\) => T\(k\)\)\)/);
   assert.match(roster, /fitGroup\(filters\.flat\(\), segFs, 22, segW - 26, 2, \{ maxH: 96 \}\)/);
-  assert.match(popup, /fitGroup\(segs\.map\(\(key\) => T\(key\)\), 44, 26, segW - 30, 2, \{ maxH: 96 \}\)/);
+  assert.match(popup, /const \{ w: segW, fits: segFits \} = segmentWidth\(segs\.map\(segText\), x - \(LP\.list\.l \+ SPACE\.m\)\);/);
+  assert.match(popup, /export const SEG = Object\.freeze\(\{ w: 230, step: 10, max: 320, fs: 44, min: 26, inset: 30, maxH: 96 \}\);/);
+  assert.match(popup, /const segText = \(seg\) => \(typeof seg === "string" \? T\(seg\) : seg\?\.text \?\? ""\);/);
   document.documentElement.lang = locale;
   for (const [segW, segFs] of [[230, 44], [210, 40], [200, 36], [190, 34], [180, 32], [170, 30]]) {
     const six = ["seg.all", "seg.mods", "seg.noMods", "seg.all", "seg.recruit", "seg.noRecruit"].map((key) => text(locale, key));

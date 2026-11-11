@@ -118,7 +118,8 @@ def test_the_summary_of_an_update_names_the_mods_whose_rig_changed(spine):
     assert summary["due"] is True and summary["previous"] == first["version"] != summary["version"]
     assert summary["mods"] == [{"id": entry.id, "label": summary["mods"][0]["label"], "target": "test",
                                 "kind": "spr", "core": "test_spr", "impact": "rig_changed",
-                                "changes": {"repacked": True, "animations": 1}, "configured": True}]
+                                "changes": {"repacked": True, "animations": 1}, "configured": True,
+                                "repaired_id": ""}]
     assert summary["counts"]["rig_changed"] == 1
     assert library.update_impact()["due"] is True  # told until the page says it was shown
     library.impact_seen(summary["install"], summary["version"])
@@ -179,3 +180,48 @@ def test_a_held_entry_survives_a_reload_of_the_configuration(tmp_path):
     data = normalized({"unfinished": [{"install": "k", "core": "c", "why": "held"},
                                       {"install": "k", "core": "d", "why": "other"}]})
     assert data["unfinished"] == [{"install": "k", "core": "c", "why": "held"}]
+
+
+def test_the_start_asks_only_after_a_seen_version_changed_and_with_mods(spine):
+    env = spine
+    library = env.library
+    first = library.update_due()
+    # a first start (no version seen) asks nothing and records the version
+    assert first["due"] is False and first["previous"] is None
+    assert library.update_due()["previous"] == first["version"]
+    configured(env)
+    updated(env, (MOVED, ("Idle_01", "00")))
+    library = reload_library(env)
+    due = library.update_due()
+    assert due["due"] is True and due["previous"] == first["version"] != due["version"]
+    assert library.update_due()["due"] is True  # asked until checked
+    library.impact_seen(due["install"], due["version"])
+    assert library.update_due()["due"] is False
+
+
+def test_the_impact_check_names_each_mod_in_its_progress(spine):
+    env = spine
+    entry = configured(env)
+    steps = []
+    env.library.update_impact(force=True, progress=steps.append)
+    assert steps == [{"current": 1, "total": 1, "step": "import.step.check", "variant": "test", "kind": "spr",
+                      "label": entry.label}]
+
+
+def test_an_update_that_changes_nothing_ends_the_hold(spine, monkeypatch):
+    env = spine
+    entry = configured(env)
+    updated(env, (MOVED, ("Idle_01", "00")))
+    library = reload_library(env)
+    assert library.impacts([entry.id]) == [{"id": entry.id, "impact": "rig_changed"}]
+    # the rebuild gives the mod's own files back: the parts now are its baseline
+    from bmpt.library import service as service_module
+
+    class Same:
+        success, all_unchanged, file_pairs = True, True, []
+
+    monkeypatch.setattr(service_module, "rebuild", lambda *args, **kwargs: Same())
+    result = library.update(entry.id)
+    assert result.unchanged
+    assert library.impacts([entry.id]) == [{"id": entry.id, "impact": "unchanged"}]
+    assert not library._hold(library.current_pin(), f"mod:{entry.id}")

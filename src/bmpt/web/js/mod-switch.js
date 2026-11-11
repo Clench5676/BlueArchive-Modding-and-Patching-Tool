@@ -590,10 +590,11 @@ export async function openHelp() {
     // a Go To closes the help, then opens the mod's student page
     held: async ({ close }) => {
       const Impact = await import("./update-impact.js");
-      const mod = await Impact.heldDetails((state || s).heldEntries);
-      if (!mod) return;
+      const answer = await Impact.heldDetails((state || s).heldEntries);
+      if (!answer.go && !answer.fix?.length) return;
       close(null);
-      await Impact.open(mod);
+      if (answer.go) await Impact.open(answer.go);
+      else await Impact.repair(answer.fix);
     },
   };
   const lines = helpLines(state || s).map((l) => (l.button ? { text: l.text, button: { label: l.button.label, fn: act[l.button.id] } } : l.text));
