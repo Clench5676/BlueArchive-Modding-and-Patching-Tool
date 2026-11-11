@@ -608,16 +608,17 @@ function chooseBackground() {
   const items = options.backgrounds.map((background) => ({ key: background.name, label: Backgrounds.label(background), full: Backgrounds.label(background),
     thumb: lazyThumbnail(() => Backgrounds.preview(background, { signal: work.signal }), work.signal) }));
   const draw = () => modal.draw(async (target, alive, signal) => {
-    const list = UI.virtualArea(target, UI.backgroundPickerBox(), Math.ceil(items.length / 2), 280,
+    const B = UI.BACKGROUND, preview = UI.backgroundPreviewBox();
+    const list = UI.virtualArea(target, UI.backgroundPickerBox(), Math.ceil(items.length / 2), B.pitch[1],
       (cell, row) => Promise.all(items.slice(row * 2, row * 2 + 2).map((item, index) => UI.card(cell, item, {
-        x: 190 + index * 370, y: 110, scale: .4, selected: item.key === selectedBackground,
+        x: B.first[0] + index * B.pitch[0], y: B.first[1], scale: B.scale, selected: item.key === selectedBackground,
         onPreview: () => { selectedBackground = item.key; draw().catch(fail); } }))),
       { key: "hall-backgrounds", signal, positions, onError: fail });
     await list.ready;
     if (!alive()) return;
-    const panel = layer(target, "", 25); Object.assign(panel.style, { inset: "auto", left: "940px", top: "260px", width: "1920px", height: "1080px", transform: "scale(.43)", transformOrigin: "0 0" });
+    const panel = layer(target, "", 25); Object.assign(panel.style, { inset: "auto", left: `${preview.left}px`, top: `${preview.top}px`, width: "1920px", height: "1080px", transform: `scale(${preview.scale})`, transformOrigin: "0 0" });
     await Backgrounds.render(Backgrounds.backgroundChoice(selectedBackground, options.backgrounds), panel, { signal: work.signal, choices: options.backgrounds });
-    await UI.caption(target, items.find((item) => item.key === selectedBackground)?.label || "", [940, 770, 800]);
+    await UI.caption(target, items.find((item) => item.key === selectedBackground)?.label || "", [preview.left, preview.top + preview.height + 46, preview.width]);
   }, [{ label: T("popup.cancel"), fn: close }, { label: T("hall.useBackground"), fn: async () => {
     if (gen !== page || !root) return;
     if (store.kind()) current().background = selectedBackground;
