@@ -2,7 +2,6 @@
 // several cards ticked, the start sequence), web/js/update.js and detail.js's preview actions, on a small stand-in
 // DOM. Run by tests/test_popup.py with Node's test runner: node --test tests/js/popup.test.mjs
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { register } from "node:module";
 import { afterEach, test } from "node:test";
@@ -241,7 +240,7 @@ test("fitting message lines together keeps the size floor and all text when extr
   // this message is taller than the scroll cap (about 1800 units of lines): its lines are in the scrolling list
   assert.ok(walk(dialog).some((e) => e.className === "popup-cards"));
   const lines = [0, 1].map((i) => walk(dialog).find((e) => e.dataset.path === `Lines/Line_${i}`));
-  const size = `${(NGUI.fontSizeFor(text, 44) * S).toFixed(2)}px`;
+  const size = `${(NGUI.fontSizeFor(text, 40) * S).toFixed(2)}px`;  // POPUP_TYPE.text's floor (BL-176)
   assert.equal(lines[0].style.fontSize, size);
   assert.equal(lines[1].style.fontSize, size);
   assert.ok(lines[1].textContent.split("\n").length > 4);
@@ -396,7 +395,7 @@ test("shared message sizes and scrolling preserve complete paths with and withou
     const area = walk(dialog).find((el) => el.className === "popup-cards");
     const prefix = boxed ? "Row" : "Line";
     const rows = [0, 1, 2].map((i) => walk(area).find((el) => el.dataset.path === `Lines/${prefix}_${i}`));
-    const size = `${(NGUI.fontSizeFor(path, boxed ? 26 : 44) * S).toFixed(2)}px`;
+    const size = `${(NGUI.fontSizeFor(path, boxed ? 26 : 40) * S).toFixed(2)}px`;
     assert.equal(rows[0].style.fontSize, size);
     assert.equal(rows[1].style.fontSize, size);
     assert.equal(rows[1].textContent.replaceAll("\n", ""), path);
@@ -481,7 +480,7 @@ test("the compatibility result's list, rule, inline Details and smaller footer f
         assert.equal(new Set(layout.body.fitted.filter(({ r }) => !r.rule).map(({ f }) => f.fs)).size, 1, `${what}: one type size`);
         for (const { r, f, room, bf, bw, bh } of layout.body.fitted) {
           if (r.rule) continue;
-          assert.ok(f.fs >= 44, `${what}: "${r.text}" keeps the plain message's floor`);
+          assert.ok(f.fs >= 40, `${what}: "${r.text}" keeps the plain message's floor`);
           for (const line of f.text.split("\n")) assert.ok(glyphsOf(line, f.fs) <= room + 1e-6, `${what}: "${line}" within its room`);
           if (r.button) {
             // its face as high as its line of text (the shadow inset around it), its caption readable and inside it
@@ -695,7 +694,7 @@ test("switch detail actions retain the prefab pattern at every button width and 
       const path = `Details/Act_${i}/Body`, findPart = (p) => walk(prompt).find((e) => e.dataset.path === p);
       const body = findPart(path), corner = findPart(`${path}/Corner`), box = (el) =>
         ["left", "top", "width", "height"].map((key) => parseFloat(el.style[key]));
-      const [x, y, w, h] = box(body), [dx, dy, dw, dh] = box(corner), k = 104 / 177 * S; // the Sort prefab's 177-high body drawn at the XS height
+      const [x, y, w, h] = box(body), [dx, dy, dw, dh] = box(corner), k = (count < 4 ? 104 : 88) / 177 * S; // the Sort prefab's 177-high body drawn at the XS height, four on one XXS row (BL-176)
       near(x + w - dx - dw, 4 * k);
       near(dy - y, 6 * k);
       near(dw, 126 * k);
@@ -821,7 +820,7 @@ test("update progress stays in NGUI, blocks buttons and Escape, and completion w
   assert.ok(bar.top - status.bottom >= 6 * S, "the status has a gap above the bar");
   for (const name of ["Btn_Ok", "Btn_Cancel"]) {
     const button = bounds(part(`Btn/${name}/BG (1)`));
-    assert.ok(Math.abs(button.height - CONTROL.buttonM.h * S) < 0.01, "check the prefab's button background height at the three-choice scale");
+    assert.ok(Math.abs(button.height - CONTROL.buttonXS.h * S) < 0.01, "check the prefab's button background height at the three-choice scale");
     assert.ok(button.top - bar.bottom >= 12 * S, "the full button background clears the progress bar");
     assert.ok(button.bottom < frame.bottom, "the buttons stay within the frame");
   }
@@ -1796,7 +1795,9 @@ test("switch geometry: per-kind columns, aspects, card bounds, labels and portra
     for (const lang of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
       const ui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url))).webui;
       setStrings(lang, Object.fromEntries(strings(ui)));
-      for (const [kind, columns] of [["spr", 4], ["lobby", 2], ["model", 4]]) {
+      for (const kind of ["spr", "lobby", "model"]) {
+        // the columns the list's paper holds (BL-176: the L class)
+        const { columns } = (await import("../../src/bmpt/web/js/switch-layout.js")).switchGrid(kind, Popup.listCardBox(Popup.listLayout(false, kind)).w);
         const items = Array.from({ length: 9 }, (_, i) => ({ key: String(i), kind: "mod", full: "ch0200_spr", label: "ch0200_spr",
           nameEdit: { label: ui.modAlias.title, fn() {} }, inUseText: ui.switch.configured,
           badge: { text: ui.switch.configured, color: "#8de4ff" } }));
@@ -1811,7 +1812,7 @@ test("switch geometry: per-kind columns, aspects, card bounds, labels and portra
           assert.ok(Math.abs(1 / ratio - 2.2) < .01, "portrait height follows the latest 2.2:1 sketch");
         }
         if (kind === "lobby") assert.ok(Math.abs(ratio - 16 / 9) < .02);
-        if (kind === "model") { assert.equal(ratio, 1); assert.ok(cards[0][2] > 220); }
+        if (kind === "model") { assert.equal(ratio, 1); assert.ok(cards[0][2] > 180); }
         const rowSize = kind === "spr" ? items.length : columns;
         for (let i = 0; i < cards.length; i++) {
           if (i % rowSize) assert.ok(cards[i][0] > cards[i - 1][0] + cards[i - 1][2] + 8, `${kind}: column gap`);
@@ -1867,7 +1868,7 @@ test("portrait spacing fits four tall cards at the standard width and selects ho
   const { switchGrid } = await import("../../src/bmpt/web/js/switch-layout.js");
   for (const width of [1300, 1818, 2200]) {
     const { card, columns, pitch, overhang } = switchGrid("spr", width);
-    assert.equal(card.h / card.w, 2.2);
+    assert.ok(Math.abs(card.h / card.w - 2.2) < 1e-9);
     assert.equal(pitch[0] - card.w, 40, "portrait gaps do not stretch to fill the viewport (SPACE.xl: no prefab gives the cards a gap)");
     assert.equal(pitch[1] - card.h - card.bar, 40);
     assert.ok(columns <= 4);
@@ -1892,7 +1893,7 @@ test("every kind left-aligns outer corners, with compact portrait gaps and balan
   };
   const headerInsets = [], leftInsets = [];
   for (const kind of ["spr", "lobby", "model"]) {
-    const { columns } = switchGrid(kind);
+    const { columns } = switchGrid(kind, Popup.listCardBox(Popup.listLayout(false, kind)).w);  // the list's paper (BL-176)
     for (const count of new Set([0, 1, 2, columns, columns + 1, 2 * columns, 19])) for (const selected of new Set(["0", String(count - 1), null])) {
       const items = Array.from({ length: count }, (_, i) => ({ key: String(i), full: "Owner label", label: "Owner label", isNew: true }));
       await Popup.listPopup({ host: prompt, layoutKind: kind, items, selected, title: kind, okText: "Set" });
@@ -1907,7 +1908,8 @@ test("every kind left-aligns outer corners, with compact portrait gaps and balan
         const right = paper.right - Math.max(...ink.map((b) => b.right)) - dx;
         leftInsets.push(left);
         assert.ok(Math.abs(left - 40 * S) <= 1, `${kind}, ${count} cards, row ${start}: fixed left inset, no centring offset`);
-        if (kind !== "spr" && names.length === columns) assert.ok(Math.abs(left - right) <= 1, `${kind}: equal insets for a full row`);
+        // a full row of two or more spreads edge to edge; a single column stays at the left (the lobby in the L class)
+        if (kind !== "spr" && names.length === columns && columns > 1) assert.ok(Math.abs(left - right) <= 1, `${kind}: equal insets for a full row`);
         if (kind !== "spr" || count <= columns) assert.ok(right >= left - 1, "short rows leave spare space on the right");
         if (kind === "spr") {
           assert.ok(Math.min(...ink.map((b) => b.top)) >= 0, "the row starts inside the viewport");
@@ -2238,7 +2240,7 @@ test("release notes draw their Markdown in the UI language: headings larger, ite
 test("release notes use one type size on every line: short, wrapped, long and unbroken lines alike", async () => {
   const NGUI = await import("../../src/bmpt/web/js/ngui.js");
   setStrings("en-US", Object.fromEntries(strings(english)));
-  const room = 2841 - 200; // the plain message's text room at the notes popup's width
+  const room = 2098 - 200; // the plain message's text room at the notes popup's width (the L class, BL-176)
   let over = "Fixed an issue";
   while (NGUI.glyphWidth(over, 44) <= room) over += " with the mod";
   const longest = "Words that wrap on and on ".repeat(320).trim();
@@ -2276,15 +2278,15 @@ test("release-note button captions fit the resized UIPopup_Sort branches in all 
       const controls = NGUI.find(tree, 'Popup/Btn').children;
       const labels = controls.map(child => NGUI.find(child, 'Label_Locale').widgets[0]);
       assert.equal(new Set(labels.map(w => w.fontSize)).size, 1, lang);
-      // the default footer is the M size (one under the old L), its bodies as wide as the captions need
-      const { control, caption } = Popup.FOOTER.M, bodyW = Popup.footerWidth(captions), room = bodyW - 2 * control.pad;
+      // the default footer is the XS size (BL-176), its bodies as wide as the captions need
+      const { control, caption } = Popup.FOOTER[Popup.FOOTER_DEFAULT], bodyW = Popup.footerWidth(captions), room = bodyW - 2 * control.pad;
       assert.ok(bodyW >= control.minW && bodyW <= CONTROL.buttonL.minW, lang);
       for (const [i, child] of controls.entries()) {
         const w = labels[i], body = NGUI.find(child, 'BG (1)');
         assert.deepEqual(child.pos, [(i - .5) * (bodyW + POPUP_FRAME.footer.gap), 0]); // two bodies, the shared gap apart
         assert.deepEqual(child.scale, [1, 1]);
         assert.deepEqual(body.pos, [0, 0]);
-        assert.deepEqual([body.widgets[0].w_, body.widgets[0].h_], [bodyW, CONTROL.buttonM.h]);
+        assert.deepEqual([body.widgets[0].w_, body.widgets[0].h_], [bodyW, control.h]);
         assert.deepEqual(NGUI.find(child, 'Label_Locale').pos, [0, 0]);
         assert.equal(w.text.replace(/\s/g, ''), captions[i].replace(/\s/g, ''), lang);
         const lines = w.text.split('\n');
@@ -2301,11 +2303,11 @@ test("release-note button captions fit the resized UIPopup_Sort branches in all 
   } finally { setStrings('en-US', Object.fromEntries(strings(english))); }
 });
 
-// UI-32: the offer's three captions wrap to two lines before they shrink, in the footer's 60 to 34 range, at one size
+// UI-32: the offer's three captions wrap to two lines before they shrink, in the default footer's range, at one size
 test("the update offer's captions wrap before they shrink, share one size and fit in every locale", async () => {
   const NGUI = await import("../../src/bmpt/web/js/ngui.js");
   await Popup.ready();
-  const { caption: range } = Popup.FOOTER.M, H = range.h;
+  const { caption: range } = Popup.FOOTER[Popup.FOOTER_DEFAULT], H = range.h;
   let W = 0; // the caption room on the footer's bodies for the captions at hand (Popup.footerLayout)
   const inside = (w, scale = 1) => {
     const lines = w.text.split("\n");
@@ -2483,7 +2485,7 @@ test('tour pages and sibling controls fit all six locales inside the notice pref
         if (image) {
           const slot = NGUI.find(popup, 'ImageSlot'), caption = NGUI.find(popup, 'Caption');
           assert.ok(copy.pos[1] - bodyWidget.h_ / 2 >= slot.pos[1] + 250);
-          // the caption's bottom edge keeps 16 clear of the footer's tops (the footer sits 190.5 above the frame's bottom)
+          // the caption's bottom edge keeps 20 clear of the footer's tops (the XS footer, BL-176)
           assert.ok(caption.pos[1] - 35 >= Popup.footerTop(NGUI.find(popup, "Base/BG").widgets[0].h_) + 20);
         }
         for (const widget of [titleWidget, bodyWidget]) for (const line of widget.text.split('\n')) {
@@ -2491,10 +2493,12 @@ test('tour pages and sibling controls fit all six locales inside the notice pref
         }
         const captions = ['Btn_Cancel', 'Btn_Ok'].map((name) => NGUI.find(popup, `Btn/${name}/Label_Locale`).widgets[0]);
         assert.equal(captions[0].fontSize, captions[1].fontSize);
+        // the default footer's caption range (XS, BL-176), inside the body's room
+        const range = Popup.FOOTER[Popup.FOOTER_DEFAULT].caption;
         for (const widget of captions) {
-          assert.ok(widget.fontSize >= 48 && widget.fontSize <= 72);
+          assert.ok(widget.fontSize >= range.fsMin && widget.fontSize <= range.fs);
           assert.ok(widget.text.split('\n').length <= 2);
-          for (const line of widget.text.split('\n')) assert.ok(NGUI.glyphWidth(line, widget.fontSize) <= 400);
+          for (const line of widget.text.split('\n')) assert.ok(NGUI.glyphWidth(line, widget.fontSize) <= widget.w_ + 1e-9);
         }
       }
     }
@@ -2729,13 +2733,13 @@ test('shipped text-only tours use one fitted message frame in every locale, wind
         const large = NGUI.find(Tours.pageTree({ ...page, image: '/tours/app-ui.png' }, index, pages.length), 'Popup');
         assert.deepEqual(controls.children, NGUI.find(large, 'Btn').children, 'footer widgets, captions and states are unchanged');
         const bodies = ['Btn_Cancel', 'Btn_Ok'].map((name) => NGUI.find(controls, `${name}/BG (1)`));
-        // the footer is the default M size, its two bodies as wide as the captions need and the shared gap apart
+        // the footer is the default XS size (BL-176), its two bodies as wide as the captions need and the shared gap apart
         const bodyW = bodies[0].widgets[0].w_;
-        assert.ok(bodyW >= CONTROL.buttonM.minW && bodyW <= CONTROL.buttonL.minW, `${lang}: ${bodyW}`);
+        assert.ok(bodyW >= CONTROL.buttonXS.minW && bodyW <= CONTROL.buttonL.minW, `${lang}: ${bodyW}`);
         for (const [i, name] of ['Btn_Cancel', 'Btn_Ok'].entries()) {
           assert.deepEqual(NGUI.find(controls, name).pos, [(i - .5) * (bodyW + POPUP_FRAME.footer.gap), 0], 'footer spacing');
           assert.deepEqual(bodies[i].pos, [0, 0]);
-          assert.deepEqual([bodies[i].widgets[0].w_, bodies[i].widgets[0].h_], [bodyW, CONTROL.buttonM.h], 'design-system buttonM size');
+          assert.deepEqual([bodies[i].widgets[0].w_, bodies[i].widgets[0].h_], [bodyW, CONTROL.buttonXS.h], 'design-system buttonXS size');
         }
         const close = NGUI.find(popup, 'Base/BG/Btn_Close');
         assert.equal(close.active, true);
@@ -2784,21 +2788,23 @@ test('illustrated and mixed tours retain the original geometry, including a miss
   await Popup.ready();
   const pages = [tourPages[0], { ...tourPages[1], image: '/tours/missing-ui.png', caption: 'App controls' }];
   const size = Tours.pageSize(pages);
-  // the frame is 68.5 taller for the footer's rise and its content half of that higher: the original room under the caption
-  const lift = 34.25;
-  assert.deepEqual(size, { width: 2458, height: 1468.5, image: [-1000, -400 + lift, 2000, 500], bottom: -445 + lift - 35 });
+  // the frame is 46.5 shorter for the XS footer (BL-176: its tops 164 above the bottom, the original's 210.5) and its content
+  // half of that lower: the original room under the caption
+  const lift = -23.25;
+  // the L class (BL-176): text 1800 across, the illustration 1800 x 450 centred where the 2000 x 500 one was
+  assert.deepEqual(size, { width: 2098, height: 1353.5, image: [-900, -375 + lift, 1800, 450], bottom: -445 + lift - 35 });
   for (const [i, page] of pages.entries()) {
     const popup = NGUI.find(Tours.pageTree(page, i, pages.length, size), 'Popup');
-    assert.deepEqual([NGUI.find(popup, 'Base/BG').widgets[0].w_, NGUI.find(popup, 'Base/BG').widgets[0].h_], [2841, 1468.5]);
+    assert.deepEqual([NGUI.find(popup, 'Base/BG').widgets[0].w_, NGUI.find(popup, 'Base/BG').widgets[0].h_], [2098, 1353.5]);
     assert.deepEqual(NGUI.find(popup, 'Count').pos, [0, 520 + lift]);
     assert.deepEqual(NGUI.find(popup, 'FeatureTitle').pos, [0, (page.image ? 405 : 300) + lift]);
     assert.deepEqual(NGUI.find(popup, 'FeatureBody').pos, [0, (page.image ? 220 : -40) + lift]);
-    assert.equal(NGUI.find(popup, 'FeatureTitle').widgets[0].w_, 2100);
-    assert.deepEqual(NGUI.find(popup, 'Btn').pos, [0, Popup.footerY(1468.5, Popup.FOOTER.M.control)]);
+    assert.equal(NGUI.find(popup, 'FeatureTitle').widgets[0].w_, 1800);
+    assert.deepEqual(NGUI.find(popup, 'Btn').pos, [0, Popup.footerY(1353.5)]);
     if (page.image) {
       const slot = NGUI.find(popup, 'ImageSlot');
       assert.deepEqual(slot.pos, [0, -150 + lift]);
-      assert.deepEqual([slot.widgets[0].w_, slot.widgets[0].h_], [2000, 500]);
+      assert.deepEqual([slot.widgets[0].w_, slot.widgets[0].h_], [1800, 450]);
       assert.deepEqual(NGUI.find(popup, 'Caption').pos, [0, -445 + lift]);
     }
   }
@@ -2811,7 +2817,7 @@ test('illustrated and mixed tours retain the original geometry, including a miss
   assert.deepEqual(frame(), initial);
   const image = walk(dialog).find((el) => el.tagName === 'IMG');
   assert.deepEqual([image.style.left, image.style.top, image.style.width, image.style.height],
-    [`${960 - 1000 * S}px`, `${540 - (100 + lift) * S}px`, `${2000 * S}px`, `${500 * S}px`]);
+    [`${960 - 900 * S}px`, `${540 - (75 + lift) * S}px`, `${1800 * S}px`, `${450 * S}px`]);
   image.onerror();
   assert.deepEqual(frame(), initial);
   action(dialog, 'close').click(); await opened;
@@ -2927,9 +2933,9 @@ test('simulated offers use the real prefab and notes builder, intercept every ac
         assert.equal(actionsIn(consent).length, 3);
         const wanted = Popup.footerLayout([ui.update.later, ui.update.notes, ui.update.now], 2098);
         for (const el of geometry) {
-          // Three choices keep equal M bodies, as wide as the captions need, at this L width.
+          // Three choices keep equal XS bodies (BL-176), as wide as the captions need, at this L width.
           assert.ok(Math.abs(parseFloat(el.style.width) - wanted.bodyW * S) < 0.01);
-          assert.ok(Math.abs(parseFloat(el.style.height) - CONTROL.buttonM.h * S) < 0.01);
+          assert.ok(Math.abs(parseFloat(el.style.height) - CONTROL.buttonXS.h * S) < 0.01);
         }
         for (let i = 1; i < geometry.length; i++) assert.ok(parseFloat(geometry[i - 1].style.left) + parseFloat(geometry[i - 1].style.width) < parseFloat(geometry[i].style.left));
         const labels = ['Btn_Cancel', 'Btn_Notes', 'Btn_Ok'].map((name) => byPath(consent, `Center/Popup/Btn/${name}/Label_Locale`));
@@ -3066,11 +3072,25 @@ test("the display settings' sort keys and filter options each share one font siz
         const sizes = label(display, /\/Sort_\w+\/Label_Text\/(On\/)?Label_On$/).map((e) => e.style.fontSize);
         assert.equal(sizes.length, 5, `${locale}: five sort keys`);
         assert.equal(new Set(sizes).size, 1, `${locale}: the sort keys at ${sizes}`);
+        // three keys to a line in the narrower panel, 480 apart (BL-176)
+        const captions = new Set(Object.values(ui.sort));
+        const lefts = walk(display).filter((e) => e.className === "hit" && captions.has(e.getAttribute("aria-label"))).map((e) => parseFloat(e.style.left));
+        assert.equal(lefts.length, 5, `${locale}: five sort keys' hits`);
+        assert.ok(Math.abs(lefts[1] - lefts[0] - 480 * S) < 0.05 && Math.abs(lefts[3] - lefts[0]) < 0.05, `${locale}: three to a line, 480 apart`);
       } else {
         // the eight options of the four groups
         await until(() => label(display, /Unit_\w+\/SwitchObject_Columns_4\/Label_Text$/).length === 8);
         const sizes = label(display, /Unit_\w+\/SwitchObject_Columns_4\/Label_Text$/).map((e) => e.style.fontSize);
         assert.equal(new Set(sizes).size, 1, `${locale}: the filter options at ${sizes}`);
+        // the footer (BL-176): the two XS bodies the shared gap apart, centred under the narrower frame
+        const hitOf = (name) => walk(display).find((e) => e.className === "hit" && e.getAttribute("aria-label") === name);
+        const [cancel, ok] = [ui.popup.cancel, ui.picker.ok].map((name) => ["left", "top", "width", "height"].map((k) => parseFloat(hitOf(name).style[k])));
+        assert.ok(Math.abs(ok[2] - cancel[2]) < 0.01 && Math.abs(ok[3] - Tokens.CONTROL.buttonXS.h * S) < 0.01, `${locale}: XS bodies`);
+        assert.ok(Math.abs(ok[0] - (cancel[0] + cancel[2]) - Tokens.POPUP_FRAME.footer.gap * S) < 0.01, `${locale}: the shared gap`);
+        assert.ok(Math.abs((cancel[0] + ok[0] + ok[2]) / 2 - 960) < 0.01, `${locale}: centred`);
+        // the frame the L class's 2098 when the prefab's is 2810: here a stand-in frame, as much narrower
+        const frame = walk(display).find((e) => e.dataset.path === "Center/Popup/Base/BG");
+        assert.ok(Math.abs(parseFloat(frame.style.width) - (2458 - (2810 - Tokens.POPUP_FRAME.L.w)) * S) < 0.05, `${locale}: frame ${frame.style.width}`);
       }
       press("Escape");
     }
@@ -3090,9 +3110,10 @@ const messageShapes = {
 
 test("message stacks centre above the shared floor and grow to the stage cap, then scroll with 20-unit footer clearance", async () => {
   await Popup.ready();
+  const Tokens = await import("../../src/bmpt/web/js/ui-tokens.js");
   for (const [shape, make] of Object.entries(messageShapes)) for (let n = 0; n <= 40; n++) {
     const layout = Popup.messageLayout(make(n));
-    assert.ok(layout.height >= 786 && layout.height <= 1560, `${shape} ${n}`);
+    assert.ok(layout.height >= Tokens.POPUP_FRAME.minH && layout.height <= 1560, `${shape} ${n}`);
     const usedHeight = layout.visible + (shape === "check" ? Popup.MSG.check : 0);
     const free = layout.scroll ? 0 : Math.max(0, layout.content.h - usedHeight);
     near2(layout.y0, Popup.FRAME_Y + layout.height / 2 - 170 - free / 2);
@@ -3103,7 +3124,8 @@ test("message stacks centre above the shared floor and grow to the stage cap, th
   }
   const asked = Popup.messageLayout({ ...messageShapes.plain(2), scroll: true });
   assert.equal(asked.scroll, true);
-  assert.equal(asked.height, 786);
+  // as high as its lines and footer need (BL-176)
+  assert.equal(asked.height, Math.max(Tokens.POPUP_FRAME.minH, Popup.MSG.title + asked.body.height + Popup.MSG.buttons));
   // A scroll that is asked for but not needed keeps the body's own height, centred in the content box.
   near2(asked.visible, asked.body.height);
   near2(Popup.FRAME_Y + asked.height / 2 - asked.y0 + asked.visible / 2, asked.content.y + asked.content.h / 2);
@@ -3620,7 +3642,7 @@ test("the custom zoom-out limit's slider is a range input with the value as its 
 // --- design-system popup anatomy, independent of the Sort prefab's original dimensions ---
 const Tokens = await import("../../src/bmpt/web/js/ui-tokens.js");
 const Frames = await import("../../src/bmpt/web/js/popup-frames.js");
-const { FOOTER, POPUP, POPUP_FRAME, CONTROL, SPACE, TYPE } = Tokens;
+const { FOOTER, POPUP, POPUP_FOOTER, POPUP_FRAME, CONTROL, SPACE, TYPE } = Tokens;
 const STAGE_HALF = 540 / S;
 const unitsOf = (el) => {
   const [top, height, left, width] = ["top", "height", "left", "width"].map((key) => parseFloat(el.style[key]));
@@ -3642,29 +3664,32 @@ for (const lang of ["en-US", "zh-CN"]) test(`each popup class positions its fram
       const bg = NGUI.find(tree, "Popup/Base/BG"), title = NGUI.find(bg, "Label_Title_Locale"), close = NGUI.find(bg, "Btn_Close");
       assert.deepEqual([bg.widgets[0].w_, bg.widgets[0].h_], [f.w, f.h]);
       assert.equal(bg.widgets[0].sprite, "Common_Popup_Bg");
-      near2(f.h / 2 - title.pos[1] - title.widgets[0].h_ / 2, 36);
-      assert.equal(title.pos[0], 0); assert.ok(title.widgets[0].fontSize >= 48 && title.widgets[0].fontSize <= 72);
+      // the title one size under the game's (POPUP_TYPE.title, BL-176), centred where the game's 72 stood under the top's 36
+      const big = (await import("../../src/bmpt/web/js/ui-grid.js")).textItem(NGUI, ui.quit.title, TYPE.display, { lines: 1 });
+      near2(f.h / 2 - title.pos[1], 36 + big.h / 2);
+      assert.equal(title.pos[0], 0); assert.ok(title.widgets[0].fontSize >= 48 && title.widgets[0].fontSize <= 62);
       assert.ok(!title.widgets[0].text.includes("\n"));
       near2(f.w / 2 - close.pos[0] - 30, 48); near2(f.h / 2 - close.pos[1] - 30, 39);
       const btn = NGUI.find(tree, "Popup/Btn"), widths = btn.children.map(b => NGUI.find(b, "BG (1)").widgets[0].w_);
       assert.equal(new Set(widths).size, 1);
       assert.equal(new Set(btn.children.map(b => NGUI.find(b, "Label_Locale").widgets[0].fontSize)).size, 1);
-      near2(btn.pos[1] - CONTROL.buttonM.h / 2 - (Popup.FRAME_Y - f.h / 2), 102);
+      // the XS footer (BL-176): its bodies POPUP_FOOTER.bottom above the frame's bottom
+      near2(btn.pos[1] - CONTROL.buttonXS.h / 2 - (Popup.FRAME_Y - f.h / 2), POPUP_FOOTER.bottom);
       for (let i = 0; i < n; i++) {
         const body = NGUI.find(btn.children[i], "BG (1)");
-        assert.deepEqual(body.pos, [0, 0]); assert.equal(body.widgets[0].h_, CONTROL.buttonM.h);
+        assert.deepEqual(body.pos, [0, 0]); assert.equal(body.widgets[0].h_, CONTROL.buttonXS.h);
         const caption = NGUI.find(btn.children[i], "Label_Locale").widgets[0];
-        assert.equal(caption.w_, widths[i] - 2 * CONTROL.buttonM.pad); assert.equal(caption.h_, Popup.FOOTER.M.caption.h);
+        assert.equal(caption.w_, widths[i] - 2 * CONTROL.buttonXS.pad); assert.equal(caption.h_, Popup.FOOTER.XS.caption.h);
         if (i) near2(btn.children[i].pos[0] - btn.children[i-1].pos[0] - widths[i], 33);
       }
       near2(btn.children[0].pos[0] + btn.children.at(-1).pos[0], 0);
       // the default footer's bodies are as wide as the captions need (Confirm in this language), a row of three is scaled to the frame
       assert.equal(widths[0], Popup.footerLayout(actions.map((a) => a.label), f.w).bodyW);
-      assert.ok(widths[0] >= CONTROL.buttonM.minW && widths[0] <= CONTROL.buttonL.minW);
+      assert.ok(widths[0] >= CONTROL.buttonXS.minW && widths[0] <= CONTROL.buttonL.minW);
       if (n === 3) near2(btn.children[0].pos[0] - widths[0] / 2 + f.w / 2, Math.max(82.5, (f.w - n * widths[0] - 66) / 2));
       const box = Frames.popupContent(f.w, f.h);
       assert.deepEqual([box.x, box.y, box.w], [40, 170, f.w - 80]);
-      near2(Popup.FRAME_Y + f.h / 2 - box.y - box.h, Popup.footerTop(f.h) + 20);
+      near2(Popup.FRAME_Y + f.h / 2 - box.y - box.h, Popup.footerTop(f.h) + POPUP_FOOTER.above);
       const text = Frames.popupContent(f.w, f.h, { text: true }); assert.deepEqual([text.x, text.w], [100, f.w - 200]);
     }
   } finally { setStrings("en-US", Object.fromEntries(strings(english))); document.documentElement.lang = "en-US"; }
@@ -3681,19 +3706,20 @@ test("titleCentre puts the title's ink centre that far under the frame's top and
 
 test("numeric caller widths round up and every fixed popup chooses its assigned class", async () => {
   const NGUI = await import("../../src/bmpt/web/js/ngui.js"); await Popup.ready();
-  for (const [width, expected] of [[700,1300],[1301,1540],[1541,2098],[2100,2841],[2458,2841]])
+  // no popup wider than the L class (BL-176): a wider call, or XL, gets L
+  for (const [width, expected] of [[700,1300],[1301,1540],[1541,2098],[2100,2098],[2458,2098],["XL",2098]])
     assert.equal(NGUI.find(Popup.popupFrame("T", width, 1), "Popup/Base/BG").widgets[0].w_, expected);
   assert.equal(Popup.messageLayout({ lines: ["Short"] }).width, 1300);
   assert.equal(Popup.messageLayout({ width: 2100 }).width, 2098);
-  assert.equal(Popup.messageLayout({ width: 2101 }).width, 2841);
+  assert.equal(Popup.messageLayout({ width: 2101 }).width, 2098);
   const candidates = Array.from({ length: 100 }, (_, n) => "word ".repeat(n + 1));
   for (const width of [1300,1540,2098]) assert.ok(candidates.some(text => Popup.messageLayout({ lines: [text] }).width === width));
-  assert.equal(Frames.TEXT_VIEWER.w, 2841); assert.equal(Popup.listLayout().frame.w, 2841);
+  assert.equal(Frames.TEXT_VIEWER.w, 2098); assert.equal(Popup.listLayout().frame.w, 2098);
   assert.equal(Frames.DETAILS.w, 2098); assert.equal(Frames.EXPORT.w, 2098);
   assert.equal(Frames.MOD_ALIAS.w, 1540); assert.equal(Frames.ALIAS.w, 1540);
   assert.equal(Frames.compareFrame(false).w, 2098); assert.equal(Frames.compareFrame(true).w, 2098);
   for (let n = 1; n <= Frames.ALIAS.max; n++) {
-    const f = Frames.aliasFrame(n); assert.ok(f.h >= 786 && f.h <= 1560); assert.ok(f.bottom >= Popup.footerTop(f.h) + 20);
+    const f = Frames.aliasFrame(n); assert.ok(f.h >= POPUP_FRAME.minH && f.h <= 1560); assert.ok(f.bottom >= Popup.footerTop(f.h) + 20);
   }
   for (const body of [0, 300, 2000]) { const f = Frames.detailsFrame(body); assert.ok(f.bottom >= Popup.footerTop(f.h) + 20); }
   for (const f of [Frames.TEXT_VIEWER, Frames.MOD_ALIAS, Frames.EXPORT, Frames.compareFrame(true)]) assert.ok(f.bottom >= Popup.footerTop(f.h) + 20);
@@ -3704,7 +3730,7 @@ for (const lang of ["en-US", "zh-CN"]) test(`list panels, check row and detail b
   const layout = Popup.listLayout(true), { content, frame } = layout;
   near2(layout.left.l, -frame.w / 2 + 40); near2(layout.list.r, frame.w / 2 - 40);
   near2(layout.list.l - layout.left.r, 40); near2(frame.cy + frame.h / 2 - layout.left.t, 170);
-  near2(layout.left.b - (Popup.footerTop(frame.h) + 20), 124);
+  near2(layout.left.b - (Popup.footerTop(frame.h) + POPUP_FOOTER.above), 124);
   const tree = Popup.detailsTree(items[0], "Details", [["File", "one.bundle"]], [["Open", () => {}]]);
   const picture = NGUI.find(tree, "Picture"), name = NGUI.find(tree, "Name"), chip = NGUI.find(tree, "Chip_0");
   const chipH = Tokens.CHIP_TIERS.S.h, headH = Math.max(name.widgets[0].h_, chipH);
@@ -3728,15 +3754,20 @@ test("a 3D model's details fit the panel without scrolling", async () => {
   const it = { ...items[0], full: "Hina (Pajamas) - Optimized", nameEdit: { label: "Alias", fn: () => {} } };
   const sizes = new Set(), bottoms = new Set();
   for (const n of [3, 4, 6]) for (const rows of [fields, fields.map(([c]) => [c, "-"])]) {
-    const tree = Popup.detailsTree(it, "3D Model Info", rows, actions.slice(0, n), null, "model", panel);
+    // the switch popups' values on one line (BL-173 rework), as the narrower L-class panel needs (BL-176)
+    const tree = Popup.detailsTree(it, "3D Model Info", rows, actions.slice(0, n), null, "model", panel, { truncate: true });
     assert.ok(tree.contentHeight <= height + 1e-6, `${n} actions: ${tree.contentHeight} > ${height}`);
     sizes.add(NGUI.find(tree, "Picture").widgets[0].w_.toFixed(6));
-    bottoms.add(NGUI.find(tree, "Act_0").pos[1].toFixed(6));
+    // the last row's solid art (the actions in rows, BL-176; four on one XXS row, the others XS)
+    const bh = n === 4 ? 88 : 104;
+    bottoms.add((NGUI.find(tree, `Act_${n - 1}`).pos[1] - bh / 2 + bh * 14 / 176).toFixed(6));
     const picture = NGUI.find(tree, "Picture"), size = picture.widgets[0].w_, name = NGUI.find(tree, "Name");
     assert.equal(picture.widgets[0].h_, size);
     assert.ok(size >= 150, `picture ${size}`);
-    const TAN10 = Math.tan(Math.PI / 18), left = picture.pos[0] - size * (1 + TAN10) / 2, centre = (panel.l + panel.r) / 2;
-    assert.ok(left >= centre - width / 2 - 1e-6 && picture.pos[0] + size * (1 + TAN10) / 2 <= name.pos[0], `picture ${left}`);
+    // the picture across the panel, the name under it (owner, 2026-11-11, BL-176)
+    const TAN10 = Math.tan(Math.PI / 18), centre = (panel.l + panel.r) / 2;
+    assert.ok(Math.abs(picture.pos[0] - centre) < 1e-6 && size * (1 + TAN10) <= width - 40 + 1e-6, `picture ${size}`);
+    assert.ok(picture.pos[1] - size / 2 > name.pos[1], "the name under the picture");
   }
   // one picture size for every candidate, the actions on the panel's bottom whatever the fields hold
   assert.equal(sizes.size, 1, [...sizes].join(", "));
@@ -3761,7 +3792,8 @@ for (const lang of ["en-US", "zh-CN", "th-TH"]) test(`the switch details fit the
       const what = `${lang} ${kind} ${file.length}`;
       assert.ok(tree.contentHeight <= height + 1e-6, `${what}: ${tree.contentHeight} > ${height}`);
       // the actions on the bottom: their solid art at the panel's foot
-      const act = NGUI.find(tree, "Act_0");
+      // the last row of actions on the bottom (the actions in rows, BL-176)
+      const act = NGUI.find(tree, `Act_${actions.length - 1}`);
       const xs = Tokens.CONTROL.buttonXS.h;
       assert.ok(Math.abs(act.pos[1] - (panel.b + xs / 2 - xs * 14 / 176)) < 1e-6, `${what}: actions at the bottom (${act.pos[1]})`);
       const values = tree.children.filter((c) => /^V_\d+$/.test(c.name)).map((c) => c.widgets[0]);
@@ -3780,18 +3812,18 @@ for (const lang of ["en-US", "zh-CN", "th-TH"]) test(`the switch details fit the
       assert.ok(chipY.every((y) => Math.abs(y - chipY[0]) < 1e-6), `${what}: the chips on one row`);
       if (kind === "model") assert.ok(NGUI.find(tree, "Name").pos[1] > chipY[0] + 1, `${what}: the model's chips under its name`);
       // the chips are the S chip and the actions are tagged as buttons
-      assert.equal(NGUI.find(tree, "Chip_0").widgets[0].h_, Tokens.CHIP_TIERS.S.h);
+      assert.ok([Tokens.CHIP_TIERS.S.h, Tokens.CHIP_TIERS.XS.h].includes(NGUI.find(tree, "Chip_0").widgets[0].h_));  // XS where S would not fit (BL-176)
       assert.equal(NGUI.find(tree, "Chip_0").widgets[0].tier, "chip");
       assert.equal(NGUI.find(tree, "Act_0/Body").widgets.find((w) => "sprite" in w).tier, "button");
     }
   } finally { setStrings("en-US", Object.fromEntries(strings(english))); }
 });
 
-test("the list popups' footer is the S button", async () => {
+test("the list popups' footer is the XS button every popup has", async () => {
   const NGUI = await import("../../src/bmpt/web/js/ngui.js"); await Popup.ready();
-  assert.equal(Popup.LIST_FOOTER, "S");
+  assert.equal(Popup.LIST_FOOTER, "XS");
   const tree = Popup.listFrame("Switch Portrait", [{ label: "Save", primary: true }], true);
-  assert.equal(NGUI.find(tree, "Popup/Btn/Btn_0/BG (1)").widgets.find((w) => "sprite" in w).h_, Tokens.CONTROL.buttonS.h);
+  assert.equal(NGUI.find(tree, "Popup/Btn/Btn_0/BG (1)").widgets.find((w) => "sprite" in w).h_, Tokens.CONTROL.buttonXS.h);
   const named = Popup.listFrame("Mods", [{ label: "Close" }], true, false, null, undefined, "M");
   assert.equal(NGUI.find(named, "Popup/Btn/Btn_0/BG (1)").widgets.find((w) => "sprite" in w).h_, Tokens.CONTROL.buttonM.h);
 });
@@ -3985,7 +4017,7 @@ for (const lang of LOCALE_LIST) test(`the asset consent's Change button (104 hig
       assert.ok(text[1] >= -L.cachedH - 1e-9, "the path text stays in the section");
       // The Note keeps the shared 20-unit footer clearance on the stage.
       assert.ok(L.noteBottom >= Popup.footerTop(L.h) + 20 - 1e-9, `${lang}: ${L.noteBottom} against ${Popup.footerTop(L.h)}`);
-      assert.ok(L.h <= Tokens.POPUP.maxH && L.h >= 786);
+      assert.ok(L.h <= Tokens.POPUP.maxH && L.h >= Tokens.POPUP_FRAME.minH);
       assert.ok(L.neverTop - L.neverH >= L.noteBottom + L.note.h + 40 - 1e-9, "the Never section clears the Note");
     }
     // as drawn
@@ -4047,7 +4079,9 @@ for (const lang of LOCALE_LIST) test(`the details panel's chips are S chips as w
       const what = `${lang} ${chips.length} chips${original ? " with an original" : ""}, ${full.length > 10 ? "long" : "short"} name`;
       chips.forEach((_, i) => {
         const chip = stageRect(part(`Chip_${i}`), NGUI);
-        assert.ok(chip[2] >= CHIP.minW * S - 0.02 && Math.abs(chip[3] - CHIP.h * S) < 0.02, `${what}: chip ${i} is ${chip[2] / S} x ${chip[3] / S}`);
+        // the S chip, or the XS one where the S row would not fit the narrower panel (BL-176)
+        const tier = Math.abs(chip[3] - CHIP.h * S) < 0.02 ? CHIP : Tokens.CHIP_TIERS.XS;
+        assert.ok(chip[2] >= tier.minW * S - 0.02 && Math.abs(chip[3] - tier.h * S) < 0.02, `${what}: chip ${i} is ${chip[2] / S} x ${chip[3] / S}`);
         assert.ok(chip[0] - slant / 2 >= panel[0] - 0.02 && chip[0] + chip[2] + slant / 2 <= panel[1] + 0.02, `${what}: chip ${i} inside the panel`);
         assert.ok(chip[1] + chip[3] + 20 * S <= fields[1] + 0.02, `${what}: chip ${i} keeps 20 above the fields box`);
         // its caption stays in the chip
@@ -4056,7 +4090,7 @@ for (const lang of LOCALE_LIST) test(`the details panel's chips are S chips as w
         for (const el of text) {
           const r = stageRect(el, NGUI), fs = parseFloat(el.style.fontSize);
           assert.ok(r[0] >= chip[0] - 0.02 && r[0] + r[2] <= chip[0] + chip[2] + 0.02 && r[1] >= chip[1] - 0.02 && r[1] + r[3] <= chip[1] + chip[3] + 0.02, `${what}: chip ${i}'s caption inside it`);
-          assert.ok(fs <= NGUI.fontSizeFor(el.textContent, CHIP.fs) * S + 0.02, `${what}: chip ${i} at ${fs}`);
+          assert.ok(fs <= NGUI.fontSizeFor(el.textContent, tier.fs) * S + 0.02, `${what}: chip ${i} at ${fs}`);
         }
       });
       // the chips never overlap the name: beside it on its line, or under it
@@ -4084,7 +4118,8 @@ test("the portrait panel's chips (the S chip) stay in the right half and 20 abov
       const fields = stageRect(part("Fields"), NGUI);
       chips.forEach((_, i) => {
         const chip = stageRect(part(`Chip_${i}`), NGUI);
-        assert.ok(Math.abs(chip[3] - Tokens.CHIP_TIERS.S.h * S) < 0.02, `${chips.length} chips: chip ${i} is the S chip's height`);
+        // the S chip, or the XS one where the S row would not fit the column (BL-176)
+        assert.ok([Tokens.CHIP_TIERS.S.h, Tokens.CHIP_TIERS.XS.h].some((h) => Math.abs(chip[3] - h * S) < 0.02), `${chips.length} chips: chip ${i} is the S or XS chip's height`);
         assert.ok(chip[0] >= left - 0.02 && chip[0] + chip[2] <= right + 0.02, `${chips.length} chips: chip ${i} in the right half`);
         assert.ok(chip[1] + chip[3] + 20 * S <= fields[1] + 0.02, `${chips.length} chips: chip ${i} keeps 20 above the fields box`);
       });
@@ -4115,12 +4150,12 @@ test("the startup Spine notice wraps inside UIPopup_Sort at message sizes in eve
       assert.equal(heading.text.replace(/\s/g, ""), title.replace(/\s/g, ""));
       const lineNode = NGUI.find(popup, "Lines/Line_0"), line = lineNode.widgets[0];
       assert.equal(line.text.replace(/\s/g, ""), notice.replace(/\s/g, ""));
-      if (NGUI.glyphWidth(notice, 52) > line.w_) assert.ok(line.text.includes("\n"), `${lang} wraps when needed`);
-      assert.ok(line.fontSize >= 44 && line.fontSize <= 52, `${lang} message size ${line.fontSize}`);
+      if (NGUI.glyphWidth(notice, line.fontSize) > line.w_) assert.ok(line.text.includes("\n"), `${lang} wraps when needed`);
+      assert.ok(line.fontSize >= 40 && line.fontSize <= 48, `${lang} message size ${line.fontSize}`);
       assert.ok(line.text.split("\n").length * NGUI.fontSizeFor(line.text, line.fontSize) * NGUI.LINE_PITCH <= line.h_);
       const caption = NGUI.find(ok, "Label_Locale").widgets[0];
       assert.equal(caption.text.replace(/\s/g, ""), ui.picker.ok.replace(/\s/g, ""));
-      assert.ok(caption.fontSize >= FOOTER.caption.fsMin);
+      assert.ok(caption.fontSize >= Popup.FOOTER[Popup.FOOTER_DEFAULT].caption.fsMin);
       for (const [name, widget] of [["heading", heading], ["body", line], ["caption", caption]]) {
         for (const text of widget.text.split("\n")) assert.ok(NGUI.glyphWidth(text, widget.fontSize) <= widget.w_, `${lang} ${name}`);
       }
@@ -4166,7 +4201,7 @@ test("missing-original apply results fit the message frame in every locale", asy
     for (const [index, text] of lines.entries()) {
       const widget = NGUI.find(body.tree, `Line_${index}`).widgets[0];
       assert.equal(widget.text.replace(/\s/g, ""), text.replace(/\s/g, ""));
-      assert.ok(widget.fontSize >= 44 && widget.fontSize <= 52, lang);
+      assert.ok(widget.fontSize >= 40 && widget.fontSize <= 48, lang);
       assert.ok(NGUI.glyphWidth(widget.text, widget.fontSize) <= widget.w_, lang);
       assert.ok(widget.h_ >= widget.text.split("\n").length * widget.fontSize, lang);
     }
@@ -4186,18 +4221,18 @@ for (const lang of LOCALE_LIST) test(`the rendered footer labels keep every capt
     setStrings(lang, Object.fromEntries(strings(ui))); document.documentElement.lang = lang;
     for (const keys of groups) {
       const captions = keys.map(key => byDots(ui, key));
-      const before = NGUI.fitGroup(captions, 72, 48, 400, 2, { maxH: 140 })[0].fs;
-      const known = lang === "th-TH" && (keys[0] === "update.later" || keys.join("/") === "recovery.report/picker.ok");
       const tree = Popup.popupFrame(ui.quit.title, keys.length > 2 ? "L" : "S", 0,
         { buttons: captions.map(label => ({ label })) });
       const labels = NGUI.find(tree, "Popup/Btn").children.map(child => NGUI.find(child, "Label_Locale").widgets[0]);
       assert.equal(new Set(labels.map(label => label.fontSize)).size, 1);
+      // the default footer's range (XS, BL-176), inside each body's room
+      const range = Popup.FOOTER[Popup.FOOTER_DEFAULT].caption;
       labels.forEach((label, i) => {
-        assert.ok(label.fontSize >= (known ? Math.max(36, before) : 48) && label.fontSize <= 72, `${lang} ${keys.join("/")}`);
+        assert.ok(label.fontSize >= range.fsMin && label.fontSize <= range.fs, `${lang} ${keys.join("/")}`);
         assert.equal(label.text.replace(/\s/g, ""), captions[i].replace(/\s/g, ""));
         assert.ok(label.text.split("\n").length <= 2);
-        for (const line of label.text.split("\n")) assert.ok(NGUI.glyphWidth(line, label.fontSize) <= 472);
-        assert.ok(label.text.split("\n").length * NGUI.fontSizeFor(label.text, label.fontSize) * NGUI.LINE_PITCH <= Popup.BUTTON_TEXT_H);
+        for (const line of label.text.split("\n")) assert.ok(NGUI.glyphWidth(line, label.fontSize) <= label.w_ + 1e-9);
+        assert.ok(label.text.split("\n").length * NGUI.fontSizeFor(label.text, label.fontSize) * NGUI.LINE_PITCH <= range.h + 1e-9);
       });
     }
   } finally { setStrings("en-US", Object.fromEntries(strings(english))); document.documentElement.lang = "en-US"; }
@@ -4220,7 +4255,7 @@ test("portrait and ordinary detail scroll areas keep the complete last field and
       assert.ok(a[1] + a[3] <= parseFloat(area.children[0].style.height) + 0.02);
       const layout = Popup.listLayout(false, kind);
       assert.ok(Math.abs(parseFloat(area.style.top) + parseFloat(area.style.height)
-        - (540 - (Popup.footerTop(layout.frame.h) + 20) * S)) < 0.02);
+        - (540 - (Popup.footerTop(layout.frame.h) + POPUP_FOOTER.above) * S)) < 0.02);
     }
   } finally { prompt.hidden = true; Popup.closed(prompt); }
 });
@@ -4243,11 +4278,15 @@ test("finding the game asks the Check Game Files consent first and searches only
 const contentCentre = f => f.cy + f.h / 2 - f.content.y - f.content.h / 2;
 const messageTop = layout => Popup.FRAME_Y + layout.height / 2 - layout.y0;
 
-test("explicit frame heights use 786 through 1560; omitted or zero heights retain the exemplar", () => {
+test("explicit frame heights use POPUP_FRAME.minH through 1560; omitted or zero heights retain the exemplar", () => {
   for (const key of ["S", "M", "L", "XL"]) {
-    assert.equal(Frames.frameGeometry(key).h, POPUP_FRAME[key].h);
-    assert.equal(Frames.frameGeometry(key, 0).h, POPUP_FRAME[key].h);
-    for (const [height, expected] of [[1, 786], [700, 786], [786, 786], [900, 900], [1400, 1400], [2000, 1560]])
+    // XL is L now (BL-176): no popup wider
+    const exemplar = POPUP_FRAME[key === "XL" ? "L" : key].h;
+    assert.equal(Frames.frameGeometry(key).h, exemplar);
+    assert.equal(Frames.frameGeometry(key, 0).h, exemplar);
+    const min = POPUP_FRAME.minH; // the title's band over the XS footer's clearance (BL-176)
+    assert.equal(min, 170 + POPUP_FOOTER.clearance);
+    for (const [height, expected] of [[1, min], [min - 1, min], [min, min], [700, 700], [900, 900], [1400, 1400], [2000, 1560]])
       assert.equal(Frames.frameGeometry(key, height).h, expected);
   }
   assert.ok(!("minH" in Popup.MSG) && !("minH" in Frames.DETAILS));
@@ -4261,10 +4300,13 @@ for (const lang of LOCALE_LIST) test(`messages fit and centre their body and che
     for (const width of ["S", "M", "L"]) for (const footer of [false, true]) {
       const args = { lines: [ui.picker.ok], width, ok: footer ? ui.picker.ok : null };
       const short = Popup.messageLayout(args);
-      assert.equal(short.height, 786); assert.equal(short.scroll, false);
+      // as high as the line and the footer need (BL-176), no taller minimum
+      assert.equal(short.height, Math.max(POPUP_FRAME.minH, Popup.MSG.title + short.body.height + (footer ? Popup.MSG.buttons : Popup.MSG.none)));
+      assert.equal(short.scroll, false);
       near2(messageTop(short) + short.visible / 2, short.content.y + short.content.h / 2, .5);
       const checked = Popup.messageLayout({ ...args, check: { label: ui.picker.ok, checked: false } });
-      assert.equal(checked.height, 786); assert.equal(checked.scroll, false);
+      assert.equal(checked.height, Math.max(POPUP_FRAME.minH, Popup.MSG.title + checked.body.height + Popup.MSG.check + (footer ? Popup.MSG.buttons : Popup.MSG.none)));
+      assert.equal(checked.scroll, false);
       near2(messageTop(checked) + (checked.visible + Popup.MSG.check) / 2, checked.content.y + checked.content.h / 2, .5);
       near2(checked.checkBox.y, messageTop(checked) + checked.visible + SPACE.m);
       // The same formula must hold when a tour reserves the tallest page's height.
@@ -4273,7 +4315,7 @@ for (const lang of LOCALE_LIST) test(`messages fit and centre their body and che
       near2(messageTop(page) + page.visible / 2, page.content.y + page.content.h / 2, .5);
       const tall = Popup.messageLayout({ ...args, lines: Array.from({ length: footer ? 6 : 8 }, () => ({ text: ui.picker.ok, fontSize: 52, minFontSize: 52 })) });
       const need = Popup.MSG.title + tall.body.height + (footer ? Popup.MSG.buttons : Popup.MSG.none);
-      assert.ok(need > 786 && need < POPUP_FRAME.maxH);
+      assert.ok(need > POPUP_FRAME.minH && need < POPUP_FRAME.maxH);
       near2(tall.height, need); near2(messageTop(tall), POPUP_FRAME.contentTop);
       assert.equal(tall.scroll, false);
       const scrolling = Popup.messageLayout({ ...args, scroll: true, check: { label: ui.picker.ok } });
@@ -4300,11 +4342,11 @@ for (const lang of LOCALE_LIST) test(`both consent stacks fit and centre between
     setStrings(lang, Object.fromEntries(strings(ui))); document.documentElement.lang = lang;
     const asset = Consent.assetLayout("/fixtures/cache");
     const assetHeight = asset.cachedH + asset.neverH + asset.note.h + 2 * SPACE.xl;
-    near2(asset.h, Math.max(786, POPUP_FRAME.contentTop + assetHeight + Popup.MSG.buttons), 1);
+    near2(asset.h, Math.max(POPUP_FRAME.minH, POPUP_FRAME.contentTop + assetHeight + Popup.MSG.buttons), 1);
     near2((asset.cachedTop + asset.noteBottom) / 2, contentCentre(asset), .5);
     const scan = Consent.scanLayout(), first = scan.boxes[0], last = scan.boxes.at(-1);
     const scanHeight = scan.boxes.reduce((sum, b) => sum + b.h, 0) + 2 * SPACE.xl;
-    near2(scan.h, Math.max(786, POPUP_FRAME.contentTop + scanHeight + Popup.MSG.buttons), 1);
+    near2(scan.h, Math.max(POPUP_FRAME.minH, POPUP_FRAME.contentTop + scanHeight + Popup.MSG.buttons), 1);
     near2((first.y + last.y + last.h) / 2, scan.content.y + scan.content.h / 2, .5);
     near2(first.y, POPUP_FRAME.contentTop);
     for (const f of [asset, scan]) assert.ok(f.h <= POPUP_FRAME.maxH);
@@ -4314,20 +4356,22 @@ for (const lang of LOCALE_LIST) test(`both consent stacks fit and centre between
 test("Mod Alias and Export fit their unchanged row envelopes and centre the whole body", () => {
   const mod = Frames.MOD_ALIAS, content = Frames.popupContent(mod.w, mod.h, { text: true });
   const modNeed = POPUP_FRAME.contentTop + 2 * SPACE.xxxl + SPACE.m + Popup.MSG.buttons;
-  near2(mod.h, Math.max(786, modNeed), 1);
+  near2(mod.h, Math.max(POPUP_FRAME.minH, modNeed), 1);
   assert.equal(mod.input.h, SPACE.xxxl); assert.equal(mod.hint.h, SPACE.xxxl);
   near2((mod.input.y + mod.input.h / 2 + mod.bottom) / 2, contentCentre({ ...mod, content }), .5);
   const exp = Frames.EXPORT, rows = Object.values(exp.rows), expContent = Frames.popupContent(exp.w, exp.h);
   assert.deepEqual(rows.map(r => r.h), [260, 240, 240]);
-  near2(exp.h, Math.max(786, POPUP_FRAME.contentTop + 740 + 2 * SPACE.m + Popup.MSG.buttons), 1);
+  near2(exp.h, Math.max(POPUP_FRAME.minH, POPUP_FRAME.contentTop + 740 + 2 * SPACE.m + Popup.MSG.buttons), 1);
   near2((rows[0].y + rows[0].h / 2 + exp.bottom) / 2, contentCentre({ ...exp, content: expContent }), .5);
   for (let i = 1; i < rows.length; i++) near2(rows[i - 1].y - rows[i - 1].h / 2 - rows[i].y - rows[i].h / 2, SPACE.m);
 });
 
 test("scrolling text viewer and picker heights retain their pre-fit viewports", () => {
-  assert.equal(Frames.TEXT_VIEWER.h, 1353);
+  // the XL prefab's content box (885) over the XS footer (BL-176): the frames lose the old footer's padding (94)
+  assert.equal(Frames.TEXT_VIEWER.h, 1259);
   assert.equal(Frames.TEXT_VIEWER.box.height, 885);
-  for (const [kind, height] of [[null, 1353], ["spr", 1512], ["lobby", 1353], ["model", 1353]])
+  // every list popup as high as the Hall's editors (POPUP_FRAME.panelH, owner 2026-11-11, BL-176)
+  for (const [kind, height] of [[null, 1450], ["spr", 1450], ["lobby", 1450], ["model", 1450]])
     for (const check of [false, true]) assert.equal(Popup.listLayout(check, kind).frame.h, height, String(kind));
 });
 
@@ -4422,72 +4466,44 @@ async function toolbarOf(Fresh, tools, items) {
     segments: SEGMENTS.map((key) => rectOf(named(english.seg[key.slice(4)]))), drawn: drawnTools };
 }
 
-test("a list popup toolbar without the checkbox keeps its layout", async (t) => {
+test("a list popup's toolbar is the roster's, fitted inside the L class's list panel", async (t) => {
   const NGUI = await import("../../src/bmpt/web/js/ngui.js");
   serveToolbarCollection(t, NGUI);
   const Fresh = await import("../../src/bmpt/web/js/popup.js?toolbar-plain");
   const items = [{ key: "a", label: "Alpha", full: "Alpha", thumb: "a.png" }];
   try {
     const plain = await toolbarOf(Fresh, { segs: SEGMENTS, seg: 1, onSeg() {}, sortKey: "sort.default" }, items);
-    // measured on the layout before the checkbox existed (popup.js toolbar): not a pixel moves
-    const near = (got, want) => got.forEach((v, i) => assert.ok(Math.abs(v - want[i]) < 1e-6, `${got} against ${want}`));
-    near(plain.order, [1733.25, 238.7, 108.97, 75.24]);
-    near(plain.search, [1239.89, 238.7, 80.43, 75.24]);
-    near(plain.sort, [1453.16, 238.67, 272.7, 75.32]);
-    near(plain.segments[0], [824.7567567567569, 242.46486486486486, 149.1891891891892, 67.45945945945947]);
-    near(plain.segments[2], [1123.1351351351352, 242.46486486486486, 149.1891891891892, 67.45945945945947]);
-    assert.equal(plain.drawn.length, 15);
-    assert.equal(createHash("sha1").update(JSON.stringify(plain.drawn)).digest("hex"), "621aac4f9012a6e9104d3aed9f5b85da1b877c64");
+    // segments, search, sort, order left to right, inside the list panel, the order button at its right padding (BL-176)
+    const list = Fresh.listLayout(false, "model").list, left = 960 + list.l * S, right = 960 + list.r * S;
+    const [seg0, , seg2] = plain.segments;
+    assert.ok(seg0[0] >= left && seg2[0] + seg2[2] <= plain.search[0] + 1e-6, "the segments, then search");
+    assert.ok(plain.search[0] < plain.sort[0] && plain.sort[0] < plain.order[0], "search, sort, order");
+    assert.ok(Math.abs(plain.order[0] + plain.order[2] - (right - 20 * S)) < 1, "order at the list's right padding");
+    const centre = (r) => r[1] + r[3] / 2;
+    for (const r of [plain.search, plain.sort, plain.order]) assert.ok(Math.abs(centre(r) - centre(plain.search)) < 1.5, "one centre line");
     assert.equal(action(prompt, "check"), undefined, "no checkbox in the toolbar");
   } finally { prompt.hidden = true; Fresh.closed(prompt); }
 });
 
-test("Show other students is a checkbox of the model popup's toolbar: drawn from the roster's toggle, flipping on a click", async (t) => {
+
+test("Show Other Students is an icon toggle before search in the list's toolbar, its label the hover hint", async (t) => {
   const NGUI = await import("../../src/bmpt/web/js/ngui.js");
   serveToolbarCollection(t, NGUI);
-  const Fresh = await import("../../src/bmpt/web/js/popup.js?toolbar-check");
-  const items = [{ key: "a", label: "Alpha", full: "Alpha", thumb: "a.png" }, { key: "b", label: "Beta", full: "Beta", thumb: "b.png" }];
-  const check = { label: english.model.showOthers, checked: false, onChange(on) { changes.push(on); } };
-  const changes = [], views = [];
-  const tools = { segs: SEGMENTS, seg: 0, onSeg() {}, sortKey: "sort.default", check, onView: (keys) => views.push(keys) };
-  const box = () => action(prompt, "check");
-  const paths = (name) => walk(prompt).filter((e) => (e.dataset.path || "").includes(name));
+  const Fresh = await import("../../src/bmpt/web/js/popup.js?toolbar-toggle");
+  const items = [{ key: "a", label: "Alpha", full: "Alpha", thumb: "a.png" }];
+  const changes = [], toggle = { label: english.model.showOthers, checked: false, onChange: (on) => changes.push(on) };
   try {
-    await toolbarOf(Fresh, tools, items);
-    assert.ok(box(), "the checkbox is in the toolbar");
-    assert.equal(box().getAttribute("role"), "checkbox");
-    assert.equal(box().getAttribute("aria-checked"), "false");
-    assert.equal(box().getAttribute("aria-label"), english.model.showOthers);
-    // it stands left of the three segments, on the toolbar's row, inside the list panel, and the tools keep their order
-    const [cx, cy, cw, ch] = rectOf(box());
-    const seg = ["All", "Playable", "NPC"].map((label) => rectOf(walk(prompt).find((e) => e.className === "hit" && e.getAttribute("aria-label") === label)));
-    const search = rectOf(action(prompt, "search")), sort = rectOf(action(prompt, "sort")), order = rectOf(action(prompt, "order"));
-    assert.ok(cx + cw <= seg[0][0], "the checkbox ends before the first segment");
-    assert.ok(seg[0][0] < seg[1][0] && seg[1][0] < seg[2][0] && seg[2][0] + seg[2][2] <= search[0] + 1e-6, "segments, then search");
-    assert.ok(search[0] < sort[0] && sort[0] < order[0]);
-    const listPanel = Fresh.listLayout(false, "model").list, left = 960 + listPanel.l * S, right = 960 + listPanel.r * S;
-    assert.ok(cx >= left && order[0] + order[2] <= right + 1e-6, "everything inside the list panel");
-    const centre = (r) => r[1] + r[3] / 2;
-    assert.ok(Math.abs(centre([cx, cy, cw, ch]) - centre(search)) < 1.5, "the checkbox is on the tools' centre line");
-    // drawn from the roster's toggle: its plate, the box and its Type_OFF state; no tick while off
-    assert.ok(paths("Toolbar/Menubar/Merge").length > 0);
-    assert.ok(paths("Merge/Type_OFF/Check").length > 0 && paths("Merge/Type_ON").length === 0);
-    assert.equal(paths("Toolbar/Menubar/Merge/Label").length > 0, true, "its caption");
-    // a click flips the shared state, tells the caller and draws the popup again with the tick
-    box().click();
-    assert.equal(check.checked, true);
+    await toolbarOf(Fresh, { segs: SEGMENTS, seg: 0, onSeg() {}, sortKey: "sort.default", toggle }, items);
+    const box = action(prompt, "toggle");
+    assert.ok(box, "the toggle's hit area");
+    assert.equal(box.getAttribute("aria-label"), english.model.showOthers);
+    assert.equal(box.getAttribute("aria-pressed"), "false");
+    const search = rectOf(action(prompt, "search")), own = rectOf(box);
+    assert.ok(own[0] + own[2] <= search[0] + 1e-6, "before search");
+    assert.ok(walk(prompt).some((e) => (e.dataset.path || "").startsWith("Toolbar/ToggleBtn")), "drawn from the search button's body");
+    box.click();
+    assert.equal(toggle.checked, true);
     assert.deepEqual(changes, [true]);
-    await until(() => box()?.getAttribute("aria-checked") === "true");
-    assert.ok(paths("Merge/Type_ON/Check/Icon").length > 0 && paths("Merge/Type_OFF").length === 0, "the tick shows while on");
-    box().click();
-    await until(() => box()?.getAttribute("aria-checked") === "false");
-    assert.deepEqual(changes, [true, false]);
-    // the cards in view are reported after every drawing
-    assert.ok(views.length >= 1 && views.at(-1).includes("a") && views.at(-1).includes("b"));
-    // other popups with tools, without the checkbox (portraits, lobbies), draw none and report nothing
-    await Fresh.listPopup({ host: prompt, layoutKind: "model", title: "Models", items, selected: "a", okText: "Save",
-      tools: { segs: SEGMENTS, seg: 0, onSeg() {}, sortKey: "sort.default" }, onSelect() {} });
-    assert.equal(box(), undefined);
   } finally { prompt.hidden = true; Fresh.closed(prompt); }
 });
 
@@ -4554,7 +4570,7 @@ test("the held entries' Details fit their wide frame with four mods, Go To and F
           assert.ok(button.h <= line.f.fs, `${lang} ${label}: within the text's height`);
           assert.ok(fit.text === label, `${lang} ${label}: caption whole, on one line`);
           // the small button fits its caption again within its width less its inset: still one line
-          assert.ok(!NGUI.fitText(label, fit.fs, fit.fs, button.w - XS_BUTTON.fitInset).text.includes("\n"), `${lang} ${label}: drawn on one line`);
+          assert.ok(!NGUI.fitText(label, fit.fs, fit.fs, button.w - XS_BUTTON.fitInset + 1e-6).text.includes("\n"), `${lang} ${label}: drawn on one line`);
           assert.ok(text.x + text.w <= button.x && button.x + button.w <= layout.width, `${lang} ${label}: inside the frame`);
         }
         assert.ok(buttons[0].x + buttons[0].w <= buttons[1].x, `${lang}: side by side`);

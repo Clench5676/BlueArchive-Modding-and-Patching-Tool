@@ -350,7 +350,7 @@
 			"configured": "Set"
 		},
 		"field": {
-			"file": "File",
+			"file": "File Name",
 			"type": "Type",
 			"size": "Size",
 			"status": "Status",
@@ -1020,6 +1020,8 @@
 			"changePortrait": "Change Portrait",
 			"add": "Add",
 			"remove": "Remove",
+			"selectStudent": "Select a student",
+			"removeConfirm": "Remove this memorial lobby from the playlist",
 			"previous": "Previous",
 			"next": "Next",
 			"done": "Done",

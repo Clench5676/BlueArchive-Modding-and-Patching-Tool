@@ -40,8 +40,10 @@ const titleBox = () => ({ x: PANEL.padCard, y: PANEL.cardTitleTop, w: ROW_W - 2 
 // the card's title room: the box less a SPACE.xl slack at its right
 const titleRoom = () => titleBox().w - SPACE.xl;
 
-function titleNode(text, h) {
-  const box = titleBox(), f = fitText(text, 50, 40, titleRoom(), 1);
+// The cards' type on the Settings page; a popup's cards pass POPUP_TYPE.card, one size under it (BL-176)
+export const CARD_TYPE = Object.freeze({ title: Object.freeze({ fs: 50, min: 40 }), option: Object.freeze({ fs: 48, min: 34 }) });
+function titleNode(text, h, type = CARD_TYPE) {
+  const box = titleBox(), f = fitText(text, type.title.fs, type.title.min, titleRoom(), 1);
   return node("Title", toNode(box, 3, frameOf(h)), [label(f.text, f.fs, "#506e8e/1.00", box.w, box.h, { pivot: 3, depth: 8 })], [
     node("TagDeco", [-13, 5.2], [sprite("Common_Square_Bg", 6, 45, { depth: 9, color: "#5cd3ff/1.00" })]),
   ]);
@@ -56,9 +58,10 @@ export function afterTitle(h, textW, { width, height }) {
 }
 
 // a row: the white body with the title and its dotted line; returns [tree, height, hits]
-export function rowBase(name, y, h, title) {
+// type: CARD_TYPE, or a popup's POPUP_TYPE.card
+export function rowBase(name, y, h, title, type = CARD_TYPE) {
   return node(name, [0, y], [sprite("Common_Bg_Raius5px", ROW_W, h, { depth: 5, color: "#ffffff/1.00" })], [
-    titleNode(title, h),
+    titleNode(title, h, type),
     node("DotLine", [CARD.lineX - ROW_W / 2, h / 2 - CARD.line], [sprite("Common_Dotline", CARD.lineW, CARD.lineH, { pivot: 3, type: 2, depth: 6, color: "#ffffff/1.00" })]),
   ]);
 }
@@ -79,12 +82,12 @@ export function optionLayout(count, columns = count) {
 
 // radio options in a row (the game's On / Off toggles, as many as needed): [value, text, the text's language if it is
 // not the page's]; dim: the options drawn faded (a switch that is busy or unavailable; a click still answers why)
-export function radioRow(name, y, title, options, selected, onPick, { dim = false, description = "", columns = options.length } = {}) {
-  const lay = optionLayout(options.length, columns), h = lay.h, row = rowBase(name, y, h, title), hits = [];
+export function radioRow(name, y, title, options, selected, onPick, { dim = false, description = "", columns = options.length, type = CARD_TYPE } = {}) {
+  const lay = optionLayout(options.length, columns), h = lay.h, row = rowBase(name, y, h, title, type), hits = [];
   const { pitch } = lay;
   // the options are one kind of control side by side: one size for all of them (each text measured in its own language),
   // its lines inside the band under the row's dotted line
-  const fits = fitGroup(options.map(([, text]) => text), 48, 34, lay.room, 2,
+  const fits = fitGroup(options.map(([, text]) => text), type.option.fs, type.option.min, lay.room, 2,
     { lang: options.map(([, , lang]) => lang || null), maxH: options.length > columns ? OPTION_TEXT_H : OPTION_TEXT_H_ONE_ROW });
   options.forEach(([value, text, lang], i) => {
     const on = selected instanceof Set ? selected.has(value) : value === selected;

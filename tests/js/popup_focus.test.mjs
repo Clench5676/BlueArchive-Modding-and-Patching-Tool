@@ -339,14 +339,19 @@ test("asset-free messages use the same class, title, close, check and footer box
   const action = name => walk(box).find(e => e.dataset?.action === name);
   const near = (a, b) => assert.ok(Math.abs(a - b) < 1e-9, `${a} != ${b}`);
   near(parseFloat(box.style.width), P.M.w * scale);
-  near(parseFloat(box.style.height), P.minH * scale);
-  near(parseFloat(heading.style.top), P.titleTop * scale);
+  // as high as its lines, check and footer need (BL-176), as the prefab popup's layout says
+  const layout = Popup.messageLayout({ lines: ["Line"], width: 1301, ok: "OK", cancel: "Cancel", check: { label: "Check", checked: false }, assets: false });
+  near(parseFloat(box.style.height), layout.height * scale);
+  // the title one size under the game's (BL-176), centred where the game's 72 stood
+  const NGUI = await import("../../src/bmpt/web/js/ngui.js"), { textItem } = await import("../../src/bmpt/web/js/ui-grid.js");
+  const { POPUP_TYPE, TYPE } = await import("../../src/bmpt/web/js/ui-tokens.js");
+  near(parseFloat(heading.style.top), (P.titleTop + (textItem(NGUI, "Title", TYPE.display).h - textItem(NGUI, "Title", POPUP_TYPE.title).h) / 2) * scale);
   near(parseFloat(action("close").style.left), (P.M.w - P.close.right - C.icon.h) * scale);
   near(parseFloat(action("close").style.top), P.close.top * scale);
   const footer = walk(box).find(e => e.className === "message-actions");
-  // the default footer is M, its bodies as wide as the captions need
+  // the default footer is XS (BL-176), its bodies as wide as the captions need
   const bodyW = Popup.footerLayout(["Cancel", "OK"], P.M.w).bodyW;
-  near(parseFloat(footer.style.top), (P.minH - P.footer.bottom - C.buttonM.h) * scale);
+  near(parseFloat(footer.style.top), (layout.height - Popup.footerBottom() - C.buttonXS.h) * scale);
   near(parseFloat(action("ok").style.width), bodyW * scale);
   near(parseFloat(action("ok").style.left) - parseFloat(action("cancel").style.left), (bodyW + P.footer.gap) * scale);
   action("check").click();

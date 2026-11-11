@@ -218,6 +218,21 @@ for (const locale of LOCALES) test(`the details panel's light box holds its capt
     const what = `${locale} details panel, set ${n}`;
     const nodes = tree.children.filter((c) => c.name === "Fields" || /^(F|V|L)_\d+$/.test(c.name));
     assert.equal(nodes[0].name, "Fields");
+    // where the captions leave a value no room for its lines (the L class's narrower panel, BL-176), each caption stands
+    // bold over its value: every value within three lines and its room, inside the box
+    const f0 = nodes.find((c) => c.name === "F_0"), v0 = nodes.find((c) => c.name === "V_0");
+    if (f0 && v0 && f0.pos[0] === v0.pos[0]) {
+      const box = rectOf(nodes[0]);
+      fields.forEach((_, k) => {
+        const cap = nodes.find((c) => c.name === `F_${k}`).widgets[0], v = nodes.find((c) => c.name === `V_${k}`), vw = v.widgets[0];
+        assert.equal(cap.bold, true, `${what}: caption ${k} bold`);
+        assert.ok(vw.text.split("\n").length <= Box.STATS_BOX_S.value.lines, `${what}: value ${k} ${JSON.stringify(vw.text)}`);
+        for (const line of vw.text.split("\n")) assert.ok(NGUI.glyphWidth(line, vw.fontSize) <= vw.w_ + 1e-9, `${what}: ${line}`);
+        const r = rectOf(v);
+        assert.ok(r.left >= box.left - 1e-9 && r.right <= box.right + 1e-9, `${what}: value ${k} inside the box`);
+      });
+      continue;
+    }
     const { fill, boxRect } = assertRows({ nodes, what, count: fields.length, size: Box.STATS_BOX_S });
     // The stats box keeps its own inset inside the new four-column details panel.
     const bounds = Popup.listLayout().left, panel = bounds.r - bounds.l;
@@ -341,7 +356,7 @@ test("the Switch Portrait panel keeps the line 5 larger than its box", () => {
 });
 
 // the boxed message rows take the box's value range; a message without a box keeps its own
-test("a message with a line button sets its rows 38 down to 26 and shares one size across a group; one without keeps 52 down to 44", () => {
+test("a message with a line button sets its rows 38 down to 26 and shares one size across a group; one without keeps 48 down to 40", () => {
   use("en-US");
   const shortRow = { text: "Short row", button: { label: "Go", fn() {} } };
   const long = "A finding that is rather long and needs several words to say what is different in this file".repeat(2);
@@ -358,9 +373,9 @@ test("a message with a line button sets its rows 38 down to 26 and shares one si
   assert.equal(rows.find((n) => n.name === "Dot_0").pos[1] - rows.find((n) => n.name === "Dot_1").pos[1], 64);
   assert.equal(-12 - rows.find((n) => n.name === "Dot_0").pos[1], Popup.MSG.rowButton);
   assert.equal(Popup.MSG.rowButton, 124);
-  // no box, no change: 52 down to 44, lines of 1.3
+  // no box: POPUP_TYPE.text, 48 down to 40 (BL-176), lines of 1.3
   const plain = Popup.messageLayout({ lines: ["Short row", long], width: 1700, ok: "OK" }).body.tree.children;
-  assert.equal(size(plain, "Line_0"), 52);
-  assert.ok(size(plain, "Line_1") <= 52 && size(plain, "Line_1") >= 44 - 8);
+  assert.equal(size(plain, "Line_0"), 48);
+  assert.ok(size(plain, "Line_1") <= 48 && size(plain, "Line_1") >= 40 - 8);
   assert.equal(plain.some((n) => n.name === "Box"), false);
 });

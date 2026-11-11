@@ -199,7 +199,7 @@ export async function show(report, { onRemap } = {}) {
   const repair = choices.length > 0;
   const lines = resultLines(result, repair);
   // the lines share one type size, as siblings do (docs/ui-guidelines.md)
-  const response = await Popup.message({ title: T("compatibility.result"), lines, scroll: true, plain: true, footer: "S",
+  const response = await Popup.message({ title: T("compatibility.result"), lines, scroll: true, plain: true,
     fitTogether: lines.flatMap((line, i) => (line.rule ? [] : [i])),
     ...(repair ? repairButtons(choices) : { ok: T("picker.ok") }) });
   const kind = repair ? chosen(response, choices) : null;
@@ -278,7 +278,7 @@ export async function prepare(id, label = "", subject = label, kind = "", choice
     // More than one repair (Update without the result popup): the same choice as there.
     if (choices.length > 1 && choice !== "default") {
       const lines = [T("compatibility.autoUpdate"), ...choices.map(({ text }) => ({ text, ...ITEM }))];
-      choice = chosen(await Popup.message({ title: T("act.update"), lines, plain: true, footer: "S",
+      choice = chosen(await Popup.message({ title: T("act.update"), lines, plain: true,
         fitTogether: lines.map((_line, i) => i), ...repairButtons(choices) }), choices);
       if (!choice) return null;
     } else choice = choices[0]?.kind ?? null;

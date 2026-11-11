@@ -112,26 +112,28 @@ globalThis.fetch = async url => {
 };
 const Popup = await import(POPUP_URL);
 const NGUI = await import(NGUI_URL);
-const { POPUP_FRAME: P, CONTROL: C } = await import(TOKENS_URL);
+const { POPUP_FRAME: P, CONTROL: C, TYPE: T } = await import(TOKENS_URL);
+const Grid = await import(GRID_URL);
 await Popup.frameReady();
-for (const key of ['S', 'M', 'L', 'XL']) for (const requested of [0, 1, 786, 900, 1400, 2000]) for (const n of [1, 2, 3]) {
+for (const key of ['S', 'M', 'L', 'XL']) for (const requested of [0, 1, 374, 786, 900, 1400, 2000]) for (const n of [1, 2, 3]) {
   const tree = Popup.popupFrame('Title', key, requested, { buttons: Array.from({ length: n }, () => ({ label: 'OK' })) });
   const bg = NGUI.find(tree, 'Popup/Base/BG'), body = bg.widgets.find(w => 'sprite' in w);
   assert.equal(body.sprite, 'Common_Popup_Bg');
-  assert.equal(body.w_, P[key].w);
-  assert.equal(body.h_, requested ? Math.min(P.maxH, Math.max(P.minH, requested)) : P[key].h);
+  assert.equal(body.w_, P[key === 'XL' ? 'L' : key].w);  // no popup wider than L (BL-176)
+  assert.equal(body.h_, requested ? Math.min(P.maxH, Math.max(P.minH, requested)) : P[key === 'XL' ? 'L' : key].h);
   const title = NGUI.find(bg, 'Label_Title_Locale'), close = NGUI.find(bg, 'Btn_Close');
-  assert.ok(Math.abs(body.h_ / 2 - title.pos[1] - title.widgets[0].h_ / 2 - P.titleTop) < 1e-9);
+  // the title one size under the game's (BL-176), centred where the game's 72 stood under the frame's top
+  assert.ok(Math.abs(body.h_ / 2 - title.pos[1] - P.titleTop - Grid.textItem(NGUI, 'Title', T.display, { lines: 1 }).h / 2) < 1e-9);
   assert.equal(body.w_ / 2 - close.pos[0] - C.icon.h / 2, P.close.right);
   assert.equal(body.h_ / 2 - close.pos[1] - C.icon.h / 2, P.close.top);
   const btn = NGUI.find(tree, 'Popup/Btn');
-  assert.equal(btn.pos[1] - C.buttonM.h / 2 - (P.frameY - body.h_ / 2), P.footer.bottom);
+  assert.equal(btn.pos[1] - C.buttonXS.h / 2 - (P.frameY - body.h_ / 2), Popup.footerBottom());
   assert.equal(btn.children.length, n);
   assert.equal(new Set(btn.children.map(child => NGUI.find(child, 'Label_Locale').widgets[0].fontSize)).size, 1);
-  for (const child of btn.children) assert.equal(NGUI.find(child, 'BG (1)').widgets[0].h_, C.buttonM.h);
+  for (const child of btn.children) assert.equal(NGUI.find(child, 'BG (1)').widgets[0].h_, C.buttonXS.h);
 }
 """
-    for marker, filename in (("POPUP_URL", "popup.js"), ("NGUI_URL", "ngui.js"), ("TOKENS_URL", "ui-tokens.js")):
+    for marker, filename in (("POPUP_URL", "popup.js"), ("NGUI_URL", "ngui.js"), ("TOKENS_URL", "ui-tokens.js"), ("GRID_URL", "ui-grid.js")):
         script = script.replace(marker, json.dumps((web / filename).as_uri()))
     result = subprocess.run([NODE, "--input-type=module", "-e", script], input=json.dumps(source),
                             capture_output=True, text=True, timeout=30)

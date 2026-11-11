@@ -5,15 +5,21 @@ import * as Popup from "./popup.js";
 import * as Buttons from "./game-buttons.js";
 import { rpc } from "./api.js";
 import { T } from "./i18n.js";
-import { FOOTER } from "./ui-tokens.js";
+import { FOOTER, POPUP_FOOTER, POPUP_FRAME } from "./ui-tokens.js";
 import { S, wrapPath } from "./util.js";
 
 const { node, label, sprite, find } = NGUI;
-// An illustrated page keeps the original frame and content, the frame 68.5 taller for the footer's rise and the content
-// lifted by half of it (the frame grows both ways from its centre), so the room under the caption is what it was.
-const LIFT = FOOTER.rise / 2;
+// An illustrated page keeps the original frame and content, the frame as much taller (or shorter) as the footer's top stands
+// above the original's (its 177-high bodies centred 122 above the bottom), the content moved by half of it (the frame grows
+// both ways from its centre), so the room under the caption is what it was. The XS footer (BL-176) stands lower: -46.5.
+const RISE = POPUP_FOOTER.bottom + POPUP_FOOTER.control.h - (FOOTER.centre - FOOTER.rise + FOOTER.body.h / 2);
+const LIFT = RISE / 2;
 // bottom: the lowest content edge of an illustrated page, the caption (centre -445, 70 high)
-export const GEOMETRY = { width: 2458, height: 1400 + FOOTER.rise, image: [-1000, -400 + LIFT, 2000, 500], bottom: -445 + LIFT - 35 };
+// The page is the L class's 2098 wide (BL-176: no popup wider), its text 1800 across and the illustration 1800 x 450 (the
+// original 2000 x 500 scaled to the text's width), centred where it was.
+const TEXT_W = POPUP_FRAME.L.w - 298, IMAGE = [TEXT_W, TEXT_W / 4];
+export const GEOMETRY = { width: POPUP_FRAME.L.w, height: 1400 + RISE, image: [-IMAGE[0] / 2, -150 - IMAGE[1] / 2 + LIFT, ...IMAGE],
+  bottom: -445 + LIFT - 35 };
 let active = null;
 const shown = new Set();
 const paint = () => new Promise((resolve) => (globalThis.requestAnimationFrame || queueMicrotask)(resolve));
@@ -50,12 +56,6 @@ export function pageTree(page, index, count, size = pageSize([page])) {
     { cancel: previous, ok: next });
   const popup = find(tree, "Popup"), controls = find(popup, "Btn");
   find(controls, "Btn_Ok").actionSemantic = index === count - 1 ? "finish" : "navigation";
-  const { fs: fsMax, fsMin, w: room, lines } = FOOTER.caption;
-  const fs = Math.min(...[previous, next].map((text) => wrapPath(text, fsMax, fsMin, room, lines).fs));
-  for (const [name, text] of [["Btn_Cancel", previous], ["Btn_Ok", next]]) {
-    const fitted = wrapPath(text, fs, fs, room, lines);
-    Object.assign(find(controls, `${name}/Label_Locale`).widgets[0], { text: fitted.text, fontSize: fs, w_: room });
-  }
   if (index === 0) controls.children[controls.children.findIndex((child) => child.name === "Btn_Cancel")] = Buttons.disable(find(controls, "Btn_Cancel"));
   find(popup, "Base/BG/Label_Title_Locale").widgets[0].h_ = 100;
   if (!size.image) {
@@ -65,19 +65,19 @@ export function pageTree(page, index, count, size = pageSize([page])) {
     popup.children.push(...body.tree.children);
     return tree;
   }
-  const title = fitCopy(page.title, 52, 44, 2100, 2);
-  const body = fitCopy(page.body, 48, 40, 2100, 3);
+  const title = fitCopy(page.title, 52, 44, TEXT_W, 2);
+  const body = fitCopy(page.body, 48, 40, TEXT_W, 3);
   const bodyHeight = body.lines * body.fs * 1.3 + 12;
   const illustrated = page.image && bodyHeight <= 200;
   popup.children.push(
     node("Count", [0, 520 + LIFT], [label(T("tour.count", { page: index + 1, total: count }), 40, "#506e8e/1.00", 500, 70, { depth: 8 })]),
-    node("FeatureTitle", [0, (illustrated ? 405 : 300) + LIFT], [label(title.text, title.fs, "#2d4664/1.00", 2100, title.lines * title.fs * 1.3 + 12, { depth: 8 })]),
-    node("FeatureBody", [0, (illustrated ? 220 : -40) + LIFT], [label(body.text, body.fs, "#2d4664/1.00", 2100, bodyHeight, { depth: 8 })]),
+    node("FeatureTitle", [0, (illustrated ? 405 : 300) + LIFT], [label(title.text, title.fs, "#2d4664/1.00", TEXT_W, title.lines * title.fs * 1.3 + 12, { depth: 8 })]),
+    node("FeatureBody", [0, (illustrated ? 220 : -40) + LIFT], [label(body.text, body.fs, "#2d4664/1.00", TEXT_W, bodyHeight, { depth: 8 })]),
   );
   if (illustrated) {
-    popup.children.push(node("ImageSlot", [0, -150 + LIFT], [sprite("Common_Bg_Raius10px", 2000, 500, { depth: 5, color: "#ecf5f9/1.00" })]));
-    const caption = fitCopy(page.caption || "", 40, 40, 2100, 1);
-    popup.children.push(node("Caption", [0, -445 + LIFT], [label(caption.text, caption.fs, "#506e8e/1.00", 2100, 70, { depth: 8 })]));
+    popup.children.push(node("ImageSlot", [0, -150 + LIFT], [sprite("Common_Bg_Raius10px", IMAGE[0], IMAGE[1], { depth: 5, color: "#ecf5f9/1.00" })]));
+    const caption = fitCopy(page.caption || "", 40, 40, TEXT_W, 1);
+    popup.children.push(node("Caption", [0, -445 + LIFT], [label(caption.text, caption.fs, "#506e8e/1.00", TEXT_W, 70, { depth: 8 })]));
   }
   return tree;
 }
@@ -193,7 +193,7 @@ export async function start({ info, ready, blocked = () => false }) {
 export async function browse() {
   const result = await rpc("app.tours");
   const tours = result?.tours || [];
-  return Popup.message({ title: T("tour.title"), width: 2458, scroll: true, plain: true,
+  return Popup.message({ title: T("tour.title"), width: "L", scroll: true, plain: true,
     lines: tours.length ? tours.map((tour) => ({ text: `${tour.version} - ${tour.pages.map((page) => page.title).join(T("tour.separator"))}`,
       button: { label: T("tour.open"), fn: () => show(tour.pages, [tour.version]) } })) : [T("tour.empty")],
     cancel: T("display.close") });

@@ -350,7 +350,7 @@
 			"configured": "已设定"
 		},
 		"field": {
-			"file": "文件",
+			"file": "文件名",
 			"type": "类型",
 			"size": "大小",
 			"status": "状态",
@@ -1020,6 +1020,8 @@
 			"changePortrait": "更换立绘",
 			"add": "添加",
 			"remove": "移除",
+			"selectStudent": "请选择学生",
+			"removeConfirm": "从清单中移除此记忆大厅",
 			"previous": "上一个",
 			"next": "下一个",
 			"done": "完成",

@@ -93,7 +93,8 @@ test("stopped memorial sites explicitly retain their existing button boxes and c
   assert.match(hall, /retainedButtonSize = .*NGUI\.fitGroup\(captions, 40, 26, width \/ S - 60, 2, \{ maxH: height \/ S - 20 \}\)/);
   assert.match(hall, /actions.map\(\(action, index\) => retainedButton/);
   assert.match(hall, /kind === "spr" \? button : retainedButton/);
-  assert.match(read("js/student-hall-picker.js"), /UI\.retainedButton\(box, `Remove/);
+  // the queue's Remove is a trash button over the card now (BL-176)
+  assert.match(read("js/student-hall-picker.js"), /UI\.trashButton\(box, `Remove/);
   assert.match(read("js/student-hall.js"), /UI\.button\(destination, "HallPortraitScaleReset"/);
 });
 
@@ -247,17 +248,18 @@ for (const locale of locales) test(`every footer's captions share one size in th
 
 // Hall modals use the shared footer; the memorial editor still hits its full-row stop rule.
 const popupSource = read("js/popup.js");
-const footerHelpers = new Function("CONTROL", "POPUP_FRAME", "SPACE", "TYPE", "BUTTON_TEXT_H", "row", "toNode", "FRAME_Y", "NGUI", "captionMinimum", "SMALL_BUTTON", `${popupSource.slice(popupSource.indexOf("export const footerY"), popupSource.indexOf("// the game's popup frame at a size"))
-  .replaceAll("export ", "")}; return {footerY, footerTop, footerSlots, footerFit, footerLabels, footerWidth, footerLayout};`)(Tokens.CONTROL, Tokens.POPUP_FRAME, Tokens.SPACE, Tokens.TYPE, 156, row, toNode, Tokens.POPUP_FRAME.frameY, NGUI, Tokens.captionMinimum, Tokens.SMALL_BUTTON);
-test("Hall modal footers use the default M for one, two and three actions", () => {
-  const M = Tokens.CONTROL.buttonM;
+const footerHelpers = new Function("CONTROL", "POPUP_FOOTER", "POPUP_FRAME", "SPACE", "TYPE", "BUTTON_TEXT_H", "row", "toNode", "FRAME_Y", "NGUI", "captionMinimum", "SMALL_BUTTON", "XS_BUTTON", `${popupSource.slice(popupSource.indexOf("export const footerBottom"), popupSource.indexOf("// the game's popup frame at a size"))
+  .replaceAll("export ", "")}; return {footerBottom, footerY, footerTop, footerSlots, footerFit, footerLabels, footerWidth, footerLayout};`)(Tokens.CONTROL, Tokens.POPUP_FOOTER, Tokens.POPUP_FRAME, Tokens.SPACE, Tokens.TYPE, 156, row, toNode, Tokens.POPUP_FRAME.frameY, NGUI, Tokens.captionMinimum, Tokens.SMALL_BUTTON, Tokens.XS_BUTTON);
+test("Hall modal footers use the default XS for one, two and three actions", () => {
+  const M = Tokens.CONTROL.buttonXS;
   for (const n of [1, 2, 3]) {
     // the slots of a row of bodies the control's minimum wide (footerLayout widens them with the captions)
     const { scale, xs } = footerHelpers.footerSlots(n, 2800, M);
     assert.equal(scale, 1);
     assert.equal(xs.reduce((sum, x) => sum + x, 0), 0);
     for (let i = 1; i < n; i++) assert.ok(Math.abs(xs[i] - xs[i-1] - M.minW * scale - Tokens.POPUP_FRAME.footer.gap) < 1e-9);
-    assert.equal(footerHelpers.footerY(1450, M) - (Tokens.POPUP.frameY - 1450 / 2), Tokens.POPUP_FRAME.footer.bottom + M.h / 2);
+    assert.equal(footerHelpers.footerY(1450) - (Tokens.POPUP.frameY - 1450 / 2), Tokens.POPUP_FOOTER.bottom + M.h / 2);
+    assert.equal(footerHelpers.footerBottom(), Tokens.POPUP_FOOTER.bottom, "the prefab's 102 under 176, scaled to 104");
   }
 });
 const { SORTS } = await import("../../src/bmpt/web/js/roster-order.js");
@@ -268,7 +270,7 @@ const toolbarFor = (web) => new Function("NGUI", "T", "advanceOf", "glyphsOf", "
 const modalLayoutFor = (web) => {
   const source = read("js/student-hall-ui.js");
   return new Function("Popup", "POPUP", "POPUP_FRAME", "S", "toolbarLayout", "SPACE", "BUTTON", "layoutStack", `${source.slice(source.indexOf("export const modalContentBottom"), source.indexOf("// Keep a caller's centre"))
-    .replaceAll("export ", "")}; return {modalContentBottom, portraitPickerLayout, backgroundPickerBox, portraitRowLayout, compactFooterBoxes, COMPACT_BUTTON_H, COMPACT_FOOTER_W, PORTRAIT_FRAME};`)({ ...footerHelpers, LIST_CARD_NAME: { fs: 34, lines: 2, padY: 22, pitch: 1.2 } }, Tokens.POPUP, Tokens.POPUP_FRAME, 1920 / 2960, toolbarFor(web), Tokens.SPACE, Tokens.CONTROL.buttonXS, layoutStack);
+    .replaceAll("export ", "")}; return {modalContentBottom, portraitPickerLayout, backgroundPickerBox, backgroundPreviewBox, WIDE, BACKGROUND, portraitRowLayout, compactFooterBoxes, COMPACT_BUTTON_H, COMPACT_FOOTER_W, PORTRAIT_FRAME};`)({ ...footerHelpers, LIST_CARD_NAME: { fs: 34, lines: 2, padY: 22, pitch: 1.2 } }, Tokens.POPUP, Tokens.POPUP_FRAME, 1920 / 2960, toolbarFor(web), Tokens.SPACE, Tokens.CONTROL.buttonXS, layoutStack);
 };
 for (const locale of ["en-US", "th-TH", "zh-CN", "zh-TW", "ja-JP", "ko-KR"]) test(`Hall modal content keeps its gaps and clears the compact footer, keeping full rows in both search states in ${locale}`, () => {
   document.documentElement.lang = locale;
@@ -297,26 +299,34 @@ for (const locale of ["en-US", "th-TH", "zh-CN", "zh-TW", "ja-JP", "ko-KR"]) tes
       assert.ok((y + h) * k <= height * dpr);
     }
   }
-  const bg = layout.backgroundPickerBox();
-  assert.deepEqual([bg[0], bg[2], bg[3]], [130, 760, 650]);
+  // the background picker in the L class (BL-176): the list at WIDE's left, the preview after it up to WIDE's right
+  const bg = layout.backgroundPickerBox(), preview = layout.backgroundPreviewBox();
+  near(layout.WIDE.left, 960 - (Tokens.POPUP_FRAME.L.w / 2 - Tokens.SPACE.xl) * S);
+  // the list on the right, the preview on the left (BL-176)
+  assert.deepEqual([bg[0], bg[2]], [layout.WIDE.left + layout.WIDE.width - layout.BACKGROUND.list, layout.BACKGROUND.list]);
+  near(bg[1], 540 - (Tokens.POPUP.frameY + 1450 / 2 - 132 - Tokens.SPACE.l) * S);
+  near(bg[1] + bg[3], 540 - (footerHelpers.footerTop(1450, 2) + Tokens.SPACE.xl) * S);
+  // the preview and its caption centred down the list's height
+  near(preview.top + (preview.height + layout.BACKGROUND.caption + 40 * S * 1.3) / 2, bg[1] + bg[3] / 2);
+  near(preview.left, layout.WIDE.left); near(preview.left + preview.width + Tokens.SPACE.l * S, bg[0]);
+  near(preview.height, preview.width * 1080 / 1920);
+  assert.ok(bg[1] + bg[3] <= 540 - (Tokens.POPUP.frameY - 1450 / 2) * S, "inside the frame");
   assert.ok(bg[1] >= 540 - (Tokens.POPUP.frameY + 1450 / 2 - 132) * S);
   assert.ok(bg[3] >= 280);
   assert.ok(bg[1] + bg[3] + Tokens.POPUP.clearance * S <= 540 - footerHelpers.footerTop(1450, 2) * S + 1e-9);
   assert.match(read("js/student-hall-picker.js"), /UI\.portraitPickerLayout\(view, searching\)\.list/);
   assert.match(read("js/student-hall.js"), /UI\.backgroundPickerBox\(\)/);
 });
-test("the memorial modal remains stopped: even tightly stacked full rows cannot clear the shared footer", () => {
-  const S = 1920 / 2960, limit = 540 - (footerHelpers.footerTop(1450, 2) + Tokens.POPUP.clearance) * S;
-  const titleBottom = 540 - (Tokens.POPUP.frameY + 1450 / 2 - (64 + 52 + 6)) * S;
-  const candidate = 93 + (202.5 + 10 + 88) * .39 + 8 + Tokens.SMALL_BUTTON.h * S;
-  const queue = 119 + Tokens.SMALL_BUTTON.h * S;
-  // A generous lower bound: no inter-panel gaps, shortest name strip, search only its native body's height.
-  for (const searching of [false, true]) {
-    const bottom = titleBottom + 140 * (1660 / 2840) + (searching ? 90 * S : 0) + 58 + candidate + 15 + 15 + queue + 5;
-    assert.ok(bottom > limit, `${searching}: ${bottom} exceeds ${limit}`);
-  }
+test("the memorial modal keeps its retained footer: XS-high buttons at the frame's bottom right, under its fixed queue", () => {
+  // the queue panel ends at 915 px; the retained buttons (the XS body, BL-176) stand under it
+  const S = 1920 / 2960, bottom = 540 + (1450 / 2 - 120) * S;
+  assert.ok(bottom >= 720 + 195, `${bottom}`);
+  // each as wide as its caption needs, their right edge on the panels' (BL-176)
+  assert.match(read("js/student-hall-ui.js"), /const bodyH = CONTROL\.buttonXS\.h \* S, captions = actions\.map\(\(action\) => action\.label\);/);
+  assert.match(read("js/student-hall-ui.js"), /let x = WIDE\.left \+ WIDE\.width - widths\.reduce/);
   assert.match(read("js/student-hall-picker.js"), /memorial \? \{ retainedFooter: true \}/);
-  assert.match(read("js/student-hall-picker.js"), /queuePanel\(layer, \[115, 720, 1685, 195\]/);
+  // the queue across WIDE, the L class's content (BL-176)
+  assert.match(read("js/student-hall-picker.js"), /queuePanel\(layer, \[wideLeft, 720, wideW, 195\]/);
 });
 const HALL_FOOTERS = [["popup.cancel", "hall.savePlaylist"], ["hall.doneAdding"], ["popup.cancel"],
   ["popup.cancel", "hall.useBackground"], ["hall.keepEditing", "hall.discard", "hall.saveLeave"]];

@@ -80,7 +80,7 @@ const { DIALOG_H } = await import("../../src/bmpt/web/js/batch-import.js");
 const { frameOutline } = await import("../../src/bmpt/web/js/row-thumbnail.js");
 const { ROW_W: OPTION_WIDTH, rowBase, radioRow } = await import("../../src/bmpt/web/js/settings-rows.js");
 const { S } = await import("../../src/bmpt/web/js/util.js");
-const { SPACE, TYPE, LINE, CONTROL, POPUP_FRAME } = await import("../../src/bmpt/web/js/ui-tokens.js");
+const { SPACE, TYPE, LINE, CONTROL, POPUP_FOOTER, POPUP_FRAME, POPUP_TYPE } = await import("../../src/bmpt/web/js/ui-tokens.js");
 const { container } = await import("../../src/bmpt/web/js/ui-grid.js");
 // separate lines of a row stack LINE.stack of the row's one size apart (List_01's meta lines)
 const PITCH = LINE.stack * TYPE.dense.fs;
@@ -1206,7 +1206,8 @@ test("advanced boolean, choice, resource and input rows share Settings' body, ti
   for (const group of groups) {
     const { tree, opts } = drawn(h, group), key = group.dataset.option;
     const height = parseFloat(group.style.height) / S;
-    const base = rowBase(`Option_${key}`, 0, height, find(tree, "Title").widgets[0].text);
+    // a popup's cards, one size under the Settings page's (POPUP_TYPE.card, BL-176)
+    const base = rowBase(`Option_${key}`, 0, height, find(tree, "Title").widgets[0].text, POPUP_TYPE.card);
     assert.deepEqual(tree.widgets, base.widgets);
     assert.deepEqual(find(tree, "Title"), find(base, "Title"));
     assert.deepEqual(find(tree, "DotLine"), find(base, "DotLine"));
@@ -1219,7 +1220,7 @@ test("advanced boolean, choice, resource and input rows share Settings' body, ti
   await off.click(); await h.page.settled();
   assert.equal(off.getAttribute("aria-checked"), "true");
   assert.equal(walk(enable).find((element) => element.dataset.value === "true").getAttribute("aria-checked"), "false");
-  const expected = radioRow("Option_backup", 0, "Create Backup", [[true, "On"], [false, "Off"]], false, () => {}).tree;
+  const expected = radioRow("Option_backup", 0, "Create Backup", [[true, "On"], [false, "Off"]], false, () => {}, { type: POPUP_TYPE.card }).tree;
   assert.deepEqual(drawn(h, enable).tree, expected);
   await h.action("ok", h.dialog).click();
   assert.equal(h.calls.find((call) => call.method === "import.setOptions").params.backup, false);
@@ -1371,9 +1372,13 @@ test("footer artwork clears the whole bottom nav and the list and dialog content
   assert.match(css, /\.import-search-clear\s*\{\s*z-index:\s*40/);
   const rule = css.match(/\.import-dialog-content\s*\{([^}]+)\}/)[1];
   const top = Number(rule.match(/top:\s*(\d+)px/)[1]), height = Number(rule.match(/height:\s*(\d+)px/)[1]);
-  // the dialog frame is 68.5 taller than it was; its footer's centre sits 190.5 above the bottom edge, the body 4 below that
-  const popupButtonTop = 540 - (-12 - (1360 + 68.5) / 2 + 190.5 - 4) * S - 177 * S / 2;
-  assert.ok(top + height < popupButtonTop - 16);
+  // the dialog's XS footer (BL-176): its bodies' tops POPUP_FOOTER.bottom + the body's height above the frame's bottom edge;
+  // the area ends about SPACE.xl (26 px) above them, and its frame's top keeps the title's band over it
+  const frameTop = 540 - (POPUP_FRAME.frameY + DIALOG_H / 2) * S, frameBottom = 540 - (POPUP_FRAME.frameY - DIALOG_H / 2) * S;
+  const popupButtonTop = frameBottom - (POPUP_FOOTER.bottom + POPUP_FOOTER.control.h) * S;
+  assert.ok(top + height <= popupButtonTop - SPACE.xl * S + 1, `${top + height} ${popupButtonTop}`);
+  assert.ok(top + height >= popupButtonTop - SPACE.xl * S - 4, "no more padding than SPACE.xl over the footer");
+  assert.ok(top - frameTop >= 83 && top - frameTop <= 84, "the area keeps its place under the title's band");
 });
 
 test("all six locales retain option labels, On/Off choices and the same saved values", async () => {
@@ -2328,7 +2333,8 @@ test("Advanced Options, Import State, Import Results and Assign Character each d
   const unknown = { ...entry("unidentified", "blocked", "lobby"), variant: null, reason: "mod_target_unknown" };
   await h.analyze([unknown]); await h.action("assignCharacter").click(); await flush(); await h.page.settled();
   area = areaOf(); bar = barOf();
-  assert.deepEqual(bar.track, scrollbarTrack(DIALOG_AREA, S));
+  // the L class's content box, as Advanced Options' (BL-176: no dialog wider)
+  assert.deepEqual(bar.track, scrollbarTrack([960 + (inner.x - POPUP_FRAME.L.w / 2) * S, DIALOG_AREA[1], inner.w * S, 640], S));
   await h.action("close", h.dialog).click();
 });
 
@@ -2340,7 +2346,9 @@ test("Import Results draws the game's scrollbar on its area", async () => {
   await h.page.results();
   const area = h.dialog.querySelector(".import-results"), bar = h.drawnBars.findLast((item) => item.parentNode?.parentNode === h.dialog);
   assert.ok(area && bar, "bound to the results");
-  assert.deepEqual(bar.track, scrollbarTrack(DIALOG_AREA, S));
+  // the L class's content box (BL-176)
+  const inner = container({ w: POPUP_FRAME.L.w, h: DIALOG_H, padding: [0, SPACE.xl] }).inner;
+  assert.deepEqual(bar.track, scrollbarTrack([960 + (inner.x - POPUP_FRAME.L.w / 2) * S, DIALOG_AREA[1], inner.w * S, 640], S));
   overflow(area, 640, 1400, 60); await area.dispatch("scroll");
   assert.deepEqual(bar.syncs.at(-1), [640, 1400, 60]);
   await h.action("ok", h.dialog).click();

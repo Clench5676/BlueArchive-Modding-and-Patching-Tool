@@ -67,13 +67,13 @@ export function clipButtonPatterns(view, { load } = {}) {
   return Promise.all(pending);
 }
 
-// The size tag of a button (developer previews only): which of the presets (XS, S, M, L) a button body is, by its height in
+// The size tag of a button (developer previews only): which of the presets (XXS, XS, S, M, L) a button body is, by its height in
 // the app's units (what it measures on the stage: its prefab size, the nodes' scales and the render's scale). A pill that is
 // none of them (a compact body, a list's tool, a footer scaled to fit a row) is tagged with its measured height instead.
 // A pill is a body at most PILL.maxH high and PILL.ratio times as wide as high: the cards, thumbnails and square action
 // buttons that also draw Common_Btn_BG (the skill cards, the face cards) are not tagged.
 export const PILL = Object.freeze({ maxH: 200, ratio: 1.5 });
-export const BUTTON_TIERS = Object.freeze([["XS", CONTROL.buttonXS], ["S", CONTROL.buttonS], ["M", CONTROL.buttonM], ["L", CONTROL.buttonL]]);
+export const BUTTON_TIERS = Object.freeze([["XXS", CONTROL.buttonXXS], ["XS", CONTROL.buttonXS], ["S", CONTROL.buttonS], ["M", CONTROL.buttonM], ["L", CONTROL.buttonL]]);
 export function buttonTier(height, tolerance = 0.5) {
   return BUTTON_TIERS.find(([, control]) => Math.abs(height - control.h) <= tolerance)?.[0] ?? null;
 }

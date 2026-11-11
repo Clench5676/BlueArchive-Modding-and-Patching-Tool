@@ -3,6 +3,7 @@ import * as NGUI from "./ngui.js";
 import * as Popup from "./popup.js";
 import * as Loading from "./loading.js";
 import { EXPORT } from "./popup-frames.js";
+import { POPUP_TYPE } from "./ui-tokens.js";
 import { rowBase, radioRow } from "./settings-rows.js";
 import { rpc, waitJob } from "./api.js";
 import { T, errorText } from "./i18n.js";
@@ -56,8 +57,10 @@ function confirmation(initial) {
       const tree = Popup.popupFrame(T("export.title"), EXPORT.w, EXPORT.h,
         { ok: T("export.confirm"), cancel: T("export.chooseDirectory") });
       const popup = NGUI.find(tree, "Popup");
-      const path = rowBase("Destination", EXPORT.rows.Destination.y, EXPORT.rows.Destination.h, T(draft.folder === draft.defaultFolder ? "export.defaultDestination" : "export.destination"));
-      const fit = wrapPath(draft.folder, 44, 30, 1400, 3);
+      // the cards one size under the Settings page's (POPUP_TYPE.card, BL-176)
+      const card = POPUP_TYPE.card;
+      const path = rowBase("Destination", EXPORT.rows.Destination.y, EXPORT.rows.Destination.h, T(draft.folder === draft.defaultFolder ? "export.defaultDestination" : "export.destination"), card);
+      const fit = wrapPath(draft.folder, card.path.fs, card.path.min, 1400, 3);
       path.children.push(NGUI.node("Path", [-718, -45], [NGUI.label(fit.text, fit.fs, "#2d4664/1.00", 1440,
         fit.fs * fit.lines * 1.3 + 10, { pivot: 3, depth: 8 })]));
       const targets = draft.targets?.length ? draft.targets : [{ server: draft.server, platform: draft.platform }];
@@ -69,8 +72,8 @@ function confirmation(initial) {
           if (!targets.some((target) => target.server === value && target.platform === draft.platform))
             draft.platform = targets.find((target) => target.server === value).platform;
           redraw();
-        }), radioRow("Platform", EXPORT.rows.Platform.y, T("export.platform"), platforms.map((value) => [value, T(`import.source.${value}`)]),
-        draft.platform, (value) => { draft.platform = value; redraw(); })];
+        }, { type: card }), radioRow("Platform", EXPORT.rows.Platform.y, T("export.platform"), platforms.map((value) => [value, T(`import.source.${value}`)]),
+        draft.platform, (value) => { draft.platform = value; redraw(); }, { type: card })];
       popup.children.push(path, ...rows.map((row) => row.tree));
       const next = document.createElement("div");
       const view = await NGUI.render(tree, next, { scale: S, origin: [960, 540], z: 10 });

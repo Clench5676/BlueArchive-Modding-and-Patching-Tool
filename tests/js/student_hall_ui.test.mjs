@@ -89,8 +89,10 @@ test("white native row plates reserve equal margins beyond their outer inclined 
 
 
 test("the memorial queue preserves artwork size, halves the actual gap, and uses native noninclined paper",async()=>{
-  const artWidth=(720+405*Math.tan(Math.PI/18))*.25;
-  assert.ok(Math.abs((UI.MEMORIAL_QUEUE_PITCH-artWidth)-(290-artWidth)/2)<.001);
+  // the queue's cards .32 of the card (no Remove under them, BL-176), SPACE.l apart
+  const artWidth=(720+405*Math.tan(Math.PI/18))*UI.QUEUE.scale;
+  assert.equal(UI.QUEUE.scale,.32);
+  assert.ok(Math.abs(UI.MEMORIAL_QUEUE_PITCH-artWidth-SPACE.l)<.001);
   const n=(name,children=[],widgets=[])=>({name,children,widgets,pos:[0,0]});
   const native={sprite:"Common_Bg_Raius10px",w_:2828,h_:1282,pivot:4,type:1,incline:0,color:"#f4fcfe/1.00",depth:7};
   UI.assetsFixture({collection:n("Root",[n("ListBG",[n("PaperBG",[],[native])])])});

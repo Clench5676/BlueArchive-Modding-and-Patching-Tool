@@ -410,6 +410,7 @@ export async function render(tree, host, opts = {}) {
         justifyContent: { left: "flex-start", center: "center", right: "flex-end", justify: "center" }[align],
         color: col.hex, fontSize: `${(fontSizeFor(text, w.fontSize || 40) * sy * S).toFixed(2)}px`, lineHeight: "1.15", whiteSpace: "pre", textAlign: align,
         fontStyle: w.italic ? "italic" : "",
+        fontWeight: w.bold ? "700" : "",
         textShadow: labelEffect(w, sy * S),
         paddingBottom: `${(fontSizeFor(text, w.fontSize || 40) * sy * S * (isLatin(text) ? LATIN_LIFT : GLYPH_LIFT) * 2).toFixed(2)}px`,
       });

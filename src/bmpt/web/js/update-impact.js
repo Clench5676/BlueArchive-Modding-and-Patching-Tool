@@ -333,7 +333,7 @@ async function fix(mods, nameOf, { review = false } = {}) {
         // the asset update moves the mod's assets onto the new parts as they are: it looks the same after, said so
         if (review) {
           const answer = await Popup.message({ title: T("mods.impact.preview"), lines: [T("mods.impact.noPreview")],
-            cancel: T("photo.back"), ok: T("mods.impact.fix"), footer: "XS", compact: true });
+            cancel: T("photo.back"), ok: T("mods.impact.fix") });
           if (answer.button !== "ok") continue;
         }
         await Loading.task(async (update) => waitJob(await rpc("actions.update", { mod: mod.id }), update),

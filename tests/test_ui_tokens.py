@@ -376,10 +376,17 @@ def _origin(tree, path):
     return x + leaf["pos"][0], y + leaf["pos"][1]
 
 
-def test_popup_minimum_is_the_client_version_frame(tokens):
+def test_popup_minimum_is_the_title_band_over_the_xs_footer(tokens):
+    # The game's smallest titled popup with a footer button, UIPopup_ClientVersion (1115 x 786), kept far more padding than
+    # the owner wants (BL-176): the App's smallest frame is the title's band over the XS footer's clearance.
     path = bundle_by_cab("ui-_mxload-prefabs-2025-07-02_assets_all_197929148.bundle", "cab-f132af15cc4169b45772a043d884cb2c")
     with open_bundle(path) as env:
         tree = export_layout(env, "UIPopup_ClientVersion", {})
     bg = sprite(subtree(tree, "Center/Popup/Base/BG"), "Common_Popup_Bg")
-    assert bg["w_"] == 1115
-    assert bg["h_"] == tokens["POPUP_FRAME"]["minH"] == 786
+    assert (bg["w_"], bg["h_"]) == (1115, 786)
+    footer, frame, control = tokens["POPUP_FOOTER"], tokens["POPUP_FRAME"], tokens["CONTROL"]
+    assert footer["control"] == control["buttonXS"]
+    # the prefab's 102 under its 176-high buttonL bodies, scaled to the XS body's 104
+    assert footer["bottom"] == round(frame["footer"]["bottom"] * control["buttonXS"]["h"] / control["buttonL"]["h"]) == 60
+    assert footer["clearance"] == footer["bottom"] + control["buttonXS"]["h"] + footer["above"]
+    assert frame["minH"] == frame["contentTop"] + footer["clearance"] < bg["h_"]

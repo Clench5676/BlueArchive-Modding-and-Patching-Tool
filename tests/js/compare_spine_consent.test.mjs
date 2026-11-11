@@ -50,7 +50,7 @@ test("closing compare before its licence gate settles prevents late players", as
 
 // The compare callers retain their public frame fields while the shared geometry rounds their old width up to L.
 import { compareFrame } from "../../src/bmpt/web/js/popup-frames.js";
-import { CONTROL, POPUP_FRAME, SPACE } from "../../src/bmpt/web/js/ui-tokens.js";
+import { POPUP_FOOTER, POPUP_FRAME, SPACE } from "../../src/bmpt/web/js/ui-tokens.js";
 test("compare and repair frames use L and keep their scrolling findings inside the content box", () => {
   for (const review of [false, true]) {
     const f = compareFrame(review);
@@ -59,7 +59,7 @@ test("compare and repair frames use L and keep their scrolling findings inside t
     assert.equal(f.scroll.width, f.w - 2 * SPACE.xxxl);
     assert.equal(f.scroll.top, f.cy + f.h / 2 - POPUP_FRAME.contentTop);
     assert.equal(f.bottom, f.scroll.top - f.scroll.height);
-    if (review) assert.equal(f.bottom - (f.cy - f.h / 2 + POPUP_FRAME.footer.bottom + CONTROL.buttonL.h), SPACE.m);
+    if (review) assert.equal(f.bottom - (f.cy - f.h / 2 + POPUP_FOOTER.bottom + POPUP_FOOTER.control.h), POPUP_FOOTER.above);
     if (review) {
       assert.equal(f.h, 1180);
       assert.ok(f.rows.max * f.rows.pitch <= f.scroll.height);
@@ -74,7 +74,7 @@ test("comparison fits and centres zero, one or a capped set of rows; repair reta
   for (const count of [0, 1, cap, cap + 100]) {
     const f = compareFrame(false, count), used = Math.max(1, Math.min(count, cap)) * SPACE.xxl;
     assert.equal(f.rows.max, cap, "shrinking the frame never shrinks the row cap");
-    assert.equal(f.h, Math.max(786, POPUP_FRAME.contentTop + used + SPACE.xl));
+    assert.equal(f.h, Math.max(POPUP_FRAME.minH, POPUP_FRAME.contentTop + used + SPACE.xl));
     assert.ok(Math.abs(f.rows.y + SPACE.xxl / 2 - used / 2
       - (f.cy + f.h / 2 - f.content.y - f.content.h / 2)) <= .5);
     assert.equal(compareFrame(true, count).h, 1180);

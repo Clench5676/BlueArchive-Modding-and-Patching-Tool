@@ -70,6 +70,7 @@ Everything in one row shares one control height, and a control's caption has the
 |---|---|---|---|---|---|
 | `badge` | 54 | 34 | 16 | 220 | `List_01/TimeLimit/Bg` |
 | `chip` | 72 | 40 | 20 | 272 | `UICharacterDetail` type chip |
+| `buttonXXS` | 88 | 34 | 26 | 140 | `buttonXS` at 0.85: a details panel's actions when their row of XS buttons would not fit (BL-176) |
 | `buttonXS` | 104 | 40 | 34 | 200 | the app's small button: the S button at 0.765 of its height, the game's toolbar and tab height |
 | `buttonS` | 136 | 48 | 45 | 240 | `UIPopup_Option_PC` small button |
 | `buttonM` | 162 | 60 | 45 | 348 | `List_01/Btn_Receive` |

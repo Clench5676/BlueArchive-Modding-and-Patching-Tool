@@ -13,7 +13,7 @@ import * as Popup from "./popup.js";
 import { rpc } from "./api.js";
 import { T, errorText } from "./i18n.js";
 import { setSpineConsent } from "./spine-runtime.js";
-import { COLOUR, CONTROL, POPUP_FRAME, SPACE, TYPE, XS_BUTTON } from "./ui-tokens.js";
+import { COLOUR, CONTROL, POPUP_FOOTER, POPUP_FRAME, POPUP_TYPE, SPACE, TYPE, XS_BUTTON } from "./ui-tokens.js";
 import { frameGeometry, popupContent } from "./popup-frames.js";
 import { container, row, stack, textItem, toNode } from "./ui-grid.js";
 import { S, hitButton, wrapPath } from "./util.js";
@@ -46,7 +46,7 @@ export function assetLayout(cacheDir) {
   const note = textItem(NGUI, T("consent.note"), TYPE.caption, { maxW: w - 2 * SPACE.xxxl, lines: 3 });
   const sections = stack([{ w: sectionW, h: cachedH }, { w: sectionW, h: neverH }, { w: note.w, h: note.h }],
     { w: sectionW, gap: SPACE.xl, align: "center" });
-  const f = frameGeometry("L", POPUP_FRAME.contentTop + sections.h + POPUP_FRAME.footer.bottom + CONTROL.buttonL.h + SPACE.m);
+  const f = frameGeometry("L", POPUP_FRAME.contentTop + sections.h + POPUP_FOOTER.clearance);
   const content = popupContent(f.w, f.h), placed = stack(sections.boxes, { ...content, gap: SPACE.xl, align: "center", justify: "center" }).boxes;
   const cachedTop = toNode(placed[0], 1, f)[1], neverTop = toNode(placed[1], 1, f)[1];
   const path = pathRow.boxes[0], button = pathRow.boxes[1], rowY = -cachedBodyH - SPACE.m - pathRow.h / 2;
@@ -131,7 +131,7 @@ export function spine(host, { over = false, readOnly = false } = {}) {
 export function spineFrame() {
   const ok = T("picker.ok");
   const { body, width, height, y0, visible, scroll } = Popup.messageLayout({
-    lines: [{ text: T("spine.license.notice"), fontSize: 52, minFontSize: 52 }], width: POPUP_FRAME.L.w, ok,
+    lines: [{ text: T("spine.license.notice"), fontSize: POPUP_TYPE.text.fs, minFontSize: POPUP_TYPE.text.fs }], width: POPUP_FRAME.L.w, ok,
   });
   const tree = Popup.popupFrame(T("spine.license.title"), width, height, { ok, close: false });
   body.tree.pos = [0, y0];
@@ -159,7 +159,7 @@ async function drawSpine(host, over, readOnly, resolve) {
   const next = document.createElement("div");
   if (!assetsAllowed) {
     const fallback = Popup.plainMessage(next, { title: T("spine.license.title"), width: POPUP_FRAME.L.w,
-      lines: [{ text: T("spine.license.notice"), fontSize: TYPE.heading.fs, minFontSize: TYPE.heading.fs }],
+      lines: [{ text: T("spine.license.notice"), fontSize: POPUP_TYPE.text.fs, minFontSize: POPUP_TYPE.text.fs }],
       ok: T("picker.ok"), dismissable: false }, choose);
     fallback.box.classList.add("spine-license-plain");
   } else {
@@ -231,7 +231,7 @@ export function scanLayout() {
   const note = textItem(NGUI, T("mods.scan.note"), TYPE.caption, { maxW: W - 2 * SPACE.xxxl, lines: 3 });
   const parts = [{ w: panelW, h: hc }, { w: panelW, h: hn }, { w: note.w, h: note.h }];
   const measured = stack(parts, { gap: SPACE.xl });
-  const frame = frameGeometry("L", POPUP_FRAME.contentTop + measured.h + POPUP_FRAME.footer.bottom + CONTROL.buttonL.h + SPACE.m);
+  const frame = frameGeometry("L", POPUP_FRAME.contentTop + measured.h + POPUP_FOOTER.clearance);
   const content = popupContent(frame.w, frame.h), boxes = stack(parts, { ...content, gap: SPACE.xl, align: "center", justify: "center" }).boxes;
   return { ...frame, content, boxes, checked, never, note };
 }

@@ -7,7 +7,7 @@ import { BUTTON_TIERS, CHIP_TIER_LIST, PILL, TAG, buttonTier, chipTier, inkBox, 
 import { CHIP_TIERS, CONTROL, SMALL_BUTTON, XS_BUTTON } from "../../src/bmpt/web/js/ui-tokens.js";
 
 test("the presets are the controls' heights, XS under S under M under L", () => {
-  assert.deepEqual(BUTTON_TIERS.map(([tier, control]) => [tier, control.h]), [["XS", 104], ["S", 136], ["M", 162], ["L", 176]]);
+  assert.deepEqual(BUTTON_TIERS.map(([tier, control]) => [tier, control.h]), [["XXS", 88], ["XS", 104], ["S", 136], ["M", 162], ["L", 176]]);
   assert.equal(XS_BUTTON.h, CONTROL.buttonXS.h);
   assert.equal(XS_BUTTON.h, CONTROL.toolbar.h, "the game's own toolbar and tab height (UILobby Able_Count/Bg, Common_Filter_Tab_Type1)");
   assert.equal(2 * CONTROL.buttonXS.pad, XS_BUTTON.glyphPad);

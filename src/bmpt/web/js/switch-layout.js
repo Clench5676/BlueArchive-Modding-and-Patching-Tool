@@ -20,17 +20,32 @@ function spreadPitch(count, w, span) {
   return boxes[1].x - boxes[0].x;
 }
 
+// The list popups' cards in the L class (owner, 2026-11-11, BL-176): at least MIN_COLUMNS of a kind a row, the card scaled
+// down (its aspect and name band kept) until they fit the paper less its inset, the vertical scrollbar's band (SCROLL_BAND)
+// and the inclined edges' overhang; a portrait strip (horizontal) at PORTRAIT_SCALE, its names clear of the scrollbar under it.
+export const MIN_COLUMNS = Object.freeze({ lobby: 2, model: 3 });
+export const PORTRAIT_SCALE = .875; // 280 x 616: whole units
+export const SCROLL_BAND = SPACE.m;
 export function switchGrid(kind, width = GRID_WIDTH) {
   // The generic list (no kind): six columns of 250 x 226 cards, centred, at the card's width and SPACE.l across (34 before; the
   // gap that keeps six columns inside the paper's inset at the standard width) and SPACE.xxl down (56 before).
   if (!kind) return { card: { w: 250, h: 226, bar: 68 }, columns: 6, pitch: [250 + SPACE.l, 226 + 68 + SPACE.xxl], rowH: 226 + 68, overhang: 304 * lean };
-  const card = kind === "spr" ? { w: 320, h: 704, bar: 104 }
+  let card = kind === "spr" ? { w: 320 * PORTRAIT_SCALE, h: 704 * PORTRAIT_SCALE, bar: 104 }
     : kind === "lobby" ? { w: 790, h: 444.375, bar: 104 }
     : kind === "model" ? { w: 360, h: 360, bar: 104 }
     : { w: 250, h: 226, bar: 68 };
-  const overhang = (card.h + card.bar + 10) * lean;
   const max = kind === "lobby" ? 2 : kind === "spr" || kind === "model" ? 4 : 6;
-  const area = container({ w: width, h: 0, padding: [0, INSET] }).inner;
+  // the paper less its inset and, for a list that scrolls down, the scrollbar's band at its right
+  const area = container({ w: width - (kind === "spr" ? 0 : SCROLL_BAND), h: 0, padding: [0, INSET] }).inner;
+  const least = MIN_COLUMNS[kind];
+  if (least) {
+    // m cards, GAP apart, and the overhang of the last one's incline: m w + (m - 1) GAP + (w r + bar + 10) lean <= area
+    const r = card.h / card.w, w = (area.w - (least - 1) * GAP - (card.bar + 10) * lean) / (least + r * lean);
+    // whole units, the width a multiple of 16 so a 16:9 card's height is whole too
+    const whole = Math.floor(w / 16) * 16;
+    if (whole < card.w) card = { ...card, w: whole, h: whole * r };
+  }
+  const overhang = (card.h + card.bar + 10) * lean;
   const columns = Math.max(1, Math.min(max, Math.floor((area.w - overhang + GAP) / (card.w + GAP))));
   const rowH = card.h + card.bar;
   const pitch = [kind === "spr" ? card.w + GAP : spreadPitch(columns, card.w, area.w - overhang), rowH + GAP];

@@ -16,7 +16,7 @@ import { spineAllowed } from "./spine-runtime.js";
 import { thumbnailScope, forget } from "./thumbs.js";
 import { modelThumbnail } from "./model-still.js";
 import { S } from "./util.js";
-import { FOOTER, XS_BUTTON, SPACE, TYPE, CONTROL, POPUP_FRAME } from "./ui-tokens.js";
+import { XS_BUTTON, SPACE, TYPE, CONTROL, POPUP_FRAME, POPUP_TYPE } from "./ui-tokens.js";
 import { row as layoutRow, stack as layoutStack, container } from "./ui-grid.js";
 import { ROW_W as OPTION_WIDTH, rowBase, radioRow } from "./settings-rows.js";
 import { BUTTON_BODY_H, loadImportLayouts, importArtwork, clipButtonPatterns, ROW_SCALE, ROW_WIDTH, ROW_HEIGHT, ROW_SELECTION, ROW_CHECK_TOP,
@@ -44,9 +44,10 @@ const sizeText = (size) => size >= 1048576 ? `${(size / 1048576).toFixed(1)} MB`
 const baseName = (path) => path?.split(/[\\/]/).pop() || "";
 const listSeparator = () => /^(zh|ja)/i.test(language()) ? "、" : ", ";
 // the dialogs' scrolling area [left, top, width, height] (px in the stage; app.css .import-dialog-content has the same numbers)
-// and their frame's height: 1360 plus the footer's rise (68.5), the area 22 px (half of it in px) higher
-export const DIALOG_H = 1360 + FOOTER.rise;
-export const DIALOG_AREA = [228, 168, 1464, 640];
+// and their frame's height: the area 83.5 px under the frame's top, and the XS footer every popup has (BL-176) about
+// SPACE.xl under the area (POPUP_FOOTER.clearance)
+export const DIALOG_H = 1320.5;
+export const DIALOG_AREA = [228, 203, 1464, 640];
 
 export function catalogEntries(data) {
   return (data?.families || []).flatMap((family) => (family.variants || []).map((variant) => ({ ...variant, family })));
@@ -626,10 +627,10 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
     if (model.busy()) return;
     let server = entry.source?.server || entry.target.server, platform = entry.source?.platform || "android";
     await dialog(T("import.source.choose"), { action: T("picker.ok"), cancel: T("popup.cancel"),
-      onAction: () => model.setSource(entry.id, server, platform) }, (area) => {
+      onAction: () => model.setSource(entry.id, server, platform) }, (area, { width }) => {
       const choices = (key, values, value, change) => {
         const title = el("div"); Object.assign(title.style, { height: "60px", position: "relative" }); area.appendChild(title);
-        textWidget(title, T(`import.source.${key}`), "empty", { scale: 0.5, origin: [685, 30] });
+        textWidget(title, T(`import.source.${key}`), "empty", { scale: 0.5, origin: [width / 2, 30] });
         const group = radioOptions(area, values, value, change, { columns: values.length });
         group.setAttribute("aria-label", T(`import.source.${key}`));
       };
@@ -844,7 +845,8 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
   // until primary(true); it may be called while the content is built.
   // width: the frame's (units); bodyWidth: the content's, centred (px). padding instead: the content fills the frame's container
   // (container: the frame less padding units on each side), and content gets its width in px.
-  async function dialog(title, { action = T("display.close"), cancel = null, onAction = () => true, width = 2458, bodyWidth = null, padding = null } = {}, content) {
+  // the dialogs are the L class at most (BL-176), their area the frame's content box (padding SPACE.xl) unless one names its own
+  async function dialog(title, { action = T("display.close"), cancel = null, onAction = () => true, width = POPUP_FRAME.L.w, bodyWidth = null, padding = bodyWidth ? null : SPACE.xl } = {}, content) {
     await popups.ready();
     if (!visible || dialogClose) return;
     const dialogHost = document.getElementById("dialog"), layer = el("div", "popup-layer import-dialog-layer"), before = document.activeElement;
@@ -921,7 +923,7 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
         return group;
       };
       const choice = (key, title, values, getValue, onPick, { multiple = false, parent = null } = {}) => {
-        const makeRow = () => radioRow(`Option_${key}`, 0, title, values, getValue(), onPick, { columns: Math.min(values.length, 3) });
+        const makeRow = () => radioRow(`Option_${key}`, 0, title, values, getValue(), onPick, { columns: Math.min(values.length, 3), type: POPUP_TYPE.card });
         const group = add(key, makeRow().h, parent), controls = [];
         group.setAttribute("role", multiple ? "group" : "radiogroup"); group.setAttribute("aria-label", title);
         const refresh = () => {
@@ -969,7 +971,7 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
         }, { multiple: true, parent: types });
       for (const key of ["extraBytes", "workers", "output"]) {
         const group = add(key, 240);
-        paint(group, rowBase(`Option_${key}`, 0, 240, T(`import.options.${key}`)), { scale: S, origin: [OPTION_WIDTH * S / 2, 120 * S] });
+        paint(group, rowBase(`Option_${key}`, 0, 240, T(`import.options.${key}`), POPUP_TYPE.card), { scale: S, origin: [OPTION_WIDTH * S / 2, 120 * S] });
         const control = inputControl(T(`import.options.${key}`), draft[key] ?? "", { type: key === "workers" ? "number" : "text", width: (OPTION_WIDTH - 110) * S });
         place(control.wrap, 55 * S, 120 * S, (OPTION_WIDTH - 110) * S, 112 * S); group.appendChild(control.wrap);
         const input = control.input;
@@ -989,22 +991,25 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
   }
 
   async function results() {
-    await dialog(T("import.resultTitle"), {}, (area) => {
+    await dialog(T("import.resultTitle"), {}, (area, { width }) => {
       area.classList.add("import-results");
+      // the rows drawn for a 1400 px wide area, scaled to the L-class dialog's (BL-176)
+      const k = Math.min(1, width / 1400);
       const pictures = [];
       const groups = importGroups(model.state.taskEntries, merged, identified);
       const textSize = art.rowTextSize(groups.map((group) => paragraphCopy(group, true)));
-      const resultScale = 0.62, resultTextSize = textSize;
+      const resultScale = 0.62 * k, resultTextSize = textSize;
       for (const group of groups) {
         const entry = representative(group.entries), row = el("div", "import-result-row");
+        Object.assign(row.style, { width: `${1400 * k}px`, height: `${216 * k}px` });
         row.dataset.result = entry.id;
         const drawing = paint(row, art.row({ name: identified(entry).name, ...paragraphCopy(group, true), textSize: resultTextSize }),
-        { scale: resultScale, origin: [700, 104], textures: { "Icon_Arona": Promise.resolve(null) } });
+        { scale: resultScale, origin: [700 * k, 104 * k], textures: { "Icon_Arona": Promise.resolve(null) } });
         let picture;
-        pictures.push({ row, height: 216, prepare: () => picture ||= bindTexture(drawing,
+        pictures.push({ row, height: 216 * k, prepare: () => picture ||= bindTexture(drawing,
           "List_01/BG_Icon/Icon_Arona", thumbnail(entry, { incoming: true }), "import-thumb") });
-        const go = button(T("add.go"), "go", { width: 225, scale: 0.4 });
-        place(go, 1115, 86, 225, 65);
+        const go = button(T("add.go"), "go", { width: 225 * k, scale: 0.4 * k });
+        place(go, 1115 * k, 86 * k, 225 * k, 65 * k);
         const navigate = (item) => {
           dialogClose?.();
           const variant = identified(item).variant;
