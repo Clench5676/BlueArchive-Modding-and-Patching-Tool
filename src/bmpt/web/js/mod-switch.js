@@ -175,7 +175,8 @@ export function classicOutcome({ queued = false, checked = false } = {}) {
 //   consent: the asset consent until it is given; spine: its licence confirmation while unanswered;
 //   scan: the scan consent while unanswered and a game folder is known;
 //   update: released builds; drift and untracked: only with the scan consent, from the start scan's entries not
-//   dismissed, never while the game, Steam or the classic UI may be writing; no drift while mods are off
+//   dismissed, never while the game, Steam or the classic UI may be writing; no drift while mods are off, and none
+//   for a game update (entries updated: the update summary tells them, update-impact.js)
 export const START = ["consent", "spine", "scan", "update", "drift", "untracked"];
 export function startDue(name, { info = {}, state = null, entries = [] } = {}) {
   const scanned = state?.scan === true && !PROMPT_BLOCKERS.includes(state?.reason);
@@ -185,7 +186,7 @@ export function startDue(name, { info = {}, state = null, entries = [] } = {}) {
     case "spine": return info.spineConsent == null;
     case "scan": return !!state && state.scan == null && (state.installs || []).length > 0;
     case "update": return !!info.compiled && info.startupUpdate !== false;
-    case "drift": return scanned && state.enabled !== false && entries.some((e) => open(e) && ["reset", "updated"].includes(e.state));
+    case "drift": return scanned && state.enabled !== false && entries.some((e) => open(e) && e.state === "reset");
     case "untracked": return scanned && entries.some((e) => open(e) && ["untracked", "changed"].includes(e.state));
     default: return false;
   }

@@ -2559,15 +2559,24 @@ overwritten entry need none (the detail screen judges its files cheaply).
   records the version (`mods.impactSeen`). At the start before the prompts below, and after `config.changed` (a
   game update while the program runs rebuilds the game services) once no other popup is open. Settings' Mods tab
   shows it again (Game Update Impact, View: `mods.impact {force}` under the loading screen, the mods as they stand
-  now; with none affected, the counts).
+  now; with none affected, the counts). Every mod line ends with "Applied" for a mod its student is configured with,
+  whatever the switch says (`configured`). It is also the game update's drift prompt: while mods are on and the file
+  check is allowed and done, the applied entries the update put back to official (`mods.entries` state `updated`,
+  not dismissed; Settings' View lists the dismissed ones too) are listed after the held mods ("Reset to official by
+  the game update: n", each with Go To), those whose configured mod's rig changed staying with their mod above; the
+  message then has the drift prompt's two buttons and no close (decision 16): Apply Mod Configuration
+  (`mods.restoreDrift` for the put-back entries, `prompts.js applyDrift`, the held ones dismissed) and Keep as Is
+  (`mods.dismiss drift` for all). Put-back entries a later scan finds (`library.scanned`) bring it back for them alone,
+  with the held mods. The tray's Back to Official and Settings' Check open it when only such entries are there.
 - **New Game Version** (`mod-switch.js confirmUntested`, a plain message popup): a write refused with
   `untested_build`, from the switch (the tray's toggle too, once the window is in front), the detail screen, Apply Mod
   Configuration, Settings' other mods and the photography gallery. "Affected by the game update: n", then the entries
   as list items ("name - kind", six at most, then "+n"); Apply Anyway (`mods.confirmUntested`, then the same call
   again) and Cancel (nothing changes).
-- **Mods Back to Official** (while mods are on; titled Mods Affected by a Game Update when every listed entry is
-  `updated`): the `reset` and `updated` entries, every card ticked but those whose
-  configured mod's rig a game update changed (`mods.impact {ids}`): those carry the Rig Changed badge and start
+- **Mods Back to Official** (while mods are on: with mods off the game is meant to be official, so nothing was put
+  back): the `reset` entries (a Steam check or a repair; a game update's `updated` ones are the update summary's),
+  every card ticked but those whose configured mod's official .skel or .atlas file a game update changed
+  (`mods.impact {ids}`): those carry the Files Changed badge and start
   unticked, so Apply Mod Configuration writes them only when ticked; with the install
   chip; no hint over the cards (only "Still overwritten: n" when there are such entries), the band over the paper as
   slim as the count, the cards from the paper's left edge and a portrait's details upright beside its stacked fields

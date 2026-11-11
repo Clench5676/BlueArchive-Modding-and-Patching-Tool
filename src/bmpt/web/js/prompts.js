@@ -50,15 +50,15 @@ export const entryBase = (entry, state) => ["model", "other"].includes(entry?.ki
 
 // the entries a prompt lists, from the last scan (mods.entries), leaving out the dismissed ones unless asked (Settings'
 // Check lists them again):
-//   drift: the reset and updated entries ("listed", while mods are on), and the stuck ones (pending, overwritten),
-//          which no repair brought back, apart ("apart")
+//   drift: the reset entries ("listed", while mods are on; a game update's updated ones are the update summary's,
+//          update-impact.js), and the stuck ones (pending, overwritten), which no repair brought back, apart ("apart")
 //   untracked: the untracked entries and the configured changed ones ("listed"), the damaged ones apart
 export function promptEntries(entries, which, { dismissed = false, enabled = true } = {}) {
   const open = (e) => dismissed || !e.dismissed;
   const list = (entries || []).filter((e) => e && typeof e === "object");
   if (which === "drift") {
     return {
-      listed: enabled ? list.filter((e) => open(e) && ["reset", "updated"].includes(e.state)) : [],
+      listed: enabled ? list.filter((e) => open(e) && e.state === "reset") : [],
       apart: list.filter((e) => e.state === "pending" && e.overwritten),
     };
   }
@@ -190,7 +190,11 @@ export const isBusy = () => busy; // includes async card preparation before the 
 
 export function init(options = {}) {
   if (options.names) names = options.names;
-  ModSwitch.setDriftPrompt(() => show("drift", { force: true }));
+  // the tray's Back to Official: the drift prompt, or the update summary when only a game update put entries back
+  ModSwitch.setDriftPrompt(async () => {
+    const entries = await rpc("mods.entries").catch(() => []);
+    if ((await show("drift", { entries, force: true })) == null && !busy && entries.some((e) => e?.state === "updated")) await Impact.show();
+  });
   // a scan after the start (the window back in front, the classic window closed, a game folder change): the prompts
   // that have something new show once no other popup is open
   on("library.scanned", () => { later().catch((err) => console.error("prompts", err)); });
@@ -303,9 +307,6 @@ export function heldCards(items, held) {
     ? { ...it, badge: { text: T("mods.heldBadge"), color: COLOUR.warning, ink: "#ffffff" } } : it));
 }
 
-// the drift prompt's title: Mods Affected by a Game Update when a game update put every listed entry back (updated),
-// else Mods Back to Official (a Steam check or a repair among them)
-export const driftTitle = (listed) => T(listed.length && listed.every((e) => e.state === "updated") ? "mods.driftUpdated" : "mods.driftTitle");
 
 // "Mods Back to Official": exactly two buttons (decision 16), no Later and no close; Escape and the backdrop do
 // nothing. Apply Mod Configuration sends the ticked cards (the others are kept as they are); Keep as Is keeps them all.
@@ -315,7 +316,7 @@ async function driftPrompt(lists, s) {
   const blocked = s.available === false ? ModSwitch.reasonText(s) : "";
   const hint = lists.apart.length ? T("mods.stillOverwritten", { n: lists.apart.length }) : "";
   const answer = await listPrompt({
-    title: driftTitle(lists.listed), items, hint, closable: false, which: "drift", unticked: held,
+    title: T("mods.driftTitle"), items, hint, closable: false, which: "drift", unticked: held,
     buttons: [
       { label: T("mods.driftKeep"), action: "keep" },
       { label: T("mods.driftApply"), action: "apply", primary: true, greyed: !!blocked && s.reason !== "classic_open", why: blocked, whyError: { code: s.reason, params: s.reasonParams } },
@@ -333,8 +334,8 @@ async function driftPrompt(lists, s) {
 }
 
 // Apply Mod Configuration: the job, its progress, and its result; refused while the classic UI is open, the classic
-// modal (which can keep it for when the window closes)
-async function applyDrift(entries) {
+// modal (which can keep it for when the window closes). The update summary's Apply Mod Configuration too.
+export async function applyDrift(entries) {
   const params = { entries };
   let id;
   try {
