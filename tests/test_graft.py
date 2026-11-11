@@ -332,3 +332,10 @@ def test_an_official_slot_taken_out_and_grafted_back_returns_in_its_place_with_i
             tried += 1
             if tried == 6:
                 break
+
+
+def test_a_page_beyond_the_largest_one_a_graft_packs_is_refused():
+    mod, new = pages()
+    huge = ATLAS.replace("size:32,32", "size:100000,100000")
+    with pytest.raises(graft.GraftError):
+        graft.pack(huge, OFFICIAL, ["new"], {"page": mod}, {"official": new}, setup_drawing((0, 0, 8, 8)))

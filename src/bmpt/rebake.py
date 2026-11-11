@@ -73,10 +73,10 @@ def _numbers(value, limit: int, *, integer: bool = False) -> list:
     return value
 
 
-def rig(value, atlas: Atlas) -> Rig:
+def rig(value, atlas: Atlas, max_poses: int | None = None) -> Rig:
     """The posted geometry of one rig, checked against the atlas the back end read itself (untrusted input: counts
     capped, numbers finite, UVs on the page, triangle indices in range, regions and pages of that atlas). Refused
-    with ``bad_params``."""
+    with ``bad_params``. ``max_poses``: the most poses taken (a graft's test rig asks for one per candidate)."""
     if not isinstance(value, dict) or not isinstance(value.get("slots"), list) or not isinstance(value.get("poses"), dict):
         raise _bad()
     slots = value["slots"]
@@ -86,7 +86,7 @@ def rig(value, atlas: Atlas) -> Rig:
     pages = {texture_key(page) for page in atlas.pages}
     regions = {(texture_key(page), name) for page, name, _index in atlas.regions}
     poses, total = {}, 0
-    if len(value["poses"]) > MAX_POSES or "" not in value["poses"]:
+    if len(value["poses"]) > (MAX_POSES if max_poses is None else max_poses) or "" not in value["poses"]:
         raise _bad()
     for name, drawn in value["poses"].items():
         if not isinstance(name, str) or not isinstance(drawn, list) or len(drawn) > MAX_DRAWN:
