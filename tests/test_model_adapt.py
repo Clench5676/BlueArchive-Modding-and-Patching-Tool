@@ -227,7 +227,7 @@ def _index(files):
     index = {}
     for path in files:
         if re.search(r"characters|-_mx-npcs-|^character-|-_mx-shaders-|-_mx-program-animators-|^field-|animatorbase|"
-                     r"prolog", path.name):
+                     r"prolog|-_mx-effectsfreezed-", path.name):
             for cab in cab_names(path):
                 index[cab] = path
     return index
@@ -707,6 +707,8 @@ def test_official_cross_costume_carries_a_skinned_halo(view, tmp_path):
         assert t.nodes[target].name == ma.HEAD
         world = t.world()
         p, q = f["TargetRelativePosition"], f["TargetRelativeRotation"]
+        # inside the follower's clamp box, which moved with the offset: the follower leaves it there
+        assert all(f["ClampMinOffset"][k] <= p[k] <= f["ClampMaxOffset"][k] for k in "xyz")
         head = world[target]
         turn = head[:3, :3] / np.linalg.norm(head[:3, :3], axis=0)
         followed = np.eye(4)
@@ -729,11 +731,10 @@ def test_official_cross_costume_carries_a_skinned_halo(view, tmp_path):
 @pytest.mark.parametrize("source,shape", [
     ("binah_original", "halo without a follower"),  # a boss: no head bone
     ("chesed_original", "halo without a follower"),  # a boss: skinned to two bones of the body
-    ("tsurugi_original", "MeshRenderer, ParticleSystem, ParticleSystemRenderer"),  # particles: not carried yet
 ])
 def test_official_a_halo_that_cannot_be_carried_hides_the_slots(view, source, shape):
     """After a swap the halo is the source's or none, never the slot's own. A source halo that cannot be
-    carried (a boss's, particles) hides Azusa's: the change carries nothing and hides her halo's node."""
+    carried (a boss's) hides Azusa's: the change carries nothing and hides her halo's node."""
     from bmpt.gameassets.model import BundleGraph, _prefabs, model_root
 
     files, index = view
@@ -750,24 +751,92 @@ def test_official_a_halo_that_cannot_be_carried_hides_the_slots(view, source, sh
 
 
 @official
-def test_official_a_particle_halo_hides_the_slots_in_the_build(view, tmp_path):
-    """Azusa <- Tsurugi, whose halo has particles: Azusa's halo renderer is turned off and draws no mesh in
-    every prefab of the slot, and the export has no halo of hers."""
-    from bmpt.gameassets.model import _prefabs, export_chibi
+@pytest.mark.parametrize("source,nodes,particles", [
+    ("tsurugi_original", ["Tsurugi_Original_Halo", "FX_blood"], 1),  # her mesh and a particle system beside it
+    ("ch0069", ["CH0069_Halo", "FX_CH0069_Halo"], 9),  # Mika: nested particle systems, an Animator left out
+])
+def test_official_a_particle_halo_is_carried_with_its_nodes(view, tmp_path, source, nodes, particles):
+    """A halo with particles (Tsurugi's, Mika's) is carried with its nodes: below Azusa's followed node, new
+    GameObjects, Transforms, renderers and particle systems as the source has them below its own, their meshes and
+    materials carried into the slot's files; the follower takes the source's offsets. Azusa's own halo draws nothing
+    and the slot still exports, with the source's halo mesh."""
+    from bmpt.gameassets.model import _key, _prefabs, export_chibi, model_root
 
-    slot, sources, written, adapted, official, graph = _cross_build(view, tmp_path, "tsurugi_original")
+    slot, sources, written, adapted, official, graph = _cross_build(view, tmp_path, source)
+    new = _official_objects_kept(slot, written, {"SkinnedMeshRenderer", "MeshRenderer", "MeshFilter", "AssetBundle",
+                                                 "Transform", "MonoBehaviour", "ParticleSystem",
+                                                 "ParticleSystemRenderer"})
+    s = ma.Skeleton.of(official, model_root(official, sources, source)[0])
+    halo = ma.halo_of(s)
+    below = [s.nodes[i] for i in s.descendants(halo.root)]
     prefab_files = [p for p in written if p.name.startswith("character-")]
+    checked = 0
     for name, pointer in _prefabs(graph, prefab_files).items():
         if "azusa_original" not in name:
             continue
+        checked += 1
         t = ma.Skeleton.of(graph, pointer.deref())
-        node = t.nodes[t.first("Azusa_Original_Halo")]
-        renderer, filt = graph.component(node.go, "MeshRenderer"), graph.component(node.go, "MeshFilter")
+        root = t.first("HaloRoot")
+        own = t.nodes[t.first("Azusa_Original_Halo")]
+        renderer, filt = graph.component(own.go, "MeshRenderer"), graph.component(own.go, "MeshFilter")
         assert not graph.tree(renderer)["m_Enabled"] and not graph.tree(filt)["m_Mesh"]["m_PathID"], name
+        added = [t.nodes[i] for i in t.descendants(root) if t.nodes[i].name != "Azusa_Original_Halo"]
+        assert [n.path.split("/", 1)[1] for n in added] == [n.path.split("/", 1)[1] for n in below], name
+        assert all(new.get(_key(n.go)) == "GameObject" and new.get(_key(n.transform)) == "Transform" for n in added)
+        for a, b in zip(added, below):
+            assert np.allclose(np.concatenate(a.local), np.concatenate(b.local)) and a.active == b.active
+        kinds = [o.type.name for n in added for c in graph.tree(n.go)["m_Component"]
+                 if (o := graph.deref(n.go, c["component"])) is not None]
+        assert kinds.count("ParticleSystem") == particles and "Animator" not in kinds
+        drawing = 0
+        for n in added:
+            for c in graph.tree(n.go)["m_Component"]:
+                o = graph.deref(n.go, c["component"])
+                assert o is not None and new.get(_key(o)) == o.type.name
+                if o.type.name.endswith("Renderer"):  # every material the source's draws, carried
+                    materials = [graph.deref(o, m) for m in graph.tree(o)["m_Materials"] if m["m_PathID"]]
+                    assert all(m is not None and new.get(_key(m)) == "Material" for m in materials)
+                    drawing += len(materials)
+        assert drawing >= len(nodes) and all(t.first(x) is not None for x in nodes)
+        follower = graph.tree(ma.halo_of(t).follower)
+        for field in ma.FOLLOWER_OFFSETS:
+            assert follower[field] == pytest.approx(official.tree(halo.follower)[field])
+    assert checked
     data = export_chibi(graph, prefab_files, "azusa_original")
     doc = json.loads(data[20:20 + struct.unpack_from("<I", data, 12)[0]])
     names = {m["name"] for m in doc["meshes"]}
-    assert not any(n.startswith("Azusa_Original_Halo") for n in names) and doc["animations"]
+    assert nodes[0] in names and not any(n.startswith("Azusa_Original_Halo") for n in names) and doc["animations"]
+
+
+@official
+def test_official_a_particle_slot_hides_its_halo_and_takes_the_sources(view, tmp_path):
+    """Tsurugi's slot <- Azusa: Tsurugi's halo mesh draws nothing and her particle system emits nothing;
+    Azusa's halo comes as new nodes below Tsurugi's followed node."""
+    from bmpt.gameassets.model import _prefabs, export_chibi
+
+    slot, sources, written, adapted, official, graph = _cross_build(view, tmp_path, "azusa_original", "tsurugi_original")
+    prefab_files = [p for p in written if p.name.startswith("character-")]
+    checked = 0
+    for name, pointer in _prefabs(graph, prefab_files).items():
+        if "tsurugi_original" not in name:
+            continue
+        t = ma.Skeleton.of(graph, pointer.deref())
+        if t.first("HaloRoot") is None:
+            continue
+        checked += 1
+        own = t.nodes[t.first("Tsurugi_Original_Halo")]
+        assert not graph.tree(graph.component(own.go, "MeshRenderer"))["m_Enabled"], name
+        blood = t.nodes[t.first("FX_blood")]
+        assert graph.tree(graph.component(blood.go, "ParticleSystem"))["InitialModule"]["maxNumParticles"] == 0
+        assert not graph.tree(graph.component(blood.go, "ParticleSystemRenderer"))["m_Enabled"]
+        added = t.nodes[t.first("Azusa_Original_Halo")]
+        assert added.path == "HaloRoot/Azusa_Original_Halo"
+        assert graph.tree(graph.component(added.go, "MeshRenderer"))["m_Enabled"]
+    assert checked
+    data = export_chibi(graph, prefab_files, "tsurugi_original")
+    doc = json.loads(data[20:20 + struct.unpack_from("<I", data, 12)[0]])
+    names = {m["name"] for m in doc["meshes"]}
+    assert "Azusa_Original_Halo" in names and "Tsurugi_Original_Halo" not in names
 
 
 def _locks_free() -> list[str]:

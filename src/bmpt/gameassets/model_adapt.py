@@ -33,9 +33,11 @@ own:
   (``adapt``'s ``halo``). The source's halo mesh, materials and textures are added like the costume's and the slot's
   halo renderer draws them where the source draws its own: a followed halo (one unskinned renderer below an
   ``FxFollower``) with its follower offset taken from the source, a halo skinned to one bone below the head (NPC asset
-  models such as Ayame's) at that bone's rest place, the follower set to keep it there. Every other case (a source
-  without a halo, particles, several renderers, a boss's halo, a slot whose halo cannot take another) hides
-  everything the slot's halo draws.
+  models such as Ayame's) at that bone's rest place, the follower set to keep it there. A followed halo of any other
+  shape (particles: Tsurugi's, Mika's), or one going onto such a slot, is carried with its nodes: what the slot's halo
+  draws is hidden and the source's nodes below its followed node become new nodes below the slot's, with their
+  renderers and particle systems (:func:`_halo_transplant`). Every other case (a source without a halo, a boss's
+  halo, anything below the followed node that points elsewhere) hides everything the slot's halo draws.
 
 The caller supplies official copies of the files (``adapt``'s ``index``) and saves the changed bundles.
 """
@@ -1580,7 +1582,8 @@ class HaloChange:
     """What the slot's prefabs change on their halo (:func:`_halo_change`): the renderer at ``path`` drawing ``mesh``
     (the slot's halo mesh) draws ``new_mesh`` with ``materials`` at ``local`` (position, rotation, scale), and the
     follower at ``root`` takes ``follower``'s offsets. With ``new_mesh`` None the slot's halo is hidden: every renderer
-    and particle system at the ``hide`` paths draws nothing."""
+    and particle system at the ``hide`` paths draws nothing; a ``transplant`` (the source's followed nodes with their
+    particles) then goes below the followed node at ``root``, whose follower takes ``follower``'s offsets."""
 
     path: str | None
     root: str | None
@@ -1590,9 +1593,29 @@ class HaloChange:
     local: tuple | None = None
     follower: dict[str, Any] | None = None
     hide: list[str] = field(default_factory=list)
+    transplant: "Transplant | None" = None
+
+
+@dataclass
+class Transplant:
+    """The nodes below a source's followed node, as new objects for each prefab of the slot: every
+    GameObject, Transform and drawing component, its tree with its pointers as markers (:data:`_IN`: the n-th object
+    here; :data:`_MESH` and :data:`_MATERIAL`: a carried mesh or material by its path id in its file; :data:`_ROOT`:
+    the slot's followed node), ``top`` the Transforms whose parent is that node."""
+
+    objects: list[tuple[Any, dict]] = field(default_factory=list)  # (source object, tree)
+    top: list[int] = field(default_factory=list)
+    carried: list[tuple[int, int]] = field(default_factory=list)  # (marker, path id) of the carried meshes, materials
+
+
+_IN, _MESH, _MATERIAL, _ROOT = -1, -2, -3, -4
+# what a transplanted halo may hold besides its nodes; an Animator (Mika's halo has one, with no controller) is left out
+CARRIED = ("MeshFilter", "MeshRenderer", "ParticleSystem", "ParticleSystemRenderer")
+LEFT_OUT = ("Animator",)
 
 
 FOLLOWER_OFFSETS = ("TargetRelativePosition", "TargetRelativeRotation")
+FOLLOWER_CLAMPS = ("ClampMinOffset", "ClampMaxOffset")
 HEAD = "Bip001 Head"
 DRAWN = ("MeshRenderer", "SkinnedMeshRenderer", "ParticleSystemRenderer", "ParticleSystem")
 
@@ -1629,17 +1652,17 @@ def halo_of(skeleton: Skeleton) -> Halo:
     root = roots[0]
     found = [(j, o) for j in below(root) for o in drawn(j)]
     if len(found) != 1 or found[0][1].type.name != "MeshRenderer":
-        return Halo(", ".join(sorted(o.type.name for _, o in found)), drawn=found)
+        return Halo(", ".join(sorted(o.type.name for _, o in found)), root, follower(root), drawn=found)
     node, renderer = found[0]
     if node == root:
-        return Halo("renderer on the followed node", drawn=found)
+        return Halo("renderer on the followed node", root, follower(root), drawn=found)
     filt = next((o for o in components[node] if o.type.name == "MeshFilter"), None)
     mesh = g.deref(filt, g.tree(filt)["m_Mesh"]) if filt is not None else None
     if mesh is None:
-        return Halo("no mesh", drawn=found)
+        return Halo("no mesh", root, follower(root), drawn=found)
     materials = [g.deref(renderer, m) for m in g.tree(renderer)["m_Materials"]]
     if not materials or any(m is None for m in materials):
-        return Halo("material not found", drawn=found)
+        return Halo("material not found", root, follower(root), drawn=found)
     return Halo("single", root, follower(root), node, renderer, mesh, materials, drawn=found)
 
 
@@ -1701,6 +1724,16 @@ def _halo_change(t_skeleton: Skeleton, s_skeleton: Skeleton, carry_mesh: Callabl
     placed = _halo_place(t_skeleton, s_skeleton, t, s) if t.shape == "single" else None
     if placed is None:
         hidden = sorted({t_skeleton.nodes[node].path for node, _ in t.drawn})
+        transplant = _halo_transplant(s_skeleton, s, carry_mesh, carry_material,
+                                      t_skeleton.nodes[t.root].transform.assets_file) if (
+            t.root is not None and t.follower is not None and s.root is not None and s.follower is not None) else None
+        if transplant is not None:
+            follower = s_skeleton.graph.tree(s.follower)
+            logger.info("Costume of %s on %s: halo carried with its nodes (slot: %s, source: %s)", s_name, t_name,
+                        t.shape, s.shape)
+            return HaloChange(None, t_skeleton.nodes[t.root].path, None, hide=hidden, transplant=transplant,
+                              follower={name: copy.deepcopy(follower[name]) for name in FOLLOWER_OFFSETS
+                                        if name in follower})
         if s.shape == "none":
             logger.info("Costume of %s on %s: the source has no halo, the slot's is hidden", s_name, t_name)
         else:
@@ -1720,6 +1753,98 @@ def _halo_change(t_skeleton: Skeleton, s_skeleton: Skeleton, carry_mesh: Callabl
     change.follower = follower
     logger.info("Costume of %s on %s: halo %s carried (%s)", s_name, t_name, s.mesh.peek_name(), s.shape)
     return change
+
+
+def _pointers(value: Any) -> Iterable[dict]:
+    """Every pointer (``m_FileID``, ``m_PathID``) in a typetree."""
+    if isinstance(value, dict):
+        if set(value) == {"m_FileID", "m_PathID"}:
+            yield value
+            return
+        for item in value.values():
+            yield from _pointers(item)
+    elif isinstance(value, list):
+        for item in value:
+            yield from _pointers(item)
+
+
+def _halo_transplant(s_skeleton: Skeleton, s: Halo, carry_mesh: Callable[[Any], int],
+                     carry_material: Callable[[Any], int], into: Any) -> Transplant | None:
+    """The source's halo as new nodes (:class:`Transplant`): everything below its followed node, with the
+    meshes and materials its renderers and particle systems draw carried into the slot's files. None (nothing
+    carried) when something there points elsewhere (another node of the model, a script, a sprite) or cannot be
+    added to the slot's prefab file ``into``."""
+    g = s_skeleton.graph
+    below = s_skeleton.descendants(s.root)
+    if not below:
+        return None
+    root_key = _key(s_skeleton.nodes[s.root].transform)
+    plan = Transplant()
+    index: dict[tuple[str, int], int] = {}
+    kept: list[list[Any]] = []
+    for i in below:
+        node = s_skeleton.nodes[i]
+        components = []
+        for c in g.tree(node.go)["m_Component"]:
+            obj = g.deref(node.go, c["component"])
+            if obj is None:
+                return None
+            name = obj.type.name
+            if name in ("Transform",) or name in LEFT_OUT:
+                continue
+            if name not in CARRIED:
+                return None
+            components.append(obj)
+        objects = [node.go, node.transform] + components
+        if any(_Writer.addable(into, obj) for obj in objects):
+            return None
+        kept.append(objects)
+        for obj in objects:
+            index[_key(obj)] = len(index)
+    # what the copies point at outside them: only meshes and materials, read before anything is carried
+    outside: dict[tuple[str, int], Any] = {}
+    for objects in kept:
+        for obj in objects:
+            for pointer in _pointers(g.tree(obj)):
+                if not pointer["m_PathID"]:
+                    continue
+                key = (_external_cab(obj, pointer["m_FileID"]), pointer["m_PathID"])
+                if key in index or key == root_key:
+                    continue
+                target = g.deref(obj, pointer)
+                if obj.type.name == "GameObject" and target is not None and target.type.name in LEFT_OUT:
+                    continue
+                if target is None or target.type.name not in ("Mesh", "Material"):
+                    return None
+                outside[key] = target
+    carried: dict[tuple[str, int], tuple[int, int]] = {}
+    for key, target in outside.items():
+        if target.type.name == "Mesh":
+            carried[key] = (_MESH, carry_mesh(target))
+        else:
+            carried[key] = (_MATERIAL, carry_material(target))
+    plan.carried = sorted(set(carried.values()))
+    for objects in kept:
+        for obj in objects:
+            tree = copy.deepcopy(g.tree(obj))
+            if obj.type.name == "GameObject":
+                tree["m_Component"] = [c for c in tree["m_Component"]
+                                       if (_external_cab(obj, c["component"]["m_FileID"]), c["component"]["m_PathID"]) in index]
+            for pointer in _pointers(tree):
+                if not pointer["m_PathID"]:
+                    pointer["m_FileID"] = 0
+                    continue
+                key = (_external_cab(obj, pointer["m_FileID"]), pointer["m_PathID"])
+                if key in index:
+                    pointer.update(m_FileID=_IN, m_PathID=index[key])
+                elif key == root_key:
+                    pointer.update(m_FileID=_ROOT, m_PathID=0)
+                else:
+                    pointer.update(m_FileID=carried[key][0], m_PathID=carried[key][1])
+            if obj.type.name == "Transform" and tree["m_Father"]["m_FileID"] == _ROOT:
+                plan.top.append(len(plan.objects))
+            plan.objects.append((obj, tree))
+    return plan
 
 
 def _halo_place(t_skeleton: Skeleton, s_skeleton: Skeleton, t: Halo, s: Halo) -> tuple[np.ndarray, dict] | None:
@@ -1761,12 +1886,26 @@ def _halo_place(t_skeleton: Skeleton, s_skeleton: Skeleton, t: Halo, s: Halo) ->
     resize = np.diag(list(np.linalg.norm(bone[:3, :3], axis=0) / np.linalg.norm(t_world[t.root][:3, :3], axis=0)) + [1])
     x, y, z, w = (float(v) for v in ms.quaternion(turn))
     position = relative[:3, 3]
-    return np.linalg.inv(between) @ resize @ bind, {
-        "TargetRelativePosition": {"x": float(position[0]), "y": float(position[1]), "z": float(position[2])},
-        "TargetRelativeRotation": {"x": x, "y": y, "z": z, "w": w}}
+    offsets = {"TargetRelativePosition": {"x": float(position[0]), "y": float(position[1]), "z": float(position[2])},
+               "TargetRelativeRotation": {"x": x, "y": y, "z": z, "w": w}}
+    # the follower clamps the followed node to a box in the head's space around its offset: the box moves with it
+    old = t_follower["TargetRelativePosition"]
+    for name in FOLLOWER_CLAMPS:
+        box = t_follower.get(name)
+        if isinstance(box, dict) and all(k in box for k in "xyz"):
+            offsets[name] = {k: float(box[k]) + offsets["TargetRelativePosition"][k] - float(old[k]) for k in "xyz"}
+    return np.linalg.inv(between) @ resize @ bind, offsets
 
 
 # --- writing -------------------------------------------------------------------------------------------------------
+
+def _type_index(sf: Any, source: Any) -> int | None:
+    """The index of ``source``'s type among ``sf``'s types, None when ``sf`` has none of it."""
+    src_type = source.serialized_type
+    return next((i for i, typ in enumerate(sf.types) if typ.class_id == source.class_id
+                 and typ.old_type_hash == src_type.old_type_hash and typ.script_type_index == src_type.script_type_index),
+                None)
+
 
 class _Writer:
     """Objects added to the slot's bundles, opened for writing."""
@@ -1799,18 +1938,26 @@ class _Writer:
         sf.objects.update(ordered)
         return new.path_id
 
-    def add_like(self, sf: Any, source: Any, tree: dict) -> int:
-        """A new object of ``source``'s type in ``sf``, the type copied from ``source``'s file when ``sf`` holds no
-        object of it (a shader carried with a costume). Both files must come from the same build."""
+    @staticmethod
+    def addable(sf: Any, source: Any) -> str | None:
+        """Why an object of ``source``'s type cannot be added to ``sf`` by :meth:`add_like` (None when it can)."""
         src_type, src_file = source.serialized_type, source.assets_file
         if (src_type is None or sf.header.version != src_file.header.version or sf.unity_version != src_file.unity_version
                 or sf._enable_type_tree != src_file._enable_type_tree or sf.header.version < 16):
-            raise refuse("object type of another build", type=source.type.name)
-        index = next((i for i, typ in enumerate(sf.types) if typ.class_id == source.class_id
-                      and typ.old_type_hash == src_type.old_type_hash and typ.script_type_index == src_type.script_type_index), None)
+            return "object type of another build"
+        if _type_index(sf, source) is None and src_type.type_dependencies:
+            return "object type with dependencies"
+        return None
+
+    def add_like(self, sf: Any, source: Any, tree: dict) -> int:
+        """A new object of ``source``'s type in ``sf``, the type copied from ``source``'s file when ``sf`` holds no
+        object of it (a shader carried with a costume). Both files must come from the same build."""
+        why = self.addable(sf, source)
+        if why:
+            raise refuse(why, type=source.type.name)
+        src_type = source.serialized_type
+        index = _type_index(sf, source)
         if index is None:
-            if src_type.type_dependencies:
-                raise refuse("object type with dependencies", type=source.type.name)
             sf.types.append(copy.copy(src_type))
             index = len(sf.types) - 1
         template = next(iter(sf.objects.values()))
@@ -2374,7 +2521,7 @@ def _edit_prefabs(writer: _Writer, sf: Any, graph: BundleGraph, t_meshes: Mappin
             else:  # the target's other costume parts, alternates and their copies draw nothing
                 r["m_Mesh"] = {"m_FileID": 0, "m_PathID": 0}
             save(pid)
-        halo_added = _edit_halo(halo, by_path, objects, tree, save, mesh_fid, material_fid, sf) if halo else []
+        halo_added = _edit_halo(halo, by_path, objects, tree, save, mesh_fid, material_fid, sf, writer) if halo else []
         if main is None:
             if added or halo_added:
                 additions[(info["preloadIndex"], info["preloadSize"])] = list(added) + halo_added
@@ -2422,10 +2569,11 @@ def _edit_prefabs(writer: _Writer, sf: Any, graph: BundleGraph, t_meshes: Mappin
 
 
 def _edit_halo(halo: HaloChange, by_path: Mapping[str, int], objects: Mapping[int, Any], tree: Callable[[int], dict],
-               save: Callable[[int], None], mesh_fid: int, material_fid: int, sf: Any) -> list[dict]:
+               save: Callable[[int], None], mesh_fid: int, material_fid: int, sf: Any, writer: _Writer) -> list[dict]:
     """One prefab's halo changed (:class:`HaloChange`): its renderer that draws the slot's halo mesh, and the follower
-    of its followed node; or, hiding it, everything drawn at the hidden paths. The nodes stay, so the clips that move
-    or toggle them still do. Returns the new objects the prefab now loads (its preload entries)."""
+    of its followed node; or, hiding it, everything drawn at the hidden paths, then the source's halo nodes added
+    below the followed node (a transplant). The slot's nodes stay, so the clips that move or toggle them still do.
+    Returns the new objects the prefab now loads (its preload entries)."""
 
     def components(path: str) -> list[int]:
         transform = by_path.get(path)
@@ -2459,7 +2607,10 @@ def _edit_halo(halo: HaloChange, by_path: Mapping[str, int], objects: Mapping[in
                                 tree(other)["m_Mesh"] = {"m_FileID": 0, "m_PathID": 0}
                                 save(other)
                 save(pid)
-        return []
+        if halo.transplant is None or by_path.get(halo.root) is None:
+            return []
+        return _transplant(halo, by_path[halo.root], components(halo.root), objects, tree, save, mesh_fid,
+                           material_fid, sf, writer)
     here = components(halo.path)
     filt = next((pid for pid in here if objects[pid].type.name == "MeshFilter"), None)
     renderer = next((pid for pid in here if objects[pid].type.name == "MeshRenderer"), None)
@@ -2483,6 +2634,47 @@ def _edit_halo(halo: HaloChange, by_path: Mapping[str, int], objects: Mapping[in
             save(pid)
     return [{"m_FileID": mesh_fid, "m_PathID": halo.new_mesh}] + [
         {"m_FileID": material_fid, "m_PathID": m} for m in halo.materials]
+
+
+def _transplant(halo: HaloChange, root: int, root_components: list[int], objects: Mapping[int, Any],
+                tree: Callable[[int], dict], save: Callable[[int], None], mesh_fid: int, material_fid: int, sf: Any,
+                writer: _Writer) -> list[dict]:
+    """The source's halo nodes (:class:`Transplant`) added to one prefab below its followed node ``root`` (a
+    Transform), which keeps the source's follower offsets. Returns the new objects the prefab loads."""
+    plan = halo.transplant
+    ids: list[int] = []
+    for _ in plan.objects:
+        pid = writer.fresh(sf)
+        while pid in ids:
+            pid = writer.fresh(sf)
+        ids.append(pid)
+    files = {_IN: 0, _ROOT: 0, _MESH: mesh_fid, _MATERIAL: material_fid}
+    for k, (source, template) in enumerate(plan.objects):
+        new = copy.deepcopy(template)
+        for pointer in _pointers(new):
+            marker = pointer["m_FileID"]
+            if marker == _IN:
+                pointer.update(m_FileID=0, m_PathID=ids[pointer["m_PathID"]])
+            elif marker == _ROOT:
+                pointer.update(m_FileID=0, m_PathID=root)
+            elif marker in files:
+                pointer["m_FileID"] = files[marker]
+        pid = writer.add_like(sf, source, new)
+        if pid != ids[k]:
+            obj = sf.objects.pop(pid)
+            obj.path_id = ids[k]
+            sf.objects[ids[k]] = obj
+    ordered = sorted(sf.objects.items())
+    sf.objects.clear()
+    sf.objects.update(ordered)
+    tree(root)["m_Children"].extend({"m_FileID": 0, "m_PathID": ids[k]} for k in plan.top)
+    save(root)
+    for pid in root_components:  # the FxFollower: the source's offsets
+        if halo.follower and objects[pid].type.name == "MonoBehaviour" and all(name in tree(pid) for name in halo.follower):
+            tree(pid).update(copy.deepcopy(halo.follower))
+            save(pid)
+    return [{"m_FileID": 0, "m_PathID": pid} for pid in ids] + [
+        {"m_FileID": files[marker], "m_PathID": pid} for marker, pid in plan.carried]
 
 
 def _cab(sf: Any, file_id: int) -> str:
