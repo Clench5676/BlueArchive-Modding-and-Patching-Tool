@@ -609,7 +609,8 @@ class ModLibrary:
     def favorites(self) -> set[str]; def set_favorite(self, variant_key: str, on: bool) -> None
     def state(self, variant_key: str, pin=None) -> VariantState   # game files, applied ("official" | "mod:<id>" |
                                                          # "variant:<key>" | "removed" | "unknown"), crc ("ok" |
-                                                         # "fixed" | "needs_fix"), copy, restorable, official
+                                                         # "fixed" | "needs_fix"), copy, restorable, official,
+                                                         # checked ("steam" | "crc" | None: what verifies the copy)
     def configured(self, variant_key: str, pin=None) -> {"spr": source | None, "lobby": source | None}
     def modified(self, pin=None) -> dict[str, str]       # the roster's Replaced flags (portraits)
     def apply(self, variant_key, source, log, progress, kind="spr", pin=None) -> ApplyResult   # also deferred
@@ -2301,7 +2302,10 @@ no withdrawal control.
   Selection and rename redraws retain the active axis offset. Captures start when a card enters the viewport or
   its details are shown, and both share one still; closing the popup cancels deferred work.
   On an overwritten kind (a file that is not official with no official copy anywhere, `restorable` false), Original
-  is greyed with the existing Overwritten treatment. Library Mods remain selectable and applicable; another
+  is greyed with the existing Overwritten treatment. A kept original a Steam list rejected (`originals.json`,
+  verdict `failed`) is no official copy: never restored, kept in place, replaced once the game file passes again;
+  the screens show no verification state (`checked` is for the library's own repair). Library Mods remain
+  selectable and applicable; another
   variant's official card is greyed when that source has no official copy. The greyed cards can still be selected
   for preview; Apply is disabled. `original_unavailable` opens the Add First or Overwritten message
   from an apply or a restore. Delete, in a mod's details, always confirms with the mod's name. If configured or

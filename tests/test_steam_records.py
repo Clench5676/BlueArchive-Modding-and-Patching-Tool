@@ -12,6 +12,7 @@ import pytest
 
 from bmpt import steam_records
 from bmpt.config import Settings
+from bmpt.errors import ServiceError
 from bmpt.library import ModLibrary
 from ba_modding_toolkit.utils import CRCUtils
 
@@ -136,3 +137,91 @@ def test_with_steams_list_a_file_is_official_by_its_sha1_not_by_the_crc_in_its_n
     library._hashes = type(library._hashes)()
     assert library._is_official_as(official, official.name)
     assert library._official_size(official.name) == len(official_bytes)
+
+
+# --- how a kept original was verified (BL-194) ---
+
+def crc_matching_mod(official: Path) -> bytes:
+    """A mod of the official file's size whose CRC32 matches its name, with nothing after the bundle."""
+    expected = int(official.name.rsplit("_", 1)[1].split(".")[0])
+    other = header_bundle(b"modified")
+    changed = CRCUtils.apply_crc_fix(other[:-4], expected)
+    assert changed is not None and len(changed) == len(official.read_bytes())
+    return changed
+
+
+def checks_of(library: ModLibrary) -> dict:
+    import json
+    return json.loads((library.root / "originals.json").read_text())["originals"]
+
+
+def test_an_original_kept_by_the_crc_rule_alone_is_marked_so(tmp_path, steam):
+    library_dir, install, game_data, official, keep, listed = steam
+    allowed = [False]
+    library = make_library(tmp_path, game_data, allowed)
+    pin = library.current_pin()
+    official.write_bytes(crc_matching_mod(official))
+    library._hashes = type(library._hashes)()
+    kept = library._original_path(official)
+    assert library._keep_original(official, pin) == official
+    assert kept.is_file() and checks_of(library)[official.name]["by"] == "crc"
+    # the copy the screens name: kept, verified by the CRC rule alone
+    official.write_bytes(header_bundle(b"a larger mod"))
+    files = [f for f in library.state("test").files if f.file.name == official.name]
+    assert files and files[0].copy == "kept" and files[0].checked == "crc"
+
+
+def test_a_kept_original_steams_list_rejects_is_flagged_and_never_written_back(tmp_path, steam):
+    library_dir, install, game_data, official, keep, listed = steam
+    keep(listed)
+    allowed = [False]
+    library = make_library(tmp_path, game_data, allowed)
+    pin = library.current_pin()
+    official_bytes = official.read_bytes()
+    official.write_bytes(crc_matching_mod(official))
+    library._hashes = type(library._hashes)()
+    kept = library._original_path(official)
+    library._keep_original(official, pin)  # no consent: the CRC rule keeps the mod as the official copy
+    assert checks_of(library)[official.name]["by"] == "crc"
+    allowed[0] = True  # Steam's list becomes available: the scan checks the kept originals
+    assert library.check_originals() == {"failed": 1}
+    assert checks_of(library)[official.name]["by"] == "failed"
+    with pytest.raises(ServiceError) as raised:
+        library._official_for(official, pin)
+    assert raised.value.code == "original_unavailable"
+    # without the list again, neither the kept copy nor the same bytes in the game folder pass as official
+    allowed[0] = False
+    library._steam_roots_cache = None
+    with pytest.raises(ServiceError) as raised:
+        library._official_for(official, pin)
+    assert raised.value.code == "original_unavailable"
+    assert kept.is_file()  # flagged, never deleted
+    # a game file of other bytes: the screens name no official copy for it
+    official.write_bytes(header_bundle(b"a larger mod"))
+    entry = [f for f in library.state("test").files if f.file.name == official.name][0]
+    assert not entry.official and entry.copy is None and not entry.restorable
+    # once the game file is official again (Steam's verify), it replaces the rejected copy
+    official.write_bytes(official_bytes)
+    allowed[0] = True
+    assert library._official_for(official, pin) == official
+    library._keep_original(official, pin)
+    assert kept.read_bytes() == official_bytes and checks_of(library)[official.name]["by"] == "steam"
+
+
+def test_a_kept_original_steams_list_confirms_stays_verified_without_the_list(tmp_path, steam):
+    library_dir, install, game_data, official, keep, listed = steam
+    keep(listed)
+    allowed = [False]
+    library = make_library(tmp_path, game_data, allowed)
+    pin = library.current_pin()
+    library._keep_original(official, pin)
+    assert checks_of(library)[official.name]["by"] == "crc"
+    allowed[0] = True
+    assert library.check_originals() == {"steam": 1}
+    assert library.check_originals() == {}  # judged once
+    allowed[0] = False
+    library._steam_roots_cache = None
+    official.write_bytes(header_bundle(b"a larger mod"))
+    entry = [f for f in library.state("test").files if f.file.name == official.name][0]
+    assert entry.copy == "kept" and entry.checked == "steam"
+    assert library._official_for(official, pin) == library._original_path(official)

@@ -112,6 +112,9 @@ class GameFileState(JsonResult):
     copy: CopyKind | None = None
     restorable: bool = False  # copy is not None
     official: bool = False  # the file holds official bytes (the front end's source rule leaves it out)
+    # what verifies that official copy (BL-194): "steam" (Steam's file list), "crc" (the CRC rule alone, no Steam list
+    # names it); None for an official file or without a copy. A kept original a Steam list rejected is no copy at all.
+    checked: Literal["steam", "crc"] | None = None
 
 
 @dataclass(frozen=True)
