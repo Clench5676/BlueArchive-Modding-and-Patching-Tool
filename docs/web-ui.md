@@ -761,6 +761,19 @@ official (no trailing bytes, the official size) whose bytes were changed outside
 by its size and date (`outside`, dropped by the next write there). Without that, the next scan would list the first
 in the untracked prompt again, and the second in the drift prompt at every start for Apply Mod Configuration to skip.
 
+**CRC repair** (`crc_repair_due`, `repair_crc`; `crc_repair.py`, BL-191). Builds before 0.7.0 wrote a mod file
+whole over a part whose name carries another CRC (a game update rebuilt the part in place) without the CRC fix, and the
+Off after kept those bytes as the entry's built copy. Every whole-file write now compares the bytes with the CRC in
+the target's name (`install.matches_target_crc`), and a built copy whose kept bytes lack the part's CRC is built again
+rather than reused (`_kept_crc_fits`). Once per library the start looks for what an older build left: built keys with
+such a part, and game files the library wrote whose record says `crc: needs_fix`, still holding those bytes, where the
+part needs the CRC. A library free of both is recorded at once in `profiles.json` `checked.target_crc` and never read
+again; otherwise the services repair it without asking, once the first screen is revealed (`_start_crc_repair`, a game
+writer job; owner, 2026-11-12: silent, no dialog): `repair_crc` drops the built keys (the next On builds the entry
+again; a mod's own files stay) and writes each game entry again from the source it carries, built anew, then records
+the check. An entry it cannot write now (the game running, a classic window open, a refused write) is only logged and
+found again at the next start.
+
 **Game update impact** (`update_impact`, `impacts`, `impact_seen`; `fingerprint.impact`). What a game update did
 under a mod is told from the fingerprint of the official parts it was built against (`built-against.json`) held
 against the one its core's parts give now, matched by the assets they hold (a part renamed by the update compares

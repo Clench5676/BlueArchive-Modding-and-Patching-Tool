@@ -5696,6 +5696,8 @@ class ModLibrary:
                             kept = self.root / "mods" / key["source"][4:] / part["mod_file"]
                         if self._hashes.get(kept).sha1 != part["sha1"]:
                             raise ValueError("Changed built copy")
+                        if not self._kept_crc_fits(kept, target):
+                            raise ValueError("Built copy without the part's CRC")
                         replacements[target] = kept
                     logger.debug("Reused configured build %s", signature)
                     return replacements
@@ -5729,7 +5731,7 @@ class ModLibrary:
                 kept = (self.root / "mods" / source[4:] / part["mod_file"]) if part.get("mod_file") and \
                     source.startswith("mod:") else self.root / "built" / f"{part.get('sha1')}.bundle"
                 try:
-                    if self._hashes.get(kept).sha1 != part.get("sha1"):
+                    if self._hashes.get(kept).sha1 != part.get("sha1") or not self._kept_crc_fits(kept, target):
                         raise ValueError(kept)
                 except (OSError, ValueError):
                     logger.info("The built copy of %s no longer fits, rebuilding", target.name)
@@ -5742,6 +5744,30 @@ class ModLibrary:
             return replacements
         self._drop_built(pin, [core])
         return None
+
+    def _kept_crc_fits(self, kept: Path, target: Path) -> bool:
+        """Whether a built copy's part may go over ``target`` as it is: its bytes carry the CRC of the target's name,
+        or the target needs no CRC. An older build kept the bytes of a mod file written whole over a part whose name
+        carries another CRC (BL-191); such a copy is built again."""
+        fingerprint = self._hashes.get(kept)
+        if crc_state(fingerprint.crc, fingerprint.trailing, target.name) != "needs_fix":
+            return True
+        return not self.settings.crc_needed(target)
+
+    @_serialized
+    def crc_repair_due(self) -> dict[str, Any]:
+        """Whether the start repairs what an older build left without its part's CRC (``crc_repair.findings``):
+        {due, entries}."""
+        from . import crc_repair
+
+        return crc_repair.findings(self)
+
+    @_serialized
+    def repair_crc(self, log: LogFunc = no_log, progress: ProgressCallback | None = None) -> Any:
+        """Repair what an older build left without its part's CRC (``crc_repair.repair``), a game writer job."""
+        from . import crc_repair
+
+        return crc_repair.repair(self, log, progress)
 
     def _current_builds(self, pin: Pin, core: str, record: dict[str, Any], targets: list[Path]) -> set[str]:
         """The builds a write of a mod over an entry's game files signs now, as apply and switch sign them
