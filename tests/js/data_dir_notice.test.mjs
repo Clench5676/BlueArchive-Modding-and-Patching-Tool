@@ -56,7 +56,7 @@ function bootHarness(info) {
     Consent: { init() {}, show: async () => true, spine: async () => true, scan: async () => {} },
     Prompts: { start: async () => {}, isBusy: () => false },
     Impact: { check: async () => null, isBusy: () => false },
-    Update: { check: async () => null },
+    Update: { check: async () => null, afterUpgrade: async () => {} },
     route: async () => {},
   };
   const code = main.slice(main.indexOf('let sessionReady = null'), main.indexOf('async function start()'));

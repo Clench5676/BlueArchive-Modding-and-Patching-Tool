@@ -38,16 +38,28 @@ export function notesLines(markdown, lang = language()) {
   });
 }
 
-export async function releaseNotes(info, { simulation = false, onSimulatedPage } = {}) {
+// releasePage: false leaves out the release page button (a local build's tag may not be published)
+export async function releaseNotes(info, { simulation = false, onSimulatedPage, releasePage = true } = {}) {
   const lines = notesLines(info.notes);
   const result = await Popup.message({ title: `${dialogTitle("update.notes", simulation)} - ${info.version}`,
     lines, plain: true, scroll: true, width: "L",
-    buttons: [{ label: T("update.releasePage"), value: "page" },
+    buttons: [...(releasePage ? [{ label: T("update.releasePage"), value: "page" }] : []),
       { label: T("display.close"), value: "dismiss" }] });
   if (result.button === "page") {
     if (simulation) await onSimulatedPage?.();
     else await rpc("app.openReleasePage", { page: info.page });
   }
+}
+
+// The first launch after an upgrade, pre-releases included: the running version's own notes once, when no popup is open
+// and blocked() is false. The server records the launch (app.upgradeNotes), so it is asked before the feature tours; the
+// offer stays pending until the popup has closed.
+export async function afterUpgrade({ blocked = () => false } = {}) {
+  const own = await rpc("app.upgradeNotes");
+  if (!own?.due) return;
+  await Popup.whenIdle(200, blocked);
+  await releaseNotes(own, { releasePage: false });
+  await rpc("app.upgradeNotesPresented", { version: own.current });
 }
 
 // Settings supplies the server's shared prerelease gate. Synthetic data never enters the updater service. With notes,

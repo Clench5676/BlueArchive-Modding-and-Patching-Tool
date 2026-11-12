@@ -321,7 +321,8 @@ function bootHarness({ compiled = true, startupUpdate = true } = {}) {
     Consent: { show: () => { events.push("consent"); return consent.promise; }, scan: async () => events.push("scan") },
     Prompts: { start: async (name) => events.push(name), isBusy: () => promptBusy },
     Impact: { check: async () => events.push("impact"), isBusy: () => false },
-    Update: { check: (_host, _info, options) => { events.push("update-check"); offers.push(options); return update.promise; } },
+    Update: { check: (_host, _info, options) => { events.push("update-check"); offers.push(options); return update.promise; },
+      afterUpgrade: async () => { events.push("upgrade-notes"); } },
   };
   // the first-run sequence, boot() and the start popups
   const bootCode = source.slice(source.indexOf("let sessionReady = null"), source.indexOf("async function start()"));
@@ -346,7 +347,8 @@ test("startup launches its update check only after reveal and finishes while the
   h.consent.resolve(true);
   await boot;
   await offer;
-  assert.deepEqual(h.events.slice(4), ["scan", "impact", "drift", "untracked"], "scan prompts never wait for the network check");
+  assert.deepEqual(h.events.slice(4), ["scan", "impact", "drift", "untracked", "upgrade-notes"],
+    "scan prompts never wait for the network check; the notes after an upgrade follow the start popups");
   const blocked = h.blockers[0];
   assert.equal(blocked(), false);
   h.setLoading(true); assert.equal(blocked(), true);

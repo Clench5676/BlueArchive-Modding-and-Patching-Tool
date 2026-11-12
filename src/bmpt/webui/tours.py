@@ -140,6 +140,46 @@ def presented(state: UiState, versions: list[str], tours: list[dict]) -> None:
     state.update_tours(change)
 
 
+def notes_launch(state: UiState, current: str) -> bool:
+    """Whether this launch should show the running version's release notes: the first launch of a newer version on a
+    profile that ran an older one, every pre-release build included. A fresh profile or a downgrade records the version
+    quietly; an offer stays pending for this version until notes_presented."""
+    current_key = version_key(current)
+    if current_key is None:
+        return False
+    due = []
+
+    def change(history: dict) -> None:
+        notes = history.get('notes')
+        notes = notes if isinstance(notes, dict) else {}
+        high = version_key(notes.get('highest'))
+        if high is None:
+            # A profile from before these notes: the tours' launch history, still the previous launch's because the
+            # page asks for the notes before the tours.
+            high = version_key(history.get('highest'))
+        if (high is None and state.had_asset_consent) or (high is not None and current_key > high):
+            notes['pending'] = current
+        if high is None or current_key > high:
+            notes['highest'] = current
+        history['notes'] = notes
+        due.append(notes.get('pending') == current)
+
+    state.update_tours(change)
+    return due[0]
+
+
+def notes_presented(state: UiState, version: str) -> None:
+    if not isinstance(version, str) or version_key(version) is None:
+        raise ServiceError('bad_params', key='version')
+
+    def change(history: dict) -> None:
+        notes = history.get('notes')
+        if isinstance(notes, dict) and notes.get('pending') == version:
+            del notes['pending']
+
+    state.update_tours(change)
+
+
 def register(rpc: Any, services: Any) -> None:
     from bmpt.engine import get_version_info, i18n_manager
 
@@ -159,3 +199,16 @@ def register(rpc: Any, services: Any) -> None:
     def app_tour_presented(versions: list[str]) -> None:
         _, tours = available()
         presented(services.state, versions, tours)
+
+    @rpc.method('app.upgradeNotes')
+    def app_upgrade_notes() -> dict:
+        from .api import release_notes
+        current = get_version_info().get('version') or ''
+        due = (getattr(services, 'tours_ready', False) and not getattr(services, 'safe_mode', False)
+               and notes_launch(services.state, current))
+        own = release_notes(current) if due else {'version': current, 'notes': ''}
+        return {**own, 'current': current, 'due': bool(due and own['notes'])}
+
+    @rpc.method('app.upgradeNotesPresented')
+    def app_upgrade_notes_presented(version: str) -> None:
+        notes_presented(services.state, version)

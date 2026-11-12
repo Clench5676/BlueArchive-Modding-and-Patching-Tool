@@ -3020,6 +3020,29 @@ test('simulation never joins or replaces an existing real update offer', async (
   action(consent, 'later').click(); await offered;
 });
 
+test('after an upgrade the running version shows its own notes once, Close only, and acknowledges on close', async () => {
+  try {
+    handlers.set('app.upgradeNotes', () => ({ result: { version: '0.7.0', current: '0.7.0-rc.6', due: false, notes: '' } }));
+    let start = calls.length;
+    await Update.afterUpgrade();
+    assert.deepEqual(calls.slice(start), ['app.upgradeNotes'], 'nothing due: no popup, no acknowledgement');
+    handlers.set('app.upgradeNotes', () => ({ result: { version: '0.7.0', current: '0.7.0-rc.6', due: true,
+      notes: '<!-- lang: en -->\n## What\'s New\n- Faster previews\n' } }));
+    start = calls.length;
+    const shown = Update.afterUpgrade();
+    await drawn(dialog, 'dismiss');
+    assert.equal(action(dialog, 'page'), undefined, 'no release page button: a local build may have no published tag');
+    assert.ok(walk(dialog).some((el) => el.textContent === 'Faster previews'));
+    assert.ok(walk(dialog).some((el) => el.dataset?.path === 'Center/Popup/Base/BG/Label_Title_Locale'
+      && el.textContent.replace(/\n/g, '') === `${english.update.notes} - 0.7.0`));
+    assert.deepEqual(calls.slice(start), ['app.upgradeNotes'], 'acknowledged only once closed');
+    action(dialog, 'dismiss').click();
+    await shown;
+    assert.deepEqual(calls.slice(start), ['app.upgradeNotes', 'app.upgradeNotesPresented']);
+    assert.deepEqual(requests.at(-1).params, { version: '0.7.0-rc.6' });
+  } finally { action(dialog, 'dismiss')?.click(); handlers.clear(); }
+});
+
 // --- the display settings over a dialog (#display over #dialog) ---
 const appCss = readFileSync(new URL("../../src/bmpt/web/css/app.css", import.meta.url), "utf8");
 const zRule = (selector) => Number(new RegExp(`^${selector.replace(/[.#]/g, "\\$&")} \\{[^}]*?z-index: (\\d+)`, "m").exec(appCss)?.[1]);

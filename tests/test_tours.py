@@ -306,3 +306,62 @@ def test_other_instance_preferences_and_presentations_merge(tmp_path, manifest):
 def test_release_core_exception_never_admits_a_future_prerelease_tour(monkeypatch):
     monkeypatch.setattr(tours, 'PUBLISHED_TOURS', (release('0.6.0-beta.1', 'future'),))
     assert tours.published('0.6.0-alpha.9', 'en-US') == []
+
+
+def notes_due(state, version):
+    return tours.notes_launch(state, version)
+
+
+@pytest.mark.parametrize('previous', ['0.6.2', '0.7.0-rc.4', '0.7.0-rc.4-dev'])
+def test_release_notes_show_once_after_each_upgrade_pre_releases_included(tmp_path, previous):
+    state = UiState(tmp_path / 'webui.json')
+    assert notes_due(state, previous) is False, 'a fresh profile is quiet'
+    assert notes_due(state, '0.7.0-rc.5') is True
+    # pending until the popup has closed: a crash before that offers it again
+    assert notes_due(UiState(state.path), '0.7.0-rc.5') is True
+    tours.notes_presented(state, '0.7.0-rc.5')
+    assert notes_due(UiState(state.path), '0.7.0-rc.5') is False
+    assert notes_due(state, '0.7.0-rc.6') is True, 'every pre-release build counts'
+    tours.notes_presented(state, '0.7.0-rc.6')
+    assert notes_due(state, '0.7.0') is True
+    tours.notes_presented(state, '0.7.0')
+    assert notes_due(state, '0.7.0') is False
+
+
+def test_release_notes_stay_quiet_on_a_downgrade_and_keep_a_newer_pending_offer(tmp_path):
+    state = UiState(tmp_path / 'webui.json')
+    notes_due(state, '0.6.0')
+    assert notes_due(state, '0.7.0') is True
+    assert notes_due(UiState(state.path), '0.6.0') is False
+    assert notes_due(UiState(state.path), '0.7.0') is True
+    tours.notes_presented(state, '0.6.0')
+    assert notes_due(state, '0.7.0') is True, 'acknowledging another version leaves the offer'
+    assert notes_due(state, 'invalid') is False
+
+
+@pytest.mark.parametrize('consent', [True, False])
+def test_release_notes_follow_the_tours_launch_history_and_pre_tour_profiles(tmp_path, consent):
+    path = tmp_path / 'webui.json'
+    path.write_text(json.dumps({'consent': True, 'tours': {'highest': '0.7.0-rc.5', 'presented': []}}), encoding='utf-8')
+    assert notes_due(UiState(path), '0.7.0-rc.5') is False, 'already launched before these notes'
+    assert notes_due(UiState(path), '0.7.0-rc.6') is True
+    legacy = tmp_path / 'legacy.json'
+    legacy.write_text(json.dumps({'consent': consent, 'prefs': {'voice_muted': True}}), encoding='utf-8')
+    assert notes_due(UiState(legacy), '0.7.0') is True
+    assert json.loads(legacy.read_text())['prefs'] == {'voice_muted': True}
+
+
+def test_release_notes_and_tours_keep_separate_launch_records(tmp_path, manifest):
+    state = UiState(tmp_path / 'webui.json')
+    plan(state, '0.5.0')
+    notes_due(state, '0.5.0')
+    # the page asks for the notes first, then the tours: both see the upgrade
+    assert notes_due(state, '0.7.0') is True
+    assert plan(state, '0.7.0')['versions'] == ['0.7.0', '0.6.0']
+    tours.notes_presented(state, '0.7.0')
+    assert plan(UiState(state.path), '0.7.0')['versions'] == ['0.7.0', '0.6.0']
+
+
+def test_release_notes_reject_a_bad_version(tmp_path):
+    with pytest.raises(ServiceError):
+        tours.notes_presented(UiState(tmp_path / 'webui.json'), ['0.7.0'])
