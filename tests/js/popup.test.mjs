@@ -1667,6 +1667,25 @@ test("errors use an answerable game popup, plain notices stay silent and the toa
 });
 
 
+test("an error notification waits while the loading screen covers every popup, then opens answerable (BL-195)", async () => {
+  setStrings("en-US", Object.fromEntries(strings(english)));
+  let strict = true;
+  Popup.deferWhile(() => strict);
+  try {
+    const before = dialog.children.length;
+    Popup.notify("Wait for the current task to finish", { kind: "error" });
+    for (let i = 0; i < 30; i++) await tick();
+    assert.equal(dialog.children.length, before, "nothing is drawn beneath a strict hold");
+    assert.equal(dialog.hidden, true);
+    strict = false;
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    const layer = dialog.children.at(-1);
+    const ok = await drawn(layer, "ok");
+    assert.ok(walk(layer).some((el) => el.textContent === "Wait for the current task to finish"));
+    ok.click(); assert.equal(dialog.hidden, true);
+  } finally { Popup.deferWhile(() => false); }
+});
+
 test("clean Update asks Cancel / Update and reuses the checked report; problems update without that question", async () => {
   setStrings("en-US", Object.fromEntries(strings(english))); await modsEnabled(false);
   const inputs = { skeletons: {}, atlases: {}, textures: {} }, fam = previewFamily();
