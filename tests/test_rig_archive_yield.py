@@ -72,3 +72,117 @@ def test_background_work_does_not_hold_back_its_own_next_step(monkeypatch):
         assert library._yield_to_foreground(None) < 0.05
     finally:
         service._background.on = False
+
+
+def test_a_paced_job_does_not_count_as_use_it_steps_aside_for():
+    lock = service._LibraryLock()
+    with lock:
+        pass
+    asked = lock.asked
+    assert asked > 0 and lock.used == asked
+    service._background.paced = True
+    try:
+        time.sleep(0.01)
+        with lock:
+            pass
+        assert lock.asked == asked  # the toggle's own steps
+        assert lock.used > asked  # background work still steps aside for a toggle
+    finally:
+        service._background.paced = False
+
+
+def test_a_paced_job_goes_on_at_once_when_nobody_else_uses_the_library(monkeypatch):
+    monkeypatch.setattr(service, "TOGGLE_YIELD", (0.3, 2.0))
+    library = _library()
+    assert library._let_others_in() < 0.05  # never used
+    service._background.paced = True
+    try:
+        with library._lock:
+            pass
+        assert library._let_others_in() < 0.05
+    finally:
+        service._background.paced = False
+
+
+def test_a_paced_job_waits_for_the_others_but_no_longer_than_its_bound(monkeypatch):
+    monkeypatch.setattr(service, "TOGGLE_YIELD", (0.2, 0.5))
+    library = _library()
+    with library._lock:
+        pass
+    waited = library._let_others_in()
+    assert 0.15 <= waited < 0.4  # the quiet time after the last use
+    stop = threading.Event()
+
+    def reader():
+        while not stop.is_set():
+            with library._lock:
+                pass
+            time.sleep(0.02)
+
+    worker = threading.Thread(target=reader)
+    worker.start()
+    try:
+        time.sleep(0.05)
+        waited = library._let_others_in()
+    finally:
+        stop.set()
+        worker.join()
+    assert 0.45 <= waited < 0.8  # busy all along: the bound
+
+
+def test_a_reader_is_not_held_to_one_library_call_per_toggle_step(monkeypatch):
+    """A preview file request makes several library calls in a row; while a toggle reaches its entries (each under
+    the lock for a while), all of them get in between two entries."""
+    monkeypatch.setattr(service, "TOGGLE_YIELD", (0.05, 0.5))
+    library = _library()
+    step, calls, gap = 0.1, 20, 0.01
+    done = threading.Event()
+
+    def toggle():
+        service._background.paced = True
+        try:
+            while not done.is_set():
+                library._let_others_in()
+                with library._lock:
+                    time.sleep(step)
+        finally:
+            service._background.paced = False
+
+    worker = threading.Thread(target=toggle)
+    worker.start()
+    try:
+        time.sleep(0.15)
+        started = time.monotonic()
+        for _ in range(calls):
+            with library._lock:
+                pass
+            time.sleep(gap)  # the request's own work between its calls
+        took = time.monotonic() - started
+    finally:
+        done.set()
+        worker.join()
+    assert took < calls * gap + 3 * step  # one call per step would take calls * step
+
+
+def test_a_paced_job_steps_aside_for_a_caller_blocked_on_the_lock(monkeypatch):
+    monkeypatch.setattr(service, "TOGGLE_YIELD", (0.01, 0.3))
+    library = _library()
+    held, got = threading.Event(), threading.Event()
+
+    def reader():
+        held.wait()
+        with library._lock:
+            got.set()
+
+    worker = threading.Thread(target=reader)
+    worker.start()
+    with library._lock:
+        held.set()
+        while not library._lock.waiting:
+            time.sleep(0.005)
+        time.sleep(0.05)
+        # it noted its wait long before the quiet time, but it is still blocked: the job waits (here up to its bound,
+        # as this thread holds the lock)
+        assert library._let_others_in() >= 0.29
+    worker.join()
+    assert got.is_set() and library._lock.waiting == 0
