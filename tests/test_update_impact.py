@@ -218,7 +218,7 @@ def test_an_update_that_changes_nothing_ends_the_hold(spine, monkeypatch):
     from bmpt.library import service as service_module
 
     class Same:
-        success, all_unchanged, file_pairs = True, True, []
+        success, all_unchanged, file_pairs, no_match = True, True, [], False
 
     monkeypatch.setattr(service_module, "rebuild", lambda *args, **kwargs: Same())
     result = library.update(entry.id)
