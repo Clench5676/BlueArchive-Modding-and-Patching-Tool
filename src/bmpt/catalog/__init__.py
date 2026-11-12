@@ -396,13 +396,14 @@ class Catalog:
             family.variants.append(variant)
             variants[key] = variant
         if unmodelled and hasattr(self.game, "asset_model_cores"):
-            # a story-only or UI-only character's model in its own bundles (a cutscene's NP0206, Arona): the same
-            # preview and costume source as a field-mode one, read for these variants only
+            # a story-only or UI-only character's model in its own bundles (a cutscene's NP0206, Arona), read for
+            # these variants only. Those bundles are the variant's model slot (BL-181): a mod of them applies there,
+            # unlike a field-mode model, which shares its bundles with other students' and has no slot
             names = {name.lower() for key, aliases in unmodelled.items()
                      for name in (key, key + "_original", *aliases, *(alias + "_original" for alias in aliases))}
             owned = self.game.asset_model_cores(names)
             for key, aliases in unmodelled.items():
-                variants[key].field_model = model_core(key, aliases, owned)
+                variants[key].model = model_core(key, aliases, owned)
         for core, paths in sorted(lobbies.items()):
             key = keys.get(core.lower(), "")
             if not key.startswith(SPECIAL_PREFIX):

@@ -1109,7 +1109,8 @@ def test_catalog_gives_a_variant_with_no_model_its_own_one():
     catalog = Catalog(game, FIXTURES / "characters.csv", FIXTURES / "catalog.json")
     assert (catalog.variant("hoshino").model, catalog.variant("hoshino").field_model) == ("hoshino_original", None)
     assert (catalog.variant("np0001").model, catalog.variant("np0001").field_model) == (None, "np0001")
-    assert (catalog.variant("ch0020").model, catalog.variant("ch0020").field_model) == (None, "ch0020")
+    # a model of the variant's own bundles is its slot (BL-181): a mod of those bundles applies there
+    assert (catalog.variant("ch0020").model, catalog.variant("ch0020").field_model) == ("ch0020", None)
     # asked once, for the variants with neither a character nor a field model only
     assert len(game.asked) == 1 and "ch0020" in game.asked[0] and not {"hoshino", "np0001"} & game.asked[0]
-    assert catalog.variant("ch0020").to_json()["field_model"] == "ch0020"
+    assert catalog.variant("ch0020").to_json()["model"] == "ch0020"
