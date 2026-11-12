@@ -1760,14 +1760,15 @@ class Services:
         found = getattr(self.library, "camera_prefab", lambda _id: None)(mod_id)
         if found is None:
             raise KeyError("lobby.json")
-        meta, own, official = found
+        meta, own, official, timeline = found
         if official is None:
             return game.lobby_info(meta["core"], prefab=own)
         # a game update replaced the prefab it was made on and it was not made again yet: framed on the fly, from the
         # stored parameters
         with temporary_directory(prefix=devmode.LIBRARY_STAGING_PREFIX) as temporary:
             output = Path(temporary) / official.name
-            patch_prefab(official, output, meta["root"], meta["scale"], tuple(meta["offset"]), crc=False)
+            patch_prefab(official, output, meta["root"], meta["scale"], tuple(meta["offset"]), timeline=timeline,
+                         crc=False)
             return game.lobby_info(meta["core"], prefab=output)
 
     def close(self, wait: float | None = 600.0) -> None:
