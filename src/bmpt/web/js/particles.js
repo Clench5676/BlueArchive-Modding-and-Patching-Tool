@@ -842,6 +842,118 @@ export function geometry(fxs, s, { meshes = {}, linear = true } = {}) {
   return { data: data.subarray(0, o), count: o / STRIDE };
 }
 
+// floats per vertex of geometry3d(): position (x, y, z), then as geometry()
+export const STRIDE3 = STRIDE + 1;
+
+const cross3 = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+
+// One system's triangles for a perspective camera (the 3D model view's halo, model-fx.js), as geometry() builds them
+// for the lobby's orthographic one, with z kept: positions in the simulation's units (lobby units, WORLD per Unity
+// unit) and space (the system's matrices place it there). view: the camera in that space, {x, y, z: its right, up and
+// forward unit vectors (Unity's handedness: x cross y is z), eye: its position, k: the visible height per unit of
+// depth (2 tan(fov / 2))}. Billboards face the camera plane (View alignment; World and Local: the system's plane, as
+// geometry()), horizontal ones lie in the world's XZ plane, vertical ones stand up facing the camera; stretched ones
+// lie along the velocity, turned round it to the camera; meshes turn with the camera (View), the world (World) or the
+// system (Local). The max particle size is a share of the view's height at the particle's depth. Trails are not built
+// (no halo has them).
+let scratch3 = new Float32Array(0);
+export function geometry3d(fxs, s, view, { meshes = {}, linear = true } = {}) {
+  const def = s.def, rend = def.renderer, world = def.main.space === 1;
+  const decode = linear && rend.colorSpace !== 0;
+  const list = rend.mode === 4 ? (rend.meshes || [rend.mesh]).map((id) => meshes[id]) : null;
+  if (!s.particles.length || rend.mode === 5 || (list && !list.every(Boolean))) return { data: new Float32Array(0), count: 0 };
+  const M = s.M, streams = rend.streams || { uv: [0, 2] };
+  const need = s.particles.length * (list ? Math.max(...list.map((m) => m.i.length)) : 6) * STRIDE3;
+  if (scratch3.length < need) scratch3 = new Float32Array(Math.max(need, scratch3.length * 2, 4096));
+  const data = scratch3;
+  let o = 0;
+  const sx = colLen(M, 0), sy = colLen(M, 1), sz = colLen(M, 2), Rm = rotationOf(M);
+  const facing = [-view.z[0], -view.z[1], -view.z[2]];
+  const depth = (p) => (p[0] - view.eye[0]) * view.z[0] + (p[1] - view.eye[1]) * view.z[1] + (p[2] - view.eye[2]) * view.z[2];
+  const centreOf = (pt) => (world ? pt.pos : apply(M, pt.pos[0], pt.pos[1], pt.pos[2]));
+  // drawn in order, the last on top (geometry()), by distance from the eye (1) or by depth (4) the farthest first
+  let order = s.particles;
+  if (rend.sort === 2) order = order.slice().sort((a, b) => a.age - b.age);
+  else if (rend.sort === 3) order = order.slice().sort((a, b) => b.age - a.age);
+  else if (rend.sort === 1 || rend.sort === 4) {
+    const far = (pt) => {
+      const c = centreOf(pt);
+      return rend.sort === 4 ? depth(c) : Math.hypot(c[0] - view.eye[0], c[1] - view.eye[1], c[2] - view.eye[2]);
+    };
+    order = order.slice().sort((a, b) => far(b) - far(a));
+  }
+  // the camera's axes as a matrix's columns: a mesh's View alignment
+  const camera = [view.x[0], view.y[0], view.z[0], 0, view.x[1], view.y[1], view.z[1], 0, view.x[2], view.y[2], view.z[2], 0];
+  for (const pt of order) {
+    const mesh = list && list[meshIndex(rend, pt.seed)];
+    const cur = fxs.current(s, pt), c = vertexColor(cur.color, decode), tc = texcoords(streams, cur.custom);
+    const centre = centreOf(pt);
+    const fu = rend.flip && rnd(pt.seed, R.flipU) < rend.flip[0], fv = rend.flip && rnd(pt.seed, R.flipV) < rend.flip[1];
+    let u0 = 0, v0 = 0, du = 1, dv = 1;
+    if (cur.tiles) {
+      du = 1 / cur.tiles[0]; dv = 1 / cur.tiles[1];
+      u0 = (cur.frame % cur.tiles[0]) * du;
+      v0 = 1 - (Math.floor(cur.frame / cur.tiles[0]) + 1) * dv;
+    }
+    const push = (p, u, v, n = facing, col = c) => {
+      const uu = u0 + (fu ? 1 - u : u) * du, vv = v0 + (fv ? 1 - v : v) * dv;
+      data[o++] = p[0]; data[o++] = p[1]; data[o++] = p[2];
+      for (let k = 0; k < 12; k++) data[o + k] = tc[k];
+      if (streams.uv) { data[o + streams.uv[0]] = uu; data[o + streams.uv[0] + 1] = vv; }
+      if (streams.uv2) { data[o + streams.uv2[0]] = uu; data[o + streams.uv2[0] + 1] = vv; }
+      o += 12;
+      data[o++] = col[0]; data[o++] = col[1]; data[o++] = col[2]; data[o++] = col[3];
+      data[o++] = n[0]; data[o++] = n[1]; data[o++] = n[2];
+    };
+    if (mesh) {
+      const deg = 180 / Math.PI, mc = mesh.c, pc = cur.color;
+      const base = rend.align === 2 ? Rm : rend.align === 1 ? IDENTITY : camera;
+      const turn = mul(base, euler(cur.rot[0] * deg, cur.rot[1] * deg, -cur.rot[2] * deg));
+      const T = mul(turn, [cur.size[0] * sx, 0, 0, 0, 0, cur.size[1] * sy, 0, 0, 0, 0, cur.size[2] * sz, 0]);
+      for (const idx of mesh.i) {
+        const p = applyDir(T, mesh.v[idx * 3], mesh.v[idx * 3 + 1], mesh.v[idx * 3 + 2]);
+        const n = mesh.n ? norm(applyDir(turn, mesh.n[idx * 3], mesh.n[idx * 3 + 1], mesh.n[idx * 3 + 2])) : facing;
+        const col = mc ? vertexColor([pc[0] * mc[idx * 4], pc[1] * mc[idx * 4 + 1], pc[2] * mc[idx * 4 + 2], pc[3] * mc[idx * 4 + 3]], decode) : c;
+        push([centre[0] + p[0], centre[1] + p[1], centre[2] + p[2]], mesh.uv ? mesh.uv[idx * 2] : 0, mesh.uv ? mesh.uv[idx * 2 + 1] : 0, n, col);
+      }
+      continue;
+    }
+    let w = cur.size[0] * sx, h = cur.size[1] * sy;
+    const big = Math.max(Math.abs(w), Math.abs(h)), maxSize = (rend.maxSize ?? 0.5) * view.k * Math.max(depth(centre), 1e-6);
+    if (big > maxSize) { w *= maxSize / big; h *= maxSize / big; }
+    if (rend.mode === 1) {
+      // along its velocity, the particle at the head, its width across the velocity and the line of sight
+      const v = world ? [pt.vel[0] + pt.anim[0], pt.vel[1] + pt.anim[1], pt.vel[2] + pt.anim[2]]
+        : applyDir(M, pt.vel[0] + pt.anim[0], pt.vel[1] + pt.anim[1], pt.vel[2] + pt.anim[2]);
+      const sp = Math.hypot(v[0], v[1], v[2]) || 1e-6, d = [v[0] / sp, v[1] / sp, v[2] / sp];
+      const toEye = norm([view.eye[0] - centre[0], view.eye[1] - centre[1], view.eye[2] - centre[2]]);
+      let side = cross3(d, toEye);
+      side = Math.hypot(side[0], side[1], side[2]) > 1e-6 ? norm(side) : view.y;
+      const len = w * (rend.lengthScale ?? 2) + sp * (rend.velocityScale || 0);
+      for (const q of QUAD) {
+        const a = (q[0] - 0.5) * len, b = q[1] * h;
+        push([centre[0] + d[0] * a + side[0] * b, centre[1] + d[1] * a + side[1] * b, centre[2] + d[2] * a + side[2] * b], q[2], q[3]);
+      }
+      continue;
+    }
+    const rz = -cur.rot[2], cz = Math.cos(rz), sn = Math.sin(rz);
+    const px = (rend.pivot?.[0] || 0) * w, py = (rend.pivot?.[1] || 0) * h;
+    let X = view.x, Y = view.y;
+    if (rend.mode === 2) { X = [1, 0, 0]; Y = [0, 0, 1]; }
+    else if (rend.mode === 3) {
+      const flat = [view.x[0], 0, view.x[2]];
+      X = Math.hypot(flat[0], flat[2]) > 1e-6 ? norm(flat) : [1, 0, 0]; Y = [0, 1, 0];
+    } else if (rend.align === 2) { X = [Rm[0], Rm[4], Rm[8]]; Y = [Rm[1], Rm[5], Rm[9]]; }
+    const fx3 = def.main.rotation.length === 3 ? Math.cos(cur.rot[1]) : 1, fy3 = def.main.rotation.length === 3 ? Math.cos(cur.rot[0]) : 1;
+    for (const q of QUAD) {
+      const lx = (q[0] * w + px) * fx3, ly = (q[1] * h + py) * fy3;
+      const rx = lx * cz - ly * sn, ry = lx * sn + ly * cz;
+      push([centre[0] + X[0] * rx + Y[0] * ry, centre[1] + X[1] * rx + Y[1] * ry, centre[2] + X[2] * rx + Y[2] * ry], q[2], q[3]);
+    }
+  }
+  return { data: data.subarray(0, o), count: o / STRIDE3 };
+}
+
 // One system's trails for this frame (the trail module; the renderer's second submesh, drawn with its trail material),
 // in geometry()'s vertex layout: for each particle with a trail, a ribbon facing the camera from the particle back
 // through the points it left. Along it (u: 0 at the particle, 1 at the trail's end, the texture stretched once over

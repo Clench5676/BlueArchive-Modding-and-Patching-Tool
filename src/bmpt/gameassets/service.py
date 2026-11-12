@@ -9,7 +9,7 @@ import math
 import re
 import threading
 import time
-from collections.abc import Iterable, Iterator
+from collections.abc import Iterable, Iterator, Mapping
 from concurrent.futures import Future
 from contextlib import contextmanager
 from copy import deepcopy
@@ -911,9 +911,9 @@ class GameAssets:
                 raise AssetNotFound(str(path)) from None
             stamps.append((str(path), stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns))
         # v2 excludes old partial exports whose missing CABs were not recorded; v3 adds the rule that chose the files
-        # read outside the overrides.
-        key = _SCHEMA + ("model/v2/" + json.dumps([core, stamps]) if reads is None
-                         else "model/v3/" + json.dumps([core, stamps, reads.key]))
+        # read outside the overrides; "fx1" the halo's particle systems.
+        key = _SCHEMA + ("model/v2/fx1/" + json.dumps([core, stamps]) if reads is None
+                         else "model/v3/fx1/" + json.dumps([core, stamps, reads.key]))
         generation, disk_generation = self.cache.generation, self._preview_generation()
 
         def valid_cached() -> bytes | None:
@@ -998,7 +998,10 @@ class GameAssets:
                 with self._cab_discovery().batch(), BundleGraph({}, overrides, resolver=resolve_timed, opener=tracked_bundle) as graph:
                     try:
                         with spans.span("export.model.convert"):
-                            data = export_chibi(graph, bundles, core, **({"story": story} if story else {}))
+                            # the halo's particles: their materials and meshes, read as a lobby's (_FxResolver)
+                            def fx(objects: Mapping[int, Any]) -> Callable[[str, int, dict], Any]:
+                                return _FxResolver(graph, dict(objects), self._shader_forms).resolve
+                            data = export_chibi(graph, bundles, core, fx=fx, **({"story": story} if story else {}))
                     finally:
                         spans.record("export.model.open", phases["open"])
                         spans.record("export.model.resolve", phases["resolve"])

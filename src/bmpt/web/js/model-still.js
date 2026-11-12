@@ -12,7 +12,7 @@ export const modelStillVersion = (family, variant, generation = 0) => JSON.strin
   family.variants.flatMap((v) => v.modList || []).filter((m) => m.kind === "model")
     .map(({ alias, label, fresh, ...source }) => source), generation,
 ]);
-export const modelStillKey = (key, source, version) => JSON.stringify([key, source, version, "square-640-v2"]);
+export const modelStillKey = (key, source, version) => JSON.stringify([key, source, version, "square-640-v3"]); // v3: the halo's particles
 
 export function createModelStills({ renderer = () => import("./model.js"), report = previewError, timeout = 8000, persistent = previewCache } = {}) {
   const cache = new Map(), queue = [];
@@ -59,7 +59,7 @@ export function createModelStills({ renderer = () => import("./model.js"), repor
         item.controller = controller;
         let view;
         const capture = (async () => {
-          item.persistent = await persistent.modelTicket(JSON.stringify(["model-square-640-v2", globalThis.devicePixelRatio || 1]), item.variant, item.source);
+          item.persistent = await persistent.modelTicket(JSON.stringify(["model-square-640-v3", globalThis.devicePixelRatio || 1]), item.variant, item.source);
           signal.throwIfAborted();
           const saved = await persistent.get(item.persistent, { signal });
           if (saved) {

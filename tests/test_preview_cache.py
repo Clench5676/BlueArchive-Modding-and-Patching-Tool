@@ -266,7 +266,7 @@ def test_model_export_reuses_disk_and_revalidates_dependencies(tmp_path, monkeyp
     dependency.write_bytes(b"old")
     builds = []
 
-    def export(graph, bundles, core):
+    def export(graph, bundles, core, **_):
         graph.loaded.extend([str(prefab), str(dependency)])
         builds.append(1)
         return b"glTF" + dependency.read_bytes()
@@ -293,7 +293,7 @@ def test_model_preview_reuses_disk_exports_only_for_the_locations_its_rule_admit
     kept.write_bytes(b"official")
     builds = []
 
-    def export(graph, bundles, core):
+    def export(graph, bundles, core, **_):
         graph.loaded.extend([str(prefab), str(kept)])  # a texture read from the library's official copy
         builds.append(1)
         return b"glTF" + kept.read_bytes()
@@ -331,7 +331,7 @@ def test_model_dependency_replaced_during_decode_is_not_cached(tmp_path, monkeyp
             path.write_bytes(b"new")
         yield SimpleNamespace(objects=[], decoded=decoded)
 
-    def export(graph, bundles, core):
+    def export(graph, bundles, core, **_):
         decoded = graph.add(dependency).decoded
         if change_at == "export":
             dependency.write_bytes(b"new")
@@ -361,7 +361,7 @@ def test_missing_model_cab_is_not_persisted_and_new_dependency_exports_on_restar
         obj = SimpleNamespace(assets_file=SimpleNamespace(name="cab-extra"), path_id=7, data=path.read_bytes())
         yield SimpleNamespace(objects=[obj] if path == dependency else [])
 
-    def export(graph, bundles, core):
+    def export(graph, bundles, core, **_):
         builds.append(1)
         graph.add(prefab)
         texture = graph.deref(owner, {"m_FileID": 1, "m_PathID": 7})
@@ -407,7 +407,7 @@ def test_real_complete_models_still_persist(tmp_path, monkeypatch, core):
     assert list(preview.root.glob("*.preview")), "valid models must retain their cross-session cache"
     restarted = GameAssets(directories, AssetCache(root=tmp_path / "light"),
                            preview_cache=PreviewCache(preview.root, allowed=True))
-    monkeypatch.setattr(model, "export_chibi", lambda *args: pytest.fail("Complete cached model was exported again"))
+    monkeypatch.setattr(model, "export_chibi", lambda *args, **_: pytest.fail("Complete cached model was exported again"))
     assert restarted.model_glb(core) == data
 
 

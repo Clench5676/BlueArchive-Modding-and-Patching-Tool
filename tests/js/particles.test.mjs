@@ -377,6 +377,49 @@ test("geometry: billboard size, the view's max size, stretch and meshes; vertex 
   near(vertexColor([1, 0.5, 0, 1], true)[1], 0.2158605, 1e-6, "linear");
 });
 
+test("geometry3d: the lobby's quads for a camera looking along +z, facing any other camera, with depth kept", () => {
+  const { geometry3d, STRIDE3 } = P;
+  const one = { bursts: [{ t: 0, n: 1, cycles: 1, interval: 0.01, p: 1 }] };
+  const placed = [100, 0, 0, 10, 0, 100, 0, 20, 0, 0, 100, 30];
+  const front = { x: [1, 0, 0], y: [0, 1, 0], z: [0, 0, 1], eye: [0, 0, -1e4], k: 1665 / 1e4 };
+  const corners = (g, stride) => Array.from({ length: g.count }, (_, v) => [0, 1, 2].map((k) => g.data[v * stride + k]));
+  for (const renderer of [{ mode: 0 }, { mode: 1, lengthScale: 3 }, { mode: 0, align: 2 }]) {
+    const over = { emission: one, static: placed, main: { size: [2], speed: 1 }, renderer,
+      shape: { type: 12, radius: 0, thickness: 1, arc: 360, pos: [0, 0, 0], rot: [0, 0, 0], scale: [1, 1, 1], randomDir: 0, spherical: 0, randomPos: 0 } };
+    const fx = effects([sys(over)]);
+    fx.update(0.016);
+    const flat = geometry(fx, fx.systems[0]), flatCorners = Array.from({ length: flat.count }, (_, v) => [flat.data[v * STRIDE], flat.data[v * STRIDE + 1]]);
+    const deep = geometry3d(fx, fx.systems[0], front);
+    assert.equal(deep.count, flat.count);
+    corners(deep, STRIDE3).forEach(([x, y, z], v) => {
+      near(x, flatCorners[v][0], 1e-3, `x ${renderer.mode}`); near(y, flatCorners[v][1], 1e-3, `y ${renderer.mode}`);
+      // the rest of the vertex as geometry() writes it (UVs, custom data, colour, normal)
+      for (let k = 2; k < STRIDE; k++) near(deep.data[v * STRIDE3 + k + 1], flat.data[v * STRIDE + k], 1e-6, `attr ${k}`);
+    });
+    if (renderer.mode === 0 && !renderer.align) corners(deep, STRIDE3).forEach(([, , z]) => near(z, 30, 1e-6, "depth kept"));
+  }
+  // seen from the side (the camera looks along -x): the billboard lies in the camera's plane, its normal toward it
+  const fx = effects([sys({ emission: one, static: placed, main: { size: [2] } })]);
+  fx.update(0.016);
+  const side = { x: [0, 0, 1], y: [0, 1, 0], z: [-1, 0, 0], eye: [1e4, 20, 30], k: 1665 / 1e4 };
+  const g = geometry3d(fx, fx.systems[0], side);
+  const xs = corners(g, STRIDE3);
+  xs.forEach(([x]) => near(x, 10, 1e-6, "in the camera's plane"));
+  near(Math.max(...xs.map((c) => c[2])) - Math.min(...xs.map((c) => c[2])), 200, 1e-6, "width across the view");
+  assert.deepEqual([...g.data.slice(19, 22)].map((v) => v + 0), [1, 0, 0]);
+  // a mesh with View alignment turns with the camera: its local x along the camera's right
+  const mesh = effects([sys({ emission: one, static: placed, renderer: { mode: 4, mesh: "tri" } })]);
+  mesh.update(0.016);
+  const mg = geometry3d(mesh, mesh.systems[0], side, { meshes: { tri: { v: [0, 0, 0, 1, 0, 0, 0, 1, 0], i: [0, 1, 2] } } });
+  assert.deepEqual([0, 1, 2].map((k) => Math.round(mg.data[STRIDE3 + k] - mg.data[k])), [0, 0, 100]);
+  // the max particle size is a share of the view's height at the particle's depth
+  const big = effects([sys({ emission: one, static: placed, main: { size: [20] } })]);
+  big.update(0.016);
+  const bg = geometry3d(big, big.systems[0], { ...front, eye: [10, 20, -970], k: 1 });
+  const ys = corners(bg, STRIDE3).map((c) => c[1]);
+  near(Math.max(...ys) - Math.min(...ys), 0.5 * 1000, 1e-6, "max size at depth");
+});
+
 test("a mesh renderer's meshes: one per particle, uniformly at random or by their weights", () => {
   // ch0095's rain streaks (four meshes) and lobbyayane_multi's confetti (two triangles): a mesh per particle
   const tri = { v: [0, 0, 0, 1, 0, 0, 0, 1, 0], i: [0, 1, 2] }, quad = { v: [0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0], i: [0, 1, 2, 2, 3, 0] };
