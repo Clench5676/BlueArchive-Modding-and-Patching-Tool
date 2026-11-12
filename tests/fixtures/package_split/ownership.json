@@ -43,14 +43,14 @@
       "masked_import_lines_sha256": "8eb8ba6d47bb69e1f07cac2ab667981c26304644c6a997af68a2b629b934304c"
     },
     "src/ba_modding_toolkit/asset.py": {
-      "blob": "2756e36e8d00192e269f7d09f06781068fc11ec1",
-      "non_import_ast_sha256": "4f897639e8b3752a390913876ff4045b430f5d7017337b10d548b7c1c47dbc2d",
-      "masked_import_lines_sha256": "aa55f9ff74b9f582afe9d108aa7e34a54e2cb393e58321429c667303bec0f601"
+      "blob": "9d909ae1f7d59e1820e34219c9f5332ef87c9c18",
+      "non_import_ast_sha256": "004be4342b656e2dc00fa0d1052bebd2f4475bb026af2904787b8765d13d8ea0",
+      "masked_import_lines_sha256": "4f6da7a56e76438613d0db8fef3b0f36185fbd24d447ed33349865444ca467b2"
     },
     "src/ba_modding_toolkit/bundle.py": {
-      "blob": "ee5d0163474c67abbe90d5dfaf57cd84994fd303",
-      "non_import_ast_sha256": "bc24d44f040ae25897bf1fd38e9565770356940665366f7d440243572f630e2d",
-      "masked_import_lines_sha256": "304ebb18bb192e35539b73238471d3a35ff35f46b21a4ec5126f9e491c3350d6"
+      "blob": "da31cb270a0b07a45b52d60053b9b8ddd4681750",
+      "non_import_ast_sha256": "89e988d2425446796eb5d5903f973a209b8e9d6756776a475f4af067965895ca",
+      "masked_import_lines_sha256": "f6b3131204a1142021950f6686fb060772a15fefa3065ffc78d7207e9c0c5b5b"
     },
     "src/ba_modding_toolkit/cli/__main__.py": {
       "blob": "d24c3ec2f890ae7ae00da4d3641ad2a07789af81",
@@ -228,9 +228,9 @@
       "masked_import_lines_sha256": "32bfb77b3f64892379bc22704e589f97f083a5868c6e7c9d4f6f04cbb320bc34"
     },
     "src/ba_modding_toolkit/gui/windows/mod_install_dialog.py": {
-      "blob": "3382b3954f57f8ae0c540a293015d213471e4856",
-      "non_import_ast_sha256": "8d7b8e2bcfeec94acc1f2fa1bc4f246f8a53311a124008bf9fcc1fb72ee00a08",
-      "masked_import_lines_sha256": "6092b5cee6dc88cfe569a0071d69e7b32dd5c6620a8158bb216ae0d7a8517032"
+      "blob": "42b9d681e0fead3d42b9947dcfef397d03cd5caa",
+      "non_import_ast_sha256": "d5ec9c6e37a23d212552d26e409b3320b880d7fbd2e16dc77cde994264bd3952",
+      "masked_import_lines_sha256": "764a359308d606b56971ab6fe39de48d96f2322ee31c4a09522c016534c697ad"
     },
     "src/ba_modding_toolkit/gui/windows/preview_window.py": {
       "blob": "d66109c691ea64e387c2b00351ccf78609bf0893",
@@ -277,9 +277,9 @@
       "masked_import_lines_sha256": "d17ec42d31d3861a36afe4143e36f132984e62cfcf583ae8e0348cb4cc1d4563"
     },
     "src/ba_modding_toolkit/spine.py": {
-      "blob": "308bbc525c83aa689555b409d3612c6bc35f2e19",
-      "non_import_ast_sha256": "50ff65e18ea49c546b1bb08853810252699bf59300b04d2a28abd1b8236c34d3",
-      "masked_import_lines_sha256": "f8ad9c004abedeea423dc6444032a14b8d5534e1efed01749fd4f505e9bdd911"
+      "blob": "0ffd74b1ae1d34254a2233192f92cf170170182e",
+      "non_import_ast_sha256": "5a038b9f338dfbb41b0df2108da30b417462e522591db4d0889801cea806e491",
+      "masked_import_lines_sha256": "9a905899c73d21b3777618e1d5df914e5f608f566627bbfb36520ef9ae88a366"
     },
     "src/ba_modding_toolkit/utils/__init__.py": {
       "blob": "1d55e8b866ac812f32b906a640d888791529bb2f",
@@ -327,7 +327,7 @@
     },
     {
       "file": "src/ba_modding_toolkit/asset.py",
-      "line": 16,
+      "line": 17,
       "original": "from .texture_guard import texture_image",
       "import": "from bmpt.texture_guard import encodable_image, texture_image"
     },
