@@ -1541,7 +1541,9 @@ async function drawPopup(scroll = 0) {
       ...crossExtras(c, T("model.crossCharacter")),
       badge: c.greyed ? { ...GREYED_BADGE(), ...(!coreOf(v, kind) && c.kind === "self" ? { text: T("import.reason.no_target") } : {}) }
         : c.mod?.incomplete ? { text: T("mods.incomplete"), color: COLOUR.warning, ink: "#ffffff" }
-        : outdated ? outdatedMark : null,
+        : null,
+      // after the tag on the card's bottom row (like Optimized, never pushed to a second line)
+      marks: outdated ? [outdatedMark] : [],
       tag: c.mod?.repaired_from ? { text: T("remap.repaired"), color: "#d7eaf4", ink: "#2d4664" }
         : c.mod?.optimized_from ? { text: T("model.optimized"), color: "#d7eaf4", ink: "#2d4664" } : null,
     };
