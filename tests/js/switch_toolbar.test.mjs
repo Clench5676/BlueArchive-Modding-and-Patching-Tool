@@ -82,4 +82,3 @@ for (const locale of LOCALES) test(`model.showOthers is in ${locale} with the ag
   assert.equal(text(locale, "model.showOthers"), WORDING[locale]);
   assert.equal(Object.keys(WORDING).length, LOCALES.length);
 });
-
