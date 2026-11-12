@@ -48,8 +48,6 @@ class ModEntry(JsonResult):
     alias: str = ""
     label_base: str = ""  # stored name before aliases and localized repair suffixes
     optimized_from: str = ""  # an Optimize Physics copy: the costume it was built from, "variant:<key>"
-    # an Optimize Physics copy built under an older costume rule (or none recorded): Update builds it again
-    outdated: bool = False
     # a memorial lobby camera: {source, number, scale, offset}; listed as a lobby choice of its variant
     camera: dict | None = None
 

@@ -8,11 +8,9 @@
 // Files Changed badge; Fix and Apply for the ticked ones), the entries applied again, the other affected mods; a
 // card's details hold Go To and, for a held mod, the repair's preview (the review, whose Accept is Fix and Apply) and
 // Fix and Apply. Closing it records the version as seen (mods.impactSeen); Settings' Game Update Impact runs it again
-// (show). What the App built from a costume under an older costume rule (Optimize Physics copies, costume swaps
-// in the game files; impact "outdated") is listed with the held mods (the game's segment control has three toggles),
-// ticked, with the Updatable badge; Fix and Apply (its details: Update) builds them again; the start shows the list
-// without the question when they are the only news (mods.updateDue's outdated, once per rule). The pure parts are tested
-// in Node (tests/js/mod_switch.test.mjs).
+// (show). Before the question, what the App built from a costume under an older costume rule (Optimize Physics
+// copies, costume swaps in the game files: mods.updateDue's outdated) is built again without asking
+// (mods.refreshCostumes, refresh). The pure parts are tested in Node (tests/js/mod_switch.test.mjs).
 import * as Compatibility from "./mod-compatibility.js";
 import * as Loading from "./loading.js";
 import * as Popup from "./popup.js";
@@ -157,21 +155,28 @@ async function run({ force = false, scan = true } = {}) {
   }, { label: T("mods.impact.checking") });
 }
 
-// gate(): at the start before the first screen (and after a game update while the program runs): the question, then the
-// check. Resolves true when a summary waits (check shows it); Later asks again at the next start.
+// refresh(): the costume builds of an older costume rule built again under the loading screen, with the plain progress
+// of a writer task and nothing to answer: what cannot be built again is kept or left for the next start, never told
+async function refresh() {
+  await Loading.task(async (update) => waitJob(await rpc("mods.refreshCostumes"), update));
+}
+
+// gate(): at the start before the first screen (and after a game update while the program runs): the costume builds of
+// an older costume rule built again (refresh), then the question and the check. Resolves true when a summary waits
+// (check shows it); Later asks again at the next start.
 export async function gate() {
   if (busy) return false;
   const due = await rpc("mods.updateDue").catch(() => null);
   if (!due?.due && !due?.outdated) return false;
   busy = true;
   // At the start, the boot watchdog holds from here: the answer is the user's, and the check, a job over every library
-  // mod, shows its own progress (a first check after an upgrade fingerprints each mod and can take minutes)
+  // mod, shows its own progress (a first check after an upgrade fingerprints each mod and can take minutes; a costume
+  // rebuild takes up to half a minute each)
   const release = globalThis.BAMTRecovery?.hold?.();
   try {
-    // outdated costume builds alone (the same game version): nothing to check, the list shows at once
-    if (!due.due) {
-      pending = await run({ scan: false });
-      return true;
+    if (due.outdated) {
+      await refresh().catch((err) => console.error("costume refresh", err));
+      if (!due.due) return false;
     }
     const answer = await Popup.message({ title: T("mods.impact.gateTitle"), lines: [T("mods.impact.gateAsk")], close: false,
       buttons: [{ label: T("update.later"), value: "later" }, { label: T("mods.impact.gateCheck"), value: "check", primary: true }] });
@@ -190,8 +195,7 @@ export async function gate() {
 
 // --- the list (the drift prompt's popup; the wireframe of the thread) ---
 
-// the segments over the cards: the held mods (with the costume builds of an older costume rule), the entries the
-// check applied again, the other affected mods
+// the segments over the cards: the held mods, the entries the check applied again, the other affected mods
 export const TABS = ["held", "reapplied", "others"];
 const OTHER_KINDS = { rebuilt: "kindRebuilt", new_parts: "kindNewParts", gone: "kindGone" };
 
@@ -199,22 +203,18 @@ const OTHER_KINDS = { rebuilt: "kindRebuilt", new_parts: "kindNewParts", gone: "
 // one and its student is not configured with it)
 export const heldOf = (result) => (result?.mods || []).filter((m) => m.impact === "rig_changed" && !(m.repaired_id && !m.configured));
 
-// tabMods(outcome): the mods each segment lists ({held, reapplied, others}); Needs Fix ends with the outdated costume
-// builds
+// tabMods(outcome): the mods each segment lists ({held, reapplied, others})
 export function tabMods({ result, reapplied = [] } = {}) {
   const mods = result?.mods || [];
-  return { held: [...heldOf(result), ...mods.filter((m) => m.impact === "outdated")], reapplied: reapplied.map(entryMod),
+  return { held: heldOf(result), reapplied: reapplied.map(entryMod),
     others: mods.filter((m) => m.impact in OTHER_KINDS) };
 }
 
 // the segments' captions (no counts), as the list's toolbar takes them
 export const tabCaptions = () => ["mods.impact.tabHeld", "mods.impact.tabReapplied", "mods.impact.tabOthers"];
 
-// a card's key: its mod, else (a costume swap in the game files) its core
+// a card's key: its mod, else its core
 export const modKey = (mod) => mod?.id || `${mod?.core || ""}`;
-
-// the costume a swap in the game files carries ("variant:<key>"), "" for a mod
-const costumeOf = (mod) => /^variant:(.+)$/.exec(mod?.source || "")?.[1] || "";
 
 // card(mod, tab, nameOf): a mod's card: the student's name, its own picture (none for a 3D model), the kind and Applied
 // as chips; a held mod with the Files Changed badge, another kind with what happened to it as its badge
@@ -224,16 +224,12 @@ export function card(mod, tab, nameOf = (e) => e?.variant || e?.core || "") {
   const lobby = mod.kind === "lobby";
   // an Official chip over the details' one line of the official changes
   const chips = [T(kindKey(mod.kind)), ...(mod.configured ? [T("status.applied")] : []), ...(changeText(mod) ? [T("mods.impact.chipOfficial")] : [])];
-  const badge = mod.impact === "outdated" ? { text: T("model.outdated"), color: COLOUR.success, ink: "#ffffff" }
-    : tab === "held" ? { text: T("mods.heldBadge"), color: COLOUR.warning, ink: "#ffffff" }
+  const badge = tab === "held" ? { text: T("mods.heldBadge"), color: COLOUR.warning, ink: "#ffffff" }
     : tab === "others" ? { text: T(`mods.impact.${OTHER_KINDS[mod.impact]}`), color: COLOUR.greyed, ink: "#ffffff" } : null;
   // the details name the mod itself (the card names the student), its kind and Applied as chips
   // a generic mod (other) has no student: its own name, never its set's key
   const name = mod.kind === "other" ? mod.label || T("settings.mods.other") : nameOf(entry) || mod.label || mod.core || "";
-  // a costume swap in the game files is named after the costume it carries
-  const costume = costumeOf(mod);
-  const full = costume ? nameOf({ variant: costume, kind: mod.kind }) || name : mod.label || name;
-  return { key: modKey(mod), label: name, full, chips,
+  return { key: modKey(mod), label: name, full: mod.label || name, chips,
     ...(badge ? { badge } : {}), mod,
     thumb: base ? thumb(base, "card", null, lobby) : null,
     big: base ? () => thumb(base, mod.kind === "spr" ? "portrait" : "bust", null, lobby) : null };
@@ -247,8 +243,7 @@ export function details(mod, tab) {
   const fields = changes ? [[null, changes]] : [];
   const page = !!(mod.id && mod.kind !== "other" && mod.target);
   const actions = [...(page ? [["go", T("add.go")]] : []),
-    ...(mod.impact === "outdated" ? [["fix", T("act.update"), "apply"]]
-      : tab === "held" ? [["preview", T("mods.impact.preview")], ["fix", T("mods.impact.fix"), "apply"]] : [])];
+    ...(tab === "held" ? [["preview", T("mods.impact.preview")], ["fix", T("mods.impact.fix"), "apply"]] : [])];
   return { title: T(mod.kind === "lobby" ? "info.title.lobby" : mod.kind === "model" ? "info.title.model" : "info.title.portrait"),
     fields, actions };
 }
@@ -330,8 +325,7 @@ async function applyRepaired(mod, id) {
   if (mod.configured) await waitJob(await rpc("actions.apply", { variant: mod.target, source: `mod:${id}`, kind: mod.kind }));
 }
 
-// fix(mods, nameOf, {review}): the student page's Update for each held mod, here: an outdated costume build is built
-// again (rebuild); a repaired copy made before takes
+// fix(mods, nameOf, {review}): the student page's Update for each held mod, here: a repaired copy made before takes
 // its place at once; a mod the repair can take is prepared with the default repair (review: the choice and the review,
 // whose Accept is Fix and Apply) and, unless partial, stored and put in its place; another gets the asset update.
 // Resolves with {fixed, partial}: the mods fixed, and those whose repair was partial (not stored, not applied).
@@ -340,11 +334,6 @@ async function fix(mods, nameOf, { review = false } = {}) {
   for (const mod of mods) {
     const subject = modName({ ...mod, configured: false }, nameOf);
     try {
-      if (mod.impact === "outdated") {
-        await rebuild(mod, subject);
-        fixed.push(mod);
-        continue;
-      }
       if (mod.repaired_id) {
         await applyRepaired(mod, mod.repaired_id);
         fixed.push(mod);
@@ -390,18 +379,6 @@ async function fix(mods, nameOf, { review = false } = {}) {
     }
   }
   return { fixed, partial };
-}
-
-// rebuild(mod, subject): Update of a costume build of an older costume rule: an Optimize Physics copy is built
-// again in place, then applied again where its student is configured with it; a costume swap in the game files is
-// applied again
-async function rebuild(mod, subject) {
-  await Loading.task(async (update) => {
-    if (mod.id) await waitJob(await rpc("actions.update", { mod: mod.id }), update);
-    if (mod.id ? mod.configured : costumeOf(mod)) {
-      await waitJob(await rpc("actions.apply", { variant: mod.target, source: mod.id ? `mod:${mod.id}` : mod.source, kind: mod.kind }), update);
-    }
-  }, { label: T("progress.process", { name: subject }) });
 }
 
 // the mods.state entries a game update's rig change holds ({install, core, variant, kind, source, label}) as the
