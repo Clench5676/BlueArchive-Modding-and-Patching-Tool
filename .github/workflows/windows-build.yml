@@ -1,4 +1,4 @@
-name: Windows 构建
+name: Windows Pre-release Build
 
 # Builds the Windows GUI for a pre-release and attaches the EXE and MD5 to that pre-release's draft release.
 # Manual only. No workflow artifacts: draft releases and their assets are visible only to users with push access.
