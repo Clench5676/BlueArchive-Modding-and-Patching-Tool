@@ -3144,9 +3144,9 @@ it (decision 7); browser and serve mode have none.
 - **Moves.** The wheel zooms at the pointer's height, any drag moves the view up or down (`lobby-touch.js` pan only);
   the view stays 16:9 and centred across (`lobby.js framingView`).
 - **Limits.** `measureFraming` paints every pose the lobby rests in into 16-unit cells three game views across: the
-  idle and every clip (`clipPoses`). The intro does not count (BL-184): some intros move the whole scene for seconds
-  (Mika (Swimsuit)'s lifts it off her feet), so a framing that shows the lobby at rest may show the camera's clear
-  colour during them. A cell outside the game's view that some pose leaves unpainted may not be shown; inside the
+  idle and every clip (`clipPoses`). The intro does not count (BL-184): the camera leaves it at the official framing
+  (BL-187, below); on the few lobbies that keep the older framing it may show the camera's clear colour while an intro
+  moves the whole scene (Mika (Swimsuit)'s lifts it off her feet). A cell outside the game's view that some pose leaves unpainted may not be shown; inside the
   game's view everything may, as the game shows it. Zoom-in stops at 2x the game's view.
 - **Kept.** `cameraParams(V, G)`: the lobby scaled by `k = G.w / V.w` about the screen centre and moved by
   `-k (V's centre - G's centre)` NGUI units, so that V fills the screen as G did.
@@ -3157,14 +3157,28 @@ it (decision 7); browser and serve mode have none.
   `k = k2 k1`, `offset = k2 o1 + o2`, on that camera's source). After it the detail reads the family again; the
   popup says `lobby.cameraSaved` / `lobby.cameraDetail`.
 - **The prefab** (`library/lobby_camera.py`). In the student's own `ui-uilobbyelement-...` bundle (one prefab per
-  bundle), the root's `MX.Utils.UIManualScaleByAspect`: every `scaleTransforms` Transform's local scale times k, every
-  `scaleTransforms` and `offsetSettings` Transform moved to `k p + offset` in the root's frame (z kept), every
-  `MostWideAdd` / `MostNarrowAdd` times k; `mostWideScale` / `mostNarrowScale` kept. A similarity about the screen
-  centre at every aspect. Every other object and stream stays byte for byte; saved with the CRC fix (lz4) and checked
-  after. A prefab without the component on its root, or whose targets are not plain Transforms under unscaled,
-  unturned parents, is refused (`lobby_camera_unsupported`).
+  bundle), the root's `MX.Utils.UIManualScaleByAspect` names the scale targets (`<X>LobbySpine`, Hina's, Asuna's and
+  Aru's `*_BG` too) and the dialogue anchors: every `offsetSettings` Transform moved to `k p + offset` in the root's
+  frame (z kept), every `MostWideAdd` / `MostNarrowAdd` times k; `mostWideScale` / `mostNarrowScale` kept. A
+  similarity about the screen centre at every aspect. Every other object and stream stays byte for byte; saved with
+  the CRC fix (lz4) and checked after. A prefab without the component on its root, or whose targets are not plain
+  Transforms under unscaled, unturned parents, is refused (`lobby_camera_unsupported`).
+- **The intro at the official framing (BL-187).** A camera node (GameObject `LobbyCamera`, `lobby_camera.NODE`) goes
+  between the root and the scale targets, which keep their own transforms: its local scale is k and its position the
+  offset. The intro is held at the official framing by a track of the prefab's own copy of the intro's TimelineAsset
+  (`library/lobby_camera_intro.py`): the copy lists the art's tracks in their own file plus an AnimationTrack bound
+  to a new Animator (no controller) on the root, whose recorded clip keeps the node at scale 1 and position 0 until
+  the first `Idle_01` clip of the intro's Spine track starts and then reaches the camera over that clip's mix (0.1 s in
+  most intros). The PlayableDirector names the copy; its other bindings stay. Skipped intros, wrap None (Unity puts
+  the node back to its serialized camera) and Hold (Shiroko, the clip's last value) all end on the camera. The
+  timeline bundle copied is the camera's art's (the lobby mod's own file of that name, else the official one; the
+  record keeps its name as `timeline`, and a game update that replaces it makes the camera again). The 5 lobbies with
+  an Animator on the root (CH0247, CH0303, CH0174, CH0347, CH0346: its clips name paths through the targets) keep the
+  older framing: the targets themselves scaled by k and moved, the intro framed by the camera too; so does the intro
+  of a timeline without an `Idle_01` clip, under its camera node. `intro.py` matches the director's bindings to tracks by their file and path id, so the
+  App plays the copy as the game does.
 - **The choice.** A camera is a generated generic mod of that prefab bundle (record key `lobby_camera`: variant, lobby
-  core, source, scale, offset, root, prefab file, slot, base, number). Its slot is the prefab's own, keyed by its CAB
+  core, source, scale, offset, root, prefab file, slot, base, number, timeline). Its slot is the prefab's own, keyed by its CAB
   (a group packed one asset per bundle); no lobby slot holds the prefab, so other lobby mods and students are as before.
   The App lists it as a lobby mod of its variant (`kind` "lobby", `camera: {source, number, scale, offset}`), named
   `<source's name> - lobby.cameraName` (`lobby.original` for the official art), in Switch Memorial Lobby with the
@@ -3176,7 +3190,8 @@ it (decision 7); browser and serve mode have none.
   slot. `configured` / `selection` give the camera as the lobby's source while the prefab slot holds it and the lobby
   slot holds its source.
 - **Game update.** Before a master-switch plan and a camera's apply, a camera framed on the official prefab whose
-  prefab file the game replaced is made again on the new one with its scale and offset, in place (same id).
+  prefab file or intro timeline bundle the game replaced is made again on the new ones with its scale and offset, in
+  place (same id).
 - **Preview.** `/asset/spine/mod/<camera>/` serves the source's art and, as `lobby.json`, the camera's own prefab
   (framed on the fly from the official one after a game update it was not made again for); `Lobby.show({camera})`
   reads the layout there. `/asset/spine/lobby/<core>/lobby.json` reads the official prefab while a camera holds the

@@ -89,7 +89,7 @@ def assert_mapped(before: dict, after: dict, k: float, offset, anchors=("Talk", 
     systems = before.get("fx", {}).get("systems", [])
     assert len(after.get("fx", {}).get("systems", [])) == len(systems)
     for a, b in zip(systems, after["fx"]["systems"]):
-        assert b["name"] == a["name"] and b["path"] == a["path"]
+        assert b["name"] == a["name"] and b["path"].replace(f"/{lobby_camera.NODE}/", "/") == a["path"]
         if a.get("anchor"):  # relative to the bone it follows; else in the root's space, like static
             assert b["rel"] == a["rel"]
         for matrix_of in (lambda s: s.get("static"), lambda s: (s.get("anchor") or {}).get("go"),
@@ -203,6 +203,75 @@ def test_real_prefab_round_trip(real_game, tmp_path, core, k, offset):
     shutil.rmtree(out)
 
 
+
+def _without_node(intro: dict) -> dict:
+    """An intro with the camera node and its curves taken out, the other nodes' indices and paths as before it."""
+    nodes = intro.get("nodes", [])
+    cam = next((i for i, n in enumerate(nodes) if n["path"].rsplit("/", 1)[-1] == lobby_camera.NODE), None)
+    if cam is None:
+        return intro
+
+    def index(value):
+        return value - (value > cam) if isinstance(value, int) and not isinstance(value, bool) else value
+
+    def fix(value, key=None):
+        if isinstance(value, dict):
+            node = value.get("on") in (None, "node")  # props index nodes, volumes, systems or sprites by "on"
+            # what lies below the camera node is moved by it during the intro: only that move is new
+            return {k: (v if k == "i" and not node else fix(v, k)) for k, v in value.items()
+                    if not (k == "moves" and isinstance(v, dict) and v.get("nodes") == [cam])}
+        if isinstance(value, list):
+            return [fix(v, key) for v in value]
+        if key in ("i", "node", "gate"):
+            return index(value)
+        if key == "path" and isinstance(value, str):
+            return value.replace(f"/{lobby_camera.NODE}/", "/")
+        return value
+
+    out = {k: v for k, v in intro.items() if k not in ("nodes", "props")}
+    out["nodes"] = [n for i, n in enumerate(nodes) if i != cam]
+    out["props"] = [p for p in intro.get("props", []) if not (p.get("on") == "node" and p.get("i") == cam)]
+    return fix(out)
+
+
+@pytest.mark.skipif(not GAME_DIR.is_dir(), reason="No local game install")
+@pytest.mark.parametrize("core, k, offset, held", [("ch0294_home", 1.3, (0.0, 0.0), True),
+                                                   ("azusa_home", 0.85, (0.0, 120.0), True),
+                                                   ("shiroko_home", 1.2, (0.0, -60.0), True),
+                                                   ("hina_home", 1.4, (0.0, 200.0), True),
+                                                   ("ch0247_home", 1.2, (0.0, 0.0), False)])
+def test_real_camera_keeps_the_official_intro(real_game, tmp_path, core, k, offset, held):
+    """BL-187: the camera node holds the official framing through the intro and the camera from its rest pose on; the
+    intro is otherwise the official one. A lobby whose root Animator animates below its targets keeps the targets'
+    own camera (the intro framed too)."""
+    from bmpt.gameassets import intro
+
+    before = real_game.lobby_info(core)
+    name, root = real_game.lobby_prefab(core)
+    base = real_game._bundle_path(name)
+    cab = lobby_camera.timeline_cab(base)
+    timeline = Path(real_game._resolve_cabs({cab})[cab])
+    output = tmp_path / base.name
+    assert lobby_camera.patch_prefab(base, output, root, k, offset, timeline=timeline) is held
+    after = real_game.lobby_info(core, prefab=output)
+    assert_mapped(before, after, k, offset)
+    if not held:
+        assert not any(n["path"].endswith(lobby_camera.NODE) for n in after["intro"].get("nodes", []))
+        return
+    assert _without_node(after["intro"]) == before["intro"]
+    nodes = after["intro"]["nodes"]
+    cam = next(i for i, n in enumerate(nodes) if n["path"] == f"{root}/{lobby_camera.NODE}")
+    assert nodes[cam]["trs"][:2] == pytest.approx(list(offset)) and nodes[cam]["trs"][7:] == pytest.approx([k, k, k])
+    curves = {(p["attr"], p["k"]): p["c"] for p in after["intro"]["props"] if p.get("on") == "node" and p["i"] == cam}
+    rest = before["intro"]["idle"]
+    official, camera = (0.0, 0.0, 0.0, 1.0, 1.0, 1.0), (*offset, 0.0, k, k, k)
+    for (attr, axis), curve in curves.items():
+        slot = (0 if attr == "position" else 3) + axis
+        assert intro.evaluate(curve, 0.0) == pytest.approx(official[slot])
+        assert intro.evaluate(curve, rest - 0.01) == pytest.approx(official[slot])
+        assert intro.evaluate(curve, rest + 0.5) == pytest.approx(camera[slot], abs=1e-4)
+    assert len(curves) == 6
+
 # --- the library: a camera is a Memorial Lobby choice of its student ---
 
 @pytest.fixture(scope="module")
@@ -259,6 +328,9 @@ def test_camera_choice_applies_switches_and_restores(camera_env):
     record = save(e)
     meta = record[lc.TAG]
     assert (meta["variant"], meta["source"], meta["number"], meta["base"], meta["root"]) == ("azusa", "official", 1, "official", "LobbyAzusa")
+    # the intro keeps the official framing (BL-187): the prefab copies the timeline of the art's own bundle
+    cab = lc.timeline_cab(e.prefab)
+    assert meta["timeline"] in {path.name for path in e.art} and cab is not None
     # its own slot, by the prefab's CAB: never Shiroko's
     assert meta["slot"] == core_of(e.prefab.name) != core_of(e.other.name)
     # listed as a lobby choice of Azusa; hidden from the generic sources
