@@ -783,7 +783,7 @@ with other regions, a skeleton with other bones, slots or animations, a texture 
 `gone` (no official part of the core left) and `unknown` (no fingerprint, unreadable parts). `update_impact`
 classifies every library mod once the install's resource version differs from the one in `resource` (or none is
 recorded); with nothing but `unchanged` and `unknown` it records the version at once, otherwise `due` stays true until
-`impact_seen`; `force` (Check Game Update Impact) classifies them whatever was seen. Every check keeps its outcome in
+`impact_seen`; `force` (Check Update Impact) classifies them whatever was seen. Every check keeps its outcome in
 the folder's `impact` (`{version, checked, mods: [{id, changes, mark}]}`, the mods whose rig changed); `last_impact`
 reads it back without checking: those mods no repair or update has taken on since (`mark`: the mod's files and its
 baseline's modification time), and `update`, whether the resource version differs from the one last checked (else
@@ -1299,7 +1299,7 @@ stops the server (the page shows Closed); with `--serve` it gives `native_unavai
 | `mods.scan {dismissed = false}` | `{requested: bool}`; the result comes as `library.scanned`; `scan_off` without scan consent; `dismissed: true` is Settings' explicit Check |
 | `mods.entries` | the last scan's entries (`{install, core, variant, names, kind, source, configured, state, overwritten, fixed, size, files, dismissed}`), updated by every writer job's result until the next scan; empty without scan consent |
 | `mods.adopt {entries}` | job id (`library.adopt`): Add to Library for `[{install, core}]`, allowed while the game runs and while a classic window is open; `not_enough_space` |
-| `mods.impact {ids?, force?}` | reader job id: without `ids`, the current install's game update impact (`update_impact`: `{due, install, version, previous, mods: [{id, label, target, kind, core, impact, changes, configured}], counts}`, `mods` only those not `unchanged` or `unknown`; `force`: classified even when the version was seen, Check Game Update Impact); with `ids`, `{mods: [{id, impact}]}` for those mods now |
+| `mods.impact {ids?, force?}` | reader job id: without `ids`, the current install's game update impact (`update_impact`: `{due, install, version, previous, mods: [{id, label, target, kind, core, impact, changes, configured}], counts}`, `mods` only those not `unchanged` or `unknown`; `force`: classified even when the version was seen, Check Update Impact); with `ids`, `{mods: [{id, impact}]}` for those mods now |
 | `mods.impactLast` | `{install, version, checked, update, mods}`: the last impact check's mods to update, without checking (`last_impact`: the version file and the configuration only; `update`: a game update since the last check); Settings' View Mods to Update |
 | `mods.updateDue` | `{due, outdated, install, version, previous}`: whether the start asks to check the mods against a game update (`update_due`: the version file and the configuration only; a first start or no mod records the version and asks nothing); `outdated`: what the App built from a costume under an older costume rule, built again first (`mods.refreshCostumes`) |
 | `mods.refreshCostumes` | job id (`mods.refreshCostumes`, a game writer): at the start, the Optimize Physics copies and the costume swaps in the game files built under an older `COSTUME_RULE` built again without asking (`refresh_costumes`: `{done, kept, left}`); a copy no physics rule improves any more, or whose build fails, is kept as it is (`costume_kept`); a build the game files hold that cannot be written now (game running, untested build, mods off, a classic window open) is left for the next start |
@@ -2629,11 +2629,11 @@ overwritten entry need none (the detail screen judges its files cheaply).
   Back and Update and Apply) and Update and Apply (the default repair, no review). A click on a card shows it in the
   details; the tick box at the card's top right corner ticks it (`listPopup` `tick`), and the cards are placed as if
   all were selected, so ticking never moves them. A generic mod's card names the mod (never its set's key). The footer
-  buttons are one size down (S): Close, Check Game Update Impact and, with mods to update, Update and Apply for the
+  buttons are one size down (S): Close, Check Update Impact and, with mods to update, Update and Apply for the
   ticked mods (greyed with none ticked) (the default repair each, no review; a partial repair is neither stored nor
-  applied, and those are named in a message afterwards). Preview Update, Update and Apply and Check Game Update
+  applied, and those are named in a message afterwards). Preview Update, Update and Apply and Check Update
   Impact run over the list, which stays open and is drawn again as the mods stand then: after an update the last
-  check read again (`mods.impactLast`, no new check), after a check its result. Check Game Update Impact asks first
+  check read again (`mods.impactLast`, no new check), after a check its result. Check Update Impact asks first
   when no game update is recorded since the last check (`mods.impactLast`'s `update` false: "No game update found.
   Check the game update impact anyway? (This check takes a while)", Cancel and Check), then runs `mods.impact
   {force}` under the loading screen, no new scan. Only Close and Go To close the list. A fixed mod's repaired copy

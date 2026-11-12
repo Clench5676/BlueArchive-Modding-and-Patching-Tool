@@ -306,7 +306,7 @@
 				"sep": ", ",
 				"fix": "Update and Apply",
 				"none": "No mods to update",
-				"check": "Check Game Update Impact",
+				"check": "Check Update Impact",
 				"checkAsk": "No game update found. Check the game update impact anyway? (This check takes a while)",
 				"preview": "Preview Update",
 				"noPreview": "Looks the same after the update: only its file structure is updated",

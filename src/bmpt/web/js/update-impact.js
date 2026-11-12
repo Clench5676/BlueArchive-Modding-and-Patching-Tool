@@ -9,7 +9,7 @@
 // again, mods rebuilt, with new parts or gone) is never listed. A card's details hold Go To, the update's preview (the
 // review, whose Accept is Update and Apply) and Update and Apply. Closing it records the version as seen
 // (mods.impactSeen). Settings' View Mods to Update opens the list from the last check without checking (view,
-// mods.impactLast); its Check Game Update Impact runs the check again, after a question when no game update is
+// mods.impactLast); its Check Update Impact runs the check again, after a question when no game update is
 // recorded since the last check. Before the question, what the App built from a costume under an older costume rule (Optimize Physics
 // copies, costume swaps in the game files: mods.updateDue's outdated) is built again without asking
 // (mods.refreshCostumes, refresh). The pure parts are tested in Node (tests/js/mod_switch.test.mjs).
@@ -134,7 +134,7 @@ async function scanned(step) {
 }
 
 // run({force}): the check under the loading screen with its progress: classify, scan, apply again what needs no repair.
-// force: whatever was seen (Check Game Update Impact). Resolves with {result, reapplied, failed}; throws what the jobs refuse.
+// force: whatever was seen (Check Update Impact). Resolves with {result, reapplied, failed}; throws what the jobs refuse.
 async function run({ force = false, scan = true } = {}) {
   const nameOf = await names().catch(() => undefined);
   return Loading.task(async (update) => {
@@ -234,12 +234,12 @@ export function details(mod) {
     fields, actions };
 }
 
-// footer(count, ticked): the list's footer: Close, Check Game Update Impact and, with mods to update, Update and Apply
+// footer(count, ticked): the list's footer: Close, Check Update Impact and, with mods to update, Update and Apply
 // for the ticked ones (greyed with none ticked); ids for the buttons' actions
 export const footer = (count, ticked) => [["close", T("display.close")], ["check", T("mods.impact.check")],
   ...(count ? [["fix", T("mods.impact.fix"), !ticked]] : [])];
 
-// recheck(): Check Game Update Impact: the check again, after a question when the install's resource version is the
+// recheck(): Check Update Impact: the check again, after a question when the install's resource version is the
 // one last checked (no game update recorded: the check takes long). Resolves with its outcome, null when not asked for.
 async function recheck() {
   const last = await rpc("mods.impactLast").catch(() => null);

@@ -1495,9 +1495,9 @@ test("an update's impact as a list: only the mods to update, each a card with it
   assert.deepEqual(d.fields, [[null, ".atlas file layout changed, 3 new animations in the .skel file"]]);
   assert.deepEqual(d.actions.map(([id, caption]) => [id, caption]), [["go", "Go to"], ["preview", "Preview Update"], ["fix", "Update and Apply"]]);
   assert.deepEqual(Impact.details({ ...generic.mod }).actions.map(([id]) => id), ["preview", "fix"], "a generic mod: no student page");
-  // the footer: Close and Check Game Update Impact; Update and Apply only with mods to update, greyed with none ticked
-  assert.deepEqual(Impact.footer(0, 0), [["close", "Close"], ["check", "Check Game Update Impact"]]);
-  assert.deepEqual(Impact.footer(2, 1), [["close", "Close"], ["check", "Check Game Update Impact"], ["fix", "Update and Apply", false]]);
+  // the footer: Close and Check Update Impact; Update and Apply only with mods to update, greyed with none ticked
+  assert.deepEqual(Impact.footer(0, 0), [["close", "Close"], ["check", "Check Update Impact"]]);
+  assert.deepEqual(Impact.footer(2, 1), [["close", "Close"], ["check", "Check Update Impact"], ["fix", "Update and Apply", false]]);
   assert.deepEqual(Impact.footer(2, 0).at(-1), ["fix", "Update and Apply", true]);
   // every string in every locale
   try {
@@ -1765,14 +1765,14 @@ test("the impact list: a card's click shows it, its corner ticks it; Update and 
   }
 });
 
-test("Settings' View Mods to Update opens the last check without checking; Check Game Update Impact asks first without a game update", async () => {
+test("Settings' View Mods to Update opens the last check without checking; Check Update Impact asks first without a game update", async () => {
   const saved = { ...answers };
   const footerButtons = () => walk(prompt).filter((e) => e.tagName === "BUTTON").map((e) => e.getAttribute("aria-label"));
   const held = { id: "s", target: "airi", core: "airi_home", kind: "lobby", impact: "rig_changed", label: "Band", configured: true, repaired_id: "" };
   try {
     answers["mods.state"] = base({ scan: false });
     await MS.refresh();
-    // nothing to update: the list says so, Close and Check Game Update Impact only
+    // nothing to update: the list says so, Close and Check Update Impact only
     answers["mods.impactLast"] = { install: GLOBAL, version: "v4", checked: "v4", update: false, mods: [] };
     answers["mods.impact"] = "job-impact-view";
     jobs["job-impact-view"] = { state: "done", result: { due: true, install: GLOBAL, version: "v4", mods: [held] } };
@@ -1780,10 +1780,10 @@ test("Settings' View Mods to Update opens the last check without checking; Check
     const viewed = Impact.view();
     await until(() => !prompt.hidden && walk(prompt).some((e) => (e.textContent || "").includes("No mods to update")), "the empty list");
     assert.equal(called("mods.impact").length, before, "opened without a check");
-    assert.ok(footerButtons().includes("Check Game Update Impact"));
+    assert.ok(footerButtons().includes("Check Update Impact"));
     assert.ok(!footerButtons().includes("Update and Apply"), "no Update and Apply without mods to update");
     // the same game version as the last check: asked first; Cancel checks nothing
-    walk(prompt).find((e) => e.tagName === "BUTTON" && e.getAttribute("aria-label") === "Check Game Update Impact").click();
+    walk(prompt).find((e) => e.tagName === "BUTTON" && e.getAttribute("aria-label") === "Check Update Impact").click();
     await drawn(dialog, "cancel");
     assert.ok(walk(dialog).some((e) => (e.textContent || "").includes("No game update found")));
     action(dialog, "cancel").click();
@@ -1791,7 +1791,7 @@ test("Settings' View Mods to Update opens the last check without checking; Check
     await tick();
     assert.equal(called("mods.impact").length, before);
     // Check: the check whatever was seen, then the list as it stands, Update and Apply with it
-    walk(prompt).find((e) => e.tagName === "BUTTON" && e.getAttribute("aria-label") === "Check Game Update Impact").click();
+    walk(prompt).find((e) => e.tagName === "BUTTON" && e.getAttribute("aria-label") === "Check Update Impact").click();
     await drawn(dialog, "ok");
     action(dialog, "ok").click();
     await until(() => walk(prompt).some((e) => e.dataset?.key === "s"), "the list after the check");
@@ -1805,7 +1805,7 @@ test("Settings' View Mods to Update opens the last check without checking; Check
     const asked = called("mods.impact").length;
     const again = Impact.view();
     await until(() => !prompt.hidden && walk(prompt).some((e) => (e.textContent || "").includes("No mods to update")), "the empty list");
-    walk(prompt).find((e) => e.tagName === "BUTTON" && e.getAttribute("aria-label") === "Check Game Update Impact").click();
+    walk(prompt).find((e) => e.tagName === "BUTTON" && e.getAttribute("aria-label") === "Check Update Impact").click();
     await until(() => called("mods.impact").length > asked, "checked at once");
     await until(() => walk(prompt).some((e) => e.dataset?.key === "s"), "the list after the check");
     walk(prompt).find((e) => e.tagName === "BUTTON" && e.getAttribute("aria-label") === S("display.close")).click();
