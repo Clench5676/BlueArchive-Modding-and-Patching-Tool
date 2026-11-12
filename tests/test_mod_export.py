@@ -38,7 +38,8 @@ def contents(result):
 
 def test_library_export_prepares_existing_mods_without_mutating_library_or_game(setup_library):
     env = setup_library
-    source = make_mod(env.original, env.tmp / "upload")
+    # A Windows export gives each file the CRC fix (auto follows the install); a fixed mod passes through unchanged.
+    source = make_mod(env.original, env.tmp / "upload", fixed=True)
     mod, = env.library.add([source])
     state = (env.root / "state.json").read_bytes()
     game = env.original.read_bytes()
