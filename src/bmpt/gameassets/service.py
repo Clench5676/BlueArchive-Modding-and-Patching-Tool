@@ -60,7 +60,7 @@ _SPRITE_FIELDS = ("x", "y", "width", "height", "borderLeft", "borderRight", "bor
 # of its name: PREFAB_CABS then finds it among the bundles of the same name less the CRC.
 PREFAB_HINTS = {
     "UICharacterCollection": "ui-_mxload-prefabs-2025-07-02_assets_all_3649883161.bundle",
-    "UICharacterCollectionPopulatorUnit": "ui-uiassetobject-_mxload-2024-11-18_assets_all_1995474029.bundle",
+    "UICharacterCollectionPopulatorUnit": "ui-uiassetobject-_mxload-2024-11-18_assets_all_4108373898.bundle",
     "UIPopup_GachaCharList": "ui-_mxload-prefabs-2025-07-02_assets_all_3329130623.bundle",
     "UIPopup_Sort": "ui-_mxload-prefabs-2025-07-02_assets_all_1596625361.bundle",
     "UIPopup_Mulligan": "ui-_mxload-prefabs-2025-07-02_assets_all_267995722.bundle",
@@ -68,7 +68,7 @@ PREFAB_HINTS = {
     "UIDescriptionTooltip": "ui-tooltip-_mxload-prefabs-2026-04-06_assets_all_413832495.bundle",
     # the student list's display settings popup (filter and sort tabs) and its filter group template
     "UIPopup_FilterSort": "ui-_mxload-prefabs-2025-07-02_assets_all_2229874793.bundle",
-    "UIFilterObjectList": "ui-uiassetobject-_mxload-2024-11-18_assets_all_1995474029.bundle",
+    "UIFilterObjectList": "ui-uiassetobject-_mxload-2024-11-18_assets_all_4108373898.bundle",
     "UICharacterDetail": "ui-_mxload-prefabs-2025-07-02_assets_all_4244715916.bundle",
     # the portrait's fullscreen view, opened by the detail screen's ZoomButton
     "UICharacterVisualMode": "ui-_mxload-prefabs-2025-07-02_assets_all_3863404692.bundle",
