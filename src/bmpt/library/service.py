@@ -6835,20 +6835,28 @@ class ModLibrary:
     def _run(self, enabled: bool | None, expect: bool | None, pins: list[Pin] | None, log: LogFunc,
              progress: ProgressCallback | None, cancel: Callable[[], bool] | None,
              drift: list[dict] | None) -> ToggleResult:
+        found: list[_Entry] = []
         with self._lock, _errors("toggle"):
             pins = list(pins) if pins is not None else self.installs()
-            self._check_pins(pins)
+            self._check_start(pins, drift is None, expect)
             config = self.profiles.read()
             current = profiles_mod.enabled(config)
-            if drift is None and current != expect:
-                raise ServiceError("state_changed")
-            safety.check_game_not_running()
-            self._check_idle(pins)
             if drift is None:
                 from .portrait_edit import refresh_missing
                 from .lobby_camera import refresh
                 refresh_missing(self, pins, log)
                 refresh(self, pins, log)
+                config = self.profiles.read()
+            allowed = drift is None and self._scan_allowed()  # asked once: the job keeps the answer it planned with
+            # an Off with scan consent plans from the files as they are now: its own pass, read outside the lock
+            view = self._view(pins, "scan", config, snapshot=True) if drift is None and not enabled and allowed else None
+        if view is not None:
+            # previews go first: one loads while the pass runs (which pauses itself while a model preview is exported)
+            with _errors("toggle"):
+                found = view.entries(pins, background=True)
+        with self._lock, _errors("toggle"):
+            if view is not None:  # what the start checked may have changed during the pass
+                self._check_start(pins, True, expect)
                 config = self.profiles.read()
             if drift is not None:
                 if not current:  # mods off: official files are the intent, there is no drift to apply
@@ -6860,11 +6868,7 @@ class ModLibrary:
                         and isinstance(item.get("core"), str)]
                 listed = {(item["install"], item["core"].lower()): item.get("state") for item in drift
                           if isinstance(item, dict) and isinstance(item.get("core"), str)}
-                allowed = False
             else:
-                allowed = self._scan_allowed()  # asked once: the job keeps the answer it planned with
-                # an Off with scan consent plans from the files as they are now: its own pass
-                found = self._view(pins, "scan", config).entries(pins) if (not enabled and allowed) else []
                 plan = self._plan_toggle(enabled, pins, config, found)
                 listed = {}
                 if not enabled:
@@ -6945,6 +6949,15 @@ class ModLibrary:
         return ToggleResult(bool(enabled), result["done"], result["adopted"], result["failed"], result["stuck"],
                             result["left"], result["skipped"], result["dropped"], sorted(cores), sorted(kinds),
                             result["held"])
+
+    def _check_start(self, pins: list[Pin], intent: bool, expect: bool | None) -> None:
+        """What a toggle, Retry or Apply Mod Configuration checks before it plans (``intent``: and that the stored
+        intent is still the one the caller saw)."""
+        self._check_pins(pins)
+        if intent and profiles_mod.enabled(self.profiles.read()) != expect:
+            raise ServiceError("state_changed")
+        safety.check_game_not_running()
+        self._check_idle(pins)
 
     def _untested_plan(self, plan: Sequence[tuple[Pin, str]], config: dict | None, drift: bool) -> None:
         """The confirmation of a toggle's writes on an untested build (``_check_untested``): every planned entry
