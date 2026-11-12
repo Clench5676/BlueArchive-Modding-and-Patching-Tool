@@ -335,6 +335,19 @@ let routeToken = 0, routeAttempt = 0, permissionAttempt = 0, endRoute = () => {}
 const navigation = routeHistory();
 let shownRoute = ROOT_ROUTE;
 let stagedDetail = null;
+// The hall screen loads hidden. A reload can start while another is still loading (a mod toggle refreshes directly
+// and again on its library event), so the screen as it was before the first one is what is put back, never the
+// hidden state an unfinished load left.
+let stagedHall = null;
+function stageHall(target) {
+  stagedHall ||= { hidden: target.hidden };
+  target.hidden = false; target.style.visibility = "hidden";
+}
+function unstageHall(target, committed) {
+  if (!stagedHall) return;
+  if (!committed) target.hidden = stagedHall.hidden;
+  target.style.visibility = ""; stagedHall = null;
+}
 function goBack() {
   return withHallPermission(() => {
     const destination = navigation.back(location.hash || ROOT_ROUTE);
@@ -393,7 +406,7 @@ async function route() {
   const current = () => my === routeToken && attempt === routeAttempt;
   const parts = address.replace(/^#\/?/, "").split("/").map(decodeURIComponent);
   if (parts[0] !== "import") BatchImport.hide();
-  if (parts[0] !== "hall") StudentHall.hide();
+  if (parts[0] !== "hall") { StudentHall.hide(); unstageHall($("screen-hall"), false); }
   renderNav(parts[0] === "hall" ? -1 : parts[0] === "import" ? 1 : 0);
   try {
     if (parts[0] === "hall") {
@@ -402,19 +415,15 @@ async function route() {
         Detail.suspend();
         Detail.hide();
         const target = $("screen-hall");
-        const wasHidden = target.hidden, wasVisibility = target.style.visibility;
         let committed = false;
-        target.hidden = false; target.style.visibility = "hidden";
+        stageHall(target);
         try {
           await StudentHall.show(ctx);
           if (!current()) return;
           showScreen("hall"); setTitle(T("hall.title"), goBack);
           committed = true;
         } finally {
-          if (my === routeToken) {
-            if (!committed) target.hidden = wasHidden;
-            target.style.visibility = wasVisibility || "";
-          }
+          if (my === routeToken) unstageHall(target, committed);
         }
       }, { until: ended });
     } else if (parts[0] === "import") {
