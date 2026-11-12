@@ -112,7 +112,12 @@ def _build_group(group: PlannedGroup, output_dir: Path, asset_types: set[Replace
         result = rebuild([file.mod_path for file in update], group.target_paths, output_dir, asset_types,
                          save_options, spine_options, skip_unchanged=True, match_strategy="cont_name_type",
                          anim_check=anim_check, log=log)
-        if not result.success:
+        if result.no_match:
+            # The files hold nothing these parts take (e.g. a part of materials only that a game update rebuilt):
+            # the parts stay the official copies they were staged as (BL-180).
+            for target in group.target_paths:
+                log(f"  ⏭️ {t('log.mod_update.target_unchanged', name=target.name, count=0)}")
+        elif not result.success:
             failures.append((group.core, result.message))
         elif result.all_unchanged:
             log(t("log.mod_install.already_installed", core=group.core))

@@ -91,7 +91,8 @@ class UpdateScope:
 @dataclass
 class RebuildResult:
     """``rebuild``'s outcome. ``all_unchanged``: every matched asset already equals the target's, nothing was
-    written. The asset lists hold the keys as text, sorted: ``matched`` found their counterpart in a target (written
+    written. ``no_match``: a failure because no source asset has a counterpart in the targets (a target that holds
+    none of the replaced types, or none the sources carry): the targets take nothing from the sources. The asset lists hold the keys as text, sorted: ``matched`` found their counterpart in a target (written
     or equal), ``unchanged`` equal their counterpart, ``not_transferred`` have none, ``target_only`` are the
     targets' assets of the replaced types that the sources lack. A prepared patch reports matches only."""
     success: bool
@@ -104,10 +105,17 @@ class RebuildResult:
     unchanged: list[str] = field(default_factory=list)
     not_transferred: list[str] = field(default_factory=list)
     target_only: list[str] = field(default_factory=list)
+    no_match: bool = False
 
 
 def _names(keys) -> list[str]:
     return sorted(map(str, keys))
+
+
+def _failed(message: str, log: LogFunc, **fields) -> RebuildResult:
+    """A failure whose message the user's log has not shown yet."""
+    log(f"❌ {message}")
+    return RebuildResult(False, message, **fields)
 
 
 def rebuild(
@@ -139,14 +147,14 @@ def rebuild(
         for path in target_paths:
             target = Bundle.load(path, log)
             if target is None:
-                return RebuildResult(False, t("message.load_failed"))
+                return _failed(t("message.load_failed"), log)
             targets.append(target)
         scope = UpdateScope(targets, match_strategy, asset_types_to_replace) if prepared_patch is None else None
 
         for src in source_paths:
             src_bundle = Bundle.load(src, log)
             if not src_bundle:
-                return RebuildResult(False, t("message.load_failed"))
+                return _failed(t("message.load_failed"), log)
             patch, conflicts = src_bundle.extract_patch(asset_types_to_replace, match_strategy, spine_options,
                                                         **({"scope": scope} if scope is not None else {}))
             patches.update(patch)
@@ -163,7 +171,8 @@ def rebuild(
         not_transferred = _names(scope.not_transferred) if scope is not None else []
         target_only = _names(scope.target_only) if scope is not None else []
         if not required_keys and not unchanged_keys:
-            return RebuildResult(False, t("message.mod_update.no_assets_extracted"))
+            # Not logged here: a caller may keep the targets as they are (BL-180).
+            return RebuildResult(False, t("message.mod_update.no_assets_extracted"), no_match=True)
         warning = t("webui.import.notTransferred", names=", ".join(not_transferred)) if not_transferred else ""
         if warning:
             log(warning)
@@ -188,8 +197,8 @@ def rebuild(
                 on_step("replace")
             result = tgt_bundle.apply_patch(patches, match_strategy, anim_check)
             if prepared_patch is not None and result.matched_count != len(patches):
-                return RebuildResult(False, t("webui.error.atlas_remap_target_mismatch", file=tgt.name,
-                                              matched=result.matched_count, expected=len(patches)))
+                return _failed(t("webui.error.atlas_remap_target_mismatch", file=tgt.name,
+                                 matched=result.matched_count, expected=len(patches)), log)
             total_matched += result.matched_count
             matched_keys.update(result.matched_keys)
             skipped = set(result.skipped_keys or ())
@@ -227,7 +236,7 @@ def rebuild(
 
         # A partial save is a failed mod, even when another part was unchanged or saved successfully.
         if failed_targets:
-            return RebuildResult(False, t("message.mod_update.no_targets_processed"), anim_diffs=final_anim_diffs)
+            return _failed(t("message.mod_update.no_targets_processed"), log, anim_diffs=final_anim_diffs)
 
         report = {"matched": _names(matched_keys | unchanged_keys),
                   "unchanged": _names((unchanged_keys | skipped_keys) - applied_keys),
@@ -236,7 +245,7 @@ def rebuild(
             # Nothing matched at all, or every match was left as it is.
             if total_matched > 0 and skip_unchanged:
                 return RebuildResult(True, "", anim_diffs=final_anim_diffs, all_unchanged=True, **report)
-            return RebuildResult(False, t("message.mod_update.no_targets_processed"), anim_diffs=final_anim_diffs)
+            return _failed(t("message.mod_update.no_targets_processed"), log, anim_diffs=final_anim_diffs)
 
         message = "\n".join(filter(None, [t("message.mod_update.success"), warning]))
         return RebuildResult(True, message, file_pairs, final_anim_diffs, **report)

@@ -118,6 +118,7 @@ def expect_error(code, action):
         action()
     assert caught.value.code == code
     json.dumps(caught.value.to_json())
+    return caught.value
 
 
 @pytest.mark.parametrize("language", ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR"])
@@ -1400,6 +1401,82 @@ def test_failed_rebuild_keeps_mod_and_game_bytes(setup_library, monkeypatch):
     assert entry.file.read_bytes() == mod_bytes
     assert env.original.read_bytes() == game_bytes
     assert not (entry.file.parent / "previous").exists()
+
+
+def _split_old_mod(env, monkeypatch):
+    """A mod of an old release whose part the current release holds in two parts (002, 003)."""
+    entry = env.library.add([make_mod(env.original, env.tmp / "input")])[0]
+    env.original.unlink()
+    targets = [game_bundle(env.game_dir, part=part, date="2026-10-01", payload=part.encode())
+               for part in ("002", "003")]
+    monkeypatch.setattr("bmpt.library.targets.by_assets", lambda sources, targets, readers: ("asset_key", list(targets)))
+    return entry, targets
+
+
+def test_update_keeps_the_official_part_that_takes_nothing_from_the_mod(setup_library, monkeypatch):
+    # BL-180: a rebuilt part holding none of the replaced types (materials only) no longer fails the whole update
+    env = setup_library
+    entry, (materials, textures) = _split_old_mod(env, monkeypatch)
+    official = materials.read_bytes()
+    no_match = RebuildResult(False, "No assets were extracted from source files", no_match=True)
+
+    def update(sources, current, output, *args, **kwargs):
+        if current[0].name == materials.name:
+            return no_match
+        result = output / current[0].name
+        result.write_bytes(header_bundle(b"textures of the mod"))
+        return RebuildResult(True, "updated", [FilePair(result, current[0])])
+
+    monkeypatch.setattr(service, "rebuild", update)
+    lines = []
+    result = env.library.update(entry.id, log=lines.append)
+    assert not result.unchanged
+    assert {path.name: path.read_bytes() for path in result.files} == {
+        materials.name: official, textures.name: header_bundle(b"textures of the mod")}
+    assert any(materials.name in line for line in lines)
+
+
+def test_update_fails_with_the_reason_when_no_part_takes_anything(setup_library, monkeypatch):
+    env = setup_library
+    entry, _ = _split_old_mod(env, monkeypatch)
+    mod_bytes = entry.file.read_bytes()
+    message = "No assets were extracted from source files"
+    monkeypatch.setattr(service, "rebuild", lambda *args, **kwargs: RebuildResult(False, message, no_match=True))
+    lines = []
+    error = expect_error("mod_update_failed", lambda: env.library.update(entry.id, log=lines.append))
+    assert error.params["reason"] == message
+    assert any(message in line for line in lines)
+    assert entry.file.read_bytes() == mod_bytes
+    assert not (entry.file.parent / "previous").exists()
+
+
+def test_failed_rebuild_names_its_reason(setup_library, monkeypatch):
+    env = setup_library
+    entry = env.library.add([make_mod(env.original, env.tmp / "input")])[0]
+    monkeypatch.setattr(service, "rebuild", lambda *args, **kwargs: RebuildResult(False, "load failed", []))
+    assert expect_error("mod_update_failed", lambda: env.library.update(entry.id)).params["reason"] == "load failed"
+
+
+@pytest.mark.parametrize("no_match", [True, False])
+def test_apply_keeps_the_official_part_that_takes_nothing_from_an_old_release(setup_library, monkeypatch, no_match):
+    # BL-180: the older release of a part rebuilt by a game update, holding nothing the update moves
+    env = setup_library
+    entry, = env.library.add([_old_release(env, env.tmp / "old")])
+    monkeypatch.setattr(service.integrity.Inspection, "structure", lambda self, path: frozenset(
+        {"rebuilt" if env.game_dir in path.parents else "old"}))
+    official = env.original.read_bytes()
+    message = "No assets were extracted from source files"
+    monkeypatch.setattr("bmpt.library.install.rebuild", lambda *args, **kwargs:
+                        RebuildResult(False, message, no_match=no_match))
+    lines = []
+    if no_match:
+        env.library.apply("test", f"mod:{entry.id}", log=lines.append)
+        assert env.original.read_bytes() == official
+        assert any(env.original.name in line for line in lines)
+    else:
+        error = expect_error("mod_apply_failed", lambda: env.library.apply("test", f"mod:{entry.id}"))
+        assert message in error.params["reason"]
+        assert env.original.read_bytes() == official
 
 
 def test_failed_install_preparation_keeps_game_and_originals(setup_library, monkeypatch):
