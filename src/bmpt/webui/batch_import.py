@@ -19,6 +19,7 @@ from bmpt.engine import (
     AssetType, Bundle, CRCUtils, SaveOptions, get_skel_version, no_log, parse_filename,
     parse_hex_bytes, t,
 )
+from ..config import install_needs_crc
 from ..errors import ServiceError
 from ..gameassets.spine import PREVIEW_TYPES, Composition, spine_revision
 from ..gameassets.discovery import cab_names
@@ -75,8 +76,6 @@ class ImportSettings:
 
     def __init__(self, base: Any, options: dict):
         self.base, self.options = base, options
-        self._crc: dict[Path, tuple[tuple[int, ...], bool]] = {}
-        self._crc_lock = threading.Lock()
 
     def __getattr__(self, name: str) -> Any:
         return getattr(self.base, name)
@@ -84,21 +83,12 @@ class ImportSettings:
     def asset_types(self) -> set[str]:
         return set(self.options["types"])
 
-    def crc_needed(self, target: Path | None) -> bool:
+    def crc_needed(self, target: Path | None = None) -> bool:
+        """``auto`` follows the selected install, as ``Settings.crc_needed`` does; ``target`` does not change it."""
         setting = self.options["crc"]
-        if setting != "auto" or target is None:
+        if setting != "auto":
             return setting == "on"
-        target = target.resolve()
-        stat = target.stat()
-        stamp = (stat.st_dev, stat.st_ino, stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns)
-        with self._crc_lock:
-            cached = self._crc.get(target)
-        if cached is not None and cached[0] == stamp:
-            return cached[1]
-        value = Bundle.check_need_crc(target)
-        with self._crc_lock:
-            self._crc[target] = (stamp, value)
-        return value
+        return install_needs_crc(self.base.get("file_source"))
 
     def save_options(self, perform_crc: bool) -> SaveOptions:
         return SaveOptions(perform_crc=perform_crc, compression=self.options["compression"],
