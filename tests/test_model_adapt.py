@@ -529,6 +529,13 @@ def _cross_build(view, tmp_path, source, target="azusa_original"):
     return slot, sources, written, adapted, BundleGraph(index), BundleGraph(adapted)
 
 
+def _fx(graph):
+    """The halo particles' reader of a model export (service.model_glb's)."""
+    from bmpt.gameassets.service import _FxResolver
+
+    return lambda objects: _FxResolver(graph, dict(objects), {}).resolve
+
+
 def _official_objects_kept(slot, written, allowed):
     """Every object of the official files is still there, byte for byte, but those of ``allowed`` types; the new
     objects by (file, path id) with their types."""
@@ -751,11 +758,11 @@ def test_official_a_halo_that_cannot_be_carried_hides_the_slots(view, source, sh
 
 
 @official
-@pytest.mark.parametrize("source,nodes,particles", [
-    ("tsurugi_original", ["Tsurugi_Original_Halo", "FX_blood"], 1),  # her mesh and a particle system beside it
-    ("ch0069", ["CH0069_Halo", "FX_CH0069_Halo"], 9),  # Mika: nested particle systems, an Animator left out
+@pytest.mark.parametrize("source,nodes,particles,drawn", [
+    ("tsurugi_original", ["Tsurugi_Original_Halo", "FX_blood"], 1, 1),  # her mesh and a particle system beside it
+    ("ch0069", ["CH0069_Halo", "FX_CH0069_Halo"], 9, 8),  # Mika: nested particle systems, an Animator left out
 ])
-def test_official_a_particle_halo_is_carried_with_its_nodes(view, tmp_path, source, nodes, particles):
+def test_official_a_particle_halo_is_carried_with_its_nodes(view, tmp_path, source, nodes, particles, drawn):
     """A halo with particles (Tsurugi's, Mika's) is carried with its nodes: below Azusa's followed node, new
     GameObjects, Transforms, renderers and particle systems as the source has them below its own, their meshes and
     materials carried into the slot's files; the follower takes the source's offsets. Azusa's own halo draws nothing
@@ -802,10 +809,13 @@ def test_official_a_particle_halo_is_carried_with_its_nodes(view, tmp_path, sour
         for field in ma.FOLLOWER_OFFSETS:
             assert follower[field] == pytest.approx(official.tree(halo.follower)[field])
     assert checked
-    data = export_chibi(graph, prefab_files, "azusa_original")
+    data = export_chibi(graph, prefab_files, "azusa_original", fx=_fx(graph))
     doc = json.loads(data[20:20 + struct.unpack_from("<I", data, 12)[0]])
     names = {m["name"] for m in doc["meshes"]}
     assert nodes[0] in names and not any(n.startswith("Azusa_Original_Halo") for n in names) and doc["animations"]
+    # The carried particles play in the slot's 3D preview, read from the slot's files
+    systems = doc["extras"]["haloFx"]["systems"]
+    assert len(systems) == drawn and all(doc["nodes"][s["node"]]["name"] == s["name"] for s in systems)
 
 
 @official
@@ -833,10 +843,11 @@ def test_official_a_particle_slot_hides_its_halo_and_takes_the_sources(view, tmp
         assert added.path == "HaloRoot/Azusa_Original_Halo"
         assert graph.tree(graph.component(added.go, "MeshRenderer"))["m_Enabled"]
     assert checked
-    data = export_chibi(graph, prefab_files, "tsurugi_original")
+    data = export_chibi(graph, prefab_files, "tsurugi_original", fx=_fx(graph))
     doc = json.loads(data[20:20 + struct.unpack_from("<I", data, 12)[0]])
     names = {m["name"] for m in doc["meshes"]}
     assert "Azusa_Original_Halo" in names and "Tsurugi_Original_Halo" not in names
+    assert "haloFx" not in doc["extras"]  # her silenced drops do not play in the preview
 
 
 def _locks_free() -> list[str]:

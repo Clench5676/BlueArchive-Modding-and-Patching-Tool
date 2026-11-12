@@ -28,6 +28,7 @@ PROGRAMS = {
     "DSFX/FX_SHADER_AlphaBlend_0": "alphaBlend",
     "DSFX/FX_SHADER_AlphaBlend_Add": "alphaBlendAdd",
     "DSFX/FX_SHADER_AlphaBlend_Add_Mask_0": "mask",
+    "DSFX/FX_SHADER_AlphaBlend_Add_Mask_0_MXChar": "mask",  # the character variant (Mika's halo rings)
     "DSFX/FX_SHADER_AlphaBlend_Add_Distort_0": "distort",
     "DSFX/FX_SHADER_AlphaBlend_Add_Distort_1a": "distort1a",
     "DSFX/FX_SHADER_AlphaBlend_Add_Double_Distort_1a": "doubleDistort",

@@ -1,7 +1,8 @@
 // 3D chibi for the detail screen's third tab. The GLB is exported from the user's game files in memory
 // (gameassets/model.py): the game's material constants are in the material extras, the halo follower (FxFollower)
 // in the root extras, and each clip's slot, loop flag, SetMouthTile events and renderer switches in the animation
-// extras. The materials are ports of the game's character shaders (chibi-materials.js), the camera starts at the
+// extras; the halo's particle effects (root extras, haloFx) play as model-fx.js draws them. The materials are ports of
+// the game's character shaders (chibi-materials.js), the camera starts at the
 // formation screen's view of one character (FORMATION_VIEW) and orbits freely; the wheel, pinches and swipes are read
 // as the fullscreen lobby reads them (attachInput). One view at a time; hide() frees its WebGL context at once.
 import * as THREE from "three";
@@ -9,6 +10,7 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { straightTextureLoader } from "./png-decode.js";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { chibiMaterial, disposeDefaults, outlineMaterial, setOutlineScale } from "./chibi-materials.js";
+import { createModelFx } from "./model-fx.js";
 import { wheelKind, wheelStep } from "./lobby-touch.js";
 import { modelUrl } from "./switch-sources.js";
 
@@ -466,6 +468,14 @@ class ChibiView {
     if (!this.clips.size) root.traverse((o) => { if (/^(prop_root|Bip001_Weapon)$/i.test(o.name)) o.scale.setScalar(0); });
     await this.setupHalo(ex.haloFollower);
     if (this.disposed) return;
+    // the halo's particles (Tsurugi's drops, Mika's stars and rings), placed by their nodes as the halo moves
+    try {
+      this.fx = createModelFx(ex.haloFx, { nodes, textures, root });
+    } catch (err) {
+      console.warn("halo effects", err);
+      this.fx = null;
+    }
+    if (this.fx) this.scene.add(this.fx.group);
     // a story model has no idle: it stands in its first story clip's pose, never its bind pose
     if (!this.act("idle", { fade: 0, quiet: true })) this.act("story1", { fade: 0, quiet: true });
     this.measure();
@@ -812,6 +822,7 @@ class ChibiView {
     this.controls.update();
     this.root?.updateMatrixWorld();
     this.updateSpaces();
+    this.fx?.update(dt, this.camera);
     setOutlineScale(this.host.clientWidth || 1, this.host.clientHeight || 1);
     this.renderer.render(this.scene, this.camera);
   }
@@ -829,6 +840,7 @@ class ChibiView {
     this.followHalo(0, true);
     this.root.updateMatrixWorld(true);
     this.updateSpaces();
+    this.fx?.settle(this.camera); // the halo's particles at a fixed moment: the same still every time
     setOutlineScale(640, 640, 640);
     this.renderer.render(this.scene, this.camera);
     const gl = this.renderer.getContext(), pixels = new Uint8Array(640 * 640 * 4);
@@ -887,6 +899,7 @@ class ChibiView {
     this.detachInput?.();
     this.controls.dispose();
     this.mixer?.stopAllAction();
+    this.fx?.dispose();
     this.scene.traverse((o) => {
       o.geometry?.dispose();
       for (const m of [].concat(o.material || [])) {
