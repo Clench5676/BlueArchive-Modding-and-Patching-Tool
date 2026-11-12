@@ -170,8 +170,13 @@ def _timeline_clip(c: Mapping[str, Any]) -> dict:
             "name": c.get("m_DisplayName") or ""}
 
 
+def _file_name(obj: Any) -> str | None:
+    name = getattr(getattr(obj, "assets_file", None), "name", None)
+    return name.lower() if isinstance(name, str) else None
+
+
 def read_timeline(g: Any, timeline: Any, sound: Callable[[Any, dict], dict | None] | None = None) -> dict:
-    """A TimelineAsset's tracks as plain data: {"name", "tracks": [{"pid", "class", "name", "muted", "depth", "clips":
+    """A TimelineAsset's tracks as plain data: {"name", "files", "tracks": [{"pid", "file", "class", "name", "muted", "depth", "clips":
     [clip timing and "asset"], "infinite" (clip_curves of a recorded clip), "trackIndex" (spine), "post" (activation
     tracks' PostPlaybackState)}]}, groups' children after their group. g: tree(obj), deref(obj, pointer).
     sound(owner, AudioData) turns a TimeLineAudioController's audio data into a sound event (lobby.sound_event)."""
@@ -227,8 +232,9 @@ def read_timeline(g: Any, timeline: Any, sound: Callable[[Any, dict], dict | Non
             return
         t = g.tree(tr)
         cls = _script(g, tr)
-        item: dict[str, Any] = {"pid": tr.path_id, "class": cls, "name": t.get("m_Name") or "",
-                                "muted": bool(t.get("m_Muted")), "depth": depth, "clips": []}
+        item: dict[str, Any] = {"pid": tr.path_id, "file": _file_name(tr), "class": cls,
+                                "name": t.get("m_Name") or "", "muted": bool(t.get("m_Muted")), "depth": depth,
+                                "clips": []}
         if "trackIndex" in t:
             item["trackIndex"] = int(t.get("trackIndex", 0))
         if "m_PostPlaybackState" in t:
@@ -250,7 +256,13 @@ def read_timeline(g: Any, timeline: Any, sound: Callable[[Any, dict], dict | Non
 
     for pointer in tt.get("m_Tracks") or []:
         track(pointer, 0)
-    return {"name": tt.get("m_Name") or "", "durationMode": int(tt.get("m_DurationMode", 0)),
+    own = getattr(timeline, "assets_file", None)
+    externals = getattr(own, "externals", None) or []
+    return {"name": tt.get("m_Name") or "",
+            # the timeline's file and its externals by file id, lower case: what the tracks' "file" and the director's
+            # binding keys name
+            "files": [_file_name(timeline), *(external.path.rsplit("/", 1)[-1].lower() for external in externals)],
+            "durationMode": int(tt.get("m_DurationMode", 0)),
             "fixedDuration": _r(tt.get("m_FixedDuration", 0.0), 6), "tracks": tracks}
 
 
@@ -320,10 +332,19 @@ class Plan:
         self.children: dict[int, list[dict]] = {}
         for n in nodes:
             self.children.setdefault(n["parent"], []).append(n)
-        # the tracks' bindings (the timeline's file, by path id) and the control clips' exposed GameObjects
+        # the tracks' bindings (by the file and path id of the track) and the control clips' exposed GameObjects. The
+        # timeline is in a file of the lobby's art, or (a lobby camera's own copy, BL-187) in the prefab's file, its
+        # tracks then in the art's file but for the camera's
         file_id = (director.get("m_PlayableAsset") or {}).get("m_FileID", 0)
-        binds = {(b.get("key") or {}).get("m_PathID"): (b.get("value") or {}).get("m_PathID", 0)
-                 for b in director.get("m_SceneBindings") or [] if (b.get("key") or {}).get("m_FileID", 0) == file_id}
+        files = raw.get("files") or []
+
+        def key_file(fid: int) -> str | None:
+            if file_id == 0:
+                return files[fid] if 0 <= fid < len(files) else None
+            return files[0] if fid == file_id and files else None
+
+        binds = {(key_file((b.get("key") or {}).get("m_FileID", 0)), (b.get("key") or {}).get("m_PathID")):
+                 (b.get("value") or {}).get("m_PathID", 0) for b in director.get("m_SceneBindings") or []}
         exposed = {str(k): (v or {}).get("m_PathID", 0)
                    for k, v in (director.get("m_ExposedReferences") or {}).get("m_References", [])}
         self.spine: list[dict] = []        # {"sa": SkeletonAnimation path id, "track", "clips"}
@@ -338,7 +359,7 @@ class Plan:
         for t in raw.get("tracks", []):
             if t.get("muted"):
                 continue
-            cls, bound = t.get("class"), binds.get(t["pid"], 0)
+            cls, bound = t.get("class"), binds.get((t.get("file", files[0] if files else None), t["pid"]), 0)
             if cls == "SpineAnimationStateTrack":
                 if bound and kinds.get(bound) == "MonoBehaviour":
                     self.spine.append({"sa": bound, "track": t.get("trackIndex", 0), "clips": t.get("clips", [])})

@@ -4056,7 +4056,7 @@ class ModLibrary:
         return lobby_camera.save(self, variant_key, source, scale, offset, prefab, root, self._current(pin), log)
 
     @_serialized
-    def camera_prefab(self, mod_id: str, pin: Pin | None = None) -> tuple[dict, Path, Path | None] | None:
+    def camera_prefab(self, mod_id: str, pin: Pin | None = None) -> tuple[dict, Path, Path | None, Path | None] | None:
         """A lobby camera's parameters and preview prefab (``lobby_camera.preview_files``), None for another mod."""
         from . import lobby_camera
 
