@@ -41,6 +41,7 @@ from ..logging_utils import log_failure
 from ..openfiles import remove_tree, temporary_directory
 from . import profiles as profiles_mod
 from . import fingerprint, integrity, rig_archive, safety, staging, tested_build
+from .original_checks import OriginalChecks, Verdict
 from .install import Action, PlannedFile, PlannedGroup, backup_file, install_staged
 from .rebuild import rebuild
 from . import targets as resolver
@@ -58,7 +59,7 @@ from .models import (
 from .profiles import Profiles
 from .safety import check_resource_path
 from .storage import (
-    Fingerprints, atomic_clone, atomic_copy, atomic_json, read_tail, sync_directory, trailing_bytes,
+    Fingerprint, Fingerprints, atomic_clone, atomic_copy, atomic_json, read_tail, sync_directory, trailing_bytes,
     verified_move, verify_file,
 )
 from .variants import adapt_variant_sources
@@ -474,7 +475,8 @@ class _View:
         its .backup, a file of its name in another game folder; None when there is none (or it may not be looked
         for). Candidates beyond the file are looked at only for a file that is not official and has no original."""
         name = part.path.name
-        if name in self.originals:
+        # a kept original a Steam list rejected is no official copy (BL-194): the other candidates are looked at
+        if name in self.originals and not self.library._original_failed(self.library.root / "originals" / name, False):
             return "kept"
         if part.official:
             return "game"
@@ -692,6 +694,8 @@ class ModLibrary:
         self._maps: dict[str, tuple[int, CoreMap]] = {}
         self._names_cache: dict[str, tuple[int, dict[str, Path]]] = {}
         self._originals_cache: tuple[Any, dict[str, int]] | None = None
+        # how each kept original was verified: Steam's list or the CRC rule alone (BL-194)
+        self._original_checks = OriginalChecks(self.root)
         self._backfill_misses: set[tuple] = set()
         # the official rigs of portraits kept per game release, and what was matched against them (_archived_rigs)
         self.rigs = rig_archive.RigArchive(self.root / "rigs")
@@ -2938,13 +2942,96 @@ class ModLibrary:
 
     def _is_official_as(self, path: Path, name: str) -> bool:
         """Official: the size and SHA-1 that Steam's file list gives ``name`` (``_steam_official``), else the CRC32 of
-        the whole content against the CRC in ``name``, with no trailing bytes. A mod can match a CRC, not a SHA-1."""
+        the whole content against the CRC in ``name``, with no trailing bytes. A mod can match a CRC, not a SHA-1.
+        A kept original also records which rule it passed, and one a Steam list rejected stays rejected without the
+        list (``_judge_original``)."""
         fingerprint = self._hashes.get(path)
         steam = self._steam_official(name, path)
+        if self._is_kept(path) and path.name == name:
+            return self._judge_original(path, fingerprint, steam) in ("steam", "crc")
         if steam is not None:
             return fingerprint.size == steam.size and fingerprint.sha1 == steam.sha1
+        # the very bytes a Steam list rejected as the kept original of this name stay a mod's without the list
+        return self._original_checks.of_bytes(name, fingerprint) != "failed" and self._crc_official(fingerprint, name)
+
+    @staticmethod
+    def _crc_official(fingerprint: Fingerprint, name: str) -> bool:
         parsed = parse_filename(name)
         return fingerprint.trailing == 0 and bool(parsed.crc) and fingerprint.crc == int(parsed.crc)
+
+    def _is_kept(self, path: Path) -> bool:
+        """Whether a path is a kept original (a file of originals/)."""
+        try:
+            return path.parent.resolve() == (self.root / "originals").resolve()
+        except (OSError, RuntimeError):
+            return False
+
+    def _judge_original(self, original: Path, fingerprint: Fingerprint,
+                        steam: steam_records.OfficialFile | None) -> Verdict | None:
+        """How a kept original's bytes pass, recorded (BL-194): ``steam`` (Steam's list gives its size and SHA-1, now
+        or when it was recorded), ``crc`` (no list names it, the CRC rule alone), ``failed`` (a Steam list gave other
+        bytes: never official again, list or not); None when it fails the CRC rule (damaged, ``original_invalid``)."""
+        if steam is not None:
+            verdict: Verdict = "steam" if (fingerprint.size, fingerprint.sha1) == (steam.size, steam.sha1) else "failed"
+            self._original_checks.save(original, verdict, fingerprint, set(self._originals()))
+            return verdict
+        recorded = self._original_checks.of_bytes(original.name, fingerprint)
+        if recorded in ("failed", "steam"):
+            return recorded
+        if not self._crc_official(fingerprint, original.name):
+            return None
+        if recorded is None:
+            self._original_checks.save(original, "crc", fingerprint, set(self._originals()))
+        return "crc"
+
+    def _original_failed(self, original: Path, full: bool) -> bool:
+        """Whether a kept original is one a Steam list rejected: at write strength by its bytes (hashed), else by
+        its record while the file is unchanged since."""
+        try:
+            if full:
+                return self._judge_original(original, self._hashes.get(original),
+                                            self._steam_official(original.name, original)) == "failed"
+            return self._original_checks.of_file(original) == "failed"
+        except OSError:
+            return False
+
+    def original_check(self, name: str, copy: str | None, roots: Sequence[Path] | None = None) -> str | None:
+        """What verifies the official copy a screen names (``copy``, as ``_View.copy_of`` gives it, which never names a
+        kept original a Steam list rejected), cheaply (no file read): ``steam`` (Steam's list names the file, or the
+        kept original passed it), ``crc`` (the CRC rule alone); None without a copy or for the game file itself."""
+        if copy not in ("kept", "backup", "elsewhere"):
+            return None
+        if copy == "kept" and self._original_checks.of_file(self.root / "originals" / name) == "steam":
+            return "steam"
+        return "steam" if self._steam_official(name, roots=roots) is not None else "crc"
+
+    def check_originals(self, cancel: Callable[[], bool] | None = None) -> dict[str, int]:
+        """With Steam's list (the scan consent), verify the kept originals it names that carry no verdict of their
+        bytes as they are now (kept by the CRC rule alone, kept by an older build, changed since): each is hashed once
+        and recorded ``steam`` or ``failed``. Not serialized: the scan calls it outside the library lock. Returns the
+        counts by verdict of the originals it judged."""
+        counts: dict[str, int] = {}
+        if not self._scan_allowed():
+            return counts
+        roots = self._steam_roots()
+        for name in sorted(self._originals()):
+            if cancel and cancel():
+                break
+            original = self.root / "originals" / name
+            if self._original_checks.of_file(original) in ("steam", "failed"):
+                continue
+            steam = self._steam_official(name, roots=roots)
+            if steam is None:
+                continue
+            preview_gate.yield_to_previews(cancel)
+            try:
+                verdict = self._judge_original(original, self._hashes.get(original), steam)
+            except OSError:
+                continue  # released meanwhile
+            if verdict == "failed":
+                logger.warning("The kept original %s is not the file Steam's list names", name)
+            counts[verdict or "invalid"] = counts.get(verdict or "invalid", 0) + 1
+        return counts
 
     def _original_path(self, game_file: Path) -> Path:
         return self.root / "originals" / game_file.name
@@ -2995,7 +3082,8 @@ class ModLibrary:
         if game_first and official(game_file):
             return game_file
         original = self._original_path(game_file)
-        if original.exists():
+        # a kept original a Steam list rejected is a mod's bytes: never an official copy, skipped (BL-194)
+        if original.exists() and not self._original_failed(original, full):
             if full and not self._is_official(original):
                 raise ServiceError("original_invalid", file=original)
             return original
@@ -3807,9 +3895,11 @@ class ModLibrary:
         parsed = parse_filename(part.path.name)
         copy_ = entry.copies.get(str(part.path))
         applied = "unknown" if part.carried == "damaged" else part.carried
+        checked = None if part.official else self.original_check(
+            part.path.name, copy_, roots=[pin.root for pin in view.pins.values()])
         return GameFileState(part.path, entry.core if entry.kind == "other" else parsed.core, entry.kind,
                              applied, part.crc, part.path.name in view.originals,
-                             parsed.date, part.size, copy_, copy_ is not None, part.official)
+                             parsed.date, part.size, copy_, copy_ is not None, part.official, checked)
 
     @_serialized
     def state(self, variant_key: str, pin: Pin | None = None) -> VariantState:
@@ -6114,6 +6204,9 @@ class ModLibrary:
         library are saved."""
         if not self._scan_allowed():
             raise ServiceError("scan_off")
+        # the kept originals Steam's list names and no verdict covers yet, hashed once each (BL-194)
+        with contextlib.suppress(OSError, ServiceError):
+            self.check_originals(cancel)
         with self._lock, _errors("scan"):
             pins = list(pins) if pins is not None else self.installs()
             view = self._view(pins, "scan", snapshot=True)
