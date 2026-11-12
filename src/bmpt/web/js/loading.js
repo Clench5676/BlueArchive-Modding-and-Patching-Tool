@@ -156,6 +156,7 @@ function open(mode, opaque = false, writer = false) {
 export function refresh() {
   for (const o of [overlay, writerOverlay]) o?.relabelProgress?.();
   if (overlay) overlay.el.style.visibility = overlay.mode === "indicator" && writerOverlay && !writerOverlay.closing ? "hidden" : "";
+  syncLock();
 }
 
 function setProgress(o, text) {
@@ -466,9 +467,9 @@ export async function wait(promise, { label: text = null, cap = HARD_CAP, immedi
   return result;
 }
 
-// A write holds input from submission through the final reload. Default holds leave Back and popups available;
-// all blocks them too. Leaving the page releases its hold while the job keeps reporting its end.
-const holds = new Set(), wired = new WeakSet();
+// A write holds input from submission through the final reload. Default holds leave popups available; all blocks
+// them too. Leaving the page releases its hold while the job keeps reporting its end.
+const holds = new Set();
 export const held = () => holds.size > 0;
 export async function hold(work, { until = null, all = false, progress = null } = {}) {
   let latest = null;
@@ -476,23 +477,13 @@ export async function hold(work, { until = null, all = false, progress = null } 
     : typeof latest === "string" ? latest : progressText(latest) };
   const update = (value) => { latest = value; refresh(); };
   holds.add(key);
-  refresh();
   if (all) el.classList.add("input-held");
-  if (!wired.has(el)) {
-    const block = (ev) => {
-      if (!held() || (![...holds].some((hold) => hold.all)
-        && (ev.target.closest?.(".topbar .back") || Popup.allowsInput(ev)))) return;
-      ev.preventDefault();
-      ev.stopImmediatePropagation();
-    };
-    for (const event of ["pointerdown", "pointerup", "pointermove", "click", "keydown", "wheel", "touchstart", "touchmove"]) el.addEventListener(event, block, true);
-    wired.add(el);
-  }
+  refresh();
   const release = () => {
     holds.delete(key);
+    if (![...holds].some((hold) => hold.all)) el.classList.remove("input-held");
     refresh();
     if (!holds.size && overlay?.holdOwned && overlay.mode === "indicator" && !overlay.closing) close(overlay);
-    if (![...holds].some((hold) => hold.all)) el.classList.remove("input-held");
   };
   const task = track(Promise.resolve().then(() => work(update)));
   const visible = until ? Promise.race([task, until.then(release)]) : task;
@@ -500,11 +491,45 @@ export async function hold(work, { until = null, all = false, progress = null } 
   try { return await task; } finally { release(); }
 }
 
-// Read-only previews retain their frame-swap guard but allow Back and existing
-// popups to cancel or supersede the wait. Writers keep their explicit strict hold.
+// Read-only previews retain their frame-swap guard but allow existing popups to cancel or supersede the wait.
+// Writers keep their explicit strict hold.
 export function page(fn, options = {}) {
   return hold(() => fn(Promise.resolve()), options);
 }
+
+// Now Loading locks every control beneath it, the top bar and the bottom menu included (BL-195): while a hold, a
+// page overlay or a writer's progress is up, no click, key, wheel, touch or focus reaches the screen. Open popups
+// stay usable unless a strict hold (all) covers them too; automatic popups wait for a strict hold to end, so a popup
+// is never shown where it cannot be closed.
+export const locked = () => held() || active() || (!!writerOverlay && !writerOverlay.closing);
+const strict = () => [...holds].some((hold) => hold.all);
+const exempt = (ev) => !strict() && Popup.allowsInput(ev);
+const LOCKED_EVENTS = ["pointerdown", "pointerup", "pointermove", "mousedown", "mouseup", "click", "dblclick", "auxclick",
+  "contextmenu", "keydown", "keyup", "wheel", "touchstart", "touchmove", "dragstart", "drop"];
+const wired = new WeakSet();
+function wire(el = stage()) {
+  if (!el?.addEventListener || wired.has(el)) return;
+  const block = (ev) => {
+    if (!locked() || exempt(ev)) return;
+    ev.preventDefault();
+    ev.stopImmediatePropagation();
+  };
+  for (const type of LOCKED_EVENTS) el.addEventListener(type, block, { capture: true, passive: false });
+  // keys with the focus outside the stage (the page's own shortcuts: arrows, Escape); system shortcuts pass
+  const keys = (ev) => { if (ev.target && !ev.defaultPrevented && !ev.metaKey && !ev.ctrlKey) block(ev); };
+  for (const type of ["keydown", "keyup"]) globalThis.addEventListener?.(type, keys, true);
+  // focus cannot be cancelled: a control beneath that takes it while locked gives it up at once
+  el.addEventListener("focusin", (ev) => { if (locked() && !exempt(ev)) ev.target?.blur?.(); }, true);
+  wired.add(el);
+}
+// on locking: the focused control beneath gives up its focus, so Enter or Space cannot press it
+function syncLock() {
+  const el = stage();
+  wire(el);
+  const focused = document.activeElement;
+  if (locked() && focused && focused !== el && el?.contains?.(focused) && !exempt({ target: focused })) focused.blur?.();
+}
+Popup.deferWhile?.(strict);
 
 // Prefabs and derived UI values belong to the selected installation.
 NGUI.onResourceChange?.(() => { repeater = loadingTree = shade = geometry = null; letterInk.clear(); });

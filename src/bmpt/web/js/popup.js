@@ -1692,8 +1692,13 @@ export function notice(text) {
 
 // Only errors/refusals use a notification popup: a refusal as a notice, anything else as Failed with the Error Report.
 // Rich results call message() explicitly.
+// deferWhile(blocked): automatic notifications wait while blocked() holds (loading.js: a strict hold covers every
+// popup), so they never open beneath the loading screen where they could not be closed (BL-195)
+let deferred = () => false;
+export function deferWhile(blocked) { deferred = blocked; }
 export function notify(text, { kind = "info", error = null } = {}) {
   if (!text || kind !== "error") return;
+  if (deferred()) { setTimeout(() => notify(text, { kind, error }), 100); return; }
   if (isRefusal(error)) { void notice(text); return; }
   void message({ title: T("job.failed"), lines: [withCode(text, error, T)], ok: T("picker.ok"), error });
 }

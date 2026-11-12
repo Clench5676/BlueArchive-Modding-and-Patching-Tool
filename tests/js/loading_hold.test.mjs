@@ -46,7 +46,7 @@ const event = (target = new El(), key) => ({ target, key, prevented: false, stop
 
 function deferred() { let resolve; const promise = new Promise((r) => { resolve = r; }); return { promise, resolve }; }
 
-test("input is held immediately through a slow apply, while Back keeps working", async () => {
+test("input is held immediately through a slow apply, Back included", async () => {
   const job = deferred();
   const done = Loading.hold(() => job.promise);
   assert.equal(Loading.held(), true);
@@ -54,7 +54,7 @@ test("input is held immediately through a slow apply, while Back keeps working",
   assert.ok(click.prevented && click.stopped);
   const backButton = new El(); backButton.back = true;
   const back = event(backButton); stage.listeners.click(back);
-  assert.equal(back.prevented, false);
+  assert.ok(back.prevented && back.stopped, "Now Loading locks the top bar too (BL-195)");
   await new Promise((r) => setTimeout(r, 350));
   assert.ok(Loading.active(), "the existing corner indicator shows during the hold");
   assert.equal(Loading.held(), true);
@@ -252,15 +252,45 @@ test("a navigation cannot leave an existing strict hold blocking pencils without
   const click = event(); stage.listeners.click(click); assert.equal(click.stopped, false);
 });
 
-test("a read-only preview keeps Back and popups available while guarding other inputs", async () => {
+test("a read-only preview keeps popups available while guarding Back and other inputs", async () => {
   const work = deferred(), back = new El(); back.back = true;
   const popup = new El(); popup.className = "popup-host";
   const changing = Loading.page(async () => work.promise);
   await new Promise(setImmediate);
   try {
-    for (const target of [back, popup]) {
-      const click = event(target); stage.listeners.click(click); assert.equal(click.stopped, false);
+    const open = event(popup); stage.listeners.click(open); assert.equal(open.stopped, false);
+    for (const target of [back, new El()]) {
+      const click = event(target); stage.listeners.click(click); assert.equal(click.stopped, true);
     }
-    const click = event(new El()); stage.listeners.click(click); assert.equal(click.stopped, true);
   } finally { work.resolve(); await changing; }
+});
+
+// BL-195: Now Loading locks every control beneath it, the top bar and the bottom menu included
+test("writer progress locks the top bar, the bottom menu and the page until it settles", async () => {
+  const job = deferred();
+  const running = Loading.task(() => job.promise, { label: "Applying" });
+  await new Promise(setImmediate);
+  try {
+    assert.equal(Loading.locked(), true);
+    const toggle = new El(), nav = new El(), back = new El(); back.back = true;
+    for (const target of [toggle, nav, back]) for (const type of ["pointerdown", "click", "keydown"]) {
+      const ev = event(target, type === "keydown" ? " " : undefined); stage.listeners[type](ev);
+      assert.ok(ev.prevented && ev.stopped, `${type} beneath writer progress`);
+    }
+    const popup = new El(); popup.className = "popup-host";
+    const open = event(popup); stage.listeners.click(open);
+    assert.equal(open.stopped, false, "a popup over the progress stays answerable");
+  } finally { job.resolve(); await running; }
+  assert.equal(Loading.locked(), false);
+  const after = event(); stage.listeners.click(after); assert.equal(after.stopped, false);
+});
+
+test("an in-page wait locks input once its indicator is up", async () => {
+  const job = deferred();
+  const waiting = Loading.wait(job.promise, { immediate: true });
+  await new Promise(setImmediate);
+  try {
+    assert.equal(Loading.active(), true);
+    const click = event(); stage.listeners.click(click); assert.ok(click.stopped);
+  } finally { job.resolve(); await waiting; }
 });

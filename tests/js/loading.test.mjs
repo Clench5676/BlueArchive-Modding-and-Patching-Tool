@@ -75,6 +75,7 @@ async function harness({ labelFailure = null, labelGate = null, locale = "en-US"
     performance: { now: () => now }, getComputedStyle: () => ({ opacity: "1" }),
     setTimeout: (fn, ms) => { const id = ++timerId; timers.set(id, { at: now + ms, fn }); return id; },
     clearTimeout: (id) => timers.delete(id), requestAnimationFrame: (fn) => fn(),
+    Popup: { allowsInput: () => false, deferWhile: () => {} },
     T, S: 1, loadingLabel, loadingLetterSprites, loadingInkLine, alphaBounds,
     domBaseline: () => 1028.75, alignBaseline: (el, line) => alignBaseline(el, line, stage, () => 1028.75 + (el.baselineShift || 0)),
     publishAligned: (host, next, line) => labelFailure !== "alignment" && publishAligned(host, next, line, stage, () => 1028.75 + (next.baselineShift || 0)),
@@ -94,7 +95,7 @@ async function harness({ labelFailure = null, labelGate = null, locale = "en-US"
     } },
   };
   globalThis.loadingDeps = d;
-  const code = `const {document,performance,setTimeout,clearTimeout,requestAnimationFrame,getComputedStyle,NGUI,T,S,loadingLabel,loadingLetterSprites,loadingInkLine,alphaBounds,alignBaseline,domBaseline,publishAligned} = globalThis.loadingDeps;\n${source.replace(/^import .*;$/gm, "")}\n// ${seq++}`;
+  const code = `const {document,performance,setTimeout,clearTimeout,requestAnimationFrame,getComputedStyle,NGUI,Popup,T,S,loadingLabel,loadingLetterSprites,loadingInkLine,alphaBounds,alignBaseline,domBaseline,publishAligned} = globalThis.loadingDeps;\n${source.replace(/^import .*;$/gm, "")}\n// ${seq++}`;
   const loading = await import(`data:text/javascript;base64,${Buffer.from(code).toString("base64")}`);
   if (infoReady) loading.init({ consent, uiCached, gameFound: true });
   const advance = async (ms) => {
