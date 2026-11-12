@@ -398,3 +398,28 @@ def test_the_poll_still_reloads_a_change_in_a_file_of_the_same_size(tmp_path, de
     settings = Settings(path)
     assert _poll_after_write(path, b"[AppSettings]\nmax_workers = 3\n", settings) is True
     assert settings.get("max_workers") == 3
+
+
+@pytest.mark.parametrize("source, needed", [("windows_global", True), ("windows_japan", True),
+                                            ("adb_global", False), ("adb_japan", False), ("", True), ("other", True)])
+def test_auto_crc_follows_the_install_and_fails_closed(tmp_path: Path, monkeypatch, source, needed):
+    from ba_modding_toolkit.bundle import Bundle
+
+    monkeypatch.setattr(Bundle, "load", lambda *args, **kwargs: pytest.fail("the target was loaded"))
+    s = Settings(tmp_path / "config.toml")
+    s.set("enable_crc_correction", "auto")
+    s.set("file_source", source)
+    unreadable = tmp_path / "unreadable.bundle"
+    unreadable.write_bytes(b"not a bundle")
+    assert s.crc_needed(unreadable) is needed
+    assert s.crc_needed(tmp_path / "missing.bundle") is needed
+    assert s.crc_needed(None) is needed
+
+
+@pytest.mark.parametrize("setting, needed", [("true", True), ("false", False)])
+def test_explicit_crc_setting_wins_over_the_install(tmp_path: Path, setting, needed):
+    s = Settings(tmp_path / "config.toml")
+    s.set("enable_crc_correction", setting)
+    for source in ("windows_global", "adb_global"):
+        s.set("file_source", source)
+        assert s.crc_needed(tmp_path / "missing.bundle") is needed
