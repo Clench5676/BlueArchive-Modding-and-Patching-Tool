@@ -173,6 +173,7 @@ def test_repair_writes_again_a_game_file_left_without_its_crc(updated, monkeypat
     env = updated
     with monkeypatch.context() as old:  # the write of an older build
         old.setattr(install, "matches_target_crc", lambda source, target: Bundle.check_crc_match(source))
+        old.setattr(env.library, "_check_target_crc", lambda changed: None)  # nor the last CRC check of a write
         env.library.apply("test", f"mod:{env.mod.id}")
     assert not matches_name(env.part) and env.library.state("test").crc == "needs_fix"
     found = env.library.crc_repair_due()
@@ -192,6 +193,7 @@ def test_repair_leaves_game_files_for_a_later_start_while_the_game_runs(updated,
     env = updated
     with monkeypatch.context() as old:
         old.setattr(install, "matches_target_crc", lambda source, target: Bundle.check_crc_match(source))
+        old.setattr(env.library, "_check_target_crc", lambda changed: None)  # nor the last CRC check of a write
         env.library.apply("test", f"mod:{env.mod.id}")
 
     def running():
