@@ -83,19 +83,16 @@ for (const locale of LOCALES) test(`model.showOthers is in ${locale} with the ag
   assert.equal(Object.keys(WORDING).length, LOCALES.length);
 });
 
-// a list card's bottom row: Updatable after the tag (Optimized) and the recruit icon, on one
-// line, never under the pin or past the card, in every shipped language on the 3D model card
+// a list card's bottom row: the tag (Optimized) from the corner or after the recruit icon, on one line, never under the
+// pin or past the card, in every shipped language on the 3D model card
 for (const locale of ORDER) test(`a card's tags stand in one row after the recruit icon in ${locale}`, () => {
   setStrings(locale, Object.fromEntries(flat(webui(locale))));
   document.documentElement.lang = locale;
   const { w } = Popup.listLayout(false, "model").card;
-  const tag = { text: webui(locale).model.optimized }, updatable = { text: webui(locale).model.outdated };
-  for (const it of [{ tag, marks: [updatable] }, { recruit: true, marks: [updatable] }, { recruit: true, fav: true, marks: [updatable] },
-    { tag, marks: [updatable], fav: true }]) {
+  const tag = { text: webui(locale).model.optimized };
+  for (const it of [{ tag }, { tag, recruit: true }, { tag, fav: true }]) {
     const row = Popup.tagRow(it, w), texts = row.map((t) => t.mark.text);
-    // Updatable is always drawn; Optimized beside it wherever the row has room (not beside the pin in every language)
-    assert.ok(texts.includes(updatable.text), `${locale} ${JSON.stringify(it)}: Updatable drawn`);
-    if (it.tag && !it.fav) assert.deepEqual(texts, [tag.text, updatable.text], `${locale}: both, the tag first`);
+    assert.deepEqual(texts, [tag.text], `${locale} ${JSON.stringify(it)}: the tag drawn`);
     assert.equal(new Set(row.map((t) => t.bf.fs)).size, 1, `${locale}: one size`);
     assert.ok(row.every((t) => t.bf.fs >= 18), `${locale}: 18 at the smallest`);
     let x = it.recruit ? -w / 2 + 34 + 31 * 126 / 143 : -w / 2 + 12;

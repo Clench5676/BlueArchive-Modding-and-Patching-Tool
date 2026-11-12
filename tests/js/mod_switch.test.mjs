@@ -1463,30 +1463,6 @@ test("Settings Spine value row opens the same read-only notice in every locale w
 
 const Impact = await import("../../src/bmpt/web/js/update-impact.js");
 
-test("costume builds of an older costume rule: in Needs Fix after the held mods, ticked, Updatable, with Update", () => {
-  const mods = [
-    { id: "7", target: "hoshino", core: "hoshino_original", kind: "model", impact: "outdated", label: "Hina - Optimized",
-      changes: {}, configured: true, repaired_id: "" },
-    { id: "", target: "azusa", core: "azusa_original", kind: "model", impact: "outdated", label: "", source: "variant:yukino",
-      changes: {}, configured: true, repaired_id: "" },
-    { id: "1", target: "airi", core: "ch0200_spr", kind: "spr", impact: "rig_changed", label: "Airi", changes: { rig: true } },
-    { id: "8", target: "aru", core: "aru_spr", kind: "spr", impact: "rebuilt", label: "Aru", changes: {} },
-  ];
-  const nameOf = (e) => e.variant[0].toUpperCase() + e.variant.slice(1);
-  const tabs = Impact.tabMods({ result: { due: true, mods } });
-  assert.deepEqual([tabs.held.map(Impact.modKey), tabs.others.map((m) => m.id)], [["1", "7", "azusa_original"], ["8"]]);
-  // a copy is named by its student and itself; a swap in the game files by its slot's student and the costume it carries
-  const copy = Impact.card(tabs.held[1], "held", nameOf), swap = Impact.card(tabs.held[2], "held", nameOf);
-  assert.deepEqual([copy.key, copy.label, copy.full, copy.chips, copy.badge.text, copy.thumb],
-    ["7", "Hoshino", "Hina - Optimized", ["3D Model", "Applied"], S("model.outdated"), null]);
-  assert.deepEqual([swap.key, swap.label, swap.full, swap.chips, swap.badge.text],
-    ["azusa_original", "Azusa", "Yukino", ["3D Model", "Applied"], S("model.outdated")]);
-  assert.equal(Impact.card(tabs.held[0], "held", nameOf).badge.text, S("mods.heldBadge"));
-  // Update in the details (no preview); Go To only where a mod has a page
-  assert.deepEqual(Impact.details(tabs.held[1], "held").actions, [["go", S("add.go")], ["fix", S("act.update"), "apply"]]);
-  assert.deepEqual(Impact.details(tabs.held[2], "held").actions, [["fix", S("act.update"), "apply"]]);
-});
-
 test("an update's impact as a list: the held mods, those applied again and the others, each a card with its details", () => {
   const mods = [
     { id: "1", target: "hoshino", core: "ch0101_spr", kind: "spr", impact: "rig_changed", label: "Bunny Hoshino", configured: true,
@@ -1647,6 +1623,37 @@ test("the start asks before the first screen, checks under the loading screen, a
     await shown;
     assert.deepEqual(called("mods.impactSeen").at(-1), { install: GLOBAL, version: "v3" });
     assert.equal(await Impact.check(), null, "told once");
+  } finally {
+    for (const key of Object.keys(answers)) delete answers[key];
+    Object.assign(answers, saved);
+    await tick(); dialog.hidden = true;
+  }
+});
+
+test("the start builds costume builds of an older costume rule again before anything else, without asking", async () => {
+  const saved = { ...answers };
+  try {
+    answers["mods.refreshCostumes"] = "job-refresh-costumes";
+    jobs["job-refresh-costumes"] = { state: "done", result: { done: [{ id: "7", core: "hoshino_original", source: "mod:7" }], kept: [], left: [] } };
+    // the same game version: built again, nothing asked or listed
+    answers["mods.updateDue"] = { due: false, outdated: true, install: GLOBAL, version: "v3", previous: "v3" };
+    const before = called("mods.refreshCostumes").length;
+    assert.equal(await Impact.gate(), false);
+    assert.equal(called("mods.refreshCostumes").length, before + 1);
+    assert.equal(dialog.hidden, true, "silently");
+    assert.equal(await Impact.check(), null, "no list");
+    // a refusal is never told: the start goes on
+    jobs["job-refresh-costumes"] = { state: "failed", error: { code: "game_running", params: {} } };
+    assert.equal(await Impact.gate(), false);
+    assert.equal(dialog.hidden, true, "silently");
+    // with a game update too: built again first, then the question
+    jobs["job-refresh-costumes"] = { state: "done", result: { done: [], kept: [], left: [] } };
+    answers["mods.updateDue"] = { due: true, outdated: true, install: GLOBAL, version: "v4", previous: "v3" };
+    const gated = Impact.gate();
+    await drawn(dialog, "later");
+    assert.equal(called("mods.refreshCostumes").length, before + 3);
+    action(dialog, "later").click();
+    assert.equal(await gated, false);
   } finally {
     for (const key of Object.keys(answers)) delete answers[key];
     Object.assign(answers, saved);

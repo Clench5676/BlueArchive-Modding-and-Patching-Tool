@@ -49,7 +49,7 @@ import { ALIAS, DETAILS, aliasFrame, detailsFrame, popupContent } from "./popup-
 import { statsBox } from "./stats-box.js";
 import { CHIP, COLOUR, CONTROL, SPACE, TYPE } from "./ui-tokens.js";
 import { container, row, stack, textItem, toNode } from "./ui-grid.js";
-import { CROSS_LIMIT, crossExtras, setShowOthers, showOthers, detailStatus, selectionStatus, selectionError, intendedKey, isApplied, swapOutdated, availableTab, coreOf, costumeCandidates, costumeHold, crossCandidates, crossCard, crossModels, hasAsset, hasKind, primaryKind, appliedKey as keyOf, appliedOf, candidates as listSources, partsOf, popupMode, modelSource, previewBase, previewChanged, previewKey, sourceOf, switchKindOf } from "./switch-sources.js";
+import { CROSS_LIMIT, crossExtras, setShowOthers, showOthers, detailStatus, selectionStatus, selectionError, intendedKey, isApplied, availableTab, coreOf, costumeCandidates, costumeHold, crossCandidates, crossCard, crossModels, hasAsset, hasKind, primaryKind, appliedKey as keyOf, appliedOf, candidates as listSources, partsOf, popupMode, modelSource, previewBase, previewChanged, previewKey, sourceOf, switchKindOf } from "./switch-sources.js";
 import { pickerItems } from "./roster-widgets.js";
 import { $, DOT, RECRUIT, S, TAN10, advanceOf, at, clone, glyphsOf, hitButton, markedLabel, off, text, widget, wrapPath } from "./util.js";
 
@@ -1515,12 +1515,8 @@ async function drawPopup(scroll = 0) {
   const v = variant(), kind = popupKind, applied = intendedKey(v, kind);
   const mode = popupMode(fam, v, kind, modsOn(), otherStudents);
   const own = candidates(v, kind);
-  // built from a costume under an older costume rule: an Optimize Physics copy or the applied swap; its Update
-  // builds it again
-  const outdatedMark = { text: T("model.outdated"), color: COLOUR.success, ink: "#ffffff" };
   const item = (c) => {
     const work = switchThumbnails;
-    const outdated = !!c.mod?.outdated || swapOutdated(v, kind, c.key);
     const picture = lazyThumbnail(() => kind === "model" ? modelPicture(c, v, work)
       : thumb(baseOf(c, kind), kind === "spr" ? "portrait" : "landscape", null, kind === "lobby", specialFraming(v), (c.origin || c.variant || v).bg, work), work.signal);
     return {
@@ -1541,8 +1537,6 @@ async function drawPopup(scroll = 0) {
       badge: c.greyed ? { ...GREYED_BADGE(), ...(!coreOf(v, kind) && c.kind === "self" ? { text: T("import.reason.no_target") } : {}) }
         : c.mod?.incomplete ? { text: T("mods.incomplete"), color: COLOUR.warning, ink: "#ffffff" }
         : null,
-      // after the tag on the card's bottom row (like Optimized, never pushed to a second line)
-      marks: outdated ? [outdatedMark] : [],
       tag: c.mod?.repaired_from ? { text: T("remap.repaired"), color: "#d7eaf4", ink: "#2d4664" }
         : c.mod?.optimized_from ? { text: T("model.optimized"), color: "#d7eaf4", ink: "#2d4664" } : null,
     };
@@ -1579,8 +1573,6 @@ async function drawPopup(scroll = 0) {
         fields: [[T("field.file"), baseName(file)], [T("field.size"), sizeText(size)], ...(problem ? [[null, problem, `${COLOUR.warning}/1.00`]] : [])],
         truncate: true,
         actions: [[T("popup.apply"), () => applyCandidate(c.key, kind), !coreOf(v, kind) || isApplied(v, kind, c.key) || !!c.greyed || !!c.previewOnly || !!c.pending || busy, "apply", c.previewOnly ? T("model.unfit") : c.beyondFit ? T("model.beyondFit") : null],
-          // the costume swap the game files hold, built under an older costume rule: applied again
-          ...(c.kind !== "mod" && swapOutdated(v, kind, c.key) ? [[T("act.update"), () => applyCandidate(c.key, kind, { again: true }), busy]] : []),
           [T(platform === "mac" ? "open.mac" : "open.win"), () => reveal(file)],
           ...(c.kind === "mod" ? [[T("compatibility.check"), async () => {
             let rebuilt = false;

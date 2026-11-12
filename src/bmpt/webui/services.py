@@ -904,6 +904,20 @@ class Services:
             self.check_classic()
             return self.submit("mods.restore", run, writes="game", library=library)
 
+    def submit_refresh_costumes(self) -> str:
+        """``mods.refreshCostumes``: at the start, the costume builds of an older costume rule built again
+        (``refresh_costumes``), on the current install; with a classic window open the game files are left for the next
+        start."""
+        library = self.library
+        pin = self._current_pin(library)
+
+        def run(log: Any, progress: Any) -> Any:
+            self._check_pin(library, pin)
+            return library.refresh_costumes(pin, log=log, progress=progress, write_game=not self.classic_open())
+
+        with self.classic.starting():
+            return self.submit("mods.refreshCostumes", run, writes="game", library=library)
+
     def submit_apply(self, variant: str, source: str, kind: str = "spr") -> str:
         """``actions.apply``: one entry of the current install, pinned at submit. ``classic_open`` only when it would
         write a game file (an apply while mods are off only changes the configuration)."""

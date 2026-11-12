@@ -1296,7 +1296,8 @@ stops the server (the page shows Closed); with `--serve` it gives `native_unavai
 | `mods.entries` | the last scan's entries (`{install, core, variant, names, kind, source, configured, state, overwritten, fixed, size, files, dismissed}`), updated by every writer job's result until the next scan; empty without scan consent |
 | `mods.adopt {entries}` | job id (`library.adopt`): Add to Library for `[{install, core}]`, allowed while the game runs and while a classic window is open; `not_enough_space` |
 | `mods.impact {ids?, force?}` | reader job id: without `ids`, the current install's game update impact (`update_impact`: `{due, install, version, previous, mods: [{id, label, target, kind, core, impact, changes, configured}], counts}`, `mods` only those not `unchanged` or `unknown`; `force`: classified even when the version was seen, Settings' Game Update Impact); with `ids`, `{mods: [{id, impact}]}` for those mods now |
-| `mods.updateDue` | `{due, install, version, previous}`: whether the start asks to check the mods against a game update (`update_due`: the version file and the configuration only; a first start or no mod records the version and asks nothing) |
+| `mods.updateDue` | `{due, outdated, install, version, previous}`: whether the start asks to check the mods against a game update (`update_due`: the version file and the configuration only; a first start or no mod records the version and asks nothing); `outdated`: what the App built from a costume under an older costume rule, built again first (`mods.refreshCostumes`) |
+| `mods.refreshCostumes` | job id (`mods.refreshCostumes`, a game writer): at the start, the Optimize Physics copies and the costume swaps in the game files built under an older `COSTUME_RULE` built again without asking (`refresh_costumes`: `{done, kept, left}`); a copy no physics rule improves any more, or whose build fails, is kept as it is (`costume_kept`); a build the game files hold that cannot be written now (game running, untested build, mods off, a classic window open) is left for the next start |
 | `mods.impactSeen {install, version}` | `{}`: the impact summary of that resource version was shown |
 | `mods.confirmUntested {confirm}` | `{}`: the writes an `untested_build` refusal named are confirmed (its `params.confirm`); the page makes the refused call again |
 | `mods.restoreDrift {entries}` | job id (`mods.restore`): Apply Mod Configuration; `classic_open` at submit |
@@ -2593,6 +2594,10 @@ overwritten entry need none (the detail screen judges its files cheaply).
   the toggle, with the first toggle's explanation), and Later (also the close button, the backdrop and Escape); Don't
   Ask Again dismisses the cards not added (`mods.dismiss untracked`). Damaged entries are listed apart, dim and never
   ticked, their Details giving the repair lines.
+- **Costume builds of an older rule** (`update-impact.js gate`, before the first screen and before Game Updated): what
+  the App built from a costume under an older `COSTUME_RULE` (`mods.updateDue`'s `outdated`) is built again under the
+  loading screen with the plain writer progress (`mods.refreshCostumes`); nothing is asked, listed or told, a failure
+  included.
 - **Game Updated** (`update-impact.js gate`, before the first screen; also after `config.changed`): once the current
   install's resource version differs from the last one seen and the library has mods (`mods.updateDue`; a first start
   or a newly chosen folder records the version and asks nothing), "Check your mods against this update?" with Later
