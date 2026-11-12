@@ -41,7 +41,7 @@ def test_two_requests_share_one_export_without_cached_bytes(exporting, monkeypat
     builds = []
     data = b"glTF shared bytes"
 
-    def export(graph, bundles, core):
+    def export(graph, bundles, core, **_):
         builds.append(core)
         graph.loaded.append(str(prefab))
         entered.set()
@@ -73,7 +73,7 @@ def test_failure_is_shared_and_next_request_exports_again(exporting, monkeypatch
     builds = []
     failure = ValueError("model export failed")
 
-    def export(graph, bundles, core):
+    def export(graph, bundles, core, **_):
         builds.append(core)
         graph.loaded.append(str(prefab))
         if len(builds) == 1:

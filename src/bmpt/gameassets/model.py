@@ -4,8 +4,9 @@ The prefabs are in the bundle family ``character-<dev>-_mxload-*``; their meshes
 in other bundles and are reached through external CAB references. :class:`BundleGraph` loads only the bundles the
 used objects point into, by a CAB -> bundle index. :func:`export_chibi` walks one prefab and writes the skinned
 meshes, the skeleton, the textures as PNG (with the game's samplers and colour spaces), the game's material constants
-and render states (material extras), the halo follower and the mouth receiver (root extras) and the clips, decoded
-from Unity's streamed, dense and constant curves, with the renderers they switch on and off (animation extras).
+and render states (material extras), the halo follower and the mouth receiver (root extras), the halo's particle
+systems (root extras, :meth:`_Exporter.halo_fx`) and the clips, decoded from Unity's streamed, dense and constant
+curves, with the renderers they switch on and off (animation extras).
 
 Unity is left-handed (+Z forward), glTF right-handed: positions, rotations and bind matrices are mirrored on X.
 Nothing is written to disk.
@@ -30,6 +31,7 @@ from UnityPy.helpers.MeshHelper import MeshHandler
 from UnityPy.helpers.PackedBitVector import reshape, unpack_floats, unpack_ints
 
 from ..texture_guard import texture_image
+from . import particles
 from .discovery import cab_names, own_bundle
 from .errors import AssetNotFound
 from .unity import open_bundle
@@ -846,6 +848,10 @@ class _Exporter:
         self.disabled: dict[int, tuple[int, Any, Any]] = {}
         self.shown: set[int] = set()                     # nodes outside inactive and effect subtrees
         self.follower = self.mouth = None
+        # every GameObject as particles.build reads a prefab walk (lobby.read_prefab nodes), for the halo's particles
+        self.fx_nodes: list[dict[str, Any]] = []
+        self.go_of_node: dict[int, int] = {}  # node -> its GameObject's path id
+        self.halo_effects: dict[str, Any] | None = None
         self.animancer = None  # a field prefab's FieldAnimancerController: its own clip list
         self.textures: dict[tuple[str, int], int] = {}
         self.materials: dict[tuple[str, int], int] = {}
@@ -890,6 +896,15 @@ class _Exporter:
         else:
             self.nodes[parent].setdefault("children", []).append(index)
         here = active and bool(go["m_IsActive"])
+        fx = [(obj.type.name, obj.path_id, g.tree(obj)) for obj in components
+              if obj.type.name in ("ParticleSystem", "ParticleSystemRenderer")]
+        local3 = particles.trs(t)
+        self.go_of_node[index] = go_obj.path_id
+        self.fx_nodes.append({
+            "go": go_obj.path_id, "parent": self.go_of_node.get(parent) if parent is not None else None,
+            "name": go["m_Name"], "path": path, "active": here, "own": bool(go["m_IsActive"]), "all": fx,
+            "first": {cls: c for cls, _, c in reversed(fx)}, "pids": {cls: pid for cls, pid, _ in reversed(fx)},
+            "t": t, "m3": local3, "local3": local3, "node": index})
         effect = any(obj.type.name in ("ParticleSystem", "Camera", "Light") for obj in components)
         shown = shown and here and not effect
         if shown:
@@ -1094,11 +1109,48 @@ class _Exporter:
                 "clampMin": [-hi["x"], lo["y"], lo["z"]], "clampMax": [-lo["x"], hi["y"], hi["z"]],
                 "positionPower": tree["FollowPositionPower"], "rotationPower": tree["FollowRotationPower"],
             }
+        if self.halo_effects:
+            extras["haloFx"] = self.halo_effects
         if self.mouth:
             _, tree = self.mouth
             extras["mouth"] = {"materialIndex": tree.get("MouthMaterialIndex"),
                                "defaultOffset": [tree["MouthDefaultUV"]["x"], tree["MouthDefaultUV"]["y"]]}
         return extras
+
+    def halo_fx(self, resolver: Callable[[Mapping[int, Any]], Callable[[str, int, dict], Any]]) -> None:
+        """The particle systems below the halo (the FxFollower's GameObject), as particles.build reads them for the
+        lobbies' player, for the viewer to simulate and draw where their nodes are (Tsurugi's drops, Mika's stars and
+        rings): each system names its glTF node ("node") instead of a place in a lobby, and each texture its glTF
+        texture ("texture"). resolver(objects of the prefab's file by path id) reads the materials and meshes the
+        renderers point at (service._FxResolver). Effects elsewhere in the prefab (an EX skill's, a pickup motion's)
+        are left out, as the viewer never plays them."""
+        if not self.follower:
+            return
+        top = self.path_of[self.follower[0]]
+        nodes = [n for n in self.fx_nodes if top and (n["path"] == top or n["path"].startswith(top + "/"))]
+        if not any("ParticleSystem" in n["first"] for n in nodes):
+            return
+        nodes = [{**n, "parent": None} if i == 0 else n for i, n in enumerate(nodes)]
+        owner = self.follower[1].assets_file
+        found = particles.build(nodes, lambda go: None, lambda skeleton: 1.0, resolver(dict(owner.objects)))
+        if not found["systems"]:
+            return
+        node_of_go = {n["go"]: n["node"] for n in nodes}
+        textures = {}
+        for tex_id, meta in found["textures"].items():
+            cab, _, pid = tex_id.rpartition("_")
+            obj = self.g.objects.get((cab, int(pid))) if pid.lstrip("-").isdigit() else None
+            if obj is None or obj.type.name != "Texture2D":
+                continue
+            try:
+                textures[tex_id] = {**meta, "texture": self.texture(obj)}
+            except Exception:  # an unreadable texture: the systems that sample it are not drawn
+                logger.debug("Cannot read halo particle texture %s", tex_id, exc_info=True)
+        # placed by their nodes, live: the lobby's places (anchor, rel, static, z) do not apply
+        systems = [{**{k: v for k, v in s.items() if k not in ("anchor", "rel", "static", "z", "_go")},
+                    "node": node_of_go[s["_go"]]} for s in found["systems"]]
+        self.halo_effects = {"systems": systems, "materials": found["materials"], "textures": textures,
+                             "meshes": found["meshes"]}
 
     # clips
     def controller_clips(self, prefabs: Mapping[str, Any]) -> list[Any]:
@@ -1258,20 +1310,24 @@ class _Exporter:
 
 
 def export_chibi(graph: BundleGraph, bundles: Iterable[Path], dev: str, *, prefab: str = "echelon",
-                 clips: Iterable[str] = DEFAULT_CLIPS, story: Iterable[Path] = ()) -> bytes:
+                 clips: Iterable[str] = DEFAULT_CLIPS, story: Iterable[Path] = (),
+                 fx: Callable[[Mapping[int, Any]], Callable[[str, int, dict], Any]] | None = None) -> bytes:
     """Export one chibi to GLB bytes. ``bundles`` are the prefab bundles of ``dev``; the prefab is the Echelon
     (formation) one where there is one, else the battle, cafe or strategy one, else a field-mode player or NPC (an
     event or story variant with no battle model), played with the clips its FieldAnimancerController lists, else a
     model of its own dependency bundles (:func:`asset_root`; ``bundles`` are those bundles), played with an idle among
     their clips that moves it, if any; else with its own clips of the story cutscenes in ``story`` (bundles holding
     clips named after it, ``<dev>_...``, as Story_1, Story_2, ...), so it never stands in its bind pose where the game
-    moves it (Ayame's story forms)."""
+    moves it (Ayame's story forms). ``fx`` reads the halo's particle materials and meshes
+    (:meth:`_Exporter.halo_fx`); without it the halo's particles are left out."""
     bundles = list(bundles)
     root, name, kind = model_root(graph, bundles, dev, prefab)
     exporter = _Exporter(graph, dev)
     exporter.visit(root, None, "", True)
     exporter.set_aside_ex_only()
     exporter.meshes()
+    if fx is not None:
+        exporter.halo_fx(fx)
     exporter.glb.json["extras"] = {**exporter.extras(name), **({"source": kind} if kind in ("npc", "asset") else {})}
     if exporter.animancer is not None:
         # a field prefab lists its clips itself; its bundle holds other students' prefabs and controllers

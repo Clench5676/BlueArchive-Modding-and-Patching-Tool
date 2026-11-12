@@ -668,7 +668,7 @@ def test_model_glb_exports_again_when_a_bundle_it_read_changes(tmp_path, monkeyp
 def test_model_glb_cache_hit_does_not_wait_for_export_lock(tmp_path, monkeypatch):
     prefab = "character-ch0242-_mxload-2024-11-18_assets_all_1.bundle"
     game, resources = _game(tmp_path, prefab)
-    monkeypatch.setattr(model, "export_chibi", lambda *args: b"glTF cached")
+    monkeypatch.setattr(model, "export_chibi", lambda *args, **_: b"glTF cached")
     assert game.model_glb("ch0242") == b"glTF cached"
 
     class UnrelatedExport:
@@ -696,7 +696,7 @@ def test_model_glb_waiting_requests_reuse_the_completed_export(tmp_path, monkeyp
             waiting.set()
         return value
 
-    def export(*args):
+    def export(*args, **_):
         calls.append(1)
         started.set()
         assert release.wait(5)
@@ -724,7 +724,7 @@ def test_model_glb_cache_detects_mtime_preserving_replacement(tmp_path, monkeypa
     game, resources = _game(tmp_path, prefab, dependency)
     calls = []
 
-    def export(graph, bundles, dev):
+    def export(graph, bundles, dev, **_):
         graph.loaded.append(str(resources / dependency))
         calls.append(dev)
         return b"glTF" + bytes(len(calls))
@@ -815,6 +815,43 @@ def test_catalog_variant_model_mapping():
 # --- a local install (read only) ---
 
 @pytest.mark.skipif(not GAME_DIR.is_dir(), reason="No local game install")
+def test_real_halo_particles(tmp_path):
+    """A halo made of particles (Tsurugi's drops; Mika's and her swimsuit's stars, drops and rings) comes with
+    the model, each system on its node below the halo with a material the viewer ports and its textures as glTF
+    textures; effects elsewhere (Mika's pickup motion) and halos without particles bring none."""
+    game = GameAssets(get_search_dirs(GAME_DIR), AssetCache(root=tmp_path / "cache", allowed=True))
+    want = {"tsurugi_original": ["FX_blood"],
+            "ch0069": ["FX_blood (1)", "FX_blood (5)", "FX_blood (2)", "trail1", "trail2", "cross_star", "particle",
+                       "particle_world"]}
+    want["ch0294"] = want["ch0069"]
+    for core, names in want.items():
+        doc = _strict(game.model_glb(core))
+        fx = doc["extras"]["haloFx"]
+        assert [s["name"] for s in fx["systems"]] == names, core
+        follower = doc["extras"]["haloFollower"]["node"]
+
+        def below(node, top=follower):
+            parents = {c: i for i, n in enumerate(doc["nodes"]) for c in n.get("children", [])}
+            while node is not None and node != top:
+                node = parents.get(node)
+            return node == top
+        for s in fx["systems"]:
+            assert doc["nodes"][s["node"]]["name"] == s["name"] and below(s["node"])
+            assert doc["nodes"][s["node"]]["extras"]["hidden"]  # an effect node: no renderer of the model
+            assert not {"anchor", "rel", "static", "_go"} & set(s)
+            mat = fx["materials"][s["material"]]
+            assert mat["program"] in ("step", "mask")
+            for tex in mat["tex"].values():
+                if "id" in tex:
+                    assert doc["textures"][fx["textures"][tex["id"]]["texture"]]["name"] == tex["name"]
+        if core != "tsurugi_original":  # the rings: mesh particles in the character variant of the mask shader
+            ring = next(s for s in fx["systems"] if s["name"] == "trail1")
+            assert ring["renderer"]["mode"] == 4 and ring["renderer"]["mesh"] in fx["meshes"]
+            assert fx["materials"][ring["material"]]["shader"] == "DSFX/FX_SHADER_AlphaBlend_Add_Mask_0_MXChar"
+    assert "haloFx" not in _strict(game.model_glb("hoshino_original"))["extras"]
+
+
+@pytest.mark.skipif(not GAME_DIR.is_dir(), reason="No local game install")
 def test_real_chibi_exports(tmp_path):
     game = GameAssets(get_search_dirs(GAME_DIR), AssetCache(root=tmp_path / "cache", allowed=True))
     assert {"hoshino_original", "ch0242"} <= game.model_cores()
@@ -863,7 +900,7 @@ def test_model_preview_overrides_the_prefab_root_as_well_as_dependencies(tmp_pat
     upload.parent.mkdir()
     upload.write_bytes(_unityfs(['CAB-mod']))
     calls = []
-    def export(graph, bundles, dev):
+    def export(graph, bundles, dev, **_):
         calls.append((list(bundles), graph.index['cab-mod']))
         return b'glTF preview'
     monkeypatch.setattr(model, 'export_chibi', export)
@@ -885,7 +922,7 @@ def test_model_preview_reads_the_files_outside_its_source_by_its_rule(tmp_path, 
     (kept / prefab).write_bytes(b'')
     seen = []
 
-    def export(graph, bundles, dev):
+    def export(graph, bundles, dev, **_):
         seen.append(([str(path) for path in bundles], graph.resolver({'cab-tex'}, None)))
         return b'glTF' + bytes([len(seen)])
 
