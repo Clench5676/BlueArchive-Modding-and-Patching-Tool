@@ -500,9 +500,9 @@ def test_official_costume_takes_its_own_materials_on_a_body_drawn_from_two_mater
                                          "Hihumi_Original_EyeMouth", "Hihumi_Original_Hair", "Hihumi_Original_Body"]
 
 
-def _cross_build(view, tmp_path, source):
-    """Azusa's slot carrying ``source``'s costume as another student's (with its halo), saved with
-    the CRC fix: the written files, the CAB index over them, the official graph and the read-back graph."""
+def _cross_build(view, tmp_path, source, target="azusa_original"):
+    """``target``'s slot (Azusa's) carrying ``source``'s costume as another student's (with its halo), saved
+    with the CRC fix: the written files, the CAB index over them, the official graph and the read-back graph."""
     from ba_modding_toolkit.bundle import Bundle
     from ba_modding_toolkit.models import SaveOptions
     from ba_modding_toolkit.naming import parse_filename
@@ -511,9 +511,9 @@ def _cross_build(view, tmp_path, source):
     from bmpt.gameassets.model import BundleGraph
 
     files, index = view
-    slot = _slot(files, "azusa_original")
-    sources = [p for p in files if re.match(rf"character-{source}-_mxload", p.name)]
-    result = ma.adapt(index=index, resolver=None, target_files=slot, target_dev="azusa_original", source_files=sources,
+    slot = _slot(files, target)
+    sources = [p for p in files if re.match(rf"(character-{source}-_mxload|assets-_mx-npcs-{source}-)", p.name)]
+    result = ma.adapt(index=index, resolver=None, target_files=slot, target_dev=target, source_files=sources,
                       source_dev=source, open_writable=Bundle.load, halo=True)
     out = tmp_path / "out"
     out.mkdir()
@@ -667,6 +667,107 @@ def test_official_cross_costume_without_a_halo_hides_the_slots(view, tmp_path):
     data = export_chibi(graph, prefab_files, "azusa_original")
     doc = json.loads(data[20:20 + struct.unpack_from("<I", data, 12)[0]])
     assert before.mesh.peek_name() not in {m["name"] for m in doc["meshes"]} and doc["animations"]
+
+
+@official
+def test_official_cross_costume_carries_a_skinned_halo(view, tmp_path):
+    """Miyu (ch0145) <- Ayame (Twilight)'s NPC model (np0229), whose halo has no follower: one halo-shaded
+    renderer skinned to bone_halo below the head. Its mesh, material and texture are new objects in the slot's files;
+    Miyu's halo renderer draws it, unskinned, where Ayame's bone draws it against the head (the follower moves the
+    followed node there); Miyu's own halo mesh is gone from the export."""
+    from bmpt.gameassets.model import _key, _prefabs, export_chibi, model_root, read_mesh
+
+    slot, sources, written, adapted, official, graph = _cross_build(view, tmp_path, "np0229", "ch0145")
+    new = _official_objects_kept(slot, written, {"SkinnedMeshRenderer", "MeshRenderer", "MeshFilter", "AssetBundle",
+                                                 "Transform", "MonoBehaviour"})
+    s = ma.Skeleton.of(official, model_root(official, sources, "np0229")[0])
+    source = ma.halo_of(s)
+    assert source.shape == "skinned" and s.nodes[source.bone].name == "bone_halo"
+    s_world = s.world()
+    bind = np.array([[official.tree(source.mesh)["m_BindPose"][0][f"e{r}{c}"] for c in range(4)] for r in range(4)])
+    want = np.linalg.inv(s_world[source.head]) @ s_world[source.bone] @ bind  # the mesh against the head
+    o_prefabs = _prefabs(official, [p for p in slot if p.name.startswith("character-")])
+    before = ma.halo_of(ma.Skeleton.of(official, o_prefabs[ma.choose_prefab(o_prefabs, "ch0145")].deref()))
+    assert before.shape == "single"
+    prefab_files = [p for p in written if p.name.startswith("character-")]
+    checked = 0
+    for name, pointer in _prefabs(graph, prefab_files).items():
+        t = ma.Skeleton.of(graph, pointer.deref())
+        halo = ma.halo_of(t)
+        if halo.shape != "single":
+            continue
+        checked += 1
+        assert new.get(_key(halo.mesh)) == "Mesh" and halo.mesh.peek_name() == source.mesh.peek_name(), name
+        got, mesh = read_mesh(halo.mesh.read()), read_mesh(source.mesh.read())
+        assert np.allclose(got.vertices, mesh.vertices) and got.triangles == mesh.triangles
+        assert [new.get(_key(m)) for m in halo.materials] == ["Material"]
+        # the follower keeps the followed node at the bone's place against the head: the mesh lands where Ayame's is
+        f = graph.tree(halo.follower)
+        target = t.by_transform[_key(graph.deref(halo.follower, f["FollowTarget"]))]
+        assert t.nodes[target].name == ma.HEAD
+        world = t.world()
+        p, q = f["TargetRelativePosition"], f["TargetRelativeRotation"]
+        head = world[target]
+        turn = head[:3, :3] / np.linalg.norm(head[:3, :3], axis=0)
+        followed = np.eye(4)
+        followed[:3, :3] = turn @ ma.trs((0, 0, 0), [q[k] for k in "xyzw"], (1, 1, 1))[:3, :3] * np.linalg.norm(
+            world[halo.root][:3, :3], axis=0)
+        followed[:3, 3] = (head @ [p["x"], p["y"], p["z"], 1])[:3]
+        drawn = followed @ np.linalg.inv(world[halo.root]) @ world[halo.node]
+        head_s = np.linalg.norm(head[:3, :3], axis=0)
+        source_head = np.linalg.norm(s_world[source.head][:3, :3], axis=0)
+        assert np.allclose(head_s, source_head, rtol=1e-3)  # same head scale, so the placements compare directly
+        assert np.allclose(np.linalg.inv(head) @ drawn, want, atol=1e-4), name
+    assert checked
+    data = export_chibi(graph, prefab_files, "ch0145")
+    doc = json.loads(data[20:20 + struct.unpack_from("<I", data, 12)[0]])
+    names = {m["name"] for m in doc["meshes"]}
+    assert source.mesh.peek_name() in names and before.mesh.peek_name() not in names and doc["animations"]
+
+
+@official
+@pytest.mark.parametrize("source,shape", [
+    ("binah_original", "halo without a follower"),  # a boss: no head bone
+    ("chesed_original", "halo without a follower"),  # a boss: skinned to two bones of the body
+    ("tsurugi_original", "MeshRenderer, ParticleSystem, ParticleSystemRenderer"),  # particles: not carried yet
+])
+def test_official_a_halo_that_cannot_be_carried_hides_the_slots(view, source, shape):
+    """After a swap the halo is the source's or none, never the slot's own. A source halo that cannot be
+    carried (a boss's, particles) hides Azusa's: the change carries nothing and hides her halo's node."""
+    from bmpt.gameassets.model import BundleGraph, _prefabs, model_root
+
+    files, index = view
+    sources = [p for p in files if re.match(rf"character-{source}-_mxload", p.name)]
+    slot = [p for p in _slot(files, "azusa_original") if p.name.startswith("character-")]
+    with BundleGraph(index) as graph:
+        s = ma.Skeleton.of(graph, model_root(graph, sources, source)[0])
+        prefabs = _prefabs(graph, slot)
+        t = ma.Skeleton.of(graph, prefabs[ma.choose_prefab(prefabs, "azusa_original")].deref())
+        assert ma.halo_of(s).shape == shape
+        carried = []
+        change = ma._halo_change(t, s, carried.append, carried.append, (source, "azusa_original"))
+    assert change.new_mesh is None and not carried and change.hide == ["HaloRoot/Azusa_Original_Halo"]
+
+
+@official
+def test_official_a_particle_halo_hides_the_slots_in_the_build(view, tmp_path):
+    """Azusa <- Tsurugi, whose halo has particles: Azusa's halo renderer is turned off and draws no mesh in
+    every prefab of the slot, and the export has no halo of hers."""
+    from bmpt.gameassets.model import _prefabs, export_chibi
+
+    slot, sources, written, adapted, official, graph = _cross_build(view, tmp_path, "tsurugi_original")
+    prefab_files = [p for p in written if p.name.startswith("character-")]
+    for name, pointer in _prefabs(graph, prefab_files).items():
+        if "azusa_original" not in name:
+            continue
+        t = ma.Skeleton.of(graph, pointer.deref())
+        node = t.nodes[t.first("Azusa_Original_Halo")]
+        renderer, filt = graph.component(node.go, "MeshRenderer"), graph.component(node.go, "MeshFilter")
+        assert not graph.tree(renderer)["m_Enabled"] and not graph.tree(filt)["m_Mesh"]["m_PathID"], name
+    data = export_chibi(graph, prefab_files, "azusa_original")
+    doc = json.loads(data[20:20 + struct.unpack_from("<I", data, 12)[0]])
+    names = {m["name"] for m in doc["meshes"]}
+    assert not any(n.startswith("Azusa_Original_Halo") for n in names) and doc["animations"]
 
 
 def _locks_free() -> list[str]:
