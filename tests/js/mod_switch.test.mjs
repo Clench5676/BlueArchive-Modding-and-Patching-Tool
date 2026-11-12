@@ -1477,10 +1477,10 @@ test("an update's impact as a list: only the mods to update, each a card with it
   const listed = Impact.heldOf({ due: true, mods });
   assert.deepEqual(listed.map((m) => m.id), ["1"]);
   assert.equal(Impact.TABS, undefined, "no segments");
-  // a card: the student's name, its kind and Applied as chips, the Files Changed badge, its own picture
+  // a card: the student's name, its kind and Applied as chips, the Outdated badge, its own picture
   const held = Impact.card(listed[0], nameOf);
   assert.deepEqual([held.key, held.label, held.full, held.chips, held.badge.text],
-    ["1", "Hoshino", "Bunny Hoshino", ["Portrait", "Applied", "Official"], "Files Changed"]);
+    ["1", "Hoshino", "Bunny Hoshino", ["Portrait", "Applied", "Official"], "Outdated"]);
   assert.deepEqual(Impact.card({ ...listed[0], configured: false, changes: {} }, nameOf).chips, ["Portrait"], "no changes known: no chip");
   assert.ok(held.thumb && typeof held.big === "function");
   // a generic mod's card names the mod itself, never its set's key
@@ -1679,7 +1679,7 @@ test("the drift prompt asks the impacts of the mods its entries are configured w
   const held = Impact.heldKeys(entries, [{ id: "1", impact: "rig_changed" }, { id: "2", impact: "rebuilt" }]);
   assert.deepEqual([...held], ["/a|a_spr", "/b|a_spr"]);
   const items = P.heldCards([{ key: "/a|a_spr" }, { key: "/a|b_spr" }, { key: "/b|a_spr", disabled: true }], held);
-  assert.equal(items[0].badge.text, "Files Changed");
+  assert.equal(items[0].badge.text, "Outdated");
   // the badge keeps its whole word on the generic list's card (250 wide: popup.js listCard, 26 down to 20, 70 kept)
   const NGUI = await import("../../src/bmpt/web/js/ngui.js");
   {
@@ -1689,6 +1689,22 @@ test("the drift prompt asks the impacts of the mods its entries are configured w
         const bf = NGUI.fitText(ui.mods.heldBadge, 26, 20, 250 - 70, 1);
         assert.equal(bf.text, ui.mods.heldBadge, `${lang}: whole`);
         assert.ok(NGUI.glyphWidth(bf.text, bf.fs) <= 250 - 70, `${lang}: inside the card`);
+        // with the tick box in the corner (the update list): whole, and short of the box on every kind's card
+        const Pop = await import("../../src/bmpt/web/js/popup.js");
+        const { switchGrid } = await import("../../src/bmpt/web/js/switch-layout.js");
+        const { TAN10 } = await import("../../src/bmpt/web/js/util.js");
+        for (const kind of [null, "spr", "lobby", "model"]) {
+          const card = switchGrid(kind, Pop.listCardBox(Pop.listLayout(false, kind)).w).card;
+          const room = Pop.badgeRoom(card);
+          const fit = NGUI.fitText(ui.mods.heldBadge, 26, 20, room - 24, 1);
+          assert.equal(fit.text, ui.mods.heldBadge, `${lang} ${kind}: whole beside the tick box`);
+          assert.ok(NGUI.glyphWidth(fit.text, fit.fs) + 24 <= room, `${lang} ${kind}: short of the tick box`);
+          // drawn: the badge's right edge, held at the box's height along the slant, stops BADGE_GAP short of the box
+          const tree = Pop.listCard({ key: "k", label: "K", badge: { text: ui.mods.heldBadge, color: "#ff5a00", ink: "#ffffff" } }, 0, 0, false, card, kind, true);
+          const using = tree.children.find((n) => n.name === "Using"), box = tree.children.find((n) => n.name === "Tick");
+          const right = using.pos[0] + using.widgets[0].w_ / 2 + (box.pos[1] - using.pos[1]) * TAN10;
+          assert.ok(right + Pop.BADGE_GAP <= box.pos[0] - Pop.TICK_BOX.w / 2 + 1e-9, `${lang} ${kind}: drawn short of the tick box`);
+        }
       }
     } finally { I18n.setStrings("en-US", strings); }
   }

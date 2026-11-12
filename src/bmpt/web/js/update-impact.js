@@ -5,7 +5,7 @@
 // and the file check allowed the game files are scanned and the applied entries the update overwrote with official
 // files, which need no repair, are applied again (mods.restoreDrift). Once the first screen is in, the summary shows
 // the mods to update as a list (check; the drift prompt's popup), only when there are any: the held mods (ticked,
-// with the Files Changed badge; Update and Apply for the ticked ones); what the check handled by itself (entries applied
+// with the Outdated badge; Update and Apply for the ticked ones); what the check handled by itself (entries applied
 // again, mods rebuilt, with new parts or gone) is never listed. A card's details hold Go To, the update's preview (the
 // review, whose Accept is Update and Apply) and Update and Apply. Closing it records the version as seen
 // (mods.impactSeen). Settings' View Mods to Update opens the list from the last check without checking (view,
@@ -207,7 +207,7 @@ export const heldOf = (result) => (result?.mods || []).filter((m) => m.impact ==
 export const modKey = (mod) => mod?.id || `${mod?.core || ""}`;
 
 // card(mod, nameOf): a mod's card: the student's name, its own picture (none for a 3D model), the kind and Applied
-// as chips, the Files Changed badge
+// as chips, the Outdated badge
 export function card(mod, nameOf = (e) => e?.variant || e?.core || "") {
   const entry = { variant: mod.target, core: mod.core, kind: mod.kind };
   const base = mod.kind === "model" || mod.kind === "other" || !mod.id ? null : spineBase("mod", mod.id);

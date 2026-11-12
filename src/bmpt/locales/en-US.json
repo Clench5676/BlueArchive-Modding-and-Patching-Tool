@@ -300,7 +300,7 @@
 			"stillOverwritten": "Still overwritten: {n}",
 			"held": "Official .skel or .atlas file changed, not applied: {n}",
 			"heldTitle": "Mods Not Applied: Official Files Changed",
-			"heldBadge": "Files Changed",
+			"heldBadge": "Outdated",
 			"impact": {
 				"title": "Mods to Update",
 				"sep": ", ",

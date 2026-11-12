@@ -2617,7 +2617,7 @@ overwritten entry need none (the detail screen judges its files cheaply).
   (`mods.restoreDrift`). Then the first screen, and the summary with the start popups.
 - **Mods to Update** (`update-impact.js check` and `view`, the drift prompt's list popup in `#prompt`): only the mods
   to update (`heldOf`: a mod whose rig changed, unless a repaired copy took its place), ticked at first, each with the
-  Files Changed badge; no segments, the band over the paper slim (`listPopup` `slimBand`), and with none "No mods to
+  Outdated badge; no segments, the band over the paper slim (`listPopup` `slimBand`), and with none "No mods to
   update" in the middle of its paper (`listPopup` `empty`). What the check handled by itself (entries applied again,
   mods rebuilt, with new parts or gone) is never listed: after the start's check the list opens only with mods to
   update, otherwise the version is recorded as seen at once and nothing is shown. A card names the student, its
@@ -2659,7 +2659,7 @@ overwritten entry need none (the detail screen judges its files cheaply).
 - **Mods Back to Official** (while mods are on: with mods off the game is meant to be official, so nothing was put
   back): the `reset` entries (a Steam check or a repair; a game update's `updated` ones are reconciled above),
   every card ticked but those whose configured mod's official .skel or .atlas file a game update changed
-  (`mods.impact {ids}`): those carry the Files Changed badge and start
+  (`mods.impact {ids}`): those carry the Outdated badge and start
   unticked, so Apply Mod Configuration writes them only when ticked; with the install
   chip; no hint over the cards (only "Still overwritten: n" when there are such entries), the band over the paper as
   slim as the count, the cards from the paper's left edge and a portrait's details upright beside its stacked fields
