@@ -8,7 +8,10 @@
 // Files Changed badge; Fix and Apply for the ticked ones), the entries applied again, the other affected mods; a
 // card's details hold Go To and, for a held mod, the repair's preview (the review, whose Accept is Fix and Apply) and
 // Fix and Apply. Closing it records the version as seen (mods.impactSeen); Settings' Game Update Impact runs it again
-// (show). The pure parts are tested in Node (tests/js/mod_switch.test.mjs).
+// (show). What the App built from a costume under an older costume rule (Optimize Physics copies, costume swaps
+// in the game files; impact "outdated") has a segment of its own, Updatable, whose Update builds them again; the start
+// shows the list without the question when they are the only news (mods.updateDue's outdated, once per rule). The pure
+// parts are tested in Node (tests/js/mod_switch.test.mjs).
 import * as Compatibility from "./mod-compatibility.js";
 import * as Loading from "./loading.js";
 import * as Popup from "./popup.js";
@@ -158,12 +161,17 @@ async function run({ force = false, scan = true } = {}) {
 export async function gate() {
   if (busy) return false;
   const due = await rpc("mods.updateDue").catch(() => null);
-  if (!due?.due) return false;
+  if (!due?.due && !due?.outdated) return false;
   busy = true;
   // At the start, the boot watchdog holds from here: the answer is the user's, and the check, a job over every library
   // mod, shows its own progress (a first check after an upgrade fingerprints each mod and can take minutes)
   const release = globalThis.BAMTRecovery?.hold?.();
   try {
+    // outdated costume builds alone (the same game version): nothing to check, the list shows at once
+    if (!due.due) {
+      pending = await run({ scan: false });
+      return true;
+    }
     const answer = await Popup.message({ title: T("mods.impact.gateTitle"), lines: [T("mods.impact.gateAsk")], close: false,
       buttons: [{ label: T("update.later"), value: "later" }, { label: T("mods.impact.gateCheck"), value: "check", primary: true }] });
     if (answer.button !== "check") return false;
@@ -181,23 +189,32 @@ export async function gate() {
 
 // --- the list (the drift prompt's popup; the wireframe of the thread) ---
 
-// the segments over the cards: the held mods, the entries the check applied again, the other affected mods
-export const TABS = ["held", "reapplied", "others"];
+// the segments over the cards: the held mods, the entries the check applied again, the other affected mods, the costume
+// builds of an older costume rule
+export const TABS = ["held", "reapplied", "others", "outdated"];
+// the segments whose cards are ticked for the list's main button (Fix and Apply, Update)
+export const TICKED = ["held", "outdated"];
 const OTHER_KINDS = { rebuilt: "kindRebuilt", new_parts: "kindNewParts", gone: "kindGone" };
 
 // heldOf(result): the held mods the list shows: a mod whose rig changed, unless a repaired copy took its place (it has
 // one and its student is not configured with it)
 export const heldOf = (result) => (result?.mods || []).filter((m) => m.impact === "rig_changed" && !(m.repaired_id && !m.configured));
 
-// tabMods(outcome): the mods each segment lists ({held, reapplied, others})
+// tabMods(outcome): the mods each segment lists ({held, reapplied, others, outdated})
 export function tabMods({ result, reapplied = [] } = {}) {
   const mods = result?.mods || [];
   return { held: heldOf(result), reapplied: reapplied.map(entryMod),
-    others: mods.filter((m) => m.impact in OTHER_KINDS) };
+    others: mods.filter((m) => m.impact in OTHER_KINDS), outdated: mods.filter((m) => m.impact === "outdated") };
 }
 
 // the segments' captions (no counts), as the list's toolbar takes them
-export const tabCaptions = () => ["mods.impact.tabHeld", "mods.impact.tabReapplied", "mods.impact.tabOthers"];
+export const tabCaptions = () => ["mods.impact.tabHeld", "mods.impact.tabReapplied", "mods.impact.tabOthers", "mods.impact.tabOutdated"];
+
+// a card's key: its mod, else (a costume swap in the game files) its core
+export const modKey = (mod) => mod?.id || `${mod?.core || ""}`;
+
+// the costume a swap in the game files carries ("variant:<key>"), "" for a mod
+const costumeOf = (mod) => /^variant:(.+)$/.exec(mod?.source || "")?.[1] || "";
 
 // card(mod, tab, nameOf): a mod's card: the student's name, its own picture (none for a 3D model), the kind and Applied
 // as chips; a held mod with the Files Changed badge, another kind with what happened to it as its badge
@@ -212,7 +229,10 @@ export function card(mod, tab, nameOf = (e) => e?.variant || e?.core || "") {
   // the details name the mod itself (the card names the student), its kind and Applied as chips
   // a generic mod (other) has no student: its own name, never its set's key
   const name = mod.kind === "other" ? mod.label || T("settings.mods.other") : nameOf(entry) || mod.label || mod.core || "";
-  return { key: mod.id || `${mod.core}`, label: name, full: mod.label || name, chips,
+  // a costume swap in the game files is named after the costume it carries
+  const costume = costumeOf(mod);
+  const full = costume ? nameOf({ variant: costume, kind: mod.kind }) || name : mod.label || name;
+  return { key: modKey(mod), label: name, full, chips,
     ...(badge ? { badge } : {}), mod,
     thumb: base ? thumb(base, "card", null, lobby) : null,
     big: base ? () => thumb(base, mod.kind === "spr" ? "portrait" : "bust", null, lobby) : null };
@@ -226,7 +246,8 @@ export function details(mod, tab) {
   const fields = changes ? [[null, changes]] : [];
   const page = !!(mod.id && mod.kind !== "other" && mod.target);
   const actions = [...(page ? [["go", T("add.go")]] : []),
-    ...(tab === "held" ? [["preview", T("mods.impact.preview")], ["fix", T("mods.impact.fix"), "apply"]] : [])];
+    ...(tab === "held" ? [["preview", T("mods.impact.preview")], ["fix", T("mods.impact.fix"), "apply"]] : []),
+    ...(tab === "outdated" ? [["update", T("act.update"), "apply"]] : [])];
   return { title: T(mod.kind === "lobby" ? "info.title.lobby" : mod.kind === "model" ? "info.title.model" : "info.title.portrait"),
     fields, actions };
 }
@@ -240,7 +261,8 @@ function presentList(outcome, nameOf) {
   let current = outcome, tabs = tabMods(current);
   let tab = TABS.findIndex((name) => tabs[name].length);
   if (tab < 0) tab = 0;
-  let selection = new Set(tabs.held.map((m) => m.id)), focus = null, scroll = 0, running = false;
+  const tickable = () => [...tabs.held, ...tabs.outdated].map(modKey);
+  let selection = new Set(tickable()), focus = null, scroll = 0, running = false;
   return new Promise((resolve) => {
     const done = (answer) => {
       if (running) return;
@@ -250,17 +272,17 @@ function presentList(outcome, nameOf) {
       resolve(answer);
     };
     // a repair over the list, then the list as the mods stand: the result read again, the ticks kept where they still apply
-    const work = async (mods, review) => {
+    const work = async (mods, review, run = fix) => {
       if (running || !mods.length) return;
       running = true;
       try {
-        const { partial } = await fix(mods, nameOf, { review });
+        const { partial } = await run(mods, nameOf, { review });
         if (partial.length) await Popup.message({ title: T("mods.impact.title"), ok: T("picker.ok"), plain: true, width: WIDTH,
           lines: [T("mods.impact.partial", { n: partial.length }), ...partial.map((m) => ({ text: modName(m, nameOf), ...ITEM }))] });
         const id = await rpc("mods.impact", { force: true });
         current = { ...current, result: await Loading.task((update) => waitJob(id, update), { label: T("mods.impact.checking") }) };
         tabs = tabMods(current);
-        selection = new Set(tabs.held.map((m) => m.id).filter((id2) => selection.has(id2)));
+        selection = new Set(tickable().filter((key) => selection.has(key)));
       } catch (err) {
         notify(errorText(err.code, err.params), { kind: "error", error: err });
       } finally {
@@ -270,16 +292,16 @@ function presentList(outcome, nameOf) {
     };
     const draw = (keep = 0) => {
       scroll = keep;
-      const name = TABS[tab], held = name === "held";
+      const name = TABS[tab], held = name === "held", ticks = TICKED.includes(name);
       const items = tabs[name].map((mod) => card(mod, name, nameOf));
       if (!items.some((it) => it.key === focus)) focus = items[0]?.key ?? null;
-      const ticked = tabs.held.filter((m) => selection.has(m.id));
+      const ticked = ticks ? tabs[name].filter((m) => selection.has(modKey(m))) : [];
       Popup.listPopup({
         host, title: T("mods.impact.title"), items, selected: focus, focus, keepScroll: keep,
         detailKind: (it) => it.mod?.kind, alignStart: true, empty: T("mods.impact.none"),
         // portraits alone: the portrait switch's frame and tall cards, whose details keep their actions in view
         ...(items.length && items.every((it) => it.mod?.kind === "spr") ? { layoutKind: "spr" } : {}),
-        ...(held ? { tick: { keys: [...selection], onTick: (key, s) => {
+        ...(ticks ? { tick: { keys: [...selection], onTick: (key, s) => {
           selection = selection.has(key) ? new Set([...selection].filter((k) => k !== key)) : new Set([...selection, key]);
           draw(s);
         } } } : {}),
@@ -287,12 +309,15 @@ function presentList(outcome, nameOf) {
         // Fix and Apply without a count, so the S footer's caption keeps to one line; the tick boxes show what it fixes
         buttons: [{ label: T("display.close"), fn: () => done({}) },
           ...(held ? [{ label: T("mods.impact.fix"), primary: true, greyed: !ticked.length,
-            fn: () => work(ticked, false) }] : [])],
+            fn: () => work(ticked, false) }] : []),
+          ...(name === "outdated" ? [{ label: T("act.update"), primary: true, greyed: !ticked.length,
+            fn: () => work(ticked, false, rebuild) }] : [])],
         onClose: () => done({}),
         onSelect: (key, s) => { focus = key; draw(s); },
         details: (it) => {
           const d = details(it.mod, name);
-          const act = { go: () => done({ go: it.mod }), preview: () => work([it.mod], true), fix: () => work([it.mod], false) };
+          const act = { go: () => done({ go: it.mod }), preview: () => work([it.mod], true), fix: () => work([it.mod], false),
+            update: () => work([it.mod], false, rebuild) };
           return { title: d.title, fields: d.fields, actions: d.actions.map(([id, caption, semantic]) => [caption, act[id], false, semantic]) };
         },
       }).catch((err) => { console.error("impact list", err); done({}); });
@@ -361,6 +386,28 @@ async function fix(mods, nameOf, { review = false } = {}) {
     }
   }
   return { fixed, partial };
+}
+
+// rebuild(mods, nameOf): Update of the costume builds of an older costume rule: an Optimize Physics copy is
+// built again in place, then applied again where its student is configured with it; a costume swap in the game files is
+// applied again. Resolves like fix ({fixed, partial}; nothing is partial here).
+async function rebuild(mods, nameOf) {
+  const fixed = [];
+  for (const mod of mods) {
+    const subject = modName({ ...mod, configured: false }, nameOf);
+    try {
+      await Loading.task(async (update) => {
+        if (mod.id) await waitJob(await rpc("actions.update", { mod: mod.id }), update);
+        if (mod.id ? mod.configured : costumeOf(mod)) {
+          await waitJob(await rpc("actions.apply", { variant: mod.target, source: mod.id ? `mod:${mod.id}` : mod.source, kind: mod.kind }), update);
+        }
+      }, { label: T("progress.process", { name: subject }) });
+      fixed.push(mod);
+    } catch (err) {
+      notify(errorText(err.code, err.params), { kind: "error", error: err });
+    }
+  }
+  return { fixed, partial: [] };
 }
 
 // the mods.state entries a game update's rig change holds ({install, core, variant, kind, source, label}) as the

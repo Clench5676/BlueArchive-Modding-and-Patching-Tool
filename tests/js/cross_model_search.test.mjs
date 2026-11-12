@@ -56,6 +56,43 @@ for (const locale of LOCALES) test(`past-limit own cards allow Apply and Optimiz
   }
 });
 
+for (const locale of LOCALES) test(`an applied swap and an Optimize Physics copy of an older costume rule say Updatable (${locale})`, async () => {
+  const ui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8")).webui;
+  const v = { key: "slot", family: "own", model: "slot", configured: { model: "variant:past" },
+    selection: { model: { source: "variant:past", installed: true, outdated: true } } };
+  const fam = { variants: [v, { key: "past", family: "own", model: "past" }] };
+  const copy = { kind: "mod", key: "m:7", id: "7", label: "Copy", mod: { id: "7", outdated: true, optimized_from: "variant:past" } };
+  const cards = [...Sources.candidates(fam, v, "model", { past: "ok" }), copy];
+  const applied = [];
+  let popup;
+  const ctx = vm.createContext({ ...Sources, fam, otherStudents: [], switchThumbnails: {}, switchPopupPage: 1, pageToken: 1,
+    popupKind: "model", popupSeg: 0, pending: "v:past", busy: false, platform: "mac", variant: () => v, modsOn: () => true,
+    candidates: () => cards, lazyThumbnail: () => ({ start: () => null }), candidateLabel: (c) => c.variant?.key || c.label,
+    fullName: (o) => o?.key, originalName: (o) => o.key, modOriginalName: () => "", isSpecial: () => false, gameFile: () => "model.bundle",
+    baseName: (s) => s, sizeText: () => "0", crcOf: () => null, appliedKey: Sources.appliedKey, repairedId: () => "",
+    T: (key) => key.split(".").reduce((o, part) => o?.[part], ui), COLOUR: { success: "green" },
+    optimizeSource: (c) => c.kind === "variant" ? `variant:${c.variant.key}` : c.kind === "self" ? "official" : null, optimizedCopy: () => null,
+    listPopup: async (options) => { popup = options; }, applyCandidate: (key, kind, options) => applied.push([key, options]),
+    runOptimize: () => {}, runUpdate: () => {},
+  });
+  vm.runInContext(functionSource("drawPopup"), ctx);
+  await ctx.drawPopup();
+  const item = (key) => popup.items.find((it) => it.key === key);
+  assert.deepEqual([item("v:past").badge?.text, item("m:7").badge?.text, item("self").badge], [ui.model.outdated, ui.model.outdated, null]);
+  // the applied swap's Update applies it again; Apply stays off (it is applied)
+  const actions = popup.details(item("v:past")).actions;
+  const update = actions.find(([label]) => label === ui.act.update);
+  assert.ok(update && !update[2]);
+  update[1]();
+  assert.equal(JSON.stringify(applied), JSON.stringify([["v:past", { again: true }]]));
+  assert.equal(actions.find(([label]) => label === ui.popup.apply)[2], true);
+  // not outdated: no badge, no Update
+  v.selection.model.outdated = false;
+  await ctx.drawPopup();
+  assert.equal(item("v:past").badge, null);
+  assert.ok(!popup.details(item("v:past")).actions.some(([label]) => label === ui.act.update));
+});
+
 for (const locale of LOCALES) test(`the model search shares picker matching and appends roster-ordered hits (${locale})`, () => {
   const ui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8")).webui;
   const v = { key: "slot", family: "own", model: "slot" };
