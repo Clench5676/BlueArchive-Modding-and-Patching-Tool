@@ -1917,6 +1917,33 @@ def test_historyless_profile_tour_rpc_distinguishes_upgrade_from_first_install(
     assert rpc(app, 'app.tours', launching=True)['result']['automatic']['pages'] == []
 
 
+def test_upgrade_notes_rpc_shows_the_running_versions_notes_once_after_normal_ready(app, services, monkeypatch, tmp_path):
+    from bmpt.webui.api import RELEASE_NOTES_DIR
+    from bmpt.webui.state import UiState
+
+    path = tmp_path / 'notes-profile.json'
+    path.write_text(json.dumps({'consent': True, 'tours': {'highest': '0.7.0-rc.5'}}), encoding='utf-8')
+    services.state = UiState(path)
+    monkeypatch.setattr('ba_modding_toolkit.utils.get_version_info', lambda: {'version': '0.7.0-rc.6'})
+    monkeypatch.setattr(services, 'game_found', lambda: pytest.fail('the notes must not inspect the game'))
+    monkeypatch.setattr(services, 'ready', lambda: None)
+    app.rpc = build_api(services)
+    quiet = {'version': '0.7.0-rc.6', 'notes': '', 'current': '0.7.0-rc.6', 'due': False}
+    assert rpc(app, 'app.upgradeNotes')['result'] == quiet, 'not before app.ready'
+    services.safe_mode = True
+    rpc(app, 'app.ready')
+    assert rpc(app, 'app.upgradeNotes')['result'] == quiet
+    assert 'notes' not in json.loads(path.read_text())['tours']
+    services.safe_mode = False
+    rpc(app, 'app.ready')
+    shown = rpc(app, 'app.upgradeNotes')['result']
+    assert shown == {'version': '0.7.0', 'current': '0.7.0-rc.6', 'due': True,
+                     'notes': (RELEASE_NOTES_DIR / '0.7.0.md').read_text(encoding='utf-8')}
+    assert rpc(app, 'app.upgradeNotesPresented', version='0.7.0-rc.6') == {'result': None}
+    assert rpc(app, 'app.upgradeNotes')['result']['due'] is False
+    assert rpc(app, 'app.upgradeNotesPresented', version=7)['error']['code'] == 'bad_params'
+
+
 @pytest.fixture
 def native_exit(services):
     from bmpt.webui.window_close import CloseCoordinator

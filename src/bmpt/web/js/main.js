@@ -547,8 +547,14 @@ async function firstRun() {
     } }).catch((err) => console.error("update check", err));
   }
   await popups;
-  Tours.start({ info, ready: sessionReady, blocked: () => Loading.busy() || ModSwitch.current()?.busy || Prompts.isBusy() || Impact.isBusy()
-    || !!document.getElementById("bamt-recovery") }).catch((err) => console.warn("feature tour", err));
+  const blocked = () => Loading.busy() || ModSwitch.current()?.busy || Prompts.isBusy() || Impact.isBusy()
+    || !!document.getElementById("bamt-recovery");
+  // after an upgrade, the new version's release notes, then its feature tour
+  if (!info.safeMode) {
+    await sessionReady;
+    await Update.afterUpgrade({ blocked }).catch((err) => console.warn("release notes after an upgrade", err));
+  }
+  Tours.start({ info, ready: sessionReady, blocked }).catch((err) => console.warn("feature tour", err));
 }
 
 async function boot() {

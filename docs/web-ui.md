@@ -1326,6 +1326,8 @@ stops the server (the page shows Closed); with `--serve` it gives `native_unavai
 | `app.checkUpdate` | the newest release above this version, or `null`; `notes` is the literal GitHub body for this exact tag and `page` its canonical release page; `downloaded` and `file` (path or `null`) report a verified file still present for that version in this session |
 | `app.tours {launching?}` | approved local tours through this version, newest first; after normal `app.ready`, `launching: true` records the profile baseline and returns pending upgrade pages, deduplicated by feature ID |
 | `app.tourPresented {versions}` | acknowledge the covered published versions only after a first page has painted; merges under the profile lock, without changing preferences/library/preview state |
+| `app.upgradeNotes` | after normal `app.ready`, records this launch's version and answers `{version, notes, current, due}`: `due` on the first launch of a version above the profile's highest (each pre-release build included; a profile from before these notes uses the tours' launch history, and a pre-tour profile with a stored consent counts as an upgrade) while the build ships notes; a fresh profile or a downgrade stays quiet; the offer stays due until acknowledged |
+| `app.upgradeNotesPresented {version}` | acknowledge the notes offer for that running version once its popup has closed |
 | `app.update` / `app.installUpdate {file}` | job id (download and MD5 check, result `{file}`; reuses the verified file for the same version) / swap in the build and quit after Restart (a macOS disk image that does not mount starts the installed app again); `classic_open` while any classic window is open (never queued) |
 
 HTTP endpoints outside `/api/rpc`, each with its own token, never the session token: `GET /api/classic/control` and
@@ -2261,6 +2263,8 @@ the library come last if the start scan is already in. An unfinished scan stays 
 show once no other popup is open, including a tour. Each prompt appears when `startDue` says it is due:
 only with the scan consent, never while the game runs, Steam is busy
 or the classic UI is open, no drift while mods are off, nothing dismissed (see Mods already in use).
+After the start popups, the first launch of a newer version shows that version's own release notes once (see
+Release notes and feature tours), then the feature tour.
 
 **Spine licence**
 
@@ -3348,6 +3352,9 @@ downloaded or installed. Missing or empty bodies show the empty-notes line.
 A build ships its own notes as `assets/release-notes/<X.Y.Z>.md`, the text its GitHub release carries; `app.releaseNotes`
 reads the running version's file, and Settings' prerelease update preview ("Release Notes" case) shows it in place of the
 sample, so the notes can be read in the App before publishing.
+After an upgrade, pre-releases included, `Update.afterUpgrade` shows the running version's notes once on that popup
+(`app.upgradeNotes`), when no popup is open and no work holds the UI, before the feature tour; Close only, since a local
+build's release page may not exist yet. Safe mode skips it. The offer is acknowledged when the popup closes.
 The explicit validated page argument remains attached to that offer even if a later check changes backend state.
 
 `tours.js` and `webui/tours.py` implement the local presentation framework for new-version

@@ -23,7 +23,7 @@ function harness({first=NO_GAME}={}){
     setSpineConsent:value=>log.push(['spine',value]),
     Popup:{sequence:async steps=>{log.push(['popups',steps.length]);await popups.promise;},whenIdle:async()=>{}},
     ModSwitch:{startDue:(name,{info})=>name==='update'&&!!info.compiled&&info.startupUpdate!==false,current:()=>null},
-    Update:{check:async()=>{log.push(['update']);}},
+    Update:{check:async()=>{log.push(['update']);},afterUpgrade:async options=>{log.push(['notes',typeof options.blocked]);}},
     Tours:{start:async options=>{log.push(['tour',options.info.gameFound,options.ready===api.ready()]);}},
     Prompts:{isBusy:()=>false},
     startPopups:()=>[['consent',async()=>{}],['spine',async()=>{}]],
@@ -57,6 +57,15 @@ test('a start with a game runs the sequence once, after the page told the server
   assert.equal(count(h,'cursor'),1);assert.equal(count(h,'tour'),1);
   assert.deepEqual(h.log.find(item=>item[0]==='tour'),['tour',true,true],'the tour gets the page\'s ready promise');
   assert.equal(count(h,'consent.init'),0,'a start with a game already holds the game data: no late re-read');
+  assert.deepEqual(h.log.filter(item=>['notes','tour'].includes(item[0])).map(item=>item[0]),['notes','tour'],
+    'the release notes after an upgrade come before the feature tour, which reads the same launch history');
+  assert.deepEqual(h.log.find(item=>item[0]==='notes'),['notes','function']);
+});
+
+test('a safe-mode start shows no release notes after an upgrade',async()=>{
+  const h=harness({first:{...GAME,safeMode:true}});
+  const booting=h.boot();await flush();h.popups.resolve();await booting;await flush();
+  assert.equal(count(h,'notes'),0);assert.equal(count(h,'tour'),1);
 });
 
 test('a game found later runs the sequence once, with the consent and loading data read again',async()=>{
@@ -76,7 +85,7 @@ test('a game found later runs the sequence once, with the consent and loading da
   assert.equal(count(h,'tour'),1);
   // later refreshes (a server switch, a library move, any config.changed) never start it again
   for(let i=0;i<3;i++){const again=h.refreshConfiguration();await h.answer(GAME);await again;await flush();}
-  assert.deepEqual(['cursor','update','tour','popups','consent.init'].map(name=>count(h,name)),[1,1,1,1,1]);
+  assert.deepEqual(['cursor','update','notes','tour','popups','consent.init'].map(name=>count(h,name)),[1,1,1,1,1,1]);
 });
 
 test('a refresh that still finds no game starts nothing, and the first one that finds a game starts it',async()=>{
