@@ -217,5 +217,18 @@ def test_update_still_requires_a_nonempty_match(tmp_path, monkeypatch):
     bundles = {source: bundle(source, [asset("obsolete_stock", AssetType.TextAsset)]),
                target: bundle(target, [asset("unrelated", AssetType.TextAsset)])}
     monkeypatch.setattr(Bundle, "load", lambda path, *args: bundles[path])
-    result = rebuild([source], [target], tmp_path, {"ALL"}, SaveOptions(), match_strategy="name_type")
+    lines = []
+    result = rebuild([source], [target], tmp_path, {"ALL"}, SaveOptions(), match_strategy="name_type",
+                     log=lines.append)
     assert not result.success and not result.file_pairs
+    assert result.no_match and not any(result.message in line for line in lines)  # the caller decides (BL-180)
+
+
+def test_other_failures_are_logged_and_not_a_missing_match(tmp_path, monkeypatch):
+    source, target = tmp_path / "mod.bundle", tmp_path / "official.bundle"
+    monkeypatch.setattr(Bundle, "load", lambda path, *args: None)
+    lines = []
+    result = rebuild([source], [target], tmp_path, {"ALL"}, SaveOptions(), match_strategy="name_type",
+                     log=lines.append)
+    assert not result.success and not result.no_match
+    assert lines[-1] == f"❌ {result.message}"

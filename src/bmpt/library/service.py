@@ -43,7 +43,7 @@ from . import profiles as profiles_mod
 from . import fingerprint, integrity, rig_archive, safety, staging, tested_build
 from .original_checks import OriginalChecks, Verdict
 from .install import Action, PlannedFile, PlannedGroup, backup_file, install_staged
-from .rebuild import rebuild
+from .rebuild import RebuildResult, rebuild
 from . import targets as resolver
 from .identity import identify
 from .judge import (
@@ -605,6 +605,11 @@ class _View:
                 if entry.configured or entry.state != "ok" or entry.overwritten:
                     out.append(entry)
         return out
+
+
+def _reasons(failures: list[tuple[str, str]]) -> str:
+    """The build failures of ``install_staged`` as one line, for the error and the log."""
+    return "; ".join(f"{core}: {reason}" for core, reason in failures)
 
 
 def _outside(record: dict | None, size: int, mtime: int) -> bool:
@@ -5264,10 +5269,11 @@ class ModLibrary:
                     parsed = parse_filename(exact.name)
                     group = PlannedGroup(parsed.prefix, parsed.category, parsed.core, [
                         PlannedFile(exact, parsed, Action.DIRECT_REPLACE, existing_path=original, need_crc_fix=True)])
-                    if install_staged([group], output, self.settings.asset_types(),
-                                      self.settings.save_options(self.settings.crc_needed(target)),
-                                      self.settings.spine_options(), log=log):
-                        raise ServiceError("mod_apply_failed", id=record["id"])
+                    failures = install_staged([group], output, self.settings.asset_types(),
+                                              self.settings.save_options(self.settings.crc_needed(target)),
+                                              self.settings.spine_options(), log=log)
+                    if failures:
+                        raise ServiceError("mod_apply_failed", id=record["id"], reason=_reasons(failures))
                     continue
                 matching = resolver.same_prefix(sources, target)
                 if not matching:
@@ -5276,8 +5282,11 @@ class ModLibrary:
                     self.settings.save_options(self.settings.crc_needed(target)), self.settings.spine_options(),
                     match_strategy="cont_name_type", skip_unchanged=True,
                     anim_check=self.settings.anim_check_options(), log=log)
+                if result.no_match:  # the part takes nothing from the mod: it stays the official copy (BL-180)
+                    log(f"  ⏭️ {t('log.mod_update.target_unchanged', name=target.name, count=0)}")
+                    continue
                 if not result.success:
-                    raise ServiceError("mod_apply_failed", id=record["id"])
+                    raise ServiceError("mod_apply_failed", id=record["id"], reason=result.message)
                 for pair in result.file_pairs:
                     atomic_copy(pair.output, original)
             return staged
@@ -5307,7 +5316,7 @@ class ModLibrary:
             ) if progress else None)
         logger.info("Mod apply build and CRC: %.3f s", time.perf_counter() - started)
         if failures:
-            raise ServiceError("mod_apply_failed", id=record["id"])
+            raise ServiceError("mod_apply_failed", id=record["id"], reason=_reasons(failures))
         return staged
 
     def _needs_crc_fix(self, source: Path, target: Path) -> bool:
@@ -7728,6 +7737,8 @@ class ModLibrary:
             output = Path(temporary)
             generated = []
             all_unchanged = True
+            no_match: RebuildResult | None = None  # a part's rebuild that took nothing, while no part took any
+            matched = False
             for i, target in enumerate(targets, 1):
                 def step(key: str) -> None:
                     if progress:
@@ -7739,11 +7750,21 @@ class ModLibrary:
                     self.settings.save_options(self.settings.crc_needed(target)), self.settings.spine_options(),
                     skip_unchanged=True, match_strategy="cont_name_type",
                     anim_check=self.settings.anim_check_options(), log=log, on_step=step)
+                if result.no_match:
+                    # A part that takes nothing from the mod (one of materials only, or one the mod carries none
+                    # of) keeps the official file: the copy below (BL-180).
+                    log(f"  ⏭️ {t('log.mod_update.target_unchanged', name=target.name, count=0)}")
+                    no_match = no_match or result
+                    continue
                 if not result.success:
-                    raise ServiceError("mod_update_failed", id=mod_id)
+                    raise ServiceError("mod_update_failed", id=mod_id, reason=result.message)
+                matched = True
                 if not result.all_unchanged:
                     all_unchanged = False
                 generated.extend(pair.output for pair in result.file_pairs)
+            if no_match and not matched:  # no part took anything from the mod
+                log(f"❌ {no_match.message}")
+                raise ServiceError("mod_update_failed", id=mod_id, reason=no_match.message)
             if all_unchanged or (len(generated) == len(paths) and all(
                     new.name == old.name and self._hashes.get(new).sha1 == self._hashes.get(old).sha1
                     for new, old in zip(sorted(generated), sorted(paths)))):
