@@ -718,6 +718,35 @@ def test_model_add_apply_restore_keeps_every_slot_and_official_backup(model_env)
     assert reloaded.configured('hoshino')['model'] is None
 
 
+@pytest.mark.parametrize('category', ['npcs', 'characters'])
+def test_model_of_own_bundles_is_a_slot_mods_apply_to(setup_library, category):
+    """An NPC's model in its own bundles (Arona's assets-_mx-npcs-arona-*, BL-181) is the variant's model slot: a mod
+    of those bundles is stored for the variant, applies there and restores, as a battle model's does."""
+    env = setup_library
+    game_bundle(env.game_dir, 'arona_spr')
+    parts = [game_bundle(env.game_dir, 'arona', category=category, part=part, payload=b'official ' + part.encode())
+             for part in ('000', 'meshes', 'textures')]
+    official = {path: path.read_bytes() for path in parts}
+    game = SimpleNamespace(spine_cores=lambda kind: {'arona_spr': []} if kind == 'spr' else {},
+                           collection_names=lambda: {}, model_cores=set, field_model_cores=set,
+                           asset_model_cores=lambda candidates: {'arona'} & set(candidates))
+    catalog = Catalog(game, None)
+    assert (catalog.variant('arona').model, catalog.variant('arona').field_model) == ('arona', None)
+    library = ModLibrary(env.root, catalog, object(), env.settings, scan_allowed=lambda: True)
+    assert library.model_cores('arona') == ['arona']
+    assert library._game_files('arona', 'model') == parts
+    upload = make_mod(parts[1], env.tmp / 'upload', payload=b'mod mesh')
+    added = library.add_files('model', [upload], apply=True)
+    entry, = added
+    assert entry.kind == 'model' and entry.target == 'arona' and added.applied == [entry]
+    assert parts[1].read_bytes() == upload.read_bytes()
+    assert library.configured('arona')['model'] == f'mod:{entry.id}'
+    library.restore('arona', kind='model')
+    assert all(path.read_bytes() == data for path, data in official.items())
+    assert library.apply('arona', f'mod:{entry.id}', kind='model').files
+    assert parts[1].read_bytes() == upload.read_bytes()
+
+
 def test_model_master_switch_and_remove(model_env):
     env = model_env
     off = env.library.toggle(False, True)

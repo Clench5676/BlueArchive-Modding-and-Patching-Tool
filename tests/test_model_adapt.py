@@ -753,8 +753,9 @@ def test_official_field_models_are_found_and_exported(tmp_path):
     assert [a["name"] for a in doc["animations"]] == ["Field_Player_NP0009_Normal_Idle"]
 
 
-# BL-127: variants with neither a battle nor a field player model whose model sits elsewhere: (variant, prefab,
-# source kind, a mesh it draws, whether it plays an idle)
+# BL-127: variants with neither a battle nor a field player model whose model sits elsewhere (the "asset" ones, in
+# their own bundles, are their slot since BL-181): (variant, prefab, source kind, a mesh it draws, whether it plays
+# an idle)
 NO_SLOT_MODELS = [
     ("ch0171", "Field_NPC_CH0171_NonWeapon", "npc", "OL_CH0171_Body", True),
     ("np0060", "Field_NPC_NP0060_Justice_Student", "npc", "OL_NP0144_Body", True),
@@ -779,8 +780,9 @@ def test_official_no_slot_models_are_found_and_exported(tmp_path):
     catalog = Catalog(game, None, server="global")
     for key, prefab, kind, mesh, idle in NO_SLOT_MODELS:
         variant = catalog.variant(key)
-        assert (variant.model, variant.field_model) == (None, key)
-        data = game.model_glb(variant.field_model)
+        # a model of the variant's own bundles is its slot (BL-181); a field-mode one has none
+        assert (variant.model, variant.field_model) == ((key, None) if kind == "asset" else (None, key)), key
+        data = game.model_glb(variant.model or variant.field_model)
         doc = json.loads(data[20:20 + struct.unpack_from("<I", data, 12)[0]])
         assert (doc["extras"]["prefab"], doc["extras"]["source"]) == (prefab, kind), key
         assert mesh in {m["name"] for m in doc["meshes"]}, key

@@ -22,10 +22,11 @@ class Variant:
     date: str | None
     page_id: str | None = None  # the student page on Kivo (kivo.wiki), for lobby lines
     recruitable: bool = False  # playable on the selected server, not only on some server
-    model: str | None = None  # the 3D chibi's dev name (character-<dev>-_mxload-* bundles)
-    # a model with no slot, for a variant with no character model: preview and costume source only, the game has no
-    # slot of it to switch. The dev name of a field-mode player (Field_Player_<dev>), of a field NPC (Field_NPC_<id>)
-    # or of a model in the variant's own bundles (a story cutscene's or a UI scene's character)
+    # the 3D chibi's dev name (character-<dev>-_mxload-* bundles), or that of a model in the variant's own bundles
+    # (assets-_mx-npcs|characters-<dev>-*: a story cutscene's or a UI scene's character, BL-181), its slot either way
+    model: str | None = None
+    # a model with no slot, for a variant with no model of its own: preview and costume source only, the game has no
+    # slot of it to switch. The dev name of a field-mode player (Field_Player_<dev>) or of a field NPC (Field_NPC_<id>)
     field_model: str | None = None
     schale_id: int | None = None  # the game's character id (SchaleDB's student id), for the Global server's lines
     # names the roster search matches but the UI never shows (the CN server's zh-CN wording)

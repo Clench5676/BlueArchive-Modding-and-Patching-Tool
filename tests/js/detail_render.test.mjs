@@ -1320,7 +1320,7 @@ test("a variant with only a field or NPC model draws it on the 3D tab", async (t
     errors.length = 0; closeLeftMessages();
     family = modFamily("model");
     const v = family.variants[0];
-    v.model = null; v.fieldModel = "np0206"; v.state.files = [];
+    v.model = null; v.fieldModel = "np0143"; v.state.files = [];
     modelRequests.length = 0;
     await showPortrait(t);
     const switching = tabButton(3).click();

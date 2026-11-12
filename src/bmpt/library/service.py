@@ -5002,9 +5002,9 @@ class ModLibrary:
 
     def _costume_files(self, other: str, pin: Pin) -> tuple[str, list[Path], list[Path]]:
         """Another variant's model as a costume source: its dev name, the game files that hold its prefab and every
-        game file of its own (the model slot; for a variant with a model but no slot, the field character bundles,
-        which hold other students' field models as well, and the parts of its own dependency bundles that can hold a
-        story-only or UI-only model)."""
+        game file of its own (the model slot; for a slot of the variant's own dependency bundles, a story-only or
+        UI-only model, the parts that can hold it; for a variant with a model but no slot, the field character
+        bundles, which hold other students' field models as well, and those parts of its own bundles)."""
         variant = self._variant(other)
         core = getattr(variant, "model", None)
         if core:
@@ -5012,6 +5012,10 @@ class ModLibrary:
             prefabs = [path for path in files if path.name.startswith("character-")]
             if prefabs:
                 return core.lower(), prefabs, files
+            # no prefab bundle: a model of its own dependency bundles (Arona's, BL-181)
+            owned = sorted((path for path in files if may_hold_model_root(path.name)), key=lambda path: path.name)
+            if owned:
+                return core.lower(), owned, owned
         dev = getattr(variant, "field_model", None)
         if dev:
             names = self._names(pin)
