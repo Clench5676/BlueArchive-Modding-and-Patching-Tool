@@ -1516,8 +1516,12 @@ async function drawPopup(scroll = 0) {
   const v = variant(), kind = popupKind, applied = intendedKey(v, kind);
   const mode = popupMode(fam, v, kind, modsOn(), otherStudents);
   const own = candidates(v, kind);
+  // built from a costume under an older costume rule: an Optimize Physics copy or the applied swap; its Update
+  // builds it again
+  const outdatedMark = { text: T("model.outdated"), color: COLOUR.success, ink: "#ffffff" };
   const item = (c) => {
     const work = switchThumbnails;
+    const outdated = !!c.mod?.outdated || swapOutdated(v, kind, c.key);
     const picture = lazyThumbnail(() => kind === "model" ? modelPicture(c, v, work)
       : thumb(baseOf(c, kind), kind === "spr" ? "portrait" : "landscape", null, kind === "lobby", specialFraming(v), (c.origin || c.variant || v).bg, work), work.signal);
     return {
@@ -1537,8 +1541,7 @@ async function drawPopup(scroll = 0) {
       ...crossExtras(c, T("model.crossCharacter")),
       badge: c.greyed ? { ...GREYED_BADGE(), ...(!coreOf(v, kind) && c.kind === "self" ? { text: T("import.reason.no_target") } : {}) }
         : c.mod?.incomplete ? { text: T("mods.incomplete"), color: COLOUR.warning, ink: "#ffffff" }
-        // built from a costume under an older costume rule: its Update builds it again
-        : c.mod?.outdated || swapOutdated(v, kind, c.key) ? { text: T("model.outdated"), color: COLOUR.success, ink: "#ffffff" } : null,
+        : outdated ? outdatedMark : null,
       tag: c.mod?.repaired_from ? { text: T("remap.repaired"), color: "#d7eaf4", ink: "#2d4664" }
         : c.mod?.optimized_from ? { text: T("model.optimized"), color: "#d7eaf4", ink: "#2d4664" } : null,
     };

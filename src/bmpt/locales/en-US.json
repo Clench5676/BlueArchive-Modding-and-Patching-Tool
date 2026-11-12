@@ -309,7 +309,6 @@
 				"tabHeld": "Needs Fix",
 				"tabReapplied": "Applied Again",
 				"tabOthers": "Other Affected",
-				"tabOutdated": "Updatable",
 				"none": "No mods affected",
 				"preview": "Preview Fix",
 				"noPreview": "Looks the same after the fix: only its file structure is updated",

@@ -83,23 +83,3 @@ for (const locale of LOCALES) test(`model.showOthers is in ${locale} with the ag
   assert.equal(Object.keys(WORDING).length, LOCALES.length);
 });
 
-// the update impact list's four segments (Updatable after the three, update-impact.js tabCaptions), on the
-// default frame and on the portrait frame its list takes when it holds portraits alone
-for (const locale of ORDER) test(`the impact list's four segments fit its toolbar in ${locale}`, async () => {
-  const Impact = await import(`${JS}update-impact.js`);
-  setStrings(locale, Object.fromEntries(flat(webui(locale))));
-  document.documentElement.lang = locale;
-  const segs = Impact.tabCaptions();
-  assert.equal(segs.length, 4);
-  for (const kind of [undefined, "spr"]) {
-    const frame = Popup.listLayout(false, kind).list;
-    const lay = Popup.checkedToolbarFit(frame.r - SPACE.m, { segs, sortKey: "sort.default", sortKeys: ["sort.default", "sort.name"],
-      left: frame.l + SPACE.m });
-    assert.equal(lay.fits, true, `${locale} ${kind}: the segments stand inside the list`);
-    assert.equal(new Set(lay.segLabels.map((f) => f.fs)).size, 1, `${locale} ${kind}: one segment size`);
-    for (const f of lay.segLabels) {
-      for (const line of f.text.split("\n")) assert.ok(NGUI.glyphWidth(line, f.fs) <= lay.segW - 26 + 1e-9, `${locale} ${kind}: ${f.text}`);
-      assert.ok(f.lines * NGUI.fontSizeFor(f.text, f.fs) * NGUI.LINE_PITCH <= 96 + 1e-9, `${locale} ${kind}: ${f.text} in two lines`);
-    }
-  }
-});

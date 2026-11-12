@@ -9,9 +9,10 @@
 // card's details hold Go To and, for a held mod, the repair's preview (the review, whose Accept is Fix and Apply) and
 // Fix and Apply. Closing it records the version as seen (mods.impactSeen); Settings' Game Update Impact runs it again
 // (show). What the App built from a costume under an older costume rule (Optimize Physics copies, costume swaps
-// in the game files; impact "outdated") has a segment of its own, Updatable, whose Update builds them again; the start
-// shows the list without the question when they are the only news (mods.updateDue's outdated, once per rule). The pure
-// parts are tested in Node (tests/js/mod_switch.test.mjs).
+// in the game files; impact "outdated") is listed with the held mods (the game's segment control has three toggles),
+// ticked, with the Updatable badge; Fix and Apply (its details: Update) builds them again; the start shows the list
+// without the question when they are the only news (mods.updateDue's outdated, once per rule). The pure parts are tested
+// in Node (tests/js/mod_switch.test.mjs).
 import * as Compatibility from "./mod-compatibility.js";
 import * as Loading from "./loading.js";
 import * as Popup from "./popup.js";
@@ -189,26 +190,25 @@ export async function gate() {
 
 // --- the list (the drift prompt's popup; the wireframe of the thread) ---
 
-// the segments over the cards: the held mods, the entries the check applied again, the other affected mods, the costume
-// builds of an older costume rule
-export const TABS = ["held", "reapplied", "others", "outdated"];
-// the segments whose cards are ticked for the list's main button (Fix and Apply, Update)
-export const TICKED = ["held", "outdated"];
+// the segments over the cards: the held mods (with the costume builds of an older costume rule), the entries the
+// check applied again, the other affected mods
+export const TABS = ["held", "reapplied", "others"];
 const OTHER_KINDS = { rebuilt: "kindRebuilt", new_parts: "kindNewParts", gone: "kindGone" };
 
 // heldOf(result): the held mods the list shows: a mod whose rig changed, unless a repaired copy took its place (it has
 // one and its student is not configured with it)
 export const heldOf = (result) => (result?.mods || []).filter((m) => m.impact === "rig_changed" && !(m.repaired_id && !m.configured));
 
-// tabMods(outcome): the mods each segment lists ({held, reapplied, others, outdated})
+// tabMods(outcome): the mods each segment lists ({held, reapplied, others}); Needs Fix ends with the outdated costume
+// builds
 export function tabMods({ result, reapplied = [] } = {}) {
   const mods = result?.mods || [];
-  return { held: heldOf(result), reapplied: reapplied.map(entryMod),
-    others: mods.filter((m) => m.impact in OTHER_KINDS), outdated: mods.filter((m) => m.impact === "outdated") };
+  return { held: [...heldOf(result), ...mods.filter((m) => m.impact === "outdated")], reapplied: reapplied.map(entryMod),
+    others: mods.filter((m) => m.impact in OTHER_KINDS) };
 }
 
 // the segments' captions (no counts), as the list's toolbar takes them
-export const tabCaptions = () => ["mods.impact.tabHeld", "mods.impact.tabReapplied", "mods.impact.tabOthers", "mods.impact.tabOutdated"];
+export const tabCaptions = () => ["mods.impact.tabHeld", "mods.impact.tabReapplied", "mods.impact.tabOthers"];
 
 // a card's key: its mod, else (a costume swap in the game files) its core
 export const modKey = (mod) => mod?.id || `${mod?.core || ""}`;
@@ -224,7 +224,8 @@ export function card(mod, tab, nameOf = (e) => e?.variant || e?.core || "") {
   const lobby = mod.kind === "lobby";
   // an Official chip over the details' one line of the official changes
   const chips = [T(kindKey(mod.kind)), ...(mod.configured ? [T("status.applied")] : []), ...(changeText(mod) ? [T("mods.impact.chipOfficial")] : [])];
-  const badge = tab === "held" ? { text: T("mods.heldBadge"), color: COLOUR.warning, ink: "#ffffff" }
+  const badge = mod.impact === "outdated" ? { text: T("model.outdated"), color: COLOUR.success, ink: "#ffffff" }
+    : tab === "held" ? { text: T("mods.heldBadge"), color: COLOUR.warning, ink: "#ffffff" }
     : tab === "others" ? { text: T(`mods.impact.${OTHER_KINDS[mod.impact]}`), color: COLOUR.greyed, ink: "#ffffff" } : null;
   // the details name the mod itself (the card names the student), its kind and Applied as chips
   // a generic mod (other) has no student: its own name, never its set's key
@@ -246,8 +247,8 @@ export function details(mod, tab) {
   const fields = changes ? [[null, changes]] : [];
   const page = !!(mod.id && mod.kind !== "other" && mod.target);
   const actions = [...(page ? [["go", T("add.go")]] : []),
-    ...(tab === "held" ? [["preview", T("mods.impact.preview")], ["fix", T("mods.impact.fix"), "apply"]] : []),
-    ...(tab === "outdated" ? [["update", T("act.update"), "apply"]] : [])];
+    ...(mod.impact === "outdated" ? [["fix", T("act.update"), "apply"]]
+      : tab === "held" ? [["preview", T("mods.impact.preview")], ["fix", T("mods.impact.fix"), "apply"]] : [])];
   return { title: T(mod.kind === "lobby" ? "info.title.lobby" : mod.kind === "model" ? "info.title.model" : "info.title.portrait"),
     fields, actions };
 }
@@ -261,7 +262,7 @@ function presentList(outcome, nameOf) {
   let current = outcome, tabs = tabMods(current);
   let tab = TABS.findIndex((name) => tabs[name].length);
   if (tab < 0) tab = 0;
-  const tickable = () => [...tabs.held, ...tabs.outdated].map(modKey);
+  const tickable = () => tabs.held.map(modKey);
   let selection = new Set(tickable()), focus = null, scroll = 0, running = false;
   return new Promise((resolve) => {
     const done = (answer) => {
@@ -272,11 +273,11 @@ function presentList(outcome, nameOf) {
       resolve(answer);
     };
     // a repair over the list, then the list as the mods stand: the result read again, the ticks kept where they still apply
-    const work = async (mods, review, run = fix) => {
+    const work = async (mods, review) => {
       if (running || !mods.length) return;
       running = true;
       try {
-        const { partial } = await run(mods, nameOf, { review });
+        const { partial } = await fix(mods, nameOf, { review });
         if (partial.length) await Popup.message({ title: T("mods.impact.title"), ok: T("picker.ok"), plain: true, width: WIDTH,
           lines: [T("mods.impact.partial", { n: partial.length }), ...partial.map((m) => ({ text: modName(m, nameOf), ...ITEM }))] });
         const id = await rpc("mods.impact", { force: true });
@@ -292,16 +293,16 @@ function presentList(outcome, nameOf) {
     };
     const draw = (keep = 0) => {
       scroll = keep;
-      const name = TABS[tab], held = name === "held", ticks = TICKED.includes(name);
+      const name = TABS[tab], held = name === "held";
       const items = tabs[name].map((mod) => card(mod, name, nameOf));
       if (!items.some((it) => it.key === focus)) focus = items[0]?.key ?? null;
-      const ticked = ticks ? tabs[name].filter((m) => selection.has(modKey(m))) : [];
+      const ticked = held ? tabs.held.filter((m) => selection.has(modKey(m))) : [];
       Popup.listPopup({
         host, title: T("mods.impact.title"), items, selected: focus, focus, keepScroll: keep,
         detailKind: (it) => it.mod?.kind, alignStart: true, empty: T("mods.impact.none"),
         // portraits alone: the portrait switch's frame and tall cards, whose details keep their actions in view
         ...(items.length && items.every((it) => it.mod?.kind === "spr") ? { layoutKind: "spr" } : {}),
-        ...(ticks ? { tick: { keys: [...selection], onTick: (key, s) => {
+        ...(held ? { tick: { keys: [...selection], onTick: (key, s) => {
           selection = selection.has(key) ? new Set([...selection].filter((k) => k !== key)) : new Set([...selection, key]);
           draw(s);
         } } } : {}),
@@ -309,15 +310,12 @@ function presentList(outcome, nameOf) {
         // Fix and Apply without a count, so the S footer's caption keeps to one line; the tick boxes show what it fixes
         buttons: [{ label: T("display.close"), fn: () => done({}) },
           ...(held ? [{ label: T("mods.impact.fix"), primary: true, greyed: !ticked.length,
-            fn: () => work(ticked, false) }] : []),
-          ...(name === "outdated" ? [{ label: T("act.update"), primary: true, greyed: !ticked.length,
-            fn: () => work(ticked, false, rebuild) }] : [])],
+            fn: () => work(ticked, false) }] : [])],
         onClose: () => done({}),
         onSelect: (key, s) => { focus = key; draw(s); },
         details: (it) => {
           const d = details(it.mod, name);
-          const act = { go: () => done({ go: it.mod }), preview: () => work([it.mod], true), fix: () => work([it.mod], false),
-            update: () => work([it.mod], false, rebuild) };
+          const act = { go: () => done({ go: it.mod }), preview: () => work([it.mod], true), fix: () => work([it.mod], false) };
           return { title: d.title, fields: d.fields, actions: d.actions.map(([id, caption, semantic]) => [caption, act[id], false, semantic]) };
         },
       }).catch((err) => { console.error("impact list", err); done({}); });
@@ -332,7 +330,8 @@ async function applyRepaired(mod, id) {
   if (mod.configured) await waitJob(await rpc("actions.apply", { variant: mod.target, source: `mod:${id}`, kind: mod.kind }));
 }
 
-// fix(mods, nameOf, {review}): the student page's Update for each held mod, here: a repaired copy made before takes
+// fix(mods, nameOf, {review}): the student page's Update for each held mod, here: an outdated costume build is built
+// again (rebuild); a repaired copy made before takes
 // its place at once; a mod the repair can take is prepared with the default repair (review: the choice and the review,
 // whose Accept is Fix and Apply) and, unless partial, stored and put in its place; another gets the asset update.
 // Resolves with {fixed, partial}: the mods fixed, and those whose repair was partial (not stored, not applied).
@@ -341,6 +340,11 @@ async function fix(mods, nameOf, { review = false } = {}) {
   for (const mod of mods) {
     const subject = modName({ ...mod, configured: false }, nameOf);
     try {
+      if (mod.impact === "outdated") {
+        await rebuild(mod, subject);
+        fixed.push(mod);
+        continue;
+      }
       if (mod.repaired_id) {
         await applyRepaired(mod, mod.repaired_id);
         fixed.push(mod);
@@ -388,26 +392,16 @@ async function fix(mods, nameOf, { review = false } = {}) {
   return { fixed, partial };
 }
 
-// rebuild(mods, nameOf): Update of the costume builds of an older costume rule: an Optimize Physics copy is
-// built again in place, then applied again where its student is configured with it; a costume swap in the game files is
-// applied again. Resolves like fix ({fixed, partial}; nothing is partial here).
-async function rebuild(mods, nameOf) {
-  const fixed = [];
-  for (const mod of mods) {
-    const subject = modName({ ...mod, configured: false }, nameOf);
-    try {
-      await Loading.task(async (update) => {
-        if (mod.id) await waitJob(await rpc("actions.update", { mod: mod.id }), update);
-        if (mod.id ? mod.configured : costumeOf(mod)) {
-          await waitJob(await rpc("actions.apply", { variant: mod.target, source: mod.id ? `mod:${mod.id}` : mod.source, kind: mod.kind }), update);
-        }
-      }, { label: T("progress.process", { name: subject }) });
-      fixed.push(mod);
-    } catch (err) {
-      notify(errorText(err.code, err.params), { kind: "error", error: err });
+// rebuild(mod, subject): Update of a costume build of an older costume rule: an Optimize Physics copy is built
+// again in place, then applied again where its student is configured with it; a costume swap in the game files is
+// applied again
+async function rebuild(mod, subject) {
+  await Loading.task(async (update) => {
+    if (mod.id) await waitJob(await rpc("actions.update", { mod: mod.id }), update);
+    if (mod.id ? mod.configured : costumeOf(mod)) {
+      await waitJob(await rpc("actions.apply", { variant: mod.target, source: mod.id ? `mod:${mod.id}` : mod.source, kind: mod.kind }), update);
     }
-  }
-  return { fixed, partial: [] };
+  }, { label: T("progress.process", { name: subject }) });
 }
 
 // the mods.state entries a game update's rig change holds ({install, core, variant, kind, source, label}) as the

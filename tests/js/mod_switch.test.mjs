@@ -1463,26 +1463,28 @@ test("Settings Spine value row opens the same read-only notice in every locale w
 
 const Impact = await import("../../src/bmpt/web/js/update-impact.js");
 
-test("costume builds of an older costume rule: their own segment, ticked, with Update", () => {
+test("costume builds of an older costume rule: in Needs Fix after the held mods, ticked, Updatable, with Update", () => {
   const mods = [
     { id: "7", target: "hoshino", core: "hoshino_original", kind: "model", impact: "outdated", label: "Hina - Optimized",
       changes: {}, configured: true, repaired_id: "" },
     { id: "", target: "azusa", core: "azusa_original", kind: "model", impact: "outdated", label: "", source: "variant:yukino",
       changes: {}, configured: true, repaired_id: "" },
-    { id: "8", target: "airi", core: "ch0200_spr", kind: "spr", impact: "rebuilt", label: "Airi", changes: {} },
+    { id: "1", target: "airi", core: "ch0200_spr", kind: "spr", impact: "rig_changed", label: "Airi", changes: { rig: true } },
+    { id: "8", target: "aru", core: "aru_spr", kind: "spr", impact: "rebuilt", label: "Aru", changes: {} },
   ];
   const nameOf = (e) => e.variant[0].toUpperCase() + e.variant.slice(1);
   const tabs = Impact.tabMods({ result: { due: true, mods } });
-  assert.deepEqual([tabs.outdated.map(Impact.modKey), tabs.others.map((m) => m.id), tabs.held], [["7", "azusa_original"], ["8"], []]);
-  assert.deepEqual(Impact.TICKED, ["held", "outdated"]);
+  assert.deepEqual([tabs.held.map(Impact.modKey), tabs.others.map((m) => m.id)], [["1", "7", "azusa_original"], ["8"]]);
   // a copy is named by its student and itself; a swap in the game files by its slot's student and the costume it carries
-  const copy = Impact.card(tabs.outdated[0], "outdated", nameOf), swap = Impact.card(tabs.outdated[1], "outdated", nameOf);
-  assert.deepEqual([copy.key, copy.label, copy.full, copy.chips, copy.badge, copy.thumb],
-    ["7", "Hoshino", "Hina - Optimized", ["3D Model", "Applied"], undefined, null]);
-  assert.deepEqual([swap.key, swap.label, swap.full, swap.chips], ["azusa_original", "Azusa", "Yukino", ["3D Model", "Applied"]]);
-  // Update in the details; Go To only where a mod has a page
-  assert.deepEqual(Impact.details(tabs.outdated[0], "outdated").actions, [["go", S("add.go")], ["update", S("act.update"), "apply"]]);
-  assert.deepEqual(Impact.details(tabs.outdated[1], "outdated").actions, [["update", S("act.update"), "apply"]]);
+  const copy = Impact.card(tabs.held[1], "held", nameOf), swap = Impact.card(tabs.held[2], "held", nameOf);
+  assert.deepEqual([copy.key, copy.label, copy.full, copy.chips, copy.badge.text, copy.thumb],
+    ["7", "Hoshino", "Hina - Optimized", ["3D Model", "Applied"], S("model.outdated"), null]);
+  assert.deepEqual([swap.key, swap.label, swap.full, swap.chips, swap.badge.text],
+    ["azusa_original", "Azusa", "Yukino", ["3D Model", "Applied"], S("model.outdated")]);
+  assert.equal(Impact.card(tabs.held[0], "held", nameOf).badge.text, S("mods.heldBadge"));
+  // Update in the details (no preview); Go To only where a mod has a page
+  assert.deepEqual(Impact.details(tabs.held[1], "held").actions, [["go", S("add.go")], ["fix", S("act.update"), "apply"]]);
+  assert.deepEqual(Impact.details(tabs.held[2], "held").actions, [["fix", S("act.update"), "apply"]]);
 });
 
 test("an update's impact as a list: the held mods, those applied again and the others, each a card with its details", () => {
@@ -1499,9 +1501,8 @@ test("an update's impact as a list: the held mods, those applied again and the o
   const tabs = Impact.tabMods(outcome);
   // a held mod a repaired copy replaced is no longer listed; unchanged ones never are
   assert.deepEqual([tabs.held.map((m) => m.id), tabs.reapplied.map((m) => m.id), tabs.others.map((m) => m.id)], [["1"], ["6"], ["2", "3"]]);
-  assert.deepEqual(Impact.TABS, ["held", "reapplied", "others", "outdated"]);
-  assert.deepEqual(Impact.tabCaptions().map((k) => S(k)), ["Needs Fix", "Applied Again", "Other Affected", "Updatable"], "no counts");
-  assert.deepEqual(tabs.outdated, []);
+  assert.deepEqual(Impact.TABS, ["held", "reapplied", "others"]);
+  assert.deepEqual(Impact.tabCaptions().map((k) => S(k)), ["Needs Fix", "Applied Again", "Other Affected"], "no counts");
   // a held card: the student's name, its kind and Applied as chips, the Files Changed badge, its own picture
   const held = Impact.card(tabs.held[0], "held", nameOf);
   assert.deepEqual([held.key, held.label, held.full, held.chips, held.badge.text],

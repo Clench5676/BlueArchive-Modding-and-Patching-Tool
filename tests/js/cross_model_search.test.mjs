@@ -78,7 +78,8 @@ for (const locale of LOCALES) test(`an applied swap and an Optimize Physics copy
   vm.runInContext(functionSource("drawPopup"), ctx);
   await ctx.drawPopup();
   const item = (key) => popup.items.find((it) => it.key === key);
-  assert.deepEqual([item("v:past").badge?.text, item("m:7").badge?.text, item("self").badge], [ui.model.outdated, ui.model.outdated, null]);
+  assert.deepEqual([item("v:past").badge?.text, item("v:past").tag, item("m:7").badge?.text, item("m:7").tag?.text, item("self").badge],
+    [ui.model.outdated, null, ui.model.outdated, ui.model.optimized, null]);
   // the applied swap's Update applies it again; Apply stays off (it is applied)
   const actions = popup.details(item("v:past")).actions;
   const update = actions.find(([label]) => label === ui.act.update);
@@ -89,7 +90,7 @@ for (const locale of LOCALES) test(`an applied swap and an Optimize Physics copy
   // not outdated: no badge, no Update
   v.selection.model.outdated = false;
   await ctx.drawPopup();
-  assert.equal(item("v:past").badge, null);
+  assert.deepEqual([item("v:past").badge, item("v:past").tag], [null, null]);
   assert.ok(!popup.details(item("v:past")).actions.some(([label]) => label === ui.act.update));
 });
 

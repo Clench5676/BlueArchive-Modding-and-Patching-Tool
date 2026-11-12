@@ -32,6 +32,8 @@ import { container, grid, row, stack as layoutStack, textItem, toNode } from "./
 
 const { node, sprite, label, find, rect } = NGUI;
 const fitText = (...a) => NGUI.fitText(...a);
+// how far a card's badge stands from its top on the applied card, under the frame's caption; 30 elsewhere
+export const APPLIED_BADGE_DROP = 84;
 const hostOf = (h) => (typeof h === "string" ? document.getElementById(h) : h);
 
 // --- the prefabs, read once: the frame (required), the student list's tools and the checkbox (each optional: a
@@ -622,7 +624,8 @@ export function listCard(it, x, y, selected, card = LP.card, kind = null, tick =
   const corner = (dx, dy) => [dx + dy * TAN10, dy]; // a point inside the slanted card
   if (it.dim) kids.push(node("Dim", [1, 4], [sprite("Common_Bg_Raius10px", w - 12, h - 18, { incline: 10, depth: 24, color: "#000000/0.55" })]));
   const badge = it.badge || (it.inUse ? { text: T("popup.inUse"), color: COLOUR.inUse, ink: COLOUR.inUseInk } : null);
-  for (const [name, mark, y] of [["Using", badge, h / 2 - 30], ["Tag", it.tag, -h / 2 + 36]]) {
+  // on the applied card the frame's caption takes the top corner: the badge stands under it
+  for (const [name, mark, y] of [["Using", badge, h / 2 - (it.applied === true ? APPLIED_BADGE_DROP : 30)], ["Tag", it.tag, -h / 2 + 36]]) {
     if (!mark) continue;
     // as wide as its word needs, from the corner, up to most of the card
     const bf = fitText(mark.text, 26, 20, w - 70, 1), bw = Math.max(116, glyphsOf(bf.text, bf.fs) + 24);

@@ -309,7 +309,6 @@
 				"tabHeld": "需要修复",
 				"tabReapplied": "已重新应用",
 				"tabOthers": "其余受影响",
-				"tabOutdated": "可更新",
 				"none": "无 Mod 受影响",
 				"preview": "修复后预览",
 				"noPreview": "修复前后外观相同，只更新文件结构",

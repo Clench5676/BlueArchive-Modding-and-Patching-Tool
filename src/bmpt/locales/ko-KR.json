@@ -309,7 +309,6 @@
 				"tabHeld": "수정 필요",
 				"tabReapplied": "다시 적용됨",
 				"tabOthers": "기타 영향",
-				"tabOutdated": "업데이트 가능",
 				"none": "영향을 받은 모드 없음",
 				"preview": "수정 후 미리보기",
 				"noPreview": "수정 전후 모습은 같고 파일 구조만 업데이트",
