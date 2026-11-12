@@ -78,6 +78,10 @@ COSTUME_PREVIEWS = 4  # costume previews kept in built/previews (one folder per 
 COSTUME_VERDICTS = 4000  # costume verdicts kept in costume-verdicts.json, newest first
 # the startup rig archive (archive_rigs) works only once no other caller used the library for this long
 RIG_ARCHIVE_QUIET = 1.0
+# between two entries a toggle lets other callers of the library go first: it waits until none of them used the lock
+# for TOGGLE_YIELD[0] seconds, at most TOGGLE_YIELD[1] seconds per entry (a preview's file requests would otherwise
+# get one library call in per entry)
+TOGGLE_YIELD = (0.1, 0.5)
 RECOVERY_RETRY = 60.0  # seconds before a read tries a recovery that failed (or waits) again, if the journals stay
 # a toggle's refusals that stop it: every later write would fail the same way
 STOPPING = ("game_running", "game_status_unavailable", "steam_busy", "folder_changed", "classic_open", "untested_build")
@@ -96,25 +100,46 @@ def _game_folder(game_file: Path) -> Path:
     return folder
 
 
-# set on a thread while it does background work that steps aside for everyone else (archive_rigs)
+# set on a thread while it does background work that steps aside for everyone else (archive_rigs): ``on``; while it
+# runs a long job that lets other callers in between its steps (a toggle): ``paced``
 _background = threading.local()
 
 
 class _LibraryLock:
     """The library's lock (re-entrant) that notes when any caller but background work (``_background``) last took or
-    gave it back: what background work steps aside for (``ModLibrary._yield_to_foreground``)."""
+    gave it back: what background work steps aside for (``ModLibrary._yield_to_foreground``); and when any caller but
+    background work and a paced job did: what a paced job lets in between its steps (``ModLibrary._let_others_in``)."""
 
     def __init__(self) -> None:
         self._lock = threading.RLock()
         self.used = 0.0  # time.monotonic() of the last foreground acquire or release
+        self.asked = 0.0  # the same, less the paced job's own
+        self.waiting = 0  # callers but background work and a paced job blocked on the lock right now
+        self._count = threading.Lock()
 
     def _note(self) -> None:
         if not getattr(_background, "on", False):
             self.used = time.monotonic()
+            if not getattr(_background, "paced", False):
+                self.asked = self.used
 
     def acquire(self, blocking: bool = True, timeout: float = -1) -> bool:
         self._note()
-        return self._lock.acquire(blocking, timeout)
+        if self._lock.acquire(False):
+            return True
+        if not blocking:
+            return False
+        counted = not (getattr(_background, "on", False) or getattr(_background, "paced", False))
+        if counted:
+            with self._count:
+                self.waiting += 1
+        try:
+            return self._lock.acquire(True, timeout)
+        finally:
+            if counted:
+                with self._count:
+                    self.waiting -= 1
+            self._note()
 
     def release(self) -> None:
         self._lock.release()
@@ -4364,6 +4389,20 @@ class ModLibrary:
                 return time.monotonic() - started
             time.sleep(min(0.1, RIG_ARCHIVE_QUIET - quiet))
 
+    def _let_others_in(self) -> float:
+        """Between two steps of a paced job (a toggle): wait until no other caller used the library's lock for
+        ``TOGGLE_YIELD[0]`` seconds, at most ``TOGGLE_YIELD[1]``; how long it waited. A caller that waits for the lock
+        notes it before it blocks, so the job steps aside for it at once."""
+        quiet_for, longest = TOGGLE_YIELD
+        started = time.monotonic()
+        while True:
+            now = time.monotonic()
+            # a lock without the stamps: nothing to wait for
+            quiet = 0.0 if getattr(self._lock, "waiting", 0) else now - getattr(self._lock, "asked", 0.0)
+            if quiet >= quiet_for or now - started >= longest:
+                return now - started
+            time.sleep(max(0.0, min(quiet_for - quiet, longest - (now - started), 0.01)))
+
     @_serialized
     def _archive_core(self, core: str, pin: Pin) -> int:
         """Keep the official rigs of one portrait core (``archive_rigs``)."""
@@ -6787,41 +6826,46 @@ class ModLibrary:
         kinds: set[str] = set()
         saved_at, unsaved = time.monotonic(), 0
         stop: ServiceError | None = None
-        for i, (pin, core) in enumerate(plan, 1):
-            if cancel and cancel():
-                break
-            with self._lock:
-                try:
+        _background.paced = True  # other callers of the library go first between its entries (_let_others_in)
+        try:
+            for i, (pin, core) in enumerate(plan, 1):
+                if cancel and cancel():
+                    break
+                self._let_others_in()
+                with self._lock:
+                    try:
+                        with _errors("toggle"):
+                            self._check_pins(pins)
+                            outcome, why, entry = self._reach(pin, core, enabled, allowed, listed.get((pin.key, core)),
+                                                              drift is not None, log)
+                    except ServiceError as error:
+                        item = {"install": pin.key, "core": core, "kind": self._kind(core, pin) or "spr",
+                                "variant": self._core_map(pin).key(core) or core}
+                        if error.code not in STOPPING:  # a refusal of the moment belongs to the switch, not the choice
+                            self._selection_error(pin, [core], error.to_json())
+                        result["failed"].append({"entry": item, "code": error.code, "params": error.to_json()["params"]})
+                        outcomes[(pin.key, core)] = "pending"
+                        if error.code in STOPPING:
+                            stop = error
+                            break
+                        continue
+                outcomes[(pin.key, core)] = why
+                if "done" in outcome:
+                    self._selection_error(pin, [core], None)
+                for name, value in outcome.items():
+                    result[name].append(value)
+                if entry is not None and ("done" in outcome or "adopted" in outcome):
+                    cores.add(core)
+                    kinds.add(entry["kind"])
+                unsaved += 1
+                if unsaved >= SAVE_EVERY[0] or time.monotonic() - saved_at >= SAVE_EVERY[1]:
                     with _errors("toggle"):
-                        self._check_pins(pins)
-                        outcome, why, entry = self._reach(pin, core, enabled, allowed, listed.get((pin.key, core)),
-                                                          drift is not None, log)
-                except ServiceError as error:
-                    item = {"install": pin.key, "core": core, "kind": self._kind(core, pin) or "spr",
-                            "variant": self._core_map(pin).key(core) or core}
-                    if error.code not in STOPPING:  # a refusal of the moment belongs to the switch, not the choice
-                        self._selection_error(pin, [core], error.to_json())
-                    result["failed"].append({"entry": item, "code": error.code, "params": error.to_json()["params"]})
-                    outcomes[(pin.key, core)] = "pending"
-                    if error.code in STOPPING:
-                        stop = error
-                        break
-                    continue
-            outcomes[(pin.key, core)] = why
-            if "done" in outcome:
-                self._selection_error(pin, [core], None)
-            for name, value in outcome.items():
-                result[name].append(value)
-            if entry is not None and ("done" in outcome or "adopted" in outcome):
-                cores.add(core)
-                kinds.add(entry["kind"])
-            unsaved += 1
-            if unsaved >= SAVE_EVERY[0] or time.monotonic() - saved_at >= SAVE_EVERY[1]:
-                with _errors("toggle"):
-                    self._save_outcomes(outcomes)
-                outcomes, unsaved, saved_at = {}, 0, time.monotonic()
-            if progress:
-                progress(i, len(plan), t("webui.progress.apply" if enabled else "webui.progress.restore", name=core))
+                        self._save_outcomes(outcomes)
+                    outcomes, unsaved, saved_at = {}, 0, time.monotonic()
+                if progress:
+                    progress(i, len(plan), t("webui.progress.apply" if enabled else "webui.progress.restore", name=core))
+        finally:
+            _background.paced = False
         with self._lock:
             self._prune_quietly()
         with _errors("toggle"):
