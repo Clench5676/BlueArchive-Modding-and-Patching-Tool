@@ -198,7 +198,7 @@ export async function show(report, { onRemap } = {}) {
   const choices = onRemap ? repairs(result) : [];
   const repair = choices.length > 0;
   const lines = resultLines(result, repair);
-  // the lines share one type size, as siblings do (docs/ui-guidelines.md)
+  // the lines share one type size, as siblings do
   const response = await Popup.message({ title: T("compatibility.result"), lines, scroll: true, plain: true,
     fitTogether: lines.flatMap((line, i) => (line.rule ? [] : [i])),
     ...(repair ? repairButtons(choices) : { ok: T("picker.ok") }) });

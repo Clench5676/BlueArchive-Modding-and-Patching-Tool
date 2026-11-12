@@ -1,5 +1,5 @@
 // UIPopup_Mulligan badges expand only their byte-identical middle columns. Text measurement uses a stand-in
-// canvas (CJK one em, Thai bases .55 em and combining marks zero, Latin .5 em); native font appearance is checked by eye.
+// canvas (CJK one em, Thai bases .55 em and combining marks zero, Latin .5 em); native font appearance is checked by hand.
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";

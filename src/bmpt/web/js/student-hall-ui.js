@@ -365,7 +365,7 @@ export const MEMORIAL_QUEUE_PITCH = (720 + 405 * Math.tan(Math.PI / 18)) * QUEUE
 // the trash button over a queue card's top right corner (a 40 px square inside the inclined art)
 export const queueTrashBox = (pitch) => [pitch / 2 + 360 * QUEUE.scale + 405 * QUEUE.scale * Math.tan(Math.PI / 18) / 2 - 52, QUEUE.y - 405 * QUEUE.scale / 2 + 8, 40, 40];
 // A trash button: shown while the pointer is over its host, grey, red while the pointer is over it; a click asks the caller
-// The icon is the Hall's own Remove (CCG_Icon_Dump), its shape a mask over the colour.
+//. The icon is the Hall's own Remove (CCG_Icon_Dump), its shape a mask over the colour.
 export const TRASH = Object.freeze({ grey: "#8a96a3", red: "#e0474c", atlas: "CardGame", sprite: "CCG_Icon_Dump" });
 export async function trashButton(host, name, label, [x, y, width, height], action) {
   const hit = hitButton(host, [x, y, width, height], action, label, 96);

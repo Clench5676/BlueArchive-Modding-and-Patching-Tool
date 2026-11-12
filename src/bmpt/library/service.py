@@ -2648,7 +2648,7 @@ class ModLibrary:
 
     def _migrate_packed_slots(self) -> None:
         """Give each bundle of a group packed one asset per bundle its own slot, in the generic mods' records and the
-        configuration: before, a whole group was one slot. No game bytes change."""
+        configuration: a whole group used to be one slot. No game bytes change."""
         records = [record for record in self._records.values() if record.get("kind") == "other"]
         if not records:
             return
@@ -5142,8 +5142,7 @@ class ModLibrary:
         into ``directory``, the others as staged official copies. Reads official bytes only: the slot's own parts, the
         source model's files, and any other bundle the CAB index finds. ``physics``: Optimize Physics, the
         build may also choose Rule B, or a rule built with the followed leg groups made rigid; ``report["physics"]`` says
-        whether it chose one of them. Every costume, the same student's too, carries its halo or hides the slot's
-       ."""
+        whether it chose one of them. Every costume, the same student's too, carries its halo or hides the slot's."""
         from ..gameassets.model_adapt import adapt
 
         staged = self._stage_official(targets, directory / "targets", pin, current_fallback=True)

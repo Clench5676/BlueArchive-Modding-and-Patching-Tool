@@ -93,7 +93,7 @@ for (const locale of ['en-US', 'zh-CN', 'zh-TW', 'ja-JP', 'ko-KR', 'th-TH']) for
       const icon = backHit.parentElement.children.find(el => el.dataset.path?.endsWith('LeftTop/Btn_Back/Icon'));
       assert.equal(body.widget.sprite, 'Common_Bg_Raius5px_Shadow');
       assert.equal(icon.widget.sprite, 'Common_Icon_Back');
-      near(parseFloat(body.style.width), 171 * S); near(parseFloat(body.style.height), FULLSCREEN_BUTTON.h * S);
+      near(parseFloat(body.style.width), 171 * S); near(parseFloat(body.style.height), FULLSCREEN_BUTTON.h * S); // the fullscreen button size
       near(parseFloat(icon.style.width), 75 * S); near(parseFloat(icon.style.height), 63 * S);
       const hitH = 165 + FULLSCREEN_BUTTON.h - 116, dx = (228.83 - 171) * S / 2, dy = (hitH - FULLSCREEN_BUTTON.h) * S / 2;
       near(b[1] + dy, CORNER_MARGIN); near(guide[1] + guide[3] / 2, CORNER_MARGIN + env.toolbarLayout().top[3] / 2); // centred in the row, which the 82 px icon makes as high as it is near(guide[1]+guide[3]/2,rotate[1]+rotate[3]/2);

@@ -60,7 +60,7 @@ test("a caption wider than the body wraps at its space instead of shrinking or s
 });
 
 test("the text button uses a buttonS body and caption insets", () => {
-  assert.equal(OCCLUSION_BUTTON[2],196);assert.equal(OCCLUSION_BUTTON[3],FULLSCREEN_BUTTON.h*S); // the fullscreen buttons' one height
+  assert.equal(OCCLUSION_BUTTON[2],196);assert.equal(OCCLUSION_BUTTON[3],FULLSCREEN_BUTTON.h*S); // The fullscreen buttons' one height
   assert.equal(TOOLBAR_CAPTION.width,196-2*CONTROL.buttonXS.pad*S);
   assert.equal(TOOLBAR_CAPTION.height,(FULLSCREEN_BUTTON.h-XS_BUTTON.boxInsetH)*S);
 });

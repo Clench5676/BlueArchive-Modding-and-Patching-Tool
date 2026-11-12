@@ -10,8 +10,8 @@ from .state import UiState
 from .strings import ui_strings
 
 LOCALES = ('en-US', 'zh-CN', 'zh-TW', 'ja-JP', 'ko-KR', 'th-TH')
-# True publishes approved content to all builds; 'prerelease' is local review content, hidden in stable.
-# Final stable publication requires an approved text in every locale. Review tables live in docs/tours/.
+# True publishes approved content to all builds; 'prerelease' is content still being checked, hidden in stable.
+# Final stable publication requires every locale to be approved.
 # Each page's copy key names webui.tours.v<major>_<minor>_<patch>.<page-id> in locales/*.json;
 # its title/body (80/320 characters) and optional caption are resolved without language fallback.
 PUBLISHED_TOURS: tuple[dict, ...] = ({

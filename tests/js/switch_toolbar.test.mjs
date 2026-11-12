@@ -1,6 +1,6 @@
 // The list popups' toolbar (every list popup the L class): the student roster's toolbar fitted by its own steps
 // (roster-widgets.js toolbarFit), the three segments, search, sort and order, without a checkbox (Switch 3D Model's "Show
-// other students", stands under the details, the toolbar has no room for it at this width), in every shipped language, longest first (English, Thai), against the locale files' real strings. Text is measured on the fit
+// other students" stands under the details, the toolbar has no room for it at this width), in every shipped language, longest first (English, Thai), against the locale files' real strings. Text is measured on the fit
 // tests' stand-in canvas (helpers/fit_canvas.mjs), so what is asserted is the logic, not a font.
 import assert from "node:assert/strict";
 import { test } from "node:test";

@@ -229,9 +229,9 @@ human-reviewed presentation materials.
 
 ## History boundaries
 
-Intermediate version bumps and local review build numbers without a published tag/release are not retrospectively
+Intermediate version bumps and local test build numbers without a published tag/release are not retrospectively
 listed as public releases. Unreleased work, including update-dialog Release Notes and the new-version feature tour framework,
-stays out of it until publication. Consult the linked comparisons for detailed commits and upstream history
+is not listed until publication. Consult the linked comparisons for detailed commits and upstream history
 for the classic toolkit's earlier v2 releases.
 
 | Version | Commit comparison |

@@ -1850,7 +1850,7 @@ for (const enabled of [true, false]) test(`fullscreen switches both ways on the 
     assert.equal(visualButton('Btn_HideUI').getAttribute('aria-label'), 'Switch Portrait');
     assert.equal(document.activeElement, visualButton('Btn_HideUI'), 'The replacement switch retains keyboard focus');
     assert.equal(hosts['fs-exit'].hidden, false, 'Back remains available in the lobby');
-    const s = 1920 / 2960, backBounds = [960 + (-1354 - 171 / 2) * s, 540 - (650 + 126 / 2) * s, 171 * s, 126 * s]; // the fullscreen button size
+    const s = 1920 / 2960, backBounds = [960 + (-1354 - 171 / 2) * s, 540 - (650 + 126 / 2) * s, 171 * s, 126 * s]; // the Back button's size
     ['left', 'top', 'width', 'height'].forEach((key, index) => assert.ok(Math.abs(parseFloat(hosts['fs-exit'].style[key]) - backBounds[index]) < 0.02, `Lobby Back ${key} keeps its existing position`));
     assertPhotographyCorner('lobby');
     await clickFullscreen(t, visualButton('Btn_HideUI'));

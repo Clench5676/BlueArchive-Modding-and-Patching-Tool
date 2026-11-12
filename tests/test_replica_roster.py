@@ -62,7 +62,7 @@ TARGET_CODES = {"no_matching_assets", "conversion_names", "no_target", "game_fil
                 "mod_target_ambiguous", "mod_target_mismatch", "source_unknown"}
 IMPORTABLE = {"convert", "update", "ready"}
 IMPORTED = {"imported", "updated"}
-# cores whose imports fail for a known reason outside the target rule, with the reason
+#: cores whose imports fail for a known reason outside the target rule, with that reason
 KNOWN: dict[str, str] = {}
 
 
