@@ -1031,7 +1031,8 @@ def test_official_roster_partial_and_complete_mod_preflight(tmp_path, monkeypatc
 
 def test_every_costume_is_applied_past_the_stretch_limit(model_env, monkeypatch):
     """Every costume with a "preview" verdict (past the stretch limit) is applied and optimized. Another
-    student's carries its halo (``cross``); the same student's does not, and a refusal stays a refusal."""
+    student's, and the same student's, carries its halo or hides the slot's (in the build itself); a
+    refusal stays a refusal."""
     env = model_env
     model_bundle(env.game_dir, core='hoshino_swimsuit', prefab=True, part='000', payload=b'swim prefab')
     model_bundle(env.game_dir, core='hina_original', prefab=True, part='000', payload=b'hina prefab')
@@ -1044,17 +1045,17 @@ def test_every_costume_is_applied_past_the_stretch_limit(model_env, monkeypatch)
     built = []
     gain = {'physics': True}  # whether the physics build chose a rule (a skirt, or a regrouped rule)
 
-    def stage(self, other, targets, directory, log, pin, *, preview=False, report=None, physics=False, cross=False):
-        built.append((other, preview, physics, cross))
+    def stage(self, other, targets, directory, log, pin, *, preview=False, report=None, physics=False):
+        built.append((other, preview, physics))
         if report is not None and physics:
             report['physics'] = gain['physics']
         out = make_mod(targets[0], directory / 'output', payload=b'costume ' + other.encode())
         return {target: out if target == targets[0] else self._official_or_current(target, pin) for target in targets}
 
     monkeypatch.setattr(ModLibrary, '_stage_costume', stage)
-    # unchecked: the same student's pair builds without a halo of its own
+    # unchecked: the same student's pair builds
     assert library.apply('hoshino', 'variant:hoshino_swimsuit', kind='model').files
-    assert built.pop() == ('hoshino_swimsuit', False, False, False)
+    assert built.pop() == ('hoshino_swimsuit', False, False)
     library.restore('hoshino', kind='model')
     assert all(path.read_bytes() == data for path, data in env.official.items())
     pin = library.current_pin()
@@ -1063,23 +1064,23 @@ def test_every_costume_is_applied_past_the_stretch_limit(model_env, monkeypatch)
     assert library.costume_verdict('hoshino', 'hina')['preview'] is True
     assert library.costume_verdict('hoshino', 'hoshino_swimsuit')['preview'] is True
     assert library.apply('hoshino', 'variant:hoshino_swimsuit', kind='model').files
-    assert built.pop() == ('hoshino_swimsuit', False, False, False)
+    assert built.pop() == ('hoshino_swimsuit', False, False)
     assert library.configured('hoshino').get('model') == 'variant:hoshino_swimsuit'
-    assert library.costume_preview('hoshino', 'hoshino_swimsuit') and built.pop() == ('hoshino_swimsuit', True, False, False)
+    assert library.costume_preview('hoshino', 'hoshino_swimsuit') and built.pop() == ('hoshino_swimsuit', True, False)
     assert library.optimize_costume('hoshino', 'variant:hoshino_swimsuit', 'Swimsuit')['mod']
-    assert built.pop() == ('hoshino_swimsuit', False, True, False)
+    assert built.pop() == ('hoshino_swimsuit', False, True)
     library.restore('hoshino', kind='model')
     result = library.apply('hoshino', 'variant:hina', kind='model')
-    assert result.files and built.pop() == ('hina', False, False, True)
+    assert result.files and built.pop() == ('hina', False, False)
     assert library.configured('hoshino').get('model') == 'variant:hina'
-    assert library.costume_preview('hoshino', 'hina') and built.pop() == ('hina', True, False, True)
+    assert library.costume_preview('hoshino', 'hina') and built.pop() == ('hina', True, False)
     made = library.optimize_costume('hoshino', 'variant:hina', 'Hina')
-    assert made['mod'] and built.pop() == ('hina', False, True, True)
+    assert made['mod'] and built.pop() == ('hina', False, True)
     # nothing to build: the official model needs none, a costume that no physics rule improves says so (reasons apart)
     assert library.optimize_costume('hoshino', 'official', 'Hoshino') == {'unneeded': True, 'reason': 'official'}
     gain['physics'] = False
     assert library.optimize_costume('hina', 'variant:hoshino', 'Hoshino') == {'unneeded': True, 'reason': 'no_gain'}
-    assert built.pop() == ('hoshino', False, True, True) and not [m for m in library.mods() if m.target == 'hina']
+    assert built.pop() == ('hoshino', False, True) and not [m for m in library.mods() if m.target == 'hina']
     library.restore('hoshino', kind='model')
     for other in ('hoshino_swimsuit', 'hina'):
         library._save_verdict(library._costume_signature('hoshino', other, pin)[0], False, 'static model')
@@ -1103,7 +1104,7 @@ def test_costume_verdicts_are_kept_per_build_signature(model_env, monkeypatch):
     library = ModLibrary(env.root, Catalog(game, None), object(), env.settings, scan_allowed=lambda: True)
     assert library.costume_verdict('hoshino', 'hoshino_swimsuit') is None
 
-    def refused(self, other, targets, directory, log, pin, *, preview=False, report=None, cross=False):
+    def refused(self, other, targets, directory, log, pin, *, preview=False, report=None):
         raise model_adapt.refuse('rest pose')
 
     monkeypatch.setattr(ModLibrary, '_stage_costume', refused)
