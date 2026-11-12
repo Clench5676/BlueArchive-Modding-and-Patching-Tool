@@ -140,3 +140,65 @@ def test_generic_mod_after_a_crc_only_game_update_writes_the_part_with_its_own_c
     library.apply(mod.target, f"mod:{mod.id}", kind="other")
     assert part.read_bytes() != (mod.file.parent / mod.file.name).read_bytes()
     assert matches_name(part)
+
+
+def test_start_finds_a_bad_built_copy_and_the_repair_drops_it(updated):
+    env = updated
+    assert not env.library.toggle(False, True).failed
+    env.library.apply("test", f"mod:{env.mod.id}")
+    pin = bad_built_key(env)
+    found = env.library.crc_repair_due()
+    assert found["due"]
+    assert found["entries"] == [{"install": pin.key, "core": "test_spr", "variant": "test", "kind": "spr",
+                                 "built": True, "game": False}]
+    result = env.library.repair_crc()
+    assert [item["core"] for item in result.dropped] == ["test_spr"] and not result.rewritten and not result.failed
+    assert "test_spr" not in env.library.profiles.read()["folders"][pin.key]["built"]
+    assert env.mod.file.exists()  # the mod's own file stays
+    assert not env.library.crc_repair_due()["due"]
+    assert not env.library.toggle(True, False).failed
+    assert matches_name(env.part)
+
+
+def test_start_check_runs_once_on_a_clean_library(updated, monkeypatch):
+    env = updated
+    assert not env.library.crc_repair_due()["due"]
+    assert env.library.profiles.read()["checked"]["target_crc"]
+    monkeypatch.setattr(env.library._hashes, "get", lambda path: pytest.fail("checked libraries read no file"))
+    assert env.library.crc_repair_due() == {"due": False, "entries": []}
+
+
+def test_repair_writes_again_a_game_file_left_without_its_crc(updated, monkeypatch):
+    from bmpt.library import install
+    env = updated
+    with monkeypatch.context() as old:  # the write of an older build
+        old.setattr(install, "matches_target_crc", lambda source, target: Bundle.check_crc_match(source))
+        env.library.apply("test", f"mod:{env.mod.id}")
+    assert not matches_name(env.part) and env.library.state("test").crc == "needs_fix"
+    found = env.library.crc_repair_due()
+    assert found["due"] and found["entries"][0]["game"] and found["entries"][0]["core"] == "test_spr"
+    result = env.library.repair_crc()
+    assert [item["core"] for item in result.rewritten] == ["test_spr"] and not result.failed
+    assert result.cores == ["test_spr"] and result.kinds == ["spr"]
+    assert matches_name(env.part)
+    assert env.library.state("test").crc == "fixed"
+    assert env.library.state("test").applied == f"mod:{env.mod.id}"
+    assert not env.library.crc_repair_due()["due"]
+
+
+def test_repair_leaves_game_files_for_a_later_start_while_the_game_runs(updated, monkeypatch):
+    from bmpt.errors import ServiceError
+    from bmpt.library import install, safety
+    env = updated
+    with monkeypatch.context() as old:
+        old.setattr(install, "matches_target_crc", lambda source, target: Bundle.check_crc_match(source))
+        env.library.apply("test", f"mod:{env.mod.id}")
+
+    def running():
+        raise ServiceError("game_running")
+
+    monkeypatch.setattr(safety, "check_game_not_running", running)
+    result = env.library.repair_crc()
+    assert [failed["code"] for failed in result.failed] == ["game_running"] and not result.rewritten
+    assert not matches_name(env.part)
+    assert env.library.crc_repair_due()["due"]  # found again at the next start

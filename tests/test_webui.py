@@ -1060,6 +1060,50 @@ def test_startup_maintenance_waits_for_reveal_and_respects_the_preference(servic
     assert sorted(calls) == (["prune", "rigs", "scan"] if enabled else [])
 
 
+@pytest.mark.parametrize("consent", [True, False])
+def test_startup_repairs_what_older_builds_left_without_the_crc_silently(services, monkeypatch, consent):
+    # BL-191: with or without the scan consent, once the first screen is revealed, as a game writer job; nothing asked
+    calls, finished = [], threading.Event()
+    services.state.set_scan_consent(consent)
+    monkeypatch.setattr(services, "start_watch", lambda: None)
+    monkeypatch.setattr(services.scanner, "request", lambda *args: None)
+    monkeypatch.setattr(services.library, "prune", lambda: [])
+    monkeypatch.setattr(services.library, "archive_rigs", lambda cancel: 0, raising=False)
+    monkeypatch.setattr(services.library, "crc_repair_due", lambda: {"due": True, "entries": [{"core": "a_spr"}]},
+                        raising=False)
+    monkeypatch.setattr(services.library, "repair_crc", lambda log=None, progress=None: calls.append("repair"),
+                        raising=False)
+    warm, start, started = services._warm, services._start_crc_repair, []
+
+    def warmed():
+        try:
+            warm()
+        finally:
+            finished.set()
+
+    monkeypatch.setattr(services, "_warm", warmed)
+    monkeypatch.setattr(services, "_start_crc_repair", lambda library: started.append(start(library)) or started[-1])
+    services.start()
+    services.ready()
+    assert finished.wait(5)
+    assert services.jobs.wait(started[0], 5) and services.jobs.get(started[0]).state == "done"
+    assert calls == ["repair"]
+
+
+def test_startup_crc_repair_is_left_for_the_next_start_while_a_classic_window_is_open(services, monkeypatch):
+    calls = []
+    monkeypatch.setattr(services.library, "crc_repair_due", lambda: {"due": True, "entries": [{"core": "a_spr"}]},
+                        raising=False)
+    monkeypatch.setattr(services.library, "repair_crc", lambda log=None, progress=None: calls.append("repair"),
+                        raising=False)
+    monkeypatch.setattr(services, "classic_open", lambda: True)
+    job = services._start_crc_repair(services.library)
+    assert services.jobs.wait(job, 5) and services.jobs.get(job).state == "done"
+    assert calls == []
+    monkeypatch.setattr(services.library, "crc_repair_due", lambda: {"due": False, "entries": []}, raising=False)
+    assert services._start_crc_repair(services.library) is None
+
+
 def test_startup_preferences_round_trip_and_update_info(app, services):
     prefs = rpc(app, "settings.get")["result"]
     assert "startupChecks" not in prefs and prefs["startupUpdate"] is True

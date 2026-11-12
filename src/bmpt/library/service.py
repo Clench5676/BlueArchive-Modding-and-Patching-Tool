@@ -5750,6 +5750,21 @@ class ModLibrary:
             return True
         return not self.settings.crc_needed(target)
 
+    @_serialized
+    def crc_repair_due(self) -> dict[str, Any]:
+        """Whether the start repairs what an older build left without its part's CRC (``crc_repair.findings``):
+        {due, entries}."""
+        from . import crc_repair
+
+        return crc_repair.findings(self)
+
+    @_serialized
+    def repair_crc(self, log: LogFunc = no_log, progress: ProgressCallback | None = None) -> Any:
+        """Repair what an older build left without its part's CRC (``crc_repair.repair``), a game writer job."""
+        from . import crc_repair
+
+        return crc_repair.repair(self, log, progress)
+
     def _current_builds(self, pin: Pin, core: str, record: dict[str, Any], targets: list[Path]) -> set[str]:
         """The builds a write of a mod over an entry's game files signs now, as apply and switch sign them
         (``_cached_build``); those that cannot be told are left out."""

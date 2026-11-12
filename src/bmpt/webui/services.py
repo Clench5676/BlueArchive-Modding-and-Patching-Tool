@@ -1238,6 +1238,7 @@ class Services:
     def _warm(self) -> None:
         try:
             library = self.library
+            self._start_crc_repair(library)
             requested = False
             with self._lock:
                 if self._prune_job is None and self.scan_allowed():
@@ -1257,6 +1258,26 @@ class Services:
                     archive(cancel=lambda: self.jobs.closing)
         except Exception:
             logger.exception("startup maintenance failed")
+
+    def _start_crc_repair(self, library: Any) -> str | None:
+        """What an older build left without its part's CRC (BL-191), repaired without asking: a game writer job, once
+        found (``crc_repair_due``, read once per library); returns its job id. Nothing is shown: an entry it cannot
+        write now (the game running, a classic window open) is logged and tried again at the next start."""
+        due = getattr(library, "crc_repair_due", None)
+        try:
+            if due is None or not due().get("due"):
+                return None
+        except ServiceError as error:
+            logger.info("CRC repair not checked: %s", error.code)
+            return None
+
+        def run(log: Any, progress: Any) -> Any:
+            if self.classic_open():
+                logger.info("CRC repair left for the next start: a classic window is open")
+                return None
+            return library.repair_crc(log=log)
+
+        return self.submit("mods.crcRepair", run, writes="game", library=library)
 
     def start_watch(self, run: bool = True) -> None:
         """Make the game watch and (``run``) start its thread; without, ``watch.poll()`` checks once."""
