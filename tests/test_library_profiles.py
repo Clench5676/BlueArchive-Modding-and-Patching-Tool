@@ -476,6 +476,60 @@ def keep_backup(path: Path, data: bytes = OFFICIAL) -> Path:
     return backup
 
 
+def test_an_offs_own_pass_leaves_the_library_free_for_previews(world, monkeypatch):
+    world.consent = True
+    keep_backup(world.spr)
+    outside_mod(world.spr)
+    pass_entries = service._View.entries
+    seen = []
+
+    def entries(view, pins, *args, **kwargs):
+        got = threading.Event()
+
+        def reader():  # a preview's library call while the pass runs
+            if world.library._lock.acquire(timeout=2):
+                got.set()
+                world.library._lock.release()
+
+        worker = threading.Thread(target=reader)
+        worker.start()
+        worker.join()
+        seen.append((got.is_set(), kwargs.get("background")))
+        return pass_entries(view, pins, *args, **kwargs)
+
+    monkeypatch.setattr(service._View, "entries", entries)
+    result = world.toggle(False)
+    assert seen == [(True, True)]  # the pass ran once, unlocked, pausing for model previews
+    assert [item["core"] for item in result.adopted] == ["test_spr"] and world.spr.read_bytes() == OFFICIAL
+
+
+def test_an_off_checks_again_after_its_pass(world, monkeypatch):
+    world.consent = True
+    data = outside_mod(world.spr)
+    pass_entries = service._View.entries
+
+    def running():
+        raise ServiceError("game_running")
+
+    def entries(view, pins, *args, **kwargs):
+        found = pass_entries(view, pins, *args, **kwargs)
+        monkeypatch.setattr(safety, "check_game_not_running", running)  # the game starts during the pass
+        return found
+
+    monkeypatch.setattr(service._View, "entries", entries)
+    expect_error("game_running", lambda: world.toggle(False))
+    assert world.library.intent()["enabled"] is True and world.spr.read_bytes() == data
+    monkeypatch.setattr(safety, "check_game_not_running", lambda: None)
+
+    def switched(view, pins, *args, **kwargs):
+        found = pass_entries(view, pins, *args, **kwargs)
+        world.library.profiles.update(lambda config: config.update(enabled=False))  # another window's Off
+        return found
+
+    monkeypatch.setattr(service._View, "entries", switched)
+    expect_error("state_changed", lambda: world.toggle(False))
+
+
 def test_untracked_mods_are_adopted_before_an_off_and_come_back_on(world, original_cloning):
     world.consent = True
     keep_backup(world.spr)
