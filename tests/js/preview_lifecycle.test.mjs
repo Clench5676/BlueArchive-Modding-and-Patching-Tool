@@ -106,31 +106,35 @@ test("frame readiness uses foreground frames but can finish after focus leaves",
 
 for (const kind of ["portrait", "lobby", "special L2D"]) test(`${kind} restarts without stale frames, rebuilds its context and ignores disposed events`, async (t) => {
   const env = surface(); globals(t, env);
-  const queue = latestLoad(), players = [], errors = []; let frames = 0, resets = 0;
+  const queue = latestLoad(), players = [], errors = []; let frames = 0, draws = 0, resets = 0;
   const show = () => queue.run(async (signal) => {
     const load = loadPlayer((config) => {
       const p = { config, canvas: new EventTarget(), stopRequestAnimationFrame: false,
         time: { delta: 99, update() { this.delta = 99; } },
         stopRendering() { this.stopRequestAnimationFrame = true; },
         startRendering() { this.stopRequestAnimationFrame = false; },
+        drawFrame() { this.config.frame(this); this.config.draw(this); },
         dispose() { this.disposed = true; } };
       players.push(p); queueMicrotask(() => config.success(p)); return p;
-    }, { skeleton: `/${kind}/revision.skel`, frame() { frames++; } },
+    }, { skeleton: `/${kind}/revision.skel`, frame() { frames++; }, draw() { draws++; } },
     { signal, onResume: () => resets++, onRecover: show, onError: (err) => errors.push(err) });
     return load.ready;
   });
   const p = await show();
-  env.focus(false); p.config.frame(p); assert.equal(frames, 0);
+  env.focus(false); p.drawFrame();
+  assert.deepEqual([frames, draws], [0, 0], "the loop frame queued before the pause is skipped whole");
+  p.drawFrame(false);
+  assert.deepEqual([frames, draws], [1, 1], "a frame asked for directly runs every hook, never half of them");
   env.focus(true); await tick();
   assert.equal(p.stopRequestAnimationFrame, false); assert.equal(p.time.delta, 0); assert.equal(resets, 1);
-  p.config.frame(p); assert.equal(frames, 1);
+  p.drawFrame(); assert.deepEqual([frames, draws], [2, 2]);
   contextEvent(p.canvas, "lost"); p.config.error(p, "Context lost"); await tick();
   assert.deepEqual(errors, []); assert.equal(players.length, 1, "wait for restoration");
   contextEvent(p.canvas, "restored"); await tick();
   assert.equal(players.length, 2); assert.equal(p.disposed, true);
   assert.equal(players[1].config.skeleton, p.config.skeleton);
   p.config.frame(p); contextEvent(p.canvas, "restored"); await tick();
-  assert.equal(frames, 1); assert.equal(players.length, 2);
+  assert.equal(frames, 2); assert.equal(players.length, 2);
   players[1].config.error(players[1], "Invalid GPU draw"); await tick();
   assert.equal(errors.length, 1, "a foreground render failure is still reported"); queue.cancel();
 });

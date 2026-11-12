@@ -93,9 +93,11 @@ export function loadPlayer(create, config, { signal, timeout = 15000, onError, o
   };
   if (signal?.aborted) { dispose(); return { ready, dispose, player: null }; }
   try {
+    // A frame the runtime draws runs every hook: without them a frame is only half drawn (a lobby's skeleton without
+    // its linear-light pass looks dark). While the context is being rebuilt nothing is drawn through them.
     const hooks = Object.fromEntries(["frame", "update", "draw", "updateWorldTransform"].filter((key) => config[key])
       .map((key) => [key, (...args) => {
-        if (disposed || failed || signal?.aborted || (!manual && settled && !lifecycle.active())) return;
+        if (disposed || failed || signal?.aborted || (!manual && settled && lifecycle.recovering())) return;
         try { return config[key](...args); } catch (err) { fail(err, key); }
       }]));
     player = create({
@@ -109,6 +111,16 @@ export function loadPlayer(create, config, { signal, timeout = 15000, onError, o
       },
       error: (_p, message) => fail(message, settled ? "render" : "load"),
     });
+    // stopRendering does not cancel the frame the runtime's loop has already queued: once the window is away, that
+    // frame (and any later loop frame) is skipped whole, so the last full frame stays on screen. Frames asked for
+    // directly (drawFrame(false): a resize, a capture) still draw.
+    if (!manual && typeof player?.drawFrame === "function") {
+      const drawFrame = player.drawFrame;
+      player.drawFrame = function (loop = true) {
+        if (loop && settled && !disposed && !lifecycle.active()) return;
+        return drawFrame.call(this, loop);
+      };
+    }
     lifecycle.watch(player?.canvas);
     if (manual || !lifecycle.active()) player?.stopRendering?.();
     signal?.addEventListener("abort", dispose, { once: true });
