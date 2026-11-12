@@ -6,6 +6,8 @@
 .loading.neutral .loading-progress { color: #444; background: #f4f4f4; border-radius: 0; }
 .loading-plain { position: absolute; right: 84px; bottom: 44px; padding: 10px 16px;
   color: #444; background: #f4f4f4; font: 24px/1.4 system-ui, sans-serif; }
+/* nothing painted until its text is in: the light box must not show empty on the black start cover */
+.loading-plain:has(> span:empty) { visibility: hidden; }
 .loading.neutral .loading-progress { color: #444; background: #f4f4f4; font-family: system-ui, sans-serif; }
 
 /* message screen */

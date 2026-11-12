@@ -453,6 +453,29 @@ test("overlapping holds retain one indicator until the last task and accept acti
   assert.equal(h.loading.held(), false); assert.equal(h.loading.active(), false);
 });
 
+test("a writer under the start cover shows its progress only, and its own indicator once the cover is gone", async () => {
+  const h = await harness({ boot: true }), boot = deferred(), writer = deferred();
+  const booting = h.loading.scene(() => boot.promise, { opaque: true });
+  await flush();
+  const writing = h.loading.task(() => writer.promise, { label: "Updating" });
+  const indicator = h.stage.children.find((el) => el.classList.contains("with-progress"));
+  assert.equal(h.loading.covering(), true);
+  assert.equal(indicator.classList.contains("over-cover"), true, "one Now Loading over the start cover");
+  assert.equal(indicator.querySelector(".loading-progress").textContent, "Updating");
+  boot.resolve(); await flush();
+  assert.equal(indicator.classList.contains("over-cover"), false, "the writer's indicator returns as the cover leaves");
+  await h.advance(300); await booting;
+  writer.resolve(); await flush(); await h.advance(300); await writing;
+  assert.equal(h.stage.children.length, 0);
+});
+
+test("the stylesheets hide the writer's indicator over a cover and an empty neutral box", () => {
+  const css = readFileSync(new URL("../../src/bmpt/web/css/app.css", import.meta.url), "utf8");
+  const fallback = readFileSync(new URL("../../src/bmpt/web/css/fallback.css", import.meta.url), "utf8");
+  assert.match(css, /\.loading\.over-cover \.loading-ind, \.loading\.over-cover \.loading-edge \{ visibility: hidden; \}/);
+  assert.match(fallback, /\.loading-plain:has\(> span:empty\) \{ visibility: hidden; \}/);
+});
+
 test("page changes keep the current screen visible and writer progress suppresses duplicate indicators", async () => {
   const h = await harness({ consent: false }), page = deferred(), writer = deferred();
   const changing = h.loading.page(async (ready) => { await ready; await page.promise; });

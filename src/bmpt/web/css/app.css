@@ -383,6 +383,8 @@ input[type="text"], input[type="search"], textarea { cursor: text; }
   -webkit-text-stroke: 1px #fff; text-shadow: 0 3px 0 #2c4564, 2px 0 0 #2c4564, -2px 0 0 #2c4564; }
 .loading-fallback span { margin-right: 4px; animation: ld-text .8333s ease-in-out infinite; }
 .loading.with-progress { z-index: 1501; }
+/* a writer over a full cover: its progress only, the cover's indicator stays the one Now Loading */
+.loading.over-cover .loading-ind, .loading.over-cover .loading-edge { visibility: hidden; }
 .input-held > .loading { z-index: 4000; }
 .loading-progress { position: absolute; left: 84px; bottom: 44px; max-width: 1000px;
   color: #fff; font-size: 26px;
