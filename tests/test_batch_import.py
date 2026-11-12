@@ -17,6 +17,8 @@ from bmpt.errors import ServiceError
 from bmpt.library import integrity
 from bmpt.library import targets as resolver
 from ba_modding_toolkit.models import AssetType, FilePair, PatchResult
+from ba_modding_toolkit.naming import parse_filename
+from ba_modding_toolkit.utils import CRCUtils
 from bmpt.library.rebuild import RebuildResult
 from bmpt.webui import batch_import, native
 from bmpt.webui.api import build_api
@@ -535,7 +537,10 @@ def updater(monkeypatch, calls, payload=b"updated mod"):
         for target in kwargs["target_paths"]:
             output = kwargs["output_dir"] / target.name
             from test_library import header_bundle
-            output.write_bytes(header_bundle(payload))
+            data = header_bundle(payload)
+            if kwargs["save_options"].perform_crc:  # as the real rebuild: the CRC of the target's name
+                data = CRCUtils.apply_crc_fix(data, int(parse_filename(target.name).crc))
+            output.write_bytes(data)
             pairs.append(FilePair(output, target))
         return RebuildResult(True, "ok", pairs)
 
