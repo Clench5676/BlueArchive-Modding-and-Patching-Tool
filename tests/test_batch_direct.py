@@ -100,7 +100,6 @@ def test_model_direct_replacement_never_transfers_assets(batch_model_env, monkey
     monkeypatch.setattr(Bundle, 'extract_patch', forbidden)
     monkeypatch.setattr(resolver, 'sharing_keys', forbidden)
     monkeypatch.setattr(batch_import, 'rebuild', forbidden)
-    monkeypatch.setattr(Bundle, 'check_need_crc', lambda *args: True)
     entry, = analyze(env, [source])['entries']
     assert (entry['state'], entry['reason'], entry['files'][0]['target']) == ('ready', None, target.name)
     result, = run(env, [entry], crc='auto', extraBytes='', types=['Texture2D'], backup=True)
@@ -121,7 +120,6 @@ def test_direct_replacement_stages_in_a_short_folder(batch_model_env, monkeypatc
     target = rename_crc(unity_bundle(env.parts[1], name='Hoshino_Body'))
     env.parts[1] = target
     source = unity_bundle(env.tmp / 'input' / target.name, name='Unknown_CutIn_Body', payload=b'modified model')
-    monkeypatch.setattr(Bundle, 'check_need_crc', lambda *args: True)
     entry, = analyze(env, [source])['entries']
     assert entry['state'] == 'ready' and len(entry['id']) == 64
     prepare, staged = env.services.batch_import._prepare, []
@@ -138,12 +136,12 @@ def test_direct_replacement_stages_in_a_short_folder(batch_model_env, monkeypatc
     assert staged[0].parent.name == 'direct' and staged[0].parent.parent.name == entry['id'][:16]
 
 
-@pytest.mark.parametrize('crc,official_needs,extra', [
+@pytest.mark.parametrize('crc,install_needs,extra', [
     ('off', True, '0x01020304'), ('auto', False, '0x01020304'), ('on', False, ''), ('on', False, '0x01020304'),
     ('auto', True, '0x0A0B'),
 ])
 def test_direct_replacement_honours_the_crc_and_extra_bytes_options(batch_model_env, monkeypatch, crc,
-                                                                     official_needs, extra):
+                                                                     install_needs, extra):
     env = batch_model_env
     restore_metadata(monkeypatch)
     target = rename_crc(unity_bundle(env.parts[1], name='Hoshino_Body'))
@@ -151,13 +149,13 @@ def test_direct_replacement_honours_the_crc_and_extra_bytes_options(batch_model_
     source = rename_crc(unity_bundle(env.tmp / 'input' / target.name, name='Unknown_CutIn_Body',
                                      payload=b'modified model'))
     original_source = source.read_bytes()
-    monkeypatch.setattr(Bundle, 'check_need_crc', lambda *args: official_needs)
+    monkeypatch.setattr(batch_import, 'install_needs_crc', lambda source: install_needs)
     entry, = analyze(env, [source])['entries']
     assert entry['state'] == 'ready' and entry['files'][0]['target'] == target.name
     result, = run(env, [entry], crc=crc, extraBytes=extra, types=['Texture2D'])
     assert result['outcome'] == 'imported' and result['applied'], result
     installed = target.read_bytes()
-    if crc == 'off' or (crc == 'auto' and not official_needs):
+    if crc == 'off' or (crc == 'auto' and not install_needs):
         assert installed == original_source
         return
     appended = bytes.fromhex(extra[2:]) if extra else b''
