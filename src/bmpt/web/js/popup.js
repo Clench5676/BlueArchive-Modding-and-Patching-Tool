@@ -293,11 +293,10 @@ export function footerSlots(n, w, control = footerSize().control) {
 }
 const CAPTION_L = { fs: TYPE.display.fs, fsMin: TYPE.display.min, w: CONTROL.buttonL.minW - 2 * CONTROL.buttonL.pad,
   lines: 2, h: BUTTON_TEXT_H };
-// The footer's sizes: "XS", the app's small button (CONTROL.buttonXS), every popup's footer (
-// "弹窗的按钮弄成 XS", every popup of the App); "L", the buttonL control with display captions (UIPopup_RaidEnterCheck's footer); "M", one size smaller
+// The footer's sizes: "XS", the app's small button (CONTROL.buttonXS), every popup's footer (// "弹窗的按钮弄成 XS", every popup of the App); "L", the buttonL control with display captions (UIPopup_RaidEnterCheck's footer); "M", one size smaller
 // (the buttonM control, its caption 60 down to TYPE.body's floor); "S", two sizes smaller (the Settings value row's small
-// button, SMALL_BUTTON, 402 x 136, its caption 48 down to TYPE.body's floor). Every button went one size down:
-// a popup's footer is "M" unless its call site says otherwise, and the compatibility result ("S") and
+// button, SMALL_BUTTON, 402 x 136, its caption 48 down to TYPE.body's floor). Every button went one size down: a
+// popup's footer is "M" unless its call site says otherwise, and the compatibility result ("S") and
 // the repair review ("M") had gone down once already.
 const FOOTER_S = Object.freeze({ ...CONTROL.buttonS, minW: SMALL_BUTTON.w });
 export const FOOTER = Object.freeze({
@@ -361,7 +360,7 @@ const titleHeight = (title) => textItem(NGUI, title, TYPE.display, { lines: 1 })
 //                header band's centre puts the title where UIPopup_Sort has it)
 //   footer: the buttons' size, "XS", "S", "M" or "L" (FOOTER); without it the default size, XS, its bodies as wide as the captions need
 //   align: "right" for a footer at the frame's bottom right, its last body's right edge SPACE.xl in from the frame's (the
-//          panels' edge: the list popups and the Hall's background picker); centred otherwise
+//          panels' edge; the list popups and the Hall's background picker); centred otherwise
 //   a button's tone: "bright" for the Settings small button's bright blue (BRIGHT_BUTTON) in place of the pale secondary
 export function popupFrame(title, w, h, { ok = null, cancel = null, close = true, buttons = null, captionSite = null,
   titleCentre = null, footer = null, align = "center" } = {}) {
@@ -700,7 +699,7 @@ export function listCard(it, x, y, selected, card = LP.card, kind = null, tick =
 }
 
 // The detail actions: the XS body, their captions 34 down to 24 (smaller, with more padding),
-// the button's padding each side of the caption (the body's slant inside it). All of them on one row (owner): the
+// the button's padding each side of the caption (the body's slant inside it). All of them on one row: the
 // XXS body, its captions 30 down to 22, where the row of XS bodies at their minimum width does not fit.
 const ACTION_TIERS = Object.freeze([
   Object.freeze({ control: CONTROL.buttonXS, fs: 34, min: 24 }),
@@ -929,7 +928,8 @@ export function detailsTree(it, title, fields, actions, portraitTexture = null, 
   });
   if (actions.length) bands.push({ name: "Actions", w, h: actionsH });
   const placed = layoutStack(bands, { x: content.x, y: content.y, w: content.w, gap: SPACE.m });
-  // The actions stand on the panel's bottom, their solid art level with the list panel's (every panel).
+  // The actions stand on the panel's bottom, their solid art level with the list panel's (every
+  // panel).
   const pinned = actions.length && placed.h <= content.h;
   if (pinned) placed.boxes.at(-1).y = content.y + content.h - actionsH + BTN.h * ACTION_SHADOW;
   const tree = node("Details", [0, 0], [], kids);
@@ -1175,7 +1175,7 @@ export async function listPopup(options) {
   const trees = items.map((it) => listCard(it, 0, 0, isSelected(it.key), card, options.layoutKind, tickKeys ? tickKeys.has(it.key) : null));
   const paper = { left: cardLeft, right: cardLeft + cardBox.w, top: top + SPACE.m };
   // every list is placed as if every card were selected, so choosing or ticking a card, or a segment that hides the
-  // chosen one, never moves the cards (the list's padding is fixed whatever is ticked; and
+  // chosen one, never moves the cards (the list's padding is fixed whatever is ticked, and
   // whatever is chosen); a card's own marks (the selection's check, the new dot) stand over that envelope
   const shapes = items.map((it) => listCard(it, 0, 0, true, card, options.layoutKind, tickKeys ? true : null));
   // the envelopes where they stand, for the scroll extent and the cards in view: the same whatever is chosen
@@ -1432,7 +1432,8 @@ export const RULE = Object.freeze({ h: 4 });
 // pad: the small button fits its caption again within its width less XS_BUTTON.fitInset, so the pad is at least that
 export const INLINE_BUTTON = Object.freeze({ height: 0.9 * XS_RATIO, share: 0.55 * XS_RATIO, fsMin: 20, pad: XS_BUTTON.fitInset });
 // button.inline "line": the button's face as high as its line of text (the line's pitch, the small button's shadow
-// inset added around it), its caption ``share`` of the type size, ``fsMin`` at least (the compatibility result's Details)
+// inset added around it), its caption ``share`` of the type size, ``fsMin`` at least (the compatibility result's
+// Details)
 export const LINE_BUTTON = Object.freeze({ share: 0.6 * XS_RATIO, height: XS_RATIO, fsMin: TYPE.badge.min, pad: XS_BUTTON.fitInset });
 function inlineButton(r, fs, w) {
   const first = oneInlineButton(r, r.button, fs);

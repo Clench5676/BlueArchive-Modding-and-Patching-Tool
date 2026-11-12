@@ -66,7 +66,7 @@ export const SMALL_BUTTON = Object.freeze({
 // The app's own small button, one size under the S preset above: the S button drawn at 0.765 of
 // its height, 104 high, which is the game's own toolbar and tab height (Common_Filter_Tab_Type1, UILobby Able_Count/Bg). Its
 // numbers are SMALL_BUTTON's scaled, the slice borders' insets (the sprite's structure) a little smaller, and its caption 40 down
-// to 28. Every small button of the app takes these; SMALL_BUTTON stays for the popups whose footers are set to S.
+// to 28. Every small button of the app takes these; SMALL_BUTTON stays for the popups whose footers are S.
 export const XS_BUTTON = Object.freeze({
   w: 308,
   h: 104,
@@ -86,7 +86,7 @@ export const XS_BUTTON = Object.freeze({
   wideW: 520,
 });
 
-// Agreed wording exceptions, scoped to a single Hall site and locale. The prefab minima above stay unchanged.
+// Approved wording exceptions, scoped to a single Hall site and locale. The prefab minima above stay unchanged.
 export const CAPTION_EXCEPTIONS = Object.freeze({
   "hall.doneAdding": Object.freeze({ "th-TH": 44 }),
   "hall.unsavedChanges": Object.freeze({ "th-TH": 36 }),
@@ -277,7 +277,7 @@ export const POPUP_FOOTER = Object.freeze({ control: CONTROL.buttonXS, bottom: 6
 export const POPUP_FRAME = Object.freeze({
   frameY: -12, // UIPopup_Sort Base -20 + BG 8
   // the smallest frame: the title's band over the footer's clearance (the game's smallest titled popup with a footer
-  // button, UIPopup_ClientVersion's 1115 x 786, kept far more padding than wanted)
+  // button, UIPopup_ClientVersion's 1115 x 786, kept far more padding than the App wants)
   minH: 170 + POPUP_FOOTER.clearance,
   maxH: 1560,
   // the panel popups' height: the Hall's editors and the list popups share one outline

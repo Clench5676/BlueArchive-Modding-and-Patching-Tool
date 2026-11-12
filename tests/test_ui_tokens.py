@@ -68,7 +68,7 @@ def test_toolbar_height_is_the_lobby_clone(tokens, record_property):
     lobby = roots["UILobby"]
     clone = "Front/Right/Btn_RotateSpine/ConditionRoot/Able_Count"
     assert sprite(subtree(lobby, f"{clone}/Bg"))["h_"] == tokens["CONTROL"]["toolbar"]["h"] == 104
-    # Derived widget geometry only, kept in the test report for a before/after review.
+    # Derived widget geometry only, kept in the test report for a before/after comparison.
     geometry = {}
     for root, path in (("UILobby", f"{clone}/Label_SpineCount"), *(
         ("UICharacterCollection", f"SeletControl/TopMenu/{name}/Btn_Normal")
@@ -378,7 +378,7 @@ def _origin(tree, path):
 
 def test_popup_minimum_is_the_title_band_over_the_xs_footer(tokens):
     # The game's smallest titled popup with a footer button, UIPopup_ClientVersion (1115 x 786), kept far more padding than
-    # wanted: the App's smallest frame is the title's band over the XS footer's clearance.
+    # the App wants: the App's smallest frame is the title's band over the XS footer's clearance.
     path = bundle_by_cab("ui-_mxload-prefabs-2025-07-02_assets_all_197929148.bundle", "cab-f132af15cc4169b45772a043d884cb2c")
     with open_bundle(path) as env:
         tree = export_layout(env, "UIPopup_ClientVersion", {})

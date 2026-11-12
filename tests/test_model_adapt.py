@@ -847,7 +847,7 @@ def test_official_a_particle_slot_hides_its_halo_and_takes_the_sources(view, tmp
     doc = json.loads(data[20:20 + struct.unpack_from("<I", data, 12)[0]])
     names = {m["name"] for m in doc["meshes"]}
     assert "Azusa_Original_Halo" in names and "Tsurugi_Original_Halo" not in names
-    assert "haloFx" not in doc["extras"]  # her silenced drops do not play in the preview
+    assert "haloFx" not in doc["extras"]  # Her silenced drops do not play in the preview
 
 
 def _locks_free() -> list[str]:

@@ -29,7 +29,7 @@ src/ba_modding_toolkit/locales/tmp/
 src/ba_modding_toolkit/locales/backup/
 src/ba_modding_toolkit/locales/*TMP.json
 
-# --- Project: local development docs ---
+# --- Project: local development notes (never committed) ---
 /docs/project-status.md
 /docs/feedback-*.md
 /docs/asset-ecosystem.md

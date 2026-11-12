@@ -181,7 +181,7 @@ for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) tes
   assert.equal(widget.color, "#e06f6f/1.00");
   assert.equal(widget.pivot, 0);
   assert.ok(widget.fontSize <= TYPE.caption.fs && widget.fontSize >= TYPE.caption.min, `${widget.fontSize} is a caption`);
-  // the given words, wrapped at most onto two lines, each inside the content box
+  // the agreed words, wrapped at most onto two lines, each inside the content box
   assert.equal(widget.text.replace(/\n/g, locale.startsWith("en") || locale === "th-TH" || locale === "ko-KR" ? " " : ""), T("settings.log.reportNote"));
   const lines = widget.text.split("\n");
   assert.ok(lines.length <= Rows.NOTE.lines);

@@ -288,7 +288,7 @@ for (const locale of LOCALES) test(`Hall portrait swap choice fits its existing 
 });
 
 // --- the compatibility result's three repair choices (mod-compatibility.js repairButtons): the XS footer every popup has
-// bodies as wide as the captions need and sharing the frame's width (popup.js footerScale), in each frame the
+//, bodies as wide as the captions need and sharing the frame's width (popup.js footerScale), in each frame the
 // result popup can take ---
 const { POPUP_FRAME } = await import("../../src/bmpt/web/js/ui-tokens.js");
 for (const locale of LOCALES) test(`the three repair choices share one size and fit their small button bodies in ${locale}`, async () => {

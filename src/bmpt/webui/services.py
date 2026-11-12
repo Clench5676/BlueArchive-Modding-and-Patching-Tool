@@ -1249,7 +1249,7 @@ class Services:
             if self.refresh_status() is not None:
                 self.publish_state()
             # the official rigs of the portraits as this release has them, kept before an update replaces them
-            # after the prune, away from the job queue, a core at a time
+            #: after the prune, away from the job queue, a core at a time
             if self._prune_job is not None:
                 self.jobs.wait(self._prune_job, PRUNE_WAIT)
             archive = getattr(library, "archive_rigs", None)

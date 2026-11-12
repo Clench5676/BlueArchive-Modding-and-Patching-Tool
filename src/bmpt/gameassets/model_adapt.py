@@ -87,7 +87,7 @@ def stretch_limit(own: float) -> float:
 
 
 # the shapes a costume may be bound in, in the order they are judged: its vertex data in its renderer's space
-# (the earlier binding), as its prefab draws it at rest, with its joints moved onto the slot's, refitted (moved and turned)
+# (the only shape the adapter used at first), as its prefab draws it at rest, with its joints moved onto the slot's, refitted (moved and turned)
 SHAPES = ("stored", "drawn", "moved", "refitted")
 SHAPE_MARGIN = 0.02  # a later shape is taken when it stretches this share less
 CARRIER_SAMPLES = 200  # vertices measured, about, per unmatched bone
@@ -742,8 +742,7 @@ def flatten(costume: Costume, rest: list[np.ndarray]) -> Flat:
         bp = bindposes(graph, part.mesh)
         carry = [rest[b] @ bp[j] if b is not None and j < len(bp) else node for j, b in enumerate(part.bones)]
         # a face's eye, brow and mouth bones may rest off their bind (a default expression the clips replace): the
-        # face is drawn as bound, rigidly with the head, so no expression of the source's rest goes along (
-        # Midori (Battle)'s brows rested 1.4 cm up, through Midori's bangs)
+        # face is drawn as bound, rigidly with the head, so no expression of the source's rest goes along (# Midori (Battle)'s brows rested 1.4 cm up, through Midori's bangs)
         head = {b: j for j, b in enumerate(part.bones) if b is not None and skeleton.nodes[b].name == "Bip001 Head"}
         for j, b in enumerate(part.bones):
             if b is None or j >= len(bp) or not face_bone(skeleton, b):
@@ -827,7 +826,7 @@ def fit_anchor(target: Skeleton, source: Skeleton, node: int,
 
 
 def stored(costume: Costume, rest: list[np.ndarray], flat: Flat) -> Fit:
-    """The shape the adapter bound costumes in before the shapes: each part's vertex data in its renderer's space."""
+    """The shape the adapter bound costumes in at first: each part's vertex data in its renderer's space."""
     vertices, linear = [], []
     for part, skin in zip(costume.parts, costume.skins):
         node = rest[part.node]
@@ -1231,7 +1230,7 @@ def _skirt_candidates(ts: Skeleton, ss: Skeleton, plan_: Plan, flat: Flat, sv: n
 
 def hems(target: Costume, source: Costume, plan_: Plan, t_clips: list[Any], s_clips: list[Any],
          writable: list[bool], physics: bool = False) -> Hems:
-    """Rule A of the hem rule: new skin weights for the cloth the group choice left rigid around the legs, and, with
+    """Rule A: new skin weights for the cloth the group choice left rigid around the legs, and, with
     ``physics`` (Optimize Physics), Rule B: the skirt chains as new bones turned by the legs in every
     frame; picked by measurement under the slot's own clips (see ``model_hems`` and ``model_skirts``). ``writable``:
     per source part, whether its mesh's skin can be rewritten.

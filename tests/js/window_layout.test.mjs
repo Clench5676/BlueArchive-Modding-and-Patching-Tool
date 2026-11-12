@@ -12,7 +12,7 @@ const S = 24 / 37;
 const sizes = [[960,540], [1600,900], [2560,1080], [960,1200]];
 const near = (a,b) => assert.ok(Math.abs(a-b)<1e-7, `${a} != ${b}`);
 // Deterministic advance fixture: real locale strings feed the same measured-width
-// contract as the DOM canvas. Native font rendering is checked by eye.
+// contract as the DOM canvas. Native font rendering is checked by hand.
 const textWidth = (text, font) => [...text].reduce((w,c) => w + font * (/[^\x00-\x7f]/.test(c) ? 1 : .65), 0);
 const prefabs=cornerPrefabs.UICharacterCollection,right='NUITop_Scenes/Top/Right/';
 const cssSource=readFileSync(new URL('../../src/bmpt/web/css/app.css',import.meta.url),'utf8');

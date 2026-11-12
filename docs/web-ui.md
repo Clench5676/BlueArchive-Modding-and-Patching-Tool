@@ -11,8 +11,8 @@ the scales in `ui-tokens.js`, the layout primitives in `ui-grid.js`).
 
 The Student Hall, import/assignment, ZIP export and navigation changes are included in 0.5.0, along with office
 backgrounds, global portrait scaling,
-immersive Hall view and touch-friendly queue reordering. Local test builds preceded the stable
-release approval. Runtime checks cover Hall toolbars/selectors, portrait resource reuse and complete batch reveal,
+immersive Hall view and touch-friendly queue reordering. Local alpha builds preceded the stable
+release. Runtime checks cover Hall toolbars/selectors, portrait resource reuse and complete batch reveal,
 saved layering/mirroring, exclusive dialogue, and pointer-driven playlist reordering with save/reopen. Automated
 gesture checks cover touch holds, swipe-to-scroll, cancellation, viewport scaling and stationary-edge scrolling.
 Game assets and development data are excluded from packages.
@@ -1086,8 +1086,7 @@ tab's left side draws a field or NPC model as it draws a slot's (`previewAvailab
 ### Checks before a write
 
 `library/safety.py` holds the checks every game file write makes first (`writable_game_files`). None of them reads a
-game file: the process list and Steam's app manifest are not game files, so none needs the scan consent (
-the write-time Steam check stays outside it; reading one state value per write costs about 12 µs). The
+game file: the process list and Steam's app manifest are not game files, so none needs the scan consent (the write-time Steam check stays outside it; reading one state value per write costs about 12 µs). The
 watch's own Steam poll runs only with the consent (`steam_allowed`).
 
 - **Game running.** `check_game_not_running()` refuses with `game_running`, or `game_status_unavailable` when the
@@ -1882,7 +1881,7 @@ import list and its view controls, stays available within the session.
 
 ### Student Hall
 
-Later work adds the caption and scene-camera fixes.
+Later work adds the caption and scene-camera fixes described below.
 `dialogue-text.js` keeps Chinese subtitle fallback within Chinese scripts. Preferred-source readiness and late
 caption enrichment preserve the current voice and expression timeline; language changes also update a retained
 memorial scene without replaying it. Ordinary flat voice indices count voiced rows, not dialogue groups.
@@ -1979,8 +1978,7 @@ dialogue. Missing sources remain distinguishable from an empty playlist. A libra
 local scene-layout resource, using the renderer's existing layout fallback.
 
 Hall `createModal().draw` sends its actions through `popupFrame` and its shared `FOOTER` layout, preserving each
-semantic and enabled state; the background picker keeps its frame, list and footer. The portrait/replacement picker
- draws in `PORTRAIT_FRAME`: the L frame (2098 u wide, 1300 high) whose panels keep `SPACE.xl` at each side, the
+semantic and enabled state; the background picker keeps its frame, list and footer. The portrait/replacement picker draws in `PORTRAIT_FRAME`: the L frame (2098 u wide, 1300 high) whose panels keep `SPACE.xl` at each side, the
 title's ink centred in the 132 u header band (`titleCentre`, where UIPopup_Sort has it), and a compact footer (a Done
 or Cancel body `COMPACT_BUTTON_H` = half a buttonXS body high, `COMPACT_FOOTER_W` wide or as wide as its caption needs
 at the compact floor (`TYPE.micro.min`, 24 u), `SPACE.xl` above the frame's foot). Under the header band the picker is a column with `SPACE.l`
@@ -2010,7 +2008,7 @@ label box w-24 by 88. `buttonBox` preserves each caller's centre and width, rais
 centre (960, 595). `updateAction` preserves the original control's migrated/retained role when refreshing it.
 
 The portrait picker Add/Select bodies sit 8 CSS px below the unchanged name strip and draw through `button()` as compact
-bodies (one size down): half a buttonXS body (52 u, 33.7 px) high, 129.7 px (200 u) wide at least, keeping the former horizontal
+bodies (one size down with the small button): half a buttonXS body (52 u, 33.7 px) high, 129.7 px (200 u) wide at least, keeping the former horizontal
 centre, their caption the largest size that fits one line (`compactButtonSize`). Portrait row plates and nested strips
 are 393 px high with vertical pitch 397: this reserves the name strip's largest 103.6 u two-line case, the compact button
 and the horizontal scrollbar's 12.973 px painted band. The strip extends 12 px left by its existing hit outset (x 240 to
@@ -2603,8 +2601,7 @@ overwritten entry need none (the detail screen judges its files cheaply).
   classifies the mods; with mods on and the file check allowed a new scan (`mods.scan`) finds the applied entries the
   update overwrote with official files, and those that need no repair (not held) are applied again
   (`mods.restoreDrift`). Then the first screen, and the summary with the start popups.
-- **Mods Impacted by Game Update** (`update-impact.js check`, the drift prompt's list popup in `#prompt`):
-  three segments over the cards (`listPopup` `tools.segs`, no counts; an empty segment says "No mods affected" in
+- **Mods Impacted by Game Update** (`update-impact.js check`, the drift prompt's list popup in `#prompt`): three segments over the cards (`listPopup` `tools.segs`, no counts; an empty segment says "No mods affected" in
   the middle of its paper, `listPopup` `empty`): Needs Fix (the held
   mods, `heldOf`: a mod whose rig changed, unless a repaired copy took its place; ticked at first, each with the Files
   Changed badge), Applied Again (the entries the check applied again) and Other Affected (rebuilt, new parts, gone,
@@ -3353,4 +3350,4 @@ feature tours. The shipped registry is empty. Text-only pages are the default;
 optional bundled PNGs may illustrate only the App's own UI, without game assets. The framework adds no startup
 capture, asset scan or network request. Settings' General/version area replays all available versions. Navigation,
 modal focus, disabled Previous, Close and Finish use the existing NGUI popup/control prefabs. The empty-manifest
-path records launch history but performs no tour rendering. Drafts stay under `docs/tours/`, outside the package.
+path records launch history but performs no tour rendering. Drafts stay outside the package.

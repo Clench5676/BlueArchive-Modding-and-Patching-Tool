@@ -538,7 +538,7 @@ def test_split_model_preview_sources_use_prefab_and_every_own_core(split_model_a
 
 
 def test_model_cards_read_other_cores_by_their_source_whatever_the_mods_switch(split_model_app):
-    """A 3D look split across cores (a real case: a mesh mod for ch0263 and a texture mod for the NPC en0002,
+    """A 3D look split across cores (a reported case: a mesh mod for ch0263 and a texture mod for the NPC en0002,
     whose bundle holds ch0263's textures): the Original card reads the textures' official bytes and a mod card the
     configured texture mod, with mods on and off; a bundle no mod touches is read where it is."""
     env = split_model_app

@@ -73,7 +73,7 @@ test("the portrait picker draws names and plates from the row layout, with Done 
   assert.equal(frames.at(-1).options,pickerFixture.UI.PORTRAIT_FRAME);assert.deepEqual(frames.at(-1).actions.map(a=>a.label),["hall.doneAdding"]);
   assert.equal(cards.find(c=>c.options.onAdd).options.addSize,41);assert.deepEqual(errors,[]);picker.close();
 });
-test("Change Portrait is present beside background in all six locales, with the exact en/zh wording",async()=>{
+test("Change Portrait is present beside background in all six locales, with the exact agreed en/zh wording",async()=>{
   const words={"en-US":"Change Portrait","zh-CN":"\u66f4\u6362\u7acb\u7ed8"};
   for(const lang of ["en-US","zh-CN","zh-TW","ja-JP","ko-KR","th-TH"]){
     const raw=await readFile(new URL(`../../src/bmpt/locales/${lang}.json`,import.meta.url),"utf8"),hall=JSON.parse(raw).webui.hall;
