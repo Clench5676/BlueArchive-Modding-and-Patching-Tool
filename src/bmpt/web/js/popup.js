@@ -32,6 +32,40 @@ import { container, grid, row, stack as layoutStack, textItem, toNode } from "./
 
 const { node, sprite, label, find, rect } = NGUI;
 const fitText = (...a) => NGUI.fitText(...a);
+// tagRow(item, w): a list card's bottom row of tags, left to right: its tag, then its marks (Updatable), on one
+// line, 8 apart, from the left corner or after the recruit icon, never under the pin (a favourite) or
+// past the card's right edge. One tag keeps its badge width (its word, at least 116); several share one size, the
+// largest at which the row fits (26 down to 18, the inset narrowing last). A row that fits at none leaves out the tag
+// (the marks tell what needs doing; the card's name still says Optimized), then whatever does not fit.
+// [{mark, x (left edge), bf (fitted text), bw}]
+export const TAG_GAP = 8;
+export function tagRow(it, w) {
+  const start = it?.recruit ? -w / 2 + 34 + 31 / RECRUIT.ratio + TAG_GAP : -w / 2 + 12;
+  const end = it?.fav ? w / 2 - 38 - 27 - TAG_GAP : w / 2 - 12;
+  const room = end - start;
+  const span = (row) => row.reduce((n, t) => n + t.bw, 0) + TAG_GAP * Math.max(0, row.length - 1);
+  const fit = (marks) => {
+    if (marks.length === 1) {  // the badge's own form where it fits, else the row's steps below
+      const bf = fitText(marks[0].text, 26, 20, Math.min(w - 70, room - 24), 1);
+      const row = [{ mark: marks[0], bf, bw: Math.max(Math.min(116, room), glyphsOf(bf.text, bf.fs) + 24) }];
+      if (span(row) <= room + 1e-9) return row;
+    }
+    for (const inset of [24, 16, 12]) for (let fs = 26; fs >= 18; fs--) {
+      const row = marks.map((mark) => {
+        const bf = fitText(mark.text, fs, fs, room, 1);
+        return { mark, bf, bw: glyphsOf(bf.text, bf.fs) + inset };
+      });
+      if (span(row) <= room + 1e-9) return row;
+    }
+    return null;
+  };
+  const marks = [it?.tag, ...(it?.marks || [])].filter(Boolean);
+  let row = marks.length ? fit(marks) || (it?.tag && it?.marks?.length ? fit(it.marks) : null) : [];
+  for (let n = marks.length - 1; !row && n > 0; n--) row = fit(marks.slice(0, n));
+  let x = start;
+  return (row || []).map((t) => { const placed = { ...t, x }; x += t.bw + TAG_GAP; return placed; });
+}
+
 const hostOf = (h) => (typeof h === "string" ? document.getElementById(h) : h);
 
 // --- the prefabs, read once: the frame (required), the student list's tools and the checkbox (each optional: a
@@ -622,13 +656,16 @@ export function listCard(it, x, y, selected, card = LP.card, kind = null, tick =
   const corner = (dx, dy) => [dx + dy * TAN10, dy]; // a point inside the slanted card
   if (it.dim) kids.push(node("Dim", [1, 4], [sprite("Common_Bg_Raius10px", w - 12, h - 18, { incline: 10, depth: 24, color: "#000000/0.55" })]));
   const badge = it.badge || (it.inUse ? { text: T("popup.inUse"), color: COLOUR.inUse, ink: COLOUR.inUseInk } : null);
-  for (const [name, mark, y] of [["Using", badge, h / 2 - 30], ["Tag", it.tag, -h / 2 + 36]]) {
-    if (!mark) continue;
+  const place = (name, mark, x, bf, bw, y) => kids.push(node(name, corner(x + bw / 2, y),
+    [sprite("Common_Bg_Raius10px", bw, 42, { depth: 26, color: `${mark.color}/1.00`, incline: 10 })],
+    [node("Text", [0, 0], [label(bf.text, bf.fs, `${mark.ink || COLOUR.inUseInk}/1.00`, bw - 4, 40, { depth: 27 })])]));
+  if (badge) {
     // as wide as its word needs, from the corner, up to most of the card
-    const bf = fitText(mark.text, 26, 20, w - 70, 1), bw = Math.max(116, glyphsOf(bf.text, bf.fs) + 24);
-    kids.push(node(name, corner(-w / 2 + 12 + bw / 2, y), [sprite("Common_Bg_Raius10px", bw, 42, { depth: 26, color: `${mark.color}/1.00`, incline: 10 })],
-      [node("Text", [0, 0], [label(bf.text, bf.fs, `${mark.ink || COLOUR.inUseInk}/1.00`, bw - 4, 40, { depth: 27 })])]));
+    const bf = fitText(badge.text, 26, 20, w - 70, 1);
+    place("Using", badge, -w / 2 + 12, bf, Math.max(116, glyphsOf(bf.text, bf.fs) + 24), h / 2 - 30);
   }
+  // the bottom row: the tag, then the marks (Updatable), after the recruit icon and before the pin
+  tagRow(it, w).forEach(({ mark, x, bf, bw }, i) => place(i ? `Mark${i}` : "Tag", mark, x, bf, bw, -h / 2 + 36));
   if (it.fav) kids.push(node("Pin", corner(w / 2 - 38, -h / 2 + 36), [sprite("Common_Btn_Pin_01", 54, 54, { type: 0, depth: 26 })]));
   if (it.recruit) kids.push(node("Recruit", corner(-w / 2 + 34, -h / 2 + 40), [sprite(RECRUIT.sprite, 62 / RECRUIT.ratio, 62, { atlas: RECRUIT.atlas, type: 0, depth: 26 })]));
   // In-use mods already have a badge; a picked card's check takes the corner.

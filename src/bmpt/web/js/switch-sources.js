@@ -180,6 +180,10 @@ export const previewKey = (v, kind = "spr", enabled = true) => {
 export const intendedKey = (v, kind = "spr") => configuredKey(v, kind) || "self";
 export const isApplied = (v, kind, key = previewKey(v, kind)) => key === intendedKey(v, kind);
 
+// swapOutdated(v, kind, key): whether a card is the costume swap the game files hold for the model slot, built under an
+// older costume rule (mods.selection's outdated); its Update applies it again
+export const swapOutdated = (v, kind, key) => kind === "model" && !!v?.selection?.model?.outdated && key === intendedKey(v, kind);
+
 // A switch being On is intent, never evidence that the chosen source reached the game.
 export function selectionStatus(v, kind = "spr") {
   if ((previewKey(v, kind) === intendedKey(v, kind) && v?.selection?.[kind]?.incomplete)

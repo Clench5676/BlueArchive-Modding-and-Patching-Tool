@@ -105,6 +105,7 @@
 			"optimize": "Optimize Physics",
 			"optimizeHint": "Currently supports skirts",
 			"optimized": "Optimized",
+			"outdated": "Updatable",
 			"optimizedGo": "View optimized Mod",
 			"optimizedName": "{name} - Optimized",
 			"optimizeUnneeded": "No optimization needed",

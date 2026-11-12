@@ -76,6 +76,7 @@ SAVE_EVERY = (10, 2.0)  # a toggle saves its unfinished list every 10 entries or
 BUILT_TEMP_MAX_AGE = 60 * 60  # seconds before an abandoned built copy can be cleared
 COSTUME_PREVIEWS = 4  # costume previews kept in built/previews (one folder per build signature)
 COSTUME_VERDICTS = 4000  # costume verdicts kept in costume-verdicts.json, newest first
+OUTDATED = "outdated"  # an impact summary item: a costume build under an older costume rule
 # the startup rig archive (archive_rigs) works only once no other caller used the library for this long
 RIG_ARCHIVE_QUIET = 1.0
 RECOVERY_RETRY = 60.0  # seconds before a read tries a recovery that failed (or waits) again, if the journals stay
@@ -1055,6 +1056,14 @@ class ModLibrary:
         source = record.get("optimized_from")
         return source if isinstance(source, str) and source.startswith("variant:") else ""
 
+    @classmethod
+    def _costume_outdated(cls, record: dict[str, Any]) -> bool:
+        """Whether an Optimize Physics copy was built under an older costume rule than the program's, or under one not
+        recorded (every copy made before the rule was recorded): its Update builds it again."""
+        from ..gameassets.costume_rule import COSTUME_RULE
+
+        return bool(cls._optimized_from(record)) and record.get("costume_rule") != COSTUME_RULE
+
     def _entry(self, record: dict[str, Any]) -> ModEntry:
         from .lobby_camera import meta_of
 
@@ -1071,6 +1080,7 @@ class ModLibrary:
                         repaired_from=record.get("repaired_from", ""), repaired_id=self._repaired_id(record),
                         user_added=record.get("user_added") is True, alias=record.get("alias", ""),
                         label_base=record["label"], optimized_from=self._optimized_from(record),
+                        outdated=self._costume_outdated(record),
                         camera={key: camera[key] for key in ("source", "number", "scale", "offset")} if camera else None)
 
     def _label(self, record: dict[str, Any], seen: frozenset[str] = frozenset()) -> str:
@@ -3384,7 +3394,10 @@ class ModLibrary:
         parts (``changes``: ``fingerprint.changes``). ``due`` is True when a mod needs telling (rebuilt,
         new parts, changed rig or gone); a check with nothing to tell records the version as seen at once, one with
         something waits for ``impact_seen``. ``force`` classifies whatever was seen. Read-only otherwise; never
-        fails on one mod."""
+        fails on one mod.
+
+        Whatever the version, the summary also lists what the App built from a costume under an older costume rule
+        (``_outdated_costumes``, impact ``outdated``), in place of a game update's impact of the same mod."""
         pin = pin or self.current_pin()
         if pin is None:
             return {"due": False, "install": None, "version": None, "previous": None, "mods": [], "counts": {}}
@@ -3393,9 +3406,9 @@ class ModLibrary:
         seen = ((config.get("folders") or {}).get(pin.key) or {}).get("resource") or {}
         previous = seen.get("version") if isinstance(seen, dict) else None
         out: dict[str, Any] = {"due": False, "install": pin.key, "version": version, "previous": previous,
-                               "mods": [], "counts": {name: 0 for name in fingerprint.IMPACTS}}
+                               "mods": [], "counts": {name: 0 for name in (*fingerprint.IMPACTS, OUTDATED)}}
         if version is None or (version == previous and not force):
-            return out
+            return self._with_outdated(out, pin, config)
         configured = {entry.get("source") for entry in
                       (((config.get("folders") or {}).get(pin.key) or {}).get("configured") or {}).values()}
         with self._lock:
@@ -3407,8 +3420,7 @@ class ModLibrary:
         cached = self._impact_cache.get(pin.key)
         if cached and cached[0] == stamp:
             out.update(mods=[dict(mod) for mod in cached[1]["mods"]], counts=dict(cached[1]["counts"]))
-            out["due"] = bool(out["mods"])
-            return out
+            return self._with_outdated(out, pin, config)
         for i, record in enumerate(records, 1):
             if progress:
                 entry = entries[record["id"]]
@@ -3425,10 +3437,52 @@ class ModLibrary:
             out["mods"].append({"id": entry.id, "label": entry.label, "target": entry.target, "kind": entry.kind,
                                 "core": entry.core, "impact": found, "changes": changes,
                                 "configured": f"mod:{entry.id}" in configured, "repaired_id": entry.repaired_id})
-        out["due"] = bool(out["mods"])
         self._impact_cache[pin.key] = (stamp, {"mods": [dict(mod) for mod in out["mods"]], "counts": dict(out["counts"])})
+        out = self._with_outdated(out, pin, config)
         if not out["due"] and not force:
             self.impact_seen(pin.key, version)
+        return out
+
+    def _with_outdated(self, out: dict[str, Any], pin: Pin, config: dict) -> dict[str, Any]:
+        """An impact summary with the outdated costume builds (``_outdated_costumes``) added, each in place of the
+        same mod's game update impact, and ``due`` set."""
+        outdated = self._outdated_costumes(pin, config)
+        ids = {mod["id"] for mod in outdated if mod["id"]}
+        mods = [mod for mod in out["mods"] if mod["id"] not in ids]
+        out["mods"] = mods + outdated
+        out["counts"] = {**out["counts"], OUTDATED: len(outdated)}
+        out["due"] = bool(out["mods"])
+        return out
+
+    def _outdated_costumes(self, pin: Pin, config: dict) -> list[dict[str, Any]]:
+        """What the App built from a costume under an older costume rule than the program's, as impact
+        summary items (impact ``outdated``): Optimize Physics copies (``_costume_outdated``), then the costume swaps the
+        install's game files hold (``_swap_outdated``, verified installed; ``source`` the costume, no mod id). Reads
+        records, the configuration and the game files' cached fingerprints only."""
+        folder = (config.get("folders") or {}).get(pin.key) or {}
+        choices = folder.get("configured") or {}
+        configured = {choice.get("source") for choice in choices.values()}
+        out: list[dict[str, Any]] = []
+        with self._lock:
+            for record in self._records.values():
+                if not self._costume_outdated(record):
+                    continue
+                entry = self._entry(record)
+                out.append({"id": entry.id, "label": entry.label, "target": entry.target, "kind": entry.kind,
+                            "core": entry.core, "impact": OUTDATED, "changes": {},
+                            "configured": f"mod:{entry.id}" in configured, "repaired_id": entry.repaired_id})
+            for core, choice in sorted(choices.items()):
+                if choice.get("kind") != "model" or not str(choice.get("source") or "").startswith("variant:"):
+                    continue
+                try:
+                    if not self._selection_of(pin, config, core, choice).get("outdated"):
+                        continue
+                except (OSError, ServiceError) as error:
+                    log_failure(logger, logging.DEBUG, "Could not judge a costume swap", error)
+                    continue
+                out.append({"id": "", "label": "", "target": choice.get("variant"), "kind": "model", "core": core,
+                            "source": choice["source"], "impact": OUTDATED, "changes": {}, "configured": True,
+                            "repaired_id": ""})
         return out
 
     def _impact_stamp(self, pin: Pin, version: str, records: list[dict[str, Any]], configured: set) -> str:
@@ -3448,9 +3502,15 @@ class ModLibrary:
         """Whether the start asks to check the library's mods against a game update: the install's resource version
         differs from the last one seen there and the library has mods. Reads only the version file and the
         configuration. With no version seen yet (a first start, a newly chosen folder) or no mod, the version is
-        recorded as seen at once and nothing is asked. Never fails: a version that cannot be read asks nothing."""
+        recorded as seen at once and nothing is asked. Never fails: a version that cannot be read asks nothing.
+
+        ``outdated``: the same version, but the App built something from a costume under an older costume
+        rule and the summary was not shown under the program's rule yet; the summary shows at once, without the
+        question (nothing needs checking)."""
+        from ..gameassets.costume_rule import COSTUME_RULE
+
         pin = pin or self.current_pin()
-        out: dict[str, Any] = {"due": False, "install": None, "version": None, "previous": None}
+        out: dict[str, Any] = {"due": False, "outdated": False, "install": None, "version": None, "previous": None}
         if pin is None:
             return out
         version = self.resource_version(pin)
@@ -3459,6 +3519,12 @@ class ModLibrary:
         previous = seen.get("version") if isinstance(seen, dict) else None
         out.update(install=pin.key, version=version, previous=previous)
         if version is None or version == previous:
+            if version is not None and seen.get("rule") != COSTUME_RULE:
+                outdated = self._outdated_costumes(pin, config)
+                if not outdated:
+                    with contextlib.suppress(ServiceError):
+                        self.impact_seen(pin.key, version)
+                out["outdated"] = bool(outdated)
             return out
         with self._lock:
             has_mods = bool(self._records)
@@ -3484,7 +3550,10 @@ class ModLibrary:
         return out
 
     def impact_seen(self, install: str, version: str) -> None:
-        """Record a resource version of an install as seen (its impact summary shown or not needed)."""
+        """Record a resource version of an install as seen (its impact summary shown or not needed), with the costume
+        rule it was shown under (a newer rule shows the summary again when it lists outdated costume builds)."""
+        from ..gameassets.costume_rule import COSTUME_RULE
+
         if not isinstance(install, str) or not isinstance(version, str) or not version:
             raise ServiceError("bad_params", key="version")
         if self._writes_refused():
@@ -3492,9 +3561,10 @@ class ModLibrary:
 
         def change(data: dict) -> bool:
             folder = data["folders"].setdefault(install, {})
-            if (folder.get("resource") or {}).get("version") == version:
+            seen = folder.get("resource") or {}
+            if seen.get("version") == version and seen.get("rule") == COSTUME_RULE:
                 return False
-            folder["resource"] = {"version": version, "seen": now()}
+            folder["resource"] = {"version": version, "seen": now(), "rule": COSTUME_RULE}
             return True
 
         with _errors("impact_seen"):
@@ -4030,7 +4100,19 @@ class ModLibrary:
         source = choice["source"]
         if source.startswith("mod:") and source[4:] in self._records and self._incomplete(self._records[source[4:]], pin):
             entry["incomplete"] = True
+        if installed and self._swap_outdated(paths, choice):
+            entry["outdated"] = True
         return entry
+
+    def _swap_outdated(self, paths: list[Path], choice: dict) -> bool:
+        """Whether the game files of a model slot hold another variant's costume (``choice``, its configured entry)
+        built under an older costume rule than the program's, or under one not recorded (every swap applied before
+        the rule was recorded): applying it again builds it under the current rule."""
+        from ..gameassets.costume_rule import COSTUME_RULE
+
+        if choice.get("kind") != "model" or not str(choice.get("source") or "").startswith("variant:"):
+            return False
+        return any((self._applied.get(str(path.resolve())) or {}).get("costume_rule") != COSTUME_RULE for path in paths)
 
     def _selection_error(self, pin: Pin, cores, error: dict | None) -> None:
         def change(data):
@@ -4832,6 +4914,8 @@ class ModLibrary:
                progress: ProgressCallback | None, pin: Pin, build_keys: dict[Path, str] | None = None,
                *, create_backup: bool = False, expected: dict[Path, str] | None = None,
                kept_current: list[str] | None = None, untested: bool = True) -> list[Path]:
+        from ..gameassets.costume_rule import COSTUME_RULE
+
         dirs = list(pin.dirs)
         for target, prepared in replacements.items():
             check_resource_path(target, dirs)
@@ -4863,6 +4947,9 @@ class ModLibrary:
                           "crc": crc_state(fingerprint.crc, fingerprint.trailing, target.name)}
                 if build_keys and target in build_keys:
                     record["build"] = build_keys[target]
+                if source.startswith("variant:"):
+                    # built by this program, under its costume rule: an older rule asks for an update
+                    record["costume_rule"] = COSTUME_RULE
                 previous = self._applied.get(str(target.resolve()))
                 if previous and {k: v for k, v in previous.items() if k != "at"} == {
                         k: v for k, v in record.items() if k != "at"}:
@@ -5173,7 +5260,10 @@ class ModLibrary:
         the physics rules (Rule B, the skirt chains as new bones), kept as a model mod of the variant named after
         ``name`` (the costume as the screen shows it): {"mod": id}, the copy made before when there is one. {"unneeded":
         True, "reason": ...} when there is nothing to build: "official" for the official model, whose own clips move its
-        skirt, and "no_gain" for a costume that no physics rule improves within the stretch limit."""
+        skirt, and "no_gain" for a costume that no physics rule improves within the stretch limit. The copy records the
+        costume rule it was built under."""
+        from ..gameassets.costume_rule import COSTUME_RULE
+
         pin = self._current(pin)
         self._variant(variant_key)
         if source == "official":
@@ -5197,7 +5287,8 @@ class ModLibrary:
             if not report.get("physics"):
                 return {"unneeded": True, "reason": "no_gain"}
             built = {path.name: path for path in replacements.values() if path.parent.name == "output"}
-            record = self._store(built, label, variant_key, "model", metadata={"optimized_from": source},
+            record = self._store(built, label, variant_key, "model",
+                                 metadata={"optimized_from": source, "costume_rule": COSTUME_RULE},
                                  built_against=self._built_against(built, pin, "import"))
         return {"mod": record["id"]}
 
@@ -7726,6 +7817,8 @@ class ModLibrary:
         self._check_writable()
         pin = self._current(pin)
         record = self._record(mod_id)
+        if self._optimized_from(record):
+            return self._rebuild_optimized(record, log, pin)
         paths = self._paths(record)
         built_from = {path.name: self._hashes.get(path).sha1 for path in paths}
         painted = (self._read_built_against(record) or {}).get("painted")  # the textures move over as they are
@@ -7785,6 +7878,39 @@ class ModLibrary:
             # after the commit: a fingerprint of the files before stays theirs if the update is rolled back
             self._write_built_against(record, built_against)
         return UpdateResult(self._entry(record), self._paths(record), previous, rig=rig)
+
+    def _rebuild_optimized(self, record: dict[str, Any], log: LogFunc, pin: Pin) -> UpdateResult:
+        """Update of an Optimize Physics copy: its costume built again with the physics rules under the current
+        costume rule, published in place of its files (``_publish_update``: its id, name and links stay), the rule
+        recorded after. Refused like Optimize Physics when the pair's verdict refuses it; ``mod_update_failed`` when
+        no physics rule improves the costume any more."""
+        from ..gameassets.costume_rule import COSTUME_RULE
+
+        source = self._optimized_from(record)
+        variant_key = self._target_of(record)
+        signature, targets = self._costume_signature(variant_key, source[8:], pin)
+        verdict = self._verdicts().get(signature)
+        if not self._costume_allowed(verdict):
+            raise ServiceError("source_unsupported", source=verdict.get("reason") or source)
+        paths = self._paths(record)
+        built_from = {path.name: self._hashes.get(path).sha1 for path in paths}
+        report: dict[str, Any] = {}
+        with temporary_directory(prefix=devmode.LIBRARY_STAGING_PREFIX + "update-") as temporary:
+            replacements = self._stage_costume(source[8:], targets, Path(temporary) / "model", log, pin,
+                                               report=report, physics=True)
+            if not report.get("physics"):
+                raise ServiceError("mod_update_failed", id=record["id"], reason="no_gain")
+            generated = [path for path in replacements.values() if path.parent.name == "output"]
+            built_against = self._built_against({path.name: path for path in generated}, pin, "update")
+            if sorted((path.name, self._hashes.get(path).sha1) for path in generated) == sorted(built_from.items()):
+                previous: list[Path] = []  # the same bytes: only the rule is new
+            else:
+                record, previous = self._publish_update(record["id"], built_from, generated)
+            self._write_built_against(record, built_against)
+        if record.get("costume_rule") != COSTUME_RULE:
+            record["costume_rule"] = COSTUME_RULE  # after the commit: a rolled back update keeps the old rule
+            self._save()
+        return UpdateResult(self._entry(record), self._paths(record), previous, unchanged=not previous)
 
     @_mod_writer
     def _publish_update(self, mod_id: str, built_from: dict[str, str],

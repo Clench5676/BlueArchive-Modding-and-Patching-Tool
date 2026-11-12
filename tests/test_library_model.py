@@ -1091,6 +1091,62 @@ def test_every_costume_is_applied_past_the_stretch_limit(model_env, monkeypatch)
     assert built == []
 
 
+def test_costume_builds_of_an_older_rule_ask_for_an_update(model_env, monkeypatch):
+    """An Optimize Physics copy and a costume swap in the game files record the costume rule they were built
+    under; under a newer rule they are outdated (the copy's entry, the slot's selection), listed by the impact summary,
+    asked at the start once per rule, and built again by the copy's Update (in place) or by applying the swap again."""
+    from bmpt.gameassets import costume_rule
+
+    env = model_env
+    model_bundle(env.game_dir, core='hoshino_swimsuit', prefab=True, part='000', payload=b'swim prefab')
+    game = SimpleNamespace(spine_cores=lambda kind: {'hoshino_spr': [], 'hoshino_swimsuit_spr': []} if kind == 'spr'
+                           else {}, collection_names=lambda: {}, model_cores=lambda: {'hoshino_original', 'hoshino_swimsuit'})
+    library = ModLibrary(env.root, Catalog(game, None), object(), env.settings, scan_allowed=lambda: True)
+    built = []
+
+    def stage(self, other, targets, directory, log, pin, *, preview=False, report=None, physics=False):
+        built.append((other, physics))
+        if report is not None and physics:
+            report['physics'] = True
+        payload = f'costume {other} {physics} rule {costume_rule.COSTUME_RULE}'.encode()
+        out = make_mod(targets[0], directory / 'output', payload=payload)
+        return {target: out if target == targets[0] else self._official_or_current(target, pin) for target in targets}
+
+    monkeypatch.setattr(ModLibrary, '_stage_costume', stage)
+    monkeypatch.setattr(ModLibrary, 'resource_version', lambda self, pin: 'v1')
+    made = library.optimize_costume('hoshino', 'variant:hoshino_swimsuit', 'Swimsuit')['mod']
+    assert library.apply('hoshino', 'variant:hoshino_swimsuit', kind='model').files
+    assert library.update_due()['due'] is False  # a first start: the version and the rule are seen
+    assert library.update_due()['outdated'] is False
+    assert not [mod for mod in library.mods() if mod.outdated]
+    assert library.selection('hoshino')['model']['installed'] and 'outdated' not in library.selection('hoshino')['model']
+    assert library.update_impact(force=True)['counts']['outdated'] == 0
+
+    monkeypatch.setattr(costume_rule, 'COSTUME_RULE', costume_rule.COSTUME_RULE + 1)
+    assert [mod.id for mod in library.mods() if mod.outdated] == [made]
+    assert library.selection('hoshino')['model']['outdated'] is True
+    due = library.update_due()
+    assert due['due'] is False and due['outdated'] is True  # the same game version: the summary without the question
+    summary = library.update_impact()
+    assert summary['due'] is True and summary['counts']['outdated'] == 2
+    assert [(mod['id'], mod['impact'], mod['configured'], mod.get('source')) for mod in summary['mods']] == [
+        (made, 'outdated', False, None), ('', 'outdated', True, 'variant:hoshino_swimsuit')]
+    library.impact_seen(summary['install'], summary['version'])
+    assert library.update_due()['outdated'] is False  # shown under this rule
+    assert library.update_impact(force=True)['counts']['outdated'] == 2  # Settings' View still lists them
+
+    # the copy's Update builds it again, in place, under the current rule; the swap is applied again
+    before = library.mods()[0]
+    result = library.update(made)
+    assert built.pop() == ('hoshino_swimsuit', True)
+    assert result.mod.id == made and result.mod.label == before.label and not result.mod.outdated and result.previous
+    assert library.apply('hoshino', 'variant:hoshino_swimsuit', kind='model').files
+    assert 'outdated' not in library.selection('hoshino')['model']
+    assert library.update_impact(force=True)['counts']['outdated'] == 0
+    # nothing new under the same rule: an Update keeps the files
+    assert library.update(made).unchanged
+
+
 def test_costume_verdicts_are_kept_per_build_signature(model_env, monkeypatch):
     """A pair's verdict holds for the costume rule and the official bytes it was judged on (not the
     program build); the rule's refusals are saved by the preview itself."""

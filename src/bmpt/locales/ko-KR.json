@@ -105,6 +105,7 @@
 			"optimize": "물리 효과 최적화",
 			"optimizeHint": "현재 스커트 최적화 지원",
 			"optimized": "최적화됨",
+			"outdated": "갱신 가능",
 			"optimizedGo": "최적화된 Mod 보기",
 			"optimizedName": "{name} - 최적화 버전",
 			"optimizeUnneeded": "최적화 불필요",

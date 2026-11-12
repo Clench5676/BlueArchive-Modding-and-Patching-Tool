@@ -105,6 +105,7 @@
 			"optimize": "优化物理效果",
 			"optimizeHint": "当前支持优化裙摆效果",
 			"optimized": "已优化",
+			"outdated": "可更新",
 			"optimizedGo": "查看已优化 Mod",
 			"optimizedName": "{name} - 优化版",
 			"optimizeUnneeded": "无需优化",
