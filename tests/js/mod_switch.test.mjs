@@ -1463,7 +1463,7 @@ test("Settings Spine value row opens the same read-only notice in every locale w
 
 const Impact = await import("../../src/bmpt/web/js/update-impact.js");
 
-test("an update's impact as a list: the held mods, those applied again and the others, each a card with its details", () => {
+test("an update's impact as a list: only the mods to update, each a card with its details; the footer", () => {
   const mods = [
     { id: "1", target: "hoshino", core: "ch0101_spr", kind: "spr", impact: "rig_changed", label: "Bunny Hoshino", configured: true,
       changes: { repacked: true, animations: 3, textures: true } },
@@ -1473,47 +1473,45 @@ test("an update's impact as a list: the held mods, those applied again and the o
     { id: "5", target: "aris", core: "aris_spr", kind: "spr", impact: "rig_changed", repaired_id: "5r", configured: false },
   ];
   const nameOf = (e) => e.variant[0].toUpperCase() + e.variant.slice(1);
-  const outcome = { result: { due: true, mods }, reapplied: [entry("mika_spr", "updated", { configured: "mod:6" })] };
-  const tabs = Impact.tabMods(outcome);
-  // a held mod a repaired copy replaced is no longer listed; unchanged ones never are
-  assert.deepEqual([tabs.held.map((m) => m.id), tabs.reapplied.map((m) => m.id), tabs.others.map((m) => m.id)], [["1"], ["6"], ["2", "3"]]);
-  assert.deepEqual(Impact.TABS, ["held", "reapplied", "others"]);
-  assert.deepEqual(Impact.tabCaptions().map((k) => S(k)), ["Needs Fix", "Applied Again", "Other Affected"], "no counts");
-  // a held card: the student's name, its kind and Applied as chips, the Files Changed badge, its own picture
-  const held = Impact.card(tabs.held[0], "held", nameOf);
+  // what was handled by itself (rebuilt, new parts, gone) is never listed; a mod a repaired copy replaced neither
+  const listed = Impact.heldOf({ due: true, mods });
+  assert.deepEqual(listed.map((m) => m.id), ["1"]);
+  assert.equal(Impact.TABS, undefined, "no segments");
+  // a card: the student's name, its kind and Applied as chips, the Files Changed badge, its own picture
+  const held = Impact.card(listed[0], nameOf);
   assert.deepEqual([held.key, held.label, held.full, held.chips, held.badge.text],
     ["1", "Hoshino", "Bunny Hoshino", ["Portrait", "Applied", "Official"], "Files Changed"]);
-  assert.deepEqual(Impact.card(tabs.others[0], "others", nameOf).chips, ["Portrait"], "no changes known: no chip");
+  assert.deepEqual(Impact.card({ ...listed[0], configured: false, changes: {} }, nameOf).chips, ["Portrait"], "no changes known: no chip");
   assert.ok(held.thumb && typeof held.big === "function");
   // a generic mod's card names the mod itself, never its set's key
-  const generic = Impact.card({ id: "g", target: "other-set:0d9415b79fe5", core: "other-set:0d9415b79fe5", kind: "other", impact: "rebuilt",
-    label: "UI Font" }, "others", (e) => e.variant);
+  const generic = Impact.card({ id: "g", target: "other-set:0d9415b79fe5", core: "other-set:0d9415b79fe5", kind: "other", impact: "rig_changed",
+    label: "UI Font" }, (e) => e.variant);
   assert.deepEqual([generic.label, generic.full, generic.thumb], ["UI Font", "UI Font", null]);
-  assert.equal(Impact.card({ id: "g", target: "other-set:0d94", kind: "other", impact: "rebuilt" }, "others", (e) => e.variant).label, "Other Mods");
-  // another kind's card says what happened to it
-  assert.equal(Impact.card(tabs.others[1], "others", nameOf).badge.text, "Gone");
-  assert.equal(Impact.card(tabs.reapplied[0], "reapplied", nameOf).badge, undefined);
-  // the details: the mod's name, what changed (without the kind's prefix), its state; Go To, the preview, Fix and Apply
-  const d = Impact.details(tabs.held[0], "held");
+  assert.equal(Impact.card({ id: "g", target: "other-set:0d94", kind: "other", impact: "rig_changed" }, (e) => e.variant).label, "Other Mods");
+  // the details: the mod's name, what changed (without the kind's prefix); Go To, the preview, Update and Apply
+  const d = Impact.details(listed[0]);
   assert.equal(d.title, S("info.title.portrait"));
-  // the changes alone, no caption: the chip above names them, the badge and the segment give the state
+  // the changes alone, no caption: the chip above names them, the badge gives the state
   assert.deepEqual(d.fields, [[null, ".atlas file layout changed, 3 new animations in the .skel file"]]);
-  assert.deepEqual(d.actions.map(([id]) => id), ["go", "preview", "fix"]);
-  assert.deepEqual(Impact.details(tabs.others[0], "others").actions.map(([id]) => id), ["go"]);
-  assert.deepEqual(Impact.details(tabs.reapplied[0], "reapplied").fields, []);
+  assert.deepEqual(d.actions.map(([id, caption]) => [id, caption]), [["go", "Go to"], ["preview", "Preview Update"], ["fix", "Update and Apply"]]);
+  assert.deepEqual(Impact.details({ ...generic.mod }).actions.map(([id]) => id), ["preview", "fix"], "a generic mod: no student page");
+  // the footer: Close and Check Game Update Impact; Update and Apply only with mods to update, greyed with none ticked
+  assert.deepEqual(Impact.footer(0, 0), [["close", "Close"], ["check", "Check Game Update Impact"]]);
+  assert.deepEqual(Impact.footer(2, 1), [["close", "Close"], ["check", "Check Game Update Impact"], ["fix", "Update and Apply", false]]);
+  assert.deepEqual(Impact.footer(2, 0).at(-1), ["fix", "Update and Apply", true]);
   // every string in every locale
   try {
     for (const lang of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
       const ui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url))).webui;
       I18n.setStrings(lang, flat({ webui: ui }));
       const m = ui.mods.impact;
-      for (const k of ["title", "fix", "preview", "noPreview", "chipOfficial", "kindRebuilt", "kindNewParts", "kindGone",
+      for (const k of ["title", "fix", "preview", "noPreview", "chipOfficial", "check", "checkAsk",
         "gateTitle", "gateAsk", "gateCheck", "checking", "reapplying", "sep"]) assert.ok(typeof m[k] === "string" && m[k].length > 0, `${lang} ${k}`);
-      for (const k of ["tabHeld", "tabReapplied", "tabOthers"]) assert.ok(!m[k].includes("{n}"), `${lang} ${k}: no count`);
       assert.ok(m.partial.includes("{n}") && m.none.length > 0, lang);
       assert.ok(!("fixSelected" in m), `${lang}: the footer's Fix and Apply carries no count (the list's footer has it)`);
       assert.ok(m.checkingMod.includes("{name}"), lang);
-      for (const gone of ["hint", "reset", "rigChanged", "fixAll", "reapplied", "others", "expand", "collapse", "gone", "newParts", "rebuilt", "unchanged", "unknown"])
+      for (const gone of ["hint", "reset", "rigChanged", "fixAll", "reapplied", "others", "expand", "collapse", "gone", "newParts", "rebuilt", "unchanged", "unknown",
+        "tabHeld", "tabReapplied", "tabOthers", "kindRebuilt", "kindNewParts", "kindGone"])
         assert.ok(!(gone in m), `${lang}: ${gone} no longer used`);
       for (const k of ["held", "heldTitle", "heldBadge"]) assert.ok(typeof ui.mods[k] === "string" && ui.mods[k].length > 0, `${lang} ${k}`);
       const every = { repacked: true, animations: 2, rig: true, removed: true, added: true };
@@ -1521,7 +1519,7 @@ test("an update's impact as a list: the held mods, those applied again and the o
         const text = Impact.changeText({ kind, changes });
         assert.ok(text && !/[{}]|mods\./.test(text), `${lang} ${kind} ${text}`);
       }
-      assert.ok(typeof ui.settings.mods.impact === "string" && typeof ui.settings.mods.view === "string", lang);
+      for (const k of ["impact", "view", "viewUpdates"]) assert.ok(typeof ui.settings.mods[k] === "string" && ui.settings.mods[k].length > 0, `${lang} ${k}`);
     }
     // Chinese: the changes after a comma, the new animations as xN
     I18n.setStrings("zh-CN", flat({ webui: JSON.parse(readFileSync(new URL("../../src/bmpt/locales/zh-CN.json", import.meta.url))).webui }));
@@ -1542,7 +1540,7 @@ test("what an update changed in a mod's official parts: each change once, a repa
   const other = Impact.modLines({ id: "9", kind: "other", label: "UI Font", target: "", changes: { removed: true } });
   assert.equal(other[0].text, "UI Font - Other Mods");
   assert.equal(other[0].button, undefined);
-  assert.equal(Impact.modLines({ id: "9", kind: "other", label: "UI Font", target: "" }, undefined, { fix: true })[0].button.label, "Fix and Apply");
+  assert.equal(Impact.modLines({ id: "9", kind: "other", label: "UI Font", target: "" }, undefined, { fix: true })[0].button.label, "Update and Apply");
 });
 
 test("the held entries' Details name each mod with Go To and Fix where its mod is known, then how the hold ends", () => {
@@ -1550,7 +1548,7 @@ test("the held entries' Details name each mod with Go To and Fix where its mod i
     { install: "/a", core: "b_home", variant: "b", kind: "lobby", source: "variant:c" }];
   const lines = Impact.heldLines(entries, (e) => e.variant.toUpperCase());
   assert.deepEqual(lines.map((l) => [l.text, l.button?.label || null, (l.more || []).map((b) => b.label)]),
-    [["A - Portrait - Swim A - Applied", "Go to", ["Fix and Apply"]], ["B - Memorial Lobby - Applied", null, []]]);
+    [["A - Portrait - Swim A - Applied", "Go to", ["Update and Apply"]], ["B - Memorial Lobby - Applied", null, []]]);
   assert.deepEqual(Impact.heldMods(entries)[0], { id: "1", target: "a", core: "a_spr", kind: "spr", label: "Swim A", configured: true });
 });
 
@@ -1623,6 +1621,15 @@ test("the start asks before the first screen, checks under the loading screen, a
     await shown;
     assert.deepEqual(called("mods.impactSeen").at(-1), { install: GLOBAL, version: "v3" });
     assert.equal(await Impact.check(), null, "told once");
+    // nothing to update: no list, the version recorded at once
+    jobs["job-impact-gate"] = { state: "done", result: { ...result, version: "v5", mods: [result.mods[1]] } };
+    answers["mods.updateDue"] = { due: true, install: GLOBAL, version: "v5", previous: "v3" };
+    gated = Impact.gate();
+    await drawn(dialog, "check");
+    action(dialog, "check").click();
+    assert.equal(await gated, false);
+    assert.deepEqual(called("mods.impactSeen").at(-1), { install: GLOBAL, version: "v5" });
+    assert.equal(await Impact.check(), null, "no list");
   } finally {
     for (const key of Object.keys(answers)) delete answers[key];
     Object.assign(answers, saved);
@@ -1689,7 +1696,7 @@ test("the drift prompt asks the impacts of the mods its entries are configured w
   assert.equal(items[2].badge, undefined, "a card that cannot be ticked keeps its own state");
 });
 
-test("the impact list: a card's click shows it, its corner ticks it; Fix and Apply runs over the list, which stays open", async () => {
+test("the impact list: a card's click shows it, its corner ticks it; Update and Apply runs over the list, which stays open", async () => {
   const saved = { ...answers };
   // memorial lobbies: the generic list (the portrait frame's prefab is not in this stand-in)
   const held = (extra = {}) => ({ id: "r", target: "hina", core: "hina_home", kind: "lobby", impact: "rig_changed", label: "Night",
@@ -1701,9 +1708,10 @@ test("the impact list: a card's click shows it, its corner ticks it; Fix and App
     answers["mods.state"] = base({ scan: false });
     await MS.refresh();
     let fixed = false;
-    answers["mods.impact"] = (params) => (params?.force && fixed ? "job-impact-after" : "job-impact-list");
+    answers["mods.impact"] = "job-impact-list";
     jobs["job-impact-list"] = { state: "done", result };
-    jobs["job-impact-after"] = { state: "done", result: { ...result, counts: { rig_changed: 1 }, mods: [result.mods[1]] } };
+    // after an update the list reads the last check again, without the mods updated since (no new check)
+    answers["mods.impactLast"] = () => ({ ...result, update: false, mods: fixed ? [result.mods[1]] : result.mods });
     answers["actions.apply"] = (params) => { fixed = true; return "job-apply-list"; };
     jobs["job-apply-list"] = { state: "done", result: { files: [] } };
     const gated = Impact.gate();
@@ -1721,14 +1729,16 @@ test("the impact list: a card's click shows it, its corner ticks it; Fix and App
     // the corner's box unticks it
     tick("s").click();
     await until(() => tick("s")?.getAttribute("aria-checked") === "false", "unticked");
-    // Fix and Apply in the details of Hina's mod (a repaired copy made before): it takes the mod's place, the list stays
+    // Update and Apply in the details of Hina's mod (a repaired copy made before): it takes the mod's place, the list stays
     walk(prompt).find((e) => e.dataset?.key === "r").click();
     await until(() => walk(prompt).some((e) => (e.textContent || "").includes("Night")), "Hina's details");
-    walk(prompt).find((e) => e.tagName === "BUTTON" && e.getAttribute("aria-label") === "Fix and Apply").click();
+    const checks = called("mods.impact").length;
+    walk(prompt).find((e) => e.tagName === "BUTTON" && e.getAttribute("aria-label") === "Update and Apply").click();
     await until(() => called("actions.apply").length > 0, "applied");
     assert.deepEqual(called("actions.apply").at(-1), { variant: "hina", source: "mod:r2", kind: "lobby" });
     await until(() => !prompt.hidden && !walk(prompt).some((e) => e.dataset?.key === "r"), "the list again, without the fixed mod");
     assert.equal(prompt.hidden, false, "never closed under the user");
+    assert.equal(called("mods.impact").length, checks, "no new check");
     walk(prompt).find((e) => e.tagName === "BUTTON" && e.getAttribute("aria-label") === S("display.close")).click();
     await shown;
     assert.equal(prompt.hidden, true);
@@ -1736,5 +1746,61 @@ test("the impact list: a card's click shows it, its corner ticks it; Fix and App
     for (const key of Object.keys(answers)) delete answers[key];
     Object.assign(answers, saved);
     await tick?.(); dialog.hidden = true; prompt.hidden = true;
+  }
+});
+
+test("Settings' View Mods to Update opens the last check without checking; Check Game Update Impact asks first without a game update", async () => {
+  const saved = { ...answers };
+  const footerButtons = () => walk(prompt).filter((e) => e.tagName === "BUTTON").map((e) => e.getAttribute("aria-label"));
+  const held = { id: "s", target: "airi", core: "airi_home", kind: "lobby", impact: "rig_changed", label: "Band", configured: true, repaired_id: "" };
+  try {
+    answers["mods.state"] = base({ scan: false });
+    await MS.refresh();
+    // nothing to update: the list says so, Close and Check Game Update Impact only
+    answers["mods.impactLast"] = { install: GLOBAL, version: "v4", checked: "v4", update: false, mods: [] };
+    answers["mods.impact"] = "job-impact-view";
+    jobs["job-impact-view"] = { state: "done", result: { due: true, install: GLOBAL, version: "v4", mods: [held] } };
+    const before = called("mods.impact").length;
+    const viewed = Impact.view();
+    await until(() => !prompt.hidden && walk(prompt).some((e) => (e.textContent || "").includes("No mods to update")), "the empty list");
+    assert.equal(called("mods.impact").length, before, "opened without a check");
+    assert.ok(footerButtons().includes("Check Game Update Impact"));
+    assert.ok(!footerButtons().includes("Update and Apply"), "no Update and Apply without mods to update");
+    // the same game version as the last check: asked first; Cancel checks nothing
+    walk(prompt).find((e) => e.tagName === "BUTTON" && e.getAttribute("aria-label") === "Check Game Update Impact").click();
+    await drawn(dialog, "cancel");
+    assert.ok(walk(dialog).some((e) => (e.textContent || "").includes("No game update found")));
+    action(dialog, "cancel").click();
+    await until(() => dialog.hidden, "the question answered");
+    await tick();
+    assert.equal(called("mods.impact").length, before);
+    // Check: the check whatever was seen, then the list as it stands, Update and Apply with it
+    walk(prompt).find((e) => e.tagName === "BUTTON" && e.getAttribute("aria-label") === "Check Game Update Impact").click();
+    await drawn(dialog, "ok");
+    action(dialog, "ok").click();
+    await until(() => walk(prompt).some((e) => e.dataset?.key === "s"), "the list after the check");
+    assert.deepEqual(called("mods.impact").at(-1), { force: true });
+    assert.ok(footerButtons().includes("Update and Apply"));
+    walk(prompt).find((e) => e.tagName === "BUTTON" && e.getAttribute("aria-label") === S("display.close")).click();
+    assert.equal(await viewed, false);
+    assert.deepEqual(called("mods.impactSeen").at(-1), { install: GLOBAL, version: "v4" });
+    // a game update since the last check: no question
+    answers["mods.impactLast"] = { install: GLOBAL, version: "v5", checked: "v4", update: true, mods: [] };
+    const asked = called("mods.impact").length;
+    const again = Impact.view();
+    await until(() => !prompt.hidden && walk(prompt).some((e) => (e.textContent || "").includes("No mods to update")), "the empty list");
+    walk(prompt).find((e) => e.tagName === "BUTTON" && e.getAttribute("aria-label") === "Check Game Update Impact").click();
+    await until(() => called("mods.impact").length > asked, "checked at once");
+    await until(() => walk(prompt).some((e) => e.dataset?.key === "s"), "the list after the check");
+    walk(prompt).find((e) => e.tagName === "BUTTON" && e.getAttribute("aria-label") === S("display.close")).click();
+    await again;
+    // elsewhere (the tray, Settings' Check): only with mods to update
+    answers["mods.impactLast"] = { install: GLOBAL, version: "v5", checked: "v5", update: false, mods: [] };
+    assert.equal(await Impact.show(), false);
+    assert.equal(prompt.hidden, true);
+  } finally {
+    for (const key of Object.keys(answers)) delete answers[key];
+    Object.assign(answers, saved);
+    await tick(); dialog.hidden = true; prompt.hidden = true;
   }
 });

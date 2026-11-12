@@ -275,7 +275,7 @@ function rows({ builtSize = null, sizeError = null } = {}) {
         [T("settings.troubleshoot.apply"), async () => done(await Troubleshoot.applyOfficial())],
         [T("settings.troubleshoot.restore"), async () => done(await Troubleshoot.restore()), trouble?.active === true]]));
     }
-    add(valueRow("Impact", 0, T("settings.mods.impact"), "", [[T("settings.mods.view"), () => Impact.show()]], { showValue: false }));
+    add(valueRow("Impact", 0, T("settings.mods.impact"), "", [[T("settings.mods.viewUpdates"), () => Impact.view()]], { showValue: false }));
     if (otherMods?.length) {
       add({ tree: rowBase("OtherMods", 0, 130, T("settings.mods.other")), h: 130, hits: [] });
       OtherMods.rows(otherMods, valueRow, refreshOtherMods).forEach(add);

@@ -1214,6 +1214,13 @@ def build_api(s: Services) -> RpcRegistry:
                                                                                       progress=progress))
         return s.submit("mods.impact", lambda log, progress: {"mods": library.impacts(ids, pin)})
 
+    @rpc.method("mods.impactLast")
+    def mods_impact_last() -> dict[str, Any]:
+        """The outcome of the last impact check of the current install, without checking (``last_impact``):
+        {install, version, checked, update, mods}; Settings' View Mods to Update."""
+        library = s.library
+        return library.last_impact(library.current_pin())
+
     @rpc.method("mods.updateDue")
     def mods_update_due() -> dict[str, Any]:
         """Whether the start asks to check the mods against a game update (``update_due``): {due, outdated, install,

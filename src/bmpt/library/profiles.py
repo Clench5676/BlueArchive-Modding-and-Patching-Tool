@@ -16,6 +16,8 @@ configuration lives in a file of its own that older builds never open::
          "built": {"<core>": {"source", "inputs": [...], "parts": {"<file name>": {"sha1", "mod_file"}}}},
          "dismissed": {"drift": {"<core>": [[name, size, mtime_ns]]}, "untracked": {...}},
          "resource": {"version", "seen"},   # the last resource version whose game update impact was told
+         "impact": {"version", "checked", "mods": [{"id", "changes", "mark"}]},   # the last impact check: the
+                                            # mods whose rig changed then (library last_impact)
          "scanned": "<ISO>"}}}
 
 Several instances may share one library: every change is applied to the file as it is at that moment, read again under
