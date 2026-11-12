@@ -11,6 +11,7 @@ import { clipButtonPatterns, tagOf, tagBox, overlaps, inkBox } from "./button-la
 import { spriteUrl, uiExportUrl, setAssetContext } from "./api.js";
 import { decodeAll, imageUrls, imageDecoder } from "./image-decode.js";
 import { withTimeout } from "./async.js";
+import { canvasFailed, encodedPicture } from "./canvas-failure.js";
 import { spriteBorders, sliceAxis } from "./sprite-slices.js";
 import { renderFrameEffect } from "./ngui-frame-fx.js";
 
@@ -142,8 +143,16 @@ export async function spritePixels(widget) {
   return context.getImageData(0, 0, canvas.width, canvas.height);
 }
 
-// canvases become in-memory blob URLs (never written anywhere)
-const canvasUrl = (c) => withTimeout(new Promise((resolve) => c.toBlob((b) => resolve(b ? URL.createObjectURL(b) : c.toDataURL()))), 15000, "UI image encoding");
+// canvases become in-memory blob URLs (never written anywhere). A canvas with no backing store gives no blob and
+// encodes to "data:,": that is a failure, so the caches below drop it and the next render draws the picture again.
+export const canvasUrl = (c) => withTimeout(new Promise((resolve, reject) => c.toBlob((b) => {
+  if (b) { resolve(URL.createObjectURL(b)); return; }
+  const data = c.toDataURL();
+  if (encodedPicture(data)) { resolve(data); return; }
+  const error = new Error(`UI image encoding failed (${c.width} x ${c.height})`);
+  canvasFailed(error, "", "ui-image");
+  reject(error);
+})), 15000, "UI image encoding");
 
 // multiply the image by the tint colour, keeping its alpha (alpha of the tint is applied as opacity)
 export async function tinted(url, hex) {

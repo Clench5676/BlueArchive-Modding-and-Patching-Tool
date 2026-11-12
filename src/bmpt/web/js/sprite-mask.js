@@ -1,5 +1,7 @@
 // Reuse a rendered prefab sprite's alpha in another flattened widget's local
 // coordinates. The sprite supplies every corner; no replacement radius is used.
+import { canvasFailed, context2d, encodedPicture, hasAlpha } from "./canvas-failure.js";
+
 const masks = new Map();
 const LIMIT = 96;
 const rect = (style) => ["left", "top", "width", "height"].map((key) => parseFloat(style[key]));
@@ -51,7 +53,9 @@ export function spriteSurface({ data, width, height }) {
   return { data: result, width, height };
 }
 
-export async function maskWithSprite(source, target, load, { surface = false } = {}) {
+// A mask drawn on a canvas with no backing store comes out empty; kept, it would hide every widget sharing it for the
+// rest of the session. It is never kept: the widget shows unmasked and the next render draws the mask again.
+export async function maskWithSprite(source, target, load, { surface = false, report = canvasFailed } = {}) {
   const match = /^url\(["']?(.*?)["']?\)$/.exec(source.style.backgroundImage || "");
   if (!match || !load) return false;
   const [, , sw, sh] = rect(source.style), [, , tw, th] = rect(target.style);
@@ -67,22 +71,31 @@ export async function maskWithSprite(source, target, load, { surface = false } =
     const pending = load(match[1]).then((image) => {
       if (surface) {
         const body = document.createElement("canvas"); body.width = image.naturalWidth; body.height = image.naturalHeight;
-        const pixels = body.getContext("2d"); pixels.drawImage(image, 0, 0);
+        const pixels = context2d(body); pixels.drawImage(image, 0, 0);
         const original = pixels.getImageData(0, 0, body.width, body.height);
+        if (!hasAlpha(original.data)) throw new Error("Mask sprite drew no pixels");
         original.data.set(spriteSurface(original).data); pixels.putImageData(original, 0, 0); image = body;
       }
       const canvas = document.createElement("canvas"); canvas.width = width; canvas.height = height;
-      const context = canvas.getContext("2d");
+      const context = context2d(canvas);
       context.imageSmoothingQuality = "high";
       context.scale(width / tw, height / th);
       context.transform(...matrix);
       context.drawImage(image, 0, 0, sw, sh);
-      return canvas.toDataURL("image/png");
-    }).catch((err) => { masks.delete(key); throw err; });
+      if (!hasAlpha(context.getImageData(0, 0, width, height).data)) throw new Error("Mask drew no pixels");
+      const data = canvas.toDataURL("image/png");
+      if (!encodedPicture(data)) throw new Error(`Mask encoding failed (${String(data).slice(0, 16)})`);
+      return data;
+    }).catch((err) => { if (masks.get(key) === pending) masks.delete(key); throw err; });
     masks.set(key, pending);
     if (masks.size > LIMIT) masks.delete(masks.keys().next().value);
   }
-  const url = `url("${await masks.get(key)}")`;
+  let data;
+  try { data = await masks.get(key); } catch (error) {
+    report(error, match[1], "ui-mask");
+    return false;
+  }
+  const url = `url("${data}")`;
   Object.assign(target.style, {
     webkitMaskImage: url, maskImage: url, webkitMaskSize: "100% 100%", maskSize: "100% 100%",
     webkitMaskPosition: "0 0", maskPosition: "0 0", webkitMaskRepeat: "no-repeat", maskRepeat: "no-repeat",
