@@ -783,7 +783,11 @@ with other regions, a skeleton with other bones, slots or animations, a texture 
 `gone` (no official part of the core left) and `unknown` (no fingerprint, unreadable parts). `update_impact`
 classifies every library mod once the install's resource version differs from the one in `resource` (or none is
 recorded); with nothing but `unchanged` and `unknown` it records the version at once, otherwise `due` stays true until
-`impact_seen`; `force` (Settings' Game Update Impact) classifies them whatever was seen. Each mod named carries
+`impact_seen`; `force` (Check Update Impact) classifies them whatever was seen. Every check keeps its outcome in
+the folder's `impact` (`{version, checked, mods: [{id, changes, mark}]}`, the mods whose rig changed); `last_impact`
+reads it back without checking: those mods no repair or update has taken on since (`mark`: the mod's files and its
+baseline's modification time), and `update`, whether the resource version differs from the one last checked (else
+the one last seen). Each mod named carries
 `changes` (`fingerprint.changes`): what the update changed in its official parts, `repacked` (an atlas with other
 places or regions), `animations` (how many added), `rig` (bones or slots, animations removed, a skeleton that cannot
 be read), `textures` (another size), `removed` and `added` assets, `gone`; only what is true is kept. An On and its
@@ -1295,7 +1299,8 @@ stops the server (the page shows Closed); with `--serve` it gives `native_unavai
 | `mods.scan {dismissed = false}` | `{requested: bool}`; the result comes as `library.scanned`; `scan_off` without scan consent; `dismissed: true` is Settings' explicit Check |
 | `mods.entries` | the last scan's entries (`{install, core, variant, names, kind, source, configured, state, overwritten, fixed, size, files, dismissed}`), updated by every writer job's result until the next scan; empty without scan consent |
 | `mods.adopt {entries}` | job id (`library.adopt`): Add to Library for `[{install, core}]`, allowed while the game runs and while a classic window is open; `not_enough_space` |
-| `mods.impact {ids?, force?}` | reader job id: without `ids`, the current install's game update impact (`update_impact`: `{due, install, version, previous, mods: [{id, label, target, kind, core, impact, changes, configured}], counts}`, `mods` only those not `unchanged` or `unknown`; `force`: classified even when the version was seen, Settings' Game Update Impact); with `ids`, `{mods: [{id, impact}]}` for those mods now |
+| `mods.impact {ids?, force?}` | reader job id: without `ids`, the current install's game update impact (`update_impact`: `{due, install, version, previous, mods: [{id, label, target, kind, core, impact, changes, configured}], counts}`, `mods` only those not `unchanged` or `unknown`; `force`: classified even when the version was seen, Check Update Impact); with `ids`, `{mods: [{id, impact}]}` for those mods now |
+| `mods.impactLast` | `{install, version, checked, update, mods}`: the last impact check's mods to update, without checking (`last_impact`: the version file and the configuration only; `update`: a game update since the last check); Settings' View Mods to Update |
 | `mods.updateDue` | `{due, outdated, install, version, previous}`: whether the start asks to check the mods against a game update (`update_due`: the version file and the configuration only; a first start or no mod records the version and asks nothing); `outdated`: what the App built from a costume under an older costume rule, built again first (`mods.refreshCostumes`) |
 | `mods.refreshCostumes` | job id (`mods.refreshCostumes`, a game writer): at the start, the Optimize Physics copies and the costume swaps in the game files built under an older `COSTUME_RULE` built again without asking (`refresh_costumes`: `{done, kept, left}`); a copy no physics rule improves any more, or whose build fails, is kept as it is (`costume_kept`); a build the game files hold that cannot be written now (game running, untested build, mods off, a classic window open) is left for the next start |
 | `mods.impactSeen {install, version}` | `{}`: the impact summary of that resource version was shown |
@@ -2610,33 +2615,37 @@ overwritten entry need none (the detail screen judges its files cheaply).
   classifies the mods; with mods on and the file check allowed a new scan (`mods.scan`) finds the applied entries the
   update overwrote with official files, and those that need no repair (not held) are applied again
   (`mods.restoreDrift`). Then the first screen, and the summary with the start popups.
-- **Mods Impacted by Game Update** (`update-impact.js check`, the drift prompt's list popup in `#prompt`): three segments over the cards (`listPopup` `tools.segs`, no counts; an empty segment says "No mods affected" in
-  the middle of its paper, `listPopup` `empty`): Needs Fix (the held
-  mods, `heldOf`: a mod whose rig changed, unless a repaired copy took its place; ticked at first, each with the Files
-  Changed badge), Applied Again (the entries the check applied again) and Other Affected (rebuilt, new parts, gone,
-  each with that as its badge); it opens on the first segment with cards. A card names the student, its picture is
-  the mod's own (`spineBase("mod", id)`; none for a 3D model), its chips the kind and Applied (configured, whatever the
-  switch says). The details name the mod and give what the update changed in its official parts and its state, with
-  Go To and, for a held mod, Preview Fix (the repair's preview: `mod-compatibility.js prepare`, the choice when more
-  than one repair applies, then `review`, whose Accept is Fix and Apply and Discard Back; a mod the asset update takes
-  instead says it looks the same after the fix, on a compact notice with XS buttons (`message` `compact`, `footer:
-  "XS"`), with Back and Fix and Apply) and Fix and Apply (the default repair, no
-  review). A click on a card shows it in the details; on Needs Fix the tick box at the card's top right corner ticks it
-  (`listPopup` `tick`), and the cards are placed as if all were selected, so ticking never moves
-  them. Preview Fix and Fix and Apply run over the list, which stays open and is drawn again as the mods stand then.
-  A generic mod's card names the mod (never its set's key). The footer buttons are one size down (S).
-  The footer: Close and, on Needs Fix, Fix and Apply for the ticked mods (greyed with none ticked) (the default repair each, no review; a
-  partial repair is neither stored nor applied, and those are named in a message afterwards). Only Close and Go To
-  close the list. A fixed mod's repaired
-  copy takes its place where its student is configured with it (`actions.apply`, only configured while mods are off);
-  a repaired copy made before does so at once; an asset update that changes nothing makes the parts now its baseline
-  (`update`), which ends the hold. The list opens again as the mods stand then. Go To closes it and opens the mod's
-  student page on the tab of its kind with its switch open and the mod's card selected (`detail.js want`/`takeWanted`,
-  Settings closed first). Closing it records the version (`mods.impactSeen`); entries the check could not apply again
-  follow in a message with their errors. Settings' Mods tab shows it again (Game Update Impact, View:
-  `mods.impact {force}`, no new scan; the library answers from its last check while the resource version, the mods,
-  their baselines and the configuration are the same), as do the tray's Back to Official and Settings' Check when only a game update's entries are
-  there. The switch help's held entries (Details) are listed as text lines, each with Go To and Fix and Apply.
+- **Mods to Update** (`update-impact.js check` and `view`, the drift prompt's list popup in `#prompt`): only the mods
+  to update (`heldOf`: a mod whose rig changed, unless a repaired copy took its place), ticked at first, each with the
+  Outdated badge; no segments, the band over the paper slim (`listPopup` `slimBand`), and with none "No mods to
+  update" in the middle of its paper (`listPopup` `empty`). What the check handled by itself (entries applied again,
+  mods rebuilt, with new parts or gone) is never listed: after the start's check the list opens only with mods to
+  update, otherwise the version is recorded as seen at once and nothing is shown. A card names the student, its
+  picture is the mod's own (`spineBase("mod", id)`; none for a 3D model), its chips the kind and Applied (configured,
+  whatever the switch says). The details name the mod and give what the update changed in its official parts, with
+  Go To, Preview Update (the update's preview: `mod-compatibility.js prepare`, the choice when more than one repair
+  applies, then `review`, whose Accept is Update and Apply and Discard Back; a mod the asset update takes instead says
+  it looks the same after the update, on a compact notice with XS buttons (`message` `compact`, `footer: "XS"`), with
+  Back and Update and Apply) and Update and Apply (the default repair, no review). A click on a card shows it in the
+  details; the tick box at the card's top right corner ticks it (`listPopup` `tick`), and the cards are placed as if
+  all were selected, so ticking never moves them. A generic mod's card names the mod (never its set's key). The footer
+  buttons are one size down (S): Close, Check Update Impact and, with mods to update, Update and Apply for the
+  ticked mods (greyed with none ticked) (the default repair each, no review; a partial repair is neither stored nor
+  applied, and those are named in a message afterwards). Preview Update, Update and Apply and Check Update
+  Impact run over the list, which stays open and is drawn again as the mods stand then: after an update the last
+  check read again (`mods.impactLast`, no new check), after a check its result. Check Update Impact asks first
+  when no game update is recorded since the last check (`mods.impactLast`'s `update` false: "No game update found.
+  Check the game update impact anyway? (This check takes a while)", Cancel and Check), then runs `mods.impact
+  {force}` under the loading screen, no new scan. Only Close and Go To close the list. A fixed mod's repaired copy
+  takes its place where its student is configured with it (`actions.apply`, only configured while mods are off); a
+  repaired copy made before does so at once; an asset update that changes nothing makes the parts now its baseline
+  (`update`), which ends the hold. Go To closes it and opens the mod's student page on the tab of its kind with its
+  switch open and the mod's card selected (`detail.js want`/`takeWanted`, Settings closed first). Closing it records
+  the version of the check shown or run (`mods.impactSeen`); entries the start's check could not apply again follow
+  in a message with their errors. Settings' Mods tab opens it from the last check without checking (Game Update
+  Impact, View Mods to Update: `mods.impactLast`), even with none; the tray's Back to Official and Settings' Check,
+  when only a game update's entries are there, open it only with mods to update. The switch help's held entries
+  (Details) are listed as text lines, each with Go To and Update and Apply.
 - **New Game Version** (`mod-switch.js confirmUntested`, a plain message popup): a write refused with
   `untested_build`, from the switch (the tray's toggle too, once the window is in front), the detail screen, Apply Mod
   Configuration, Settings' other mods and the photography gallery. "Affected by the game update: n", then the entries
@@ -2650,7 +2659,7 @@ overwritten entry need none (the detail screen judges its files cheaply).
 - **Mods Back to Official** (while mods are on: with mods off the game is meant to be official, so nothing was put
   back): the `reset` entries (a Steam check or a repair; a game update's `updated` ones are reconciled above),
   every card ticked but those whose configured mod's official .skel or .atlas file a game update changed
-  (`mods.impact {ids}`): those carry the Files Changed badge and start
+  (`mods.impact {ids}`): those carry the Outdated badge and start
   unticked, so Apply Mod Configuration writes them only when ticked; with the install
   chip; no hint over the cards (only "Still overwritten: n" when there are such entries), the band over the paper as
   slim as the count, the cards from the paper's left edge and a portrait's details upright beside its stacked fields

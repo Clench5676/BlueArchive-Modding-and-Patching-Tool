@@ -243,3 +243,29 @@ def test_the_summary_answers_from_its_last_check_while_nothing_changed(spine, mo
     later = time.time() + 5
     os.utime(baseline, (later, later))
     assert library.update_impact(force=True)["mods"] == [] and calls
+
+
+def test_the_last_check_is_kept_and_read_without_checking(spine, monkeypatch):
+    env = spine
+    entry = configured(env)
+    library = env.library
+    first = library.update_due()
+    # no check yet: the version seen is the reference, no game update since
+    assert library.last_impact()["update"] is False and library.last_impact()["mods"] == []
+    updated(env, (MOVED, ("Idle_01", "00")))
+    library = reload_library(env)
+    last = library.last_impact()
+    assert last["update"] is True and last["checked"] is None and last["version"] != first["version"]
+    summary = library.update_impact(force=True)
+    # kept: read again without judging anything, after a restart too
+    library = reload_library(env)
+    monkeypatch.setattr(library, "_impact_of", lambda *args: pytest.fail("judged"))
+    last = library.last_impact()
+    assert last["update"] is False and last["checked"] == summary["version"]
+    assert last["mods"] == summary["mods"]
+    # a new baseline (an update, a repair) ends the kept impact of that mod
+    import os, time
+    baseline = env.root / "mods" / entry.id / fingerprint.FILE_NAME
+    later = time.time() + 5
+    os.utime(baseline, (later, later))
+    assert library.last_impact()["mods"] == []

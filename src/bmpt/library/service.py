@@ -3459,14 +3459,84 @@ class ModLibrary:
             out["counts"][found] += 1
             if found in (fingerprint.UNCHANGED, fingerprint.UNKNOWN):
                 continue
-            entry = entries[record["id"]]
-            out["mods"].append({"id": entry.id, "label": entry.label, "target": entry.target, "kind": entry.kind,
-                                "core": entry.core, "impact": found, "changes": changes,
-                                "configured": f"mod:{entry.id}" in configured, "repaired_id": entry.repaired_id})
+            out["mods"].append(self._impact_item(entries[record["id"]], found, changes, configured))
         out["due"] = bool(out["mods"])
         self._impact_cache[pin.key] = (stamp, {"mods": [dict(mod) for mod in out["mods"]], "counts": dict(out["counts"])})
+        self._keep_impact(pin.key, version, out["mods"])
         if not out["due"] and not force:
             self.impact_seen(pin.key, version)
+        return out
+
+    @staticmethod
+    def _impact_item(entry: Any, found: str, changes: dict, configured: set) -> dict[str, Any]:
+        """A mod as the impact summary names it."""
+        return {"id": entry.id, "label": entry.label, "target": entry.target, "kind": entry.kind, "core": entry.core,
+                "impact": found, "changes": changes, "configured": f"mod:{entry.id}" in configured,
+                "repaired_id": entry.repaired_id}
+
+    def _impact_mark(self, record: dict[str, Any]) -> str:
+        """What a kept impact of a mod depends on: its files and its stored baseline (by its modification time). A
+        repair or an update writes a new baseline, which ends the kept impact. Names and times only."""
+        baseline = self.root / "mods" / record["id"] / fingerprint.FILE_NAME
+        try:
+            mark = baseline.stat().st_mtime_ns
+        except OSError:
+            mark = None
+        return hashlib.sha1(json.dumps([sorted(record.get("files") or []), mark]).encode()).hexdigest()
+
+    def _keep_impact(self, install: str, version: str, mods: list[dict[str, Any]]) -> None:
+        """Keep the outcome of an impact check of an install (``last_impact``): its resource version and the mods
+        whose rig changed, each with what changed and its mark (``_impact_mark``). Never fails."""
+        with self._lock:
+            kept = [{"id": mod["id"], "changes": mod.get("changes") or {}, "mark": self._impact_mark(self._records[mod["id"]])}
+                    for mod in mods if mod.get("impact") == fingerprint.RIG_CHANGED and mod["id"] in self._records]
+        if self._writes_refused():
+            return
+
+        def change(data: dict) -> bool:
+            folder = data["folders"].setdefault(install, {})
+            before = folder.get("impact") or {}
+            if before.get("version") == version and before.get("mods") == kept:
+                return False
+            folder["impact"] = {"version": version, "checked": now(), "mods": kept}
+            return True
+
+        try:
+            with _errors("impact_kept"):
+                self.profiles.update(change)
+        except ServiceError as error:
+            log_failure(logger, logging.WARNING, "Could not keep the outcome of the impact check", error)
+
+    def last_impact(self, pin: Pin | None = None) -> dict[str, Any]:
+        """The outcome of the last impact check of an install (the current one by default), without checking: the mods
+        whose rig changed then and that no repair or update has taken on since (their mark unchanged), named as
+        ``update_impact`` names them. ``update``: whether the install's resource version differs from the one last
+        checked (else the one last seen), or nothing tells. Reads the version file and the configuration only."""
+        pin = pin or self.current_pin()
+        out: dict[str, Any] = {"install": None, "version": None, "checked": None, "update": False, "mods": []}
+        if pin is None:
+            return out
+        version = self.resource_version(pin)
+        config = self.profiles.read() or {}
+        folder = (config.get("folders") or {}).get(pin.key) or {}
+        kept = folder.get("impact") if isinstance(folder.get("impact"), dict) else {}
+        seen = folder.get("resource") if isinstance(folder.get("resource"), dict) else {}
+        checked = kept.get("version") if isinstance(kept.get("version"), str) else None
+        reference = checked or (seen.get("version") if isinstance(seen.get("version"), str) else None)
+        out.update(install=pin.key, version=version, checked=checked,
+                   update=version is None or reference is None or version != reference)
+        configured = {entry.get("source") for entry in (folder.get("configured") or {}).values()
+                      if isinstance(entry, dict)}
+        with self._lock:
+            entries = {entry.id: entry for entry in self.mods()}
+            for item in kept.get("mods") or []:
+                if not isinstance(item, dict):
+                    continue
+                record = self._records.get(item.get("id"))
+                if record is None or item["id"] not in entries or item.get("mark") != self._impact_mark(record):
+                    continue
+                changes = item.get("changes") if isinstance(item.get("changes"), dict) else {}
+                out["mods"].append(self._impact_item(entries[item["id"]], fingerprint.RIG_CHANGED, changes, configured))
         return out
 
     def _outdated_costumes(self, pin: Pin, config: dict) -> list[dict[str, Any]]:

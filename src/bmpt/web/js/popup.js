@@ -636,6 +636,13 @@ export function listFrame(title, buttons, closeButton, check = false, kind = nul
 // tick): a check box at the card's top right corner, the selection frame then without its check (it marks the card
 // the details show)
 export const TICK_BOX = Object.freeze({ w: 60, h: 58, icon: 48, inset: 42 });
+// badgeRoom(card): the widest a card's top badge may be beside the tick box, BADGE_GAP short of it (both slant alike:
+// their edges are compared without the slant, which corner and tickPlace add by height)
+export const BADGE_GAP = 8;
+export const badgeRoom = (card) => {
+  const [x, y] = tickPlace(card);
+  return x - y * TAN10 - TICK_BOX.w / 2 - BADGE_GAP - (-card.w / 2 + 12);
+};
 export const tickPlace = (card) => [card.w / 2 - TICK_BOX.inset + (card.h / 2 - TICK_BOX.inset) * TAN10, card.h / 2 - TICK_BOX.inset];
 export function listCard(it, x, y, selected, card = LP.card, kind = null, tick = null) {
   const { w, h, bar } = card;
@@ -659,9 +666,10 @@ export function listCard(it, x, y, selected, card = LP.card, kind = null, tick =
     [sprite("Common_Bg_Raius10px", bw, 42, { depth: 26, color: `${mark.color}/1.00`, incline: 10 })],
     [node("Text", [0, 0], [label(bf.text, bf.fs, `${mark.ink || COLOUR.inUseInk}/1.00`, bw - 4, 40, { depth: 27 })])]));
   if (badge) {
-    // as wide as its word needs, from the corner, up to most of the card
-    const bf = fitText(badge.text, 26, 20, w - 70, 1);
-    place("Using", badge, -w / 2 + 12, bf, Math.max(116, glyphsOf(bf.text, bf.fs) + 24), h / 2 - 30);
+    // as wide as its word needs, from the corner, up to most of the card; with a tick box in the corner, up to the box
+    const room = tick === null ? w - 46 : badgeRoom(card);
+    const bf = fitText(badge.text, 26, 20, room - 24, 1);
+    place("Using", badge, -w / 2 + 12, bf, Math.min(room, Math.max(116, glyphsOf(bf.text, bf.fs) + 24)), h / 2 - 30);
   }
   // the bottom row: the tag, then the marks (Updatable), after the recruit icon and before the pin
   tagRow(it, w).forEach(({ mark, x, bf, bw }, i) => place(i ? `Mark${i}` : "Tag", mark, x, bf, bw, -h / 2 + 36));
