@@ -7898,7 +7898,7 @@ class ModLibrary:
             replacements = self._stage_costume(source[8:], targets, Path(temporary) / "model", log, pin,
                                                report=report, physics=True)
             if not report.get("physics"):
-                raise ServiceError("mod_update_failed", id=record["id"], reason="no_gain")
+                raise ServiceError("mod_update_failed", id=record["id"])
             generated = [path for path in replacements.values() if path.parent.name == "output"]
             built_against = self._built_against({path.name: path for path in generated}, pin, "update")
             if sorted((path.name, self._hashes.get(path).sha1) for path in generated) == sorted(built_from.items()):
