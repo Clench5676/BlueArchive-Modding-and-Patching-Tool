@@ -4818,6 +4818,16 @@ class ModLibrary:
             self._save()
         return left
 
+    def _check_target_crc(self, changed: dict[Path, Path]) -> None:
+        """The last CRC check of a write: bytes whose CRC is not the one in the target's name never reach an install
+        that needs the CRC fix, whatever step before missed it (crc_fix_failed, naming the file)."""
+        for target, prepared in changed.items():
+            fingerprint = self._hashes.get(prepared)
+            if crc_state(fingerprint.crc, fingerprint.trailing, target.name) == "needs_fix" and \
+                    self.settings.crc_needed(target):
+                logger.warning("Refused a write whose CRC does not match the target name: %s", target.name)
+                raise ServiceError("crc_fix_failed", file=target)
+
     def _write(self, replacements: dict[Path, Path], source: str, log: LogFunc,
                progress: ProgressCallback | None, pin: Pin, build_keys: dict[Path, str] | None = None,
                *, create_backup: bool = False, expected: dict[Path, str] | None = None,
@@ -4829,6 +4839,8 @@ class ModLibrary:
                 raise ServiceError("bundle_invalid", file=prepared)
         changed = {target: prepared for target, prepared in replacements.items()
                    if self._hashes.get(target).sha1 != self._hashes.get(prepared).sha1}
+        if untested and source != "official":  # restores and rollbacks put back what was there
+            self._check_target_crc(changed)
         if changed and untested and source != "official":
             # the last check: every write path asked before it built (apply, a toggle's plan); one that did not, asks
             written = sorted(changed)
