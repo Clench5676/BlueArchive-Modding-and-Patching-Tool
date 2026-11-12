@@ -1084,34 +1084,25 @@ def test_batch_application_prunes_globally_once_even_after_failure(env, monkeypa
     assert env.library._deferred_prunes == 0 and not env.library._prune_pending
 
 
-def test_crc_detection_reuses_only_the_same_target_revision(env, monkeypatch):
+@pytest.mark.parametrize('source, needed', [('windows_global', True), ('windows_japan', True),
+                                             ('adb_global', False), ('adb_japan', False)])
+def test_auto_crc_follows_the_install_without_loading_the_target(env, monkeypatch, source, needed):
+    env.settings.set('file_source', source)
     settings = batch_import.ImportSettings(env.settings, {**env.services.batch_import.options(), 'crc': 'auto'})
-    calls = []
-    monkeypatch.setattr(Bundle, 'check_need_crc', lambda path: calls.append(path) or True)
-    assert settings.crc_needed(env.original) and settings.crc_needed(env.original)
-    assert calls == [env.original.resolve()]
-    stat = env.original.stat()
-    data = env.original.read_bytes()
-    env.original.write_bytes(data[:-1] + bytes([data[-1] ^ 1]))
-    os.utime(env.original, ns=(stat.st_atime_ns, stat.st_mtime_ns))
-    assert settings.crc_needed(env.original)
-    assert calls == [env.original.resolve(), env.original.resolve()]
+    monkeypatch.setattr(Bundle, 'load', lambda *args, **kwargs: pytest.fail('the target was loaded'))
+    unreadable = env.tmp / 'unreadable.bundle'
+    unreadable.write_bytes(b'not a bundle')
+    assert settings.crc_needed(env.original) is needed
+    assert settings.crc_needed(unreadable) is needed
+    assert settings.crc_needed(None) is needed
 
 
-def test_crc_detection_does_not_serialize_unrelated_worker_targets(env, monkeypatch):
-    from concurrent.futures import ThreadPoolExecutor
-
-    targets = [env.original, game_bundle(env.game_dir, 'other_spr')]
-    settings = batch_import.ImportSettings(env.settings, {**env.services.batch_import.options(), 'crc': 'auto'})
-    barrier = threading.Barrier(2)
-
-    def detect(path):
-        barrier.wait(timeout=5)
-        return True
-
-    monkeypatch.setattr(Bundle, 'check_need_crc', detect)
-    with ThreadPoolExecutor(2) as workers:
-        assert list(workers.map(settings.crc_needed, targets)) == [True, True]
+@pytest.mark.parametrize('option, needed', [('on', True), ('off', False)])
+def test_explicit_import_crc_option_wins_over_the_install(env, option, needed):
+    for source in ('windows_global', 'adb_global'):
+        env.settings.set('file_source', source)
+        settings = batch_import.ImportSettings(env.settings, {**env.services.batch_import.options(), 'crc': option})
+        assert settings.crc_needed(env.original) is needed
 
 
 def test_later_worker_uses_frozen_official_bytes_after_an_earlier_apply(env, monkeypatch):
@@ -1708,22 +1699,14 @@ def test_analysis_writers_hold_move_and_quit_guards(env, monkeypatch, method):
         finish(env, jid)
 
 
-def test_direct_auto_crc_uses_verified_snapshot_when_an_official_copy_exists(env, monkeypatch):
+def test_direct_auto_crc_does_not_read_the_target_or_its_official_copy(env, monkeypatch):
+    # BL-193: auto follows the install, so neither the live target (another row may replace it) nor a copy is read.
     incoming = make_mod(env.original, env.tmp / 'incoming')
     entry, = analyze(env, [incoming])['entries']
     assert entry['state'] == 'ready'
-    calls = []
-
-    def detect(path):
-        calls.append(path)
-        # A direct preparation must use the frozen official copy, not a target another row may replace.
-        assert path != env.original
-        assert 'originals' in path.parts
-        return False
-
-    monkeypatch.setattr(Bundle, 'check_need_crc', detect)
+    monkeypatch.setattr(Bundle, 'check_need_crc', lambda *args, **kwargs: pytest.fail('platform read from a file'))
     result, = run(env, [entry], crc='auto', enableAfterImport=False)
-    assert result['outcome'] == 'imported' and calls
+    assert result['outcome'] == 'imported'
 
 
 def test_a_stored_mod_whose_install_fails_stays_in_the_library_row(env, monkeypatch):

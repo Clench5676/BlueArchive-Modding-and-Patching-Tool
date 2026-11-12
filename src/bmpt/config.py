@@ -52,6 +52,12 @@ class Field:
             object.__setattr__(self, "kind", type(self.default))
 
 
+def install_needs_crc(file_source: object) -> bool:
+    """Whether an install of this file source needs the CRC fix: the Windows clients check every bundle's CRC against
+    its file name, Android ones do not. Fails closed: any source not known to be Android needs it."""
+    return not str(file_source).startswith("adb_")
+
+
 def _default_file_source() -> str:
     if get_BA_path("global"):
         return "windows_global"
@@ -358,15 +364,18 @@ class Settings:
         return SaveOptions(perform_crc=perform_crc, extra_bytes=parse_hex_bytes(self.get("extra_bytes")),
                            compression=self.get("compression_method"))
 
-    def crc_needed(self, target: Path | None) -> bool:
+    def crc_needed(self, target: Path | None = None) -> bool:
+        """Whether files written for the selected install get the CRC fix.
+
+        ``auto`` follows the install (``install_needs_crc``), never the live ``target``: that file may be another tool's
+        mod or unreadable, and a wrong "no" would write a whole group unfixed. ``target`` is accepted for the callers
+        and does not change the answer."""
         setting = self.get("enable_crc_correction")
         if setting == "true":
             return True
-        if setting == "false" or target is None:
+        if setting == "false":
             return False
-        from bmpt.engine import Bundle
-
-        return Bundle.check_need_crc(target)
+        return install_needs_crc(self.get("file_source"))
 
     def spine_options(self, upgrade: bool = True) -> SkelConvertOptions:
         if upgrade:
