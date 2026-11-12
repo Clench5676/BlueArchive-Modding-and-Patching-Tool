@@ -156,6 +156,11 @@ function open(mode, opaque = false, writer = false) {
 export function refresh() {
   for (const o of [overlay, writerOverlay]) o?.relabelProgress?.();
   if (overlay) overlay.el.style.visibility = overlay.mode === "indicator" && writerOverlay && !writerOverlay.closing ? "hidden" : "";
+  // over a full cover (the start's), the writer shows only its progress: the cover keeps the one Now Loading
+  if (writerOverlay) {
+    if (covering() && !writerOverlay.closing) writerOverlay.el.classList.add("over-cover");
+    else writerOverlay.el.classList.remove("over-cover");
+  }
   syncLock();
 }
 
