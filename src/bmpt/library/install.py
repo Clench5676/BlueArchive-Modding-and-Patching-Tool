@@ -12,8 +12,8 @@ from enum import StrEnum
 from pathlib import Path
 
 from bmpt.engine import (
-    AnimCheckOptions, Bundle, LogFunc, ParsedFilename, ProgressCallback, ReplaceAssetType, SaveOptions,
-    SkelConvertOptions, no_log, t,
+    AnimCheckOptions, Bundle, CRCUtils, LogFunc, ParsedFilename, ProgressCallback, ReplaceAssetType, SaveOptions,
+    SkelConvertOptions, no_log, parse_filename, t,
 )
 from .. import devmode
 from ..openfiles import temporary_directory
@@ -68,9 +68,17 @@ def _replace(source: Path, target: Path, log: LogFunc) -> bool:
         return False
 
 
+def matches_target_crc(source: Path, target: Path) -> bool:
+    """Whether a file's bytes already have the CRC in the target's name. The library also writes a mod file whole
+    over a part whose name differs from the mod file's (its CRC changed in a game update, or it matched by CAB), so
+    the mod file's own name proves nothing about the part's."""
+    crc = parse_filename(target.name).crc
+    return bool(crc) and crc.isdigit() and CRCUtils.compute_crc32(source) == int(crc)
+
+
 def _direct(file: PlannedFile, save_options: SaveOptions, log: LogFunc) -> bool:
     """Copy the mod file over its part, or re-save it under the part's CRC first when the bytes do not match."""
-    if not file.need_crc_fix or Bundle.check_crc_match(file.mod_path):
+    if not file.need_crc_fix or matches_target_crc(file.mod_path, file.existing_path):
         return _replace(file.mod_path, file.existing_path, log)
     with temporary_directory(prefix=devmode.LIBRARY_STAGING_PREFIX) as temporary:
         resaved = Path(temporary) / file.existing_path.name
