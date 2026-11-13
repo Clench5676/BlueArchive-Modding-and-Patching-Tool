@@ -204,11 +204,17 @@ export function init(options = {}) {
 // reconcile(entries, s): a game update's overwritten entries (state updated) that need no repair are applied again by
 // themselves while mods are on, no prompt (the configuration says they are applied; with the switch
 // on, or once it is turned on again, the drift is reconciled). Those whose configured mod's rig changed stay held.
+// While the install's game update check is due (Later at the start question, or the question not answered yet),
+// its entries wait: only the check applies them again, never a scan before it.
 // Resolves true when it wrote; a refusal (the game running, Steam busy) leaves them for the next scan.
 let reconciling = false;
 export async function reconcile(entries, s) {
   if (reconciling || s?.enabled === false || s?.scan !== true || s?.available === false) return false;
-  const updated = (entries || []).filter((e) => e?.state === "updated" && !e.dismissed);
+  let updated = (entries || []).filter((e) => e?.state === "updated" && !e.dismissed);
+  if (!updated.length) return false;
+  const due = await rpc("mods.updateDue").catch(() => null);
+  if (!due) return false; // unknown whether the check is due: nothing written
+  if (due.due) updated = updated.filter((e) => e.install !== due.install);
   if (!updated.length) return false;
   const held = Impact.heldKeys(updated, await Impact.impacts(updated));
   const again = updated.filter((e) => !held.has(entryKey(e)));
