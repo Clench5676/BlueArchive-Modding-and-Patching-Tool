@@ -23,7 +23,7 @@ from ..config import install_needs_crc
 from ..errors import ServiceError
 from ..gameassets.spine import PREVIEW_TYPES, Composition, spine_revision
 from ..gameassets.discovery import cab_names
-from ..library import integrity, staging, manual_identity
+from ..library import import_archive, integrity, staging, manual_identity
 from ..library.rebuild import UpdateScope, rebuild
 from ..library.judge import core_of, kind_of, part_of
 from ..library.storage import Fingerprints, atomic_clone, verify_file
@@ -305,7 +305,7 @@ class BatchImport:
         from .native import pick_files, pick_folder
 
         paths = pick_folder(self.services.window) if folder else pick_files(
-            self.services.window, ("Bundle (*.bundle;*.bundle.backup)",), **({"directory": directory} if directory else {}))
+            self.services.window, ("Mod (*.bundle;*.bundle.backup;*.zip)",), **({"directory": directory} if directory else {}))
         return {"paths": [str(path) for path in paths]}
 
     def analyze(self, paths: list[str], recursive: bool = False) -> str:
@@ -582,6 +582,13 @@ class BatchImport:
                     for child in sorted(path.iterdir()):
                         if not child.is_dir():
                             take(child)
+            elif import_archive.is_archive(path):
+                # A chosen archive opens like a folder, one level only: archives inside it stay packed.
+                devmode.check_read(path)
+                unpacked, left = import_archive.unpack(path, library.root)
+                skipped += left
+                for member in unpacked:
+                    take(member)
             else:
                 take(path)
         # a bundle of a group packed one asset per bundle gets its own slot (its CAB) before anything is identified

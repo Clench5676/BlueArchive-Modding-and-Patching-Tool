@@ -457,6 +457,7 @@
 			"data_dir_readonly": "データフォルダーに書き込めません：{path}",
 			"asset_extraction_failed": "ゲームファイルから素材を読み込めません",
 			"asset_load_failed": "ゲームファイルを読み込めません：{path}",
+			"archive_invalid": "有効なZIPファイルではありません：{file}",
 			"bundle_invalid": "有効なBundleではありません：{file}",
 			"catalog_data_invalid": "キャラクターデータが破損しています",
 			"catalog_family_not_found": "生徒が見つかりません",

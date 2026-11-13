@@ -457,6 +457,7 @@
 			"data_dir_readonly": "Data folder not writable: {path}",
 			"asset_extraction_failed": "Could not read the assets from the game files",
 			"asset_load_failed": "Could not read a game file: {path}",
+			"archive_invalid": "Not a valid ZIP file: {file}",
 			"bundle_invalid": "Not a valid bundle: {file}",
 			"catalog_data_invalid": "The character data is damaged",
 			"catalog_family_not_found": "Student not found",

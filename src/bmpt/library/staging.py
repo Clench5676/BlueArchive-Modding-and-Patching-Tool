@@ -10,7 +10,8 @@ import time
 from .. import devmode
 from ..filelock import file_lock
 from ..logging_utils import log_failure
-from ..openfiles import temporary_directory
+from ..openfiles import remove_tree, temporary_directory
+from .import_archive import PREFIX as ARCHIVE_PREFIX
 
 logger = logging.getLogger(__name__)
 MIN_IMPORT_AGE = 24 * 60 * 60
@@ -74,6 +75,15 @@ def cleanup(root: Path) -> None:
                     continue  # Another instance is still using this workspace.
                 except OSError as error:
                     log_failure(logger, logging.WARNING, "Could not remove abandoned import", error)
+            # Unpacked archives (import_archive) have no lease: a startup keeps those used within the last day.
+            for path in staging.glob(ARCHIVE_PREFIX + "*"):
+                if path.is_symlink() or not path.is_dir():
+                    continue
+                try:
+                    if _stale(path, time.time() - MIN_IMPORT_AGE):
+                        remove_tree(path)
+                except OSError as error:
+                    log_failure(logger, logging.WARNING, "Could not remove an unpacked archive", error)
     except TimeoutError:
         pass  # A creation or another cleanup currently owns the directory list.
     except OSError as error:

@@ -41,6 +41,7 @@ BLOCKS = (
         'platform_unsupported required_asset_apply_failed required_asset_extract_failed '
         'required_asset_stream_missing required_assets_unmatched source_conflict source_unknown '
         'source_unsupported spine_version target_unknown unreadable unsupported '
+        'archive_invalid '
     ).split(),
     (
         'asset_delete_confirm asset_official crc_fix_failed entry_changed export_empty export_target_unavailable '

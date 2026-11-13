@@ -74,6 +74,7 @@ _EXPORTS: dict[str, tuple[str, str | None]] = {
     "get_BA_path": ("utils", "get_BA_path"),
     "get_version_info": ("utils", "get_version_info"),
     "is_safe_file_name": ("utils.common", "is_safe_file_name"),
+    "is_safe_relative_name": ("utils.common", "is_safe_relative_name"),
     "no_log": ("utils", "no_log"),
     "parse_hex_bytes": ("utils", "parse_hex_bytes"),
     # The classic Tk UI
@@ -99,7 +100,7 @@ if TYPE_CHECKING:
     from ba_modding_toolkit.searching import SEARCH_DIR_SUFFIXES, get_search_dirs, is_game_install
     from ba_modding_toolkit.spine import get_skel_version, get_spine_backend
     from ba_modding_toolkit.utils import CRCUtils, EXE_DIR, get_BA_path, get_version_info, no_log, parse_hex_bytes
-    from ba_modding_toolkit.utils.common import is_safe_file_name
+    from ba_modding_toolkit.utils.common import is_safe_file_name, is_safe_relative_name
 
 
 def source_of(name: str) -> tuple[str, str | None]:
