@@ -3,7 +3,7 @@ import { rpc } from "./api.js";
 const ROOT = "vendor/spine-player-4.2.120/";
 let choice, reading = null, loading = null, started = false;
 
-// Saved answers are acknowledged at startup; an unanswered notice cannot enable the runtime.
+// Only a saved Yes enables the runtime; an unanswered notice or a stored No cannot.
 export function setSpineConsent(value) {
   choice = typeof value === "boolean" ? value : null;
 }
