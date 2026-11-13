@@ -98,9 +98,9 @@
       "masked_import_lines_sha256": "e81bdea409ec2c874c65d78e0940768851f9b6dbb07a1e89504f82c50c3260c1"
     },
     "src/ba_modding_toolkit/core/packing.py": {
-      "blob": "f15740a5b66a85eb60ae26030ca5ec5b985fec63",
-      "non_import_ast_sha256": "ee76f9a3403798526a1b6cdff6a31340204a1864705821bbaf4b24141c47d74d",
-      "masked_import_lines_sha256": "cd3325e5b0c7e1b0280691cc02fccf69b192cb2c04aeda2c1a1bdabc4d156621"
+      "blob": "db01cb5fbd994485c17406af29308a2e0788fdc3",
+      "non_import_ast_sha256": "5d869db4d8c70e9df5ec5e2efdc20d4143f18cf0da54aa09695d960d32f36bb2",
+      "masked_import_lines_sha256": "d385fd7aaf95776d8809805411907f76b46a1eedec5ffd7ef3b1db64e4e278a6"
     },
     "src/ba_modding_toolkit/core/preview.py": {
       "blob": "46b0249932ca31203581f9a49fc3de12c88148c6",
