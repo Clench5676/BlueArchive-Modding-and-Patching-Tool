@@ -274,12 +274,13 @@ def test_spine_notice_confirm_uses_the_existing_consent_rpc_without_a_version(ap
 
 
 @pytest.mark.parametrize("previous", [True, False])
-def test_previous_spine_answers_are_true_before_the_first_screen(app, services, previous):
+def test_previous_spine_answers_reach_the_first_screen_unchanged(app, services, previous):
+    # a stored No stays No, so the start shows the licence notice again
     services.state.set("spine_consent", previous)
     services.state = UiState(services.state.path)
-    assert rpc(app, "app.info")["result"]["spineConsent"] is True
-    assert rpc(app, "app.spineConsent")["result"] is True
-    assert rpc(app, "settings.get")["result"]["spineConsent"] is True
+    assert rpc(app, "app.info")["result"]["spineConsent"] is previous
+    assert rpc(app, "app.spineConsent")["result"] is previous
+    assert rpc(app, "settings.get")["result"]["spineConsent"] is previous
     assert services.state.get("spine_notice") is None
 
 

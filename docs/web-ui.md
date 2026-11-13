@@ -1263,7 +1263,7 @@ stops the server (the page shows Closed); with `--serve` it gives `native_unavai
 
 | Method | Result |
 |---|---|
-| `app.info` | version, language, platform, game found (the selected folder is a game install, as for `settings.set`; a folder saved earlier that holds no game starts on the no-game screen), resource version, consent (`null`, `true`, `false`), `spineConsent` (`null` until acknowledged; earlier Yes or No answers are true at startup), `uiCached` (consented light assets on disk for the current resource version), paths, `dataDirWritable` (a real temporary file was written in the data folder and removed again at start; `false`: see Start sequence), `debug` (started with `--debug`) |
+| `app.info` | version, language, platform, game found (the selected folder is a game install, as for `settings.set`; a folder saved earlier that holds no game starts on the no-game screen), resource version, consent (`null`, `true`, `false`), `spineConsent` (`null` until answered, `true` once acknowledged; an earlier stored No stays `false` and shows the notice at start), `uiCached` (consented light assets on disk for the current resource version), paths, `dataDirWritable` (a real temporary file was written in the data folder and removed again at start; `false`: see Start sequence), `debug` (started with `--debug`) |
 | `app.consent {granted}` | records the choice; `false` closes the app |
 | `app.spineConsent {granted?}` | reads the saved answer; `{granted: true}` records the notice acknowledgement and returns true, without a notice version |
 | `app.quit` | closes the window; `busy` while a writer job runs; in browser mode answers, then stops the server; `native_unavailable` with `--serve` |
@@ -1940,7 +1940,7 @@ placed sources (a Mod portrait may go back to its own variant's official art). W
 and source; UUID, position, individual size, mirror and layer index stay intact. Only the new art loads; saved source
 actors remain cached through Cancel, without restarting other actors or the background.
 Existing duplicate portrait rows are canonicalized on read without writing a migration or advancing the revision. Spine previews
-wait for licence notice acknowledgement (see Spine licence); earlier Yes and No answers already count as acknowledged. The Add Portraits modal lists student names beside independently scrolling portrait-card
+wait for licence notice acknowledgement (see Spine licence); an earlier Yes counts as acknowledged, an earlier No does not. The Add Portraits modal lists student names beside independently scrolling portrait-card
 rows. Optional skin grouping, search, filters and sorting use roster semantics; only library portraits can be added.
 Cards are still previews with explicit Add buttons; clicking them neither opens another preview window nor plays
 in the background. The compact modal uses inclined native white row plates, equal outer-edge margins and a
@@ -2243,7 +2243,7 @@ data of the game found), without a restart. A later refresh never starts it agai
 the start popups come one at a time, in order, each only when it has something to show (`mod-switch.js startDue`): first,
 when `app.info.dataDirWritable` is `false` (the data folder cannot be written), one notice with the quit dialog's title and
 Confirm only (`webui.error.data_dir_readonly`, with the folder's path; the no-game screen shows it too, once per session);
-then the asset consent, the Spine licence notice (only while no answer was ever stored; see Spine licence),
+then the asset consent, the Spine licence notice (until it is acknowledged; see Spine licence),
 then the scan consent (while it is unanswered and a game folder is known; see Enable Mods switch). File checks require scan
 consent: On checks at every start, Off withdraws consent and stops scans.
 The Configuration Drift Check row's Check remains available while Off too: missing consent opens the scan consent
@@ -2284,12 +2284,12 @@ quit behaviour. Without asset consent the plain popup uses exactly the same titl
 The notice says that continuing to use the software confirms that the user holds a Spine Editor licence.
 Confirm sends one `app.spineConsent {granted: true}` RPC, saving `prefs.spine_consent = true` in `webui.json`.
 Repeated clicks while saving send nothing; a failed save leaves the notice open to retry. No notice version is
-stored or returned. `mod-switch.js startDue` requires this step only while `app.info.spineConsent` is null.
-Earlier Yes and No answers never show the notice. On the first start, `UiState` migrates a stored No to true under
-the shared state lock before `app.info` or the first screen reads it; an earlier Yes remains true. Unanswered
-state stays null. Confirm updates `info.spineConsent` and calls `route()` to render the current screen again.
+stored or returned. `mod-switch.js startDue` requires this step while `app.info.spineConsent` is not true.
+An earlier Yes never shows the notice. A stored No (data from before the one-time notice) is never changed at start:
+it stays false, previews stay off, and the start shows the notice until Confirm saves true. Unanswered state stays
+null. Confirm updates `info.spineConsent` and calls `route()` to render the current screen again.
 
-`spine-runtime.js ensureSpine` loads the runtime only after acknowledgement, including an earlier answer.
+`spine-runtime.js ensureSpine` loads the runtime only after acknowledgement, including an earlier Yes.
 The first screen, built before the start popups, uses a static portrait where one exists, otherwise an empty preview. Detail, Hall,
 comparison and compatibility paths show no licence notice or Confirm License action. Settings' General tab keeps
 Spine License (`settings.spine.label`) as a value row with one View (`settings.spine.view`) button. View opens the

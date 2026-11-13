@@ -383,9 +383,8 @@ test("the start prompts: their order, the scan consent, and no prompt from the s
   assert.deepEqual(due(base({ scan: null }), [], { consent: null, spineConsent: null, compiled: true }), ["consent", "spine", "scan", "update"]);
   assert.equal(MS.startDue("spine", { info: {} }), true);
   assert.equal(MS.startDue("spine", { info: { spineConsent: null } }), true);
-  for (const spineConsent of [true, false]) {
-    assert.deepEqual(due(base({ scan: false }), [], { consent: true, spineConsent }), [], "either stored answer skips the notice");
-  }
+  assert.deepEqual(due(base({ scan: false }), [], { consent: true, spineConsent: true }), [], "a stored Yes skips the notice");
+  assert.deepEqual(due(base({ scan: false }), [], { consent: true, spineConsent: false }), ["spine"], "a stored No shows the notice");
   assert.deepEqual(due(base({ scan: null, installs: [] })), [], "no game folder known: no scan consent");
   assert.deepEqual(due(base({ scan: false })), [], "answered: not asked again");
   const reset = { install: "/g", core: "airi_spr", state: "reset" }, untracked = { install: "/g", core: "ch0251_spr", state: "untracked" };
@@ -1384,7 +1383,7 @@ test("Spine notice has the same title, legal body and lone Confirm in both paths
   } finally { I18n.setStrings("en-US", strings); answers["app.spineConsent"] = saved; Runtime.setSpineConsent(null); }
 });
 
-test("startup acknowledges only an unanswered Spine notice after assets, re-renders, and skips either old answer", async () => {
+test("startup shows the Spine notice after assets until it is acknowledged, re-renders, and skips an old Yes", async () => {
   const main = readFileSync(new URL("../../src/bmpt/web/js/main.js", import.meta.url), "utf8");
   const source = main.slice(main.indexOf("function startPopups()"), main.indexOf("async function start()"));
   for (const choice of [undefined, null, false, true]) {
@@ -1402,8 +1401,8 @@ test("startup acknowledges only an unanswered Spine notice after assets, re-rend
     };
     const steps = new Function("env", `const { ${Object.keys(env).join(", ")} } = env; ${source}; return startPopups();`)(env);
     await (await import("../../src/bmpt/web/js/popup.js")).sequence(steps);
-    assert.deepEqual(order, ["assets", ...(choice == null ? ["spine", "route"] : []), "scan", "drift", "untracked"]);
-    assert.equal(info.spineConsent, choice == null ? true : choice);
+    assert.deepEqual(order, ["assets", ...(choice !== true ? ["spine", "route"] : []), "scan", "drift", "untracked"]);
+    assert.equal(info.spineConsent, true);
     assert.equal(MS.startDue("spine", { info }), false);
   }
 });

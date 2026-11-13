@@ -581,7 +581,7 @@ function dataDirNotice() {
 // The start popups, one at a time and in this order, each only when it has something to show (mod-switch.js
 // startDue); each step resolves once its popup has closed (docs/web-ui.md, "Start sequence"):
 //   - the asset consent;
-//   - the Spine licence notice, only while no answer was ever stored;
+//   - the Spine licence notice, until it is acknowledged (a stored No shows it again);
 //   - the scan consent, while it is unanswered and a game folder is known;
 //   - the impact of a game update on the library's mods, once per resource version (update-impact.js);
 //   - the prompts of mods back to official and of mods outside the library, if the start scan is already in;
