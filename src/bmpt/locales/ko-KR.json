@@ -457,6 +457,7 @@
 			"data_dir_readonly": "데이터 폴더에 쓸 수 없음: {path}",
 			"asset_extraction_failed": "게임 파일에서 에셋을 읽을 수 없음",
 			"asset_load_failed": "게임 파일을 읽을 수 없음: {path}",
+			"archive_invalid": "올바른 ZIP 파일이 아님: {file}",
 			"bundle_invalid": "올바른 번들이 아님: {file}",
 			"catalog_data_invalid": "캐릭터 데이터 손상",
 			"catalog_family_not_found": "학생을 찾을 수 없음",

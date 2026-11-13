@@ -7,6 +7,10 @@
     "code": "E6002",
     "level": "notice"
   },
+  "archive_invalid": {
+    "code": "E3029",
+    "level": "failed"
+  },
   "asset_delete_confirm": {
     "code": "E4001",
     "level": "failed"

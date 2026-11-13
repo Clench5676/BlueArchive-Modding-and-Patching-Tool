@@ -457,6 +457,7 @@
 			"data_dir_readonly": "無法寫入資料目錄：{path}",
 			"asset_extraction_failed": "無法從遊戲檔案讀取素材",
 			"asset_load_failed": "無法讀取遊戲檔案：{path}",
+			"archive_invalid": "不是有效的 ZIP 檔案：{file}",
 			"bundle_invalid": "不是有效的資源包：{file}",
 			"catalog_data_invalid": "角色資料已損毀",
 			"catalog_family_not_found": "找不到這名學生",
