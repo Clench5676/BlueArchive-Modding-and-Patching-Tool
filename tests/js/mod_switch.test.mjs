@@ -1570,6 +1570,16 @@ test("the entries a game update overwrote that need no repair are applied again;
     jobs["job-reconcile"] = { state: "done", result: { done: [{ install: GLOBAL, core: "airi_spr" }], failed: [], skipped: [], stuck: [] } };
     assert.equal(await P.reconcile(entries, base({ enabled: false })), false, "mods off: nothing written");
     assert.equal(await P.reconcile(entries, base({ scan: false })), false, "no file check: nothing known");
+    // the game update check still due (Later, or the question not answered yet): only the check applies them again
+    const writes = called("mods.restoreDrift").length;
+    answers["mods.updateDue"] = null;
+    assert.equal(await P.reconcile(entries, base()), false, "unknown whether the check is due: nothing written");
+    answers["mods.updateDue"] = { due: true, install: GLOBAL, version: "v3", previous: "v2" };
+    assert.equal(await P.reconcile(entries, base()), false, "Later: nothing written");
+    assert.equal(called("mods.restoreDrift").length, writes);
+    answers["mods.updateDue"] = { due: true, install: "/other", version: "v3", previous: "v2" };
+    assert.equal(await P.reconcile(entries, base()), true, "another install's check due: this one's entries applied");
+    answers["mods.updateDue"] = { due: false, install: GLOBAL, version: "v3", previous: "v3" };
     assert.equal(await P.reconcile(entries, base()), true);
     assert.deepEqual(called("mods.restoreDrift").at(-1), { entries: [{ install: GLOBAL, core: "airi_spr", state: "updated" }] });
     assert.equal(dialog.hidden, true, "silently");

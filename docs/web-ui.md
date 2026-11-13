@@ -2654,7 +2654,9 @@ overwritten entry need none (the detail screen judges its files cheaply).
 - **A game update's drift** (`prompts.js reconcile`): with mods on and the file check allowed, the scan's `updated`
   entries (overwritten by a game update) that need no repair are applied again by themselves, no prompt
   (`mods.restoreDrift`; the configuration says they are applied); those whose configured mod's rig
-  changed stay held. Mods off: nothing; turning them on writes the configuration. A refusal (the game running) leaves
+  changed stay held. While the install's game update check is due (`mods.updateDue`'s `due`: Later at Game Updated,
+  or the question not answered yet), its entries are left as they are: only Check applies them again, and the next
+  start asks again. Mods off: nothing; turning them on writes the configuration. A refusal (the game running) leaves
   them for the next scan.
 - **Mods Back to Official** (while mods are on: with mods off the game is meant to be official, so nothing was put
   back): the `reset` entries (a Steam check or a repair; a game update's `updated` ones are reconciled above),
