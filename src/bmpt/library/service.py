@@ -17,6 +17,7 @@ import threading
 import time
 import unicodedata
 import uuid
+from collections import OrderedDict
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from functools import wraps
@@ -40,7 +41,7 @@ from ..gameassets.preview_reads import PreviewReads
 from ..logging_utils import log_failure
 from ..openfiles import remove_tree, temporary_directory
 from . import profiles as profiles_mod
-from . import fingerprint, integrity, rig_archive, safety, staging, tested_build
+from . import fingerprint, integrity, pointers, rig_archive, safety, staging, tested_build
 from .original_checks import OriginalChecks, Verdict
 from .install import Action, PlannedFile, PlannedGroup, backup_file, install_staged
 from .rebuild import RebuildResult, rebuild
@@ -75,6 +76,7 @@ SPACE_MARGIN = 512 * 1024 * 1024  # left free on the library's volume by an Off 
 SAVE_EVERY = (10, 2.0)  # a toggle saves its unfinished list every 10 entries or 2 s
 BUILT_TEMP_MAX_AGE = 60 * 60  # seconds before an abandoned built copy can be cleared
 COSTUME_PREVIEWS = 4  # costume previews kept in built/previews (one folder per build signature)
+POINTER_CACHE = 256  # files whose cross-bundle pointers, and game files whose objects, are kept in memory
 COSTUME_VERDICTS = 4000  # costume verdicts kept in costume-verdicts.json, newest first
 # the startup rig archive (archive_rigs) works only once no other caller used the library for this long
 RIG_ARCHIVE_QUIET = 1.0
@@ -691,6 +693,9 @@ class ModLibrary:
         self._write_check = write_check
         self._lock = _LibraryLock()
         self._hashes = Fingerprints()
+        # cross-bundle pointers of a file by its SHA-1, and the objects of a game file's CABs by its revision
+        self._pointer_cache: OrderedDict[str, frozenset[pointers.Pointer]] = OrderedDict()
+        self._layout_cache: OrderedDict[tuple, dict[str, dict[int, int]]] = OrderedDict()
         self._steam_files = steam_files if steam_files is not None else steam_records.OfficialFiles()
         self._steam_roots_cache: tuple[float, list[Path]] | None = None
         self._legacy_import_matches: dict[str, str | None] = {}
@@ -1851,6 +1856,8 @@ class ModLibrary:
                 self._check_model_references(source, incoming, baseline, replacements, targets, pin, inspection)
             elif incoming.files != baseline.files or incoming.layout != baseline.layout:
                 raise ServiceError("mod_release_mismatch", file=source.name)
+        # A whole file must also point at objects the game still holds where it points into other bundles.
+        self._check_references(replacements, pin)
         inspection.validate()
         source_origin, error = mod_origin.source_of(set(files), selected, official, target_origin)
         if error == "source_unknown" and compatibility["unavailable"]:
@@ -5069,6 +5076,119 @@ class ModLibrary:
             self._save()
         return left
 
+    def _pointers_of(self, path: Path) -> frozenset[pointers.Pointer]:
+        """The cross-bundle pointers of a file (``pointers.external_pointers``), kept by its SHA-1. A file that is no
+        readable bundle has none: it gives no evidence here, and the bundle checks judge it."""
+        sha1 = self._hashes.get(path).sha1
+        found = self._pointer_cache.get(sha1)
+        if found is None:
+            devmode.check_read(path)
+            try:
+                bundle = Bundle.load(path)
+                found = frozenset(pointers.external_pointers(bundle.env)) if bundle is not None else frozenset()
+            except Exception as error:  # noqa: BLE001 - an unreadable file gives no evidence
+                log_failure(logger, logging.DEBUG, "Could not read the pointers of a file", error)
+                return frozenset()  # not kept: the read may succeed later
+            self._pointer_cache[sha1] = found
+            while len(self._pointer_cache) > POINTER_CACHE:
+                self._pointer_cache.popitem(last=False)
+        self._pointer_cache.move_to_end(sha1)
+        return found
+
+    def _layouts_of(self, path: Path) -> dict[str, dict[int, int]]:
+        """The objects of each CAB of a file, {CAB: {path id: class id}}, from its headers; kept by the file's
+        revision."""
+        devmode.check_read(path)
+        stat = path.stat()
+        key = (str(path), stat.st_dev, stat.st_ino, stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns)
+        layouts = self._layout_cache.get(key)
+        if layouts is None:
+            contents = integrity.metadata(path, inspection=integrity.Inspection())
+            layouts = {cab: dict(objects) for cab, objects in contents.layout.items()}
+            self._layout_cache[key] = layouts
+            while len(self._layout_cache) > POINTER_CACHE:
+                self._layout_cache.popitem(last=False)
+        self._layout_cache.move_to_end(key)
+        return layouts
+
+    def _broken_references(self, replacements: Mapping[Path, Path], pin: Pin) -> dict[Path, set[pointers.Pointer]]:
+        """The written files of ``replacements`` ({target: prepared}) that point at objects the game does not hold:
+        a pointer into another bundle's CAB whose object is gone there or of a type the field cannot hold
+        (``pointers.dangling``), {target: those pointers}. A CAB resolves to the file this write puts there, else to
+        the install's (``CabIndex``); one found nowhere is left to the missing-part checks. A file that is the
+        target's official copy is not judged, and what the official copy itself points at in vain, against the
+        official files, is not held against a file (the game's own data then has it too)."""
+        official: dict[Path, Path | None] = {}
+        for target in replacements:
+            try:
+                official[target] = self._official_for(target, pin)
+            except ServiceError as error:
+                if error.code not in ("original_unavailable", "original_invalid"):
+                    raise
+                official[target] = None
+        written = [target for target, prepared in replacements.items() if official[target] is None
+                   or self._hashes.get(official[target]).sha1 != self._hashes.get(prepared).sha1]
+        if not written:
+            return {}
+        index = self._cab_index(pin)
+
+        def world(files: Mapping[Path, Path | None]) -> Callable[[Path], Callable[[str], dict[int, int] | None]]:
+            own: dict[str, Path] = {}
+            for path in files.values():
+                if path is not None:
+                    with contextlib.suppress(ServiceError, OSError, ValueError):
+                        own.update(dict.fromkeys(self._layouts_of(path), path))
+
+            def layout_for(hint: Path) -> Callable[[str], dict[int, int] | None]:
+                def layout(cab: str) -> dict[int, int] | None:
+                    path = own.get(cab)
+                    if path is None:
+                        found = index.resolve({cab}, hint, exclude=replacements.keys())
+                        path = Path(found[cab]) if cab in found else None
+                    if path is None:
+                        return None
+                    try:
+                        return self._layouts_of(path).get(cab)
+                    except (ServiceError, OSError, ValueError):
+                        return None
+                return layout
+            return layout_for
+
+        current, baseline = world(replacements), world(official)
+        broken: dict[Path, set[pointers.Pointer]] = {}
+        for target in written:
+            found = pointers.dangling(self._pointers_of(replacements[target]), current(target))
+            if found and official[target] is not None:
+                found -= pointers.dangling(self._pointers_of(official[target]), baseline(target))
+            if found:
+                broken[target] = found
+        return broken
+
+    def _stale_build(self, replacements: Mapping[Path, Path], pin: Pin) -> bool:
+        """Whether a kept build points at objects the game no longer holds (``_broken_references``): a game update
+        that rebuilt a bundle it points into, under the same CAB, leaves its inputs' and targets' names as they were.
+        Such a copy is built again from the current files; a file that cannot be read keeps the copy (the write's own
+        check reads it again)."""
+        try:
+            broken = self._broken_references(replacements, pin)
+        except (ServiceError, OSError, ValueError) as error:
+            log_failure(logger, logging.DEBUG, "Could not read the references of a built copy", error)
+            return False
+        if broken:
+            logger.info("The built copy of %s points at objects the game no longer holds, rebuilding",
+                        ", ".join(sorted(target.name for target in broken)))
+        return bool(broken)
+
+    def _check_references(self, changed: Mapping[Path, Path], pin: Pin) -> None:
+        """The last reference check of a write: a file that points at objects the game no longer holds where it points
+        (``_broken_references``) never reaches the install; the game would draw nothing there and report nothing
+        (mod_release_mismatch, naming the file)."""
+        broken = self._broken_references(changed, pin)
+        for target, found in sorted(broken.items()):
+            logger.warning("Refused a write pointing at %d objects the game no longer holds: %s (%s)", len(found),
+                           target.name, ", ".join(f"{item.cab}:{item.path_id}" for item in sorted(found)[:3]))
+            raise ServiceError("mod_release_mismatch", file=changed[target].name)
+
     def _check_target_crc(self, changed: dict[Path, Path]) -> None:
         """The last CRC check of a write: bytes whose CRC is not the one in the target's name never reach an install
         that needs the CRC fix, whatever step before missed it (crc_fix_failed, naming the file)."""
@@ -5094,6 +5214,7 @@ class ModLibrary:
                    if self._hashes.get(target).sha1 != self._hashes.get(prepared).sha1}
         if untested and source != "official":  # restores and rollbacks put back what was there
             self._check_target_crc(changed)
+            self._check_references(changed, pin)
         if changed and untested and source != "official":
             # the last check: every write path asked before it built (apply, a toggle's plan); one that did not, asks
             written = sorted(changed)
@@ -5964,6 +6085,8 @@ class ModLibrary:
                         if not self._kept_crc_fits(kept, target):
                             raise ValueError("Built copy without the part's CRC")
                         replacements[target] = kept
+                    if self._stale_build(replacements, pin):
+                        continue
                     logger.debug("Reused configured build %s", signature)
                     return replacements
                 except (OSError, ValueError, KeyError, TypeError):
@@ -6003,6 +6126,8 @@ class ModLibrary:
                     fits = False
                     break
                 replacements[target] = kept
+        if fits and self._stale_build(replacements, pin):
+            fits = False
         if fits:
             if build_keys is not None and key.get("build"):
                 build_keys.update((target, key["build"]) for target in targets)

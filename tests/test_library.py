@@ -166,9 +166,13 @@ def test_apply_already_crc_fixed_mod_copies_without_unity_rebuild(setup_library,
     monkeypatch.setattr(env.settings, "crc_needed", lambda path: True)
 
     def no_rebuild(*args, **kwargs):
-        pytest.fail("A verified CRC-fixed mod must not be loaded or recompressed")
+        pytest.fail("A verified CRC-fixed mod must not be rebuilt or recompressed")
 
-    monkeypatch.setattr(Bundle, "load", no_rebuild)
+    # The write's reference check reads the file; nothing may be rebuilt or saved from it.
+    monkeypatch.setattr(Bundle, "compress", no_rebuild)
+    monkeypatch.setattr(Bundle, "save", no_rebuild)
+    monkeypatch.setattr("bmpt.library.service.install_staged", no_rebuild)
+    monkeypatch.setattr("bmpt.library.service.rebuild", no_rebuild)
     result = env.library.apply("test", f"mod:{entry.id}", kind=kind)
     assert result.files == [target]
     assert target.read_bytes() == mod.read_bytes()
