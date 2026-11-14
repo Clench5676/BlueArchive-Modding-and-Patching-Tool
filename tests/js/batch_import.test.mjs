@@ -1498,7 +1498,7 @@ test("merged rows keep variant identity, say every asset kind and state as an un
   await adding; await h.page.settled();
   assert.equal(h.row("a"), row, "the student row survives adding more assets");
   const tree = drawn(h, row).tree, text = (path) => find(tree, path).widgets.find((w) => "text" in w).text.replace(/\n/g, "");
-  assert.equal(text("Label_Locale_Received"), "Portrait ×2, Memorial Lobby ×1, 3D Model ×1");
+  assert.equal(text("Label_Locale_Received"), "Portrait ×2, Memorial Lobby ×1, Chibi ×1");
   assert.equal(find(tree, "Label_From").children.length, 0, "no icon counts in the list");
   assert.notEqual(find(tree, "TimeLimit").active, false, "the states are on the status tag");
   for (const state of [/Ready/, /Pending Update/]) assert.match(text("TimeLimit/Label_Locale_TimeLimit"), state);
@@ -2531,7 +2531,7 @@ test("scenario 2: adding the one omitted 3D part completes and reveals the model
   const h = await fixture(), partial = selectedParts({ ...missingEntry("b", 1), kind: "model" }, 3);
   h.answers.push({ button: "ok" });
   await beginAnalysis(h, [partial]);
-  assert.equal(h.messages.length, 1); assert.match(h.messages[0].lines.at(-1), /3D Model/);
+  assert.equal(h.messages.length, 1); assert.match(h.messages[0].lines.at(-1), /Chibi/);
   assert.ok(h.analyses.at(-1).params.paths.includes(partial.missing.found[0].path));
   await resolveAnalysis(h, [completedEntry(partial, [partial.missing.found[0].path], "complete")], 2);
   assert.equal(h.page.model.state.entries[0].files.length, 4);

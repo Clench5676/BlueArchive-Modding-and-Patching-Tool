@@ -24,7 +24,7 @@
 			"cached": {
 				"label": "Cached on This Device",
 				"items": "UI icons, buttons, frames, textures, fonts",
-				"previews": "Previews and exports of portraits, memorial lobbies, backgrounds and 3D models, up to 2 GB, can be turned off in Settings"
+				"previews": "Previews and exports of portraits, memorial lobbies, backgrounds and chibis, up to 2 GB, can be turned off in Settings"
 			},
 			"never": {
 				"label": "Never Cached",
@@ -38,7 +38,7 @@
 			"title": {
 				"portrait": "Portrait Info",
 				"lobby": "Memorial Lobby Info",
-				"model": "3D Model Info"
+				"model": "Chibi Info"
 			},
 			"details": "Details",
 			"current": "Current",
@@ -50,17 +50,17 @@
 			"box": {
 				"portrait": "Portrait",
 				"lobby": "Memorial Lobby",
-				"model": "3D Model"
+				"model": "Chibi"
 			},
 			"switch": {
 				"portrait": "Switch Portrait",
 				"lobby": "Switch Memorial Lobby",
-				"model": "Switch 3D Model"
+				"model": "Switch Chibi"
 			},
 			"add": {
 				"portrait": "Add Portrait",
 				"lobby": "Add Memorial Lobby",
-				"model": "Add 3D Model"
+				"model": "Add Chibi"
 			},
 			"four": {
 				"portrait": "Faces",
@@ -89,9 +89,9 @@
 			"original": "Original",
 			"has": "Yes",
 			"none": "None",
-			"failed": "3D model unavailable",
+			"failed": "Chibi unavailable",
 			"unfit": "Auto-fit unavailable",
-			"crossCharacter": "Cross-character model, may break",
+			"crossCharacter": "Cross-character chibi, may break",
 			"beyondFit": "Beyond auto-fit, may clip or distort",
 			"showOthers": "Show other students",
 			"action": {
@@ -179,7 +179,7 @@
 		"tab": {
 			"portrait": "Portrait",
 			"lobby": "Memorial Lobby",
-			"model": "3D Model"
+			"model": "Chibi"
 		},
 		"status": {
 			"original": "Original",
