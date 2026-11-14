@@ -1,4 +1,4 @@
-// The design system's layout primitives (docs/design-system.md). A composed screen describes its parts as containers, a
+// The design system's layout primitives (docs/design-system/layout.md). A composed screen describes its parts as containers, a
 // 12-column grid, rows and stacks, and places its prefab clones into the boxes they return, instead of computing each
 // position by hand. Everything is in prefab units, in a container's own frame: x to the right and y down from its top left
 // corner. toNode turns a box into the NGUI position of a widget with a given pivot (y up, from the container's centre).

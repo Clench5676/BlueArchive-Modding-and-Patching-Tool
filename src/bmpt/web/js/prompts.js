@@ -1,4 +1,4 @@
-// Item 1's prompts (docs/web-ui.md, "Mods already in use"): the mods the last scan found outside the library ("Mods
+// Item 1's prompts (docs/webui/mods-switch.md, "Mods already in use"): the mods the last scan found outside the library ("Mods
 // Not in the Library"), the configured entries a Steam check, a repair or a game update put back to official ("Mods
 // Back to Official"), and the messages of an overwritten entry (no official copy anywhere): Add First while its mod is
 // not in the library, the Overwritten message with the repair lines once it is. Every list comes from the scan

@@ -1,4 +1,4 @@
-// What a game update did under the library's mods (docs/web-ui.md, "Game update impact"). At the start, before the
+// What a game update did under the library's mods (docs/webui/library.md, "Game update impact"). At the start, before the
 // first screen (gate): once the current install's resource version differs from the last one seen and the library has
 // mods (mods.updateDue), the page asks whether to check them; Check runs under the loading screen with its progress
 // (run): the library classifies every mod from the official parts it was built against (mods.impact), with mods on

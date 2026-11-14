@@ -106,7 +106,7 @@ uv run pytest
 Release builds: `scripts/build_macos.sh` (macOS) and `scripts/build_windows.ps1` (Windows). Publishing a stable release
 automatically builds the Windows GUI from its exact tag and uploads the EXE and MD5; prereleases do not start that build.
 How the interface works:
-[docs/web-ui.md](docs/web-ui.md).
+[docs/webui/](docs/webui/README.md).
 
 ## License
 

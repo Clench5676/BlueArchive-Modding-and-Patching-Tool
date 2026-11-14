@@ -3,7 +3,7 @@
 // down, kept where no pose of the lobby (its intro, idle and every clip) shows past the art (lobby.js framingView).
 // The shutter keeps the view as the lobby's camera: the lobby scaled about the
 // screen centre and moved (lobby.js cameraParams), saved as a new Memorial Lobby choice of the student (lobby.camera.save,
-// a job; docs/web-ui.md), its art the source the lobby shows.
+// a job; docs/webui/lobby-and-photography.md), its art the source the lobby shows.
 import { rpc, waitJob } from "./api.js";
 import { T } from "./i18n.js";
 import * as NGUI from "./ngui.js";

@@ -1,5 +1,5 @@
 import {segmentTree,segmentOrigin,segmentDensity,SEGMENT_SCALE} from './mod-switch-skin.js';
-// The Enable Mods switch (docs/web-ui.md, "Enable Mods switch"): one switch for every game folder, in the top bar
+// The Enable Mods switch (docs/webui/mods-switch.md, "Enable Mods switch"): one switch for every game folder, in the top bar
 // (#mod-switch) and in Settings' Mods tab. A click on the current state does nothing; a click on the other state asks
 // first, and only the confirmation submits mods.toggle; the first toggle from any place explains it once instead (its
 // button confirms); the square "?" opens the help, with Retry and Details.
@@ -498,7 +498,7 @@ export async function refused(err, method = null, params = null, retry = null) {
   if (code === "state_changed") refresh();
 }
 
-// --- an untested game build (docs/web-ui.md, "Untested game build"): the writes onto the cores its update changed
+// --- an untested game build (docs/webui/library.md, "Untested game build"): the writes onto the cores its update changed
 // wait for a confirmation; Apply Anyway gives the refusal's confirm back (mods.confirmUntested) and the call is made
 // again, Cancel leaves everything as it was ---
 

@@ -1,4 +1,4 @@
-"""The tray icon (Windows) and the menu bar icon (macOS); see docs/web-ui.md, "Tray".
+"""The tray icon (Windows) and the menu bar icon (macOS); see docs/webui/desktop.md, "Tray".
 
 Its menu: one Enable Mods item for every known install, Back to Official while a scan found drift, Open
 and Quit. The icon is shown while the preference ``tray`` is on, only in the app window, and it goes with the app:

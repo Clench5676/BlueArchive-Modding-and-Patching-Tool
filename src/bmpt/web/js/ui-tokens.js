@@ -200,7 +200,7 @@ export const LOBBY_ENTRY = Object.freeze({
   bottom: Object.freeze([Object.freeze([0, -1045, 0]), Object.freeze([0.2, -31.52, 300.1906]), Object.freeze([0.42, 0, 0])]),
 });
 
-// --- The design system (docs/design-system.md): the scales every composed screen takes its sizes from. Values are the game's,
+// --- The design system (docs/design-system/): the scales every composed screen takes its sizes from. Values are the game's,
 // from a survey of 41 page prefabs and all 247 popups (the most common value of each role) and named exemplar nodes; the
 // layout primitives that use them are ui-grid.js. ---
 

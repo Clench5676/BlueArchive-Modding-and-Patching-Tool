@@ -1,5 +1,5 @@
 """The local HTTP server: the static front end, /api/rpc, /api/events, /asset/..., the classic window's channel
-(/api/classic/*) and a second start's raise (/api/instance/raise); see docs/web-ui.md."""
+(/api/classic/*) and a second start's raise (/api/instance/raise); see docs/webui/README.md."""
 
 from __future__ import annotations
 

@@ -1,7 +1,7 @@
 """How the library judges game files and entries: pure rules, kept apart from the reads so they can be tested on
 their own (the table-driven tests of the entry states read nothing).
 
-Terms (docs/web-ui.md, library): an *entry* is one game core of a variant in one install (a portrait or one memorial
+Terms (docs/webui/library.md, library): an *entry* is one game core of a variant in one install (a portrait or one memorial
 lobby core); what its files *carry* is the library source that wrote them while they are unchanged since, else
 official, unknown or damaged; *configured* is the source the user chose for it; *enabled* is the Enable Mods switch.
 """

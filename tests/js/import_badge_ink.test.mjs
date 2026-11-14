@@ -232,7 +232,7 @@ for (const locale of LOCALES) test(`fallback: a badge too wide for the metadata'
   }
 });
 
-// --- the design system (docs/design-system.md) in Import Mod's rows: the scales and rules of decisions 1 to 3, in en-US and zh-CN ---
+// --- the design system (docs/design-system/) in Import Mod's rows: the scales and rules of decisions 1 to 3, in en-US and zh-CN ---
 // the scales the row takes, and the rules as assertions on its boxes
 const PITCH = LINE.stack * TYPE.dense.fs, DESIGN_LOCALES = ["en-US", "zh-CN"];
 const metaFor = (locale, n = 3) => text(locale, n === 1 ? "import.metaOne" : "import.meta", { id: "ch0163", n, size: "4.0 MB" });

@@ -5,7 +5,7 @@ A pure poller. It reads the process list, Steam's app manifests and, through the
 ``classic.json``; never a game file, so it needs no scan consent. The check at write time stays the authority: the
 poll only greys controls.
 
-The services wire it (see docs/web-ui.md, "Game watch"):
+The services wire it (see docs/webui/library.md, "Game watch"):
 
 - ``installs()``: the known installs' folders, from the settings at each call;
 - ``find_classic()``: the classic window ``classic.json`` names, or ``None`` (the classic hand-off's reader, which

@@ -98,7 +98,7 @@ uv run pytest
 ```
 
 发布构建：`scripts/build_macos.sh`（macOS）与 `scripts/build_windows.ps1`（Windows）。界面实现说明见
-[docs/web-ui.md](docs/web-ui.md)。
+[docs/webui/](docs/webui/README.md)。
 
 ## 许可
 

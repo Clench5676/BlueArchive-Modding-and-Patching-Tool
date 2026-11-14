@@ -1,4 +1,4 @@
-"""The RPC methods the front end calls (see the RPC table in docs/web-ui.md)."""
+"""The RPC methods the front end calls (see the RPC table in docs/webui/api.md)."""
 
 from __future__ import annotations
 

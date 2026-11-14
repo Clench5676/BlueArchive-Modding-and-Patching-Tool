@@ -1,5 +1,5 @@
 // The repair lines of the Overwritten message: what the user runs to get an official file back, per install
-// (docs/web-ui.md, "Enable Mods switch"). The app never starts a repair and never replaces a game file for one, so
+// (docs/webui/mods-switch.md, "Enable Mods switch"). The app never starts a repair and never replaces a game file for one, so
 // these are lines only, never a button. Pure, tested in Node (tests/js/repairs.test.mjs).
 //
 //   install                                          lines

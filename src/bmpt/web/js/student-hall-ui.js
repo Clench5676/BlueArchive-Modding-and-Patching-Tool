@@ -11,7 +11,7 @@ import { spriteUrl } from "./api.js";
 import { bindScale } from "./student-hall-scale.js";
 import { POPUP, POPUP_FRAME, XS_BUTTON, CONTROL, TYPE, SPACE, captionMinimum } from "./ui-tokens.js";
 import { stack as layoutStack } from "./ui-grid.js";
-// A Hall small button is a buttonS control (docs/design-system.md): its height, minimum width and caption size are the system's, the
+// A Hall small button is a buttonS control (docs/design-system/controls.md): its height, minimum width and caption size are the system's, the
 // caption's floor the body role's. Its fit insets are the Common_Btn_BG body's (XS_BUTTON), not a scale value.
 // the compact bodies (half an XS body high) hold one line at TYPE.micro's size, down to its floor
 const BUTTON = CONTROL.buttonXS, BUTTON_FLOOR = XS_BUTTON.fsMin, COMPACT_FLOOR = TYPE.micro.min;
