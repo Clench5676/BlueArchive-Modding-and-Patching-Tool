@@ -272,9 +272,9 @@
       "masked_import_lines_sha256": "f34cf15f8d6d82abeaa939dbdcca85bac011da3d5f78157a0224403ee2aa6424"
     },
     "src/ba_modding_toolkit/searching.py": {
-      "blob": "f564d8000fd97b99474cdf7e134ab1dc09fb6bf5",
-      "non_import_ast_sha256": "0033a5967a85317dba2b647621d58911e26966c3d30a2e4aeba927dcdc17faea",
-      "masked_import_lines_sha256": "d17ec42d31d3861a36afe4143e36f132984e62cfcf583ae8e0348cb4cc1d4563"
+      "blob": "12ed614dafe5563e004ff24e1f2ad3cfa86f5b35",
+      "non_import_ast_sha256": "f2cfbf587dc6e623e6de2ce43c96c106350fca00609d370228180aaa5e4d1679",
+      "masked_import_lines_sha256": "b509cf7420ada8f42c7a2b9c927c30e3257e199d13cb3501552a499072192a08"
     },
     "src/ba_modding_toolkit/spine.py": {
       "blob": "0ffd74b1ae1d34254a2233192f92cf170170182e",
@@ -417,37 +417,37 @@
     },
     {
       "file": "src/ba_modding_toolkit/searching.py",
-      "line": 244,
+      "line": 246,
       "original": "from .gameassets.discovery import is_atlas",
       "import": "from bmpt.gameassets.discovery import is_atlas"
     },
     {
       "file": "src/ba_modding_toolkit/searching.py",
-      "line": 302,
+      "line": 304,
       "original": "from . import config, devmode",
       "import": "from bmpt import config, devmode"
     },
     {
       "file": "src/ba_modding_toolkit/searching.py",
-      "line": 303,
+      "line": 305,
       "original": "from .gameassets.cache import PreviewCache",
       "import": "from bmpt.gameassets.cache import PreviewCache"
     },
     {
       "file": "src/ba_modding_toolkit/searching.py",
-      "line": 304,
+      "line": 306,
       "original": "from .gameassets.cabs import CabIndex",
       "import": "from bmpt.gameassets.cabs import CabIndex"
     },
     {
       "file": "src/ba_modding_toolkit/searching.py",
-      "line": 305,
+      "line": 307,
       "original": "from .gameassets.discovery import resource_version",
       "import": "from bmpt.gameassets.discovery import resource_version"
     },
     {
       "file": "src/ba_modding_toolkit/searching.py",
-      "line": 307,
+      "line": 309,
       "original": "from .webui.state import UiState",
       "import": "from bmpt.webui.state import UiState"
     },
