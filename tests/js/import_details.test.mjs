@@ -1,4 +1,4 @@
-// The details a refused Import Mod row opens from its badge, in the entry shape of docs/web-ui.md ("bundles", "missing").
+// The details a refused Import Mod row opens from its badge, in the entry shape of docs/webui/api.md ("bundles", "missing").
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { readFileSync } from "node:fs";

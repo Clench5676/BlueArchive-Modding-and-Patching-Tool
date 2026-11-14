@@ -1,4 +1,4 @@
-"""The classic Tk GUI as a window of the web UI (see docs/web-ui.md, "Classic window").
+"""The classic Tk GUI as a window of the web UI (see docs/webui/desktop.md, "Classic window").
 
 - ``ClassicWindow`` starts the classic GUI (``--classic --control``) in its own process, talks to it over the web UI's
   own HTTP server (``GET /api/classic/control``, ``POST /api/classic/report``, with a one-time token), places it over

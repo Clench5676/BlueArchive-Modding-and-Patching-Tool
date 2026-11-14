@@ -579,7 +579,7 @@ function dataDirNotice() {
 }
 
 // The start popups, one at a time and in this order, each only when it has something to show (mod-switch.js
-// startDue); each step resolves once its popup has closed (docs/web-ui.md, "Start sequence"):
+// startDue); each step resolves once its popup has closed (docs/webui/front-end.md, "Start sequence"):
 //   - the asset consent;
 //   - the Spine licence notice, until it is acknowledged (a stored No shows it again);
 //   - the scan consent, while it is unanswered and a game folder is known;

@@ -1,7 +1,7 @@
 // What the detail screen's switch cards offer and what the game shows now, for the portrait ("spr") and the memorial
 // lobby ("lobby"): pure functions of the family that family.get returns, tested in Node
 // (tests/js/switch_sources.test.mjs). Switching saves the chosen source and installs it while enabled; the
-// library keeps what it replaces (docs/web-ui.md, library).
+// library keeps what it replaces (docs/webui/library.md, library).
 import { spineBase } from "./api.js";
 
 // Every asset tab uses the same source selection and apply flow.

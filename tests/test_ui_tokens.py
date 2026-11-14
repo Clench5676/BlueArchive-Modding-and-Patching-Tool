@@ -246,7 +246,7 @@ def test_lobby_entry_is_uiani_lobby(tokens, tmp_path_factory):
         assert flat(got) == pytest.approx(flat(tokens["LOBBY_ENTRY"][edge]), abs=1e-3)
 
 
-# --- the design system's scales (ui-tokens.js SPACE, TYPE, CONTROL, POPUP_FRAME, PANEL, LIST_ROW; docs/design-system.md) ---
+# --- the design system's scales (ui-tokens.js SPACE, TYPE, CONTROL, POPUP_FRAME, PANEL, LIST_ROW; docs/design-system/) ---
 
 # exemplars the App does not load at run time (so not in PREFAB_HINTS): their bundles in the development view
 EXEMPLAR_BUNDLES = {"UIPopup_RaidEnterCheck": ("ui-_mxload-prefabs-2025-07-02_assets_all_847805749.bundle",

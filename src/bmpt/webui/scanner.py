@@ -1,4 +1,5 @@
-"""The scan of the game folders (see docs/web-ui.md, "Scan"), on a thread of its own, never on the job worker.
+"""The scan of the game folders (see docs/webui/mods-switch.md, "Mods state, scan and the classic queue"), on a
+thread of its own, never on the job worker.
 
 - Only with the scan consent: ``allowed()`` is asked at each request and again before each scan, and a request
   without it is refused (``request`` returns ``None``). The library refuses on its own too (``scan_off``).

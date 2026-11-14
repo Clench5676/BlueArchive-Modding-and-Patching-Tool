@@ -1,4 +1,4 @@
-"""One web UI instance per data directory (see docs/web-ui.md, "One instance per data directory").
+"""One web UI instance per data directory (see docs/webui/desktop.md, "One instance per data directory").
 
 The running instance holds an OS lock on ``<data dir>/instance.lock`` for its lifetime and names itself in
 ``<data dir>/instance.json`` (``{pid, port, raise_token}``). A second start finds the lock held, posts

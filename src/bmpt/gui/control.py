@@ -1,4 +1,4 @@
-"""The classic GUI's side of the control channel to the web UI that started it (see docs/web-ui.md, "Classic window").
+"""The classic GUI's side of the control channel to the web UI that started it (see docs/webui/desktop.md, "Classic window").
 
 Started with ``--control`` and the variables ``BAMT_CLASSIC_URL`` and ``BAMT_CLASSIC_TOKEN``, the classic window starts
 transparent, reports ``ready`` once mapped, and follows the web UI's control lines: ``place``, then ``raise``, and
