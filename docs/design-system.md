@@ -11,22 +11,11 @@ unit at a 1920-pixel-wide window.
 
 ## How the values were found
 
-A survey of 288 prefabs from the official files: 41 page prefabs (lobby, student list and detail, items, equipment,
-mailbox, missions, shop, recruitment, formation, cafe, campaign, friends, club, events, attendance, trophies, sticker
-book, ...) and all 247 popups. Each prefab was exported with the App's own reader (`GameAssets.layout`), every visible
-sprite, texture and label placed in stage coordinates (positions, scales, pivots), and then:
-
-- label sizes, button bodies, popup frames, list grids and corner sprites counted across all prefabs;
-- the gaps between neighbouring elements of one parent measured (5697 horizontal, 5129 vertical);
-- the anatomy of the 183 popups with a `Common_Popup_Bg` frame measured: frame size, title, close icon, footer buttons,
-  content padding;
-- the screens the App builds on read node by node: `UIPopup_Sort`, `UIPopup_Option_PC`, `UIPopup_FilterSort`,
-  `UIMailBox` / `UIMailBoxContent`, `UINonEquipmentInventory`, `UICharacterCollection`, `UICharacterDetail`.
-
-What it shows: the game has no strict grid (its gaps spread over every value, designers placed widgets by hand), but each
-role has one dominant value. Popup titles are 72 in 135 of 158 titled popups, 19 small popups share one frame
-(1300 x 1050) with the same title, close icon and footer, list panels sit about 40 inside the screen's edge with a
-20-unit padding, cards are 12 apart. The system takes those dominant values, each traced to a named exemplar node.
+A survey of 288 prefabs from the official files (41 page prefabs and all 247 popups), each exported with the App's
+own reader (`GameAssets.layout`): label sizes, button bodies, popup frames, list grids and gaps between neighbours
+counted and measured across all of them, and the anatomy of the 183 popups with a `Common_Popup_Bg` frame compared.
+The game has no strict grid, but each role has one dominant value; the system takes those values, each traced to a
+named exemplar node.
 
 ## Scales
 
@@ -87,10 +76,8 @@ popups whose footers are set to S. A popup's footer is M unless its call site na
 inline buttons of a plain popup line and the Batch Import tool row are the XS body scaled by its ratio to S. A new button
 takes its size from these; it never states a height.
 
-Developer previews (a pre-release version other than a packaged release candidate, `buttonSizeTags`) tag every `Common_Btn_BG` pill at its top left with its preset,
-XS, S, M or L, by its height on the stage; a pill that is none of them shows its measured height in grey, and a body that is
-no pill (a card, a thumbnail, a square action button) none. A tag that would cover the caption is a dot with the same label on
-hover. Release candidates and stable builds show no tag.
+Developer previews (a pre-release version other than a packaged release candidate, `buttonSizeTags`) tag every
+`Common_Btn_BG` pill with its preset by its height on the stage; release candidates and stable builds show no tag.
 
 ### Grid (`GRID`)
 
@@ -159,15 +146,35 @@ A screen measures its parts (texts with `textItem`, controls from `CONTROL`), la
 `grid` inside a `container`, and moves each prefab clone to `toNode` of its box. Its tests then check the rules on the
 boxes instead of pixel offsets.
 
+## Other shared tokens (`ui-tokens.js`)
+
+Beyond the scales, `ui-tokens.js` holds the remaining numbers and colours the web UI shares, each named after the
+prefab node it comes from (`tests/test_ui_tokens.py` pins them to the development view):
+
+- **`BACKDROP`**: every popup's backdrop, black at 0.80 — the value `BlackBgClickArea`'s TweenAlpha rests at in the
+  game's popups (shown at once, without the fade).
+- **`LOBBY_ENTRY`**: the top bar's and bottom menu's entry motion, UILobby's `UIAni_Lobby` Hermite keys (see
+  web-ui.md, Bar motion).
+- **`XS_BUTTON`** / **`SMALL_BUTTON`**: the app's small button (308 x 104, caption 40 down to 28) and the S popup
+  footers' 402 x 136 body; `game-buttons.js optionButton` and the Hall's `button()` take the XS values as defaults.
+- **`CAPTION_EXCEPTIONS`** (checked by `captionMinimum`): the few recorded Thai-only caption floors; an allowance
+  only lowers a floor, and no other group gets an exception.
+- **`CHIP`** (`UICharacterDetail` type chip): 272 x 72 inclined 10 degrees, caption 40 down to 28, 290 apart; drawn
+  by the nameplate's variant chips and the list popup's details panel.
+- **`STATS_BOX`** (`UICharacterDetail`'s light stats box: `Bg` `#ecf5f9`, `Deco` line `#c0c9d4`): drawn by
+  `statsBox()` in `web/js/stats-box.js` for details panels, file details, messages with a line button and the update
+  dialog; captions 38, values 38 down to 26, rows 64 high at least, dotted dividers between rows only.
+- **`COLOUR`**, each from the game: success `#0a6f2d`, warning `#f14f00`, error `#bb3421`, greyed `#828282`, the
+  page's ink `#2c4564`, the In Use badge `#ffb700` on `#4b2116`, a note's ink `#6a7b8f`. The style sheets repeat the
+  CSS ones, which the token tests keep equal.
+- **`APPLIED_SELECTION_GOLD`**: the Hall's applied-frame yellow `#ffe900` (`UIPopup_Mulligan`'s `SelectLine`).
+- **Corners and focus ring** (style sheets): the game's radius ladder (5, 10 and 22 units, `RADIUS_PX`); one focus
+  rule in `app.css` draws the ring for every control, 4 px `#2fa6f0`.
+
 ## Adoption
 
-On the system (2026-11-07): every popup (`popup.js`, `popup-frames.js`: the S to XL frames and their anatomy), Import Mod
-(`import-layout.js`, `batch-import.js`), Settings (`settings-rows.js`), the switch cards (`switch-layout.js`) and the
-toolbars of the Student Hall, its framing, the roster and photography. Values that are a prefab's own stay and say so in
-the code (the Hall's 104-unit icon row, `CONTROL.toolbar`; the roster tools' 116; Settings' cards). The old `POPUP` /
-`FOOTER` tokens remain only where a screen still reads them.
-
-The student detail page's composed parts followed (the nameplate's edit row, the switch text, the expression pile and
-strip, the details table); its skill cards, chips and stats box keep the prefab's own values. The tool pages (CRC Tool, Asset Packer, Asset
-Extractor, ADB Push, Tools) are upstream's classic windows, not web screens: they join the system when they move into
-the web UI.
+On the system: every popup (`popup.js`, `popup-frames.js`), Import Mod, Settings, the switch cards, the toolbars of
+the Student Hall, its framing, the roster and photography, and the detail page's composed parts. Values that are a
+prefab's own stay and say so in the code. Not yet: the stopped memorial candidate/queue/footer buttons, the
+photography toolbar and the detail screen's Show in Finder / Explorer button (`retainedButton`, the old `POPUP` /
+`FOOTER` tokens); the classic tool pages join the system when they move into the web UI.
