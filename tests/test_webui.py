@@ -1250,7 +1250,7 @@ def test_ui_strings_fall_back_key_by_key():
     zh = ui_strings("zh-CN")
     en = ui_strings("en-US")
     assert zh["webui.tab.lobby"] == "记忆大厅"
-    assert en["webui.tab.model"] == "3D Model"
+    assert en["webui.tab.model"] == "Chibi"
     assert set(zh) == set(en)
     assert all("·" not in v and "・" not in v for v in zh.values())
     # Traditional Chinese falls back to English, not to Simplified Chinese (i18n.fallback_language); Korean and

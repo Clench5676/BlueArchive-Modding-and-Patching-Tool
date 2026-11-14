@@ -114,7 +114,7 @@ stored No stays false and shows the notice until Confirm. `spine-runtime.js ensu
 acknowledgement; the first screen uses a static portrait where one exists. Settings' General tab keeps a View button
 that opens the same notice without changing state.
 
-**Switch popups** (Switch Portrait / Memorial Lobby / 3D Model). The sources (`switch-sources.js`, tested in Node):
+**Switch popups** (Switch Portrait / Memorial Lobby / Chibi). The sources (`switch-sources.js`, tested in Node):
 the variant's own files and its added mods; for the portrait also the other variants' own and added ones (other
 variants' lobbies are not offered — untested in the game). Save changes only the preview (persisted per install and
 variant in `webui.json`, exposed as `previewSources`); Apply updates the manifest through `actions.apply` (with Mods

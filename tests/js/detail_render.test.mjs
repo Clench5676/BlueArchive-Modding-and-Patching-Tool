@@ -1352,7 +1352,7 @@ test("an official 3D model with no official copy left opens the overwritten mess
     const texts = walk(hosts.dialog).map((el) => el.textContent);
     assert.ok(texts.includes("Official File Missing"), texts.join(" | "));
     assert.ok(texts.includes("No official copy left"), texts.join(" | "));
-    assert.ok(!texts.includes("3D model unavailable"), texts.join(" | "));
+    assert.ok(!texts.includes("Chibi unavailable"), texts.join(" | "));
   } finally {
     globalThis.__detailModel.show = show; closeLeftMessages(); Detail.hide();
     modsEnabled = true; await ModSwitch.refresh(); await flush(); t.mock.timers.reset();
@@ -1533,7 +1533,7 @@ for (const enabled of [true, false]) test(`model switching reuses the detail con
     assert.equal(modelRequests.at(-1).source, "mod:test");
     assert.ok(switchButton(), "the model switch opens the shared popup");
     const add = walk(hosts.ngui).find((e) => e.dataset.part === `${INFO}/Weapon/Btn_Up_Wrapper/Btn_Up/BG (1)`);
-    assert.ok(add && add.getAttribute("aria-label") === "Add 3D Model");
+    assert.ok(add && add.getAttribute("aria-label") === "Add Chibi");
     const text = walk(hosts.ngui).find((e) => e.className === "switch-text");
     assert.ok(text.children.some((e) => e.className === "switch-go"));
     assert.ok(text.children.some((e) => e.innerText?.startsWith("test - ")));

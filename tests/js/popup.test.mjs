@@ -3832,7 +3832,7 @@ test("a 3D model's details fit the panel without scrolling", async () => {
   const sizes = new Set(), bottoms = new Set();
   for (const n of [3, 4, 6]) for (const rows of [fields, fields.map(([c]) => [c, "-"])]) {
     // the switch popups' values on one line, as the narrower L-class panel needs
-    const tree = Popup.detailsTree(it, "3D Model Info", rows, actions.slice(0, n), null, "model", panel, { truncate: true });
+    const tree = Popup.detailsTree(it, "Chibi Info", rows, actions.slice(0, n), null, "model", panel, { truncate: true });
     assert.ok(tree.contentHeight <= height + 1e-6, `${n} actions: ${tree.contentHeight} > ${height}`);
     sizes.add(NGUI.find(tree, "Picture").widgets[0].w_.toFixed(6));
     // the last row's solid art (the actions in rows; four on one XXS row, the others XS)

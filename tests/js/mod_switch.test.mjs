@@ -1533,7 +1533,7 @@ test("what an update changed in a mod's official parts: each change once, a repa
   assert.equal(Impact.changeText({ kind: "lobby", changes: { repacked: true, textures: true, rig: true } }),
     "Official Memorial Lobby changes: .atlas file layout changed, .skel file structure changed");
   assert.equal(Impact.changeText({ kind: "model", changes: { textures: true, removed: true, added: true } }),
-    "Official 3D Model changes: texture size changed, part removed, new parts");
+    "Official Chibi changes: texture size changed, part removed, new parts");
   assert.equal(Impact.changeText({ kind: "other", changes: { removed: true } }), "Official files: part removed");
   // a generic mod: its own name and the kind, no Go To (no student page); a held one keeps Fix
   const other = Impact.modLines({ id: "9", kind: "other", label: "UI Font", target: "", changes: { removed: true } });

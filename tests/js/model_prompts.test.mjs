@@ -20,7 +20,7 @@ setStrings("en-US", flat(JSON.parse(readFileSync(new URL("../../src/bmpt/locales
 
 test("model entries retain their kind in untracked and drift prompts without requesting a Spine preview", () => {
   const model = { kind: "model", core: "hoshino_original", install: "game", state: "untracked" };
-  assert.equal(kindLabel(model), "3D Model");
+  assert.equal(kindLabel(model), "Chibi");
   assert.equal(entryBase(model, { current: "game" }), null);
   assert.deepEqual(promptEntries([model], "untracked").listed, [model]);
   const reset = { ...model, state: "reset" };

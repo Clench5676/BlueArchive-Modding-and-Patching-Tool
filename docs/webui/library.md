@@ -203,7 +203,7 @@ the master switch off, a valid application records desired state and defers the 
 model-kind core `Catalog.model_map` maps to that variant; the choice is keyed by the prefab core, and the slot's
 files, Needs Fix, restore availability and incomplete judgement cover all its cores. A model Mod fits when every
 file's core belongs to the slot; apply uses the existing replacement mapping, keeps originals and journals the whole
-transaction. Switch 3D Model offers Mods from any of the slot's cores and the student's other models as costumes
+transaction. Switch Chibi offers Mods from any of the slot's cores and the student's other models as costumes
 (`variant:<key>`, field-mode models included, `gameassets/model_adapt.py`): the slot keeps its skeleton, clips,
 weapon, halo and props; the source's costume renderers are added as new objects to the slot's own bundles (existing
 objects never change in place, since other bundles reference them). Roles, bone mapping and checks use data only,
