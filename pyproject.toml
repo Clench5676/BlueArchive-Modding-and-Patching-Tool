@@ -37,6 +37,13 @@ bmpt = [
     "web/vendor/*/examples/jsm/utils/*",
 ]
 
+[tool.uv]
+# ttkbootstrap 1.x declares pillow<13, but the classic GUI stays on 1.x (2.x
+# rewrote the style engine) while Pillow 13 carries the security fixes; 1.x
+# uses only Image.new, ImageDraw, ImageTk and ImageColor, which 13 keeps.
+override-dependencies = ["pillow>=13.0.0"]
+constraint-dependencies = ["ttkbootstrap<2"]
+
 [tool.uv.sources]
 spineatlas = { git = "https://github.com/Agent-0808/SpineAtlas.git", rev = "fix/bounds-not-first" }
 
