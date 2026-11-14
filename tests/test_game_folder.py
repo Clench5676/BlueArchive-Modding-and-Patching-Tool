@@ -77,6 +77,25 @@ def test_install_root_and_resource_folder_are_accepted(env):
     assert "result" in rpc(env.app, "settings.set", key="gameDir.japan", value=str(japan))
 
 
+def test_japan_install_root_and_bundle_folder_are_accepted(env):
+    """The Japan PC client keeps every bundle in StreamingAssets/AssetBundles; both its install root and that folder
+    are accepted, and both map to the same install."""
+    from bmpt.library.judge import install_root
+
+    root = env.tmp / "BlueArchive_JP"
+    bundles = root / "BlueArchive_Data" / "StreamingAssets" / "AssetBundles"
+    bundles.mkdir(parents=True)
+    (bundles / "assets-_mx-uis-atlas-_mxdependency-assets-2025-07-02_assets_all_1.bundle").touch()
+    assert is_game_install(root)
+    for folder in (root, bundles):
+        result = rpc(env.app, "settings.set", key="gameDir.japan", value=str(folder))["result"]
+        assert result["gameDirs"]["japan"] == str(folder)
+        assert install_root(folder) == root.resolve()
+    env.settings.set("file_source", "windows_japan")
+    env.settings.set("game_resource_dir_japan", str(root))
+    assert bundles in env.settings.resource_dirs()
+
+
 def test_only_atlas_bundle_files_count(env):
     folder = env.tmp / "folder"
     folder.mkdir()

@@ -214,6 +214,8 @@ SEARCH_DIR_SUFFIXES = [
     "",
     "BlueArchive_Data/StreamingAssets/PUB/Resource/GameData/Windows",
     "BlueArchive_Data/StreamingAssets/PUB/Resource/Preload/Windows",
+    # Japan PC client: every bundle in one folder
+    "BlueArchive_Data/StreamingAssets/AssetBundles",
     "GameData/Windows",
     "Preload/Windows",
     "GameData/Android",
