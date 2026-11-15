@@ -43,6 +43,10 @@ STORY_CLIPS = 12  # a story model's own cutscene clips exported at most
 STORY_ROOTS = {"bone_root", "bone_root/Bip001"}  # the nodes a cutscene places its character by
 DEFAULT_CLIPS = ("Formation_Idle", "Formation_Pickup", "Cafe_Idle", "Cafe_Reaction", "Cafe_Walk",
                  "Victory_Start", "Victory_End", "Vital_Retreat", "Vital_Death")
+# other names a slot's clip goes by: misspelt ones, and the first form's of a student with two battle forms
+# (CH0187, CH0368, Hoshino's swimsuit: Vital_Death01 and Vital_Death02)
+CLIP_ALIASES = {"Formation_Pickup": ("Fomation_Pickup", "Formation Pickup"), "Vital_Death": ("Vital_Death01",),
+                "Vital_Retreat": ("Vital_Retreat01",)}
 # idles used when a prefab has neither the formation nor the cafe idle (NPC and battle-only prefabs)
 FALLBACK_IDLES = ("Normal_Idle", "Stand_Idle", "Idle")
 PREFAB_KINDS = {"echelon": "Echelon_{}", "battle": "{}", "cafe": "Cafe_{}", "strategy": "Strategy_{}",
@@ -418,12 +422,15 @@ def track_values(attribute: int, parts: list[list[float]],
 
 def pick_clips(names: list[str], wanted: Iterable[str] = DEFAULT_CLIPS, dev: str = "") -> list[tuple[int, str]]:
     """(index, slot) of the clips to export: one clip per wanted name suffix, the prefab's own (``<dev>_<slot>``)
-    before a shared one. When neither the formation nor the cafe idle is there, the first fallback idle comes along
-    as slot 'Idle'."""
-    def best(suffix: str) -> int | None:
+    before a shared one, a slot's own name before its :data:`CLIP_ALIASES`. When neither the formation nor the cafe
+    idle is there, the first fallback idle comes along as slot 'Idle'."""
+    def named(suffix: str) -> int | None:
         hits = [i for i, n in enumerate(names) if n.lower().endswith("_" + suffix.lower())]
         own = [i for i in hits if names[i].lower() == f"{dev}_{suffix}".lower()]
         return (own or hits or [None])[0]
+
+    def best(slot: str) -> int | None:
+        return next((i for suffix in (slot, *CLIP_ALIASES.get(slot, ())) if (i := named(suffix)) is not None), None)
 
     chosen = [(i, slot) for slot in wanted if (i := best(slot)) is not None]
     if not any(slot in ("Formation_Idle", "Cafe_Idle") for _, slot in chosen):

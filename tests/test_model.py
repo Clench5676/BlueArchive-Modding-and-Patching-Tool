@@ -208,6 +208,13 @@ def test_default_clips_bring_the_knockdown_fall_and_the_retreat_hang():
              "CH0069_Vital_Retreat", "VitalDeathGroggy", "VitalHit"]
     assert model.pick_clips(names, model.DEFAULT_CLIPS, "ch0069") == [
         (0, "Formation_Idle"), (4, "Vital_Retreat"), (1, "Vital_Death")]
+    # a student with two battle forms shows the first form's; misspelt pickups still count
+    two = ["CH0187_Formation_Idle", "CH0187_Vital_Death02", "CH0187_Vital_Death01", "CH0187_Vital_Retreat01"]
+    assert model.pick_clips(two, model.DEFAULT_CLIPS, "ch0187") == [(0, "Formation_Idle"), (3, "Vital_Retreat"), (2, "Vital_Death")]
+    for name in ("CH0271_Fomation_Pickup", "Hanae_Original_Formation Pickup"):
+        assert model.pick_clips(["X_Formation_Idle", name], model.DEFAULT_CLIPS, "x") == [(0, "Formation_Idle"), (1, "Formation_Pickup")]
+    # the own name wins over an alias
+    assert model.pick_clips(["X_Vital_Death01", "X_Vital_Death"], ("Vital_Death",), "x") == [(1, "Vital_Death")]
 
 
 # --- GLB ---
