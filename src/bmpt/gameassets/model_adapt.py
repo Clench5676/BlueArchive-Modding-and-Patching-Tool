@@ -640,10 +640,31 @@ def carriers(target: Skeleton, source: Skeleton, flat: Flat, poses: list[list[np
         best = int(np.argmin(errors))
         if stay > 1e-4 * len(poses) and errors[best] < CARRIER_SHARE * stay:
             out[m] = present[best]
+        if (shoulder := _shoulder_mount(target, source, m, dominant)) is not None:
+            out[m] = shoulder
     if out:
         logger.debug("Costume bones the slot lacks, carried by: %s",
                      {source.nodes[m].name: source.nodes[c].name for m, c in out.items()})
     return out
+
+
+UPPER_ARM = re.compile(r"^Bip001 ([LR]) UpperArm$")
+
+
+def _shoulder_mount(target: Skeleton, source: Skeleton, node: int, dominant: np.ndarray) -> int | None:
+    """A mount on an upper arm the slot lacks (a Biped-named bone below ``Bip001 L/R UpperArm`` that skins nothing
+    itself and holds only props: Airi (Band)'s shoulder bag on its strap): the slot's arm moves otherwise than the
+    source's, whose own keys held the prop at her side, so the prop hangs from the shoulder (that side's clavicle)
+    instead of following the arm. None for anything else."""
+    parent = source.nodes[node].parent
+    side = UPPER_ARM.match(source.nodes[parent].name) if parent is not None else None
+    if side is None or not source.nodes[node].name.startswith("Bip001") or (dominant == node).any():
+        return None
+    children = [i for i, n in enumerate(source.nodes) if n.parent == node]
+    if not children or any(source.nodes[c].name.startswith("Bip001") for c in children):
+        return None
+    clavicle = source.first(f"Bip001 {side.group(1)} Clavicle")
+    return clavicle if clavicle is not None and target.first(source.nodes[clavicle].name) is not None else None
 
 
 def _kept_ancestor(target: Skeleton, source: Skeleton, node: int) -> int | None:
