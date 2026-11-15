@@ -465,6 +465,58 @@ def test_official_costume_carries_a_shader_the_slot_does_not_load(view, tmp_path
 
 
 @official
+def test_official_added_parts_hang_below_the_primary_and_the_bounds_hold_the_poses(view, tmp_path):
+    """Hoshino <- Hoshino (Swimsuit): the two parts added beside the primary are its children, so a clip or the EX
+    timeline that hides the primary hides them too; every renderer's culling box holds its part at rest and in every
+    probe pose of the slot's clips."""
+    from ba_modding_toolkit.bundle import Bundle
+    from ba_modding_toolkit.models import SaveOptions
+    from bmpt.gameassets.discovery import cab_names
+    from bmpt.gameassets.model import BundleGraph, _key, _prefabs
+
+    files, index = view
+    target, source = "hoshino_original", "hoshino_swimsuit"
+    sources = [p for p in files if re.match(rf"character-{source}-_mxload", p.name)]
+    result = ma.adapt(index=index, resolver=None, target_files=_slot(files, target), target_dev=target,
+                      source_files=sources, source_dev=source, open_writable=Bundle.load)
+    adapted = dict(index)
+    for path, bundle in result.changed.items():
+        ok, message = bundle.save(tmp_path / path.name, SaveOptions(perform_crc=True, compression="lz4"))
+        assert ok, message
+        for cab in cab_names(tmp_path / path.name):
+            adapted[cab] = tmp_path / path.name
+    with BundleGraph(adapted) as graph:
+        prefabs = _prefabs(graph, sorted(tmp_path.glob("character-*")))
+        t = ma.Skeleton.of(graph, prefabs[ma.choose_prefab(prefabs, target)].deref())
+        clips = ma.prefab_clips(graph, t, {k: v for k, v in prefabs.items() if target in k})
+        poses = [t.world(), *ma.probe_poses(t, clips)]
+        s_prefabs = _prefabs(graph, sources)
+        s = ma.Skeleton.of(graph, s_prefabs[ma.choose_prefab(s_prefabs, source)].deref())
+        names = {p.mesh.peek_name() for p in ma.roles(s, None) if p.role in ("primary", "costume")}
+        drawn = {}
+        for node, renderer in t.renderers:
+            tree = graph.tree(renderer)
+            mesh = graph.deref(renderer, tree["m_Mesh"])
+            if mesh is not None and mesh.peek_name() in names:
+                drawn[node] = (renderer, tree, mesh)
+        assert len(drawn) == 3
+        added = [n for n in drawn if t.nodes[n].parent in drawn]
+        assert len(added) == 2 and len({t.nodes[n].parent for n in added}) == 1
+        for node, (renderer, tree, mesh) in drawn.items():
+            skin = ma.skin_of(mesh)
+            bones = [t.by_transform[_key(graph.deref(renderer, b))] for b in tree["m_Bones"]]
+            root = t.by_transform[_key(graph.deref(renderer, tree["m_RootBone"]))]
+            box = tree["m_AABB"]
+            lo = np.array([box["m_Center"][a] - box["m_Extent"][a] for a in "xyz"]) - 1e-4
+            hi = np.array([box["m_Center"][a] + box["m_Extent"][a] for a in "xyz"]) + 1e-4
+            weighted = skin.weights.sum(axis=1) > 1e-9
+            for pose in poses:
+                posed = ma.deform(skin, np.array([pose[b] for b in bones]) @ ma.bindposes(graph, mesh))[weighted]
+                local = (np.c_[posed, np.ones(len(posed))] @ np.linalg.inv(pose[root]).T)[:, :3]
+                assert (local >= lo).all() and (local <= hi).all()
+
+
+@official
 def test_official_bones_any_clip_scales_away_are_hidden(view):
     """The probes see six clips at three frames each; the slot's other clips hide bones too (a hair ornament in the
     cafe, a weapon bone in the cafe, skewers in a public skill). They and the bones below them are hidden, so no

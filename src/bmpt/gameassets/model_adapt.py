@@ -2387,7 +2387,6 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
 
     # meshes: the source parts' meshes with bindposes on the target skeleton
     new_meshes = []
-    fitted_skins = []
     written: list[Written] = []
     rendered: list[Rendered] = []
     for k, (part, skin) in enumerate(zip(s_costume, source.skins)):
@@ -2400,7 +2399,6 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
             except OverflowError:  # a position past what half-precision or packed floats hold
                 raise refuse("vertices out of range", part=part.mesh.peek_name()) from None
         skin = Skin(points, skin.joints, skin.weights, skin.edges, skin.triangles)
-        fitted_skins.append(skin)
         joints, weights = skin.joints, skin.weights
         aabbs = len(tree["m_BonesAABB"]) == len(nodes)
         change = hem.parts[k] if k < len(hem.parts) else None
@@ -2453,6 +2451,9 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
     t_primary_materials = [_key(m) for m in primary.materials if m is not None]
     root_bone = graph.deref(primary.renderer, graph.tree(primary.renderer)["m_RootBone"])
     root_node = t_skeleton.by_transform.get(_key(root_bone), 0) if root_bone is not None else 0
+    # the renderers' culling boxes hold each part at rest and in every probe pose, so parts that move far from their
+    # rest place do not vanish at the screen's edge
+    bounds = [_bounds(w, nodes, t_skeleton, root_node, [t_rest, *probes]) for w, (_, nodes) in zip(written, new_meshes)]
     mouth = mouth_of(s_skeleton, s_costume)
     if mouth is None:
         logger.info("Costume of %s on %s: the source has no mouth receiver on its costume, the slot's stays as it is",
@@ -2463,8 +2464,8 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
             if hasattr(sf, "objects") and name.lower() in files:
                 _edit_prefabs(writer, sf, graph, t_meshes, t_primary_materials, mesh_cab, material_cab, new_meshes,
                               [[materials[_key(m)] for m in p.materials if m is not None] for p in s_costume],
-                              [s_skeleton.nodes[p.node].name for p in s_costume], root_node, t_skeleton, s_costume,
-                              fitted_skins, result.mapping, s_rest, halo_change, rendered, mouth)
+                              [s_skeleton.nodes[p.node].name for p in s_costume], root_node, t_skeleton, bounds,
+                              halo_change, rendered, mouth)
     if hem.skirt is not None:
         for clip in skirt_clips:
             obj = writer.file(clip.assets_file.name.lower()).objects[clip.path_id]
@@ -2490,8 +2491,7 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
 def _edit_prefabs(writer: _Writer, sf: Any, graph: BundleGraph, t_meshes: Mapping[tuple[str, int], str],
                   primary_materials: list[tuple[str, int]], mesh_cab: str, material_cab: str,
                   new_meshes: list[tuple[int, list[int]]], new_materials: list[list[int]], names: list[str],
-                  root_node: int, t_skeleton: Skeleton, s_costume: list[Part], skins: list[Skin],
-                  mapping: Mapping[int, int], s_rest: list[np.ndarray], halo: HaloChange | None = None,
+                  root_node: int, t_skeleton: Skeleton, bounds: list[dict], halo: HaloChange | None = None,
                   rendered: list[Rendered] | None = None, mouth: Mouth | None = None) -> None:
     objects = sf.objects
     trees: dict[int, dict] = {}
@@ -2601,7 +2601,7 @@ def _edit_prefabs(writer: _Writer, sf: Any, graph: BundleGraph, t_meshes: Mappin
                     kept = r["m_Materials"] or [{"m_FileID": 0, "m_PathID": 0}]
                     r["m_Materials"] = (kept * count)[:count]
                 r["m_RootBone"] = bone(root_node)
-                r["m_AABB"] = _bounds(skins[0], s_costume[0], t_skeleton, root_node, s_rest)
+                r["m_AABB"] = copy.deepcopy(bounds[0])
                 seen.append(Rendered(0, len(r["m_Bones"]), [m["m_PathID"] for m in r["m_Materials"]], r["m_AABB"]))
             else:  # the target's other costume parts, alternates and their copies draw nothing
                 r["m_Mesh"] = {"m_FileID": 0, "m_PathID": 0}
@@ -2618,7 +2618,6 @@ def _edit_prefabs(writer: _Writer, sf: Any, graph: BundleGraph, t_meshes: Mappin
         go_tree = tree(go_pid)
         tf_pid = next(c["component"]["m_PathID"] for c in go_tree["m_Component"]
                       if objects[c["component"]["m_PathID"]].type.name == "Transform")
-        father = tree(tf_pid)["m_Father"]["m_PathID"]
         for k in range(1, len(new_meshes)):
             mesh_pid, nodes = new_meshes[k]
             new_go, new_tf, new_r = writer.fresh(sf), None, None
@@ -2631,7 +2630,7 @@ def _edit_prefabs(writer: _Writer, sf: Any, graph: BundleGraph, t_meshes: Mappin
             r["m_Materials"] = [{"m_FileID": material_fid, "m_PathID": m} for m in new_materials[k]]
             r["m_Bones"] = [bone(n) for n in nodes]
             r["m_RootBone"] = bone(root_node)
-            r["m_AABB"] = _bounds(skins[k], s_costume[k], t_skeleton, root_node, s_rest)
+            r["m_AABB"] = copy.deepcopy(bounds[k])
             seen.append(Rendered(k, len(r["m_Bones"]), [m["m_PathID"] for m in r["m_Materials"]], r["m_AABB"]))
             new_r = _add_with_id(writer, sf, "SkinnedMeshRenderer", r)
             drawing[k] = new_r
@@ -2639,10 +2638,13 @@ def _edit_prefabs(writer: _Writer, sf: Any, graph: BundleGraph, t_meshes: Mappin
                  "m_Component": [{"component": {"m_FileID": 0, "m_PathID": new_tf}},
                                  {"component": {"m_FileID": 0, "m_PathID": new_r}}]}
             _add_with_id(writer, sf, "GameObject", g, new_go)
-            t = {**tree(tf_pid), "m_GameObject": {"m_FileID": 0, "m_PathID": new_go}, "m_Children": []}
+            # below the primary, where it stands: a clip or timeline that hides the primary hides it too
+            t = {**tree(tf_pid), "m_GameObject": {"m_FileID": 0, "m_PathID": new_go}, "m_Children": [],
+                 "m_Father": {"m_FileID": 0, "m_PathID": tf_pid}, "m_LocalPosition": _vector((0, 0, 0)),
+                 "m_LocalRotation": {"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0}, "m_LocalScale": _vector((1, 1, 1))}
             _add_with_id(writer, sf, "Transform", t, new_tf)
-            tree(father)["m_Children"].append({"m_FileID": 0, "m_PathID": new_tf})
-            save(father)
+            tree(tf_pid)["m_Children"].append({"m_FileID": 0, "m_PathID": new_tf})
+            save(tf_pid)
             added += [{"m_FileID": 0, "m_PathID": pid} for pid in (new_go, new_tf, new_r)]
             # lists of renderers that name the primary (effects, flashes) take the new part as well
             for b in behaviours:
@@ -2816,10 +2818,34 @@ def _append_beside(value: Any, existing: dict, new: dict) -> bool:
     return changed
 
 
-def _bounds(skin: Skin, part: Part, t_skeleton: Skeleton, root: int, s_rest: list[np.ndarray]) -> dict:
-    world = t_skeleton.world()
-    points = (np.c_[skin.vertices, np.ones(len(skin.vertices))] @ (np.linalg.inv(world[root]) @ s_rest[part.node]).T)[:, :3]
-    lo, hi = points.min(axis=0), points.max(axis=0)
+def _bounds(mesh: Written, nodes: list[int], t_skeleton: Skeleton, root: int, poses: list[list[np.ndarray]]) -> dict:
+    """A renderer's ``m_AABB``, in its root bone's space: the box around the part as the slot skins it in each of
+    ``poses`` (the rest first), its vertices without weight where the rest puts them. A bone added after the poses
+    were taken (Rule B's) goes with its nearest ancestor there."""
+    rest = t_skeleton.world()
+    skin = Skin(mesh.vertices, mesh.joints, mesh.weights, np.zeros((0, 2), int))
+    weighted = mesh.weights.sum(axis=1) > 1e-9
+    lo, hi = np.full(3, np.inf), np.full(3, -np.inf)
+
+    def at(pose: list[np.ndarray], n: int) -> np.ndarray:
+        a = n
+        while a >= len(pose):
+            a = t_skeleton.nodes[a].parent
+        return pose[n] if a == n else pose[a] @ np.linalg.inv(rest[a]) @ rest[n]
+
+    for k, pose in enumerate(poses):
+        matrices = np.array([at(pose, n) for n in nodes]) @ mesh.bindposes
+        world = deform(skin, matrices)
+        points = world[weighted] if k else world
+        if not k and (~weighted).any():  # without weight: where the rest draws it, by the first bone
+            points = np.where(weighted[:, None], world,
+                              (np.c_[mesh.vertices, np.ones(len(mesh.vertices))] @ matrices[0].T)[:, :3])
+        if not len(points):
+            continue
+        local = (np.c_[points, np.ones(len(points))] @ np.linalg.inv(at(pose, root)).T)[:, :3]
+        lo, hi = np.minimum(lo, local.min(axis=0)), np.maximum(hi, local.max(axis=0))
+    if not np.isfinite(lo).all():
+        lo = hi = np.zeros(3)
     return {"m_Center": _vector((lo + hi) / 2), "m_Extent": _vector((hi - lo) / 2)}
 
 
