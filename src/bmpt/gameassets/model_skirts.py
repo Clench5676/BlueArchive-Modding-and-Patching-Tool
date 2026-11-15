@@ -58,6 +58,7 @@ LENGTH_WEIGHT = 10.0    # weight of an edge's length against a pushed vertex's p
 DAMPING = 1e-4          # keeps each update small where nothing pins a chain
 
 UP, FRONT = np.array([0.0, 1.0, 0.0]), np.array([0.0, 0.0, 1.0])  # Unity's vertical and forward
+DOWN = -UP
 
 
 # --- rotations -----------------------------------------------------------------------------------------------------
@@ -514,6 +515,8 @@ SPRING_SPEED = 1.5             # a chain's natural frequency, times a pendulum's
 SPRING_RATES = (4.0, 25.0)     # its bounds (radians per second)
 SPRING_SUBSTEP = 1 / 120       # seconds per integration step
 MIN_LENGTH = 0.01              # a chain shorter than this (metres, head to farthest bone) does not swing
+HANGING = math.radians(60)     # a chain whose tip lies within this of straight down at rest hangs (hair, ribbons)
+GRAVITY = 0.5                  # the share of its rest direction in the world a hanging chain keeps as the head turns
 
 
 class Spring:
@@ -545,6 +548,11 @@ class Spring:
             lengths.append(float(np.linalg.norm(chains.rest[r][:3, :3] @ far)))
         self.tips = np.array(tips).reshape(-1, 3)        # in each root's own space
         self.lengths = np.array(lengths)                 # world length, head to tip
+        # each chain's tip direction at rest in the prefab's space; those that point down hang under gravity
+        rest_dirs = np.array([chains.rest[r][:3, :3] @ t for r, t in zip(self.roots, self.tips)]).reshape(-1, 3)
+        norms = np.maximum(np.linalg.norm(rest_dirs, axis=1, keepdims=True), 1e-9)
+        self.rest_dirs = rest_dirs / norms
+        self.hanging = np.array([float(d @ DOWN) >= math.cos(HANGING) for d in self.rest_dirs], bool)
         self.rates = np.clip(SPRING_SPEED * np.sqrt(9.81 / np.maximum(self.lengths, MIN_LENGTH)), *SPRING_RATES)
 
     def _rest(self, anchor: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -638,6 +646,41 @@ class Spring:
                 local = self.chains.local[bone] @ back @ own
                 local[:3, :3] = local[:3, :3] @ np.linalg.inv(scale_of(local))
                 out[k][bone] = local
+        return out
+
+    def settle(self, turns: list[dict[int, np.ndarray]], anchors: Sequence[np.ndarray]) -> list[dict[int, np.ndarray]]:
+        """Gravity on the hanging chains (``self.hanging``): in each frame (``anchors``: the anchor's world matrix
+        there) a hanging root turns its tip ``GRAVITY`` of the way back toward the direction it had at rest in the
+        world, about its own head, so hair hangs down as the head tilts instead of keeping its angle to the head; the
+        other chains (ears, antennae) are left as they are. Every hanging root gets a turn in every frame."""
+        out = []
+        for frame, anchor in zip(turns, anchors):
+            frame = dict(frame)
+            for k, r in enumerate(self.roots):
+                if not self.hanging[k]:
+                    continue
+                local = frame.get(r, self.chains.hanging(r))
+                world = anchor @ local
+                world[:3, :3] = world[:3, :3] @ scale_of(self.chains.local[r])
+                d = world[:3, :3] @ self.tips[k]
+                n = float(np.linalg.norm(d))
+                if n < 1e-9:
+                    continue
+                d = d / n
+                want = (1 - GRAVITY) * d + GRAVITY * self.rest_dirs[k]
+                want /= max(float(np.linalg.norm(want)), 1e-9)
+                axis = np.cross(d, want)
+                s_, c_ = float(np.linalg.norm(axis)), float(d @ want)
+                if s_ < 1e-9:
+                    frame[r] = local
+                    continue
+                turn = axis_angle(axis / s_, math.atan2(s_, c_))
+                settled = world.copy()
+                settled[:3, :3] = turn @ world[:3, :3]
+                out_local = np.linalg.inv(anchor) @ settled
+                out_local[:3, :3] = out_local[:3, :3] @ np.linalg.inv(scale_of(out_local))
+                frame[r] = out_local
+            out.append(frame)
         return out
 
     def posed(self, pose: Sequence[np.ndarray], turns: Mapping[int, np.ndarray]) -> np.ndarray:
