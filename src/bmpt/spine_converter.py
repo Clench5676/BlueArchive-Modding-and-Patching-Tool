@@ -158,13 +158,13 @@ def convert(exe: Path, data: bytes, source_suffix: str, target_suffix: str) -> b
         try:
             done = _run(exe, source, target)
         except subprocess.TimeoutExpired:
-            raise ConverterError("converter_failed", reason="timeout") from None
+            raise ConverterError("converter_failed", detail="timeout") from None
         except OSError as error:
-            raise ConverterError("converter_failed", reason=type(error).__name__) from error
+            raise ConverterError("converter_failed", detail=type(error).__name__) from error
         if done.returncode != 0 or not target.is_file():
-            raise ConverterError("converter_failed", reason=f"exit {done.returncode}")
+            raise ConverterError("converter_failed", detail=f"exit {done.returncode}")
         if target.stat().st_size > MAX_OUTPUT:
-            raise ConverterError("converter_failed", reason="output too large")
+            raise ConverterError("converter_failed", detail="output too large")
         return target.read_bytes()
 
 
@@ -176,13 +176,13 @@ def to_json(exe: Path, skeleton: bytes) -> dict:
     try:
         Skeleton(skeleton)
     except (ValueError, IndexError, EOFError) as error:
-        raise ConverterError("converter_unreadable", reason=str(error)) from None
+        raise ConverterError("converter_unreadable", detail=str(error)) from None
     try:
         out = json.loads(convert(exe, skeleton, ".skel", ".json").decode("utf-8-sig"))
     except (UnicodeDecodeError, json.JSONDecodeError) as error:
-        raise ConverterError("converter_failed", reason="json") from error
+        raise ConverterError("converter_failed", detail="json") from error
     if not isinstance(out, dict) or not isinstance(out.get("skeleton"), dict):
-        raise ConverterError("converter_failed", reason="json")
+        raise ConverterError("converter_failed", detail="json")
     return out
 
 
@@ -193,7 +193,7 @@ def to_binary(exe: Path, document: dict) -> bytes:
     try:
         Skeleton(data)
     except (ValueError, IndexError, EOFError) as error:
-        raise ConverterError("converter_failed", reason="binary") from error
+        raise ConverterError("converter_failed", detail="binary") from error
     return data
 
 
@@ -210,6 +210,11 @@ class JsonGraft:
     refused: dict[str, str]
     bones: list[str]
     slots: list[str]
+    regions: list[str] = None  # the atlas regions the carried attachments draw
+
+    def __post_init__(self) -> None:
+        if self.regions is None:
+            self.regions = []
 
 
 def _names(items: Iterable[Mapping[str, Any]] | None) -> list[str]:
@@ -300,7 +305,13 @@ def graft_json(mod: dict, official: dict) -> JsonGraft:
             m_skin = _skin(mod, skin_name)
             if source is None or m_skin is None:
                 continue
-            m_skin.setdefault("attachments", {}).setdefault(slot, {}).setdefault(attachment, json.loads(json.dumps(source)))
+            kept = m_skin.setdefault("attachments", {}).setdefault(slot, {})
+            if attachment not in kept:
+                kept[attachment] = json.loads(json.dumps(source))
+                if source.get("type", "region") in ("region", "mesh", "linkedmesh"):
+                    region = source.get("path") or attachment
+                    if region not in result.regions:
+                        result.regions.append(region)
         mod["animations"][name] = json.loads(json.dumps(animation))
         result.added.append(name)
     return result
@@ -317,9 +328,12 @@ def _missing_reason(mod: Mapping[str, Any], official: Mapping[str, Any], need: M
                 mine.get("type") != theirs.get("type") or len(mine.get("vertices") or []) != len(theirs.get("vertices") or [])):
             return f"deform of {slot}/{attachment}, redrawn by the mod"
     for slot, attachment in need["shown"]:
-        if attachment not in ((_skin(official, "default") or {}).get("attachments") or {}).get(slot, {}) and \
-                attachment not in ((_skin(mod, "default") or {}).get("attachments") or {}).get(slot, {}):
+        theirs = ((_skin(official, "default") or {}).get("attachments") or {}).get(slot, {}).get(attachment)
+        mine = ((_skin(mod, "default") or {}).get("attachments") or {}).get(slot, {}).get(attachment)
+        if theirs is None and mine is None:
             return f"attachment {slot}/{attachment}"
+        if mine is None and theirs.get("type") == "linkedmesh":  # its parent mesh would have to come along
+            return f"linked mesh {slot}/{attachment}"
     return None
 
 

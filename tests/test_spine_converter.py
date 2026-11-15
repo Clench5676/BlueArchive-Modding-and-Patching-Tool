@@ -57,6 +57,7 @@ def test_an_animation_the_built_in_graft_refuses_is_added_in_json_with_what_it_n
     attachments = mod["skins"][0]["attachments"]
     assert set(attachments["face"]) == {"face_00", "face_09"} and set(attachments["tear"]) == {"drop"}
     assert attachments["face"]["face_00"]["vertices"] == [0, 0, 1, 1, 2, 2]  # the mod's own stays as it is
+    assert result.regions == ["face_09", "drop"]  # what the atlas must gain
     # refused, with nothing of them added: a deform of a face the mod redrew, a skin the mod lacks
     assert set(result.refused) == {"10", "11"}
     assert "redrawn" in result.refused["10"] and result.refused["11"] == "skin blush"
