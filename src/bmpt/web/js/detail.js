@@ -49,7 +49,7 @@ import { ALIAS, DETAILS, aliasFrame, detailsFrame, popupContent } from "./popup-
 import { statsBox } from "./stats-box.js";
 import { CHIP, COLOUR, CONTROL, SPACE, TYPE } from "./ui-tokens.js";
 import { container, row, stack, textItem, toNode } from "./ui-grid.js";
-import { CROSS_LIMIT, crossExtras, setShowOthers, showOthers, detailStatus, selectionStatus, selectionError, intendedKey, isApplied, availableTab, coreOf, costumeCandidates, costumeHold, crossCandidates, crossCard, crossModels, hasAsset, hasKind, primaryKind, appliedKey as keyOf, appliedOf, candidates as listSources, partsOf, popupMode, modelSource, previewBase, previewChanged, previewKey, sourceOf, switchKindOf } from "./switch-sources.js";
+import { CAUTIONS, CROSS_LIMIT, cautionKey, crossExtras, setShowOthers, showOthers, detailStatus, selectionStatus, selectionError, intendedKey, isApplied, availableTab, coreOf, costumeCandidates, costumeHold, crossCandidates, crossCard, crossModels, hasAsset, hasKind, primaryKind, appliedKey as keyOf, appliedOf, candidates as listSources, partsOf, popupMode, modelSource, previewBase, previewChanged, previewKey, sourceOf, switchKindOf } from "./switch-sources.js";
 import { pickerItems } from "./roster-widgets.js";
 import { $, DOT, RECRUIT, S, TAN10, advanceOf, at, clone, glyphsOf, hitButton, markedLabel, off, text, widget, wrapPath } from "./util.js";
 
@@ -302,6 +302,7 @@ function costumesReady(v) {
     check = (async () => {
       const known = await rpc("model.costumes", { variant: v.key, others });
       costumeState.set(v.key, { ...(costumeState.get(v.key) || {}), ...known });
+      void readCautions(v, others.filter((o) => known[o] === "ok" || known[o] === "preview"));
       // the Apply card follows the shown costume's verdict, and an open switch its cards' verdicts
       costumesChecked(v);
       const unknown = others.filter((o) => known[o] == null);
@@ -309,6 +310,7 @@ function costumesReady(v) {
         const id = await rpc("model.checkCostumes", { variant: v.key, others: [other] });
         const result = await waitJob(id);
         costumeState.set(v.key, { ...(costumeState.get(v.key) || {}), ...result });
+        void readCautions(v, [other]);
         costumesChecked(v);
       }
       return unknown.length > 0;
@@ -344,6 +346,7 @@ function runCross() {
         const known = await rpc("model.costumes", { variant: v.key, others: fresh });
         if (epoch !== othersEpoch) continue;
         costumeState.set(v.key, { ...(costumeState.get(v.key) || {}), ...known });
+        void readCautions(v, fresh.filter((o) => known[o] === "ok" || known[o] === "preview"));
         costumesChecked(v);
         continue;
       }
@@ -353,12 +356,24 @@ function runCross() {
       const result = await waitJob(await rpc("model.checkCostumes", { variant: v.key, others: [next] }));
       if (epoch !== othersEpoch) continue;
       costumeState.set(v.key, { ...(costumeState.get(v.key) || {}), ...result });
+      void readCautions(v, [next]);
       costumesChecked(v);
     }
   })().catch((err) => console.error("Costume check failed", err)).finally(() => {
     crossRunning = null;
     if (handled !== crossWanted) runCross();
   });
+}
+// The cautions of the offered pairs (model.costumeCautions), beside their verdicts (switch-sources.js CAUTIONS), read
+// aside from the check queue; a failed read leaves them unknown, which shows no caution.
+async function readCautions(v, others) {
+  if (!others.length) return;
+  let found = {};
+  try { found = await rpc("model.costumeCautions", { variant: v.key, others }); } catch (err) { console.error("Costume cautions failed", err); }
+  if (!found || !Object.keys(found).length) return;
+  const state = costumeState.get(v.key) || {};
+  costumeState.set(v.key, { ...state, [CAUTIONS]: { ...(state[CAUTIONS] || {}), ...found } });
+  costumesChecked(v);
 }
 // what keeps a 3D source from being applied by its check (switch-sources.js costumeHold): a refused costume
 // ("unfit": shown, never applied), another student's model before its verdict ("pending")
@@ -1532,6 +1547,8 @@ async function drawPopup(scroll = 0) {
       inUseText: c.mod?.incomplete ? T("mods.incomplete") : coreOf(v, kind) && c.key === applied ? T("status.applied") : null,
       dim: c.greyed,
       // past-limit own costumes and another student's model carry their caution on hover
+      // what the game may draw differently (cautionKey); past the limit, another student's model say more
+      ...(cautionKey(c) ? { hint: T(cautionKey(c)) } : {}),
       ...(c.beyondFit ? { hint: T("model.beyondFit") } : {}),
       ...crossExtras(c, T("model.crossCharacter")),
       badge: c.greyed ? { ...GREYED_BADGE(), ...(!coreOf(v, kind) && c.kind === "self" ? { text: T("import.reason.no_target") } : {}) }
@@ -1572,7 +1589,7 @@ async function drawPopup(scroll = 0) {
         title: T(isSpecial(v) ? "special.background" : kind === "spr" ? "info.title.portrait" : `info.title.${kind}`),
         fields: [[T("field.file"), baseName(file)], [T("field.size"), sizeText(size)], ...(problem ? [[null, problem, `${COLOUR.warning}/1.00`]] : [])],
         truncate: true,
-        actions: [[T("popup.apply"), () => applyCandidate(c.key, kind), !coreOf(v, kind) || isApplied(v, kind, c.key) || !!c.greyed || !!c.previewOnly || !!c.pending || busy, "apply", c.previewOnly ? T("model.unfit") : c.beyondFit ? T("model.beyondFit") : null],
+        actions: [[T("popup.apply"), () => applyCandidate(c.key, kind), !coreOf(v, kind) || isApplied(v, kind, c.key) || !!c.greyed || !!c.previewOnly || !!c.pending || busy, "apply", c.previewOnly ? T("model.unfit") : c.beyondFit ? T("model.beyondFit") : cautionKey(c) ? T(cautionKey(c)) : null],
           [T(platform === "mac" ? "open.mac" : "open.win"), () => reveal(file)],
           ...(c.kind === "mod" ? [[T("compatibility.check"), async () => {
             let rebuilt = false;

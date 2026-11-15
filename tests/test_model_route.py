@@ -260,6 +260,21 @@ def test_costume_rpcs_offer_only_pairs_checked_to_their_end(tmp_path):
         s.close()
 
 
+def test_costume_cautions_name_what_offered_pairs_may_draw_differently_in_the_game(tmp_path):
+    s, saved, _, _ = _costume_services(tmp_path, {})
+    saved.update(np0009={"ok": True, "cautions": ["ex_parts"]}, momoi={"ok": False, "preview": True,
+                 "cautions": ["carried_shader", "ex_parts"]}, ch0230={"ok": False, "reason": "static model",
+                 "cautions": ["ex_parts"]}, midori={"ok": True})
+    api = build_api(s)
+    try:
+        assert api.call("model.costumeCautions", {"variant": "hina", "others": ["np0009", "momoi", "ch0230", "midori",
+                                                                                "hina"]})["result"] == {
+            "np0009": ["ex_parts"], "momoi": ["carried_shader", "ex_parts"]}
+        assert api.call("model.costumeCautions", {"variant": "hina", "others": "np0009"})["error"]["code"] == "bad_params"
+    finally:
+        s.close()
+
+
 def test_optimize_physics_runs_as_a_library_job_on_the_official_model_or_a_costume(tmp_path):
     """Model.optimize hands the source and its shown name to the library, as a library writer job."""
     s, _, _, _ = _costume_services(tmp_path, {})

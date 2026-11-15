@@ -2297,12 +2297,18 @@ def mouth_of(skeleton: Skeleton, costume: list[Part]) -> Mouth | None:
     return None
 
 
+# what a build cannot show in the preview and the game may draw differently (the switch's cautions)
+EX_PARTS = "ex_parts"              # the slot's EX-only parts (a cut-in body, alternative faces) now draw nothing
+CARRIED_SHADER = "carried_shader"  # a shader carried with the costume: the game holds two of its name
+
+
 @dataclass
 class Result:
     changed: dict[Path, Any]  # slot file -> engine Bundle with the changes
     plan: Plan
     parts: int
     hems: Hems | None = None
+    cautions: list[str] = field(default_factory=list)  # ``EX_PARTS``, ``CARRIED_SHADER``
 
 
 def _model_prefabs(graph: BundleGraph, files: list[Path]) -> dict[str, Any]:
@@ -2624,12 +2630,20 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
                 logger.info("Costume of %s on %s: clip %s left without skirt curves (layout)", s_name, t_name,
                             clip.peek_name())
     _sanity(written, rendered)
+    cautions = []
+    alternates = sorted(p.mesh.peek_name() for p in t_parts if p.role == "alternate" and p.mesh is not None)
+    if alternates:  # a cut-in body or alternative face: blank for the frames the EX timeline shows it
+        cautions.append(EX_PARTS)
+        logger.info("Costume of %s on %s: EX-only parts draw nothing: %s", s_name, t_name, ", ".join(alternates))
+    if shaders:  # death dissolve and hit flash look shaders up by name: untested on a carried copy
+        cautions.append(CARRIED_SHADER)
+        logger.info("Costume of %s on %s: %d shader(s) carried with the costume", s_name, t_name, len(shaders))
     logger.info("Costume of %s on %s: %d part(s), groups %s, stretch %.2f (own %.2f), shape %s (changed %.3f, 99th "
                 "percentile %.3f); hem %s%s", s_name, t_name, len(s_costume),
                 {s_skeleton.nodes[n].name: c for n, c in result.choices.items()}, result.stretch, result.own,
                 result.fit.shape, result.fit.largest, result.fit.shift, hem.summary(),
                 f"; {result.repair}" if result.repair else "")
-    return Result(opened, result, len(s_costume), hem)
+    return Result(opened, result, len(s_costume), hem, cautions)
 
 
 def _edit_prefabs(writer: _Writer, sf: Any, graph: BundleGraph, t_meshes: Mapping[tuple[str, int], str],

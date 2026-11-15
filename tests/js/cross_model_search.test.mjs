@@ -56,6 +56,42 @@ for (const locale of LOCALES) test(`past-limit own cards allow Apply and Optimiz
   }
 });
 
+for (const locale of LOCALES) test(`an offered pair shows what the game may draw differently on hover (${locale})`, async () => {
+  const ui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8")).webui;
+  const v = { key: "slot", family: "own", model: "slot" };
+  const sibling = (key) => ({ key, family: "own", model: key });
+  const fam = { variants: [v, sibling("ex"), sibling("shader"), sibling("both"), sibling("past"), sibling("plain")] };
+  const costumes = { ex: "ok", shader: "ok", both: "ok", past: "preview", plain: "ok", cross: "ok",
+    [Sources.CAUTIONS]: { ex: ["ex_parts"], shader: ["carried_shader"], both: ["carried_shader", "ex_parts"],
+      past: ["ex_parts"], cross: ["carried_shader"], plain: ["something new"] } };
+  const cards = [...Sources.candidates(fam, v, "model", { ...costumes }),
+    Sources.crossCard({ key: "cross", family: "other", model: "cross" }, costumes)];
+  let popup;
+  const ctx = vm.createContext({ ...Sources, fam, otherStudents: [], switchThumbnails: {}, switchPopupPage: 1, pageToken: 1,
+    popupKind: "model", popupSeg: 0, pending: "v:ex", busy: false, platform: "mac", variant: () => v, modsOn: () => true,
+    candidates: () => cards, lazyThumbnail: () => ({ start: () => null }), candidateLabel: (c) => c.variant.key,
+    fullName: (o) => o.key, originalName: (o) => o.key, isSpecial: () => false, gameFile: () => "model.bundle",
+    baseName: (s) => s, sizeText: () => "0", crcOf: () => null, appliedKey: Sources.appliedKey,
+    T: (key) => key.split(".").reduce((o, part) => o?.[part], ui), COLOUR: { success: "green" },
+    optimizeSource: () => "official", optimizedCopy: () => null, listPopup: async (options) => { popup = options; },
+    applyCandidate: () => null, runOptimize: () => null,
+  });
+  vm.runInContext(functionSource("drawPopup"), ctx);
+  await ctx.drawPopup();
+  const item = (key) => popup.items.find((it) => it.key === `v:${key}`);
+  const applyHint = (key) => popup.details(item(key)).actions.find(([label]) => label === ui.popup.apply)[4];
+  assert.equal(item("ex").hint, ui.model.exParts);
+  assert.equal(item("shader").hint, ui.model.carriedShader);
+  assert.equal(item("both").hint, ui.model.exParts, "the first caution");
+  assert.equal(item("past").hint, ui.model.beyondFit, "past the limit says more");
+  assert.equal(item("cross").hint, ui.model.crossCharacter, "another student's model says more");
+  assert.equal(item("plain").hint, undefined, "an unknown caution shows none");
+  assert.equal(applyHint("ex"), ui.model.exParts);
+  assert.equal(applyHint("shader"), ui.model.carriedShader);
+  assert.equal(applyHint("past"), ui.model.beyondFit);
+  assert.equal(applyHint("plain"), null);
+});
+
 for (const locale of LOCALES) test(`the model search shares picker matching and appends roster-ordered hits (${locale})`, () => {
   const ui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8")).webui;
   const v = { key: "slot", family: "own", model: "slot" };
@@ -93,12 +129,14 @@ for (const locale of LOCALES) test(`the model search shares picker matching and 
   assert.deepEqual(hits("B NPC").map((c) => c.key), ["v:ch0171"], "original name remains searchable with an alias");
 });
 
-function queue({ saved = [], read, check } = {}) {
-  const v = { key: "slot", family: "own", model: "slot" }, calls = [], changed = [], failures = [];
+function queue({ saved = [], read, check, cautions } = {}) {
+  const v = { key: "slot", family: "own", model: "slot" }, calls = [], cautionCalls = [], changed = [], failures = [];
   const ctx = vm.createContext({ ...Sources, otherStudents: [], othersEpoch: 0, costumeState: new Map(), open: true, current: v,
     variant: () => ctx.current, candidates: () => saved.map((key) => ({ cross: true, variant: { key } })),
     costumesChecked: (v) => changed.push(v.key), console: { error: (...args) => failures.push(args) },
     rpc: async (method, params) => {
+      // the cautions are read aside from the queue: ``calls`` holds the queue's own, the verdicts' and the checks'
+      if (method === "model.costumeCautions") { cautionCalls.push({ method, ...params }); return cautions ? cautions(params) : {}; }
       calls.push({ method, ...params });
       if (method === "model.costumes") return read ? read(params) : Object.fromEntries(params.others.map((key) => [key, null]));
       return check ? check(params) : Object.fromEntries(params.others.map((key) => [key, "preview"]));
@@ -106,7 +144,7 @@ function queue({ saved = [], read, check } = {}) {
   });
   const start = source.indexOf("let crossWanted ="), end = source.indexOf("// what keeps a 3D source", start);
   vm.runInContext(source.slice(start, end), ctx);
-  return { ctx, v, calls, changed, failures, want: (keys, target = ctx.current) => ctx.judgeCross(target, keys) };
+  return { ctx, v, calls, cautionCalls, changed, failures, want: (keys, target = ctx.current) => ctx.judgeCross(target, keys) };
 }
 
 test("the cross queue checks only current hits and stops old query work after the in-flight pair", async () => {
@@ -147,6 +185,19 @@ test("a different destination takes over the queue and leaving the screen stops 
   const start = q.calls.length;
   q.ctx.open = false; q.want(["unseen"]); await flush();
   assert.equal(q.calls.length, start);
+});
+
+test("the offered pairs' cautions are read beside their verdicts without holding the queue", async () => {
+  const q = queue({ read: ({ others }) => Object.fromEntries(others.map((key) => [key, key === "known" ? "ok" : null])),
+    check: ({ others }) => ({ [others[0]]: "preview" }), cautions: ({ others }) => Object.fromEntries(
+      others.filter((key) => key !== "plain").map((key) => [key, ["ex_parts"]])) });
+  q.want(["known", "fresh", "plain"]); await flush();
+  assert.deepEqual(q.cautionCalls.map((c) => [...c.others]), [["known"], ["fresh"], ["plain"]]);
+  const state = q.ctx.costumeState.get(q.v.key);
+  assert.deepEqual(JSON.parse(JSON.stringify(state[Sources.CAUTIONS])), { known: ["ex_parts"], fresh: ["ex_parts"] });
+  assert.equal(state.plain, "preview");
+  assert.ok(!Object.keys(state).includes("undefined"));
+  assert.deepEqual(q.failures, []);
 });
 
 test("a failed saved-verdict read can be retried on the next search", async () => {

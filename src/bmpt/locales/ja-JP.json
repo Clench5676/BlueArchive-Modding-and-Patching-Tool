@@ -93,6 +93,8 @@
 			"unfit": "自動フィット不可",
 			"crossCharacter": "別キャラのモデル、表示が崩れる可能性あり",
 			"beyondFit": "自動フィット範囲外、貫通や変形の可能性あり",
+			"exParts": "EXスキル中は一部パーツが非表示",
+			"carriedShader": "シェーダー同梱、被弾と撃破の演出はゲーム内未検証",
 			"showOthers": "他の生徒を表示",
 			"action": {
 				"idle": "待機",

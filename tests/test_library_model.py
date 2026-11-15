@@ -1172,6 +1172,40 @@ def test_costume_builds_of_an_older_rule_are_built_again_at_the_start(model_env,
     assert library.refresh_costumes() == {'done': [copy], 'kept': [], 'left': []}
 
 
+def test_a_costume_verdict_keeps_the_cautions_its_preview_build_found(model_env, monkeypatch):
+    """The preview build's cautions (what the game may draw differently) go with the pair's verdict, whether the
+    check saves it as ok or the build as past the stretch limit."""
+    env = model_env
+    model_bundle(env.game_dir, core='hoshino_swimsuit', prefab=True, part='000', payload=b'swim prefab')
+    game = SimpleNamespace(spine_cores=lambda kind: {'hoshino_spr': [], 'hoshino_swimsuit_spr': []} if kind == 'spr' else {},
+                           collection_names=lambda: {}, model_cores=lambda: {'hoshino_original', 'hoshino_swimsuit'})
+    library = ModLibrary(env.root, Catalog(game, None), object(), env.settings, scan_allowed=lambda: True)
+    unfit = {}
+
+    def staged(self, other, targets, directory, log, pin, *, preview=False, report=None):
+        out = directory / 'output'
+        out.mkdir(parents=True)
+        (out / targets[0].name).write_bytes(b'built')
+        report['cautions'] = ['ex_parts', 'carried_shader']
+        if unfit:
+            report['unfit'] = unfit
+        return {targets[0]: out / targets[0].name}
+
+    monkeypatch.setattr(ModLibrary, '_stage_costume', staged)
+    assert library.costume_preview('hoshino', 'hoshino_swimsuit')
+    verdict = library.record_costume_verdict('hoshino', 'hoshino_swimsuit', True)
+    assert verdict['ok'] is True and verdict['cautions'] == ['carried_shader', 'ex_parts']
+    assert library.costume_verdict('hoshino', 'hoshino_swimsuit')['cautions'] == ['carried_shader', 'ex_parts']
+    from bmpt.gameassets import costume_rule
+    monkeypatch.setattr(costume_rule, 'COSTUME_RULE', costume_rule.COSTUME_RULE + 1)  # judged again
+    unfit.update(source='stretch', adapted='9.00', own='4.00')
+    assert library.costume_preview('hoshino', 'hoshino_swimsuit')
+    verdict = library.costume_verdict('hoshino', 'hoshino_swimsuit')
+    assert verdict['preview'] is True and verdict['cautions'] == ['carried_shader', 'ex_parts']
+    # a refusal carries none
+    assert 'cautions' not in library._save_verdict('signature', False, 'rest pose', cautions=['ex_parts'])
+
+
 def test_costume_verdicts_are_kept_per_build_signature(model_env, monkeypatch):
     """A pair's verdict holds for the costume rule and the official bytes it was judged on (not the
     program build); the rule's refusals are saved by the preview itself."""
