@@ -239,16 +239,18 @@ export function stillCrop(camera, target, box, W, H, aspect) {
   return { x: Math.max(0, Math.min(W - cw, x - cw / 2)), y: Math.max(0, Math.min(H - ch, cy - ch / 2)), w: cw, h: ch };
 }
 
-// the tab's actions: the clip slots they play, in order of preference; "next" follows a clip that plays once,
-// "then" is the action after it
+// the tab's actions: the clip slots they play, in order of preference; "next" follows a clip that plays once (after
+// "wait" seconds on its last frame, faded in over "fade"), "then" is the action after it; "needs" is a slot the
+// action cannot do without besides its own
 export const ACTIONS = {
   idle: { slots: ["Formation_Idle", "Cafe_Idle", "Idle"] },
   reaction: { slots: ["Cafe_Reaction"], then: "idle" },
   walk: { slots: ["Cafe_Walk"] },
   victory: { slots: ["Victory_Start"], next: "Victory_End" },
   pickup: { slots: ["Formation_Pickup"] },
-  // the battle's vital clips: the retreat run loops in place; the knockdown falls once and stays down
-  retreat: { slots: ["Vital_Retreat"] },
+  // the battle's vital clips: the retreat falls, lies a moment, then hangs from the evacuation helicopter's rope (the
+  // helicopter itself is not part of the model); the knockdown, an enemy's, falls and stays down
+  retreat: { slots: ["Vital_Death"], next: "Vital_Retreat", wait: 1, fade: 0.5, needs: "Vital_Retreat" },
   knockdown: { slots: ["Vital_Death"], hold: true },
 };
 
@@ -709,7 +711,8 @@ class ChibiView {
 
   // --- actions ---
   actions() {
-    return [...Object.keys(ACTIONS).filter((name) => ACTIONS[name].slots.some((s) => this.clips?.has(s))),
+    return [...Object.keys(ACTIONS).filter((name) => ACTIONS[name].slots.some((s) => this.clips?.has(s))
+      && (!ACTIONS[name].needs || this.clips.has(ACTIONS[name].needs))),
       ...storyActions(this.clips)];
   }
 
@@ -718,6 +721,7 @@ class ChibiView {
     const slot = def?.slots.find((s) => this.clips?.has(s));
     if (!slot) return false;
     this.current = name;
+    this.queued = null;
     this.playSlot(slot, { fade, once: !!(def.then || def.next || def.hold) });
     if (!quiet) this.onAction?.(name);
     return true;
@@ -739,8 +743,19 @@ class ChibiView {
   finished(action) {
     if (action !== this.action) return;
     const def = ACTIONS[this.current];
-    if (def?.next && this.clips.has(def.next) && this.slot !== this.clips.get(def.next)) this.playSlot(def.next, { fade: 0.2 });
-    else if (def?.then) this.act(def.then, { fade: 0.35 });
+    if (def?.next && this.clips.has(def.next) && this.slot !== this.clips.get(def.next)) {
+      // a wait counts the mixer's time, which stands still while the preview is frozen
+      if (def.wait) this.queued = { slot: def.next, at: this.mixer.time + def.wait, fade: def.fade ?? 0.2 };
+      else this.playSlot(def.next, { fade: def.fade ?? 0.2 });
+    } else if (def?.then) this.act(def.then, { fade: 0.35 });
+  }
+
+  // the follow-up clip, once its wait is over
+  playQueued() {
+    if (!this.queued || this.mixer.time < this.queued.at) return;
+    const { slot, fade } = this.queued;
+    this.queued = null;
+    this.playSlot(slot, { fade });
   }
 
   updateMouth() {
@@ -820,6 +835,7 @@ class ChibiView {
   tick() {
     const dt = Math.min(0.1, this.clock.getDelta());
     this.mixer?.update(dt);
+    this.playQueued();
     this.applySwitches();
     this.updateMouth();
     this.followHalo(dt);
