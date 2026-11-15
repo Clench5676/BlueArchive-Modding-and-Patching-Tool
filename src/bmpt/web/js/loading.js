@@ -530,14 +530,37 @@ function wire(el = stage()) {
   el.addEventListener("focusin", (ev) => { if (locked() && !exempt(ev)) ev.target?.blur?.(); }, true);
   wired.add(el);
 }
+// Controls outside the stage miss the stage's listeners and draw above its overlays: the native window's toolbar row
+// (window-chrome.js) holds the top bar there. Each one registered here is locked the same way, whenever it was made,
+// and a full cover hides the row (the root class, app.css), so the top bar is neither shown nor pressed over Now Loading.
+const outside = new Set();
+export function lockOutside(el) {
+  if (!el?.addEventListener) return () => {};
+  outside.add(el);
+  if (!wired.has(el)) {
+    const block = (ev) => {
+      if (!locked() || !outside.has(el)) return;
+      ev.preventDefault();
+      ev.stopImmediatePropagation();
+    };
+    for (const type of LOCKED_EVENTS) el.addEventListener(type, block, { capture: true, passive: false });
+    el.addEventListener("focusin", (ev) => { if (locked() && outside.has(el)) ev.target?.blur?.(); }, true);
+    wired.add(el);
+  }
+  syncLock();
+  return () => { outside.delete(el); };
+}
 // on locking: the focused control beneath gives up its focus, so Enter or Space cannot press it, and the previews
 // shown beneath freeze until the lock ends
 function syncLock() {
   const el = stage();
   wire(el);
   freezeShown(locked());
+  document.documentElement?.classList?.toggle?.("now-loading-cover", covering());
   const focused = document.activeElement;
-  if (locked() && focused && focused !== el && el?.contains?.(focused) && !exempt({ target: focused })) focused.blur?.();
+  if (!locked() || !focused) return;
+  if (focused !== el && el?.contains?.(focused) && !exempt({ target: focused })) focused.blur?.();
+  for (const row of outside) if (row.contains?.(focused)) focused.blur?.();
 }
 Popup.deferWhile?.(strict);
 

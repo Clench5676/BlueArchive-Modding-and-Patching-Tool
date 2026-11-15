@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
@@ -9,6 +9,7 @@ class El {
     remove: (...names) => { this.className = this.className.split(" ").filter((n) => !names.includes(n)).join(" "); },
     replace: (a, b) => { this.classList.remove(a); this.classList.add(b); },
     contains: (name) => this.className.split(" ").includes(name),
+    toggle: (name, on) => { if (on) this.classList.add(name); else this.classList.remove(name); },
   };
   addEventListener(type, fn) { this.listeners[type] = fn; }
   setAttribute() {}
@@ -34,8 +35,11 @@ class El {
   getContext() { return {}; }
 }
 const stage = new El();
+const root = new El();
 globalThis.document = { createElement: () => new El(), getElementById: (id) => id === "stage" ? stage : null,
-  querySelector: () => stage.children.find((el) => !el.hidden && /popup-host|consent-host/.test(el.className)) || null };
+  querySelector: () => stage.children.find((el) => !el.hidden && /popup-host|consent-host/.test(el.className)) || null,
+  documentElement: root };
+globalThis.getComputedStyle = () => ({ opacity: "1" });
 globalThis.addEventListener = () => {};
 globalThis.requestAnimationFrame = (fn) => setTimeout(fn, 0);
 globalThis.fetch = async () => { throw new Error("no game assets in this test"); };
@@ -314,4 +318,116 @@ test("Now Loading holds pinches and touch ends too, and freezes the previews sho
   const ev = event(); stage.listeners.gesturechange(ev);
   assert.equal(ev.prevented, false, "a pinch reaches the preview once Now Loading is gone");
   shown.dispose(); preparing.dispose();
+});
+
+// Packaged builds move the top bar out of the stage into the native window's toolbar row (window-chrome.js).
+function windowHeader() {
+  const header = new El(); header.className = "window-header";
+  const bar = header.appendChild(new El()), button = bar.appendChild(new El());
+  button.blur = () => { button.blurred = true; };
+  const release = Loading.lockOutside(header);
+  return { header, button, release };
+}
+const HEADER_EVENTS = ["pointerdown", "pointerup", "click", "dblclick", "contextmenu", "wheel", "touchstart", "touchend",
+  "gesturestart", "gesturechange"];
+const headerBlocked = ({ header, button }) => HEADER_EVENTS.map((type) => {
+  const ev = event(button); header.listeners[type](ev);
+  return [type, ev.prevented && ev.stopped];
+});
+
+const ENTRIES = {
+  hold: (work) => Loading.hold(() => work),
+  strict: (work) => Loading.hold(() => work, { all: true }),
+  page: (work) => Loading.page(() => work),
+  task: (work) => Loading.task(() => work, { label: "Mods" }),
+  wait: (work) => Loading.wait(work, { immediate: true, cap: null }),
+  scene: (work) => Loading.scene(() => work),
+  cover: (work) => Loading.scene(() => work, { opaque: true }),
+};
+for (const [name, start] of Object.entries(ENTRIES)) test(`the native toolbar takes no input under Now Loading (${name})`, async () => {
+  const row = windowHeader();
+  const job = deferred();
+  const running = start(job.promise);
+  await new Promise(setImmediate);
+  try {
+    assert.equal(Loading.locked(), true);
+    for (const [type, blocked] of headerBlocked(row)) assert.ok(blocked, `${type} on the toolbar`);
+    row.button.blurred = false; row.header.listeners.focusin(event(row.button));
+    assert.equal(row.button.blurred, true, "a toolbar control that takes focus gives it up");
+  } finally { job.resolve(); await running; }
+  await new Promise((r) => setTimeout(r, 350));
+  assert.equal(Loading.locked(), false);
+  for (const [type, blocked] of headerBlocked(row)) assert.equal(blocked, false, `${type} on the toolbar afterwards`);
+  row.release();
+});
+
+test("a toolbar row made while Now Loading is up is locked at once, and its focus given up", async () => {
+  const job = deferred();
+  const running = Loading.hold(() => job.promise);
+  const header = new El(), button = header.appendChild(new El());
+  button.blur = () => { button.blurred = true; };
+  document.activeElement = button;
+  try {
+    const release = Loading.lockOutside(header);
+    assert.equal(button.blurred, true, "the focused toolbar control gives up its focus");
+    const ev = event(button); header.listeners.click(ev);
+    assert.ok(ev.prevented && ev.stopped);
+    release();
+    const free = event(button); header.listeners.click(free);
+    assert.equal(free.stopped, false, "a released row (back in the stage) is left to the stage's lock");
+  } finally { document.activeElement = null; job.resolve(); await running; }
+});
+
+test("a full cover hides the native toolbar with the screen; an indicator leaves it shown but locked", async () => {
+  const job = deferred(), writer = deferred();
+  const cover = Loading.scene(() => job.promise, { opaque: true });
+  await new Promise(setImmediate);
+  const progress = Loading.task(() => writer.promise, { label: "Mods" });
+  await new Promise(setImmediate);
+  try {
+    assert.equal(root.classList.contains("now-loading-cover"), true, "the start cover hides the toolbar");
+    job.resolve(); await cover;
+    assert.equal(root.classList.contains("now-loading-cover"), false, "the writer alone is an indicator");
+    assert.equal(Loading.locked(), true);
+    const row = windowHeader();
+    for (const [type, blocked] of headerBlocked(row)) assert.ok(blocked, `${type} on the toolbar under the writer`);
+    row.release();
+  } finally { job.resolve(); writer.resolve(); await progress; }
+  assert.equal(root.classList.contains("now-loading-cover"), false);
+});
+
+test("the toolbar row the lock reaches is the one the window chrome builds, and the cover hides it", () => {
+  const chrome = readFileSync(new URL("../../src/bmpt/web/js/window-chrome.js", import.meta.url), "utf8");
+  const loading = readFileSync(new URL("../../src/bmpt/web/js/loading.js", import.meta.url), "utf8");
+  const css = readFileSync(new URL("../../src/bmpt/web/css/app.css", import.meta.url), "utf8");
+  assert.match(chrome, /wrapper\.className = 'window-header'[\s\S]*unlockHeader = lockOutside\(wrapper\)/);
+  assert.match(loading, /export function lockOutside/);
+  assert.match(css, /\.now-loading-cover \.window-header \{[^}]*visibility: hidden/);
+});
+
+// Every element put outside the stage escapes the stage's input lock and paints above its Now Loading. Each one is
+// either the toolbar (locked above) or takes no input of its own; a new one must be covered before it is listed.
+const OUTSIDE_STAGE = {
+  "window-chrome.js": ["controls", "wrapper"], // the window's own buttons (a system control); the toolbar row
+  "recovery.js": ["panel"],                   // the crash recovery report, shown when the page itself failed
+  "cursor.js": ["c"],                         // touch effects, pointer-events: none
+  "thumbs.js": ["host"],                      // off-screen thumbnail renderer, pointer-events: none
+  "settings.js": ["input"],                   // a clipboard fallback, removed in the same task
+  "ngui.js": ["probe"],                       // a font measuring probe, removed in the same call
+};
+test("nothing else is attached outside the stage", () => {
+  const dir = new URL("../../src/bmpt/web/js/", import.meta.url);
+  const found = {};
+  const walk = (url) => {
+    for (const entry of readdirSync(url, { withFileTypes: true })) {
+      if (entry.isDirectory()) { walk(new URL(`${entry.name}/`, url)); continue; }
+      if (!entry.name.endsWith(".js")) continue;
+      const text = readFileSync(new URL(entry.name, url), "utf8");
+      for (const m of text.matchAll(/document\.(?:body|documentElement)\.(?:append|appendChild|prepend|insertBefore)\(\s*(\w+)/g)) {
+        (found[entry.name] ||= []).push(m[1]);
+      }
+    }
+  };
+  walk(dir);
+  assert.deepEqual(found, OUTSIDE_STAGE);
 });

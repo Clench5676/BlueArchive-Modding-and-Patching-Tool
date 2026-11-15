@@ -61,9 +61,11 @@ globalThis.chromeFixture={...geometry,chromeMotion:()=>motion,on:(name,fn)=>hand
   if(name==='window.chrome')return snapshot;calls.push({name,value});
   if(name==='window.layout'&&layoutFailure){const error=layoutFailure;layoutFailure=null;throw error;}},T:key=>key,
   reflowTopActions(){},alignTopBar:async()=>{if(alignmentGate)await alignmentGate;},fitStage(){},
-  naturalTextWidth:(el,scale)=>Math.ceil(el.textContent.length*13*scale),paintTopBar:async()=>{}};
+  naturalTextWidth:(el,scale)=>Math.ceil(el.textContent.length*13*scale),paintTopBar:async()=>{},
+  lockOutside:(el)=>{lockedRows.add(el);return()=>lockedRows.delete(el);}};
+const lockedRows=new Set();
 let source=readFileSync(new URL('../../src/bmpt/web/js/window-chrome.js',import.meta.url),'utf8').replace(/^import .*;$/gm,'');
-source=`const {on,rpc,T,reflowTopActions,alignTopBar,fitStage,naturalTextWidth,paintTopBar,headerGeometry,rowLayout,isImmersive,dragRegions,expandRect,chromeMotion}=globalThis.chromeFixture;\n${source}`;
+source=`const {on,rpc,T,reflowTopActions,alignTopBar,fitStage,naturalTextWidth,paintTopBar,headerGeometry,rowLayout,isImmersive,dragRegions,expandRect,chromeMotion,lockOutside}=globalThis.chromeFixture;\n${source}`;
 const {setupWindowChrome}=await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
 async function settle(){for(let i=0;i<8;i++){frames.splice(0).forEach(fn=>fn());await new Promise(resolve=>setImmediate(resolve));}}
 const payload=()=>calls.filter(c=>c.name==='window.layout').at(-1).value;
@@ -75,6 +77,8 @@ test('native and fallback controllers hide and restore every immersive scene; th
     snapshot={...snapshot,sequence:snapshot.sequence+1,platform,bounds:platform==='darwin'?{left:12,top:8,right:80,bottom:30}:{left:812,top:0,right:960,bottom:32}};
     handlers['window.chrome'](snapshot);await settle();
     assert.ok(body.classList.has('native-chrome'));assert.equal(doc.getElementById('native-controls'),undefined);
+    // the row leaves the stage, so Now Loading has to lock it itself
+    assert.deepEqual([...lockedRows].map(el=>el.className),['window-header']);assert.equal(header.parent,[...lockedRows][0]);
     for(const [stageFlags,rootFlags] of [[['fullscreen'],[]],[['fullscreen'],[]],[['fullscreen'],['photo-active']],[['fullscreen'],['photo-active','photo-lobby']],[['hall-fullscreen'],[]],[[],['photo-active']]]){
       stage.classList=new Classes(stageFlags);root.classList=new Classes(rootFlags);await change();
       assert.ok(body.classList.has('window-immersive'));assert.equal(header.inert,true);
@@ -103,6 +107,7 @@ test('native and fallback controllers hide and restore every immersive scene; th
   stage.classList.clear();await change();
   snapshot={...snapshot,active:false,sequence:snapshot.sequence+1};handlers['window.chrome'](snapshot);await settle();
   assert.equal(header.parent,stage);assert.equal(body.classList.has('native-chrome'),false);
+  assert.equal(lockedRows.size,0,'back in the stage, the bar is locked with the stage');
   assert.equal(body.descendants().filter(el=>el.id==='native-controls').length,1);
   root.classList.add('photo-active');await change();
   assert.ok(body.classList.has('window-immersive'));assert.equal(body.querySelectorAll('.window-drag-region').length,0);

@@ -7,9 +7,10 @@ import { paintTopBar } from "./top-bar-background.js";
 import { naturalTextWidth } from "./top-bar-measure.js";
 import { headerGeometry, rowLayout, isImmersive, dragRegions, expandRect } from "./window-layout.js";
 import { chromeMotion } from "./chrome-motion.js";
+import { lockOutside } from "./loading.js";
 
 let snapshot = null, wrapper = null, placeholder = null, compact = false, scheduled = false, lastLayout = "";
-let layoutRevision = 0, lastScene = null;
+let layoutRevision = 0, lastScene = null, unlockHeader = null;
 const bar = () => document.querySelector('.topbar');
 // The top bar's entry, its absence in immersive scenes and its return at the window's edge (chrome-motion.js).
 const motion = chromeMotion();
@@ -89,7 +90,7 @@ async function layout() {
   if (!nativeChrome()) {
     lastScene = null;
     if (wrapper) {
-      placeholder.replaceWith(header); wrapper.remove(); wrapper = placeholder = null;
+      placeholder.replaceWith(header); wrapper.remove(); wrapper = placeholder = null; unlockHeader?.(); unlockHeader = null;
       header.style.removeProperty('width'); header.style.removeProperty('height'); header.style.removeProperty('transform');
       header.style.removeProperty('--native-left'); header.inert = false;
       header.classList.remove('mods-compact', 'chrome-waiting', 'native-toolbar');
@@ -108,6 +109,8 @@ async function layout() {
     placeholder = document.createComment('window toolbar'); header.before(placeholder);
     wrapper = document.createElement('div'); wrapper.className = 'window-header';
     document.body.append(wrapper); wrapper.append(header); header.classList.add('native-toolbar'); document.body.classList.add('native-chrome');
+    // outside the stage, so Now Loading locks the row itself
+    unlockHeader = lockOutside(wrapper);
   }
   const g = headerGeometry(innerWidth, innerHeight, 0, immersive);
   globalThis.bamtHeaderGeometry = g;
