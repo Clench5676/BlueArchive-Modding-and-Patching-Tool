@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import vm from "node:vm";
-import { isSpecial, specialFraming, specialView } from "../../src/bmpt/web/js/special-view.js";
+import { isSpecial, specialFraming, specialFramingOf, specialView } from "../../src/bmpt/web/js/special-view.js";
 import { artBounds, settle, validRect, worldBounds } from "../../src/bmpt/web/js/lobby-health.js";
 import { layersOf } from "../../src/bmpt/web/js/lobby.js";
 
@@ -63,19 +63,63 @@ test("detail and thumbnails frame real posed vertices, ignoring stale export bou
   const lobby = read("../../src/bmpt/web/js/lobby.js");
   const code = lobby.slice(lobby.indexOf("function measureSpecial("), lobby.indexOf("// switch between the left view"));
   const thumbs = read("../../src/bmpt/web/js/thumbs.js");
-  const thumbnail = new Function("spine", "specialView", "artBounds", `${thumbs.slice(thumbs.indexOf("function viewFor("), thumbs.indexOf("function loadPlayer("))}; return viewFor;`)(spine, specialView, artBounds);
+  const thumbnail = new Function("spine", "specialView", "specialFramingOf", "artBounds", `${thumbs.slice(thumbs.indexOf("function viewFor("), thumbs.indexOf("function loadPlayer("))}; return viewFor;`)(spine, specialView, specialFramingOf, artBounds);
   const p = player(), layer = { name: "np0032_npc", x: 40000, y: -30000, scale: 0.01, player: p };
   const edge = worldBounds(artBounds(p.skeleton), layer);
   for (const framing of ["character", "scene"]) {
     const current = { framing };
-    const measure = new Function("env", `const { current, worldBounds, artBounds, validRect, union, specialView, rectOf } = env; ${code}; return measureSpecial;`)
-      ({ current, worldBounds, artBounds, validRect, union, specialView, rectOf });
-    const m = measure([layer]);
-    assert.deepEqual(m.full, specialView(edge, framing));
-    const thumb = thumbnail(p, "roster", 404 / 456, framing), expected = specialView(artBounds(p.skeleton), framing, 404 / 456);
+    const measure = new Function("env", `const { current, worldBounds, artBounds, validRect, union, specialFramingOf, specialView, rectOf } = env; ${code}; return measureSpecial;`)
+      ({ current, worldBounds, artBounds, validRect, union, specialFramingOf, specialView, rectOf });
+    const m = measure([layer]), shaped = specialFramingOf(framing, edge);
+    assert.deepEqual(m.full, specialView(edge, shaped));
+    const thumb = thumbnail(p, "roster", 404 / 456, framing), expected = specialView(artBounds(p.skeleton), shaped, 404 / 456);
     assert.deepEqual([thumb.x, thumb.y, thumb.width, thumb.height], [expected.x, expected.y, expected.w, expected.h]);
     assert.ok(m.full.w < 100, "the huge export header never sets the zoom");
   }
+});
+
+test("art taller than wide is framed as a whole character, whatever the slot's name says", () => {
+  // operator and guide NPCs filed as backgrounds (momoka_weekdungeon, rin_raiddungeon, np0013_quest, np0281_skill):
+  // one standing figure, about half as wide as tall
+  const tall = { x0: -418, y0: -873, x1: 667, y1: 1341 }, wide = { x0: -1600, y0: -1100, x1: 1600, y1: 1150 };
+  assert.equal(specialFramingOf("scene", tall), "character");
+  assert.equal(specialFramingOf("scene", wide), "scene", "a work page or shop scene still fills the view");
+  assert.equal(specialFramingOf("character", wide), "character", "a named NPC keeps its framing");
+  assert.equal(specialFramingOf(null, tall), null, "students' lobbies are not special slots");
+  assert.equal(specialFramingOf("scene", null), "scene");
+  assert.equal(specialFramingOf("scene", tall, 23), "scene", "a set of skeletons (ui_set) keeps its framing");
+  for (const aspect of [16 / 9, 404 / 456]) {
+    const v = specialView(tall, specialFramingOf("scene", tall), aspect);
+    assert.ok(contains(rectOf(v), tall), "head and feet both in frame");
+  }
+});
+
+test("the detail view keeps scene framing for a tall set of several skeletons", () => {
+  const lobby = read("../../src/bmpt/web/js/lobby.js");
+  const code = lobby.slice(lobby.indexOf("function measureSpecial("), lobby.indexOf("// switch between the left view"));
+  const tall = { x0: -970, y0: -1000, x1: 975, y1: 1151 }, art = () => tall, world = (r) => r;
+  const m = new Function("env", `const { current, worldBounds, artBounds, validRect, union, specialFramingOf, specialView, rectOf } = env; ${code}; return measureSpecial;`)
+    ({ current: { framing: "scene" }, worldBounds: world, artBounds: art, validRect, union, specialFramingOf, specialView, rectOf })(
+      [{ name: "Ui_RaidBoss_Binah", player: {} }, { name: "Ui_RaidBoss_Hod", player: {} }]);
+  assert.equal(m.sparse, false);
+  assert.deepEqual(m.full, specialView(tall, "scene"));
+});
+
+test("the detail view and its thumbnail frame a tall scene-named NPC alike", () => {
+  const lobby = read("../../src/bmpt/web/js/lobby.js");
+  const code = lobby.slice(lobby.indexOf("function measureSpecial("), lobby.indexOf("// switch between the left view"));
+  const thumbs = read("../../src/bmpt/web/js/thumbs.js");
+  const tall = { x0: -418, y0: -873, x1: 667, y1: 1341 };
+  const art = () => tall, world = (r) => r;
+  const current = { framing: "scene" };
+  const m = new Function("env", `const { current, worldBounds, artBounds, validRect, union, specialFramingOf, specialView, rectOf } = env; ${code}; return measureSpecial;`)
+    ({ current, worldBounds: world, artBounds: art, validRect, union, specialFramingOf, specialView, rectOf })([{ name: "momoka_weekdungeon", player: {} }]);
+  assert.equal(m.sparse, true);
+  assert.ok(contains(rectOf(m.full), tall) && contains(rectOf({ ...m.left, w: m.left.w / 2 }), tall), "whole in fullscreen and the left pane");
+  const thumbnail = new Function("spine", "specialView", "specialFramingOf", "artBounds", `${thumbs.slice(thumbs.indexOf("function viewFor("), thumbs.indexOf("function loadPlayer("))}; return viewFor;`)(spine, specialView, specialFramingOf, art);
+  const t = thumbnail({ skeleton: {} }, "landscape", 16 / 9, "scene");
+  assert.deepEqual([t.x, t.y, t.width, t.height], Object.values(specialView(tall, "character", 16 / 9)));
+  assert.deepEqual(m.full, specialView(tall, "character"), "the same rule as the thumbnail");
 });
 
 test("special layers have no memorial lobby fallback offset", async (t) => {

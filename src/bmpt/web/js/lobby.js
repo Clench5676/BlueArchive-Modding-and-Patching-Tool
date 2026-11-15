@@ -22,7 +22,7 @@ import {lobbyCaptureView,lobbyMaximumWidth} from './photography/camera.js';
 // blend modes as the materials give them, no dark colour) and keep the bones the prefab pins (skeleton-pins.js).
 // Entered, the lobby plays its intro timeline (lobby-intro.js) from the first frame it is on screen: a tap or a
 // dialogue skips it, and with the setting off the lobby starts as the intro leaves it.
-import { specialView } from "./special-view.js";
+import { specialFramingOf, specialView } from "./special-view.js";
 import { latestLoad, loadPlayer } from "./spine-load.js";
 import { ensureSpine } from "./spine-runtime.js";
 import { forgetSpineAssets, spineBase, spineAssetBase } from "./api.js";
@@ -798,10 +798,11 @@ function measure(loaded) {
 // Special slots have no memorial camera: derive their frame from settled, drawable attachments.
 function measureSpecial(loaded) {
   const edge = loaded.map((l) => worldBounds(artBounds(l.player.skeleton), l)).filter(validRect).reduce((a, b) => a ? union(a, b) : b, null);
-  const full = specialView(edge, current.framing);
-  const left = specialView(edge, current.framing, 16 / 9, current.framing === "character" ? 0.25 : 0.5);
+  const framing = specialFramingOf(current.framing, edge, loaded.length);
+  const full = specialView(edge, framing);
+  const left = specialView(edge, framing, 16 / 9, framing === "character" ? 0.25 : 0.5);
   current.specialGame = full;
-  return { main: loaded.at(-1).name, edge, painted: edge, sparse: current.framing === "character",
+  return { main: loaded.at(-1).name, edge, painted: edge, sparse: framing === "character",
     touch: { x: (edge.x0 + edge.x1) / 2, y: edge.y0 + (edge.y1 - edge.y0) * 0.8 },
     full, left, outer: rectOf(full), whole: union(edge, rectOf(full)), safe: null, sequences: [] };
 }
