@@ -208,6 +208,24 @@ def test_each_root_hangs_off_its_own_anchor():
     assert chains.anchor_of(1) == 1 and ms.Chains(0, [-1], local[:1], local[:1]).anchor_of(0) == 0
 
 
+def test_a_hanging_chain_keeps_part_of_its_world_direction_and_an_upright_one_its_own():
+    """Gravity: with the anchor turned 90 degrees, hair hanging down turns only half as far as the head; an ear
+    pointing up turns with the head."""
+    hair = _hanging_chain()
+    local = np.array([trs((0, 0, 0), (0, 0, 0, 1), (1, 1, 1)), trs((0, 0.1, 0), (0, 0, 0, 1), (1, 1, 1))])
+    ear = ms.Chains(0, [-1, 0], local, np.array([local[0], local[0] @ local[1]]))
+    turned = trs((0, 0, 0), ms.quaternion(_rotation((0, 0, 1), math.pi / 2)), (1, 1, 1))
+    for chains, hanging, expected in ((hair, True, 45.0), (ear, False, 90.0)):
+        spring = ms.Spring(chains, {0: math.radians(20)})
+        assert bool(spring.hanging[0]) is hanging
+        settled = spring.settle([{}], [turned])[0]
+        world = spring.posed([turned], settled)
+        tip = world[1][:3, 3] - world[0][:3, 3]
+        rest = chains.rest[1][:3, 3] - chains.rest[0][:3, 3]
+        angle = math.degrees(math.acos(float(tip @ rest) / (np.linalg.norm(tip) * np.linalg.norm(rest))))
+        assert angle == pytest.approx(expected, abs=0.5)
+
+
 def test_a_chain_too_short_or_without_a_limit_does_not_swing():
     spring = ms.Spring(_hanging_chain(), {})
     assert spring.roots == []

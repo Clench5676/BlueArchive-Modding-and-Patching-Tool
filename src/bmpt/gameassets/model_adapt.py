@@ -2023,10 +2023,11 @@ def skirt_sequence(skeleton: Skeleton, solver: ms.Solver, tree: Mapping[str, Any
     if isinstance(solver, FaceRetarget):  # the slot's expressions, about the source face's own places, every frame
         every = list(range(count))     # (a blink lasts a few frames)
         return every, solver.follow(skeleton, tree, every)
-    if isinstance(solver, ms.Spring):  # the source's own keys for a clip it has by name, else the swing
+    if isinstance(solver, ms.Spring):  # the source's own keys for a clip it has by name, else the swing; then gravity
         keyed = solver.keyed(str(tree.get("m_Name") or ""), [times[f] for f in frames])
-        if keyed is not None:
-            return frames, keyed
+        turns = keyed if keyed is not None else solver.sequence(
+            [times[f] for f in frames], lambda k: pose(frames[k]), bool(tree["m_MuscleClip"].get("m_LoopTime")))
+        return frames, solver.settle(turns, [np.asarray(pose(f)[solver.chains.anchor]) for f in frames])
     loop = bool(tree["m_MuscleClip"].get("m_LoopTime"))
     return frames, solver.sequence([times[f] for f in frames], lambda k: pose(frames[k]), loop)
 
