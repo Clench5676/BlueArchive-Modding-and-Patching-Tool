@@ -121,6 +121,13 @@ test("a story model's cutscene clips are its actions, in order, each held on its
   assert.deepEqual(storyActions(new Map()), []);
 });
 
+test("the retreat run loops and the knockdown falls once and stays down, after the other actions", async () => {
+  const { ACTIONS } = await import("../../src/bmpt/web/js/model.js");
+  assert.deepEqual(Object.keys(ACTIONS), ["idle", "reaction", "walk", "victory", "pickup", "retreat", "knockdown"]);
+  assert.deepEqual(ACTIONS.retreat, { slots: ["Vital_Retreat"] });
+  assert.deepEqual(ACTIONS.knockdown, { slots: ["Vital_Death"], hold: true });
+});
+
 test("the view follows the hips across the floor, so any clip plays in place", async () => {
   const { anchorNode, followOffset } = await import("../../src/bmpt/web/js/model.js");
   const root = new THREE.Group();

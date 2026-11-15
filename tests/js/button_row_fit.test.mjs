@@ -307,3 +307,22 @@ for (const locale of LOCALES) test(`the three repair choices share one size and 
     assertGroup(fits, captions, captions.map(() => width), height, `${locale} repair choices in ${size}`);
   }
 });
+
+// --- the 3D model tab's action cards (detail.js stripCard): a 242-wide Common_Btn_BG card, its caption 56 down to 28 in
+// 50 less than the card's width, up to two lines; every action model.js plays has its caption in every locale ---
+for (const locale of LOCALES) test(`the 3D model's action captions fit their cards in ${locale}`, async () => {
+  const detail = await source("detail.js"), model = await source("model.js");
+  assert.match(detail, /const CARD = \{ w: 242, h: 209 \};/);
+  assert.match(detail, /const f = fitText\(caption, 56, 28, w - 50\);/);
+  const names = [...model.match(/export const ACTIONS = \{([\s\S]*?)\n\};/)[1].matchAll(/^  (\w+): \{/gm)].map((m) => m[1]);
+  assert.ok(names.includes("retreat") && names.includes("knockdown"));
+  document.documentElement.lang = locale;
+  const room = 242 - 50, height = 209 - 13;
+  for (const name of [...names, "story"]) {
+    const caption = text(locale, `model.action.${name}`).replace("{n}", "12"), f = fitText(caption, 56, 28, room);
+    assert.ok(f.lines <= 2 && f.fs >= 28 - 8, `${locale} ${name}: ${f.fs}px on ${f.lines} lines`);
+    assert.ok(widest(f) <= room + 1e-9, `${locale} ${name}: ${JSON.stringify(f.text)} is ${widest(f)} wide in ${room}`);
+    assert.ok(tall(f) <= height, `${locale} ${name}: too tall`);
+    keepsEverything(f, caption);
+  }
+});

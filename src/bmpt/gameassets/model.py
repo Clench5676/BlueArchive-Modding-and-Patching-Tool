@@ -42,7 +42,7 @@ logger = logging.getLogger(__name__)
 STORY_CLIPS = 12  # a story model's own cutscene clips exported at most
 STORY_ROOTS = {"bone_root", "bone_root/Bip001"}  # the nodes a cutscene places its character by
 DEFAULT_CLIPS = ("Formation_Idle", "Formation_Pickup", "Cafe_Idle", "Cafe_Reaction", "Cafe_Walk",
-                 "Victory_Start", "Victory_End")
+                 "Victory_Start", "Victory_End", "Vital_Retreat", "Vital_Death")
 # idles used when a prefab has neither the formation nor the cafe idle (NPC and battle-only prefabs)
 FALLBACK_IDLES = ("Normal_Idle", "Stand_Idle", "Idle")
 PREFAB_KINDS = {"echelon": "Echelon_{}", "battle": "{}", "cafe": "Cafe_{}", "strategy": "Strategy_{}",

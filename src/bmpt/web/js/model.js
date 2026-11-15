@@ -241,12 +241,15 @@ export function stillCrop(camera, target, box, W, H, aspect) {
 
 // the tab's actions: the clip slots they play, in order of preference; "next" follows a clip that plays once,
 // "then" is the action after it
-const ACTIONS = {
+export const ACTIONS = {
   idle: { slots: ["Formation_Idle", "Cafe_Idle", "Idle"] },
   reaction: { slots: ["Cafe_Reaction"], then: "idle" },
   walk: { slots: ["Cafe_Walk"] },
   victory: { slots: ["Victory_Start"], next: "Victory_End" },
   pickup: { slots: ["Formation_Pickup"] },
+  // the battle's vital clips: the retreat run loops in place; the knockdown falls once and stays down
+  retreat: { slots: ["Vital_Retreat"] },
+  knockdown: { slots: ["Vital_Death"], hold: true },
 };
 
 // a story model's own cutscene clips (slots Story_1, Story_2, ...): actions story1, story2, ..., each played
