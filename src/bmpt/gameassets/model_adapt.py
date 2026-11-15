@@ -596,13 +596,7 @@ def carriers(target: Skeleton, source: Skeleton, flat: Flat, poses: list[list[np
     def group(n: int) -> int:
         """A Biped bone stands for itself; a bone outside the Biped for its branch: the node right under the nearest
         ancestor the slot has by name (a prop's whole chain, never torn across the body)."""
-        if source.nodes[n].name.startswith("Bip001"):
-            return n
-        kept = _kept_ancestor(target, source, n)
-        while source.nodes[n].parent is not None and source.nodes[n].parent != kept \
-                and source.nodes[source.nodes[n].parent].parent is not None:
-            n = source.nodes[n].parent
-        return n
+        return n if source.nodes[n].name.startswith("Bip001") else _branch_top(target, source, n)
 
     groups = sorted({group(m) for m in missing})
     anchor = {n: (group(n) if n in missing else n if source.nodes[n].name.startswith("Bip001")
@@ -665,6 +659,92 @@ def _shoulder_mount(target: Skeleton, source: Skeleton, node: int, dominant: np.
         return None
     clavicle = source.first(f"Bip001 {side.group(1)} Clavicle")
     return clavicle if clavicle is not None and target.first(source.nodes[clavicle].name) is not None else None
+
+
+def stowed(target: Skeleton, source: Skeleton, flat: Flat, poses: list[list[np.ndarray]],
+           carried: Mapping[int, int]) -> dict[int, tuple[int, np.ndarray, np.ndarray]]:
+    """Props the costume's rest pose lays out away from the body and the source's own clips key onto it: Aoba's pipe
+    wrench, skinned in her body mesh below a ``Prop_root`` the slot lacks, rests 40 cm beside her, and every clip of
+    hers keys it to her hip. ``carriers`` measures from the rest and finds no bone that explains it, so the slot's
+    clips, which never key it, leave it where it rests while her body moves away. For such a branch (outside the
+    Biped, no carrier, its vertices skinned to it alone, held by the first probe pose, the idle, at its size and
+    more than ``NEAR`` away from where its parent would carry its rest): the bone the slot has by name that moves it
+    most alike measured from the idle, under the share ``carriers`` asks. Keyed by the branch's top node: the
+    carrier, the branch's vertex rows and per row the move that puts it where the idle holds it against that carrier,
+    at the carrier's rest. A prop the idle hides or scales is left as before."""
+    if not poses:
+        return {}
+    rest = source.world()
+    ref = poses[0]
+    present = [i for i, node in enumerate(source.nodes) if BIPED_CHAIN.match(node.name)
+               and target.first(node.name) is not None]
+    weighted = flat.weights > 0
+    out = {}
+    for n in unmatched(target, source, flat):
+        if source.nodes[n].name.startswith("Bip001") or (m := _branch_top(target, source, n)) in carried or m in out:
+            continue
+        branch = {m, *source.descendants(m)}
+        inside = np.isin(flat.joints, sorted(branch)) & weighted
+        rows = np.where(inside.any(axis=1))[0]
+        if not len(rows) or (inside[rows] != weighted[rows]).any():  # skinned to the body too: not a loose prop
+            continue
+        bones = sorted(set(flat.joints[rows][weighted[rows]].tolist()))
+        if any(not 0.9 < abs(np.linalg.det(ref[b][:3, :3])) / max(abs(np.linalg.det(rest[b][:3, :3])), 1e-12) < 1.1
+               for b in bones):
+            continue  # the idle hides or scales it: a prop the clips show and hide, not one they carry
+        parent = _kept_ancestor(target, source, m)
+        moves = {b: ref[b] @ np.linalg.inv(rest[b]) for b in bones}
+        dominant = flat.joints[rows, np.argmax(flat.weights[rows], axis=1)]
+        sample = np.arange(len(rows))[::max(1, len(rows) // CARRIER_SAMPLES)]
+        points = np.c_[flat.vertices[rows[sample]], np.ones(len(sample))]
+        at_rest = points @ (ref[parent] @ np.linalg.inv(rest[parent])).T if parent is not None else points
+        held = np.einsum("nij,nj->ni", np.array([moves[b] for b in dominant[sample]]), points)
+        if float(np.linalg.norm(held - at_rest, axis=1).mean()) <= NEAR:
+            continue  # it rests where the clips hold it
+        errors = np.zeros(len(present))
+        stay = 0.0
+        for pose in poses:
+            here = np.einsum("nij,nj->ni", np.array([pose[b] @ np.linalg.inv(rest[b]) for b in dominant[sample]]),
+                             points)
+            kept = held @ (pose[parent] @ np.linalg.inv(ref[parent])).T if parent is not None else held
+            stay += float(np.linalg.norm(kept - here, axis=1).mean())
+            stack = np.array([pose[c] @ np.linalg.inv(ref[c]) for c in present])
+            errors += np.linalg.norm(np.einsum("cij,nj->cni", stack, held) - here[None], axis=2).mean(axis=1)
+        best = int(np.argmin(errors)) if len(present) else -1
+        if best < 0 or not (stay > 1e-4 * len(poses) and errors[best] < CARRIER_SHARE * stay):
+            continue
+        c = present[best]
+        back = rest[c] @ np.linalg.inv(ref[c])  # from where the idle holds the carrier to its rest
+        row_moves = drawn(Skin(flat.vertices[rows], np.searchsorted(bones, np.where(
+            weighted[rows], flat.joints[rows], bones[0])), flat.weights[rows], np.zeros((0, 2), int)),
+            np.array([back @ moves[b] for b in bones]), np.eye(4))
+        out[m] = (c, rows, row_moves)
+    if out:
+        logger.debug("Costume props stowed by the source's clips, carried by: %s",
+                     {source.nodes[m].name: source.nodes[c].name for m, (c, _, _) in out.items()})
+    return out
+
+
+def stow(fit: Fit, flat: Flat, props: Mapping[int, tuple[int, np.ndarray, np.ndarray]]) -> Fit:
+    """``fit`` with each prop of :func:`stowed` where the source's clips hold it against its carrier: moved from
+    where the prefab draws it at rest (``flat``), in every shape alike."""
+    if not props:
+        return fit
+    vertices, linear = fit.vertices.copy(), fit.linear.copy()
+    for _, rows, moves in props.values():
+        vertices[rows] = np.einsum("nij,nj->ni", moves, np.c_[flat.vertices[rows], np.ones(len(rows))])[:, :3]
+        linear[rows] = moves[:, :3, :3] @ flat.linear[rows]
+    return dataclasses.replace(fit, vertices=vertices, linear=linear)
+
+
+def _branch_top(target: Skeleton, source: Skeleton, n: int) -> int:
+    """A bone outside the Biped stands for its branch: the node right under the nearest ancestor the slot has by name
+    (``carriers``'s groups)."""
+    kept = _kept_ancestor(target, source, n)
+    while source.nodes[n].parent is not None and source.nodes[n].parent != kept \
+            and source.nodes[source.nodes[n].parent].parent is not None:
+        n = source.nodes[n].parent
+    return n
 
 
 def _kept_ancestor(target: Skeleton, source: Skeleton, node: int) -> int | None:
@@ -990,7 +1070,8 @@ def plan(target: Costume, source: Costume, probes: list[list[np.ndarray]], *, fi
     and the stretch. The mapping (``map_bones``) takes the carriers of the unmatched bones from the source's own clips
     (``own_probes``, see ``carriers``) and leaves out the slot's hidden bones: those the probes hide, and those any of
     the slot's ``clips`` scales to nothing (:func:`scaled_away`). With ``fit`` (the costume's geometry can
-    be rewritten), each of ``SHAPES`` is judged under the slot's clips and the least stretch wins, a later shape only
+    be rewritten), a prop the costume rests aside and its own clips hold on the body is moved there and carried
+    (``stowed``), and each of ``SHAPES`` is judged under the slot's clips and the least stretch wins, a later shape only
     by more than ``SHAPE_MARGIN``; without, the costume keeps its stored shape."""
     s_rest = source.skeleton.world()
     # every part's vertices in the root's space, with its bones as source node indices
@@ -999,14 +1080,21 @@ def plan(target: Costume, source: Costume, probes: list[list[np.ndarray]], *, fi
     if (sj[sw > 0] < 0).any():
         raise refuse("costume bone outside the prefab")
     carried = carriers(target.skeleton, source.skeleton, flat_source, own_probes or [])
+    # a prop the costume rests aside and its clips hold on the body (``stowed``): moved there and carried, when the
+    # geometry can be rewritten
+    props = stowed(target.skeleton, source.skeleton, flat_source, own_probes or [], carried) if fit else {}
+    carried = {**carried, **{m: c for m, (c, _, _) in props.items()}}
     hidden = hidden_bones(target.skeleton, probes) | scaled_away(target.skeleton, clips)
     mapping = map_bones(target.skeleton, source.skeleton, source.bones(), carried, hidden)
     own_mesh = OwnMesh.of(target)
     posed_targets = [own_mesh.posed(p) for p in probes]
     own = max((stretch(own_mesh.rest, posed, own_mesh.edges) for posed in posed_targets), default=1.0)
-    shapes = [stored(source, s_rest, flat_source)]
+    shapes = [stow(stored(source, s_rest, flat_source), flat_source, props)]
     if fit:
-        shapes.append(Fit(flat_source.vertices, flat_source.linear, 0.0, 0.0, 0.0, list(flat_source.starts), "drawn"))
+        drawn_ = stow(Fit(flat_source.vertices, flat_source.linear, 0.0, 0.0, 0.0, list(flat_source.starts), "drawn"),
+                      flat_source, props)
+        flat_source = dataclasses.replace(flat_source, vertices=drawn_.vertices, linear=drawn_.linear)
+        shapes.append(drawn_)
         shapes += [refit(target.skeleton, source.skeleton, flat_source, carried, shape) for shape in ("moved", "refitted")]
     best: Plan | None = None
     judged = []
