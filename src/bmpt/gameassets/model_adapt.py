@@ -795,6 +795,7 @@ class Plan:
     groups: dict[int, list[int]] = field(default_factory=dict)  # source Biped node -> its secondary bones
     unfit: bool = False  # past the stretch limit: may clip or distort, still built and applied
     fit: Fit | None = None  # the shape the costume is bound and judged in (``Fit``)
+    repair: str = ""  # past the limit: what stiffening its worst edges did (:func:`rigidify`), for the log
 
 
 @dataclass
@@ -1519,6 +1520,106 @@ def hems(target: Costume, source: Costume, plan_: Plan, t_clips: list[Any], s_cl
         rows = np.where(changed[bounds[k]:bounds[k + 1]])[0]
         result.parts.append((rows, nodes[joints4[bounds[k] + rows]], weights4[bounds[k] + rows]) if len(rows) else None)
     return result
+
+
+RIGID_ROUNDS = 8           # stiffening rounds at most
+RIGID_STEPS = (0.5, 1.0)   # how far a round moves the worst vertices' weights toward their anchor
+RIGID_SHARE = 99.5         # the edges past this percentile of stretch (and past the limit) are the worst
+
+
+def rigidify(target: Costume, source: Costume, plan_: Plan, probes: list[list[np.ndarray]], hem: Hems,
+             writable: list[bool]) -> None:
+    """A costume past the stretch limit (``plan.unfit``): the vertices of its worst stretched edges under the slot's
+    probes get their weights blended toward the slot bone their anchor maps to (as a rigid group is mapped), round by
+    round while the stretch falls, until it is within the limit or nothing improves; kept only when it is better than
+    before. The new weights join the hem's (``hem.parts``) and the plan takes the stretch reached. Parts whose skin
+    cannot be rewritten and Rule B's builds are left as they are."""
+    if not plan_.unfit or plan_.fit is None or hem.skirt is not None:
+        return
+    ts, ss = target.skeleton, source.skeleton
+    s_rest, t_rest = ss.world(), ts.world()
+    flat = flatten(source, s_rest)
+    sv = plan_.fit.vertices
+    reference = sv if plan_.fit.shape == "stored" else flat.vertices
+    mapped = np.vectorize(lambda n: plan_.mapping.get(int(n), 0), otypes=[int])(flat.joints)
+    bounds = [*flat.starts, len(sv)]
+    rows_ok = np.concatenate([np.full(bounds[k + 1] - bounds[k], ok) for k, ok in enumerate(writable)])
+    # each vertex's anchor on the slot: its dominant bone's Biped bone (itself for a Biped bone), mapped
+    dominant = flat.joints[np.arange(len(sv)), np.argmax(flat.weights, axis=1)]
+    anchors = {}
+    for n in set(dominant.tolist()) - {-1}:
+        a = n if ss.nodes[n].name.startswith("Bip001") else ss.biped_ancestor(n)
+        anchors[n] = plan_.mapping.get(a if a is not None else n, 0)
+    anchor = np.array([anchors.get(int(n), 0) for n in dominant])
+    hem_rows: list[tuple[np.ndarray, np.ndarray, np.ndarray] | None] = list(hem.parts) + [None] * (
+        len(source.parts) - len(hem.parts))
+    columns = sorted(set(mapped[flat.weights > 0].tolist()) | set(anchor.tolist()) | {
+        int(n) for change in hem_rows if change is not None for n in change[1].ravel().tolist()})
+    index = {c: k for k, c in enumerate(columns)}
+    cols = np.vectorize(lambda n: index.get(int(n), 0), otypes=[int])(np.where(flat.weights > 0, mapped, columns[0]))
+    dense = hm.densify(cols, flat.weights, len(columns))
+    for k, change in enumerate(hem_rows):  # the hem's weights first, where it rewrote them
+        if change is not None:
+            rows, nodes, weights = change
+            dense[bounds[k] + rows] = hm.densify(np.vectorize(index.get, otypes=[int])(nodes), weights, len(columns))
+    start = dense.copy()
+    matrices = [np.array([pose[c] for c in columns]) @ np.array([_inverse(t_rest[c], ts.nodes[c].name)
+                                                                 for c in columns]) for pose in [t_rest, *probes]]
+    edges = flat.edges
+    weighted = flat.weights.sum(axis=1) > 1e-9
+
+    def measure(weights: np.ndarray) -> tuple[float, np.ndarray]:
+        joints4, weights4 = hm.keep_four(weights)
+        worst = np.ones(len(edges))
+        l0 = np.linalg.norm(reference[edges[:, 0]] - reference[edges[:, 1]], axis=1)
+        ok = l0 > 1e-6
+        for m in matrices:
+            posed = hm.skin(sv, joints4, weights4, m)
+            l1 = np.linalg.norm(posed[edges[:, 0]] - posed[edges[:, 1]], axis=1)
+            ratio = np.where(ok, l1 / np.maximum(l0, 1e-12), 1.0)
+            worst = np.maximum(worst, np.maximum(ratio, 1 / np.maximum(ratio, 1e-6)))
+        return (float(np.percentile(worst[ok], 99.9)) if ok.any() else 1.0), worst
+
+    limit = stretch_limit(plan_.own)
+    before, worst = measure(dense)
+    now = before
+    onehot = np.zeros_like(dense)
+    onehot[np.arange(len(sv)), [index[int(a)] for a in anchor]] = 1.0
+    for _ in range(RIGID_ROUNDS):
+        if now <= limit:
+            break
+        cut = max(limit, float(np.percentile(worst, RIGID_SHARE)))
+        rows = np.unique(edges[worst > cut].ravel())
+        rows = rows[rows_ok[rows] & weighted[rows]]
+        if not len(rows):
+            break
+        best = None
+        for step in RIGID_STEPS:
+            trial = dense.copy()
+            trial[rows] = (1 - step) * dense[rows] + step * onehot[rows]
+            value, trial_worst = measure(trial)
+            if best is None or value < best[0]:
+                best = (value, trial, trial_worst)
+        if best[0] >= now * (1 - 1e-3):
+            break
+        now, dense, worst = best
+    if now >= before * (1 - 1e-3):
+        plan_.repair = f"stiffening did not help ({before:.2f})"
+        return
+    changed = np.abs(dense - start).max(axis=1) > 1e-9
+    nodes = np.array(columns)
+    joints4, weights4 = hm.keep_four(dense)
+    parts: list[tuple[np.ndarray, np.ndarray, np.ndarray] | None] = []
+    for k in range(len(source.parts)):
+        mine = changed[bounds[k]:bounds[k + 1]]
+        if hem_rows[k] is not None:  # the hem's rows stay written, now with the stiffened weights
+            mine = mine.copy()
+            mine[hem_rows[k][0]] = True
+        rows = np.where(mine)[0]
+        parts.append((rows, nodes[joints4[bounds[k] + rows]], weights4[bounds[k] + rows]) if len(rows) else None)
+    hem.parts = parts
+    plan_.repair = f"worst edges stiffened, stretch {before:.2f} -> {now:.2f} (limit {limit:.2f})"
+    plan_.stretch, plan_.unfit = now, now > limit
 
 
 def skirt_bones(skeleton: Skeleton, skirt: Skirt) -> None:
@@ -2289,6 +2390,7 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
             raise refuse("costume geometry not writable", part=s_costume[k].mesh.peek_name())
     stores = [hm.store_of(tree) for tree in mesh_trees]
     hem = hems(target, source, result, t_clips, s_clips, [store is not None for store in stores], physics)
+    rigidify(target, source, result, probes, hem, [store is not None for store in stores])
     skirt_clips: list[Any] = []
     if hem.skirt is not None:  # Rule B: the chains join the slot's skeleton, the slot's clips that move it get curves
         skirt_bones(t_skeleton, hem.skirt)
@@ -2523,9 +2625,10 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
                             clip.peek_name())
     _sanity(written, rendered)
     logger.info("Costume of %s on %s: %d part(s), groups %s, stretch %.2f (own %.2f), shape %s (changed %.3f, 99th "
-                "percentile %.3f); hem %s", s_name, t_name, len(s_costume),
+                "percentile %.3f); hem %s%s", s_name, t_name, len(s_costume),
                 {s_skeleton.nodes[n].name: c for n, c in result.choices.items()}, result.stretch, result.own,
-                result.fit.shape, result.fit.largest, result.fit.shift, hem.summary())
+                result.fit.shape, result.fit.largest, result.fit.shift, hem.summary(),
+                f"; {result.repair}" if result.repair else "")
     return Result(opened, result, len(s_costume), hem)
 
 

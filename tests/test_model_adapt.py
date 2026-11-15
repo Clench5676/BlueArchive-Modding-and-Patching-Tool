@@ -298,7 +298,9 @@ def _slot(files, dev):
     ("hoshino_original", "hoshino_swimsuit", False, 3, "rigid", False),  # a three-part costume: two renderers added
     ("hoshino_swimsuit", "hoshino_original", False, 1, "rigid", False),  # the swimsuit's own extra parts draw nothing
     ("ch0186", "mari_original", False, 1, "skirt smooth", True),   # Mari (Track) <- Mari: a compressed mesh; Rule B
-])                                                                 # within the limit once the seam keeps its length
+                                                                   # within the limit once the seam keeps its length
+    ("airi_original", "ch0251", False, 1, "rigid", False),         # Airi <- Airi (Band): past the limit (12.1) until
+])                                                                 # its worst edges are stiffened
 def test_official_costume_on_a_slot(view, tmp_path, target, source, field, parts, hem, physics):
     from ba_modding_toolkit.bundle import Bundle
     from ba_modding_toolkit.models import SaveOptions
