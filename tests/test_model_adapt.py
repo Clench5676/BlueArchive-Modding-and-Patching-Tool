@@ -465,6 +465,58 @@ def test_official_costume_carries_a_shader_the_slot_does_not_load(view, tmp_path
 
 
 @official
+@pytest.mark.parametrize("target,source,index,uv,on_primary", [
+    ("azusa_original", "mashiro_original", 2, (0.125, 0.5), True),
+    ("hina_original", "ch0288", 3, (0.75, 0.625), False),  # the mouth on a part beside the primary
+])
+def test_official_mouth_receivers_follow_the_costume(view, tmp_path, target, source, index, uv, on_primary):
+    """The slot's mouth receivers index the renderer's materials, now the source's in the source's order: they take
+    the source receiver's material index and default mouth tile, and point at the renderer drawing the source's
+    mouth, an added part where the source's mouth is not on its primary."""
+    from ba_modding_toolkit.bundle import Bundle
+    from ba_modding_toolkit.models import SaveOptions
+    from bmpt.gameassets.discovery import cab_names
+    from bmpt.gameassets.model import BundleGraph, _prefabs
+
+    files, index_ = view
+    sources = [p for p in files if re.match(rf"character-{source}-_mxload", p.name)]
+    with ma.BundleGraph(index_) as graph:
+        s_prefabs = _prefabs(graph, sources)
+        s = ma.Skeleton.of(graph, s_prefabs[ma.choose_prefab(s_prefabs, source)].deref())
+        parts = ma.roles(s, None)
+        costume = [p for p in parts if p.role == "primary"] + [p for p in parts if p.role == "costume"]
+        mouth = ma.mouth_of(s, costume)
+        assert mouth is not None and (mouth.index, (mouth.uv["x"], mouth.uv["y"])) == (index, uv)
+        mouth_mesh = costume[mouth.part].mesh.peek_name()
+    assert (mouth.part == 0) == on_primary
+    result = ma.adapt(index=index_, resolver=None, target_files=_slot(files, target), target_dev=target,
+                      source_files=sources, source_dev=source, open_writable=Bundle.load)
+    adapted = dict(index_)
+    for path, bundle in result.changed.items():
+        ok, message = bundle.save(tmp_path / path.name, SaveOptions(perform_crc=True, compression="lz4"))
+        assert ok, message
+        for cab in cab_names(tmp_path / path.name):
+            adapted[cab] = tmp_path / path.name
+    receivers = 0
+    with BundleGraph(adapted) as graph:
+        for pointer in _prefabs(graph, sorted(tmp_path.glob("character-*"))).values():
+            t = ma.Skeleton.of(graph, pointer.deref())
+            for behaviour in t.behaviours:
+                tree = graph.tree(behaviour)
+                if "MouthRenderer" not in tree:
+                    continue
+                renderer = graph.deref(behaviour, tree["MouthRenderer"])
+                drawn = graph.deref(renderer, graph.tree(renderer)["m_Mesh"])
+                materials = [graph.deref(renderer, m) for m in graph.tree(renderer)["m_Materials"]]
+                assert drawn.peek_name() == mouth_mesh
+                assert tree["MouthMaterialIndex"] == index
+                assert (tree["MouthDefaultUV"]["x"], tree["MouthDefaultUV"]["y"]) == uv
+                assert ma._shader_kind(graph, materials[index]) == "eyemouth"
+                receivers += 1
+    assert receivers == 4  # one per prefab of the slot
+
+
+@official
 def test_official_costume_takes_its_own_materials_on_a_body_drawn_from_two_material_files(view, tmp_path):
     """Hifumi (Swimsuit)'s body takes its materials from two files. The slot's body renderer was taken for a
     copy and kept its own materials in its own order, so Hifumi's face drew with the swimsuit's hair material. The

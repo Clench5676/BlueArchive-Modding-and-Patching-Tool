@@ -29,6 +29,9 @@ own:
   own stretch range; rigid weights stay where no rule does better. Optimize Physics (``physics``) also judges the
   leg-anchor groups set to ``follow`` again: the rules are built as if they were rigid too and must beat the follow
   result by the same measure;
+- the mouth (:func:`mouth_of`): the slot's mouth receivers index the renderer's materials, which are now the
+  source's, so they take the source receiver's material index and default tile, and point at the part added for the
+  source's mouth where that is not on the primary;
 - the halo (:func:`halo_of`): after any swap the halo is the source's or none, never the slot's own
   (``adapt``'s ``halo``). The source's halo mesh, materials and textures are added like the costume's and the slot's
   halo renderer draws them where the source draws its own: a followed halo (one unskinned renderer below an
@@ -2085,6 +2088,38 @@ def _sanity(meshes: list[Written], renderers: list[Rendered]) -> None:
 
 
 @dataclass
+class Mouth:
+    """The source's mouth, as its mouth receiver (``CharacterMouthEventReceiver`` or
+    ``CharacterAnimationEventReceiver``) holds it: the costume part that draws it (an index into the source's costume,
+    the primary first), the material index of the eye-mouth material on that part and the default mouth tile."""
+
+    part: int
+    index: int
+    uv: dict
+
+
+MOUTH_FIELDS = ("MouthRenderer", "MouthMaterialIndex", "MouthDefaultUV")
+
+
+def mouth_of(skeleton: Skeleton, costume: list[Part]) -> Mouth | None:
+    """The source's mouth (:class:`Mouth`), None when it has no receiver that points at one of its costume parts and
+    at an eye-mouth material there (a Battle NPC's index -1, a mouth on a cut-in body)."""
+    g = skeleton.graph
+    parts = {_key(p.renderer): k for k, p in enumerate(costume)}
+    for behaviour in skeleton.behaviours:
+        tree = g.tree(behaviour)
+        if not all(name in tree for name in MOUTH_FIELDS):
+            continue
+        renderer = g.deref(behaviour, tree["MouthRenderer"])
+        k = parts.get(_key(renderer)) if renderer is not None else None
+        index = int(tree["MouthMaterialIndex"])
+        if k is None or not 0 <= index < len(costume[k].kinds) or costume[k].kinds[index] != "eyemouth":
+            continue
+        return Mouth(k, index, copy.deepcopy(tree["MouthDefaultUV"]))
+    return None
+
+
+@dataclass
 class Result:
     changed: dict[Path, Any]  # slot file -> engine Bundle with the changes
     plan: Plan
@@ -2373,6 +2408,10 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
     t_primary_materials = [_key(m) for m in primary.materials if m is not None]
     root_bone = graph.deref(primary.renderer, graph.tree(primary.renderer)["m_RootBone"])
     root_node = t_skeleton.by_transform.get(_key(root_bone), 0) if root_bone is not None else 0
+    mouth = mouth_of(s_skeleton, s_costume)
+    if mouth is None:
+        logger.info("Costume of %s on %s: the source has no mouth receiver on its costume, the slot's stays as it is",
+                    s_name, t_name)
     for prefab_path in prefab_files:
         bundle = opened[prefab_path]
         for name, sf in bundle.env.file.files.items():
@@ -2380,7 +2419,7 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
                 _edit_prefabs(writer, sf, graph, t_meshes, t_primary_materials, mesh_cab, material_cab, new_meshes,
                               [[materials[_key(m)] for m in p.materials if m is not None] for p in s_costume],
                               [s_skeleton.nodes[p.node].name for p in s_costume], root_node, t_skeleton, s_costume,
-                              fitted_skins, result.mapping, s_rest, halo_change, rendered)
+                              fitted_skins, result.mapping, s_rest, halo_change, rendered, mouth)
     if hem.skirt is not None:
         for clip in skirt_clips:
             obj = writer.file(clip.assets_file.name.lower()).objects[clip.path_id]
@@ -2408,7 +2447,7 @@ def _edit_prefabs(writer: _Writer, sf: Any, graph: BundleGraph, t_meshes: Mappin
                   new_meshes: list[tuple[int, list[int]]], new_materials: list[list[int]], names: list[str],
                   root_node: int, t_skeleton: Skeleton, s_costume: list[Part], skins: list[Skin],
                   mapping: Mapping[int, int], s_rest: list[np.ndarray], halo: HaloChange | None = None,
-                  rendered: list[Rendered] | None = None) -> None:
+                  rendered: list[Rendered] | None = None, mouth: Mouth | None = None) -> None:
     objects = sf.objects
     trees: dict[int, dict] = {}
 
@@ -2494,12 +2533,14 @@ def _edit_prefabs(writer: _Writer, sf: Any, graph: BundleGraph, t_meshes: Mappin
             return tf_pid
 
         main = None
+        costume_renderers = set()  # the slot's renderers of its costume: a mouth receiver pointing at one follows
         for pid in renderers:
             r = tree(pid)
             mesh = r["m_Mesh"]
             role = t_meshes.get((_cab(sf, mesh["m_FileID"]), mesh["m_PathID"])) if mesh["m_PathID"] else None
             if role is None:
                 continue
+            costume_renderers.add(pid)
             if role == "primary":
                 # its materials wherever they live: a slot's body may take them from two files (Hifumi (Swimsuit))
                 own = [(_cab(sf, m["m_FileID"]), m["m_PathID"]) for m in r["m_Materials"] if m["m_PathID"]]
@@ -2526,6 +2567,7 @@ def _edit_prefabs(writer: _Writer, sf: Any, graph: BundleGraph, t_meshes: Mappin
                 additions[(info["preloadIndex"], info["preloadSize"])] = list(added) + halo_added
             continue
         # further source parts: renderers of their own beside the primary
+        drawing = {0: main}  # source part -> the renderer drawing it in this prefab
         template = tree(main)
         go_pid = template["m_GameObject"]["m_PathID"]
         go_tree = tree(go_pid)
@@ -2547,6 +2589,7 @@ def _edit_prefabs(writer: _Writer, sf: Any, graph: BundleGraph, t_meshes: Mappin
             r["m_AABB"] = _bounds(skins[k], s_costume[k], t_skeleton, root_node, s_rest)
             seen.append(Rendered(k, len(r["m_Bones"]), [m["m_PathID"] for m in r["m_Materials"]], r["m_AABB"]))
             new_r = _add_with_id(writer, sf, "SkinnedMeshRenderer", r)
+            drawing[k] = new_r
             g = {**go_tree, "m_Name": names[k], "m_IsActive": True,
                  "m_Component": [{"component": {"m_FileID": 0, "m_PathID": new_tf}},
                                  {"component": {"m_FileID": 0, "m_PathID": new_r}}]}
@@ -2560,11 +2603,30 @@ def _edit_prefabs(writer: _Writer, sf: Any, graph: BundleGraph, t_meshes: Mappin
             for b in behaviours:
                 if _append_beside(tree(b), {"m_FileID": 0, "m_PathID": main}, {"m_FileID": 0, "m_PathID": new_r}):
                     save(b)
+        if mouth is not None and mouth.part in drawing:
+            _edit_mouth(behaviours, tree, save, costume_renderers, drawing[mouth.part], mouth)
         key = (info["preloadIndex"], info["preloadSize"])
         additions[key] = added + [{"m_FileID": mesh_fid, "m_PathID": m} for m, _ in new_meshes] + [
             {"m_FileID": material_fid, "m_PathID": m} for ms in new_materials for m in ms] + halo_added
     _extend_preload(asset_bundle, additions)
     bundle_object.save_typetree(asset_bundle)
+
+
+def _edit_mouth(behaviours: list[int], tree: Callable[[int], dict], save: Callable[[int], None],
+                costume_renderers: set[int], renderer: int, mouth: Mouth) -> None:
+    """The prefab's mouth receivers that point at one of the slot's costume renderers draw the source's mouth: on
+    ``renderer`` (the primary, or the part added for the source's mouth), with the source's material index and default
+    tile. The receiver indexes the renderer's materials, which are now the source's in the source's order."""
+    for pid in behaviours:
+        t = tree(pid)
+        pointer = t.get("MouthRenderer")
+        if not all(name in t for name in MOUTH_FIELDS) or not isinstance(pointer, dict) \
+                or pointer.get("m_FileID") != 0 or pointer.get("m_PathID") not in costume_renderers:
+            continue
+        t["MouthRenderer"] = {"m_FileID": 0, "m_PathID": renderer}
+        t["MouthMaterialIndex"] = type(t["MouthMaterialIndex"])(mouth.index)
+        t["MouthDefaultUV"] = copy.deepcopy(mouth.uv)
+        save(pid)
 
 
 def _edit_halo(halo: HaloChange, by_path: Mapping[str, int], objects: Mapping[int, Any], tree: Callable[[int], dict],
