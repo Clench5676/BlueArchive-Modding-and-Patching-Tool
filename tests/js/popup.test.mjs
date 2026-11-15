@@ -2109,6 +2109,58 @@ test("NGUI preview placeholders remain for pending, missing, rejected and undeco
   }
 });
 
+// A button whose action is still loading (loadingRing) shows the game's loading ring in its caption's place: fitted
+// into the widget's box, centred, tinted in the caption's ink and turned by the prefab's tween; without the prefab the
+// caption stands in. Kept before the still's test below, which caches the prefab.
+test("a loading button shows the game's loading ring in its caption's ink, the caption without the prefab", async (t) => {
+  const NGUI = await import("../../src/bmpt/web/js/ngui.js");
+  const caption = { text: "Apply", fontSize: 30, w_: 160, h_: 40, pivot: 4, color: "#2d5164/1.00" };
+  const button = () => n("Act", [0, 0], [], [n("Label", [0, 0], [{ loadingRing: true, w_: 50, h_: 50, pivot: 4, depth: 8,
+    color: "#2d5164/1.00", fallback: caption }])]);
+  const without = new El();
+  await NGUI.render(button(), without);
+  const plain = walk(without).find((e) => e.dataset.path === "Act/Label");
+  assert.ok(plain && plain.dataset.loading === "true");
+  assert.ok(!plain.className.split(" ").includes("ngui-loading"), "no prefab, no ring");
+  assert.equal(plain.textContent, "Apply", "the caption stands in");
+  const ICON = n("UIRatioNoticePopup", [0, 0], [], [n("Center", [0, 0], [], [n("Popup", [0, 0], [], [n("Base", [0, 0], [], [
+    n("LoadingIcon", [0, 0], [{ cls: "UISprite", sprite: "Common_Login_Loading", atlas: "Common", type: 1, flip: 1, w_: 75, h_: 75,
+      pivot: 4, depth: 10, color: "#ffffff/1.00" }, { cls: "TweenRotation", tween: { from: [0, 0, 180], to: [0, 0, -180], duration: 3,
+      delay: 0, style: 1, method: 0 } }])])])])]);
+  const base = globalThis.fetch;
+  t.mock.method(globalThis, "fetch", async (url, options) => url === "/asset/ui/layout/UIRatioNoticePopup.json" ? reply(ICON) : base(url, options));
+  const target = new El();
+  await NGUI.render(button(), target, { scale: 1 });
+  const ring = walk(target).find((e) => e.dataset.path === "Act/Label");
+  assert.ok(ring.className.split(" ").includes("ngui-loading"), "the ring turns");
+  assert.equal(ring.dataset.loading, "true");
+  assert.equal(ring.textContent, "", "no caption under the ring");
+  assert.deepEqual([ring.style.width, ring.style.height], ["50.00px", "50.00px"], "fitted into the box");
+  assert.equal(ring.style.zIndex, "8", "at the caption's depth");
+  assert.deepEqual(["--turn-from", "--turn-to", "--turn-time"].map((k) => ring.style[k]), ["-180deg", "180deg", "3s"]);
+});
+
+// In the details panel a loading action keeps its body, as wide as its caption makes it, and puts the ring in the
+// caption's place, in the caption's ink (the greyed button's, as it waits)
+test("a loading action in the details panel shows the ring in its caption's place and keeps its width", async () => {
+  const NGUI = await import("../../src/bmpt/web/js/ngui.js"); await Popup.ready();
+  const actions = (loading) => [["Apply", () => {}, true, "apply", null, loading], ["Optimize Physics", () => {}, true, "secondary", null, loading],
+    ["Show in Finder", () => {}]];
+  const idle = Popup.detailsTree(items[0], "Chibi Info", [["File", "a.bundle"]], actions(false), null, "model");
+  const busy = Popup.detailsTree(items[0], "Chibi Info", [["File", "a.bundle"]], actions(true), null, "model");
+  for (const i of [0, 1]) {
+    const label = NGUI.find(busy, `Act_${i}/Label`).widgets[0], before = NGUI.find(idle, `Act_${i}/Label`).widgets[0];
+    assert.equal(label.loadingRing, true);
+    assert.equal(label.color, before.color, "the caption's ink");
+    assert.equal(label.fallback.text, before.text, "the caption stands in without the prefab");
+    assert.equal(label.w_, label.h_);
+    assert.ok(label.h_ <= before.h_ + 1e-9 && label.w_ <= before.w_ + 1e-9, "inside the caption's box");
+    assert.deepEqual(NGUI.find(busy, `Act_${i}`).pos, NGUI.find(idle, `Act_${i}`).pos, "nothing moves");
+    assert.deepEqual(JSON.stringify(NGUI.find(busy, `Act_${i}/Body`)), JSON.stringify(NGUI.find(idle, `Act_${i}/Body`)), "the same body");
+  }
+  assert.ok(!NGUI.find(busy, "Act_2/Label").widgets[0].loadingRing, "an action not loading keeps its caption");
+});
+
 // A still being made holds its place with the game's loading ring (UIRatioNoticePopup's LoadingIcon, turned by
 // its TweenRotation); the placeholder text shows only once it fails, and both go when it decodes
 test("a still being made shows the game's loading ring, the placeholder text only when it fails", async (t) => {

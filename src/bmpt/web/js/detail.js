@@ -289,7 +289,9 @@ function viewCross(v, keys) {
 const costumeState = new Map(), costumeChecks = new Map();
 function costumesReady(v) {
   void readOthers().then((families) => {
-    if (!families || !open || variant() !== v) return;
+    if (!open || variant() !== v) return;
+    // a roster that cannot be read leaves another student's model unjudged: its loading ring stops
+    if (!families) { costumesChecked(v); return; }
     // Loading the roster must not replace the popup's current hits with just the saved choices.
     if (switchPopupPage !== pageToken || $("popup").hidden) judgeCross(v);
     costumesChecked(v);
@@ -314,7 +316,11 @@ function costumesReady(v) {
         costumesChecked(v);
       }
       return unknown.length > 0;
-    })().finally(() => costumeChecks.delete(key));
+    })().finally(() => {
+      costumeChecks.delete(key);
+      // a pair left without a verdict (its check failed) stops showing the loading ring
+      if (unjudged(v, others)) costumesChecked(v);
+    });
     costumeChecks.set(key, check);
   }
   return check;
@@ -362,8 +368,26 @@ function runCross() {
   })().catch((err) => console.error("Costume check failed", err)).finally(() => {
     crossRunning = null;
     if (handled !== crossWanted) runCross();
+    // a wanted pair left without a verdict stops showing the loading ring
+    else if (handled?.variant && unjudged(handled.variant, handled.keys)) costumesChecked(handled.variant);
   });
 }
+// whether any of a variant's pairs (``others``: variant keys) still has no verdict
+const unjudged = (v, others) => others.some((o) => (costumeState.get(v.key) || {})[o] == null);
+// A 3D candidate whose costume check is still under way (no verdict yet, its check running or queued): its Apply and
+// Optimize Physics wait for it and show the game's loading ring in their caption's place instead of only greying.
+// ``key``: the candidate's key ("v:<variant>"); another student's model also waits for the roster read that queues it.
+function costumeChecking(v, kind, key) {
+  if (kind !== "model" || typeof key !== "string" || !key.startsWith("v:")) return false;
+  const other = key.slice(2);
+  if ((costumeState.get(v.key) || {})[other] != null) return false;
+  if (fam.variants.some((o) => o.key === other)) return [...costumeChecks.keys()].some((k) => k.startsWith(`${v.key}|`));
+  if (!otherStudents) return !!othersLoad;
+  return !!crossRunning && crossWanted.variant === v && crossWanted.keys.includes(other);
+}
+// the 3D tab's Apply card while the shown costume (another student's model) waits for its check
+const applyChecking = (v, kind) => !!kind && !!coreOf(v, kind) && !busy && costumeBlock(v, kind, shownSource(v, kind)) === "pending"
+  && costumeChecking(v, kind, shownSource(v, kind));
 // The cautions of the offered pairs (model.costumeCautions), beside their verdicts (switch-sources.js CAUTIONS), read
 // aside from the check queue; a failed read leaves them unknown, which shows no caution.
 async function readCautions(v, others) {
@@ -546,7 +570,8 @@ function screenTree() {
   // Keep these action cards and row 3's Add card at their existing prefab-based positions and sizes.
   const isMod = !!sk && c.kind === "mod";
   const actions = [["SkillData_EX", "compatibility.check", "compare", isMod && !busy], ["SkillData_EX (1)", repairAction(c), "update", isMod && !busy],
-    ["SkillData_EX (2)", "export.title", "extract", !busy], ["SkillData_EX (3)", "popup.apply", "apply", !!sk && !!coreOf(v, sk) && !busy && !isApplied(v, sk, shownSource(v, sk)) && !unfitCostume(v, sk, shownSource(v, sk))]];
+    ["SkillData_EX (2)", "export.title", "extract", !busy], ["SkillData_EX (3)", "popup.apply", "apply", !!sk && !!coreOf(v, sk) && !busy && !isApplied(v, sk, shownSource(v, sk)) && !unfitCostume(v, sk, shownSource(v, sk)),
+      applyChecking(v, sk)]];
   // the row's white section spans x 58..1320 (Bg_W2 at 689, 1262 wide); cards keep the first card's 37-unit margins
   const ROW_L = 58 + 37, ROW_R = 1320 - 37, GAP = 6, CW = (ROW_R - ROW_L - 3 * GAP) / 4;
   actions.forEach(([card], i) => {
@@ -558,7 +583,7 @@ function screenTree() {
   off(t, `${INFO}/Skill/Btn_Up_Wrapper`); // the install button, removed for now
   // the four titles share one size: the largest at which every one fits its card after wrapping onto two lines
   const titles = NGUI.fitGroup(actions.map(([, key]) => T(key)), 40, 28, CW - 60, 2, { maxH: 90 });
-  for (const [index, [card, key, glyph, enabled]] of actions.entries()) {
+  for (const [index, [card, key, glyph, enabled, loading]] of actions.entries()) {
     const base = `${INFO}/Skill/${card}`;
     actionState(at(t, base), enabled, layouts.disabled);
     off(t, `${base}/Normal/Label_SkillType (1)`, `${base}/Normal/Line (1)`);
@@ -580,6 +605,9 @@ function screenTree() {
       extract: ["Common", "Common_Icon_Inventory_Equip"], apply: ["Common", "Common_Icon_All_Download"] }[glyph];
     Object.assign(picture, { cls: "UISprite", sprite, atlas, type: 0, w_: 109, h_: 109, keepAspect: true });
     if (!enabled && disabledInk) picture.color = disabledInk;
+    // the shown costume's check under way: the game's loading ring turns in the icon's place, the title stays
+    if (loading) at(t, `${base}/Normal/SkillIconBg/Texture`).widgets = [{ loadingRing: true, w_: 82, h_: 82, pivot: 4,
+      depth: picture.depth, color: picture.color || "#466399/1.00", fallback: { ...picture } }];
   }
   // row 3: portrait box, the switch card (the game's light weapon card), add portrait. The box's body spans
   // -96..95 around its centre (its slanted right edge ends lower down a few units further left); the title sits at -8.
@@ -838,6 +866,7 @@ function hits(view, leftHost, rightHost) {
     const hold = costumeBlock(variant(), sk, shownSource(variant(), sk)), unfit = hold === "unfit";
     apply.disabled = !unfit && (!!hold || !sk || !coreOf(variant(), sk) || busy || isApplied(variant(), sk, shownSource(variant(), sk)));
     if (!coreOf(variant(), sk)) apply.setAttribute("aria-description", T("import.reason.no_target"));
+    if (applyChecking(variant(), sk)) apply.setAttribute("aria-busy", "true");
     // a refused costume: greyed, the reason on hover (the click does nothing, applyCandidate); another
     // student's model waits for its check
     if (unfit) { apply.setAttribute("aria-disabled", "true"); apply.setAttribute("aria-description", T("model.unfit")); attachHint(apply, T("model.unfit")); }
@@ -1585,11 +1614,14 @@ async function drawPopup(scroll = 0) {
       // row of its own in the warning colour (no file of this kind in the game, the configured choice's error)
       const error = c.key === mode.set ? selectionError(v, kind) : null;
       const problem = [!coreOf(v, kind) && T("import.reason.no_target"), error && T(`error.${error.code}`, error.params)].filter(Boolean).join("\n");
+      // its costume check under way: Apply and Optimize Physics show the loading ring until the verdict lands
+      const checking = !!coreOf(v, kind) && !c.greyed && costumeChecking(v, kind, c.key);
       return {
         title: T(isSpecial(v) ? "special.background" : kind === "spr" ? "info.title.portrait" : `info.title.${kind}`),
         fields: [[T("field.file"), baseName(file)], [T("field.size"), sizeText(size)], ...(problem ? [[null, problem, `${COLOUR.warning}/1.00`]] : [])],
         truncate: true,
-        actions: [[T("popup.apply"), () => applyCandidate(c.key, kind), !coreOf(v, kind) || isApplied(v, kind, c.key) || !!c.greyed || !!c.previewOnly || !!c.pending || busy, "apply", c.previewOnly ? T("model.unfit") : c.beyondFit ? T("model.beyondFit") : cautionKey(c) ? T(cautionKey(c)) : null],
+        actions: [[T("popup.apply"), () => applyCandidate(c.key, kind), !coreOf(v, kind) || isApplied(v, kind, c.key) || !!c.greyed || !!c.previewOnly || !!c.pending || busy, "apply",
+          checking ? null : c.previewOnly ? T("model.unfit") : c.beyondFit ? T("model.beyondFit") : cautionKey(c) ? T(cautionKey(c)) : null, checking && !isApplied(v, kind, c.key)],
           [T(platform === "mac" ? "open.mac" : "open.win"), () => reveal(file)],
           ...(c.kind === "mod" ? [[T("compatibility.check"), async () => {
             let rebuilt = false;
@@ -1599,7 +1631,7 @@ async function drawPopup(scroll = 0) {
           ...(kind === "model" && optimizeSource(c) ? [optimizedCopy(c, v)
             ? [T("model.optimizedGo"), () => { pending = `m:${optimizedCopy(c, v).id}`; renderPopup(); }]
             : [T("model.optimize"), () => runOptimize(c, v), busy || !!c.greyed || !!c.previewOnly || !!c.pending || !coreOf(v, kind), "secondary",
-              c.previewOnly ? T("model.unfit") : c.beyondFit ? T("model.beyondFit") : T("model.optimizeHint")]] : []),
+              checking ? null : c.previewOnly ? T("model.unfit") : c.beyondFit ? T("model.beyondFit") : T("model.optimizeHint"), checking]] : []),
           c.kind === "mod"
             ? [T("btn.delete"), async () => {
               if (!(await removeMod(c.id))) return;
