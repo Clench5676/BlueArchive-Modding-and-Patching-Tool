@@ -29,7 +29,7 @@ from ..openfiles import temporary_directory
 from .classic import QUEUE_METHODS, ClassicQueue, ClassicWindow, NativeOps, QueuedCall, native_ops, stat_files
 from ..library.relocate import relocate
 from .events import EventBus
-from .jobs import JobRunner
+from .jobs import MAINTENANCE, USER, JobRunner
 from .scanner import Scanner
 from .timing import Timings
 from .server import MIME, AssetResponse
@@ -42,6 +42,8 @@ PRUNE_WAIT = 120.0  # seconds the start scan waits for the library.prune job sub
 PROGRESS_PUBLISH = 0.25  # seconds between two mods.state events while a toggle reports its progress
 SCAN_WRITER_POLL = 0.2  # seconds between two looks of a waiting scan at the writer jobs (_scan)
 UPDATE_QUIT_WAIT = 3.0  # seconds for the native window to close for an update
+# /asset/ kinds the shown page draws as previews (portraits, lobbies, backgrounds, 3D models): class 1 of the ordering
+PREVIEW_ASSETS = frozenset({"spine", "art", "office", "model"})
 # the library's files and folders a library move takes along; the lock files are made again where needed
 LIBRARY_ITEMS = ("mods", "originals", "built", "transactions", "import-transactions", "asset-deletions", "photographs",
                  "state.json", "state.json.prev", "state.json.bad", "profiles.json", "profiles.json.prev",
@@ -493,6 +495,10 @@ class Services:
                         self.library_dir(), self.catalog, game, self.settings, scan_allowed=self.scan_allowed,
                         data_id=self.state.data_id(self.data_dir), write_check=self._write_check,
                         steam_files=self.steam_files)
+                lock = getattr(built, "_lock", None)
+                if lock is not None and hasattr(lock, "on_wait"):
+                    # the page pauses its preview deadlines while a read waits for the library
+                    lock.on_wait = lambda busy: self.events.publish("library.waiting", {"busy": busy})
             library = self._library
             # Establish the baseline before any caller (including an add or adoption job) gets the library. A library
             # that could not read its state answers empty: that is no baseline (every mod would count as new later).
@@ -539,7 +545,7 @@ class Services:
             with self.timings.measure("library.prune"):
                 return [str(p) for p in library.prune()]
 
-        self._prune_job = self.submit("library.prune", prune, writes="library", library=library)
+        self._prune_job = self.submit("library.prune", prune, writes="library", library=library, rank=MAINTENANCE)
 
     def cache_dir(self) -> Path:
         """Where consented game assets are cached: a bluearchive-modding-patching-tool/cache folder inside the chosen folder,
@@ -761,12 +767,13 @@ class Services:
     # --- jobs ---
 
     def submit(self, kind: str, fn: Callable[..., Any], *, writes: str | None = None, library: Any = None,
-               **params: Any) -> str:
+               rank: int = USER, **params: Any) -> str:
         """Submit a job. A writer job (``writes``: "game" or "library") ends on the worker with the library's
         judging of the unfinished list, a new ``mods.state`` snapshot, ``library.changed {cores, kinds}`` and a scan
-        (with scan consent); ``library`` is the library it works through, captured at submit."""
+        (with scan consent); ``library`` is the library it works through, captured at submit. ``rank``: the job's
+        class in the queue (``jobs.USER`` unless maintenance)."""
         if writes is None:
-            return self.jobs.submit(kind, fn, **params)
+            return self.jobs.submit(kind, fn, rank=rank, **params)
 
         def run(log: Any, progress: Any, **p: Any) -> Any:
             result, failed = None, True
@@ -777,7 +784,7 @@ class Services:
             finally:
                 self._after_writer(library, kind, result, failed)
 
-        return self.jobs.submit(kind, run, writes=writes, **params)
+        return self.jobs.submit(kind, run, writes=writes, rank=rank, **params)
 
     def _after_writer(self, library: Any, kind: str, result: Any, failed: bool) -> None:
         started = time.perf_counter()
@@ -972,7 +979,7 @@ class Services:
         if library is None or self.jobs.active("library.judge"):
             return None
         return self.submit("library.judge", lambda log, progress: {"dropped": library.judge_unfinished()},
-                           writes="library", library=library)
+                           writes="library", library=library, rank=MAINTENANCE)
 
     # --- the classic window ---
 
@@ -1291,7 +1298,7 @@ class Services:
                 return None
             return library.repair_crc(log=log)
 
-        return self.submit("mods.crcRepair", run, writes="game", library=library)
+        return self.submit("mods.crcRepair", run, writes="game", library=library, rank=MAINTENANCE)
 
     def start_watch(self, run: bool = True) -> None:
         """Make the game watch and (``run``) start its thread; without, ``watch.poll()`` checks once."""
@@ -1448,6 +1455,13 @@ class Services:
     def asset(self, path: str, query: dict[str, str]) -> AssetResponse:
         if self.safe_mode:
             raise ServiceError("game_not_found")
+        if path.split("/", 1)[0] in PREVIEW_ASSETS:
+            # what the shown page draws: scans and background work step aside until it is answered
+            with preview_gate.foreground():
+                return self._asset(path, query)
+        return self._asset(path, query)
+
+    def _asset(self, path: str, query: dict[str, str]) -> AssetResponse:
         parts = path.split("/")
         kind = parts[0]
         if kind == "photography":
@@ -1490,8 +1504,7 @@ class Services:
             source = query.get("source", "live")
             kind = source.split(":", 1)[0]
             # How long each preview source takes end to end: lock waits, CRC checks and the export.
-            with preview_gate.foreground(), \
-                    spans.span("asset.model." + (kind if kind in ("live", "official", "mod", "import", "variant") else "other")):
+            with spans.span("asset.model." + (kind if kind in ("live", "official", "mod", "import", "variant") else "other")):
                 if field_only:  # no slot: its own files only, never a mod or another costume
                     if source not in ("live", "official"):
                         raise KeyError(path)

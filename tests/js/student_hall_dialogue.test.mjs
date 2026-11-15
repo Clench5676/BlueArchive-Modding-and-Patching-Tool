@@ -3,6 +3,7 @@ import { test } from "node:test";
 import { readFile } from "node:fs/promises";
 import { dialogueText } from "../../src/bmpt/web/js/dialogue-text.js";
 import { spriteBorders, sliceAxis, slicePoint } from "../../src/bmpt/web/js/sprite-slices.js";
+import { freezeShown, freezeWhileLoading } from "../../src/bmpt/web/js/preview-lifecycle.js";
 
 class Element {
   constructor() { this.style = {}; this.children = []; this.attrs = {}; }
@@ -23,10 +24,11 @@ globalThis.hallDialogueHarness = {
   setTimeout: (callback, delay) => { timers.set(++nextTimer, callback); timerDelays.set(nextTimer, delay); return nextTimer; },
   clearTimeout: (id) => { timers.delete(id); timerDelays.delete(id); },
   URL: { createObjectURL: () => `blob:voice-${nextTimer}`, revokeObjectURL: (url) => revoked.push(url) },
+  freezeWhileLoading,
 };
 let source = await readFile(new URL("../../src/bmpt/web/js/student-hall-dialogue.js", import.meta.url), "utf8");
 source = source.replace(/^import .*;$/gm, "");
-source = `const {NGUI, defaultRpc, language, S, talkExpression, setTimeout, clearTimeout, URL, spriteBorders, sliceAxis, slicePoint, dialogueText} = globalThis.hallDialogueHarness;\n${source}`;
+source = `const {NGUI, defaultRpc, language, S, talkExpression, setTimeout, clearTimeout, URL, spriteBorders, sliceAxis, slicePoint, dialogueText, freezeWhileLoading} = globalThis.hallDialogueHarness;\n${source}`;
 const { createDialogue, memoryMemo, prepareBalloon, balloonPosition, balloonBody, wrapDialogue, lobbyPoint, lobbyBalloon, clampBalloon, createLobbyDialogue } = await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`);
 const deferred = () => { let resolve, reject; const promise = new Promise((yes, no) => { resolve = yes; reject = no; }); return { promise, resolve, reject }; };
 const flush = async () => { for (let i = 0; i < 20; i++) await Promise.resolve(); };
@@ -548,4 +550,28 @@ test("Talk remains inside the visible left area at minimum/default/large windows
     assert.ok(p.y * factor >= g.bounds.top * factor);
     assert.ok((p.y + p.height) * factor <= g.bounds.bottom * factor);
   }
+});
+
+test("Now Loading over the Hall pauses its voice and caption lifetime, and both go on afterwards", async () => {
+  const h = fixture();
+  await h.controller.play(entry());
+  const voice = h.players[0];
+  assert.equal(voice.played, 1); assert.equal(voice.paused, 0);
+  freezeShown(true);
+  assert.equal(voice.paused, 1, "the playing voice stops under Now Loading");
+  freezeShown(false);
+  assert.equal(voice.played, 2, "and continues once it is gone");
+  h.controller.dispose();
+
+  const text = fixture({ call: (method) => method === "hall.lines" ? { lines: { hoshino_lobby_1: { "zh-TW": "Text", voice: false } } } : undefined });
+  await text.controller.play(entry());
+  assert.equal(timerDelays.size, 1);
+  freezeShown(true);
+  assert.equal(timerDelays.size, 0, "a text-only caption keeps its time left while frozen");
+  assert.equal(text.host.children.length, 1);
+  freezeShown(false);
+  assert.equal(timerDelays.size, 1);
+  const [left] = timerDelays.values();
+  assert.ok(left > 4900 && left <= 5000);
+  text.controller.dispose();
 });

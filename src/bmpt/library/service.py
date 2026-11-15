@@ -84,6 +84,9 @@ RIG_ARCHIVE_QUIET = 1.0
 # for TOGGLE_YIELD[0] seconds, at most TOGGLE_YIELD[1] seconds per entry (a preview's file requests would otherwise
 # get one library call in per entry)
 TOGGLE_YIELD = (0.1, 0.5)
+# between two steps of a job that holds the library for its whole run (CRC repair, prune), a caller waiting for the lock
+# (a preview, a page read) gets it first: the job gives the lock up until that caller has it, at most this long
+STEP_ASIDE = 0.5
 RECOVERY_RETRY = 60.0  # seconds before a read tries a recovery that failed (or waits) again, if the journals stay
 # a toggle's refusals that stop it: every later write would fail the same way
 STOPPING = ("game_running", "game_status_unavailable", "steam_busy", "folder_changed", "classic_open", "untested_build")
@@ -118,6 +121,25 @@ class _LibraryLock:
         self.asked = 0.0  # the same, less the paced job's own
         self.waiting = 0  # callers but background work and a paced job blocked on the lock right now
         self._count = threading.Lock()
+        # told True when such a caller starts waiting with nobody else waiting, False when the last stops: the
+        # page's preview deadlines do not count that time (``library.waiting``)
+        self.on_wait: Callable[[bool], None] | None = None
+        self._wait_turn = 0  # the transitions of ``waiting`` in order; a late one is not told
+        self._told = 0
+        self._telling = threading.Lock()
+
+    def _waited(self, turn: int, busy: bool) -> None:
+        hook = self.on_wait
+        if hook is None:
+            return
+        with self._telling:
+            if turn <= self._told:
+                return  # a later transition was told already
+            self._told = turn
+            try:
+                hook(busy)
+            except Exception:  # a listener never fails a library call
+                logger.debug("library wait listener failed", exc_info=True)
 
     def _note(self) -> None:
         if not getattr(_background, "on", False):
@@ -135,17 +157,47 @@ class _LibraryLock:
         if counted:
             with self._count:
                 self.waiting += 1
+                first = self.waiting == 1
+                if first:
+                    self._wait_turn += 1
+                    turn = self._wait_turn
+            if first:
+                self._waited(turn, True)
         try:
             return self._lock.acquire(True, timeout)
         finally:
             if counted:
                 with self._count:
                     self.waiting -= 1
+                    last = self.waiting == 0
+                    if last:
+                        self._wait_turn += 1
+                        turn = self._wait_turn
+                if last:
+                    self._waited(turn, False)
             self._note()
 
     def release(self) -> None:
         self._lock.release()
         self._note()
+
+    def step_aside(self, longest: float = STEP_ASIDE) -> float:
+        """Between two steps of a job that holds the lock (however often it took it): when a caller waits for it,
+        give the lock up whole until that caller has it, at most ``longest`` seconds, then take it back, blocking
+        while that caller works. How long it waited; nothing when nobody waits or this thread does not hold it."""
+        release = getattr(self._lock, "_release_save", None)
+        restore = getattr(self._lock, "_acquire_restore", None)
+        owned = getattr(self._lock, "_is_owned", None)
+        if not self.waiting or release is None or restore is None or owned is None or not owned():
+            return 0.0
+        started = time.monotonic()
+        state = release()
+        try:
+            while self.waiting and time.monotonic() - started < longest:
+                time.sleep(0.005)
+        finally:
+            restore(state)
+        return time.monotonic() - started
 
     def __enter__(self) -> bool:
         return self.acquire()
@@ -3997,7 +4049,10 @@ class ModLibrary:
                 present.setdefault(name, []).append(path)
         known_dirs = {folder: pin for pin in guarded for folder in pin.dirs}
         released: list[Path] = []
+        waited = 0.0
         for name in sorted(listed):
+            # a preview or a page read waiting for the library goes first; nothing is decided between two originals
+            waited += self._lock.step_aside() if hasattr(self._lock, "step_aside") else 0.0
             original = directory / name
             files = present.get(name, [])
             if files:
@@ -4022,6 +4077,8 @@ class ModLibrary:
                 continue
             logger.info("Released the kept original %s", name)
             released.append(original)
+        if waited:
+            spans.record("library.prune.yield", waited)
         # superseded gone records: kept while an original of their name is, else dropped (with the marker)
         kept = {name for name in listed if (directory / name).exists()}
         stale: list[str] = []

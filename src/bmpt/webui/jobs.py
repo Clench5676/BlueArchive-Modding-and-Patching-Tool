@@ -21,6 +21,11 @@ logger = logging.getLogger(__name__)
 LOG_FLUSH_SECONDS = 0.1
 PROGRESS_SECONDS = 0.1
 WRITES = ("game", "library")  # a writer job writes the game folder (and the library), or the library only
+# The queue serves jobs by class, then in submission order; a running job is never interrupted. Jobs the user started
+# and watches go first, then start-up work behind the start cover, then background maintenance (the prune, the CRC
+# repair at start): a user's switch never waits for maintenance queued before it.
+USER, START, MAINTENANCE = 2, 3, 4
+_STOP = 99  # the shutdown marker, after every queued job: queued writers still run
 
 
 @dataclass
@@ -30,6 +35,7 @@ class Job:
     params: dict[str, Any]
     fn: Callable[..., Any]
     writes: str | None = None  # "game", "library" or None (read-only)
+    rank: int = USER  # its class in the queue: USER, START or MAINTENANCE
     state: str = "queued"  # queued, running, done, failed, dropped
     result: Any = None
     error: dict[str, Any] | None = None
@@ -57,7 +63,8 @@ class JobRunner:
         self.on_exception = None
         self.translate: Callable[[BaseException], ServiceError | None] | None = None  # see RpcRegistry.translate
         self._events = events
-        self._queue: queue.Queue[Job | None] = queue.Queue()
+        self._queue: queue.PriorityQueue[tuple[int, int, Job | None]] = queue.PriorityQueue()
+        self._seq = itertools.count()
         self._jobs: dict[str, Job] = {}
         self._order: list[str] = []
         self._keep = keep
@@ -70,11 +77,15 @@ class JobRunner:
         self._thread = threading.Thread(target=self._run, name="bamt-jobs", daemon=True)
         self._thread.start()
 
-    def submit(self, kind: str, fn: Callable[..., Any], *, writes: str | None = None, **params: Any) -> str:
-        """Queue ``fn(log=..., progress=..., **params)``; returns the job id. ``writes`` marks a writer job."""
+    def submit(self, kind: str, fn: Callable[..., Any], *, writes: str | None = None, rank: int = USER,
+               **params: Any) -> str:
+        """Queue ``fn(log=..., progress=..., **params)``; returns the job id. ``writes`` marks a writer job; ``rank``
+        is its class (``USER`` unless start-up or maintenance work)."""
         if writes is not None and writes not in WRITES:
             raise ValueError(f"unknown writes {writes!r}")
-        job = Job(id=f"j{next(self._ids)}", kind=kind, params=params, fn=fn, writes=writes)
+        if rank not in (USER, START, MAINTENANCE):
+            raise ValueError(f"unknown rank {rank!r}")
+        job = Job(id=f"j{next(self._ids)}", kind=kind, params=params, fn=fn, writes=writes, rank=rank)
         with self._lock:
             if writes and self._quit_reserved:
                 raise ServiceError("busy")
@@ -86,7 +97,7 @@ class JobRunner:
                 if drop is None:
                     break
                 self._jobs.pop(self._order.pop(drop), None)
-        self._queue.put(job)
+            self._queue.put((rank, next(self._seq), job))
         return job.id
 
     def listen(self, fn: Callable[[Job], Any]) -> None:
@@ -145,7 +156,7 @@ class JobRunner:
         read-only job is not waited for (the worker is a daemon thread)."""
         with self._lock:
             self._closing = True
-        self._queue.put(None)
+            self._queue.put((_STOP, next(self._seq), None))
         if wait is not None and self._thread.is_alive() and self.busy():
             deadline = time.monotonic() + wait
             with self._idle:
@@ -154,7 +165,7 @@ class JobRunner:
 
     def _run(self) -> None:
         while True:
-            job = self._queue.get()
+            _rank, _seq, job = self._queue.get()
             if job is None:
                 return
             with self._lock:

@@ -95,7 +95,7 @@ async function harness({ labelFailure = null, labelGate = null, locale = "en-US"
     } },
   };
   globalThis.loadingDeps = d;
-  const code = `const {document,performance,setTimeout,clearTimeout,requestAnimationFrame,getComputedStyle,NGUI,Popup,T,S,loadingLabel,loadingLetterSprites,loadingInkLine,alphaBounds,alignBaseline,domBaseline,publishAligned} = globalThis.loadingDeps;\n${source.replace(/^import .*;$/gm, "")}\n// ${seq++}`;
+  const code = `const {document,performance,setTimeout,clearTimeout,requestAnimationFrame,getComputedStyle,NGUI,Popup,T,S,loadingLabel,loadingLetterSprites,loadingInkLine,alphaBounds,alignBaseline,domBaseline,publishAligned,freezeShown = () => {}} = globalThis.loadingDeps;\n${source.replace(/^import .*;$/gm, "")}\n// ${seq++}`;
   const loading = await import(`data:text/javascript;base64,${Buffer.from(code).toString("base64")}`);
   if (infoReady) loading.init({ consent, uiCached, gameFound: true });
   const advance = async (ms) => {

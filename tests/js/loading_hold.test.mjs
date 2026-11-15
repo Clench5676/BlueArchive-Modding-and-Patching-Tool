@@ -41,6 +41,7 @@ globalThis.requestAnimationFrame = (fn) => setTimeout(fn, 0);
 globalThis.fetch = async () => { throw new Error("no game assets in this test"); };
 const Loading = await import("../../src/bmpt/web/js/loading.js");
 const Popup = await import("../../src/bmpt/web/js/popup.js");
+const { freezeWhileLoading } = await import("../../src/bmpt/web/js/preview-lifecycle.js");
 const event = (target = new El(), key) => ({ target, key, prevented: false, stopped: false,
   preventDefault() { this.prevented = true; }, stopImmediatePropagation() { this.stopped = true; } });
 
@@ -293,4 +294,24 @@ test("an in-page wait locks input once its indicator is up", async () => {
     assert.equal(Loading.active(), true);
     const click = event(); stage.listeners.click(click); assert.ok(click.stopped);
   } finally { job.resolve(); await waiting; }
+});
+
+test("Now Loading holds pinches and touch ends too, and freezes the previews shown beneath it", async () => {
+  const calls = [];
+  const shown = freezeWhileLoading({ freeze: () => calls.push("freeze"), thaw: () => calls.push("thaw") });
+  const preparing = freezeWhileLoading({ shown: () => false, freeze: () => calls.push("preparing freeze") });
+  const job = deferred();
+  const done = Loading.hold(() => job.promise);
+  for (const type of ["gesturestart", "gesturechange", "gestureend", "touchend"]) {
+    const ev = event(); stage.listeners[type](ev);
+    assert.ok(ev.prevented && ev.stopped, `${type} is held`);
+  }
+  assert.deepEqual(calls, ["freeze"]);
+  job.resolve();
+  await done;
+  assert.equal(Loading.locked(), false);
+  assert.deepEqual(calls, ["freeze", "thaw"]);
+  const ev = event(); stage.listeners.gesturechange(ev);
+  assert.equal(ev.prevented, false, "a pinch reaches the preview once Now Loading is gone");
+  shown.dispose(); preparing.dispose();
 });

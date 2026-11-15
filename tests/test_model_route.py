@@ -340,3 +340,37 @@ def test_another_students_model_is_a_preview_source_and_past_the_stretch_limit_s
             s.asset("model/hina.glb", {"source": "variant:momoi"})
     finally:
         s.close()
+
+
+def test_every_preview_asset_counts_as_foreground(tmp_path):
+    """Scans and background work step aside for portraits, lobbies and backgrounds too, not only 3D models."""
+    from bmpt import preview_gate
+
+    seen = []
+
+    class Game(RouteGame):
+        def model_glb(self, core):
+            seen.append(("model", preview_gate._count))
+            return b"glTF model"
+
+        def collection_portrait(self, name):
+            seen.append(("portrait", preview_gate._count))
+            return b"png"
+
+        def collection_bg(self, name):
+            seen.append(("bg", preview_gate._count))
+            raise KeyError(name)
+
+    s = Services(Settings(tmp_path / "config.toml"), tmp_path, state=UiState(tmp_path / "webui.json"),
+                 cache=object(), game=Game(), catalog=RouteCatalog(), library=object())
+    try:
+        s.asset("model/ch0242.glb", {})
+        s.asset("art/portrait/ch0242.png", {})
+        try:
+            s.asset("art/bg/missing.png", {})
+        except KeyError:
+            pass
+        assert seen == [("model", 1), ("portrait", 1), ("bg", 1)]
+        assert preview_gate._count == 0  # released after an answer and after a failure
+    finally:
+        s.close()

@@ -18,6 +18,7 @@ import * as Settings from "./settings.js";
 import * as Update from "./update.js";
 import * as Tours from "./tours.js";
 import { on, rpc, spinePrefix } from "./api.js";
+import { setLibraryWaiting } from "./preview-lifecycle.js";
 import { L, T, errorText, setStrings, languageRefresh } from "./i18n.js";
 import { neighbour, visit } from "./roster-order.js";
 import { hasAsset, primaryKind } from "./switch-sources.js";
@@ -662,6 +663,7 @@ async function start() {
   };
   ctx.goOther = () => Settings.open(settingsChanged, "mods");
   on("library.changed", libraryChanged);
+  on("library.waiting", (data) => setLibraryWaiting(!!data?.busy));
   on("photography.changed", () => {
     ctx.invalidateRoster();
     if ($("screen-roster").hidden) return;

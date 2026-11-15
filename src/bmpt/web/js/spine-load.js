@@ -1,4 +1,4 @@
-import { previewLifecycle, previewTimer } from "./preview-lifecycle.js";
+import { onScreen, previewLifecycle, previewTimer } from "./preview-lifecycle.js";
 
 // One view load at a time. A newer request cancels the old one and waits for its cleanup before starting.
 export function latestLoad() {
@@ -44,6 +44,8 @@ export function loadPlayer(create, config, { signal, timeout = 15000, onError, o
     try { player?.dispose(); } catch (err) { console.error(err); } finally { finish(); }
   };
   const lifecycle = previewLifecycle({
+    // a loaded player on screen stops under Now Loading; one still loading, or prepared hidden, keeps going
+    shown: () => settled && !failed && !manual && onScreen(player?.canvas),
     suspend: () => player?.stopRendering?.(),
     resume: () => {
       if (disposed || failed || manual) return;

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { previewLifecycle, previewTimer } from "../../src/bmpt/web/js/preview-lifecycle.js";
+import { freezeShown, freezeWhileLoading, previewLifecycle, previewTimer } from "../../src/bmpt/web/js/preview-lifecycle.js";
 import { latestLoad, loadPlayer } from "../../src/bmpt/web/js/spine-load.js";
 import { nextFrame } from "../../src/bmpt/web/js/async.js";
 
@@ -152,4 +152,79 @@ test("a Spine load that times out says how far it got", async () => {
     [true, false, 2, 1, [], false, "640x360"]);
   assert.ok(state.frames >= 1 && state.ms >= 30);
   assert.equal(error.step, "load timeout");
+});
+
+test("Now Loading freezes the previews shown beneath it; one started behind it keeps preparing", () => {
+  const env = surface(), calls = [];
+  let shown = true;
+  const life = previewLifecycle({ suspend: () => calls.push("pause"), resume: () => calls.push("resume"), shown: () => shown }, env);
+  const hidden = previewLifecycle({ suspend: () => calls.push("hidden pause"), shown: () => false }, env);
+  const timer = previewLifecycle({ suspend: () => calls.push("timer pause") }, env);
+  freezeShown(true);
+  assert.equal(life.active(), false); assert.equal(hidden.active(), true); assert.equal(timer.active(), true);
+  const behind = previewLifecycle({ suspend: () => calls.push("behind pause"), shown: () => true }, env);
+  assert.equal(behind.active(), true, "prepared behind Now Loading");
+  env.focus(false); env.focus(true);
+  assert.equal(life.active(), false, "focus alone does not thaw it");
+  freezeShown(false);
+  assert.equal(life.active(), true);
+  assert.deepEqual(calls, ["pause", "hidden pause", "timer pause", "behind pause", "resume"], "a blur pauses the others as before");
+  freezeShown(true);
+  assert.equal(behind.active(), false, "the next Now Loading freezes it");
+  freezeShown(false);
+  for (const item of [life, hidden, timer, behind]) item.dispose();
+  freezeShown(true); freezeShown(false);
+  assert.equal(calls.filter((call) => call === "pause").length, 2, "retired previews are not frozen");
+});
+
+test("a member that throws while freezing does not keep the others running", () => {
+  const calls = [];
+  const bad = freezeWhileLoading({ freeze: () => { throw new Error("broken"); } });
+  const good = freezeWhileLoading({ freeze: () => calls.push("freeze"), thaw: () => calls.push("thaw") });
+  const error = console.error; console.error = () => {};
+  try { freezeShown(true); freezeShown(false); } finally { console.error = error; }
+  assert.deepEqual(calls, ["freeze", "thaw"]);
+  bad.dispose(); good.dispose();
+});
+
+test("a loaded Spine player on screen stops under Now Loading and restarts after it", async (t) => {
+  const env = surface(); globals(t, env);
+  const old = globalThis.requestAnimationFrame;
+  globalThis.requestAnimationFrame = (fn) => queueMicrotask(fn);
+  t.after(() => { if (old) globalThis.requestAnimationFrame = old; else delete globalThis.requestAnimationFrame; });
+  let frames = 0;
+  const load = loadPlayer((config) => {
+    const canvas = new EventTarget(); canvas.isConnected = true;
+    const p = { config, canvas, stopRequestAnimationFrame: false, time: { delta: 5, update() {} },
+      stopRendering() { this.stopRequestAnimationFrame = true; }, startRendering() { this.stopRequestAnimationFrame = false; },
+      drawFrame() { frames++; }, dispose() {} };
+    queueMicrotask(() => config.success(p)); return p;
+  }, {});
+  const p = await load.ready;
+  freezeShown(true);
+  assert.equal(p.stopRequestAnimationFrame, true); assert.equal(load.active(), false);
+  const before = frames; p.drawFrame(); assert.equal(frames, before, "loop frames are skipped while frozen");
+  p.drawFrame(false); assert.equal(frames, before + 1, "a frame asked for directly still draws");
+  freezeShown(false); await tick();
+  assert.equal(p.stopRequestAnimationFrame, false); assert.equal(p.time.delta, 0);
+  load.dispose();
+});
+
+test("preview deadlines leave out the time a read waits for the library", async (t) => {
+  const { setLibraryWaiting, LIBRARY_WAIT_CAP } = await import("../../src/bmpt/web/js/preview-lifecycle.js");
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const env = surface(); let now = 0, expired = 0;
+  const advance = (ms) => { now += ms; t.mock.timers.tick(ms); };
+  const cancel = previewTimer(() => expired++, 1000, { ...env, now: () => now });
+  advance(400);
+  setLibraryWaiting(true); advance(60000); assert.equal(expired, 0, "waiting for the library is not the preview's work");
+  env.focus(false); env.focus(true); advance(5000); assert.equal(expired, 0, "focus does not restart it while waiting");
+  setLibraryWaiting(false); advance(599); assert.equal(expired, 0);
+  advance(1); assert.equal(expired, 1); cancel();
+  // a wait whose end is never heard counts again after the cap
+  let late = 0;
+  const other = previewTimer(() => late++, 1000, { ...env, now: () => now });
+  setLibraryWaiting(true); advance(LIBRARY_WAIT_CAP); advance(999); assert.equal(late, 0);
+  advance(1); assert.equal(late, 1); other(); setLibraryWaiting(false);
+  t.mock.timers.reset();
 });

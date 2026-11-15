@@ -186,3 +186,83 @@ def test_a_paced_job_steps_aside_for_a_caller_blocked_on_the_lock(monkeypatch):
         assert library._let_others_in() >= 0.29
     worker.join()
     assert got.is_set() and library._lock.waiting == 0
+
+
+def test_a_job_holding_the_library_lets_a_waiting_reader_in_between_two_steps():
+    """A job that holds the lock for its whole run (prune, CRC repair) gives it up whole, nested holds included, to a
+    caller blocked on it, and takes it back once that caller is done."""
+    lock = service._LibraryLock()
+    order = []
+    with lock, lock:  # the job's own call and one of its steps
+        reader = threading.Thread(target=lambda: (lock.acquire(), order.append("reader"), time.sleep(0.05),
+                                                  order.append("reader done"), lock.release()))
+        reader.start()
+        deadline = time.monotonic() + 2
+        while not lock.waiting and time.monotonic() < deadline:
+            time.sleep(0.005)
+        assert lock.waiting == 1
+        waited = lock.step_aside()
+        order.append("job")
+        assert waited >= 0.04  # it waited for the reader's work
+        assert order == ["reader", "reader done", "job"]
+    reader.join()
+    with lock:  # the lock is whole again: released twice above, nothing left over
+        pass
+    assert lock._lock.acquire(False)
+    lock._lock.release()
+
+
+def test_a_job_does_not_step_aside_for_nobody_or_without_the_lock():
+    lock = service._LibraryLock()
+    with lock:
+        assert lock.step_aside() == 0.0  # nobody waits
+    lock.waiting = 1  # another thread's count, but this thread holds nothing
+    assert lock.step_aside() == 0.0
+    lock.waiting = 0
+
+
+def test_the_lock_tells_when_a_reader_starts_and_stops_waiting_for_it():
+    """The page pauses its preview deadlines while a read waits for the library: told once per spell, in order,
+    never for background work or a paced job."""
+    lock = service._LibraryLock()
+    told = []
+    lock.on_wait = told.append
+    with lock:
+        pass
+    assert told == []  # a free lock: nobody waited
+    with lock:
+        readers = [threading.Thread(target=lambda: (lock.acquire(), lock.release())) for _ in range(2)]
+        for reader in readers:
+            reader.start()
+        deadline = time.monotonic() + 2
+        while lock.waiting < 2 and time.monotonic() < deadline:
+            time.sleep(0.005)
+        assert told == [True]
+    for reader in readers:
+        reader.join()
+    assert told == [True, False]
+    def background():
+        service._background.on = True
+        try:
+            with lock:
+                pass
+        finally:
+            service._background.on = False
+
+    with lock:
+        waiter = threading.Thread(target=background)
+        waiter.start()
+        time.sleep(0.05)
+    waiter.join()
+    assert told == [True, False]  # background work waiting for the lock is not told
+
+
+def test_a_failing_wait_listener_never_fails_the_library():
+    lock = service._LibraryLock()
+    lock.on_wait = lambda busy: 1 / 0
+    with lock:
+        reader = threading.Thread(target=lambda: (lock.acquire(), lock.release()))
+        reader.start()
+        time.sleep(0.05)
+    reader.join()
+    assert lock.waiting == 0

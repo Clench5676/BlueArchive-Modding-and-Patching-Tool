@@ -45,6 +45,7 @@ function harness(layersOf = layers, resolveSources = null, { allowed = true } = 
     setView: noop, game: () => ({}), viewOf: () => ({}), feather: noop, lightUp: noop, openEdge: noop,
     releaseTouch: noop, restoreTouch: () => touchSetups.push("setup"), clearTimers: noop,
     previewLifecycle: () => ({ active: () => true, dispose: noop }),
+    freezeWhileLoading: () => ({ held: () => false, dispose: noop }), onScreen: () => true,
     measure: () => structuredClone(meta), measuresClips: () => false,
     Stage: { install: noop, hostOf: () => null }, Linear: { setClear: noop, detach: noop },
     Materials: { detach: noop }, Touch: { setup: noop, detach: noop }, Idle: { start: noop, stop: noop },
