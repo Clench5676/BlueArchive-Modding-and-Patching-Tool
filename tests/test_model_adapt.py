@@ -751,6 +751,43 @@ def test_official_a_bag_mounted_on_an_upper_arm_hangs_from_the_shoulder(view):
 
 
 @official
+def test_official_a_prop_the_clips_hold_on_the_body_goes_with_the_body(view):
+    """Hina <- Aoba: the pipe wrench, skinned in Aoba's body mesh below a Prop_root Hina lacks, rests 40 cm beside
+    her, and every clip of hers keys it to her hip. On Hina it goes with the pelvis and sits against it where Aoba's
+    idle holds it against hers, so Hina's clips take it along instead of leaving it where it rests."""
+    from ba_modding_toolkit.bundle import Bundle
+    from bmpt.gameassets.model import _prefabs
+
+    files, index = view
+    sources = [p for p in files if re.match(r"character-ch0288-_mxload", p.name)]
+    result = ma.adapt(index=index, resolver=None, target_files=_slot(files, "hina_original"),
+                      target_dev="hina_original", source_files=sources, source_dev="ch0288", open_writable=Bundle.load)
+    with ma.BundleGraph(index) as graph:
+        s_prefabs = _prefabs(graph, sources)
+        s = ma.Skeleton.of(graph, s_prefabs[ma.choose_prefab(s_prefabs, "ch0288")].deref())
+        t_prefabs = _prefabs(graph, [p for p in _slot(files, "hina_original") if p.name.startswith("character-")])
+        t = ma.Skeleton.of(graph, t_prefabs[ma.choose_prefab(t_prefabs, "hina_original")].deref())
+        idle = s.poses(ma.pick(ma.prefab_clips(graph, s, ma.own_prefabs(s_prefabs, "ch0288")), ["Formation_Idle"]),
+                       frames=1)[0]
+        parts = ma.roles(s, idle)
+        parts = [p for p in parts if p.role == "primary"] + [p for p in parts if p.role == "costume"]  # as adapt does
+        flat = ma.flatten(ma.Costume(s, parts, [ma.skin_of(p.mesh) for p in parts]), s.world())
+    wrench, t_pelvis, s_pelvis = s.first("bone_pipe wrench"), t.first("Bip001 Pelvis"), s.first("Bip001 Pelvis")
+    assert result.plan.mapping[wrench] == t_pelvis
+    # its vertices, as bound on the slot, against the slot's pelvis at rest: where Aoba's idle holds them against hers
+    s_rest, t_rest = s.world(), t.world()
+    rows = np.where(((flat.joints == wrench) & (flat.weights > 0)).any(axis=1))[0]
+    assert len(rows)
+    bound = np.c_[result.plan.fit.vertices[rows], np.ones(len(rows))] @ np.linalg.inv(t_rest[t_pelvis]).T
+    held = np.c_[flat.vertices[rows], np.ones(len(rows))] @ (
+        np.linalg.inv(idle[s_pelvis]) @ idle[wrench] @ np.linalg.inv(s_rest[wrench])).T
+    assert np.abs(bound - held).max() < 0.01
+    assert np.linalg.norm(bound[:, :3].mean(axis=0)) < 0.25  # at her hip, not 40 cm beside her
+    # the cart, the bag and the screwdriver are props of their own renderers, not of the costume: never carried
+    assert not {s.nodes[n].name for n in result.plan.mapping} & {"bone_cart_body", "bone_bag", "bone_screwdriver"}
+
+
+@official
 def test_official_bones_any_clip_scales_away_are_hidden(view):
     """The probes see six clips at three frames each; the slot's other clips hide bones too (a hair ornament in the
     cafe, a weapon bone in the cafe, skewers in a public skill). They and the bones below them are hidden, so no
