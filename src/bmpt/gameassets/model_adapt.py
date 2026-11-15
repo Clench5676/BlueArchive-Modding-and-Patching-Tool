@@ -59,7 +59,7 @@ import re
 import zlib
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Iterable, Mapping
+from typing import Any, Callable, Iterable, Mapping, Sequence
 
 import numpy as np
 
@@ -1177,7 +1177,7 @@ class Skirt:
     parents: list[int]
     locals: list[tuple]
     anchor: int
-    solver: ms.Solver | ms.Spring
+    solver: Any  # ms.Solver, ms.Spring or FaceRetarget
     base: int
     clips: int = 0  # clips given curves
     solved: dict[tuple[str, int], tuple[list[int], list[dict[int, np.ndarray]]]] = field(default_factory=dict)
@@ -1210,6 +1210,7 @@ class Hems:
     thin: tuple[np.ndarray, np.ndarray] | None = None
     thin_score: hm.Score | None = None
     springs: list[Skirt] = field(default_factory=list)  # Optimize Physics: chains that swing after their anchor
+    face: Skirt | None = None  # another character's face bones following the slot's expressions (``face_retarget``)
 
     def score(self, rule: str) -> hm.Score | None:
         return next((s for s in self.scores if s.rule == rule), None)
@@ -1862,6 +1863,117 @@ def springs(target: Costume, source: Costume, plan_: Plan, s_clips: list[Any], f
     return out
 
 
+FACE_OFFSET = 0.002  # a source face bone resting this far (metres) or more from the slot bone it maps to is retargeted
+
+
+class FaceRetarget:
+    """The source's eye, brow and mouth bones as new bones of the slot below its head, where the source's face has
+    them, following the slot's expressions: in every frame of a slot clip each new bone takes the turn and the move
+    its slot bone of the same name makes against the head, about its own place (a lid closes about the source's eye,
+    not the slot's). ``slots``: per bone, the slot bone it follows."""
+
+    def __init__(self, chains: ms.Chains, head: int, slots: list[int], t_rest: list[np.ndarray]):
+        self.chains, self.head, self.slots = chains, head, slots
+        self.roots = list(range(len(slots)))
+        inverse = np.linalg.inv(t_rest[head])
+        self.rel0 = [inverse @ t_rest[m] for m in slots]       # the slot bones against the head at rest
+        self.new0 = [inverse @ m for m in chains.rest]          # the new bones likewise
+
+    def follow(self, skeleton: Skeleton, tree: Mapping[str, Any], frames: list[int]) -> list[dict[int, np.ndarray]]:
+        """The new bones' local transforms (4x4, without the bone's scale) at ``frames`` of a slot clip, for the bones
+        whose slot bone moves against the head in it; the others stay at rest (no curve)."""
+        _, pose, _ = skeleton.clip_frames(tree)
+        ch = self.chains
+        out: list[dict[int, np.ndarray]] = []
+        for f in frames:
+            world = pose(f)
+            back = np.linalg.inv(world[self.head])
+            placed: list[np.ndarray] = []
+            for k, m in enumerate(self.slots):
+                rel = back @ world[m]
+                turn = _rotation(rel) @ _rotation(self.rel0[k]).T
+                w = self.new0[k].copy()
+                w[:3, :3] = turn @ w[:3, :3]
+                w[:3, 3] = self.new0[k][:3, 3] + rel[:3, 3] - self.rel0[k][:3, 3]
+                placed.append(w)
+            turns = {}
+            for k, p in enumerate(ch.parents):
+                local = placed[k] if p < 0 else np.linalg.inv(placed[p]) @ placed[k]
+                local[:3, :3] = local[:3, :3] @ np.linalg.inv(ms.scale_of(local))
+                turns[k] = local
+            out.append(turns)
+        moving = {k for k in self.roots if any(not np.allclose(t[k], out[0][k], atol=1e-6) for t in out)
+                  or not np.allclose(out[0][k], ch.hanging(k), atol=1e-6)}
+        return [{k: t[k] for k in sorted(moving)} for t in out]
+
+    def posed(self, pose: Sequence[np.ndarray], turns: Mapping[int, np.ndarray]) -> np.ndarray:
+        return self.chains.posed(np.asarray(pose[self.chains.anchor]), turns)
+
+
+def _rotation(m: np.ndarray) -> np.ndarray:
+    return m[:3, :3] / np.linalg.norm(m[:3, :3], axis=0)
+
+
+def face_retarget(target: Costume, source: Costume, plan_: Plan, fit: Fit) -> Skirt | None:
+    """The source's face bones that rest away from the slot bones they map to by name (another character's face,
+    ``FACE_OFFSET``), with their face-bone ancestors, as new bones of the slot below its head that follow the slot's
+    expressions about the source's own places (:class:`FaceRetarget`); None when there are none. The face goes with
+    the head as the costume is bound (``flatten``), so the bones go along with it into the bound shape."""
+    ts, ss = target.skeleton, source.skeleton
+    t_head, s_head = ts.first(HEAD), ss.first(HEAD)
+    if t_head is None or s_head is None:
+        return None
+    flat = flatten(source, ss.world())
+    t_rest, s_rest = ts.world(), ss.world()
+    used = set(flat.joints[flat.weights > 0].tolist())
+    face = [n for n in sorted(used) if n >= 0 and face_bone(ss, n) and n in plan_.mapping
+            and ts.nodes[plan_.mapping[n]].name == ss.nodes[n].name]
+    if not face:
+        return None
+    rows = np.where(np.isin(flat.joints, face).any(axis=1))[0]
+    carry = ms.rigid_fit(flat.vertices[rows], fit.vertices[rows], np.ones(len(rows))) if len(rows) >= 3 else (
+        t_rest[t_head] @ _inverse(s_rest[s_head], HEAD))
+    apart = {n for n in face if float(np.linalg.norm((carry @ s_rest[n])[:3, 3] - t_rest[plan_.mapping[n]][:3, 3]))
+             >= FACE_OFFSET}
+    if not apart:
+        return None
+    wanted: set[int] = set()
+    for n in apart:  # with the face bones above it, so the hierarchy holds
+        while n is not None and n != s_head and n not in wanted and face_bone(ss, n) and n in plan_.mapping:
+            wanted.add(n)
+            n = ss.nodes[n].parent
+    sources = sorted(wanted)
+    new = {n: k for k, n in enumerate(sources)}
+    parents = [new.get(ss.nodes[n].parent, -1) for n in sources]
+    rest = np.array([carry @ s_rest[n] for n in sources])
+    local = np.array([np.linalg.inv(rest[p] if p >= 0 else t_rest[t_head]) @ rest[k] for k, p in enumerate(parents)])
+    taken = {node.path for node in ts.nodes}
+    names, paths, locals_ = [], [], []
+    for k, n in enumerate(sources):
+        name = ss.nodes[n].name + "_costume"
+        parent_path = paths[parents[k]] if parents[k] >= 0 else ts.nodes[t_head].path
+        while f"{parent_path}/{name}" in taken:
+            name += "_costume"
+        names.append(name)
+        paths.append(f"{parent_path}/{name}")
+        taken.add(paths[-1])
+        if parents[k] >= 0:
+            locals_.append(ss.nodes[n].local)
+        else:
+            m = local[k]
+            scale = np.linalg.norm(m[:3, :3], axis=0)
+            locals_.append((tuple(m[:3, 3]), tuple(ms.quaternion(m[:3, :3] / scale)), tuple(scale)))
+    placed: list[np.ndarray] = []
+    for k, p in enumerate(parents):
+        placed.append((placed[p] if p >= 0 else t_rest[t_head]) @ trs(*locals_[k]))
+    if float(np.abs(np.array(placed) - rest).max()) > 1e-5:
+        logger.debug("Face bones left on the slot's: rest not reproduced")
+        return None
+    chains = ms.Chains(t_head, parents, local, rest)
+    solver = FaceRetarget(chains, t_head, [plan_.mapping[n] for n in sources], t_rest)
+    return Skirt(sources, names, parents, locals_, t_head, solver, -1)
+
+
 def skirt_bones(skeleton: Skeleton, skirt: Skirt) -> None:
     """Rule B's new bones appended to the slot's skeleton (no objects yet: ``_edit_prefabs`` adds them)."""
     if len(skeleton.nodes) != skirt.base:
@@ -1887,6 +1999,9 @@ def skirt_sequence(skeleton: Skeleton, solver: ms.Solver, tree: Mapping[str, Any
     times, pose, _ = skeleton.clip_frames(tree)
     count = len(times)
     frames = sorted(set(range(0, count, ms.SOLVE_EVERY)) | {count - 1} | set(measured_frames(count)))
+    if isinstance(solver, FaceRetarget):  # the slot's expressions, about the source face's own places, every frame
+        every = list(range(count))     # (a blink lasts a few frames)
+        return every, solver.follow(skeleton, tree, every)
     if isinstance(solver, ms.Spring):  # the source's own keys for a clip it has by name, else the swing
         keyed = solver.keyed(str(tree.get("m_Name") or ""), [times[f] for f in frames])
         if keyed is not None:
@@ -2655,6 +2770,9 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
     # the slot's clips that move their anchor
     chained = ([hem.skirt] if hem.skirt is not None else []) + (
         springs(target, source, result, s_clips, result.fit) if physics and result.fit is not None else [])
+    face = face_retarget(target, source, result, result.fit) if result.fit is not None else None
+    if face is not None:  # another character's face: its eye, brow and mouth bones follow the slot's expressions
+        chained.append(face)
     skirt_clips: list[Any] = []
     clip_skirts: dict[tuple[str, int], list[Skirt]] = {}
     for skirt in chained:
@@ -2670,7 +2788,8 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
                 if _key(clip) not in clip_skirts:
                     skirt_clips.append(clip)
                 clip_skirts.setdefault(_key(clip), []).append(skirt)
-    hem.springs = [skirt for skirt in chained if skirt is not hem.skirt]
+    hem.springs = [skirt for skirt in chained if skirt is not hem.skirt and skirt is not face]
+    hem.face = face
     if chained:
         t_rest = t_skeleton.world()
 
