@@ -25,6 +25,7 @@ one changes are in the other files ([`README.md`](README.md)).
 | `mods.other` | the generic (`other`) mods for Settings' Other Mods |
 | `ui.preview {variant, kind, source}` | store a preview choice in `webui.json`; never touches the manifest or game files |
 | `model.costumes {variant, others}` / `model.checkCostumes {...}` / `model.optimize {variant, source, name}` | costume verdicts / check pairs to their end (job) / Optimize Physics (writer job) |
+| `model.costumeCautions {variant, others}` | what offered pairs may draw differently in the game: `ex_parts`, `carried_shader` |
 | `mods.state` / `mods.sizes {kind}` | the switch snapshot / Mod Cache or originals size, measured on demand |
 | `mods.toggle {enabled, expect}` | the switch over every known install (writer job); also Retry |
 | `mods.consent {granted}` / `mods.explained` / `mods.scan {dismissed}` / `mods.entries` | scan consent / first-toggle explanation shown / request a scan / the last scan's entries |

@@ -93,6 +93,8 @@
 			"unfit": "Auto-fit unavailable",
 			"crossCharacter": "Cross-character chibi, may break",
 			"beyondFit": "Beyond auto-fit, may clip or distort",
+			"exParts": "Some parts hidden in EX skills",
+			"carriedShader": "Shader carried, hit and defeat effects untested in game",
 			"showOthers": "Show other students",
 			"action": {
 				"idle": "Idle",

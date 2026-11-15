@@ -795,6 +795,22 @@ def build_api(s: Services) -> RpcRegistry:
             out[other] = verdict_kind(verdict)
         return out
 
+    @rpc.method("model.costumeCautions")
+    def model_costume_cautions(variant: str, others: list[str]) -> dict[str, list[str]]:
+        """What the offered pairs among ``others`` may draw differently in the game than in the preview (the switch's
+        cautions, ``model_adapt.Result.cautions``): {other: ["ex_parts" | "carried_shader", ...]}, only the pairs
+        that have any."""
+        out: dict[str, list[str]] = {}
+        for other in costume_keys(variant, others):
+            try:
+                verdict = s.library.costume_verdict(variant, other)
+            except (ServiceError, KeyError):
+                continue
+            cautions = (verdict or {}).get("cautions")
+            if verdict_kind(verdict) in ("ok", "preview") and isinstance(cautions, list) and cautions:
+                out[other] = [c for c in cautions if isinstance(c, str)]
+        return out
+
     def verdict_kind(verdict: dict | None) -> str | None:
         return None if verdict is None else "ok" if verdict["ok"] else "preview" if verdict.get("preview") else "refused"
 

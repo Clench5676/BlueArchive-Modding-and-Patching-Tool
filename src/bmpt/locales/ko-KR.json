@@ -93,6 +93,8 @@
 			"unfit": "자동 맞춤 불가",
 			"crossCharacter": "다른 캐릭터 모델, 외형이 깨질 수 있음",
 			"beyondFit": "자동 맞춤 범위 초과, 관통 또는 변형 가능",
+			"exParts": "EX 스킬 중 일부 파츠 미표시",
+			"carriedShader": "셰이더 동봉, 피격 및 격파 효과 게임 내 미검증",
 			"showOthers": "다른 학생 표시",
 			"action": {
 				"idle": "대기",

@@ -479,6 +479,7 @@ def test_official_costume_carries_a_shader_the_slot_does_not_load(view, tmp_path
     sources = [p for p in files if re.match(r"character-ch0230-_mxload", p.name)]
     result = ma.adapt(index=index, resolver=None, target_files=slot, target_dev="hina_original", source_files=sources,
                       source_dev="ch0230", open_writable=Bundle.load)
+    assert ma.CARRIED_SHADER in result.cautions  # the switch says so: the game holds two shaders of one name
     out = tmp_path / "out"
     out.mkdir()
     for path, bundle in result.changed.items():

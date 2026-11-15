@@ -71,6 +71,19 @@ export const overwrittenOf = (v, kind = "spr") => partsOf(v, kind).some((f) => !
 // are for a preview only (``previewOnly``), and a refused pair cannot be chosen as the preview either (``refused``).
 // Another student's model (``families``: roster.list's) is offered through the popup's search, or all at once
 // with "Show other students" (crossCandidates), save the one already chosen, listed last (``cross``).
+// What a built pair may draw differently in the game than in its preview (model.costumeCautions), kept beside the
+// verdicts under this key: { other: ["ex_parts" | "carried_shader", ...] }; a symbol, so it never reads as a variant.
+export const CAUTIONS = Symbol("cautions");
+const CAUTION_TEXT = { ex_parts: "model.exParts", carried_shader: "model.carriedShader" };
+const cautionsOf = (costumes, key) => {
+  const found = costumes?.[CAUTIONS]?.[key];
+  return Array.isArray(found) && found.some((c) => c in CAUTION_TEXT) ? { cautions: found } : {};
+};
+// the locale key of a card's caution on hover: the first it has, in CAUTION_TEXT's order; null for none
+export const cautionKey = (c) => {
+  const found = Object.keys(CAUTION_TEXT).find((code) => c?.cautions?.includes(code));
+  return found ? CAUTION_TEXT[found] : null;
+};
 export function candidates(fam, v, kind = "spr", costumes = null, families = null) {
   const own = coreOf(v, kind);
   const cores = (kind === "model" && v.modelCores?.length ? v.modelCores : [own]).map((core) => String(core).toLowerCase());
@@ -90,7 +103,8 @@ export function candidates(fam, v, kind = "spr", costumes = null, families = nul
     ...others.map((o) => ({ key: `v:${o.key}`, kind: "variant", core: coreOf(o, kind), variant: o,
       ...(kind === "model" && costumes?.[o.key] === "preview" ? { beyondFit: true }
         : kind === "model" && costumes?.[o.key] !== "ok" ? { previewOnly: true } : {}),
-      ...(kind === "model" && costumes?.[o.key] === "refused" ? { refused: true } : {}) })),
+      ...(kind === "model" && costumes?.[o.key] === "refused" ? { refused: true } : {}),
+      ...(kind === "model" ? cautionsOf(costumes, o.key) : {}) })),
     ...(across && kind === "spr" ? mods.filter((m) => m.target !== v.key).map(mod) : []),
     ...chosenCross.map((o) => crossCard(o, costumes)),
   ];
@@ -131,7 +145,8 @@ export function crossModels(families, v) {
 export const crossCard = (o, costumes = null) => {
   const verdict = costumes?.[o.key];
   return { key: `v:${o.key}`, kind: "variant", core: coreOf(o, "model"), variant: o, cross: true, restorable: true, greyed: false,
-    ...(verdict === "ok" || verdict === "preview" ? {} : verdict == null ? { pending: true } : { previewOnly: true, refused: true }) };
+    ...(verdict === "ok" || verdict === "preview" ? {} : verdict == null ? { pending: true } : { previewOnly: true, refused: true }),
+    ...cautionsOf(costumes, o.key) };
 };
 // the cards a search adds after the popup's own (``exclude``: their keys): the other students' models ``match`` finds,
 // refused ones left out, in ``compare``'s order (the roster's name order), the first ``limit`` (64: what one RPC call

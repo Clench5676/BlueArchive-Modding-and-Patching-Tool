@@ -5464,6 +5464,7 @@ class ModLibrary:
             report["unfit"] = {"source": "stretch", "adapted": f"{result.plan.stretch:.2f}", "own": f"{result.plan.own:.2f}"}
         if report is not None:
             report["physics"] = result.hems is not None and (result.hems.skirt is not None or result.hems.regrouped)
+            report["cautions"] = list(result.cautions)
         output = directory / "output"
         output.mkdir(parents=True, exist_ok=True)
         reverse = {value: key for key, value in staged.items()}
@@ -5515,9 +5516,13 @@ class ModLibrary:
                 if isinstance(key, str) and isinstance(value, dict) and isinstance(value.get("ok"), bool)}
 
     def _save_verdict(self, signature: str, ok: bool, reason: str | None = None,
-                      detail: Mapping[str, Any] | None = None, *, preview: bool = False) -> dict[str, Any]:
+                      detail: Mapping[str, Any] | None = None, *, preview: bool = False,
+                      cautions: Iterable[str] = ()) -> dict[str, Any]:
+        """``cautions``: what the built pair may draw differently in the game (``model_adapt.Result.cautions``)."""
+        cautions = sorted({str(c) for c in cautions})
         verdict = {"ok": ok, "reason": reason, "detail": {str(k): str(v) for k, v in (detail or {}).items()},
-                   "at": now(), **({"preview": True} if preview and not ok else {})}
+                   "at": now(), **({"preview": True} if preview and not ok else {}),
+                   **({"cautions": cautions} if cautions and (ok or preview) else {})}
         verdicts = self._verdicts()
         verdicts[signature] = verdict
         kept = dict(sorted(verdicts.items(), key=lambda item: str(item[1].get("at", "")), reverse=True)[:COSTUME_VERDICTS])
@@ -5539,9 +5544,19 @@ class ModLibrary:
     @_serialized
     def record_costume_verdict(self, variant_key: str, other: str, ok: bool, reason: str | None = None,
                                detail: Mapping[str, Any] | None = None, pin: Pin | None = None) -> dict[str, Any]:
-        """Save the verdict of a pair checked to its end (its preview built and exported, or refused)."""
+        """Save the verdict of a pair checked to its end (its preview built and exported, or refused), with the
+        cautions its preview build found."""
         signature, _ = self._costume_signature(variant_key, other, self._current(pin))
-        return self._save_verdict(signature, ok, reason, detail)
+        return self._save_verdict(signature, ok, reason, detail, cautions=self._preview_cautions(signature))
+
+    def _preview_cautions(self, signature: str) -> list[str]:
+        """The cautions the preview build of a pair recorded (``costume_preview``'s parts.json), none when unknown."""
+        try:
+            kept = json.loads((self.root / "built" / "previews" / signature / "parts.json").read_text())
+        except (OSError, ValueError):
+            return []
+        cautions = kept.get("cautions") if isinstance(kept, dict) else None
+        return [c for c in cautions if isinstance(c, str)] if isinstance(cautions, list) else []
 
     @_serialized
     def optimize_costume(self, variant_key: str, source: str, name: str, pin: Pin | None = None) -> dict[str, Any]:
@@ -5598,7 +5613,8 @@ class ModLibrary:
                 if parts and all(path.is_file() for path in parts):
                     os.utime(folder)
                     if kept.get("unfit") and signature not in self._verdicts():
-                        self._save_verdict(signature, False, "stretch", kept["unfit"], preview=True)
+                        self._save_verdict(signature, False, "stretch", kept["unfit"], preview=True,
+                                           cautions=kept.get("cautions") or ())
                     return parts
             except (OSError, ValueError, KeyError, TypeError):
                 pass
@@ -5615,9 +5631,11 @@ class ModLibrary:
             folder.mkdir(parents=True, exist_ok=True)
             for path in built:
                 atomic_copy(path, folder / path.name)
-            done.write_text(json.dumps({"parts": [path.name for path in built], "unfit": report.get("unfit")}))
+            done.write_text(json.dumps({"parts": [path.name for path in built], "unfit": report.get("unfit"),
+                                        "cautions": report.get("cautions") or []}))
         if report.get("unfit"):  # past the stretch limit: still offered, with a caution
-            self._save_verdict(signature, False, "stretch", report["unfit"], preview=True)
+            self._save_verdict(signature, False, "stretch", report["unfit"], preview=True,
+                               cautions=report.get("cautions") or ())
         previews = sorted((p for p in folder.parent.iterdir() if p.is_dir()), key=lambda p: p.stat().st_mtime, reverse=True)
         for stale in previews[COSTUME_PREVIEWS:]:
             remove_tree(stale)
