@@ -2,7 +2,7 @@
 // card and the roster, cards for the popups. One hidden Spine player at a time (one WebGL context); results are
 // in-memory blob URLs, with validated lossless PNGs retained by the backend preview cache when enabled.
 import { artBounds, settle } from "./lobby-health.js";
-import { specialView } from "./special-view.js";
+import { specialFramingOf, specialView } from "./special-view.js";
 import { withTimeout } from "./async.js";
 import { loadPlayer as spinePlayer } from "./spine-load.js";
 import { ensureSpine, spineAllowed } from "./spine-runtime.js";
@@ -141,7 +141,7 @@ export function thumbFrame(found, bounds, frame, aspect) {
 function viewFor(p, frame, aspect, framing, lobby = false) {
   if (lobby && !framing) return lobbyStillViewport(p.bamtLobbyFrame, aspect);
   if (framing || frame === "landscape") {
-    const r = specialView(artBounds(p.skeleton), framing || "scene", aspect);
+    const bounds = artBounds(p.skeleton), r = specialView(bounds, framing ? specialFramingOf(framing, bounds) : "scene", aspect);
     return { x: r.x, y: r.y, width: r.w, height: r.h, padLeft: 0, padRight: 0, padTop: 0, padBottom: 0, transitionTime: 0, animations: {} };
   }
   const offset = new spine.Vector2(), size = new spine.Vector2();
