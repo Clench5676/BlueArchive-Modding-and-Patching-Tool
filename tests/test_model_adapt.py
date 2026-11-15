@@ -728,6 +728,29 @@ def test_official_another_characters_face_follows_the_slots_expressions_about_it
 
 
 @official
+def test_official_a_bag_mounted_on_an_upper_arm_hangs_from_the_shoulder(view):
+    """Airi <- Airi (Band): the shoulder bag and its strap hang from a mount below Airi (Band)'s right upper arm that
+    Airi lacks and that skins nothing itself. On Airi they go with the right clavicle, not with the arm, so the bag
+    stays at her side when she lifts the arm."""
+    from ba_modding_toolkit.bundle import Bundle
+    from bmpt.gameassets.model import _prefabs
+
+    files, index = view
+    sources = [p for p in files if re.match(r"character-ch0251-_mxload", p.name)]
+    result = ma.adapt(index=index, resolver=None, target_files=_slot(files, "airi_original"),
+                      target_dev="airi_original", source_files=sources, source_dev="ch0251", open_writable=Bundle.load)
+    with ma.BundleGraph(index) as graph:
+        s_prefabs = _prefabs(graph, sources)
+        s = ma.Skeleton.of(graph, s_prefabs[ma.choose_prefab(s_prefabs, "ch0251")].deref())
+        t_prefabs = _prefabs(graph, [p for p in _slot(files, "airi_original") if p.name.startswith("character-")])
+        t = ma.Skeleton.of(graph, t_prefabs[ma.choose_prefab(t_prefabs, "airi_original")].deref())
+    bag = [n for n in result.plan.mapping if s.nodes[n].name.startswith("bone_bag")]
+    assert bag and {t.nodes[result.plan.mapping[n]].name for n in bag} == {"Bip001 R Clavicle"}
+    # a sleeve's twist bone the slot lacks still goes with its arm: only a mount holding nothing but props moves
+    assert ma._shoulder_mount(t, s, s.first("Bip001 R UpperArm"), np.zeros(0, int)) is None
+
+
+@official
 def test_official_bones_any_clip_scales_away_are_hidden(view):
     """The probes see six clips at three frames each; the slot's other clips hide bones too (a hair ornament in the
     cafe, a weapon bone in the cafe, skewers in a public skill). They and the bones below them are hidden, so no
