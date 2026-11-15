@@ -201,9 +201,9 @@ def test_pick_clips_prefers_own_clips_and_falls_back_to_an_idle():
     assert model.pick_clips(["X_Move_Ing"], model.DEFAULT_CLIPS, "x") == []
 
 
-def test_default_clips_bring_the_retreat_run_and_the_knockdown_fall():
-    # a battle controller's vital clips: the retreat run and the fall, not the low-health loop, the panic or the
-    # shared groggy and hit clips whose names merely contain the words
+def test_default_clips_bring_the_knockdown_fall_and_the_retreat_hang():
+    # a battle controller's vital clips: the fall and the hang from the evacuation rope, not the low-health stance,
+    # the panic or the shared groggy and hit clips whose names merely contain the words
     names = ["CH0069_Formation_Idle", "CH0069_Vital_Death", "CH0069_Vital_Dying_Ing", "CH0069_Vital_Panic",
              "CH0069_Vital_Retreat", "VitalDeathGroggy", "VitalHit"]
     assert model.pick_clips(names, model.DEFAULT_CLIPS, "ch0069") == [
@@ -870,7 +870,7 @@ def test_real_chibi_exports(tmp_path):
     assert doc["extras"]["prefab"] == "Echelon_Hoshino_Original" and "haloFollower" in doc["extras"]
     slots = [a["extras"]["slot"] for a in doc["animations"]]
     assert slots[0] == "Formation_Idle" and "Cafe_Reaction" in slots and len(slots) == len(set(slots))
-    # the retreat run loops, the knockdown fall plays once (the viewer holds its last frame)
+    # the hang from the rope loops, the fall plays once (the viewer holds its last frame or moves on to the hang)
     loops = {a["extras"]["slot"]: a["extras"]["loop"] for a in doc["animations"]}
     assert loops["Vital_Retreat"] is True and loops["Vital_Death"] is False
     assert doc["skins"] and all(len(s["joints"]) > 0 for s in doc["skins"])
