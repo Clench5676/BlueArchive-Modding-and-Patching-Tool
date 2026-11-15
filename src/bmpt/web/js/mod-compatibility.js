@@ -12,6 +12,16 @@ const key = (name) => name.replaceAll("\\", "/").split("/").at(-1).toLowerCase()
 const joined = (items) => items.join(/^(zh|ja)/i.test(language()) ? "、" : ", ") || "—";
 const shortList = (items) => items.length > 3 ? T("compatibility.more", { names: joined(items.slice(0, 3)), n: items.length - 3 }) : joined(items);
 const reports = new Map(), stamps = new Map();
+// Why the graft cannot carry an animation (graft.py SkeletonGraft.refused, "kind:name"), as a reason each.
+const reason = (entry) => {
+  const at = entry.indexOf(":"), kind = at < 0 ? entry : entry.slice(0, at), name = at < 0 ? "" : entry.slice(at + 1);
+  return ["bone", "constraint", "skin", "event", "deform", "linked", "pose"].includes(kind)
+    ? T(`compatibility.why.${kind}`, { name }) : entry;
+};
+// Animations a graft cannot carry, each with its reasons: "Hat_01 (bone hat missing)". A reason list, or one text
+// (the converter's).
+export const refusedNames = (refused) => Object.entries(refused || {}).map(([name, reasons]) =>
+  T("compatibility.refusedAnimation", { name, why: joined([].concat(reasons || []).map(reason)) }));
 function progressTask(action, name, run) {
   const text = (p = {}) => jobProgress({ action: `progress.action${action}`, name: name || T("progress.mods"),
     current: p.current || 1, total: p.total || 1, step: p.step || "" });
@@ -134,13 +144,20 @@ export function compare(report, runtime = globalThis.spine, summarize = false) {
     for (const [name, names] of Object.entries(report.oldRig.animations))
       add("missingAnimations", { name, names: list(names) }, summarize ? { name, names: joined(names) } : null);
   } else if (gained.length) add("oldRigAnimations", { names: list(gained) }, summarize ? { names: joined(gained) } : null);
+  // What the graft cannot carry into the mod's own rig, and why (the reasons behind Details)
+  for (const [name, refused] of Object.entries(report.graft?.refused || {})) {
+    const names = Object.keys(refused);
+    if (names.length) add("graftRefused", { name, names: list(names) }, { name, names: joined(refusedNames(refused)) });
+  }
   const available = !issues.some(({ key }) => key === "unavailable");
   return { available, issues, author: issues.some(({ key }) => key !== "unavailable"),
     remap: available && eligible(report) && report.remappable === true && !redrawn
       && issues.some(({ key }) => ["regions", "atlasSize", "atlasLayout", "missingAnimations"].includes(key)),
     oldRig: available && eligible(report) && report.remappable === true && redrawn && !gained.length
       && report.oldRig?.available === true,
-    graft: available && graftable, graftOldRig: report.graft?.kind === "oldRig" };
+    graft: available && graftable, graftOldRig: report.graft?.kind === "oldRig",
+    // a memorial lobby or Spine background takes new animations, not expressions
+    graftAnimations: report.kind === "lobby" };
 }
 
 async function assess(report) {
@@ -175,8 +192,9 @@ export function resultLines(result, repair) {
 // mod's pixels on the official rig, the old rig keeps a redrawn portrait's whole rig.
 export function repairs(result) {
   const out = [];
-  if (result.graft) out.push({ kind: "graft", text: T(result.graftOldRig ? "compatibility.graftOldRig" : "compatibility.graft"),
-    label: T("compatibility.graftAction") });
+  if (result.graft) out.push({ kind: "graft", text: T(result.graftOldRig ? "compatibility.graftOldRig"
+    : result.graftAnimations ? "compatibility.graftAnimations" : "compatibility.graft"),
+    label: T(result.graftAnimations ? "compatibility.graftAnimationsAction" : "compatibility.graftAction") });
   if (result.remap) out.push({ kind: "remap", text: T("compatibility.remapUpdate"), label: T("compatibility.remapAction") });
   if (result.oldRig) out.push({ kind: "oldRig", text: T("compatibility.oldRig"), label: T("remap.action") });
   return out;
@@ -214,15 +232,18 @@ export function reviewLines(report, { convert = false } = {}) {
     ...report.warnings.map(({ key, name }) => T(`remap.${key}`, { name }))];
   // a graft (actions.graft) counts the expressions it added, corrected and could not match, the names behind Details
   if (report.grafted) {
-    const named = (key, names) => !names.length ? [] : [{ text: T(`remap.${key}`, { n: names.length }), button: {
-      label: T("info.details"), fn: () => Popup.message({ title: T("info.details"), lines: [joined(names)], scroll: true,
+    const named = (key, names, shown = names) => !names.length ? [] : [{ text: T(`remap.${key}`, { n: names.length }), button: {
+      label: T("info.details"), fn: () => Popup.message({ title: T("info.details"), lines: [joined(shown)], scroll: true,
         ok: T("picker.ok") }) } }];
-    return [...named("grafted", report.grafted), ...named("graftCorrected", report.corrected || []),
-      ...named("graftUnfixed", report.unfixed || []), ...named("graftRefused", Object.keys(report.refused || {})),
+    // a memorial lobby's graft (report.animations) adds animations, a portrait's expressions
+    return [...named(report.animations ? "graftedAnimations" : "grafted", report.grafted),
+      ...named("graftCorrected", report.corrected || []), ...named("graftUnfixed", report.unfixed || []),
+      ...named("graftRefused", Object.keys(report.refused || {}), refusedNames(report.refused)),
       ...(report.grown ? [T("remap.graftGrown", { n: report.grown })] : []),
       ...(report.unanchored ? [T("remap.graftUnanchored")] : []),
-      // what the graft refused, through the optional converter (converterRemap): ends this review to take it
-      ...(convert && !report.converter && Object.keys(report.refused || {}).length
+      // what the graft refused, through the optional converter (converterRemap): ends this review to take it; a
+      // portrait's only (a memorial lobby's graft has no setup poses for it)
+      ...(convert && !report.converter && !report.animations && Object.keys(report.refused || {}).length
         ? [{ text: CONVERTER_NAME, button: { label: T("compatibility.converterAction"), close: "convert" } }] : [])];
   }
   const kinds = { unpainted: report.added || [], official: report.official || [], dropped: report.dropped || [] };
@@ -300,6 +321,14 @@ async function grafted(id, subject) {
       const first = await waitJob(await rpc("actions.graft", { mod: id }), update);
       token = first.token;
       const skeleton = (rig) => ({ data: rig.skeleton });
+      // a rig without a picture to compare (a memorial lobby): built at once, each carried animation posed here
+      if (first.plain) {
+        const posed = Object.fromEntries(Object.entries(first.rigs).map(([name, rig]) => [name, {
+          failed: RigGeometry.failedPoses(S, rig.atlas, skeleton(rig), rig.animations) }]));
+        const result = await waitJob(await rpc("actions.graftCheck", { token, geometry: posed }), update);
+        token = null;  // the check takes it
+        return result;
+      }
       const setup = Object.fromEntries(Object.entries(first.rigs).map(([name, rig]) => [name, {
         mod: RigGeometry.setupOf(S, rig.mod.atlas, skeleton(rig.mod)),
         official: RigGeometry.setupOf(S, rig.official.atlas, skeleton(rig.official)),
@@ -373,9 +402,12 @@ export function review(id, result, { label = "", kind = "", accept: acceptLabel 
     // pictures can ring
     marks: report.grafted ? report.marks || []
       : [...new Set((report.official || []).map((name) => name.slice(name.indexOf(" - ") + 3)))],
-    // a graft's review steps through the expressions it added, under a verdict of its own
+    // a graft's review steps through the expressions it added (a memorial lobby's: the animations, playing), under
+    // a verdict of its own
     expressions: report.grafted || [],
-    verdict: report.grafted ? (report.partial ? "remap.graftPartial" : "remap.graftDone") : null,
+    steps: report.animations ? "animation" : "expression",
+    verdict: !report.grafted ? null : report.animations ? (report.partial ? "remap.graftAnimationsPartial" : "remap.graftAnimationsDone")
+      : (report.partial ? "remap.graftPartial" : "remap.graftDone"),
   });
 }
 

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import vm from "node:vm";
-import { forRemap, poses, restOnly } from "../../src/bmpt/web/js/rig-geometry.js";
+import { failedPoses, forRemap, poses, restOnly } from "../../src/bmpt/web/js/rig-geometry.js";
 
 const context = vm.createContext({ console, TextDecoder, TextEncoder, Float32Array, Float64Array, Uint8Array, Uint16Array,
   Int8Array, Int16Array, Int32Array, Uint32Array, ArrayBuffer, DataView, Math, Map, Set, JSON });
@@ -114,4 +114,14 @@ test("the graft's setup pose gives each bone's world matrix, each slot's bone an
   assert.deepEqual(parts.poses[""], []);
   assert.deepEqual(parts.poses["01"].map((d) => [d.slot, d.region]), [["face", "face_b"]]);
   assert.deepEqual(parts.slots, ["body", "face", "glow"]);
+});
+
+test("the plain graft's check poses each animation and names the ones the rig lacks or cannot pose", () => {
+  const rig = skeleton({ extra: { Talk_01: { bones: { root: { rotate: [{ value: 10 }, { time: 1, value: 40 }] } } } } });
+  assert.deepEqual(failedPoses(S, ATLAS, encoded(rig), ["Talk_01", "01", "Gone_01"]), ["Gone_01"]);
+  // a rig the runtime cannot read fails every animation
+  assert.deepEqual(failedPoses(S, ATLAS, encoded("{\"bones\": 3}"), ["Talk_01"]), ["Talk_01"]);
+  const broken = JSON.parse(rig);
+  broken.animations.Talk_01 = { bones: { root: { scale: [{ x: 1e39, y: 1 }] } } };
+  assert.deepEqual(failedPoses(S, ATLAS, encoded(JSON.stringify(broken)), ["Talk_01"]), ["Talk_01"]);
 });

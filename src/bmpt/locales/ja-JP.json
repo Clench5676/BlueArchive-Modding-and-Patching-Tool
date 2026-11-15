@@ -785,6 +785,19 @@
 			"converterMac": "macOS 版は各自でビルド",
 			"converterDownload": "ダウンロード",
 			"converterPage": "プロジェクトページ",
+			"graftAnimations": "Mod の .skel ファイルを維持し、公式の新しいアニメーションを追加",
+			"graftAnimationsAction": "アニメーションを追加",
+			"graftRefused": "{name}、追加できないアニメーション：{names}",
+			"refusedAnimation": "{name}（{why}）",
+			"why": {
+				"bone": "ボーン {name} なし",
+				"constraint": "コンストレイント {name} なし",
+				"skin": "スキン {name} なし",
+				"event": "イベント {name} なし",
+				"deform": "メッシュ {name} 変更済み",
+				"linked": "リンクメッシュ {name}",
+				"pose": "再生不可"
+			},
 			"remapAction": "公式 .skel ファイルを使用",
 			"rigUnknown": "Mod 作成時の .skel ファイルの記録なし、自動修復不可"
 		},
@@ -823,7 +836,13 @@
 			"previousExpression": "前の表情",
 			"nextExpression": "次の表情",
 			"graftDone": "表情を追加済み",
-			"graftPartial": "表情を追加済み、一部要確認"
+			"graftPartial": "表情を追加済み、一部要確認",
+			"graftedAnimations": "追加したアニメーション：{n}",
+			"animation": "アニメーション {name}（{n}/{total}）",
+			"previousAnimation": "前のアニメーション",
+			"nextAnimation": "次のアニメーション",
+			"graftAnimationsDone": "アニメーションを追加済み",
+			"graftAnimationsPartial": "アニメーションを追加済み、一部未追加"
 		},
 		"spine": {
 			"license": {

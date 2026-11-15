@@ -62,7 +62,8 @@ async function harness(locale = "en-US", button = "cancel", accept = false) {
     RigGeometry: { forRemap: (report) => { geometries.push(report); return { "test.atlas": { source: { slots: [], poses: { "": [] } }, target: { slots: [], poses: { "": [] } } } }; },
       restOnly: (geometry) => ({ ...geometry, rest: true }),
       setupOf: (_S, atlasText) => { posed.push(["setup", atlasText]); return { bones: {}, slotBones: {}, skin: [] }; },
-      partPoses: (_S, atlasText, _skeleton, check) => { posed.push(["poses", atlasText, check]); return { slots: [], poses: { "": [] } }; } },
+      partPoses: (_S, atlasText, _skeleton, check) => { posed.push(["poses", atlasText, check]); return { slots: [], poses: { "": [] } }; },
+      failedPoses: (_S, atlasText, _skeleton, names) => { posed.push(["failed", atlasText, names]); return names.filter((name) => name === "Bad_01"); } },
     Compare: { show: async (...args) => { assert.ok(!held && !covered && !taskActive); comparisons.push(args);
       return typeof accept === "function" ? accept(comparisons.length) : accept; } },
   };
@@ -595,6 +596,43 @@ test("on macOS the converter is the user's to compile: no download", async () =>
   await h.mod.check("old-mod", "Mod", () => {}, { kind: "spr" });
   assert.ok(!h.calls.some(([method]) => method === "actions.converterDownload"));
   assert.deepEqual(h.popups.at(-1).lines, [h.strings.compatibility.converterMac]);
+});
+
+test("a memorial lobby is offered its new animations with the ones it cannot take and why; the page poses them", async () => {
+  for (const locale of ["zh-CN", "en-US", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
+    const h = await harness(locale, "ok", true);
+    h.use({ ...report(), kind: "lobby", remappable: false, graft: { kind: "own", animations: { "test.skel": ["Talk_01", "Bad_01"] },
+      refused: { "test.skel": { Hat_01: ["bone:hat", "constraint:cap"] } }, available: true } });
+    h.steps({
+      "actions.graft": { token: "t2", plain: true, rigs: { "test.atlas": { skeleton: "c2tlbA==", atlas: "grafted",
+        animations: ["Talk_01", "Bad_01"] } } },
+      "actions.graftCheck": { preview: "review", compare: { differences: [] }, pages: [], drawings: {},
+        report: { grafted: ["Talk_01"], corrected: [], unfixed: [], refused: { Hat_01: ["bone:hat"], Bad_01: ["pose:"] },
+          grown: 0, unanchored: false, marks: [], moved: [], dropped: [], added: [], official: [], upscaled: [], warnings: [],
+          partial: true, animations: true } },
+    });
+    const checked = await h.mod.inspect("old-mod");
+    const T = (key, vars = {}) => key.split(".").reduce((o, k) => o?.[k], h.strings).replace(/\{(\w+)\}/g, (_, k) => vars[k]);
+    const refused = checked.assessment.issues.find(({ key }) => key === "graftRefused");
+    assert.deepEqual(refused.params, { name: "test.skel", names: "Hat_01" }, locale);
+    const sep = /^(zh|ja)/.test(locale) ? "、" : ", ";
+    assert.equal(refused.detail.names, T("compatibility.refusedAnimation", { name: "Hat_01",
+      why: [T("compatibility.why.bone", { name: "hat" }), T("compatibility.why.constraint", { name: "cap" })].join(sep) }), locale);
+    assert.deepEqual(h.mod.repairs(checked.assessment).map(({ kind, text, label }) => [kind, text, label]),
+      [["graft", h.strings.compatibility.graftAnimations, h.strings.compatibility.graftAnimationsAction]], locale);
+    h.calls.length = 0;
+    await h.mod.check("old-mod", "Mod", () => {}, { kind: "lobby" });
+    assert.deepEqual(h.calls.map(([method]) => method), ["actions.compatibility", "actions.graft", "actions.graftCheck",
+      "actions.acceptRemap", "actions.discardRemap"], locale);
+    assert.deepEqual(h.calls[2][1], { token: "t2", geometry: { "test.atlas": { failed: ["Bad_01"] } } }, locale);
+    assert.deepEqual(h.posed, [["failed", "grafted", ["Talk_01", "Bad_01"]]], locale);
+    const [, , , options] = h.comparisons[0];
+    const lines = options.lines.map((line) => (typeof line === "string" ? line : line.text));
+    assert.deepEqual(lines, [T("remap.graftedAnimations", { n: 1 }), T("remap.graftRefused", { n: 2 })], locale);
+    assert.equal(options.steps, "animation", locale);
+    assert.deepEqual(options.expressions, ["Talk_01"], locale);
+    assert.equal(options.verdict, "remap.graftAnimationsPartial", locale);
+  }
 });
 
 test("a redrawn portrait whose official rig gained expressions is offered its old rig with them grafted", async () => {

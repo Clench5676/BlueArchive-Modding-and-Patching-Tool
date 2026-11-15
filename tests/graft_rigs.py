@@ -102,10 +102,10 @@ def mesh(vertices, uvs, triangles, hull=None, path=None) -> dict:
 
 
 def skeleton(*, bones=(("root", None),), slots=(("face", "root", None),), skin=None, animations=(),
-             nonessential=False, bone_floats=None) -> bytes:
+             nonessential=False, bone_floats=None, events=()) -> bytes:
     """A binary 4.2 skeleton: ``bones`` (name, parent), ``slots`` (name, bone, setup attachment), ``skin`` {slot:
-    [(key, attachment)]} for the default skin, ``animations`` [(name, {slot: [attachment, ...]}, [draw-order frames as
-    slot orders] )]."""
+    [(key, attachment)]} for the default skin, ``events`` (name, or (name, audio path)), ``animations`` [(name,
+    {slot: [attachment, ...]}, [draw-order frames as slot orders], optionally [events it fires])]."""
     strings: list[str] = []
 
     def ref(text):
@@ -153,10 +153,19 @@ def skeleton(*, bones=(("root", None),), slots=(("face", "root", None),), skin=N
                 out += b"".join(_varint(i) for i in a["triangles"])
                 if nonessential:
                     out += _varint(0) + _floats(0, 0)
-    body += bytes(out) + _varint(0) + _varint(0)  # no other skins, no events
+    body += bytes(out) + _varint(0)  # no other skins
+    events = [(e, None) if isinstance(e, str) else tuple(e) for e in events]
+    event_names = [name for name, _audio in events]
+    out = bytearray(_varint(len(events)))
+    for i, (name, audio) in enumerate(events):
+        out += _text(name) + _varint(i) + _floats(0.5) + _text(None) + _text(audio)
+        if audio:
+            out += _floats(1, 0)
+    body += bytes(out)
     out = bytearray(_varint(len(animations)))
-    for name, timelines, orders in animations:
-        out += _text(name) + _varint(len(timelines) + (1 if orders else 0))
+    for name, timelines, orders, *fired in animations:
+        fired = fired[0] if fired else []
+        out += _text(name) + _varint(len(timelines) + (1 if orders else 0) + (1 if fired else 0))
         out += _varint(len(timelines))
         for slot, names in timelines.items():
             out += _varint(slot_names.index(slot)) + _varint(1) + b"\x00" + _varint(len(names))
@@ -166,7 +175,11 @@ def skeleton(*, bones=(("root", None),), slots=(("face", "root", None),), skin=N
         out += _varint(len(orders))
         for i, order in enumerate(orders):
             out += _floats(i / 10) + draw_order_bytes([slot_names.index(slot) for slot in order])
-        out += _varint(0)  # events
+        out += _varint(len(fired))
+        for i, event in enumerate(fired):
+            out += _floats(i / 10) + _varint(event_names.index(event)) + _varint(0) + _floats(0) + _text(None)
+            if events[event_names.index(event)][1]:
+                out += _floats(1, 0)
     body += bytes(out)
     head = b"\x01" * 8 + _text("4.2.33") + _floats(0, 0, 100, 100, 100) + (b"\x01" if nonessential else b"\x00")
     if nonessential:

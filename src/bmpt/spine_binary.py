@@ -518,7 +518,12 @@ class Skeleton:
             self.skins.append(self._skin(False))
         self.events: list[str | None] = []
         self.audio: list[bool] = []
-        for _ in range(self._varint()):
+        self.events_count_at = self.pos
+        count = self._varint()
+        self.events_at = self.pos
+        self.event_spans: list[tuple[int, int]] = []  # (start, end) of each event's record; it names nothing else
+        for _ in range(count):
+            start = self.pos
             self.events.append(self._string())
             self._varint()
             self._skip(_FLOAT)
@@ -526,6 +531,7 @@ class Skeleton:
             self.audio.append(bool(self._string()))
             if self.audio[-1]:
                 self._skip(2 * _FLOAT)
+            self.event_spans.append((start, self.pos))
         self.anim_count_at = self.pos
         count = self._varint()
         self.anim_at = self.pos
@@ -632,6 +638,17 @@ def strings_patch(skeleton: Skeleton, added: list[str]) -> dict[tuple[int, int],
         return {}
     return {(skeleton.strings_count_at, skeleton.strings_at): varint_bytes(len(skeleton.strings) + len(added)),
             (skeleton.strings_end, skeleton.strings_end): b"".join(string_bytes(text) for text in added)}
+
+
+def events_patch(skeleton: Skeleton, source: Skeleton, names: list[str]) -> dict[tuple[int, int], bytes]:
+    """Patches that append the events ``names`` of ``source``, their records as they are, at the end of the
+    skeleton's event list: no event index of the skeleton moves, and an event record refers to nothing else."""
+    if not names:
+        return {}
+    added = b"".join(source.data[slice(*source.event_spans[source.events.index(name)])] for name in names)
+    end = skeleton.event_spans[-1][1] if skeleton.event_spans else skeleton.events_at
+    return {(skeleton.events_count_at, skeleton.events_at): varint_bytes(len(skeleton.events) + len(names)),
+            (end, end): added}
 
 
 def count_patch(at: int, end: int, count: int) -> dict[tuple[int, int], bytes]:

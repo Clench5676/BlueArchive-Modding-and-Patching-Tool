@@ -785,6 +785,19 @@
 			"converterMac": "macOS build: compile it yourself",
 			"converterDownload": "Download",
 			"converterPage": "Project page",
+			"graftAnimations": "Keep the Mod's .skel file, add the official new animations",
+			"graftAnimationsAction": "Add Animations",
+			"graftRefused": "{name}, animations that cannot be added: {names}",
+			"refusedAnimation": "{name} ({why})",
+			"why": {
+				"bone": "bone {name} missing",
+				"constraint": "constraint {name} missing",
+				"skin": "skin {name} missing",
+				"event": "event {name} missing",
+				"deform": "mesh {name} changed",
+				"linked": "linked mesh {name}",
+				"pose": "does not play"
+			},
 			"remapAction": "Use Official .skel File",
 			"rigUnknown": ".skel file the Mod was drawn for not recorded, no automatic repair"
 		},
@@ -823,7 +836,13 @@
 			"previousExpression": "Previous Expression",
 			"nextExpression": "Next Expression",
 			"graftDone": "Expressions added",
-			"graftPartial": "Expressions added, some to check"
+			"graftPartial": "Expressions added, some to check",
+			"graftedAnimations": "Animations added: {n}",
+			"animation": "Animation {name} ({n}/{total})",
+			"previousAnimation": "Previous Animation",
+			"nextAnimation": "Next Animation",
+			"graftAnimationsDone": "Animations added",
+			"graftAnimationsPartial": "Animations added, some not added"
 		},
 		"spine": {
 			"license": {

@@ -12,7 +12,7 @@ import pytest
 from PIL import Image
 
 from bmpt import atlas_remap, graft, rebake
-from bmpt.spine_binary import MESH, REGION, Skeleton, draw_order, draw_order_bytes, strip_nonessential
+from bmpt.spine_binary import MESH, REGION, Skeleton, draw_order, draw_order_bytes, strip_nonessential, varint_bytes
 
 from graft_rigs import mesh, region, remove_animations, remove_slot, skeleton
 
@@ -339,3 +339,133 @@ def test_a_page_beyond_the_largest_one_a_graft_packs_is_refused():
     huge = ATLAS.replace("size:32,32", "size:100000,100000")
     with pytest.raises(graft.GraftError):
         graft.pack(huge, OFFICIAL, ["new"], {"page": mod}, {"official": new}, setup_drawing((0, 0, 8, 8)))
+
+
+# --- events, and rigs without a picture to compare (memorial lobbies, Spine backgrounds)
+
+def test_an_event_a_new_animation_fires_is_appended_to_the_mods_event_list_and_nothing_of_the_mods_moves():
+    new = official(events=["mine", ("voice", "talk.wav"), "step"],
+                   animations=[("00", {"face": ["a"]}, [], ["mine"]), ("17", {"face": ["new"]}, [], ["voice", "step"]),
+                               ("18", {}, [], ["step"])])
+    mod = official(events=["mine"], animations=[("00", {"face": ["a"]}, [], ["mine"])])
+    g = graft.SkeletonGraft(mod, new)
+    out = g.build()
+    assert not g.refused and names(out) == ["00", "17", "18"]
+    assert g.events_added == ["voice", "step"]
+    sk = Skeleton(out)  # walks to the last byte
+    assert sk.events == ["mine", "voice", "step"] and sk.audio == [False, True, False]
+    fired = {a["name"]: [sk.events[v] for _x, _y, kind, v in sk.refs_in(a["body"], a["end"]) if kind == "event"]
+             for a in sk.animations}
+    assert fired == {"00": ["mine"], "17": ["voice", "step"], "18": ["step"]}
+
+
+def test_an_event_is_carried_only_for_an_animation_that_is_carried():
+    new = official(bones=(("root", None), ("hat", "root")), events=["voice"],
+                   slots=[("body", "root", "b"), ("face", "root", "a"), ("glow", "root", "g"), ("cap", "hat", None)],
+                   skin={"body": [("b", region())], "face": [("a", region())], "glow": [("g", region())],
+                         "cap": [("c", region())]},
+                   animations=[("00", {"face": ["a"]}, []), ("18", {"cap": ["c"]}, [], ["voice"])])
+    g = graft.SkeletonGraft(official(animations=[("00", {"face": ["a"]}, [])]), new)
+    assert g.refused == {"18": ["bone:hat"]} and not g.events_added and not g.animations
+
+
+def test_without_a_posed_rig_a_region_goes_where_none_of_the_mods_atlas_regions_lie():
+    mod, new = pages()
+    out = graft.pack(ATLAS, OFFICIAL, ["new"], {"page": mod}, {"official": new}, None)
+    x, y = out.placed["new"].xy
+    assert x >= 8 + graft.PAD or y >= 8 + graft.PAD  # clear of the mod's own region
+    assert not out.grown
+
+
+def test_a_pack_with_no_region_to_place_changes_no_page():
+    out = graft.pack(ATLAS, OFFICIAL, [], {}, {}, None)
+    assert not out.placed and not out.images and not out.grown
+
+
+def test_a_plain_graft_carries_the_animations_and_attachments_with_the_official_records():
+    skin = {"body": [("b", region())], "face": [("a", region()), ("new", region(x=3))], "glow": [("g", region())]}
+    new = official(skin=skin)
+    mod = official(skin={"body": [("b", region(w=9))], "face": [("a", region(w=7))], "glow": [("g", region())]},
+                   animations=[("00", {"face": ["a"]}, [])])
+    mod_atlas = "page.png\nsize:32,32\nfilter:Linear,Linear\na\nbounds:0,0,8,8\nb\nbounds:8,0,8,8\ng\nbounds:16,0,4,4\n"
+    official_atlas = ("official.png\nsize:16,16\nfilter:Linear,Linear\na\nbounds:0,0,4,4\nb\nbounds:4,0,4,4\n"
+                      "g\nbounds:8,8,2,2\nnew\nbounds:8,0,4,6\n")
+    page, source = pages()
+    out = graft.plain(mod, mod_atlas, {"page": page}, new, official_atlas, {"official": source})
+    assert names(out.skeleton) == ["00", "17"] and list(out.results) == ["17"]
+    sk = Skeleton(out.skeleton)
+    assert sk.attachments()[("default", "face", "new")]["floats"] == Skeleton(new).attachments()[
+        ("default", "face", "new")]["floats"]
+    assert "\nnew\n" in out.atlas and "page" in out.pages
+
+
+def test_a_plain_graft_of_only_some_animations_leaves_the_others_out():
+    new = official(animations=[("00", {"face": ["a"]}, []), ("17", {"face": ["new"]}, []), ("18", {}, [])])
+    mod = official(animations=[("00", {"face": ["a"]}, [])])
+    atlas = "page.png\nsize:32,32\nfilter:Linear,Linear\na\nbounds:0,0,8,8\n"
+    out = graft.plain(mod, atlas, {}, new, OFFICIAL, {}, only={"18"})
+    assert names(out.skeleton) == ["00", "18"] and not out.pages
+    with pytest.raises(graft.GraftError):
+        graft.plain(mod, atlas, {}, new, OFFICIAL, {}, only={"nothing"})
+
+
+def official_lobby_skeletons() -> list[bytes]:
+    folder = os.environ.get("BAMT_TEST_GAME_DIR")
+    if not folder:
+        pytest.skip("BAMT_TEST_GAME_DIR is not set")
+    windows = Path(folder) / "BlueArchive_Data/StreamingAssets/PUB/Resource/GameData/Windows"
+    found = []
+    for core in ("ch0058_home", "hoshino_home", "np0032_npc", "sora_shop"):
+        parts = sorted(windows.glob(f"assets-_mx-spine*-{core}-*.bundle"))
+        if parts:
+            found += list(atlas_remap.read_inputs(parts).skeletons.values())
+    if not found:
+        pytest.skip("no official memorial lobby found")
+    return found
+
+
+def remove_events(data: bytes, count: int) -> tuple[bytes, list[str]]:
+    """The skeleton without its last ``count`` events and the animations that fire them."""
+    sk = Skeleton(data)
+    n = len(sk.events)
+    gone_events = set(range(n - count, n))
+    gone = [a for a in sk.animations
+            if any(kind == "event" and v in gone_events for _a, _b, kind, v in sk.refs_in(a["body"], a["end"]))]
+    patches = {(a["start"], a["end"]): b"" for a in gone}
+    patches[(sk.anim_count_at, sk.anim_at)] = varint_bytes(len(sk.animations) - len(gone))
+    patches[(sk.events_count_at, sk.events_at)] = varint_bytes(n - count)
+    patches[(sk.event_spans[n - count][0], sk.event_spans[-1][1])] = b""
+    return sk.emit(0, sk.size, None, patches), [a["name"] for a in gone]
+
+
+def canonical(data: bytes) -> dict[str, bytes]:
+    """Each animation's bytes with every shared string referred to by its first index: official string tables
+    repeat entries, and a graft refers to the first."""
+    sk = Skeleton(data)
+    first: dict = {}
+    for i, text in enumerate(sk.strings, 1):
+        first.setdefault(text, i)
+    return {a["name"]: sk.emit(a["start"], a["end"], lambda kind, v: first[sk.s(v)] if kind == "str" and v else v)
+            for a in sk.animations}
+
+
+def test_official_lobby_animations_and_events_taken_out_and_grafted_back_are_what_they_were():
+    tried = 0
+    for data in official_lobby_skeletons():
+        sk = Skeleton(data)
+        assert sk.emit(0, len(data)) == data
+        if len(sk.events) >= 2:
+            mod, gone = remove_events(data, max(1, len(sk.events) // 3))
+        else:
+            take = [a["name"] for a in sk.animations][-max(1, len(sk.animations) // 3):]
+            mod, gone = remove_animations(data, take), take
+        if not gone:
+            continue
+        g = graft.SkeletonGraft(mod, data)
+        out = g.build()
+        assert not g.refused, g.refused
+        assert Skeleton(out).events == sk.events and sorted(names(out)) == sorted(names(data))
+        before, after = canonical(data), canonical(out)
+        assert {name: after[name] for name in gone} == {name: before[name] for name in gone}
+        tried += 1
+    assert tried
