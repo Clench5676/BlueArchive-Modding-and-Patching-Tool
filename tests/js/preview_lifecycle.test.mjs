@@ -228,3 +228,32 @@ test("preview deadlines leave out the time a read waits for the library", async 
   advance(1); assert.equal(late, 1); other(); setLibraryWaiting(false);
   t.mock.timers.reset();
 });
+
+test("a Spine player restarted under Now Loading draws again once it ends", async (t) => {
+  const env = surface(); globals(t, env);
+  const old = globalThis.requestAnimationFrame, queued = [];
+  globalThis.requestAnimationFrame = (fn) => { queued.push(fn); };
+  t.after(() => { if (old) globalThis.requestAnimationFrame = old; else delete globalThis.requestAnimationFrame; });
+  const flush = () => { for (const fn of queued.splice(0)) fn(); };
+  let frames = 0;
+  const load = loadPlayer((config) => {
+    const canvas = new EventTarget(); canvas.isConnected = true;
+    const p = { config, canvas, stopRequestAnimationFrame: false, time: { delta: 5, update() {} },
+      stopRendering() { this.stopRequestAnimationFrame = true; },
+      // the runtime's own loop: each frame asks for the next while it runs
+      startRendering() { this.stopRequestAnimationFrame = false; requestAnimationFrame(() => this.drawFrame()); },
+      drawFrame(loop = true) { if (loop && !this.stopRequestAnimationFrame) requestAnimationFrame(() => this.drawFrame()); frames++; },
+      dispose() {} };
+    queueMicrotask(() => config.success(p)); return p;
+  }, {});
+  const p = await load.ready;
+  freezeShown(true);
+  p.startRendering(); // an owner restarting its clock behind Now Loading (photography opening)
+  flush();
+  assert.equal(p.stopRequestAnimationFrame, true, "the skipped frame ended the loop");
+  freezeShown(false); await tick(); flush(); flush();
+  const before = frames; flush();
+  assert.equal(frames, before + 1, "the loop runs again");
+  assert.equal(p.stopRequestAnimationFrame, false);
+  load.dispose(); freezeShown(false);
+});
