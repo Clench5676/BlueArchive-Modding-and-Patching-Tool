@@ -22,12 +22,13 @@ from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from functools import wraps
 from pathlib import Path
+from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, Callable, Hashable, Iterable, Iterator, Mapping, Sequence
 
 from UnityPy.helpers.ResourceReader import get_resource_data
 
 from bmpt import atlas_remap, devmode, game_paths, graft as grafting, mod_origin, preview_gate, rebake, spans, \
-    steam_records
+    spine_converter, steam_records
 from bmpt.engine import (
     SEARCH_DIR_SUFFIXES, AssetType, Bundle, LogFunc, ProgressCallback, core, get_search_dirs, get_skel_version,
     is_safe_file_name, no_log, parse_filename, t,
@@ -8051,6 +8052,140 @@ class ModLibrary:
                 raise ServiceError(error.code, **error.params) from error
             return self._remap_review(mod_id, state["identity"], paths, originals, official, inputs["view"], output,
                                       patch, report, pin, log, step)
+
+    # --- the converter route of a graft (bmpt.spine_converter): optional, after the user's consent -----------------
+
+    def converter_root(self) -> Path:
+        """Where the App keeps helper programs the user fetched: beside the settings (the App's data folder)."""
+        return Path(self.settings.path).parent
+
+    def converter_status(self) -> dict:
+        return spine_converter.status(self.converter_root())
+
+    def converter_download(self, consented: bool, progress: Callable[[dict], None] | None = None) -> dict:
+        """Fetch the pinned converter release after the user confirmed its licence (Windows)."""
+        def step(done: int, total: int) -> None:
+            if progress:
+                progress({"current": done, "total": total, "step": "import.step.check"})
+        try:
+            spine_converter.download(self.converter_root(), consented=consented, progress=step)
+        except spine_converter.ConverterError as error:
+            raise ServiceError(error.code, **error.params) from error
+        return self.converter_status()
+
+    @_serialized
+    def graft_convert(self, token: str, geometry: Any) -> dict:
+        """The converter route's second step, after ``graft``: per rig the mod's skeleton and the official one through
+        the converter to JSON, the official animations the mod lacks added there with what they need
+        (``spine_converter.graft_json``), the regions they draw packed onto the mod's pages (``graft.pack``, from the
+        posted setup poses as ``graft_build`` takes them) and the skeleton back to binary. Hands back, per rig, the
+        mod's rig ``before`` and ``after`` to pose, with ``check``: the mod's own animations and the slots that draw
+        them, for the pose comparison of ``graft_convert_check``; and ``refused``."""
+        state = self._graft_state(token)
+        if not isinstance(geometry, dict):
+            raise ServiceError("bad_params", key="geometry")
+        exe = spine_converter.located(self.converter_root())
+        if exe is None:
+            raise ServiceError("converter_missing")
+        official = state["inputs"]["official"]
+        converted, out, refused = {}, {}, {}
+        try:
+            for name, rig in state["rigs"].items():
+                posted = geometry.get(name)
+                if not isinstance(posted, dict):
+                    raise ServiceError("bad_params", key="geometry")
+                official_text = official.atlases[name].decode("utf-8-sig")
+                mod_json = spine_converter.to_json(exe, rig["data"])
+                own = {animation: [slot.get("name") for slot in mod_json.get("slots") or []]
+                       for animation in mod_json.get("animations") or {}}
+                result = spine_converter.graft_json(mod_json, spine_converter.to_json(exe, official.skeletons[rig["skeleton"]]))
+                refused.update(result.refused)
+                mod_atlas = atlas_remap.parse_atlas(rig["atlas"], name)
+                mod_setup = grafting.setup(posted.get("mod"), mod_atlas)
+                mod_pages = {key: state["inputs"]["mod"].textures[key] for key in rig["pages"]}
+                pages = grafting.pack(rig["atlas"], official_text, result.regions, mod_pages, official.textures, mod_setup)
+                atlas = grafting.atlas_text(rig["atlas"], pages)
+                skeleton = spine_converter.to_binary(exe, mod_json)
+                converted[name] = {"result": result, "pages": pages, "atlas": atlas, "skeleton": skeleton, "own": own}
+                out[name] = {"before": {"atlas": rig["atlas"], "skeleton": base64.b64encode(rig["data"]).decode("ascii")},
+                             "after": {"atlas": atlas, "skeleton": base64.b64encode(skeleton).decode("ascii")},
+                             "check": own}
+        except spine_converter.ConverterError as error:
+            raise ServiceError(error.code, **error.params) from error
+        except grafting.GraftError as error:
+            raise ServiceError(error.code, **error.params) from error
+        except atlas_remap.RemapError as error:
+            raise ServiceError(error.code, **error.params) from error
+        state["converted"] = converted
+        return {"rigs": out, "refused": refused}
+
+    @_serialized
+    def graft_convert_check(self, token: str, geometry: Any, log: LogFunc = no_log,
+                            progress: Callable[[dict], None] | None = None, pin: Pin | None = None) -> dict:
+        """The converter route's last step: the mod's own animations posed before and after the rewrite (the
+        converter rounds to two decimals) may move at most ``spine_converter.DRIFT``, else ``converter_drift``; then
+        the review of the repaired copy as a graft's (``_remap_review``). The carried attachments keep the official
+        rig's placement (no anchor fit), so the review rings what they draw."""
+        state = self._graft_state(token)
+        pin = self._current(pin)
+        if not state.get("converted") or not isinstance(geometry, dict):
+            raise ServiceError("bad_params", key="geometry")
+        if pin.key != state["pin"]:
+            raise ServiceError("entry_changed")
+        mod_id = state["source"]
+        record = self._record(mod_id)
+        paths = self._paths(record)
+        if state["identity"] != self._identity({path.name: path for path in paths}):
+            raise ServiceError("entry_changed")
+        inputs = state["inputs"]
+        report = {"moved": [], "added": [], "official": [], "dropped": [], "upscaled": [], "warnings": [],
+                  "grafted": [], "refused": {}, "corrected": [], "unfixed": [], "grown": 0, "unanchored": True,
+                  "unchanged": False, "converter": True}
+        marks: list[str] = []
+        checked = {}
+        try:
+            for name, one in state["converted"].items():
+                posted = geometry.get(name)
+                if not isinstance(posted, dict):
+                    raise ServiceError("bad_params", key="geometry")
+                limit = len(one["own"]) + 1
+                before = rebake.rig(posted.get("before"), atlas_remap.parse_atlas(state["rigs"][name]["atlas"], name),
+                                    max_poses=limit)
+                after = rebake.rig(posted.get("after"), atlas_remap.parse_atlas(one["atlas"], name), max_poses=limit)
+                moved = spine_converter.drift(*({f"{pose}|{d.slot}|{d.region}|{k}": d.vertices.ravel().tolist()
+                                                 for pose, drawn in rig.poses.items() for k, d in enumerate(drawn)}
+                                                for rig in (before, after)))
+                if moved > spine_converter.DRIFT:
+                    raise ServiceError("converter_drift", moved=f"{moved:.2f}", limit=spine_converter.DRIFT)
+                result = one["result"]
+                report["grafted"] += result.added
+                report["refused"].update(result.refused)
+                report["grown"] = max([report["grown"], *one["pages"].grown.values()])
+                marks += result.regions
+                checked[name] = SimpleNamespace(atlas=one["atlas"], skeleton=one["skeleton"], pages=one["pages"].images)
+        except atlas_remap.RemapError as error:
+            raise ServiceError(error.code, **error.params) from error
+        self._grafts.pop(token, None)
+        report["marks"] = sorted(set(marks))
+        report["partial"] = True  # placed as the official rig places them: always for a look
+        targets = self._spine_parts(core_of(paths[0].name), pin)
+        if not targets:
+            raise ServiceError("game_file_not_found", variant=record["target"])
+
+        def step(key: str, current: int = 1) -> None:
+            if progress:
+                progress({"current": current, "total": len(targets), "step": f"import.step.{key}"})
+
+        with temporary_directory(prefix=devmode.LIBRARY_STAGING_PREFIX + "remap-") as temporary:
+            output = Path(temporary)
+            step("check")
+            originals = self._stage_official(targets, output / "official", pin)
+            try:
+                patch = self._graft_patch(paths, originals, inputs["official"], inputs["mod"], state["rigs"], checked)
+            except atlas_remap.RemapError as error:
+                raise ServiceError(error.code, **error.params) from error
+            return self._remap_review(mod_id, state["identity"], paths, originals, inputs["official"], inputs["view"],
+                                      output, patch, report, pin, log, step)
 
     @_serialized
     def discard_graft(self, token: str) -> None:

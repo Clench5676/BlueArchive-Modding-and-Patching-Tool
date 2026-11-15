@@ -40,6 +40,7 @@ async function harness(locale = "en-US", button = "cancel", accept = false) {
     rpc: async (method, params) => {
       if (method === "actions.compatibilityStamp") return stamp;
       calls.push([method, params]);
+      if (`rpc:${method}` in steps) return steps[`rpc:${method}`];  // a direct answer, not a job
       if (["actions.remap", "actions.oldRig", "actions.acceptRemap"].includes(method)) assert.ok(held && covered && taskActive);
       return method;
     },
@@ -62,7 +63,8 @@ async function harness(locale = "en-US", button = "cancel", accept = false) {
       restOnly: (geometry) => ({ ...geometry, rest: true }),
       setupOf: (_S, atlasText) => { posed.push(["setup", atlasText]); return { bones: {}, slotBones: {}, skin: [] }; },
       partPoses: (_S, atlasText, _skeleton, check) => { posed.push(["poses", atlasText, check]); return { slots: [], poses: { "": [] } }; } },
-    Compare: { show: async (...args) => { assert.ok(!held && !covered && !taskActive); comparisons.push(args); return accept; } },
+    Compare: { show: async (...args) => { assert.ok(!held && !covered && !taskActive); comparisons.push(args);
+      return typeof accept === "function" ? accept(comparisons.length) : accept; } },
   };
   const code = `const { T, language, rpc, waitJob, Loading, Popup, Compare, ensureSpine, jobProgress, RigGeometry } = globalThis.compatibilityDeps;\n${source.replace(/^import .*;$/gm, "")}\n// ${sequence++}`;
   const mod = await import(`data:text/javascript;base64,${Buffer.from(code).toString("base64")}`);
@@ -529,12 +531,70 @@ test("a mod with its own skeleton the official one outgrew is offered the graft 
     const lines = options.lines.map((line) => (typeof line === "string" ? line : line.text));
     assert.deepEqual(lines, [h.strings.remap.grafted.replace("{n}", 2), h.strings.remap.graftCorrected.replace("{n}", 1),
       h.strings.remap.graftRefused.replace("{n}", 1), h.strings.remap.graftGrown.replace("{n}", 132),
-      h.strings.remap.graftUnanchored], locale);
+      h.strings.remap.graftUnanchored, h.mod.CONVERTER_NAME], locale);
+    // what the graft refused: the converter's route, which ends this review
+    assert.deepEqual(options.lines.at(-1).button, { label: h.strings.compatibility.converterAction, close: "convert" }, locale);
     assert.deepEqual(options.expressions, ["17", "18"], locale);
     assert.deepEqual(options.marks, ["17"], locale);
     assert.ok(options.partial, locale);
     assert.equal(options.verdict, "remap.graftPartial", locale);  // its own verdict: nothing was repacked
   }
+});
+
+test("what the graft refused goes through the converter once it is fetched with the user's consent", async () => {
+  for (const locale of ["zh-CN", "en-US"]) {
+    // the first review ends with the converter's route, the second is accepted
+    const h = await harness(locale, "ok", (n) => (n === 1 ? "convert" : true));
+    h.use({ ...mixedReport(), kind: "spr", graft: { kind: "own", animations: { "test.skel": ["17"] }, available: true } });
+    const rig = (atlas) => ({ atlas, skeleton: "c2tlbA==" });
+    const review = (report) => ({ preview: "review", compare: { differences: [] }, pages: [], drawings: {}, report: {
+      grafted: ["17"], corrected: [], unfixed: [], grown: 0, unanchored: true, marks: [], moved: [], dropped: [], added: [],
+      official: [], upscaled: [], warnings: [], partial: true, ...report } });
+    h.steps({
+      "actions.graft": { token: "t1", rigs: { "test.atlas": { kind: "own", animations: ["17", "19"], mod: rig("mod"), base: null,
+        official: rig("official") } } },
+      "actions.graftBuild": { rigs: { "test.atlas": { skeleton: "dGVzdA==", atlas: "test", check: { "17": ["face"] },
+        official: { "17": ["face"] } } }, refused: { "19": "bone hat" } },
+      "actions.graftCheck": review({ refused: { "19": "bone hat" } }),
+      "rpc:actions.converterStatus": { installed: false, downloadable: true, home: "https://github.com/wang606/SpineSkeletonDataConverter" },
+      "actions.converterDownload": { installed: true },
+      "actions.graftConvert": { rigs: { "test.atlas": { before: rig("mod"), after: rig("after"), check: { "00": ["face"] } } }, refused: {} },
+      "actions.graftConvertCheck": review({ grafted: ["17", "19"], refused: {}, converter: true }),
+    });
+    await h.mod.check("old-mod", "Mod", () => {}, { kind: "spr" });
+    const methods = h.calls.map(([method]) => method);
+    assert.deepEqual(methods.slice(methods.indexOf("actions.graftCheck")), ["actions.graftCheck", "actions.discardRemap",
+      "actions.converterStatus", "actions.converterDownload", "actions.graft", "actions.graftConvert",
+      "actions.graftConvertCheck", "actions.acceptRemap", "actions.discardRemap"], locale);
+    assert.deepEqual(h.calls.find(([method]) => method === "actions.converterDownload")[1], { consent: true }, locale);
+    // the consent names the licence and the tool's page, and downloads only on the user's yes
+    const consent = h.popups.at(-1);
+    assert.equal(consent.title, h.strings.compatibility.converterTitle, locale);
+    assert.equal(consent.lines[0], h.strings.compatibility.converterLicence, locale);
+    assert.equal(consent.ok, h.strings.compatibility.converterDownload, locale);
+    // the mod's own animations posed before and after the rewrite
+    assert.deepEqual(h.posed.slice(-2), [["poses", "mod", { "00": ["face"] }], ["poses", "after", { "00": ["face"] }]], locale);
+    // the converter's review offers no converter again
+    const [, , , options] = h.comparisons[1];
+    assert.ok(!options.lines.some((line) => line.button?.close), locale);
+  }
+});
+
+test("on macOS the converter is the user's to compile: no download", async () => {
+  const h = await harness("zh-CN", "ok", (n) => (n === 1 ? "convert" : true));
+  h.use({ ...mixedReport(), kind: "spr", graft: { kind: "own", animations: { "test.skel": ["17"] }, available: true } });
+  const rig = (atlas) => ({ atlas, skeleton: "c2tlbA==" });
+  h.steps({
+    "actions.graft": { token: "t1", rigs: { "test.atlas": { kind: "own", animations: ["17"], mod: rig("mod"), base: null,
+      official: rig("official") } } },
+    "actions.graftBuild": { rigs: { "test.atlas": { skeleton: "dGVzdA==", atlas: "test", check: {}, official: {} } }, refused: {} },
+    "actions.graftCheck": { preview: "review", compare: {}, pages: [], drawings: {}, report: { grafted: ["17"], refused: { "19": "x" },
+      corrected: [], unfixed: [], marks: [], moved: [], dropped: [], added: [], official: [], upscaled: [], warnings: [] } },
+    "rpc:actions.converterStatus": { installed: false, downloadable: false },
+  });
+  await h.mod.check("old-mod", "Mod", () => {}, { kind: "spr" });
+  assert.ok(!h.calls.some(([method]) => method === "actions.converterDownload"));
+  assert.deepEqual(h.popups.at(-1).lines, [h.strings.compatibility.converterMac]);
 });
 
 test("a redrawn portrait whose official rig gained expressions is offered its old rig with them grafted", async () => {

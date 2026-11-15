@@ -177,7 +177,8 @@ export async function show(result, title = T("act.compare"), hostId = "popup", r
       tool(row, "\u25b6", T("remap.nextExpression"), () => go(1));
       go(0);
     }
-    // a line is text, or {text, button: {label, fn}} for one with a small button at its end, as in message popups
+    // a line is text, or {text, button: {label, fn}} for one with a small button at its end, as in message popups;
+    // a button with ``close`` ends the review with that value instead (another route to take)
     for (const line of review.lines) {
       if (typeof line === "string") { part("", notes, line); continue; }
       const row = part("repair-line", notes), caption = document.createElement("div"), button = document.createElement("button");
@@ -185,12 +186,12 @@ export async function show(result, title = T("act.compare"), hostId = "popup", r
       button.className = "plain-line-button";
       button.textContent = line.button.label;
       button.setAttribute("aria-label", `${line.button.label} - ${line.text}`);
-      button.addEventListener("click", () => line.button.fn?.());
+      button.addEventListener("click", () => { if (line.button.close) { routed = line.button.close; done(); } else line.button.fn?.(); });
       row.appendChild(caption);
       row.appendChild(button);
     }
   }
-  let finish;
+  let finish, routed = null;  // routed: the value a line button's ``close`` ended the review with
   const closed = new Promise((resolve) => { finish = resolve; });
   let finished = false;
   const done = (accepted = false) => {
@@ -200,7 +201,7 @@ export async function show(result, title = T("act.compare"), hostId = "popup", r
     layer.remove();
     popupClosed(host, layer);
     if (!host.children.length) host.hidden = true;
-    finish(accepted === true);
+    finish(routed ?? accepted === true);
   };
   hitNode(next, view, "Center/Popup/Base/BG/Btn_Close", done, { name: T("display.close"), action: "close" });
   if (review) {

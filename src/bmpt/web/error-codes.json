@@ -123,6 +123,38 @@
     "code": "E3004",
     "level": "failed"
   },
+  "converter_consent": {
+    "code": "E5023",
+    "level": "failed"
+  },
+  "converter_download_failed": {
+    "code": "E5025",
+    "level": "failed"
+  },
+  "converter_drift": {
+    "code": "E5030",
+    "level": "failed"
+  },
+  "converter_failed": {
+    "code": "E5027",
+    "level": "failed"
+  },
+  "converter_mismatch": {
+    "code": "E5026",
+    "level": "failed"
+  },
+  "converter_missing": {
+    "code": "E5029",
+    "level": "failed"
+  },
+  "converter_unavailable": {
+    "code": "E5024",
+    "level": "failed"
+  },
+  "converter_unreadable": {
+    "code": "E5028",
+    "level": "failed"
+  },
   "crc_fix_failed": {
     "code": "E4003",
     "level": "failed"

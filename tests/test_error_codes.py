@@ -55,7 +55,8 @@ BLOCKS = (
         'atlas_remap_property atlas_remap_region_ambiguous atlas_remap_regions_missing atlas_remap_source_missing '
         'atlas_remap_structure atlas_remap_target_mismatch atlas_remap_redrawn old_rig_animations '
         'old_rig_unavailable graft_unavailable graft_refused graft_page_missing graft_region_too_large '
-        'graft_spine_licence '
+        'graft_spine_licence converter_consent converter_unavailable converter_download_failed converter_mismatch '
+        'converter_failed converter_unreadable converter_missing converter_drift '
     ).split(),
     (
         'alias_too_long alias_too_many hall_conflict hall_duplicate_memorial hall_duplicate_portrait '

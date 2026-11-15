@@ -208,7 +208,7 @@ export async function show(report, { onRemap } = {}) {
 
 // The repair review's lines: one per kind of region with its count, the names behind a Details button. Regions are
 // named "<atlas> - <region>"; the atlas is left out when every region of the report is in the same one.
-export function reviewLines(report) {
+export function reviewLines(report, { convert = false } = {}) {
   // an old rig set up as a whole (actions.oldRig) moves nothing: its line names the atlases kept
   if (report.rigs?.length) return [T("remap.oldRig", { names: joined(report.rigs) }),
     ...report.warnings.map(({ key, name }) => T(`remap.${key}`, { name }))];
@@ -220,7 +220,10 @@ export function reviewLines(report) {
     return [...named("grafted", report.grafted), ...named("graftCorrected", report.corrected || []),
       ...named("graftUnfixed", report.unfixed || []), ...named("graftRefused", Object.keys(report.refused || {})),
       ...(report.grown ? [T("remap.graftGrown", { n: report.grown })] : []),
-      ...(report.unanchored ? [T("remap.graftUnanchored")] : [])];
+      ...(report.unanchored ? [T("remap.graftUnanchored")] : []),
+      // what the graft refused, through the optional converter (converterRemap): ends this review to take it
+      ...(convert && !report.converter && Object.keys(report.refused || {}).length
+        ? [{ text: CONVERTER_NAME, button: { label: T("compatibility.converterAction"), close: "convert" } }] : [])];
   }
   const kinds = { unpainted: report.added || [], official: report.official || [], dropped: report.dropped || [] };
   const atlases = new Set(Object.values(kinds).flat().map((name) => name.split(" - ")[0]));
@@ -234,6 +237,55 @@ export function reviewLines(report) {
     ...new Set((report.upscaled || []).map(({ w, h }) => T("remap.upscaled", { w, h }))),
     ...counted("official", kinds.official), ...counted("unpainted", kinds.unpainted),
     ...report.warnings.map(({ key, name }) => T(`remap.${key}`, { name }))];
+}
+
+// The optional converter (bmpt/spine_converter.py): its program's name, as its author writes it
+export const CONVERTER_NAME = "SpineSkeletonDataConverter";
+
+// The converter route (actions.graft, graftConvert, graftConvertCheck): the page poses the mod's setup for the packing,
+// the library rewrites the rigs through the converter and hands back each rig before and after, the page poses the
+// mod's own animations on both, and the library checks how far they moved and prepares the review.
+async function converted(id, subject) {
+  if (!await ensureSpine()) return null;
+  const S = globalThis.spine;
+  let token = null;
+  try {
+    return await Loading.hold(() => Loading.page(() => progressTask("Remap", subject, async (update) => {
+      const first = await waitJob(await rpc("actions.graft", { mod: id }), update);
+      token = first.token;
+      const skeleton = (rig) => ({ data: rig.skeleton });
+      const setup = Object.fromEntries(Object.entries(first.rigs).map(([name, rig]) => [name, {
+        mod: RigGeometry.setupOf(S, rig.mod.atlas, skeleton(rig.mod)) }]));
+      const built = await waitJob(await rpc("actions.graftConvert", { token, geometry: setup }), update);
+      const posed = Object.fromEntries(Object.entries(built.rigs).map(([name, rig]) => [name, {
+        before: RigGeometry.partPoses(S, rig.before.atlas, skeleton(rig.before), rig.check),
+        after: RigGeometry.partPoses(S, rig.after.atlas, skeleton(rig.after), rig.check) }]));
+      const result = await waitJob(await rpc("actions.graftConvertCheck", { token, geometry: posed }), update);
+      token = null;  // the check takes it
+      return result;
+    })), { all: true });
+  } finally {
+    if (token) await rpc("actions.discardGraft", { token }).catch(() => {});
+  }
+}
+
+// The converter, fetched once with the user's consent to its licence (Windows), or the note that the macOS build is
+// the user's own to compile. Resolves true when it is in place.
+export async function ensureConverter() {
+  const status = await rpc("actions.converterStatus");
+  if (status.installed) return true;
+  const title = T("compatibility.converterTitle");
+  if (!status.downloadable) {
+    await Popup.message({ title, lines: [T("compatibility.converterMac")], ok: T("picker.ok") });
+    return false;
+  }
+  const response = await Popup.message({ title, lines: [T("compatibility.converterLicence"),
+    { text: status.home, button: { label: T("compatibility.converterPage"), fn: () => rpc("app.openConverterPage").catch(() => {}) } }],
+    ok: T("compatibility.converterDownload"), cancel: T("popup.cancel") });
+  if (response.button !== "ok") return false;
+  await Loading.hold(() => Loading.page(() => progressTask("Remap", CONVERTER_NAME,
+    async (update) => waitJob(await rpc("actions.converterDownload", { consent: true }), update))), { all: true });
+  return true;
 }
 
 // The graft (actions.graft, graftBuild, graftCheck): the page poses the rigs the library names, the library splices and
@@ -312,10 +364,11 @@ export const discard = (result) => (result?.preview ? rpc("actions.discardRemap"
 
 // review(id, result, options): the repair review (Compare.show): both pictures, the report's lines and marks; resolves
 // true when accepted. options: {label, kind, accept, discard}: the review's title, kind and button labels.
-export function review(id, result, { label = "", kind = "", accept: acceptLabel = T("remap.accept"), discard: discardLabel = T("remap.discard") } = {}) {
+// options.convert: a graft's review may end with "convert" (the converter route for what it refused).
+export function review(id, result, { label = "", kind = "", accept: acceptLabel = T("remap.accept"), discard: discardLabel = T("remap.discard"), convert = false } = {}) {
   const report = result.report;
   return Compare.show({ ...result.compare, pages: result.pages, drawings: result.drawings }, label || T("remap.action"), "dialog", {
-    lines: reviewLines(report), partial: report.partial, accept: acceptLabel, discard: discardLabel, kind: kind || reports.get(id)?.kind || "spr",
+    lines: reviewLines(report, { convert }), partial: report.partial, accept: acceptLabel, discard: discardLabel, kind: kind || reports.get(id)?.kind || "spr",
     // the regions whose pixels are not the mod's own, or a graft's parts that match no candidate: what the
     // pictures can ring
     marks: report.grafted ? report.marks || []
@@ -334,8 +387,23 @@ export async function remap(id, onRemapped = () => {}, label = "", subject = lab
     await Popup.message({ title: T("remap.action"), lines: [T("remap.unneeded")], ok: T("picker.ok") });
     return result;
   }
+  let verdict = false;
   try {
-    if (!await review(id, result, { label, kind })) return null;
+    verdict = await review(id, result, { label, kind, convert: true });
+    if (verdict === true) return await accept(id, result, onRemapped, subject);
+  } finally {
+    await discard(result);
+  }
+  return verdict === "convert" ? converterRemap(id, onRemapped, label, subject, kind) : null;
+}
+
+// The graft again through the converter, once it is in place, and its review.
+async function converterRemap(id, onRemapped, label, subject, kind) {
+  if (!await ensureConverter()) return null;
+  const result = await converted(id, subject);
+  if (!result) return null;
+  try {
+    if (await review(id, result, { label, kind }) !== true) return null;
     return await accept(id, result, onRemapped, subject);
   } finally {
     await discard(result);

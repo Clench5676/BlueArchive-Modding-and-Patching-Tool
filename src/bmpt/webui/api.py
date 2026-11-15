@@ -1397,6 +1397,49 @@ def build_api(s: Services) -> RpcRegistry:
     def actions_discard_graft(token: str) -> None:
         s.library.discard_graft(token)
 
+    # the converter route (bmpt.spine_converter): the optional helper for what the graft refuses
+    @rpc.method("actions.converterStatus")
+    def actions_converter_status() -> dict:
+        """Whether the converter is in place, whether the App can fetch it here, and what its consent names."""
+        return s.library.converter_status()
+
+    @rpc.method("actions.converterDownload")
+    def actions_converter_download(consent: bool = False) -> str:
+        """Fetch the pinned converter release (Windows), only with the user's ``consent`` to its licence."""
+        if consent is not True:
+            raise ServiceError("converter_consent")
+        library = s.library
+        return s.submit("remap", lambda log, progress: library.converter_download(True, progress))
+
+    @rpc.method("actions.graftConvert")
+    def actions_graft_convert(token: str, geometry: Any = None) -> str:
+        """The converter route after actions.graft: the rigs rewritten through the converter, before and after, to
+        pose."""
+        spine_licensed()
+        library = s.library
+
+        def convert(log: Any, progress: Any) -> Any:
+            progress({"current": 1, "total": 1, "step": "import.step.extract"})
+            return library.graft_convert(token, geometry)
+
+        return s.submit("remap", convert)
+
+    @rpc.method("actions.graftConvertCheck")
+    def actions_graft_convert_check(token: str, geometry: Any = None) -> str:
+        """The converter route's last step: the pose check and the review, accepted or discarded as a remap's."""
+        spine_licensed()
+        library = s.library
+        pin = s._current_pin(library)
+        return s.submit("remap", lambda log, progress: library.graft_convert_check(token, geometry, log=log,
+                                                                                   progress=progress, pin=pin))
+
+    @rpc.method("app.openConverterPage")
+    def app_open_converter_page() -> None:
+        """The converter's own page (its licence and source), in the browser."""
+        from bmpt import spine_converter
+
+        webbrowser.open(spine_converter.HOME)
+
     @rpc.method("actions.redrawn")
     def actions_redrawn(mod: str, geometry: Any) -> str:
         library = s.library
