@@ -1707,6 +1707,13 @@ class Services:
         if kind == "mod" and name == "lobby.json":
             # a lobby camera's layout: its own prefab; any other mod has none of its own
             return _json(self._camera_layout(game, key), light=False)
+        if kind == "mod" and (name.startswith("fx_") and name.endswith(".png")
+                              or name.startswith("sfx_") and name.endswith(".wav")):
+            # A lobby camera's layout route is its own, so the lobby asks it for the effect textures and sounds its
+            # lobby.json names: those of the lobby it frames, read from the game files like the lobby's own
+            found = getattr(self.library, "camera_prefab", lambda _id: None)(key)
+            if found is not None:
+                return self._spine_file("lobby", found[0]["core"], name)
         if kind == "lobby" and name.startswith("fx_") and name.endswith(".png"):
             # a texture of the lobby's particle effects (lobby.json fx.textures), read from the game files; any other
             # name is one of the skeletons' own files

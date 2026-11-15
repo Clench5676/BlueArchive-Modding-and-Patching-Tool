@@ -376,6 +376,45 @@ def test_camera_choice_applies_switches_and_restores(camera_env):
 
 
 @pytest.mark.skipif(not GAME_DIR.is_dir(), reason="No local game install")
+def test_camera_serves_the_effect_textures_of_the_lobby_it_frames(camera_env, tmp_path, monkeypatch):
+    from bmpt.config import Settings
+    from bmpt.gameassets import AssetNotFound
+    from bmpt.webui.services import Services
+    from bmpt.webui.state import UiState
+
+    e = camera_env
+    record = save(e)
+    # the effect textures and sounds of the lobby, as the game files would give them
+    calls = []
+
+    def texture(core, tex_id):
+        calls.append((core, tex_id))
+        if tex_id != "cab-fx_1":
+            raise AssetNotFound(tex_id)
+        return b"png of " + tex_id.encode()
+
+    def sound(core, clip_id):
+        calls.append((core, clip_id))
+        return b"RIFF of " + clip_id.encode()
+
+    monkeypatch.setattr(e.game, "lobby_fx_texture", texture)
+    monkeypatch.setattr(e.game, "lobby_sound", sound)
+    services = Services(Settings(tmp_path / "webui-config.toml"), tmp_path / "data", state=UiState(tmp_path / "webui.json"),
+                        cache=object(), game=e.game, catalog=object(), library=e.library)
+    try:
+        # the camera's own route, which its lobby.json comes from, answers for the textures and sounds that lobby.json
+        # names: those of the lobby it frames
+        route = f"spine/mod/{record['id']}"
+        assert services.asset(f"{route}/fx_cab-fx_1.png", {}).body == b"png of cab-fx_1"
+        assert services.asset(f"{route}/sfx_cab-sfx_2.wav", {}).body == b"RIFF of cab-sfx_2"
+        assert calls == [("azusa_home", "cab-fx_1"), ("azusa_home", "cab-sfx_2")]
+        with pytest.raises(KeyError):
+            services.asset(f"{route}/fx_cab-missing_3.png", {})
+    finally:
+        services.close()
+
+
+@pytest.mark.skipif(not GAME_DIR.is_dir(), reason="No local game install")
 def test_camera_on_a_lobby_mod_and_after_a_game_update(camera_env):
     import zlib
     from ba_modding_toolkit.bundle import Bundle
