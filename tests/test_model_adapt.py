@@ -351,7 +351,8 @@ def test_official_costume_on_a_slot(view, tmp_path, target, source, field, parts
         assert before.keys() <= after.keys()
         changed = {before[pid].type.name for pid in before if before[pid].get_raw_data() != after[pid].get_raw_data()}
         allowed = {"SkinnedMeshRenderer", "AssetBundle", "Transform", "MonoBehaviour"}
-        assert changed <= allowed | ({"AnimationClip"} if skirt else set()), changed
+        # Rule B's skirt and another face's bones (face_retarget) give the slot's clips curves
+        assert changed <= allowed | ({"AnimationClip"} if skirt or hems.face else set()), changed
     # the slot read back: the costume drawn at rest exactly in the shape it was bound and judged in (as the
     # source draws it, refitted to the slot's joints), and exportable
     adapted = dict(index)
@@ -449,7 +450,9 @@ def test_official_rule_b_clip_edit_is_read_back_and_a_changed_curve_is_refused(v
     monkeypatch.setattr(ma, "clip_edit_error", watched)
     result = build()
     assert result.hems.skirt.clips >= 20 and len(checked) == result.hems.skirt.clips
-    assert all(problem is None and added == 7 * len(result.hems.skirt.solver.roots) for problem, added in checked)
+    # each clip: the skirt's first bones and the face bones it moves (face_retarget), 7 curves each
+    assert all(problem is None and added % 7 == 0 and added >= 7 * len(result.hems.skirt.solver.roots)
+               for problem, added in checked)
 
     real_curves, edited = ma.skirt_curves, []
 
@@ -667,6 +670,64 @@ def test_official_rule_b_takes_a_skirt_chain_off_a_thigh(view):
 
 
 @official
+def test_official_another_characters_face_follows_the_slots_expressions_about_its_own_places(view, tmp_path):
+    """Aris <- Yuzu: Yuzu's eye, brow and lid bones rest one to two centimetres from Aris's of the same names. They
+    become new bones of the slot below the head, where Yuzu's face has them, and in the saved clips each turns and
+    moves against the head as Aris's bone of its name does, about its own place; the same student's face (Midori
+    <- Midori (Game Dev)) keeps the slot's bones."""
+    from ba_modding_toolkit.bundle import Bundle
+    from ba_modding_toolkit.models import SaveOptions
+    from bmpt.gameassets.discovery import cab_names
+    from bmpt.gameassets.model import BundleGraph, _key, _prefabs
+
+    files, index = view
+    same = ma.adapt(index=index, resolver=None, target_files=_slot(files, "midori_original"),
+                    target_dev="midori_original", source_files=[p for p in files if re.match(
+                        r"character-midori_en0004-_mxload", p.name)], source_dev="midori_en0004",
+                    open_writable=Bundle.load)
+    assert same.hems.face is None
+    target, source = "aris_original", "yuzu_original"
+    result = ma.adapt(index=index, resolver=None, target_files=_slot(files, target), target_dev=target,
+                      source_files=[p for p in files if re.match(rf"character-{source}-_mxload", p.name)],
+                      source_dev=source, open_writable=Bundle.load)
+    face = result.hems.face
+    assert face is not None and len(face.sources) >= 12 and face.clips >= 10
+    solver = face.solver
+    adapted = dict(index)
+    for path, bundle in result.changed.items():
+        ok, message = bundle.save(tmp_path / path.name, SaveOptions(perform_crc=True, compression="lz4"))
+        assert ok, message
+        for cab in cab_names(tmp_path / path.name):
+            adapted[cab] = tmp_path / path.name
+    with BundleGraph(adapted) as graph:
+        prefabs = _prefabs(graph, sorted(tmp_path.glob("character-*")))
+        t = ma.Skeleton.of(graph, prefabs[ma.choose_prefab(prefabs, target)].deref())
+        head = t.first("Bip001 Head")
+        new = [t.first(name) for name in face.names]
+        slots = [t.first(name.removesuffix("_costume")) for name in face.names]
+        rest = t.world()
+        rel0 = [np.linalg.inv(rest[head]) @ rest[m] for m in slots]
+        new0 = [np.linalg.inv(rest[head]) @ rest[n] for n in new]
+        assert all(np.linalg.norm(a[:3, 3] - b[:3, 3]) > 1e-3 for a, b in zip(rel0, new0))  # apart at rest
+        hashes = {zlib.crc32(t.nodes[n].path.encode()) for n in new}
+        clip = next(c for c in ma.prefab_clips(graph, t, ma.own_prefabs(prefabs, target))
+                    if hashes & {b["path"] for b in graph.tree(c)["m_ClipBindingConstant"]["genericBindings"]})
+        times, pose, _ = t.clip_frames(graph.tree(clip))
+        moved = 0
+        for f in range(len(times)):
+            world = pose(f)
+            back = np.linalg.inv(world[head])
+            for k, (n, m) in enumerate(zip(new, slots)):
+                slot_rel, new_rel = back @ world[m], back @ world[n]
+                turn = ma._rotation(slot_rel) @ ma._rotation(rel0[k]).T
+                assert np.allclose(ma._rotation(new_rel) @ ma._rotation(new0[k]).T, turn, atol=2e-3)
+                assert np.allclose(new_rel[:3, 3] - new0[k][:3, 3], slot_rel[:3, 3] - rel0[k][:3, 3], atol=2e-4)
+                moved += not np.allclose(turn, np.eye(3), atol=1e-3)
+        assert moved
+    assert isinstance(solver, ma.FaceRetarget)
+
+
+@official
 def test_official_bones_any_clip_scales_away_are_hidden(view):
     """The probes see six clips at three frames each; the slot's other clips hide bones too (a hair ornament in the
     cafe, a weapon bone in the cafe, skewers in a public skill). They and the bones below them are hidden, so no
@@ -822,7 +883,7 @@ def _official_objects_kept(slot, written, allowed):
         after = {o.path_id: o for o in UnityPy.load(str(path)).objects}
         assert before.keys() <= after.keys()
         changed = {before[pid].type.name for pid in before if before[pid].get_raw_data() != after[pid].get_raw_data()}
-        assert changed <= allowed, changed
+        assert changed <= set(allowed) | {"AnimationClip"}, changed  # another face's bones get curves (face_retarget)
         new.update({(after[pid].assets_file.name.lower(), pid): after[pid].type.name for pid in after.keys() - before.keys()})
     return new
 
