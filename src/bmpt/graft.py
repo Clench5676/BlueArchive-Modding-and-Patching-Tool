@@ -6,9 +6,9 @@ reference is mapped by name; nothing of the mod's skeleton changes but what the 
 - Skeleton (``SkeletonGraft``): every animation the official rig has and the mod lacks, with all its timelines; the
   attachments its timelines name that the mod's skins lack; slots the mod lacks inserted where the official rig has
   them (every slot index and draw-order frame of the mod follows); draw-order frames of carried animations recomputed
-  for the mod's slot list; carried records adapted to whether the mod's file holds nonessential data. Not carried, with
-  the reason: an animation that needs a bone, event, constraint or skin the mod lacks, a deform of a mesh the mod
-  changed, a linked mesh.
+  for the mod's slot list; carried records adapted to whether the mod's file holds nonessential data; the official
+  events a carried animation fires that the mod lacks appended to its event list. Not carried, with the reason: an
+  animation that needs a bone, constraint or skin the mod lacks, a deform of a mesh the mod changed, a linked mesh.
 - Atlas and pages (``pack``): the regions the carried attachments draw appended in the mod's atlas syntax, with rotate
   and offsets, their pixels copied as packed into page space no attachment of the mod's rig samples, else the page grows
   downward in whole 4-pixel rows and the atlas's page size follows; a page larger than its atlas declares is scaled.
@@ -35,8 +35,8 @@ import numpy as np
 from PIL import Image
 
 from . import atlas_remap, rebake
-from .spine_binary import (MESH, REGION, Skeleton, attachment_record, draw_order, draw_order_bytes, mesh_record,
-                           slot_record, string_bytes, strings_patch, varint_bytes)
+from .spine_binary import (MESH, REGION, Skeleton, attachment_record, draw_order, draw_order_bytes, events_patch,
+                           mesh_record, slot_record, string_bytes, strings_patch, varint_bytes)
 
 #: share of the visible pixels of a part that may differ from the official part
 BOUND = 0.02
@@ -161,16 +161,20 @@ class SkeletonGraft:
         mod_names = {kind: set(values) for kind, values in _names(mod).items()}
         new_names = self.new_names = _names(official)
         accepted, slots_needed = [], []
+        events: dict[str, list[str]] = {}  # animation -> the official events it fires that the mod lacks
         for animation in wanted:
             why, slots = [], []
             for _a, _b, kind, value in official.refs_in(animation["body"], animation["end"]):
-                if kind == "slot":
+                if kind == "event" and official.events[value] not in mod_names["event"]:
+                    # an event record names nothing else: it is appended to the mod's event list (``events_patch``)
+                    events.setdefault(animation["name"], []).append(official.events[value])
+                elif kind == "slot":
                     if mod.slot_index(official.slots[value]["name"]) is None and value not in slots:
                         slots.append(value)
                 elif kind == "physics1":
                     if value and new_names["physics"][value - 1] not in mod_names["physics"]:
                         why.append(("constraint", new_names["physics"][value - 1]))
-                elif kind in ("bone", "event", "skin", "ik", "transform", "path", "physics") \
+                elif kind in ("bone", "skin", "ik", "transform", "path", "physics") \
                         and new_names[kind][value] not in mod_names[kind]:
                     why.append(({"ik": "constraint", "transform": "constraint", "path": "constraint",
                                  "physics": "constraint"}.get(kind, kind), new_names[kind][value]))
@@ -231,6 +235,11 @@ class SkeletonGraft:
             self.shown[animation["name"]] = [key for key in shown if key in need or key in carry]
             carry.update(need)
         self.carried = {key: Carried(*key, attachment) for key, attachment in carry.items()}
+        # the events the carried animations fire that the mod lacks, at the end of its event list, in official order
+        fired = {name for an in self.animations for name in events.get(an["name"], [])}
+        self.events_added = [name for name in official.events if name in fired]
+        if self.events_added:
+            self.mod = mod = Skeleton(mod.emit(0, mod.size, None, events_patch(mod, official, self.events_added)))
         self.strings = Strings(mod)
         index = {
             "slot": lambda v: mod.slot_index(official.slots[v]["name"]),
@@ -571,10 +580,22 @@ class Pages:
     missing: list[str]  # regions the official atlas lacks
 
 
+def packed_regions(atlas: atlas_remap.Atlas, page: str, size: tuple[int, int]) -> np.ndarray:
+    """Where the atlas's own regions lie on a page, widened by ``PAD``: the space taken without a posed rig."""
+    occupied = np.zeros((size[1], size[0]), dtype=bool)
+    for region in atlas.regions.values():
+        if region.page != page:
+            continue
+        (x, y), (w, h) = region.xy, packed(region)
+        occupied[max(0, y - PAD):max(0, y + h + PAD), max(0, x - PAD):max(0, x + w + PAD)] = True
+    return occupied
+
+
 def pack(mod_text: str, official_text: str, regions: list[str], mod_pages: dict[str, Image.Image],
-         official_pages: dict[str, Image.Image], mod_setup: Setup) -> Pages:
-    """Place the official regions ``regions`` on the mod's pages: into space the mod's rig does not sample, page by
-    page, else the first page grows downward (whole ``ROWS``); pixels copied as packed."""
+         official_pages: dict[str, Image.Image], mod_setup: Setup | None) -> Pages:
+    """Place the official regions ``regions`` on the mod's pages: into space the mod's rig does not sample (without
+    ``mod_setup``, space none of the mod's atlas regions takes), page by page, else the first page grows downward
+    (whole ``ROWS``); pixels copied as packed."""
     mod_atlas = atlas_remap.parse_atlas(mod_text, "mod")
     official_atlas = atlas_remap.parse_atlas(official_text, "official")
     by_name = {}
@@ -585,6 +606,8 @@ def pack(mod_text: str, official_text: str, regions: list[str], mod_pages: dict[
     missing = [name for name in wanted if name not in by_name]
     wanted = [name for name in wanted if name in by_name]
     pages = list(mod_atlas.pages.values())
+    if not wanted:
+        return Pages({}, {}, {page.name: page.size for page in pages}, {}, missing)
     occupancy, scales = {}, {}
     for page in pages:
         key = atlas_remap.texture_key(page.name)
@@ -594,7 +617,8 @@ def pack(mod_text: str, official_text: str, regions: list[str], mod_pages: dict[
         if page.size[0] * page.size[1] > MAX_PAGE_PIXELS:
             raise GraftError("graft_region_too_large", region=page.name)
         scales[page.name] = (image.size[0] / page.size[0], image.size[1] / page.size[1])
-        occupancy[page.name] = sampled(mod_setup, key, page.size)
+        occupancy[page.name] = (sampled(mod_setup, key, page.size) if mod_setup is not None
+                                else packed_regions(mod_atlas, page.name, page.size))
     if not occupancy:
         raise GraftError("graft_page_missing", page=", ".join(p.name for p in pages) or "—")
     placed: dict[str, Placed] = {}
@@ -989,3 +1013,30 @@ def choose(prepared: Prepared, official: rebake.Rig, test: rebake.Rig, official_
             records[key], _note = placed_record(graft, carried, m, 0, region)
     return Checked(graft.build(records), atlas_text(prepared.mod_text, prepared.pages, rotate=rotate),
                    grafted_pages, results)
+
+
+# ---------------------------------------------------------------- a rig without a picture to compare
+
+@dataclass
+class Plain(Checked):
+    """A ``plain`` graft: the delivered rig of one atlas, its plan and the rows each page grew by."""
+    graft: SkeletonGraft | None = None
+    grown: dict[str, int] = field(default_factory=dict)
+
+
+def plain(mod_skeleton: bytes, mod_atlas: str, mod_pages: dict[str, Image.Image], official_skeleton: bytes,
+          official_atlas: str, official_pages: dict[str, Image.Image], only: set[str] | None = None) -> Plain:
+    """The graft of a rig whose new animations have no part to compare with the official one (a memorial lobby, a
+    Spine background: they mostly move bones and constraints): every carried attachment as the official record on
+    the mod's bone of the same name, its regions packed where none of the mod's atlas regions lie. ``only``: the
+    animations to carry. Each carried animation's result is checked by posing it (``rig-geometry.js``
+    ``failedPoses``), not by pixels."""
+    graft = SkeletonGraft(mod_skeleton, official_skeleton, only)
+    if not graft.animations:
+        raise GraftError("graft_refused", names=", ".join(sorted(graft.refused)) or "—")
+    regions = [c.region for c in graft.carried.values() if c.region]
+    pages = pack(mod_atlas, official_atlas, regions, mod_pages, official_pages, None)
+    if pages.missing:
+        raise GraftError("graft_page_missing", page=", ".join(pages.missing))
+    results = {an["name"]: {"off": 0.0, "candidate": None, "fixed": True} for an in graft.animations}
+    return Plain(graft.build(), atlas_text(mod_atlas, pages), pages.images, results, graft, pages.grown)

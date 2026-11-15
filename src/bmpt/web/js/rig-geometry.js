@@ -169,3 +169,42 @@ export function partPoses(S, atlasText, skeletonData, check) {
   }
   return { slots: Array.from(data.slots, (slot) => slot.name), poses: result };
 }
+
+// The graft's check of a rig without a picture to compare (graft.py plain): the animations of `names` the runtime
+// cannot pose (all of them when the rig does not read), each tried on track 0 from the setup pose at `times` (shares of its duration). An animation fails when
+// posing it throws or gives a bone or a drawn vertex that is not finite; one the skeleton lacks fails too.
+export function failedPoses(S, atlasText, skeletonData, names, times = [0, 0.37, 0.81]) {
+  let rig;
+  try { rig = load(S, atlasText, skeletonData); } catch { return [...names]; }  // the rig itself does not read
+  const { data, missing } = rig;
+  const failed = [];
+  for (const name of names) {
+    const animation = data.findAnimation(name);
+    try {
+      if (!animation) throw new Error("Animation missing");
+      for (const share of times) {
+        const skeleton = new S.Skeleton(data), state = new S.AnimationState(new S.AnimationStateData(data));
+        skeleton.setToSetupPose();
+        state.setAnimation(0, name, false);
+        state.update(animation.duration * share);
+        state.apply(skeleton);
+        skeleton.updateWorldTransform(S.Physics.update);
+        for (const b of skeleton.bones) {
+          if (![b.a, b.b, b.c, b.d, b.worldX, b.worldY].every(Number.isFinite)) throw new Error("Non-finite bone");
+        }
+        for (const slot of skeleton.drawOrder) {
+          const a = slot.getAttachment();
+          if (!a || !slot.bone.active || missing.has(a)) continue;
+          let vertices;
+          if (a instanceof S.RegionAttachment) { vertices = new Float32Array(8); a.computeWorldVertices(slot, vertices, 0, 2); }
+          else if (a instanceof S.MeshAttachment) {
+            vertices = new Float32Array(a.worldVerticesLength);
+            a.computeWorldVertices(slot, 0, a.worldVerticesLength, vertices, 0, 2);
+          } else continue;
+          if (!vertices.every(Number.isFinite)) throw new Error("Non-finite posed geometry");
+        }
+      }
+    } catch { failed.push(name); }
+  }
+  return failed;
+}

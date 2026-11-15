@@ -785,6 +785,19 @@
 			"converterMac": "เวอร์ชัน macOS ต้องคอมไพล์เอง",
 			"converterDownload": "ดาวน์โหลด",
 			"converterPage": "หน้าโปรเจกต์",
+			"graftAnimations": "คงไฟล์ .skel ของ Mod และเพิ่มแอนิเมชันใหม่ของต้นฉบับ",
+			"graftAnimationsAction": "เพิ่มแอนิเมชัน",
+			"graftRefused": "{name}, แอนิเมชันที่เพิ่มไม่ได้: {names}",
+			"refusedAnimation": "{name} ({why})",
+			"why": {
+				"bone": "ไม่มีกระดูก {name}",
+				"constraint": "ไม่มีข้อจำกัด {name}",
+				"skin": "ไม่มีสกิน {name}",
+				"event": "ไม่มีอีเวนต์ {name}",
+				"deform": "เมช {name} ถูกแก้ไข",
+				"linked": "เมชที่ลิงก์ {name}",
+				"pose": "เล่นไม่ได้"
+			},
 			"remapAction": "ใช้ไฟล์ .skel ต้นฉบับ",
 			"rigUnknown": "ไม่มีบันทึกไฟล์ .skel ที่ Mod ใช้ตอนวาด, ซ่อมอัตโนมัติไม่ได้"
 		},
@@ -823,7 +836,13 @@
 			"previousExpression": "สีหน้าก่อนหน้า",
 			"nextExpression": "สีหน้าถัดไป",
 			"graftDone": "เพิ่มสีหน้าแล้ว",
-			"graftPartial": "เพิ่มสีหน้าแล้ว บางส่วนต้องตรวจสอบ"
+			"graftPartial": "เพิ่มสีหน้าแล้ว บางส่วนต้องตรวจสอบ",
+			"graftedAnimations": "แอนิเมชันที่เพิ่ม: {n}",
+			"animation": "แอนิเมชัน {name} ({n}/{total})",
+			"previousAnimation": "แอนิเมชันก่อนหน้า",
+			"nextAnimation": "แอนิเมชันถัดไป",
+			"graftAnimationsDone": "เพิ่มแอนิเมชันแล้ว",
+			"graftAnimationsPartial": "เพิ่มแอนิเมชันแล้ว บางส่วนไม่ได้เพิ่ม"
 		},
 		"spine": {
 			"license": {

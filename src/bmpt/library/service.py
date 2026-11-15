@@ -13,6 +13,7 @@ import logging
 import os
 import re
 import shutil
+import struct
 import threading
 import time
 import unicodedata
@@ -1657,11 +1658,17 @@ class ModLibrary:
                                 "available": not unavailable and old_rig.available}
             # The graft (bmpt.graft): the mod's own binary skeleton keeps its rig and takes the animations the
             # official one gained; or the old rig above takes them, where they keep it from being offered.
+            # Memorial lobbies and Spine backgrounds take the graft too (``graft.plain``): what each new animation
+            # needs is known from the two skeletons alone, so the check tells which it carries and why not the others.
             own = {name: names for name, names in gains["animations"].items() if self._graftable(
-                selected, official, name)} if kind == "spr" else {}
+                selected, official, name)} if kind in ("spr", "lobby") else {}
+            plans = {name: self._graft_plan(selected, official, name) for name in own}
+            refused = {name: plan[1] for name, plan in plans.items() if plan[1]}
+            own = {name: plan[0] for name, plan in plans.items() if plan[0]}
             gained = old_rig.animations if kind == "spr" and old_rig.atlases and old_rig.complete else {}
             report["graft"] = {"kind": "own" if own else "oldRig" if gained else None,
-                               "animations": own or gained, "available": not unavailable and bool(own or gained)}
+                               "animations": own or gained, "refused": refused,
+                               "available": not unavailable and bool(own or gained)}
             report["misfit"] = not unavailable and misfit
             # Portraits are baked through world space; other kinds only move regions onto a page size that fits.
             wanted = misfit or bool(recorded) or bool(rerig) if kind == "spr" else misfit
@@ -1670,7 +1677,7 @@ class ModLibrary:
             report["rig"] = {"layout": [], "animations": {}, "regions": {}, "unknown": []}
             report["source"] = {"atlases": {}, "skeletons": {}}
             report["oldRig"] = {"atlases": [], "animations": {}, "available": False}
-            report["graft"] = {"kind": None, "animations": {}, "available": False}
+            report["graft"] = {"kind": None, "animations": {}, "refused": {}, "available": False}
             report["misfit"] = report["remappable"] = False
         return report
 
@@ -1688,6 +1695,19 @@ class ModLibrary:
         except (ValueError, UnicodeError):
             return False
         return bool(pages) and pages <= set(selected.textures)
+
+    @staticmethod
+    def _graft_plan(selected: integrity.Contents, official: integrity.Contents,
+                    skeleton: str) -> tuple[list[str], dict[str, list[str]]]:
+        """(carried, refused) of a graft of the official ``skeleton``'s new animations into the mod's own
+        (``graft.SkeletonGraft``): the names it carries and, per animation it cannot carry, the reasons
+        (``kind:name``). Nothing carried when a skeleton cannot be read."""
+        own = atlas_remap.pair_atlases(selected.skeletons, official.skeletons).get(skeleton)
+        try:
+            plan = grafting.SkeletonGraft(selected.skeletons[own], official.skeletons[skeleton])
+        except (ValueError, KeyError, IndexError, struct.error):
+            return [], {}
+        return [an["name"] for an in plan.animations], dict(plan.refused)
 
     @_serialized
     def compatibility_stamp(self, mod_id: str, pin: Pin | None = None) -> str:
@@ -1729,7 +1749,7 @@ class ModLibrary:
         report["remappable"] = report["remappable"] and not (report["repaired_from"] or report["repaired_id"])
         old_rig = report.setdefault("oldRig", {"atlases": [], "animations": {}, "available": False})
         old_rig["available"] = old_rig["available"] and report["remappable"]
-        graft = report.setdefault("graft", {"kind": None, "animations": {}, "available": False})
+        graft = report.setdefault("graft", {"kind": None, "animations": {}, "refused": {}, "available": False})
         graft["available"] = graft["available"] and not (report["repaired_from"] or report["repaired_id"])
         return report
 
@@ -7815,14 +7835,15 @@ class ModLibrary:
     # --- the graft of new official animations into a mod's own rig (bmpt.graft) ---
 
     def _graft_rigs(self, record: dict, paths: list[Path], inputs: dict,
-                    available: Iterable[Path]) -> dict[str, dict]:
+                    available: Iterable[Path], kind: str = "spr") -> dict[str, dict]:
         """The rigs a graft adds the official rig's new animations to, per official atlas name: the mod's own binary
         skeleton and atlas where it carries them and the official skeleton has animations it lacks (``kind`` "own";
         ``base``: the official rig the mod was made from, as the fingerprint recorded it or the official copy of the
         mod's date, where known), else the rig a texture-only portrait's textures were drawn for
         (``atlas_remap.old_rig_plan``; ``kind`` "oldRig", its own base). Each with the official ``skeleton`` name,
         the ``animations`` it gains and the mod's ``pages`` (texture keys). ``available``: verified official files
-        that may be of the mod's date (``_dated_rig``)."""
+        that may be of the mod's date (``_dated_rig``). A memorial lobby or Spine background (``kind`` "lobby")
+        takes only its own rig, without a base: its graft is ``graft.plain``."""
         mod, official = inputs["mod"], inputs["official"]
         gains = atlas_remap.rig_gains(mod.atlases, mod.skeletons, official.atlases, official.skeletons)
         skeleton_of = atlas_remap.pair_atlases(official.skeletons, official.atlases)
@@ -7846,8 +7867,8 @@ class ModLibrary:
         for name, skeleton in skeleton_of.items():
             if skeleton not in gains["animations"] or skeleton not in own_skeletons or name not in own_atlases:
                 continue
-            entry = painted.get(integrity.basename(name)) or {}
-            if not isinstance(entry.get("skeleton"), str) or not isinstance(entry.get("text"), str):
+            entry = (painted.get(integrity.basename(name)) or {}) if kind == "spr" else {}
+            if kind == "spr" and (not isinstance(entry.get("skeleton"), str) or not isinstance(entry.get("text"), str)):
                 entry = self._dated_rig(paths, [name], official.atlases, available).get(name) or {}
             base = None
             if isinstance(entry.get("skeleton"), str) and isinstance(entry.get("text"), str):
@@ -7860,7 +7881,7 @@ class ModLibrary:
             except UnicodeError:
                 continue
             rig("own", name, skeleton, text, mod.skeletons[own_skeletons[skeleton]], base)
-        if rigs:
+        if rigs or kind != "spr":
             return rigs
         plan = atlas_remap.old_rig_plan({**inputs["layout"], **inputs["dated"]}, official.atlases,
                                         official.skeletons, mod.skeletons, mod.textures, official.keys)
@@ -7901,7 +7922,8 @@ class ModLibrary:
         self._grafts = {token: state for token, state in self._grafts.items()
                         if state["expires"] > now and state["source"] != mod_id}
         paths = self._paths(record)
-        if kind_of_file(paths[0].name) != "spr":
+        kind = kind_of_file(paths[0].name)
+        if kind not in ("spr", "lobby"):
             raise ServiceError("graft_unavailable")
         identity = self._identity({path.name: path for path in paths})
         targets = self._spine_parts(core_of(paths[0].name), pin)
@@ -7914,7 +7936,7 @@ class ModLibrary:
             try:
                 inputs = self._remap_view(record, paths, targets, originals, pin)
                 sources = [self._official_for(target, pin) for target in targets]
-                rigs = self._graft_rigs(record, paths, inputs, sources)
+                rigs = self._graft_rigs(record, paths, inputs, sources, kind)
             except atlas_remap.RemapError as error:
                 raise ServiceError(error.code, **error.params) from error
             except (ValueError, KeyError, EOFError, OSError) as error:
@@ -7924,11 +7946,22 @@ class ModLibrary:
             raise ServiceError("graft_unavailable")
         official = inputs["official"]
         token = uuid.uuid4().hex
-        self._grafts[token] = {"source": mod_id, "identity": identity, "pin": pin.key, "expires": now + 3600,
-                               "rigs": rigs, "inputs": inputs, "prepared": None}
 
         def b64(data: bytes) -> str:
             return base64.b64encode(data).decode("ascii")
+
+        if kind == "lobby":
+            # built at once (``graft.plain``); the page poses each carried animation and graft_check takes the result
+            built = self._graft_plain(rigs, inputs)
+            if not built:
+                raise ServiceError("graft_unavailable")
+            self._grafts[token] = {"source": mod_id, "identity": identity, "pin": pin.key, "expires": now + 3600,
+                                   "rigs": rigs, "inputs": inputs, "prepared": built, "plain": True}
+            return {"token": token, "plain": True,
+                    "rigs": {name: {"skeleton": b64(one.skeleton), "atlas": one.atlas, "animations": list(one.results)}
+                             for name, one in built.items()}}
+        self._grafts[token] = {"source": mod_id, "identity": identity, "pin": pin.key, "expires": now + 3600,
+                               "rigs": rigs, "inputs": inputs, "prepared": None}
 
         posed = {}
         for name, rig in rigs.items():
@@ -7947,7 +7980,7 @@ class ModLibrary:
         test rigs to pose: per atlas the ``skeleton`` (base64) and ``atlas``, and ``check``: per animation to pose
         the slots whose part is compared; ``official``: the same for the official rig."""
         state = self._graft_state(token)
-        if not isinstance(geometry, dict):
+        if not isinstance(geometry, dict) or state.get("plain"):
             raise ServiceError("bad_params", key="geometry")
         official = state["inputs"]["official"]
         prepared, out, refused = {}, {}, {}
@@ -7996,6 +8029,8 @@ class ModLibrary:
             raise ServiceError("entry_changed")
         inputs = state["inputs"]
         mod, official = inputs["mod"], inputs["official"]
+        if state.get("plain"):
+            return self._graft_check_plain(token, state, geometry, paths, pin, log, progress)
         checked: dict[str, grafting.Checked] = {}
         try:
             for name, one in state["prepared"].items():
@@ -8186,6 +8221,81 @@ class ModLibrary:
                 raise ServiceError(error.code, **error.params) from error
             return self._remap_review(mod_id, state["identity"], paths, originals, inputs["official"], inputs["view"],
                                       output, patch, report, pin, log, step)
+
+    @staticmethod
+    def _graft_plain(rigs: dict[str, dict], inputs: dict,
+                     only: Mapping[str, set[str]] | None = None) -> dict[str, grafting.Plain]:
+        """The ``graft.plain`` of every rig (``only``: per atlas the animations to carry), the rigs with nothing to
+        carry left out."""
+        official, mod = inputs["official"], inputs["mod"]
+        built = {}
+        for name, rig in rigs.items():
+            wanted = None if only is None else only.get(name, set())
+            if wanted is not None and not wanted:
+                continue
+            try:
+                built[name] = grafting.plain(rig["data"], rig["atlas"], {key: mod.textures[key] for key in rig["pages"]},
+                                             official.skeletons[rig["skeleton"]],
+                                             official.atlases[name].decode("utf-8-sig"), official.textures, wanted)
+            except grafting.GraftError as error:
+                if error.code != "graft_refused":
+                    raise ServiceError(error.code, **error.params) from error
+            except atlas_remap.RemapError as error:
+                raise ServiceError(error.code, **error.params) from error
+        return built
+
+    def _graft_check_plain(self, token: str, state: dict, geometry: Any, paths: list[Path], pin: Pin, log: LogFunc,
+                           progress: Callable[[dict], None] | None) -> dict:
+        """graft_check of a ``graft.plain``: ``geometry`` per atlas ``failed``, the carried animations the page
+        could not pose (``rig-geometry.js`` ``failedPoses``). Those are built out again and reported as refused
+        (``pose:``); the review is prepared as a remap's."""
+        prepared: dict[str, grafting.Plain] = state["prepared"]
+        failed: dict[str, set[str]] = {}
+        for name, one in prepared.items():
+            posted = geometry.get(name)
+            names = posted.get("failed") if isinstance(posted, dict) else None
+            if not isinstance(names, list) or not all(isinstance(n, str) and n in one.results for n in names):
+                raise ServiceError("bad_params", key="geometry")
+            failed[name] = set(names)
+        refused: dict[str, list[str]] = {}
+        for one in prepared.values():
+            refused.update(one.graft.refused)
+        if any(failed.values()):
+            for name in failed:
+                refused.update({animation: ["pose:"] for animation in sorted(failed[name])})
+            prepared = self._graft_plain(state["rigs"], state["inputs"],
+                                         {name: set(one.results) - failed[name] for name, one in prepared.items()})
+            if not prepared:
+                self._grafts.pop(token, None)
+                raise ServiceError("graft_refused", names=", ".join(sorted(refused)) or "—")
+        self._grafts.pop(token, None)
+        record = self._record(state["source"])
+        targets = self._spine_parts(core_of(paths[0].name), pin)
+        if not targets:
+            raise ServiceError("game_file_not_found", variant=record["target"])
+
+        def step(key: str, current: int = 1) -> None:
+            if progress:
+                progress({"current": current, "total": len(targets), "step": f"import.step.{key}"})
+
+        grown = [rows for one in prepared.values() for rows in one.grown.values()]
+        report = {"moved": [], "added": [], "official": [], "dropped": [], "upscaled": [], "warnings": [],
+                  "grafted": [animation for one in prepared.values() for animation in one.results],
+                  "refused": refused, "corrected": [], "unfixed": [], "grown": max(grown, default=0),
+                  "unanchored": False, "unchanged": False, "marks": [], "animations": True}
+        report["partial"] = bool(refused)
+        inputs = state["inputs"]
+        with temporary_directory(prefix=devmode.LIBRARY_STAGING_PREFIX + "remap-") as temporary:
+            output = Path(temporary)
+            step("check")
+            originals = self._stage_official(targets, output / "official", pin)
+            try:
+                patch = self._graft_patch(paths, originals, inputs["official"], inputs["mod"],
+                                          {name: state["rigs"][name] for name in prepared}, prepared)
+            except atlas_remap.RemapError as error:
+                raise ServiceError(error.code, **error.params) from error
+            return self._remap_review(state["source"], state["identity"], paths, originals, inputs["official"],
+                                      inputs["view"], output, patch, report, pin, log, step)
 
     @_serialized
     def discard_graft(self, token: str) -> None:

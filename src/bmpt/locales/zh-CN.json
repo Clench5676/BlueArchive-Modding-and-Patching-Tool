@@ -785,6 +785,19 @@
 			"converterMac": "需自行编译mac版",
 			"converterDownload": "下载",
 			"converterPage": "项目页面",
+			"graftAnimations": "保留 Mod 的 .skel 文件，补上原版新增动画",
+			"graftAnimationsAction": "补上新动画",
+			"graftRefused": "{name}，无法补上的动画：{names}",
+			"refusedAnimation": "{name}（{why}）",
+			"why": {
+				"bone": "缺少骨骼 {name}",
+				"constraint": "缺少约束 {name}",
+				"skin": "缺少皮肤 {name}",
+				"event": "缺少事件 {name}",
+				"deform": "网格 {name} 已改动",
+				"linked": "链接网格 {name}",
+				"pose": "无法播放"
+			},
 			"remapAction": "改用原版 .skel 文件",
 			"rigUnknown": "未记录 Mod 绘制时的 .skel 文件，无法自动修复"
 		},
@@ -823,7 +836,13 @@
 			"previousExpression": "上一个表情",
 			"nextExpression": "下一个表情",
 			"graftDone": "已补上新表情",
-			"graftPartial": "已补上新表情，部分需核对"
+			"graftPartial": "已补上新表情，部分需核对",
+			"graftedAnimations": "新增动画：{n}",
+			"animation": "动画 {name}（{n}/{total}）",
+			"previousAnimation": "上一个动画",
+			"nextAnimation": "下一个动画",
+			"graftAnimationsDone": "已补上新动画",
+			"graftAnimationsPartial": "已补上新动画，部分未补上"
 		},
 		"spine": {
 			"license": {

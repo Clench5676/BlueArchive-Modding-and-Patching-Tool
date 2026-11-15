@@ -144,7 +144,9 @@ export async function show(result, title = T("act.compare"), hostId = "popup", r
         const canvas = part("repair-canvas", inside);
         inside.repairEntry.layer = part("repair-marks", inside);
         startPlayers.push(() => {
-          const player = previewPlayer(canvas, scene, side, result.pages, (picture) => fill(playerHost, picture));
+          // a memorial lobby's new animations are motions: they play; a portrait's expressions hold their first frame
+          const player = previewPlayer(canvas, scene, side, result.pages, (picture) => fill(playerHost, picture),
+            review.steps === "animation");
           if (!player) return;
           players.push(player);
           inside.repairEntry.rings = () => player.parts(review.marks || []);
@@ -161,20 +163,23 @@ export async function show(result, title = T("act.compare"), hostId = "popup", r
       }
     }
     part("repair-verdict", notes, T(review.verdict || (review.partial ? "remap.partial" : "remap.preview")));
-    // a graft's expressions, one at a time on both pictures (a picture without it stays in its rest pose)
+    // a graft's expressions (review.steps "animation": animations), one at a time on both pictures (a picture
+    // without it stays in its rest pose)
     if (review.expressions?.length) {
       const row = part("repair-steps", notes), caption = document.createElement("div");
+      const steps = review.steps === "animation" ? { one: "remap.animation", previous: "remap.previousAnimation",
+        next: "remap.nextAnimation" } : { one: "remap.expression", previous: "remap.previousExpression", next: "remap.nextExpression" };
       let at = 0;
       const go = (step) => {
         at = (at + step + review.expressions.length) % review.expressions.length;
         expression = review.expressions[at];
-        caption.textContent = T("remap.expression", { name: expression, n: at + 1, total: review.expressions.length });
+        caption.textContent = T(steps.one, { name: expression, n: at + 1, total: review.expressions.length });
         for (const player of players) player.play(expression);
         if (marking) mark(true);
       };
-      tool(row, "\u25c0", T("remap.previousExpression"), () => go(-1));
+      tool(row, "\u25c0", T(steps.previous), () => go(-1));
       row.appendChild(caption);
-      tool(row, "\u25b6", T("remap.nextExpression"), () => go(1));
+      tool(row, "\u25b6", T(steps.next), () => go(1));
       go(0);
     }
     // a line is text, or {text, button: {label, fn}} for one with a small button at its end, as in message popups;
@@ -215,7 +220,7 @@ export async function show(result, title = T("act.compare"), hostId = "popup", r
 }
 
 // `drawn(width / height)` is told once, when the skeleton is up, with the proportions of the picture the player fits.
-function previewPlayer(host, scene, side, pages, drawn = () => {}) {
+function previewPlayer(host, scene, side, pages, drawn = () => {}, moving = false) {
   let disposed = false, load = null, live = null;
   const unavailable = () => { if (!disposed) host.textContent = T("remap.previewUnavailable"); };
   let wanted = null;  // the animation on track 1, once the skeleton is up
@@ -224,6 +229,7 @@ function previewPlayer(host, scene, side, pages, drawn = () => {}) {
     if (!p?.skeleton || disposed) return;
     if (wanted && p.skeleton.data.findAnimation(wanted)) p.animationState.setAnimation(1, wanted, true);
     else p.animationState.setEmptyAnimation(1, 0);
+    if (moving) return;  // the player poses every frame itself
     p.animationState.apply(p.skeleton);
     p.skeleton.updateWorldTransform(spine.Physics.update);
   };
@@ -259,7 +265,7 @@ function previewPlayer(host, scene, side, pages, drawn = () => {}) {
           const idle = p.skeleton.data.animations.find((a) => /^Idle_01$/i.test(a.name)) || p.skeleton.data.animations[0];
           if (idle) p.animationState.setAnimation(0, idle.name, true);
           else p.animationState.setEmptyAnimation(0, 0).trackEnd = Number.MAX_VALUE;
-          p.animationState.timeScale = 0;
+          p.animationState.timeScale = moving ? 1 : 0;
           show();
           // the player fits its picture when it draws its first frame
           const fitted = (tries) => {
