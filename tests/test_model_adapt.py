@@ -293,8 +293,8 @@ def _slot(files, dev):
 @pytest.mark.parametrize("target,source,field,parts,hem,physics", [
     ("hina_original", "np0009", True, 1, "skirt smooth", True),   # Hina <- Hina (Pajamas), a field-mode model: Rule B
     ("hina_original", "np0009", True, 1, "blend 0.5", False),     # the same without Optimize Physics: Rule A only
-    ("ch0172", "np0283", True, 1, "blend 0.5", True),              # Niko <- Niko (FOX EATS): her separate hands go;
-                                                                   # Rule B past the stretch limit since the refit
+    ("ch0172", "np0283", True, 1, "skirt smooth", True),           # Niko <- Niko (FOX EATS): her separate hands go;
+                                                                   # Rule B with the chains off her thighs
     ("hoshino_original", "hoshino_swimsuit", False, 3, "rigid", False),  # a three-part costume: two renderers added
     ("hoshino_swimsuit", "hoshino_original", False, 1, "rigid", False),  # the swimsuit's own extra parts draw nothing
     ("ch0186", "mari_original", False, 1, "skirt smooth", True),   # Mari (Track) <- Mari: a compressed mesh; Rule B
@@ -330,8 +330,9 @@ def test_official_costume_on_a_slot(view, tmp_path, target, source, field, parts
         assert any(change is not None for change in hems.parts) or hem == "skirt"
     skirt = hems.skirt
     assert (skirt is not None) == hem.startswith("skirt")
-    # Optimize Physics: knees deep inside the skirt (Mari's, Niko's) are moved toward the leg's axis
-    assert (hems.thin is not None) == (physics and target in ("ch0186", "ch0172")), hems.summary()
+    # Optimize Physics: knees deep inside the skirt (Mari's) are moved toward the leg's axis; Niko's skirt clears
+    # hers once its chains off the thighs turn too
+    assert (hems.thin is not None) == (physics and target == "ch0186"), hems.summary()
     if hems.thin is not None:
         assert hems.thin_score.mean <= hems.score(hem).mean - ma.THIN_GAIN
     if skirt is not None:
@@ -642,6 +643,27 @@ def test_official_optimize_physics_swings_the_chains_the_source_turns(view, tmp_
             "genericBindings"] if b["attribute"] == 2}) > len(roots)]
     assert len(turned) == springs[0].clips
     assert keyed  # (Yuzu has every clip Aris has, by name)
+
+
+@official
+def test_official_rule_b_takes_a_skirt_chain_off_a_thigh(view):
+    """Ibuki <- Shun with Optimize Physics: beside the skirt's chains off the pelvis, a chain hanging off a thigh
+    becomes a new bone below the slot's thigh, turned like the others."""
+    from ba_modding_toolkit.bundle import Bundle
+
+    files, index = view
+    sources = [p for p in files if re.match(r"character-shun_original-_mxload", p.name)]
+    result = ma.adapt(index=index, resolver=None, target_files=_slot(files, "ibuki_original"),
+                      target_dev="ibuki_original", source_files=sources, source_dev="shun_original",
+                      open_writable=Bundle.load, physics=True)
+    skirt = result.hems.skirt
+    assert skirt is not None, result.hems.summary()
+    with ma.BundleGraph(index) as graph:
+        prefabs = ma._model_prefabs(graph, [p for p in _slot(files, "ibuki_original") if p.name.startswith("character-")])
+        t = ma.Skeleton.of(graph, prefabs[ma.choose_prefab(prefabs, "ibuki_original")].deref())
+    hangs = {t.nodes[skirt.anchor_of(k)].name for k, parent in enumerate(skirt.parents) if parent < 0}
+    assert hangs == {"Bip001 Pelvis", "Bip001 R Thigh"}
+    assert skirt.clips >= 20
 
 
 @official
