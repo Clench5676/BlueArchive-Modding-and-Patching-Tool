@@ -14,6 +14,7 @@ import * as NGUI from "./ngui.js";
 import * as Popup from "./popup.js";
 import { T } from "./i18n.js";
 import { S } from "./util.js";
+import { freezeShown } from "./preview-lifecycle.js";
 
 const STAGE_UNITS_H = 1080 / S; // 1665 units: the stage is taller than the prefabs' 2960 x 1440 frame
 const FADE_BLACK = 150;         // a scene first fades to black; work done by then fades straight back
@@ -509,8 +510,10 @@ export function page(fn, options = {}) {
 export const locked = () => held() || active() || (!!writerOverlay && !writerOverlay.closing);
 const strict = () => [...holds].some((hold) => hold.all);
 const exempt = (ev) => !strict() && Popup.allowsInput(ev);
-const LOCKED_EVENTS = ["pointerdown", "pointerup", "pointermove", "mousedown", "mouseup", "click", "dblclick", "auxclick",
-  "contextmenu", "keydown", "keyup", "wheel", "touchstart", "touchmove", "dragstart", "drop"];
+// WebKit's trackpad pinch comes as gesture events, not as wheel events.
+export const LOCKED_EVENTS = ["pointerdown", "pointerup", "pointermove", "mousedown", "mouseup", "click", "dblclick", "auxclick",
+  "contextmenu", "keydown", "keyup", "wheel", "touchstart", "touchmove", "touchend", "gesturestart", "gesturechange",
+  "gestureend", "dragstart", "drop"];
 const wired = new WeakSet();
 function wire(el = stage()) {
   if (!el?.addEventListener || wired.has(el)) return;
@@ -527,10 +530,12 @@ function wire(el = stage()) {
   el.addEventListener("focusin", (ev) => { if (locked() && !exempt(ev)) ev.target?.blur?.(); }, true);
   wired.add(el);
 }
-// on locking: the focused control beneath gives up its focus, so Enter or Space cannot press it
+// on locking: the focused control beneath gives up its focus, so Enter or Space cannot press it, and the previews
+// shown beneath freeze until the lock ends
 function syncLock() {
   const el = stage();
   wire(el);
+  freezeShown(locked());
   const focused = document.activeElement;
   if (locked() && focused && focused !== el && el?.contains?.(focused) && !exempt({ target: focused })) focused.blur?.();
 }

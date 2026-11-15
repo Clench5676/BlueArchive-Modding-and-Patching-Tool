@@ -41,7 +41,7 @@ import * as Pins from "./skeleton-pins.js";
 import * as Touch from "./lobby-touch.js";
 import * as Sync from "./lobby-sync.js";
 import * as Intro from "./lobby-intro.js";
-import { previewLifecycle } from "./preview-lifecycle.js";
+import { freezeWhileLoading, onScreen, previewLifecycle } from "./preview-lifecycle.js";
 
 const STAGE = { w: 1920, h: 1080 };
 const GAME = { x: -1480, y: -832.5, w: 2960, h: 1665 };  // lobby.json "view": the game's 16:9 view in NGUI units
@@ -68,7 +68,7 @@ export function setDialogueBounds(bounds) { dialogueViewBounds = bounds; current
 // caller claims another instance before releasing this one (including the canonical detail-screen instance).
 const touchOwners = globalThis[Symbol.for("bamt.lobby.touch-owners")] ||= new WeakMap(), touchToken = {};
 const ownsInput = () => ownsTouch && touchOwners.get(Touch) === touchToken;
-const paused = () => !!(current?.suspended || current?.backgroundPaused);
+const paused = () => !!(current?.suspended || current?.backgroundPaused || current?.loadingPaused);
 // This module can have two Hall instances. Each owns its deadlines; suspension retains remaining time rather
 // than clearing/recreating a dialogue or random-idle run. Extracted playback tests still use native timers.
 const nativeTimeout = (...args) => globalThis.setTimeout(...args), nativeClearTimeout = (id) => globalThis.clearTimeout(id);
@@ -1185,6 +1185,15 @@ async function showNow(core, host, variant, mod, sources, signal, framing, defer
     });
     c.backgroundPaused = !c.lifecycle.active();
   }
+  {
+    // a lobby on screen stops under Now Loading (its voices, timers and intro included) and goes on afterwards
+    const c = current;
+    c.loadingFreeze = freezeWhileLoading({
+      shown: () => current === c && !!c.revealed && !c.signal.aborted && onScreen(c.host),
+      freeze: () => { if (current === c) { c.loadingPaused = true; freezeScene(c); } },
+      thaw: () => { if (current === c) { c.loadingPaused = false; resumeScene(c); } },
+    });
+  }
   // Cancel the composition before individual load listeners, releasing shared-context guests first.
   current.cancel = () => { if (current?.signal === signal) clearView(host); };
   signal.addEventListener("abort", current.cancel, { once: true });
@@ -1321,6 +1330,7 @@ function clearView(host) {
   if (current?.cancel) current.signal.removeEventListener("abort", current.cancel);
   releaseTouch();
   current?.lifecycle?.dispose();
+  current?.loadingFreeze?.dispose();
   if (current?.host) current.host.inert = !!current.inputWasInert;
   Idle.stop();
   current?.intro?.dispose(); // its sounds, its depth of field's targets
@@ -1417,7 +1427,7 @@ export async function prepareFrame() {
 // the lobby is on screen (the detail screen has committed it): its intro starts with the next frame it is visible
 export function reveal(restart = true) {
   const c = current;
-  if (!c || c.suspended || c.backgroundPaused) return;
+  if (!c || c.suspended || c.backgroundPaused || c.loadingPaused) return;
   c.revealed = true;
   // A player first laid out under a hidden tab must get a frame with the visible canvas's size.
   for (const p of players) if (restart && !document.hidden && (document.hasFocus?.() ?? true)
@@ -1637,7 +1647,7 @@ const Idle = {
 // per voice cue; then back to idle. A dialogue starts at once, cutting off whatever was playing. ---
 export function play(anim, { fromChain = false } = {}) {
   const m = current?.meta;
-  if (!m || current?.suspended || current?.backgroundPaused) return null;
+  if (!m || current?.suspended || current?.backgroundPaused || current?.loadingPaused) return null;
   current.intro?.skip(); // a dialogue comes after the intro, as a tap that skips it
   if (!fromChain) chain = null;
   const i = m.sequences.findIndex((s) => s.anim === anim), seq = m.sequences[i], p = mainPlayer();
@@ -1662,7 +1672,7 @@ export function play(anim, { fromChain = false } = {}) {
   return seq;
 }
 function voice(clip) {
-  if (current?.suspended || current?.backgroundPaused) return;
+  if (current?.suspended || current?.backgroundPaused || current?.loadingPaused) return;
   const a = new Audio(`/asset/voice/${encodeURIComponent(current.variant)}/${encodeURIComponent(clip)}.ogg`);
   a.volume = volume;
   audios.push(a);
@@ -1701,14 +1711,14 @@ export function stop() {
 // the next dialogue after the last one played (a tap on the body); a dialogue that has only just started is not cut
 export function next() {
   const seqs = current?.meta?.sequences;
-  if (!seqs?.length || current?.suspended || current?.backgroundPaused || (talk && performance.now() - talk.started < TALK_GUARD_MS)) return;
+  if (!seqs?.length || current?.suspended || current?.backgroundPaused || current?.loadingPaused || (talk && performance.now() - talk.started < TALK_GUARD_MS)) return;
   chain = null;
   play(seqs[(talkIndex + 1) % seqs.length].anim);
 }
 // every dialogue in order, each starting when the previous one ends
 export function playAll(selected = null) {
   const seqs = current?.meta?.sequences;
-  if (!seqs?.length || current?.suspended || current?.backgroundPaused) return;
+  if (!seqs?.length || current?.suspended || current?.backgroundPaused || current?.loadingPaused) return;
   const run = { i: Math.max(0, seqs.findIndex((seq) => seq.anim === selected)) };
   chain = run;
   play(seqs[run.i].anim, { fromChain: true });

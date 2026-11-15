@@ -13,6 +13,7 @@ import { chibiMaterial, disposeDefaults, outlineMaterial, setOutlineScale } from
 import { createModelFx } from "./model-fx.js";
 import { wheelKind, wheelStep } from "./lobby-touch.js";
 import { modelUrl } from "./switch-sources.js";
+import { freezeWhileLoading, onScreen } from "./preview-lifecycle.js";
 
 const ease = (t) => 1 - Math.pow(1 - t, 3);
 const clamp = THREE.MathUtils.clamp;
@@ -789,7 +790,11 @@ class ChibiView {
     this.clock.getDelta();
     return new Promise((drawn) => {
       this.drawn = drawn;
-      this.renderer.setAnimationLoop(() => { this.tick(); drawn(); });
+      this.renderer.setAnimationLoop(() => {
+        // under Now Loading the shown model holds its pose: drawn again (a resize clears the canvas), not advanced
+        if (this.frozen) { this.renderer.render(this.scene, this.camera); return; }
+        this.tick(); drawn();
+      });
     });
   }
 
@@ -886,11 +891,19 @@ class ChibiView {
     return still;
   }
 
-  reveal() { this.canvas.classList.add("ready"); }
+  reveal() {
+    this.canvas.classList.add("ready");
+    this.loadingFreeze ||= freezeWhileLoading({
+      shown: () => !this.disposed && onScreen(this.canvas),
+      freeze: () => { this.frozen = true; },
+      thaw: () => { this.frozen = false; this.clock.getDelta(); },
+    });
+  }
 
   dispose() {
     if (this.disposed) return;
     this.disposed = true;
+    this.loadingFreeze?.dispose();
     this.renderer.setAnimationLoop(null);
     this.drawn?.();
     this.observer?.disconnect();

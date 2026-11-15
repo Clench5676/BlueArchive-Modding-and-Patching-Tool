@@ -58,6 +58,7 @@ function instance(h, id) {
       capturePlayer(){return makePlayer({appendChild(){}},{name:'main',x:0,y:0,scale:1,spine:'native'},null,null,current.signal);},
       adoptPlayer(player){players=[player];current.pauseFlags=new Map();playerLoads.set(player,{active:()=>true,dispose(){player.disposed=true;}});},
       background(value){const c=current;c.backgroundPaused=value;if(value)freezeScene(c);else if(!c.suspended)resumeScene(c);},
+      loadingFreeze(value){const c=current;c.loadingPaused=value;if(value)freezeScene(c);else resumeScene(c);},
       realIntro(definition){const c=current;c.intro=Intro.create(definition,{layers:[],visible:()=>c.preparingFrame||!paused()&&c.revealed,now:()=>performance.now(),sfx:(id,set)=>Sfx.play(id,set)});return c.intro;},
       sound:(id)=>Sfx.play(id),later:(fn,ms)=>setTimeout(fn,ms),current:()=>current};`;
   return new Function(...Object.keys(h.env), code)(...Object.values(h.env));
@@ -163,4 +164,19 @@ for (const blurredDuringLoad of [false, true]) test(`real vendored bootstrap res
   h.tick(250);player.drawFrame(false);assert.equal(intro.state().t,.25);
   a.suspend();h.tick(30000);await a.prepareFrame();assert.equal(intro.state().t,.25);
   a.resume();await flush();h.tick(250);player.drawFrame(false);assert.equal(intro.state().t,.5);a.hide(c.host);
+});
+
+test("Now Loading over a shown lobby holds its voice, cue delays and clocks, and resumes them afterwards", async () => {
+  const h = environment(), a = instance(h, "a"), { c, p } = a.seed();
+  await a.prepareFrame(); a.resume(); await flush();
+  a.setLines({ one:{voice:true},two:{voice:true} });a.play("Talk_01_M");h.tick(0);
+  const voice = h.sounds.at(-1); voice.currentTime = 1.25;
+  h.tick(1000);p.drawFrame();const track=p.trackTime,intro=c.intro.t;
+  a.loadingFreeze(true);assert.equal(voice.paused,true);const sounds=h.sounds.length;
+  h.tick(60000);p.drawFrame();
+  assert.equal(h.sounds.length,sounds,"no cue plays under Now Loading");assert.equal(p.trackTime,track);assert.equal(c.intro.t,intro);
+  a.resume();assert.equal(voice.paused,true,"the Hall's resume does not lift Now Loading");
+  a.loadingFreeze(false);assert.equal(voice.paused,false);assert.equal(voice.currentTime,1.25);
+  h.tick(1999);assert.equal(h.sounds.length,sounds);h.tick(1);assert.equal(h.sounds.length,sounds+1);
+  a.hide(c.host);
 });

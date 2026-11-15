@@ -6,6 +6,7 @@ import { S } from "./util.js";
 import { talkExpression } from "./student-hall-portraits.js";
 import { spriteBorders, sliceAxis, slicePoint } from "./sprite-slices.js";
 import { dialogueText } from "./dialogue-text.js";
+import { freezeWhileLoading } from "./preview-lifecycle.js";
 
 const LANGS = { "en-US": "en", "zh-CN": "zh-CN", "zh-TW": "zh-TW", "ja-JP": "ja", "ko-KR": "ko", "th-TH": "th" };
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
@@ -136,6 +137,21 @@ export function createDialogue({ host, actorOf, choiceOf = () => null, info = ()
   const preferences = () => typeof prefs === "function" ? prefs() : prefs;
   const information = () => typeof info === "function" ? info() : info;
   const muted = () => information()?.mute || preferences()?.voiceMuted || (preferences()?.voiceVolume ?? 80) === 0;
+  // under Now Loading the voice and the caption's lifetime stop, and go on from where they were afterwards
+  let clearDue = 0, clearLeft = null, resumeVoice = false;
+  const loadingFreeze = freezeWhileLoading({
+    shown: () => !disposed && (!!(audio && !audio.paused) || !!clearTimer),
+    freeze: () => {
+      if (audio && !audio.paused) { audio.pause(); resumeVoice = true; }
+      if (clearTimer) { clearTimeout(clearTimer); clearTimer = null; clearLeft = Math.max(0, clearDue - performance.now()); }
+    },
+    thaw: () => {
+      if (resumeVoice && audio) audio.play().catch(() => {});
+      resumeVoice = false;
+      if (clearLeft != null && !disposed) { clearDue = performance.now() + clearLeft; clearTimer = setTimeout(stop, clearLeft); }
+      clearLeft = null;
+    },
+  });
   function releaseAudio() {
     if (audio) { audio.onended = audio.onerror = audio.ontimeupdate = audio.onseeked = null; audio.pause(); audio = null; }
     if (url) { URL.revokeObjectURL(url); url = null; }
@@ -143,6 +159,7 @@ export function createDialogue({ host, actorOf, choiceOf = () => null, info = ()
   function stop() {
     token++; drawSequence++; busy = false; requests?.abort(); requests = null;
     clearTimeout(clearTimer); clearTimeout(prepareTimer); clearTimeout(positionTimer); clearTimer = prepareTimer = positionTimer = null; releaseAudio();
+    clearLeft = null; resumeVoice = false;
     if (speaker) expressions(speaker, false);
     speaker = current = expressionKey = null; bubble?.remove(); bubble = null;
     host?.replaceChildren();
@@ -153,7 +170,9 @@ export function createDialogue({ host, actorOf, choiceOf = () => null, info = ()
     clearTimeout(prepareTimer); prepareTimer = null; releaseAudio();
     if (talking && current) applyExpression(current.row);
     else if (speaker) { expressions(speaker, false); expressionKey = null; }
-    clearTimeout(clearTimer); clearTimer = setTimeout(stop, TEXT_LIFETIME);
+    clearTimeout(clearTimer); resumeVoice = false;
+    if (loadingFreeze.held()) { clearTimer = null; clearLeft = TEXT_LIFETIME; }
+    else { clearDue = performance.now() + TEXT_LIFETIME; clearTimer = setTimeout(stop, TEXT_LIFETIME); }
   }
   function applyExpression(row, player = null) {
     const elapsed = Number(player?.currentTime) || 0;
@@ -298,6 +317,7 @@ export function createDialogue({ host, actorOf, choiceOf = () => null, info = ()
       try {
         await player.play();
         if (!active()) { player.pause(); return; }
+        if (loadingFreeze.held() && audio === player) { player.pause(); resumeVoice = true; }
         clearTimeout(prepareTimer); prepareTimer = null;
         applyExpression(row, player);
         // Captions and local/Kivo audio may be ready before the Global animation metadata. Enrich this same
@@ -323,7 +343,7 @@ export function createDialogue({ host, actorOf, choiceOf = () => null, info = ()
   }
   function dispose() {
     if (disposed) return;
-    stop(); disposed = true; signal?.removeEventListener("abort", dispose);
+    stop(); disposed = true; loadingFreeze.dispose(); signal?.removeEventListener("abort", dispose);
     linesCache.clear(); audioCache.clear(); turns.clear(); unavailable.clear(); template = layoutFlight = null;
   }
   signal?.addEventListener("abort", dispose, { once: true });
