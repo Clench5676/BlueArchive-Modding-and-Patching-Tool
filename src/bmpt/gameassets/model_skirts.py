@@ -509,8 +509,16 @@ class Spring:
     as it hangs at rest. A clip starts at rest; a looping one is run twice, the second time from the first's end, so
     that its end leads into its start."""
 
-    def __init__(self, chains: Chains, limits: Mapping[int, float]):
+    def __init__(self, chains: Chains, limits: Mapping[int, float],
+                 keys: Mapping[tuple[str, ...], tuple[np.ndarray, Mapping[int, np.ndarray]]] | None = None,
+                 own_rest: np.ndarray | None = None):
+        """``keys``: the source's own keys of the chains' bones per clip name suffix (lower-case name tokens): the
+        clip's frame times scaled to 0..1 and, per bone (an index into the chains), its local rotation quaternions
+        there; ``own_rest``: each bone's local matrix at rest in the source's skeleton. A slot clip whose name ends in
+        such a suffix plays those keys (:meth:`keyed`) instead of the swing."""
         self.chains = chains
+        self.keys = dict(keys or {})
+        self.own_rest = own_rest
         self.roots = [r for r in chains.roots if r in limits]
         self.limits = np.array([limits[r] for r in self.roots])
         self.inverse = np.array([np.linalg.inv(m) for m in chains.rest])
@@ -586,6 +594,36 @@ class Spring:
             local = inverse @ world
             local[:3, :3] = local[:3, :3] @ np.linalg.inv(scale_of(local))
             out[r] = local
+        return out
+
+    def keyed(self, name: str, times: Sequence[float]) -> list[dict[int, np.ndarray]] | None:
+        """The chains' bones' local transforms (4x4, without the bone's scale) at ``times`` of the slot's clip
+        ``name`` from the source's own clip of the same name suffix, its time scaled onto the slot clip's; None when
+        the source has none. Each bone turns from its rest as the source's turns from its own; its position stays."""
+        tokens = [t for t in name.lower().split("_") if t]
+        match = next((self.keys[tuple(tokens[i:])] for i in range(1, len(tokens) - 1)
+                      if tuple(tokens[i:]) in self.keys), None)
+        if match is None or self.own_rest is None or not len(times):
+            return None
+        phases, rotations = match
+        start, span = float(times[0]), max(float(times[-1]) - float(times[0]), 1e-9)
+        at = np.clip((np.asarray(times, float) - start) / span, 0.0, 1.0)
+        out: list[dict[int, np.ndarray]] = [{} for _ in at]
+        for bone, quaternions in rotations.items():
+            q = resample(phases, continuous(quaternions), at)
+            rest = self.own_rest[bone]
+            scale = scale_of(rest)
+            back = np.linalg.inv(rest)
+            for k, quaternion_ in enumerate(q):
+                x, y, z, w = (float(v) for v in quaternion_ / max(float(np.linalg.norm(quaternion_)), 1e-12))
+                own = np.eye(4)
+                own[:3, :3] = np.array([[1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)],
+                                        [2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)],
+                                        [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)]]) @ scale
+                own[:3, 3] = rest[:3, 3]
+                local = self.chains.local[bone] @ back @ own
+                local[:3, :3] = local[:3, :3] @ np.linalg.inv(scale_of(local))
+                out[k][bone] = local
         return out
 
     def posed(self, pose: Sequence[np.ndarray], turns: Mapping[int, np.ndarray]) -> np.ndarray:

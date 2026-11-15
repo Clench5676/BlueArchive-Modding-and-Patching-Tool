@@ -1713,12 +1713,49 @@ def swing_of(skeleton: Skeleton, clips: Iterable[Any], nodes: Iterable[int]) -> 
     return out
 
 
+def own_keys(skeleton: Skeleton, clips: Iterable[Any], nodes: list[int]) -> dict[tuple[str, ...], tuple]:
+    """The source's own rotation keys of ``nodes`` per clip, by every name suffix of two tokens or more below its
+    full name (``Formation_Idle``, ``Move_Ing``, ...; the longest suffix is tried first, ``Spring.keyed``): the
+    clip's frame times scaled to 0..1 and, per index into ``nodes`` it turns, its local quaternions there."""
+    by_hash = {zlib.crc32(skeleton.nodes[n].path.encode()): n for n in nodes}
+    index = {n: k for k, n in enumerate(nodes)}
+    out: dict[tuple[str, ...], tuple] = {}
+    for clip in clips:
+        tree = skeleton.graph.tree(clip)
+        bindings = tree["m_ClipBindingConstant"]["genericBindings"]
+        if not any(b["typeID"] == 4 and b["attribute"] in (2, 4) and b["path"] in by_hash for b in bindings):
+            continue
+        decoded = decode_clip(tree)
+        times = np.asarray(decoded.times, float)
+        frames = len(times)
+        orders = euler_orders(bindings, by_hash)
+        rotations = {}
+        for node, attributes in bind_tracks(bindings, decoded.curves, by_hash).items():
+            if 2 in attributes:
+                q = np.array([np.resize(np.asarray(part, float), frames) for part in attributes[2]]).T
+            elif 4 in attributes:
+                e = np.array([np.resize(np.asarray(part, float), frames) for part in attributes[4]]).T
+                q = np.array([euler_to_quat(list(v), orders.get(node, UNITY_ORDER)) for v in e])
+            else:
+                continue
+            rotations[index[node]] = q
+        if not rotations:
+            continue
+        phases = (times - times[0]) / max(float(times[-1] - times[0]), 1e-9) if frames > 1 else np.zeros(1)
+        tokens = [t for t in (clip.peek_name() or "").lower().split("_") if t]
+        for i in range(1, len(tokens) - 1):
+            out.setdefault(tuple(tokens[i:]), (phases, rotations))
+    return out
+
+
 def springs(target: Costume, source: Costume, plan_: Plan, s_clips: list[Any], fit: Fit) -> list[Skirt]:
     """Optimize Physics: the secondary chains the group choice left rigid away from the legs (hair, ribbons, a loose
     coat on the spine or the head; the legs' cloth is the hem rules' and Rule B's) as new bones of the slot, one
     :class:`Skirt` per anchor, that swing after the anchor's motion in every slot clip (``model_skirts.Spring``). A
     chain swings only when the source's own clips turn it (``SWING_MIN``), at most 1.5 times as far. The skirts' bases
-    are set where they join the slot's skeleton (:func:`skirt_bones`)."""
+    are set where they join the slot's skeleton (:func:`skirt_bones`). A slot clip whose name the source's clips share
+    (``Formation_Idle``, ``Cafe_Walk``) plays the source's own keys of the chains instead, time-scaled onto it
+    (:func:`own_keys`, ``Spring.keyed``)."""
     ts, ss = target.skeleton, source.skeleton
     s_legs = legs_of(ss)
     lower = lower_anchors(ss, s_legs) if s_legs is not None else set()
@@ -1796,8 +1833,10 @@ def springs(target: Costume, source: Costume, plan_: Plan, s_clips: list[Any], f
         spring = ms.Spring(chains, {new[r]: limit for r, limit in limits.items()})
         if not spring.roots or not (spring.lengths >= ms.MIN_LENGTH).any():
             continue
+        # a slot clip the source has by name plays the source's own keys of these chains
         spring = ms.Spring(chains, {new[r]: limits[r] for r in limits
-                                    if spring.lengths[spring.roots.index(new[r])] >= ms.MIN_LENGTH})
+                                    if spring.lengths[spring.roots.index(new[r])] >= ms.MIN_LENGTH},
+                           own_keys(ss, s_clips, sources), np.array([trs(*ss.nodes[n].local) for n in sources]))
         out.append(Skirt(sources, names, parents, locals_, slot_anchor, spring, -1))
     return out
 
@@ -1827,21 +1866,28 @@ def skirt_sequence(skeleton: Skeleton, solver: ms.Solver, tree: Mapping[str, Any
     times, pose, _ = skeleton.clip_frames(tree)
     count = len(times)
     frames = sorted(set(range(0, count, ms.SOLVE_EVERY)) | {count - 1} | set(measured_frames(count)))
+    if isinstance(solver, ms.Spring):  # the source's own keys for a clip it has by name, else the swing
+        keyed = solver.keyed(str(tree.get("m_Name") or ""), [times[f] for f in frames])
+        if keyed is not None:
+            return frames, keyed
     loop = bool(tree["m_MuscleClip"].get("m_LoopTime"))
     return frames, solver.sequence([times[f] for f in frames], lambda k: pose(frames[k]), loop)
 
 
-def skirt_curves(skeleton: Skeleton, skirt: Skirt, tree: dict, key: tuple[str, int] | None = None) -> bool:
+def skirt_curves(skeleton: Skeleton, skirt: Skirt, tree: dict, key: tuple[str, int] | None = None) -> int | None:
     """Rule B's rotation and position curves for the chains' first bones added to a clip typetree of the slot: the
     turns and shifts of
-    :func:`skirt_sequence` (or those measured for the clip ``key``), interpolated onto its dense grid. False when the
-    clip has a layout the writer does not edit."""
+    :func:`skirt_sequence` (or those measured for the clip ``key``), interpolated onto its dense grid; for a clip that
+    plays the source's own keys (``Spring.keyed``), for every bone they turn. Returns how many bones got curves, None
+    when the clip has a layout the writer does not edit."""
     grid = ms.dense_grid(tree)
     if grid is None:
-        return False
+        return None
     times = skeleton.clip_frames(tree)[0]
     frames, turns = skirt.solved.get(key) or skirt_sequence(skeleton, skirt.solver, tree)
-    roots = skirt.solver.roots
+    roots = sorted(turns[0]) if turns else []
+    if not roots:
+        return 0
     rotations = np.array([[ms.quaternion(t[root][:3, :3]) for root in roots] for t in turns])
     positions = np.array([[t[root][:3, 3] for root in roots] for t in turns])
     at = np.clip(grid, times[0], times[-1])
@@ -1861,7 +1907,7 @@ def skirt_curves(skeleton: Skeleton, skirt: Skirt, tree: dict, key: tuple[str, i
         path = skeleton.nodes[skirt.node(root)].path
         bindings += [ms.rotation_binding(template, path), ms.position_binding(template, path)]
     ms.add_dense_curves(tree, bindings, samples)
-    return True
+    return len(roots)
 
 
 @dataclass
@@ -2817,10 +2863,11 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
         tree = obj.read_typetree()
         before = clip_snapshot(tree) if ms.dense_grid(tree) is not None else None
         edited = [skirt for skirt in clip_skirts[_key(clip)] if skirt.solver.roots]
-        if edited and all(skirt_curves(t_skeleton, skirt, tree, _key(clip)) for skirt in edited):
+        bones = [skirt_curves(t_skeleton, skirt, tree, _key(clip)) for skirt in edited] if before is not None else [None]
+        if edited and None not in bones and sum(bones):
             obj.save_typetree(tree)
-            # each chain's first bone got a rotation (4 curves) and a position (3): read the saved clip back
-            problem = clip_edit_error(before, saved_tree(obj), 7 * sum(len(skirt.solver.roots) for skirt in edited))
+            # each bone with curves got a rotation (4 curves) and a position (3): read the saved clip back
+            problem = clip_edit_error(before, saved_tree(obj), 7 * sum(bones))
             if problem is not None:
                 raise refuse("clip edit not verified", clip=clip.peek_name(), what=problem)
             for skirt in edited:
