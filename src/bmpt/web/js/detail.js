@@ -20,7 +20,7 @@ import { explorerLayout } from "./explorer-button.js";
 import { latestLoad, loadPlayer } from "./spine-load.js";
 import { ensureSpine, spineAllowed } from "./spine-runtime.js";
 import { decodeAll } from "./image-decode.js";
-import { withTimeout, nextFrame } from "./async.js";
+import { withPreviewTimeout, withTimeout, nextFrame } from "./async.js";
 import { previewError } from "./preview-error.js";
 import { attachHint } from "./hover-hint.js";
 import * as Loading from "./loading.js";
@@ -2012,7 +2012,8 @@ function renderLeft() {
   const swap = same && key !== shownKey ? freezeLeft(want) : null;
   let expired = false;
   // a newer left side or hide() came first: nothing is started
-  const ready = withTimeout(Promise.resolve(swap).then(() => (my !== leftToken || expired || !available ? null
+  // the preview's own work: foreground time only, without waits for the library
+  const ready = withPreviewTimeout(Promise.resolve(swap).then(() => (my !== leftToken || expired || !available ? null
     : want === "portrait" ? (mainPlayer ? null : loadSpine(currentBase()))
       : want === "lobby" ? showLobby(v, my, () => !expired) : showModel(v, my, () => !expired))), want === "lobby" ? HARD_CAP + 3000 : HARD_CAP, `Detail ${want}`).catch((err) => {
     expired = true;

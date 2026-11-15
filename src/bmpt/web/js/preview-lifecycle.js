@@ -77,22 +77,41 @@ export function previewLifecycle({ suspend = () => {}, resume = () => {}, recove
   };
 }
 
-// Deadlines count foreground time, including waits for requestAnimationFrame during initial loading.
+// While a read of the page waits for the Mod library (a job holds it; the backend's library.waiting event), preview
+// deadlines stop: that wait is not the preview's own work. A spell longer than LIBRARY_WAIT_CAP counts again, in case
+// its end was never heard (the event stream reconnected).
+export const LIBRARY_WAIT_CAP = 120000;
+const waitWatchers = new Set();
+let libraryBusy = false, busyCap = null;
+export const libraryWaiting = () => libraryBusy;
+export function setLibraryWaiting(busy) {
+  busy = !!busy;
+  clearTimeout(busyCap); busyCap = null;
+  if (busy) busyCap = setTimeout(() => setLibraryWaiting(false), LIBRARY_WAIT_CAP);
+  if (busy === libraryBusy) return;
+  libraryBusy = busy;
+  for (const update of [...waitWatchers]) update();
+}
+
+// Deadlines count foreground time, including waits for requestAnimationFrame during initial loading, and leave out
+// the time a read waits for the library (setLibraryWaiting).
 export function previewTimer(callback, ms, env = {}) {
   const now = env.now || (() => performance.now());
-  let timer, started, remaining = ms, done = false;
+  let timer, started = null, remaining = ms, done = false;
   const pause = () => {
     clearTimeout(timer);
     if (started != null) remaining -= Math.max(0, now() - started);
     started = null;
   };
   const start = () => {
-    if (done) return;
+    if (done || started != null) return;
     started = now();
     timer = setTimeout(() => { cancel(); callback(); }, Math.max(0, remaining));
   };
-  const lifecycle = previewLifecycle({ suspend: pause, resume: start }, env);
-  const cancel = () => { done = true; clearTimeout(timer); lifecycle.dispose(); };
-  if (lifecycle.active()) start();
+  const update = () => { if (!done && lifecycle.active() && !libraryBusy) start(); else pause(); };
+  const lifecycle = previewLifecycle({ suspend: update, resume: update }, env);
+  const cancel = () => { done = true; clearTimeout(timer); lifecycle.dispose(); waitWatchers.delete(update); };
+  waitWatchers.add(update);
+  update();
   return cancel;
 }

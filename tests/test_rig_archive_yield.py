@@ -219,3 +219,50 @@ def test_a_job_does_not_step_aside_for_nobody_or_without_the_lock():
     lock.waiting = 1  # another thread's count, but this thread holds nothing
     assert lock.step_aside() == 0.0
     lock.waiting = 0
+
+
+def test_the_lock_tells_when_a_reader_starts_and_stops_waiting_for_it():
+    """The page pauses its preview deadlines while a read waits for the library: told once per spell, in order,
+    never for background work or a paced job."""
+    lock = service._LibraryLock()
+    told = []
+    lock.on_wait = told.append
+    with lock:
+        pass
+    assert told == []  # a free lock: nobody waited
+    with lock:
+        readers = [threading.Thread(target=lambda: (lock.acquire(), lock.release())) for _ in range(2)]
+        for reader in readers:
+            reader.start()
+        deadline = time.monotonic() + 2
+        while lock.waiting < 2 and time.monotonic() < deadline:
+            time.sleep(0.005)
+        assert told == [True]
+    for reader in readers:
+        reader.join()
+    assert told == [True, False]
+    def background():
+        service._background.on = True
+        try:
+            with lock:
+                pass
+        finally:
+            service._background.on = False
+
+    with lock:
+        waiter = threading.Thread(target=background)
+        waiter.start()
+        time.sleep(0.05)
+    waiter.join()
+    assert told == [True, False]  # background work waiting for the lock is not told
+
+
+def test_a_failing_wait_listener_never_fails_the_library():
+    lock = service._LibraryLock()
+    lock.on_wait = lambda busy: 1 / 0
+    with lock:
+        reader = threading.Thread(target=lambda: (lock.acquire(), lock.release()))
+        reader.start()
+        time.sleep(0.05)
+    reader.join()
+    assert lock.waiting == 0

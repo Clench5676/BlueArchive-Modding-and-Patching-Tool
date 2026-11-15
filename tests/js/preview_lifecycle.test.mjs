@@ -209,3 +209,22 @@ test("a loaded Spine player on screen stops under Now Loading and restarts after
   assert.equal(p.stopRequestAnimationFrame, false); assert.equal(p.time.delta, 0);
   load.dispose();
 });
+
+test("preview deadlines leave out the time a read waits for the library", async (t) => {
+  const { setLibraryWaiting, LIBRARY_WAIT_CAP } = await import("../../src/bmpt/web/js/preview-lifecycle.js");
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const env = surface(); let now = 0, expired = 0;
+  const advance = (ms) => { now += ms; t.mock.timers.tick(ms); };
+  const cancel = previewTimer(() => expired++, 1000, { ...env, now: () => now });
+  advance(400);
+  setLibraryWaiting(true); advance(60000); assert.equal(expired, 0, "waiting for the library is not the preview's work");
+  env.focus(false); env.focus(true); advance(5000); assert.equal(expired, 0, "focus does not restart it while waiting");
+  setLibraryWaiting(false); advance(599); assert.equal(expired, 0);
+  advance(1); assert.equal(expired, 1); cancel();
+  // a wait whose end is never heard counts again after the cap
+  let late = 0;
+  const other = previewTimer(() => late++, 1000, { ...env, now: () => now });
+  setLibraryWaiting(true); advance(LIBRARY_WAIT_CAP); advance(999); assert.equal(late, 0);
+  advance(1); assert.equal(late, 1); other(); setLibraryWaiting(false);
+  t.mock.timers.reset();
+});

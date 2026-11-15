@@ -27,7 +27,8 @@ import { latestLoad, loadPlayer } from "./spine-load.js";
 import { ensureSpine } from "./spine-runtime.js";
 import { forgetSpineAssets, spineBase, spineAssetBase } from "./api.js";
 import { lobbyIdle } from "./rest-pose.js";
-import { withTimeout } from "./async.js";
+// every wait of the lobby is a preview's: counted in the foreground, without the time a read waits for the library
+import { withPreviewTimeout as withTimeout } from "./async.js";
 import { atStep, previewError } from "./preview-error.js";
 import { T, language } from "./i18n.js";
 const dialogueModule = () => import("./student-hall-dialogue.js");

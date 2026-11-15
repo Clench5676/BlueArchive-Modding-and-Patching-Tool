@@ -121,6 +121,25 @@ class _LibraryLock:
         self.asked = 0.0  # the same, less the paced job's own
         self.waiting = 0  # callers but background work and a paced job blocked on the lock right now
         self._count = threading.Lock()
+        # told True when such a caller starts waiting with nobody else waiting, False when the last stops: the
+        # page's preview deadlines do not count that time (``library.waiting``)
+        self.on_wait: Callable[[bool], None] | None = None
+        self._wait_turn = 0  # the transitions of ``waiting`` in order; a late one is not told
+        self._told = 0
+        self._telling = threading.Lock()
+
+    def _waited(self, turn: int, busy: bool) -> None:
+        hook = self.on_wait
+        if hook is None:
+            return
+        with self._telling:
+            if turn <= self._told:
+                return  # a later transition was told already
+            self._told = turn
+            try:
+                hook(busy)
+            except Exception:  # a listener never fails a library call
+                logger.debug("library wait listener failed", exc_info=True)
 
     def _note(self) -> None:
         if not getattr(_background, "on", False):
@@ -138,12 +157,24 @@ class _LibraryLock:
         if counted:
             with self._count:
                 self.waiting += 1
+                first = self.waiting == 1
+                if first:
+                    self._wait_turn += 1
+                    turn = self._wait_turn
+            if first:
+                self._waited(turn, True)
         try:
             return self._lock.acquire(True, timeout)
         finally:
             if counted:
                 with self._count:
                     self.waiting -= 1
+                    last = self.waiting == 0
+                    if last:
+                        self._wait_turn += 1
+                        turn = self._wait_turn
+                if last:
+                    self._waited(turn, False)
             self._note()
 
     def release(self) -> None:

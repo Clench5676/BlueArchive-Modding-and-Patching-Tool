@@ -495,6 +495,10 @@ class Services:
                         self.library_dir(), self.catalog, game, self.settings, scan_allowed=self.scan_allowed,
                         data_id=self.state.data_id(self.data_dir), write_check=self._write_check,
                         steam_files=self.steam_files)
+                lock = getattr(built, "_lock", None)
+                if lock is not None and hasattr(lock, "on_wait"):
+                    # the page pauses its preview deadlines while a read waits for the library
+                    lock.on_wait = lambda busy: self.events.publish("library.waiting", {"busy": busy})
             library = self._library
             # Establish the baseline before any caller (including an add or adoption job) gets the library. A library
             # that could not read its state answers empty: that is no baseline (every mod would count as new later).
