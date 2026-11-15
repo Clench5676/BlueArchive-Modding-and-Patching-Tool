@@ -196,6 +196,8 @@ class Skeleton:
     renderers: list[tuple[int, Any]] = field(default_factory=list)  # (node, SkinnedMeshRenderer)
     behaviours: list[Any] = field(default_factory=list)
     _rest: list[np.ndarray] = field(default_factory=list, repr=False)  # local matrices at rest
+    _names: tuple[int, dict[str, list[int]]] = field(default=(0, {}), repr=False)  # node count, nodes by name
+    _rig: int | None = field(default=None, repr=False)  # the main Biped (``main_rig``), -1 for none
 
     @classmethod
     def of(cls, graph: BundleGraph, root_go: Any) -> "Skeleton":
@@ -245,8 +247,48 @@ class Skeleton:
             out.append(out[node.parent] @ m if node.parent is not None else m.copy())
         return out
 
+    def named(self, name: str) -> list[int]:
+        """The nodes of a name, in the skeleton's order."""
+        count, names = self._names
+        if count != len(self.nodes):
+            names = {}
+            for i, node in enumerate(self.nodes):
+                names.setdefault(node.name, []).append(i)
+            self._names = (len(self.nodes), names)
+        return names.get(name, [])
+
+    def main_rig(self) -> int | None:
+        """The Biped the prefab's renderers skin to: of several ``Bip001`` nodes (a halo's own rig, Haruna (Track)'s
+        and a cut-in's), the one the most bones of its skinned renderers live in, the first on a tie."""
+        if self._rig is None:
+            rigs = self.named(BIPED_ROOT)
+            best = rigs[0] if rigs else -1
+            if len(rigs) > 1:
+                g = self.graph
+                counts = dict.fromkeys(rigs, 0)
+                for _, renderer in self.renderers:
+                    for pointer in g.tree(renderer)["m_Bones"]:
+                        bone = g.deref(renderer, pointer)
+                        n = self.by_transform.get(_key(bone)) if bone is not None else None
+                        if n is None:
+                            continue
+                        for r in rigs:
+                            if n == r or self.nodes[n].path.startswith(self.nodes[r].path + "/"):
+                                counts[r] += 1
+                best = max(rigs, key=lambda r: (counts[r], -rigs.index(r)))
+            self._rig = best
+        return self._rig if self._rig >= 0 else None
+
     def first(self, name: str) -> int | None:
-        return next((i for i, node in enumerate(self.nodes) if node.name == name), None)
+        """The node of a name, inside the main rig (``main_rig``) when the prefab has several and one of them holds
+        it, else the first in the prefab."""
+        hits = self.named(name)
+        if len(hits) > 1 and len(self.named(BIPED_ROOT)) > 1 and (rig := self.main_rig()) is not None:
+            prefix = self.nodes[rig].path + "/"
+            inside = next((i for i in hits if i == rig or self.nodes[i].path.startswith(prefix)), None)
+            if inside is not None:
+                return inside
+        return hits[0] if hits else None
 
     def chain_ancestor(self, i: int) -> int | None:
         """The nearest ancestor on the Biped's body chain (``BIPED_CHAIN``), or None."""
@@ -744,7 +786,7 @@ class Fit:
 @dataclass
 class Plan:
     mapping: dict[int, int]
-    choices: dict[str, str]  # Biped bone -> "follow" | "rigid"
+    choices: dict[int, str]  # source Biped node -> "follow" | "rigid"
     stretch: float
     own: float
     groups: dict[int, list[int]] = field(default_factory=dict)  # source Biped node -> its secondary bones
@@ -991,7 +1033,6 @@ def _judge(target: Costume, source: Costume, probes: list[list[np.ndarray]], fla
         rigid = mapping[anchor]
         mask = np.isin(sdom, members)
         mask = mask[se[:, 0]] & mask[se[:, 1]]
-        name = source.skeleton.nodes[anchor].name
         slot_name = source.skeleton.nodes[carried.get(anchor, anchor)].name  # a Biped bone the slot lacks: its carrier
         if not probes or not mask.any():
             follow = False
@@ -1005,7 +1046,7 @@ def _judge(target: Costume, source: Costume, probes: list[list[np.ndarray]], fla
                 if t_mask.any() else 1.0
             mine = max(stretch(reference, deform(flat, matrices(p, mapping)), se, mask) for p in probes)
             follow = mine <= max(STRETCH_FLOOR, group_own)
-        choices[name] = "follow" if follow else "rigid"
+        choices[anchor] = "follow" if follow else "rigid"
         if not follow:
             for n in members:
                 mapping[n] = rigid
@@ -1056,7 +1097,7 @@ def followed_groups(plan_: Plan, skeleton: Skeleton, anchors: set[int]) -> dict[
     """The leg-anchor groups (``anchors``: :func:`lower_anchors`) that the group choice set to ``follow``, with their
     secondary bones: Optimize Physics judges them again by pass-through (:func:`hems`)."""
     return {anchor: members for anchor, members in plan_.groups.items() if members and anchor in anchors
-            and plan_.choices.get(skeleton.nodes[anchor].name) == "follow"}
+            and plan_.choices.get(anchor) == "follow"}
 
 
 def chain_root(skeleton: Skeleton, node: int) -> int:
@@ -1187,7 +1228,7 @@ def _skirt_candidates(ts: Skeleton, ss: Skeleton, plan_: Plan, flat: Flat, sv: n
     costume in the source's space; ``sv``: its vertices in the shape bound on the slot, where each chain's
     bones go along with its cloth."""
     pelvis = s_legs["pelvis"]
-    if plan_.choices.get(ss.nodes[pelvis].name) != "rigid":
+    if plan_.choices.get(pelvis) != "rigid":
         return [], None
     members = set(plan_.groups.get(pelvis, []))
     roots = {chain_root(ss, int(n)) for n in np.unique(dominant[cloth]).tolist() if int(n) in members}
@@ -1293,7 +1334,7 @@ def hems(target: Costume, source: Costume, plan_: Plan, t_clips: list[Any], s_cl
         return Hems(note="no Biped legs")
     s_anchors = lower_anchors(ss, s_legs)
     rigid = sorted({n for anchor, members in plan_.groups.items() if anchor in s_anchors
-                    and plan_.choices.get(ss.nodes[anchor].name) == "rigid" for n in members})
+                    and plan_.choices.get(anchor) == "rigid" for n in members})
     followed = followed_groups(plan_, ss, s_anchors) if physics else {}
     flat = flatten(source, ss.world())  # the source's space, for the fit to its own clips
     on_rigid = np.isin(flat.joints, rigid) & (flat.weights > 0)
@@ -1401,7 +1442,7 @@ def hems(target: Costume, source: Costume, plan_: Plan, t_clips: list[Any], s_cl
             rules += rule_a(dense_regroup, part_regroup, share_regroup, on_regroup, REGROUP)
         if s_legs["pelvis"] in followed:
             lowered = dataclasses.replace(plan_, mapping=regroup, choices={
-                **plan_.choices, **{ss.nodes[anchor].name: "rigid" for anchor in followed}})
+                **plan_.choices, **dict.fromkeys(followed, "rigid")})
             again, again_skirt = _skirt_candidates(ts, ss, lowered, flat, sv, dominant, cloth, all_legs, t_legs, s_legs,
                                                    mapped_regroup, columns, rows_ok)
             again = [dataclasses.replace(c, rule=REGROUP + c.rule) for c in again]
@@ -2483,7 +2524,8 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
                             clip.peek_name())
     _sanity(written, rendered)
     logger.info("Costume of %s on %s: %d part(s), groups %s, stretch %.2f (own %.2f), shape %s (changed %.3f, 99th "
-                "percentile %.3f); hem %s", s_name, t_name, len(s_costume), result.choices, result.stretch, result.own,
+                "percentile %.3f); hem %s", s_name, t_name, len(s_costume),
+                {s_skeleton.nodes[n].name: c for n, c in result.choices.items()}, result.stretch, result.own,
                 result.fit.shape, result.fit.largest, result.fit.shift, hem.summary())
     return Result(opened, result, len(s_costume), hem)
 

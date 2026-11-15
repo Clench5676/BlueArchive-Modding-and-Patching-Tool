@@ -212,6 +212,27 @@ def test_a_face_is_drawn_as_bound_whatever_its_bones_rest_in():
     assert ma.face_bone(skeleton, brow) and not ma.face_bone(skeleton, head)
 
 
+def test_names_resolve_inside_the_rig_the_renderers_skin_to():
+    """A halo with a rig of its own (Haruna (Track)'s, Hasumi's) comes first in the prefab: names resolve inside the
+    Biped the renderers skin to, and names only the other rig has still resolve."""
+    from types import SimpleNamespace
+
+    class Graph(_Graph):
+        def deref(self, owner, pointer):
+            return pointer
+
+    skeleton = _skeleton([("HaloRoot", 0, (0, 2, 0), (0, 0, 0, 1)), ("Bip001", 1, (0, 0, 0), (0, 0, 0, 1)),
+                          ("Bip001 Head", 2, (0, 0.1, 0), (0, 0, 0, 1)), ("bone_halo", 2, (0, 0.2, 0), (0, 0, 0, 1)),
+                          ("Bip001", 0, (0, 0, 0), (0, 0, 0, 1)), ("Bip001 Head", 5, (0, 1.5, 0), (0, 0, 0, 1))])
+    skeleton.graph = Graph()
+    bones = [SimpleNamespace(assets_file=SimpleNamespace(name="cab"), path_id=i) for i in range(len(skeleton.nodes))]
+    skeleton.by_transform = {("cab", i): i for i in range(len(skeleton.nodes))}
+    skeleton.renderers = [(5, {"m_Bones": [bones[5], bones[6]]}), (3, {"m_Bones": [bones[4]]})]
+    assert skeleton.main_rig() == 5
+    assert skeleton.first("Bip001") == 5 and skeleton.first("Bip001 Head") == 6
+    assert skeleton.first("bone_halo") == 4
+
+
 def test_stretch_counts_shrinking_as_growing():
     rest = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0]], float)
     edges = np.array([[0, 1], [0, 2]])
@@ -517,6 +538,37 @@ def test_official_added_parts_hang_below_the_primary_and_the_bounds_hold_the_pos
 
 
 @official
+@pytest.mark.parametrize("target,source", [("haruna_original", "ch0193"), ("ch0193", "haruna_original")])
+def test_official_a_costume_binds_to_the_rig_the_slot_draws_with(view, tmp_path, target, source):
+    """Haruna (Track) holds a second Bip001 rig below her halo: the costume is bound to the rig her body skins to,
+    either way round, never to the halo's."""
+    from ba_modding_toolkit.bundle import Bundle
+    from ba_modding_toolkit.models import SaveOptions
+    from bmpt.gameassets.discovery import cab_names
+    from bmpt.gameassets.model import BundleGraph, _key, _prefabs
+
+    files, index = view
+    sources = [p for p in files if re.match(rf"character-{source}-_mxload", p.name)]
+    result = ma.adapt(index=index, resolver=None, target_files=_slot(files, target), target_dev=target,
+                      source_files=sources, source_dev=source, open_writable=Bundle.load)
+    adapted = dict(index)
+    for path, bundle in result.changed.items():
+        ok, message = bundle.save(tmp_path / path.name, SaveOptions(perform_crc=True, compression="lz4"))
+        assert ok, message
+        for cab in cab_names(tmp_path / path.name):
+            adapted[cab] = tmp_path / path.name
+    with BundleGraph(adapted) as graph:
+        prefabs = _prefabs(graph, sorted(tmp_path.glob("character-*")))
+        t = ma.Skeleton.of(graph, prefabs[ma.choose_prefab(prefabs, target)].deref())
+        rig = t.nodes[t.main_rig()].path
+        primary = next(p for p in ma.roles(t, None) if p.role == "primary")
+        bones = [t.nodes[b].path for b in primary.bones if b is not None]
+    assert len(t.named("Bip001")) == (2 if target == "ch0193" else 1)
+    assert bones and not any(path.startswith("HaloRoot") for path in bones)
+    assert not rig.startswith("HaloRoot")
+
+
+@official
 def test_official_bones_any_clip_scales_away_are_hidden(view):
     """The probes see six clips at three frames each; the slot's other clips hide bones too (a hair ornament in the
     cafe, a weapon bone in the cafe, skewers in a public skill). They and the bones below them are hidden, so no
@@ -736,8 +788,8 @@ def test_only_leg_anchor_groups_set_to_follow_are_judged_again_by_pass_through()
                           ("Bip001 L Thigh", 2, (0.1, 0, 0), (0, 0, 0, 1)), ("Bip001 R Thigh", 2, (-0.1, 0, 0), (0, 0, 0, 1)),
                           ("Bip001 Spine", 2, (0, 0.2, 0), (0, 0, 0, 1))])
     pelvis, left, right, spine = (skeleton.first(n) for n in ("Bip001 Pelvis", "Bip001 L Thigh", "Bip001 R Thigh", "Bip001 Spine"))
-    plan = ma.Plan({}, {"Bip001 Pelvis": "follow", "Bip001 L Thigh": "rigid", "Bip001 R Thigh": "follow",
-                        "Bip001 Spine": "follow"}, 1.0, 1.0, {pelvis: [10, 11], left: [12], right: [], spine: [13]})
+    plan = ma.Plan({}, {pelvis: "follow", left: "rigid", right: "follow", spine: "follow"}, 1.0, 1.0,
+                   {pelvis: [10, 11], left: [12], right: [], spine: [13]})
     anchors = {pelvis, left, right}
     assert ma.followed_groups(plan, skeleton, anchors) == {pelvis: [10, 11]}
     assert ma.followed_groups(plan, skeleton, anchors | {spine}) == {pelvis: [10, 11], spine: [13]}
