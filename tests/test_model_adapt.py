@@ -465,6 +465,27 @@ def test_official_costume_carries_a_shader_the_slot_does_not_load(view, tmp_path
 
 
 @official
+def test_official_bones_any_clip_scales_away_are_hidden(view):
+    """The probes see six clips at three frames each; the slot's other clips hide bones too (a hair ornament in the
+    cafe, a weapon bone in the cafe, skewers in a public skill). They and the bones below them are hidden, so no
+    costume bone maps onto them and collapses there; a clip that hides the body is no reason to hide it."""
+    from bmpt.gameassets.model import _prefabs
+
+    files, index = view
+    with ma.BundleGraph(index) as graph:
+        prefabs = _prefabs(graph, [p for p in _slot(files, "ch0215") if p.name.startswith("character-")])
+        t = ma.Skeleton.of(graph, prefabs[ma.choose_prefab(prefabs, "ch0215")].deref())
+        clips = ma.prefab_clips(graph, t, {k: v for k, v in prefabs.items() if "ch0215" in k})
+        probed = ma.hidden_bones(t, ma.probe_poses(t, clips))
+        hidden = ma.scaled_away(t, clips)
+    names = {t.nodes[i].name for i in hidden - probed}
+    assert {"bone_hair_acc", "Bip001_Weapon"} <= names
+    acc = t.first("bone_hair_acc")
+    assert set(t.descendants(acc)) <= hidden
+    assert not any(ma.BIPED_CHAIN.match(t.nodes[i].name) for i in hidden)
+
+
+@official
 @pytest.mark.parametrize("target,source,index,uv,on_primary", [
     ("azusa_original", "mashiro_original", 2, (0.125, 0.5), True),
     ("hina_original", "ch0288", 3, (0.75, 0.625), False),  # the mouth on a part beside the primary

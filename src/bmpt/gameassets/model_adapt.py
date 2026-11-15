@@ -12,7 +12,7 @@ own:
   and in the idle clip;
 - bone mapping (:func:`map_bones`): Biped bones (``Bip001 ...``, the names every clip and IK component uses) by name;
   every other bone by structure: the nearest bone of the slot's skeleton that hangs off the same Biped bone, in the chain
-  its parent maps to, else its parent's; never a bone the slot's clips hide by scaling it to nothing. A Biped bone the
+  its parent maps to, else its parent's; never a bone any of the slot's clips hides by scaling it to nothing. A Biped bone the
   slot lacks, or a bone outside the Biped, goes with the Biped bone that moves it alike under the source's own clips
   (:func:`carriers`: a Battle NPC's ForeTwist with the forearm, a bag's strap with the body). Per Biped bone, the group
   of secondary bones follows the matched bones only while it stretches no more than the slot's own costume under the
@@ -624,6 +624,49 @@ def hidden_bones(skeleton: Skeleton, poses: list[list[np.ndarray]]) -> set[int]:
     return out
 
 
+def scaled_away(skeleton: Skeleton, clips: Iterable[Any]) -> set[int]:
+    """The bones some frame of some clip scales to (almost) nothing (``HIDDEN`` of their volume at rest), as
+    :func:`hidden_bones` does for the probes: what the probes miss (a magazine hidden in the reload, a book in the EX
+    skill, a hair ornament in the cafe). A bone's volume is the product of its own and its ancestors' scales, so a
+    node scaled down above another scaled up (a tank's hull at 0.01, its body at 100) hides neither; it is read from
+    the clips' scale curves alone, no pose is computed. Frames that hide the body (a pop-in) hide no bone."""
+    g = skeleton.graph
+    nodes = skeleton.nodes
+    if not nodes:
+        return set()
+    by_hash = {zlib.crc32(node.path.encode()): i for i, node in enumerate(nodes)}
+    rest = np.array([math.log(max(abs(float(np.prod(node.local[2]))), 1e-30)) for node in nodes])
+    rest_world = rest.copy()
+    for i, node in enumerate(nodes):  # parents come first
+        if node.parent is not None:
+            rest_world[i] += rest_world[node.parent]
+    body = skeleton.first(BIPED_ROOT)
+    limit = math.log(HIDDEN)
+    out: set[int] = set()
+    for clip in clips:
+        tree = g.tree(clip)
+        bindings = tree["m_ClipBindingConstant"]["genericBindings"]
+        if not any(b["typeID"] == 4 and b["attribute"] == 3 and b["path"] in by_hash for b in bindings):
+            continue
+        decoded = decode_clip(tree)
+        frames = len(decoded.times)
+        local: dict[int, np.ndarray] = {}
+        for node, attributes in bind_tracks(bindings, decoded.curves, by_hash).items():
+            if 3 in attributes:
+                x, y, z = (np.asarray(part, float) for part in attributes[3])
+                local[node] = np.log(np.maximum(np.abs(x * y * z), 1e-30)) * np.ones(frames)
+        if not local:
+            continue
+        world = np.empty((len(nodes), frames))
+        for i, node in enumerate(nodes):
+            world[i] = local.get(i, rest[i]) + (world[node.parent] if node.parent is not None else 0.0)
+        shrunk = world - rest_world[:, None] < limit
+        if body is not None:
+            shrunk[:, shrunk[body]] = False
+        out.update(np.where(shrunk.any(axis=1))[0].tolist())
+    return out
+
+
 def map_bones(target: Skeleton, source: Skeleton, bones: Iterable[int],
               carried: Mapping[int, int] | None = None, hidden: set[int] | None = None) -> dict[int, int]:
     """Source node -> target node for every source bone and its ancestors, before the per-group choice. An unmatched
@@ -875,10 +918,11 @@ def refit(target: Skeleton, source: Skeleton, flat: Flat, carried: Mapping[int, 
 
 
 def plan(target: Costume, source: Costume, probes: list[list[np.ndarray]], *, fit: bool = True,
-         own_probes: list[list[np.ndarray]] | None = None) -> Plan:
+         own_probes: list[list[np.ndarray]] | None = None, clips: Iterable[Any] = ()) -> Plan:
     """The bone mapping with each group's choice, the shape the costume is bound in, and the checks of the rest pose
     and the stretch. The mapping (``map_bones``) takes the carriers of the unmatched bones from the source's own clips
-    (``own_probes``, see ``carriers``) and leaves out the slot's hidden bones. With ``fit`` (the costume's geometry can
+    (``own_probes``, see ``carriers``) and leaves out the slot's hidden bones: those the probes hide, and those any of
+    the slot's ``clips`` scales to nothing (:func:`scaled_away`). With ``fit`` (the costume's geometry can
     be rewritten), each of ``SHAPES`` is judged under the slot's clips and the least stretch wins, a later shape only
     by more than ``SHAPE_MARGIN``; without, the costume keeps its stored shape."""
     s_rest = source.skeleton.world()
@@ -888,7 +932,8 @@ def plan(target: Costume, source: Costume, probes: list[list[np.ndarray]], *, fi
     if (sj[sw > 0] < 0).any():
         raise refuse("costume bone outside the prefab")
     carried = carriers(target.skeleton, source.skeleton, flat_source, own_probes or [])
-    mapping = map_bones(target.skeleton, source.skeleton, source.bones(), carried, hidden_bones(target.skeleton, probes))
+    hidden = hidden_bones(target.skeleton, probes) | scaled_away(target.skeleton, clips)
+    mapping = map_bones(target.skeleton, source.skeleton, source.bones(), carried, hidden)
     own_mesh = OwnMesh.of(target)
     posed_targets = [own_mesh.posed(p) for p in probes]
     own = max((stretch(own_mesh.rest, posed, own_mesh.edges) for posed in posed_targets), default=1.0)
@@ -2195,7 +2240,7 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
     mesh_trees = [_mesh_tree(p.mesh) for p in s_costume]
     layouts = [mg.geometry_of(tree) for tree in mesh_trees]
     result = plan(target, source, probes, fit=all(layout is not None for layout in layouts),
-                  own_probes=probe_poses(s_skeleton, s_clips))
+                  own_probes=probe_poses(s_skeleton, s_clips), clips=t_clips)
     t_rest, s_rest = t_skeleton.world(), s_skeleton.world()
     # each part's vertices in its renderer's space at the source's rest, as they are bound (the costume's shape)
     shapes = [result.fit.part(k, s_rest[part.node]) for k, part in enumerate(s_costume)]
