@@ -176,7 +176,9 @@ def repair(library: ModLibrary, log: LogFunc = no_log, progress: ProgressCallbac
         game = _game(library, pins)
         built = _built(library, config)
     by_key = {pin.key: pin for pin in pins}
+    step_aside = getattr(library._lock, "step_aside", lambda: 0.0)
     for install, core in built:
+        step_aside()  # a preview or a page read waiting for the library goes first, between two entries
         library._drop_built(install, [core])
         result.dropped.append(_item(library, by_key.get(install), install, core))
     if game:
@@ -192,6 +194,7 @@ def repair(library: ModLibrary, log: LogFunc = no_log, progress: ProgressCallbac
     cores, kinds = set(), set()
     for i, (pin, core, source) in enumerate(game, 1):
         item = _item(library, pin, pin.key, core)
+        step_aside()
         with library._lock:
             try:
                 library._drop_built(pin, [core])
