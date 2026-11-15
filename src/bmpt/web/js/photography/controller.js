@@ -41,7 +41,9 @@ const tick=()=>new Promise(resolve=>requestAnimationFrame(resolve));
 const waitFrame=async(delay=0)=>{if(delay)await new Promise(resolve=>setTimeout(resolve,delay));await tick();await tick();};
 async function repositoryRead(){const key=sessionVariant,value=await call('list');if(key!==sessionVariant)throw new DOMException('Photography ended','AbortError');repository=normalized(value);return repository;}
 function errorText(error){return error.code?T(`error.${error.code}`,error.params||{}):P('captureFailed');}
-function safe(fn){return (...args)=>Promise.resolve().then(()=>fn(...args)).catch(error=>{if(error.name==='AbortError')return;console.error('Photography action failed',error);return Popup.message({title:P('failed'),lines:[errorText(error)],ok:P('confirm')});});}
+// A failure without an error code shows only the generic message: its message and stack go to the diagnostics
+// report, which the popup alone would leave without a trace.
+function safe(fn){return (...args)=>Promise.resolve().then(()=>fn(...args)).catch(error=>{if(error.name==='AbortError')return;console.error('Photography action failed',error);if(!error.code)globalThis.BAMTRecovery?.forward?.(error,'photography');return Popup.message({title:P('failed'),lines:[errorText(error)],ok:P('confirm')});});}
 function node(name,widgets,children=[]){return {name,active:true,pos:[0,0],scale:[1,1,1],rotZ:0,widgets,children};}
 let whiteTemplate;
 // Back, the text and the icon buttons share the fullscreen views' one button size (ui-tokens.js FULLSCREEN_BUTTON),
