@@ -1200,6 +1200,10 @@ class Hems:
     parts: list[tuple[np.ndarray, np.ndarray, np.ndarray] | None] = field(default_factory=list)
     skirt: Skirt | None = None
     regrouped: bool = False
+    # Optimize Physics: leg vertices deep under the cloth moved toward the leg's axis (rows of the bound shape, their
+    # new places in the prefab root's space), and the score that took it
+    thin: tuple[np.ndarray, np.ndarray] | None = None
+    thin_score: hm.Score | None = None
 
     def score(self, rule: str) -> hm.Score | None:
         return next((s for s in self.scores if s.rule == rule), None)
@@ -1209,6 +1213,8 @@ class Hems:
             return f"rigid ({self.note})"
         rigid, chosen = self.scores[0], self.score(self.rule) or self.scores[0]
         extra = f", {len(self.skirt.solver.roots)} chains in {self.skirt.clips} clips" if self.skirt else ""
+        if self.thin is not None and self.thin_score is not None:
+            extra += f", {len(self.thin[0])} leg vertices thinned under the cloth ({self.thin_score.mean:.1f}%)"
         return (f"{self.rule}: deep pass-through {rigid.mean:.1f}% -> {chosen.mean:.1f}%, stretch {rigid.stretch:.2f} -> "
                 f"{chosen.stretch:.2f} (limit {self.limit:.2f}){extra}; per clip " + ", ".join(
                     f"{clip} {rigid.deep[clip]:.0f}->{chosen.deep[clip]:.0f}" for clip in rigid.deep))
@@ -1322,7 +1328,7 @@ def _skirt_candidates(ts: Skeleton, ss: Skeleton, plan_: Plan, flat: Flat, sv: n
 
 
 def hems(target: Costume, source: Costume, plan_: Plan, t_clips: list[Any], s_clips: list[Any],
-         writable: list[bool], physics: bool = False) -> Hems:
+         writable: list[bool], physics: bool = False, shapes_writable: bool = False) -> Hems:
     """Rule A: new skin weights for the cloth the group choice left rigid around the legs, and, with
     ``physics`` (Optimize Physics), Rule B: the skirt chains as new bones turned by the legs in every
     frame; picked by measurement under the slot's own clips (see ``model_hems`` and ``model_skirts``). ``writable``:
@@ -1476,26 +1482,34 @@ def hems(target: Costume, source: Costume, plan_: Plan, t_clips: list[Any], s_cl
     limit = max(hm.STRETCH_FLOOR, max(hm.stretch_p99(own.rest, own.posed(pose), t_edges)
                                       for *_, frames in checks for *_, pose in frames))
     scores, four, solved = [], {}, {}
-    for rule, weights, solver in rules:
-        joints4, weights4 = hm.keep_four(weights)
+
+    def judged(rule: str, joints4: np.ndarray, weights4: np.ndarray, solver: ms.Solver | None,
+               points: np.ndarray) -> hm.Score:
         deep, worst = {}, 1.0
         for suffix, clip, tree, frames in checks:
             deep[suffix] = 0.0
             if solver is not None:  # the chains' turns in time, as the clip will hold them
-                sequence = skirt_sequence(ts, solver, tree)
-                solved[(rule, _key(clip))] = sequence
-                turns = dict(zip(*sequence))
+                if (rule, _key(clip)) not in solved:
+                    solved[(rule, _key(clip))] = skirt_sequence(ts, solver, tree)
+                turns = dict(zip(*solved[(rule, _key(clip))]))
             for frame, matrices, centre, carried, pose in frames:
                 if solver is not None:
                     matrices = np.concatenate([matrices, solver.posed(pose, turns[frame]) @ solver.inverse])
-                posed = hm.skin(sv, joints4, weights4, matrices)
+                posed = hm.skin(points, joints4, weights4, matrices)
                 state, depth = hm.cover(posed, covered, triangles, centre, carried)
                 deep[suffix] = max(deep[suffix], hm.deep_share(state, depth))
-                worst = max(worst, hm.stretch_p99(sv, posed, edges))
-        scores.append(hm.Score(rule, deep, worst))
+                worst = max(worst, hm.stretch_p99(points, posed, edges))
+        return hm.Score(rule, deep, worst)
+
+    for rule, weights, solver in rules:
+        joints4, weights4 = hm.keep_four(weights)
+        scores.append(judged(rule, joints4, weights4, solver, sv))
         four[rule] = (joints4, weights4)
     best = hm.choose(scores, limit)
     result = Hems(best.rule, "", limit, scores)
+    if physics and shapes_writable:
+        _thin_legs(result, best, judged, four[best.rule],
+                   next(solver for rule, _, solver in rules if rule == best.rule), sv, all_legs, triangles, at, up)
     if best.rule == "rigid":
         return result
     joints4, weights4 = four[best.rule]
@@ -1620,6 +1634,51 @@ def rigidify(target: Costume, source: Costume, plan_: Plan, probes: list[list[np
     hem.parts = parts
     plan_.repair = f"worst edges stiffened, stretch {before:.2f} -> {now:.2f} (limit {limit:.2f})"
     plan_.stretch, plan_.unfit = now, now > limit
+
+
+THIN_DEPTH = 0.01         # a leg vertex this far inside the cloth at rest (metres) or more may be thinned
+THIN_FACTORS = (0.85, 0.7)  # how much of its distance to the leg's axis a thinned vertex keeps, tried in order
+THIN_GAIN = 1.0           # the deep pass-through, in points, thinning must take off to be kept
+
+
+def _thin_legs(result: Hems, best: hm.Score, judged: Callable, four: tuple[np.ndarray, np.ndarray],
+               solver: ms.Solver | None, sv: np.ndarray, legs: np.ndarray, triangles: np.ndarray,
+               at: Mapping[str, np.ndarray], up: np.ndarray) -> None:
+    """Optimize Physics: the costume's leg vertices deep inside the cloth at rest (``THIN_DEPTH``) moved toward their
+    leg's axis, so that knees and shins stay under a skirt or gown; judged with the chosen rule's weights by the same
+    pass-through measure, kept when it takes ``THIN_GAIN`` points off and leaves no clip worse than the rule alone
+    (``result.thin``); only the cloth stays as it was, so its stretch does too. Removing the hidden triangles instead would leave a gap where the cloth lifts: thinning only."""
+    state, depth = hm.cover(sv, legs, triangles, at["pelvis"], up)
+    with np.errstate(invalid="ignore"):
+        rows = legs[(state == 1) & (depth < -THIN_DEPTH)]
+    if not len(rows):
+        return
+    points = sv[rows]
+    # each vertex toward the nearer leg's axis
+    left, right = (_nearest_on_legs(points, at[f"thigh {side}"], at[f"calf {side}"], at[f"foot {side}"]) for side in "LR")
+    nearer = np.linalg.norm(points - left, axis=1) <= np.linalg.norm(points - right, axis=1)
+    closest = np.where(nearer[:, None], left, right)
+    chosen = best
+    for factor in THIN_FACTORS:
+        moved = sv.copy()
+        moved[rows] = closest + factor * (points - closest)
+        score = judged(f"{best.rule} thin {factor}", *four, solver, moved)
+        if score.mean <= chosen.mean - THIN_GAIN and all(score.deep[c] <= best.deep[c] for c in score.deep):
+            chosen, result.thin, result.thin_score = score, (rows, moved[rows]), score
+            break
+
+
+def _nearest_on_legs(points: np.ndarray, hip: np.ndarray, knee: np.ndarray, ankle: np.ndarray) -> np.ndarray:
+    """Per point, the nearest point of the leg's axis (hip to knee to ankle)."""
+    out, best = np.empty_like(points), np.full(len(points), np.inf)
+    for a, b in ((hip, knee), (knee, ankle)):
+        d = b - a
+        t = np.clip((points - a) @ d / max(float(d @ d), 1e-12), 0.0, 1.0)
+        near = a + t[:, None] * d
+        distance = np.linalg.norm(points - near, axis=1)
+        take = distance < best
+        out[take], best[take] = near[take], distance[take]
+    return out
 
 
 def skirt_bones(skeleton: Skeleton, skirt: Skirt) -> None:
@@ -2395,7 +2454,14 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
         if layouts[k] is None and float(np.abs(points - skin.vertices).max(initial=0.0)) > 1e-4:
             raise refuse("costume geometry not writable", part=s_costume[k].mesh.peek_name())
     stores = [hm.store_of(tree) for tree in mesh_trees]
-    hem = hems(target, source, result, t_clips, s_clips, [store is not None for store in stores], physics)
+    hem = hems(target, source, result, t_clips, s_clips, [store is not None for store in stores], physics,
+               shapes_writable=all(layout is not None for layout in layouts))
+    if hem.thin is not None:  # Optimize Physics thinned the legs under the cloth: the bound shape changes there
+        rows, moved = hem.thin
+        vertices = result.fit.vertices.copy()
+        vertices[rows] = moved
+        result.fit = dataclasses.replace(result.fit, vertices=vertices)
+        shapes = [result.fit.part(k, s_rest[part.node]) for k, part in enumerate(s_costume)]
     rigidify(target, source, result, probes, hem, [store is not None for store in stores])
     skirt_clips: list[Any] = []
     if hem.skirt is not None:  # Rule B: the chains join the slot's skeleton, the slot's clips that move it get curves
