@@ -601,6 +601,45 @@ def test_official_a_costume_binds_to_the_rig_the_slot_draws_with(view, tmp_path,
 
 
 @official
+def test_official_optimize_physics_swings_the_chains_the_source_turns(view, tmp_path):
+    """Aris <- Yuzu with Optimize Physics: the chain the group choice left rigid off the head, which Yuzu's own clips
+    turn, becomes new bones of every prefab of the slot, and the slot's clips that move the head turn it; the rest
+    pose stays as bound."""
+    from ba_modding_toolkit.bundle import Bundle
+    from ba_modding_toolkit.models import SaveOptions
+    from bmpt.gameassets.discovery import cab_names
+    from bmpt.gameassets.model import BundleGraph, _prefabs
+
+    files, index = view
+    target, source = "aris_original", "yuzu_original"
+    sources = [p for p in files if re.match(rf"character-{source}-_mxload", p.name)]
+    result = ma.adapt(index=index, resolver=None, target_files=_slot(files, target), target_dev=target,
+                      source_files=sources, source_dev=source, open_writable=Bundle.load, physics=True)
+    springs = result.hems.springs
+    assert springs and all(s.solver.roots and s.clips >= 20 for s in springs), result.hems.summary()
+    assert all(isinstance(s.solver, ma.ms.Spring) for s in springs)
+    adapted = dict(index)
+    for path, bundle in result.changed.items():
+        ok, message = bundle.save(tmp_path / path.name, SaveOptions(perform_crc=True, compression="lz4"))
+        assert ok, message
+        for cab in cab_names(tmp_path / path.name):
+            adapted[cab] = tmp_path / path.name
+    with BundleGraph(adapted) as graph:
+        prefabs = _prefabs(graph, sorted(tmp_path.glob("character-*")))
+        for spring in springs:
+            for pointer in prefabs.values():
+                names = {n.name for n in ma.Skeleton.of(graph, pointer.deref()).nodes}
+                assert set(spring.names) <= names
+        t = ma.Skeleton.of(graph, prefabs[ma.choose_prefab(prefabs, target)].deref())
+        roots = {zlib.crc32(t.nodes[t.first(spring.names[r])].path.encode()) for spring in springs
+                 for r in spring.solver.roots}
+        turned = [c for c in ma.prefab_clips(graph, t, ma.own_prefabs(prefabs, target))
+                  if roots <= {b["path"] for b in graph.tree(c)["m_ClipBindingConstant"]["genericBindings"]
+                               if b["attribute"] == 2}]
+    assert len(turned) == springs[0].clips
+
+
+@official
 def test_official_bones_any_clip_scales_away_are_hidden(view):
     """The probes see six clips at three frames each; the slot's other clips hide bones too (a hair ornament in the
     cafe, a weapon bone in the cafe, skewers in a public skill). They and the bones below them are hidden, so no

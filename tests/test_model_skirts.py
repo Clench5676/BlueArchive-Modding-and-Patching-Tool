@@ -152,6 +152,42 @@ def _clip(dense_curves=0):
     return tree
 
 
+def _hanging_chain():
+    """A two-bone chain hanging 0.2 m down from an anchor at the origin (anchor node 0)."""
+    local = np.array([trs((0, 0, 0), (0, 0, 0, 1), (1, 1, 1)), trs((0, -0.2, 0), (0, 0, 0, 1), (1, 1, 1))])
+    rest = np.array([local[0], local[0] @ local[1]])
+    return ms.Chains(0, [-1, 0], local, rest)
+
+
+def _swing(spring, path, rate=30.0):
+    """The root's turn angle per frame while the anchor moves along ``path`` (its x position per frame)."""
+    times = [k / rate for k in range(len(path))]
+    pose = lambda k: [trs((path[k], 0, 0), (0, 0, 0, 1), (1, 1, 1))]  # noqa: E731
+    return [ms.angle_of(turns[0][:3, :3]) for turns in spring.sequence(times, pose)], spring.sequence(times, pose)
+
+
+def test_a_chain_swings_after_its_anchor_within_its_limit_and_comes_back_to_rest():
+    spring = ms.Spring(_hanging_chain(), {0: math.radians(20)})
+    assert spring.roots == [0] and np.isclose(spring.lengths[0], 0.2)
+    still, _ = _swing(spring, [0.0] * 30)
+    assert max(still) < 1e-9  # an anchor at rest leaves the chain at rest
+    path = [0.0] * 5 + [0.3] * 85  # the anchor jumps 30 cm to the side and stays
+    angles, sequence = _swing(spring, path)
+    assert angles[0] < 1e-9
+    assert max(angles) > math.radians(5)  # the tip lags behind
+    assert max(angles) <= math.radians(20) + 1e-9
+    assert angles[-1] < 0.1 * max(angles)  # and settles
+    # the tip trails the motion: the root turns its tip toward -x while the anchor moves to +x
+    peak = int(np.argmax(angles))
+    tip = spring.posed([trs((path[peak], 0, 0), (0, 0, 0, 1), (1, 1, 1))], sequence[peak])[1][:3, 3]
+    assert tip[0] < path[peak]
+
+
+def test_a_chain_too_short_or_without_a_limit_does_not_swing():
+    spring = ms.Spring(_hanging_chain(), {})
+    assert spring.roots == []
+
+
 @pytest.mark.parametrize("dense_curves", [0, 3])
 def test_dense_curves_go_between_the_dense_and_the_constant_ones(dense_curves):
     tree = _clip(dense_curves)
