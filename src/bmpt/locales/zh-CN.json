@@ -102,6 +102,8 @@
 				"walk": "行走",
 				"victory": "胜利",
 				"pickup": "拎起",
+				"retreat": "撤退",
+				"knockdown": "被击倒",
 				"story": "剧情 {n}"
 			},
 			"optimize": "优化物理效果",

@@ -102,6 +102,8 @@
 				"walk": "歩行",
 				"victory": "勝利",
 				"pickup": "持ち上げ",
+				"retreat": "撤退",
+				"knockdown": "ダウン",
 				"story": "ストーリー {n}"
 			},
 			"optimize": "物理効果を最適化",

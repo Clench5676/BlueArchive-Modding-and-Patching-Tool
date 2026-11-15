@@ -102,6 +102,8 @@
 				"walk": "걷기",
 				"victory": "승리",
 				"pickup": "들기",
+				"retreat": "후퇴",
+				"knockdown": "쓰러짐",
 				"story": "스토리 {n}"
 			},
 			"optimize": "물리 효과 최적화",
