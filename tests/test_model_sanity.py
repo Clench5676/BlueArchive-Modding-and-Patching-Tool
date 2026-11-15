@@ -43,7 +43,8 @@ def _reason(meshes, renderers):
 
 def test_sanity_passes_a_valid_build():
     ma._sanity([_written()], [_rendered()])
-    ma._sanity([_written(), _written(name="hair")], [_rendered(), _rendered(part=1, materials=[13])])
+    ma._sanity([_written(), _written(name="hair", source_materials=[1])],
+               [_rendered(), _rendered(part=1, materials=[13])])
     ma._sanity([], [])
 
 
@@ -112,9 +113,9 @@ def test_sanity_refuses_more_materials_than_submeshes():
     assert _reason([_written()], [_rendered(materials=[11, 12, 13])]) == "materials inconsistent"
 
 
-def test_sanity_refuses_a_null_material_between_others():
-    assert _reason([_written(submeshes=3)], [_rendered(materials=[11, 0, 13])]) == "materials inconsistent"
-    assert _reason([_written(source_materials=[1, 0, 1], submeshes=3)], [_rendered(materials=[11, 12])]) \
+def test_sanity_keeps_a_null_material_on_its_own_submesh():
+    ma._sanity([_written(source_materials=[1, 0, 1], submeshes=3)], [_rendered(materials=[11, 0, 13])])
+    assert _reason([_written(source_materials=[1, 0, 1], submeshes=3)], [_rendered(materials=[11, 13])]) \
         == "materials inconsistent"
 
 

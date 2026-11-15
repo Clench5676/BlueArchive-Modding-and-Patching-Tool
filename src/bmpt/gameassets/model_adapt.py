@@ -3,7 +3,10 @@
 A student's model slot (the ``character-<dev>-_mxload-*`` prefabs and their own dependency bundles) gets the costume of
 another model: its skinned costume meshes with bindposes rebound onto the slot's skeleton, its materials and its
 textures, all added as new objects to the slot's own bundles; the slot's prefabs then draw them in place of their own
-costume. Nothing existing changes in place: field, cutscene and other variants' bundles reference the slot's objects.
+costume. What exists changes only where the slot's prefabs need it (their renderers, transforms, behaviours and preload
+table) and, with Rule B, in the slot's own clips, which gain curves for the new skirt bones and keep every curve they had
+(read back value for value, :func:`clip_edit_error`): field, cutscene and other variants' bundles reference the slot's
+objects, and a prefab of theirs that plays such a clip has no node at the new curves' paths, which Unity leaves unbound.
 
 Everything is decided from data, never from names a character's artist chose, so new characters need no rules of their
 own:
@@ -65,7 +68,7 @@ from . import model_geometry as mg
 from . import model_hems as hm
 from . import model_skirts as ms
 from .errors import AssetNotFound
-from .model import (BundleGraph, PREFAB_KINDS, _external_cab, _key, _prefabs, bind_tracks, decode_clip,
+from .model import (BundleGraph, NPC_PREFAB, PREFAB_KINDS, _external_cab, _key, _prefabs, bind_tracks, decode_clip,
                     euler_orders, euler_to_quat, ex_only_renderers, model_root, read_mesh, shader_kind, UNITY_ORDER)
 
 logger = logging.getLogger(__name__)
@@ -2120,17 +2123,6 @@ class Rendered:
     bounds: dict          # m_AABB
 
 
-def _hole(pointers: Iterable[int]) -> bool:
-    """Whether a null comes before a non-null (the later materials would shift onto other submeshes)."""
-    gap = False
-    for pointer in pointers:
-        if not pointer:
-            gap = True
-        elif gap:
-            return True
-    return False
-
-
 def _sanity(meshes: list[Written], renderers: list[Rendered]) -> None:
     """The last check before the bundles are returned: what this run wrote must be numbers a player can
     load. A failure refuses the pair (``source_unsupported``) rather than saving a mesh that draws nothing or flies
@@ -2153,8 +2145,6 @@ def _sanity(meshes: list[Written], renderers: list[Rendered]) -> None:
             (totals <= 1e-9) & (mesh.source_totals <= 1e-9)
         if not (none | (np.abs(totals - 1.0) <= WEIGHT_TOLERANCE)).all():
             raise refuse("skin inconsistent", part=mesh.name, what="weights do not add up to 1")
-        if _hole(mesh.source_materials):
-            raise refuse("materials inconsistent", part=mesh.name, what="a material missing between others")
     for renderer in renderers:
         mesh = meshes[renderer.part]
         if renderer.bones != len(mesh.bindposes):
@@ -2169,8 +2159,9 @@ def _sanity(meshes: list[Written], renderers: list[Rendered]) -> None:
         if len(renderer.materials) > mesh.submeshes:
             raise refuse("materials inconsistent", part=mesh.name,
                          what=f"{len(renderer.materials)} materials for {mesh.submeshes} submeshes")
-        if _hole(renderer.materials):
-            raise refuse("materials inconsistent", part=mesh.name, what="a material missing between others")
+        if len(renderer.materials) != len(mesh.source_materials):  # a null kept in place, never dropped
+            raise refuse("materials inconsistent", part=mesh.name,
+                         what=f"{len(renderer.materials)} materials for the source's {len(mesh.source_materials)}")
 
 
 @dataclass
@@ -2217,6 +2208,14 @@ def _model_prefabs(graph: BundleGraph, files: list[Path]) -> dict[str, Any]:
     return {name: pointer for name, pointer in _prefabs(graph, files).items()}
 
 
+def own_prefabs(prefabs: Mapping[str, Any], dev: str) -> dict[str, Any]:
+    """``dev``'s own prefabs among ``prefabs`` (lower-case stems): the kinds of :data:`PREFAB_KINDS` and its field
+    NPC prefabs; never another model's whose name holds ``dev`` (``ch0336_carrier`` beside ``ch0336``)."""
+    names = {pattern.format(dev).lower() for pattern in PREFAB_KINDS.values()}
+    return {name: pointer for name, pointer in prefabs.items() if name in names or (
+        (match := NPC_PREFAB.fullmatch(name)) is not None and match.group(1).lower() == dev.lower())}
+
+
 def choose_prefab(prefabs: Mapping[str, Any], dev: str) -> str:
     for kind in ("echelon", "battle", "cafe", "strategy"):
         name = PREFAB_KINDS[kind].format(dev).lower()
@@ -2261,9 +2260,9 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
     if not s_skeleton.renderers:
         # an unskinned model (Kei's Decagrammaton body, a static mesh): nothing to bind to the slot's bones
         raise refuse("static model", dev=source_dev)
-    own = {k: v for k, v in target_prefabs.items() if target_dev in k}
+    own = own_prefabs(target_prefabs, target_dev)
     t_clips = prefab_clips(graph, t_skeleton, own)
-    s_clips = prefab_clips(graph, s_skeleton, {k: v for k, v in source_prefabs.items() if source_dev in k})
+    s_clips = prefab_clips(graph, s_skeleton, own_prefabs(source_prefabs, source_dev))
     t_idle = next(iter(t_skeleton.poses(pick(t_clips, IDLE_CLIPS)[:1], frames=1)), None)
     s_idle = next(iter(s_skeleton.poses(pick(s_clips, IDLE_CLIPS)[:1], frames=1)), None)
     t_parts, s_parts = roles(t_skeleton, t_idle), roles(s_skeleton, s_idle)
@@ -2504,7 +2503,7 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
         for name, sf in bundle.env.file.files.items():
             if hasattr(sf, "objects") and name.lower() in files:
                 _edit_prefabs(writer, sf, graph, t_meshes, t_primary_materials, mesh_cab, material_cab, new_meshes,
-                              [[materials[_key(m)] for m in p.materials if m is not None] for p in s_costume],
+                              [[materials[_key(m)] if m is not None else 0 for m in p.materials] for p in s_costume],
                               [s_skeleton.nodes[p.node].name for p in s_costume], root_node, t_skeleton, bounds,
                               halo_change, rendered, mouth)
     if hem.skirt is not None:
@@ -2549,9 +2548,9 @@ def _edit_prefabs(writer: _Writer, sf: Any, graph: BundleGraph, t_meshes: Mappin
     mesh_fid, material_fid = writer.external(sf, mesh_cab), writer.external(sf, material_cab)
     bundle_object = next(o for o in objects.values() if o.type.name == "AssetBundle")
     asset_bundle = bundle_object.read_typetree()
-    additions: dict[tuple[int, int], list[dict]] = {}
+    additions: dict[int, list[dict]] = {}  # container entry -> the objects its prefab now loads too
     seen = rendered if rendered is not None else []  # what is written on the renderers, for ``_sanity``
-    for container, info in asset_bundle["m_Container"]:
+    for entry, (container, info) in enumerate(asset_bundle["m_Container"]):
         if not container.lower().endswith(".prefab") or info["asset"]["m_FileID"] != 0:
             continue
         # the prefab's transforms by path below its root (as the skeleton names them) and its renderers
@@ -2637,7 +2636,7 @@ def _edit_prefabs(writer: _Writer, sf: Any, graph: BundleGraph, t_meshes: Mappin
                 r["m_Bones"] = [bone(n) for n in nodes]
                 count = len(new_materials[0])
                 if main_renderer:
-                    r["m_Materials"] = [{"m_FileID": material_fid, "m_PathID": m} for m in new_materials[0]]
+                    r["m_Materials"] = [_material(material_fid, m) for m in new_materials[0]]
                     main = pid
                 else:  # a copy (an effect's): its own materials, one per submesh
                     kept = r["m_Materials"] or [{"m_FileID": 0, "m_PathID": 0}]
@@ -2651,7 +2650,7 @@ def _edit_prefabs(writer: _Writer, sf: Any, graph: BundleGraph, t_meshes: Mappin
         halo_added = _edit_halo(halo, by_path, objects, tree, save, mesh_fid, material_fid, sf, writer) if halo else []
         if main is None:
             if added or halo_added:
-                additions[(info["preloadIndex"], info["preloadSize"])] = list(added) + halo_added
+                additions[entry] = list(added) + halo_added
             continue
         # further source parts: renderers of their own beside the primary
         drawing = {0: main}  # source part -> the renderer drawing it in this prefab
@@ -2669,7 +2668,7 @@ def _edit_prefabs(writer: _Writer, sf: Any, graph: BundleGraph, t_meshes: Mappin
             r = {**template}
             r["m_GameObject"] = {"m_FileID": 0, "m_PathID": new_go}
             r["m_Mesh"] = {"m_FileID": mesh_fid, "m_PathID": mesh_pid}
-            r["m_Materials"] = [{"m_FileID": material_fid, "m_PathID": m} for m in new_materials[k]]
+            r["m_Materials"] = [_material(material_fid, m) for m in new_materials[k]]
             r["m_Bones"] = [bone(n) for n in nodes]
             r["m_RootBone"] = bone(root_node)
             r["m_AABB"] = copy.deepcopy(bounds[k])
@@ -2694,9 +2693,8 @@ def _edit_prefabs(writer: _Writer, sf: Any, graph: BundleGraph, t_meshes: Mappin
                     save(b)
         if mouth is not None and mouth.part in drawing:
             _edit_mouth(behaviours, tree, save, costume_renderers, drawing[mouth.part], mouth)
-        key = (info["preloadIndex"], info["preloadSize"])
-        additions[key] = added + [{"m_FileID": mesh_fid, "m_PathID": m} for m, _ in new_meshes] + [
-            {"m_FileID": material_fid, "m_PathID": m} for ms in new_materials for m in ms] + halo_added
+        additions[entry] = added + [{"m_FileID": mesh_fid, "m_PathID": m} for m, _ in new_meshes] + [
+            {"m_FileID": material_fid, "m_PathID": m} for ms in new_materials for m in ms if m] + halo_added
     _extend_preload(asset_bundle, additions)
     bundle_object.save_typetree(asset_bundle)
 
@@ -2827,6 +2825,11 @@ def _transplant(halo: HaloChange, root: int, root_components: list[int], objects
         {"m_FileID": files[marker], "m_PathID": pid} for marker, pid in plan.carried]
 
 
+def _material(file_id: int, path_id: int) -> dict:
+    """A renderer's material pointer; a material the source leaves empty stays empty, on its own submesh."""
+    return {"m_FileID": file_id if path_id else 0, "m_PathID": path_id}
+
+
 def _cab(sf: Any, file_id: int) -> str:
     if file_id == 0:
         return sf.name.lower()
@@ -2891,25 +2894,40 @@ def _bounds(mesh: Written, nodes: list[int], t_skeleton: Skeleton, root: int, po
     return {"m_Center": _vector((lo + hi) / 2), "m_Extent": _vector((hi - lo) / 2)}
 
 
-def _extend_preload(asset_bundle: dict, additions: Mapping[tuple[int, int], list[dict]]) -> None:
+def _extend_preload(asset_bundle: dict, additions: Mapping[int, list[dict]]) -> None:
+    """The preload ranges of the edited prefabs grown by what each now loads too (``additions``, by container entry).
+    Contiguous ranges are rebuilt in place, a range two entries share taking both entries' objects; otherwise each
+    edited entry gets a copy of its range at the end, so two entries that shared one never take each other's."""
     table = asset_bundle["m_PreloadTable"]
-    ranges = sorted({(i["preloadIndex"], i["preloadSize"]) for _, i in asset_bundle["m_Container"] if i["preloadSize"]})
+    containers = asset_bundle["m_Container"]
+    ranges = sorted({(i["preloadIndex"], i["preloadSize"]) for _, i in containers if i["preloadSize"]})
     contiguous = sum(n for _, n in ranges) == len(table) and all(
         ranges[k][0] + ranges[k][1] == ranges[k + 1][0] for k in range(len(ranges) - 1)) and (not ranges or ranges[0][0] == 0)
-    moved: dict[tuple[int, int], tuple[int, int]] = {}
-    if contiguous:
-        rebuilt: list[dict] = []
-        for i, n in ranges:
-            extra = additions.get((i, n), [])
-            moved[(i, n)] = (len(rebuilt), n + len(extra))
-            rebuilt.extend(table[i:i + n] + extra)
-        asset_bundle["m_PreloadTable"] = rebuilt
-    else:  # ranges that overlap or leave gaps: the edited prefabs get a copy of their range at the end
-        for (i, n), extra in additions.items():
-            moved[(i, n)] = (len(table), n + len(extra))
+    if not contiguous:  # ranges that overlap or leave gaps: each edited entry gets a copy of its range at the end
+        for entry, extra in sorted(additions.items()):
+            info = containers[entry][1]
+            i, n = info["preloadIndex"], info["preloadSize"]
+            info["preloadIndex"], info["preloadSize"] = len(table), n + len(extra)
             table.extend(table[i:i + n] + extra)
-    for _, info in asset_bundle["m_Container"]:
-        key = (info["preloadIndex"], info["preloadSize"])
+        return
+    grown: dict[tuple[int, int], list[dict]] = {}
+    for entry, extra in sorted(additions.items()):
+        info = containers[entry][1]
+        merged = grown.setdefault((info["preloadIndex"], info["preloadSize"]) if info["preloadSize"] else ("end", entry), [])
+        merged += [pointer for pointer in extra if pointer not in merged]
+    moved: dict[tuple, tuple[int, int]] = {}
+    rebuilt: list[dict] = []
+    for i, n in ranges:
+        extra = grown.get((i, n), [])
+        moved[(i, n)] = (len(rebuilt), n + len(extra))
+        rebuilt.extend(table[i:i + n] + extra)
+    for key, extra in grown.items():  # an entry that loaded nothing before: a range of its own at the end
+        if key[0] == "end":
+            moved[key] = (len(rebuilt), len(extra))
+            rebuilt.extend(extra)
+    asset_bundle["m_PreloadTable"] = rebuilt
+    for entry, (_, info) in enumerate(containers):
+        key = (info["preloadIndex"], info["preloadSize"]) if info["preloadSize"] else ("end", entry)
         if key in moved:
             info["preloadIndex"], info["preloadSize"] = moved[key]
 

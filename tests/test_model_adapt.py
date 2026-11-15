@@ -28,7 +28,7 @@ def test_preload_ranges_grow_in_place_when_contiguous():
     bundle = {"m_PreloadTable": [_pptr(i) for i in range(5)],
               "m_Container": [["a.prefab", {"preloadIndex": 0, "preloadSize": 2, "asset": _pptr(1)}],
                               ["b.prefab", {"preloadIndex": 2, "preloadSize": 3, "asset": _pptr(2)}]]}
-    ma._extend_preload(bundle, {(0, 2): [_pptr(9, 1)]})
+    ma._extend_preload(bundle, {0: [_pptr(9, 1)]})
     assert [p["m_PathID"] for p in bundle["m_PreloadTable"]] == [0, 1, 9, 2, 3, 4]
     assert [(i["preloadIndex"], i["preloadSize"]) for _, i in bundle["m_Container"]] == [(0, 3), (3, 3)]
 
@@ -37,9 +37,34 @@ def test_preload_ranges_with_gaps_get_a_copy_at_the_end():
     bundle = {"m_PreloadTable": [_pptr(i) for i in range(6)],
               "m_Container": [["a.prefab", {"preloadIndex": 1, "preloadSize": 2, "asset": _pptr(1)}],
                               ["b.prefab", {"preloadIndex": 4, "preloadSize": 2, "asset": _pptr(2)}]]}
-    ma._extend_preload(bundle, {(4, 2): [_pptr(9)]})
+    ma._extend_preload(bundle, {1: [_pptr(9)]})
     assert [p["m_PathID"] for p in bundle["m_PreloadTable"]] == [0, 1, 2, 3, 4, 5, 4, 5, 9]
     assert [(i["preloadIndex"], i["preloadSize"]) for _, i in bundle["m_Container"]] == [(1, 2), (6, 3)]
+
+
+def test_entries_that_share_a_preload_range_keep_their_own_additions():
+    """Two prefabs of one preload range: contiguous ranges grow by both entries' objects; with gaps, each entry gets a
+    copy of its own range with its own objects."""
+    shared = {"m_PreloadTable": [_pptr(i) for i in range(4)],
+              "m_Container": [["a.prefab", {"preloadIndex": 0, "preloadSize": 2, "asset": _pptr(1)}],
+                              ["b.prefab", {"preloadIndex": 0, "preloadSize": 2, "asset": _pptr(2)}],
+                              ["c.prefab", {"preloadIndex": 2, "preloadSize": 2, "asset": _pptr(3)}]]}
+    ma._extend_preload(shared, {0: [_pptr(8)], 1: [_pptr(9), _pptr(8)]})
+    assert [p["m_PathID"] for p in shared["m_PreloadTable"]] == [0, 1, 8, 9, 2, 3]
+    assert [(i["preloadIndex"], i["preloadSize"]) for _, i in shared["m_Container"]] == [(0, 4), (0, 4), (4, 2)]
+    gaps = {"m_PreloadTable": [_pptr(i) for i in range(5)],
+            "m_Container": [["a.prefab", {"preloadIndex": 1, "preloadSize": 2, "asset": _pptr(1)}],
+                            ["b.prefab", {"preloadIndex": 1, "preloadSize": 2, "asset": _pptr(2)}]]}
+    ma._extend_preload(gaps, {0: [_pptr(8)], 1: [_pptr(9)]})
+    assert [p["m_PathID"] for p in gaps["m_PreloadTable"]] == [0, 1, 2, 3, 4, 1, 2, 8, 1, 2, 9]
+    assert [(i["preloadIndex"], i["preloadSize"]) for _, i in gaps["m_Container"]] == [(5, 3), (8, 3)]
+
+
+def test_a_models_own_prefabs_are_chosen_by_their_names():
+    prefabs = dict.fromkeys(["ch0336", "echelon_ch0336", "ch0336_carrier", "echelon_ch0336_carrier",
+                             "field_npc_np0060_justice_student", "field_npc_np00601_other"])
+    assert set(ma.own_prefabs(prefabs, "ch0336")) == {"ch0336", "echelon_ch0336"}
+    assert set(ma.own_prefabs(prefabs, "np0060")) == {"field_npc_np0060_justice_student"}
 
 
 def test_renderer_lists_that_name_the_primary_take_the_added_part():
