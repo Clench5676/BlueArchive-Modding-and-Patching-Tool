@@ -29,7 +29,7 @@ from ..openfiles import temporary_directory
 from .classic import QUEUE_METHODS, ClassicQueue, ClassicWindow, NativeOps, QueuedCall, native_ops, stat_files
 from ..library.relocate import relocate
 from .events import EventBus
-from .jobs import JobRunner
+from .jobs import MAINTENANCE, USER, JobRunner
 from .scanner import Scanner
 from .timing import Timings
 from .server import MIME, AssetResponse
@@ -541,7 +541,7 @@ class Services:
             with self.timings.measure("library.prune"):
                 return [str(p) for p in library.prune()]
 
-        self._prune_job = self.submit("library.prune", prune, writes="library", library=library)
+        self._prune_job = self.submit("library.prune", prune, writes="library", library=library, rank=MAINTENANCE)
 
     def cache_dir(self) -> Path:
         """Where consented game assets are cached: a bluearchive-modding-patching-tool/cache folder inside the chosen folder,
@@ -763,12 +763,13 @@ class Services:
     # --- jobs ---
 
     def submit(self, kind: str, fn: Callable[..., Any], *, writes: str | None = None, library: Any = None,
-               **params: Any) -> str:
+               rank: int = USER, **params: Any) -> str:
         """Submit a job. A writer job (``writes``: "game" or "library") ends on the worker with the library's
         judging of the unfinished list, a new ``mods.state`` snapshot, ``library.changed {cores, kinds}`` and a scan
-        (with scan consent); ``library`` is the library it works through, captured at submit."""
+        (with scan consent); ``library`` is the library it works through, captured at submit. ``rank``: the job's
+        class in the queue (``jobs.USER`` unless maintenance)."""
         if writes is None:
-            return self.jobs.submit(kind, fn, **params)
+            return self.jobs.submit(kind, fn, rank=rank, **params)
 
         def run(log: Any, progress: Any, **p: Any) -> Any:
             result, failed = None, True
@@ -779,7 +780,7 @@ class Services:
             finally:
                 self._after_writer(library, kind, result, failed)
 
-        return self.jobs.submit(kind, run, writes=writes, **params)
+        return self.jobs.submit(kind, run, writes=writes, rank=rank, **params)
 
     def _after_writer(self, library: Any, kind: str, result: Any, failed: bool) -> None:
         started = time.perf_counter()
@@ -974,7 +975,7 @@ class Services:
         if library is None or self.jobs.active("library.judge"):
             return None
         return self.submit("library.judge", lambda log, progress: {"dropped": library.judge_unfinished()},
-                           writes="library", library=library)
+                           writes="library", library=library, rank=MAINTENANCE)
 
     # --- the classic window ---
 
@@ -1293,7 +1294,7 @@ class Services:
                 return None
             return library.repair_crc(log=log)
 
-        return self.submit("mods.crcRepair", run, writes="game", library=library)
+        return self.submit("mods.crcRepair", run, writes="game", library=library, rank=MAINTENANCE)
 
     def start_watch(self, run: bool = True) -> None:
         """Make the game watch and (``run``) start its thread; without, ``watch.poll()`` checks once."""

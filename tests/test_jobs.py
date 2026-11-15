@@ -196,3 +196,38 @@ def test_parallel_progress_has_one_sequence_shared_with_polling():
         assert len({id(report) for report in reports}) == 20
     finally:
         jobs.shutdown()
+
+
+def test_user_jobs_go_before_queued_maintenance_and_a_running_job_is_not_interrupted():
+    jobs = JobRunner(EventBus())
+    gate, ran = threading.Event(), []
+    try:
+        first = jobs.submit("library.prune", lambda log, progress: (gate.wait(5), ran.append("prune running")),
+                            writes="library", rank=jobs_module.MAINTENANCE)
+        assert wait_for(lambda: jobs.get(first).state == "running")
+        jobs.submit("mods.crcRepair", lambda log, progress: ran.append("crc repair"), writes="game",
+                    rank=jobs_module.MAINTENANCE)
+        jobs.submit("mods.refreshCostumes", lambda log, progress: ran.append("start rebuild"), writes="game",
+                    rank=jobs_module.START)
+        jobs.submit("mods.toggle", lambda log, progress: ran.append("toggle"), writes="game")
+        last = jobs.submit("apply", lambda log, progress: ran.append("apply"), writes="game")
+        gate.set()
+        assert jobs.wait(last, 5) and wait_for(lambda: len(ran) == 5)
+        assert ran == ["prune running", "toggle", "apply", "start rebuild", "crc repair"]
+    finally:
+        gate.set()
+        jobs.shutdown()
+
+
+def test_queued_writers_still_run_at_shutdown_whatever_their_class():
+    jobs = JobRunner(EventBus())
+    gate, ran = threading.Event(), []
+    blocker = jobs.submit("extract", lambda log, progress: gate.wait(5))
+    assert wait_for(lambda: jobs.get(blocker).state == "running")
+    jobs.submit("library.prune", lambda log, progress: ran.append("prune"), writes="library",
+                rank=jobs_module.MAINTENANCE)
+    jobs.shutdown()
+    gate.set()
+    assert wait_for(lambda: ran == ["prune"])
+    with pytest.raises(ValueError):
+        jobs.submit("x", lambda log, progress: None, rank=7)
