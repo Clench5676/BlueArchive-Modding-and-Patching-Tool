@@ -183,6 +183,21 @@ def test_a_chain_swings_after_its_anchor_within_its_limit_and_comes_back_to_rest
     assert tip[0] < path[peak]
 
 
+def test_a_slot_clip_the_source_has_by_name_plays_the_source_keys():
+    chains = _hanging_chain()
+    turned = _rotation((0, 0, 1), math.radians(30))
+    q = ms.quaternion(turned)
+    keys = {("formation", "idle"): (np.array([0.0, 1.0]), {1: np.array([[0, 0, 0, 1], q])})}
+    spring = ms.Spring(chains, {0: math.radians(20)}, keys, np.array(chains.local))
+    turns = spring.keyed("CH0001_Formation_Idle", [0.0, 0.5, 1.0])
+    assert [sorted(t) for t in turns] == [[1], [1], [1]]
+    assert np.allclose(turns[0][1], chains.local[1], atol=1e-9)  # the source's first frame: its rest
+    assert np.allclose(turns[2][1][:3, :3], turned, atol=1e-9) and np.allclose(turns[2][1][:3, 3], (0, -0.2, 0))
+    assert 0 < ms.angle_of(turns[1][1][:3, :3]) < math.radians(30)  # half way, by its time
+    assert spring.keyed("CH0001_Cafe_Walk", [0.0, 1.0]) is None  # no clip of that name: the swing
+    assert spring.keyed("Idle", [0.0, 1.0]) is None
+
+
 def test_a_chain_too_short_or_without_a_limit_does_not_swing():
     spring = ms.Spring(_hanging_chain(), {})
     assert spring.roots == []

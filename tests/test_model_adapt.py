@@ -636,7 +636,12 @@ def test_official_optimize_physics_swings_the_chains_the_source_turns(view, tmp_
         turned = [c for c in ma.prefab_clips(graph, t, ma.own_prefabs(prefabs, target))
                   if roots <= {b["path"] for b in graph.tree(c)["m_ClipBindingConstant"]["genericBindings"]
                                if b["attribute"] == 2}]
+        # a clip Yuzu has by name plays Yuzu's own keys, for every bone of the chain they turn
+        bones = {zlib.crc32(t.nodes[t.first(name)].path.encode()) for spring in springs for name in spring.names}
+        keyed = [c for c in turned if len(bones & {b["path"] for b in graph.tree(c)["m_ClipBindingConstant"][
+            "genericBindings"] if b["attribute"] == 2}) > len(roots)]
     assert len(turned) == springs[0].clips
+    assert keyed  # (Yuzu has every clip Aris has, by name)
 
 
 @official
