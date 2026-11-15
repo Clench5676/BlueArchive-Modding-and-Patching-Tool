@@ -715,6 +715,8 @@ const ACTION_TIERS = Object.freeze([
 ]);
 // The small button body's soft drop shadow under its solid art: 14 of its 176 rows (Btn_Cancel/BG (1) as drawn).
 const ACTION_SHADOW = 14 / 176;
+// a loading action's ring against its body's height
+const ACTION_RING = 0.55;
 // The details panel one size down: its title and the name TYPE.body (the size under
 // TYPE.heading), its chips the S chip (CHIP_TIERS), as wide as their captions, its light box STATS_BOX_S; its actions keep
 // the XS button, the smallest. The chips stand on the name's line where they fit beside it, SPACE.s apart.
@@ -919,7 +921,7 @@ export function detailsTree(it, title, fields, actions, portraitTexture = null, 
     return row(fits.slice(start, start + captions.length).map((f) => ({ w: f.width, h: BTN.h })),
       { x: SPACE.m, w: w - 2 * SPACE.m, gap, justify: "center" }).boxes.map((b) => ({ ...b, row: r }));
   }) };
-  actions.forEach(([caption, , disabled, semantic = "secondary"], i) => {
+  actions.forEach(([caption, , disabled, semantic = "secondary", , loading = false], i) => {
     let body = clone(find(layouts.sortPopup, "Center/Popup/Btn/Btn_Cancel/BG (1)")), ink = "#2d5164/1.00";
     if (disabled) {
       const grey = Buttons.disable(node("Action", [0, 0], [], [body]));
@@ -930,8 +932,12 @@ export function detailsTree(it, title, fields, actions, portraitTexture = null, 
     // a button however narrow the row makes it: the pre-release size tag marks it
     Object.assign(bg, { depth: 6, tier: "button", ...(!disabled ? { color: "#dbeef5/1.00" } : {}) });
     for (const child of body.children || []) for (const widget of child.widgets) if ("w_" in widget) widget.depth = 7;
+    // an action still loading (its check under way) shows the game's loading ring in its caption's place, in the
+    // caption's ink; the body keeps the caption's width, so nothing moves when the caption comes back
+    const caption_ = label(fits[i].text, fits[i].fs, ink, fits[i].width - ACTION_CLEAR, ACTION_TEXT_H, { depth: 8 });
+    const ring = Math.min(ACTION_TEXT_H, Math.round(BTN.h * ACTION_RING));
     const action = node(`Act_${i}`, [0, 0], [], [body, node("Label", [0, 0],
-      [label(fits[i].text, fits[i].fs, ink, fits[i].width - ACTION_CLEAR, ACTION_TEXT_H, { depth: 8 })])]);
+      [loading ? { loadingRing: true, w_: ring, h_: ring, pivot: 4, depth: 8, color: ink, fallback: caption_ } : caption_])]);
     action.actionSemantic = disabled ? "secondary" : semantic; kids.push(action);
   });
   if (actions.length) bands.push({ name: "Actions", w, h: actionsH });
@@ -1008,7 +1014,9 @@ export function detailsTree(it, title, fields, actions, portraitTexture = null, 
 //   items' hint: the card's hover hint
 //   check: {label, checked, onChange} for a checkbox below the details; a click flips check.checked, so the same
 //          object is passed to every drawing
-//   details(it): {title, fields: [[caption, value, colour]], actions: [[caption, fn]], truncate} for the panel on the left;
+//   details(it): {title, fields: [[caption, value, colour]], actions: [[caption, fn, disabled, semantic, hint, loading]],
+//                truncate} for the panel on the left; a loading action (disabled while its check runs) shows the
+//                loading ring in its caption's place;
 //                truncate: each value on one line, a "…" button showing a cut one whole
 //   footer: the line over the paper's right (the ticked cards, their size); the footer buttons are LIST_FOOTER's size
 //   keepScroll: the list's offset on its scrolling axis (horizontal for portraits)
@@ -1238,10 +1246,11 @@ export async function listPopup(options) {
         ok: T("picker.ok") }), { name: cut.caption || d.title, action: `more:${cut.field}` });
       button?.setAttribute("aria-description", cut.value);
     }
-    d.actions.forEach(([caption, fn, disabled, , hint], i) => {
+    d.actions.forEach(([caption, fn, disabled, , hint, loading], i) => {
       if (!fn) return;
       const button = hit(detailsHost, dv, `Details/Act_${i}/Body`, disabled ? () => {} : fn, { name: caption });
       if (!button) return;
+      if (loading) button.setAttribute("aria-busy", "true");
       // a greyed action with a reason keeps the pointer, so the reason shows on hover (the game's tooltip); an action's
       // own hint (what it covers) shows the same way
       if (disabled && hint) button.setAttribute("aria-disabled", "true");

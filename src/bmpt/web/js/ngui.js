@@ -280,7 +280,9 @@ export async function render(tree, host, opts = {}) {
     "Center/Popup/Btn/Btn_Cancel/Label_Locale").widgets.find((w) => "text" in w) : null;
   // A still being made holds its place with the game's loading ring: UIRatioNoticePopup's LoadingIcon and
   // its TweenRotation; without that prefab the placeholder text stands in, as before.
-  const loadingIcon = needsPlaceholder(tree)
+  // a widget may stand for work under way with the same ring (loadingRing: a button whose action is still loading)
+  const needsRing = (n) => n.widgets?.some((w) => w.loadingRing) || n.children?.some(needsRing);
+  const loadingIcon = needsPlaceholder(tree) || needsRing(tree)
     ? await layout("UIRatioNoticePopup").then((t) => find(t, "Center/Popup/Base/LoadingIcon") || null, () => null) : null;
   const S = opts.scale ?? 1920 / 2960;
   const [ox, oy] = opts.origin ?? [960, 540];
@@ -311,7 +313,13 @@ export async function render(tree, host, opts = {}) {
     for (const w of n.widgets) {
       if (!("w_" in w)) continue;
       const col = colorOf(w.color);
-      if ("sprite" in w || "texture" in w || "text" in w || "clipImage" in w) {
+      if (w.loadingRing) {
+        // the ring fitted into the widget's box, in its colour (the white sprite tinted, as NGUI tints); without the
+        // prefab the widget's fallback (its caption) shows instead
+        const el = loadingIcon ? spinner(n, loadingIcon, p, x, y, nsx, nsy, alpha, w.depth || 0, w)
+          : w.fallback ? widget(n, { ...w.fallback, depth: w.depth }, p, x, y, nsx, nsy, colorOf(w.fallback.color), alpha) : null;
+        if (el) { el.dataset.loading = "true"; entry.els.push(el); }
+      } else if ("sprite" in w || "texture" in w || "text" in w || "clipImage" in w) {
         const el = widget(n, w, p, x, y, nsx, nsy, col, alpha);
         if (el) entry.els.push(el);
         // a widget may say what it is (tier: "button" or "chip"); any other Common_Btn_BG body is judged by its shape
@@ -326,10 +334,14 @@ export async function render(tree, host, opts = {}) {
   // the game's loading ring at a placeholder's centre, turned as its TweenRotation turns it (from and to about z, in
   // degrees, over its duration; a loop or ping-pong); it shows after a moment, so a still that comes at once never
   // flashes it
-  function spinner(n, icon, p, x, y, sx, sy, alpha, depth) {
+  // (``box``: a loadingRing widget whose box the ring fits into, centred, and whose colour tints it)
+  function spinner(n, icon, p, x, y, sx, sy, alpha, depth, box = null) {
     const sprite = icon.widgets?.find((w) => "sprite" in w);
     if (!sprite) return null;
-    const el = widget(n, { ...sprite, depth }, p, x, y, sx, sy, colorOf(sprite.color), alpha);
+    const k = box ? Math.min(box.w_ / sprite.w_, box.h_ / sprite.h_) : 1;
+    const color = box?.color ?? sprite.color;
+    const el = widget(n, { ...sprite, depth, ...(box ? { w_: sprite.w_ * k, h_: sprite.h_ * k, pivot: 4 } : {}), color },
+      p, x, y, sx, sy, colorOf(color), alpha);
     if (!el) return null;
     const tween = icon.widgets.find((w) => w.cls === "TweenRotation")?.tween;
     const from = tween?.from?.[2] ?? 180, to = tween?.to?.[2] ?? -180;

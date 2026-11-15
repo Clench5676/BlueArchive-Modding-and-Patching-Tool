@@ -32,7 +32,7 @@ for (const locale of LOCALES) test(`past-limit own cards allow Apply and Optimiz
     T: (key) => key.split(".").reduce((o, part) => o?.[part], ui), COLOUR: { success: "green" },
     optimizeSource: (c) => c.kind === "variant" ? `variant:${c.variant.key}` : "official", optimizedCopy: () => null,
     listPopup: async (options) => { popup = options; }, applyCandidate: (key) => applied.push(key),
-    runOptimize: (c) => optimized.push(c.key),
+    runOptimize: (c) => optimized.push(c.key), costumeChecking: () => false,
   });
   vm.runInContext(functionSource("drawPopup"), ctx);
   await ctx.drawPopup();
@@ -56,6 +56,48 @@ for (const locale of LOCALES) test(`past-limit own cards allow Apply and Optimiz
   }
 });
 
+// A costume whose check is still under way does not only grey its Apply and Optimize Physics: both show the game's
+// loading ring in their caption's place (the sixth action field), with no "unfit" reason on hover, until its verdict
+// lands; a refused costume keeps its reason and shows no ring.
+for (const locale of LOCALES) test(`a costume being checked shows the loading ring on Apply and Optimize Physics (${locale})`, async () => {
+  const ui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8")).webui;
+  const v = { key: "slot", family: "own", model: "slot" };
+  const sibling = (key) => ({ key, family: "own", model: key });
+  const fam = { variants: [v, sibling("refused"), sibling("unchecked"), sibling("greyed")] };
+  const cards = [...Sources.candidates(fam, v, "model", { refused: "refused" }).map((c) => c.key === "v:greyed" ? { ...c, greyed: true } : c),
+    Sources.crossCard({ key: "cross", family: "other", model: "cross" }, {})];
+  const checking = new Set(["v:unchecked", "v:cross", "v:greyed"]);
+  let popup;
+  const ctx = vm.createContext({ ...Sources, fam, otherStudents: [], switchThumbnails: {}, switchPopupPage: 1, pageToken: 1,
+    popupKind: "model", popupSeg: 0, pending: "v:unchecked", busy: false, platform: "mac", variant: () => v, modsOn: () => true,
+    candidates: () => cards, lazyThumbnail: () => ({ start: () => null }), candidateLabel: (c) => c.variant.key,
+    fullName: (o) => o.key, originalName: (o) => o.key, isSpecial: () => false, gameFile: () => "model.bundle",
+    baseName: (s) => s, sizeText: () => "0", crcOf: () => null, appliedKey: Sources.appliedKey,
+    T: (key) => key.split(".").reduce((o, part) => o?.[part], ui), COLOUR: { success: "green" },
+    optimizeSource: (c) => `variant:${c.variant.key}`, optimizedCopy: () => null, listPopup: async (options) => { popup = options; },
+    applyCandidate: () => null, runOptimize: () => null, costumeChecking: (_v, kind, key) => kind === "model" && checking.has(key),
+    GREYED_BADGE: () => ({}),
+  });
+  vm.runInContext(functionSource("drawPopup"), ctx);
+  await ctx.drawPopup();
+  const actions = (key) => popup.details(popup.items.find((it) => it.key === `v:${key}`)).actions
+    .filter(([label]) => [ui.popup.apply, ui.model.optimize].includes(label));
+  for (const key of ["unchecked", "cross"]) {
+    assert.equal(actions(key).length, 2);
+    for (const [label, , disabled, , hint, loading] of actions(key)) {
+      assert.equal(disabled, true, `${key} ${label} waits for its check`);
+      assert.equal(loading, true, `${key} ${label} shows the ring`);
+      assert.equal(hint, null, `${key} ${label} gives no reason while it is checked`);
+    }
+  }
+  for (const key of ["refused", "greyed"]) for (const [label, , disabled, , , loading] of actions(key)) {
+    assert.equal(disabled, true);
+    assert.ok(!loading, `${key} ${label} shows no ring`);
+  }
+  checking.clear();
+  for (const [, , , , hint, loading] of actions("unchecked")) { assert.ok(!loading); assert.equal(hint, ui.model.unfit); }
+});
+
 for (const locale of LOCALES) test(`an offered pair shows what the game may draw differently on hover (${locale})`, async () => {
   const ui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8")).webui;
   const v = { key: "slot", family: "own", model: "slot" };
@@ -74,7 +116,7 @@ for (const locale of LOCALES) test(`an offered pair shows what the game may draw
     baseName: (s) => s, sizeText: () => "0", crcOf: () => null, appliedKey: Sources.appliedKey,
     T: (key) => key.split(".").reduce((o, part) => o?.[part], ui), COLOUR: { success: "green" },
     optimizeSource: () => "official", optimizedCopy: () => null, listPopup: async (options) => { popup = options; },
-    applyCandidate: () => null, runOptimize: () => null,
+    applyCandidate: () => null, runOptimize: () => null, costumeChecking: () => false,
   });
   vm.runInContext(functionSource("drawPopup"), ctx);
   await ctx.drawPopup();
@@ -380,4 +422,39 @@ test("the new Optimize Physics answer reads as agreed in zh-CN and en-US", () =>
   assert.equal(ui("en-US").model.optimizeNoGain, "No physics optimization available");
   assert.equal(ui("zh-CN").model.optimizeUnneeded, "无需优化", "the official model's answer is unchanged");
   assert.equal(ui("en-US").model.optimizeUnneeded, "No optimization needed");
+});
+
+// Which candidates show the loading ring (costumeChecking): the student's own costume while its family's costume check
+// runs, another student's model while it is wanted and the queue runs (or while the roster that queues it is read),
+// never once a verdict landed; a queue that ends without a verdict draws again, so a ring never turns for good.
+test("a pair shows the loading ring only while its check runs or is queued", async () => {
+  let release;
+  const q = queue({ check: ({ others }) => others[0] === "slow" ? new Promise((resolve) => { release = resolve; }) : {} });
+  Object.assign(q.ctx, { fam: { variants: [q.v, { key: "own2", family: "own", model: "own2" }] }, costumeChecks: new Map(), othersLoad: null });
+  const checking = (key, kind = "model") => q.ctx.costumeChecking(q.v, kind, key);
+  assert.equal(checking("v:own2"), false, "no check of the family under way");
+  q.ctx.costumeChecks.set("slot|own2", Promise.resolve());
+  assert.equal(checking("v:own2"), true, "the family's check runs");
+  assert.equal(checking("v:own2", "spr"), false, "only the 3D model waits for a check");
+  assert.equal(checking("self"), false);
+  q.ctx.costumeState.set(q.v.key, { own2: "ok" });
+  assert.equal(checking("v:own2"), false, "its verdict landed");
+  q.ctx.costumeState.delete(q.v.key);
+  q.ctx.costumeChecks.clear();
+
+  q.want(["slow", "never"]); await flush();
+  assert.equal(checking("v:slow"), true, "another student's model in the running queue");
+  assert.equal(checking("v:never"), true, "queued behind it");
+  assert.equal(checking("v:other"), false, "not wanted");
+  q.changed.length = 0;
+  release({ slow: "ok" }); await flush();
+  assert.equal(checking("v:slow"), false, "its verdict landed");
+  assert.equal(checking("v:never"), false, "the queue ended without its verdict");
+  assert.ok(q.changed.includes(q.v.key), "the screen is drawn again once the queue ends without a verdict");
+
+  q.ctx.otherStudents = null; q.ctx.othersLoad = Promise.resolve();
+  assert.equal(checking("v:slow2"), true, "the roster that queues it is being read");
+  q.ctx.othersLoad = null;
+  assert.equal(checking("v:slow2"), false, "a roster that could not be read leaves no ring");
+  assert.deepEqual(q.failures, []);
 });
