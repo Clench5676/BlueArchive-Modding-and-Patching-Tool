@@ -330,6 +330,10 @@ def test_official_costume_on_a_slot(view, tmp_path, target, source, field, parts
         assert any(change is not None for change in hems.parts) or hem == "skirt"
     skirt = hems.skirt
     assert (skirt is not None) == hem.startswith("skirt")
+    # Optimize Physics: knees deep inside the skirt (Mari's, Niko's) are moved toward the leg's axis
+    assert (hems.thin is not None) == (physics and target in ("ch0186", "ch0172")), hems.summary()
+    if hems.thin is not None:
+        assert hems.thin_score.mean <= hems.score(hem).mean - ma.THIN_GAIN
     if skirt is not None:
         assert skirt.clips >= 20
     out = tmp_path / "out"

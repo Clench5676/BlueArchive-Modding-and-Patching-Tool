@@ -5463,7 +5463,8 @@ class ModLibrary:
         if report is not None and result.plan.unfit:
             report["unfit"] = {"source": "stretch", "adapted": f"{result.plan.stretch:.2f}", "own": f"{result.plan.own:.2f}"}
         if report is not None:
-            report["physics"] = result.hems is not None and (result.hems.skirt is not None or result.hems.regrouped)
+            report["physics"] = result.hems is not None and (result.hems.skirt is not None or result.hems.regrouped
+                                                             or result.hems.thin is not None)
             report["cautions"] = list(result.cautions)
         output = directory / "output"
         output.mkdir(parents=True, exist_ok=True)
