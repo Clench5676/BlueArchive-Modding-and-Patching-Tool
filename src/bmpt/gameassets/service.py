@@ -911,9 +911,10 @@ class GameAssets:
                 raise AssetNotFound(str(path)) from None
             stamps.append((str(path), stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns))
         # v2 excludes old partial exports whose missing CABs were not recorded; v3 adds the rule that chose the files
-        # read outside the overrides; "fx1" the halo's particle systems; "vital1" the retreat and knockdown clips.
-        key = _SCHEMA + ("model/v2/fx1/vital1/" + json.dumps([core, stamps]) if reads is None
-                         else "model/v3/fx1/vital1/" + json.dumps([core, stamps, reads.key]))
+        # read outside the overrides; "fx1" the halo's particle systems; "vital2" the retreat and knockdown clips and
+        # the clips' other names (CLIP_ALIASES).
+        key = _SCHEMA + ("model/v2/fx1/vital2/" + json.dumps([core, stamps]) if reads is None
+                         else "model/v3/fx1/vital2/" + json.dumps([core, stamps, reads.key]))
         generation, disk_generation = self.cache.generation, self._preview_generation()
 
         def valid_cached() -> bytes | None:
