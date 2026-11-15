@@ -115,11 +115,13 @@ export function loadPlayer(create, config, { signal, timeout = 15000, onError, o
     });
     // stopRendering does not cancel the frame the runtime's loop has already queued: once the window is away, that
     // frame (and any later loop frame) is skipped whole, so the last full frame stays on screen. Frames asked for
-    // directly (drawFrame(false): a resize, a capture) still draw.
+    // directly (drawFrame(false): a resize, a capture) still draw. A skipped loop frame asks for no next one, so the
+    // loop has ended: the player says so (stopRequestAnimationFrame), or a startRendering made while frozen (an owner
+    // restarting its clock under Now Loading) would leave a player that claims to run and that resume never restarts.
     if (!manual && typeof player?.drawFrame === "function") {
       const drawFrame = player.drawFrame;
       player.drawFrame = function (loop = true) {
-        if (loop && settled && !disposed && !lifecycle.active()) return;
+        if (loop && settled && !disposed && !lifecycle.active()) { this.stopRequestAnimationFrame = true; return; }
         return drawFrame.call(this, loop);
       };
     }
