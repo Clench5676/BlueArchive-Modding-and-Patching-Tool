@@ -1176,7 +1176,7 @@ class Skirt:
     parents: list[int]
     locals: list[tuple]
     anchor: int
-    solver: ms.Solver
+    solver: ms.Solver | ms.Spring
     base: int
     clips: int = 0  # clips given curves
     solved: dict[tuple[str, int], tuple[list[int], list[dict[int, np.ndarray]]]] = field(default_factory=dict)
@@ -1204,6 +1204,7 @@ class Hems:
     # new places in the prefab root's space), and the score that took it
     thin: tuple[np.ndarray, np.ndarray] | None = None
     thin_score: hm.Score | None = None
+    springs: list[Skirt] = field(default_factory=list)  # Optimize Physics: chains that swing after their anchor
 
     def score(self, rule: str) -> hm.Score | None:
         return next((s for s in self.scores if s.rule == rule), None)
@@ -1213,6 +1214,9 @@ class Hems:
             return f"rigid ({self.note})"
         rigid, chosen = self.scores[0], self.score(self.rule) or self.scores[0]
         extra = f", {len(self.skirt.solver.roots)} chains in {self.skirt.clips} clips" if self.skirt else ""
+        if self.springs:
+            extra += f", {sum(len(s.solver.roots) for s in self.springs)} swinging chains in " + "/".join(
+                str(s.clips) for s in self.springs) + " clips"
         if self.thin is not None and self.thin_score is not None:
             extra += f", {len(self.thin[0])} leg vertices thinned under the cloth ({self.thin_score.mean:.1f}%)"
         return (f"{self.rule}: deep pass-through {rigid.mean:.1f}% -> {chosen.mean:.1f}%, stretch {rigid.stretch:.2f} -> "
@@ -1678,6 +1682,123 @@ def _nearest_on_legs(points: np.ndarray, hip: np.ndarray, knee: np.ndarray, ankl
         distance = np.linalg.norm(points - near, axis=1)
         take = distance < best
         out[take], best[take] = near[take], distance[take]
+    return out
+
+
+SWING_MIN = math.radians(2)     # a chain the source's own clips turn less than this stays rigid (the artist kept it so)
+SWING_LIMITS = (math.radians(10), math.radians(30))  # how far a chain may swing: 1.5 times the source's own, in these
+
+
+def swing_of(skeleton: Skeleton, clips: Iterable[Any], nodes: Iterable[int]) -> dict[int, float]:
+    """How far the source's own clips turn each of ``nodes`` from its rest (radians, the largest over every frame),
+    from their rotation curves alone; a node no clip turns is 0."""
+    wanted = set(nodes)
+    out = dict.fromkeys(wanted, 0.0)
+    by_hash = {zlib.crc32(skeleton.nodes[n].path.encode()): n for n in wanted}
+    for clip in clips:
+        tree = skeleton.graph.tree(clip)
+        bindings = tree["m_ClipBindingConstant"]["genericBindings"]
+        if not any(b["typeID"] == 4 and b["attribute"] == 2 and b["path"] in by_hash for b in bindings):
+            continue
+        for node, attributes in bind_tracks(bindings, decode_clip(tree).curves, by_hash).items():
+            if 2 not in attributes:
+                continue
+            q = np.array([np.resize(np.asarray(part, float), max(len(p) for p in attributes[2]))
+                          for part in attributes[2]]).T
+            q /= np.maximum(np.linalg.norm(q, axis=1, keepdims=True), 1e-12)
+            rest = np.asarray(skeleton.nodes[node].local[1], float)
+            rest /= max(float(np.linalg.norm(rest)), 1e-12)
+            dot = np.clip(np.abs(q @ rest), 0.0, 1.0)
+            out[node] = max(out[node], float(2 * np.arccos(dot).max()))
+    return out
+
+
+def springs(target: Costume, source: Costume, plan_: Plan, s_clips: list[Any], fit: Fit) -> list[Skirt]:
+    """Optimize Physics: the secondary chains the group choice left rigid away from the legs (hair, ribbons, a loose
+    coat on the spine or the head; the legs' cloth is the hem rules' and Rule B's) as new bones of the slot, one
+    :class:`Skirt` per anchor, that swing after the anchor's motion in every slot clip (``model_skirts.Spring``). A
+    chain swings only when the source's own clips turn it (``SWING_MIN``), at most 1.5 times as far. The skirts' bases
+    are set where they join the slot's skeleton (:func:`skirt_bones`)."""
+    ts, ss = target.skeleton, source.skeleton
+    s_legs = legs_of(ss)
+    lower = lower_anchors(ss, s_legs) if s_legs is not None else set()
+    flat = flatten(source, ss.world())
+    t_rest = ts.world()
+    sv = fit.vertices
+    used = set(flat.joints[flat.weights > 0].tolist())
+    out = []
+    for anchor, members in sorted(plan_.groups.items()):
+        if plan_.choices.get(anchor) != "rigid" or anchor in lower or not members:
+            continue
+        member_set = set(members)
+        roots = sorted({chain_root(ss, n) for n in members if n in used})
+        roots = [r for r in roots if r in member_set]
+        if not roots:
+            continue
+        swing = swing_of(ss, s_clips, [j for r in roots for j in [r, *ss.descendants(r)] if j in member_set])
+        limits = {}
+        for r in roots:
+            turned = max(swing.get(j, 0.0) for j in [r, *ss.descendants(r)] if j in swing)
+            if turned >= SWING_MIN:
+                limits[r] = min(max(1.5 * turned, SWING_LIMITS[0]), SWING_LIMITS[1])
+        if not limits:
+            continue
+        wanted: set[int] = set()
+        for n in member_set & used:
+            if chain_root(ss, n) not in limits:
+                continue
+            while n not in wanted:
+                wanted.add(n)
+                if n in limits:
+                    break
+                n = ss.nodes[n].parent
+        sources = sorted(wanted)
+        new = {n: k for k, n in enumerate(sources)}
+        parents = [new.get(ss.nodes[n].parent, -1) for n in sources]
+        slot_anchor = plan_.mapping[anchor]
+        s_rest = ss.world()
+        # each chain moves with its cloth from the source's space to the bound shape (as Rule B's)
+        carry = {}
+        for k, n in enumerate(sources):
+            if parents[k] < 0:
+                share = (flat.weights * np.isin(flat.joints, [j for j in sources if chain_root(ss, j) == n])).sum(axis=1)
+                rows = np.where(share > 0.5)[0]
+                carry[n] = ms.rigid_fit(flat.vertices[rows], sv[rows], share[rows]) if len(rows) >= 3 else (
+                    t_rest[slot_anchor] @ _inverse(s_rest[anchor], ss.nodes[anchor].name))
+        rest = np.array([carry[chain_root(ss, n)] @ s_rest[n] for n in sources])
+        local = np.array([np.linalg.inv(rest[p] if p >= 0 else t_rest[slot_anchor]) @ rest[k]
+                          for k, p in enumerate(parents)])
+        chains = ms.Chains(slot_anchor, parents, local, rest)
+        taken = {node.path for node in ts.nodes}
+        names, paths, locals_ = [], [], []
+        for k, n in enumerate(sources):
+            name = ss.nodes[n].name
+            parent_path = paths[parents[k]] if parents[k] >= 0 else ts.nodes[slot_anchor].path
+            while f"{parent_path}/{name}" in taken:
+                name += "_costume"
+            names.append(name)
+            paths.append(f"{parent_path}/{name}")
+            taken.add(paths[-1])
+            if parents[k] >= 0:
+                locals_.append(ss.nodes[n].local)  # as it hangs in the costume's own skeleton
+            else:
+                m = local[k]
+                scale = np.linalg.norm(m[:3, :3], axis=0)
+                locals_.append((tuple(m[:3, 3]), tuple(ms.quaternion(m[:3, :3] / scale)), tuple(scale)))
+        # as the new bones will stand (position, rotation, scale below their parent): a chain whose rest these cannot
+        # reproduce (a sheared anchor) stays rigid
+        placed: list[np.ndarray] = []
+        for k, p in enumerate(parents):
+            placed.append((placed[p] if p >= 0 else t_rest[slot_anchor]) @ trs(*locals_[k]))
+        if float(np.abs(np.array(placed) - rest).max()) > 1e-5:
+            logger.debug("Swinging chains on %s left rigid: rest not reproduced", ss.nodes[anchor].name)
+            continue
+        spring = ms.Spring(chains, {new[r]: limit for r, limit in limits.items()})
+        if not spring.roots or not (spring.lengths >= ms.MIN_LENGTH).any():
+            continue
+        spring = ms.Spring(chains, {new[r]: limits[r] for r in limits
+                                    if spring.lengths[spring.roots.index(new[r])] >= ms.MIN_LENGTH})
+        out.append(Skirt(sources, names, parents, locals_, slot_anchor, spring, -1))
     return out
 
 
@@ -2463,17 +2584,28 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
         result.fit = dataclasses.replace(result.fit, vertices=vertices)
         shapes = [result.fit.part(k, s_rest[part.node]) for k, part in enumerate(s_costume)]
     rigidify(target, source, result, probes, hem, [store is not None for store in stores])
+    # Rule B's skirt, then (Optimize Physics) the swinging chains: new bones of the slot's skeleton, with curves in
+    # the slot's clips that move their anchor
+    chained = ([hem.skirt] if hem.skirt is not None else []) + (
+        springs(target, source, result, s_clips, result.fit) if physics and result.fit is not None else [])
     skirt_clips: list[Any] = []
-    if hem.skirt is not None:  # Rule B: the chains join the slot's skeleton, the slot's clips that move it get curves
-        skirt_bones(t_skeleton, hem.skirt)
-        for k, n in enumerate(hem.skirt.sources):
-            result.mapping[n] = hem.skirt.node(k)
-        t_rest = t_skeleton.world()
-        pelvis_hash = zlib.crc32(t_skeleton.nodes[hem.skirt.anchor].path.encode())
+    clip_skirts: dict[tuple[str, int], list[Skirt]] = {}
+    for skirt in chained:
+        if skirt.base < 0:
+            skirt.base = len(t_skeleton.nodes)
+        skirt_bones(t_skeleton, skirt)
+        for k, n in enumerate(skirt.sources):
+            result.mapping[n] = skirt.node(k)
+        anchor_hash = zlib.crc32(t_skeleton.nodes[skirt.anchor].path.encode())
         for clip in t_clips:
             bindings = graph.tree(clip)["m_ClipBindingConstant"]["genericBindings"]
-            if any(b["path"] == pelvis_hash and b["typeID"] == 4 for b in bindings):
-                skirt_clips.append(clip)
+            if any(b["path"] == anchor_hash and b["typeID"] == 4 for b in bindings):
+                if _key(clip) not in clip_skirts:
+                    skirt_clips.append(clip)
+                clip_skirts.setdefault(_key(clip), []).append(skirt)
+    hem.springs = [skirt for skirt in chained if skirt is not hem.skirt]
+    if chained:
+        t_rest = t_skeleton.world()
 
     # the slot files the new objects go to: the primary's mesh, materials and textures, and the prefab files
     primary = t_costume[0]
@@ -2680,21 +2812,22 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
                               [[materials[_key(m)] if m is not None else 0 for m in p.materials] for p in s_costume],
                               [s_skeleton.nodes[p.node].name for p in s_costume], root_node, t_skeleton, bounds,
                               halo_change, rendered, mouth)
-    if hem.skirt is not None:
-        for clip in skirt_clips:
-            obj = writer.file(clip.assets_file.name.lower()).objects[clip.path_id]
-            tree = obj.read_typetree()
-            before = clip_snapshot(tree) if ms.dense_grid(tree) is not None else None
-            if skirt_curves(t_skeleton, hem.skirt, tree, _key(clip)):
-                obj.save_typetree(tree)
-                # each chain's first bone got a rotation (4 curves) and a position (3): read the saved clip back
-                problem = clip_edit_error(before, saved_tree(obj), 7 * len(hem.skirt.solver.roots))
-                if problem is not None:
-                    raise refuse("clip edit not verified", clip=clip.peek_name(), what=problem)
-                hem.skirt.clips += 1
-            else:
-                logger.info("Costume of %s on %s: clip %s left without skirt curves (layout)", s_name, t_name,
-                            clip.peek_name())
+    for clip in skirt_clips:
+        obj = writer.file(clip.assets_file.name.lower()).objects[clip.path_id]
+        tree = obj.read_typetree()
+        before = clip_snapshot(tree) if ms.dense_grid(tree) is not None else None
+        edited = [skirt for skirt in clip_skirts[_key(clip)] if skirt.solver.roots]
+        if edited and all(skirt_curves(t_skeleton, skirt, tree, _key(clip)) for skirt in edited):
+            obj.save_typetree(tree)
+            # each chain's first bone got a rotation (4 curves) and a position (3): read the saved clip back
+            problem = clip_edit_error(before, saved_tree(obj), 7 * sum(len(skirt.solver.roots) for skirt in edited))
+            if problem is not None:
+                raise refuse("clip edit not verified", clip=clip.peek_name(), what=problem)
+            for skirt in edited:
+                skirt.clips += 1
+        else:
+            logger.info("Costume of %s on %s: clip %s left without skirt curves (layout)", s_name, t_name,
+                        clip.peek_name())
     _sanity(written, rendered)
     cautions = []
     alternates = sorted(p.mesh.peek_name() for p in t_parts if p.role == "alternate" and p.mesh is not None)

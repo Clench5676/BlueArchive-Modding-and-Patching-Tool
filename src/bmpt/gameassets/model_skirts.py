@@ -493,6 +493,105 @@ class Solver:
 
 # --- clips ---------------------------------------------------------------------------------------------------------
 
+# --- springs (Optimize Physics: hair, ribbons and loose cloth that the group choice left rigid) --------------------
+
+SPRING_DAMPING = 0.45          # damping ratio of a chain's swing
+SPRING_SPEED = 1.5             # a chain's natural frequency, times a pendulum's of its length
+SPRING_RATES = (4.0, 25.0)     # its bounds (radians per second)
+SPRING_SUBSTEP = 1 / 120       # seconds per integration step
+MIN_LENGTH = 0.01              # a chain shorter than this (metres, head to farthest bone) does not swing
+
+
+class Spring:
+    """Chains that swing after their anchor's motion, baked into the slot's clips like Rule B's turns: each root's
+    chain tip (its farthest bone) is a damped spring toward where the anchor carries it at rest, kept at the chain's
+    length from the root's head; the root turns to point at it, at most ``limits[root]`` radians, and the chain follows
+    as it hangs at rest. A clip starts at rest; a looping one is run twice, the second time from the first's end, so
+    that its end leads into its start."""
+
+    def __init__(self, chains: Chains, limits: Mapping[int, float]):
+        self.chains = chains
+        self.roots = [r for r in chains.roots if r in limits]
+        self.limits = np.array([limits[r] for r in self.roots])
+        self.inverse = np.array([np.linalg.inv(m) for m in chains.rest])
+        tips, lengths = [], []
+        for r in self.roots:
+            inverse = np.linalg.inv(chains.rest[r])
+            places = [(inverse @ chains.rest[j])[:3, 3] for j in chains.subtree[r]]
+            far = max(places, key=lambda v: float(np.linalg.norm(v)))
+            tips.append(far)
+            lengths.append(float(np.linalg.norm(chains.rest[r][:3, :3] @ far)))
+        self.tips = np.array(tips).reshape(-1, 3)        # in each root's own space
+        self.lengths = np.array(lengths)                 # world length, head to tip
+        self.rates = np.clip(SPRING_SPEED * np.sqrt(9.81 / np.maximum(self.lengths, MIN_LENGTH)), *SPRING_RATES)
+
+    def _rest(self, anchor: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """The roots' world matrices at rest below ``anchor``, their heads and their tips' targets."""
+        worlds = np.array([anchor @ self.chains.local[r] for r in self.roots]).reshape(-1, 4, 4)
+        heads = worlds[:, :3, 3]
+        targets = np.einsum("rij,rj->ri", worlds[:, :3, :3], self.tips) + heads
+        return worlds, heads, targets
+
+    def sequence(self, times: Sequence[float], pose: Any, loop: bool = False) -> list[dict[int, np.ndarray]]:
+        """The roots' turns (local 4x4 below the anchor, without the bone's scale) at ``times`` (``pose(k)``: the
+        slot's world matrices there)."""
+        anchors = [np.asarray(pose(k)[self.chains.anchor]) for k in range(len(times))]
+        rests = [self._rest(a) for a in anchors]
+        x, v = rests[0][2].copy(), np.zeros_like(rests[0][2])
+        out: list[dict[int, np.ndarray]] = []
+        for run in range(2 if loop and len(times) > 1 else 1):
+            out = []
+            for k in range(len(times)):
+                if k or run:
+                    before = rests[k - 1] if k else rests[-1]
+                    dt = (times[k] - times[k - 1]) if k else (times[1] - times[0])
+                    x, v = self._advance(x, v, before, rests[k], max(float(dt), 0.0))
+                out.append(self._turns(anchors[k], rests[k], x))
+        return out
+
+    def _advance(self, x: np.ndarray, v: np.ndarray, before: tuple, after: tuple,
+                 dt: float) -> tuple[np.ndarray, np.ndarray]:
+        steps = max(1, int(math.ceil(dt / SPRING_SUBSTEP)))
+        h = dt / steps
+        w = self.rates[:, None]
+        for i in range(1, steps + 1):
+            f = i / steps
+            head = before[1] + f * (after[1] - before[1])
+            target = before[2] + f * (after[2] - before[2])
+            v = v + h * (w * w * (target - x) - 2 * SPRING_DAMPING * w * v)
+            x = x + h * v
+            # the tip stays at the chain's length from the head; what moved it along the chain is dropped
+            d = x - head
+            n = np.maximum(np.linalg.norm(d, axis=1, keepdims=True), 1e-9)
+            x = head + d / n * self.lengths[:, None]
+            v = v - (v * (d / n)).sum(axis=1, keepdims=True) * (d / n)
+        return x, v
+
+    def _turns(self, anchor: np.ndarray, rest: tuple, x: np.ndarray) -> dict[int, np.ndarray]:
+        worlds, heads, targets = rest
+        out = {}
+        inverse = np.linalg.inv(anchor)
+        for k, r in enumerate(self.roots):
+            u0, u = targets[k] - heads[k], x[k] - heads[k]
+            turn = np.eye(3)
+            n0, n1 = float(np.linalg.norm(u0)), float(np.linalg.norm(u))
+            if n0 > 1e-9 and n1 > 1e-9:
+                axis = np.cross(u0, u)
+                s, c = float(np.linalg.norm(axis)), float(u0 @ u)
+                angle = min(math.atan2(s, c), float(self.limits[k]))
+                if s > 1e-12 and angle > 1e-6:
+                    turn = axis_angle(axis / s, angle)
+            world = worlds[k].copy()
+            world[:3, :3] = turn @ world[:3, :3]
+            local = inverse @ world
+            local[:3, :3] = local[:3, :3] @ np.linalg.inv(scale_of(local))
+            out[r] = local
+        return out
+
+    def posed(self, pose: Sequence[np.ndarray], turns: Mapping[int, np.ndarray]) -> np.ndarray:
+        return self.chains.posed(np.asarray(pose[self.chains.anchor]), turns)
+
+
 def binding_dims(binding: Mapping[str, int]) -> int:
     """How many curves a generic binding takes (as ``model.binding_dims``)."""
     if binding["typeID"] == 4:
