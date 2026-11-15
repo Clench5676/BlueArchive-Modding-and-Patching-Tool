@@ -20,7 +20,9 @@ import {prepareBack} from '../visual-mode.js';
 export {FRAME};
 // the white button of the visual mode's toolbar, for the lobby's camera framing (lobby-camera.js)
 export const visualButton = (...args) => whiteButton(...args);
-let sessionVariant=null,generation=0,repository,bridge,overlay,active=false,mode='portrait',grid=true,expanded=false,paused=false,selected=null,page=0,modal=null;
+let sessionVariant=null,generation=0,repository,bridge,overlay,active=false,mode='portrait',grid=true,expanded=false,paused=false,selected=null,modal=null;
+// the gallery list's scroll offset, kept across its redraws (UI.virtualArea positions)
+const GALLERY_SCROLL='photo-gallery',galleryScroll=new Map();
 let controlsRevision=0,saving=false,leaving=false,defaultThumbnail=null,generatedThumbnail=null,occlusion=false,feedback=null;
 const CHOICE_ICONS={portrait:{icon:'Common_Icon_Emoji',atlas:'Common'},lobby:{icon:'School_Icon_Chat',atlas:'Common'}};
 const P=key=>T(`photo.${key}`);
@@ -65,6 +67,14 @@ function galleryPair(width,x,y){
   return row([{w:Math.max(width,CONTROL.buttonXS.minW*S),h:CONTROL.buttonXS.h*S},{w:Math.max(width,CONTROL.buttonXS.minW*S),h:CONTROL.buttonXS.h*S}],
     {x,y,gap:SPACE.m*S}).boxes.map(b=>[b.x,b.y,b.w,b.h]);
 }
+// The gallery's list scrolls in one box: the cards at today's columns and first row (a margin for the selected frame),
+// down to SPACE.l above the tool row; the scrollbar track (49 in from the box's right edge) right of the cards.
+function galleryListLayout(){
+  const margin=SPACE.s*S,top=343-80-margin,left=365,right=465+2*215+92+margin+49*S,bottom=835-SPACE.l*S;
+  return {box:[left,top,right-left,bottom-top],pitch:236,columns:3,column:215,card:[465-left,343-top]};
+}
+// the scroll offset nearest to offset that shows the row of photo index
+function galleryReveal(index,offset=0){const {box,pitch,columns}=galleryListLayout(),top=Math.floor(Math.max(0,index)/columns)*pitch;return Math.max(top+pitch-box[3],Math.min(top,offset));}
 // The captions of the two text buttons, one size for both states of the grid button too, so nothing changes size on a click.
 const toolbarCaptions=()=>{
   const {caption}=photographyToolbarLayout();
@@ -313,7 +323,7 @@ async function capture(){
       return shot;
     },save:payload=>rpc('photography.save',{variant:key,...payload}),onCaptured:()=>effects?.flash(),onSaved:(_,shot)=>effects?.saved(shot.png)});
     if(scope!==generation)return;
-    repository=normalized({...repository,...result});selected=result.saved;page=Math.floor(result.photos.length/6);
+    repository=normalized({...repository,...result});selected=result.saved;
     overlay?.querySelector('.photo-shutter-ring')?.animate([{scale:'.9'},{scale:'1'}],{duration:140});
   }finally{if(scope===generation)saving=false;}
 }
@@ -325,35 +335,36 @@ async function image(host,url,box,className='photo-large-image'){
 async function openGallery(keepSelection=false){
   if(saving)return;bridge.pause(true);await repositoryRead();
   if(!keepSelection)selected=repository.app||repository.photos.find(entry=>entry.variant===sessionVariant&&entry.builtin)?.id||DEFAULT;
+  galleryScroll.set(GALLERY_SCROLL,[0,galleryReveal(galleryPhotos().findIndex(item=>item.id===selected))]);
   const close=()=>{modal?.close();modal=null;bridge.pause(paused);};
   modal=UI.createModal(P('gallery'),close);
   await galleryDraw();
 }
 async function galleryDraw(){
   await Popup.selectionReady();
-  const allPhotos=galleryPhotos();page=Math.min(page,Math.max(0,Math.ceil(allPhotos.length/6)-1));
+  const allPhotos=galleryPhotos();
   const selectedPhoto=photo(selected);
-  await modal.draw(async(layer)=>{
-    const rows=allPhotos.slice(page*6,page*6+6);
-    if(!rows.length)await UI.caption(layer,P('empty'),[365,440,680]);
-    await Promise.all(rows.map(async(entry,index)=>{
-      const x=465+(index%3)*215,y=343+Math.floor(index/3)*236,scale=.59;
-      const item={key:entry.id,label:entry.name,thumb:entry.url,applied:!!(entry.applied||entry.id===OFFICIAL&&repository.game?.id===OFFICIAL)};
-      const tree=Popup.listCard(item,0,0,entry.id===selected,{w:250,h:250,bar:46});
-      await NGUI.render(tree,layer,{scale,origin:[x,y]});
-      hitButton(layer,[x-92,y-80,184,210],safe(async()=>{selected=entry.id;await galleryDraw();}),[entry.name,item.applied&&P('applied')].filter(Boolean).join(' - '),90);
-    }));
+  await modal.draw(async(layer,alive,signal)=>{
+    if(!allPhotos.length)await UI.caption(layer,P('empty'),[365,440,680]);
+    else{
+      // one virtual row per grid row, the cards in cell coordinates
+      const {box,pitch,columns,column,card}=galleryListLayout();
+      const list=UI.virtualArea(layer,box,Math.ceil(allPhotos.length/columns),pitch,(cell,index)=>Promise.all(allPhotos.slice(index*columns,index*columns+columns).map(async(entry,col)=>{
+        const x=card[0]+col*column,y=card[1],scale=.59;
+        const item={key:entry.id,label:entry.name,thumb:entry.url,applied:!!(entry.applied||entry.id===OFFICIAL&&repository.game?.id===OFFICIAL)};
+        const tree=Popup.listCard(item,0,0,entry.id===selected,{w:250,h:250,bar:46});
+        await NGUI.render(tree,cell,{scale,origin:[x,y]});
+        hitButton(cell,[x-92,y-80,184,210],safe(async()=>{selected=entry.id;await galleryDraw();}),[entry.name,item.applied&&P('applied')].filter(Boolean).join(' - '),90);
+      })),{key:GALLERY_SCROLL,signal,positions:galleryScroll,onError:error=>console.error('Photography gallery card failed',error)});
+      await list.ready;
+      if(!alive())return;
+    }
     if(selectedPhoto){
       await image(layer,selectedPhoto.url,[1190,270,320,320]);
       await UI.caption(layer,selectedPhoto.name,[1190,625,320],{align:2});
       const pairBoxes=galleryPair(140,1200,670),pair=UI.buttonSize([P('apply'),P('delete')],pairBoxes[0][2],pairBoxes[0][3]);
       await UI.button(layer,'Apply',P('apply'),pairBoxes[0],safe(applyGame),{semantic:"apply",size:pair,enabled:repository.applicable&&(!repository.game?.known||selected!==repository.game?.id||!!repository.game?.error||repository.game?.pending)});
       if(selectedPhoto.managed!==false&&selectedPhoto.provenance!=='official')await UI.button(layer,'Delete',P('delete'),pairBoxes[1],safe(deletePhoto),{size:pair});
-    }
-    if(allPhotos.length>6){
-      const pagingBoxes=galleryPair(180,365,835-(SPACE.l+CONTROL.buttonXS.h)*S),paging=UI.buttonSize([P('previous'),P('next')],pagingBoxes[0][2],pagingBoxes[0][3]);
-      await UI.button(layer,'Previous',P('previous'),pagingBoxes[0],safe(async()=>{page=Math.max(0,page-1);await galleryDraw();}),{enabled:page>0,size:paging});
-      await UI.button(layer,'Next',P('next'),pagingBoxes[1],safe(async()=>{page++;await galleryDraw();}),{enabled:(page+1)*6<allPhotos.length,size:paging});
     }
     const toolBoxes=galleryPair(180,365,835),tools=UI.buttonSize([P('restore'),P('export')],toolBoxes[0][2],toolBoxes[0][3]);
     await UI.button(layer,'Restore',P('restore'),toolBoxes[0],safe(restoreGame),{enabled:repository.app!==repository.game?.id||!photo(repository.game?.id)?.builtin,size:tools});
@@ -383,7 +394,7 @@ async function restoreGame(){
   const scope=generation;
   try{await Loading.task(async()=>{await waitJob(await call('restore',{png:await generatedPNG()}));if(scope!==generation)throw new DOMException('Photography ended','AbortError');await repositoryRead();});}
   catch(error){if(scope===generation&&await untestedRetry(error,restoreGame))return;throw error;}
-  bridge.thumbnailChanged();selected=repository.app||DEFAULT;page=0;await galleryDraw();
+  bridge.thumbnailChanged();selected=repository.app||DEFAULT;galleryScroll.set(GALLERY_SCROLL,[0,0]);await galleryDraw();
 }
 async function applyGame(){
   if(!photo(selected)||!repository.applicable)return;

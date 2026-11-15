@@ -10,10 +10,12 @@ test('gallery cards and their accessible Applied label consume only the target-s
   const photos=[{id:'own',name:'Own skin',url:'own.png',applied:true},{id:'other',name:'Other skin',url:'other.png',applied:false}];
   const cards=[],hits=[];
   const env={CONTROL,SPACE,row,S:1920/2960,Popup:{selectionReady:async()=>{},listCard:(item,x,y,selected)=>{cards.push({...item,selected});return item;}},
-    galleryPhotos:()=>photos,photo:()=>null,modal:{draw:fn=>fn({})},NGUI:{render:async()=>{}},
-    UI:{buttonSize:()=>({}),button:async()=>{}},
+    galleryPhotos:()=>photos,photo:()=>null,modal:{draw:fn=>fn({},()=>true,null)},NGUI:{render:async()=>{}},
+    UI:{buttonSize:()=>({}),button:async()=>{},caption:async()=>{},
+      // every row at once, each into its own fake cell
+      virtualArea:(_host,_box,count,_pitch,render)=>({ready:Promise.all(Array.from({length:count},(_,index)=>render({},index,null)))})},
     hitButton:(_layer,_box,_fn,label)=>hits.push(label),safe:fn=>fn,P:key=>key,restoreGame:async()=>{}};
-  await new Function('env',`const {${Object.keys(env)}}=env;let page=0,selected='other',repository={game:{id:'own'}};const OFFICIAL='official';${drawCode};return galleryDraw();`)(env);
+  await new Function('env',`const {${Object.keys(env)}}=env;let selected='other',repository={game:{id:'own'}};const OFFICIAL='official',GALLERY_SCROLL='photo-gallery',galleryScroll=new Map();${drawCode};return galleryDraw();`)(env);
   assert.deepEqual(cards.map(card=>[card.key,card.applied,card.selected]),[['own',true,false],['other',false,true]]);
   assert.deepEqual(hits,['Own skin - applied','Other skin']);
 });
