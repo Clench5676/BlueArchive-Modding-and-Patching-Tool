@@ -42,6 +42,8 @@ PRUNE_WAIT = 120.0  # seconds the start scan waits for the library.prune job sub
 PROGRESS_PUBLISH = 0.25  # seconds between two mods.state events while a toggle reports its progress
 SCAN_WRITER_POLL = 0.2  # seconds between two looks of a waiting scan at the writer jobs (_scan)
 UPDATE_QUIT_WAIT = 3.0  # seconds for the native window to close for an update
+# /asset/ kinds the shown page draws as previews (portraits, lobbies, backgrounds, 3D models): class 1 of the ordering
+PREVIEW_ASSETS = frozenset({"spine", "art", "office", "model"})
 # the library's files and folders a library move takes along; the lock files are made again where needed
 LIBRARY_ITEMS = ("mods", "originals", "built", "transactions", "import-transactions", "asset-deletions", "photographs",
                  "state.json", "state.json.prev", "state.json.bad", "profiles.json", "profiles.json.prev",
@@ -1448,6 +1450,13 @@ class Services:
     def asset(self, path: str, query: dict[str, str]) -> AssetResponse:
         if self.safe_mode:
             raise ServiceError("game_not_found")
+        if path.split("/", 1)[0] in PREVIEW_ASSETS:
+            # what the shown page draws: scans and background work step aside until it is answered
+            with preview_gate.foreground():
+                return self._asset(path, query)
+        return self._asset(path, query)
+
+    def _asset(self, path: str, query: dict[str, str]) -> AssetResponse:
         parts = path.split("/")
         kind = parts[0]
         if kind == "photography":
@@ -1490,8 +1499,7 @@ class Services:
             source = query.get("source", "live")
             kind = source.split(":", 1)[0]
             # How long each preview source takes end to end: lock waits, CRC checks and the export.
-            with preview_gate.foreground(), \
-                    spans.span("asset.model." + (kind if kind in ("live", "official", "mod", "import", "variant") else "other")):
+            with spans.span("asset.model." + (kind if kind in ("live", "official", "mod", "import", "variant") else "other")):
                 if field_only:  # no slot: its own files only, never a mod or another costume
                     if source not in ("live", "official"):
                         raise KeyError(path)

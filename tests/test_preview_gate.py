@@ -176,6 +176,7 @@ def test_model_asset_gate_covers_each_source_and_releases_on_failure(source, fai
     services = SimpleNamespace(safe_mode=False,
                                catalog=SimpleNamespace(variant=lambda key: SimpleNamespace(model="hero", key=key)),
                                _model_asset=export)
+    services._asset = lambda path, query: Services._asset(services, path, query)
     if fails:
         with pytest.raises(ValueError, match="export failed"):
             Services.asset(services, "model/hero.glb", {"source": source})

@@ -1,4 +1,4 @@
-"""Let library scans yield briefly while foreground model previews are exported."""
+"""Let library scans and background work yield briefly while the shown page's previews are answered."""
 
 from __future__ import annotations
 
