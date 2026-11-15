@@ -321,8 +321,8 @@ def _preload(objects: dict[int, Any], added: list[int]) -> int | None:
     for pid, obj in objects.items():
         if obj.type.name == "AssetBundle":
             tree = obj.read_typetree()
-            _extend_preload(tree, {(info["preloadIndex"], info["preloadSize"]): [{"m_FileID": 0, "m_PathID": p} for p in added]
-                                   for _, info in tree["m_Container"] if info["preloadSize"]})
+            _extend_preload(tree, {entry: [{"m_FileID": 0, "m_PathID": p} for p in added]
+                                   for entry, (_, info) in enumerate(tree["m_Container"]) if info["preloadSize"]})
             obj.save_typetree(tree)
             return pid
     return None
