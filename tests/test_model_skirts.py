@@ -198,6 +198,16 @@ def test_a_slot_clip_the_source_has_by_name_plays_the_source_keys():
     assert spring.keyed("Idle", [0.0, 1.0]) is None
 
 
+def test_each_root_hangs_off_its_own_anchor():
+    """Rule B's chains off the pelvis and off the spine: each root follows its own anchor."""
+    local = np.array([trs((0, -0.1, 0), (0, 0, 0, 1), (1, 1, 1)), trs((0, -0.3, 0), (0, 0, 0, 1), (1, 1, 1))])
+    pose = [trs((0, 1, 0), (0, 0, 0, 1), (1, 1, 1)), trs((0.5, 1.3, 0), (0, 0, 0, 1), (1, 1, 1))]
+    chains = ms.Chains(0, [-1, -1], local, np.array([pose[0] @ local[0], pose[1] @ local[1]]), anchors=[0, 1])
+    world = chains.posed_in(pose)
+    assert np.allclose(world[0][:3, 3], (0, 0.9, 0)) and np.allclose(world[1][:3, 3], (0.5, 1.0, 0))
+    assert chains.anchor_of(1) == 1 and ms.Chains(0, [-1], local[:1], local[:1]).anchor_of(0) == 0
+
+
 def test_a_chain_too_short_or_without_a_limit_does_not_swing():
     spring = ms.Spring(_hanging_chain(), {})
     assert spring.roots == []

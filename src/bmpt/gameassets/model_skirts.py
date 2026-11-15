@@ -241,6 +241,7 @@ class Chains:
     local: np.ndarray
     rest: np.ndarray
     subtree: list[list[int]] = field(default_factory=list)
+    anchors: list[int] = field(default_factory=list)  # per bone, the slot node a root hangs off (empty: ``anchor``)
 
     def __post_init__(self) -> None:
         if not self.subtree:
@@ -258,6 +259,20 @@ class Chains:
     @property
     def roots(self) -> list[int]:
         return [i for i, p in enumerate(self.parents) if p < 0]
+
+    def anchor_of(self, i: int) -> int:
+        return self.anchors[i] if self.anchors else self.anchor
+
+    def posed_in(self, pose: Sequence[np.ndarray], turns: Mapping[int, np.ndarray] | None = None) -> np.ndarray:
+        """World matrices with each root below its own anchor as ``pose`` (the slot's world matrices) has it."""
+        out = np.zeros((len(self.parents), 4, 4))
+        for i, p in enumerate(self.parents):  # parents come first
+            local = self.local[i]
+            if turns is not None and i in turns:
+                local = turns[i].copy()
+                local[:3, :3] = turns[i][:3, :3] @ scale_of(self.local[i])
+            out[i] = (out[p] if p >= 0 else np.asarray(pose[self.anchor_of(i)])) @ local
+        return out
 
     def hanging(self, i: int) -> np.ndarray:
         """Bone ``i``'s local transform at rest without its scale (the form of a turn)."""
@@ -366,16 +381,15 @@ class Solver:
         """Each chain root's local transform (4x4: rotation and position, without its scale) for ``pose`` (world
         matrices of the slot's nodes), starting from the roots' transforms ``start`` (None: as they hang at rest)."""
         ch = self.chains
-        anchor = np.asarray(pose[ch.anchor])
         fixed = np.array([np.asarray(pose[f]) for f in self.cloth.fixed]).reshape(-1, 4, 4) @ self.fixed_inverse
         frame = self.frame(pose)
         grid = envelope(frame, self.legs_at(pose))
-        base = ch.posed(anchor)
-        world = ch.posed(anchor, start) if start else base.copy()
+        base = ch.posed_in(pose)
+        world = ch.posed_in(pose, start) if start else base.copy()
         self._joint(world, base, fixed, grid, frame)
         out = {}
         for i in self.roots:
-            local = np.linalg.inv(anchor) @ world[i]
+            local = np.linalg.inv(np.asarray(pose[ch.anchor_of(i)])) @ world[i]
             local[:3, :3] = local[:3, :3] @ np.linalg.inv(scale_of(local))
             out[i] = local
         return out
@@ -412,7 +426,7 @@ class Solver:
 
     def posed(self, pose: Sequence[np.ndarray], turns: Mapping[int, np.ndarray]) -> np.ndarray:
         """The chains' world matrices for ``pose`` and the roots' ``turns``."""
-        return self.chains.posed(np.asarray(pose[self.chains.anchor]), turns)
+        return self.chains.posed_in(pose, turns)
 
     def _carry(self, world: np.ndarray, root: int) -> None:
         ch = self.chains

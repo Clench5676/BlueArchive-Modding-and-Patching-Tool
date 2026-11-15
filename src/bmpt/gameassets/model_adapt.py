@@ -1072,6 +1072,7 @@ HEM_RULES = (("blend", 0.5), ("short", 0.5), ("short", 0.7), ("short", 1.0), ("f
 RAMPS = {"blend": (1.0, (1.0, 2.0)), "short": (0.3, (0.9, 1.3))}  # rise in thigh lengths, thigh -> calf change
 LEG_KEYS = ("pelvis", "thigh L", "thigh R", "calf L", "calf R", "foot L", "foot R")
 FIT_KEYS = LEG_KEYS[:5]
+SPINE = re.compile(r"^Bip001 Spine\d*$")
 REGROUP = "regroup "  # Optimize Physics: a rule built as if the leg-anchor groups set to ``follow`` were rigid
 
 
@@ -1180,9 +1181,13 @@ class Skirt:
     base: int
     clips: int = 0  # clips given curves
     solved: dict[tuple[str, int], tuple[list[int], list[dict[int, np.ndarray]]]] = field(default_factory=dict)
+    anchors: list[int] = field(default_factory=list)  # per bone, the slot node a root hangs off (empty: ``anchor``)
 
     def node(self, k: int) -> int:
         return self.base + k
+
+    def anchor_of(self, k: int) -> int:
+        return self.anchors[k] if self.anchors else self.anchor
 
 
 @dataclass
@@ -1235,16 +1240,20 @@ class _SkirtCandidate:
 
 def _skirt_candidates(ts: Skeleton, ss: Skeleton, plan_: Plan, flat: Flat, sv: np.ndarray, dominant: np.ndarray,
                       cloth: np.ndarray, legs: np.ndarray, t_legs: Mapping[str, int], s_legs: Mapping[str, int],
-                      mapped: np.ndarray, columns: list[int],
-                      writable_rows: np.ndarray) -> tuple[list[_SkirtCandidate], Skirt | None]:
+                      mapped: np.ndarray, columns: list[int], writable_rows: np.ndarray,
+                      anchors: Iterable[int] | None = None) -> tuple[list[_SkirtCandidate], Skirt | None]:
     """Rule B's candidates ("skirt": the costume's weights, "skirt smooth": blended across the chains' seams) and
-    its new bones, for the skirt chains hanging off the pelvis that the group choice left rigid. ``flat``: the
+    its new bones, for the skirt chains of the cloth around the legs that the group choice left rigid, hanging off
+    the pelvis or another of ``anchors`` (source Biped bones; the pelvis alone by default): each chain's first bone
+    hangs off the slot's bone of its own anchor (a coat's tails off the spine, a strap off a thigh). ``flat``: the
     costume in the source's space; ``sv``: its vertices in the shape bound on the slot, where each chain's
     bones go along with its cloth."""
     pelvis = s_legs["pelvis"]
-    if plan_.choices.get(pelvis) != "rigid":
+    anchors = [a for a in dict.fromkeys(anchors if anchors is not None else [pelvis])
+               if plan_.choices.get(a) == "rigid"]
+    if not anchors:
         return [], None
-    members = set(plan_.groups.get(pelvis, []))
+    members = {n for a in anchors for n in plan_.groups.get(a, [])}
     roots = {chain_root(ss, int(n)) for n in np.unique(dominant[cloth]).tolist() if int(n) in members}
     skinned = {int(n) for n in np.unique(flat.joints[flat.weights > 0]).tolist()
                if int(n) in members and chain_root(ss, int(n)) in roots}
@@ -1262,6 +1271,8 @@ def _skirt_candidates(ts: Skeleton, ss: Skeleton, plan_: Plan, flat: Flat, sv: n
     anchor = plan_.mapping[pelvis]
     t_rest, s_rest = ts.world(), ss.world()
     parents = [new.get(ss.nodes[n].parent, -1) for n in sources]
+    # each root below the slot's bone of its own Biped anchor
+    hangs = [plan_.mapping[ss.biped_ancestor(n)] if parents[k] < 0 else anchor for k, n in enumerate(sources)]
     # each chain moves with its cloth from the source's space to the bound shape (a refit carries it with the pelvis)
     carry = {}
     for k, n in enumerate(sources):
@@ -1271,14 +1282,14 @@ def _skirt_candidates(ts: Skeleton, ss: Skeleton, plan_: Plan, flat: Flat, sv: n
             rows = np.where(share > 0.5)[0]
             carry[n] = ms.rigid_fit(flat.vertices[rows], sv[rows], share[rows]) if len(rows) >= 3 else np.eye(4)
     rest = np.array([carry[chain_root(ss, n)] @ s_rest[n] for n in sources])
-    local = np.array([np.linalg.inv(rest[p] if p >= 0 else t_rest[anchor]) @ rest[k] for k, p in enumerate(parents)])
-    chains = ms.Chains(anchor, parents, local, rest)
+    local = np.array([np.linalg.inv(rest[p] if p >= 0 else t_rest[hangs[k]]) @ rest[k] for k, p in enumerate(parents)])
+    chains = ms.Chains(anchor, parents, local, rest, anchors=hangs)
     # unique names below the slot's own bones
     taken = {node.path for node in ts.nodes}
     names, paths, locals_ = [], [], []
     for k, n in enumerate(sources):
         name = ss.nodes[n].name
-        parent_path = paths[parents[k]] if parents[k] >= 0 else ts.nodes[anchor].path
+        parent_path = paths[parents[k]] if parents[k] >= 0 else ts.nodes[hangs[k]].path
         while f"{parent_path}/{name}" in taken:
             name += "_costume"
         names.append(name)
@@ -1328,7 +1339,7 @@ def _skirt_candidates(ts: Skeleton, ss: Skeleton, plan_: Plan, flat: Flat, sv: n
         out.append(_SkirtCandidate(rule, dense, ms.Solver(chains, cloth_set, leg_set, t_rest, t_legs["pelvis"])))
     if not out:
         return [], None
-    return out, Skirt(sources, names, parents, locals_, anchor, out[0].solver, len(ts.nodes))
+    return out, Skirt(sources, names, parents, locals_, anchor, out[0].solver, len(ts.nodes), anchors=hangs)
 
 
 def hems(target: Costume, source: Costume, plan_: Plan, t_clips: list[Any], s_clips: list[Any],
@@ -1387,6 +1398,16 @@ def hems(target: Costume, source: Costume, plan_: Plan, t_clips: list[Any], s_cl
     all_legs = np.where(np.isin(dominant, sorted(s_anchors - {s_legs["pelvis"]})))[0]
     legs = all_legs[::max(1, len(all_legs) // LEG_SAMPLES)]
     cloth = cloth_mask(ss, dominant, s_anchors, axis, hip_width)
+    chain_anchors = [s_legs["pelvis"]]
+    if physics:  # Optimize Physics: also the chains off the spine whose cloth reaches below the hips (a coat's tails)
+        spines = {i for i, node in enumerate(ss.nodes) if SPINE.match(node.name)}
+        wide = cloth_mask(ss, dominant, s_anchors | spines, axis, hip_width) & ~cloth
+        hips = float(((at["thigh L"] + at["thigh R"]) / 2) @ up)
+        for root in {chain_root(ss, int(n)) for n in np.unique(dominant[wide]).tolist()}:
+            rows = wide & np.isin(dominant, [root, *ss.descendants(root)])
+            if rows.any() and float((sv[rows] @ up).min()) < hips:
+                cloth |= rows
+        chain_anchors += sorted(spines) + [s_legs["thigh L"], s_legs["thigh R"]]
     triangles = flat.triangles[cloth[flat.triangles].all(axis=1)] if len(flat.triangles) else flat.triangles
     edges = flat.edges[cloth[flat.edges].all(axis=1)]
     if not len(legs) or not len(triangles):
@@ -1445,7 +1466,7 @@ def hems(target: Costume, source: Costume, plan_: Plan, t_clips: list[Any], s_cl
         if (share > 1e-6).any():
             rules += rule_a(dense, rigid_part, share, on_rigid, "")
     skirt_rules, skirt = _skirt_candidates(ts, ss, plan_, flat, sv, dominant, cloth, all_legs, t_legs, s_legs,
-                                           mapped, columns, rows_ok) if physics else ([], None)
+                                           mapped, columns, rows_ok, chain_anchors) if physics else ([], None)
     rules += [(c.rule, c.weights, c.solver) for c in skirt_rules]
     if followed:
         # the same rules with the followed groups rigid: the pelvis group's chains only where it was followed
@@ -1458,7 +1479,7 @@ def hems(target: Costume, source: Costume, plan_: Plan, t_clips: list[Any], s_cl
             lowered = dataclasses.replace(plan_, mapping=regroup, choices={
                 **plan_.choices, **dict.fromkeys(followed, "rigid")})
             again, again_skirt = _skirt_candidates(ts, ss, lowered, flat, sv, dominant, cloth, all_legs, t_legs, s_legs,
-                                                   mapped_regroup, columns, rows_ok)
+                                                   mapped_regroup, columns, rows_ok, chain_anchors)
             again = [dataclasses.replace(c, rule=REGROUP + c.rule) for c in again]
             skirt_rules, skirt = skirt_rules + again, again_skirt if skirt is None else skirt
             rules += [(c.rule, c.weights, c.solver) for c in again]
@@ -1846,7 +1867,7 @@ def skirt_bones(skeleton: Skeleton, skirt: Skirt) -> None:
     if len(skeleton.nodes) != skirt.base:
         raise refuse("skeleton changed")
     for k, (name, parent, local) in enumerate(zip(skirt.names, skirt.parents, skirt.locals)):
-        father = skirt.node(parent) if parent >= 0 else skirt.anchor
+        father = skirt.node(parent) if parent >= 0 else skirt.anchor_of(k)
         path = f"{skeleton.nodes[father].path}/{name}" if skeleton.nodes[father].path else name
         skeleton.nodes.append(Node(name, path, father, local, None, None, True))
     world = skeleton.world()
@@ -2642,10 +2663,10 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
         skirt_bones(t_skeleton, skirt)
         for k, n in enumerate(skirt.sources):
             result.mapping[n] = skirt.node(k)
-        anchor_hash = zlib.crc32(t_skeleton.nodes[skirt.anchor].path.encode())
+        anchor_hashes = {zlib.crc32(t_skeleton.nodes[a].path.encode()) for a in (skirt.anchors or [skirt.anchor])}
         for clip in t_clips:
             bindings = graph.tree(clip)["m_ClipBindingConstant"]["genericBindings"]
-            if any(b["path"] == anchor_hash and b["typeID"] == 4 for b in bindings):
+            if any(b["path"] in anchor_hashes and b["typeID"] == 4 for b in bindings):
                 if _key(clip) not in clip_skirts:
                     skirt_clips.append(clip)
                 clip_skirts.setdefault(_key(clip), []).append(skirt)
