@@ -28,6 +28,11 @@ USER, START, MAINTENANCE = 2, 3, 4
 _STOP = 99  # the shutdown marker, after every queued job: queued writers still run
 
 
+class Cancelled(Exception):
+    """Raised by a cancellable job (``submit(..., cancellable=True)``) at a step boundary once it was cancelled
+    (``JobRunner.cancel``): the job ends in the "cancelled" state, with no result."""
+
+
 @dataclass
 class Job:
     id: str
@@ -36,12 +41,14 @@ class Job:
     fn: Callable[..., Any]
     writes: str | None = None  # "game", "library" or None (read-only)
     rank: int = USER  # its class in the queue: USER, START or MAINTENANCE
-    state: str = "queued"  # queued, running, done, failed, dropped
+    state: str = "queued"  # queued, running, done, failed, dropped, cancelled
     result: Any = None
     error: dict[str, Any] | None = None
     log: list[str] = field(default_factory=list)
     finished: bool = False  # it ran and its end's listeners ran too
     progress: dict[str, Any] | None = None
+    cancellable: bool = False  # JobRunner.cancel may stop it: never run when queued, stopped between steps when running
+    stop: threading.Event = field(default_factory=threading.Event)
 
     def to_json(self) -> dict[str, Any]:
         return {"id": self.id, "kind": self.kind, "state": self.state, "result": self.result, "error": self.error,
@@ -78,14 +85,21 @@ class JobRunner:
         self._thread.start()
 
     def submit(self, kind: str, fn: Callable[..., Any], *, writes: str | None = None, rank: int = USER,
-               **params: Any) -> str:
+               cancellable: bool = False, **params: Any) -> str:
         """Queue ``fn(log=..., progress=..., **params)``; returns the job id. ``writes`` marks a writer job; ``rank``
-        is its class (``USER`` unless start-up or maintenance work)."""
+        is its class (``USER`` unless start-up or maintenance work). ``cancellable`` (read-only jobs only): ``cancel``
+        may stop it, and ``fn`` also gets ``cancelled``, a callable that says whether it was; the job checks it between
+        its steps and raises ``Cancelled``."""
         if writes is not None and writes not in WRITES:
             raise ValueError(f"unknown writes {writes!r}")
         if rank not in (USER, START, MAINTENANCE):
             raise ValueError(f"unknown rank {rank!r}")
-        job = Job(id=f"j{next(self._ids)}", kind=kind, params=params, fn=fn, writes=writes, rank=rank)
+        if cancellable and writes is not None:
+            raise ValueError("a writer job cannot be cancelled")
+        job = Job(id=f"j{next(self._ids)}", kind=kind, params=params, fn=fn, writes=writes, rank=rank,
+                  cancellable=cancellable)
+        if cancellable:
+            job.params = {**params, "cancelled": job.stop.is_set}
         with self._lock:
             if writes and self._quit_reserved:
                 raise ServiceError("busy")
@@ -110,6 +124,32 @@ class JobRunner:
         if job is None:
             raise ServiceError("job_not_found", id=job_id)
         return job
+
+    def cancel(self, job_id: str, kinds: tuple[str, ...]) -> str:
+        """Stop a cancellable job of one of ``kinds`` that is no longer wanted; its state afterwards. A queued one
+        never runs and ends "cancelled" at once; a running one is told to stop at its next step (it ends "cancelled",
+        or as it would have when it was past its last check); one that ended is left as it is.
+        ``bad_params`` for any other job."""
+        with self._idle:
+            job = self._jobs.get(job_id)
+            if job is None:
+                raise ServiceError("job_not_found", id=job_id)
+            if not job.cancellable or job.kind not in kinds:
+                raise ServiceError("bad_params", key="id")  # not a job the page may stop
+            job.stop.set()
+            if job.state != "queued":
+                return job.state
+            # still in the queue: the worker skips it when it comes up (_run)
+            job.state, job.finished = "cancelled", True
+            self._idle.notify_all()
+        self._publish("job.cancelled", {"id": job.id, "kind": job.kind})
+        return "cancelled"
+
+    def _publish(self, event: str, data: Any) -> None:
+        try:
+            self._events.publish(event, data)
+        except Exception:
+            logger.exception("job event %s failed", event)
 
     def busy(self, writes: str | None = None) -> bool:
         """Whether a writer job (one writing ``writes``, when given) is queued or running."""
@@ -169,10 +209,14 @@ class JobRunner:
             if job is None:
                 return
             with self._lock:
+                if job.state == "cancelled":
+                    continue  # cancelled while queued: it ended then (cancel)
                 drop = self._closing and not job.writes
                 if drop:
                     job.state, job.finished = "dropped", True
                     self._idle.notify_all()
+                else:
+                    job.state = "running"  # under the lock: a cancel from now on reaches the job itself
             if drop:
                 logger.info("job %s (%s) dropped at shutdown", job.id, job.kind)
                 continue
@@ -189,12 +233,7 @@ class JobRunner:
                     self._idle.notify_all()
 
     def _execute(self, job: Job) -> None:
-        def publish(event: str, data: Any) -> None:
-            try:
-                self._events.publish(event, data)
-            except Exception:
-                logger.exception("job event %s failed", event)
-
+        publish = self._publish
         pending: list[str] = []
         last_flush = [time.monotonic()]
         last_progress = [0.0]
@@ -238,6 +277,11 @@ class JobRunner:
             job.state = "done"
             flush()
             publish("job.done", {"id": job.id, "kind": job.kind, "result": job.result})
+        except Cancelled:
+            logger.info("job %s (%s) cancelled", job.id, job.kind)
+            job.state = "cancelled"
+            flush()
+            publish("job.cancelled", {"id": job.id, "kind": job.kind})
         except ServiceError as e:
             log_service_error(logger, e)
             job.error = e.to_json()

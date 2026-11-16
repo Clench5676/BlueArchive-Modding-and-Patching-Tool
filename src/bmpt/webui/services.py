@@ -29,7 +29,7 @@ from ..openfiles import temporary_directory
 from .classic import QUEUE_METHODS, ClassicQueue, ClassicWindow, NativeOps, QueuedCall, native_ops, stat_files
 from ..library.relocate import relocate
 from .events import EventBus
-from .jobs import MAINTENANCE, USER, JobRunner
+from .jobs import MAINTENANCE, USER, Cancelled, JobRunner
 from .scanner import Scanner
 from .timing import Timings
 from .server import MIME, AssetResponse
@@ -1518,31 +1518,43 @@ class Services:
             return AssetResponse(self.kivo.audio(variant.page_id or "", _stem(parts[2])), "audio/ogg", light=False)
         raise KeyError(path)
 
-    def costume_check(self, target: str, other: str) -> dict[str, Any]:
+    def costume_check(self, target: str, other: str, cancelled: Callable[[], bool] | None = None) -> dict[str, Any]:
         """Check another variant's costume on a variant's model to its end, as the Switch 3D Model card shows it:
         the slot built (``library.costume_preview``) and its preview exported. Saved as the pair's verdict, keyed by
         the build signature: the rule's refusals, program errors and export failures, so the pair is never
-        offered; a refusal of the moment (a missing original, a locked file) is returned unsaved and checked again."""
+        offered; a refusal of the moment (a missing original, a locked file) is returned unsaved and checked again.
+        ``cancelled``: the job's flag (``jobs.cancel``), checked between the phases (before the build, after it,
+        before the export and before any verdict is saved); once set, ``jobs.Cancelled`` ends the check with no
+        verdict saved, so the pair is checked again next time. The build itself is not interrupted."""
+        def stop() -> None:
+            if cancelled is not None and cancelled():
+                raise Cancelled()
+
         library = self.library
         verdict = library.costume_verdict(target, other)
         if verdict is not None:
             return verdict
         core = self.catalog.variant(target).model
+        stop()
         try:
-            bundles = library.costume_preview(target, other)
+            bundles = library.costume_preview(target, other, cancelled=cancelled)
         except ServiceError as error:
+            stop()  # a build refused because the check was cancelled (busy) is no verdict either
             if error.code == "source_unsupported":
                 return library.costume_verdict(target, other) or {"ok": False, "reason": error.params.get("source")}
             if error.code == "library_operation_failed":  # a program error, the same for these files every time
                 return library.record_costume_verdict(target, other, False, error.code)
             return {"ok": False, "reason": error.code, "transient": True}
+        stop()
         try:
             self.game.model_glb(core, overrides=bundles, reads=library.preview_reads("official"))
         except ServiceError as error:
             return {"ok": False, "reason": error.code, "transient": True}
         except Exception as error:  # the preview cannot be drawn: a program error, kept in the log
             logger.exception("Costume preview export failed for %s <- %s", target, other)
+            stop()
             return library.record_costume_verdict(target, other, False, "export", {"error": type(error).__name__})
+        stop()
         # a costume past the stretch limit was saved by the preview as shown only
         return library.costume_verdict(target, other) or library.record_costume_verdict(target, other, True)
 

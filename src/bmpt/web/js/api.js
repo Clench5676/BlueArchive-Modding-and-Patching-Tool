@@ -68,7 +68,8 @@ function connect() {
   }
 }
 
-// a job's end as a promise (resolves with the result, rejects with RpcError). Events can arrive before this
+// a job's end as a promise (resolves with the result, rejects with RpcError; "cancelled" for a job the page stopped,
+// jobs.cancel). Events can arrive before this
 // subscribes, or be lost while the event stream reconnects, so the job's state is also polled. Runtime is unbounded
 // by default: sleeping or preparing a large batch does not mean the backend job failed. Each status read is bounded.
 export function waitJob(id, onProgress, { pollEvery = 1500, maxErrors = Infinity, timeout = 0,
@@ -120,6 +121,7 @@ export function waitJob(id, onProgress, { pollEvery = 1500, maxErrors = Infinity
         if (job.progress) progress(job.progress);
         if (job.state === "done") return finish(resolve, job.result);
         if (job.state === "failed") return failed(new RpcError(job.error?.code || "internal", job.error?.params || {}, job.error?.ref));
+        if (job.state === "cancelled") return failed(new RpcError("cancelled"));
         if (job.state !== "queued" && job.state !== "running") return failed(new RpcError("internal", { error: `Job ${job.state}` }));
       } catch (err) {
         if (settled || current !== generation) return;
@@ -146,6 +148,7 @@ export function waitJob(id, onProgress, { pollEvery = 1500, maxErrors = Infinity
         on("job.progress", (d) => { if (d.id === id) { errors = 0; connection(true); progress(d); } }),
         on("job.done", (d) => { if (d.id === id) finish(resolve, d.result); }),
         on("job.failed", (d) => { if (d.id === id) failed(new RpcError(d.code, d.params, d.ref)); }),
+        on("job.cancelled", (d) => { if (d.id === id) failed(new RpcError("cancelled")); }),
         on("server.closing", () => failed(new RpcError("internal", { error: "Server closed" }))),
         on("open", wake),
       );
