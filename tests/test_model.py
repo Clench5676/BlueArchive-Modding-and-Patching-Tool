@@ -201,9 +201,9 @@ def test_pick_clips_prefers_own_clips_and_falls_back_to_an_idle():
     assert model.pick_clips(["X_Move_Ing"], model.DEFAULT_CLIPS, "x") == []
 
 
-def test_default_clips_bring_the_knockdown_fall_and_the_retreat_hang():
-    # a battle controller's vital clips: the fall and the hang from the evacuation rope, not the low-health stance,
-    # the panic or the shared groggy and hit clips whose names merely contain the words
+def test_default_clips_bring_the_knockdown_fall_and_the_retreat_cry():
+    # a battle controller's vital clips: the fall and the crying the retreat plays, not the low-health stance, the
+    # panic or the shared groggy and hit clips whose names merely contain the words
     names = ["CH0069_Formation_Idle", "CH0069_Vital_Death", "CH0069_Vital_Dying_Ing", "CH0069_Vital_Panic",
              "CH0069_Vital_Retreat", "VitalDeathGroggy", "VitalHit"]
     assert model.pick_clips(names, model.DEFAULT_CLIPS, "ch0069") == [
@@ -868,6 +868,27 @@ def test_real_halo_particles(tmp_path):
 
 
 @pytest.mark.skipif(not GAME_DIR.is_dir(), reason="No local game install")
+def test_real_retreat_clip_per_model(tmp_path):
+    # the retreat's crying, the clip the battle controller's retreat state plays, found under each model's own name:
+    # plain, a battle form's first (two forms, the second listed for the action bar), none for a student without
+    # battle clips (Hanae: a misspelt pickup, no vital clips)
+    game = GameAssets(get_search_dirs(GAME_DIR), AssetCache(root=tmp_path / "cache", allowed=True))
+    expected = {"hoshino_original": ("Hoshino_Original_Vital_Retreat", ()),
+                "ch0069": ("CH0069_Vital_Retreat", ()),
+                "hoshino_swimsuit": ("Hoshino_Swimsuit_Vital_Retreat01", ("Hoshino_Swimsuit_Vital_Retreat02",)),
+                "hanae_original": (None, ())}
+    for core, (clip, more) in expected.items():
+        doc = _strict(game.model_glb(core))
+        anims = {a["extras"]["slot"]: a for a in doc["animations"]}
+        listed = doc["extras"]["clips"]
+        if clip is None:
+            assert "Vital_Retreat" not in anims and not any("retreat" in n.lower() for n in listed), core
+            continue
+        assert anims["Vital_Retreat"]["name"] == clip and anims["Vital_Retreat"]["extras"]["loop"] is True, core
+        assert {clip, *more} <= set(listed), core
+
+
+@pytest.mark.skipif(not GAME_DIR.is_dir(), reason="No local game install")
 def test_real_chibi_exports(tmp_path):
     game = GameAssets(get_search_dirs(GAME_DIR), AssetCache(root=tmp_path / "cache", allowed=True))
     assert {"hoshino_original", "ch0242"} <= game.model_cores()
@@ -877,7 +898,7 @@ def test_real_chibi_exports(tmp_path):
     assert doc["extras"]["prefab"] == "Echelon_Hoshino_Original" and "haloFollower" in doc["extras"]
     slots = [a["extras"]["slot"] for a in doc["animations"]]
     assert slots[0] == "Formation_Idle" and "Cafe_Reaction" in slots and len(slots) == len(set(slots))
-    # the hang from the rope loops, the fall plays once (the viewer holds its last frame or moves on to the hang)
+    # the retreat's crying loops, the fall plays once (the viewer holds its last frame)
     loops = {a["extras"]["slot"]: a["extras"]["loop"] for a in doc["animations"]}
     assert loops["Vital_Retreat"] is True and loops["Vital_Death"] is False
     assert doc["skins"] and all(len(s["joints"]) > 0 for s in doc["skins"])

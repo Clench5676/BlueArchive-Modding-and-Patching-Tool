@@ -121,9 +121,10 @@ test("a story model's cutscene clips are its actions, in order, each held on its
   assert.deepEqual(storyActions(new Map()), []);
 });
 
-test("the retreat falls, lies a moment, then hangs from the rope; the knockdown falls and stays down", async () => {
+test("the retreat cuts straight to the crying loop; the knockdown falls and stays down", async () => {
   const { ACTIONS, createStillView } = await import("../../src/bmpt/web/js/model.js");
   assert.deepEqual(Object.keys(ACTIONS), ["idle", "reaction", "walk", "victory", "pickup", "retreat", "knockdown"]);
+  assert.deepEqual(ACTIONS.retreat, { slots: ["Vital_Retreat"], fade: 0 });
   assert.deepEqual(ACTIONS.knockdown, { slots: ["Vital_Death"], hold: true });
   // a still view on a stand-in renderer, with one-track clips of the slots
   const renderer = { domElement: {}, setPixelRatio() {}, setSize() {} };
@@ -133,25 +134,30 @@ test("the retreat falls, lies a moment, then hangs from the rope; the knockdown 
   const clip = (name, length, loop) => ({ clip: new THREE.AnimationClip(name, length, [new THREE.NumberKeyframeTrack(".position[x]", [0, length], [0, 1])]), loop });
   view.mixer = new THREE.AnimationMixer(root);
   view.mixer.addEventListener("finished", (e) => view.finished(e.action));
-  const run = (seconds) => { for (let t = 0; t < seconds; t += 0.05) { view.mixer.update(0.05); view.playQueued(); } };
-  // without the rope's clip there is no retreat; without the fall, neither
+  const run = (seconds) => { for (let t = 0; t < seconds; t += 0.05) view.mixer.update(0.05); };
+  // the retreat needs its own clip alone, the knockdown the fall
   view.clips = new Map([["Formation_Idle", clip("Formation_Idle", 2, true)], ["Vital_Death", clip("Vital_Death", 2, false)]]);
   assert.deepEqual(view.actions(), ["idle", "knockdown"]);
   view.clips.set("Vital_Retreat", clip("Vital_Retreat", 1.6, true));
   assert.deepEqual(view.actions(), ["idle", "retreat", "knockdown"]);
   view.clips.delete("Vital_Death");
-  assert.deepEqual(view.actions(), ["idle"]);
+  assert.deepEqual(view.actions(), ["idle", "retreat"]);
   view.clips.set("Vital_Death", clip("Vital_Death", 2, false));
 
+  // from the idle, a cut: the crying clip alone at full weight at once, no fall before it, looping
+  assert.ok(view.act("idle", { quiet: true }));
+  run(0.5);
+  const idle = view.action;
   assert.ok(view.act("retreat", { quiet: true }));
-  assert.equal(view.slot.clip.name, "Vital_Death");
-  run(2.5); // fallen, still lying
-  assert.equal(view.slot.clip.name, "Vital_Death");
-  run(1); // the wait is over: the rope's clip, looping
   assert.equal(view.slot.clip.name, "Vital_Retreat");
+  assert.ok(!idle.isRunning(), "the idle stops at the cut");
+  assert.equal(view.action.getEffectiveWeight(), 1);
   assert.equal(view.action.loop, THREE.LoopRepeat);
-  // another action cancels a pending follow-up
-  view.act("retreat", { quiet: true }); run(2.5); view.act("knockdown", { quiet: true }); run(5);
+  run(5);
+  assert.equal(view.slot.clip.name, "Vital_Retreat");
+  assert.ok(view.action.isRunning());
+  // the knockdown plays the fall once and holds it
+  view.act("knockdown", { quiet: true }); run(5);
   assert.equal(view.slot.clip.name, "Vital_Death");
   assert.equal(view.action.loop, THREE.LoopOnce);
   assert.ok(view.action.clampWhenFinished);

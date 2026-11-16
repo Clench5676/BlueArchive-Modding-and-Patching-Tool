@@ -132,7 +132,7 @@ test("a chain plays each clip once in turn and holds or loops the last by its ow
   view.clips = new Map();
   view.named = new Map([["A_Start", clip("A_Start", false)], ["A_Ing", clip("A_Ing", true)], ["A_End", clip("A_End", false)],
     ["D02", clip("D02", false)], ["R02", clip("R02", true)]]);
-  const run = (seconds) => { for (let t = 0; t < seconds; t += 0.05) { view.mixer.update(0.05); view.playQueued(); } };
+  const run = (seconds) => { for (let t = 0; t < seconds; t += 0.05) view.mixer.update(0.05); };
   assert.ok(view.actClips("attack", ["A_Start", "A_Ing", "A_End"]));
   assert.equal(view.slot.clip.name, "A_Start");
   run(1.2);
@@ -143,11 +143,17 @@ test("a chain plays each clip once in turn and holds or loops the last by its ow
   run(2);
   assert.equal(view.slot.clip.name, "A_End");
   assert.ok(view.action.clampWhenFinished, "the last clip holds");
-  // a second battle form's retreat plays as the tab's retreat: the fall, a wait, the rope looping
-  assert.ok(view.actClips("retreat@2", ["D02", "R02"], { like: "retreat" }));
-  run(1.5); // fallen, still lying
-  assert.equal(view.slot.clip.name, "D02");
-  run(1);
+  // a second battle form's retreat plays as the tab's retreat: a cut to its crying clip, looping
+  const before = view.action;
+  assert.ok(view.actClips("retreat@2", ["R02"], { like: "retreat" }));
+  assert.equal(view.slot.clip.name, "R02");
+  assert.ok(!before.isRunning(), "a cut, no cross-fade");
+  run(3);
   assert.equal(view.slot.clip.name, "R02");
   assert.equal(view.action.loop, THREE.LoopRepeat);
+  // its knockdown plays as the tab's knockdown: the fall once, held
+  assert.ok(view.actClips("knockdown@2", ["D02"], { like: "knockdown" }));
+  run(2);
+  assert.equal(view.slot.clip.name, "D02");
+  assert.ok(view.action.clampWhenFinished);
 });
