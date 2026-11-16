@@ -288,8 +288,9 @@ function viewCross(v, keys) {
 // as its check ends.
 const costumeState = new Map(), costumeChecks = new Map();
 function costumesReady(v) {
+  const run = costumeRun;
   void readOthers().then((families) => {
-    if (!open || variant() !== v) return;
+    if (!costumesWanted(v, run)) return;
     // a roster that cannot be read leaves another student's model unjudged: its loading ring stops
     if (!families) { costumesChecked(v); return; }
     // Loading the roster must not replace the popup's current hits with just the saved choices.
@@ -309,15 +310,18 @@ function costumesReady(v) {
       costumesChecked(v);
       const unknown = others.filter((o) => known[o] == null);
       for (const other of unknown) {
-        const id = await rpc("model.checkCostumes", { variant: v.key, others: [other] });
-        const result = await waitJob(id);
+        // the 3D tab left: no further pair (stopCostumeChecks cancelled the one under way)
+        if (!costumesWanted(v, run)) return false;
+        const result = await checkPair(v, other, run);
+        if (!result) return false;
         costumeState.set(v.key, { ...(costumeState.get(v.key) || {}), ...result });
         void readCautions(v, [other]);
         costumesChecked(v);
       }
       return unknown.length > 0;
     })().finally(() => {
-      costumeChecks.delete(key);
+      // a run given up when the tab was left is dropped already; coming back starts another
+      if (costumeChecks.get(key) === check) costumeChecks.delete(key);
       // a pair left without a verdict (its check failed) stops showing the loading ring
       if (unjudged(v, others)) costumesChecked(v);
     });
@@ -339,11 +343,12 @@ function runCross() {
   if (crossRunning || !crossWanted.variant || !crossWanted.keys.length) return;
   const tried = new Set();
   let handled = null;
+  const run = costumeRun;
   crossRunning = (async () => {
     for (;;) {
       handled = crossWanted;
       const { variant: v, keys } = crossWanted;
-      if (!v || !keys.length || !open || variant() !== v) return;
+      if (!v || !keys.length || !costumesWanted(v, run)) return;
       const epoch = othersEpoch;
       const state = costumeState.get(v.key) || {};
       // Saved choices can add to the 64 hits. Each read still respects costume_keys' limit.
@@ -359,8 +364,8 @@ function runCross() {
       const next = keys.find((k) => !tried.has(`${v.key}|${k}`) && state[k] == null);
       if (!next) return;
       tried.add(`${v.key}|${next}`);
-      const result = await waitJob(await rpc("model.checkCostumes", { variant: v.key, others: [next] }));
-      if (epoch !== othersEpoch) continue;
+      const result = await checkPair(v, next, run);
+      if (!result || epoch !== othersEpoch) continue;
       costumeState.set(v.key, { ...(costumeState.get(v.key) || {}), ...result });
       void readCautions(v, [next]);
       costumesChecked(v);
@@ -371,6 +376,39 @@ function runCross() {
     // a wanted pair left without a verdict stops showing the loading ring
     else if (handled?.variant && unjudged(handled.variant, handled.keys)) costumesChecked(handled.variant);
   });
+}
+// Costume checks run only while they are wanted: the screen open on the same variant with its 3D tab shown (the
+// Switch 3D Model popup opens from that tab). Leaving it (another tab, another variant, the screen closed) stops them
+// (stopCostumeChecks): no further pair is submitted, the checks already submitted are cancelled (jobs.cancel: a queued
+// one never runs, a running one stops between its steps and saves no verdict), and the loading ring stops. Coming
+// back starts them again for the pairs still without a verdict.
+let costumeRun = 0;
+const costumeJobs = new Set();
+const costumesWanted = (v, run) => run === costumeRun && open && !!v && variant().key === v.key && tab === "model";
+function stopCostumeChecks() {
+  costumeRun += 1;
+  costumeChecks.clear();
+  crossWanted = { variant: null, keys: [] };
+  for (const id of costumeJobs) rpc("jobs.cancel", { id }).catch(() => {});
+  costumeJobs.clear();
+}
+// one pair checked to its end (model.checkCostumes): its verdicts, or null when it was cancelled because the 3D tab
+// was left meanwhile
+async function checkPair(v, other, run) {
+  const id = await rpc("model.checkCostumes", { variant: v.key, others: [other] });
+  if (!costumesWanted(v, run)) {
+    rpc("jobs.cancel", { id }).catch(() => {});
+    return null;
+  }
+  costumeJobs.add(id);
+  try {
+    return await waitJob(id);
+  } catch (err) {
+    if (err?.code === "cancelled") return null;
+    throw err;
+  } finally {
+    costumeJobs.delete(id);
+  }
 }
 // whether any of a variant's pairs (``others``: variant keys) still has no verdict
 const unjudged = (v, others) => others.some((o) => (costumeState.get(v.key) || {})[o] == null);
@@ -2011,6 +2049,7 @@ function changeInPlace(work) {
 // tabs: the left side shows the portrait, the memorial lobby or the 3D model
 function showTab(id) {
   if (busy || Loading.held()) return;
+  if (id !== "model") stopCostumeChecks();
   tab = id;
   if (id === "model") {
     const v = variant();
@@ -2601,6 +2640,8 @@ export async function show(context, familyData, key, { inPlace = false, kind = n
   }
   // the tabs the variant has, on every show: another install may lack a part under the same variant
   tab = availableTab(variant(), ({ spr: "portrait", portrait: "portrait", lobby: "lobby", model: "model" })[kind] || tab);
+  // the costume checks of another variant, or of a 3D tab no longer shown, stop; the same 3D tab's go on
+  if (!sameVariant || tab !== "model") stopCostumeChecks();
   previewEnabled = modsOn();
   rpc("ui.visit", { variant: variantKey }).catch(() => {});
   // The portrait uses its own assets and default framing while the UI layout is still loading or unavailable.
@@ -2635,6 +2676,7 @@ export function suspend() {
   switchThumbnails?.cancel();
   switchThumbnails = null;
   ModAlias.close(); leavePage(); open = false; suspended = true;
+  stopCostumeChecks();
   begin(); batch = null; leftToken += 1; spineToken += 1;
 }
 
@@ -2649,6 +2691,7 @@ export function hide() {
   open = false;
   suspended = false;
   switchPopupPage = null;
+  stopCostumeChecks();
   resetOthers();
   begin();
   batch = null;

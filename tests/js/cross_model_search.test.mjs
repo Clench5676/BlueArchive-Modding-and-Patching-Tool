@@ -174,7 +174,7 @@ for (const locale of LOCALES) test(`the model search shares picker matching and 
 function queue({ saved = [], read, check, cautions } = {}) {
   const v = { key: "slot", family: "own", model: "slot" }, calls = [], cautionCalls = [], changed = [], failures = [];
   const ctx = vm.createContext({ ...Sources, otherStudents: [], othersEpoch: 0, costumeState: new Map(), open: true, current: v,
-    variant: () => ctx.current, candidates: () => saved.map((key) => ({ cross: true, variant: { key } })),
+    tab: "model", costumeChecks: new Map(), variant: () => ctx.current, candidates: () => saved.map((key) => ({ cross: true, variant: { key } })),
     costumesChecked: (v) => changed.push(v.key), console: { error: (...args) => failures.push(args) },
     rpc: async (method, params) => {
       // the cautions are read aside from the queue: ``calls`` holds the queue's own, the verdicts' and the checks'
@@ -457,4 +457,68 @@ test("a pair shows the loading ring only while its check runs or is queued", asy
   q.ctx.othersLoad = null;
   assert.equal(checking("v:slow2"), false, "a roster that could not be read leaves no ring");
   assert.deepEqual(q.failures, []);
+});
+
+// Leaving the 3D tab stops the costume checks it started: no further pair is submitted, the one under way is cancelled
+// (jobs.cancel) and its loading ring stops; coming back reads the verdicts again and checks the pairs still without
+// one, the ring turning again meanwhile.
+test("leaving the 3D tab cancels its costume checks and coming back starts them again", async () => {
+  const v = { key: "slot", family: "own", model: "slot" };
+  const own = (key) => ({ key, family: "own", model: key });
+  const fam = { variants: [v, own("a"), own("b")] };
+  const submitted = [], cancelled = [], waiting = new Map(), failures = [];
+  let jobs = 0;
+  const ctx = vm.createContext({ ...Sources, fam, otherStudents: [], othersEpoch: 0, othersLoad: null, open: true,
+    tab: "model", busy: false, switchPopupPage: null, pageToken: 1, $: () => ({ hidden: true }),
+    variant: () => fam.variants[0], costumeCandidates: (f, x) => f.variants.filter((o) => o !== x),
+    candidates: () => [], readOthers: async () => null, costumesChecked: () => {},
+    console: { error: (...args) => failures.push(args) }, Loading: { held: () => false },
+    changeInPlace: (work) => work(), renderAll: async () => {}, renderLeft: async () => {},
+    rpc: async (method, params) => {
+      if (method === "model.costumes") return Object.fromEntries(params.others.map((key) => [key, ctx.saved?.[key] ?? null]));
+      if (method === "model.costumeCautions") return {};
+      if (method === "model.checkCostumes") { submitted.push(params.others[0]); return `j${++jobs}`; }
+      if (method === "jobs.cancel") {
+        cancelled.push(params.id);
+        waiting.get(params.id)?.reject(Object.assign(new Error("cancelled"), { code: "cancelled" }));
+        return "cancelled";
+      }
+      throw new Error(method);
+    },
+    waitJob: (id) => new Promise((resolve, reject) => waiting.set(id, { resolve, reject })),
+  });
+  const start = source.indexOf("const costumeState = new Map()"), end = source.indexOf("// what keeps a 3D source", start);
+  vm.runInContext(source.slice(start, end) + functionSource("showTab"), ctx);
+  const ring = (key) => ctx.costumeChecking(v, "model", `v:${key}`);
+
+  void ctx.costumesReady(v); await flush();
+  assert.deepEqual(submitted, ["a"], "one pair at a time");
+  assert.ok(ring("a") && ring("b"), "the ring turns for the pairs being checked");
+  ctx.showTab("portrait"); await flush();
+  assert.deepEqual(cancelled, ["j1"], "the check under way is cancelled");
+  assert.deepEqual(submitted, ["a"], "no further pair is submitted");
+  assert.equal(vm.runInContext("costumeChecks.size", ctx), 0);
+  assert.ok(!ring("a") && !ring("b"), "the ring stops");
+
+  ctx.showTab("model"); await flush();
+  assert.deepEqual(submitted, ["a", "a"], "coming back checks the pairs still without a verdict");
+  assert.ok(ring("a") && ring("b"), "the ring turns again");
+  waiting.get("j2").resolve({ a: "ok" }); await flush();
+  assert.deepEqual(submitted, ["a", "a", "b"]);
+  waiting.get("j3").resolve({ b: "refused" }); await flush();
+  assert.ok(!ring("a") && !ring("b"));
+  assert.deepEqual(cancelled, ["j1"]);
+
+  // a check submitted while the tab is being left is cancelled as soon as its id arrives
+  ctx.saved = { a: "ok" };
+  vm.runInContext("costumeState.clear()", ctx);
+  ctx.rpc = ((rpc) => async (method, params) => {
+    if (method === "model.checkCostumes") { ctx.tab = "lobby"; ctx.stopCostumeChecks(); }
+    return rpc(method, params);
+  })(ctx.rpc);
+  void ctx.costumesReady(v); await flush();
+  assert.deepEqual(submitted, ["a", "a", "b", "b"]);
+  assert.deepEqual(cancelled, ["j1", "j4"]);
+  assert.ok(!waiting.has("j4"), "never waited for");
+  assert.deepEqual(failures, []);
 });
