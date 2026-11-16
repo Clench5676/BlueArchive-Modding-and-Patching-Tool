@@ -563,8 +563,8 @@ def test_official_rule_b_clip_edit_is_read_back_and_a_changed_curve_is_refused(v
 
     real_curves, edited = ma.skirt_curves, []
 
-    def damaging(skeleton, skirt, tree, key=None):
-        done = real_curves(skeleton, skirt, tree, key)
+    def damaging(skeleton, skirt, tree, key=None, **options):
+        done = real_curves(skeleton, skirt, tree, key, **options)
         edited.append(tree["m_Name"])
         if done and len(edited) == 3:  # the third clip loses an old constant on its way
             tree["m_MuscleClip"]["m_Clip"]["data"]["m_ConstantClip"]["data"][0] += 0.25
