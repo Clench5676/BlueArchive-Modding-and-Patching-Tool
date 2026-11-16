@@ -68,6 +68,7 @@ import numpy as np
 from ..errors import ServiceError
 from . import model_geometry as mg
 from . import model_hems as hm
+from . import model_locks as ml
 from . import model_skirts as ms
 from .errors import AssetNotFound
 from .unity import load_bundle
@@ -1366,6 +1367,9 @@ class Hems:
         if self.springs:
             extra += f", {sum(len(s.solver.roots) for s in self.springs)} swinging chains in " + "/".join(
                 str(s.clips) for s in self.springs) + " clips"
+            carried = sum(len(s.solver.carry.roots) for s in self.springs if s.solver.carry is not None)
+            if carried:
+                extra += f" ({carried} on the slot's own lock keys)"
         if self.thin is not None and self.thin_score is not None:
             extra += f", {len(self.thin[0])} leg vertices thinned under the cloth ({self.thin_score.mean:.1f}%)"
         return (f"{self.rule}: deep pass-through {rigid.mean:.1f}% -> {chosen.mean:.1f}%, stretch {rigid.stretch:.2f} -> "
@@ -1918,14 +1922,17 @@ def own_keys(skeleton: Skeleton, clips: Iterable[Any], nodes: list[int]) -> dict
     return out
 
 
-def springs(target: Costume, source: Costume, plan_: Plan, s_clips: list[Any], fit: Fit) -> list[Skirt]:
+def springs(target: Costume, source: Costume, plan_: Plan, s_clips: list[Any], fit: Fit,
+            step: Callable[[], None] = lambda: None) -> list[Skirt]:
     """Optimize Physics: the secondary chains the group choice left rigid away from the legs (hair, ribbons, a loose
     coat on the spine or the head; the legs' cloth is the hem rules' and Rule B's) as new bones of the slot, one
     :class:`Skirt` per anchor, that swing after the anchor's motion in every slot clip (``model_skirts.Spring``). A
     chain swings only when the source's own clips turn it (``SWING_MIN``), at most 1.5 times as far. The skirts' bases
     are set where they join the slot's skeleton (:func:`skirt_bones`). A slot clip whose name the source's clips share
     (``Formation_Idle``, ``Cafe_Walk``) plays the source's own keys of the chains instead, time-scaled onto it
-    (:func:`own_keys`, ``Spring.keyed``)."""
+    (:func:`own_keys`, ``Spring.keyed``). On the head, a chain whose lock matches one of the slot's own locks
+    (``model_locks``) takes that lock's keys in every slot clip where it moves instead (:func:`lock_carry`,
+    :func:`carried_turns`). ``step`` is called between the source clips the hair's stretch is measured in."""
     ts, ss = target.skeleton, source.skeleton
     s_legs = legs_of(ss)
     lower = lower_anchors(ss, s_legs) if s_legs is not None else set()
@@ -1948,30 +1955,38 @@ def springs(target: Costume, source: Costume, plan_: Plan, s_clips: list[Any], f
             turned = max(swing.get(j, 0.0) for j in [r, *ss.descendants(r)] if j in swing)
             if turned >= SWING_MIN:
                 limits[r] = min(max(1.5 * turned, SWING_LIMITS[0]), SWING_LIMITS[1])
-        if not limits:
+        slot_anchor = plan_.mapping[anchor]
+        # on the head every lock may take one of the slot's (scope: head groups the group choice left rigid)
+        on_head = ss.nodes[anchor].name == HEAD and ts.nodes[slot_anchor].name == HEAD
+        if not limits and not on_head:
             continue
-        wanted: set[int] = set()
+        chain: dict[int, set[int]] = {r: set() for r in roots}  # per root its weighted bones and those above them
         for n in member_set & used:
-            if chain_root(ss, n) not in limits:
+            bones = chain.get(chain_root(ss, n))
+            if bones is None:
                 continue
-            while n not in wanted:
-                wanted.add(n)
-                if n in limits:
+            while n not in bones:
+                bones.add(n)
+                if n in chain:
                     break
                 n = ss.nodes[n].parent
-        sources = sorted(wanted)
-        new = {n: k for k, n in enumerate(sources)}
-        parents = [new.get(ss.nodes[n].parent, -1) for n in sources]
-        slot_anchor = plan_.mapping[anchor]
         s_rest = ss.world()
         # each chain moves with its cloth from the source's space to the bound shape (as Rule B's)
         carry = {}
-        for k, n in enumerate(sources):
-            if parents[k] < 0:
-                share = (flat.weights * np.isin(flat.joints, [j for j in sources if chain_root(ss, j) == n])).sum(axis=1)
-                rows = np.where(share > 0.5)[0]
-                carry[n] = ms.rigid_fit(flat.vertices[rows], sv[rows], share[rows]) if len(rows) >= 3 else (
-                    t_rest[slot_anchor] @ _inverse(s_rest[anchor], ss.nodes[anchor].name))
+        for r in roots:
+            if r not in limits and not on_head:
+                continue
+            share = (flat.weights * np.isin(flat.joints, sorted(chain[r]))).sum(axis=1)
+            rows = np.where(share > 0.5)[0]
+            carry[r] = ms.rigid_fit(flat.vertices[rows], sv[rows], share[rows]) if len(rows) >= 3 else (
+                t_rest[slot_anchor] @ _inverse(s_rest[anchor], ss.nodes[anchor].name))
+        host, matched = match_locks(ts, ss, anchor, slot_anchor, [r for r in roots if ss.nodes[r].parent == anchor],
+                                    carry, t_rest, s_rest) if on_head else ([], {})
+        if not limits and not matched:
+            continue
+        sources = sorted({n for r in {*limits, *matched} for n in chain[r]})
+        new = {n: k for k, n in enumerate(sources)}
+        parents = [new.get(ss.nodes[n].parent, -1) for n in sources]
         rest = np.array([carry[chain_root(ss, n)] @ s_rest[n] for n in sources])
         local = np.array([np.linalg.inv(rest[p] if p >= 0 else t_rest[slot_anchor]) @ rest[k]
                           for k, p in enumerate(parents)])
@@ -2001,14 +2016,143 @@ def springs(target: Costume, source: Costume, plan_: Plan, s_clips: list[Any], f
             logger.debug("Swinging chains on %s left rigid: rest not reproduced", ss.nodes[anchor].name)
             continue
         spring = ms.Spring(chains, {new[r]: limit for r, limit in limits.items()})
-        if not spring.roots or not (spring.lengths >= ms.MIN_LENGTH).any():
+        swinging = {r: limit for r, limit in limits.items()
+                    if spring.lengths[spring.roots.index(new[r])] >= ms.MIN_LENGTH}
+        if not swinging and not matched:
             continue
-        # a slot clip the source has by name plays the source's own keys of these chains
-        spring = ms.Spring(chains, {new[r]: limits[r] for r in limits
-                                    if spring.lengths[spring.roots.index(new[r])] >= ms.MIN_LENGTH},
-                           own_keys(ss, s_clips, sources), np.array([trs(*ss.nodes[n].local) for n in sources]))
+        # a slot clip the source has by name plays the source's own keys of these chains (not of a lock that only
+        # takes the slot's keys: the source's own clips leave it still)
+        keys = own_keys(ss, s_clips, sources)
+        still = {new[n] for r in matched if r not in limits for n in chain[r]}
+        if still:
+            keys = {name: (phases, {b: q for b, q in rotations.items() if b not in still})
+                    for name, (phases, rotations) in keys.items()}
+        spring = ms.Spring(chains, {new[r]: limit for r, limit in swinging.items()}, keys,
+                           np.array([trs(*ss.nodes[n].local) for n in sources]))
+        if matched:
+            spring.carry = lock_carry(chains, new, sources, host, matched, t_rest)
+            spring.hair = hair_check(ss, plan_, flat, sv, sources, t_rest, s_clips, step)
         out.append(Skirt(sources, names, parents, locals_, slot_anchor, spring, -1))
     return out
+
+
+def match_locks(ts: Skeleton, ss: Skeleton, head: int, t_head: int, roots: list[int], carry: Mapping[int, np.ndarray],
+                t_rest: list[np.ndarray], s_rest: list[np.ndarray]
+                ) -> tuple[list[ml.Lock], dict[int, tuple[ml.Lock, int, Callable[[int], np.ndarray]]]]:
+    """The slot's locks below its head ``t_head`` (``model_locks``), and which of them the source's ``roots`` (chains
+    right below its ``head``) take after: each such chain is a lock with every secondary bone below it (unweighted
+    ends included), placed as it is bound on the slot (``carry``: per root its move from the source's space); it takes
+    the slot lock of its kind nearest by place and direction, within ``model_locks.MATCH_COST``. Per matched root: its
+    lock, the slot lock's index and the bound place of a node of it."""
+    host = [lock for lock in ml.head_locks([(n.name, n.parent) for n in ts.nodes], t_head, t_rest)
+            if lock.length >= ml.MIN_LENGTH]
+    if not host or not roots:
+        return host, {}
+    incoming, places = [], []
+    for root in roots:
+        members = [root] + [j for j in ss.descendants(root) if not ss.nodes[j].name.startswith(BIPED_ROOT)]
+        place = (lambda m: lambda j: (m @ s_rest[j])[:3, 3])(carry[root])
+        incoming.append(ml.lock_of(root, members, place, t_rest[t_head][:3, 3], lambda j: ss.nodes[j].parent))
+        places.append(place)
+    matched = {}
+    for root, lock, place, (best, cost) in zip(roots, incoming, places, ml.match(incoming, host)):
+        logger.debug("Lock %s: %s (cost %.2f)", ss.nodes[root].name,
+                     ts.nodes[host[best].root].name if best is not None else "no slot lock", cost)
+        if best is not None:
+            matched[root] = (lock, best, place)
+    return host, matched
+
+
+def lock_carry(chains: ms.Chains, new: Mapping[int, int], sources: list[int], host: list[ml.Lock],
+               matched: Mapping[int, tuple[ml.Lock, int, Callable[[int], np.ndarray]]],
+               t_rest: list[np.ndarray]) -> ms.Carry:
+    """The ``model_skirts.Carry`` of a spring's ``chains`` (``new``: a source node's bone; ``sources``: each bone's
+    node) from the locks :func:`match_locks` matched: the slot locks they take after and each bone's share along its
+    own lock."""
+    used: dict[int, int] = {}
+    root_lock, shares = {}, {}
+    for root, (lock, best, place) in matched.items():
+        root_lock[new[root]] = used.setdefault(best, len(used))
+        for b in chains.subtree[new[root]]:
+            shares[b] = ml.share_of(lock, sources[b], place)
+    kept = [host[i] for i in sorted(used, key=used.__getitem__)]
+    rests = [np.array([_rotation(t_rest[n]) for n in lock.path]) for lock in kept]
+    return ms.Carry(chains.anchor, np.asarray(t_rest[chains.anchor]), [lock.path for lock in kept],
+                    [lock.shares for lock in kept], rests, root_lock, shares, SWING_MIN)
+
+
+OWN_STRETCH_EVERY = 6  # frames of the source's own clips between those its hair's stretch is measured in
+OWN_STRETCH_STEP = 8   # measured frames between the build's steps (each poses the source's skeleton: about 0.03 s)
+
+
+@dataclass
+class HairCheck:
+    """The guard on a clip's carried lock turns: the hair of a spring (the vertices of the edges that touch a vertex
+    weighted half or more on its chains) as bound on the slot, influenced by the chains' bones (the first columns) and
+    by the slot ``nodes`` the rest of the costume maps to, and ``own``, the worst stretch of those edges on the
+    costume's own model under its own clips that turn the chains (:func:`stretch`, every ``OWN_STRETCH_EVERY``-th
+    frame)."""
+
+    rest: np.ndarray
+    joints: np.ndarray
+    weights: np.ndarray
+    nodes: list[int]
+    inverse: np.ndarray
+    edges: np.ndarray
+    own: float
+
+    def worst(self, spring: ms.Spring, poses: Sequence[Sequence[np.ndarray]], turns: Sequence[Mapping]) -> float:
+        """The worst stretch of the hair at ``poses`` (the slot's world matrices) with the chains' ``turns``."""
+        out = 1.0
+        homogeneous = np.c_[self.rest, np.ones(len(self.rest))]
+        for pose, frame in zip(poses, turns):
+            matrices = np.concatenate([spring.posed(pose, frame) @ spring.inverse,
+                                       np.array([pose[n] for n in self.nodes]).reshape(-1, 4, 4) @ self.inverse])
+            posed = np.einsum("nk,nkij,nj->ni", self.weights, matrices[self.joints], homogeneous)[:, :3]
+            out = max(out, stretch(self.rest, posed, self.edges))
+        return out
+
+
+def hair_check(ss: Skeleton, plan_: Plan, flat: Flat, sv: np.ndarray, sources: list[int], t_rest: list[np.ndarray],
+               s_clips: list[Any], step: Callable[[], None]) -> HairCheck | None:
+    """The :class:`HairCheck` of the chains of ``sources`` (the source nodes of a spring's bones, in its order), None
+    without hair edges. ``step`` is called before each source clip it is measured in and every ``OWN_STRETCH_STEP``
+    frames of one."""
+    column = {n: k for k, n in enumerate(sources)}
+    on_chain = np.isin(flat.joints, sources) & (flat.weights > 0)
+    hair = (flat.weights * on_chain).sum(axis=1) >= 0.5
+    edges = flat.edges[hair[flat.edges].any(axis=1)] if len(flat.edges) else flat.edges
+    if not len(edges):
+        return None
+    rows = np.unique(edges)
+    edges = np.searchsorted(rows, edges)
+    joints, weights = flat.joints[rows], flat.weights[rows]
+    slot = lambda j: plan_.mapping.get(int(j), 0)  # noqa: E731
+    nodes = sorted({slot(j) for j, w in zip(joints.ravel(), weights.ravel()) if w > 0 and int(j) not in column})
+    index = {n: len(sources) + k for k, n in enumerate(nodes)}
+    columns = np.array([[column[int(j)] if int(j) in column else index[slot(j)] if w > 0 else 0
+                         for j, w in zip(row_j, row_w)] for row_j, row_w in zip(joints, weights)], int)
+    # the costume's own worst, on its own model under its own clips that turn the chains
+    s_inverse = np.array([np.linalg.inv(m) for m in ss.world()])
+    own_rest = flat.vertices[rows]
+    homogeneous = np.c_[own_rest, np.ones(len(rows))]
+    hashes = {zlib.crc32(ss.nodes[n].path.encode()) for n in sources}
+    own = 1.0
+    for clip in s_clips:
+        tree = ss.graph.tree(clip)
+        if not any(b["typeID"] == 4 and b["attribute"] in (2, 4) and b["path"] in hashes
+                   for b in tree["m_ClipBindingConstant"]["genericBindings"]):
+            continue
+        step()
+        times, pose_at, _ = ss.clip_frames(tree)
+        for k, f in enumerate(sorted(set(range(0, len(times), OWN_STRETCH_EVERY)) | {len(times) - 1})):
+            if k and not k % OWN_STRETCH_STEP:
+                step()
+            matrices = np.asarray(pose_at(f)) @ s_inverse
+            posed = np.einsum("nk,nkij,nj->ni", weights, matrices[np.maximum(joints, 0)], homogeneous)[:, :3]
+            own = max(own, stretch(own_rest, posed, edges))
+    inverse = np.array([np.linalg.inv(t_rest[n]) for n in nodes]).reshape(-1, 4, 4)
+    return HairCheck(sv[rows], columns, weights, nodes, inverse, edges, own)
 
 
 FACE_OFFSET = 0.002  # a source face bone resting this far (metres) or more from the slot bone it maps to is retargeted
@@ -2150,13 +2294,39 @@ def skirt_sequence(skeleton: Skeleton, solver: ms.Solver, tree: Mapping[str, Any
     if isinstance(solver, FaceRetarget):  # the slot's expressions, about the source face's own places, every frame
         every = list(range(count))     # (a blink lasts a few frames)
         return every, solver.follow(skeleton, tree, every)
-    if isinstance(solver, ms.Spring):  # the source's own keys for a clip it has by name, else the swing; then gravity
+    if isinstance(solver, ms.Spring):
+        # the source's own keys for a clip it has by name, else the swing; then gravity; then the slot's own lock keys
+        poses = [pose(f) for f in frames]
         keyed = solver.keyed(str(tree.get("m_Name") or ""), [times[f] for f in frames])
         turns = keyed if keyed is not None else solver.sequence(
-            [times[f] for f in frames], lambda k: pose(frames[k]), bool(tree["m_MuscleClip"].get("m_LoopTime")))
-        return frames, solver.settle(turns, [np.asarray(pose(f)[solver.chains.anchor]) for f in frames])
+            [times[f] for f in frames], lambda k: poses[k], bool(tree["m_MuscleClip"].get("m_LoopTime")))
+        turns = solver.settle(turns, [np.asarray(p[solver.chains.anchor]) for p in poses])
+        return frames, carried_turns(solver, poses, turns)
     loop = bool(tree["m_MuscleClip"].get("m_LoopTime"))
     return frames, solver.sequence([times[f] for f in frames], lambda k: pose(frames[k]), loop)
+
+
+CARRY_GAINS = (1.0, 0.5)  # shares of the slot's lock turns tried in a clip before its locks keep their own turns
+
+
+def carried_turns(spring: ms.Spring, poses: list[list[np.ndarray]], turns: list[dict]) -> list[dict]:
+    """``turns`` of a spring's chains at ``poses`` with the chains whose slot lock moves there on that lock's keys
+    instead (``Spring.carried``; no gravity), when the hair stretches no more than on the costume's own model
+    (:class:`HairCheck`): at full turn, else at a smaller share (``CARRY_GAINS``), else ``turns`` as they were."""
+    if spring.carry is None:
+        return turns
+    host = spring.carry.turns(poses)
+    for gain in CARRY_GAINS:
+        roots, carried = spring.carried(poses, host, gain)
+        if not roots:
+            return turns
+        bones = set(carried[0])
+        merged = [{**{b: t for b, t in frame.items() if b not in bones}, **extra}
+                  for frame, extra in zip(turns, carried)]
+        hair = spring.hair
+        if hair is None or hair.worst(spring, poses[::2], merged[::2]) <= hair.own:
+            return merged
+    return turns
 
 
 def skirt_curves(skeleton: Skeleton, skirt: Skirt, tree: dict, key: tuple[str, int] | None = None) -> int | None:
@@ -3023,7 +3193,7 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
     # Rule B's skirt, then (Optimize Physics) the swinging chains: new bones of the slot's skeleton, with curves in
     # the slot's clips that move their anchor
     chained = ([hem.skirt] if hem.skirt is not None else []) + (
-        springs(target, source, result, s_clips, result.fit) if physics and result.fit is not None else [])
+        springs(target, source, result, s_clips, result.fit, step) if physics and result.fit is not None else [])
     step()
     face = face_retarget(target, source, result, result.fit) if result.fit is not None else None
     if face is not None:  # another character's face: its eye, brow and mouth bones follow the slot's expressions
@@ -3316,7 +3486,8 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
         obj = writer.file(clip.assets_file.name.lower()).objects[clip.path_id]
         tree = obj.read_typetree()
         before = clip_snapshot(tree) if ms.dense_grid(tree) is not None else None
-        edited = [skirt for skirt in clip_skirts[_key(clip)] if skirt.solver.roots]
+        edited = [skirt for skirt in clip_skirts[_key(clip)]
+                  if skirt.solver.roots or getattr(skirt.solver, "carry", None) is not None]
         bones = [skirt_curves(t_skeleton, skirt, tree, _key(clip)) for skirt in edited] if before is not None else [None]
         if edited and None not in bones and sum(bones):
             obj.save_typetree(tree)
