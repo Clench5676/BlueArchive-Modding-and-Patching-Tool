@@ -1371,19 +1371,21 @@ class Hems:
 
 @dataclass
 class _SkirtCandidate:
-    """A Rule B candidate: dense weights over the measured columns and then the chains' bones, and its solver."""
+    """A Rule B candidate: dense weights over the measured columns and then the chains' bones, its solver, and
+    the new bones those columns name (shared by the candidates of one build)."""
 
     rule: str
     weights: np.ndarray
     solver: ms.Solver
+    skirt: Skirt
 
 
 def _skirt_candidates(ts: Skeleton, ss: Skeleton, plan_: Plan, flat: Flat, sv: np.ndarray, dominant: np.ndarray,
                       cloth: np.ndarray, legs: np.ndarray, t_legs: Mapping[str, int], s_legs: Mapping[str, int],
                       mapped: np.ndarray, columns: list[int], writable_rows: np.ndarray,
-                      anchors: Iterable[int] | None = None) -> tuple[list[_SkirtCandidate], Skirt | None]:
+                      anchors: Iterable[int] | None = None) -> list[_SkirtCandidate]:
     """Rule B's candidates ("skirt": the costume's weights, "skirt smooth": blended across the chains' seams) and
-    its new bones, for the skirt chains of the cloth around the legs that the group choice left rigid, hanging off
+    their new bones, for the skirt chains of the cloth around the legs that the group choice left rigid, hanging off
     the pelvis or another of ``anchors`` (source Biped bones; the pelvis alone by default): each chain's first bone
     hangs off the slot's bone of its own anchor (a coat's tails off the spine, a strap off a thigh). ``flat``: the
     costume in the source's space; ``sv``: its vertices in the shape bound on the slot, where each chain's
@@ -1392,7 +1394,7 @@ def _skirt_candidates(ts: Skeleton, ss: Skeleton, plan_: Plan, flat: Flat, sv: n
     anchors = [a for a in dict.fromkeys(anchors if anchors is not None else [pelvis])
                if plan_.choices.get(a) == "rigid"]
     if not anchors:
-        return [], None
+        return []
     members = {n for a in anchors for n in plan_.groups.get(a, [])}
     roots = {chain_root(ss, int(n)) for n in np.unique(dominant[cloth]).tolist() if int(n) in members}
     skinned = {int(n) for n in np.unique(flat.joints[flat.weights > 0]).tolist()
@@ -1406,7 +1408,7 @@ def _skirt_candidates(ts: Skeleton, ss: Skeleton, plan_: Plan, flat: Flat, sv: n
             n = ss.nodes[n].parent
     sources = sorted(wanted)  # the skeleton lists parents first
     if not sources:
-        return [], None
+        return []
     new = {n: k for k, n in enumerate(sources)}
     anchor = plan_.mapping[pelvis]
     t_rest, s_rest = ts.world(), ss.world()
@@ -1455,6 +1457,7 @@ def _skirt_candidates(ts: Skeleton, ss: Skeleton, plan_: Plan, flat: Flat, sv: n
     smooth[~writable_rows] = plain[~writable_rows]
     leg_joints = np.where(flat.weights[legs] > 0, mapped[legs], anchor)
     leg_set = ms.Legs(sv[legs], leg_joints, flat.weights[legs])
+    skirt = Skirt(sources, names, parents, locals_, anchor, None, len(ts.nodes), anchors=hangs)
     out = []
     for rule, dense in (("skirt", plain), ("skirt smooth", smooth)):
         if rule == "skirt smooth" and np.abs(smooth - plain).max() < 1e-9:
@@ -1476,10 +1479,10 @@ def _skirt_candidates(ts: Skeleton, ss: Skeleton, plan_: Plan, flat: Flat, sv: n
         edges = position[flat.edges]
         edges = edges[(edges >= 0).all(axis=1)]
         cloth_set = ms.Cloth(sv[rows], joints, weights4, fixed, edges)
-        out.append(_SkirtCandidate(rule, dense, ms.Solver(chains, cloth_set, leg_set, t_rest, t_legs["pelvis"])))
-    if not out:
-        return [], None
-    return out, Skirt(sources, names, parents, locals_, anchor, out[0].solver, len(ts.nodes), anchors=hangs)
+        out.append(_SkirtCandidate(rule, dense, ms.Solver(chains, cloth_set, leg_set, t_rest, t_legs["pelvis"]), skirt))
+    if out:
+        skirt.solver = out[0].solver
+    return out
 
 
 def hems(target: Costume, source: Costume, plan_: Plan, t_clips: list[Any], s_clips: list[Any],
@@ -1605,8 +1608,8 @@ def hems(target: Costume, source: Costume, plan_: Plan, t_clips: list[Any], s_cl
 
         if (share > 1e-6).any():
             rules += rule_a(dense, rigid_part, share, on_rigid, "")
-    skirt_rules, skirt = _skirt_candidates(ts, ss, plan_, flat, sv, dominant, cloth, all_legs, t_legs, s_legs,
-                                           mapped, columns, rows_ok, chain_anchors) if physics else ([], None)
+    skirt_rules = _skirt_candidates(ts, ss, plan_, flat, sv, dominant, cloth, all_legs, t_legs, s_legs,
+                                    mapped, columns, rows_ok, chain_anchors) if physics else []
     rules += [(c.rule, c.weights, c.solver) for c in skirt_rules]
     if followed:
         # the same rules with the followed groups rigid: the pelvis group's chains only where it was followed
@@ -1618,10 +1621,11 @@ def hems(target: Costume, source: Costume, plan_: Plan, t_clips: list[Any], s_cl
         if s_legs["pelvis"] in followed:
             lowered = dataclasses.replace(plan_, mapping=regroup, choices={
                 **plan_.choices, **dict.fromkeys(followed, "rigid")})
-            again, again_skirt = _skirt_candidates(ts, ss, lowered, flat, sv, dominant, cloth, all_legs, t_legs, s_legs,
-                                                   mapped_regroup, columns, rows_ok, chain_anchors)
+            # their own new bones: the chains of the groups made rigid join the default build's
+            again = _skirt_candidates(ts, ss, lowered, flat, sv, dominant, cloth, all_legs, t_legs, s_legs,
+                                      mapped_regroup, columns, rows_ok, chain_anchors)
             again = [dataclasses.replace(c, rule=REGROUP + c.rule) for c in again]
-            skirt_rules, skirt = skirt_rules + again, again_skirt if skirt is None else skirt
+            skirt_rules += again
             rules += [(c.rule, c.weights, c.solver) for c in again]
     if len(rules) == 1:
         return Hems(note="skin not writable")
@@ -1683,6 +1687,7 @@ def hems(target: Costume, source: Costume, plan_: Plan, t_clips: list[Any], s_cl
     result.regrouped = best.rule.startswith(REGROUP)
     if best.rule.removeprefix(REGROUP).startswith("skirt"):
         candidate = next(c for c in skirt_rules if c.rule == best.rule)
+        skirt = candidate.skirt  # the chosen build's bones: a regrouped build may have more than the default one
         result.skirt = skirt
         skirt.solver = candidate.solver
         skirt.solved = {key: value for (rule, key), value in solved.items() if rule == best.rule}
