@@ -166,7 +166,7 @@ def test_entries_under_the_library_lock_never_pause(monkeypatch):
 @pytest.mark.parametrize("source", ["live", "official", "mod:1", "import:1", "variant:other"])
 @pytest.mark.parametrize("fails", [False, True])
 def test_model_asset_gate_covers_each_source_and_releases_on_failure(source, fails):
-    def export(core, target, selected, path):
+    def export(core, target, selected, path, clip=None):
         assert preview_gate._count == 1
         assert (core, target, selected) == ("hero", "hero", source)
         if fails:
@@ -183,3 +183,9 @@ def test_model_asset_gate_covers_each_source_and_releases_on_failure(source, fai
     else:
         Services.asset(services, "model/hero.glb", {"source": source})
     assert preview_gate._count == 0
+
+
+def test_a_preview_step_does_not_yield_to_itself(monkeypatch):
+    monkeypatch.setattr(preview_gate, "yield_to_previews", lambda cancel: pytest.fail("yielded to itself"))
+    with preview_gate.foreground():
+        preview_gate.step(None)

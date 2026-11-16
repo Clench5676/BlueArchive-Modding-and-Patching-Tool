@@ -1045,7 +1045,7 @@ def test_every_costume_is_applied_past_the_stretch_limit(model_env, monkeypatch)
     built = []
     gain = {'physics': True}  # whether the physics build chose a rule (a skirt, or a regrouped rule)
 
-    def stage(self, other, targets, directory, log, pin, *, preview=False, report=None, physics=False, inputs=None):
+    def stage(self, other, targets, directory, log, pin, *, preview=False, report=None, physics=False, inputs=None, step=None):
         built.append((other, preview, physics))
         if report is not None and physics:
             report['physics'] = gain['physics']
@@ -1107,7 +1107,7 @@ def test_costume_builds_of_an_older_rule_are_built_again_at_the_start(model_env,
     library = ModLibrary(env.root, Catalog(game, None), object(), env.settings, scan_allowed=lambda: True)
     built, gain = [], {'physics': True}
 
-    def stage(self, other, targets, directory, log, pin, *, preview=False, report=None, physics=False, inputs=None):
+    def stage(self, other, targets, directory, log, pin, *, preview=False, report=None, physics=False, inputs=None, step=None):
         built.append((other, physics))
         if report is not None and physics:
             report['physics'] = gain['physics']
@@ -1182,7 +1182,7 @@ def test_a_costume_verdict_keeps_the_cautions_its_preview_build_found(model_env,
     library = ModLibrary(env.root, Catalog(game, None), object(), env.settings, scan_allowed=lambda: True)
     unfit = {}
 
-    def staged(self, other, targets, directory, log, pin, *, preview=False, report=None, inputs=None):
+    def staged(self, other, targets, directory, log, pin, *, preview=False, report=None, inputs=None, step=None):
         out = directory / 'output'
         out.mkdir(parents=True)
         (out / targets[0].name).write_bytes(b'built')
@@ -1224,7 +1224,7 @@ def test_a_costume_preview_builds_without_holding_the_library_lock(model_env, mo
     building, gate = threading.Event(), threading.Event()
     owned = []
 
-    def staged(self, other, targets, directory, log, pin, *, preview=False, report=None, inputs=None):
+    def staged(self, other, targets, directory, log, pin, *, preview=False, report=None, inputs=None, step=None):
         owned.append(self._lock._lock._is_owned())
         assert inputs is not None and set(inputs.originals) == set(targets)
         building.set()
@@ -1269,7 +1269,7 @@ def test_a_costume_preview_whose_signature_changed_while_it_was_built_is_built_a
     rule = costume_rule.COSTUME_RULE
     builds = []
 
-    def staged(self, other, targets, directory, log, pin, *, preview=False, report=None, inputs=None):
+    def staged(self, other, targets, directory, log, pin, *, preview=False, report=None, inputs=None, step=None):
         builds.append(costume_rule.COSTUME_RULE)
         if len(builds) == 1:
             monkeypatch.setattr(costume_rule, 'COSTUME_RULE', rule + 1)  # changed while this build ran
@@ -1304,7 +1304,7 @@ def test_costume_verdicts_are_kept_per_build_signature(model_env, monkeypatch):
     library = ModLibrary(env.root, Catalog(game, None), object(), env.settings, scan_allowed=lambda: True)
     assert library.costume_verdict('hoshino', 'hoshino_swimsuit') is None
 
-    def refused(self, other, targets, directory, log, pin, *, preview=False, report=None, inputs=None):
+    def refused(self, other, targets, directory, log, pin, *, preview=False, report=None, inputs=None, step=None):
         raise model_adapt.refuse('rest pose')
 
     monkeypatch.setattr(ModLibrary, '_stage_costume', refused)

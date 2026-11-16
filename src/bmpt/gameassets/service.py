@@ -45,14 +45,16 @@ STORY_CLIP = re.compile(r"^((?:np|ch)\d{4})_", re.IGNORECASE)  # a story cutscen
 # the name is only compared with the model's clip names, never used as a path
 CLIP_NAME = re.compile(r"[A-Za-z0-9_ ]{1,128}")
 _ATLASES = "atlases-v2/"
-# One model export at a time in the process: an export holds the path locks of every bundle it reads
+# The model lock: one reader at a time of those that hold several bundles open at once (model and clip exports, the
+# selection-frame layout, lobby particles, office models), each keeping the path lock of every bundle it read until it
+# ends, so two of them could wait on each other's bundles. Held for one export (about 1 s for a model, 0.5 s for a
+# clip, no step inside it); taken after the library's lock, never before it. A costume build takes it no more: it
+# reads its bundles from memory, one path lock for one load at a time (``unity.load_bundle``).
 _MODEL_LOCK = threading.Lock()
 
 
 def model_lock(what: str) -> Any:
-    """The model lock, for every reader that holds several bundles open at once (exports, layouts, particles, costume
-    builds): each keeps the path lock of every bundle it read until it ends, so two of them at a time could wait on
-    each other's bundles. Taken after the library's lock, never before it."""
+    """The model lock (``_MODEL_LOCK``), its waits and holds logged as ``model-lock.<what>``."""
     return spans.held(f"model-lock.{what}", _MODEL_LOCK, hold=True)
 _SPRITE_FIELDS = ("x", "y", "width", "height", "borderLeft", "borderRight", "borderTop",
                   "borderBottom", "paddingLeft", "paddingRight", "paddingTop", "paddingBottom")

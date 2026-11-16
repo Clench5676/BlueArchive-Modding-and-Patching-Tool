@@ -184,3 +184,76 @@ def test_real_ex_skill_brings_the_face_the_model_leaves_out(real_game):
     brought = [t["node"] for t in toggles if "renderer" in doc["nodes"][t["node"]].get("extras", {})]
     assert [doc["nodes"][n]["name"] for n in brought] == ["CH0145_Face01_Outline"]
     assert "renderer" not in base["nodes"][brought[0]].get("extras", {}) and len(doc["meshes"]) == 1
+
+
+def _library_with_build(monkeypatch, adapt):
+    """A library whose costume build is ``adapt`` (model_adapt.adapt), with nothing to stage."""
+    from bmpt.gameassets import model_adapt
+    from bmpt.library import service as library_service
+
+    library = object.__new__(library_service.ModLibrary)
+    monkeypatch.setattr(model_adapt, "adapt", adapt)
+    monkeypatch.setattr(library_service.ModLibrary, "_official_or_current", lambda self, path, pin: path)
+    monkeypatch.setattr(library_service.ModLibrary, "_stage_copies", lambda self, originals, folder: {})
+    monkeypatch.setattr(library_service.ModLibrary, "_costume_files", lambda self, other, pin: ("dev", [], []))
+    monkeypatch.setattr(library_service.ModLibrary, "_cab_index", lambda self, pin: None)
+    monkeypatch.setattr(library_service.ModLibrary, "_core_map",
+                        lambda self, pin: type("M", (), {"slot": lambda s, c: c})())
+    return library
+
+
+def test_a_clip_export_starts_at_once_while_a_long_costume_build_runs(tmp_path, monkeypatch):
+    """A costume build (seconds) holds no model lock: the shown model's clip export starts within one of the build's
+    steps, and the build, a job, makes no new step while that foreground export runs."""
+    import threading
+    import time
+
+    from bmpt import preview_gate
+    from bmpt.gameassets import model_adapt
+
+    prefab = "character-ch0242-_mxload-2024-11-18_assets_all_1.bundle"
+    game, _ = _game(tmp_path, prefab)
+    running, steps, during = threading.Event(), [], []
+
+    def adapt(**kwargs):
+        running.set()
+        end = time.monotonic() + 3  # a build of 3 s in steps of 0.05 s
+        while time.monotonic() < end:
+            kwargs["step"]()
+            steps.append(time.monotonic())
+            time.sleep(0.05)
+        raise model_adapt.refuse("rest pose")
+
+    def export_clip(graph, bundles, dev, clip, **_):
+        before = len(steps)
+        time.sleep(0.3)  # the clip's own work
+        during.append(len(steps) - before)
+        return b"glTF " + clip.encode()
+
+    monkeypatch.setattr(model, "export_clip", export_clip)
+    library = _library_with_build(monkeypatch, adapt)
+    target = tmp_path / "character-hina_original-_mxload-2026-01-01_assets_all_1.bundle"
+    failure = []
+
+    def build():
+        try:
+            library._stage_costume("other", [target], tmp_path / "build", print, None,
+                                   step=lambda: preview_gate.step(None))
+        except Exception as error:  # the stub refuses at its end
+            failure.append(error)
+
+    worker = threading.Thread(target=build)
+    worker.start()
+    try:
+        assert running.wait(5)
+        time.sleep(0.2)
+        started = time.monotonic()
+        with preview_gate.foreground():
+            assert game.model_glb("ch0242", clip="CH0242_Exs") == b"glTF CH0242_Exs"
+        took = time.monotonic() - started
+    finally:
+        worker.join(10)
+    assert took < 0.3 + 0.5, took  # its own work and at most one step of the build
+    assert during == [0] or during == [1]  # the step under way finishes, then the build waits
+    assert steps[-1] - started > 0.5  # the build went on afterwards
+    assert [getattr(error, "code", error) for error in failure] == ["source_unsupported"]

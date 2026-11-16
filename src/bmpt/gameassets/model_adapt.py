@@ -70,6 +70,7 @@ from . import model_geometry as mg
 from . import model_hems as hm
 from . import model_skirts as ms
 from .errors import AssetNotFound
+from .unity import load_bundle
 from .model import (BundleGraph, NPC_PREFAB, PREFAB_KINDS, _external_cab, _key, _prefabs, bind_tracks, decode_clip,
                     euler_orders, euler_to_quat, ex_only_renderers, model_root, read_mesh, shader_kind, UNITY_ORDER)
 
@@ -2925,23 +2926,25 @@ def choose_prefab(prefabs: Mapping[str, Any], dev: str) -> str:
 
 def adapt(*, index: Mapping[str, Path], resolver: Callable | None, target_files: list[Path], target_dev: str,
           source_files: list[Path], source_dev: str, open_writable: Callable[[Path], Any],
-          physics: bool = False, halo: bool = False) -> Result:
+          physics: bool = False, halo: bool = False, step: Callable[[], None] | None = None) -> Result:
     """The changed bundles of ``target_files`` (the slot, official copies) carrying the costume of ``source_dev``'s
     model, whose prefab sits in ``source_files``. ``index`` maps CABs to files to read (the slot's own CABs to
     ``target_files``); ``resolver`` finds any other CAB. ``open_writable`` opens a slot file as an engine Bundle.
     A costume past the stretch limit is built and applied all the same (``plan.unfit``).
     ``physics`` (Optimize Physics) lets the hem rule also offer Rule B, the skirt chains as new bones.
     ``halo`` gives the slot the source's halo, or none (:func:`_halo_change`).
-    The caller holds the model lock (``gameassets.service.model_lock``): the graph holds the path lock of every bundle
-    it reads until it closes, like an export's."""
-    with BundleGraph(index, resolver=resolver) as graph:
+    The graph reads every bundle from memory (``unity.load_bundle``: a path lock for each load alone), so a build
+    needs no model lock and exports run beside it. ``step`` is called between the build's steps (most under 0.5 s;
+    the plan, the hems and a cold first read of the idle poses up to a few seconds, measured on Hina wearing Aoba):
+    the caller's job yields there (``preview_gate.step``) or stops by raising."""
+    with BundleGraph(index, resolver=resolver, opener=load_bundle) as graph:
         return _adapt(graph, index, target_files, target_dev, source_files, source_dev, open_writable, physics,
-                      halo)
+                      halo, step or (lambda: None))
 
 
 def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Path], target_dev: str,
            source_files: list[Path], source_dev: str, open_writable: Callable[[Path], Any],
-           physics: bool = False, halo: bool = False) -> Result:
+           physics: bool = False, halo: bool = False, step: Callable[[], None] = lambda: None) -> Result:
     target_prefabs = _model_prefabs(graph, [f for f in target_files if f.name.startswith("character-")])
     source_prefabs = _model_prefabs(graph, source_files)
     t_name = choose_prefab(target_prefabs, target_dev)
@@ -2950,16 +2953,21 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
         s_root, s_name, _ = model_root(graph, source_files, source_dev)
     except AssetNotFound:
         raise refuse("no prefab", dev=source_dev) from None
+    step()
     t_skeleton = Skeleton.of(graph, target_prefabs[t_name].deref())
     s_skeleton = Skeleton.of(graph, s_root)
     if not s_skeleton.renderers:
         # an unskinned model (Kei's Decagrammaton body, a static mesh): nothing to bind to the slot's bones
         raise refuse("static model", dev=source_dev)
+    step()
     own = own_prefabs(target_prefabs, target_dev)
     t_clips = prefab_clips(graph, t_skeleton, own)
     s_clips = prefab_clips(graph, s_skeleton, own_prefabs(source_prefabs, source_dev))
+    step()
     t_idle = next(iter(t_skeleton.poses(pick(t_clips, IDLE_CLIPS)[:1], frames=1)), None)
+    step()
     s_idle = next(iter(s_skeleton.poses(pick(s_clips, IDLE_CLIPS)[:1], frames=1)), None)
+    step()
     t_parts, s_parts = roles(t_skeleton, t_idle), roles(s_skeleton, s_idle)
 
     def costume(parts: list[Part]) -> list[Part]:
@@ -2971,9 +2979,11 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
     t_costume, s_costume = costume(t_parts), costume(s_parts)
     target = Costume(t_skeleton, t_costume, [skin_of(p.mesh) for p in t_costume])
     source = Costume(s_skeleton, s_costume, [skin_of(p.mesh) for p in s_costume])
+    step()
     probes = probe_poses(t_skeleton, t_clips)
     mesh_trees = [_mesh_tree(p.mesh) for p in s_costume]
     layouts = [mg.geometry_of(tree) for tree in mesh_trees]
+    step()
     result = plan(target, source, probes, fit=all(layout is not None for layout in layouts),
                   own_probes=probe_poses(s_skeleton, s_clips), clips=t_clips)
     t_rest, s_rest = t_skeleton.world(), s_skeleton.world()
@@ -2982,6 +2992,7 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
     for k, (skin, (points, _)) in enumerate(zip(source.skins, shapes)):
         if layouts[k] is None and float(np.abs(points - skin.vertices).max(initial=0.0)) > 1e-4:
             raise refuse("costume geometry not writable", part=s_costume[k].mesh.peek_name())
+    step()
     stores = [hm.store_of(tree) for tree in mesh_trees]
     hem = hems(target, source, result, t_clips, s_clips, [store is not None for store in stores], physics,
                shapes_writable=all(layout is not None for layout in layouts))
@@ -2991,14 +3002,17 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
         vertices[rows] = moved
         result.fit = dataclasses.replace(result.fit, vertices=vertices)
         shapes = [result.fit.part(k, s_rest[part.node]) for k, part in enumerate(s_costume)]
+    step()
     rigidify(target, source, result, probes, hem, [store is not None for store in stores])
     # Rule B's skirt, then (Optimize Physics) the swinging chains: new bones of the slot's skeleton, with curves in
     # the slot's clips that move their anchor
     chained = ([hem.skirt] if hem.skirt is not None else []) + (
         springs(target, source, result, s_clips, result.fit) if physics and result.fit is not None else [])
+    step()
     face = face_retarget(target, source, result, result.fit) if result.fit is not None else None
     if face is not None:  # another character's face: its eye, brow and mouth bones follow the slot's expressions
         chained.append(face)
+    step()
     skirt_clips: list[Any] = []
     clip_skirts: dict[tuple[str, int], list[Skirt]] = {}
     for skirt in chained:
@@ -3019,6 +3033,7 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
     if chained:
         t_rest = t_skeleton.world()
 
+    step()
     # the slot files the new objects go to: the primary's mesh, materials and textures, and the prefab files
     primary = t_costume[0]
     mesh_cab = primary.mesh.assets_file.name.lower()
@@ -3063,6 +3078,7 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
         for name, sf in bundle.env.file.files.items():
             if hasattr(sf, "objects"):
                 files[name.lower()] = (bundle, sf)
+    step()
     writer = _Writer(files, f"{target_dev}|{source_dev}")
     mesh_sf, material_sf, texture_sf = writer.file(mesh_cab), writer.file(material_cab), writer.file(texture_cab)
 
@@ -3164,6 +3180,7 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
         for material in part.materials:
             if material is None or _key(material) in materials:
                 continue
+            step()
             carry_material(material)
 
     # meshes: the source parts' meshes with bindposes on the target skeleton
@@ -3171,6 +3188,7 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
     written: list[Written] = []
     rendered: list[Rendered] = []
     for k, (part, skin) in enumerate(zip(s_costume, source.skins)):
+        step()
         tree = mesh_trees[k]
         nodes = [result.mapping.get(b, 0) if b is not None else 0 for b in part.bones]
         points, linear = shapes[k]
@@ -3220,6 +3238,7 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
             len(tree["m_SubMeshes"]), source.skins[k].weights.sum(axis=1),
             [0 if m is None else 1 for m in part.materials], bool((tree.get("m_StreamData") or {}).get("size"))))
         new_meshes.append((writer.add(mesh_sf, "Mesh", tree), nodes))
+    step()
     # the source's halo: its mesh added as it is (a skinned one is drawn unskinned), or the slot's hidden
     halo_change = _halo_change(t_skeleton, s_skeleton, lambda mesh: writer.add(mesh_sf, "Mesh", _mesh_tree(mesh)),
                                carry_material, (s_name, t_name),
@@ -3240,6 +3259,7 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
         logger.info("Costume of %s on %s: the source has no mouth receiver on its costume, the slot's stays as it is",
                     s_name, t_name)
     for prefab_path in prefab_files:
+        step()
         bundle = opened[prefab_path]
         for name, sf in bundle.env.file.files.items():
             if hasattr(sf, "objects") and name.lower() in files:
@@ -3248,6 +3268,7 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
                               [s_skeleton.nodes[p.node].name for p in s_costume], root_node, t_skeleton, bounds,
                               halo_change, rendered, mouth)
     for clip in skirt_clips:
+        step()
         obj = writer.file(clip.assets_file.name.lower()).objects[clip.path_id]
         tree = obj.read_typetree()
         before = clip_snapshot(tree) if ms.dense_grid(tree) is not None else None
