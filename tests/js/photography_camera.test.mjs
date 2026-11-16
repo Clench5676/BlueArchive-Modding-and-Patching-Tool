@@ -59,7 +59,7 @@ test('composed occlusion control keeps the right edge, centred neighbours and sc
   const controller=await readFile(new URL('../../src/bmpt/web/js/photography/controller.js',import.meta.url),'utf8');
   const {CONTROL,XS_BUTTON,SPACE,FULLSCREEN_BUTTON}=await import('../../src/bmpt/web/js/ui-tokens.js');
   const {row}=await import('../../src/bmpt/web/js/ui-grid.js');
-  const S=1920/2960,code=controller.slice(controller.indexOf('function photographyToolbarLayout('),controller.indexOf('function galleryPair('));
+  const S=1920/2960,code=controller.slice(controller.indexOf('function photographyToolbarLayout('),controller.indexOf('function galleryReveal('));
   const boxes=new Function('CONTROL','XS_BUTTON','SPACE','FULLSCREEN_BUTTON','row','S',`${code};return photographyToolbarLayout();`)(CONTROL,XS_BUTTON,SPACE,FULLSCREEN_BUTTON,row,S);
   const near=(a,b)=>assert.ok(Math.abs(a-b)<1e-9,`${a} != ${b}`);
   near(boxes.top[0]+boxes.top[2],1890);near(boxes.grid[0]-boxes.occlusion[0]-boxes.occlusion[2],SPACE.m*S);

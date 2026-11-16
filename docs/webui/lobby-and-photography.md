@@ -88,7 +88,10 @@ The native fullscreen camera entry on the student detail opens the actual portra
 enlarges a thumbnail as its capture source. The centered 404:456 guide matches the student roster, optional thirds
 stay outside output, and the shutter writes a lossless native-pixel PNG directly to the library. The mode button is
 drawn only when the student has the other mode (`bridge.info()` tells `hasPortrait` and `hasLobby`). The camera's
-controls reuse the game's prefabs and are laid out with `ui-grid.js`.
+controls reuse the game's prefabs and are laid out with `ui-grid.js`. The gallery (the button at the bottom left) is
+the Switch pickers' list popup (`popup.js` `listPopup`, Switch 3D Model's square cards): the chosen photo with Apply,
+Export and Delete in the details at the left, the photos scrolling at the right, Restore Default, Cancel and Save in
+the footer.
 
 `photographs/` belongs to the movable/shared Mod library, not Preview Cache. Its atomic manifest keeps per-student
 captures and App choices, IDs and SHA-256 digests; image publication rolls back if metadata cannot commit. Chosen

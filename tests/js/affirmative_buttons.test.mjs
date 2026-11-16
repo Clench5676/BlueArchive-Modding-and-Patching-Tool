@@ -32,8 +32,8 @@ test('the source picker, gallery and Settings use explicit treatment in all loca
   assert.match(popup,/buttons: buttons.map/);
   assert.ok(!popup.includes('[T("popup.apply"),T("act.update")'));
   const controller=await readFile(new URL('../../src/bmpt/web/js/photography/controller.js',import.meta.url),'utf8');
-  assert.match(controller,/'Export',P\('export'\).*enabled:!!selectedPhoto/s);
-  assert.match(controller,/'SaveSelection'.*semantic:"save"/s);
+  assert.match(controller,/\[P\('export'\),safe\(exportPhoto\),false,'export'\]/);
+  assert.match(controller,/label:P\('saveSelection'\),fn:safe\(saveSelection\),primary:true,semantic:'save'/);
   for(const locale of ['en-US','zh-CN','zh-TW','ja-JP','ko-KR','th-TH']){
     const data=JSON.parse(await readFile(new URL(`../../src/bmpt/locales/${locale}.json`,import.meta.url),'utf8'));
     assert.ok(data.webui.export.applied.includes('Mod'));

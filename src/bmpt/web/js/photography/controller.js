@@ -12,6 +12,7 @@ import {cameraFeedback} from './feedback.js';
 import {FRAME,choiceLayout,otherMode,actionCaption} from './camera.js';
 import {CONTROL,XS_BUTTON,SPACE,FULLSCREEN_BUTTON} from '../ui-tokens.js';
 import {row} from '../ui-grid.js';
+import {switchGrid} from '../switch-layout.js';
 import {alignIcon,buttonCenter} from '../student-hall-icons.js';
 import {anchoredCentre} from '../visual-view.js';
 import {wheelKind,wheelStep} from '../lobby-touch.js';
@@ -23,8 +24,11 @@ export const visualButton = (...args) => whiteButton(...args);
 // the gallery button's box at the bottom left (the lobby camera's album takes the same)
 export const galleryBox = () => photographyToolbarLayout().gallery;
 let sessionVariant=null,generation=0,repository,bridge,overlay,active=false,mode='portrait',grid=true,expanded=false,paused=false,selected=null,modal=null;
-// the gallery list's scroll offset, kept across its redraws (UI.virtualArea positions)
-const GALLERY_SCROLL='photo-gallery',galleryScroll=new Map();
+// The gallery is the Switch pickers' list popup (popup.js listPopup) in their host: the chosen photo, its name and its
+// actions at the left, the photos' cards scrolling at the right, Restore Default, Cancel and Save in the footer. Its
+// cards and picture are Switch 3D Model's squares (layoutKind "model"), the shape of the Collection portrait.
+const GALLERY_HOST='popup',GALLERY_KIND='model';
+const galleryHost=()=>document.getElementById(GALLERY_HOST);
 let controlsRevision=0,saving=false,leaving=false,defaultThumbnail=null,generatedThumbnail=null,occlusion=false,feedback=null;
 const CHOICE_ICONS={portrait:{icon:'Common_Icon_Emoji',atlas:'Common'},lobby:{icon:'School_Icon_Chat',atlas:'Common'}};
 const P=key=>T(`photo.${key}`);
@@ -65,18 +69,13 @@ function photographyToolbarLayout(){
     playback:asBox(bottom.boxes[0]),choices:asBox(bottom.boxes[1]),gallery:asBox(gallery),
     caption:{size:CONTROL.buttonXS.fs,min:XS_BUTTON.fsMin,width:196/S-2*CONTROL.buttonXS.pad,height:FULLSCREEN_BUTTON.h-XS_BUTTON.boxInsetH}};
 }
-function galleryPair(width,x,y){
-  return row([{w:Math.max(width,CONTROL.buttonXS.minW*S),h:CONTROL.buttonXS.h*S},{w:Math.max(width,CONTROL.buttonXS.minW*S),h:CONTROL.buttonXS.h*S}],
-    {x,y,gap:SPACE.m*S}).boxes.map(b=>[b.x,b.y,b.w,b.h]);
+// the scroll offset (stage pixels) that shows the row of photo index: none while the row is in the first view, else the
+// row at the list's top (the browser holds the offset to the list's end)
+function galleryReveal(index){
+  const LP=Popup.listLayout(false,GALLERY_KIND),cards=Popup.listCardBox(LP,{band:Popup.LIST_BAND.slim});
+  const {columns,pitch}=switchGrid(GALLERY_KIND,Popup.listCardBox(LP).w),top=Math.floor(Math.max(0,index)/columns)*pitch[1];
+  return top+pitch[1]<=cards.h?0:top*S;
 }
-// The gallery's list scrolls in one box: the cards at today's columns and first row (a margin for the selected frame),
-// down to SPACE.l above the tool row; the scrollbar track (49 in from the box's right edge) right of the cards.
-function galleryListLayout(){
-  const margin=SPACE.s*S,top=343-80-margin,left=365,right=465+2*215+92+margin+49*S,bottom=835-SPACE.l*S;
-  return {box:[left,top,right-left,bottom-top],pitch:236,columns:3,column:215,card:[465-left,343-top]};
-}
-// the scroll offset nearest to offset that shows the row of photo index
-function galleryReveal(index,offset=0){const {box,pitch,columns}=galleryListLayout(),top=Math.floor(Math.max(0,index)/columns)*pitch;return Math.max(top+pitch-box[3],Math.min(top,offset));}
 // The captions of the two text buttons, one size for both states of the grid button too, so nothing changes size on a click.
 const toolbarCaptions=()=>{
   const {caption}=photographyToolbarLayout();
@@ -329,50 +328,50 @@ async function capture(){
     overlay?.querySelector('.photo-shutter-ring')?.animate([{scale:'.9'},{scale:'1'}],{duration:140});
   }finally{if(scope===generation)saving=false;}
 }
-async function image(host,url,box,className='photo-large-image'){
-  const img=document.createElement('img');img.className=className;img.alt=P('photoLabel');
-  img.draggable=false;
-  Object.assign(img.style,{position:'absolute',left:box[0]+'px',top:box[1]+'px',width:box[2]+'px',height:box[3]+'px',zIndex:'70',pointerEvents:'none',objectFit:'contain'});img.src=url;host.append(img);await img.decode();return img;
-}
 async function openGallery(keepSelection=false){
   if(saving)return;bridge.pause(true);await repositoryRead();
   if(!keepSelection)selected=repository.app||repository.photos.find(entry=>entry.variant===sessionVariant&&entry.builtin)?.id||DEFAULT;
-  galleryScroll.set(GALLERY_SCROLL,[0,galleryReveal(galleryPhotos().findIndex(item=>item.id===selected))]);
-  const close=()=>{modal?.close();modal=null;bridge.pause(paused);};
-  modal=UI.createModal(P('gallery'),close);
-  await galleryDraw();
+  const host=galleryHost(),handle={close:()=>{
+    if(modal!==handle)return;modal=null;
+    host.hidden=true;host.innerHTML='';Popup.closed(host);bridge.pause(paused);
+  }};
+  modal?.close();modal=handle;
+  await galleryDraw(galleryReveal(galleryPhotos().findIndex(item=>item.id===selected)));
 }
-async function galleryDraw(){
-  await Popup.selectionReady();
-  const allPhotos=galleryPhotos();
-  const selectedPhoto=photo(selected);
-  await modal.draw(async(layer,alive,signal)=>{
-    if(!allPhotos.length)await UI.caption(layer,P('empty'),[365,440,680]);
-    else{
-      // one virtual row per grid row, the cards in cell coordinates
-      const {box,pitch,columns,column,card}=galleryListLayout();
-      const list=UI.virtualArea(layer,box,Math.ceil(allPhotos.length/columns),pitch,(cell,index)=>Promise.all(allPhotos.slice(index*columns,index*columns+columns).map(async(entry,col)=>{
-        const x=card[0]+col*column,y=card[1],scale=.59;
-        const item={key:entry.id,label:entry.name,thumb:entry.url,applied:!!(entry.applied||entry.id===OFFICIAL&&repository.game?.id===OFFICIAL)};
-        const tree=Popup.listCard(item,0,0,entry.id===selected,{w:250,h:250,bar:46});
-        await NGUI.render(tree,cell,{scale,origin:[x,y]});
-        hitButton(cell,[x-92,y-80,184,210],safe(async()=>{selected=entry.id;await galleryDraw();}),[entry.name,item.applied&&P('applied')].filter(Boolean).join(' - '),90);
-      })),{key:GALLERY_SCROLL,signal,positions:galleryScroll,onError:error=>console.error('Photography gallery card failed',error)});
-      await list.ready;
-      if(!alive())return;
-    }
-    if(selectedPhoto){
-      await image(layer,selectedPhoto.url,[1190,270,320,320]);
-      await UI.caption(layer,selectedPhoto.name,[1190,625,320],{align:2});
-      const pairBoxes=galleryPair(140,1200,670),pair=UI.buttonSize([P('apply'),P('delete')],pairBoxes[0][2],pairBoxes[0][3]);
-      await UI.button(layer,'Apply',P('apply'),pairBoxes[0],safe(applyGame),{semantic:"apply",size:pair,enabled:repository.applicable&&(!repository.game?.known||selected!==repository.game?.id||!!repository.game?.error||repository.game?.pending)});
-      if(selectedPhoto.managed!==false&&selectedPhoto.provenance!=='official')await UI.button(layer,'Delete',P('delete'),pairBoxes[1],safe(deletePhoto),{size:pair});
-    }
-    const toolBoxes=galleryPair(180,365,835),tools=UI.buttonSize([P('restore'),P('export')],toolBoxes[0][2],toolBoxes[0][3]);
-    await UI.button(layer,'Restore',P('restore'),toolBoxes[0],safe(restoreGame),{enabled:repository.app!==repository.game?.id||!photo(repository.game?.id)?.builtin,size:tools});
-    await UI.button(layer,'Export',P('export'),toolBoxes[1],safe(async()=>{await Loading.task(async()=>call('export',{id:selected,png:selected===DEFAULT?await generatedPNG():null}));}),{enabled:!!selectedPhoto,size:tools});
-    await UI.button(layer,'SaveSelection',P('saveSelection'),[1280,835,140,64],safe(async()=>{repository=normalized({...repository,...await call('select',{id:selectedKey(selected)})});bridge.thumbnailChanged();modal.close();modal=null;bridge.pause(paused);}),{semantic:"save",enabled:!!selected});
-  },[],{width:2000,height:1200});
+// the list's offset now, kept by a redraw (an Apply, a Delete, another card chosen)
+const galleryOffset=()=>galleryHost()?.querySelector('.popup-cards')?.scrollTop||0;
+async function galleryDraw(keepScroll=galleryOffset()){
+  if(!modal)return;
+  const handle=modal,photos=galleryPhotos();
+  if(!photo(selected))selected=photos[0]?.id??null;
+  const items=photos.map(entry=>{
+    const applied=!!(entry.applied||entry.id===OFFICIAL&&repository.game?.id===OFFICIAL);
+    return {key:entry.id,label:entry.name,full:entry.name,thumb:entry.url,big:entry.url,applied,chips:applied?[P('applied')]:[]};
+  });
+  const restorable=repository.app!==repository.game?.id||!photo(repository.game?.id)?.builtin;
+  const applicable=repository.applicable&&(!repository.game?.known||selected!==repository.game?.id||!!repository.game?.error||repository.game?.pending);
+  await Popup.listPopup({hostId:GALLERY_HOST,layoutKind:GALLERY_KIND,title:P('gallery'),items,selected,keepScroll,slimBand:true,empty:P('empty'),
+    buttons:[{label:P('restore'),fn:safe(restoreGame),action:'restore',...(restorable?{}:{greyed:true,blocked:true})},
+      {label:P('cancel'),fn:()=>handle.close(),tone:'bright',action:'cancel'},
+      {label:P('saveSelection'),fn:safe(saveSelection),primary:true,semantic:'save',action:'ok'}],
+    onSelect:(key,scroll)=>{if(modal!==handle)return;selected=key;void safe(galleryDraw)(scroll);},
+    onClose:()=>handle.close(),
+    details:it=>{
+      const entry=photo(it.key),deletable=entry?.managed!==false&&entry?.provenance!=='official';
+      return {title:P('photoLabel'),fields:[],actions:[
+        [P('apply'),safe(applyGame),!applicable,'apply'],
+        [P('export'),safe(exportPhoto),false,'export'],
+        ...(deletable?[[P('delete'),safe(deletePhoto)]]:[])]};
+    }});
+}
+async function exportPhoto(){
+  if(!photo(selected))return;
+  await Loading.task(async()=>call('export',{id:selected,png:selected===DEFAULT?await generatedPNG():null}));
+}
+async function saveSelection(){
+  if(!selected)return;
+  repository=normalized({...repository,...await call('select',{id:selectedKey(selected)})});
+  bridge.thumbnailChanged();modal?.close();
 }
 async function deletePhoto(){
   const key=selected,info=await call('removalInfo',{id:key});
@@ -396,7 +395,7 @@ async function restoreGame(){
   const scope=generation;
   try{await Loading.task(async()=>{await waitJob(await call('restore',{png:await generatedPNG()}));if(scope!==generation)throw new DOMException('Photography ended','AbortError');await repositoryRead();});}
   catch(error){if(scope===generation&&await untestedRetry(error,restoreGame))return;throw error;}
-  bridge.thumbnailChanged();selected=repository.app||DEFAULT;galleryScroll.set(GALLERY_SCROLL,[0,0]);await galleryDraw();
+  bridge.thumbnailChanged();selected=repository.app||DEFAULT;await galleryDraw(0);
 }
 async function applyGame(){
   if(!photo(selected)||!repository.applicable)return;
