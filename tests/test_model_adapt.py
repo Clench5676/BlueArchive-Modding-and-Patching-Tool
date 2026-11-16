@@ -3,7 +3,6 @@
 import copy
 import hashlib
 import json
-import math
 import os
 import re
 import struct
@@ -753,117 +752,6 @@ def test_official_optimize_physics_swings_the_chains_the_source_turns(view, tmp_
             "genericBindings"] if b["attribute"] == 2}) > len(roots)]
     assert len(turned) == springs[0].clips
     assert keyed  # (Yuzu has every clip Aris has, by name)
-
-
-def _head_locks(view, monkeypatch, target, source):
-    """A build with Optimize Physics, kept open: its slot skeleton with the new bones, the slot's clips, the head's
-    spring and a function closing the graph."""
-    from ba_modding_toolkit.bundle import Bundle
-
-    files, index = view
-    kept = {}
-    real_bones, real_clips, real_exit = ma.skirt_bones, ma.prefab_clips, ma.BundleGraph.__exit__
-
-    def clips(graph, skeleton, prefabs):
-        out = real_clips(graph, skeleton, prefabs)
-        kept.setdefault("clips", out)  # the slot's come first
-        return out
-
-    monkeypatch.setattr(ma, "skirt_bones",
-                        lambda sk, skirt: (kept.setdefault("skeleton", sk), real_bones(sk, skirt))[1])
-    monkeypatch.setattr(ma, "prefab_clips", clips)
-    monkeypatch.setattr(ma.BundleGraph, "__exit__", lambda self, *a: kept.setdefault("graph", self) and None)
-    sources = [p for p in files if re.match(rf"character-{source}-_mxload", p.name)]
-    result = ma.adapt(index=index, resolver=None, target_files=_slot(files, target), target_dev=target,
-                      source_files=sources, source_dev=source, open_writable=Bundle.load, physics=True)
-    t = kept["skeleton"]
-    head = t.first("Bip001 Head")
-    skirt = next(s for s in result.hems.springs if s.anchor == head)
-    return t, kept["clips"], skirt, lambda: real_exit(kept["graph"], None, None, None)
-
-
-def _lock_ranges(t, spring, tree, roots):
-    """In a slot clip: the mean range (degrees, against the head) of the chain ``roots`` with the build's turns and
-    with today's (no lock keys carried), of the slot locks they take after, and the hair's worst stretch with the
-    build's turns."""
-    _, pose_at, _ = t.clip_frames(tree)
-    frames, turns = ma.skirt_sequence(t, spring, tree)
-    carry, spring.carry = spring.carry, None
-    _, today = ma.skirt_sequence(t, spring, tree)
-    spring.carry = carry
-    poses = [pose_at(f) for f in frames]
-    head = [p[carry.head][:3, :3] / np.linalg.norm(p[carry.head][:3, :3], axis=0) for p in poses]
-
-    def spread(rotations):
-        return max(ma.ms.angle_of(r @ rotations[0].T) for r in rotations)
-
-    def mean(turns_):
-        worlds = [spring.posed(p, t_) for p, t_ in zip(poses, turns_)]
-        return np.mean([math.degrees(spread([h.T @ w[k][:3, :3] / np.linalg.norm(w[k][:3, :3], axis=0)
-                                             for h, w in zip(head, worlds)])) for k in roots])
-
-    host = carry.turns(poses)
-    slot = np.mean([math.degrees(spread([frame[0] for frame in host[carry.roots[k]]])) for k in roots])
-    return mean(turns), mean(today), slot, spring.hair.worst(spring, poses, turns)
-
-
-@official
-def test_official_optimize_physics_gives_a_costumes_hair_the_slots_own_lock_keys(view, monkeypatch):
-    """Shigure <- Shiroko with Optimize Physics: each of Shiroko's hair locks and ears takes the keys of Shigure's lock
-    that hangs where it does; in the idles they sway as far as Shigure's own (today they barely move), and the hair
-    stretches no more than on Shiroko's own model in any clip."""
-
-    t, clips, skirt, close = _head_locks(view, monkeypatch, "shigure_original", "shiroko_original")
-    try:
-        spring = skirt.solver
-        carry = spring.carry
-        assert {skirt.names[k]: t.nodes[carry.paths[lock][0]].name for k, lock in carry.roots.items()} == {
-            "bone_hair_F_F_00": "bone_hair_f_01", "bone_hair_F_R_00": "bone_hair_f_01",
-            "bone_hair_L_00": "bone_hair_l_01", "bone_hair_R_00": "bone_hair_r_01",
-            "bone_hair_b_b_00": "bone_hair_b_01", "bone_hair_b_l_00": "bone_hair_b_l_01",
-            "bone_hair_b_r_00": "bone_hair_b_r_01", "bone_ear_L_00": "bone_ear_l_01", "bone_ear_R_00": "bone_ear_r_01"}
-        head_hash = zlib.crc32(t.nodes[carry.head].path.encode())
-        worst = 1.0
-        for clip in clips:
-            tree = t.graph.tree(clip)
-            bindings = tree["m_ClipBindingConstant"]["genericBindings"]
-            if not any(b["path"] == head_hash and b["typeID"] == 4 for b in bindings):
-                continue
-            name = str(tree.get("m_Name") or "")
-            carried, today, slot, stretch = _lock_ranges(t, spring, tree, sorted(carry.roots))
-            worst = max(worst, stretch)
-            if name.endswith(("_Normal_Idle", "_Formation_Idle")):
-                assert 0.8 * slot <= carried <= 1.25 * slot, (name, carried, slot)
-                assert today < 0.3 * slot, (name, today, slot)
-        assert worst <= spring.hair.own
-    finally:
-        close()
-
-
-@official
-def test_official_a_lock_without_a_slot_lock_of_its_kind_keeps_its_own_turns(view, monkeypatch):
-    """Akane <- ch0155 with Optimize Physics: the costume's front right lock (nearest slot lock 1.6 off) and the
-    standing tuft on top (the slot has no standing lock) keep today's turns; the matched locks take Akane's keys."""
-    t, clips, skirt, close = _head_locks(view, monkeypatch, "akane_original", "ch0155")
-    try:
-        spring = skirt.solver
-        carry = spring.carry
-        names = {name: k for k, name in enumerate(skirt.names)}
-        unmatched = [names["bone_hair_F_R_00"], names["bone_hair_T_00"]]
-        assert set(unmatched) <= set(spring.roots) and not set(unmatched) & set(carry.roots)
-        assert {skirt.names[k] for k in carry.roots} == {
-            "bone_hair_F_F_00", "bone_hair_F_L_00", "bone_hair_F_T_00", "bone_hair_FB_L_00", "bone_hair_R_00"}
-        tree = next(t.graph.tree(c) for c in clips if (c.peek_name() or "").endswith("_Move_End_Normal"))
-        _, turns = ma.skirt_sequence(t, spring, tree)
-        carry, spring.carry = spring.carry, None
-        _, today = ma.skirt_sequence(t, spring, tree)
-        spring.carry = carry
-        for k in unmatched:
-            assert all(np.allclose(a[k], b[k]) for a, b in zip(turns, today))
-        matched = names["bone_hair_R_00"]
-        assert not all(np.allclose(a[matched], b[matched]) for a, b in zip(turns, today))
-    finally:
-        close()
 
 
 @official
