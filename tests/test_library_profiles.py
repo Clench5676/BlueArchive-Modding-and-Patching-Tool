@@ -259,7 +259,10 @@ def test_adoption_toggle_and_drift_progress_name_the_action(world, monkeypatch, 
     report = lambda *args: progress.append(args)
     result = world.library.adopt(listed, progress=report)
     assert result.added and not result.failed
-    assert progress == [(1, 1, translate("webui.progress.add", name="test_spr"))]
+    lines = [p for (p,) in progress]
+    assert [(p["current"], p["total"], p["action"], p["variant"], p["kind"], p["core"], p["step"], p["fraction"])
+            for p in lines] == [(1, 1, "add", "test", "spr", "test_spr", "import.step.add", 0.0),
+                                (1, 1, "add", "test", "spr", "test_spr", "import.step.add", 1.0)]
     # each entry of a toggle or Apply Mod Configuration as it starts (mod_progress): who it is, then its write
     def lines():
         assert all(len(args) == 1 and isinstance(args[0], dict) for args in progress)

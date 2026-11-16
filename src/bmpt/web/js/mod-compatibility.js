@@ -5,7 +5,7 @@ import * as Loading from "./loading.js";
 import * as Popup from "./popup.js";
 import * as Compare from "./mod-compare.js";
 import { ensureSpine } from "./spine-runtime.js";
-import { jobProgress } from "./job-progress.js";
+import { isIdentity, jobProgress, modJob } from "./job-progress.js";
 import * as RigGeometry from "./rig-geometry.js";
 
 const key = (name) => name.replaceAll("\\", "/").split("/").at(-1).toLowerCase().replace(/\.png$/i, "");
@@ -22,8 +22,14 @@ const reason = (entry) => {
 // (the converter's).
 export const refusedNames = (refused) => Object.entries(refused || {}).map(([name, reasons]) =>
   T("compatibility.refusedAnimation", { name, why: joined([].concat(reasons || []).map(reason)) }));
-function progressTask(action, name, run) {
-  const text = (p = {}) => jobProgress({ action: `progress.action${action}`, name: name || T("progress.mods"),
+// subject: who the mod is ({variant, kind, core, name}: the line of a job over mods, job-progress.js modJob), or a
+// name (the converter's)
+function progressTask(action, subject, run) {
+  if (isIdentity(subject)) {
+    const line = modJob(subject, { nameOf: Loading.variantName, action: `progress.action${action}` });
+    return Loading.task((update) => { update(line()); return run((p) => update(line(p))); }, { label: line().text });
+  }
+  const text = (p = {}) => jobProgress({ action: `progress.action${action}`, name: subject || T("progress.mods"),
     current: p.current || 1, total: p.total || 1, step: p.step || "" });
   return Loading.task((update) => run((p) => update({ label: text(p) })), { label: text() });
 }

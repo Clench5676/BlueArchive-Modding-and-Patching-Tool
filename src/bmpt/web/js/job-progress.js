@@ -48,9 +48,10 @@ export function jobProgress({ action, name, current = 1, total = 1, step = "", f
 // "Processing Mods (3/13): Hoshino (Swimsuit) - Chibi - My Swim Edit - 42% - Saving Bundle": the job's verb and the
 // item at hand of all, who it is, its kind, the mod's own name (or the variant whose costume it takes), how far it is
 // and its step. A one-item job leaves the count out.
-const KIND_KEYS = { spr: "tab.portrait", lobby: "tab.lobby", model: "tab.model", other: "import.other" };
+const KIND_KEYS = { spr: "tab.portrait", lobby: "tab.lobby", model: "tab.model", other: "import.other",
+  photo: "photo.modName" };
 const MOD_ACTIONS = { process: "progress.modsProcess", apply: "progress.modsApply", restore: "progress.modsRestore",
-  check: "progress.modsCheck" };
+  check: "progress.modsCheck", add: "progress.modsAdd", export: "progress.modsExport" };
 export const SHRINK_NAME = 1, SHRINK_WHO = 2;
 const plainName = (entry) => entry?.variant || entry?.core || "";
 
@@ -65,7 +66,7 @@ export function modLine(p = {}, { nameOf = plainName, action = "" } = {}) {
   const sep = T("progress.sep");
   const who = (p.kind === "other" ? p.core : nameOf({ variant: p.variant, core: p.core })) || p.core || p.variant || "";
   const parts = [[head, 0], [who, SHRINK_WHO], [sep + T(KIND_KEYS[p.kind] || KIND_KEYS.other), 0]];
-  const own = p.name && p.name !== who ? p.name
+  const own = p.name && p.name !== who && p.name !== p.core ? p.name
     : p.source ? T("progress.from", { name: nameOf({ variant: p.source }) || p.source }) : "";
   if (own) parts.push([sep, 0], [own, SHRINK_NAME]);
   const percent = percentText(p.fraction);
@@ -74,6 +75,20 @@ export function modLine(p = {}, { nameOf = plainName, action = "" } = {}) {
   if (step && step !== p.step) parts.push([sep + step, 0]);
   return { text: parts.map(([text]) => text).join(""), parts };
 }
+
+// A one-mod job's line (a student page's, Settings' or a repair's action): who it is stays as given (identity:
+// {variant, kind, core, name, source}), the step and share come from the job's progress as they arrive; a report of
+// files written (no step, their own count) keeps the step and share shown. action: the verb's string key.
+export function modJob(identity, { nameOf = plainName, action = "progress.actionProcess" } = {}) {
+  const steady = steadyFraction();
+  let step = "";
+  return (p = {}) => {
+    if (typeof p?.step === "string") step = p.step;
+    return modLine({ ...identity, variant: identity?.variant || identity?.kind || "", current: 1, total: 1, step,
+      fraction: steady({ ...p, current: 1, total: 1 }) }, { nameOf, action });
+  };
+}
+export const isIdentity = (subject) => !!subject && typeof subject === "object" && !Array.isArray(subject);
 
 // The line in at most max wide (width(text) measures it): the mod's own name shortened first, then who it is, each
 // to the longest start that fits followed by an ellipsis; the verb, count, kind, percentage and step always stay. A

@@ -1,7 +1,7 @@
 """The progress line of a job over mods, the line the web UI shows in the bottom-left corner while it runs.
 
 A report is the job's progress dict: ``current`` (the item at hand, counted from 1) of ``total``, ``action`` (the job's
-verb: process, apply, restore, check), who the item is (``variant``, ``kind``, ``core`` for a file no variant
+verb: process, apply, restore, check, add, export), who the item is (``variant``, ``kind``, ``core`` for a file no variant
 owns; ``name``: the mod's own name, or ``source``: the variant whose costume or files it takes), its ``step`` (a web UI string key) and ``fraction`` (how far
 the item is, 0..1, only growing within the item). The web UI words it (job-progress.js ``modLine``).
 
@@ -16,6 +16,8 @@ from typing import Any, Callable
 ProgressCallback = Callable[..., None]
 
 STEP_CHECK = "import.step.check"
+STEP_ADD = "import.step.add"
+STEP_EXPORT = "import.step.export"
 STEP_SAVE = "import.step.save"
 STEP_WRITE = "import.step.write"
 STEP_RESTORE = "import.step.restore"

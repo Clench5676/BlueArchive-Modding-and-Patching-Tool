@@ -478,7 +478,11 @@
 			"modCount": "{action} ({current}/{total}): ",
 			"modHead": "{action}: ",
 			"sep": " - ",
-			"from": "จาก: {name}"
+			"from": "จาก: {name}",
+			"modsAdd": "กำลังเพิ่ม Mod",
+			"modsExport": "กำลังส่งออก Mod",
+			"actionExport": "กำลังส่งออก",
+			"actionSave": "กำลังบันทึก"
 		},
 		"job": {
 			"running": "กำลังประมวลผล",

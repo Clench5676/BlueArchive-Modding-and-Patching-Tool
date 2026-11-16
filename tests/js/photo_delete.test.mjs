@@ -23,7 +23,7 @@ function setup({used=false,used_here=used,used_elsewhere=false,official=false,an
   const T=key=>key.split('.').reduce((v,key)=>v[key],strings),P=key=>T('photo.'+key);
   const env={T,P,call:async(method,params)=>{requests.push([method,params]);return method==='removalInfo'?{used,used_here,used_elsewhere,official}:{photos:[]};},
     Popup:{message:async options=>{prompts.push(options);return {button:answer};}},
-    Loading:{task:fn=>fn()},waitJob:async result=>{if(fail)throw new Error('Storage failed');return result;},
+    Loading:{task:fn=>fn()},photoTask:(_action,work)=>work(()=>{}),waitJob:async result=>{if(fail)throw new Error('Storage failed');return result;},
     bridge:{thumbnailChanged:()=>changed++},galleryDraw:async()=>{},normalized:v=>v};
   const api=new Function('env',`const {${Object.keys(env)}}=env;let selected='capture',generation=1,repository={photos:[{id:'capture'}]};const DEFAULT='generated';${code};return {deletePhoto,selected:()=>selected,repository:()=>repository};`)(env);
   return {...api,requests,prompts,changed:()=>changed};

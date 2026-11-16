@@ -37,7 +37,7 @@ async function submit(method, title) {
     result = await Loading.hold(async (update) => {
       const id = await rpc(method, {}, { timeout: 30000 });
       update(title);
-      return waitJob(id, (p) => update(Loading.progressText(p, title)));
+      return waitJob(id, (p) => update(Loading.progressLine(p, title)));
     }, { all: true });
   } catch (err) {
     // the untested build's confirmation, then the same call again; else the error's string

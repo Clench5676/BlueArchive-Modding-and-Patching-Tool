@@ -13,7 +13,8 @@ function harness({ locale = "en-US", answer = "ok", used = true, error = null, r
   const T = (key, values = {}) => key.split(".").reduce((v, k) => v[k], strings).replace(/\{(\w+)\}/g, (_, k) => values[k]);
   const calls = [], messages = [], refused = [];
   let changed = 0;
-  const deps = { T, overwrittenLines, Loading: { task: (fn) => fn(() => {}) },
+  const deps = { T, overwrittenLines, Loading: { task: (fn) => fn(() => {}), variantName: (e) => e?.variant || "" },
+    modJob: () => () => ({ text: "" }),
     ModSwitch: { refresh: async () => {}, refused: (...args) => refused.push(args),
       listSep: () => (/^(zh|ja)/i.test(locale) ? "、" : ", ") }, // the rule mod-switch.js tests pin
     Popup: { message: async (opts) => { messages.push(opts); return { button: answer }; } },

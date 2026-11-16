@@ -478,7 +478,11 @@
 			"modCount": "{action}（{current}/{total}）：",
 			"modHead": "{action}：",
 			"sep": " - ",
-			"from": "元：{name}"
+			"from": "元：{name}",
+			"modsAdd": "MOD追加",
+			"modsExport": "MODエクスポート",
+			"actionExport": "エクスポート",
+			"actionSave": "保存"
 		},
 		"job": {
 			"running": "処理中",

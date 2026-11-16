@@ -24,10 +24,10 @@ def services(env):
     return SimpleNamespace(settings=env.settings, library=env.library, state=SimpleNamespace(get=lambda *_: {}))
 
 
-def run(env, scope="library", target=None):
+def run(env, scope="library", target=None, progress=lambda *_: None):
     return export_service.export_zip(services(env), env.library, env.library.current_pin(), scope=scope,
         target=target, folder=env.tmp / "exports", server="global", platform="windows", kind=None,
-        log=lambda *_: None, progress=lambda *_: None)
+        log=lambda *_: None, progress=progress)
 
 
 def contents(result):
@@ -53,6 +53,18 @@ def test_library_export_prepares_existing_mods_without_mutating_library_or_game(
     assert (env.root / "state.json").read_bytes() == state
     assert env.original.read_bytes() == game
     assert sorted(path.suffix for path in (env.tmp / "exports").iterdir()) == [".zip"]
+
+
+def test_an_export_names_each_mod_and_its_step_on_the_progress_line(setup_library):
+    env = setup_library
+    mod, = env.library.add([make_mod(env.original, env.tmp / "upload", fixed=True)])
+    reported = []
+    run(env, progress=lambda *args: reported.append(args))
+    lines = [p for (p,) in reported]
+    assert lines and all(p["current"] == 1 and p["total"] == 1 and p["action"] == "export" and p["variant"] == mod.target
+                         and p["kind"] == mod.kind and p["core"] == mod.core for p in lines)
+    assert lines[0]["step"] == "import.step.export" and lines[-1]["fraction"] == 1.0
+    assert [p["fraction"] for p in lines] == sorted(p["fraction"] for p in lines)
 
 
 def test_applied_uses_desired_manifest_while_disabled(setup_library):

@@ -478,7 +478,11 @@
 			"modCount": "{action} ({current}/{total}): ",
 			"modHead": "{action}: ",
 			"sep": " - ",
-			"from": "From: {name}"
+			"from": "From: {name}",
+			"modsAdd": "Adding Mods",
+			"modsExport": "Exporting Mods",
+			"actionExport": "Exporting",
+			"actionSave": "Saving"
 		},
 		"job": {
 			"running": "Working",

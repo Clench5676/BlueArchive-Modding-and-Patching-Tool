@@ -1,7 +1,7 @@
 import * as Photo from "./photography/controller.js";
 import * as Camera from "./lobby-camera.js";
 import { notify } from "./popup.js";
-import { modLine, progressName, steadyFraction } from "./job-progress.js";
+import { modJob, progressName } from "./job-progress.js";
 // Detail screen, built from the game's own prefab (UICharacterDetail) by ngui.js. The prefab supplies every frame,
 // sprite, tint, incline and position; this file swaps labels and textures, hides what the tool has no use for, and adds
 // what the game has no screen for: variant chips, the expression strip and the portrait and lobby switchers. A family
@@ -996,22 +996,14 @@ async function job(method, params, options = {}) {
   const targetKey = params.variant || (params.target?.startsWith("variant:") ? params.target.slice(8) : mod?.target);
   const target = fam?.variants?.find((v) => v.key === targetKey) || variant();
   const kind = params.kind || mod?.kind || switchKind() || "spr";
-  // the progress line (job-progress.js modLine): the student, the kind, the mod's own name or the variant whose
+  // the progress line (job-progress.js modJob): the student, the kind, the mod's own name or the variant whose
   // files it takes, how far a build is (a 3D model's costume) and the step; one item, so no count
   const who = progressName(target, "", name, fam);
   const sourceKey = typeof params.source === "string" && params.source.startsWith("variant:") ? params.source.slice(8) : "";
   const sourceVariant = sourceKey ? fam?.variants?.find((v) => v.key === sourceKey) : null;
-  const own = mod ? modLabel(mod) : "";
   const nameOf = (entry) => entry?.variant === sourceKey && sourceKey ? progressName(sourceVariant, "", sourceKey, fam) : who;
-  // a report of the files written (no step, their own count) keeps the step and percentage shown
-  const steady = steadyFraction();
-  let step = "";
-  const progress = (p = {}) => {
-    if (typeof p.step === "string") step = p.step;
-    return modLine({ current: 1, total: 1, variant: target?.key || targetKey || kind, kind, name: own, source: sourceKey,
-      step, fraction: steady({ ...p, current: 1, total: 1 }) },
+  const progress = modJob({ variant: target?.key || targetKey || kind, kind, name: mod ? modLabel(mod) : "", source: sourceKey },
     { nameOf, action: `progress.action${action[0].toUpperCase()}${action.slice(1)}` });
-  };
   const running = progress();
   try {
     return await Loading.hold(async (update) => {
@@ -1058,10 +1050,10 @@ function shownMod() {
   const sk = switchKind(), c = sk && current(sk);
   return c?.kind === "mod" ? c : null;
 }
+// who a mod's repair or check is (mod-compatibility.js progressTask, job-progress.js modJob)
 function modProgressName(c) {
   const mod = c.mod || c, target = fam.variants.find((v) => v.key === mod.target) || variant();
-  const kind = mod.kind || switchKind();
-  return progressName(target, T(({ spr: "tab.portrait", lobby: "tab.lobby", model: "tab.model" })[kind] || "import.other"), c.label, fam);
+  return { variant: target?.key || mod.target, kind: mod.kind || switchKind(), core: mod.core || "", name: c.label || "" };
 }
 async function runUpdate(c = shownMod()) {
   const kind = switchKind();

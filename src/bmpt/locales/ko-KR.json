@@ -478,7 +478,11 @@
 			"modCount": "{action} ({current}/{total}): ",
 			"modHead": "{action}: ",
 			"sep": " - ",
-			"from": "출처: {name}"
+			"from": "출처: {name}",
+			"modsAdd": "모드 추가",
+			"modsExport": "모드 내보내기",
+			"actionExport": "내보내기",
+			"actionSave": "저장"
 		},
 		"job": {
 			"running": "처리 중",
