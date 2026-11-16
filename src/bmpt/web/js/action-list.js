@@ -8,7 +8,7 @@ import * as NGUI from "./ngui.js";
 import { HINT_PREFAB, hintStyle } from "./hover-hint.js";
 import { T } from "./i18n.js";
 import { S, clone, hitButton } from "./util.js";
-import { BOX, HEAD, ROW, contentWidth, fitList, placeList, stackList } from "./action-list-layout.js";
+import { BOX, HEAD, ROW, contentWidth, fitList, keyLabelWidth, placeList, stackList } from "./action-list-layout.js";
 import { actionLabel, sectionLabel } from "./clip-names.js";
 
 const { node, find } = NGUI;
@@ -50,7 +50,7 @@ function rowsTree(L, rows, fits, cw, selected) {
     const opt = find(u, "Label_Text"), on = r.action.key === selected;
     find(opt, "On").active = on;
     find(opt, "Label_On").active = !on;
-    for (const path of ["On/Label_On", "Label_On"]) Object.assign(textOf(find(opt, path)), { text: fit.text, fontSize: fit.fs, w_: ROW.maxLabelW });
+    for (const path of ["On/Label_On", "Label_On"]) Object.assign(textOf(find(opt, path)), { text: fit.text, fontSize: fit.fs, w_: keyLabelWidth(cw) });
     // the key's underline runs under the whole line
     const line = find(opt, "Line");
     if (line) { line.pos = [-ROW.radioX, -ROW.pitch / 2]; line.widgets[0].w_ = cw; }
@@ -68,7 +68,10 @@ export async function open({ host, group, anchor, sections, selected, onPick }) 
   const heads = sections.length > 1 ? sections.map((s) => sectionLabel(s, T)) : [], actions = sections.flatMap((s) => s.actions);
   const fits = fitList(heads, actions.map((a) => actionLabel(a, T, { withForm: false })));
   const cw = contentWidth(fits.keys.map(widest), fits.heads.map(widest));
-  const { rows, height } = stackList(sections);
+  const { rows, height: stacked } = stackList(sections);
+  // the content reaches past the last key's line by half its underline (it runs along the line's bottom edge): counted
+  // in, so a list that fits neither scrolls nor fades
+  const height = stacked + (find(L.key, "Label_Text/Line")?.widgets[0]?.h_ || 0) / 2;
   const layer = document.createElement("div");
   layer.className = "action-list";
   Object.assign(layer.style, { position: "absolute", zIndex: 5, pointerEvents: "auto" });

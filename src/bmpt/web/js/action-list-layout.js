@@ -26,6 +26,9 @@ export const HEAD = { h: 60, gap: 20, inset: 30, fs: 44, min: 36, slant: 60 * TA
 // a key: the radio's centre 30 inside the content, Label_On 61.5 right of it; a line every ROW, its underline
 // (UISortObjectListUnit Line) under it
 export const ROW = { pitch: 120, radioX: 30, labelX: 61.5, end: 20, maxLabelW: 590 };
+// a key's label box: left-aligned labelX right of the radio, ending at the content's right edge (a wider box would
+// make the list scroll sideways, and its scroll fade would wash out the title bars' right ends)
+export const keyLabelWidth = (cw) => Math.min(ROW.maxLabelW, cw - ROW.radioX - ROW.labelX);
 export const KEY_TYPE = POPUP_TYPE.card.option; // 42 down to 30, as the roster's sort keys
 // a group card's texts (detail.js stripCard: 242 wide less 40, 20 clear at either side; the visible body 196 high, 12
 // clear above and below): the group's name at the caption's size, wrapped onto two lines before it shrinks, centred.

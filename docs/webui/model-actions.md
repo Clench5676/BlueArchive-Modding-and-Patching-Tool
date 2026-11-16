@@ -28,7 +28,9 @@ it follows its card when the bar scrolls and closes once the card leaves the row
 another group card switches to that card's list, Escape closes it.
 
 Text: a list's keys one size (`fitGroup`, 42 down to 30, 590 wide, two lines within a line); its titles one line; the
-box as wide as its widest key or title. The cards: the group names one size (56 down to 28, 202 wide), wrapped onto two
+box as wide as its widest key or title, each key's label box ending at the content's edge (so the list never scrolls
+sideways and its scroll fade never washes out the title bars' ends); the content's height takes in half the last key's
+underline, so a list that fits neither scrolls nor fades. The cards: the group names one size (56 down to 28, 202 wide), wrapped onto two
 lines before they shrink, centred on the card. The playing card: the action's name alone, fitted on its own from 56,
 one line on the card's centre (it passes under the selection check), else up to three lines under the check, down to
 22 for the longest (a second form's random Tactical Challenge entry). A key's label leaves the battle form to its

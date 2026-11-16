@@ -205,6 +205,8 @@ for (const locale of LOCALES) test(`the action list's text fits its widgets in $
     for (const f of fit.keys) {
       assert.ok(!f.overflow && f.lines <= 2 && widest(f.text, f.fs) <= ROW.maxLabelW, `${locale} ${f.text}`);
       assert.ok(ROW.radioX + ROW.labelX + widest(f.text, f.fs) <= cw, `${locale} ${f.text} inside the box`);
+      // the label's box too: nothing reaches past the content's right edge, so the list never scrolls sideways
+      assert.ok(widest(f.text, f.fs) <= L.keyLabelWidth(cw) && ROW.radioX + ROW.labelX + L.keyLabelWidth(cw) <= cw, `${locale} ${f.text} label box`);
       assert.ok(tall(f) <= ROW.pitch - 24, `${locale} ${f.text} height`);
     }
   }
