@@ -27,6 +27,9 @@ import * as Loading from "./loading.js";
 import * as ModAlias from "./mod-alias.js";
 import * as ModExport from "./mod-export.js";
 import * as Compatibility from "./mod-compatibility.js";
+import * as ActionList from "./action-list.js";
+import { actionLabel, actionsOf, groupLabel, menuOf } from "./clip-names.js";
+import { cardText, fitCards } from "./action-list-layout.js";
 import { show as showCompare } from "./mod-compare.js";
 import * as Lobby from "./lobby.js";
 import * as Visual from "./visual-mode.js";
@@ -76,6 +79,11 @@ let previewEnabled = true;
 let tab = "portrait", fullscreen = false, expression = "00", expanded = false, exprScroll = 0;
 let mainPlayer = null, blinkTimer = null, pending = null, pickerSel = null, lobbySeq = null, busy = false, lobbyShot = null;
 let modelShot = null, modelActions = [], modelAction = null, modelGeneration = 0;
+// every action of the chibi (clip-names.js actionsOf: its own clips by group), which the action bar shows; null: the
+// model has none of its own (a story or an NPC model), and row 4 lists today's actions (modelActions)
+let modelMenu = null;
+// the action whose clips are being fetched ({ key, abort }): its group card shows the loading ring
+let actionLoad = null;
 // three.js and the model viewer load with the first 3D model
 let modelLib = null;
 const ModelLib = () => (modelLib ||= import("./model.js"));
@@ -387,6 +395,8 @@ const costumeJobs = new Set();
 const costumesWanted = (v, run) => run === costumeRun && open && !!v && variant().key === v.key && tab === "model";
 function stopCostumeChecks() {
   costumeRun += 1;
+  // an action's clips being fetched for the 3D tab are given up the same way (the request is aborted)
+  stopActionLoad();
   costumeChecks.clear();
   crossWanted = { variant: null, keys: [] };
   for (const id of costumeJobs) rpc("jobs.cancel", { id }).catch(() => {});
@@ -1294,14 +1304,19 @@ function pileBoxes() {
     x: BTN_COL[1] - w - 2 * SPACE.s, y: -ROW4_Y + 6.5 - CARD.h / 2,
   }).boxes.map(b => ({ ...b, w }));
 }
-function stripCard(name, x, { w = CARD.w, h = CARD.h, thumb: pic = null, selected = false, dim = false, caption = "", body = "", placeholder = false, tone = "#ffffff" } = {}) {
+// (captionFit: the caption's fit, drawn captionY over the card's centre, as the action bar's cards fit their names;
+// loading: the game's loading ring turns in the caption's place, as on a button whose action is still loading)
+function stripCard(name, x, { w = CARD.w, h = CARD.h, thumb: pic = null, selected = false, dim = false, caption = "", body = "", placeholder = false, tone = "#ffffff",
+  captionFit = null, captionY = 0, loading = false } = {}) {
   const vis = h - 13, cy = 6.5; // the visible body's centre sits 6.5 units above the widget's centre
   const kids = [node("Line", [1, cy], [sprite("Common_Line_Raius20px", w - 10, vis, { incline: 10, depth: 9, color: "#bebebe/1.00" })])];
   if (pic) kids.push(node("Thumb", [1, cy], [{ clipImage: pic, w_: w - 18, h_: vis - 8, pivot: 4, depth: 8, incline: 10, radius: 16, color: "#ffffff/1.00", imgSize: "cover", imgPosition: "center 50%" }]));
   if (dim) kids.push(node("Dim", [1, cy], [sprite("Common_Bg_Raius20px", w - 12, vis - 4, { incline: 10, depth: 10, color: "#000000/0.50" })]));
   if (caption) {
-    const f = fitText(caption, 56, 28, w - 50);
-    kids.push(node("Caption", [0, cy], [label(f.text, f.fs, dim ? "#ffffff/1.00" : "#2c4564/1.00", w - 30, f.fs * 1.3 * f.lines, { depth: 12 })]));
+    const f = captionFit || fitText(caption, 56, 28, w - 50), ink = dim ? "#ffffff/1.00" : "#2c4564/1.00";
+    const shown = label(f.text, f.fs, ink, w - 30, f.fs * 1.3 * f.lines, { depth: 12 });
+    kids.push(node("Caption", [0, cy + (loading ? 0 : captionY)],
+      [loading ? { loadingRing: true, w_: 82, h_: 82, pivot: 4, depth: 12, color: ink, fallback: shown } : shown]));
   }
   if (body) {
     // a dialogue line: centred on the card, as large as fits in up to four lines; a longer line ends in an ellipsis
@@ -1325,6 +1340,7 @@ function row4Items() {
       return text ? { key: sq.anim, body: text } : { key: sq.anim, body: none, placeholder: true };
     });
   }
+  if (tab === "model" && modelMenu) return barItems();
   // a story model's own cutscene clips read "Story 1", "Story 2", ...
   if (tab === "model") return modelActions.map((a) => ({ key: a,
     caption: /^story\d+$/.test(a) ? T("model.action.story", { n: a.slice(5) }) : T(`model.action.${a}`) }));
@@ -1335,7 +1351,72 @@ function row4Items() {
   const request = thumbnailWork.thumb;
   return (names.length ? names : ["00"]).map((e) => ({ key: e, thumb: () => request(base, "face", e) }));
 }
-const row4Selected = () => (tab === "lobby" ? lobbySeq : tab === "model" ? modelAction : expression);
+// The 3D tab's action bar (docs/webui/model-actions.md): a card per action group the model has, its names one size;
+// the playing action's group card is selected and shows that action's name alone, or the loading ring while its clips
+// are fetched.
+const playingAction = () => modelMenu?.find((a) => a.key === modelAction) || null;
+function barItems() {
+  const groups = menuOf(modelMenu), playing = playingAction(), names = groups.map((g) => groupLabel(g.id, T)), fits = fitCards(names);
+  ActionList.warm();
+  return groups.map((g, i) => {
+    const now = playing?.group === g.id ? actionLabel(playing, T) : null, text = cardText(fits[i], now);
+    return { key: `group:${g.id}`, group: g, caption: now || names[i], captionFit: text.name, captionY: text.nameY,
+      loading: !!now && actionLoad?.key === playing.key };
+  });
+}
+// the bar's key of an action model.js names when it changes by itself (a tap's reaction, the idle after it)
+const actionKey = (name) => (modelMenu?.find((a) => a.key === name) || modelMenu?.find((a) => a.id === name && (a.form || 0) <= 1))?.key || name;
+const row4Selected = () => (tab === "lobby" ? lobbySeq : tab === "model" && modelMenu ? `group:${playingAction()?.group}`
+  : tab === "model" ? modelAction : expression);
+// A group card pressed: its action list opens over it (action-list.js); the same card closes it, another group's
+// switches to that one. A picked action plays (pickAction) and the list closes.
+let barCards = new Map(); // group card key -> its centre x in units, unscrolled
+function toggleGroup(item) {
+  if (ActionList.openGroup() === item.key) { ActionList.close(); return; }
+  const anchor = () => {
+    const x = barCards.get(item.key) - (document.querySelector(".expr-clip")?.scrollLeft || 0) / S;
+    return { left: x - CARD.w / 2, right: x + CARD.w / 2, top: ROW4_Y + (CARD.h - 13) / 2 };
+  };
+  ActionList.open({ host: $("ngui-expr").parentElement, group: item.key, anchor, sections: item.group.sections, selected: modelAction,
+    onPick: (key) => { const a = modelMenu?.find((x) => x.key === key); if (tab === "model" && a) void pickAction(a); } }).catch(renderFailed);
+}
+// An action picked on the bar plays at once when its clips are there (the model's GLB carries today's actions;
+// others added before). Else they are fetched (model.js loadClips: the model route's ?clip=, from the shown model's
+// source) while its group card shows the loading ring, then it plays. The fetch is the shown page's preview (class 1):
+// its deadline counts only its own time in the foreground (withPreviewTimeout), and leaving the 3D tab, the variant
+// or the screen gives it up with the costume checks (stopCostumeChecks). A failure leaves the action that played
+// before and says the preview is unavailable, for that action only.
+const CLIP_CAP = 15000;
+async function pickAction(a) {
+  stopActionLoad();
+  const M = await ModelLib();
+  if (M.playAction(a)) { modelAction = a.key; keepScroll(); renderExpressions(); return; }
+  const v = variant(), run = costumeRun, before = M.current() ?? modelAction, abort = new AbortController();
+  const load = (actionLoad = { key: a.key, abort });
+  modelAction = a.key;
+  keepScroll(); renderExpressions();
+  let played = false, failure = null;
+  try {
+    played = await withPreviewTimeout(M.loadClips(a.clips, { signal: abort.signal }), CLIP_CAP, "model clips", { signal: abort.signal })
+      && costumesWanted(v, run) && actionLoad === load && M.playAction(a);
+  } catch (err) {
+    failure = err;
+    abort.abort(); // past its deadline: the request too
+  }
+  if (actionLoad !== load) return; // given up: another action picked, the model shown again or the tab left
+  actionLoad = null;
+  modelAction = played ? a.key : actionKey(M.current() ?? before);
+  if (failure) {
+    previewError(failure, a.clips.join(","), "model-clip");
+    notify(T("detail.failed"), { kind: "error", error: failure });
+  }
+  if (costumesWanted(v, run)) { keepScroll(); renderExpressions(); }
+}
+function stopActionLoad() {
+  const load = actionLoad;
+  actionLoad = null;
+  load?.abort.abort();
+}
 function row4Pick(key) {
   // the card follows the dialogue through Lobby.onTalk: selected while it plays, let go when it ends
   if (tab === "lobby") { if (Lobby.playing() === key) Lobby.stop(); else Lobby.play(key); }
@@ -1367,15 +1448,21 @@ async function drawExpressions() {
   const my = ++exprToken, gen = showGen;
   const ok = () => showable("expr", my, exprToken, gen);
   const host = $("ngui-expr");
-  const list = row4Items(), sel = row4Selected(), unfolded = expanded, pics = [], thumbs = [];
+  // the 3D tab's action bar: every group card in a row that scrolls, no pile; its open list stays over a redraw of
+  // the bar and closes when the bar goes
+  const bar = tab === "model" && !!modelMenu;
+  if (!bar) ActionList.close();
+  const list = row4Items(), sel = row4Selected(), unfolded = expanded || bar, pics = [], thumbs = [];
   const picture = (it) => typeof it.thumb === "function" ? it.thumb() : it.thumb;
   const placed = (name, box, options) => Object.assign(stripCard(name, 0, { w: box.w, h: box.h, ...options }), { pos: toNode(box, 4, LOCAL_FRAME) });
-  const cardOf = (it, box) => placed(`Item_${it.key}`, box, { thumb: picture(it), body: it.body, placeholder: it.placeholder, caption: it.caption, selected: it.key === sel });
+  const cardOf = (it, box) => placed(`Item_${it.key}`, box, { thumb: picture(it), body: it.body, placeholder: it.placeholder, caption: it.caption, selected: it.key === sel,
+    captionFit: it.captionFit, captionY: it.captionY, loading: it.loading });
   const cards = [];
   if (unfolded || list.length <= 4) {
-    const boxes = expressionBoxes(list.length + (unfolded ? 1 : 0));
+    const boxes = expressionBoxes(list.length + (expanded && !bar ? 1 : 0));
     list.forEach((it, i) => cards.push({ tree: cardOf(it, boxes[i]), item: it }));
-    if (unfolded) cards.push({ tree: placed("Fold", boxes.at(-1), { caption: T("fold.label"), tone: "#eef4f8" }), fold: true, name: T("fold.label") });
+    if (bar) barCards = new Map(cards.map((cd) => [cd.item.key, cd.tree.pos[0]]));
+    if (expanded && !bar) cards.push({ tree: placed("Fold", boxes.at(-1), { caption: T("fold.label"), tone: "#eef4f8" }), fold: true, name: T("fold.label") });
   } else {
     // three cards; a chosen item further along takes the third card so it stays in view
     const shown = list.slice(0, 3);
@@ -1410,12 +1497,15 @@ async function drawExpressions() {
     const body = view.nodes.get(cd.tree.name)?.els[0];
     if (!body || (cd.pile && cd.tree.name !== "Pile_0")) return;
     const strip = hitButton(track, rect(body), () => {
-      if (cd.item) { row4Pick(cd.item.key); keepScroll(); renderExpressions(); }
+      if (cd.item?.group) toggleGroup(cd.item);
+      else if (cd.item) { row4Pick(cd.item.key); keepScroll(); renderExpressions(); }
       if (cd.pile) { expanded = true; exprScroll = 0; renderExpressions(); }
       if (cd.fold) { expanded = false; renderExpressions(); }
     }, cd.name || cd.item?.body || cd.item?.caption || (cd.item ? faceName(cd.item.key) : ""), 260);
-    // the strip's cards pick one item: the picked one is pressed
+    // the strip's cards pick one item: the picked one is pressed; a group card opens its list (action-list.js), and a
+    // press on one is not outside the open list
     if (cd.item) strip.setAttribute("aria-pressed", String(cd.item.key === sel));
+    if (cd.item?.group) strip.dataset.actionGroup = cd.item.group.id;
   }));
   if (!ok()) return; // a newer render took over (e.g. the tab changed while faces were rendering)
   if (my === exprToken) {
@@ -1429,6 +1519,12 @@ async function drawExpressions() {
     track.style.width = `${contentW}px`;
     // the wheel, a mouse drag and touch scroll the strip as the popups' card rows do (Popup.scrollArea); a drag picks nothing
     horizontalScroll(clip, width, contentW);
+    // an open action list follows its card; it closes once the card has left the row
+    if (bar) clip.addEventListener("scroll", () => {
+      exprScroll = clip.scrollLeft;
+      const x = barCards.get(ActionList.openGroup()) - clip.scrollLeft / S;
+      if (x < Lx || x > Rx) ActionList.close(); else ActionList.follow();
+    });
   }
   commit(() => {
     if (!ok()) return;
@@ -2220,11 +2316,14 @@ async function showModel(v, my, alive = () => true) {
     if (!still()) return;
     const list = await M.show(v.key, $("model"), {
       frame: fullscreen ? "full" : "left", version: `${fam.version}:${modelGeneration}`, source: modelSource(v, modsOn()),
-      onAction: (a) => { if (tab === "model" && variantKey === v.key) { modelAction = a; renderExpressions(); } },
+      onAction: (a) => { if (tab === "model" && variantKey === v.key) { modelAction = actionKey(a); renderExpressions(); } },
     });
     if (!list || !still()) return;
     modelActions = list;
-    modelAction = M.current();
+    // the model's own clips by group, for the action bar (none: today's actions in a row)
+    const menu = actionsOf(M.clipNames(), M.devName());
+    modelMenu = menu.length ? menu : null;
+    modelAction = actionKey(M.current());
     if (!modelShot && !fullscreen) modelShot = M.snapshot();
     await Promise.all([renderScreen(), renderExpressions()]);
   } catch (err) {
@@ -2247,6 +2346,9 @@ async function showModel(v, my, alive = () => true) {
 const costumeRefusals = new Set();
 function hideModel() {
   modelActions = [];
+  modelMenu = null;
+  stopActionLoad();
+  ActionList.close();
   modelAction = null;
   modelLib?.then((M) => M.hide($("model")));
 }
@@ -2633,6 +2735,9 @@ export async function show(context, familyData, key, { inPlace = false, kind = n
     lobbyAll = false;
     modelShot = null;
     modelActions = [];
+    modelMenu = null;
+    exprScroll = 0;
+    ActionList.close();
     modelAction = null;
     // a new portrait is loaded; the shown one stays until it is committed
     clearTimeout(blinkTimer);
@@ -2686,6 +2791,7 @@ export function hide() {
   switchThumbnails?.cancel();
   switchThumbnails = null;
   ModAlias.close();
+  ActionList.close();
   leavePage();
   pageToken += 1;
   open = false;

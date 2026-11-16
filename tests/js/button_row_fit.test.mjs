@@ -313,7 +313,8 @@ for (const locale of LOCALES) test(`the three repair choices share one size and 
 for (const locale of LOCALES) test(`the 3D model's action captions fit their cards in ${locale}`, async () => {
   const detail = await source("detail.js"), model = await source("model.js");
   assert.match(detail, /const CARD = \{ w: 242, h: 209 \};/);
-  assert.match(detail, /const f = fitText\(caption, 56, 28, w - 50\);/);
+  // (the action bar's group cards bring their own fit: action_list.test.mjs)
+  assert.match(detail, /const f = captionFit \|\| fitText\(caption, 56, 28, w - 50\)[,;]/);
   const names = [...model.match(/export const ACTIONS = \{([\s\S]*?)\n\};/)[1].matchAll(/^  (\w+): \{/gm)].map((m) => m[1]);
   assert.ok(names.includes("retreat") && names.includes("knockdown"));
   document.documentElement.lang = locale;

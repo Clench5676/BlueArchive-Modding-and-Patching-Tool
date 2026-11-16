@@ -176,7 +176,7 @@ are matched to the kept release whose alpha masks they follow. A repaired copy a
 | `/asset/spine/spr/<core>@<id>/<file>`, `/asset/spine/lobby/<core>@<id>/<file>`: the core in another known install, `<id>` from `mods.state.installs` | heavy |
 | `/asset/spine/lobby/<core>/lobby.json` (prefab layout, touch boxes, clips, idle pools, sounds, post-processing, effects, materials, pins, intro; no skeleton is extracted) | heavy |
 | `/asset/spine/lobby/<core>/fx_<id>.png`, `/asset/spine/lobby/<core>/sfx_<id>.wav` | heavy |
-| `/asset/model/<variant>.glb` (`?source=` `live`, `official`, `mod:<id>`, `import:<key>`, `variant:<key>`) | heavy |
+| `/asset/model/<variant>.glb` (`?source=` `live`, `official`, `mod:<id>`, `import:<key>`, `variant:<key>`; `&clip=<name>`: one clip of that model, [`model-actions.md`](model-actions.md#clips-on-demand)) | heavy |
 | `/asset/voice/<variant>/<clip>` (a lobby voice relayed from Kivo) | heavy |
 | `/asset/office/<day|night>/layout.json` and its texture routes (the Hall's office background) | heavy |
 | `/asset/photography/...` | see [Student photography](lobby-and-photography.md#student-photography) |
