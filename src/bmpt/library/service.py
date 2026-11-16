@@ -82,6 +82,8 @@ COSTUME_PREVIEWS = 4  # costume previews kept in built/previews (one folder per 
 COSTUME_BUILD_TRIES = 3
 POINTER_CACHE = 256  # files whose cross-bundle pointers, and game files whose objects, are kept in memory
 COSTUME_VERDICTS = 4000  # costume verdicts kept in costume-verdicts.json, newest first
+WORN_VERDICTS = 1000  # models' worn-item verdicts kept in worn-items.json, newest first
+WORN_LOCK_WAIT = 2.0  # seconds a build waits for worn-items.json's lock before it leaves the verdict unsaved
 # the startup rig archive (archive_rigs) works only once no other caller used the library for this long
 RIG_ARCHIVE_QUIET = 1.0
 # between two entries a toggle lets other callers of the library go first: it waits until none of them used the lock
@@ -318,6 +320,61 @@ class _CostumeInputs:
     cabs: CabIndex
     target_dev: str
     official: Callable[[Path], Path]
+    revisions: dict[str, str] = field(default_factory=dict)  # dev name -> its model's game revision (_revision)
+
+
+def _revision(files: Iterable[tuple[Path, Path]]) -> str:
+    """A model's game revision: the names of its game files (an official name holds its CRC) and the sizes of the
+    copies read for them."""
+    return hashlib.sha1(repr(sorted((game.name, read.stat().st_size) for game, read in files)).encode()).hexdigest()
+
+
+class _WornVerdicts:
+    """The worn-item verdict of each model a costume build measures (``model_props.WornStore``), kept in
+    worn-items.json beside the costume verdicts: keyed by the costume rule's version, the model and its game revision.
+    Builds run outside the library and model locks, two at once at times: a write reads, changes and writes the file
+    under a lock of its own (this process's and the lock file's, for other processes), and the atomic write keeps
+    every read whole. A file that cannot be read or written, or a lock not had within ``WORN_LOCK_WAIT``, only means
+    the model is measured again."""
+
+    _lock = threading.Lock()
+
+    def __init__(self, path: Path, revisions: Mapping[str, str]):
+        self.path, self.revisions = path, dict(revisions)
+
+    def _key(self, dev: str) -> str | None:
+        from ..gameassets.costume_rule import COSTUME_RULE
+
+        revision = self.revisions.get(dev)
+        return f"{COSTUME_RULE}|{dev}|{revision}" if revision else None
+
+    def _read(self) -> dict[str, Any]:
+        try:
+            data = json.loads(self.path.read_text())
+        except (OSError, ValueError):
+            return {}
+        models = data.get("models") if isinstance(data, dict) and data.get("version") == 1 else None
+        return {k: v for k, v in (models or {}).items() if isinstance(k, str) and isinstance(v, dict)}
+
+    def get(self, dev: str) -> Mapping | None:
+        key = self._key(dev)
+        entry = self._read().get(key) if key else None
+        worn = entry.get("worn") if entry else None
+        return worn if isinstance(worn, dict) else None
+
+    def put(self, dev: str, verdict: Mapping) -> None:
+        key = self._key(dev)
+        if key is None:
+            return
+        try:
+            with self._lock, file_lock(self.path.with_name(self.path.name + ".lock"), timeout=WORN_LOCK_WAIT):
+                models = self._read()
+                models[key] = {"worn": verdict, "at": now()}
+                kept = dict(sorted(models.items(), key=lambda item: str(item[1].get("at", "")),
+                                   reverse=True)[:WORN_VERDICTS])
+                atomic_json(self.path, {"version": 1, "models": kept})
+        except (OSError, TimeoutError) as error:
+            log_failure(logger, logging.WARNING, "Could not save a worn-item verdict", error)
 
 
 @dataclass
@@ -5529,11 +5586,16 @@ class ModLibrary:
         originals = {path: self._official_or_current(path, pin) for path in targets}
         dev, prefab_files, files = self._costume_files(other, pin)
         resolve = self._official_or_current if preview else self._official_for
+        sources = [resolve(path, pin) for path in files]
+        target_dev = self._core_map(pin).slot(core_of(targets[0].name))
+        try:  # what keys each model's worn items (model_props), cached in worn-items.json
+            revisions = {dev: _revision(zip(files, sources)), target_dev: _revision(originals.items())}
+        except OSError:
+            revisions = {}
         return _CostumeInputs(
             originals=originals, dev=dev, chosen={path.name for path in prefab_files},
-            sources=[resolve(path, pin) for path in files], cabs=self._cab_index(pin),
-            target_dev=self._core_map(pin).slot(core_of(targets[0].name)),
-            official=lambda path: self._official_or_current(path, pin))
+            sources=sources, cabs=self._cab_index(pin), target_dev=target_dev,
+            official=lambda path: self._official_or_current(path, pin), revisions=revisions)
 
     def _stage_copies(self, originals: dict[Path, Path], directory: Path) -> dict[Path, Path]:
         """Copy the bytes chosen for each game file (``originals``) into ``directory`` under the game file's name."""
@@ -5584,7 +5646,8 @@ class ModLibrary:
             result = adapt(index=index, resolver=resolver, target_files=list(staged.values()),
                            target_dev=inputs.target_dev, source_files=[p for p in sources if p.name in inputs.chosen],
                            source_dev=inputs.dev, open_writable=Bundle.load, physics=physics,
-                           halo=True, step=step)
+                           halo=True, step=step,
+                           worn=_WornVerdicts(self.root / "worn-items.json", inputs.revisions))
         if report is not None and result.plan.unfit:
             report["unfit"] = {"source": "stretch", "adapted": f"{result.plan.stretch:.2f}", "own": f"{result.plan.own:.2f}"}
         if report is not None:

@@ -120,3 +120,60 @@ def test_official_every_costume_pair_builds_or_is_refused_by_the_rule(tmp_path, 
     assert not unknown, unknown
     assert not unexported, unexported
     assert own and pairs and offered
+
+
+# --- worn items ----------------------------------------------------------------------------------------------------
+
+WORN = Path(__file__).parent / "fixtures" / "worn_items.json"
+
+
+def _open_models(view: str) -> None:
+    import re
+    from collections import defaultdict
+    from bmpt.gameassets.discovery import cab_names
+
+    paths = list(Path(view).rglob("*.bundle"))
+    index, models = {}, defaultdict(list)
+    for path in paths:
+        if re.search(r"characters|-_mx-npcs-|^character-|-_mx-shaders-|-_mx-program-animators-|^field-|animatorbase|"
+                     r"prolog|-_mx-effectsfreezed-", path.name):
+            for cab in cab_names(path):
+                index[cab] = path
+        if (match := re.match(r"character-(.+?)-_mx", path.name)):
+            models[match.group(1)].append(path)
+    _state.update(index=index, models=models)
+
+
+def _worn(dev: str) -> tuple[str, list[str] | None]:
+    """A model's worn items as "<renderer>/<item's top node>"; None for a model without a prefab of its own bundles."""
+    from bmpt.gameassets import model_adapt as ma, model_props as mp
+    from bmpt.gameassets.errors import AssetNotFound
+    from bmpt.gameassets.model import model_root
+
+    files = _state["models"].get(dev, [])
+    with ma.BundleGraph(_state["index"]) as graph:
+        try:
+            root, _, _ = model_root(graph, files, dev)
+        except AssetNotFound:
+            return dev, None
+        s = ma.Skeleton.of(graph, root)
+        clips = ma.prefab_clips(graph, s, ma.own_prefabs(ma._model_prefabs(graph, files), dev))
+        idle = next(iter(s.poses(ma.pick(clips, ma.IDLE_CLIPS)[:1], frames=1)), None)
+        worn = mp.worn_items(s, ma.roles(s, idle), clips, idle)
+        return dev, sorted(f"{s.nodes[i.part.node].name}/{s.nodes[i.top].name}" for i in worn.items)
+
+
+@official
+def test_official_the_worn_items_of_every_student_model_are_pinned(tmp_path):
+    """The worn items (model_props) of every student model with a 3D model, against the pinned list: a game update or
+    a change of the rule shows here as a diff to look at, then to pin."""
+    _open(str(GAME_DIR), str(tmp_path))
+    devs = sorted({v.model.lower() for f in _state["catalog"].families() for v in f.variants if v.model})
+    with ProcessPoolExecutor(4, initializer=_open_models, initargs=(str(GAME_DIR),)) as pool:
+        found = {dev: items for dev, items in pool.map(_worn, devs, chunksize=4) if items}
+    pinned = json.loads(WORN.read_text())["worn"]
+    devs = sorted({*pinned, *found})
+    gained = {dev: sorted(set(found.get(dev, [])) - set(pinned.get(dev, []))) for dev in devs}
+    lost = {dev: sorted(set(pinned.get(dev, [])) - set(found.get(dev, []))) for dev in devs}
+    assert ({k: v for k, v in gained.items() if v}, {k: v for k, v in lost.items() if v}) == ({}, {}), (
+        "worn items changed: check them, then pin the new list in tests/fixtures/worn_items.json")
