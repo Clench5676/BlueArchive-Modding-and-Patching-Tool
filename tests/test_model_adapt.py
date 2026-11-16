@@ -1,5 +1,6 @@
 """Another variant's costume on a student's 3D model slot (gameassets.model_adapt)."""
 
+import copy
 import hashlib
 import json
 import os
@@ -79,6 +80,76 @@ class _Graph:
 
     def tree(self, obj):
         return obj
+
+
+class _Object:
+    """An object of a fake file: its typetree in ``tree``; pointers resolve within the file."""
+
+    def __init__(self, cab, path_id, tree):
+        from types import SimpleNamespace
+        self.assets_file, self.path_id, self.tree = SimpleNamespace(name=cab), path_id, tree
+
+
+class _Objects:
+    def __init__(self, *objects):
+        self.by = {(o.assets_file.name, o.path_id): o for o in objects}
+
+    def tree(self, obj):
+        return obj.tree
+
+    def deref(self, obj, pointer):
+        return self.by.get((obj.assets_file.name, pointer["m_PathID"]))
+
+
+def _mouth_model(graph, cab, atlas, scale, grid, uv):
+    """A model's costume (one primary part, an eye-mouth material second) and its mouth receiver."""
+    texture = _Object(cab, 1, {"m_Name": "atlas"}) if atlas is None else atlas
+    material = _Object(cab, 2, {"m_SavedProperties": {
+        "m_TexEnvs": [("_MainTex", {"m_Texture": _pptr(0), "m_Scale": {"x": 1, "y": 1}, "m_Offset": {"x": 0, "y": 0}}),
+                      ("_MouthTileTex", {"m_Texture": _pptr(texture.path_id), "m_Scale": {"x": scale, "y": scale},
+                                         "m_Offset": dict(uv)})],
+        "m_Floats": [("_MouthTileCols", grid), ("_MouthTileRows", grid)]}})
+    renderer = _Object(cab, 3, {})
+    receiver = _Object(cab, 4, {"MouthRenderer": _pptr(3), "MouthMaterialIndex": 1, "MouthDefaultUV": dict(uv)})
+    graph.by.update({(o.assets_file.name, o.path_id): o for o in (texture, material, renderer, receiver)})
+    skeleton = ma.Skeleton(graph)
+    skeleton.behaviours.append(receiver)
+    part = ma.Part(0, renderer, None, [None, material], ["body", "eyemouth"], [], 0, role="primary")
+    return skeleton, [part], material
+
+
+def test_a_mouth_on_another_atlas_takes_the_slots_atlas_and_default_tile():
+    """The slot's clips name mouth tiles as cells of the slot's atlas: a source eye-mouth material on another atlas
+    (Hina's 4 x 4 one under the shared 8 x 8 one) takes the slot's, and the receivers keep the slot's default tile;
+    on the same atlas the source's material and default tile stay."""
+    graph = _Objects()
+    slot, slot_costume, _ = _mouth_model(graph, "slot", None, 1.0, 4.0, {"x": 0.0, "y": 0.75})
+    source, source_costume, material = _mouth_model(graph, "source", None, 0.5, 8.0, {"x": 0.625, "y": 0.25})
+    mouth = ma.mouth_of(source, source_costume)
+    assert (mouth.part, mouth.index, mouth.uv) == (0, 1, {"x": 0.625, "y": 0.25})
+    atlas, retiled, carried = ma.retiled_mouths(graph, slot, slot_costume, source_costume, mouth)
+    assert retiled == {ma._key(material)}
+    assert atlas.material is slot_costume[0].materials[1] and atlas.grid == {"_MouthTileCols": 4.0, "_MouthTileRows": 4.0}
+    assert atlas.env["m_Scale"] == {"x": 1.0, "y": 1.0}
+    assert carried.uv == {"x": 0.0, "y": 0.75} and mouth.uv == {"x": 0.625, "y": 0.25}
+
+    # one atlas object, one scale and grid: nothing changes
+    shared = _Object("shared", 9, {"m_Name": "Character_Mouth"})
+    graph = _Objects(shared)
+    slot, slot_costume, _ = _mouth_model(graph, "shared", shared, 0.5, 8.0, {"x": 0.5, "y": 0.875})
+    source = ma.Skeleton(graph)
+    source.behaviours.append(_Object("shared", 14, {"MouthRenderer": _pptr(13), "MouthMaterialIndex": 1,
+                                                    "MouthDefaultUV": {"x": 0.125, "y": 0.5}}))
+    other = _Object("shared", 12, copy.deepcopy(slot_costume[0].materials[1].tree))
+    renderer = _Object("shared", 13, {})
+    graph.by.update({("shared", o.path_id): o for o in (other, renderer, source.behaviours[0])})
+    source_costume = [ma.Part(0, renderer, None, [None, other], ["body", "eyemouth"], [], 0, role="primary")]
+    mouth = ma.mouth_of(source, source_costume)
+    atlas, retiled, carried = ma.retiled_mouths(graph, slot, slot_costume, source_costume, mouth)
+    assert atlas is not None and not retiled and carried.uv == {"x": 0.125, "y": 0.5}
+    # the same texture drawn at another scale (a mirrored atlas) is another layout
+    other.tree["m_SavedProperties"]["m_TexEnvs"][1][1]["m_Scale"] = {"x": -0.5, "y": 0.5}
+    assert ma.retiled_mouths(graph, slot, slot_costume, source_costume, mouth)[1] == {ma._key(other)}
 
 
 def _skeleton(bones):
@@ -876,14 +947,22 @@ def test_official_bones_any_clip_scales_away_are_hidden(view):
 
 
 @official
-@pytest.mark.parametrize("target,source,index,uv,on_primary", [
-    ("azusa_original", "mashiro_original", 2, (0.125, 0.5), True),
-    ("hina_original", "ch0288", 3, (0.75, 0.625), False),  # the mouth on a part beside the primary
+@pytest.mark.parametrize("target,source,index,uv,on_primary,default,atlas", [
+    # one shared mouth atlas: the source's default tile
+    ("azusa_original", "mashiro_original", 2, (0.125, 0.5), True, (0.125, 0.5), ("Character_Mouth", 0.5, 8.0)),
+    ("aris_original", "yuzu_original", 3, (0.125, 0.5), True, (0.125, 0.5), ("Character_Mouth", 0.5, 8.0)),
+    # the mouth on a part beside the primary; Hina's clips name cells of her own 4 x 4 atlas, Aoba draws the shared
+    # 8 x 8 one: the mouth takes Hina's atlas and default tile
+    ("hina_original", "ch0288", 3, (0.75, 0.625), False, (0.0, 0.75), ("Hina_Mouth", 1.0, 4.0)),
 ])
-def test_official_mouth_receivers_follow_the_costume(view, tmp_path, target, source, index, uv, on_primary):
+def test_official_mouth_receivers_follow_the_costume(view, tmp_path, target, source, index, uv, on_primary, default,
+                                                     atlas):
     """The slot's mouth receivers index the renderer's materials, now the source's in the source's order: they take
-    the source receiver's material index and default mouth tile, and point at the renderer drawing the source's
-    mouth, an added part where the source's mouth is not on its primary."""
+    the source receiver's material index, and point at the renderer drawing the source's mouth, an added part where
+    the source's mouth is not on its primary. The slot's clips name mouth tiles as cells of the slot's own atlas: on
+    the same atlas the receivers take the source's default tile; a source mouth on another atlas draws the slot's
+    (its texture, scale and grid) and the receivers keep the slot's default tile, so every SetMouthTile event of the
+    slot's clips draws the mouth the slot draws."""
     from ba_modding_toolkit.bundle import Bundle
     from ba_modding_toolkit.models import SaveOptions
     from bmpt.gameassets.discovery import cab_names
@@ -900,6 +979,14 @@ def test_official_mouth_receivers_follow_the_costume(view, tmp_path, target, sou
         assert mouth is not None and (mouth.index, (mouth.uv["x"], mouth.uv["y"])) == (index, uv)
         mouth_mesh = costume[mouth.part].mesh.peek_name()
     assert (mouth.part == 0) == on_primary
+    with ma.BundleGraph(index_) as graph:
+        t_prefabs = _prefabs(graph, [p for p in _slot(files, target) if p.name.startswith("character-")])
+        t = ma.Skeleton.of(graph, t_prefabs[ma.choose_prefab(t_prefabs, target)].deref())
+        parts = ma.roles(t, None)
+        t_costume = [p for p in parts if p.role == "primary"] + [p for p in parts if p.role == "costume"]
+        t_mouth = ma.mouth_of(t, t_costume)
+        slot_atlas = ma.mouth_atlas(graph, t_costume[t_mouth.part].materials[t_mouth.index])
+        slot_name = graph.deref(slot_atlas.material, slot_atlas.env["m_Texture"]).peek_name()
     result = ma.adapt(index=index_, resolver=None, target_files=_slot(files, target), target_dev=target,
                       source_files=sources, source_dev=source, open_writable=Bundle.load)
     adapted = dict(index_)
@@ -921,8 +1008,12 @@ def test_official_mouth_receivers_follow_the_costume(view, tmp_path, target, sou
                 materials = [graph.deref(renderer, m) for m in graph.tree(renderer)["m_Materials"]]
                 assert drawn.peek_name() == mouth_mesh
                 assert tree["MouthMaterialIndex"] == index
-                assert (tree["MouthDefaultUV"]["x"], tree["MouthDefaultUV"]["y"]) == uv
+                assert (tree["MouthDefaultUV"]["x"], tree["MouthDefaultUV"]["y"]) == default
                 assert ma._shader_kind(graph, materials[index]) == "eyemouth"
+                drawn_atlas = ma.mouth_atlas(graph, materials[index])
+                assert drawn_atlas.texture == slot_atlas.texture and slot_name == atlas[0]  # the slot's own texture
+                texture = graph.deref(materials[index], drawn_atlas.env["m_Texture"])
+                assert (texture.peek_name(), drawn_atlas.env["m_Scale"]["x"], drawn_atlas.grid["_MouthTileCols"]) == atlas
                 receivers += 1
     assert receivers == 4  # one per prefab of the slot
 

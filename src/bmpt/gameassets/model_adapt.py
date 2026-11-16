@@ -34,7 +34,9 @@ own:
   result by the same measure;
 - the mouth (:func:`mouth_of`): the slot's mouth receivers index the renderer's materials, which are now the
   source's, so they take the source receiver's material index and default tile, and point at the part added for the
-  source's mouth where that is not on the primary;
+  source's mouth where that is not on the primary. The slot's clips name mouth tiles as cells of the slot's own mouth
+  atlas: a source eye-mouth material drawing another atlas (another texture, scale or grid: Hina's 4 x 4 atlas, the
+  shared 8 x 8 one) takes the slot's, and the receivers keep the slot's default tile (:func:`retiled_mouths`);
 - the halo (:func:`halo_of`): after any swap the halo is the source's or none, never the slot's own
   (``adapt``'s ``halo``). The source's halo mesh, materials and textures are added like the costume's and the slot's
   halo renderer draws them where the source draws its own: a followed halo (one unskinned renderer below an
@@ -2821,6 +2823,63 @@ def mouth_of(skeleton: Skeleton, costume: list[Part]) -> Mouth | None:
     return None
 
 
+MOUTH_ATLAS = "_MouthTileTex"                       # the eye-mouth material's mouth atlas
+MOUTH_GRID = ("_MouthTileCols", "_MouthTileRows")   # its cells across and up
+
+
+@dataclass
+class MouthAtlas:
+    """The mouth atlas an eye-mouth material draws: its ``_MouthTileTex`` entry (texture, scale and offset) and its
+    grid (``MOUTH_GRID``), as ``material`` holds them. A clip's ``SetMouthTile`` events name cells of this grid
+    (row * 100 + column, rows from the bottom), so the same number draws another mouth on another atlas: most
+    students share one atlas, others draw their own (Hina's 4 x 4 one), laid out differently."""
+
+    material: Any
+    env: dict
+    grid: dict[str, float]
+    texture: tuple[str, int] | None
+
+    def same(self, other: "MouthAtlas") -> bool:
+        """Whether a cell number draws the same here and on ``other``: one texture, one scale, one grid."""
+        return (self.texture == other.texture and self.env.get("m_Scale") == other.env.get("m_Scale")
+                and self.grid == other.grid)
+
+
+def mouth_atlas(graph: BundleGraph, material: Any) -> MouthAtlas | None:
+    """The mouth atlas ``material`` draws (:class:`MouthAtlas`), None for a material without one."""
+    if material is None:
+        return None
+    props = graph.tree(material)["m_SavedProperties"]
+    env = next((value for name, value in props.get("m_TexEnvs", []) if name == MOUTH_ATLAS), None)
+    if env is None or not env["m_Texture"]["m_PathID"]:
+        return None
+    texture = graph.deref(material, env["m_Texture"])
+    grid = {name: float(value) for name, value in props.get("m_Floats", []) if name in MOUTH_GRID}
+    return MouthAtlas(material, copy.deepcopy(env), grid, _key(texture) if texture is not None else None)
+
+
+def retiled_mouths(graph: BundleGraph, t_skeleton: Skeleton, t_costume: list[Part], s_costume: list[Part],
+                   mouth: Mouth | None) -> tuple[MouthAtlas | None, set[tuple[str, int]], Mouth | None]:
+    """The source's eye-mouth materials that draw another atlas than the slot's mouth (:class:`MouthAtlas`): the
+    slot's clips keep their ``SetMouthTile`` events, which name cells of the slot's atlas, so these materials take
+    the slot's atlas, scale, offset and grid, and the receivers keep the slot's default tile. Returns the slot's
+    atlas (None when the slot has no mouth receiver with one), the keys of those materials and the source's mouth
+    with the default tile its receivers get."""
+    t_mouth = mouth_of(t_skeleton, t_costume)
+    slot = mouth_atlas(graph, t_costume[t_mouth.part].materials[t_mouth.index]) if t_mouth is not None else None
+    if slot is None or mouth is None:
+        return None, set(), mouth
+    retiled = set()
+    for part in s_costume:
+        for material, kind in zip(part.materials, part.kinds):
+            own = mouth_atlas(graph, material) if kind == "eyemouth" else None
+            if own is not None and not own.same(slot):
+                retiled.add(_key(material))
+    if _key(s_costume[mouth.part].materials[mouth.index]) in retiled:
+        mouth = dataclasses.replace(mouth, uv=copy.deepcopy(t_mouth.uv))
+    return slot, retiled, mouth
+
+
 # what a build cannot show in the preview and the game may draw differently (the switch's cautions)
 EX_PARTS = "ex_parts"              # the slot's EX-only parts (a cut-in body, alternative faces) now draw nothing
 CARRIED_SHADER = "carried_shader"  # a shader carried with the costume: the game holds two of its name
@@ -3040,27 +3099,50 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
     # textures and materials
     textures: dict[tuple[str, int], int] = {}
     materials: dict[tuple[str, int], int] = {}
+    # the mouth: the slot's clips name cells of the slot's mouth atlas, so a source eye-mouth material drawing another
+    # atlas takes the slot's (retiled_mouths)
+    mouth = mouth_of(s_skeleton, s_costume)
+    slot_atlas, retiled, mouth = retiled_mouths(graph, t_skeleton, t_costume, s_costume, mouth)
+    if retiled:
+        logger.info("Costume of %s on %s: %d eye-mouth material(s) take the slot's mouth atlas", s_name, t_name,
+                    len(retiled))
 
     def carry_material(material: Any) -> int:
         """A source material added to the slot's material file, with its textures (and its shader where the game does
-        not load it with the slot's prefab)."""
+        not load it with the slot's prefab); an eye-mouth material in ``retiled`` with the slot's mouth atlas."""
         if _key(material) not in materials:
             tree = material.read_typetree()
+            owners: dict[str, Any] = {}  # a texture entry taken from another material: that material
+            if _key(material) in retiled and slot_atlas is not None:
+                props = tree["m_SavedProperties"]
+                envs = props["m_TexEnvs"]
+                for i, pair in enumerate(envs):
+                    if pair[0] == MOUTH_ATLAS:
+                        envs[i] = type(pair)((MOUTH_ATLAS, copy.deepcopy(slot_atlas.env)))
+                owners[MOUTH_ATLAS] = slot_atlas.material
+                floats = props.setdefault("m_Floats", [])
+                for name, value in slot_atlas.grid.items():
+                    at = next((i for i, pair in enumerate(floats) if pair[0] == name), None)
+                    if at is None:
+                        floats.append(type(floats[0])((name, value)) if floats else (name, value))
+                    else:
+                        floats[at] = type(floats[at])((name, value))
             shader_cab = _external_cab(material, tree["m_Shader"]["m_FileID"])
             if tree["m_Shader"]["m_PathID"] and not shared(shader_cab):
                 # a shader the game does not load with the slot's prefab: a copy of it goes into the material's file
                 tree["m_Shader"] = {"m_FileID": 0, "m_PathID": carried(graph.deref(material, tree["m_Shader"]), shader_cab)}
             else:
                 tree["m_Shader"] = {"m_FileID": writer.external(material_sf, shader_cab), "m_PathID": tree["m_Shader"]["m_PathID"]}
-            for _, value in tree["m_SavedProperties"]["m_TexEnvs"]:
+            for env_name, value in tree["m_SavedProperties"]["m_TexEnvs"]:
                 pointer = value["m_Texture"]
                 if not pointer["m_PathID"]:
                     continue
-                cab = _external_cab(material, pointer["m_FileID"])
+                owner = owners.get(env_name, material)
+                cab = _external_cab(owner, pointer["m_FileID"])
                 if shared(cab):
                     value["m_Texture"] = {"m_FileID": writer.external(material_sf, cab), "m_PathID": pointer["m_PathID"]}
                     continue
-                texture = graph.deref(material, pointer)
+                texture = graph.deref(owner, pointer)
                 if texture is None:
                     raise refuse("texture not found")
                 if _key(texture) not in textures:
@@ -3149,7 +3231,6 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
     # the renderers' culling boxes hold each part at rest and in every probe pose, so parts that move far from their
     # rest place do not vanish at the screen's edge
     bounds = [_bounds(w, nodes, t_skeleton, root_node, [t_rest, *probes]) for w, (_, nodes) in zip(written, new_meshes)]
-    mouth = mouth_of(s_skeleton, s_costume)
     if mouth is None:
         logger.info("Costume of %s on %s: the source has no mouth receiver on its costume, the slot's stays as it is",
                     s_name, t_name)
@@ -3368,8 +3449,9 @@ def _edit_prefabs(writer: _Writer, sf: Any, graph: BundleGraph, t_meshes: Mappin
 def _edit_mouth(behaviours: list[int], tree: Callable[[int], dict], save: Callable[[int], None],
                 costume_renderers: set[int], renderer: int, mouth: Mouth) -> None:
     """The prefab's mouth receivers that point at one of the slot's costume renderers draw the source's mouth: on
-    ``renderer`` (the primary, or the part added for the source's mouth), with the source's material index and default
-    tile. The receiver indexes the renderer's materials, which are now the source's in the source's order."""
+    ``renderer`` (the primary, or the part added for the source's mouth), with the source's material index and
+    ``mouth``'s default tile (the source's, or the slot's where the mouth takes the slot's atlas). The receiver indexes
+    the renderer's materials, which are now the source's in the source's order."""
     for pid in behaviours:
         t = tree(pid)
         pointer = t.get("MouthRenderer")
