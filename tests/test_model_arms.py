@@ -94,6 +94,10 @@ def test_head_contact_blends_only_the_head_bones_own_surface():
         def posed(w, rows=None):
             vertices = np.array([wrist + [.02, 0, 0], wrist + [0, 0, .5]])
             return vertices if rows is None else vertices[rows]
+
+        @staticmethod
+        def posed_batch(poses, rows):
+            return np.array([Own.posed(w, rows) for w in poses])
     pins = ar.head_pins(rig, Own(), [rig.rest] * 20, np.array([0]), True)
     assert np.allclose(pins[:, 0], 1)
     assert np.allclose(ar.head_pins(rig, Own(), [rig.rest] * 20, np.array([1]), False), 0)
@@ -713,7 +717,15 @@ def test_batched_torso_depths_penetrations_and_gradients_equal_the_frame_by_fram
     assert len(drawn._body_layout[0])  # the shoulder ring is re-skinned after an arm turn
     mixed = [poses[f] if f % 3 == 0 else turned[f] for f in frames]
     for f in range(len(poses)):
-        assert np.array_equal(single.frames[f].prepared[0], batched.frames[f].prepared[0])
+        # frames set up in batches equal frames set up one at a time
+        alone = ar.BodyFrame(drawn, rig, poses[f], batched.frames[f].vertices)
+        for got, want in zip(batched.frames[f].prepared[:5], alone.prepared[:5]):
+            assert got.tobytes() == want.tobytes()
+        for got, want in zip(batched.frames[f].prepared[5][1:], alone.prepared[5][1:]):
+            assert got.tobytes() == want.tobytes()
+        assert np.array_equal(batched.frames[f].vertices, drawn.posed(poses[f], batched.rows))
+    assert np.array_equal(rig.samples_many(turned), [rig.samples(w) for w in turned])
+    assert rig.samples_many(np.zeros((0, len(rig.rest), 4, 4))).shape == (0, 2, 9, 3)
     depth = ar.depths([batched[f] for f in frames], mixed)
     assert _same(depth, [single[f].depth(w) for f, w in zip(frames, mixed)])
     assert all(batched[f].baseline is not None for f in frames if f % 3 == 0)
@@ -887,3 +899,69 @@ def test_trimmed_solver_steps_are_bit_identical_with_and_without_guard_and_start
                 got = ar.solve_many(rig, poses, needs, hold, pins, sleeves, guard, start)
                 want = _solve_many_reference(rig, poses, needs, hold, pins, sleeves, guard, start)
                 assert got.tobytes() == want.tobytes()
+
+
+def _contacts_reference(rig, own, weapons, poses, rows, loop, shown=None):
+    """Weapon holds and head pins frame by frame, as before they were batched."""
+    relative = np.full((len(poses), 2, 3), np.nan)
+    distance = np.full((len(poses), 2), np.inf)
+    if weapons and rig.weapon is not None:
+        for f, w in enumerate(poses):
+            mount = w[rig.weapon]
+            if abs(np.linalg.det(mount[:3, :3])) < 1e-9:
+                continue
+            palms = rig.samples(w)[:, 7]
+            visible = [weapon.posed(w, np.arange(0, len(weapon.h), 5)) for k, weapon in enumerate(weapons)
+                       if shown is None or shown[f, k]]
+            if not visible:
+                continue
+            vertices = np.concatenate(visible)
+            distance[f] = np.linalg.norm(palms[:, None] - vertices[None], axis=2).min(axis=1)
+            relative[f] = (np.c_[palms, np.ones(2)] @ np.linalg.inv(mount).T)[:, :3]
+    pins = np.zeros((len(poses), 2))
+    if len(rows):
+        sampled = rows[::2]
+        for f, w in enumerate(poses):
+            hv = own.posed(w, sampled)
+            pts = rig.samples(w)[:, 6:9].reshape(-1, 3)
+            dist = np.linalg.norm(pts[:, None] - hv[None], axis=2).min(axis=1).reshape(2, 3).min(axis=1)
+            pins[f] = np.clip((ar.PIN_FAR - dist) / (ar.PIN_FAR - ar.PIN_NEAR), 0.0, 1.0)
+        pins = np.clip(ar.blend(pins, loop), 0.0, 1.0)
+    return ar.weapon_holds(relative, distance, loop), pins
+
+
+def test_batched_contacts_equal_the_frame_by_frame_weapon_and_head_checks():
+    base = _rig()
+    bones = [(n.name, (n.parent + 1) if n.parent is not None else 0, tuple(n.local[0]), tuple(n.local[1]))
+             for n in base.sk.nodes]
+    hand = base.arm[1][3]
+    bones.append(("Bip001_Weapon", hand + 1, (0, -.03, .04), (0, 0, 0, 1)))
+    rig = ar.Rig(_skeleton(bones))
+    rng = np.random.default_rng(77)
+    own = _skinned_body(rig, rng)
+    rest = np.array(rig.rest)
+    weapons = []
+    palm = rig.samples(rest)[1, 7]
+    for bone, size in ((rig.weapon, .03), (hand, .01)):
+        vertices = palm + rng.normal(0, size, (40, 3))
+        drawn = ar.Drawn(vertices, np.zeros((40, 1), int), np.ones((40, 1)), np.zeros((0, 3), int),
+                         np.zeros(40, int), None)
+        drawn.pose_bones, drawn.bindings = np.array([bone]), np.linalg.inv(rest[[bone]])
+        weapons.append(drawn)
+    poses = []
+    for f in range(40):
+        w = rest.copy()
+        w[:, :3, 3] += np.sin(f / 6) * .004 + rng.normal(0, .0005, (len(w), 3))
+        poses.append(w)
+    poses[5][rig.weapon, :3, :3] = 0          # a hidden mount
+    poses[9][rig.weapon] = np.nan             # an unreadable mount still counts as shown
+    shown = rng.random((40, 2)) < .8
+    shown[12] = False
+    wrist = rig.samples(rest)[0, 6]
+    head = np.argsort(np.linalg.norm(own.h[:, :3] - wrist, axis=1))[:60]  # a surface the left hand touches
+    for loop in (False, True):
+        for which in (None, shown):
+            got = ar.contacts(rig, own, weapons, poses, head, loop, which)
+            want = _contacts_reference(rig, own, weapons, poses, head, loop, which)
+            assert got[0].tobytes() == want[0].tobytes() and got[1].tobytes() == want[1].tobytes()
+    assert got[0].any() and (got[1] > 0).any()

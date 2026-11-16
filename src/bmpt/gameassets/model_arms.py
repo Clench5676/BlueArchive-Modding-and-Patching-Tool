@@ -229,6 +229,18 @@ class Rig:
                       e + 0.75 * (w - e), w, (hand @ self.palm[s])[:3], (hand @ self.tip[s])[:3]]
         return out
 
+    def samples_many(self, poses):
+        """``samples`` of every pose: (frames, 2, 9, 3), with the same arithmetic per frame."""
+        poses = np.asarray(poses)
+        out = np.zeros((len(poses), 2, len(SAMPLES), 3))
+        for s in range(2):
+            u, e, w = (poses[:, n, :3, 3] for n in self.arm[s][1:])
+            hand = poses[:, self.arm[s][3]]
+            for k, value in enumerate((u + 0.5 * (e - u), u + 0.75 * (e - u), e, e + 0.25 * (w - e), e + 0.5 * (w - e),
+                                       e + 0.75 * (w - e), w, (hand @ self.palm[s])[:, :3], (hand @ self.tip[s])[:, :3])):
+                out[:, s, k] = value
+        return out
+
     def axis(self, pose):
         pts = [pose[n][:3, 3] for n in self.spine]
         if self.feet:
@@ -517,11 +529,12 @@ def head_pins(rig, own, poses, rows, loop):
     if not len(rows):
         return out
     rows = rows[::2]
-    for f, w in enumerate(poses):
-        hv = own.posed(w, rows)
-        pts = rig.samples(w)[:, 6:9].reshape(-1, 3)
-        dist = np.linalg.norm(pts[:, None] - hv[None], axis=2).min(axis=1).reshape(2, 3).min(axis=1)
-        out[f] = np.clip((PIN_FAR - dist) / (PIN_FAR - PIN_NEAR), 0.0, 1.0)
+    for begin in range(0, len(poses), 16):
+        chunk = poses[begin:begin + 16]
+        hv = own.posed_batch(chunk, rows)
+        pts = rig.samples_many(chunk)[:, :, 6:9].reshape(len(chunk), -1, 3)
+        dist = np.linalg.norm(pts[:, :, None] - hv[:, None], axis=3).min(axis=2).reshape(-1, 2, 3).min(axis=2)
+        out[begin:begin + len(chunk)] = np.clip((PIN_FAR - dist) / (PIN_FAR - PIN_NEAR), 0.0, 1.0)
     return np.clip(blend(out, loop), 0.0, 1.0)
 
 
@@ -570,19 +583,23 @@ def weapon_holds(relative, distance, loop=False):
 def contacts(rig, own, weapons, poses, rows, loop, shown=None):
     relative = np.full((len(poses), 2, 3), np.nan)
     distance = np.full((len(poses), 2), np.inf)
-    if weapons and rig.weapon is not None:
-        for f, w in enumerate(poses):
-            mount = w[rig.weapon]
-            if abs(np.linalg.det(mount[:3, :3])) < 1e-9:
-                continue
-            palms = rig.samples(w)[:, 7]
-            visible = [weapon.posed(w, np.arange(0, len(weapon.h), 5)) for k, weapon in enumerate(weapons)
-                       if shown is None or shown[f, k]]
-            if not visible:
-                continue
-            vertices = np.concatenate(visible)
-            distance[f] = np.linalg.norm(palms[:, None] - vertices[None], axis=2).min(axis=1)
-            relative[f] = (np.c_[palms, np.ones(2)] @ np.linalg.inv(mount).T)[:, :3]
+    if weapons and rig.weapon is not None and len(poses):
+        stack = np.asarray(poses)
+        mounts = stack[:, rig.weapon]
+        valid = ~(np.abs(np.linalg.det(mounts[:, :3, :3])) < 1e-9)
+        palms = rig.samples_many(stack)[:, :, 7]
+        seen = np.zeros(len(poses), bool)
+        for k, weapon in enumerate(weapons):
+            frames = np.flatnonzero(valid & (shown[:, k] if shown is not None else True))
+            seen[frames] = True
+            sampled = np.arange(0, len(weapon.h), 5)
+            for begin in range(0, len(frames), 16):
+                at = frames[begin:begin + 16]
+                vertices = weapon.posed_batch(stack[at], sampled)
+                near = np.linalg.norm(palms[at, :, None] - vertices[:, None], axis=3).min(axis=2)
+                distance[at] = np.minimum(distance[at], near)
+        for f in np.flatnonzero(seen):
+            relative[f] = (np.c_[palms[f], np.ones(2)] @ np.linalg.inv(mounts[f]).T)[:, :3]
     return weapon_holds(relative, distance, loop), head_pins(rig, own, poses, rows, loop)
 
 
@@ -641,7 +658,7 @@ def solve_many(rig, poses, needs, hold, pins, sleeves, guard=None, initial=None)
     a = np.minimum(needs[:, :, idx], NEED_CAP).copy()
     a[:, :, 4:] *= (1 - pins)[..., None]
     free = (~hold)[..., None]
-    pts = np.array([rig.samples(w) for w in poses])
+    pts = rig.samples_many(poses)
     p = pts[:, :, idx]
     diff = p[:, 0, :, None] - p[:, 1, None, :]
     c = np.linalg.norm(diff, axis=3)
@@ -825,6 +842,7 @@ def solve_clip(rig, own, new, poses, loop, own_depth, before, frames, hold, pins
     sparse = None
     peak = wrist_peak(rig, poses, loop)
     deltas = np.zeros((n, 2, 2, 3))
+    measured_points = rig.samples_many(measured)
     for it in range(ITERATIONS):
         tick()
         current_depth, gradient = depth_gradients([bodies[f] for f in frames], current)
@@ -833,10 +851,10 @@ def solve_clip(rig, own, new, poses, loop, own_depth, before, frames, hold, pins
                                      1.25 * first + 0.005 * (first > 0)), NEED_CAP)
         full = blend(_interpolate(frames, need, n), loop)
         full = rate_limit(full, peak, hold, loop)
-        pts = np.array([rig.samples(w) for w in current])
+        pts = rig.samples_many(current)
         magnitude = np.maximum(np.linalg.norm(gradient, axis=3), 1e-6)
         directions = -gradient / magnitude[..., None]
-        displacement = pts - np.array([rig.samples(w) for w in measured])
+        displacement = pts - measured_points
         target = ((directions * displacement).sum(axis=3)
                   + (current_depth - np.maximum(d_before, 0) + .001) / magnitude)
         regressed = np.maximum(current_depth, 0) - np.maximum(d_before, 0) > .0002
@@ -1041,7 +1059,8 @@ def retarget(target, source, plan, clips, parts, *, step=None, progress=None):
                 parent = rig.sk.nodes[bone].parent
                 values = np.array([ms.quaternion(ma._rotation(np.linalg.inv(w[parent]) @ w[bone])) for w in fixed])
                 rotations[zlib.crc32(rig.sk.nodes[bone].path.encode())] = ms.continuous(values)
-        if max(np.linalg.norm(rig.samples(w) - rig.samples(v), axis=2).max() for w, v in zip(poses, fixed)) < 1e-6:
+        moved = zip(rig.samples_many(poses), rig.samples_many(fixed))
+        if max(np.linalg.norm(w - v, axis=2).max() for w, v in moved) < 1e-6:
             continue
         edited = clone_tree(tree)
         encode_rotations(edited, rotations)
@@ -1196,8 +1215,15 @@ class BodyFrames:
             self.tick()
             batch = missing[begin:begin + 8]
             vertices = self.drawn.posed_batch([self.poses[f] for f in batch], self.rows)
-            for f, v in zip(batch, vertices):
-                self.frames[f] = BodyFrame(self.drawn, self.rig, self.poses[f], v)
+            first = BodyFrame(self.drawn, self.rig, self.poses[batch[0]], vertices[0])
+            self.frames[batch[0]] = first
+            if len(batch) < 2:
+                continue
+            prepared = BodyFrame.prepare(vertices[1:, first.tris])
+            index, leaf_lo, leaf_hi = leaf_bounds(self.drawn._body_index, prepared[3], prepared[4])
+            for k, f in enumerate(batch[1:]):
+                self.frames[f] = BodyFrame(self.drawn, self.rig, self.poses[f], vertices[k + 1],
+                                           [a[k] for a in prepared] + [(index, leaf_lo[k], leaf_hi[k])])
 
     def __getitem__(self, frame):
         self.ensure([frame])
@@ -1252,7 +1278,7 @@ class BodyFrame:
     triangles overlapping the finite arm rays, without sleeve or leg casts.
     """
 
-    def __init__(self, drawn, rig, pose, vertices=None):
+    def __init__(self, drawn, rig, pose, vertices=None, prepared=None):
         self.drawn, self.rig, self.pose = drawn, rig, pose
         self.rows, self.tris, _ = drawn.measure_mesh(True, False)
         self.vertices = drawn.posed(pose, self.rows) if vertices is None else vertices
@@ -1266,11 +1292,13 @@ class BodyFrame:
                 changed = np.arange(len(self.rows))
             drawn._body_layout = changed, np.flatnonzero(np.isin(self.tris, changed).any(axis=1))
         self.changed, self.tri_changed = drawn._body_layout
-        self.prepared = self.prepare(self.vertices[self.tris])
         if not hasattr(drawn, '_body_index'):
             drawn._body_index = TriangleIndex(self.vertices[self.tris])
+        if prepared is None:
+            prepared = self.prepare(self.vertices[self.tris])
+            prepared.append(drawn._body_index.bounds(prepared))
+        self.prepared = prepared
         self.leaves_changed = np.unique(drawn._body_index.leaf_of[self.tri_changed])
-        self.prepared.append(drawn._body_index.bounds(self.prepared))
         self.baseline = None
 
     @staticmethod
@@ -1472,7 +1500,7 @@ def _geometry_many(bodies, poses):
 
 
 def _samples(rig, poses):
-    return np.array([rig.samples(w) for w in poses])
+    return rig.samples_many(poses)
 
 
 def depths(bodies, poses):
