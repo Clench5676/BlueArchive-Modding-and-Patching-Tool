@@ -455,7 +455,8 @@ def test_official_costume_on_a_slot(view, tmp_path, target, source, field, parts
         after = {o.path_id: o for o in UnityPy.load(str(path)).objects}
         assert before.keys() <= after.keys()
         changed = {before[pid].type.name for pid in before if before[pid].get_raw_data() != after[pid].get_raw_data()}
-        allowed = {"SkinnedMeshRenderer", "AssetBundle", "Transform", "MonoBehaviour"}
+        # Arm corrections select copies through the slot's override controllers.
+        allowed = {"SkinnedMeshRenderer", "AssetBundle", "Transform", "MonoBehaviour", "AnimatorOverrideController"}
         # Rule B's skirt and another face's bones (face_retarget) give the slot's clips curves
         assert changed <= allowed | ({"AnimationClip"} if skirt or hems.face else set()), changed
     # the slot read back: the costume drawn at rest exactly in the shape it was bound and judged in (as the
