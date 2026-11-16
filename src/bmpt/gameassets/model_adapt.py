@@ -61,7 +61,7 @@ import re
 import zlib
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Iterable, Mapping, Sequence
+from typing import TYPE_CHECKING, Any, Callable, Iterable, Mapping, Sequence
 
 import numpy as np
 
@@ -73,6 +73,9 @@ from .errors import AssetNotFound
 from .unity import load_bundle
 from .model import (BundleGraph, NPC_PREFAB, PREFAB_KINDS, _external_cab, _key, _prefabs, bind_tracks, decode_clip,
                     euler_orders, euler_to_quat, ex_only_renderers, model_root, read_mesh, shader_kind, UNITY_ORDER)
+
+if TYPE_CHECKING:
+    from .model_props import WornStore
 
 logger = logging.getLogger(__name__)
 
@@ -2898,6 +2901,8 @@ class Result:
     parts: int
     hems: Hems | None = None
     cautions: list[str] = field(default_factory=list)  # ``EX_PARTS``, ``CARRIED_SHADER``
+    dropped: list[str] = field(default_factory=list)  # the slot's renderers whose worn items now draw nothing
+    carried: list[str] = field(default_factory=list)  # the source's renderers whose worn items the slot now draws
 
 
 def _model_prefabs(graph: BundleGraph, files: list[Path]) -> dict[str, Any]:
@@ -2926,25 +2931,31 @@ def choose_prefab(prefabs: Mapping[str, Any], dev: str) -> str:
 
 def adapt(*, index: Mapping[str, Path], resolver: Callable | None, target_files: list[Path], target_dev: str,
           source_files: list[Path], source_dev: str, open_writable: Callable[[Path], Any],
-          physics: bool = False, halo: bool = False, step: Callable[[], None] | None = None) -> Result:
+          physics: bool = False, halo: bool = False, step: Callable[[], None] | None = None,
+          worn: WornStore | None = None) -> Result:
     """The changed bundles of ``target_files`` (the slot, official copies) carrying the costume of ``source_dev``'s
     model, whose prefab sits in ``source_files``. ``index`` maps CABs to files to read (the slot's own CABs to
     ``target_files``); ``resolver`` finds any other CAB. ``open_writable`` opens a slot file as an engine Bundle.
     A costume past the stretch limit is built and applied all the same (``plan.unfit``).
     ``physics`` (Optimize Physics) lets the hem rule also offer Rule B, the skirt chains as new bones.
     ``halo`` gives the slot the source's halo, or none (:func:`_halo_change`).
+    The slot's worn items (``model_props``: hats, glasses, bags) draw nothing and the source's are carried;
+    ``worn`` caches each model's verdict (``model_props.WornStore``).
     The graph reads every bundle from memory (``unity.load_bundle``: a path lock for each load alone), so a build
     needs no model lock and exports run beside it. ``step`` is called between the build's steps (most under 0.5 s;
     the plan, the hems and a cold first read of the idle poses up to a few seconds, measured on Hina wearing Aoba):
     the caller's job yields there (``preview_gate.step``) or stops by raising."""
     with BundleGraph(index, resolver=resolver, opener=load_bundle) as graph:
         return _adapt(graph, index, target_files, target_dev, source_files, source_dev, open_writable, physics,
-                      halo, step or (lambda: None))
+                      halo, step or (lambda: None), worn)
 
 
 def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Path], target_dev: str,
            source_files: list[Path], source_dev: str, open_writable: Callable[[Path], Any],
-           physics: bool = False, halo: bool = False, step: Callable[[], None] = lambda: None) -> Result:
+           physics: bool = False, halo: bool = False, step: Callable[[], None] = lambda: None,
+           worn: WornStore | None = None) -> Result:
+    from . import model_props as mp
+
     target_prefabs = _model_prefabs(graph, [f for f in target_files if f.name.startswith("character-")])
     source_prefabs = _model_prefabs(graph, source_files)
     t_name = choose_prefab(target_prefabs, target_dev)
@@ -2977,6 +2988,11 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
         return ordered
 
     t_costume, s_costume = costume(t_parts), costume(s_parts)
+    # worn items go with the costume: the slot's draw nothing, the source's are carried
+    t_worn = mp.worn_of(t_skeleton, t_parts, t_clips, t_idle, target_dev, worn, step)
+    step()
+    s_worn = mp.worn_of(s_skeleton, s_parts, s_clips, s_idle, source_dev, worn, step)
+    step()
     target = Costume(t_skeleton, t_costume, [skin_of(p.mesh) for p in t_costume])
     source = Costume(s_skeleton, s_costume, [skin_of(p.mesh) for p in s_costume])
     step()
@@ -3239,6 +3255,33 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
             [0 if m is None else 1 for m in part.materials], bool((tree.get("m_StreamData") or {}).get("size"))))
         new_meshes.append((writer.add(mesh_sf, "Mesh", tree), nodes))
     step()
+    # the source's worn items: further parts, bound rigidly to the slot's bones they follow
+    carried_parts = mp.carried(t_skeleton, s_skeleton, s_worn, s_clips, s_idle, _mesh_tree)
+    step()
+    root_hash = graph.tree(primary.mesh)["m_RootBoneNameHash"]
+    for c in carried_parts:
+        for material in c.part.materials:
+            if material is not None:
+                carry_material(material)
+        tree = c.tree
+        tree["m_BindPose"] = [_matrix(m) for m in c.bindposes]
+        tree["m_BoneNameHashes"] = [zlib.crc32(t_skeleton.nodes[n].path.encode()) for n in c.nodes]
+        tree["m_RootBoneNameHash"] = root_hash
+        if len(tree["m_BonesAABB"]) == len(c.nodes):
+            for i, pose in enumerate(c.bindposes):
+                hit = ((c.joints == i) & (c.weights > 0)).any(axis=1)
+                if hit.any():
+                    local = (np.c_[c.vertices[hit], np.ones(hit.sum())] @ pose.T)[:, :3]
+                    tree["m_BonesAABB"][i] = {"m_Min": _vector(local.min(axis=0)), "m_Max": _vector(local.max(axis=0))}
+        written.append(Written(
+            c.part.mesh.peek_name(), c.vertices, c.linear, c.joints, c.weights, c.bindposes,
+            [t_skeleton.nodes[n].name for n in c.nodes], len(tree["m_SubMeshes"]), c.weights.sum(axis=1),
+            [0 if m is None else 1 for m in c.part.materials], False))
+        new_meshes.append((writer.add(mesh_sf, "Mesh", tree), c.nodes))
+    # the slot's worn items: a renderer drawing nothing else the clips show draws nothing, another a copy of its mesh
+    # without them
+    worn_meshes = mp.host_meshes(t_worn, lambda tree: writer.add(mesh_sf, "Mesh", tree), _mesh_tree)
+    step()
     # the source's halo: its mesh added as it is (a skinned one is drawn unskinned), or the slot's hidden
     halo_change = _halo_change(t_skeleton, s_skeleton, lambda mesh: writer.add(mesh_sf, "Mesh", _mesh_tree(mesh)),
                                carry_material, (s_name, t_name),
@@ -3263,10 +3306,11 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
         bundle = opened[prefab_path]
         for name, sf in bundle.env.file.files.items():
             if hasattr(sf, "objects") and name.lower() in files:
+                drawn_parts = [*s_costume, *(c.part for c in carried_parts)]
                 _edit_prefabs(writer, sf, graph, t_meshes, t_primary_materials, mesh_cab, material_cab, new_meshes,
-                              [[materials[_key(m)] if m is not None else 0 for m in p.materials] for p in s_costume],
-                              [s_skeleton.nodes[p.node].name for p in s_costume], root_node, t_skeleton, bounds,
-                              halo_change, rendered, mouth)
+                              [[materials[_key(m)] if m is not None else 0 for m in p.materials] for p in drawn_parts],
+                              [s_skeleton.nodes[p.node].name for p in drawn_parts], root_node, t_skeleton, bounds,
+                              halo_change, rendered, mouth, worn_meshes)
     for clip in skirt_clips:
         step()
         obj = writer.file(clip.assets_file.name.lower()).objects[clip.path_id]
@@ -3299,14 +3343,23 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
                 {s_skeleton.nodes[n].name: c for n, c in result.choices.items()}, result.stretch, result.own,
                 result.fit.shape, result.fit.largest, result.fit.shift, hem.summary(),
                 f"; {result.repair}" if result.repair else "")
-    return Result(opened, result, len(s_costume), hem, cautions)
+    dropped = sorted(t_skeleton.nodes[n].name for n, items in t_worn.by_renderer().items()
+                     if _key(items[0].part.mesh) in worn_meshes)
+    carried_names = [s_skeleton.nodes[c.part.node].name for c in carried_parts]
+    if dropped or carried_names:
+        logger.info("Costume of %s on %s: worn items of %s draw nothing, of %s are carried", s_name, t_name,
+                    ", ".join(dropped) or "none", ", ".join(carried_names) or "none")
+    return Result(opened, result, len(s_costume), hem, cautions, dropped, carried_names)
 
 
 def _edit_prefabs(writer: _Writer, sf: Any, graph: BundleGraph, t_meshes: Mapping[tuple[str, int], str],
                   primary_materials: list[tuple[str, int]], mesh_cab: str, material_cab: str,
                   new_meshes: list[tuple[int, list[int]]], new_materials: list[list[int]], names: list[str],
                   root_node: int, t_skeleton: Skeleton, bounds: list[dict], halo: HaloChange | None = None,
-                  rendered: list[Rendered] | None = None, mouth: Mouth | None = None) -> None:
+                  rendered: list[Rendered] | None = None, mouth: Mouth | None = None,
+                  worn: Mapping[tuple[str, int], int | None] | None = None) -> None:
+    """One prefab file's renderers draw the new costume; ``worn``: the slot's meshes of worn items and what their
+    renderers draw instead (None for nothing, else a new mesh in the mesh file)."""
     objects = sf.objects
     trees: dict[int, dict] = {}
 
@@ -3396,8 +3449,15 @@ def _edit_prefabs(writer: _Writer, sf: Any, graph: BundleGraph, t_meshes: Mappin
         for pid in renderers:
             r = tree(pid)
             mesh = r["m_Mesh"]
-            role = t_meshes.get((_cab(sf, mesh["m_FileID"]), mesh["m_PathID"])) if mesh["m_PathID"] else None
+            key = (_cab(sf, mesh["m_FileID"]), mesh["m_PathID"]) if mesh["m_PathID"] else None
+            role = t_meshes.get(key) if key is not None else None
             if role is None:
+                if worn and key in worn:  # worn items of the slot's costume
+                    instead = worn[key]
+                    r["m_Mesh"] = {"m_FileID": mesh_fid if instead else 0, "m_PathID": instead or 0}
+                    if instead:
+                        added.append({"m_FileID": mesh_fid, "m_PathID": instead})
+                    save(pid)
                 continue
             costume_renderers.add(pid)
             if role == "primary":

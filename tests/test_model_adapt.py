@@ -521,7 +521,8 @@ def test_official_costume_on_a_slot(view, tmp_path, target, source, field, parts
             reweighted += 1
     assert sorted(drawn) == sorted(p.mesh.peek_name() for p in s_parts)
     assert reweighted == len(changes)
-    assert empty == {"ch0172": 1, "hoshino_swimsuit": 2}.get(target, 0)
+    # the slot's own parts that now draw nothing: Mari (Track)'s three worn bottles too (model_props)
+    assert empty == {"ch0172": 1, "hoshino_swimsuit": 2, "ch0186": 3}.get(target, 0)
     data = export_chibi(BundleGraph(adapted), prefab_files, target)
     doc = json.loads(data[20:20 + struct.unpack_from("<I", data, 12)[0]])
     assert {m["name"] for m in doc["meshes"]} >= set(drawn) and doc["animations"]
@@ -1542,6 +1543,7 @@ def test_the_library_builds_a_costume_without_the_model_lock(monkeypatch, tmp_pa
         raise model_adapt.refuse("rest pose")
 
     library = object.__new__(service.ModLibrary)
+    library.root = tmp_path
     monkeypatch.setattr(model_adapt, "adapt", adapt)
     monkeypatch.setattr(service.ModLibrary, "_official_or_current", lambda self, path, pin: path)
     monkeypatch.setattr(service.ModLibrary, "_stage_copies", lambda self, originals, folder: {})
