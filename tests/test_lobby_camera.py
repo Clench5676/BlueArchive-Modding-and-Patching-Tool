@@ -415,6 +415,40 @@ def test_camera_serves_the_effect_textures_of_the_lobby_it_frames(camera_env, tm
 
 
 @pytest.mark.skipif(not GAME_DIR.is_dir(), reason="No local game install")
+def test_camera_still_is_framed_by_its_camera(camera_env, tmp_path):
+    import json
+
+    from bmpt.config import Settings
+    from bmpt.webui.services import Services
+    from bmpt.webui.state import UiState
+
+    e = camera_env
+    k, offset = 1.6, (40.0, -300.0)
+    record = save(e, k=k, offset=offset)
+    services = Services(Settings(tmp_path / "webui-config.toml"), tmp_path / "data", state=UiState(tmp_path / "webui.json"),
+                        cache=object(), game=e.game, catalog=object(), library=e.library)
+    try:
+        def framing(route):
+            return json.loads(services.asset(f"spine/{route}/framing.json", {}).body)
+
+        official = framing("official-lobby/azusa_home")
+        own = framing(f"mod/{record['id']}")
+        # the still's camera (lobby-still.js) is the lobby's own: the camera's view, its main layer as the camera's
+        # prefab places it, which is the official one mapped by p -> k p + offset
+        layout = json.loads(services.asset(f"spine/mod/{record['id']}/lobby.json", {}).body)
+        main = next(layer for layer in layout["layers"] if layer["name"] == layout["main"])
+        assert own == {"view": layout["view"], "layer": {key: main[key] for key in ("name", "x", "y", "scale")}}
+        assert own["view"] == official["view"] and own["layer"]["name"] == official["layer"]["name"]
+        x, y = point(k, offset, official["layer"]["x"], official["layer"]["y"])
+        assert own["layer"]["x"] == pytest.approx(x, abs=0.05) and own["layer"]["y"] == pytest.approx(y, abs=0.05)
+        assert own["layer"]["scale"] == pytest.approx(official["layer"]["scale"] * k, rel=1e-4)
+        # the official still keeps the official framing
+        assert official["layer"] == framing("lobby/azusa_home")["layer"]
+    finally:
+        services.close()
+
+
+@pytest.mark.skipif(not GAME_DIR.is_dir(), reason="No local game install")
 def test_camera_on_a_lobby_mod_and_after_a_game_update(camera_env):
     import zlib
     from ba_modding_toolkit.bundle import Bundle

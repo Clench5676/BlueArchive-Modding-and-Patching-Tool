@@ -20,6 +20,8 @@ import {prepareBack} from '../visual-mode.js';
 export {FRAME};
 // the white button of the visual mode's toolbar, for the lobby's camera framing (lobby-camera.js)
 export const visualButton = (...args) => whiteButton(...args);
+// the gallery button's box at the bottom left (the lobby camera's album takes the same)
+export const galleryBox = () => photographyToolbarLayout().gallery;
 let sessionVariant=null,generation=0,repository,bridge,overlay,active=false,mode='portrait',grid=true,expanded=false,paused=false,selected=null,modal=null;
 // the gallery list's scroll offset, kept across its redraws (UI.virtualArea positions)
 const GALLERY_SCROLL='photo-gallery',galleryScroll=new Map();
