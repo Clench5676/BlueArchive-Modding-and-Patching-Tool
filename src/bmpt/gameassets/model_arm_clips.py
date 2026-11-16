@@ -1,7 +1,7 @@
 """Lossless streamed arm-curve replacement and slot-local clip copies."""
 from __future__ import annotations
 
-import copy
+import pickle
 import struct
 from collections import defaultdict, deque
 
@@ -11,6 +11,12 @@ from . import model_skirts as ms
 from .model import read_streamed, _key
 
 ARM_TOLERANCE = 2e-5
+
+
+def clone_tree(tree):
+    """An independent copy of a type tree (plain containers and scalars, shared parts kept shared), equal to a deep
+    copy and several times faster on clips with long curve arrays."""
+    return pickle.loads(pickle.dumps(tree, pickle.HIGHEST_PROTOCOL))
 
 
 def _layout(tree):
@@ -241,7 +247,7 @@ def write_copies(writer, changes, destinations, holders, skeleton, clip_skirts):
         raise ma.refuse("arm clip receiver not identified", clips=[changes[k].clip.peek_name() for k in sorted(missing)])
     copies = {}
     for key, change in changes.items():
-        tree = copy.deepcopy(change.tree)
+        tree = clone_tree(change.tree)
         before_arms = ma.clip_snapshot(tree)
         # the chains the clip's original would get (swinging roots, or hair carrying the slot's own lock keys)
         skirts = [s for s in clip_skirts.get(key, [])

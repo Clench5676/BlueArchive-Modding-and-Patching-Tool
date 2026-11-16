@@ -533,3 +533,17 @@ def test_gate_stops_measuring_when_the_required_fifth_is_already_proven(monkeypa
     monkeypatch.setattr(ar, 'arm_radii', radius)
     assert ar.clip_gate(None, rig, None, None, None, sampler)[0]
     assert len(calls) == 6  # six of thirty sampled frames prove the gate
+
+
+def test_tree_clone_equals_a_deep_copy_and_shares_nothing_with_the_original():
+    from bmpt.gameassets.model_arm_clips import clone_tree
+    shared = [1.5, -0.0, float('nan'), 2 ** 70]
+    tree = {"m_Name": "clip", "a": [{"x": 1, "y": [0.1, 0.2]}, shared, shared], "b": b"\x00\x01", "c": None,
+            "d": True, "e": np.arange(3, dtype=np.float32)}
+    clone = clone_tree(tree)
+    reference = copy.deepcopy(tree)
+    assert repr(clone) == repr(reference)
+    assert clone["a"][1] is clone["a"][2] and clone["a"][1] is not shared
+    assert np.array_equal(clone["e"], tree["e"]) and clone["e"].dtype == tree["e"].dtype
+    clone["a"][0]["y"].append(3)
+    assert tree["a"][0]["y"] == [0.1, 0.2]

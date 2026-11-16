@@ -958,7 +958,7 @@ def retarget(target, source, plan, clips, parts, *, step=None, progress=None):
     held arms are excluded from the spatial solve. ``progress(done, count)`` is told each clip it comes to, for
     the progress line's percentage.
     """
-    from .model_arm_clips import encode_rotations, edit_error
+    from .model_arm_clips import clone_tree, encode_rotations, edit_error
 
     started = time.perf_counter()
     tick = _Progress(step)
@@ -1016,8 +1016,7 @@ def retarget(target, source, plan, clips, parts, *, step=None, progress=None):
                 rotations[zlib.crc32(rig.sk.nodes[bone].path.encode())] = ms.continuous(values)
         if max(np.linalg.norm(rig.samples(w) - rig.samples(v), axis=2).max() for w, v in zip(poses, fixed)) < 1e-6:
             continue
-        import copy
-        edited = copy.deepcopy(tree)
+        edited = clone_tree(tree)
         encode_rotations(edited, rotations)
         problem = edit_error(tree, edited, rotations)
         if problem:
