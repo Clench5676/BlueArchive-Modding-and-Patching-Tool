@@ -286,6 +286,71 @@ export function standPoint(origin, hips, far = 0.2) {
 
 const stageScale = () => (document.getElementById("stage")?.getBoundingClientRect().width || 1920) / 1920;
 
+// a GLB of the model route, parsed; the server's refusal code (X-BAMT-Error, e.g. original_unavailable: no official
+// copy of a part is left) on the error
+async function readGlb(url, signal) {
+  const loader = new GLTFLoader();
+  // textures read straight, never premultiplied by the browser: alpha is data beside colours (png-decode.js)
+  loader.register((parser) => {
+    parser.textureLoader = straightTextureLoader;
+    return { name: "BAMT_straight_textures" };
+  });
+  const response = await fetch(url, { signal, cache: "no-store" });
+  if (!response.ok) {
+    const error = new Error(`${url}: HTTP ${response.status}`);
+    const code = response.headers.get("X-BAMT-Error");
+    if (code) error.code = code;
+    throw error;
+  }
+  const bytes = await response.arrayBuffer();
+  signal?.throwIfAborted();
+  return loader.parseAsync(bytes, "");
+}
+// a GLB's textures: colour textures decoded from sRGB, masks and direction maps as data (the game's linear colour space)
+async function gltfTextures(gltf) {
+  const json = gltf.parser.json;
+  const textures = await Promise.all((json.textures || []).map((_, i) => gltf.parser.getDependency("texture", i)));
+  textures.forEach((t, i) => {
+    t.colorSpace = json.textures[i].extras?.linear ? THREE.NoColorSpace : THREE.SRGBColorSpace;
+    t.flipY = false;
+  });
+  return textures;
+}
+function discardScene(scene) {
+  scene.traverse((o) => {
+    o.geometry?.dispose();
+    for (const m of [].concat(o.material || [])) {
+      for (const v of Object.values(m)) if (v?.isTexture) v.dispose();
+      m.dispose();
+    }
+  });
+}
+
+// A clip added on demand (the model route's ?clip=, model.py export_clip) made to play on the shown model: the
+// clip's GLB holds the model's hierarchy in the shown GLB's node order, so each track's node is the shown model's node
+// of the same index (renamed to its uuid, which the mixer finds whatever the names). Returns null when the hierarchy
+// is not the shown one's (another source answered).
+export function retarget(clip, clipJson, clipNodes, nodes, json) {
+  const count = clipJson.extras?.hierarchy;
+  if (!Number.isInteger(count) || count > (json.nodes || []).length
+      || clipJson.nodes.slice(0, count).some((n, i) => n.name !== json.nodes[i].name)) return null;
+  const names = new Map();
+  for (const ch of clipJson.animations?.[0]?.channels || []) {
+    const i = ch.target?.node, from = clipNodes[i];
+    if (from && i < count && nodes[i]) names.set(from.name || from.uuid, nodes[i].uuid);
+  }
+  const tracks = [];
+  for (const track of clip.tracks) {
+    const dot = track.name.lastIndexOf(".");
+    const to = names.get(track.name.slice(0, dot));
+    if (!to) continue;
+    const t = track.clone();
+    t.name = `${to}${track.name.slice(dot)}`;
+    tracks.push(t);
+  }
+  return new THREE.AnimationClip(clip.name, clip.duration, tracks);
+}
+
 let viewCount = 0;
 class ChibiView {
   constructor(host, key, { still = false, renderer = null } = {}) {
@@ -366,41 +431,13 @@ class ChibiView {
   }
 
   async load(url, { signal } = {}) {
-    const loader = new GLTFLoader();
-    // textures read straight, never premultiplied by the browser: alpha is data beside colours (png-decode.js)
-    loader.register((parser) => {
-      parser.textureLoader = straightTextureLoader;
-      return { name: "BAMT_straight_textures" };
-    });
-    const response = await fetch(url, { signal, cache: "no-store" });
-    if (!response.ok) {
-      const error = new Error(`${url}: HTTP ${response.status}`);
-      // the server's refusal code, e.g. original_unavailable: no official copy of a part is left
-      const code = response.headers.get("X-BAMT-Error");
-      if (code) error.code = code;
-      throw error;
-    }
-    const bytes = await response.arrayBuffer();
-    signal?.throwIfAborted();
-    const gltf = await loader.parseAsync(bytes, "");
-    const discard = () => gltf.scene.traverse((o) => {
-      o.geometry?.dispose();
-      for (const m of [].concat(o.material || [])) {
-        for (const v of Object.values(m)) if (v?.isTexture) v.dispose();
-        m.dispose();
-      }
-    });
-    if (this.disposed) { discard(); return; }
+    const gltf = await readGlb(url, signal);
+    if (this.disposed) { discardScene(gltf.scene); return; }
     const json = gltf.parser.json, parser = gltf.parser;
     const ex = json.extras || {};
-    const textures = await Promise.all((json.textures || []).map((_, i) => parser.getDependency("texture", i)));
+    const textures = await gltfTextures(gltf);
     const nodes = await Promise.all((json.nodes || []).map((_, i) => parser.getDependency("node", i)));
-    if (this.disposed) { discard(); for (const t of textures) t.dispose(); return; }
-    // colour textures are decoded from sRGB, masks and direction maps are data (the game's linear colour space)
-    textures.forEach((t, i) => {
-      t.colorSpace = json.textures[i].extras?.linear ? THREE.NoColorSpace : THREE.SRGBColorSpace;
-      t.flipY = false;
-    });
+    if (this.disposed) { discardScene(gltf.scene); for (const t of textures) t.dispose(); return; }
     this.textures = textures; // they are only in shader uniforms: disposed by hand
     // the mouth atlas comes as a texture of the EyeMouth material (_MouthTileTex); SetMouthTile moves its offset
     const mats = json.materials || [];
@@ -410,14 +447,6 @@ class ChibiView {
       this.mouth = { st: { value: new THREE.Vector4(t.scale[0], t.scale[1], t.offset[0], t.offset[1]) },
         cols: eye.extras.floats?._MouthTileCols || 8, rows: eye.extras.floats?._MouthTileRows || 8 };
     }
-    // the node of a mesh object: a node of one primitive is the mesh, of several a group around them
-    const nodeOf = (o) => {
-      for (let q = o; q; q = q.parent) {
-        const i = parser.associations.get(q)?.nodes;
-        if (i !== undefined) return i;
-      }
-      return undefined;
-    };
     const root = gltf.scene;
     const meshes = [];
     root.traverse((o) => {
@@ -426,6 +455,60 @@ class ChibiView {
       if (o.isMesh) meshes.push(o);
     });
     this.spaces = []; // [material, the object whose space its shader reads directions in]
+    this.dress(meshes, gltf, textures, nodes);
+    this.scene.add(root);
+    this.root = root;
+    this.gltf = gltf;
+    this.json = json;
+    this.nodes = nodes;
+    this.mixer = new THREE.AnimationMixer(root);
+    this.mixer.addEventListener("finished", (e) => this.finished(e.action));
+    this.clips = new Map();
+    // every clip by its name (the base GLB's and the ones added on demand, addClips)
+    this.named = new Map();
+    // renderers a clip switches (an expression's alternative face), each with its state at rest
+    this.switches = new Map();
+    gltf.animations.forEach((clip, i) => {
+      const extras = json.animations[i]?.extras || {};
+      for (const t of extras.toggles || []) {
+        const object = nodes[t.node];
+        if (object && !this.switches.has(t.node)) this.switches.set(t.node, { object, rest: object.visible });
+      }
+      const entry = { clip, ...extras };
+      if (extras.slot && !this.clips.has(extras.slot)) this.clips.set(extras.slot, entry);
+      if (clip.name && !this.named.has(clip.name)) this.named.set(clip.name, entry);
+    });
+    // without a clip (NPC placeholders) the rest pose shows the props and the weapon where their bones rest, beside
+    // the character; the game's clips scale them away, so fold them here
+    if (!this.clips.size) root.traverse((o) => { if (/^(prop_root|Bip001_Weapon)$/i.test(o.name)) o.scale.setScalar(0); });
+    await this.setupHalo(ex.haloFollower);
+    if (this.disposed) return;
+    // the halo's particles (Tsurugi's drops, Mika's stars and rings), placed by their nodes as the halo moves
+    try {
+      this.fx = createModelFx(ex.haloFx, { nodes, textures, root });
+    } catch (err) {
+      console.warn("halo effects", err);
+      this.fx = null;
+    }
+    if (this.fx) this.scene.add(this.fx.group);
+    // a story model has no idle: it stands in its first story clip's pose, never its bind pose
+    if (!this.act("idle", { fade: 0, quiet: true })) this.act("story1", { fade: 0, quiet: true });
+    this.measure();
+  }
+
+  // the game's shaders on a GLB's meshes (chibiMaterial) and their outlines. `nodes`: the shown model's nodes, in
+  // whose space a skinned renderer's shader reads directions (its root bone; the hierarchy's indices are the same in
+  // an added clip's GLB)
+  dress(meshes, gltf, textures, nodes) {
+    const json = gltf.parser.json, parser = gltf.parser, mats = json.materials || [];
+    // the node of a mesh object: a node of one primitive is the mesh, of several a group around them
+    const nodeOf = (o) => {
+      for (let q = o; q; q = q.parent) {
+        const i = parser.associations.get(q)?.nodes;
+        if (i !== undefined) return i;
+      }
+      return undefined;
+    };
     for (const o of meshes) {
       o.frustumCulled = false;
       const gltfMaterial = o.material;
@@ -453,38 +536,82 @@ class ChibiView {
         o.add(ol); // shown and hidden with its mesh
       }
     }
-    this.scene.add(root);
-    this.root = root;
-    this.gltf = gltf;
-    this.mixer = new THREE.AnimationMixer(root);
-    this.mixer.addEventListener("finished", (e) => this.finished(e.action));
-    this.clips = new Map();
-    // renderers a clip switches (an expression's alternative face), each with its state at rest
-    this.switches = new Map();
-    gltf.animations.forEach((clip, i) => {
-      const extras = json.animations[i]?.extras || {};
+  }
+
+  // Clips by name (the GLB's extras.clips) the shown GLB does not carry, fetched one at a time from the model route
+  // (?clip=, the same source as the model) and added: their tracks moved onto the shown model's nodes (retarget), a
+  // renderer a clip switches found in the shown model, or, when the GLB left it out (an EX skill's alternative face),
+  // taken from the clip's GLB onto the shown skeleton, hidden at rest. Rejects when one cannot be read or does not
+  // fit; the clips added before stay.
+  async addClips(names, { signal } = {}) {
+    for (const name of names) {
+      if (this.named.has(name)) continue;
+      const gltf = await readGlb(modelUrl(this.key, this.source, name), signal);
+      if (this.disposed) { discardScene(gltf.scene); return; }
+      const cj = gltf.parser.json, cp = gltf.parser;
+      const cnodes = await Promise.all((cj.nodes || []).map((_, i) => cp.getDependency("node", i)));
+      const clip = gltf.animations[0] && retarget(gltf.animations[0], cj, cnodes, this.nodes, this.json);
+      if (!clip) { discardScene(gltf.scene); throw new Error(`${name}: the clip does not fit the shown model`); }
+      const textures = await gltfTextures(gltf);
+      if (this.disposed || this.named.has(name)) { discardScene(gltf.scene); for (const t of textures) t.dispose(); return; }
+      const extras = cj.animations[0].extras || {};
+      const toggles = [];
       for (const t of extras.toggles || []) {
-        const object = nodes[t.node];
-        if (object && !this.switches.has(t.node)) this.switches.set(t.node, { object, rest: object.visible });
+        const key = this.switchOf(t.node, cj, cp, cnodes, gltf, textures);
+        if (key != null) toggles.push({ ...t, node: key });
       }
-      if (extras.slot && !this.clips.has(extras.slot)) this.clips.set(extras.slot, { clip, ...extras });
-    });
-    // without a clip (NPC placeholders) the rest pose shows the props and the weapon where their bones rest, beside
-    // the character; the game's clips scale them away, so fold them here
-    if (!this.clips.size) root.traverse((o) => { if (/^(prop_root|Bip001_Weapon)$/i.test(o.name)) o.scale.setScalar(0); });
-    await this.setupHalo(ex.haloFollower);
-    if (this.disposed) return;
-    // the halo's particles (Tsurugi's drops, Mika's stars and rings), placed by their nodes as the halo moves
-    try {
-      this.fx = createModelFx(ex.haloFx, { nodes, textures, root });
-    } catch (err) {
-      console.warn("halo effects", err);
-      this.fx = null;
+      this.textures.push(...textures);
+      this.named.set(name, { clip, ...extras, toggles });
     }
-    if (this.fx) this.scene.add(this.fx.group);
-    // a story model has no idle: it stands in its first story clip's pose, never its bind pose
-    if (!this.act("idle", { fade: 0, quiet: true })) this.act("story1", { fade: 0, quiet: true });
-    this.measure();
+  }
+
+  // The switch (this.switches' key) of the renderer at a hierarchy node an added clip toggles: the shown GLB's
+  // renderer of that node, else the one the clip's GLB brought along, moved onto the shown model (hidden at rest)
+  switchOf(h, cj, cp, cnodes, gltf, textures) {
+    const own = this.json.nodes[h];
+    if (!own) return null;
+    const at = own.extras?.renderer ?? (own.mesh !== undefined ? h : undefined);
+    if (at !== undefined) {
+      const object = this.nodes[at];
+      if (object && !this.switches.has(at)) this.switches.set(at, { object, rest: object.visible });
+      return object ? at : null;
+    }
+    const key = `added:${h}`;
+    if (this.switches.has(key)) return key;
+    const src = cj.nodes[h]?.extras?.renderer ?? (cj.nodes[h]?.mesh !== undefined ? h : undefined);
+    const holder = src === undefined ? null : cnodes[src];
+    if (!holder) return null;
+    // the primitives: the node's mesh, or the meshes of a node of several (not its child nodes)
+    const parts = holder.isMesh ? [holder] : holder.children.filter((c) => c.isMesh && cp.associations.get(c)?.nodes === undefined);
+    if (!parts.length) return null;
+    const bone = (b) => this.nodes[cp.associations.get(b)?.nodes] || null;
+    for (const p of parts) {
+      if (p.isSkinnedMesh) {
+        const bones = p.skeleton.bones.map(bone);
+        if (bones.some((b) => !b)) return null;
+        p.bind(new THREE.Skeleton(bones, p.skeleton.boneInverses), p.bindMatrix);
+      }
+    }
+    this.dress(parts, gltf, textures, this.nodes);
+    // a skinned renderer's node sits under the model's root, untransformed; a static one is the GameObject's own node,
+    // whose transform the shown model's node of the same index has
+    const skinned = parts[0].isSkinnedMesh;
+    const group = new THREE.Group();
+    group.name = `${cj.nodes[h].name}_added`;
+    for (const p of parts) {
+      if (p === holder && !skinned) {
+        // the node itself drew it: a copy without the node's transform and its child nodes, with its outline
+        const m = new THREE.Mesh(p.geometry, p.material);
+        Object.assign(m, { name: p.name, renderOrder: p.renderOrder, frustumCulled: false });
+        for (const c of [...p.children]) if (c.name.endsWith("_outline")) m.add(c);
+        for (const s of this.spaces) if (s[1] === p) s[1] = m;
+        group.add(m);
+      } else group.add(p);
+    }
+    group.visible = false;
+    (skinned ? this.nodes[0] : this.nodes[h]).add(group);
+    this.switches.set(key, { object: group, rest: false });
+    return key;
   }
 
   // the renderers the playing clip switches on or off at its time (step keys); the others as at rest, as the
@@ -720,15 +847,39 @@ class ChibiView {
     const def = ACTIONS[name] || storyAction(name);
     const slot = def?.slots.find((s) => this.clips?.has(s));
     if (!slot) return false;
-    this.current = name;
-    this.queued = null;
-    this.playSlot(slot, { fade, once: !!(def.then || def.next || def.hold) });
+    const next = def.next && this.clips.has(def.next) ? [this.clips.get(def.next)] : [];
+    this.begin(name, [this.clips.get(slot), ...next], def, fade);
     if (!quiet) this.onAction?.(name);
     return true;
   }
 
-  playSlot(slot, { fade = 0.3, once = false } = {}) {
-    const entry = this.clips.get(slot);
+  // An action by the names of the clips it plays (the action bar's: clip-names.js actionsOf), the shown GLB's or
+  // added ones (addClips); false when one is missing. `like`: the tab's action of ACTIONS it plays as (a second
+  // battle form's retreat waits and fades as the first's), else its clips play in turn, each once, and the last
+  // loops or holds by its own loop flag.
+  actClips(key, names, { like = null, fade = 0.3 } = {}) {
+    const entries = (names || []).map((n) => this.named?.get(n));
+    if (!entries.length || entries.some((e) => !e)) return false;
+    this.begin(key, entries, ACTIONS[like] || null, fade);
+    return true;
+  }
+
+  begin(name, entries, def, fade) {
+    this.current = name;
+    this.queued = null;
+    this.chain = { entries, at: 0, def };
+    this.playEntry(entries[0], { fade, once: this.onceAt(0) });
+  }
+
+  // whether the chain's clip at `at` plays once: an action of ACTIONS by its flags (its follow-up loops by its own
+  // flag); else every clip but the last
+  onceAt(at) {
+    const { entries, def } = this.chain;
+    if (def) return at === 0 && !!(def.then || def.next || def.hold);
+    return at < entries.length - 1;
+  }
+
+  playEntry(entry, { fade = 0.3, once = false } = {}) {
     const a = this.mixer.clipAction(entry.clip);
     const looping = !once && entry.loop !== false;
     a.reset().setLoop(looping ? THREE.LoopRepeat : THREE.LoopOnce, looping ? Infinity : 1);
@@ -739,23 +890,25 @@ class ChibiView {
     this.slot = entry;
   }
 
-  // a clip that plays once has ended: its follow-up clip, or the action after it
+  // a clip that plays once has ended: the chain's next clip, or the action after it
   finished(action) {
-    if (action !== this.action) return;
-    const def = ACTIONS[this.current];
-    if (def?.next && this.clips.has(def.next) && this.slot !== this.clips.get(def.next)) {
+    if (action !== this.action || !this.chain) return;
+    const { entries, at, def } = this.chain;
+    if (at + 1 < entries.length) {
+      this.chain.at = at + 1;
+      const fade = def ? def.fade ?? 0.2 : 0.15;
       // a wait counts the mixer's time, which stands still while the preview is frozen
-      if (def.wait) this.queued = { slot: def.next, at: this.mixer.time + def.wait, fade: def.fade ?? 0.2 };
-      else this.playSlot(def.next, { fade: def.fade ?? 0.2 });
+      if (def?.wait) this.queued = { at: this.mixer.time + def.wait, fade };
+      else this.playEntry(entries[at + 1], { fade, once: this.onceAt(at + 1) });
     } else if (def?.then) this.act(def.then, { fade: 0.35 });
   }
 
   // the follow-up clip, once its wait is over
   playQueued() {
     if (!this.queued || this.mixer.time < this.queued.at) return;
-    const { slot, fade } = this.queued;
+    const { fade } = this.queued, { entries, at } = this.chain;
     this.queued = null;
-    this.playSlot(slot, { fade });
+    this.playEntry(entries[at], { fade, once: this.onceAt(at) });
   }
 
   updateMouth() {
@@ -1004,6 +1157,30 @@ export function settled() {
 export const actions = () => view?.actions() || [];
 export const current = () => view?.current || null;
 export function play(name) { return view?.act(name, { quiet: true }) || false; }
+// the shown model's clips by name (the GLB's extras.clips) and its prefab's dev name, for the action bar
+// (clip-names.js actionsOf); empty before a model is shown
+export const clipNames = () => view?.json?.extras?.clips || [];
+export const devName = () => view?.json?.extras?.dev || "";
+// whether every clip named is there to play (the GLB's, or added)
+export const hasClips = (names) => !!view?.named && (names || []).every((n) => view.named.has(n));
+// the clips named that the GLB does not carry, added to the shown view (ChibiView.addClips); resolves false when the
+// view changed meanwhile
+export async function loadClips(names, { signal } = {}) {
+  const v = view;
+  if (!v?.named) return false;
+  await v.addClips(names, { signal });
+  return v === view && !v.disposed;
+}
+// An action of the bar ({ key, id, form, clips }): today's actions (ACTIONS) of the first battle form play as before,
+// by their slots; any other by its clips (actClips), which must be there (hasClips). False when it cannot play.
+export function playAction(a) {
+  if (!view || !a) return false;
+  if (ACTIONS[a.id] && (a.form || 0) <= 1 && view.act(a.id, { quiet: true })) {
+    view.current = a.key;
+    return true;
+  }
+  return view.actClips(a.key, a.clips, { like: ACTIONS[a.id] ? a.id : null });
+}
 export const snapshot = () => view?.snapshot() || null;
 // for checks: the camera's distance, the zoom's goal, range and place, the target's lift, the pan and the follow, and
 // where the anchor (the hips) projects on the canvas (-1..1 across and up)

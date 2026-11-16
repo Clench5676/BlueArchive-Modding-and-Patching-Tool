@@ -217,7 +217,12 @@ export function modelSource(v, enabled = true) {
   return key.startsWith("m:") ? `mod:${key.slice(2)}` : key.startsWith("v:") ? `variant:${key.slice(2)}`
     : key === "self" ? "official" : "live";
 }
-export const modelUrl = (key, source = "live") => `/asset/model/${encodeURIComponent(key)}.glb${source === "live" ? "" : `?source=${encodeURIComponent(source)}`}`;
+// the model route's address of a variant's chibi from a source; with `clip`, of that clip of it alone (model.js addClips)
+export function modelUrl(key, source = "live", clip = null) {
+  const query = [source === "live" ? "" : `source=${encodeURIComponent(source)}`, clip ? `clip=${encodeURIComponent(clip)}` : ""];
+  const q = query.filter(Boolean).join("&");
+  return `/asset/model/${encodeURIComponent(key)}.glb${q ? `?${q}` : ""}`;
+}
 
 export function previewBase(v, kind = "spr", enabled = true, variants = []) {
   if (kind === "model") return modelUrl(v.key, modelSource(v, enabled));

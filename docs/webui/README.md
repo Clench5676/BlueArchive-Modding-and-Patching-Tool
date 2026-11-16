@@ -10,6 +10,7 @@ read from the user's own install at runtime and never shipped with the program.
   Mods already in use
 - [`front-end.md`](front-end.md): Student list, Quit, Bottom navigation, Student Hall, Portrait, Popups, Bar motion,
   Design tokens, Loading screen, Pointer and touch effect
+- [`model-actions.md`](model-actions.md): the 3D tab's action bar and action lists, clip names, clips on demand
 - [`lobby-and-photography.md`](lobby-and-photography.md): Memorial lobby, Lobby camera framing, Lobby lines, Student
   photography
 - [`desktop.md`](desktop.md): One instance per data directory, Classic window, Tray, Local error reports and startup

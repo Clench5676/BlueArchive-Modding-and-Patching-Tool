@@ -41,6 +41,9 @@ _SCHEMA = "gameassets-v1/"
 # layouts cached in an older format are rebuilt and no other cached asset is dropped (v3: label effect colours and distances)
 _LAYOUT = "layout-v6/"
 STORY_CLIP = re.compile(r"^((?:np|ch)\d{4})_", re.IGNORECASE)  # a story cutscene's clip named after its character
+# a clip asked for by name (model_glb's clip): the characters the official clip names use ("CH0271_Formation Pickup");
+# the name is only compared with the model's clip names, never used as a path
+CLIP_NAME = re.compile(r"[A-Za-z0-9_ ]{1,128}")
 _ATLASES = "atlases-v2/"
 # One model export at a time in the process: an export holds the path locks of every bundle it reads
 _MODEL_LOCK = threading.Lock()
@@ -879,12 +882,20 @@ class GameAssets:
         """Explicit full-index compatibility path; preview requests resolve on demand."""
         return self._cab_discovery().all((lambda path: True) if everything else is_model_dependency)
 
-    def model_glb(self, core: str, overrides: Iterable[Path] = (), *, reads: PreviewReads | None = None) -> bytes:
+    def model_glb(self, core: str, overrides: Iterable[Path] = (), *, reads: PreviewReads | None = None,
+                  clip: str | None = None) -> bytes:
         """Export a chibi to lossless GLB bytes. ``overrides`` are bundles that replace the official bundles
         holding the same CABs (mod previews). ``reads`` (a preview of a chosen source) names the bytes to read for
-        every other game file the export loads, so the preview never depends on what the game folder holds now."""
-        from .model import BundleGraph, export_chibi
+        every other game file the export loads, so the preview never depends on what the game folder holds now.
+        ``clip``: only that clip of the model (one of its base GLB's ``extras.clips``), read from the same files as
+        the model (:func:`model.export_clip`), cached per model, clip and files like the model.
 
+        The export is one step under the model lock (about 1 s for a model, 0.5 s for a clip); a cached one needs no
+        lock."""
+        from .model import BundleGraph, export_chibi, export_clip
+
+        if clip is not None and not CLIP_NAME.fullmatch(clip):
+            raise AssetNotFound(("clip", core, "invalid"))
         core = core.lower()
         slot = self._model_index().get(core) or self._field_index().get(core)
         listed = slot or self._asset_bundles(core)
@@ -912,9 +923,14 @@ class GameAssets:
             stamps.append((str(path), stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns))
         # v2 excludes old partial exports whose missing CABs were not recorded; v3 adds the rule that chose the files
         # read outside the overrides; "fx1" the halo's particle systems; "vital2" the retreat and knockdown clips and
-        # the clips' other names (CLIP_ALIASES).
-        key = _SCHEMA + ("model/v2/fx1/vital2/" + json.dumps([core, stamps]) if reads is None
-                         else "model/v3/fx1/vital2/" + json.dumps([core, stamps, reads.key]))
+        # the clips' other names (CLIP_ALIASES); "names1" the names of every clip the model plays (extras.clips). A
+        # clip is keyed by its name beside the model's files.
+        if clip is None:
+            key = _SCHEMA + ("model/v2/fx1/vital2/names1/" + json.dumps([core, stamps]) if reads is None
+                             else "model/v3/fx1/vital2/names1/" + json.dumps([core, stamps, reads.key]))
+        else:
+            key = _SCHEMA + ("model-clip/v1/" + json.dumps([core, clip, stamps]) if reads is None
+                             else "model-clip/v1/reads/" + json.dumps([core, clip, stamps, reads.key]))
         generation, disk_generation = self.cache.generation, self._preview_generation()
 
         def valid_cached() -> bytes | None:
@@ -1002,7 +1018,10 @@ class GameAssets:
                             # the halo's particles: their materials and meshes, read as a lobby's (_FxResolver)
                             def fx(objects: Mapping[int, Any]) -> Callable[[str, int, dict], Any]:
                                 return _FxResolver(graph, dict(objects), self._shader_forms).resolve
-                            data = export_chibi(graph, bundles, core, fx=fx, **({"story": story} if story else {}))
+                            if clip is not None:
+                                data = export_clip(graph, bundles, core, clip)
+                            else:
+                                data = export_chibi(graph, bundles, core, fx=fx, **({"story": story} if story else {}))
                     finally:
                         spans.record("export.model.open", phases["open"])
                         spans.record("export.model.resolve", phases["resolve"])

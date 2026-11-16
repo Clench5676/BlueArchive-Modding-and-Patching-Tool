@@ -467,8 +467,10 @@ test("leaving the 3D tab cancels its costume checks and coming back starts them 
   const own = (key) => ({ key, family: "own", model: key });
   const fam = { variants: [v, own("a"), own("b")] };
   const submitted = [], cancelled = [], waiting = new Map(), failures = [];
-  let jobs = 0;
+  let jobs = 0, clipStops = 0;
   const ctx = vm.createContext({ ...Sources, fam, otherStudents: [], othersEpoch: 0, othersLoad: null, open: true,
+    // an action's clips being fetched for the 3D tab are given up with the checks
+    stopActionLoad: () => { clipStops += 1; },
     tab: "model", busy: false, switchPopupPage: null, pageToken: 1, $: () => ({ hidden: true }),
     variant: () => fam.variants[0], costumeCandidates: (f, x) => f.variants.filter((o) => o !== x),
     candidates: () => [], readOthers: async () => null, costumesChecked: () => {},
@@ -496,6 +498,7 @@ test("leaving the 3D tab cancels its costume checks and coming back starts them 
   assert.ok(ring("a") && ring("b"), "the ring turns for the pairs being checked");
   ctx.showTab("portrait"); await flush();
   assert.deepEqual(cancelled, ["j1"], "the check under way is cancelled");
+  assert.ok(clipStops > 0, "an action's clips being fetched are given up too");
   assert.deepEqual(submitted, ["a"], "no further pair is submitted");
   assert.equal(vm.runInContext("costumeChecks.size", ctx), 0);
   assert.ok(!ring("a") && !ring("b"), "the ring stops");
