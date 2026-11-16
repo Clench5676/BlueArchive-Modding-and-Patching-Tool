@@ -23,7 +23,7 @@ function spreadPitch(count, w, span) {
 // The list popups' cards in the L class: at least MIN_COLUMNS of a kind a row, the card scaled
 // down (its aspect and name band kept) until they fit the paper less its inset, the vertical scrollbar's band (SCROLL_BAND)
 // and the inclined edges' overhang; a portrait strip (horizontal) at PORTRAIT_SCALE, its names clear of the scrollbar under it.
-export const MIN_COLUMNS = Object.freeze({ lobby: 2, model: 3 });
+export const MIN_COLUMNS = Object.freeze({ lobby: 2, model: 3, photo: 3 });
 export const PORTRAIT_SCALE = .875; // 280 x 616: whole units
 export const SCROLL_BAND = SPACE.m;
 export function switchGrid(kind, width = GRID_WIDTH) {
@@ -32,9 +32,9 @@ export function switchGrid(kind, width = GRID_WIDTH) {
   if (!kind) return { card: { w: 250, h: 226, bar: 68 }, columns: 6, pitch: [250 + SPACE.l, 226 + 68 + SPACE.xxl], rowH: 226 + 68, overhang: 304 * lean };
   let card = kind === "spr" ? { w: 320 * PORTRAIT_SCALE, h: 704 * PORTRAIT_SCALE, bar: 104 }
     : kind === "lobby" ? { w: 790, h: 444.375, bar: 104 }
-    : kind === "model" ? { w: 360, h: 360, bar: 104 }
+    : kind === "model" || kind === "photo" ? { w: 360, h: 360, bar: 104 }
     : { w: 250, h: 226, bar: 68 };
-  const max = kind === "lobby" ? 2 : kind === "spr" || kind === "model" ? 4 : 6;
+  const max = kind === "lobby" ? 2 : kind === "spr" || kind === "model" || kind === "photo" ? 4 : 6;
   // the paper less its inset and, for a list that scrolls down, the scrollbar's band at its right
   const area = container({ w: width - (kind === "spr" ? 0 : SCROLL_BAND), h: 0, padding: [0, INSET] }).inner;
   const least = MIN_COLUMNS[kind];

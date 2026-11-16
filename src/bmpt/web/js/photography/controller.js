@@ -26,8 +26,8 @@ export const galleryBox = () => photographyToolbarLayout().gallery;
 let sessionVariant=null,generation=0,repository,bridge,overlay,active=false,mode='portrait',grid=true,expanded=false,paused=false,selected=null,modal=null;
 // The gallery is the Switch pickers' list popup (popup.js listPopup) in their host: the chosen photo, its name and its
 // actions at the left, the photos' cards scrolling at the right, Restore Default, Cancel and Save in the footer. Its
-// cards and picture are Switch 3D Model's squares (layoutKind "model"), the shape of the Collection portrait.
-const GALLERY_HOST='popup',GALLERY_KIND='model';
+// cards and picture are Switch 3D Model's squares (layoutKind "photo"), each photo filling its inclined window.
+const GALLERY_HOST='popup',GALLERY_KIND='photo';
 const galleryHost=()=>document.getElementById(GALLERY_HOST);
 let controlsRevision=0,saving=false,leaving=false,defaultThumbnail=null,generatedThumbnail=null,occlusion=false,feedback=null;
 const CHOICE_ICONS={portrait:{icon:'Common_Icon_Emoji',atlas:'Common'},lobby:{icon:'School_Icon_Chat',atlas:'Common'}};
