@@ -1719,7 +1719,7 @@ def hems(target: Costume, source: Costume, plan_: Plan, t_clips: list[Any], s_cl
     scores, four, solved = [], {}, {}
 
     def judged(rule: str, joints4: np.ndarray, weights4: np.ndarray, solver: ms.Solver | None,
-               points: np.ndarray) -> hm.Score:
+               points: np.ndarray, prune: bool = False) -> hm.Score:
         deep, worst = {}, 1.0
         for suffix, clip, tree, prepared, frames in checks:
             step()
@@ -1735,6 +1735,8 @@ def hems(target: Costume, source: Costume, plan_: Plan, t_clips: list[Any], s_cl
                 state, depth = hm.cover(posed, covered, triangles, centre, carried)
                 deep[suffix] = max(deep[suffix], hm.deep_share(state, depth))
                 worst = max(worst, hm.stretch_p99(points, posed, edges))
+            if prune and scores and hm.cannot_win(hm.Score(rule, deep, worst), scores, limit):
+                return hm.Score(rule, deep, worst, complete=False)
         return hm.Score(rule, deep, worst)
 
     # how far the phase is: the rules by their cost (HEM_UNITS), after the setup and before the thinned legs
@@ -1744,7 +1746,7 @@ def hems(target: Costume, source: Costume, plan_: Plan, t_clips: list[Any], s_cl
     for (rule, weights, solver), cost in zip(rules, costs):
         meter.phase("hems", done, total)
         joints4, weights4 = hm.keep_four(weights)
-        scores.append(judged(rule, joints4, weights4, solver, sv))
+        scores.append(judged(rule, joints4, weights4, solver, sv, prune=True))
         four[rule] = (joints4, weights4)
         done += cost
     meter.phase("hems", done, total)

@@ -232,6 +232,7 @@ class Score:
     rule: str
     deep: dict[str, float]  # per clip: worst frame's deep pass-through, percent
     stretch: float          # worst cloth stretch p99 over the clips
+    complete: bool = True   # a rejected candidate may stop before its remaining clips
 
     @property
     def mean(self) -> float:
@@ -243,9 +244,20 @@ def choose(scores: list[Score], limit: float) -> Score:
     gets more than ``WORSE`` points worse than rigid; the lowest mean wins, ties go to rigid, then to less stretch."""
     rigid = scores[0]
     ceiling = max(limit, rigid.stretch)
-    allowed = [s for s in scores[1:] if s.stretch <= ceiling + 1e-9
+    allowed = [s for s in scores[1:] if s.complete and s.stretch <= ceiling + 1e-9
                and all(s.deep.get(c, 0.0) <= d + WORSE for c, d in rigid.deep.items())]
     return min([*allowed, rigid], key=lambda s: (round(s.mean, 1), s is not rigid, s.stretch))
+
+
+def cannot_win(partial: Score, scores: list[Score], limit: float) -> bool:
+    """Reject only when even zero pass-through in the remaining clips loses.
+
+    Stretch and each measured clip's worst depth can only increase. Use the
+    chooser itself for the rounded mean, rigid preference, stretch and stable
+    candidate order, including the rigid score's stretch ceiling.
+    """
+    optimistic = Score(partial.rule, {c: partial.deep.get(c, 0.0) for c in scores[0].deep}, partial.stretch)
+    return choose([*scores, optimistic], limit) is not optimistic
 
 
 # --- vertex data ---------------------------------------------------------------------------------------------------
