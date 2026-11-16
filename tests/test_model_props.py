@@ -162,6 +162,66 @@ def test_the_measure_finds_the_worn_things_of_a_model(monkeypatch):
     assert worn.whole == {13}
 
 
+def _closed_box(centre, half):
+    """A closed box: 8 corners, 12 triangles."""
+    corners = np.array([[x, y, z] for x in (-half, half) for y in (-half, half) for z in (-half, half)]) + centre
+    faces = [(0, 1, 3, 2), (4, 6, 7, 5), (0, 4, 5, 1), (2, 3, 7, 6), (0, 2, 6, 4), (1, 5, 7, 3)]
+    return corners, np.array([t for a, b, c, d in faces for t in ((a, b, c), (a, c, d))])
+
+
+def _with_bag(monkeypatch, s, parts, centre, half=0.15):
+    """The made-up model's costume gains a cool bag: a closed box on the pelvis around ``centre``."""
+    corners, tris = _closed_box(np.array(centre), half)
+    bag = ma.Skin(corners, np.full((8, 4), 0), np.tile([1.0, 0, 0, 0], (8, 1)), np.zeros((0, 2), int), tris)
+    skin_of, bindposes = ma.skin_of, ma.bindposes
+    pelvis = np.linalg.inv(ma.Skeleton.world(s)[2])
+    monkeypatch.setattr(ma, "skin_of", lambda mesh: bag if mesh == "bag" else skin_of(mesh))
+    monkeypatch.setattr(ma, "bindposes", lambda graph, mesh: np.array([pelvis]) if mesh == "bag" else bindposes(graph, mesh))
+    return [ma.Part(1, "r0", _Mesh("bag"), [], ["character"], [2], 36, role="primary"), *parts]
+
+
+def test_a_ray_from_inside_a_closed_box_meets_it_everywhere():
+    corners, tris = _closed_box(np.zeros(3), 0.1)
+    inside = mp.enclosed_points(np.array([[0.0, 0, 0], [0.05, -0.05, 0.02], [0.3, 0, 0], [0.0, 0.11, 0]]),
+                                corners[tris])
+    assert inside.tolist() == [True, True, False, False]
+    open_box = corners[tris[2:]]  # one face left open
+    assert not mp.enclosed_points(np.zeros((1, 3)), open_box).any()
+
+
+def test_a_thing_the_costume_encloses_is_packed_goes_with_it_and_is_not_carried(monkeypatch):
+    """The bottle on the belt sits in the costume's cool bag: it goes with the costume like a worn thing (the slot's
+    draws nothing) but is not carried onto another slot, where it would stick out of the bag."""
+    s, parts, clips, idle = _made_up_model(monkeypatch)
+    parts = _with_bag(monkeypatch, s, parts, (0.15, 0.9, 0))
+    items = {s.nodes[i.top].name: i for i in mp.measure(s, parts, clips, idle)}
+    bottle, hat, magazine = items["bone_bottle"], items["bone_hat"], items["bone_magazine"]
+    assert bottle.enclosed == 1.0 and bottle.packed() and bottle.worn()
+    assert hat.enclosed == 0.0 and not hat.packed()
+    assert not magazine.packed()   # beside the bag, not in it
+    worn = mp.worn_items(s, parts, clips, idle)
+    assert {s.nodes[i.top].name: i.carry for i in worn.items} == {"bone_bottle": False, "bone_hat": True}
+    t = _skeleton(("root", None), ("Bip001", 0), ("Bip001 Pelvis", 1), ("Bip001 Head", 2))
+    tree = _plain_mesh(ma.skin_of("props").vertices, ma.skin_of("props").triangles.tolist())
+    hat_tree = _plain_mesh(ma.skin_of("hat").vertices, ma.skin_of("hat").triangles.tolist())
+    out = mp.carried(t, s, worn, clips, idle, lambda mesh: copy.deepcopy(hat_tree if mesh == "hat" else tree))
+    assert [c.part.mesh for c in out] == ["hat"]
+
+
+def test_a_thing_shown_at_times_inside_the_costume_stays_with_the_slot(monkeypatch):
+    """The magazine the clips show in one clip of four, inside a pouch when shown: the slot's clips take it out, so it
+    stays as before; nor is a thing drawn over the face packed (eye sparkles the game draws through the hair)."""
+    s, parts, clips, idle = _made_up_model(monkeypatch)
+    parts = _with_bag(monkeypatch, s, parts, (0.1, 1.0, 0.1), half=0.08)
+    items = {s.nodes[i.top].name: i for i in mp.measure(s, parts, clips, idle)}
+    assert not items["bone_magazine"].packed() and items["bone_magazine"].enclosed is None
+    s, parts, clips, idle = _made_up_model(monkeypatch)
+    parts = _with_bag(monkeypatch, s, parts, (0, 1.7, 0))   # a head around the hat
+    parts[-1].kinds = ["eyemouth"]
+    items = {s.nodes[i.top].name: i for i in mp.measure(s, parts, clips, idle)}
+    assert items["bone_hat"].worn() and not items["bone_hat"].packed()
+
+
 def test_a_verdict_is_saved_and_restored(monkeypatch):
     s, parts, clips, idle = _made_up_model(monkeypatch)
     store = {}
@@ -177,8 +237,8 @@ def test_a_verdict_is_saved_and_restored(monkeypatch):
     assert "made_up" in store
     monkeypatch.setattr(mp, "measure", lambda *a: pytest.fail("measured again"))
     again = mp.worn_of(s, parts, clips, idle, "made_up", Store())
-    assert [(i.part.mesh, i.top, i.follow, i.ref) for i in again.items] == \
-        [(i.part.mesh, i.top, i.follow, i.ref) for i in first.items]
+    assert [(i.part.mesh, i.top, i.follow, i.ref, i.carry) for i in again.items] == \
+        [(i.part.mesh, i.top, i.follow, i.ref, i.carry) for i in first.items]
     assert [i.rows.tolist() for i in again.items] == [i.rows.tolist() for i in first.items]
     # a verdict of another prefab is measured again
     store["made_up"]["prefab"] = "other"
@@ -407,37 +467,17 @@ def test_official_the_slots_bottles_draw_nothing_after_a_switch(view, tmp_path):
 
 
 @official
-def test_official_the_sources_bottles_are_carried_on_the_pelvis(view, tmp_path):
-    """Mari <- Mari (Track): the three bottles come along, each bound to Mari's pelvis alone, where Mari (Track)'s
-    idle holds them against hers."""
-    from bmpt.gameassets.model import _key, model_root
-
+def test_official_the_sources_bottles_stay_in_her_bag(view, tmp_path):
+    """Mari <- Mari (Track): the three bottles sit in the track suit's cool bag (packed), so they are not carried:
+    carried rigidly on the pelvis they stuck out of the bag, which the slot's clips move otherwise."""
     result, slot, sources, written, official_graph, graph = _switch(view, tmp_path, "mari_original", "ch0186")
     bottles = ["CH0186_Prop_01", "CH0186_Prop_02", "CH0186_Prop_03"]
-    assert sorted(result.carried) == bottles and result.dropped == []
+    assert result.carried == [] and result.dropped == []
     _kept(slot, written)
-    s = ma.Skeleton.of(official_graph, model_root(official_graph, sources, "ch0186")[0])
-    s_clips = ma.prefab_clips(official_graph, s, ma.own_prefabs(ma._model_prefabs(official_graph, sources), "ch0186"))
-    idle = s.poses(ma.pick(s_clips, ma.IDLE_CLIPS)[:1], frames=1)[0]
-    s_pelvis = s.first("Bip001 Pelvis")
-    s_parts = {s.nodes[p.node].name: p for p in ma.roles(s, idle)}
     for name, t in _own_skeletons(graph, written, "mari_original").items():
-        t_rest = t.world()
-        t_pelvis = t.first("Bip001 Pelvis")
         for bottle in bottles:
-            [(renderer, mesh)] = _drawn(graph, t, bottle)
-            tree = graph.tree(renderer)
-            bones = {t.by_transform[_key(graph.deref(renderer, b))] for b in tree["m_Bones"]}
-            assert bones == {t_pelvis}, (name, bottle)
-            skin = ma.skin_of(mesh)
-            at_rest = ma.deform(skin, np.array([t_rest[t_pelvis]] * len(tree["m_Bones"])) @ ma.bindposes(graph, mesh))
-            part = s_parts[bottle]
-            source_skin = ma.skin_of(part.mesh)
-            bp = ma.bindposes(official_graph, part.mesh)
-            held = ma.deform(source_skin, np.array([idle[b] for b in part.bones]) @ bp)
-            want = (np.c_[held, np.ones(len(held))] @ (t_rest[t_pelvis] @ np.linalg.inv(idle[s_pelvis])).T)[:, :3]
-            assert np.abs(at_rest - want).max() < 0.005, (name, bottle)  # a compressed mesh's steps
-    assert set(bottles) <= _exported(graph, written, "mari_original")
+            assert _drawn(graph, t, bottle) == [], (name, bottle)
+    assert not set(bottles) & _exported(graph, written, "mari_original")
 
 
 @official

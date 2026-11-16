@@ -19,8 +19,19 @@ things the clips show and hide one by one: a drill, a remote and a towel). An it
 Things the clips show only at times (magazines, EX skill props, food), guns and effect items belong to the slot's
 animation and stay. On a costume switch (``model_adapt``) the slot's worn items draw nothing and the incoming
 costume's worn items are carried: their mesh, materials and textures added like a costume part, bound rigidly to the
-slot's bone of the name they follow, where the source's idle holds them against it. The verdict of a model is cached
-by the caller (:class:`WornStore`), per model and game revision.
+slot's bone of the name they follow, where the source's idle holds them against it.
+
+A thing the costume encloses is packed: bottles in a cool bag, a handgun in its holster. The clips show it all the
+time, yet nobody sees it; it belongs inside its costume. An item is packed when it is no gear, the clips show it like
+a worn one (rules 2 to 4: shown in ``SHARE`` of the clips, outside the skeleton) and, in ``PACKED`` or more of the
+clips that show it (their first frame showing it), ``ENCLOSED`` or more of its sampled points are enclosed: a ray from
+the point in each of 26 directions meets a costume triangle within ``RAY``. Things drawn with the eye, mouth or
+eyebrow shading are never packed: the game draws them over the face and hair (sparkles in the eyes). The slot's
+packed items draw nothing, like its worn ones (their costume leaves), and the source's are not carried (carried
+rigidly, they would stick out of a costume that moves around them otherwise). Things inside the skeleton (a coin,
+smoke shells) and things shown only at times stay with the slot as before: any body hides the first, the slot's
+clips take the second out. The verdict of a model is
+cached by the caller (:class:`WornStore`), per model and game revision.
 """
 
 from __future__ import annotations
@@ -47,9 +58,15 @@ REACH = 2.0         # ... and within this far of the body (metres): some clips p
 SHARE = 0.75        # shown in every sampled frame of this share of the clips that move the body, or more
 INSIDE = 0.05       # its farthest point at least this far from the skeleton (median over frames), else parked inside
 FOLLOW = 0.8        # moves against the bone it follows less than this times its motion in the prefab's space
+PACKED = 0.75       # enclosed by the costume in this share of the clips showing it, or more: packed
+ENCLOSED = 0.75     # ... a frame encloses it when this share of its sampled points is enclosed
+RAY = 0.4           # a point is enclosed when a ray in every direction meets a costume triangle this near (metres)
+PACK_POINTS = 12    # points sampled per item for that
+OVER_FACE = {"eyemouth", "eyebrow"}  # shading the game draws over the face and hair
+EDGE = 1e-6         # a ray through a shared edge counts for both triangles
 ARM = re.compile(r"(UpperArm|Forearm|Hand|Finger\d*)$")  # bones a thing held in a hand follows
 WEAPON_NODE = "Bip001_Weapon"
-VERSION = 1         # the layout of a stored verdict
+VERSION = 2         # the layout of a stored verdict
 
 
 class WornStore(Protocol):
@@ -81,7 +98,10 @@ class Item:
     w_mean: float | None = None  # its mean motion in the prefab's space
     reach: float | None = None   # its farthest point from the skeleton, median over the frames showing it
     ref: tuple[str, int] | None = None  # the pose to place it from: None for the idle, else (clip, frame)
+    enclosed: float | None = None  # share of the clips showing it whose first frame showing it encloses it
+    carry: bool = True           # (in a verdict) carried onto another slot; packed items are not
     _active: bool = True         # its GameObject active and its renderer enabled in the prefab
+    _shown: list[int] = field(default_factory=list, repr=False)  # the measured frames showing it
 
     def visible(self) -> bool:
         """Something the clips ever draw: switched on in the prefab, shown by some clip at a quarter of its modelled
@@ -98,10 +118,21 @@ class Item:
         ratio = (self.f_mean or 0.0) / max(self.w_mean or 0.0, 1e-6) if self.w_mean is not None else 9.0
         return ratio < FOLLOW and not ARM.search(self.follow or "")
 
+    def packable(self) -> bool:
+        """Shown like a worn thing (rules 1 to 4), not drawn over the face: what may be packed."""
+        return bool(not self.gear and self.visible() and self.full >= SHARE * self.clips
+                    and self.reach is not None and self.reach >= INSIDE
+                    and not set(self.part.kinds) & OVER_FACE)
+
+    def packed(self) -> bool:
+        """Inside the costume (the module's rule): enclosed by it in ``PACKED`` of the clips showing it or more."""
+        return bool(self.packable() and self.enclosed is not None and self.enclosed >= PACKED)
+
 
 @dataclass
 class Worn:
-    """A model's worn items, by renderer: ``whole`` holds the renderers that draw nothing else the clips show."""
+    """A model's worn and packed items (the things that go with its costume), by renderer: ``whole`` holds the
+    renderers that draw nothing else the clips show. A packed item has ``carry`` False."""
 
     items: list[Item] = field(default_factory=list)
     whole: set[int] = field(default_factory=set)  # renderer nodes
@@ -117,7 +148,7 @@ class Worn:
         return {"version": VERSION, "prefab": nodes[0].name if nodes else "",
                 "renderers": [{"renderer": nodes[node].path, "whole": node in self.whole,
                                "items": [{"top": nodes[i.top].path, "follow": i.follow,
-                                          "ref": list(i.ref) if i.ref else None} for i in items]}
+                                          "ref": list(i.ref) if i.ref else None, "carry": i.carry} for i in items]}
                               for node, items in sorted(self.by_renderer().items())]}
 
     @classmethod
@@ -139,6 +170,7 @@ class Worn:
                     if item is None:
                         return None
                     item.follow, item.ref = saved["follow"], tuple(saved["ref"]) if saved["ref"] else None
+                    item.carry = bool(saved["carry"])
                     out.items.append(item)
                 if entry["whole"]:
                     out.whole.add(part.node)
@@ -312,6 +344,7 @@ def measure(skeleton: ma.Skeleton, parts: list[ma.Part], clips: Sequence[Any],
     for item in items:
         _measure_item(skeleton, item, rows, frames, seg_a, seg_b, body, body_inverse, body_scale, idle, idle_segs)
         step()
+    _enclosure(skeleton, parts, items, frames, step)
     return items
 
 
@@ -351,6 +384,7 @@ def _measure_item(skeleton: ma.Skeleton, item: Item, rows: list, frames: list, s
     per_clip: dict[int, list[bool]] = {}
     for (k, _, _), s in zip(frames, shown):
         per_clip.setdefault(k, []).append(s)
+    item._shown = [n for n, s in enumerate(shown) if s]
     item.clips = len(per_clip)
     item.full = sum(1 for flags in per_clip.values() if all(flags))
     item.some = sum(1 for flags in per_clip.values() if any(flags))
@@ -381,13 +415,105 @@ def _measure_item(skeleton: ma.Skeleton, item: Item, rows: list, frames: list, s
         item.reach = float(np.median(reach))
 
 
+_DIRECTIONS = np.array([(x, y, z) for x in (-1, 0, 1) for y in (-1, 0, 1) for z in (-1, 0, 1) if x or y or z], float)
+_DIRECTIONS /= np.linalg.norm(_DIRECTIONS, axis=1, keepdims=True)
+
+
+def enclosed_points(points: np.ndarray, triangles: np.ndarray) -> np.ndarray:
+    """Per point, whether a ray from it in each of 26 directions meets one of ``triangles`` (n, 3, 3) within
+    ``RAY``."""
+    out = np.zeros(len(points), bool)
+    if not len(triangles):
+        return out
+    low, high = triangles.min(axis=1), triangles.max(axis=1)
+    for k, origin in enumerate(points):
+        near = ((high >= origin - RAY) & (low <= origin + RAY)).all(axis=1)
+        if not near.any():
+            continue
+        a = triangles[near, 0]
+        e1, e2 = triangles[near, 1] - a, triangles[near, 2] - a
+        p = np.cross(_DIRECTIONS[:, None, :], e2[None])          # (directions, triangles, 3)
+        det = np.einsum("tj,dtj->dt", e1, p)
+        ok = np.abs(det) > 1e-12
+        inverse = np.where(ok, 1.0 / np.where(ok, det, 1.0), 0.0)
+        s = origin[None] - a
+        u = np.einsum("tj,dtj->dt", s, p) * inverse
+        q = np.cross(s, e1)
+        v = np.einsum("dj,tj->dt", _DIRECTIONS, q) * inverse
+        t = np.einsum("tj,tj->t", e2, q)[None] * inverse
+        hit = ok & (u >= -EDGE) & (v >= -EDGE) & (u + v <= 1 + EDGE) & (t > 1e-4) & (t < RAY)  # an edge meets both sides
+        out[k] = bool(hit.any(axis=1).all())
+    return out
+
+
+def _enclosure(skeleton: ma.Skeleton, parts: list[ma.Part], items: list[Item], frames: list,
+               step: Callable[[], None]) -> None:
+    """``Item.enclosed`` of every item that may be packed: of the clips showing it, the share whose first frame showing
+    it has the costume (its skinned triangles at that pose) enclose ``ENCLOSED`` of its points."""
+    wanted = [item for item in items if item.packable() and item._shown]
+    if not wanted:
+        return
+    costume = []
+    for part in parts:
+        if part.role not in ("primary", "costume", "alternate") or part.mesh is None:
+            continue
+        try:
+            skin = ma.skin_of(part.mesh)
+            costume.append((part, skin, ma.bindposes(skeleton.graph, part.mesh)))
+        except Exception:  # a part that cannot be read encloses nothing
+            continue
+    if not costume:
+        return
+
+    def matrices(part: ma.Part, bp: np.ndarray, pose: list[np.ndarray]) -> np.ndarray:
+        return np.array([pose[b] @ bp[j] if b is not None and j < len(bp) else pose[part.node]
+                         for j, b in enumerate(part.bones)] or [pose[part.node]])
+
+    def skinned(skin: ma.Skin, carry: np.ndarray) -> np.ndarray:
+        return ma.deform(ma.Skin(skin.vertices, np.minimum(skin.joints, len(carry) - 1), skin.weights, skin.edges),
+                         carry)
+
+    posed: dict[int, np.ndarray] = {}
+
+    def costume_at(n: int) -> np.ndarray:
+        if n not in posed:
+            pose = frames[n][2]
+            posed[n] = np.concatenate([skinned(skin, matrices(part, bp, pose))[skin.triangles]
+                                       for part, skin, bp in costume if skin.triangles is not None and len(skin.triangles)]
+                                      or [np.zeros((0, 3, 3))])
+        return posed[n]
+
+    for item in wanted:
+        try:
+            skin = ma.skin_of(item.part.mesh)
+            bp = ma.bindposes(skeleton.graph, item.part.mesh)
+        except Exception:  # read by the measure already; a failure leaves it unjudged
+            continue
+        rows = item.rows[np.linspace(0, len(item.rows) - 1, min(PACK_POINTS, len(item.rows))).astype(int)]
+        sub = ma.Skin(skin.vertices[rows], skin.joints[rows], skin.weights[rows], skin.edges)
+        first: dict[int, int] = {}
+        for n in item._shown:
+            first.setdefault(frames[n][0], n)
+        inside = 0
+        for n in first.values():
+            points = skinned(sub, matrices(item.part, bp, frames[n][2]))
+            inside += float(enclosed_points(points, costume_at(n)).mean()) >= ENCLOSED
+        item.enclosed = inside / len(first)
+        step()
+
+
 def worn_items(skeleton: ma.Skeleton, parts: list[ma.Part], clips: Sequence[Any],
                idle: list[np.ndarray] | None, step: Callable[[], None] = lambda: None) -> Worn:
-    """The model's worn items (the module's rule), with the renderers that draw nothing else the clips show."""
+    """The model's worn and packed items (the module's rules), with the renderers that draw nothing else the clips
+    show."""
     items = measure(skeleton, parts, clips, idle, step)
-    worn = Worn([item for item in items if item.worn()])
-    for node in {item.part.node for item in worn.items}:
-        if all(item.worn() or not item.visible() for item in items if item.part.node == node):
+    goes = [item for item in items if item.worn() or item.packed()]
+    for item in goes:
+        item.carry = not item.packed()
+    worn = Worn(goes)
+    going = {id(item) for item in goes}
+    for node in {item.part.node for item in goes}:
+        if all(id(item) in going or not item.visible() for item in items if item.part.node == node):
             worn.whole.add(node)
     return worn
 
@@ -521,6 +647,9 @@ def carried(t_skeleton: ma.Skeleton, s_skeleton: ma.Skeleton, worn: Worn, clips:
 
     out = []
     for node, items in worn.by_renderer().items():
+        items = [item for item in items if item.carry]  # packed items stay inside the costume they came with
+        if not items:
+            continue
         part = items[0].part
         name = part.mesh.peek_name()
         tree = mesh_tree(part.mesh)
