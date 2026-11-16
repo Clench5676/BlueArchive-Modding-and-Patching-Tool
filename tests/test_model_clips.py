@@ -186,12 +186,13 @@ def test_real_ex_skill_brings_the_face_the_model_leaves_out(real_game):
     assert "renderer" not in base["nodes"][brought[0]].get("extras", {}) and len(doc["meshes"]) == 1
 
 
-def _library_with_build(monkeypatch, adapt):
-    """A library whose costume build is ``adapt`` (model_adapt.adapt), with nothing to stage."""
+def _library_with_build(monkeypatch, adapt, root):
+    """A library under ``root`` whose costume build is ``adapt`` (model_adapt.adapt), with nothing to stage."""
     from bmpt.gameassets import model_adapt
     from bmpt.library import service as library_service
 
     library = object.__new__(library_service.ModLibrary)
+    library.root = root  # the build keeps its worn-item verdicts beside the library
     monkeypatch.setattr(model_adapt, "adapt", adapt)
     monkeypatch.setattr(library_service.ModLibrary, "_official_or_current", lambda self, path, pin: path)
     monkeypatch.setattr(library_service.ModLibrary, "_stage_copies", lambda self, originals, folder: {})
@@ -231,7 +232,7 @@ def test_a_clip_export_starts_at_once_while_a_long_costume_build_runs(tmp_path, 
         return b"glTF " + clip.encode()
 
     monkeypatch.setattr(model, "export_clip", export_clip)
-    library = _library_with_build(monkeypatch, adapt)
+    library = _library_with_build(monkeypatch, adapt, tmp_path)
     target = tmp_path / "character-hina_original-_mxload-2026-01-01_assets_all_1.bundle"
     failure = []
 
