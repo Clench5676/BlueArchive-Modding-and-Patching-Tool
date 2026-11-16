@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import vm from "node:vm";
-import { jobProgress } from "../../src/bmpt/web/js/job-progress.js";
+import { isIdentity, jobProgress, modJob } from "../../src/bmpt/web/js/job-progress.js";
 import { setStrings } from "../../src/bmpt/web/js/i18n.js";
 
 const context = vm.createContext({ console, TextDecoder, TextEncoder, Float32Array, Uint8Array, Uint16Array, Int16Array, Int32Array, ArrayBuffer, DataView });
@@ -33,7 +33,7 @@ async function harness(locale = "en-US", button = "cancel", accept = false) {
   let steps = {};
   const saved = { mod: { id: "new-mod", repaired_from: "old-mod" } };
   globalThis.compatibilityDeps = {
-    jobProgress,
+    jobProgress, isIdentity, modJob,
     ensureSpine: async () => { if (licensed === "error") throw new Error("Runtime failed to load"); return licensed; },
     language: () => locale,
     T: (key, vars = {}) => key.split(".").reduce((o, k) => o?.[k], strings)?.replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? "") || key,
@@ -67,7 +67,7 @@ async function harness(locale = "en-US", button = "cancel", accept = false) {
     Compare: { show: async (...args) => { assert.ok(!held && !covered && !taskActive); comparisons.push(args);
       return typeof accept === "function" ? accept(comparisons.length) : accept; } },
   };
-  const code = `const { T, language, rpc, waitJob, Loading, Popup, Compare, ensureSpine, jobProgress, RigGeometry } = globalThis.compatibilityDeps;\n${source.replace(/^import .*;$/gm, "")}\n// ${sequence++}`;
+  const code = `const { T, language, rpc, waitJob, Loading, Popup, Compare, ensureSpine, jobProgress, isIdentity, modJob, RigGeometry } = globalThis.compatibilityDeps;\n${source.replace(/^import .*;$/gm, "")}\n// ${sequence++}`;
   const mod = await import(`data:text/javascript;base64,${Buffer.from(code).toString("base64")}`);
   return { mod, calls, popups, comparisons, covers, labels, progress, strings, saved,
     use: (value) => { nextReport = value; }, build: (value) => { rebuilt = value; },

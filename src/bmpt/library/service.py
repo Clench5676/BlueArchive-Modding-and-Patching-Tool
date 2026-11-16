@@ -7188,10 +7188,15 @@ class ModLibrary:
                                 and entry.copies.get(str(part.path)) in ("backup", "elsewhere"))
             self._check_space(need)
         added, failed, skipped, cores, kinds = [], [], [], set(), set()
+        # the progress line: each entry as it starts, who it is, then its whole share once it is in the library
+        line = mod_progress.ItemProgress(progress, len(wanted), "add")
+        config = self.profiles.read() if progress else None
         for i, (pin, core) in enumerate(wanted, 1):
             if cancel and cancel():
                 break
             with self._lock:
+                if progress:
+                    line.item(i, **self._entry_identity(pin, core, config), step=mod_progress.STEP_ADD)
                 try:
                     with _errors("adopt"):
                         mod_id = self._adopt_one(pin, core)
@@ -7205,8 +7210,7 @@ class ModLibrary:
                 added.append(self._entry(self._records[mod_id]))
                 cores.add(core)
                 kinds.add(self._kind(core, pin) or "spr")
-            if progress:
-                progress(i, len(wanted), t("webui.progress.add", name=core))
+            line.done()
         return AdoptResult(added, failed, skipped, sorted(cores), sorted(kinds))
 
     def _check_space(self, need: int) -> None:

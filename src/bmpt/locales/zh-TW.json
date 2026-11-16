@@ -478,7 +478,11 @@
 			"modCount": "{action}（{current}/{total}）：",
 			"modHead": "{action}：",
 			"sep": " - ",
-			"from": "來源：{name}"
+			"from": "來源：{name}",
+			"modsAdd": "新增 Mod",
+			"modsExport": "匯出 Mod",
+			"actionExport": "匯出",
+			"actionSave": "儲存"
 		},
 		"job": {
 			"running": "處理中",

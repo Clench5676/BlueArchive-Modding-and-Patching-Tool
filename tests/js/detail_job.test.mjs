@@ -1,5 +1,5 @@
 // Exercise the detail job's orchestration with stand-ins for the rendered screen and RPC transport.
-import { modLine, progressName, steadyFraction } from "../../src/bmpt/web/js/job-progress.js";
+import { modJob, progressName, steadyFraction } from "../../src/bmpt/web/js/job-progress.js";
 import { setStrings, T as translate } from "../../src/bmpt/web/js/i18n.js";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -12,7 +12,7 @@ function harness(overrides = {}) {
   const messages = [], notices = [], calls = [], progress = [];
   let released = false, end;
   const env = {
-    notify: (s) => messages.push(s), notice: (s) => { notices.push(s); return Promise.resolve(); }, modLine, modLabel: (m) => m?.label || "", progressName, steadyFraction, fam: {}, switchKind: () => "spr", T: (s) => s, renderScreen: async () => {},
+    notify: (s) => messages.push(s), notice: (s) => { notices.push(s); return Promise.resolve(); }, modJob, modLabel: (m) => m?.label || "", progressName, steadyFraction, fam: {}, switchKind: () => "spr", T: (s) => s, renderScreen: async () => {},
     rpc: async () => { calls.push("submit"); return "j1"; }, waitJob: async () => ({}), reload: async () => {},
     errorText: String, QUEUEABLE: ["actions.apply", "actions.restore"], refused: (err) => messages.push(String(err)),
     overwrittenMessage: async () => {}, variant: () => ({}), fullName: () => "Example", resumeChanged: () => {},

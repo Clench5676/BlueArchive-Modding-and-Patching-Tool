@@ -17,6 +17,7 @@
 // game update question is due, only after its Check. The pure parts are tested in Node (tests/js/mod_switch.test.mjs).
 import * as Compatibility from "./mod-compatibility.js";
 import * as Loading from "./loading.js";
+import { modJob } from "./job-progress.js";
 import * as Popup from "./popup.js";
 import { notify } from "./popup.js";
 import { on, rpc, spineBase, waitJob } from "./api.js";
@@ -158,13 +159,14 @@ async function run({ force = false, scan = true } = {}) {
 // of a writer task and nothing to answer: what cannot be built again is kept or left for the next start, never told
 async function refresh() {
   await names().catch(() => undefined);  // the roster in, for the names on the progress line
-  await Loading.task(async (update) => waitJob(await rpc("mods.refreshCostumes"), update));
+  await Loading.task(async (update) => waitJob(await rpc("mods.refreshCostumes"), update), { label: T("progress.modsProcess") });
 }
 
 // retry(): the entries whose last write failed written again under the loading screen, nothing to answer: one that
 // fails again keeps its fresh error on its row; a refusal of the moment leaves them for the next start
 async function retry() {
-  await Loading.task(async (update) => waitJob(await rpc("mods.retryFailed"), update));
+  await names().catch(() => undefined);  // the roster in, for the names on the progress line
+  await Loading.task(async (update) => waitJob(await rpc("mods.retryFailed"), update), { label: T("progress.modsApply") });
 }
 
 // gate(): at the start before the first screen (and after a game update while the program runs): the costume builds of
@@ -341,7 +343,14 @@ function presentList(outcome, nameOf) {
 // the repaired copy takes a mod's place where its student is configured with it (actions.apply: only configured while
 // mods are off)
 async function applyRepaired(mod, id) {
-  if (mod.configured) await waitJob(await rpc("actions.apply", { variant: mod.target, source: `mod:${id}`, kind: mod.kind }));
+  if (!mod.configured) return;
+  // under the loading screen, with its line: the student, the kind, the mod and the write
+  const line = modJob({ variant: mod.target, kind: mod.kind, core: mod.core || "", name: mod.label || "" },
+    { nameOf: Loading.variantName, action: "progress.actionApply" });
+  await Loading.task(async (update) => {
+    update(line());
+    return waitJob(await rpc("actions.apply", { variant: mod.target, source: `mod:${id}`, kind: mod.kind }), (p) => update(line(p)));
+  }, { label: line().text });
 }
 
 // fix(mods, nameOf, {review}): the student page's Update for each held mod, here: a repaired copy made before takes
@@ -352,13 +361,15 @@ async function fix(mods, nameOf, { review = false } = {}) {
   const fixed = [], partial = [];
   for (const mod of mods) {
     const subject = modName({ ...mod, configured: false }, nameOf);
+    // who the mod is on the progress line of its check, repair or update (job-progress.js modJob)
+    const who = { variant: mod.target, kind: mod.kind, core: mod.core || "", name: mod.label || "" };
     try {
       if (mod.repaired_id) {
         await applyRepaired(mod, mod.repaired_id);
         fixed.push(mod);
         continue;
       }
-      const report = await Loading.hold(() => Compatibility.forUpdate(mod.id, mod.label, subject), { all: true });
+      const report = await Loading.hold(() => Compatibility.forUpdate(mod.id, mod.label, who), { all: true });
       if (!report) continue;
       if (!(Compatibility.eligible(mod) && Compatibility.canRemap(mod.id, mod))) {
         // drawn on a rig the App does not have: an update would change nothing, so it stays held; the preview shows
@@ -373,12 +384,15 @@ async function fix(mods, nameOf, { review = false } = {}) {
             cancel: T("photo.back"), ok: T("mods.impact.fix") });
           if (answer.button !== "ok") continue;
         }
-        await Loading.task(async (update) => waitJob(await rpc("actions.update", { mod: mod.id }), update),
-          { label: T("progress.process", { name: subject }) });
+        const line = modJob(who, { nameOf: Loading.variantName, action: "progress.actionRepair" });
+        await Loading.task(async (update) => {
+          update(line());
+          return waitJob(await rpc("actions.update", { mod: mod.id }), (p) => update(line(p)));
+        }, { label: line().text });
         fixed.push(mod);
         continue;
       }
-      const result = await Compatibility.prepare(mod.id, mod.label, subject, mod.kind, review ? null : "default");
+      const result = await Compatibility.prepare(mod.id, mod.label, who, mod.kind, review ? null : "default");
       if (!result || result.unchanged) continue;
       try {
         if (review) {
@@ -387,7 +401,7 @@ async function fix(mods, nameOf, { review = false } = {}) {
           partial.push(mod);
           continue;
         }
-        const saved = await Compatibility.accept(mod.id, result, () => {}, subject);
+        const saved = await Compatibility.accept(mod.id, result, () => {}, who);
         if (saved?.mod?.id) await applyRepaired(mod, saved.mod.id);
         fixed.push(mod);
       } finally {

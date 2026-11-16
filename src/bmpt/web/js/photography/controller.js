@@ -4,6 +4,7 @@ import * as NGUI from '../ngui.js';
 import * as UI from '../student-hall-ui.js';
 import * as Popup from '../popup.js';
 import * as Loading from '../loading.js';
+import {modJob} from '../job-progress.js';
 import {untestedRetry} from '../mod-switch.js';
 import {clone,S,hitButton} from '../util.js';
 import {captureScene} from './capture.js';
@@ -144,7 +145,7 @@ async function open(hooks){
       await repositoryRead();
       await Promise.all([hooks.full(mode),Promise.resolve(repository.default||hooks.defaultThumbnail()).then(async url=>{defaultThumbnail=await url;if(defaultThumbnail)await NGUI.load(defaultThumbnail);})]);
       await Promise.all([hooks.prepareExpressions(),hooks.generatedThumbnail().then(async url=>{generatedThumbnail=url;if(url)await NGUI.load(url);})]);
-    });
+    },{label:false});
     if(scope!==generation)return;
     overlay=document.createElement('div');overlay.id='photo-overlay';stage().append(overlay);
     await drawControls();
@@ -160,7 +161,7 @@ async function leave(){
       active=false;controlsRevision++;feedback?.dispose();feedback=null;overlay?.remove();overlay=null;
       document.documentElement.classList.remove('photo-active');
       await visualEntry(false);
-    });
+    },{label:false});
   }finally{leaving=false;}
 }
 async function switchMode(){
@@ -364,9 +365,14 @@ async function galleryDraw(keepScroll=galleryOffset()){
         ...(deletable?[[P('delete'),safe(deletePhoto)]]:[])]};
     }});
 }
+// a photo's job under the loading screen with its line: the verb, the student and Student Thumbnail (job-progress.js)
+function photoTask(action,work){
+  const line=modJob({variant:sessionVariant,kind:'photo'},{nameOf:Loading.variantName,action});
+  return Loading.task(async update=>{update(line());return work(p=>update(line(p)));},{label:line().text});
+}
 async function exportPhoto(){
   if(!photo(selected))return;
-  await Loading.task(async()=>call('export',{id:selected,png:selected===DEFAULT?await generatedPNG():null}));
+  await photoTask('progress.actionExport',async()=>call('export',{id:selected,png:selected===DEFAULT?await generatedPNG():null}));
 }
 async function saveSelection(){
   if(!selected)return;
@@ -382,8 +388,8 @@ async function deletePhoto(){
     if(answer.button!=='ok')return;
   }
   const scope=generation;
-  await Loading.task(async()=>{
-    const result=await waitJob(await call('delete',{id:key,confirm:!!info.used}));
+  await photoTask('progress.actionDelete',async report=>{
+    const result=await waitJob(await call('delete',{id:key,confirm:!!info.used}),report);
     if(scope!==generation)throw new DOMException('Photography ended','AbortError');
     repository=normalized(result);
   });
@@ -393,14 +399,14 @@ async function deletePhoto(){
 // an untested game build's confirmation (mod-switch.js untestedRetry) makes the write again
 async function restoreGame(){
   const scope=generation;
-  try{await Loading.task(async()=>{await waitJob(await call('restore',{png:await generatedPNG()}));if(scope!==generation)throw new DOMException('Photography ended','AbortError');await repositoryRead();});}
+  try{await photoTask('progress.actionRestore',async report=>{await waitJob(await call('restore',{png:await generatedPNG()}),report);if(scope!==generation)throw new DOMException('Photography ended','AbortError');await repositoryRead();});}
   catch(error){if(scope===generation&&await untestedRetry(error,restoreGame))return;throw error;}
   bridge.thumbnailChanged();selected=repository.app||DEFAULT;await galleryDraw(0);
 }
 async function applyGame(){
   if(!photo(selected)||!repository.applicable)return;
   const scope=generation;
-  try{await Loading.task(async()=>{await waitJob(await call('apply',{id:selected,png:selected===DEFAULT?await generatedPNG():null}));if(scope!==generation)throw new DOMException('Photography ended','AbortError');await repositoryRead();});}
+  try{await photoTask('progress.actionApply',async report=>{await waitJob(await call('apply',{id:selected,png:selected===DEFAULT?await generatedPNG():null}),report);if(scope!==generation)throw new DOMException('Photography ended','AbortError');await repositoryRead();});}
   catch(error){if(scope===generation&&await untestedRetry(error,applyGame))return;throw error;}
   await galleryDraw();
 }

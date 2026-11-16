@@ -1,6 +1,7 @@
 // Generic library sources in Settings, using the same rows and writer jobs as the other controls.
 import { notify } from "./popup.js";
 import * as Loading from "./loading.js";
+import { modJob } from "./job-progress.js";
 import * as ModSwitch from "./mod-switch.js";
 import * as Popup from "./popup.js";
 import { rpc, waitJob } from "./api.js";
@@ -10,14 +11,20 @@ import { overwrittenLines } from "./repairs.js";
 
 let busy = false;
 
-async function write(method, params, name, changed) {
+// write(method, params, mod, name, changed): a generic mod's job under the loading screen, its line naming the file
+// and the mod (job-progress.js modJob)
+async function write(method, params, mod, name, changed) {
   if (busy) return;
   busy = true;
   let refusal = null;
+  const action = method === "mods.remove" ? "progress.actionDelete" : method === "actions.restore" ? "progress.actionRestore" : "progress.actionApply";
+  const line = modJob({ variant: mod?.target || "", kind: "other", core: mod?.core || mod?.file?.split(/[\\/]/).pop() || name,
+    name }, { nameOf: Loading.variantName, action });
   try {
-    await Loading.task(async (update) => waitJob(await rpc(method, params), update), {
-      label: T(method === "mods.remove" ? "progress.delete" : method === "actions.restore" ? "progress.restore" : "progress.apply", { name }),
-    }).then(async (result) => {
+    await Loading.task(async (update) => {
+      update(line());
+      return waitJob(await rpc(method, params), (p) => update(line(p)));
+    }, { label: line().text }).then(async (result) => {
       if (result?.failed?.length) notify(T("mods.deletePending"), { kind: "error", error: { code: result.failed[0]?.code || "internal", params: { failed: result.failed } } });
       if (result?.kept_current) await Popup.message({ title: T("popup.apply"), lines: [T("mods.keptCurrent")], ok: T("picker.ok") });
     });
@@ -31,13 +38,13 @@ async function write(method, params, name, changed) {
     } else refusal = err;
   } finally { busy = false; await changed(); }
   // an untested game build's confirmation makes the write again
-  if (refusal) await ModSwitch.refused(refusal, method, params, () => write(method, params, name, changed));
+  if (refusal) await ModSwitch.refused(refusal, method, params, () => write(method, params, mod, name, changed));
 }
 
 export async function select(mod, changed, useMod = !mod.selected) {
   const method = useMod ? "actions.apply" : "actions.restore";
   const params = { variant: mod.target, kind: "other", ...(useMod ? { source: `mod:${mod.id}` } : {}) };
-  return write(method, params, mod.label, changed);
+  return write(method, params, mod, mod.label, changed);
 }
 
 export async function remove(mod, changed) {
@@ -47,7 +54,7 @@ export async function remove(mod, changed) {
     const answer = await Popup.message({ title: T("btn.delete"),
       lines: [T("mods.deleteConfirm", { name: info.name }), ...(info.used ? [T("mods.deleteRestore")] : [])],
       ok: T("btn.delete"), cancel: T("popup.cancel") });
-    if (answer.button === "ok") await write("mods.remove", { id: mod.id, confirm: true }, info.name, changed);
+    if (answer.button === "ok") await write("mods.remove", { id: mod.id, confirm: true }, mod, info.name, changed);
   } catch (err) { ModSwitch.refused(err); }
 }
 

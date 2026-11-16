@@ -117,3 +117,41 @@ test("a long line shortens the mod's own name first, then who it is, and keeps t
   const none = fitLine(line.parts, width, 5);
   assert.ok(none.includes("：…") && none.endsWith("42% - 保存文件"), none);
 });
+
+// A one-mod job (a student page's, Settings' or a repair's action): who it is stays, the step and share follow the job.
+import { modJob } from "../../src/bmpt/web/js/job-progress.js";
+import { readdirSync } from "node:fs";
+test("a one-mod job keeps who it is, shows no count and keeps its step through a report of files", () => {
+  setStrings("zh-CN", flat(JSON.parse(readFileSync(new URL("../../src/bmpt/locales/zh-CN.json", import.meta.url)))));
+  const sep = T("progress.sep");
+  const line = modJob({ variant: "ch0063", kind: "spr", core: "ch0063_spr", name: "ch0063_spr" },
+    { nameOf, action: "progress.actionRepair" });
+  const head = `${T("progress.modHead", { action: T("progress.actionRepair") })}Hoshino (Swimsuit)${sep}${T("tab.portrait")}`;
+  assert.equal(line().text, head);  // a name that only repeats the file is left out
+  assert.equal(line({ step: "import.step.replace", fraction: 0.3 }).text, `${head}${sep}30%${sep}${T("import.step.replace")}`);
+  assert.equal(line({ current: 2, total: 3, label: "file.bundle" }).text, `${head}${sep}30%${sep}${T("import.step.replace")}`);
+  // a student thumbnail is its own kind
+  assert.ok(modJob({ variant: "ch0063", kind: "photo" }, { nameOf, action: "progress.actionApply" })().text
+    .endsWith(`${sep}${T("photo.modName")}`));
+});
+
+test("every loading task of the web UI says what it does: a line of its own, or none for a screen being prepared", () => {
+  const dir = new URL("../../src/bmpt/web/js/", import.meta.url);
+  const files = (url) => readdirSync(url, { withFileTypes: true }).flatMap((e) => e.isDirectory()
+    ? files(new URL(`${e.name}/`, url)) : e.name.endsWith(".js") ? [new URL(e.name, url)] : []);
+  const missing = [];
+  for (const file of files(dir)) {
+    if (file.pathname.endsWith("/loading.js")) continue;
+    const source = readFileSync(file, "utf8");
+    for (const match of source.matchAll(/Loading\.task\(/g)) {
+      // the call's own arguments: up to its closing parenthesis
+      let depth = 0, end = match.index + "Loading.task".length;
+      for (; end < source.length; end++) {
+        if (source[end] === "(") depth++;
+        else if (source[end] === ")" && --depth === 0) break;
+      }
+      if (!/\{\s*label\s*:/.test(source.slice(match.index, end))) missing.push(`${file.pathname.split("/js/")[1]}:${source.slice(0, match.index).split("\n").length}`);
+    }
+  }
+  assert.deepEqual(missing, []);
+});

@@ -17,7 +17,7 @@ from typing import Any
 from .. import devmode, mod_origin
 from ..errors import ServiceError
 from ..openfiles import temporary_directory
-from ..library import integrity
+from ..library import integrity, mod_progress
 from ..library.judge import core_of
 from ..library.storage import sync_directory
 from .batch_import import BatchImport, Candidate, ImportSettings
@@ -178,10 +178,18 @@ def export_zip(services: Any, library: Any, pin: Any, *, scope: str, target: str
                 temporary_zip = Path(stream.name)
             with temporary_directory(prefix=devmode.LIBRARY_STAGING_PREFIX + "export-") as staging:
                 with zipfile.ZipFile(temporary_zip, "w", compression=zipfile.ZIP_DEFLATED, allowZip64=True) as archive:
+                    # the progress line: each mod as it starts, who it is and its step (mod_progress)
+                    line = mod_progress.ItemProgress(progress, len(sources), "export")
                     for i, source in enumerate(sources, 1):
-                        progress({"current": i, "total": len(sources), "step": "import.step.export"})
+                        record = library._records.get(source[4:]) if source.startswith("mod:") else None
+                        line.item(i, variant=library._target_of(record) if record else "",
+                                  kind=record["kind"] if record else "",
+                                  name=library._progress_name(record) if record else "",
+                                  core=core_of(record["files"][0]) if record and record.get("files") else "",
+                                  step=mod_progress.STEP_EXPORT)
                         paths, metadata = _prepare(services, library, source, pin, manifest["target"],
-                                                   Path(staging), log, progress, kind)
+                                                   Path(staging), log, lambda p: line.step(p["step"]), kind)
+                        line.done()
                         directory = _safe_name(source)
                         names = [_member_name(path) for path in paths]
                         keys = [unicodedata.normalize("NFC", name).casefold() for name in names]

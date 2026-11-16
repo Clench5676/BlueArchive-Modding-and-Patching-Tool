@@ -19,7 +19,7 @@ function harness(count,{selected='p0',repository={}}={}){
     switchGrid:(kind,width)=>({kind,width,columns:3,pitch:[400,PITCH]}),
     bridge:{pause:on=>calls.push(['pause',on]),thumbnailChanged:()=>calls.push(['thumbnail'])},repositoryRead:async()=>{},
     galleryPhotos:()=>photos,photo:id=>photos.find(item=>item.id===id),selectedKey:key=>key,normalized:value=>value,
-    Loading:{task:fn=>fn()},waitJob:async()=>{},call:async(name,params)=>{calls.push([name,params]);return {};},generatedPNG:async()=>'png',untestedRetry:async()=>false,
+    Loading:{task:fn=>fn(()=>{}),variantName:e=>e?.variant||''},modJob:()=>()=>({text:''}),sessionVariant:'v',waitJob:async()=>{},call:async(name,params)=>{calls.push([name,params]);return {};},generatedPNG:async()=>'png',untestedRetry:async()=>false,
     applyGame:async()=>{},deletePhoto:async()=>{},document:{getElementById:id=>id==='popup'?host:null}};
   const api=new Function('env',`const {${Object.keys(env)}}=env;let selected=${JSON.stringify(selected)},modal=null,generation=1,
     repository=${JSON.stringify({photos:[],app:null,game:{},applicable:true,...repository})};

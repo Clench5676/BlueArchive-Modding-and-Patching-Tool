@@ -13,6 +13,7 @@ import { S, hitButton } from "./util.js";
 import { visualButton as whiteButton, galleryBox } from "./photography/controller.js";
 import { cameraFeedback } from "./photography/feedback.js";
 import * as Loading from "./loading.js";
+import { modJob } from "./job-progress.js";
 import { prepareBack } from "./visual-mode.js";
 import { anchoredCentre } from "./visual-view.js";
 import { buttonCenter } from "./student-hall-icons.js";
@@ -125,13 +126,16 @@ async function save() {
   let still = null;
   try {
     // Now Loading locks the screen until the saved choice is in and the student's choices are refreshed; the new
-    // choice's still (its Switch Memorial Lobby card, framed by the camera) starts drawing behind it
-    await Loading.task(async () => {
+    // choice's still (its Switch Memorial Lobby card, framed by the camera) starts drawing behind it; its line:
+    // Saving, the student and the memorial lobby (job-progress.js modJob)
+    const line = modJob({ variant: hooks.variant(), kind: "lobby" }, { nameOf: Loading.variantName, action: "progress.actionSave" });
+    await Loading.task(async (update) => {
+      update(line());
       const saved = await waitJob(await rpc("lobby.camera.save", { variant: hooks.variant(), lobby: hooks.lobby(),
-        source: hooks.source(), view: state.view, scale, offset }));
+        source: hooks.source(), view: state.view, scale, offset }), (p) => update(line(p)));
       await hooks.saved?.(saved);
       still = Promise.resolve(hooks.still?.(saved.mod)).catch(() => null);
-    });
+    }, { label: line().text });
   } finally {
     saving = false;
   }

@@ -82,6 +82,7 @@ export const busy = () => pending.size > 0 || active() || held() || (!!writerOve
 // names once the App has them (setNames), the key until then.
 let nameOf = (entry) => entry?.variant || entry?.core || "";
 export function setNames(fn) { if (typeof fn === "function") nameOf = fn; }
+export const variantName = (entry) => nameOf(entry);
 
 // A progress line: {text}, or {text, parts} for a job over mods, whose parts fitLine shortens to the line's width.
 // value: a job's progress, a line, or a text.
@@ -100,8 +101,9 @@ export function progressText({ label = "", current = 0, total = 0, fraction = nu
     ? `${line} ${T("progress.percent", { percent: Math.min(99, Math.floor(fraction * 100)) })}` : line;
 }
 
-// A writer task stays visible until it settles. Progress survives the sprite upgrade and
-// belongs to this task only, so a late callback cannot change a newer task's indicator.
+// A writer task stays visible until it settles. Progress survives the sprite upgrade and belongs to this task only,
+// so a late callback cannot change a newer task's indicator. label: its line while the job has not reported one;
+// false for none.
 export async function task(run, { label = null } = {}) {
   const my = ++writerGen;
   const o = writerOverlay && !writerOverlay.closing ? writerOverlay : open("indicator", false, true);
@@ -121,7 +123,9 @@ export async function task(run, { label = null } = {}) {
     const key = `${value?.current ?? ""}/${value?.total ?? ""}`, f = value?.fraction;
     if (key !== item) { item = key; best = null; }
     if (typeof f === "number" && Number.isFinite(f) && (best === null || f > best)) best = f;
-    setProgress(o, progressLine(best === null ? value : { ...value, fraction: best }, label || undefined));
+    // label false: work that is no job over mods (a screen being prepared) shows no line until it reports one
+    const quiet = label === false && !value?.text && !value?.label && !value?.variant && !value?.core;
+    setProgress(o, quiet ? "" : progressLine(best === null ? value : { ...value, fraction: best }, label || undefined));
   };
   o.relabelProgress = () => update();
   update();
