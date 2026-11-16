@@ -258,3 +258,20 @@ def test_a_clip_export_starts_at_once_while_a_long_costume_build_runs(tmp_path, 
     assert during == [0] or during == [1]  # the step under way finishes, then the build waits
     assert steps[-1] - started > 0.5  # the build went on afterwards
     assert [getattr(error, "code", error) for error in failure] == ["source_unsupported"]
+
+
+@pytest.mark.parametrize(("arms", "gain"), [(0, False), (3, True)])
+def test_arms_pushed_out_count_as_an_optimize_physics_gain(tmp_path, monkeypatch, arms, gain):
+    """Optimize Physics keeps a build whose only change is the arms pushed out of a bulkier costume; without any
+    physics rule it reports no gain."""
+    from bmpt.gameassets import model_adapt
+
+    def adapt(**kwargs):
+        plan = model_adapt.Plan({}, {}, 1.0, 1.0)
+        return model_adapt.Result({}, plan, 1, None, arms=arms)
+
+    library = _library_with_build(monkeypatch, adapt, tmp_path)
+    report = {}
+    library._stage_costume("other", [tmp_path / "character-hina_original-_mxload-2026-01-01_assets_all_1.bundle"],
+                           tmp_path / "build", print, None, report=report, physics=True)
+    assert report["physics"] is gain

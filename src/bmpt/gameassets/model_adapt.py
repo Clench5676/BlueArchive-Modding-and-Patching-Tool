@@ -3073,6 +3073,7 @@ class Result:
     cautions: list[str] = field(default_factory=list)  # ``EX_PARTS``, ``CARRIED_SHADER``
     dropped: list[str] = field(default_factory=list)  # the slot's renderers whose worn items now draw nothing
     carried: list[str] = field(default_factory=list)  # the source's renderers whose worn items the slot now draws
+    arms: int = 0  # Optimize Physics: the slot's clips copied with the arms pushed out of the costume
 
 
 def _model_prefabs(graph: BundleGraph, files: list[Path]) -> dict[str, Any]:
@@ -3172,6 +3173,9 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
     step()
     result = plan(target, source, probes, fit=all(layout is not None for layout in layouts),
                   own_probes=probe_poses(s_skeleton, s_clips), clips=t_clips)
+    from . import model_arms, model_arm_clips
+    # Optimize Physics only: the arms pushed out of a bulkier costume cost seconds on an affected pair
+    arm_clips = model_arms.retarget(target, source, result, t_clips, t_parts, step=step) if physics else {}
     t_rest, s_rest = t_skeleton.world(), s_skeleton.world()
     # each part's vertices in its renderer's space at the source's rest, as they are bound (the costume's shape)
     shapes = [result.fit.part(k, s_rest[part.node]) for k, part in enumerate(s_costume)]
@@ -3254,7 +3258,12 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
     mesh_cab, material_cab, texture_cab = home(mesh_cab, "Mesh"), home(material_cab, "Material"), home(texture_cab, "Texture2D")
     # Rule B's curves go into the slot's own clips, where they are: a clip in another file stays as it is
     skirt_clips = [c for c in skirt_clips if c.assets_file.name.lower() in slot]
-    needed = {mesh_cab, material_cab, texture_cab} | prefab_cabs | {c.assets_file.name.lower() for c in skirt_clips}
+    arm_holders = model_arm_clips.receivers(graph, t_skeleton, own) if arm_clips else []
+    if any(h.assets_file.name.lower() not in slot for h in arm_holders):
+        raise refuse("arm controller outside the slot")
+    arm_destinations = {k: home(k[0], "AnimationClip") for k in arm_clips}
+    needed = ({mesh_cab, material_cab, texture_cab} | prefab_cabs | {c.assets_file.name.lower() for c in skirt_clips}
+              | set(arm_destinations.values()) | {h.assets_file.name.lower() for h in arm_holders})
     opened: dict[Path, Any] = {}
     files: dict[str, Any] = {}
     for cab in needed:
@@ -3467,7 +3476,9 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
     root_node = t_skeleton.by_transform.get(_key(root_bone), 0) if root_bone is not None else 0
     # the renderers' culling boxes hold each part at rest and in every probe pose, so parts that move far from their
     # rest place do not vanish at the screen's edge
-    bounds = [_bounds(w, nodes, t_skeleton, root_node, [t_rest, *probes]) for w, (_, nodes) in zip(written, new_meshes)]
+    arm_probes = model_arms.bounds_poses(t_skeleton, arm_clips)
+    bounds = [_bounds(w, nodes, t_skeleton, root_node, [t_rest, *probes, *arm_probes])
+              for w, (_, nodes) in zip(written, new_meshes)]
     if mouth is None:
         logger.info("Costume of %s on %s: the source has no mouth receiver on its costume, the slot's stays as it is",
                     s_name, t_name)
@@ -3481,8 +3492,12 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
                               [[materials[_key(m)] if m is not None else 0 for m in p.materials] for p in drawn_parts],
                               [s_skeleton.nodes[p.node].name for p in drawn_parts], root_node, t_skeleton, bounds,
                               halo_change, rendered, mouth, worn_meshes)
+    step()
+    model_arm_clips.write_copies(writer, arm_clips, arm_destinations, arm_holders, t_skeleton, clip_skirts)
     for clip in skirt_clips:
         step()
+        if _key(clip) in arm_clips:
+            continue
         obj = writer.file(clip.assets_file.name.lower()).objects[clip.path_id]
         tree = obj.read_typetree()
         before = clip_snapshot(tree) if ms.dense_grid(tree) is not None else None
@@ -3520,7 +3535,7 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
     if dropped or carried_names:
         logger.info("Costume of %s on %s: worn items of %s draw nothing, of %s are carried", s_name, t_name,
                     ", ".join(dropped) or "none", ", ".join(carried_names) or "none")
-    return Result(opened, result, len(s_costume), hem, cautions, dropped, carried_names)
+    return Result(opened, result, len(s_costume), hem, cautions, dropped, carried_names, len(arm_clips))
 
 
 def _edit_prefabs(writer: _Writer, sf: Any, graph: BundleGraph, t_meshes: Mapping[tuple[str, int], str],
