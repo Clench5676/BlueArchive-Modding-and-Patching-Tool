@@ -809,9 +809,11 @@ def solve_clip(rig, own, new, poses, loop, own_depth, before, frames, hold, pins
     bodies = BodyFrames(new, rig, poses, tick)
     bodies.ensure(frames)
     if before is None:
-        before = [(bodies[f].depth(poses[f]), arm_radii(new, rig, poses[f]), None) for f in frames]
-    d_before = np.array([m[0] for m in before])
-    radius = np.array([m[1] for m in before])
+        d_before = depths([bodies[f] for f in frames], [poses[f] for f in frames])
+        radius = arm_radii_many(new, rig, [poses[f] for f in frames])
+    else:
+        d_before = np.array([m[0] for m in before])
+        radius = np.array([m[1] for m in before])
     first = np.maximum(0, push_of(own_depth, d_before, radius, CLEAR) - DEAD)
     need = np.zeros_like(first)
     current = measured
@@ -820,15 +822,13 @@ def solve_clip(rig, own, new, poses, loop, own_depth, before, frames, hold, pins
     deltas = np.zeros((n, 2, 2, 3))
     for it in range(ITERATIONS):
         tick()
-        depth_gradient = [bodies[f].depth_gradient(w) for f, w in zip(frames, current)]
-        current_depth = np.array([m[0] for m in depth_gradient])
+        current_depth, gradient = depth_gradients([bodies[f] for f in frames], current)
         rest = first if not it else push_of(own_depth, current_depth, radius, CLEAR)
         need = np.minimum(np.minimum(need + np.where(rest > 0.002, rest, 0),
                                      1.25 * first + 0.005 * (first > 0)), NEED_CAP)
         full = blend(_interpolate(frames, need, n), loop)
         full = rate_limit(full, peak, hold, loop)
         pts = np.array([rig.samples(w) for w in current])
-        gradient = np.array([m[1] for m in depth_gradient])
         magnitude = np.maximum(np.linalg.norm(gradient, axis=3), 1e-6)
         directions = -gradient / magnitude[..., None]
         displacement = pts - np.array([rig.samples(w) for w in measured])
@@ -888,13 +888,16 @@ def guard_clip(rig, drawn, poses, deltas, hold, loop, peak, bodies=None, tick=la
         for f, w in zip(changed, updated):
             fixed[f] = w
             checked[f] = gains[f]
-            if not gains[f]:
-                continue
-            if f not in baseline:
-                baseline[f] = bodies[f].penetration(poses[f])
-            depth = bodies[f].penetration(w)
-            growth[f] = np.max(depth - baseline[f])
-            bad[f] = growth[f] > GUARD_TOLERANCE - 2e-5
+        live = [k for k, f in enumerate(changed) if gains[f]]
+        fresh = [changed[k] for k in live if changed[k] not in baseline]
+        if fresh:
+            baseline.update(zip(fresh, penetrations([bodies[f] for f in fresh], [poses[f] for f in fresh])))
+        if live:
+            depth = penetrations([bodies[changed[k]] for k in live], [updated[k] for k in live])
+            for k, value in zip(live, depth):
+                f = changed[k]
+                growth[f] = np.max(value - baseline[f])
+                bad[f] = growth[f] > GUARD_TOLERANCE - 2e-5
         if bad.any():
             gains[bad] *= np.minimum(.5, .0007 / np.maximum(growth[bad], 1e-9))
             gains[gains < 1 / 256] = 0
@@ -1268,7 +1271,7 @@ class BodyFrame:
     @staticmethod
     def prepare(triangles):
         t = np.asarray(triangles, np.float32)
-        a, b, c = t[:, 0], t[:, 1], t[:, 2]
+        a, b, c = t[..., 0, :], t[..., 1, :], t[..., 2, :]
         return [a, b - a, c - a, np.minimum(np.minimum(a, b), c), np.maximum(np.maximum(a, b), c)]
 
     def geometry(self, pose):
@@ -1347,37 +1350,194 @@ class BodyFrame:
         else:
             ray, at = np.nonzero((hi[None] >= ray_lo[:, None]).all(axis=2)
                                   & (lo[None] <= ray_hi[:, None]).all(axis=2))
-        all_e1, all_e2 = e1, e2
-        v0, e1, e2 = v0[at], e1[at], e2[at]
-        p, d = points.astype(np.float32)[ray], dirs.astype(np.float32)[ray]
-        dx, dy, dz = d.T
-        ax, ay, az = e1.T
-        bx, by, bz = e2.T
-        hx, hy, hz = dy * bz - dz * by, dz * bx - dx * bz, dx * by - dy * bx
-        determinant = ax * hx + ay * hy + az * hz
-        with np.errstate(divide='ignore', invalid='ignore'):
-            f = 1. / determinant
-            sx, sy, sz = (p - v0).T
-            u = f * (sx * hx + sy * hy + sz * hz)
-            qx, qy, qz = sy * az - sz * ay, sz * ax - sx * az, sx * ay - sy * ax
-            v = f * (dx * qx + dy * qy + dz * qz)
-            t = f * (bx * qx + by * qy + bz * qz)
-            valid = (np.abs(determinant) > 1e-12) & (u >= 0) & (v >= 0) & (u + v <= 1)
-        accepted = valid & (t > -rho[ray]) & (t <= high)
-        result = -rho.copy()
-        np.maximum.at(result, ray[accepted], t[accepted])
-        if not normals:
-            return result
-        normal = np.zeros_like(points)
-        # Preserve first-triangle tie breaking at shared edges, as in argmax.
-        selected = np.full(len(points), len(all_e1), int)
-        best = np.flatnonzero(accepted & (t == result[ray]))
-        np.minimum.at(selected, ray[best], at[best])
-        hit = selected < len(all_e1)
-        if hit.any():
-            normal[hit] = np.cross(all_e1[selected[hit]], all_e2[selected[hit]])
-        return result, normal
+        return _narrow(points, dirs, rho, v0, e1, e2, ray, at, normals, high)
 
+
+def _narrow(points, dirs, rho, v0, e1, e2, ray, at, normals, high):
+    """Exact float32 line/triangle tests of the candidate pairs (ray, at); the outermost hit per ray."""
+    all_e1, all_e2 = e1, e2
+    v0, e1, e2 = v0[at], e1[at], e2[at]
+    p, d = points.astype(np.float32)[ray], dirs.astype(np.float32)[ray]
+    dx, dy, dz = d.T
+    ax, ay, az = e1.T
+    bx, by, bz = e2.T
+    hx, hy, hz = dy * bz - dz * by, dz * bx - dx * bz, dx * by - dy * bx
+    determinant = ax * hx + ay * hy + az * hz
+    with np.errstate(divide='ignore', invalid='ignore'):
+        f = 1. / determinant
+        sx, sy, sz = (p - v0).T
+        u = f * (sx * hx + sy * hy + sz * hz)
+        qx, qy, qz = sy * az - sz * ay, sz * ax - sx * az, sx * ay - sy * ax
+        v = f * (dx * qx + dy * qy + dz * qz)
+        t = f * (bx * qx + by * qy + bz * qz)
+        valid = (np.abs(determinant) > 1e-12) & (u >= 0) & (v >= 0) & (u + v <= 1)
+    accepted = valid & (t > -rho[ray]) & (t <= high)
+    result = -rho.copy()
+    np.maximum.at(result, ray[accepted], t[accepted])
+    if not normals:
+        return result
+    normal = np.zeros_like(points)
+    # Preserve first-triangle tie breaking at shared edges, as in argmax.
+    selected = np.full(len(points), len(all_e1), int)
+    best = np.flatnonzero(accepted & (t == result[ray]))
+    np.minimum.at(selected, ray[best], at[best])
+    hit = selected < len(all_e1)
+    if hit.any():
+        normal[hit] = np.cross(all_e1[selected[hit]], all_e2[selected[hit]])
+    return result, normal
+
+
+def query_many(points, dirs, rho, prepared, normals=False, high=CAP):
+    """``BodyFrame.query`` for several frames at once: points and dirs (frames, rays, 3), rho (frames, rays), the
+    prepared triangle arrays (frames, triangles, 3) and the leaf bounds (frames, leaves, 3) of one partition.
+
+    A ray meets only its own frame's triangles, visited in the order the single-frame query visits them, with
+    the same arithmetic: the depths and normals are bit for bit those of one frame at a time.
+    """
+    count, rays = rho.shape
+    triangles = prepared[0].shape[1]
+    if not triangles:
+        return (-rho, np.zeros_like(points)) if normals else -rho
+    v0, e1, e2, lo, hi = (a.reshape(-1, 3) for a in prepared[:5])
+    ends = np.stack((points - rho[..., None] * dirs, points + high * dirs))
+    ray_lo, ray_hi = ends.min(axis=0) - 1e-7, ends.max(axis=0) + 1e-7
+    index, leaf_lo, leaf_hi = prepared[5]
+    # Box overlap one axis at a time: the same tests without three-wide reductions.
+    overlap = leaf_hi[:, None, :, 0] >= ray_lo[:, :, None, 0]
+    for k in range(3):
+        if k:
+            overlap &= leaf_hi[:, None, :, k] >= ray_lo[:, :, None, k]
+        overlap &= leaf_lo[:, None, :, k] <= ray_hi[:, :, None, k]
+    frame, ray, leaf = np.nonzero(overlap)
+    ray = np.repeat(frame * rays + ray, index.rows.shape[1])
+    at = (index.rows[leaf] + (frame * triangles)[:, None]).ravel()
+    ray_lo, ray_hi = ray_lo.reshape(-1, 3)[ray], ray_hi.reshape(-1, 3)[ray]
+    box_lo, box_hi = lo[at], hi[at]
+    near = box_hi[:, 0] >= ray_lo[:, 0]
+    for k in range(3):
+        if k:
+            near &= box_hi[:, k] >= ray_lo[:, k]
+        near &= box_lo[:, k] <= ray_hi[:, k]
+    out = _narrow(points.reshape(-1, 3), dirs.reshape(-1, 3), rho.ravel(), v0, e1, e2, ray[near], at[near],
+                  normals, high)
+    if not normals:
+        return out.reshape(count, rays)
+    return out[0].reshape(count, rays), out[1].reshape(count, rays, 3)
+
+
+def leaf_bounds(index, lo, hi):
+    """Each frame's leaf boxes: lo, hi (frames, triangles, 3)."""
+    return index, lo[:, index.rows].min(axis=2), hi[:, index.rows].max(axis=2)
+
+
+def radial_many(axes, points):
+    """``radial`` for frames: axes (frames, joints, 3), points (frames, n, 3)."""
+    a, b = axes[:, :-1], axes[:, 1:]
+    ab = b - a
+    t = np.clip(((points[:, :, None] - a[:, None]) * ab[:, None]).sum(-1)
+                / np.maximum((ab * ab).sum(-1), 1e-12)[:, None], 0, 1)
+    near = a[:, None] + t[..., None] * ab[:, None]
+    dist = np.linalg.norm(points[:, :, None] - near, axis=-1)
+    k = dist.argmin(-1)
+    q = np.take_along_axis(near, k[..., None, None], axis=2)[:, :, 0]
+    rho = np.take_along_axis(dist, k[..., None], axis=2)[..., 0]
+    d = (points - q) / np.maximum(rho, 1e-9)[..., None]
+    return q, d, rho
+
+
+def _geometry_many(bodies, poses):
+    """The frames' ``geometry`` stacked; arm-turned frames re-skin only their arm-influenced torso vertices."""
+    first = bodies[0]
+    stacked = [np.stack([b.prepared[k] for b in bodies]) for k in range(5)]
+    index = first.drawn._body_index
+    leaf_lo = np.stack([b.prepared[5][1] for b in bodies])
+    leaf_hi = np.stack([b.prepared[5][2] for b in bodies])
+    turned = np.array([k for k, (b, w) in enumerate(zip(bodies, poses)) if len(b.changed) and w is not b.pose], int)
+    if len(turned):
+        changed, tri_changed = first.changed, first.tri_changed
+        vertices = np.stack([bodies[k].vertices for k in turned])
+        vertices[:, changed] = first.drawn.posed_batch([poses[k] for k in turned], first.rows[changed])
+        update = BodyFrame.prepare(vertices[:, first.tris[tri_changed]])
+        for a, b in zip(stacked, update):
+            a[turned[:, None], tri_changed[None]] = b
+        rows = index.rows[first.leaves_changed]
+        leaf_lo[turned[:, None], first.leaves_changed[None]] = stacked[3][turned[:, None, None], rows[None]].min(axis=2)
+        leaf_hi[turned[:, None], first.leaves_changed[None]] = stacked[4][turned[:, None, None], rows[None]].max(axis=2)
+    return stacked + [(index, leaf_lo, leaf_hi)]
+
+
+def _samples(rig, poses):
+    return np.array([rig.samples(w) for w in poses])
+
+
+def depths(bodies, poses):
+    """``BodyFrame.depth`` of each (frame, pose) pair, measured together."""
+    out = np.empty((len(bodies), 2, len(SAMPLES)))
+    todo = []
+    for k, (b, w) in enumerate(zip(bodies, poses)):
+        if w is b.pose and b.baseline is not None:
+            out[k] = b.baseline
+        else:
+            todo.append(k)
+    if todo:
+        bodies_, poses_ = [bodies[k] for k in todo], [poses[k] for k in todo]
+        points = _samples(bodies_[0].rig, poses_).reshape(len(todo), -1, 3)
+        _, dirs, rho = radial_many(np.array([b.axis for b in bodies_]), points)
+        values = query_many(points, dirs, rho, _geometry_many(bodies_, poses_)).reshape(len(todo), 2, -1)
+        for k, b, w, value in zip(todo, bodies_, poses_, values):
+            out[k] = value
+            if w is b.pose:
+                b.baseline = value
+    return out
+
+
+def penetrations(bodies, poses):
+    """``BodyFrame.penetration`` of each (frame, pose) pair, measured together."""
+    out = np.empty((len(bodies), 2, len(SAMPLES)))
+    todo = []
+    for k, (b, w) in enumerate(zip(bodies, poses)):
+        if w is b.pose and b.baseline is not None:
+            out[k] = np.maximum(0, b.baseline)
+        else:
+            todo.append(k)
+    if todo:
+        bodies_, poses_ = [bodies[k] for k in todo], [poses[k] for k in todo]
+        points = _samples(bodies_[0].rig, poses_).reshape(len(todo), -1, 3)
+        _, dirs, _ = radial_many(np.array([b.axis for b in bodies_]), points)
+        out[todo] = query_many(points, dirs, np.zeros(points.shape[:2]),
+                               _geometry_many(bodies_, poses_)).reshape(len(todo), 2, -1)
+    return out
+
+
+def depth_gradients(bodies, poses):
+    """``BodyFrame.depth_gradient`` of each (frame, pose) pair: depths (n, 2, 9) and gradients (n, 2, 9, 3)."""
+    count = len(bodies)
+    if not count:
+        return np.empty((0, 2, len(SAMPLES))), np.empty((0, 2, len(SAMPLES), 3))
+    points = _samples(bodies[0].rig, poses).reshape(count, -1, 3)
+    axes = np.array([b.axis for b in bodies])
+    _, dirs, rho = radial_many(axes, points)
+    depth, normals = query_many(points, dirs, rho, _geometry_many(bodies, poses), normals=True)
+    a, ab = axes[:, :-1], np.diff(axes, axis=1)
+    length2 = np.maximum((ab * ab).sum(axis=2), 1e-12)
+    t = np.clip(((points[:, :, None] - a[:, None]) * ab[:, None]).sum(axis=3) / length2[:, None], 0, 1)
+    distances = np.linalg.norm(points[:, :, None] - a[:, None] - t[..., None] * ab[:, None], axis=3)
+    nearest = distances.argmin(axis=2)
+    along = (np.take_along_axis(ab, nearest[..., None], axis=1)
+             / np.sqrt(np.take_along_axis(length2, nearest, axis=1))[..., None]).reshape(-1, 3)
+    at = np.take_along_axis(t, nearest[..., None], axis=2).ravel()
+    interior = (at > 0) & (at < 1)
+    points, dirs, rho = points.reshape(-1, 3), dirs.reshape(-1, 3), rho.ravel()
+    depth, normals = depth.ravel(), normals.reshape(-1, 3)
+    project = along[:, :, None] * along[:, None, :] * interior[:, None, None]
+    pn = np.einsum('nij,nj->ni', project, normals)
+    nd = (normals * dirs).sum(axis=1)
+    tangent = normals - nd[:, None] * dirs
+    jt = (tangent - np.einsum('nij,nj->ni', project, tangent)) / np.maximum(rho, 1e-9)[:, None]
+    hit = np.linalg.norm(normals, axis=1) > 0
+    grad = -dirs.copy()
+    grad[hit] -= (pn[hit] + (depth[hit] + rho[hit])[:, None] * jt[hit]) / nd[hit, None]
+    return depth.reshape(count, 2, -1), grad.reshape(count, 2, -1, 3)
 
 
 def arm_radii(drawn, rig, pose, indices=None):
@@ -1409,6 +1569,38 @@ def arm_radii(drawn, rig, pose, indices=None):
     return radii
 
 
+def arm_radii_many(drawn, rig, poses, indices=None):
+    """``arm_radii`` of several poses (frames x 2 x samples), each sleeve segment cast for all of them at once."""
+    indices = np.arange(9) if indices is None else np.asarray(indices)
+    radii = np.zeros((len(poses), 2, len(indices)))
+    if not len(poses):
+        return radii
+    points = _samples(rig, poses)[:, :, indices]
+    _, directions, _ = radial_many(np.array([rig.axis(w) for w in poses]), points.reshape(len(poses), -1, 3))
+    directions = directions.reshape(points.shape)
+    if not hasattr(drawn, '_arm_views'):
+        drawn._arm_views = {}
+    for side in range(2):
+        for segment in range(3):
+            at = np.array([k for k, sample in enumerate(indices) if segment in SEGMENTS[sample]], int)
+            triangles = drawn.arm[side, segment]
+            if not len(at) or not len(triangles):
+                continue
+            key = side, segment
+            if key not in drawn._arm_views:
+                rows, remap = np.unique(triangles, return_inverse=True)
+                local = remap.reshape(-1, 3)
+                index = TriangleIndex(drawn.posed(poses[0], rows)[local])
+                drawn._arm_views[key] = rows, local, index
+            rows, local, index = drawn._arm_views[key]
+            prepared = BodyFrame.prepare(drawn.posed_batch(poses, rows)[:, local])
+            prepared.append(leaf_bounds(index, prepared[3], prepared[4]))
+            values = query_many(points[:, side, at], directions[:, side, at], np.zeros((len(poses), len(at))),
+                                prepared, high=ARM_CAP)
+            radii[:, side, at] = np.maximum(radii[:, side, at], values)
+    return radii
+
+
 def repair_clearance(rig, poses, deltas, hold, pins, bodies, tick=lambda: None):
     """A small shared bone turn resolves the non-driven sample constraints.
 
@@ -1419,7 +1611,7 @@ def repair_clearance(rig, poses, deltas, hold, pins, bodies, tick=lambda: None):
     """
     if hold.any() or (pins > .01).any():
         return deltas
-    baseline = np.maximum(0, np.array([b.depth(w) for b, w in zip(bodies, poses)]))
+    baseline = np.maximum(0, depths(bodies, poses))
     original = deltas.copy()
     ew = np.array([.5, .75, 1, .75, .5, .25, 0, 0, 0])
     ww = np.array([0, 0, 0, .25, .5, .75, 1, 1, 1])
@@ -1427,11 +1619,9 @@ def repair_clearance(rig, poses, deltas, hold, pins, bodies, tick=lambda: None):
     for _ in range(8):
         tick()
         fixed = _repose(rig, poses, deltas, hold)
-        measured = [b.depth_gradient(w) for b, w in zip(bodies, fixed)]
-        depth = np.array([m[0] for m in measured])
+        depth, gradient = depth_gradients(bodies, fixed)
         if (np.maximum(depth, 0) - baseline).max() < .0007:
             return deltas
-        gradient = np.array([m[1] for m in measured])
         joints = np.array([[rig.joints(w, side) for side in range(2)] for w in fixed])
         upper = joints[:, :, 1] - joints[:, :, 0]
         fore = joints[:, :, 2] - joints[:, :, 1]
@@ -1497,11 +1687,7 @@ def depth_batch(drawn, rig, poses, indices):
     prepared = [a, b - a, c - a, np.minimum(np.minimum(a, b), c), np.maximum(np.maximum(a, b), c)]
     if not hasattr(drawn, '_body_index'):
         drawn._body_index = TriangleIndex(tri[0])
-    out = []
-    for f, pose in enumerate(poses):
-        points = rig.samples(pose)[:, indices].reshape(-1, 3)
-        _, direction, rho = radial(rig.axis(pose), points)
-        frame = [p[f] for p in prepared]
-        frame.append(drawn._body_index.bounds(frame))
-        out.append(BodyFrame.query(points, direction, rho, frame).reshape(2, len(indices)))
-    return np.array(out)
+    points = _samples(rig, poses)[:, :, indices].reshape(len(poses), -1, 3)
+    _, direction, rho = radial_many(np.array([rig.axis(pose) for pose in poses]), points)
+    prepared.append(leaf_bounds(drawn._body_index, prepared[3], prepared[4]))
+    return query_many(points, direction, rho, prepared).reshape(len(poses), 2, len(indices))

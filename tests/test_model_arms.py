@@ -638,3 +638,166 @@ def test_tree_clone_equals_a_deep_copy_and_shares_nothing_with_the_original():
     assert np.array_equal(clone["e"], tree["e"]) and clone["e"].dtype == tree["e"].dtype
     clone["a"][0]["y"].append(3)
     assert tree["a"][0]["y"] == [0.1, 0.2]
+
+
+def _skinned_body(rig, rng):
+    """A noisy skinned cylinder around the spine with sleeves on both arms; the shoulder ring follows the upper arms
+    a little, so arm turns re-skin part of the torso."""
+    rest = np.array(rig.rest)
+    pelvis, spine, neck = rig.spine[1], rig.spine[2], rig.spine[3]
+    bones = [pelvis, spine, neck] + [rig.arm[s][k] for s in range(2) for k in (1, 2, 3)]
+    vertices, joints, weights, triangles, regions = [], [], [], [], []
+
+    def tube(centres, radius, segments, bone_of, second, region):
+        base = len(vertices)
+        for ring, (centre, axis) in enumerate(centres):
+            axis = axis / np.linalg.norm(axis)
+            side = np.cross(axis, [0, 0, 1.0])
+            side /= np.linalg.norm(side)
+            up = np.cross(axis, side)
+            for k in range(segments):
+                angle = 2 * np.pi * k / segments
+                r = radius * (1 + rng.normal(0, .05))
+                vertices.append(centre + r * (np.cos(angle) * side + np.sin(angle) * up))
+                joints.append([bone_of(ring), second(ring)[0]])
+                weights.append([1 - second(ring)[1], second(ring)[1]])
+                regions.append(region)
+        for ring in range(len(centres) - 1):
+            for k in range(segments):
+                a, b = base + ring * segments + k, base + ring * segments + (k + 1) % segments
+                triangles.append((a, b, b + segments))
+                triangles.append((a, b + segments, a + segments))
+
+    heights = np.linspace(.35, 1.3, 14)
+    tube([(np.array([0, h, 0.]), np.array([0, 1, 0.])) for h in heights], .15, 28,
+         lambda ring: 0 if heights[ring] < .8 else 1 if heights[ring] < 1.1 else 2,
+         lambda ring: (3 if ring % 2 else 6, .3) if heights[ring] > 1.15 else (0, 0.), 0)
+    for s in range(2):
+        for seg in range(3):
+            a, b = rest[rig.arm[s][1 + seg]][:3, 3], rest[rig.arm[s][min(2 + seg, 3)]][:3, 3]
+            if seg == 2:
+                b = a + (a - rest[rig.arm[s][2]][:3, 3]) * .4
+            bone = 3 + 3 * s + seg
+            tube([(a + t * (b - a), b - a) for t in np.linspace(0, 1, 4)], .035, 10,
+                 lambda ring, bone=bone: bone, lambda ring: (0, 0.), 2 + 3 * s + seg)
+    bindings = np.linalg.inv(rest[bones])
+    drawn = ar.Drawn(np.array(vertices), np.array(joints), np.array(weights), np.array(triangles), np.array(regions),
+                     lambda pose: np.asarray(pose)[bones] @ bindings)
+    drawn.pose_bones, drawn.bindings = np.array(bones), bindings
+    return drawn
+
+
+def _body_case(seed=31, count=12):
+    rig = _rig()
+    rng = np.random.default_rng(seed)
+    poses = _turned_poses(rig, rng, count)
+    drawn = _skinned_body(rig, rng)
+    deltas = rng.normal(0, .03, (count, 2, 2, 3))
+    hold = np.zeros((count, 2), bool)
+    hold[::5, 0] = True
+    turned = ar._repose(rig, poses, deltas, hold)
+    return rig, drawn, poses, turned
+
+
+def _same(a, b):
+    return np.array_equal(np.asarray(a), np.asarray(b), equal_nan=True)
+
+
+def test_batched_torso_depths_penetrations_and_gradients_equal_the_frame_by_frame_queries():
+    rig, drawn, poses, turned = _body_case()
+    frames = list(range(len(poses)))
+    single = ar.BodyFrames(drawn, rig, poses, lambda: None)
+    batched = ar.BodyFrames(drawn, rig, poses, lambda: None)
+    single.ensure(frames)
+    batched.ensure(frames)
+    assert len(drawn._body_layout[0])  # the shoulder ring is re-skinned after an arm turn
+    mixed = [poses[f] if f % 3 == 0 else turned[f] for f in frames]
+    for f in range(len(poses)):
+        assert np.array_equal(single.frames[f].prepared[0], batched.frames[f].prepared[0])
+    depth = ar.depths([batched[f] for f in frames], mixed)
+    assert _same(depth, [single[f].depth(w) for f, w in zip(frames, mixed)])
+    assert all(batched[f].baseline is not None for f in frames if f % 3 == 0)
+    assert _same(ar.depths([batched[f] for f in frames], mixed), depth)  # cached baselines
+    assert _same(ar.penetrations([batched[f] for f in frames], mixed),
+                 [single[f].penetration(w) for f, w in zip(frames, mixed)])
+    got, gradient = ar.depth_gradients([batched[f] for f in frames], turned)
+    want = [single[f].depth_gradient(w) for f, w in zip(frames, turned)]
+    assert _same(got, [m[0] for m in want]) and _same(gradient, [m[1] for m in want])
+    assert (got > 0).any() and (got < 0).any()
+    empty = ar.depth_gradients([], [])
+    assert empty[0].shape == (0, 2, 9) and empty[1].shape == (0, 2, 9, 3)
+
+
+def test_batched_sleeve_radii_equal_the_frame_by_frame_casts():
+    rig, drawn, poses, turned = _body_case(seed=5, count=7)
+    single = _skinned_body(rig, np.random.default_rng(5))
+    for indices in (None, ar.GATE_SAMPLES):
+        got = ar.arm_radii_many(drawn, rig, turned, indices)
+        want = [ar.arm_radii(drawn, rig, w, indices) for w in turned]
+        assert _same(got, want)
+        assert (got > 0).any()
+    assert ar.arm_radii_many(single, rig, [], None).shape == (0, 2, 9)
+
+
+def _depth_batch_reference(drawn, rig, poses, indices):
+    rows, triangles, _ = drawn.measure_mesh(True, False)
+    matrices = (poses[:, drawn.pose_bones] @ drawn.bindings).astype(np.float32)
+    joints, weights = drawn.joints[rows], drawn.weights[rows].astype(np.float32)
+    h = drawn.h[rows].astype(np.float32)
+    vertices = np.zeros((len(poses), len(rows), 3), np.float32)
+    for k in range(joints.shape[1]):
+        used = weights[:, k] != 0
+        if used.any():
+            vertices[:, used] += weights[None, used, k:k + 1] * np.einsum(
+                'fvij,vj->fvi', matrices[:, joints[used, k]], h[used])[..., :3]
+    tri = vertices[:, triangles]
+    a, b, c = tri[:, :, 0], tri[:, :, 1], tri[:, :, 2]
+    prepared = [a, b - a, c - a, np.minimum(np.minimum(a, b), c), np.maximum(np.maximum(a, b), c)]
+    out = []
+    for f, pose in enumerate(poses):
+        points = rig.samples(pose)[:, indices].reshape(-1, 3)
+        _, direction, rho = ar.radial(rig.axis(pose), points)
+        frame = [p[f] for p in prepared]
+        frame.append(drawn._body_index.bounds(frame))
+        out.append(ar.BodyFrame.query(points, direction, rho, frame).reshape(2, len(indices)))
+    return np.array(out)
+
+
+def test_batched_gate_depths_equal_the_frame_by_frame_casts():
+    rig, drawn, poses, turned = _body_case(seed=9, count=10)
+    stack = np.array(turned)
+    for indices in (ar.GATE_SAMPLES, np.arange(9)):
+        got = ar.depth_batch(drawn, rig, stack, indices)
+        assert _same(got, _depth_batch_reference(drawn, rig, stack, indices))
+    assert ar.depth_batch(drawn, rig, stack[:0], ar.GATE_SAMPLES).shape == (0, 2, 5)
+
+
+def test_batched_query_equals_single_frame_queries_with_ties_and_misses():
+    rng = np.random.default_rng(12)
+    base = rng.uniform(-.2, .2, (500, 3, 3)).astype(np.float32)
+    base[1] = base[0]                 # a duplicate triangle: the first index wins the normal
+    index = ar.TriangleIndex(base)
+    frames = [base + rng.normal(0, .02, base.shape).astype(np.float32) for _ in range(5)]
+    frames[2] = base.copy()
+    points = rng.uniform(-.25, .25, (5, 18, 3))
+    points[:, 0] = frames[0][0].mean(axis=0) - [0, 0, .05]
+    dirs = rng.normal(size=points.shape)
+    dirs[:, 0] = [0, 0, 1.]
+    dirs /= np.linalg.norm(dirs, axis=2)[..., None]
+    rho = rng.uniform(0, .35, (5, 18))
+    rho[3] = 0
+    prepared = ar.BodyFrame.prepare(np.stack(frames))
+    prepared.append(ar.leaf_bounds(index, prepared[3], prepared[4]))
+    for normals in (False, True):
+        got = ar.query_many(points, dirs, rho, prepared, normals=normals)
+        for f, triangles in enumerate(frames):
+            single = ar.BodyFrame.prepare(triangles)
+            single.append(index.bounds(single))
+            want = ar.BodyFrame.query(points[f], dirs[f], rho[f], single, normals=normals)
+            if normals:
+                assert _same(got[0][f], want[0]) and _same(got[1][f], want[1])
+            else:
+                assert _same(got[f], want)
+    empty = ar.BodyFrame.prepare(np.zeros((5, 0, 3, 3)))
+    empty.append(None)
+    assert _same(ar.query_many(points, dirs, rho, empty), -rho)
