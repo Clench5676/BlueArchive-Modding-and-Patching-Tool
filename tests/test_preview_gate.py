@@ -185,7 +185,68 @@ def test_model_asset_gate_covers_each_source_and_releases_on_failure(source, fai
     assert preview_gate._count == 0
 
 
+@pytest.fixture
+def told(monkeypatch):
+    seen = []
+    monkeypatch.setattr(preview_gate, "on_wait", seen.append)
+    return seen
+
+
+def test_a_preview_waiting_for_a_job_is_no_foreground_meanwhile_and_is_told(told):
+    with preview_gate.waiting():  # a job's thread: nothing to tell
+        assert told == []
+    with preview_gate.foreground():
+        assert preview_gate.in_foreground() and preview_gate._count == 1
+        with preview_gate.waiting():
+            # the job it waits for does not yield to it
+            assert preview_gate._count == 0 and told == [True]
+            preview_gate.step(None)
+        assert preview_gate._count == 1 and told == [True, False]
+    assert not preview_gate.in_foreground() and preview_gate._count == 0
+
+
+def test_overlapping_waits_are_told_once(told):
+    entered, leave = threading.Barrier(2), threading.Event()
+
+    def wait():
+        with preview_gate.foreground(), preview_gate.waiting():
+            entered.wait(2)
+            leave.wait(2)
+
+    with ThreadPoolExecutor(2) as pool:
+        futures = [pool.submit(wait), pool.submit(wait)]
+        leave.set()
+        for future in futures:
+            future.result(timeout=5)
+    assert told == [True, False]
+
+
 def test_a_preview_step_does_not_yield_to_itself(monkeypatch):
     monkeypatch.setattr(preview_gate, "yield_to_previews", lambda cancel: pytest.fail("yielded to itself"))
     with preview_gate.foreground():
         preview_gate.step(None)
+
+
+@pytest.mark.parametrize("holder_foreground, expected", [(False, [True, False]), (True, [])])
+def test_a_preview_waiting_for_the_model_lock_a_job_holds_is_told(told, holder_foreground, expected):
+    """The model lock held by a job (the costume check's export): a preview's wait for it is not its own time."""
+    from contextlib import nullcontext
+
+    from bmpt.gameassets.service import _ModelLock
+
+    lock, held, release = _ModelLock(), threading.Event(), threading.Event()
+
+    def hold():
+        with preview_gate.foreground() if holder_foreground else nullcontext(), lock:
+            held.set()
+            release.wait(5)
+
+    with ThreadPoolExecutor(1) as pool:
+        holder = pool.submit(hold)
+        assert held.wait(2)
+        with preview_gate.foreground():
+            threading.Timer(0.1, release.set).start()
+            with lock:
+                assert lock.locked()
+        holder.result(timeout=5)
+    assert told == expected and not lock.locked()

@@ -264,6 +264,9 @@ class Services:
         self.reports.game = {"found": bool(game_dir and game_dir.is_dir()), "server": self.settings.server_region(),
                              "platform": "Android" if self.settings.is_adb_mode() else "Windows", "resourceVersion": None}
         self.events = events or EventBus()
+        # the page pauses its preview deadlines while a preview waits for a job (the model lock, a costume build)
+        events_bus = self.events
+        preview_gate.on_wait = lambda busy: events_bus.publish("preview.waiting", {"busy": busy})
         self.jobs = jobs or JobRunner(self.events)
         with self.timings.measure("settings.ui-state"):
             self.state = state or UiState(self.data_dir / "webui.json")

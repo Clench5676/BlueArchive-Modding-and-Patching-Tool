@@ -5736,7 +5736,8 @@ class ModLibrary:
         model lock either: exports, the shown model's and its clips, run beside it. A build whose signature changed
         meanwhile (the game files or the kept originals changed) is discarded and built again.
         Class 2 for the costume check: between the build's steps (most under 0.5 s, ``model_adapt.adapt``) it yields
-        to the foreground previews, at most 20 s a step (``preview_gate.step``); a preview's own build does not.
+        to the foreground previews, at most 20 s a step (``preview_gate.step``); a preview's own build does not. A
+        preview waiting for a build of the same pair waits outside its own time (``preview_gate.waiting``).
         ``cancelled`` (the costume check's ``jobs.cancel``): once set, the build stops at its next step (``busy``)
         and no verdict is saved; a build that ended is still kept."""
         def stopped() -> bool:
@@ -5755,9 +5756,10 @@ class ModLibrary:
                 signature, targets, built_pin, inputs = start
                 building = self._costume_build_turn(signature)
                 if building is not None:  # another caller builds the same pair: its result is kept, read it then
-                    while not building.wait(0.1):
-                        if stopped():
-                            raise ServiceError("busy")
+                    with preview_gate.waiting():
+                        while not building.wait(0.1):
+                            if stopped():
+                                raise ServiceError("busy")
                     continue
                 try:
                     if stopped():

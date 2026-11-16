@@ -664,6 +664,7 @@ async function start() {
   ctx.goOther = () => Settings.open(settingsChanged, "mods");
   on("library.changed", libraryChanged);
   on("library.waiting", (data) => setLibraryWaiting(!!data?.busy));
+  on("preview.waiting", (data) => setLibraryWaiting(!!data?.busy, "job"));
   on("photography.changed", () => {
     ctx.invalidateRoster();
     if ($("screen-roster").hidden) return;
