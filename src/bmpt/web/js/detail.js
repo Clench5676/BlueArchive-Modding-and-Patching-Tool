@@ -629,7 +629,7 @@ function screenTree() {
       ? clipped("Bust", [1, 6], thumb(currentBase(), "bust"), win, { dx: -383 + 202 - 40, dy: -67.5, w: 404, h: 404 },
         { depth: 10, mask: "linear-gradient(90deg, #000 70%, transparent 98%)" })
       // wider than the window's slanted left edge; the lobby fades out before the labels so their contrast is known
-      : clipped("Bust", [1, 6], tab === "model" ? modelPicture(current("model")) : lobbyShot, win, { dx: -383 + 216, dy: 0, w: tab === "model" ? 253 : 450, h: 253 },
+      : clipped("Bust", [1, 6], tab === "model" ? modelPicture(current("model")) : lobbyCard(v), win, { dx: -383 + 216, dy: 0, w: tab === "model" ? 253 : 450, h: 253 },
         { depth: 10, placeholder: T("import.previewUnavailable"), edge: 0.7, mask: `linear-gradient(90deg, transparent 0, #000 10%, #000 70%, transparent ${tab === "model" ? 96 : 82}%)` }));
   // the wrapper holds an enabled (cyan) and a disabled (grey) body and label: the enabled ones while the tab has
   // something to add and switch to (switchKind), else the disabled ones
@@ -2205,6 +2205,12 @@ function hideModel() {
   modelLib?.then((M) => M.hide($("model")));
 }
 
+// the lobby's switch card: a camera choice shows the view its camera keeps (the still of its Switch Memorial Lobby
+// card); any other lobby the still below
+function lobbyCard(v) {
+  const c = current("lobby");
+  return c?.mod?.camera ? thumb(baseOf(c, "lobby"), "landscape", null, true, specialFraming(v), (c.origin || v).bg) : lobbyShot;
+}
 // a still of the lobby for the switch card, framed on the face: lobby.js picks the crop inside the left view, which
 // lies inside the lobby's painted area, so the still is opaque everywhere and the card's mask fades it out softly
 function snapshotLobby() {

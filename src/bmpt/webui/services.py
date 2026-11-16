@@ -1686,13 +1686,17 @@ class Services:
         if name == "framing.json":
             from ..gameassets import AssetNotFound, lobby
 
+            camera = False
             if kind == "import":
                 core = self.batch_import.preview(key)[0]
             elif kind == "mod":
                 sources = bundles if bundles is not None else self.library.preview_bundles(key)
                 core = parse_filename(sources[-1].name).core
+                camera = getattr(self.library, "camera_prefab", lambda _id: None)(key) is not None
             try:
-                info = game.lobby_info(core)
+                # a lobby camera's still is framed as its lobby shows it: by its own prefab (its lobby.json), whose
+                # layers the camera scaled and moved; any other mod by the official prefab
+                info = self._camera_layout(game, key) if camera else game.lobby_info(core)
                 layer = next((layer for layer in info["layers"] if layer["name"] == info.get("main")), None)
                 layer = layer or next(iter(info["layers"]), lobby.STANDARD)
                 return _json({"view": info["view"], "layer": {k: layer[k] for k in ("name", "x", "y", "scale") if k in layer}}, light=False)

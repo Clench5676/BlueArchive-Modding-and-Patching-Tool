@@ -59,7 +59,8 @@ own module:
   game replaced is made again on the new ones in place.
 - **Preview.** `/asset/spine/mod/<camera>/` serves the source's art and the camera's own prefab as `lobby.json`; the
   official route reads the official prefab while a camera holds the game's, so no other choice's preview shows a
-  camera's framing.
+  camera's framing. The camera's `framing.json` answers its own prefab's view and main layer, so its stills (Switch
+  Memorial Lobby cards, the detail page's lobby card) show what its lobby shows at rest.
 
 ## Lobby lines
 

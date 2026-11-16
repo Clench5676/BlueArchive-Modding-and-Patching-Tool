@@ -68,6 +68,27 @@ test("the shutter keeps the lobby scaled about the screen centre and moved so th
   near(p.scale * top + p.offset[1], G.y + G.h, 1e-6, "top edge");
 });
 
+test("a camera's still shows the art the framed view showed, as its lobby does", async () => {
+  const { lobbyStillViewport } = await import("../../src/bmpt/web/js/lobby-still.js");
+  // the official prefab's main layer, and a view framed on it: zoomed in and moved up and to the left
+  const official = { name: "hero", x: 0, y: -1017.5, scale: 1.05769 };
+  const w = 1600, h = (w * 9) / 16, V = { x: -900, y: -120, w, h };
+  const { scale: k, offset } = Lobby.cameraParams(V, G);
+  // the camera's prefab places the layer by p -> k p + offset, its scale times k (library/lobby_camera.py); the
+  // framing.json of a camera answers that layer and the game's view (webui/services.py)
+  const camera = { name: "hero", x: k * official.x + offset[0], y: k * official.y + offset[1], scale: official.scale * k };
+  const still = lobbyStillViewport({ view: G, layer: camera }, 16 / 9);
+  // in skeleton units: the art the framed view showed with the official prefab
+  near(still.x, (V.x - official.x) / official.scale, 1e-6, "x");
+  near(still.y, (V.y - official.y) / official.scale, 1e-6, "y");
+  near(still.width, V.w / official.scale, 1e-6, "width");
+  near(still.height, V.h / official.scale, 1e-6, "height");
+  // the official prefab's still is the game's view
+  const plain = lobbyStillViewport({ view: G, layer: official }, 16 / 9);
+  near(plain.x, (G.x - official.x) / official.scale);
+  near(plain.width, G.w / official.scale);
+});
+
 test("the intro sampler places a moved skeleton by its timeline and plays its clips on their tracks", () => {
   // node 0: the skeleton's GameObject, sliding from x -500 to 0 over 1 s; node 1: a scene switched on from 0.5 s
   const slide = { d: [0, 1, [-500, 0]] };
