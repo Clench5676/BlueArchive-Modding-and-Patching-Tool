@@ -878,6 +878,9 @@ class Fit:
     size: float
     starts: list[int] = field(default_factory=list)  # each part's first vertex
     shape: str = "stored"
+    # a refit: where the source's head joint lands against the slot's Head joint, in the prefab root's space (the
+    # head goes with the neck, ``_anchor_move``); what hangs off the head (the halo) moves along by it
+    head: np.ndarray | None = None
 
     def part(self, k: int, world: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         """Part ``k``'s vertices and linear parts in the mesh space ``world`` (prefab root's space) defines."""
@@ -1028,30 +1031,55 @@ def stored(costume: Costume, rest: list[np.ndarray], flat: Flat) -> Fit:
     return Fit(np.vstack(vertices), np.concatenate(linear), 0.0, 0.0, 0.0, list(flat.starts), "stored")
 
 
+def _anchor_move(target: Skeleton, source: Skeleton, a: int, t: int, shape: str, t_rest: list[np.ndarray],
+                 s_rest: list[np.ndarray], carried: Mapping[int, int] | None = None) -> np.ndarray:
+    """How a refit carries what anchors on the source's ``a`` to the slot's ``t`` (``refit``): "moved", the joint's
+    move alone; "refitted", its move and turn. The head goes with the neck: it keeps its own turn, but its joint goes
+    where the neck's move takes it, not onto the slot's Head joint. Two rigs put the Head joint at different heights
+    inside the head (Aris's 3.5 cm above her chin, Yuzu's 1.6 cm), so a whole head carried onto the slot's joint rose
+    or sank against the collar that the neck and spine carry, and the neck between stretched (Yuzu's costume on Aris:
+    her head 1.8 cm up out of her high collar) or vanished. The head then turns about the slot's joint."""
+    m = t_rest[t] @ _inverse(s_rest[a], source.nodes[a].name)
+    if shape == "moved":  # the joint's move alone, no turn
+        m = np.eye(4)
+        m[:3, 3] = t_rest[t][:3, 3] - s_rest[a][:3, 3]
+    parent = source.nodes[a].parent
+    if source.nodes[a].name == HEAD and parent is not None \
+            and (hit := fit_anchor(target, source, parent, carried)) is not None and hit[0] != a:
+        joint = s_rest[a][:, 3]
+        m[:3, 3] += (_anchor_move(target, source, *hit, shape, t_rest, s_rest, carried) @ joint - m @ joint)[:3]
+    return m
+
+
 def refit(target: Skeleton, source: Skeleton, flat: Flat, carried: Mapping[int, int] | None = None,
           shape: str = "refitted") -> Fit:
     """The costume carried from the source's rest skeleton to the slot's: each vertex follows its bones by
-    their anchors' transforms (``fit_anchor``), so the Biped's proportions change and hair, skirts and props move
-    rigidly with their anchor; the skin weights stay. ``shape`` "moved": each anchor's joint move alone, "refitted":
-    its move and turn. ``shift`` and ``largest``: how far the vertices move past the costume's common move (a slot
-    whose prefab rests a metre aside, or lying, takes the costume along as a whole), for the log; what the refit does
-    to the costume's edges counts in its stretch (``plan``)."""
+    their anchors' transforms (``fit_anchor``, ``_anchor_move``), so the Biped's proportions change and hair, skirts
+    and props move rigidly with their anchor; the skin weights stay. ``shape`` "moved": each anchor's joint move
+    alone, "refitted": its move and turn. ``shift`` and ``largest``: how far the vertices move past the costume's
+    common move (a slot whose prefab rests a metre aside, or lying, takes the costume along as a whole), for the log;
+    what the refit does to the costume's edges counts in its stretch (``plan``). ``head``: where the source's head
+    joint lands against the slot's."""
     t_rest, s_rest = target.world(), source.world()
     used = sorted(set(flat.joints[flat.weights > 0].tolist()) - {-1})
     matrices = [np.eye(4)]  # column 0: a bone outside the prefab or without weight
     columns = {}
+    moves: dict[int, np.ndarray] = {}  # per source anchor
     for n in used:
         hit = fit_anchor(target, source, n, carried)
         if hit is None:
             columns[n] = 0
             continue
         a, t = hit
-        m = t_rest[t] @ _inverse(s_rest[a], source.nodes[a].name)
-        if shape == "moved":  # the joint's move alone, no turn
-            m = np.eye(4)
-            m[:3, 3] = t_rest[t][:3, 3] - s_rest[a][:3, 3]
+        if a not in moves:
+            moves[a] = _anchor_move(target, source, a, t, shape, t_rest, s_rest, carried)
         columns[n] = len(matrices)
-        matrices.append(m)
+        matrices.append(moves[a])
+    head = None
+    s_head, t_head = source.first(HEAD), target.first(HEAD)
+    if s_head is not None and t_head is not None:
+        move = _anchor_move(target, source, s_head, t_head, shape, t_rest, s_rest, carried)
+        head = (move @ s_rest[s_head][:, 3])[:3] - t_rest[t_head][:3, 3]
     stack = np.array(matrices)
     local = np.vectorize(lambda n: columns.get(int(n), 0), otypes=[int])(np.where(flat.weights > 0, flat.joints, -1))
     blended = drawn(Skin(flat.vertices, local, flat.weights, flat.edges), stack, np.eye(4))
@@ -1061,7 +1089,7 @@ def refit(target: Skeleton, source: Skeleton, flat: Flat, carried: Mapping[int, 
     size = float(np.ptp(flat.vertices, axis=0).max()) if len(flat.vertices) else 0.0
     linear = blended[:, :3, :3] @ flat.linear if flat.linear is not None else blended[:, :3, :3]
     return Fit(vertices, linear, float(np.percentile(changed, 99)) if len(changed) else 0.0,
-               float(changed.max()) if len(changed) else 0.0, size, list(flat.starts), shape)
+               float(changed.max()) if len(changed) else 0.0, size, list(flat.starts), shape, head)
 
 
 def plan(target: Costume, source: Costume, probes: list[list[np.ndarray]], *, fit: bool = True,
@@ -2377,10 +2405,34 @@ def _mesh_tree(mesh: Any) -> dict:
 
 
 def _halo_change(t_skeleton: Skeleton, s_skeleton: Skeleton, carry_mesh: Callable[[Any], int],
-                 carry_material: Callable[[Any], int], names: tuple[str, str]) -> HaloChange | None:
+                 carry_material: Callable[[Any], int], names: tuple[str, str],
+                 head: np.ndarray | None = None) -> HaloChange | None:
     """The slot's halo after the swap: the source's carried (its mesh and materials added by
     ``carry_mesh`` and ``carry_material``) and drawn by the slot's halo renderer where the source draws its own, or
-    else the slot's hidden; never the slot's own. None when the slot has no halo."""
+    else the slot's hidden; never the slot's own. None when the slot has no halo. ``head``: where the bound costume's
+    head sits against the slot's Head joint (``Fit.head``); a carried halo moves along by it."""
+    change = _halo_carried(t_skeleton, s_skeleton, carry_mesh, carry_material, names)
+    if change is not None and change.follower and head is not None and float(np.abs(head).max()) > 1e-6:
+        _halo_shift(t_skeleton, change.follower, head)
+    return change
+
+
+def _halo_shift(t_skeleton: Skeleton, follower: dict[str, Any], head: np.ndarray) -> None:
+    """The follower's offset (and its clamp box, when it carries one) moved by ``head``, a move in the prefab root's
+    space, as the slot's followed node (the head) sees it at rest."""
+    t_head = t_skeleton.first(HEAD)
+    if t_head is None or "TargetRelativePosition" not in follower:
+        return
+    local = np.linalg.inv(t_skeleton.world()[t_head])[:3, :3] @ np.asarray(head, float)
+    for name in ("TargetRelativePosition", *FOLLOWER_CLAMPS):
+        box = follower.get(name)
+        if isinstance(box, dict) and all(k in box for k in "xyz"):
+            follower[name] = {**box, **{k: float(box[k]) + float(local[i]) for i, k in enumerate("xyz")}}
+
+
+def _halo_carried(t_skeleton: Skeleton, s_skeleton: Skeleton, carry_mesh: Callable[[Any], int],
+                  carry_material: Callable[[Any], int], names: tuple[str, str]) -> HaloChange | None:
+    """:func:`_halo_change` before the head's move."""
     t, s = halo_of(t_skeleton), halo_of(s_skeleton)
     s_name, t_name = names
     if t.shape == "none":
@@ -3083,7 +3135,8 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
         new_meshes.append((writer.add(mesh_sf, "Mesh", tree), nodes))
     # the source's halo: its mesh added as it is (a skinned one is drawn unskinned), or the slot's hidden
     halo_change = _halo_change(t_skeleton, s_skeleton, lambda mesh: writer.add(mesh_sf, "Mesh", _mesh_tree(mesh)),
-                               carry_material, (s_name, t_name)) if halo else None
+                               carry_material, (s_name, t_name),
+                               result.fit.head if result.fit is not None else None) if halo else None
 
     # prefabs: the primary takes the source primary, further parts get renderers of their own, the rest draws nothing
     rank = {"primary": 0, "costume": 1, "alternate": 2, "copy": 3}

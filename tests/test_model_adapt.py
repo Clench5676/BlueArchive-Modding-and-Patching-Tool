@@ -173,6 +173,39 @@ def test_a_face_goes_with_the_head_whatever_its_eye_bones():
     assert np.allclose(ma.refit(target, source, flat).vertices, flat.vertices)  # same head: the face keeps its shape
 
 
+def test_the_head_goes_with_the_neck_not_onto_the_slots_head_joint():
+    """Yuzu's costume on Aris: Aris's Head joint sits higher inside her head than Yuzu's (5 cm above the neck joint
+    against 3.2). Carried onto the slot's Head joint, Yuzu's whole head rose 1.8 cm against the collar the neck and
+    spine carry, and the neck between stretched. The head's vertices take the neck's move; the source's head joint
+    lands below the slot's, and a halo following the head moves along."""
+    def body(neck_y, head_y):
+        return _skeleton([("Bip001", 0, (0, 0, 0), (0, 0, 0, 1)), ("Bip001 Spine1", 1, (0, 0.9, 0), (0, 0, 0, 1)),
+                          ("Bip001 Neck", 2, (0, neck_y - 0.9, 0), (0, 0, 0, 1)),
+                          ("Bip001 Head", 3, (0, head_y - neck_y, 0), (0, 0, 0, 1)),
+                          ("bone_hair_00", 4, (0, 0.05, -0.03), (0, 0, 0, 1))])
+    source, target = body(1.0, 1.032), body(0.98, 1.03)  # the slot's neck: 2 cm lower, its head joint as high
+    spine, neck, head, hair = (source.first(n) for n in ("Bip001 Spine1", "Bip001 Neck", "Bip001 Head", "bone_hair_00"))
+    # the collar, the neck, the chin, the crown and a lock of hair
+    flat = _flat([[0, 0.99, 0.02], [0, 1.01, 0.01], [0, 1.015, 0.04], [0, 1.1, 0], [0, 1.08, -0.04]],
+                 [spine, neck, head, head, hair])
+    for shape in ("moved", "refitted"):
+        fit = ma.refit(target, source, flat, shape=shape)
+        assert np.allclose(fit.vertices[:2], flat.vertices[:2] - [[0, 0, 0], [0, 0.02, 0]])  # the spine's, the neck's
+        # the head and the hair go down with the neck, 2 cm: no longer left 0.2 cm down at the slot's head joint
+        assert np.allclose(fit.vertices[2:], flat.vertices[2:] - [0, 0.02, 0])
+        assert np.allclose(fit.head, [0, -0.018, 0])  # its joint 1.8 cm below the slot's
+    # a halo following the head moves along, in the head's space, its clamp box with it
+    turned = _skeleton([("Bip001", 0, (0, 0, 0), (0, 0, 0, 1)),
+                        ("Bip001 Head", 1, (0, 1.0, 0), (0, 0, np.sin(np.pi / 4), np.cos(np.pi / 4)))])
+    follower = {"TargetRelativePosition": {"x": 0.0, "y": 0.2, "z": 0.0},
+                "TargetRelativeRotation": {"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0},
+                "ClampMinOffset": {"x": -0.1, "y": 0.1, "z": -0.1}}
+    ma._halo_shift(turned, follower, np.array([0, -0.018, 0]))
+    assert [follower["TargetRelativePosition"][k] for k in "xyz"] == pytest.approx([-0.018, 0.2, 0.0])
+    assert [follower["ClampMinOffset"][k] for k in "xyz"] == pytest.approx([-0.118, 0.1, -0.1])
+    assert follower["TargetRelativeRotation"] == {"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0}
+
+
 def test_a_skirt_on_the_biped_root_and_a_bag_off_a_prop_go_with_the_body():
     """Sena (Casual)'s skirt hangs off Bip001 and her bag off a prop node Sena lacks. On a slot whose prefab
     rests 0.74 m aside, the refit took the skirt nowhere (no anchor on the body chain) and the bag stayed with the
@@ -788,6 +821,40 @@ def test_official_a_prop_the_clips_hold_on_the_body_goes_with_the_body(view):
 
 
 @official
+def test_official_a_head_set_on_a_longer_neck_keeps_its_neck(view):
+    """Aris <- Yuzu: Aris's Head joint sits 1.8 cm higher inside her head than Yuzu's. Carried onto it, Yuzu's
+    head rose out of her high collar (its yellow lining showed from above) and the neck stretched up to 1.8 times.
+    The head goes with the neck: at the slot's rest no edge of the neck and head grows past 1.1 times, and Yuzu's head
+    joint lands 1.8 cm below Aris's."""
+    from ba_modding_toolkit.bundle import Bundle
+    from bmpt.gameassets.model import _prefabs
+
+    files, index = view
+    result = ma.adapt(index=index, resolver=None, target_files=_slot(files, "aris_original"),
+                      target_dev="aris_original", source_files=_slot(files, "yuzu_original"),
+                      source_dev="yuzu_original", open_writable=Bundle.load)
+    with ma.BundleGraph(index) as graph:
+        s_prefabs = _prefabs(graph, [p for p in _slot(files, "yuzu_original") if p.name.startswith("character-")])
+        s = ma.Skeleton.of(graph, s_prefabs[ma.choose_prefab(s_prefabs, "yuzu_original")].deref())
+        idle = s.poses(ma.pick(ma.prefab_clips(graph, s, ma.own_prefabs(s_prefabs, "yuzu_original")),
+                               ma.IDLE_CLIPS)[:1], frames=1)[0]
+        parts = ma.roles(s, idle)
+        parts = [p for p in parts if p.role == "primary"] + [p for p in parts if p.role == "costume"]  # as adapt does
+        flat = ma.flatten(ma.Costume(s, parts, [ma.skin_of(p.mesh) for p in parts]), s.world())
+    fit = result.plan.fit
+    assert fit.shape in ("moved", "refitted") and fit.head is not None
+    assert fit.head[1] == pytest.approx(-0.018, abs=0.002) and abs(fit.head[0]) < 1e-4
+    dominant = np.array([row[np.argmax(w)] for row, w in zip(flat.joints, flat.weights)])
+    upper = np.isin(dominant, [s.first("Bip001 Neck"), s.first("Bip001 Head")])
+    edges = flat.edges[upper[flat.edges[:, 0]] & upper[flat.edges[:, 1]]]
+    before = np.linalg.norm(flat.vertices[edges[:, 0]] - flat.vertices[edges[:, 1]], axis=1)
+    after = np.linalg.norm(fit.vertices[edges[:, 0]] - fit.vertices[edges[:, 1]], axis=1)
+    kept = before > 1e-6
+    assert kept.sum() > 1000
+    assert (after[kept] / before[kept]).max() <= 1.1  # it stretched 1.77 times
+
+
+@official
 def test_official_bones_any_clip_scales_away_are_hidden(view):
     """The probes see six clips at three frames each; the slot's other clips hide bones too (a hair ornament in the
     cafe, a weapon bone in the cafe, skewers in a public skill). They and the bones below them are hidden, so no
@@ -896,9 +963,10 @@ def test_official_costume_takes_its_own_materials_on_a_body_drawn_from_two_mater
                                          "Hihumi_Original_EyeMouth", "Hihumi_Original_Hair", "Hihumi_Original_Body"]
 
 
-def _cross_build(view, tmp_path, source, target="azusa_original"):
+def _cross_build(view, tmp_path, source, target="azusa_original", results=None):
     """``target``'s slot (Azusa's) carrying ``source``'s costume as another student's (with its halo), saved
-    with the CRC fix: the written files, the CAB index over them, the official graph and the read-back graph."""
+    with the CRC fix: the written files, the CAB index over them, the official graph and the read-back graph; the
+    build's result goes into ``results``."""
     from ba_modding_toolkit.bundle import Bundle
     from ba_modding_toolkit.models import SaveOptions
     from ba_modding_toolkit.naming import parse_filename
@@ -911,6 +979,8 @@ def _cross_build(view, tmp_path, source, target="azusa_original"):
     sources = [p for p in files if re.match(rf"(character-{source}-_mxload|assets-_mx-npcs-{source}-)", p.name)]
     result = ma.adapt(index=index, resolver=None, target_files=slot, target_dev=target, source_files=sources,
                       source_dev=source, open_writable=Bundle.load, halo=True)
+    if results is not None:
+        results.append(result)
     out = tmp_path / "out"
     out.mkdir()
     for path, bundle in result.changed.items():
@@ -1077,10 +1147,13 @@ def test_official_cross_costume_carries_a_skinned_halo(view, tmp_path):
     """Miyu (ch0145) <- Ayame (Twilight)'s NPC model (np0229), whose halo has no follower: one halo-shaded
     renderer skinned to bone_halo below the head. Its mesh, material and texture are new objects in the slot's files;
     Miyu's halo renderer draws it, unskinned, where Ayame's bone draws it against the head (the follower moves the
-    followed node there); Miyu's own halo mesh is gone from the export."""
+    followed node there), moved along with the head where the bound costume's head sits off Miyu's head joint;
+    Miyu's own halo mesh is gone from the export."""
     from bmpt.gameassets.model import _key, _prefabs, export_chibi, model_root, read_mesh
 
-    slot, sources, written, adapted, official, graph = _cross_build(view, tmp_path, "np0229", "ch0145")
+    results = []
+    slot, sources, written, adapted, official, graph = _cross_build(view, tmp_path, "np0229", "ch0145", results)
+    moved = results[0].plan.fit.head if results[0].plan.fit.head is not None else np.zeros(3)
     new = _official_objects_kept(slot, written, {"SkinnedMeshRenderer", "MeshRenderer", "MeshFilter", "AssetBundle",
                                                  "Transform", "MonoBehaviour"})
     s = ma.Skeleton.of(official, model_root(official, sources, "np0229")[0])
@@ -1122,7 +1195,9 @@ def test_official_cross_costume_carries_a_skinned_halo(view, tmp_path):
         head_s = np.linalg.norm(head[:3, :3], axis=0)
         source_head = np.linalg.norm(s_world[source.head][:3, :3], axis=0)
         assert np.allclose(head_s, source_head, rtol=1e-3)  # same head scale, so the placements compare directly
-        assert np.allclose(np.linalg.inv(head) @ drawn, want, atol=1e-4), name
+        shifted = want.copy()
+        shifted[:3, 3] += np.linalg.inv(head)[:3, :3] @ moved  # with the head, in the head's space
+        assert np.allclose(np.linalg.inv(head) @ drawn, shifted, atol=1e-4), name
     assert checked
     data = export_chibi(graph, prefab_files, "ch0145")
     doc = json.loads(data[20:20 + struct.unpack_from("<I", data, 12)[0]])
