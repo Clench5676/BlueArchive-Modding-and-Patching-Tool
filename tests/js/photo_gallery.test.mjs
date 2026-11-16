@@ -23,7 +23,7 @@ function harness(count,{selected='p0',repository={}}={}){
     applyGame:async()=>{},deletePhoto:async()=>{},document:{getElementById:id=>id==='popup'?host:null}};
   const api=new Function('env',`const {${Object.keys(env)}}=env;let selected=${JSON.stringify(selected)},modal=null,generation=1,
     repository=${JSON.stringify({photos:[],app:null,game:{},applicable:true,...repository})};
-    const GALLERY_HOST='popup',GALLERY_KIND='model',galleryHost=()=>document.getElementById(GALLERY_HOST);
+    const GALLERY_HOST='popup',GALLERY_KIND='photo',galleryHost=()=>document.getElementById(GALLERY_HOST);
     ${code};return {galleryReveal,openGallery,restoreGame,galleryDraw,modal:()=>modal,select:id=>{selected=id;},selected:()=>selected};`)(env);
   return {...api,draws,calls,host,last:()=>draws.at(-1)};
 }
@@ -31,7 +31,7 @@ function harness(count,{selected='p0',repository={}}={}){
 test('the gallery opens as the Switch pickers\' list popup: photos at the right, the chosen one in the details at the left',async()=>{
   const h=harness(5,{selected:'p3'});await h.openGallery(true);
   const o=h.last();
-  assert.equal(o.hostId,'popup');assert.equal(o.layoutKind,'model');assert.equal(o.title,'gallery');assert.equal(o.empty,'empty');
+  assert.equal(o.hostId,'popup');assert.equal(o.layoutKind,'photo');assert.equal(o.title,'gallery');assert.equal(o.empty,'empty');
   assert.deepEqual(o.items.map(it=>it.key),['p0','p1','p2','p3','p4']);assert.equal(o.selected,'p3');
   assert.deepEqual(o.items.map(it=>it.applied),[false,false,true,false,false]);
   assert.deepEqual(o.items[2].chips,['applied']);assert.deepEqual(o.items[0].chips,[]);
@@ -83,4 +83,15 @@ test('Restore Default greys out when the game already shows the default, and goe
 test('Apply is greyed while the game already shows the chosen photo',async()=>{
   const h=harness(3,{selected:'p1',repository:{game:{known:true,id:'p1'}}});await h.openGallery(true);
   assert.equal(h.last().details(h.last().items[1]).actions[0][2],true);
+});
+
+test('the gallery\'s cards and picture are 3D Model\'s squares, each photo filling its inclined window',async()=>{
+  const {switchGrid,MIN_COLUMNS}=await import('../../src/bmpt/web/js/switch-layout.js');
+  for(const width of [1200,1500,1818])assert.deepEqual(switchGrid('photo',width),switchGrid('model',width));
+  assert.equal(MIN_COLUMNS.photo,MIN_COLUMNS.model);
+  const popup=readFileSync(new URL('../../src/bmpt/web/js/popup.js',import.meta.url),'utf8');
+  // only a model's still is shown whole (contain); a photo, like the other kinds, covers the card's and the picture's window
+  assert.equal(popup.match(/imgSize: kind === "model" \? "contain" : "cover"/g)?.length,2);
+  assert.match(popup,/const model = !portraitTexture && \(kind === "model" \|\| kind === "photo"\);/);
+  assert.match(popup,/: model \? 1 : 16 \/ 9;/);
 });

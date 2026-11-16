@@ -771,8 +771,9 @@ export function detailsTree(it, title, fields, actions, portraitTexture = null, 
   ]);
   kids.push(titleNode); bands.push({ name: "Title_Bg", w, h: titleH });
   // A 3D model's picture spans the panel, its name, chips and fields under it (beside them
-  // before), one size for every candidate (model).
-  const model = !portraitTexture && kind === "model";
+  // before), one size for every candidate (model); a photograph's square the same (photo), its picture filling the window
+  // (cover) where a model's still is shown whole (contain).
+  const model = !portraitTexture && (kind === "model" || kind === "photo");
   const columns = grid(content), pictureColumn = portraitTexture ? columns.span(5) : content;
   const infoColumn = portraitTexture ? columns.span(7, 5) : content;
   const infoW = infoColumn.w, edit = it.nameEdit ? CONTROL.icon.h + SPACE.m : 0, nameRoom = infoW - 2 * SPACE.m - edit;
@@ -881,7 +882,7 @@ export function detailsTree(it, title, fields, actions, portraitTexture = null, 
     + (fields.length ? boxHeight(fields.map((_, i) => (i === 0 && !options.truncate ? 3 : 1)), DETAILS.box) - fieldBox.height : 0) : 0;
   const texture = portraitTexture && clone(portraitTexture), native = texture?.widgets.find(widget => "texture" in widget);
   const portraitCard = texture && switchGrid("spr").card; // Keep the portrait card's native aspect in its preview column.
-  const aspect = portraitCard ? portraitCard.w / portraitCard.h : kind === "model" ? 1 : 16 / 9;
+  const aspect = portraitCard ? portraitCard.w / portraitCard.h : model ? 1 : 16 / 9;
   let pictureW;
   if (portraitTexture) pictureW = Math.max(0, Math.min(pictureColumn.w, roomFor(0, 0) * aspect));
   // a model's square beside the reference and the most room actions take (two rows of XS bodies): one size for all

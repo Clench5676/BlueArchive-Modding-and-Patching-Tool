@@ -12,7 +12,7 @@ test('gallery cards consume only the target-scoped Applied flag; the official ca
   const env={galleryPhotos:()=>photos,photo:id=>photos.find(p=>p.id===id),safe:fn=>fn,P:key=>key,restoreGame:async()=>{},applyGame:async()=>{},deletePhoto:async()=>{},
     saveSelection:async()=>{},exportPhoto:async()=>{},galleryOffset:()=>0,Popup:{listPopup:async options=>{shown=options;}}};
   for(const game of ['own','official']){
-    await new Function('env',`const {${Object.keys(env)}}=env;let selected='other',modal={},repository={game:{id:'${game}'}};const OFFICIAL='official',GALLERY_HOST='popup',GALLERY_KIND='model';${drawCode};return galleryDraw();`)(env);
+    await new Function('env',`const {${Object.keys(env)}}=env;let selected='other',modal={},repository={game:{id:'${game}'}};const OFFICIAL='official',GALLERY_HOST='popup',GALLERY_KIND='photo';${drawCode};return galleryDraw();`)(env);
     assert.equal(shown.selected,'other');
     assert.deepEqual(shown.items.map(it=>[it.key,it.applied]),[['own',true],['other',false],['official',game==='official']]);
   }
