@@ -657,11 +657,12 @@ function screenTree() {
     if (loading) at(t, `${base}/Normal/SkillIconBg/Texture`).widgets = [{ loadingRing: true, w_: 82, h_: 82, pivot: 4,
       depth: picture.depth, color: picture.color || "#466399/1.00", fallback: { ...picture } }];
   }
-  // row 3: portrait box, the switch card (the game's light weapon card), add portrait. The box's body spans
-  // -96..95 around its centre (its slanted right edge ends lower down a few units further left); the title sits at -8.
+  // row 3: portrait box, the switch card (the game's light weapon card), add portrait. The box's visible body (its
+  // straight left side, its slanted right edge) has its centre at mid-height 3 units left of the box's; the title is
+  // centred there.
   const boxTitle = fitIn(T(isSpecial(v) && tab === "lobby" ? "special.background" : `row.box.${tab}`), 48, 42, 160);
   text(t, `${INFO}/Weapon/WeaponType/Label_WeaponType`, boxTitle.text, { fontSize: boxTitle.fs, w_: 200, h_: 60 * boxTitle.lines });
-  at(t, `${INFO}/Weapon/WeaponType/Label_WeaponType`).pos = [-8, -2];
+  at(t, `${INFO}/Weapon/WeaponType/Label_WeaponType`).pos = [-3, -2];
   off(t, `${INFO}/Weapon/WeaponType/Icon`);
   const card = `${INFO}/Weapon/Equip_1/UIEquipmentCard/Btn_Target`;
   if (!sk || !switchUnseen(fam, v, sk, modsOn())) off(t, `${INFO}/Weapon/Equip_1/UIEquipmentCard/Dot`);
@@ -698,9 +699,11 @@ function screenTree() {
   find(box, "BG/BG (1)").widgets[0].w_ = BOX_RIGHT - 126;   // ends where the first skill card of row 2 ends
   find(box, "Line/Line").widgets[0].w_ = BOX_RIGHT + 3 - 123.7;
   const boxLabel = find(box, "Label_WeaponType");
-  const row4 = fitIn(T(`row.four.${tab}`), 48, 42, 200); // the box's body spans -96..148, the label sits at 20
+  // the box's visible body, as row 3's, has its centre at mid-height 1.5 units left of the span's middle; the label is
+  // centred there
+  const row4 = fitIn(T(`row.four.${tab}`), 48, 42, 200);
   Object.assign(boxLabel.widgets[0], { text: row4.text, fontSize: row4.fs, w_: 240, h_: 60 * row4.lines });
-  boxLabel.pos = [(87.5 + BOX_RIGHT) / 2 - 183.7 - 6, -2];
+  boxLabel.pos = [(87.5 + BOX_RIGHT) / 2 - 183.7 - 1.5, -2];
   at(t, `${INFO}/Equip`).children.push(box);
 
   // nameplate: favourite pin, name, the white panel for the variant chips; no stars, level, heart, squad or terrain
