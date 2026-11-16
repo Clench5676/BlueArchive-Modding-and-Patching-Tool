@@ -1677,6 +1677,35 @@ test("the start builds costume builds of an older costume rule again before anyt
   }
 });
 
+test("the start writes entries whose last write failed again without asking, after the game update check", async () => {
+  const saved = { ...answers };
+  try {
+    answers["mods.retryFailed"] = "job-retry-failed";
+    jobs["job-retry-failed"] = { state: "done", result: { done: [{ install: GLOBAL, core: "mashiro_home" }], failed: [] } };
+    answers["mods.updateDue"] = { due: false, outdated: false, retry: true, install: GLOBAL, version: "v3", previous: "v3" };
+    const before = called("mods.retryFailed").length;
+    assert.equal(await Impact.gate(), false);
+    assert.equal(called("mods.retryFailed").length, before + 1);
+    assert.equal(dialog.hidden, true, "silently");
+    // a refusal is never told: the start goes on
+    jobs["job-retry-failed"] = { state: "failed", error: { code: "game_running", params: {} } };
+    assert.equal(await Impact.gate(), false);
+    assert.equal(dialog.hidden, true, "silently");
+    // with a game update: Later writes nothing
+    jobs["job-retry-failed"] = { state: "done", result: { done: [], failed: [] } };
+    answers["mods.updateDue"] = { due: true, retry: true, install: GLOBAL, version: "v4", previous: "v3" };
+    const gated = Impact.gate();
+    await drawn(dialog, "later");
+    action(dialog, "later").click();
+    assert.equal(await gated, false);
+    assert.equal(called("mods.retryFailed").length, before + 2);
+  } finally {
+    for (const key of Object.keys(answers)) delete answers[key];
+    Object.assign(answers, saved);
+    await tick(); dialog.hidden = true;
+  }
+});
+
 test("the drift prompt asks the impacts of the mods its entries are configured with and marks the held ones", async () => {
   const entries = [
     { install: "/a", core: "a_spr", configured: "mod:1" },

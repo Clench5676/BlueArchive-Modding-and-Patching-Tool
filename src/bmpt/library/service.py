@@ -102,6 +102,13 @@ STOPPING = ("game_running", "game_status_unavailable", "steam_busy", "folder_cha
 LATER = (*STOPPING, "busy", "entry_changed", "library_state_unreadable", "library_io_error")
 
 
+def _app_version() -> str:
+    """This build's version (``updater.current_version``)."""
+    from ..updater import current_version
+
+    return current_version()
+
+
 def _game_folder(game_file: Path) -> Path:
     """The game folder a game file is in, as the settings name it: its resource folder less the subfolder the search
     looks in (searching.SEARCH_DIR_SUFFIXES)."""
@@ -3821,6 +3828,47 @@ class ModLibrary:
             record["costume_kept"] = rule
             self._save()
 
+    def _failed_writes(self, pin: Pin, config: dict) -> list[str]:
+        """The configured entries of ``pin`` whose last write failed (their saved error) and were not tried again under
+        this build of the App (``retry_failed``): an App update may have fixed the cause, and nothing else writes such
+        an entry until the user switches it again. None while mods are off: the next On reaches every entry."""
+        if not profiles_mod.enabled(config):
+            return []
+        folder = (config.get("folders") or {}).get(pin.key) or {}
+        if folder.get("retried") == _app_version():
+            return []
+        with self._lock:
+            return [core for core, choice in sorted((folder.get("configured") or {}).items())
+                    if isinstance(choice, dict) and choice.get("error") and self._kind(core, pin)]
+
+    def retry_failed(self, pin: Pin | None = None, log: LogFunc = no_log,
+                     progress: ProgressCallback | None = None) -> ToggleResult | None:
+        """At the start, without asking: the entries whose last write failed (``_failed_writes``) written again once
+        under this build, as an On's Retry does for them alone. One that is written, or already holds its source,
+        loses its error; one that fails keeps a fresh one. Refusals of the moment (the game running, an untested
+        build to confirm) leave them all for the next start; otherwise they are not tried again under this build.
+        None when there is nothing to try."""
+        pin = self._current(pin)
+        cores = self._failed_writes(pin, self.profiles.read() or {})
+        if not cores:
+            return None
+        logger.info("Retrying %d entries whose last write failed", len(cores))
+        result = self._run(True, True, [pin], log, progress, None, drift=None, retry=cores)
+        version = _app_version()
+
+        def change(data: dict) -> bool:
+            folder = data["folders"].get(pin.key)
+            if folder is None or folder.get("retried") == version:
+                return False
+            folder["retried"] = version
+            return True
+
+        with _errors("toggle"):
+            self.profiles.update(change)
+        logger.info("Entries whose last write failed: %d written, %d failed again", len(result.done),
+                    len(result.failed))
+        return result
+
     def _impact_stamp(self, pin: Pin, version: str, records: list[dict[str, Any]], configured: set) -> str:
         """What an impact summary depends on: the resource version, each mod's files and stored baseline (by its
         modification time) and the configured sources. Names, sizes and times only."""
@@ -3841,13 +3889,20 @@ class ModLibrary:
         recorded as seen at once and nothing is asked. Never fails: a version that cannot be read asks nothing.
 
         ``outdated``: whatever the version, the App built something from a costume under an older costume rule
-        (``_outdated_costumes``): the start builds it again first (``refresh_costumes``), without asking."""
+        (``_outdated_costumes``): the start builds it again first (``refresh_costumes``), without asking.
+        ``retry``: entries whose last write failed, not tried again under this build of the App (``_failed_writes``):
+        the start writes them again (``retry_failed``), without asking; after the check while ``due``."""
         pin = pin or self.current_pin()
-        out: dict[str, Any] = {"due": False, "outdated": False, "install": None, "version": None, "previous": None}
+        out: dict[str, Any] = {"due": False, "outdated": False, "retry": False, "install": None, "version": None,
+                               "previous": None}
         if pin is None:
             return out
         version = self.resource_version(pin)
         config = self.profiles.read() or {}
+        try:
+            out["retry"] = bool(self._failed_writes(pin, config))
+        except (OSError, ServiceError) as error:
+            log_failure(logger, logging.DEBUG, "Could not look for entries whose last write failed", error)
         seen = ((config.get("folders") or {}).get(pin.key) or {}).get("resource") or {}
         previous = seen.get("version") if isinstance(seen, dict) else None
         out.update(install=pin.key, version=version, previous=previous)
@@ -7324,14 +7379,17 @@ class ModLibrary:
 
     def _run(self, enabled: bool | None, expect: bool | None, pins: list[Pin] | None, log: LogFunc,
              progress: ProgressCallback | None, cancel: Callable[[], bool] | None,
-             drift: list[dict] | None) -> ToggleResult:
+             drift: list[dict] | None, retry: Sequence[str] | None = None) -> ToggleResult:
+        """A toggle, Retry (``drift`` None), Apply Mod Configuration (``drift``, the listed entries) or the start's
+        retry of failed writes (``retry``, cores of the one install ``pins``: an On's Retry of those entries alone,
+        the intent unchanged)."""
         found: list[_Entry] = []
         with self._lock, _errors("toggle"):
             pins = list(pins) if pins is not None else self.installs()
             self._check_start(pins, drift is None, expect)
             config = self.profiles.read()
             current = profiles_mod.enabled(config)
-            if drift is None:
+            if drift is None and retry is None:
                 from .portrait_edit import refresh_missing
                 from .lobby_camera import refresh
                 refresh_missing(self, pins, log)
@@ -7348,7 +7406,11 @@ class ModLibrary:
             if view is not None:  # what the start checked may have changed during the pass
                 self._check_start(pins, True, expect)
                 config = self.profiles.read()
-            if drift is not None:
+            if retry is not None:
+                enabled = True
+                plan = [(pins[0], self._core_map(pins[0]).slot(core)) for core in retry]
+                listed = {}
+            elif drift is not None:
                 if not current:  # mods off: official files are the intent, there is no drift to apply
                     raise ServiceError("state_changed")
                 enabled = current
@@ -7363,11 +7425,11 @@ class ModLibrary:
                 listed = {}
                 if not enabled:
                     self._check_space(self._off_space(plan, found, config))
-            hidden = self._hidden_items(config) if drift is None else []
+            hidden = self._hidden_items(config) if drift is None and retry is None else []
             if enabled:  # an On, its Retry or Apply Mod Configuration: confirmed before the intent changes
                 self._untested_plan(plan, config, drift is not None)
         stamp = now()
-        if drift is None:
+        if drift is None and retry is None:
             def intent(data: dict) -> None:
                 data["enabled"], data["toggled"] = enabled, stamp
                 listed_keys = {(item["install"], item["core"]) for item in data["unfinished"]}

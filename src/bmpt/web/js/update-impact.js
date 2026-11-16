@@ -12,7 +12,9 @@
 // mods.impactLast); its Check Update Impact runs the check again, after a question when no game update is
 // recorded since the last check. Before the question, what the App built from a costume under an older costume rule (Optimize Physics
 // copies, costume swaps in the game files: mods.updateDue's outdated) is built again without asking
-// (mods.refreshCostumes, refresh). The pure parts are tested in Node (tests/js/mod_switch.test.mjs).
+// (mods.refreshCostumes, refresh). Then the entries whose last write failed are written again once under a new build of
+// the App, without asking (mods.updateDue's retry, mods.retryFailed): an App update may have fixed the cause; while the
+// game update question is due, only after its Check. The pure parts are tested in Node (tests/js/mod_switch.test.mjs).
 import * as Compatibility from "./mod-compatibility.js";
 import * as Loading from "./loading.js";
 import * as Popup from "./popup.js";
@@ -159,27 +161,35 @@ async function refresh() {
   await Loading.task(async (update) => waitJob(await rpc("mods.refreshCostumes"), update));
 }
 
+// retry(): the entries whose last write failed written again under the loading screen, nothing to answer: one that
+// fails again keeps its fresh error on its row; a refusal of the moment leaves them for the next start
+async function retry() {
+  await Loading.task(async (update) => waitJob(await rpc("mods.retryFailed"), update));
+}
+
 // gate(): at the start before the first screen (and after a game update while the program runs): the costume builds of
-// an older costume rule built again (refresh), then the question and the check. Resolves true when a summary waits
+// an older costume rule built again (refresh), the failed writes tried again (retry), then the question and the
+// check. Resolves true when a summary waits
 // (check shows it); Later asks again at the next start.
 export async function gate() {
   if (busy) return false;
   const due = await rpc("mods.updateDue").catch(() => null);
-  if (!due?.due && !due?.outdated) return false;
+  if (!due?.due && !due?.outdated && !due?.retry) return false;
   busy = true;
   // At the start, the boot watchdog holds from here: the answer is the user's, and the check, a job over every library
   // mod, shows its own progress (a first check after an upgrade fingerprints each mod and can take minutes; a costume
   // rebuild takes up to half a minute each)
   const release = globalThis.BAMTRecovery?.hold?.();
   try {
-    if (due.outdated) {
-      await refresh().catch((err) => console.error("costume refresh", err));
-      if (!due.due) return false;
-    }
+    if (due.outdated) await refresh().catch((err) => console.error("costume refresh", err));
+    // Later at the game update question writes nothing (the check applies mods again): a retry waits for the check
+    if (due.retry && !due.due) await retry().catch((err) => console.warn("failed writes retry", err));
+    if (!due.due) return false;
     const answer = await Popup.message({ title: T("mods.impact.gateTitle"), lines: [T("mods.impact.gateAsk")], close: false,
       buttons: [{ label: T("update.later"), value: "later" }, { label: T("mods.impact.gateCheck"), value: "check", primary: true }] });
     if (answer.button !== "check") return false;
     const outcome = await run();
+    if (due.retry) await retry().catch((err) => console.warn("failed writes retry", err));
     // nothing to update: done without a list (the version recorded as seen), only a failure told
     if (!heldOf(outcome.result).length) {
       await seen(outcome.result);

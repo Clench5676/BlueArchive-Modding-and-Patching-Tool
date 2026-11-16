@@ -1246,9 +1246,10 @@ def build_api(s: Services) -> RpcRegistry:
 
     @rpc.method("mods.updateDue")
     def mods_update_due() -> dict[str, Any]:
-        """Whether the start asks to check the mods against a game update (``update_due``): {due, outdated, install,
-        version, previous}; ``outdated``: costume builds of an older costume rule to build again first
-        (``mods.refreshCostumes``). Reads the version file, the configuration and cached fingerprints only."""
+        """Whether the start asks to check the mods against a game update (``update_due``): {due, outdated, retry,
+        install, version, previous}; ``outdated``: costume builds of an older costume rule to build again first
+        (``mods.refreshCostumes``); ``retry``: entries whose last write failed to write again (``mods.retryFailed``).
+        Reads the version file, the configuration and cached fingerprints only."""
         library = s.library
         return library.update_due(library.current_pin())  # no game folder: nothing is asked
 
@@ -1257,6 +1258,12 @@ def build_api(s: Services) -> RpcRegistry:
         """At the start: what the App built from a costume under an older costume rule built again, without asking
         (``refresh_costumes``): {done, kept, left}."""
         return s.submit_refresh_costumes()
+
+    @rpc.method("mods.retryFailed")
+    def mods_retry_failed() -> str:
+        """At the start: the entries whose last write failed written again once under this build, without asking
+        (``retry_failed``): a toggle result, or None with nothing to try."""
+        return s.submit_retry_failed()
 
     @rpc.method("mods.impactSeen")
     def mods_impact_seen(install: str, version: str) -> dict[str, Any]:

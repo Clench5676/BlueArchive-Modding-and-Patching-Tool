@@ -31,7 +31,7 @@ one changes are in the other files ([`README.md`](README.md)).
 | `mods.consent {granted}` / `mods.explained` / `mods.scan {dismissed}` / `mods.entries` | scan consent / first-toggle explanation shown / request a scan / the last scan's entries |
 | `mods.adopt {entries}` / `mods.restoreDrift {entries}` / `mods.dismiss {kind, entries}` | Add to Library / Apply Mod Configuration / Keep as Is, Don't Ask Again |
 | `mods.impact {ids?, force?}` / `mods.impactLast` / `mods.impactSeen {install, version}` | game update impact (job) / the last check without checking / mark seen |
-| `mods.updateDue` / `mods.refreshCostumes` / `mods.confirmUntested {confirm}` | whether the start asks to check mods / rebuild outdated costume builds (writer job) / confirm an `untested_build` refusal |
+| `mods.updateDue` / `mods.refreshCostumes` / `mods.retryFailed` / `mods.confirmUntested {confirm}` | whether the start asks to check mods / rebuild outdated costume builds (writer job) / write failed entries again once per App build (writer job) / confirm an `untested_build` refusal |
 | `mods.clearBuilt` / `mods.forget {install}` | Clear Mod Cache / Remove from List (jobs) |
 | `mods.troubleshootState` / `mods.applyOfficial` / `mods.restoreConfig` | Troubleshoot Mods (pre-release builds only) |
 | `actions.apply {variant, source, kind}` / `actions.restore {variant, kind}` | switch what the current install shows (writer job; `deferred` while mods are off; refusals of the moment keep the earlier choice) |
