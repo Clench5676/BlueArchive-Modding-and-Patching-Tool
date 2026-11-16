@@ -8,11 +8,13 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import os
 import re
 import threading
 import time
 import zlib
 from collections import OrderedDict
+from concurrent import futures
 from dataclasses import dataclass
 
 import numpy as np
@@ -995,13 +997,40 @@ def _own_depths(target, rig, own, clip, poses, frames, key=None, indices=None):
     return value
 
 
+# Solves of independent clips run on this many threads beside the caller's (numpy releases the GIL in the larger
+# array operations); at least two cores stay free for the foreground preview and the rest of the App.
+ARM_WORKERS = max(1, min(3, (os.cpu_count() or 2) - 2))
+
+
+class _Stopped(Exception):
+    """The caller's step stopped the arm pass while solves were running."""
+
+
+@dataclass
+class _Solve:
+    clip: object
+    tree: dict
+    poses: list
+    hold: np.ndarray
+    pins: np.ndarray
+    share: float
+    future: object
+
+
 def retarget(target, source, plan, clips, parts, *, step=None, progress=None):
     """Changed clips only; an empty result leaves the existing build byte-identical.
 
     Runs in the caller's class 1 preview / class 2 check, outside the library
     lock. Gate five forearm/hand samples every third frame; solve gated clips every third frame;
-    held arms are excluded from the spatial solve. ``progress(done, count)`` is told each clip it comes to, for
+    held arms are excluded from the spatial solve. ``progress(done, count)`` is told how many clips are done, for
     the progress line's percentage.
+
+    Gates, contacts and clip encoding run on the calling thread in clip order;
+    the solves of gated clips run on up to ``ARM_WORKERS`` threads meanwhile.
+    Only the calling thread calls ``step``: when it raises, the solves stop at
+    their next round and the exception is passed on. Every result is the one a
+    single thread computes: solves share no mutable state, and the lazily built
+    sleeve partitions are built first from the pose the first solve would use.
     """
     from .model_arm_clips import clone_tree, encode_rotations, edit_error
 
@@ -1019,56 +1048,98 @@ def retarget(target, source, plan, clips, parts, *, step=None, progress=None):
         joints = drawn.joints[rows][drawn.weights[rows] > 0]
         gate_nodes.update(drawn.pose_bones[np.unique(joints)].tolist())
     changed = {}
-    for i, clip in enumerate(clips):
-        tick()
+    pending = []
+    done = 0
+    stop = threading.Event()
+    pool = None
+
+    def stopped():
+        if stop.is_set():
+            raise _Stopped
+
+    def report():
         if progress is not None:
-            progress(i, len(clips))
-        tree = rig.sk.graph.tree(clip)
-        if not any(b["typeID"] == 4 and b["path"] in hashes for b in tree["m_ClipBindingConstant"]["genericBindings"]):
-            continue
-        sampler = ClipFrames(rig.sk, tree, gate_nodes)
-        times = sampler.times
-        if len(times) < 2:
-            continue
-        passes, sampled, _, share = clip_gate(target, rig, own, new, clip, sampler, tick)
-        if not passes:
-            continue
-        if contacts_data is None:
-            weapon_parts = [p for p in parts if p.role == "weapon" and p.mesh is not None]
-            weapons = [own_drawn(ma.Costume(rig.sk, [p], [ma.skin_of(p.mesh)])) for p in weapon_parts]
-            head_rows = head_core(target)
-            old_girth, new_girth = girth(own, rig), girth(new, rig)
-            sleeves = (2 * old_girth["fore"] / 1000, max(0, 2 * (new_girth["fore"] - old_girth["fore"]) / 1000))
-            if not np.isfinite(sleeves).all():
-                sleeves = (0, 0)
-            contacts_data = weapons, head_rows, sleeves
-        weapons, head_rows, sleeves = contacts_data
-        sampler = ClipFrames(rig.sk, tree)
-        poses = list(sampler.world(np.arange(len(times))))
-        loop = bool(tree["m_MuscleClip"].get("m_LoopTime"))
-        shown = weapon_visibility(rig, tree, weapon_parts, poses) if weapons else None
-        hold, pins = contacts(rig, own, weapons, poses, head_rows, loop, shown)
-        if hold.all():
-            continue
-        frames = sorted(set(range(0, len(times), SOLVE_EVERY)) | {len(times) - 1})
-        depth = _own_depths(target, rig, own, clip, poses, frames)
-        fixed = solve_clip(rig, own, new, poses, loop, depth, None, frames, hold, pins, sleeves, tick)
-        rotations = {}
-        for a in rig.arm:
-            for bone in a[1:]:
-                parent = rig.sk.nodes[bone].parent
-                values = np.array([ms.quaternion(ma._rotation(np.linalg.inv(w[parent]) @ w[bone])) for w in fixed])
-                rotations[zlib.crc32(rig.sk.nodes[bone].path.encode())] = ms.continuous(values)
-        moved = zip(rig.samples_many(poses), rig.samples_many(fixed))
-        if max(np.linalg.norm(w - v, axis=2).max() for w, v in moved) < 1e-6:
-            continue
-        edited = clone_tree(tree)
-        encode_rotations(edited, rotations)
-        problem = edit_error(tree, edited, rotations)
-        if problem:
-            raise ma.refuse("arm clip edit not verified", clip=clip.peek_name(), what=problem)
-        changed[ma._key(clip)] = ArmClip(clip, edited, rotations, share,
-                                         hold, pins)
+            progress(done, len(clips))
+
+    def finish(block):
+        """Encode solved clips in clip order: the first one when it is ready, or waiting for it."""
+        nonlocal done
+        while pending and (block or pending[0].future.done()):
+            job = pending.pop(0)
+            while not job.future.done():
+                futures.wait([job.future], timeout=.1)
+                tick()
+            fixed = job.future.result()
+            done += 1
+            report()
+            rotations = {}
+            for a in rig.arm:
+                for bone in a[1:]:
+                    parent = rig.sk.nodes[bone].parent
+                    values = np.array([ms.quaternion(ma._rotation(np.linalg.inv(w[parent]) @ w[bone])) for w in fixed])
+                    rotations[zlib.crc32(rig.sk.nodes[bone].path.encode())] = ms.continuous(values)
+            moved = zip(rig.samples_many(job.poses), rig.samples_many(fixed))
+            if max(np.linalg.norm(w - v, axis=2).max() for w, v in moved) < 1e-6:
+                continue
+            edited = clone_tree(job.tree)
+            encode_rotations(edited, rotations)
+            problem = edit_error(job.tree, edited, rotations)
+            if problem:
+                raise ma.refuse("arm clip edit not verified", clip=job.clip.peek_name(), what=problem)
+            changed[ma._key(job.clip)] = ArmClip(job.clip, edited, rotations, job.share, job.hold, job.pins)
+
+    try:
+        for clip in clips:
+            tick()
+            finish(False)
+            report()
+            done += 1  # counted now; a submitted solve takes the count back until it is encoded
+            tree = rig.sk.graph.tree(clip)
+            if not any(b["typeID"] == 4 and b["path"] in hashes
+                       for b in tree["m_ClipBindingConstant"]["genericBindings"]):
+                continue
+            sampler = ClipFrames(rig.sk, tree, gate_nodes)
+            times = sampler.times
+            if len(times) < 2:
+                continue
+            passes, sampled, _, share = clip_gate(target, rig, own, new, clip, sampler, tick)
+            if not passes:
+                continue
+            if contacts_data is None:
+                weapon_parts = [p for p in parts if p.role == "weapon" and p.mesh is not None]
+                weapons = [own_drawn(ma.Costume(rig.sk, [p], [ma.skin_of(p.mesh)])) for p in weapon_parts]
+                head_rows = head_core(target)
+                old_girth, new_girth = girth(own, rig), girth(new, rig)
+                sleeves = (2 * old_girth["fore"] / 1000, max(0, 2 * (new_girth["fore"] - old_girth["fore"]) / 1000))
+                if not np.isfinite(sleeves).all():
+                    sleeves = (0, 0)
+                contacts_data = weapons, head_rows, sleeves
+            weapons, head_rows, sleeves = contacts_data
+            sampler = ClipFrames(rig.sk, tree)
+            poses = list(sampler.world(np.arange(len(times))))
+            loop = bool(tree["m_MuscleClip"].get("m_LoopTime"))
+            shown = weapon_visibility(rig, tree, weapon_parts, poses) if weapons else None
+            hold, pins = contacts(rig, own, weapons, poses, head_rows, loop, shown)
+            if hold.all():
+                continue
+            frames = sorted(set(range(0, len(times), SOLVE_EVERY)) | {len(times) - 1})
+            depth = _own_depths(target, rig, own, clip, poses, frames)
+            if pool is None:
+                arm_radii_many(new, rig, [poses[frames[0]]])
+                pool = futures.ThreadPoolExecutor(ARM_WORKERS, thread_name_prefix="arm-solve")
+            done -= 1
+            future = pool.submit(solve_clip, rig, own, new, poses, loop, depth, None, frames, hold, pins, sleeves,
+                                 stopped)
+            pending.append(_Solve(clip, tree, poses, hold, pins, share, future))
+            while len(pending) > ARM_WORKERS:
+                finish(True)
+        finish(True)
+    except BaseException:
+        stop.set()
+        raise
+    finally:
+        if pool is not None:
+            pool.shutdown(wait=True, cancel_futures=True)
     logger.info("Arm clearance: %d/%d clips corrected in %.3fs", len(changed), len(clips), time.perf_counter() - started)
     return changed
 

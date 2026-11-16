@@ -965,3 +965,110 @@ def test_batched_contacts_equal_the_frame_by_frame_weapon_and_head_checks():
             want = _contacts_reference(rig, own, weapons, poses, head, loop, which)
             assert got[0].tobytes() == want[0].tobytes() and got[1].tobytes() == want[1].tobytes()
     assert got[0].any() and (got[1] > 0).any()
+
+
+class _FakeClip(dict):
+    def __init__(self, number, tree):
+        super().__init__(tree)
+        from types import SimpleNamespace
+        self.assets_file, self.path_id, self.number = SimpleNamespace(name="cab-clips"), number, number
+
+    def peek_name(self):
+        return f"clip{self.number}"
+
+
+def _threaded_retarget_case(monkeypatch, delays, step=None):
+    """retarget with its measuring parts replaced: solves of different lengths finish out of clip order."""
+    import threading
+    import zlib
+    from types import SimpleNamespace
+    from bmpt.gameassets import model_arm_clips as ac
+    rig = _rig()
+    body = _skinned_body(rig, np.random.default_rng(3))
+    path = zlib.crc32(rig.sk.nodes[rig.arm[0][1]].path.encode())
+    clips = [_FakeClip(k, {"m_ClipBindingConstant": {"genericBindings": [{"typeID": 4, "path": path}]},
+                           "m_MuscleClip": {"m_LoopTime": 1}}) for k in range(len(delays))]
+    count = 12
+    poses = np.repeat(np.array(rig.rest)[None], count, axis=0)
+    seen = {"stopped": 0, "threads": set()}
+
+    class Frames:
+        def __init__(self, sk, tree, nodes=None):
+            self.times = np.arange(count) / 30.
+
+        def world(self, frames):
+            return poses[frames]
+
+    def solve(rig_, own, new, poses_, loop, depth, before, frames, hold, pins, sleeves, tick):
+        seen["threads"].add(threading.current_thread().name)
+        number = int(depth[0, 0, 0])
+        try:
+            for _ in range(4):
+                time.sleep(delays[number] / 4)
+                tick()
+        except Exception:
+            seen["stopped"] += 1
+            raise
+        out = [w.copy() for w in poses_]
+        for w in out:
+            w[rig_.arm[0][2], :3, 3] += .01 * (number + 1)
+        return out
+
+    import time
+    monkeypatch.setattr(ar, "Rig", lambda sk: rig)
+    monkeypatch.setattr(ar, "own_drawn", lambda target: body)
+    monkeypatch.setattr(ar, "adapted_drawn", lambda target, source, plan: body)
+    monkeypatch.setattr(ar, "ClipFrames", Frames)
+    monkeypatch.setattr(ar, "clip_gate", lambda *a: (True, {}, {}, .5))
+    monkeypatch.setattr(ar, "head_core", lambda target: np.zeros(0, int))
+    monkeypatch.setattr(ar, "girth", lambda drawn, rig_: {"fore": 30.})
+    monkeypatch.setattr(ar, "contacts", lambda *a: (np.zeros((count, 2), bool), np.zeros((count, 2))))
+    monkeypatch.setattr(ar, "_own_depths", lambda t, r, o, clip, *a: np.full((5, 2, 9), float(clip.number)))
+    monkeypatch.setattr(ar, "solve_clip", solve)
+    monkeypatch.setattr(ac, "encode_rotations", lambda tree, rotations: tree.update(edited=True))
+    monkeypatch.setattr(ac, "edit_error", lambda before, after, rotations: None)
+    monkeypatch.setattr(ar.ma, "_key", lambda clip: clip.number)
+    reported = []
+    target = SimpleNamespace(skeleton=rig.sk)
+    out = ar.retarget(target, None, None, clips, [], step=step,
+                      progress=lambda done, total: reported.append((done, total)))
+    return out, reported, seen
+
+
+def test_threaded_solves_keep_clip_order_progress_and_single_thread_results(monkeypatch):
+    import threading
+    delays = [.08, .01, .05, .0, .03]
+    monkeypatch.setattr(ar, "ARM_WORKERS", 3)
+    out, reported, seen = _threaded_retarget_case(monkeypatch, delays)
+    assert list(out) == list(range(len(delays)))
+    assert all(change.tree["edited"] for change in out.values())
+    assert [d for d, _ in reported] == sorted(d for d, _ in reported) and reported[-1] == (len(delays), len(delays))
+    assert len(seen["threads"]) > 1 and threading.current_thread().name not in seen["threads"]
+    monkeypatch.setattr(ar, "ARM_WORKERS", 1)
+    alone, _, _ = _threaded_retarget_case(monkeypatch, delays)
+    assert list(alone) == list(out)
+    for key in out:
+        for path, values in out[key].rotations.items():
+            assert values.tobytes() == alone[key].rotations[path].tobytes()
+    assert not [t for t in threading.enumerate() if t.name.startswith("arm-solve")]
+
+
+def test_a_stopping_step_stops_the_running_solves_and_is_passed_on(monkeypatch):
+    import threading
+    calls = []
+
+    class Cancelled(Exception):
+        pass
+
+    def step():
+        calls.append(1)
+        if len(calls) > 3:
+            raise Cancelled
+
+    monkeypatch.setattr(ar, "ARM_WORKERS", 2)
+    monkeypatch.setattr(ar._Progress, "__call__", lambda self: self.step())
+    started = time.perf_counter()
+    with pytest.raises(Cancelled):
+        _threaded_retarget_case(monkeypatch, [.4] * 6, step)
+    assert time.perf_counter() - started < .3  # the running solves stopped at their next round
+    assert not [t for t in threading.enumerate() if t.name.startswith("arm-solve")]
