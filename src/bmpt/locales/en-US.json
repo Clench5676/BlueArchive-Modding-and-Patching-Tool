@@ -81,8 +81,7 @@
 			"dialogue": "Dialogue {n}",
 			"cameraOpen": "Frame Camera",
 			"cameraSave": "Save Camera",
-			"cameraSaved": "Saved as a new Memorial Lobby",
-			"cameraDetail": "Scale {scale}, offset {offset}",
+			"cameraAlbum": "Album",
 			"cameraName": "Camera {n}"
 		},
 		"model": {

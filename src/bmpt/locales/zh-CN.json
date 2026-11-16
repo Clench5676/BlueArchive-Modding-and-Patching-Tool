@@ -81,8 +81,7 @@
 			"dialogue": "对话 {n}",
 			"cameraOpen": "镜头取景",
 			"cameraSave": "保存镜头",
-			"cameraSaved": "已另存为新的记忆大厅",
-			"cameraDetail": "缩放 {scale}，偏移 {offset}",
+			"cameraAlbum": "相册",
 			"cameraName": "镜头 {n}"
 		},
 		"model": {

@@ -81,8 +81,7 @@
 			"dialogue": "会話{n}",
 			"cameraOpen": "カメラ構図",
 			"cameraSave": "カメラを保存",
-			"cameraSaved": "新しいメモリアルロビーとして保存しました",
-			"cameraDetail": "倍率 {scale}、オフセット {offset}",
+			"cameraAlbum": "アルバム",
 			"cameraName": "カメラ {n}"
 		},
 		"model": {

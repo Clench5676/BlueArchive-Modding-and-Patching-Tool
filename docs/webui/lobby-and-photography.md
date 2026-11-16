@@ -42,8 +42,9 @@ own module:
 ## Lobby camera framing
 
 - **Entry.** In the fullscreen memorial lobby a visual-mode button (`lobby-camera.js`) enters the framing: the lobby
-  rests, and Back, Reset and the photography shutter replace the fullscreen controls. The wheel zooms at the
-  pointer's height, any drag moves the view up or down; the view stays 16:9 and centred across.
+  rests, and Back, Reset, the photography shutter and an album at the bottom left (the photography gallery's button)
+  replace the fullscreen controls. The wheel zooms at the pointer's height, any drag moves the view up or down; the
+  view stays 16:9 and centred across.
 - **Limits.** `measureFraming` paints every pose the lobby rests in; a cell outside the game's view that some pose
   leaves unpainted may not be shown. Zoom-in stops at 2x the game's view.
 - **RPC `lobby.camera.save`** `{variant, lobby, source, view, scale, offset}` starts a library writer job. The saved
@@ -52,6 +53,10 @@ own module:
   checked after; a prefab whose structure does not fit is refused (`lobby_camera_unsupported`). The intro is held at
   the official framing by a track of the prefab's own copy of the intro timeline (`library/lobby_camera_intro.py`);
   the few prefabs with an Animator on the root keep the older framing (targets scaled directly).
+- **Shutter and album.** Each press saves a new choice under Now Loading; then the new choice's still (else, after
+  1.5 s, the view on screen) flies into the album. The album opens Switch Memorial Lobby itself (`detail.js`, through
+  the camera bridge) over the framing, whose controls take no input meanwhile; a lobby changed there is framed anew
+  from the game's view.
 - **The choice.** The App lists a camera as a lobby mod of its variant (`camera: {source, number, scale, offset}`),
   named after its source, in Switch Memorial Lobby; rename and delete as for mods. Apply writes the source's art
   through the lobby's own apply, then the prefab through the generic one; any other lobby choice puts the prefab back

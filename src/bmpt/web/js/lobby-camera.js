@@ -3,14 +3,14 @@
 // down, kept where no pose of the lobby (its intro, idle and every clip) shows past the art (lobby.js framingView).
 // The shutter keeps the view as the lobby's camera: the lobby scaled about the
 // screen centre and moved (lobby.js cameraParams), saved as a new Memorial Lobby choice of the student (lobby.camera.save,
-// a job; docs/webui/lobby-and-photography.md), its art the source the lobby shows.
+// a job; docs/webui/lobby-and-photography.md), its art the source the lobby shows; its still flies into the album at the
+// bottom left, which opens the student's Switch Memorial Lobby (detail.js) over the framing.
 import { rpc, waitJob } from "./api.js";
 import { T } from "./i18n.js";
 import * as NGUI from "./ngui.js";
 import * as Lobby from "./lobby.js";
-import * as Popup from "./popup.js";
 import { S, hitButton } from "./util.js";
-import { visualButton as whiteButton } from "./photography/controller.js";
+import { visualButton as whiteButton, galleryBox } from "./photography/controller.js";
 import { cameraFeedback } from "./photography/feedback.js";
 import * as Loading from "./loading.js";
 import { prepareBack } from "./visual-mode.js";
@@ -19,8 +19,10 @@ import { buttonCenter } from "./student-hall-icons.js";
 import { FULLSCREEN_BUTTON, SPACE } from "./ui-tokens.js";
 
 const STAGE = { w: 1920, h: 1080 };
+// how long the flight waits for the saved choice's still before it takes the view on screen instead
+const STILL_WAIT = 1500;
 
-let hooks = null, overlay = null, active = false, saving = false, feedback = null, generation = 0;
+let hooks = null, overlay = null, active = false, saving = false, albumOpen = false, feedback = null, generation = 0;
 const stage = () => document.getElementById("stage");
 
 // the entry: beside the photography button, in the fullscreen lobby only, and not in a lobby without a prefab (nothing
@@ -50,14 +52,15 @@ async function open() {
   if (active || !hooks) return;
   active = true;
   saving = false;
+  albumOpen = false;
   document.getElementById("camera-launcher")?.remove();
   document.documentElement.classList.add("lobby-camera");
   Lobby.camera(true);
   overlay = document.createElement("div");
   overlay.id = "camera-overlay";
   stage().append(overlay);
-  await Promise.all([back(), resetButton(), shutter()]);
-  feedback = cameraFeedback(stage(), { x: 0, y: 0, width: STAGE.w, height: STAGE.h }, () => null);
+  await Promise.all([back(), resetButton(), shutter(), album()]);
+  feedback = cameraFeedback(stage(), { x: 0, y: 0, width: STAGE.w, height: STAGE.h }, () => overlay?.querySelector('[data-path="Album/Icon"]'));
 }
 
 async function back() {
@@ -71,6 +74,28 @@ async function resetButton() {
   overlay.append(host);
   const hit = await whiteButton(host, "CameraReset", T("visual.reset"), [1890 - 196, 25, 196, FULLSCREEN_BUTTON.h * S], () => Lobby.resetZoom(), { corner: "top-right" });
   hit.dataset.cameraAction = "Reset";
+}
+// the album: the student photography's gallery button (photography/controller.js), its icon, size and place
+async function album() {
+  const host = document.createElement("div");
+  overlay.append(host);
+  const hit = await whiteButton(host, "Album", T("lobby.cameraAlbum"), galleryBox(), openAlbum, { icon: "Cafe_Icon_Photo", corner: "bottom-left" });
+  hit.dataset.cameraAction = "Album";
+}
+// Switch Memorial Lobby over the framing, whose controls take no input meanwhile; a lobby changed there (a choice
+// saved or applied) is framed anew from the game's view, at rest, as on entering
+async function openAlbum() {
+  if (!active || saving || albumOpen || !hooks?.album) return;
+  const shown = overlay, before = Lobby.meta();
+  albumOpen = true;
+  shown.inert = true;
+  try {
+    await hooks.album();
+  } finally {
+    shown.inert = false;
+    if (overlay === shown) albumOpen = false;
+  }
+  if (active && overlay === shown && Lobby.meta() !== before) Lobby.camera(true);
 }
 async function shutter() {
   const host = document.createElement("div");
@@ -91,34 +116,47 @@ async function shutter() {
 }
 
 async function save() {
-  if (saving || !active) return;
+  if (saving || !active || albumOpen) return;
   const state = Lobby.cameraState();
   if (!state || state.measuring) return;
   saving = true;
   feedback?.flash();
   const { scale, offset } = state.params;
-  let result;
+  let still = null;
   try {
-    // Now Loading locks the screen until the saved choice is in and the student's choices are refreshed
-    result = await Loading.task(async () => {
+    // Now Loading locks the screen until the saved choice is in and the student's choices are refreshed; the new
+    // choice's still (its Switch Memorial Lobby card, framed by the camera) starts drawing behind it
+    await Loading.task(async () => {
       const saved = await waitJob(await rpc("lobby.camera.save", { variant: hooks.variant(), lobby: hooks.lobby(),
         source: hooks.source(), view: state.view, scale, offset }));
       await hooks.saved?.(saved);
-      return saved;
+      still = Promise.resolve(hooks.still?.(saved.mod)).catch(() => null);
     });
   } finally {
     saving = false;
   }
   if (!active) return;
-  await Popup.message({ title: T("lobby.cameraSaved"),
-    lines: [T("lobby.cameraDetail", { scale: result.scale.toFixed(3), offset: result.offset.map((v) => Math.round(v)).join(", ") })],
-    ok: T("photo.confirm") });
+  const picture = await Promise.race([still, new Promise((resolve) => setTimeout(resolve, STILL_WAIT, null))]);
+  const png = active ? picture || viewPicture() : null;
+  if (png) await feedback?.saved(png).catch((err) => console.warn("Camera save flight failed", err));
+}
+// the view on screen, the lobby's layers drawn in order
+function viewPicture() {
+  const layers = [...document.querySelectorAll("#lobby .lobby-view .lobby-layer:not(.lobby-off) canvas")];
+  if (!layers.length) return null;
+  const canvas = document.createElement("canvas");
+  canvas.width = 640;
+  canvas.height = 360;
+  const g = canvas.getContext("2d");
+  for (const layer of layers) g.drawImage(layer, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL("image/png");
 }
 
 // leaves the framing (Back, leaving fullscreen or the page): the view goes back to the game's
 export function close(reenter = true) {
   if (!active) return;
   active = false;
+  albumOpen = false;
   feedback?.dispose();
   feedback = null;
   overlay?.remove();

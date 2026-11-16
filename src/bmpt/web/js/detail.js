@@ -1708,6 +1708,13 @@ async function markSeen(mods, scroll = 0) {
   finally { ids.forEach((id) => seeing.delete(id)); }
 }
 function closePopup(apply) {
+  const album = albumClosed;
+  albumClosed = null;
+  const saved = closeSwitch(apply);
+  if (album) Promise.resolve(saved).finally(album);
+  return saved;
+}
+function closeSwitch(apply) {
   switchThumbnails?.cancel();
   switchThumbnails = null;
   switchPopupPage = null;
@@ -2265,10 +2272,20 @@ async function setFullscreen(on, { switching = false } = {}) {
   if (!on) { await photoBridge.release(); stillAfterFullscreen(); }
 }
 // the camera framing's view of the detail page (lobby-camera.js)
-// source: what the lobby shows (the camera's art); saved: the student's lobby choices read again with the new one
+// source: what the lobby shows (the camera's art); saved: the student's lobby choices read again with the new one;
+// still: a saved camera's still, as its Switch Memorial Lobby card draws it; album: Switch Memorial Lobby itself,
+// resolved once it closed and what was chosen there is shown
+let albumClosed = null;
 const cameraBridge = { variant: () => variantKey, lobby: () => variant()?.lobby,
   source: () => { const c = current("lobby"); return c?.kind === "mod" ? `mod:${c.id}` : "official"; },
-  saved: () => reload() };
+  saved: () => reload(),
+  still: (id) => { const v = variant(); return thumb(spineBase("mod", id), "landscape", null, true, specialFraming(v), v.bg); },
+  album: () => new Promise((resolve) => {
+    albumClosed?.();
+    albumClosed = resolve;
+    const ended = () => { if ($("popup").hidden && albumClosed === resolve) { albumClosed = null; resolve(); } };
+    openPopup("lobby").then(ended, ended);
+  }) };
 // the UI slides out (app.css .stage.fullscreen) and out of the keyboard's reach; back, the visual mode closes and the
 // focus returns (visual-mode.js uiOut, uiBack)
 const slidOut = () => [$("ngui"), $("ngui-chips"), $("ngui-expr"), document.querySelector(".topbar"), stage().querySelector(".nav")];
