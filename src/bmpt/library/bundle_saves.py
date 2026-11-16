@@ -8,11 +8,18 @@ cannot be split without changing its bytes, so the largest one bounds the phase;
 Concurrency: the saves keep their caller's class and locks (a costume build: class 1 for a preview's own build, class
 2 for the costume check, both without the library lock; class 2 under it for an apply the user watches) and take no
 lock of their own. A save is one step, as before (the largest about 7 s, all of it compression); ``step`` runs
-before each one starts, so a waiting foreground preview stops new saves and gets at least half the cores."""
+before each one starts, so a waiting foreground preview stops new saves and gets at least half the cores.
+
+``fast``: LZMA with the fast mode and a hash-chain match finder (``fast_lzma``) instead of UnityPy's normal mode;
+the stream keeps UnityPy's header (lc 3, lp 0, pb 2, an 8 MiB dictionary), so the game reads it as before, and is
+about three times faster for some 3 % more bytes."""
 
 from __future__ import annotations
 
+import lzma
 import os
+import struct
+import threading
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from pathlib import Path
 from typing import Any, Callable, Sequence
@@ -20,6 +27,53 @@ from typing import Any, Callable, Sequence
 from ..errors import ServiceError
 
 MAX_WORKERS = 4
+LZMA_DICT = 0x800000  # UnityPy's dictionary size, written in the header
+LZMA_PROPS = 0x5D     # lc 3, lp 0, pb 2, UnityPy's
+
+_fast = threading.local()
+_install = threading.Lock()
+
+
+def _fast_lzma(original: Callable[..., bytes]) -> Callable[..., bytes]:
+    def compress_lzma(data, write_decompressed_size: bool = False) -> bytes:
+        if not getattr(_fast, "on", False):
+            return original(data, write_decompressed_size)
+        compressor = lzma.LZMACompressor(format=lzma.FORMAT_RAW, filters=[{
+            "id": lzma.FILTER_LZMA1, "dict_size": LZMA_DICT, "lc": 3, "lp": 0, "pb": 2,
+            "mode": lzma.MODE_FAST, "mf": lzma.MF_HC4, "nice_len": 32}])
+        body = compressor.compress(data) + compressor.flush()
+        if write_decompressed_size:
+            return struct.pack("<BIQ", LZMA_PROPS, LZMA_DICT, len(data)) + body
+        return struct.pack("<BI", LZMA_PROPS, LZMA_DICT) + body
+
+    compress_lzma.fast_of = original  # type: ignore[attr-defined]
+    return compress_lzma
+
+
+def install_fast_lzma() -> None:
+    """Route UnityPy's LZMA compression through ``_fast_lzma``: unchanged unless the calling thread is inside
+    ``fast_lzma``. Idempotent."""
+    from UnityPy.helpers import CompressionHelper as helper
+
+    with _install:
+        if hasattr(helper.compress_lzma, "fast_of"):
+            return
+        wrapped = _fast_lzma(helper.compress_lzma)
+        for flag, function in list(helper.COMPRESSION_MAP.items()):
+            if function is helper.compress_lzma:
+                helper.COMPRESSION_MAP[flag] = wrapped
+        helper.compress_lzma = wrapped
+
+
+class fast_lzma:
+    """Within it, LZMA saves on this thread use the fast mode (``install_fast_lzma`` must have run)."""
+
+    def __enter__(self) -> None:
+        self.before = getattr(_fast, "on", False)
+        _fast.on = True
+
+    def __exit__(self, *_: Any) -> None:
+        _fast.on = self.before
 
 
 def save_workers(count: int, cpus: int | None = None) -> int:
@@ -39,8 +93,9 @@ def _payload(bundle: Any) -> int:
 
 def save_bundles(jobs: Sequence[tuple[Path, Any, Path, Any]], *, step: Callable[[], None] = lambda: None,
                  progress: Callable[[int, int], None] = lambda done, count: None,
-                 workers: int | None = None) -> None:
-    """Save each ``(target, bundle, output, options)`` with ``bundle.save(output, options)``.
+                 workers: int | None = None, fast: bool = False) -> None:
+    """Save each ``(target, bundle, output, options)`` with ``bundle.save(output, options)``; ``fast``: LZMA in
+    the fast mode (module docstring).
 
     ``step`` is called before each save starts, on the calling thread (a job's yield to the foreground, or its
     cancellation by raising); ``progress(done, count)`` after each save ends, on the calling thread too. At most
@@ -54,10 +109,16 @@ def save_bundles(jobs: Sequence[tuple[Path, Any, Path, Any]], *, step: Callable[
     if not count:
         return
     workers = save_workers(count) if workers is None else max(1, workers)
+    if fast:
+        install_fast_lzma()
 
     def save(i: int) -> None:
         target, bundle, output, options = jobs[i]
-        ok, _ = bundle.save(output, options)
+        if fast:
+            with fast_lzma():
+                ok, _ = bundle.save(output, options)
+        else:
+            ok, _ = bundle.save(output, options)
         if not ok:
             raise ServiceError("mod_apply_failed", file=target)
 

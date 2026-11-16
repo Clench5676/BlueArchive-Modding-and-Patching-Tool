@@ -368,3 +368,31 @@ def test_save_workers_leave_half_the_cores(count, cpus, expected, monkeypatch):
         assert bs.save_workers(count) == expected
     else:
         assert bs.save_workers(count, cpus) == expected
+
+
+def test_fast_lzma_round_trips_and_stays_on_its_thread():
+    import random
+    import threading
+
+    from UnityPy.helpers import CompressionHelper as helper
+
+    from bmpt.library.bundle_saves import fast_lzma, install_fast_lzma
+
+    rng = random.Random(7)
+    data = bytes(rng.choice(b"abcdefgh") for _ in range(200_000)) * 3
+    normal = helper.compress_lzma(data, True)
+    install_fast_lzma()
+    install_fast_lzma()  # idempotent
+    assert helper.compress_lzma(data, True) == normal  # outside the context: UnityPy's own bytes
+    with fast_lzma():
+        fast = helper.compress_lzma(data, True)
+        chunked = helper.COMPRESSION_MAP[helper.CompressionFlags.LZMA](data)  # the bundle writer's entry
+        other: list[bytes] = []
+        thread = threading.Thread(target=lambda: other.append(helper.compress_lzma(data, True)))
+        thread.start()
+        thread.join()
+    assert other == [normal]  # another thread keeps the normal mode
+    assert fast != normal and fast[:5] == normal[:5]  # same properties and dictionary in the header
+    assert helper.decompress_lzma(fast, True) == data
+    assert helper.decompress_lzma(chunked, False) == data
+    assert helper.compress_lzma(data, True) == normal

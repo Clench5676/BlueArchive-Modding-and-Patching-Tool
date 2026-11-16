@@ -5711,8 +5711,9 @@ class ModLibrary:
                  SaveOptions(perform_crc=False, compression="none") if preview
                  else self.settings.save_options(self.settings.crc_needed(reverse[path])))
                 for path, bundle in result.changed.items()]
-        # in threads, at most half the cores: step() still runs before each save starts
-        save_bundles(jobs, step=step, progress=lambda done, count: meter.phase("save", done, count))
+        # in threads, at most half the cores: step() still runs before each save starts; a game-bound costume's LZMA
+        # in the fast mode (``bundle_saves``: the same format, about three times faster, some 3 % larger)
+        save_bundles(jobs, step=step, progress=lambda done, count: meter.phase("save", done, count), fast=not preview)
         for target, _, path, _ in jobs:
             replacements[target] = path
         return replacements
