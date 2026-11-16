@@ -32,8 +32,8 @@ from bmpt import atlas_remap, devmode, game_paths, graft as grafting, mod_origin
     spine_converter, steam_records
 from bmpt.progress_meter import Meter
 from bmpt.engine import (
-    SEARCH_DIR_SUFFIXES, AssetType, Bundle, LogFunc, ProgressCallback, core, get_search_dirs, get_skel_version,
-    is_safe_file_name, no_log, parse_filename, t,
+    SEARCH_DIR_SUFFIXES, AssetType, Bundle, LogFunc, ProgressCallback, SaveOptions, core, get_search_dirs,
+    get_skel_version, is_safe_file_name, no_log, parse_filename, t,
 )
 from ..catalog.models import CoreMap
 from ..errors import ServiceError
@@ -5705,8 +5705,11 @@ class ModLibrary:
         output.mkdir(parents=True, exist_ok=True)
         reverse = {value: key for key, value in staged.items()}
         replacements = dict(staged)
+        # A preview's parts are only read by the App's own 3D export and never reach the game: written uncompressed and
+        # without the CRC fix, which skips the LZMA pass (most of the save phase). Game-bound builds keep the settings.
         jobs = [(reverse[path], bundle, output / path.name,
-                 self.settings.save_options(self.settings.crc_needed(reverse[path])))
+                 SaveOptions(perform_crc=False, compression="none") if preview
+                 else self.settings.save_options(self.settings.crc_needed(reverse[path])))
                 for path, bundle in result.changed.items()]
         # in threads, at most half the cores: step() still runs before each save starts
         save_bundles(jobs, step=step, progress=lambda done, count: meter.phase("save", done, count))
