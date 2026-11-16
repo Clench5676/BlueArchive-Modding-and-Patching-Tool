@@ -3,7 +3,7 @@
 Row 4 of the 3D tab is the action bar: one card per action group the model has (Basic, Combat, Move & Cover, Skills,
 Status, Random Variants, Other), in a row that scrolls sideways with the strip's edge fade; there is no "+N" pile.
 Pressing a card opens its action list upward from it; picking an action plays it and closes the list. A card shows its
-group's name centred; the playing action's group card is selected and shows that action's name alone, large, instead.
+group's name centred; the playing action's group card is selected and shows that action's name alone instead.
 A model without clips of its own (a story model, an NPC) keeps today's row of actions (`model.js` `ACTIONS`, story
 clips).
 
@@ -28,13 +28,17 @@ it follows its card when the bar scrolls and closes once the card leaves the row
 another group card switches to that card's list, Escape closes it.
 
 Text: a list's keys one size (`fitGroup`, 42 down to 30, 590 wide, two lines within a line); its titles one line; the
-box as wide as its widest key or title. The cards: the group names one size (56 down to 28, 202 wide), wrapped onto two
-lines before they shrink, centred on the card. The playing card: the action's name alone, fitted on its own from 56,
-one line on the card's centre (it passes under the selection check), else up to three lines under the check, down to
-22 for the longest (a second form's random Tactical Challenge entry). A key's label leaves the battle form to its
-section's title; the card carries it (`Normal Attack (Form 2)`). Geometry and fit are pure (`action-list-layout.js`)
-and tested in every language (`tests/js/action_list.test.mjs`). The prefabs are read and the box, a title bar and a key
-drawn once off screen when the bar is first drawn, so the first press finds their sprites ready.
+box as wide as its widest key or title, each key's label box ending at the content's edge (so the list never scrolls
+sideways and its scroll fade never washes out the title bars' ends); the content's height takes in half the last key's
+underline, so a list that fits neither scrolls nor fades. The cards: the names are siblings, one size for every card,
+the list keys' size (42 down to 28), 182 wide (30 clear at either side of the leaning card), wrapped onto two lines
+before they shrink, centred on the card. The playing card: the action's name alone, at the names' size, never larger;
+smaller (down to 20, three lines) only when it does not fit there (a second form's Tactical Challenge entry). It is
+centred too, and moves down only as far as needed when its first line's ink would reach under the selection check. A
+key's label leaves the battle form to its section's title; the card carries it (`Normal Attack (Form 2)`). Geometry and
+fit are pure (`action-list-layout.js`) and tested in every language (`tests/js/action_list.test.mjs`). The prefabs are
+read and the box, a title bar and a key drawn once off screen when the bar is first drawn, so the first press finds
+their sprites ready.
 
 ## Groups
 
