@@ -94,6 +94,10 @@ def test_head_contact_blends_only_the_head_bones_own_surface():
         def posed(w, rows=None):
             vertices = np.array([wrist + [.02, 0, 0], wrist + [0, 0, .5]])
             return vertices if rows is None else vertices[rows]
+
+        @staticmethod
+        def posed_batch(poses, rows):
+            return np.array([Own.posed(w, rows) for w in poses])
     pins = ar.head_pins(rig, Own(), [rig.rest] * 20, np.array([0]), True)
     assert np.allclose(pins[:, 0], 1)
     assert np.allclose(ar.head_pins(rig, Own(), [rig.rest] * 20, np.array([1]), False), 0)
@@ -533,3 +537,538 @@ def test_gate_stops_measuring_when_the_required_fifth_is_already_proven(monkeypa
     monkeypatch.setattr(ar, 'arm_radii', radius)
     assert ar.clip_gate(None, rig, None, None, None, sampler)[0]
     assert len(calls) == 6  # six of thirty sampled frames prove the gate
+
+
+def _min_rotation_reference(a, b):
+    a, b = a / max(np.linalg.norm(a), 1e-12), b / max(np.linalg.norm(b), 1e-12)
+    v = np.cross(a, b)
+    c = float(a @ b)
+    if c < -1 + 1e-9:
+        return ar._half_turn(a)
+    k = np.array([[0, -v[2], v[1]], [v[2], 0, -v[0]], [-v[1], v[0], 0]])
+    return np.eye(3) + k + k @ k / (1 + c)
+
+
+def _repose_reference(rig, poses, deltas, hold):
+    """The frame-by-frame arm turn the batched one replaced."""
+    arms = ar.Arms(rig)
+    out = []
+    for f, w in enumerate(poses):
+        source = np.asarray(w)
+        result = source.copy()
+        for s in range(2):
+            if hold[f, s] or np.abs(deltas[f, s]).max() < 1e-7:
+                continue
+            u, e, wr = rig.joints(w, s)
+            l1, l2 = np.linalg.norm(e - u), np.linalg.norm(wr - e)
+            e2, w2 = np.array([e, wr]) + deltas[f, s]
+            reach = np.linalg.norm(w2 - u)
+            axis = (w2 - u) / max(reach, 1e-9)
+            reach = np.clip(reach, abs(l1 - l2) + 1e-8, l1 + l2 - 1e-8)
+            w2 = u + reach * axis
+            along = (l1 * l1 - l2 * l2 + reach * reach) / (2 * reach)
+            centre = u + along * axis
+            normal = e2 - centre - np.dot(e2 - centre, axis) * axis
+            if np.linalg.norm(normal) < 1e-9:
+                normal = e - centre - np.dot(e - centre, axis) * axis
+            normal /= max(np.linalg.norm(normal), 1e-9)
+            e2 = centre + np.sqrt(max(0, l1 * l1 - along * along)) * normal
+            _, upper, fore, hand = rig.arm[s]
+            shoulder = source[upper, :3, 3]
+            turn_upper = np.eye(4)
+            turn_upper[:3, :3] = _min_rotation_reference(source[fore, :3, 3] - shoulder, e2 - shoulder)
+            turn_upper[:3, 3] = shoulder - turn_upper[:3, :3] @ shoulder
+            hand_world = turn_upper @ source[hand]
+            anchor = (turn_upper @ source[fore])[:3, 3]
+            turn_fore = np.eye(4)
+            turn_fore[:3, :3] = _min_rotation_reference(hand_world[:3, 3] - anchor, w2 - anchor)
+            turn_fore[:3, 3] = anchor - turn_fore[:3, :3] @ anchor
+            combined = turn_fore @ turn_upper
+            upper_rows, fore_rows, hand_rows = arms.groups[s]
+            result[upper_rows] = turn_upper @ source[upper_rows]
+            result[fore_rows] = combined @ source[fore_rows]
+            result[hand_rows, :3, 3] += (combined @ source[hand])[:3, 3] - source[hand, :3, 3]
+        out.append(result)
+    return out
+
+
+def _turned_poses(rig, rng, count):
+    poses = []
+    for _ in range(count):
+        w = np.array(rig.rest)
+        w[:, :3, 3] += rng.normal(0, .01, (len(w), 3))
+        poses.append(w)
+    return poses
+
+
+def test_batched_arm_turn_is_bit_identical_to_the_frame_by_frame_turn():
+    rig = _rig()
+    rng = np.random.default_rng(253)
+    poses = _turned_poses(rig, rng, 40)
+    deltas = rng.normal(0, .02, (40, 2, 2, 3))
+    deltas[3] = 0                     # an unchanged frame
+    deltas[5, 1] = 1e-9               # below the threshold on one side
+    deltas[7, 0, 0] = rig.joints(poses[7], 0)[2] - rig.joints(poses[7], 0)[1]  # the elbow onto the wrist line
+    deltas[9, 1, 1] = np.nan          # a failed solve still turns, as before
+    hold = rng.random((40, 2)) < .2
+    got = ar._repose(rig, poses, deltas, hold)
+    want = _repose_reference(rig, poses, deltas, hold)
+    assert len(got) == len(want)
+    for a, b in zip(got, want):
+        assert np.array_equal(a, b, equal_nan=True)
+    assert ar._repose(rig, [], np.zeros((0, 2, 2, 3)), np.zeros((0, 2), bool)) == []
+
+
+def test_batched_minimum_rotations_match_the_single_rotation_and_the_half_turn():
+    rng = np.random.default_rng(7)
+    a, b = rng.normal(size=(500, 3)), rng.normal(size=(500, 3))
+    b[:3] = -a[:3]                    # opposite directions take the half turn
+    b[3] = a[3] * 2
+    got = ar.min_rotations(a, b)
+    for row in range(len(a)):
+        assert np.array_equal(got[row], _min_rotation_reference(a[row], b[row]))
+        assert np.array_equal(got[row], ar.min_rotation(a[row], b[row]))
+
+
+def test_tree_clone_equals_a_deep_copy_and_shares_nothing_with_the_original():
+    from bmpt.gameassets.model_arm_clips import clone_tree
+    shared = [1.5, -0.0, float('nan'), 2 ** 70]
+    tree = {"m_Name": "clip", "a": [{"x": 1, "y": [0.1, 0.2]}, shared, shared], "b": b"\x00\x01", "c": None,
+            "d": True, "e": np.arange(3, dtype=np.float32)}
+    clone = clone_tree(tree)
+    reference = copy.deepcopy(tree)
+    assert repr(clone) == repr(reference)
+    assert clone["a"][1] is clone["a"][2] and clone["a"][1] is not shared
+    assert np.array_equal(clone["e"], tree["e"]) and clone["e"].dtype == tree["e"].dtype
+    clone["a"][0]["y"].append(3)
+    assert tree["a"][0]["y"] == [0.1, 0.2]
+
+
+def _skinned_body(rig, rng):
+    """A noisy skinned cylinder around the spine with sleeves on both arms; the shoulder ring follows the upper arms
+    a little, so arm turns re-skin part of the torso."""
+    rest = np.array(rig.rest)
+    pelvis, spine, neck = rig.spine[1], rig.spine[2], rig.spine[3]
+    bones = [pelvis, spine, neck] + [rig.arm[s][k] for s in range(2) for k in (1, 2, 3)]
+    vertices, joints, weights, triangles, regions = [], [], [], [], []
+
+    def tube(centres, radius, segments, bone_of, second, region):
+        base = len(vertices)
+        for ring, (centre, axis) in enumerate(centres):
+            axis = axis / np.linalg.norm(axis)
+            side = np.cross(axis, [0, 0, 1.0])
+            side /= np.linalg.norm(side)
+            up = np.cross(axis, side)
+            for k in range(segments):
+                angle = 2 * np.pi * k / segments
+                r = radius * (1 + rng.normal(0, .05))
+                vertices.append(centre + r * (np.cos(angle) * side + np.sin(angle) * up))
+                joints.append([bone_of(ring), second(ring)[0]])
+                weights.append([1 - second(ring)[1], second(ring)[1]])
+                regions.append(region)
+        for ring in range(len(centres) - 1):
+            for k in range(segments):
+                a, b = base + ring * segments + k, base + ring * segments + (k + 1) % segments
+                triangles.append((a, b, b + segments))
+                triangles.append((a, b + segments, a + segments))
+
+    heights = np.linspace(.35, 1.3, 14)
+    tube([(np.array([0, h, 0.]), np.array([0, 1, 0.])) for h in heights], .15, 28,
+         lambda ring: 0 if heights[ring] < .8 else 1 if heights[ring] < 1.1 else 2,
+         lambda ring: (3 if ring % 2 else 6, .3) if heights[ring] > 1.15 else (0, 0.), 0)
+    for s in range(2):
+        for seg in range(3):
+            a, b = rest[rig.arm[s][1 + seg]][:3, 3], rest[rig.arm[s][min(2 + seg, 3)]][:3, 3]
+            if seg == 2:
+                b = a + (a - rest[rig.arm[s][2]][:3, 3]) * .4
+            bone = 3 + 3 * s + seg
+            tube([(a + t * (b - a), b - a) for t in np.linspace(0, 1, 4)], .035, 10,
+                 lambda ring, bone=bone: bone, lambda ring: (0, 0.), 2 + 3 * s + seg)
+    bindings = np.linalg.inv(rest[bones])
+    drawn = ar.Drawn(np.array(vertices), np.array(joints), np.array(weights), np.array(triangles), np.array(regions),
+                     lambda pose: np.asarray(pose)[bones] @ bindings)
+    drawn.pose_bones, drawn.bindings = np.array(bones), bindings
+    return drawn
+
+
+def _body_case(seed=31, count=12):
+    rig = _rig()
+    rng = np.random.default_rng(seed)
+    poses = _turned_poses(rig, rng, count)
+    drawn = _skinned_body(rig, rng)
+    deltas = rng.normal(0, .03, (count, 2, 2, 3))
+    hold = np.zeros((count, 2), bool)
+    hold[::5, 0] = True
+    turned = ar._repose(rig, poses, deltas, hold)
+    return rig, drawn, poses, turned
+
+
+def _same(a, b):
+    return np.array_equal(np.asarray(a), np.asarray(b), equal_nan=True)
+
+
+def test_batched_torso_depths_penetrations_and_gradients_equal_the_frame_by_frame_queries():
+    rig, drawn, poses, turned = _body_case()
+    frames = list(range(len(poses)))
+    single = ar.BodyFrames(drawn, rig, poses, lambda: None)
+    batched = ar.BodyFrames(drawn, rig, poses, lambda: None)
+    single.ensure(frames)
+    batched.ensure(frames)
+    assert len(drawn._body_layout[0])  # the shoulder ring is re-skinned after an arm turn
+    mixed = [poses[f] if f % 3 == 0 else turned[f] for f in frames]
+    for f in range(len(poses)):
+        # frames set up in batches equal frames set up one at a time
+        alone = ar.BodyFrame(drawn, rig, poses[f], batched.frames[f].vertices)
+        for got, want in zip(batched.frames[f].prepared[:5], alone.prepared[:5]):
+            assert got.tobytes() == want.tobytes()
+        for got, want in zip(batched.frames[f].prepared[5][1:], alone.prepared[5][1:]):
+            assert got.tobytes() == want.tobytes()
+        assert np.array_equal(batched.frames[f].vertices, drawn.posed(poses[f], batched.rows))
+    assert np.array_equal(rig.samples_many(turned), [rig.samples(w) for w in turned])
+    assert rig.samples_many(np.zeros((0, len(rig.rest), 4, 4))).shape == (0, 2, 9, 3)
+    depth = ar.depths([batched[f] for f in frames], mixed)
+    assert _same(depth, [single[f].depth(w) for f, w in zip(frames, mixed)])
+    assert all(batched[f].baseline is not None for f in frames if f % 3 == 0)
+    assert _same(ar.depths([batched[f] for f in frames], mixed), depth)  # cached baselines
+    assert _same(ar.penetrations([batched[f] for f in frames], mixed),
+                 [single[f].penetration(w) for f, w in zip(frames, mixed)])
+    got, gradient = ar.depth_gradients([batched[f] for f in frames], turned)
+    want = [single[f].depth_gradient(w) for f, w in zip(frames, turned)]
+    assert _same(got, [m[0] for m in want]) and _same(gradient, [m[1] for m in want])
+    assert (got > 0).any() and (got < 0).any()
+    empty = ar.depth_gradients([], [])
+    assert empty[0].shape == (0, 2, 9) and empty[1].shape == (0, 2, 9, 3)
+
+
+def test_batched_sleeve_radii_equal_the_frame_by_frame_casts():
+    rig, drawn, poses, turned = _body_case(seed=5, count=7)
+    single = _skinned_body(rig, np.random.default_rng(5))
+    for indices in (None, ar.GATE_SAMPLES):
+        got = ar.arm_radii_many(drawn, rig, turned, indices)
+        want = [ar.arm_radii(drawn, rig, w, indices) for w in turned]
+        assert _same(got, want)
+        assert (got > 0).any()
+    assert ar.arm_radii_many(single, rig, [], None).shape == (0, 2, 9)
+
+
+def _depth_batch_reference(drawn, rig, poses, indices):
+    rows, triangles, _ = drawn.measure_mesh(True, False)
+    matrices = (poses[:, drawn.pose_bones] @ drawn.bindings).astype(np.float32)
+    joints, weights = drawn.joints[rows], drawn.weights[rows].astype(np.float32)
+    h = drawn.h[rows].astype(np.float32)
+    vertices = np.zeros((len(poses), len(rows), 3), np.float32)
+    for k in range(joints.shape[1]):
+        used = weights[:, k] != 0
+        if used.any():
+            vertices[:, used] += weights[None, used, k:k + 1] * np.einsum(
+                'fvij,vj->fvi', matrices[:, joints[used, k]], h[used])[..., :3]
+    tri = vertices[:, triangles]
+    a, b, c = tri[:, :, 0], tri[:, :, 1], tri[:, :, 2]
+    prepared = [a, b - a, c - a, np.minimum(np.minimum(a, b), c), np.maximum(np.maximum(a, b), c)]
+    out = []
+    for f, pose in enumerate(poses):
+        points = rig.samples(pose)[:, indices].reshape(-1, 3)
+        _, direction, rho = ar.radial(rig.axis(pose), points)
+        frame = [p[f] for p in prepared]
+        frame.append(drawn._body_index.bounds(frame))
+        out.append(ar.BodyFrame.query(points, direction, rho, frame).reshape(2, len(indices)))
+    return np.array(out)
+
+
+def test_batched_gate_depths_equal_the_frame_by_frame_casts():
+    rig, drawn, poses, turned = _body_case(seed=9, count=10)
+    stack = np.array(turned)
+    for indices in (ar.GATE_SAMPLES, np.arange(9)):
+        got = ar.depth_batch(drawn, rig, stack, indices)
+        assert _same(got, _depth_batch_reference(drawn, rig, stack, indices))
+    assert ar.depth_batch(drawn, rig, stack[:0], ar.GATE_SAMPLES).shape == (0, 2, 5)
+
+
+def test_batched_query_equals_single_frame_queries_with_ties_and_misses():
+    rng = np.random.default_rng(12)
+    base = rng.uniform(-.2, .2, (500, 3, 3)).astype(np.float32)
+    base[1] = base[0]                 # a duplicate triangle: the first index wins the normal
+    index = ar.TriangleIndex(base)
+    frames = [base + rng.normal(0, .02, base.shape).astype(np.float32) for _ in range(5)]
+    frames[2] = base.copy()
+    points = rng.uniform(-.25, .25, (5, 18, 3))
+    points[:, 0] = frames[0][0].mean(axis=0) - [0, 0, .05]
+    dirs = rng.normal(size=points.shape)
+    dirs[:, 0] = [0, 0, 1.]
+    dirs /= np.linalg.norm(dirs, axis=2)[..., None]
+    rho = rng.uniform(0, .35, (5, 18))
+    rho[3] = 0
+    prepared = ar.BodyFrame.prepare(np.stack(frames))
+    prepared.append(ar.leaf_bounds(index, prepared[3], prepared[4]))
+    for normals in (False, True):
+        got = ar.query_many(points, dirs, rho, prepared, normals=normals)
+        for f, triangles in enumerate(frames):
+            single = ar.BodyFrame.prepare(triangles)
+            single.append(index.bounds(single))
+            want = ar.BodyFrame.query(points[f], dirs[f], rho[f], single, normals=normals)
+            if normals:
+                assert _same(got[0][f], want[0]) and _same(got[1][f], want[1])
+            else:
+                assert _same(got[f], want)
+    empty = ar.BodyFrame.prepare(np.zeros((5, 0, 3, 3)))
+    empty.append(None)
+    assert _same(ar.query_many(points, dirs, rho, empty), -rho)
+
+
+def _solve_many_reference(rig, poses, needs, hold, pins, sleeves, guard=None, initial=None):
+    """The solver loop before its per-step work was trimmed."""
+    idx = [k for k, _, _ in ar.DRIVEN]
+    tw = np.array([x for _, x, _ in ar.DRIVEN])[None, None, :, None]
+    te = 1 - tw
+    a = np.minimum(needs[:, :, idx], ar.NEED_CAP).copy()
+    a[:, :, 4:] *= (1 - pins)[..., None]
+    free = (~hold)[..., None]
+    pts = np.array([rig.samples(w) for w in poses])
+    p = pts[:, :, idx]
+    diff = p[:, 0, :, None] - p[:, 1, None, :]
+    c = np.linalg.norm(diff, axis=3)
+    reach, grown = sleeves
+    near = (np.clip((reach - c) / 0.02, 0, 1) * np.exp(-(c - c.min(axis=(1, 2))[:, None, None]) / 0.015)
+            if grown > 0 else np.zeros_like(c))
+    active = (a.max(axis=2) > 1e-5) & ~hold
+    near *= active.any(axis=1)[:, None, None]
+    normal = diff / np.maximum(c, 1e-9)[..., None]
+    d = np.array([ar.push_directions(rig, w, pt)[:, idx] for w, pt in zip(poses, pts)])
+    joints = np.array([[rig.joints(w, s) for s in range(2)] for w in poses])
+    u, e, wr = (joints[:, :, k] for k in range(3))
+    l1 = np.linalg.norm(e - u, axis=2)[..., None]
+    l2 = np.linalg.norm(wr - e, axis=2)[..., None]
+    de, dw = np.zeros_like(e), np.zeros_like(wr)
+    if initial is not None:
+        de, dw = .25 * initial[:, :, 0], .25 * initial[:, :, 1]
+    guard_tw = np.array([0, 0, 0, .25, .5, .75, 1, 1, 1])[None, None, :, None]
+    guard_te = np.array([.5, .75, 1, .75, .5, .25, 0, 0, 0])[None, None, :, None]
+    step = ar.STEP if guard is None else .025
+    steps = ar.STEPS if initial is None else 3 * ar.STEPS // 4
+    for iteration in range(steps + (60 if guard is not None else 0)):
+        dp = tw * dw[:, :, None] + te * de[:, :, None]
+        v = np.maximum(0, a - (d * dp).sum(axis=3))
+        v += 4 * np.maximum(0, -(d * dp).sum(axis=3))
+        g = -v[..., None] * d
+        rel = dp[:, 0, :, None] - dp[:, 1, None, :]
+        vp = ar.PAIR_WEIGHT * near * np.maximum(0, grown - (normal * rel).sum(axis=3))
+        g[:, 0] -= (vp[..., None] * normal).sum(axis=2)
+        g[:, 1] += (vp[..., None] * normal).sum(axis=1)
+        gw = (tw * g).sum(axis=2)
+        ge = (te * g).sum(axis=2)
+        if guard is not None:
+            direction, target = guard
+            all_dp = guard_tw * dw[:, :, None] + guard_te * de[:, :, None]
+            penalty = 4 * np.maximum(0, target - (direction * all_dp).sum(axis=3))
+            gradient = -penalty[..., None] * direction
+            gw += (guard_tw * gradient).sum(axis=2)
+            ge += (guard_te * gradient).sum(axis=2)
+        if iteration >= steps:
+            gw = (guard_tw * gradient).sum(axis=2)
+            ge = (guard_te * gradient).sum(axis=2)
+        else:
+            gw += (ar.MOVE_COST + ar.PIN_COST * pins[..., None]) * dw
+            ge += ar.MOVE_COST * de
+        v1, v2 = e + de - u, wr + dw - e - de
+        a1, a2 = v1 / l1, v2 / l2
+        gu = ge + gw
+        v1 -= step * (gu - (gu * a1).sum(axis=2)[..., None] * a1) * free
+        v2 -= step * (gw - (gw * a2).sum(axis=2)[..., None] * a2) * free
+        v1 *= l1 / np.maximum(np.linalg.norm(v1, axis=2), 1e-9)[..., None]
+        v2 *= l2 / np.maximum(np.linalg.norm(v2, axis=2), 1e-9)[..., None]
+        de = (u + v1 - e) * free
+        dw = (u + v1 + v2 - wr) * free
+    return np.stack((de, dw), axis=2)
+
+
+def test_trimmed_solver_steps_are_bit_identical_with_and_without_guard_and_start():
+    rig = _rig()
+    rng = np.random.default_rng(41)
+    poses = _turned_poses(rig, rng, 9)
+    needs = np.abs(rng.normal(0, .03, (9, 2, 9)))
+    needs[2] = 0
+    hold = rng.random((9, 2)) < .15
+    pins = np.clip(rng.normal(.2, .3, (9, 2)), 0, 1)
+    initial = rng.normal(0, .01, (9, 2, 2, 3))
+    direction = rng.normal(size=(9, 2, 9, 3))
+    direction /= np.linalg.norm(direction, axis=3)[..., None]
+    target = np.where(rng.random((9, 2, 9)) < .5, rng.normal(0, .01, (9, 2, 9)), -1e6)
+    for sleeves in ((0, 0), (.3, .02)):
+        for guard in (None, (direction, target)):
+            for start in (None, initial):
+                got = ar.solve_many(rig, poses, needs, hold, pins, sleeves, guard, start)
+                want = _solve_many_reference(rig, poses, needs, hold, pins, sleeves, guard, start)
+                assert got.tobytes() == want.tobytes()
+
+
+def _contacts_reference(rig, own, weapons, poses, rows, loop, shown=None):
+    """Weapon holds and head pins frame by frame, as before they were batched."""
+    relative = np.full((len(poses), 2, 3), np.nan)
+    distance = np.full((len(poses), 2), np.inf)
+    if weapons and rig.weapon is not None:
+        for f, w in enumerate(poses):
+            mount = w[rig.weapon]
+            if abs(np.linalg.det(mount[:3, :3])) < 1e-9:
+                continue
+            palms = rig.samples(w)[:, 7]
+            visible = [weapon.posed(w, np.arange(0, len(weapon.h), 5)) for k, weapon in enumerate(weapons)
+                       if shown is None or shown[f, k]]
+            if not visible:
+                continue
+            vertices = np.concatenate(visible)
+            distance[f] = np.linalg.norm(palms[:, None] - vertices[None], axis=2).min(axis=1)
+            relative[f] = (np.c_[palms, np.ones(2)] @ np.linalg.inv(mount).T)[:, :3]
+    pins = np.zeros((len(poses), 2))
+    if len(rows):
+        sampled = rows[::2]
+        for f, w in enumerate(poses):
+            hv = own.posed(w, sampled)
+            pts = rig.samples(w)[:, 6:9].reshape(-1, 3)
+            dist = np.linalg.norm(pts[:, None] - hv[None], axis=2).min(axis=1).reshape(2, 3).min(axis=1)
+            pins[f] = np.clip((ar.PIN_FAR - dist) / (ar.PIN_FAR - ar.PIN_NEAR), 0.0, 1.0)
+        pins = np.clip(ar.blend(pins, loop), 0.0, 1.0)
+    return ar.weapon_holds(relative, distance, loop), pins
+
+
+def test_batched_contacts_equal_the_frame_by_frame_weapon_and_head_checks():
+    base = _rig()
+    bones = [(n.name, (n.parent + 1) if n.parent is not None else 0, tuple(n.local[0]), tuple(n.local[1]))
+             for n in base.sk.nodes]
+    hand = base.arm[1][3]
+    bones.append(("Bip001_Weapon", hand + 1, (0, -.03, .04), (0, 0, 0, 1)))
+    rig = ar.Rig(_skeleton(bones))
+    rng = np.random.default_rng(77)
+    own = _skinned_body(rig, rng)
+    rest = np.array(rig.rest)
+    weapons = []
+    palm = rig.samples(rest)[1, 7]
+    for bone, size in ((rig.weapon, .03), (hand, .01)):
+        vertices = palm + rng.normal(0, size, (40, 3))
+        drawn = ar.Drawn(vertices, np.zeros((40, 1), int), np.ones((40, 1)), np.zeros((0, 3), int),
+                         np.zeros(40, int), None)
+        drawn.pose_bones, drawn.bindings = np.array([bone]), np.linalg.inv(rest[[bone]])
+        weapons.append(drawn)
+    poses = []
+    for f in range(40):
+        w = rest.copy()
+        w[:, :3, 3] += np.sin(f / 6) * .004 + rng.normal(0, .0005, (len(w), 3))
+        poses.append(w)
+    poses[5][rig.weapon, :3, :3] = 0          # a hidden mount
+    poses[9][rig.weapon] = np.nan             # an unreadable mount still counts as shown
+    shown = rng.random((40, 2)) < .8
+    shown[12] = False
+    wrist = rig.samples(rest)[0, 6]
+    head = np.argsort(np.linalg.norm(own.h[:, :3] - wrist, axis=1))[:60]  # a surface the left hand touches
+    for loop in (False, True):
+        for which in (None, shown):
+            got = ar.contacts(rig, own, weapons, poses, head, loop, which)
+            want = _contacts_reference(rig, own, weapons, poses, head, loop, which)
+            assert got[0].tobytes() == want[0].tobytes() and got[1].tobytes() == want[1].tobytes()
+    assert got[0].any() and (got[1] > 0).any()
+
+
+class _FakeClip(dict):
+    def __init__(self, number, tree):
+        super().__init__(tree)
+        from types import SimpleNamespace
+        self.assets_file, self.path_id, self.number = SimpleNamespace(name="cab-clips"), number, number
+
+    def peek_name(self):
+        return f"clip{self.number}"
+
+
+def _threaded_retarget_case(monkeypatch, delays, step=None):
+    """retarget with its measuring parts replaced: solves of different lengths finish out of clip order."""
+    import threading
+    import zlib
+    from types import SimpleNamespace
+    from bmpt.gameassets import model_arm_clips as ac
+    rig = _rig()
+    body = _skinned_body(rig, np.random.default_rng(3))
+    path = zlib.crc32(rig.sk.nodes[rig.arm[0][1]].path.encode())
+    clips = [_FakeClip(k, {"m_ClipBindingConstant": {"genericBindings": [{"typeID": 4, "path": path}]},
+                           "m_MuscleClip": {"m_LoopTime": 1}}) for k in range(len(delays))]
+    count = 12
+    poses = np.repeat(np.array(rig.rest)[None], count, axis=0)
+    seen = {"stopped": 0, "threads": set()}
+
+    class Frames:
+        def __init__(self, sk, tree, nodes=None):
+            self.times = np.arange(count) / 30.
+
+        def world(self, frames):
+            return poses[frames]
+
+    def solve(rig_, own, new, poses_, loop, depth, before, frames, hold, pins, sleeves, tick):
+        seen["threads"].add(threading.current_thread().name)
+        number = int(depth[0, 0, 0])
+        try:
+            for _ in range(4):
+                time.sleep(delays[number] / 4)
+                tick()
+        except Exception:
+            seen["stopped"] += 1
+            raise
+        out = [w.copy() for w in poses_]
+        for w in out:
+            w[rig_.arm[0][2], :3, 3] += .01 * (number + 1)
+        return out
+
+    import time
+    monkeypatch.setattr(ar, "Rig", lambda sk: rig)
+    monkeypatch.setattr(ar, "own_drawn", lambda target: body)
+    monkeypatch.setattr(ar, "adapted_drawn", lambda target, source, plan: body)
+    monkeypatch.setattr(ar, "ClipFrames", Frames)
+    monkeypatch.setattr(ar, "clip_gate", lambda *a: (True, {}, {}, .5))
+    monkeypatch.setattr(ar, "head_core", lambda target: np.zeros(0, int))
+    monkeypatch.setattr(ar, "girth", lambda drawn, rig_: {"fore": 30.})
+    monkeypatch.setattr(ar, "contacts", lambda *a: (np.zeros((count, 2), bool), np.zeros((count, 2))))
+    monkeypatch.setattr(ar, "_own_depths", lambda t, r, o, clip, *a: np.full((5, 2, 9), float(clip.number)))
+    monkeypatch.setattr(ar, "solve_clip", solve)
+    monkeypatch.setattr(ac, "encode_rotations", lambda tree, rotations: tree.update(edited=True))
+    monkeypatch.setattr(ac, "edit_error", lambda before, after, rotations: None)
+    monkeypatch.setattr(ar.ma, "_key", lambda clip: clip.number)
+    reported = []
+    target = SimpleNamespace(skeleton=rig.sk)
+    out = ar.retarget(target, None, None, clips, [], step=step,
+                      progress=lambda done, total: reported.append((done, total)))
+    return out, reported, seen
+
+
+def test_threaded_solves_keep_clip_order_progress_and_single_thread_results(monkeypatch):
+    import threading
+    delays = [.08, .01, .05, .0, .03]
+    monkeypatch.setattr(ar, "ARM_WORKERS", 3)
+    out, reported, seen = _threaded_retarget_case(monkeypatch, delays)
+    assert list(out) == list(range(len(delays)))
+    assert all(change.tree["edited"] for change in out.values())
+    assert [d for d, _ in reported] == sorted(d for d, _ in reported) and reported[-1] == (len(delays), len(delays))
+    assert len(seen["threads"]) > 1 and threading.current_thread().name not in seen["threads"]
+    monkeypatch.setattr(ar, "ARM_WORKERS", 1)
+    alone, _, _ = _threaded_retarget_case(monkeypatch, delays)
+    assert list(alone) == list(out)
+    for key in out:
+        for path, values in out[key].rotations.items():
+            assert values.tobytes() == alone[key].rotations[path].tobytes()
+    assert not [t for t in threading.enumerate() if t.name.startswith("arm-solve")]
+
+
+def test_a_stopping_step_stops_the_running_solves_and_is_passed_on(monkeypatch):
+    import threading
+    calls = []
+
+    class Cancelled(Exception):
+        pass
+
+    def step():
+        calls.append(1)
+        if len(calls) > 3:
+            raise Cancelled
+
+    monkeypatch.setattr(ar, "ARM_WORKERS", 2)
+    monkeypatch.setattr(ar._Progress, "__call__", lambda self: self.step())
+    started = time.perf_counter()
+    with pytest.raises(Cancelled):
+        _threaded_retarget_case(monkeypatch, [.4] * 6, step)
+    assert time.perf_counter() - started < .3  # the running solves stopped at their next round
+    assert not [t for t in threading.enumerate() if t.name.startswith("arm-solve")]
