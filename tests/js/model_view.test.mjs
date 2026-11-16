@@ -124,7 +124,7 @@ test("a story model's cutscene clips are its actions, in order, each held on its
 test("the retreat cuts straight to the crying loop; the knockdown falls and stays down", async () => {
   const { ACTIONS, createStillView } = await import("../../src/bmpt/web/js/model.js");
   assert.deepEqual(Object.keys(ACTIONS), ["idle", "reaction", "walk", "victory", "pickup", "retreat", "knockdown"]);
-  assert.deepEqual(ACTIONS.retreat, { slots: ["Vital_Retreat"], fade: 0 });
+  assert.deepEqual(ACTIONS.retreat, { slots: ["Vital_Retreat"], fade: 0, face: true });
   assert.deepEqual(ACTIONS.knockdown, { slots: ["Vital_Death"], hold: true });
   // a still view on a stand-in renderer, with one-track clips of the slots
   const renderer = { domElement: {}, setPixelRatio() {}, setSize() {} };
@@ -161,6 +161,130 @@ test("the retreat cuts straight to the crying loop; the knockdown falls and stay
   assert.equal(view.slot.clip.name, "Vital_Death");
   assert.equal(view.action.loop, THREE.LoopOnce);
   assert.ok(view.action.clampWhenFinished);
+});
+
+// a stand-in biped facing +z (the front view's side), its left at +x, under a root turned by `yaw` radians
+function biped(yaw = 0, names = {}) {
+  const root = new THREE.Object3D();
+  root.rotation.y = yaw;
+  const hips = new THREE.Object3D();
+  hips.name = "Bip001";
+  hips.position.set(0, 0.34, 0);
+  root.add(hips);
+  const bone = (name, x, y) => { const o = new THREE.Object3D(); o.name = names[name] ?? name; o.position.set(x, y, 0); hips.add(o); return o; };
+  bone("Bip001 Head", 0, 0.29);
+  bone("Bip001 L Thigh", 0.05, -0.03);
+  bone("Bip001 R Thigh", -0.05, -0.03);
+  bone("Bip001 L Clavicle", 0.02, 0.2);
+  bone("Bip001 R Clavicle", -0.02, 0.2);
+  root.updateMatrixWorld(true);
+  return root;
+}
+
+test("the facing is read from the skeleton: trunk across the left-to-right line, whatever the student", async () => {
+  const { facingBones, facingOf } = await import("../../src/bmpt/web/js/model.js");
+  const facing = (root) => facingOf(facingBones(root))?.toArray().map((v) => Math.round(v * 1000) / 1000 + 0);
+  assert.deepEqual(facing(biped()), [0, 0, 1]);
+  assert.deepEqual(facing(biped(Math.PI)), [0, 0, -1]);
+  assert.deepEqual(facing(biped(Math.PI / 2)), [1, 0, 0]);
+  // a turn of the trunk forward (a bow) leaves the facing level
+  const bowed = biped();
+  bowed.children[0].rotation.x = 0.6;
+  bowed.updateMatrixWorld(true);
+  assert.deepEqual(facing(bowed), [0, 0, 1]);
+  // another rig's names: left/right shoulders and up-legs, a pelvis and a head
+  const other = biped(Math.PI, { Bip001: "pelvis", "Bip001 Head": "head", "Bip001 L Thigh": "LeftUpLeg", "Bip001 R Thigh": "RightUpLeg",
+    "Bip001 L Clavicle": "Left_Shoulder", "Bip001 R Clavicle": "Right_Shoulder" });
+  assert.deepEqual(facing(other), [0, 0, -1]);
+  // one pair is enough; none, or no head, gives no facing
+  assert.deepEqual(facing(biped(0, { "Bip001 L Clavicle": "x", "Bip001 R Clavicle": "y" })), [0, 0, 1]);
+  assert.equal(facingBones(biped(0, { "Bip001 L Thigh": "x", "Bip001 L Clavicle": "y" })), null);
+  assert.equal(facingBones(biped(0, { "Bip001 Head": "x" })), null);
+  assert.equal(facingOf(null), null);
+});
+
+test("the face's facing: the head's forward read on the formation idle, carried by the head's turn", async () => {
+  const { facingBones, facingOf, headFront } = await import("../../src/bmpt/web/js/model.js");
+  const round = (v) => v?.toArray().map((x) => Math.round(x * 1000) / 1000 + 0);
+  // the idle: the body turned 0.5 rad off the front view, the head turned back to look into it
+  const root = biped(0.5);
+  const head = root.getObjectByName("Bip001 Head");
+  head.rotation.y = -0.5;
+  root.updateMatrixWorld(true);
+  const bones = facingBones(root), front = headFront(bones);
+  assert.deepEqual(round(facingOf(bones, new THREE.Vector3(), front)), [0, 0, 1]);
+  assert.notDeepEqual(round(facingOf(bones)), [0, 0, 1], "the body alone looks aside");
+  // the retreat turns the whole character round: the face's facing follows the head
+  root.rotation.y = 0.5 + Math.PI;
+  root.updateMatrixWorld(true);
+  assert.deepEqual(round(facingOf(bones, new THREE.Vector3(), front)), [0, 0, -1]);
+  // a head looking straight down gives no level facing: the body's
+  head.rotation.set(Math.PI / 2, 0, 0);
+  root.rotation.y = 0;
+  root.updateMatrixWorld(true);
+  assert.deepEqual(round(facingOf(bones, new THREE.Vector3(), new THREE.Vector3(0, 0, 1))), round(facingOf(bones)));
+  assert.equal(headFront(null), null);
+});
+
+test("the front view keeps the camera's height angle and turns the yaw to the facing", async () => {
+  const { frontView } = await import("../../src/bmpt/web/js/model.js");
+  const round = (v) => v.toArray().map((x) => Math.round(x * 1000) / 1000 + 0);
+  assert.deepEqual(round(frontView(new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 2, 2))), [0.707, 0.707, 0]);
+  assert.deepEqual(round(frontView(new THREE.Vector3(0, 0, -1), new THREE.Vector3(3, 0, 0))), [0, 0, -1]);
+});
+
+test("only the retreat turns the view to the face, from its first posed frame, and keeps the zoom", async () => {
+  const { ACTIONS, createStillView } = await import("../../src/bmpt/web/js/model.js");
+  assert.deepEqual(Object.keys(ACTIONS).filter((name) => ACTIONS[name].face), ["retreat"]);
+  const renderer = { domElement: {}, setPixelRatio() {}, setSize() {} };
+  const view = createStillView({ renderer });
+  const clip = (name, loop) => ({ clip: new THREE.AnimationClip(name, 1, [new THREE.NumberKeyframeTrack(".position[x]", [0, 1], [0, 0])]), loop });
+  view.root = biped(Math.PI); // the retreat's pose: turned away from the front view
+  view.mixer = new THREE.AnimationMixer(view.root);
+  view.clips = new Map([["Formation_Idle", clip("Formation_Idle", true)], ["Vital_Retreat", clip("Vital_Retreat", true)],
+    ["Vital_Death", clip("Vital_Death", false)]]);
+  view.named = new Map([["R02", clip("R02", true)]]);
+  view.fit = 3;
+  view.limits = { min: 1, max: 4 };
+  // the head's forward is read on the formation idle's posed frame, once per model
+  view.act("idle", { quiet: true });
+  assert.equal(view.headFront, null);
+  view.readHeadFront();
+  assert.ok(view.headFront?.isVector3);
+  view.headFront = undefined;
+  view.camera.position.set(0, 0, 2.5);
+  for (const name of ["idle", "knockdown"]) {
+    view.act(name, { quiet: true });
+    assert.equal(view.facing, false, name);
+  }
+  view.act("retreat", { quiet: true });
+  assert.equal(view.facing, true, "turned on the next frame, once the clip has posed the skeleton");
+  assert.ok(view.turnToFace());
+  assert.equal(view.facing, false);
+  assert.deepEqual(view.tween.dir1.toArray().map((v) => Math.round(v * 1000) / 1000 + 0), [0, 0, -1]);
+  near(view.tween.dist1, 2.5);
+  // a second battle form's retreat plays as the tab's retreat, and turns too; a pick of another action cancels a turn
+  // not yet made
+  view.actClips("retreat@2", ["R02"], { like: "retreat" });
+  assert.equal(view.facing, true);
+  view.act("idle", { quiet: true });
+  assert.equal(view.facing, false);
+  // with the head's forward read: the face's facing
+  view.headFront = new THREE.Vector3(0, 0, 1);
+  view.act("retreat", { quiet: true });
+  assert.ok(view.turnToFace());
+  assert.deepEqual(view.tween.dir1.toArray().map((v) => Math.round(v * 1000) / 1000 + 0), [0, 0, -1]);
+  // a model without the formation idle (a cafe idle) has none: the body's facing
+  view.clips.delete("Formation_Idle");
+  view.clips.set("Cafe_Idle", clip("Cafe_Idle", true));
+  view.headFront = undefined;
+  view.act("idle", { quiet: true });
+  view.readHeadFront();
+  assert.equal(view.headFront, false);
+  // a skeleton without the bones it reads: no turn
+  view.root = new THREE.Object3D();
+  view.act("retreat", { quiet: true });
+  assert.equal(view.turnToFace(), false);
 });
 
 test("the view follows the hips across the floor, so any clip plays in place", async () => {

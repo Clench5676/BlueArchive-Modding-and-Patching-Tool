@@ -240,7 +240,8 @@ export function stillCrop(camera, target, box, W, H, aspect) {
 }
 
 // the tab's actions: the clip slots they play, in order of preference; "next" follows a clip that plays once, "then"
-// is the action after it; "fade" the cross-fade into the action in seconds (0: a cut), else the caller's
+// is the action after it; "fade" the cross-fade into the action in seconds (0: a cut), else the caller's; "face":
+// the view turns to the character's front once the action's first frame is posed
 export const ACTIONS = {
   idle: { slots: ["Formation_Idle", "Cafe_Idle", "Idle"] },
   reaction: { slots: ["Cafe_Reaction"], then: "idle" },
@@ -248,8 +249,9 @@ export const ACTIONS = {
   victory: { slots: ["Victory_Start"], next: "Victory_End" },
   pickup: { slots: ["Formation_Pickup"] },
   // the battle's vital clips: the retreat cuts straight to the crying in place the battle controller's retreat state
-  // plays (looping); the knockdown, an enemy's, falls and stays down
-  retreat: { slots: ["Vital_Retreat"], fade: 0 },
+  // plays (looping), turned to the battle camera, so the view turns to the face; the knockdown, an enemy's, falls and
+  // stays down
+  retreat: { slots: ["Vital_Retreat"], fade: 0, face: true },
   knockdown: { slots: ["Vital_Death"], hold: true },
 };
 
@@ -259,6 +261,58 @@ const STORY = /^Story_(\d+)$/;
 export const storyActions = (clips) => [...(clips?.keys() || [])].map((slot) => STORY.exec(slot)?.[1]).filter(Boolean)
   .map(Number).sort((a, b) => a - b).map((n) => `story${n}`);
 export const storyAction = (name) => (/^story\d+$/.test(name) ? { slots: [`Story_${name.slice(5)}`], hold: true } : null);
+
+// The skeleton's paired bones and trunk the facing is read from: a biped's (3ds Max's "Bip001 L Thigh", any rig's
+// left/right thigh and clavicle or shoulder, its pelvis or hips and its head); null without a pair and the trunk.
+const SIDE = /(?:^|[\s_.:-])(l|r|left|right)[\s_.:-]*(thigh|upleg|upperleg|clavicle|shoulder)$/i;
+export function facingBones(root) {
+  const found = {};
+  root?.traverse((o) => {
+    const side = SIDE.exec(o.name || "");
+    if (side) {
+      const key = `${side[1][0].toLowerCase()}${/thigh|leg/i.test(side[2]) ? "Leg" : "Arm"}`;
+      found[key] ||= o;
+    } else if (!found.head && /(?:^|[\s_.:-])head$/i.test(o.name || "")) found.head = o;
+  });
+  const hips = anchorNode(root);
+  const pairs = [["lLeg", "rLeg"], ["lArm", "rArm"]].filter(([l, r]) => found[l] && found[r]);
+  return hips && found.head && pairs.length ? { hips, head: found.head, pairs: pairs.map(([l, r]) => [found[l], found[r]]) } : null;
+}
+
+// The head's own forward, in its local space: `front` (the front view's direction) as the head is turned now, read
+// while the formation idle looks into the formation camera; null without the bones.
+export function headFront(bones, front = HOME) {
+  if (!bones) return null;
+  return front.clone().applyQuaternion(bones.head.getWorldQuaternion(new THREE.Quaternion()).invert());
+}
+
+// The way a posed character faces, level (unit, y 0): where the face looks, with the head's forward (headFront),
+// else the body's: the trunk (hips to head) crossed with its left-to-right line (each pair's right bone less its
+// left, summed); null when the pose gives none (lying flat along that line, or the face straight up or down).
+export function facingOf(bones, out = new THREE.Vector3(), front = null) {
+  if (!bones) return null;
+  if (front) {
+    out.copy(front).applyQuaternion(bones.head.getWorldQuaternion(new THREE.Quaternion())).setY(0);
+    if (out.lengthSq() > 1e-4) return out.normalize();
+  }
+  const at = (o) => o.getWorldPosition(new THREE.Vector3());
+  const up = at(bones.head).sub(at(bones.hips));
+  const right = new THREE.Vector3();
+  for (const [l, r] of bones.pairs) {
+    const d = at(r).sub(at(l));
+    if (d.lengthSq() > 0) right.add(d.normalize());
+  }
+  out.crossVectors(up, right).setY(0);
+  return out.lengthSq() > 1e-8 ? out.normalize() : null;
+}
+
+// The camera's direction from the orbit target that sees the character's front: its facing, at the camera's
+// height angle now (the orbit's elevation kept, so only the yaw turns).
+export function frontView(facing, offset) {
+  const length = offset.length();
+  const sin = length > 0 ? THREE.MathUtils.clamp(offset.y / length, -1, 1) : 0;
+  return facing.clone().multiplyScalar(Math.sqrt(1 - sin * sin)).setY(sin).normalize();
+}
 
 // The node the view follows: the hips (3ds Max's Bip001, else a pelvis or hips bone), whose horizontal
 // travel a clip's walk, run or cutscene path makes; null without one (the view then stays put).
@@ -457,6 +511,7 @@ class ChibiView {
     this.dress(meshes, gltf, textures, nodes);
     this.scene.add(root);
     this.root = root;
+    this.headFront = undefined; // read again for this model (readHeadFront)
     this.gltf = gltf;
     this.json = json;
     this.nodes = nodes;
@@ -721,6 +776,27 @@ class ChibiView {
     this.moveTo(keep ? offset.normalize() : this.homeDirection(), distance, f, snap, keep ? from : null);
   }
 
+  // an action that asks for the face (ACTIONS "face"): the camera glides round to the character's front as posed now,
+  // keeping its distance, height angle and pan; an orbit during the glide takes over (stepTween), and any later one
+  // stays, as the view stays on other actions
+  turnToFace() {
+    this.facing = false;
+    if (!this.limits || !this.root) return false;
+    this.root.updateMatrixWorld(true);
+    const facing = facingOf(facingBones(this.root), new THREE.Vector3(), this.headFront || null);
+    if (!facing) return false;
+    const offset = this.camera.position.clone().sub(this.controls.target);
+    this.moveTo(frontView(facing, offset), this.zoomGoal(), FRAMES[this.mode], false, this.range());
+    return true;
+  }
+
+  // the head's forward (headFront), from the formation idle as posed now: its face looks into the front view
+  readHeadFront() {
+    if (!this.root || this.slot?.clip !== this.clips?.get("Formation_Idle")?.clip) { this.headFront = false; return; }
+    this.root.updateMatrixWorld(true);
+    this.headFront = headFront(facingBones(this.root)) || false;
+  }
+
   // double-click: back to the front view at the fit distance, unpanned (from where a change of framing has brought
   // the zoom range so far)
   home() {
@@ -864,6 +940,9 @@ class ChibiView {
 
   begin(name, entries, def, fade) {
     this.current = name;
+    this.facing = !!def?.face; // turned once the clip has posed the character (tick)
+    // the head's forward is read once per model, on the formation idle's first posed frame (tick)
+    if (name === "idle" && this.headFront === undefined) this.headFront = null;
     this.chain = { entries, at: 0, def };
     this.playEntry(entries[0], { fade, once: this.onceAt(0) });
   }
@@ -979,6 +1058,8 @@ class ChibiView {
   tick() {
     const dt = Math.min(0.1, this.clock.getDelta());
     this.mixer?.update(dt);
+    if (this.headFront === null) this.readHeadFront();
+    if (this.facing) this.turnToFace();
     this.applySwitches();
     this.updateMouth();
     this.followHalo(dt);
