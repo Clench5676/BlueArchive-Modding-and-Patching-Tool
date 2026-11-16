@@ -1205,6 +1205,82 @@ def test_optimize_physics_judges_a_followed_skirt_again_by_pass_through(view):
     assert hems.skirt.clips >= 20 and any(change is not None for change in hems.parts)
 
 
+def _skirt_case():
+    """A source with a front skirt chain off the pelvis and a strap off the left thigh, on a slot of the same Biped
+    without them; the cloth, two leg vertices per leg, and the plan's mapping and groups."""
+    biped = [("Bip001", 0, (0, 0, 0), (0, 0, 0, 1)), ("Bip001 Pelvis", 1, (0, 1, 0), (0, 0, 0, 1)),
+             ("Bip001 L Thigh", 2, (0.1, 0, 0), (0, 0, 0, 1)), ("Bip001 R Thigh", 2, (-0.1, 0, 0), (0, 0, 0, 1)),
+             ("Bip001 L Calf", 3, (0, -0.45, 0), (0, 0, 0, 1)), ("Bip001 R Calf", 4, (0, -0.45, 0), (0, 0, 0, 1)),
+             ("Bip001 L Foot", 5, (0, -0.45, 0), (0, 0, 0, 1)), ("Bip001 R Foot", 6, (0, -0.45, 0), (0, 0, 0, 1))]
+    chains = [("skirt_F_1", 2, (0, -0.05, 0.15), (0, 0, 0, 1)), ("skirt_F_2", 9, (0, -0.2, 0), (0, 0, 0, 1)),
+              ("strap_L_1", 3, (0.08, -0.05, 0), (0, 0, 0, 1)), ("strap_L_2", 11, (0, -0.2, 0), (0, 0, 0, 1))]
+    ts, ss = _skeleton(biped), _skeleton(biped + chains)
+    points = [(-0.05, 0.95, 0.16), (0.05, 0.95, 0.16), (-0.05, 0.75, 0.16), (0.05, 0.75, 0.16),  # the skirt
+              (0.18, 0.95, 0.02), (0.19, 0.95, -0.02), (0.18, 0.75, 0.02), (0.19, 0.75, -0.02),  # the strap
+              (0.1, 0.8, 0.05), (0.1, 0.5, 0.05), (-0.1, 0.8, 0.05), (-0.1, 0.5, 0.05)]  # the legs
+    joints = [9, 9, 10, 10, 11, 11, 12, 12, 3, 5, 4, 6]
+    flat = _flat(points, joints)
+    flat.edges = np.array([[0, 1], [0, 2], [1, 3], [2, 3], [4, 5], [4, 6], [5, 7], [6, 7], [1, 4]])
+    mapping = {**{n: n for n in range(1, 9)}, 9: 2, 10: 2, 11: 3, 12: 3}
+    groups = {2: [9, 10], 3: [11, 12]}
+    return ts, ss, flat, mapping, groups
+
+
+def test_a_regrouped_skirt_build_carries_its_own_new_bones():
+    """Optimize Physics builds Rule B twice when the pelvis group follows: as the group choice left it (the strap off
+    the thigh alone) and as if the followed group were rigid (the skirt off the pelvis too). Each candidate carries
+    the new bones of its own build: the regrouped one has more, and the rule chosen writes the bones its weights'
+    columns name (Shigure <- Hina failed to build when a regrouped rule won with the default build's bones)."""
+    ts, ss, flat, mapping, groups = _skirt_case()
+    t_legs, s_legs = ma.legs_of(ts), ma.legs_of(ss)
+    pelvis, thigh_l, thigh_r = s_legs["pelvis"], s_legs["thigh L"], s_legs["thigh R"]
+    plan = ma.Plan(mapping, {1: "rigid", pelvis: "follow", thigh_l: "rigid", thigh_r: "rigid"}, 1.0, 1.0, groups)
+    lowered = ma.Plan(mapping, {**plan.choices, pelvis: "rigid"}, 1.0, 1.0, groups)
+    dominant = flat.joints[:, 0]
+    cloth = np.arange(len(flat.vertices)) < 8
+    legs = np.arange(8, 12)
+    mapped = np.vectorize(lambda n: mapping.get(int(n), 0), otypes=[int])(flat.joints)
+    columns = sorted(set(mapped[flat.weights > 0].tolist()) | {t_legs[k] for k in ma.FIT_KEYS})
+    writable = np.ones(len(flat.vertices), bool)
+    built = {}
+    for name, p in (("default", plan), ("regrouped", lowered)):
+        built[name] = ma._skirt_candidates(ts, ss, p, flat, flat.vertices, dominant, cloth, legs, t_legs, s_legs,
+                                           mapped, columns, writable, [pelvis, thigh_l, thigh_r])
+        assert built[name] and len({id(c.skirt) for c in built[name]}) == 1  # one build's candidates share its bones
+        for candidate in built[name]:
+            assert candidate.weights.shape[1] == len(columns) + len(candidate.skirt.sources)
+            assert candidate.skirt.solver is not None
+    default, regrouped = built["default"][0].skirt, built["regrouped"][0].skirt
+    assert [ss.nodes[n].name for n in default.sources] == ["strap_L_1", "strap_L_2"]
+    assert [ss.nodes[n].name for n in regrouped.sources] == ["skirt_F_1", "skirt_F_2", "strap_L_1", "strap_L_2"]
+    assert default.anchor_of(0) == thigh_l and regrouped.anchor_of(0) == pelvis
+
+
+@official
+def test_official_optimize_physics_builds_a_regrouped_skirt_with_its_own_bones(view):
+    """Shigure <- Hina with Optimize Physics: Hina's skirt follows Shigure's own chains, and the rule chosen is built
+    as if that group were rigid, its chains more than the default build's (it failed to build: the weights of one
+    build, the bones of the other). It builds, its new bones are the regrouped build's, and the written weights name
+    only the slot's nodes and those bones."""
+    from ba_modding_toolkit.bundle import Bundle
+
+    files, index = view
+    slot = _slot(files, "shigure_original")
+    sources = [p for p in files if re.match(r"character-hina_original-_mxload", p.name)]
+    result = ma.adapt(index=index, resolver=None, target_files=slot, target_dev="shigure_original",
+                      source_files=sources, source_dev="hina_original", open_writable=Bundle.load, halo=True,
+                      physics=True)
+    hems = result.hems
+    assert hems.regrouped and hems.rule.startswith(ma.REGROUP + "skirt"), hems.summary()
+    skirt = hems.skirt
+    assert len(skirt.sources) == len(skirt.names) == len(skirt.parents) == len(skirt.locals) > 0
+    assert skirt.clips > 0 and skirt.solver.roots
+    new = set(range(skirt.base, skirt.base + len(skirt.sources)))
+    written = {int(n) for change in hems.parts if change is not None for n in change[1].ravel().tolist()}
+    assert written & new and all(n < skirt.base or n in new for n in written)
+    assert all(result.plan.mapping[n] == skirt.node(k) for k, n in enumerate(skirt.sources))
+
+
 @official
 def test_official_cross_costume_without_a_halo_hides_the_slots(view, tmp_path):
     """Another student's costume from a model without a halo (CH9999) hides the slot's: its renderer is turned
