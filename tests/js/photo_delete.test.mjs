@@ -5,19 +5,17 @@ import { CONTROL, SPACE } from "../../src/bmpt/web/js/ui-tokens.js";
 import { row } from "../../src/bmpt/web/js/ui-grid.js";
 const source=readFileSync(new URL('../../src/bmpt/web/js/photography/controller.js',import.meta.url),'utf8');
 const code=source.slice(source.indexOf('async function deletePhoto()'),source.indexOf('async function applyGame()'));
-test('gallery cards and their accessible Applied label consume only the target-scoped flag', async () => {
-  const drawCode=source.slice(source.indexOf('function galleryPair('),source.indexOf('// The captions of the two text buttons'))+source.slice(source.indexOf('async function galleryDraw()'),source.indexOf('async function deletePhoto()'));
-  const photos=[{id:'own',name:'Own skin',url:'own.png',applied:true},{id:'other',name:'Other skin',url:'other.png',applied:false}];
-  const cards=[],hits=[];
-  const env={CONTROL,SPACE,row,S:1920/2960,Popup:{selectionReady:async()=>{},listCard:(item,x,y,selected)=>{cards.push({...item,selected});return item;}},
-    galleryPhotos:()=>photos,photo:()=>null,modal:{draw:fn=>fn({},()=>true,null)},NGUI:{render:async()=>{}},
-    UI:{buttonSize:()=>({}),button:async()=>{},caption:async()=>{},
-      // every row at once, each into its own fake cell
-      virtualArea:(_host,_box,count,_pitch,render)=>({ready:Promise.all(Array.from({length:count},(_,index)=>render({},index,null)))})},
-    hitButton:(_layer,_box,_fn,label)=>hits.push(label),safe:fn=>fn,P:key=>key,restoreGame:async()=>{}};
-  await new Function('env',`const {${Object.keys(env)}}=env;let selected='other',repository={game:{id:'own'}};const OFFICIAL='official',GALLERY_SCROLL='photo-gallery',galleryScroll=new Map();${drawCode};return galleryDraw();`)(env);
-  assert.deepEqual(cards.map(card=>[card.key,card.applied,card.selected]),[['own',true,false],['other',false,true]]);
-  assert.deepEqual(hits,['Own skin - applied','Other skin']);
+test('gallery cards consume only the target-scoped Applied flag; the official card counts when the game shows it', async () => {
+  const drawCode=source.slice(source.indexOf('async function galleryDraw('),source.indexOf('async function exportPhoto()'));
+  const photos=[{id:'own',name:'Own skin',url:'own.png',applied:true},{id:'other',name:'Other skin',url:'other.png',applied:false},{id:'official',name:'Official',url:'o.png'}];
+  let shown=null;
+  const env={galleryPhotos:()=>photos,photo:id=>photos.find(p=>p.id===id),safe:fn=>fn,P:key=>key,restoreGame:async()=>{},applyGame:async()=>{},deletePhoto:async()=>{},
+    saveSelection:async()=>{},exportPhoto:async()=>{},galleryOffset:()=>0,Popup:{listPopup:async options=>{shown=options;}}};
+  for(const game of ['own','official']){
+    await new Function('env',`const {${Object.keys(env)}}=env;let selected='other',modal={},repository={game:{id:'${game}'}};const OFFICIAL='official',GALLERY_HOST='popup',GALLERY_KIND='model';${drawCode};return galleryDraw();`)(env);
+    assert.equal(shown.selected,'other');
+    assert.deepEqual(shown.items.map(it=>[it.key,it.applied]),[['own',true],['other',false],['official',game==='official']]);
+  }
 });
 function setup({used=false,used_here=used,used_elsewhere=false,official=false,answer='ok',fail=false,locale='en-US'}={}){
   const requests=[],prompts=[];let changed=0;
@@ -66,7 +64,8 @@ test('a failed deletion cannot change selection or publish thumbnail success',as
 test('official and runtime gallery entries omit Delete; persisted generated photos remain managed',()=>{
   assert.match(source,/provenance:'official',managed:false/);
   assert.match(source,/provenance:'runtime',managed:false/);
-  assert.match(source,/if\(selectedPhoto.managed!==false&&selectedPhoto.provenance!=='official'\)await UI.button\(layer,'Delete'/);
+  assert.match(source,/deletable=entry\?\.managed!==false&&entry\?\.provenance!=='official'/);
+  assert.match(source,/\.\.\.\(deletable\?\[\[P\('delete'\),safe\(deletePhoto\)\]\]:\[\]\)/);
   assert.ok(!source.includes('enabled:!selectedPhoto.original'));
 });
 

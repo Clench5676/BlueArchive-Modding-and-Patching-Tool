@@ -244,20 +244,13 @@ for (const locale of LOCALES) test(`the import list's tools and the row under th
   }
 });
 
-// --- the photography gallery's buttonS pairs and the Hall modal's retained footer ---
+// --- the Hall modal's retained footer ---
 const { row } = await import("../../src/bmpt/web/js/ui-grid.js");
-for (const locale of LOCALES) test(`the gallery's button pairs share one size and fit in ${locale}`, async () => {
-  const ui = await source("student-hall-ui.js"), controller = await source("photography/controller.js");
+for (const locale of LOCALES) test(`the Hall modal's footer captions fit in ${locale}`, async () => {
+  const ui = await source("student-hall-ui.js");
   assert.match(ui, /fitGroup\(captions, 40, 26, width \/ S - 60, 2, \{ maxH: height \/ S - 20 \}\)/);
-  for (const call of ["buttonSize([P('apply'),P('delete')],pairBoxes[0][2],pairBoxes[0][3])", "buttonSize([P('restore'),P('export')],toolBoxes[0][2],toolBoxes[0][3])"]) assert.ok(controller.includes(call), call);
   document.documentElement.lang = locale;
   const S = 1920 / 2960;
-  const galleryPair=new Function("CONTROL","SPACE","row","S",`${controller.slice(controller.indexOf("function galleryPair("),controller.indexOf("// The captions of the two text buttons"))};return galleryPair;`)(CONTROL,SPACE,row,S);
-  for (const [keys, width] of [[["apply", "delete"], 140], [["restore", "export"], 180]]) {
-    const boxes=galleryPair(width,0,0),captions=keys.map((key)=>text(locale,`photo.${key}`)),room=boxes[0][2]/S-XS_BUTTON.fitInset,maxH=boxes[0][3]/S-XS_BUTTON.boxInsetH;
-    assertGroup(fitGroup(captions,CONTROL.buttonXS.fs,XS_BUTTON.fsMin,room,2,{maxH}),captions,captions.map(()=>room),maxH,`${locale} ${keys}`);
-    assert.ok(Math.abs(boxes[1][0]-boxes[0][0]-boxes[0][2]-SPACE.m*S)<1e-9);
-  }
   // the Hall modal's footer actions: up to 280 wide, 66 high
   const hall = ["hall.addPortraits", "hall.adjust", "hall.remove", "popup.cancel", "popup.save"].map((key) => text(locale, key));
   assertGroup(fitGroup(hall, 40, 26, 280 / S - 60, 2, { maxH: 66 / S - 20 }), hall, hall.map(() => 280 / S - 60), 66 / S - 20, `${locale} hall footer`);
