@@ -1539,8 +1539,9 @@ def _skirt_candidates(ts: Skeleton, ss: Skeleton, plan_: Plan, flat: Flat, sv: n
 # The cost of the hems' parts, for the build's "hems" phase (COSTUME_PHASES), in units of about 0.05 s as measured on
 # the dev view (Hina <- Aoba, Shigure <- Shiroko, Hoshino <- Hoshino (Swimsuit), Optimize Physics): the setup, a rule
 # judged by weights alone, a rule with chains (its turns solved in every check clip) and the legs thinned under the
-# cloth after them.
-HEM_UNITS = (20, 1, 60, 60)
+# cloth after them. Reweighted after candidate pruning and reuse of the chosen solver's turns during thinning
+# (cold ch0224 <- ch0145, 2026-11); setup and weight-only judging keep their previous costs.
+HEM_UNITS = (20, 1, 24, 12)
 
 
 def hems(target: Costume, source: Costume, plan_: Plan, t_clips: list[Any], s_clips: list[Any],
@@ -3214,6 +3215,7 @@ def choose_prefab(prefabs: Mapping[str, Any], dev: str) -> str:
 # 2026-11), without and with Optimize Physics, averaged over four pairs with cold, memory and disk caches: the
 # weights of the progress line's percentage (``progress_meter``). The arm pass varies by pair; "curves" holds its
 # clip copies as well as the skirt, hair and face curves.
+# Physics hem/curve weights are scaled by the cold ch0224 <- ch0145 improvement after pruning and pose sharing.
 # "stage" (the slot's copies) comes before the build and "save" (the changed bundles written, lzma) after it, both in
 # the library's ``_stage_costume``.
 COSTUME_PHASES: tuple[tuple[str, float, float], ...] = (
@@ -3226,7 +3228,7 @@ COSTUME_PHASES: tuple[tuple[str, float, float], ...] = (
     ("probes", 0.10, 0.09),
     ("plan", 0.76, 0.81),
     ("arms", 0.00, 3.16),
-    ("hems", 0.47, 5.61),
+    ("hems", 0.47, 1.50),
     ("rigid", 0.01, 0.01),
     ("springs", 0.00, 0.45),
     ("face", 0.01, 0.03),
@@ -3237,7 +3239,7 @@ COSTUME_PHASES: tuple[tuple[str, float, float], ...] = (
     ("carried", 0.01, 0.01),
     ("halo", 0.02, 0.12),
     ("prefabs", 0.03, 0.06),
-    ("curves", 2.19, 4.60),
+    ("curves", 2.19, 3.20),
     ("check", 0.02, 0.02),
     ("save", 6.60, 7.59),
 )
