@@ -77,24 +77,28 @@ export function previewLifecycle({ suspend = () => {}, resume = () => {}, recove
   };
 }
 
-// While a read of the page waits for the Mod library (a job holds it; the backend's library.waiting event), preview
-// deadlines stop: that wait is not the preview's own work. A spell longer than LIBRARY_WAIT_CAP counts again, in case
-// its end was never heard (the event stream reconnected).
+// While a read of the page waits for the Mod library (a job holds it; the backend's library.waiting event), or a
+// preview waits for a job (the model lock, a costume build of the same pair; preview.waiting), preview deadlines stop:
+// that wait is not the preview's own work. Each source is told apart, so one ending does not end the other. A spell
+// longer than LIBRARY_WAIT_CAP counts again, in case its end was never heard (the event stream reconnected).
 export const LIBRARY_WAIT_CAP = 120000;
 const waitWatchers = new Set();
-let libraryBusy = false, busyCap = null;
+const waitingFor = new Map(); // source -> its cap timer
+let libraryBusy = false;
 export const libraryWaiting = () => libraryBusy;
-export function setLibraryWaiting(busy) {
+export function setLibraryWaiting(busy, source = "library") {
   busy = !!busy;
-  clearTimeout(busyCap); busyCap = null;
-  if (busy) busyCap = setTimeout(() => setLibraryWaiting(false), LIBRARY_WAIT_CAP);
+  clearTimeout(waitingFor.get(source));
+  waitingFor.delete(source);
+  if (busy) waitingFor.set(source, setTimeout(() => setLibraryWaiting(false, source), LIBRARY_WAIT_CAP));
+  busy = waitingFor.size > 0;
   if (busy === libraryBusy) return;
   libraryBusy = busy;
   for (const update of [...waitWatchers]) update();
 }
 
 // Deadlines count foreground time, including waits for requestAnimationFrame during initial loading, and leave out
-// the time a read waits for the library (setLibraryWaiting).
+// the time a read or a preview waits for the library or a job (setLibraryWaiting).
 export function previewTimer(callback, ms, env = {}) {
   const now = env.now || (() => performance.now());
   let timer, started = null, remaining = ms, done = false;

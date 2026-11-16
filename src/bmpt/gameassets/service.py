@@ -18,7 +18,7 @@ from typing import Any, Callable
 
 from PIL import Image
 
-from .. import devmode, spans
+from .. import devmode, preview_gate, spans
 from ..errors import ServiceError
 from bmpt.engine import parse_filename, spine_kind
 from ..texture_guard import texture_image
@@ -45,14 +45,52 @@ STORY_CLIP = re.compile(r"^((?:np|ch)\d{4})_", re.IGNORECASE)  # a story cutscen
 # the name is only compared with the model's clip names, never used as a path
 CLIP_NAME = re.compile(r"[A-Za-z0-9_ ]{1,128}")
 _ATLASES = "atlases-v2/"
-# One model export at a time in the process: an export holds the path locks of every bundle it reads
-_MODEL_LOCK = threading.Lock()
+
+
+class _ModelLock:
+    """The model lock: one reader at a time of those that hold several bundles open at once (model and clip exports,
+    the selection-frame layout, lobby particles, office models), each keeping the path lock of every bundle it read
+    until it ends, so two of them could wait on each other's bundles. Held for one export (about 1 s for a model,
+    0.5 s for a clip, no step inside it); taken after the library's lock, never before it. A costume build takes it
+    no more: it reads its bundles from memory, one path lock for one load at a time (``unity.load_bundle``).
+    A foreground preview that waits for it while a job or background work holds it (the costume check's export, a
+    lobby warm-up) waits outside its own time (``preview_gate.waiting``): the page's deadline leaves the wait out."""
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._job = False  # the holder answers no foreground preview
+
+    def acquire(self, blocking: bool = True, timeout: float = -1) -> bool:
+        if not self._lock.acquire(False):
+            if not blocking:
+                return False
+            if self._job and preview_gate.in_foreground():
+                with preview_gate.waiting():
+                    if not self._lock.acquire(True, timeout):
+                        return False
+            elif not self._lock.acquire(True, timeout):
+                return False
+        self._job = not preview_gate.in_foreground()
+        return True
+
+    def release(self) -> None:
+        self._lock.release()
+
+    def locked(self) -> bool:
+        return self._lock.locked()
+
+    def __enter__(self) -> bool:
+        return self.acquire()
+
+    def __exit__(self, *exc: Any) -> None:
+        self.release()
+
+
+_MODEL_LOCK = _ModelLock()
 
 
 def model_lock(what: str) -> Any:
-    """The model lock, for every reader that holds several bundles open at once (exports, layouts, particles, costume
-    builds): each keeps the path lock of every bundle it read until it ends, so two of them at a time could wait on
-    each other's bundles. Taken after the library's lock, never before it."""
+    """The model lock (``_ModelLock``), its waits and holds logged as ``model-lock.<what>``."""
     return spans.held(f"model-lock.{what}", _MODEL_LOCK, hold=True)
 _SPRITE_FIELDS = ("x", "y", "width", "height", "borderLeft", "borderRight", "borderTop",
                   "borderBottom", "paddingLeft", "paddingRight", "paddingTop", "paddingBottom")

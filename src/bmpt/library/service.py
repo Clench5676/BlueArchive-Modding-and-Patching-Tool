@@ -5549,14 +5549,18 @@ class ModLibrary:
 
     def _stage_costume(self, other: str, targets: list[Path], directory: Path, log: LogFunc, pin: Pin, *,
                        preview: bool = False, report: dict[str, Any] | None = None,
-                       physics: bool = False, inputs: _CostumeInputs | None = None) -> dict[Path, Path]:
+                       physics: bool = False, inputs: _CostumeInputs | None = None,
+                       step: Callable[[], None] | None = None) -> dict[Path, Path]:
         """The model slot ``targets`` (official copies) carrying the costume of ``other``'s model: changed parts built
         into ``directory``, the others as staged official copies. Reads official bytes only: the slot's own parts, the
         source model's files, and any other bundle the CAB index finds. ``physics``: Optimize Physics, the
         build may also choose Rule B, or a rule built with the followed leg groups made rigid; ``report["physics"]`` says
         whether it chose one of them. Every costume, the same student's too, carries its halo or hides the slot's.
         ``inputs``: what it reads of the library, gathered before under the library lock (``_costume_inputs``); given,
-        the build reads no library state and runs without that lock (``costume_preview``), else the caller holds it."""
+        the build reads no library state and runs without that lock (``costume_preview``), else the caller holds it.
+        The build takes no model lock (``model_adapt.adapt`` reads its bundles from memory), so exports run beside it.
+        ``step``: called between its steps (``adapt``'s, then each part saved); only for a build without the library
+        lock (``costume_preview``), whose job yields there to the foreground previews."""
         from ..gameassets.model_adapt import adapt
 
         if inputs is None:
@@ -5575,14 +5579,12 @@ class ModLibrary:
         def resolver(wanted: set[str], hint: Path | None) -> dict[str, str]:
             return {cab: str(inputs.official(Path(path))) for cab, path in cabs.resolve(wanted, hint).items()}
 
-        from ..gameassets.service import model_lock
-
-        # never while waiting for the library lock: costume_preview gave that lock back before its build
-        with model_lock("costume"):
+        step = step or (lambda: None)
+        with spans.span("costume.build"):
             result = adapt(index=index, resolver=resolver, target_files=list(staged.values()),
                            target_dev=inputs.target_dev, source_files=[p for p in sources if p.name in inputs.chosen],
                            source_dev=inputs.dev, open_writable=Bundle.load, physics=physics,
-                           halo=True)
+                           halo=True, step=step)
         if report is not None and result.plan.unfit:
             report["unfit"] = {"source": "stretch", "adapted": f"{result.plan.stretch:.2f}", "own": f"{result.plan.own:.2f}"}
         if report is not None:
@@ -5594,6 +5596,7 @@ class ModLibrary:
         reverse = {value: key for key, value in staged.items()}
         replacements = dict(staged)
         for path, bundle in result.changed.items():
+            step()
             target = reverse[path]
             ok, message = bundle.save(output / path.name, self.settings.save_options(self.settings.crc_needed(target)))
             if not ok:
@@ -5729,12 +5732,21 @@ class ModLibrary:
         Not serialized as a whole: its callers are the 3D tab's preview (class 1) and the costume check (class 2),
         and a build takes seconds. Only its short steps hold the library lock: the signature, the kept preview and
         the build's inputs (``_costume_preview_start``), then storing the result (``_costume_preview_store``); the
-        staging and the build run without it, so the page's reads never queue behind a build. The model lock is taken
-        only once the library lock is given back. A build whose signature changed meanwhile (the game files or the
-        kept originals changed) is discarded and built again. ``cancelled`` (the costume check's ``jobs.cancel``):
-        once set, no build starts (``busy``) and no verdict is saved; a build that ended is still kept."""
+        staging and the build run without it, so the page's reads never queue behind a build. The build holds no
+        model lock either: exports, the shown model's and its clips, run beside it. A build whose signature changed
+        meanwhile (the game files or the kept originals changed) is discarded and built again.
+        Class 2 for the costume check: between the build's steps (most under 0.5 s, ``model_adapt.adapt``) it yields
+        to the foreground previews, at most 20 s a step (``preview_gate.step``); a preview's own build does not. A
+        preview waiting for a build of the same pair waits outside its own time (``preview_gate.waiting``).
+        ``cancelled`` (the costume check's ``jobs.cancel``): once set, the build stops at its next step (``busy``)
+        and no verdict is saved; a build that ended is still kept."""
         def stopped() -> bool:
             return cancelled is not None and cancelled()
+
+        def step() -> None:
+            preview_gate.step(cancelled)
+            if stopped():
+                raise ServiceError("busy")
 
         with _errors("costume_preview"):
             for _ in range(COSTUME_BUILD_TRIES):
@@ -5744,9 +5756,10 @@ class ModLibrary:
                 signature, targets, built_pin, inputs = start
                 building = self._costume_build_turn(signature)
                 if building is not None:  # another caller builds the same pair: its result is kept, read it then
-                    while not building.wait(0.1):
-                        if stopped():
-                            raise ServiceError("busy")
+                    with preview_gate.waiting():
+                        while not building.wait(0.1):
+                            if stopped():
+                                raise ServiceError("busy")
                     continue
                 try:
                     if stopped():
@@ -5755,7 +5768,8 @@ class ModLibrary:
                     with temporary_directory(prefix=devmode.LIBRARY_STAGING_PREFIX) as temporary:
                         try:
                             replacements = self._stage_costume(other, targets, Path(temporary) / "model", no_log,
-                                                               built_pin, preview=True, report=report, inputs=inputs)
+                                                               built_pin, preview=True, report=report, inputs=inputs,
+                                                               step=step)
                         except ServiceError as error:
                             if error.code == "source_unsupported" and not stopped():
                                 # the rule cannot carry this pair: never offered again

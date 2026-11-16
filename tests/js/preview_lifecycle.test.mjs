@@ -257,3 +257,38 @@ test("a Spine player restarted under Now Loading draws again once it ends", asyn
   assert.equal(p.stopRequestAnimationFrame, false);
   load.dispose(); freezeShown(false);
 });
+
+test("a clip fetch waiting for a job on the server does not reach its 15 s cap", async (t) => {
+  const { setLibraryWaiting } = await import("../../src/bmpt/web/js/preview-lifecycle.js");
+  const { withPreviewTimeout } = await import("../../src/bmpt/web/js/async.js");
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  let now = 0;
+  const realNow = performance.now;
+  performance.now = () => now;
+  const advance = (ms) => { now += ms; t.mock.timers.tick(ms); };
+  try {
+    let answer;
+    const fetched = new Promise((resolve) => { answer = resolve; });
+    let outcome = null;
+    withPreviewTimeout(fetched, 15000, "model clips").then((v) => { outcome = v; }, (err) => { outcome = err; });
+    advance(1000);
+    setLibraryWaiting(true, "job"); // preview.waiting: the clip waits for the model lock a job holds
+    setLibraryWaiting(true); setLibraryWaiting(false); // a library wait ending meanwhile ends nothing else
+    advance(30000);
+    await Promise.resolve();
+    assert.equal(outcome, null, "the wait for the job is not the clip's own time");
+    setLibraryWaiting(false, "job");
+    advance(13000); await Promise.resolve();
+    assert.equal(outcome, null);
+    answer("clip"); await Promise.resolve(); await Promise.resolve();
+    assert.equal(outcome, "clip");
+    // without the signal, the cap still holds for the clip's own time
+    let late = null;
+    withPreviewTimeout(new Promise(() => {}), 15000, "model clips").catch((err) => { late = err; });
+    advance(15000); await Promise.resolve(); await Promise.resolve();
+    assert.match(String(late), /timed out/);
+  } finally {
+    performance.now = realNow;
+    t.mock.timers.reset();
+  }
+});

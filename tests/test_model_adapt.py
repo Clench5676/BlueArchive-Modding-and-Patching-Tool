@@ -1528,15 +1528,17 @@ def test_official_costume_build_leaves_no_bundle_locked(view, target, source, un
     assert _locks_free() == []
 
 
-def test_the_library_builds_a_costume_under_the_model_lock(monkeypatch, tmp_path):
-    """Costume builds and exports hold many bundles at once: one at a time, under the model lock."""
+def test_the_library_builds_a_costume_without_the_model_lock(monkeypatch, tmp_path):
+    """A costume build reads its bundles from memory (one path lock per load): exports never wait for it, so it
+    builds without the model lock, and its caller's steps reach the build."""
     from bmpt.gameassets import model_adapt, service as gameassets_service
     from bmpt.library import service
 
-    held = []
+    held, steps = [], []
 
     def adapt(**kwargs):
         held.append(gameassets_service._MODEL_LOCK.locked())
+        kwargs["step"]()
         raise model_adapt.refuse("rest pose")
 
     library = object.__new__(service.ModLibrary)
@@ -1548,8 +1550,30 @@ def test_the_library_builds_a_costume_under_the_model_lock(monkeypatch, tmp_path
     monkeypatch.setattr(service.ModLibrary, "_core_map", lambda self, pin: type("M", (), {"slot": lambda s, c: c})())
     target = tmp_path / "character-hina_original-_mxload-2026-01-01_assets_all_1.bundle"
     with pytest.raises(Exception, match="source_unsupported"):
-        library._stage_costume("other", [target], tmp_path, print, None)
-    assert held == [True] and not gameassets_service._MODEL_LOCK.locked()
+        library._stage_costume("other", [target], tmp_path, print, None, step=lambda: steps.append(1))
+    assert held == [False] and steps == [1]
+
+
+def test_a_costume_build_holds_one_path_lock_for_one_load_at_a_time(monkeypatch, tmp_path):
+    """The build's graph loads each bundle under its path lock and reads it afterwards without the lock."""
+    from bmpt.gameassets import unity
+
+    loaded = []
+
+    class Loaded:
+        env = "env"
+
+    def load(path, log=None):
+        lock = unity._locks[path.resolve()]
+        loaded.append(lock._is_owned())
+        return Loaded()
+
+    monkeypatch.setattr(unity, "Bundle", type("Engine", (), {"load": staticmethod(load)}))
+    path = tmp_path / "a.bundle"
+    with unity.load_bundle(path) as env:
+        assert env == "env"
+        assert not unity._locks[path.resolve()]._is_owned()
+    assert loaded == [True]
 
 
 @official

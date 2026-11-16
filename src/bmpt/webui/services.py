@@ -264,6 +264,9 @@ class Services:
         self.reports.game = {"found": bool(game_dir and game_dir.is_dir()), "server": self.settings.server_region(),
                              "platform": "Android" if self.settings.is_adb_mode() else "Windows", "resourceVersion": None}
         self.events = events or EventBus()
+        # the page pauses its preview deadlines while a preview waits for a job (the model lock, a costume build)
+        events_bus = self.events
+        preview_gate.on_wait = lambda busy: events_bus.publish("preview.waiting", {"busy": busy})
         self.jobs = jobs or JobRunner(self.events)
         with self.timings.measure("settings.ui-state"):
             self.state = state or UiState(self.data_dir / "webui.json")
@@ -1532,7 +1535,8 @@ class Services:
         offered; a refusal of the moment (a missing original, a locked file) is returned unsaved and checked again.
         ``cancelled``: the job's flag (``jobs.cancel``), checked between the phases (before the build, after it,
         before the export and before any verdict is saved); once set, ``jobs.Cancelled`` ends the check with no
-        verdict saved, so the pair is checked again next time. The build itself is not interrupted."""
+        verdict saved, so the pair is checked again next time; the build stops at its next step
+        (``costume_preview``)."""
         def stop() -> None:
             if cancelled is not None and cancelled():
                 raise Cancelled()
@@ -1552,6 +1556,8 @@ class Services:
             if error.code == "library_operation_failed":  # a program error, the same for these files every time
                 return library.record_costume_verdict(target, other, False, error.code)
             return {"ok": False, "reason": error.code, "transient": True}
+        # its export is one step under the model lock (about 1 s); it starts once no foreground preview waits
+        preview_gate.step(cancelled)
         stop()
         try:
             self.game.model_glb(core, overrides=bundles, reads=library.preview_reads("official"))

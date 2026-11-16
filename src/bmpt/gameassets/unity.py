@@ -1,4 +1,6 @@
 """Serialized, read-only access to Unity bundles."""
+# Path locks: ``open_bundle`` holds a bundle's for as long as it is read (an export holds many at once, under the
+# model lock); ``load_bundle`` holds it for the load alone (about 0.1 s), then reads from memory.
 
 from __future__ import annotations
 
@@ -30,6 +32,22 @@ def open_bundle(path: Path) -> Iterator[Environment]:
         if bundle is None:
             raise ServiceError("asset_load_failed", path=str(path))
         yield bundle.env
+
+
+@contextmanager
+def load_bundle(path: Path) -> Iterator[Environment]:
+    """Like :func:`open_bundle`, but the path lock is held only while the bundle loads: ``Bundle.load`` reads a
+    bundle's blocks into memory and closes the file, so its objects are read afterwards without it. A reader that
+    opens several bundles this way holds at most one path lock at a time, for one load, so it never waits on a
+    reader that holds many (an export) while holding one itself, and needs no model lock (a costume build)."""
+    path = path.resolve()
+    with _guard:
+        lock = _locks.setdefault(path, threading.RLock())
+    with lock:
+        bundle = Bundle.load(path, log=logger.debug)
+    if bundle is None:
+        raise ServiceError("asset_load_failed", path=str(path))
+    yield bundle.env
 
 
 def reference(obj: ObjectReader, pointer: dict) -> tuple[str, int]:
