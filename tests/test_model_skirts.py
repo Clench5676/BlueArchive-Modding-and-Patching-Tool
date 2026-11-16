@@ -165,24 +165,19 @@ def test_shared_curve_dependencies_write_the_same_solver_and_face_curves():
     assert tree == expected
 
 
-def test_shared_spring_frames_include_carried_locks_and_hair_guard_nodes():
+def test_shared_spring_frames_pose_only_the_anchor():
     skeleton = ma.Skeleton(None)
     for k in range(8):
         skeleton.nodes.append(ma.Node(f"bone{k}", f"bone/{k}", 0 if k else None,
                                       ((0, 0, 0), (0, 0, 0, 1), (1, 1, 1)), None, None, True))
     spring = ms.Spring(_hanging_chain(), {0: math.radians(20)})
-    spring.carry = ms.Carry(0, np.eye(4), [[1, 2]], [np.array([0.0, 1.0])],
-                            [np.array([np.eye(3), np.eye(3)])], {0: 0}, {0: 0.0, 1: 1.0})
-    spring.hair = ma.HairCheck(np.array([[0, 0, 0], [0, -0.1, 0], [0, -0.2, 0]]),
-                               np.tile([1, 2], (3, 1)), np.tile([0.8, 0.2], (3, 1)), [3],
-                               np.eye(4)[None], np.array([[0, 1], [1, 2]]), float('inf'))
     skirt = ma.Skirt([0, 1], ["a", "b"], [-1, 0], [], 0, spring, 4)
     tree = _clip(3)
     bindings = tree['m_ClipBindingConstant']['genericBindings']
     bindings[0]['path'] = zlib.crc32(skeleton.nodes[1].path.encode())
     prepared = ma.curve_frames(skeleton, [skirt], tree)
-    assert all(prepared[1](0)[n] is not None for n in range(4))
-    assert all(prepared[1](0)[n] is None for n in range(4, 8))
+    assert prepared[1](0)[spring.chains.anchor] is not None
+    assert all(prepared[1](0)[n] is None for n in range(8) if n != spring.chains.anchor)
     frames, expected = ma.skirt_sequence(skeleton, spring, tree)
     actual_frames, actual = ma.skirt_sequence(skeleton, spring, tree, prepared=prepared)
     assert frames == actual_frames
