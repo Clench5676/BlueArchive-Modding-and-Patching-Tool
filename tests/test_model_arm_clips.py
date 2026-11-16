@@ -293,3 +293,30 @@ def test_official_ungated_pair_build_is_byte_identical_to_the_previous_path(view
     after = {p.name: hashlib.sha256(b.env.file.save(packer='none')).hexdigest() for p, b in disabled.changed.items()}
     assert before == after
     record_property('ungated_build_added_seconds', enabled_seconds - disabled_seconds)
+
+
+def _stored_curves_reference(tree):
+    data = tree["m_MuscleClip"]["m_Clip"]["data"]
+    out = {}
+    for t, keys in read_streamed(data['m_StreamedClip']['data']):
+        for index, *coefficients in keys:
+            out.setdefault(index, []).append((t, *coefficients))
+    return {k: np.array(v) for k, v in out.items()}
+
+
+def test_array_read_stored_curves_equal_the_key_by_key_reader():
+    tree = _clip()
+    data = tree["m_MuscleClip"]["m_Clip"]["data"]
+    frames = read_streamed(data["m_StreamedClip"]["data"])
+    frames.insert(2, (0., [(3, 0., float("nan"), -0., -5.), (0, 1e-30, 0., 0., 2.)]))  # repeated keys, NaN, -0
+    frames.insert(4, (.5, [(6, 3.5, 0., 0., 1.)]))
+    data["m_StreamedClip"]["data"] = ac.encode_streamed(frames)
+    got = ac.stored_curves(tree)
+    want = _stored_curves_reference(tree)
+    for index, rows in want.items():
+        assert got[index].dtype == rows.dtype and got[index].shape == rows.shape
+        assert got[index].tobytes() == rows.tobytes()
+    ns = data["m_StreamedClip"]["curveCount"]
+    assert set(got) == set(want) | set(range(ns, ns + 6 + 5))
+    data["m_StreamedClip"]["data"] = []
+    assert set(ac.stored_curves(tree)) == set(range(ns, ns + 6 + 5))

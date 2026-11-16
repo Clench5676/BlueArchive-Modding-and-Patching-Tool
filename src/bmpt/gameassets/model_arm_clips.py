@@ -374,6 +374,30 @@ def sample_curves(tree, wanted, *, hold_before=False):
     return times, curves
 
 
+_KEY = np.dtype([("index", "<i4"), ("coefs", "<f4", (4,))])
+
+
+def _streamed_records(words):
+    """Per streamed curve its keys in stream order as rows (time, c0, c1, c2, c3), helper frames included: the
+    values ``read_streamed`` gives, read as arrays."""
+    raw = np.asarray(words, dtype="<u4").tobytes()
+    blocks, times, pos = [], [], 0
+    while pos + 8 <= len(raw):
+        t, count = struct.unpack_from("<fi", raw, pos)
+        pos += 8
+        blocks.append(np.frombuffer(raw, _KEY, count, pos))
+        times.append(np.full(count, t))
+        pos += count * 20
+    if not blocks:
+        return {}
+    keys = np.concatenate(blocks)
+    order = np.argsort(keys["index"], kind="stable")
+    index = keys["index"][order]
+    rows = np.column_stack((np.concatenate(times), keys["coefs"].astype(float)))[order]
+    cuts = np.flatnonzero(np.diff(index)) + 1
+    return {int(group[0]): values for group, values in zip(np.split(index, cuts), np.split(rows, cuts))}
+
+
 def stored_curves(tree):
     """Lossless signatures for every unedited curve, independent of its index.
 
@@ -383,11 +407,7 @@ def stored_curves(tree):
     times all frames. Added dense curves cannot mask a changed original key.
     """
     data, ns, nd = _layout(tree)
-    out = {}
-    for t, keys in read_streamed(data['m_StreamedClip']['data']):
-        for index, *coefficients in keys:
-            out.setdefault(index, []).append((t, *coefficients))
-    out = {k: np.array(v) for k, v in out.items()}
+    out = _streamed_records(data['m_StreamedClip']['data'])
     dense = data['m_DenseClip']
     if nd:
         samples = np.array(dense['m_SampleArray']).reshape(dense['m_FrameCount'], nd)
