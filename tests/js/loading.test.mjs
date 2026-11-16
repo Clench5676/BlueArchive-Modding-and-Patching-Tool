@@ -252,6 +252,29 @@ for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR"]) test(`action
   work.resolve(); await flush(); await h.advance(300); await pending;
 });
 
+for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) test(`a task's percentage follows its count, grows and starts again per item in ${locale}`, async () => {
+  const h = await harness({ locale, consent: false }), work = deferred();
+  let update;
+  const pending = h.loading.task((report) => { update = report; return work.promise; });
+  const detail = h.stage.children[0].querySelector(".loading-progress");
+  const count = (current, total) => h.loading.progressText({ current, total });
+  const percent = (n) => h.T("progress.percent", { percent: n });
+  update({ current: 0, total: 2 });
+  assert.equal(detail.textContent, count(0, 2), "no fraction, no percentage");
+  update({ current: 0, total: 2, fraction: 0.375 });
+  assert.equal(detail.textContent, `${count(0, 2)} ${percent(37)}`);
+  update({ current: 0, total: 2, fraction: 0.2 });
+  assert.equal(detail.textContent, `${count(0, 2)} ${percent(37)}`, "it never goes back within an item");
+  update({ current: 0, total: 2, fraction: 1 });
+  assert.equal(detail.textContent, `${count(0, 2)} ${percent(99)}`, "never 100 % while the item runs");
+  update({ current: 1, total: 2 });
+  assert.equal(detail.textContent, count(1, 2), "the next item starts without one");
+  update({ current: 1, total: 2, fraction: 0.05 });
+  assert.equal(detail.textContent, `${count(1, 2)} ${percent(5)}`);
+  assert.equal(h.loading.progressText({ label: "x", fraction: 0.5 }), `x ${percent(50)}`);
+  work.resolve(); await flush(); await h.advance(300); await pending;
+});
+
 test("locale arrival relabels task progress and its accessible label", async () => {
   const h = await harness({ translated: false, consent: false }), work = deferred();
   const pending = h.loading.task(() => work.promise);

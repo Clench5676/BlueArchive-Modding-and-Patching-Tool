@@ -461,6 +461,7 @@
 			"subject": "{name} ({parts})",
 			"job": "{action} {name} {current} / {total}",
 			"step": " - {step}",
+			"percent": "{percent}%",
 			"actionProcess": "Processing",
 			"actionApply": "Applying",
 			"actionRestore": "Restoring",

@@ -947,12 +947,13 @@ def _own_depths(target, rig, own, clip, poses, frames, key=None, indices=None):
     return value
 
 
-def retarget(target, source, plan, clips, parts, *, step=None):
+def retarget(target, source, plan, clips, parts, *, step=None, progress=None):
     """Changed clips only; an empty result leaves the existing build byte-identical.
 
     Runs in the caller's class 1 preview / class 2 check, outside the library
     lock. Gate five forearm/hand samples every third frame; solve gated clips every third frame;
-    held arms are excluded from the spatial solve.
+    held arms are excluded from the spatial solve. ``progress(done, count)`` is told each clip it comes to, for
+    the progress line's percentage.
     """
     from .model_arm_clips import encode_rotations, edit_error
 
@@ -970,8 +971,10 @@ def retarget(target, source, plan, clips, parts, *, step=None):
         joints = drawn.joints[rows][drawn.weights[rows] > 0]
         gate_nodes.update(drawn.pose_bones[np.unique(joints)].tolist())
     changed = {}
-    for clip in clips:
+    for i, clip in enumerate(clips):
         tick()
+        if progress is not None:
+            progress(i, len(clips))
         tree = rig.sk.graph.tree(clip)
         if not any(b["typeID"] == 4 and b["path"] in hashes for b in tree["m_ClipBindingConstant"]["genericBindings"]):
             continue

@@ -66,6 +66,7 @@ from typing import TYPE_CHECKING, Any, Callable, Iterable, Mapping, Sequence
 import numpy as np
 
 from ..errors import ServiceError
+from ..progress_meter import QUIET, Meter
 from . import model_geometry as mg
 from . import model_hems as hm
 from . import model_locks as ml
@@ -1493,8 +1494,15 @@ def _skirt_candidates(ts: Skeleton, ss: Skeleton, plan_: Plan, flat: Flat, sv: n
     return out
 
 
+# The cost of the hems' parts, for the build's "hems" phase (COSTUME_PHASES), in units of about 0.05 s as measured on
+# the dev view (Hina <- Aoba, Shigure <- Shiroko, Hoshino <- Hoshino (Swimsuit), Optimize Physics): the setup, a rule
+# judged by weights alone, a rule with chains (its turns solved in every check clip) and the legs thinned under the
+# cloth after them.
+HEM_UNITS = (20, 1, 60, 60)
+
+
 def hems(target: Costume, source: Costume, plan_: Plan, t_clips: list[Any], s_clips: list[Any],
-         writable: list[bool], physics: bool = False, shapes_writable: bool = False) -> Hems:
+         writable: list[bool], physics: bool = False, shapes_writable: bool = False, meter: Meter = QUIET) -> Hems:
     """Rule A: new skin weights for the cloth the group choice left rigid around the legs, and, with
     ``physics`` (Optimize Physics), Rule B: the skirt chains as new bones turned by the legs in every
     frame; picked by measurement under the slot's own clips (see ``model_hems`` and ``model_skirts``). ``writable``:
@@ -1503,7 +1511,8 @@ def hems(target: Costume, source: Costume, plan_: Plan, t_clips: list[Any], s_cl
     With ``physics`` the leg-anchor groups the group choice set to ``follow`` are judged again by pass-through: both
     rules are also built as if those groups were rigid (named with the ``REGROUP`` prefix), and ``model_hems.choose``
     compares them with the follow result, the first score, which they must beat within the same stretch ceiling. A build
-    without ``physics`` never looks at them."""
+    without ``physics`` never looks at them. ``meter`` is told how far the judging is, the rules weighed by their cost
+    (``HEM_UNITS``; the build's "hems" phase)."""
     ts, ss = target.skeleton, source.skeleton
     t_legs, s_legs = legs_of(ts), legs_of(ss)
     if t_legs is None or s_legs is None:
@@ -1678,14 +1687,28 @@ def hems(target: Costume, source: Costume, plan_: Plan, t_clips: list[Any], s_cl
                 worst = max(worst, hm.stretch_p99(points, posed, edges))
         return hm.Score(rule, deep, worst)
 
-    for rule, weights, solver in rules:
+    # how far the phase is: the rules by their cost (HEM_UNITS), after the setup and before the thinned legs
+    setup, plain, chained, thin = HEM_UNITS
+    costs = [chained if solver is not None else plain for _, _, solver in rules]
+    total, done = setup + sum(costs) + (thin if physics and shapes_writable else 0), setup
+    for (rule, weights, solver), cost in zip(rules, costs):
+        meter.phase("hems", done, total)
         joints4, weights4 = hm.keep_four(weights)
         scores.append(judged(rule, joints4, weights4, solver, sv))
         four[rule] = (joints4, weights4)
+        done += cost
+    meter.phase("hems", done, total)
     best = hm.choose(scores, limit)
     result = Hems(best.rule, "", limit, scores)
     if physics and shapes_writable:
-        _thin_legs(result, best, judged, four[best.rule],
+        tried = []
+
+        def judged_thin(*args: Any) -> hm.Score:  # one judgement per factor tried (THIN_FACTORS)
+            meter.phase("hems", done + thin * len(tried) / len(THIN_FACTORS), total)
+            tried.append(1)
+            return judged(*args)
+
+        _thin_legs(result, best, judged_thin, four[best.rule],
                    next(solver for rule, _, solver in rules if rule == best.rule), sv, all_legs, triangles, at, up)
     if best.rule == "rigid":
         return result
@@ -3100,10 +3123,48 @@ def choose_prefab(prefabs: Mapping[str, Any], dev: str) -> str:
     raise refuse("no prefab", dev=dev)
 
 
+# A costume build's phases in the order it passes them, each with its seconds as measured on the dev view (Steam,
+# 2026-11), without and with Optimize Physics, averaged over Hina <- Aoba, Shigure <- Shiroko and Hoshino <- Hoshino
+# (Swimsuit): the weights of the progress line's percentage (``progress_meter``). "arms" (Optimize Physics only) is
+# 8.9 s where it corrects clips (Hina <- Aoba) and under 1 s where it does not; "curves" holds the arms' clip copies.
+# "stage" (the slot's copies) comes before the build and "save" (the changed bundles written, lzma) after it, both in
+# the library's ``_stage_costume``.
+COSTUME_PHASES: tuple[tuple[str, float, float], ...] = (
+    ("stage", 0.10, 0.10),
+    ("read", 0.05, 0.05),
+    ("skeleton", 0.01, 0.01),
+    ("clips", 0.02, 0.02),
+    ("idle", 0.07, 0.07),
+    ("worn", 1.15, 1.15),
+    ("probes", 0.22, 0.22),
+    ("plan", 0.90, 0.95),
+    ("arms", 0.00, 3.50),
+    ("hems", 0.75, 6.60),
+    ("rigid", 0.02, 0.02),
+    ("springs", 0.00, 0.60),
+    ("face", 0.01, 0.01),
+    ("chains", 0.01, 0.01),
+    ("open", 0.10, 0.10),
+    ("materials", 0.01, 0.01),
+    ("meshes", 0.05, 0.05),
+    ("carried", 0.02, 0.02),
+    ("halo", 0.03, 0.03),
+    ("prefabs", 0.03, 0.03),
+    ("curves", 4.10, 4.90),
+    ("check", 0.02, 0.02),
+    ("save", 2.30, 2.55),
+)
+
+
+def costume_weights(physics: bool) -> list[tuple[str, float]]:
+    """The phases of a costume build with their weights (``COSTUME_PHASES``), for a ``progress_meter.Meter``."""
+    return [(name, with_physics if physics else plain) for name, plain, with_physics in COSTUME_PHASES]
+
+
 def adapt(*, index: Mapping[str, Path], resolver: Callable | None, target_files: list[Path], target_dev: str,
           source_files: list[Path], source_dev: str, open_writable: Callable[[Path], Any],
           physics: bool = False, halo: bool = False, step: Callable[[], None] | None = None,
-          worn: WornStore | None = None) -> Result:
+          worn: WornStore | None = None, meter: Meter | None = None) -> Result:
     """The changed bundles of ``target_files`` (the slot, official copies) carrying the costume of ``source_dev``'s
     model, whose prefab sits in ``source_files``. ``index`` maps CABs to files to read (the slot's own CABs to
     ``target_files``); ``resolver`` finds any other CAB. ``open_writable`` opens a slot file as an engine Bundle.
@@ -3115,18 +3176,21 @@ def adapt(*, index: Mapping[str, Path], resolver: Callable | None, target_files:
     The graph reads every bundle from memory (``unity.load_bundle``: a path lock for each load alone), so a build
     needs no model lock and exports run beside it. ``step`` is called between the build's steps (most under 0.5 s;
     the plan, the hems and a cold first read of the idle poses up to a few seconds, measured on Hina wearing Aoba):
-    the caller's job yields there (``preview_gate.step``) or stops by raising."""
+    the caller's job yields there (``preview_gate.step``) or stops by raising. ``meter`` is told the build's phases
+    (``COSTUME_PHASES``), for the progress line's percentage."""
     with BundleGraph(index, resolver=resolver, opener=load_bundle) as graph:
         return _adapt(graph, index, target_files, target_dev, source_files, source_dev, open_writable, physics,
-                      halo, step or (lambda: None), worn)
+                      halo, step or (lambda: None), worn, meter or QUIET)
 
 
 def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Path], target_dev: str,
            source_files: list[Path], source_dev: str, open_writable: Callable[[Path], Any],
            physics: bool = False, halo: bool = False, step: Callable[[], None] = lambda: None,
-           worn: WornStore | None = None) -> Result:
+           worn: WornStore | None = None, meter: Meter = QUIET) -> Result:
     from . import model_props as mp
 
+    phase = meter.phase
+    phase("read")
     target_prefabs = _model_prefabs(graph, [f for f in target_files if f.name.startswith("character-")])
     source_prefabs = _model_prefabs(graph, source_files)
     t_name = choose_prefab(target_prefabs, target_dev)
@@ -3136,18 +3200,22 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
     except AssetNotFound:
         raise refuse("no prefab", dev=source_dev) from None
     step()
+    phase("skeleton")
     t_skeleton = Skeleton.of(graph, target_prefabs[t_name].deref())
     s_skeleton = Skeleton.of(graph, s_root)
     if not s_skeleton.renderers:
         # an unskinned model (Kei's Decagrammaton body, a static mesh): nothing to bind to the slot's bones
         raise refuse("static model", dev=source_dev)
     step()
+    phase("clips")
     own = own_prefabs(target_prefabs, target_dev)
     t_clips = prefab_clips(graph, t_skeleton, own)
     s_clips = prefab_clips(graph, s_skeleton, own_prefabs(source_prefabs, source_dev))
     step()
+    phase("idle")
     t_idle = next(iter(t_skeleton.poses(pick(t_clips, IDLE_CLIPS)[:1], frames=1)), None)
     step()
+    phase("idle", 1, 2)
     s_idle = next(iter(s_skeleton.poses(pick(s_clips, IDLE_CLIPS)[:1], frames=1)), None)
     step()
     t_parts, s_parts = roles(t_skeleton, t_idle), roles(s_skeleton, s_idle)
@@ -3160,10 +3228,13 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
 
     t_costume, s_costume = costume(t_parts), costume(s_parts)
     # worn items go with the costume: the slot's draw nothing, the source's are carried
+    phase("worn")
     t_worn = mp.worn_of(t_skeleton, t_parts, t_clips, t_idle, target_dev, worn, step)
     step()
+    phase("worn", 1, 2)
     s_worn = mp.worn_of(s_skeleton, s_parts, s_clips, s_idle, source_dev, worn, step)
     step()
+    phase("probes")
     target = Costume(t_skeleton, t_costume, [skin_of(p.mesh) for p in t_costume])
     source = Costume(s_skeleton, s_costume, [skin_of(p.mesh) for p in s_costume])
     step()
@@ -3171,11 +3242,13 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
     mesh_trees = [_mesh_tree(p.mesh) for p in s_costume]
     layouts = [mg.geometry_of(tree) for tree in mesh_trees]
     step()
+    phase("plan")
     result = plan(target, source, probes, fit=all(layout is not None for layout in layouts),
                   own_probes=probe_poses(s_skeleton, s_clips), clips=t_clips)
     from . import model_arms, model_arm_clips
     # Optimize Physics only: the arms pushed out of a bulkier costume cost seconds on an affected pair
-    arm_clips = model_arms.retarget(target, source, result, t_clips, t_parts, step=step) if physics else {}
+    arm_clips = model_arms.retarget(target, source, result, t_clips, t_parts, step=step,
+                                    progress=lambda done, count: phase("arms", done, count)) if physics else {}
     t_rest, s_rest = t_skeleton.world(), s_skeleton.world()
     # each part's vertices in its renderer's space at the source's rest, as they are bound (the costume's shape)
     shapes = [result.fit.part(k, s_rest[part.node]) for k, part in enumerate(s_costume)]
@@ -3183,9 +3256,10 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
         if layouts[k] is None and float(np.abs(points - skin.vertices).max(initial=0.0)) > 1e-4:
             raise refuse("costume geometry not writable", part=s_costume[k].mesh.peek_name())
     step()
+    phase("hems")
     stores = [hm.store_of(tree) for tree in mesh_trees]
     hem = hems(target, source, result, t_clips, s_clips, [store is not None for store in stores], physics,
-               shapes_writable=all(layout is not None for layout in layouts))
+               shapes_writable=all(layout is not None for layout in layouts), meter=meter)
     if hem.thin is not None:  # Optimize Physics thinned the legs under the cloth: the bound shape changes there
         rows, moved = hem.thin
         vertices = result.fit.vertices.copy()
@@ -3193,16 +3267,20 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
         result.fit = dataclasses.replace(result.fit, vertices=vertices)
         shapes = [result.fit.part(k, s_rest[part.node]) for k, part in enumerate(s_costume)]
     step()
+    phase("rigid")
     rigidify(target, source, result, probes, hem, [store is not None for store in stores])
     # Rule B's skirt, then (Optimize Physics) the swinging chains: new bones of the slot's skeleton, with curves in
     # the slot's clips that move their anchor
+    phase("springs")
     chained = ([hem.skirt] if hem.skirt is not None else []) + (
         springs(target, source, result, s_clips, result.fit, step) if physics and result.fit is not None else [])
     step()
+    phase("face")
     face = face_retarget(target, source, result, result.fit) if result.fit is not None else None
     if face is not None:  # another character's face: its eye, brow and mouth bones follow the slot's expressions
         chained.append(face)
     step()
+    phase("chains")
     skirt_clips: list[Any] = []
     clip_skirts: dict[tuple[str, int], list[Skirt]] = {}
     for skirt in chained:
@@ -3224,6 +3302,7 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
         t_rest = t_skeleton.world()
 
     step()
+    phase("open")
     # the slot files the new objects go to: the primary's mesh, materials and textures, and the prefab files
     primary = t_costume[0]
     mesh_cab = primary.mesh.assets_file.name.lower()
@@ -3371,12 +3450,13 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
             materials[_key(material)] = writer.add(material_sf, "Material", tree)
         return materials[_key(material)]
 
-    for part in s_costume:
-        for material in part.materials:
-            if material is None or _key(material) in materials:
-                continue
-            step()
-            carry_material(material)
+    own_materials = [m for part in s_costume for m in part.materials if m is not None]
+    for i, material in enumerate(own_materials):
+        if _key(material) in materials:
+            continue
+        step()
+        phase("materials", i, len(own_materials))
+        carry_material(material)
 
     # meshes: the source parts' meshes with bindposes on the target skeleton
     new_meshes = []
@@ -3384,6 +3464,7 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
     rendered: list[Rendered] = []
     for k, (part, skin) in enumerate(zip(s_costume, source.skins)):
         step()
+        phase("meshes", k, len(s_costume))
         tree = mesh_trees[k]
         nodes = [result.mapping.get(b, 0) if b is not None else 0 for b in part.bones]
         points, linear = shapes[k]
@@ -3434,6 +3515,7 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
             [0 if m is None else 1 for m in part.materials], bool((tree.get("m_StreamData") or {}).get("size"))))
         new_meshes.append((writer.add(mesh_sf, "Mesh", tree), nodes))
     step()
+    phase("carried")
     # the source's worn items: further parts, bound rigidly to the slot's bones they follow
     carried_parts = mp.carried(t_skeleton, s_skeleton, s_worn, s_clips, s_idle, _mesh_tree)
     step()
@@ -3461,6 +3543,7 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
     # without them
     worn_meshes = mp.host_meshes(t_worn, lambda tree: writer.add(mesh_sf, "Mesh", tree), _mesh_tree)
     step()
+    phase("halo")
     # the source's halo: its mesh added as it is (a skinned one is drawn unskinned), or the slot's hidden
     halo_change = _halo_change(t_skeleton, s_skeleton, lambda mesh: writer.add(mesh_sf, "Mesh", _mesh_tree(mesh)),
                                carry_material, (s_name, t_name),
@@ -3482,8 +3565,9 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
     if mouth is None:
         logger.info("Costume of %s on %s: the source has no mouth receiver on its costume, the slot's stays as it is",
                     s_name, t_name)
-    for prefab_path in prefab_files:
+    for i, prefab_path in enumerate(prefab_files):
         step()
+        phase("prefabs", i, len(prefab_files))
         bundle = opened[prefab_path]
         for name, sf in bundle.env.file.files.items():
             if hasattr(sf, "objects") and name.lower() in files:
@@ -3493,9 +3577,14 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
                               [s_skeleton.nodes[p.node].name for p in drawn_parts], root_node, t_skeleton, bounds,
                               halo_change, rendered, mouth, worn_meshes)
     step()
+    # the "curves" phase: the arms' clip copies first (each clip they change counts as one), then the clips edited
+    # in place
+    curves = len(arm_clips) + len(skirt_clips)
+    phase("curves", 0, curves)
     model_arm_clips.write_copies(writer, arm_clips, arm_destinations, arm_holders, t_skeleton, clip_skirts)
-    for clip in skirt_clips:
+    for i, clip in enumerate(skirt_clips):
         step()
+        phase("curves", len(arm_clips) + i, curves)
         if _key(clip) in arm_clips:
             continue
         obj = writer.file(clip.assets_file.name.lower()).objects[clip.path_id]
@@ -3515,6 +3604,7 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
         else:
             logger.info("Costume of %s on %s: clip %s left without skirt curves (layout)", s_name, t_name,
                         clip.peek_name())
+    phase("check")
     _sanity(written, rendered)
     cautions = []
     alternates = sorted(p.mesh.peek_name() for p in t_parts if p.role == "alternate" and p.mesh is not None)

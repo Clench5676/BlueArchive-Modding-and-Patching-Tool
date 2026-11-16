@@ -1045,7 +1045,8 @@ def test_every_costume_is_applied_past_the_stretch_limit(model_env, monkeypatch)
     built = []
     gain = {'physics': True}  # whether the physics build chose a rule (a skirt, or a regrouped rule)
 
-    def stage(self, other, targets, directory, log, pin, *, preview=False, report=None, physics=False, inputs=None, step=None):
+    def stage(self, other, targets, directory, log, pin, *, preview=False, report=None, physics=False, inputs=None, step=None,
+              fraction=None):
         built.append((other, preview, physics))
         if report is not None and physics:
             report['physics'] = gain['physics']
@@ -1107,8 +1108,11 @@ def test_costume_builds_of_an_older_rule_are_built_again_at_the_start(model_env,
     library = ModLibrary(env.root, Catalog(game, None), object(), env.settings, scan_allowed=lambda: True)
     built, gain = [], {'physics': True}
 
-    def stage(self, other, targets, directory, log, pin, *, preview=False, report=None, physics=False, inputs=None, step=None):
+    def stage(self, other, targets, directory, log, pin, *, preview=False, report=None, physics=False, inputs=None, step=None,
+              fraction=None):
         built.append((other, physics))
+        if fraction is not None:
+            fraction(0.5)
         if report is not None and physics:
             report['physics'] = gain['physics']
         payload = f'costume {other} {physics} rule {costume_rule.COSTUME_RULE}'.encode()
@@ -1131,8 +1135,13 @@ def test_costume_builds_of_an_older_rule_are_built_again_at_the_start(model_env,
     assert library.update_impact(force=True)['mods'] == []
     before = library.mods()[0]
     built.clear()
-    assert library.refresh_costumes() == {'done': [copy, swap], 'kept': [], 'left': []}
+    reported = []
+    assert library.refresh_costumes(progress=lambda *args: reported.append(args)) == {
+        'done': [copy, swap], 'kept': [], 'left': []}
     assert sorted(built) == [('hoshino_swimsuit', False), ('hoshino_swimsuit', True)]
+    # each build's share done is the progress of its own item, beside the items' count
+    assert [args[0] for args in reported if isinstance(args[0], dict)] == [
+        {'current': 0, 'total': 2, 'fraction': 0.5}, {'current': 1, 'total': 2, 'fraction': 0.5}]
     after = library.mods()[0]
     assert (after.id, after.label) == (before.id, before.label)
     assert library._records[made]['costume_rule'] == costume_rule.COSTUME_RULE

@@ -30,6 +30,7 @@ from UnityPy.helpers.ResourceReader import get_resource_data
 
 from bmpt import atlas_remap, devmode, game_paths, graft as grafting, mod_origin, preview_gate, rebake, spans, \
     spine_converter, steam_records
+from bmpt.progress_meter import Meter
 from bmpt.engine import (
     SEARCH_DIR_SUFFIXES, AssetType, Bundle, LogFunc, ProgressCallback, core, get_search_dirs, get_skel_version,
     is_safe_file_name, no_log, parse_filename, t,
@@ -327,6 +328,15 @@ def _revision(files: Iterable[tuple[Path, Path]]) -> str:
     """A model's game revision: the names of its game files (an official name holds its CRC) and the sizes of the
     copies read for them."""
     return hashlib.sha1(repr(sorted((game.name, read.stat().st_size) for game, read in files)).encode()).hexdigest()
+
+
+def _item_fraction(progress: Callable[..., None] | None, current: int = 1,
+                   total: int = 1) -> Callable[[float], None] | None:
+    """How far a costume build is (``_stage_costume``'s ``fraction``), reported as the job's progress of its item
+    ``current`` of ``total``: {"current", "total", "fraction"}. None without a job's progress."""
+    if progress is None:
+        return None
+    return lambda fraction: progress({"current": current, "total": total, "fraction": round(fraction, 3)})
 
 
 class _WornVerdicts:
@@ -3761,6 +3771,8 @@ class ModLibrary:
         for i, item in enumerate(items):
             if progress:
                 progress(i, len(items), "")
+            # each build tells how far it is, as the progress of this item
+            fraction = _item_fraction(progress, i, len(items))
             named = {key: item[key] for key in ("id", "core", "source")}
             if item["installed"]:
                 # a build the game files hold is built only when it can be written now: checked before the rebuild
@@ -3776,7 +3788,7 @@ class ModLibrary:
                     continue
             if item["id"]:
                 try:
-                    self.update(item["id"], log, pin=pin)
+                    self.update(item["id"], log, pin=pin, fraction=fraction)
                 except (ServiceError, OSError) as error:
                     if isinstance(error, ServiceError) and error.code in LATER:
                         result["left"].append(named)
@@ -3787,7 +3799,7 @@ class ModLibrary:
                     continue
             if item["installed"]:
                 try:
-                    self.apply(item["target"], item["source"], log, kind="model", pin=pin)
+                    self.apply(item["target"], item["source"], log, kind="model", pin=pin, fraction=fraction)
                 except (ServiceError, OSError) as error:
                     log_failure(logger, logging.INFO, "Left a costume build for the next start", error)
                     result["left"].append(named)
@@ -5612,7 +5624,8 @@ class ModLibrary:
     def _stage_costume(self, other: str, targets: list[Path], directory: Path, log: LogFunc, pin: Pin, *,
                        preview: bool = False, report: dict[str, Any] | None = None,
                        physics: bool = False, inputs: _CostumeInputs | None = None,
-                       step: Callable[[], None] | None = None) -> dict[Path, Path]:
+                       step: Callable[[], None] | None = None,
+                       fraction: Callable[[float], None] | None = None) -> dict[Path, Path]:
         """The model slot ``targets`` (official copies) carrying the costume of ``other``'s model: changed parts built
         into ``directory``, the others as staged official copies. Reads official bytes only: the slot's own parts, the
         source model's files, and any other bundle the CAB index finds. ``physics``: Optimize Physics, the
@@ -5622,9 +5635,13 @@ class ModLibrary:
         the build reads no library state and runs without that lock (``costume_preview``), else the caller holds it.
         The build takes no model lock (``model_adapt.adapt`` reads its bundles from memory), so exports run beside it.
         ``step``: called between its steps (``adapt``'s, then each part saved); only for a build without the library
-        lock (``costume_preview``), whose job yields there to the foreground previews."""
-        from ..gameassets.model_adapt import adapt
+        lock (``costume_preview``), whose job yields there to the foreground previews.
+        ``fraction``: told how far the build is (0..1, its phases weighted by ``model_adapt.COSTUME_PHASES``), at most
+        every 0.2 s (``progress_meter``); the job's progress for its item (``_item_fraction``)."""
+        from ..gameassets.model_adapt import adapt, costume_weights
 
+        meter = Meter(fraction, costume_weights(physics))
+        meter.phase("stage")
         if inputs is None:
             inputs = self._costume_inputs(other, targets, pin, preview=preview)
         staged = self._stage_copies(inputs.originals, directory / "targets")
@@ -5647,7 +5664,7 @@ class ModLibrary:
                            target_dev=inputs.target_dev, source_files=[p for p in sources if p.name in inputs.chosen],
                            source_dev=inputs.dev, open_writable=Bundle.load, physics=physics,
                            halo=True, step=step,
-                           worn=_WornVerdicts(self.root / "worn-items.json", inputs.revisions))
+                           worn=_WornVerdicts(self.root / "worn-items.json", inputs.revisions), meter=meter)
         if report is not None and result.plan.unfit:
             report["unfit"] = {"source": "stretch", "adapted": f"{result.plan.stretch:.2f}", "own": f"{result.plan.own:.2f}"}
         if report is not None:
@@ -5660,8 +5677,9 @@ class ModLibrary:
         output.mkdir(parents=True, exist_ok=True)
         reverse = {value: key for key, value in staged.items()}
         replacements = dict(staged)
-        for path, bundle in result.changed.items():
+        for i, (path, bundle) in enumerate(result.changed.items()):
             step()
+            meter.phase("save", i, len(result.changed))
             target = reverse[path]
             ok, message = bundle.save(output / path.name, self.settings.save_options(self.settings.crc_needed(target)))
             if not ok:
@@ -5751,13 +5769,14 @@ class ModLibrary:
         return [c for c in cautions if isinstance(c, str)] if isinstance(cautions, list) else []
 
     @_serialized
-    def optimize_costume(self, variant_key: str, source: str, name: str, pin: Pin | None = None) -> dict[str, Any]:
+    def optimize_costume(self, variant_key: str, source: str, name: str, pin: Pin | None = None,
+                         progress: ProgressCallback | None = None) -> dict[str, Any]:
         """Optimize Physics: a variant's model slot carrying ``source``'s costume ("variant:<key>") built with
         the physics rules (Rule B, the skirt chains as new bones), kept as a model mod of the variant named after
         ``name`` (the costume as the screen shows it): {"mod": id}, the copy made before when there is one. {"unneeded":
         True, "reason": ...} when there is nothing to build: "official" for the official model, whose own clips move its
         skirt, and "no_gain" for a costume that no physics rule improves within the stretch limit. The copy records the
-        costume rule it was built under."""
+        costume rule it was built under. ``progress``: the job's, told how far the build is (``_stage_costume``)."""
         from ..gameassets.costume_rule import COSTUME_RULE
 
         pin = self._current(pin)
@@ -5779,7 +5798,7 @@ class ModLibrary:
         report: dict[str, Any] = {}
         with temporary_directory(prefix=devmode.LIBRARY_STAGING_PREFIX) as temporary:
             replacements = self._stage_costume(other, targets, Path(temporary) / "model", no_log, pin, report=report,
-                                               physics=True)
+                                               physics=True, fraction=_item_fraction(progress))
             if not report.get("physics"):
                 return {"unneeded": True, "reason": "no_gain"}
             built = {path.name: path for path in replacements.values() if path.parent.name == "output"}
@@ -6011,10 +6030,12 @@ class ModLibrary:
 
     @_serialized
     def apply(self, variant_key: str, source: str, log: LogFunc = no_log, progress: ProgressCallback | None = None,
-              kind: Kind | None = "spr", pin: Pin | None = None, *, create_backup: bool = False) -> ApplyResult:
+              kind: Kind | None = "spr", pin: Pin | None = None, *, create_backup: bool = False,
+              fraction: Callable[[float], None] | None = None) -> ApplyResult:
         """Install and configure one kind from a mod, variant, or originals (``_apply_choice``). A memorial lobby camera
         (``lobby_camera``) is a lobby choice: its source's art and its own prefab; any other lobby choice puts the
-        variant's prefab back to its base."""
+        variant's prefab back to its base. ``fraction``: told how far a costume build is, instead of ``progress``
+        (``_stage_costume``)."""
         from . import lobby_camera
 
         camera = lobby_camera.camera_of(self, source) if kind == "lobby" else None
@@ -6022,14 +6043,15 @@ class ModLibrary:
             self._untested_apply(variant_key, source, kind, self._current(pin), camera)
         if camera is not None:
             return lobby_camera.apply(self, variant_key, camera, log, progress, self._current(pin), create_backup)
-        result = self._apply_choice(variant_key, source, log, progress, kind, pin, create_backup=create_backup)
+        result = self._apply_choice(variant_key, source, log, progress, kind, pin, create_backup=create_backup,
+                                    fraction=fraction)
         if kind in ("lobby", None) and lobby_camera.cameras(self, variant_key):
             lobby_camera.release(self, variant_key, self._current(pin), log, progress)
         return result
 
     def _apply_choice(self, variant_key: str, source: str, log: LogFunc = no_log,
                       progress: ProgressCallback | None = None, kind: Kind | None = "spr", pin: Pin | None = None, *,
-                      create_backup: bool = False) -> ApplyResult:
+                      create_backup: bool = False, fraction: Callable[[float], None] | None = None) -> ApplyResult:
         """Install and configure one kind from a mod, variant, or originals.
 
         None selects all kinds for originals, and both Spine kinds for variant adaptation.
@@ -6119,7 +6141,8 @@ class ModLibrary:
                         return self._defer(pin, variant_key, kinds, source)
                     _, inputs = self._costume_source(other, pin)
                     replacements = self._cached_build(inputs, targets, pin,
-                        lambda: self._stage_costume(other, targets, work / "model", log, pin), build_keys)
+                        lambda: self._stage_costume(other, targets, work / "model", log, pin,
+                                                    fraction=fraction or _item_fraction(progress)), build_keys)
                 elif source.startswith("variant:"):
                     other = source[8:]
                     self._variant(other)
@@ -6320,7 +6343,8 @@ class ModLibrary:
                 elif source.startswith("variant:") and kind == "model":
                     _, inputs = self._costume_source(source[8:], pin)
                     replacements = self._cached_build(inputs, targets, pin,
-                        lambda: self._stage_costume(source[8:], targets, work / kind, log, pin), build_keys)
+                        lambda: self._stage_costume(source[8:], targets, work / kind, log, pin,
+                                                    fraction=_item_fraction(progress)), build_keys)
                 elif source.startswith("variant:"):
                     other = self._core_map(pin).core(source[8:], kind)
                     sources = self._index(pin).get(other.lower(), []) if other else []
@@ -8641,16 +8665,18 @@ class ModLibrary:
 
     @_serialized
     def update(self, mod_id: str, log: LogFunc = no_log,
-               progress: Callable[[dict], None] | None = None, pin: Pin | None = None) -> UpdateResult:
+               progress: Callable[[dict], None] | None = None, pin: Pin | None = None, *,
+               fraction: Callable[[float], None] | None = None) -> UpdateResult:
         """Rebuild a mod against current official bundles and retain its old files (``_publish_update``, atomic per
         mod). Its built copies go: they hold the old build. The entries configured with it are marked updated (a game
-        file still holds the old build); an update that changed nothing marks none."""
+        file still holds the old build); an update that changed nothing marks none. ``fraction``: told how far an
+        Optimize Physics copy's build is, instead of ``progress`` (``_stage_costume``)."""
         self._check_recovery()  # refused before the rebuild when a recovery has failed or the state cannot be saved
         self._check_writable()
         pin = self._current(pin)
         record = self._record(mod_id)
         if self._optimized_from(record):
-            return self._rebuild_optimized(record, log, pin)
+            return self._rebuild_optimized(record, log, pin, fraction or _item_fraction(progress))
         paths = self._paths(record)
         built_from = {path.name: self._hashes.get(path).sha1 for path in paths}
         painted = (self._read_built_against(record) or {}).get("painted")  # the textures move over as they are
@@ -8711,7 +8737,8 @@ class ModLibrary:
             self._write_built_against(record, built_against)
         return UpdateResult(self._entry(record), self._paths(record), previous, rig=rig)
 
-    def _rebuild_optimized(self, record: dict[str, Any], log: LogFunc, pin: Pin) -> UpdateResult:
+    def _rebuild_optimized(self, record: dict[str, Any], log: LogFunc, pin: Pin,
+                           fraction: Callable[[float], None] | None = None) -> UpdateResult:
         """Update of an Optimize Physics copy: its costume built again with the physics rules under the current
         costume rule, published in place of its files (``_publish_update``: its id, name and links stay), the rule
         recorded after. Refused like Optimize Physics when the pair's verdict refuses it; ``mod_update_failed`` when
@@ -8729,7 +8756,7 @@ class ModLibrary:
         report: dict[str, Any] = {}
         with temporary_directory(prefix=devmode.LIBRARY_STAGING_PREFIX + "update-") as temporary:
             replacements = self._stage_costume(source[8:], targets, Path(temporary) / "model", log, pin,
-                                               report=report, physics=True)
+                                               report=report, physics=True, fraction=fraction)
             if not report.get("physics"):
                 raise ServiceError("mod_update_failed", id=record["id"])
             generated = [path for path in replacements.values() if path.parent.name == "output"]

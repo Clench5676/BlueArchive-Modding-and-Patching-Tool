@@ -860,7 +860,7 @@ def build_api(s: Services) -> RpcRegistry:
 
         def run(log: Any, progress: Any) -> dict[str, Any]:
             progress({"current": 1, "total": 1, "step": ""})
-            return library.optimize_costume(variant, source, name, pin=pin)
+            return library.optimize_costume(variant, source, name, pin=pin, progress=progress)
 
         return s.submit("model.optimize", run, writes="library", library=library)
 

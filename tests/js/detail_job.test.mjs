@@ -1,5 +1,5 @@
 // Exercise the detail job's orchestration with stand-ins for the rendered screen and RPC transport.
-import { jobProgress, progressName } from "../../src/bmpt/web/js/job-progress.js";
+import { jobProgress, progressName, steadyFraction } from "../../src/bmpt/web/js/job-progress.js";
 import { setStrings, T as translate } from "../../src/bmpt/web/js/i18n.js";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -12,7 +12,7 @@ function harness(overrides = {}) {
   const messages = [], notices = [], calls = [], progress = [];
   let released = false, end;
   const env = {
-    notify: (s) => messages.push(s), notice: (s) => { notices.push(s); return Promise.resolve(); }, jobProgress, progressName, fam: {}, switchKind: () => "spr", T: (s) => s, renderScreen: async () => {},
+    notify: (s) => messages.push(s), notice: (s) => { notices.push(s); return Promise.resolve(); }, jobProgress, progressName, steadyFraction, fam: {}, switchKind: () => "spr", T: (s) => s, renderScreen: async () => {},
     rpc: async () => { calls.push("submit"); return "j1"; }, waitJob: async () => ({}), reload: async () => {},
     errorText: String, QUEUEABLE: ["actions.apply", "actions.restore"], refused: (err) => messages.push(String(err)),
     overwrittenMessage: async () => {}, variant: () => ({}), fullName: () => "Example", resumeChanged: () => {},
@@ -105,6 +105,33 @@ test("detail actions keep the verb, target and count from progress in all locale
       assert.deepEqual(h.messages, []);
       assert.ok(progress.every((text) => !text.includes("portrait.bundle")));
     }
+  }
+});
+
+test("a 3D model's costume build shows its percentage after the line, growing within the item and gone after it", async () => {
+  for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
+    const strings = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8")).webui;
+    const flat = (o, prefix = "", result = {}) => { for (const [key, value] of Object.entries(o)) {
+      if (value && typeof value === "object") flat(value, prefix + key + ".", result); else result["webui." + prefix + key] = value;
+    } return result; };
+    globalThis.document ||= { documentElement: {} }; globalThis.document.documentElement ||= {};
+    setStrings(locale, flat(strings));
+    const progress = [];
+    const h = harness({ T: translate, Loading: { hold: (fn) => fn((value) => progress.push(value)) }, waitJob: async (id, update) => {
+      update({ current: 1, total: 1, step: "" });
+      update({ current: 1, total: 1, fraction: 0.42 });
+      update({ current: 1, total: 1, fraction: 0.3 });   // an older reading: the shown percentage stays
+      update({ current: 1, total: 1, fraction: 1 });     // never 100 % while the item runs
+      update({ current: 1, total: 4 });                  // the next item (the files written): no percentage
+      update({ current: 2, total: 4, fraction: 0.1 });
+      return {};
+    } });
+    assert.equal(await h.job("model.optimize", { variant: "hina", source: "variant:aoba" }, { name: "Example" }), true);
+    const subject = progressName(null, translate("tab.portrait"), "Example");
+    const line = (current, total) => jobProgress({ action: "progress.actionOptimize", name: subject, current, total });
+    const percent = (n) => translate("progress.percent", { percent: n });
+    assert.deepEqual(progress, [line(1, 1), line(1, 1), `${line(1, 1)} ${percent(42)}`, `${line(1, 1)} ${percent(42)}`,
+      `${line(1, 1)} ${percent(99)}`, line(1, 4), `${line(2, 4)} ${percent(10)}`], locale);
   }
 });
 
