@@ -317,6 +317,8 @@ test("model sources stay within the variant and use the shared configured/applie
   assert.deepEqual(popupMode(fam, v, "model", false), { start: "m:model-a", button: "popup.save", set: "m:model-a" });
   assert.equal(appliedKey(v, "model"), "self");
   assert.equal(modelUrl("a/b", "official"), "/asset/model/a%2Fb.glb?source=official");
+  assert.equal(modelUrl("hihumi", "live", "Hihumi_Original_Exs"), "/asset/model/hihumi.glb?clip=Hihumi_Original_Exs");
+  assert.equal(modelUrl("hihumi", "variant:ch0242", "CH0271_Formation Pickup"), "/asset/model/hihumi.glb?source=variant%3Ach0242&clip=CH0271_Formation%20Pickup");
   v.configured = {};
   assert.equal(modelSource(v, false), "official");
 });
