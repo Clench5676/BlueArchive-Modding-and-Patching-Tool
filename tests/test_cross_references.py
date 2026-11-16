@@ -152,6 +152,48 @@ def test_apply_updates_a_file_whose_pointers_a_game_update_left_dangling(
     assert len(demotions) == 1 and mod.file.name in demotions[0]
 
 
+@pytest.mark.parametrize('kind', ['spr', 'lobby', 'model'])
+@pytest.mark.parametrize('entry_point', ['apply', 'toggle'])
+@pytest.mark.parametrize('needs_crc_fix', [False, True])
+def test_apply_checks_references_after_restoring_omitted_official_parts(
+        request, monkeypatch, caplog, kind, entry_point, needs_crc_fix):
+    env = request.getfixturevalue('batch_model_env' if kind == 'model' else 'env')
+    target, mod = mod_with_pointers(env, monkeypatch, kind, same_name=True)
+    move_shader(env, target, same_name=True)
+    # The omitted shared part belongs to this entry, so the write restores its official copy. The install still
+    # has an older, non-official copy that masks the mod's stale pointer when resolved through the CAB index.
+    env.original = rename_crc(env.original.rename(env.original.with_name(target.name.replace('_004_', '_000_'))))
+    official = env.original.read_bytes()
+    if entry_point == 'toggle':
+        assert not env.library.toggle(False, True).failed
+    previous = shared(env.tmp / 'previous' / env.original.name, [(5, SHADER), (6, SHADER)])
+    previous_mod, = env.library.add_files(kind, [previous])
+    # Reproduce a partial write left by an earlier build, with its library record intact. An unrecorded outside
+    # change is deliberately skipped by Mods on before it ever plans or writes this entry.
+    env.library._commit({env.original: previous_mod.file}, f'mod:{previous_mod.id}', lambda message: None,
+                        pin=env.library.current_pin(), prune=False)
+    if entry_point == 'toggle':
+        assert env.library.apply(mod.target, f'mod:{mod.id}', kind=kind).deferred
+    assert not env.library._is_official(env.original)
+    monkeypatch.setattr(env.settings, 'crc_needed', lambda path: needs_crc_fix)
+    assert env.library._needs_crc_fix(mod.file, target) is needs_crc_fix
+    with caplog.at_level(logging.DEBUG, logger='bmpt.library.service'):
+        if entry_point == 'apply':
+            result = env.library.apply(mod.target, f'mod:{mod.id}', kind=kind)
+            assert target in result.files
+        else:
+            result = env.library.toggle(True, False)
+            assert not result.failed, result.failed
+    assert env.original.read_bytes() == official
+    material_object, text = Bundle.load(target).env.objects
+    assert material_object.read_typetree()['m_Shader']['m_PathID'] == 6
+    assert text.read().m_Script == 'modded'
+    demotions = [record.message for record in caplog.records
+                 if 'points at objects the game no longer holds, updating it as a file of an older release'
+                 in record.message]
+    assert len(demotions) == 1 and mod.file.name in demotions[0]
+
+
 @pytest.mark.parametrize('entry_point', ['cached_build', 'built_replacements'])
 def test_a_stale_kept_copy_rebuilds_by_updating_its_source(env, monkeypatch, caplog, entry_point):
     target, mod = mod_with_pointers(env, monkeypatch, 'lobby', same_name=True)
