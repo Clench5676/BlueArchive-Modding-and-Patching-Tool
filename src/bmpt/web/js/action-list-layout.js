@@ -30,14 +30,15 @@ export const ROW = { pitch: 120, radioX: 30, labelX: 61.5, end: 20, maxLabelW: 5
 // make the list scroll sideways, and its scroll fade would wash out the title bars' right ends)
 export const keyLabelWidth = (cw) => Math.min(ROW.maxLabelW, cw - ROW.radioX - ROW.labelX);
 export const KEY_TYPE = POPUP_TYPE.card.option; // 42 down to 30, as the roster's sort keys
-// a group card's texts (detail.js stripCard: 242 wide less 40, 20 clear at either side; the visible body 196 high, 12
-// clear above and below): the group's name at the caption's size, wrapped onto two lines before it shrinks, centred.
-// The playing group's card (selected: Card_Select_Line_Blue and its check, Common_Icon_Check_B 54 high, centred 26
-// under the body's top, at its right) shows the playing action's name alone instead, as large as the names: one line
-// centred on the card (it passes under the check), else up to three lines under the check (3 clear) and 6 over the
-// body's bottom, down to 22 for the longest (a second battle form's random Tactical Challenge entry).
-export const CARD_TEXT = { w: 242 - 40, room: 196 - 2 * 12, name: { fs: 56, min: 28 },
-  playing: { top: 98 - 26 - 54 / 2 - 3, bottom: -98 + 6, lines: 3, min: 22 }, checkBottom: 98 - 26 - 54 / 2 };
+// a group card's texts (detail.js stripCard: 242 wide, the visible body 196 high). The names are siblings: one size
+// for every card, the list keys' size (42 down to 28), wrapped onto two lines before they shrink, 182 wide (30 clear at
+// either side, so the card's 10-degree lean keeps them off its edges) and 12 clear of the body above and below, centred
+// on the card. The playing group's card (selected: Card_Select_Line_Blue and its check, Common_Icon_Check_B 56 x 54,
+// centred 26 under the body's top and 30 in from its right side, along the lean) shows the playing action's name alone
+// instead, at the names' size, never larger: smaller (down to 20, three lines) only when it does not fit there. It is
+// centred too; only when its first line's ink would reach under the check does it move down, as far as clears it.
+export const CARD_TEXT = { w: 182, room: 196 - 2 * 12, name: { fs: KEY_TYPE.fs, min: 28 },
+  playing: { lines: 3, min: 20 }, check: { left: 242 / 2 - 30 + (98 - 26) * TAN10 - 56 / 2, bottom: 98 - 26 - 54 / 2, clear: 0 } };
 
 // the list's rows from the top of its content (y down is negative): [{ kind: "head"|"key", y, section | action }]
 // and the content's height. A group of one section has no title bar: its card names it.
@@ -94,11 +95,32 @@ export function fitCards(names, lang = null) {
 }
 // a fitted text's height, NGUI's line pitch
 export const textHeight = (f) => NGUI.fontSizeFor(f.text, f.fs) * NGUI.LINE_PITCH * f.lines;
+// its ink's height: the lines less the line pitch's spacing over the first and under the last line
+export const inkHeight = (f) => textHeight(f) - (NGUI.LINE_PITCH - 1) * NGUI.fontSizeFor(f.text, f.fs);
 // a card's text: { name, nameY } from the card's centre. A group's card: its name's fit (`fit`, shared with the
-// siblings), centred. The playing group's card: the playing action's name (`playing`) alone, fitted on its own.
+// siblings), centred. The playing group's card: the playing action's name (`playing`) alone, at the siblings' size
+// or smaller, centred unless its first line would reach under the check.
 export function cardText(fit, playing = null, lang = null) {
   if (!playing) return { name: fit, nameY: 0 };
-  const { top, bottom } = CARD_TEXT.playing;
-  const name = NGUI.fitGroup([playing], CARD_TEXT.name.fs, CARD_TEXT.playing.min, CARD_TEXT.w, CARD_TEXT.playing.lines, { lang, maxH: top - bottom })[0];
-  return { name, nameY: name.lines > 1 ? (top + bottom) / 2 : 0 };
+  const { room, playing: P, check } = CARD_TEXT;
+  // centred, or moved down just under the check when its first line reaches that far right; null when even that
+  // leaves the body
+  const place = (name) => {
+    const h = textHeight(name), ink = inkHeight(name), first = NGUI.glyphWidth(String(name.text).split("\n")[0], name.fs);
+    if (h > room + 1e-6) return null;
+    if (ink / 2 <= check.bottom - check.clear || first / 2 <= check.left - check.clear) return 0;
+    const y = check.bottom - check.clear - ink / 2;
+    return y - h / 2 >= -room / 2 - 1e-6 ? y : null;
+  };
+  // the largest size from the siblings' down that both fits and clears the check
+  let last = null;
+  for (let fs = fit.fs; fs >= P.min; fs -= 2) {
+    const name = NGUI.wrapText(playing, fs, CARD_TEXT.w, P.lines, lang);
+    if (name.overflow) continue;
+    const y = place(name);
+    if (y !== null) return { name, nameY: y };
+    last = name;
+  }
+  const name = last || NGUI.fitGroup([playing], fit.fs, P.min, CARD_TEXT.w, P.lines, { lang, maxH: room })[0];
+  return { name, nameY: 0 };
 }

@@ -218,38 +218,39 @@ for (const locale of LOCALES) test(`the group cards' names keep the caption size
   const names = GROUPS_ALL.map((g) => groupLabel(g, T)), fits = L.fitCards(names);
   assert.equal(new Set(fits.map((f) => f.fs)).size, 1, "one size for the sibling cards");
   for (const f of fits) assert.ok(!f.overflow && f.lines <= 2 && widest(f.text, f.fs) <= CARD_TEXT.w && tall(f) <= CARD_TEXT.room, `${locale} ${f.text}`);
-  // a name too wide for one line wraps at the caption's size instead of shrinking (CJK names, Move & Cover)
+  // a name too wide for one line wraps at the names' size instead of shrinking (CJK names, Move & Cover)
   const move = L.fitCards([groupLabel("move", T)])[0], cjk = /^(zh|ja|ko)/.test(locale);
   assert.equal(move.lines, 2, `${locale} ${move.text} wraps`);
   if (cjk) assert.equal(move.fs, CARD_TEXT.name.fs, `${locale} ${move.text} at ${move.fs}`);
-  // with every group (a long word such as Variants or ランダム sets the size): never under 40
-  assert.ok(fits[0].fs >= 40, `${locale} names at ${fits[0].fs}`);
+  // the list keys' size at most, with clear space at the card's leaning sides; never under 36 with every group
+  assert.ok(fits[0].fs <= L.KEY_TYPE.fs && fits[0].fs >= 36, `${locale} names at ${fits[0].fs}`);
+  assert.ok(CARD_TEXT.w + 2 * (CARD_TEXT.room / 2) * Math.tan(Math.PI / 18) <= 242 - 2 * 12, "clear of the leaning sides");
   // a name alone sits on the card's centre
   assert.deepEqual(L.cardText(fits[0]), { name: fits[0], nameY: 0 });
-  // the playing card: the action's name alone, large (the names' size range), inside the body and clear of the check
-  // (one line on the centre passes under it; two lines stand under it)
-  const { top, bottom } = CARD_TEXT.playing, half = (196 - 2 * 12) / 2;
-  const sizes = [];
+  // the playing card: the action's name alone, never larger than its siblings, inside the body, clear of the check,
+  // and centred unless its first line would reach under the check
+  const half = CARD_TEXT.room / 2, { check } = CARD_TEXT, sizes = [];
   for (const a of everyAction()) {
-    const c = L.cardText(fits[0], actionLabel(a, T)), h = tall(c.name);
+    const c = L.cardText(fits[0], actionLabel(a, T)), h = tall(c.name), first = glyphWidth(lines(c.name.text)[0], c.name.fs);
     assert.ok(!c.name.overflow && c.name.lines <= CARD_TEXT.playing.lines && widest(c.name.text, c.name.fs) <= CARD_TEXT.w, `${locale} ${c.name.text}: ${c.name.fs}`);
-    assert.ok(c.name.fs >= CARD_TEXT.playing.min && c.name.fs <= CARD_TEXT.name.fs, `${locale} ${c.name.text}: ${c.name.fs}`);
+    assert.ok(c.name.fs >= CARD_TEXT.playing.min && c.name.fs <= fits[0].fs, `${locale} ${c.name.text}: ${c.name.fs} next to ${fits[0].fs}`);
     assert.equal(c.name.text.replace(/\n/g, "").replace(/\s/g, ""), actionLabel(a, T).replace(/\s/g, ""), "the action's name only");
-    if (c.name.lines === 1) assert.ok(c.nameY === 0 && h / 2 <= CARD_TEXT.checkBottom && h / 2 <= half, `${locale} ${c.name.text}`);
-    else assert.ok(c.nameY + h / 2 <= top + 1e-6 && c.nameY - h / 2 >= bottom - 1e-6, `${locale} ${c.name.text}`);
-    sizes.push([a.form, c.name.fs]);
+    assert.ok(c.nameY + h / 2 <= half + 1e-6 && c.nameY - h / 2 >= -half - 1e-6, `${locale} ${c.name.text} inside the body`);
+    const ink = L.inkHeight(c.name), top = c.nameY + ink / 2, reaches = first / 2 > check.left - check.clear;
+    assert.ok(!reaches || top <= check.bottom - check.clear + 1e-6, `${locale} ${c.name.text} under the check`);
+    if (c.nameY !== 0) assert.ok(reaches && ink / 2 > check.bottom - check.clear, `${locale} ${c.name.text} moved only for the check`);
+    sizes.push([a.form, c.name.fs, c.name.fs === fits[0].fs]);
   }
-  // the bar's usual actions stay large
-  for (const id of ["idle", "kneelAttack", "ex", "combatIdle"]) {
+  // most actions show at their siblings' size
+  const plain = sizes.filter(([form]) => !form);
+  assert.ok(plain.filter(([, , same]) => same).length >= plain.length * 0.6, `${locale}: ${plain.map(([, fs]) => fs).join(" ")}`);
+  // the bar's usual actions keep the siblings' size and the card's centre (within a unit or two of it)
+  for (const id of ["idle", "combatIdle", "attack", "ex"]) {
     const c = L.cardText(fits[0], T(`model.action.${id}`));
-    assert.ok(c.name.fs >= 40, `${locale} ${c.name.text} at ${c.name.fs}`);
+    assert.ok(c.name.fs === fits[0].fs && Math.abs(c.nameY) <= 2, `${locale} ${c.name.text} at ${c.name.fs}, ${c.nameY}`);
   }
-  assert.ok(Math.min(...sizes.map(([, fs]) => fs)) >= CARD_TEXT.playing.min);
-  // most actions keep 40 or more
-  const plain = sizes.filter(([form]) => !form).map(([, fs]) => fs);
-  assert.ok(plain.filter((fs) => fs >= 40).length >= plain.length * 0.6, `${locale}: ${plain.join(" ")}`);
-  assert.ok(top <= 98 - 26 - 27, "under the check");
 });
+
 
 test("the section title bars lean inside the content", () => {
   const cw = 500, half = (cw - L.HEAD.slant) / 2, lean = (L.HEAD.h / 2) * Math.tan((10 * Math.PI) / 180);
