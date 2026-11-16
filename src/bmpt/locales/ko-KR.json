@@ -470,7 +470,15 @@
 			"actionDelete": "삭제",
 			"actionRemap": "텍스처 재배치",
 			"actionCompatibility": "호환성 확인",
-			"actionOptimize": "물리 효과 최적화"
+			"actionOptimize": "물리 효과 최적화",
+			"modsProcess": "모드 처리",
+			"modsApply": "모드 적용",
+			"modsRestore": "모드 복원",
+			"modsCheck": "모드 검사",
+			"modCount": "{action} ({current}/{total}): ",
+			"modHead": "{action}: ",
+			"sep": " - ",
+			"from": "출처: {name}"
 		},
 		"job": {
 			"running": "처리 중",
@@ -1042,7 +1050,12 @@
 				"crc": "CRC 수정",
 				"add": "Mod 라이브러리에 추가",
 				"apply": "Mod 적용",
-				"export": "파일 내보내기"
+				"export": "파일 내보내기",
+				"readModel": "모델 읽기",
+				"fitCostume": "의상 맞춤",
+				"buildModel": "모델 생성",
+				"write": "게임 파일 쓰기",
+				"restore": "공식 파일 복원"
 			},
 			"selectPreview": "미리보기로 선택",
 			"applyGame": "게임에 적용",

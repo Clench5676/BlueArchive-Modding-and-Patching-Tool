@@ -94,7 +94,8 @@ export function createImportPage({ host, call = rpc, jobs = waitJob, ui = NGUI, 
       const step = p?.step || "import.step.check", detail = T(step);
       const repeated = { "import.phase.add": "import.step.add", "import.phase.apply": "import.step.apply" };
       return T("import.completedProgress", { done, total, remaining: p?.remaining ?? Math.max(0, total - done), action: phase,
-        name: current ? progressName(identity.variant, T(KIND_KEYS[current.kind] || KIND_KEYS.other), identity.name) : "",
+        // who and the kind as a job over mods names them (job-progress.js modLine): "Hoshino (Swimsuit) - Chibi"
+        name: current ? `${progressName(identity.variant, "", identity.name)}${T("progress.sep")}${T(KIND_KEYS[current.kind] || KIND_KEYS.other)}` : "",
         step: detail && detail !== phase && repeated[action] !== step ? T("progress.step", { step: detail }) : "" });
     }
     const label = T(reconnecting ? "import.reconnecting" : ["analyzing", "saving"].includes(phase) ? `import.${phase}` : "app.loading");

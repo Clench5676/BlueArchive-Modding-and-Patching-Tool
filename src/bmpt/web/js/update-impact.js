@@ -113,11 +113,10 @@ export function init(options = {}) {
 // open(mod): Go To, the mod's student page with its switch open on the mod
 export const open = (mod) => Promise.resolve(goTo({ id: mod.id, variant: mod.target, kind: mod.kind })).catch((err) => console.error("impact", err));
 
-// the progress of a check (Loading.task's update): its step and, while the mods are classified, the mod at hand
-function stepper(update, nameOf) {
-  return (key) => (p = {}) => update({ ...p,
-    label: key === "mods.impact.checking" && p.variant
-      ? T("mods.impact.checkingMod", { name: modName({ target: p.variant, kind: p.kind, label: p.label }, nameOf) }) : T(key) });
+// the progress of a check (Loading.task's update): its step, or the mod at hand while the mods are classified and
+// applied again (job-progress.js modLine)
+function stepper(update) {
+  return (key) => (p = {}) => update({ ...p, label: T(key) });
 }
 
 // the scan the check reads its overwritten entries from: a new one, with mods on and the file check allowed; [] else
@@ -138,9 +137,9 @@ async function scanned(step) {
 // run({force}): the check under the loading screen with its progress: classify, scan, apply again what needs no repair.
 // force: whatever was seen (Check Update Impact). Resolves with {result, reapplied, failed}; throws what the jobs refuse.
 async function run({ force = false, scan = true } = {}) {
-  const nameOf = await names().catch(() => undefined);
+  await names().catch(() => undefined);  // the roster in, for the names on the progress line
   return Loading.task(async (update) => {
-    const step = stepper(update, nameOf);
+    const step = stepper(update);
     const result = await waitJob(await rpc("mods.impact", force ? { force: true } : {}), step("mods.impact.checking"));
     const again = scan ? reappliable(await scanned(step), result) : [];
     let reapplied = [], failed = [];
@@ -158,6 +157,7 @@ async function run({ force = false, scan = true } = {}) {
 // refresh(): the costume builds of an older costume rule built again under the loading screen, with the plain progress
 // of a writer task and nothing to answer: what cannot be built again is kept or left for the next start, never told
 async function refresh() {
+  await names().catch(() => undefined);  // the roster in, for the names on the progress line
   await Loading.task(async (update) => waitJob(await rpc("mods.refreshCostumes"), update));
 }
 

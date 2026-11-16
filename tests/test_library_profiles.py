@@ -260,14 +260,24 @@ def test_adoption_toggle_and_drift_progress_name_the_action(world, monkeypatch, 
     result = world.library.adopt(listed, progress=report)
     assert result.added and not result.failed
     assert progress == [(1, 1, translate("webui.progress.add", name="test_spr"))]
-    for enabled, action in [(False, "restore"), (True, "apply")]:
+    # each entry of a toggle or Apply Mod Configuration as it starts (mod_progress): who it is, then its write
+    def lines():
+        assert all(len(args) == 1 and isinstance(args[0], dict) for args in progress)
+        return [(p["current"], p["total"], p["action"], p["variant"], p["kind"], p["core"], p["step"], p["fraction"])
+                for (p,) in progress]
+
+    for enabled, action, write in [(False, "restore", "restore"), (True, "apply", "write")]:
         progress.clear()
         assert not world.toggle(enabled, progress=report).failed
-        assert progress == [(1, 1, translate(f"webui.progress.{action}", name="test_spr"))]
+        assert lines() == [(1, 1, action, "test", "spr", "test_spr", "import.step.check", 0.0),
+                           (1, 1, action, "test", "spr", "test_spr", f"import.step.{write}", 0.5),
+                           (1, 1, action, "test", "spr", "test_spr", f"import.step.{write}", 1.0)]
     world.spr.write_bytes(OFFICIAL)
     progress.clear()
     assert not world.library.restore_drift([{**listed[0], "state": "reset"}], progress=report).failed
-    assert progress == [(1, 1, translate("webui.progress.apply", name="test_spr"))]
+    assert lines() == [(1, 1, "apply", "test", "spr", "test_spr", "import.step.check", 0.0),
+                       (1, 1, "apply", "test", "spr", "test_spr", "import.step.write", 0.5),
+                       (1, 1, "apply", "test", "spr", "test_spr", "import.step.write", 1.0)]
 
 
 def test_apply_configures_and_restore_drops_it(world):

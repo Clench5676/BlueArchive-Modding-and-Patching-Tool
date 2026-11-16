@@ -1,5 +1,5 @@
 // Exercise the detail job's orchestration with stand-ins for the rendered screen and RPC transport.
-import { jobProgress, progressName, steadyFraction } from "../../src/bmpt/web/js/job-progress.js";
+import { modLine, progressName, steadyFraction } from "../../src/bmpt/web/js/job-progress.js";
 import { setStrings, T as translate } from "../../src/bmpt/web/js/i18n.js";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -12,7 +12,7 @@ function harness(overrides = {}) {
   const messages = [], notices = [], calls = [], progress = [];
   let released = false, end;
   const env = {
-    notify: (s) => messages.push(s), notice: (s) => { notices.push(s); return Promise.resolve(); }, jobProgress, progressName, steadyFraction, fam: {}, switchKind: () => "spr", T: (s) => s, renderScreen: async () => {},
+    notify: (s) => messages.push(s), notice: (s) => { notices.push(s); return Promise.resolve(); }, modLine, modLabel: (m) => m?.label || "", progressName, steadyFraction, fam: {}, switchKind: () => "spr", T: (s) => s, renderScreen: async () => {},
     rpc: async () => { calls.push("submit"); return "j1"; }, waitJob: async () => ({}), reload: async () => {},
     errorText: String, QUEUEABLE: ["actions.apply", "actions.restore"], refused: (err) => messages.push(String(err)),
     overwrittenMessage: async () => {}, variant: () => ({}), fullName: () => "Example", resumeChanged: () => {},
@@ -80,7 +80,7 @@ test("the apply result reaches the refresh while input is still held", async () 
   assert.equal(h.busy(), false);
 });
 
-test("detail actions keep the verb, target and count from progress in all locales", async () => {
+test("detail actions keep the verb, target, kind and step from progress in all locales", async () => {
   for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
     const strings = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8")).webui;
     const T = (key, vars = {}) => key.split(".").reduce((o, k) => o[k], strings).replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? "");
@@ -99,16 +99,17 @@ test("detail actions keep the verb, target and count from progress in all locale
         return {};
       } });
       assert.equal(await h.job(method, params, { name: "Example" }), true);
-      const subject = progressName(null, T("tab.portrait"), "Example");
       const actionKey = `progress.action${action[0].toUpperCase()}${action.slice(1)}`;
-      assert.deepEqual(progress, [jobProgress({ action: actionKey, name: subject }), jobProgress({ action: actionKey, name: subject, current: 1, total: 3, step: "import.step.crc" })]);
+      // one item: the verb, who and the kind, then the step; the files' own count is not the line's
+      const head = `${T("progress.modHead", { action: T(actionKey) })}Example${T("progress.sep")}${T("tab.portrait")}`;
+      assert.deepEqual(progress.map((line) => line.text), [head, `${head}${T("progress.sep")}${T("import.step.crc")}`], `${locale} ${method}`);
       assert.deepEqual(h.messages, []);
-      assert.ok(progress.every((text) => !text.includes("portrait.bundle")));
+      assert.ok(progress.every(({ text }) => !text.includes("portrait.bundle") && !text.includes("3")));
     }
   }
 });
 
-test("a 3D model's costume build shows its percentage after the line, growing within the item and gone after it", async () => {
+test("a 3D model's costume build shows its percentage and step, only growing while the action runs", async () => {
   for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
     const strings = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8")).webui;
     const flat = (o, prefix = "", result = {}) => { for (const [key, value] of Object.entries(o)) {
@@ -119,19 +120,20 @@ test("a 3D model's costume build shows its percentage after the line, growing wi
     const progress = [];
     const h = harness({ T: translate, Loading: { hold: (fn) => fn((value) => progress.push(value)) }, waitJob: async (id, update) => {
       update({ current: 1, total: 1, step: "" });
-      update({ current: 1, total: 1, fraction: 0.42 });
+      update({ current: 1, total: 1, step: "import.step.fitCostume", fraction: 0.42 });
       update({ current: 1, total: 1, fraction: 0.3 });   // an older reading: the shown percentage stays
-      update({ current: 1, total: 1, fraction: 1 });     // never 100 % while the item runs
-      update({ current: 1, total: 4 });                  // the next item (the files written): no percentage
+      update({ current: 1, total: 1, step: "import.step.write", fraction: 1 });  // never 100 % while it runs
+      update({ current: 1, total: 4 });                  // the files written, counted: the line stays as it is
       update({ current: 2, total: 4, fraction: 0.1 });
       return {};
     } });
     assert.equal(await h.job("model.optimize", { variant: "hina", source: "variant:aoba" }, { name: "Example" }), true);
-    const subject = progressName(null, translate("tab.portrait"), "Example");
-    const line = (current, total) => jobProgress({ action: "progress.actionOptimize", name: subject, current, total });
-    const percent = (n) => translate("progress.percent", { percent: n });
-    assert.deepEqual(progress, [line(1, 1), line(1, 1), `${line(1, 1)} ${percent(42)}`, `${line(1, 1)} ${percent(42)}`,
-      `${line(1, 1)} ${percent(99)}`, line(1, 4), `${line(2, 4)} ${percent(10)}`], locale);
+    const sep = translate("progress.sep");
+    const head = `${translate("progress.modHead", { action: translate("progress.actionOptimize") })}Example${sep}${translate("tab.portrait")}${sep}${translate("progress.from", { name: "aoba" })}`;
+    const percent = (n) => `${sep}${translate("progress.percent", { percent: n })}`;
+    const fit = `${sep}${translate("import.step.fitCostume")}`, write = `${sep}${translate("import.step.write")}`;
+    assert.deepEqual(progress.map((line) => line.text), [head, head, `${head}${percent(42)}${fit}`, `${head}${percent(42)}${fit}`,
+      `${head}${percent(99)}${write}`, `${head}${percent(99)}${write}`, `${head}${percent(99)}${write}`], locale);
   }
 });
 
@@ -157,8 +159,7 @@ test("detail progress identifies the target Mod's student variant and kind inste
     update({ label: "Repairing: assets-_mx-test.bundle", current: 2, total: 2 }); return {};
   } });
   await h.job("actions.update", { mod: "m1" });
-  assert.match(h.progress.at(-1), /Repairing Yoshimi \(Band, Memorial Lobby\) 2 \/ 2/);
-  assert.doesNotMatch(h.progress.at(-1), /assets-|\.bundle|Portrait/);
+  assert.equal(h.progress.at(-1).text, "Repairing: Yoshimi (Band) - Memorial Lobby");
 });
 
 test("an apply adds no notice, while mods are off (only saved) or on", async () => {

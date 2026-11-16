@@ -1139,9 +1139,16 @@ def test_costume_builds_of_an_older_rule_are_built_again_at_the_start(model_env,
     assert library.refresh_costumes(progress=lambda *args: reported.append(args)) == {
         'done': [copy, swap], 'kept': [], 'left': []}
     assert sorted(built) == [('hoshino_swimsuit', False), ('hoshino_swimsuit', True)]
-    # each build's share done is the progress of its own item, beside the items' count
-    assert [args[0] for args in reported if isinstance(args[0], dict)] == [
-        {'current': 0, 'total': 2, 'fraction': 0.5}, {'current': 1, 'total': 2, 'fraction': 0.5}]
+    # each item at hand, counted from 1, with who it is (the copy's own name, the swap's source) and its step; a
+    # build's share done fills most of its item, the write into the game files the rest
+    lines = [args[0] for args in reported]
+    assert all(isinstance(line, dict) and line['total'] == 2 and line['action'] == 'process'
+               and line['variant'] == 'hoshino' and line['kind'] == 'model' for line in lines)
+    # (the copy is not in the game files: its rebuild is the whole item)
+    assert [(line['current'], line['step'], line['fraction']) for line in lines] == [
+        (1, 'import.step.check', 0.0), (1, 'import.step.check', 0.5),
+        (2, 'import.step.check', 0.0), (2, 'import.step.check', 0.45), (2, 'import.step.write', 0.9)]
+    assert lines[0]['name'] == before.label and lines[-1]['source'] == 'hoshino_swimsuit'
     after = library.mods()[0]
     assert (after.id, after.label) == (before.id, before.label)
     assert library._records[made]['costume_rule'] == costume_rule.COSTUME_RULE

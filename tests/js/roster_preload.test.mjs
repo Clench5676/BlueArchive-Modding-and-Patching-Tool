@@ -21,7 +21,7 @@ function runStart(gameFound) {
     timed: (_phase, work) => work(),
     rpc: async (method) => (method === "app.info" ? { gameFound, resourceContext: "rev-2" } : {}),
     NGUI: { setResourceContext() {}, init: async () => {}, setTierTags() {} },
-    Consent: { init() {} }, setSpineConsent() {}, Loading: { init() {}, relabel() {} },
+    Consent: { init() {} }, setSpineConsent() {}, Loading: { init() {}, relabel() {}, setNames() {} }, progressNames() {},
     previewCache: { configure() {} }, setStrings() {}, T: (key) => key, notify() {}, errorText: String,
     document: { title: "", querySelector: el, fonts: { ready: Promise.resolve() } }, $: el,
     on() {}, addEventListener() {}, location: { hash: "#/" }, history: { replaceState() {} },

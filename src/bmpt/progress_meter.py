@@ -4,7 +4,8 @@ A long build marks named phases as it passes them (``Meter.phase``), optionally 
 ``count``). Each phase weighs its measured share of the build's time (a table per build, never per item), so the
 fraction grows about evenly with time. The fraction only grows, stops below 1 (``CAP``) until the item ends, and is
 reported at most every ``EVERY`` seconds and only when its whole percent changed, so marking costs a clock read. The
-meter takes no lock and never waits: the report is the job's progress callback.
+meter takes no lock and never waits: the report is the job's progress callback. A report with a ``phase`` method is
+also told each phase the build enters, at once (the progress line's step).
 """
 
 from __future__ import annotations
@@ -32,6 +33,8 @@ class Meter:
             self._start[name] = (at, share)
             at += share
         self._report = report
+        self._entered = getattr(report, "phase", None)  # told each phase entered, unthrottled
+        self._phase: str | None = None
         self._every = EVERY if every is None else every
         self._clock = clock
         self._last = float("-inf")  # when it last reported
@@ -43,6 +46,10 @@ class Meter:
         start = self._start.get(name)
         if start is None:
             return
+        if name != self._phase:
+            self._phase = name
+            if self._entered is not None:
+                self._entered(name)
         at, share = start
         part = min(1.0, max(0.0, done / count)) if count > 0 else 0.0
         self._move(at + share * part)
