@@ -928,7 +928,7 @@ def test_refuses_install_plan_outside_resource_dirs(setup_library, monkeypatch, 
         monkeypatch.setattr("ba_modding_toolkit.searching.asset_match", lambda sources, candidates, log: (candidates, ""))
     entry = env.library.add([source])[0]
     groups = mod_install.plan_mod_install([entry.file], [outside.parent])
-    monkeypatch.setattr(env.library, "_plan", lambda *args: groups)
+    monkeypatch.setattr(env.library, "_plan", lambda *args, **kwargs: groups)
     monkeypatch.setattr(env.library, '_needs_crc_fix', lambda *args: True)
     before = outside.read_bytes()
     expect_error("game_file_outside_resources", lambda: env.library.apply("test", f"mod:{entry.id}"))
@@ -951,7 +951,7 @@ def test_symlink_destination_cannot_escape_resources(setup_library, monkeypatch,
     if release == "older":
         monkeypatch.setattr(mod_install, "plan_mod_install", lambda *args: groups)
     else:
-        monkeypatch.setattr(env.library, "_plan", lambda *args: groups)
+        monkeypatch.setattr(env.library, "_plan", lambda *args, **kwargs: groups)
     monkeypatch.setattr(env.library, "_game_files", lambda *args: [env.original])
     expect_error("game_file_outside_resources", lambda: env.library.apply("test", f"mod:{entry.id}"))
     assert env.original.is_symlink()

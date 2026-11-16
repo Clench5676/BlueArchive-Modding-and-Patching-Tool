@@ -23,7 +23,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Any, Callable, Iterable, Mapping, Sequence
+from typing import Any, Callable, Collection, Iterable, Mapping, Sequence
 
 from bmpt.engine import parse_filename
 
@@ -88,8 +88,10 @@ class Group:
 
 def current(files: Mapping[str, Path], targets: Sequence[Path],
             cabs: Callable[[Path], Iterable[str]] = _nothing,
-            release: Callable[[Path, Path], bool] = _same_release) -> tuple[dict[Path, Path], dict[str, str]]:
-    """The files that are a part's current release, {target: source}, and the method each was found by.
+            release: Callable[[Path, Path], bool] = _same_release, *,
+            older: Collection[Path] = ()) -> tuple[dict[Path, Path], dict[str, str]]:
+    """The files that are a part's current release, {target: source}, and the method each was found by. The files
+    of ``older`` are known to be of an older release, whatever their names say (left to the asset stage).
 
     An exact name proves the release current; a name without the CRC or a CAB match does when ``release`` finds the
     file built on the part as it is now (a game update rebuilds a part under its name and CABs: such a file of the
@@ -98,6 +100,8 @@ def current(files: Mapping[str, Path], targets: Sequence[Path],
     result: dict[Path, Path] = {}
     methods: dict[str, str] = {}
     for name, source in files.items():
+        if source in older:
+            continue
         method = NAME
         matches = [path for path in targets if path.name == name]
         if len(matches) != 1:
@@ -163,12 +167,13 @@ class Resolution:
     once; the asset stage reads only when asked for (``groups`` and everything built on it)."""
 
     def __init__(self, files: Mapping[str, Path], targets: Sequence[Path], readers: Readers = NAMES_ONLY, *,
-                 whole: bool = True):
+                 whole: bool = True, older: Collection[Path] = ()):
         self.files = dict(files)
         self.targets = list(targets)
         self.readers = readers
         if whole:
-            self.current, self._methods = current(self.files, self.targets, readers.cabs, readers.release)
+            self.current, self._methods = current(self.files, self.targets, readers.cabs, readers.release,
+                                                  older=older)
         else:
             self.current, self._methods = {}, {}
         sources = set(self.current.values())
@@ -269,10 +274,10 @@ class Resolution:
 
 
 def resolve(files: Mapping[str, Path], targets: Sequence[Path], readers: Readers = NAMES_ONLY, *,
-            whole: bool = True) -> Resolution:
+            whole: bool = True, older: Collection[Path] = ()) -> Resolution:
     """The resolution of a set of mod files among the parts of its core; ``whole=False`` treats every file as an
-    older release (no name or CAB stage)."""
-    return Resolution(files, targets, readers, whole=whole)
+    older release (no name or CAB stage), ``older`` only the files it lists."""
+    return Resolution(files, targets, readers, whole=whole, older=older)
 
 
 # Generic file slots (kind "other"): every bundle of a prefix is a candidate, not only the parts of one core
