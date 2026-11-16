@@ -171,6 +171,74 @@ def test_selected_pose_nodes_equal_full_hierarchy_with_animated_ancestors():
         assert b[3] is None
 
 
+def test_shared_clip_frames_are_bit_identical_independent_and_memory_only(monkeypatch):
+    monkeypatch.setattr(cc, '_poses', cc.ArrayLRU())
+    sk, _, tree = _posed_model()
+    times, original, _ = sk.clip_frames(tree)
+    expected = [np.asarray(original(k)) for k in range(len(times))]
+    calls = []
+    world = ma.Skeleton.world
+    def measured(self, *args, **kwargs):
+        calls.append(True)
+        return world(self, *args, **kwargs)
+    monkeypatch.setattr(ma.Skeleton, 'world', measured)
+    for _ in range(2):
+        _, sampled, _ = sk.clip_frames(tree, cache=True)
+        for k, value in enumerate(expected):
+            result = np.asarray(sampled(k))
+            assert np.array_equal(result.view(np.uint64), value.view(np.uint64))
+            result[0, 0, 0] = 999
+    assert len(calls) == len(times)
+    assert cc._poses.size <= cc._poses.limit
+
+
+def test_selected_shared_frames_preserve_bits_and_do_not_alias_full_frames(monkeypatch):
+    monkeypatch.setattr(cc, '_poses', cc.ArrayLRU())
+    sk, _, tree = _posed_model()
+    times, full, _ = sk.clip_frames(tree, cache=True)
+    expected = [np.asarray(full(k)) for k in range(len(times))]
+    for _ in range(2):
+        _, selected, _ = sk.clip_frames(tree, [2], cache=True)
+        for k, value in enumerate(expected):
+            pose = selected(k)
+            assert pose[3] is None
+            for node in (0, 1, 2):
+                assert np.array_equal(pose[node].view(np.uint64), value[node].view(np.uint64))
+            pose[0][:] = 999
+
+
+@pytest.mark.parametrize('changed', ['revision', 'model', 'binding', 'hierarchy', 'curve', 'grid'])
+def test_shared_frames_invalidate_all_pose_dependencies(monkeypatch, changed):
+    import zlib
+    monkeypatch.setattr(cc, '_poses', cc.ArrayLRU())
+    store = cc.PoseStore(None, {'one': 'a', 'two': 'a'})
+    sk, _, tree = _posed_model(store, 'one')
+    sk.clip_frames(tree, cache=True)[1](0)
+    if changed == 'revision':
+        store.revisions['one'] = 'b'
+    elif changed == 'model':
+        sk.dev = 'two'
+    elif changed == 'binding':
+        tree['m_ClipBindingConstant']['genericBindings'][0]['path'] = zlib.crc32(sk.nodes[2].path.encode())
+    elif changed == 'hierarchy':
+        sk.nodes[1].local = ((1, 2, 3), (0, 0, 0, 1), (1, 1, 1))
+        sk._rest = []
+    elif changed == 'curve':
+        tree['m_MuscleClip']['m_Clip']['data']['m_DenseClip']['m_SampleArray'][0] += 0.25
+    else:
+        tree['m_SampleRate'] = 7.0
+    expected = np.asarray(sk.clip_frames(tree)[1](0))
+    calls = []
+    original = ma.Skeleton.world
+    def measured(self, *args, **kwargs):
+        calls.append(True)
+        return original(self, *args, **kwargs)
+    monkeypatch.setattr(ma.Skeleton, 'world', measured)
+    actual = np.asarray(sk.clip_frames(tree, cache=True)[1](0))
+    assert calls
+    assert np.array_equal(actual.view(np.uint64), expected.view(np.uint64))
+
+
 def test_selected_pose_nodes_keep_the_full_hierarchy_path_collision_order():
     import zlib
     sk, _, tree = _posed_model()

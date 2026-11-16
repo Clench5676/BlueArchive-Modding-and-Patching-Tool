@@ -230,8 +230,12 @@ def repoint(tree, owner, copies, writer):
     return changed
 
 
-def write_copies(writer, changes, destinations, holders, skeleton, clip_skirts):
-    """Bake added curves into the same copies, verify serialized bytes, repoint."""
+def write_copies(writer, changes, destinations, holders, skeleton, clip_skirts, *, step=lambda: None):
+    """Bake added curves into the same copies, verify serialized bytes, repoint.
+
+    Retain the caller's preview/build class; yield between copies and sampled
+    frames without adding locks or workers.
+    """
     from . import model_adapt as ma
     if not changes:
         return {}
@@ -247,6 +251,7 @@ def write_copies(writer, changes, destinations, holders, skeleton, clip_skirts):
         raise ma.refuse("arm clip receiver not identified", clips=[changes[k].clip.peek_name() for k in sorted(missing)])
     copies = {}
     for key, change in changes.items():
+        step()
         tree = clone_tree(change.tree)
         before_arms = ma.clip_snapshot(tree)
         # the chains the clip's original would get (swinging roots, or hair carrying the slot's own lock keys)
@@ -256,7 +261,8 @@ def write_copies(writer, changes, destinations, holders, skeleton, clip_skirts):
             # Cached hem probes sampled the uncorrected arms. Recompute added
             # chains on this corrected clip so their arm anchors follow it.
             skirt.solved.pop(key, None)
-        bones = [ma.skirt_curves(skeleton, s, tree, key) for s in skirts]
+        prepared = ma.curve_frames(skeleton, skirts, tree) if skirts else None
+        bones = [ma.skirt_curves(skeleton, s, tree, key, prepared=prepared, step=step) for s in skirts]
         if any(n is None for n in bones):
             raise ma.refuse("arm clip edit not verified", clip=change.clip.peek_name(), what="added curve layout")
         if sum(bones):

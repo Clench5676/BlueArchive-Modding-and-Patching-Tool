@@ -351,8 +351,17 @@ class Solver:
         self.parts = np.stack([self.masks[r] * cloth.weights for r in self.roots], axis=2) if self.roots else np.zeros(
             cloth.weights.shape + (0,))
         self.part_share = self.parts.sum(axis=1)
+        self.homogeneous = np.c_[cloth.rest, np.ones(len(cloth.rest))]
+        self.vertices = np.arange(len(cloth.rest))
+        self.root_indices = np.asarray(self.roots, dtype=int)
+        self.jacobian = np.zeros((len(cloth.rest), 3, len(self.roots), 6))
+        for axis in range(3):
+            self.jacobian[:, axis, :, 3 + axis] = self.part_share
         e = cloth.edges
         self.lengths = np.linalg.norm(cloth.rest[e[:, 1]] - cloth.rest[e[:, 0]], axis=1) if len(e) else np.zeros(0)
+        self.edge_share = (self.part_share[e[:, 1]] - self.part_share[e[:, 0]]).T[:, :, None]
+        self.shift_cost = SHIFT_COST * np.eye(3)
+        self.damping = DAMPING * np.eye(6 * len(self.roots))
         # how far outside the legs each cloth vertex was at rest: it never has to be farther out than that
         frame = self.frame(rest)
         legs_reach, distance, _ = reach(envelope(frame, legs.rest), frame, cloth.rest)
@@ -407,19 +416,24 @@ class Solver:
             out[i] = m
         return out
 
-    def sequence(self, times: Sequence[float], pose: Any, loop: bool = False) -> list[dict[int, np.ndarray]]:
+    def sequence(self, times: Sequence[float], pose: Any, loop: bool = False, *, step=lambda: None
+                 ) -> list[dict[int, np.ndarray]]:
         """The roots' turns for consecutive frames (``pose(k)``: the slot's world matrices at ``times[k]``), each
         starting from the frame before let back toward rest; a looping clip runs twice, the second time from the
         first's end."""
-        poses = [pose(k) for k in range(len(times))]
+        poses = []
+        for k in range(len(times)):
+            step()
+            poses.append(pose(k))
         out: list[dict[int, np.ndarray]] = []
         previous, last = None, None
         for run in range(2 if loop and len(times) > 1 else 1):
             out = []
             for k, t in enumerate(times):
+                step()
                 if previous is not None:
-                    step = t - last if k else (times[1] - times[0] if len(times) > 1 else 0.0)
-                    previous = self.released(previous, step)
+                    interval = t - last if k else (times[1] - times[0] if len(times) > 1 else 0.0)
+                    previous = self.released(previous, interval)
                 previous = self.solve(poses[k], previous)
                 last = t
                 out.append(previous)
@@ -442,8 +456,9 @@ class Solver:
         if not roots:
             return
         count, width = len(c.rest), 6 * len(roots)
-        everything = np.arange(count)
-        homogeneous = np.c_[c.rest, np.ones(count)]
+        everything, homogeneous = self.vertices, self.homogeneous
+        jacobian = self.jacobian.copy()
+        blocks = np.arange(len(roots))
         edges = c.edges
         for _ in range(ITERATIONS):
             matrices = world @ self.inverse
@@ -456,15 +471,13 @@ class Solver:
             if not moved.any():
                 break
             partial = np.einsum("vkr,vki->rvi", self.parts, places, optimize=True)
-            heads = np.array([world[r][:3, 3] for r in roots])
+            heads = world[self.root_indices, :3, 3]
             arm = partial - self.part_share.T[:, :, None] * heads[:, None, :]  # (roots, vertices, 3)
             # a vertex moves by sum_r (omega_r x arm_r + share_r shift_r) = sum_r (-[arm_r]x omega_r + share_r shift_r)
-            jacobian = np.zeros((count, 3, len(roots), 6))
+            jacobian = jacobian.reshape(count, 3, len(roots), 6)
             jacobian[:, 0, :, 1], jacobian[:, 0, :, 2] = arm[:, :, 2].T, -arm[:, :, 1].T
             jacobian[:, 1, :, 0], jacobian[:, 1, :, 2] = -arm[:, :, 2].T, arm[:, :, 0].T
             jacobian[:, 2, :, 0], jacobian[:, 2, :, 1] = arm[:, :, 1].T, -arm[:, :, 0].T
-            for axis in range(3):
-                jacobian[:, axis, :, 3 + axis] = self.part_share
             jacobian = jacobian.reshape(3 * count, width)
             weight = np.repeat(np.where(moved, 1.0, HOLD), 3)
             residual = np.where(moved[:, None], target - points, 0.0).ravel()
@@ -477,18 +490,16 @@ class Solver:
                 # an edge grows by unit . (move_b - move_a)
                 #   = sum_r omega_r . ((arm_rb - arm_ra) x unit) + shift_r . unit (share_rb - share_ra)
                 turn = np.cross(arm[:, edges[:, 1]] - arm[:, edges[:, 0]], unit[None])
-                shift = (self.part_share[edges[:, 1]] - self.part_share[edges[:, 0]]).T[:, :, None] * unit[None]
+                shift = self.edge_share * unit[None]
                 rows = np.concatenate([turn, shift], axis=2).transpose(1, 0, 2).reshape(len(edges), width)
                 stretch = np.minimum(0.0, self.lengths - length)  # pull grown edges back, keep the others
                 a += LENGTH_WEIGHT * rows.T @ rows
                 b += LENGTH_WEIGHT * rows.T @ stretch
             # a shift costs against the turns: the heads move only where a turn cannot reach
-            shifted = np.array([world[r][:3, 3] - base[r][:3, 3] for r in roots])
-            for k in range(len(roots)):
-                block = slice(6 * k + 3, 6 * k + 6)
-                a[block, block] += SHIFT_COST * np.eye(3)
-                b[block] -= SHIFT_COST * shifted[k]
-            a += DAMPING * np.eye(width)
+            shifted = world[self.root_indices, :3, 3] - base[self.root_indices, :3, 3]
+            a.reshape(len(roots), 6, len(roots), 6)[blocks, 3:, blocks, 3:] += self.shift_cost
+            b.reshape(len(roots), 6)[:, 3:] -= SHIFT_COST * shifted
+            a += self.damping
             step = np.linalg.solve(a, b).reshape(len(roots), 6)
             if float(np.abs(step[:, :3]).max()) < MIN_ANGLE and float(np.abs(step[:, 3:]).max()) < MIN_ANGLE * 0.1:
                 break
