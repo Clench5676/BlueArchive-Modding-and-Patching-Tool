@@ -4912,7 +4912,7 @@ class ModLibrary:
         targets = (self._other_targets(files, pin) if record["kind"] == "other" else
                    self._spine_parts(core_of(paths[0].name), pin))
         resolution = self._resolve(files, targets, pin, older=older)
-        stale = self._stale_sources(resolution.current, pin) if check_references else set()
+        stale = self._stale_sources(resolution.current, pin, targets=targets) if check_references else set()
         if stale:
             resolution = self._resolve(files, targets, pin, older=set(older) | stale)
         current = resolution.current
@@ -5285,15 +5285,18 @@ class ModLibrary:
         self._layout_cache.move_to_end(key)
         return layouts
 
-    def _broken_references(self, replacements: Mapping[Path, Path], pin: Pin) -> dict[Path, set[pointers.Pointer]]:
+    def _broken_references(self, replacements: Mapping[Path, Path], pin: Pin, *,
+                           targets: Collection[Path] = ()) -> dict[Path, set[pointers.Pointer]]:
         """The written files of ``replacements`` ({target: prepared}) that point at objects the game does not hold:
         a pointer into another bundle's CAB whose object is gone there or of a type the field cannot hold
-        (``pointers.dangling``), {target: those pointers}. A CAB resolves to the file this write puts there, else to
-        the install's (``CabIndex``); one found nowhere is left to the missing-part checks. A file that is the
-        target's official copy is not judged, and what the official copy itself points at in vain, against the
-        official files, is not held against a file (the game's own data then has it too)."""
+        (``pointers.dangling``), {target: those pointers}. ``targets`` completes a planned entry: its omitted parts
+        use official copies where available, else the current files, as the write will. A CAB resolves within that
+        resulting entry first, and only outside it to the install (``CabIndex``); one found nowhere is left to the
+        missing-part checks. A file that is the target's official copy is not judged, and what the official copy
+        itself points at in vain, against the official files, is not held against a file (the game's own data then
+        has it too)."""
         official: dict[Path, Path | None] = {}
-        for target in replacements:
+        for target in dict.fromkeys((*targets, *replacements)):
             try:
                 official[target] = self._official_for(target, pin)
             except ServiceError as error:
@@ -5317,7 +5320,7 @@ class ModLibrary:
                 def layout(cab: str) -> dict[int, int] | None:
                     path = own.get(cab)
                     if path is None:
-                        found = index.resolve({cab}, hint, exclude=replacements.keys())
+                        found = index.resolve({cab}, hint, exclude=official.keys())
                         path = Path(found[cab]) if cab in found else None
                     if path is None:
                         return None
@@ -5328,7 +5331,9 @@ class ModLibrary:
                 return layout
             return layout_for
 
-        current, baseline = world(replacements), world(official)
+        resulting = {target: replacements.get(target, original if original is not None else target)
+                     for target, original in official.items()}
+        current, baseline = world(resulting), world(official)
         broken: dict[Path, set[pointers.Pointer]] = {}
         for target in written:
             found = pointers.dangling(self._pointers_of(replacements[target]), current(target))
@@ -5353,16 +5358,17 @@ class ModLibrary:
                         ", ".join(sorted(target.name for target in broken)))
         return bool(broken)
 
-    def _stale_sources(self, current: Mapping[Path, Path], pin: Pin) -> set[Path]:
+    def _stale_sources(self, current: Mapping[Path, Path], pin: Pin, *, targets: Collection[Path]) -> set[Path]:
         """The files of ``current`` ({target: source}, those a resolution writes whole) that point at objects the game
         no longer holds (``_broken_references``): a game update rebuilt a bundle they point into, under the same CAB,
-        and left the part's name, or its structure, as it was. They are files of an older release, updated into the
-        part as it is now like any other; written whole, the write's own check would refuse them. A file that cannot
-        be read stays as it is (that check reads it again)."""
+        and left the part's name, or its structure, as it was. The entry's full ``targets`` supplies the official
+        copies its write restores alongside them. They are files of an older release, updated into the part as it
+        is now like any other; written whole, the write's own check would refuse them. A file that cannot be read
+        stays as it is (that check reads it again)."""
         if not current:
             return set()
         try:
-            broken = self._broken_references(current, pin)
+            broken = self._broken_references(current, pin, targets=targets)
         except (ServiceError, OSError, ValueError) as error:
             log_failure(logger, logging.DEBUG, "Could not read the references of a mod file", error)
             return set()
@@ -5978,7 +5984,7 @@ class ModLibrary:
         if (len(sources) == len(record["files"]) and len(by_name) == len(targets)
                 and sources.keys() <= by_name.keys()
                 and all(not self._needs_crc_fix(path, by_name[name]) for name, path in sources.items())):
-            stale = self._stale_sources({by_name[name]: path for name, path in sources.items()}, pin)
+            stale = self._stale_sources({by_name[name]: path for name, path in sources.items()}, pin, targets=targets)
             if not stale:
                 # These parts have current names, references and the required CRC. The
                 # transaction checks and copies their exact bytes once; staging an
@@ -5989,7 +5995,7 @@ class ModLibrary:
                         for target in targets}
         if record["kind"] == "other":
             resolution = self._resolve(sources, targets, pin, older=stale)
-            more_stale = self._stale_sources(resolution.current, pin)
+            more_stale = self._stale_sources(resolution.current, pin, targets=targets)
             if more_stale:
                 resolution = self._resolve(sources, targets, pin, older=stale | more_stale)
             current = resolution.current
