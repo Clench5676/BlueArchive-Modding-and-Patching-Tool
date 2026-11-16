@@ -320,3 +320,72 @@ def test_array_read_stored_curves_equal_the_key_by_key_reader():
     assert set(got) == set(want) | set(range(ns, ns + 6 + 5))
     data["m_StreamedClip"]["data"] = []
     assert set(ac.stored_curves(tree)) == set(range(ns, ns + 6 + 5))
+
+
+def _sample_curves_reference(tree, wanted, *, hold_before=False):
+    """The frame-by-frame streamed reader the array reader replaced; dense and constant curves as before."""
+    import struct
+    times = np.array(ac.clip_times(tree))
+    data = tree["m_MuscleClip"]["m_Clip"]["data"]
+    streamed = data["m_StreamedClip"]
+    raw = np.asarray(streamed["data"], dtype="<u4").tobytes()
+    pos = 0
+    dtype = np.dtype([("index", "<i4"), ("coefs", "<f4", (4,))])
+    selected = np.zeros(streamed["curveCount"], bool)
+    for k in wanted:
+        if k < len(selected):
+            selected[k] = True
+    blocks, key_times = [], []
+    while pos + 8 <= len(raw):
+        t, count = struct.unpack_from("<fi", raw, pos)
+        pos += 8
+        if -1e30 < t < 1e30:
+            rows = np.frombuffer(raw, dtype, count, pos)
+            keep = selected[rows["index"]]
+            blocks.append(rows[keep])
+            key_times.append(np.full(keep.sum(), t))
+        pos += count * 20
+    curves = {}
+    if blocks:
+        rows = np.concatenate(blocks)
+        key_at = np.concatenate(key_times)
+        order = np.argsort(rows["index"], kind="stable")
+        rows, key_at = rows[order], key_at[order]
+        cuts = np.r_[0, np.flatnonzero(np.diff(rows["index"])) + 1, len(rows)]
+        for begin, end in zip(cuts[:-1], cuts[1:]):
+            if end == begin:
+                continue
+            ks = key_at[begin:end]
+            at = np.maximum(0, np.searchsorted(ks, times + 1e-6, side="right") - 1)
+            chosen = rows["coefs"][begin:end][at].astype(float)
+            dt = np.maximum(0, times - ks[at])
+            values = ((chosen[:, 0] * dt + chosen[:, 1]) * dt + chosen[:, 2]) * dt + chosen[:, 3]
+            if hold_before:
+                values = np.where(times < ks[at], chosen[:, 3], values)
+            curves[int(rows["index"][begin])] = values
+    return times, curves
+
+
+def test_array_streamed_reader_samples_exactly_like_the_frame_by_frame_reader():
+    tree = _clip()
+    data = tree["m_MuscleClip"]["m_Clip"]["data"]
+    frames = read_streamed(data["m_StreamedClip"]["data"])
+    frames.insert(2, (0., [(3, 0., float("nan"), -0., -5.), (0, 1e-30, 0., 0., 2.)]))
+    frames.insert(3, (.25, []))
+    frames.insert(4, (.5, [(6, 3.5, -1., 0., 1.)]))
+    frames.insert(5, (float("nan"), [(1, 1., 1., 1., 1.)]))
+    data["m_StreamedClip"]["data"] = ac.encode_streamed(frames)
+    for wanted in (range(7), {0, 3}, {6, 40}, set(), range(30)):
+        for hold in (False, True):
+            got = ac.sample_curves(tree, wanted, hold_before=hold)
+            want = _sample_curves_reference(tree, wanted, hold_before=hold)
+            assert np.array_equal(got[0], want[0])
+            streamed = {k: v for k, v in got[1].items() if k < 7}
+            assert set(streamed) == set(want[1])
+            for k, values in want[1].items():
+                assert streamed[k].tobytes() == values.tobytes()
+    data["m_StreamedClip"]["data"] = ac.encode_streamed([(-float("inf"), []), (float("inf"), [])])
+    assert not {k: v for k, v in ac.sample_curves(tree, range(7))[1].items() if k < 7}
+    data["m_StreamedClip"]["data"] = data["m_StreamedClip"]["data"][:-1] + [5]
+    with pytest.raises(ValueError):
+        ac.sample_curves(tree, range(7))

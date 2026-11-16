@@ -316,33 +316,49 @@ def clip_times(tree):
     return [start + f / rate for f in range(max(1, round((stop - start) * rate) + 1))]
 
 
+_KEY = np.dtype([("index", "<i4"), ("coefs", "<f4", (4,))])
+
+
+def _streamed_keys(words):
+    """Every key of a streamed clip in stream order: its frame's time (float64), curve index and four cubic
+    coefficients (float32). Frames are walked by their key counts; the keys are then read in one gather."""
+    w = np.asarray(words, dtype="<u4")
+    starts, counts, pos, end = [], [], 0, len(w)
+    while pos + 2 <= end:
+        count = int(w[pos + 1])
+        count -= (count >> 31) << 32
+        if count < 0 or pos + 2 + 5 * count > end:
+            raise ValueError("streamed clip data is truncated")
+        starts.append(pos)
+        counts.append(count)
+        pos += 2 + 5 * count
+    starts, counts = np.array(starts, int), np.array(counts, int)
+    first = (np.repeat(starts + 2, counts)
+             + 5 * (np.arange(counts.sum()) - np.repeat(np.cumsum(counts) - counts, counts)))
+    times = np.repeat(w[starts].view("<f4").astype(float), counts)
+    index = w[first].view("<i4")
+    coefs = w[first[:, None] + np.arange(1, 5)].view("<f4")
+    return times, index, coefs
+
+
 def sample_curves(tree, wanted, *, hold_before=False):
     """Sample selected scalar curves with the runtime decoder's cubic semantics."""
     times = np.array(clip_times(tree))
     data = tree["m_MuscleClip"]["m_Clip"]["data"]
     streamed, dense = data["m_StreamedClip"], data["m_DenseClip"]
-    words = streamed["data"]
-    raw = np.asarray(words, dtype="<u4").tobytes()
-    pos = 0
-    dtype = np.dtype([("index", "<i4"), ("coefs", "<f4", (4,))])
     selected = np.zeros(streamed["curveCount"], bool)
     for k in wanted:
         if k < len(selected):
             selected[k] = True
-    blocks, key_times = [], []
-    while pos + 8 <= len(raw):
-        t, count = struct.unpack_from("<fi", raw, pos)
-        pos += 8
-        if -1e30 < t < 1e30:
-            rows = np.frombuffer(raw, dtype, count, pos)
-            keep = selected[rows["index"]]
-            blocks.append(rows[keep])
-            key_times.append(np.full(keep.sum(), t))
-        pos += count * 20
+    key_at, index, coefs = _streamed_keys(streamed["data"])
+    inside = (key_at > -1e30) & (key_at < 1e30)
+    keep = np.zeros(len(index), bool)
+    keep[inside] = selected[index[inside]]
     curves = {}
-    if blocks:
-        rows = np.concatenate(blocks)
-        key_at = np.concatenate(key_times)
+    if inside.any():
+        rows = np.zeros(int(keep.sum()), _KEY)
+        rows["index"], rows["coefs"] = index[keep], coefs[keep]
+        key_at = key_at[keep]
         order = np.argsort(rows["index"], kind="stable")
         rows, key_at = rows[order], key_at[order]
         cuts = np.r_[0, np.flatnonzero(np.diff(rows["index"])) + 1, len(rows)]
@@ -374,26 +390,15 @@ def sample_curves(tree, wanted, *, hold_before=False):
     return times, curves
 
 
-_KEY = np.dtype([("index", "<i4"), ("coefs", "<f4", (4,))])
-
-
 def _streamed_records(words):
     """Per streamed curve its keys in stream order as rows (time, c0, c1, c2, c3), helper frames included: the
     values ``read_streamed`` gives, read as arrays."""
-    raw = np.asarray(words, dtype="<u4").tobytes()
-    blocks, times, pos = [], [], 0
-    while pos + 8 <= len(raw):
-        t, count = struct.unpack_from("<fi", raw, pos)
-        pos += 8
-        blocks.append(np.frombuffer(raw, _KEY, count, pos))
-        times.append(np.full(count, t))
-        pos += count * 20
-    if not blocks:
+    key_at, index, coefs = _streamed_keys(words)
+    if not len(index):
         return {}
-    keys = np.concatenate(blocks)
-    order = np.argsort(keys["index"], kind="stable")
-    index = keys["index"][order]
-    rows = np.column_stack((np.concatenate(times), keys["coefs"].astype(float)))[order]
+    order = np.argsort(index, kind="stable")
+    index = index[order]
+    rows = np.column_stack((key_at, coefs.astype(float)))[order]
     cuts = np.flatnonzero(np.diff(index)) + 1
     return {int(group[0]): values for group, values in zip(np.split(index, cuts), np.split(rows, cuts))}
 
