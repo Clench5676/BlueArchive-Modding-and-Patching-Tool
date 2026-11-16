@@ -1290,7 +1290,7 @@ class _Exporter:
             else:  # a GameObject: every exported renderer at or below it
                 nodes = self._subtree(node)
             for target in [t for t in map(self._renderer_node, nodes) if t is not None]:
-                rest = 0 if self.nodes[target].get("extras", {}).get("hidden") else 1
+                rest = self._rest(target)
                 if any(state != rest for _, state in keys):
                     out[target] = keys
         return [{"node": node, "keys": keys} for node, keys in sorted(out.items())]
@@ -1307,6 +1307,10 @@ class _Exporter:
         if target is not None:
             self.nodes[target].setdefault("extras", {})["hidden"] = True
 
+    def _rest(self, target: int) -> int:
+        """A renderer node's state at rest: 0 when hidden, else 1."""
+        return 0 if self.nodes[target].get("extras", {}).get("hidden") else 1
+
     def _subtree(self, node: int) -> list[int]:
         out, stack = [], [node]
         while stack:
@@ -1314,6 +1318,41 @@ class _Exporter:
             out.append(n)
             stack.extend(c for c in self.nodes[n].get("children", []) if c in self.path_of)
         return out
+
+
+class _ClipExporter(_Exporter):
+    """One clip of a model, for a viewer that already shows the model's base GLB (:func:`export_chibi` of the same
+    files): no meshes, textures or halo effects of its own. The hierarchy's nodes come in the base GLB's order, so a
+    channel's node is the same node there. Toggles name the node of the renderer's GameObject (the viewer finds its
+    renderer in the base GLB: the node's ``extras.renderer`` or its mesh); a renderer the base GLB leaves out
+    (disabled, or only an EX skill shows it) that the clip turns on comes along with its materials and textures, as
+    the base GLB would carry it: its node's ``extras.renderer`` (skinned) or ``mesh`` (static), hidden at rest."""
+
+    def __init__(self, graph: BundleGraph, dev: str):
+        super().__init__(graph, dev)
+        self.drawn: set[int] = set()    # GameObject nodes of the renderers the base GLB draws
+        self.brought: set[int] = set()  # GameObject nodes of the renderers this clip brings in
+
+    def _renderer_node(self, node: int) -> int | None:
+        return node if node in self.drawn or node in self.brought else None
+
+    def _hide_renderer(self, node: int) -> None:
+        self.brought.add(node)
+
+    def _rest(self, target: int) -> int:
+        return 0 if target in self.brought else 1
+
+
+def _model_clips(exporter: _Exporter, graph: BundleGraph, bundles: list[Path], kind: str) -> list[Any]:
+    """The clips a model plays: a field prefab's own list, the clips of a model of its own bundles that move it, else
+    its animator controllers' clips."""
+    if exporter.animancer is not None:
+        # a field prefab lists its clips itself; its bundle holds other students' prefabs and controllers
+        listed = graph.tree(exporter.animancer).get("animationClips", [])
+        return [c for c in (graph.deref(exporter.animancer, p) for p in listed) if c is not None]
+    if kind == "asset":
+        return exporter.bound_clips(graph, bundles)
+    return exporter.controller_clips(_prefabs(graph, bundles))
 
 
 def export_chibi(graph: BundleGraph, bundles: Iterable[Path], dev: str, *, prefab: str = "echelon",
@@ -1336,14 +1375,9 @@ def export_chibi(graph: BundleGraph, bundles: Iterable[Path], dev: str, *, prefa
     if fx is not None:
         exporter.halo_fx(fx)
     exporter.glb.json["extras"] = {**exporter.extras(name), **({"source": kind} if kind in ("npc", "asset") else {})}
-    if exporter.animancer is not None:
-        # a field prefab lists its clips itself; its bundle holds other students' prefabs and controllers
-        listed = graph.tree(exporter.animancer).get("animationClips", [])
-        chosen = [c for c in (graph.deref(exporter.animancer, p) for p in listed) if c is not None]
-    elif kind == "asset":
-        chosen = exporter.bound_clips(graph, bundles)
-    else:
-        chosen = exporter.controller_clips(_prefabs(graph, bundles))
+    chosen = _model_clips(exporter, graph, bundles, kind)
+    # every clip the model plays, by name: the viewer lists the model's own and asks for one by name (export_clip)
+    exporter.glb.json["extras"]["clips"] = list(dict.fromkeys(n for c in chosen if (n := c.peek_name())))
     exporter.animations(chosen, clips)
     story = list(story)
     if kind == "asset" and story and not exporter.glb.json.get("animations"):
@@ -1354,4 +1388,27 @@ def export_chibi(graph: BundleGraph, bundles: Iterable[Path], dev: str, *, prefa
                         if (clip.peek_name() or "").lower().startswith(prefix)])
     data = exporter.glb.finish()
     logger.debug("model %s (%s): %d bundles, %d KB", dev, name, len(graph.loaded), len(data) // 1024)
+    return data
+
+
+def export_clip(graph: BundleGraph, bundles: Iterable[Path], dev: str, clip: str, *, prefab: str = "echelon") -> bytes:
+    """Export one clip of a chibi, by its name among the clips the model plays (the base GLB's ``extras.clips``), to
+    GLB bytes without the model's meshes (:class:`_ClipExporter`); the prefab is chosen and walked as
+    :func:`export_chibi` does for the same ``bundles``. The root extras name the clip and the number of hierarchy
+    nodes (``hierarchy``), the nodes the viewer matches with the base GLB's. AssetNotFound for a name the model does
+    not play."""
+    bundles = list(bundles)
+    root, name, kind = model_root(graph, bundles, dev, prefab)
+    exporter = _ClipExporter(graph, dev)
+    exporter.visit(root, None, "", True)
+    exporter.set_aside_ex_only()
+    exporter.drawn = {node for node, _, _ in exporter.renderers}
+    hierarchy = len(exporter.nodes)
+    found = next((c for c in _model_clips(exporter, graph, bundles, kind) if c.peek_name() == clip), None)
+    if found is None:
+        raise AssetNotFound(("clip", dev, clip))
+    exporter.animation(found, clip)
+    exporter.glb.json["extras"] = {"prefab": name, "dev": dev, "clip": clip, "hierarchy": hierarchy}
+    data = exporter.glb.finish()
+    logger.debug("clip %s of %s (%s): %d bundles, %d KB", clip, dev, name, len(graph.loaded), len(data) // 1024)
     return data

@@ -1503,14 +1503,21 @@ class Services:
                 raise KeyError(path)
             source = query.get("source", "live")
             kind = source.split(":", 1)[0]
+            # ?clip=<name>: one clip of the model, read from the same source as the model, for an action whose clips
+            # the model's GLB does not carry. Class 1 (what the user is looking at): foreground like the model (asset
+            # above), one step of about 0.5 s under the model lock, cached afterwards; a request the page gave up on
+            # (the 3D tab left) lets its step finish and keeps the result.
+            clip = query.get("clip") or None
+            extra = {"clip": clip} if clip else {}
             # How long each preview source takes end to end: lock waits, CRC checks and the export.
-            with spans.span("asset.model." + (kind if kind in ("live", "official", "mod", "import", "variant") else "other")):
+            with spans.span("asset.model." + ("clip." if clip else "")
+                            + (kind if kind in ("live", "official", "mod", "import", "variant") else "other")):
                 if field_only:  # no slot: its own files only, never a mod or another costume
                     if source not in ("live", "official"):
                         raise KeyError(path)
-                    data = self.game.model_glb(core)
+                    data = self.game.model_glb(core, **extra)
                 else:
-                    data = self._model_asset(core, target, source, path)
+                    data = self._model_asset(core, target, source, path, clip)
             return AssetResponse(data, MIME[".glb"], light=False)
         if kind == "voice" and len(parts) == 3:
             # a memorial lobby voice clip from Kivo, relayed so it is never cached
@@ -1558,15 +1565,17 @@ class Services:
         # a costume past the stretch limit was saved by the preview as shown only
         return library.costume_verdict(target, other) or library.record_costume_verdict(target, other, True)
 
-    def _model_asset(self, core: str, target: str, source: str, path: str) -> bytes:
+    def _model_asset(self, core: str, target: str, source: str, path: str, clip: str | None = None) -> bytes:
         """A variant's 3D chibi as GLB from one source: live game files, official copies, a library mod or an
         import candidate (KeyError, a 404, for anything else). Every source but ``live`` reads the files outside its
-        own parts by the library's rule (``preview_reads``), never as the game folder holds them now."""
+        own parts by the library's rule (``preview_reads``), never as the game folder holds them now. ``clip``: one
+        clip of that model instead, from the same files (a costume's adapted bundles included)."""
+        extra = {"clip": clip} if clip else {}
         if source == "live":
-            return self.game.model_glb(core)
+            return self.game.model_glb(core, **extra)
         if source == "official":
             return self.game.model_glb(core, overrides=self.library.official_bundles(core, current_fallback=True),
-                                       reads=self.library.preview_reads("official"))
+                                       reads=self.library.preview_reads("official"), **extra)
         from ..library.judge import core_of, kind_of_file
         try:
             cores = set(getattr(self.library, "model_cores", lambda key: [core])(target))
@@ -1587,7 +1596,7 @@ class Services:
             bundles = self.library.preview_bundles(mod_id)
             if not fits(bundles):
                 raise KeyError(path)
-            return self.game.model_glb(core, overrides=bundles, reads=self.library.preview_reads("configured"))
+            return self.game.model_glb(core, overrides=bundles, reads=self.library.preview_reads("configured"), **extra)
         if source.startswith("variant:"):
             verdict = self.library.costume_verdict(target, source[8:])
             if verdict is not None and not verdict["ok"] and not verdict.get("preview"):
@@ -1595,12 +1604,12 @@ class Services:
             bundles = self.library.costume_preview(target, source[8:])
             if not fits(bundles):
                 raise KeyError(path)
-            return self.game.model_glb(core, overrides=bundles, reads=self.library.preview_reads("official"))
+            return self.game.model_glb(core, overrides=bundles, reads=self.library.preview_reads("official"), **extra)
         if source.startswith("import:"):
             preview_core, bundles = self.batch_import.preview(source[7:])
             if preview_core not in cores or not fits(bundles):
                 raise KeyError(path)
-            return self.game.model_glb(core, overrides=bundles, reads=self.library.preview_reads("configured"))
+            return self.game.model_glb(core, overrides=bundles, reads=self.library.preview_reads("configured"), **extra)
         raise KeyError(path)
 
     def _ui_asset(self, parts: list[str], query: dict[str, str]) -> AssetResponse:
