@@ -161,6 +161,39 @@ def test_choose_keeps_the_limit_the_clip_rule_and_ties():
     assert hm.choose(tie, 1.5).rule == "fit 1.0"
 
 
+def test_skipping_losing_candidates_keeps_the_full_choice():
+    rng = np.random.default_rng(48)
+    clips = ["a", "b", "c", "d"]
+    stopped = []
+    for _ in range(80):
+        complete = [hm.Score(str(k), dict(zip(clips, rng.uniform(0, 30, len(clips)))),
+                             float(rng.uniform(1, 3))) for k in range(8)]
+        measured = [complete[0]]
+        for candidate in complete[1:]:
+            for count in range(1, len(clips) + 1):
+                partial = hm.Score(candidate.rule, {c: candidate.deep[c] for c in clips[:count]}, candidate.stretch)
+                if hm.cannot_win(partial, measured, 1.5):
+                    partial.complete = False
+                    measured.append(partial)
+                    stopped.append(count)
+                    break
+            else:
+                measured.append(candidate)
+        assert hm.choose(measured, 1.5).rule == hm.choose(complete, 1.5).rule
+    assert min(stopped) < len(clips)
+
+
+def test_pruning_preserves_rounded_ties_stretch_and_candidate_order():
+    rigid = hm.Score("rigid", {"a": 10.0, "b": 10.0}, 4.0)
+    winner = hm.Score("first", {"a": 0.08, "b": 0.0}, 2.0)
+    assert not hm.cannot_win(hm.Score("less stretch", {"a": 0.09}, 1.9), [rigid, winner], 1.5)
+    assert hm.cannot_win(hm.Score("same stretch", {"a": 0.09}, 2.0), [rigid, winner], 1.5)
+    assert hm.cannot_win(hm.Score("over ceiling", {"a": 0.0}, 4.01), [rigid], 1.5)
+    assert not hm.cannot_win(hm.Score("rigid ceiling", {"a": 0.0}, 3.0), [rigid], 1.5)
+    assert hm.cannot_win(hm.Score("worse clip", {"a": 15.01}, 1.0), [rigid], 1.5)
+    assert hm.cannot_win(hm.Score("tie rigid", {"a": 20.0}, 1.0), [rigid], 1.5)
+
+
 # --- vertex data ---------------------------------------------------------------------------------------------------
 
 def _channel(stream=0, offset=0, fmt=0, dimension=0):

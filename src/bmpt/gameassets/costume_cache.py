@@ -158,6 +158,49 @@ class PoseStore:
                 path.unlink(missing_ok=True)
 
 
+def clip_digest(tree: Mapping) -> str:
+    """Content identity of the decoded grid, including in-place curve edits."""
+    muscle = tree["m_MuscleClip"]
+    data = muscle["m_Clip"]["data"]
+    streamed, dense, constant = data["m_StreamedClip"], data["m_DenseClip"], data["m_ConstantClip"]
+    ns, nd = streamed["curveCount"], dense["m_CurveCount"]
+    # Content keys invalidate even in-place edits of the writer's trees. No
+    # graph, tree or asset reader survives a build; only numerical samples do.
+    samples = dense.get("m_SampleArray", [])
+    digest = hashlib.sha256(repr((CLIP_SCHEMA, muscle["m_StartTime"], muscle["m_StopTime"], tree.get("m_SampleRate"),
+                                 ns, nd, dense["m_FrameCount"], dense.get("m_BeginTime"), dense.get("m_SampleRate"),
+                                 len(streamed["data"]), len(samples), len(constant["data"]))).encode())
+    for values, dtype in ((streamed["data"], "<u4"), (samples, "<f8"), (constant["data"], "<f8")):
+        digest.update(np.asarray(values, dtype=dtype).tobytes())
+    return digest.hexdigest()
+
+
+def memoize_pose(pose, token: str, indices: tuple[int, ...] | None = None, count: int = 0):
+    """Share sampled frames in the existing bounded pose memory, never on disk.
+
+    The caller identifies the model revision, hierarchy, bindings and clip
+    content. Copies keep solvers independent; the lock covers bookkeeping only.
+    """
+    def sampled(frame: int):
+        key = f"frame|{token}|{frame}"
+        found = _poses.get(key)
+        if found is not None:
+            # a fresh copy per call: callers may change the matrices they get in place
+            matrices = found[0].copy()
+            if indices is None:
+                return list(matrices)
+            result = [None] * count
+            for node, matrix in zip(indices, matrices):
+                result[node] = matrix
+            return result
+        result = pose(frame)
+        matrices = np.asarray(result if indices is None else [result[n] for n in indices])
+        _poses.put(key, (matrices, np.empty(0, dtype=np.int64)))
+        return result
+
+    return sampled
+
+
 def decode_clip(tree: Mapping):
     """The runtime decoder's scalar arithmetic on NumPy arrays, in the same order.
 
@@ -172,15 +215,7 @@ def decode_clip(tree: Mapping):
     data = muscle["m_Clip"]["data"]
     streamed, dense, constant = data["m_StreamedClip"], data["m_DenseClip"], data["m_ConstantClip"]
     ns, nd = streamed["curveCount"], dense["m_CurveCount"]
-    # Content keys invalidate even in-place edits of the writer's trees. No
-    # graph, tree or asset reader survives a build; only numerical samples do.
-    samples = dense.get("m_SampleArray", [])
-    digest = hashlib.sha256(repr((CLIP_SCHEMA, muscle["m_StartTime"], muscle["m_StopTime"], tree.get("m_SampleRate"),
-                                 ns, nd, dense["m_FrameCount"], dense.get("m_BeginTime"), dense.get("m_SampleRate"),
-                                 len(streamed["data"]), len(samples), len(constant["data"]))).encode())
-    for values, dtype in ((streamed["data"], "<u4"), (samples, "<f8"), (constant["data"], "<f8")):
-        digest.update(np.asarray(values, dtype=dtype).tobytes())
-    key = digest.hexdigest()
+    key = clip_digest(tree)
     duration = muscle["m_StopTime"] - muscle["m_StartTime"]
     found = _clips.get(key)
     if found is not None:

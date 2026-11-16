@@ -1,6 +1,8 @@
 """Rule B of the costume switch: the skirt solver and the dense clip writer, on synthetic data."""
 
+import copy
 import math
+import types
 import zlib
 
 import numpy as np
@@ -73,6 +75,121 @@ def _setup(leg_forward=0.0, knee=None):
     pose = [np.eye(4), trs((0, 0, leg_forward), (0, 0, 0, 1), (1, 1, 1)),
             trs(knee if knee is not None else (0, 0, 0), (0, 0, 0, 1), (1, 1, 1))]
     return solver, pose
+
+
+@pytest.mark.parametrize("loop,with_edges", [(False, True), (True, True), (True, False)])
+def test_batched_joint_equals_scalar_reference_bit_for_bit(loop, with_edges):
+    solver, pushed = _setup(leg_forward=0.1, knee=(0, 0.235, 0.09))
+    # Two roots, descendants, mixed influences and a fixed influence exercise
+    # every Jacobian block and the cross-root normal equations.
+    chains, cloth = solver.chains, solver.cloth
+    local = np.concatenate([chains.local, chains.local.copy()])
+    local[2, 0, 3] += 0.02
+    rest = np.array([local[0], local[0] @ local[1], local[2], local[2] @ local[3]])
+    chains = ms.Chains(0, [-1, 0, -1, 2], local, rest)
+    joints = np.column_stack([cloth.joints[:, 0], cloth.joints[:, 0] + 2, np.full((len(cloth.rest), 2), 4)])
+    weights = np.tile([0.6, 0.3, 0.1, 0.0], (len(cloth.rest), 1))
+    edges = cloth.edges if with_edges else np.empty((0, 2), int)
+    solver = ms.Solver(chains, ms.Cloth(cloth.rest, joints, weights, [0], edges), solver.legs,
+                       [np.eye(4)] * 3, 0)
+    reference = copy.deepcopy(solver)
+    reference._joint = types.MethodType(_reference_joint, reference)
+    _, free = _setup()
+    poses = [pushed, pushed, free, free]
+    times = [0.0, 0.05, 0.1, 0.2]
+    expected = reference.sequence(times, lambda k: poses[k], loop)
+    yielded = []
+    actual = solver.sequence(times, lambda k: poses[k], loop, step=lambda: yielded.append(True))
+    assert yielded
+    for measured, old in zip(actual, expected):
+        assert measured.keys() == old.keys()
+        for root in old:
+            assert np.array_equal(measured[root].view(np.uint64), old[root].view(np.uint64))
+
+
+def test_solver_sequence_yields_and_propagates_cancellation(monkeypatch):
+    solver, pose = _setup(leg_forward=0.1)
+    solved = []
+    original = solver.solve
+    def measured(*args):
+        result = original(*args)
+        solved.append(result)
+        return result
+    monkeypatch.setattr(solver, "solve", measured)
+    def cancel():
+        if solved:
+            raise RuntimeError("cancelled")
+    with pytest.raises(RuntimeError, match="cancelled"):
+        solver.sequence([0.0, 0.1], lambda _: pose, step=cancel)
+    assert len(solved) == 1
+
+
+def test_judged_sequence_reuse_writes_identical_clip_curves(monkeypatch):
+    solver, pushed = _setup(leg_forward=0.1)
+    _, free = _setup()
+    poses = [pushed, free, pushed, free]
+    prepared = ([k / 30 for k in range(4)], lambda k: poses[k], set())
+    skeleton = types.SimpleNamespace(nodes=[types.SimpleNamespace(path=f"bone/{k}") for k in range(5)],
+                                     clip_frames=lambda tree: prepared)
+    tree = _clip()
+    skirt = ma.Skirt([0, 1], ["a", "b"], [-1, 0], [], 0, solver, 3)
+    measured = ma.skirt_sequence(skeleton, solver, tree, prepared=prepared)
+    old = copy.deepcopy(tree)
+    assert ma.skirt_curves(skeleton, skirt, old) == 1
+    skirt.solved[("clip", 1)] = measured
+    def unexpected(*args, **kwargs):
+        raise AssertionError("judged sequence was solved again")
+    monkeypatch.setattr(ma, "skirt_sequence", unexpected)
+    assert ma.skirt_curves(skeleton, skirt, tree, ("clip", 1)) == 1
+    assert tree == old
+
+
+def test_shared_curve_dependencies_write_the_same_solver_and_face_curves():
+    solver, _ = _setup(leg_forward=0.1)
+    skeleton = ma.Skeleton(None)
+    for k in range(7):
+        skeleton.nodes.append(ma.Node(f"bone{k}", f"bone/{k}", 0 if k else None,
+                                      ((0, 0, 0), (0, 0, 0, 1), (1, 1, 1)), None, None, True))
+    tree = _clip()
+    tree['m_ClipBindingConstant']['genericBindings'][0]['path'] = zlib.crc32(skeleton.nodes[1].path.encode())
+    face = ma.FaceRetarget(solver.chains, 0, [1, 2], skeleton.world())
+    skirts = [ma.Skirt([0, 1], ["a", "b"], [-1, 0], [], 0, solver, 3),
+              ma.Skirt([0, 1], ["c", "d"], [-1, 0], [], 0, face, 5)]
+    expected = copy.deepcopy(tree)
+    for skirt in skirts:
+        ma.skirt_curves(skeleton, skirt, expected)
+    prepared = ma.curve_frames(skeleton, skirts, tree)
+    assert all(prepared[1](0)[n] is None for n in range(3, 7))
+    for skirt in skirts:
+        ma.skirt_curves(skeleton, skirt, tree, prepared=prepared)
+    assert tree == expected
+
+
+def test_shared_spring_frames_include_carried_locks_and_hair_guard_nodes():
+    skeleton = ma.Skeleton(None)
+    for k in range(8):
+        skeleton.nodes.append(ma.Node(f"bone{k}", f"bone/{k}", 0 if k else None,
+                                      ((0, 0, 0), (0, 0, 0, 1), (1, 1, 1)), None, None, True))
+    spring = ms.Spring(_hanging_chain(), {0: math.radians(20)})
+    spring.carry = ms.Carry(0, np.eye(4), [[1, 2]], [np.array([0.0, 1.0])],
+                            [np.array([np.eye(3), np.eye(3)])], {0: 0}, {0: 0.0, 1: 1.0})
+    spring.hair = ma.HairCheck(np.array([[0, 0, 0], [0, -0.1, 0], [0, -0.2, 0]]),
+                               np.tile([1, 2], (3, 1)), np.tile([0.8, 0.2], (3, 1)), [3],
+                               np.eye(4)[None], np.array([[0, 1], [1, 2]]), float('inf'))
+    skirt = ma.Skirt([0, 1], ["a", "b"], [-1, 0], [], 0, spring, 4)
+    tree = _clip(3)
+    bindings = tree['m_ClipBindingConstant']['genericBindings']
+    bindings[0]['path'] = zlib.crc32(skeleton.nodes[1].path.encode())
+    prepared = ma.curve_frames(skeleton, [skirt], tree)
+    assert all(prepared[1](0)[n] is not None for n in range(4))
+    assert all(prepared[1](0)[n] is None for n in range(4, 8))
+    frames, expected = ma.skirt_sequence(skeleton, spring, tree)
+    actual_frames, actual = ma.skirt_sequence(skeleton, spring, tree, prepared=prepared)
+    assert frames == actual_frames
+    for old, measured in zip(expected, actual):
+        assert old.keys() == measured.keys()
+        for root in old:
+            assert np.array_equal(old[root].view(np.uint64), measured[root].view(np.uint64))
 
 
 def test_the_solver_leaves_the_rest_pose_as_it_is():
@@ -316,3 +433,77 @@ def test_dense_values_compare_to_a_millionth_and_stored_values_exactly():
     assert ma.clip_edit_error(before, tree, added) is None
     clip["m_ConstantClip"]["data"][0] += 5e-7
     assert ma.clip_edit_error(before, tree, added) == "curve 3 changed"
+
+
+# Scalar reference for the solver arithmetic before batching constant work.
+
+def _reference_joint(self, world: np.ndarray, base: np.ndarray, fixed: np.ndarray, grid: np.ndarray, frame: ms.Frame) -> None:
+    """All chains at once: Gauss-Newton steps on the roots' turns (rotation vectors about their heads) and the
+    heads' shifts that carry the cloth inside the legs out, hold the cloth already clear, and keep the cloth's edges
+    from growing."""
+    c, roots = self.cloth, self.roots
+    if not roots:
+        return
+    count, width = len(c.rest), 6 * len(roots)
+    everything = np.arange(count)
+    homogeneous = np.c_[c.rest, np.ones(count)]
+    edges = c.edges
+    for _ in range(ms.ITERATIONS):
+        matrices = world @ self.inverse
+        if len(fixed):
+            matrices = np.concatenate([matrices, fixed])
+        # each influence's place, the vertices, and each root's share of them
+        places = np.einsum("vkij,vj->vki", matrices[c.joints], homogeneous, optimize=True)[..., :3]
+        points = (c.weights[..., None] * places).sum(axis=1)
+        target, moved = self.push(points, everything, grid, frame)
+        if not moved.any():
+            break
+        partial = np.einsum("vkr,vki->rvi", self.parts, places, optimize=True)
+        heads = np.array([world[r][:3, 3] for r in roots])
+        arm = partial - self.part_share.T[:, :, None] * heads[:, None, :]  # (roots, vertices, 3)
+        # a vertex moves by sum_r (omega_r x arm_r + share_r shift_r) = sum_r (-[arm_r]x omega_r + share_r shift_r)
+        jacobian = np.zeros((count, 3, len(roots), 6))
+        jacobian[:, 0, :, 1], jacobian[:, 0, :, 2] = arm[:, :, 2].T, -arm[:, :, 1].T
+        jacobian[:, 1, :, 0], jacobian[:, 1, :, 2] = -arm[:, :, 2].T, arm[:, :, 0].T
+        jacobian[:, 2, :, 0], jacobian[:, 2, :, 1] = arm[:, :, 1].T, -arm[:, :, 0].T
+        for axis in range(3):
+            jacobian[:, axis, :, 3 + axis] = self.part_share
+        jacobian = jacobian.reshape(3 * count, width)
+        weight = np.repeat(np.where(moved, 1.0, ms.HOLD), 3)
+        residual = np.where(moved[:, None], target - points, 0.0).ravel()
+        a = (jacobian * weight[:, None]).T @ jacobian
+        b = jacobian.T @ (weight * residual)
+        if len(edges):
+            d = points[edges[:, 1]] - points[edges[:, 0]]
+            length = np.linalg.norm(d, axis=1)
+            unit = d / np.maximum(length, 1e-12)[:, None]
+            # an edge grows by unit . (move_b - move_a)
+            #   = sum_r omega_r . ((arm_rb - arm_ra) x unit) + shift_r . unit (share_rb - share_ra)
+            turn = np.cross(arm[:, edges[:, 1]] - arm[:, edges[:, 0]], unit[None])
+            shift = (self.part_share[edges[:, 1]] - self.part_share[edges[:, 0]]).T[:, :, None] * unit[None]
+            rows = np.concatenate([turn, shift], axis=2).transpose(1, 0, 2).reshape(len(edges), width)
+            stretch = np.minimum(0.0, self.lengths - length)  # pull grown edges back, keep the others
+            a += ms.LENGTH_WEIGHT * rows.T @ rows
+            b += ms.LENGTH_WEIGHT * rows.T @ stretch
+        # a shift costs against the turns: the heads move only where a turn cannot reach
+        shifted = np.array([world[r][:3, 3] - base[r][:3, 3] for r in roots])
+        for k in range(len(roots)):
+            block = slice(6 * k + 3, 6 * k + 6)
+            a[block, block] += ms.SHIFT_COST * np.eye(3)
+            b[block] -= ms.SHIFT_COST * shifted[k]
+        a += ms.DAMPING * np.eye(width)
+        step = np.linalg.solve(a, b).reshape(len(roots), 6)
+        if float(np.abs(step[:, :3]).max()) < ms.MIN_ANGLE and float(np.abs(step[:, 3:]).max()) < ms.MIN_ANGLE * 0.1:
+            break
+        for k, r in enumerate(roots):
+            turned = ms.from_vector(step[k, :3]) @ world[r][:3, :3]
+            total = turned @ base[r][:3, :3].T
+            if ms.angle_of(total) > ms.MAX_ANGLE:
+                turned = ms.axis_angle(ms.rotation_axis(total), ms.MAX_ANGLE) @ base[r][:3, :3]
+            world[r][:3, :3] = turned
+            moved = shifted[k] + step[k, 3:]
+            length = float(np.linalg.norm(moved))
+            if length > ms.MAX_SHIFT:
+                moved *= ms.MAX_SHIFT / length
+            world[r][:3, 3] = base[r][:3, 3] + moved
+            self._carry(world, r)

@@ -73,7 +73,7 @@ from . import model_hems as hm
 from . import model_locks as ml
 from . import model_skirts as ms
 from .errors import AssetNotFound
-from .costume_cache import PoseStore, decode_clip
+from .costume_cache import PoseStore, clip_digest, decode_clip, memoize_pose
 from .unity import load_bundle
 from .model import (BundleGraph, NPC_PREFAB, PREFAB_KINDS, _external_cab, _key, _prefabs, bind_tracks,
                     euler_orders, euler_to_quat, ex_only_renderers, model_root, read_mesh, shader_kind, UNITY_ORDER)
@@ -349,10 +349,11 @@ class Skeleton:
             self.pose_store.put(self.dev, token, np.asarray(poses), np.array(sorted(animated), dtype=np.int64))
         return poses, animated
 
-    def clip_frames(self, tree: Mapping[str, Any], nodes: Iterable[int] | None = None
+    def clip_frames(self, tree: Mapping[str, Any], nodes: Iterable[int] | None = None, *, cache: bool = False
                     ) -> tuple[list[float], Callable[[int], list[np.ndarray]], set[int]]:
         """Frame times, world matrices by frame, and animated nodes. With ``nodes``, only their ancestors are posed;
-        other entries are None. This keeps a face-only pass from posing the body, props and new costume bones."""
+        other entries are None. This keeps a face-only pass from posing the body, props and new costume bones.
+        ``cache`` shares numerical frames in the bounded pose memory, keyed by revision and all pose inputs."""
         needed = set(range(len(self.nodes))) if nodes is None else set(nodes)
         for i in list(needed):
             parent = self.nodes[i].parent
@@ -392,6 +393,13 @@ class Skeleton:
                 world[i] = world[node.parent] @ m if node.parent is not None else m.copy()
             return world
 
+        if cache:
+            indices = tuple(sorted(needed)) if nodes is not None else None
+            revision = self.pose_store.revisions.get(self.dev) if self.pose_store is not None else None
+            digest = hashlib.sha256(repr((self.dev, revision, [(n.path, n.parent, n.local) for n in self.nodes],
+                                         bindings, indices)).encode())
+            digest.update(clip_digest(tree).encode())
+            pose = memoize_pose(pose, digest.hexdigest(), indices, len(self.nodes))
         return decoded.times, pose, set(tracks)
 
 
@@ -1531,12 +1539,14 @@ def _skirt_candidates(ts: Skeleton, ss: Skeleton, plan_: Plan, flat: Flat, sv: n
 # The cost of the hems' parts, for the build's "hems" phase (COSTUME_PHASES), in units of about 0.05 s as measured on
 # the dev view (Hina <- Aoba, Shigure <- Shiroko, Hoshino <- Hoshino (Swimsuit), Optimize Physics): the setup, a rule
 # judged by weights alone, a rule with chains (its turns solved in every check clip) and the legs thinned under the
-# cloth after them.
-HEM_UNITS = (20, 1, 60, 60)
+# cloth after them. Reweighted after candidate pruning and reuse of the chosen solver's turns during thinning
+# (cold ch0224 <- ch0145, 2026-11); setup and weight-only judging keep their previous costs.
+HEM_UNITS = (20, 1, 24, 12)
 
 
 def hems(target: Costume, source: Costume, plan_: Plan, t_clips: list[Any], s_clips: list[Any],
-         writable: list[bool], physics: bool = False, shapes_writable: bool = False, meter: Meter = QUIET) -> Hems:
+         writable: list[bool], physics: bool = False, shapes_writable: bool = False, meter: Meter = QUIET,
+         step: Callable[[], None] = lambda: None) -> Hems:
     """Rule A: new skin weights for the cloth the group choice left rigid around the legs, and, with
     ``physics`` (Optimize Physics), Rule B: the skirt chains as new bones turned by the legs in every
     frame; picked by measurement under the slot's own clips (see ``model_hems`` and ``model_skirts``). ``writable``:
@@ -1546,7 +1556,12 @@ def hems(target: Costume, source: Costume, plan_: Plan, t_clips: list[Any], s_cl
     rules are also built as if those groups were rigid (named with the ``REGROUP`` prefix), and ``model_hems.choose``
     compares them with the follow result, the first score, which they must beat within the same stretch ceiling. A build
     without ``physics`` never looks at them. ``meter`` is told how far the judging is, the rules weighed by their cost
-    (``HEM_UNITS``; the build's "hems" phase)."""
+    (``HEM_UNITS``; the build's "hems" phase).
+
+    This runs in the caller's class 1 preview or class 2/3 build, with no new
+    locks or workers. ``step`` yields or cancels between clips and solver
+    frames (normally under 0.1 s); cache locks hold only LRU bookkeeping.
+    """
     ts, ss = target.skeleton, source.skeleton
     t_legs, s_legs = legs_of(ts), legs_of(ss)
     if t_legs is None or s_legs is None:
@@ -1690,13 +1705,14 @@ def hems(target: Costume, source: Costume, plan_: Plan, t_clips: list[Any], s_cl
         clip = next((c for c, n in zip(t_clips, names) if n.endswith("_" + suffix.lower())), None)
         if clip is not None:
             tree = clip.read_typetree()
-            times, pose_at, _ = ts.clip_frames(tree)
+            prepared = ts.clip_frames(tree, cache=True)
+            times, pose_at, _ = prepared
             frames = []
             for frame in measured_frames(len(times)):
                 pose = pose_at(frame)
                 frames.append((frame, np.array([pose[c] for c in columns]) @ inverse, pose[t_legs["pelvis"]][:3, 3],
                                pose[t_legs["pelvis"]][:3, :3] @ rest_rotation @ up, pose))
-            checks.append((suffix, clip, tree, frames))
+            checks.append((suffix, clip, tree, prepared, frames))
     if not checks:
         return Hems(note="no check clips")
     limit = max(hm.STRETCH_FLOOR, max(hm.stretch_p99(own.rest, own.posed(pose), t_edges)
@@ -1704,14 +1720,15 @@ def hems(target: Costume, source: Costume, plan_: Plan, t_clips: list[Any], s_cl
     scores, four, solved = [], {}, {}
 
     def judged(rule: str, joints4: np.ndarray, weights4: np.ndarray, solver: ms.Solver | None,
-               points: np.ndarray) -> hm.Score:
+               points: np.ndarray, prune: bool = False) -> hm.Score:
         deep, worst = {}, 1.0
-        for suffix, clip, tree, frames in checks:
+        for suffix, clip, tree, prepared, frames in checks:
+            step()
             deep[suffix] = 0.0
             if solver is not None:  # the chains' turns in time, as the clip will hold them
-                if (rule, _key(clip)) not in solved:
-                    solved[(rule, _key(clip))] = skirt_sequence(ts, solver, tree)
-                turns = dict(zip(*solved[(rule, _key(clip))]))
+                if (solver, _key(clip)) not in solved:
+                    solved[(solver, _key(clip))] = skirt_sequence(ts, solver, tree, prepared=prepared, step=step)
+                turns = dict(zip(*solved[(solver, _key(clip))]))
             for frame, matrices, centre, carried, pose in frames:
                 if solver is not None:
                     matrices = np.concatenate([matrices, solver.posed(pose, turns[frame]) @ solver.inverse])
@@ -1719,6 +1736,8 @@ def hems(target: Costume, source: Costume, plan_: Plan, t_clips: list[Any], s_cl
                 state, depth = hm.cover(posed, covered, triangles, centre, carried)
                 deep[suffix] = max(deep[suffix], hm.deep_share(state, depth))
                 worst = max(worst, hm.stretch_p99(points, posed, edges))
+            if prune and scores and hm.cannot_win(hm.Score(rule, deep, worst), scores, limit):
+                return hm.Score(rule, deep, worst, complete=False)
         return hm.Score(rule, deep, worst)
 
     # how far the phase is: the rules by their cost (HEM_UNITS), after the setup and before the thinned legs
@@ -1728,7 +1747,7 @@ def hems(target: Costume, source: Costume, plan_: Plan, t_clips: list[Any], s_cl
     for (rule, weights, solver), cost in zip(rules, costs):
         meter.phase("hems", done, total)
         joints4, weights4 = hm.keep_four(weights)
-        scores.append(judged(rule, joints4, weights4, solver, sv))
+        scores.append(judged(rule, joints4, weights4, solver, sv, prune=True))
         four[rule] = (joints4, weights4)
         done += cost
     meter.phase("hems", done, total)
@@ -1755,7 +1774,7 @@ def hems(target: Costume, source: Costume, plan_: Plan, t_clips: list[Any], s_cl
         skirt = candidate.skirt  # the chosen build's bones: a regrouped build may have more than the default one
         result.skirt = skirt
         skirt.solver = candidate.solver
-        skirt.solved = {key: value for (rule, key), value in solved.items() if rule == best.rule}
+        skirt.solved = {key: value for (solver, key), value in solved.items() if solver is candidate.solver}
         nodes = np.array(columns + [skirt.node(k) for k in range(len(skirt.sources))])
         if result.regrouped:  # every vertex that differs from the follow result is written: the groups' other bones too
             changed = np.abs(chosen - np.pad(dense, ((0, 0), (0, len(skirt.sources))))).max(axis=1) > 1e-9
@@ -2228,13 +2247,15 @@ class FaceRetarget:
         self.rel0 = [inverse @ t_rest[m] for m in slots]       # the slot bones against the head at rest
         self.new0 = [inverse @ m for m in chains.rest]          # the new bones likewise
 
-    def follow(self, skeleton: Skeleton, tree: Mapping[str, Any], frames: list[int]) -> list[dict[int, np.ndarray]]:
+    def follow(self, skeleton: Skeleton, tree: Mapping[str, Any], frames: list[int], *, prepared=None, step=lambda: None
+               ) -> list[dict[int, np.ndarray]]:
         """The new bones' local transforms (4x4, without the bone's scale) at ``frames`` of a slot clip, for the bones
         whose slot bone moves against the head in it; the others stay at rest (no curve)."""
-        _, pose, _ = skeleton.clip_frames(tree, [self.head, *self.slots])
+        _, pose, _ = prepared if prepared is not None else skeleton.clip_frames(tree, [self.head, *self.slots])
         ch = self.chains
         out: list[dict[int, np.ndarray]] = []
         for f in frames:
+            step()
             world = pose(f)
             back = np.linalg.inv(world[self.head])
             placed: list[np.ndarray] = []
@@ -2342,27 +2363,31 @@ def measured_frames(count: int) -> list[int]:
     return sorted({min(count - 1, round(k * (count - 1) / max(1, HEM_FRAMES - 1))) for k in range(HEM_FRAMES)})
 
 
-def skirt_sequence(skeleton: Skeleton, solver: ms.Solver, tree: Mapping[str, Any]) -> tuple[list[int], list[dict]]:
+def skirt_sequence(skeleton: Skeleton, solver: ms.Solver, tree: Mapping[str, Any], *, prepared=None,
+                   step: Callable[[], None] = lambda: None) -> tuple[list[int], list[dict]]:
     """Rule B's solved frames of a clip (every ``SOLVE_EVERY``-th, the last and the measured ones) and the chains'
     turns there, in time (``Solver.sequence``)."""
     from .model_arm_clips import clip_times
 
     if isinstance(solver, FaceRetarget):  # a blink lasts a few frames
         every = list(range(len(clip_times(tree))))
-        return every, solver.follow(skeleton, tree, every)
-    times, pose, _ = skeleton.clip_frames(tree)
+        return every, solver.follow(skeleton, tree, every, prepared=prepared, step=step)
+    times, pose, _ = prepared if prepared is not None else skeleton.clip_frames(tree)
     count = len(times)
     frames = sorted(set(range(0, count, ms.SOLVE_EVERY)) | {count - 1} | set(measured_frames(count)))
     if isinstance(solver, ms.Spring):
         # the source's own keys for a clip it has by name, else the swing; then gravity; then the slot's own lock keys
-        poses = [pose(f) for f in frames]
+        poses = []
+        for f in frames:
+            step()
+            poses.append(pose(f))
         keyed = solver.keyed(str(tree.get("m_Name") or ""), [times[f] for f in frames])
         turns = keyed if keyed is not None else solver.sequence(
             [times[f] for f in frames], lambda k: poses[k], bool(tree["m_MuscleClip"].get("m_LoopTime")))
         turns = solver.settle(turns, [np.asarray(p[solver.chains.anchor]) for p in poses])
         return frames, carried_turns(solver, poses, turns)
     loop = bool(tree["m_MuscleClip"].get("m_LoopTime"))
-    return frames, solver.sequence([times[f] for f in frames], lambda k: pose(frames[k]), loop)
+    return frames, solver.sequence([times[f] for f in frames], lambda k: pose(frames[k]), loop, step=step)
 
 
 CARRY_GAINS = (1.0, 0.5)  # shares of the slot's lock turns tried in a clip before its locks keep their own turns
@@ -2388,7 +2413,32 @@ def carried_turns(spring: ms.Spring, poses: list[list[np.ndarray]], turns: list[
     return turns
 
 
-def skirt_curves(skeleton: Skeleton, skirt: Skirt, tree: dict, key: tuple[str, int] | None = None) -> int | None:
+def curve_frames(skeleton: Skeleton, skirts: Sequence[Skirt], tree: Mapping[str, Any]):
+    """One snapshot of the original clip, posing only the chains' dependencies.
+
+    New curves target new bones, never these original anchors, locks and face
+    slots. Arm copies supply their corrected tree before taking this snapshot.
+    """
+    nodes = set()
+    for skirt in skirts:
+        solver = skirt.solver
+        if isinstance(solver, FaceRetarget):
+            nodes.update([solver.head, *solver.slots])
+        elif isinstance(solver, ms.Spring):
+            nodes.add(solver.chains.anchor)
+            if solver.carry is not None:
+                nodes.add(solver.carry.head)
+                nodes.update(n for path in solver.carry.paths for n in path)
+            if solver.hair is not None:
+                nodes.update(solver.hair.nodes)
+        else:
+            nodes.update([solver.pelvis, *solver.leg_nodes, *solver.cloth.fixed])
+            nodes.update(solver.chains.anchor_of(r) for r in solver.roots)
+    return skeleton.clip_frames(tree, nodes, cache=True)
+
+
+def skirt_curves(skeleton: Skeleton, skirt: Skirt, tree: dict, key: tuple[str, int] | None = None, *,
+                 prepared=None, step: Callable[[], None] = lambda: None) -> int | None:
     """Rule B's rotation and position curves for the chains' first bones added to a clip typetree of the slot: the
     turns and shifts of
     :func:`skirt_sequence` (or those measured for the clip ``key``), interpolated onto its dense grid; for a clip that
@@ -2400,7 +2450,7 @@ def skirt_curves(skeleton: Skeleton, skirt: Skirt, tree: dict, key: tuple[str, i
     from .model_arm_clips import clip_times
 
     times = clip_times(tree)
-    frames, turns = skirt.solved.get(key) or skirt_sequence(skeleton, skirt.solver, tree)
+    frames, turns = skirt.solved.get(key) or skirt_sequence(skeleton, skirt.solver, tree, prepared=prepared, step=step)
     roots = sorted(turns[0]) if turns else []
     if not roots:
         return 0
@@ -2408,9 +2458,9 @@ def skirt_curves(skeleton: Skeleton, skirt: Skirt, tree: dict, key: tuple[str, i
     positions = np.array([[t[root][:3, 3] for root in roots] for t in turns])
     at = np.clip(grid, times[0], times[-1])
     columns = []
+    solved_at = np.array([times[f] for f in frames])
     for r in range(len(roots)):  # per root its rotation (4 curves), then its position (3)
         if len(frames) > 1:
-            solved_at = np.array([times[f] for f in frames])
             columns.append(ms.resample(solved_at, ms.continuous(rotations[:, r]), at))
             columns.append(np.stack([np.interp(at, solved_at, positions[:, r, k]) for k in range(3)], axis=1))
         else:
@@ -3165,6 +3215,7 @@ def choose_prefab(prefabs: Mapping[str, Any], dev: str) -> str:
 # 2026-11), without and with Optimize Physics, averaged over four pairs with cold, memory and disk caches: the
 # weights of the progress line's percentage (``progress_meter``). The arm pass varies by pair; "curves" holds its
 # clip copies as well as the skirt, hair and face curves.
+# Physics hem/curve weights are scaled by the cold ch0224 <- ch0145 improvement after pruning and pose sharing.
 # "stage" (the slot's copies) comes before the build and "save" (the changed bundles written, lzma) after it, both in
 # the library's ``_stage_costume``.
 COSTUME_PHASES: tuple[tuple[str, float, float], ...] = (
@@ -3177,7 +3228,7 @@ COSTUME_PHASES: tuple[tuple[str, float, float], ...] = (
     ("probes", 0.10, 0.09),
     ("plan", 0.76, 0.81),
     ("arms", 0.00, 3.16),
-    ("hems", 0.47, 5.61),
+    ("hems", 0.47, 1.50),
     ("rigid", 0.01, 0.01),
     ("springs", 0.00, 0.45),
     ("face", 0.01, 0.03),
@@ -3188,7 +3239,7 @@ COSTUME_PHASES: tuple[tuple[str, float, float], ...] = (
     ("carried", 0.01, 0.01),
     ("halo", 0.02, 0.12),
     ("prefabs", 0.03, 0.06),
-    ("curves", 2.19, 4.60),
+    ("curves", 2.19, 3.20),
     ("check", 0.02, 0.02),
     ("save", 6.60, 7.59),
 )
@@ -3300,7 +3351,7 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
     phase("hems")
     stores = [hm.store_of(tree) for tree in mesh_trees]
     hem = hems(target, source, result, t_clips, s_clips, [store is not None for store in stores], physics,
-               shapes_writable=all(layout is not None for layout in layouts), meter=meter)
+               shapes_writable=all(layout is not None for layout in layouts), meter=meter, step=step)
     if hem.thin is not None:  # Optimize Physics thinned the legs under the cloth: the bound shape changes there
         rows, moved = hem.thin
         vertices = result.fit.vertices.copy()
@@ -3622,7 +3673,7 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
     # in place
     curves = len(arm_clips) + len(skirt_clips)
     phase("curves", 0, curves)
-    model_arm_clips.write_copies(writer, arm_clips, arm_destinations, arm_holders, t_skeleton, clip_skirts)
+    model_arm_clips.write_copies(writer, arm_clips, arm_destinations, arm_holders, t_skeleton, clip_skirts, step=step)
     for i, clip in enumerate(skirt_clips):
         step()
         phase("curves", len(arm_clips) + i, curves)
@@ -3633,7 +3684,9 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
         before = clip_snapshot(tree) if ms.dense_grid(tree) is not None else None
         edited = [skirt for skirt in clip_skirts[_key(clip)]
                   if skirt.solver.roots or getattr(skirt.solver, "carry", None) is not None]
-        bones = [skirt_curves(t_skeleton, skirt, tree, _key(clip)) for skirt in edited] if before is not None else [None]
+        prepared = curve_frames(t_skeleton, edited, tree) if before is not None and edited else None
+        bones = [skirt_curves(t_skeleton, skirt, tree, _key(clip), prepared=prepared, step=step)
+                 for skirt in edited] if before is not None else [None]
         if edited and None not in bones and sum(bones):
             obj.save_typetree(tree)
             # each bone with curves got a rotation (4 curves) and a position (3): read the saved clip back
