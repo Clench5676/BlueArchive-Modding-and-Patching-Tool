@@ -84,6 +84,16 @@ def test_an_exact_name_is_the_current_release_without_asking_for_the_structure()
     assert resolve({source.name: source}, CORE, Readers(release=never)).current == {SKEL: source}
 
 
+def test_a_known_older_file_is_not_current_even_with_the_exact_name():
+    source = Path("/mod") / SKEL.name
+    files = {source.name: source}
+    assert resolver.current(files, CORE, older={source}) == ({}, {})
+    resolution = resolve(files, CORE, readers({**HELD, source: HELD[SKEL]}), older={source})
+    assert resolution.current == {} and resolution.older == files
+    assert resolution.updated == [SKEL]
+    assert resolution.matches()[source.name].method == resolver.ASSET_PATH
+
+
 def test_a_generic_file_of_a_rebuilt_slot_updates_it_through_its_assets():
     target = Path("/game/uis-03_scenario-01_background-bg_a-2024-11-18_assets_all_1.bundle")
     old = Path("/mod") / target.name.replace("_1.bundle", "_99.bundle")

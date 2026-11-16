@@ -24,7 +24,7 @@ from datetime import datetime, timezone
 from functools import wraps
 from pathlib import Path
 from types import SimpleNamespace
-from typing import TYPE_CHECKING, Any, Callable, Hashable, Iterable, Iterator, Mapping, Sequence
+from typing import TYPE_CHECKING, Any, Callable, Collection, Hashable, Iterable, Iterator, Mapping, Sequence
 
 from UnityPy.helpers.ResourceReader import get_resource_data
 
@@ -1927,10 +1927,10 @@ class ModLibrary:
 
     def _resolve(self, files: dict[str, Path], targets: Sequence[Path], pin: Pin | None,
                  inspection: integrity.Inspection | None = None, *, whole: bool = True,
-                 keys: bool = True, release: bool = True) -> resolver.Resolution:
+                 keys: bool = True, release: bool = True, older: Collection[Path] = ()) -> resolver.Resolution:
         """The one rule for the official parts these files replace or update (``targets.resolve``)."""
         return resolver.resolve(files, targets, self._readers(targets, pin, inspection, keys=keys, release=release),
-                                whole=whole)
+                                whole=whole, older=older)
 
     def _replacements(self, files: dict[str, Path], targets: list[Path], pin: Pin | None,
                       inspection: integrity.Inspection | None = None, *, release: bool = True) -> dict[Path, Path]:
@@ -4902,12 +4902,18 @@ class ModLibrary:
 
     # --- switching ---
 
-    def _plan(self, record: dict[str, Any], log: LogFunc, pin: Pin) -> list[PlannedGroup]:
+    def _plan(self, record: dict[str, Any], log: LogFunc, pin: Pin, *,
+              older: Collection[Path] = (), check_references: bool = True) -> list[PlannedGroup]:
+        """Install groups, demoting stale whole files before a build. Comparisons only ask for targets, without
+        reference reads; ``older`` carries any files the whole-file shortcut already found stale."""
         paths = self._paths(record)
         files = {path.name: path for path in paths}
         targets = (self._other_targets(files, pin) if record["kind"] == "other" else
                    self._spine_parts(core_of(paths[0].name), pin))
-        resolution = self._resolve(files, targets, pin)
+        resolution = self._resolve(files, targets, pin, older=older)
+        stale = self._stale_sources(resolution.current, pin) if check_references else set()
+        if stale:
+            resolution = self._resolve(files, targets, pin, older=set(older) | stale)
         current = resolution.current
         groups = {}
         inspection = integrity.Inspection()
@@ -5345,6 +5351,24 @@ class ModLibrary:
             logger.info("The built copy of %s points at objects the game no longer holds, rebuilding",
                         ", ".join(sorted(target.name for target in broken)))
         return bool(broken)
+
+    def _stale_sources(self, current: Mapping[Path, Path], pin: Pin) -> set[Path]:
+        """The files of ``current`` ({target: source}, those a resolution writes whole) that point at objects the game
+        no longer holds (``_broken_references``): a game update rebuilt a bundle they point into, under the same CAB,
+        and left the part's name, or its structure, as it was. They are files of an older release, updated into the
+        part as it is now like any other; written whole, the write's own check would refuse them. A file that cannot
+        be read stays as it is (that check reads it again)."""
+        if not current:
+            return set()
+        try:
+            broken = self._broken_references(current, pin)
+        except (ServiceError, OSError, ValueError) as error:
+            log_failure(logger, logging.DEBUG, "Could not read the references of a mod file", error)
+            return set()
+        if broken:
+            logger.info("%s points at objects the game no longer holds, updating it as a file of an older release",
+                        ", ".join(sorted(current[target].name for target in broken)))
+        return {current[target] for target in broken}
 
     def _check_references(self, changed: Mapping[Path, Path], pin: Pin) -> None:
         """The last reference check of a write: a file that points at objects the game no longer holds where it points
@@ -5943,18 +5967,25 @@ class ModLibrary:
                         progress: ProgressCallback | None, pin: Pin) -> dict[Path, Path]:
         sources = {path.name: path for path in self._paths(record)}
         by_name = {path.name: path for path in targets}
+        stale: set[Path] = set()
         if (len(sources) == len(record["files"]) and len(by_name) == len(targets)
                 and sources.keys() <= by_name.keys()
                 and all(not self._needs_crc_fix(path, by_name[name]) for name, path in sources.items())):
-            # These parts already have the current names and required CRC. The
-            # transaction checks and copies their exact bytes once; staging an
-            # official copy and replacing it with the same Mod adds no protection.
-            if progress:
-                progress(0, 1, t("webui.progress.process", name=core_of(record["files"][0])))
-            return {target: sources[target.name] if target.name in sources else self._official_or_current(target, pin)
-                    for target in targets}
+            stale = self._stale_sources({by_name[name]: path for name, path in sources.items()}, pin)
+            if not stale:
+                # These parts have current names, references and the required CRC. The
+                # transaction checks and copies their exact bytes once; staging an
+                # official copy and replacing it with the same Mod adds no protection.
+                if progress:
+                    progress(0, 1, t("webui.progress.process", name=core_of(record["files"][0])))
+                return {target: sources[target.name] if target.name in sources else self._official_or_current(target, pin)
+                        for target in targets}
         if record["kind"] == "other":
-            current = self._replacements(sources, targets, pin)
+            resolution = self._resolve(sources, targets, pin, older=stale)
+            more_stale = self._stale_sources(resolution.current, pin)
+            if more_stale:
+                resolution = self._resolve(sources, targets, pin, older=stale | more_stale)
+            current = resolution.current
             staged = self._stage_direct(targets, sources, work / "targets", pin,
                                         set(targets) - current.keys())
             output = work / "output"
@@ -5992,7 +6023,7 @@ class ModLibrary:
                     atomic_copy(pair.output, original)
             return staged
         started = time.perf_counter()
-        groups = self._plan(record, log, pin)
+        groups = self._plan(record, log, pin, older=stale)
         allowed = set(targets)
         planned = self._plan_targets(groups)
         if any(path not in allowed for path in planned):
@@ -9011,7 +9042,7 @@ class ModLibrary:
         """Hash raw assets against the current official files, even when a mod is installed."""
         pin = self._current(pin)
         record = self._record(mod_id)
-        targets = self._plan_targets(self._plan(record, no_log, pin))
+        targets = self._plan_targets(self._plan(record, no_log, pin, check_references=False))
         baseline = [self._official_for(path, pin) for path in targets]
         return self._compare_paths(mod_id, self._paths(record), baseline)
 
