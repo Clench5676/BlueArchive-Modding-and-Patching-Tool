@@ -145,7 +145,8 @@ def _open_models(view: str) -> None:
 
 
 def _worn(dev: str) -> tuple[str, list[str] | None]:
-    """A model's worn items as "<renderer>/<item's top node>"; None for a model without a prefab of its own bundles."""
+    """A model's worn items as "<renderer>/<item's top node>", " (packed)" after one the costume encloses (not
+    carried); None for a model without a prefab of its own bundles."""
     from bmpt.gameassets import model_adapt as ma, model_props as mp
     from bmpt.gameassets.errors import AssetNotFound
     from bmpt.gameassets.model import model_root
@@ -160,7 +161,8 @@ def _worn(dev: str) -> tuple[str, list[str] | None]:
         clips = ma.prefab_clips(graph, s, ma.own_prefabs(ma._model_prefabs(graph, files), dev))
         idle = next(iter(s.poses(ma.pick(clips, ma.IDLE_CLIPS)[:1], frames=1)), None)
         worn = mp.worn_items(s, ma.roles(s, idle), clips, idle)
-        return dev, sorted(f"{s.nodes[i.part.node].name}/{s.nodes[i.top].name}" for i in worn.items)
+        return dev, sorted(f"{s.nodes[i.part.node].name}/{s.nodes[i.top].name}{'' if i.carry else ' (packed)'}"
+                           for i in worn.items)
 
 
 @official

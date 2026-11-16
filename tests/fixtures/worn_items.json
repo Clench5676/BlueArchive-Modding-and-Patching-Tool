@@ -6,7 +6,7 @@
   "ch0123": ["CH0123_Prop/bone_juice_01_main"],
   "ch0155": ["CH0155_Star/bone_star_L", "CH0155_Star/bone_star_R"],
   "ch0178": ["CH0178_BeachProp_02/bone_crab_s"],
-  "ch0186": ["CH0186_Prop_01/bone_prop_01", "CH0186_Prop_02/bone_prop_02", "CH0186_Prop_03/bone_prop_03"],
+  "ch0186": ["CH0186_Prop_01/bone_prop_01 (packed)", "CH0186_Prop_02/bone_prop_02 (packed)", "CH0186_Prop_03/bone_prop_03 (packed)"],
   "ch0188": ["CH0188_Bag/bone_bag_line_00"],
   "ch0201": ["CH0201_Prop_Mesh/bone_mop_01"],
   "ch0202": ["CH0201_Prop_Mesh/bone_mop_01"],
@@ -31,7 +31,7 @@
   "chinatsu_original": ["Chinatsu_Original_Syringe_Bag/bag_bone_01"],
   "hibiki_original": ["Hibiki_Original_Bag_Outline/bone_Bag"],
   "hoshino_swimsuit": ["Hoshino_Swimsuit_BeachProp_Outline/bone_WaterproofCase_00"],
-  "kazusa_original": ["Kazusa_Original_Macaron/bone_Macaron"],
+  "kazusa_original": ["Kazusa_Original_Macaron/bone_Macaron (packed)"],
   "neru_original": ["Neru_Original_Weapon_Chain/bone_chain_01"],
   "saori_original": ["Saori_Original_Handgun/bone_Weapon"]
 }}
