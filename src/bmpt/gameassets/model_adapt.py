@@ -3073,6 +3073,7 @@ class Result:
     cautions: list[str] = field(default_factory=list)  # ``EX_PARTS``, ``CARRIED_SHADER``
     dropped: list[str] = field(default_factory=list)  # the slot's renderers whose worn items now draw nothing
     carried: list[str] = field(default_factory=list)  # the source's renderers whose worn items the slot now draws
+    arms: int = 0  # Optimize Physics: the slot's clips copied with the arms pushed out of the costume
 
 
 def _model_prefabs(graph: BundleGraph, files: list[Path]) -> dict[str, Any]:
@@ -3534,7 +3535,7 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
     if dropped or carried_names:
         logger.info("Costume of %s on %s: worn items of %s draw nothing, of %s are carried", s_name, t_name,
                     ", ".join(dropped) or "none", ", ".join(carried_names) or "none")
-    return Result(opened, result, len(s_costume), hem, cautions, dropped, carried_names)
+    return Result(opened, result, len(s_costume), hem, cautions, dropped, carried_names, len(arm_clips))
 
 
 def _edit_prefabs(writer: _Writer, sf: Any, graph: BundleGraph, t_meshes: Mapping[tuple[str, int], str],
