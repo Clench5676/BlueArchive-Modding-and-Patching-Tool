@@ -461,6 +461,7 @@
 			"subject": "{name}（{parts}）",
 			"job": "{action}{name} {current} / {total}",
 			"step": " - {step}",
+			"percent": "{percent}%",
 			"actionProcess": "處理",
 			"actionApply": "套用",
 			"actionRestore": "還原",

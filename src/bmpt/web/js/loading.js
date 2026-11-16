@@ -77,9 +77,13 @@ export const covering = () => active() && overlay.mode === "full";
 // Automatic popups wait for page work, input holds and independent writer progress.
 export const busy = () => pending.size > 0 || active() || held() || (!!writerOverlay && !writerOverlay.closing);
 
-export function progressText({ label = "", current = 0, total = 0 } = {}, fallback = T("progress.process", { name: T("progress.mods") })) {
+// fraction: the share done of the item at hand, after the line as job-progress.js's percentText writes it (whole
+// percents, below 100 while the item runs); nothing without one
+export function progressText({ label = "", current = 0, total = 0, fraction = null } = {}, fallback = T("progress.process", { name: T("progress.mods") })) {
   const text = label || fallback;
-  return total > 0 ? T("progress.count", { label: text, current, total }) : text;
+  const line = total > 0 ? T("progress.count", { label: text, current, total }) : text;
+  return typeof fraction === "number" && Number.isFinite(fraction) && fraction > 0
+    ? `${line} ${T("progress.percent", { percent: Math.min(99, Math.floor(fraction * 100)) })}` : line;
 }
 
 // A writer task stays visible until it settles. Progress survives the sprite upgrade and
@@ -95,11 +99,15 @@ export async function task(run, { label = null } = {}) {
   o.progress = detail;
   o.progressTree = null; o.progressContent = null;
   o.el.appendChild(detail);
-  let latest = {};
+  let latest = {}, item = null, best = null;
   const update = (value = latest) => {
     if (my !== writerGen || o !== writerOverlay) return;
     latest = value;
-    setProgress(o, progressText(value, label || undefined));
+    // the fraction only grows within one item (its current / total) and starts again with the next
+    const key = `${value?.current ?? ""}/${value?.total ?? ""}`, f = value?.fraction;
+    if (key !== item) { item = key; best = null; }
+    if (typeof f === "number" && Number.isFinite(f) && (best === null || f > best)) best = f;
+    setProgress(o, progressText(best === null ? value : { ...value, fraction: best }, label || undefined));
   };
   o.relabelProgress = () => update();
   update();

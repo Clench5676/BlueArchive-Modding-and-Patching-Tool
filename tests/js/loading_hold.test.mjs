@@ -171,7 +171,7 @@ const detailSource = readFileSync(new URL("../../src/bmpt/web/js/detail.js", imp
 const detailJob = detailSource.slice(detailSource.indexOf("async function job("), detailSource.indexOf("function shownMod()"));
 function detailHarness(overrides = {}) {
   const env = { Loading, notify() {}, T: (key) => key, variant: () => ({}), fullName: () => "Student", fam: {},
-    switchKind: () => "spr", progressName: () => "Student", jobProgress: () => "Repairing Student", renderScreen: async () => {},
+    switchKind: () => "spr", progressName: () => "Student", jobProgress: () => "Repairing Student", steadyFraction: () => () => null, renderScreen: async () => {},
     rpc: async () => "job", waitJob: async () => ({}), reload: async () => {}, QUEUEABLE: [], errorText: String,
     refused() {}, overwrittenMessage() {}, resumeChanged() {}, ...overrides };
   return new Function("env", `const { ${Object.keys(env).join(", ")} } = env;

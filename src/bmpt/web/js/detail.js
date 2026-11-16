@@ -1,7 +1,7 @@
 import * as Photo from "./photography/controller.js";
 import * as Camera from "./lobby-camera.js";
 import { notify } from "./popup.js";
-import { jobProgress, progressName } from "./job-progress.js";
+import { jobProgress, progressName, steadyFraction } from "./job-progress.js";
 // Detail screen, built from the game's own prefab (UICharacterDetail) by ngui.js. The prefab supplies every frame,
 // sprite, tint, incline and position; this file swaps labels and textures, hides what the tool has no use for, and adds
 // what the game has no screen for: variant chips, the expression strip and the portrait and lobby switchers. A family
@@ -994,8 +994,10 @@ async function job(method, params, options = {}) {
   const target = fam?.variants?.find((v) => v.key === targetKey) || variant();
   const kind = params.kind || mod?.kind || switchKind() || "spr";
   const subject = progressName(target, T(({ spr: "tab.portrait", lobby: "tab.lobby", model: "tab.model", other: "import.other" })[kind] || "import.other"), name, fam);
+  // a build that says how far it is (a 3D model's costume) shows its percentage after the line
+  const steady = steadyFraction();
   const progress = (p = {}) => jobProgress({ action: `progress.action${action[0].toUpperCase()}${action.slice(1)}`, name: subject,
-    current: p.current || 1, total: p.total || 1, step: p.step || "" });
+    current: p.current || 1, total: p.total || 1, step: p.step || "", fraction: steady(p) });
   const running = progress();
   try {
     return await Loading.hold(async (update) => {
