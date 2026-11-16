@@ -801,3 +801,89 @@ def test_batched_query_equals_single_frame_queries_with_ties_and_misses():
     empty = ar.BodyFrame.prepare(np.zeros((5, 0, 3, 3)))
     empty.append(None)
     assert _same(ar.query_many(points, dirs, rho, empty), -rho)
+
+
+def _solve_many_reference(rig, poses, needs, hold, pins, sleeves, guard=None, initial=None):
+    """The solver loop before its per-step work was trimmed."""
+    idx = [k for k, _, _ in ar.DRIVEN]
+    tw = np.array([x for _, x, _ in ar.DRIVEN])[None, None, :, None]
+    te = 1 - tw
+    a = np.minimum(needs[:, :, idx], ar.NEED_CAP).copy()
+    a[:, :, 4:] *= (1 - pins)[..., None]
+    free = (~hold)[..., None]
+    pts = np.array([rig.samples(w) for w in poses])
+    p = pts[:, :, idx]
+    diff = p[:, 0, :, None] - p[:, 1, None, :]
+    c = np.linalg.norm(diff, axis=3)
+    reach, grown = sleeves
+    near = (np.clip((reach - c) / 0.02, 0, 1) * np.exp(-(c - c.min(axis=(1, 2))[:, None, None]) / 0.015)
+            if grown > 0 else np.zeros_like(c))
+    active = (a.max(axis=2) > 1e-5) & ~hold
+    near *= active.any(axis=1)[:, None, None]
+    normal = diff / np.maximum(c, 1e-9)[..., None]
+    d = np.array([ar.push_directions(rig, w, pt)[:, idx] for w, pt in zip(poses, pts)])
+    joints = np.array([[rig.joints(w, s) for s in range(2)] for w in poses])
+    u, e, wr = (joints[:, :, k] for k in range(3))
+    l1 = np.linalg.norm(e - u, axis=2)[..., None]
+    l2 = np.linalg.norm(wr - e, axis=2)[..., None]
+    de, dw = np.zeros_like(e), np.zeros_like(wr)
+    if initial is not None:
+        de, dw = .25 * initial[:, :, 0], .25 * initial[:, :, 1]
+    guard_tw = np.array([0, 0, 0, .25, .5, .75, 1, 1, 1])[None, None, :, None]
+    guard_te = np.array([.5, .75, 1, .75, .5, .25, 0, 0, 0])[None, None, :, None]
+    step = ar.STEP if guard is None else .025
+    steps = ar.STEPS if initial is None else 3 * ar.STEPS // 4
+    for iteration in range(steps + (60 if guard is not None else 0)):
+        dp = tw * dw[:, :, None] + te * de[:, :, None]
+        v = np.maximum(0, a - (d * dp).sum(axis=3))
+        v += 4 * np.maximum(0, -(d * dp).sum(axis=3))
+        g = -v[..., None] * d
+        rel = dp[:, 0, :, None] - dp[:, 1, None, :]
+        vp = ar.PAIR_WEIGHT * near * np.maximum(0, grown - (normal * rel).sum(axis=3))
+        g[:, 0] -= (vp[..., None] * normal).sum(axis=2)
+        g[:, 1] += (vp[..., None] * normal).sum(axis=1)
+        gw = (tw * g).sum(axis=2)
+        ge = (te * g).sum(axis=2)
+        if guard is not None:
+            direction, target = guard
+            all_dp = guard_tw * dw[:, :, None] + guard_te * de[:, :, None]
+            penalty = 4 * np.maximum(0, target - (direction * all_dp).sum(axis=3))
+            gradient = -penalty[..., None] * direction
+            gw += (guard_tw * gradient).sum(axis=2)
+            ge += (guard_te * gradient).sum(axis=2)
+        if iteration >= steps:
+            gw = (guard_tw * gradient).sum(axis=2)
+            ge = (guard_te * gradient).sum(axis=2)
+        else:
+            gw += (ar.MOVE_COST + ar.PIN_COST * pins[..., None]) * dw
+            ge += ar.MOVE_COST * de
+        v1, v2 = e + de - u, wr + dw - e - de
+        a1, a2 = v1 / l1, v2 / l2
+        gu = ge + gw
+        v1 -= step * (gu - (gu * a1).sum(axis=2)[..., None] * a1) * free
+        v2 -= step * (gw - (gw * a2).sum(axis=2)[..., None] * a2) * free
+        v1 *= l1 / np.maximum(np.linalg.norm(v1, axis=2), 1e-9)[..., None]
+        v2 *= l2 / np.maximum(np.linalg.norm(v2, axis=2), 1e-9)[..., None]
+        de = (u + v1 - e) * free
+        dw = (u + v1 + v2 - wr) * free
+    return np.stack((de, dw), axis=2)
+
+
+def test_trimmed_solver_steps_are_bit_identical_with_and_without_guard_and_start():
+    rig = _rig()
+    rng = np.random.default_rng(41)
+    poses = _turned_poses(rig, rng, 9)
+    needs = np.abs(rng.normal(0, .03, (9, 2, 9)))
+    needs[2] = 0
+    hold = rng.random((9, 2)) < .15
+    pins = np.clip(rng.normal(.2, .3, (9, 2)), 0, 1)
+    initial = rng.normal(0, .01, (9, 2, 2, 3))
+    direction = rng.normal(size=(9, 2, 9, 3))
+    direction /= np.linalg.norm(direction, axis=3)[..., None]
+    target = np.where(rng.random((9, 2, 9)) < .5, rng.normal(0, .01, (9, 2, 9)), -1e6)
+    for sleeves in ((0, 0), (.3, .02)):
+        for guard in (None, (direction, target)):
+            for start in (None, initial):
+                got = ar.solve_many(rig, poses, needs, hold, pins, sleeves, guard, start)
+                want = _solve_many_reference(rig, poses, needs, hold, pins, sleeves, guard, start)
+                assert got.tobytes() == want.tobytes()

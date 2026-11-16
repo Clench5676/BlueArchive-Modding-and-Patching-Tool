@@ -664,30 +664,35 @@ def solve_many(rig, poses, needs, hold, pins, sleeves, guard=None, initial=None)
     guard_te = np.array([.5, .75, 1, .75, .5, .25, 0, 0, 0])[None, None, :, None]
     step = STEP if guard is None else .025
     steps = STEPS if initial is None else 3 * STEPS // 4
+    pair = PAIR_WEIGHT * near
+    wrist_cost = MOVE_COST + PIN_COST * pins[..., None]
     for iteration in range(steps + (60 if guard is not None else 0)):
-        dp = tw * dw[:, :, None] + te * de[:, :, None]
-        v = np.maximum(0, a - (d * dp).sum(axis=3))
-        # Penalize inward moves too; separating sleeves must not bury an arm.
-        v += 4 * np.maximum(0, -(d * dp).sum(axis=3))
-        g = -v[..., None] * d
-        rel = dp[:, 0, :, None] - dp[:, 1, None, :]
-        vp = PAIR_WEIGHT * near * np.maximum(0, grown - (normal * rel).sum(axis=3))
-        g[:, 0] -= (vp[..., None] * normal).sum(axis=2)
-        g[:, 1] += (vp[..., None] * normal).sum(axis=1)
-        gw = (tw * g).sum(axis=2)
-        ge = (te * g).sum(axis=2)
         if guard is not None:
             direction, target = guard
             all_dp = guard_tw * dw[:, :, None] + guard_te * de[:, :, None]
             penalty = 4 * np.maximum(0, target - (direction * all_dp).sum(axis=3))
             gradient = -penalty[..., None] * direction
-            gw += (guard_tw * gradient).sum(axis=2)
-            ge += (guard_te * gradient).sum(axis=2)
         if iteration >= steps:
+            # The closing guard-only steps: the need and sleeve terms are not used.
             gw = (guard_tw * gradient).sum(axis=2)
             ge = (guard_te * gradient).sum(axis=2)
         else:
-            gw += (MOVE_COST + PIN_COST * pins[..., None]) * dw
+            dp = tw * dw[:, :, None] + te * de[:, :, None]
+            out = (d * dp).sum(axis=3)
+            v = np.maximum(0, a - out)
+            # Penalize inward moves too; separating sleeves must not bury an arm.
+            v += 4 * np.maximum(0, -out)
+            g = -v[..., None] * d
+            rel = dp[:, 0, :, None] - dp[:, 1, None, :]
+            vp = pair * np.maximum(0, grown - (normal * rel).sum(axis=3))
+            g[:, 0] -= (vp[..., None] * normal).sum(axis=2)
+            g[:, 1] += (vp[..., None] * normal).sum(axis=1)
+            gw = (tw * g).sum(axis=2)
+            ge = (te * g).sum(axis=2)
+            if guard is not None:
+                gw += (guard_tw * gradient).sum(axis=2)
+                ge += (guard_te * gradient).sum(axis=2)
+            gw += wrist_cost * dw
             ge += MOVE_COST * de
         # Optimize the two unit bone directions. The upper-arm derivative
         # includes both joint gradients because turning it moves the wrist too.
