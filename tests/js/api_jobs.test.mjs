@@ -32,6 +32,15 @@ test("polling observes a failed apply even when its event was lost, and done nee
   assert.equal(await waitJob("j2", null, options), "recovered");
 });
 
+test("a cancelled job ends its waiter with the cancelled code, polled or by its event", async () => {
+  globalThis.fetch = async () => answer({ result: { state: "cancelled", result: null } });
+  await assert.rejects(waitJob("j-cancelled", null, options), (e) => e.code === "cancelled");
+  globalThis.fetch = async () => answer({ result: { state: "running" } });
+  const pending = waitJob("j-stopped", null, options);
+  stream.emit("job.cancelled", { id: "j-stopped", kind: "costume-check" });
+  await assert.rejects(pending, (e) => e.code === "cancelled");
+});
+
 test("missing, dropped, repeatedly unreadable and permanently running jobs end the waiter", async () => {
   for (const result of [{ error: { code: "job_not_found" } }, { result: { state: "dropped" } }, null, { result: { state: "running" } }]) {
     let calls = 0;

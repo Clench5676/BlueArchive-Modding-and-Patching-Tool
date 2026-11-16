@@ -1299,7 +1299,8 @@ def test_the_library_builds_a_costume_under_the_model_lock(monkeypatch, tmp_path
 
     library = object.__new__(service.ModLibrary)
     monkeypatch.setattr(model_adapt, "adapt", adapt)
-    monkeypatch.setattr(service.ModLibrary, "_stage_official", lambda self, targets, folder, pin, **kw: {})
+    monkeypatch.setattr(service.ModLibrary, "_official_or_current", lambda self, path, pin: path)
+    monkeypatch.setattr(service.ModLibrary, "_stage_copies", lambda self, originals, folder: {})
     monkeypatch.setattr(service.ModLibrary, "_costume_files", lambda self, other, pin: ("dev", [], []))
     monkeypatch.setattr(service.ModLibrary, "_cab_index", lambda self, pin: None)
     monkeypatch.setattr(service.ModLibrary, "_core_map", lambda self, pin: type("M", (), {"slot": lambda s, c: c})())

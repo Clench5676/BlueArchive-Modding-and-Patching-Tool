@@ -231,3 +231,57 @@ def test_queued_writers_still_run_at_shutdown_whatever_their_class():
     assert wait_for(lambda: ran == ["prune"])
     with pytest.raises(ValueError):
         jobs.submit("x", lambda log, progress: None, rank=7)
+
+
+def test_a_cancelled_job_never_runs_when_queued_and_stops_at_its_next_step_when_running():
+    """A page cancels a check it no longer wants: a queued one never runs and ends "cancelled" at once; a running
+    one is told and ends "cancelled" at its next step; a job not made cancellable, or of another kind, is refused."""
+    from bmpt.errors import ServiceError
+    from bmpt.webui.jobs import Cancelled
+
+    events = EventBus()
+    seen = events.subscribe()
+    jobs = JobRunner(events)
+    gate, steps, ran = threading.Event(), [], []
+    try:
+        def check(log, progress, cancelled):
+            steps.append("started")
+            gate.wait(5)
+            if cancelled():
+                raise Cancelled()
+            steps.append("finished")
+            return {"saved": True}
+
+        running = jobs.submit("costume-check", check, cancellable=True)
+        assert wait_for(lambda: jobs.get(running).state == "running")
+        queued = jobs.submit("costume-check", lambda log, progress, cancelled: ran.append("queued"), cancellable=True)
+        plain = jobs.submit("extract", lambda log, progress: ran.append("extract"))
+        with pytest.raises(ServiceError, match="bad_params"):
+            jobs.cancel(plain, ("costume-check",))  # not cancellable
+        with pytest.raises(ServiceError, match="bad_params"):
+            jobs.cancel(queued, ("compatibility",))  # not a kind the caller may stop
+        with pytest.raises(ServiceError, match="job_not_found"):
+            jobs.cancel("j999", ("costume-check",))
+        assert jobs.cancel(queued, ("costume-check",)) == "cancelled"
+        assert jobs.wait(queued, 0) and jobs.get(queued).state == "cancelled" and not jobs.get(queued).pending
+        assert jobs.cancel(running, ("costume-check",)) == "running"
+        gate.set()
+        assert jobs.wait(running, 5) and jobs.wait(plain, 5)
+        assert jobs.get(running).state == "cancelled" and jobs.get(running).result is None
+        assert steps == ["started"] and ran == ["extract"]  # the queued check never ran; the next job did
+        assert jobs.get(running).to_json()["state"] == "cancelled"
+        names = []
+        while not seen.empty():
+            event, data = seen.get_nowait()
+            if event == "job.cancelled":
+                names.append(data["id"])
+        assert names == [queued, running]
+        # a job that ended is left as it is
+        done = jobs.submit("costume-check", lambda log, progress, cancelled: "ok", cancellable=True)
+        assert jobs.wait(done, 5) and jobs.cancel(done, ("costume-check",)) == "done"
+        assert jobs.get(done).result == "ok"
+        with pytest.raises(ValueError):
+            jobs.submit("apply", lambda log, progress, cancelled: None, writes="game", cancellable=True)
+    finally:
+        gate.set()
+        jobs.shutdown()

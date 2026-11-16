@@ -161,7 +161,7 @@ def _costume_services(tmp_path, outcomes, export_error=None):
     saved, built, exported = {}, [], []
     part = tmp_path / "character-hina_original-_mxload-2026-01-01_assets_all_2.bundle"
 
-    def preview(target, other):
+    def preview(target, other, cancelled=None):
         built.append(other)
         outcome = outcomes[other]
         if isinstance(outcome, ServiceError):
@@ -217,7 +217,7 @@ def test_a_costume_past_the_stretch_limit_is_shown_for_a_preview_only(tmp_path):
     s, saved, built, _ = _costume_services(tmp_path, outcomes)
     preview = s.library.costume_preview
 
-    def unfit(target, other):  # the library saves such a pair as shown only while it builds the preview
+    def unfit(target, other, cancelled=None):  # the library saves such a pair as shown only while it builds the preview
         saved[other] = {"ok": False, "preview": True, "reason": "stretch", "detail": {}}
         return preview(target, other)
 
@@ -315,7 +315,7 @@ def test_another_students_model_is_a_preview_source_and_past_the_stretch_limit_s
     s, saved, built, _ = _costume_services(tmp_path, outcomes)
     preview = s.library.costume_preview
 
-    def unfit(target, other):  # past the stretch limit: saved as "preview" while the preview builds
+    def unfit(target, other, cancelled=None):  # past the stretch limit: saved as "preview" while the preview builds
         saved[other] = {"ok": False, "preview": True, "reason": "stretch", "detail": {}}
         return preview(target, other)
 
@@ -373,4 +373,55 @@ def test_every_preview_asset_counts_as_foreground(tmp_path):
         assert seen == [("model", 1), ("portrait", 1), ("bg", 1)]
         assert preview_gate._count == 0  # released after an answer and after a failure
     finally:
+        s.close()
+
+
+def test_a_cancelled_costume_check_stops_between_its_phases_and_saves_no_verdict(tmp_path):
+    """Leaving the 3D tab cancels its checks (jobs.cancel): a running check stops once its build ends, before the
+    export and before any verdict, and its next pairs are never built; the pair is checked again next time. Other
+    jobs cannot be cancelled this way."""
+    import threading
+    import time
+
+    outcomes = {"np0009": "parts", "ch0230": "parts"}
+    s, saved, built, exported = _costume_services(tmp_path, outcomes)
+    preview = s.library.costume_preview
+    building, gate, seen = threading.Event(), threading.Event(), []
+
+    def slow(target, other, cancelled=None):  # the build: not interrupted, the check stops after it
+        building.set()
+        gate.wait(5)
+        seen.append(cancelled())
+        return preview(target, other)
+
+    s.library.costume_preview = slow
+    api = build_api(s)
+    try:
+        job = api.call("model.checkCostumes", {"variant": "hina", "others": ["np0009", "ch0230"]})["result"]
+        assert building.wait(5)
+        assert api.call("jobs.cancel", {"id": job})["result"] == "running"
+        gate.set()
+        assert s.jobs.wait(job, 5)
+        state = api.call("jobs.get", {"id": job})["result"]
+        assert state["state"] == "cancelled" and state["result"] is None
+        assert seen == [True] and built == ["np0009"] and exported == [] and saved == {}
+        # a queued check never runs
+        gate.clear()
+        building.clear()
+        first = api.call("model.checkCostumes", {"variant": "hina", "others": ["np0009"]})["result"]
+        assert building.wait(5)
+        queued = api.call("model.checkCostumes", {"variant": "hina", "others": ["ch0230"]})["result"]
+        assert api.call("jobs.cancel", {"id": queued})["result"] == "cancelled"
+        gate.set()
+        assert s.jobs.wait(first, 5) and s.jobs.wait(queued, 5)
+        assert s.jobs.get(first).result == {"np0009": "ok"} and "ch0230" not in built and "ch0230" not in saved
+        # checked again next time
+        again = api.call("model.checkCostumes", {"variant": "hina", "others": ["ch0230"]})["result"]
+        assert s.jobs.wait(again, 5) and s.jobs.get(again).result == {"ch0230": "ok"}
+        # only the kinds a page may stop
+        other = s.submit("compatibility", lambda log, progress: time.sleep(0.01))
+        refused = api.call("jobs.cancel", {"id": other})
+        assert refused["error"]["code"] == "bad_params"
+    finally:
+        gate.set()
         s.close()

@@ -19,7 +19,7 @@ from concurrent.futures import Future
 from concurrent.futures import TimeoutError as FutureTimeout
 from io import BytesIO
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 from urllib.parse import unquote
 
 from .. import devmode, globallines, updater
@@ -30,12 +30,15 @@ from .strings import get_locale_dir
 from ..kivo import clip_id
 from ..library.storage import trailing_bytes
 from . import strings
+from .jobs import Cancelled
 from .rpc import RpcRegistry, to_json
 from .services import Services
 from .session_log import tail
 from .state import ALIAS_LENGTH, ALIAS_MAX, LOBBY_ZOOM_MODES, alias_key, alias_text, is_number, lobby_zoom, roster_view
 from .system import can_restart_safe, reveal
 
+# the jobs a page may cancel once it no longer wants them (``jobs.cancel``): read-only checks of what it shows
+CANCELLABLE = ("costume-check",)
 # a build's own release notes, one Markdown file per version (shipped with the package's assets)
 RELEASE_NOTES_DIR = Path(__file__).resolve().parent.parent / "assets" / "release-notes"
 
@@ -817,23 +820,27 @@ def build_api(s: Services) -> RpcRegistry:
     @rpc.method("model.checkCostumes")
     def model_check_costumes(variant: str, others: list[str]) -> str:
         """A job checking other variants' costumes on a variant's model to their end (``Services.costume_check``);
-        its result is {other: "ok" | "preview" | "refused"}. A refusal of the moment is "refused" and not saved."""
+        its result is {other: "ok" | "preview" | "refused"}. A refusal of the moment is "refused" and not saved.
+        Class 2, read-only; the page cancels it (``jobs.cancel``) once its 3D tab is left: a queued one never runs, a
+        running one stops between its pairs and phases, saving no verdict (the "cancelled" state)."""
         keys = costume_keys(variant, others)
 
-        def run(log: Any, progress: Any) -> dict[str, str]:
+        def run(log: Any, progress: Any, cancelled: Callable[[], bool]) -> dict[str, str]:
             out: dict[str, str] = {}
             for i, other in enumerate(keys):
+                if cancelled():
+                    raise Cancelled()
                 if progress:
                     progress(i, len(keys), "")
                 try:
-                    verdict = s.costume_check(variant, other) if preview_source_valid(
+                    verdict = s.costume_check(variant, other, cancelled=cancelled) if preview_source_valid(
                         variant, "model", f"variant:{other}") else None
                 except (ServiceError, KeyError):
                     verdict = None
                 out[other] = verdict_kind(verdict) or "refused"
             return out
 
-        return s.submit("costume-check", run)
+        return s.submit("costume-check", run, cancellable=True)
 
     @rpc.method("model.optimize")
     def model_optimize(variant: str, source: str, name: str = "") -> str:
@@ -1480,6 +1487,15 @@ def build_api(s: Services) -> RpcRegistry:
     def jobs_get(id: str) -> dict[str, Any]:
         job = s.jobs.get(id)
         return {**job.to_json(), "log": job.log[-500:]}
+
+    @rpc.method("jobs.cancel")
+    def jobs_cancel(id: str) -> str:
+        """Stop a job the page no longer wants, of the kinds that allow it (``CANCELLABLE``): its state afterwards
+        ("cancelled" at once for a queued one; a running one stops at its next step). ``bad_params`` for any other
+        job."""
+        if not isinstance(id, str) or not id or len(id) > 64:
+            raise ServiceError("bad_params", key="id")
+        return s.jobs.cancel(id, CANCELLABLE)
 
     # --- system ---
 

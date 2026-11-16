@@ -1045,7 +1045,7 @@ def test_every_costume_is_applied_past_the_stretch_limit(model_env, monkeypatch)
     built = []
     gain = {'physics': True}  # whether the physics build chose a rule (a skirt, or a regrouped rule)
 
-    def stage(self, other, targets, directory, log, pin, *, preview=False, report=None, physics=False):
+    def stage(self, other, targets, directory, log, pin, *, preview=False, report=None, physics=False, inputs=None):
         built.append((other, preview, physics))
         if report is not None and physics:
             report['physics'] = gain['physics']
@@ -1107,7 +1107,7 @@ def test_costume_builds_of_an_older_rule_are_built_again_at_the_start(model_env,
     library = ModLibrary(env.root, Catalog(game, None), object(), env.settings, scan_allowed=lambda: True)
     built, gain = [], {'physics': True}
 
-    def stage(self, other, targets, directory, log, pin, *, preview=False, report=None, physics=False):
+    def stage(self, other, targets, directory, log, pin, *, preview=False, report=None, physics=False, inputs=None):
         built.append((other, physics))
         if report is not None and physics:
             report['physics'] = gain['physics']
@@ -1182,7 +1182,7 @@ def test_a_costume_verdict_keeps_the_cautions_its_preview_build_found(model_env,
     library = ModLibrary(env.root, Catalog(game, None), object(), env.settings, scan_allowed=lambda: True)
     unfit = {}
 
-    def staged(self, other, targets, directory, log, pin, *, preview=False, report=None):
+    def staged(self, other, targets, directory, log, pin, *, preview=False, report=None, inputs=None):
         out = directory / 'output'
         out.mkdir(parents=True)
         (out / targets[0].name).write_bytes(b'built')
@@ -1206,6 +1206,91 @@ def test_a_costume_verdict_keeps_the_cautions_its_preview_build_found(model_env,
     assert 'cautions' not in library._save_verdict('signature', False, 'rest pose', cautions=['ex_parts'])
 
 
+def _swimsuit_library(env):
+    model_bundle(env.game_dir, core='hoshino_swimsuit', prefab=True, part='000', payload=b'swim prefab')
+    game = SimpleNamespace(spine_cores=lambda kind: {'hoshino_spr': [], 'hoshino_swimsuit_spr': []} if kind == 'spr' else {},
+                           collection_names=lambda: {}, model_cores=lambda: {'hoshino_original', 'hoshino_swimsuit'})
+    return ModLibrary(env.root, Catalog(game, None), object(), env.settings, scan_allowed=lambda: True)
+
+
+def test_a_costume_preview_builds_without_holding_the_library_lock(model_env, monkeypatch):
+    """The build of a costume preview takes seconds: the page's reads (any serialized library call) never wait for
+    it. Only its short steps (the signature and inputs, then storing the result) hold the library lock; a cancelled
+    check keeps the build but saves no verdict."""
+    import threading
+    import time
+
+    library = _swimsuit_library(model_env)
+    building, gate = threading.Event(), threading.Event()
+    owned = []
+
+    def staged(self, other, targets, directory, log, pin, *, preview=False, report=None, inputs=None):
+        owned.append(self._lock._lock._is_owned())
+        assert inputs is not None and set(inputs.originals) == set(targets)
+        building.set()
+        gate.wait(5)
+        out = directory / 'output'
+        out.mkdir(parents=True)
+        (out / targets[0].name).write_bytes(b'built')
+        report['unfit'] = {'source': 'stretch', 'adapted': '9.00', 'own': '4.00'}
+        return {targets[0]: out / targets[0].name}
+
+    monkeypatch.setattr(ModLibrary, '_stage_costume', staged)
+    result, cancelled = {}, threading.Event()
+    worker = threading.Thread(target=lambda: result.update(parts=library.costume_preview(
+        'hoshino', 'hoshino_swimsuit', cancelled=cancelled.is_set)))
+    worker.start()
+    try:
+        assert building.wait(5)
+        started = time.monotonic()
+        assert library.costume_verdict('hoshino', 'hoshino_swimsuit') is None  # a page read, while the build runs
+        assert library.mods() == []
+        assert time.monotonic() - started < 2
+        cancelled.set()
+    finally:
+        gate.set()
+        worker.join(5)
+    assert owned == [False]
+    parts = result['parts']
+    assert [path.read_bytes() for path in parts] == [b'built'] and parts[0].parent.parent.name == 'previews'
+    # cancelled after the build: the build is kept, its stretch verdict is not saved until a check reads it
+    assert library.costume_verdict('hoshino', 'hoshino_swimsuit') is None
+    assert library.costume_preview('hoshino', 'hoshino_swimsuit') == parts and owned == [False]  # kept: not built again
+    assert library.costume_verdict('hoshino', 'hoshino_swimsuit')['preview'] is True
+
+
+def test_a_costume_preview_whose_signature_changed_while_it_was_built_is_built_again(model_env, monkeypatch):
+    """The build runs without the library lock: when the pair's build signature changed meanwhile (here the costume
+    rule; the official bytes or the kept originals likewise), the build is discarded, nothing is kept or saved under
+    the old signature, and the pair is built again for the new one."""
+    from bmpt.gameassets import costume_rule
+
+    library = _swimsuit_library(model_env)
+    rule = costume_rule.COSTUME_RULE
+    builds = []
+
+    def staged(self, other, targets, directory, log, pin, *, preview=False, report=None, inputs=None):
+        builds.append(costume_rule.COSTUME_RULE)
+        if len(builds) == 1:
+            monkeypatch.setattr(costume_rule, 'COSTUME_RULE', rule + 1)  # changed while this build ran
+        out = directory / 'output'
+        out.mkdir(parents=True)
+        (out / targets[0].name).write_bytes(f'built {len(builds)}'.encode())
+        report['unfit'] = {'source': 'stretch', 'adapted': '9.00', 'own': '4.00'}
+        return {targets[0]: out / targets[0].name}
+
+    monkeypatch.setattr(ModLibrary, '_stage_costume', staged)
+    pin = library.current_pin()
+    old = library._costume_signature('hoshino', 'hoshino_swimsuit', pin)[0]
+    parts = library.costume_preview('hoshino', 'hoshino_swimsuit')
+    new = library._costume_signature('hoshino', 'hoshino_swimsuit', pin)[0]
+    assert old != new and builds == [rule, rule + 1]
+    assert [path.read_bytes() for path in parts] == [b'built 2'] and parts[0].parent.name == new
+    previews = model_env.root / 'built' / 'previews'
+    assert sorted(path.name for path in previews.iterdir()) == [new]
+    assert old not in library._verdicts() and library._verdicts()[new]['preview'] is True
+
+
 def test_costume_verdicts_are_kept_per_build_signature(model_env, monkeypatch):
     """A pair's verdict holds for the costume rule and the official bytes it was judged on (not the
     program build); the rule's refusals are saved by the preview itself."""
@@ -1219,7 +1304,7 @@ def test_costume_verdicts_are_kept_per_build_signature(model_env, monkeypatch):
     library = ModLibrary(env.root, Catalog(game, None), object(), env.settings, scan_allowed=lambda: True)
     assert library.costume_verdict('hoshino', 'hoshino_swimsuit') is None
 
-    def refused(self, other, targets, directory, log, pin, *, preview=False, report=None):
+    def refused(self, other, targets, directory, log, pin, *, preview=False, report=None, inputs=None):
         raise model_adapt.refuse('rest pose')
 
     monkeypatch.setattr(ModLibrary, '_stage_costume', refused)

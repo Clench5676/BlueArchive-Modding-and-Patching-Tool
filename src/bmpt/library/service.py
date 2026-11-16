@@ -78,6 +78,8 @@ SPACE_MARGIN = 512 * 1024 * 1024  # left free on the library's volume by an Off 
 SAVE_EVERY = (10, 2.0)  # a toggle saves its unfinished list every 10 entries or 2 s
 BUILT_TEMP_MAX_AGE = 60 * 60  # seconds before an abandoned built copy can be cleared
 COSTUME_PREVIEWS = 4  # costume previews kept in built/previews (one folder per build signature)
+# times a costume preview is built again when its build signature changed while it was built (costume_preview)
+COSTUME_BUILD_TRIES = 3
 POINTER_CACHE = 256  # files whose cross-bundle pointers, and game files whose objects, are kept in memory
 COSTUME_VERDICTS = 4000  # costume verdicts kept in costume-verdicts.json, newest first
 # the startup rig archive (archive_rigs) works only once no other caller used the library for this long
@@ -300,6 +302,22 @@ def _held_after(disk_held: list, records: dict, base: dict, mine: dict) -> list:
         if mod_id is None or (mod_id not in records and mod_id not in removed):
             kept.append(raw)
     return kept
+
+
+@dataclass
+class _CostumeInputs:
+    """What a costume build reads of the library, gathered under its lock (``ModLibrary._costume_inputs``) so the
+    build itself can run without it (``costume_preview``): the bytes to stage for each part of the model slot, the
+    source model's files, the CAB index, the slot's dev name, and the rule that gives the official copy of a
+    dependency the build finds (``_official_or_current``: not serialized, as for the preview reads)."""
+
+    originals: dict[Path, Path]  # the slot's game files -> the official (else current) copy staged for it
+    dev: str  # the source model's dev name
+    chosen: set[str]  # the names of the source's files that hold its prefab
+    sources: list[Path]  # the official (else current, for a preview) copies of the source model's files
+    cabs: CabIndex
+    target_dev: str
+    official: Callable[[Path], Path]
 
 
 @dataclass
@@ -779,6 +797,8 @@ class ModLibrary:
         # per install key: (folders' signature, index, its files, generation); file name -> lower-case core
         self._indexes: dict[str, tuple[tuple, dict[str, list[Path]], frozenset, int]] = {}
         self._cab_indexes: dict[tuple[str, tuple[Path, ...]], CabIndex] = {}
+        self._costume_builds: dict[str, threading.Event] = {}  # costume preview signatures being built
+        self._costume_builds_lock = threading.Lock()
         self._cores: dict[str, str] = {}
         self._packed_wanted: set[str] = set()  # packed groups of files being imported
         self._generation = 0
@@ -5503,40 +5523,65 @@ class ModLibrary:
         resolve = self._official_or_current if preview else self._official_for
         return dev, [resolve(path, pin) for path in files]
 
+    def _costume_inputs(self, other: str, targets: list[Path], pin: Pin, *, preview: bool = False) -> _CostumeInputs:
+        """What ``_stage_costume`` reads of the library for a build of ``other``'s costume on the model slot
+        ``targets``; under the library lock (path lookups only, no bundle is opened)."""
+        originals = {path: self._official_or_current(path, pin) for path in targets}
+        dev, prefab_files, files = self._costume_files(other, pin)
+        resolve = self._official_or_current if preview else self._official_for
+        return _CostumeInputs(
+            originals=originals, dev=dev, chosen={path.name for path in prefab_files},
+            sources=[resolve(path, pin) for path in files], cabs=self._cab_index(pin),
+            target_dev=self._core_map(pin).slot(core_of(targets[0].name)),
+            official=lambda path: self._official_or_current(path, pin))
+
+    def _stage_copies(self, originals: dict[Path, Path], directory: Path) -> dict[Path, Path]:
+        """Copy the bytes chosen for each game file (``originals``) into ``directory`` under the game file's name."""
+        staged: dict[Path, Path] = {}
+        directory.mkdir(parents=True, exist_ok=True)
+        for path, source in originals.items():
+            target = directory / path.name
+            if target in staged.values():
+                raise ServiceError("game_file_conflict", file=path)
+            atomic_copy(source, target)
+            staged[path] = target
+        return staged
+
     def _stage_costume(self, other: str, targets: list[Path], directory: Path, log: LogFunc, pin: Pin, *,
                        preview: bool = False, report: dict[str, Any] | None = None,
-                       physics: bool = False) -> dict[Path, Path]:
+                       physics: bool = False, inputs: _CostumeInputs | None = None) -> dict[Path, Path]:
         """The model slot ``targets`` (official copies) carrying the costume of ``other``'s model: changed parts built
         into ``directory``, the others as staged official copies. Reads official bytes only: the slot's own parts, the
         source model's files, and any other bundle the CAB index finds. ``physics``: Optimize Physics, the
         build may also choose Rule B, or a rule built with the followed leg groups made rigid; ``report["physics"]`` says
-        whether it chose one of them. Every costume, the same student's too, carries its halo or hides the slot's."""
+        whether it chose one of them. Every costume, the same student's too, carries its halo or hides the slot's.
+        ``inputs``: what it reads of the library, gathered before under the library lock (``_costume_inputs``); given,
+        the build reads no library state and runs without that lock (``costume_preview``), else the caller holds it."""
         from ..gameassets.model_adapt import adapt
 
-        staged = self._stage_official(targets, directory / "targets", pin, current_fallback=True)
-        dev, prefab_files, files = self._costume_files(other, pin)
-        resolve = self._official_or_current if preview else self._official_for
+        if inputs is None:
+            inputs = self._costume_inputs(other, targets, pin, preview=preview)
+        staged = self._stage_copies(inputs.originals, directory / "targets")
         index: dict[str, Path] = {}
-        sources = [resolve(path, pin) for path in files]
-        chosen = {path.name for path in prefab_files}
+        sources = inputs.sources
         for path in sources:
             for cab in cab_names(path):
                 index.setdefault(cab, path)
         for path in staged.values():
             for cab in cab_names(path):
                 index[cab] = path
-        cabs = self._cab_index(pin)
+        cabs = inputs.cabs
 
         def resolver(wanted: set[str], hint: Path | None) -> dict[str, str]:
-            return {cab: str(self._official_or_current(Path(path), pin)) for cab, path in cabs.resolve(wanted, hint).items()}
+            return {cab: str(inputs.official(Path(path))) for cab, path in cabs.resolve(wanted, hint).items()}
 
-        target_dev = self._core_map(pin).slot(core_of(targets[0].name))
         from ..gameassets.service import model_lock
 
+        # never while waiting for the library lock: costume_preview gave that lock back before its build
         with model_lock("costume"):
             result = adapt(index=index, resolver=resolver, target_files=list(staged.values()),
-                           target_dev=target_dev, source_files=[p for p in sources if p.name in chosen],
-                           source_dev=dev, open_writable=Bundle.load, physics=physics,
+                           target_dev=inputs.target_dev, source_files=[p for p in sources if p.name in inputs.chosen],
+                           source_dev=inputs.dev, open_writable=Bundle.load, physics=physics,
                            halo=True)
         if report is not None and result.plan.unfit:
             report["unfit"] = {"source": "stretch", "adapted": f"{result.plan.stretch:.2f}", "own": f"{result.plan.own:.2f}"}
@@ -5675,11 +5720,78 @@ class ModLibrary:
                                  built_against=self._built_against(built, pin, "import"))
         return {"mod": record["id"]}
 
-    @_serialized
-    def costume_preview(self, variant_key: str, other: str, pin: Pin | None = None) -> list[Path]:
+    def costume_preview(self, variant_key: str, other: str, pin: Pin | None = None, *,
+                        cancelled: Callable[[], bool] | None = None) -> list[Path]:
         """The parts of a variant's model slot carrying another variant's costume, for a 3D preview: built once per
         build signature into built/previews/<signature> and kept for the newest few (the export cache keys on their
-        paths). Reads official bytes where there are any, else the current ones, like the other previews."""
+        paths). Reads official bytes where there are any, else the current ones, like the other previews.
+
+        Not serialized as a whole: its callers are the 3D tab's preview (class 1) and the costume check (class 2),
+        and a build takes seconds. Only its short steps hold the library lock: the signature, the kept preview and
+        the build's inputs (``_costume_preview_start``), then storing the result (``_costume_preview_store``); the
+        staging and the build run without it, so the page's reads never queue behind a build. The model lock is taken
+        only once the library lock is given back. A build whose signature changed meanwhile (the game files or the
+        kept originals changed) is discarded and built again. ``cancelled`` (the costume check's ``jobs.cancel``):
+        once set, no build starts (``busy``) and no verdict is saved; a build that ended is still kept."""
+        def stopped() -> bool:
+            return cancelled is not None and cancelled()
+
+        with _errors("costume_preview"):
+            for _ in range(COSTUME_BUILD_TRIES):
+                start = self._costume_preview_start(variant_key, other, pin, verdicts=not stopped())
+                if isinstance(start, list):
+                    return start
+                signature, targets, built_pin, inputs = start
+                building = self._costume_build_turn(signature)
+                if building is not None:  # another caller builds the same pair: its result is kept, read it then
+                    while not building.wait(0.1):
+                        if stopped():
+                            raise ServiceError("busy")
+                    continue
+                try:
+                    if stopped():
+                        raise ServiceError("busy")
+                    report: dict[str, Any] = {}
+                    with temporary_directory(prefix=devmode.LIBRARY_STAGING_PREFIX) as temporary:
+                        try:
+                            replacements = self._stage_costume(other, targets, Path(temporary) / "model", no_log,
+                                                               built_pin, preview=True, report=report, inputs=inputs)
+                        except ServiceError as error:
+                            if error.code == "source_unsupported" and not stopped():
+                                # the rule cannot carry this pair: never offered again
+                                self._costume_preview_refused(variant_key, other, pin, signature, error)
+                            raise
+                        built = [path for path in replacements.values() if path.parent.name == "output"]
+                        parts = self._costume_preview_store(variant_key, other, pin, signature, built, report,
+                                                            verdicts=not stopped())
+                    if parts is not None:
+                        return parts
+                    logger.info("Costume preview %s <- %s changed while it was built: built again", variant_key, other)
+                finally:
+                    self._costume_build_done(signature)
+            raise ServiceError("busy")
+
+    def _costume_build_turn(self, signature: str) -> threading.Event | None:
+        """Claim the build of a costume preview signature: None when this caller builds it (``_costume_build_done``
+        ends the claim), else the event of the build under way."""
+        with self._costume_builds_lock:
+            building = self._costume_builds.get(signature)
+            if building is None:
+                self._costume_builds[signature] = threading.Event()
+            return building
+
+    def _costume_build_done(self, signature: str) -> None:
+        with self._costume_builds_lock:
+            building = self._costume_builds.pop(signature, None)
+        if building is not None:
+            building.set()
+
+    @_serialized
+    def _costume_preview_start(self, variant_key: str, other: str, pin: Pin | None, *,
+                               verdicts: bool = True) -> list[Path] | tuple[str, list[Path], Pin, _CostumeInputs]:
+        """``costume_preview``'s first step, under the library lock: the kept preview of the pair's build signature
+        when there is one (with the stretch verdict it found, unless ``verdicts`` is False), else (signature, the
+        slot's files, the install, the build's inputs)."""
         pin = self._current(pin)
         signature, targets = self._costume_signature(variant_key, other, pin)
         folder = self.root / "built" / "previews" / signature
@@ -5691,28 +5803,37 @@ class ModLibrary:
                 parts = [folder / name for name in kept["parts"] if is_safe_file_name(name)]
                 if parts and all(path.is_file() for path in parts):
                     os.utime(folder)
-                    if kept.get("unfit") and signature not in self._verdicts():
+                    if verdicts and kept.get("unfit") and signature not in self._verdicts():
                         self._save_verdict(signature, False, "stretch", kept["unfit"], preview=True,
                                            cautions=kept.get("cautions") or ())
                     return parts
             except (OSError, ValueError, KeyError, TypeError):
                 pass
-        report: dict[str, Any] = {}
-        with temporary_directory(prefix=devmode.LIBRARY_STAGING_PREFIX) as temporary:
-            try:
-                replacements = self._stage_costume(other, targets, Path(temporary) / "model", no_log, pin, preview=True,
-                                                   report=report)
-            except ServiceError as error:
-                if error.code == "source_unsupported":  # the rule cannot carry this pair: never offered again
-                    self._save_verdict(signature, False, error.params.get("source"), error.params)
-                raise
-            built = [path for target, path in replacements.items() if path.parent.name == "output"]
-            folder.mkdir(parents=True, exist_ok=True)
-            for path in built:
-                atomic_copy(path, folder / path.name)
-            done.write_text(json.dumps({"parts": [path.name for path in built], "unfit": report.get("unfit"),
-                                        "cautions": report.get("cautions") or []}))
-        if report.get("unfit"):  # past the stretch limit: still offered, with a caution
+        return signature, targets, pin, self._costume_inputs(other, targets, pin, preview=True)
+
+    @_serialized
+    def _costume_preview_refused(self, variant_key: str, other: str, pin: Pin | None, signature: str,
+                                 error: ServiceError) -> None:
+        """Save the rule's refusal of a pair built without the lock, when its signature is still the current one."""
+        if self._costume_signature(variant_key, other, self._current(pin))[0] == signature:
+            self._save_verdict(signature, False, error.params.get("source"), error.params)
+
+    @_serialized
+    def _costume_preview_store(self, variant_key: str, other: str, pin: Pin | None, signature: str,
+                               built: list[Path], report: dict[str, Any], *, verdicts: bool = True) -> list[Path] | None:
+        """``costume_preview``'s last step, under the library lock: the parts built without it copied into
+        built/previews/<signature>, with the stretch verdict the build found (unless ``verdicts`` is False), and the
+        older previews pruned; None, keeping nothing, when the pair's signature is no longer ``signature``."""
+        if self._costume_signature(variant_key, other, self._current(pin))[0] != signature:
+            return None
+        folder = self.root / "built" / "previews" / signature
+        folder.mkdir(parents=True, exist_ok=True)
+        for path in built:
+            atomic_copy(path, folder / path.name)
+        (folder / "parts.json").write_text(json.dumps({"parts": [path.name for path in built],
+                                                       "unfit": report.get("unfit"),
+                                                       "cautions": report.get("cautions") or []}))
+        if verdicts and report.get("unfit"):  # past the stretch limit: still offered, with a caution
             self._save_verdict(signature, False, "stretch", report["unfit"], preview=True,
                                cautions=report.get("cautions") or ())
         previews = sorted((p for p in folder.parent.iterdir() if p.is_dir()), key=lambda p: p.stat().st_mtime, reverse=True)
