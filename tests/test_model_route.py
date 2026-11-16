@@ -280,7 +280,7 @@ def test_optimize_physics_runs_as_a_library_job_on_the_official_model_or_a_costu
     s, _, _, _ = _costume_services(tmp_path, {})
     asked = []
 
-    def optimize(variant, source, name, pin=None):
+    def optimize(variant, source, name, pin=None, progress=None):
         asked.append((variant, source, name, pin))
         return {"unneeded": True, "reason": "official"} if source == "official" else {"mod": "copy"}
 
