@@ -554,6 +554,8 @@ class Spring:
         self.rest_dirs = rest_dirs / norms
         self.hanging = np.array([float(d @ DOWN) >= math.cos(HANGING) for d in self.rest_dirs], bool)
         self.rates = np.clip(SPRING_SPEED * np.sqrt(9.81 / np.maximum(self.lengths, MIN_LENGTH)), *SPRING_RATES)
+        self.carry: Carry | None = None  # the slot's own lock keys some roots take (:meth:`carried`)
+        self.hair: Any = None            # what judges a clip's carried turns (``model_adapt.HairCheck``)
 
     def _rest(self, anchor: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """The roots' world matrices at rest below ``anchor``, their heads and their tips' targets."""
@@ -683,8 +685,107 @@ class Spring:
             out.append(frame)
         return out
 
+    def carried(self, poses: Sequence[Sequence[np.ndarray]], host: list[np.ndarray] | None = None,
+                gain: float = 1.0) -> tuple[list[int], list[dict[int, np.ndarray]]]:
+        """The third source of turns beside :meth:`keyed` and :meth:`sequence`: the slot's own keys of its locks
+        (:class:`Carry`), at the slot's world matrices ``poses`` (the clip's own frames, no time scaling). Each chain
+        root of the carry (swinging or not) whose slot lock moves in them takes that lock's turns from rest against
+        the head: every bone of its chain the turn at its share along its lock (``gain`` of it), about its own rest,
+        the chain rebuilt from the root to its tips. Returns those roots and, per pose, the local transforms (4x4,
+        without the bone's scale) of every bone of their chains; no roots when there is no carry or no slot lock
+        moves. ``host``: :meth:`Carry.turns` of the poses, when already known."""
+        carry = self.carry
+        if carry is None or not len(poses):
+            return [], [{} for _ in poses]
+        host = carry.turns(poses) if host is None else host
+        moving = carry.moving(host)
+        roots = sorted(r for r, lock in carry.roots.items() if lock in moving)
+        ch = self.chains
+        bones = [(b, carry.roots[r]) for r in roots for b in ch.subtree[r]]
+        out: list[dict[int, np.ndarray]] = []
+        for f in range(len(poses)):
+            turn, world, frame = {}, {}, {}
+            for b, lock in bones:
+                t = carry.at(host[lock][f], lock, carry.places.get(b, 0.0))
+                turn[b] = t if gain == 1.0 else from_vector(rotation_vector(t) * gain)
+            for b, _ in bones:  # parents first (each chain's subtree lists them so)
+                p = ch.parents[b]
+                w = ch.rest[b].copy()
+                w[:3, :3] = turn[b] @ ch.rest[b][:3, :3]
+                if p >= 0:
+                    w[:3, 3] = world[p][:3, 3] + turn[p] @ (ch.rest[b][:3, 3] - ch.rest[p][:3, 3])
+                world[b] = w
+                local = np.linalg.inv(world[p] if p >= 0 else carry.anchor) @ w
+                local[:3, :3] = local[:3, :3] @ np.linalg.inv(scale_of(local))
+                frame[b] = local
+            out.append(frame)
+        return roots, out
+
     def posed(self, pose: Sequence[np.ndarray], turns: Mapping[int, np.ndarray]) -> np.ndarray:
         return self.chains.posed(np.asarray(pose[self.chains.anchor]), turns)
+
+
+def _rotation(m: np.ndarray) -> np.ndarray:
+    return m[:3, :3] / np.maximum(np.linalg.norm(m[:3, :3], axis=0, keepdims=True), 1e-12)
+
+
+def slerp(r0: np.ndarray, r1: np.ndarray, f: float) -> np.ndarray:
+    """The rotation ``f`` of the way from ``r0`` to ``r1``."""
+    return from_vector(rotation_vector(r1 @ r0.T) * f) @ r0
+
+
+@dataclass
+class Carry:
+    """The slot's own keys of its locks (hair, ears), carried onto the chains matched to them (``model_locks``). Per
+    slot lock its nodes in the slot's skeleton, first bone to farthest, their shares of its length and their rest
+    rotations; per chain root the slot lock it takes after (``roots``), per chain bone its share along its own lock
+    (``places``). ``head``: the slot's head node; ``anchor``: the chains' anchor at rest (the head's world matrix).
+    A slot lock whose nodes turn less than ``still`` within a clip is still there: its roots keep their own turns."""
+
+    head: int
+    anchor: np.ndarray
+    paths: list[list[int]]
+    shares: list[np.ndarray]
+    rests: list[np.ndarray]
+    roots: dict[int, int]
+    places: dict[int, float]
+    still: float = math.radians(2)
+
+    def turns(self, poses: Sequence[Sequence[np.ndarray]]) -> list[np.ndarray]:
+        """Per slot lock, its nodes' turns from rest against the head at each of ``poses`` (frames x nodes x 3 x 3),
+        in the prefab root's space with the head at rest: a node turned as it turns against the head."""
+        head0 = _rotation(self.anchor)
+        out = []
+        for path, rest in zip(self.paths, self.rests):
+            frames = np.zeros((len(poses), len(path), 3, 3))
+            for f, pose in enumerate(poses):
+                back = head0 @ _rotation(np.asarray(pose[self.head])).T
+                for k, node in enumerate(path):
+                    frames[f, k] = back @ _rotation(np.asarray(pose[node])) @ rest[k].T
+            out.append(frames)
+        return out
+
+    def moving(self, host: list[np.ndarray]) -> set[int]:
+        """The slot locks whose nodes turn ``still`` or more within the frames of ``host`` (:meth:`turns`)."""
+        out = set()
+        for lock, frames in enumerate(host):
+            if not len(frames) or lock not in self.roots.values():
+                continue
+            first = frames[0]
+            if any(angle_of(frame[k] @ first[k].T) >= self.still for frame in frames[1:] for k in range(len(first))):
+                out.add(lock)
+        return out
+
+    def at(self, turns: np.ndarray, lock: int, u: float) -> np.ndarray:
+        """Slot lock ``lock``'s turn at share ``u`` of its length (``turns``: its nodes' in one frame), between the
+        nodes on either side."""
+        shares = self.shares[lock]
+        if len(shares) < 2:
+            return turns[0]
+        i = int(np.clip(np.searchsorted(shares, u, side="right") - 1, 0, len(shares) - 2))
+        gap = float(shares[i + 1] - shares[i])
+        f = float(np.clip((u - shares[i]) / gap, 0.0, 1.0)) if gap > 1e-9 else 1.0
+        return slerp(turns[i], turns[i + 1], f)
 
 
 def binding_dims(binding: Mapping[str, int]) -> int:
