@@ -52,7 +52,7 @@ export function parseClip(name, dev) {
 }
 
 // The 3D tab's actions in menu order: id, the group (its card on the action bar) and section it is listed in, and the
-// clips it plays in turn (play: the first is required; with needs, that one too). A looping clip loops; a chain plays
+// clips it plays in turn (play: the first is required). A looping clip loops; a chain plays
 // through once and holds its last clip (or loops it, as the attack's Ing and the idles do).
 export const ACTION_DEFS = [
   { id: "idle", group: "basic", pick: ["Formation_Idle", "Cafe_Idle", "Idle"] },
@@ -83,7 +83,7 @@ export const ACTION_DEFS = [
   { id: "skill", group: "skills", play: ["Public"], indexed: true },
   { id: "panic", group: "status", play: ["Vital_Panic"] },
   { id: "dying", group: "status", play: ["Vital_Dying_Ing"] },
-  { id: "retreat", group: "status", play: ["Vital_Death", "Vital_Retreat"], needs: "Vital_Retreat" },
+  { id: "retreat", group: "status", play: ["Vital_Retreat"] },
   { id: "knockdown", group: "status", play: ["Vital_Death"] },
   { id: "randomIdle", group: "random", play: ["Formation_Idle_Random"] },
   { id: "randomVictory", group: "random", play: ["Victory_Start_Random", "Victory_End_Random"] },
@@ -129,7 +129,6 @@ export function actionsOf(names, dev) {
     for (const [form, index] of variants(lead)) {
       const at = (slot) => named.get(`${slot}|${form}|${index}`);
       const clips = (def.pick ? [lead] : def.play).map(at).filter(Boolean);
-      if (def.needs && !at(def.needs)) continue;
       found.push({ id: def.id, group: def.group, section: def.section || def.group, form, index, clips });
     }
     for (const a of found) {

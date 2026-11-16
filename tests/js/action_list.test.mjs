@@ -91,10 +91,10 @@ test("Hoshino (Swimsuit): a section per battle form after the shared one, random
   assert.equal(sectionLabel(tabs.find((t) => t.id === "move").sections[0], T), "移动（形态 1）");
   assert.equal(actionLabel(actions.find((a) => a.key === "attack@2"), T), "普通攻击（形态 2）");
   assert.equal(sectionLabel(combat.sections[1], (key, params) => text("en-US", key, params)), "Combat (Form 1)");
-  // each form's retreat plays that form's fall and rope (the first's from the GLB, the second's added on demand)
+  // each form's retreat plays that form's crying clip alone (the first's from the GLB, the second's added on demand)
   const retreats = actions.filter((a) => a.id === "retreat");
   assert.deepEqual(retreats.map((a) => [a.key, a.clips.map((c) => c.replace("Hoshino_Swimsuit_", ""))]),
-    [["retreat@1", ["Vital_Death01", "Vital_Retreat01"]], ["retreat@2", ["Vital_Death02", "Vital_Retreat02"]]]);
+    [["retreat@1", ["Vital_Retreat01"]], ["retreat@2", ["Vital_Retreat02"]]]);
 });
 
 test("Ayane: two group cards, Basic and Combat", () => {
@@ -109,6 +109,16 @@ test("several EX skills are numbered, one is not", () => {
   const T = (key, params) => text("zh-CN", key, params);
   assert.deepEqual(actions.filter((a) => a.id === "ex").map((a) => actionLabel(a, T)), ["EX 技能 1", "EX 技能 2", "EX 技能 3"]);
   assert.equal(actionLabel(actions.find((a) => a.id === "skill"), T), "普通技能");
+});
+
+test("the retreat plays the crying clip alone, in the status group; without it no retreat", () => {
+  const dev = "x_y", status = (names) => actionsOf(names, dev).filter((a) => a.group === "status").map((a) => [a.key, a.clips]);
+  assert.deepEqual(status(["X_Y_Formation_Idle", "X_Y_Vital_Retreat", "X_Y_Vital_Death"]),
+    [["retreat", ["X_Y_Vital_Retreat"]], ["knockdown", ["X_Y_Vital_Death"]]]);
+  assert.deepEqual(status(["X_Y_Formation_Idle", "X_Y_Vital_Retreat"]), [["retreat", ["X_Y_Vital_Retreat"]]]);
+  assert.deepEqual(status(["X_Y_Formation_Idle", "X_Y_Vital_Death"]), [["knockdown", ["X_Y_Vital_Death"]]]);
+  // a Special student's controller: only the base's bare placeholders, no action of the status group
+  assert.deepEqual(status(["X_Y_Formation_Idle", "Vital_Retreat", "VitalHit", "VitalDeathGroggy"]), []);
 });
 
 // --- the action list over its card ---
