@@ -229,3 +229,142 @@ def test_invalid_numeric_cache_entries_are_measured_again(tmp_path, poses, anima
     assert store.get('one', 'clip') is None
     store.put('one', 'clip', *_value())
     assert np.array_equal(store.get('one', 'clip')[0], _value()[0])
+
+
+# --- saving a build's bundles in threads (library.bundle_saves) ---
+
+import threading
+import time
+import zlib
+from pathlib import Path
+from types import SimpleNamespace
+
+from UnityPy.helpers import CompressionHelper
+
+from ba_modding_toolkit.bundle import Bundle
+from ba_modding_toolkit.models import SaveOptions
+from bmpt.errors import ServiceError
+from bmpt.library import bundle_saves as bs
+
+
+def _engine_bundle(seed, size):
+    """An engine Bundle whose environment packs ``size`` bytes the way a UnityFS save does (one LZMA block)."""
+    rng = np.random.default_rng(seed)
+    payload = bytes(rng.integers(0, 16, size, dtype=np.uint8))  # compressible, distinct per bundle
+
+    def save(packer):
+        assert packer == 'lzma'
+        data, blocks = CompressionHelper.chunk_based_compress(payload, 1)
+        return b'UnityFS\0' + repr(blocks).encode() + data
+
+    env = SimpleNamespace(file=SimpleNamespace(save=save), objects=[SimpleNamespace(byte_size=size)])
+    return Bundle(Path(f'part{seed}.bundle'), env)
+
+
+def _jobs(directory, sizes, crc=True):
+    jobs = []
+    for i, size in enumerate(sizes):
+        target = Path(f'game/slot_{i}_assets_all_{1000 + i}.bundle')
+        jobs.append((target, _engine_bundle(i, size), directory / target.name, SaveOptions(perform_crc=crc)))
+    directory.mkdir()
+    return jobs
+
+
+@pytest.mark.parametrize('crc', [True, False])
+def test_bundles_saved_in_threads_are_the_bytes_saved_in_turn(tmp_path, crc):
+    sizes = [200_000, 3_000, 900_000, 40_000, 1, 500_000]
+    serial, threaded = _jobs(tmp_path / 'serial', sizes, crc), _jobs(tmp_path / 'threaded', sizes, crc)
+    bs.save_bundles(serial, workers=1)
+    bs.save_bundles(threaded, workers=4)
+    for (target, _, one, _), (_, _, other, _) in zip(serial, threaded):
+        assert one.read_bytes() == other.read_bytes()
+        if crc:  # the CRC fix still lands on the name's value
+            assert zlib.crc32(other.read_bytes()) == int(target.stem.rsplit('_', 1)[1])
+    assert sorted(p.name for p in (tmp_path / 'threaded').iterdir()) == sorted(t.name for t, *_ in threaded)
+
+
+class _Slow:
+    """A bundle whose save takes ``delay`` seconds and records when it ran."""
+
+    def __init__(self, name, delay, size, log, ok=True):
+        self.name, self.delay, self.ok, self.log = name, delay, ok, log
+        self.env = SimpleNamespace(objects=[SimpleNamespace(byte_size=size)])
+
+    def save(self, output, options):
+        self.log.append(('start', self.name, threading.current_thread().name))
+        time.sleep(self.delay)
+        if self.ok:
+            Path(output).write_bytes(self.name.encode())
+        self.log.append(('end', self.name))
+        return self.ok, 'message'
+
+
+def _slow_jobs(tmp_path, specs, log):
+    return [(Path(f'game/{name}'), _Slow(name, delay, size, log, ok), tmp_path / name, None)
+            for name, delay, size, ok in specs]
+
+
+def test_concurrent_save_results_do_not_depend_on_finish_order_and_largest_starts_first(tmp_path):
+    log, progress, steps = [], [], []
+    specs = [('small', 0.15, 10, True), ('large', 0.05, 1000, True), ('mid', 0.01, 100, True), ('tiny', 0.0, 1, True)]
+    jobs = _slow_jobs(tmp_path, specs, log)
+    main = threading.current_thread()
+    bs.save_bundles(jobs, workers=2, step=lambda: steps.append(threading.current_thread() is main),
+                    progress=lambda done, count: progress.append((done, count, threading.current_thread() is main)))
+    assert [e[1] for e in log if e[0] == 'start'][:2] == ['large', 'mid']
+    assert {p.name: p.read_bytes() for p in tmp_path.iterdir()} == {name: name.encode() for name, *_ in specs}
+    assert steps == [True] * 4  # one step per save, on the calling thread
+    assert progress == [(i, 4, True) for i in range(5)]
+    assert all(e[2] != main.name for e in log if e[0] == 'start')
+
+
+def test_a_failed_concurrent_save_names_its_file_and_starts_no_other(tmp_path):
+    log = []
+    specs = [('a', 0.2, 50, True), ('bad', 0.0, 40, False), ('c', 0.0, 30, True), ('d', 0.0, 20, True)]
+    with pytest.raises(ServiceError) as error:
+        bs.save_bundles(_slow_jobs(tmp_path, specs, log), workers=2)
+    assert error.value.code == 'mod_apply_failed'
+    assert error.value.params['file'] == Path('game/bad')
+    started = [e[1] for e in log if e[0] == 'start']
+    assert started == ['a', 'bad']  # nothing started after the failure
+    assert ('end', 'a') in log  # the save under way ended before the error was raised
+    assert sorted(p.name for p in tmp_path.iterdir()) == ['a']
+
+
+def test_cancelling_between_concurrent_saves_waits_for_the_saves_under_way(tmp_path):
+    log, calls = [], []
+
+    def step():
+        calls.append(1)
+        if len(calls) == 3:
+            raise ServiceError('busy')
+
+    specs = [(name, 0.1, 10 - i, True) for i, name in enumerate('abcdef')]
+    with pytest.raises(ServiceError) as error:
+        bs.save_bundles(_slow_jobs(tmp_path, specs, log), workers=2, step=step)
+    assert error.value.code == 'busy'
+    assert [e[1] for e in log if e[0] == 'start'] == ['a', 'b']
+    assert sorted(e[1] for e in log if e[0] == 'end') == ['a', 'b']  # both ended before the error was raised
+    assert sorted(p.name for p in tmp_path.iterdir()) == ['a', 'b']
+
+
+def test_cancelling_before_the_first_save_writes_nothing(tmp_path):
+    log = []
+
+    def step():
+        raise ServiceError('busy')
+
+    for workers in (1, 3):
+        with pytest.raises(ServiceError):
+            bs.save_bundles(_slow_jobs(tmp_path, [('a', 0.0, 1, True)], log), workers=workers, step=step)
+    assert log == [] and not list(tmp_path.iterdir())
+
+
+@pytest.mark.parametrize('count, cpus, expected', [
+    (6, 12, 4), (6, 8, 4), (6, 4, 2), (6, 3, 1), (6, 2, 1), (6, 1, 1), (6, None, 1), (2, 12, 2), (1, 12, 1)])
+def test_save_workers_leave_half_the_cores(count, cpus, expected, monkeypatch):
+    if cpus is None:
+        monkeypatch.setattr(bs.os, 'cpu_count', lambda: None)
+        assert bs.save_workers(count) == expected
+    else:
+        assert bs.save_workers(count, cpus) == expected

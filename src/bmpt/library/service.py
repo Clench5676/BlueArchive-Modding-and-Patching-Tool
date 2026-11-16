@@ -49,6 +49,7 @@ from .original_checks import OriginalChecks, Verdict
 from .install import Action, PlannedFile, PlannedGroup, backup_file, install_staged
 from .rebuild import RebuildResult, rebuild
 from . import targets as resolver
+from .bundle_saves import save_bundles
 from .identity import identify
 from .judge import (
     CRC_STATES, KINDS, LIBRARY_SOURCES, carried_of, classify, core_of, crc_state, date_of, distinguishing_folders,
@@ -5658,8 +5659,9 @@ class ModLibrary:
         ``inputs``: what it reads of the library, gathered before under the library lock (``_costume_inputs``); given,
         the build reads no library state and runs without that lock (``costume_preview``), else the caller holds it.
         The build takes no model lock (``model_adapt.adapt`` reads its bundles from memory), so exports run beside it.
-        ``step``: called between its steps (``adapt``'s, then each part saved); only for a build without the library
-        lock (``costume_preview``), whose job yields there to the foreground previews.
+        ``step``: called between its steps (``adapt``'s, then before each part's save starts); only for a build without
+        the library lock (``costume_preview``), whose job yields there to the foreground previews. The changed parts are
+        saved in threads (``bundle_saves.save_bundles``), at most half the cores; the same bytes as one after another.
         ``fraction``: told how far the build is (0..1, its phases weighted by ``model_adapt.COSTUME_PHASES``), at most
         every 0.2 s (``progress_meter``); the job's progress for its item (``_item_fraction``)."""
         from ..gameassets.model_adapt import adapt, costume_weights
@@ -5703,14 +5705,13 @@ class ModLibrary:
         output.mkdir(parents=True, exist_ok=True)
         reverse = {value: key for key, value in staged.items()}
         replacements = dict(staged)
-        for i, (path, bundle) in enumerate(result.changed.items()):
-            step()
-            meter.phase("save", i, len(result.changed))
-            target = reverse[path]
-            ok, message = bundle.save(output / path.name, self.settings.save_options(self.settings.crc_needed(target)))
-            if not ok:
-                raise ServiceError("mod_apply_failed", file=target)
-            replacements[target] = output / path.name
+        jobs = [(reverse[path], bundle, output / path.name,
+                 self.settings.save_options(self.settings.crc_needed(reverse[path])))
+                for path, bundle in result.changed.items()]
+        # in threads, at most half the cores: step() still runs before each save starts
+        save_bundles(jobs, step=step, progress=lambda done, count: meter.phase("save", done, count))
+        for target, _, path, _ in jobs:
+            replacements[target] = path
         return replacements
 
     def _costume_signature(self, variant_key: str, other: str, pin: Pin) -> tuple[str, list[Path]]:
