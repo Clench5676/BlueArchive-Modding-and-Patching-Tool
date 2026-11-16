@@ -310,7 +310,7 @@ def clip_times(tree):
     return [start + f / rate for f in range(max(1, round((stop - start) * rate) + 1))]
 
 
-def sample_curves(tree, wanted):
+def sample_curves(tree, wanted, *, hold_before=False):
     """Sample selected scalar curves with the runtime decoder's cubic semantics."""
     times = np.array(clip_times(tree))
     data = tree["m_MuscleClip"]["m_Clip"]["data"]
@@ -347,7 +347,12 @@ def sample_curves(tree, wanted):
             at = np.maximum(0, np.searchsorted(ks, times + 1e-6, side="right") - 1)
             chosen = rows["coefs"][begin:end][at].astype(float)
             dt = np.maximum(0, times - ks[at])
-            curves[int(rows["index"][begin])] = ((chosen[:, 0] * dt + chosen[:, 1]) * dt + chosen[:, 2]) * dt + chosen[:, 3]
+            values = ((chosen[:, 0] * dt + chosen[:, 1]) * dt + chosen[:, 2]) * dt + chosen[:, 3]
+            if hold_before:
+                # The scalar decoder holds c3 directly before the first key,
+                # preserving even its signed zero and non-finite coefficients.
+                values = np.where(times < ks[at], chosen[:, 3], values)
+            curves[int(rows["index"][begin])] = values
     ns, nd = streamed["curveCount"], dense["m_CurveCount"]
     if nd and dense["m_FrameCount"]:
         samples = np.asarray(dense["m_SampleArray"]).reshape(dense["m_FrameCount"], nd)

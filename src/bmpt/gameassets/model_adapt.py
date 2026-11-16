@@ -54,6 +54,7 @@ from __future__ import annotations
 
 import copy
 import dataclasses
+import hashlib
 import logging
 import math
 import random
@@ -72,8 +73,9 @@ from . import model_hems as hm
 from . import model_locks as ml
 from . import model_skirts as ms
 from .errors import AssetNotFound
+from .costume_cache import PoseStore, decode_clip
 from .unity import load_bundle
-from .model import (BundleGraph, NPC_PREFAB, PREFAB_KINDS, _external_cab, _key, _prefabs, bind_tracks, decode_clip,
+from .model import (BundleGraph, NPC_PREFAB, PREFAB_KINDS, _external_cab, _key, _prefabs, bind_tracks,
                     euler_orders, euler_to_quat, ex_only_renderers, model_root, read_mesh, shader_kind, UNITY_ORDER)
 
 if TYPE_CHECKING:
@@ -209,6 +211,8 @@ class Skeleton:
     _rest: list[np.ndarray] = field(default_factory=list, repr=False)  # local matrices at rest
     _names: tuple[int, dict[str, list[int]]] = field(default=(0, {}), repr=False)  # node count, nodes by name
     _rig: int | None = field(default=None, repr=False)  # the main Biped (``main_rig``), -1 for none
+    pose_store: PoseStore | None = field(default=None, repr=False)
+    dev: str = ""
 
     @classmethod
     def of(cls, graph: BundleGraph, root_go: Any) -> "Skeleton":
@@ -325,17 +329,38 @@ class Skeleton:
     def clip_poses(self, clip: Any, frames: int | None = None) -> tuple[list[list[np.ndarray]], set[int]]:
         """World matrices of a clip's first, middle and last frames (``frames`` None) or of ``frames`` evenly spaced
         ones, and the nodes the clip animates."""
-        times, pose, animated = self.clip_frames(clip.read_typetree())
+        token = None
+        if self.pose_store is not None and (frames is None or frames <= 3):
+            digest = hashlib.sha256(repr([(n.path, n.parent, n.local) for n in self.nodes]).encode())
+            digest.update(clip.get_raw_data())
+            token = f"{frames}|{digest.hexdigest()}"
+            found = self.pose_store.get(self.dev, token)
+            if found is not None and found[0].shape[1] == len(self.nodes):
+                poses, animated = found
+                return [list(p) for p in poses], set(animated.tolist())
+        times, pose, animated = self.clip_frames(self.graph.tree(clip))
         count = len(times)
         if frames is None:
             chosen = sorted({0, count // 2, count - 1})
         else:
             chosen = sorted({min(count - 1, round(k * (count - 1) / max(1, frames - 1))) for k in range(frames)})
-        return [pose(frame) for frame in chosen], animated
+        poses = [pose(frame) for frame in chosen]
+        if token is not None:
+            self.pose_store.put(self.dev, token, np.asarray(poses), np.array(sorted(animated), dtype=np.int64))
+        return poses, animated
 
-    def clip_frames(self, tree: Mapping[str, Any]) -> tuple[list[float], Callable[[int], list[np.ndarray]], set[int]]:
-        """A clip's frame times (its sample grid), the world matrices of a frame by index, and the nodes it animates."""
+    def clip_frames(self, tree: Mapping[str, Any], nodes: Iterable[int] | None = None
+                    ) -> tuple[list[float], Callable[[int], list[np.ndarray]], set[int]]:
+        """Frame times, world matrices by frame, and animated nodes. With ``nodes``, only their ancestors are posed;
+        other entries are None. This keeps a face-only pass from posing the body, props and new costume bones."""
+        needed = set(range(len(self.nodes))) if nodes is None else set(nodes)
+        for i in list(needed):
+            parent = self.nodes[i].parent
+            while parent is not None and parent not in needed:
+                needed.add(parent)
+                parent = self.nodes[parent].parent
         by_hash = {zlib.crc32(node.path.encode()): i for i, node in enumerate(self.nodes)}
+        by_hash = {path: i for path, i in by_hash.items() if i in needed}
         decoded = decode_clip(tree)
         bindings = tree["m_ClipBindingConstant"]["genericBindings"]
         tracks = bind_tracks(bindings, decoded.curves, by_hash)
@@ -356,7 +381,16 @@ class Skeleton:
                     elif attribute == 4:
                         r = list(euler_to_quat(value, orders.get(i, UNITY_ORDER)))
                 local[i] = trs(p, r, s)
-            return self.world(local)
+            if nodes is None:
+                return self.world(local)
+            if len(self._rest) != len(self.nodes):
+                self._rest = [trs(*node.local) for node in self.nodes]
+            world = [None] * len(self.nodes)
+            for i in sorted(needed):
+                node = self.nodes[i]
+                m = local.get(i, self._rest[i])
+                world[i] = world[node.parent] @ m if node.parent is not None else m.copy()
+            return world
 
         return decoded.times, pose, set(tracks)
 
@@ -2197,7 +2231,7 @@ class FaceRetarget:
     def follow(self, skeleton: Skeleton, tree: Mapping[str, Any], frames: list[int]) -> list[dict[int, np.ndarray]]:
         """The new bones' local transforms (4x4, without the bone's scale) at ``frames`` of a slot clip, for the bones
         whose slot bone moves against the head in it; the others stay at rest (no curve)."""
-        _, pose, _ = skeleton.clip_frames(tree)
+        _, pose, _ = skeleton.clip_frames(tree, [self.head, *self.slots])
         ch = self.chains
         out: list[dict[int, np.ndarray]] = []
         for f in frames:
@@ -2311,12 +2345,14 @@ def measured_frames(count: int) -> list[int]:
 def skirt_sequence(skeleton: Skeleton, solver: ms.Solver, tree: Mapping[str, Any]) -> tuple[list[int], list[dict]]:
     """Rule B's solved frames of a clip (every ``SOLVE_EVERY``-th, the last and the measured ones) and the chains'
     turns there, in time (``Solver.sequence``)."""
+    from .model_arm_clips import clip_times
+
+    if isinstance(solver, FaceRetarget):  # a blink lasts a few frames
+        every = list(range(len(clip_times(tree))))
+        return every, solver.follow(skeleton, tree, every)
     times, pose, _ = skeleton.clip_frames(tree)
     count = len(times)
     frames = sorted(set(range(0, count, ms.SOLVE_EVERY)) | {count - 1} | set(measured_frames(count)))
-    if isinstance(solver, FaceRetarget):  # the slot's expressions, about the source face's own places, every frame
-        every = list(range(count))     # (a blink lasts a few frames)
-        return every, solver.follow(skeleton, tree, every)
     if isinstance(solver, ms.Spring):
         # the source's own keys for a clip it has by name, else the swing; then gravity; then the slot's own lock keys
         poses = [pose(f) for f in frames]
@@ -2361,7 +2397,9 @@ def skirt_curves(skeleton: Skeleton, skirt: Skirt, tree: dict, key: tuple[str, i
     grid = ms.dense_grid(tree)
     if grid is None:
         return None
-    times = skeleton.clip_frames(tree)[0]
+    from .model_arm_clips import clip_times
+
+    times = clip_times(tree)
     frames, turns = skirt.solved.get(key) or skirt_sequence(skeleton, skirt.solver, tree)
     roots = sorted(turns[0]) if turns else []
     if not roots:
@@ -3124,35 +3162,35 @@ def choose_prefab(prefabs: Mapping[str, Any], dev: str) -> str:
 
 
 # A costume build's phases in the order it passes them, each with its seconds as measured on the dev view (Steam,
-# 2026-11), without and with Optimize Physics, averaged over Hina <- Aoba, Shigure <- Shiroko and Hoshino <- Hoshino
-# (Swimsuit): the weights of the progress line's percentage (``progress_meter``). "arms" (Optimize Physics only) is
-# 8.9 s where it corrects clips (Hina <- Aoba) and under 1 s where it does not; "curves" holds the arms' clip copies.
+# 2026-11), without and with Optimize Physics, averaged over four pairs with cold, memory and disk caches: the
+# weights of the progress line's percentage (``progress_meter``). The arm pass varies by pair; "curves" holds its
+# clip copies as well as the skirt, hair and face curves.
 # "stage" (the slot's copies) comes before the build and "save" (the changed bundles written, lzma) after it, both in
 # the library's ``_stage_costume``.
 COSTUME_PHASES: tuple[tuple[str, float, float], ...] = (
-    ("stage", 0.10, 0.10),
-    ("read", 0.05, 0.05),
-    ("skeleton", 0.01, 0.01),
-    ("clips", 0.02, 0.02),
-    ("idle", 0.07, 0.07),
-    ("worn", 1.15, 1.15),
-    ("probes", 0.22, 0.22),
-    ("plan", 0.90, 0.95),
-    ("arms", 0.00, 3.50),
-    ("hems", 0.75, 6.60),
-    ("rigid", 0.02, 0.02),
-    ("springs", 0.00, 0.60),
-    ("face", 0.01, 0.01),
+    ("stage", 0.01, 0.01),
+    ("read", 0.04, 0.04),
+    ("skeleton", 0.03, 0.03),
+    ("clips", 0.14, 0.14),
+    ("idle", 0.52, 0.64),
+    ("worn", 0.37, 0.37),
+    ("probes", 0.10, 0.09),
+    ("plan", 0.76, 0.81),
+    ("arms", 0.00, 3.16),
+    ("hems", 0.47, 5.61),
+    ("rigid", 0.01, 0.01),
+    ("springs", 0.00, 0.45),
+    ("face", 0.01, 0.03),
     ("chains", 0.01, 0.01),
-    ("open", 0.10, 0.10),
+    ("open", 0.07, 0.08),
     ("materials", 0.01, 0.01),
-    ("meshes", 0.05, 0.05),
-    ("carried", 0.02, 0.02),
-    ("halo", 0.03, 0.03),
-    ("prefabs", 0.03, 0.03),
-    ("curves", 4.10, 4.90),
+    ("meshes", 0.04, 0.04),
+    ("carried", 0.01, 0.01),
+    ("halo", 0.02, 0.12),
+    ("prefabs", 0.03, 0.06),
+    ("curves", 2.19, 4.60),
     ("check", 0.02, 0.02),
-    ("save", 2.30, 2.55),
+    ("save", 6.60, 7.59),
 )
 
 
@@ -3164,7 +3202,7 @@ def costume_weights(physics: bool) -> list[tuple[str, float]]:
 def adapt(*, index: Mapping[str, Path], resolver: Callable | None, target_files: list[Path], target_dev: str,
           source_files: list[Path], source_dev: str, open_writable: Callable[[Path], Any],
           physics: bool = False, halo: bool = False, step: Callable[[], None] | None = None,
-          worn: WornStore | None = None, meter: Meter | None = None) -> Result:
+          worn: WornStore | None = None, meter: Meter | None = None, poses: PoseStore | None = None) -> Result:
     """The changed bundles of ``target_files`` (the slot, official copies) carrying the costume of ``source_dev``'s
     model, whose prefab sits in ``source_files``. ``index`` maps CABs to files to read (the slot's own CABs to
     ``target_files``); ``resolver`` finds any other CAB. ``open_writable`` opens a slot file as an engine Bundle.
@@ -3173,6 +3211,7 @@ def adapt(*, index: Mapping[str, Path], resolver: Callable | None, target_files:
     ``halo`` gives the slot the source's halo, or none (:func:`_halo_change`).
     The slot's worn items (``model_props``: hats, glasses, bags) draw nothing and the source's are carried;
     ``worn`` caches each model's verdict (``model_props.WornStore``).
+    ``poses`` caches idle and probe matrices per model and game revision; it retains no bundle readers.
     The graph reads every bundle from memory (``unity.load_bundle``: a path lock for each load alone), so a build
     needs no model lock and exports run beside it. ``step`` is called between the build's steps (most under 0.5 s;
     the plan, the hems and a cold first read of the idle poses up to a few seconds, measured on Hina wearing Aoba):
@@ -3180,13 +3219,13 @@ def adapt(*, index: Mapping[str, Path], resolver: Callable | None, target_files:
     (``COSTUME_PHASES``), for the progress line's percentage."""
     with BundleGraph(index, resolver=resolver, opener=load_bundle) as graph:
         return _adapt(graph, index, target_files, target_dev, source_files, source_dev, open_writable, physics,
-                      halo, step or (lambda: None), worn, meter or QUIET)
+                      halo, step or (lambda: None), worn, meter or QUIET, poses)
 
 
 def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Path], target_dev: str,
            source_files: list[Path], source_dev: str, open_writable: Callable[[Path], Any],
            physics: bool = False, halo: bool = False, step: Callable[[], None] = lambda: None,
-           worn: WornStore | None = None, meter: Meter = QUIET) -> Result:
+           worn: WornStore | None = None, meter: Meter = QUIET, poses: PoseStore | None = None) -> Result:
     from . import model_props as mp
 
     phase = meter.phase
@@ -3203,6 +3242,8 @@ def _adapt(graph: BundleGraph, index: Mapping[str, Path], target_files: list[Pat
     phase("skeleton")
     t_skeleton = Skeleton.of(graph, target_prefabs[t_name].deref())
     s_skeleton = Skeleton.of(graph, s_root)
+    t_skeleton.pose_store, t_skeleton.dev = poses, target_dev
+    s_skeleton.pose_store, s_skeleton.dev = poses, source_dev
     if not s_skeleton.renderers:
         # an unskinned model (Kei's Decagrammaton body, a static mesh): nothing to bind to the slot's bones
         raise refuse("static model", dev=source_dev)

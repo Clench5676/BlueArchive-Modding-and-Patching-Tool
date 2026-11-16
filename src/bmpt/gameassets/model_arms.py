@@ -143,7 +143,10 @@ def own_drawn(costume):
         bones = [b if b is not None else 0 for b in part.bones]
         j = np.minimum(skin.joints, len(bones) - 1)
         dom = np.array(bones)[j[np.arange(len(j)), skin.weights.argmax(1)]]
-        regs.append(np.array([cache.setdefault(n, region(sk, n)) for n in dom]))
+        for n in np.unique(dom):
+            if n not in cache:
+                cache[n] = region(sk, n)
+        regs.append(np.array([cache[n] for n in dom]))
         loose.append(np.array([not sk.nodes[n].name.startswith("Bip001") for n in dom]))
         verts.append(skin.vertices); joints.append(j + off_m); weights.append(skin.weights)
         tris.append((skin.triangles if skin.triangles is not None else np.zeros((0, 3), int)) + off_v)
@@ -170,8 +173,8 @@ def adapted_drawn(target, source, plan):
     mapped = [plan.mapping[n] for n in nodes]
     inverse = np.array([np.linalg.inv(t_rest[t]) for t in mapped])
     dom = sj[np.arange(len(sj)), sw.argmax(1)]
-    cache = {}
-    regions = np.array([cache.setdefault(n, region(ss, n)) for n in dom])
+    cache = {n: region(ss, n) for n in np.unique(dom)}
+    regions = np.array([cache[n] for n in dom])
     loose = np.array([not ss.nodes[n].name.startswith("Bip001") for n in dom])
     out = Drawn(plan.fit.vertices, joints, sw, flat.triangles, regions,
                 lambda pose: np.array([pose[t] for t in mapped]) @ inverse, loose)

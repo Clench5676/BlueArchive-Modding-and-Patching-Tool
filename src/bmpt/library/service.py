@@ -5663,6 +5663,7 @@ class ModLibrary:
         ``fraction``: told how far the build is (0..1, its phases weighted by ``model_adapt.COSTUME_PHASES``), at most
         every 0.2 s (``progress_meter``); the job's progress for its item (``_item_fraction``)."""
         from ..gameassets.model_adapt import adapt, costume_weights
+        from ..gameassets.costume_cache import PoseStore
 
         meter = Meter(fraction, costume_weights(physics))
         meter.phase("stage")
@@ -5688,7 +5689,8 @@ class ModLibrary:
                            target_dev=inputs.target_dev, source_files=[p for p in sources if p.name in inputs.chosen],
                            source_dev=inputs.dev, open_writable=Bundle.load, physics=physics,
                            halo=True, step=step,
-                           worn=_WornVerdicts(self.root / "worn-items.json", inputs.revisions), meter=meter)
+                           worn=_WornVerdicts(self.root / "worn-items.json", inputs.revisions), meter=meter,
+                           poses=PoseStore(self.root / "costume-poses", inputs.revisions))
         if report is not None and result.plan.unfit:
             report["unfit"] = {"source": "stretch", "adapted": f"{result.plan.stretch:.2f}", "own": f"{result.plan.own:.2f}"}
         if report is not None:
