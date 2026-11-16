@@ -470,7 +470,15 @@
 			"actionDelete": "Deleting",
 			"actionRemap": "Remapping textures",
 			"actionCompatibility": "Checking compatibility",
-			"actionOptimize": "Optimizing physics"
+			"actionOptimize": "Optimizing physics",
+			"modsProcess": "Processing Mods",
+			"modsApply": "Applying Mods",
+			"modsRestore": "Restoring Mods",
+			"modsCheck": "Checking Mods",
+			"modCount": "{action} ({current}/{total}): ",
+			"modHead": "{action}: ",
+			"sep": " - ",
+			"from": "From: {name}"
 		},
 		"job": {
 			"running": "Working",
@@ -1042,7 +1050,12 @@
 				"crc": "Repairing CRC",
 				"add": "Adding to Library",
 				"apply": "Applying Mod",
-				"export": "Exporting Files"
+				"export": "Exporting Files",
+				"readModel": "Reading Model",
+				"fitCostume": "Fitting Costume",
+				"buildModel": "Building Model",
+				"write": "Writing Game Files",
+				"restore": "Restoring Official Files"
 			},
 			"selectPreview": "Select for Preview",
 			"applyGame": "Apply to Game",

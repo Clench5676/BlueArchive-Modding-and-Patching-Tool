@@ -151,6 +151,17 @@ async function variantNames() {
   };
 }
 
+// the progress line's names (loading.js, job-progress.js modLine): the roster's as it is now, the key until it is in
+let nameIndex = new Map(), nameIndexOf = null;
+function progressNames(entry) {
+  if (nameIndexOf !== rosterData) {
+    nameIndexOf = rosterData;
+    nameIndex = new Map((rosterData?.families || []).flatMap((f) => f.variants.map((v) => [v.key, v])));
+  }
+  const v = nameIndex.get(entry?.variant);
+  return studentName(v, (v && L(v.names)?.full) || entry?.variant || entry?.core || "");
+}
+
 // Go To from the update summary or the held entries' Details (update-impact.js): the mod's student page on the tab of
 // its kind, its switch open on the mod (Detail.takeWanted); Settings closes first
 async function openMod({ id, variant, kind }) {
@@ -651,6 +662,7 @@ async function start() {
   });
   Prompts.init({ names: variantNames });
   Impact.init({ names: variantNames, go: openMod });
+  Loading.setNames(progressNames);
   const settingsChanged = async (key, prefs) => {
     ctx.prefs = prefs;
     previewCache.configure(prefs);

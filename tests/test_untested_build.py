@@ -141,7 +141,7 @@ def test_apply_mod_configuration_waits_for_a_confirmation(setup_library, monkeyp
     as_tested(env, monkeypatch)
     game_bundle(env.game_dir, part="textures")
     written = []
-    monkeypatch.setattr(env.library, "_switch", lambda pin, core, source, log: written.append((core, source)))
+    monkeypatch.setattr(env.library, "_switch", lambda pin, core, source, log, **_: written.append((core, source)))
     entries = [{"install": key(env), "core": "test_spr", "state": "reset"}]
     params = refusal(lambda: env.library.restore_drift(entries))
     assert [entry["core"] for entry in params["entries"]] == ["test_spr"] and written == []

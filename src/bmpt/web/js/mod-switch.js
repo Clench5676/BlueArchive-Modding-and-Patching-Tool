@@ -437,7 +437,7 @@ function toggleJob(id, params, update = null) {
   const running = T(params.enabled ? "progress.apply" : "progress.restore", { name: T("progress.mods") });
   if (update) {
     update(running);
-    return waitJob(id, (p) => update(Loading.progressText(p, running)));
+    return waitJob(id, (p) => update(Loading.progressLine(p, running)));
   }
   return Loading.task((report) => waitJob(id, report), { label: running });
 }

@@ -143,7 +143,7 @@ def test_a_retry_holds_an_entry_whose_rig_changed_and_apply_mod_configuration_wr
                                          "source": f"mod:{entry.id}", "label": entry.label}]
 
     written = []
-    monkeypatch.setattr(library, "_switch", lambda pin, core, source, log: written.append((core, source)))
+    monkeypatch.setattr(library, "_switch", lambda pin, core, source, log, **_: written.append((core, source)))
     result = library.restore_drift([{"install": key(env), "core": "test_spr", "state": "updated"}])
     assert [item["core"] for item in result.done] == ["test_spr"] and not result.held, result
     assert written == [("test_spr", f"mod:{entry.id}")]
@@ -157,7 +157,7 @@ def test_a_rebuild_with_the_same_rig_is_not_held(spine, monkeypatch):
     library = reload_library(env)
     assert library.update_impact()["mods"][0]["impact"] == "rebuilt"
     written = []
-    monkeypatch.setattr(library, "_switch", lambda pin, core, source, log: written.append((core, source)))
+    monkeypatch.setattr(library, "_switch", lambda pin, core, source, log, **_: written.append((core, source)))
     result = library.toggle(True, True)
     assert [item["core"] for item in result.done] == ["test_spr"] and not result.held, result
     assert written == [("test_spr", f"mod:{entry.id}")]
@@ -204,8 +204,9 @@ def test_the_impact_check_names_each_mod_in_its_progress(spine):
     entry = configured(env)
     steps = []
     env.library.update_impact(force=True, progress=steps.append)
-    assert steps == [{"current": 1, "total": 1, "step": "import.step.check", "variant": "test", "kind": "spr",
-                      "label": entry.label}]
+    # the item at hand, who it is and its step (mod_progress); its name left out where it only repeats the file's
+    assert steps == [{"current": 1, "total": 1, "action": "check", "step": "import.step.check", "variant": "test",
+                      "kind": "spr", "core": entry.core, "name": "", "source": "", "fraction": 0.0}]
 
 
 def test_an_update_that_changes_nothing_ends_the_hold(spine, monkeypatch):

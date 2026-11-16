@@ -13,6 +13,7 @@ import { spriteUrl } from "./api.js";
 import * as NGUI from "./ngui.js";
 import * as Popup from "./popup.js";
 import { T } from "./i18n.js";
+import { fitLine, modLine } from "./job-progress.js";
 import { S } from "./util.js";
 import { freezeShown } from "./preview-lifecycle.js";
 
@@ -77,6 +78,19 @@ export const covering = () => active() && overlay.mode === "full";
 // Automatic popups wait for page work, input holds and independent writer progress.
 export const busy = () => pending.size > 0 || active() || held() || (!!writerOverlay && !writerOverlay.closing);
 
+// How a job over mods names a variant ({variant, core}) in its progress line (job-progress.js modLine): the roster's
+// names once the App has them (setNames), the key until then.
+let nameOf = (entry) => entry?.variant || entry?.core || "";
+export function setNames(fn) { if (typeof fn === "function") nameOf = fn; }
+
+// A progress line: {text}, or {text, parts} for a job over mods, whose parts fitLine shortens to the line's width.
+// value: a job's progress, a line, or a text.
+export function progressLine(value, fallback) {
+  if (typeof value === "string") return { text: value };
+  if (value && typeof value.text === "string") return value;
+  return modLine(value, { nameOf }) || { text: progressText(value || {}, fallback) };
+}
+
 // fraction: the share done of the item at hand, after the line as job-progress.js's percentText writes it (whole
 // percents, below 100 while the item runs); nothing without one
 export function progressText({ label = "", current = 0, total = 0, fraction = null } = {}, fallback = T("progress.process", { name: T("progress.mods") })) {
@@ -107,7 +121,7 @@ export async function task(run, { label = null } = {}) {
     const key = `${value?.current ?? ""}/${value?.total ?? ""}`, f = value?.fraction;
     if (key !== item) { item = key; best = null; }
     if (typeof f === "number" && Number.isFinite(f) && (best === null || f > best)) best = f;
-    setProgress(o, progressText(best === null ? value : { ...value, fraction: best }, label || undefined));
+    setProgress(o, progressLine(best === null ? value : { ...value, fraction: best }, label || undefined));
   };
   o.relabelProgress = () => update();
   update();
@@ -173,12 +187,26 @@ export function refresh() {
   syncLock();
 }
 
-function setProgress(o, text) {
+// The progress line's width on the stage, the prefab label's (ngui-label.js) and the plain one's (app.css), less room
+// for the label's outline; the plain line's font size (app.css .loading-progress).
+const PROGRESS_WIDTH = 1000 - 8, PLAIN_FONT = 26;
+// The line shortened to its width at a font size (CSS px): a job over mods shortens its names (fitLine), any other
+// line is left to the label's ellipsis.
+function fittedProgress(o, fontSize) {
+  const text = o.progressText || "";
+  if (!o.progressParts) return text;
+  try { return fitLine(o.progressParts, (str) => NGUI.textWidth(str, fontSize), PROGRESS_WIDTH); } catch { return text; }
+}
+
+function setProgress(o, value) {
+  const line = typeof value === "string" ? { text: value } : value || { text: "" };
+  const text = line.text || "";
   if (o.progressText === text && o.progressTarget === o.progress) return;
   o.progressTarget = o.progress;
   o.progressText = text;
+  o.progressParts = line.parts || null;
   o.el.setAttribute("aria-label", text);
-  if (!o.progressContent) o.progress.textContent = text;
+  if (!o.progressContent) o.progress.textContent = fittedProgress(o, PLAIN_FONT);
   correctFallback(o);
   queueProgress(o);
 }
@@ -196,7 +224,7 @@ function queueProgress(o) {
         if (o.closing || o.done || !o.progress || o.progressDirty) continue;
         o.progressContent = null; o.progressTree = null;
         o.progress.classList.remove("prefab-label");
-        o.progress.textContent = o.progressText || "";
+        o.progress.textContent = fittedProgress(o, PLAIN_FONT);
         o.geometryFailed = true;
         correctFallback(o);
         if (!o.progressContent) o.progress.style.visibility = "";
@@ -224,6 +252,9 @@ async function renderProgress(o) {
   }));
   const ink = Object.fromEntries(bounds);
   const tree = loadingLabel(o.repeaterTree, style || loadingTree, text, S, ink);
+  // a job over mods: its names shortened to the label's width at the label's size
+  const label = tree?.widgets?.[0];
+  if (label && o.progressParts) label.text = fittedProgress(o, label.fontSize * S);
   const line = tree?.inkLine ?? loadingInkLine(o.repeaterTree, S, ink);
   if (line == null) throw new Error("Loading label baseline unavailable");
   const next = document.createElement("div");
@@ -234,7 +265,7 @@ async function renderProgress(o) {
     else {
       const css = getComputedStyle(o.progress);
       Object.assign(next.style, { inset: "auto", left: "84px", bottom: "44px", font: css.font, color: css.color, whiteSpace: "nowrap" });
-      next.textContent = text;
+      next.textContent = fittedProgress(o, PLAIN_FONT);
     }
     await document.fonts?.ready;
     if (token !== o.progressVersion || o.closing || o.done) { next.remove(); return; }
@@ -488,7 +519,7 @@ export const held = () => holds.size > 0;
 export async function hold(work, { until = null, all = false, progress = null } = {}) {
   let latest = null;
   const el = stage(), key = { all, progress: () => latest === null ? progress?.() || T("app.loading")
-    : typeof latest === "string" ? latest : progressText(latest) };
+    : progressLine(latest) };
   const update = (value) => { latest = value; refresh(); };
   holds.add(key);
   if (all) el.classList.add("input-held");

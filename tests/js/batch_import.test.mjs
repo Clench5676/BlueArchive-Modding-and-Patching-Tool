@@ -462,7 +462,7 @@ test("running captures IDs/options, follows job progress, survives hiding and sh
   h.runs[0].progress({ done: 0, index: 2, total: 2, current: "b", phase: "update", step: "import.step.crc" }); await h.page.settled();
   assert.equal(h.host.querySelector(".import-progress"), null);
   assert.doesNotMatch(h.host.textContent, /Updating.*Student b/);
-  assert.equal(h.holds.findLast((hold) => hold.active).opts.progress(), "Completed 0 / 2, remaining 2\nUpdating Student b (Memorial Lobby) - Repairing CRC");
+  assert.equal(h.holds.findLast((hold) => hold.active).opts.progress(), "Completed 0 / 2, remaining 2\nUpdating Student b - Memorial Lobby - Repairing CRC");
   h.page.hide(); assert.equal(h.scopes[0].cancelled, true);
   h.runs[0].resolve({ results: [{ id: "a", outcome: "imported", reason: null, libraryId: "lib-a", applied: false },
     { id: "b", outcome: "failed", reason: "unreadable", libraryId: null, applied: false }] }); await flush();
@@ -1569,7 +1569,7 @@ test("the shared page hold reports both analysis and import progress through art
   h.analyses[0].resolve({ entries: [entry("a")], skipped: 0 }); await analyzing; await h.page.settled(); await flush();
   h.answers.push({ button: "ok" }); await h.action("start").click(); await flush();
   h.runs[0].progress({ done: 0, index: 1, total: 2, current: "a", phase: "apply", step: "import.step.apply" });
-  assert.equal(hold().opts.progress(), "Completed 0 / 2, remaining 2\nApplying Mods Saved Alias (Portrait)");
+  assert.equal(hold().opts.progress(), "Completed 0 / 2, remaining 2\nApplying Mods Saved Alias - Portrait");
   h.runs[0].reject({ code: "internal" }); await flush(); await h.page.settled(); await flush();
   assert.equal(hold(), undefined);
 });

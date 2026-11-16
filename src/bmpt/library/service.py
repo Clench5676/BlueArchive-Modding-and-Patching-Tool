@@ -44,7 +44,7 @@ from ..gameassets.preview_reads import PreviewReads
 from ..logging_utils import log_failure
 from ..openfiles import remove_tree, temporary_directory
 from . import profiles as profiles_mod
-from . import fingerprint, integrity, pointers, rig_archive, safety, staging, tested_build
+from . import fingerprint, integrity, mod_progress, pointers, rig_archive, safety, staging, tested_build
 from .original_checks import OriginalChecks, Verdict
 from .install import Action, PlannedFile, PlannedGroup, backup_file, install_staged
 from .rebuild import RebuildResult, rebuild
@@ -338,13 +338,13 @@ def _revision(files: Iterable[tuple[Path, Path]]) -> str:
     return hashlib.sha1(repr(sorted((game.name, read.stat().st_size) for game, read in files)).encode()).hexdigest()
 
 
-def _item_fraction(progress: Callable[..., None] | None, current: int = 1,
-                   total: int = 1) -> Callable[[float], None] | None:
+def _item_fraction(progress: Callable[..., None] | None, current: int = 1, total: int = 1,
+                   build: float = 0.9) -> Callable[[float], None] | None:
     """How far a costume build is (``_stage_costume``'s ``fraction``), reported as the job's progress of its item
-    ``current`` of ``total``: {"current", "total", "fraction"}. None without a job's progress."""
-    if progress is None:
-        return None
-    return lambda fraction: progress({"current": current, "total": total, "fraction": round(fraction, 3)})
+    ``current`` of ``total``: {"current", "total", "step", "fraction"}, the build's phases as steps
+    (``mod_progress.single``). ``build``: the item's share the build fills, the rest for a write into the game files
+    after it (1 for a build the library keeps). None without a job's progress."""
+    return mod_progress.single(progress, current, total, build)
 
 
 class _WornVerdicts:
@@ -3622,11 +3622,12 @@ class ModLibrary:
             out.update(mods=[dict(mod) for mod in cached[1]["mods"]], counts=dict(cached[1]["counts"]))
             out["due"] = bool(out["mods"])
             return out
+        line = mod_progress.ItemProgress(progress, len(records), "check")
         for i, record in enumerate(records, 1):
             if progress:
                 entry = entries[record["id"]]
-                progress({"current": i, "total": len(records), "step": "import.step.check", "variant": entry.target,
-                          "kind": entry.kind, "label": entry.label})
+                line.item(i, variant=entry.target, kind=entry.kind, name=self._progress_name(record), core=entry.core,
+                          step=mod_progress.STEP_CHECK)
             with self._lock:
                 if record["id"] not in self._records:
                     continue
@@ -3776,11 +3777,17 @@ class ModLibrary:
         if items and self._writes_refused():
             result["left"] = [{key: item[key] for key in ("id", "core", "source")} for item in items]
             return result
-        for i, item in enumerate(items):
-            if progress:
-                progress(i, len(items), "")
-            # each build tells how far it is, as the progress of this item
-            fraction = _item_fraction(progress, i, len(items))
+        line = mod_progress.ItemProgress(progress, len(items), "process")
+        for i, item in enumerate(items, 1):
+            line.item(i, **self._progress_identity(item["target"], "model", item["source"]),
+                      step=mod_progress.STEP_CHECK)
+            # each build tells how far it is: an Optimize Physics copy's rebuild, or the costume swap's build, most of
+            # the item; then the write into the game files
+            if item["id"]:
+                rebuilt = line.part(0.0, 0.9 if item["installed"] else 1.0)
+                written = line.part(0.9, 1.0, build=0.0)
+            else:
+                rebuilt, written = None, line.part(0.0, 1.0, build=0.9)
             named = {key: item[key] for key in ("id", "core", "source")}
             if item["installed"]:
                 # a build the game files hold is built only when it can be written now: checked before the rebuild
@@ -3796,7 +3803,7 @@ class ModLibrary:
                     continue
             if item["id"]:
                 try:
-                    self.update(item["id"], log, pin=pin, fraction=fraction)
+                    self.update(item["id"], log, pin=pin, fraction=rebuilt)
                 except (ServiceError, OSError) as error:
                     if isinstance(error, ServiceError) and error.code in LATER:
                         result["left"].append(named)
@@ -3807,18 +3814,53 @@ class ModLibrary:
                     continue
             if item["installed"]:
                 try:
-                    self.apply(item["target"], item["source"], log, kind="model", pin=pin, fraction=fraction)
+                    self.apply(item["target"], item["source"], log, kind="model", pin=pin, fraction=written)
                 except (ServiceError, OSError) as error:
                     log_failure(logger, logging.INFO, "Left a costume build for the next start", error)
                     result["left"].append(named)
                     continue
             result["done"].append(named)
-        if progress and items:
-            progress(len(items), len(items), "")
         if items:
             logger.info("Costume builds of an older rule: %d built again, %d kept, %d left",
                         len(result["done"]), len(result["kept"]), len(result["left"]))
         return result
+
+    def _entry_identity(self, pin: Pin, core: str, config: dict[str, Any] | None) -> dict[str, str]:
+        """Who a toggle's entry is (``_progress_identity``): its core's variant and kind, and its configured source."""
+        try:
+            variant = self._core_map(pin).key(core) or ""
+            kind = self._kind(core, pin) or ""
+        except (OSError, ServiceError):
+            variant, kind = "", ""
+        folder = (((config or {}).get("folders") or {}).get(pin.key) or {}).get("configured") or {}
+        source = (folder.get(core.lower()) or {}).get("source")
+        return {**self._progress_identity(variant, kind, source), "core": core}
+
+    def _progress_identity(self, variant: str, kind: str, source: str | None) -> dict[str, str]:
+        """Who an item of a job over mods is, for its progress line (``mod_progress``): the variant and kind it
+        writes, and the mod's own name (``_progress_name``) or the variant whose files it takes."""
+        identity = {"variant": variant or "", "kind": kind or ""}
+        if isinstance(source, str) and source.startswith("mod:"):
+            record = self._records.get(source[4:])
+            if record is not None:
+                identity["name"] = self._progress_name(record)
+        elif isinstance(source, str) and source.startswith("variant:"):
+            identity["source"] = source[8:]
+        return identity
+
+    def _progress_name(self, record: dict[str, Any]) -> str:
+        """A mod's name as its list shows it (``_label``), or nothing when that only repeats its target or one of its
+        file names or cores."""
+        try:
+            label = self._label(record)
+        except (KeyError, TypeError):
+            return ""
+        if not isinstance(label, str) or not label:
+            return ""
+        plain = {str(record.get("target") or "").lower()}
+        for name in record.get("files") or []:
+            plain.update({str(name).lower(), Path(str(name)).stem.lower(), core_of(str(name))})
+        return "" if label.lower() in plain else label
 
     @_serialized
     def _keep_costume(self, mod_id: str, rule: int) -> None:
@@ -5890,7 +5932,7 @@ class ModLibrary:
         report: dict[str, Any] = {}
         with temporary_directory(prefix=devmode.LIBRARY_STAGING_PREFIX) as temporary:
             replacements = self._stage_costume(other, targets, Path(temporary) / "model", no_log, pin, report=report,
-                                               physics=True, fraction=_item_fraction(progress))
+                                               physics=True, fraction=_item_fraction(progress, build=1.0))
             if not report.get("physics"):
                 return {"unneeded": True, "reason": "no_gain"}
             built = {path.name: path for path in replacements.values() if path.parent.name == "output"}
@@ -6272,6 +6314,7 @@ class ModLibrary:
                 else:
                     raise ServiceError("source_unsupported", source=source)
                 prepared = time.perf_counter()
+                mod_progress.entered(fraction, "write")
                 files = self._commit(replacements, source, log, progress, pin, prune=False, build_keys=build_keys,
                                      create_backup=create_backup, kept_current=kept_current)
                 change.configure(kinds)
@@ -6409,10 +6452,12 @@ class ModLibrary:
         return False
 
     def _switch(self, pin: Pin, core: str, source: str, log: LogFunc = no_log,
-                progress: ProgressCallback | None = None, use_built: bool = True) -> list[Path]:
+                progress: ProgressCallback | None = None, use_built: bool = True,
+                fraction: Callable[[float], None] | None = None) -> list[Path]:
         """The internal write of an entry: its core's parts in its own install switched to a source, and nothing
         else (the configuration stays). From a built copy when one still fits; a mod made for the core is installed
-        directly, another variant's mod adapted, another variant's files (in that same install) adapted."""
+        directly, another variant's mod adapted, another variant's files (in that same install) adapted.
+        ``fraction``: told how far a costume build is and when the write starts (``mod_progress.Part``)."""
         core = self._core_map(pin).slot(core)
         targets = self._spine_parts(core, pin)
         if not targets:
@@ -6443,7 +6488,7 @@ class ModLibrary:
                     _, inputs = self._costume_source(source[8:], pin)
                     replacements = self._cached_build(inputs, targets, pin,
                         lambda: self._stage_costume(source[8:], targets, work / kind, log, pin,
-                                                    fraction=_item_fraction(progress)), build_keys)
+                                                    fraction=fraction or _item_fraction(progress)), build_keys)
                 elif source.startswith("variant:"):
                     other = self._core_map(pin).core(source[8:], kind)
                     sources = self._index(pin).get(other.lower(), []) if other else []
@@ -6454,6 +6499,7 @@ class ModLibrary:
                         lambda: self._stage_adapted(official, targets, work / kind, log, pin), build_keys)
                 else:
                     raise ServiceError("source_unsupported", source=source)
+            mod_progress.entered(fraction, "restore" if source == "official" else "write")
             files = self._commit(replacements, source, log, progress, pin, prune=False, build_keys=build_keys)
         self._clear_marker(pin, core)
         return files
@@ -7453,6 +7499,8 @@ class ModLibrary:
         saved_at, unsaved = time.monotonic(), 0
         stop: ServiceError | None = None
         _background.paced = True  # other callers of the library go first between its entries (_let_others_in)
+        # the progress line: each entry as it starts, who it is and the source it is switched from or to
+        line = mod_progress.ItemProgress(progress, len(plan), "apply" if enabled else "restore")
         try:
             for i, (pin, core) in enumerate(plan, 1):
                 if cancel and cancel():
@@ -7462,8 +7510,11 @@ class ModLibrary:
                     try:
                         with _errors("toggle"):
                             self._check_pins(pins)
+                            if progress:
+                                line.item(i, **self._entry_identity(pin, core, config), step=mod_progress.STEP_CHECK)
                             outcome, why, entry = self._reach(pin, core, enabled, allowed, listed.get((pin.key, core)),
-                                                              drift is not None, log)
+                                                              drift is not None, log,
+                                                              fraction=line.part(0.0, 1.0, build=0.9))
                     except ServiceError as error:
                         item = {"install": pin.key, "core": core, "kind": self._kind(core, pin) or "spr",
                                 "variant": self._core_map(pin).key(core) or core}
@@ -7488,8 +7539,7 @@ class ModLibrary:
                     with _errors("toggle"):
                         self._save_outcomes(outcomes)
                     outcomes, unsaved, saved_at = {}, 0, time.monotonic()
-                if progress:
-                    progress(i, len(plan), t("webui.progress.apply" if enabled else "webui.progress.restore", name=core))
+                line.done()
         finally:
             _background.paced = False
         with self._lock:
@@ -7578,11 +7628,13 @@ class ModLibrary:
         return need
 
     def _reach(self, pin: Pin, core: str, enabled: bool, allowed: bool, listed_state: str | None, drift: bool,
-               log: LogFunc) -> tuple[dict[str, Any], str | None, dict | None]:
+               log: LogFunc, fraction: Callable[[float], None] | None = None
+               ) -> tuple[dict[str, Any], str | None, dict | None]:
         """One entry of a toggle, Retry or Apply Mod Configuration, under the library lock: its configuration read
         again and its files judged at write strength (a part the library can show unchanged by stat carries its
         record's source; every other part is read in full). Returns (what happened, by result list; the entry's
-        why in the unfinished list, None when it leaves; the entry)."""
+        why in the unfinished list, None when it leaves; the entry). ``fraction``: its progress line's share
+        (``mod_progress.Part``), told the build and the write."""
         pins = self._view_pins(pin)
         view = self._view(pins, "full")
         entry = view.entry(pin, core)
@@ -7627,7 +7679,7 @@ class ModLibrary:
             if entry.configured and entry.carried == entry.configured and not entry.drifted:
                 self._make_built(pin, entry)
             try:
-                self._switch(pin, core, "official", log)
+                self._switch(pin, core, "official", log, fraction=fraction)
             except ServiceError as error:
                 if error.code == "original_unavailable":
                     outcome["stuck"] = item
@@ -7659,7 +7711,7 @@ class ModLibrary:
             return outcome, "held", item
         mod_count = len(self._records)
         try:
-            self._switch(pin, core, target, log)
+            self._switch(pin, core, target, log, fraction=fraction)
         except ServiceError as error:
             if error.code == "original_unavailable":
                 outcome["stuck"] = item
@@ -8782,7 +8834,7 @@ class ModLibrary:
         pin = self._current(pin)
         record = self._record(mod_id)
         if self._optimized_from(record):
-            return self._rebuild_optimized(record, log, pin, fraction or _item_fraction(progress))
+            return self._rebuild_optimized(record, log, pin, fraction or _item_fraction(progress, build=1.0))
         paths = self._paths(record)
         built_from = {path.name: self._hashes.get(path).sha1 for path in paths}
         painted = (self._read_built_against(record) or {}).get("painted")  # the textures move over as they are

@@ -86,7 +86,8 @@ def test_the_costume_table_lists_each_phase_once_with_the_physics_phases():
 
 def test_the_library_reports_a_costume_builds_progress_through_the_job(monkeypatch, tmp_path):
     """``_stage_costume`` hands the build a meter whose growing fractions, below 1, reach its ``fraction``; a job's
-    progress gets them as its item's {"current", "total", "fraction"} (``_item_fraction``)."""
+    progress gets them as its item's {"current", "total", "step", "fraction"} (``_item_fraction``), the phases as
+    the steps of the progress line (``mod_progress.COSTUME_STEPS``)."""
     from bmpt.gameassets import model_adapt
     from bmpt.library import service
 
@@ -112,16 +113,19 @@ def test_the_library_reports_a_costume_builds_progress_through_the_job(monkeypat
     library._stage_costume("other", [target], tmp_path, print, None, step=lambda: steps.append(1),
                            fraction=service._item_fraction(reported.append, 2, 5), physics=True)
     assert len(steps) == len(phases)
-    assert reported and all(set(p) == {"current", "total", "fraction"} and (p["current"], p["total"]) == (2, 5)
+    assert reported and all(set(p) == {"current", "total", "step", "fraction"} and (p["current"], p["total"]) == (2, 5)
                             for p in reported)
     fractions = [p["fraction"] for p in reported]
-    assert fractions == sorted(set(fractions)) and 0 < fractions[0] and fractions[-1] < 1
+    assert fractions == sorted(fractions) and fractions[-1] < 0.9  # the rest of the item for the write after it
+    steps = [p["step"] for p in reported]
+    assert list(dict.fromkeys(steps)) == ["import.step.readModel", "import.step.fitCostume", "import.step.buildModel",
+                                              "import.step.save"]
     # without a job's progress the build marks its phases all the same, and nothing is reported
     assert service._item_fraction(None) is None
     library._stage_costume("other", [target], tmp_path, print, None)
     single = []
-    service._item_fraction(single.append)(0.12345)
-    assert single == [{"current": 1, "total": 1, "fraction": 0.123}]
+    service._item_fraction(single.append, build=1.0)(0.12345)
+    assert single == [{"current": 1, "total": 1, "step": "", "fraction": 0.123}]
 
 
 @official

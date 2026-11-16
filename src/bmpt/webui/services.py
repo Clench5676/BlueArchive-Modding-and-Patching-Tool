@@ -834,12 +834,21 @@ class Services:
             self.publish_state()
 
     def _progress(self, progress: Callable[..., Any]) -> Callable[..., Any]:
-        """A toggle's progress callback that also feeds ``mods.state.progress`` ("Working 12/40")."""
-        def report(current: int, total: int, label: str = "") -> None:
+        """A toggle's progress callback that also feeds ``mods.state.progress`` ("Working 12/40"). The job reports
+        its item at hand as a dict (``mod_progress``): the items before it are done, and it is once its share is whole."""
+        def report(current: int | dict[str, Any], total: int | None = None, label: str = "") -> None:
             progress(current, total, label)
-            self.snapshot.set_progress({"done": int(current), "total": int(total)})
+            if isinstance(current, dict):
+                total = int(current.get("total") or 0)
+                ended = float(current.get("fraction") or 0) >= 1
+                done = max(0, int(current.get("current") or 0) - (0 if ended else 1))
+                if self.snapshot.progress() == {"done": done, "total": total}:
+                    return
+            else:
+                done, total = int(current), int(total or 0)
+            self.snapshot.set_progress({"done": done, "total": total})
             now = time.monotonic()
-            if current >= total or now - self._progress_at >= PROGRESS_PUBLISH:
+            if done >= total or now - self._progress_at >= PROGRESS_PUBLISH:
                 self._progress_at = now
                 self.publish_state()
 

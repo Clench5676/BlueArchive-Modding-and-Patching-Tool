@@ -43,3 +43,59 @@ export function jobProgress({ action, name, current = 1, total = 1, step = "", f
   const suffix = detail && detail !== phase && repeated[action] !== step ? T("progress.step", { step: detail }) : "";
   return withPercent(T("progress.job", { action: phase.replace(/\{name\}/g, "").replace(/[:：]\s*$/u, "").trim(), name, current, total }) + suffix, fraction);
 }
+
+// --- a job over mods: one line per item at hand (library/mod_progress.py) ---
+// "Processing Mods (3/13): Hoshino (Swimsuit) - Chibi - My Swim Edit - 42% - Saving Bundle": the job's verb and the
+// item at hand of all, who it is, its kind, the mod's own name (or the variant whose costume it takes), how far it is
+// and its step. A one-item job leaves the count out.
+const KIND_KEYS = { spr: "tab.portrait", lobby: "tab.lobby", model: "tab.model", other: "import.other" };
+const MOD_ACTIONS = { process: "progress.modsProcess", apply: "progress.modsApply", restore: "progress.modsRestore",
+  check: "progress.modsCheck" };
+export const SHRINK_NAME = 1, SHRINK_WHO = 2;
+const plainName = (entry) => entry?.variant || entry?.core || "";
+
+// p: a job's progress ({current, total, action, variant, kind, core, name, source, step, fraction}); nameOf names a
+// variant ({variant, core}) as the roster does; action: a string key that overrides the job's verb. Returns
+// {text, parts} (parts: [text, shrink], shrink 0 for text that always stays), or null for progress of no mod item.
+export function modLine(p = {}, { nameOf = plainName, action = "" } = {}) {
+  if (!p || (!p.variant && !p.core)) return null;
+  const current = Number(p.current) || 0, total = Number(p.total) || 0;
+  const verb = T(action || MOD_ACTIONS[p.action] || MOD_ACTIONS.process);
+  const head = total > 1 ? T("progress.modCount", { action: verb, current, total }) : T("progress.modHead", { action: verb });
+  const sep = T("progress.sep");
+  const who = (p.kind === "other" ? p.core : nameOf({ variant: p.variant, core: p.core })) || p.core || p.variant || "";
+  const parts = [[head, 0], [who, SHRINK_WHO], [sep + T(KIND_KEYS[p.kind] || KIND_KEYS.other), 0]];
+  const own = p.name && p.name !== who ? p.name
+    : p.source ? T("progress.from", { name: nameOf({ variant: p.source }) || p.source }) : "";
+  if (own) parts.push([sep, 0], [own, SHRINK_NAME]);
+  const percent = percentText(p.fraction);
+  if (percent) parts.push([sep + percent, 0]);
+  const step = p.step ? T(p.step) : "";
+  if (step && step !== p.step) parts.push([sep + step, 0]);
+  return { text: parts.map(([text]) => text).join(""), parts };
+}
+
+// The line in at most max wide (width(text) measures it): the mod's own name shortened first, then who it is, each
+// to the longest start that fits followed by an ellipsis; the verb, count, kind, percentage and step always stay. A
+// line that still does not fit is returned with both shortened to the ellipsis alone.
+export function fitLine(parts, width, max, ellipsis = "…") {
+  const texts = parts.map(([text]) => text);
+  const joined = () => texts.join("");
+  if (width(joined()) <= max) return joined();
+  for (const level of [SHRINK_NAME, SHRINK_WHO]) {
+    const at = parts.findIndex(([, shrink]) => shrink === level);
+    if (at < 0) continue;
+    const chars = Array.from(parts[at][0]);
+    let lo = 0, hi = chars.length - 1;  // the longest start, lo characters, that fits
+    texts[at] = ellipsis;
+    if (width(joined()) > max) continue;
+    while (lo < hi) {
+      const mid = Math.ceil((lo + hi) / 2);
+      texts[at] = chars.slice(0, mid).join("").trimEnd() + ellipsis;
+      if (width(joined()) <= max) lo = mid; else hi = mid - 1;
+    }
+    texts[at] = chars.slice(0, lo).join("").trimEnd() + ellipsis;
+    return joined();
+  }
+  return joined();
+}

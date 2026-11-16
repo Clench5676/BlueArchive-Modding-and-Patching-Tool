@@ -470,7 +470,15 @@
 			"actionDelete": "削除",
 			"actionRemap": "テクスチャ再配置",
 			"actionCompatibility": "互換性確認",
-			"actionOptimize": "物理効果の最適化"
+			"actionOptimize": "物理効果の最適化",
+			"modsProcess": "MOD処理",
+			"modsApply": "MOD適用",
+			"modsRestore": "MOD復元",
+			"modsCheck": "MODチェック",
+			"modCount": "{action}（{current}/{total}）：",
+			"modHead": "{action}：",
+			"sep": " - ",
+			"from": "元：{name}"
 		},
 		"job": {
 			"running": "処理中",
@@ -1042,7 +1050,12 @@
 				"crc": "CRC 修復",
 				"add": "Mod ライブラリに追加",
 				"apply": "Mod 適用",
-				"export": "ファイル出力"
+				"export": "ファイル出力",
+				"readModel": "モデル読み込み",
+				"fitCostume": "衣装合わせ",
+				"buildModel": "モデル生成",
+				"write": "ゲームファイル書き込み",
+				"restore": "公式ファイル復元"
 			},
 			"selectPreview": "プレビューに設定",
 			"applyGame": "ゲームに適用",

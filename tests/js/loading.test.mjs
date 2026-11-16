@@ -1,4 +1,5 @@
 import { alignBaseline, publishAligned } from "../../src/bmpt/web/js/loading-baseline.js";
+import { fitLine, modLine } from "../../src/bmpt/web/js/job-progress.js";
 import { loadingLabel, loadingLetterSprites, loadingInkLine, alphaBounds } from "../../src/bmpt/web/js/ngui-label.js";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -76,7 +77,7 @@ async function harness({ labelFailure = null, labelGate = null, locale = "en-US"
     setTimeout: (fn, ms) => { const id = ++timerId; timers.set(id, { at: now + ms, fn }); return id; },
     clearTimeout: (id) => timers.delete(id), requestAnimationFrame: (fn) => fn(),
     Popup: { allowsInput: () => false, deferWhile: () => {} },
-    T, S: 1, loadingLabel, loadingLetterSprites, loadingInkLine, alphaBounds,
+    T, S: 1, loadingLabel, loadingLetterSprites, loadingInkLine, alphaBounds, modLine, fitLine,
     domBaseline: () => 1028.75, alignBaseline: (el, line) => alignBaseline(el, line, stage, () => 1028.75 + (el.baselineShift || 0)),
     publishAligned: (host, next, line) => labelFailure !== "alignment" && publishAligned(host, next, line, stage, () => 1028.75 + (next.baselineShift || 0)),
     NGUI: { find: (_tree, path) => edges && path.endsWith("CharCombatStyleAniwidget/Bg") ? gradient : null, init: () => { assets.push("indexes"); return sprites.promise; }, layout: async (name) => { assets.push(name); if (name === "UICharacterDetail" && labelFailure === "layout") throw new Error("Missing label style"); return prefabLabels && name === "UIRepeater" ? {
@@ -95,7 +96,7 @@ async function harness({ labelFailure = null, labelGate = null, locale = "en-US"
     } },
   };
   globalThis.loadingDeps = d;
-  const code = `const {document,performance,setTimeout,clearTimeout,requestAnimationFrame,getComputedStyle,NGUI,Popup,T,S,loadingLabel,loadingLetterSprites,loadingInkLine,alphaBounds,alignBaseline,domBaseline,publishAligned,freezeShown = () => {}} = globalThis.loadingDeps;\n${source.replace(/^import .*;$/gm, "")}\n// ${seq++}`;
+  const code = `const {document,performance,setTimeout,clearTimeout,requestAnimationFrame,getComputedStyle,NGUI,Popup,T,S,loadingLabel,loadingLetterSprites,loadingInkLine,alphaBounds,alignBaseline,domBaseline,publishAligned,modLine,fitLine,freezeShown = () => {}} = globalThis.loadingDeps;\n${source.replace(/^import .*;$/gm, "")}\n// ${seq++}`;
   const loading = await import(`data:text/javascript;base64,${Buffer.from(code).toString("base64")}`);
   if (infoReady) loading.init({ consent, uiCached, gameFound: true });
   const advance = async (ms) => {

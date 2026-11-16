@@ -470,7 +470,15 @@
 			"actionDelete": "กำลังลบ",
 			"actionRemap": "กำลังจัดพื้นผิวใหม่",
 			"actionCompatibility": "กำลังตรวจสอบความเข้ากันได้",
-			"actionOptimize": "กำลังปรับเอฟเฟกต์ฟิสิกส์"
+			"actionOptimize": "กำลังปรับเอฟเฟกต์ฟิสิกส์",
+			"modsProcess": "กำลังประมวลผล Mod",
+			"modsApply": "กำลังใช้ Mod",
+			"modsRestore": "กำลังคืนค่า Mod",
+			"modsCheck": "กำลังตรวจสอบ Mod",
+			"modCount": "{action} ({current}/{total}): ",
+			"modHead": "{action}: ",
+			"sep": " - ",
+			"from": "จาก: {name}"
 		},
 		"job": {
 			"running": "กำลังประมวลผล",
@@ -1042,7 +1050,12 @@
 				"crc": "แก้ไข CRC",
 				"add": "เพิ่มในคลัง Mod",
 				"apply": "ใช้ Mod",
-				"export": "ส่งออกไฟล์"
+				"export": "ส่งออกไฟล์",
+				"readModel": "อ่านโมเดล",
+				"fitCostume": "ปรับชุด",
+				"buildModel": "สร้างโมเดล",
+				"write": "เขียนไฟล์เกม",
+				"restore": "คืนค่าไฟล์ทางการ"
 			},
 			"selectPreview": "เลือกเป็นภาพตัวอย่าง",
 			"applyGame": "ใช้ในเกม",

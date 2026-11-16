@@ -470,7 +470,15 @@
 			"actionDelete": "删除",
 			"actionRemap": "重排贴图",
 			"actionCompatibility": "检查兼容性",
-			"actionOptimize": "优化物理效果"
+			"actionOptimize": "优化物理效果",
+			"modsProcess": "处理 Mod",
+			"modsApply": "应用 Mod",
+			"modsRestore": "还原 Mod",
+			"modsCheck": "检查 Mod",
+			"modCount": "{action}（{current}/{total}）：",
+			"modHead": "{action}：",
+			"sep": " - ",
+			"from": "来源：{name}"
 		},
 		"job": {
 			"running": "处理中",
@@ -1042,7 +1050,12 @@
 				"crc": "修复 CRC",
 				"add": "加入 Mod 仓库",
 				"apply": "应用 Mod",
-				"export": "导出文件"
+				"export": "导出文件",
+				"readModel": "读取模型",
+				"fitCostume": "适配服装",
+				"buildModel": "生成模型",
+				"write": "写入游戏文件",
+				"restore": "还原官方文件"
 			},
 			"selectPreview": "选择为预览",
 			"applyGame": "应用到游戏",
