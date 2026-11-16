@@ -1123,8 +1123,8 @@ def test_costume_builds_of_an_older_rule_are_built_again_at_the_start(model_env,
     monkeypatch.setattr(ModLibrary, 'resource_version', lambda self, pin: 'v1')
     made = library.optimize_costume('hoshino', 'variant:hoshino_swimsuit', 'Swimsuit')['mod']
     assert library.apply('hoshino', 'variant:hoshino_swimsuit', kind='model').files
-    assert library.update_due() == {'due': False, 'outdated': False, 'install': library.current_pin().key,
-                                    'version': 'v1', 'previous': None}
+    assert library.update_due() == {'due': False, 'outdated': False, 'retry': False,
+                                    'install': library.current_pin().key, 'version': 'v1', 'previous': None}
     assert library.refresh_costumes() == {'done': [], 'kept': [], 'left': []}
     swap = {'id': '', 'core': 'hoshino_original', 'source': 'variant:hoshino_swimsuit'}
     copy = {'id': made, 'core': 'hoshino_original', 'source': f'mod:{made}'}

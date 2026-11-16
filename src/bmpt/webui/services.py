@@ -928,6 +928,21 @@ class Services:
         with self.classic.starting():
             return self.submit("mods.refreshCostumes", run, writes="game", library=library)
 
+    def submit_retry_failed(self) -> str:
+        """``mods.retryFailed``: at the start, the entries of the current install whose last write failed written again
+        once under this build (``retry_failed``)."""
+        library = self.library
+        pin = self._current_pin(library)
+
+        def run(log: Any, progress: Any) -> Any:
+            self._check_pin(library, pin)
+            self.check_classic()
+            return library.retry_failed(pin, log=log, progress=self._progress(progress))
+
+        with self.classic.starting():
+            self.check_classic()
+            return self.submit("mods.retryFailed", run, writes="game", library=library)
+
     def submit_apply(self, variant: str, source: str, kind: str = "spr") -> str:
         """``actions.apply``: one entry of the current install, pinned at submit. ``classic_open`` only when it would
         write a game file (an apply while mods are off only changes the configuration)."""

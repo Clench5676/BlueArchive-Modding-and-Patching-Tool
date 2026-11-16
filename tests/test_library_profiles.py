@@ -3269,6 +3269,66 @@ def test_failed_toggle_reports_set_with_error_then_retry_installs(world, monkeyp
     assert world.library.selection("test")["spr"] == {"source": f"mod:{mod.id}", "installed": True, "error": None}
 
 
+def test_a_new_build_writes_entries_whose_last_write_failed_again_once(world, monkeypatch):
+    mod = world.add(world.spr)
+    world.toggle(False)
+    world.library.apply("test", f"mod:{mod.id}")
+    switch = world.library._switch
+
+    def fail(*args, **kwargs):
+        raise ServiceError("mod_release_mismatch", file=world.spr.name)
+
+    monkeypatch.setattr(service, "_app_version", lambda: "1.0.0")
+    monkeypatch.setattr(world.library, "_switch", fail)
+    assert world.toggle(True).failed
+    assert world.library.update_due()["retry"] is True
+    # still failing under this build: a fresh error, not tried again under it
+    result = world.library.retry_failed()
+    assert result.failed[0]["code"] == "mod_release_mismatch"
+    assert world.library.selection("test")["spr"]["error"]["code"] == "mod_release_mismatch"
+    assert world.folder()["retried"] == "1.0.0" and world.library.update_due()["retry"] is False
+    assert world.library.retry_failed() is None
+    # a new build that fixed the cause: written at its first start, the error gone, the entry off the unfinished list
+    monkeypatch.setattr(service, "_app_version", lambda: "1.0.1")
+    monkeypatch.setattr(world.library, "_switch", switch)
+    assert world.reload().update_due()["retry"] is True
+    assert world.library.retry_failed().done
+    assert world.library.selection("test")["spr"] == {"source": f"mod:{mod.id}", "installed": True, "error": None}
+    assert world.unfinished() == [] and world.library.update_due()["retry"] is False
+    assert world.library.profiles.read()["enabled"] is True
+
+
+def test_a_retry_clears_the_stale_error_of_an_entry_that_holds_its_source(world, monkeypatch):
+    mod = world.add(world.spr)
+    world.library.apply("test", f"mod:{mod.id}")
+    pin = world.library.current_pin()
+    world.library._selection_error(pin, ["test_spr"], {"code": "mod_release_mismatch", "params": {}})
+    assert world.library.selection("test")["spr"]["installed"] is False
+    before = world.spr.read_bytes(), world.spr.stat().st_mtime_ns
+    monkeypatch.setattr(service, "_app_version", lambda: "1.0.1")
+    world.library.retry_failed()
+    assert world.library.selection("test")["spr"] == {"source": f"mod:{mod.id}", "installed": True, "error": None}
+    assert (world.spr.read_bytes(), world.spr.stat().st_mtime_ns) == before  # nothing written
+
+
+def test_failed_writes_wait_while_mods_are_off_or_the_game_runs(world, monkeypatch):
+    mod = world.add(world.spr)
+    world.library.apply("test", f"mod:{mod.id}")
+    pin = world.library.current_pin()
+    world.library._selection_error(pin, ["test_spr"], {"code": "mod_release_mismatch", "params": {}})
+    monkeypatch.setattr(service, "_app_version", lambda: "1.0.1")
+    world.library.profiles.update(lambda data: data.update(enabled=False))
+    assert world.library.update_due()["retry"] is False and world.library.retry_failed() is None
+    world.library.profiles.update(lambda data: data.update(enabled=True))
+
+    def running():
+        raise ServiceError("game_running")
+
+    monkeypatch.setattr(safety, "check_game_not_running", running)
+    expect_error("game_running", world.library.retry_failed)
+    assert "retried" not in world.folder() and world.library.update_due()["retry"] is True
+
+
 def test_migration_keeps_the_old_choice_as_set_after_an_external_reset(world):
     mod = world.add(world.spr)
     world.library.apply("test", f"mod:{mod.id}")

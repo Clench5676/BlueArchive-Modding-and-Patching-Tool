@@ -80,6 +80,11 @@ from the last scan, so the prompts exist only with the scan consent; the message
   Again (`mods.dismiss untracked`). Damaged entries are listed apart, dim and never ticked.
 - **Costume builds of an older rule** (`update-impact.js gate`, before the first screen): what the App built under an
   older `COSTUME_RULE` is built again silently (`mods.refreshCostumes`).
+- **Failed writes after an App update** (`update-impact.js gate`, before the first screen): with mods on, the
+  configured entries whose last write failed (the error kept on the choice) are written again once under each new build
+  of the App, silently (`mods.updateDue`'s `retry`, `mods.retryFailed`, an On's Retry of those entries alone): one
+  written, or already holding its source, loses its error; one that fails keeps a fresh one. While the Game Updated
+  question is due they wait for its Check; a refusal of the moment leaves them for the next start.
 - **Game Updated** (before the first screen; also after `config.changed`): once the resource version differs from the
   last seen and the library has mods (`mods.updateDue`), "Check your mods against this update?" with Later and Check.
   Check runs under the loading screen: `mods.impact` classifies the mods, a new scan finds entries the update
