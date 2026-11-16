@@ -535,6 +535,97 @@ def test_gate_stops_measuring_when_the_required_fifth_is_already_proven(monkeypa
     assert len(calls) == 6  # six of thirty sampled frames prove the gate
 
 
+def _min_rotation_reference(a, b):
+    a, b = a / max(np.linalg.norm(a), 1e-12), b / max(np.linalg.norm(b), 1e-12)
+    v = np.cross(a, b)
+    c = float(a @ b)
+    if c < -1 + 1e-9:
+        return ar._half_turn(a)
+    k = np.array([[0, -v[2], v[1]], [v[2], 0, -v[0]], [-v[1], v[0], 0]])
+    return np.eye(3) + k + k @ k / (1 + c)
+
+
+def _repose_reference(rig, poses, deltas, hold):
+    """The frame-by-frame arm turn the batched one replaced."""
+    arms = ar.Arms(rig)
+    out = []
+    for f, w in enumerate(poses):
+        source = np.asarray(w)
+        result = source.copy()
+        for s in range(2):
+            if hold[f, s] or np.abs(deltas[f, s]).max() < 1e-7:
+                continue
+            u, e, wr = rig.joints(w, s)
+            l1, l2 = np.linalg.norm(e - u), np.linalg.norm(wr - e)
+            e2, w2 = np.array([e, wr]) + deltas[f, s]
+            reach = np.linalg.norm(w2 - u)
+            axis = (w2 - u) / max(reach, 1e-9)
+            reach = np.clip(reach, abs(l1 - l2) + 1e-8, l1 + l2 - 1e-8)
+            w2 = u + reach * axis
+            along = (l1 * l1 - l2 * l2 + reach * reach) / (2 * reach)
+            centre = u + along * axis
+            normal = e2 - centre - np.dot(e2 - centre, axis) * axis
+            if np.linalg.norm(normal) < 1e-9:
+                normal = e - centre - np.dot(e - centre, axis) * axis
+            normal /= max(np.linalg.norm(normal), 1e-9)
+            e2 = centre + np.sqrt(max(0, l1 * l1 - along * along)) * normal
+            _, upper, fore, hand = rig.arm[s]
+            shoulder = source[upper, :3, 3]
+            turn_upper = np.eye(4)
+            turn_upper[:3, :3] = _min_rotation_reference(source[fore, :3, 3] - shoulder, e2 - shoulder)
+            turn_upper[:3, 3] = shoulder - turn_upper[:3, :3] @ shoulder
+            hand_world = turn_upper @ source[hand]
+            anchor = (turn_upper @ source[fore])[:3, 3]
+            turn_fore = np.eye(4)
+            turn_fore[:3, :3] = _min_rotation_reference(hand_world[:3, 3] - anchor, w2 - anchor)
+            turn_fore[:3, 3] = anchor - turn_fore[:3, :3] @ anchor
+            combined = turn_fore @ turn_upper
+            upper_rows, fore_rows, hand_rows = arms.groups[s]
+            result[upper_rows] = turn_upper @ source[upper_rows]
+            result[fore_rows] = combined @ source[fore_rows]
+            result[hand_rows, :3, 3] += (combined @ source[hand])[:3, 3] - source[hand, :3, 3]
+        out.append(result)
+    return out
+
+
+def _turned_poses(rig, rng, count):
+    poses = []
+    for _ in range(count):
+        w = np.array(rig.rest)
+        w[:, :3, 3] += rng.normal(0, .01, (len(w), 3))
+        poses.append(w)
+    return poses
+
+
+def test_batched_arm_turn_is_bit_identical_to_the_frame_by_frame_turn():
+    rig = _rig()
+    rng = np.random.default_rng(253)
+    poses = _turned_poses(rig, rng, 40)
+    deltas = rng.normal(0, .02, (40, 2, 2, 3))
+    deltas[3] = 0                     # an unchanged frame
+    deltas[5, 1] = 1e-9               # below the threshold on one side
+    deltas[7, 0, 0] = rig.joints(poses[7], 0)[2] - rig.joints(poses[7], 0)[1]  # the elbow onto the wrist line
+    deltas[9, 1, 1] = np.nan          # a failed solve still turns, as before
+    hold = rng.random((40, 2)) < .2
+    got = ar._repose(rig, poses, deltas, hold)
+    want = _repose_reference(rig, poses, deltas, hold)
+    assert len(got) == len(want)
+    for a, b in zip(got, want):
+        assert np.array_equal(a, b, equal_nan=True)
+    assert ar._repose(rig, [], np.zeros((0, 2, 2, 3)), np.zeros((0, 2), bool)) == []
+
+
+def test_batched_minimum_rotations_match_the_single_rotation_and_the_half_turn():
+    rng = np.random.default_rng(7)
+    a, b = rng.normal(size=(500, 3)), rng.normal(size=(500, 3))
+    b[:3] = -a[:3]                    # opposite directions take the half turn
+    b[3] = a[3] * 2
+    got = ar.min_rotations(a, b)
+    for row in range(len(a)):
+        assert np.array_equal(got[row], _min_rotation_reference(a[row], b[row]))
+        assert np.array_equal(got[row], ar.min_rotation(a[row], b[row]))
+
+
 def test_tree_clone_equals_a_deep_copy_and_shares_nothing_with_the_original():
     from bmpt.gameassets.model_arm_clips import clone_tree
     shared = [1.5, -0.0, float('nan'), 2 ** 70]

@@ -393,13 +393,35 @@ def min_rotation(a, b):
     v = np.cross(a, b)
     c = float(a @ b)
     if c < -1 + 1e-9:
-        axis = np.cross(a, [1.0, 0, 0])
-        if np.linalg.norm(axis) < 1e-6:
-            axis = np.cross(a, [0, 1.0, 0])
-        axis /= np.linalg.norm(axis)
-        return 2 * np.outer(axis, axis) - np.eye(3)
+        return _half_turn(a)
     k = np.array([[0, -v[2], v[1]], [v[2], 0, -v[0]], [-v[1], v[0], 0]])
     return np.eye(3) + k + k @ k / (1 + c)
+
+
+def _half_turn(a):
+    """A half turn about an axis normal to the unit direction a."""
+    axis = np.cross(a, [1.0, 0, 0])
+    if np.linalg.norm(axis) < 1e-6:
+        axis = np.cross(a, [0, 1.0, 0])
+    axis /= np.linalg.norm(axis)
+    return 2 * np.outer(axis, axis) - np.eye(3)
+
+
+def min_rotations(a, b):
+    """``min_rotation`` for rows of directions, with the same arithmetic per row."""
+    a = a / np.maximum(np.linalg.norm(a, axis=1), 1e-12)[:, None]
+    b = b / np.maximum(np.linalg.norm(b, axis=1), 1e-12)[:, None]
+    v = np.cross(a, b)
+    c = (a * b).sum(axis=1)
+    k = np.zeros((len(a), 3, 3))
+    k[:, 0, 1], k[:, 0, 2] = -v[:, 2], v[:, 1]
+    k[:, 1, 0], k[:, 1, 2] = v[:, 2], -v[:, 0]
+    k[:, 2, 0], k[:, 2, 1] = -v[:, 1], v[:, 0]
+    with np.errstate(divide='ignore', invalid='ignore'):  # opposite rows take the half turn below
+        out = np.eye(3) + k + k @ k / (1 + c)[:, None, None]
+    for row in np.flatnonzero(c < -1 + 1e-9):
+        out[row] = _half_turn(a[row])
+    return out
 
 
 def _pad(values, k, loop):
@@ -445,38 +467,32 @@ class Arms:
             self.groups.append([np.array(sorted(all_upper - all_fore)), np.array(sorted(all_fore - all_hand)),
                                 np.array(sorted(all_hand))])
 
-    def repose(self, w, targets):
-        """Least bone turns; hand orientation and every lower local stay exact.
+    def repose(self, poses, source, side, rows, elbow, wrist):
+        """Least bone turns of one arm on the frames ``rows``: ``poses`` (frames x bones x 4 x 4) is changed in place
+        from the unturned ``source``; hand orientation and every lower local stay exact.
 
         Each unchanged subtree receives one rigid world transform. A hand that
         keeps its world orientation translates its entire subtree, so no per-
         descendant inverse matrices or hierarchy recomposition are necessary.
         """
-        source = np.asarray(w)
-        out = source.copy()
-        for side, target in enumerate(targets):
-            if target is None:
-                continue
-            _, upper, fore, hand = self.rig.arm[side]
-            elbow, wrist = target
-            shoulder = source[upper, :3, 3]
-            turn_upper = np.eye(4)
-            turn_upper[:3, :3] = min_rotation(source[fore, :3, 3] - shoulder, elbow - shoulder)
-            turn_upper[:3, 3] = shoulder - turn_upper[:3, :3] @ shoulder
-            fore_world = turn_upper @ source[fore]
-            hand_world = turn_upper @ source[hand]
-            anchor = fore_world[:3, 3]
-            turn_fore = np.eye(4)
-            turn_fore[:3, :3] = min_rotation(hand_world[:3, 3] - anchor, wrist - anchor)
-            turn_fore[:3, 3] = anchor - turn_fore[:3, :3] @ anchor
-            combined = turn_fore @ turn_upper
-            upper_rows, fore_rows, hand_rows = self.groups[side]
-            out[upper_rows] = turn_upper @ source[upper_rows]
-            out[fore_rows] = combined @ source[fore_rows]
-            hand_delta = (combined @ source[hand])[:3, 3] - source[hand, :3, 3]
-            out[hand_rows, :3, 3] += hand_delta
-        return out
-
+        _, upper, fore, hand = self.rig.arm[side]
+        source = source[rows]
+        shoulder = source[:, upper, :3, 3]
+        turn_upper = np.repeat(np.eye(4)[None], len(rows), axis=0)
+        turn_upper[:, :3, :3] = min_rotations(source[:, fore, :3, 3] - shoulder, elbow - shoulder)
+        turn_upper[:, :3, 3] = shoulder - (turn_upper[:, :3, :3] @ shoulder[..., None])[..., 0]
+        fore_world = turn_upper @ source[:, fore]
+        hand_world = turn_upper @ source[:, hand]
+        anchor = fore_world[:, :3, 3]
+        turn_fore = np.repeat(np.eye(4)[None], len(rows), axis=0)
+        turn_fore[:, :3, :3] = min_rotations(hand_world[:, :3, 3] - anchor, wrist - anchor)
+        turn_fore[:, :3, 3] = anchor - (turn_fore[:, :3, :3] @ anchor[..., None])[..., 0]
+        combined = turn_fore @ turn_upper
+        upper_rows, fore_rows, hand_rows = self.groups[side]
+        poses[rows[:, None], upper_rows[None]] = turn_upper[:, None] @ source[:, upper_rows]
+        poses[rows[:, None], fore_rows[None]] = combined[:, None] @ source[:, fore_rows]
+        hand_delta = (combined @ source[:, hand])[:, :3, 3] - source[:, hand, :3, 3]
+        poses[rows[:, None], hand_rows[None], :3, 3] += hand_delta[:, None]
 
 
 def head_core(costume):
@@ -714,36 +730,39 @@ def _interpolate(frames, values, count):
 
 
 def _repose(rig, poses, deltas, hold):
+    """The poses with each arm turned to its corrected elbow and wrist, all frames at once."""
     if not hasattr(rig, "_arms"):
         rig._arms = Arms(rig)
     arms = rig._arms
-    out = []
-    for f, w in enumerate(poses):
-        targets = []
-        for s in range(2):
-            if hold[f, s] or np.abs(deltas[f, s]).max() < 1e-7:
-                targets.append(None)
-                continue
-            u, e, wr = rig.joints(w, s)
-            l1, l2 = np.linalg.norm(e - u), np.linalg.norm(wr - e)
-            e2, w2 = np.array([e, wr]) + deltas[f, s]
-            # The interpolated wrist is fixed; choose the nearest elbow on the
-            # two bone spheres' circle. This keeps lengths without amplifying
-            # the interpolated wrist's speed during the final rotation solve.
-            reach = np.linalg.norm(w2 - u)
-            axis = (w2 - u) / max(reach, 1e-9)
-            reach = np.clip(reach, abs(l1 - l2) + 1e-8, l1 + l2 - 1e-8)
-            w2 = u + reach * axis
-            along = (l1 * l1 - l2 * l2 + reach * reach) / (2 * reach)
-            centre = u + along * axis
-            normal = e2 - centre - np.dot(e2 - centre, axis) * axis
-            if np.linalg.norm(normal) < 1e-9:
-                normal = e - centre - np.dot(e - centre, axis) * axis
-            normal /= max(np.linalg.norm(normal), 1e-9)
-            e2 = centre + np.sqrt(max(0, l1 * l1 - along * along)) * normal
-            targets.append((e2, w2))
-        out.append(arms.repose(w, targets))
-    return out
+    out = np.array(poses)
+    if not len(out):
+        return []
+    source = out.copy()
+    for s in range(2):
+        rows = np.flatnonzero(~hold[:, s] & ~(np.abs(deltas[:, s]).max(axis=(1, 2)) < 1e-7))
+        if not len(rows):
+            continue
+        u, e, wr = (source[rows, n, :3, 3] for n in rig.arm[s][1:])
+        l1, l2 = np.linalg.norm(e - u, axis=1), np.linalg.norm(wr - e, axis=1)
+        e2, w2 = e + deltas[rows, s, 0], wr + deltas[rows, s, 1]
+        # The interpolated wrist is fixed; choose the nearest elbow on the
+        # two bone spheres' circle. This keeps lengths without amplifying
+        # the interpolated wrist's speed during the final rotation solve.
+        reach = np.linalg.norm(w2 - u, axis=1)
+        axis = (w2 - u) / np.maximum(reach, 1e-9)[:, None]
+        reach = np.clip(reach, np.abs(l1 - l2) + 1e-8, l1 + l2 - 1e-8)
+        w2 = u + reach[:, None] * axis
+        along = (l1 * l1 - l2 * l2 + reach * reach) / (2 * reach)
+        centre = u + along[:, None] * axis
+        normal = e2 - centre - ((e2 - centre) * axis).sum(axis=1)[:, None] * axis
+        flat = np.linalg.norm(normal, axis=1) < 1e-9
+        fallback = e - centre - ((e - centre) * axis).sum(axis=1)[:, None] * axis
+        normal[flat] = fallback[flat]
+        normal /= np.maximum(np.linalg.norm(normal, axis=1), 1e-9)[:, None]
+        height = l1 * l1 - along * along
+        e2 = centre + np.sqrt(np.where(height > 0, height, 0.))[:, None] * normal
+        arms.repose(out, source, s, rows, e2, w2)
+    return list(out)
 
 
 def wrist_peak(rig, poses, loop):
