@@ -96,7 +96,8 @@ def test_popup_resizes_official_sort_branches_to_each_class(request, tmp_path):
     cache = AssetCache(root=tmp_path / "memory-only", allowed=False)
     source = GameAssets(official.resource_dirs, cache).layout("UIPopup_Sort")
     web = Path(__file__).resolve().parents[1] / "src/bmpt/web/js"
-    script = r"""
+    script = (
+        r"""
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 const source = JSON.parse(readFileSync(0, 'utf8'));
@@ -115,15 +116,18 @@ const NGUI = await import(NGUI_URL);
 const { POPUP_FRAME: P, CONTROL: C, TYPE: T } = await import(TOKENS_URL);
 const Grid = await import(GRID_URL);
 await Popup.frameReady();
-for (const key of ['S', 'M', 'L', 'XL']) for (const requested of [0, 1, 374, 786, 900, 1400, 2000]) for (const n of [1, 2, 3]) {
-  const tree = Popup.popupFrame('Title', key, requested, { buttons: Array.from({ length: n }, () => ({ label: 'OK' })) });
+for (const key of ['S', 'M', 'L', 'XL']) for (const requested of [0, 1, 374, 786, 900, 1400, 2000]) """
+        r"""for (const n of [1, 2, 3]) {
+  const tree = Popup.popupFrame('Title', key, requested, """
+        r"""{ buttons: Array.from({ length: n }, () => ({ label: 'OK' })) });
   const bg = NGUI.find(tree, 'Popup/Base/BG'), body = bg.widgets.find(w => 'sprite' in w);
   assert.equal(body.sprite, 'Common_Popup_Bg');
   assert.equal(body.w_, P[key === 'XL' ? 'L' : key].w);  // no popup wider than L
   assert.equal(body.h_, requested ? Math.min(P.maxH, Math.max(P.minH, requested)) : P[key === 'XL' ? 'L' : key].h);
   const title = NGUI.find(bg, 'Label_Title_Locale'), close = NGUI.find(bg, 'Btn_Close');
   // the title one size under the game's, centred where the game's 72 stood under the frame's top
-  assert.ok(Math.abs(body.h_ / 2 - title.pos[1] - P.titleTop - Grid.textItem(NGUI, 'Title', T.display, { lines: 1 }).h / 2) < 1e-9);
+  assert.ok(Math.abs(body.h_ / 2 - title.pos[1] - P.titleTop - """
+        r"""Grid.textItem(NGUI, 'Title', T.display, { lines: 1 }).h / 2) < 1e-9);
   assert.equal(body.w_ / 2 - close.pos[0] - C.icon.h / 2, P.close.right);
   assert.equal(body.h_ / 2 - close.pos[1] - C.icon.h / 2, P.close.top);
   const btn = NGUI.find(tree, 'Popup/Btn');
@@ -133,6 +137,7 @@ for (const key of ['S', 'M', 'L', 'XL']) for (const requested of [0, 1, 374, 786
   for (const child of btn.children) assert.equal(NGUI.find(child, 'BG (1)').widgets[0].h_, C.buttonXS.h);
 }
 """
+    )
     for marker, filename in (
         ("POPUP_URL", "popup.js"),
         ("NGUI_URL", "ngui.js"),

@@ -9,7 +9,11 @@ from ._names import csv_bases, csv_names
 
 
 def read_character_map(path: Path) -> list[dict[str, str]]:
-    """Read nonempty file-id rows, including BOM-prefixed downloads."""
+    """Read nonempty file-id rows, including BOM-prefixed downloads.
+
+    Args:
+        path: Character-map CSV whose fields are stripped and missing cell values become empty strings.
+    """
     with path.open(encoding="utf-8-sig", newline="") as stream:
         return [
             {key: (value or "").strip() for key, value in row.items() if key}
@@ -19,7 +23,11 @@ def read_character_map(path: Path) -> list[dict[str, str]]:
 
 
 def csv_entry(row: dict[str, str]) -> dict:
-    """Build conservative metadata for a file id absent from the shipped data."""
+    """Build conservative metadata for a file id absent from the shipped data.
+
+    Args:
+        row: Character-map CSV record with a file_id and optional localized names and student metadata.
+    """
     bases = csv_bases(row)
     names, fallbacks = csv_names(row, bases)
     return {
@@ -40,7 +48,14 @@ def csv_entry(row: dict[str, str]) -> dict:
 
 
 def base_rank(entry: dict) -> tuple:
-    """Prefer an unskinned recruitable base over story-only representations."""
+    """Rank unskinned, playable variants ahead of story-only representations.
+
+    Args:
+        entry: Variant metadata with localized short labels, playability, and display order.
+
+    Returns:
+        A sorting key preferring base labels, then playable entries, then lower display order.
+    """
     from ._names import BASE_SHORT
 
     original = all(name.get("short") == BASE_SHORT[lang] for lang, name in entry["names"].items())

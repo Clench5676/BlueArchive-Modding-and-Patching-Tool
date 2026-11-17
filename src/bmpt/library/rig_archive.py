@@ -47,16 +47,18 @@ MATCH_MARGIN = 0.1
 
 
 def alpha_mask(image: Image.Image) -> np.ndarray:
-    """Where a page is drawn: its alpha box-filtered to MASK x MASK, above ALPHA."""
+    """Box-filter a page's alpha to MASK by MASK pixels and threshold it above ALPHA."""
     alpha = image.getchannel("A") if "A" in image.getbands() else image.convert("RGBA").getchannel("A")
     return np.asarray(alpha.resize((MASK, MASK), Image.Resampling.BOX)) > ALPHA
 
 
 def pack(mask: np.ndarray) -> str:
+    """Pack a boolean page mask into base64-encoded bits in row-major order."""
     return base64.b64encode(np.packbits(mask.astype(bool), axis=None).tobytes()).decode("ascii")
 
 
 def unpack(data: str) -> np.ndarray | None:
+    """Decode a base64 mask to a MASK by MASK boolean array, or None for invalid or short data."""
     try:
         bits = np.frombuffer(base64.b64decode(data, validate=True), dtype=np.uint8)
     except (ValueError, TypeError):
@@ -67,21 +69,31 @@ def unpack(data: str) -> np.ndarray | None:
 
 
 def iou(a: np.ndarray, b: np.ndarray) -> float:
+    """Compute two masks' intersection over union, treating two empty masks as a perfect match."""
     union = np.logical_or(a, b).sum()
     return float(np.logical_and(a, b).sum() / union) if union else 1.0
 
 
 def overlap(mod: Mapping[str, np.ndarray], masks: Mapping[str, np.ndarray]) -> float | None:
-    """How closely a mod's pages follow a release's: the mean IoU over the pages both have (texture keys); None when
-    they share none."""
+    """Average page-mask IoU for texture keys shared by a mod and a release.
+
+    Args:
+        mod: Mod page masks indexed by normalized texture key.
+        masks: Official release page masks indexed by the same keys.
+
+    Returns:
+        Mean overlap, or None when no page keys are shared.
+    """
     keys = [key for key in masks if key in mod]
     return sum(iou(mod[key], masks[key]) for key in keys) / len(keys) if keys else None
 
 
 @dataclass(frozen=True)
 class Rig:
-    """One kept release of a portrait's rig: its official atlas and skeleton (asset names, SHA-1 of their bytes), the
-    atlas's layout (``fingerprint.atlas``) and the alpha mask of each page it names (texture keys)."""
+    """Keep a portrait release's official atlas, skeleton, layout hash, and page masks.
+
+    Assets retain their names and SHA-1 digests; masks use normalized texture keys.
+    """
 
     core: str
     atlas: str
@@ -93,6 +105,7 @@ class Rig:
     seen: str = ""
 
     def unpacked(self) -> dict[str, np.ndarray]:
+        """Decode usable page masks by texture key, omitting invalid encodings."""
         out = {}
         for key, data in self.masks.items():
             mask = unpack(data)
@@ -104,9 +117,17 @@ class Rig:
 def best(
     rigs: Iterable[Rig], mod: Mapping[str, np.ndarray], current: Mapping[str, np.ndarray]
 ) -> tuple[Rig, float] | None:
-    """Of kept releases, the one a mod's pages (``mod``, texture key to mask) were drawn on, with its overlap: the
-    closest, where it reaches MATCH_MIN and beats the release installed now (``current``, its masks) by MATCH_MARGIN.
-    None otherwise: the mod follows the release installed now, or nothing tells."""
+    """Choose a kept rig whose alpha masks clearly fit a mod better than the installed rig.
+
+    Args:
+        rigs: Archived official releases to rank by mean page-mask overlap.
+        mod: Mod texture keys mapped to alpha masks.
+        current: Installed release's texture keys mapped to alpha masks.
+
+    Returns:
+        Best rig and overlap if it reaches MATCH_MIN and beats current by MATCH_MARGIN;
+        None when the current rig fits or the evidence is insufficient.
+    """
     now = overlap(mod, current)
     found = None
     for rig in rigs:
@@ -122,6 +143,11 @@ class RigArchive:
     """The kept rigs of one library (``folder``: ``<library>/rigs``). Thread-safe; writes are atomic."""
 
     def __init__(self, folder: Path):
+        """Locate an archive without reading its index until needed.
+
+        Args:
+            folder: Library rigs folder containing index.json and content-addressed objects.
+        """
         self.folder = folder
         self._lock = threading.Lock()
         self._data: dict[str, Any] | None = None
@@ -152,8 +178,10 @@ class RigArchive:
 
     @contextmanager
     def deferred(self) -> Iterator[None]:
-        """Write the index once, at the end of the block, instead of at every rig kept (the startup archive
-        wrote its whole index, megabytes by the end, once per portrait). The kept files are written as they come."""
+        """Defer index writes until the outermost block exits, avoiding a large rewrite per portrait.
+
+        Kept asset files are written immediately.
+        """
         with self._lock:
             self._deferring += 1
         try:
@@ -186,20 +214,34 @@ class RigArchive:
             return None
 
     def rigs(self, core: str) -> list[Rig]:
-        """The kept rigs of a portrait core, oldest first."""
+        """Return a portrait core's kept rigs, oldest first, ignoring core case."""
         with self._lock:
             items = self._load()["rigs"].get(core.lower()) or []
         return [rig for rig in (self._rig(core.lower(), item) for item in items) if rig is not None]
 
     def has(self, core: str, atlas_sha1: str, skeleton_sha1: str) -> bool:
+        """Check whether a portrait's exact atlas and skeleton pair is already archived.
+
+        Args:
+            core: Portrait bundle core, matched case-insensitively.
+            atlas_sha1: Hexadecimal digest of the official atlas bytes.
+            skeleton_sha1: Hexadecimal digest of the official skeleton bytes.
+        """
         return any(rig.atlas_sha1 == atlas_sha1 and rig.skeleton_sha1 == skeleton_sha1 for rig in self.rigs(core))
 
     def stamp(self, install: str) -> str | None:
+        """Return an install key's last archived resource signature, or None if unrecorded."""
         with self._lock:
             value = self._load()["stamps"].get(install)
         return value if isinstance(value, str) else None
 
     def set_stamp(self, install: str, stamp: str) -> None:
+        """Persist the resource signature covered by an install's archive pass.
+
+        Args:
+            install: Install key whose archive coverage is being recorded.
+            stamp: Resource-list signature identifying the release inspected by the pass.
+        """
         with self._lock:
             self._load()["stamps"][install] = stamp
             self._save()
@@ -214,9 +256,23 @@ class RigArchive:
         layout: str,
         masks: Mapping[str, np.ndarray],
     ) -> bool:
-        """Keep one official rig of a portrait core (its atlas and skeleton, named and as bytes, the atlas's layout and
-        its pages' masks). False when it is kept already. Every distinct rig is kept: an entry is added only when a
-        release changes a rig, and a dropped one could no longer repair a mod drawn for it."""
+        """Keep a distinct official portrait rig for repairing mods painted for that release.
+
+        Every distinct atlas/skeleton pair is retained because deleting it would remove
+        the repair baseline for mods drawn on that rig.
+
+        Args:
+            core: Portrait bundle core, stored case-insensitively.
+            atlas: Atlas asset name associated with the kept bytes.
+            atlas_data: Official atlas text bytes stored by SHA-1.
+            skeleton: Skeleton asset name associated with the kept bytes.
+            skeleton_data: Official skeleton bytes stored by SHA-1.
+            layout: Atlas layout hash from fingerprint.atlas.
+            masks: Texture keys mapped to page alpha masks for release matching.
+
+        Returns:
+            Whether a new pair was added; False when the exact pair is already kept.
+        """
         atlas_sha1, skeleton_sha1 = hashlib.sha1(atlas_data).hexdigest(), hashlib.sha1(skeleton_data).hexdigest()
         if self.has(core, atlas_sha1, skeleton_sha1):
             return False
@@ -245,7 +301,7 @@ class RigArchive:
         return True
 
     def read(self, sha1: str) -> bytes | None:
-        """A kept atlas or skeleton by its SHA-1; None when it is missing or no longer has those bytes."""
+        """Read an archived atlas or skeleton by lower-case SHA-1, or None if absent or mismatched."""
         if len(sha1) != 40 or not all(c in "0123456789abcdef" for c in sha1):
             return None
         try:
@@ -255,5 +311,5 @@ class RigArchive:
         return data if hashlib.sha1(data).hexdigest() == sha1 else None
 
     def generation(self) -> int:
-        """Changes whenever this archive keeps another rig (to key what was worked out from it)."""
+        """Return the local addition counter used to invalidate derived archive results."""
         return self._generation

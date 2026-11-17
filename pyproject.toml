@@ -81,13 +81,12 @@ ignore = [
     "E731",  # a named lambda is fine for a one-line key or callback
     "E741",  # short names such as l stay readable in numeric code
     # Not yet met by the existing code: remove each line once the code passes the rule.
-    "D100", "D101", "D102", "D103", "D104", "D105", "D107",
-    "D200", "D202", "D205", "D209", "D212", "D301", "D403", "D415",
-    "E501",
     "F402",
 ]
 
 [tool.ruff.lint.per-file-ignores]
+# The package's __init__ stays empty: importing bmpt must have no effect of its own.
+"src/bmpt/__init__.py" = ["D104"]
 # engine.py imports the engine's names for type checking and re-exports them.
 "src/bmpt/engine.py" = ["F401"]
 # The entry points register the locales before importing modules that translate at import time.

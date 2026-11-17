@@ -106,13 +106,25 @@ def _is_astc(texture_format: TextureFormat) -> bool:
 
 
 def supported(texture_format: TextureFormat) -> bool:
-    """Whether the size a format needs is known: every format UnityPy decodes except the crunched ones, whose data
-    cannot be bounded before it is unpacked."""
+    """Whether the size a format needs is known.
+
+    True for every format UnityPy decodes except the crunched ones, whose data cannot be bounded before it is
+    unpacked.
+    """
     return texture_format in _PIXEL_BYTES or texture_format in _BLOCK_BYTES or _is_astc(texture_format)
 
 
 def required_size(width: int, height: int, texture_format: TextureFormat) -> int:
-    """Bytes of image data the first mip level needs, from UnityPy's own padding."""
+    """Return the bytes of image data the first mip level needs, padded to blocks as UnityPy pads them.
+
+    Args:
+        width: The texture's width in pixels.
+        height: The texture's height in pixels.
+        texture_format: The texture's format.
+
+    Raises:
+        TextureRefused: The format is not ``supported``.
+    """
     if texture_format in _PIXEL_BYTES:
         return width * height * _PIXEL_BYTES[texture_format]
     if _is_astc(texture_format):
@@ -157,8 +169,15 @@ def check_texture(texture: Any, file: str | None = None) -> None:
 
     Refused: a width or height that is not a positive number up to ``MAX_TEXTURE_SIDE``, a format the size check
     does not know (crunched formats included), and image data (stream data included) shorter than the declared size
-    needs.
-    Raises ``ServiceError("bundle_invalid", file=file)`` when the file is known, else ``TextureRefused`` (a ValueError).
+    needs. A Switch-swizzled texture is measured at its padded size.
+
+    Args:
+        texture: The Texture2D object read from a bundle.
+        file: The bundle's name for the error; None raises ``TextureRefused`` instead.
+
+    Raises:
+        ServiceError: ``bundle_invalid`` with ``file``, when ``file`` is given.
+        TextureRefused: The texture is refused and ``file`` is None.
     """
     try:
         _check(texture)
@@ -169,7 +188,7 @@ def check_texture(texture: Any, file: str | None = None) -> None:
 
 
 def texture_image(texture: Any, file: str | None = None) -> Image.Image:
-    """The decoded image of a Texture2D, after ``check_texture``."""
+    """Return the decoded image of a Texture2D, after ``check_texture`` with the same arguments."""
     check_texture(texture, file)
     return texture.image
 
@@ -199,12 +218,16 @@ def _check(texture: Any) -> None:
 
 
 def encodable_image(image: Image.Image, texture_format: int) -> Image.Image:
-    """``image`` in a mode UnityPy's encoder packs into ``texture_format``.
+    """Return ``image`` in a mode UnityPy's encoder packs into ``texture_format``.
 
     UnityPy decodes BC4 to a single-channel L image but packs every format from RGBA, RGB, A or R, none of which an
     L image converts to on its own. The channel goes where the target keeps it: the alpha of Alpha8 (decoded as
     black with that alpha), else red, green and blue of an opaque image (the red one-channel formats read).
     Images in any other mode are returned as they are.
+
+    Args:
+        image: A decoded texture image.
+        texture_format: The ``TextureFormat`` value the image is encoded to.
     """
     if image.mode != "L":
         return image

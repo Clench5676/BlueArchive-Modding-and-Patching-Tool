@@ -55,7 +55,19 @@ def patch_portraits(
     compression: str = "lz4",
     crc: bool = True,
 ) -> None:
-    """Compose a batch without changing unrelated objects, streams or texture geometry."""
+    """Compose portrait edits without changing unrelated objects, streams, or texture geometry.
+
+    Args:
+        base: Collection bundle retaining all existing neighboring edits.
+        official: Official copy defining texture dimensions, mipmaps, and default GPU-encoded bytes.
+        output: Destination bundle to save and reload for verification.
+        edits: Texture names mapped to PNG bytes, or None to restore that texture's official payload.
+        compression: Engine bundle compression mode for the saved composite.
+        crc: Whether to fix the output's CRC to its filename.
+
+    Raises:
+        ServiceError: A bundle or texture is unavailable, saving fails, or verification detects unintended changes.
+    """
     bundle, original = Bundle.load(base), Bundle.load(official)
     if bundle is None or original is None:
         raise ServiceError("bundle_invalid", file=base)
@@ -133,10 +145,31 @@ def patch_portrait(
     compression: str = "lz4",
     crc: bool = True,
 ) -> None:
+    """Compose one portrait edit using the batch writer's preservation checks.
+
+    Args:
+        base: Collection bundle retaining existing edits to neighboring textures.
+        official: Official copy supplying default bytes and texture geometry.
+        output: Destination bundle to save and verify.
+        name: Exact Texture2D asset name to replace.
+        png: Capture PNG bytes, or None to restore the official texture payload.
+        compression: Compression setting forwarded to the composite batch writer.
+        crc: Whether the single-edit composite receives the CRC encoded in its output filename.
+    """
     patch_portraits(base, official, output, {name: png}, compression=compression, crc=crc)
 
 
 def target_file(library: ModLibrary, descriptor: dict, pin: Pin) -> Path:
+    """Find the descriptor's exact Collection bundle only while it is the slot's newest batch.
+
+    Args:
+        library: Library providing the pinned install's bundle index.
+        descriptor: Collection target metadata whose bundle field names the required live file.
+        pin: Game install and server the operation is fixed to.
+
+    Raises:
+        ServiceError: The target is missing, duplicated, or superseded (photo_target_unavailable).
+    """
     core = core_of(descriptor["bundle"])
     paths = library._index(pin).get(core, [])
     exact = [path for path in paths if path.name == descriptor["bundle"]]
@@ -164,7 +197,16 @@ def _configuration(library: ModLibrary, descriptor: dict, pin: Pin) -> tuple[str
 
 
 def choice(library: ModLibrary, descriptor: dict, pin: Pin) -> dict:
-    """The desired photo choice, including a configuration deferred by the master switch."""
+    """Describe the desired photo choice, including configuration deferred by the master switch.
+
+    Args:
+        library: Library supplying managed recipes, configuration, and current game-file state.
+        descriptor: Collection target metadata containing bundle filename and texture name.
+        pin: Game install and server the operation is fixed to.
+
+    Returns:
+        Photo ID, whether the choice is known, switch intent, and any pending state or error.
+    """
     target = target_file(library, descriptor, pin)
     config = library.profiles.read()
     slot, entry, record = _configuration(library, descriptor, pin)
@@ -225,8 +267,11 @@ def _uses(library: ModLibrary) -> list[tuple[Any, set[str]]]:
 
 
 def _record(library: ModLibrary, mod_id: str) -> dict:
-    """A recipe's record by id. A record state.json holds while its files are missing counts too: its choices still own
-    their photos and the file may return."""
+    """Look up a recipe's record by id.
+
+    A record state.json holds while its files are missing counts too: its choices still own their photos and the
+    file may return.
+    """
     record = library._records.get(mod_id)
     if record is None:
         record = next((raw for raw in library._held if isinstance(raw, dict) and raw.get("id") == mod_id), None)
@@ -249,7 +294,7 @@ def _owned(library: ModLibrary, source: Any, defaults: set[str]) -> dict[str, di
 
 
 def usage_targets(library: ModLibrary) -> dict[str, set[str]]:
-    """Map referenced photos to their target skins, independently of the photo's originating skin."""
+    """Map a library's referenced photo IDs to target skins, independently of capture skin."""
     targets = {}
     for source, defaults in _uses(library):
         for item in _owned(library, source, defaults).values():
@@ -270,11 +315,22 @@ def _held_use(library: ModLibrary, key: str) -> bool:
 
 
 def in_use(library: ModLibrary) -> set[str]:
+    """Find photo IDs owned by a library's configured recipes or existing managed game files."""
     return set(usage_targets(library))
 
 
 def remove_photo(library: ModLibrary, key: str, log) -> None:
-    """Reset every affected texture, retaining other choices in each shared Collection recipe."""
+    """Reset every affected texture, retaining other choices in each shared Collection recipe.
+
+    Args:
+        library: Library whose applied and configured recipes must release the photograph.
+        key: Photograph ID to remove from all active recipe choices.
+        log: Receives user-facing operation messages.
+
+    Raises:
+        ServiceError: A held recipe owns the photo, an install or texture is unavailable,
+            or a protected write cannot finish.
+    """
     if _held_use(library, key):
         # a held record's recipe cannot be rebuilt while its files are missing: the photo stays until they return
         raise ServiceError("photo_in_use")
@@ -405,7 +461,26 @@ def apply(
     *,
     configure_only: bool = False,
 ) -> ApplyResult:
-    """Produce a managed generic Mod so journaled writes, version updates and the master switch remain shared."""
+    """Store a managed Collection composite using shared journaled writes and switch behavior.
+
+    Args:
+        library: Library storing the recipe and composing it with other choices in the bundle.
+        variant: Variant key owning the target skin's photo choice.
+        photo: Saved photograph ID, or None to restore the official texture.
+        png: Verified photograph bytes, or None for the official texture.
+        descriptor: Collection target metadata containing bundle filename and exact texture name.
+        pin: Game install and server the operation is fixed to.
+        log: Receives user-facing operation messages.
+        progress: Receives game-write progress; None disables reporting.
+        configure_only: Whether to defer game writes even when the master switch is on.
+
+    Returns:
+        Applied or deferred result identifying the affected shared Collection core.
+
+    Raises:
+        ServiceError: A target, source, or official copy is unavailable, composition fails,
+            or the protected game writer refuses the change.
+    """
     target = target_file(library, descriptor, pin)
     core = core_of(target.name)
     official = library._official_for(target, pin)
@@ -507,7 +582,13 @@ def apply(
 
 
 def refresh_missing(library: ModLibrary, pins: list[Pin], log) -> None:
-    """Rebuild photograph-only recipes on changed Collection batches before a master-switch plan."""
+    """Rebuild photograph-only recipes on changed Collection batches before a master-switch plan.
+
+    Args:
+        library: Library retaining old photo recipes and resolving their live Collection textures.
+        pins: Game installs and servers the operation is fixed to.
+        log: Receives user-facing operation messages.
+    """
     from ..filelock import file_lock
     from ..gameassets import GameAssets
 

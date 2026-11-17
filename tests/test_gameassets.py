@@ -1060,7 +1060,7 @@ def test_prefab_hint_follows_a_rebuilt_bundle_by_cab(tmp_path, monkeypatch, stat
     )
     for name in (rebuilt, sibling, other, "updated-prefabs.bundle"):
         (tmp_path / name).touch()
-    if state == "stale-and-rebuilt":  # a leftover of the previous build, no longer holding the root
+    if state == "stale-and-rebuilt":  # a leftover file of the hint's name that does not hold the root
         (tmp_path / hint).touch()
     game = GameAssets([tmp_path], AssetCache(root=tmp_path / "cache"))
     opened, scans = [], []

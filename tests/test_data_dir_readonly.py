@@ -1,4 +1,4 @@
-"""A data folder that cannot be written (FUN-14): tested at start, reported by app.info, and its failed writes answer
+"""A data folder that cannot be written: tested at start, reported by app.info, and its failed writes answer
 data_dir_readonly instead of internal."""
 
 import errno

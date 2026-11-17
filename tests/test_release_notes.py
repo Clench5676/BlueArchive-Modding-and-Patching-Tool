@@ -1,5 +1,5 @@
-"""A build's own release notes (assets/release-notes/<X.Y.Z>.md): the App reads them for Settings' update preview, and the
-same text is the GitHub release's. The page's Markdown reader is tested in tests/js/release_notes.test.mjs."""
+"""A build's own release notes (assets/release-notes/<X.Y.Z>.md): the App reads them for Settings' update preview, and
+the same text is the GitHub release's. The page's Markdown reader is tested in tests/js/release_notes.test.mjs."""
 
 import re
 

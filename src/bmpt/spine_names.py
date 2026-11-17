@@ -20,6 +20,8 @@ _CURVE = 4 * _FLOAT  # one Bezier segment: cx1, cy1, cx2, cy2
 
 @dataclass
 class Names:
+    """The names a skeleton declares, in file order, and its Spine version string (empty when it has none)."""
+
     version: str = ""
     # (name, parent name) in file order; the root's parent is ""
     bones: list[tuple[str, str]] = field(default_factory=list)
@@ -87,8 +89,10 @@ class _Reader:
         self.skip(_FLOAT * sum(1 for bit in bits if flags & bit))
 
     def curves(self, frames: int, frame: int, curves: int) -> None:
-        """A curve timeline's frames: ``frame`` bytes each, and between two frames the curve type with, for a Bezier,
-        ``curves`` segments."""
+        """Step over a curve timeline's frames.
+
+        ``frame`` bytes each, and between two frames the curve type with, for a Bezier, ``curves`` segments.
+        """
         if frames < 1:
             raise ValueError("skeleton timeline without frames")
         self.skip(frame)
@@ -416,8 +420,14 @@ def _json(data: bytes) -> Names:
 
 
 def read(data: bytes) -> Names:
-    """The names of a skeleton. ``ValueError`` for data that is not a skeleton this reader walks (another binary
-    version, damaged or cut data)."""
+    """Read the names of a skeleton, binary (Spine 4.2) or JSON (any version).
+
+    Data that starts with ``{`` is tried as JSON first, then as binary, since a binary skeleton's hash may start with
+    the same byte. A JSON skeleton's missing names read as empty.
+
+    Raises:
+        ValueError: The data is not a skeleton this reader walks (another binary version, damaged or cut data).
+    """
     if data.lstrip()[:1] == b"{":
         # a binary skeleton's hash may start with the same byte
         try:
@@ -431,6 +441,6 @@ def read(data: bytes) -> Names:
 
 
 def version(data: bytes) -> str:
-    """The version string at the head of a binary skeleton, or '' when there is none."""
+    """Return the first ``x.y.z`` version string in the head of a binary skeleton, or '' when there is none."""
     match = re.search(rb"\d+\.\d+\.\d+", data[:48])
     return match.group().decode("ascii") if match else ""

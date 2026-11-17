@@ -2,7 +2,7 @@
 
 A cached still stays valid only while the code that drew it is unchanged: the cache key of every persisted still
 carries the content hash of its renderer's pixel files (``revision``), so a release that changes how a still is drawn
-never serves the old picture. Each pixel file's imports are either pixel files of the same renderer or listed in
+never serves a stale picture. Each pixel file's imports are either pixel files of the same renderer or listed in
 ``NOT_PIXELS`` (loading, scheduling, errors); ``tests/test_still_renderers.py`` holds every import to that.
 """
 
@@ -71,7 +71,18 @@ _revisions: dict[tuple[str, str], str] = {}
 
 
 def revision(renderer: object, root: Path = WEB_DIR) -> str:
-    """The content hash of ``renderer``'s pixel files (bad_params for an unknown renderer). Computed once per root."""
+    """Hash the pixel files of a renderer; each hash is computed once per root.
+
+    Args:
+        renderer: A key of ``RENDERERS``. Typed ``object`` because it comes from the page's request.
+        root: The folder the pixel files are relative to.
+
+    Returns:
+        The hex digest of the renderer's name and its files' names and contents.
+
+    Raises:
+        ServiceError: ``bad_params``, the renderer is not a known one.
+    """
     if not isinstance(renderer, str) or renderer not in RENDERERS:
         raise ServiceError("bad_params", key="renderer")
     with _lock:

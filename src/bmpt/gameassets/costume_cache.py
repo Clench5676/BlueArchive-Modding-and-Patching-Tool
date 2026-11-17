@@ -25,9 +25,10 @@ DISK_ENTRIES = 256
 
 
 class ArrayLRU:
-    """Only numerical arrays; copying at both boundaries keeps builds independent."""
+    """Cache numerical array pairs, copying at both boundaries to keep builds independent."""
 
     def __init__(self, limit: int = POSE_BYTES):
+        """Start an empty array cache with a byte budget including key and entry overhead."""
         self.limit = limit
         self.size = 0
         self._entries: OrderedDict[str, tuple[np.ndarray, np.ndarray]] = OrderedDict()
@@ -38,6 +39,7 @@ class ArrayLRU:
         return len(key.encode()) + 256 + sum(a.nbytes for a in value)
 
     def get(self, key: str) -> tuple[np.ndarray, np.ndarray] | None:
+        """Return copies of a digest-keyed array pair, or None on a miss."""
         with self._lock:
             value = self._entries.get(key)
             if value is not None:
@@ -45,6 +47,12 @@ class ArrayLRU:
         return tuple(a.copy() for a in value) if value is not None else None
 
     def put(self, key: str, value: tuple[np.ndarray, np.ndarray]) -> None:
+        """Copy an array pair into the LRU, evicting older entries to fit the budget.
+
+        Args:
+            key: Content digest or sampled-frame identity shared by equivalent computations.
+            value: Numerical samples and their layout or animated-node indices; oversized pairs are skipped.
+        """
         cost = self._cost(key, value)
         if cost > self.limit:
             return
@@ -65,7 +73,7 @@ _clips = ArrayLRU(CLIP_BYTES)
 
 
 class PoseStore:
-    """Caller-supplied poses keyed by schema, model, game revision and input digest.
+    """Cache caller-supplied poses by schema, model, game revision, and input digest.
 
     Disk entries hold only sampled matrices and animated node indices, never
     readers or asset data. Atomic replacement permits concurrent builds; an
@@ -76,6 +84,13 @@ class PoseStore:
     """
 
     def __init__(self, root: Path | None, revisions: Mapping[str, str], *, memory: ArrayLRU | None = None):
+        """Configure pose storage without retaining game readers or asset trees.
+
+        Args:
+            root: Optional folder for validated numerical .npz entries; None uses memory alone.
+            revisions: Model dev names mapped to resource revisions; missing revisions disable caching.
+            memory: Shared array LRU; None uses the module's bounded pose cache.
+        """
         self.root, self.revisions = root, dict(revisions)
         self.memory = memory if memory is not None else _poses
 
@@ -102,6 +117,15 @@ class PoseStore:
         )
 
     def get(self, dev: str, token: str) -> tuple[np.ndarray, np.ndarray] | None:
+        """Read a pose sample from memory or validated disk storage.
+
+        Args:
+            dev: Model dev name whose revision is registered in this store.
+            token: Digest identifying the sampled hierarchy, bindings, and clip inputs.
+
+        Returns:
+            Pose matrices and animated node indices, or None for missing revisions or unusable entries.
+        """
         key = self._key(dev, token)
         if key is None:
             return None
@@ -126,6 +150,14 @@ class PoseStore:
         return poses, animated
 
     def put(self, dev: str, token: str, poses: np.ndarray, animated: np.ndarray) -> None:
+        """Cache validated pose arrays, suppressing disk failures so builds can continue.
+
+        Args:
+            dev: Model dev name whose revision is registered in this store.
+            token: Digest identifying the sampled hierarchy, bindings, and clip inputs.
+            poses: Finite float64 matrices shaped as one to three frames by nodes by 4 by 4.
+            animated: One-dimensional int64 indices into the sampled nodes, within the entry byte limit.
+        """
         key = self._key(dev, token)
         if key is None or not self._valid(poses, animated):
             return
@@ -167,7 +199,11 @@ class PoseStore:
 
 
 def clip_digest(tree: Mapping) -> str:
-    """Content identity of the decoded grid, including in-place curve edits."""
+    """Hash a clip's decoded sample-grid inputs, including in-place curve edits.
+
+    Args:
+        tree: AnimationClip typetree with muscle timing and streamed, dense, and constant curve storage.
+    """
     muscle = tree["m_MuscleClip"]
     data = muscle["m_Clip"]["data"]
     streamed, dense, constant = data["m_StreamedClip"], data["m_DenseClip"], data["m_ConstantClip"]
@@ -203,6 +239,15 @@ def memoize_pose(pose, token: str, indices: tuple[int, ...] | None = None, count
 
     The caller identifies the model revision, hierarchy, bindings and clip
     content. Copies keep solvers independent; the lock covers bookkeeping only.
+
+    Args:
+        pose: Frame-index callback returning node world matrices on a cache miss.
+        token: Identity covering model revision, hierarchy, bindings, and clip content.
+        indices: Node indices to retain; None caches every returned matrix.
+        count: Length of the reconstructed node list when indices is supplied; other entries become None.
+
+    Returns:
+        A frame-index callback returning independently mutable pose matrices.
     """
 
     def sampled(frame: int):
@@ -226,11 +271,17 @@ def memoize_pose(pose, token: str, indices: tuple[int, ...] | None = None, count
 
 
 def decode_clip(tree: Mapping):
-    """The runtime decoder's scalar arithmetic on NumPy arrays, in the same order.
+    """Decode clip curves with the runtime decoder's arithmetic order on NumPy arrays.
 
     All stored curves remain present for read-back checks. Vectorizing the sample
     grid avoids Python's curve-by-frame loop without changing float precision,
     the endpoint epsilon, or the hold before a streamed curve's first key.
+
+    Args:
+        tree: AnimationClip typetree with muscle timing and streamed, dense, and constant curves.
+
+    Returns:
+        A DecodedClip with second-based duration and times, sampled curves, and single-value constants.
     """
     from .model import DecodedClip
     from .model_arm_clips import sample_curves

@@ -25,11 +25,24 @@ UNKNOWN_PLATFORMS = {"UnknownPlatform", "NoTarget", "Unknown", "0", "-2"}
 
 
 def platform_of(contents: Contents) -> str | None:
+    """Return the one platform the bundles' Unity build targets name, unknown targets left out.
+
+    Returns:
+        ``"android"``, ``"ios"`` or ``"windows"``; None when no target or several platforms are named, or a target
+        the App does not know.
+    """
     platforms = {UNITY_PLATFORMS.get(name) for name in contents.platforms - UNKNOWN_PLATFORMS}
     return next(iter(platforms)) if len(platforms) == 1 else None
 
 
 def server_hints(names: set[str]) -> set[str]:
+    """Return the servers that names point to.
+
+    Global is named by its package name or a ``_home_gl`` suffix, Japan by its package name.
+
+    Args:
+        names: Asset and file names, reference paths and install folders; case and separators do not matter.
+    """
     hints = set()
     for value in names:
         value = value.lower().replace("\\", "/")
@@ -41,6 +54,7 @@ def server_hints(names: set[str]) -> set[str]:
 
 
 def names_of(contents: Contents) -> set[str]:
+    """Return every name in a bundle's metadata: assets, files, references, Spine skeletons, atlases and textures."""
     return (
         contents.names
         | contents.files
@@ -53,11 +67,25 @@ def names_of(contents: Contents) -> set[str]:
 
 
 def platform_hints(names: set[str]) -> set[str]:
+    """Return the platforms named as a path segment (``android``, ``ios``, ``windows``) in any of ``names``."""
     return {part.lower() for name in names for part in name.replace("\\", "/").split("/") if part.lower() in PLATFORMS}
 
 
 def target_of(settings: Any, pin: Any, official: Contents | None = None) -> dict:
-    """Prefer serialized targets; Settings supplies the install's region and fallback platform."""
+    """Return the server and platform of the install a mod is meant for.
+
+    The platform comes from the official bundles' build targets. Without them it comes from a platform folder in the
+    pinned install's paths, else from the settings: Android in ADB mode, Windows otherwise. The server is the single
+    server the official names and install folders point to, else the pin's, else the settings' region.
+
+    Args:
+        settings: The App settings (``is_adb_mode``, ``server_region``).
+        pin: The game install and server the operation is fixed to; None when there is no install.
+        official: Metadata of the official bundles the mod replaces; None when they are unknown.
+
+    Returns:
+        ``{"server", "platform"}``; the platform is None when the evidence names several.
+    """
     platform = platform_of(official) if official and official.platforms else None
     if platform is None and not (official and official.platforms):
         parts = {part.lower() for directory in pin.dirs for part in directory.parts} if pin else set()
@@ -74,7 +102,24 @@ def target_of(settings: Any, pin: Any, official: Contents | None = None) -> dict
 
 
 def constraints(names: set[str], selected: Contents, official: Contents, target: dict) -> tuple[dict, str | None]:
-    """Reliable evidence constrains each dimension even when the other is unknown."""
+    """Return what a mod's own files prove about its server and platform.
+
+    Each dimension is constrained by reliable evidence even when the other stays unknown. The platform comes from the
+    bundles' build targets, else from a platform folder in their names. The server comes from names pointing to one
+    server; without such names, a mod whose CAB names all match official files of the selected install takes the
+    target's server, since a CAB is an identity, not a region tag.
+
+    Args:
+        names: The mod's file names.
+        selected: Metadata of the mod's bundles.
+        official: Metadata of the official bundles the mod replaces.
+        target: The install the mod is meant for, as ``target_of`` gives it.
+
+    Returns:
+        ``({"server", "platform"}, None)`` with None for an unproven dimension, or ``({}, error)``:
+        ``platform_unsupported`` for a build target the App does not handle, ``source_conflict`` for evidence of two
+        platforms or two servers.
+    """
     platforms = {UNITY_PLATFORMS.get(name) for name in selected.platforms}
     known = selected.platforms - UNKNOWN_PLATFORMS
     if any(name not in UNITY_PLATFORMS for name in known):
@@ -98,7 +143,18 @@ def constraints(names: set[str], selected: Contents, official: Contents, target:
 
 
 def source_of(names: set[str], selected: Contents, official: Contents, target: dict) -> tuple[dict | None, str | None]:
-    """Return a complete detected source, or a precise unresolved/unsupported reason."""
+    """Return the mod's source when its files prove both server and platform.
+
+    Args:
+        names: The mod's file names.
+        selected: Metadata of the mod's bundles.
+        official: Metadata of the official bundles the mod replaces.
+        target: The install the mod is meant for, as ``target_of`` gives it.
+
+    Returns:
+        ``({"server", "platform", "detected": True}, None)``, or ``(None, error)``: the error of ``constraints``, or
+        ``source_unknown`` when either dimension stays unproven.
+    """
     evidence, error = constraints(names, selected, official, target)
     if error:
         return None, error
@@ -110,7 +166,18 @@ def source_of(names: set[str], selected: Contents, official: Contents, target: d
 def candidates(
     names: set[str], selected: Contents, official: Contents | None = None, target: dict | None = None
 ) -> list[dict]:
-    """Try only unknown dimensions, in Global/Japan and Android/iOS/PC order."""
+    """Return the sources a mod may come from, varying only what its files leave unproven.
+
+    Args:
+        names: The mod's file names.
+        selected: Metadata of the mod's bundles.
+        official: Metadata of the official bundles the mod replaces; None for none.
+        target: The install the mod is meant for, as ``target_of`` gives it; None for none.
+
+    Returns:
+        ``{"server", "platform", "detected": True}`` in Global, Japan and Android, iOS, Windows order; empty when the
+        evidence conflicts.
+    """
     evidence, error = constraints(names, selected, official or Contents(), target or {})
     if error:
         return []

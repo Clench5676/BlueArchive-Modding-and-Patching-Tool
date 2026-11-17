@@ -1,4 +1,4 @@
-"""A memorial lobby's intro: the Timeline its prefab's PlayableDirector plays when the lobby is entered.
+"""Export the Timeline a memorial lobby prefab's PlayableDirector plays on entry.
 
 Every lobby prefab has one PlayableDirector (on its Timeline GameObject) with InitialState Paused: the lobby plays it
 when it is shown. Its TimelineAsset holds:
@@ -59,6 +59,7 @@ def _r(value: float, digits: int = 5) -> float:
 
 
 def crc(text: str) -> int:
+    """Hash a Unity animation binding path as an unsigned UTF-8 CRC32."""
     return zlib.crc32(text.encode("utf-8")) & 0xFFFFFFFF
 
 
@@ -66,10 +67,17 @@ def crc(text: str) -> int:
 
 
 def streamed(data: Iterable[int], count: int) -> list[list[list[float]]]:
-    """A StreamedClip's keys by curve: [time, a, b, c, d], the segment from time on being ((a x + b) x + c) x + d with x
+    """Read a StreamedClip's cubic keys grouped by curve.
+
+    Keys are [time, a, b, c, d], the segment from time on being ((a x + b) x + c) x + d with x
     the time since the key (Unity stores each key with its segment's cubic). The stream is frames of (time, key count,
     keys of (curve index, a, b, c, d)) in 32-bit words; the first frame (at -FLT_MAX) holds every curve's value before
-    its first key, the last one (at +FLT_MAX) none. A time beyond float range becomes -1e9 / 1e9."""
+    its first key, the last one (at +FLT_MAX) none. A time beyond float range becomes -1e9 / 1e9.
+
+    Args:
+        data: Serialized StreamedClip.data as unsigned 32-bit words.
+        count: Declared scalar curve count; keys outside this range are ignored.
+    """
     words = list(data)
     buf = struct.pack(f"<{len(words)}I", *words)
     curves: list[list[list[float]]] = [[] for _ in range(count)]
@@ -103,8 +111,12 @@ def _streamed_curve(keys: list[list[float]]) -> dict:
 
 
 def evaluate(curve: Mapping[str, Any], t: float) -> float:
-    """A curve at time t (seconds in the clip): a streamed curve's last key at or before t, a dense curve's frames
-    lerped (clamped), a constant. As web/js/lobby-intro.js evaluates it."""
+    """Evaluate an exported curve as web/js/lobby-intro.js does.
+
+    Args:
+        curve: Constant k, streamed cubic keys s, or dense [begin, rate, values] under d.
+        t: Time in clip seconds; streamed curves use the last preceding key and dense samples clamp and lerp.
+    """
     if "k" in curve:
         return float(curve["k"])
     if "s" in curve:
@@ -127,12 +139,18 @@ def evaluate(curve: Mapping[str, Any], t: float) -> float:
 
 
 def clip_curves(clip: Mapping[str, Any]) -> dict:
-    """A built AnimationClip's bindings with their curves: {"length", "bindings": [{"path" (CRC-32 below the Animator),
+    """Pair a built AnimationClip's generic bindings with their component curves.
+
+    Return {"length", "bindings": [{"path" (CRC-32 below the Animator),
     "type" (class id), "attr", "custom", "script" (the MonoScript pointer of a behaviour property), "pptr",
     "curves": [curve per component]}]}. The streamed, dense and constant curves follow the bindings in order, each
     binding taking one curve per component; an object-reference (pptr) binding takes its one too (its values index
     the clip's pptrCurveMapping: the 12 lobby clips with one, Shun's intro glow among them, hold that many curves),
-    and is left without curves."""
+    and is left without curves.
+
+    Args:
+        clip: AnimationClip typetree with muscle-clip curve storage and m_ClipBindingConstant.
+    """
     mc = clip.get("m_MuscleClip") or {}
     data = (mc.get("m_Clip") or {}).get("data") or {}
     s = data.get("m_StreamedClip") or {}
@@ -199,10 +217,17 @@ def _file_name(obj: Any) -> str | None:
 
 
 def read_timeline(g: Any, timeline: Any, sound: Callable[[Any, dict], dict | None] | None = None) -> dict:
-    """A TimelineAsset's tracks as plain data: {"name", "files", "tracks": [{"pid", "file", "class", "name", "muted", "depth", "clips":
+    """Read TimelineAsset tracks as plain data, placing group children after their group.
+
+    Return {"name", "files", "tracks": [{"pid", "file", "class", "name", "muted", "depth", "clips":
     [clip timing and "asset"], "infinite" (clip_curves of a recorded clip), "trackIndex" (spine), "post" (activation
-    tracks' PostPlaybackState)}]}, groups' children after their group. g: tree(obj), deref(obj, pointer).
-    sound(owner, AudioData) turns a TimeLineAudioController's audio data into a sound event (lobby.sound_event)."""
+    tracks' PostPlaybackState)}]}.
+
+    Args:
+        g: Bundle graph supplying tree(obj) and deref(obj, pointer) across timeline dependencies.
+        timeline: TimelineAsset reader whose output tracks and child groups are traversed.
+        sound: Converts an owner and TimeLineAudioController AudioData into a lobby.sound_event; None omits it.
+    """
     tt = g.tree(timeline)
     tracks: list[dict] = []
 
@@ -318,8 +343,11 @@ def read_timeline(g: Any, timeline: Any, sound: Callable[[Any, dict], dict | Non
 
 
 def duration(raw: Mapping[str, Any]) -> float:
-    """The timeline's duration (TimelineAsset.duration): fixed, or (BasedOnClips) the end of its last clip, a recorded
-    clip counting its length; muted tracks count too."""
+    """Return TimelineAsset duration in seconds, counting recorded clips and muted tracks.
+
+    Args:
+        raw: read_timeline result with fixed duration or BasedOnClips timing ending at the last clip.
+    """
     if raw.get("durationMode") == 1:
         return float(raw.get("fixedDuration", 0.0))
     end = 0.0
@@ -347,8 +375,15 @@ MATERIAL_NAMES = ("_Color", "_TintColor", "_Color0", "_BaseColor", "_MainColor",
 
 
 def material_attribute(attr: int, names: Iterable[str] = MATERIAL_NAMES) -> tuple[str, int] | None:
-    """A material binding's property and component: the low 28 bits are those of the property name's CRC-32, the top
-    4 bits 4 + its component (x / r to w / a); a float property (other top bits) has component -1."""
+    """Resolve a material binding's property and component, using -1 for scalar properties.
+
+    Args:
+        attr: Name CRC32 in the low 28 bits; top bits 4-7 encode x/r through w/a.
+        names: Candidate shader property names; the default covers lobby sprite, particle, and quad colors.
+
+    Returns:
+        Matching property and component, or None when no candidate name matches.
+    """
     low, top = attr & 0x0FFFFFFF, attr >> 28
     for name in names:
         if crc(name) & 0x0FFFFFFF == low:
@@ -357,7 +392,12 @@ def material_attribute(attr: int, names: Iterable[str] = MATERIAL_NAMES) -> tupl
 
 
 def chain(n: dict, by_go: Mapping[int, dict]) -> list[dict]:
-    """A node and its ancestors, the node first."""
+    """Return a node and its ancestors, starting with the node.
+
+    Args:
+        n: Prefab walk node whose parent chain is followed.
+        by_go: Walk nodes indexed by GameObject path ID.
+    """
     out = []
     while n is not None:
         out.append(n)
@@ -366,21 +406,35 @@ def chain(n: dict, by_go: Mapping[int, dict]) -> list[dict]:
 
 
 def kept(n: dict, by_go: Mapping[int, dict], gates: Iterable[int]) -> bool:
-    """Whether a node can be active at some point of the intro or after it: active at rest, or every GameObject that
-    keeps it off at rest (inactive itself) is one the intro switches on."""
+    """Check whether a node can be active during or after the intro.
+
+    Args:
+        n: Prefab walk node to retain if active at rest or blocked only by intro gates.
+        by_go: Walk nodes indexed by GameObject path ID for ancestor checks.
+        gates: GameObjects switched on by the intro, including any inactive ancestors.
+    """
     gates = set(gates)
     return all(x["own"] or x["go"] in gates for x in chain(n, by_go))
 
 
 class Plan:
-    """What a lobby's intro changes in its prefab: the GameObjects it switches or moves, the components whose properties
-    it animates, its control and activation clips, the Spine tracks it drives and its sounds, by the prefab's path ids
-    (build() turns them into the player's indices). raw: read_timeline; director: the PlayableDirector's typetree;
-    nodes: lobby.read_prefab's walk (go, name, parent, own, all: [(class, path id, tree)])."""
+    """Resolve intro changes to prefab GameObjects, components, Spine tracks, and sounds.
+
+    Targets use prefab path IDs until build converts them to player indices. Changes
+    include object activity and movement, properties, and control/activation clips.
+    """
 
     def __init__(
         self, raw: Mapping[str, Any], director: Mapping[str, Any], nodes: list[dict], kinds: Mapping[int, str]
     ):
+        """Bind timeline tracks and exposed references to a prefab walk.
+
+        Args:
+            raw: read_timeline result containing track timing, bindings, and source file names.
+            director: PlayableDirector typetree supplying generic/exposed bindings and wrap mode.
+            nodes: lobby.read_prefab walk with go, name, parent, own, and all component tuples.
+            kinds: Prefab path IDs mapped to Unity object types for property binding checks.
+        """
         self.raw, self.nodes = raw, nodes
         self.duration = duration(raw)
         self.wrap = {WRAP_HOLD: "hold", WRAP_LOOP: "loop"}.get(int(director.get("m_WrapMode", WRAP_NONE)), "none")
@@ -480,7 +534,12 @@ class Plan:
         self.skipped[what] = self.skipped.get(what, 0) + 1
 
     def touches(self, n: dict, pid: int) -> bool:
-        """Whether the intro changes a component (pid, on node n): one of its properties, or the activity of its chain."""
+        """Check whether the intro changes a component's properties or its ancestor activity.
+
+        Args:
+            n: Prefab node owning the component whose ancestor chain is checked.
+            pid: Component path ID to search among animated property targets.
+        """
         return any(p["target"] == ("comp", pid) for p in self.props) or any(
             x["go"] in self.gates for x in chain(n, self.by_go)
         )
@@ -574,10 +633,18 @@ def _mul(a: list[float], b: list[float]) -> list[float]:
 
 
 def moves(n: dict, by_go: Mapping[int, dict], moved: Mapping[int, int], stop: int | None = None) -> dict | None:
-    """How a drawable's matrix follows the transforms the intro animates on its chain (below the GameObject `stop`,
-    the anchor bone's, when it hangs on a bone; else from the prefab root): {"m": [M0 .. Mk], "nodes": [i1 .. ik]} for
+    """Factor a drawable's transform chain into fixed matrices and animated node indices.
+
+    Return {"m": [M0 .. Mk], "nodes": [i1 .. ik]} for
     M0 L(i1) M1 L(i2) ... L(ik) Mk, L the animated node's local matrix this frame and the M's fixed (3 x 4, row-major).
-    moved: animated GameObject -> its index in the intro's nodes. None when nothing on the chain moves."""
+    None when nothing on the chain moves.
+
+    Args:
+        n: Drawable's prefab walk node.
+        by_go: Walk nodes indexed by GameObject path ID for ancestor and fixed-world transforms.
+        moved: Animated GameObject IDs mapped to their indices in the intro's nodes.
+        stop: Anchor-bone GameObject excluded from the chain; None starts from the prefab root.
+    """
     path = []
     for x in chain(n, by_go):
         if stop is not None and x["go"] == stop:
@@ -622,8 +689,15 @@ def _trs(t: Mapping[str, Any]) -> list[float]:
 
 
 def bone_go(n: dict, by_go: Mapping[int, dict]) -> int | None:
-    """The GameObject of the SkeletonUtilityBone a node hangs on (the nearest on its chain), as particles.build anchors
-    a system."""
+    """Find the nearest SkeletonUtilityBone GameObject as particles.build anchors a system.
+
+    Args:
+        n: Drawable's prefab walk node, checked before its ancestors.
+        by_go: Walk nodes indexed by GameObject path ID.
+
+    Returns:
+        The bone's GameObject path ID, or None when no ancestor carries one.
+    """
     return next((x["go"] for x in chain(n, by_go) if "SkeletonUtilityBone" in x["first"]), None)
 
 
@@ -647,8 +721,14 @@ VOLUME_PARAMS = {
 
 
 def volume_components(components: Iterable[Mapping[str, Any]]) -> list[dict]:
-    """A volume profile's components as the player blends them: [{"name", "active", "params": {overridden: value}}],
-    values as lobby.py reads them (a colour or vector as a list)."""
+    """Export supported volume components and their overridden parameters for the player.
+
+    Args:
+        components: Profile component typetrees; scalar values remain numbers and colors/vectors become lists.
+
+    Returns:
+        Records with name, active, and params mapping overridden parameter names to values.
+    """
     out = []
     for comp in components or []:
         name = comp.get("m_Name", "")
@@ -679,10 +759,22 @@ def sprite(
     skeleton_of_go: Callable[[int], str | None],
     data_scale: Callable[[str], float],
 ) -> tuple[dict, dict, dict] | None:
-    """A SpriteRenderer as a drawable of the effects player: its quad (the sprite's rect around its pivot, in the
+    """Export a SpriteRenderer drawable with its material and texture tables.
+
+    Include its quad (the sprite's rect around its pivot, in the
     GameObject's units), UVs, colour, material (the renderer's, the sprite's texture as _MainTex, as the renderer's
     property block sets it) and place; and its material and texture for the fx tables. None without a sprite, a
-    material or a ported shader. Simple draw mode only (every lobby's)."""
+    material or a ported shader. Simple draw mode only (every lobby's).
+
+    Args:
+        n: Renderer-owning prefab walk node, with rest and local transforms.
+        renderer_pid: SpriteRenderer path ID owning material and sprite pointers.
+        renderer: SpriteRenderer typetree supplying color, flips, sort order, and pointers.
+        resolve: Reads material and sprite descriptions by kind, owner ID, and pointer; None returns None.
+        by_go: Walk nodes indexed by GameObject path ID for anchor traversal.
+        skeleton_of_go: Maps a skeleton GameObject path ID to its skeleton name, or None.
+        data_scale: Returns Unity units per skeleton unit for anchored placement.
+    """
     if resolve is None or not renderer.get("m_Enabled", 1):
         return None
     mats = renderer.get("m_Materials") or []
@@ -746,9 +838,11 @@ def sprite(
 
 
 def _custom_mix(c: Mapping[str, Any]) -> float | None:
-    """The mix a Spine clip starts with (SpineAnimationStateMixerBehaviour.GetCustomMixDuration): with a custom
-    duration the timeline clip's blend-in or ease-in (useBlendDuration) or the clip's own; else the skeleton's default
-    (None)."""
+    """Return the mix a Spine clip starts with.
+
+    SpineAnimationStateMixerBehaviour.GetCustomMixDuration uses the timeline clip's blend-in or ease-in
+    (useBlendDuration) or the clip's own duration when a custom duration is set; else the skeleton's default (None).
+    """
     a = c["asset"]
     if not a.get("customDuration"):
         return None
@@ -767,7 +861,9 @@ def build(
     fx: dict,
     sprites: list[dict],
 ) -> dict:
-    """The intro as the player plays it (web/js/lobby-intro.js), and its marks on the lobby's other data:
+    """Build the intro for web/js/lobby-intro.js and mark affected lobby drawables.
+
+    The output includes:
     - nodes: [{"path", "own", "trs" (moved ones)}], the GameObjects it switches or moves;
     - spine: [{"skeleton", "track", "clips": [{"t", "d", "in", "speed", "anim", "loop", "mix", "endMix", "end",
       "hold", "alpha"}]}];
@@ -777,8 +873,16 @@ def build(
       "priority", "global", "enabled", "layer", "components"}];
     and on the layers, the fx systems and fx sprites it can switch: "gate" (its nodes on the drawable's chain), "base"
     (whether the rest of the chain is active), "rest" 0 for those off at rest, "moves" for those it moves.
-    layer_nodes: skeleton -> its SkeletonAnimation's node; volumes: lobby.read_prefab's (with "_node"); fx: particles
-    build's (systems with "_go"); sprites: sprite drawables with "_node"."""
+
+    Args:
+        plan: Resolved timeline bindings and prefab targets.
+        layers: Exported skeleton layers to annotate in place with gates and movement.
+        layer_nodes: Skeleton names mapped to their SkeletonAnimation prefab nodes.
+        skeleton_of_sa: SkeletonAnimation path IDs mapped to exported skeleton names.
+        volumes: lobby.read_prefab volume records carrying _node for gating and weight/property tracks.
+        fx: particles.build result with _go on systems, annotated in place with intro gates and movement.
+        sprites: Sprite drawables with _node, annotated in place with intro gates, movement, and color tracks.
+    """
     gates, moved = set(plan.gates), set(plan.moved)
     order = [n["go"] for n in plan.nodes if n["go"] in gates or n["go"] in moved]
     index = {go: i for i, go in enumerate(order)}

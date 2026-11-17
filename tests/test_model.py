@@ -1072,7 +1072,7 @@ def test_catalog_variant_model_mapping():
     assert catalog.variant("ch0020").model is None
     assert catalog.variant("np0001").model == "np0001"
     assert catalog.variant("hoshino").to_json()["model"] == "hoshino_original"
-    # a game source without models (older fakes, no install): no model anywhere
+    # a game source without models (fakes without models, no install): no model anywhere
     plain = SimpleNamespace(spine_cores=game.spine_cores, collection_names=game.collection_names)
     assert Catalog(plain, None, FIXTURES / "catalog.json").variant("hoshino").model is None
 

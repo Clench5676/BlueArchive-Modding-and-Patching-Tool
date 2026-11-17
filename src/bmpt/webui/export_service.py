@@ -216,8 +216,10 @@ def _contents(path: Path) -> integrity.Contents:
 
 
 def _generated(library: Any, record: dict | None) -> bool:
-    """Whether a library mod is made by the App (an Optimize Physics copy, a lobby camera, a roster photograph): its
-    changed files are ``generated`` in the package manifest."""
+    """Tell whether the App made a library mod (an Optimize Physics copy, a lobby camera, a roster photograph).
+
+    Its changed files are ``generated`` in the package manifest.
+    """
     from ..library import lobby_camera, portrait_edit
 
     return bool(record) and bool(
@@ -226,10 +228,13 @@ def _generated(library: Any, record: dict | None) -> bool:
 
 
 class _Package:
-    """What one exported mod's ``ba-mod.json`` says, worked out from the prepared files and the target install's
-    verified official copies: each file's role, the official bundles holding the .skel and .atlas files the mod lacks
-    (a Spine package carries them), and per skeleton which parts are the mod's. Best effort: a part that cannot be
-    read is left out of ``skeletons`` and a file without a verified official copy counts as the mod's."""
+    """What one exported mod's ``ba-mod.json`` says.
+
+    It is worked out from the prepared files and the target install's verified official copies: each file's role,
+    the official bundles holding the .skel and .atlas files the mod lacks (a Spine package carries them), and per
+    skeleton which parts are the mod's. Best effort: a part that cannot be read is left out of ``skeletons`` and a
+    file without a verified official copy counts as the mod's.
+    """
 
     def __init__(
         self, library: Any, pin: Any, live: dict[str, Path], record: dict | None, paths: list[Path], kind: str | None
@@ -273,9 +278,12 @@ class _Package:
         return ba_mod.GENERATED if self.generated else ba_mod.MOD
 
     def companions(self, paths: list[Path]) -> list[tuple[Path, str]]:
-        """The official bundles of a Spine core that hold the .skel and .atlas files of the pages the mod paints and
-        that the mod lacks, as (copy, member name): a Spine package carries them. A core with several scenes (Spine
-        backgrounds) carries only the rigs of the scenes the mod paints; a lobby camera carries only its prefab."""
+        """List the official bundles of a Spine core that hold the .skel and .atlas files the mod lacks.
+
+        These are the files of the pages the mod paints, as (copy, member name); a Spine package carries them. A
+        core with several scenes (Spine backgrounds) carries only the rigs of the scenes the mod paints; a lobby
+        camera carries only its prefab.
+        """
         if self.kind not in ba_mod.SPINE_KINDS or self.camera:
             return []
         names = {path.name for path in paths}
@@ -366,7 +374,37 @@ def export_zip(
     log: Any,
     progress: Any,
 ) -> dict:
-    """Keep a snapshot locked until ZIP verification and atomic publication finish."""
+    """Export mods as a ZIP archive that is published only after every member is verified.
+
+    The library stays locked from the snapshot until the ZIP is verified and moved into place. The archive holds, per
+    mod, its bundle files, the official files a Spine package needs, and a ``ba-mod.json``; ``manifest.json`` lists
+    them all. A single mod sits at the archive's root; several get a folder each.
+
+    Args:
+        services: The Services; their settings decide how a mod's target is recognized.
+        library: The Mod library to export from.
+        pin: The game install and server the operation is fixed to; the mods must fit this install.
+        scope: ``single`` (the one mod in ``target``), ``library`` (every mod) or ``applied`` (the mods currently
+            applied to the game).
+        target: With ``single``, ``mod:<library id>`` for a library mod or ``variant:<key>`` for a variant's
+            official game files.
+        folder: Where the archive is written, as ``mods-<scope>-<server>-<platform>-<id>.zip``.
+        server: The game server the mods are for.
+        platform: The game platform the mods are for.
+        kind: With a ``variant:`` target, the asset kind (``spr``, ``lobby``, ``model`` or ``other``) of the
+            official files to export; None for all of them.
+        log: Receives user-facing messages of the job.
+        progress: Receives the progress lines of the job.
+
+    Returns:
+        ``folder``, the ``archive`` path and the ``count`` of mods in it.
+
+    Raises:
+        ServiceError: ``export_empty`` without mods; ``export_target_unavailable`` when a mod or the install does
+            not match ``server`` and ``platform``; ``game_file_conflict`` for member names that collide;
+            ``entry_changed`` when a file changed while it was copied; ``library_io_error`` when the finished
+            archive fails its check.
+    """
     devmode.check_write(folder)
     folder.mkdir(parents=True, exist_ok=True)
     destination = folder / f"mods-{scope}-{server}-{platform}-{uuid.uuid4().hex}.zip"
@@ -486,6 +524,13 @@ def _sha256(path: Path) -> str:
 
 
 def register_api(rpc: Any, services: Any) -> None:
+    """Register ``export.options``, which lists the export targets, and ``export.start``, which starts the export job.
+
+    Args:
+        rpc: The ``RpcRegistry`` to register on.
+        services: The Services whose library, settings and jobs the methods use.
+    """
+
     @rpc.method("export.options")
     def options() -> dict:
         library = services.library

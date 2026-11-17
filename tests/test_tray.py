@@ -250,7 +250,7 @@ def test_the_icon_follows_the_preference_from_the_mods_state_events(made):
     assert backend.closed and not services.tray_shown
     count = len(backend.synced)
     services.events.publish("mods.state", snapshot(tray=True))
-    assert len(backend.synced) == count  # no longer observed
+    assert len(backend.synced) == count  # closed: not observed
 
 
 def test_the_icon_waits_for_the_window_and_never_comes_after_it_closed(made):

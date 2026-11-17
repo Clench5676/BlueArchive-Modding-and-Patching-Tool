@@ -32,6 +32,7 @@ BACKGROUNDS = {
 
 
 def texture_bundle(path: Path) -> bool:
+    """Check whether a bundle belongs to the ordinary lobby's background texture family."""
     return path.name.startswith("uis-00_images-lobby-")
 
 
@@ -73,7 +74,12 @@ def _stamps(paths: list[Path]) -> list[tuple] | None:
 
 
 def material_description(form: dict, material: dict | None = None) -> dict:
-    """Read the shader's pass factors; unused material properties never override fixed state."""
+    """Read shader pass factors without letting unused material properties override fixed state.
+
+    Args:
+        form: Parsed shader form whose first subshader and pass define blending and color writes.
+        material: Material typetree supplying floats referenced by the pass; None uses pass constants.
+    """
     state = form["m_SubShaders"][0]["m_Passes"][0]["m_State"]
     blend = state.get("rtBlend0") or state["rtBlend"][0]
     floats = dict(((material or {}).get("m_SavedProperties") or {}).get("m_Floats", []))
@@ -158,6 +164,14 @@ def _add_materials(game, path: Path, tree: dict) -> set[Path]:
 
 
 def inventory(game) -> dict:
+    """Cache complete installed day/night backgrounds with revision-checked dependencies.
+
+    Args:
+        game: GameAssets instance supplying bundle discovery, texture indexes, CAB resolution, and cache locks.
+
+    Returns:
+        Available day/night keys mapped to layout trees, required texture locators, labels, and revisions.
+    """
     paths = game._paths()
     by_name = {path.name: path for path in paths}
     textures = [path for path in paths if texture_bundle(path)]
@@ -252,6 +266,11 @@ def inventory(game) -> dict:
 
 
 def choices(game) -> list[dict]:
+    """List usable office backgrounds, returning an empty list when discovery fails.
+
+    Args:
+        game: GameAssets instance whose install supplies the background inventory.
+    """
     try:
         available = inventory(game)
     except (OSError, ServiceError, ValueError, KeyError):
@@ -264,6 +283,15 @@ def choices(game) -> list[dict]:
 
 
 def layout(game, key: str) -> dict:
+    """Return an independent background tree with revisioned texture URLs.
+
+    Args:
+        game: GameAssets instance whose inventory supplies the layout and textures.
+        key: Office background choice, "day" or "night".
+
+    Raises:
+        AssetNotFound: The requested background is unavailable in this install.
+    """
     value = inventory(game).get(key)
     if value is None:
         raise AssetNotFound(key)
@@ -277,6 +305,16 @@ def layout(game, key: str) -> dict:
 
 
 def texture_record(game, key: str, name: str) -> dict:
+    """Find a texture locator restricted to one installed office background.
+
+    Args:
+        game: GameAssets instance whose inventory defines allowed background textures.
+        key: Office background choice, "day" or "night".
+        name: Exact texture name referenced by that background's active widgets.
+
+    Raises:
+        AssetNotFound: The background or its texture is unavailable.
+    """
     value = inventory(game).get(key)
     if value is None or name not in value["records"]:
         raise AssetNotFound(name)

@@ -56,7 +56,18 @@ def staging_name(digest: str) -> str:
 
 
 def options_of(value: Any, defaults: dict) -> dict:
-    """Validate complete RPC options (and merge older saved preferences with new defaults)."""
+    """Validate complete import options, with the defaults filling in what is missing.
+
+    Args:
+        value: The options as the page sends them or as they are saved; a dict without keys the defaults lack.
+        defaults: The options the settings give (``BatchImport.defaults``).
+
+    Returns:
+        The options, with ``types`` deduplicated and ``output`` resolved to an absolute path.
+
+    Raises:
+        ServiceError: ``bad_params`` naming the invalid option.
+    """
     if not isinstance(value, dict) or set(value) - set(defaults):
         raise ServiceError("bad_params", key="options")
     out = {**defaults, **value}
@@ -88,22 +99,43 @@ class ImportSettings:
     """A read-only overlay; the classic config and the library's shared settings stay intact."""
 
     def __init__(self, base: Any, options: dict):
+        """Overlay import options on the settings.
+
+        Args:
+            base: The settings.
+            options: Validated import options (``options_of``).
+        """
         self.base, self.options = base, options
 
     def __getattr__(self, name: str) -> Any:
+        """Read any other setting from the base settings."""
         return getattr(self.base, name)
 
     def asset_types(self) -> set[str]:
+        """Return the asset types the options select."""
         return set(self.options["types"])
 
     def crc_needed(self, target: Path | None = None) -> bool:
-        """``auto`` follows the selected install, as ``Settings.crc_needed`` does; ``target`` does not change it."""
+        """Decide whether bundles get their CRC corrected.
+
+        Args:
+            target: Accepted for the settings' interface; it does not change the answer.
+
+        Returns:
+            The option's choice (``on`` or ``off``); ``auto`` follows the selected install, as
+            ``Settings.crc_needed`` does.
+        """
         setting = self.options["crc"]
         if setting != "auto":
             return setting == "on"
         return install_needs_crc(self.base.get("file_source"))
 
     def save_options(self, perform_crc: bool) -> SaveOptions:
+        """Build the options for saving a bundle, with the compression and extra bytes of the import options.
+
+        Args:
+            perform_crc: Whether the saved bundle gets its CRC corrected.
+        """
         return SaveOptions(
             perform_crc=perform_crc,
             compression=self.options["compression"],
@@ -113,6 +145,13 @@ class ImportSettings:
 
 @dataclass
 class Candidate:
+    """One import row: the files of one mod and what the analysis found about them.
+
+    ``files`` maps file names to paths; ``entry`` is the row the page shows. The other fields hold the analysis for
+    the import itself: its error, its identity (what the files are), the official targets and originals, how the
+    files are converted or copied, and the missing parts.
+    """
+
     files: dict[str, Path]
     entry: dict
     error: str | None = None
@@ -136,6 +175,8 @@ class Candidate:
 
 @dataclass
 class ImportResult:
+    """What an import run did: the result of each row, and what it added to the library."""
+
     results: list[dict]
     cores: set[str] = field(default_factory=set)
     kinds: set[str] = field(default_factory=set)
@@ -143,12 +184,19 @@ class ImportResult:
     mods_changed: bool = True
 
     def to_json(self) -> dict:
+        """Return the per-row results, as the page gets them."""
         return {"results": self.results}
 
 
 def claimed_first(choices: list[dict], package: dict | None) -> list[dict]:
-    """The guessed sources of a row, the one its trusted package manifest names first: a claim only orders the
-    guesses the files allow, it never adds one or rules one out."""
+    """Order the guessed sources of a row, the one its trusted package manifest names first.
+
+    A claim only orders the guesses the files allow; it never adds one or rules one out.
+
+    Args:
+        choices: The guessed sources, each with a ``server`` and a ``platform``.
+        package: The row's package manifest (``ba_mod.read``); None leaves the order alone.
+    """
     if not package:
         return choices
     claim = (package["target"]["server"], package["target"]["platform"])
@@ -168,6 +216,15 @@ def blocked_error(candidate: Candidate) -> ServiceError:
 
 
 def blocked_reason(error: ServiceError) -> str:
+    """Map the error that blocks a row to the reason the page shows.
+
+    Args:
+        error: The error of the analysis.
+
+    Returns:
+        The error's code when it is a known reason, a grouped reason for a few codes (``unreadable``,
+        ``no_target``, ``unsupported``), else ``failed``.
+    """
     aliases = {
         "bundle_invalid": "unreadable",
         "game_file_not_found": "no_target",
@@ -212,14 +269,30 @@ EVIDENCE_BUNDLES = 20
 
 
 def missing_detail(cabs: set[str], found: list[dict]) -> dict:
-    """An incomplete entry's ``missing``: how many CABs it references that neither its files, the install nor the
-    other dropped files hold, the first EVIDENCE_CABS of them, and the unselected files that complete it."""
+    """Build an incomplete entry's ``missing``.
+
+    Args:
+        cabs: The CABs the entry references that neither its files, the install nor the other dropped files hold.
+        found: The unselected files that complete it.
+
+    Returns:
+        ``unresolved`` (how many CABs), the first ``EVIDENCE_CABS`` of them as ``cabs``, and ``found``.
+    """
     return {"unresolved": len(cabs), "cabs": sorted(cabs)[:EVIDENCE_CABS], "found": found}
 
 
 def bundle_evidence(candidate: Candidate, inspection: integrity.Inspection) -> list[dict]:
-    """What the check read of each of an entry's files (``Inspection.summary``), for the error report and the log: a
-    refusal from the files' format can be told from one guessed from their names or targets."""
+    """Summarize what the check read of an entry's files, for the error report and the log.
+
+    A refusal from the files' format can then be told from one guessed from their names or targets.
+
+    Args:
+        candidate: The entry.
+        inspection: The check's inspection, whose ``summary`` gives what it read of a file.
+
+    Returns:
+        A row per file, at most ``EVIDENCE_BUNDLES`` of them, with the file's name and its summary.
+    """
     rows = []
     for path in sorted(candidate.files.values())[:EVIDENCE_BUNDLES]:
         summary = inspection.summary(path)
@@ -229,9 +302,16 @@ def bundle_evidence(candidate: Candidate, inspection: integrity.Inspection) -> l
 
 
 def target_evidence(entry: dict, resolution: Any, attempts: list[dict]) -> None:
-    """What a refused entry's check found of its targets, for the error report and the log: per file how the resolver
-    matched it and the official parts and dates it found (``Resolution.evidence``), and, for a guessed source, every
-    server and platform tried with its failure."""
+    """Record what a refused entry's check found of its targets, for the error report and the log.
+
+    Per file that is how the resolver matched it and the official parts and dates it found
+    (``Resolution.evidence``); for a guessed source it is every server and platform tried, with its failure.
+
+    Args:
+        entry: The row, which gets ``resolution`` and ``attempts``.
+        resolution: The resolver's result; None when there was none.
+        attempts: The sources tried, each with its failure.
+    """
     if resolution is not None:
         try:
             entry["resolution"] = resolution.evidence()[:EVIDENCE_BUNDLES]
@@ -242,6 +322,17 @@ def target_evidence(entry: dict, resolution: Any, attempts: list[dict]) -> None:
 
 
 def failure_detail(error: ServiceError, paths: Any, log: Any = no_log, *, secrets: set[str] | None = None) -> dict:
+    """Log a refused entry's error, redacted, and return it as JSON.
+
+    Args:
+        error: The error.
+        paths: The entry's files, which the log record lists.
+        log: Receives the logged message too.
+        secrets: Secret values to hide from the record; None hides none.
+
+    Returns:
+        The error as ``ServiceError.to_json`` gives it.
+    """
     from .diagnostics import clean
 
     detail = error.to_json()
@@ -253,7 +344,18 @@ def failure_detail(error: ServiceError, paths: Any, log: Any = no_log, *, secret
 
 
 def copy_compatibility(report: dict, uploaded: integrity.Contents) -> tuple[dict, dict, bool]:
-    """A direct copy installs every uploaded asset alongside the retained official parts."""
+    """Collect the Spine versions that decide whether a direct copy fits the retained official parts.
+
+    A direct copy installs every uploaded asset alongside them.
+
+    Args:
+        report: The library's compatibility report for the copy: its official skeletons and ``misfit``.
+        uploaded: The uploaded files' contents.
+
+    Returns:
+        The official Spine versions per uploaded skeleton name (a set), the uploaded skeletons' own versions, and
+        whether a page size mismatch refuses the copy (``misfit``).
+    """
     skeletons = report.get("official", {}).get("skeletons", {})
     incoming = {name: get_skel_version(data) for name, data in uploaded.skeletons.items()}
     versions = {data["version"] for data in skeletons.values()} or {None}
@@ -266,7 +368,22 @@ def copy_compatibility(report: dict, uploaded: integrity.Contents) -> tuple[dict
 def transfer_compatibility(
     inspection: integrity.Inspection, sources: list[Path], targets: list[Path], originals: list[Path], strategy: str
 ) -> tuple[dict, dict, bool]:
-    """Check transferred Spine inputs against their counterparts and retained official parts."""
+    """Check transferred Spine inputs against their counterparts and retained official parts.
+
+    Args:
+        inspection: The inspection that reads the bundles; its asset types say what is transferred.
+        sources: The uploaded bundles.
+        targets: The bundles the transfer writes into.
+        originals: The official bundles whose parts are retained.
+        strategy: How assets are matched, one of ``CHOICES["strategy"]``.
+
+    Returns:
+        The official Spine versions per matched skeleton (a set), the uploaded skeletons' versions, and whether
+        atlas pages that are not transferred mismatch the transferred textures in size, which a remap could solve.
+
+    Raises:
+        ServiceError: A bundle is unreadable (raised by ``inspection.validate``).
+    """
     scope = UpdateScope([inspection.bundle(path) for path in targets], strategy, inspection.asset_types)
     key_of = Bundle._get_key_func(strategy)
     incoming, official = {}, {}
@@ -316,7 +433,18 @@ def transfer_compatibility(
 
 
 class BatchImport:
+    """The batch import of mods: analyze what the user dropped into rows, name a row's source, then import.
+
+    The rows of the latest analysis live in memory under a revision; every analysis and source change bumps it,
+    and an import of rows from an older revision is refused (``entry_changed``).
+    """
+
     def __init__(self, services: Any):
+        """Create the import, with no rows.
+
+        Args:
+            services: The Services: settings, UI state, catalog, library and job submission.
+        """
         self.services = services
         self._lock = threading.RLock()
         self._revision = 0
@@ -332,6 +460,11 @@ class BatchImport:
         self._session_folders: set[Path] = set()
 
     def defaults(self) -> dict:
+        """Return the import options the settings give.
+
+        The keys are ``strategy``, ``types``, ``skipUnchanged``, ``crc``, ``compression``, ``extraBytes``,
+        ``backup``, ``workers``, ``output``, ``enableAfterImport`` and ``previewAfterImport``.
+        """
         settings = self.services.settings
         return {
             "strategy": "cont_name_type",
@@ -348,6 +481,7 @@ class BatchImport:
         }
 
     def options(self) -> dict:
+        """Return the saved import options over the defaults; the defaults alone when the saved ones are invalid."""
         defaults = self.defaults()
         try:
             return options_of(self.services.state.get(PREF, {}), defaults)
@@ -355,11 +489,35 @@ class BatchImport:
             return options_of({}, defaults)
 
     def set_options(self, value: dict) -> dict:
+        """Save the import options.
+
+        Args:
+            value: The options, as ``options_of`` validates them.
+
+        Returns:
+            The options as saved.
+
+        Raises:
+            ServiceError: ``bad_params`` naming the invalid option.
+        """
         options = options_of(value, self.defaults())
         self.services.state.set(PREF, options)
         return options
 
     def pick(self, folder: bool = False, recursive: bool = False, directory: str | None = None) -> dict:
+        """Show the native dialog that chooses what to import.
+
+        Args:
+            folder: Choose folders instead of mod files and archives.
+            recursive: Only checked to be a boolean; the dialog does not depend on it.
+            directory: The folder the file dialog opens in; None leaves it to the system.
+
+        Returns:
+            ``paths``, the chosen paths; empty when the dialog was cancelled.
+
+        Raises:
+            ServiceError: ``bad_params`` for a wrong type; ``native_unavailable`` without a window.
+        """
         if not isinstance(folder, bool) or not isinstance(recursive, bool):
             raise ServiceError("bad_params", key="folder")
         if self.services.window is None:
@@ -382,6 +540,22 @@ class BatchImport:
         return {"paths": [str(path) for path in paths]}
 
     def analyze(self, paths: list[str], recursive: bool = False) -> str:
+        """Start the analysis of dropped files, which replaces the rows of the last one.
+
+        Rows of the previous analysis whose files are all part of this one keep their grouping, provided the library
+        and the install are the same.
+
+        Args:
+            paths: Mod bundles, archives and folders.
+            recursive: Also read the folders' subfolders.
+
+        Returns:
+            The id of the library writer job. Its result holds the ``entries`` (the rows), the number of files
+            ``skipped`` and the ``revision`` the rows belong to.
+
+        Raises:
+            ServiceError: ``bad_params`` for a wrong type.
+        """
         if not isinstance(paths, list) or not all(isinstance(p, str) and p for p in paths):
             raise ServiceError("bad_params", key="paths")
         if not isinstance(recursive, bool):
@@ -453,6 +627,7 @@ class BatchImport:
                 pass  # An unavailable source keeps its static catalog artwork.
 
     def diagnostic_snapshot(self) -> dict:
+        """Return the revision and the current rows, each with whether the import preview composed it, for reports."""
         with self._lock:
             return {
                 "revision": self._revision,
@@ -466,7 +641,13 @@ class BatchImport:
         logger.info("Batch import analysis (%s): %s", phase, json.dumps(detail, ensure_ascii=False, sort_keys=True))
 
     def assignment_catalog(self) -> dict:
-        """Use cross-server metadata; absent assets remain absent in the picker."""
+        """List the students of every server for assigning a mod, as the catalog's cross-server metadata has them.
+
+        Assets the install lacks stay absent in the picker.
+
+        Returns:
+            ``families``, each with its ``key``, ``base`` names, ``aliases``, ``school`` and ``variants``.
+        """
         families = []
         for family in self.services.catalog.assignment_families():
             variants = []
@@ -486,6 +667,19 @@ class BatchImport:
         return {"families": families}
 
     def assign_character(self, id: str, variant: str) -> str:
+        """Assign a row to a student of the user's choice, for a mod whose target the files do not give.
+
+        Args:
+            id: The row's id.
+            variant: The student's variant key, which may be one the install lacks.
+
+        Returns:
+            The id of the job that analyzes the row again, as ``set_source`` returns it.
+
+        Raises:
+            ServiceError: ``bad_params`` for an unknown row or one that is done; the row's own error when it is
+                blocked for another reason than its target.
+        """
         if not isinstance(id, str) or not isinstance(variant, str):
             raise ServiceError("bad_params", key="variant")
         selected = self.services.catalog.assignment_variant(variant)
@@ -503,6 +697,21 @@ class BatchImport:
         )
 
     def set_source(self, id: str, server: str, platform: str, *, assignment_only: bool = False) -> str:
+        """Name the server and platform a row's files come from, and analyze the row again.
+
+        Args:
+            id: The row's id.
+            server: The game server, one of ``mod_origin.SERVERS``.
+            platform: The platform, one of ``mod_origin.PLATFORMS``.
+            assignment_only: Keep the row's own source and only analyze it again, after an assignment.
+
+        Returns:
+            The id of the library writer job. Its result is the new row, with the ``revision``; the job refuses
+            with ``entry_changed`` when the rows or their files changed meanwhile.
+
+        Raises:
+            ServiceError: ``bad_params`` for an unknown row, server or platform.
+        """
         if not isinstance(id, str) or server not in mod_origin.SERVERS or platform not in mod_origin.PLATFORMS:
             raise ServiceError("bad_params", key="source")
         with self._lock:
@@ -629,7 +838,17 @@ class BatchImport:
             candidate.entry.update(state="done", reason=None, libraryId=mod_id)
 
     def preview(self, key: str) -> tuple[str, list[Path]]:
-        """Compose a source with official omitted parts, or current parts when no official copy remains."""
+        """Compose a row's source with the official parts it omits, or the current parts when no official copy remains.
+
+        Args:
+            key: The key of the row's ``preview``.
+
+        Returns:
+            The row's core name and the composed bundles; the row is marked as previewed.
+
+        Raises:
+            KeyError: The key is unknown, the analysis was replaced or the files changed.
+        """
         with self._lock:
             candidate, stamp = self._previews[key]
             library, pin = self._library, self._pin
@@ -643,7 +862,7 @@ class BatchImport:
         core_name = candidate.entry["core"]
         # A Spine import that transfers assets (update, convert) writes only the asset types its options name: the
         # preview keeps every official part and leaves the other types of the source files out, so it shows what the
-        # game will. Whole-file imports (ready) and 3D previews compose as before.
+        # game will. Whole-file imports (ready) and 3D previews compose the source files whole.
         types = set(self.options()["types"])
         transfers = candidate.entry["state"] in ("update", "convert") and candidate.entry["kind"] in ("spr", "lobby")
         left = set() if "ALL" in types or not transfers else set(PREVIEW_TYPES) - types
@@ -862,9 +1081,12 @@ class BatchImport:
         return candidates, skipped
 
     def _join_passengers(self, versioned: list[tuple], version_by_path: dict[Path, str], library: Any) -> None:
-        """A part holding no asset of the import's types (a split bundle of animation data only) is no version of
-        its own: it stays with the one mod of its set, where the import leaves its target official. Only sets the
-        date rule split are read; a set with several versions besides, or with nothing else, keeps the date rule."""
+        """Keep a part that holds no asset of the import's types with the one mod of its set.
+
+        Such a part (a split bundle of animation data only) is no version of its own, and the import leaves its
+        target official. Only sets the date rule split are read; a set with several versions besides, or with
+        nothing else, keeps the date rule.
+        """
         sets: dict[tuple, list[tuple]] = {}
         for path, name, kind, variant, core, error, _ in versioned:
             sets.setdefault((path.parent, core, kind, variant), []).append((path, name, error))
@@ -1345,6 +1567,24 @@ class BatchImport:
             raise ServiceError(detail["code"], **detail["params"])
 
     def run(self, ids: list[str], options: dict, revision: int) -> str:
+        """Start the import of analyzed rows.
+
+        Each row is checked again against the files and the official data before its bundles are built, on parallel
+        workers, and added to the library; the row's result says whether it was imported, updated, unchanged, failed
+        or skipped.
+
+        Args:
+            ids: The ids of the rows to import.
+            options: The import options, as ``options_of`` validates them.
+            revision: The revision of the analysis the ids come from.
+
+        Returns:
+            The id of the library writer job. Its result is an ``ImportResult``.
+
+        Raises:
+            ServiceError: ``bad_params`` for ids that are no rows; ``entry_changed`` for an older revision;
+                ``folder_changed`` when the library changed.
+        """
         options = options_of(options, self.defaults())
         if not isinstance(ids, list) or not all(isinstance(i, str) for i in ids):
             raise ServiceError("bad_params", key="ids")

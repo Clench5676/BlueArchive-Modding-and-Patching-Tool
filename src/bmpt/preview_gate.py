@@ -43,7 +43,12 @@ def in_foreground() -> bool:
 
 
 def yield_to_previews(cancel: Callable[[], bool] | None, limit: float = 20.0) -> None:
-    """Wait for previews, checking cancellation every 0.1 s and bounding the pause."""
+    """Wait while foreground previews run, and record the pause as ``scan.yield``.
+
+    Args:
+        cancel: Polled every 0.1 s; the wait ends when it returns True. None never cancels.
+        limit: The longest pause in seconds.
+    """
     started = None
     try:
         with _condition:
@@ -65,8 +70,13 @@ def yield_to_previews(cancel: Callable[[], bool] | None, limit: float = 20.0) ->
 
 
 def step(cancel: Callable[[], bool] | None = None) -> None:
-    """Between two steps of a job that holds no lock a preview needs (a costume build): yield to the foreground
-    previews (at most 20 s), unless this thread answers one itself."""
+    """Yield to the foreground previews for at most 20 s, unless this thread answers one itself.
+
+    Called between two steps of a job that holds no lock a preview needs (a costume build).
+
+    Args:
+        cancel: Polled every 0.1 s; the wait ends when it returns True. None never cancels.
+    """
     if not in_foreground():
         yield_to_previews(cancel)
 
@@ -83,9 +93,11 @@ def _tell(busy: bool) -> None:
 
 @contextmanager
 def waiting() -> Iterator[None]:
-    """A foreground preview waits for a job (the model lock a job holds, a costume build of the same pair): it does
-    not count as foreground meanwhile, so the job it waits for does not yield to it, and the wait is told
-    (``on_wait``) so the page's deadline leaves it out. Nothing for a thread that answers no preview."""
+    """Mark a foreground preview as waiting for a job (the model lock a job holds, a costume build of the same pair).
+
+    Meanwhile the preview does not count as foreground, so the job it waits for does not yield to it, and the wait is
+    told (``on_wait``) so the page's deadline leaves it out. Does nothing on a thread that answers no preview.
+    """
     global _count, _waiters
     depth = getattr(_local, "depth", 0)
     if not depth:

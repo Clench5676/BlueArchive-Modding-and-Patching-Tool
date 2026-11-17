@@ -17,11 +17,18 @@ class ServiceError(Exception):
     """A failure the user should see, identified by a code (e.g. ``"game_not_found"``)."""
 
     def __init__(self, code: str, **params: Any):
+        """Create the error.
+
+        Args:
+            code: The error name; the front end shows ``webui.error.<code>`` and the registry gives its reference.
+            **params: Values filled into the locale string; values JSON cannot carry are sent as text.
+        """
         super().__init__(code)
         self.code = code
         self.params = params
 
     def to_json(self) -> dict[str, Any]:
+        """Return the payload the front end receives: ``code``, ``ref`` when registered, and ``params``."""
         result: dict[str, Any] = {"code": self.code}
         if ref := code_of(self.code):
             result["ref"] = ref
@@ -29,11 +36,16 @@ class ServiceError(Exception):
         return result
 
     def __repr__(self) -> str:
+        """Show the code and the parameters."""
         return f"ServiceError({self.code!r}, {self.params!r})"
 
 
 def log_service_error(logger: logging.Logger, error: ServiceError) -> None:
-    """Record a service verdict once, where RPC or a worker hands it to the UI."""
+    """Record a service verdict once, where RPC or a worker hands it to the UI.
+
+    Codes registered as ``"notice"`` log at INFO, all others at WARNING; a registered code logs its reference and
+    parameters too.
+    """
     level = logging.INFO if level_of(error.code) == "notice" else logging.WARNING
     payload = error.to_json()
     if ref := payload.get("ref"):

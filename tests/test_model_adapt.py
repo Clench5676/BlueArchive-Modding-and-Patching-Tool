@@ -343,7 +343,7 @@ def test_the_head_goes_with_the_neck_not_onto_the_slots_head_joint():
     for shape in ("moved", "refitted"):
         fit = ma.refit(target, source, flat, shape=shape)
         assert np.allclose(fit.vertices[:2], flat.vertices[:2] - [[0, 0, 0], [0, 0.02, 0]])  # the spine's, the neck's
-        # the head and the hair go down with the neck, 2 cm: no longer left 0.2 cm down at the slot's head joint
+        # the head and the hair go down with the neck, 2 cm: not left 0.2 cm down at the slot's head joint
         assert np.allclose(fit.vertices[2:], flat.vertices[2:] - [0, 0.02, 0])
         assert np.allclose(fit.head, [0, -0.018, 0])  # its joint 1.8 cm below the slot's
     # a halo following the head moves along, in the head's space, its clamp box with it
@@ -366,9 +366,10 @@ def test_the_head_goes_with_the_neck_not_onto_the_slots_head_joint():
 
 def test_a_skirt_on_the_biped_root_and_a_bag_off_a_prop_go_with_the_body():
     """Sena (Casual)'s skirt hangs off Bip001 and her bag off a prop node Sena lacks. On a slot whose prefab
-    rests 0.74 m aside, the refit took the skirt nowhere (no anchor on the body chain) and the bag stayed with the
-    prefab's root: both were left beside her. The skirt is refitted by the Biped's root; the bag, carried by the spine
-    under the source's clips, goes with the spine as one branch, never with a loose slot bone that happens to rest near it."""
+    rests 0.74 m aside, a refit would take the skirt nowhere (no anchor on the body chain) and leave the bag with the
+    prefab's root: both would be beside her. The skirt is refitted by the Biped's root; the bag, carried by the spine
+    under the source's clips, goes with the spine as one branch, never with a loose slot bone that happens to rest
+    near it."""
 
     def body(x, prop):
         bones = [
@@ -1214,9 +1215,10 @@ def test_official_bones_any_clip_scales_away_are_hidden(view):
 def test_official_mouth_receivers_follow_the_costume(
     view, tmp_path, target, source, index, uv, on_primary, default, atlas
 ):
-    """The slot's mouth receivers index the renderer's materials, now the source's in the source's order: they take
-    the source receiver's material index, and point at the renderer drawing the source's mouth, an added part where
-    the source's mouth is not on its primary. The slot's clips name mouth tiles as cells of the slot's own atlas: on
+    """The slot's mouth receivers index the renderer's materials, which are the source's in the source's order after
+    the build: they take the source receiver's material index, and point at the renderer drawing the source's mouth,
+    an added part where the source's mouth is not on its primary. The slot's clips name mouth tiles as cells of the
+    slot's own atlas: on
     the same atlas the receivers take the source's default tile; a source mouth on another atlas draws the slot's
     (its texture, scale and grid) and the receivers keep the slot's default tile, so every SetMouthTile event of the
     slot's clips draws the mouth the slot draws."""
@@ -1288,9 +1290,9 @@ def test_official_mouth_receivers_follow_the_costume(
 
 @official
 def test_official_costume_takes_its_own_materials_on_a_body_drawn_from_two_material_files(view, tmp_path):
-    """Hifumi (Swimsuit)'s body takes its materials from two files. The slot's body renderer was taken for a
-    copy and kept its own materials in its own order, so Hifumi's face drew with the swimsuit's hair material. The
-    body renderer now draws the costume with the costume's materials, in its submeshes' order."""
+    """Hifumi (Swimsuit)'s body takes its materials from two files. The slot's body renderer is not taken for a
+    copy that keeps its own materials in its own order (Hifumi's face would draw with the swimsuit's hair material):
+    it draws the costume with the costume's materials, in its submeshes' order."""
     from ba_modding_toolkit.bundle import Bundle
     from ba_modding_toolkit.models import SaveOptions
     from bmpt.gameassets.discovery import cab_names
@@ -1577,7 +1579,7 @@ def test_a_regrouped_skirt_build_carries_its_own_new_bones():
     """Optimize Physics builds Rule B twice when the pelvis group follows: as the group choice left it (the strap off
     the thigh alone) and as if the followed group were rigid (the skirt off the pelvis too). Each candidate carries
     the new bones of its own build: the regrouped one has more, and the rule chosen writes the bones its weights'
-    columns name (Shigure <- Hina failed to build when a regrouped rule won with the default build's bones)."""
+    columns name (a regrouped rule is never written with the default build's bones)."""
     ts, ss, flat, mapping, groups = _skirt_case()
     t_legs, s_legs = ma.legs_of(ts), ma.legs_of(ss)
     pelvis, thigh_l, thigh_r = s_legs["pelvis"], s_legs["thigh L"], s_legs["thigh R"]
@@ -1620,9 +1622,9 @@ def test_a_regrouped_skirt_build_carries_its_own_new_bones():
 @official
 def test_official_optimize_physics_builds_a_regrouped_skirt_with_its_own_bones(view):
     """Shigure <- Hina with Optimize Physics: Hina's skirt follows Shigure's own chains, and the rule chosen is built
-    as if that group were rigid, its chains more than the default build's (it failed to build: the weights of one
-    build, the bones of the other). It builds, its new bones are the regrouped build's, and the written weights name
-    only the slot's nodes and those bones."""
+    as if that group were rigid, its chains more than the default build's. It builds with the weights and the bones of
+    the same build: its new bones are the regrouped build's, and the written weights name only the slot's nodes and
+    those bones."""
     from ba_modding_toolkit.bundle import Bundle
 
     files, index = view
@@ -1921,7 +1923,7 @@ def _locks_free() -> list[str]:
 )
 def test_official_costume_build_leaves_no_bundle_locked(view, target, source, unfit):
     """A build opens many bundles, each under its path lock; it closes them all when it ends, built or
-    refused, so an export on another thread never waits for them (an earlier build hung there). Past-limit pairs build
+    refused, so an export on another thread never waits for them. Past-limit pairs build
     as well, with their stretch kept as information."""
     from ba_modding_toolkit.bundle import Bundle
 

@@ -57,6 +57,7 @@ class AddResult(list[ModEntry]):
     """New entries, with matched library entries and sources recognized in game files."""
 
     def __init__(self) -> None:
+        """Start an empty import result with separate lists for matched and failed entries."""
         super().__init__()
         self.duplicates: list[ModEntry] = []
         self.installed: list[ModEntry] = []
@@ -69,9 +70,11 @@ class AddResult(list[ModEntry]):
 
     @property
     def added(self) -> list[ModEntry]:
+        """Return the newly added entries as a plain list."""
         return list(self)
 
     def to_json(self) -> dict[str, Any]:
+        """Serialize added, matched, applied, and failed entries with their import metadata."""
         return {
             "added": [entry.to_json() for entry in self],
             "duplicates": [entry.to_json() for entry in self.duplicates],
@@ -101,8 +104,10 @@ CopyKind = Literal["game", "kept", "backup", "elsewhere"]
 
 @dataclass(frozen=True)
 class GameFileState(JsonResult):
-    """The installed source and restore availability for one bundle part, from the cheap judgement (size, date and
-    header; never the whole file)."""
+    """Describe one bundle part's installed source and restore availability.
+
+    The cheap judgement uses size, date, and header without reading the whole file.
+    """
 
     file: Path
     core: str
@@ -199,13 +204,16 @@ class RemapResult(JsonResult):
 
     @property
     def added(self) -> list[ModEntry]:
+        """Return the separately stored repaint as a single added entry."""
         return [self.mod]
 
 
 @dataclass(frozen=True)
 class Pin(JsonResult):
-    """A game folder the library works on, fixed for one call or job: its install key (the install root, resolved),
-    its resource folders and its server."""
+    """Fix a game install and server for one call or job.
+
+    The install key is the resolved install root; dirs holds its resource folders.
+    """
 
     key: str
     root: Path
@@ -214,7 +222,7 @@ class Pin(JsonResult):
 
     @property
     def id(self) -> str:
-        """The first 12 hex digits of the install key's SHA-1: the install's name in URLs."""
+        """Return the install's URL name: the first 12 hex digits of its key's SHA-1."""
         import hashlib
 
         return hashlib.sha1(self.key.encode("utf-8")).hexdigest()[:12]
@@ -227,8 +235,11 @@ EntryStateName = Literal[
 
 @dataclass(frozen=True)
 class EntryState(JsonResult):
-    """One asset slot of a variant in one install: what its files carry, what is configured for it, and what the
-    switch would do with it. A model slot combines its prefab and its own dependency cores."""
+    """Describe an asset slot's carried source, configuration, and switch outcome.
+
+    Each slot belongs to one variant in one install. A model slot combines its prefab
+    and its own dependency cores.
+    """
 
     install: str  # the install key
     core: str  # lower-case core
@@ -246,6 +257,7 @@ class EntryState(JsonResult):
 
     @property
     def key(self) -> tuple[str, str]:
+        """Return the install and core identifying this slot."""
         return self.install, self.core
 
 

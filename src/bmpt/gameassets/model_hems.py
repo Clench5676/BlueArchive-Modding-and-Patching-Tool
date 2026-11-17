@@ -34,18 +34,20 @@ RAY_CHUNK = 32
 
 
 def smoothstep(a: float, b: float, x: np.ndarray) -> np.ndarray:
+    """Blend values from zero at a to one at b with a clamped cubic smoothstep."""
     t = np.clip((x - a) / (b - a), 0.0, 1.0)
     return t * t * (3 - 2 * t)
 
 
 def segment_distance(points: np.ndarray, a: np.ndarray, b: np.ndarray) -> np.ndarray:
+    """Return each 3D point's Euclidean distance to the segment from a to b."""
     ab = b - a
     t = np.clip(((points - a) @ ab) / max(float(ab @ ab), 1e-12), 0.0, 1.0)
     return np.linalg.norm(points - (a + np.outer(t, ab)), axis=1)
 
 
 def leg_distance(points: np.ndarray, hip: np.ndarray, knee: np.ndarray, ankle: np.ndarray) -> np.ndarray:
-    """Distance of each point to a leg's axis (hip -> knee -> ankle)."""
+    """Return each point's distance to the hip-knee-ankle leg axis in the same coordinate space."""
     return np.minimum(segment_distance(points, hip, knee), segment_distance(points, knee, ankle))
 
 
@@ -53,8 +55,15 @@ def leg_distance(points: np.ndarray, hip: np.ndarray, knee: np.ndarray, ankle: n
 
 
 def densify(columns: np.ndarray, weights: np.ndarray, width: int) -> np.ndarray:
-    """Per-vertex influences (column, weight) as a dense (vertices x ``width``) matrix; influences on the same column
-    (several bones driving the same slot bone) add up, so keeping four later drops no real influence."""
+    """Sum per-vertex influences into a dense vertex-by-bone matrix.
+
+    Bones driving the same slot bone add up, so keeping four later drops no real influence.
+
+    Args:
+        columns: Bone-column index for each stored influence, shaped like weights.
+        weights: Per-vertex influence weights, shaped as vertices by influences.
+        width: Number of destination bone columns.
+    """
     dense = np.zeros((len(weights), width))
     rows = np.repeat(np.arange(len(weights))[:, None], columns.shape[1], axis=1)
     np.add.at(dense, (rows, columns), weights)
@@ -64,8 +73,15 @@ def densify(columns: np.ndarray, weights: np.ndarray, width: int) -> np.ndarray:
 def reweight(
     dense: np.ndarray, rigid: np.ndarray, fraction: np.ndarray, moves: np.ndarray, columns: list[int]
 ) -> np.ndarray:
-    """``dense`` (vertices x bones) with ``fraction`` of each vertex's rigid part (``rigid``, part of ``dense``) moved
-    to ``columns``, shared by ``moves`` (rows summing to 1)."""
+    """Move a fraction of rigid influence onto the selected leg-bone columns.
+
+    Args:
+        dense: Current vertex-by-bone weights.
+        rigid: Rigid portion of dense, in the same shape.
+        fraction: Per-vertex fraction of rigid weight to redistribute.
+        moves: Destination shares per vertex, with rows summing to one.
+        columns: Destination bone columns corresponding to the columns of moves.
+    """
     share = rigid.sum(axis=1)
     out = dense - rigid * fraction[:, None]
     out[:, columns] += (share * fraction)[:, None] * moves
@@ -81,10 +97,20 @@ def ramp(
     top: float,
     knee: tuple[float, float],
 ) -> tuple[np.ndarray, np.ndarray]:
-    """The fraction of the rigid part to move and its shares on (left thigh, right thigh, left calf, right calf).
-    ``height``: below the hip in thigh lengths; ``near``: 1 next to the legs, 0 from two hip widths away; ``left`` and
-    ``right``: closeness to each leg. The fraction rises over ``top`` thigh lengths, the calf takes over across
-    ``knee``."""
+    """Compute rigid-weight transfer fractions and thigh/calf shares from hem position.
+
+    Args:
+        height: Distance below the hip in thigh lengths for each vertex.
+        near: Proximity factor, one beside the legs and zero from two hip widths away.
+        left: Closeness to the left leg, used to divide influence between sides.
+        right: Closeness to the right leg, used with left to divide influence.
+        alpha: Maximum fraction of rigid weight to transfer.
+        top: Thigh-length interval over which the transfer fraction rises from the hip.
+        knee: Thigh-length interval over which calf influence replaces thigh influence.
+
+    Returns:
+        Per-vertex fractions and shares on left thigh, right thigh, left calf, and right calf.
+    """
     fraction = alpha * smoothstep(0.0, top, height) * near
     calf = smoothstep(knee[0], knee[1], height)
     total = left + right
@@ -94,8 +120,13 @@ def ramp(
 
 
 def keep_four(dense: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    """The four largest influences per vertex (columns, weights summing to 1), largest first; unused ones repeat the
-    first column with weight 0."""
+    """Keep four largest nonnegative influences per dense weight row and normalize nonzero totals.
+
+    Return columns and weights, largest first; unused influences repeat the first column with zero weight.
+
+    Args:
+        dense: Vertex-by-bone influences; negative values are clipped and all-zero rows retain zero total weight.
+    """
     dense = np.clip(dense, 0.0, None)
     joints = np.argsort(-dense, axis=1, kind="stable")[:, :4]
     weights = np.take_along_axis(dense, joints, axis=1)
@@ -109,6 +140,14 @@ def keep_four(dense: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
 
 
 def skin(rest: np.ndarray, joints: np.ndarray, weights: np.ndarray, matrices: np.ndarray) -> np.ndarray:
+    """Apply linear-blend skinning to rest vertices.
+
+    Args:
+        rest: Vertex positions shaped as vertices by 3 in the matrices' input space.
+        joints: Matrix indices for each vertex influence.
+        weights: Influence weights in the same shape as joints.
+        matrices: Bone skin matrices shaped as bones by 4 by 4.
+    """
     homogeneous = np.c_[rest, np.ones(len(rest))]
     out = np.zeros((len(rest), 3))
     for k in range(joints.shape[1]):
@@ -117,16 +156,22 @@ def skin(rest: np.ndarray, joints: np.ndarray, weights: np.ndarray, matrices: np
 
 
 class Normal:
-    """Per vertex, the normal equations of the least squares ``basis @ w ~ target`` over many frames."""
+    """Accumulate per-vertex normal equations for least squares basis @ w ~ target across frames."""
 
     def __init__(self, count: int, bones: int):
+        """Allocate empty equations for count vertices with bones candidate influences each."""
         self.gram = np.zeros((count, bones, bones))
         self.right = np.zeros((count, bones))
         self.square = np.zeros(count)
         self.frames = 0
 
     def add(self, basis: np.ndarray, target: np.ndarray) -> None:
-        """``basis``: (vertices, 3, bones) where each bone alone puts the vertex; ``target``: (vertices, 3)."""
+        """Accumulate one frame's target positions and candidate bone placements.
+
+        Args:
+            basis: Positions under each bone alone, shaped as vertices by 3 by bones.
+            target: Desired positions in the same space, shaped as vertices by 3.
+        """
         self.gram += np.einsum("nri,nrj->nij", basis, basis)
         self.right += np.einsum("nri,nr->ni", basis, target)
         self.square += (target * target).sum(axis=1)
@@ -134,8 +179,13 @@ class Normal:
 
 
 def fit_simplex(normal: Normal) -> tuple[np.ndarray, np.ndarray]:
-    """Per vertex, the non-negative weights summing to 1 that best fit the frames (exact: every subset of the bones
-    solved with the sum constraint, the best feasible one kept), and the rms residual per frame."""
+    """Fit nonnegative unit-sum weights per vertex and return weights with RMS residuals per frame.
+
+    Solve every bone subset with the sum constraint and keep the best feasible solution.
+
+    Args:
+        normal: Equations accumulated from candidate placements and target positions across frames.
+    """
     count, bones = normal.right.shape
     best = np.full(count, np.inf)
     out = np.zeros((count, bones))
@@ -170,7 +220,13 @@ def fit_simplex(normal: Normal) -> tuple[np.ndarray, np.ndarray]:
 
 
 def stretch_p99(rest: np.ndarray, posed: np.ndarray, edges: np.ndarray) -> float:
-    """The 99th percentile of how much the edges grow (1 = unchanged)."""
+    """Measure the 99th percentile edge-length ratio, with one meaning unchanged.
+
+    Args:
+        rest: Rest vertex positions in the same units as posed.
+        posed: Corresponding vertex positions after skinning.
+        edges: Vertex-index pairs to measure; empty or degenerate edges yield one.
+    """
     if not len(edges):
         return 1.0
     l0 = np.linalg.norm(rest[edges[:, 0]] - rest[edges[:, 1]], axis=1)
@@ -202,9 +258,19 @@ def _far_hits(origins: np.ndarray, directions: np.ndarray, corners: np.ndarray) 
 def cover(
     points: np.ndarray, legs: np.ndarray, triangles: np.ndarray, centre: np.ndarray, up: np.ndarray
 ) -> tuple[np.ndarray, np.ndarray]:
-    """For the leg vertices ``legs`` (indices into ``points``), on the ray from the body axis (through ``centre``
-    along ``up``) through each: +1 when cloth (``triangles``, indices into ``points``) lies beyond it, -1 when every
-    crossing lies nearer, 0 without a crossing or on the axis; and how far it lies outside the farthest crossing."""
+    """Classify leg vertices against cloth along rays from the body axis.
+
+    Args:
+        points: Shared posed vertices for legs and cloth, in metres.
+        legs: Indices into points for the leg vertices to classify.
+        triangles: Cloth triangles indexing points.
+        centre: Point on the body axis in the same space as points.
+        up: Body-axis direction, normalized before ray construction.
+
+    Returns:
+        States (+1 cloth beyond, -1 all crossings nearer, 0 no decisive crossing/on axis)
+        and distance outside the farthest crossing, NaN without a crossing.
+    """
     up = up / np.linalg.norm(up)
     v = points[legs]
     height = (v - centre) @ up
@@ -234,7 +300,12 @@ def cover(
 
 
 def deep_share(state: np.ndarray, depth: np.ndarray) -> float:
-    """Percent of the (covered at rest) leg vertices more than ``DEEP`` outside the cloth."""
+    """Measure the percentage of rest-covered leg vertices more than DEEP metres outside cloth.
+
+    Args:
+        state: cover classifications restricted to the vertices covered at rest.
+        depth: Corresponding distances outside cloth in metres; NaNs do not count as deep.
+    """
     if not len(state):
         return 0.0
     with np.errstate(invalid="ignore"):
@@ -243,6 +314,8 @@ def deep_share(state: np.ndarray, depth: np.ndarray) -> float:
 
 @dataclass
 class Score:
+    """Record a hem rule's worst per-clip pass-through percentages and maximum stretch percentile."""
+
     rule: str
     deep: dict[str, float]  # per clip: worst frame's deep pass-through, percent
     stretch: float  # worst cloth stretch p99 over the clips
@@ -250,12 +323,19 @@ class Score:
 
     @property
     def mean(self) -> float:
+        """Return mean worst-clip pass-through percentage, or zero before any clip is measured."""
         return sum(self.deep.values()) / len(self.deep) if self.deep else 0.0
 
 
 def choose(scores: list[Score], limit: float) -> Score:
-    """``scores[0]`` is rigid. A rule is allowed when its stretch stays within ``max(limit, rigid's)`` and no clip
-    gets more than ``WORSE`` points worse than rigid; the lowest mean wins, ties go to rigid, then to less stretch."""
+    """Choose the lowest mean pass-through within rigid-relative stretch and per-clip limits.
+
+    Ties prefer rigid, then less stretch; no clip may worsen by more than WORSE percentage points.
+
+    Args:
+        scores: Measured candidates, with the rigid baseline first; incomplete candidates are ineligible.
+        limit: Allowed stretch ratio, raised to the rigid baseline's stretch when necessary.
+    """
     rigid = scores[0]
     ceiling = max(limit, rigid.stretch)
     allowed = [
@@ -274,6 +354,11 @@ def cannot_win(partial: Score, scores: list[Score], limit: float) -> bool:
     Stretch and each measured clip's worst depth can only increase. Use the
     chooser itself for the rounded mean, rigid preference, stretch and stable
     candidate order, including the rigid score's stretch ceiling.
+
+    Args:
+        partial: Candidate with only some clip measurements, whose unmeasured clips optimistically score zero.
+        scores: Completed candidates, with the rigid baseline first and its full clip set.
+        limit: Allowed stretch ratio passed to choose.
     """
     optimistic = Score(partial.rule, {c: partial.deep.get(c, 0.0) for c in scores[0].deep}, partial.stretch)
     return choose([*scores, optimistic], limit) is not optimistic
@@ -290,14 +375,15 @@ BLEND_WEIGHT, BLEND_INDICES = 12, 13
 
 @dataclass
 class SkinLayout:
+    """Locate four plain weights and bone indices per vertex by byte offset, stride, and struct code."""
+
     count: int
     weights: tuple[int, int, str]  # first byte, stride, struct code
     indices: tuple[int, int, str]
 
 
 def skin_layout(mesh: Mapping[str, Any]) -> SkinLayout | None:
-    """Where a Mesh typetree keeps its skin in ``m_VertexData``, when it is written plainly: no compressed mesh, no
-    stream data, four float weights and four integer indices per vertex. None otherwise."""
+    """Locate a Mesh typetree's plain four-float/four-index skin, or None for compressed/streamed/unsupported data."""
     compressed = (mesh.get("m_CompressedMesh") or {}).get("m_Weights") or {}
     if compressed.get("m_NumItems") or (mesh.get("m_StreamData") or {}).get("size"):
         return None
@@ -341,6 +427,12 @@ def skin_layout(mesh: Mapping[str, Any]) -> SkinLayout | None:
 
 
 def read_skin(mesh: Mapping[str, Any], layout: SkinLayout) -> tuple[np.ndarray, np.ndarray]:
+    """Decode plain skin rows as bone-index and weight arrays.
+
+    Args:
+        mesh: Mesh typetree with inline m_VertexData bytes.
+        layout: Validated offsets and formats returned by skin_layout for this mesh.
+    """
     raw = mesh["m_VertexData"]["m_DataSize"]
     (ws, wstride, wcode), (js, jstride, jcode) = layout.weights, layout.indices
     weights = np.array([struct.unpack_from("<4" + wcode, raw, ws + v * wstride) for v in range(layout.count)], float)
@@ -363,8 +455,18 @@ INDEX_RANGE = {
 
 
 def write_skin(mesh: dict, layout: SkinLayout, rows: np.ndarray, joints: np.ndarray, weights: np.ndarray) -> None:
-    """Rewrite the skin of the vertices ``rows`` in place; every other byte stays as it is. A bone index past what the
-    mesh's index format holds (8 bits: 255) raises :class:`SkinNotWritable` before anything changes."""
+    """Rewrite selected plain skin rows in place, preserving every other byte.
+
+    Args:
+        mesh: Mutable Mesh typetree containing inline vertex bytes.
+        layout: Validated plain-skin offsets and formats for this mesh.
+        rows: Vertex indices to rewrite, in the same order as joints and weights.
+        joints: Four destination bone indices per selected row.
+        weights: Four destination influence weights per selected row.
+
+    Raises:
+        SkinNotWritable: A bone index exceeds the stored format (255 for unsigned 8-bit), before mutation.
+    """
     data = mesh["m_VertexData"]
     raw = bytearray(data["m_DataSize"])
     (ws, wstride, wcode), (js, jstride, jcode) = layout.weights, layout.indices
@@ -383,6 +485,7 @@ STEPS = 31
 
 
 def unpack_bits(packed: Mapping[str, Any]) -> list[int]:
+    """Unpack a Unity packed integer typetree in little-bit order, yielding zeros for zero-bit items."""
     count, bits = int(packed.get("m_NumItems") or 0), int(packed.get("m_BitSize") or 0)
     if not count or not bits:
         return [0] * count
@@ -392,6 +495,12 @@ def unpack_bits(packed: Mapping[str, Any]) -> list[int]:
 
 
 def pack_bits(values: list[int], bits: int) -> bytes:
+    """Pack integer values in Unity's little-bit order.
+
+    Args:
+        values: Nonnegative integer items whose low bits are stored in order.
+        bits: Bit width allocated to each item.
+    """
     if not values:
         return b""
     array = np.asarray(values, np.int64)
@@ -400,8 +509,13 @@ def pack_bits(values: list[int], bits: int) -> bytes:
 
 
 def compressed_rows(weights: list[int], bones: list[int], count: int) -> list[tuple[list[int], list[int]]] | None:
-    """The weight and bone index items of each vertex as stored (the reading of ``model.compressed_skin``); None when
-    the items do not make exactly ``count`` vertices."""
+    """Split compressed skin items into stored per-vertex weight and bone rows.
+
+    Args:
+        weights: Unpacked 5-bit weights with an implied fourth weight when needed, as model.compressed_skin reads.
+        bones: Unpacked bone indices including implied fourth influences.
+        count: Required vertex count; malformed or differently sized input returns None.
+    """
     rows: list[tuple[list[int], list[int]]] = []
     w_items: list[int] = []
     b_items: list[int] = []
@@ -427,7 +541,7 @@ def compressed_rows(weights: list[int], bones: list[int], count: int) -> list[tu
 
 
 def quantize(weights: np.ndarray) -> list[int]:
-    """Weights (summing to 1) as steps of 1/31 summing to 31, by the largest remainders."""
+    """Quantize a positive-total weight row to 1/31 steps summing to 31 by largest remainders."""
     scaled = np.clip(np.asarray(weights, float), 0.0, None) * STEPS / max(float(np.sum(weights)), 1e-12)
     steps = np.floor(scaled).astype(int)
     for k in np.argsort(-(scaled - steps), kind="stable")[: STEPS - int(steps.sum())]:
@@ -436,6 +550,12 @@ def quantize(weights: np.ndarray) -> list[int]:
 
 
 def encode_row(joints: np.ndarray, weights: np.ndarray) -> tuple[list[int], list[int]]:
+    """Encode one skin row as 5-bit weights and bone indices, omitting the fourth weight.
+
+    Args:
+        joints: Up to four bone indices aligned with weights.
+        weights: Influence weights to quantize; zero-weight influences are omitted.
+    """
     steps = quantize(weights)
     kept = [(s, int(j)) for s, j in zip(steps, joints) if s > 0]
     if len(kept) == 4:
@@ -445,11 +565,14 @@ def encode_row(joints: np.ndarray, weights: np.ndarray) -> tuple[list[int], list
 
 @dataclass
 class CompressedLayout:
+    """Retain a compressed skin's vertex count and original per-vertex weight/bone items."""
+
     count: int
     rows: list[tuple[list[int], list[int]]]
 
 
 def compressed_layout(mesh: Mapping[str, Any]) -> CompressedLayout | None:
+    """Locate a Mesh typetree's inline 5-bit compressed skin, or None when its layout is unsupported."""
     compressed = mesh.get("m_CompressedMesh") or {}
     weights, bones = compressed.get("m_Weights") or {}, compressed.get("m_BoneIndices") or {}
     if not weights.get("m_NumItems") or (mesh.get("m_StreamData") or {}).get("size"):
@@ -464,7 +587,15 @@ def compressed_layout(mesh: Mapping[str, Any]) -> CompressedLayout | None:
 def write_compressed(
     mesh: dict, layout: CompressedLayout, rows: np.ndarray, joints: np.ndarray, weights: np.ndarray
 ) -> None:
-    """Re-encode the skin of the vertices ``rows``; the other vertices keep their stored items."""
+    """Re-encode selected compressed skin rows, retaining other vertices' stored items.
+
+    Args:
+        mesh: Mutable Mesh typetree whose compressed weights and bone indices are replaced.
+        layout: Validated compressed layout, updated in place with the newly stored rows.
+        rows: Vertex indices to rewrite, aligned with joints and weights.
+        joints: Up to four destination bone indices per selected row.
+        weights: Destination influence weights to quantize to 1/31 steps.
+    """
     stored = list(layout.rows)
     for row, j, w in zip(rows.tolist(), joints, weights):
         stored[row] = encode_row(np.asarray(j), np.asarray(w))
@@ -488,7 +619,7 @@ def write_compressed(
 
 
 def store_of(mesh: Mapping[str, Any]) -> SkinLayout | CompressedLayout | None:
-    """Where a Mesh typetree keeps its skin, when this module can rewrite it (not with per-vertex bone counts)."""
+    """Locate a Mesh typetree's writable skin, or None for unsupported layouts or variable per-vertex bone counts."""
     if (mesh.get("m_VariableBoneCountWeights") or {}).get("m_Data"):
         return None
     return skin_layout(mesh) or compressed_layout(mesh)
@@ -497,6 +628,15 @@ def store_of(mesh: Mapping[str, Any]) -> SkinLayout | CompressedLayout | None:
 def write_weights(
     mesh: dict, store: SkinLayout | CompressedLayout, rows: np.ndarray, joints: np.ndarray, weights: np.ndarray
 ) -> None:
+    """Rewrite selected skin rows through their plain or compressed storage layout.
+
+    Args:
+        mesh: Mutable Mesh typetree to update in place.
+        store: Validated writable skin layout returned by store_of.
+        rows: Vertex indices to rewrite, aligned with joints and weights.
+        joints: Four destination bone indices per selected row.
+        weights: Four destination influence weights per selected row.
+    """
     if isinstance(store, CompressedLayout):
         write_compressed(mesh, store, rows, joints, weights)
     else:

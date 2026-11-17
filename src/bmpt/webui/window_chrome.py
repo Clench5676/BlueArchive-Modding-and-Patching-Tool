@@ -18,6 +18,8 @@ MOTION_FRAMES, MOTION_REACH = 120, 4096
 
 @dataclass(frozen=True)
 class Rect:
+    """A rectangle by its edges. The unit is the caller's: CSS pixels (AppKit points) for the chrome's geometry."""
+
     left: float
     top: float
     right: float
@@ -25,15 +27,22 @@ class Rect:
 
     @property
     def valid(self):
+        """Whether every edge is finite and the rectangle is not empty."""
         return (
             all(math.isfinite(v) for v in asdict(self).values()) and self.right > self.left and self.bottom > self.top
         )
 
     def contains(self, x, y):
+        """Whether a point is inside; the left and top edges count, the right and bottom ones do not."""
         return self.left <= x < self.right and self.top <= y < self.bottom
 
 
 def union(rects):
+    """Return the smallest rectangle that covers all of ``rects``.
+
+    Raises:
+        ValueError: ``rects`` is empty or has an invalid rectangle.
+    """
     if not rects or not all(rect.valid for rect in rects):
         raise ValueError("Native control bounds unavailable")
     return Rect(
@@ -42,14 +51,37 @@ def union(rects):
 
 
 def vertical_offsets(rects, centre):
-    """Preserve each real button's x, size and spacing; translate the group vertically."""
+    """Move a group of rectangles vertically, keeping each one's x, size and spacing.
+
+    Args:
+        rects: The rectangles, such as the window buttons'.
+        centre: The y the group's bounding box is centred on afterwards.
+
+    Returns:
+        The moved rectangles, in the order given.
+    """
     bounds = union(rects)
     delta = centre - (bounds.top + bounds.bottom) / 2
     return [Rect(r.left, r.top + delta, r.right, r.bottom + delta) for r in rects]
 
 
 class WindowChrome:
+    """The native window's chrome, as far as the page's top bar needs to know it.
+
+    It holds the window state and the page's toolbar layout, measures the native window buttons through a platform
+    host (AppKit or Windows) and publishes the result as ``window.chrome`` events. Without a usable host the
+    page falls back to its own buttons.
+    """
+
     def __init__(self, window, events, *, platform=sys.platform, host=None):
+        """Create the chrome, not yet installed.
+
+        Args:
+            window: The pywebview window.
+            events: The ``EventBus`` that receives ``window.chrome``.
+            platform: A ``sys.platform`` value; it picks the host (macOS and Windows have one).
+            host: A platform host to use instead of the one ``platform`` picks, for tests.
+        """
         self.window, self.events, self.platform, self.host = window, events, platform, host
         self.active = False
         self.reason = "not-installed"
@@ -63,6 +95,7 @@ class WindowChrome:
         self.updates, self.busy_at = deque(), -math.inf
 
     def install(self):
+        """Create and install the platform host and publish the first measure; any failure ends in ``fail``."""
         try:
             if self.host is None:
                 if self.platform == "darwin":
@@ -85,6 +118,11 @@ class WindowChrome:
             self.fail(error)
 
     def fail(self, error):
+        """Give up the native chrome: dispose of the host, publish the reason and leave the page to its own buttons.
+
+        Args:
+            error: What went wrong; its text becomes the published ``reason``.
+        """
         logger.warning("Native window chrome inactive: %s", error, exc_info=True)
         if self.host:
             self.host.dispose()
@@ -94,6 +132,13 @@ class WindowChrome:
         self.publish()
 
     def snapshot(self):
+        """Return what the page gets in a ``window.chrome`` event.
+
+        Returns:
+            ``active``, ``platform``, ``reason`` (why it is not active), ``mode`` (``standard`` on Windows,
+            ``integrated`` elsewhere), the buttons' ``bounds`` (CSS pixels, or None), ``valid``, the window
+            ``state`` (maximized, fullscreen, minimized) and a ``sequence`` number that grows with each event.
+        """
         return {
             "active": self.active,
             "platform": self.platform,
@@ -106,10 +151,12 @@ class WindowChrome:
         }
 
     def publish(self):
+        """Publish the current snapshot as a ``window.chrome`` event."""
         self.sequence += 1
         self.events.publish("window.chrome", self.snapshot())
 
     def refresh(self):
+        """Read the window state and measure the buttons again, then publish; any failure ends in ``fail``."""
         if not self.active:
             return
         try:
@@ -127,6 +174,22 @@ class WindowChrome:
             self.fail(error)
 
     def update(self, centre, height, drag, state=""):
+        """Take the page's toolbar layout and have the host measure again.
+
+        A layout that is rejected leaves the previous one in place.
+
+        Args:
+            centre: The y of the toolbar's centre line in CSS pixels, which the native buttons are aligned to.
+            height: The toolbar's height in CSS pixels, at most 512 and more than ``centre``.
+            drag: The regions of the toolbar that drag the window, up to 64 dicts with ``left``, ``top``,
+                ``right`` and ``bottom`` in CSS pixels, inside the toolbar.
+            state: Why ``drag`` is empty, for the log: ``immersive`` (a full-screen scene), ``waiting`` (chrome
+                the page does not take as valid yet) or empty.
+
+        Raises:
+            ValueError: ``state``, the geometry or a drag region is invalid.
+            TypeError: A drag region has no usable edges.
+        """
         try:
             if state not in LAYOUT_STATES:
                 raise ValueError("Invalid toolbar state")
@@ -171,8 +234,18 @@ class WindowChrome:
             self.host.dispatch(self.refresh)
 
     def motion(self, frames, period):
-        """The top bar's offsets (points up from where the buttons rest), one per period: the window buttons follow it.
-        Only hosts whose buttons sit in the page's toolbar play it."""
+        """Play the top bar's motion on the native window buttons, which follow it.
+
+        Only hosts whose buttons sit in the page's toolbar play it.
+
+        Args:
+            frames: The top bar's offsets in points up from where the buttons rest, one per period; 1 to 120
+                values from 0 to 4096.
+            period: Seconds between two offsets, more than 0 and at most 0.1.
+
+        Raises:
+            ValueError: ``frames`` or ``period`` is invalid.
+        """
         number = lambda v: isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
         if (
             not isinstance(frames, list)
@@ -187,6 +260,11 @@ class WindowChrome:
             self.host.dispatch(lambda: self.host.slide(frames, float(period)))
 
     def command(self, action):
+        """Do a window action with the native button's behaviour.
+
+        Args:
+            action: ``minimize``, ``maximize`` (which restores a maximized window) or ``fullscreen``.
+        """
         if self.active:
             self.host.dispatch(lambda: self.host.command(action))
         elif action == "minimize":
@@ -199,6 +277,14 @@ class WindowChrome:
             self.window.maximize()
 
     def fallback_state(self, key, value):
+        """Take a window state change reported by the window's own events.
+
+        The host is asked for the state when there is one; otherwise ``value`` is recorded.
+
+        Args:
+            key: The state that changed, ``maximized`` or ``minimized``.
+            value: Its new value.
+        """
         if self.active:
             self.host.dispatch(self.refresh)
         elif self.host is not None:
@@ -215,6 +301,7 @@ class WindowChrome:
             self.publish()
 
     def close(self):
+        """Close the window; on macOS through ``performClose:``, which keeps the closing delegate."""
         # Cocoa destroy() skips its delegate. performClose: preserves that delegate.
         if self.platform == "darwin" and getattr(self.window, "native", None) is not None:
             from PyObjCTools import AppHelper
@@ -224,5 +311,6 @@ class WindowChrome:
             self.window.destroy()
 
     def dispose(self):
+        """Dispose of the host."""
         if self.host:
             self.host.dispose()

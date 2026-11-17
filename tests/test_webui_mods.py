@@ -489,7 +489,7 @@ def test_two_installs_of_one_server_are_labelled_by_their_folders(env):
     installs = {i["key"]: i for i in rpc(env.app, "mods.state")["result"]["installs"]}
     assert installs[env.key(blue)]["label"] == "Global (BlueArchive)" and installs[env.key(blue)]["named"] is True
     assert installs[env.key(steam)]["label"] == "Global (Steam)" and installs[env.key(steam)]["named"] is False
-    # Remove from List: a recorded install the settings no longer name, never a named one
+    # Remove from List: a recorded install the settings do not name, never a named one
     assert rpc(env.app, "mods.forget", install=env.key(blue))["error"]["code"] == "bad_params"
     assert env.job("mods.forget", install=env.key(steam)).state == "done"
     assert [i["key"] for i in rpc(env.app, "mods.state")["result"]["installs"]] == [env.key(blue)]
@@ -1320,7 +1320,7 @@ def test_first_add_baselines_existing_mods_before_storing_new_ones(env, monkeypa
     env.s.close(wait=5)
     path = env.data / "webui.json"
     stored = json.loads(path.read_text(encoding="utf-8"))
-    stored.pop("seen_mods")  # simulate an update from before the dots feature
+    stored.pop("seen_mods")  # simulate a saved state without the seen_mods record
     path.write_text(json.dumps(stored), encoding="utf-8")
     env.s, env.app = env.services()
     source = make_mod(env.spr, env.tmp / "picker", payload=b"new mod", fixed=True)

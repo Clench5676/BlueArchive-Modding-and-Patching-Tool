@@ -31,6 +31,7 @@ PORTRAIT_SCALE = (0.25, 1.5, 1)
 
 
 def empty_hall() -> dict:
+    """Return a hall with no entries, in the shape ``prefs.student_hall`` stores."""
     return {
         "revision": 0,
         "mode": "portraits",
@@ -43,7 +44,15 @@ def empty_hall() -> dict:
 
 
 def normalize_hall(value: Any) -> dict:
-    """Canonicalize duplicate resources on read without writing or advancing the stored revision."""
+    """Canonicalize duplicate resources on read without writing or advancing the stored revision.
+
+    Args:
+        value: The stored hall; anything that is not a dict gives an empty hall.
+
+    Returns:
+        A copy that holds each (variant, source) once per group. Of duplicate memorials, the first one kept takes
+        the id of the active one.
+    """
     result = copy.deepcopy(value) if isinstance(value, dict) else empty_hall()
     result.setdefault("portraitScale", PORTRAIT_SCALE[2])
     for group in ("portraits", "memorials"):
@@ -65,7 +74,21 @@ def normalize_hall(value: Any) -> dict:
 
 
 def validate_hall(value: Any) -> dict:
-    """Validate a complete snapshot without silently dropping entries or merging duplicate students."""
+    """Validate a complete hall snapshot without silently dropping entries or merging duplicate students.
+
+    Args:
+        value: The hall as the page sends it: ``mode`` (``portraits`` or ``memorial``), ``background``,
+            ``portraitScale``, and the ``portraits`` and ``memorials`` lists. Each entry has a UUID ``id``, a
+            ``variant`` and a ``source`` (``official`` or ``mod:<id>``); a portrait also has ``mirror``, ``x``,
+            ``y`` and ``scale``, which default to the standard place.
+
+    Returns:
+        The clean hall at revision 0, with ``active`` set to the memorial asked for or else the first one.
+
+    Raises:
+        ServiceError: ``bad_params`` naming the invalid field; ``hall_duplicate_portrait`` or
+            ``hall_duplicate_memorial`` for the same variant and source twice in a group.
+    """
     if not isinstance(value, dict) or value.get("mode") not in ("portraits", "memorial"):
         raise ServiceError("bad_params", key="hall")
     out = empty_hall()
@@ -137,7 +160,22 @@ def validate_hall(value: Any) -> dict:
 
 
 def save_hall(state: Any, value: dict, revision: int) -> dict:
-    """Compare and replace under the UI state's cross-process transaction lock."""
+    """Save a hall if nobody changed it since the caller read it.
+
+    The comparison and the replacement run under the UI state's cross-process transaction lock.
+
+    Args:
+        state: The ``UiState`` that stores the hall.
+        value: The complete hall, as ``validate_hall`` takes it.
+        revision: The revision the caller's hall was read at; it must still be the stored one.
+
+    Returns:
+        A copy of the saved hall, whose revision is one more.
+
+    Raises:
+        ServiceError: ``bad_params`` for an invalid hall or revision; ``hall_conflict`` when the stored revision
+            differs; ``hall_last_portrait`` or ``hall_last_memorial`` when the save would empty a group.
+    """
     clean = validate_hall(value)
     if isinstance(revision, bool) or not isinstance(revision, int) or revision < 0:
         raise ServiceError("bad_params", key="revision")
@@ -159,7 +197,16 @@ def save_hall(state: Any, value: dict, revision: int) -> dict:
 
 
 def portrait_lines(page: dict) -> dict:
-    """Use the game's ordinary Lobby voice clips; memorial dialogue belongs to the scene player."""
+    """Pick the ordinary Lobby voice lines out of a Kivo student page; memorial dialogue belongs to the scene player.
+
+    Args:
+        page: The page's data, whose ``voice`` rows (Japanese) and ``voice_cn`` rows (Chinese captions) hold the
+            clips.
+
+    Returns:
+        Clip id mapped to ``zh-CN`` and ``ja`` captions and the ``audio`` URL. A clip without a caption is left
+        out when a captioned recording of the same numbered line exists.
+    """
     tables = []
     for key in ("voice", "voice_cn"):
         table = {}
@@ -195,11 +242,25 @@ def portrait_lines(page: dict) -> dict:
 
 
 class PortraitVoices(Kivo):
+    """The Kivo client for portrait dialogue: caption lines and voice audio, kept in memory only."""
+
     def __init__(self) -> None:
+        """Create the client with an empty memory cache."""
         super().__init__()
         self.memo = MemoryMemo(64 * 1024 * 1024, 160)
 
     def lines(self, page_id: str) -> dict:
+        """Return the Lobby voice lines of a Kivo student page.
+
+        Args:
+            page_id: The digits of the Kivo page.
+
+        Returns:
+            What ``portrait_lines`` makes of the page.
+
+        Raises:
+            ServiceError: ``lines_unavailable`` for a page id that is not digits or a page that cannot be read.
+        """
         if not page_id or not str(page_id).isdigit():
             raise ServiceError("lines_unavailable")
 
@@ -213,6 +274,19 @@ class PortraitVoices(Kivo):
         return self.memo.get(("lines", page_id), read)
 
     def audio(self, page_id: str, clip: str) -> bytes:
+        """Download a voice clip.
+
+        Args:
+            page_id: The digits of the Kivo page.
+            clip: The clip's id or file name.
+
+        Returns:
+            The audio file's bytes.
+
+        Raises:
+            ServiceError: ``lines_unavailable`` when the page has no such clip on Kivo's audio host or the
+                download fails.
+        """
         row = self.lines(page_id).get(clip_id(clip), {})
         url = row.get("audio", "")
         if not url.startswith(f"https://{AUDIO_HOST}/"):
@@ -231,6 +305,13 @@ class MemoryMemo:
     """Bounded memory-only results with one in-flight producer and short failure backoff per key."""
 
     def __init__(self, byte_limit: int, count_limit: int):
+        """Create an empty memo.
+
+        Args:
+            byte_limit: Total size of the values kept, in bytes; the least recently used go first, and a value
+                larger than this is returned but not kept.
+            count_limit: How many values, and how many failures, are kept.
+        """
         self.byte_limit, self.count_limit = byte_limit, count_limit
         self._lock = threading.RLock()
         self._values: OrderedDict[Any, tuple[Any, int]] = OrderedDict()
@@ -239,6 +320,11 @@ class MemoryMemo:
         self.bytes = 0
 
     def peek(self, key: Any) -> Any:
+        """Return a kept value and mark it as recently used; None when there is none.
+
+        Args:
+            key: The value's key.
+        """
         with self._lock:
             cached = self._values.get(key)
             if cached is None:
@@ -247,6 +333,20 @@ class MemoryMemo:
             return cached[0]
 
     def get(self, key: Any, read: Any) -> Any:
+        """Return the value of a key, producing it with ``read`` when it is not kept.
+
+        Callers that ask for the same key meanwhile wait for the one producer. A failure is remembered for 30
+        seconds and raised again to each caller in that time.
+
+        Args:
+            key: The value's key.
+            read: Called without arguments to produce the value, which is ``bytes`` or JSON-serializable.
+
+        Raises:
+            Exception: Whatever the producer raised, to the caller that ran it.
+            ServiceError: To a caller within 30 seconds of a failure; it carries the producer's error code, or
+                ``lines_unavailable`` when the producer raised something else.
+        """
         with self._lock:
             if key in self._values:
                 self._values.move_to_end(key)
@@ -290,15 +390,27 @@ class LocalPortraitVoices:
     """Ordinary Lobby AudioClips from installed audio bundles, decoded losslessly in memory."""
 
     def __init__(self, services: Any):
+        """Create the source over the installed game.
+
+        Args:
+            services: The Services, whose ``game`` provides the audio bundles.
+        """
         self.services = services
         self.memo = MemoryMemo(64 * 1024 * 1024, 128)
         self._index_key = None
 
     def cached_index(self) -> dict | None:
+        """Return the clip index when it is built for the current game already, without building it; else None."""
         key = self._index_key
         return self.memo.peek(key) if key and key[1] == id(self.services.game) else None
 
     def index(self) -> dict:
+        """Build, or return the kept, index of the Lobby clips in the installed audio bundles.
+
+        Returns:
+            Clip id (such as ``shiroko_lobby_1``) mapped to the bundle, serialized file and object that hold it.
+            The index is rebuilt when the game's audio bundles change.
+        """
         game = self.services.game
         paths = getattr(game, "_paths", lambda: [])()
         paths = [path for path in paths if any(word in path.name.lower() for word in ("audio", "voice", "sound"))]
@@ -325,6 +437,17 @@ class LocalPortraitVoices:
         return value
 
     def audio(self, clip: str) -> bytes:
+        """Decode a Lobby clip from the game's bundles.
+
+        Args:
+            clip: The clip's id.
+
+        Returns:
+            The clip as WAV bytes.
+
+        Raises:
+            AssetNotFound: The game has no such clip or it holds no samples.
+        """
         record = self.index().get(clip)
         if record is None:
             raise AssetNotFound(clip)
@@ -357,7 +480,17 @@ class LocalPortraitVoices:
 
 
 def dialogue_layout(game: Any) -> dict:
-    """The ordinary LobbyCommon ChatDialog balloon, retaining its native sliced sprite and text styling."""
+    """Export the ordinary LobbyCommon ChatDialog balloon, retaining its native sliced sprite and text styling.
+
+    Args:
+        game: The game assets service.
+
+    Returns:
+        The ``DialogPanel/ChatDialog/Talk`` layout of the lobby prefab, placed at the origin.
+
+    Raises:
+        AssetNotFound: The game has no LobbyCommon prefab.
+    """
     hint = "ui-uilobbyelement-_mxload-prefabs-2025-07-02_assets_all_1158600183.bundle"
     path = next((path for path in game._paths() if path.name == hint), None)
     if path is None:
@@ -377,7 +510,16 @@ def dialogue_layout(game: Any) -> dict:
 
 
 def portrait_motion_layout(game: Any, core: str | None) -> dict:
-    """Only authored animation tracks and mixes from the official portrait's SpineClip assets."""
+    """Read the animation tracks and mixes authored in an official portrait's SpineClip assets.
+
+    Args:
+        game: The game assets service.
+        core: The portrait's Spine core, such as a variant's ``spr``; None gives no motion.
+
+    Returns:
+        Animation name mapped to its clip (``track``, ``loop``, ``intro``, ``outro``, ``mode``, ``sync``); empty
+        when the core has no bundles or the game cannot list Spine cores.
+    """
     if not core or not hasattr(game, "spine_cores"):
         return {}
     paths = game.spine_cores("spr").get(core.lower(), [])
@@ -400,7 +542,19 @@ def portrait_motion_layout(game: Any, core: str | None) -> dict:
 
 
 def expression_motion(name: str, clips: dict, seen: frozenset = frozenset()) -> dict | None:
-    """Random idle clips retain their own scheduler; only explicit synchronized clips join the speech pose."""
+    """Describe the clip an expression plays, with the clips it plays along with.
+
+    Random idle clips retain their own scheduler; only explicit synchronized clips join the speech pose.
+
+    Args:
+        name: The animation name of the expression's clip.
+        clips: The clips of ``portrait_motion_layout``.
+        seen: The animations on the way here, which stops a cycle of synchronized clips.
+
+    Returns:
+        ``animation``, ``track``, ``loop``, ``mix`` (the intro), ``outro`` and the ``sync`` motions; None for an
+        unknown clip, one already seen, or a random idle clip.
+    """
     clip = clips.get(name)
     if not clip or name in seen or clip.get("mode") in (2, 3):
         return None
@@ -417,6 +571,17 @@ def expression_motion(name: str, clips: dict, seen: frozenset = frozenset()) -> 
 
 
 def register_api(rpc: Any, s: Any) -> None:
+    """Register the Student Hall RPC methods.
+
+    ``hall.get`` returns the stored hall, which a first call fills with Shiroko when the game has her; ``hall.update``
+    saves it; ``hall.options`` lists what the hall can show (official and mod portraits and lobbies, backgrounds);
+    ``hall.viewed`` records a viewed choice; ``hall.dialogueLayout`` gives the dialogue balloon; ``hall.lines`` and
+    ``hall.voice`` give a portrait's dialogue lines and voice audio.
+
+    Args:
+        rpc: The ``RpcRegistry`` to register on.
+        s: The Services; the game, catalog, library, UI state and global lines are used.
+    """
     voices = PortraitVoices()
     local = LocalPortraitVoices(s)
 

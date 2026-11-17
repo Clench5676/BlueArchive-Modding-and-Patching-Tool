@@ -186,7 +186,7 @@ def test_foreign_platform_mod_is_rebuilt_with_real_unity_payload(setup_library, 
         payload=b"modded",
         references=["com.nexon.bluearchive"],
     )
-    # A library may contain Mods imported for another previously selected installation.
+    # A library may contain Mods imported for another installation than the selected one.
     record = env.library._store({source.name: source}, "foreign", "test", "spr", user_added=True)
     original_bytes = env.original.read_bytes()
     source_bytes = source.read_bytes()

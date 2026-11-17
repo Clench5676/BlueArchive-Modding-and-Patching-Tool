@@ -1,4 +1,4 @@
-"""The plain MeshRenderers of a memorial lobby prefab and the Animators that loop them, for web/js/mesh-fx.js.
+"""Describe lobby prefab MeshRenderers and their looping Animators for web/js/mesh-fx.js.
 
 Besides its skeletons and particle systems a lobby prefab can carry meshes drawn with effect shaders: lens dirt and
 light quads (FX/FX_SHADER_Lobby_Order, One One; DSFX/FX_SHADER_Additive_0) in Akane's, Eimi's, Karin's, Shiroko's,
@@ -9,7 +9,8 @@ Animator: its controller's default state plays one clip, which scales, moves and
 material colours.
 
 A renderer is {"name", "path", "material", "mesh" ("quad" or a lobby.json fx.meshes id), "queue", "sortingLayer",
-"order", "layer" (the sorting layer's id), "z", "anchor", "chain", "static"}: drawn like a particle system with that material, sorted with the systems and the
+"order", "layer" (the sorting layer's id), "z", "anchor", "chain", "static"}: drawn like a particle system with that
+material, sorted with the systems and the
 skeletons' atlas pages, placed by its anchor's bone (as particles.anchor_of) times the transforms in "chain" (each
 {"node", "p", "q", "s"}: local position, rotation quaternion and scale), or by "static" without an anchor (then the
 chain runs from the prefab root). A clip is {"duration", "rate", "loop", "tracks"}, a track one of
@@ -54,15 +55,22 @@ def _trs(t: Mapping[str, Any]) -> dict:
 
 
 def binding_dims(binding: Mapping[str, Any]) -> int:
-    """How many curves a generic binding takes (a Transform's position, scale and Euler 3, its rotation 4, else 1)."""
+    """Count curves in a generic binding: three for position/scale/Euler, four for rotation, otherwise one."""
     if binding.get("typeID") == 4:
         return _TRANSFORM.get(binding.get("attribute"), ("", 1))[1]
     return 1
 
 
 def material_property(attribute: int, names: list[str]) -> tuple[str, int, int] | None:
-    """A material property binding's (property, channel, rgba): the attribute keeps the property name's crc32 in its
-    low 28 bits, the channel (x y z w, r g b a) in bits 28-29 and in bit 30 whether it is a Color's (r g b a)."""
+    """Resolve a packed material-property binding to its name, channel, and color flag.
+
+    Args:
+        attribute: Property CRC32 in bits 0-27, channel in bits 28-29, and Color-versus-Vector flag in bit 30.
+        names: Candidate property names whose truncated CRC32 may match.
+
+    Returns:
+        Property name, channel index, and RGBA flag, or None when no name matches.
+    """
     crc = attribute & 0x0FFFFFFF
     for name in names:
         if zlib.crc32(name.encode()) & 0x0FFFFFFF == crc:
@@ -77,9 +85,18 @@ def clip(
     paths: Mapping[int, int],
     renderer_of: Mapping[int, tuple[int, list[str]]],
 ) -> dict | None:
-    """One Animator clip's tracks (see the module docstring). decoded: model.decode_clip's result; paths: crc32 of a
-    path below the Animator's GameObject ("" for itself) -> node; renderer_of: node -> (renderer index, its material
-    property names). Bindings to other components are left out. None when nothing is left."""
+    """Export Animator transform and material tracks using the module's clip schema.
+
+    Args:
+        decoded: model.decode_clip result with second-based timing and sampled scalar curves.
+        bindings: Generic bindings in their stored curve order; unsupported components are omitted.
+        loop: Whether the controller's clip repeats.
+        paths: CRC32 of paths below the Animator GameObject (empty for itself) mapped to prefab node indices.
+        renderer_of: Node indices mapped to renderer indices and their candidate material property names.
+
+    Returns:
+        Duration, rate, loop flag, and tracks, or None when no supported track remains.
+    """
     tracks, index = [], 0
     for b in bindings:
         dims = binding_dims(b)
@@ -119,10 +136,18 @@ def build(
     data_scale: Callable[[str], float],
     resolve: Callable[[str, int, dict], Any] | None,
 ) -> dict:
-    """The mesh renderers and their Animators' clips of a prefab walk (lobby.read_prefab nodes): {"renderers",
-    "clips", "materials", "textures", "meshes"} (the last three as particles.build's). resolve(kind, owner, pointer)
-    reads a "material", a "mesh" (("quad", None) for the built-in Quad) and an "animator" controller (its default
-    state's clip: {"decoded": model.DecodedClip, "bindings", "loop"})."""
+    """Build mesh renderers and their Animator clips from a lobby prefab walk.
+
+    Args:
+        nodes: lobby.read_prefab nodes in hierarchy order with first components, path IDs, and transforms.
+        skeleton_of_go: Maps a skeleton GameObject path ID to its exported skeleton name, or None.
+        data_scale: Returns Unity units per skeleton unit for each skeleton name.
+        resolve: Reads material, mesh, or animator by owner path ID and pointer; None returns empty collections.
+            Meshes may be ("quad", None); animators carry decoded default-state clips, bindings, and loop flags.
+
+    Returns:
+        Renderers and clips plus materials, textures, and meshes in the particles.build schema.
+    """
     out: dict[str, Any] = {"renderers": [], "clips": [], "materials": {}, "textures": {}, "meshes": {}}
     if resolve is None:
         return out

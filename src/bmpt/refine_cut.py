@@ -20,6 +20,12 @@ from .refine_composite import compose, _distance, _rgba, _sample, _tri_map
 
 @dataclass(frozen=True)
 class CutParameters:
+    """Thresholds and radii of the cut.
+
+    Alphas are 0..1; radii are composite pixels except ``bleed_pad``, in output page texels. The defaults are those
+    of ``r1b_reference``.
+    """
+
     swap_alpha: float = 0.1
     hidden: float = 0.01
     top_hidden: float = 0.9
@@ -52,7 +58,7 @@ class CutParameters:
 
     @classmethod
     def r1b_reference(cls):
-        """The accepted R1b arithmetic, pinned: the defaults equal it.
+        """Return the R1b reference arithmetic, pinned: the defaults equal it.
 
         Overlay alpha feathers through the first five mesh pixels; bleed is a smooth push-pull fill.
         """
@@ -60,13 +66,22 @@ class CutParameters:
 
     @classmethod
     def strict(cls):
-        """A stricter variant, not visually accepted: no overlay alpha in the first five mesh pixels,
-        then a five-pixel feather; bleed copies the nearest edited colour."""
+        """Return a stricter variant, kept for comparison.
+
+        No overlay alpha in the first five mesh pixels, then a five-pixel feather; bleed copies the nearest edited
+        colour.
+        """
         return cls(mesh_inset=5, bleed_mode="nearest")
 
 
 @dataclass
 class Pose:
+    """One pose to cut: its name, its posed geometry (``refine-composite.js``) and its generated target.
+
+    The target is a full frame when ``box`` is None, else a crop placed at ``box`` (left, top, right, bottom) in
+    composite pixels; a pose without a target is only gated.
+    """
+
     name: str
     geometry: dict
     target: Image.Image | None = None
@@ -75,6 +90,12 @@ class Pose:
 
 @dataclass
 class CutResult:
+    """The result of a cut.
+
+    The pages by name (straight RGBA at the page scale), the report, and per page the edited-mesh mask and the mask
+    of texels allowed to change.
+    """
+
     pages: dict[str, Image.Image]
     report: dict
     edited_meshes: dict[str, Image.Image]
@@ -82,12 +103,26 @@ class CutResult:
 
 
 class GateError(ValueError):
+    """The cut's gates failed; ``report`` is the whole cut report."""
+
     def __init__(self, report):
+        """Create the error from a report whose ``failures`` it names."""
         self.report = report
         super().__init__("Cut gates failed: " + ", ".join(report["failures"]))
 
 
 def render_subset(geometry, keep, pages, comp):
+    """Render some attachments in the frame and density of a composite.
+
+    Args:
+        geometry: The pose's geometry.
+        keep: Called with (index, attachment); the attachments it accepts are drawn.
+        pages: The page images by name.
+        comp: The composite whose frame and density are used.
+
+    Returns:
+        (height, width, 4) straight RGBA floats 0..1; zeros when nothing is drawn.
+    """
     g = subset(geometry, keep)
     if not g["attachments"]:
         return np.zeros(comp.image.size[::-1] + (4,), np.float32)
@@ -95,13 +130,22 @@ def render_subset(geometry, keep, pages, comp):
 
 
 def dilate(mask, n):
+    """Grow a boolean mask by ``n`` pixels in every direction (a square neighbourhood)."""
     if n <= 0:
         return mask
     return np.asarray(Image.fromarray(np.uint8(mask) * 255).filter(ImageFilter.MaxFilter(2 * n + 1))) > 0
 
 
 def pushpull(values, valid):
-    """Fill invalid entries smoothly from the valid ones (pyramid push-pull)."""
+    """Fill invalid entries smoothly from the valid ones (pyramid push-pull).
+
+    Args:
+        values: (height, width, channels) floats.
+        valid: (height, width) booleans; the valid entries are kept as they are.
+
+    Returns:
+        The filled values, float32.
+    """
     levels = []
     v = np.where(valid[..., None], values, 0).astype(np.float32)
     w = valid.astype(np.float32)
@@ -137,7 +181,7 @@ def upsample(values, shape):
 
 
 def blur(values, radius):
-    """Separable box blur with edge clamping."""
+    """Separable box blur, ``2 * radius + 1`` pixels wide, with edge clamping."""
     out = values
     for axis in (0, 1):
         pad = [(0, 0)] * out.ndim
@@ -152,6 +196,7 @@ def blur(values, radius):
 
 
 def subset(geometry, keep):
+    """Return the geometry with only the attachments ``keep(index, attachment)`` accepts."""
     return {**geometry, "attachments": [a for i, a in enumerate(geometry["attachments"]) if keep(i, a)]}
 
 
@@ -162,6 +207,7 @@ def at(array, xy):
 
 
 def pixel(xy, size):
+    """Return the (row, column) indices of the pixels holding points ``xy``, clamped to an image of ``size``."""
     return (
         np.clip(np.floor(xy[:, 1]).astype(int), 0, size[1] - 1),
         np.clip(np.floor(xy[:, 0]).astype(int), 0, size[0] - 1),
@@ -169,13 +215,21 @@ def pixel(xy, size):
 
 
 def inside(xy, size):
+    """Whether points ``xy`` lie within the outermost pixel centres of an image of ``size`` (width, height)."""
     return (xy[:, 0] >= 0.5) & (xy[:, 0] <= size[0] - 0.5) & (xy[:, 1] >= 0.5) & (xy[:, 1] <= size[1] - 0.5)
 
 
 def fill_hidden(page, official, xx, yy, edited, hidden):
-    """Hidden texels keep the official drawing, shifted by the layer's smoothed colour change.
+    """Fill hidden texels with the official drawing, shifted by the layer's smoothed colour change.
 
-    ``edited`` are the texels the change is measured on."""
+    Args:
+        page: The page being cut, (height, width, 4) floats; changed in place.
+        official: The official page, the same shape.
+        xx: Column of each of the attachment's texels.
+        yy: Row of each of the attachment's texels.
+        edited: Per texel, whether the change is measured on it.
+        hidden: Per texel, whether it is filled.
+    """
     if not hidden.any():
         return
     if not edited.any():
@@ -199,6 +253,24 @@ def cut_swappable(
     takes the smallest alpha, never below the official one, that reproduces the target over what lies
     beneath. The target's overall colour drift against the head is removed first, so the overlay does
     not end in a step at its mesh boundary.
+
+    Args:
+        geometry: The pose's geometry.
+        comp: The pose's composite, with inverse maps.
+        index: The slot's attachment index in draw order.
+        target: The target colour, (height, width, 3) straight floats in composite space.
+        page: The slot's page being cut, (height, width, 4) floats; changed in place.
+        official: The slot's official page, the same shape.
+        pages_of: Returns the current pages as images, for drawing the slots beneath and above.
+        touched: The page's texels this cut reached; set in place.
+        frozen: The page's texels of masked slots, left unchanged.
+        box: The target crop (left, top, right, bottom) the drift is measured in; None measures 24 pixels around the
+            slot's drawn alpha.
+        density: Not used; accepted for the callers.
+        params: The cut's parameters.
+
+    Returns:
+        The slot's report: texels edited and hidden, the colour drift removed (0-255) and the texels whose alpha rose.
     """
     a = geometry["attachments"][index]
     m = comp.inverse[index]
@@ -284,6 +356,15 @@ def cut_swappable(
 
 
 def transmission(geometry, comp, index, swaps, params):
+    """Return how much of each composite pixel the normal-blend attachments above ``index`` let through, 0..1.
+
+    Args:
+        geometry: The pose's geometry.
+        comp: The pose's composite.
+        index: The attachment's index in draw order.
+        swaps: The swappable slots; theirs count as opaque from alpha ``params.swap_alpha``.
+        params: The cut's parameters.
+    """
     result = np.ones(comp.image.size[::-1], np.float32)
     for k in range(index + 1, len(geometry["attachments"])):
         a, alpha = geometry["attachments"][k], comp.layers[k]["alpha"]
@@ -398,10 +479,23 @@ def _nearest(values, valid):
 
 
 def join_band_gate(rendered, target, bands, reference, *, max_ratio=1.0, bins=20, silhouette_margin=0):
-    """Gradient-distribution-matched interior RMSE, in straight RGB / 255 units.
+    """Compare the error in join bands with the interior error at the same detail level.
 
-    ``silhouette_margin`` (composite px) keeps join bands off the outer silhouette, which has its own
-    gates: where a join band meets thin outline structures it would otherwise measure the outline.
+    The interior's RMSE is taken per gradient bin and weighted by each band's own gradient distribution, so a band
+    of fine lines is held to the error of fine lines elsewhere. Errors are straight RGB in 0-255 units.
+
+    Args:
+        rendered: The cut result, rendered.
+        target: The target image.
+        bands: Join band masks by name.
+        reference: The interior pixels compared with; the bands are taken out of it.
+        max_ratio: The largest band-to-interior RMSE ratio that passes.
+        bins: Gradient bins.
+        silhouette_margin: Composite pixels that keep join bands off the outer silhouette, which has its own gates:
+            where a join band meets thin outline structures it would otherwise measure the outline.
+
+    Returns:
+        Per band its pixels, ``join_rmse``, ``detail_matched_interior_rmse``, ``ratio`` and ``passed``.
     """
     actual, goal = _rgba(rendered), _rgba(target)
     opaque = goal[..., 3] > 0.97
@@ -449,6 +543,19 @@ def join_band_gate(rendered, target, bands, reference, *, max_ratio=1.0, bins=20
 
 
 def check_invariants(pages, baseline, frozen, allowed, edited):
+    """Count the changes per page that the cut must not make.
+
+    Args:
+        pages: The cut pages by name.
+        baseline: The official pages at the page scale, by name.
+        frozen: Per page, the texels of masked slots.
+        allowed: Per page, the texels allowed to change.
+        edited: Per page, the texels of edited meshes.
+
+    Returns:
+        Per page: changed texels, changed masked texels, changes outside the allowed texels, and alpha changes
+        outside the edited meshes.
+    """
     report = {}
     for name, image in pages.items():
         a, b = np.asarray(image), np.asarray(baseline[name])
@@ -523,6 +630,24 @@ def cut(
     see the final lower layers. Repeated identical attachments are solved once.
     Optional atlas metadata constrains bleed to exact packed region rectangles;
     without it, UV bounding boxes constrain bleed. No part names are hard-coded.
+
+    Args:
+        poses: The poses, base first; the base needs a full-frame target.
+        official_pages: The official pages by name, straight alpha.
+        density: The integer page scale; also the composite's density.
+        frame: The composite frame (left, bottom, right, top) in world units; None fits the base pose.
+        atlas: The atlas, to bound bleed by its region rectangles; None bounds it by UV boxes.
+        masked_slots: Slots kept official; slots with another blend than normal, and slots sharing their regions,
+            are masked too.
+        parameters: The thresholds; None uses the defaults.
+        diagnostic: Return a result whose gates failed instead of raising.
+        review_dir: A folder outside the repository for side-by-side review images per pose; None writes none.
+        join_bands: Join band masks by name for the gate, or a function of (pose, composite) giving them; None
+            takes each slot's soft edge over what lies beneath.
+
+    Raises:
+        ValueError: Invalid poses, parameters, pages or targets.
+        GateError: A gate failed and ``diagnostic`` is off.
     """
     p = parameters or CutParameters()
     if type(density) is not int or density < 1:
@@ -762,7 +887,7 @@ def cut(
         if pose.target is None:
             continue
         pg = pose.geometry
-        # Base uses official alpha to define support; expression support follows the final pages, as R1b.
+        # Base uses official alpha to define support; expression support follows the final pages, as in R1b.
         pc = base if n == 0 else _compact(compose(pg, pages_of(), density=density, frame=frame))
         goal = target if n == 0 else _rgba(_target(pose, size, pc.image))[..., :3]
         for j, a in enumerate(pg["attachments"]):
@@ -1015,7 +1140,17 @@ def revealed_texels(
     Counts include potential transparent mesh texels, plus a separate count for
     texels with nonzero official alpha. World/UV sampling avoids false reveals
     when a common root translation changes the composite pixel grid phase.
-    Density/frame are accepted for parity with cut; visibility is frame independent.
+
+    Args:
+        poses: The poses, base first; texels visible in the base are not counted.
+        pages: The official pages by name.
+        density: Accepted for parity with ``cut``; visibility does not depend on it.
+        frame: Accepted for parity with ``cut``; visibility does not depend on it.
+        masked_slots: Slots left out, as for ``cut``; swappable slots are left out too.
+        parameters: The thresholds; None uses the defaults.
+
+    Returns:
+        Per pose its name, per slot the revealed and the drawn revealed texels, and their totals.
     """
     if not poses:
         raise ValueError("At least one pose is required")
@@ -1050,6 +1185,9 @@ def main(argv=None):
     null, box or null]), frame, density, atlas (optional path), masked_slots and
     parameters (optional named overrides). All manifest paths resolve beside it.
     Output pages, mesh masks, allowed masks, report and PNG reviews go outside Git.
+
+    Args:
+        argv: Command-line arguments; None reads ``sys.argv``.
     """
     from .localization import register_locales
 

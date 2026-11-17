@@ -103,7 +103,7 @@ def test_switch_after_a_crc_only_game_update_writes_the_part_with_its_own_crc(up
 
 
 def bad_built_key(env):
-    """The built key an older build kept at an Off after such a write: the part is the mod file's exact bytes."""
+    """The built key kept at an Off after such a write: the part is the mod file's exact bytes."""
     pin = env.library.current_pin()
     sha1 = env.library._hashes.get(env.mod.file).sha1
 
@@ -175,7 +175,7 @@ def test_repair_writes_again_a_game_file_left_without_its_crc(updated, monkeypat
     from bmpt.library import install
 
     env = updated
-    with monkeypatch.context() as old:  # the write of an older build
+    with monkeypatch.context() as old:  # a write without the target-CRC rule
         old.setattr(install, "matches_target_crc", lambda source, target: Bundle.check_crc_match(source))
         old.setattr(env.library, "_check_target_crc", lambda changed: None)  # nor the last CRC check of a write
         env.library.apply("test", f"mod:{env.mod.id}")

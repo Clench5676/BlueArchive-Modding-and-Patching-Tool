@@ -1,8 +1,7 @@
-"""How the library judges game files and entries: pure rules, kept apart from the reads so they can be tested on
-their own (the table-driven tests of the entry states read nothing).
+"""Judge game files and entries with pure rules that can be tested independently of reads.
 
-Terms (docs/webui/library.md, library): an *entry* is one game core of a variant in one install (a portrait or one memorial
-lobby core); what its files *carry* is the library source that wrote them while they are unchanged since, else
+Terms (docs/webui/library.md, library): an *entry* is one game core of a variant in one install (a portrait or one
+memorial lobby core); what its files *carry* is the library source that wrote them while they are unchanged since, else
 official, unknown or damaged; *configured* is the source the user chose for it; *enabled* is the Enable Mods switch.
 """
 
@@ -25,17 +24,22 @@ MODEL_CATEGORIES = {"character", "characters", "npcs"}
 
 
 def supports_kind(kind: str) -> bool:
-    """Whether files of this kind can be stored and switched by the library."""
+    """Return whether files of this kind can be stored and switched by the library."""
     return kind in KINDS
 
 
 def now() -> str:
-    """The current time as the library records it (ISO 8601, UTC)."""
+    """Return the current time as the library records it (ISO 8601, UTC)."""
     return datetime.now(timezone.utc).isoformat()
 
 
 def seconds(value: Any) -> float | None:
-    """A recorded time as seconds since the epoch: an ISO text, or nanoseconds (a file's modification time)."""
+    """Convert a recorded time to seconds since the epoch.
+
+    Args:
+        value: ISO timestamp or numeric file mtime in nanoseconds; None, booleans,
+            and unparseable timestamps yield None.
+    """
     if isinstance(value, bool) or value is None:
         return None
     if isinstance(value, (int, float)):
@@ -47,7 +51,15 @@ def seconds(value: Any) -> float | None:
 
 
 def kind_of(core: str, category: str | None = None) -> str | None:
-    """The kind of a character asset slot, using the bundle category for 3D models."""
+    """Classify a character asset slot, using the bundle category for 3D models.
+
+    Args:
+        core: Bundle core to classify as portrait, lobby, or model.
+        category: Filename category distinguishing model assets; None uses Spine naming alone.
+
+    Returns:
+        The supported character kind, or None if the core is not a character slot.
+    """
     if (
         category
         and category.lower() in MODEL_CATEGORIES
@@ -60,7 +72,7 @@ def kind_of(core: str, category: str | None = None) -> str | None:
 
 
 def kind_of_file(name: str) -> str | None:
-    """Classify a bundle using its category as well as its core."""
+    """Classify a bundle filename by category and core, using other for generic bundles."""
     parsed = parse_filename(name)
     return kind_of(parsed.core, parsed.category) or (
         "other" if name.endswith(".bundle") and parsed.prefix and parsed.crc else None
@@ -75,7 +87,15 @@ _packed: dict[str, str] = {}
 
 
 def learn_packed(name: str, cab: str) -> bool:
-    """Remember the CAB of a bundle of a group packed one asset per bundle; True when it was not known."""
+    """Remember the CAB identifying a slot packed one asset per bundle.
+
+    Args:
+        name: Bundle filename, optionally ending in .backup; matched case-insensitively.
+        cab: Serialized-file CAB used to distinguish bundles sharing a filename prefix.
+
+    Returns:
+        Whether the remembered CAB changed.
+    """
     key, cab = name.removesuffix(".backup").lower(), cab.lower()
     with _packed_lock:
         if _packed.get(key) == cab:
@@ -85,14 +105,21 @@ def learn_packed(name: str, cab: str) -> bool:
 
 
 def packed_cab(name: str) -> str | None:
-    """The learned CAB of a bundle of a group packed one asset per bundle, else None."""
+    """Return a bundle filename's learned CAB, ignoring case and .backup, or None if unknown."""
     with _packed_lock:
         return _packed.get(name.removesuffix(".backup").lower())
 
 
 def core_of(name: str) -> str:
-    """The character core, or a generic file slot keyed by prefix and resource type, without date or CRC; for a bundle
-    of a group packed one asset per bundle whose CAB is learned (``learn_packed``), by that CAB as well."""
+    """Find a filename's character core or stable generic slot key.
+
+    Generic slots use prefix and resource type, plus a learned CAB for groups packed
+    one asset per bundle. Dates and CRCs do not distinguish slots, except Collection
+    batch dates, which identify coexisting portraits.
+
+    Args:
+        name: Bundle filename to resolve to its lower-case core or hashed other slot.
+    """
     if kind_of_file(name) == "other":
         cab = packed_cab(name)
         part = part_of(name) if cab is None else (*part_of(name), cab)
@@ -101,13 +128,17 @@ def core_of(name: str) -> str:
 
 
 def other_target(names: Iterable[str]) -> str:
-    """A bundle set's address; its individual target slots remain independently configurable."""
+    """Address a bundle set while leaving its individual slots independently configurable.
+
+    Args:
+        names: Bundle filenames whose unique slot keys form the set's stable address.
+    """
     slots = sorted({core_of(name) for name in names})
     return "other-set:" + hashlib.sha256("\0".join(slots).encode()).hexdigest()
 
 
 def part_of(name: str) -> tuple[str, str | None]:
-    """Which part of its core a bundle file is, whatever its date and CRC: its prefix and resource type."""
+    """Identify a filename's part by prefix and resource type, retaining Collection batch dates."""
     parsed = parse_filename(name)
     # Collection batches coexist across dates; a later batch does not replace an earlier batch's portraits.
     if name.lower().startswith("uis-01_common-14_charactercollect-"):
@@ -116,20 +147,27 @@ def part_of(name: str) -> tuple[str, str | None]:
 
 
 def date_of(name: str) -> str:
+    """Return the game-data date encoded in a bundle filename."""
     return parse_filename(name).date
 
 
 def mod_versions(entries: Sequence[tuple[Hashable, str]], installed: Iterable[str] = ()) -> list[str]:
-    """The version of its set each bundle name belongs to, in the order given: the one rule that groups the files of
-    an import into mods, shared by the batch import and Add.
+    """Group imported bundle sets into mod versions using the rule shared by Add and batch import.
 
     A set is what one import takes for one mod: the files of one core and kind, or of one model slot across its cores
     (the batch import also separates folders and variants), named by its key. Its files are the parts of one mod
-    whatever their dates, because some
-    cores keep their parts under different dates (a Spine core's textures and text, a model's prefab and
+    whatever their dates, because some cores keep their parts under different dates
+    (a Spine core's textures and text, a model's prefab and
     dependencies). Only a set in which one part (``part_of``) occurs under more than one date holds several versions
-    of the mod: the whole set then goes by date. Returns "" for every file of a set that is one mod, else the
-    file's date. Dates kept side by side for that part in the install are one version."""
+    of the mod: the whole set then goes by date. Dates kept side by side for that part in the install are one version.
+
+    Args:
+        entries: Pairs of grouping key and bundle filename, in the import's order.
+        installed: Live bundle names whose coexisting dates should count as one version.
+
+    Returns:
+        One version label per entry: empty for an unversioned set, otherwise its file's date.
+    """
     live: dict[tuple[str, str | None], set[str]] = {}
     for name in installed:
         live.setdefault(part_of(name), set()).add(date_of(name))
@@ -141,8 +179,12 @@ def mod_versions(entries: Sequence[tuple[Hashable, str]], installed: Iterable[st
 
 
 def install_root(folder: Path) -> Path:
-    """The install root of a game folder setting, resolved: a setting that names a resource folder (one of the
-    subfolders the search looks in, searching.SEARCH_DIR_SUFFIXES) maps to the folder it is in."""
+    """Resolve a game-folder setting to its install root.
+
+    Args:
+        folder: Install or resource directory; a recognized SEARCH_DIR_SUFFIXES suffix
+            is removed from the resolved path.
+    """
     folder = Path(folder).resolve()
     for suffix in sorted(filter(None, SEARCH_DIR_SUFFIXES), key=len, reverse=True):
         parts = tuple(part.lower() for part in Path(suffix).parts)
@@ -152,13 +194,19 @@ def install_root(folder: Path) -> Path:
 
 
 def install_key(root: Path) -> str:
-    """The key everything per install is stored under: its root, case-folded on Windows."""
+    """Return the install root's storage key, case-folded on Windows."""
     return os.path.normcase(str(root))
 
 
 def distinguishing_folders(roots: dict[str, Path]) -> dict[str, str]:
-    """For installs of one server: the shortest trailing part of each root's path that tells it from the others, the
-    folder name first ({key: "BlueArchive"}, or "Steam/BlueArchive" when the names are the same)."""
+    """Choose the shortest distinct trailing path for each install of a server.
+
+    Args:
+        roots: Install roots indexed by install key, all belonging to the same server.
+
+    Returns:
+        Labels by install key, such as BlueArchive or Steam/BlueArchive when folder names coincide.
+    """
     out = {}
     for key, root in roots.items():
         parts = root.parts
@@ -173,7 +221,11 @@ def distinguishing_folders(roots: dict[str, Path]) -> dict[str, str]:
 
 
 def says_official(record: dict | None) -> bool:
-    """Whether a record says the library wrote official bytes: its flag, else (an older build's record) its source."""
+    """Read a write record's official flag, falling back to its source when the flag is absent.
+
+    Args:
+        record: Recorded write, or None when no write is known.
+    """
     if not record:
         return False
     flag = record.get("official")
@@ -181,8 +233,16 @@ def says_official(record: dict | None) -> bool:
 
 
 def crc_state(crc: int, trailing: int | None, name: str) -> str:
-    """The CRC state of bytes against the CRC in a target's name: ok (matches, no trailing bytes), fixed (matches
-    with trailing bytes, the CRC fix), else needs_fix."""
+    """Judge file bytes against the CRC encoded in a target filename.
+
+    Args:
+        crc: CRC32 of the entire file, including any fixing suffix.
+        trailing: Bytes beyond the bundle's declared size, or None when the header is unreadable.
+        name: Target filename containing the expected CRC.
+
+    Returns:
+        ok for a match without trailing bytes, fixed for a match with a suffix, else needs_fix.
+    """
     parsed = parse_filename(name)
     matches = bool(parsed.crc) and crc == int(parsed.crc)
     if matches and trailing == 0:
@@ -191,10 +251,19 @@ def crc_state(crc: int, trailing: int | None, name: str) -> str:
 
 
 def carried_of(parts: Iterable[tuple[str, bool]]) -> str:
-    """What an entry's files carry, from its non-official parts only ((carried, official) per part): "official" when
-    there are none, their one source, else "unknown" (several sources, or any part unknown). A mod replaces its kind
-    as a unit and the library records every part, the ones it left official included: after a repair puts back the
-    one modded part, the others still match their records, and the entry must not look modded."""
+    """Determine an entry's source from its non-official parts.
+
+    A mod replaces its kind as a unit, recording even parts left official. Restoring
+    the only modded part must make the entry official even though other parts still
+    match their recorded mod-source writes.
+
+    Args:
+        parts: Pairs of carried source and official-byte flag for every part of the entry.
+
+    Returns:
+        official when all parts are official, the sole non-official source, or unknown
+        for mixed or unknown sources.
+    """
     sources = {carried for carried, official in parts if not official}
     if not sources:
         return "official"
@@ -219,12 +288,29 @@ def classify(
     since: float | None = None,
     toggled: float | None = None,
 ) -> tuple[str, str | None]:
-    """The state of an entry, first match wins, and the source a take-over configures (else None).
+    """Classify an entry by the first matching state rule.
 
-    ``carried`` is what the non-official parts carry ("official" when there are none, "unknown" when they carry
-    several sources or any part is unknown, "removed" for a mod the user removed). ``written`` is the latest write
-    time of the parts carrying it, ``since`` when the configuration was set and ``toggled`` the switch's last change.
-    A take-over ("takeover") is classified again by the caller with the new configuration."""
+    A takeover is classified again by the caller with the returned source configured.
+
+    Args:
+        enabled: Enable Mods intent for the install.
+        configured: Chosen library source, or None for official files.
+        carried: Source of non-official parts, official if none, unknown if mixed,
+            or removed for a deleted mod.
+        files: Whether any target files exist for the configured slot.
+        damaged: Whether the entry contains unreadable bundle data.
+        configured_exists: Whether the chosen source is available.
+        carried_exists: Whether the source identified in the game files is available.
+        drifted_present: Whether a changed target part is still present in the install.
+        drifted_gone: Whether a changed target part is absent from the install.
+        marker: Whether a recorded update marks the entry as rebuilt.
+        written: Latest source write time in epoch seconds, or None when unknown.
+        since: Configuration choice time in epoch seconds, or None when unknown.
+        toggled: Last switch change in epoch seconds, or None when unknown.
+
+    Returns:
+        State and source to configure for a takeover; the second value is None otherwise.
+    """
     if damaged:
         return "damaged", None
     if configured and not files:
@@ -251,8 +337,12 @@ def classify(
 
 
 def leaves(state: str, enabled: bool) -> bool:
-    """The leaving rule of the switch's unfinished list: whether an entry in this state needs nothing more from a
-    toggle or Retry under the current intent."""
+    """Decide whether an entry can leave the switch's unfinished list.
+
+    Args:
+        state: Classified entry state after a toggle or Retry.
+        enabled: Current switch intent; enabling leaves outside changes untouched.
+    """
     if state in ("ok", "missing", "damaged", "source_missing"):
         return True
     # an On never writes over an outside change; while mods are off the next Off or Retry adopts it

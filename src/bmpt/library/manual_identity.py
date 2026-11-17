@@ -14,6 +14,16 @@ def validate(files: dict[str, Path], kind: str | None = None) -> str:
     """Require readable bundles and complete parts; unknown platforms remain storage-only.
 
     Known platform evidence must be supported and consistent. No choice made here authorizes installation.
+
+    Args:
+        files: Uploaded paths indexed by safe bundle basename, forming one complete mod.
+        kind: Required library kind, or None to infer it from filenames and character content.
+
+    Returns:
+        The single inferred portrait, lobby, or model kind.
+
+    Raises:
+        ServiceError: Files are unsupported, unreadable, ambiguous, incomplete, or inconsistent in platform.
     """
     refused = next((name for name in files if Path(name).name != name or not name.endswith(".bundle")), None)
     if not files:

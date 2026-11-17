@@ -27,8 +27,11 @@ AUDIO_CACHE = 48  # clips kept in memory
 
 
 def clip_id(name: str) -> str:
-    """Normalise a voice clip or Spine event name: ``Images/sound/Hoshino_MemorialLobby_3_1.ogg`` ->
-    ``hoshino_memoriallobby_3_1``."""
+    """Normalise a voice clip or Spine event name to the key its line is stored under.
+
+    The key is lower case, without folder, audio extension or ``_new`` suffix:
+    ``Images/sound/Hoshino_MemorialLobby_3_1.ogg`` -> ``hoshino_memoriallobby_3_1``.
+    """
     name = name.lower().replace("\\", "/").rsplit("/", 1)[-1]
     name = re.sub(r"\.(ogg|wav|mp3)$", "", name)
     return re.sub(r"_new$", "", name)
@@ -43,11 +46,18 @@ def _one_line(text: str | None) -> str:
 
 
 def lobby_lines(page: dict[str, Any]) -> dict[str, dict[str, str]]:
-    """``{clip id: {"zh-CN", "ja", "audio"}}`` for the memorial lobby clips of a Kivo student page.
+    """Collect the memorial lobby lines of a Kivo student page.
 
-    zh-CN is the CN server's text when Kivo has it, else Kivo's translation; ja is the original line; audio is the
-    Japanese voice (the one the Global and Japanese clients play). Thai text comes
-    from the Global table; Kivo supplies no Thai dialogue fallback."""
+    Thai text comes from the Global table; Kivo supplies no Thai dialogue fallback.
+
+    Args:
+        page: The student page's data from Kivo's API (its ``voice`` and ``voice_cn`` lists).
+
+    Returns:
+        ``{clip id: {"zh-CN", "ja", "audio"}}``. zh-CN is the CN server's text when Kivo has it, else Kivo's
+        translation; ja is the original line; audio is the URL of the Japanese voice (the one the Global and Japanese
+        clients play), or empty.
+    """
 
     def by_clip(entries: list[dict]) -> dict[str, dict]:
         # several entries can share a clip id ("<clip>_new" re-recordings with empty text): keep the one with text
@@ -80,6 +90,7 @@ class Kivo:
     """Kivo student pages and voice clips, fetched once per session and kept in memory."""
 
     def __init__(self) -> None:
+        """Start with nothing fetched."""
         self._lock = threading.Lock()
         self._pages: dict[str, dict[str, dict[str, str]]] = {}
         self._audio: OrderedDict[str, bytes] = OrderedDict()
@@ -90,6 +101,18 @@ class Kivo:
             return res.read()
 
     def lines(self, page_id: str) -> dict[str, dict[str, str]]:
+        """Return the memorial lobby lines of a student page, fetched once per session.
+
+        Args:
+            page_id: Kivo's numeric student page id.
+
+        Returns:
+            The lines as ``lobby_lines`` gives them.
+
+        Raises:
+            ServiceError: ``lines_unavailable`` for an id that is not a number, or a page that could not be fetched
+                or parsed.
+        """
         if not page_id or not str(page_id).isdigit():
             raise ServiceError("lines_unavailable")
         with self._lock:
@@ -107,7 +130,21 @@ class Kivo:
         return lines
 
     def audio(self, page_id: str, clip: str) -> bytes:
-        """A voice clip of a page read with ``lines`` first (only Kivo's own voice host is contacted)."""
+        """Return the audio of a memorial lobby voice clip, kept in memory for the last ``AUDIO_CACHE`` clips.
+
+        Only Kivo's own voice host is contacted.
+
+        Args:
+            page_id: Kivo's numeric student page id; its lines are read first.
+            clip: The clip or Spine event name, in any form ``clip_id`` accepts.
+
+        Returns:
+            The clip's audio file as fetched.
+
+        Raises:
+            KeyError: The page has no such clip, or its audio is not on Kivo's voice host.
+            ServiceError: ``lines_unavailable`` when the page or the clip could not be fetched.
+        """
         line = self.lines(page_id).get(clip_id(clip))
         url = (line or {}).get("audio", "")
         if not url.startswith(f"https://{AUDIO_HOST}/"):

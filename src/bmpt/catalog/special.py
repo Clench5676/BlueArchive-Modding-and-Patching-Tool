@@ -13,6 +13,7 @@ PEOPLE = {"arona": "arona", "plana": "np0035", "aoi": "np0032"}
 
 @lru_cache(maxsize=1)
 def words() -> dict[str, dict[str, str]]:
+    """Load and cache translated person and role labels for special Spine slots."""
     folder = Path(__file__).parents[1] / "locales"
     return {
         lang: json.loads((folder / f"{locale}.json").read_text(encoding="utf-8"))["webui"]["special"]
@@ -21,7 +22,16 @@ def words() -> dict[str, dict[str, str]]:
 
 
 def describe(core: str, entries: dict, students: dict) -> tuple[str, dict, dict]:
-    """Use the character map for known people; preserve unknown slot names verbatim."""
+    """Name a special slot using known people while preserving unknown slot names verbatim.
+
+    Args:
+        core: Original Spine core spelling, retained when its role tokens cannot be translated.
+        entries: Variant metadata indexed by file ID, including core aliases and student IDs.
+        students: Student metadata indexed by ID, supplying family keys and localized base names.
+
+    Returns:
+        Family key, localized base names, and localized full and short slot labels.
+    """
     lower = core.lower()
     person = next((name for name in PEOPLE if lower == name or lower.startswith(name + "_")), None)
     prefix = person

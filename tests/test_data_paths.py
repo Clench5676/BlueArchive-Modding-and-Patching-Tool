@@ -314,7 +314,7 @@ def test_busy_external_library_does_not_block_start_and_is_retried(folders, tmp_
 
     @contextmanager
     def bounded_lock(path, *, timeout=None):
-        # Reject an unbounded call before it can hang this regression test.
+        # Reject an unbounded call before it can hang this test.
         assert timeout is not None and 0 <= timeout <= 0.5
         attempted.append(path)
         with filelock.file_lock(path, timeout=timeout):

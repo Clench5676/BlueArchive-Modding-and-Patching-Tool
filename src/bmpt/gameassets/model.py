@@ -98,7 +98,7 @@ SHADER_KINDS = (
 
 
 def shader_kind(shader: str | None) -> str:
-    """The shading model of a shader name ("general", MX/C-General/Single's, for anything unknown)."""
+    """Return a shader name's shading model, defaulting to MX/C-General/Single's "general"."""
     for prefix, kind in SHADER_KINDS:
         if shader and shader.startswith(prefix):
             return kind
@@ -110,8 +110,7 @@ CUT_IN = re.compile(r"cut_?in", re.IGNORECASE)
 
 
 def ex_only_renderers(renderers: Iterable[tuple[int, str, list[tuple[str, int]]]]) -> set[int]:
-    """The renderers of a prefab the game shows only in an EX skill, out of (node, hierarchy path, [(shading kind,
-    index count) per submesh]) of the renderers the prefab enables.
+    """Identify enabled prefab renderers that the game shows only during an EX skill.
 
     - Cut-in bodies: a second body with a face for the skill's cut-in (``CH0123_CutIn_Body``), beside the body that is
       not one. Cut-in props (a chair) stay: the clips scale them away like any prop.
@@ -119,6 +118,9 @@ def ex_only_renderers(renderers: Iterable[tuple[int, str, list[tuple[str, int]]]
       without eyes, beside one with them. The prefab enables them all, and the gag face lies in front of the eyes, so
       drawn together it hides them; the skill's timeline switches the faces (Kasumi's turns her face with eyes off),
       and where a clip does it, every clip turns the face without eyes off (Miyu, Kaede, Tsukuyo).
+
+    Args:
+        renderers: Enabled renderers as (node, hierarchy path, submesh shading-kind/index-count pairs).
     """
     renderers = list(renderers)
     with_face = {node for node, _, parts in renderers if any(kind == "face" for kind, _ in parts)}
@@ -141,12 +143,17 @@ _ARRAY = 34962
 _INDICES = 34963
 
 
-# --- UnityPy 1.23 fixes -------------------------------------------------------------------------------------------
-
-
 def safe_unpack_floats(packed: Any, start: int = 0, count: int | None = None, shape: tuple | None = None) -> list:
-    """``unpack_floats`` that accepts ``m_BitSize == 0``: every value then equals ``m_Start`` (UnityPy divides by
-    ``(1 << 0) - 1`` there)."""
+    """Unpack packed floats while treating zero-bit values as the constant m_Start.
+
+    The engine unpacker divides by (1 << 0) - 1 for a zero-bit stream.
+
+    Args:
+        packed: PackedFloatVector with item count, bit width, range, and starting value.
+        start: First packed item to decode.
+        count: Number of items to decode; None reads from start to the declared end.
+        shape: Optional dimensions passed to the unpacker's reshape operation.
+    """
     if not packed.m_BitSize:
         n = (packed.m_NumItems - start) if count is None else count
         return reshape([float(packed.m_Start)] * n, shape)
@@ -160,11 +167,16 @@ MeshHelper.unpack_floats = safe_unpack_floats
 def compressed_skin(
     weights: list[int], bones: list[int], vertex_count: int
 ) -> tuple[list[list[float]], list[list[int]]]:
-    """Per-vertex weights and bone indices of a compressed mesh, summed as integers.
+    """Decode compressed per-vertex weights and bone indices with integer weight sums.
 
     Weights are 5-bit (a vertex's weights add up to 31). After three weights that fall short, the fourth is implied
     (31 - sum) and only its bone index is stored. UnityPy sums the weights as floats, where 1/31 + 25/31 + 5/31 < 1,
     reads a phantom fourth weight and shifts every later vertex.
+
+    Args:
+        weights: Unpacked 5-bit weights, omitting an implied fourth influence after three incomplete weights.
+        bones: Unpacked bone indices, including the implied fourth influence's index.
+        vertex_count: Number of four-influence rows to produce, padding absent data with zeros.
     """
     w_rows = [[0, 0, 0, 0] for _ in range(vertex_count)]
     j_rows = [[0, 0, 0, 0] for _ in range(vertex_count)]
@@ -202,8 +214,14 @@ _CHANNEL_ATTRS = {
 
 
 def fix_vertex_formats(mesh: Any, handler: Any) -> None:
-    """Scale normalised integer vertex channels to floats; UnityPy returns them raw (UNorm8 colours as 0..255,
-    which drew giant outline hulls, since the outline width is in the colour alpha)."""
+    """Scale normalized integer vertex channels to floats in a processed mesh handler.
+
+    Raw UNorm8 colors span 0..255; outline width uses alpha and requires normalized values.
+
+    Args:
+        mesh: Unity Mesh supplying the vertex channel formats.
+        handler: Processed MeshHandler whose decoded channel attributes are corrected in place.
+    """
     data = mesh.m_VertexData
     if data is None or not data.m_Channels or tuple(getattr(handler, "version", (2019,)))[0] < 2019:
         return
@@ -217,8 +235,19 @@ def fix_vertex_formats(mesh: Any, handler: Any) -> None:
 
 
 def pad_skin(joints: list | None, weights: list | None, count: int) -> tuple[list | None, list | None]:
-    """Four joints and normalised weights per vertex. Rigid props have one BlendIndices component and no
-    BlendWeight channel: that is weight 1 on the one bone."""
+    """Pad joint rows to four influences and normalize vertex weights.
+
+    Rigid props have one BlendIndices component and no BlendWeight channel: that is
+    weight 1 on the one bone.
+
+    Args:
+        joints: Per-vertex bone-index rows; None or an empty list means no skin.
+        weights: Per-vertex influence weights; None or empty assigns weight one to the first joint.
+        count: Vertex count used to create rigid-prop weight rows when weights are absent.
+
+    Returns:
+        Four-component joint/weight rows, or (None, None) for an unskinned mesh.
+    """
     if not joints:
         return None, None
     joints = [tuple(int(x) for x in j) + (0,) * (4 - len(j)) for j in joints]
@@ -234,6 +263,8 @@ def pad_skin(joints: list | None, weights: list | None, count: int) -> tuple[lis
 
 @dataclass
 class MeshData:
+    """Hold decoded vertex attributes and baseVertex-adjusted triangles per submesh."""
+
     vertices: list
     normals: list | None
     uv0: list | None
@@ -246,7 +277,7 @@ class MeshData:
 
 
 def read_mesh(mesh: Any) -> MeshData:
-    """Decode a Unity Mesh object with the fixes above; triangles per submesh, baseVertex applied."""
+    """Decode a Unity Mesh with normalized channels, corrected compressed skin, and baseVertex-adjusted triangles."""
     cm = mesh.m_CompressedMesh
     packed_skin = bool(cm and cm.m_Weights.m_NumItems)
     if packed_skin:
@@ -286,28 +317,32 @@ def read_mesh(mesh: Any) -> MeshData:
 
 
 def mpos(v: Iterable[float]) -> tuple[float, float, float]:
+    """Mirror a three-component Unity position on X for glTF."""
     x, y, z = v
     return (-x, y, z)
 
 
 def mquat(q: Iterable[float]) -> tuple[float, float, float, float]:
+    """Mirror an (x, y, z, w) Unity quaternion on X for glTF."""
     x, y, z, w = q
     return (x, -y, -z, w)
 
 
 def mirror_matrix(e: Mapping[str, float]) -> list[float]:
-    """A Unity Matrix4x4 typetree (e<row><col>) as the mirrored S*M*S, column-major for glTF."""
+    """Convert an e<row><col> Unity Matrix4x4 typetree to X-mirrored S*M*S in glTF column order."""
     s = (-1, 1, 1, 1)
     return [e[f"e{r}{c}"] * s[r] * s[c] for c in range(4) for r in range(4)]
 
 
 def quat_norm(q: Iterable[float]) -> tuple[float, ...]:
+    """Normalize quaternion components, leaving a zero quaternion unchanged."""
     q = tuple(q)
     n = math.sqrt(sum(x * x for x in q)) or 1.0
     return tuple(x / n for x in q)
 
 
 def qmul(a: tuple, b: tuple) -> tuple[float, float, float, float]:
+    """Multiply (x, y, z, w) quaternions in a * b order."""
     ax, ay, az, aw = a
     bx, by, bz, bw = b
     return (
@@ -326,7 +361,14 @@ UNITY_ORDER = 4
 
 
 def euler_to_quat(e: Iterable[float], order: int = UNITY_ORDER) -> tuple[float, float, float, float]:
-    """Unity Euler degrees in a rotation order; Unity's own (ZXY) applies Z, then X, then Y: q = qy * qx * qz."""
+    """Convert Unity Euler degrees to an (x, y, z, w) quaternion.
+
+    Unity's ZXY order applies Z, then X, then Y: q = qy * qx * qz.
+
+    Args:
+        e: X, Y, and Z Euler angles in degrees.
+        order: Unity rotation-order code from ROTATION_ORDERS; unknown codes use ZXY.
+    """
     x, y, z = (math.radians(a) / 2 for a in e)
     axes = {
         "X": (math.sin(x), 0, 0, math.cos(x)),
@@ -343,17 +385,20 @@ def euler_to_quat(e: Iterable[float], order: int = UNITY_ORDER) -> tuple[float, 
 
 
 def binding_dims(binding: Mapping[str, int]) -> int:
-    """How many curves a generic binding takes: Transform (typeID 4) position, scale and Euler 3, rotation 4."""
+    """Count generic-binding curves: three for Transform position/scale/Euler, four for rotation, otherwise one."""
     if binding["typeID"] == 4:
         return 4 if binding["attribute"] == 2 else 3 if binding["attribute"] in (1, 3, 4) else 1
     return 1
 
 
 def read_streamed(words: list[int]) -> list[tuple[float, list[tuple[int, float, float, float, float]]]]:
-    """The frames of a streamed clip: [(time, [(curve, c0, c1, c2, c3), ...])].
+    """Read streamed clip frames as (time, curve/cubic-coefficient tuples).
 
     Each key stores the cubic of the segment that starts at it, value(t) = ((c0*dt + c1)*dt + c2)*dt + c3. The first
     frame is a slope helper at -inf, the last one sits at +inf.
+
+    Args:
+        words: Serialized StreamedClip.data as unsigned 32-bit words in little-endian order.
     """
     data = struct.pack(f"<{len(words)}I", *words)
     frames, pos = [], 0
@@ -368,14 +413,22 @@ def read_streamed(words: list[int]) -> list[tuple[float, list[tuple[int, float, 
 
 @dataclass
 class DecodedClip:
+    """Hold clip duration and sample times in seconds, with scalar curves by storage index."""
+
     duration: float
     times: list[float]
     curves: dict[int, list[float]]  # curve index -> one value per time, or a single value (constant)
 
 
 def decode_clip(tt: Mapping[str, Any]) -> DecodedClip:
-    """Sample a clip typetree on a uniform grid at its sample rate. Curve index space: streamed, then dense, then
-    constant curves."""
+    """Sample a clip on its uniform sample-rate grid, indexing streamed, dense, then constant curves.
+
+    Args:
+        tt: AnimationClip typetree with muscle timing and curve storage; a missing sample rate uses 30 Hz.
+
+    Returns:
+        Duration and times in seconds, with sampled curves and single-value constants.
+    """
     muscle = tt["m_MuscleClip"]
     clip = muscle["m_Clip"]["data"]
     start, stop = muscle["m_StartTime"], muscle["m_StopTime"]
@@ -417,8 +470,16 @@ def decode_clip(tt: Mapping[str, Any]) -> DecodedClip:
 def bind_tracks(
     bindings: list[Mapping[str, int]], curves: Mapping[int, list[float]], nodes: Mapping[int, int]
 ) -> dict[int, dict[int, list[list[float]]]]:
-    """Transform curves by node and attribute (1 position, 2 rotation, 3 scale, 4 Euler), one component list each.
-    ``nodes`` maps crc32 of a hierarchy path to its node; bindings to other paths or types only advance the index."""
+    """Group Transform curves by node and attribute, retaining one list per component.
+
+    Attributes are 1 position, 2 rotation, 3 scale, and 4 Euler. Other types or paths
+    advance the storage index without producing a track.
+
+    Args:
+        bindings: Generic bindings in curve-storage order.
+        curves: Decoded scalar samples indexed across streamed, dense, and constant storage.
+        nodes: Hierarchy-path CRC32 values mapped to destination node indices.
+    """
     out: dict[int, dict[int, list[list[float]]]] = {}
     index = 0
     for binding in bindings:
@@ -432,7 +493,12 @@ def bind_tracks(
 
 
 def euler_orders(bindings: list[Mapping[str, int]], nodes: Mapping[int, int]) -> dict[int, int]:
-    """The rotation order (:data:`ROTATION_ORDERS`) of each node a clip rotates with Euler curves."""
+    """Find each Euler-animated node's Unity rotation-order code.
+
+    Args:
+        bindings: Generic bindings carrying customType rotation orders from ROTATION_ORDERS.
+        nodes: Hierarchy-path CRC32 values mapped to destination node indices.
+    """
     return {
         nodes[b["path"]]: b.get("customType", UNITY_ORDER)
         for b in bindings
@@ -449,8 +515,16 @@ TOGGLE_ATTRIBUTES = {"renderer": zlib.crc32(b"m_Enabled"), "active": zlib.crc32(
 def bind_toggles(
     bindings: list[Mapping[str, int]], curves: Mapping[int, list[float]], nodes: Mapping[int, int]
 ) -> list[tuple[int, str, list[float]]]:
-    """(node, "renderer" | "active", values) of the renderer and GameObject switches a clip animates, in the same
-    curve index walk as :func:`bind_tracks`."""
+    """Bind renderer and GameObject switch curves using the same index walk as bind_tracks.
+
+    Args:
+        bindings: Generic bindings in curve-storage order; object-reference curves are omitted.
+        curves: Decoded scalar samples indexed across streamed, dense, and constant storage.
+        nodes: Hierarchy-path CRC32 values mapped to destination node indices.
+
+    Returns:
+        (Node, "renderer" or "active", values) tuples for supported switches.
+    """
     out, index = [], 0
     for binding in bindings:
         kind = TOGGLE_TYPES.get(binding["typeID"])
@@ -467,7 +541,13 @@ def bind_toggles(
 
 
 def toggle_keys(values: list[float], times: list[float], start: float = 0.0) -> list[list[float]]:
-    """A switch curve as change points [[time, 0 | 1], ...] from the clip start (on at 0.5 and above)."""
+    """Reduce a switch curve to change points, treating values at least 0.5 as on.
+
+    Args:
+        values: Sampled switch values, or one constant value.
+        times: Clip sample times in seconds, aligned with nonconstant values.
+        start: Clip start time in seconds, subtracted from output times; constants start at zero.
+    """
     keys: list[list[float]] = []
     for i, value in enumerate(values):
         state = 1 if value >= 0.5 else 0
@@ -480,8 +560,16 @@ def toggle_keys(values: list[float], times: list[float], start: float = 0.0) -> 
 def track_values(
     attribute: int, parts: list[list[float]], order: int = UNITY_ORDER
 ) -> tuple[str, list[tuple[float, ...]]]:
-    """A glTF channel path and its values (mirrored; rotations normalised and kept continuous; Euler curves in their
-    rotation order)."""
+    """Convert component curves to mirrored glTF tracks with continuous normalized rotations.
+
+    Args:
+        attribute: Unity Transform attribute: 1 position, 2 quaternion, 3 scale, or 4 Euler degrees.
+        parts: One sample list per component; single-value lists are constant across the track.
+        order: Unity rotation-order code used for Euler curves.
+
+    Returns:
+        glTF channel path and tuples of converted values.
+    """
     length = max(len(p) for p in parts)
     rows = [tuple(p[i] if len(p) > 1 else p[0] for p in parts) for i in range(length)]
     if attribute == 1:
@@ -496,9 +584,20 @@ def track_values(
 
 
 def pick_clips(names: list[str], wanted: Iterable[str] = DEFAULT_CLIPS, dev: str = "") -> list[tuple[int, str]]:
-    """(index, slot) of the clips to export: one clip per wanted name suffix, the prefab's own (``<dev>_<slot>``)
+    """Choose one clip per requested slot, preferring the prefab's own clips.
+
+    Prefer the prefab's own (``<dev>_<slot>``)
     before a shared one, a slot's own name before its :data:`CLIP_ALIASES`. When neither the formation nor the cafe
-    idle is there, the first fallback idle comes along as slot 'Idle'."""
+    idle is there, the first fallback idle comes along as slot 'Idle'.
+
+    Args:
+        names: Clip asset names whose indices identify the selected readers.
+        wanted: Animation slot suffixes to export, tried before each slot's aliases.
+        dev: Prefab dev name giving exact <dev>_<slot> matches precedence over shared clips.
+
+    Returns:
+        Source-list index and exported slot-name pairs.
+    """
 
     def named(suffix: str) -> int | None:
         hits = [i for i, n in enumerate(names) if n.lower().endswith("_" + suffix.lower())]
@@ -523,9 +622,14 @@ FLT_MAX = 3.4028234663852886e38  # the largest float32
 
 
 def finite_json(value: Any) -> Any:
-    """A copy of a JSON tree with only finite numbers: an infinity becomes +-FLT_MAX (still unbounded for a shader),
-    NaN becomes 0. glTF readers parse the JSON chunk with a strict parser (JSON.parse), which rejects NaN and
-    Infinity, and the game's materials do hold infinite constants (``_CameraFadeParams`` of some NPCs and Saya)."""
+    """Copy a JSON tree, replacing infinities with signed FLT_MAX and NaN with zero.
+
+    FLT_MAX remains effectively unbounded for shaders. Strict glTF JSON parsers reject
+    nonfinite numbers, which occur in _CameraFadeParams for some NPCs and Saya.
+
+    Args:
+        value: Nested dictionaries, lists/tuples, and scalar JSON values; tuples become lists and other leaves are kept.
+    """
     if isinstance(value, float):
         if math.isfinite(value):
             return value
@@ -538,9 +642,10 @@ def finite_json(value: Any) -> Any:
 
 
 class GlbWriter:
-    """glTF 2.0 JSON plus one binary buffer; buffer views are 4-byte aligned."""
+    """Build glTF 2.0 JSON and one binary buffer with 4-byte-aligned buffer views."""
 
     def __init__(self, generator: str = "BA Modding and Patching Tool"):
+        """Start an empty scene, recording generator as the glTF asset's producer label."""
         self.json: dict[str, Any] = {
             "asset": {"version": "2.0", "generator": generator},
             "scene": 0,
@@ -563,6 +668,12 @@ class GlbWriter:
         self.bin += b"\0" * (-len(self.bin) % 4)
 
     def view(self, data: bytes, target: int | None = None) -> int:
+        """Append aligned bytes and return their buffer-view index.
+
+        Args:
+            data: Binary payload to append without altering its contents.
+            target: Optional glTF buffer target, 34962 for vertex data or 34963 for indices.
+        """
         self._align()
         view = {"buffer": 0, "byteOffset": len(self.bin), "byteLength": len(data)}
         if target:
@@ -574,6 +685,15 @@ class GlbWriter:
     def accessor(
         self, values: list, kind: str, component: int = 5126, target: int | None = None, minmax: bool = False
     ) -> int:
+        """Pack numeric values into an accessor and return its index.
+
+        Args:
+            values: Scalar items or rows matching the requested kind's component count.
+            kind: glTF accessor shape: SCALAR, VEC2, VEC3, VEC4, or MAT4.
+            component: glTF component code: 5126 float, 5123 uint16, 5125 uint32, or 5121 uint8.
+            target: Optional buffer target forwarded to the new view.
+            minmax: Whether to store per-component bounds for a nonempty accessor.
+        """
         size = {"SCALAR": 1, "VEC2": 2, "VEC3": 3, "VEC4": 4, "MAT4": 16}[kind]
         flat = [x for v in values for x in v] if size > 1 else list(values)
         fmt = {5126: "f", 5123: "H", 5125: "I", 5121: "B"}[component]
@@ -591,16 +711,21 @@ class GlbWriter:
         return len(self.json["accessors"]) - 1
 
     def sampler(self, sampler: Mapping[str, int]) -> int:
-        """The index of a sampler, added once."""
+        """Return a glTF filter/wrap sampler's index, adding equal settings only once."""
         samplers = self.json["samplers"]
         if dict(sampler) not in samplers:
             samplers.append(dict(sampler))
         return samplers.index(dict(sampler))
 
     def image(self, png: bytes, name: str, linear: bool = False, sampler: Mapping[str, int] | None = None) -> int:
-        """A PNG texture; ``linear`` marks data textures (masks, direction maps) the game samples without the sRGB
-        decode (glTF has no flag for that: it goes in the texture extras). ``sampler``: filters and wrapping, else the
-        first sampler (trilinear, repeat)."""
+        """Embed a PNG image and return its texture index.
+
+        Args:
+            png: Complete encoded PNG bytes to place in the binary buffer.
+            name: Asset name recorded on both the image and texture.
+            linear: Whether masks/direction maps bypass sRGB decoding, recorded in extras because glTF lacks a flag.
+            sampler: Filter and wrapping settings; None or empty uses the first sampler (trilinear, repeat).
+        """
         self.json["images"].append({"bufferView": self.view(png), "mimeType": "image/png", "name": name})
         texture: dict[str, Any] = {
             "sampler": self.sampler(sampler) if sampler else 0,
@@ -613,6 +738,7 @@ class GlbWriter:
         return len(self.json["textures"]) - 1
 
     def finish(self) -> bytes:
+        """Serialize the scene and aligned binary buffer as GLB bytes with finite JSON numbers."""
         self._align()
         self.json["buffers"] = [{"byteLength": len(self.bin)}]
         doc = finite_json({k: v for k, v in self.json.items() if v != []})
@@ -643,8 +769,9 @@ def _external_cab(obj: Any, file_id: int) -> str:
 
 
 class BundleGraph:
-    """Objects of the loaded bundles by (CAB, path id). A pointer into a CAB that is not loaded yet loads the bundle
-    holding it, so only what the model really uses is read.
+    """Index loaded objects by CAB and path ID, loading referenced bundles on demand.
+
+    Only bundles that the model's objects reference are read.
 
     Every bundle stays open (with its process-wide path lock held) until :meth:`close`. Callers serialise exports,
     and every other reader holds one path lock at a time, so holding several cannot deadlock. ``fallback`` is asked
@@ -660,6 +787,15 @@ class BundleGraph:
         opener: Callable = open_bundle,
         resolver: Callable[[set[str], Path | None], Mapping[str, str]] | None = None,
     ):
+        """Configure dependency lookup and bundle lifetimes for one graph traversal.
+
+        Args:
+            index: Lower-case CAB names mapped to bundle paths.
+            overrides: Mod bundles whose CABs replace entries in the supplied index.
+            fallback: Optional one-shot callback supplying a wider CAB index for unresolved references.
+            opener: Context manager loading a bundle environment and defining its lock lifetime.
+            resolver: On-demand CAB lookup receiving requested names and an optional owning-bundle hint.
+        """
         self.index = {cab: str(path) for cab, path in index.items()}
         for path in overrides:
             for cab in cab_names(Path(path)):
@@ -679,12 +815,15 @@ class BundleGraph:
         self._stack = ExitStack()
 
     def __enter__(self) -> "BundleGraph":
+        """Return this graph for scoped bundle lifetime management."""
         return self
 
     def __exit__(self, *exc: Any) -> None:
+        """Release loaded bundle contexts when graph traversal exits."""
         self.close()
 
     def close(self) -> None:
+        """Release bundle contexts and discard object, typetree, and lookup references."""
         self.objects.clear()
         self.trees.clear()
         self.locations.clear()
@@ -693,7 +832,14 @@ class BundleGraph:
         self._stack.close()
 
     def add(self, path: Path | str) -> Any:
-        """Load a bundle (once) and index its objects; returns its environment, or None when already loaded."""
+        """Load a bundle once and index its objects by CAB and path ID.
+
+        Args:
+            path: Bundle location in the same path spelling used by the graph's index.
+
+        Returns:
+            The loaded environment, or None when this path was already loaded.
+        """
         path = str(path)
         if path in self.loaded:
             return None
@@ -706,6 +852,7 @@ class BundleGraph:
         return env
 
     def tree(self, obj: Any) -> Any:
+        """Read and cache a Unity object's typetree by its CAB/path-ID identity."""
         key = _key(obj)
         tree = self.trees.get(key)
         if tree is None:
@@ -713,6 +860,15 @@ class BundleGraph:
         return tree
 
     def deref(self, obj: Any, pointer: Mapping[str, int] | None) -> Any:
+        """Resolve an object pointer, loading its CAB's bundle on demand.
+
+        Args:
+            obj: Pointer owner supplying its serialized file's external table; None resolves to None.
+            pointer: m_FileID/m_PathID reference; None or a zero path ID resolves to None.
+
+        Returns:
+            The referenced reader, or None when the CAB or object cannot be found.
+        """
         if obj is None or not pointer or not pointer.get("m_PathID"):
             return None
         cab, pid = _external_cab(obj, pointer.get("m_FileID", 0)), pointer["m_PathID"]
@@ -742,6 +898,15 @@ class BundleGraph:
         return hit
 
     def component(self, game_object: Any, type_name: str) -> Any:
+        """Find the first component of a Unity type on a GameObject.
+
+        Args:
+            game_object: GameObject reader whose m_Component pointers are followed.
+            type_name: Exact Unity object type name, such as Transform or Animator.
+
+        Returns:
+            The component reader, or None when no component matches.
+        """
         for c in self.tree(game_object)["m_Component"]:
             obj = self.deref(game_object, c["component"])
             if obj is not None and obj.type.name == type_name:
@@ -749,6 +914,7 @@ class BundleGraph:
         return None
 
     def script(self, behaviour: Any) -> str | None:
+        """Return a MonoBehaviour reader's script class name, or None for an unresolved script."""
         script = self.deref(behaviour, self.tree(behaviour).get("m_Script"))
         return self.tree(script).get("m_ClassName") if script is not None else None
 
@@ -771,10 +937,16 @@ _WRAPS = {0: 10497, 1: 33071, 2: 33648, 3: 33071}  # Unity Repeat, Clamp, Mirror
 
 
 def texture_sampler(tree: Mapping[str, Any]) -> dict[str, int]:
-    """A glTF sampler for a Texture2D as the game samples it (m_TextureSettings): point, bilinear or trilinear,
+    """Convert Texture2D sampler settings to glTF without generating absent mipmaps.
+
+    Preserve point, bilinear or trilinear filtering,
     mipmaps only when the texture has them (the characters' textures have none, a viewer that generated them would
     blur and darken thin details at a distance), and its wrap modes. Point takes the nearest texel of the nearest
-    mipmap, bilinear blends texels within the nearest mipmap, trilinear blends two mipmaps as well."""
+    mipmap, bilinear blends texels within the nearest mipmap, trilinear blends two mipmaps as well.
+
+    Args:
+        tree: Texture2D typetree with m_TextureSettings and m_MipCount.
+    """
     s = tree.get("m_TextureSettings") or {}
     mode = s.get("m_FilterMode", 1)
     point = mode == 0
@@ -791,8 +963,13 @@ def texture_sampler(tree: Mapping[str, Any]) -> dict[str, int]:
 
 
 def shader_vectors(form: Mapping[str, Any]) -> set[str]:
-    """Names of a shader's Vector properties (m_Type 1). In a linear-space project the game converts Color properties
-    from sRGB to linear before a shader sees them, Vector properties not; materials store both in m_Colors."""
+    """Return Vector property names (m_Type 1) from a parsed shader form.
+
+    Materials store Color and Vector values in m_Colors, but only Colors receive sRGB-to-linear conversion.
+
+    Args:
+        form: Parsed shader form whose m_PropInfo declarations distinguish Vector from Color storage.
+    """
     return {p["m_Name"] for p in form["m_PropInfo"]["m_Props"] if p.get("m_Type") == 1}
 
 
@@ -800,16 +977,22 @@ _HDR = 16  # ShaderPropertyFlags.HDR
 
 
 def shader_hdr(form: Mapping[str, Any]) -> set[str]:
-    """Names of a shader's HDR Color properties (m_Type 0 with the HDR flag). Their stored values are linear already:
+    """Return HDR Color property names (m_Type 0 with the HDR flag) from a parsed shader form.
+
+    Their stored values are linear already:
     the game passes them unconverted, like Vector properties. The character shaders mark most of their colours HDR
-    (the hair's and face's _ShadowTint, _Tint, _OutlineTint, the halos' tints): decoded as sRGB, the hair's shadow
-    came out about half as bright and redder than the EnemyInfo renders, and an HDR halo tint (Aru's 3.69, 1.76,
-    1.53) near white instead of coral."""
+    (the hair's and face's _ShadowTint, _Tint, _OutlineTint, the halos' tints). sRGB decoding makes hair shadows
+    about half as bright and redder than EnemyInfo renders, and Aru's HDR halo tint (3.69, 1.76, 1.53)
+    near white instead of coral.
+
+    Args:
+        form: Parsed shader form whose Color declarations carry ShaderPropertyFlags.HDR.
+    """
     return {p["m_Name"] for p in form["m_PropInfo"]["m_Props"] if p.get("m_Type") == 0 and p.get("m_Flags", 0) & _HDR}
 
 
 def shader_outline(form: Mapping[str, Any]) -> bool:
-    """Whether a shader draws the inverted-hull outline: a pass with the light mode "Outline"."""
+    """Check a parsed shader form for an inverted-hull pass with light mode "Outline"."""
     for sub in form["m_SubShaders"]:
         for p in sub["m_Passes"]:
             tags = dict(p["m_State"]["m_Tags"]["tags"])
@@ -824,10 +1007,18 @@ _QUEUES = {"background": 1000, "geometry": 2000, "alphatest": 2450, "transparent
 
 
 def shader_state(form: Mapping[str, Any], floats: Mapping[str, float], custom_queue: int = -1) -> dict[str, Any]:
-    """The render state of a shader's colour pass for one material: {cull, zwrite, src, dst, queue}. A state either
+    """Read cull, depth-write, blend, and queue state for a material's shader color pass.
+
+    A state either
     names a material property (``_Cull``, ``_SrcBlend`` ...: the material's float decides) or is fixed in the pass.
     Cull 0 off, 1 front, 2 back; blend factors as UnityEngine.Rendering.BlendMode (1 One, 0 Zero, 5 SrcAlpha,
-    10 OneMinusSrcAlpha)."""
+    10 OneMinusSrcAlpha).
+
+    Args:
+        form: Parsed shader form, preferring UniversalForward then other color passes.
+        floats: Material properties used when a pass state names one.
+        custom_queue: Material render queue; a negative value or None derives it from shader tags.
+    """
 
     def tags(entry: Mapping[str, Any]) -> dict[str, str]:
         return {k.lower(): v for k, v in (entry.get("m_Tags") or {}).get("tags", [])}
@@ -878,8 +1069,17 @@ def _prefabs(graph: BundleGraph, bundles: Iterable[Path]) -> dict[str, Any]:
 
 
 def npc_prefab(stems: Iterable[str], dev: str) -> str | None:
-    """The field NPC prefab of ``dev`` (a lower-case id such as np0060) among lower-case prefab stems: one with a halo
-    before its ``_NoHalo`` copy, then the first by name (NP0143's AR weapon before its SG and SR ones)."""
+    """Choose a field NPC prefab, preferring a halo and then the first name.
+
+    NP0143's AR weapon precedes its SG and SR prefabs.
+
+    Args:
+        stems: Available lower-case prefab filename stems.
+        dev: NPC character ID such as np0060, matched without case sensitivity.
+
+    Returns:
+        The preferred stem, or None when no field NPC prefab matches.
+    """
     dev = dev.lower()
     hits = [stem for stem in stems if (match := NPC_PREFAB.fullmatch(stem)) and match.group(1).lower() == dev]
     return min(hits, key=lambda stem: ("nohalo" in stem.lower(), stem.lower()), default=None)
@@ -906,18 +1106,34 @@ def _subtree_renderers(graph: BundleGraph, transform: Any) -> int:
 
 
 def asset_root(graph: BundleGraph, bundles: Iterable[Path], dev: str | None = None) -> tuple[Any, str] | None:
-    """The model kept in a character's or NPC's own dependency bundles (``assets-_mx-npcs|characters-<dev>-
-    _mxdependency-*``; with ``dev``, only those of ``bundles``) for a variant the game shows only in a story cutscene
-    or a UI scene (Ayame's story forms, Arona): the root GameObject of a container asset with renderers below it, as
-    (root, container path); the first of :func:`asset_roots`."""
+    """Find the best model root in a character's or NPC's own dependency bundles.
+
+    Story/UI-only variants, such as Ayame's story forms and Arona, keep rendered container
+    roots in assets-_mx-npcs|characters-<dev>-_mxdependency-* bundles. Choose the first asset_roots result.
+
+    Args:
+        graph: Dependency graph loading bundle containers and following model references.
+        bundles: Candidate character or NPC dependency bundles to inspect.
+        dev: Optional dev name restricting the search to that character's own bundles.
+
+    Returns:
+        Root GameObject and container path, or None when no rendered model is found.
+    """
     found = asset_roots(graph, bundles, dev)
     return (found[0][1], found[0][2]) if found else None
 
 
 def asset_roots(graph: BundleGraph, bundles: Iterable[Path], dev: str | None = None) -> list[tuple[tuple, Any, str]]:
-    """The roots :func:`asset_root` chooses from, best first, as (rank, root, container path). A prefab comes before
-    an imported model (the prefab carries the materials the game assigns), a root with an Animator before one
-    without, then the most renderers, then the name; the ranks of several bundles compare the same way."""
+    """Rank rendered roots for asset_root as (rank, root GameObject, container path).
+
+    A prefab precedes an imported model because it carries assigned materials; a root with an Animator precedes one
+    without, then the most renderers, then the name; the ranks of several bundles compare the same way.
+
+    Args:
+        graph: Dependency graph loading bundle containers and traversing components.
+        bundles: Candidate dependency bundles containing prefab or imported FBX container roots.
+        dev: Optional dev name restricting the search to its own bundles.
+    """
     found: list[tuple[tuple, Any, str]] = []
     seen: set[tuple[str, int]] = set()
     for path in bundles:
@@ -948,9 +1164,21 @@ def asset_roots(graph: BundleGraph, bundles: Iterable[Path], dev: str | None = N
 
 
 def model_root(graph: BundleGraph, bundles: Iterable[Path], dev: str, prefab: str = "echelon") -> tuple[Any, str, str]:
-    """The prefab to show of ``dev`` in ``bundles``, as (root GameObject, its name, its kind): the ``prefab`` kind of
+    """Choose a model's root GameObject, display name, and prefab kind.
+
+    Try the ``prefab`` kind of
     :data:`PREFAB_KINDS` where there is one, else the first of the others (Echelon, battle, cafe, strategy, field
-    player), else a field NPC prefab (kind ``npc``), else a model in the bundles of its own (kind ``asset``)."""
+    player), else a field NPC prefab (kind ``npc``), else a model in the bundles of its own (kind ``asset``).
+
+    Args:
+        graph: Dependency graph loading candidate prefabs and model assets.
+        bundles: Prefab bundles, or the model's own dependency bundles for story/UI assets.
+        dev: Character dev name or NPC ID used to construct prefab names.
+        prefab: Preferred key from PREFAB_KINDS, such as echelon, battle, cafe, strategy, or field.
+
+    Raises:
+        AssetNotFound: No matching prefab or rendered asset root is available.
+    """
     bundles = list(bundles)
     prefabs = _prefabs(graph, bundles)
     for kind in [prefab, *(k for k in PREFAB_KINDS if k != prefab)]:
@@ -970,6 +1198,7 @@ def model_root(graph: BundleGraph, bundles: Iterable[Path], dev: str, prefab: st
 
 class _Exporter:
     def __init__(self, graph: BundleGraph, dev: str):
+        """Prepare an empty model export for a dependency graph and character dev name."""
         self.g, self.dev = graph, dev
         self.glb = GlbWriter()
         self.nodes = self.glb.json["nodes"]
@@ -988,13 +1217,22 @@ class _Exporter:
         self.textures: dict[tuple[str, int], int] = {}
         self.materials: dict[tuple[str, int], int] = {}
 
-    # hierarchy
     def visit(self, go_obj: Any, parent: int | None, path: str, active: bool, shown: bool = True) -> None:
-        """Nodes for a GameObject and its children. Inactive objects and effect nodes (particles, the EX camera and
+        """Append glTF nodes for a GameObject hierarchy, deferring hidden renderers.
+
+        Inactive objects and effect nodes (particles, the EX camera and
         light) are kept for the clips but marked hidden; renderers below a hidden node are not exported, since the
         viewer never shows them (and their effect materials sit in unrelated bundles). Renderers the prefab disables
         (m_Enabled 0: alternative faces, bodies and props) are kept aside: only a clip that enables one brings it in
-        (:meth:`toggles`)."""
+        (:meth:`toggles`).
+
+        Args:
+            go_obj: Root GameObject reader for this recursive visit.
+            parent: Parent glTF node index; None attaches the node to the scene root list.
+            path: Hierarchy path below the animated root, empty for the root itself.
+            active: Whether all ancestor GameObjects are active.
+            shown: Whether ancestors permit exporting visible renderers, excluding effect subtrees.
+        """
         g = self.g
         go = g.tree(go_obj)
         transform, components = None, []
@@ -1081,8 +1319,7 @@ class _Exporter:
                 self.visit(child_go, index, f"{path}/{name}" if path else name, here, shown)
 
     def set_aside_ex_only(self) -> None:
-        """Keep the renderers only an EX skill shows (:func:`ex_only_renderers`) aside like disabled ones: a clip that
-        turns one on brings it in, hidden at rest."""
+        """Defer EX-only renderers until a clip enables them, exporting them hidden at rest."""
         parts = [(node, self.path_of[node], self._parts(renderer, go_obj)) for node, renderer, go_obj in self.renderers]
         aside = ex_only_renderers(parts)
         for entry in [r for r in self.renderers if r[0] in aside]:
@@ -1110,8 +1347,8 @@ class _Exporter:
             parts.append((shader_kind(name), int(sub.get("indexCount", 0))))
         return parts
 
-    # textures and materials
     def texture(self, obj: Any) -> int:
+        """Embed a Texture2D reader once with its game sampler/color space and return its glTF texture index."""
         key = _key(obj)
         if key not in self.textures:
             data = obj.read()
@@ -1125,6 +1362,7 @@ class _Exporter:
         return self.textures[key]
 
     def material(self, obj: Any) -> int:
+        """Embed a Material reader once, retaining shader state/properties in extras, and return its index."""
         key = _key(obj)
         if key in self.materials:
             return self.materials[key]
@@ -1192,8 +1430,12 @@ class _Exporter:
         self.materials[key] = len(self.glb.json["materials"]) - 1
         return self.materials[key]
 
-    # meshes
     def meshes(self, renderers: Iterable[tuple[int, Any, Any]] | None = None) -> None:
+        """Export renderer geometry, materials, and skins into the current hierarchy.
+
+        Args:
+            renderers: Node/renderer/GameObject triples to export; None uses the prefab's visible renderers.
+        """
         g, glb, root = self.g, self.glb, self.glb.json["scenes"][0]["nodes"][0]
         for node_index, renderer, go_obj in self.renderers if renderers is None else renderers:
             tree = g.tree(renderer)
@@ -1264,8 +1506,8 @@ class _Exporter:
             self.nodes[root].setdefault("children", []).append(len(self.nodes) - 1)
             self.nodes[node_index].setdefault("extras", {})["renderer"] = len(self.nodes) - 1
 
-    # behaviours
     def extras(self, prefab: str) -> dict[str, Any]:
+        """Build root metadata for the named prefab, including halo following, halo effects, and mouth UVs."""
         extras: dict[str, Any] = {"prefab": prefab, "dev": self.dev}
         if self.follower:
             index, obj, tree = self.follower
@@ -1294,12 +1536,18 @@ class _Exporter:
         return extras
 
     def halo_fx(self, resolver: Callable[[Mapping[int, Any]], Callable[[str, int, dict], Any]]) -> None:
-        """The particle systems below the halo (the FxFollower's GameObject), as particles.build reads them for the
+        """Export particle systems below the halo's FxFollower for the model viewer.
+
+        Read them as particles.build does for the
         lobbies' player, for the viewer to simulate and draw where their nodes are (Tsurugi's drops, Mika's stars and
         rings): each system names its glTF node ("node") instead of a place in a lobby, and each texture its glTF
         texture ("texture"). resolver(objects of the prefab's file by path id) reads the materials and meshes the
         renderers point at (service._FxResolver). Effects elsewhere in the prefab (an EX skill's, a pickup motion's)
-        are left out, as the viewer never plays them."""
+        are left out, as the viewer never plays them.
+
+        Args:
+            resolver: Builds a service._FxResolver-compatible material/mesh reader from prefab objects by path ID.
+        """
         if not self.follower:
             return
         top = self.path_of[self.follower[0]]
@@ -1337,10 +1585,14 @@ class _Exporter:
             "meshes": found["meshes"],
         }
 
-    # clips
     def controller_clips(self, prefabs: Mapping[str, Any]) -> list[Any]:
-        """Clips of every prefab's animator controller (an override clip, or the original where the override is
-        empty: NPCs share generic clips), plus override controllers stored next to the prefabs."""
+        """Collect unique clips from prefab controllers and nearby override controllers.
+
+        Empty overrides retain original clips because NPCs share generic clips.
+
+        Args:
+            prefabs: Prefab stems mapped to root pointers whose Animator controllers are read.
+        """
         g, pointers = self.g, []
 
         def add(controller: Any) -> None:
@@ -1371,9 +1623,15 @@ class _Exporter:
         return clips
 
     def bound_clips(self, graph: BundleGraph, bundles: Iterable[Path]) -> list[Any]:
-        """The clips stored in ``bundles`` that move this hierarchy, most bound nodes first (a model of a story
-        cutscene or a UI scene has no controller; its bundles hold its own clips beside a prop's, such as Arona's
-        sack)."""
+        """Rank clips moving this hierarchy by their number of bound nodes.
+
+        Story/UI models lack controllers; their bundles can mix character and prop clips,
+        such as Arona's sack, so binding coverage distinguishes them.
+
+        Args:
+            graph: Graph containing the loaded AnimationClip readers to inspect.
+            bundles: Bundle paths restricting clip ownership to the model or selected cutscene sources.
+        """
         paths = {str(path) for path in bundles}
         by_hash = {zlib.crc32(path.encode("utf-8")) for path in self.path_of.values()}
         scored = []
@@ -1390,6 +1648,12 @@ class _Exporter:
         return [obj for *_, obj in sorted(scored, key=lambda entry: entry[:2])]
 
     def animations(self, clips: list[Any], wanted: Iterable[str]) -> None:
+        """Export each selected clip once under its requested animation slot.
+
+        Args:
+            clips: Available AnimationClip readers whose names are matched by pick_clips.
+            wanted: Slot suffixes to select, with aliases and a fallback idle.
+        """
         names = [c.peek_name() for c in clips]
         exported = set()
         for index, slot in pick_clips(names, wanted, self.dev):
@@ -1399,13 +1663,24 @@ class _Exporter:
             self.animation(clips[index], slot)
 
     def story(self, clips: list[Any]) -> None:
-        """A story model's own clips from its cutscenes, as slots Story_1, Story_2, ... in the order of their
-        names (NP0206_Cutin_A_01, ...), at most ``STORY_CLIPS``: it has no standard clips to stand in."""
+        """Export at most STORY_CLIPS cutscene clips as Story_1, Story_2, ... in name order.
+
+        A story model has no standard clips to stand in; names include NP0206_Cutin_A_01.
+
+        Args:
+            clips: Model-bound cutscene AnimationClip readers already filtered to the character's own names.
+        """
         named = sorted(clips, key=lambda clip: clip.peek_name() or "")
         for k, clip in enumerate(named[:STORY_CLIPS], 1):
             self.animation(clip, f"Story_{k}")
 
     def animation(self, clip: Any, slot: str) -> None:
+        """Export a clip's mirrored tracks, mouth events, and renderer toggles.
+
+        Args:
+            clip: AnimationClip reader whose generic bindings target the exported hierarchy.
+            slot: Viewer animation role; Story_ prefixes also recenter horizontal root motion.
+        """
         glb = self.glb
         by_hash = {zlib.crc32(path.encode("utf-8")): index for index, path in self.path_of.items()}
         rest = {
@@ -1463,9 +1738,17 @@ class _Exporter:
             glb.json["animations"].append(animation)
 
     def toggles(self, tt: Mapping[str, Any], decoded: DecodedClip, by_hash: Mapping[int, int]) -> list[dict[str, Any]]:
-        """The renderers a clip switches on and off ({node: mesh node, keys: [[time, 0 | 1], ...]}), such as the
+        """Export renderer switch change points, bringing in disabled renderers when needed.
+
+        Records are {node: mesh node, keys: [[time, 0 | 1], ...]}, such as the
         alternative faces of an expression. A renderer the prefab disables is exported once a clip enables it, hidden
-        at rest. Switches equal to the rest state over the whole clip are left out."""
+        at rest. Switches equal to the rest state over the whole clip are left out.
+
+        Args:
+            tt: AnimationClip typetree supplying generic bindings and start time.
+            decoded: Sampled scalar curves and second-based times for this clip.
+            by_hash: Hierarchy-path CRC32 values mapped to exported node indices.
+        """
         start = tt["m_MuscleClip"]["m_StartTime"]
         out: dict[int, list[list[float]]] = {}
         for node, kind, values in bind_toggles(tt["m_ClipBindingConstant"]["genericBindings"], decoded.curves, by_hash):
@@ -1511,14 +1794,18 @@ class _Exporter:
 
 
 class _ClipExporter(_Exporter):
-    """One clip of a model, for a viewer that already shows the model's base GLB (:func:`export_chibi` of the same
-    files): no meshes, textures or halo effects of its own. The hierarchy's nodes come in the base GLB's order, so a
+    """Export one model clip for a viewer that already shows its base GLB.
+
+    The base GLB is :func:`export_chibi` of the same files; the clip has no meshes, textures or halo effects of its
+    own. The hierarchy's nodes come in the base GLB's order, so a
     channel's node is the same node there. Toggles name the node of the renderer's GameObject (the viewer finds its
     renderer in the base GLB: the node's ``extras.renderer`` or its mesh); a renderer the base GLB leaves out
     (disabled, or only an EX skill shows it) that the clip turns on comes along with its materials and textures, as
-    the base GLB would carry it: its node's ``extras.renderer`` (skinned) or ``mesh`` (static), hidden at rest."""
+    the base GLB would carry it: its node's ``extras.renderer`` (skinned) or ``mesh`` (static), hidden at rest.
+    """
 
     def __init__(self, graph: BundleGraph, dev: str):
+        """Prepare a clip export using the base model's graph and character dev name."""
         super().__init__(graph, dev)
         self.drawn: set[int] = set()  # GameObject nodes of the renderers the base GLB draws
         self.brought: set[int] = set()  # GameObject nodes of the renderers this clip brings in
@@ -1534,8 +1821,11 @@ class _ClipExporter(_Exporter):
 
 
 def _model_clips(exporter: _Exporter, graph: BundleGraph, bundles: list[Path], kind: str) -> list[Any]:
-    """The clips a model plays: a field prefab's own list, the clips of a model of its own bundles that move it, else
-    its animator controllers' clips."""
+    """Return the clips a model plays.
+
+    Use a field prefab's own list, the clips of a model of its own bundles that move it, else its animator
+    controllers' clips.
+    """
     if exporter.animancer is not None:
         # a field prefab lists its clips itself; its bundle holds other students' prefabs and controllers
         listed = graph.tree(exporter.animancer).get("animationClips", [])
@@ -1555,14 +1845,26 @@ def export_chibi(
     story: Iterable[Path] = (),
     fx: Callable[[Mapping[int, Any]], Callable[[str, int, dict], Any]] | None = None,
 ) -> bytes:
-    """Export one chibi to GLB bytes. ``bundles`` are the prefab bundles of ``dev``; the prefab is the Echelon
+    """Export a chibi's hierarchy, meshes, materials, textures, and chosen clips to GLB bytes.
+
+    The prefab is the Echelon
     (formation) one where there is one, else the battle, cafe or strategy one, else a field-mode player or NPC (an
     event or story variant with no battle model), played with the clips its FieldAnimancerController lists, else a
     model of its own dependency bundles (:func:`asset_root`; ``bundles`` are those bundles), played with an idle among
     their clips that moves it, if any; else with its own clips of the story cutscenes in ``story`` (bundles holding
     clips named after it, ``<dev>_...``, as Story_1, Story_2, ...), so it never stands in its bind pose where the game
     moves it (Ayame's story forms). ``fx`` reads the halo's particle materials and meshes
-    (:meth:`_Exporter.halo_fx`); without it the halo's particles are left out."""
+    (:meth:`_Exporter.halo_fx`); without it the halo's particles are left out.
+
+    Args:
+        graph: Dependency graph resolving the model's external CAB references for the export lifetime.
+        bundles: Prefab bundles of the dev name, or its own dependency bundles for story/UI models.
+        dev: Character dev name or NPC ID selecting the model and its own clips.
+        prefab: Preferred PREFAB_KINDS key before fallback roots are tried.
+        clips: Animation slot suffixes to include, using aliases and a fallback idle when needed.
+        story: Cutscene bundles supplying <dev>_... clips as Story_1, Story_2, ... when an asset model lacks an idle.
+        fx: Builds a material/mesh resolver from halo component owners; None omits halo particles.
+    """
     bundles = list(bundles)
     root, name, kind = model_root(graph, bundles, dev, prefab)
     exporter = _Exporter(graph, dev)
@@ -1590,11 +1892,23 @@ def export_chibi(
 
 
 def export_clip(graph: BundleGraph, bundles: Iterable[Path], dev: str, clip: str, *, prefab: str = "echelon") -> bytes:
-    """Export one clip of a chibi, by its name among the clips the model plays (the base GLB's ``extras.clips``), to
-    GLB bytes without the model's meshes (:class:`_ClipExporter`); the prefab is chosen and walked as
+    """Export one named chibi clip for a viewer already holding the model's base GLB.
+
+    The prefab is chosen and walked as
     :func:`export_chibi` does for the same ``bundles``. The root extras name the clip and the number of hierarchy
-    nodes (``hierarchy``), the nodes the viewer matches with the base GLB's. AssetNotFound for a name the model does
-    not play."""
+    nodes (``hierarchy``), the nodes the viewer matches with the base GLB's. Meshes already in the base are omitted;
+    renderers activated only by this clip accompany it as described by _ClipExporter.
+
+    Args:
+        graph: Dependency graph resolving the same sources as the base GLB.
+        bundles: Prefab or own-dependency bundles used for the base export.
+        dev: Character dev name or NPC ID selecting the same hierarchy as the base export.
+        clip: Exact clip asset name listed in the base GLB's extras.clips.
+        prefab: Preferred PREFAB_KINDS key, matching the base export's choice.
+
+    Raises:
+        AssetNotFound: The model has no root or does not play the requested clip.
+    """
     bundles = list(bundles)
     root, name, kind = model_root(graph, bundles, dev, prefab)
     exporter = _ClipExporter(graph, dev)

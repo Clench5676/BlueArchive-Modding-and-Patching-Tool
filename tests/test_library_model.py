@@ -203,7 +203,8 @@ def test_official_split_model_dependency_mod_on_clones(tmp_path, batch, complete
         record_property("cloned_model_files", len(official))
         record_property("cloned_shared_files", len(sources - set(official) - portraits))
         print(
-            f"Hoshino clone workflow: slot_files={len(official)}; shared_files={len(sources - set(official) - portraits)}; changed={len(targets)}"
+            f"Hoshino clone workflow: slot_files={len(official)}; "
+            f"shared_files={len(sources - set(official) - portraits)}; changed={len(targets)}"
         )
         print("Hoshino slot files: " + ", ".join(sorted(path.name for path in official)))
     finally:
@@ -605,7 +606,7 @@ def test_split_model_preview_sources_use_prefab_and_every_own_core(split_model_a
 
 
 def test_model_cards_read_other_cores_by_their_source_whatever_the_mods_switch(split_model_app):
-    """A 3D look split across cores (a reported case: a mesh mod for ch0263 and a texture mod for the NPC en0002,
+    """A 3D look split across cores (a mesh mod for ch0263 and a texture mod for the NPC en0002,
     whose bundle holds ch0263's textures): the Original card reads the textures' official bytes and a mod card the
     configured texture mod, with mods on and off; a bundle no mod touches is read where it is."""
     env = split_model_app
@@ -1132,7 +1133,8 @@ def test_official_roster_partial_and_complete_mod_preflight(tmp_path, monkeypatc
             seen.add(core)
             if len(seen) % 100 == 0:
                 print(
-                    f"Roster progress: cores={len(seen)}; parts={counters}; seconds={time.perf_counter() - started:.3f}",
+                    f"Roster progress: cores={len(seen)}; parts={counters}; "
+                    f"seconds={time.perf_counter() - started:.3f}",
                     flush=True,
                 )
             targets = library._spine_parts(core, pin)
@@ -1211,7 +1213,8 @@ def test_official_roster_partial_and_complete_mod_preflight(tmp_path, monkeypatc
     record_property("roster_counts", str(counters))
     record_property("roster_seconds", round(elapsed, 3))
     print(
-        f"Roster preflight: {counters}; variants={len(variants)}; sample={len(sample)}; seconds={elapsed:.3f}; full={full}"
+        f"Roster preflight: {counters}; variants={len(variants)}; sample={len(sample)}; "
+        f"seconds={elapsed:.3f}; full={full}"
     )
     assert not failures, failures[:30]
 
@@ -1413,7 +1416,7 @@ def test_costume_builds_of_an_older_rule_are_built_again_at_the_start(model_env,
     assert library.selection("hoshino")["model"] == {"source": f"mod:{made}", "installed": True, "error": None}
     assert library.update_due()["outdated"] is False
 
-    # no physics rule improves it any more: kept as it is, not tried again under this rule
+    # no physics rule improves it: kept as it is, not tried again under this rule
     monkeypatch.setattr(costume_rule, "COSTUME_RULE", costume_rule.COSTUME_RULE + 1)
     gain["physics"] = False
     files = library._records[made]["files"]

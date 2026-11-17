@@ -209,7 +209,7 @@ def test_the_solver_leaves_the_rest_pose_as_it_is():
 
 
 def test_a_leg_pushing_forward_turns_the_skirt_out_of_it():
-    solver, pose = _setup(leg_forward=0.1)  # the thigh now reaches 18 cm, past the cloth at 12 cm
+    solver, pose = _setup(leg_forward=0.1)  # the thigh reaches 18 cm, past the cloth at 12 cm
     turns = solver.solve(pose)
     angle = ms.angle_of(turns[0][:3, :3])
     assert 0.02 < angle <= ms.MAX_ANGLE + 1e-9  # with a shift of the head (see below) where the turn falls short
@@ -454,7 +454,7 @@ def test_a_clip_that_kept_every_curve_reads_back_as_edited(dense_curves):
         (
             lambda t: t["m_MuscleClip"]["m_Clip"]["data"]["m_DenseClip"]["m_SampleArray"].__setitem__(12, 99.0),
             "curve 2 changed",
-        ),  # frame 1 of an old dense curve: ten curves a frame now
+        ),  # frame 1 of the dense clip: ten curves a frame
         (lambda t: t["m_MuscleClip"]["m_Clip"]["data"]["m_ConstantClip"]["data"].pop(), "curves"),
         (lambda t: t.__setitem__("m_MuscleClipSize", t["m_MuscleClipSize"] + 4), "muscle clip size"),
         (

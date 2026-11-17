@@ -62,7 +62,14 @@ def _parse(path: Path) -> dict[str, Any]:
 
 
 def normalized(data: dict[str, Any] | None) -> dict[str, Any]:
-    """A configuration with every key the library reads present and of its type; unknown keys are kept."""
+    """Copy a configuration and normalize the fields the library reads, keeping unknown keys.
+
+    Args:
+        data: Stored profile document, or None to start with configuration defaults.
+
+    Returns:
+        An independent document with malformed folder and unfinished entries removed.
+    """
     data = copy.deepcopy(data) if data else {}
     data["version"] = 1
     if not isinstance(data.get("enabled", True), bool):
@@ -99,15 +106,23 @@ def normalized(data: dict[str, Any] | None) -> dict[str, Any]:
 
 
 def enabled(data: dict[str, Any] | None) -> bool:
-    """The switch's intent: a configuration without it (or no configuration) means on, so existing users keep their
-    mods."""
+    """Read the Enable Mods intent, defaulting to on for an absent switch.
+
+    Args:
+        data: Profile document, or None when no configuration has been saved.
+    """
     return not data or data.get("enabled", True) is not False
 
 
 class Profiles:
-    """``profiles.json`` of one library folder. Reads are cached by the file's size and modification time."""
+    """Manage one library's ``profiles.json``, caching reads by size and modification time."""
 
     def __init__(self, root: Path) -> None:
+        """Locate the configuration, recovery copies, and shared lock.
+
+        Args:
+            root: Library folder containing the profile files.
+        """
         self.root = Path(root)
         self.path = self.root / FILE
         self.prev = self.root / f"{FILE}.prev"
@@ -116,11 +131,11 @@ class Profiles:
         self._lock = threading.RLock()
         self._seen: tuple[tuple[int, int] | None, tuple[int, int] | None] | None = None
         self._data: dict[str, Any] | None = None
-        # called before every change: the owner may refuse it by raising (the library: a recovery that has failed)
+        # A failed library recovery can block profile writes by raising from this gate.
         self.gate: Callable[[], None] | None = None
 
     def signature(self) -> tuple[int, int] | None:
-        """The file's (modification time in ns, size), None while it is missing."""
+        """Return the file's (mtime in nanoseconds, size), or None if it cannot be statted."""
         try:
             stat = self.path.stat()
         except OSError:
@@ -136,9 +151,16 @@ class Profiles:
         return self.signature(), prev
 
     def _load(self) -> tuple[dict[str, Any] | None, bool]:
-        """(the configuration now, whether profiles.json itself is unreadable) with the file lock held: profiles.json,
-        else profiles.json.prev (logged), else None when neither exists. ServiceError profiles_unreadable when neither
-        can be read."""
+        """Read the configuration with the file lock held.
+
+        The source is profiles.json, else profiles.json.prev (logged), else None when neither exists.
+
+        Returns:
+            The configuration now, and whether profiles.json itself is unreadable.
+
+        Raises:
+            ServiceError: profiles_unreadable, when neither file can be read.
+        """
         bad = False
         if self.path.exists():
             try:
@@ -160,10 +182,16 @@ class Profiles:
         return None, False
 
     def read(self) -> dict[str, Any] | None:
-        """The configuration as the file holds it now (another instance may have written it), normalized; None while
-        there is none yet. Read under the lock the instances share; ServiceError profiles_unreadable when neither
-        profiles.json nor its .prev can be read. The answer is shared until the file changes: read it, never change
-        it (update is how the configuration changes)."""
+        """Read the current normalized configuration under the shared file lock.
+
+        Returns:
+            The cached document, or None if no configuration exists. Treat this shared
+            object as read-only; use update to change it.
+
+        Raises:
+            ServiceError: Neither profiles.json nor its recovery copy is readable
+                (profiles_unreadable).
+        """
         with self._lock:
             signatures = self._signatures()
             if signatures == self._seen:
@@ -179,17 +207,29 @@ class Profiles:
             return self._data
 
     def exists(self) -> bool:
-        """Whether a configuration exists (profiles.json or its .prev)."""
+        """Return whether profiles.json or its recovery copy exists."""
         return self.path.exists() or self.prev.exists()
 
     def update(
         self, change: Callable[[dict[str, Any]], Any], after: Callable[[dict[str, Any]], Any] | None = None
     ) -> dict[str, Any]:
-        """Apply one change to the file's current contents, read again under the shared lock, and write it back
-        (unknown keys and folders kept, the last good file kept as .prev first). ``change`` gets the normalized
-        configuration to change in place, and returns False to write nothing. ``after`` gets the configuration as
-        written (or as read, when nothing was written), still under the lock. Neither callback calls into Profiles
-        or the library's public methods. Returns the configuration as written (or as read)."""
+        """Change the current configuration under the shared lock, keeping a recovery copy.
+
+        Unknown keys and folders are preserved. Neither callback may call Profiles
+        or the library's public methods while the lock is held.
+
+        Args:
+            change: Mutates the normalized document in place; returns False to skip writing.
+            after: Receives the written document, or the original when writing is skipped,
+                while still under the lock. None skips this callback.
+
+        Returns:
+            The configuration as written, or as read when writing is skipped.
+
+        Raises:
+            ServiceError: The configuration and its recovery copy are unreadable, or
+                the library's write gate refuses the change.
+        """
         if self.gate is not None:
             self.gate()
         with self._lock, file_lock(self.lock_path):

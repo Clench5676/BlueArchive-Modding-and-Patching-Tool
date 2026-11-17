@@ -1,5 +1,6 @@
-"""SpineSkeletonDataConverter (wang606, PolyForm Noncommercial 1.0.0) as an optional helper of the graft
-(``bmpt.graft``): where the built-in graft refuses an animation (it needs a bone, slot, event, constraint or skin the
+"""SpineSkeletonDataConverter (wang606, PolyForm Noncommercial 1.0.0) as an optional helper of the graft.
+
+Where the built-in graft (``bmpt.graft``) refuses an animation (it needs a bone, slot, event, constraint or skin the
 mod's rig lacks), the rigs go through the converter to JSON, the animation is added there by name with what it needs
 (:func:`graft_json`), and the result goes back to binary.
 
@@ -30,6 +31,8 @@ from typing import Any, Callable, Iterable, Mapping
 
 @dataclass(frozen=True)
 class Release:
+    """A converter release the App fetches: its tag, file name, download URL, SHA-256 and size in bytes."""
+
     version: str
     name: str
     url: str
@@ -61,16 +64,24 @@ class ConverterError(Exception):
     """A step of the converter route failed: ``code`` names it (the caller turns it into a ``ServiceError``)."""
 
     def __init__(self, code: str, **params: Any):
+        """Create the error.
+
+        Args:
+            code: The ``ServiceError`` code the caller raises.
+            **params: The error's parameters, kept as text.
+        """
         super().__init__(code)
         self.code, self.params = code, {key: str(value) for key, value in params.items()}
 
 
 def platform_kind(platform: str | None = None) -> str:
+    """Return ``"windows"``, ``"macos"`` or ``"other"`` for a ``sys.platform`` value; None uses this one."""
     platform = platform or sys.platform
     return "windows" if platform.startswith("win") else "macos" if platform == "darwin" else "other"
 
 
 def tool_dir(data_dir: Path) -> Path:
+    """Return the tools folder in the App's data folder, where the converter is kept."""
     return Path(data_dir) / TOOLS
 
 
@@ -83,8 +94,15 @@ def _sha256(path: Path) -> str:
 
 
 def located(data_dir: Path, platform: str | None = None) -> Path | None:
-    """The converter to run, or None: on Windows the pinned release in the tools folder, only while its SHA-256 is the
-    pinned one; on macOS a build the user compiled and put there (executable)."""
+    """Return the converter to run, or None.
+
+    On Windows that is the pinned release in the tools folder, only while its size and SHA-256 are the pinned ones; on
+    macOS an executable build the user compiled and put there as ``MAC_NAME``; nothing elsewhere.
+
+    Args:
+        data_dir: The App's data folder.
+        platform: A ``sys.platform`` value; None uses this one.
+    """
     kind = platform_kind(platform)
     folder = tool_dir(data_dir)
     if kind == "windows":
@@ -99,8 +117,15 @@ def located(data_dir: Path, platform: str | None = None) -> Path | None:
 
 
 def status(data_dir: Path, platform: str | None = None) -> dict[str, Any]:
-    """What the switch to the converter route shows: the platform, whether a converter is in place, whether the App
-    can fetch one (Windows only), and what the consent names."""
+    """Return what the switch to the converter route shows.
+
+    That is the platform, whether a converter is in place, whether the App can fetch one (Windows only), and what the
+    consent names: the release's version and size, the licence and the converter's home page.
+
+    Args:
+        data_dir: The App's data folder.
+        platform: A ``sys.platform`` value; None uses this one.
+    """
     kind = platform_kind(platform)
     return {
         "platform": kind,
@@ -123,8 +148,26 @@ def download(
     progress: Callable[[int, int], None] | None = None,
     timeout: float = 30.0,
 ) -> Path:
-    """Fetch the pinned release into the tools folder, after the user confirmed its licence (``consented``):
-    the size and SHA-256 must be the pinned ones, else nothing stays. Windows only."""
+    """Fetch the pinned release into the tools folder, after the user confirmed its licence. Windows only.
+
+    The size and SHA-256 must be the pinned ones, else nothing stays.
+
+    Args:
+        data_dir: The App's data folder.
+        consented: Whether the user confirmed the converter's licence.
+        platform: A ``sys.platform`` value; None uses this one.
+        opener: Opens the download request, as ``urllib.request.urlopen`` does.
+        progress: Called with bytes done and the release's size after each chunk.
+        timeout: Seconds for the request.
+
+    Returns:
+        The converter's path.
+
+    Raises:
+        ConverterError: ``converter_consent`` without consent, ``converter_unavailable`` off Windows,
+            ``converter_mismatch`` for a file of another size or hash, ``converter_download_failed`` on a network or
+            disk error.
+    """
     if not consented:
         raise ConverterError("converter_consent")
     if platform_kind(platform) != "windows":
@@ -175,7 +218,18 @@ def _run(exe: Path, source: Path, target: Path) -> subprocess.CompletedProcess:
 
 
 def convert(exe: Path, data: bytes, source_suffix: str, target_suffix: str) -> bytes:
-    """``data`` converted (``.skel`` <-> ``.json``) in a temporary folder of its own."""
+    """Run the converter on ``data`` in a temporary folder of its own and return the output.
+
+    Args:
+        exe: The converter.
+        data: The skeleton to convert.
+        source_suffix: ``.skel`` or ``.json``, the format of ``data``.
+        target_suffix: ``.json`` or ``.skel``, the format wanted.
+
+    Raises:
+        ConverterError: ``converter_failed`` on a time-out, a start failure, a non-zero exit, no output or output
+            above ``MAX_OUTPUT``.
+    """
     with tempfile.TemporaryDirectory(prefix="bmpt-converter-") as folder:
         source = Path(folder) / f"in{source_suffix}"
         target = Path(folder) / f"out{target_suffix}"
@@ -194,8 +248,21 @@ def convert(exe: Path, data: bytes, source_suffix: str, target_suffix: str) -> b
 
 
 def to_json(exe: Path, skeleton: bytes) -> dict:
-    """A binary skeleton as the converter's JSON, after the App's own reader walked it whole: a file it cannot walk
-    never reaches the converter."""
+    """Convert a binary skeleton to the converter's JSON, after the App's own reader walked it whole.
+
+    A file the reader cannot walk never reaches the converter.
+
+    Args:
+        exe: The converter.
+        skeleton: The binary skeleton.
+
+    Returns:
+        The JSON document.
+
+    Raises:
+        ConverterError: ``converter_unreadable`` for a skeleton the reader refuses; ``converter_failed`` as
+            ``convert`` raises it, or for output that is not a skeleton document.
+    """
     from .spine_binary import Skeleton  # the runtime-derived reader, after the user's Spine licence answer
 
     try:
@@ -212,6 +279,11 @@ def to_json(exe: Path, skeleton: bytes) -> dict:
 
 
 def to_binary(exe: Path, document: dict) -> bytes:
+    """Convert a JSON skeleton document back to binary and check that the App's reader walks the result.
+
+    Raises:
+        ConverterError: ``converter_failed`` as ``convert`` raises it, or for a result the reader refuses.
+    """
     data = convert(exe, json.dumps(document, ensure_ascii=False).encode("utf-8"), ".json", ".skel")
     from .spine_binary import Skeleton
 
@@ -229,7 +301,11 @@ CONSTRAINTS = ("ik", "transform", "path", "physics")
 
 @dataclass
 class JsonGraft:
-    """What :func:`graft_json` carried: per animation added, and per animation left out the reason."""
+    """What :func:`graft_json` carried.
+
+    The animations added, the reason for each animation left out, the bones and slots added, and the atlas regions the
+    carried attachments draw.
+    """
 
     added: list[str]
     refused: dict[str, str]
@@ -238,6 +314,7 @@ class JsonGraft:
     regions: list[str] = None  # the atlas regions the carried attachments draw
 
     def __post_init__(self) -> None:
+        """Give ``regions`` a list of its own."""
         if self.regions is None:
             self.regions = []
 
@@ -251,8 +328,11 @@ def _skin(document: Mapping[str, Any], name: str) -> dict | None:
 
 
 def _needs(animation: Mapping[str, Any]) -> dict[str, set[str]]:
-    """The names an animation's timelines refer to: bones, slots, constraints by kind, events, skins (deforms) and
-    per (skin, slot) the attachments its attachment keys show or its deforms change."""
+    """The names an animation's timelines refer to.
+
+    Bones, slots, constraints by kind, events, skins (deforms) and per (skin, slot) the attachments its attachment
+    keys show or its deforms change.
+    """
     need: dict[str, set] = {
         "bones": set(animation.get("bones") or {}),
         "slots": set(animation.get("slots") or {}),
@@ -278,12 +358,22 @@ def _needs(animation: Mapping[str, Any]) -> dict[str, set[str]]:
 
 
 def graft_json(mod: dict, official: dict) -> JsonGraft:
-    """Every animation of ``official`` that ``mod`` lacks, added to ``mod`` in place with what it refers to that
-    the mod lacks, by name: bones (with their parents, after them), slots (where the official order has them, after
-    the last slot before them the mod has), events, constraints whose bones and targets the mod then has, and the
-    attachments its keys show or deform, in the skin of the mod that has the slot. Refused, with the reason, and
-    nothing of it added: an animation that needs a skin the mod lacks, or deforms an attachment the mod has in
-    another shape (a mesh the mod redrew)."""
+    """Add every animation of ``official`` that ``mod`` lacks to ``mod``, in place, with what it refers to.
+
+    Matched by name, what the mod lacks is copied: bones with the ancestors the mod lacks (parents first, in the
+    official order), slots (after the last slot before them in the official order that the mod has), events, the
+    constraints the animation keys with their bones and targets, and the attachments its keys show (into the default
+    skin) or deform (into the mod's skin of the same name). Refused, with the reason, and nothing of it added: an
+    animation that needs a skin the mod lacks, deforms an attachment the mod has in another shape (a mesh the mod
+    redrew), shows an attachment neither rig has, or shows a linked mesh the mod lacks.
+
+    Args:
+        mod: The mod's skeleton as the converter's JSON; changed in place.
+        official: The official skeleton as the converter's JSON.
+
+    Returns:
+        What was carried and what was refused.
+    """
     result = JsonGraft([], {}, [], [])
     m_bones = {b.get("name"): b for b in mod.setdefault("bones", [])}
     o_bones = {b.get("name"): b for b in official.get("bones") or []}
@@ -376,9 +466,15 @@ def _missing_reason(mod: Mapping[str, Any], official: Mapping[str, Any], need: M
 
 
 def drift(before: Mapping[str, Iterable[float]], after: Mapping[str, Iterable[float]]) -> float:
-    """How far the mod's own poses moved through the rewrite: the largest distance between the world vertices of
-    each (pose, slot) the page posed before and after (``x, y, x, y, ...``); a part only one side has counts as
-    infinitely far."""
+    """Return how far the mod's own poses moved through the rewrite, in world units.
+
+    That is the largest distance between the world vertices of each (pose, slot) the page posed before and after; a
+    part only one side has, or with another vertex count, counts as infinitely far.
+
+    Args:
+        before: World vertices (``x, y, x, y, ...``) by pose and slot, from the original rig.
+        after: The same from the rewritten rig.
+    """
     worst = 0.0
     for key in set(before) | set(after):
         a, b = list(before.get(key) or []), list(after.get(key) or [])

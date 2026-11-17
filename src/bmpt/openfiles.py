@@ -30,8 +30,18 @@ def release() -> None:
 
 
 def remove_tree(path: str | Path, *, tries: int = REMOVE_TRIES, wait: float = REMOVE_WAIT) -> None:
-    """shutil.rmtree, releasing this process's unreferenced bundle readers and retrying while a file is in use.
-    A missing folder is already removed."""
+    """Remove a folder tree, releasing unreferenced bundle readers and retrying while a file is in use.
+
+    A missing folder counts as removed.
+
+    Args:
+        path: The folder to remove.
+        tries: Attempts before the last PermissionError is raised; 10 on Windows, 1 elsewhere.
+        wait: Seconds between attempts.
+
+    Raises:
+        PermissionError: A file stayed in use through every attempt.
+    """
     for attempt in range(1, tries + 1):
         try:
             shutil.rmtree(path)
@@ -47,10 +57,18 @@ def remove_tree(path: str | Path, *, tries: int = REMOVE_TRIES, wait: float = RE
 
 @contextmanager
 def temporary_directory(prefix: str | None = None, dir: str | Path | None = None) -> Iterator[str]:
-    """A temporary folder like tempfile.TemporaryDirectory whose removal never fails the work done in it.
+    """Create a temporary folder like ``tempfile.TemporaryDirectory`` whose removal never fails the work done in it.
 
     A folder that cannot be removed (a file still in use) is logged and left for a later cleanup; an error raised
-    inside the block passes on unchanged."""
+    inside the block passes on unchanged.
+
+    Args:
+        prefix: Start of the folder name, as for ``tempfile.mkdtemp``.
+        dir: Parent folder; None uses the system's temporary folder.
+
+    Yields:
+        The folder's path.
+    """
     path = tempfile.mkdtemp(prefix=prefix, dir=dir)
     try:
         yield path

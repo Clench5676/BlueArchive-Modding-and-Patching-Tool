@@ -1,4 +1,4 @@
-"""The materials a memorial lobby skeleton is drawn with, as the game's spine-unity sets them, for web/js/skeleton-materials.js.
+"""Describe memorial lobby materials as spine-unity sets them, for web/js/skeleton-materials.js.
 
 spine-unity draws every submesh with the material of its atlas page (the SpineAtlasAsset's materials, matched by their
 main texture). Most pages use the plain spine shaders, which the web UI's spine-player reproduces; some use other
@@ -43,19 +43,25 @@ _BLEND_LISTS = (("multiply", "multiplyMaterials"), ("screen", "screenMaterials")
 
 
 def program(shader: str | None) -> str | None:
-    """The web UI's program for a page shader, None for the shaders spine-player already draws as the game does."""
+    """Return the page shader's web program, or None when spine-player already reproduces it."""
     return PROGRAMS.get(shader or "")
 
 
 def page_name(name: str | None) -> str | None:
-    """A page by the name the web UI knows it: the atlas page's file name without its extension."""
+    """Return an atlas page filename without its extension, preserving None."""
     return name.rsplit(".", 1)[0] if name and "." in name else name
 
 
 def blend_state(form: Mapping[str, Any] | None, floats: Mapping[str, float]) -> dict[str, int]:
-    """The colour and alpha blend factors (UnityEngine.Rendering.BlendMode) of a shader's first pass for a material:
-    a factor names a material property (_SrcBlend ...) or is fixed in the pass ("<noninit>": Hina's multiply page
-    keeps a stray float of that name, which the pass does not read)."""
+    """Read Unity color and alpha blend factors from the first shader pass.
+
+    Factors use UnityEngine.Rendering.BlendMode. Each names a material property (_SrcBlend, ...)
+    or a fixed pass value. The "<noninit>" marker ignores stray material floats, such as Hina's multiply page's.
+
+    Args:
+        form: Parsed shader form; None or an unreadable pass uses premultiplied-alpha defaults.
+        floats: Material float properties used only when the pass explicitly references them.
+    """
 
     def value(entry: Mapping[str, Any], default: int) -> int:
         name = entry.get("name", "")
@@ -79,10 +85,18 @@ def blend_state(form: Mapping[str, Any] | None, floats: Mapping[str, float]) -> 
 def material(
     shader: str | None, form: Mapping[str, Any] | None, tree: Mapping[str, Any], textures: Mapping[str, dict]
 ) -> dict:
-    """A page or replacement material: its program, blend, keywords that change the program (_STRAIGHT_ALPHA_INPUT:
-    the shader premultiplies the texture), its Float and Color properties as stored (the shader's defaults filling what
-    the material lacks; Colors are converted to linear light by the front end) and its textures but the page's own
-    (textures: property -> particles.texture, an empty slot naming the shader's default texture)."""
+    """Describe a page or replacement material's program, blend, properties, and textures.
+
+    _STRAIGHT_ALPHA_INPUT makes the shader premultiply the texture. Float and Color values
+    remain as stored, filled from shader defaults when absent; the front end converts Colors
+    to linear light. Textures exclude the page's own, with empty slots naming shader defaults.
+
+    Args:
+        shader: ShaderLab name selecting the web program, or None for an unresolved shader.
+        form: Parsed shader form supplying pass state and default properties; None uses material values alone.
+        tree: Material typetree supplying saved Float/Color properties and shader keywords.
+        textures: Texture properties mapped to particles.texture descriptions, excluding unresolved slots.
+    """
     saved = tree.get("m_SavedProperties") or {}
     floats = {k: round(float(v), 6) + 0.0 for k, v in saved.get("m_Floats", []) if isinstance(v, (int, float))}
     colors = {k: [round(float(v.get(c, 0.0)), 6) + 0.0 for c in "rgba"] for k, v in saved.get("m_Colors", [])}
@@ -119,10 +133,17 @@ def skeleton(
     replacement: Callable[[dict], tuple[str | None, dict] | None],
     scale: float = 0.01,
 ) -> dict:
-    """The materials of one SkeletonDataAsset: atlas_materials are (page texture name, material) of its atlas assets'
-    materials (material as above), blend_modes its blendModeMaterials typetree, replacement(pointer) a replacement
-    material's (page texture name, material), or None for a null reference. {"pages": {page: material} (only the
-    pages a ported program draws), "blend": {mode: {page: material or None}}, "scale": the data asset's scale}."""
+    """Describe a SkeletonDataAsset's page materials and blend-mode replacements.
+
+    Args:
+        atlas_materials: Atlas materials as (page texture name, material description) pairs.
+        blend_modes: SkeletonDataAsset blendModeMaterials typetree controlling replacement lists.
+        replacement: Resolves a material pointer to (page texture name, description), or None for a null reference.
+        scale: Unity units per skeleton unit from the data asset.
+
+    Returns:
+        Ported-program pages, blend replacements by mode and page (None for unset references), and scale.
+    """
     pages = {}
     for name, mat in atlas_materials:
         page = page_name(name)
@@ -149,9 +170,17 @@ def skeleton(
 def layer(
     resolve: Callable[[str, int, dict], tuple[str, Any] | None] | None, sa_pid: int, sa: Mapping[str, Any]
 ) -> dict:
-    """What a lobby layer (lobby.read_prefab) carries for skeleton-materials.js: {"materials": {"pages", "blend",
-    "scale", "tintBlack"}} from the SkeletonAnimation's data asset (scale: Unity units per skeleton unit, which the
-    noise programs' centres are in); empty pages and blend when it cannot be read."""
+    """Attach SkeletonAnimation material data to a lobby layer for skeleton-materials.js.
+
+    Args:
+        resolve: Reads a skeleton pointer by owner path ID; None leaves page and blend maps empty.
+        sa_pid: SkeletonAnimation path ID owning the data-asset pointer.
+        sa: SkeletonAnimation typetree supplying skeletonDataAsset and tintBlack.
+
+    Returns:
+        Materials with pages, blend, tintBlack, and scale in Unity units per skeleton unit
+        (the noise programs' center units); unreadable data leaves empty page and blend maps.
+    """
     pointer = sa.get("skeletonDataAsset") or {}
     found = resolve("skeleton", sa_pid, pointer) if resolve is not None and pointer.get("m_PathID") else None
     data = found[1] if found else {}
@@ -166,8 +195,11 @@ def layer(
 
 
 def textures(layers: Iterable[Mapping[str, Any]]) -> dict[str, dict]:
-    """The textures the layers' materials sample besides their pages (lobby.json fx.textures entries, served like the
-    particles' own)."""
+    """Collect material textures beyond atlas pages as lobby.json fx.textures entries.
+
+    Args:
+        layers: Exported lobby layers with page and replacement materials; textures use particle-serving locators.
+    """
     out = {}
     for l in layers:
         mats = l.get("materials") or {}

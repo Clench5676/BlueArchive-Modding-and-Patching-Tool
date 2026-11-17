@@ -46,8 +46,7 @@ from .unity import find_object, object_record, open_bundle, reference, ref_key
 
 logger = logging.getLogger(__name__)
 _SCHEMA = "gameassets-v1/"
-# The layout export's format, part of each cached layout's key: raise it whenever export_layout's output changes, so
-# layouts cached in an older format are rebuilt and no other cached asset is dropped (v3: label effect colours and distances)
+# Bump the layout schema when export_layout changes so only incompatible layout entries are rebuilt.
 _LAYOUT = "layout-v6/"
 STORY_CLIP = re.compile(r"^((?:np|ch)\d{4})_", re.IGNORECASE)  # a story cutscene's clip named after its character
 # a clip asked for by name (model_glb's clip): the characters the official clip names use ("CH0271_Formation Pickup");
@@ -57,19 +56,32 @@ _ATLASES = "atlases-v2/"
 
 
 class _ModelLock:
-    """The model lock: one reader at a time of those that hold several bundles open at once (model and clip exports,
-    the selection-frame layout, lobby particles, office models), each keeping the path lock of every bundle it read
-    until it ends, so two of them could wait on each other's bundles. Held for one export (about 1 s for a model,
-    0.5 s for a clip, no step inside it); taken after the library's lock, never before it. A costume build takes it
-    no more: it reads its bundles from memory, one path lock for one load at a time (``unity.load_bundle``).
-    A foreground preview that waits for it while a job or background work holds it (the costume check's export, a
-    lobby warm-up) waits outside its own time (``preview_gate.waiting``): the page's deadline leaves the wait out."""
+    """The model lock: one reader at a time of those that hold several bundles open at once.
+
+    Those readers are model and clip exports, the selection-frame layout, lobby particles and office models, each
+    keeping the path lock of every bundle it read until it ends, so two of them could wait on each other's bundles. Held
+    for one export (about 1 s for a model, 0.5 s for a clip, no step inside it); taken after the library's lock, never
+    before it. A costume build needs no model lock: it reads bundles from memory after each individually locked load
+    (``unity.load_bundle``). A foreground preview that waits for it while a job or background work holds it (the costume
+    check's export, a lobby warm-up) waits outside its own time (``preview_gate.waiting``): the page's deadline leaves
+    the wait out.
+    """
 
     def __init__(self) -> None:
+        """Create an unlocked export lock with no background holder."""
         self._lock = threading.Lock()
         self._job = False  # the holder answers no foreground preview
 
     def acquire(self, blocking: bool = True, timeout: float = -1) -> bool:
+        """Acquire the export lock, excluding background-holder waits from foreground deadlines.
+
+        Args:
+            blocking: Whether to wait when another export holds the lock.
+            timeout: Maximum wait in seconds for a blocking acquire; -1 waits indefinitely.
+
+        Returns:
+            Whether the lock was acquired.
+        """
         if not self._lock.acquire(False):
             if not blocking:
                 return False
@@ -83,15 +95,19 @@ class _ModelLock:
         return True
 
     def release(self) -> None:
+        """Release the held export lock."""
         self._lock.release()
 
     def locked(self) -> bool:
+        """Report whether an export currently holds the lock."""
         return self._lock.locked()
 
     def __enter__(self) -> bool:
+        """Acquire the export lock for the context."""
         return self.acquire()
 
     def __exit__(self, *exc: Any) -> None:
+        """Release the export lock when the context exits."""
         self.release()
 
 
@@ -99,7 +115,7 @@ _MODEL_LOCK = _ModelLock()
 
 
 def model_lock(what: str) -> Any:
-    """The model lock (``_ModelLock``), its waits and holds logged as ``model-lock.<what>``."""
+    """Wrap the model lock with wait/hold spans named model-lock.<what> for the supplied operation label."""
     return spans.held(f"model-lock.{what}", _MODEL_LOCK, hold=True)
 
 
@@ -119,7 +135,7 @@ _SPRITE_FIELDS = (
 )
 
 
-# Where the prefabs the UI uses are in the Global client (bundle file names, as of the 2026-11 resource version).
+# Global-client bundle filenames used as fast prefab hints.
 # Checked before scanning every prefab bundle. A game update rebuilds a changed bundle under a new CRC, the last part
 # of its name: PREFAB_CABS then finds it among the bundles of the same name less the CRC.
 PREFAB_HINTS = {
@@ -175,18 +191,23 @@ _CRC = re.compile(r"_\d+(?=\.bundle$)")
 
 
 def less_crc(name: str) -> str:
-    """A bundle's file name less its CRC, the part a rebuilt bundle keeps."""
+    """Remove a bundle filename's trailing CRC, retaining the identity preserved by a rebuild."""
     return _CRC.sub("", name)
 
 
 def is_collection_art(name: str) -> bool:
-    """Whether a texture of the character collection bundles (the game's UIs/01_Common/14_CharacterCollect folder, the
-    one CostumeExcel's CollectionBGTexturePath and CollectionTexturePath point into) is one the art routes serve.
+    """Check whether a collection-bundle texture name is served by the art routes.
+
+    These bundles contain UIs/01_Common/14_CharacterCollect, the folder referenced by
+    CostumeExcel's CollectionBGTexturePath and CollectionTexturePath.
 
     Every background there is a costume's collection background: most are named BG_<place>_Collection, a few after
     the scenario background they reuse (BG_NewYearFestival2, BG_WaterFall), and two are region copies
     (BG_<place>_Collection_kr), so the suffix is not required. Portraits are Student_Portrait_<id>_Collection; the
     folder's NPC_Portrait_* are never asked for.
+
+    Args:
+        name: Collection Texture2D name, tested with case-sensitive BG_/portrait naming conventions.
     """
     return name.startswith("BG_") or (name.startswith("Student_Portrait_") and name.endswith("_Collection"))
 
@@ -201,10 +222,20 @@ def _stamp(path: str | Path) -> tuple[int, int, int] | None:
 
 
 def prefab_overrides(bundles: list[Path], overrides: list[Path]) -> list[Path | None]:
-    """The override standing in for each prefab bundle, or None, by the replacement rule of library.targets: the
+    """Match one optional override to each prefab bundle using library.targets replacement rules.
+
+    Try the
     override of the same name, else of the same slot (prefix and resource type) and date; an override of another
     release stands in for its slot's newest prefab bundle that has none. A model whose prefabs span dated bundles of
-    one slot (2024-11-18 and 2025-07-25) keeps each of them: one override never stands in for two bundles."""
+    one slot (2024-11-18 and 2025-07-25) keeps each of them: one override never stands in for two bundles.
+
+    Args:
+        bundles: Official prefab parts, retaining coexisting dates in their input order.
+        overrides: Mod parts matched by exact name, then slot/date, then an unclaimed newest slot part.
+
+    Returns:
+        One replacement path or None per input bundle.
+    """
 
     def slot(path: Path) -> tuple:
         parsed = parse_filename(path.name)
@@ -237,6 +268,16 @@ class GameAssets:
     """
 
     def __init__(self, resource_dirs: list[Path], cache: AssetCache, *, preview_cache: PreviewCache | None = None):
+        """Configure lazy reads for one install without scanning or loading Unity assets.
+
+        Args:
+            resource_dirs: Ordered resource folders; existing resolved directories are deduplicated in precedence order.
+            cache: Consent-controlled light-asset storage and bounded decoded-asset memory cache.
+            preview_cache: Optional separately consented store for unchanged heavy preview exports.
+
+        Raises:
+            ServiceError: No supplied resource directory exists (game_not_found).
+        """
         for path in resource_dirs:
             devmode.check_read(path)  # dev mode: only game folders inside the dev roots
         self.resource_dirs = list(dict.fromkeys(Path(p).resolve() for p in resource_dirs if Path(p).is_dir()))
@@ -287,14 +328,14 @@ class GameAssets:
 
     @property
     def resource_version(self) -> str:
-        """The catalog hash, or the hash of the sorted resource file listing."""
+        """Return the lazily cached catalog hash, or hash of the sorted resource file listing."""
         with self._lock("version"):
             if "version" not in self._indexes:
                 self._indexes["version"] = resource_version(self.resource_dirs)
             return self._indexes["version"]
 
     def resource_changed(self) -> bool:
-        """Whether the resource version on disk differs from the one this instance indexed (a game update)."""
+        """Check for an on-disk game update, returning False before this instance has indexed a version."""
         with self._lock("version"):
             known = self._indexes.get("version")
         return known is not None and resource_version(self.resource_dirs) != known
@@ -520,7 +561,15 @@ class GameAssets:
             return image
 
     def sprite_png(self, atlas: str, sprite: str) -> bytes:
-        """Crop a named atlas sprite and return PNG bytes."""
+        """Crop a named atlas sprite and return PNG bytes.
+
+        Args:
+            atlas: Exact NGUI atlas name from atlases.
+            sprite: Exact sprite name within that atlas, using its top-left rectangle.
+
+        Raises:
+            AssetNotFound: The atlas/sprite is absent or atlas bundles change during extraction.
+        """
         with self._lock("atlases"):
             index = self._atlas_index()
             source = self._indexes["atlas-source"]
@@ -562,14 +611,23 @@ class GameAssets:
         return sorted(self._texture_index()["textures"])
 
     def _pointer_index(self) -> dict:
-        """The PC client's cursor and the touch effect's textures (a small scan, about 0.1 s). An index of its own,
-        so a UI texture index cached before these families were read stays valid."""
+        """The PC client's cursor and the touch effect's textures (a small scan, about 0.1 s).
+
+        An index of its own, so a UI texture index cached before these families were read stays valid.
+        """
         return self._index(
             "pointer-textures", lambda: self._scan_textures(filter(is_pointer_texture, self._paths()))["textures"]
         )
 
     def texture_png(self, name: str) -> bytes:
-        """Decode a shared UI texture (or a cursor or touch effect texture) and return PNG bytes."""
+        """Decode a shared UI, cursor, or touch-effect texture as PNG bytes.
+
+        Args:
+            name: Exact Texture2D name in the shared UI or pointer-effect indexes.
+
+        Raises:
+            AssetNotFound: Neither index contains the requested texture.
+        """
 
         def build() -> bytes:
             record = self._texture_index()["textures"].get(name) or self._pointer_index().get(name)
@@ -583,9 +641,11 @@ class GameAssets:
         return self._index("prefabs", self._scan_prefabs)
 
     def _prefab_bundle(self, root: str) -> Path:
-        """The bundle holding a prefab root: the known bundle first (one small read), after a game update the
-        bundle of the same name less the CRC that holds the known CAB (a header read each), else the full index
-        (a scan of every UI prefab bundle, about 12 s cold)."""
+        """The bundle holding a prefab root.
+
+        The known bundle first (one small read), after a game update the bundle of the same name less the CRC that holds
+        the known CAB (a header read each), else the full index (a scan of every UI prefab bundle, about 12 s cold).
+        """
         for path in self._hinted_bundles(root):
             suffix = f"/{root.lower()}.prefab"
             with open_bundle(path) as env:
@@ -641,7 +701,15 @@ class GameAssets:
         return roots
 
     def layout(self, root: str, subpath: str = "") -> dict:
-        """Return a prefab tree, optionally selecting an exact child subpath."""
+        """Return a prefab tree, optionally selecting an exact child subpath.
+
+        Args:
+            root: Exact top-level UI prefab GameObject name, resolved through hints and bundle containers.
+            subpath: Slash-separated child names relative to the root; empty selects the whole tree.
+
+        Raises:
+            AssetNotFound: The prefab, its root, or a requested child is absent.
+        """
         generation = self.cache.generation
 
         def build() -> dict:
@@ -684,7 +752,14 @@ class GameAssets:
         return subtree(tree, subpath)
 
     def selection_frame_texture(self, tex_id: str) -> bytes:
-        """Serve only textures referenced by the starting-skill selection frames, in memory."""
+        """Serve starting-skill selection-frame textures as PNG bytes cached only in memory.
+
+        Args:
+            tex_id: <lower-case CAB>_<path ID> locator listed by the selected-card material descriptions.
+
+        Raises:
+            AssetNotFound: The texture is unlisted, malformed, or unavailable in the install.
+        """
         from .selection_frames import ROOT, SLOT
 
         slot = self.layout(ROOT, SLOT)
@@ -743,17 +818,34 @@ class GameAssets:
         }
 
     def office_backgrounds(self) -> list[dict]:
+        """List complete installed day/night office backgrounds with translated-label keys and layout URLs."""
         from . import office
 
         return office.choices(self)
 
     def office_layout(self, key: str) -> dict:
+        """Return the installed day/night office layout and revisioned texture URLs.
+
+        Args:
+            key: Office background choice, "day" or "night".
+
+        Raises:
+            AssetNotFound: The background is unavailable in this install.
+        """
         from . import office
 
         return office.layout(self, key)
 
     def office_texture(self, key: str, name: str) -> bytes:
-        """Decode only a texture used by this installed office prefab, at its original resolution."""
+        """Decode a texture used by an installed office prefab at its original resolution.
+
+        Args:
+            key: Office background choice, "day" or "night".
+            name: Exact texture name referenced by that background's active widgets.
+
+        Raises:
+            AssetNotFound: The background/texture is absent or its bundle changes during extraction.
+        """
         from . import office
 
         record = office.texture_record(self, key, name)
@@ -790,21 +882,53 @@ class GameAssets:
         return value
 
     def collection_bg(self, name: str) -> tuple[bytes, str]:
-        """Return a lossless collection background with its image MIME type."""
+        """Return a lossless collection background with its image MIME type.
+
+        Args:
+            name: Exact installed collection texture name beginning with BG_.
+
+        Raises:
+            AssetNotFound: The background is absent or its bundle changes during extraction.
+        """
         return self._collection_png(name, "BG_"), "image/png"
 
     def collection_portrait(self, name: str) -> bytes:
-        """Return a lossless collection portrait as PNG bytes."""
+        """Return a lossless collection portrait as PNG bytes.
+
+        Args:
+            name: Exact installed roster texture name beginning with Student_Portrait_.
+
+        Raises:
+            AssetNotFound: The portrait is absent or its bundle changes during extraction.
+        """
         return self._collection_png(name, "Student_Portrait_")
 
     def collection_target(self, name: str) -> dict:
-        """The installed student-roster texture locator; selection-card portraits are excluded."""
+        """Return an installed student-roster texture locator, excluding selection-card portraits.
+
+        Args:
+            name: Exact Student_Portrait_ texture name present in the collection index.
+
+        Raises:
+            ServiceError: The texture is not an available roster portrait (photo_target_unavailable).
+        """
         if not isinstance(name, str) or not name.startswith("Student_Portrait_") or name not in self._collection():
             raise ServiceError("photo_target_unavailable")
         return dict(self._collection()[name])
 
     def collection_portrait_from(self, name: str, paths: list[Path]) -> bytes:
-        """Read the requested Collection image from explicitly verified original bundles."""
+        """Read a Collection portrait from explicitly verified original bundles.
+
+        Args:
+            name: Exact installed roster portrait name, validated by collection_target.
+            paths: Verified original bundle copies expected to contain exactly one matching Texture2D.
+
+        Returns:
+            Lossless PNG bytes, optionally persisted in the preview cache.
+
+        Raises:
+            ServiceError: The portrait is unavailable, duplicated, or its source copies change while reading.
+        """
         self.collection_target(name)
         stamps = spine_stamps(paths)
 
@@ -822,7 +946,14 @@ class GameAssets:
         return self._preview_bytes("photography/default/" + name + json.dumps(stamps), build)
 
     def spine_cores(self, kind: str) -> dict[str, list[Path]]:
-        """Group portrait or lobby bundle parts by parsed Spine core."""
+        """Group portrait or lobby bundle parts by parsed Spine core.
+
+        Args:
+            kind: "spr" for portraits or "lobby" for memorial/background/special lobby slots.
+
+        Raises:
+            AssetNotFound: The category is neither spr nor lobby.
+        """
         categories = {"spr": ("spinecharacters",), "lobby": ("spinelobbies", "spinebackground", "spinecharacters")}
         if kind not in categories:
             raise AssetNotFound(kind)
@@ -840,7 +971,15 @@ class GameAssets:
         return {core: [Path(path) for path in paths] for core, paths in groups.items()}
 
     def spine_files(self, kind: str, core: str) -> dict[str, bytes]:
-        """Return all files required by a portrait or lobby Spine player."""
+        """Return all files required by a portrait or lobby Spine player.
+
+        Args:
+            kind: Spine category, "spr" or "lobby".
+            core: Bundle core to find without case sensitivity.
+
+        Raises:
+            AssetNotFound: The category/core or a required bundle/atlas page is absent.
+        """
         try:
             bundles = self.spine_cores(kind)[core.lower()]
         except KeyError:
@@ -852,6 +991,12 @@ class GameAssets:
 
         Supply official parts first and mod parts last. Cache identity includes
         the order and file stamps, so precedence and changed mods invalidate it.
+
+        Args:
+            bundles: Merge-ordered Spine bundle paths, optionally a Composition carrying type exclusions.
+
+        Raises:
+            AssetNotFound: The list is empty, a bundle/page is absent, or sources change during extraction.
         """
         if not bundles:
             raise AssetNotFound("spine")
@@ -902,13 +1047,15 @@ class GameAssets:
         )
 
     def model_cores(self) -> set[str]:
-        """Lower-case dev names with a 3D chibi prefab bundle (character-<dev>-_mxload-*)."""
+        """Return lower-case dev names with a 3D chibi prefab bundle (character-<dev>-_mxload-*)."""
         return set(self._model_index())
 
     def _field_index(self) -> dict[str, list[str]]:
-        """Field-mode models (event and story variants with no battle model): lower-case dev name -> the field
-        character bundles holding ``Field_Player_<dev>[_NonWeapon]``, or a field NPC named by the character's id
-        (``Field_NPC_<id>[_...]``, keyed by the lower-case id), read from their containers."""
+        """Field-mode models (event and story variants with no battle model) by lower-case dev name.
+
+        Each entry lists the field character bundles holding ``Field_Player_<dev>[_NonWeapon]``, or a field NPC named by
+        the character's id (``Field_NPC_<id>[_...]``, keyed by the lower-case id), read from their containers.
+        """
         from .model import NPC_PREFAB
 
         def build() -> dict[str, list[str]]:
@@ -936,12 +1083,14 @@ class GameAssets:
         return self._index("field-models", build, disk=False)
 
     def field_model_cores(self) -> set[str]:
-        """Lower-case dev names of field-mode models (``Field_Player_<dev>``, ``Field_NPC_<id>``)."""
+        """Return lower-case dev names of field players and NPCs (Field_Player_<dev>, Field_NPC_<id>)."""
         return set(self._field_index())
 
     def _asset_families(self) -> dict[str, list[str]]:
-        """The characters' and NPCs' own dependency bundles (``assets-_mx-npcs|characters-<dev>-_mxdependency-*``)
-        by lower-case dev name, from the file names alone."""
+        """The characters' and NPCs' own dependency bundles by lower-case dev name.
+
+        They are ``assets-_mx-npcs|characters-<dev>-_mxdependency-*``, found from the file names alone.
+        """
 
         def build() -> dict[str, list[str]]:
             out: dict[str, list[str]] = {}
@@ -953,9 +1102,11 @@ class GameAssets:
         return self._index("asset-families", build, disk=False)
 
     def _asset_model(self, core: str, paths: list[str]) -> list[str] | None:
-        """The bundles to export a model of ``core``'s own dependency bundles from (:func:`model.asset_root`): the
-        one holding its root, then those holding clips. Parts that cannot hold a root are not opened
-        (:func:`discovery.may_hold_model_root`)."""
+        """The bundles to export a model of ``core``'s own dependency bundles from.
+
+        See :func:`model.asset_root`. The one holding its root, then those holding clips. Parts that cannot hold a root
+        are not opened (:func:`discovery.may_hold_model_root`).
+        """
         from .model import BundleGraph, asset_roots
 
         best, owner, clips = None, None, []
@@ -975,9 +1126,14 @@ class GameAssets:
         return [owner, *(path for path in clips if path != owner)] if owner else None
 
     def asset_model_cores(self, candidates: Iterable[str]) -> set[str]:
-        """Of ``candidates`` (lower-case dev names of variants with neither a character nor a field model), those
-        whose own dependency bundles hold a model: story-only and UI-only characters (Ayame's story forms in the
-        cutscene bundles' NP0206 and NP0229 models, Arona). Each name is read once, on first request."""
+        """Find candidates whose own dependency bundles hold story-only or UI-only models.
+
+        Examples include Ayame's NP0206/NP0229 story forms and Arona. Each name is read
+        once, on first request.
+
+        Args:
+            candidates: Dev names lacking character/field models, normalized to lower case for discovery.
+        """
         families = self._asset_families()
         with self._lock("asset-models"):
             found = self._indexes.setdefault("asset-models", {})
@@ -987,9 +1143,11 @@ class GameAssets:
             return {core for core in (str(c).lower() for c in candidates) if found.get(core)}
 
     def _story_clips(self) -> dict[str, list[str]]:
-        """The story cutscenes' clips by the character id they are named after (NP0206_Cutin_A_01): {id: [bundle]},
-        among the cutscenes' dependency bundles (assets-_mx-prodresources-sccutscene_*). A story model moves only there
-        (Ayame's story forms)."""
+        """The story cutscenes' clips by the character id they are named after.
+
+        An id looks like NP0206_Cutin_A_01; the result is {id: [bundle]}, among the cutscenes' dependency bundles
+        (assets-_mx-prodresources-sccutscene_*). A story model moves only there (Ayame's story forms).
+        """
 
         def build() -> dict[str, list[str]]:
             found: dict[str, set[str]] = {}
@@ -1029,14 +1187,21 @@ class GameAssets:
     def model_glb(
         self, core: str, overrides: Iterable[Path] = (), *, reads: PreviewReads | None = None, clip: str | None = None
     ) -> bytes:
-        """Export a chibi to lossless GLB bytes. ``overrides`` are bundles that replace the official bundles
-        holding the same CABs (mod previews). ``reads`` (a preview of a chosen source) names the bytes to read for
-        every other game file the export loads, so the preview never depends on what the game folder holds now.
-        ``clip``: only that clip of the model (one of its base GLB's ``extras.clips``), read from the same files as
-        the model (:func:`model.export_clip`), cached per model, clip and files like the model.
+        """Export a chibi or one of its named clips to cached lossless GLB bytes.
 
         The export is one step under the model lock (about 1 s for a model, 0.5 s for a clip); a cached one needs no
-        lock."""
+        lock. Source choices cover every dependency, keeping chosen-source previews independent of installed mods.
+
+        Args:
+            core: Model dev name or NPC ID, matched without case sensitivity.
+            overrides: Mod bundles replacing official prefab parts and dependencies holding the same CABs.
+            reads: Optional source-selection rule for all other game files, with cache identity and trusted locations.
+            clip: Exact name from the base GLB's extras.clips; None exports the base model with its default clips.
+                Named clips use model.export_clip and the same source files, with a per-model/clip/file cache key.
+
+        Raises:
+            AssetNotFound: The model/clip is absent, the clip name is invalid, or sources change while reading.
+        """
         from .model import BundleGraph, export_chibi, export_clip
 
         if clip is not None and not CLIP_NAME.fullmatch(clip):
@@ -1078,10 +1243,8 @@ class GameAssets:
             except FileNotFoundError:
                 raise AssetNotFound(str(path)) from None
             stamps.append((str(path), stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns))
-        # v2 excludes old partial exports whose missing CABs were not recorded; v3 adds the rule that chose the files
-        # read outside the overrides; "fx1" the halo's particle systems; "vital2" the retreat and knockdown clips and
-        # the clips' other names (CLIP_ALIASES); "names1" the names of every clip the model plays (extras.clips). A
-        # clip is keyed by its name beside the model's files.
+        # Cache identity includes source-selection rules and export schemas for halo effects, clip aliases,
+        # and the complete clip list. Named clips also include the requested clip name.
         if clip is None:
             key = _SCHEMA + (
                 "model/v2/fx1/vital2/names1/" + json.dumps([core, stamps])
@@ -1162,7 +1325,6 @@ class GameAssets:
                 if cached is not None:
                     return cached
                 started: dict[str, tuple[int, int, int] | None] = {}
-                # Export phases for the report: bundle opening and CAB lookups are summed per export.
                 phases = {"open": 0.0, "resolve": 0.0}
                 find_cabs = resolve_cabs
 
@@ -1243,8 +1405,11 @@ class GameAssets:
                 del self._model_flights[key]
 
     def _lobby_prefabs(self) -> dict[str, str]:
-        """Memorial lobby prefab names (lower case) -> bundle names, from the bundle containers alone (about 5 s
-        cold). It holds names only, so it is cached like the other indexes."""
+        """Memorial lobby prefab names (lower case) -> bundle names.
+
+        Read from the bundle containers alone (about 5 s cold). It holds names only, so it is cached like the other
+        indexes.
+        """
 
         def build() -> dict[str, str]:
             names: dict[str, str] = {}
@@ -1258,10 +1423,20 @@ class GameAssets:
         return self._index("lobby-prefabs", build)
 
     def lobby_info(self, core: str, prefab: Path | None = None) -> dict:
-        """A memorial lobby's layout and interaction (see lobby.py), from its prefab and its own clip assets. It is
+        """Read a memorial lobby's layout and interaction from its prefab and clip assets.
+
+        The lobby.py data is
         read from the character's bundles, so it stays in memory; the file stamps keep an applied mod apart. With
         ``prefab``, that bundle file is read in place of the lobby's prefab bundle in the game folder (a lobby camera's
-        own prefab)."""
+        own prefab).
+
+        Args:
+            core: Installed lobby bundle core, matched without case sensitivity.
+            prefab: Optional replacement prefab bundle, such as a lobby camera's own copy.
+
+        Raises:
+            AssetNotFound: The lobby core or one of its required bundle files is absent.
+        """
         try:
             bundles = self.spine_cores("lobby")[core.lower()]
         except KeyError:
@@ -1312,8 +1487,13 @@ class GameAssets:
         return json.loads(self._cached("lobby/" + json.dumps([core.lower(), stamps]), build, disk=False))
 
     def lobby_prefab(self, core: str) -> tuple[str, str] | None:
-        """The file name of a lobby's prefab bundle and the name of its root GameObject, None for a lobby without one
-        (a lobby camera keeps its framing there)."""
+        """Find a lobby's prefab bundle filename and root GameObject name, or None without a prefab.
+
+        A lobby camera stores its framing in that prefab.
+
+        Args:
+            core: Installed lobby core passed to lobby_info without case sensitivity.
+        """
         root = self.lobby_info(core).get("prefab")
         bundle = self._lobby_prefabs().get(str(root or "").lower())
         return (bundle, root) if root and bundle else None
@@ -1327,8 +1507,11 @@ class GameAssets:
         behaviours: dict[tuple[str, int], dict] | None = None,
         path: Path | None = None,
     ) -> dict | None:
-        """read_prefab on a prefab bundle (``path``: that file in its place); behaviours are the lobby core's
-        MonoBehaviours by (CAB name, path id), where the prefab's volume profiles usually are."""
+        """Read a lobby prefab on its bundle (``path``: that file in its place), as ``read_prefab`` does.
+
+        ``behaviours`` are the lobby core's MonoBehaviours by (CAB name, path id), where the prefab's volume profiles
+        usually are.
+        """
         from .model import BundleGraph
 
         if path is None:
@@ -1371,8 +1554,11 @@ class GameAssets:
             return lobby.read_prefab(kinds, tree, scripts, root, skeletons, clips, profile=profile, resolve=fx.resolve)
 
     def _lobby_behaviours(self, cab: str) -> dict[tuple[str, int], dict]:
-        """The MonoBehaviours of another lobby core's bundle by (CAB name, path id): a few lobbies share a volume
-        profile (Neru's is Serika's). Read on demand and kept in memory only, like the lobby data."""
+        """The MonoBehaviours of another lobby core's bundle by (CAB name, path id).
+
+        A few lobbies share a volume profile (Neru's is Serika's). Read on demand and kept in memory only, like the
+        lobby data.
+        """
         path = self._resolve_cabs({cab}).get(cab.lower())
         out: dict[tuple[str, int], dict] = {}
         if path is None:
@@ -1387,9 +1573,11 @@ class GameAssets:
         return out
 
     def _lobby_sound_events(self, ids: Iterable[str]) -> dict[str, dict]:
-        """The sound key events (AnimationAudioEvent assets of the lobbies' shared bundle) by id ("<cab>_<path id>"),
-        as lobby.sound_event reads them; their clips are ids of the same form. An event that cannot be read is left
-        out. Part of the lobby data: kept in memory only."""
+        """The sound key events by id ("<cab>_<path id>"), as lobby.sound_event reads them.
+
+        They are the AnimationAudioEvent assets of the lobbies' shared bundle; their clips are ids of the same form. An
+        event that cannot be read is left out. Part of the lobby data: kept in memory only.
+        """
         wanted: dict[str, set[int]] = {}
         for event in ids:
             cab, _, pid = event.rpartition("_")
@@ -1427,8 +1615,15 @@ class GameAssets:
         return out
 
     def lobby_sound(self, core: str, clip_id: str) -> bytes:
-        """An AudioClip a lobby's sound events play, decoded to WAV in memory (UnityPy and FMOD); only clips the
-        lobby's info lists. Game audio: never cached on disk."""
+        """Decode a listed lobby AudioClip to WAV using UnityPy/FMOD, caching game audio only in memory.
+
+        Args:
+            core: Lobby core whose exported sound events authorize the clip.
+            clip_id: <lower-case CAB>_<path ID> locator listed by a sound event.
+
+        Raises:
+            AssetNotFound: The clip is unlisted, malformed, unavailable, or undecodable.
+        """
         if not any(clip_id in e.get("clips", ()) for e in self.lobby_info(core).get("sounds", {}).values()):
             raise AssetNotFound(("lobby-sound", core, clip_id))
         cab, _, pid = clip_id.rpartition("_")
@@ -1461,7 +1656,15 @@ class GameAssets:
         return self._cached("lobby-sound/" + json.dumps([clip_id, spine_stamps([Path(bundle)])]), build, disk=False)
 
     def lobby_fx_texture(self, core: str, tex_id: str) -> bytes:
-        """A texture of a lobby's particle effects as PNG (memory only): only ids the lobby's info lists."""
+        """Decode a listed lobby effect texture to PNG bytes cached only in memory.
+
+        Args:
+            core: Lobby core whose fx texture table authorizes the image.
+            tex_id: <lower-case CAB>_<path ID> locator listed in lobby_info's fx.textures.
+
+        Raises:
+            AssetNotFound: The texture is unlisted, malformed, or unavailable in the install.
+        """
         if tex_id not in self.lobby_info(core).get("fx", {}).get("textures", {}):
             raise AssetNotFound(("lobby-fx", core, tex_id))
         cab, _, pid = tex_id.rpartition("_")
@@ -1502,18 +1705,39 @@ def _builtin_quad(owner: Any, pointer: dict | None) -> tuple[str, None] | None:
 
 
 class _FxResolver:
-    """Reads what a lobby's renderers point at, for lobby.read_prefab: a particle material as (id, particles.material)
-    with its textures (particles.texture), a mesh as (id, particles.mesh) (Unity's built-in Quad as ("quad", None)),
-    the render queue of a skeleton's atlas pages ("pages": a SkeletonDataAsset, or one Material) as (id, {texture
-    name: queue}), or their shaders' names ("shaders") as (id, {texture name: shader name}), the materials a skeleton
-    is drawn with ("skeleton": a SkeletonDataAsset) as (id, spine_materials.skeleton) and an Animator's controller
-    ("animator") as (id, {"decoded", "bindings", "loop"}) of its default state's clip. Ids are "<cab>_<path id>"."""
+    """Reads what a lobby's renderers point at, for lobby.read_prefab.
+
+    A particle material is read as (id, particles.material) with its textures (particles.texture), a mesh as (id,
+    particles.mesh) (Unity's built-in Quad as ("quad", None)), the render queue of a skeleton's atlas pages ("pages": a
+    SkeletonDataAsset, or one Material) as (id, {texture name: queue}), or their shaders' names ("shaders") as (id,
+    {texture name: shader name}), the materials a skeleton is drawn with ("skeleton": a SkeletonDataAsset) as (id,
+    spine_materials.skeleton) and an Animator's controller ("animator") as (id, {"decoded", "bindings", "loop"}) of its
+    default state's clip. Ids are "<cab>_<path id>".
+    """
 
     def __init__(self, graph: Any, objects: dict[int, Any], shader_forms: dict):
+        """Prepare dependency reads for one prefab's effect components.
+
+        Args:
+            graph: BundleGraph resolving external pointers and caching typetrees.
+            objects: Prefab-file readers indexed by path ID, identifying each pointer owner.
+            shader_forms: Shared parsed-shader cache indexed by CAB and path ID.
+        """
         self.graph, self.objects, self.forms = graph, objects, shader_forms
         self.done: dict[tuple[str, str], Any] = {}
 
     def resolve(self, kind: str, owner: int, pointer: dict) -> tuple[str, Any] | None:
+        """Resolve an effect pointer to a stable ID and player-ready data, caching failures too.
+
+        Args:
+            kind: material, mesh, pages, shaders, skeleton, animator, timeline, or sprite description to read.
+            owner: Prefab-file component path ID supplying the pointer's external-file table.
+            pointer: Unity m_FileID/m_PathID reference to the requested asset.
+
+        Returns:
+            (<lower-case CAB>_<path ID>, description), ("quad", None) for the built-in Quad,
+            or None for an absent, incompatible, or unreadable object.
+        """
         from . import particles
         from .model import read_mesh
 
@@ -1564,8 +1788,11 @@ class _FxResolver:
         return {**event, "id": f"{asset.assets_file.name.lower()}_{asset.path_id}"} if event else None
 
     def _sprite(self, obj: Any) -> dict | None:
-        """A Sprite as intro.sprite draws it: its texture (particles.texture), its rect in the texture's pixels, its
-        size in units (rect / pixels per unit) and its pivot (0 to 1). The pixels are read when served."""
+        """A Sprite as intro.sprite draws it.
+
+        That is its texture (particles.texture), its rect in the texture's pixels, its size in units (rect / pixels per
+        unit) and its pivot (0 to 1). The pixels are read when served.
+        """
         from . import particles
 
         g = self.graph
@@ -1588,11 +1815,13 @@ class _FxResolver:
         }
 
     def _pages(self, obj: Any, kind: str = "pages") -> dict[str, Any]:
-        """{texture name: render queue} of a SkeletonDataAsset's atlas pages, as spine-unity draws them: each page with
-        the material its SpineAtlasAsset lists for it (matched by the material's main texture name, which is the page's
-        file name without its extension). For a Material, its own page. With kind "shaders", {texture name: the name
-        of the material's shader} instead (a page without a shader is left out). The textures' pixels are never
-        read."""
+        """{texture name: render queue} of a SkeletonDataAsset's atlas pages, as spine-unity draws them.
+
+        Each page comes with the material its SpineAtlasAsset lists for it (matched by the material's main texture name,
+        which is the page's file name without its extension). For a Material, its own page. With kind "shaders",
+        {texture name: the name of the material's shader} instead (a page without a shader is left out). The textures'
+        pixels are never read.
+        """
         g = self.graph
         materials = [obj]
         if obj.type.name == "MonoBehaviour":
@@ -1616,8 +1845,11 @@ class _FxResolver:
         return out
 
     def _state(self, obj: Any, tree: dict) -> tuple[str | None, dict | None, dict]:
-        """A material's shader name, the shader's parsed form (the parts read here) and the render state of its
-        colour pass for this material (model.shader_state: blend and queue)."""
+        """A material's shader name, the shader's parsed form and the render state of its colour pass.
+
+        The parsed form holds the parts read here; the render state is this material's (model.shader_state: blend and
+        queue).
+        """
         from .model import shader_state
 
         g = self.graph
@@ -1671,9 +1903,11 @@ class _FxResolver:
         return out
 
     def _skeleton(self, obj: Any) -> dict:
-        """The materials of a SkeletonDataAsset's atlas pages and its blend mode replacement materials
-        (spine_materials.skeleton). Only the pages a ported shader draws read their other textures' settings; no
-        pixels are read."""
+        """The materials of a SkeletonDataAsset's atlas pages and its blend mode replacement materials.
+
+        See spine_materials.skeleton. Only the pages a ported shader draws read their other textures' settings; no
+        pixels are read.
+        """
         from . import spine_materials
 
         g = self.graph
@@ -1710,8 +1944,11 @@ class _FxResolver:
         return (main.peek_name() if main is not None else None), spine_materials.material(name, form, tree, textures)
 
     def _animator(self, controller: Any, oid: str) -> tuple[str, dict] | None:
-        """The clip an AnimatorController's first layer plays in its default state (the lobbies' controllers have one
-        state, looping one clip), decoded (model.decode_clip) with its bindings."""
+        """The clip an AnimatorController's first layer plays in its default state.
+
+        The lobbies' controllers have one state, looping one clip. The clip is decoded (model.decode_clip) with its
+        bindings.
+        """
         from .model import decode_clip
 
         g = self.graph

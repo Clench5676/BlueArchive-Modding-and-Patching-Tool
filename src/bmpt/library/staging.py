@@ -32,6 +32,14 @@ def _stale(path: Path, cutoff: float) -> bool:
 
 @contextmanager
 def import_directory(root: Path):
+    """Lease a temporary import workspace and remove it on context exit.
+
+    Args:
+        root: Library folder whose staging directory holds the workspace and lease.
+
+    Yields:
+        A directory protected from startup cleanup while the context is open.
+    """
     staging = root / "staging"
     devmode.check_read(staging)
     devmode.check_write(staging)
@@ -51,6 +59,11 @@ def import_directory(root: Path):
 
 
 def cleanup(root: Path) -> None:
+    """Remove abandoned import workspaces with no writes in the last day.
+
+    Args:
+        root: Library folder whose staging directory is checked for inactive leases.
+    """
     staging = root / "staging"
     if staging.is_symlink() or not staging.is_dir():
         return
@@ -66,7 +79,7 @@ def cleanup(root: Path) -> None:
                     continue
                 try:
                     with file_lock(lease, timeout=0):
-                        # Older versions have no lease, so also require a full day without writes.
+                        # Lease-free workspaces also need protection from recent activity.
                         if not _stale(path, time.time() - MIN_IMPORT_AGE):
                             continue
                         shutil.rmtree(path)

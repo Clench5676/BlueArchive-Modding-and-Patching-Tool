@@ -1,9 +1,9 @@
-"""Steam's own records of an install, read-only and on this device: which build is installed and the size and SHA-1 of
-every file of it, from the depot manifest Steam keeps in its ``depotcache`` folder.
+"""Steam's own records of an install, read-only and on this device.
 
-The game's bundles name their CRC32, which a mod can match; Steam's file list says what the official build holds. The
-callers ask only with the user's consent to read Steam's records (the Check Game Files consent). Nothing here writes,
-opens the network or reads a game file.
+They say which build is installed and the size and SHA-1 of every file of it, from the depot manifest Steam keeps in
+its ``depotcache`` folder. The game's bundles name their CRC32, which a mod can match; Steam's file list says what the
+official build holds. The callers ask only with the user's consent to read Steam's records (the Check Game Files
+consent). Nothing here writes, opens the network or reads a game file.
 """
 
 from __future__ import annotations
@@ -43,6 +43,8 @@ class ManifestError(ValueError):
 
 @dataclass(frozen=True)
 class OfficialFile:
+    """A file of the official build as Steam lists it: its size in bytes and its SHA-1 in hex."""
+
     size: int
     sha1: str
 
@@ -53,7 +55,11 @@ _TOKEN = re.compile(r'\s*(?://[^\n]*\n?\s*)*(?:"((?:[^"\\]|\\.)*)"|([{}])|([^\s{
 
 
 def parse_keyvalues(text: str) -> dict:
-    """KeyValues text as nested dicts with lower-case keys (the last of a repeated key wins)."""
+    """Parse Valve KeyValues text into nested dicts with lower-case keys; the last of a repeated key wins.
+
+    Raises:
+        ManifestError: The text is not well-formed KeyValues.
+    """
     tokens: list[tuple[str, str]] = []
     pos = 0
     while pos < len(text):
@@ -99,7 +105,18 @@ def parse_keyvalues(text: str) -> dict:
 
 
 def installed_manifest(appmanifest: str, depot: int = DEPOT_GLOBAL_WINDOWS) -> int | None:
-    """The manifest id Steam installed for ``depot``, from an app manifest's text; None when it lists none."""
+    """Return the manifest id Steam installed for a depot.
+
+    Args:
+        appmanifest: The text of the game's ``appmanifest_*.acf``.
+        depot: The depot id; the Global client's Windows depot by default.
+
+    Returns:
+        The manifest id, or None when the app manifest lists none for the depot.
+
+    Raises:
+        ManifestError: The text is not well-formed KeyValues.
+    """
     state = parse_keyvalues(appmanifest).get("appstate", {})
     depots = state.get("installeddepots", {}) if isinstance(state, dict) else {}
     entry = depots.get(str(depot)) if isinstance(depots, dict) else None
@@ -166,8 +183,18 @@ def _sections(data: bytes) -> dict[int, bytes]:
 
 
 def parse_depot_manifest(data: bytes) -> tuple[int, int, dict[str, OfficialFile]]:
-    """(depot, manifest id, {path below the install: size and SHA-1}) of a depot manifest; the payload's checksum is
-    verified. Directories and links are left out."""
+    """Parse a depot manifest (Steam's ContentManifest), verifying its payload's checksum.
+
+    Args:
+        data: The manifest file's bytes.
+
+    Returns:
+        ``(depot, manifest id, {path below the install: file})``; paths use ``/``, directories and links are left out.
+
+    Raises:
+        ManifestError: The manifest is truncated, malformed, fails its checksum, has encrypted file names or a file
+            without a SHA-1.
+    """
     sections = _sections(data)
     if _MAGIC_PAYLOAD not in sections or _MAGIC_METADATA not in sections:
         raise ManifestError("depot manifest without payload or metadata")
@@ -210,9 +237,11 @@ def parse_depot_manifest(data: bytes) -> tuple[int, int, dict[str, OfficialFile]
 
 
 def _steam_roots(library: Path) -> Iterator[Path]:
-    """The Steam client folders that may hold the depot cache for a library: the library itself (the client's own
-    library), the Windows client inside the same Wine prefix, the Windows client's registered folder, the native
-    client's folders."""
+    """The Steam client folders that may hold the depot cache for a library.
+
+    They are the library itself (the client's own library), the Windows client inside the same Wine prefix, the
+    Windows client's registered folder, the native client's folders.
+    """
     yield library
     for ancestor in library.parents:
         if (ancestor / "drive_c").is_dir():
@@ -232,8 +261,16 @@ def _steam_roots(library: Path) -> Iterator[Path]:
 
 
 def depot_manifest_path(game_folder: Path, depot: int = DEPOT_GLOBAL_WINDOWS) -> Path | None:
-    """The depot manifest Steam keeps for the build installed at ``game_folder`` (the install root or a folder below
-    it); None outside a Steam library, or when Steam lists no such depot or keeps no manifest of it."""
+    """Return the depot manifest Steam keeps for the build installed at a game folder.
+
+    Args:
+        game_folder: The install root or a folder below it.
+        depot: The depot id; the Global client's Windows depot by default.
+
+    Returns:
+        The manifest file, or None outside a Steam library, when Steam lists no such depot or keeps no manifest of
+        it, or when dev mode refuses the path.
+    """
     app = game_paths.steam_app_manifest(Path(game_folder))
     if app is None or not devmode.allows_read(app):
         return None
@@ -253,17 +290,27 @@ def depot_manifest_path(game_folder: Path, depot: int = DEPOT_GLOBAL_WINDOWS) ->
 
 
 class OfficialFiles:
-    """Steam's file list of each install, by the bundle file names of its resource folders, read when asked and kept
-    while Steam's files are unchanged (thread-safe)."""
+    """Steam's file list of each install, by the bundle file names of its resource folders.
+
+    Read when asked and kept while Steam's files are unchanged; thread-safe.
+    """
 
     def __init__(self) -> None:
+        """Start with nothing read."""
         self._lock = threading.Lock()
         self._cache: dict[Path, tuple[tuple, dict[str, OfficialFile]]] = {}
         self._apps: dict[Path, tuple[tuple, Path]] = {}  # app manifest -> (its stat, the depot manifest it named)
 
     def bundles(self, game_folder: Path) -> dict[str, OfficialFile]:
-        """{bundle file name: official size and SHA-1} for the install at ``game_folder``; empty when Steam keeps no
-        readable file list of it."""
+        """Return the official bundles of an install by file name.
+
+        Args:
+            game_folder: The install root or a folder below it.
+
+        Returns:
+            ``{bundle file name: file}`` for the bundles of ``BUNDLE_FOLDERS``; empty when Steam keeps no readable
+            file list of it.
+        """
         app = game_paths.steam_app_manifest(Path(game_folder))
         if app is None or not devmode.allows_read(app):
             return {}

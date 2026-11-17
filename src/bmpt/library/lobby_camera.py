@@ -7,6 +7,11 @@ multiplies its ``scaleTransforms``' local scale and adds whole units to its ``of
 scaled by ``k`` and both kinds of target moved to ``k p + o`` (in the root's frame), the component's offsets times
 ``k``. It holds at every aspect, since the component multiplies the scale and adds the offsets. Only those objects of
 the prefab bundle change; every other object and stream stays byte for byte.
+
+A camera is a generated generic mod of the student's own prefab bundle. Prefabs are packed one per bundle,
+so each slot is keyed by its CAB. Parameters live under TAG, while the App lists the record as a Memorial Lobby
+choice (mod:<id>, kind lobby). Applying it puts its source art in the lobby slot and its prefab in the prefab
+slot. Another lobby choice or a lobby restore returns the prefab slot to the camera's base.
 """
 
 from __future__ import annotations
@@ -61,7 +66,18 @@ def _refuse(root: str) -> ServiceError:
 
 
 def check_params(scale: Any, offset: Any) -> tuple[float, tuple[float, float]]:
-    """A camera's scale and offset as numbers, or ``bad_params``."""
+    """Validate a camera's finite scale and offset within the supported bounds.
+
+    Args:
+        scale: Numeric zoom multiplier within SCALE_RANGE; booleans are rejected.
+        offset: Two numeric NGUI-unit offsets, each within OFFSET_LIMIT of zero.
+
+    Returns:
+        Float scale and (horizontal, vertical) offset.
+
+    Raises:
+        ServiceError: A parameter is invalid (bad_params).
+    """
     if not _number(scale) or not SCALE_RANGE[0] <= scale <= SCALE_RANGE[1]:
         raise ServiceError("bad_params", key="scale")
     if (
@@ -79,9 +95,12 @@ NODE = "LobbyCamera"  # the camera node's GameObject, between the root and the s
 
 @dataclass
 class CameraEdit:
-    """What a camera changes in a lobby prefab: ``trees`` the new typetrees by path id, of changed objects and of the
+    """Describe changed and added lobby-prefab objects for a camera.
+
+    ``trees`` holds the new typetrees by path id, of changed objects and of the
     ``added`` ones (path id -> class); ``node`` the camera node's Transform, ``animator`` the root's new Animator and
-    ``director`` the intro's PlayableDirector (to give the intro track to), each None when not made or not found."""
+    ``director`` the intro's PlayableDirector (to give the intro track to), each None when not made or not found.
+    """
 
     trees: dict[int, dict]
     added: dict[int, str] = field(default_factory=dict)
@@ -99,8 +118,7 @@ def camera_edit(
     offset: tuple[float, float],
     fresh: Callable[[], int] | None = None,
 ) -> CameraEdit:
-    """The objects a camera changes or adds in one lobby prefab. kinds, tree and scripts as ``lobby.read_prefab``
-    takes them; ``fresh`` gives path ids for new objects.
+    """Plan camera changes and additions within one lobby prefab.
 
     With ``fresh``, when the scale targets are the root's children and the root has no Animator of its own, a camera
     node (a GameObject and its Transform, ``NODE``) goes between the root and the targets, holding the camera, and an
@@ -111,7 +129,20 @@ def camera_edit(
 
     A prefab without the component on its root, or whose component or targets are not as described above (a target
     that is no plain Transform of this file, a parent between it and the root that is scaled or turned), is refused
-    (``lobby_camera_unsupported``): nothing is guessed."""
+    (``lobby_camera_unsupported``): nothing is guessed.
+
+    Args:
+        kinds: Unity class names indexed by local object path ID.
+        tree: Cached typetree reader for an object's local path ID.
+        scripts: MonoScript class names indexed by script path ID.
+        root: Case-insensitive lobby root GameObject name.
+        scale: Camera zoom multiplier applied around the screen center.
+        offset: Horizontal and vertical translation in NGUI units in the root's frame.
+        fresh: Allocates unused path IDs for a camera node and Animator; None edits targets directly.
+
+    Raises:
+        ServiceError: Parameters or the prefab's transform/component structure are unsupported.
+    """
     scale, (ox, oy) = check_params(scale, offset)
     top = next(
         (
@@ -153,8 +184,10 @@ def camera_edit(
         return pointer["m_PathID"]
 
     def parents(pid: int) -> tuple[float, float]:
-        """The translation of a target's parents up to the root (the root's own Transform is the frame), or a refusal
-        when one of them scales or turns."""
+        """Sum the translation of a target's parents up to the root.
+
+        The root's own Transform is the frame, so it is not counted. A parent that scales or turns is a refusal.
+        """
         x = y = 0.0
         seen = set()
         father = tree(pid)["m_Father"]["m_PathID"]
@@ -274,8 +307,19 @@ def camera_trees(
     scale: float,
     offset: tuple[float, float],
 ) -> dict[int, dict]:
-    """The new typetrees of a camera that scales and moves the scale targets themselves (``camera_edit`` without a
-    camera node): the root's UIManualScaleByAspect and its target Transforms, by path id."""
+    """Frame a lobby by editing scale targets directly, without inserting a camera node.
+
+    Args:
+        kinds: Prefab path IDs mapped to Unity classes for direct-target editing.
+        tree: Supplies the prefab typetree for a local path ID.
+        scripts: Local script IDs mapped to classes for locating UIManualScaleByAspect.
+        root: Lobby root's GameObject name, matched without regard to case.
+        scale: Camera zoom multiplier around the screen center.
+        offset: NGUI-unit x/y translation applied to targets relative to the prefab root.
+
+    Returns:
+        Changed UIManualScaleByAspect and Transform typetrees indexed by path ID.
+    """
     return camera_edit(kinds, tree, scripts, root, scale, offset).trees
 
 
@@ -313,7 +357,11 @@ def _streams(bundle: Bundle) -> dict[str, str]:
 
 
 def read_trees(objects: dict[int, Any]) -> tuple[dict[int, str], Callable[[int], dict], dict[int, str]]:
-    """kinds, a caching typetree reader and the MonoScript class names of a prefab file's objects."""
+    """Prepare class names, a cached typetree reader, and MonoScript names for prefab objects.
+
+    Args:
+        objects: Object readers from one prefab serialized file, indexed by local path ID.
+    """
     kinds = {pid: obj.type.name for pid, obj in objects.items()}
     cache: dict[int, dict] = {}
 
@@ -327,8 +375,7 @@ def read_trees(objects: dict[int, Any]) -> tuple[dict[int, str], Callable[[int],
 
 
 def timeline_cab(prefab: Path) -> str | None:
-    """The CAB name of the file holding a lobby prefab's intro timeline (its PlayableDirector's asset), lower case;
-    None for a prefab without one in another file."""
+    """Find a lobby prefab's external intro-timeline CAB in lower case, or None if unavailable."""
     bundle = Bundle.load(prefab)
     if bundle is None:
         return None
@@ -399,10 +446,25 @@ def patch_prefab(
     compression: str = "lz4",
     crc: bool = True,
 ) -> bool:
-    """Write ``base`` with the camera to ``output`` (its name gives the CRC to fix to), then check that only the
-    camera's objects changed or were added, and to what they should be (``lobby_camera_failed`` otherwise).
-    ``timeline``: the bundle holding the lobby's intro timeline (``timeline_cab``), as the camera's art has it; with it
-    the intro keeps the official framing (``lobby_camera_intro``). Returns whether it does."""
+    """Write a camera prefab and verify that only its intended objects changed or were added.
+
+    Args:
+        base: Prefab bundle supplying untouched objects and streams.
+        output: Saved bundle path whose filename supplies the CRC to fix to.
+        root: Lobby root GameObject name to frame.
+        scale: Similarity-transform multiplier for the prefab's camera framing.
+        offset: Horizontal and vertical translation in NGUI units.
+        timeline: Art bundle holding the intro timeline; None leaves the intro in camera framing.
+        compression: Engine bundle compression mode for the output.
+        crc: Whether to fix the saved bytes to the output filename's CRC.
+
+    Returns:
+        Whether an added intro track preserves official framing until the rest pose.
+
+    Raises:
+        ServiceError: The bundle or camera structure is unsupported, saving fails,
+            or post-save preservation checks fail (lobby_camera_failed).
+    """
     from . import lobby_camera_intro as intro
 
     bundle = Bundle.load(base)
@@ -458,8 +520,12 @@ def _intro(
     offset: tuple[float, float],
     added: list[int],
 ) -> bool:
-    """Give the prefab its own intro timeline with the camera track (``lobby_camera_intro``); False, and nothing
-    added, when the timeline file does not hold the director's timeline or it has no rest pose to switch at."""
+    """Give the prefab its own intro timeline with the camera track (``lobby_camera_intro``).
+
+    Returns:
+        False, with nothing added, when the timeline file does not hold the director's timeline or the timeline has
+        no rest pose to switch at; True otherwise.
+    """
     director = copy.deepcopy(edit.trees.get(edit.director) or tree(edit.director))
     asset = director.get("m_PlayableAsset") or {}
     file_id = asset.get("m_FileID", 0)
@@ -503,26 +569,29 @@ def _intro(
 def compose(
     first: tuple[float, tuple[float, float]], then: tuple[float, tuple[float, float]]
 ) -> tuple[float, list[float]]:
-    """A camera framed on a lobby that already has one: ``p -> k2 (k1 p + o1) + o2``."""
+    """Compose camera transforms as p -> k2 (k1 p + o1) + o2.
+
+    Args:
+        first: Existing camera's scale and horizontal/vertical NGUI offset.
+        then: New framing's scale and horizontal/vertical offset applied to the existing camera.
+    """
     (k1, (x1, y1)), (k2, (x2, y2)) = first, then
     return k1 * k2, [k2 * x1 + x2, k2 * y1 + y2]
 
 
-# --- the library's lobby camera choices ---
-# A camera is kept as a generated generic mod of the student's own prefab bundle (one prefab per bundle: a group packed
-# one asset per bundle, so the library gives each its own slot keyed by its CAB), with its parameters under TAG. The
-# App lists it as a Memorial Lobby choice of its variant (``mod:<id>``, kind "lobby"): applying it puts the art of its
-# source (official, or the lobby mod it was framed on) in the lobby slot and the camera's prefab in the prefab slot.
-# Any other lobby choice of the variant, and a restore of its lobby, put the prefab slot back to the camera's base.
-
-
 def meta_of(record: dict | None) -> dict | None:
-    """A record's camera parameters, None for any other record."""
+    """Return a generic record's camera parameters, or None for absent or noncamera records."""
     meta = (record or {}).get(TAG) if (record or {}).get("kind") == "other" else None
     return meta if isinstance(meta, dict) and isinstance(meta.get("variant"), str) else None
 
 
 def cameras(library: ModLibrary, variant: str | None = None) -> list[dict]:
+    """List stored camera records, optionally restricted to one variant.
+
+    Args:
+        library: Library whose managed generic records may contain camera metadata.
+        variant: Variant key, or None to include cameras for every variant.
+    """
     return [
         record
         for record in library._records.values()
@@ -531,7 +600,12 @@ def cameras(library: ModLibrary, variant: str | None = None) -> list[dict]:
 
 
 def camera_of(library: ModLibrary, source: Any) -> dict | None:
-    """The camera record a ``mod:<id>`` source names, else None."""
+    """Resolve a library source to a camera record.
+
+    Args:
+        library: Library holding the source records.
+        source: mod:<id> reference; other values or noncamera records return None.
+    """
     if not isinstance(source, str) or not source.startswith("mod:"):
         return None
     record = library._records.get(source[4:])
@@ -558,9 +632,18 @@ def _configured(library: ModLibrary, pin: Pin) -> dict:
 
 
 def timeline_file(library: ModLibrary, variant: str, source: str, prefab: Path, pin: Pin) -> Path | None:
-    """The bundle holding a lobby's intro timeline as the camera's art has it: the lobby mod's own file of that name
-    when ``source`` is a lobby mod that holds one, else the official copy of the game's. None when the prefab's intro
-    is in no lobby file of the variant."""
+    """Find the intro timeline matching a camera's art source.
+
+    Prefer the lobby mod's own matching file, falling back to the verified official
+    copy. Return None when no lobby file holds the prefab's external timeline CAB.
+
+    Args:
+        library: Library providing source records, lobby files, and official copies.
+        variant: Variant key whose lobby art is searched.
+        source: official or a lobby mod:<id> whose own timeline takes precedence.
+        prefab: Camera base prefab whose PlayableDirector identifies the timeline CAB.
+        pin: Game install and server the operation is fixed to.
+    """
     cab = timeline_cab(prefab)
     if cab is None:
         return None
@@ -581,9 +664,22 @@ def timeline_file(library: ModLibrary, variant: str, source: str, prefab: Path, 
 def save(
     library: ModLibrary, variant: str, source: str, scale: float, offset: Any, prefab: str, root: str, pin: Pin, log
 ) -> dict:
-    """Keep a new camera choice of a variant's memorial lobby: ``source`` is what the lobby showed ("official",
-    ``mod:<id>`` of one of its lobby mods, or one of its cameras, composed), ``prefab`` / ``root`` its prefab bundle's
-    file name and root GameObject. Returns the stored record."""
+    """Store a new memorial-lobby camera choice, composing any existing camera framing.
+
+    Args:
+        library: Library storing the generated prefab and its source-art recipe.
+        variant: Variant key whose memorial lobby is framed.
+        source: official, a lobby mod:<id>, or a camera mod:<id> to compose with the new framing.
+        scale: Additional camera zoom multiplier, validated after composition too.
+        offset: Horizontal and vertical NGUI-unit offset for the additional framing.
+        prefab: Live ui-uilobbyelement bundle basename containing the lobby prefab.
+        root: Prefab root GameObject name.
+        pin: Game install and server the operation is fixed to.
+        log: Receives user-facing operation messages.
+
+    Returns:
+        Stored generic record with camera metadata, number, and base source.
+    """
     k, (ox, oy) = check_params(scale, offset)
     v = library._variant(variant)
     if not v.lobby:
@@ -642,8 +738,20 @@ def save(
 
 
 def apply(library: ModLibrary, variant: str, record: dict, log, progress, pin: Pin, create_backup: bool) -> ApplyResult:
-    """Put a camera choice in the game: its source's art through the lobby's own apply, then its prefab through the
-    generic one (both only configured while mods are off)."""
+    """Apply a camera's lobby art and generic prefab, deferring both when mods are off.
+
+    Args:
+        library: Library applying the camera's two coordinated source choices.
+        variant: Variant key that must match the camera record.
+        record: Stored camera record identifying art, prefab, and any required refresh.
+        log: Receives user-facing operation messages.
+        progress: Receives apply progress; None disables reporting.
+        pin: Game install and server the operation is fixed to.
+        create_backup: Whether applying the art and prefab also keeps adjacent .backup files.
+
+    Returns:
+        Combined art and prefab result retaining incomplete and kept-current art status.
+    """
     from .models import ApplyResult
 
     meta = meta_of(record)
@@ -653,7 +761,6 @@ def apply(library: ModLibrary, variant: str, record: dict, log, progress, pin: P
     record = library._record(record["id"])
     art = library._apply_choice(variant, meta["source"], log, progress, "lobby", pin, create_backup=create_backup)
     prefab = library._apply_other(record["target"], f"mod:{record['id']}", log, progress, pin, create_backup)
-    # the art's own result: incomplete or kept as it is
     return ApplyResult(
         variant,
         f"mod:{record['id']}",
@@ -666,8 +773,15 @@ def apply(library: ModLibrary, variant: str, record: dict, log, progress, pin: P
 
 
 def release(library: ModLibrary, variant: str, pin: Pin, log, progress) -> None:
-    """After another lobby choice of a variant (or a restore of its lobby): a prefab slot holding one of its cameras
-    goes back to that camera's base, the official prefab or the generic prefab mod it was framed on."""
+    """Return camera prefab slots to their bases when another lobby choice or restore replaces the art.
+
+    Args:
+        library: Library applying the official prefab or generic prefab mod used as each camera's base.
+        variant: Variant key whose configured camera slots must be released.
+        pin: Game install and server the operation is fixed to.
+        log: Receives user-facing operation messages.
+        progress: Receives apply progress; None disables reporting.
+    """
     for slot, entry in list(_configured(library, pin).items()):
         record = camera_of(library, entry.get("source"))
         meta = meta_of(record)
@@ -683,8 +797,16 @@ def release(library: ModLibrary, variant: str, pin: Pin, log, progress) -> None:
 
 
 def stale(library: ModLibrary, record: dict, pin: Pin) -> Path | None:
-    """The game's prefab file when a game update replaced the one a camera was made on, or the intro timeline bundle
-    its own timeline copies (``meta["timeline"]``), else None."""
+    """Find the live prefab when a camera's prefab or copied intro timeline is outdated.
+
+    Args:
+        library: Library providing the live generic slot and lobby-art filenames.
+        record: Stored camera record with its base prefab and optional copied-timeline name.
+        pin: Game install and server the operation is fixed to.
+
+    Returns:
+        The sole live prefab if either baseline changed, or None otherwise or when the slot is unavailable.
+    """
     meta = meta_of(record)
     paths = library._index(pin).get(meta["slot"], [])
     if len(paths) != 1:
@@ -698,9 +820,17 @@ def stale(library: ModLibrary, record: dict, pin: Pin) -> Path | None:
 
 
 def refresh(library: ModLibrary, pins: list[Pin], log, only: set[str] | None = None) -> None:
-    """Make each camera framed on the official prefab anew on the game's new prefab after an update, with the same
-    scale and offset, in place (the same choice, alias and number). A camera that cannot be made again keeps its
-    file; applying it updates that file onto the new prefab like any generic mod."""
+    """Rebuild official-base cameras in place on updated prefabs with their existing framing.
+
+    Retain the choice, alias, number, scale, and offset. A camera that cannot be made again keeps its
+    file; applying it updates that file onto the new prefab like any generic mod.
+
+    Args:
+        library: Library retaining camera records and resolving official prefab copies.
+        pins: Game installs and servers the operation is fixed to.
+        log: Receives user-facing operation messages.
+        only: Camera IDs to refresh; None considers every stored camera.
+    """
     from .storage import atomic_copy, verify_file
 
     for pin in pins:
@@ -742,8 +872,16 @@ def refresh(library: ModLibrary, pins: list[Pin], log, only: set[str] | None = N
 
 
 def preview_files(library: ModLibrary, record: dict, pin: Pin) -> tuple[Path, Path | None, Path | None]:
-    """What a camera's preview reads: its own prefab file, or, after a game update it was not made again for yet, the
-    game's official prefab to frame on the fly (second item) with the intro timeline bundle of its art (third)."""
+    """Choose the stored camera prefab and any updated official inputs needed for its preview.
+
+    Args:
+        library: Library providing stored files, official copies, and source-art timelines.
+        record: Camera record whose prefab and copied timeline may be outdated.
+        pin: Game install and server the operation is fixed to.
+
+    Returns:
+        Stored prefab, optional official prefab to frame on the fly, and optional art timeline.
+    """
     live = stale(library, record, pin)
     if live is None:
         return library._paths(record)[0], None, None
@@ -757,8 +895,16 @@ def preview_files(library: ModLibrary, record: dict, pin: Pin) -> tuple[Path, Pa
 
 
 def live_base(library: ModLibrary, core: str, pin: Pin) -> Path | None:
-    """For the lobby of a core whose prefab in the game carries one of its cameras: the official prefab, which the
-    other choices' previews read (they never show a camera's framing); else None."""
+    """Supply unframed official prefab bytes for other choices when a lobby camera is installed.
+
+    Args:
+        library: Library inspecting carried prefab sources and locating official copies.
+        core: Lobby bundle core whose preview must avoid the installed camera's framing.
+        pin: Game install and server the operation is fixed to.
+
+    Returns:
+        Official prefab path, or None when no camera is carried by the core's prefab slot.
+    """
     view = None
     for record in cameras(library):
         meta = meta_of(record)
@@ -783,7 +929,13 @@ def _chosen(records: list[dict], folder: dict, lobby: str | None) -> dict | None
 
 
 def overlay(records: list[dict], folder: dict, sources: dict) -> dict:
-    """A variant's configured sources (``ModLibrary.configured``) with its camera choice as its lobby's source."""
+    """Overlay a coordinated camera choice onto a variant's configured lobby source.
+
+    Args:
+        records: Camera records belonging to the variant being described.
+        folder: Install's configured entries indexed by slot core.
+        sources: Variant's configured sources by kind, returned unchanged if no camera matches.
+    """
     record = _chosen(records, folder, sources.get("lobby"))
     if record is not None:
         sources = {**sources, "lobby": f"mod:{record['id']}"}
@@ -793,8 +945,16 @@ def overlay(records: list[dict], folder: dict, sources: dict) -> dict:
 def overlay_selection(
     library: ModLibrary, variant: str, pin: Pin, config: dict | None, folder: dict, result: dict
 ) -> dict:
-    """A variant's saved choices (``ModLibrary.selection``) with its camera choice as its lobby's: installed when both
-    its art and its prefab are."""
+    """Overlay a saved camera choice, marking it installed only when its art and prefab are installed.
+
+    Args:
+        library: Library providing camera records and prefab-selection state.
+        variant: Variant key whose saved choices are described.
+        pin: Game install and server the operation is fixed to.
+        config: Profile snapshot, or None when no configuration exists.
+        folder: Pinned install's slot choices, including the camera prefab entry to verify.
+        result: Variant's selection by kind; its lobby entry is replaced in place when a camera matches.
+    """
     records = cameras(library, variant)
     art = result.get("lobby")
     record = _chosen(records, folder, (art or {}).get("source")) if records else None

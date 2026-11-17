@@ -20,7 +20,16 @@ logger = logging.getLogger(__name__)
 
 
 class Deletion:
+    """Journal asset deletion and the bytes and metadata needed for protected rollback."""
+
     def __init__(self, library, directory=None, data=None):
+        """Snapshot library state or reopen an existing deletion journal.
+
+        Args:
+            library: Library whose records, profiles, and managed files participate in deletion.
+            directory: Journal folder; None allocates a unique folder below asset-deletions.
+            data: Loaded journal document; None or an empty document snapshots current state.
+        """
         self.library = library
         self.directory = directory or library.root / "asset-deletions" / uuid4().hex
         self.rolling_back = False
@@ -37,9 +46,15 @@ class Deletion:
         }
 
     def publish(self):
+        """Atomically persist the current deletion journal."""
         atomic_json(self.directory / "journal.json", self.data)
 
     def remember_mods(self, ids):
+        """Back up each recorded mod once before deleting its source bytes.
+
+        Args:
+            ids: Mod IDs present in the transaction's initial records; unknown IDs are ignored.
+        """
         if self.rolling_back:
             return
         for key in ids:
@@ -52,6 +67,7 @@ class Deletion:
             self.publish()
 
     def remember_built(self, path):
+        """Back up an existing built file once, keyed by its content-addressed filename."""
         if self.rolling_back or path.name in self.data["built"] or not path.exists():
             return
         atomic_copy(path, self.directory / "built" / path.name)
@@ -59,6 +75,12 @@ class Deletion:
         self.publish()
 
     def remember_game(self, replacements, pin):
+        """Journal game bytes before deletion switches them to another source.
+
+        Args:
+            replacements: Game targets mapped to prepared files whose digests permit rollback of known writes.
+            pin: Game install and server the operation is fixed to.
+        """
         if self.rolling_back:
             return
         from .safety import check_resource_path
@@ -83,6 +105,12 @@ class Deletion:
             self.publish()
 
     def remember_photo(self, variant, key):
+        """Back up a photograph, its manifest entry, and every selection pointing to it.
+
+        Args:
+            variant: Variant key authorizing access to the photograph's student family.
+            key: Photograph ID whose PNG and selection metadata must survive rollback.
+        """
         store = self.library.photographs
         self.data["photo"] = {
             "variant": variant,
@@ -94,9 +122,12 @@ class Deletion:
         self.publish()
 
     def rollback(self):
-        """Undo the deletion: the mods and built copies it removed, the game files it switched (a file gone or changed
+        """Restore deleted source bytes, protected game writes, and the initial metadata snapshot.
+
+        Restore the mods and built copies removed, then game files switched (a file gone or changed
         outside the library is left as it is), then the snapshot of records, applied entries and configuration. A
-        record held at the start that came back meanwhile is not one this deletion created."""
+        record held at the start that came back meanwhile is not one this deletion created.
+        """
         library, data = self.library, self.data
         self.rolling_back = True
         # Restore source bytes before publishing any references to them.
@@ -113,9 +144,7 @@ class Deletion:
             )
         for name in data["built"]:
             atomic_copy(self.directory / "built" / name, library.root / "built" / name)
-        # Every rollback uses the normal protected writer, with an outside-change fence. A game file that is gone, or
-        # whose bytes are neither the journal's before nor one of its after, was changed outside the library: it is
-        # left as it is (a gone file is not recreated), a warning is logged and the rollback goes on.
+        # Restore only journaled bytes; missing or externally changed files must stay untouched.
         left = set()
         for entry in reversed(data["games"]):
             target = Path(entry["target"])
@@ -149,8 +178,7 @@ class Deletion:
                 expected={target: current},
                 untested=False,
             )
-        # A held record (its files were missing at the start) that came back meanwhile is not a record this
-        # transaction created: it keeps its folder and its place in the library.
+        # A returning held record predates the deletion and must survive its rollback.
         held = set(data.get("held", []))
         new_ids = set(library._records) - set(data["records"]) - held
         library._refresh_state()
@@ -223,6 +251,14 @@ def _validate(library, directory, data):
 
 
 def recover(library):
+    """Roll back active deletion journals and remove completed journals at startup.
+
+    Args:
+        library: Library whose journal paths and game destinations must pass validation before rollback.
+
+    Raises:
+        ServiceError: Journal data or a protected recovery destination is invalid.
+    """
     for journal in sorted((library.root / "asset-deletions").glob("*/journal.json")):
         try:
             data = json.loads(journal.read_text(encoding="utf-8"))
@@ -241,6 +277,14 @@ def recover(library):
 
 @contextmanager
 def transaction(library):
+    """Reuse an active deletion or journal a deletion with rollback on failure.
+
+    Args:
+        library: Library whose asset deletion must include managed game writes and metadata.
+
+    Yields:
+        The active deletion journal. A failed rollback keeps its journal and verified bytes.
+    """
     if getattr(library, "_asset_deletion", None):
         yield library._asset_deletion
         return

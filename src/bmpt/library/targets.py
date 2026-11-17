@@ -56,10 +56,13 @@ def _same_release(source: Path, target: Path) -> bool:
 
 @dataclass(frozen=True)
 class Readers:
-    """What the resolver may read of a file: its CABs, asset paths and asset names and types. Each returns an empty
-    set for a file it cannot read; a target is read from its official copy where there is one.
+    """Supply file evidence to the resolver: CABs, asset paths, and asset names and types.
+
+    Each reader returns an empty set for a file it cannot read; a target is read from
+    its official copy where there is one.
     ``release(source, target)`` says whether a file that names a part without its CRC, or by its CABs, was built on
-    that part as it is now; the names alone (no reader) take it as such."""
+    that part as it is now; the names alone (no reader) take it as such.
+    """
 
     cabs: Callable[[Path], Iterable[str]] = _nothing
     paths: Callable[[Path], set[str]] = _nothing
@@ -97,13 +100,28 @@ def current(
     *,
     older: Collection[Path] = (),
 ) -> tuple[dict[Path, Path], dict[str, str]]:
-    """The files that are a part's current release, {target: source}, and the method each was found by. The files
-    of ``older`` are known to be of an older release, whatever their names say (left to the asset stage).
+    """Find files that replace current parts whole, with the evidence for each match.
+
+    Sources in older are left to the asset stage regardless of their names.
 
     An exact name proves the release current; a name without the CRC or a CAB match does when ``release`` finds the
     file built on the part as it is now (a game update rebuilds a part under its name and CABs: such a file of the
     release before is left to the asset stage). Coexisting dates of a part stay apart. Two files on one part, or a
-    name or CAB that several parts share without a part number to tell them apart, are ambiguous."""
+    name or CAB that several parts share without a part number to tell them apart, are ambiguous.
+
+    Args:
+        files: Source paths indexed by the bundle filenames used for matching.
+        targets: Official parts available for replacement, including coexisting dates.
+        cabs: Reads a file's CAB names; an empty result gives no CAB evidence.
+        release: Confirms that a non-exact match was built on the target's current structure.
+        older: Source paths known to require asset transfer regardless of their names.
+
+    Returns:
+        Target-to-source replacements and source-filename-to-matching-method evidence.
+
+    Raises:
+        ServiceError: Several sources or targets claim one replacement (mod_target_ambiguous).
+    """
     result: dict[Path, Path] = {}
     methods: dict[str, str] = {}
     for name, source in files.items():
@@ -134,9 +152,17 @@ def current(
 
 
 def by_assets(sources: Sequence[Path], targets: Sequence[Path], readers: Readers) -> tuple[str, list[Path]] | None:
-    """The parts among ``targets`` (every part of the core, whatever its date) that files of an older release or
-    another build update: the parts holding any of their asset paths, else the parts sharing an asset name and type;
-    None when the sources show neither (nothing to judge by), an empty list when no part holds what they show."""
+    """Find target parts holding source asset paths, falling back to asset names and types.
+
+    Args:
+        sources: Older-release or other-build files whose assets will be transferred.
+        targets: All candidate parts of the core, across every date.
+        readers: Evidence readers using official copies for targets when available.
+
+    Returns:
+        Matching method and parts, an empty parts list when readable assets find no match,
+        or None when neither source paths nor keys provide evidence.
+    """
     wanted = set().union(*(readers.paths(source) for source in sources))
     if wanted:
         found = [target for target in targets if wanted & readers.paths(target)]
@@ -151,8 +177,12 @@ def by_assets(sources: Sequence[Path], targets: Sequence[Path], readers: Readers
 
 
 def by_part(names: Iterable[str], targets: Sequence[Path]) -> list[Path]:
-    """The cheap rule, for files whose assets cannot be read: each file's part (prefix and resource type or number)
-    at the newest date it has among ``targets``."""
+    """Match unreadable files to each part's newest target date.
+
+    Args:
+        names: Source bundle filenames identifying parts by prefix and resource type or number.
+        targets: Candidate parts whose dates determine the newest release.
+    """
     found: list[Path] = []
     for name in names:
         same = [target for target in targets if part_of(target.name) == part_of(name)]
@@ -163,15 +193,22 @@ def by_part(names: Iterable[str], targets: Sequence[Path]) -> list[Path]:
 
 
 def sharing_keys(sources: Sequence[Path], candidates: Sequence[Path], keys: Callable[[Path], set]) -> list[Path]:
-    """The candidates sharing an asset name and type with the sources: those an asset transfer by name and type
-    (conversions and rebuilds) writes into."""
+    """Find candidates an asset transfer by name and type can write into.
+
+    Args:
+        sources: Bundles supplying the assets for conversion or rebuilding.
+        candidates: Potential destination bundles, returned in their existing order.
+        keys: Reads the asset name-and-type keys held by a bundle.
+    """
     wanted = set().union(*(keys(source) for source in sources))
     return [candidate for candidate in candidates if wanted & keys(candidate)]
 
 
 class Resolution:
-    """What a set of mod files replaces and updates among the parts of its core. The name and CAB stage runs at
-    once; the asset stage reads only when asked for (``groups`` and everything built on it)."""
+    """Resolve a mod's whole replacements immediately and its asset transfers lazily.
+
+    The asset stage reads only when requested through groups or a result built on it.
+    """
 
     def __init__(
         self,
@@ -182,6 +219,15 @@ class Resolution:
         whole: bool = True,
         older: Collection[Path] = (),
     ):
+        """Match names and CABs, deferring asset reads until their results are requested.
+
+        Args:
+            files: Source paths indexed by bundle filename.
+            targets: Candidate official parts of the mod's core.
+            readers: Evidence readers; the default uses filenames alone.
+            whole: Whether files may replace parts whole; False sends all files to asset transfer.
+            older: Sources known to require asset transfer despite a matching name or CAB.
+        """
         self.files = dict(files)
         self.targets = list(targets)
         self.readers = readers
@@ -195,12 +241,12 @@ class Resolution:
 
     @property
     def rest(self) -> list[Path]:
-        """The parts no file replaces whole: what the other files may update."""
+        """Return parts available for asset transfer because no file replaces them whole."""
         return [target for target in self.targets if target not in self.current]
 
     @property
     def groups(self) -> list[Group]:
-        """The older files per name prefix and core, with the parts they update."""
+        """Group older files by name prefix and core with the parts they update."""
         if self._groups is None:
             grouped: dict[tuple[str, str], list[str]] = {}
             for name in self.older:
@@ -220,7 +266,7 @@ class Resolution:
         return self._groups
 
     def matches(self) -> dict[str, Match]:
-        """How each file found its targets, in the files' order."""
+        """Return each file's matching method and targets in source-file order."""
         by_name: dict[str, Match] = {}
         for target, source in self.current.items():
             name = next(name for name, path in self.files.items() if path == source)
@@ -232,15 +278,18 @@ class Resolution:
 
     @property
     def updated(self) -> list[Path]:
-        """Every part the files write: those they replace whole and those they update, in the targets' order."""
+        """Return whole replacements and asset-transfer destinations in target order."""
         touched = set(self.current).union(*(group.targets for group in self.groups))
         return [target for target in self.targets if target in touched]
 
     @property
     def replaced(self) -> set[Path]:
-        """The parts the files stand in for, which a preview drops: those they replace whole, those whose every asset
-        path they carry, and, for files whose assets cannot be read, their parts. A part they update in part keeps
-        its other assets, so a preview keeps it under the mod's files."""
+        """Find parts a preview can omit because the mod stands in for them.
+
+        Omit whole replacements, parts whose asset paths are all carried by the mod,
+        and matching parts for unreadable sources. Partially updated parts remain
+        underneath the mod so their other assets stay available.
+        """
         result = set(self.current)
         carried = set().union(*(self.readers.paths(path) for path in self.older.values())) if self.older else set()
         for group in self.groups:
@@ -254,13 +303,15 @@ class Resolution:
 
     @property
     def unresolved(self) -> list[str]:
-        """The files that found no part."""
+        """Return source filenames that found no target part."""
         return [name for group in self.groups if group.method == NOTHING for name in group.names]
 
     @property
     def unplaced(self) -> list[str]:
-        """The files that neither a name, a CAB nor their asset paths place, and whose part (prefix and resource type
-        or number) no target has: another server's files are accepted only where something places them."""
+        """Find files unsupported by names, CABs, asset paths, or a matching target part.
+
+        Another server's files are accepted only when one of these forms of evidence places them.
+        """
         placed = {name for name, match in self.matches().items() if match.method in WHOLE or match.method == ASSET_PATH}
         return [
             name
@@ -269,14 +320,17 @@ class Resolution:
         ]
 
     def sharing_keys(self, among: Sequence[Path] | None = None) -> list[Path]:
-        """The parts (``among``, else every part the files write) sharing an asset name and type with the files."""
+        """Find parts sharing asset name-and-type keys with the source files.
+
+        Args:
+            among: Parts to search; None searches every part the resolution writes.
+        """
         return sharing_keys(
             list(self.files.values()), self.updated if among is None else list(among), self.readers.keys
         )
 
     def evidence(self) -> list[dict[str, Any]]:
-        """Per file: how it matched, the official parts it found and their dates, for error reports. The asset stage
-        is reported only when it has run."""
+        """Report each file's method, official target names, and dates without forcing asset reads."""
         rows = []
         stages = (
             self.matches()
@@ -312,8 +366,15 @@ def resolve(
     whole: bool = True,
     older: Collection[Path] = (),
 ) -> Resolution:
-    """The resolution of a set of mod files among the parts of its core; ``whole=False`` treats every file as an
-    older release (no name or CAB stage), ``older`` only the files it lists."""
+    """Resolve a set of mod files among the official parts of its core.
+
+    Args:
+        files: Mod bundle basenames mapped to their on-disk paths for all matching stages.
+        targets: Candidate official parts, including coexisting dates.
+        readers: Evidence callbacks for CAB, asset, and release matching; omitted readers leave only name evidence.
+        whole: Whether to run the whole-file name and CAB stage; False treats all sources as older releases.
+        older: Sources that must use asset transfer even when whole-file matching is enabled.
+    """
     return Resolution(files, targets, readers, whole=whole, older=older)
 
 
@@ -329,12 +390,28 @@ def generic(
     *,
     container_keys: Callable[[Path, bool], set],
 ) -> dict[str, Match]:
-    """The official files each generic mod file replaces or updates: a collection batch's exact name; a current
+    """Resolve generic mod files against official bundles across their filename prefixes.
+
+    Matching considers a Collection batch's exact name; a current
     release (name, name without CRC, CAB); the files of its prefix holding its asset paths, over every date (an asset
     path lives in one bundle of a build: this tells apart the bundles of a group packed one asset per bundle, whose
     names differ only in the CRC); else the newest file of each slot of its prefix with its exact name, or sharing a
     container, name and type (``container_keys(path, source)`` reads a mod file, or a candidate from its official
-    copy)."""
+    copy).
+
+    Args:
+        files: Generic source paths indexed by bundle filename.
+        available: All candidate official bundles, including every date and slot.
+        readers: CAB, asset-path, and release-structure readers for whole and asset matching.
+        container_keys: Reads container/name/type keys; its second argument is True for
+            a source and False for a candidate read from an official copy.
+
+    Returns:
+        Matching evidence and destination parts indexed by source filename.
+
+    Raises:
+        ServiceError: A target is missing, ambiguous, or conflicts with another file at the same date.
+    """
     result: dict[str, Match] = {}
     assets = replace(readers, keys=_nothing)
     for name, source in files.items():
@@ -376,7 +453,15 @@ def generic(
 
 
 def slot_files(index: Mapping[str, Sequence[Path]], slots: Iterable[str]) -> list[Path]:
-    """The file each generic slot holds now: its newest date. Two files of a slot under that date conflict."""
+    """Select the single newest file of each generic slot.
+
+    Args:
+        index: Available bundle paths indexed by generic slot key, each with at least one file.
+        slots: Slot keys to resolve, deduplicated before selection.
+
+    Raises:
+        ServiceError: Several files share a slot's newest date (game_file_conflict).
+    """
     targets: list[Path] = []
     for slot in sorted(set(slots)):
         newest = max(date_of(path.name) for path in index[slot])
@@ -388,7 +473,13 @@ def slot_files(index: Mapping[str, Sequence[Path]], slots: Iterable[str]) -> lis
 
 
 def same_prefix(sources: Iterable[Path], target: Path) -> list[Path]:
-    """The generic mod files an update of ``target`` reads: those of its name prefix (the update itself transfers
-    only the assets the target holds, by container, name and type)."""
+    """Choose generic sources sharing a target's filename prefix.
+
+    The update transfers only assets held by the target, matched by container, name, and type.
+
+    Args:
+        sources: Generic mod bundles available to the update.
+        target: Destination bundle whose parsed prefix limits the sources.
+    """
     prefix = parse_filename(target.name).prefix
     return [path for path in sources if parse_filename(path.name).prefix == prefix]

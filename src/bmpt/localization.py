@@ -8,4 +8,5 @@ LOCALES = Path(__file__).resolve().parent / "locales"
 
 
 def register_locales() -> None:
+    """Add the App's locale folder to the engine's translation lookup."""
     register_locale_dir(LOCALES)

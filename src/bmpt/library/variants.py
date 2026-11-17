@@ -19,6 +19,20 @@ def adapt_variant_sources(
     transplant the payloads without changing the target's object references.
     Different numbers of texture pages or skeletons cannot fit those references
     and are rejected before any game file is written.
+
+    Args:
+        sources: Official bundles from the variant supplying the replacement payloads.
+        targets: Destination variant's bundles defining the required asset names and page counts.
+        directory: Scratch directory receiving numbered subfolders of adapted source bundles.
+        asset_types: Selected replaceable classes, or ALL; adaptation supports textures, text, meshes, and clips.
+        log: Receives user-facing operation messages.
+
+    Returns:
+        Uncompressed adapted bundles with CRC fixing disabled, ready for name/type transfer.
+
+    Raises:
+        ServiceError: A bundle is invalid, source and target slots differ or are ambiguous,
+            or an adapted bundle cannot be saved.
     """
     allowed = {AssetType.Texture2D, AssetType.TextAsset, AssetType.Mesh, AssetType.AnimationClip}
     if "ALL" not in asset_types:

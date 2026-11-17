@@ -20,8 +20,10 @@ logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True, order=True)
 class Pointer:
-    """One cross-bundle pointer: the CAB it points into (lower case), the object's path id there and the type the
-    field declares (``PPtr<Material>`` declares ``Material``)."""
+    """Identify a cross-bundle pointer by lower-case CAB, path ID, and declared field type.
+
+    For example, PPtr<Material> declares Material.
+    """
 
     cab: str
     path_id: int
@@ -69,9 +71,14 @@ def _walk(node, value, seen: dict[int, bool]) -> Iterator[tuple[str, dict]]:
 
 
 def external_pointers(env) -> set[Pointer]:
-    """Every pointer of the bundle's objects into another serialized file (a CAB of another bundle). Objects whose
-    type holds no pointer (textures, meshes, text, audio) are never read; one whose type tree cannot be read gives
-    none, as it gives no evidence either way."""
+    """Read cross-bundle pointers from objects whose type trees contain them.
+
+    Types without pointers, including textures, meshes, text, and audio, are skipped.
+    Unreadable type trees provide no evidence and yield no pointers.
+
+    Args:
+        env: Loaded UnityPy environment to walk, including nested serialized files.
+    """
     found: set[Pointer] = set()
 
     def visit(file) -> None:
@@ -112,9 +119,18 @@ def _class(name: str):
 
 
 def compatible(declared: str, class_id: int) -> bool:
-    """Whether an object of Unity class ``class_id`` can stand where ``PPtr<declared>`` points. A declared type the
-    class table does not know (a script type such as ``SkeletonDataAsset``) needs a MonoBehaviour; any other unknown
-    gives no evidence."""
+    """Check whether a Unity class can satisfy a pointer's declared field type.
+
+    Unknown declared script types such as SkeletonDataAsset require MonoBehaviour.
+    An unknown target class gives no evidence of incompatibility.
+
+    Args:
+        declared: Type named inside PPtr<...>, such as Material or a script class.
+        class_id: Unity class ID of the object at the pointer's destination.
+
+    Returns:
+        Whether the target is compatible, including unknown target classes that give no evidence of failure.
+    """
     from UnityPy.enums import ClassIDType
 
     try:
@@ -130,9 +146,12 @@ def compatible(declared: str, class_id: int) -> bool:
 
 
 def dangling(pointers: Iterable[Pointer], layout: Callable[[str], dict[int, int] | None]) -> set[Pointer]:
-    """The pointers whose target object is not in its CAB, or is of a type the field cannot hold. ``layout`` gives a
-    CAB's objects ({path id: class id}) as the game has it now, None for a CAB it cannot find: those pointers are
-    left to the missing-part checks."""
+    """Find pointers to absent objects or objects incompatible with their declared fields.
+
+    Args:
+        pointers: Cross-bundle references to validate against the effective game layout.
+        layout: Maps a CAB to {path ID: class ID}; None leaves an absent CAB to missing-part checks.
+    """
     broken: set[Pointer] = set()
     layouts: dict[str, dict[int, int] | None] = {}
     for pointer in pointers:

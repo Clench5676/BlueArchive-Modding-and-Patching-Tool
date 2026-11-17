@@ -1,4 +1,4 @@
-"""Keep the App/engine boundary tied to the accepted upstream ownership inventory."""
+"""Keep the App/engine boundary tied to the recorded upstream ownership inventory."""
 
 import ast
 import hashlib
@@ -139,7 +139,8 @@ import runpy, sys, types
 from ba_modding_toolkit import i18n
 seen = []
 def check(*args):
-    assert i18n.i18n_manager.t('webui.error.required_asset_stream_missing') != 'webui.error.required_asset_stream_missing'
+    assert i18n.i18n_manager.t('webui.error.required_asset_stream_missing') != \
+'webui.error.required_asset_stream_missing'
     seen.append(True)
 for name in ('bmpt.webui.main', 'ba_modding_toolkit.gui.main'):
     module = types.ModuleType(name)

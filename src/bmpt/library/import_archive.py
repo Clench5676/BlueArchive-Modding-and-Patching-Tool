@@ -1,8 +1,10 @@
 """Mod archives (ZIP) taken for import: their bundles are unpacked once into the library's staging folder.
 
 Only the archive's own bundles are unpacked, with the package manifests beside them (``ba_mod``, read when the
-bundles are taken). Archives inside it stay packed and are left out, like every other file that is no bundle. Member names come from an untrusted file: each must stay below the unpacked folder, and the
-folder layout inside the archive is kept, so mods in separate folders of one archive stay separate mods."""
+bundles are taken). Archives inside it stay packed and are left out, like every other file that is no bundle.
+Member names come from an untrusted file: each must stay below the unpacked folder, and the folder layout
+inside the archive is kept, so mods in separate folders of one archive stay separate mods.
+"""
 
 from __future__ import annotations
 
@@ -32,12 +34,16 @@ SPACE_MARGIN = 512 * 1024 * 1024
 
 
 def is_archive(path: Path) -> bool:
+    """Return whether the filename has a case-insensitive ZIP extension."""
     return path.name.lower().endswith(SUFFIX)
 
 
 def _members(archive: zipfile.ZipFile, file: Path) -> tuple[list[tuple[zipfile.ZipInfo, tuple[str, ...]]], int]:
-    """The bundle and package manifest members to unpack with their path parts, and the number of other members left
-    out."""
+    """Pick the bundle and package manifest members of an archive to unpack.
+
+    Returns:
+        The members to unpack with their path parts, and the number of other members left out.
+    """
     taken, keys, skipped = [], set(), 0
     for info in archive.infolist():
         if info.is_dir():
@@ -72,12 +78,21 @@ def _digest(file: Path) -> str:
 
 
 def unpack(file: Path, root: Path) -> tuple[list[Path], int]:
-    """The bundles of a ZIP archive unpacked below ``<root>/staging`` (reused while the same archive content is
-    there; package manifests are unpacked beside them but not returned), and the number of members left out: nested
-    archives, other files, unsafe or repeated names.
+    """Unpack an archive's bundles and manifests into reusable library staging storage.
 
-    Raises ``archive_invalid`` for a damaged or encrypted archive and ``not_enough_space`` when its bundles do not
-    fit on the disk."""
+    Args:
+        file: ZIP archive whose content digest identifies the reusable unpacked folder.
+        root: Library folder containing staging storage.
+
+    Returns:
+        Bundle paths and the number of skipped members, including nested archives,
+        other files, unsafe names, and duplicates. Manifests are unpacked but not returned.
+
+    Raises:
+        ServiceError: The archive is damaged or encrypted (archive_invalid), space is
+            insufficient (not_enough_space), staging is busy, or filesystem access fails
+            (library_io_error).
+    """
     staging = root / "staging"
     devmode.check_read(file)
     devmode.check_read(staging)

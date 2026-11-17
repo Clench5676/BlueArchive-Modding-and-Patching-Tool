@@ -1,4 +1,4 @@
-"""Export NGUI prefab trees using the prototype layout schema."""
+"""Export NGUI prefab trees with widget, transform, and button-state metadata."""
 
 from __future__ import annotations
 
@@ -126,7 +126,17 @@ def _widget(obj: ObjectReader, tree: dict, names: dict[str, str], scripts: dict)
 
 
 def export_layout(env: Environment, root: str, names: dict[str, str], *, effects: dict | None = None) -> dict:
-    """Return a prefab root with ordered children and rounded widget transforms."""
+    """Return a prefab root with ordered children and rounded widget transforms.
+
+    Args:
+        env: Loaded prefab environment containing GameObjects, transforms, scripts, and widgets.
+        root: Exact name of the top-level GameObject to export.
+        names: CAB/path-ID keys mapped to atlas and texture names used by widget references.
+        effects: Optional selected-card particle descriptions indexed by GameObject path ID.
+
+    Raises:
+        AssetNotFound: No top-level GameObject has the requested name.
+    """
     objects = list(env.objects)
     gos, transforms, scripts, components = {}, {}, {}, {}
     owners = {}  # path id of a GameObject, Transform or MonoBehaviour -> its GameObject's path id
@@ -201,7 +211,15 @@ def export_layout(env: Environment, root: str, names: dict[str, str], *, effects
 
 
 def subtree(tree: dict, subpath: str) -> dict:
-    """Select an exact, slash-separated child path relative to a prefab root."""
+    """Select an exact, slash-separated child path relative to a prefab root.
+
+    Args:
+        tree: Exported prefab root containing named children.
+        subpath: Child names separated by slashes; an empty path selects the root.
+
+    Raises:
+        AssetNotFound: A named child is absent along the path.
+    """
     for part in filter(None, subpath.split("/")):
         tree = next((child for child in tree.get("children", []) if child["name"] == part), None)
         if tree is None:

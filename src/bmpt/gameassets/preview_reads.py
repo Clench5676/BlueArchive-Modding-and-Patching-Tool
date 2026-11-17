@@ -15,10 +15,13 @@ from typing import Callable
 
 @dataclass(frozen=True)
 class PreviewReads:
-    """``resolve`` maps a game file the export would load (a prefab bundle or a bundle the CAB index finds) to the
+    """Select source bytes and trusted cache locations for a 3D preview.
+
+    ``resolve`` maps a game file the export would load (a prefab bundle or a bundle the CAB index finds) to the
     file to read instead. ``key`` names the rule and the state its choices depend on; it is part of the export's cache
     key. ``trusted`` admits the locations ``resolve`` may return outside the resource folders, so a persisted export
-    that read them can be reused."""
+    that read them can be reused.
+    """
 
     resolve: Callable[[Path], Path]
     key: str

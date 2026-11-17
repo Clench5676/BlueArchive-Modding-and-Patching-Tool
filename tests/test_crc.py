@@ -27,7 +27,10 @@ class TestComputeCrc32:
         assert compute_crc32(b"0808") == 206773752
 
     def test_compute_crc32_2_methods(self, tmp_path: Path):
-        data = b"8080 0800 8800 0888 8080 0800 8088 0000 8080 0800 8800 0008 8080 0800 8800 8888 8080 0800 8088 8008 8080 0800 8088 0000 8080 0800 8088 8808 8080 0800 8088 0088"
+        data = (
+            b"8080 0800 8800 0888 8080 0800 8088 0000 8080 0800 8800 0008 8080 0800 8800 8888 "
+            b"8080 0800 8088 8008 8080 0800 8088 0000 8080 0800 8088 8808 8080 0800 8088 0088"
+        )
         file = tmp_path / "test.bin"
         file.write_bytes(data)
         assert compute_crc32(file) == compute_crc32(data)

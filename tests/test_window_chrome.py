@@ -170,10 +170,10 @@ def test_cocoa_moves_only_y_and_leaves_fullscreen_reveal_to_appkit(flipped):
     state.update(fullscreen=False, mini=True)
     assert host.measure({"centre": 30}) is None
     state["mini"] = False
-    # a wide window: the bar's centre line is lower than a 32-high title bar container lets the buttons go. They go as low as
-    # it allows and stay inside it; the native chrome is not given up (a second display)
-    # (the container spans the content's top 32 points; this stand-in converts frames unchanged, so an unflipped container
-    # starts 168 up)
+    # a wide window: the bar's centre line is lower than a 32-high title bar container lets the buttons go. They go
+    # as low as it allows and stay inside it; the native chrome is not given up (a second display)
+    # (the container spans the content's top 32 points; this stand-in converts frames unchanged, so an unflipped
+    # container starts 168 up)
     base = 0 if flipped else 168
     for button in host.buttons:
         button.parent.bounds = lambda: rect(0, base, 200, 32)
@@ -583,7 +583,7 @@ def test_cocoa_window_closing_without_content_view_keeps_the_native_chrome():
 
 def test_cocoa_measures_again_until_a_content_view_arrives(caplog):
     # No AppKit notification follows when pywebview puts its web view in place: without another measurement the
-    # chrome stayed waiting, with no drag regions, until the window was moved or resized.
+    # chrome stays waiting, with no drag regions, until the window is moved or resized.
     host = CocoaHost.__new__(CocoaHost)
     host.api = NS(NSContainsRect=lambda outer, inner: True, NSWindowStyleMaskFullScreen=1 << 14)
     content, scheduled = {"view": None}, []
@@ -1239,7 +1239,7 @@ def test_cocoa_dispose_stops_a_playing_motion():
 @pytest.mark.parametrize("flipped", [True, False])
 def test_cocoa_measures_without_moving_buttons_already_in_place(flipped):
     # every page layout measures again; a move to where a button already is makes AppKit reset the pointer, which
-    # flickered against the page's game pointer
+    # flickers against the page's game pointer
     host, pending, _ = cocoa_motion(flipped)
     host.measure({"centre": 22})
     host.slide([40.0], 1 / 60)
@@ -1317,7 +1317,7 @@ def test_toolbar_layouts_in_a_burst_are_logged(caplog, monkeypatch):
 
 
 def test_windows_host_prototypes_a_user32_of_its_own(monkeypatch):
-    # Prototypes set on ctypes.windll.user32 broke pywebview's window.move (None sizes) on Windows.
+    # Prototypes set on ctypes.windll.user32 would break pywebview's window.move (None sizes) on Windows.
     import ctypes
 
     from bmpt.webui import window_windows

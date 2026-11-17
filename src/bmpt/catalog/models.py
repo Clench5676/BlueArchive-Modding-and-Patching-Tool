@@ -55,8 +55,11 @@ class Family:
 
 @dataclass(frozen=True)
 class CoreMap:
-    """How one install's portrait and memorial lobby cores map to variant keys (Catalog.core_map): the same rules as
-    the roster's, run on that install's core names, so a core gets the same key in every install."""
+    """Map one install's portrait and memorial lobby cores to variant keys.
+
+    Catalog.core_map applies the roster's rules to that install's core names, so a
+    core gets the same key in every install.
+    """
 
     keys: dict[str, str]  # lower-case core -> variant key
     spr: dict[str, str]  # variant key -> its portrait core in the install, as named there
@@ -69,21 +72,41 @@ class CoreMap:
     )  # variant key -> prefab first, own dependencies
 
     def slot(self, core: str) -> str:
-        """The choice key of a physical core; a model's dependencies share its prefab's choice."""
+        """Return a physical core's choice key, sharing model dependencies with their prefab.
+
+        Args:
+            core: Installed bundle core, matched without case sensitivity.
+        """
         core = core.lower()
         key = self.key(core)
         return self.model[key] if core in self.model_cores.get(key, ()) else core
 
     def slot_cores(self, core: str) -> tuple[str, ...]:
-        """Physical cores of one choice, with the model prefab first."""
+        """Return the physical cores of one choice, with the model prefab first.
+
+        Args:
+            core: Prefab, dependency, or non-model core identifying the choice.
+        """
         core = core.lower()
         key = self.key(core)
         return self.model_cores[key] if core in self.model_cores.get(key, ()) else (core,)
 
     def key(self, core: str) -> str | None:
-        """The variant key of a portrait or lobby core, ignoring letter case; None for a core of neither kind."""
+        """Return a core's variant key, or None when it is absent from the map.
+
+        Args:
+            core: Installed bundle core, matched without case sensitivity.
+        """
         return self.keys.get(core.lower())
 
     def core(self, key: str, kind: str) -> str | None:
-        """A variant's portrait core ("spr") or primary lobby core ("lobby") in the install."""
+        """Return a variant's installed core for a requested asset category.
+
+        Args:
+            key: Variant key.
+            kind: "spr" for a portrait, "lobby" for the primary memorial lobby, or "model" for its prefab.
+
+        Returns:
+            The core, or None when the variant or category is unavailable.
+        """
         return {"spr": self.spr, "lobby": self.lobby, "model": self.model}.get(kind, {}).get(key.lower())

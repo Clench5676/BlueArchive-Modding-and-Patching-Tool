@@ -122,7 +122,7 @@ def test_first_install_empty_content_and_same_version_are_quiet(tmp_path, manife
 @pytest.mark.parametrize("history", [None, {}, {"highest": None}])
 def test_pre_tour_profile_offers_upgrade_once_and_retries_until_presented(tmp_path, consent, history):
     path = tmp_path / "webui.json"
-    # 0.5.0 saved these choices, but had no tours/highest field.
+    # A profile with these choices but no tours/highest field.
     profile = {"consent": consent, "prefs": {"voice_muted": True, "scan_consent": False}}
     if history is not None:
         profile["tours"] = history

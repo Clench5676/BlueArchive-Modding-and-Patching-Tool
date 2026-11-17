@@ -1,7 +1,7 @@
 """Offline generation inputs, distance keying and seam stitching for refinement.
 
 No generator or runtime is launched. The caller supplies posed public-runtime
-geometry. All images and plans are external artifacts. Cut policy stays in K6.
+geometry. All images and plans are external artifacts. Cut policy stays in refine_cut.
 """
 
 from __future__ import annotations
@@ -36,11 +36,16 @@ from .refine_stitch import (
 
 @dataclass(frozen=True)
 class InputParameters:
+    """Budgets and gate thresholds of the input stage.
+
+    Sizes are master pixels unless named native (official texture pixels); colour distances are 0-255.
+    """
+
     pixel_budget: int = 1_573_000
     overlap: int = 64
     head_context: float = 0.65
     feather: int = 48
-    # Retained for loading K7 plans; raw RMSE is diagnostic only.
+    # Kept so that existing plans load; raw RMSE is diagnostic only.
     overlap_rmse: float = 2.0
     seam_blend: int = 2
     seam_agreement: float = 6.0
@@ -58,7 +63,7 @@ class InputParameters:
     contour_rate: float = 0.05
     unpaired_outline_rate: float = 0.001
     min_iou: float = 0.96
-    line_offset: float = 3.0  # Legacy K7 plan field; native_line_offset gates returns.
+    line_offset: float = 3.0  # A field of existing plans; native_line_offset gates returns.
     aspect_tolerance: float = 0.005
     budget_tolerance: float = 0.15
     alpha_normalisation: float = 1.0
@@ -70,7 +75,10 @@ class InputParameters:
 
 
 class InputGateError(ValueError):
+    """The input stage's gates failed; ``report`` is the merge report."""
+
     def __init__(self, report):
+        """Create the error from a report whose ``failures`` it names."""
         self.report = report
         super().__init__("Input gates failed: " + ", ".join(report["failures"]))
 
@@ -92,10 +100,21 @@ def _external(folder):
 
 
 def templates():
+    """Return the prompt templates of ``refine_prompts.json``."""
     return json.loads(Path(__file__).with_name("refine_prompts.json").read_text())["templates"]
 
 
 def prompt(template_id, *, version=1, **fields):
+    """Return a prompt from a template, its fields filled in.
+
+    Args:
+        template_id: The template's id.
+        version: The template's version.
+        **fields: The values of the template's fields.
+
+    Raises:
+        ValueError: The template is unknown, or the text asks for transparency, restoration or a redesign.
+    """
     selected = [t for t in templates() if (t["id"], t["version"]) == (template_id, version)]
     if len(selected) != 1:
         raise ValueError("Unknown prompt template id/version")
@@ -106,7 +125,16 @@ def prompt(template_id, *, version=1, **fields):
 
 
 def choose_key(image):
-    """Maximise the minimum Euclidean RGB distance to visible straight colours."""
+    """Choose the key colour farthest from every visible colour of an image, among five candidates.
+
+    The choice maximises the minimum Euclidean RGB distance to visible straight colours.
+
+    Returns:
+        The key (RGB in 0-255) and each candidate's minimum distance.
+
+    Raises:
+        ValueError: The image shows nothing, or no candidate is 16 or more away.
+    """
     a = _rgba(image)
     colours = a[..., :3][a[..., 3] > 0.02] * 255
     if not len(colours):
@@ -119,6 +147,7 @@ def choose_key(image):
 
 
 def flatten(image, key):
+    """Return an image composited over the key colour (RGB in 0-255), as opaque RGB."""
     a = _rgba(image)
     rgb = a[..., :3] * a[..., 3:] + np.asarray(key) / 255 * (1 - a[..., 3:])
     return Image.fromarray(np.uint8(np.rint(rgb * 255)))
@@ -131,6 +160,17 @@ def key_image(image, official, key, *, parameters=None, density=1.0):
     estimate. Straight edge colour is copied from alpha >= .5 and despilled
     towards the interior; weaker coverage is filled from inside. Null edits
     preserve the reference's otherwise unobservable bytes exactly.
+
+    Args:
+        image: The returned crop on the key (RGB).
+        official: The official crop (RGBA), the same grid.
+        key: The key colour, RGB in 0-255.
+        parameters: The input stage's parameters; None uses the defaults.
+        density: Crop pixels per native pixel; scales the outline band.
+
+    Returns:
+        The keyed RGBA crop and its matte quality: the alpha error against the official soft edge (0-255) and pixel
+        counts.
     """
     p = parameters or InputParameters()
     c = np.asarray(image.convert("RGB"), np.float32) / 255
@@ -190,7 +230,7 @@ def key_image(image, official, key, *, parameters=None, density=1.0):
     retain = unchanged & (abs(alpha - ref[..., 3]) < 0.5 / 255)
     rgb[retain] = ref[..., :3][retain]
     # Chroma cleanup covers every foreground/background boundary, including
-    # enclosed key gaps. Alpha's soft band remains frame-connected as before.
+    # enclosed key gaps. Alpha's soft band above stays frame-connected.
     outside = Image.fromarray(np.uint8(alpha < 0.5) * 255)
     chroma_band = np.asarray(outside.filter(ImageFilter.MaxFilter(2 * radius + 1))) > 0
     rgb = despill_key_band(rgb, alpha, k, chroma_band, tolerance=p.key_chroma_seed_tolerance / 255)
@@ -221,7 +261,21 @@ def _box_frame(box, frame, scale):
 
 
 def crop_boxes(size, head, parameters, image=None):
-    """Fewest rectangular tiles fitting the budget at master density; no gaps."""
+    """Choose the fewest rectangular tiles fitting the budget at master density; no gaps.
+
+    Args:
+        size: The master's (width, height) in pixels.
+        head: The head crop (left, top, right, bottom).
+        parameters: The pixel budget and overlap.
+        image: The master composite; when given, shared tile boundaries move by up to half the overlap to where the
+            visible gradient is lowest.
+
+    Returns:
+        ``(role, box)`` pairs: the head first, then the body tiles in row order.
+
+    Raises:
+        ValueError: The budget cannot hold the minimum overlap.
+    """
     w, h = size
     p = parameters
     choices = []
@@ -319,9 +373,28 @@ def plan_inputs(
 ):
     """Write opaque crops and a self-contained, hashed plan to an external folder.
 
-    Page replication matches K6. Each input is rendered directly on its recorded
-    crop grid. Merge resamples edit residuals onto the master, so an identity edit
-    adds neither an extra filtering pass nor a crop-grid seam to official pixels.
+    Page replication matches the cut (``refine_cut``). Each input is rendered directly on its recorded crop grid.
+    Merge resamples edit residuals onto the master, so an identity edit adds neither an extra filtering pass nor a
+    crop-grid seam to official pixels.
+
+    Args:
+        poses: The poses, base first, with unique names.
+        pages: The official pages by name, straight alpha.
+        output: A new folder outside the repository.
+        density: The integer master density, also the page scale.
+        frame: The composite frame (left, bottom, right, top) in world units; None fits the base pose.
+        masked_slots: Slots kept out of the generation inputs.
+        parameters: The input stage's parameters; None uses the defaults.
+        template_id: The base crops' prompt template.
+        template_version: Its version.
+        source_hashes: Hashes of the sources recorded in the plan.
+
+    Returns:
+        The plan, also written as ``plan.json``.
+
+    Raises:
+        ValueError: Invalid parameters or poses, no switching slot, premultiplied pages, an existing plan, or a head
+            context above the budget.
     """
     p = parameters or InputParameters()
     _validate(p, density)
@@ -466,6 +539,11 @@ def plan_inputs(
 
 
 def load_plan(path):
+    """Read a plan and check every artifact it names against its recorded hash.
+
+    Raises:
+        ValueError: The plan's version is unknown, or an artifact changed or lies outside the plan's folder.
+    """
     path = Path(path).resolve()
     plan = json.loads(path.read_text())
     if plan["version"] != 1:
@@ -505,6 +583,21 @@ def merge_inputs(plan_path, returned, output, *, diagnostic=False, base_only=Fal
     ``returned`` is a directory containing each crop id plus .png. Inputs are
     valid identity returns. Explicit diagnostic mode retains failed targets;
     the command never packs diagnostic failures.
+
+    Args:
+        plan_path: The plan file.
+        returned: The folder of returned crops.
+        output: A folder outside the repository for the targets, seams and report.
+        diagnostic: Return failed targets instead of raising.
+        base_only: Merge the base pose only.
+
+    Returns:
+        Per pose its keyed target and its crop box (None for the base, a full frame), and the merge report.
+
+    Raises:
+        ValueError: A return that is not opaque, changed its aspect ratio or left the budget, or a plan leaving
+            master pixels uncovered.
+        InputGateError: A gate failed and ``diagnostic`` is off.
     """
     path = Path(plan_path).resolve()
     plan = load_plan(path)
@@ -828,7 +921,19 @@ def expression_inputs(plan_path, base_target, output):
     The editable feature window is the union of all switching-slot alpha, padded
     by a named radius. Outside it the supplied base head is fixed, including its
     keyed outline. The expression itself is always the animated official pose.
-    A new plan records the context hash; the original plan remains reviewable.
+    A new plan records the context hash; the original plan stays as it is.
+
+    Args:
+        plan_path: The base plan file.
+        base_target: The generated, keyed base target on the master grid.
+        output: A new folder outside the repository for the expression plan.
+
+    Returns:
+        The new plan.
+
+    Raises:
+        ValueError: The output folder is not new, or the base target is not on the master grid.
+        InputGateError: The base target moved against the official base.
     """
     from .refine_cut import dilate
 
@@ -908,7 +1013,24 @@ def expression_inputs(plan_path, base_target, output):
 
 
 def finish(plan_path, returned, output, *, diagnostic=False, atlas=None, pack=None):
-    """Merge, key, cut, gate, optionally pack through the existing assembly engine."""
+    """Merge, key, cut, gate, optionally pack through the existing assembly engine.
+
+    Args:
+        plan_path: The plan file.
+        returned: The folder of returned crops.
+        output: A folder outside the repository for the pages and reports.
+        diagnostic: Keep going past failed gates; nothing is packed then.
+        atlas: The atlas, to bound bleed by its region rectangles.
+        pack: The packing spec (``bundles``, ``atlas_name``, ``hashes``); None packs nothing.
+
+    Returns:
+        The cut result and the report of merge, cut and packing.
+
+    Raises:
+        ValueError: A packing source changed.
+        InputGateError: A merge gate failed and ``diagnostic`` is off.
+        GateError: A cut gate failed and ``diagnostic`` is off.
+    """
     path = Path(plan_path).resolve()
     plan = load_plan(path)
     out = _external(output)
@@ -923,7 +1045,7 @@ def finish(plan_path, returned, output, *, diagnostic=False, atlas=None, pack=No
         geometry = json.loads((path.parent / item["geometry"]).read_text())
         target, box = targets[item["name"]]
         # Masked slots never enter model inputs. Restore their official composite
-        # pixels for K6's full-composite identity and display convention.
+        # pixels for the cut's full-composite identity and display convention.
         full = compose(geometry, baseline, density=plan["density"], frame=plan["frame"], inverse=False)
         clean = Image.open(path.parent / item["official"]).convert("RGBA")
         mask = np.any(np.asarray(full.image) != np.asarray(clean), -1)
@@ -991,6 +1113,11 @@ def finish(plan_path, returned, output, *, diagnostic=False, atlas=None, pack=No
 
 
 def main(argv=None):
+    """Run one stage (plan, merge-base, expressions, finish) from a JSON manifest.
+
+    Args:
+        argv: Command-line arguments; None reads ``sys.argv``.
+    """
     from .localization import register_locales
 
     register_locales()

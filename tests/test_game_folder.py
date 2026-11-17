@@ -135,7 +135,7 @@ def test_the_predicate_reads_names_only(tmp_path, monkeypatch):
 def test_an_old_bad_setting_starts_without_a_game_and_recovers(env, setting):
     empty = env.tmp / "empty"
     empty.mkdir()
-    # a setting saved by an earlier version, which took any folder
+    # a saved setting that names a folder holding no game
     env.settings.set("file_source", "windows_japan" if setting.endswith("japan") else "windows_global")
     env.settings.set(setting, str(empty))
     env.settings.save()

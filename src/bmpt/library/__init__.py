@@ -1,4 +1,4 @@
-"""The user's portrait and memorial lobby mod library."""
+"""Manage portrait, memorial lobby, model, and generic mods with persistent student photographs."""
 
 from .models import (
     AdoptResult,

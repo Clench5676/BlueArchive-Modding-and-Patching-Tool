@@ -1,7 +1,9 @@
-"""Small UI state kept between launches: the asset consent, recently opened variants, seen mods, the user's own
-aliases of the variants and the web UI's own preferences (voice volume, the mod library folder, scan and Spine consents,
-the mod switch's and the classic hand-off's flags, the data directory's id). Kept apart from config.toml, which the
-classic GUI rewrites with only its own keys.
+"""Small UI state kept between launches, in webui.json.
+
+It holds the asset consent, recently opened variants, seen mods, the user's own aliases of the variants and the web
+UI's own preferences (voice volume, the mod library folder, scan and Spine consents, the mod switch's and the classic
+hand-off's flags, the data directory's id). It is kept apart from config.toml, which the classic GUI rewrites with only
+its own keys.
 
 Several app instances may share one data folder: every change is applied to the file as it is at that moment (read
 again under a lock the instances share), so one instance never erases what another wrote, and reads pick up the
@@ -10,7 +12,8 @@ other instances' writes, under the same lock: Windows cannot replace a file anot
 The file is written the way the library's profiles.json is: flushed to disk before the replace, and the last good file
 kept as ``webui.json.prev`` before every write. An unreadable file is read from that copy instead, and kept as
 ``webui.json.bad`` at the next write. With neither readable, the state starts from the defaults (an error is logged)
-and the bad bytes are kept as ``webui.json.bad`` before the first write."""
+and the bad bytes are kept as ``webui.json.bad`` before the first write.
+"""
 
 from __future__ import annotations
 
@@ -29,7 +32,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-# the lock and the replace shared with the mod library (bmpt.filelock), under their old names
+# the lock and the replace shared with the mod library (bmpt.filelock)
 from ..filelock import file_lock as _file_lock, replace as _replace
 from ..logging_utils import log_failure
 
@@ -41,8 +44,15 @@ ALIAS_MAX, ALIAS_LENGTH = 8, 24
 
 
 def alias_text(value: Any) -> str:
-    """One alias as it is kept: NFC text without control or format characters, every run of whitespace one space,
-    trimmed; '' for anything but text."""
+    """Clean one alias the way it is kept.
+
+    Args:
+        value: The alias as typed.
+
+    Returns:
+        NFC text without control or format characters, every run of whitespace one space, trimmed; an empty string
+        for anything but text.
+    """
     if not isinstance(value, str):
         return ""
     text = "".join(
@@ -52,13 +62,24 @@ def alias_text(value: Any) -> str:
 
 
 def alias_key(text: str) -> str:
-    """What makes two aliases the same one: case and width ignored."""
+    """Return what makes two aliases the same one, ignoring case and width.
+
+    Args:
+        text: An alias, cleaned by ``alias_text``.
+    """
     return unicodedata.normalize("NFKC", text).casefold()
 
 
 def custom_aliases(value: Any) -> list[str]:
-    """A student's own aliases as the page gets them: cleaned (alias_text), without empty, too long and repeated ones,
-    in their order, at most ALIAS_MAX."""
+    """Clean a student's own aliases as the page gets them.
+
+    Args:
+        value: The stored list; anything that is not a list gives no aliases.
+
+    Returns:
+        The aliases cleaned by ``alias_text``, in their order, without empty, longer than ``ALIAS_LENGTH`` and
+        repeated ones (``alias_key``), at most ``ALIAS_MAX``.
+    """
     out: list[str] = []
     seen: set[str] = set()
     for item in value if isinstance(value, list) else []:
@@ -82,7 +103,15 @@ ROSTER_FILTERS = {
 
 
 def roster_view(value: Any) -> dict[str, Any]:
-    """A stored or sent roster view with every field valid; unknown fields and options are dropped."""
+    """Make a stored or sent roster view valid; unknown fields and options are dropped.
+
+    Args:
+        value: The view: ``merged``, ``mods``, ``recruit``, ``sort``, ``order`` and the ``filters`` per group.
+
+    Returns:
+        The view with every field set; a missing or invalid one takes its default, and the order defaults to the
+        sort's natural direction.
+    """
     src = value if isinstance(value, dict) else {}
 
     def pick(key: str, allowed: tuple[str, ...], fallback: str) -> str:
@@ -120,7 +149,14 @@ def _seen_mods_of(data: dict[str, Any]) -> set[str] | None:
 
 
 class UiState:
+    """The web UI's own state file (webui.json), shared by every instance on the data directory."""
+
     def __init__(self, path: Path):
+        """Read the state and migrate its preferences.
+
+        Args:
+            path: The state file, webui.json; its folder also holds the previous copy, the bad copy and the lock.
+        """
         self.path = Path(path)
         self.prev = self.path.with_name(f"{self.path.name}.prev")
         self.bad = self.path.with_name(f"{self.path.name}.bad")
@@ -135,14 +171,15 @@ class UiState:
         self.had_asset_consent = isinstance(initial.get("consent"), bool)
         prefs = initial.get("prefs")
         # A stored Spine "No" stays as it is: the start shows the licence notice again until it is acknowledged.
-        # Manual scan consent did not authorize automatic checks. Migrate it to Off without opting the user in.
+        # Drop the obsolete startup_checks flag; where it was off while scan consent was on, scan consent becomes
+        # off, so nobody is opted in to automatic checks.
         if isinstance(prefs, dict) and any(key in prefs for key in ("startup_checks", "mod_switch_shown")):
 
             def migrate(data: dict[str, Any]) -> None:
                 prefs = data.get("prefs", {})
                 if prefs.pop("startup_checks", None) is False and prefs.get("scan_consent") is True:
                     prefs["scan_consent"] = False
-                # The main screens always keep the switch.
+                # Drop the obsolete mod_switch_shown flag: the main screens always keep the switch.
                 prefs.pop("mod_switch_shown", None)
 
             self._update(migrate)
@@ -166,17 +203,22 @@ class UiState:
         return data
 
     def _read(self) -> dict[str, Any]:
-        """The file's content now, for the strict readers: {} while missing; OSError or ValueError while
-        unreadable. The previous copy is not consulted: stale state must not stand in for the file."""
+        """Return the file's content now, for the strict readers.
+
+        It is {} while the file is missing, and OSError or ValueError while it is unreadable. The previous copy is
+        not consulted: stale state must not stand in for the file.
+        """
         try:
             return self._parse(self.path)
         except FileNotFoundError:
             return {}
 
     def _load(self) -> tuple[dict[str, Any] | None, str]:
-        """(the content now, the file's state) with the file lock held. The state is "ok" (webui.json parsed, and it
-        is the content), "bad" (it exists but cannot be read) or "missing"; unless "ok", the content is the previous
-        copy's (logged) or None when that cannot be read either."""
+        """Return (the content now, the file's state), with the file lock held.
+
+        The state is "ok" (webui.json parsed, and it is the content), "bad" (it exists but cannot be read) or
+        "missing"; unless "ok", the content is the previous copy's (logged) or None when that cannot be read either.
+        """
         state = "missing"
         try:
             return self._parse(self.path), "ok"
@@ -202,9 +244,12 @@ class UiState:
         return data, state
 
     def _current(self) -> dict[str, Any]:
-        """The state as the file holds it now (another instance may have written it); what was last known while the
-        file is missing or unreadable (else its previous copy, else the defaults). Read under the lock the instances
-        share, so another instance's write never meets this one's open file (Windows refuses to replace it)."""
+        """Return the state as the file holds it now; another instance may have written it.
+
+        While the file is missing or unreadable it is what was last known (else its previous copy, else the
+        defaults). The file is read under the lock the instances share, so another instance's write never meets
+        this one's open file (Windows refuses to replace it).
+        """
         with self._lock:
             if self._signature() in ((None, None), self._seen):
                 return self._data
@@ -221,9 +266,12 @@ class UiState:
             return self._data
 
     def _update(self, change: Callable[[dict[str, Any]], None]) -> None:
-        """Apply one change to the file's current content, read again under the lock the instances share, and write
-        it back: keys another instance wrote meanwhile are kept. When the file cannot be read the change applies to
-        what this instance knew, else to the previous copy, else to the defaults, and the bad file is kept."""
+        """Apply one change to the file's current content and write it back.
+
+        The content is read again under the lock the instances share, so keys another instance wrote meanwhile are
+        kept. When the file cannot be read the change applies to what this instance knew, else to the previous copy,
+        else to the defaults, and the bad file is kept.
+        """
         with self._lock, _file_lock(self._lock_path):
             data, state = self._load()
             if data is None or (state != "ok" and self._known):
@@ -232,9 +280,11 @@ class UiState:
             self._write(data, bad=state == "bad")
 
     def _write(self, data: dict[str, Any], *, bad: bool = False) -> None:
-        """Replace the state atomically while both state locks are held. The new content reaches the disk before it
-        replaces the file; the file it replaces, when it parsed, becomes the previous copy, and when it could not be
-        read (``bad``) it is kept as webui.json.bad for the user."""
+        """Replace the state atomically while both state locks are held.
+
+        The new content reaches the disk before it replaces the file. The file it replaces, when it parsed, becomes
+        the previous copy; when it could not be read (``bad``) it is kept as webui.json.bad for the user.
+        """
         self.path.parent.mkdir(parents=True, exist_ok=True)
         fd, name = tempfile.mkstemp(prefix=f".{self.path.name}.", suffix=".tmp", dir=self.path.parent)
         try:
@@ -255,7 +305,7 @@ class UiState:
         self._data, self._known, self._seen = data, True, self._signature()
 
     def _keep_previous(self) -> None:
-        """Copy the current file to webui.json.prev (flushed to disk, replacing the old copy in one step)."""
+        """Copy the current file to webui.json.prev (flushed to disk, replacing the previous copy in one step)."""
         fd, name = tempfile.mkstemp(prefix=f".{self.prev.name}.", suffix=".tmp", dir=self.prev.parent)
         try:
             with os.fdopen(fd, "wb") as out, self.path.open("rb") as stream:
@@ -269,14 +319,19 @@ class UiState:
             raise
 
     def diagnostic_state(self) -> dict | None:
-        """Read the last known diagnostic settings without a file lock or disk access."""
+        """Read the last known diagnostic settings without a file lock or disk access.
+
+        Returns:
+            The ``consent`` answers (``uiAssets``, ``spine``, ``scan``) and the ``libraryDir`` preference; None
+            while another thread holds the state's lock.
+        """
         if not self._lock.acquire(blocking=False):
             return None
         try:
             prefs = self._data.get("prefs", {})
             scan = prefs.get("scan_consent")
             if scan is True and prefs.get("scan_consent_scope") != SCAN_CONSENT_SCOPE:
-                scan = None  # as scan_consent: an Allow from before the popup covered Steam's records is asked again
+                scan = None  # as scan_consent: an Allow given for a narrower scope is asked again
             return {
                 "consent": {
                     "uiAssets": self._data.get("consent"),
@@ -295,6 +350,11 @@ class UiState:
         return value if isinstance(value, bool) else None
 
     def set_consent(self, granted: bool) -> None:
+        """Save the answer to the asset consent popup.
+
+        Args:
+            granted: Whether the web view may cache light assets.
+        """
         self._update(lambda data: data.__setitem__("consent", bool(granted)))
 
     @property
@@ -303,9 +363,19 @@ class UiState:
         return self.get("preview_cache") is not False
 
     def recent(self) -> list[str]:
+        """Return the keys of the recently opened variants, the latest first."""
         return _recent_of(self._current())
 
     def preview_sources(self, install: str, variant: str) -> dict[str, str]:
+        """Return the saved view choice of one variant.
+
+        Args:
+            install: The install's id.
+            variant: The variant key.
+
+        Returns:
+            Asset kind (``spr``, ``lobby`` or ``model``) mapped to the chosen source: ``official`` or ``mod:<id>``.
+        """
         data = self._current().get("asset_previews", {})
         folder = data.get(install, {}) if isinstance(data, dict) else {}
         sources = folder.get(variant, {}) if isinstance(folder, dict) else {}
@@ -320,7 +390,14 @@ class UiState:
         )
 
     def preview_snapshot(self, install: str) -> dict[str, dict[str, str]]:
-        """Read all saved view choices of one install once, detached from mutable state."""
+        """Read all saved view choices of one install at once, detached from mutable state.
+
+        Args:
+            install: The install's id.
+
+        Returns:
+            Variant key mapped to what ``preview_sources`` returns for it.
+        """
         data = self._current().get("asset_previews", {})
         folder = data.get(install, {}) if isinstance(data, dict) else {}
         return (
@@ -338,7 +415,14 @@ class UiState:
         )
 
     def set_preview_source(self, install: str, variant: str, kind: str, source: str) -> None:
-        """Remember a view choice independently of the library's game configuration."""
+        """Remember a view choice independently of the library's game configuration.
+
+        Args:
+            install: The install's id.
+            variant: The variant key.
+            kind: The asset kind, ``spr``, ``lobby`` or ``model``.
+            source: ``official`` or ``mod:<id>``.
+        """
 
         def change(data: dict[str, Any]) -> None:
             data.setdefault("asset_previews", {}).setdefault(install, {}).setdefault(variant, {})[kind] = source
@@ -346,7 +430,15 @@ class UiState:
         self._update(change)
 
     def reconcile_deleted_source(self, source: str, fallback) -> None:
-        """Clear a removed preview everywhere; retain Hall placement when another source exists."""
+        """Clear a removed preview source everywhere; retain Student Hall placement when another source exists.
+
+        View choices that name the source take the fallback or are dropped. Hall entries that use it are moved to
+        the fallback, merged into an entry that has it already, or removed; the hall's revision grows then.
+
+        Args:
+            source: The removed source, ``mod:<id>``.
+            fallback: ``fallback(variant, kind)`` returns the source to use instead, or a falsy value for none.
+        """
 
         def change(data):
             for folder in data.get("asset_previews", {}).values():
@@ -392,6 +484,12 @@ class UiState:
         self._update(change)
 
     def visit(self, variant_key: str) -> None:
+        """Move a variant to the front of the recent list, which keeps ``RECENT_MAX`` keys.
+
+        Args:
+            variant_key: The variant opened.
+        """
+
         def change(data: dict[str, Any]) -> None:
             recent = [v for v in _recent_of(data) if v != variant_key]
             data["recent"] = [variant_key, *recent][:RECENT_MAX]
@@ -399,8 +497,17 @@ class UiState:
         self._update(change)
 
     def seen_mods(self, baseline: Callable[[], list[str]] | None = None) -> set[str] | None:
-        """Seen ids, or None when unknown. Only a missing key gets the library's baseline, never an existing list.
-        Read strictly: stale or unreadable state must not turn every mod into a new one."""
+        """Read the ids of the mods the user has seen.
+
+        The file is read strictly: stale or unreadable state must not turn every mod into a new one.
+
+        Args:
+            baseline: Returns the library's mod ids. Only a missing key is filled with them, never an existing
+                list. None leaves a missing key missing.
+
+        Returns:
+            The ids; None when they are unknown (no key and no baseline, or the file is unreadable).
+        """
         try:
             with self._lock, _file_lock(self._lock_path):
                 data = self._read()
@@ -419,7 +526,11 @@ class UiState:
             return None
 
     def mark_mods_seen(self, ids: list[str]) -> None:
-        """Remember opened mods without changing the shared mod library."""
+        """Remember opened mods without changing the shared mod library.
+
+        Args:
+            ids: The ids of the mods opened.
+        """
 
         def change(data: dict[str, Any]) -> None:
             value = data.get("seen_mods")
@@ -431,9 +542,17 @@ class UiState:
     # --- the user's own aliases, by variant key ---
 
     def aliases(self, legacy_targets: dict[str, str] | None = None) -> dict[str, list[str]]:
-        """Every variant's own aliases ({variant key: [alias]}), cleaned as custom_aliases does.
+        """Return every variant's own aliases, cleaned as ``custom_aliases`` does.
+
         Ordinary family keys identify the original variant. Special-only families need a catalog-selected target;
-        move those entries once under the shared lock, preserving any explicitly saved variant aliases."""
+        their entries are moved once under the shared lock, preserving any explicitly saved variant aliases.
+
+        Args:
+            legacy_targets: Family key mapped to the variant that takes the aliases stored under the family key.
+
+        Returns:
+            Variant key mapped to its aliases; variants without aliases are left out.
+        """
         table = self._current().get("aliases")
         if isinstance(table, dict) and legacy_targets and any(key in table for key in legacy_targets):
 
@@ -457,8 +576,15 @@ class UiState:
         return out
 
     def set_aliases(self, variant: str, names: list[str]) -> list[str]:
-        """Keep a variant's own aliases (none: forget its entry) and return them as kept.
-        Only this variant's entry of the file changes."""
+        """Keep a variant's own aliases; only this variant's entry of the file changes.
+
+        Args:
+            variant: The variant key.
+            names: The aliases as typed; an empty result forgets the variant's entry.
+
+        Returns:
+            The aliases as kept, cleaned by ``custom_aliases``.
+        """
         kept = custom_aliases(names)
 
         def change(data: dict[str, Any]) -> None:
@@ -476,7 +602,11 @@ class UiState:
     # --- preferences ---
 
     def update_tours(self, change: Callable[[dict[str, Any]], None]) -> None:
-        """Merge presentation history under the existing profile lock, apart from library and preview state."""
+        """Merge presentation history under the existing profile lock, apart from library and preview state.
+
+        Args:
+            change: Edits the stored ``tours`` dict in place.
+        """
 
         def update(data: dict[str, Any]) -> None:
             if not isinstance(data.get("tours"), dict):
@@ -486,10 +616,23 @@ class UiState:
         self._update(update)
 
     def get(self, key: str, default: Any = None) -> Any:
+        """Read a preference.
+
+        Args:
+            key: The preference's key.
+            default: Returned when it is not set.
+        """
         prefs = self._current().get("prefs")
         return prefs.get(key, default) if isinstance(prefs, dict) else default
 
     def set(self, key: str, value: Any) -> None:
+        """Save a preference.
+
+        Args:
+            key: The preference's key.
+            value: Its new value, JSON-serializable.
+        """
+
         def change(data: dict[str, Any]) -> None:
             prefs = data.get("prefs")
             if not isinstance(prefs, dict):
@@ -499,21 +642,35 @@ class UiState:
         self._update(change)
 
     def flag(self, key: str) -> bool:
-        """A boolean preference of the mod switch and the classic hand-off (FLAGS), its default until set."""
+        """Read a boolean preference of the tray, the mod switch or the classic hand-off.
+
+        Args:
+            key: A key of ``FLAGS``.
+
+        Returns:
+            The saved value; the flag's default until it is set.
+        """
         value = self.get(key)
         return value if isinstance(value, bool) else FLAGS[key]
 
     @property
     def scan_consent(self) -> bool | None:
-        """None until the user answered the scan consent popup; then True (the game folders may be checked and Steam's
-        records read) or False. An Allow given before the popup covered Steam's records is asked again."""
+        """The scan consent: True (the game folders may be checked and Steam's records read) or False.
+
+        It is None until the user answered the scan consent popup, and again for an Allow given before the popup
+        covered Steam's records.
+        """
         value = self.get("scan_consent")
         if value is True and self.get("scan_consent_scope") != SCAN_CONSENT_SCOPE:
             return None
         return value if isinstance(value, bool) else None
 
     def set_scan_consent(self, granted: bool) -> None:
-        """Save an answer to the scan consent popup, for what the popup covers now."""
+        """Save an answer to the scan consent popup, for what the popup covers now.
+
+        Args:
+            granted: Whether the game folders may be checked and Steam's records read.
+        """
 
         def change(data: dict[str, Any]) -> None:
             prefs = data.get("prefs")
@@ -526,17 +683,24 @@ class UiState:
 
     @property
     def spine_consent(self) -> bool | None:
-        """None until the notice is answered; True once acknowledged. A stored False (an earlier No) makes the
-        start show the notice again."""
+        """The Spine licence notice's answer: None until it is answered, True once acknowledged.
+
+        A stored False (a No) makes the start show the notice again.
+        """
         value = self.get("spine_consent")
         return value if isinstance(value, bool) else None
 
     def data_id(self, data_dir: Path) -> str:
-        """This data directory's id (``data_id``), kept with the data directory's own path (``data_path``): made at
-        the first call. When the path recorded with it is another one, the folder was copied or moved: a copy (the
-        recorded folder still exists and holds the same id) gets a new id, so it never shares the original's; a moved
-        folder keeps its id and records its new path. Only the services call it, when they first build the library,
-        so the constructor never adds preferences."""
+        """Return this data directory's id, made at the first call and kept with the directory's path.
+
+        The id (``data_id``) is stored with the data directory's own path (``data_path``). When the recorded path is
+        another one, the folder was copied or moved: a copy (the recorded folder still exists and holds the same id)
+        gets a new id, so it never shares the original's; a moved folder keeps its id and records its new path. Only
+        the services call it, when they first build the library, so the constructor never adds preferences.
+
+        Args:
+            data_dir: The data directory.
+        """
         here = data_path(data_dir)
         made: list[str] = []
 
@@ -576,7 +740,11 @@ DATA_ID_LENGTH = 12  # hex digits
 
 
 def data_path(data_dir: Path) -> str:
-    """A data directory's path as ``data_path`` records it: resolved, and case-folded on Windows."""
+    """Return a data directory's path as ``data_path`` records it: resolved, and case-folded on Windows.
+
+    Args:
+        data_dir: The data directory.
+    """
     return os.path.normcase(str(Path(data_dir).resolve()))
 
 
@@ -586,7 +754,9 @@ def _is_data_id(value: Any) -> bool:
 
 def _holds_id(folder: Path, data_id: str) -> bool:
     """Whether a data directory still exists and its webui.json holds this id (the folder was copied, not moved).
-    An unreadable webui.json answers from its previous copy."""
+
+    An unreadable webui.json answers from its previous copy.
+    """
     for name in ("webui.json", "webui.json.prev"):
         try:
             data = json.loads((folder / name).read_text(encoding="utf-8"))
@@ -605,12 +775,23 @@ LOBBY_ZOOM_CUSTOM_DEFAULT = 2.0
 
 
 def is_number(value: Any) -> bool:
+    """Return whether a value is a finite int or float; a bool is not."""
     return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
 
 
 def lobby_zoom(mode: Any, custom: Any, legacy: Any = None) -> dict[str, Any]:
-    """The zoom-out setting as stored, every field valid: the mode, else the boolean the setting was before (`legacy`,
-    lobby_zoom_out: off is the game's view), else Full Art; and the custom limit in 0.1 steps within its range."""
+    """Make the memorial lobby's zoom-out setting valid, as it is stored.
+
+    Args:
+        mode: The saved mode, one of ``LOBBY_ZOOM_MODES``; anything else is decided by ``legacy``.
+        custom: The saved custom limit, in game views across; a number is rounded to 0.1 and kept within
+            ``LOBBY_ZOOM_CUSTOM``, anything else gives the default.
+        legacy: The ``lobby_zoom_out`` boolean setting, read when ``mode`` is not valid: False gives the game's
+            view, anything else Full Art.
+
+    Returns:
+        ``mode`` and ``custom``.
+    """
     lo, hi = LOBBY_ZOOM_CUSTOM
     return {
         "mode": mode if isinstance(mode, str) and mode in LOBBY_ZOOM_MODES else "game" if legacy is False else "art",

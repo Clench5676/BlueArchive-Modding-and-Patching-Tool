@@ -96,7 +96,7 @@ def _r(value: float, digits: int = 5) -> float:
 
 
 def trs(t: Mapping[str, Any]) -> list[float]:
-    """A Transform's local matrix (3 x 4, row-major): translation, rotation (quaternion), scale."""
+    """Convert a Transform typetree's translation, quaternion, and scale to a row-major 3 by 4 matrix."""
     p, q, s = t["m_LocalPosition"], t["m_LocalRotation"], t["m_LocalScale"]
     x, y, z, w = q.get("x", 0.0), q.get("y", 0.0), q.get("z", 0.0), q.get("w", 1.0)
     n = math.sqrt(x * x + y * y + z * z + w * w) or 1.0
@@ -130,7 +130,7 @@ def trs(t: Mapping[str, Any]) -> list[float]:
 
 
 def mul(a: list[float], b: list[float]) -> list[float]:
-    """a * b for 3 x 4 affine matrices."""
+    """Multiply two row-major 3 by 4 affine matrices as a * b."""
     out = []
     for i in range(3):
         row = a[i * 4 : i * 4 + 4]
@@ -141,6 +141,7 @@ def mul(a: list[float], b: list[float]) -> list[float]:
 
 
 def rounded(m: list[float]) -> list[float]:
+    """Round affine-matrix elements for JSON output and normalize negative zero."""
     return [_r(v, 6) for v in m]
 
 
@@ -160,7 +161,12 @@ def _keys(curve: Mapping[str, Any] | None) -> list[list[float | None]]:
 
 
 def curve(c: Mapping[str, Any] | float | None, default: float = 0.0) -> Any:
-    """A MinMaxCurve (see the module docstring)."""
+    """Encode a MinMaxCurve using the module's constant, random, or Hermite-curve schema.
+
+    Args:
+        c: Unity MinMaxCurve typetree, a scalar constant, or None for the default.
+        default: Scalar to return when the curve is absent.
+    """
     if c is None:
         return default
     if not isinstance(c, Mapping):
@@ -193,7 +199,11 @@ def _gradient(g: Mapping[str, Any]) -> dict:
 
 
 def gradient(c: Mapping[str, Any] | None) -> dict:
-    """A MinMaxGradient (see the module docstring)."""
+    """Encode a MinMaxGradient using the module's color and gradient schema.
+
+    Args:
+        c: Unity MinMaxGradient typetree; None or an empty mapping produces opaque white.
+    """
     if not c:
         return {"col": [1.0, 1.0, 1.0, 1.0]}
     state = c.get("minMaxState", 0)
@@ -407,8 +417,11 @@ def _main(ps: Mapping[str, Any]) -> dict:
 
 
 def _streams(renderer: Mapping[str, Any]) -> dict[str, list[int]]:
-    """Where UV, UV2 and the custom data land in TEXCOORD0.. (component offsets), as Unity packs the renderer's
-    vertex streams; without custom streams only UV is there (TEXCOORD0.xy) and the rest reads 0."""
+    """Locate UV, UV2 and the custom data in TEXCOORD0.. as component offsets.
+
+    Unity packs them in the renderer's vertex streams; without custom streams only UV is there (TEXCOORD0.xy)
+    and the rest reads 0.
+    """
     if not renderer.get("m_UseCustomVertexStreams"):
         return {"uv": [0, 2]}
     out, offset = {}, 0
@@ -444,7 +457,12 @@ def _renderer(r: Mapping[str, Any]) -> dict:
 
 
 def system(ps: Mapping[str, Any], renderer: Mapping[str, Any] | None) -> dict:
-    """One ParticleSystem with its renderer, without its place, material or sub-emitters (see lobby.read_prefab)."""
+    """Describe a ParticleSystem and renderer before placement, materials, and sub-emitter resolution.
+
+    Args:
+        ps: ParticleSystem typetree supplying its main, emission, shape, and enabled module settings.
+        renderer: ParticleSystemRenderer typetree; None uses renderer defaults.
+    """
     renderer = renderer or {}
     return {
         "main": _main(ps),
@@ -457,7 +475,7 @@ def system(ps: Mapping[str, Any], renderer: Mapping[str, Any] | None) -> dict:
 
 
 def sub_emitters(ps: Mapping[str, Any]) -> list[tuple[int, int, int, float]]:
-    """(type, emitter ParticleSystem path id, inherit properties, probability) of the enabled sub-emitter module."""
+    """Read enabled sub-emitters as type, ParticleSystem path ID, inherited properties, and probability."""
     m = ps.get("SubModule") or {}
     if not m.get("enabled"):
         return []
@@ -470,7 +488,7 @@ def sub_emitters(ps: Mapping[str, Any]) -> list[tuple[int, int, int, float]]:
 
 
 def program(shader: str | None) -> str | None:
-    """The player's program for a shader name, None for shaders it does not port."""
+    """Return the player's program for a shader name, or None for unsupported shaders."""
     return PROGRAMS.get(shader or "")
 
 
@@ -481,10 +499,20 @@ def material(
     shader_props: Iterable[Mapping],
     textures: Mapping[str, dict],
 ) -> dict:
-    """A particle material: its program, blend and queue, the textures by property (id, size, sampler, sRGB, tiling;
-    an empty slot names the shader's default texture, "white", "black" ...) and its Float, Color and Vector properties
+    """Describe a particle material's program, blend, queue, textures, and properties.
+
+    Textures retain id, size, sampler, sRGB, and tiling; an empty slot names the shader's default texture
+    ("white", "black", ...). Float, Color and Vector properties remain
     as stored, the shader's defaults filling what the material lacks. Colors are converted to linear light by the
-    front end, Vector properties not ("vectors" lists them)."""
+    front end, Vector properties not ("vectors" lists them).
+
+    Args:
+        shader: ShaderLab name selecting a ported program, or None when unresolved.
+        tree: Material typetree with saved Float, Color/Vector, and texture properties.
+        state: Shader pass source/destination blend factors and render queue.
+        shader_props: Parsed shader property declarations supplying missing material defaults.
+        textures: Resolved texture properties mapped to texture descriptions, before tiling/offset is added.
+    """
     saved = tree.get("m_SavedProperties") or {}
     floats = {k: _r(v) for k, v in saved.get("m_Floats", []) if isinstance(v, (int, float))}
     colors = {k: _rgba(v) for k, v in saved.get("m_Colors", [])}
@@ -523,8 +551,15 @@ def material(
 
 
 def texture(tree: Mapping[str, Any], tex_id: str) -> dict:
-    """A texture's id and how the game samples it: size, filter (0 point, 1 bilinear, 2 trilinear), mipmaps, wrap per
-    axis (0 repeat, 1 clamp, 2 mirror, 3 mirror once) and whether it is sRGB (m_ColorSpace 1)."""
+    """Describe a texture's dimensions and game sampling settings.
+
+    Filter is 0 point, 1 bilinear, or 2 trilinear; wrap per axis is 0 repeat, 1 clamp,
+    2 mirror, or 3 mirror once. sRGB corresponds to m_ColorSpace 1.
+
+    Args:
+        tree: Texture2D typetree supplying dimensions, mip count, color space, and sampler settings.
+        tex_id: Stable exported texture locator used by materials and the asset-serving route.
+    """
     s = tree.get("m_TextureSettings") or {}
     wrap = s.get("m_WrapMode", 0)
     return {
@@ -546,7 +581,15 @@ def mesh(
     triangles: Iterable[tuple[int, int, int]],
     colors: list | None = None,
 ) -> dict:
-    """A particle mesh: positions, UVs, normals and colours flattened, triangles as indices."""
+    """Flatten particle mesh attributes and triangle indices for JSON output.
+
+    Args:
+        vertices: Position rows in Unity coordinates; the first three components are retained.
+        uv: Optional UV rows; the first two components are retained.
+        normals: Optional normal rows; the first three components are retained.
+        triangles: Triples indexing the vertex rows.
+        colors: Optional RGBA vertex-color rows; the first four components are retained.
+    """
     flat = lambda rows, n: [_r(x) for row in rows for x in list(row)[:n]]  # noqa: E731
     out = {"v": flat(vertices, 3), "i": [int(i) for tri in triangles for i in tri]}
     if uv:
@@ -568,9 +611,12 @@ _MESH_SLOTS = (
 
 
 def _mesh_choice(ids: list[tuple[str, float]], distribution: int) -> dict:
-    """What a mesh renderer draws: "mesh", the first of its meshes, and with more than one "meshes", all of them in
-    their slots' order (the empty slots left out): Unity picks one per particle, uniformly at random, or with
-    m_MeshDistribution 1 (non-uniform random) by their weights ("weights")."""
+    """Describe the meshes a mesh renderer draws.
+
+    "mesh" is the first of its meshes, and with more than one, "meshes" holds all of them in their slots' order
+    (the empty slots left out). Unity picks one per particle, uniformly at random, or with m_MeshDistribution 1
+    (non-uniform random) by their weights ("weights").
+    """
     out: dict[str, Any] = {"mesh": ids[0][0]}
     if len(ids) > 1:
         out["meshes"] = [i for i, _ in ids]
@@ -582,10 +628,19 @@ def _mesh_choice(ids: list[tuple[str, float]], distribution: int) -> dict:
 def anchor_of(
     n: dict, by_go: Mapping[int, dict], skeleton_of_go: Callable[[int], str | None], data_scale: Callable[[str], float]
 ) -> tuple[dict | None, list[dict]]:
-    """Where a prefab node (lobby.read_prefab) is placed: the nearest SkeletonUtilityBone above (or on) it, when it
-    follows its bone (Follow), as {"skeleton", "bone", "go" (the skeleton GameObject's matrix), "ds" (its data
-    scale)}, else None; and the nodes below that bone down to the node itself, top first (with no bone: up to the
-    root, or up to an Override bone)."""
+    """Find a prefab node's Follow-bone anchor and intervening transform chain.
+
+    Args:
+        n: lobby.read_prefab node whose effect placement is being exported.
+        by_go: Prefab walk nodes indexed by GameObject path ID for ancestor traversal.
+        skeleton_of_go: Maps a skeleton GameObject path ID to its skeleton name, or None.
+        data_scale: Returns Unity units per skeleton unit for each skeleton name.
+
+    Returns:
+        The nearest Follow SkeletonUtilityBone as skeleton, bone, go (skeleton matrix),
+        and ds (data scale), or None; and nodes below it through n, top first. Without a
+        Follow anchor, the chain stops at the root or nearest Override bone.
+    """
     chain, cur, anchor = [], n, None
     while cur is not None:
         utility = cur["first"].get("SkeletonUtilityBone")
@@ -615,12 +670,22 @@ TOGGLE_SCRIPT = "SpineEventToggleObjects"
 def toggle_groups(
     nodes: list[dict], skeleton_of_go: Callable[[int], str | None]
 ) -> tuple[list[dict], dict[int, list[list[int]]]]:
-    """The prefab's SpineEventToggleObjects components: each one listens to the Spine events of the skeleton on its
+    """Read Spine-event toggle groups and the GameObjects controlled by each group.
+
+    Each SpineEventToggleObjects component listens to the skeleton on its
     GameObject (or the nearest one above) and sets toggleObjects[event int] active on "EnableObject", inactive on
     "DisableObject". CH0217_home's Idle_01 switches fish 0 on at 5 s and off at 13.3 s, fish 1 at 23.3 to 30 s and
     the bubbles 5 and 6 twice, its BG_Loop_00_R fish 2 and 3, Talk_04_M bubble 4: seven indices, the seven entries of
-    its list. Returns the groups, {"skeleton", "on": the objects' own activity in the prefab, 1 or 0}, and for each
-    listed GameObject its [group, index] pairs."""
+    its list.
+
+    Args:
+        nodes: lobby.read_prefab walk carrying component lists and each object's own activity.
+        skeleton_of_go: Maps a skeleton GameObject path ID to its skeleton name, or None.
+
+    Returns:
+        Groups with skeleton and on (own prefab activity as 1/0), plus each listed
+        GameObject's [group, index] pairs.
+    """
     by_go = {n["go"]: n for n in nodes}
     groups: list[dict] = []
     listed: dict[int, list[list[int]]] = {}
@@ -649,16 +714,24 @@ def build(
     resolve: Callable[[str, int, dict], Any] | None,
     gates: Iterable[int] = (),
 ) -> dict:
-    """The particle systems of a prefab walk (lobby.read_prefab nodes, in hierarchy order), with their place: under a
-    SkeletonUtilityBone (Follow) the bone GameObject moves with the bone, so a system there is anchored on that bone
+    """Build placed particle systems and their materials, textures, meshes, and toggle groups.
+
+    Under a SkeletonUtilityBone (Follow), a system is anchored on that bone
     of its skeleton ("anchor") and placed by the transforms below it ("rel", Unity units of the bone GameObject);
     every system also keeps its place in the prefab's own pose ("static", NGUI units around the prefab root).
-    resolve(kind, owner path id, pointer) reads the materials ("material") and meshes ("mesh") the renderers point
-    at; without it no system has a material. Systems below a GameObject a SpineEventToggleObjects switches
+    Systems below a GameObject a SpineEventToggleObjects switches
     (toggle_groups) are kept even while it is off, with the [group, index] pairs above them ("toggle"): they play
-    while every one is on. gates: GameObjects the lobby's intro switches on (intro.py): a system off at rest is kept
-    when only they (and toggles) keep it off ("rest" 0). Each system has its GameObject as "_go" (for the intro, which
-    lobby.read_prefab removes)."""
+    while every one is on. Intro-gated systems off at rest are kept
+    when only gates and toggles keep them off ("rest" 0). Each system has its GameObject as "_go" (for the intro, which
+    lobby.read_prefab removes).
+
+    Args:
+        nodes: lobby.read_prefab walk in hierarchy order, with transforms, component trees, and path IDs.
+        skeleton_of_go: Maps a skeleton GameObject path ID to its skeleton name, or None.
+        data_scale: Returns Unity units per skeleton unit for each skeleton name.
+        resolve: Reads material or mesh pointers by owner path ID; None leaves systems without materials.
+        gates: GameObject IDs activated by the intro, allowing otherwise inactive systems to be retained.
+    """
     systems, materials, textures, meshes = [], {}, {}, {}
     index_of_ps: dict[int, int] = {}
     pending_subs: list[tuple[int, list[tuple[int, int, int, float]]]] = []
@@ -669,8 +742,6 @@ def build(
         ps = n["first"].get("ParticleSystem")
         if ps is None:
             continue
-        # active, or inactive only by GameObjects a toggle switches and GameObjects the intro switches on (gated: off
-        # at rest)
         switched, cur, off, gated = [], n, False, False
         while cur is not None:
             if cur["go"] in listed:
@@ -689,7 +760,6 @@ def build(
         item = system(ps, rend)
 
         def drawn_with(pointer: dict | None) -> str | None:
-            # a material the player ports (its id), with its textures
             if not (pointer or {}).get("m_PathID"):
                 return None
             found = resolve("material", rend_pid, pointer)
@@ -767,7 +837,6 @@ def build(
                 systems[j]["isSub"] = 1
         if resolved:
             systems[i]["subs"] = resolved
-    # what the player keeps: systems that draw, and the systems that spawn them
     keep = [bool(s["material"] or s.get("trailMaterial")) for s in systems]
     for _ in range(4):
         for i, s in enumerate(systems):

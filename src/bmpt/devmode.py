@@ -2,7 +2,7 @@
 
 A development run (tests, a dev server, a build run for testing) can keep the tool away from the user's own data
 directory, cache and game install: it names a data folder and game folders of its own, and dev mode holds every path
-the tool uses to the folders the run names. A user's run sets none of these variables and behaves as before.
+the tool uses to the folders the run names. A user's run sets none of these variables, and the hooks do nothing.
 
 - ``BAMT_DATA_DIR``: the data directory (``config.toml``, ``webui.json``, ``library/``, ``output/``, ``Addons/``)
   instead of the checkout or the app's folder, and the disk cache ``<BAMT_DATA_DIR>/cache``. Read once, when
@@ -47,14 +47,21 @@ LIBRARY_STAGING_PREFIX = "bamt-library-"
 
 
 def data_dir() -> Path | None:
-    """The data directory ``BAMT_DATA_DIR`` names (absolute), or None when it is not set."""
+    """Return the data directory ``BAMT_DATA_DIR`` names (absolute), or None when it is not set."""
     value = os.environ.get(DATA_DIR, "").strip()
     return Path(value).expanduser().resolve() if value else None
 
 
 def game_dirs(region: str) -> list[Path] | None:
-    """The game folders ``BAMT_GAME_DIRS_<REGION>`` names, in order (empty when it is set to nothing), or None when it
-    is not set and the game is searched for as usual."""
+    """Return the game folders a region's ``BAMT_GAME_DIRS_*`` variable names.
+
+    Args:
+        region: ``"global"`` or ``"japan"``.
+
+    Returns:
+        The folders in order (empty when the variable is set to nothing), or None when it is not set and the game is
+        searched for as usual.
+    """
     value = os.environ.get(GAME_DIRS[region])
     return None if value is None else _path_list(value)
 
@@ -65,12 +72,12 @@ def active() -> bool:
 
 
 def roots() -> list[Path]:
-    """The folders the tool may use in dev mode (the writable ones included), links resolved."""
+    """Return the folders the tool may use in dev mode (the writable ones included), links resolved."""
     return [_real(path) for path in _path_list(os.environ.get(ROOTS, "")) + _path_list(os.environ.get(WRITABLE, ""))]
 
 
 def writable_roots() -> list[Path]:
-    """The folders whose files the tool may change in place in dev mode, links resolved."""
+    """Return the folders whose files the tool may change in place in dev mode, links resolved."""
     return [_real(path) for path in _path_list(os.environ.get(WRITABLE, ""))]
 
 
@@ -85,15 +92,23 @@ def allows_read(path: str | os.PathLike[str]) -> bool:
 
 
 def check_read(path: str | os.PathLike[str]) -> None:
-    """In dev mode, refuse a path outside the dev roots: one the tool reads, or a folder it writes new files into
-    (library, cache, output). Raises ``ServiceError("dev_path_outside", path=...)``."""
+    """In dev mode, refuse a path outside the dev roots.
+
+    Args:
+        path: A path the tool reads, or a folder it writes new files into (library, cache, output).
+
+    Raises:
+        ServiceError: ``dev_path_outside`` with ``path``.
+    """
     if not allows_read(path):
         raise ServiceError("dev_path_outside", path=str(path))
 
 
 def allows_write(path: str | os.PathLike[str]) -> bool:
-    """Whether the tool may change a file in place: always outside dev mode, else only inside ``BAMT_DEV_WRITABLE``
-    or one of the library's staging folders."""
+    """Whether the tool may change a file in place.
+
+    Always outside dev mode; in dev mode only inside ``BAMT_DEV_WRITABLE`` or one of the library's staging folders.
+    """
     if not active():
         return True
     real = _real(path)
@@ -101,8 +116,14 @@ def allows_write(path: str | os.PathLike[str]) -> bool:
 
 
 def check_write(path: str | os.PathLike[str]) -> None:
-    """In dev mode, refuse changing a file in place (a game file, a CRC fix) outside ``BAMT_DEV_WRITABLE``. Raises
-    ``ServiceError("dev_path_outside", path=...)``."""
+    """In dev mode, refuse changing a file in place outside ``BAMT_DEV_WRITABLE`` and the library's staging folders.
+
+    Args:
+        path: The file about to be changed (a game file, a CRC fix).
+
+    Raises:
+        ServiceError: ``dev_path_outside`` with ``path``.
+    """
     if not allows_write(path):
         raise ServiceError("dev_path_outside", path=str(path))
 

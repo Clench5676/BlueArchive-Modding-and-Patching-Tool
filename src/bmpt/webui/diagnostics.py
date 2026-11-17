@@ -62,6 +62,17 @@ GAME_FILE_NAMES = 100
 
 
 def private_text(text: str, secrets: set[str]) -> str:
+    """Scrub personal data out of text for a report.
+
+    Args:
+        text: The text, such as a log excerpt; common log encodings of it are decoded first.
+        secrets: Secret values to hide, as ``session_log.redact`` takes them.
+
+    Returns:
+        The text with the home folder as ``~``, user names as ``[user]``, host names as ``[host]``, credentials
+        redacted and file names reduced to ``[asset].<extension>``. The game's own names (official bundles, CAB
+        ids, model URLs) stay, as a report cannot tell which game file a check refused without them.
+    """
     # Normalize common log encodings before scrubbing; the caller encodes only the sanitized result.
     for _ in range(3):
         decoded = html.unescape(unquote(text))
@@ -104,6 +115,19 @@ def private_text(text: str, secrets: set[str]) -> str:
 
 
 def clean(value: Any, secrets: set[str], depth: int = 0, *, filename: bool = False) -> Any:
+    """Make any value safe to put into a report.
+
+    Args:
+        value: The value; dicts, lists and strings are cleaned recursively, anything else becomes its ``str``.
+        secrets: Secret values to hide, as ``session_log.redact`` takes them.
+        depth: How deep ``value`` sits; callers leave it at 0. Beyond 8 levels the value becomes ``[truncated]``.
+        filename: Whether the strings in ``value`` are file names, which are reduced to ``[asset].<extension>``;
+            set for the values under keys such as ``file`` and ``paths``.
+
+    Returns:
+        A JSON-ready copy: at most 100 keys per dict and the last 40 items per list, values under credential-like
+        keys redacted, and strings scrubbed by ``private_text`` and cut to their last 8000 characters.
+    """
     if depth > 8:
         return "[truncated]"
     if isinstance(value, dict):
@@ -138,9 +162,19 @@ def clean(value: Any, secrets: set[str], depth: int = 0, *, filename: bool = Fal
 
 
 def differing_game_files(folder: Path, official: dict[str, steam_records.OfficialFile]) -> dict:
-    """The bundles of an install's resource folders that differ from Steam's file list by name or size, by stat
-    alone (no hashing): counts, and at most GAME_FILE_NAMES names each. The names from Steam's list are the game's
-    own; of the bundles it does not list, only names in the game's own form are given."""
+    """Find the bundles of an install that differ from Steam's file list by name or size.
+
+    The comparison uses stat alone, with no hashing. The names from Steam's list are the game's own; of the bundles
+    it does not list, only names in the game's own form are given.
+
+    Args:
+        folder: The install's folder.
+        official: Steam's file list for it: bundle name mapped to the official file, which has a ``size``.
+
+    Returns:
+        ``listed`` and ``present`` (how many bundles), and ``sizeChanged``, ``missing`` and ``notListed``, each
+        a ``count`` with at most ``GAME_FILE_NAMES`` sorted ``names``.
+    """
     present: dict[str, int] = {}
     for prefix in steam_records.BUNDLE_FOLDERS:
         resource = Path(folder) / prefix
@@ -174,7 +208,14 @@ def differing_game_files(folder: Path, official: dict[str, steam_records.Officia
 
 
 def configured_language(data_dir: Path) -> str:
-    """Read only the UI preference, before startup loads settings or detects a game."""
+    """Read only the UI language from config.toml, before startup loads settings or detects a game.
+
+    Args:
+        data_dir: The data directory that holds config.toml.
+
+    Returns:
+        The saved language; the running UI language when the file has none or cannot be read.
+    """
     import toml
 
     try:
@@ -188,14 +229,31 @@ def configured_language(data_dir: Path) -> str:
 
 
 def with_ref(error: dict) -> dict:
-    """Retain a supplied display reference, or resolve a locally recorded name."""
+    """Give an error the display reference of its code.
+
+    Args:
+        error: The error as the page and the logs carry it (``code``, ``ref``, ``params``).
+
+    Returns:
+        The error with its own ``ref``, or the one recorded locally for its code; unchanged when there is none.
+    """
     if ref := error.get("ref") or code_of(error.get("code")):
         return {**error, "ref": ref}
     return error
 
 
 def import_row(entry: dict, secrets: set[str]) -> dict:
-    """Use the same redacted, structured verdict in logs and reports."""
+    """Summarize one batch-import row as the logs and reports show it, redacted.
+
+    Args:
+        entry: The row of the import list: its state, error, source and target, files and how each found its
+            official parts.
+        secrets: Secret values to hide, as ``session_log.redact`` takes them.
+
+    Returns:
+        The row's identity, ``state``, ``code``, ``ref`` and ``params`` of its refusal, the files with their
+        resource types, the ``conversionRoute`` between source and target, and the rest of what the check read.
+    """
     from bmpt.engine import parse_filename
 
     detail = entry.get("error") if isinstance(entry.get("error"), dict) else {}
@@ -249,6 +307,16 @@ def import_row(entry: dict, secrets: set[str]) -> dict:
 
 
 def import_snapshot(value: Any, secrets: set[str]) -> dict | None:
+    """Summarize the batch import's list for a report, within half of ``DATA_CAP``.
+
+    Args:
+        value: The import's diagnostic snapshot: ``phase``, ``revision`` and ``rows``.
+        secrets: Secret values to hide, as ``session_log.redact`` takes them.
+
+    Returns:
+        ``phase``, ``revision``, the ``total`` number of rows, the number ``omitted`` for the size limit and the
+        summarized ``rows``; None when ``value`` is not a snapshot.
+    """
     if not isinstance(value, dict) or not isinstance(value.get("rows"), list):
         return None
     rows, size = [], 0
@@ -270,6 +338,15 @@ def import_snapshot(value: Any, secrets: set[str]) -> dict | None:
 
 
 def environment(safe_mode: bool = False, language: str | None = None) -> dict:
+    """Describe the App and the system it runs on, for the log header.
+
+    Args:
+        safe_mode: Whether the App runs in safe mode.
+        language: The UI language; None uses the running one.
+
+    Returns:
+        ``app`` (version and build), ``os``, ``locale``, ``language``, ``webview`` and ``safeMode``.
+    """
     return {
         "app": {"version": updater.current_version(), "build": "compiled" if updater.is_compiled() else "source"},
         "os": {"name": platform.system(), "version": platform.version(), "arch": platform.machine()},
@@ -281,6 +358,15 @@ def environment(safe_mode: bool = False, language: str | None = None) -> dict:
 
 
 def log_tail(path: Path, secrets: set[str]) -> str | None:
+    """Read the end of a log file, scrubbed, within ``LOG_CAP`` bytes.
+
+    Args:
+        path: The log file.
+        secrets: Secret values to hide, as ``session_log.redact`` takes them.
+
+    Returns:
+        The text, led by a note when earlier content was cut; None when the file cannot be read.
+    """
     try:
         with path.open("rb") as stream:
             stream.seek(0, 2)
@@ -300,7 +386,23 @@ def log_tail(path: Path, secrets: set[str]) -> str | None:
 
 
 class Reports:
+    """Collect what a diagnostic report needs, and write it as a ZIP archive on this computer.
+
+    The page's errors and context, the last failed job, the environment and the logs go into the report, all
+    scrubbed of personal data. A report is bounded in time (each read has a timeout) and in size, and is never
+    uploaded.
+    """
+
     def __init__(self, data_dir: Path, *, services: Any = None, safe_mode: bool = False):
+        """Create the collector.
+
+        Args:
+            data_dir: The data directory: the logs are read from it and automatic reports and the last backend
+                error are written to it.
+            services: The Services to read the library, switch state, settings and timings from; None before
+                they exist.
+            safe_mode: Whether the App runs in safe mode, which the report states.
+        """
         self.data_dir, self.services, self.safe_mode = Path(data_dir), services, safe_mode
         self.secrets: set[str] = set()
         self.frontend: dict = {}
@@ -320,6 +422,18 @@ class Reports:
         self._steam_files = steam_records.OfficialFiles()  # without the services' shared one
 
     def frontend_event(self, event: dict | None = None, context: dict | None = None) -> bool:
+        """Take an error and the state of the page.
+
+        Args:
+            event: The page's error (``message``, ``stack``, ``page``, ``phase``, ``kind``, ``source``, ``code``,
+                ``ref``, ``params``); None only updates the context.
+            context: The page's state (``page``, ``phase``, ``language``, ``userAgent``, ``screen``, ``webgl``,
+                ``timings``) and the import list as ``batchImport``.
+
+        Returns:
+            Whether the error was recorded and logged. False when there is no error to record, for a repeat of an
+            error seen in the last minute, beyond ten errors in a minute, or when the lock was busy.
+        """
         now = time.monotonic()
         if not self._lock.acquire(timeout=READ_TIMEOUT):
             return False
@@ -362,11 +476,22 @@ class Reports:
         return True
 
     def job_finished(self, job: Any) -> None:
+        """Keep a failed job for the report and log it; jobs that did not fail are ignored.
+
+        Args:
+            job: The finished ``Job``.
+        """
         if job.state == "failed":
             self.last_job = clean(with_ref({"kind": job.kind, **(job.error or {})}), self.secrets)
             logger.error("Failed job %s", json.dumps(self.last_job, ensure_ascii=False))
 
     def library_counts(self) -> dict | None:
+        """Count the library's mods per kind from its state file, without taking the library lock.
+
+        Returns:
+            The counts of ``spr``, ``lobby``, ``model`` and ``other`` mods; None without services, without a state
+            file or when it cannot be read.
+        """
         s = self.services
         if s is None:
             return None
@@ -417,7 +542,19 @@ class Reports:
         return task
 
     def optional(self, key: str, read, deadline: float, timeout: float = READ_TIMEOUT):
-        """Bound optional reads, including OS calls. At most one daemon per field can remain stuck."""
+        """Read one field of the report within a time limit, OS calls included.
+
+        The read runs on a daemon thread, and at most one thread per field can stay stuck.
+
+        Args:
+            key: The field's name.
+            read: Called without arguments to read the field.
+            deadline: The monotonic time by which the whole report is due.
+            timeout: The longest wait for this read, in seconds.
+
+        Returns:
+            The value; None when the time ran out or the read failed.
+        """
         remaining = min(timeout, deadline - time.monotonic())
         if remaining <= 0:
             return None
@@ -436,9 +573,15 @@ class Reports:
         return s.scan_allowed() is True
 
     def game_files(self) -> list | None:
-        """For each known install with Steam's file list, its bundles that differ from that list
-        (``differing_game_files``); only with the Check Game Files consent. Never the library lock: the installs come
-        from the switch's snapshot, Steam's list from the cache the library shares."""
+        """Compare each known install with Steam's file list, only with the Check Game Files consent.
+
+        The library lock is never taken: the installs come from the switch's snapshot, Steam's list from the cache
+        the library shares.
+
+        Returns:
+            Per install with a file list: ``install``, ``server`` and what ``differing_game_files`` finds. None
+            without consent, services or a switch snapshot.
+        """
         s = self.services
         if s is None or not self.scan_consent():
             return None
@@ -476,6 +619,11 @@ class Reports:
             return json.loads(stream.read(DATA_CAP))
 
     def import_list(self) -> dict | None:
+        """Return the batch import's list for the report: the page's last one, else the service's own.
+
+        Returns:
+            What ``import_snapshot`` makes of it; None without a batch import service.
+        """
         with self._lock:
             if self.imports is not None:
                 return self.imports
@@ -483,6 +631,7 @@ class Reports:
         return import_snapshot(batch.diagnostic_snapshot(), self.secrets) if batch else None
 
     def language(self) -> str:
+        """Return the language of the report: the page's, else the settings', else the one in config.toml."""
         with self._lock:
             language = self.frontend.get("language")
         if language in UI_LANGUAGES:
@@ -495,6 +644,19 @@ class Reports:
         return configured_language(self.data_dir)
 
     def snapshot(self, deadline: float | None = None) -> dict:
+        """Collect the data of a report.
+
+        Each field is read within a time limit and the whole is scrubbed of personal data; what could not be read
+        in time is None.
+
+        Args:
+            deadline: The monotonic time by which collection must end; None allows ``COLLECTION_TIMEOUT`` seconds.
+
+        Returns:
+            The report's fields: ``created``, ``privacy``, ``safeMode``, ``os``, ``locale``, ``language``,
+            ``webview``, the page's state and errors, ``lastFailedJob``, ``libraryCounts``, ``consent``,
+            ``timings``, ``running``, ``previousBackendError``, ``app``, ``batchImport`` and ``gameFiles``.
+        """
         deadline = deadline if deadline is not None else time.monotonic() + COLLECTION_TIMEOUT
         read = lambda key, fn: self.optional(key, fn, deadline)
         s = self.services
@@ -506,7 +668,10 @@ class Reports:
         }
         data = {
             "created": datetime.now().astimezone().isoformat(timespec="seconds"),
-            "privacy": "Redacted: home paths, user names, hostnames, credentials and file names other than the game's own. Local only; no upload.",
+            "privacy": (
+                "Redacted: home paths, user names, hostnames, credentials and file names other than the game's own. "
+                "Local only; no upload."
+            ),
             "safeMode": self.safe_mode,
             "os": read(
                 "os", lambda: {"name": platform.system(), "version": platform.version(), "arch": platform.machine()}
@@ -542,6 +707,24 @@ class Reports:
         }
 
     def generate(self, *, automatic: bool = False, trigger: dict | None = None) -> dict:
+        """Write a report as a ZIP archive with a text and a JSON report and the logs.
+
+        The archive goes to the first folder that takes it: for a report the user asked for, the Desktop and
+        Downloads folders, then the data directory, then the temporary folder; for an automatic one the data
+        directory comes first. A report the user asked for is also copied (its summary) and shown in the file
+        manager.
+
+        Args:
+            automatic: The report is written after a backend exception, so nothing is copied or shown.
+            trigger: The error that led to the report (``kind``, ``code``, ``ref``, ``params``, ``message``).
+
+        Returns:
+            ``path`` of the archive, its ``summary`` text, and whether the summary was ``copied`` and the archive
+            ``revealed``.
+
+        Raises:
+            OSError: Another report is being written, or no folder can take the archive.
+        """
         if not self._writing.acquire(timeout=COLLECTION_TIMEOUT):
             raise OSError("Report already in progress")
         try:
@@ -661,6 +844,16 @@ class Reports:
             self._writing.release()
 
     def backend_exception(self, exc_type: type, exc: BaseException, tb: Any) -> None:
+        """Record an unexpected backend exception and write an automatic report for it.
+
+        The snapshot is kept in memory and in ``last-backend-error.json``, which the next report includes. At most
+        one automatic report is written per minute, and only the newest three are kept.
+
+        Args:
+            exc_type: The exception's type.
+            exc: The exception.
+            tb: Its traceback.
+        """
         # One automatic report per minute. Keep one snapshot for the next user report, without recursive archives.
         now = time.monotonic()
         if not self._lock.acquire(timeout=READ_TIMEOUT):
@@ -711,6 +904,14 @@ class Reports:
 
 
 def install_exception_hooks(reports: Reports):
+    """Send uncaught exceptions, in any thread, to ``Reports.backend_exception``, then to the previous hooks.
+
+    Args:
+        reports: The report collector.
+
+    Returns:
+        A function that puts the previous hooks back.
+    """
     previous, previous_thread = sys.excepthook, threading.excepthook
 
     def exception(kind, value, tb):

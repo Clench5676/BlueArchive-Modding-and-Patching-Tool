@@ -241,7 +241,7 @@ def test_selected_server_resolution_never_falls_back(tmp_path, source, region):
     assert settings.game_dir() is None
 
 
-# --- a bad config.toml (FUN-10) ---
+# --- a bad config.toml ---
 
 
 @pytest.fixture

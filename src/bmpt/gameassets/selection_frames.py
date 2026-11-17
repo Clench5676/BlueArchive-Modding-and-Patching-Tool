@@ -7,7 +7,12 @@ SLOT = "Center/Popup/01/UIMulliganSlot"
 
 
 def export_effects(env, resolve):
-    """Return each selected frame's UV mesh, material and particle timing by GameObject id."""
+    """Return each selected frame's UV mesh, material, and particle timing by GameObject ID.
+
+    Args:
+        env: Loaded UIPopup_Mulligan environment containing selected-card particle components.
+        resolve: Reads a material or mesh from its renderer path ID and pointer, returning (id, description) or None.
+    """
     transforms, parents, names, components = {}, {}, {}, {}
     for obj in env.objects:
         if obj.type.name == "GameObject":

@@ -1,4 +1,4 @@
-"""Small things a 3D model wears with its costume: hats, glasses, a mask, bags, bottles on a belt (worn items).
+"""Identify small items worn with a 3D costume, such as hats, glasses, masks, bags, and belt bottles.
 
 The prefab draws them with renderers of their own, beside the costume's; nothing in the files marks them (names,
 shaders, layers and tags say nothing), so they are recognised by how the model's own clips treat them. An item is the
@@ -29,7 +29,7 @@ the point in each of 26 directions meets a costume triangle within ``RAY``. Thin
 eyebrow shading are never packed: the game draws them over the face and hair (sparkles in the eyes). The slot's
 packed items draw nothing, like its worn ones (their costume leaves), and the source's are not carried (carried
 rigidly, they would stick out of a costume that moves around them otherwise). Things inside the skeleton (a coin,
-smoke shells) and things shown only at times stay with the slot as before: any body hides the first, the slot's
+smoke shells) and things shown only at times stay with the slot: any body hides the first, the slot's
 clips take the second out. The verdict of a model is
 cached by the caller (:class:`WornStore`), per model and game revision.
 """
@@ -70,11 +70,20 @@ VERSION = 2  # the layout of a stored verdict
 
 
 class WornStore(Protocol):
-    """The caller's cache of verdicts, per model (``dev``) and game revision: :meth:`Worn.saved` data."""
+    """Cache Worn.saved verdicts per model dev name and game revision."""
 
-    def get(self, dev: str) -> Mapping | None: ...
+    def get(self, dev: str) -> Mapping | None:
+        """Read a model dev name's saved verdict for the cache's game revision, or None on a miss."""
+        ...
 
-    def put(self, dev: str, verdict: Mapping) -> None: ...
+    def put(self, dev: str, verdict: Mapping) -> None:
+        """Store a model's worn-item verdict for the cache's game revision.
+
+        Args:
+            dev: Model dev name identifying the measured prefab.
+            verdict: Path-based Worn.saved record to retain without Unity readers.
+        """
+        ...
 
 
 @dataclass
@@ -104,14 +113,13 @@ class Item:
     _shown: list[int] = field(default_factory=list, repr=False)  # the measured frames showing it
 
     def visible(self) -> bool:
-        """Something the clips ever draw: switched on in the prefab, shown by some clip at a quarter of its modelled
-        size or more."""
+        """Check that the prefab enables the item and some clip draws it at least a quarter of its modelled size."""
         return bool(
             self._active and self.clips and self.some and self.size is not None and self.size >= SHOWN * self.native
         )
 
     def worn(self) -> bool:
-        """The module's rule."""
+        """Apply the module's worn-item rule for persistent visibility, body clearance, and non-arm following."""
         if self.gear or not self.visible() or self.full < SHARE * self.clips:
             return False
         if self.reach is None or self.reach < INSIDE:
@@ -120,7 +128,7 @@ class Item:
         return ratio < FOLLOW and not ARM.search(self.follow or "")
 
     def packable(self) -> bool:
-        """Shown like a worn thing (rules 1 to 4), not drawn over the face: what may be packed."""
+        """Check worn-item rules 1 to 4 and exclude face overlays before testing enclosure."""
         return bool(
             not self.gear
             and self.visible()
@@ -131,25 +139,33 @@ class Item:
         )
 
     def packed(self) -> bool:
-        """Inside the costume (the module's rule): enclosed by it in ``PACKED`` of the clips showing it or more."""
+        """Check that a packable item is enclosed in at least PACKED of the clips showing it."""
         return bool(self.packable() and self.enclosed is not None and self.enclosed >= PACKED)
 
 
 @dataclass
 class Worn:
-    """A model's worn and packed items (the things that go with its costume), by renderer: ``whole`` holds the
-    renderers that draw nothing else the clips show. A packed item has ``carry`` False."""
+    """Group the worn and packed items that belong to a model's costume.
+
+    whole holds renderers drawing no other visible items; packed items have carry False.
+    """
 
     items: list[Item] = field(default_factory=list)
     whole: set[int] = field(default_factory=set)  # renderer nodes
 
     def by_renderer(self) -> dict[int, list[Item]]:
+        """Group measured items by their renderer's skeleton node index."""
         out: dict[int, list[Item]] = {}
         for item in self.items:
             out.setdefault(item.part.node, []).append(item)
         return out
 
     def saved(self, skeleton: ma.Skeleton) -> dict:
+        """Serialize the verdict with hierarchy paths rather than transient node indices.
+
+        Args:
+            skeleton: Measured model hierarchy supplying prefab, renderer, and item paths.
+        """
         nodes = skeleton.nodes
         return {
             "version": VERSION,
@@ -174,8 +190,16 @@ class Worn:
 
     @classmethod
     def restored(cls, skeleton: ma.Skeleton, parts: list[ma.Part], data: Mapping) -> "Worn | None":
-        """The verdict ``saved`` wrote, on the same model and prefab; None when it no longer fits (another prefab, a
-        renderer or item missing)."""
+        """Restore a saved verdict against the same model and prefab.
+
+        Args:
+            skeleton: Current hierarchy whose prefab and paths must match the saved record.
+            parts: Current renderer parts used to reconstruct each item's mesh/bone grouping.
+            data: Worn.saved mapping containing the schema, prefab, and path-based verdicts.
+
+        Returns:
+            The restored verdict, or None for invalid data, a different prefab, or a missing renderer/item.
+        """
         by_path = {skeleton.nodes[p.node].path: p for p in parts}
         out = cls()
         try:
@@ -216,8 +240,17 @@ def _ancestors(skeleton: ma.Skeleton, i: int) -> Iterable[int]:
 
 
 def split_items(skeleton: ma.Skeleton, part: ma.Part) -> list[Item]:
-    """A renderer's items: each skinned bone stands for the top of its branch among the renderer's bones; branches
-    joined by a triangle are one item. An unskinned mesh has none."""
+    """Split a renderer into bone branches joined into items by mesh triangles.
+
+    Each skinned bone stands for the top of its branch among the renderer's bones.
+
+    Args:
+        skeleton: Model hierarchy defining ancestor relationships between skin bones.
+        part: Renderer part whose dominant skin influences and triangles define items.
+
+    Returns:
+        Items with vertex/triangle indices, or an empty list for unreadable or unskinned meshes.
+    """
     try:
         skin = ma.skin_of(part.mesh)
     except Exception:  # an unskinned mesh or one that cannot be read: nothing to split
@@ -337,9 +370,18 @@ def measure(
     idle: list[np.ndarray] | None,
     step: Callable[[], None] = lambda: None,
 ) -> list[Item]:
-    """Every item of the prefab's renderers that are no costume part or halo, measured under ``clips`` (the model's
-    own) with ``idle`` (the idle clip's first frame) as the reference pose where it shows them. ``step`` is called
-    after the clips are read and after each item (the caller's job yields there)."""
+    """Measure non-costume, non-halo items under the model's own clips.
+
+    Args:
+        skeleton: Model hierarchy supplying body bones, transforms, and clip sampling.
+        parts: Prefab renderer parts; costume parts and halo renderers are excluded.
+        clips: Model-owned clip readers; only readable clips moving the body contribute.
+        idle: First idle-frame world matrices used as the placement reference; None uses visible clip frames.
+        step: No-argument yield/cancellation callback after clip reads, each item, and enclosure measurements.
+
+    Returns:
+        Items with visibility, body following, reference-pose, and enclosure measurements.
+    """
     nodes = skeleton.nodes
     g = skeleton.graph
     rig = skeleton.main_rig()
@@ -474,8 +516,12 @@ _DIRECTIONS /= np.linalg.norm(_DIRECTIONS, axis=1, keepdims=True)
 
 
 def enclosed_points(points: np.ndarray, triangles: np.ndarray) -> np.ndarray:
-    """Per point, whether a ray from it in each of 26 directions meets one of ``triangles`` (n, 3, 3) within
-    ``RAY``."""
+    """Test whether cloth surrounds each point within RAY metres in all 26 sampled directions.
+
+    Args:
+        points: Test positions in prefab-root space, in metres.
+        triangles: Cloth corner positions in the same space, shaped as triangles by 3 by 3.
+    """
     out = np.zeros(len(points), bool)
     if not len(triangles):
         return out
@@ -505,8 +551,11 @@ def enclosed_points(points: np.ndarray, triangles: np.ndarray) -> np.ndarray:
 def _enclosure(
     skeleton: ma.Skeleton, parts: list[ma.Part], items: list[Item], frames: list, step: Callable[[], None]
 ) -> None:
-    """``Item.enclosed`` of every item that may be packed: of the clips showing it, the share whose first frame showing
-    it has the costume (its skinned triangles at that pose) enclose ``ENCLOSED`` of its points."""
+    """Measure ``Item.enclosed`` for every item that may be packed.
+
+    Of the clips showing the item, this is the share whose first frame showing it has the costume (its skinned
+    triangles at that pose) enclose ``ENCLOSED`` of its points.
+    """
     wanted = [item for item in items if item.packable() and item._shown]
     if not wanted:
         return
@@ -574,8 +623,15 @@ def worn_items(
     idle: list[np.ndarray] | None,
     step: Callable[[], None] = lambda: None,
 ) -> Worn:
-    """The model's worn and packed items (the module's rules), with the renderers that draw nothing else the clips
-    show."""
+    """Identify worn/packed items and renderers drawing no other visible items.
+
+    Args:
+        skeleton: Model hierarchy used to measure body following and skinning.
+        parts: Renderer parts to classify by the module's worn and packed rules.
+        clips: Model-owned AnimationClip readers used for visibility and enclosure sampling.
+        idle: First idle-frame world matrices for item placement; None uses sampled visible poses.
+        step: No-argument yield/cancellation callback during clip and item measurements.
+    """
     items = measure(skeleton, parts, clips, idle, step)
     goes = [item for item in items if item.worn() or item.packed()]
     for item in goes:
@@ -597,7 +653,17 @@ def worn_of(
     store: WornStore | None = None,
     step: Callable[[], None] = lambda: None,
 ) -> Worn:
-    """``worn_items``, through the caller's cache when there is one; ``step`` as :func:`measure` takes it."""
+    """Read or measure a model's worn-item verdict through the caller's revision-scoped cache.
+
+    Args:
+        skeleton: Current model hierarchy used to validate saved paths or measure items.
+        parts: Current renderer parts for reconstructing or measuring item groups.
+        clips: Model-owned AnimationClip readers used on a cache miss.
+        idle: First idle-frame world matrices; None uses sampled visible poses when measuring.
+        dev: Model dev name identifying the cache entry.
+        store: Optional revision-scoped verdict cache; read failures are logged and treated as misses.
+        step: No-argument yield/cancellation callback used by measure on cache misses.
+    """
     if store is not None:
         try:
             data = store.get(dev)
@@ -623,9 +689,15 @@ INDEX_CODES = {0: ("H", 2), 1: ("I", 4)}
 
 
 def drop_triangles(tree: dict, drop: np.ndarray) -> bool:
-    """The triangles numbered in ``drop`` (``read_mesh``'s order: submeshes in order) made degenerate in a Mesh
-    typetree (each takes its first corner thrice), so they draw nothing; every count and offset stays. False, and
-    nothing changed, where the mesh holds other than triangle lists or its indices cannot be read."""
+    """Make selected triangles degenerate by repeating their first corner, preserving counts and offsets.
+
+    Args:
+        tree: Mutable Mesh typetree with plain or packed triangle-list indices.
+        drop: Triangle numbers in read_mesh order, concatenating submeshes in order.
+
+    Returns:
+        True after rewriting; False without mutation for non-triangle topology or unreadable indices.
+    """
     subs = tree.get("m_SubMeshes") or []
     if any(int(s.get("topology", 0)) != 0 for s in subs):
         return False
@@ -670,9 +742,16 @@ def drop_triangles(tree: dict, drop: np.ndarray) -> bool:
 
 
 def host_meshes(worn: Worn, add_mesh: Callable[[dict], int], mesh_tree: Callable[[Any], dict]) -> dict:
-    """What the slot's renderers holding worn items draw instead, by their mesh (graph key): None for a renderer that
-    draws nothing else the clips show (its mesh pointer is cleared), else a new mesh (``add_mesh`` of a copy of its
-    mesh, the worn items' triangles left out; the original stays as it is)."""
+    """Build slot mesh replacements that remove worn and packed items.
+
+    Args:
+        worn: Slot verdict grouping items by renderer and marking wholly removable renderers.
+        add_mesh: Writes an edited mesh copy and returns its new path ID.
+        mesh_tree: Supplies a mutable mesh typetree copy, preserving the original asset.
+
+    Returns:
+        Original graph mesh keys mapped to new IDs, or None to clear wholly removable mesh pointers.
+    """
     out: dict = {}
     for node, items in worn.by_renderer().items():
         part = items[0].part
@@ -690,9 +769,12 @@ def host_meshes(worn: Worn, add_mesh: Callable[[dict], int], mesh_tree: Callable
 
 @dataclass
 class Carried:
-    """A source renderer's worn items, as a new mesh for the slot: bound to the slot's bones of the names they follow,
+    """Carry a source renderer's worn items as a new mesh in prefab-root space.
+
+    Bind it to slot bones with the names the items follow,
     every bone entry at a bindpose that puts the mesh where the source's reference pose holds the item against that
-    bone (so the rest pose draws it there whatever the weights), the mesh's space the prefab root's."""
+    bone (so the rest pose draws it there whatever the weights).
+    """
 
     part: ma.Part
     tree: dict
@@ -713,8 +795,18 @@ def carried(
     idle: list[np.ndarray] | None,
     mesh_tree: Callable[[Any], dict],
 ) -> list[Carried]:
-    """The source's worn items as new meshes for the slot (:class:`Carried`), one per source renderer. An item whose
-    bone the slot lacks, or a mesh whose geometry or triangles cannot be rewritten, is left out (logged)."""
+    """Build one carried-item mesh per source renderer, skipping unsupported items with a log entry.
+
+    Skip items whose following bone the slot lacks and meshes whose geometry or triangles cannot be rewritten.
+
+    Args:
+        t_skeleton: Destination slot hierarchy supplying named following bones and rest transforms.
+        s_skeleton: Source costume hierarchy supplying the measured item reference poses.
+        worn: Source worn/packed verdict; only items marked carry are transferred.
+        clips: Source clip readers used to reconstruct non-idle item reference poses.
+        idle: Source first idle-frame world matrices, or None when unavailable.
+        mesh_tree: Supplies mutable source mesh typetree copies for geometry and triangle rewrites.
+    """
     t_rest = t_skeleton.world()
     by_name = {(c.peek_name() or ""): c for c in clips}
     poses: dict[tuple[str, int] | None, list[np.ndarray] | None] = {None: idle}

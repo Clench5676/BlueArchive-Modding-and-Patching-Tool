@@ -1,7 +1,7 @@
 """The design tokens (web/js/ui-tokens.js) against the game's own prefabs, from the official development view.
 
-Skipped without BAMT_TEST_GAME_DIR (set by the development test plugin) or Node.js. Only numbers and colour codes of prefab
-nodes are read: no image data. The call sites are pinned against the tokens by tests/js/ui_tokens.test.mjs.
+Skipped without BAMT_TEST_GAME_DIR (set by the development test plugin) or Node.js. Only numbers and colour codes of
+prefab nodes are read: no image data. The call sites are pinned against the tokens by tests/js/ui_tokens.test.mjs.
 """
 
 import json
@@ -109,7 +109,8 @@ def test_legacy_popup_frame_and_footer_geometry_remain_pinned(tokens, layouts):
     assert base["pos"][1] + bg["pos"][1] == popup["frameY"]
     frame = sprite(bg, "Common_Popup_Bg")
     assert [frame["w_"], frame["h_"]] == [popup["frameW"], popup["frameH"]]
-    # the footer's centre above the frame's bottom edge: Btn's y less the bottom edge (frame centre less half its height)
+    # the footer's centre above the frame's bottom edge: Btn's y less the bottom edge (frame centre less half its
+    # height)
     btn = subtree(sort, "Center/Popup/Btn")
     assert btn["pos"][1] == footer["btnY"]
     assert btn["pos"][1] - (popup["frameY"] - frame["h_"] / 2) == footer["centre"] == 190.5
@@ -258,8 +259,8 @@ def test_lobby_entry_is_uiani_lobby(tokens, tmp_path_factory):
     curves = {c["path"]: c["curve"]["m_Curve"] for c in clip["m_PositionCurves"]}
     for edge, path in (("top", "Front/NUITop/Top/Right"), ("bottom", "Front/Bottom/Menu")):
         keys = curves[path]
-        # the clip ends the top bar where the prefab puts it and, since the 2026-11 update, the bottom menu 2 units
-        # above (-678 for the prefab's -680): the offsets are from where the clip leaves the node
+        # the clip ends the top bar where the prefab puts it and the bottom menu 2 units above (-678 for the prefab's
+        # -680): the offsets are from where the clip leaves the node
         rest = keys[-1]["value"]["y"]
         assert rest - subtree(layout, path)["pos"][1] == {"top": 0, "bottom": 2}[edge]
         assert all(k["weightedMode"] == 0 for k in keys)
@@ -269,7 +270,8 @@ def test_lobby_entry_is_uiani_lobby(tokens, tmp_path_factory):
         assert flat(got) == pytest.approx(flat(tokens["LOBBY_ENTRY"][edge]), abs=1e-3)
 
 
-# --- the design system's scales (ui-tokens.js SPACE, TYPE, CONTROL, POPUP_FRAME, PANEL, LIST_ROW; docs/design-system/) ---
+# --- the design system's scales (ui-tokens.js SPACE, TYPE, CONTROL, POPUP_FRAME, PANEL, LIST_ROW;
+# docs/design-system/) ---
 
 # exemplars the App does not load at run time (so not in PREFAB_HINTS): their bundles in the development view
 EXEMPLAR_BUNDLES = {
@@ -417,8 +419,8 @@ def _origin(tree, path):
 
 
 def test_popup_minimum_is_the_title_band_over_the_xs_footer(tokens):
-    # The game's smallest titled popup with a footer button, UIPopup_ClientVersion (1115 x 786), kept far more padding than
-    # the App wants: the App's smallest frame is the title's band over the XS footer's clearance.
+    # The game's smallest titled popup with a footer button, UIPopup_ClientVersion (1115 x 786), kept far more
+    # padding than the App wants: the App's smallest frame is the title's band over the XS footer's clearance.
     path = bundle_by_cab(
         "ui-_mxload-prefabs-2025-07-02_assets_all_197929148.bundle", "cab-f132af15cc4169b45772a043d884cb2c"
     )

@@ -12,12 +12,24 @@ STABLE_TAG = re.compile(r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*
 
 
 def stable_tag(tag: object) -> str:
+    """Return ``tag`` when it is a stable ``MAJOR.MINOR.PATCH`` tag; exit with an error otherwise."""
     if not isinstance(tag, str) or STABLE_TAG.fullmatch(tag) is None:
         raise SystemExit("Only a stable MAJOR.MINOR.PATCH release tag may build Windows release assets.")
     return tag
 
 
 def published_tag(event: object) -> str:
+    """Return the tag of a published, stable, non-draft release from the GitHub release event.
+
+    ``RELEASE_TAG``, when set, must name the same tag.
+
+    Args:
+        event: The workflow's event payload.
+
+    Raises:
+        SystemExit: The run is not a release event, the release is a draft, a pre-release or unpublished, or the
+            tags differ.
+    """
     if (
         os.environ.get("GITHUB_EVENT_NAME") != "release"
         or not isinstance(event, dict)
@@ -40,6 +52,11 @@ def published_tag(event: object) -> str:
 
 
 def check_tag(tag: str) -> None:
+    """Exit with an error unless the tag points at the checked-out commit, the commit of the release event.
+
+    Args:
+        tag: The release tag, a stable version.
+    """
     tag = stable_tag(tag)
     result = subprocess.run(
         ["git", "rev-parse", "--verify", "--quiet", f"refs/tags/{tag}^{{commit}}"], capture_output=True, text=True
@@ -55,6 +72,7 @@ def check_tag(tag: str) -> None:
 
 
 def main() -> None:
+    """Check the release event, the project version and the checkout, then write ``tag`` to the step's outputs."""
     try:
         with Path(os.environ["GITHUB_EVENT_PATH"]).open(encoding="utf-8") as stream:
             event = json.load(stream)

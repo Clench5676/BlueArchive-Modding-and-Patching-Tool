@@ -43,7 +43,8 @@ def _read_directory(path: Path, max_directory: int) -> tuple[bytes, int] | None:
     """The decompressed block and node directory and the physical file size, or None for a non-UnityFS file.
 
     ``max_directory`` bounds both the compressed and the declared uncompressed size of the directory before anything
-    is read or decompressed. Raises ValueError for a corrupt, encrypted or unsupported directory."""
+    is read or decompressed. Raises ValueError for a corrupt, encrypted or unsupported directory.
+    """
     with open(path, "rb") as stream:
         if stream.read(8) != b"UnityFS\0":
             return None
@@ -106,10 +107,19 @@ def _block_table(data: bytes) -> tuple[int, int]:
 
 
 def read_cab_names(path: Path) -> list[str] | None:
-    """Return original-case internal names, or None for a non-UnityFS file.
+    """Return the names of the files a UnityFS bundle holds (its CAB names), in their original case.
 
-    Corrupt, encrypted and unsupported directories raise ValueError. File-system
-    errors remain OSError. Only the header and compressed directory are read.
+    Only the header and the compressed directory are read.
+
+    Args:
+        path: The bundle file.
+
+    Returns:
+        The names in directory order, or None for a file that is not UnityFS.
+
+    Raises:
+        ValueError: The directory is corrupt, encrypted or unsupported.
+        OSError: The file could not be read.
     """
     try:
         directory = _read_directory(path, _MAX_BLOCK_INFO)
@@ -146,11 +156,21 @@ class Layout:
 
 
 def read_layout(path: Path, max_directory: int = _MAX_BLOCK_INFO) -> Layout | None:
-    """The declared sizes of a UnityFS bundle, or None for a non-UnityFS file.
+    """Return the declared sizes of a UnityFS bundle.
 
-    Reads the header and the compressed directory only: no data block is decompressed, and the directory itself is
-    bounded by ``max_directory`` (compressed and uncompressed) before it is read. Corrupt, encrypted and unsupported
-    directories raise ValueError. File-system errors remain OSError."""
+    Reads the header and the compressed directory only: no data block is decompressed.
+
+    Args:
+        path: The bundle file.
+        max_directory: Bytes the directory may take, compressed and declared uncompressed, checked before it is read.
+
+    Returns:
+        The layout, or None for a file that is not UnityFS.
+
+    Raises:
+        ValueError: The directory is corrupt, encrypted, unsupported or above ``max_directory``.
+        OSError: The file could not be read.
+    """
     try:
         directory = _read_directory(path, max_directory)
         if directory is None:
