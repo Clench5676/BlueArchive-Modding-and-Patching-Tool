@@ -34,6 +34,11 @@ function startIdle(player) {
   player.blinkAt = 2.5 + Math.random() * 3.5;
 }
 // Applying stage coordinates to the skeleton keeps the game's absolute framing and never fits to art bounds.
+/**
+ * Pose a portrait's skeleton at its entry's stage coordinates.
+ * @param {{x: number, y: number, mirror?: boolean}} entry
+ * @param {object} skeleton The spine skeleton; its position and scale are set.
+ */
 export function pose(entry, skeleton, globalScale = 1) {
   skeleton.x = entry.x;
   skeleton.y = 1080 - entry.y;
@@ -41,6 +46,18 @@ export function pose(entry, skeleton, globalScale = 1) {
   skeleton.scaleX = skeleton.scaleY * (entry.mirror ? -1 : 1);
 }
 
+/**
+ * Create the players of the Hall's placed portraits, in the shared WebGL context.
+ * @param {HTMLElement} host The element the players go into.
+ * @param {object[]} entries
+ * @param {(entry: object) => object|null} choiceOf Gives a portrait's source choice.
+ * @param {object} [options]
+ * @param {(error: Error, entry?: object) => void} [options.onError]
+ * @param {() => void} [options.onRecover]
+ * @param {() => void} [options.onFrame] Called after every frame.
+ * @returns {Promise<object>} The portraits' controls: actors, dispose, allowed, and when allowed needsLoad,
+ *     update and pick(x, y).
+ */
 export async function createPortraits(
   host,
   entries,
@@ -171,7 +188,8 @@ export async function createPortraits(
                   p.sceneRenderer.drawSkeleton = (_skeleton, ...args) => {
                     for (const [id, { player: actor }] of actors) {
                       if (id === selectedId) {
-                        // An empty public draw starts SceneRenderer's polygon pass even when this is the back-most actor.
+                        // An empty public draw starts SceneRenderer's polygon pass even when this is the back-most
+                        // actor.
                         const order = actor.skeleton.drawOrder;
                         try {
                           actor.skeleton.drawOrder = [];
@@ -410,6 +428,11 @@ export async function createPortraits(
 }
 
 const speechTracks = new WeakMap();
+/**
+ * Set a talking portrait's face: the talk expression while it talks, the given one otherwise.
+ * @param {{player: object}} actor
+ * @param {string|null} [expression] The expression to show when it does not.
+ */
 export function talkExpression(actor, talking, expression = null) {
   const p = actor?.player;
   if (!p?.skeleton) return;
@@ -509,6 +532,12 @@ export const OUTLINE_OFFSETS = Object.freeze(
     Object.freeze([3 * Math.cos((i * Math.PI) / 8), 3 * Math.sin((i * Math.PI) / 8)]),
   ),
 );
+/**
+ * Make the selection outline of the portraits: the skeleton drawn offset in the applied-selection gold, behind
+ * the portrait.
+ * @param {object} player The spine-player, in whose context it draws.
+ * @returns {{dispose: () => void, draw: (skeleton: object) => void}} The outline's controls.
+ */
 export function createPortraitOutline(player) {
   const renderer = player.sceneRenderer;
   const shader = new spine.Shader(player.context, OUTLINE_VERTEX, OUTLINE_FRAGMENT);

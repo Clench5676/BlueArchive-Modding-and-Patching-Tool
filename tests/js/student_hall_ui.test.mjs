@@ -618,7 +618,7 @@ test("Hall's search box closes the search on Escape and shows no browser clear b
   const vm = await import("node:vm"),
     { readFileSync } = await import("node:fs");
   const code = source.slice(
-    source.indexOf("// onEscape: Escape in the box"),
+    source.indexOf("export async function search("),
     source.indexOf("export async function checkbox("),
   );
   const box = (onEscape) => {

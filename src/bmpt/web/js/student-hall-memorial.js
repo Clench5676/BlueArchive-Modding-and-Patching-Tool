@@ -2,6 +2,15 @@
 const modules = [null, null];
 const moduleAt = (index) =>
   (modules[index] ||= index === 0 ? import("./lobby.js?student-hall-a") : import("./lobby.js?student-hall-b"));
+/**
+ * Make the Hall's pool of memorial lobbies: one retained current scene and one hidden replacement.
+ * @param {object} options
+ * @param {(choice: object, host: HTMLElement, signal: AbortSignal) => Promise<object>} options.load
+ * @param {(index: number) => Promise<object>} [options.moduleFor] Gives the lobby module instance of a slot,
+ *     for the tests.
+ * @returns {object} The pool's controls: current(), suspend(), resume(), prepare(choice, makeHost, signal),
+ *     commit(session), discard(session), invalidate(session), cancelPending() and dispose().
+ */
 export function createMemorialPool({ load, moduleFor = moduleAt }) {
   const slots = [null, null];
   let current = null,

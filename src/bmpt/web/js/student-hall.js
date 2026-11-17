@@ -1121,6 +1121,7 @@ async function renderScene() {
   }
 }
 
+/** Apply the settings the Hall's dialogue and memorial lobby take. */
 export function applyPrefs(prefs) {
   if (ctx) ctx.prefs = prefs;
   dialogue?.preferencesChanged();
@@ -1310,8 +1311,17 @@ async function fullscreenExit(close) {
   bindCorner(host, NGUI.rect(view.nodes.get("HallFullscreenExit/Bg").els[0]), { corner: "top-right" });
   return { host, button };
 }
+/**
+ * A token for the Hall's state that changes whenever a close would lose something: the page, the draft, its
+ * kind and the pending writes.
+ * @returns {string} The token.
+ */
 export const closeRevision = () => JSON.stringify([page, store?.current(), store?.kind(), pendingWrites]);
 
+/**
+ * Ask whether the Hall may be left: unsaved changes are asked about first.
+ * @returns {Promise<boolean>} True when it may.
+ */
 export function canLeave() {
   if (!root || !store) return Promise.resolve(true);
   if (leavePending) return leavePending;
@@ -1388,11 +1398,20 @@ export function canLeave() {
   });
   return leavePending;
 }
+/**
+ * Draw the scene again when a change made while the Hall was not shown needs it.
+ * @returns {Promise<void>} Settles when it is drawn.
+ */
 export async function settleView() {
   if (!root || !needsSettlement) return;
   needsSettlement = false;
   await renderScene();
 }
+/**
+ * Show the Student Hall.
+ * @param {object|null} [data] The saved Hall data; read from the server by default.
+ * @returns {Promise<void>} Settles when the Hall is drawn.
+ */
 export async function show(context, data = null) {
   hide();
   ctx = context;
@@ -1467,6 +1486,7 @@ function onKey(event) {
   event.preventDefault();
   step(event.key === "ArrowLeft" ? -1 : 1).catch(fail);
 }
+/** Hide the Hall and free its portraits and memorial lobby. */
 export function hide() {
   const owned = !!root;
   sceneCamera?.dispose();
@@ -1493,6 +1513,10 @@ export function hide() {
   actorHover = null;
   needsSettlement = false;
 }
+/**
+ * Redraw the Hall's controls after a locale change.
+ * @returns {Promise<void>} Settles when they are drawn.
+ */
 export async function relabel() {
   const gen = page;
   if (root) {
