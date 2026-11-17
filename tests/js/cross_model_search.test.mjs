@@ -1,7 +1,7 @@
 // Exercise detail.js's search and check queue without starting the app or its renderers.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { statementEnd } from "./helpers/source-text.mjs";
+import { POPUP_MODULES, statementEnd } from "./helpers/source-text.mjs";
 import { test } from "node:test";
 import vm from "node:vm";
 import * as Sources from "../../src/bmpt/web/js/mods/switch-sources.js";
@@ -777,7 +777,8 @@ test("in-view cards are read in calls of at most 64 keys, then checked one pair 
 test("another student's card is drawn like any card: no grey filter anywhere in the switch or the list", () => {
   const read = (name) => readFileSync(new URL(`../../src/bmpt/web/js/${name}`, import.meta.url), "utf8");
   assert.ok(!/shade:\s*true|\bSHADE\b|\.shade\b/.test(read("detail/detail.js")), "detail/detail.js");
-  assert.ok(!/shade:\s*true|\bSHADE\b|\.shade\b/.test(read("ui/popup.js")), "ui/popup.js");
+  for (const file of POPUP_MODULES)
+    assert.ok(!/shade:\s*true|\bSHADE\b|\.shade\b/.test(read(`ui/${file}`)), `ui/${file}`);
 });
 
 // --- Optimize Physics answers: the official model needs none; a costume no physics rule improves has no gain ---

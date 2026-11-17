@@ -413,10 +413,10 @@ test("a Japanese word wider than the button breaks between characters rather tha
   assert.deepEqual(NGUI.fitGroup([], 32, 26, 140, 3), []);
 });
 
-// the prompt cards' labels (prompts.js card, popup.js listCard: 34 down to 24, two lines, 250 - 56 wide)
+// the prompt cards' labels (prompts.js card, popup-list.js listCard: 34 down to 24, two lines, 250 - 56 wide)
 const { markedLabel } = await import("../../src/bmpt/web/js/core/util.js");
 test("the prompt cards draw the pieces this test measures", () => {
-  const popup = readFileSync(new URL("../../src/bmpt/web/js/ui/popup.js", import.meta.url), "utf8");
+  const popup = readFileSync(new URL("../../src/bmpt/web/js/ui/popup-list.js", import.meta.url), "utf8");
   assert.match(
     flat(popup),
     /LIST_CARD_NAME = Object\.freeze\(\{ fs: 34, fsMin: 24, lines: 2, padY: 22, pitch: 1\.2 \}\)/,

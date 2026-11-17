@@ -1,5 +1,5 @@
 import { test } from "node:test";
-import { compact, flat } from "./helpers/source-text.mjs";
+import { compact, flat, POPUP_MODULES } from "./helpers/source-text.mjs";
 import assert from "node:assert/strict";
 import { hasAffirmative, skinAffirmatives } from "../../src/bmpt/web/js/ui/affirmative-buttons.js";
 test("affirmative styling preserves secondary and disabled semantics", () => {
@@ -49,7 +49,13 @@ test("names and translated captions cannot imply an affirmative action", () => {
 
 test("the source picker, gallery and Settings use explicit treatment in all locales", async () => {
   const { readFile } = await import("node:fs/promises");
-  const popup = flat(await readFile(new URL("../../src/bmpt/web/js/ui/popup.js", import.meta.url), "utf8"));
+  const popup = flat(
+    (
+      await Promise.all(
+        POPUP_MODULES.map((file) => readFile(new URL(`../../src/bmpt/web/js/ui/${file}`, import.meta.url), "utf8")),
+      )
+    ).join("\n"),
+  );
   assert.match(popup, /child.actionSemantic = action.semantic \|\| \(action.primary \? "confirm" : "secondary"\)/);
   assert.match(popup, /buttons: buttons.map/);
   assert.ok(!popup.includes('[T("popup.apply"),T("act.update")'));

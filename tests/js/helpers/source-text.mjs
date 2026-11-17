@@ -105,6 +105,16 @@ export const joinedModules = (main, ...siblings) =>
     .replace(/^import [^;]*;$/gm, "")
     .replace(/^export \{[^}]*\}( from "[^"]*")?;$/gm, "");
 
+// The popups' code: popup.js and the modules split from it, paths under web/js/ui.
+export const POPUP_MODULES = [
+  "popup.js",
+  "popup-footer.js",
+  "popup-checkbox.js",
+  "popup-list.js",
+  "popup-details.js",
+  "popup-message.js",
+];
+
 // The relative specifier a web UI module writes to import another, as a regular expression source matching only that
 // specifier: `from` and `to` are paths under web/js (e.g. "app/main.js", "core/i18n.js").
 export function importOf(from, to) {

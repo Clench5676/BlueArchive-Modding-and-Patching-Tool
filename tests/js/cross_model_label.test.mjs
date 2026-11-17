@@ -186,10 +186,10 @@ test("Optimize Physics on the student's own cards keeps its names", async () => 
   assert.equal(sibling.params.name, "Swimsuit");
 });
 
-// --- the card bar: 34 down to 24, two lines, 250 - 56 wide (popup.js listCard) ---
+// --- the card bar: 34 down to 24, two lines, 250 - 56 wide (popup-list.js listCard) ---
 const catalog = JSON.parse(readFileSync(new URL("../../src/bmpt/catalog/data/catalog.json", import.meta.url), "utf8"));
 test("the card label fitting is the one these tests measure", () => {
-  const popup = flat(readFileSync(new URL("../../src/bmpt/web/js/ui/popup.js", import.meta.url), "utf8"));
+  const popup = flat(readFileSync(new URL("../../src/bmpt/web/js/ui/popup-list.js", import.meta.url), "utf8"));
   assert.match(popup, /LIST_CARD_NAME = Object\.freeze\(\{ fs: 34, fsMin: 24, lines: 2, padY: 22, pitch: 1\.2 \}\)/);
   assert.match(
     popup,

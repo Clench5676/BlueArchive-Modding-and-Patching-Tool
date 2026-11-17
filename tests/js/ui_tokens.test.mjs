@@ -193,7 +193,7 @@ test("the call sites take the status colours from the tokens, the style sheet re
     "js/detail/detail.js": ["COLOUR.success", "COLOUR.warning", "COLOUR.greyed"],
     "js/mods/mod-compare.js": ["COLOUR.warning", "COLOUR.success", "COLOUR.error"],
     "js/app/prompts.js": ["COLOUR.greyed"],
-    "js/ui/popup.js": ["COLOUR.inUse", "COLOUR.inUseInk"],
+    "js/ui/popup-list.js": ["COLOUR.inUse", "COLOUR.inUseInk"],
     "js/app/consent.js": ["COLOUR.neverBar", "COLOUR.note"],
   };
   for (const [file, names] of Object.entries(uses))
@@ -375,7 +375,7 @@ for (const locale of locales)
   });
 
 // Hall modals use the shared footer; the memorial editor hits its full-row stop rule.
-const popupSource = read("js/ui/popup.js");
+const footerSource = read("js/ui/popup-footer.js");
 const footerHelpers = new Function(
   "CONTROL",
   "POPUP_FOOTER",
@@ -390,8 +390,8 @@ const footerHelpers = new Function(
   "captionMinimum",
   "SMALL_BUTTON",
   "XS_BUTTON",
-  `${popupSource
-    .slice(popupSource.indexOf("export const footerBottom"), popupSource.indexOf("const titleHeight"))
+  `${footerSource
+    .slice(footerSource.indexOf("export const footerBottom"))
     .replaceAll(
       "export ",
       "",
@@ -628,7 +628,7 @@ test("a named caption allowance only lowers a floor, for its own site and locale
   assert.match(src("js/hall/student-hall-picker.js"), /memorial \? \{ retainedFooter: true \} : UI\.PORTRAIT_FRAME/);
   assert.match(src("js/hall/student-hall.js"), /captionSite: "hall.unsavedChanges"/);
   assert.match(
-    popupSource,
+    read("js/ui/popup-message.js"),
     /popupFrame\(title, w, height, \{ ok, cancel, buttons, close: dismissable, captionSite, footer \}\)/,
   );
 });

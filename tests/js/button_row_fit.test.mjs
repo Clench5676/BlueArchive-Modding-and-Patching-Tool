@@ -6,7 +6,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { readFile } from "node:fs/promises";
-import { flat } from "./helpers/source-text.mjs";
+import { flat, POPUP_MODULES } from "./helpers/source-text.mjs";
 
 const WIDE = /[⺀-鿿　-ヿ＀-￯가-힯฀-๿]/;
 const ctx = {
@@ -38,6 +38,8 @@ const text = (locale, key) => {
 };
 const raw = async (file) => readFile(new URL(`../../src/bmpt/web/js/${file}`, import.meta.url), "utf8");
 const source = async (file) => flat(await raw(file));
+// popup.js and the modules split from it, read as one
+const popupSource = async () => (await Promise.all(POPUP_MODULES.map((file) => source(`ui/${file}`)))).join("\n");
 
 const widest = (f) => Math.max(...f.text.split("\n").map((l) => glyphWidth(l, f.fs)));
 const tall = (f) => f.lines * fontSizeFor(f.text, f.fs) * LINE_PITCH;
@@ -66,7 +68,7 @@ function assertGroup(fits, captions, widths, maxH, label) {
 
 // --- the source pickers' action row (popup.js detailsTree), 850 wide panel, 120 high bodies ---
 test("the picker's constants are the ones asserted here", async () => {
-  const popup = await source("ui/popup.js");
+  const popup = await popupSource();
   // the actions' captions 34 down to 24 on XS bodies, 30 down to 22 on XXS ones, the button's padding each side
   assert.match(
     popup,
@@ -217,7 +219,7 @@ function footerBody(captions) {
 }
 for (const locale of LOCALES)
   test(`popup footer captions share one size and fit the default XS body in ${locale}`, async () => {
-    const popup = await source("ui/popup.js"),
+    const popup = await popupSource(),
       consent = await source("app/consent.js"),
       update = await source("app/update.js");
     assert.match(popup, /export const BUTTON_TEXT_H = CONTROL.buttonL.h - SPACE.m;/);
@@ -283,7 +285,7 @@ for (const locale of LOCALES)
 for (const locale of LOCALES)
   test(`the roster's six segments and the popup's three share one size in ${locale}`, async () => {
     const roster = await source("roster/roster-widgets.js"),
-      popup = await source("ui/popup.js");
+      popup = await popupSource();
     // the roster's two filters' six captions go through toolbarFit, which fits every filter's captions as one group
     assert.match(
       roster,
@@ -512,7 +514,7 @@ for (const locale of LOCALES)
 const { POPUP_FRAME } = await import("../../src/bmpt/web/js/ui/ui-tokens.js");
 for (const locale of LOCALES)
   test(`the three repair choices share one size and fit their small button bodies in ${locale}`, async () => {
-    const popup = await source("ui/popup.js"),
+    const popup = await popupSource(),
       compatibility = await source("mods/mod-compatibility.js");
     assert.match(
       popup,

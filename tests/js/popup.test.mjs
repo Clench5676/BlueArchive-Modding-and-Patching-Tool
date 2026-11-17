@@ -2,7 +2,7 @@
 // several cards ticked, the start sequence), web/js/app/update.js and detail.js's preview actions, on a small stand-in
 // DOM. Run by tests/test_popup.py with Node's test runner: node --test tests/js/popup.test.mjs
 import assert from "node:assert/strict";
-import { flat } from "./helpers/source-text.mjs";
+import { flat, POPUP_MODULES } from "./helpers/source-text.mjs";
 import { readFileSync } from "node:fs";
 import { register } from "node:module";
 import { afterEach, test } from "node:test";
@@ -10,6 +10,21 @@ import vm from "node:vm";
 import { switchPrefabs } from "./switch_prefabs.mjs";
 import { selectionPrefab, selectionFramePixels, selectionSprite } from "./selection_prefabs.mjs";
 import { controls, insert } from "./control_prefabs.mjs";
+
+// A popup.js imported with a query is a fresh copy of the popups: the modules split from it import one another
+// with the same query, so the copy's list and message popups read the copy's prefabs.
+register(
+  `data:text/javascript,${encodeURIComponent(`const FAMILY = ${JSON.stringify(POPUP_MODULES)};
+export async function resolve(spec, ctx, next) {
+  const resolved = await next(spec, ctx);
+  if (!ctx.parentURL?.includes("/web/js/ui/") || !FAMILY.includes(spec.replace(/^\\.\\//, ""))) return resolved;
+  const parent = new URL(ctx.parentURL);
+  if (!parent.search || !FAMILY.some((name) => parent.pathname.endsWith("/ui/" + name))) return resolved;
+  const url = new URL(resolved.url);
+  url.search = parent.search;
+  return { ...resolved, url: url.href };
+}`)}`,
+);
 import { displayLayouts } from "./display_prefabs.mjs";
 
 // --- a stand-in DOM: elements in a tree, ids, clicks, the focus and the window's key listeners ---
@@ -1859,7 +1874,7 @@ test("the log popup preserves literal text, opens at the bottom and Copy leaves 
 
 // the log popup's fallback (no game frame) draws with the plain popup's styles, sized to the log
 test("the log popup's plain fallback uses only classes the style sheet defines", () => {
-  const source = readFileSync(new URL("../../src/bmpt/web/js/ui/popup.js", import.meta.url), "utf8");
+  const source = readFileSync(new URL("../../src/bmpt/web/js/ui/popup-message.js", import.meta.url), "utf8");
   const viewer = source.slice(
     source.indexOf("export function textViewer("),
     source.indexOf("// --- ordinary refusals ---"),
