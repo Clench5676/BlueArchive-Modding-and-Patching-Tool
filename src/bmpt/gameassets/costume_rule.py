@@ -14,6 +14,8 @@ RULE_SOURCES = (
     "gameassets/model_geometry.py",
     "gameassets/model_props.py",
     "gameassets/model_arms.py",
+    "gameassets/model_arm_frames.py",
+    "gameassets/model_arm_solve.py",
     "gameassets/model_arm_clips.py",
     "gameassets/costume_cache.py",
 )

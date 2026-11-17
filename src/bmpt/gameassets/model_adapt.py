@@ -4145,11 +4145,11 @@ def _adapt(
         own_probes=probe_poses(s_skeleton, s_clips),
         clips=t_clips,
     )
-    from . import model_arms, model_arm_clips
+    from . import model_arm_clips, model_arm_frames, model_arm_solve
 
     # Optimize Physics only: the arms pushed out of a bulkier costume cost seconds on an affected pair
     arm_clips = (
-        model_arms.retarget(
+        model_arm_solve.retarget(
             target, source, result, t_clips, t_parts, step=step, progress=lambda done, count: phase("arms", done, count)
         )
         if physics
@@ -4544,7 +4544,7 @@ def _adapt(
     root_node = t_skeleton.by_transform.get(_key(root_bone), 0) if root_bone is not None else 0
     # the renderers' culling boxes hold each part at rest and in every probe pose, so parts that move far from their
     # rest place do not vanish at the screen's edge
-    arm_probes = model_arms.bounds_poses(t_skeleton, arm_clips)
+    arm_probes = model_arm_frames.bounds_poses(t_skeleton, arm_clips)
     bounds = [
         _bounds(w, nodes, t_skeleton, root_node, [t_rest, *probes, *arm_probes])
         for w, (_, nodes) in zip(written, new_meshes)
