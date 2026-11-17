@@ -102,7 +102,7 @@ globalThis.fetch = async (url) => ({
 const NGUI = await import("../../src/bmpt/web/js/ngui.js");
 const Buttons = await import("../../src/bmpt/web/js/game-buttons.js");
 const { resizeButton } = await import("../../src/bmpt/web/js/button-layout.js");
-const { navigationEntry } = await import("../../src/bmpt/web/js/navigation-layout.js");
+const { navigationEntry } = await import("../../src/bmpt/web/js/app/navigation-layout.js");
 const { pickerItems, orderBody } = await import("../../src/bmpt/web/js/roster-widgets.js");
 const { scrollbar } = await import("../../src/bmpt/web/js/scrollbar.js");
 const Popup = await import("../../src/bmpt/web/js/popup.js");

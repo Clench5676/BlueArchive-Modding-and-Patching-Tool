@@ -1,4 +1,4 @@
-"""The repair lines of the Overwritten message (web/js/repairs.js) are front-end code: their tests run with Node's
+"""The repair lines of the Overwritten message (web/js/app/repairs.js) are front-end code: their tests run with Node's
 test runner, skipped where Node is not installed."""
 
 import shutil

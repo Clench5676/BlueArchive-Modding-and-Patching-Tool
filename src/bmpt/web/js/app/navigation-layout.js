@@ -1,6 +1,6 @@
 // UILobby's plate and entry states, with app destinations substituted into its grid.
-import * as NGUI from "./ngui.js";
-import { clone } from "./util.js";
+import * as NGUI from "../ngui.js";
+import { clone } from "../util.js";
 
 /**
  * The origin of an entry's drawing: UILobby's label half-height supplies the bottom inset as well as the space

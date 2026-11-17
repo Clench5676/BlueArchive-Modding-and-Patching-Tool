@@ -145,7 +145,7 @@ async function closeAll() {
 afterEach(closeAll);
 
 test("the registry loads once across importers and exposes name lookups and levels", async () => {
-  const codes = await import("../../src/bmpt/web/js/error-codes.js");
+  const codes = await import("../../src/bmpt/web/js/app/error-codes.js");
   await import("../../src/bmpt/web/js/import-details.js");
   assert.equal(registryReads, 1);
   assert.equal(codes.codeOf("mod_parts_missing"), "E3006");
@@ -383,7 +383,7 @@ test("the classic modal is not a failure and passes no error", () => {
 });
 
 test("a greyed Apply names its reason as the same refusal as the greyed switch", () => {
-  const prompts = readFileSync(new URL("../../src/bmpt/web/js/prompts.js", import.meta.url), "utf8");
+  const prompts = readFileSync(new URL("../../src/bmpt/web/js/app/prompts.js", import.meta.url), "utf8");
   assert.match(flat(prompts), /notify\(b\.why \|\| "", \{ kind: "error", error: b\.whyError \}\)/);
   assert.match(flat(prompts), /why: blocked, whyError: \{ code: s\.reason, params: s\.reasonParams \}/);
 });

@@ -6,15 +6,15 @@
 // prepared; wait(promise) shades an in-page wait. There is one page overlay at a time: a newer call takes over
 // the one on screen instead of flashing a new one. Writer progress has its own indicator and lifetime,
 // independent of page changes.
-import { loadingLabel, loadingLetterSprites, loadingInkLine, alphaBounds } from "./ngui-label.js";
+import { loadingLabel, loadingLetterSprites, loadingInkLine, alphaBounds } from "../ngui-label.js";
 import { alignBaseline, domBaseline, publishAligned } from "./loading-baseline.js";
-import { spriteUrl } from "./api.js";
-import * as NGUI from "./ngui.js";
-import * as Popup from "./popup.js";
-import { T } from "./i18n.js";
-import { fitLine, modLine } from "./job-progress.js";
-import { S } from "./util.js";
-import { freezeShown } from "./preview-lifecycle.js";
+import { spriteUrl } from "../api.js";
+import * as NGUI from "../ngui.js";
+import * as Popup from "../popup.js";
+import { T } from "../i18n.js";
+import { fitLine, modLine } from "../job-progress.js";
+import { S } from "../util.js";
+import { freezeShown } from "../preview-lifecycle.js";
 
 const STAGE_UNITS_H = 1080 / S; // 1665 units: the stage is taller than the prefabs' 2960 x 1440 frame
 const FADE_BLACK = 150; // a scene first fades to black; work done by then fades straight back

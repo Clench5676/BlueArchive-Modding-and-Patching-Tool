@@ -5,7 +5,7 @@
 // replacement materials for that mode draw as Normal. The dark colour (two-colour tint) never reaches the screen: no
 // lobby shader reads it. Hooks spine-player's PolygonBatcher and SkeletonRenderer; needs linear.js.
 import * as Linear from "./linear.js";
-import { toLinear } from "./touch-fx.js";
+import { toLinear } from "./app/touch-fx.js";
 
 // Runtime hooks run only on players created after lobby.js awaits ensureSpine().
 

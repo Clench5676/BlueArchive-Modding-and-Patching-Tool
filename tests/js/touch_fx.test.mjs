@@ -1,4 +1,4 @@
-// Tests for web/js/touch-fx.js (the game's touch effect, simulated) and the pointer of web/js/cursor.js, run
+// Tests for web/js/app/touch-fx.js (the game's touch effect, simulated) and the pointer of web/js/app/cursor.js, run
 // by tests/test_touch_fx.py with Node's test runner: node --test tests/js/touch_fx.test.mjs
 import assert from "node:assert/strict";
 import { test } from "node:test";
@@ -18,8 +18,8 @@ import {
   toLinear,
   toSrgb,
   trailState,
-} from "../../src/bmpt/web/js/touch-fx.js";
-import { cursorValue, opaqueBox, paint, pointerBoxes, withRetries } from "../../src/bmpt/web/js/cursor.js";
+} from "../../src/bmpt/web/js/app/touch-fx.js";
+import { cursorValue, opaqueBox, paint, pointerBoxes, withRetries } from "../../src/bmpt/web/js/app/cursor.js";
 
 const near = (a, b, eps = 1e-6) => assert.ok(Math.abs(a - b) <= eps, `${a} != ${b}`);
 // a fixed sequence in place of Math.random

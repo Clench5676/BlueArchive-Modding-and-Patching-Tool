@@ -1,5 +1,5 @@
 // Character ownership uses the roster's search and order rules and the FilterSort popup.
-import * as Display from "./display.js";
+import * as Display from "./app/display.js";
 import { order, normalizeView } from "./roster-order.js";
 import { L, T, language } from "./i18n.js";
 import { studentName } from "./names.js";

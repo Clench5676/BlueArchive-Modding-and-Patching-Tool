@@ -62,7 +62,7 @@ const Popup = await import(`${JS}popup.js`);
 const Detail = await import(DETAIL);
 const Buttons = await import(`${JS}game-buttons.js`);
 await Buttons.ready();
-const Update = await import(`${JS}update.js`);
+const Update = await import(`${JS}app/update.js`);
 const Box = await import(`${JS}stats-box.js`);
 const { setStrings } = await import(`${JS}i18n.js`);
 const { DETAILS, frameGeometry } = await import(`${JS}popup-frames.js`);

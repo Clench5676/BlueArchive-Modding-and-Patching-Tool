@@ -13,9 +13,9 @@ globalThis.document = {
 };
 globalThis.window = new EventTarget();
 globalThis.addEventListener = () => {};
-const Prompts = await import("../../src/bmpt/web/js/prompts.js");
+const Prompts = await import("../../src/bmpt/web/js/app/prompts.js");
 const ModSwitch = await import("../../src/bmpt/web/js/mod-switch.js");
-const main = readFileSync(new URL("../../src/bmpt/web/js/main.js", import.meta.url), "utf8");
+const main = readFileSync(new URL("../../src/bmpt/web/js/app/main.js", import.meta.url), "utf8");
 const code = main.slice(main.indexOf("async function variantNames()"), main.indexOf("// --- library.changed"));
 const flatten = (obj, prefix = "", out = {}) => {
   for (const [key, value] of Object.entries(obj)) {

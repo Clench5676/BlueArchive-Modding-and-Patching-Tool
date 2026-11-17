@@ -1,16 +1,16 @@
 // Update popup on the game's popup frame (UIPopup_Sort): the current and the new version, Later / Update.
 // Updating downloads and verifies the build; Restart installs it only after a separate confirmation. check()
 // resolves once the popup has closed; automatic checks wait for beforeShow without holding a screen.
-import * as Buttons from "./game-buttons.js";
-import * as NGUI from "./ngui.js";
-import * as Popup from "./popup.js";
-import { frameGeometry } from "./popup-frames.js";
-import { rpc, waitJob } from "./api.js";
-import { T, errorText, language } from "./i18n.js";
+import * as Buttons from "../game-buttons.js";
+import * as NGUI from "../ngui.js";
+import * as Popup from "../popup.js";
+import { frameGeometry } from "../popup-frames.js";
+import { rpc, waitJob } from "../api.js";
+import { T, errorText, language } from "../i18n.js";
 import { notesFor } from "./release-notes.js";
-import { statsBox } from "./stats-box.js";
-import { COLOUR, POPUP, POPUP_FOOTER, STATS_BOX } from "./ui-tokens.js";
-import { S, clone } from "./util.js";
+import { statsBox } from "../stats-box.js";
+import { COLOUR, POPUP, POPUP_FOOTER, STATS_BOX } from "../ui-tokens.js";
+import { S, clone } from "../util.js";
 
 const { node, sprite, label, find } = NGUI;
 const checks = new WeakMap();

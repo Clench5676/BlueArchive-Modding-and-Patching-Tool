@@ -12,7 +12,7 @@ import * as Lobby from "./lobby.js";
 import { S, hitButton } from "./util.js";
 import { visualButton as whiteButton, galleryBox } from "./photography/controller.js";
 import { cameraFeedback } from "./photography/feedback.js";
-import * as Loading from "./loading.js";
+import * as Loading from "./app/loading.js";
 import { modJob } from "./job-progress.js";
 import { prepareBack } from "./visual-mode.js";
 import { anchoredCentre } from "./visual-view.js";

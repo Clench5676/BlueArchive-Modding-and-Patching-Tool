@@ -1,10 +1,18 @@
-// Tests for web/js/nav-items.js (the bottom navigation's entries: which are greyed, their names, the hand-off and its
-// prompt, the greyed look) and, without a game folder, the hand-off prompt drawn plain by web/js/popup.js, on a small
-// stand-in DOM. Run by tests/test_nav_items.py with Node's test runner: node --test tests/js/nav_items.test.mjs
+// Tests for web/js/app/nav-items.js (the bottom navigation's entries: which are greyed, their names, the hand-off and
+// its prompt, the greyed look) and, without a game folder, the hand-off prompt drawn plain by web/js/popup.js, on a
+// small stand-in DOM. Run by tests/test_nav_items.py with Node's test runner: node --test tests/js/nav_items.test.mjs
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { ITEMS, NGUI_GREY, activate, greyed, handOffPrompt, tintOf, view } from "../../src/bmpt/web/js/nav-items.js";
+import {
+  ITEMS,
+  NGUI_GREY,
+  activate,
+  greyed,
+  handOffPrompt,
+  tintOf,
+  view,
+} from "../../src/bmpt/web/js/app/nav-items.js";
 
 const T = (key, vars = {}) => (key === "nav.classic" ? `${vars.label} - Classic UI` : `<${key}>`);
 const CLASSIC = ["crc_tool", "asset_packer", "asset_extractor", "adb_push", "tools"];

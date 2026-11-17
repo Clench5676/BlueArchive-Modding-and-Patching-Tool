@@ -21,7 +21,7 @@ import { decodeAll } from "./image-decode.js";
 import { withPreviewTimeout, withTimeout, nextFrame } from "./async.js";
 import { previewError } from "./preview-error.js";
 import { attachHint } from "./hover-hint.js";
-import * as Loading from "./loading.js";
+import * as Loading from "./app/loading.js";
 import * as ModAlias from "./mod-alias.js";
 import * as ModExport from "./mod-export.js";
 import * as Compatibility from "./mod-compatibility.js";
@@ -31,7 +31,7 @@ import { cardText, fitCards } from "./action-list-layout.js";
 import * as Lobby from "./lobby.js";
 import * as Visual from "./visual-mode.js";
 import { QUEUEABLE, current as modsState, entryLabel, listSep, refused } from "./mod-switch.js";
-import * as Prompts from "./prompts.js";
+import * as Prompts from "./app/prompts.js";
 import { anyOpen as popupOpen } from "./popup.js";
 import { rpc, spineBase, spinePrefix, loadSpineAssets, waitJob } from "./api.js";
 import { L, T, errorText, language, platform } from "./i18n.js";
@@ -42,7 +42,7 @@ import { portraitViewport } from "./portrait-view.js";
 import { colourSwitchCard } from "./switch-card.js";
 import { clearUnseen, hasUnseen as hasFresh, shownUnseen, switchUnseen } from "./unseen-assets.js";
 import { crossName, customAliases as aliasesOf, modName, modOriginalName, studentName } from "./names.js";
-import { setTitle } from "./nav.js";
+import { setTitle } from "./app/nav.js";
 import { KEYS, deltaOf, pacer, typing } from "./step-keys.js";
 import {
   closable,

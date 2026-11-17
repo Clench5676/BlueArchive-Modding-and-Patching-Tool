@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { flat } from "./helpers/source-text.mjs";
 import { test } from "node:test";
-const source = readFileSync(new URL("../../src/bmpt/web/js/main.js", import.meta.url), "utf8");
+const source = readFileSync(new URL("../../src/bmpt/web/js/app/main.js", import.meta.url), "utf8");
 const refresh = source.slice(
   source.indexOf("async function refreshConfiguration()"),
   source.indexOf("\nlet routeToken"),

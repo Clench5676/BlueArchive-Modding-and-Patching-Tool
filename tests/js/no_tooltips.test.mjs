@@ -78,7 +78,7 @@ test("hit targets and NGUI labels retain accessible names without hover titles o
 
 test("web UI sources cannot reintroduce native or custom tooltip attributes", () => {
   const web = new URL("../../src/bmpt/web/", import.meta.url);
-  for (const name of readdirSync(new URL("js/", web)).filter((name) => name.endsWith(".js"))) {
+  for (const name of readdirSync(new URL("js/", web), { recursive: true }).filter((name) => name.endsWith(".js"))) {
     const source = readFileSync(new URL(`js/${name}`, web), "utf8").replace(/\bdocument\.title\s*=/g, "");
     assert.doesNotMatch(
       source,

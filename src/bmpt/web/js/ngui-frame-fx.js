@@ -2,7 +2,7 @@
 // UIPopup_Mulligan and the mask shader scrolls FX_TEX_Bulletline_03; no TweenAlpha, UISpriteAnimation or CSS
 // animation is involved.
 import { fragmentSource } from "./particles-gl.js";
-import { toLinear, toSrgb } from "./touch-fx.js";
+import { toLinear, toSrgb } from "./app/touch-fx.js";
 import { uiExportUrl } from "./api.js";
 import { applyDir, euler } from "./particles.js";
 

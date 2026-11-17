@@ -308,7 +308,7 @@ test("no native window buttons, no motion for them", () => {
 });
 
 test("boot() lets the bars in after the first screen, and after a failed one too", async () => {
-  const main = readFileSync(new URL("../../src/bmpt/web/js/main.js", import.meta.url), "utf8");
+  const main = readFileSync(new URL("../../src/bmpt/web/js/app/main.js", import.meta.url), "utf8");
   const code = main.slice(main.indexOf("async function boot()"), main.indexOf("async function start()"));
   for (const fail of [false, true]) {
     const entered = [];

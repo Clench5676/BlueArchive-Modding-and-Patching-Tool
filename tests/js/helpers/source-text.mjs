@@ -1,3 +1,5 @@
+import { posix } from "node:path";
+
 // Source text for tests that assert how a module is written: the layout the formatter chose is irrelevant, so line
 // breaks and indentation collapse to single spaces, and a wrapped list closes up on its contents without the trailing
 // comma the formatter adds.
@@ -92,3 +94,10 @@ export const compact = (text) =>
     .replace(/ ?([^\w$ ]) ?/g, "$1")
     .replace(/,([)\]}])/g, "$1")
     .replace(/(^|[^\w$.])\(([\w$]+)\)=>/g, "$1$2=>");
+
+// The relative specifier a web UI module writes to import another, as a regular expression source matching only that
+// specifier: `from` and `to` are paths under web/js (e.g. "app/main.js", "core/i18n.js").
+export function importOf(from, to) {
+  const rel = posix.relative(posix.dirname(from), to);
+  return (rel.startsWith("..") ? rel : `./${rel}`).replace(/[.*+?^${}()|[\]\\/]/g, "\\$&");
+}

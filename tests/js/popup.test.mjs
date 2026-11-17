@@ -1,5 +1,5 @@
 // Tests for web/js/popup.js (the shared popups: the stack Escape goes to, the message popup, the list popup with
-// several cards ticked, the start sequence), web/js/update.js and detail.js's preview actions, on a small stand-in
+// several cards ticked, the start sequence), web/js/app/update.js and detail.js's preview actions, on a small stand-in
 // DOM. Run by tests/test_popup.py with Node's test runner: node --test tests/js/popup.test.mjs
 import assert from "node:assert/strict";
 import { flat } from "./helpers/source-text.mjs";
@@ -466,7 +466,7 @@ console.warn = (...args) => {
 };
 
 const Popup = await import("../../src/bmpt/web/js/popup.js");
-const Update = await import("../../src/bmpt/web/js/update.js");
+const Update = await import("../../src/bmpt/web/js/app/update.js");
 const { S } = await import("../../src/bmpt/web/js/util.js");
 const { setStrings } = await import("../../src/bmpt/web/js/i18n.js");
 const { setSpineConsent } = await import("../../src/bmpt/web/js/spine-runtime.js");
@@ -1130,7 +1130,7 @@ test("confirm keys press OK while the popup is in front and holds the focus; non
 });
 
 test("the hand-off prompt saves Don't Ask Again only with Open", async () => {
-  const { ITEMS, activate, handOffPrompt } = await import("../../src/bmpt/web/js/nav-items.js");
+  const { ITEMS, activate, handOffPrompt } = await import("../../src/bmpt/web/js/app/nav-items.js");
   const T = (key) => key;
   const ask = (item) => Popup.message(handOffPrompt(item, T));
   const run = () => {
@@ -2118,7 +2118,7 @@ test("the impact list's Fix leaves a portrait drawn on a rig the App no longer h
   await modsEnabled(false);
   const fam = previewFamily();
   Detail.setupPreviewTest(fam, "spr");
-  const Impact = await import("../../src/bmpt/web/js/update-impact.js");
+  const Impact = await import("../../src/bmpt/web/js/app/update-impact.js");
   const inputs = { skeletons: {}, atlases: {}, textures: {} };
   handlers.set("actions.compatibilityStamp", () => "stamp-impact");
   handlers.set("actions.compatibility", () => ({ result: "compatibility" }));
@@ -3825,7 +3825,7 @@ test("release notes never run HTML or load images, scroll, retain the offer and 
 
 test("release notes draw their Markdown in the UI language: headings larger, items with a hanging bullet", async () => {
   const NGUI = await import("../../src/bmpt/web/js/ngui.js");
-  const { scriptOf } = await import("../../src/bmpt/web/js/release-notes.js");
+  const { scriptOf } = await import("../../src/bmpt/web/js/app/release-notes.js");
   const shipped = readFileSync(new URL("../../src/bmpt/assets/release-notes/0.7.0.md", import.meta.url), "utf8");
   const chineseUi = JSON.parse(readFileSync(new URL("../../src/bmpt/locales/zh-CN.json", import.meta.url))).webui;
   try {
@@ -4070,7 +4070,7 @@ test("empty and unavailable notes offer the exact release page in every locale",
   setStrings("en-US", Object.fromEntries(strings(english)));
 });
 
-const Tours = await import("../../src/bmpt/web/js/tours.js");
+const Tours = await import("../../src/bmpt/web/js/app/tours.js");
 const tourPages = [
   {
     id: "photos",
@@ -5004,7 +5004,7 @@ test("the display settings open over a dialog: above it in the page and on the s
   t.mock.method(globalThis, "fetch", async (url, options) =>
     url === "/asset/ui/layout/UICharacterCollection.json" ? reply(collection) : fetch(url, options),
   );
-  const Display = await import("../../src/bmpt/web/js/display.js");
+  const Display = await import("../../src/bmpt/web/js/app/display.js");
   const done = [];
   const open = () =>
     Display.open({
@@ -5122,7 +5122,7 @@ test("the display settings' sort keys and filter options each share one font siz
   t.mock.method(globalThis, "fetch", async (url, options) =>
     url === "/asset/ui/layout/UICharacterCollection.json" ? reply(collection) : fetch(url, options),
   );
-  const Display = await import("../../src/bmpt/web/js/display.js");
+  const Display = await import("../../src/bmpt/web/js/app/display.js");
   const label = (root, pattern) => walk(root).filter((e) => pattern.test(e.dataset.path || "") && e.textContent);
   try {
     // the filter tab is the module's tab until a sort-only popup switches it, so the filter passes come first
@@ -5192,7 +5192,7 @@ test("the display settings' sort keys and filter options each share one font siz
 // the header's triangle pattern inside the header, from its left end (the prefab stands it from
 // the header's right end outwards, and in the narrower frame it showed past the frame's right edge)
 test("Display Settings' header pattern stays inside the header", async () => {
-  const Display = await import("../../src/bmpt/web/js/display.js"),
+  const Display = await import("../../src/bmpt/web/js/app/display.js"),
     { find } = await import("../../src/bmpt/web/js/ngui.js");
   const root = n("UIPopup_FilterSort");
   displayLayouts(root);
@@ -5788,7 +5788,7 @@ test("a search that matches nothing blocks the primary button until the match is
 
 // --- the asset consent's Agree and Decline are named by their captions ---
 test("the asset consent names Agree and Decline with their captions in every language", async () => {
-  const Consent = await import("../../src/bmpt/web/js/consent.js");
+  const Consent = await import("../../src/bmpt/web/js/app/consent.js");
   try {
     for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
       const ui = JSON.parse(
@@ -5816,7 +5816,7 @@ test("the asset consent names Agree and Decline with their captions in every lan
 
 // --- a failed asset consent shows its error and can be answered again; a repeat click sends nothing ---
 test("a failed asset consent shows the error, keeps the popup to retry, and a repeat click sends nothing", async () => {
-  const Consent = await import("../../src/bmpt/web/js/consent.js");
+  const Consent = await import("../../src/bmpt/web/js/app/consent.js");
   setStrings("en-US", Object.fromEntries(strings(english)));
   const sent = [];
   let answer = null;
@@ -6357,7 +6357,7 @@ test("every popup frame draws the one backdrop token", async () => {
     assert.equal(colour(Popup.popupFrame("T", w, h, { ok: "OK" })), Tokens.BACKDROP);
   // the consent and update dialogs take it from popupFrame; the list popup, the display settings and Settings set
   // the same token
-  for (const file of ["popup.js", "display.js", "settings.js"]) {
+  for (const file of ["popup.js", "app/display.js", "settings.js"]) {
     const source = readFileSync(new URL(`../../src/bmpt/web/js/${file}`, import.meta.url), "utf8");
     const sites =
       source.match(/BlackBgClickArea"\)\.widgets\.find\(\(\w+\) => "sprite" in \w+\)\.color = [^;]+;/g) || [];
@@ -6367,7 +6367,7 @@ test("every popup frame draws the one backdrop token", async () => {
       `${file}: ${sites}`,
     );
   }
-  for (const file of ["consent.js", "update.js"]) {
+  for (const file of ["app/consent.js", "app/update.js"]) {
     const source = readFileSync(new URL(`../../src/bmpt/web/js/${file}`, import.meta.url), "utf8");
     assert.doesNotMatch(source, /BlackBgClickArea/, `${file} draws no frame of its own`);
   }
@@ -6659,7 +6659,7 @@ for (const lang of LOCALE_LIST)
 for (const lang of LOCALE_LIST)
   test(`the asset consent's Change button (104 high) clears the item and path text and the buttons below, in ${lang}`, async () => {
     const NGUI = await import("../../src/bmpt/web/js/ngui.js");
-    const Consent = await import("../../src/bmpt/web/js/consent.js");
+    const Consent = await import("../../src/bmpt/web/js/app/consent.js");
     const ui = localeWebui(lang);
     await Popup.ready();
     const apartBoxes = (a, b) =>
@@ -6928,7 +6928,7 @@ test("the portrait panel's chips (the S chip) stay in the right half and 20 abov
 
 test("the startup Spine notice wraps inside UIPopup_Sort at message sizes in every locale and window scale", async () => {
   const NGUI = await import("../../src/bmpt/web/js/ngui.js");
-  const Consent = await import("../../src/bmpt/web/js/consent.js");
+  const Consent = await import("../../src/bmpt/web/js/app/consent.js");
   await Popup.ready();
   try {
     for (const lang of ["en-US", "th-TH", "zh-CN", "zh-TW", "ja-JP", "ko-KR"]) {
@@ -7115,7 +7115,7 @@ test("portrait and ordinary detail scroll areas keep the complete last field and
 });
 
 test("finding the game asks the Check Game Files consent first and searches only after an Allow", async () => {
-  const Consent = await import("../../src/bmpt/web/js/consent.js");
+  const Consent = await import("../../src/bmpt/web/js/app/consent.js");
   let allowed = false,
     searched = 0,
     asked = 0;
@@ -7273,7 +7273,7 @@ for (const lang of LOCALE_LIST)
 
 for (const lang of LOCALE_LIST)
   test(`both consent stacks fit and centre between title and footer in ${lang}`, async () => {
-    const Consent = await import("../../src/bmpt/web/js/consent.js"),
+    const Consent = await import("../../src/bmpt/web/js/app/consent.js"),
       ui = localeWebui(lang);
     try {
       setStrings(lang, Object.fromEntries(strings(ui)));
@@ -7646,7 +7646,7 @@ test("a plain line's inline button is as high as the line's text and stays insid
 test("the held entries' Details fit their wide frame with four mods, Go To and Fix and Apply on one line each, in every locale", async () => {
   await Popup.ready();
   const I18n = await import("../../src/bmpt/web/js/i18n.js");
-  const Impact = await import("../../src/bmpt/web/js/update-impact.js");
+  const Impact = await import("../../src/bmpt/web/js/app/update-impact.js");
   const NGUI = await import("../../src/bmpt/web/js/ngui.js");
   const { XS_BUTTON } = await import("../../src/bmpt/web/js/ui-tokens.js");
   const flat = (o, p = "", out = {}) => {

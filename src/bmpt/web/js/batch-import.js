@@ -1,15 +1,15 @@
 import { importStatus } from "./switch-sources.js";
 import { current as modsState } from "./mod-switch.js";
-import { overwrittenLines } from "./repairs.js";
+import { overwrittenLines } from "./app/repairs.js";
 // Unified import behaviour over runtime Items, Mailbox and FilterSort prefab widgets (import-layout.js).
 import { progressName } from "./job-progress.js";
 import { importGroups } from "./import-groups.js";
 import * as NGUI from "./ngui.js";
 import * as Popup from "./popup.js";
-import * as Loading from "./loading.js";
+import * as Loading from "./app/loading.js";
 import { rpc, spineBase, spinePrefix, waitJob } from "./api.js";
 import { L, T, language } from "./i18n.js";
-import { withCode } from "./error-codes.js";
+import { withCode } from "./app/error-codes.js";
 import { customAliases, studentName } from "./names.js";
 import { specialFraming } from "./special-view.js";
 import { spineAllowed } from "./spine-runtime.js";

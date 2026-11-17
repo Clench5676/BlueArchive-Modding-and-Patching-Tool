@@ -277,7 +277,7 @@ def test_shipped_paths_do_not_import_optional_refine_modules():
                 else:
                     continue
                 assert not any("refine_" in name or "refine" in name.split(".") for name in names), path
-    for path in (root / "web" / "js").glob("*.js"):
+    for path in (root / "web" / "js").rglob("*.js"):
         if path.name == "refine-composite.js":
             continue
         assert "refine-composite" not in path.read_text(), path

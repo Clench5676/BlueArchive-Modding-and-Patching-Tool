@@ -3,7 +3,7 @@ import { T, L } from "../i18n.js";
 import * as NGUI from "../ngui.js";
 import * as UI from "../student-hall-ui.js";
 import * as Popup from "../popup.js";
-import * as Loading from "../loading.js";
+import * as Loading from "../app/loading.js";
 import { modJob } from "../job-progress.js";
 import { untestedRetry } from "../mod-switch.js";
 import { clone, S, hitButton } from "../util.js";

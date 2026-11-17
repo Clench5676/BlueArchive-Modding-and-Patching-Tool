@@ -760,7 +760,7 @@ test("disabled actions use the game's grey button body without changing its dono
   assert.deepEqual(template, before);
 });
 const NGUI = await import("../../src/bmpt/web/js/ngui.js");
-const Loading = await import("../../src/bmpt/web/js/loading.js");
+const Loading = await import("../../src/bmpt/web/js/app/loading.js");
 const ModSwitch = await import("../../src/bmpt/web/js/mod-switch.js");
 const ModAlias = await import("../../src/bmpt/web/js/mod-alias.js");
 const Popup = await import("../../src/bmpt/web/js/popup.js");

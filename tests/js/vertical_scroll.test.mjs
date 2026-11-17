@@ -353,6 +353,6 @@ test("the roster uses the shared controller for its virtual position and cancels
       flat(source),
       new RegExp(`(?:async )?function ${name}\\([^)]*\\) \\{\\s*wheelMotion\\?\\.stop\\(\\);`),
     );
-  const main = readFileSync(new URL("../../src/bmpt/web/js/main.js", import.meta.url), "utf8");
+  const main = readFileSync(new URL("../../src/bmpt/web/js/app/main.js", import.meta.url), "utf8");
   assert.match(flat(main), /installVerticalWheel\(\);/);
 });

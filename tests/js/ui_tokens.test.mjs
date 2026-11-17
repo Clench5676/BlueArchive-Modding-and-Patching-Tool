@@ -189,12 +189,12 @@ test("no site outside ui-tokens.js carries a retired backdrop or colour literal"
 
 test("the call sites take the status colours from the tokens, the style sheet repeats the same values", () => {
   const uses = {
-    "js/update.js": ["COLOUR.success", "COLOUR.error"],
+    "js/app/update.js": ["COLOUR.success", "COLOUR.error"],
     "js/detail.js": ["COLOUR.success", "COLOUR.warning", "COLOUR.greyed"],
     "js/mod-compare.js": ["COLOUR.warning", "COLOUR.success", "COLOUR.error"],
-    "js/prompts.js": ["COLOUR.greyed"],
+    "js/app/prompts.js": ["COLOUR.greyed"],
     "js/popup.js": ["COLOUR.inUse", "COLOUR.inUseInk"],
-    "js/consent.js": ["COLOUR.neverBar", "COLOUR.note"],
+    "js/app/consent.js": ["COLOUR.neverBar", "COLOUR.note"],
   };
   for (const [file, names] of Object.entries(uses))
     for (const name of names) assert.ok(read(file).includes(name), `${file} uses ${name}`);

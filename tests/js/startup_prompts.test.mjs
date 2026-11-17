@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
-const source = readFileSync(new URL("../../src/bmpt/web/js/prompts.js", import.meta.url), "utf8");
+const source = readFileSync(new URL("../../src/bmpt/web/js/app/prompts.js", import.meta.url), "utf8");
 const lifecycle = source
   .slice(source.indexOf("const shown = { drift:"), source.indexOf("async function cardsOf("))
   .replace(/^export /gm, "");

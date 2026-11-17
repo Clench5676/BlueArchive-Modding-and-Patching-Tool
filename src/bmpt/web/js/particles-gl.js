@@ -17,7 +17,7 @@ import {
   spriteGeometry,
   trailGeometry,
 } from "./particles.js";
-import { toLinear } from "./touch-fx.js";
+import { toLinear } from "./app/touch-fx.js";
 
 const VS_HEAD = `#version 300 es
 in vec2 a_pos;

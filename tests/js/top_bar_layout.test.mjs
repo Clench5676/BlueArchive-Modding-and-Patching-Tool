@@ -155,7 +155,7 @@ test("the bar still measures its fill and aligns the remaining caption by script
   const css = await readFile(new URL("../../src/bmpt/web/css/app.css", import.meta.url), "utf8");
   assert.match(css, /padding-bottom: var\(--bar-padding, 4\.88px\)/);
   near(Layout.barPadding(Layout.barCentre()), 4.88, 0.01);
-  const nav = await readFile(new URL("../../src/bmpt/web/js/nav.js", import.meta.url), "utf8");
+  const nav = await readFile(new URL("../../src/bmpt/web/js/app/nav.js", import.meta.url), "utf8");
   assert.match(nav, /watchTopBar\(\)/);
   const bar = await readFile(new URL("../../src/bmpt/web/js/top-bar.js", import.meta.url), "utf8");
   assert.match(bar, /querySelectorAll\("\.ms-label"\)/);

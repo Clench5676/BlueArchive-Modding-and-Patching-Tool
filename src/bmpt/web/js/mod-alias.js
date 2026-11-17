@@ -7,7 +7,7 @@ import { rpc } from "./api.js";
 import { T, errorText } from "./i18n.js";
 import { closed, closable, frameReady, hit, popupFrame } from "./popup.js";
 import { MOD_ALIAS } from "./popup-frames.js";
-import * as Loading from "./loading.js";
+import * as Loading from "./app/loading.js";
 import { $, S } from "./util.js";
 
 let token = 0,

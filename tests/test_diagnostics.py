@@ -451,7 +451,7 @@ def test_safe_mode_disables_assets_and_maintenance_without_changing_consent(tmp_
         assert config["safeMode"] and config["strings"]["recovery.report"]
         app = WebApp(RpcRegistry(), EventBus(), recovery=lambda: config)
         response = b"".join(app._static("/", lambda *args: None)).decode()
-        assert 'type="module" src="js/main.js"' not in response
+        assert 'type="module" src="js/app/main.js"' not in response
         assert response.index("window.BAMT_CONFIG") < response.index('href="css/app.css"')
         assert "function progress()" in response
     finally:

@@ -8,8 +8,8 @@
 import { clipRosterBand } from "./roster-card.js";
 import { specialFraming } from "./special-view.js";
 import * as NGUI from "./ngui.js";
-import * as Display from "./display.js";
-import * as Loading from "./loading.js";
+import * as Display from "./app/display.js";
+import * as Loading from "./app/loading.js";
 import {
   emptyListY,
   searchTree as rosterSearchTree,

@@ -1898,8 +1898,8 @@ def test_program_command_in_a_compiled_build(monkeypatch, tmp_path):
 @pytest.mark.parametrize("platform", ["win32", "darwin", "linux"])
 def test_the_window_leaves_the_pointer_and_text_selection_to_the_page(monkeypatch, tmp_path, platform):
     """pywebview's text_select=False (its default) appends "body { user-select: none; cursor: default }" to the page,
-    after app.css: the game's pointer (web/js/cursor.js) then shows only on buttons, the system arrow everywhere else.
-    The window keeps text selection on and the page turns it off itself."""
+    after app.css: the game's pointer (web/js/app/cursor.js) then shows only on buttons, the system arrow everywhere
+    else. The window keeps text selection on and the page turns it off itself."""
     import re
     import sys
     from types import SimpleNamespace

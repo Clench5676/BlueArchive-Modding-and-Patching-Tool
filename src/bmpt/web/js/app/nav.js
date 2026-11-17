@@ -1,18 +1,18 @@
-import { topActionLayout, nativeRightClearance } from "./top-action-layout.js";
-import { CORNER_MARGIN } from "./corner-layout.js";
-import { watchTopBar } from "./top-bar.js";
+import { topActionLayout, nativeRightClearance } from "../top-action-layout.js";
+import { CORNER_MARGIN } from "../corner-layout.js";
+import { watchTopBar } from "../top-bar.js";
 // The lobby-style bottom navigation and the top bar. The entries are nav-items.js: one without a web screen is
 // greyed out with the game's disabled tint and hands over to the classic GUI on its tab, through the hand-off
 // prompt (on every click, with Don't Ask Again, until the pref classicPrompt is turned off).
-import { notify } from "./popup.js";
+import { notify } from "../popup.js";
 import * as Loading from "./loading.js";
-import * as NGUI from "./ngui.js";
-import * as Popup from "./popup.js";
+import * as NGUI from "../ngui.js";
+import * as Popup from "../popup.js";
 import { navigationEntry, navigationOrigin } from "./navigation-layout.js";
-import { rpc } from "./api.js";
-import { T, errorText } from "./i18n.js";
+import { rpc } from "../api.js";
+import { T, errorText } from "../i18n.js";
 import { ITEMS, activate, handOffPrompt, view } from "./nav-items.js";
-import { $, S, clone } from "./util.js";
+import { $, S, clone } from "../util.js";
 
 const CLASSIC_WAIT = 32000; // the classic UI's start: app.openClassic waits up to 30 s for its window
 let options = { game: false, prefs: () => null, setPrefs: () => {} };

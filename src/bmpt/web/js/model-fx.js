@@ -9,7 +9,7 @@
 import * as THREE from "three";
 import { Effects, IDENTITY, STRIDE3, WORLD, geometry3d } from "./particles.js";
 import { PROGRAMS, fragmentSource, vertexSource } from "./particles-gl.js";
-import { toLinear } from "./touch-fx.js";
+import { toLinear } from "./app/touch-fx.js";
 
 // glTF mirrors Unity on X (model.py)
 const MIRROR = new THREE.Matrix4().makeScale(-1, 1, 1);

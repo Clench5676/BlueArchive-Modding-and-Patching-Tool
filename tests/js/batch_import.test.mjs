@@ -1484,7 +1484,7 @@ test("failed option reads cannot release an in-flight analysis lock", async () =
 });
 
 test("the window's native drop event goes directly to Batch Import on its route", async () => {
-  const source = readFileSync(new URL("../../src/bmpt/web/js/main.js", import.meta.url), "utf8");
+  const source = readFileSync(new URL("../../src/bmpt/web/js/app/main.js", import.meta.url), "utf8");
   const drop = source.slice(
     source.indexOf("  // Only Import Mod takes files dropped"),
     source.indexOf('  $("top-option").addEventListener'),

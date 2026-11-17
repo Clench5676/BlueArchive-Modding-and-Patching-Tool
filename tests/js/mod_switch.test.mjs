@@ -447,7 +447,7 @@ I18n.setStrings("en-US", strings);
 const S = (key) => strings[`webui.${key}`];
 
 const MS = await import("../../src/bmpt/web/js/mod-switch.js");
-const Loading = await import("../../src/bmpt/web/js/loading.js");
+const Loading = await import("../../src/bmpt/web/js/app/loading.js");
 
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
 const actionsIn = (root) => walk(root).filter((e) => e.dataset?.action);
@@ -1071,7 +1071,7 @@ test("Settings measures built mods only when its Mods row is drawn, and remeasur
 
 test("Troubleshoot Mods shows only in pre-release builds, and Apply Official to All confirms, runs and shows the check", async () => {
   const Settings = await import("../../src/bmpt/web/js/settings.js");
-  const T = await import("../../src/bmpt/web/js/troubleshoot.js");
+  const T = await import("../../src/bmpt/web/js/app/troubleshoot.js");
   const button = (name) =>
     walk(settingsHost).find((e) => e.tagName === "BUTTON" && e.getAttribute("aria-label") === name);
   const hasText = (text) => walk(settingsHost).some((e) => e.textContent === text);
@@ -1523,7 +1523,7 @@ test("the classic modal queues the refused write only when its box is ticked, on
 
 // --- item 1's prompts (prompts.js) ---
 
-const P = await import("../../src/bmpt/web/js/prompts.js");
+const P = await import("../../src/bmpt/web/js/app/prompts.js");
 const GLOBAL = "/games/BlueArchive",
   JAPAN = "/games/Japan";
 const gameFile = (core, extra = {}) => ({
@@ -1890,7 +1890,7 @@ test("held refusal prompts accept Overwritten, Add First and its result, and sca
   assert.equal(await held, false);
   assert.equal(Loading.held(), false);
 
-  const Consent = await import("../../src/bmpt/web/js/consent.js");
+  const Consent = await import("../../src/bmpt/web/js/app/consent.js");
   held = Loading.hold(() => Consent.scan(consent));
   await drawn(consent, "ok");
   assert.equal(press("Escape", stage).stopped, false);
@@ -2066,7 +2066,7 @@ test("scan, cache cleanup and both switch directions name their action in every 
 });
 
 test("the toggle flushes the event delay and awaits the visible detail or roster redraw", async () => {
-  const main = readFileSync(new URL("../../src/bmpt/web/js/main.js", import.meta.url), "utf8");
+  const main = readFileSync(new URL("../../src/bmpt/web/js/app/main.js", import.meta.url), "utf8");
   const changed = main.slice(main.indexOf("let heldChange,"), main.indexOf("// the window back in front"));
   assert.match(main, /refreshPage: refreshAfterToggle/, "the switch uses the awaited refresh");
   for (const screen of ["detail", "roster"]) {
@@ -2125,7 +2125,7 @@ test("the toggle flushes the event delay and awaits the visible detail or roster
 });
 
 test("main refreshes on external Enable Mods changes and keeps the awaited local toggle refresh", async () => {
-  const main = readFileSync(new URL("../../src/bmpt/web/js/main.js", import.meta.url), "utf8");
+  const main = readFileSync(new URL("../../src/bmpt/web/js/app/main.js", import.meta.url), "utf8");
   const setup = main.slice(main.indexOf('  await timed("mod-state"'), main.indexOf("  Prompts.init("));
   let listener,
     options,
@@ -2215,7 +2215,7 @@ test("detail refresh callers await changes queued while an earlier refresh is dr
 });
 
 test("Spine notice is plain before asset consent and enables nothing until its acknowledgement is saved", async () => {
-  const Consent = await import("../../src/bmpt/web/js/consent.js");
+  const Consent = await import("../../src/bmpt/web/js/app/consent.js");
   const Runtime = await import("../../src/bmpt/web/js/spine-runtime.js");
   const saved = answers["app.spineConsent"],
     save = deferred();
@@ -2254,7 +2254,7 @@ test("Spine notice is plain before asset consent and enables nothing until its a
 });
 
 test("Spine notice has the same title, legal body and lone Confirm in both paths in every locale", async () => {
-  const Consent = await import("../../src/bmpt/web/js/consent.js");
+  const Consent = await import("../../src/bmpt/web/js/app/consent.js");
   const Runtime = await import("../../src/bmpt/web/js/spine-runtime.js");
   const saved = answers["app.spineConsent"];
   answers["app.spineConsent"] = ({ granted }) => granted;
@@ -2300,7 +2300,7 @@ test("Spine notice has the same title, legal body and lone Confirm in both paths
 });
 
 test("startup shows the Spine notice after assets until it is acknowledged, re-renders, and skips an old Yes", async () => {
-  const main = readFileSync(new URL("../../src/bmpt/web/js/main.js", import.meta.url), "utf8");
+  const main = readFileSync(new URL("../../src/bmpt/web/js/app/main.js", import.meta.url), "utf8");
   const source = main.slice(main.indexOf("function startPopups()"), main.indexOf("async function start()"));
   for (const choice of [undefined, null, false, true]) {
     const info = { consent: null, spineConsent: choice },
@@ -2346,7 +2346,7 @@ test("startup shows the Spine notice after assets until it is acknowledged, re-r
 });
 
 test("Settings Spine value row opens the same read-only notice in every locale without changing state", async () => {
-  const Consent = await import("../../src/bmpt/web/js/consent.js");
+  const Consent = await import("../../src/bmpt/web/js/app/consent.js");
   const Settings = await import("../../src/bmpt/web/js/settings.js");
   const Runtime = await import("../../src/bmpt/web/js/spine-runtime.js");
   const saved = { ...answers },
@@ -2415,7 +2415,7 @@ test("Settings Spine value row opens the same read-only notice in every locale w
 
 // --- the impact of a game update (update-impact.js) and the drift prompt's held cards ---
 
-const Impact = await import("../../src/bmpt/web/js/update-impact.js");
+const Impact = await import("../../src/bmpt/web/js/app/update-impact.js");
 
 test("an update's impact as a list: only the mods to update, each a card with its details; the footer", () => {
   const mods = [

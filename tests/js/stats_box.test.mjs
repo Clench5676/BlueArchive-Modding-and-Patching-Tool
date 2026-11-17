@@ -2,7 +2,7 @@
 // The sites that draw through it are checked in popup.test.mjs (the details panel, the file details, the
 // messages, the update dialog); the tokens against the prefab in tests/test_ui_tokens.py.
 import assert from "node:assert/strict";
-import { flat } from "./helpers/source-text.mjs";
+import { flat, importOf } from "./helpers/source-text.mjs";
 import { readFileSync, readdirSync } from "node:fs";
 import { test } from "node:test";
 import { STATS_BOX as B } from "../../src/bmpt/web/js/ui-tokens.js";
@@ -241,22 +241,26 @@ const sources = (dir, ext) =>
 
 test("the stats box's fill and line colours are written in ui-tokens.js only (and the tour's image slot reuses the fill)", () => {
   const files = sources("js/", ".js");
-  assert.ok(files.length > 100 && files.includes("js/popup.js") && files.includes("js/update.js"));
+  assert.ok(files.length > 100 && files.includes("js/popup.js") && files.includes("js/app/update.js"));
   const holders = (literal) => files.filter((file) => read(file).toLowerCase().includes(literal)).sort();
-  assert.deepEqual(holders("#ecf5f9"), ["js/tours.js", "js/ui-tokens.js"]);
+  assert.deepEqual(holders("#ecf5f9"), ["js/app/tours.js", "js/ui-tokens.js"]);
   // the line's colour is also the progress bar's, the chips' outline and the dotted dividers of the file table
   for (const file of holders("#c0c9d4"))
-    assert.ok(["js/detail.js", "js/popup.js", "js/ui-tokens.js", "js/update.js"].includes(file), file);
+    assert.ok(["js/detail.js", "js/popup.js", "js/ui-tokens.js", "js/app/update.js"].includes(file), file);
 });
 
 test("the four sites build their box with statsBox()", () => {
   for (const [file, calls] of [
     ["js/popup.js", 2],
     ["js/detail.js", 1],
-    ["js/update.js", 2],
+    ["js/app/update.js", 2],
   ]) {
     const source = read(file);
-    assert.match(flat(source), /import \{[^}]*\bstatsBox\b[^}]*\} from "\.\/stats-box\.js";/, file);
+    assert.match(
+      flat(source),
+      new RegExp(`import \\{[^}]*\\bstatsBox\\b[^}]*\\} from "${importOf(file.slice(3), "stats-box.js")}";`),
+      file,
+    );
     assert.equal(source.match(/\bstatsBox\(/g).length, calls, `${file}: its calls to statsBox()`);
   }
   assert.match(read("js/popup.js"), /name: "Fields"/);

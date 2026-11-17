@@ -218,8 +218,8 @@ function footerBody(captions) {
 for (const locale of LOCALES)
   test(`popup footer captions share one size and fit the default XS body in ${locale}`, async () => {
     const popup = await source("popup.js"),
-      consent = await source("consent.js"),
-      update = await source("update.js");
+      consent = await source("app/consent.js"),
+      update = await source("app/update.js");
     assert.match(popup, /export const BUTTON_TEXT_H = CONTROL.buttonL.h - SPACE.m;/);
     assert.match(popup, /export const FOOTER_DEFAULT = "XS";/);
     assert.match(popup, /NGUI.fitLabels\(widgets, captions, caption.fs, caption.fsMin/);

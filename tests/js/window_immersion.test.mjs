@@ -36,7 +36,7 @@ test("camera preparation is immersive even before the shared detail fullscreen f
     /\.chrome-hide-top \.topbar, \.chrome-hide-bottom \.nav \{[^}]*visibility: hidden;[^}]*pointer-events: none/,
   );
   assert.doesNotMatch(css, /\.stage\.(hall-)?fullscreen \.(topbar|nav) \{|\.window-immersive \.topbar/);
-  assert.doesNotMatch(flat(source("web/js/nav.js")), /back\.style\.visibility/);
+  assert.doesNotMatch(flat(source("web/js/app/nav.js")), /back\.style\.visibility/);
 });
 for (const platform of ["darwin", "win32", "fallback"])
   test(`immersion reports no drag rectangles for ${platform}`, () => {

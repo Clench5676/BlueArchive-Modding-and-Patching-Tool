@@ -1,7 +1,7 @@
 // Read structural data with the same bundled Spine runtime as the preview, without creating textures or a player.
 import { T, language } from "./i18n.js";
 import { rpc, waitJob } from "./api.js";
-import * as Loading from "./loading.js";
+import * as Loading from "./app/loading.js";
 import * as Popup from "./popup.js";
 import * as Compare from "./mod-compare.js";
 import { ensureSpine } from "./spine-runtime.js";

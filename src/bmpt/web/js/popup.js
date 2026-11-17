@@ -24,7 +24,7 @@ import {
 } from "./selected-frames.js";
 import { frameOutline } from "./row-thumbnail.js";
 import { T } from "./i18n.js";
-import { codeOf, noticeNames, withCode } from "./error-codes.js";
+import { codeOf, noticeNames, withCode } from "./app/error-codes.js";
 import { withTimeout } from "./async.js";
 import { TEXT_VIEWER, frameClass, frameGeometry, popupContent } from "./popup-frames.js";
 import { STATS_BOX_S, boxHeight, statsBox, valueRoom } from "./stats-box.js";
@@ -2280,7 +2280,7 @@ export async function listPopup(options) {
       tv,
       "Toolbar/SortBtn/Btn_Normal",
       async () => {
-        const Display = await import("./display.js");
+        const Display = await import("./app/display.js");
         await Display.open({
           view: { sort: toolState.sort, order: toolState.ascending ? "asc" : "desc", filters: {} },
           count: () => items.length,

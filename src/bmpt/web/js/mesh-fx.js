@@ -6,7 +6,7 @@
 // material colours) and builds their triangles. Pure data, no DOM and no GL. Triangles the material culls are
 // dropped the way Unity culls them, and a mesh's vertex colours reach the shader as stored.
 import { IDENTITY, STRIDE, mul, vertexColor } from "./particles.js";
-import { toLinear } from "./touch-fx.js";
+import { toLinear } from "./app/touch-fx.js";
 
 // Unity's built-in Quad (unity default resources): a unit square facing the camera, UV (0, 0) at the bottom left
 export const QUAD = Object.freeze({

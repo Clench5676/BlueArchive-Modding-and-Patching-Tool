@@ -67,7 +67,7 @@ URL.createObjectURL = (blob) => {
   blobs.set(url, blob);
   return url;
 };
-const { ITEMS } = await import("../../src/bmpt/web/js/nav-items.js");
+const { ITEMS } = await import("../../src/bmpt/web/js/app/nav-items.js");
 const meta = Object.fromEntries(ITEMS.map((item, i) => [item.icon, { width: 1100 + i * 130, height: 1400 - i * 120 }]));
 Object.assign(meta, {
   Common_Top_Home_Btn: { width: 62, height: 59 },
@@ -143,7 +143,7 @@ globalThis.fetch = async (url) => ({
     assert.fail(url);
   },
 });
-const { renderNav } = await import("../../src/bmpt/web/js/nav.js");
+const { renderNav } = await import("../../src/bmpt/web/js/app/nav.js");
 const { setStrings } = await import("../../src/bmpt/web/js/i18n.js");
 const { S } = await import("../../src/bmpt/web/js/util.js");
 const flat = (value, prefix = "", out = {}) => {
@@ -221,7 +221,7 @@ test("Home, settings and divider retain the game's native sibling spacing", asyn
 });
 
 test("Hall reflows Settings into Home and restores sibling geometry across repeated transitions", async () => {
-  const { setTopActions } = await import("../../src/bmpt/web/js/nav.js");
+  const { setTopActions } = await import("../../src/bmpt/web/js/app/nav.js");
   await renderNav(-1, { game: true });
   const original = structuredClone(Object.fromEntries(Object.entries(top).map(([key, node]) => [key, node.style])));
   const centre = (style) => [
@@ -258,7 +258,7 @@ test("native-control clearance is preserved at fractional window scales", async 
 });
 
 test("page names remain accessible while Hall removes Back and leaving restores the current route", async () => {
-  const { setTitle, setTopActions } = await import("../../src/bmpt/web/js/nav.js");
+  const { setTitle, setTopActions } = await import("../../src/bmpt/web/js/app/nav.js");
   const classes = new Set();
   top[".topbar"] = Object.assign(new El(), {
     classList: {
@@ -292,7 +292,7 @@ test("page names remain accessible while Hall removes Back and leaving restores 
 
 for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"])
   test(`every page retains its accessible name without a visible title in ${locale}`, async () => {
-    const { setTitle, setTopActions } = await import("../../src/bmpt/web/js/nav.js");
+    const { setTitle, setTopActions } = await import("../../src/bmpt/web/js/app/nav.js");
     const ui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url))).webui;
     for (const [name, hall] of [
       [ui.top.students, false],

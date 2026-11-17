@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { errorText as sharedErrorText } from "../../src/bmpt/web/js/i18n.js";
-const source = readFileSync(new URL("../../src/bmpt/web/js/main.js", import.meta.url), "utf8");
+const source = readFileSync(new URL("../../src/bmpt/web/js/app/main.js", import.meta.url), "utf8");
 const noGame = source.slice(
   source.indexOf("function noGame()"),
   source.indexOf("\nasync function refreshConfiguration()"),

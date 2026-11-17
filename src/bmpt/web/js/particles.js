@@ -7,7 +7,7 @@
 // and rotation by speed, external forces and limit velocity's drag are not simulated (no system a lobby draws
 // uses them); a system keeps drawing without them.
 
-import { toLinear } from "./touch-fx.js";
+import { toLinear } from "./app/touch-fx.js";
 
 export const WORLD = 1665 / 2; // lobby units per Unity world unit
 export const VIEW_H = 1665; // the game's view height in lobby units (max particle size is a fraction of it)

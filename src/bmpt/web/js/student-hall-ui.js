@@ -2,7 +2,7 @@
 // switch-card renderer.
 import * as NGUI from "./ngui.js";
 import * as Popup from "./popup.js";
-import * as Loading from "./loading.js";
+import * as Loading from "./app/loading.js";
 import { withTimeout } from "./async.js";
 import * as Buttons from "./game-buttons.js";
 import { searchTree, orderBody, toolbarLayout, toolbarTree } from "./roster-widgets.js";

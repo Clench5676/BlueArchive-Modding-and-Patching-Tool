@@ -426,7 +426,7 @@ test("the prompt cards draw the pieces this test measures", () => {
     /markedLabel\(it\.label, \{ fs: LIST_CARD_NAME.fs, fsMin: LIST_CARD_NAME.fsMin, color: "#ffffff\/1\.00", maxW: w - 56 - \(it\.nameEdit \? 60 : 0\), mark: false, maxLines: LIST_CARD_NAME.lines \}\)/,
   );
   assert.match(flat(popup), /export function listLayout[\s\S]*?card: \{ w: 250, h: 226, bar: 68 \}/);
-  const prompts = readFileSync(new URL("../../src/bmpt/web/js/prompts.js", import.meta.url), "utf8");
+  const prompts = readFileSync(new URL("../../src/bmpt/web/js/app/prompts.js", import.meta.url), "utf8");
   assert.doesNotMatch(
     prompts.slice(prompts.indexOf("export function card(")),
     /kindLabel\(entry\)\}`/,

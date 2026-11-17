@@ -3,10 +3,10 @@
 // brings it back. Both are game writer jobs (mods.applyOfficial, mods.restoreConfig) whose end shows the check of the
 // game files against Steam's file list. The pure parts are tested in Node (tests/js/troubleshoot.test.mjs).
 import * as Loading from "./loading.js";
-import * as Popup from "./popup.js";
-import * as ModSwitch from "./mod-switch.js";
-import { rpc, waitJob } from "./api.js";
-import { T } from "./i18n.js";
+import * as Popup from "../popup.js";
+import * as ModSwitch from "../mod-switch.js";
+import { rpc, waitJob } from "../api.js";
+import { T } from "../i18n.js";
 
 const MAX_NAMES = 10; // file names a result lists; the rest are counted
 

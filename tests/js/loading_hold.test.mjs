@@ -86,7 +86,7 @@ globalThis.requestAnimationFrame = (fn) => setTimeout(fn, 0);
 globalThis.fetch = async () => {
   throw new Error("no game assets in this test");
 };
-const Loading = await import("../../src/bmpt/web/js/loading.js");
+const Loading = await import("../../src/bmpt/web/js/app/loading.js");
 const Popup = await import("../../src/bmpt/web/js/popup.js");
 const { freezeWhileLoading } = await import("../../src/bmpt/web/js/preview-lifecycle.js");
 const event = (target = new El(), key) => ({
@@ -656,7 +656,7 @@ test("a full cover hides the native toolbar with the screen; an indicator leaves
 
 test("the toolbar row the lock reaches is the one the window chrome builds, and the cover hides it", () => {
   const chrome = readFileSync(new URL("../../src/bmpt/web/js/window-chrome.js", import.meta.url), "utf8");
-  const loading = readFileSync(new URL("../../src/bmpt/web/js/loading.js", import.meta.url), "utf8");
+  const loading = readFileSync(new URL("../../src/bmpt/web/js/app/loading.js", import.meta.url), "utf8");
   const css = readFileSync(new URL("../../src/bmpt/web/css/app.css", import.meta.url), "utf8");
   assert.match(chrome, /wrapper\.className = ["']window-header["'][\s\S]*unlockHeader = lockOutside\(wrapper\)/);
   assert.match(loading, /export function lockOutside/);

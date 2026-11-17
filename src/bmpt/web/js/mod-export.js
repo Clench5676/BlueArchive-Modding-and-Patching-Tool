@@ -1,7 +1,7 @@
 // Shared ZIP journey: UIPopup_Sort frame and UIPopup_Option_PC / Toggle rows.
 import * as NGUI from "./ngui.js";
 import * as Popup from "./popup.js";
-import * as Loading from "./loading.js";
+import * as Loading from "./app/loading.js";
 import { EXPORT } from "./popup-frames.js";
 import { POPUP_TYPE } from "./ui-tokens.js";
 import { rowBase, radioRow } from "./settings-rows.js";

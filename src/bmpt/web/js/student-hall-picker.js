@@ -1,6 +1,6 @@
 // Portrait rows and the quick-formation memorial picker share the roster's search, filter and sort semantics.
 import * as UI from "./student-hall-ui.js";
-import * as Display from "./display.js";
+import * as Display from "./app/display.js";
 import * as Popup from "./popup.js";
 import { bindReorder, dragFeedback } from "./student-hall-reorder.js";
 import { normalizeView } from "./roster-order.js";

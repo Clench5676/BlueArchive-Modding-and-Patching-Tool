@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { controls } from "./control_prefabs.mjs";
-import { overwrittenLines } from "../../src/bmpt/web/js/repairs.js";
+import { overwrittenLines } from "../../src/bmpt/web/js/app/repairs.js";
 
 const web = new URL("../../src/bmpt/web/js/", import.meta.url);
 const source = readFileSync(new URL("settings-other.js", web), "utf8");

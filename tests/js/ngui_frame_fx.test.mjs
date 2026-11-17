@@ -27,7 +27,7 @@ globalThis.MutationObserver = class {
 const { FRAME_OUTPUT, frameBlend, frameMesh, frameOver, renderFrameEffect } = await import(
   "../../src/bmpt/web/js/ngui-frame-fx.js"
 );
-const { toLinear, toSrgb } = await import("../../src/bmpt/web/js/touch-fx.js");
+const { toLinear, toSrgb } = await import("../../src/bmpt/web/js/app/touch-fx.js");
 const slot = SELECTION_SLOT.split("/").reduce((n, part) => n.children.find((c) => c.name === part), selectionPrefab());
 const effect = selectedFrame(slot, { w: 312, h: 480 }, true, true).children.find((n) => n.frameEffect).frameEffect;
 function setup({ connected = true, glAvailable = true } = {}) {

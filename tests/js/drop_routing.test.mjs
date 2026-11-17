@@ -3,7 +3,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-const main = readFileSync(new URL("../../src/bmpt/web/js/main.js", import.meta.url), "utf8");
+const main = readFileSync(new URL("../../src/bmpt/web/js/app/main.js", import.meta.url), "utf8");
 const block = main.slice(
   main.indexOf("  // Only Import Mod takes files dropped"),
   main.indexOf('  $("top-option").addEventListener'),

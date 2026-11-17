@@ -28,7 +28,7 @@ RENDERERS: dict[str, tuple[str, ...]] = {
         "js/model-fx.js",
         "js/particles.js",
         "js/particles-gl.js",
-        "js/touch-fx.js",
+        "js/app/touch-fx.js",
         "vendor/three-0.160.0/build/three.module.min.js",
         "vendor/three-0.160.0/examples/jsm/loaders/GLTFLoader.js",
         "vendor/three-0.160.0/examples/jsm/utils/BufferGeometryUtils.js",

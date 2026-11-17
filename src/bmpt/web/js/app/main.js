@@ -1,39 +1,39 @@
 // Boot and routing: #/roster (the student list) and #/student/<family>/<variant> (the detail screen). The game's
 // loading screen covers the start and every change of screen until the new one is ready; a change inside the detail
 // screen (a variant chip, the arrows) is covered too, through its first complete frame.
-import { notify } from "./popup.js";
+import { notify } from "../popup.js";
 import * as Consent from "./consent.js";
-import * as BatchImport from "./batch-import.js";
+import * as BatchImport from "../batch-import.js";
 import * as Cursor from "./cursor.js";
-import * as Detail from "./detail.js";
+import * as Detail from "../detail.js";
 import * as Loading from "./loading.js";
-import * as ModSwitch from "./mod-switch.js";
-import * as NGUI from "./ngui.js";
-import * as Popup from "./popup.js";
+import * as ModSwitch from "../mod-switch.js";
+import * as NGUI from "../ngui.js";
+import * as Popup from "../popup.js";
 import * as Prompts from "./prompts.js";
 import * as Impact from "./update-impact.js";
-import * as Roster from "./roster.js";
-import * as StudentHall from "./student-hall.js";
-import * as Settings from "./settings.js";
+import * as Roster from "../roster.js";
+import * as StudentHall from "../student-hall.js";
+import * as Settings from "../settings.js";
 import * as Update from "./update.js";
 import * as Tours from "./tours.js";
-import { on, rpc, spinePrefix } from "./api.js";
-import { setLibraryWaiting } from "./preview-lifecycle.js";
-import { L, T, errorText, setStrings, languageRefresh } from "./i18n.js";
-import { neighbour, visit } from "./roster-order.js";
-import { hasAsset, primaryKind } from "./switch-sources.js";
+import { on, rpc, spinePrefix } from "../api.js";
+import { setLibraryWaiting } from "../preview-lifecycle.js";
+import { L, T, errorText, setStrings, languageRefresh } from "../i18n.js";
+import { neighbour, visit } from "../roster-order.js";
+import { hasAsset, primaryKind } from "../switch-sources.js";
 import { renderNav, setTitle, setTopActions } from "./nav.js";
 import { confirmQuit, quitKey } from "./quit.js";
-import { forget } from "./thumbs.js";
-import { setSpineConsent } from "./spine-runtime.js";
-import { $, fitStage } from "./util.js";
-import { studentName } from "./names.js";
-import { previewCache } from "./preview-cache.js";
+import { forget } from "../thumbs.js";
+import { setSpineConsent } from "../spine-runtime.js";
+import { $, fitStage } from "../util.js";
+import { studentName } from "../names.js";
+import { previewCache } from "../preview-cache.js";
 import { ROOT_ROUTE, routeHistory } from "./route-history.js";
-import { setupWindowChrome } from "./window-chrome.js";
-import { chromeMotion } from "./chrome-motion.js";
-import { installCloseGuard } from "./window-close.js";
-import { installVerticalWheel } from "./horizontal-scroll.js";
+import { setupWindowChrome } from "../window-chrome.js";
+import { chromeMotion } from "../chrome-motion.js";
+import { installCloseGuard } from "../window-close.js";
+import { installVerticalWheel } from "../horizontal-scroll.js";
 
 installCloseGuard({
   prepare: () => StudentHall.canLeave(),

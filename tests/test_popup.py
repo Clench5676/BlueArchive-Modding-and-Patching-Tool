@@ -1,5 +1,5 @@
-"""The shared popups (web/js/popup.js) and the update popup (web/js/update.js) are front-end code: their tests run with
-Node's test runner on a stand-in DOM, skipped where Node is not installed."""
+"""The shared popups (web/js/popup.js) and the update popup (web/js/app/update.js) are front-end code: their tests run
+with Node's test runner on a stand-in DOM, skipped where Node is not installed."""
 
 import json
 import shutil

@@ -9,14 +9,14 @@ import { notify } from "./popup.js";
 import * as ModSwitch from "./mod-switch.js";
 import * as NGUI from "./ngui.js";
 import * as Popup from "./popup.js";
-import * as Prompts from "./prompts.js";
-import * as Impact from "./update-impact.js";
-import * as Consent from "./consent.js";
+import * as Prompts from "./app/prompts.js";
+import * as Impact from "./app/update-impact.js";
+import * as Consent from "./app/consent.js";
 import * as OtherMods from "./settings-other.js";
 import * as ModExport from "./mod-export.js";
-import * as Tours from "./tours.js";
-import * as Troubleshoot from "./troubleshoot.js";
-import * as Update from "./update.js";
+import * as Tours from "./app/tours.js";
+import * as Troubleshoot from "./app/troubleshoot.js";
+import * as Update from "./app/update.js";
 import * as Buttons from "./game-buttons.js";
 import { BACKDROP, XS_BUTTON, TYPE } from "./ui-tokens.js";
 import {
@@ -650,7 +650,7 @@ async function checkUpdate(event) {
   event.currentTarget.disabled = true;
   try {
     await render();
-    const { check } = await import("./update.js");
+    const { check } = await import("./app/update.js");
     await check($("consent"), undefined, {
       // no newer release: the check's only answer (offline and failures go to onError)
       onCheck: (info) => {

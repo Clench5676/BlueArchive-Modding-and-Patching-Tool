@@ -8,12 +8,12 @@ import { segmentTree, segmentOrigin, segmentDensity, SEGMENT_SCALE } from "./mod
 // modal's outcome) are tested in Node (tests/js/mod_switch.test.mjs).
 import { notify } from "./popup.js";
 import * as NGUI from "./ngui.js";
-import * as Consent from "./consent.js";
-import * as Loading from "./loading.js";
+import * as Consent from "./app/consent.js";
+import * as Loading from "./app/loading.js";
 import * as Popup from "./popup.js";
 import { on, rpc, waitJob } from "./api.js";
 import { T, language } from "./i18n.js";
-import { overwrittenLines } from "./repairs.js";
+import { overwrittenLines } from "./app/repairs.js";
 import { $ } from "./util.js";
 
 // --- pure parts ---
@@ -835,7 +835,7 @@ export async function openHelp() {
     details: () => overwritten(),
     // a Go To closes the help, then opens the mod's student page
     held: async ({ close }) => {
-      const Impact = await import("./update-impact.js");
+      const Impact = await import("./app/update-impact.js");
       const answer = await Impact.heldDetails((state || s).heldEntries);
       if (!answer.go && !answer.fix?.length) return;
       close(null);

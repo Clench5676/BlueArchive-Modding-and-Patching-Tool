@@ -1,12 +1,12 @@
 // Feature pages on the notice frame: /asset/ui/layout/UIPopup_Sort.json (Base/BG, Btn_Close, Btn_Cancel, Btn_Ok).
 // Optional images are bundled illustrations of App UI only. Text-only pages need no capture, renderer or download.
-import * as NGUI from "./ngui.js";
-import * as Popup from "./popup.js";
-import * as Buttons from "./game-buttons.js";
-import { rpc } from "./api.js";
-import { T } from "./i18n.js";
-import { FOOTER, POPUP_FOOTER, POPUP_FRAME } from "./ui-tokens.js";
-import { S, wrapPath } from "./util.js";
+import * as NGUI from "../ngui.js";
+import * as Popup from "../popup.js";
+import * as Buttons from "../game-buttons.js";
+import { rpc } from "../api.js";
+import { T } from "../i18n.js";
+import { FOOTER, POPUP_FOOTER, POPUP_FRAME } from "../ui-tokens.js";
+import { S, wrapPath } from "../util.js";
 
 const { node, label, sprite, find } = NGUI;
 // An illustrated page keeps the original frame and content: the frame is as much taller (or shorter) as the
