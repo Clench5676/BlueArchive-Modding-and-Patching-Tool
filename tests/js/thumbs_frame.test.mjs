@@ -18,7 +18,7 @@ test("the face: the parts named like one, else the parts the expressions switch"
     part("halo", box(-243, 157, 1186, 1443), true),
   ];
   assert.deepEqual(faceOf(ako), box(-81, 125, 972, 1127));
-  // a part named like a face wins over the switched ones, as before
+  // a part named like a face wins over the switched ones
   const named = [
     part("01_Normal", box(-100, 100, 900, 1100), true, "default"),
     part("mouth", box(-40, 40, 950, 990), true),

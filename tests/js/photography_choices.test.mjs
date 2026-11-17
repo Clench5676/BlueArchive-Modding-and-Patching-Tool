@@ -1,5 +1,5 @@
-// The camera's mode button exists only when the student has the other mode (UI-16), and its Dialogue / Actions list names a
-// dialogue as the detail screen does, never by its clip name (UI-17). Run by Node's test runner.
+// The camera's mode button exists only when the student has the other mode, and its Dialogue / Actions
+// list names a dialogue as the detail screen does, never by its clip name. Run by Node's test runner.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { compact, flat } from "./helpers/source-text.mjs";
@@ -176,7 +176,8 @@ test("the Dialogue / Actions list captions its buttons through actionCaption in 
   assert.equal(choiceLayout("lobby", 5).columns, 3, "unchanged: the list keeps its geometry");
 });
 
-// Blank space in the Expressions / Actions list is the list's, not the pan surface's: no grab cursor, no pan or zoom there.
+// Blank space in the Expressions / Actions list is the list's, not the pan surface's: no grab cursor, no pan or
+// zoom there.
 const css = flat(readFileSync(new URL("../../src/bmpt/web/css/photography.css", import.meta.url), "utf8"));
 const rule = (selector) =>
   [...css.matchAll(/([^{}]+)\{([^}]*)\}/g)]

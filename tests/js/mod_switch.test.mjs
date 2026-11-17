@@ -575,7 +575,7 @@ test("the switch's view from mods.state: on, off, busy, unavailable with its rea
     MS.view(base({ scan: false, pending: 0, left: 1, unfinished: { pending: 0, left: 1, stuck: 0 } })).dot,
     true,
   );
-  // Legacy visibility values cannot hide the switch; only the absence of a current install does.
+  // A stored visibility value cannot hide the switch; only the absence of a current install does.
   assert.equal(MS.view(base({ shown: false })).hidden, false);
   assert.equal(MS.view(base({ current: null })).hidden, true);
   assert.equal(MS.view(base({ shown: false }), { place: "settings" }).hidden, false, "Settings keeps the switch");
@@ -1486,7 +1486,8 @@ test("the classic modal queues the refused write only when its box is ticked, on
   await until(() => queued() === 2 && called("classic.front").length === 1, "front and queue");
   await tick();
   assert.equal(dialog.hidden, true, "plain confirmations stay silent");
-  // opened on writes already queued (a click on the busy switch): the box ticked; unticked and closed, the queue empties
+  // opened on writes already queued (a click on the busy switch): the box ticked; unticked and closed, the queue
+  // empties
   answers["mods.state"] = base({ busy: true, queued: 2 });
   await MS.refresh();
   MS.click("top");
@@ -1597,7 +1598,8 @@ test("a prompt's cards: the name, the kind and install chips, No Official Copy, 
     [c.key, c.label, c.full, c.chips, c.disabled, c.size],
     [`${GLOBAL}|airi_spr`, "Airi", "Airi", [S("tab.portrait")], false, 100],
   );
-  // the label is the name alone (the kind is the details panel's first chip); a portrait and a lobby are told apart there
+  // the label is the name alone (the kind is the details panel's first chip); a portrait and a lobby are told
+  // apart there
   assert.equal(P.card(entry("hina_home", "reset"), { nameOf }).label, "Hina");
   assert.deepEqual(P.card(entry("hina_home", "reset"), { nameOf }).chips, [S("tab.lobby")]);
   // two installs: the install chip; an alternate lobby core: its suffix after the kind
@@ -1835,7 +1837,7 @@ test("the tray's Back to Official opens the drift prompt: two buttons and no way
   assert.equal(prompt.hidden, true);
   await tick();
   assert.equal(dialog.hidden, true, "plain confirmations stay silent");
-  // nothing back to official any more: the tray's item was stale, the page says so
+  // nothing is left to restore to official: the tray's item was stale, the page says so
   answers["mods.entries"] = [];
   await MS.trayOpen({ view: "drift" });
   await until(() => !Loading.busy(), "scan settled without a confirmation");
@@ -2650,7 +2652,7 @@ test("the entries a game update overwrote that need no repair are applied again;
     Impact.reappliable(entries, result).map((e) => e.core),
     ["airi_spr"],
   );
-  // a repaired copy that took a mod's place: not held any more, unless its student is still configured with the mod
+  // a repaired copy that took a mod's place: not held, unless its student is still configured with the mod
   const fixed = {
     mods: [
       { id: "x", impact: "rig_changed", repaired_id: "y", configured: false },
@@ -2986,7 +2988,8 @@ test("the impact list: a card's click shows it, its corner ticks it; Update and 
     // the corner's box unticks it
     tick("s").click();
     await until(() => tick("s")?.getAttribute("aria-checked") === "false", "unticked");
-    // Update and Apply in the details of Hina's mod (a repaired copy made before): it takes the mod's place, the list stays
+    // Update and Apply in the details of Hina's mod (a repaired copy made before): it takes the mod's place, the
+    // list stays
     walk(prompt)
       .find((e) => e.dataset?.key === "r")
       .click();

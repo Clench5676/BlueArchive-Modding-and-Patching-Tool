@@ -74,9 +74,9 @@ test("moving an element puts the centre of its ink on the bar's centre", () => {
 
 test("every element's ink lands on the bar's centre, from the prefab's geometry and the sprites' drawn rows", () => {
   const centre = Layout.barCentre();
-  // NUITop_Scenes/Top/Right: Lobby (Home) 62 x 59 at y -51.8, Option 60 x 62 at -52.4, Line (1) 4 x 49 at -54.2; nav.js puts
-  // Home's top at 7 and the others at the prefab's offsets from it (units to stage px: 1920 / 2960). Their sprites are drawn
-  // to the edge (alpha rows 0 to the last), so the ink is the box.
+  // NUITop_Scenes/Top/Right: Lobby (Home) 62 x 59 at y -51.8, Option 60 x 62 at -52.4, Line (1) 4 x 49 at -54.2;
+  // nav.js puts Home's top at 7 and the others at the prefab's offsets from it (units to stage px: 1920 / 2960).
+  // Their sprites are drawn to the edge (alpha rows 0 to the last), so the ink is the box.
   const home = { y: -51.8, h: 59 },
     option = { y: -52.4, h: 62 },
     line = { y: -54.2, h: 49 };
@@ -95,8 +95,9 @@ test("every element's ink lands on the bar's centre, from the prefab's geometry 
     const dy = Layout.moveBy(centre, ink);
     near((ink.top + dy + ink.bottom + dy) / 2, centre);
   }
-  // Left side: flex centres each box on the bar's centre; what is left to move is the ink's own offset inside its box.
-  // The switch: segments 38 (pressed) and 40 (normal, its last 4 of 80 rows are shadow) high, all drawn from the box's top.
+  // Left side: flex centres each box on the bar's centre; what is left to move is the ink's own offset inside its
+  // box. The switch: segments 38 (pressed) and 40 (normal, its last 4 of 80 rows are shadow) high, all drawn from
+  // the box's top.
   const toggle = Layout.extent([
     Layout.inkRect({ top: 12, bottom: 50 }, { top: 0, bottom: 25, height: 25 }),
     Layout.inkRect({ top: 12, bottom: 52 }, { top: 0, bottom: 76, height: 80 }),

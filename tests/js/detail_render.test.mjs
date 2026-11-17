@@ -520,7 +520,7 @@ for (const path of [
   "Pin/Pin_Off/Bg/Icon/Label_Locale",
 ])
   add(`${PLATE}/${path}`);
-// These synthetic holders now supply the dimensions the composed layouts measure from their prefab widgets.
+// These synthetic holders supply the dimensions the composed layouts measure from their prefab widgets.
 Object.assign(add(`${PLATE}/BG`).widgets[0], { w_: 1000, h_: 120, pivot: 6, incline: 10 });
 add(`${PLATE}/BG`).pos = [0, 234];
 Object.assign(add(`${INFO}/Weapon/Equip_1/UIEquipmentCard/Btn_Target/Normal/Card_Bg`).widgets[0], { w_: 778, h_: 209 });
@@ -3635,7 +3635,7 @@ for (const lang of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"])
     }
   });
 
-// --- UI-13: accessible names and pressed states of the detail screen's controls, from the locale files ---
+// --- accessible names and pressed states of the detail screen's controls, from the locale files ---
 const everyLocale = ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"];
 
 test("the student arrows, the copy button and the variant chips are named, and the shown chip is pressed, in every locale", async (t) => {
@@ -3797,7 +3797,7 @@ test("the expression strip's cards, its pile and Collapse are named, and the pic
   }
 });
 
-// --- UI-33: the unfolded expression strip scrolls with the wheel through horizontalScroll, as Popup.scrollArea does ---
+// --- the unfolded expression strip scrolls with the wheel through horizontalScroll, as Popup.scrollArea does ---
 test("the unfolded expression strip takes the wheel and a drag picks no face", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   try {
@@ -3867,7 +3867,7 @@ test("the unfolded expression strip takes the wheel and a drag picks no face", a
   }
 });
 
-// --- UI-19: the Show in Finder / Explorer button is drawn from explorer-button.js's layout, in every locale ---
+// --- the Show in Finder / Explorer button is drawn from explorer-button.js's layout, in every locale ---
 test("the Show in Finder button's caption and folder icon are placed by the explorer layout in every locale", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   const { explorerLayout } = await import("../../src/bmpt/web/js/explorer-button.js");
@@ -4014,7 +4014,8 @@ for (const lang of ["en-US", "zh-CN"])
     }
   });
 
-// --- design tokens, item E: the nameplate's chips are the prefab chip (Char_Target/Type/MainType/BG): 272 x 72, caption 40 down to 28 ---
+// --- design tokens, item E: the nameplate's chips are the prefab chip (Char_Target/Type/MainType/BG): 272 x 72,
+// caption 40 down to 28 ---
 test("variant chips are 272 x 72 with the caption at 40 down to 28, the second column 290 on", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   const { CHIP } = await import("../../src/bmpt/web/js/ui-tokens.js");
@@ -4072,8 +4073,9 @@ test("variant chips are 272 x 72 with the caption at 40 down to 28, the second c
 // the game puts it they stay in the white panel under the dark band, whatever the name and the language ---
 test("variant chips stay under the nameplate's band, in the plate's prefab frame, for short and long names in every locale", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
-  // UICharacterDetail of the 2026-11 game build: LeftInfo at (0, 1) and CharInfo at (-1480, -743) put Char_Target at
-  // (-1480, -742); its BG (906 x 171, bottom-left pivot) ends at y 226 and BG2 (886 x 202, top-centre pivot) starts at 234
+  // UICharacterDetail of the 2026-11 game build: LeftInfo at (0, 1) and CharInfo at (-1480, -743) put Char_Target
+  // at (-1480, -742); its BG (906 x 171, bottom-left pivot) ends at y 226 and BG2 (886 x 202, top-centre pivot)
+  // starts at 234
   const leftInfo = add("LeftInfo"),
     charInfo = add("LeftInfo/CharInfo"),
     plate = add(PLATE),

@@ -264,7 +264,7 @@ const screenOf = (v, W, H) => {
 const place = (v) => [(G.x - v.x) / v.w, (G.y - v.y) / v.h, G.w / v.w, G.h / v.h];
 
 test("the game's screen on the canvas: the canvas itself in the game's view, its place in any other view", () => {
-  // fullscreen in the game's view: exactly the canvas (the shader then reads as before), at any 16:9 drawing buffer
+  // fullscreen in the game's view: exactly the canvas, at any 16:9 drawing buffer
   for (const [W, H] of [
     [1920, 1080],
     [3840, 2160],
@@ -304,7 +304,7 @@ test("the pass places the post-processing in the game's screen, at the screen's 
   p.sceneRenderer.camera = camera(v, 64, 32);
   const tall = frameUniforms(gl, p);
   closeAll(tall.panini.slice(0, 2), [(Math.tan(Math.PI / 36) * 16) / 9, Math.tan(Math.PI / 36)]);
-  // without a screen the canvas's own shape, as before
+  // without a screen the canvas's own shape applies
   Linear.setScreen(p, null);
   closeAll(frameUniforms(gl, p).panini.slice(0, 2), [Math.tan(Math.PI / 36) * 2, Math.tan(Math.PI / 36)]);
   assert.deepEqual(frameUniforms(gl, p).screen, [0, 0, 1, 1]);

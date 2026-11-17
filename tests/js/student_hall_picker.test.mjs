@@ -168,7 +168,7 @@ test("adding a memorial disables its current control synchronously and the redra
   picker.close();
 });
 
-// UI-34: Escape in the picker's search box closes the search (as its toolbar button does) and the picker stays
+// Escape in the picker's search box closes the search (as its toolbar button does) and the picker stays
 test("Escape in the picker's search closes the search and clears it; the picker stays", async () => {
   const fixture = globalThis.pickerFixture.UI,
     saved = { rosterToolbar: fixture.rosterToolbar, search: fixture.search };

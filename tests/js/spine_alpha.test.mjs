@@ -122,7 +122,7 @@ test("the bundled renderer keeps 0.2.0 edge colours and declared slot blends acr
       modes.map((_, i) => [i, false]),
     );
     for (const vertices of calls) near(vertices.slice(2, 6), [1, 1, 1, 128 / 255]);
-    // A normal edge uses the same straight texture and vertex alpha as 0.2.0, regardless of page.pma.
+    // A normal edge uses the straight texture and vertex alpha of the plain runtime, regardless of page.pma.
     const edge = [200, 100, 50, 128].map((v) => v / 255);
     near(
       edge.slice(0, 3).map((c, i) => c * calls[0][i + 2] * edge[3] * calls[0][5]),

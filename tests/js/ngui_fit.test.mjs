@@ -12,7 +12,8 @@ const ctx = {
   font: "",
   measureText(s) {
     const fs = parseFloat(/([\d.]+)px/.exec(this.font)[1]);
-    // metrics for inkShift: ink 0.72 above the baseline (0.2 below for a letter with a descender), the font's box 1.16 above and 0.29 below
+    // metrics for inkShift: ink 0.72 above the baseline (0.2 below for a letter with a descender), the font's box
+    // 1.16 above and 0.29 below
     return {
       width: [...s].reduce((w, c) => w + (WIDE.test(c) ? fs : fs / 2), 0),
       actualBoundingBoxAscent: 0.72 * fs,
@@ -191,7 +192,7 @@ test("one long word goes below the size range instead of running past its box", 
   assert.equal(fitText("Compatibility", 40, 26, 140, 2).fs, 18);
   // a one-line cell still keeps its floor (its caller clips)
   assert.equal(fitText("Compatibility", 40, 26, 100, 1).fs, 26);
-  // and where not even half the minimum fits, the old floor stays
+  // and where not even half the minimum fits, the floor (18) holds
   assert.equal(fitText("Compatibility", 40, 26, 40, 2).fs, 18);
 });
 

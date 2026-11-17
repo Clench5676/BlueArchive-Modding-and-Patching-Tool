@@ -398,8 +398,8 @@ test("standard Windows title bar leaves the prefab in the stage without native c
 });
 
 test("a refused layout goes to the report and is sent again on the next layout pass", async () => {
-  // The layout used to be remembered before the native side took it, so a refused one was never sent again
-  // and the top bar kept the old (often empty) drag regions.
+  // The layout must not be remembered before the native side has taken it: a refused one has to be sent again,
+  // or the top bar keeps stale (often empty) drag regions.
   snapshot = {
     active: true,
     valid: true,

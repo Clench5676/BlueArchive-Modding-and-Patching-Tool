@@ -254,7 +254,8 @@ for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"])
               leftCamera++;
             },
             switchMode() {},
-            // the student has both modes, so the mode button is drawn (the test of its omission is photography_choices.test.mjs)
+            // the student has both modes, so the mode button is drawn (the test of its omission is
+            // photography_choices.test.mjs)
             bridge: {
               info: () => ({ hasPortrait: true, hasLobby: true }),
               playbackTree: () => ({

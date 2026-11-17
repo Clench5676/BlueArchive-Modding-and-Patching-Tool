@@ -181,7 +181,7 @@ test("prefab and dependency source events refresh the model while foreign cores 
   }
 });
 
-// FUN-26 for the detail screen: a family read waits for the job that holds the library lock, and an old read never
+// On the detail screen a family read waits for the job that holds the library lock, and an old read never
 // replaces a newer family
 test("the family read has no deadline of its own: it waits for a job that holds the library lock", async () => {
   const line = source.split("\n").find((l) => l.startsWith("const readFamily ="));

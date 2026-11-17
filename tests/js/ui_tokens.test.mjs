@@ -1,5 +1,6 @@
-// The design tokens (web/js/ui-tokens.js): one place for the numbers and colours that popups, buttons, chips and the style
-// sheets share. The prefab values behind them are checked by tests/test_ui_tokens.py against the development view.
+// The design tokens (web/js/ui-tokens.js): one place for the numbers and colours that popups, buttons, chips and
+// the style sheets share. The prefab values behind them are checked by tests/test_ui_tokens.py against the
+// development view.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { flat } from "./helpers/source-text.mjs";
@@ -44,7 +45,8 @@ test("the small button and the chip are the prefab nodes' sizes, their pitches f
   assert.equal(CHIP.pitch - CHIP.w, CHIP.gap);
 });
 
-// --- the measuring stand-in the fit tests share (button_row_fit.test.mjs): a CJK or Thai code point one em, anything else half ---
+// --- the measuring stand-in the fit tests share (button_row_fit.test.mjs): a CJK or Thai code point one em,
+// anything else half ---
 const WIDE = /[\u2e80-\u9fff\u3000-\u30ff\uff00-\uffef\uac00-\ud7af\u0e00-\u0e7f]/;
 const ctx = {
   font: "",
@@ -75,7 +77,8 @@ test("the app's small button defaults to the XS 308 x 104 at 40 down to 28, its 
   const label = labelOf(tree);
   assert.deepEqual([label.w_, label.h_], [308 - B.boxInsetW, 104 - B.boxInsetH]);
   assert.equal(label.fontSize, 40);
-  // a long caption wraps, then shrinks, inside the fit width (w - 46) and the box height, never under 28 while it can hold
+  // a long caption wraps, then shrinks, inside the fit width (w - 46) and the box height, never under 28 while it
+  // can hold
   const long = labelOf(smallButton("B", 0, 0, "Clear the cache"));
   const widest = Math.max(...long.text.split("\n").map((line) => NGUI.glyphWidth(line, long.fontSize)));
   assert.ok(widest <= 308 - B.fitInset && long.fontSize <= 40 && long.fontSize >= B.fsMin);
@@ -112,7 +115,7 @@ test("stopped memorial sites explicitly retain their existing button boxes and c
   );
   assert.match(hall, /actions.map\(\(action, index\) => retainedButton/);
   assert.match(hall, /kind === "spr" \? button : retainedButton/);
-  // the queue's Remove is a trash button over the card now
+  // the queue's Remove is a trash button over the card
   assert.match(src("js/student-hall-picker.js"), /UI\.trashButton\(box, `Remove/);
   assert.match(src("js/student-hall.js"), /UI\.button\(destination, "HallPortraitScaleReset"/);
 });
@@ -282,7 +285,7 @@ test("the plain popup and its parts sit on the ladder, and the three fallback bu
     assert.doesNotMatch(declarations, /skew|transform|box-shadow|text-shadow/);
   }
   assert.deepEqual([B.fill, B.ink, B.radiusPx], ["#8de4ff", "#314665", 6.49]);
-  // The lobby now draws the prefab balloon; its CSS host has only geometry and motion.
+  // The lobby draws the prefab balloon; its CSS host has only geometry and motion.
   assert.doesNotMatch(ruleStarting(css, ".lobby-subtitle"), /border-radius|background|color|font|padding/);
   assert.match(css, /\.loading-fallback i \{[^}]*border-radius: 50%/);
 });
@@ -316,8 +319,9 @@ const FOOTERS = [
   ["btn.delete", "popup.cancel"],
   ["recovery.report", "picker.ok"],
 ];
-// Captions that do not hold the range's 48 in a 400 box on two lines in this file's stand-in canvas (a code point of Thai a full em,
-// Latin half an em): the shared fit takes the group under 48, never past the box. Named here so that they are seen, not hidden.
+// Captions that do not hold the range's 48 in a 400 box on two lines in this file's stand-in canvas (a code
+// point of Thai a full em, Latin half an em): the shared fit takes the group under 48, never past the box. Named
+// here so that they are seen, not hidden.
 const BELOW_MINIMUM = {
   "th-TH": [
     "update.later/update.notes/update.now",
@@ -370,7 +374,7 @@ for (const locale of locales)
     }
   });
 
-// Hall modals use the shared footer; the memorial editor still hits its full-row stop rule.
+// Hall modals use the shared footer; the memorial editor hits its full-row stop rule.
 const popupSource = read("js/popup.js");
 const footerHelpers = new Function(
   "CONTROL",
@@ -571,7 +575,8 @@ const HALL_FOOTERS = [
   ["popup.cancel", "hall.useBackground"],
   ["hall.keepEditing", "hall.discard", "hall.saveLeave"],
 ];
-// The default M footer's bodies follow the captions, so no caption needs a named allowance below the footer's floor any more.
+// The default M footer's bodies follow the captions, so no caption needs a named allowance below the footer's
+// floor.
 for (const locale of ["en-US", "th-TH", "zh-CN", "zh-TW", "ja-JP", "ko-KR"])
   test(`Hall footer captions share one size, keep every character and need no allowance in ${locale}`, () => {
     const web = JSON.parse(readSync(new URL(`${locale}.json`, LOCALE_DIR), "utf8")).webui;
@@ -789,7 +794,8 @@ for (const locale of ["en-US", "th-TH", "zh-CN", "zh-TW", "ja-JP", "ko-KR"])
       [["hall.add", "hall.added"], (720 - 22) * 0.39],
     ]) {
       const captions = keys.map((key) => key.split(".").reduce((value, part) => value[part], web));
-      // the footer's body is as wide as its caption needs, never under COMPACT_FOOTER_W and never wider than the old buttonL footer
+      // the footer's body is as wide as its caption needs, never under COMPACT_FOOTER_W and never wider than the
+      // buttonL footer
       if (width === "footer") {
         width = hallControls.compactFooterWidth(captions);
         assert.ok(
@@ -849,8 +855,9 @@ test("Hall first-run body and caption bounds scale together at supported window 
     }
 });
 
-// Design system, the Hall's toolbars and selectors (student-hall-ui.js): a Hall button is a buttonS control, buttons of one row share
-// one height and one caption size, and the portrait picker and its rows are stacks laid out flush.
+// Design system, the Hall's toolbars and selectors (student-hall-ui.js): a Hall button is a buttonS control,
+// buttons of one row share one height and one caption size, and the portrait picker and its rows are stacks laid
+// out flush.
 for (const locale of ["en-US", "zh-CN"])
   test(`Hall buttons are buttonS controls with one caption size per row, and the picker and its rows are stacks in ${locale}`, () => {
     const web = JSON.parse(readSync(new URL(`${locale}.json`, LOCALE_DIR), "utf8")).webui,
@@ -896,8 +903,8 @@ for (const locale of ["en-US", "zh-CN"])
       assert.equal(size, fits[0].fs);
       assert.ok(size >= Tokens.XS_BUTTON.fsMin && size <= C.fs);
     }
-    // the picker: a column from the header band's foot, SPACE.l between its parts: the head panel (the bar and, when open, the search
-    // field, flush), the list and the footer
+    // the picker: a column from the header band's foot, SPACE.l between its parts: the head panel (the bar and, when
+    // open, the search field, flush), the list and the footer
     const layout = modalLayoutFor(web),
       gap = Tokens.SPACE.l * S,
       width = (Tokens.POPUP_FRAME.L.w - 2 * Tokens.SPACE.xl) * S,
@@ -922,7 +929,8 @@ for (const locale of ["en-US", "zh-CN"])
       ])
         near(got, want);
     }
-    // the portrait row: the artwork down to its name strip, 8 px, a compact body (half a buttonS body), then the scrollbar's 20-unit band (SPACE.m)
+    // the portrait row: the artwork down to its name strip, 8 px, a compact body (half a buttonS body), then the
+    // scrollbar's 20-unit band (SPACE.m)
     const row = layout.portraitRowLayout(),
       strip = 22 + 2 * 34 * 1.2;
     near(row.height, row.cardY + (300 + 10 + strip) * 0.46 + 8 + (C.h / 2) * S + Tokens.SPACE.m * S);

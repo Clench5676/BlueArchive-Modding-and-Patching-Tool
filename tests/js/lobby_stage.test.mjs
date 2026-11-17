@@ -356,7 +356,7 @@ function frame(p) {
   p.sceneRenderer.drawSkeleton(p.skeleton, false);
   p.sceneRenderer.end();
 }
-// a stand-in for particles-gl.js: effects after the given steps of their owner
+// a stand-in for particles-gl.js: effects that run after the given steps of their host
 function fakeFx(after, log) {
   return {
     layers(players, list) {
@@ -446,7 +446,7 @@ test("the guests draw with the host's context and only through the host, posed b
     guest.skeleton.drawOrder.every((s) => s.attachment),
     "every attachment is given back",
   );
-  // for checks: the order drawn, and the old one (each skeleton whole) in the same context
+  // for checks: the order drawn, and the whole-skeleton order (interleaving off) in the same context
   assert.deepEqual(
     Stage.drawn().map(([n, q, fxAfter]) => `${n} ${q}${fxAfter ? " +fx" : ""}`),
     [
@@ -629,7 +629,8 @@ test("a scene only the intro shows draws nothing while hidden, and the effects o
 test("the guests' slot colours are tinted for linear light around the host's draw, and given back", () => {
   const { players } = lobby(SHIGURE, [[["a", "Shigure_home"]], [["b", "Shigure_00"]], [["c", "Shigure_01"]]], null);
   const [host, guest] = players;
-  // every slot white but the guest's, a 0.5 grey: decoded from sRGB while the host draws it, as the game's shader sees it
+  // every slot white but the guest's, a 0.5 grey: decoded from sRGB while the host draws it, as the game's shader
+  // sees it
   const grey = (v) => ({
     r: v,
     g: v,

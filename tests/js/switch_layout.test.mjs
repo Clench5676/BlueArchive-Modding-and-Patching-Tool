@@ -1,6 +1,6 @@
-// The switch cards' grid (switch-layout.js) is laid out in a container (the paper
-// less SPACE.xl on every side), a row of columns and a stack of rows; the least gap between cards, across and down, is SPACE.xl.
-// The cards carry no text, so the checks hold in every language; they run at the standard width (1818) and at a narrow and a wide one.
+// The switch cards' grid (switch-layout.js) is laid out in a container (the paper less SPACE.xl on every side), a row
+// of columns and a stack of rows; the least gap between cards, across and down, is SPACE.xl. The cards carry no text,
+// so the checks hold in every language; they run at the standard width (1818) and at a narrow and a wide one.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { SPACE } from "../../src/bmpt/web/js/ui-tokens.js";
@@ -13,8 +13,8 @@ import {
 } from "../../src/bmpt/web/js/switch-layout.js";
 
 const near = (a, b, eps = 1e-6) => assert.ok(Math.abs(a - b) < eps, `${a} != ${b}`);
-// a card's tree as popup.js builds it, reduced to what the layout reads: the body (card.w x card.h) and the name band under it,
-// both inclined 10 degrees as the prefab's are
+// a card's tree as popup.js builds it, reduced to what the layout reads: the body (card.w x card.h) and the name
+// band under it, both inclined 10 degrees as the prefab's are
 const cardTree = ({ w, h, bar }) => ({
   name: "Card",
   pos: [0, 0],

@@ -68,7 +68,7 @@ globalThis.document = {
 globalThis.window = new EventTarget();
 globalThis.requestAnimationFrame = (done) => {
   scheduledFrames++;
-  // A background window has no usable RAF clock. Foreground players can still load normally in the old code.
+  // A background window has no usable RAF clock. Foreground players load normally.
   return focused && !hidden ? setTimeout(done, 16) : 0;
 };
 globalThis.URL.createObjectURL = () => `blob:runtime-${++nextBlob}`;

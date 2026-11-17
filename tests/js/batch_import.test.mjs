@@ -1542,8 +1542,8 @@ test("the page clones runtime Items/Mailbox widgets and has no invented empty pr
   assert.doesNotMatch(rules, /border-radius|box-shadow|#[0-9a-f]{3,8}|linear-gradient|drop-shadow/i);
 });
 
-// the kind (Portrait, Memorial Lobby, 3D) is on the name's line: right aligned on the divider's end, its box centred on the
-// name's
+// the kind (Portrait, Memorial Lobby, 3D) is on the name's line: right aligned on the divider's end, its box
+// centred on the name's
 const boxCentreY = (node) => {
   const w = node.widgets.find((w) => "text" in w);
   return node.pos[1] + ([-1, 0, 1][Math.floor((w.pivot ?? 4) / 3)] * w.h_) / 2;
@@ -2073,7 +2073,8 @@ test("buttons side by side share one caption size: the list's tools, and Advance
   const captions = ["Add Files", "Add Folder", "Select All", "Deselect All", "Remove", "Remove Imported", "Clear"];
   const widths = [174, 190, 126, 140, 150, 224, 156].map((width) => width / TOOL_SCALE);
   const size = art.buttonSize(captions, widths);
-  // the prefab's own size (Btn_Receive) down to 70 %, each caption's room XS_BUTTON.fitInset less than its button, inside the body less XS_BUTTON.boxInsetH
+  // the prefab's own size (Btn_Receive) down to 70 %, each caption's room XS_BUTTON.fitInset less than its button,
+  // inside the body less XS_BUTTON.boxInsetH
   const body = find(layouts.UIMailBoxContent, "List_01/Btn_Receive"),
     label = find(body, "Label_Locale").widgets.find((w) => "text" in w);
   assert.equal(asked[0].max, label.fontSize);
@@ -2096,7 +2097,7 @@ test("buttons side by side share one caption size: the list's tools, and Advance
   });
   assert.equal(new Set(sizes).size, 1, `one size on every button: ${sizes}`);
   assert.equal(sizes[0], size);
-  // without a shared size a button fits its own caption as before
+  // without a shared size a button fits its own caption
   const alone = art.button("Remove Imported", widths[5]);
   assert.ok(
     treeNodes(alone)
@@ -2179,11 +2180,13 @@ inLocales(
       closeTo(rect[3], BUTTON_BODY_H * TOOL_SCALE);
       if (i) closeTo(rect[0] - rects[i - 1][0] - rects[i - 1][2], gap);
     }
-    // each tool keeps the share of the strip its caption was fitted to: widths 174 190 126 140 150 224 156 in the same proportions
+    // each tool keeps the share of the strip its caption was fitted to: widths 174 190 126 140 150 224 156 in the
+    // same proportions
     const shares = [174, 190, 126, 140, 150, 224, 156],
       total = shares.reduce((sum, share) => sum + share, 0);
     shares.forEach((share, i) => closeTo(rects[i][2], (share / total) * (1220 - 6 * gap)));
-    // the row under the list ends where the tools do, and its four slots (Fill All, Advanced Options, Recheck, Import) are SPACE.m apart
+    // the row under the list ends where the tools do, and its four slots (Fill All, Advanced Options, Recheck,
+    // Import) are SPACE.m apart
     const row = ["options", "recheck", "start"].map((key) => rectOf(h.action(key))),
       fill = rectOf(h.action("fillAll"));
     closeTo(row[2][0] + row[2][2], 602 + list[0] + list[2]);
@@ -2214,8 +2217,8 @@ inLocales(
     closeTo(left, 960 - (POPUP_FRAME.L.w / 2) * S + SPACE.xl * S);
     closeTo(width, inner.w * S);
     closeTo(left + width / 2, 960);
-    // the stack: Settings' rows, OPTION_WIDTH wide, centred in the area less its 16 px for the scrollbar, SPACE.l apart, with the
-    // hint and the error line after them
+    // the stack: Settings' rows, OPTION_WIDTH wide, centred in the area less its 16 px for the scrollbar, SPACE.l
+    // apart, with the hint and the error line after them
     const body = h.dialog.querySelector(".import-options"),
       parts = body.children;
     assert.equal(parts.length, 11 + 2);
@@ -2463,7 +2466,7 @@ test("the Items header retains its own control sizes, transforms and states with
   assert.deepEqual(h.layouts, h.layoutSnapshot);
 });
 
-// Include each inclined sprite's overhang; checking only the button rectangles missed earlier regressions.
+// Include each inclined sprite's overhang: the button rectangles alone do not show it.
 function artworkBounds(h, element, predicate = () => true) {
   const { tree } = drawn(h, element);
   return element.art.children
@@ -3737,8 +3740,8 @@ for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"])
       }
     });
 
-// UI-3: a failed row's note is its short reason and the localized error text; the code and parameters stay on the result
-// and the list entry
+// a failed row's note is its short reason and the localized error text; the code and parameters stay on
+// the result and the list entry
 for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"])
   test(`failed result notes show the localized text only, never a code or JSON, in ${locale}`, async () => {
     try {
@@ -3888,7 +3891,8 @@ test("a blocked row's badge gives the short reason and its details keep the erro
     path = "/profile/input/refused.bundle";
   await h.analyze([{ ...entry("a", "blocked"), reason: "dev_path_outside", params: { path } }]);
   const { tree } = drawn(h, h.row("a"));
-  // a reason without a short label, whose text needs parameters: Import Check Failed on the badge, nothing under the metadata
+  // a reason without a short label, whose text needs parameters: Import Check Failed on the badge, nothing under
+  // the metadata
   assert.equal(
     find(tree, "TimeLimit/Label_Locale_TimeLimit").widgets[0].text.replace(/\n/g, ""),
     "Cannot Import - Import Check Failed",
@@ -4090,7 +4094,8 @@ for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
       const h = await fixture();
       await h.analyze(reasons.map((reason, index) => ({ ...entry(`blocked-${index}`, "blocked"), reason })));
       for (const [index, reason] of reasons.entries()) {
-        // (this fixture measures every character full width, so a long badge may wrap here; import_badge_ink measures it)
+        // (this fixture measures every character full width, so a long badge may wrap here; import_badge_ink measures
+        // it)
         const { tree } = drawn(h, h.row(`blocked-${index}`)),
           badge = find(tree, "TimeLimit/Label_Locale_TimeLimit").widgets[0].text.replace(/\n/g, "");
         assert.equal(badge, `${strings.webui.import.state.blocked} - ${strings.webui.import.reason[reason]}`);
@@ -4329,7 +4334,7 @@ test("Assign Character scrolls in one area: no scroller inside it, paging goes b
   }
 });
 
-// --- UI-13: Assign Character's page arrows are named by the pages they turn, not by their painted glyphs ---
+// --- Assign Character's page arrows are named by the pages they turn, not by their painted glyphs ---
 test("Assign Character's previous and next page buttons are named in every language and keep their painted arrows", async () => {
   const unknown = { ...entry("unidentified", "blocked", "lobby"), variant: null, reason: "mod_target_unknown" };
   try {

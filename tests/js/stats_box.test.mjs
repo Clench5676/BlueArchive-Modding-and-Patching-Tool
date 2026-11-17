@@ -1,6 +1,6 @@
-// The light stats box component (web/js/stats-box.js): pure layout from a width and rows to nodes and a height. The
-// sites that draw through it are checked in popup.test.mjs (the details panel, the file details, the messages, the update
-// dialog); the tokens against the prefab in tests/test_ui_tokens.py.
+// The light stats box component (web/js/stats-box.js): pure layout from a width and rows to nodes and a height.
+// The sites that draw through it are checked in popup.test.mjs (the details panel, the file details, the
+// messages, the update dialog); the tokens against the prefab in tests/test_ui_tokens.py.
 import assert from "node:assert/strict";
 import { flat } from "./helpers/source-text.mjs";
 import { readFileSync, readdirSync } from "node:fs";
@@ -228,7 +228,8 @@ test("the module touches no page: it uses the text measure, the path wrap and th
   );
 });
 
-// --- no site paints the light box by hand: the fill's colour is written in the tokens and nowhere else but the tour image slot ---
+// --- no site paints the light box by hand: the fill's colour is written in the tokens and nowhere else but the
+// tour image slot ---
 const sources = (dir, ext) =>
   readdirSync(new URL(dir, WEB), { withFileTypes: true }).flatMap((entry) =>
     entry.isDirectory()
