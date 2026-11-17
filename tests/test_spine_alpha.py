@@ -1,4 +1,6 @@
-"""Pin the 0.2.0 atlas and PNG export, independent of material alpha declarations."""
+"""Pin the atlas and PNG export, independent of material alpha declarations.
+
+The pixels and the atlas text pass through unchanged."""
 
 from contextlib import contextmanager
 from io import BytesIO

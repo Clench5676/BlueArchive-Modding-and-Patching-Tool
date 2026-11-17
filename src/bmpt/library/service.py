@@ -173,8 +173,10 @@ def _app_version() -> str:
 
 
 def _game_folder(game_file: Path) -> Path:
-    """The game folder a game file is in, as the settings name it: its resource folder less the subfolder the search
-    looks in (searching.SEARCH_DIR_SUFFIXES)."""
+    """Name the game folder a game file is in, as the settings name it.
+
+    That is its resource folder less the subfolder the search looks in (searching.SEARCH_DIR_SUFFIXES).
+    """
     folder = game_file.parent
     for suffix in sorted(filter(None, SEARCH_DIR_SUFFIXES), key=len, reverse=True):
         parts = tuple(part.lower() for part in Path(suffix).parts)
@@ -189,9 +191,12 @@ _background = threading.local()
 
 
 class _LibraryLock:
-    """The library's lock (re-entrant) that notes when any caller but background work (``_background``) last took or
-    gave it back: what background work steps aside for (``ModLibrary._yield_to_foreground``); and when any caller but
-    background work and a paced job did: what a paced job lets in between its steps (``ModLibrary._let_others_in``)."""
+    """The library's re-entrant lock, which notes when callers last took or gave it back.
+
+    It notes when any caller but background work (``_background``) last took or gave it back: what background work steps
+    aside for (``ModLibrary._yield_to_foreground``); and when any caller but background work and a paced job did: what a
+    paced job lets in between its steps (``ModLibrary._let_others_in``).
+    """
 
     def __init__(self) -> None:
         self._lock = threading.RLock()
@@ -260,9 +265,15 @@ class _LibraryLock:
         self._note()
 
     def step_aside(self, longest: float = STEP_ASIDE) -> float:
-        """Between two steps of a job that holds the lock (however often it took it): when a caller waits for it,
-        give the lock up whole until that caller has it, at most ``longest`` seconds, then take it back, blocking
-        while that caller works. How long it waited; nothing when nobody waits or this thread does not hold it."""
+        """Give up the lock between two steps of a job while another caller waits for it.
+
+        Between two steps of a job that holds the lock (however often it took it): when a caller waits for it, give the
+        lock up whole until that caller has it, at most ``longest`` seconds, then take it back, blocking while that
+        caller works.
+
+        Returns:
+            How long it waited; nothing when nobody waits or this thread does not hold the lock.
+        """
         release = getattr(self._lock, "_release_save", None)
         restore = getattr(self._lock, "_acquire_restore", None)
         owned = getattr(self._lock, "_is_owned", None)
@@ -285,9 +296,11 @@ class _LibraryLock:
 
 
 def _serialized(method: Callable) -> Callable:
-    """Run a public method under the library lock, after bringing the state up to date. A pending journal is
-    recovered if it can be, and never fails the call: reads work, and a write is refused by its own gates
-    (``ModLibrary._check_recovery``) with the real failure."""
+    """Run a public method under the library lock, after bringing the state up to date.
+
+    A pending journal is recovered if it can be, and never fails the call: reads work, and a write is refused by its own
+    gates (``ModLibrary._check_recovery``) with the real failure.
+    """
 
     @wraps(method)
     def call(self: ModLibrary, *args: Any, **kwargs: Any) -> Any:
@@ -353,7 +366,8 @@ class _Reading:
     ``kind``: ``ok`` (the file), ``missing`` (no file: an empty library), ``prev`` (the file is unreadable, its
     previous copy was read instead), ``corrupt`` (neither is readable), ``newer`` (a version above 1) or ``io`` (the
     file could not be opened: not a verdict on its contents). ``state`` is (records, favourites, applied, migrations,
-    held records); ``error`` is set for ``corrupt``, ``newer`` and ``io``."""
+    held records); ``error`` is set for ``corrupt``, ``newer`` and ``io``.
+    """
 
     kind: str
     state: tuple | None = None
@@ -371,9 +385,12 @@ def _held_id(raw: Any) -> str | None:
 
 
 def _held_after(disk_held: list, records: dict, base: dict, mine: dict) -> list:
-    """The held records to write after a merge: the disk copy's, less those whose id is among the merged ``records``
-    and those this instance removed since ``base`` (in ``base``, not in ``mine``). A record without a usable id is
-    always kept: nothing can say it was removed."""
+    """Pick the held records to write after a merge.
+
+    They are the disk copy's, less those whose id is among the merged ``records`` and those this instance removed since
+    ``base`` (in ``base``, not in ``mine``). A record without a usable id is always kept: nothing can say it was
+    removed.
+    """
     removed = base.keys() - mine.keys()
     kept = []
     for raw in disk_held:
@@ -385,10 +402,13 @@ def _held_after(disk_held: list, records: dict, base: dict, mine: dict) -> list:
 
 @dataclass
 class _CostumeInputs:
-    """What a costume build reads of the library, gathered under its lock (``ModLibrary._costume_inputs``) so the
-    build itself can run without it (``costume_preview``): the bytes to stage for each part of the model slot, the
-    source model's files, the CAB index, the slot's dev name, and the rule that gives the official copy of a
-    dependency the build finds (``_official_or_current``: not serialized, as for the preview reads)."""
+    """What a costume build reads of the library, gathered under the library lock.
+
+    ``ModLibrary._costume_inputs`` gathers it so the build itself can run without the lock (``costume_preview``). It
+    holds the bytes to stage for each part of the model slot, the source model's files, the CAB index, the slot's dev
+    name, and the rule that gives the official copy of a dependency the build finds (``_official_or_current``: not
+    serialized, as for the preview reads).
+    """
 
     originals: dict[Path, Path]  # the slot's game files -> the official (else current) copy staged for it
     dev: str  # the source model's dev name
@@ -401,28 +421,35 @@ class _CostumeInputs:
 
 
 def _revision(files: Iterable[tuple[Path, Path]]) -> str:
-    """A model's game revision: the names of its game files (an official name holds its CRC) and the sizes of the
-    copies read for them."""
+    """Return a model's game revision.
+
+    It is the names of its game files (an official name holds its CRC) and the sizes of the copies read for them.
+    """
     return hashlib.sha1(repr(sorted((game.name, read.stat().st_size) for game, read in files)).encode()).hexdigest()
 
 
 def _item_fraction(
     progress: Callable[..., None] | None, current: int = 1, total: int = 1, build: float = 0.9
 ) -> Callable[[float], None] | None:
-    """How far a costume build is (``_stage_costume``'s ``fraction``), reported as the job's progress of its item
-    ``current`` of ``total``: {"current", "total", "step", "fraction"}, the build's phases as steps
-    (``mod_progress.single``). ``build``: the item's share the build fills, the rest for a write into the game files
-    after it (1 for a build the library keeps). None without a job's progress."""
+    """Report how far a costume build is as the job's progress of its item ``current`` of ``total``.
+
+    The build's own ``fraction`` comes from ``_stage_costume``. The progress is {"current", "total", "step",
+    "fraction"}, with the build's phases as steps (``mod_progress.single``). ``build`` is the item's share the build
+    fills, the rest being for a write into the game files after it (1 for a build the library keeps). None without a
+    job's progress.
+    """
     return mod_progress.single(progress, current, total, build)
 
 
 class _WornVerdicts:
-    """The worn-item verdict of each model a costume build measures (``model_props.WornStore``), kept in
-    worn-items.json beside the costume verdicts: keyed by the costume rule's version, the model and its game revision.
-    Builds run outside the library and model locks, two at once at times: a write reads, changes and writes the file
-    under a lock of its own (this process's and the lock file's, for other processes), and the atomic write keeps
-    every read whole. A file that cannot be read or written, or a lock not had within ``WORN_LOCK_WAIT``, only means
-    the model is measured again."""
+    """The worn-item verdict of each model a costume build measures (``model_props.WornStore``).
+
+    Verdicts are kept in worn-items.json beside the costume verdicts, keyed by the costume rule's version, the model and
+    its game revision. Builds run outside the library and model locks, two at once at times: a write reads, changes and
+    writes the file under a lock of its own (this process's and the lock file's, for other processes), and the atomic
+    write keeps every read whole. A file that cannot be read or written, or a lock not had within ``WORN_LOCK_WAIT``,
+    only means the model is measured again.
+    """
 
     _lock = threading.Lock()
 
@@ -509,9 +536,12 @@ class _Entry:
 
 
 def _rebuilt(index: dict[str, list[Path]], path: Path) -> Path | None:
-    """The file that a game update rebuilt ``path`` as: the one other file of its group (its name less the CRC) in its
-    folder. An update rebuilds a changed group in place, keeping its name and date and changing only the CRC. None
-    when no other file or several have that name (groups packed one asset per bundle share it)."""
+    """Find the file that a game update rebuilt ``path`` as.
+
+    It is the one other file of its group (its name less the CRC) in its folder. An update rebuilds a changed group in
+    place, keeping its name and date and changing only the CRC. None when no other file or several have that name
+    (groups packed one asset per bundle share it).
+    """
     if not parse_filename(path.name).crc:
         return None
     key = integrity.replacement_key(path.name)
@@ -524,8 +554,11 @@ def _rebuilt(index: dict[str, list[Path]], path: Path) -> Path | None:
 
 
 def _has_successor(index: dict[str, list[Path]], path: Path) -> bool:
-    """Whether the file that replaced ``path`` in a game update is in its folder in an install's index: the group
-    rebuilt under a new CRC (``_rebuilt``), or a file of the same part dated after it (an update that renamed it)."""
+    """Tell whether the file that replaced ``path`` in a game update is in its folder in an install's index.
+
+    That file is the group rebuilt under a new CRC (``_rebuilt``), or a file of the same part dated after it (an update
+    that renamed it).
+    """
     if _rebuilt(index, path) is not None:
         return True
     part, date = part_of(path.name), date_of(path.name)
@@ -536,8 +569,10 @@ def _has_successor(index: dict[str, list[Path]], path: Path) -> bool:
 
 
 class _View:
-    """A consistent copy of what the judgement reads besides the game files: the library's records, its mods, the
-    configuration, the indexes and the kept originals. ``allow`` says which game files it may read:
+    """A consistent copy of what the judgement reads besides the game files.
+
+    That is the library's records, its mods, the configuration, the indexes and the kept originals. ``allow`` says which
+    game files it may read:
 
     - ``scan``: headers and tails of any file (the scan consent is given);
     - ``family``: the same, for the files the detail screen shows (no consent needed);
@@ -548,8 +583,11 @@ class _View:
     def __init__(
         self, library: ModLibrary, pins: list[Pin], config: dict | None, allow: str, snapshot: bool = False
     ) -> None:
-        """``snapshot``: copy the records, for a view read outside the library lock (the scan). A view used under
-        the lock shares the library's records and the maps built from them."""
+        """Collect what the judgement reads besides the game files.
+
+        ``snapshot``: copy the records, for a view read outside the library lock (the scan). A view used under the lock
+        shares the library's records and the maps built from them.
+        """
         self.library = library
         self.pins = {pin.key: pin for pin in pins}
         self.mods = set(library._records)
@@ -576,9 +614,11 @@ class _View:
         return (self.folder(key).get("configured") or {}).get(core)
 
     def official_size(self, name: str) -> int | None:
-        """The size of the official file of a name, where the library knows it by stat alone: a kept original of
-        that name, else a record of that name, in any folder, that says official bytes. The CRC is in the name, so
-        every official file of that name has those bytes."""
+        """Give the size of the official file of a name, where the library knows it by stat alone.
+
+        That is a kept original of that name, else a record of that name, in any folder, that says official bytes. The
+        CRC is in the name, so every official file of that name has those bytes.
+        """
         if name not in self._sizes:
             steam = self.library._steam_official(name, roots=[pin.root for pin in self.pins.values()])
             size = steam.size if steam is not None else self.originals.get(name)
@@ -595,9 +635,12 @@ class _View:
         return self._sizes[name]
 
     def source_exists(self, source: str, key: str, kind: str, *, held: bool = True) -> bool:
-        """Whether the library has a source. A held record (kept in state.json but not usable now) counts: its
-        configuration and the game files carrying it are not those of a source the library lost. ``held=False``
-        asks only for a usable record (whether the library has the source's bytes)."""
+        """Tell whether the library has a source.
+
+        A held record (kept in state.json but not usable now) counts: its configuration and the game files carrying it
+        are not those of a source the library lost. ``held=False`` asks only for a usable record (whether the library
+        has the source's bytes).
+        """
         if source == "official":
             return True
         if source.startswith("mod:"):
@@ -628,8 +671,11 @@ class _View:
         return trailing_bytes(path)
 
     def official_now(self, path: Path, size: int, trailing: int | None, name: str | None = None) -> bool:
-        """Whether a file holds official bytes: at write strength by the CRC32 of its whole content; else by the
-        cheap rule, no trailing bytes and the official size of its name where the library knows it."""
+        """Tell whether a file holds official bytes.
+
+        At write strength that is decided by the CRC32 of its whole content; else by the cheap rule, no trailing bytes
+        and the official size of its name where the library knows it.
+        """
         name = name or path.name
         if self.allow == "full":
             return self.library._is_official_as(path, name)
@@ -716,8 +762,11 @@ class _View:
         )
 
     def says_nonofficial(self, path: Path, record: dict, present: bool) -> bool:
-        """Whether a record says the library wrote non-official bytes there. A record of an older build without the
-        flag: its size is not the official size of its name, or (its file gone) an original of that name is kept."""
+        """Tell whether a record says the library wrote non-official bytes there.
+
+        A record of an older build without the flag says so when its size is not the official size of its name, or (its
+        file gone) an original of that name is kept.
+        """
         flag = record.get("official")
         if isinstance(flag, bool):
             return not flag
@@ -733,8 +782,11 @@ class _View:
         return _has_successor(self.indexes[pin.key], path)
 
     def later_record(self, path: Path, pin: Pin | None = None) -> bool:
-        """Whether the library recorded the file that replaced ``path`` in its folder (it wrote the successor): with
-        ``pin``, the group rebuilt under a new CRC (``_rebuilt``); a later file of the same part."""
+        """Tell whether the library recorded the file that replaced ``path`` in its folder (it wrote the successor).
+
+        The successor is the group rebuilt under a new CRC (``_rebuilt``; only with ``pin``) or a later file of the same
+        part.
+        """
         records = self.by_folder.get(path.parent, [])
         rebuilt = _rebuilt(self.indexes[pin.key], path) if pin is not None else None
         if rebuilt is not None and any(other == rebuilt for other, _record in records):
@@ -743,9 +795,12 @@ class _View:
         return any(part_of(other.name) == part and date_of(other.name) > date for other, _record in records)
 
     def copy_of(self, part: _Part, pin: Pin) -> str | None:
-        """Where an official copy of a game file is, judged cheaply: the library's kept original, the file itself,
-        its .backup, a file of its name in another game folder; None when there is none (or it may not be looked
-        for). Candidates beyond the file are looked at only for a file that is not official and has no original."""
+        """Find where an official copy of a game file is, judged cheaply.
+
+        The candidates are the library's kept original, the file itself, its .backup, a file of its name in another game
+        folder; None when there is none (or it may not be looked for). Candidates beyond the file are looked at only for
+        a file that is not official and has no original.
+        """
         name = part.path.name
         # a kept original a Steam list rejected is no official copy: the other candidates are looked at
         if name in self.originals and not self.library._original_failed(self.library.root / "originals" / name, False):
@@ -881,8 +936,11 @@ class _View:
         return bool(stored) and sorted(map(tuple, stored)) == signature(entry.parts)
 
     def cores(self, pin: Pin) -> set[str]:
-        """Every core of an install the judgement covers: the portrait and lobby cores of its index, the configured
-        ones and the ones the library recorded files of."""
+        """List every core of an install the judgement covers.
+
+        These are the portrait and lobby cores of its index, the configured ones and the ones the library recorded files
+        of.
+        """
         cores = {core for core in self.indexes[pin.key] if self.library._kind(core, pin)}
         cores.update(self.folder(pin.key).get("configured") or {})
         for folder in pin.dirs:
@@ -899,9 +957,11 @@ class _View:
         *,
         background: bool = False,
     ) -> list[_Entry]:
-        """Every entry that is configured, not in its intended state, or overwritten. A ``background`` pass (the
-        scan, outside the library lock) pauses while a model preview is exported; callers holding the library lock
-        never pause, since a preview may need that lock."""
+        """List every entry that is configured, not in its intended state, or overwritten.
+
+        A ``background`` pass (the scan, outside the library lock) pauses while a model preview is exported; callers
+        holding the library lock never pause, since a preview may need that lock.
+        """
         out = []
         for pin in pins:
             wanted = self.cores(pin)
@@ -927,8 +987,11 @@ def _reasons(failures: list[tuple[str, str]]) -> str:
 
 
 def _outside(record: dict | None, size: int, mtime: int) -> bool:
-    """Whether a record remembers the full judgement's verdict on the file as it is now (``outside``: its size and
-    modification time when a switch found it changed outside the library, though the cheap rule calls it official)."""
+    """Tell whether a record remembers the full judgement's verdict on the file as it is now.
+
+    ``outside`` is its size and modification time when a switch found it changed outside the library, though the cheap
+    rule calls it official.
+    """
     mark = (record or {}).get("outside")
     return isinstance(mark, list) and len(mark) == 2 and mark[0] == size and mark[1] == mtime
 
@@ -1070,11 +1133,18 @@ class ModLibrary:
                 log_failure(logger, logging.ERROR, "Mod configuration lookup failed", error)
 
     def _parse_state(self, data: Any) -> tuple[dict, set, dict, set, list]:
-        """(records, favourites, applied, migrations, held) of a state.json's JSON. A record that cannot be used (not
-        an object, a key missing or of another type, a bad id) is skipped with a warning and its raw JSON is held, to
-        be written back unchanged: one bad record costs that record at most, never the file. An invalid ``applied``
-        entry is dropped. ValueError when the file as a whole is not a state of this version (_NewerState for a version
-        above 1)."""
+        """Parse the JSON of a state.json.
+
+        A record that cannot be used (not an object, a key missing or of another type, a bad id) is skipped with a
+        warning and its raw JSON is held, to be written back unchanged: one bad record costs that record at most, never
+        the file. An invalid ``applied`` entry is dropped.
+
+        Returns:
+            The tuple (records, favourites, applied, migrations, held).
+
+        Raises:
+            ValueError: The file as a whole is not a state of this version (_NewerState for a version above 1).
+        """
         if not isinstance(data, dict):
             raise ValueError("not a library state")
         version = data.get("version")
@@ -1150,11 +1220,13 @@ class ModLibrary:
         return self._parse_state(json.loads(path.read_text(encoding="utf-8")))
 
     def _read_state(self) -> _Reading:
-        """Read state.json, else (when it is unreadable or gone) its previous copy; never raises. With neither file the
-        library is empty. A file of a newer build (version above 1) is never read as corrupt: the previous copy is not
-        looked at. A file that cannot be opened (``OSError``: locked, scanned) is not corruption either. A missing
-        file with a previous copy (a partial restore) reads the copy, as profiles.json does: nothing here deletes
-        state.json, and its writes are atomic."""
+        """Read state.json, else (when it is unreadable or gone) its previous copy; never raises.
+
+        With neither file the library is empty. A file of a newer build (version above 1) is never read as corrupt: the
+        previous copy is not looked at. A file that cannot be opened (``OSError``: locked, scanned) is not corruption
+        either. A missing file with a previous copy (a partial restore) reads the copy, as profiles.json does: nothing
+        here deletes state.json, and its writes are atomic.
+        """
         path = self._state_path
         exists = True
         try:
@@ -1212,23 +1284,31 @@ class ModLibrary:
                 log_failure(logger, logging.WARNING, "Could not migrate legacy remapped mods", error)
 
     def _state_unreadable(self, reading: _Reading) -> None:
-        """Note a reading that found no state. A library that never read a good state stays empty and cannot be
-        saved (``_state_error``); one that holds good state keeps it, unless the file is a newer build's. An ``io``
-        failure is read again at the next call, any other verdict stands until the file changes."""
+        """Note a reading that found no state.
+
+        A library that never read a good state stays empty and cannot be saved (``_state_error``); one that holds good
+        state keeps it, unless the file is a newer build's. An ``io`` failure is read again at the next call, any other
+        verdict stands until the file changes.
+        """
         self._reread = reading.kind == "io"
         if reading.kind == "newer" or not self._state_good:
             self._state_error = reading.error
 
     def _check_writable(self) -> None:
-        """Refuse a write before it starts changing files that state.json could not record: ServiceError
-        ``library_state_unreadable`` (a state that cannot be read, or a newer build's) or ``library_io_error`` (a state
-        that cannot be opened), as read at the last refresh."""
+        """Refuse a write before it starts changing files that state.json could not record.
+
+        Raises:
+            ServiceError: ``library_state_unreadable`` (a state that cannot be read, or a newer build's) or
+            ``library_io_error`` (a state that cannot be opened), as read at the last refresh.
+        """
         if self._state_error is not None:
             raise ServiceError(self._state_error.code, **self._state_error.params)
 
     def _disk_held(self, reading: _Reading) -> list:
-        """The held records of what was read. A previous copy is older than this instance's state: the records it held
-        before are kept too."""
+        """Give the held records of what was read.
+
+        A previous copy is older than this instance's state: the records it held before are kept too.
+        """
         held = reading.state[4] if reading.state else []
         if reading.kind == "prev":
             held = [*held, *(raw for raw in self._held if raw not in held)]
@@ -1246,10 +1326,12 @@ class ModLibrary:
         return stat.st_mtime_ns, stat.st_size
 
     def _refresh_state(self, migrate: bool = True) -> None:
-        """Take in what another instance sharing the library wrote to state.json since this one last read or wrote
-        it (its size or date changed), keeping this instance's own changes not saved yet. A library that could not
-        read its state reads it again at every call that finds the file changed (and after a failed open). The legacy
-        migration is saved when ``migrate``, and skipped (not raised) while writes are refused."""
+        """Take in what another instance sharing the library wrote to state.json since this one last read or wrote it.
+
+        The file counts as changed when its size or date changed; this instance's own changes not saved yet are kept. A
+        library that could not read its state reads it again at every call that finds the file changed (and after a
+        failed open). The legacy migration is saved when ``migrate``, and skipped (not raised) while writes are refused.
+        """
         self._recover_for_read()
         if not self._reread and self._state_signature() == self._seen:
             if self._migration_pending and migrate:
@@ -1274,24 +1356,28 @@ class ModLibrary:
             self._migrate_state()
 
     def _migrate_state(self) -> None:
-        """Save the state with the legacy remap migration, once writes are allowed: a pending recovery, a state that
-        cannot be written (ServiceError) or a file that cannot be written (OSError) skips it for now, and it stays
-        pending. A read never fails on it."""
+        """Save the state with the legacy remap migration, once writes are allowed.
+
+        A pending recovery, a state that cannot be written (ServiceError) or a file that cannot be written (OSError)
+        skips it for now, and it stays pending. A read never fails on it.
+        """
         try:
             self._save()
         except (OSError, ServiceError) as error:
             log_failure(logger, logging.DEBUG, "Library state migration skipped", error)
 
     def _save(self) -> None:
-        """Write state.json, merged with what another instance sharing the library wrote since this one last read
-        it: this instance's own changes since then (records added, changed or removed by id, game file records
-        written or dropped, favourites toggled) applied to the file as it is now, under a lock both share. The
-        merged state becomes this instance's only once it is written. Held records of the file are written back
-        unchanged, less those this instance replaced or removed.
+        """Write state.json, merged with what another instance sharing the library wrote since this one last read it.
+
+        This instance's own changes since then (records added, changed or removed by id, game file records written or
+        dropped, favourites toggled) are applied to the file as it is now, under a lock both share. The merged state
+        becomes this instance's only once it is written. Held records of the file are written back unchanged, less those
+        this instance replaced or removed.
 
         The last good file is kept as state.json.prev before the write, and an unreadable one as state.json.bad. A
-        library that never read a good state (``_state_good``), a file of a newer build and a file that cannot be
-        opened are not written: ServiceError ``library_state_unreadable`` or ``library_io_error``, nothing changed."""
+        library that never read a good state (``_state_good``), a file of a newer build and a file that cannot be opened
+        are not written: ServiceError ``library_state_unreadable`` or ``library_io_error``, nothing changed.
+        """
         self._check_recovery()
         path = self._state_path
         mine = (self._records, self._favorites, self._applied, self._migrations)
@@ -1328,8 +1414,11 @@ class ModLibrary:
         self._version += 1
 
     def _keep_state_file(self, kind: str) -> None:
-        """Before state.json is replaced: a file that was read becomes state.json.prev (the last good file); one that
-        could not be read is kept as state.json.bad, and the previous copy stays what it is."""
+        """Keep the old state.json before it is replaced.
+
+        A file that was read becomes state.json.prev (the last good file); one that could not be read is kept as
+        state.json.bad, and the previous copy stays what it is.
+        """
         if kind == "ok":
             atomic_copy(self._state_path, self._prev_path)
         elif kind in ("prev", "corrupt") and self._state_path.exists():  # a missing file leaves nothing to keep
@@ -1409,8 +1498,11 @@ class ModLibrary:
         return paths
 
     def _target_of(self, record: dict[str, Any]) -> str:
-        """The variant a mod belongs to: the one the current catalog gives its core, else its stored target (fixed
-        when it was added; a later catalog may name that core by an alias)."""
+        """Give the variant a mod belongs to.
+
+        That is the one the current catalog gives its core, else its stored target (fixed when it was added; a later
+        catalog may name that core by an alias).
+        """
         if record.get("assignment"):
             return record["assignment"]
         if record["kind"] == "other":
@@ -1419,9 +1511,11 @@ class ModLibrary:
         return variant.key if variant is not None else record["target"]
 
     def _repaired_id(self, record: dict[str, Any]) -> str:
-        """The repaired copy a mod links to, "" when the link points at no record: an old library that deleted the copy
-        keeps its id, which counts as none. A held record is there (its files are missing for now, not gone): its link
-        stays, and the mod stays not repairable while it is held."""
+        """Give the repaired copy a mod links to, an empty string when the link points at no record.
+
+        An old library that deleted the copy keeps its id, which counts as none. A held record is there (its files are
+        missing for now, not gone): its link stays, and the mod stays not repairable while it is held.
+        """
         mod_id = record.get("repaired_id")
         if not isinstance(mod_id, str) or not mod_id:
             return ""
@@ -1435,10 +1529,12 @@ class ModLibrary:
 
     @classmethod
     def _costume_outdated(cls, record: dict[str, Any]) -> bool:
-        """Whether an Optimize Physics copy was built under an older costume rule than the program's, or under one not
-        recorded (every copy made before the rule was recorded), and was not kept as it is under the program's rule
-        (``costume_kept``: a rebuild found no physics rule that improves it, or failed): the start builds it again
-        (``refresh_costumes``)."""
+        """Tell whether the start builds an Optimize Physics copy again (``refresh_costumes``).
+
+        It does when the copy was built under an older costume rule than the program's, or under one not recorded (every
+        copy made before the rule was recorded), and was not kept as it is under the program's rule (``costume_kept``: a
+        rebuild found no physics rule that improves it, or failed).
+        """
         from ..gameassets.costume_rule import COSTUME_RULE
 
         return (
@@ -2011,10 +2107,13 @@ class ModLibrary:
         inspection: integrity.Inspection | None = None,
         built: dict | None = None,
     ) -> dict:
-        """``built`` is the stored fingerprint of the files when they are a library mod's (``_read_built_against``).
-        The report's ``rig`` names what the official rig changed under the mod: atlases repacked since its textures
-        were drawn (``layout``), animations its skeleton lacks and regions its atlas lacks (``atlas_remap.rig_gains``).
-        ``remappable`` is any of them or a page size the texture does not fit (``misfit``)."""
+        """Check a group of mod files and return the report on them.
+
+        ``built`` is the stored fingerprint of the files when they are a library mod's (``_read_built_against``). The
+        report's ``rig`` names what the official rig changed under the mod: atlases repacked since its textures were
+        drawn (``layout``), animations its skeleton lacks and regions its atlas lacks (``atlas_remap.rig_gains``).
+        ``remappable`` is any of them or a page size the texture does not fit (``misfit``).
+        """
         inspect = inspection.inspect if inspection else integrity.inspect
         cab_inspection = inspection or integrity.Inspection()
         selected, official, effective = integrity.Contents(), integrity.Contents(), integrity.Contents()
@@ -2250,8 +2349,10 @@ class ModLibrary:
         return report
 
     def _graftable(self, selected: integrity.Contents, official: integrity.Contents, skeleton: str) -> bool:
-        """Whether the mod carries a binary 4.2 skeleton for the official ``skeleton`` and the atlas of its stem
-        with the pages of that atlas."""
+        """Tell whether the mod carries what a graft of the official ``skeleton`` needs.
+
+        That is a binary 4.2 skeleton for it and the atlas of its stem with the pages of that atlas.
+        """
         own = atlas_remap.pair_atlases(selected.skeletons, official.skeletons).get(skeleton)
         atlas = next(
             (
@@ -2274,9 +2375,12 @@ class ModLibrary:
     def _graft_plan(
         selected: integrity.Contents, official: integrity.Contents, skeleton: str
     ) -> tuple[list[str], dict[str, list[str]]]:
-        """(carried, refused) of a graft of the official ``skeleton``'s new animations into the mod's own
-        (``graft.SkeletonGraft``): the names it carries and, per animation it cannot carry, the reasons
-        (``kind:name``). Nothing carried when a skeleton cannot be read."""
+        """Plan a graft of the official ``skeleton``'s new animations into the mod's own (``graft.SkeletonGraft``).
+
+        Returns:
+            The tuple (carried, refused): the names it carries and, per animation it cannot carry, the reasons
+            (``kind:name``). Nothing carried when a skeleton cannot be read.
+        """
         own = atlas_remap.pair_atlases(selected.skeletons, official.skeletons).get(skeleton)
         try:
             plan = grafting.SkeletonGraft(selected.skeletons[own], official.skeletons[skeleton])
@@ -2426,10 +2530,12 @@ class ModLibrary:
         keys: bool = True,
         release: bool = True,
     ) -> resolver.Readers:
-        """What the resolver reads of a file: its CABs, asset paths and (with ``keys``) asset names and types; a file
-        of ``targets`` is read from its official copy where there is one, else as it is. Asset evidence is on top of
-        the name rules: a file the readers cannot read gives none. With ``release``, a file naming a part without its
-        CRC or by its CABs is that part's current release only with the part's structure (``Inspection.structure``)."""
+        """Read what the resolver needs of a file: its CABs, asset paths and (with ``keys``) asset names and types.
+
+        A file of ``targets`` is read from its official copy where there is one, else as it is. Asset evidence is on top
+        of the name rules: a file the readers cannot read gives none. With ``release``, a file naming a part without its
+        CRC or by its CABs is that part's current release only with the part's structure (``Inspection.structure``).
+        """
         inspection = inspection or integrity.Inspection()
         members, baselines = set(targets), {}
 
@@ -2503,8 +2609,10 @@ class ModLibrary:
         *,
         release: bool = True,
     ) -> dict[Path, Path]:
-        """The files that are a part's current release: {target: source}. ``release=False`` takes the names and
-        CABs alone, for a caller that judges the release itself."""
+        """Find the files that are a part's current release, as {target: source}.
+
+        ``release=False`` takes the names and CABs alone, for a caller that judges the release itself.
+        """
         return self._resolve(files, targets, pin, inspection, release=release).current
 
     def _update_groups(
@@ -2515,8 +2623,11 @@ class ModLibrary:
 
     @staticmethod
     def _groups_of(resolution: resolver.Resolution) -> list[PlannedGroup]:
-        """Install groups for the files the resolution does not replace whole: per name prefix and core, the parts
-        they update (groups reaching a common part update it together); files that found no part are NOT_FOUND."""
+        """Plan install groups for the files the resolution does not replace whole.
+
+        They are per name prefix and core, the parts they update (groups reaching a common part update it together);
+        files that found no part are NOT_FOUND.
+        """
         planned: list[PlannedGroup] = []
         for group in resolution.groups:
             parsed = parse_filename(group.names[0])
@@ -2885,7 +2996,9 @@ class ModLibrary:
         built_against: dict | None = None,
     ) -> dict[str, Any]:
         """Publish a complete directory before its metadata, with durable recovery of either outcome.
-        ``built_against`` (``_built_against``) is stored with the files, as part of the same directory."""
+
+        ``built_against`` (``_built_against``) is stored with the files, as part of the same directory.
+        """
         names = sorted(files)
         if not names:
             raise ServiceError("source_unsupported")  # no file to name
@@ -3112,9 +3225,14 @@ class ModLibrary:
 
     @_mod_writer
     def _add_group(self, paths: list[Path], label: str, pin: Pin) -> tuple[str, bool]:
-        """Store the parts of one core as one mod, whatever their dates, keyed by the variant key the install's own
-        core map gives the core (a core the current catalog does not map is stored too). Returns the id of the mod
-        and whether it was created: a part set already in the library is not stored twice."""
+        """Store the parts of one core as one mod, whatever their dates.
+
+        The mod is keyed by the variant key the install's own core map gives the core (a core the current catalog does
+        not map is stored too). A part set already in the library is not stored twice.
+
+        Returns:
+            The id of the mod and whether it was created.
+        """
         files = {path.name: path for path in paths}
         signature_ = self._identity(files)
         existing = self._known().get(signature_)
@@ -3341,8 +3459,10 @@ class ModLibrary:
         )
 
     def _in_use(self, mod_id: str) -> list[Path]:
-        """The game files still carrying the mod: stats and tails first, then SHA-1 when their stamp changed.
-        A part the mod left official carries nothing of it."""
+        """Find the game files still carrying the mod: stats and tails first, then SHA-1 when their stamp changed.
+
+        A part the mod left official carries nothing of it.
+        """
         paths = []
         for name, record in self._applied.items():
             if record.get("source") != f"mod:{mod_id}" or record.get("removed"):
@@ -3481,8 +3601,11 @@ class ModLibrary:
         return Pin(install_key(root), root, dirs, server)
 
     def _named_pins(self) -> list[Pin]:
-        """The Global and Japan folders the settings name, each when it is set and exists, whatever the file source.
-        In dev mode (devmode) a folder outside the dev roots is not used, as the settings' own game folder."""
+        """List the Global and Japan folders the settings name, whatever the file source.
+
+        Each is listed when it is set and exists. In dev mode (devmode) a folder outside the dev roots is not used, as
+        the settings' own game folder.
+        """
         out: list[Pin] = []
         if self.settings is None:
             return out
@@ -3543,8 +3666,10 @@ class ModLibrary:
         return pins
 
     def _all_pins(self) -> list[Pin]:
-        """The known installs and the recorded ones this data directory removed from its list: whose kept originals
-        must stay just the same."""
+        """List the known installs and the recorded ones this data directory removed from its list.
+
+        The kept originals of the removed ones must stay just the same.
+        """
         pins = self.installs()
         with contextlib.suppress(ServiceError):
             for key, folder in ((self.profiles.read() or {}).get("folders") or {}).items():
@@ -3582,9 +3707,12 @@ class ModLibrary:
 
     @staticmethod
     def _packed_groups(listing: Iterable[tuple[str, str]]) -> dict[tuple, list[Path]]:
-        """The generic bundles whose part (``part_of``: prefix and part number, no date or CRC) several files of one
-        folder share, by part: groups packed one asset per bundle, and a part kept under several dates. Their names
-        cannot tell them apart over game updates, so each gets a slot keyed by its CAB."""
+        """Group the generic bundles whose part several files of one folder share, by part.
+
+        A part is ``part_of``: prefix and part number, no date or CRC. Such bundles are groups packed one asset per
+        bundle, and a part kept under several dates. Their names cannot tell them apart over game updates, so each gets
+        a slot keyed by its CAB.
+        """
         groups: dict[tuple, list[Path]] = {}
         for name, path in listing:
             if kind_of_file(name) == "other":
@@ -3596,8 +3724,10 @@ class ModLibrary:
         return packed
 
     def _wanted_packed(self) -> set[tuple]:
-        """The parts of the generic mods' files and of files being imported: only bundles of those parts need their CAB
-        learned."""
+        """List the parts of the generic mods' files and of files being imported.
+
+        Only bundles of those parts need their CAB learned.
+        """
         return {
             part_of(name)
             for record in self._records.values()
@@ -3626,8 +3756,11 @@ class ModLibrary:
         return min(cabs) if cabs else None
 
     def _learn_packed_sources(self, files: dict[str, Path], packed: dict[tuple, list[Path]], pin: Pin) -> bool:
-        """Learn the slot of each mod file of a packed part: the CAB it shares with a bundle of that part in the
-        install, else (an older release) the CAB of the one install file it updates, found by its assets."""
+        """Learn the slot of each mod file of a packed part.
+
+        The slot is the CAB it shares with a bundle of that part in the install, else (an older release) the CAB of the
+        one install file it updates, found by its assets.
+        """
         changed = False
         for name, path in files.items():
             name = name.removesuffix(".backup")
@@ -3766,8 +3899,11 @@ class ModLibrary:
         self.profiles.update(update)
 
     def _index(self, pin: Pin) -> dict[str, list[Path]]:
-        """The install's bundle files by lower-case core (names only). Listed again when a folder changes, and
-        rebuilt only when the files there are not the same ones (a write replacing a file keeps the index)."""
+        """Index the install's bundle files by lower-case core (names only).
+
+        The index is listed again when a folder changes, and rebuilt only when the files there are not the same ones (a
+        write replacing a file keeps the index).
+        """
         try:
             signature_ = tuple((str(d), d.stat().st_mtime_ns) for d in pin.dirs)
         except OSError:
@@ -4006,9 +4142,11 @@ class ModLibrary:
     def _steam_official(
         self, name: str, path: Path | None = None, roots: Sequence[Path] | None = None
     ) -> steam_records.OfficialFile | None:
-        """What Steam's file list says the official file of a bundle name is (its size and SHA-1), only with the
-        consent to read Steam's records: the list of the Steam install holding ``path``, else of ``roots``, else of
-        every known install. None when no list names it, or two lists disagree."""
+        """Read what Steam's file list says the official file of a bundle name is (its size and SHA-1).
+
+        It reads only with the consent to read Steam's records: the list of the Steam install holding ``path``, else of
+        ``roots``, else of every known install. None when no list names it, or two lists disagree.
+        """
         if not self._scan_allowed():
             return None
         name = name.removesuffix(".backup")
@@ -4030,8 +4168,10 @@ class ModLibrary:
         return next(iter(found)) if len(found) == 1 else None
 
     def _steam_roots(self) -> list[Path]:
-        """The known installs' roots for Steam's file lists, listed again after a few seconds (a judgement asks once
-        per file)."""
+        """List the known installs' roots for Steam's file lists.
+
+        The list is made again after a few seconds (a judgement asks once per file).
+        """
         now = time.monotonic()
         cached = self._steam_roots_cache
         if cached is None or now - cached[0] > 5:
@@ -4039,10 +4179,13 @@ class ModLibrary:
         return cached[1]
 
     def _is_official_as(self, path: Path, name: str) -> bool:
-        """Official: the size and SHA-1 that Steam's file list gives ``name`` (``_steam_official``), else the CRC32 of
-        the whole content against the CRC in ``name``, with no trailing bytes. A mod can match a CRC, not a SHA-1.
-        A kept original also records which rule it passed, and one a Steam list rejected stays rejected without the
-        list (``_judge_original``)."""
+        """Tell whether the file at ``path`` holds the official bytes of ``name``.
+
+        It does with the size and SHA-1 that Steam's file list gives ``name`` (``_steam_official``), else with the CRC32
+        of the whole content matching the CRC in ``name``, and no trailing bytes. A mod can match a CRC, not a SHA-1. A
+        kept original also records which rule it passed, and one a Steam list rejected stays rejected without the list
+        (``_judge_original``).
+        """
         fingerprint = self._hashes.get(path)
         steam = self._steam_official(name, path)
         if self._is_kept(path) and path.name == name:
@@ -4067,9 +4210,12 @@ class ModLibrary:
     def _judge_original(
         self, original: Path, fingerprint: Fingerprint, steam: steam_records.OfficialFile | None
     ) -> Verdict | None:
-        """How a kept original's bytes pass, recorded: ``steam`` (Steam's list gives its size and SHA-1, now
-        or when it was recorded), ``crc`` (no list names it, the CRC rule alone), ``failed`` (a Steam list gave other
-        bytes: never official again, list or not); None when it fails the CRC rule (damaged, ``original_invalid``)."""
+        """Judge how a kept original's bytes pass, as it is recorded.
+
+        The result is ``steam`` (Steam's list gives its size and SHA-1, now or when it was recorded), ``crc`` (no list
+        names it, the CRC rule alone) or ``failed`` (a Steam list gave other bytes: never official again, list or not).
+        None when it fails the CRC rule (damaged, ``original_invalid``).
+        """
         if steam is not None:
             verdict: Verdict = "steam" if (fingerprint.size, fingerprint.sha1) == (steam.size, steam.sha1) else "failed"
             self._original_checks.save(original, verdict, fingerprint, set(self._originals()))
@@ -4084,8 +4230,10 @@ class ModLibrary:
         return "crc"
 
     def _original_failed(self, original: Path, full: bool) -> bool:
-        """Whether a kept original is one a Steam list rejected: at write strength by its bytes (hashed), else by
-        its record while the file is unchanged since."""
+        """Tell whether a kept original is one a Steam list rejected.
+
+        At write strength that is decided by its bytes (hashed), else by its record while the file is unchanged since.
+        """
         try:
             if full:
                 return (
@@ -4187,12 +4335,15 @@ class ModLibrary:
         return out
 
     def _official_for(self, game_file: Path, pin: Pin, full: bool = True, *, game_first: bool = False) -> Path:
-        """An official copy of a game file, in this order: the library's kept original (it was verified when it was
-        kept; ``original_invalid`` when it fails, never overwritten), the game file itself, its .backup beside it (the
-        classic GUI's; judged by the name without .backup), a file of its name in another game folder. At write
-        strength each candidate is verified by the CRC32 of its whole content; else (previews) by the cheap rule.
-        ``original_unavailable`` when there is none. Read-only checks may prefer the current official game file
-        with ``game_first``; an invalid kept original must still block writes."""
+        """Find an official copy of a game file.
+
+        The candidates come in this order: the library's kept original (it was verified when it was kept;
+        ``original_invalid`` when it fails, never overwritten), the game file itself, its .backup beside it (the classic
+        GUI's; judged by the name without .backup), a file of its name in another game folder. At write strength each
+        candidate is verified by the CRC32 of its whole content; else (previews) by the cheap rule.
+        ``original_unavailable`` when there is none. Read-only checks may prefer the current official game file with
+        ``game_first``; an invalid kept original must still block writes.
+        """
         check_resource_path(game_file, list(pin.dirs))
 
         def official(path: Path) -> bool:
@@ -4224,8 +4375,11 @@ class ModLibrary:
         raise ServiceError("original_unavailable", file=game_file)
 
     def _keep_original(self, game_file: Path, pin: Pin, *, moving: bool = False) -> Path:
-        """Keep verified official bytes, cloning where possible. A journaled write may move its own target;
-        backups and files of another install must remain available in their current locations."""
+        """Keep verified official bytes, cloning where possible.
+
+        A journaled write may move its own target; backups and files of another install must remain available in their
+        current locations.
+        """
         official = self._official_for(game_file, pin)
         original = self._original_path(game_file)
         if official != original:
@@ -4261,12 +4415,14 @@ class ModLibrary:
             return None
 
     def _keep_replaced(self, targets: list[Path], pin: Pin) -> list[str]:
-        """Store the game files about to be replaced that are kept nowhere else as library mods, one per core, and
-        return the ids of the mods it created. Each target is judged in full: official files go to originals/
-        (_keep_original), files carrying a library source stay where they are, and a file changed outside the
-        library (another tool, a manual copy), or the bytes of a source absent from the library, is kept. A part
-        of a mod the user removed is never kept. At write strength a target's sha1 is compared with its record, never
-        its size and date: _write has hashed every target already, so this reads nothing more."""
+        """Store the game files about to be replaced that are kept nowhere else as library mods, one per core.
+
+        It returns the ids of the mods it created. Each target is judged in full: official files go to originals/
+        (_keep_original), files carrying a library source stay where they are, and a file changed outside the library
+        (another tool, a manual copy), or the bytes of a source absent from the library, is kept. A part of a mod the
+        user removed is never kept. At write strength a target's sha1 is compared with its record, never its size and
+        date: _write has hashed every target already, so this reads nothing more.
+        """
         view = self._view([pin], "full")
         keep: dict[str, list[Path]] = {}
         for target in targets:
@@ -4281,10 +4437,12 @@ class ModLibrary:
         return created
 
     def _replaced_unkept(self, target: Path, pin: Pin, view: _View) -> bool:
-        """Whether a game file about to be replaced holds bytes kept nowhere else, by the full judgement: a target
-        whose sha1 equals its record carries the record's source, and is kept only when that source is gone from the
-        library (never a removed mod's part) and the target is not official; any other target is kept when it is not
-        official. A file whose header cannot be read is never kept."""
+        """Tell whether a game file about to be replaced holds bytes kept nowhere else, by the full judgement.
+
+        A target whose sha1 equals its record carries the record's source, and is kept only when that source is gone
+        from the library (never a removed mod's part) and the target is not official; any other target is kept when it
+        is not official. A file whose header cannot be read is never kept.
+        """
         fingerprint = self._hashes.get(target)
         record = self._applied.get(str(target.resolve()))
         if record and fingerprint.sha1 == record.get("sha1"):
@@ -4298,9 +4456,11 @@ class ModLibrary:
         return not self._is_official(target)
 
     def _drop_mods(self, mod_ids: list[str]) -> None:
-        """Forget mods _keep_replaced added for a replacement that was rolled back (their files are in the game
-        again). The state is saved before a folder is deleted. A state that cannot be saved still lists them, so
-        their folders stay: a record whose files are gone is held, never dropped."""
+        """Forget mods _keep_replaced added for a replacement that was rolled back.
+
+        Their files are in the game again. The state is saved before a folder is deleted. A state that cannot be saved
+        still lists them, so their folders stay: a record whose files are gone is held, never dropped.
+        """
         if not mod_ids:
             return
         deletion = getattr(self, "_asset_deletion", None)
@@ -4337,16 +4497,18 @@ class ModLibrary:
         *,
         painted: bool | Mapping[str, dict] | None = None,
     ) -> dict | None:
-        """The fingerprint (``fingerprint.document``) of the official parts a mod's files are built against: every
-        part its core has now, from a verified official copy, each with how the mod's own files stand to it
-        (``fingerprint.standing``). A part with no official copy is left out (``complete`` False). Headers and text
-        assets only. None when nothing can be told (no install, no part, unreadable files); it never fails the
-        import, update or remap that asks.
+        """Build the fingerprint (``fingerprint.document``) of the official parts a mod's files are built against.
+
+        It covers every part its core has now, from a verified official copy, each with how the mod's own files stand to
+        it (``fingerprint.standing``). A part with no official copy is left out (``complete`` False). Headers and text
+        assets only. None when nothing can be told (no install, no part, unreadable files); it never fails the import,
+        update or remap that asks.
 
         ``painted`` tells which atlas layout the mod's textures follow where the mod carries no atlas
-        (``fingerprint.painted``): True when the files are known to be made for these parts (a whole-file copy of
-        files named for them), the record of the files before when a rebuild only moved their textures over, and
-        nothing when no one knows."""
+        (``fingerprint.painted``): True when the files are known to be made for these parts (a whole-file copy of files
+        named for them), the record of the files before when a rebuild only moved their textures over, and nothing when
+        no one knows.
+        """
         if pin is None or not files:
             return None
         try:
@@ -4381,8 +4543,10 @@ class ModLibrary:
             return None
 
     def _rig_gains(self, files: Mapping[str, Path], pin: Pin | None) -> dict:
-        """What the official rig of a mod's core has that the files lack (``atlas_remap.rig_gains``), with only its
-        non-empty kinds; empty when nothing, or nothing can be told. Text assets only; never raises."""
+        """Find what the official rig of a mod's core has that the files lack (``atlas_remap.rig_gains``).
+
+        Only the non-empty kinds are given; empty when nothing, or nothing can be told. Text assets only; never raises.
+        """
         if pin is None or not files:
             return {}
         try:
@@ -4456,14 +4620,18 @@ class ModLibrary:
         return self._built_against({path.name: path for path in self._paths(record)}, pin or self.current_pin(), "now")
 
     def _impact(self, record: dict[str, Any], pin: Pin | None) -> str:
-        """What a game update did to the official parts a mod was built against (``fingerprint.impact``), held
-        against its core's parts in ``pin``. Never raises."""
+        """Report what a game update did to the official parts a mod was built against (``fingerprint.impact``).
+
+        It is held against its core's parts in ``pin``. Never raises.
+        """
         return self._impact_of(record, pin)[0]
 
     def _impact_of(self, record: dict[str, Any], pin: Pin | None) -> tuple[str, dict[str, Any]]:
-        """``_impact`` with what changed in those parts (``fingerprint.changes``). Kept per mod files and official
-        part names (a rebuilt part has another CRC in its name), so a toggle reaching many entries reads each core
-        once. Never raises."""
+        """Give ``_impact`` with what changed in those parts (``fingerprint.changes``).
+
+        It is kept per mod files and official part names (a rebuilt part has another CRC in its name), so a toggle
+        reaching many entries reads each core once. Never raises.
+        """
         if pin is None:
             return fingerprint.UNKNOWN, {}
         try:
@@ -4507,10 +4675,12 @@ class ModLibrary:
             return fingerprint.UNKNOWN, {}
 
     def _hold(self, pin: Pin, target: str) -> bool:
-        """Whether an On or its Retry holds an entry configured with ``target`` instead of writing it: a mod whose
-        official rig a game update changed (``fingerprint.RIG_CHANGED``), so the write would carry its old rig or
-        layout onto the new parts. Remapping or updating the mod records its new baseline and ends the hold; Apply
-        Mod Configuration and a switch on the detail screen write it as asked."""
+        """Tell whether an On or its Retry holds an entry configured with ``target`` instead of writing it.
+
+        It does for a mod whose official rig a game update changed (``fingerprint.RIG_CHANGED``), so the write would
+        carry its old rig or layout onto the new parts. Remapping or updating the mod records its new baseline and ends
+        the hold; Apply Mod Configuration and a switch on the detail screen write it as asked.
+        """
         if not target.startswith("mod:") or target[4:] not in self._records:
             return False
         return self._impact(self._records[target[4:]], pin) == fingerprint.RIG_CHANGED
@@ -4619,8 +4789,11 @@ class ModLibrary:
         }
 
     def _impact_mark(self, record: dict[str, Any]) -> str:
-        """What a kept impact of a mod depends on: its files and its stored baseline (by its modification time). A
-        repair or an update writes a new baseline, which ends the kept impact. Names and times only."""
+        """Give what a kept impact of a mod depends on.
+
+        That is its files and its stored baseline (by its modification time). A repair or an update writes a new
+        baseline, which ends the kept impact. Names and times only.
+        """
         baseline = self.root / "mods" / record["id"] / fingerprint.FILE_NAME
         try:
             mark = baseline.stat().st_mtime_ns
@@ -4629,8 +4802,11 @@ class ModLibrary:
         return hashlib.sha1(json.dumps([sorted(record.get("files") or []), mark]).encode()).hexdigest()
 
     def _keep_impact(self, install: str, version: str, mods: list[dict[str, Any]]) -> None:
-        """Keep the outcome of an impact check of an install (``last_impact``): its resource version and the mods
-        whose rig changed, each with what changed and its mark (``_impact_mark``). Never fails."""
+        """Keep the outcome of an impact check of an install (``last_impact``).
+
+        It holds the resource version and the mods whose rig changed, each with what changed and its mark
+        (``_impact_mark``). Never fails.
+        """
         with self._lock:
             kept = [
                 {
@@ -4701,10 +4877,13 @@ class ModLibrary:
         return out
 
     def _outdated_costumes(self, pin: Pin, config: dict) -> list[dict[str, Any]]:
-        """What the App built from a costume under an older costume rule than the program's (``refresh_costumes``
-        builds them again): Optimize Physics copies (``_costume_outdated``; ``installed`` when the game files hold
-        it), then the costume swaps the install's game files hold (``_swap_outdated``, verified installed; ``source``
-        the costume, no mod id). Reads records, the configuration and the game files' cached fingerprints only."""
+        """List what the App built from a costume under an older costume rule than the program's.
+
+        ``refresh_costumes`` builds them again. They are Optimize Physics copies (``_costume_outdated``; ``installed``
+        when the game files hold it), then the costume swaps the install's game files hold (``_swap_outdated``, verified
+        installed; ``source`` the costume, no mod id). Reads records, the configuration and the game files' cached
+        fingerprints only.
+        """
         folder = (config.get("folders") or {}).get(pin.key) or {}
         choices = folder.get("configured") or {}
         out: list[dict[str, Any]] = []
@@ -4858,8 +5037,11 @@ class ModLibrary:
         return {**self._progress_identity(variant, kind, source), "core": core}
 
     def _progress_identity(self, variant: str, kind: str, source: str | None) -> dict[str, str]:
-        """Who an item of a job over mods is, for its progress line (``mod_progress``): the variant and kind it
-        writes, and the mod's own name (``_progress_name``) or the variant whose files it takes."""
+        """Say who an item of a job over mods is, for its progress line (``mod_progress``).
+
+        That is the variant and kind it writes, and the mod's own name (``_progress_name``) or the variant whose files
+        it takes.
+        """
         identity = {"variant": variant or "", "kind": kind or ""}
         if isinstance(source, str) and source.startswith("mod:"):
             record = self._records.get(source[4:])
@@ -4870,8 +5052,10 @@ class ModLibrary:
         return identity
 
     def _progress_name(self, record: dict[str, Any]) -> str:
-        """A mod's name as its list shows it (``_label``), or nothing when that only repeats its target or one of its
-        file names or cores."""
+        """Give a mod's name as its list shows it (``_label``).
+
+        Nothing when that only repeats its target or one of its file names or cores.
+        """
         try:
             label = self._label(record)
         except (KeyError, TypeError):
@@ -4892,9 +5076,12 @@ class ModLibrary:
             self._save()
 
     def _failed_writes(self, pin: Pin, config: dict) -> list[str]:
-        """The configured entries of ``pin`` whose last write failed (their saved error) and were not tried again under
-        this build of the App (``retry_failed``): an App update may have fixed the cause, and nothing else writes such
-        an entry until the user switches it again. None while mods are off: the next On reaches every entry."""
+        """List the configured entries of ``pin`` whose last write failed (their saved error).
+
+        Only those not tried again under this build of the App (``retry_failed``) count: an App update may have fixed
+        the cause, and nothing else writes such an entry until the user switches it again. None while mods are off: the
+        next On reaches every entry.
+        """
         if not profiles_mod.enabled(config):
             return []
         folder = (config.get("folders") or {}).get(pin.key) or {}
@@ -4946,8 +5133,11 @@ class ModLibrary:
         return result
 
     def _impact_stamp(self, pin: Pin, version: str, records: list[dict[str, Any]], configured: set) -> str:
-        """What an impact summary depends on: the resource version, each mod's files and stored baseline (by its
-        modification time) and the configured sources. Names, sizes and times only."""
+        """Give what an impact summary depends on.
+
+        That is the resource version, each mod's files and stored baseline (by its modification time) and the configured
+        sources. Names, sizes and times only.
+        """
         parts = [pin.key, version, sorted(str(source) for source in configured if source)]
         for record in records:
             baseline = self.root / "mods" / record["id"] / fingerprint.FILE_NAME
@@ -5061,9 +5251,12 @@ class ModLibrary:
         return None if version is None or version in tested.versions else version
 
     def _untested_cores(self, pin: Pin, targets: Iterable[Path], version: str | None) -> list[str]:
-        """The cores of ``targets`` the untested build of resource version ``version`` (``untested_version``) changed
-        and the user has not confirmed writing: a core with a bundle whose name the tested build does not have (a part
-        rebuilt under a new CRC, or a new part). Names only."""
+        """Find the cores of ``targets`` that the untested build of resource version ``version`` changed.
+
+        ``version`` is the one ``untested_version`` gives. A core counts when the user has not confirmed writing it and
+        it has a bundle whose name the tested build does not have (a part rebuilt under a new CRC, or a new part). Names
+        only.
+        """
         targets = list(targets)
         if version is None or not targets:
             return []
@@ -5080,8 +5273,10 @@ class ModLibrary:
     def _untested_entry(
         self, pin: Pin, core: str, targets: Sequence[Path], variant: str | None = None, kind: str | None = None
     ) -> dict[str, Any]:
-        """An entry an untested build's confirmation names: {install, core, variant, kind}, with its file names for a
-        generic part."""
+        """Name an entry of an untested build's confirmation.
+
+        It is {install, core, variant, kind}, with its file names for a generic part.
+        """
         kind = kind or self._kind(core, pin) or "spr"
         entry = {
             "install": pin.key,
@@ -5094,10 +5289,12 @@ class ModLibrary:
         return entry
 
     def _check_untested(self, writes: Sequence[tuple[Pin, dict[str, Any], Sequence[Path]]]) -> None:
-        """Refuse writes onto cores an untested build changed until the user confirms them (``untested_build``, a
-        refusal of the moment: nothing is written or configured). ``writes`` holds, per entry to write, its install,
-        the entry the refusal names (``_untested_entry``) and its target files. The refusal's ``confirm``
-        ({install: {version, cores}}) is what ``confirm_untested`` takes back."""
+        """Refuse writes onto cores an untested build changed until the user confirms them.
+
+        The refusal is ``untested_build``, a refusal of the moment: nothing is written or configured. ``writes`` holds,
+        per entry to write, its install, the entry the refusal names (``_untested_entry``) and its target files. The
+        refusal's ``confirm`` ({install: {version, cores}}) is what ``confirm_untested`` takes back.
+        """
         entries: list[dict[str, Any]] = []
         confirm: dict[str, dict[str, Any]] = {}
         versions: dict[str, str | None] = {}  # read once per install
@@ -5143,10 +5340,13 @@ class ModLibrary:
             logger.info("Untested game build: %d cores confirmed in %s", len(cores), install)
 
     def _backfill_built_against(self, record: dict[str, Any], pin: Pin | None) -> dict | None:
-        """A fingerprint for a mod stored without one, from evidence alone: the official files of its core (the
-        install's current parts and the kept originals) whose atlases, skeletons and textures the mod's own files
-        carry unchanged. One file per part: the install's part before a kept original. It is stored, as
-        incomplete (other parts of the core are not known). None, and nothing stored, when no file shows it."""
+        """Build a fingerprint for a mod stored without one, from evidence alone.
+
+        The evidence is the official files of its core (the install's current parts and the kept originals) whose
+        atlases, skeletons and textures the mod's own files carry unchanged. One file per part: the install's part
+        before a kept original. It is stored, as incomplete (other parts of the core are not known). None, and nothing
+        stored, when no file shows it.
+        """
         try:
             paths = self._paths(record)
             files = {path.name: path for path in paths}
@@ -5199,8 +5399,11 @@ class ModLibrary:
             return None
 
     def _backfill_before_release(self, name: str) -> None:
-        """Before a kept original goes: the mods of its core stored without a fingerprint get theirs while the
-        file that shows it is still here (``_backfill_built_against``, kept originals only). Never raises."""
+        """Backfill fingerprints before a kept original goes.
+
+        The mods of its core stored without a fingerprint get theirs while the file that shows it is still here
+        (``_backfill_built_against``, kept originals only). Never raises.
+        """
         try:
             key, core = integrity.replacement_key(name), core_of(name)
             for record in list(self._records.values()):
@@ -5216,10 +5419,12 @@ class ModLibrary:
             log_failure(logger, logging.DEBUG, "No fingerprint made before the release", error)
 
     def _needs_original(self, path: Path, record: dict[str, Any]) -> bool:
-        """Whether a game file the library wrote to may still need the kept original of its name, by stat alone: not
-        once its folder exists and the file is gone, nor while it is unchanged since the library wrote official
-        bytes there. A folder that cannot be seen (an unmounted drive) is judged by its record. When unsure, the
-        original stays: the cost is disk space, never a lost official copy."""
+        """Tell whether a game file the library wrote to may still need the kept original of its name, by stat alone.
+
+        It does not once its folder exists and the file is gone, nor while it is unchanged since the library wrote
+        official bytes there. A folder that cannot be seen (an unmounted drive) is judged by its record. When unsure,
+        the original stays: the cost is disk space, never a lost official copy.
+        """
         try:
             if not path.parent.is_dir():
                 return not says_official(record)
@@ -5233,10 +5438,13 @@ class ModLibrary:
             return True
 
     def _needed_elsewhere(self, name: str, mine: set[str], pins: list[Pin]) -> bool:
-        """Whether another file needs the kept original of a name: a file of that name the library wrote to outside
-        ``mine`` (resolved paths), judged by _needs_original, or a file of that name in one of ``pins`` outside
-        ``mine`` the library never wrote (it may be another tool's mod, with this original its only official copy).
-        ``pins`` holds the installs this data directory removed from its list too (_all_pins)."""
+        """Tell whether another file needs the kept original of a name.
+
+        Another file is one of that name the library wrote to outside ``mine`` (resolved paths), judged by
+        _needs_original, or one of that name in one of ``pins`` outside ``mine`` the library never wrote (it may be
+        another tool's mod, with this original its only official copy). ``pins`` holds the installs this data directory
+        removed from its list too (_all_pins).
+        """
         for other, record in self._applied.items():
             if other not in mine and Path(other).name == name and self._needs_original(Path(other), record):
                 return True
@@ -5248,10 +5456,13 @@ class ModLibrary:
         return False
 
     def _kept_for_configuration(self, name: str, config: dict | None, pins: list[Pin]) -> bool:
-        """Whether a configured entry keeps the original of a name: its game file of that name exists in that
-        install, and the configured source may write non-official bytes there (no record there shows the configured
-        source leaving that part official). When unsure, the original stays. While troubleshooting, the
-        configuration saved to restore keeps its originals too: releasing them all would be a long pass for nothing."""
+        """Tell whether a configured entry keeps the original of a name.
+
+        It does when its game file of that name exists in that install, and the configured source may write non-official
+        bytes there (no record there shows the configured source leaving that part official). When unsure, the original
+        stays. While troubleshooting, the configuration saved to restore keeps its originals too: releasing them all
+        would be a long pass for nothing.
+        """
         core = core_of(name)
         saved = (config or {}).get("troubleshoot")
         saved = saved.get("folders") if isinstance(saved, dict) else None
@@ -5273,8 +5484,11 @@ class ModLibrary:
         return False
 
     def _release_failed(self, targets: list[Path], pin: Pin) -> None:
-        """After a write that failed with its game files back as they were, release the originals that same call kept
-        from the game files themselves: those files hold the bytes just verified."""
+        """Release the originals a failed write kept, from the game files themselves.
+
+        This is for a write that failed with its game files back as they were: the originals that same call kept are
+        released from the game files, which hold the bytes just verified.
+        """
         if not targets:
             return
         try:
@@ -5295,26 +5509,30 @@ class ModLibrary:
                 logger.info("Released the original of %s kept by a failed write", target.name)
 
     def _prune(self) -> list[Path]:
-        """Serialize deletion with writes that may still need an original for rollback. Nothing is deleted while a
-        journal is pending or the state cannot be written (the start job calls this)."""
+        """Serialize deletion with writes that may still need an original for rollback.
+
+        Nothing is deleted while a journal is pending or the state cannot be written (the start job calls this).
+        """
         if self._state_error is not None or any((self.root / "transactions").glob("*/journal.json")):
             return []
         with self._transaction_lock():
             return self._prune_originals()
 
     def _prune_originals(self) -> list[Path]:
-        """Delete unneeded kept originals, over every known install, from names, stats and records only
-        (no game file's contents are read; an original about to go is read once for the mods of its core that have
-        no fingerprint of their official parts yet, ``_backfill_before_release``): an original whose name is present
-        is released once every file of that name is unchanged since the library wrote official bytes there; an
-        original whose name is gone from every known install is deleted when a game update superseded it (a
-        later-dated file of the same part in the folder of each of its gone records). Then the records of superseded
-        gone files are dropped (with the entry's ``updated`` marker when the library wrote non-official bytes there),
-        and the built copies whose names are gone.
+        """Delete unneeded kept originals, over every known install, from names, stats and records only.
+
+        No game file's contents are read; an original about to go is read once for the mods of its core that have no
+        fingerprint of their official parts yet (``_backfill_before_release``). An original whose name is present is
+        released once every file of that name is unchanged since the library wrote official bytes there; an original
+        whose name is gone from every known install is deleted when a game update superseded it (a later-dated file of
+        the same part in the folder of each of its gone records). Then the records of superseded gone files are dropped
+        (with the entry's ``updated`` marker when the library wrote non-official bytes there), and the built copies
+        whose names are gone.
 
         What it keeps is decided over the installs this data directory removed from its list too (``guarded``): a
         library shared with a data directory that names such an install keeps the same originals here as there, so
-        removing an install from the list never changes what the prune keeps."""
+        removing an install from the list never changes what the prune keeps.
+        """
         directory = self.root / "originals"
         if not directory.resolve().is_relative_to(self.root):
             return []
@@ -5693,9 +5911,12 @@ class ModLibrary:
         return entry
 
     def _swap_outdated(self, paths: list[Path], choice: dict) -> bool:
-        """Whether the game files of a model slot hold another variant's costume (``choice``, its configured entry)
-        built under an older costume rule than the program's, or under one not recorded (every swap applied before
-        the rule was recorded): applying it again builds it under the current rule."""
+        """Tell whether the game files of a model slot hold another variant's costume built under an outdated rule.
+
+        ``choice`` is its configured entry. A costume is outdated when it was built under an older costume rule than the
+        program's, or under one not recorded (every swap applied before the rule was recorded): applying it again builds
+        it under the current rule.
+        """
         from ..gameassets.costume_rule import COSTUME_RULE
 
         if choice.get("kind") != "model" or not str(choice.get("source") or "").startswith("variant:"):
@@ -5964,8 +6185,11 @@ class ModLibrary:
             _background.on = False
 
     def _yield_to_foreground(self, cancel: Callable[[], bool] | None) -> float | None:
-        """Wait until no other caller used the library's lock for ``RIG_ARCHIVE_QUIET`` seconds: how long it waited,
-        None once cancelled."""
+        """Wait until no other caller used the library's lock for ``RIG_ARCHIVE_QUIET`` seconds.
+
+        Returns:
+            How long it waited; None once cancelled.
+        """
         started = time.monotonic()
         while True:
             if cancel is not None and cancel():
@@ -5976,9 +6200,14 @@ class ModLibrary:
             time.sleep(min(0.1, RIG_ARCHIVE_QUIET - quiet))
 
     def _let_others_in(self) -> float:
-        """Between two steps of a paced job (a toggle): wait until no other caller used the library's lock for
-        ``TOGGLE_YIELD[0]`` seconds, at most ``TOGGLE_YIELD[1]``; how long it waited. A caller that waits for the lock
-        notes it before it blocks, so the job steps aside for it at once."""
+        """Wait between two steps of a paced job (a toggle) until no other caller used the library's lock for a while.
+
+        The wait lasts until no other caller used the lock for ``TOGGLE_YIELD[0]`` seconds, at most ``TOGGLE_YIELD[1]``.
+        A caller that waits for the lock notes it before it blocks, so the job steps aside for it at once.
+
+        Returns:
+            How long it waited.
+        """
         quiet_for, longest = TOGGLE_YIELD
         started = time.monotonic()
         while True:
@@ -6047,12 +6276,15 @@ class ModLibrary:
     def _archived_rigs(
         self, paths: list[Path], atlases: Mapping[str, bytes], current: Callable[[], Mapping[str, Any]] | None = None
     ) -> dict[str, dict]:
-        """Of the official ``atlases`` as they are now that a mod's textures paint without the mod carrying them, the
-        ones its pages were drawn for in an earlier release the archive keeps (``rig_archive.best``): per atlas name a
-        ``fingerprint.painted``-style entry (``text``, base64 ``skeleton``, ``layout``, ``archived``). ``current`` gives
-        the installed release's page masks; without it, the archive's rig of the installed layout stands for them, and
-        an atlas whose installed rig the archive does not keep is left out. Nothing is decoded unless the archive keeps
-        a rig of another layout for the core. Never raises."""
+        """Find the rigs of an earlier release that a mod's textures were drawn for.
+
+        The archive keeps them (``rig_archive.best``). It looks at the official ``atlases`` as they are now, where a
+        mod's textures paint without the mod carrying them, and gives the ones its pages were drawn for in an earlier
+        release the archive keeps: per atlas name a ``fingerprint.painted``-style entry (``text``, base64 ``skeleton``,
+        ``layout``, ``archived``). ``current`` gives the installed release's page masks; without it, the archive's rig
+        of the installed layout stands for them, and an atlas whose installed rig the archive does not keep is left out.
+        Nothing is decoded unless the archive keeps a rig of another layout for the core. Never raises.
+        """
         if not paths or not atlases:
             return {}
         core = core_of(paths[0].name)
@@ -6320,8 +6552,11 @@ class ModLibrary:
         older: Collection[Path] = (),
         check_references: bool = True,
     ) -> list[PlannedGroup]:
-        """Install groups, demoting stale whole files before a build. Comparisons only ask for targets, without
-        reference reads; ``older`` carries any files the whole-file shortcut already found stale."""
+        """Plan install groups, demoting stale whole files before a build.
+
+        Comparisons only ask for targets, without reference reads; ``older`` carries any files the whole-file shortcut
+        already found stale.
+        """
         paths = self._paths(record)
         files = {path.name: path for path in paths}
         targets = (
@@ -6429,12 +6664,14 @@ class ModLibrary:
         kept_current: list[str] | None = None,
         untested: bool = True,
     ) -> list[Path]:
-        """Write prepared files over game files as one unit, keeping what they replace: the official file in
-        originals/ (once), a file kept nowhere else as a library mod (_keep_replaced). Every written part is rolled
-        back on failure. With ``prune``, unneeded kept originals are deleted afterwards, whatever the
-        outcome; bulk operations prune once at their end. ``untested``: a write of another source than official onto
-        a core an untested build changed needs the user's confirmation (``_check_untested``); False for a rollback
-        that puts back what was there."""
+        """Write prepared files over game files as one unit, keeping what they replace.
+
+        That is the official file in originals/ (once) and a file kept nowhere else as a library mod (_keep_replaced).
+        Every written part is rolled back on failure. With ``prune``, unneeded kept originals are deleted afterwards,
+        whatever the outcome; bulk operations prune once at their end. ``untested``: a write of another source than
+        official onto a core an untested build changed needs the user's confirmation (``_check_untested``); False for a
+        rollback that puts back what was there.
+        """
         pin = self._current(pin)
         deletion = getattr(self, "_asset_deletion", None)
         if deletion:
@@ -6459,8 +6696,11 @@ class ModLibrary:
 
     @contextlib.contextmanager
     def _writable(self, paths: list[Path], pin: Pin, *, recovering: bool = False) -> Iterator[None]:
-        """The checks right before game files are written: the game not running, Steam not updating or verifying the
-        install, the files inside its resource folders and lockable, and the caller's own check (write_check)."""
+        """Run the checks right before game files are written.
+
+        They are: the game not running, Steam not updating or verifying the install, the files inside its resource
+        folders and lockable, and the caller's own check (write_check).
+        """
         if self._write_check is not None:
             self._write_check(pin)
         self._check_idle([pin])
@@ -6469,10 +6709,13 @@ class ModLibrary:
 
     @contextlib.contextmanager
     def _transaction_lock(self) -> Iterator[None]:
-        """Lock before mods, state and profiles; nested writes already hold this process lock. Taking the lock
-        recovers every pending journal first, every time, and raises the real failure when one cannot be rolled back
-        (a write never goes on over a journal it could not settle); the failure is remembered for the reads and for
-        the writes that do not take this lock (``_check_recovery``)."""
+        """Take the transaction lock, before the mods, state and profiles locks.
+
+        Nested writes already hold this process lock. Taking the lock recovers every pending journal first, every time,
+        and raises the real failure when one cannot be rolled back (a write never goes on over a journal it could not
+        settle); the failure is remembered for the reads and for the writes that do not take this lock
+        (``_check_recovery``).
+        """
         if self._transacting:
             yield
             return
@@ -6502,8 +6745,10 @@ class ModLibrary:
         )
 
     def _recover_pending(self) -> None:
-        """Recover before indexing game files, including one moved away just before a crash. Raises the failure of a
-        journal that cannot be settled (it stays pending); nothing happens without a journal."""
+        """Recover before indexing game files, including one moved away just before a crash.
+
+        Raises the failure of a journal that cannot be settled (it stays pending); nothing happens without a journal.
+        """
         if self._transacting:
             return
         if self._journals():
@@ -6513,10 +6758,13 @@ class ModLibrary:
             self._recovery_error = self._recovery_seen = self._recovery_logged = None
 
     def _recover_for_read(self) -> None:
-        """Attempt recovery before a read, never failing it: a failure is logged once, remembered (with the pending
-        journals and the time) and the read goes on. A read tries again only when the set of journals changed or
-        RECOVERY_RETRY seconds have passed; a retry that finds other journals still pending but raises nothing
-        follows the same limit. Writes recover on their own (``_transaction_lock``)."""
+        """Attempt recovery before a read, never failing it.
+
+        A failure is logged once, remembered (with the pending journals and the time) and the read goes on. A read tries
+        again only when the set of journals changed or RECOVERY_RETRY seconds have passed; a retry that finds other
+        journals still pending but raises nothing follows the same limit. Writes recover on their own
+        (``_transaction_lock``).
+        """
         if self._transacting:
             return
         journals = self._journals()
@@ -6535,8 +6783,11 @@ class ModLibrary:
             pass  # _remember_recovery logs it and makes it a ServiceError; the read goes on
 
     def _remember_recovery(self, error: Exception | None) -> None:
-        """Note the outcome of a recovery attempt: the failure writes refuse with (None: it succeeded), and the
-        journals still pending with the time, which limit how often a read tries again."""
+        """Note the outcome of a recovery attempt.
+
+        That is the failure writes refuse with (None: it succeeded), and the journals still pending with the time, which
+        limit how often a read tries again.
+        """
         journals = self._journals()
         self._recovery_seen = (journals, time.monotonic()) if journals else None
         if error is None:
@@ -6554,22 +6805,30 @@ class ModLibrary:
             log_failure(logger, logging.WARNING, "Mod recovery pending, reads continue", error)
 
     def _check_recovery(self) -> None:
-        """Refuse a change of state or configuration while a recovery has failed, with that failure. Recovery is
-        attempted again first (a closed game, a repaired file), so the refusal is the real, current one. Not during a
-        recovery itself or the writes under the transaction lock, which recovered before they started."""
+        """Refuse a change of state or configuration while a recovery has failed, with that failure.
+
+        Recovery is attempted again first (a closed game, a repaired file), so the refusal is the real, current one. Not
+        during a recovery itself or the writes under the transaction lock, which recovered before they started.
+        """
         if self._recovery_error is not None and not self._transacting:
             self._recover_pending()
 
     def _check_writes(self) -> None:
-        """The gate of every change of the configuration (``Profiles.gate``): refused with the real error while a
-        recovery has failed (``_check_recovery``) or the state cannot be written (``_check_writable``), because a
-        library that reads an empty state would judge every source gone and settle that into profiles.json."""
+        """Gate every change of the configuration (``Profiles.gate``).
+
+        It is refused with the real error while a recovery has failed (``_check_recovery``) or the state cannot be
+        written (``_check_writable``), because a library that reads an empty state would judge every source gone and
+        settle that into profiles.json.
+        """
         self._check_recovery()
         self._check_writable()
 
     def _writes_refused(self) -> bool:
-        """Whether changes of state and configuration are refused now, without trying again: a recovery has failed or
-        the state cannot be written. For the reads that settle something on the side and skip it instead."""
+        """Tell whether changes of state and configuration are refused now, without trying again.
+
+        That is when a recovery has failed or the state cannot be written. It is for the reads that settle something on
+        the side and skip it instead.
+        """
         return self._state_error is not None or (self._recovery_error is not None and not self._transacting)
 
     def state_unreadable(self) -> bool:
@@ -6585,8 +6844,10 @@ class ModLibrary:
 
     def _recover_transactions(self) -> None:
         """Settle every pending journal under the transaction lock: imports, then write journals, then asset deletions.
+
         A failure (ServiceError) leaves the journal and stops here; a write journal whose install is not known now waits
-        (skipped, logged once). A game file changed outside the library is left as it is (``_rollback_write``)."""
+        (skipped, logged once). A game file changed outside the library is left as it is (``_rollback_write``).
+        """
         self._recover_imports()
         for path in sorted((self.root / "transactions").glob("*/journal.json")):
             try:
@@ -6647,8 +6908,11 @@ class ModLibrary:
         recover(self)
 
     def _droppable(self, kept: list[str], left: set[str]) -> list[str]:
-        """Of the mods a rolled back write kept from game files, those to forget: not the ones kept from a file left
-        as it is (changed outside the library), whose bytes are in no game file again."""
+        """Pick the mods a rolled back write kept from game files that are to be forgotten.
+
+        Not the ones kept from a file left as it is (changed outside the library), whose bytes are in no game file
+        again.
+        """
         if not left:
             return list(kept)
         names = {Path(key).name for key in left}
@@ -6664,7 +6928,8 @@ class ModLibrary:
 
         A target that is missing while a later-dated file of its part is in its folder was superseded by a game
         update: it is not restored (that would write the old name beside the new one), the journal's own record of it
-        is dropped and its original stays. It is returned with the targets left, so that nothing it kept is released."""
+        is dropped and its original stays. It is returned with the targets left, so that nothing it kept is released.
+        """
         left: set[str] = set()
         superseded: set[str] = set()
         for item in reversed(data["files"]):
@@ -6720,8 +6985,10 @@ class ModLibrary:
         return left
 
     def _pointers_of(self, path: Path) -> frozenset[pointers.Pointer]:
-        """The cross-bundle pointers of a file (``pointers.external_pointers``), kept by its SHA-1. A file that is no
-        readable bundle has none: it gives no evidence here, and the bundle checks judge it."""
+        """Give the cross-bundle pointers of a file (``pointers.external_pointers``), kept by its SHA-1.
+
+        A file that is no readable bundle has none: it gives no evidence here, and the bundle checks judge it.
+        """
         sha1 = self._hashes.get(path).sha1
         found = self._pointer_cache.get(sha1)
         if found is None:
@@ -6739,8 +7006,10 @@ class ModLibrary:
         return found
 
     def _layouts_of(self, path: Path) -> dict[str, dict[int, int]]:
-        """The objects of each CAB of a file, {CAB: {path id: class id}}, from its headers; kept by the file's
-        revision."""
+        """Give the objects of each CAB of a file, {CAB: {path id: class id}}, from its headers.
+
+        They are kept by the file's revision.
+        """
         devmode.check_read(path)
         stat = path.stat()
         key = (str(path), stat.st_dev, stat.st_ino, stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns)
@@ -6757,14 +7026,16 @@ class ModLibrary:
     def _broken_references(
         self, replacements: Mapping[Path, Path], pin: Pin, *, targets: Collection[Path] = ()
     ) -> dict[Path, set[pointers.Pointer]]:
-        """The written files of ``replacements`` ({target: prepared}) that point at objects the game does not hold:
-        a pointer into another bundle's CAB whose object is gone there or of a type the field cannot hold
-        (``pointers.dangling``), {target: those pointers}. ``targets`` completes a planned entry: its omitted parts
-        use official copies where available, else the current files, as the write will. A CAB resolves within that
-        resulting entry first, and only outside it to the install (``CabIndex``); one found nowhere is left to the
-        missing-part checks. A file that is the target's official copy is not judged, and what the official copy
-        itself points at in vain, against the official files, is not held against a file (the game's own data then
-        has it too)."""
+        """Find the written files of ``replacements`` ({target: prepared}) that point at objects the game does not hold.
+
+        That is a pointer into another bundle's CAB whose object is gone there or of a type the field cannot hold
+        (``pointers.dangling``); the result is {target: those pointers}. ``targets`` completes a planned entry: its
+        omitted parts use official copies where available, else the current files, as the write will. A CAB resolves
+        within that resulting entry first, and only outside it to the install (``CabIndex``); one found nowhere is left
+        to the missing-part checks. A file that is the target's official copy is not judged, and what the official copy
+        itself points at in vain, against the official files, is not held against a file (the game's own data then has
+        it too).
+        """
         official: dict[Path, Path | None] = {}
         for target in dict.fromkeys((*targets, *replacements)):
             try:
@@ -6821,10 +7092,12 @@ class ModLibrary:
         return broken
 
     def _stale_build(self, replacements: Mapping[Path, Path], pin: Pin) -> bool:
-        """Whether a kept build points at objects absent from the game (``_broken_references``): a game update
-        that rebuilt a bundle it points into, under the same CAB, leaves its inputs' and targets' names as they were.
-        Such a copy is built again from the current files; a file that cannot be read keeps the copy (the write's own
-        check reads it again)."""
+        """Tell whether a kept build points at objects absent from the game (``_broken_references``).
+
+        A game update that rebuilt a bundle it points into, under the same CAB, leaves its inputs' and targets' names as
+        they were. Such a copy is built again from the current files; a file that cannot be read keeps the copy (the
+        write's own check reads it again).
+        """
         try:
             broken = self._broken_references(replacements, pin)
         except (ServiceError, OSError, ValueError) as error:
@@ -6838,12 +7111,14 @@ class ModLibrary:
         return bool(broken)
 
     def _stale_sources(self, current: Mapping[Path, Path], pin: Pin, *, targets: Collection[Path]) -> set[Path]:
-        """The files of ``current`` ({target: source}, those a resolution writes whole) that point at objects the game
-        does not hold (``_broken_references``): a game update rebuilt a bundle they point into, under the same CAB,
-        and left the part's name, or its structure, as it was. The entry's full ``targets`` supplies the official
-        copies its write restores alongside them. They are files of an older release, updated into the part as it
-        is now like any other; written whole, the write's own check would refuse them. A file that cannot be read
-        stays as it is (that check reads it again)."""
+        """Find the files of ``current`` that point at objects the game does not hold (``_broken_references``).
+
+        ``current`` is {target: source}, the files a resolution writes whole. A game update rebuilt a bundle they point
+        into, under the same CAB, and left the part's name, or its structure, as it was. The entry's full ``targets``
+        supplies the official copies its write restores alongside them. They are files of an older release, updated into
+        the part as it is now like any other; written whole, the write's own check would refuse them. A file that cannot
+        be read stays as it is (that check reads it again).
+        """
         if not current:
             return set()
         try:
@@ -6859,9 +7134,11 @@ class ModLibrary:
         return {current[target] for target in broken}
 
     def _check_references(self, changed: Mapping[Path, Path], pin: Pin) -> None:
-        """The last reference check of a write: a file that points at objects absent from its destination CAB
-        (``_broken_references``) never reaches the install; the game would draw nothing there and report nothing
-        (mod_release_mismatch, naming the file)."""
+        """Make the last reference check of a write.
+
+        A file that points at objects absent from its destination CAB (``_broken_references``) never reaches the
+        install; the game would draw nothing there and report nothing (mod_release_mismatch, naming the file).
+        """
         broken = self._broken_references(changed, pin)
         for target, found in sorted(broken.items()):
             logger.warning(
@@ -6873,8 +7150,11 @@ class ModLibrary:
             raise ServiceError("mod_release_mismatch", file=changed[target].name)
 
     def _check_target_crc(self, changed: dict[Path, Path]) -> None:
-        """The last CRC check of a write: bytes whose CRC is not the one in the target's name never reach an install
-        that needs the CRC fix, whatever step before missed it (crc_fix_failed, naming the file)."""
+        """Make the last CRC check of a write.
+
+        Bytes whose CRC is not the one in the target's name never reach an install that needs the CRC fix, whatever step
+        before missed it (crc_fix_failed, naming the file).
+        """
         for target, prepared in changed.items():
             fingerprint = self._hashes.get(prepared)
             if crc_state(
@@ -7136,10 +7416,13 @@ class ModLibrary:
         return replacements
 
     def _costume_files(self, other: str, pin: Pin) -> tuple[str, list[Path], list[Path]]:
-        """Another variant's model as a costume source: its dev name, the game files that hold its prefab and every
-        game file of its own (the model slot; for a slot of the variant's own dependency bundles, a story-only or
-        UI-only model, the parts that can hold it; for a variant with a model but no slot, the field character
-        bundles, which hold other students' field models as well, and those parts of its own bundles)."""
+        """Find another variant's model as a costume source.
+
+        That is its dev name, the game files that hold its prefab and every game file of its own (the model slot; for a
+        slot of the variant's own dependency bundles, a story-only or UI-only model, the parts that can hold it; for a
+        variant with a model but no slot, the field character bundles, which hold other students' field models as well,
+        and those parts of its own bundles).
+        """
         variant = self._variant(other)
         core = getattr(variant, "model", None)
         if core:
@@ -7174,8 +7457,11 @@ class ModLibrary:
         return dev, [resolve(path, pin) for path in files]
 
     def _costume_inputs(self, other: str, targets: list[Path], pin: Pin, *, preview: bool = False) -> _CostumeInputs:
-        """What ``_stage_costume`` reads of the library for a build of ``other``'s costume on the model slot
-        ``targets``; under the library lock (path lookups only, no bundle is opened)."""
+        """Gather what ``_stage_costume`` reads of the library for a costume build.
+
+        The build is of ``other``'s costume on the model slot ``targets``. This runs under the library lock (path
+        lookups only, no bundle is opened).
+        """
         originals = {path: self._official_or_current(path, pin) for path in targets}
         dev, prefab_files, files = self._costume_files(other, pin)
         resolve = self._official_or_current if preview else self._official_for
@@ -7223,20 +7509,25 @@ class ModLibrary:
         step: Callable[[], None] | None = None,
         fraction: Callable[[float], None] | None = None,
     ) -> dict[Path, Path]:
-        """The model slot ``targets`` (official copies) carrying the costume of ``other``'s model: changed parts built
-        into ``directory``, the others as staged official copies. Reads official bytes only: the slot's own parts, the
-        source model's files, and any other bundle the CAB index finds. ``physics``: Optimize Physics, the
-        build may also choose Rule B, or a rule built with the followed leg groups made rigid;
-        ``report["physics"]`` says
-        whether it chose one of them. Every costume, the same student's too, carries its halo or hides the slot's.
-        ``inputs``: what it reads of the library, gathered before under the library lock (``_costume_inputs``); given,
-        the build reads no library state and runs without that lock (``costume_preview``), else the caller holds it.
-        The build takes no model lock (``model_adapt.adapt`` reads its bundles from memory), so exports run beside it.
-        ``step``: called between its steps (``adapt``'s, then before each part's save starts); only for a build without
-        the library lock (``costume_preview``), whose job yields there to the foreground previews. The changed parts are
-        saved in threads (``bundle_saves.save_bundles``), at most half the cores; the same bytes as one after another.
-        ``fraction``: told how far the build is (0..1, its phases weighted by ``model_adapt.COSTUME_PHASES``), at most
-        every 0.2 s (``progress_meter``); the job's progress for its item (``_item_fraction``)."""
+        """Build the model slot ``targets`` (official copies) carrying the costume of ``other``'s model.
+
+        Changed parts are built into ``directory``, the others are staged official copies. Reads official bytes only:
+        the slot's own parts, the source model's files, and any other bundle the CAB index finds. Every costume, the
+        same student's too, carries its halo or hides the slot's. The build takes no model lock (``model_adapt.adapt``
+        reads its bundles from memory), so exports run beside it. The changed parts are saved in threads
+        (``bundle_saves.save_bundles``), at most half the cores; the same bytes as one after another.
+
+        - ``physics``: Optimize Physics; the build may also choose Rule B, or a rule built with the followed leg
+          groups made rigid; ``report["physics"]`` says whether it chose one of them.
+        - ``inputs``: what it reads of the library, gathered before under the library lock
+          (``_costume_inputs``); given, the build reads no library state and runs without that lock
+          (``costume_preview``), else the caller holds it.
+        - ``step``: called between its steps (``adapt``'s, then before each part's save starts); only for a
+          build without the library lock (``costume_preview``), whose job yields there to the foreground
+          previews.
+        - ``fraction``: told how far the build is (0..1, its phases weighted by ``model_adapt.COSTUME_PHASES``),
+          at most every 0.2 s (``progress_meter``); the job's progress for its item (``_item_fraction``).
+        """
         from ..gameassets.model_adapt import adapt, costume_weights
         from ..gameassets.costume_cache import PoseStore
 
@@ -7318,9 +7609,12 @@ class ModLibrary:
         return replacements
 
     def _costume_signature(self, variant_key: str, other: str, pin: Pin) -> tuple[str, list[Path]]:
-        """The build signature of another variant's costume on a variant's model slot (the preview's, from official
-        bytes where there are any, else the current ones), and the slot's files. Keyed by the costume rule's version
-        rather than the program's: a new program build keeps the verdicts and previews of the same rule."""
+        """Give the build signature of another variant's costume on a variant's model slot, and the slot's files.
+
+        The signature is the preview's, from official bytes where there are any, else the current ones. It is keyed by
+        the costume rule's version rather than the program's: a new program build keeps the verdicts and previews of the
+        same rule.
+        """
         from ..gameassets.costume_rule import COSTUME_RULE
 
         rule = f"costume-rule:{COSTUME_RULE}"
@@ -7344,8 +7638,10 @@ class ModLibrary:
             ).hexdigest(), targets
 
     def _costume_allowed(self, verdict: dict[str, Any] | None) -> bool:
-        """Whether a pair's saved verdict lets it be built for the game: unchecked, "ok" or "preview" (past the
-        stretch limit); never a refusal."""
+        """Tell whether a pair's saved verdict lets it be built for the game.
+
+        That is a verdict of unchecked, "ok" or "preview" (past the stretch limit); never a refusal.
+        """
         return verdict is None or verdict["ok"] or verdict.get("preview")
 
     def _verdicts(self) -> dict[str, dict[str, Any]]:
@@ -7603,8 +7899,10 @@ class ModLibrary:
             raise ServiceError("busy")
 
     def _costume_build_turn(self, signature: str) -> threading.Event | None:
-        """Claim the build of a costume preview signature: None when this caller builds it (``_costume_build_done``
-        ends the claim), else the event of the build under way."""
+        """Claim the build of a costume preview signature.
+
+        None when this caller builds it (``_costume_build_done`` ends the claim), else the event of the build under way.
+        """
         with self._costume_builds_lock:
             building = self._costume_builds.get(signature)
             if building is None:
@@ -7621,9 +7919,11 @@ class ModLibrary:
     def _costume_preview_start(
         self, variant_key: str, other: str, pin: Pin | None, *, verdicts: bool = True
     ) -> list[Path] | tuple[str, list[Path], Pin, _CostumeInputs]:
-        """``costume_preview``'s first step, under the library lock: the kept preview of the pair's build signature
-        when there is one (with the stretch verdict it found, unless ``verdicts`` is False), else (signature, the
-        slot's files, the install, the build's inputs)."""
+        """Take ``costume_preview``'s first step, under the library lock.
+
+        It gives the kept preview of the pair's build signature when there is one (with the stretch verdict it found,
+        unless ``verdicts`` is False), else (signature, the slot's files, the install, the build's inputs).
+        """
         pin = self._current(pin)
         signature, targets = self._costume_signature(variant_key, other, pin)
         folder = self.root / "built" / "previews" / signature
@@ -7669,9 +7969,12 @@ class ModLibrary:
         *,
         verdicts: bool = True,
     ) -> list[Path] | None:
-        """``costume_preview``'s last step, under the library lock: the parts built without it copied into
-        built/previews/<signature>, with the stretch verdict the build found (unless ``verdicts`` is False), and the
-        older previews pruned; None, keeping nothing, when the pair's current signature differs from ``signature``."""
+        """Take ``costume_preview``'s last step, under the library lock.
+
+        The parts built without the lock are copied into built/previews/<signature>, with the stretch verdict the build
+        found (unless ``verdicts`` is False), and the older previews are pruned; None, keeping nothing, when the pair's
+        current signature differs from ``signature``.
+        """
         if self._costume_signature(variant_key, other, self._current(pin))[0] != signature:
             return None
         folder = self.root / "built" / "previews" / signature
@@ -8108,9 +8411,11 @@ class ModLibrary:
     def _untested_apply(
         self, variant_key: str, source: str, kind: Kind | None, pin: Pin, camera: dict[str, Any] | None
     ) -> None:
-        """An apply's confirmation on an untested build (``_check_untested``), before anything is built or configured:
-        the targets of each kind it writes, a camera's art and prefab together. Nothing to confirm while mods are off,
-        when an apply only configures."""
+        """Give an apply's confirmation on an untested build (``_check_untested``).
+
+        It is made before anything is built or configured, on the targets of each kind the apply writes, a camera's art
+        and prefab together. Nothing to confirm while mods are off, when an apply only configures.
+        """
         if self.untested_version(pin) is None or not profiles_mod.enabled(self.profiles.read()):
             return
         if camera is not None:  # one entry, the lobby, for the art and the prefab it holds
@@ -8306,10 +8611,12 @@ class ModLibrary:
         use_built: bool = True,
         fraction: Callable[[float], None] | None = None,
     ) -> list[Path]:
-        """The internal write of an entry: its core's parts in its own install switched to a source, and nothing
-        else (the configuration stays). From a built copy when one still fits; a mod made for the core is installed
-        directly, another variant's mod adapted, another variant's files (in that same install) adapted.
-        ``fraction``: told how far a costume build is and when the write starts (``mod_progress.Part``)."""
+        """Write an entry internally: its core's parts in its own install switched to a source, and nothing else.
+
+        The configuration stays. The write is from a built copy when one still fits; a mod made for the core is
+        installed directly, another variant's mod adapted, another variant's files (in that same install) adapted.
+        ``fraction``: told how far a costume build is and when the write starts (``mod_progress.Part``).
+        """
         core = self._core_map(pin).slot(core)
         targets = self._spine_parts(core, pin)
         if not targets:
@@ -8379,8 +8686,11 @@ class ModLibrary:
         return files
 
     def _build_signature(self, sources: list[Path], targets: list[Path], pin: Pin, version: str | None = None) -> str:
-        """What a build is made from: the program (or ``version``, a rule's own), the bytes of its inputs, the official
-        bytes of its targets and the options. A game file written from it records this as its ``build``."""
+        """Give what a build is made from.
+
+        That is the program (or ``version``, a rule's own), the bytes of its inputs, the official bytes of its targets
+        and the options. A game file written from it records this as its ``build``.
+        """
         inputs = [(path.name, self._hashes.get(path).sha1) for path in sources]
         originals = [(path.name, self._hashes.get(self._official_for(path, pin)).sha1) for path in targets]
         options = (
@@ -8400,7 +8710,9 @@ class ModLibrary:
         build_keys: dict[Path, str],
     ) -> dict[Path, Path]:
         """Reuse only a referenced instant-On copy with the same program, inputs, official targets and options.
-        Prepared files otherwise live solely in the caller's temporary staging directory."""
+
+        Prepared files otherwise live solely in the caller's temporary staging directory.
+        """
         if len({path.name for path in targets}) != len(targets):
             return build()  # built keys identify parts by file name
         try:
@@ -8447,9 +8759,12 @@ class ModLibrary:
     def _built_replacements(
         self, pin: Pin, core: str, source: str, targets: list[Path], build_keys: dict[Path, str] | None = None
     ) -> dict[Path, Path] | None:
-        """The entry's built copy written back, when it still fits: built for this very source, every part's name and
-        every input's name still in the install. The other parts take their official copies. A kept file whose bytes
-        are not the recorded ones drops the key (the entry is rebuilt)."""
+        """Give the entry's built copy written back, when it still fits.
+
+        It fits when it was built for this very source, with every part's name and every input's name still in the
+        install. The other parts take their official copies. A kept file whose bytes are not the recorded ones drops the
+        key (the entry is rebuilt).
+        """
         folder = ((self.profiles.read() or {}).get("folders") or {}).get(pin.key) or {}
         key = (folder.get("built") or {}).get(core)
         if not key:
@@ -8492,9 +8807,11 @@ class ModLibrary:
         return None
 
     def _kept_crc_fits(self, kept: Path, target: Path) -> bool:
-        """Whether a built copy's part may go over ``target`` as it is: its bytes carry the CRC of the target's name,
-        or the target needs no CRC. An older build kept the bytes of a mod file written whole over a part whose name
-        carries another CRC; such a copy is built again."""
+        """Tell whether a built copy's part may go over ``target`` as it is.
+
+        It may when its bytes carry the CRC of the target's name, or the target needs no CRC. An older build kept the
+        bytes of a mod file written whole over a part whose name carries another CRC; such a copy is built again.
+        """
         fingerprint = self._hashes.get(kept)
         if crc_state(fingerprint.crc, fingerprint.trailing, target.name) != "needs_fix":
             return True
@@ -8520,8 +8837,10 @@ class ModLibrary:
         return crc_repair.repair(self, log, progress)
 
     def _current_builds(self, pin: Pin, core: str, record: dict[str, Any], targets: list[Path]) -> set[str]:
-        """The builds a write of a mod over an entry's game files signs now, as apply and switch sign them
-        (``_cached_build``); those that cannot be told are left out."""
+        """Give the builds a write of a mod over an entry's game files signs now.
+
+        They are signed as apply and switch sign them (``_cached_build``); those that cannot be told are left out.
+        """
 
         def sign(sources: Callable[[], list[Path]], group: Callable[[], list[Path]]) -> str | None:
             try:
@@ -8546,11 +8865,14 @@ class ModLibrary:
         return signatures
 
     def _make_built(self, pin: Pin, entry: _Entry) -> None:
-        """Keep the exact bytes of an entry's modded parts before an Off replaces them, whole: every non-official part
-        of one write of its configured source, as a file of the mod in mods/<id>/ when one holds those bytes, else a
-        copy in built/<sha1>.bundle. The key replaces any earlier one. Nothing is kept when a part of a mod was not
-        written from the mod's current files (the mod was updated since): a key naming only some parts would put
-        official bytes over the others, and the old build must not come back. The entry is built again by the On."""
+        """Keep the exact bytes of an entry's modded parts before an Off replaces them, whole.
+
+        That is every non-official part of one write of its configured source, as a file of the mod in mods/<id>/ when
+        one holds those bytes, else a copy in built/<sha1>.bundle. The key replaces any earlier one. Nothing is kept
+        when a part of a mod was not written from the mod's current files (the mod was updated since): a key naming only
+        some parts would put official bytes over the others, and the old build must not come back. The entry is built
+        again by the On.
+        """
         source = entry.configured
         parts: dict[str, dict[str, Any]] = {}
         mod_files: dict[str, str] = {}
@@ -8612,8 +8934,11 @@ class ModLibrary:
             self._update_profiles(lambda data: False, after=lambda data: self._delete_built_files([key], data))
 
     def _inputs(self, pin: Pin, core: str, source: str) -> list[str]:
-        """The other game files a build of a source reads: an adapted mod's official parts of its own core, another
-        variant's files of the kind; none for a mod made for the core."""
+        """List the other game files a build of a source reads.
+
+        They are an adapted mod's official parts of its own core, another variant's files of the kind; none for a mod
+        made for the core.
+        """
         index = self._index(pin)
         if source.startswith("mod:") and source[4:] in self._records:
             record = self._records[source[4:]]
@@ -8636,8 +8961,10 @@ class ModLibrary:
     def _drop_built(
         self, pin_or_key: Pin | str, cores: list[str] | None = None, when: Callable[[dict], bool] | None = None
     ) -> None:
-        """Drop built keys of an install (the given cores, or those ``when`` picks; with neither, all), deleting the
-        built/ files no other key references."""
+        """Drop built keys of an install, deleting the built/ files no other key references.
+
+        The keys dropped are the given cores', or those ``when`` picks; with neither, all.
+        """
         target = pin_or_key.key if isinstance(pin_or_key, Pin) else pin_or_key
         dropped: list[dict] = []
 
@@ -8727,9 +9054,11 @@ class ModLibrary:
         return freed
 
     def _update_profiles(self, change: Callable[[dict], Any], after: Callable[[dict], Any] | None = None) -> Any:
-        """One change of profiles.json, then ``after`` under its lock. Neither callback calls into Profiles or the
-        library's public methods. Returns what the change returned when it is not a bool, else the configuration
-        as written."""
+        """Make one change of profiles.json, then ``after`` under its lock.
+
+        Neither callback calls into Profiles or the library's public methods. Returns what the change returned when it
+        is not a bool, else the configuration as written.
+        """
         result: list[Any] = []
 
         def wrapped(data: dict) -> Any:
@@ -8742,8 +9071,10 @@ class ModLibrary:
         return data if value is None or isinstance(value, bool) else value
 
     def _folder(self, data: dict, pin: Pin) -> dict:
-        """The install's record in a configuration, created when missing (with this data directory's id in
-        named_by when its settings name the install)."""
+        """Give the install's record in a configuration, created when missing.
+
+        A new record gets this data directory's id in named_by when its settings name the install.
+        """
         folders = data["folders"]
         folder = folders.get(pin.key)
         if folder is None:
@@ -8769,9 +9100,12 @@ class ModLibrary:
         *,
         dropped: list[dict] | None = None,
     ) -> None:
-        """Set (or, with None, drop) the configured source of an entry's cores. A changed or dropped configuration
-        drops the entry's built copy and its updated marker. With ``dropped``, the dropped built keys go there and
-        their files stay until the caller deletes them (``_ChoiceChange.close``), else they are deleted at once."""
+        """Set (or, with None, drop) the configured source of an entry's cores.
+
+        A changed or dropped configuration drops the entry's built copy and its updated marker. With ``dropped``, the
+        dropped built keys go there and their files stay until the caller deletes them (``_ChoiceChange.close``), else
+        they are deleted at once.
+        """
         kinds = {kind: self._core_map(pin).slot(core) if kind == "model" else core for kind, core in kinds.items()}
         stamp = now()
         dropped_keys: list[dict] = []
@@ -8814,17 +9148,21 @@ class ModLibrary:
         self._update_profiles(change, after=lambda data: self._delete_built_files(dropped_keys, data))
 
     def _check_stopping(self, pin: Pin) -> None:
-        """The refusals of the moment that the write-time checks (``_writable``) would give whatever the files: the
-        classic UI open, Steam changing the install, the game running. Checked before a choice is saved, so a write
-        refused for one of them (STOPPING) leaves the choice as it was and costs no build."""
+        """Check the refusals of the moment that the write-time checks (``_writable``) would give whatever the files.
+
+        They are the classic UI open, Steam changing the install, the game running. They are checked before a choice is
+        saved, so a write refused for one of them (STOPPING) leaves the choice as it was and costs no build.
+        """
         if self._write_check is not None:
             self._write_check(pin)
         self._check_idle([pin])
         safety.check_game_for(list(pin.dirs))
 
     def _saved_choices(self, pin: Pin, kinds: dict[str, str]) -> dict[str, dict[str, Any]]:
-        """The saved entries of an entry's cores (configured, updated marker, built key), as ``_put_back_choices``
-        restores them."""
+        """Give the saved entries of an entry's cores (configured, updated marker, built key).
+
+        ``_put_back_choices`` restores them.
+        """
         folder = ((self.profiles.read() or {}).get("folders") or {}).get(pin.key) or {}
         cores = [self._core_map(pin).slot(core) if kind == "model" else core for kind, core in kinds.items()]
         return {
@@ -8873,9 +9211,11 @@ class ModLibrary:
                 self._update_profiles(change)
 
     def _lookup_records(self) -> None:
-        """At each build: find each named install's record (its own; a moved install's, re-keyed; else one migrated
-        from what the library already wrote there), then refresh named_by and hidden of the records that exist. The
-        scan consent is asked before profiles.json is locked."""
+        """Find each named install's record at each build.
+
+        That is its own; a moved install's, re-keyed; else one migrated from what the library already wrote there. Then
+        refresh named_by and hidden of the records that exist. The scan consent is asked before profiles.json is locked.
+        """
         config = self.profiles.read()
         allowed = self._scan_allowed()
         named = self._named_pins()
@@ -8933,8 +9273,11 @@ class ModLibrary:
         self.profiles.update(change)
 
     def _rekey(self, old_root: Path, pin: Pin, allowed: bool) -> None:
-        """A moved install: its records follow to the same relative paths where the file matches, by size and date,
-        or (with scan consent: the new paths are not the library's yet) by size and last bytes. Nothing is hashed."""
+        """Follow a moved install: its records go to the same relative paths where the file matches.
+
+        A file matches by size and date, or (with scan consent: the new paths are not the library's yet) by size and
+        last bytes. Nothing is hashed.
+        """
         moved = 0
         for name, record in list(self._applied.items()):
             path = Path(name)
@@ -8957,10 +9300,12 @@ class ModLibrary:
             logger.info("Moved %d records of %s to %s", moved, old_root, pin.root)
 
     def _migration(self, pin: Pin, config: dict | None) -> dict[str, dict]:
-        """The configuration of an install without a record, from what the library already wrote there (recorded
-        paths and names only): every entry whose non-official parts all carry one library source, and every entry
-        whose present parts carry none while its gone records (renamed by a game update) all say non-official bytes
-        of one source."""
+        """Derive the configuration of an install without a record, from what the library already wrote there.
+
+        It uses recorded paths and names only. It holds every entry whose non-official parts all carry one library
+        source, and every entry whose present parts carry none while its gone records (renamed by a game update) all say
+        non-official bytes of one source.
+        """
         view = _View(self, [pin], config, "recorded")
         stamp = now()
         configured: dict[str, dict] = {}
@@ -9113,9 +9458,11 @@ class ModLibrary:
         return ScanResult(result, counts)
 
     def _settle(self, view: _View, found: list[_Entry]) -> None:
-        """What the judgement settles in the configuration: take-overs (a newer library write than the configured
-        source, or a library source with none) and sources gone from the library (dropped once listed); and the new
-        dates of files the library knows by their last bytes."""
+        """Settle in the configuration what the judgement finds.
+
+        That is take-overs (a newer library write than the configured source, or a library source with none) and sources
+        gone from the library (dropped once listed); and the new dates of files the library knows by their last bytes.
+        """
         if self._writes_refused():
             return  # a recovery that has failed refuses changes: the next scan settles
         restamps = {
@@ -9264,8 +9611,11 @@ class ModLibrary:
 
     @_mod_writer
     def _adopt_one(self, pin: Pin, core: str, mod_id: str | None = None) -> str:
-        """Adopt one entry, under the library lock: its files read in full (they are copied anyway). Rolled back as a
-        whole on failure; a mod already in the library stays as it was."""
+        """Adopt one entry, under the library lock.
+
+        Its files are read in full (they are copied anyway). Rolled back as a whole on failure; a mod already in the
+        library stays as it was.
+        """
         view = self._view([pin, *[p for p in self.installs() if p.key != pin.key]], "full")
         entry = view.entry(pin, core)
         core = entry.core
@@ -9462,9 +9812,12 @@ class ModLibrary:
     def _plan_toggle(
         self, enabled: bool, pins: list[Pin], config: dict | None, found: list[_Entry]
     ) -> list[tuple[Pin, str]]:
-        """The entries a toggle reaches, in every known install: for an Off with scan consent, every entry its own
-        pass over the files found (``found``), and for any Off the configured entries and those with records. For an
-        On, the configured entries, those with a record of a removed mod, and those the unfinished list holds."""
+        """List the entries a toggle reaches, in every known install.
+
+        For an Off with scan consent, that is every entry its own pass over the files found (``found``), and for any Off
+        the configured entries and those with records. For an On, the configured entries, those with a record of a
+        removed mod, and those the unfinished list holds.
+        """
         plan: list[tuple[Pin, str]] = []
         seen: set[tuple[str, str]] = set()
 
@@ -9493,8 +9846,11 @@ class ModLibrary:
         return plan
 
     def _hidden_items(self, config: dict | None) -> list[dict[str, str]]:
-        """The entries of the installs this data directory removed from its list: listed as not switched for the data
-        directory that names them (a toggle here leaves their files as they are)."""
+        """List the entries of the installs this data directory removed from its list.
+
+        They are listed as not switched for the data directory that names them (a toggle here leaves their files as they
+        are).
+        """
         items = []
         for key, folder in ((config or {}).get("folders") or {}).items():
             if self.data_id not in (folder.get("hidden") or []):
@@ -9583,9 +9939,12 @@ class ModLibrary:
         drift: list[dict] | None,
         retry: Sequence[str] | None = None,
     ) -> ToggleResult:
-        """A toggle, Retry (``drift`` None), Apply Mod Configuration (``drift``, the listed entries) or the start's
-        retry of failed writes (``retry``, cores of the one install ``pins``: an On's Retry of those entries alone,
-        the intent unchanged)."""
+        """Run a toggle, Retry, Apply Mod Configuration or the start's retry of failed writes.
+
+        The kinds are a toggle, Retry (``drift`` None), Apply Mod Configuration (``drift``, the listed entries) and the
+        start's retry of failed writes (``retry``, cores of the one install ``pins``: an On's Retry of those entries
+        alone, the intent unchanged).
+        """
         found: list[_Entry] = []
         with self._lock, _errors("toggle"):
             pins = list(pins) if pins is not None else self.installs()
@@ -9749,8 +10108,10 @@ class ModLibrary:
         )
 
     def _check_start(self, pins: list[Pin], intent: bool, expect: bool | None) -> None:
-        """What a toggle, Retry or Apply Mod Configuration checks before it plans (``intent``: and that the stored
-        intent is still the one the caller saw)."""
+        """Check what a toggle, Retry or Apply Mod Configuration checks before it plans.
+
+        With ``intent``, it also checks that the stored intent is still the one the caller saw.
+        """
         self._check_pins(pins)
         if intent and profiles_mod.enabled(self.profiles.read()) != expect:
             raise ServiceError("state_changed")
@@ -9758,9 +10119,11 @@ class ModLibrary:
         self._check_idle(pins)
 
     def _untested_plan(self, plan: Sequence[tuple[Pin, str]], config: dict | None, drift: bool) -> None:
-        """The confirmation of a toggle's writes on an untested build (``_check_untested``): every planned entry
-        configured with a source other than official, but those an On or its Retry holds for a changed rig
-        (``_hold``)."""
+        """Give the confirmation of a toggle's writes on an untested build (``_check_untested``).
+
+        It covers every planned entry configured with a source other than official, but those an On or its Retry holds
+        for a changed rig (``_hold``).
+        """
         writes = []
         untested = {key: self.untested_version(pin) for key, pin in {pin.key: pin for pin, _core in plan}.items()}
         for pin, core in plan:
@@ -9783,8 +10146,11 @@ class ModLibrary:
         self._check_untested(writes)
 
     def _save_outcomes(self, outcomes: dict[tuple[str, str], str | None]) -> None:
-        """The unfinished list after reached entries: an entry that holds its intent leaves, another keeps (or gets)
-        the why of what happened. Items of entries the job did not reach stay as they are."""
+        """Save the unfinished list after the reached entries.
+
+        An entry that holds its intent leaves, another keeps (or gets) the why of what happened. Items of entries the
+        job did not reach stay as they are.
+        """
         if not outcomes:
             return
 
@@ -9801,8 +10167,11 @@ class ModLibrary:
         self.profiles.update(change)
 
     def _off_space(self, plan: list[tuple[Pin, str]], found: list[_Entry], config: dict | None) -> int:
-        """What an Off copies: the mods it adopts and their official copies (from its pass), and the built copies it
-        keeps (parts not in built/ yet and not files of their mod)."""
+        """Give what an Off copies.
+
+        That is the mods it adopts and their official copies (from its pass), and the built copies it keeps (parts not
+        in built/ yet and not files of their mod).
+        """
         need = 0
         for entry in found:
             if entry.state in ("untracked", "changed"):
@@ -9842,11 +10211,13 @@ class ModLibrary:
         log: LogFunc,
         fraction: Callable[[float], None] | None = None,
     ) -> tuple[dict[str, Any], str | None, dict | None]:
-        """One entry of a toggle, Retry or Apply Mod Configuration, under the library lock: its configuration read
-        again and its files judged at write strength (a part the library can show unchanged by stat carries its
-        record's source; every other part is read in full). Returns (what happened, by result list; the entry's
-        why in the unfinished list, None when it leaves; the entry). ``fraction``: its progress line's share
-        (``mod_progress.Part``), told the build and the write."""
+        """Reach one entry of a toggle, Retry or Apply Mod Configuration, under the library lock.
+
+        Its configuration is read again and its files judged at write strength (a part the library can show unchanged by
+        stat carries its record's source; every other part is read in full). Returns (what happened, by result list; the
+        entry's why in the unfinished list, None when it leaves; the entry). ``fraction``: its progress line's share
+        (``mod_progress.Part``), told the build and the write.
+        """
         pins = self._view_pins(pin)
         view = self._view(pins, "full")
         entry = view.entry(pin, core)
@@ -9941,10 +10312,12 @@ class ModLibrary:
         return outcome, None, item
 
     def _note_judged(self, view: _View, entry: _Entry) -> None:
-        """What a judgement found that the records keep, so the cheap judgement agrees with it from then on: the new
-        date of a file whose bytes are the record's (its sha1 at write strength, its last bytes cheaply), and, at
-        write strength, a file the cheap rule calls official whose bytes were changed outside the library (``outside``,
-        its size and date; dropped by the next write there)."""
+        """Keep in the records what a judgement found, so the cheap judgement agrees with it from then on.
+
+        That is the new date of a file whose bytes are the record's (its sha1 at write strength, its last bytes
+        cheaply), and, at write strength, a file the cheap rule calls official whose bytes were changed outside the
+        library (``outside``, its size and date; dropped by the next write there).
+        """
         if self._writes_refused():
             return  # a recovery that has failed refuses changes: a later judgement notes it
         changed = False
@@ -10132,13 +10505,16 @@ class ModLibrary:
     def _remap_view(
         self, record: dict, paths: list[Path], targets: list[Path], originals: dict[Path, Path], pin: Pin
     ) -> dict:
-        """What a remap starts from: the mod's own inputs (``mod``), the official ones (``official``, from
-        ``originals``: per target its verified official copy), the official files with the mod's over them (``view``),
-        the official atlases the mod paints without carrying them (``mixed``), and why a remap is wanted: those whose
-        page the texture does not fit (``misfit``), those repacked since its textures were drawn on them (``layout``,
-        ``fingerprint.changed_layouts``) and the mod's own atlases that give way to the official rig, with its
-        skeleton (``rerig``, ``atlas_remap.rerigged``). ``dated``: the rig of the mod's date of the misfit atlases
-        the fingerprint does not record (``_dated_rig``)."""
+        """Gather what a remap starts from.
+
+        That is the mod's own inputs (``mod``), the official ones (``official``, from ``originals``: per target its
+        verified official copy), the official files with the mod's over them (``view``), the official atlases the mod
+        paints without carrying them (``mixed``), and why a remap is wanted: those whose page the texture does not fit
+        (``misfit``), those repacked since its textures were drawn on them (``layout``, ``fingerprint.changed_layouts``)
+        and the mod's own atlases that give way to the official rig, with its skeleton (``rerig``,
+        ``atlas_remap.rerigged``). ``dated``: the rig of the mod's date of the misfit atlases the fingerprint does not
+        record (``_dated_rig``).
+        """
         mod = atlas_remap.read_inputs(paths)
         official = atlas_remap.read_inputs(list(originals.values()))
         replaced = self._replaced_parts({path.name: path for path in paths}, targets, pin)
@@ -10187,12 +10563,14 @@ class ModLibrary:
 
     @staticmethod
     def _rebake_plan(inputs: dict) -> dict[str, bytes]:
-        """The portrait atlases the world-space rebake bakes (``bmpt.rebake``), each with the atlas the mod's textures
-        were drawn on, chosen as ``rig-geometry.js`` ``forRemap`` chooses it (the mod's own, else the recorded one:
-        the fingerprint's, or the official copy of the mod's date, else the official one): the mod's own atlases that
-        give way to the official rig, and the official ones it
-        paints without carrying them where they were repacked under a recorded rig or the texture does not fit. An
-        atlas the mod carries otherwise keeps its own rig and textures."""
+        """Plan the portrait atlases the world-space rebake bakes (``bmpt.rebake``).
+
+        Each comes with the atlas the mod's textures were drawn on, chosen as ``rig-geometry.js`` ``forRemap`` chooses
+        it (the mod's own, else the recorded one: the fingerprint's, or the official copy of the mod's date, else the
+        official one). The atlases are the mod's own atlases that give way to the official rig, and the official ones it
+        paints without carrying them where they were repacked under a recorded rig or the texture does not fit. An atlas
+        the mod carries otherwise keeps its own rig and textures.
+        """
         mod, official = inputs["mod"], inputs["official"]
         carried = atlas_remap.pair_atlases(mod.atlases, official.atlases)
         plan = {}
@@ -10211,8 +10589,10 @@ class ModLibrary:
 
     @staticmethod
     def _posted_rigs(geometry: Any, name: str, source: bytes, target: bytes) -> tuple:
-        """The posted geometry of an atlas's two rigs (``rig-geometry.js`` ``forRemap``), checked against the atlases
-        read here (``rebake.rig``), with the two atlases."""
+        """Check the posted geometry of an atlas's two rigs (``rig-geometry.js`` ``forRemap``).
+
+        It is checked against the atlases read here (``rebake.rig``), and returned with the two atlases.
+        """
         posted = geometry.get(name) if isinstance(geometry, dict) else None
         if not isinstance(posted, dict):
             raise atlas_remap.RemapError("bad_params", key="geometry")
@@ -10228,8 +10608,10 @@ class ModLibrary:
     def _rebake_pages(
         inputs: dict, source: atlas_remap.Atlas, target: atlas_remap.Atlas, done: dict | None = None
     ) -> tuple[dict, dict]:
-        """The mod's pages of the source atlas and the official pages of the target one, keyed by texture key; a page
-        an earlier atlas baked (``done``) is taken as it came out."""
+        """Give the mod's pages of the source atlas and the official pages of the target one, keyed by texture key.
+
+        A page an earlier atlas baked (``done``) is taken as it came out.
+        """
         mod, official = inputs["mod"], inputs["official"]
         source_pages = {
             key: mod.textures[key] for key in map(atlas_remap.texture_key, source.pages) if key in mod.textures
@@ -10243,8 +10625,11 @@ class ModLibrary:
         return source_pages, official_pages
 
     def _rebake(self, inputs: dict, plan: dict[str, bytes], geometry: Any) -> tuple[dict, dict]:
-        """The texture patch of a portrait remap: every planned atlas baked (``rebake.bake``), every other page as the
-        official files with the mod's over them have it."""
+        """Build the texture patch of a portrait remap.
+
+        Every planned atlas is baked (``rebake.bake``), every other page is as the official files with the mod's over
+        them have it.
+        """
         official, view = inputs["official"], inputs["view"]
         report = {"moved": [], "added": [], "official": [], "dropped": [], "upscaled": [], "warnings": []}
         baked: dict[str, Any] = {}
@@ -10311,10 +10696,12 @@ class ModLibrary:
     def _dated_rig(
         self, paths: list[Path], names: Iterable[str], official: dict[str, bytes], available: Iterable[Path] = ()
     ) -> dict[str, dict]:
-        """Of the official atlases ``names``, those a verified official copy of the mod's date holds (one the
-        library kept, or one of ``available`` of that date), each as a ``fingerprint.painted`` entry: that copy's
-        atlas ``text`` and, where it has one, the base64 ``skeleton`` of the same stem. The rig a texture-only mod's
-        textures were drawn for when its fingerprint does not record it."""
+        """Find the rig a texture-only mod's textures were drawn for when its fingerprint does not record it.
+
+        Of the official atlases ``names``, it takes those a verified official copy of the mod's date holds (one the
+        library kept, or one of ``available`` of that date), each as a ``fingerprint.painted`` entry: that copy's atlas
+        ``text`` and, where it has one, the base64 ``skeleton`` of the same stem.
+        """
         names = set(names)
         if not names or not paths:
             return {}
@@ -10565,8 +10952,11 @@ class ModLibrary:
         mod: atlas_remap.Inputs,
         plan: atlas_remap.OldRig,
     ) -> dict:
-        """The patch of an old-rig set (``old_rig``): the mod's own text assets, the plan's atlases and skeletons
-        over the official ones of their names, and the mod's own textures, all by ``cont_name_type``."""
+        """Build the patch of an old-rig set (``old_rig``).
+
+        It holds the mod's own text assets, the plan's atlases and skeletons over the official ones of their names, and
+        the mod's own textures, all by ``cont_name_type``.
+        """
         patch: dict = {}
         texts: dict[str, Any] = {}
         for original in originals.values():
@@ -10598,14 +10988,16 @@ class ModLibrary:
     def _graft_rigs(
         self, record: dict, paths: list[Path], inputs: dict, available: Iterable[Path], kind: str = "spr"
     ) -> dict[str, dict]:
-        """The rigs a graft adds the official rig's new animations to, per official atlas name: the mod's own binary
-        skeleton and atlas where it carries them and the official skeleton has animations it lacks (``kind`` "own";
-        ``base``: the official rig the mod was made from, as the fingerprint recorded it or the official copy of the
-        mod's date, where known), else the rig a texture-only portrait's textures were drawn for
-        (``atlas_remap.old_rig_plan``; ``kind`` "oldRig", its own base). Each with the official ``skeleton`` name,
-        the ``animations`` it gains and the mod's ``pages`` (texture keys). ``available``: verified official files
-        that may be of the mod's date (``_dated_rig``). A memorial lobby or Spine background (``kind`` "lobby")
-        takes only its own rig, without a base: its graft is ``graft.plain``."""
+        """Find the rigs a graft adds the official rig's new animations to, per official atlas name.
+
+        A rig is the mod's own binary skeleton and atlas where it carries them and the official skeleton has animations
+        it lacks (``kind`` "own"; ``base``: the official rig the mod was made from, as the fingerprint recorded it or
+        the official copy of the mod's date, where known), else the rig a texture-only portrait's textures were drawn
+        for (``atlas_remap.old_rig_plan``; ``kind`` "oldRig", its own base). Each comes with the official ``skeleton``
+        name, the ``animations`` it gains and the mod's ``pages`` (texture keys). ``available``: verified official files
+        that may be of the mod's date (``_dated_rig``). A memorial lobby or Spine background (``kind`` "lobby") takes
+        only its own rig, without a base: its graft is ``graft.plain``.
+        """
         mod, official = inputs["mod"], inputs["official"]
         gains = atlas_remap.rig_gains(mod.atlases, mod.skeletons, official.atlases, official.skeletons)
         skeleton_of = atlas_remap.pair_atlases(official.skeletons, official.atlases)
@@ -11194,8 +11586,10 @@ class ModLibrary:
     def _graft_plain(
         rigs: dict[str, dict], inputs: dict, only: Mapping[str, set[str]] | None = None
     ) -> dict[str, grafting.Plain]:
-        """The ``graft.plain`` of every rig (``only``: per atlas the animations to carry), the rigs with nothing to
-        carry left out."""
+        """Build the ``graft.plain`` of every rig, leaving out the rigs with nothing to carry.
+
+        ``only`` is per atlas the animations to carry.
+        """
         official, mod = inputs["official"], inputs["mod"]
         built = {}
         for name, rig in rigs.items():
@@ -11229,9 +11623,12 @@ class ModLibrary:
         log: LogFunc,
         progress: Callable[[dict], None] | None,
     ) -> dict:
-        """graft_check of a ``graft.plain``: ``geometry`` per atlas ``failed``, the carried animations the page
-        could not pose (``rig-geometry.js`` ``failedPoses``). Those are built out again and reported as refused
-        (``pose:``); the review is prepared as a remap's."""
+        """Make the graft_check of a ``graft.plain``.
+
+        ``geometry`` is per atlas ``failed``, the carried animations the page could not pose (``rig-geometry.js``
+        ``failedPoses``). Those are built out again and reported as refused (``pose:``); the review is prepared as a
+        remap's.
+        """
         prepared: dict[str, grafting.Plain] = state["prepared"]
         failed: dict[str, set[str]] = {}
         for name, one in prepared.items():
@@ -11329,8 +11726,11 @@ class ModLibrary:
         rigs: dict[str, dict],
         checked: dict,
     ) -> dict:
-        """The patch of a grafted copy: the mod's own text assets, every grafted skeleton and atlas over the official
-        ones of their names, the mod's own textures and the grafted pages, all by ``cont_name_type``."""
+        """Build the patch of a grafted copy.
+
+        It holds the mod's own text assets, every grafted skeleton and atlas over the official ones of their names, the
+        mod's own textures and the grafted pages, all by ``cont_name_type``.
+        """
         patch: dict = {}
         texts: dict[str, Any] = {}
         for original in originals.values():
@@ -11381,11 +11781,13 @@ class ModLibrary:
         log: LogFunc,
         step: Callable[..., None],
     ) -> dict:
-        """The review of a prepared repair: the official parts (``originals``) with ``patch`` ported in by
-        ``cont_name_type`` and CRC fixed as the settings ask, in ``output``; kept in temporary storage under a token
-        that only accept_remap can add to the library. Every Texture2D of a part takes the patch's image of its
-        texture key where the patch has one. ``original_view``: the official files with the mod's over them, the
-        review's "before"."""
+        """Build the review of a prepared repair.
+
+        It is the official parts (``originals``) with ``patch`` ported in by ``cont_name_type`` and CRC fixed as the
+        settings ask, in ``output``; kept in temporary storage under a token that only accept_remap can add to the
+        library. Every Texture2D of a part takes the patch's image of its texture key where the patch has one.
+        ``original_view``: the official files with the mod's over them, the review's "before".
+        """
         generated = {}
         for i, (target, original) in enumerate(originals.items(), 1):
             step("replace", i)
@@ -11634,10 +12036,12 @@ class ModLibrary:
     def _rebuild_optimized(
         self, record: dict[str, Any], log: LogFunc, pin: Pin, fraction: Callable[[float], None] | None = None
     ) -> UpdateResult:
-        """Update of an Optimize Physics copy: its costume built again with the physics rules under the current
-        costume rule, published in place of its files (``_publish_update``: its id, name and links stay), the rule
-        recorded after. Refused like Optimize Physics when the pair's verdict refuses it; ``mod_update_failed`` when
-        no physics rule improves the costume any more."""
+        """Update an Optimize Physics copy.
+
+        Its costume is built again with the physics rules under the current costume rule, published in place of its
+        files (``_publish_update``: its id, name and links stay), the rule recorded after. Refused like Optimize Physics
+        when the pair's verdict refuses it; ``mod_update_failed`` when no physics rule improves the costume any more.
+        """
         from ..gameassets.costume_rule import COSTUME_RULE
 
         source = self._optimized_from(record)
@@ -11671,12 +12075,15 @@ class ModLibrary:
     def _publish_update(
         self, mod_id: str, built_from: dict[str, str], generated: list[Path]
     ) -> tuple[dict[str, Any], list[Path]]:
-        """Replace a mod's files with its rebuild, atomically per mod. A journal (``import-transactions/<id>``,
-        ``operation`` ``update``) names the old and the new files with their hashes and the ``previous/<uuid>`` copy of
-        the old ones before any file changes; the record's new file list is the commit point. A failure or an
-        interruption before it leaves the old mod whole (``_rollback_update``, also at recovery): its files and file
-        list come back, and its id, alias, assignment and repair links never change. Only the newest previous copy is
-        kept. Refuses with ``entry_changed`` when the mod's files changed since the rebuild read them."""
+        """Replace a mod's files with its rebuild, atomically per mod.
+
+        A journal (``import-transactions/<id>``, ``operation`` ``update``) names the old and the new files with their
+        hashes and the ``previous/<uuid>`` copy of the old ones before any file changes; the record's new file list is
+        the commit point. A failure or an interruption before it leaves the old mod whole (``_rollback_update``, also at
+        recovery): its files and file list come back, and its id, alias, assignment and repair links never change. Only
+        the newest previous copy is kept. Refuses with ``entry_changed`` when the mod's files changed since the rebuild
+        read them.
+        """
         record = self._record(mod_id)
         paths = self._paths(record)
         if {path.name: self._hashes.get(path).sha1 for path in paths} != built_from:
@@ -11723,8 +12130,11 @@ class ModLibrary:
         return record, previous
 
     def _finish_update(self, journal: Path, data: dict) -> None:
-        """After the commit: the old files the rebuild does not name go, older previous copies go, the built copies
-        and markers follow (``_after_update``), then the journal. Repeating it is safe."""
+        """Finish an update after its commit.
+
+        The old files the rebuild does not name go, older previous copies go, the built copies and markers follow
+        (``_after_update``), then the journal. Repeating it is safe.
+        """
         directory = self.root / "mods" / data["id"]
         for name in data["old"]:
             if name not in data["new"]:
@@ -11745,10 +12155,12 @@ class ModLibrary:
             log_failure(logger, logging.WARNING, "Committed update journal retained", error)
 
     def _rollback_update(self, journal: Path, data: dict) -> None:
-        """Put the old mod back: each old file whose bytes are not the journal's comes from the previous copy
-        (verified),
-        the new files the old mod does not name go, and the record's file list in state.json is the old one again.
-        This attempt's previous copy and the journal go last. Repeating it is safe."""
+        """Put the old mod back.
+
+        Each old file whose bytes are not the journal's comes from the previous copy (verified), the new files the old
+        mod does not name go, and the record's file list in state.json is the old one again. This attempt's previous
+        copy and the journal go last. Repeating it is safe.
+        """
         mod_id, old = data["id"], data["old"]
         directory = self.root / "mods" / mod_id
         previous_dir = directory / "previous" / data["previous"]
@@ -11804,8 +12216,10 @@ class ModLibrary:
         sync_directory(journal.parent.parent)
 
     def _recover_update(self, journal: Path, data: dict) -> None:
-        """Settle an interrupted update (``_publish_update``): finish it when the record names the new files and each
-        holds its new bytes, else roll it back."""
+        """Settle an interrupted update (``_publish_update``).
+
+        Finish it when the record names the new files and each holds its new bytes, else roll it back.
+        """
         root = self.root / "import-transactions"
         mod_id, old, new = data["id"], data["old"], data["new"]
 
@@ -11860,9 +12274,12 @@ class ModLibrary:
             self._rollback_update(journal, data)
 
     def _after_update(self, mod_id: str) -> None:
-        """A mod's build changed: the built copies of the old build go, and every entry configured with the mod gets the
-        updated marker, so the game files still holding the old build are offered Apply Mod Configuration. An earlier
-        Keep as Is of that prompt is forgotten: it answered the old build."""
+        """Handle a mod's changed build.
+
+        The built copies of the old build go, and every entry configured with the mod gets the updated marker, so the
+        game files still holding the old build are offered Apply Mod Configuration. An earlier Keep as Is of that prompt
+        is forgotten: it answered the old build.
+        """
         source, stamp = f"mod:{mod_id}", now()
         dropped: list[dict] = []
 
@@ -12006,8 +12423,11 @@ class ModLibrary:
 
 
 def _merge(base: dict, mine: dict, disk: dict) -> dict:
-    """This instance's changes since ``base`` applied to ``disk``: keys it added or changed take its value, keys it
-    removed go; the rest is as the file holds it (this instance's own objects where they are equal)."""
+    """Apply this instance's changes since ``base`` to ``disk``.
+
+    Keys it added or changed take its value, keys it removed go; the rest is as the file holds it (this instance's own
+    objects where they are equal).
+    """
     out = {key: mine[key] if key in mine and mine[key] == value else value for key, value in disk.items()}
     for key in base.keys() | mine.keys():
         if key in mine:
@@ -12019,9 +12439,12 @@ def _merge(base: dict, mine: dict, disk: dict) -> dict:
 
 
 def _combine(kind: str, base: tuple, mine: tuple, disk: tuple) -> tuple[dict, set, dict, set]:
-    """This instance's changes since ``base`` (``mine``) on the state read from disk: (records, favourites, applied,
-    migrations). The previous copy of an unreadable state.json (``kind`` ``prev``) is older than what this instance
-    holds, so it adds to ``mine`` and drops nothing but what this instance removed since ``base``."""
+    """Apply this instance's changes since ``base`` (``mine``) to the state read from disk.
+
+    Returns (records, favourites, applied, migrations). The previous copy of an unreadable state.json (``kind``
+    ``prev``) is older than what this instance holds, so it adds to ``mine`` and drops nothing but what this instance
+    removed since ``base``.
+    """
     if kind == "prev":
         records, applied = {**disk[0], **mine[0]}, {**disk[2], **mine[2]}
         for key in base[0].keys() - mine[0].keys():
@@ -12038,8 +12461,10 @@ def _combine(kind: str, base: tuple, mine: tuple, disk: tuple) -> tuple[dict, se
 
 
 def _drop_source(data: dict, source: str, keys: list[dict]) -> list[tuple[str, str]]:
-    """Drop every configuration naming a source, with its markers and built copies (collected in ``keys``);
-    returns the entries."""
+    """Drop every configuration naming a source, with its markers and built copies.
+
+    The built copies are collected in ``keys``. Returns the entries.
+    """
     dropped = []
     for key, folder in data["folders"].items():
         for core in [core for core, entry in folder["configured"].items() if entry.get("source") == source]:
@@ -12059,10 +12484,12 @@ def _pins_signature(pins: list[Pin]) -> list[tuple[str, tuple[str, ...]]]:
 
 @functools.cache
 class _ChoiceChange:
-    """One apply's change of saved choices. The choice is saved before the build (a failed build shows its error on
-    it); a write then refused for a reason of the moment (STOPPING: the game running, Steam busy, the classic UI open,
-    the installs changed) puts the cores' entries back as they were, and the built copies the new choice replaced are
-    deleted only once it stands (``close``)."""
+    """One apply's change of saved choices.
+
+    The choice is saved before the build (a failed build shows its error on it); a write then refused for a reason of
+    the moment (STOPPING: the game running, Steam busy, the classic UI open, the installs changed) puts the cores'
+    entries back as they were, and the built copies the new choice replaced are deleted only once it stands (``close``).
+    """
 
     def __init__(self, library: "ModLibrary", pin: Pin, variant_key: str, source: str):
         self.library, self.pin, self.variant_key, self.source = library, pin, variant_key, source

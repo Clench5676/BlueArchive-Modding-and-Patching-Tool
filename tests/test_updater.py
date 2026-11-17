@@ -99,7 +99,7 @@ def test_latest_needs_the_build_and_its_checksum_to_prefer_a_release():
 
 def test_latest_never_offers_a_downgrade_to_reach_a_build():
     releases = [built("0.6.0"), built("0.6.1-alpha", "-macos-arm64.dmg")]
-    # Running 0.6.0: the only newer release has no build here, and it is still reported as before
+    # The only newer release has no build here: it is reported, but not offered as an installable download
     info = updater.latest(releases, "0.6.0", WIN)
     assert info.version == "0.6.1-alpha" and info.asset is None and info.checksum is None and not info.installable
     # Running a pre-release above the one release with a build: nothing older is offered
@@ -593,7 +593,7 @@ def test_release_creates_exact_version_tag_and_checksum(release_workspace, suffi
 
 
 def test_release_rejects_cli_builds(release_workspace) -> None:
-    # The command line is no longer built or released; only GUI builds are uploaded.
+    # The command line is not built or released; only GUI builds are uploaded.
     repo, env = release_workspace
     result = run_release(repo, env, "Blue-Archive-Modding-and-Patching-Tool-cli-0.1.0-windows-x64.exe")
     assert result.returncode != 0 and "is not a 0.1.0 build" in result.stderr

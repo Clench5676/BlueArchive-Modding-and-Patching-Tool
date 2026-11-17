@@ -857,7 +857,7 @@ def test_clear_built_mods_keeps_another_instances_copy_in_progress(world, monkey
 
 
 def as_alpha3(world: World) -> None:
-    """The library as alpha.3 left it: records without the new keys, and no profiles.json."""
+    """The library as an older build left it: records without the new keys, and no profiles.json."""
     path = world.root / "state.json"
     data = json.loads(path.read_text())
     data["applied"] = {
@@ -981,7 +981,7 @@ def test_a_moved_install_matches_by_last_bytes_only_with_scan_consent(world):
     assert str(new_file.resolve()) not in json.loads((world.root / "state.json").read_text())["applied"]
     world.consent = True
     entry = world.entries()[(world.key(moved), "test_spr")]
-    assert entry.state == "changed"  # configured, the file not the library's any more: offered for adoption
+    assert entry.state == "changed"  # configured, the file is not the library's: offered for adoption
 
 
 def test_a_moved_install_with_consent_is_rekeyed_by_its_last_bytes(world):
@@ -1431,7 +1431,7 @@ def test_a_forget_by_the_last_data_directory_naming_it_drops_the_record(world, o
     game_bundle(elsewhere, "other_spr")
     world.settings.set("game_resource_dir", str(elsewhere))
     old = world.key(world.game)
-    world.reload()  # A no longer names it: its id leaves named_by
+    world.reload()  # A's settings do not name it: its id leaves named_by
     assert "A" not in world.profiles()["folders"][old]["named_by"]
     assert world.folder(world.game)["built"]
     world.library.forget(old)
@@ -1496,7 +1496,7 @@ def test_a_newer_library_write_takes_over_an_older_one_does_not(world):
     world.consent = True
     first, second = world.add(world.spr, fixed=True), world.add(world.spr, b"second!!", fixed=True, where="b")
     world.library.apply("test", f"mod:{first.id}")
-    # an alpha.3 instance switched it after (no configuration change in profiles.json)
+    # an older instance switched it after (no configuration change in profiles.json)
     alpha3 = ModLibrary(world.root, world.catalog, None, world.settings)
     alpha3._switch(world.library.current_pin(), "test_spr", f"mod:{second.id}")
     entry = world.entries()[(world.key(), "test_spr")]
@@ -1654,7 +1654,7 @@ def test_missing_entries_are_skipped_and_not_counted(world):
     mod = world.add(world.spr)
     world.library.apply("test", f"mod:{mod.id}")
     world.toggle(False)
-    world.spr.unlink()  # a renamed core: no game files any more
+    world.spr.unlink()  # a renamed core: no game files
     result = world.toggle(True)
     assert result.skipped == [
         {"install": world.key(), "core": "test_spr", "variant": "test", "kind": "spr", "why": "missing"}
@@ -1801,7 +1801,7 @@ def test_a_steam_check_over_an_unfixed_mod_of_the_official_size_is_a_reset(world
     world.spr.write_bytes(OFFICIAL)
     entry = world.entries()[(world.key(), "test_spr")]
     assert entry.state == "reset"
-    world.library.remove(mod.id, confirm=True)  # the game no longer shows it
+    world.library.remove(mod.id, confirm=True)  # the game does not show it
 
 
 def test_a_file_of_another_size_without_trailing_bytes_is_unknown(world):
@@ -1905,7 +1905,7 @@ def test_an_on_skipping_an_outside_change_still_brings_an_updated_build_to_the_g
     result = world.toggle(True)
     assert [item["core"] for item in result.done] == ["test_spr"]
     assert [(item["core"], item["why"]) for item in result.skipped] == [("other_spr", "changed")]
-    assert world.spr.read_bytes() == header_bundle(b"new build")  # FUN-7: the updated build reaches the game
+    assert world.spr.read_bytes() == header_bundle(b"new build")  # the updated build reaches the game
     assert other_file.read_bytes() == outside
     assert world.folder()["updated"] == {}
     assert world.unfinished() == []
@@ -2258,7 +2258,7 @@ def test_a_mod_retargeted_by_a_later_catalog_is_listed_and_installed_there_direc
     (mod,) = world.library.mods()
     assert mod.target == "ch0042"
     stored = json.loads((world.root / "state.json").read_text())["mods"][0]["target"]
-    assert stored == "dev_alias"  # what an alpha.3 instance reads stays as it wrote it
+    assert stored == "dev_alias"  # what an older instance reads stays as it wrote it
 
     def fail(*args, **kwargs):
         raise AssertionError("adapted onto its own variant")
@@ -2298,7 +2298,7 @@ def test_an_on_reaches_an_unconfigured_listed_entry(world):
     assert world.unfinished() == []  # it holds the intent: official, nothing configured
 
 
-# --- alpha.3 records, game updates and gone records ---
+# --- records of an older build, game updates and gone records ---
 
 
 def test_alpha3_records_of_a_two_part_lobby_and_a_game_update_give_updated(world):
@@ -2313,7 +2313,7 @@ def test_alpha3_records_of_a_two_part_lobby_and_a_game_update_give_updated(world
     world.library.apply("test", f"mod:{mod.id}", kind="lobby")
     as_alpha3(world)
     game_update(parts[0], payload=b"updated lobby part")  # one modded part renamed by the update
-    world.reload()  # the first alpha.4 start: the lookup migrates, then the start prunes
+    world.reload()  # the first start with these records: the lookup migrates, then the start prunes
     assert world.folder()["configured"]["test_home"]["source"] == f"mod:{mod.id}"
     world.library.prune()
     assert not world.original(parts[0]).exists()
@@ -2644,7 +2644,7 @@ def test_a_built_copy_goes_with_a_configuration_the_scan_takes_over(world, monke
     world.toggle(False)
     world.toggle(True)  # written back from its built copy, which stays
     (copy,) = (world.root / "built").iterdir()
-    # an alpha.3 instance, which keeps no built copies, wrote the other mod after
+    # an older instance, which keeps no built copies, wrote the other mod after
     world.spr.write_bytes(second.file.read_bytes())
     path, stat = world.root / "state.json", world.spr.stat()
     data = json.loads(path.read_text())
@@ -3204,7 +3204,7 @@ def test_alpha3_records_of_a_lobby_whose_mod_left_a_part_official_and_a_game_upd
     world.library.apply("test", f"mod:{mod.id}", kind="lobby")
     as_alpha3(world)
     game_update(parts[0], payload=b"updated lobby part")  # the modded part renamed; the other part still official
-    world.reload()  # the first alpha.4 start: the present part carries the mod's source with official bytes
+    world.reload()  # the first start with these records: the present part carries the mod's source with official bytes
     assert world.folder()["configured"]["test_home"]["source"] == f"mod:{mod.id}"  # from the gone record
     world.library.prune()
     assert "test_home" in world.folder()["updated"]
@@ -3609,7 +3609,7 @@ def test_cold_core_map_reuses_its_inventory_instead_of_rechecking_each_core(worl
     assert len(reads) <= 2
 
 
-# --- updating an applied mod: the new build reaches the game, the old one never comes back (FUN-7) ---
+# --- updating an applied mod: the new build reaches the game, the old one never comes back ---
 
 
 def updating(monkeypatch, payload: bytes = b"new build") -> None:

@@ -1,4 +1,4 @@
-"""Upgrade synthetic 0.2.0 records without opening an application or real library."""
+"""Upgrade synthetic legacy records without opening an application or real library."""
 
 import copy
 import json

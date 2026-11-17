@@ -1,4 +1,4 @@
-"""State and recovery safety of the mod library (FUN-1 to FUN-3 of the functional review): state.json is never
+"""State and recovery safety of the mod library: state.json is never
 overwritten by a failed read, a missing mod file never deletes a record, and a journal that cannot roll back stops
 writes without stopping reads. Synthetic header-only bundles in temporary folders only."""
 
@@ -91,7 +91,7 @@ class NoRead:
         self.active = False
 
 
-# --- FUN-1: record by record ---
+# --- record by record ---
 
 
 def test_one_bad_record_costs_that_record_only_through_the_real_library(world):
@@ -179,7 +179,7 @@ def test_an_invalid_applied_entry_may_stay_dropped_and_the_rest_stays(world):
     assert read_state(world)["applied"] == kept
 
 
-# --- FUN-1: .prev and .bad ---
+# --- .prev and .bad ---
 
 
 def test_the_last_good_file_is_kept_as_prev_before_every_write(world):
@@ -367,7 +367,7 @@ def test_the_same_failure_through_the_real_rpc_registry(rpc_env):
     assert "error" not in rpc(env.app, "mods.state")
 
 
-# --- FUN-1: the places that list or move state files ---
+# --- the places that list or move state files ---
 
 
 def test_a_library_move_takes_the_state_copies_along(rpc_env):
@@ -479,7 +479,7 @@ def rpc_env(tmp_path, monkeypatch, header_only_bundles):
     env.close()
 
 
-# --- FUN-2: a missing file never deletes a record ---
+# --- a missing file never deletes a record ---
 
 
 def chosen(world: World) -> dict:
@@ -513,7 +513,7 @@ def test_a_missing_file_holds_its_record_and_the_mod_returns_when_the_file_does(
     parked = hide(world, second)
     library = world.reload()
     assert [mod.id for mod in library.mods()] == [first.id]  # the engine and the UI never see it
-    library.set_favorite("test", True)  # the save that used to delete the record
+    library.set_favorite("test", True)  # the save does not delete the record
     library.set_favorite("test", False)
     assert record_of(world, second.id) == raw
     unhide(world, second, parked)
@@ -765,7 +765,7 @@ def test_importing_the_same_files_while_a_record_is_held_leaves_it_alone(world):
     assert sorted(m.id for m in library.mods()) == sorted([mod.id, again.id])  # two mods of one content, kept
 
 
-# --- FUN-3: reads keep working while a journal is pending, writes stay protected ---
+# --- reads keep working while a journal is pending, writes stay protected ---
 
 
 class Crash(BaseException):
@@ -831,7 +831,7 @@ def test_the_report_reproduction_a_steam_repair_after_a_crash_no_longer_blocks_t
     crash_during(world, f"mod:{second.id}")
     world.spr.write_bytes(OFFICIAL)  # Steam's verify: the bytes match neither the before nor the after
     library = world.reload()
-    # reads and writes alike: nothing answers entry_changed any more
+    # reads and writes alike: nothing answers entry_changed
     assert [m.id for m in library.mods()] == [first.id, second.id]
     library.set_favorite("test", True)
     assert world.spr.read_bytes() == OFFICIAL  # the outside change is left as it is
@@ -864,7 +864,7 @@ def test_a_file_that_is_back_to_its_before_or_after_is_restored_as_before(world)
 
 
 def forget_configuration(world: World) -> None:
-    """Nothing configured keeps the original of a name any more (the user chose again, another instance cleared it)."""
+    """No configured entry keeps the original of a name (the user chose again, another instance cleared it)."""
     edit = json.loads((world.root / "profiles.json").read_text())
     for folder in edit["folders"].values():
         folder["configured"] = {}
@@ -1082,7 +1082,7 @@ def test_a_remembered_failure_is_cleared_when_the_journals_are_gone(world, monke
     library.set_favorite("test", True)
 
 
-# --- FUN-3: folder_changed ---
+# --- folder_changed ---
 
 
 def edit_journal(journal: Path, change) -> None:
@@ -1182,7 +1182,7 @@ def pin_of(world: World, folder: Path):
     return next(pin for pin in world.library.installs() if pin.key == world.key(folder))
 
 
-# --- FUN-3: an asset deletion's journal ---
+# --- an asset deletion's journal ---
 
 
 def crash_during_removal(world: World, mod, monkeypatch) -> Path:
@@ -1210,7 +1210,7 @@ def test_an_asset_deletion_whose_target_is_gone_rolls_back_without_recreating_it
     mod = world.add(world.spr, payload=b"modded!!")
     world.library.apply("test", f"mod:{mod.id}")
     crash_during_removal(world, mod, monkeypatch)
-    world.spr.unlink()  # a game update renamed the bundle: hashing the target used to raise library_io_error
+    world.spr.unlink()  # a game update renamed the bundle: the missing target does not raise library_io_error
     library = world.reload()
     assert library._recovery_error is None and not journals_of(world, "asset-deletions")
     assert not world.spr.exists()  # not recreated
@@ -1252,7 +1252,7 @@ def test_an_asset_deletion_of_an_unknown_install_stays_a_remembered_failure(worl
     assert journal.exists() and snapshot_of(world) == before
 
 
-# --- FUN-3: through the real RPC registry ---
+# --- through the real RPC registry ---
 
 
 def crash_in_services(env, write_check=None) -> tuple:
@@ -1318,7 +1318,7 @@ def test_a_mod_update_is_refused_before_the_rebuild_while_a_recovery_has_failed(
     expect_error("classic_open", lambda: library.update(mods[0].id))
 
 
-# --- review round: a blocked library settles nothing, a missing state reads its prev, reads never fail ---
+# --- a blocked library settles nothing, a missing state reads its prev, reads never fail ---
 
 
 def blocked_state(world: World, how: str, monkeypatch=None):
@@ -1336,7 +1336,7 @@ def blocked_state(world: World, how: str, monkeypatch=None):
 
 @pytest.mark.parametrize("how", ["newer", "broken", "io"])
 def test_a_blocked_library_never_settles_the_configuration_away(world, monkeypatch, how):
-    """Every source is gone from an empty library: the scan used to drop each configured choice."""
+    """Every source is gone from an empty library: the scan keeps each configured choice."""
     world.consent = True
     mod = world.add(world.spr)
     world.library.apply("test", f"mod:{mod.id}")

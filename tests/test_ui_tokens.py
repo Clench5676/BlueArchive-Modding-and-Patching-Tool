@@ -258,8 +258,8 @@ def test_lobby_entry_is_uiani_lobby(tokens, tmp_path_factory):
     curves = {c["path"]: c["curve"]["m_Curve"] for c in clip["m_PositionCurves"]}
     for edge, path in (("top", "Front/NUITop/Top/Right"), ("bottom", "Front/Bottom/Menu")):
         keys = curves[path]
-        # the clip ends the top bar where the prefab puts it and, since the 2026-11 update, the bottom menu 2 units
-        # above (-678 for the prefab's -680): the offsets are from where the clip leaves the node
+        # the clip ends the top bar where the prefab puts it and the bottom menu 2 units above (-678 for the prefab's
+        # -680): the offsets are from where the clip leaves the node
         rest = keys[-1]["value"]["y"]
         assert rest - subtree(layout, path)["pos"][1] == {"top": 0, "bottom": 2}[edge]
         assert all(k["weightedMode"] == 0 for k in keys)

@@ -1072,7 +1072,7 @@ def test_remap_progress_reports_real_steps_without_bundle_names(repair_review):
     assert all(1 <= item["current"] <= item["total"] for item in progress)
 
 
-# --- a repaired copy and the link from its original (FUN-11) ---
+# --- a repaired copy and the link from its original ---
 
 
 def _repair(env, entry):

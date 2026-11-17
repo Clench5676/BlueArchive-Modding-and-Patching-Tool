@@ -261,8 +261,9 @@ def test_queued_writers_still_run_at_shutdown_whatever_their_class():
 
 
 def test_a_cancelled_job_never_runs_when_queued_and_stops_at_its_next_step_when_running():
-    """A page cancels a check it no longer wants: a queued one never runs and ends "cancelled" at once; a running
-    one is told and ends "cancelled" at its next step; a job not made cancellable, or of another kind, is refused."""
+    """A page cancels a check it has stopped waiting for: a queued one never runs and ends "cancelled" at once; a
+    running one is told and ends "cancelled" at its next step; a job not made cancellable, or of another kind, is
+    refused."""
     from bmpt.errors import ServiceError
     from bmpt.webui.jobs import Cancelled
 

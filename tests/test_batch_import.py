@@ -653,7 +653,7 @@ def updater(monkeypatch, calls, payload=b"updated mod"):
     monkeypatch.setattr(batch_import, "rebuild", update)
 
 
-# The review's example: a library folder of 73 characters and the longest official bundle names (134 characters).
+# A library folder of 73 characters and the longest official bundle names (134 characters).
 WINDOWS_LIBRARY = r"C:\Users\student\Downloads\Blue-Archive-Modding-and-Patching-Tool\library"
 LONGEST_BUNDLE_NAME = 134
 WINDOWS_PATH_LIMIT = 259  # MAX_PATH of 260 includes the terminating null

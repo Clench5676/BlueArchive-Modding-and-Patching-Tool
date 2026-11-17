@@ -151,9 +151,16 @@ class Profiles:
         return self.signature(), prev
 
     def _load(self) -> tuple[dict[str, Any] | None, bool]:
-        """(the configuration now, whether profiles.json itself is unreadable) with the file lock held: profiles.json,
-        else profiles.json.prev (logged), else None when neither exists. ServiceError profiles_unreadable when neither
-        can be read."""
+        """Read the configuration with the file lock held.
+
+        The source is profiles.json, else profiles.json.prev (logged), else None when neither exists.
+
+        Returns:
+            The configuration now, and whether profiles.json itself is unreadable.
+
+        Raises:
+            ServiceError: profiles_unreadable, when neither file can be read.
+        """
         bad = False
         if self.path.exists():
             try:

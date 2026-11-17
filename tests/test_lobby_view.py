@@ -83,12 +83,12 @@ def test_custom_zoom_out_limit_is_kept_in_range_and_steps(app, tmp_path):
 
 
 def test_zoom_out_setting_migrates_the_saved_boolean(services, app):
-    # before the modes the setting was a boolean (lobby_zoom_out): on was Full Art, off the game's view
+    # the setting is a saved boolean (lobby_zoom_out) without a mode: true is Full Art, false the game's view
     services.state.set("lobby_zoom_out", True)
     assert rpc(app, "settings.get")["result"]["lobbyZoom"] == {"mode": "art", "custom": 2.0}
     services.state.set("lobby_zoom_out", False)
     assert rpc(app, "settings.get")["result"]["lobbyZoom"]["mode"] == "game"
-    # a chosen mode wins over the old boolean, and a damaged value falls back to it
+    # a chosen mode wins over the saved boolean, and a damaged value falls back to it
     services.state.set("lobby_zoom_out", True)
     rpc(app, "settings.set", key="lobbyZoom", value="unlocked")
     assert rpc(app, "settings.get")["result"]["lobbyZoom"]["mode"] == "unlocked"

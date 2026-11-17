@@ -330,7 +330,7 @@ def test_restore_reuses_or_creates_one_default_and_reports_the_deletion_identity
     assert services.jobs.get(failed).error["code"] == "asset_delete_confirm"
 
 
-# --- lock order (FUN-13): the photograph lock never waits for the services lock ---
+# --- lock order: the photograph lock never waits for the services lock ---
 
 
 def _run(target, name, results):
@@ -356,8 +356,8 @@ def _finished(*threads, timeout=10):
 def test_a_save_or_selection_arriving_while_the_manifest_is_parsed_does_not_deadlock(
     app, services, photography_env, monkeypatch, writer
 ):
-    """The reader holds the photograph lock and looks families up; the writer arrives meanwhile. The writer used to
-    hold the services lock and wait for the photograph lock, the reader to wait for the services lock."""
+    """The reader holds the photograph lock and looks families up; the writer arrives meanwhile. The writer must not
+    hold the services lock while it waits for the photograph lock: the reader would then wait for the services lock."""
     from bmpt.library.photographs import Photographs
 
     env = photography_env

@@ -336,8 +336,10 @@ def writable_game_files(
 
 
 def _probe_when_free(path: Path) -> None:
-    """Open a destination for writing on Windows, waiting a moment while another program (a virus scanner reading
-    a large bundle) holds it."""
+    """Open a destination for writing on Windows.
+
+    Waits a moment while another program (a virus scanner reading a large bundle) holds it.
+    """
     deadline = time.monotonic() + IN_USE_WAIT
     while True:
         try:

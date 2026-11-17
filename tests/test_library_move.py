@@ -1,4 +1,4 @@
-"""Moving the mod library to another folder (FUN-17): copy, verify, publish, then clear the source. A failed move
+"""Moving the mod library to another folder: copy, verify, publish, then clear the source. A failed move
 removes its copies and can be retried at once; a failure clearing the source loses nothing."""
 
 import errno
@@ -105,7 +105,7 @@ def fail_on(monkeypatch, match, error=None):
 def test_running_out_of_space_in_mods_removes_the_copies_and_the_retry_works(
     services, library, tmp_path, monkeypatch, existing_target
 ):
-    """The review's reproduction: the first move fails during `mods`, the retry used to find a partial target/mods."""
+    """The first move fails during `mods`; the retry meets no partial target/mods left by it."""
     before = tree(library)
     target = tmp_path / "volume" / "new-library"
     if existing_target:
