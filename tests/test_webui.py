@@ -2369,7 +2369,7 @@ def test_lobby_camera_save_checks_its_params_before_any_job(app, services):
 
 @pytest.mark.parametrize("version, enabled", [("0.7.0-rc.2", True), ("0.7.0-dev", True), ("0.7.0", False)])
 def test_troubleshoot_mods_answers_only_in_pre_release_builds(app, services, monkeypatch, version, enabled):
-    monkeypatch.setattr("bmpt.webui.api.get_version_info", lambda: {"version": version})
+    monkeypatch.setattr("bmpt.webui.api_mods.get_version_info", lambda: {"version": version})
     monkeypatch.setattr(
         "bmpt.library.troubleshoot.status", lambda library: {"active": False, "count": 0, "since": None}
     )

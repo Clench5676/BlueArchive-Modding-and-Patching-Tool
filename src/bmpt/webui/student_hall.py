@@ -586,7 +586,7 @@ def register_api(rpc: Any, s: Any) -> None:
     local = LocalPortraitVoices(s)
 
     def rows_for(v: Any, lang: str) -> tuple[dict, bool, bool]:
-        from .api import _background
+        from .api_students import _background
 
         started = time.monotonic()
         local_cached = local.cached_index()

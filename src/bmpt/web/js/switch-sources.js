@@ -184,7 +184,7 @@ export function costumeCandidates(fam, v) {
 
 // --- another student's model ---
 // The most cards a search adds to Switch 3D Model: the pairs one model.costumes or model.checkCostumes call takes
-// (webui/api.py costume_keys).
+// (webui/api_students.py costume_keys).
 export const CROSS_LIMIT = 64;
 // "Show other students" (Switch 3D Model): every other student's model listed after the student's own, not only
 // the search's hits. Off at every App start and never saved: kept for as long as the page lives, across students

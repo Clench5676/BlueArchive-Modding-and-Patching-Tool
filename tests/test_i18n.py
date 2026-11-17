@@ -18,6 +18,7 @@ from ba_modding_toolkit.i18n import (
     offered_languages,
 )
 from bmpt.webui import api as webui_api
+from bmpt.webui import api_students
 
 NODE = shutil.which("node")
 JS_TESTS = Path(__file__).parent / "js" / "i18n.test.mjs"
@@ -181,7 +182,7 @@ def test_thai_system_locale_detection(monkeypatch):
 
 
 def test_lines_language_of_each_ui_language():
-    assert webui_api.LINE_LANGS == {
+    assert api_students.LINE_LANGS == {
         "zh-CN": "zh-CN",
         "zh-TW": "zh-TW",
         "en-US": "en",
@@ -189,7 +190,7 @@ def test_lines_language_of_each_ui_language():
         "ko-KR": "ko",
         "th-TH": "th",
     }
-    assert set(webui_api.LINE_LANGS) == set(UI_LANGUAGES)
+    assert set(api_students.LINE_LANGS) == set(UI_LANGUAGES)
 
 
 @pytest.mark.skipif(NODE is None, reason="Node.js is not installed")
