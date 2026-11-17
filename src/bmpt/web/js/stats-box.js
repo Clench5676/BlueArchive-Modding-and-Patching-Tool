@@ -1,33 +1,7 @@
 // The game's light stats box (STATS_BOX in ui-tokens.js): the fill, its line, the dotted dividers between rows
-// and the rows themselves, laid out as pure data. statsBox() takes what holds the box and its width and the
-// rows, and gives the nodes (positions in the caller's frame) and the box's height; nothing here touches the
-// page, so tests can run it.
-//
-// A row is {caption, value, colour, ariaLabel, cut, reserve, secondary, minH, slot}:
-//   caption    the left column's text, one line (rows without one start the value at the box's padding)
-//   value the text, wrapped by wrapPath() into up to three lines from 38 down to 26 and never cut; or an already
-//   fitted
-//              {text, fs, lines} (a caller that fits several rows together)
-//   colour     the value's colour as "#rrggbb/a" (black)
-//   ariaLabel  the value label's accessible text
-//   cut        lines kept when the fit needs more: the rest becomes an ellipsis (0, the default: never)
-//   reserve    width left free at the value's right (an icon, a button), the value's room is narrower by it
-//   secondary  a smaller one-line text under the value, cut with an ellipsis
-//   minH       the row's height at least (STATS_BOX.rowMin)
-//   more width a button at the value's end takes (its gap included) when the value is longer than one line: the
-//   value is
-//              then cut to the one line it has at its full size, the button's width left free (a details panel
-//              that does not
-//              scroll); a value that fits keeps the whole row
-//   bold       the value drawn bold (a caption standing as its own row)
-//   joined     no divider under the row (a caption row and the value under it read as one)
-//   slot (g) => nodes a caller adds in the row; g = {i, x, y, valueY, right, room, text, h, cut}: the row's
-//   index, the value's
-//              left edge, the row's centre, the value's centre, the inner right edge, the value's room, the
-//              fitted value, the
-//              row's height and whether `more` cut the value
-// type: the box's sizes when it is one size down from the prefab's ({caption, value: {fs, fsMin, lines},
-// rowMin}; STATS_BOX's by default).
+// and the rows themselves, laid out as pure data. statsBox() takes what holds the box, its width and the rows,
+// and gives the nodes (positions in the caller's frame) and the box's height; nothing here touches the page, so
+// tests can run it.
 import * as NGUI from "./ngui.js";
 import { STATS_BOX as B } from "./ui-tokens.js";
 import { wrapPath } from "./util.js";
@@ -38,11 +12,32 @@ const lineHeight = (fitted) => fitted.lines * fitted.fs * B.linePitch;
 // bold text's width over the regular weight's (the font has one weight: the browser draws bold heavier, a little wider)
 const BOLD_WIDTH = 1.06;
 
-// the box's width in what holds it: "frame" is a popup frame's width, "panel" a panel's, "table" a table's the
-// box stands over
+/**
+ * A row of the stats box.
+ * @typedef {object} StatsRow
+ * @property {string} [caption] The left column's text, one line; rows without one start the value at the box's padding.
+ * @property {string|{text: string, fs: number, lines: number}} value The text, wrapped by wrapPath() into up to three lines from 38 down to 26 and never cut; or an already fitted {text, fs, lines} (a caller that fits several rows together).
+ * @property {string} [colour] The value's colour as "#rrggbb/a" (black).
+ * @property {string} [ariaLabel] The value label's accessible text.
+ * @property {number} [cut] Lines kept when the fit needs more: the rest becomes an ellipsis (0, the default: never).
+ * @property {number} [reserve] Width left free at the value's right (an icon, a button); the value's room is narrower by it.
+ * @property {string} [secondary] A smaller one-line text under the value, cut with an ellipsis.
+ * @property {number} [minH] The row's height at least (STATS_BOX.rowMin).
+ * @property {number} [more] The width a button at the value's end takes (its gap included) when the value is longer than one line: the value is then cut to the one line it has at its full size and the button's width is left free (a details panel that does not scroll); a value that fits keeps the whole row.
+ * @property {boolean} [bold] The value drawn bold (a caption standing as its own row).
+ * @property {boolean} [joined] No divider under the row (a caption row and the value under it read as one).
+ * @property {(geometry: object) => object[]} [slot] Gives nodes a caller adds in the row; geometry is {i, x, y, valueY, right, room, text, h, cut}: the row's index, the value's left edge, the row's centre, the value's centre, the inner right edge, the value's room, the fitted value, the row's height and whether `more` cut the value.
+ */
+
+/**
+ * The box's width in what holds it: "frame" is a popup frame's width, "panel" a panel's, "table" a table's the
+ * box stands over.
+ */
 export const boxWidth = (holder, width) => width - B.inset[holder];
 
-// the width the captions take: the widest one and the gap to the values (none without captions)
+/**
+ * The width the captions take: the widest one and the gap to the values (none without captions).
+ */
 export const captionWidth = (captions, size = B.caption) => {
   const shown = captions.filter(Boolean);
   return shown.length ? Math.max(...shown.map((caption) => NGUI.textWidth(caption, size))) + B.captionGap : 0;
@@ -60,8 +55,11 @@ const graphemes = (text) =>
   globalThis.Intl?.Segmenter
     ? [...new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(text)].map((part) => part.segment)
     : Array.from(text);
-// a value on one line at size fs within room: the whole of it when it fits (cut false), else as much of its
-// first line as fits (whole graphemes)
+/**
+ * A value on one line at size fs within room: the whole of it when it fits (cut false), else as much of its
+ * first line as fits (whole graphemes).
+ * @returns {{text: string, fs: number, lines: number, cut: boolean}} The fitted line.
+ */
 export function oneLine(text, fs, room) {
   const first = String(text).split("\n")[0];
   if (first === String(text) && NGUI.glyphWidth(first, fs) <= room) return { text: first, fs, lines: 1, cut: false };
@@ -76,13 +74,19 @@ export function oneLine(text, fs, room) {
   return { text: parts.slice(0, lo).join(""), fs, lines: 1, cut: true };
 }
 
-// the room a value's text may fill: the box less its padding on both sides, the caption column, what the row
-// reserves and the slack
+/**
+ * The room a value's text may fill: the box less its padding on both sides, the caption column, what the row
+ * reserves and the slack.
+ */
 export const valueRoom = (holder, width, { capW = 0, reserve = 0 } = {}) =>
   boxWidth(holder, width) - 2 * B.padX - capW - reserve - B.slack;
 
-// the height of a box whose values take these numbers of lines at the full value size (no secondary lines, no
-// minH); type: the box's sizes, as statsBox takes them
+/**
+ * The height of a box whose values take these numbers of lines at the full value size (no secondary lines, no
+ * minH).
+ * @param {number[]} lines The number of lines of each row's value.
+ * @param {object|null} [type] The box's sizes, as statsBox takes them.
+ */
 export const boxHeight = (lines, type = null) => {
   const rowMin = type?.rowMin ?? B.rowMin,
     fs = type?.value?.fs ?? B.value.fs;
@@ -101,12 +105,25 @@ function cutTo(fitted, cut, room = Infinity) {
   return { ...fitted, text: `${kept.join("\n")}\u2026`, lines: cut };
 }
 
-// holder: "frame", "panel" or "table", width: its width; at: the box's top centre in the caller's frame; name:
-// the box node's name; names: the rows' node name prefixes ({caption: "F", value: "V", divider: "L"} by
-// default). Gives {nodes, height, width, capW, rows: [{y, h, top, bottom, text, room}]}; the nodes are the box
-// (fill and line) first, then each row's caption, value, secondary line, slot nodes and the divider under it
-// (none under the last row). boldCaptions: the captions drawn bold (their column measured a little wider for the
-// heavier strokes)
+/**
+ * Lay out a stats box. The nodes are the box (fill and line) first, then each row's caption, value, secondary
+ * line, slot nodes and the divider under it (none under the last row).
+ * @param {object} options The box.
+ * @param {"frame"|"panel"|"table"} options.holder What holds it.
+ * @param {number} options.width The holder's width.
+ * @param {number[]} [options.at] The box's top centre in the caller's frame.
+ * @param {StatsRow[]} options.rows The rows.
+ * @param {string} [options.name] The box node's name.
+ * @param {{caption?: string, value?: string, divider?: string}} [options.names] The rows' node name prefixes
+ *     ({caption: "F", value: "V", divider: "L"} by default).
+ * @param {{caption: number, value: {fs: number, fsMin: number, lines: number}, rowMin: number}|null}
+ *     [options.type] The box's sizes when it is one size down from the prefab's (STATS_BOX's by default).
+ * @param {boolean} [options.boldCaptions] The captions drawn bold; their column is measured a little wider for
+ *     the heavier strokes.
+ * @returns
+ *     {{nodes: NguiNode[], height: number, width: number, capW: number, rows: {y: number, h: number, top: number, bottom: number, text: object, room: number}[]}}
+ *     The nodes and the geometry.
+ */
 export function statsBox({
   holder,
   width,

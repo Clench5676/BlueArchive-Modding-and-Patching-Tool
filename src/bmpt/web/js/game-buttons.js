@@ -5,6 +5,9 @@ import { CONTROL, SPACE, TYPE, XS_BUTTON } from "./ui-tokens.js";
 import { clone } from "./util.js";
 
 let layouts, loading;
+/**
+ * Load the prefabs the popups' buttons are cloned from.
+ */
 export function ready() {
   return (loading ||= Promise.all([NGUI.layout("UIPopup_Option_PC"), NGUI.layout("UIPopup_FilterSort")])
     .then(([option, filter]) => {
@@ -16,6 +19,10 @@ export function ready() {
     }));
 }
 
+/**
+ * The game's disabled form of a button: the filter popup's disabled state with the original's name, position
+ * and scale.
+ */
 export function disabledButton(filter, original) {
   const tree = clone(NGUI.find(filter, "Center/Popup/Btn_Section/Btn_Disable"));
   tree.name = original.name;
@@ -38,11 +45,16 @@ export function disabledButton(filter, original) {
   return tree;
 }
 
+/**
+ * The disabled form of a button, from the loaded prefab.
+ */
 export const disable = (original) => disabledButton(layouts.filter, original);
 
-// The popups' light-blue button (ETCSetting/ButtonBg): 402 x 136, caption 48 down to 34 fitted to the width less
-// 60, its label box 30 less across and 20 less down. Callers vary the width (240 at least) and pass their own
-// sizes where a screen has its own (the Hall's boxes).
+/**
+ * The popups' light-blue button (ETCSetting/ButtonBg): 402 x 136, caption 48 down to 34 fitted to the width
+ * less 60, its label box 30 less across and 20 less down. Callers vary the width (240 at least) and pass their
+ * own sizes where a screen has its own (the Hall's boxes).
+ */
 export function optionButton(
   option,
   filter,
@@ -79,9 +91,15 @@ export function optionButton(
   return tree;
 }
 
+/**
+ * The popups' light-blue button from the loaded prefabs, with optionButton's arguments after the prefabs.
+ */
 export const smallButton = (...args) => optionButton(layouts.option, layouts.filter, ...args);
 
-// A complete Sort/Btn_Ok in a DOM flow (preview licence prompts); plain text remains available without assets.
+/**
+ * Skin a DOM button as a complete Sort/Btn_Ok (preview licence prompts); plain text remains available without
+ * assets.
+ */
 export async function skinPrimary(button, caption) {
   button.textContent = caption;
   try {

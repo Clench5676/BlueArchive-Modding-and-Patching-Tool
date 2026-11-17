@@ -10,11 +10,15 @@ import { T } from "./i18n.js";
 
 const MAX_NAMES = 10; // file names a result lists; the rest are counted
 
-// statusText(state): the row's value from mods.troubleshootState {active, count}
+/**
+ * The row's value from mods.troubleshootState {active, count}.
+ */
 export const statusText = (state) =>
   state?.active ? T("settings.troubleshoot.active", { n: state.count || 0 }) : T("settings.troubleshoot.inactive");
 
-// checkLines(check): the check against Steam's file list, then the first names of the files that differ
+/**
+ * The check against Steam's file list, then the first names of the files that differ.
+ */
 export function checkLines(check) {
   if (!check) return [];
   if (!check.verified) return [T("settings.troubleshoot.unverified")];
@@ -26,7 +30,9 @@ export function checkLines(check) {
   return lines;
 }
 
-// resultLines(result, nameOf): the check, then the switch's own summary of entries not switched
+/**
+ * The check's lines, then the switch's own summary of entries not switched.
+ */
 export function resultLines(result, nameOf) {
   return [...checkLines(result?.check), ...(ModSwitch.resultSummary(result, nameOf)?.lines || [])];
 }
@@ -65,6 +71,15 @@ async function run(method, key, confirmKey) {
   return submit(method, title);
 }
 
+/**
+ * Read Troubleshoot Mods' state.
+ */
 export const state = () => rpc("mods.troubleshootState");
+/**
+ * Apply the official files for every choice, with mods on, after a confirmation.
+ */
 export const applyOfficial = () => run("mods.applyOfficial", "apply", "applyConfirm");
+/**
+ * Put the saved configuration back, after a confirmation.
+ */
 export const restore = () => run("mods.restoreConfig", "restore", "restoreConfirm");

@@ -1,6 +1,7 @@
-// Default-on, revision-addressed PNG persistence with an explicit opt-out. Only the authenticated backend
-// writes user-space files; browser HTTP/storage caches never retain heavy art. Every ticket names the renderer that
-// draws its still ("model", "spine"): the backend keys the entry by that renderer's code too (webui/stills.py).
+// Revision-addressed PNG persistence for stills, on by default with an explicit opt-out. Only the authenticated
+// backend writes user-space files; browser HTTP/storage caches never retain heavy art. Every ticket names the
+// renderer that draws its still ("model", "spine"): the backend keys the entry by that renderer's code too
+// (webui/stills.py).
 import { rpc } from "./api.js";
 import { withTimeout } from "./async.js";
 
@@ -16,6 +17,17 @@ function encode(bytes) {
   return btoa(text);
 }
 
+/**
+ * Make the still cache that talks to the backend.
+ * @param {object} [options] Replaceable parts, for the tests.
+ * @param {Function} [options.request] The RPC call.
+ * @param {Function} [options.digest] Hashes a key into a ticket.
+ * @param {(url: string) => Promise<Response>} [options.fetchImage] Fetches a stored picture.
+ * @param {number} [options.timeout] The most milliseconds the optional storage may hold a thumbnail's
+ *     readiness.
+ * @param {(bytes: ArrayBuffer) => string} [options.makeUrl] Makes an object URL of PNG bytes.
+ * @returns {object} The cache's controls.
+ */
 export function createPreviewCache({
   request = rpc,
   digest = hashKey,

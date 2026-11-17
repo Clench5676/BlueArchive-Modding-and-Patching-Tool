@@ -9,10 +9,10 @@ import { FOOTER, POPUP_FOOTER, POPUP_FRAME } from "./ui-tokens.js";
 import { S, wrapPath } from "./util.js";
 
 const { node, label, sprite, find } = NGUI;
-// An illustrated page keeps the original frame and content, the frame as much taller (or shorter) as the
-// footer's top stands above the original's (its 177-high bodies centred 122 above the bottom), the content moved
-// by half of it (the frame grows both ways from its centre), so the room under the caption is what it was. The
-// XS footer stands lower: -46.5.
+// An illustrated page keeps the original frame and content: the frame is as much taller (or shorter) as the
+// footer's top stands above the original's (its 177-high bodies centred 122 above the bottom), and the content
+// moves by half of it (the frame grows both ways from its centre), so the room under the caption is what it was.
+// The XS footer stands lower: -46.5.
 const RISE = POPUP_FOOTER.bottom + POPUP_FOOTER.control.h - (FOOTER.centre - FOOTER.rise + FOOTER.body.h / 2);
 const LIFT = RISE / 2;
 // bottom: the lowest content edge of an illustrated page, the caption (centre -445, 70 high)
@@ -52,14 +52,24 @@ function textLayout(page, index, count) {
   });
 }
 
-// A tour keeps the longest localized page's message size; an illustration keeps the original large frame.
+/**
+ * The size of a tour's popup: it keeps the longest localized page's message size, and an illustration keeps the
+ * original large frame.
+ */
 export function pageSize(pages) {
   if (pages.some((page) => page.image)) return GEOMETRY;
   const layouts = pages.map((page, index) => textLayout(page, index, pages.length));
   return { width: layouts[0].width, height: Math.max(...layouts.map((layout) => layout.height)) };
 }
 
-// Every caption wraps before shrinking within the popup's range; sibling controls use one font size.
+/**
+ * The tree of a tour's page. Every caption wraps before shrinking within the popup's range; sibling controls
+ * use one font size.
+ * @param {object} page The page: title, body, caption, image and version.
+ * @param {number} index The page's index.
+ * @param {number} count The number of pages.
+ * @param {object} [size] The popup's size (pageSize).
+ */
 export function pageTree(page, index, count, size = pageSize([page])) {
   const previous = T("tour.previous"),
     next = T(index === count - 1 ? "tour.finish" : "tour.next");
@@ -122,6 +132,12 @@ export function pageTree(page, index, count, size = pageSize([page])) {
   return tree;
 }
 
+/**
+ * Show a tour.
+ * @param {object[]} pages The pages.
+ * @param {string[]} versions The versions the tour covers, recorded as seen when it closes.
+ * @returns {Promise<boolean>} Whether it was shown.
+ */
 export function show(pages, versions) {
   if (active) return active;
   const usable = (pages || []).filter(
@@ -268,7 +284,14 @@ function view(pages, versions) {
   });
 }
 
-// Called after first-screen reveal and the startup sequence. Existing dialogs/jobs retain priority; no network check.
+/**
+ * Offer the automatic tour, after first-screen reveal and the startup sequence: existing dialogs and jobs keep
+ * priority, and no network is used.
+ * @param {object} options What it uses.
+ * @param {object} options.info The app's information.
+ * @param {Promise<void>} options.ready Resolves once the first screen is in.
+ * @param {() => boolean} [options.blocked] Whether another dialog or job holds priority.
+ */
 export async function start({ info, ready, blocked = () => false }) {
   if (!info?.gameFound || info.safeMode) return;
   await ready;
@@ -283,6 +306,9 @@ export async function start({ info, ready, blocked = () => false }) {
   return show(automatic.pages, automatic.versions);
 }
 
+/**
+ * Open the list of the tours, to read any of them again.
+ */
 export async function browse() {
   const result = await rpc("app.tours");
   const tours = result?.tours || [];

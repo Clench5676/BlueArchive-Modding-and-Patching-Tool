@@ -1,9 +1,12 @@
 import { spriteBorders, sliceAxis, slicePoint } from "./sprite-slices.js";
 
-// The inner edge is where the near-opaque stroke ends, excluding its glow.
-// Compressed atlas blocks vary slightly below peak alpha even inside the stroke;
-// exact equality mistakes those blocks for holes. A centre seam can interrupt
-// the top/bottom stripe; then the repeated straight-edge extent wins.
+/**
+ * The outline of a card frame: its inner edge is where the near-opaque stroke ends, excluding its glow.
+ * Compressed atlas blocks vary slightly below peak alpha even inside the stroke, so exact equality would
+ * mistake those blocks for holes; a centre seam can interrupt the top and bottom stripe, then the repeated
+ * straight-edge extent wins.
+ * @param {{width: number, height: number, data: Uint8ClampedArray}} image The frame sprite's pixels.
+ */
 export function frameOutline({ width, height, data }) {
   let peak = 0;
   for (let i = 3; i < data.length; i += 4) peak = Math.max(peak, data[i]);
@@ -168,8 +171,14 @@ function smoothContour(points, bounds, scale) {
   ].filter((p, i, all) => !i || distance(p, all[i - 1]) > 1e-8);
 }
 
-// Coordinates are in the same flattened NGUI space as the frame widget. Pixel
-// cuts use the frame's actual rendering scale, including nine-slice rounding.
+/**
+ * The window inside a frame: coordinates are in the same flattened NGUI space as the frame widget, and pixel
+ * cuts use the frame's actual rendering scale, including nine-slice rounding.
+ * @param {object} w The frame widget.
+ * @param {object} meta The sprite's metadata.
+ * @param {object} outline The frame's outline (frameOutline).
+ * @param {object} [options] Where the frame stands.
+ */
 export function innerFrame(w, meta, outline, { x = 0, y = 0, sx = 1, sy = 1, scale = 1 } = {}) {
   if (!outline) throw new Error("Selection frame outline is not ready");
   const width = w.w_ * Math.abs(sx),

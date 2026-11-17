@@ -1,11 +1,11 @@
 // First-launch consent for caching light game assets. Before consent the UI reads every game asset straight from
 // the install (in memory). After consent light UI assets (atlas sprites, UI textures, prefab layouts) are cached
 // in the user data directory; previews and exports of portraits, memorial lobbies, backgrounds and 3D models
-// follow the Preview Cache setting (on by default, bounded); voices are always read from the game files. Also
-// the scan consent (scan()): whether the app may check the game files on its own (the start and the end of each
-// portrait and memorial lobby file) and read Steam's records on this device (the install location to find the
-// game, the update status, the file lists that tell official files); asked once like the asset consent, again
-// when it came to cover more; Settings' Mods tab asks again or withdraws it.
+// follow the Preview Cache setting (on by default, bounded); voices are always read from the game files. The
+// scan consent (scan()) is a separate question: whether the app may check the game files on its own and read
+// Steam's records on this device (the install location to find the game, the update status, the file lists that
+// tell official files); it is asked once like the asset consent, and again when it came to cover more; Settings'
+// Mods tab asks again or withdraws it.
 import { notify } from "./popup.js";
 import * as NGUI from "./ngui.js";
 import * as Buttons from "./game-buttons.js";
@@ -22,17 +22,29 @@ const { node, sprite, label, find, rect } = NGUI;
 let assetsAllowed = false,
   spinePrompt = null;
 
-// The licence notice uses game assets only after the asset consent.
+/**
+ * Set the consent popups up from the app's information. The licence notice uses game assets only after the
+ * asset consent.
+ */
 export function init(info) {
   assetsAllowed = info?.consent === true;
 }
 
-// resolves with the choice (true / false) once a button is pressed; native: the folder picker is available
+/**
+ * Ask the asset consent.
+ * @param {HTMLElement} host The popup's host.
+ * @param {string} cacheDir The user data directory the assets would be cached in.
+ * @param {boolean} [native] The folder picker is available.
+ * @returns {Promise<boolean>} The choice, once a button is pressed.
+ */
 export async function show(host, cacheDir, native = false) {
   return new Promise((resolve) => draw(host, cacheDir, native, resolve));
 }
 
-// The consent sections are stacks inside the shared L content box. Paths keep the small-button row's centre line.
+/**
+ * The asset consent's layout: the sections are stacks inside the shared L content box, and the paths keep the
+ * small-button row's centre line.
+ */
 export function assetLayout(cacheDir) {
   const w = POPUP_FRAME.L.w,
     sectionW = w - 2 * SPACE.xl;
@@ -214,7 +226,14 @@ async function draw(host, cacheDir, native, resolve) {
   host.replaceChildren(...next.childNodes);
 }
 
-// The same notice at startup and from Settings. Reading it in Settings never changes state or loads Spine.
+/**
+ * Show the Spine licence notice, the same at startup and from Settings. Reading it in Settings never changes
+ * state or loads Spine.
+ * @param {HTMLElement} host The popup's host.
+ * @param {object} [options] Options.
+ * @param {boolean} [options.over] Draw it over the settings and the message popups.
+ * @param {boolean} [options.readOnly] Read it only: no choice is saved.
+ */
 export function spine(host, { over = false, readOnly = false } = {}) {
   if (spinePrompt) return spinePrompt;
   spinePrompt = new Promise((resolve) => {
@@ -229,8 +248,11 @@ export function spine(host, { over = false, readOnly = false } = {}) {
   return spinePrompt;
 }
 
-// UIPopup_Sort with the ordinary message layout. A fixed message size wraps onto as many lines as needed,
-// growing the frame above one centred button rather than shrinking the legal notice below the message minimum.
+/**
+ * The frame of the Spine notice: UIPopup_Sort with the ordinary message layout. A fixed message size wraps onto
+ * as many lines as needed, growing the frame above one centred button rather than shrinking the legal notice
+ * below the message minimum.
+ */
 export function spineFrame() {
   const ok = T("picker.ok");
   const { body, width, height, y0, visible, scroll } = Popup.messageLayout({
@@ -349,11 +371,16 @@ function section(name, top, titleText, items, tone, w = POPUP_FRAME.L.w - 2 * SP
   return [node(name, [0, top], [], kids), h];
 }
 
-// scan(host, {over}): the scan consent popup ("Check Game Files"): what is checked and what for, what never happens,
-// and that declining keeps those checks off (Settings changes it). Resolves with the choice once a button is pressed:
-// Allow saves consent and requests a scan. Don't Allow saves the refusal; declining does
-// not quit. It must be answered: Escape and the backdrop do nothing. over: drawn over the settings and the message
-// popups (opened from Settings' Check Game Files).
+/**
+ * Ask the scan consent ("Check Game Files"): what is checked and what for, what never happens, and that
+ * declining keeps those checks off (Settings changes it). Allow saves consent and requests a scan; Don't Allow
+ * saves the refusal and does not quit. It must be answered: Escape and the backdrop do nothing.
+ * @param {HTMLElement} host The popup's host.
+ * @param {object} [options] Options.
+ * @param {boolean} [options.over] Draw it over the settings and the message popups (opened from Settings' Check
+ *     Game Files).
+ * @returns {Promise<boolean>} The choice, once a button is pressed.
+ */
 export function scan(host, { over = false } = {}) {
   return new Promise((resolve) => {
     drawScan(host, over, resolve).catch((err) => {
@@ -371,7 +398,9 @@ function finishScan(host) {
   Popup.closed(host);
 }
 
-// Pure geometry shared by the scan consent builder and its six-locale fit checks.
+/**
+ * The scan consent's geometry, shared by its builder and its six-locale fit checks.
+ */
 export function scanLayout() {
   const W = POPUP_FRAME.L.w,
     panelW = W - 2 * SPACE.xl;
@@ -452,9 +481,14 @@ async function drawScan(host, over, resolve) {
   host.replaceChildren(...next.childNodes);
 }
 
-// detectGame(region, ask): the game folders Steam's records name for a region. Finding them reads those records, so
-// without the Check Game Files consent the server refuses (scan_off): ask() shows the consent popup, and only an Allow
-// searches; declined, nothing is searched (null).
+/**
+ * The game folders Steam's records name for a region. Finding them reads those records, so without the Check
+ * Game Files consent the server refuses (scan_off): ask() shows the consent popup, and only an Allow searches;
+ * declined, nothing is searched.
+ * @param {string} region The server's region.
+ * @param {() => Promise<boolean>} ask Shows the scan consent popup.
+ * @returns {Promise<string[]|null>} The folders; null when the consent was declined.
+ */
 export async function detectGame(region, ask) {
   try {
     return await rpc("settings.detectGame", { region });

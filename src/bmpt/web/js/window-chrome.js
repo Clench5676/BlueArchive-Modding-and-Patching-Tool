@@ -21,6 +21,9 @@ let layoutRevision = 0,
 const bar = () => document.querySelector(".topbar");
 // The top bar's entry, its absence in immersive scenes and its return at the window's edge (chrome-motion.js).
 const motion = chromeMotion();
+/**
+ * The native window chrome's snapshot while it is active in a mode other than "standard"; null otherwise.
+ */
 export const nativeChrome = () => (snapshot?.active && snapshot.mode !== "standard" ? snapshot : null);
 // The macOS window buttons travel with the top bar, except in macOS fullscreen, where AppKit shows and hides them.
 const nativeLights = () => !!nativeChrome() && snapshot.platform === "darwin" && !snapshot.state?.fullscreen;
@@ -216,8 +219,8 @@ async function layout() {
     return publishLayout(g, drag, state);
   };
   // The regions follow the page at once; the ink alignment then moves the bar's pictures by a pixel or two and the
-  // regions follow again. Waiting for the alignment first left the bar without regions whenever a pass did not finish
-  // it (after a popup or an immersive scene the bar stayed undraggable).
+  // regions follow again. Waiting for the alignment first would leave the bar without regions whenever a pass did
+  // not finish it (after a popup or an immersive scene the bar would stay undraggable).
   await publish();
   if (revision !== layoutRevision || !nativeChrome() || !wrapper) return;
   const slow = setTimeout(() => layoutFailed(new Error("Top bar alignment still pending after 2 s")), 2000);
@@ -238,6 +241,9 @@ async function publishLayout(g, drag, state = "") {
   lastLayout = payload;
 }
 
+/**
+ * Set up the native window's header row and its drag regions, and keep them following the page's layout.
+ */
 export function setupWindowChrome() {
   motion.setup({ onChange: schedule, lights: nativeLights });
   on("window.chrome", accept);

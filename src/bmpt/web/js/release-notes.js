@@ -1,14 +1,16 @@
-// Release notes as the update popup shows them (update.js): the release's Markdown, read in the UI language.
-// A release body holds one section per language, separated by a rule (---) and marked with <!-- lang: xx -->, which
-// GitHub does not show; an unmarked section is told by its script. The section in the UI language is shown, else the
-// same language's other variant (zh-TW reads zh-CN), else English, else the first. Markdown is drawn rather than shown:
-// headings larger, list items with a bullet and a hanging indent; emphasis, code and link marks go, their text stays.
-// Pure functions: no DOM, no imports.
+// Release notes as the update popup shows them (update.js): the release's Markdown, read in the UI language. A
+// release body holds one section per language, separated by a rule (---) and marked with <!-- lang: xx -->,
+// which GitHub does not show; an unmarked section is told by its script. The section in the UI language is
+// shown, else the same language's other variant (zh-TW reads zh-CN), else English, else the first. Markdown is
+// drawn rather than shown: headings larger, list items with a bullet and a hanging indent; emphasis, code and
+// link marks go, their text stays. Pure functions: no DOM, no imports.
 
 const MARK = /^<!--\s*lang:\s*([A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*)\s*-->$/;
 const RULE = /^ {0,3}([-*_])(?:[ \t]*\1){2,}[ \t]*$/;
 
-// the language a section is written in, by its script: kana, hangul, Thai, Han, else Latin (English)
+/**
+ * The language a section is written in, by its script: kana, hangul, Thai, Han, else Latin (English).
+ */
 export function scriptOf(text) {
   const count = (re) => (String(text).match(re) || []).length;
   if (count(/[\u3040-\u30ff]/g) >= 3) return "ja";
@@ -18,7 +20,9 @@ export function scriptOf(text) {
   return "en";
 }
 
-// [{lang, lines}] in the body's order; sections with nothing but blank lines are dropped
+/**
+ * The sections of a release body, in order: [{lang, lines}]; sections with nothing but blank lines are dropped.
+ */
 export function sections(markdown) {
   const out = [];
   let current = { lang: null, lines: [] };
@@ -48,6 +52,10 @@ const base = (lang) =>
   String(lang || "")
     .toLowerCase()
     .split("-")[0];
+/**
+ * Pick the section for a UI language.
+ * @returns {{lang: string, lines: string[]}|null} The section; null for an empty list.
+ */
 export function pick(list, lang) {
   if (!list.length) return null;
   const wanted = String(lang || "").toLowerCase();
@@ -59,8 +67,10 @@ export function pick(list, lang) {
   );
 }
 
-// the text of one line, without Markdown's marks: images and links keep their text, emphasis, code and strike marks go,
-// inline HTML goes, escapes keep their character
+/**
+ * The text of one line without Markdown's marks: images and links keep their text, emphasis, code and strike
+ * marks go, inline HTML goes, escapes keep their character.
+ */
 export function inline(text) {
   // escaped characters are set aside first, so an escaped mark never opens or closes an emphasis
   const kept = [];
@@ -83,9 +93,12 @@ export function inline(text) {
   );
 }
 
-// [{kind: "heading" | "item" | "text", text, level?, depth?, marker?, gap}]: gap marks a blank line before.
-// Every line stays a line, as GitHub shows a release's text; an indented line under a list item continues it at
-// its indent (depth + 1, no bullet).
+/**
+ * The blocks of a section: [{kind: "heading" | "item" | "text", text, level?, depth?, marker?, gap}], where gap
+ * marks a blank line before. Every line stays a line, as GitHub shows a release's text; an indented line under
+ * a list item continues it at its indent (depth + 1, no bullet).
+ * @param {string[]} lines The section's lines.
+ */
 export function blocks(lines) {
   const out = [];
   let gap = false;
@@ -126,7 +139,9 @@ export function blocks(lines) {
   return out.filter((b) => b.text);
 }
 
-// the blocks for the UI language, or [] for empty notes
+/**
+ * The blocks for the UI language, or [] for empty notes.
+ */
 export const notesFor = (markdown, lang) => {
   const section = pick(sections(markdown), lang);
   return section ? blocks(section.lines) : [];

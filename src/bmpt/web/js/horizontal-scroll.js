@@ -1,7 +1,12 @@
 import { wheelStep } from "./lobby-touch.js";
 
-// Horizontal UIScrollView input for the popup's existing NGUI list paper.
-// Native overflow keeps keyboard focus and touch scrolling inside the same clipped viewport.
+/**
+ * Horizontal UIScrollView input for the popup's list paper: wheel, drag and keys scroll the area. Native
+ * overflow keeps keyboard focus and touch scrolling inside the same clipped viewport.
+ * @param {HTMLElement} area The scrolling element.
+ * @param {number} width The viewport's width in stage pixels.
+ * @param {number} contentWidth The content's width in stage pixels.
+ */
 export function horizontalScroll(area, width, contentWidth) {
   const limit = Math.max(0, contentWidth - width);
   const moveTo = (left) => {
@@ -63,12 +68,26 @@ const DURATION = 180;
 const moving = new Set();
 const clamp = (value, max) => Math.max(0, Math.min(Math.max(0, max), value));
 
-// A bounded, frame-rate-independent ease-out. Restarting from the current position preserves accumulated notches.
+/**
+ * A bounded, frame-rate-independent ease-out of a scroll position. Restarting from the current position
+ * preserves accumulated notches.
+ * @param {number} from The position the ease started at.
+ * @param {number} to The target position.
+ * @param {number} elapsed The time since it started, in milliseconds.
+ * @param {number} [duration] The ease's length in milliseconds.
+ */
 export function easeScroll(from, to, elapsed, duration = DURATION) {
   const t = duration <= 0 ? 1 : Math.max(0, Math.min(1, elapsed / duration));
   return from + (to - from) * (1 - (1 - t) ** 3);
 }
 
+/**
+ * Whether a wheel event is a plain vertical mouse-wheel notch on Windows (no modifier, no horizontal part,
+ * nothing took it yet): wheel notches need explicit easing in the virtual roster and WebView2's native overflow
+ * lists, while touchpad pixels, touch gestures and macOS keep their own scrolling and momentum.
+ * @param {WheelEvent} event The event.
+ * @param {string} platform navigator.platform.
+ */
 export function windowsWheel(event, platform) {
   return (
     /^Win/i.test(platform) &&
@@ -82,7 +101,18 @@ export function windowsWheel(event, platform) {
   );
 }
 
-// read/write use the list's logical pixels; scale converts viewport wheel pixels after the stage transform.
+/**
+ * Make the wheel handler of a scrolling list: it eases notches. read and write use the list's logical pixels;
+ * scale converts viewport wheel pixels after the stage transform.
+ * @param {object} options The list.
+ * @param {() => number} options.read The scroll position.
+ * @param {(position: number) => void} options.write Sets it.
+ * @param {() => number} options.max The furthest position.
+ * @param {() => number} options.page One page of scrolling.
+ * @param {() => number} [options.scale] The viewport pixels per logical pixel.
+ * @param {() => boolean} [options.alive] Whether the list is still on screen.
+ * @param {object} [env] The page, for the tests.
+ */
 export function wheelScroller({ read, write, max, page, scale = () => 1, alive = () => true }, env = globalThis) {
   let frame = null,
     from = 0,
@@ -137,8 +167,11 @@ export function wheelScroller({ read, write, max, page, scale = () => 1, alive =
   return { wheel, stop };
 }
 
-// Delegation covers every current and future native vertical list, including nested dialogs and plain fallback UI.
-// Existing horizontal lists and scene cameras consume their events before this bubble listener.
+/**
+ * Delegate wheel easing to every current and future native vertical list, including nested dialogs and plain
+ * fallback UI. Horizontal lists and scene cameras consume their events before this bubble listener.
+ * @returns {() => void} Removes the delegation.
+ */
 export function installVerticalWheel(root = document, env = globalThis) {
   const controllers = new WeakMap();
   const wheel = (event) => {

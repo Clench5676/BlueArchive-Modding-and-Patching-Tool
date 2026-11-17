@@ -1,9 +1,12 @@
-// Character ownership uses roster search/order rules and the existing FilterSort popup.
+// Character ownership uses the roster's search and order rules and the FilterSort popup.
 import * as Display from "./display.js";
 import { order, normalizeView } from "./roster-order.js";
 import { L, T, language } from "./i18n.js";
 import { studentName } from "./names.js";
 
+/**
+ * The students an assignment can be made to, in the roster's order for a view and a search.
+ */
 export function assignmentChoices(data, view, query = "") {
   return order(data, normalizeView(view), {
     query,
@@ -12,7 +15,9 @@ export function assignmentChoices(data, view, query = "") {
   });
 }
 
-// the variants a view offers: with Group Alts every variant of a family shown, else the cards' own
+/**
+ * The keys of the variants a view offers: with Group Alts every variant of a family shown, else the cards' own.
+ */
 export function offeredKeys(data, view, cards) {
   return new Set(
     cards.flatMap((card) =>
@@ -23,7 +28,15 @@ export function offeredKeys(data, view, cards) {
   );
 }
 
-// refresh(area): the dialog's scrolling area changed height (its game scrollbar follows)
+/**
+ * Fill the character picker's dialog: a list of students with a search, sort and the Group Alts option.
+ * @param {object} options The dialog's parts.
+ * @param {object} options.data The data of roster.list.
+ * @param {string|null} options.selected The selected variant's key.
+ * @param {object} options.dialog The dialog, whose scrolling area `refresh` follows.
+ * @param {(area: object) => void} [options.refresh] Called when the dialog's scrolling area changed height (its
+ *     game scrollbar follows).
+ */
 export async function characterPicker({
   data,
   selected,

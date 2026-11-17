@@ -100,8 +100,10 @@ function selectionWidget(tree) {
   return result;
 }
 
-// The selected widget supplies size and position. The standard rounded popup
-// line supplies the picture's small corners, independently of the selection glow.
+/**
+ * The window of a selected picture: the selected widget supplies size and position, and the standard rounded
+ * popup line supplies the picture's small corners, independently of the selection glow.
+ */
 export function selectionWindow(tree, atlas = {}, outline, pictureOutline = null) {
   const frame = selectionWidget(tree),
     ratio = ROW_SELECTION.scale / ROW_SCALE;
@@ -127,6 +129,11 @@ export function selectionWindow(tree, atlas = {}, outline, pictureOutline = null
   };
 }
 
+/**
+ * Load the prefabs the import page is drawn from, and the outlines of the selection frame and the picture
+ * frame.
+ * @returns {Promise<object>} The layouts by prefab name, with `selectionOutline` and `pictureOutline`.
+ */
 export async function loadImportLayouts(ui) {
   // UICharacterCollection holds the game list's scrollbar (SeletControl/List/Scroll Bar) that the scrolling areas draw
   const names = [
@@ -148,6 +155,12 @@ export async function loadImportLayouts(ui) {
   return layouts;
 }
 
+/**
+ * Make the artwork functions of the import page from the prefabs: the panel, the buttons, the mail rows and
+ * their texts.
+ * @param {object} ui The NGUI module.
+ * @param {object} layouts What loadImportLayouts gave.
+ */
 export function importArtwork(ui, layouts) {
   const get = (prefab, path) => {
     const n = path ? ui.find(layouts[prefab], path) : layouts[prefab];
@@ -900,8 +913,10 @@ export function importArtwork(ui, layouts) {
   };
 }
 
-// The box [x, y, width, height] (px, from the row's top left) of the control a row reserved room for (row({
-// control })), or null.
+/**
+ * The box [x, y, width, height] (px, from the row's top left) of the control a row reserved room for (row({
+ * control })), or null.
+ */
 export function controlRect(tree) {
   const c = tree?.control;
   return c
@@ -914,7 +929,10 @@ export function controlRect(tree) {
     : null;
 }
 
-// The status badge's box [x, y, width, height] (px, from the row's top left), as controlRect, or null without a badge.
+/**
+ * The status badge's box [x, y, width, height] (px, from the row's top left), as controlRect, or null without a
+ * badge.
+ */
 export function badgeRect(tree) {
   const b = tree?.badge;
   return b

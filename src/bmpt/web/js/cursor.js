@@ -1,25 +1,14 @@
-// The game's own mouse pointer and its touch effect.
-//
-// Pointer: the PC client (by its MousePoint option: this or the system arrow) sets
-// PCIcon_MousePoint (UIs/GLPC_Cursor, 64 x 64) with Cursor.SetCursor, hotspot (0, 0), CursorMode.Auto: a hardware
-// cursor, which Windows shows at the system cursor size (32 px at 100 %).
-// Here it is a CSS cursor of 32 CSS px with the texture as its 2x image, on everything the game would show it on
-// (buttons too: the game has no hover or pressed pointer); drag handles keep grab and grabbing, text fields the text
-// cursor. Cursor_1 (the halo crosshair, hotspot in its middle, a software cursor) is the controller's pointer.
-// The window must leave body's cursor alone: pywebview's text_select=False adds "body { cursor: default }" after
-// app.css (webui/main.py keeps it True).
-// WebKit (WKWebView) drops a cursor image whose box would cross the window's right or bottom edge and shows the system
-// arrow instead (Style::Cursor::selectImageCursor): the image is cut to the texture's opaque part, and smaller cuts of
-// it follow in the list for the last pixels at those edges, down to 1 CSS px (the first one that fits is shown). Other
-// engines take the first, the whole pointer.
-//
-// Touch effect: touch-fx.js simulates FX_Touch; this draws it on two canvases over the whole window, below the
-// pointer and above everything else, idle (hidden, no frame loop, no bitmap) while nothing animates. The light goes to
-// a canvas screened over the page, what the flash disc hides to a multiplied one under it (touch-fx.js overBlend: the
-// page blends in sRGB values, the game in linear light). Sizes follow the stage (the game's screen is 2 units high).
-//
-// Both use the game's textures from the light /asset/ui/texture route; without a game the system cursor stays and
-// there is no effect.
+// The game's own mouse pointer and its touch effect. The pointer is the PC client's PCIcon_MousePoint
+// (UIs/GLPC_Cursor, 64 x 64): here a CSS cursor of 32 CSS px with the texture as its 2x image, on everything the
+// game would show it on (drag handles keep grab and grabbing, text fields the text cursor). WebKit drops a
+// cursor image whose box would cross the window's right or bottom edge and shows the system arrow instead, so
+// the image is cut to the texture's opaque part and smaller cuts follow in the list for the last pixels at those
+// edges, down to 1 CSS px; other engines take the first, the whole pointer. The window must leave body's cursor
+// alone (webui/main.py keeps pywebview's text_select True). The touch effect: touch-fx.js simulates FX_Touch;
+// this draws it on two canvases over the whole window, below the pointer and above everything else, idle
+// (hidden, no frame loop, no bitmap) while nothing animates; the light goes to a canvas screened over the page,
+// what the flash disc hides to a multiplied one under it. Both use the game's textures from the light
+// /asset/ui/texture route; without a game the system cursor stays and there is no effect.
 import * as FX from "./touch-fx.js";
 import { textureUrl } from "./api.js";
 
@@ -60,7 +49,12 @@ function cut(img, scale, w, h) {
   return new Promise((resolve) => c.toBlob((blob) => resolve(blob && URL.createObjectURL(blob)), "image/png"));
 }
 
-// the opaque part of the pointer's texture (an ImageData) from its top left, in CSS px at `size`
+/**
+ * The opaque part of the pointer's texture from its top left, in CSS px at `size`.
+ * @param {{data: Uint8ClampedArray, width: number, height: number}} image The texture's pixels.
+ * @param {number} [size] The pointer's size in CSS px.
+ * @returns {number[]} [width, height] in CSS px.
+ */
 export function opaqueBox({ data, width, height }, size = SIZE) {
   let w = 0,
     h = 0;
@@ -75,9 +69,12 @@ export function opaqueBox({ data, width, height }, size = SIZE) {
   return w ? [Math.ceil((w * size) / width), Math.ceil((h * size) / height)] : [size, size];
 }
 
-// the pointer's boxes in the order WebKit tries them: the whole pointer, then narrower ones for the right edge,
-// shorter ones for the bottom edge and smaller squares for the corner, `step` CSS px apart and then 1 CSS px apart
-// below one step, so that no strip at the window's edges is left to the system arrow
+/**
+ * The pointer's boxes in the order WebKit tries them: the whole pointer, then narrower ones for the right edge,
+ * shorter ones for the bottom edge and smaller squares for the corner, `step` CSS px apart and then 1 CSS px
+ * apart below one step, so that no strip at the window's edges is left to the system arrow.
+ * @param {number[]} box [w, h] of the whole pointer.
+ */
 export function pointerBoxes([w, h], step = STEP) {
   const cuts = (n) => {
     const coarse = Array.from({ length: Math.ceil(n / step) - 1 }, (_, i) => (Math.ceil(n / step) - 1 - i) * step);
@@ -92,8 +89,11 @@ export function pointerBoxes([w, h], step = STEP) {
   ];
 }
 
-// the pointer as a CSS cursor value, in the first syntax the engine takes (image-set keeps it sharp on HiDPI): sets
-// lists each box's 1x and 2x image, the system cursor comes last
+/**
+ * The pointer as a CSS cursor value, in the first syntax the engine takes (image-set keeps it sharp on HiDPI).
+ * @param {object[]} sets Each box's 1x and 2x image; the system cursor comes last.
+ * @param {(value: string) => boolean} [supports] Whether the engine takes a cursor value.
+ */
 export function cursorValue(sets, supports = (v) => CSS.supports("cursor", v)) {
   const list = (one) => [...sets.map((set) => `${one(set)} 0 0`), "auto"].join(", ");
   return (
@@ -117,7 +117,13 @@ async function pointerValue() {
   return value;
 }
 
-// run attempt until it succeeds, waiting `delays` ms between tries; every failure is reported, the last one rethrown
+/**
+ * Run an attempt until it succeeds, waiting `delays` ms between tries; every failure is reported, the last one
+ * rethrown.
+ * @param {() => Promise<*>} attempt The attempt.
+ * @param {number[]} delays The waits between tries in milliseconds.
+ * @param {object} [options] Replaceable parts, for the tests.
+ */
 export async function withRetries(
   attempt,
   delays,
@@ -315,8 +321,15 @@ function drawArc(g, p, fx, now, U, t) {
   }
 }
 
-// the effects (list) at now on the light's context (front) and the multiplied one (back), U CSS px to a world unit;
-// t: the textures (loadTextures, with the tint canvas)
+/**
+ * Paint the effects at a time on the light's context (front) and the multiplied one (back).
+ * @param {CanvasRenderingContext2D} front The screened canvas.
+ * @param {CanvasRenderingContext2D} back The multiplied canvas.
+ * @param {object[]} list The effects.
+ * @param {number} now The time in seconds.
+ * @param {number} U CSS px per world unit.
+ * @param {object} [t] The textures (loadTextures, with the tint canvas).
+ */
 export function paint(front, back, list, now, U, t = tex) {
   // the trails first, plainly (a trail does not add onto itself), then everything else added
   for (const fx of list) drawTrail(front, fx, U, t);
@@ -443,6 +456,10 @@ async function initTouch() {
   }
 }
 
+/**
+ * Load the pointer and the touch effect's textures and start them.
+ * @returns {Promise<void>} Settles when both are set up; a failure is only logged.
+ */
 export function init() {
   return Promise.all([initPointer(), initTouch()]).catch((err) => console.warn("cursor", err));
 }

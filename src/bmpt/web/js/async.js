@@ -1,7 +1,11 @@
 import { previewTimer } from "./preview-lifecycle.js";
 
-// Hidden or unfocused WebKit windows may stop their frame clock. Resource setup
-// can still finish there; continuous playback remains governed by its lifecycle.
+/**
+ * Wait for the next animation frame. Hidden or unfocused WebKit windows may stop their frame clock; resource
+ * setup can still finish there, and continuous playback remains governed by its lifecycle.
+ * @param {object} [options] Options.
+ * @param {AbortSignal} [options.signal] Ends the wait.
+ */
 export function nextFrame({ signal } = {}) {
   return new Promise((resolve) => {
     let frame,
@@ -34,7 +38,14 @@ export function nextFrame({ signal } = {}) {
   });
 }
 
-// Bound waits on asset loaders whose callbacks may never arrive. Observe late rejections too.
+/**
+ * Bound a wait on an asset loader whose callbacks may never arrive; late rejections are observed too.
+ * @param {Promise<*>} promise The wait.
+ * @param {number} ms The deadline in milliseconds; Infinity is no deadline.
+ * @param {string} name What the wait is for, in the timeout's message.
+ * @param {object} [options] Options.
+ * @param {AbortSignal} [options.signal] Rejects the wait when it aborts.
+ */
 export function withTimeout(promise, ms, name, { signal } = {}) {
   return bounded(
     promise,
@@ -48,6 +59,15 @@ export function withTimeout(promise, ms, name, { signal } = {}) {
   );
 }
 
+/**
+ * Bound a wait like withTimeout, counting foreground time only and not the time a read or a preview waits for
+ * the library (previewTimer).
+ * @param {Promise<*>} promise The wait.
+ * @param {number} ms The deadline in milliseconds.
+ * @param {string} name What the wait is for.
+ * @param {object} [options] Options.
+ * @param {AbortSignal} [options.signal] Rejects the wait when it aborts.
+ */
 export function withPreviewTimeout(promise, ms, name, { signal } = {}) {
   return bounded(promise, ms, name, previewTimer, signal);
 }

@@ -1,7 +1,7 @@
-// UIPopup_Mulligan/Center/Popup/01/UIMulliganSlot: selected starting-skill cards.
-// Clone the frame and the badge. Both badge sprites (Common_Icon_Mulligan_1 / _2) already draw their own check;
-// the slot's number label (Mulligan_IndexLabel) carries the caption, a word instead of the game's number. SelectLine's
-// own Sprite (Common_Icon_Check_Y_Off, inactive in the prefab) is not cloned: it would be a second check.
+// UIPopup_Mulligan/Center/Popup/01/UIMulliganSlot: selected starting-skill cards. The frame and the badge are
+// cloned; both badge sprites (Common_Icon_Mulligan_1 / _2) already draw their own check, and the slot's number
+// label (Mulligan_IndexLabel) carries the caption, a word instead of the game's number. SelectLine's own Sprite
+// (Common_Icon_Check_Y_Off, inactive in the prefab) is not cloned: it would be a second check.
 import { innerFrame } from "./row-thumbnail.js";
 
 export const SELECTION_PREFAB = "UIPopup_Mulligan";
@@ -15,9 +15,15 @@ export const SELECTION_BADGE_SLICES = {
 const child = (n, name) => n.children.find((c) => c.name === name);
 const widget = (n) => n.widgets.find((w) => "sprite" in w);
 const textOf = (n) => n.widgets.find((w) => "text" in w);
+/**
+ * The state a source card shows: applied, previewed or none.
+ * @returns {"applied"|"preview"|null} The state.
+ */
 export const sourceCardState = (applied, previewed) => (applied ? "applied" : previewed ? "preview" : null);
 
-// The box of the prefab's number label: its font size and size in prefab units, which a caption has to fit.
+/**
+ * The box of the prefab's number label: its font size and size in prefab units, which a caption has to fit.
+ */
 export function badgeCaptionBox(slot) {
   const label = child(slot, "Mulligan_IndexLabel"),
     text = label && textOf(label);
@@ -28,6 +34,17 @@ export function badgeCaptionBox(slot) {
 // uniform fill first. A badge may occupy at most the card body's width; only that limit can shrink the captions.
 // Preserve the original 76/64 horizontal and 74/69 vertical scale of the end pieces, including the check.
 export const BADGE_FONT_MIN = 12;
+/**
+ * Fit the badge captions of both states: they share a width and a font size per locale and card. It starts at
+ * the prefab label's font size, expanding the uniform fill first; a badge may occupy at most the card body's
+ * width, and only that limit can shrink the captions. The original 76/64 horizontal and 74/69 vertical scale of
+ * the end pieces is preserved, the check included.
+ * @param {object} slot The selection slot.
+ * @param {string[]} texts The captions, one per state.
+ * @param {Function} fitGroup NGUI's fitGroup.
+ * @param {Function} measureWidth NGUI's glyphWidth.
+ * @param {{w: number}|null} [card] The card, which limits the badge's width.
+ */
 export function fitBadgeCaptions(slot, texts, fitGroup, measureWidth, card = null) {
   const box = badgeCaptionBox(slot);
   if (!box) return null;
@@ -50,9 +67,12 @@ export function fitBadgeCaptions(slot, texts, fitGroup, measureWidth, card = nul
   }));
 }
 
-// Paint the entire opening of SelectLine / SelectLine_Sub, including its corners. A second rounded mask or
-// Common_Line_Raius20px cuts into that opening and exposes Common/BG. One source texel of underpaint stays under
-// the opaque stroke and covers nine-slice raster rounding; the prefab frame itself supplies the visible corners.
+/**
+ * Paint the entire opening of SelectLine / SelectLine_Sub, including its corners. A second rounded mask or
+ * Common_Line_Raius20px cuts into that opening and exposes Common/BG; one source texel of underpaint stays
+ * under the opaque stroke and covers nine-slice raster rounding, and the prefab frame itself supplies the
+ * visible corners.
+ */
 export function selectionArtWindow(frame, meta, outline) {
   const { clipPolygon, ...window } = innerFrame(
     widget(frame),
@@ -63,7 +83,10 @@ export function selectionArtWindow(frame, meta, outline) {
   return window;
 }
 
-// caption: the state's fitBadgeCaptions result. The label occupies only the fill between the preserved ends.
+/**
+ * The frame of a selected card. The label occupies only the fill between the preserved ends.
+ * @param {object|null} [caption] The state's fitBadgeCaptions result.
+ */
 export function selectedFrame(slot, card, applied, previewed, caption = null) {
   const state = sourceCardState(applied, previewed);
   if (!state) return null;

@@ -1,4 +1,10 @@
-// Student variants share a row only when requested; generic and unidentified assets retain their own rows.
+/**
+ * Group the import entries into rows: student variants share a row only when requested (merged); generic and
+ * unidentified assets keep their own rows.
+ * @param {object[]} entries The entries.
+ * @param {boolean} merged Group the variants of one student.
+ * @param {(entry: object) => object} identify Tells who an entry is for.
+ */
 export function importGroups(entries, merged, identify) {
   const groups = new Map();
   for (const entry of entries) {

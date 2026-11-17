@@ -1,9 +1,9 @@
 // The action list of a group card on the 3D tab's action bar: the game's description tooltip box over the card
-// (UIDescriptionTooltip, as the hover hints draw it), the group's sections as UIShortcutTooltip's list title bars and
-// its actions as UISortObjectListUnit radio keys (Label_Text), one to a line; the playing one is on. It opens upward
-// from the card, stays inside the stage (action-list-layout.js placeList), scrolls when taller than the room over the
-// card, and follows the card when the bar scrolls. Picking a key plays it and closes the list; a press outside the
-// list (other than on a group card, which switches the list) or Escape closes it.
+// (UIDescriptionTooltip, as the hover hints draw it), the group's sections as UIShortcutTooltip's list title
+// bars and its actions as UISortObjectListUnit radio keys, one to a line; the playing one is on. It opens upward
+// from the card, stays inside the stage (action-list-layout.js placeList), scrolls when taller than the room
+// over the card, and follows the card when the bar scrolls. Picking a key plays it and closes the list; a press
+// outside the list (other than on a group card, which switches the list) or Escape closes it.
 import * as NGUI from "./ngui.js";
 import { HINT_PREFAB, hintStyle } from "./hover-hint.js";
 import { T } from "./i18n.js";
@@ -87,8 +87,17 @@ function rowsTree(L, rows, fits, cw, selected) {
   return out;
 }
 
-// open({ host, group, anchor, sections, selected, onPick }): host, the layer the list goes in (over the bar); anchor(),
-// the card's visible body now ({ left, right, top }, units); onPick(key) when a key is picked
+/**
+ * Open the list of a group card.
+ * @param {object} options The list.
+ * @param {HTMLElement} options.host The layer the list goes in (over the bar).
+ * @param {string} options.group The group's id.
+ * @param {() => {left: number, right: number, top: number}} options.anchor Gives the card's visible body now,
+ *     in units.
+ * @param {object[]} options.sections The group's sections.
+ * @param {string|null} options.selected The playing action's key.
+ * @param {(key: string) => void} options.onPick Called when a key is picked.
+ */
 export async function open({ host, group, anchor, sections, selected, onPick }) {
   close();
   const my = ++token,
@@ -176,6 +185,9 @@ export async function open({ host, group, anchor, sections, selected, onPick }) 
   };
 }
 
+/**
+ * Close the list.
+ */
 export function close() {
   token++;
   if (!shown) return;
@@ -183,10 +195,19 @@ export function close() {
   shown.layer.remove();
   shown = null;
 }
+/**
+ * The group whose list is open.
+ * @returns {string|null} The group's id, or null.
+ */
 export const openGroup = () => shown?.group ?? null;
 // the prefabs read and the box, a title bar and a key drawn once off screen, when the bar is drawn, so the first press
 // finds their sprites sliced (the first draw of a sprite takes a while; display.js warms its popup the same way)
 let warming = null;
+/**
+ * Draw the prefabs, the box, a title bar and a key once off screen when the bar is drawn, so the first press
+ * finds their sprites sliced (the first draw of a sprite takes a while; display.js warms its popup the same
+ * way).
+ */
 export function warm() {
   warming ||= load()
     .then((L) => {
@@ -211,7 +232,9 @@ export function warm() {
     });
   return warming;
 }
-// the bar scrolled: the list follows its card
+/**
+ * Move the list to its card after the bar scrolled.
+ */
 export function follow() {
   shown?.place();
 }

@@ -12,7 +12,10 @@ const luminance = (colour) =>
     return sum + [0.2126, 0.7152, 0.0722][c] * (s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4);
   }, 0);
 
-// Transparent portrait margins carry no colour: use the last painted pixels, then the nearest painted row.
+/**
+ * The colours at the painted edges of a portrait: transparent margins carry no colour, so the last painted
+ * pixels are used, then the nearest painted row.
+ */
 export function edgeColours({ data, width, height }) {
   const rows = Array.from({ length: height }, (_, y) => {
     const sum = [0, 0, 0];
@@ -39,6 +42,11 @@ export function edgeColours({ data, width, height }) {
   return filled.map((_, y) => mean(filled.slice(Math.max(0, y - 2), y + 3)));
 }
 
+/**
+ * The text colour and the backing of a switch card from the colours of its rows.
+ * @param {number[][]} rows The edge colour of each row.
+ * @param {number} [edge] The share of the card the text covers.
+ */
 export function cardColours(rows, edge = 0.4) {
   if (!rows.length) rows = [FALLBACK];
   if (rows.length === 1) rows = [rows[0], rows[0]];
@@ -79,6 +87,17 @@ export function cardColours(rows, edge = 0.4) {
   return { color, backing, alpha, backgroundImage };
 }
 
+/**
+ * Colour a switch card's text and backing after its picture.
+ * @param {HTMLElement} picture The picture's element.
+ * @param {HTMLElement} text The text's element.
+ * @param {object} widget The card's picture widget.
+ * @param {(url: string) => Promise<HTMLImageElement>} load Loads an image.
+ * @param {object} [options] Options.
+ * @param {AbortSignal} [options.signal] Cancels the work.
+ * @param {string} [options.kind] "lobby" by default.
+ * @param {object} [options.background] The background under a portrait.
+ */
 export async function colourSwitchCard(picture, text, widget, load, { signal, kind = "lobby", background } = {}) {
   if (signal?.aborted) return;
   // the portrait card keeps the prefab's own look: no background picture and no fade

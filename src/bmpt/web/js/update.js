@@ -1,6 +1,6 @@
 // Update popup on the game's popup frame (UIPopup_Sort): the current and the new version, Later / Update.
-// Updating downloads and verifies the build; Restart installs it only after a separate confirmation.
-// check() resolves once the popup has closed; automatic checks wait for beforeShow without holding a screen.
+// Updating downloads and verifies the build; Restart installs it only after a separate confirmation. check()
+// resolves once the popup has closed; automatic checks wait for beforeShow without holding a screen.
 import * as Buttons from "./game-buttons.js";
 import * as NGUI from "./ngui.js";
 import * as Popup from "./popup.js";
@@ -22,8 +22,12 @@ const NOTES_FONT = 44;
 const dialogTitle = (key, simulation) => T(key) + (simulation ? T("update.simulation.suffix") : "");
 const HEADING_FONT = [56, 52, 48];
 
-// the popup's lines for the notes: one fixed type size per kind, as a changelog reads; a longer line wraps instead of
-// shrinking
+/**
+ * The popup's lines for the release notes: one fixed type size per kind, as a changelog reads; a longer line
+ * wraps instead of shrinking.
+ * @param {string} markdown The notes.
+ * @param {string} [lang] The language tag.
+ */
 export function notesLines(markdown, lang = language()) {
   const blocks = notesFor(typeof markdown === "string" ? markdown : "", lang);
   if (!blocks.length) return [{ text: T("update.notesEmpty"), fontSize: NOTES_FONT, minFontSize: NOTES_FONT }];
@@ -38,7 +42,15 @@ export function notesLines(markdown, lang = language()) {
   });
 }
 
-// releasePage: false leaves out the release page button (a local build's tag may not be published)
+/**
+ * Show a release's notes.
+ * @param {object} info The release's information: version, notes and page.
+ * @param {object} [options] Options.
+ * @param {boolean} [options.simulation] The notes of a simulated release.
+ * @param {Function} [options.onSimulatedPage] Called instead of opening the release page.
+ * @param {boolean} [options.releasePage] False leaves out the release page button (a local build's tag may not
+ *     be published).
+ */
 export async function releaseNotes(info, { simulation = false, onSimulatedPage, releasePage = true } = {}) {
   const lines = notesLines(info.notes);
   const result = await Popup.message({
@@ -58,9 +70,13 @@ export async function releaseNotes(info, { simulation = false, onSimulatedPage, 
   }
 }
 
-// The first launch after an upgrade, pre-releases included: the running version's own notes once, when no popup
-// is open and blocked() is false. The server records the launch (app.upgradeNotes), so it is asked before the
-// feature tours; the offer stays pending until the popup has closed.
+/**
+ * Show the first launch after an upgrade, pre-releases included: the running version's own notes once, when no
+ * popup is open and blocked() is false. The server records the launch (app.upgradeNotes), so it is asked before
+ * the feature tours; the offer stays pending until the popup has closed.
+ * @param {object} [options] Options.
+ * @param {() => boolean} [options.blocked] Whether the notes must wait.
+ */
 export async function afterUpgrade({ blocked = () => false } = {}) {
   const own = await rpc("app.upgradeNotes");
   if (!own?.due) return;
@@ -69,9 +85,14 @@ export async function afterUpgrade({ blocked = () => false } = {}) {
   await rpc("app.upgradeNotesPresented", { version: own.current });
 }
 
-// Settings supplies the server's shared prerelease gate. Synthetic data never enters the updater service. With
-// notes, the build's own release notes (app.releaseNotes) stand in for a newer release's, so they can be read
-// before publishing.
+/**
+ * Simulate an update for the pre-release previews: Settings supplies the server's shared prerelease gate, and
+ * synthetic data never enters the updater service. With notes, the build's own release notes (app.releaseNotes)
+ * stand in for a newer release's, so they can be read before publishing.
+ * @param {HTMLElement} host The popup's host.
+ * @param {object} prefs The settings.
+ * @param {boolean} [notes] Use the build's own release notes.
+ */
 export async function simulate(host, prefs, notes = true) {
   if (prefs?.prereleasePreviews !== true || checks.has(host)) return null;
   const own = notes ? await rpc("app.releaseNotes").catch(() => null) : null;
@@ -87,9 +108,20 @@ export async function simulate(host, prefs, notes = true) {
   );
 }
 
-// resolves with what closed the popup: "later" (Later or Escape), "page" (the download page opened) or "update" (a
-// failed update, once dismissed). A successful retry clears that failure; Restart quits the app on success.
-// null without a newer release, offline or when the popup cannot be drawn. Settings may pass its check's result.
+/**
+ * Offer an update. The popup resolves with what closed it: "later" (Later or Escape), "page" (the download page
+ * opened) or "update" (a failed update, once dismissed); a successful retry clears that failure; Restart quits
+ * the app on success.
+ * @param {HTMLElement} host The popup's host.
+ * @param {object} info The update information; Settings may pass its check's result.
+ * @param {object} [options] Options.
+ * @param {(info: object) => void} [options.onCheck] Called with the check's answer.
+ * @param {(error: Error) => void} [options.onError] Called when the check fails.
+ * @param {() => Promise<void>} [options.beforeShow] Automatic checks wait for it without holding a screen.
+ * @param {boolean} [options.simulation] A simulated update.
+ * @returns {Promise<"later"|"page"|"update"|null>} null without a newer release, offline or when the popup
+ *     cannot be drawn.
+ */
 export function check(host, info, { onCheck, onError, beforeShow, simulation = false } = {}) {
   const observe = (checked) => {
     if (onCheck || onError) checked.then(onCheck, onError).catch((err) => console.error("update check", err));
@@ -116,9 +148,11 @@ export function check(host, info, { onCheck, onError, beforeShow, simulation = f
   return done;
 }
 
-// the offer's three captions (Label_Locale widgets) on the footer's bodies in the frame (FRAME_W wide, taken to
-// the popup frames' class): the popups' footer fit (popupFrame applies the same to the three choices), a long
-// one wraps to two lines before it shrinks, clear of the body's edges; all three share one size
+/**
+ * Fit the offer's three captions (Label_Locale widgets) on the footer's bodies in the frame (FRAME_W wide,
+ * taken to the popup frames' class): the popups' footer fit (popupFrame applies the same to the three choices),
+ * a long one wraps to two lines before it shrinks, clear of the body's edges; all three share one size.
+ */
 export function offerCaptions(widgets) {
   const texts = widgets.map((l) => l.text),
     { kind, room } = Popup.footerLayout(texts, frameGeometry(FRAME_W).w);
@@ -132,8 +166,10 @@ const STATUS = { gap: 6, h: 96 };
 const PROGRESS = { gap: 8, h: 20 };
 const TOP = Popup.MSG.title;
 const FRAME_W = 1700;
-// the frame for a box boxH high: its height, the box's top and the centres of Status and Progress (popup-local
-// y), and the lowest content edge
+/**
+ * The frame for a box boxH high: its height, the box's top and the centres of Status and Progress (popup-local
+ * y), and the lowest content edge.
+ */
 export function frameFor(boxH) {
   const below = STATUS.gap + STATUS.h + PROGRESS.gap + PROGRESS.h;
   const h = Math.ceil(TOP + boxH + below + POPUP_FOOTER.clearance);
@@ -143,15 +179,22 @@ export function frameFor(boxH) {
     progress = boxBottom - STATUS.gap - STATUS.h - PROGRESS.gap - PROGRESS.h / 2;
   return { w: FRAME_W, h, boxTop, status, progress, contentBottom: progress - PROGRESS.h / 2 };
 }
-// The content shown is centred in the room the frame keeps under the title: the version box alone while the
-// offer waits, with Status once there is a line, with the Progress bar too while downloading (no empty band
-// under the box). The shift moves the whole group down from its top place.
+/**
+ * How far the content group moves down from its top place: it is centred in the room the frame keeps under the
+ * title, the version box alone while the offer waits, with Status once there is a line, with the Progress bar
+ * too while downloading (no empty band under the box).
+ * @param {object} [options] Options.
+ * @param {boolean} [options.status] A status line shows.
+ * @param {boolean} [options.progress] The progress bar shows.
+ */
 export function contentShift({ status = false, progress = false } = {}) {
   const full = STATUS.gap + STATUS.h + PROGRESS.gap + PROGRESS.h;
   const shown = status || progress ? STATUS.gap + STATUS.h + (progress ? PROGRESS.gap + PROGRESS.h : 0) : 0;
   return (full - shown) / 2;
 }
-// the rows of the box: the current version in black, the latest in the success colour
+/**
+ * The rows of the version box: the current version in black, the latest in the success colour.
+ */
 export const versionRows = (info) => [
   { caption: T("update.current"), value: info.current.replace(/-dev$/, "") },
   { caption: T("update.latest"), value: info.version, colour: `${COLOUR.success}/1.00` },

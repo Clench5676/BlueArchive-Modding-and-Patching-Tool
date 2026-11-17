@@ -18,8 +18,10 @@ const GAP = 6,
 // the tallest caption: what the three-line layout leaves between the icon's bottom edge and the body's
 const BAND = FOLDER_Y[3] - ICON.h / 2 - GAP - (BODY.bottom + MARGIN);
 
-// The caption's text and size and where it and the icon go (units, x slanted with y like the body): { text, fs, lines,
-// label: [x, y, h], folder: [x, y] }. h: the label box's height.
+/**
+ * The caption's text and size and where it and the icon go (units, x slanted with y like the body): { text, fs,
+ * lines, label: [x, y, h], folder: [x, y] }, h being the label box's height.
+ */
 export function explorerLayout(caption) {
   const [fit] = fitGroup([caption], CAPTION.fsMax, CAPTION.fsMin, CAPTION.room, CAPTION.maxLines, { maxH: BAND });
   const lines = Math.min(3, Math.max(1, fit.lines)),

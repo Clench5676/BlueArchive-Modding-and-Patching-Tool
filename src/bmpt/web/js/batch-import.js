@@ -100,15 +100,25 @@ const sizeText = (size) =>
   size >= 1048576 ? `${(size / 1048576).toFixed(1)} MB` : `${Math.ceil((size || 0) / 1024)} KB`;
 const baseName = (path) => path?.split(/[\\/]/).pop() || "";
 const listSeparator = () => (/^(zh|ja)/i.test(language()) ? "、" : ", ");
-// the dialogs' scrolling area [left, top, width, height] (px in the stage; app.css .import-dialog-content has
+// The dialogs' scrolling area [left, top, width, height] (px in the stage; app.css .import-dialog-content has
 // the same numbers) and their frame's height: the area 83.5 px under the frame's top, and the XS footer every
-// popup has about SPACE.xl under the area (POPUP_FOOTER.clearance)
+// popup has about SPACE.xl under the area (POPUP_FOOTER.clearance).
 export const DIALOG_H = 1320.5;
 export const DIALOG_AREA = [228, 203, 1464, 640];
 
+/**
+ * The roster's variants as a flat list, each with its family.
+ * @param {{families?: object[]}} data The data of roster.list.
+ */
 export function catalogEntries(data) {
   return (data?.families || []).flatMap((family) => (family.variants || []).map((variant) => ({ ...variant, family })));
 }
+/**
+ * Who an import entry is for: the catalog variant its variant key or its core names, the student's display
+ * name, the core and the search words.
+ * @param {object} entry The import entry.
+ * @param {object[]} catalog The variants (catalogEntries).
+ */
 export function entryIdentity(entry, catalog) {
   const variant =
     catalog.find((item) => item.key === entry.variant) ||
@@ -138,6 +148,13 @@ export function entryIdentity(entry, catalog) {
   };
 }
 
+/**
+ * Make the batch import page: the file list, the options, the progress and the result popups. Every other
+ * option replaces a service, for the tests.
+ * @param {object} [options] What it uses.
+ * @param {HTMLElement} options.host The element the page is drawn into.
+ * @returns {object} The page's controls: show, hide, drop, invalidate and relabel.
+ */
 export function createImportPage({
   host,
   call = rpc,
@@ -2072,19 +2089,37 @@ export function createImportPage({
 }
 
 let page;
+/**
+ * Show the batch import page.
+ * @param {object} context The shared screen context.
+ * @param {object} data The data of roster.list.
+ */
 export function show(context, data) {
   page ||= createImportPage({ host: document.getElementById("import") });
   return page.show(context, data);
 }
+/**
+ * Hide the batch import page.
+ */
 export function hide() {
   page?.hide();
 }
+/**
+ * Take files dropped on the window into the page.
+ * @param {string[]} paths The dropped paths.
+ */
 export function drop(paths) {
   return page?.drop(paths);
 }
+/**
+ * Mark what the page shows as stale: the next show reads the catalog again.
+ */
 export function invalidate() {
   page?.invalidate();
 }
+/**
+ * Draw the page again after a locale change.
+ */
 export function relabel() {
   return page?.relabel();
 }

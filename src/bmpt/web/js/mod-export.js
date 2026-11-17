@@ -11,7 +11,12 @@ import { S, hitButton, wrapPath } from "./util.js";
 
 let active = false;
 
-// A picker return updates the confirmation draft. Only an explicit Confirm starts a job.
+/**
+ * Run the export journey: choose, confirm, run and report. A picker's return updates the confirmation draft;
+ * only an explicit Confirm starts a job.
+ * @param {object} request What to export.
+ * @param {object} deps The steps (confirm, options, pick, reveal, run, success).
+ */
 export async function journey(request, deps) {
   const options = await deps.options();
   let draft = { ...options, defaultFolder: options.folder };
@@ -147,6 +152,10 @@ function confirmation(initial) {
   });
 }
 
+/**
+ * Open the export popup for a request.
+ * @returns {Promise<object|null>} The result; null when cancelled.
+ */
 export async function open(request) {
   if (active) return null;
   active = true;

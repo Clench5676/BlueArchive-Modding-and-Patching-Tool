@@ -31,7 +31,7 @@ const backCode =
   statementOf(visualSource, "const CORNERS =") +
   "\n" +
   visualSource
-    .slice(visualSource.indexOf("export async function prepare("), visualSource.indexOf("// open({parts"))
+    .slice(visualSource.indexOf("export async function prepare("), visualSource.indexOf("export async function open("))
     .replaceAll("export ", "") +
   visualSource.slice(
     visualSource.indexOf("async function renderBg("),
