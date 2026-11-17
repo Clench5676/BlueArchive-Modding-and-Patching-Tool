@@ -793,7 +793,7 @@ def test_add_and_batch_keep_known_names_despite_conflicting_content(checks, monk
     (row,) = analyze(e, [source])["entries"]
     (mod,) = e.library.add([source])
     assert (mod.file.name, mod.target, mod.kind) == expected
-    assert (Path(row["files"][0]["path"]).name, row["variant"], row["kind"]) == expected
+    assert (Path(row["files"][0]["path"]).name, row["alt"], row["kind"]) == expected
 
 
 def test_model_content_keeps_its_dependency_core_even_when_variant_model_differs(checks, monkeypatch):

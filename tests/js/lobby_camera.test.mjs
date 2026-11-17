@@ -207,7 +207,7 @@ test("Switch Memorial Lobby lists the cameras with the lobby mods and starts on 
     configured: { lobby: "mod:c1" },
     state: { files: [] },
   };
-  const fam = { variants: [v] };
+  const fam = { alts: [v] };
   const listed = Sources.candidates(fam, v, "lobby");
   assert.deepEqual(
     listed.map((c) => c.key),

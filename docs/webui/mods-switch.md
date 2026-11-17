@@ -56,7 +56,7 @@ configuration: Off puts every entry of every known install back to official, On 
   queue has run, one popup lists the dropped calls.
 - **What a writer job switched** (`library.changed`): the roster is read again, thumbnails under the changed cores
   are forgotten, and the detail screen reloads the shown kind under a still of the old one, waiting while a popup or
-  fullscreen view is open. The screen's reads of `family.get` have no client deadline (a writer job can hold the
+  fullscreen view is open. The screen's reads of `student.get` have no client deadline (a writer job can hold the
   library lock); a read that finishes after the screen was read anew is dropped.
 - **While mods are off** an apply only saves the choice (the apply job's `deferred`); the switch popup reads Save.
 - **The tray's events** are followed like the page's own toggle (see [Tray](desktop.md#tray)).
@@ -75,7 +75,7 @@ The prompts and messages around files already modded (`prompts.js`; the pure par
 from the last scan, so the prompts exist only with the scan consent; the messages of an overwritten entry need none.
 
 - **Mods Not in the Library** (`#prompt`): the `untracked` and configured `changed` entries of every known install,
-  every card ticked, each with its own install's picture, the variant's name, kind and install chips and "No Official
+  every card ticked, each with its own install's picture, the alt's name, kind and install chips and "No Official
   Copy" where it holds. Add to Library (`mods.adopt`), with mods off also Add and Turn On Mods, Later, and Don't Ask
   Again (`mods.dismiss untracked`). Damaged entries are listed apart, dim and never ticked.
 - **Costume builds of an older rule** (`update-impact.js gate`, before the first screen): what the App built under an

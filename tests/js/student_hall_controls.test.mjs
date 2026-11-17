@@ -309,10 +309,10 @@ test("Hall's real action row measures its top margin below the bar at minimum, d
 });
 
 test("the Common ChangeUnit portrait icon keeps its77x68ratio and enables only with a replacement candidate", async () => {
-  const entry = { id: "a", variant: "hero", source: "mod:current", scale: 1 },
+  const entry = { id: "a", alt: "hero", source: "mod:current", scale: 1 },
     choices = [
-      { ...entry, family: "hero", kind: "spr" },
-      { variant: "alt", source: "official", family: "hero", kind: "spr" },
+      { ...entry, student: "hero", kind: "spr" },
+      { alt: "alt", source: "official", student: "hero", kind: "spr" },
     ];
   for (const available of [[], choices]) {
     Hall.fixture("portraits", "layout", 0, [entry], available);
@@ -335,7 +335,7 @@ test("the Common ChangeUnit portrait icon keeps its77x68ratio and enables only w
 
 test("the own-size slider moves the toolbar only once a size is set, never under a dragged thumb", async () => {
   const { portraitRect, portraitToolbarLayout } = await import("../../src/bmpt/web/js/hall/student-hall-framing.js");
-  const entry = { id: "a", variant: "hero", source: "mod:current", x: 400, y: 1100, scale: 1, mirror: false },
+  const entry = { id: "a", alt: "hero", source: "mod:current", x: 400, y: 1100, scale: 1, mirror: false },
     ui = globalThis.hallControlsHarness.UI,
     saved = { ...ui };
   let change,
@@ -385,7 +385,7 @@ test("the own-size slider moves the toolbar only once a size is set, never under
 });
 
 test("the toolbar centres on the portrait's visible head, not its Spine bounds", async () => {
-  const entry = { id: "a", variant: "hero", source: "mod:current", x: 700, y: 1100, scale: 1, mirror: false };
+  const entry = { id: "a", alt: "hero", source: "mod:current", x: 700, y: 1100, scale: 1, mirror: false };
   Hall.fixture("portraits", "layout", 0, [entry], []);
   Hall.setPortraits({ actors: new Map(), head: (id) => (id === "a" ? { x: -150, y: -600 } : null) });
   try {

@@ -179,7 +179,7 @@ class UpdatingMixin:
 
         source = self._optimized_from(record)
         variant_key = self._target_of(record)
-        signature, targets = self._costume_signature(variant_key, source[8:], pin)
+        signature, targets = self._costume_signature(variant_key, source[4:], pin)
         verdict = self._verdicts().get(signature)
         if not self._costume_allowed(verdict):
             raise ServiceError("source_unsupported", source=verdict.get("reason") or source)
@@ -188,7 +188,7 @@ class UpdatingMixin:
         report: dict[str, Any] = {}
         with temporary_directory(prefix=devmode.LIBRARY_STAGING_PREFIX + "update-") as temporary:
             replacements = self._stage_costume(
-                source[8:], targets, Path(temporary) / "model", log, pin, report=report, physics=True, fraction=fraction
+                source[4:], targets, Path(temporary) / "model", log, pin, report=report, physics=True, fraction=fraction
             )
             if not report.get("physics"):
                 raise ServiceError("mod_update_failed", id=record["id"])
@@ -447,7 +447,7 @@ class UpdatingMixin:
         """Extract game or mod assets into a child folder named after their bundle core.
 
         Args:
-            target: mod:<id> for stored bundles or variant:<key> for live game parts.
+            target: mod:<id> for stored bundles or alt:<key> for live game parts.
             out_dir: Parent directory of the core-named output folder, which the engine clears before extraction.
             log: Receives user-facing operation messages.
             pin: Game install and server the operation is fixed to; None uses the current install for variant targets.
@@ -461,8 +461,8 @@ class UpdatingMixin:
         """
         if target.startswith("mod:"):
             paths = self._paths(self._record(target[4:]))
-        elif target.startswith("variant:"):
-            paths = self._game_files(target[8:], None, pin)
+        elif target.startswith("alt:"):
+            paths = self._game_files(target[4:], None, pin)
         else:
             raise ServiceError("source_unsupported", source=target)
         if not paths:

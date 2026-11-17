@@ -254,13 +254,13 @@ class JobsMixin:
         ):
             changed = _changed_of(result)
             cores = set(changed["cores"]) if not failed and kind in ("apply", "restore") else None
-            variant = getattr(result, "variant", None)
-            if cores is not None and not cores and variant:
-                # nothing written (unchanged or deferred): only the configuration of the variant's cores changed
+            alt = getattr(result, "variant", None)
+            if cores is not None and not cores and alt:
+                # nothing written (unchanged or deferred): only the configuration of the alt's cores changed
                 try:
-                    cores = library.variant_cores(variant)
+                    cores = library.variant_cores(alt)
                 except Exception:
-                    logger.exception("variant cores not read")
+                    logger.exception("alt cores not read")
                     cores = None
             if cores is not None:
                 cores.update(pruned)
@@ -445,12 +445,12 @@ class JobsMixin:
             self.check_classic()
             return self.submit("mods.retryFailed", run, writes="game", library=library)
 
-    def submit_apply(self, variant: str, source: str, kind: str = "spr") -> str:
+    def submit_apply(self, alt: str, source: str, kind: str = "spr") -> str:
         """Submit ``actions.apply``: one entry of the current install, pinned at submit.
 
         Args:
-            variant: The variant key.
-            source: The source to switch to: ``official``, ``mod:<id>`` or ``variant:<key>``.
+            alt: The alt id.
+            source: The source to switch to: ``official``, ``mod:<id>`` or ``alt:<key>``.
             kind: The asset kind, ``spr``, ``lobby``, ``model`` or ``other``.
 
         Returns:
@@ -467,14 +467,14 @@ class JobsMixin:
 
         def run(log: Any, progress: Any) -> Any:
             self._check_pin(library, pin)
-            return library.apply(variant, source, log=log, progress=progress, kind=kind, pin=pin)
+            return library.apply(alt, source, log=log, progress=progress, kind=kind, pin=pin)
 
         with self.classic.starting():
-            if self.classic_open() and library.would_write(variant, source, kind, pin=pin, setting=True):
+            if self.classic_open() and library.would_write(alt, source, kind, pin=pin, setting=True):
                 raise ServiceError("classic_open")
             return self.submit("apply", run, writes="game", library=library)
 
-    def submit_restore(self, variant: str, kind: str = "spr") -> str:
+    def submit_restore(self, alt: str, kind: str = "spr") -> str:
         """Submit ``actions.restore``: one entry of the current install back to official, pinned at submit.
 
         A restore that writes nothing (the files are official already) is allowed while a classic window is open;
@@ -482,7 +482,7 @@ class JobsMixin:
         with ``classic_open``.
 
         Args:
-            variant: The variant key.
+            alt: The alt id.
             kind: The asset kind, ``spr``, ``lobby``, ``model`` or ``other``.
 
         Returns:
@@ -498,10 +498,10 @@ class JobsMixin:
 
         def run(log: Any, progress: Any) -> Any:
             self._check_pin(library, pin)
-            return library.restore(variant, log=log, kind=kind, pin=pin, progress=progress)
+            return library.restore(alt, log=log, kind=kind, pin=pin, progress=progress)
 
         with self.classic.starting():
-            if self.classic_open() and library.would_write(variant, "official", kind, pin=pin):
+            if self.classic_open() and library.would_write(alt, "official", kind, pin=pin):
                 raise ServiceError("classic_open")
             return self.submit("restore", run, writes="game", library=library)
 
@@ -524,9 +524,9 @@ class JobsMixin:
         if method == "mods.restoreDrift":
             return self.submit_restore_drift(params.get("entries"))
         if method == "actions.apply":
-            return self.submit_apply(params.get("variant"), params.get("source"), params.get("kind", "spr"))
+            return self.submit_apply(params.get("alt"), params.get("source"), params.get("kind", "spr"))
         if method == "actions.restore":
-            return self.submit_restore(params.get("variant"), params.get("kind", "spr"))
+            return self.submit_restore(params.get("alt"), params.get("kind", "spr"))
         raise ServiceError("bad_params", method=method)
 
     def submit_judge(self) -> str | None:

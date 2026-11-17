@@ -117,7 +117,7 @@ class CostumesMixin:
             )
             if files:
                 return dev.lower(), files, files
-        raise ServiceError("game_file_not_found", variant=other)
+        raise ServiceError("game_file_not_found", alt=other)
 
     def _costume_source(self, other: str, pin: Pin, *, preview: bool = False) -> tuple[str, list[Path]]:
         """The dev name and the official copies of another variant's model files (the build's inputs)."""
@@ -289,11 +289,11 @@ class CostumesMixin:
         rule = f"costume-rule:{COSTUME_RULE}"
         self._variant(variant_key)
         if other == variant_key:
-            raise ServiceError("source_unsupported", source=f"variant:{other}")
+            raise ServiceError("source_unsupported", source=f"alt:{other}")
         self._variant(other)
         targets = self._game_files(variant_key, "model", pin)
         if not targets:
-            raise ServiceError("game_file_not_found", variant=variant_key)
+            raise ServiceError("game_file_not_found", alt=variant_key)
         _, inputs = self._costume_source(other, pin, preview=True)
         try:
             return self._build_signature(inputs, targets, pin, rule), targets
@@ -412,7 +412,7 @@ class CostumesMixin:
     ) -> dict[str, Any]:
         """Store a costume swap with skirt-chain physics as a reusable model mod.
 
-        The variant's model slot carrying ``source``'s costume ("variant:<key>") is built with
+        The variant's model slot carrying ``source``'s costume ("alt:<key>") is built with
         the physics rules (Rule B, the skirt chains as new bones), kept as a model mod of the variant named after
         ``name`` (the costume as the screen shows it): {"mod": id}, the copy made before when there is one. {"unneeded":
         True, "reason": ...} when there is nothing to build: "official" for the official model, whose own clips move its
@@ -421,7 +421,7 @@ class CostumesMixin:
 
         Args:
             variant_key: Variant key whose model slot receives the optimized costume.
-            source: variant:<key> costume source; official returns an unneeded result.
+            source: alt:<key> costume source; official returns an unneeded result.
             name: Costume label from the UI, trimmed to 200 characters; blank falls back to the source key.
             pin: Game install and server the operation is fixed to; None uses the current install.
             progress: Receives build fraction and phase dictionaries; None disables reporting.
@@ -432,9 +432,9 @@ class CostumesMixin:
         self._variant(variant_key)
         if source == "official":
             return {"unneeded": True, "reason": "official"}
-        if not isinstance(source, str) or not source.startswith("variant:"):
+        if not isinstance(source, str) or not source.startswith("alt:"):
             raise ServiceError("source_unsupported", source=str(source))
-        other = source[8:]
+        other = source[4:]
         signature, targets = self._costume_signature(variant_key, other, pin)
         verdict = self._verdicts().get(signature)
         if not self._costume_allowed(verdict):  # refused: never built for the game

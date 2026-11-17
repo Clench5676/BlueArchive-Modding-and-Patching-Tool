@@ -87,7 +87,7 @@ const arranging = () => editing() && !fullscreen?.active();
 const choiceOf = (entry, kind = "spr") =>
   options.choices.find((choice) => choice.kind === kind && sourceKey(choice) === sourceKey(entry));
 const titleOf = (choice) =>
-  choice ? [L(choice.names)?.full || choice.variant, choice.label].filter(Boolean).join(" - ") : T("hall.missing");
+  choice ? [L(choice.names)?.full || choice.alt, choice.label].filter(Boolean).join(" - ") : T("hall.missing");
 const fail = (error) => {
   if (root && error?.name !== "AbortError") Popup.notify(errorText(error), { kind: "error", error });
 };
@@ -658,7 +658,7 @@ function renderHits(host = hits) {
 
 function viewed(choice) {
   if (!choice || choice.kind !== "lobby") return;
-  rpc("hall.viewed", { variant: choice.variant, source: choice.source })
+  rpc("hall.viewed", { alt: choice.alt, source: choice.source })
     .then((keys) => {
       if (!options || !Array.isArray(keys)) return;
       for (const source of options.choices) {
@@ -685,7 +685,7 @@ function refreshMemorialCaptions(player, source = memorialCaptions.get(player)) 
   // Chinese requests also load the official Chinese script while Kivo's preferred text is being retrieved.
   return rpc(
     "lobby.lines",
-    { variant: source.variant, talks: source.talks, lang: lang === "zh-CN" ? "zh-TW" : lang },
+    { alt: source.alt, talks: source.talks, lang: lang === "zh-CN" ? "zh-TW" : lang },
     { signal: source.signal },
   ).then((lines) => {
     if (!source.signal.aborted && request === source.request && memorialCaptions.get(player) === source)
@@ -694,7 +694,7 @@ function refreshMemorialCaptions(player, source = memorialCaptions.get(player)) 
 }
 async function memorial(choice, host, signal, player) {
   configureMemorial(player);
-  const meta = await player.show(choice.core, host, choice.variant, {
+  const meta = await player.show(choice.core, host, choice.alt, {
     mod: choice.source.startsWith("mod:") ? choice.source.slice(4) : null,
     official: choice.source === "official",
     deferPlayback: true,
@@ -709,7 +709,7 @@ async function memorial(choice, host, signal, player) {
   const talks = Object.fromEntries(
     meta.sequences.map((sequence) => [sequence.anim, sequence.cues.map((cue) => cue.clip)]),
   );
-  refreshMemorialCaptions(player, { variant: choice.variant, talks, signal }).catch(() => {});
+  refreshMemorialCaptions(player, { alt: choice.alt, talks, signal }).catch(() => {});
   return true;
 }
 async function renderScene() {

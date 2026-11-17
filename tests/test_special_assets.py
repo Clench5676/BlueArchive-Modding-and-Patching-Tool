@@ -257,8 +257,8 @@ def test_special_rpc_and_preview_use_existing_lobby_routes(setup_library, monkey
     services = Services(env.settings, env.tmp / "ui", game=game, catalog=catalog, library=env.library)
     try:
         api = build_api(services)
-        family = api.call("family.get", {"key": "arona"})["result"]
-        (v,) = family["variants"]
+        family = api.call("student.get", {"key": "arona"})["result"]
+        (v,) = family["alts"]
         assert (v["key"], v["spineCategory"], v["spr"], v["lobby"]) == (
             "special:arona_workpage_daytime",
             "spinebackground",

@@ -13,7 +13,7 @@ import { switchKindOf } from "../mods/switch-sources.js";
 import { $ } from "../core/util.js";
 import {
   stage,
-  variantKey,
+  altId,
   layouts,
   tab,
   fullscreen,
@@ -25,7 +25,7 @@ import {
   frames,
   open,
   thumb,
-  variant,
+  alt,
   previewAvailable,
   current,
   renderAll,
@@ -60,7 +60,7 @@ let fullscreenRequest = 0;
 export async function setFullscreen(on, { switching = false } = {}) {
   const request = ++fullscreenRequest,
     part = tab,
-    key = variantKey;
+    key = altId;
   if (on && tab === "portrait") {
     return enterVisual({ switching });
   }
@@ -68,14 +68,14 @@ export async function setFullscreen(on, { switching = false } = {}) {
     const layout = await (layouts.visual ||= NGUI.layout("UICharacterVisualMode").catch(() => null));
     if (layout) await Visual.exitControl($("fs-exit"), layout);
     const control =
-      tab === "lobby" && previewAvailable(variant(), "spr")
+      tab === "lobby" && previewAvailable(alt(), "spr")
         ? await Visual.prepareSwitch({
             layout,
             label: T("row.switch.portrait"),
             onSwitch: switchFullscreenView,
           })
         : null;
-    if (request !== fullscreenRequest || !open || tab !== part || variantKey !== key) return;
+    if (request !== fullscreenRequest || !open || tab !== part || altId !== key) return;
     $("visual-ui").replaceChildren(...(control ? [control] : []));
     $("visual-ui").hidden = !control;
   } else if (part !== "portrait") {
@@ -103,15 +103,15 @@ export async function setFullscreen(on, { switching = false } = {}) {
 // resolved once it closed and what was chosen there is shown
 export let albumClosed = null;
 const cameraBridge = {
-  variant: () => variantKey,
-  lobby: () => variant()?.lobby,
+  alt: () => altId,
+  lobby: () => alt()?.lobby,
   source: () => {
     const c = current("lobby");
     return c?.kind === "mod" ? `mod:${c.id}` : "official";
   },
   saved: () => reload(),
   still: (id) => {
-    const v = variant();
+    const v = alt();
     return thumb(spineBase("mod", id), "landscape", null, true, specialFraming(v), v.bg);
   },
   album: () =>
@@ -166,7 +166,7 @@ export let visualToken = 0;
 async function enterVisual({ switching = false } = {}) {
   if ((fullscreen && !switching) || !mainPlayer?.skeleton) return; // the portrait is not in yet
   const my = ++visualToken,
-    key = variantKey,
+    key = altId,
     request = fullscreenRequest;
   const alive = () =>
     my === visualToken &&
@@ -174,15 +174,15 @@ async function enterVisual({ switching = false } = {}) {
     open &&
     fullscreen === switching &&
     tab === "portrait" &&
-    variantKey === key &&
+    altId === key &&
     !!mainPlayer?.skeleton;
   const layout = await (layouts.visual ||= NGUI.layout("UICharacterVisualMode").catch(() => null));
   const strings = {
     reset: T("visual.reset"),
     back: T("lobby.exit"),
-    switch: previewAvailable(variant(), "lobby") ? T("row.switch.lobby") : null,
+    switch: previewAvailable(alt(), "lobby") ? T("row.switch.lobby") : null,
   };
-  const parts = await Visual.prepare({ layout, bg: variant().bg, strings }).catch((err) => {
+  const parts = await Visual.prepare({ layout, bg: alt().bg, strings }).catch((err) => {
     console.error(err);
     return null;
   });
@@ -210,7 +210,7 @@ async function enterVisual({ switching = false } = {}) {
 }
 
 // Reuse the detail preview loaders and source selection while keeping the stage fullscreen. These paths only
-// read previews; the selected skin, expression, mod toggle and configured sources remain owned by the detail page.
+// read previews; the selected skin, face, mod toggle and configured sources remain owned by the detail page.
 let fullscreenSwitching = false;
 async function switchFullscreenView() {
   if (
@@ -223,10 +223,10 @@ async function switchFullscreenView() {
   )
     return;
   const target = tab === "portrait" ? "lobby" : "portrait",
-    key = variantKey;
-  if (!previewAvailable(variant(), switchKindOf(target))) return;
+    key = altId;
+  if (!previewAvailable(alt(), switchKindOf(target))) return;
   const request = ++fullscreenRequest;
-  const alive = () => request === fullscreenRequest && open && fullscreen && variantKey === key;
+  const alive = () => request === fullscreenRequest && open && fullscreen && altId === key;
   fullscreenSwitching = true;
   try {
     const ready = await changeInPlace(async () => {
@@ -240,7 +240,7 @@ async function switchFullscreenView() {
       await Promise.all([renderAll(), renderLeft()]);
       if (alive()) await setFullscreen(true, { switching: true });
     });
-    if (ready && open && fullscreen && variantKey === key && tab === target) {
+    if (ready && open && fullscreen && altId === key && tab === target) {
       [...$("visual-ui").querySelectorAll("button")]
         .find((button) => button.dataset.visualAction === "Btn_HideUI")
         ?.focus({ preventScroll: true });
@@ -253,12 +253,12 @@ async function switchFullscreenView() {
 // in, the still is taken once the left framing is back
 async function stillAfterFullscreen() {
   const part = tab,
-    key = variantKey;
+    key = altId;
   const wanted = () =>
     open &&
     !fullscreen &&
     tab === part &&
-    variantKey === key &&
+    altId === key &&
     (part === "lobby"
       ? !lobbyShot && !!Lobby.meta()
       : part === "model" && !modelShot && !!$("model").querySelector(".model-view.ready"));

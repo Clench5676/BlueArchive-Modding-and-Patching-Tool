@@ -44,8 +44,8 @@ def register(rpc: RpcRegistry, s: Services) -> None:
         return s.batch_import.assignment_catalog()
 
     @rpc.method("import.assignCharacter")
-    def import_assign_character(id: str, variant: str) -> str:
-        return s.batch_import.assign_character(id, variant)
+    def import_assign_character(id: str, alt: str) -> str:
+        return s.batch_import.assign_character(id, alt)
 
     @rpc.method("import.run")
     def import_run(ids: list[str], options: dict[str, Any], revision: int) -> str:
@@ -139,24 +139,24 @@ def register(rpc: RpcRegistry, s: Services) -> None:
         if id == "official":
             raise ServiceError("asset_official")
 
-        def fallback(variant, kind):
+        def fallback(alt, kind):
             try:
-                value = variants[variant]
+                value = alts[alt]
                 if getattr(value, kind, None):
                     return "official"
             except (KeyError, ServiceError):
                 pass
             return next(
-                ("mod:" + mod.id for mod in remaining if mod.id != id and mod.target == variant and mod.kind == kind),
+                ("mod:" + mod.id for mod in remaining if mod.id != id and mod.target == alt and mod.kind == kind),
                 None,
             )
 
         remaining = []
-        variants = {}
+        alts = {}
 
         def remove(log, progress):
             remaining[:] = library.mods()
-            variants.update((v.key, v) for family in s.catalog.families() for v in family.variants)
+            alts.update((v.key, v) for student in s.catalog.families() for v in student.variants)
             result = library.remove(
                 id,
                 confirm=bool(confirm),
@@ -403,18 +403,18 @@ def register(rpc: RpcRegistry, s: Services) -> None:
     # --- actions (jobs) ---
 
     @rpc.method("actions.apply")
-    def actions_apply(variant: str, source: str, kind: str = "spr") -> str:
-        """Switch what the game shows: write a source into the variant's game files, and configure it.
+    def actions_apply(alt: str, source: str, kind: str = "spr") -> str:
+        """Switch what the game shows: write a source into the alt's game files, and configure it.
 
         The files are the portrait ("spr") or memorial lobby ("lobby") ones of the current install, pinned at
         submit. The library keeps what it replaces (``ModLibrary._commit``). While mods are off it only configures
         the source (``deferred``).
         """
-        return s.submit_apply(variant, source, kind)
+        return s.submit_apply(alt, source, kind)
 
     @rpc.method("actions.restore")
-    def actions_restore(variant: str, kind: str = "spr") -> str:
-        return s.submit_restore(variant, kind)
+    def actions_restore(alt: str, kind: str = "spr") -> str:
+        return s.submit_restore(alt, kind)
 
     @rpc.method("actions.update")
     def actions_update(mod: str) -> str:

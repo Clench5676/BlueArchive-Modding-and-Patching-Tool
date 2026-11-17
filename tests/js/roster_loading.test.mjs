@@ -204,17 +204,17 @@ for (const kind of ["spr", "lobby"])
     assert.equal(ready, true);
   });
 
-test("roster fallback and configured-source stills receive the variant's default background", () => {
+test("roster fallback and configured-source stills receive the alt's default background", () => {
   const code = source.slice(source.indexOf("const portraitOf ="), source.indexOf("// --- rows near the view"));
   const requested = [],
-    student = { key: "np0189", family: "student", spr: "np0189_spr", bg: "/bg/practice-room", portrait: null };
+    student = { key: "np0189", student: "student", spr: "np0189_spr", bg: "/bg/practice-room", portrait: null };
   let enabled = true,
     configured = false;
   const env = {
     spineAllowed: () => true,
     thumbnailWork: { thumb: (...args) => requested.push(args) },
     primaryKind: () => "spr",
-    data: { families: [{ key: "student", variants: [student] }] },
+    data: { students: [{ key: "student", alts: [student] }] },
     modsState: () => ({ enabled }),
     configuredKey: () => (configured ? "mod:incoming" : null),
     previewBase: () => "configured-skeleton",
@@ -243,7 +243,7 @@ test("roster fallback and configured-source stills receive the variant's default
 test("library-only roster cards use saved Mod previews without inventing local cores", () => {
   const code = source.slice(source.indexOf("const portraitOf ="), source.indexOf("// --- rows near the view"));
   const requested = [],
-    variants = [];
+    alts = [];
   const env = {
     spineAllowed: () => true,
     thumbnailWork: {
@@ -256,7 +256,7 @@ test("library-only roster cards use saved Mod previews without inventing local c
     configuredKey,
     previewBase,
     hasAsset,
-    data: { families: [{ key: "assigned", variants }] },
+    data: { students: [{ key: "assigned", alts }] },
     spineBase: () => {
       throw new Error("No local core is available");
     },
@@ -268,14 +268,14 @@ test("library-only roster cards use saved Mod previews without inventing local c
   for (const kind of ["spr", "lobby", "model"]) {
     const student = {
       key: kind,
-      family: "assigned",
+      student: "assigned",
       spr: null,
       lobby: null,
       model: null,
       storedKinds: [kind],
       configured: {},
     };
-    variants.push(student);
+    alts.push(student);
     assert.equal(hasAsset(student), true);
     assert.equal(portraitOf(student), null, "preview opt-out stays unselected");
     student.previewSources = { [kind]: `mod:assigned-${kind}` };

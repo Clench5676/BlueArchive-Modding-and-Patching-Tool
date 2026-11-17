@@ -600,11 +600,11 @@ class Services(JobsMixin, WindowMixin, AssetsMixin):
     def photographs(self):
         """The photograph store of the library folder in use.
 
-        Its family lookup is bound to the catalog resolved here, never reached through the services lock: the
-        store's own lock is held while it looks families up, and no code path may hold that lock while it waits for
+        Its student lookup is bound to the catalog resolved here, never reached through the services lock: the
+        store's own lock is held while it looks students up, and no code path may hold that lock while it waits for
         ``self._lock``. A new catalog (a new game folder) makes a new store. Call it with the photograph lock free.
         """
-        from ..library.photographs import Photographs, student_family
+        from ..library.photographs import Photographs, student_family as student
 
         catalog = self.catalog
         root = self.library_dir()
@@ -612,7 +612,7 @@ class Services(JobsMixin, WindowMixin, AssetsMixin):
             store = getattr(self, "_photographs", None)
             if store is None or store.root.parent != root or self._photographs_catalog is not catalog:
                 self._photographs_catalog = catalog
-                self._photographs = store = Photographs(root, lambda key: student_family(catalog, key))
+                self._photographs = store = Photographs(root, lambda key: student(catalog, key))
             return store
 
     @property

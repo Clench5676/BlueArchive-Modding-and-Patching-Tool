@@ -90,11 +90,11 @@ def _lacks_crc(library: ModLibrary, path: Path, name: str, sha1: str | None = No
 
 def _item(library: ModLibrary, pin: Pin | None, install: str, core: str) -> dict[str, str]:
     if pin is None:
-        return {"install": install, "core": core, "variant": core, "kind": "spr"}
+        return {"install": install, "core": core, "alt": core, "kind": "spr"}
     return {
         "install": install,
         "core": core,
-        "variant": library._core_map(pin).key(core) or core,
+        "alt": library._core_map(pin).key(core) or core,
         "kind": library._kind(core, pin) or "spr",
     }
 

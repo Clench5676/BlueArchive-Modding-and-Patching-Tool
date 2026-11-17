@@ -3,10 +3,10 @@ import * as Camera from "../lobby/lobby-camera.js";
 import { notify } from "../ui/popup.js";
 // Detail screen, built from the game's own prefab (UICharacterDetail) by ngui.js: the prefab supplies every frame,
 // sprite, tint, incline and position; this file swaps labels and textures, hides what the tool has no use for, and adds
-// what the game has no screen for (variant chips, the expression strip, the portrait and lobby switchers). A family is
-// one base character with all of its variant portraits. Each variant's game file carries one portrait and one memorial
-// lobby (its own, another variant's or an added one). Added ones belong to the variant whose game file they replace
-// (mod.target); added portraits can be worn by the other variants of the family, lobbies are not offered to them.
+// what the game has no screen for (alt chips, the face strip, the portrait and lobby switchers). A student is
+// one base character with all of its alt portraits. Each alt's game file carries one portrait and one memorial
+// lobby (its own, another alt's or an added one). Added ones belong to the alt whose game file they replace
+// (mod.target); added portraits can be worn by the other alts of the student, lobbies are not offered to them.
 // Switching writes the chosen one into the game files (switch-sources.js, actions.apply). A change inside the screen
 // prepares its parts behind the loading cover and swaps them in one frame.
 import * as NGUI from "../ui/ngui.js";
@@ -69,7 +69,7 @@ import {
 import { busy, call, takeWanted } from "./detail-actions.js";
 import { renderScreen } from "./detail-screen.js";
 import { renderChips } from "./detail-chips.js";
-import { stopActionLoad, renderExpressions } from "./detail-strip.js";
+import { stopActionLoad, renderFaces } from "./detail-strip.js";
 import { aliasToken, setAliasToken } from "./detail-aliases.js";
 import { showLobby, refreshLobbyLines } from "./detail-lobby-tab.js";
 import { showModel, hideModel } from "./detail-model-tab.js";
@@ -102,7 +102,7 @@ export const PORTRAIT_BOX = { left: 0, top: 0, width: 1920, height: 1080 };
 
 export let ctx = null,
   fam = null,
-  variantKey = null,
+  altId = null,
   layouts = null;
 // Prefabs and derived UI values belong to the selected installation.
 NGUI.onResourceChange?.(() => {
@@ -115,7 +115,7 @@ NGUI.onResourceChange?.(() => {
 export let previewEnabled = true;
 export let tab = "portrait",
   fullscreen = false,
-  expression = "00",
+  face = "00",
   expanded = false,
   exprScroll = 0;
 export let mainPlayer = null,
@@ -173,7 +173,7 @@ export const thumb = (
   expr = null,
   lobby = false,
   framing = null,
-  background = variant()?.bg,
+  background = alt()?.bg,
   work = thumbnailWork,
 ) => {
   if (!base) return null;
@@ -181,17 +181,17 @@ export const thumb = (
   return work.thumb(base, frame, expr, lobby, framing, frame === "face" ? null : background);
 };
 function collectionPortrait(base) {
-  for (const v of fam?.variants || []) {
+  for (const v of fam?.alts || []) {
     if (!v.spr) continue;
     if (spineBase("official-spr", v.spr) === base) return v.portrait || null;
   }
   return null;
 }
-// a model card's still: another variant's costume shows that variant's own model
-export const modelPicture = (c, v = variant(), work = thumbnailWork) =>
-  c.kind === "variant"
-    ? modelThumbnail(c.variant.key, "official", {
-        version: modelStillVersion(fam, c.variant, modelGeneration),
+// a model card's still: another alt's costume shows that alt's own model
+export const modelPicture = (c, v = alt(), work = thumbnailWork) =>
+  c.kind === "alt"
+    ? modelThumbnail(c.alt.key, "official", {
+        version: modelStillVersion(fam, c.alt, modelGeneration),
         signal: work.signal,
       })
     : c.kind !== "mod" && !coreOf(v, "model") && !v.fieldModel
@@ -236,7 +236,7 @@ async function prepare({ gen, ended }, inPlace, work) {
       }
     batch = null;
   }
-  if (open && fam) markSeen(shownUnseen(fam, variant(), tabKind(), modsOn()));
+  if (open && fam) markSeen(shownUnseen(fam, alt(), tabKind(), modsOn()));
   return true;
 }
 // Required UI pictures settle before publication; optional thumbnails keep their
@@ -276,47 +276,45 @@ export async function settleImages() {
 export const originalName = (v) => L(v.names)?.full ?? v.key;
 export const fullName = (v) => studentName(v, originalName(v));
 export const shortName = (v) => studentName(v, L(v.names)?.short ?? v.key);
-// the current variant's own aliases (webui/state.py keeps the same limits): the roster search
+// the current alt's own aliases (webui/state.py keeps the same limits): the roster search
 // finds this skin by all of them; the first one is the nameplate's main name
 export const ALIAS_MAX = ALIAS.max,
   ALIAS_LENGTH = 24;
-export const customAliases = () => aliasesOf(variant());
+export const customAliases = () => aliasesOf(alt());
 export const aliasList = () => customAliases().join(/^(zh|ja)/.test(language()) ? "\u3001" : ", ");
-export const variant = () => fam.variants.find((v) => v.key === variantKey) || fam.variants[0];
-export const familyMods = () => fam.variants.flatMap((v) => v.modList || []);
+export const alt = () => fam.alts.find((v) => v.key === altId) || fam.alts[0];
+export const studentMods = () => fam.alts.flatMap((v) => v.modList || []);
 export const isFav = (v) => !!v.favorite;
 export const hasLobby = (v) => hasKind(v, "lobby");
 export const hasModel = (v) => hasKind(v, "model");
-export const modLabel = (m) => modName(m, familyMods(), T);
+export const modLabel = (m) => modName(m, studentMods(), T);
 export const repairedId = (c) =>
-  c?.mod?.repaired_id && familyMods().some((m) => m.id === c.mod.repaired_id) ? c.mod.repaired_id : null;
+  c?.mod?.repaired_id && studentMods().some((m) => m.id === c.mod.repaired_id) ? c.mod.repaired_id : null;
 export const repairAction = (c) => (repairedId(c) ? "remap.go" : "act.update");
 // Optimize Physics runs on the official model (which needs none: its own clips move its skirt) and on another
-// variant's costume; the copy it made from a costume, a model mod of the variant, takes its place afterwards
-export const optimizeSource = (c) =>
-  c.kind === "self" ? "official" : c.kind === "variant" ? `variant:${c.variant.key}` : null;
-export const optimizedCopy = (c, v = variant()) =>
-  c.kind !== "variant"
+// alt's costume; the copy it made from a costume, a model mod of the alt, takes its place afterwards
+export const optimizeSource = (c) => (c.kind === "self" ? "official" : c.kind === "alt" ? `alt:${c.alt.key}` : null);
+export const optimizedCopy = (c, v = alt()) =>
+  c.kind !== "alt"
     ? null
-    : familyMods().find(
-        (m) => m.kind === "model" && m.target === v.key && m.optimized_from === `variant:${c.variant.key}`,
-      ) || null;
-// a candidate's skeleton: a mod's preview (its parts over the official ones), else the variant's own portrait or lobby
+    : studentMods().find((m) => m.kind === "model" && m.target === v.key && m.optimized_from === `alt:${c.alt.key}`) ||
+      null;
+// a candidate's skeleton: a mod's preview (its parts over the official ones), else the alt's own portrait or lobby
 export const baseOf = (c, kind = "spr") =>
   c.kind === "mod" ? spineBase("mod", c.id) : c.core ? spineBase(`official-${kind}`, c.core) : null;
 // The installed portrait comes from the current game files; with mods off, preview the configured source.
-export const currentBase = () => variantBase(variant());
+export const currentBase = () => altBase(alt());
 // no deadline: the read waits for a job that holds the library lock, as the route's does (main.js), and the
 // screen stays as it is meanwhile. A caller drops the result when the screen was read anew in the meantime (left
-// and entered again, or reloaded by another action), so that an old read never replaces a newer family.
-export const readFamily = (key) => rpc("family.get", { key });
+// and entered again, or reloaded by another action), so that an old read never replaces a newer student.
+export const readStudent = (key) => rpc("student.get", { key });
 
-// what the switch card of a kind offers (switch-sources.js), with the names and marks the cards show: the variant's
-// own portrait or lobby and its added ones, then for the portrait the other variants' ones and their added ones
-export function candidates(v = variant(), kind = "spr") {
+// what the switch card of a kind offers (switch-sources.js), with the names and marks the cards show: the alt's
+// own portrait or lobby and its added ones, then for the portrait the other alts' ones and their added ones
+export function candidates(v = alt(), kind = "spr") {
   return listSources(fam, v, kind, costumeState.get(v.key), otherStudents).map(named);
 }
-// a lobby camera framed on the official art takes the name of the variant's own card, as the cards show it
+// a lobby camera framed on the official art takes the name of the alt's own card, as the cards show it
 const cameraLabel = (c) =>
   c.mod.camera && !c.mod.alias && !c.mod.camera.source?.startsWith("mod:") && c.origin
     ? `${shortName(c.origin)} - ${T("lobby.cameraName", { n: c.mod.camera.number })}`
@@ -324,8 +322,8 @@ const cameraLabel = (c) =>
 const named = (c) =>
   c.kind === "mod"
     ? { ...c, label: cameraLabel(c) }
-    : { ...c, label: shortName(c.variant), recruit: c.variant.recruitable, fav: isFav(c.variant) };
-// Switch 3D Model takes any student's model, offered through its search only: roster.list's families, read
+    : { ...c, label: shortName(c.alt), recruit: c.alt.recruitable, fav: isFav(c.alt) };
+// Switch 3D Model takes any student's model, offered through its search only: roster.list's students, read
 // with the 3D tab or the popup (the one already chosen keeps its card), for the life of the screen
 export let otherStudents = null,
   othersLoad = null,
@@ -335,7 +333,7 @@ function resetOthers() {
   othersEpoch++;
   otherStudents = null;
   othersLoad = null;
-  crossWanted = { variant: null, keys: [] };
+  crossWanted = { alt: null, keys: [] };
   crossShown = [];
 }
 export function readOthers() {
@@ -343,7 +341,7 @@ export function readOthers() {
   const epoch = othersEpoch;
   return (othersLoad ||= Promise.resolve()
     .then(() => ctx.roster({ stale: true }))
-    .then((data) => (epoch === othersEpoch ? (otherStudents = data?.families || null) : null))
+    .then((data) => (epoch === othersEpoch ? (otherStudents = data?.students || null) : null))
     .catch((err) => {
       console.error("Roster read failed", err);
       return null;
@@ -403,7 +401,7 @@ export function crossItems(v, query, own, item) {
     exclude: own,
     limit: all ? Infinity : CROSS_LIMIT,
   });
-  const keys = hits.map((c) => c.variant.key);
+  const keys = hits.map((c) => c.alt.key);
   const inView = new Set(crossShown); // the cards in view, as the list last reported them (popup.js onView)
   judgeCross(v, all ? keys.filter((key) => inView.has(key)) : keys);
   return hits.map((c) => item(named(c)));
@@ -415,23 +413,23 @@ export function viewCross(v, keys) {
   const shown = keys
     .filter((key) => typeof key === "string" && key.startsWith("v:"))
     .map((key) => key.slice(2))
-    .filter((key) => !fam.variants.some((o) => o.key === key));
+    .filter((key) => !fam.alts.some((o) => o.key === key));
   if (shown.length === crossShown.length && shown.every((key, i) => key === crossShown[i])) return;
   crossShown = shown;
-  if (showOthers() && popupKind === "model" && variant() === v) judgeCross(v, shown);
+  if (showOthers() && popupKind === "model" && alt() === v) judgeCross(v, shown);
 }
 // Switch 3D Model lists every costume of the student at once and lets one be applied only once that pair was built
-// and exported for these files (model.costumes): the verdicts by variant, read when the 3D tab shows
+// and exported for these files (model.costumes): the verdicts by alt, read when the 3D tab shows
 // and checked to their end (model.checkCostumes) in the background, one pair at a time; each card turns applicable
 // as its check ends.
 export const costumeState = new Map(),
   costumeChecks = new Map();
 export function costumesReady(v) {
   const run = costumeRun;
-  void readOthers().then((families) => {
+  void readOthers().then((students) => {
     if (!costumesWanted(v, run)) return;
     // a roster that cannot be read leaves another student's model unjudged: its loading ring stops
-    if (!families) {
+    if (!students) {
       costumesChecked(v);
       return;
     }
@@ -445,7 +443,7 @@ export function costumesReady(v) {
   let check = costumeChecks.get(key);
   if (!check) {
     check = (async () => {
-      const known = await rpc("model.costumes", { variant: v.key, others });
+      const known = await rpc("model.costumes", { alt: v.key, others });
       costumeState.set(v.key, { ...(costumeState.get(v.key) || {}), ...known });
       void readCautions(
         v,
@@ -476,36 +474,36 @@ export function costumesReady(v) {
 }
 // Another student's model is judged only once it shows: the chosen one, and the search's hits while they are
 // hits. Their saved verdicts are read at once (model.costumes), the rest checked in the background one pair at a time;
-// a pair no longer wanted (a new query, another variant) is not checked. Each card waits until its verdict lands.
-let crossWanted = { variant: null, keys: [] },
+// a pair no longer wanted (a new query, another alt) is not checked. Each card waits until its verdict lands.
+let crossWanted = { alt: null, keys: [] },
   crossRunning = null;
 const chosenCross = (v) =>
   otherStudents
     ? candidates(v, "model")
         .filter((c) => c.cross)
-        .map((c) => c.variant.key)
+        .map((c) => c.alt.key)
     : [];
 export function judgeCross(v, hits = []) {
   const keys = [...new Set([...chosenCross(v), ...hits])];
-  crossWanted = { variant: v, keys };
+  crossWanted = { alt: v, keys };
   runCross();
 }
 function runCross() {
-  if (crossRunning || !crossWanted.variant || !crossWanted.keys.length) return;
+  if (crossRunning || !crossWanted.alt || !crossWanted.keys.length) return;
   const tried = new Set();
   let handled = null;
   const run = costumeRun;
   crossRunning = (async () => {
     for (;;) {
       handled = crossWanted;
-      const { variant: v, keys } = crossWanted;
+      const { alt: v, keys } = crossWanted;
       if (!v || !keys.length || !costumesWanted(v, run)) return;
       const epoch = othersEpoch;
       const state = costumeState.get(v.key) || {};
       // Saved choices can add to the 64 hits. Each read still respects costume_keys' limit.
       const fresh = keys.filter((k) => !(k in state)).slice(0, CROSS_LIMIT);
       if (fresh.length) {
-        const known = await rpc("model.costumes", { variant: v.key, others: fresh });
+        const known = await rpc("model.costumes", { alt: v.key, others: fresh });
         if (epoch !== othersEpoch) continue;
         costumeState.set(v.key, { ...(costumeState.get(v.key) || {}), ...known });
         void readCautions(
@@ -530,31 +528,30 @@ function runCross() {
       crossRunning = null;
       if (handled !== crossWanted) runCross();
       // a wanted pair left without a verdict stops showing the loading ring
-      else if (handled?.variant && unjudged(handled.variant, handled.keys)) costumesChecked(handled.variant);
+      else if (handled?.alt && unjudged(handled.alt, handled.keys)) costumesChecked(handled.alt);
     });
 }
-// Costume checks run only while the screen is open on the same variant with its 3D tab shown (the Switch 3D
-// Model popup opens from that tab). Leaving it (another tab, another variant, the screen closed) stops them
+// Costume checks run only while the screen is open on the same alt with its 3D tab shown (the Switch 3D
+// Model popup opens from that tab). Leaving it (another tab, another alt, the screen closed) stops them
 // (stopCostumeChecks): no further pair is submitted, the submitted checks are cancelled (jobs.cancel: a queued
 // one never runs, a running one stops between its steps and saves no verdict) and the loading ring stops. Coming
 // back restarts the pairs still without a verdict.
 export let costumeRun = 0;
 const costumeJobs = new Set();
-export const costumesWanted = (v, run) =>
-  run === costumeRun && open && !!v && variant().key === v.key && tab === "model";
+export const costumesWanted = (v, run) => run === costumeRun && open && !!v && alt().key === v.key && tab === "model";
 function stopCostumeChecks() {
   costumeRun += 1;
   // an action's clips being fetched for the 3D tab are given up the same way (the request is aborted)
   stopActionLoad();
   costumeChecks.clear();
-  crossWanted = { variant: null, keys: [] };
+  crossWanted = { alt: null, keys: [] };
   for (const id of costumeJobs) rpc("jobs.cancel", { id }).catch(() => {});
   costumeJobs.clear();
 }
 // one pair checked to its end (model.checkCostumes): its verdicts, or null when it was cancelled because the 3D tab
 // was left meanwhile
 async function checkPair(v, other, run) {
-  const id = await rpc("model.checkCostumes", { variant: v.key, others: [other] });
+  const id = await rpc("model.checkCostumes", { alt: v.key, others: [other] });
   if (!costumesWanted(v, run)) {
     rpc("jobs.cancel", { id }).catch(() => {});
     return null;
@@ -569,19 +566,18 @@ async function checkPair(v, other, run) {
     costumeJobs.delete(id);
   }
 }
-// whether any of a variant's pairs (``others``: variant keys) still has no verdict
+// whether any of an alt's pairs (``others``: alt ids) still has no verdict
 const unjudged = (v, others) => others.some((o) => (costumeState.get(v.key) || {})[o] == null);
 // A 3D candidate whose costume check is still under way (no verdict yet, its check running or queued): its Apply and
 // Optimize Physics wait for it and show the game's loading ring in their caption's place instead of only greying.
-// ``key``: the candidate's key ("v:<variant>"); another student's model also waits for the roster read that queues it.
+// ``key``: the candidate's key ("v:<alt>"); another student's model also waits for the roster read that queues it.
 export function costumeChecking(v, kind, key) {
   if (kind !== "model" || typeof key !== "string" || !key.startsWith("v:")) return false;
   const other = key.slice(2);
   if ((costumeState.get(v.key) || {})[other] != null) return false;
-  if (fam.variants.some((o) => o.key === other))
-    return [...costumeChecks.keys()].some((k) => k.startsWith(`${v.key}|`));
+  if (fam.alts.some((o) => o.key === other)) return [...costumeChecks.keys()].some((k) => k.startsWith(`${v.key}|`));
   if (!otherStudents) return !!othersLoad;
-  return !!crossRunning && crossWanted.variant === v && crossWanted.keys.includes(other);
+  return !!crossRunning && crossWanted.alt === v && crossWanted.keys.includes(other);
 }
 // the 3D tab's Apply card while the shown costume (another student's model) waits for its check
 export const applyChecking = (v, kind) =>
@@ -596,7 +592,7 @@ async function readCautions(v, others) {
   if (!others.length) return;
   let found = {};
   try {
-    found = await rpc("model.costumeCautions", { variant: v.key, others });
+    found = await rpc("model.costumeCautions", { alt: v.key, others });
   } catch (err) {
     console.error("Costume cautions failed", err);
   }
@@ -612,8 +608,8 @@ export const costumeBlock = (v, kind, key) =>
 export const unfitCostume = (v, kind, key) => !!costumeBlock(v, kind, key);
 // After a background check: the open Switch 3D Model popup lists what it found, where it was scrolled to.
 function costumesChecked(v) {
-  if (open && variant() === v && tab === "model") void renderScreen();
-  if (open && variant() === v && popupKind === "model" && switchPopupPage === pageToken && !$("popup").hidden)
+  if (open && alt() === v && tab === "model") void renderScreen();
+  if (open && alt() === v && popupKind === "model" && switchPopupPage === pageToken && !$("popup").hidden)
     void renderPopup($("popup").querySelector(".popup-cards")?.scrollTop || 0);
 }
 
@@ -633,28 +629,28 @@ export function crcOf(v, kind = "spr") {
   const states = partsOf(v, kind).map((f) => f.crc);
   return states.includes("needs_fix") ? "needs_fix" : states.includes("fixed") ? "fixed" : "ok";
 }
-export const appliedKey = (v = variant(), kind = primaryKind(v)) => keyOf(v, kind);
-export const shownSource = (v = variant(), kind = primaryKind(v)) => previewKey(v, kind, modsOn());
-// the left side draws a kind it can preview: a variant's own files, a field or NPC model without a slot (//
+export const appliedKey = (v = alt(), kind = primaryKind(v)) => keyOf(v, kind);
+export const shownSource = (v = alt(), kind = primaryKind(v)) => previewKey(v, kind, modsOn());
+// the left side draws a kind it can preview: an alt's own files, a field or NPC model without a slot (//
 // Shown, never switched), or an added mod
 export const previewAvailable = (v, kind) =>
   !!coreOf(v, kind) || (kind === "model" && !!v?.fieldModel) || shownSource(v, kind).startsWith("m:");
-export const variantBase = (v, kind = "spr") =>
-  previewAvailable(v, kind) ? previewBase(v, kind, modsOn(), fam.variants) : null;
+export const altBase = (v, kind = "spr") =>
+  previewAvailable(v, kind) ? previewBase(v, kind, modsOn(), fam.alts) : null;
 // The configured portrait or lobby while mods are off; otherwise what the game files carry.
 export const current = (kind = "spr") =>
-  candidates(variant(), kind).find((c) => c.key === shownSource(variant(), kind)) || candidates(variant(), kind)[0];
-// another student's costume, named after the student: "Yukino (Original)" (the family's base name from the roster read)
+  candidates(alt(), kind).find((c) => c.key === shownSource(alt(), kind)) || candidates(alt(), kind)[0];
+// another student's costume, named after the student: "Yukino (Original)" (the student's base name from the roster read)
 const crossLabel = (o) => {
-  const base = L(otherStudents?.find((f) => f.key === o.family)?.base);
-  // no family read: the variant's full name
+  const base = L(otherStudents?.find((f) => f.key === o.student)?.base);
+  // no student read: the alt's full name
   return base ? crossName(o, base, L(o.names)?.short ?? o.key, T) : fullName(o);
 };
-// a candidate's name on the cards: another variant's mod with that variant's name first, another student's model with
+// a candidate's name on the cards: another alt's mod with that alt's name first, another student's model with
 // the student's name first
-export const candidateLabel = (c, v = variant()) =>
+export const candidateLabel = (c, v = alt()) =>
   c.cross
-    ? crossLabel(c.variant)
+    ? crossLabel(c.alt)
     : c.kind === "mod" && !c.mod.alias && c.origin && c.origin.key !== v.key
       ? `${shortName(c.origin)} - ${c.label}`
       : c.label;
@@ -664,7 +660,7 @@ export function sourceLabel(v, kind) {
   const c = candidates(v, kind).find((x) => x.key === key);
   return c ? candidateLabel(c, v) : T("status.replaced");
 }
-export const gameFile = (v = variant(), kind = "spr") => partsOf(v, kind)[0]?.file || null;
+export const gameFile = (v = alt(), kind = "spr") => partsOf(v, kind)[0]?.file || null;
 export const baseName = (path) => (path ? path.split(/[\\/]/).pop() : "—");
 export const sizeText = (bytes) =>
   !bytes ? "—" : bytes < 1048576 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / 1048576).toFixed(1)} MB`;
@@ -722,7 +718,7 @@ export const clipped = (name, pos, url, win, img, opts = {}) =>
     },
   ]);
 // a dialogue started (a card, play all, a tap on the character in fullscreen), ended or stopped. A lobby that is
-// hidden stops without telling (and off the lobby tab nothing is followed): the tab change, the variant change and
+// hidden stops without telling (and off the lobby tab nothing is followed): the tab change, the alt change and
 // hide() reset what is followed here, so the next start redraws the cards and the play-all button.
 let lobbyAll = false;
 Lobby.onTalk((anim, all) => {
@@ -730,13 +726,13 @@ Lobby.onTalk((anim, all) => {
   const button = lobbyAll !== all;
   lobbySeq = anim;
   lobbyAll = all;
-  renderExpressions();
+  renderFaces();
   if (button) renderScreen();
 });
 
 export async function renderAll() {
   previewEnabled = modsOn();
-  await Promise.all([renderScreen(), renderChips(), renderExpressions()]);
+  await Promise.all([renderScreen(), renderChips(), renderFaces()]);
 }
 
 // A tab or applied preview prepares under the shared in-page shade, with the input hold retained.
@@ -765,7 +761,7 @@ export function showTab(id) {
   if (id !== "model") stopCostumeChecks();
   tab = id;
   if (id === "model") {
-    const v = variant();
+    const v = alt();
     void costumesReady(v).catch((err) => console.error("Costume check failed", err));
   }
   expanded = false;
@@ -778,11 +774,11 @@ export function showTab(id) {
 // renderLeft() resolves once the preview has drawn its first frame or failed. It loads laid out but
 // transparent (.pending: a hidden canvas has no size) and is
 // committed with the rest of the screen; the part it replaces fades out and is freed. The lobby and the model are
-// single players: when the shown one is replaced by another variant's, a still of it holds the place meanwhile.
+// single players: when the shown one is replaced by another alt's, a still of it holds the place meanwhile.
 const LEFT = ["portrait", "lobby", "model"];
 let shownLeft = null,
   shownKey = null;
-// what the lobby or the model shows: the same variant of another install (game folder, file source) is another one
+// what the lobby or the model shows: the same alt of another install (game folder, file source) is another one
 export const leftKey = (part, v) =>
   part === "lobby"
     ? `${v.lobby}:${shownSource(v, "lobby")}@${fam.version}`
@@ -793,7 +789,7 @@ export let lobbyFrom = null; // the install of the lobby in lobby.js, which keep
 export let lobbyStale = false; // its game files were switched: lobby.js reads them again
 export function renderLeft() {
   if (!open) return Promise.resolve();
-  const v = variant(),
+  const v = alt(),
     my = ++leftToken,
     want = tab,
     el = $(want),
@@ -915,13 +911,13 @@ function unfreezeLeft(now = false) {
 
 export async function reload(refresh = []) {
   const read = fam;
-  const data = await call(() => readFamily(read.key));
+  const data = await call(() => readStudent(read.key));
   if (data && fam !== read) return; // the screen was read anew meanwhile
-  const next = data?.variants.find((v) => v.key === variantKey) || data?.variants[0];
+  const next = data?.alts.find((v) => v.key === altId) || data?.alts[0];
   const changed = new Set(refresh);
   if (data)
     for (const kind of ["spr", "lobby", "model"])
-      if (previewChanged(variant(), next, kind, previewEnabled, modsOn())) changed.add(kind);
+      if (previewChanged(alt(), next, kind, previewEnabled, modsOn())) changed.add(kind);
   if (data) fam = data;
   for (const kind of changed) resetPreview(kind);
   await Promise.all([renderAll(), changed.has(tabKind()) ? renderLeft() : null]);
@@ -940,7 +936,7 @@ export function resetPreview(kind) {
     modelGeneration++;
     if (shownLeft === "model") shownKey = null;
   } else {
-    expression = "00";
+    face = "00";
     clearTimeout(blinkTimer);
     mainPlayer = null;
   }
@@ -975,15 +971,15 @@ export function applyPrefs(prefs) {
 
 /**
  * Redraw the screen's controls after a locale change, around the retained scene. It does not call show,
- * renderLeft or begin: they reset expressions, playback and capture scopes.
+ * renderLeft or begin: they reset faces, playback and capture scopes.
  * @returns {Promise<void>} Settles when the controls are redrawn.
  */
 export async function relabel() {
   if (!open || !fam || !layouts) return;
-  const work = [renderScreen(), renderChips(), renderExpressions()];
+  const work = [renderScreen(), renderChips(), renderFaces()];
   if (tab === "lobby" && Lobby.meta()) {
     // Network-backed dialogue is optional; it must not delay language selection.
-    refreshLobbyLines(variant(), Lobby.meta());
+    refreshLobbyLines(alt(), Lobby.meta());
   }
   if (
     switchThumbnails &&
@@ -1024,12 +1020,12 @@ function address() {
   }
 }
 let arrivals = [],
-  askedKey = null; // askedKey: the variant the last show() was asked for, as in the address
+  askedKey = null; // askedKey: the alt the last show() was asked for, as in the address
 // the screen is ready on a student (or was left: no arguments): a step waiting for the address to be shown goes on
-function arrived(family, key) {
+function arrived(student, key) {
   if (!arrivals.length) return;
   const [screen, f, k] = address();
-  if (family !== undefined && (screen !== "student" || f !== family || k !== key)) return; // a newer address comes
+  if (student !== undefined && (screen !== "student" || f !== student || k !== key)) return; // a newer address comes
   for (const resolve of arrivals.splice(0)) resolve();
 }
 const keySteps = pacer(async (delta) => {
@@ -1041,7 +1037,7 @@ const keySteps = pacer(async (delta) => {
     arrivals.push(r);
   });
   try {
-    await ctx.step(delta, fam.key, variantKey);
+    await ctx.step(delta, fam.key, altId);
   } finally {
     // nowhere else to go (or the step failed): nothing to wait for
     if (location.hash === from) resolve();
@@ -1082,16 +1078,16 @@ addEventListener("keyup", (ev) => {
 addEventListener("blur", () => keySteps.release());
 
 /**
- * Open the detail screen on a variant. In place (another variant or family while the screen is shown), the
+ * Open the detail screen on an alt. In place (another alt or student while the screen is shown), the
  * shown screen stays until the new one is ready and every part swaps in one frame.
- * @param {object} familyData The family, as family.get gives it.
+ * @param {object} studentData The student, as student.get gives it.
  * @param {object} [options]
  * @param {boolean} [options.inPlace] Swap the parts in place of the shown screen.
  * @param {string|null} [options.kind] The tab to open on: "spr", "lobby" or "model".
  * @returns {Promise<void>} Settles once the screen is ready (the panels, primary preview and decoded UI
  *     images).
  */
-export async function show(context, familyData, key, { inPlace = false, kind = null } = {}) {
+export async function show(context, studentData, key, { inPlace = false, kind = null } = {}) {
   Photo.destroy();
   Camera.close(false);
   document.getElementById("camera-launcher")?.remove();
@@ -1107,21 +1103,19 @@ export async function show(context, familyData, key, { inPlace = false, kind = n
   suspended = false;
   askedKey = key;
   const g = begin();
-  const sameFamily = fam?.key === familyData.key;
-  // the alias editor of another variant goes (a history step while it was open)
-  if ((!sameFamily || variantKey !== key) && $("popup").querySelector(".alias-input")) {
+  const sameStudent = fam?.key === studentData.key;
+  // the alias editor of another alt goes (a history step while it was open)
+  if ((!sameStudent || altId !== key) && $("popup").querySelector(".alias-input")) {
     setAliasToken(aliasToken + 1);
     $("popup").hidden = true;
     $("popup").innerHTML = "";
   }
-  // the same variant of another install (another game folder or file source) is read again like another variant
-  const sameVariant = sameFamily && variantKey === key && fam.version === familyData.version;
-  fam = familyData;
-  variantKey = fam.variants.some((v) => v.key === key && hasAsset(v))
-    ? key
-    : (fam.variants.find(hasAsset) || fam.variants[0]).key;
-  if (!sameVariant) {
-    expression = "00";
+  // the same alt of another install (another game folder or file source) is read again like another alt
+  const sameAlt = sameStudent && altId === key && fam.version === studentData.version;
+  fam = studentData;
+  altId = fam.alts.some((v) => v.key === key && hasAsset(v)) ? key : (fam.alts.find(hasAsset) || fam.alts[0]).key;
+  if (!sameAlt) {
+    face = "00";
     expanded = false;
     lobbyShot = null;
     lobbySeq = null;
@@ -1136,12 +1130,12 @@ export async function show(context, familyData, key, { inPlace = false, kind = n
     clearTimeout(blinkTimer);
     mainPlayer = null;
   }
-  // the tabs the variant has, on every show: another install may lack a part under the same variant
-  tab = availableTab(variant(), { spr: "portrait", portrait: "portrait", lobby: "lobby", model: "model" }[kind] || tab);
-  // the costume checks of another variant, or of a 3D tab no longer shown, stop; the same 3D tab's go on
-  if (!sameVariant || tab !== "model") stopCostumeChecks();
+  // the tabs the alt has, on every show: another install may lack a part under the same alt
+  tab = availableTab(alt(), { spr: "portrait", portrait: "portrait", lobby: "lobby", model: "model" }[kind] || tab);
+  // the costume checks of another alt, or of a 3D tab no longer shown, stop; the same 3D tab's go on
+  if (!sameAlt || tab !== "model") stopCostumeChecks();
   previewEnabled = modsOn();
-  rpc("ui.visit", { variant: variantKey }).catch(() => {});
+  rpc("ui.visit", { alt: altId }).catch(() => {});
   // The portrait uses its own assets and default framing while the UI layout is still loading or unavailable.
   const ready = await prepare(g, true, async () => {
     commit(() =>
@@ -1163,15 +1157,15 @@ export async function show(context, familyData, key, { inPlace = false, kind = n
     ]);
     await settleImages();
   });
-  if (ready) arrived(familyData.key, key);
+  if (ready) arrived(studentData.key, key);
   if (ready && open) void takeWanted().catch(renderFailed);
   // a 3D tab entered directly (a link, a reload) reads and checks the costume verdicts as a click on the tab does,
   // once the screen is drawn (their arrival redraws it)
   if (ready && open && tab === "model")
-    void costumesReady(variant()).catch((err) => console.error("Costume check failed", err));
+    void costumesReady(alt()).catch((err) => console.error("Costume check failed", err));
   // the server's index of the lobbies' prefabs takes seconds to build the first time: built in the background once
   // the screen is in, so the lobby tab does not wait for it
-  if (open && hasLobby(variant())) rpc("lobby.warm").catch(() => {});
+  if (open && hasLobby(alt())) rpc("lobby.warm").catch(() => {});
 }
 
 /** Tell the screen a route to a student failed: a key step waiting for that screen goes on at once. */
@@ -1180,10 +1174,10 @@ export function stepFailed() {
 }
 
 /**
- * The variant actually shown, including the fallback for a family-only or unavailable-variant route.
- * @returns {string|null} The variant's key, or null when the screen is not shown.
+ * The alt actually shown, including the fallback for a student-only or unavailable-alt route.
+ * @returns {string|null} The alt's key, or null when the screen is not shown.
  */
-export const currentVariant = () => ((open || suspended) && fam ? variant().key : null);
+export const currentAlt = () => ((open || suspended) && fam ? alt().key : null);
 
 /**
  * Release page work before a destination waits on library locks, keeping the complete current frame until that
@@ -1244,7 +1238,7 @@ export function hide() {
     $(id).innerHTML = "";
   }
   keySteps.clear();
-  setHeldChange(undefined); // the next show reads the family anyway
+  setHeldChange(undefined); // the next show reads the student anyway
   arrived();
 }
 
@@ -1266,8 +1260,8 @@ export function setChipPics(value) {
 export function setModelAction(value) {
   modelAction = value;
 }
-export function setExpressionState(value) {
-  expression = value;
+export function setFaceState(value) {
+  face = value;
 }
 export function setExpanded(value) {
   expanded = value;

@@ -23,7 +23,7 @@ import {
   ORIGIN,
   toStage,
   tab,
-  expression,
+  face,
   expanded,
   exprScroll,
   mainPlayer,
@@ -41,18 +41,18 @@ import {
   thumbnailWork,
   picturesReady,
   fillPictures,
-  variant,
+  alt,
   currentBase,
   costumeRun,
   costumesWanted,
   TEXTURES,
   setModelAction,
-  setExpressionState,
+  setFaceState,
   setExpanded,
   setExprScroll,
   setExprPics,
 } from "./detail.js";
-import { applyExpression } from "./detail-portrait.js";
+import { applyFace } from "./detail-portrait.js";
 
 // the action whose clips are being fetched ({ key, abort }): its group card shows the loading ring
 let actionLoad = null;
@@ -63,13 +63,13 @@ export const ROW4_Y = -552; // centre of row 4's visible part (Bg_W4: top -436, 
 export const BOX_RIGHT = 332; // the first skill card's right edge: the box ends there
 // UICharacterDetail's Skill + SkillData + Bg supply these columns, pitch and bodies; keep the prefab's own values.
 const COLS = [461.9, 707.5, 953.2]; // skill cards 2-4 (Skill at 202 + SkillData x + Bg x 24)
-const BTN_COL = [1079.8, 1284.8]; // expression pile's column, derived from the skill/Add cards; keep its x edges
+const BTN_COL = [1079.8, 1284.8]; // face pile's column, derived from the skill/Add cards; keep its x edges
 const CARD = { w: 242, h: 209 }; // Common_Btn_BG like the skill cards; the visible body is h - 13 (shadow below)
 const PITCH = 245.7;
 export const LOCAL_FRAME = { cx: 0, cy: 0, w: 0, h: 0 };
 
 // --- row 4: a box, then cards on the columns of row 2's skill cards, the pile in the button column ---
-function expressionBoxes(count, nativeColumns = false) {
+function faceBoxes(count, nativeColumns = false) {
   // Slots retain the prefab's pitch (including its rounded column coordinates); the bodies remain 242 x 209.
   return row(
     Array.from({ length: count }, (_, i) => ({
@@ -266,7 +266,7 @@ const row4Selected = () =>
       ? `group:${playingAction()?.group}`
       : tab === "model"
         ? modelAction
-        : expression;
+        : face;
 // A group card pressed: its action list opens over it (action-list.js); the same card closes it, another group's
 // switches to that one. A picked action plays (pickAction) and the list closes.
 let barCards = new Map(); // group card key -> its centre x in units, unscrolled
@@ -294,7 +294,7 @@ function toggleGroup(item) {
 // An action picked on the bar plays at once when its clips are there (the model's GLB carries today's actions).
 // Otherwise they are fetched (model.js loadClips: the model route's ?clip=) while its group card shows the
 // loading ring, then it plays. The fetch counts only its own foreground time (withPreviewTimeout); leaving the
-// 3D tab, the variant or the screen gives it up. A failure leaves the previous action playing and says the
+// 3D tab, the alt or the screen gives it up. A failure leaves the previous action playing and says the
 // preview is unavailable.
 const CLIP_CAP = 15000;
 async function pickAction(a) {
@@ -303,17 +303,17 @@ async function pickAction(a) {
   if (M.playAction(a)) {
     setModelAction(a.key);
     keepScroll();
-    renderExpressions();
+    renderFaces();
     return;
   }
-  const v = variant(),
+  const v = alt(),
     run = costumeRun,
     before = M.current() ?? modelAction,
     abort = new AbortController();
   const load = (actionLoad = { key: a.key, abort });
   setModelAction(a.key);
   keepScroll();
-  renderExpressions();
+  renderFaces();
   let played = false,
     failure = null;
   try {
@@ -337,7 +337,7 @@ async function pickAction(a) {
   }
   if (costumesWanted(v, run)) {
     keepScroll();
-    renderExpressions();
+    renderFaces();
   }
 }
 export function stopActionLoad() {
@@ -354,8 +354,8 @@ function row4Pick(key) {
     setModelAction(key);
     modelLib?.then((M) => M.play(key));
   } else {
-    setExpressionState(key);
-    applyExpression();
+    setFaceState(key);
+    applyFace();
   }
 }
 // play every dialogue in order; the cards and the play-all button follow along (Lobby.onTalk)
@@ -364,10 +364,10 @@ export function togglePlayAll() {
   else Lobby.playAll(lobbySeq);
 }
 
-export function renderExpressions() {
-  return drawExpressions().catch(renderFailed);
+export function renderFaces() {
+  return drawFaces().catch(renderFailed);
 }
-async function drawExpressions() {
+async function drawFaces() {
   const my = ++exprToken,
     gen = showGen;
   const ok = () => showable("expr", my, exprToken, gen);
@@ -397,7 +397,7 @@ async function drawExpressions() {
     });
   const cards = [];
   if (unfolded || list.length <= 4) {
-    const boxes = expressionBoxes(list.length + (expanded && !bar ? 1 : 0));
+    const boxes = faceBoxes(list.length + (expanded && !bar ? 1 : 0));
     list.forEach((it, i) => cards.push({ tree: cardOf(it, boxes[i]), item: it }));
     if (bar) barCards = new Map(cards.map((cd) => [cd.item.key, cd.tree.pos[0]]));
     if (expanded && !bar)
@@ -411,7 +411,7 @@ async function drawExpressions() {
     const shown = list.slice(0, 3);
     const chosen = list.find((it) => it.key === sel);
     if (chosen && !shown.includes(chosen)) shown[2] = chosen;
-    const boxes = expressionBoxes(shown.length, true);
+    const boxes = faceBoxes(shown.length, true);
     shown.forEach((it, i) => cards.push({ tree: cardOf(it, boxes[i]), item: it }));
     // the pile fills the button column: two plain cards behind, the top one darkened with the count
     const rest = list.filter((it) => !shown.includes(it));
@@ -472,16 +472,16 @@ async function drawExpressions() {
           else if (cd.item) {
             row4Pick(cd.item.key);
             keepScroll();
-            renderExpressions();
+            renderFaces();
           }
           if (cd.pile) {
             setExpanded(true);
             setExprScroll(0);
-            renderExpressions();
+            renderFaces();
           }
           if (cd.fold) {
             setExpanded(false);
-            renderExpressions();
+            renderFaces();
           }
         },
         cd.name || cd.item?.body || cd.item?.caption || (cd.item ? faceName(cd.item.key) : ""),
@@ -523,7 +523,7 @@ async function drawExpressions() {
     if (unfolded) clip.scrollLeft = exprScroll;
   });
 }
-// a portrait face's name, as the camera's expression list has it
+// a portrait face's name, as the camera's face list has it
 const faceName = (key) => (key === "00" ? T("photo.natural") : `${T("photo.expressions")} ${key}`);
 const keepScroll = () => {
   setExprScroll(document.querySelector(".expr-clip")?.scrollLeft || 0);

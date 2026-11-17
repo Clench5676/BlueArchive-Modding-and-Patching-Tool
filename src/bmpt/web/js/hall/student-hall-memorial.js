@@ -37,7 +37,7 @@ export function createMemorialPool({ load, moduleFor = moduleAt }) {
     },
     async prepare(choice, makeHost, signal) {
       if (disposed || signal?.aborted) return null;
-      const key = `${choice.variant}:${choice.source}`;
+      const key = `${choice.alt}:${choice.source}`;
       if (pending) release(pending);
       if (current?.key === key) return current;
       const index = current?.index === 0 ? 1 : 0;

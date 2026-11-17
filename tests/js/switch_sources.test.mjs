@@ -50,9 +50,9 @@ const mod = (id, target, kind) => ({
 });
 // hoshino: a portrait and a lobby; swimsuit: a portrait and a lobby of its own; np: a portrait only; shared: the same
 // lobby core as hoshino
-const family = () => ({
+const student = () => ({
   key: "hoshino",
-  variants: [
+  alts: [
     {
       key: "hoshino",
       spr: "hoshino_spr",
@@ -64,7 +64,7 @@ const family = () => ({
       key: "hoshino_swimsuit",
       spr: "hoshino_swimsuit_spr",
       lobby: "hoshino_swimsuit_home",
-      state: { files: [part("spr", "variant:hoshino"), part("lobby", "official")] },
+      state: { files: [part("spr", "alt:hoshino"), part("lobby", "official")] },
       modList: [mod("p2", "hoshino_swimsuit", "spr"), mod("l2", "hoshino_swimsuit", "lobby")],
     },
     { key: "np0045", spr: "np0045_spr", lobby: null, state: { files: [part("spr", "official")] }, modList: [] },
@@ -85,7 +85,7 @@ test("stored-only character sources are previewable without an official install 
     previewSources: { lobby: "mod:future-mod" },
     modList: [mod("future-mod", "future", "lobby")],
   };
-  const fam = { variants: [student] };
+  const fam = { alts: [student] };
   assert.ok(hasAsset(student));
   assert.equal(primaryKind(student), "lobby");
   assert.equal(availableTab(student, "portrait"), "lobby");
@@ -118,7 +118,7 @@ test("stored-only portraits offer their own Mods without sibling adaptation sour
     state: { files: [] },
     modList: [mod("sibling", "released", "spr")],
   };
-  const choices = candidates({ variants: [student, sibling] }, student, "spr");
+  const choices = candidates({ alts: [student, sibling] }, student, "spr");
   assert.deepEqual(
     choices.map((choice) => choice.key),
     ["self", "m:own"],
@@ -139,12 +139,12 @@ test("special slots open their lobby tab and switch only mods for their own core
   const night = { ...day, key: "special:arona_workpage_night", lobby: "arona_workpage_night" };
   day.modList = [{ ...mod("day", day.key, "lobby"), core: day.lobby }];
   night.modList = [{ ...mod("night", night.key, "lobby"), core: night.lobby }];
-  const fam = { variants: [day, night, ...family().variants] };
+  const fam = { alts: [day, night, ...student().alts] };
   assert.ok(hasAsset(day));
   assert.equal(primaryKind(day), "lobby");
   for (const tab of ["portrait", "model", "lobby"]) assert.equal(availableTab(day, tab), "lobby");
-  assert.equal(availableTab(fam.variants[2], "portrait"), "portrait");
-  assert.equal(availableTab(fam.variants[4], "lobby"), "portrait");
+  assert.equal(availableTab(fam.alts[2], "portrait"), "portrait");
+  assert.equal(availableTab(fam.alts[4], "lobby"), "portrait");
   assert.deepEqual(
     candidates(fam, day, "lobby").map((c) => c.key),
     ["self", "m:day"],
@@ -157,9 +157,9 @@ test("special slots open their lobby tab and switch only mods for their own core
   assert.equal(sourceOf("self"), "official");
 });
 
-test("candidates of the portrait: own, own mods, other variants, their mods", () => {
-  const fam = family();
-  const list = candidates(fam, fam.variants[0], "spr");
+test("candidates of the portrait: own, own mods, other alts, their mods", () => {
+  const fam = student();
+  const list = candidates(fam, fam.alts[0], "spr");
   assert.deepEqual(
     list.map((c) => c.key),
     ["self", "m:p1", "v:hoshino_swimsuit", "v:np0045", "v:hoshino_shared", "m:p2"],
@@ -169,10 +169,10 @@ test("candidates of the portrait: own, own mods, other variants, their mods", ()
   assert.equal(list.at(-1).origin.key, "hoshino_swimsuit");
 });
 
-test("candidates of the memorial lobby: the variant's own lobby and its lobby mods only", () => {
-  const fam = family();
-  const list = candidates(fam, fam.variants[0], "lobby");
-  // no portrait mods, and neither another variant's lobby nor its lobby mods (untested under this variant's prefab)
+test("candidates of the memorial lobby: the alt's own lobby and its lobby mods only", () => {
+  const fam = student();
+  const list = candidates(fam, fam.alts[0], "lobby");
+  // no portrait mods, and neither another alt's lobby nor its lobby mods (untested under this alt's prefab)
   assert.deepEqual(
     list.map((c) => c.key),
     ["self", "m:l1"],
@@ -180,17 +180,17 @@ test("candidates of the memorial lobby: the variant's own lobby and its lobby mo
   assert.equal(list[0].core, "hoshino_home");
   assert.ok(list.every((c) => c.kind !== "mod" || c.mod.kind === "lobby"));
   assert.deepEqual(
-    candidates(fam, fam.variants[1], "lobby").map((c) => c.key),
+    candidates(fam, fam.alts[1], "lobby").map((c) => c.key),
     ["self", "m:l2"],
   );
   assert.deepEqual(
-    candidates(fam, fam.variants[2], "lobby").map((c) => c.key),
+    candidates(fam, fam.alts[2], "lobby").map((c) => c.key),
     ["self"],
   );
 });
 
 test("what the game shows, per kind", () => {
-  const [hoshino, swimsuit, np] = family().variants;
+  const [hoshino, swimsuit, np] = student().alts;
   assert.equal(appliedOf(hoshino, "spr"), "official");
   assert.equal(appliedKey(hoshino, "spr"), "self");
   assert.equal(appliedKey(hoshino, "lobby"), "m:l1");
@@ -212,7 +212,7 @@ test("parts with several sources, or changed outside the library, are unknown", 
 test("sources for actions.apply", () => {
   assert.equal(sourceOf("self"), "official");
   assert.equal(sourceOf("m:abc"), "mod:abc");
-  assert.equal(sourceOf("v:hoshino_swimsuit"), "variant:hoshino_swimsuit");
+  assert.equal(sourceOf("v:hoshino_swimsuit"), "alt:hoshino_swimsuit");
 });
 
 test("parts and cores of a kind", () => {
@@ -257,43 +257,43 @@ test("a part's official verdict wins over its applied source; without one, its a
 
 // --- overwritten kinds, alternate lobby cores and the popup while mods are off ---
 
-// a part of another tool's mod with no official copy anywhere (family.get: restorable false)
+// a part of another tool's mod with no official copy anywhere (student.get: restorable false)
 const overwrittenPart = (kind) => part(kind, "unknown", { official: false, copy: null, restorable: false });
 
 test("candidates keep Original unavailable while mods can replace an overwritten kind", () => {
-  const fam = family();
-  for (const c of candidates(fam, fam.variants[0], "spr")) {
+  const fam = student();
+  for (const c of candidates(fam, fam.alts[0], "spr")) {
     assert.equal(c.restorable, true, c.key);
     assert.equal(c.greyed, false, c.key);
   }
   // An outside overwrite disables Original while library mods remain selectable.
-  fam.variants[0].state.files = [overwrittenPart("spr")];
-  assert.equal(overwrittenOf(fam.variants[0], "spr"), true);
+  fam.alts[0].state.files = [overwrittenPart("spr")];
+  assert.equal(overwrittenOf(fam.alts[0], "spr"), true);
   assert.deepEqual(
-    candidates(fam, fam.variants[0], "spr")
+    candidates(fam, fam.alts[0], "spr")
       .filter((c) => c.greyed)
       .map((c) => c.key),
     ["self"],
   );
-  assert.equal(candidates(fam, fam.variants[0], "spr")[0].restorable, false);
+  assert.equal(candidates(fam, fam.alts[0], "spr")[0].restorable, false);
   // Adoption does not change the availability of other library mods.
-  fam.variants[0].state.files = [part("spr", "mod:p1", { official: false, copy: null, restorable: false })];
-  const list = candidates(fam, fam.variants[0], "spr");
+  fam.alts[0].state.files = [part("spr", "mod:p1", { official: false, copy: null, restorable: false })];
+  const list = candidates(fam, fam.alts[0], "spr");
   assert.deepEqual(
     list.filter((c) => c.greyed).map((c) => c.key),
     ["self"],
   );
   // Preview selection is independent of whether the asset can currently be applied.
-  assert.equal(popupMode(fam, fam.variants[0], "spr", true).start, "m:p1");
-  assert.equal(popupMode(fam, fam.variants[0], "spr", false).start, "self");
+  assert.equal(popupMode(fam, fam.alts[0], "spr", true).start, "m:p1");
+  assert.equal(popupMode(fam, fam.alts[0], "spr", false).start, "self");
   // the lobby is not overwritten: its cards are not greyed
-  assert.ok(candidates(fam, fam.variants[0], "lobby").every((c) => !c.greyed));
+  assert.ok(candidates(fam, fam.alts[0], "lobby").every((c) => !c.greyed));
 });
 
-test("another variant's card is greyed on every other popup when its files of that kind are overwritten", () => {
-  const fam = family();
-  fam.variants[2].state.files = [overwrittenPart("spr")]; // np0045's portrait: no official copy to adapt from
-  for (const v of [fam.variants[0], fam.variants[1]]) {
+test("another alt's card is greyed on every other popup when its files of that kind are overwritten", () => {
+  const fam = student();
+  fam.alts[2].state.files = [overwrittenPart("spr")]; // np0045's portrait: no official copy to adapt from
+  for (const v of [fam.alts[0], fam.alts[1]]) {
     const card = candidates(fam, v, "spr").find((c) => c.key === "v:np0045");
     assert.equal(card.greyed, true, v.key);
     assert.equal(card.restorable, false, v.key);
@@ -305,19 +305,19 @@ test("another variant's card is greyed on every other popup when its files of th
     );
   }
   // a part that is not official but has an official copy (kept, a backup, another folder) greys nothing
-  fam.variants[2].state.files = [part("spr", "unknown", { official: false, copy: "backup", restorable: true })];
-  assert.equal(candidates(fam, fam.variants[0], "spr").find((c) => c.key === "v:np0045").greyed, false);
+  fam.alts[2].state.files = [part("spr", "unknown", { official: false, copy: "backup", restorable: true })];
+  assert.equal(candidates(fam, fam.alts[0], "spr").find((c) => c.key === "v:np0045").greyed, false);
   // a part without restorable (an older server) is never taken for overwritten
   assert.equal(overwrittenOf({ state: { files: [part("spr", "unknown")] } }, "spr"), false);
 });
 
 test("a lobby popup lists only the lobby mods of its own core", () => {
-  const fam = family();
-  fam.variants[0].modList.push(
+  const fam = student();
+  fam.alts[0].modList.push(
     { ...mod("gl", "hoshino", "lobby"), core: "hoshino_home_gl" },
     { ...mod("own", "hoshino", "lobby"), core: "hoshino_home" },
   );
-  const keys = candidates(fam, fam.variants[0], "lobby").map((c) => c.key);
+  const keys = candidates(fam, fam.alts[0], "lobby").map((c) => c.key);
   assert.deepEqual(
     keys,
     ["self", "m:l1", "m:own"],
@@ -326,17 +326,17 @@ test("a lobby popup lists only the lobby mods of its own core", () => {
 });
 
 test("asset selection always saves the preview independently of the Mods switch", () => {
-  const fam = family();
-  const v = fam.variants[0];
+  const fam = student();
+  const v = fam.alts[0];
   // mods on: Apply, from what the game shows
   assert.deepEqual(popupMode(fam, v, "spr", true), { start: "self", button: "popup.save", set: null });
   assert.deepEqual(popupMode(fam, v, "lobby", true), { start: "m:l1", button: "popup.save", set: null });
   // off, with a configured mod: the files are official, the popup starts on the configured card and saves
-  v.configured = { spr: "mod:p1", lobby: "variant:hoshino_swimsuit" };
+  v.configured = { spr: "mod:p1", lobby: "alt:hoshino_swimsuit" };
   v.state.files = [part("spr", "official"), part("lobby", "official")];
   assert.equal(configuredKey(v, "spr"), "m:p1");
   assert.deepEqual(popupMode(fam, v, "spr", false), { start: "m:p1", button: "popup.save", set: "m:p1" });
-  // a configured source the popup does not offer (another variant's lobby): it starts on the own files
+  // a configured source the popup does not offer (another alt's lobby): it starts on the own files
   assert.equal(configuredKey(v, "lobby"), "v:hoshino_swimsuit");
   assert.equal(popupMode(fam, v, "lobby", false).start, "self");
   // nothing configured: the own files, and no Set chip
@@ -347,8 +347,8 @@ test("asset selection always saves the preview independently of the Mods switch"
 });
 
 test("previews keep both configured kinds while the game files are official", () => {
-  const fam = family(),
-    v = fam.variants[0];
+  const fam = student(),
+    v = fam.alts[0];
   v.configured = { spr: "mod:p1", lobby: "mod:l1" };
   v.state.files = [part("spr", "official"), part("lobby", "official")];
   for (const [kind, id] of [
@@ -356,7 +356,7 @@ test("previews keep both configured kinds while the game files are official", ()
     ["lobby", "l1"],
   ]) {
     assert.equal(previewKey(v, kind, false), `m:${id}`);
-    assert.equal(previewBase(v, kind, false, fam.variants), `/asset/spine/mod/${id}/skeleton`);
+    assert.equal(previewBase(v, kind, false, fam.alts), `/asset/spine/mod/${id}/skeleton`);
     assert.equal(appliedKey(v, kind), "self", "file status remains independent of the preview");
     assert.equal(previewKey(v, kind, true), `m:${id}`, "the saved source stays visible while installation is pending");
     const marked = candidates(fam, v, kind).filter((c) => c.key === previewKey(v, kind, false));
@@ -366,24 +366,24 @@ test("previews keep both configured kinds while the game files are official", ()
       "only the configured card matches the preview",
     );
   }
-  v.configured.spr = "variant:hoshino_swimsuit";
+  v.configured.spr = "alt:hoshino_swimsuit";
   assert.equal(previewKey(v, "spr", false), "v:hoshino_swimsuit");
-  assert.equal(previewBase(v, "spr", false, fam.variants), "/asset/spine/official-spr/hoshino_swimsuit_spr/skeleton");
-  assert.equal(previewBase(v, "spr", true, fam.variants), "/asset/spine/official-spr/hoshino_swimsuit_spr/skeleton");
+  assert.equal(previewBase(v, "spr", false, fam.alts), "/asset/spine/official-spr/hoshino_swimsuit_spr/skeleton");
+  assert.equal(previewBase(v, "spr", true, fam.alts), "/asset/spine/official-spr/hoshino_swimsuit_spr/skeleton");
 });
 
-test("a configured variant previews its official copy even when its live files still carry a mod", () => {
-  const fam = family(),
-    [v, source] = fam.variants;
-  v.configured = { spr: `variant:${source.key}` };
+test("a configured alt previews its official copy even when its live files still carry a mod", () => {
+  const fam = student(),
+    [v, source] = fam.alts;
+  v.configured = { spr: `alt:${source.key}` };
   source.state.files = [part("spr", "mod:leftover", { official: false, restorable: true })];
   assert.equal(appliedKey(source), "m:leftover");
-  assert.equal(previewBase(v, "spr", false, fam.variants), "/asset/spine/official-spr/hoshino_swimsuit_spr/skeleton");
-  assert.equal(previewBase(source, "spr", true, fam.variants), "/asset/spine/spr/hoshino_swimsuit_spr/skeleton");
+  assert.equal(previewBase(v, "spr", false, fam.alts), "/asset/spine/official-spr/hoshino_swimsuit_spr/skeleton");
+  assert.equal(previewBase(source, "spr", true, fam.alts), "/asset/spine/spr/hoshino_swimsuit_spr/skeleton");
 });
 
 test("off previews use the configuration even if an unswitched game file still carries a different mod", () => {
-  const v = family().variants[0];
+  const v = student().alts[0];
   v.configured = { spr: "mod:configured" };
   v.state.files = [part("spr", "mod:carried")];
   assert.equal(previewBase(v, "spr", false), "/asset/spine/mod/configured/skeleton");
@@ -397,8 +397,8 @@ test("off previews use the configuration even if an unswitched game file still c
 });
 
 test("off previews of the own source use verified originals for both kinds despite leftover live mods", () => {
-  const fam = family(),
-    v = fam.variants[0];
+  const fam = student(),
+    v = fam.alts[0];
   for (const [kind, core] of [
     ["spr", v.spr],
     ["lobby", v.lobby],
@@ -406,14 +406,14 @@ test("off previews of the own source use verified originals for both kinds despi
     v.state.files = [part(kind, "mod:leftover", { official: false })];
     for (const source of [null, "official", "unknown"]) {
       v.configured = { [kind]: source };
-      assert.equal(previewBase(v, kind, false, fam.variants), `/asset/spine/official-${kind}/${core}/skeleton`);
-      assert.equal(previewBase(v, kind, true, fam.variants), `/asset/spine/official-${kind}/${core}/skeleton`);
+      assert.equal(previewBase(v, kind, false, fam.alts), `/asset/spine/official-${kind}/${core}/skeleton`);
+      assert.equal(previewBase(v, kind, true, fam.alts), `/asset/spine/official-${kind}/${core}/skeleton`);
     }
   }
 });
 
 test("a saved or removed configuration refreshes the preview without any change to the game files", () => {
-  const before = family().variants[0];
+  const before = student().alts[0];
   before.configured = { spr: "mod:p1", lobby: "mod:l1" };
   const after = structuredClone(before);
   after.configured.spr = "mod:p2";
@@ -429,13 +429,13 @@ test("a saved or removed configuration refreshes the preview without any change 
   assert.equal(previewChanged(before, after, "spr", true, true), true, "with mods on the saved choice still decides");
 });
 
-test("model sources stay within the variant and use the shared configured/applied rules", () => {
-  const fam = family(),
-    v = fam.variants[0];
+test("model sources stay within the alt and use the shared configured/applied rules", () => {
+  const fam = student(),
+    v = fam.alts[0];
   v.model = "hoshino_original";
   v.state.files.push(part("model", "mod:model-a", { official: false, restorable: true }));
   v.modList.push({ ...mod("model-a", v.key, "model"), core: v.model });
-  fam.variants[1].modList.push(mod("foreign", fam.variants[1].key, "model"));
+  fam.alts[1].modList.push(mod("foreign", fam.alts[1].key, "model"));
   v.modList.push({ ...mod("wrong-core", v.key, "model"), core: "alternate" });
   assert.deepEqual(
     candidates(fam, v, "model").map((c) => c.key),
@@ -454,19 +454,19 @@ test("model sources stay within the variant and use the shared configured/applie
   assert.equal(modelUrl("a/b", "official"), "/asset/model/a%2Fb.glb?source=official");
   assert.equal(modelUrl("hihumi", "live", "Hihumi_Original_Exs"), "/asset/model/hihumi.glb?clip=Hihumi_Original_Exs");
   assert.equal(
-    modelUrl("hihumi", "variant:ch0242", "CH0271_Formation Pickup"),
-    "/asset/model/hihumi.glb?source=variant%3Ach0242&clip=CH0271_Formation%20Pickup",
+    modelUrl("hihumi", "alt:ch0242", "CH0271_Formation Pickup"),
+    "/asset/model/hihumi.glb?source=alt%3Ach0242&clip=CH0271_Formation%20Pickup",
   );
   v.configured = {};
   assert.equal(modelSource(v, false), "official");
 });
 
 test("the 3D model offers the student's other models as costumes, field-mode models included", () => {
-  const fam = family(),
-    [v, swimsuit, np] = fam.variants;
+  const fam = student(),
+    [v, swimsuit, np] = fam.alts;
   v.model = "hoshino_original";
   swimsuit.model = "hoshino_swimsuit";
-  swimsuit.modList.push(mod("swim-model", swimsuit.key, "model")); // another variant's mod: never a costume
+  swimsuit.modList.push(mod("swim-model", swimsuit.key, "model")); // another alt's mod: never a costume
   np.fieldModel = "np0045"; // an event costume with only a field-mode model
   const ok = { hoshino: "ok", hoshino_swimsuit: "ok", np0045: "ok" };
   assert.deepEqual(
@@ -513,39 +513,36 @@ test("the 3D model offers the student's other models as costumes, field-mode mod
   assert.equal(refused.refused, true);
   assert.equal(refused.beyondFit, undefined);
   // the popup starts on the saved preview before any verdict arrives
-  v.previewSources = { model: "variant:np0045" };
+  v.previewSources = { model: "alt:np0045" };
   assert.equal(popupMode(fam, v, "model").start, "v:np0045");
   delete v.previewSources;
-  // the field-only variant shows a 3D tab, with no slot to switch
+  // the field-only alt shows a 3D tab, with no slot to switch
   assert.equal(hasKind(np, "model"), true);
   assert.equal(availableTab(np, "model"), "model");
   assert.deepEqual(
     candidates(fam, np, "model").map((c) => [c.key, c.greyed]),
     [["self", true]],
   );
-  // a costume previews and applies as variant:<key>
-  v.previewSources = { model: "variant:np0045" };
-  assert.equal(modelSource(v, true), "variant:np0045");
-  assert.equal(previewBase(v, "model", true), "/asset/model/hoshino.glb?source=variant%3Anp0045");
-  assert.equal(sourceOf("v:np0045"), "variant:np0045");
-  // the portrait keeps its own rules: other variants' portrait mods, never models
-  assert.ok(candidates(fam, v, "spr").every((c) => c.kind !== "variant" || c.variant.spr));
+  // a costume previews and applies as alt:<key>
+  v.previewSources = { model: "alt:np0045" };
+  assert.equal(modelSource(v, true), "alt:np0045");
+  assert.equal(previewBase(v, "model", true), "/asset/model/hoshino.glb?source=alt%3Anp0045");
+  assert.equal(sourceOf("v:np0045"), "alt:np0045");
+  // the portrait keeps its own rules: other alts' portrait mods, never models
+  assert.ok(candidates(fam, v, "spr").every((c) => c.kind !== "alt" || c.alt.spr));
 });
 
 test("other students' models stay out of the normal list and retain saved cross choices", () => {
-  const fam = family(),
-    v = fam.variants[0];
-  fam.variants.forEach((o) => {
-    o.family = fam.key;
+  const fam = student(),
+    v = fam.alts[0];
+  fam.alts.forEach((o) => {
+    o.student = fam.key;
   });
   v.model = "hoshino_original";
-  fam.variants[1].model = "hoshino_swimsuit";
-  const npc = { key: "ch0171", family: "yukino", model: "ch0171_enemy", playable: false };
-  const field = { key: "field", family: "yukino", fieldModel: "ch0171_field" };
-  const roster = [
-    fam,
-    { key: "yukino", variants: [npc, field, { key: "portrait", family: "yukino", spr: "portrait" }] },
-  ];
+  fam.alts[1].model = "hoshino_swimsuit";
+  const npc = { key: "ch0171", student: "yukino", model: "ch0171_enemy", playable: false };
+  const field = { key: "field", student: "yukino", fieldModel: "ch0171_field" };
+  const roster = [fam, { key: "yukino", alts: [npc, field, { key: "portrait", student: "yukino", spr: "portrait" }] }];
   const verdicts = { hoshino_swimsuit: "ok", ch0171: "preview" };
   assert.deepEqual(candidates(fam, v, "model", verdicts, roster), candidates(fam, v, "model", verdicts));
   assert.deepEqual(
@@ -554,7 +551,7 @@ test("other students' models stay out of the normal list and retain saved cross 
   );
   assert.deepEqual(crossModels(roster, field), [], "field-only models have no destination slot");
   for (const property of ["configured", "previewSources"]) {
-    v[property] = { model: "variant:ch0171" };
+    v[property] = { model: "alt:ch0171" };
     const choices = candidates(fam, v, "model", verdicts, roster);
     assert.deepEqual(
       choices.map((c) => c.key),
@@ -563,7 +560,7 @@ test("other students' models stay out of the normal list and retain saved cross 
     assert.equal(choices.at(-1).cross, true);
     assert.equal(choices.at(-1).previewOnly, undefined);
     assert.equal(popupMode(fam, v, "model", true, roster).start, "v:ch0171");
-    assert.equal(modelSource(v), "variant:ch0171");
+    assert.equal(modelSource(v), "alt:ch0171");
     assert.deepEqual(candidates(fam, v, "spr", verdicts, roster), candidates(fam, v, "spr", verdicts));
     assert.deepEqual(candidates(fam, v, "lobby", verdicts, roster), candidates(fam, v, "lobby", verdicts));
     delete v[property];
@@ -571,9 +568,9 @@ test("other students' models stay out of the normal list and retain saved cross 
 });
 
 test("cross model hits are ordered and capped, flag pending cards, and omit hard refusals", () => {
-  const v = { key: "slot", family: "own", model: "slot" };
-  const variants = Array.from({ length: 70 }, (_, i) => ({ key: `npc${i}`, family: "other", fieldModel: `ch${i}` }));
-  const roster = [{ variants }];
+  const v = { key: "slot", student: "own", model: "slot" };
+  const alts = Array.from({ length: 70 }, (_, i) => ({ key: `npc${i}`, student: "other", fieldModel: `ch${i}` }));
+  const roster = [{ alts }];
   const hits = crossCandidates(
     roster,
     v,
@@ -599,9 +596,9 @@ test("cross model hits are ordered and capped, flag pending cards, and omit hard
 });
 
 test("every other student's model is listed without the 64 cap, in the same order, when asked for", () => {
-  const v = { key: "slot", family: "own", model: "slot" };
-  const variants = Array.from({ length: 200 }, (_, i) => ({ key: `npc${i}`, family: "other", fieldModel: `ch${i}` }));
-  const roster = [{ variants }],
+  const v = { key: "slot", student: "own", model: "slot" };
+  const alts = Array.from({ length: 200 }, (_, i) => ({ key: `npc${i}`, student: "other", fieldModel: `ch${i}` }));
+  const roster = [{ alts }],
     compare = (a, b) => Number(a.key.slice(3)) - Number(b.key.slice(3));
   const verdicts = { npc0: "refused", npc5: "preview" };
   const capped = crossCandidates(roster, v, verdicts, { compare });
@@ -618,9 +615,9 @@ test("every other student's model is listed without the 64 cap, in the same orde
     all.map((c) => c.key).sort((a, b) => Number(a.slice(5)) - Number(b.slice(5))),
   );
   assert.ok(all.every((c) => c.cross && !c.greyed) && all.find((c) => c.key === "v:npc5").pending === undefined);
-  // the student's own variants and models of the same student are never among them
+  // the student's own alts and models of the same student are never among them
   assert.deepEqual(
-    crossCandidates([{ variants: [{ key: "mine", family: "own", model: "mine" }, ...variants.slice(0, 2)] }], v, null, {
+    crossCandidates([{ alts: [{ key: "mine", student: "own", model: "mine" }, ...alts.slice(0, 2)] }], v, null, {
       limit: Infinity,
     }).map((c) => c.key),
     ["v:npc0", "v:npc1"],
@@ -645,12 +642,12 @@ test("Show other students is off at every start and is kept only in memory", asy
 });
 
 test("a card of another student's model carries the caution and its ids, from a search or from the checkbox", () => {
-  const v = { key: "slot", family: "own", model: "slot" };
+  const v = { key: "slot", student: "own", model: "slot" };
   const roster = [
     {
-      variants: [
-        { key: "a", family: "other", model: "ch1", fileId: "f1" },
-        { key: "b", family: "other", fieldModel: "np2" },
+      alts: [
+        { key: "a", student: "other", model: "ch1", fileId: "f1" },
+        { key: "b", student: "other", fieldModel: "np2" },
       ],
     },
   ];
@@ -662,11 +659,11 @@ test("a card of another student's model carries the caution and its ids, from a 
     for (const card of cards) {
       const extras = crossExtras(card, "careful");
       assert.equal(extras.hint, "careful");
-      assert.deepEqual(extras.terms, [card.variant.fileId, card.variant.model, card.variant.fieldModel]);
+      assert.deepEqual(extras.terms, [card.alt.fileId, card.alt.model, card.alt.fieldModel]);
     }
   }
   assert.deepEqual(
-    crossExtras({ key: "v:sibling", kind: "variant" }, "careful"),
+    crossExtras({ key: "v:sibling", kind: "alt" }, "careful"),
     {},
     "the student's own costumes carry none",
   );
@@ -674,8 +671,8 @@ test("a card of another student's model carries the caution and its ids, from a 
 });
 
 test("past-limit verdicts allow Apply for every pair while hard refusals stay blocked", () => {
-  const v = { key: "slot", family: "own", model: "slot" };
-  const fam = { variants: [v, { key: "sibling", family: "own", model: "sibling" }] };
+  const v = { key: "slot", student: "own", model: "slot" };
+  const fam = { alts: [v, { key: "sibling", student: "own", model: "sibling" }] };
   for (const [verdict, ownHold, crossHold] of [
     ["ok", null, null],
     ["preview", null, null],
@@ -713,7 +710,7 @@ test("split model slots offer dependency mods and judge every slot part", async 
     ],
   };
   const fam = {
-    variants: [
+    alts: [
       v,
       {
         key: "hoshino",
@@ -722,7 +719,7 @@ test("split model slots offer dependency mods and judge every slot part", async 
       },
     ],
   };
-  // other cores' mods stay out; the other variant's model is listed as a costume, applicable once checked
+  // other cores' mods stay out; the other alt's model is listed as a costume, applicable once checked
   assert.deepEqual(
     candidates(fam, v, "model", { hoshino: "ok" }).map((c) => [c.key, !!c.previewOnly]),
     [

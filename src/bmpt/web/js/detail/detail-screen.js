@@ -29,7 +29,7 @@ import {
   layouts,
   fam,
   ctx,
-  variantKey,
+  altId,
   tab,
   renderFailed,
   commit,
@@ -45,7 +45,7 @@ import {
   fullName,
   customAliases,
   aliasList,
-  variant,
+  alt,
   isFav,
   hasLobby,
   hasModel,
@@ -115,7 +115,7 @@ function screenTree() {
   // The right panel is its Target only: buttons a game update adds beside it are game features the App does not
   // have (the 2026-11 update's Btn_Engrave, whose label is the prefab's untranslated text).
   for (const n of at(t, "RightInfo")?.children || []) if (n.name !== "Target") n.active = false;
-  const v = variant(),
+  const v = alt(),
     sk = switchKind(),
     c = current(sk || "spr"),
     kind = tabKind();
@@ -429,7 +429,7 @@ function screenTree() {
   boxLabel.pos = [(87.5 + BOX_RIGHT) / 2 - 183.7 - 1.5, -2];
   at(t, `${INFO}/Equip`).children.push(box);
 
-  // nameplate: favourite pin, name, the white panel for the variant chips; no stars, level, heart, squad or terrain
+  // nameplate: favourite pin, name, the white panel for the alt chips; no stars, level, heart, squad or terrain
   const np = PLATE_PATH;
   off(
     t,
@@ -593,7 +593,7 @@ async function drawScreen() {
   const ok = () => showable("screen", my, renderToken, gen);
   const host = $("ngui"),
     bgHost = $("ngui-bg");
-  const v = variant();
+  const v = alt();
   const t = screenTree();
   const bgNode = find(t, "BG");
   const RIGHT = ["RightInfo", "Arrow_R"];
@@ -697,14 +697,14 @@ function addSwitchText(host, view) {
     display: "block",
     padding: "0",
   });
-  const selectedStatus = selectionStatus(variant(), tabKind());
+  const selectedStatus = selectionStatus(alt(), tabKind());
   const sub = [
-    tab === "portrait" ? candidateLabel(current()) : sourceLabel(variant(), tabKind()),
+    tab === "portrait" ? candidateLabel(current()) : sourceLabel(alt(), tabKind()),
     selectedStatus && T(selectedStatus),
   ]
     .filter(Boolean)
     .join(" - ");
-  const title = T(isSpecial(variant()) && tab === "lobby" ? "special.switch" : `row.switch.${tab}`);
+  const title = T(isSpecial(alt()) && tab === "lobby" ? "special.switch" : `row.switch.${tab}`);
   const layout = switchTextLayout(w / S, h / S, title, sub, !!switchKind());
   const b = document.createElement("b"),
     span = document.createElement("span"),
@@ -738,7 +738,7 @@ function addSwitchText(host, view) {
   host.appendChild(box);
   const bust = view.nodes.get(`Inventory_ListControl/${INFO}/Weapon/Equip_1/UIEquipmentCard/Btn_Target/Normal/Bust`);
   const { signal } = thumbnailWork;
-  const background = variant().bg || layouts.textures[widget(layouts.list, "BG").texture];
+  const background = alt().bg || layouts.textures[widget(layouts.list, "BG").texture];
   if (switchKind() && bust?.els[0])
     return colourSwitchCard(bust.els[0], box, bust.node.widgets[0], NGUI.load, { signal, kind: tab, background }).catch(
       (err) => {
@@ -763,19 +763,19 @@ function hits(view, leftHost, rightHost) {
       rightHost,
       `${INFO}/Weapon/Equip_1/UIEquipmentCard/Btn_Target/Normal/Card_Bg`,
       () => openPopup(sk),
-      T(isSpecial(variant()) && sk === "lobby" ? "special.switch" : `row.switch.${tab}`),
+      T(isSpecial(alt()) && sk === "lobby" ? "special.switch" : `row.switch.${tab}`),
     );
     add(
       rightHost,
       `${INFO}/Weapon/Btn_Up_Wrapper/Btn_Up/BG (1)`,
       addMods,
-      T(isSpecial(variant()) && sk === "lobby" ? "special.add" : `row.add.${tab}`),
+      T(isSpecial(alt()) && sk === "lobby" ? "special.add" : `row.add.${tab}`),
     );
   }
   add(
     rightHost,
     `${INFO}/Status/Btn_Up_Wrapper/Btn_Up/BG (1)`,
-    () => reveal(gameFile(variant(), tabKind())),
+    () => reveal(gameFile(alt(), tabKind())),
     T(platform === "mac" ? "open.mac" : "open.win"),
   );
   add(rightHost, `${INFO}/Detail_Btn`, showDetails, T("info.details"));
@@ -794,15 +794,14 @@ function hits(view, leftHost, rightHost) {
     T(repairAction(shownMod())),
   );
   act("SkillData_EX (2)", () => runExport(), T("export.title"));
-  const apply = act("SkillData_EX (3)", () => applyCandidate(shownSource(variant(), sk), sk), T("popup.apply"));
+  const apply = act("SkillData_EX (3)", () => applyCandidate(shownSource(alt(), sk), sk), T("popup.apply"));
   if (apply) {
-    const hold = costumeBlock(variant(), sk, shownSource(variant(), sk)),
+    const hold = costumeBlock(alt(), sk, shownSource(alt(), sk)),
       unfit = hold === "unfit";
     apply.disabled =
-      !unfit &&
-      (!!hold || !sk || !coreOf(variant(), sk) || busy || isApplied(variant(), sk, shownSource(variant(), sk)));
-    if (!coreOf(variant(), sk)) apply.setAttribute("aria-description", T("import.reason.no_target"));
-    if (applyChecking(variant(), sk)) apply.setAttribute("aria-busy", "true");
+      !unfit && (!!hold || !sk || !coreOf(alt(), sk) || busy || isApplied(alt(), sk, shownSource(alt(), sk)));
+    if (!coreOf(alt(), sk)) apply.setAttribute("aria-description", T("import.reason.no_target"));
+    if (applyChecking(alt(), sk)) apply.setAttribute("aria-busy", "true");
     // a refused costume: greyed, the reason on hover (the click does nothing, applyCandidate); another
     // student's model waits for its check
     if (unfit) {
@@ -818,7 +817,7 @@ function hits(view, leftHost, rightHost) {
     leftHost,
     "LeftInfo/CharInfo/Char_Target/Char_CVCollectionBtn",
     copyName,
-    `${T("window.copy")}${listSep()}${baseName(gameFile(variant(), tabKind()))}`,
+    `${T("window.copy")}${listSep()}${baseName(gameFile(alt(), tabKind()))}`,
   );
   // The pencil opens the editor beside the displayed name.
   const aliasEls = ["Char_AliasBtn"]
@@ -840,8 +839,8 @@ function hits(view, leftHost, rightHost) {
     );
   }
   // the previous or next card of the student list, within its filters and in its order
-  add(leftHost, "Arrow_L/Left", () => ctx.step(-1, fam.key, variantKey), T("hall.previous"));
-  add(rightHost, "Arrow_R/Right", () => ctx.step(1, fam.key, variantKey), T("hall.next"));
+  add(leftHost, "Arrow_L/Left", () => ctx.step(-1, fam.key, altId), T("hall.previous"));
+  add(rightHost, "Arrow_R/Right", () => ctx.step(1, fam.key, altId), T("hall.next"));
   add(leftHost, "LeftInfo/CharInfo/Char_Target/Char_ZoomBtn", () => setFullscreen(true), T("lobby.fullscreen"));
   if (tab === "lobby")
     add(
@@ -850,7 +849,7 @@ function hits(view, leftHost, rightHost) {
       togglePlayAll,
       T(Lobby.playingAll() ? "lobby.stop" : "lobby.playAll"),
     );
-  const v = variant();
+  const v = alt();
   [
     ["Tab_1", "portrait", hasKind(v, "spr")],
     ["Tab_2", "lobby", hasLobby(v)],

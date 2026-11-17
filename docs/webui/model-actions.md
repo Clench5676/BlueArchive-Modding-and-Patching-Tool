@@ -79,7 +79,7 @@ plays, in order.
 
 ## Clips on demand
 
-The model's GLB (`/asset/model/<variant>.glb?source=...`) carries today's clips only (`model.py` `DEFAULT_CLIPS`, about
+The model's GLB (`/asset/model/<alt>.glb?source=...`) carries today's clips only (`model.py` `DEFAULT_CLIPS`, about
 3 MB for Hifumi) and, in its root extras, `clips`: the name of every clip the model plays (its animator controllers'
 clips, a field prefab's own list), from which the page groups the actions (`actionsOf(clips, extras.dev)`).
 
@@ -87,7 +87,7 @@ Picking an action: today's actions of the first battle form play from the GLB as
 other plays its `clips` in turn, each once, the last looping or held by its own loop flag (a second form's retreat waits
 and fades as the first's). A clip the view does not hold yet is fetched first:
 
-`GET /asset/model/<variant>.glb?source=<the shown source>&clip=<name>` -> one clip of that model as GLB
+`GET /asset/model/<alt>.glb?source=<the shown source>&clip=<name>` -> one clip of that model as GLB
 (`model.py` `export_clip`), read from the same files as the model (official copies, a mod, an import, a switched
 costume's adapted bundles: whatever the shown model was built from), without meshes or textures. Its nodes are the
 model's hierarchy in the model GLB's order (`extras.hierarchy` of them), so each channel's node is the shown model's
@@ -102,6 +102,6 @@ from the cache.
 The fetch is class 1 (the shown page's preview): the route counts as foreground (`preview_gate.foreground()`), one
 export step of about 0.5 s under the model lock, never behind a job; the page's deadline (15 s) counts only its own time
 in the foreground (`withPreviewTimeout`), not a wait for the library lock. While it loads, the action's group card shows
-the game's loading ring in its name's place; leaving the 3D tab, the variant or the screen aborts it with the costume
+the game's loading ring in its name's place; leaving the 3D tab, the alt or the screen aborts it with the costume
 checks (`detail.js` `stopCostumeChecks`); a step under way on the server finishes and stays cached. A failure leaves the
 action that played before and shows "Preview unavailable" (`detail.failed`) for that action only.

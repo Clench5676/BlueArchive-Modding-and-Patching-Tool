@@ -8,7 +8,7 @@ const linesSetter = source.slice(source.indexOf("function setLines("), source.in
 const detail = readFileSync(new URL("../../src/bmpt/web/js/detail/detail-strip.js", import.meta.url), "utf8");
 const toggle = detail.slice(
   detail.indexOf("function togglePlayAll()"),
-  detail.indexOf("export function renderExpressions()"),
+  detail.indexOf("export function renderFaces()"),
 );
 
 function player(cues = []) {

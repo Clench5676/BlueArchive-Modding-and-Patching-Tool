@@ -299,8 +299,8 @@ def usage_targets(library: ModLibrary) -> dict[str, set[str]]:
     for source, defaults in _uses(library):
         for item in _owned(library, source, defaults).values():
             variants = targets.setdefault(item["photo"], set())
-            if isinstance(item.get("variant"), str):
-                variants.add(item["variant"])
+            if isinstance(item.get("alt"), str):
+                variants.add(item["alt"])
     return targets
 
 
@@ -379,7 +379,7 @@ def remove_photo(library: ModLibrary, key: str, log) -> None:
             paths = library._index(pin).get(core, [])
             if len(paths) != 1:
                 raise ServiceError("photo_target_unavailable")
-            tasks.extend((pin, {"bundle": paths[0].name, "name": name}, value["variant"]) for name, value in matches)
+            tasks.extend((pin, {"bundle": paths[0].name, "name": name}, value["alt"]) for name, value in matches)
     for pin, descriptor, variant in tasks:
         apply(library, variant, None, None, descriptor, pin, log, None)
     library._save()
@@ -512,7 +512,7 @@ def apply(
             choices = {name: value for name, value in meta.get("choices", {}).items() if name in names}
             for name, value in choices.items():
                 if name != descriptor["name"] and value.get("photo"):
-                    edits[name] = library.photographs.image(value["variant"], value["photo"])
+                    edits[name] = library.photographs.image(value["alt"], value["photo"])
             meta["choices"] = choices
             base = official
         elif record is not None:
@@ -527,7 +527,7 @@ def apply(
         if "base_official" not in meta:
             meta["base_official"] = library._hashes.get(base).sha1 == library._hashes.get(official).sha1
         choices = meta.setdefault("choices", {})
-        choices[descriptor["name"]] = {"variant": variant, "photo": photo}
+        choices[descriptor["name"]] = {"alt": variant, "photo": photo}
         if photo is None and meta["base_official"] and all(item.get("photo") is None for item in choices.values()):
             result = library.apply(core, "official", kind="other", pin=pin, log=log, progress=progress)
             if slot != core:
@@ -632,10 +632,10 @@ def refresh_missing(library: ModLibrary, pins: list[Pin], log) -> None:
                             if not current.get(TAG):
                                 # An explicit shared-bundle Mod is not replaced by an old photo recipe.
                                 continue
-                        png = library.photographs.image(value["variant"], value["photo"])
+                        png = library.photographs.image(value["alt"], value["photo"])
                         apply(
                             library,
-                            value["variant"],
+                            value["alt"],
                             value["photo"],
                             png,
                             descriptor,

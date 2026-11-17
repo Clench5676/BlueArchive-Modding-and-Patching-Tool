@@ -523,21 +523,21 @@ def build_api(s: Services) -> RpcRegistry:
         }
 
     @rpc.method("preview.modelRevision")
-    def preview_model_revision(variant: str, source: str = "live") -> dict[str, str]:
+    def preview_model_revision(alt: str, source: str = "live") -> dict[str, str]:
         if (
-            not isinstance(variant, str)
-            or not variant
-            or len(variant) > 256
-            or "/" in variant
+            not isinstance(alt, str)
+            or not alt
+            or len(alt) > 256
+            or "/" in alt
             or not isinstance(source, str)
             or len(source) > 512
         ):
-            raise ServiceError("bad_params", key="variant")
+            raise ServiceError("bad_params", key="alt")
         generation = s.preview_cache.generation
         try:
-            exported = s.asset("model/" + variant + ".glb", {"source": source})
+            exported = s.asset("model/" + alt + ".glb", {"source": source})
         except KeyError as error:
-            raise ServiceError("bad_params", key="variant") from error
+            raise ServiceError("bad_params", key="alt") from error
         return {"revision": hashlib.sha256(exported.body).hexdigest(), "generation": generation}
 
     @rpc.method("preview.assetRevision")

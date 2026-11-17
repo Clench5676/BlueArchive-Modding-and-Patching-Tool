@@ -427,9 +427,9 @@ export function createImportDialogs(P, page) {
         place(go, 1115 * k, 86 * k, 225 * k, 65 * k);
         const navigate = (item) => {
           P.dialogClose?.();
-          const variant = identified(item).variant;
-          if (item.kind === "other" || !variant) P.context?.goOther?.();
-          else P.context?.go?.(variant.family.key, variant.key, item.kind === "spr" ? "portrait" : item.kind);
+          const alt = identified(item).alt;
+          if (item.kind === "other" || !alt) P.context?.goOther?.();
+          else P.context?.go?.(alt.student.key, alt.key, item.kind === "spr" ? "portrait" : item.kind);
         };
         go.addEventListener("click", () => navigate(entry));
         if (P.merged)

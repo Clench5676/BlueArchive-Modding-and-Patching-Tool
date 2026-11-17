@@ -33,7 +33,7 @@ test("RPC, polled jobs and job failure events preserve backend display reference
 
 test("polling observes a failed apply even when its event was lost, and done needs no event", async () => {
   globalThis.fetch = async () =>
-    answer({ result: { state: "failed", error: { code: "mod_target_mismatch", params: { variant: "test" } } } });
+    answer({ result: { state: "failed", error: { code: "mod_target_mismatch", params: { alt: "test" } } } });
   await assert.rejects(waitJob("j1", null, options), (e) => e.code === "mod_target_mismatch");
   globalThis.fetch = async () => answer({ result: { state: "done", result: "recovered" } });
   assert.equal(await waitJob("j2", null, options), "recovered");

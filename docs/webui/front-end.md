@@ -1,7 +1,7 @@
 # Front end
 
 `ngui.js` (prefab renderer), the roster, the detail screen, the popups, the consent popup and the lobby player, as ES
-modules under `web/js/`, one page with a hash router (`#/roster`, `#/student/<family>/<variant>`). The modules sit in
+modules under `web/js/`, one page with a hash router (`#/roster`, `#/student/<student>/<alt>`). The modules sit in
 folders by screen area: `app/` (start-up, navigation, loading, updates, prompts), `window/` (window chrome and top bar),
 `core/` (RPC, strings, shared helpers), `ui/` (NGUI, popups, shared widgets and tokens), `roster/`, `detail/`, `mods/`
 (mod switching and import), `spine/`, `lobby/`, `model/` (3D), `hall/`, `settings/` and `photography/`. Data comes from
@@ -13,7 +13,7 @@ accessible names from the locale files; a control that picks one of several carr
 `roster-order.js` decides which cards the list shows and in what order (pure functions, tested in Node from
 `tests/test_roster_order.py`); `roster.js` draws them and `display.js` is the game's display settings popup.
 
-- One card per variant, or per family with "Group Variants". Cards with mods first, the rest after the "No Mod" bar;
+- One card per alt, or per student with "Group Alts". Cards with mods first, the rest after the "No Mod" bar;
   favourites lead each group whatever the sort.
 - Segment filters, the display settings' filter groups (options in a group add up, groups narrow) and the sort
   (recently viewed, recently added, name with the UI language's collation, mod count, default). All of it is saved
@@ -26,7 +26,7 @@ accessible names from the locale files; a control that picks one of several carr
 - Back from the detail screen, the list is built behind the loading cover: the visible rows finish their portraits and
   frames before reveal, and pictures are decoded first (`NGUI.decoded`, `image-decode.js`, tested in Node) — WebKit
   lets go of blob images a hidden screen draws, so without the wait the first frames painted bare.
-- A visit to a variant (`ui.visit`) is mirrored in the page's roster data, so "Recently Viewed" updates without a new
+- A visit to an alt (`ui.visit`) is mirrored in the page's roster data, so "Recently Viewed" updates without a new
   `roster.list`.
 
 ## Quit
@@ -119,13 +119,13 @@ acknowledgement; the first screen uses a static portrait where one exists. Setti
 that opens the same notice without changing state.
 
 **Switch popups** (Switch Portrait / Memorial Lobby / Chibi). The sources (`switch-sources.js`, tested in Node):
-the variant's own files and its added mods; for the portrait also the other variants' own and added ones (other
-variants' lobbies are not offered — untested in the game). Save changes only the preview (persisted per install and
-variant in `webui.json`, exposed as `previewSources`); Apply updates the manifest through `actions.apply` (with Mods
+the alt's own files and its added mods; for the portrait also the other alts' own and added ones (other
+alts' lobbies are not offered — untested in the game). Save changes only the preview (persisted per install and
+alt in `webui.json`, exposed as `previewSources`); Apply updates the manifest through `actions.apply` (with Mods
 off it only updates the intended source). On an overwritten kind, Original is greyed with the Overwritten treatment;
 greyed cards can still be previewed. Delete always confirms with the mod's name and explains affected entries.
 Duplicates show Already in the Mod Library; exact outside game content is adopted without reapplying. Unseen mods
-mark their variant chip, tab and roster card; opening a switch popup marks what it offers as seen (`mods.seen`,
+mark their alt chip, tab and roster card; opening a switch popup marks what it offers as seen (`mods.seen`,
 independent of the library's legacy flags). **Aliases** (the pencil on the nameplate): the user's own search aliases,
 edited in the game's input rows, IME-safe. **Details** (the info bars' button): the shown tab's game files, one row
 per bundle with size, date, CRC state and contents.
@@ -150,7 +150,7 @@ scales, controls, popup anatomy and alignment rules are documented in [`design-s
 corner, animated in `app.css` from the game's clip. Before asset consent, covers use neutral system text and no game
 assets; the server selects the initial document's style from consent and the disk cache, so a cached launch is
 stylized before modules arrive. `scene(fn)` covers startup, navigation, student steps and detail tabs (fade to black,
-indicator, reveal; it warns after 15 s and waits without a client deadline for `family.get` and `roster.list`, since
+indicator, reveal; it warns after 15 s and waits without a client deadline for `student.get` and `roster.list`, since
 a writer job can hold the library lock; a later navigation supersedes the wait). `wait(promise, {label, cap})` shows
 the indicator alone for other waits. The detail screen resolves `show()` only when every part is ready and swaps
 changes in one frame. Startup phase durations are recorded in the session log and `app.timings`.

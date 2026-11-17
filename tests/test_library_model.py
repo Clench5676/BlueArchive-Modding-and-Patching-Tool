@@ -155,7 +155,7 @@ def test_official_split_model_dependency_mod_on_clones(tmp_path, batch, complete
     env = SimpleNamespace(services=services, rpc=build_api(services))
     try:
         (row,) = analyze(env, uploads)["entries"]
-        assert (row["kind"], row["core"], row["variant"], row["state"]) == ("model", "ch0258_02", "ch0258", "ready")
+        assert (row["kind"], row["core"], row["alt"], row["state"]) == ("model", "ch0258_02", "ch0258", "ready")
         assert row["paths"] == sorted(map(str, uploads))
         assert {file["target"] for file in row["files"]} == {path.name for path in targets}
         if batch:
@@ -178,14 +178,14 @@ def test_official_split_model_dependency_mod_on_clones(tmp_path, batch, complete
         assert all(
             (library.root / "originals" / target.name).read_bytes() == official_bytes[target] for target in targets
         )
-        family = env.rpc.call("family.get", {"key": "hoshino"})["result"]
-        variant = next(v for v in family["variants"] if v["key"] == "ch0258")
+        family = env.rpc.call("student.get", {"key": "hoshino"})["result"]
+        variant = next(v for v in family["alts"] if v["key"] == "ch0258")
         assert variant["selection"]["model"]["installed"]
         if shutil.which("node"):
             script = (
                 'import {readFileSync} from "node:fs"; '
                 'import {candidates} from "./src/bmpt/web/js/mods/switch-sources.js"; '
-                'const f=JSON.parse(readFileSync(0,"utf8")); const v=f.variants.find(v=>v.key==="ch0258"); '
+                'const f=JSON.parse(readFileSync(0,"utf8")); const v=f.alts.find(v=>v.key==="ch0258"); '
                 'if(!candidates(f,v,"model").some(c=>c.id===' + json.dumps(mod.id) + ")) process.exit(1);"
             )
             check = subprocess.run(
@@ -318,7 +318,7 @@ def test_split_model_dependency_add_apply_switch_and_restore(split_model_app, ba
     assert all(library.identify_import(path, path.name) == (path.name, "ch0258", "model") for path in uploads)
     if batch:
         (row,) = analyze(env, uploads)["entries"]
-        assert (row["core"], row["variant"], row["state"]) == ("ch0258_02", "ch0258", "ready")
+        assert (row["core"], row["alt"], row["state"]) == ("ch0258_02", "ch0258", "ready")
         (result,) = run(env, [row], enableAfterImport=False)
         assert result["outcome"] == "imported"
         (mod,) = library.mods()
@@ -346,8 +346,8 @@ def test_split_model_dependency_add_apply_switch_and_restore(split_model_app, ba
     assert filtered.core == "ch0258_02" and len(filtered.files) == len(env.parts)
     state = [part for part in library.state("ch0258").files if part.kind == "model"]
     assert {part.applied for part in state} == {f"mod:{mod.id}"} and all(part.restorable for part in state)
-    family = env.rpc.call("family.get", {"key": "hoshino"})["result"]
-    shown = next(v for v in family["variants"] if v["key"] == "ch0258")
+    family = env.rpc.call("student.get", {"key": "hoshino"})["result"]
+    shown = next(v for v in family["alts"] if v["key"] == "ch0258")
     assert shown["modelCores"] == ["ch0258_02", "ch0258"]
     assert {part["file"] for part in shown["modelFiles"]} == set(map(str, env.parts))
     assert shown["selection"]["model"]["installed"]
@@ -388,7 +388,7 @@ def test_complete_split_model_is_one_row_one_mod_and_one_choice(split_model_app,
         for i, path in enumerate(env.parts)
     ]
     (row,) = analyze(env, uploads)["entries"]
-    assert (row["core"], row["variant"], row["state"]) == (env.prefab_core, env.variant_key, "ready")
+    assert (row["core"], row["alt"], row["state"]) == (env.prefab_core, env.variant_key, "ready")
     assert row["paths"] == sorted(map(str, uploads))
     assert {file["target"] for file in row["files"]} == {path.name for path in env.parts}
     if batch:
@@ -501,8 +501,8 @@ def test_split_model_incomplete_and_unrestorable_cover_the_whole_slot(split_mode
     result = env.library.apply("ch0258", f"mod:{mod.id}", kind="model")
     assert result.incomplete and result.kept_current
     assert env.library.selection("ch0258")["model"]["incomplete"]
-    family = env.rpc.call("family.get", {"key": "hoshino"})["result"]
-    variant = next(v for v in family["variants"] if v["key"] == "ch0258")
+    family = env.rpc.call("student.get", {"key": "hoshino"})["result"]
+    variant = next(v for v in family["alts"] if v["key"] == "ch0258")
     assert next(m for m in variant["modList"] if m["id"] == mod.id)["incomplete"]
     assert next(p for p in variant["modelFiles"] if p["file"] == str(path))["restorable"] is False
     with pytest.raises(ServiceError, match="original_unavailable"):
@@ -517,8 +517,8 @@ def test_split_model_drift_and_needs_fix_belong_to_prefab_entry(split_model_app)
     # A record of a write can carry Needs Fix on any dependency, including the file table's copy.
     env.library._applied[str(target.resolve())]["crc"] = "needs_fix"
     env.library._save()
-    family = env.rpc.call("family.get", {"key": "hoshino"})["result"]
-    variant = next(v for v in family["variants"] if v["key"] == "ch0258")
+    family = env.rpc.call("student.get", {"key": "hoshino"})["result"]
+    variant = next(v for v in family["alts"] if v["key"] == "ch0258")
     assert next(p for p in variant["modelFiles"] if p["file"] == str(target))["crc"] == "needs_fix"
     target.write_bytes(env.official[target])
     (entry,) = [e for e in env.library.scan().entries if e.kind == "model"]
@@ -943,7 +943,7 @@ def test_model_costume_of_itself_is_refused(model_env):
     # another variant's costume is tested in test_model_adapt.py; a variant's own model is no costume source
     env = model_env
     with pytest.raises(ServiceError, match="source_unsupported"):
-        env.library.apply("hoshino", "variant:hoshino", kind="model")
+        env.library.apply("hoshino", "alt:hoshino", kind="model")
 
 
 def test_model_jobs_publish_the_model_kind(model_env):
@@ -995,9 +995,9 @@ def test_model_missing_official_preserves_outside_parts_and_marks_only_partial(m
     )
     services.game_found = lambda: False
     try:
-        family = build_api(services).call("family.get", {"key": "hoshino"})
+        family = build_api(services).call("student.get", {"key": "hoshino"})
         assert "error" not in family, family
-        shown = next(m for v in family["result"]["variants"] for m in v["modList"] if m["id"] == mod.id)
+        shown = next(m for v in family["result"]["alts"] for m in v["modList"] if m["id"] == mod.id)
         assert shown.get("incomplete", False) is partial
     finally:
         services.close()
@@ -1264,7 +1264,7 @@ def test_every_costume_is_applied_past_the_stretch_limit(model_env, monkeypatch)
 
     monkeypatch.setattr(ModLibrary, "_stage_costume", stage)
     # unchecked: the same student's pair builds
-    assert library.apply("hoshino", "variant:hoshino_swimsuit", kind="model").files
+    assert library.apply("hoshino", "alt:hoshino_swimsuit", kind="model").files
     assert built.pop() == ("hoshino_swimsuit", False, False)
     library.restore("hoshino", kind="model")
     assert all(path.read_bytes() == data for path, data in env.official.items())
@@ -1273,31 +1273,31 @@ def test_every_costume_is_applied_past_the_stretch_limit(model_env, monkeypatch)
         library._save_verdict(library._costume_signature("hoshino", other, pin)[0], False, "stretch", preview=True)
     assert library.costume_verdict("hoshino", "hina")["preview"] is True
     assert library.costume_verdict("hoshino", "hoshino_swimsuit")["preview"] is True
-    assert library.apply("hoshino", "variant:hoshino_swimsuit", kind="model").files
+    assert library.apply("hoshino", "alt:hoshino_swimsuit", kind="model").files
     assert built.pop() == ("hoshino_swimsuit", False, False)
-    assert library.configured("hoshino").get("model") == "variant:hoshino_swimsuit"
+    assert library.configured("hoshino").get("model") == "alt:hoshino_swimsuit"
     assert library.costume_preview("hoshino", "hoshino_swimsuit") and built.pop() == ("hoshino_swimsuit", True, False)
-    assert library.optimize_costume("hoshino", "variant:hoshino_swimsuit", "Swimsuit")["mod"]
+    assert library.optimize_costume("hoshino", "alt:hoshino_swimsuit", "Swimsuit")["mod"]
     assert built.pop() == ("hoshino_swimsuit", False, True)
     library.restore("hoshino", kind="model")
-    result = library.apply("hoshino", "variant:hina", kind="model")
+    result = library.apply("hoshino", "alt:hina", kind="model")
     assert result.files and built.pop() == ("hina", False, False)
-    assert library.configured("hoshino").get("model") == "variant:hina"
+    assert library.configured("hoshino").get("model") == "alt:hina"
     assert library.costume_preview("hoshino", "hina") and built.pop() == ("hina", True, False)
-    made = library.optimize_costume("hoshino", "variant:hina", "Hina")
+    made = library.optimize_costume("hoshino", "alt:hina", "Hina")
     assert made["mod"] and built.pop() == ("hina", False, True)
     # nothing to build: the official model needs none, a costume that no physics rule improves says so (reasons apart)
     assert library.optimize_costume("hoshino", "official", "Hoshino") == {"unneeded": True, "reason": "official"}
     gain["physics"] = False
-    assert library.optimize_costume("hina", "variant:hoshino", "Hoshino") == {"unneeded": True, "reason": "no_gain"}
+    assert library.optimize_costume("hina", "alt:hoshino", "Hoshino") == {"unneeded": True, "reason": "no_gain"}
     assert built.pop() == ("hoshino", False, True) and not [m for m in library.mods() if m.target == "hina"]
     library.restore("hoshino", kind="model")
     for other in ("hoshino_swimsuit", "hina"):
         library._save_verdict(library._costume_signature("hoshino", other, pin)[0], False, "static model")
         with pytest.raises(ServiceError, match="source_unsupported"):
-            library.apply("hoshino", f"variant:{other}", kind="model")
+            library.apply("hoshino", f"alt:{other}", kind="model")
         with pytest.raises(ServiceError, match="source_unsupported"):
-            library.optimize_costume("hoshino", f"variant:{other}", "Refused")
+            library.optimize_costume("hoshino", f"alt:{other}", "Refused")
     assert built == []
 
 
@@ -1346,8 +1346,8 @@ def test_costume_builds_of_an_older_rule_are_built_again_at_the_start(model_env,
 
     monkeypatch.setattr(ModLibrary, "_stage_costume", stage)
     monkeypatch.setattr(ModLibrary, "resource_version", lambda self, pin: "v1")
-    made = library.optimize_costume("hoshino", "variant:hoshino_swimsuit", "Swimsuit")["mod"]
-    assert library.apply("hoshino", "variant:hoshino_swimsuit", kind="model").files
+    made = library.optimize_costume("hoshino", "alt:hoshino_swimsuit", "Swimsuit")["mod"]
+    assert library.apply("hoshino", "alt:hoshino_swimsuit", kind="model").files
     assert library.update_due() == {
         "due": False,
         "outdated": False,
@@ -1357,7 +1357,7 @@ def test_costume_builds_of_an_older_rule_are_built_again_at_the_start(model_env,
         "previous": None,
     }
     assert library.refresh_costumes() == {"done": [], "kept": [], "left": []}
-    swap = {"id": "", "core": "hoshino_original", "source": "variant:hoshino_swimsuit"}
+    swap = {"id": "", "core": "hoshino_original", "source": "alt:hoshino_swimsuit"}
     copy = {"id": made, "core": "hoshino_original", "source": f"mod:{made}"}
 
     # a newer rule: both are built again at the start, whatever the game version; nothing is listed or asked
@@ -1380,7 +1380,7 @@ def test_costume_builds_of_an_older_rule_are_built_again_at_the_start(model_env,
         isinstance(line, dict)
         and line["total"] == 2
         and line["action"] == "process"
-        and line["variant"] == "hoshino"
+        and line["alt"] == "hoshino"
         and line["kind"] == "model"
         for line in lines
     )
@@ -1614,7 +1614,7 @@ def test_costume_verdicts_are_kept_per_build_signature(model_env, monkeypatch):
         if not enabled:
             library.toggle(False, True)
         with pytest.raises(ServiceError, match="source_unsupported"):
-            library.apply("hoshino", "variant:hoshino_swimsuit", kind="model")
+            library.apply("hoshino", "alt:hoshino_swimsuit", kind="model")
         assert library.configured("hoshino").get("model") is None
     (env.root / "costume-verdicts.json").write_text("{not json")
     assert library.costume_verdict("hoshino", "hoshino_swimsuit") is None

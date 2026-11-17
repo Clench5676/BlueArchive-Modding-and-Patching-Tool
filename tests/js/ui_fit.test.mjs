@@ -100,7 +100,7 @@ test("a caption that fits on one line keeps the prefab's size, a longer one wrap
 
 // --- the Batch Import name plate (Items Equip_Target: BG 1246 x 204 at y 98, Label_Name 104 at y 93,
 // room 1160) --- a breakable name whose one-line width at the prefab's floor (72.8) is at least `target`, built
-// from a variant's parts
+// from an alt's parts
 function nameOfWidth(target, parts, from = 0) {
   let name = parts[from];
   for (let i = from + 1; glyphWidth(name, 72.8) < target; i++)
@@ -331,7 +331,7 @@ for (const locale of LOCALES)
 import { readFileSync } from "node:fs";
 const catalog = JSON.parse(readFileSync(new URL("../../src/bmpt/catalog/data/catalog.json", import.meta.url), "utf8"));
 const NAME_KEY = { "en-US": "en", "zh-CN": "zh-CN", "zh-TW": "zh-TW", "ja-JP": "ja", "ko-KR": "ko", "th-TH": "th" };
-// every variant's full name in a locale's language (Thai falls back to the English names, as the app does)
+// every alt's full name in a locale's language (Thai falls back to the English names, as the app does)
 const namesOf = (locale) =>
   Object.values(catalog.variants)
     .map((v) => v.names?.[NAME_KEY[locale]]?.full || v.names?.en?.full)

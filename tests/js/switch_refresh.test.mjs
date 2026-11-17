@@ -21,15 +21,9 @@ const code = [
   "async function reload",
   "function resetPreview",
   // detail.js's setters of the state these write
-  ...[
-    "setFam",
-    "setLobbyStale",
-    "setLobbyShot",
-    "setShownKey",
-    "setModelShot",
-    "setExpressionState",
-    "setMainPlayer",
-  ].map((name) => `function ${name}`),
+  ...["setFam", "setLobbyStale", "setLobbyShot", "setShownKey", "setModelShot", "setFaceState", "setMainPlayer"].map(
+    (name) => `function ${name}`,
+  ),
 ]
   .map(functionSource)
   .join("\n");
@@ -53,13 +47,13 @@ async function apply(result, kind, { changedConfiguration = false } = {}) {
     switchPopupPage: null,
     pageToken: 1,
     coreOf,
-    variant: () => ctx.fam.variants[0],
+    alt: () => ctx.fam.alts[0],
     sourceOf: (key) => key,
     ctx: { invalidateRoster: () => calls.push("roster") },
     forget: () => calls.push("forget"),
     spinePrefix: (kind, core) => `${kind}/${core}`,
     call: (fn) => fn(),
-    readFamily: async () => ({ key: "family", variants: [next] }),
+    readStudent: async () => ({ key: "student", alts: [next] }),
     renderAll: async () => calls.push("cards"),
     renderLeft: async () => calls.push("left"),
     shownSource: () => "mod:old",
@@ -72,10 +66,10 @@ async function apply(result, kind, { changedConfiguration = false } = {}) {
     changeInPlace: (fn) => fn(),
     clearTimeout() {},
     open: true,
-    fam: { key: "family", variants: [v] },
-    variantKey: v.key,
+    fam: { key: "student", alts: [v] },
+    altId: v.key,
     shownLeft: kind,
-    expression: "00",
+    face: "00",
     blinkTimer: null,
     mainPlayer: {},
     modelGeneration: 0,
@@ -111,7 +105,7 @@ test("saving a different source while mods are off refreshes the configured prev
       changedConfiguration: true,
     });
     assert.deepEqual(calls, ["roster", "cards", "left"]);
-    assert.equal(ctx.fam.variants[0].configured[kind], "mod:new");
+    assert.equal(ctx.fam.alts[0].configured[kind], "mod:new");
     if (kind === "lobby") assert.equal(ctx.lobbyStale, true);
     else if (kind === "model") {
       assert.equal(ctx.modelShot, null);
@@ -132,7 +126,7 @@ test("changed game files still invalidate thumbnails and refresh the shown previ
   }
 });
 
-test("a lobby source event reloads the manifest even if a repack kept every family field unchanged", async () => {
+test("a lobby source event reloads the manifest even if a repack kept every student field unchanged", async () => {
   const calls = [],
     v = { key: "shun", lobby: "shun_home" };
   const ctx = {
@@ -140,10 +134,10 @@ test("a lobby source event reloads the manifest even if a repack kept every fami
     quiet: () => true,
     busy: false,
     heldChange: { cores: ["shun_home"] },
-    fam: { key: "shun", variants: [v] },
-    variantKey: "shun",
-    variant: () => v,
-    readFamily: async () => ({ key: "shun", variants: [v] }),
+    fam: { key: "shun", alts: [v] },
+    altId: "shun",
+    alt: () => v,
+    readStudent: async () => ({ key: "shun", alts: [v] }),
     renderFailed: assert.fail,
     previewEnabled: true,
     modsOn: () => true,
@@ -163,7 +157,7 @@ test("a lobby source event reloads the manifest even if a repack kept every fami
   assert.deepEqual(calls, ["roster", "lobby", "panels", "preview"]);
 });
 
-test("prefab and dependency source events refresh the model while foreign cores stay outside the family", async () => {
+test("prefab and dependency source events refresh the model while foreign cores stay outside the student", async () => {
   for (const core of ["ch0258_02", "ch0258", "ch0258_01_enemy"]) {
     const calls = [],
       v = { key: "ch0258", model: "ch0258_02", modelCores: ["ch0258_02", "ch0258"] };
@@ -172,10 +166,10 @@ test("prefab and dependency source events refresh the model while foreign cores 
       quiet: () => true,
       busy: false,
       heldChange: undefined,
-      fam: { key: "hoshino", variants: [v] },
-      variantKey: v.key,
-      variant: () => v,
-      readFamily: async () => ({ key: "hoshino", variants: [v] }),
+      fam: { key: "hoshino", alts: [v] },
+      altId: v.key,
+      alt: () => v,
+      readStudent: async () => ({ key: "hoshino", alts: [v] }),
       renderFailed: assert.fail,
       previewEnabled: true,
       modsOn: () => true,
@@ -202,11 +196,11 @@ test("prefab and dependency source events refresh the model while foreign cores 
   }
 });
 
-// On the detail screen a family read waits for the job that holds the library lock, and an old read never
-// replaces a newer family
-test("the family read has no deadline of its own: it waits for a job that holds the library lock", async () => {
-  const line = source.split("\n").find((l) => l.startsWith("const readFamily ="));
-  assert.ok(line, "readFamily is defined");
+// On the detail screen a student read waits for the job that holds the library lock, and an old read never
+// replaces a newer student
+test("the student read has no deadline of its own: it waits for a job that holds the library lock", async () => {
+  const line = source.split("\n").find((l) => l.startsWith("const readStudent ="));
+  assert.ok(line, "readStudent is defined");
   let release;
   const ctx = {
     rpc: (method, params) =>
@@ -219,10 +213,10 @@ test("the family read has no deadline of its own: it waits for a job that holds 
     HARD_CAP: 5,
   };
   vm.createContext(ctx);
-  const pending = vm.runInContext(`${line}; readFamily("shun")`, ctx);
+  const pending = vm.runInContext(`${line}; readStudent("shun")`, ctx);
   await new Promise((resolve) => setTimeout(resolve, 40));
   release();
-  assert.deepEqual(await pending, { method: "family.get", key: "shun" });
+  assert.deepEqual(await pending, { method: "student.get", key: "shun" });
 });
 
 function deferred() {
@@ -233,20 +227,20 @@ function deferred() {
   return { promise, resolve };
 }
 
-test("a family read that finishes after the screen was read anew does not replace the newer family", async () => {
+test("a student read that finishes after the screen was read anew does not replace the newer student", async () => {
   const calls = [],
     v = { key: "shun", lobby: "shun_home" };
   const read = deferred(),
-    newer = { key: "shun", variants: [v], newer: true };
+    newer = { key: "shun", alts: [v], newer: true };
   const ctx = {
     open: true,
     quiet: () => true,
     busy: false,
     heldChange: { cores: ["shun_home"] },
-    fam: { key: "shun", variants: [v] },
-    variantKey: "shun",
-    variant: () => v,
-    readFamily: () => read.promise,
+    fam: { key: "shun", alts: [v] },
+    altId: "shun",
+    alt: () => v,
+    readStudent: () => read.promise,
     renderFailed: assert.fail,
     previewEnabled: true,
     modsOn: () => true,
@@ -269,11 +263,11 @@ test("a family read that finishes after the screen was read anew does not replac
   );
   ctx.fam = newer; // the screen was left and entered again, or reloaded by another action, while the read waited
   ctx.heldChange = undefined;
-  read.resolve({ key: "shun", variants: [{ ...v, old: true }] });
+  read.resolve({ key: "shun", alts: [{ ...v, old: true }] });
   await running;
   assert.equal(ctx.fam, newer, "the old read is dropped");
   assert.deepEqual(calls, []);
-  assert.deepEqual(ctx.heldChange, { cores: ["shun_home"] }, "the change is read again after the newer family");
+  assert.deepEqual(ctx.heldChange, { cores: ["shun_home"] }, "the change is read again after the newer student");
 });
 
 test("reload and a switch's reload drop a read that finishes after the screen was read anew", async () => {
@@ -281,7 +275,7 @@ test("reload and a switch's reload drop a read that finishes after the screen wa
     v = { key: "dress", spr: "dress_spr", lobby: "dress_home", model: "dress_model", configured: {} };
   for (const entry of ["reload()", 'applyCandidate("mod:test", "spr")']) {
     const read = deferred(),
-      newer = { key: "family", variants: [v], newer: true };
+      newer = { key: "student", alts: [v], newer: true };
     const ctx = {
       busy: false,
       isApplied: () => false,
@@ -289,13 +283,13 @@ test("reload and a switch's reload drop a read that finishes after the screen wa
       switchPopupPage: null,
       pageToken: 1,
       coreOf,
-      variant: () => ctx.fam.variants[0],
+      alt: () => ctx.fam.alts[0],
       sourceOf: (key) => key,
       ctx: { invalidateRoster: () => calls.push("roster") },
       forget() {},
       spinePrefix: (kind, core) => `${kind}/${core}`,
       call: (fn) => fn(),
-      readFamily: () => read.promise,
+      readStudent: () => read.promise,
       renderAll: async () => calls.push("cards"),
       renderLeft: async () => calls.push("left"),
       shownSource: () => "mod:old",
@@ -309,10 +303,10 @@ test("reload and a switch's reload drop a read that finishes after the screen wa
       changeInPlace: (fn) => fn(),
       clearTimeout() {},
       open: true,
-      fam: { key: "family", variants: [v] },
-      variantKey: v.key,
+      fam: { key: "student", alts: [v] },
+      altId: v.key,
       shownLeft: "spr",
-      expression: "00",
+      face: "00",
       blinkTimer: null,
       mainPlayer: {},
       modelGeneration: 0,
@@ -330,7 +324,7 @@ test("reload and a switch's reload drop a read that finishes after the screen wa
     vm.createContext(ctx);
     const running = vm.runInContext(`${code}; ${entry}`, ctx);
     ctx.fam = newer;
-    read.resolve({ key: "family", variants: [{ ...v, old: true }] });
+    read.resolve({ key: "student", alts: [{ ...v, old: true }] });
     await running;
     assert.equal(ctx.fam, newer, `${entry}: the old read is dropped`);
     assert.ok(!calls.includes("cards") && !calls.includes("left"), `${entry}: nothing is drawn from it`);

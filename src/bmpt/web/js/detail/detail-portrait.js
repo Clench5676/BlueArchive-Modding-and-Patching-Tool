@@ -1,4 +1,4 @@
-// The detail screen's main Spine portrait: loading it, its blink and expressions, and disposing of it.
+// The detail screen's main Spine portrait: loading it, its blink and faces, and disposing of it.
 import { latestLoad, loadPlayer } from "../spine/spine-load.js";
 import { ensureSpine } from "../spine/spine-runtime.js";
 import { decodeAll } from "../core/image-decode.js";
@@ -13,7 +13,7 @@ import {
   ORIGIN,
   PORTRAIT_BOX,
   layouts,
-  expression,
+  face,
   mainPlayer,
   HARD_CAP,
   frames,
@@ -21,19 +21,19 @@ import {
   batch,
   commit,
   open,
-  variant,
+  alt,
   setMainPlayer,
 } from "./detail.js";
-import { renderExpressions } from "./detail-strip.js";
+import { renderFaces } from "./detail-strip.js";
 
 export let blinkTimer = null;
 export let spineToken = 0;
 
 // --- main Spine portrait ---
-// loadSpine(base) resolves once the portrait's first frame is drawn and the expression strip shows its faces
+// loadSpine(base) resolves once the portrait's first frame is drawn and the face strip shows its faces
 // (also on an error, after the message popup). The new layer stays transparent until committed, then fades in
 // over the old one, which goes. A portrait that cannot be shown takes the old one away too: the left side stays
-// empty rather than showing another variant under this one's name.
+// empty rather than showing another alt under this one's name.
 const portraitLoads = latestLoad();
 export function loadSpine(base) {
   const my = ++spineToken;
@@ -70,7 +70,7 @@ async function showSpine(base, my, signal) {
   };
   if (!allowed) {
     setMainPlayer(null);
-    const portrait = variant().portrait;
+    const portrait = alt().portrait;
     if (portrait) {
       const image = document.createElement("img");
       image.className = "portrait-static";
@@ -129,8 +129,8 @@ async function showSpine(base, my, signal) {
               else player.animationState.setEmptyAnimation(0, 0).trackEnd = Number.MAX_VALUE;
               if (my !== spineToken || !live()) return; // a newer portrait took over; it retires this layer
               setMainPlayer(player);
-              applyExpression();
-              await renderExpressions(); // the faces come from this skeleton
+              applyFace();
+              await renderFaces(); // the faces come from this skeleton
               await frames(2); // its first frame is on the canvas
               commit(() => {
                 if (my !== spineToken || !live()) return;
@@ -181,10 +181,10 @@ export const detailViewport = () =>
   portraitViewport(layouts && find(layouts.list, "CharacterPos"), { origin: ORIGIN, s: S, box: PORTRAIT_BOX });
 function scheduleBlink(player) {
   clearTimeout(blinkTimer);
-  if (expression !== "00" || mainPlayer !== player) return;
+  if (face !== "00" || mainPlayer !== player) return;
   blinkTimer = setTimeout(
     () => {
-      if (expression !== "00" || mainPlayer !== player) return;
+      if (face !== "00" || mainPlayer !== player) return;
       if (player.skeleton?.data.findAnimation("Eye_Close_01")) {
         player.animationState.setAnimation(2, "Eye_Close_01", false);
         player.animationState.addEmptyAnimation(2, 0.1, 0);
@@ -194,10 +194,10 @@ function scheduleBlink(player) {
     2500 + Math.random() * 3500,
   );
 }
-export function applyExpression() {
+export function applyFace() {
   clearTimeout(blinkTimer);
   mainPlayer?.animationState.clearTrack?.(2);
-  if (mainPlayer?.skeleton?.data.findAnimation(expression)) mainPlayer.animationState.setAnimation(1, expression, true);
+  if (mainPlayer?.skeleton?.data.findAnimation(face)) mainPlayer.animationState.setAnimation(1, face, true);
   if (mainPlayer) scheduleBlink(mainPlayer);
 }
 export function disposePortrait() {

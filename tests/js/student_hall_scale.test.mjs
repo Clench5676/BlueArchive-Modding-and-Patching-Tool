@@ -98,7 +98,7 @@ test("global size drafts cancel/save without changing any actor position or rela
     revision: 0,
     mode: "portraits",
     background: "office-night",
-    portraits: [{ id: "a", variant: "a", source: "mod:a", x: 600, y: 1000, scale: 0.8 }],
+    portraits: [{ id: "a", alt: "a", source: "mod:a", x: 600, y: 1000, scale: 0.8 }],
     memorials: [],
     active: null,
   };
@@ -149,7 +149,7 @@ test("individual size uses .5–2.0, hundredth steps, reset and a cancellable/sa
     revision: 0,
     mode: "portraits",
     portraitScale: 0.8,
-    portraits: [{ id: "a", variant: "a", source: "mod:a", x: 900, y: 1100, scale: 0.8, mirror: true }],
+    portraits: [{ id: "a", alt: "a", source: "mod:a", x: 900, y: 1100, scale: 0.8, mirror: true }],
     memorials: [],
     active: null,
   };

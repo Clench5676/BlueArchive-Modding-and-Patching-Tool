@@ -29,6 +29,7 @@ from ..judge import (
     crc_state,
     now,
 )
+from ..migrations import migrate_journal_names
 from ..models import Pin
 from ..safety import check_resource_path
 from ..storage import (
@@ -104,7 +105,7 @@ class SwitchPlanMixin:
         if not planned or any(
             file.action not in (Action.DIRECT_REPLACE, Action.UPDATE) for group in planned for file in group.files
         ):
-            raise ServiceError("game_file_not_found", variant=record["target"])
+            raise ServiceError("game_file_not_found", alt=record["target"])
         return planned
 
     @staticmethod
@@ -364,6 +365,8 @@ class SwitchPlanMixin:
                     or not path.resolve().is_relative_to(self.root / "transactions")
                 ):
                     raise ValueError("Invalid write journal")
+                if isinstance(data, dict):
+                    migrate_journal_names(data, path)
                 if data["phase"] == "committed":
                     shutil.rmtree(path.parent)
                     continue
@@ -727,7 +730,7 @@ class SwitchPlanMixin:
                 }
                 if build_keys and target in build_keys:
                     record["build"] = build_keys[target]
-                if source.startswith("variant:"):
+                if source.startswith("alt:"):
                     # built by this program, under its costume rule: an older rule asks for an update
                     record["costume_rule"] = COSTUME_RULE
                 previous = self._applied.get(str(target.resolve()))

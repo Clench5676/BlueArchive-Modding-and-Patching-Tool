@@ -252,8 +252,8 @@ async function capture(player, el, frame, expr, lobby, framing, background, sign
   }
   // The main portrait also applies 00. Some story portraits attach their entire body on that track;
   // an empty setup pose cannot produce a still, however often the same frame is drawn.
-  const expression = expr || (!lobby && !framing ? "00" : null);
-  if (expression && data.findAnimation(expression)) state.setAnimation(1, expression, true);
+  const face = expr || (!lobby && !framing ? "00" : null);
+  if (face && data.findAnimation(face)) state.setAnimation(1, face, true);
   state.apply(player.skeleton);
   player.skeleton.updateWorldTransform(spine.Physics.update);
   player.config.viewport = viewFor(player, frame, w / h, framing, lobby);
@@ -278,7 +278,7 @@ async function capture(player, el, frame, expr, lobby, framing, background, sign
   if (signal.aborted) return null;
   if (!valid)
     throw new Error(
-      `No visible pixels (frame=${frame}, idle=${idle || "setup"}, expression=${expression || "none"}, viewport=${JSON.stringify(player.config.viewport)})`,
+      `No visible pixels (frame=${frame}, idle=${idle || "setup"}, face=${face || "none"}, viewport=${JSON.stringify(player.config.viewport)})`,
     );
   // Freeze the validated draw before background loading or encoding can yield to the running player.
   const portrait = el.querySelector("canvas"),
@@ -305,7 +305,7 @@ export function hasThumbnailInk(pixels) {
 }
 
 /**
- * A collection portrait: the variant background fills the texture before the transparent Spine still.
+ * A collection portrait: the alt background fills the texture before the transparent Spine still.
  */
 export async function collectionStill(
   portrait,
@@ -733,7 +733,7 @@ function request(
   const picture = subscribe(cache.get(key), signal);
   queueMicrotask(pump);
   if (frame !== "portrait") return picture;
-  // Reuse only a still of these exact source bytes. Never borrow the other similarly named variant's art,
+  // Reuse only a still of these exact source bytes. Never borrow the other similarly named alt's art,
   // a face-only crop, or a thumbnail from before an install/update changed the revision.
   return withThumbnailFallback(picture, () => {
     for (const otherFrame of ["roster", "bust", "card"]) {

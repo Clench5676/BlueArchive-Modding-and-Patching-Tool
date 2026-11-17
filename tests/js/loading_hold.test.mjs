@@ -284,7 +284,7 @@ function detailHarness(overrides = {}) {
     Loading,
     notify() {},
     T: (key) => key,
-    variant: () => ({}),
+    alt: () => ({}),
     fullName: () => "Student",
     fam: {},
     switchKind: () => "spr",
@@ -322,7 +322,7 @@ test("detail jobs ignore Back, nav and every other interaction until the final r
       if (++renders === 2) await redraw.promise;
     },
   });
-  const targets = ["back", "nav", "student", "variant", "tab", "mods switch", "action card", "popup trigger"].map(
+  const targets = ["back", "nav", "student", "alt", "tab", "mods switch", "action card", "popup trigger"].map(
     (name) => {
       const target = new El();
       target.back = name === "back";
@@ -386,7 +386,7 @@ for (const entry of ["Enable Mods"])
     const submitted = deferred(),
       work = deferred(),
       redraw = deferred();
-    const targets = ["back", "nav", "student", "variant", "tab", "mods switch", "action", "popup"].map((name) => {
+    const targets = ["back", "nav", "student", "alt", "tab", "mods switch", "action", "popup"].map((name) => {
       const target = new El();
       target.back = name === "back";
       if (name === "popup") target.className = "popup-host";

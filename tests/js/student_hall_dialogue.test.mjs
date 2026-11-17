@@ -139,7 +139,7 @@ const template = () => ({
 });
 const find = (tree, path) =>
   path.split("/").reduce((node, key) => node.children.find((child) => child.name === key), tree);
-const entry = (id = "one", variant = "hoshino") => ({ id, variant, x: 600, y: 1120, scale: 1 });
+const entry = (id = "one", alt = "hoshino") => ({ id, alt, x: 600, y: 1120, scale: 1 });
 function fixture(extra = {}) {
   timers = new Map();
   timerDelays = new Map();
@@ -295,7 +295,7 @@ test("duplicate actors keep independent dialogue turns", async () => {
 test("the first pending text request owns the turn and ignored clicks never fetch or advance", async () => {
   const first = deferred();
   const h = fixture({
-    call: (method, params) => (method === "hall.lines" && params.variant === "old" ? first.promise : undefined),
+    call: (method, params) => (method === "hall.lines" && params.alt === "old" ? first.promise : undefined),
   });
   const old = h.controller.play(entry("old", "old"));
   await flush();
@@ -611,7 +611,7 @@ test("a pending voice download blocks all portraits without interrupting the cur
   h.players[0].onended();
   await h.controller.play(entry("two", "other"));
   assert.equal(h.players.length, 2);
-  assert.equal(h.calls.at(-1).params.variant, "other");
+  assert.equal(h.calls.at(-1).params.alt, "other");
   h.controller.dispose();
 });
 
@@ -653,7 +653,7 @@ test("an audio error cannot allow a second bubble until its text fallback expire
 test("stalled setup expires with no caption and a late completion cannot steal the next turn", async () => {
   const stalled = deferred();
   const h = fixture({
-    call: (method, params) => (method === "hall.lines" && params.variant === "stalled" ? stalled.promise : undefined),
+    call: (method, params) => (method === "hall.lines" && params.alt === "stalled" ? stalled.promise : undefined),
   });
   const pending = h.controller.play(entry("one", "stalled"));
   await flush();
@@ -768,11 +768,11 @@ test("ordinary dialogue absence and missing catalog mappings are silent, throttl
     { lines: {}, unavailable: true },
     { lines: { missing_lobby_1: { voice: false } } },
     Object.assign(new Error("missing"), { code: "lines_unavailable" }),
-    Object.assign(new Error("missing"), { code: "catalog_variant_not_found" }),
+    Object.assign(new Error("missing"), { code: "catalog_alt_not_found" }),
   ]) {
     const h = fixture({
       call: (method, params) =>
-        method === "hall.lines" && params.variant === "missing"
+        method === "hall.lines" && params.alt === "missing"
           ? response instanceof Error
             ? Promise.reject(response)
             : response
